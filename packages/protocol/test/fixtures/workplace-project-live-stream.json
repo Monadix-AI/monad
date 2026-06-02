@@ -1,0 +1,214 @@
+{
+  "source": {
+    "capturedAt": "2026-07-06T08:21:13.372Z",
+    "daemonUrl": "http://127.0.0.1:52749",
+    "projectId": "prj_01KWV7JGB54M",
+    "projectTitle": "Monad",
+    "uiItemsEndpoint": "/v1/projects/prj_01KWV7JGB54M/ui-items?limit=200&includeInactive=true",
+    "uiStreamEndpoint": "/v1/projects/prj_01KWV7JGB54M/ui-stream"
+  },
+  "uiItems": {
+    "items": [
+      {
+        "kind": "tool",
+        "id": "mesh_01KWV7N0NGY7",
+        "tool": "mesh-agent:codex",
+        "input": {
+          "agent": "pmem_codex_4f745c7343e2",
+          "provider": "codex",
+          "workingPath": "/Users/test/Projects/monad",
+          "approvalOwnership": "provider-owned"
+        },
+        "status": "running",
+        "seq": "2026-07-06T08:10:26.352Z"
+      },
+      {
+        "kind": "message",
+        "id": "msg_01KWV7N1X9X1",
+        "role": "assistant",
+        "agentName": "pmem_codex_4f745c7343e2",
+        "source": "managed-mesh-agent",
+        "meshSessionId": "mesh_01KWV7N0NGY7",
+        "parts": [
+          {
+            "type": "text",
+            "text": "Lily joined and is ready to take scoped Monad work with code-first context and concise progress updates."
+          }
+        ],
+        "status": "done",
+        "seq": "2026-07-06T08:10:43.836Z"
+      },
+      {
+        "kind": "tool",
+        "id": "mesh_01KWV7NHS524",
+        "tool": "mesh-agent:claude-code",
+        "input": {
+          "agent": "pmem_claude-code_e59584f30f83",
+          "provider": "claude-code",
+          "workingPath": "/Users/test/Projects/monad",
+          "approvalOwnership": "provider-owned"
+        },
+        "status": "running",
+        "seq": "2026-07-06T08:10:43.877Z"
+      },
+      {
+        "kind": "message",
+        "id": "msg_01KWV7NHS8ZG",
+        "role": "assistant",
+        "agentName": "pmem_claude-code_e59584f30f83",
+        "source": "managed-mesh-agent",
+        "meshSessionId": "mesh_01KWV7NHS524",
+        "parts": [
+          {
+            "type": "reasoning",
+            "text": "Thinking"
+          }
+        ],
+        "status": "done",
+        "seq": "2026-07-06T08:10:43.880Z"
+      },
+      {
+        "kind": "tool",
+        "id": "mesh_01KWV7NHZNY2",
+        "tool": "mesh-agent:claude-code",
+        "input": {
+          "agent": "pmem_claude-code_e59584f30f83",
+          "provider": "claude-code",
+          "workingPath": "/Users/test/Projects/monad",
+          "approvalOwnership": "provider-owned"
+        },
+        "status": "running",
+        "seq": "2026-07-06T08:10:44.085Z"
+      },
+      {
+        "kind": "message",
+        "id": "msg_01KWV7NHZRPQ",
+        "role": "assistant",
+        "agentName": "pmem_claude-code_e59584f30f83",
+        "source": "managed-mesh-agent",
+        "meshSessionId": "mesh_01KWV7NHZNY2",
+        "deliveryId": "deliv_01KWV7NHR0V8",
+        "parts": [
+          {
+            "type": "text",
+            "text": "Jeff here — joined and ready. I'll dig into the monad repo (docs/CLAUDE.md already loaded) for any scoped work that comes my way."
+          }
+        ],
+        "status": "done",
+        "seq": "2026-07-06T08:11:02.718Z"
+      },
+      {
+        "kind": "message",
+        "id": "msg_01KWV7P46EHH",
+        "role": "assistant",
+        "agentName": "pmem_codex_4f745c7343e2",
+        "source": "managed-mesh-agent",
+        "meshSessionId": "mesh_01KWV7N0NGY7",
+        "deliveryId": "deliv_01KWV7P46EZ3",
+        "parts": [
+          {
+            "type": "reasoning",
+            "text": "Thinking"
+          }
+        ],
+        "status": "streaming",
+        "seq": "2026-07-06T08:11:02.734Z"
+      }
+    ]
+  },
+  "uiStreamSnapshot": {
+    "kind": "snapshot",
+    "oldestCursor": "msg_01KWV7N1X9X1",
+    "items": [
+      {
+        "kind": "tool",
+        "id": "mesh_01KWV7N0NGY7",
+        "tool": "mesh-agent:codex",
+        "input": {
+          "agent": "pmem_codex_4f745c7343e2",
+          "provider": "codex",
+          "workingPath": "/Users/test/Projects/monad",
+          "approvalOwnership": "provider-owned"
+        },
+        "status": "running",
+        "seq": "2026-07-06T08:10:26.352Z"
+      },
+      {
+        "kind": "message",
+        "id": "msg_01KWV7N1X9X1",
+        "role": "assistant",
+        "agentName": "pmem_codex_4f745c7343e2",
+        "source": "managed-mesh-agent",
+        "meshSessionId": "mesh_01KWV7N0NGY7",
+        "parts": [
+          {
+            "type": "text",
+            "text": "Lily joined and is ready to take scoped Monad work with code-first context and concise progress updates."
+          }
+        ],
+        "status": "done",
+        "seq": "2026-07-06T08:10:43.836Z"
+      },
+      {
+        "kind": "tool",
+        "id": "mesh_01KWV7NHS524",
+        "tool": "mesh-agent:claude-code",
+        "input": {
+          "agent": "pmem_claude-code_e59584f30f83",
+          "provider": "claude-code",
+          "workingPath": "/Users/test/Projects/monad",
+          "approvalOwnership": "provider-owned"
+        },
+        "status": "running",
+        "seq": "2026-07-06T08:10:43.877Z"
+      },
+      {
+        "kind": "tool",
+        "id": "mesh_01KWV7NHZNY2",
+        "tool": "mesh-agent:claude-code",
+        "input": {
+          "agent": "pmem_claude-code_e59584f30f83",
+          "provider": "claude-code",
+          "workingPath": "/Users/test/Projects/monad",
+          "approvalOwnership": "provider-owned"
+        },
+        "status": "running",
+        "seq": "2026-07-06T08:10:44.085Z"
+      },
+      {
+        "kind": "message",
+        "id": "msg_01KWV7NHZRPQ",
+        "role": "assistant",
+        "agentName": "pmem_claude-code_e59584f30f83",
+        "source": "managed-mesh-agent",
+        "meshSessionId": "mesh_01KWV7NHZNY2",
+        "deliveryId": "deliv_01KWV7NHR0V8",
+        "parts": [
+          {
+            "type": "text",
+            "text": "Jeff here — joined and ready. I'll dig into the monad repo (docs/CLAUDE.md already loaded) for any scoped work that comes my way."
+          }
+        ],
+        "status": "done",
+        "seq": "2026-07-06T08:11:02.718Z"
+      },
+      {
+        "kind": "message",
+        "id": "msg_01KWV7P46EHH",
+        "role": "assistant",
+        "agentName": "pmem_codex_4f745c7343e2",
+        "source": "managed-mesh-agent",
+        "meshSessionId": "mesh_01KWV7N0NGY7",
+        "deliveryId": "deliv_01KWV7P46EZ3",
+        "parts": [
+          {
+            "type": "reasoning",
+            "text": "Thinking"
+          }
+        ],
+        "status": "streaming",
+        "seq": "2026-07-06T08:11:02.734Z"
+      }
+    ]
+  }
+}

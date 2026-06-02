@@ -1,0 +1,14 @@
+{
+  "daemon.ready.title": "Monad is running",
+  "daemon.ready.webUi": "Web UI:",
+  "daemon.ready.cli": "CLI:",
+  "daemon.ready.configure": "Configure providers:",
+  "daemon.singleton.alreadyRunning": "Monad daemon is already running. Run `monad stop` to stop it first.",
+  "daemon.session.contextEvicted_one": "Cleared ~{tokens} tokens ({count} tool result) from context.",
+  "daemon.session.contextEvicted_other": "Cleared ~{tokens} tokens ({count} tool results) from context.",
+  "daemon.session.contextHandoffSuggested": "Context is {pct}% full — consider starting a fresh session.",
+  "daemon.mcp.taskRecovered.completed": "MCP Task {taskId} from {server} completed while Monad was reconnecting.",
+  "daemon.mcp.taskRecovered.failed": "MCP Task {taskId} from {server} failed while Monad was reconnecting.",
+  "daemon.mcp.taskRecovered.cancelled": "MCP Task {taskId} from {server} was cancelled while Monad was reconnecting.",
+  "daemon.mcp.taskRecovered.inputRequired": "MCP Task {taskId} from {server} resumed and needs your input."
+}

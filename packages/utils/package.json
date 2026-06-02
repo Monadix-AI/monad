@@ -1,0 +1,17 @@
+{
+  "name": "@monad/utils",
+  "version": "0.0.0",
+  "devDependencies": {
+    "@monad/tsconfig": "workspace:*"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "module": "src/index.ts",
+  "private": true,
+  "scripts": {
+    "test": "bun ../../scripts/quiet-run.ts bun ../../scripts/bun-test.ts test/ --only-failures",
+    "typecheck": "bun ../../scripts/quiet-run.ts tsc --noEmit"
+  },
+  "type": "module"
+}

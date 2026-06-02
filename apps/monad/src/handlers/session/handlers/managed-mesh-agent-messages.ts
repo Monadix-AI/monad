@@ -1,0 +1,252 @@
+import type {
+  ChatMessage,
+  Event,
+  IdempotencyKey,
+  MessageAttachmentRef,
+  MessageId,
+  NativeAgentDeliveryId,
+  SessionId
+} from '@monad/protocol';
+import type { SessionContext } from '#/handlers/session/context.ts';
+
+import { meshSessionIdSchema, newId } from '@monad/protocol';
+
+import { meshAgentProjectMemberDisplayNameForAgent } from '#/handlers/session/handlers/messaging-members.ts';
+import { makeEvent } from '#/services/event-bus.ts';
+
+export function createManagedMeshAgentMessages(ctx: SessionContext) {
+  const {
+    deps: { store },
+    makeEmit,
+    persistAndRetire,
+    messageIngress,
+    managedAgentSessions
+  } = ctx;
+
+  const pendingManagedMeshAgentWakeMessages = new Map<
+    string,
+    { messageId: MessageId; deliveryId?: NativeAgentDeliveryId }
+  >();
+
+  function deliveryIdFromMessageData(sessionId: SessionId, messageId: MessageId): NativeAgentDeliveryId | undefined {
+    const data = store.getMessage(sessionId, messageId)?.data;
+    if (!data || typeof data !== 'object') return undefined;
+    const deliveryId = (data as { deliveryId?: unknown }).deliveryId;
+    return typeof deliveryId === 'string' && deliveryId.startsWith('deliv_')
+      ? (deliveryId as NativeAgentDeliveryId)
+      : undefined;
+  }
+
+  async function emitManagedMeshAgentThinking(
+    sessionId: SessionId,
+    meshSessionId: string,
+    agentName: string,
+    deliveryId?: NativeAgentDeliveryId,
+    agentDisplayName = meshAgentProjectMemberDisplayNameForAgent(store, sessionId, agentName)
+  ): Promise<MessageId> {
+    const pending = pendingManagedMeshAgentWakeMessages.get(meshSessionId);
+    const existing = pending?.messageId ?? store.findManagedMeshAgentStreamingMessage(sessionId, meshSessionId);
+    if (existing) return existing as MessageId;
+    const message = await messageIngress.begin({
+      transcriptTargetId: sessionId,
+      idempotencyKey: newId('idem'),
+      producer: {
+        kind: 'mesh-agent',
+        meshSessionId: meshSessionIdSchema.parse(meshSessionId),
+        agentName,
+        ...(deliveryId ? { deliveryId } : {})
+      },
+      role: 'assistant',
+      type: 'text',
+      text: '',
+      data: {
+        memberId: agentName,
+        agentName,
+        agentDisplayName,
+        meshSessionId,
+        ...(deliveryId ? { deliveryId } : {}),
+        source: 'managed-mesh-agent'
+      },
+      includeInContext: false
+    });
+    const messageId = message.id;
+    if (pendingManagedMeshAgentWakeMessages.size >= 256) {
+      const oldest = pendingManagedMeshAgentWakeMessages.keys().next().value;
+      if (oldest !== undefined) pendingManagedMeshAgentWakeMessages.delete(oldest);
+    }
+    pendingManagedMeshAgentWakeMessages.set(meshSessionId, {
+      messageId,
+      ...(deliveryId ? { deliveryId } : {})
+    });
+    return messageId;
+  }
+
+  async function completeManagedMeshAgentThinking({
+    sessionId,
+    meshSessionId,
+    agentName,
+    agentDisplayName,
+    text,
+    replyToMessageId,
+    attachments,
+    idempotencyKey,
+    placeholderRemovalIdempotencyKey,
+    source = 'managed-mesh-agent',
+    error = false,
+    settleTurn = false
+  }: {
+    sessionId: SessionId;
+    meshSessionId: string;
+    agentName: string;
+    agentDisplayName?: string;
+    text: string;
+    replyToMessageId?: MessageId;
+    attachments?: MessageAttachmentRef[];
+    idempotencyKey?: IdempotencyKey;
+    placeholderRemovalIdempotencyKey?: IdempotencyKey;
+    source?: 'managed-mesh-agent' | 'mesh-agent-provider';
+    error?: boolean;
+    settleTurn?: boolean;
+  }): Promise<{ messageId: MessageId; message: ChatMessage; changed: boolean }> {
+    const pending = pendingManagedMeshAgentWakeMessages.get(meshSessionId);
+    const pendingMessageId = pending?.messageId ?? store.findManagedMeshAgentStreamingMessage(sessionId, meshSessionId);
+    pendingManagedMeshAgentWakeMessages.delete(meshSessionId);
+    const settledReplay =
+      !pendingMessageId && idempotencyKey ? store.getSettledMessageMutationReplay(sessionId, idempotencyKey) : null;
+    if (settledReplay && settledReplay.replyToMessageId !== replyToMessageId) {
+      throw new Error('idempotency key reused with a different command');
+    }
+    const messageId = (pendingMessageId ?? settledReplay?.id) as MessageId | undefined;
+    const deliveryId = pending?.deliveryId ?? (messageId ? deliveryIdFromMessageData(sessionId, messageId) : undefined);
+    const persistedDisplayName = messageId ? store.getMessage(sessionId, messageId)?.data : undefined;
+    const resolvedAgentDisplayName =
+      agentDisplayName ??
+      (persistedDisplayName && typeof persistedDisplayName === 'object'
+        ? (persistedDisplayName as { agentDisplayName?: unknown }).agentDisplayName
+        : undefined) ??
+      meshAgentProjectMemberDisplayNameForAgent(store, sessionId, agentName);
+    const data = {
+      memberId: agentName,
+      agentName,
+      ...(typeof resolvedAgentDisplayName === 'string' && resolvedAgentDisplayName
+        ? { agentDisplayName: resolvedAgentDisplayName }
+        : {}),
+      meshSessionId,
+      ...(deliveryId ? { deliveryId } : {}),
+      source,
+      ...(attachments?.length ? { attachments } : {})
+    };
+    const completed =
+      messageId && replyToMessageId
+        ? await (async () => {
+            await messageIngress.remove({
+              transcriptTargetId: sessionId,
+              messageId,
+              idempotencyKey: placeholderRemovalIdempotencyKey ?? newId('idem'),
+              producer: {
+                kind: 'mesh-agent',
+                meshSessionId: meshSessionIdSchema.parse(meshSessionId),
+                agentName,
+                ...(deliveryId ? { deliveryId } : {})
+              }
+            });
+            return messageIngress.deliverWithOutcome({
+              transcriptTargetId: sessionId,
+              idempotencyKey: idempotencyKey ?? newId('idem'),
+              producer: {
+                kind: 'mesh-agent',
+                meshSessionId: meshSessionIdSchema.parse(meshSessionId),
+                agentName,
+                ...(deliveryId ? { deliveryId } : {})
+              },
+              role: 'assistant',
+              type: error ? 'error' : 'text',
+              text,
+              data,
+              replyToMessageId,
+              includeInContext: true
+            });
+          })()
+        : messageId
+          ? await messageIngress.settleWithOutcome({
+              transcriptTargetId: sessionId,
+              messageId,
+              idempotencyKey: idempotencyKey ?? newId('idem'),
+              producer: {
+                kind: 'mesh-agent',
+                meshSessionId: meshSessionIdSchema.parse(meshSessionId),
+                agentName,
+                ...(deliveryId ? { deliveryId } : {})
+              },
+              text,
+              type: error ? 'error' : 'text',
+              data,
+              includeInContext: true
+            })
+          : await messageIngress.deliverWithOutcome({
+              transcriptTargetId: sessionId,
+              idempotencyKey: idempotencyKey ?? newId('idem'),
+              producer: {
+                kind: 'mesh-agent',
+                meshSessionId: meshSessionIdSchema.parse(meshSessionId),
+                agentName,
+                ...(deliveryId ? { deliveryId } : {})
+              },
+              role: 'assistant',
+              type: error ? 'error' : 'text',
+              text,
+              data,
+              ...(replyToMessageId ? { replyToMessageId } : {}),
+              includeInContext: true
+            });
+    if (settleTurn) {
+      const round: Event[] = [];
+      const emit = makeEmit(round);
+      emit(
+        makeEvent(sessionId as SessionId, 'mesh.turn_settled', {
+          meshSessionId,
+          ...(error ? { error: true } : {})
+        })
+      );
+      persistAndRetire(sessionId, round);
+      if (deliveryId) managedAgentSessions?.settleTurn({ sessionId, memberId: agentName, deliveryId });
+    }
+    return { messageId: completed.message.id, message: completed.message, changed: completed.changed };
+  }
+
+  async function retireManagedMeshAgentThinking(
+    sessionId: SessionId,
+    meshSessionId: string,
+    agentName: string
+  ): Promise<MessageId | null> {
+    const pending = pendingManagedMeshAgentWakeMessages.get(meshSessionId);
+    const pendingMessageId = pending?.messageId ?? store.findManagedMeshAgentStreamingMessage(sessionId, meshSessionId);
+    pendingManagedMeshAgentWakeMessages.delete(meshSessionId);
+    if (pending?.deliveryId) {
+      managedAgentSessions?.settleTurn({ sessionId, memberId: agentName, deliveryId: pending.deliveryId });
+    }
+    const round: Event[] = [];
+    const emit = makeEmit(round);
+    if (pendingMessageId) {
+      await messageIngress.remove({
+        transcriptTargetId: sessionId,
+        messageId: pendingMessageId as MessageId,
+        idempotencyKey: newId('idem'),
+        producer: {
+          kind: 'mesh-agent',
+          meshSessionId: meshSessionIdSchema.parse(meshSessionId),
+          agentName
+        }
+      });
+    }
+    emit(makeEvent(sessionId as SessionId, 'mesh.turn_settled', { meshSessionId }));
+    persistAndRetire(sessionId, round);
+    return (pendingMessageId as MessageId | undefined) ?? null;
+  }
+
+  return {
+    emitManagedMeshAgentThinking,
+    completeManagedMeshAgentThinking,
+    retireManagedMeshAgentThinking
+  };
+}

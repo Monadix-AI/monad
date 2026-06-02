@@ -1,0 +1,683 @@
+#!/usr/bin/env bash
+# Monad installer
+#
+# Usage (production):
+#   curl -fsSL https://release.monadix.ai/monad/install.sh | bash
+#   curl -fsSL https://release.monadix.ai/monad/install.sh | bash -s -- --channel beta
+#
+# Usage (local dev — fully self-contained inside dist/):
+#   mise run release:build          # produces dist/monad-dev-darwin-arm64.tar.gz
+#   mise run release:test:install   # installs into dist/test-install/, nothing else touched
+#
+# Flags (can also be set via environment variables):
+#   --channel <channel>   — release channel: stable (default), beta, or nightly
+#   --version <version>   — exact release tag to install (overrides channel latest)
+#   --force               — remove the install directory before extracting and skip verification
+#   --no-daemon           — skip auto-starting the daemon after install
+#   --no-verify           — skip SHA256 checksum verification
+#   --no-path-modify      — never touch shell config files
+#
+# Environment overrides:
+#   MONAD_VERSION         — release tag to install (default: latest for the selected channel)
+#   MONAD_INSTALL_DIR     — installation root       (default: ~/.monad)
+#   MONAD_BIN_DIR         — where to place binaries (default: ~/.local/bin or /usr/local/bin)
+#                           when set explicitly, PATH modification is skipped automatically
+#   MONAD_NO_PATH_MODIFY  — set to 1 to never touch shell config files
+#   MONAD_TARBALL         — path to a local tarball, skips download
+#   MONAD_SKIP_VERIFY     — set to 1 to skip SHA256 verification
+#   MONAD_NO_DAEMON       — set to 1 to skip auto-starting the daemon after install
+#   MONAD_GITHUB_REPO     — GitHub owner/repo (default: Monadix-AI/monad)
+#   MONAD_RELEASE_BASE_URL — release mirror base URL (default: https://release.monadix.ai/monad)
+#   MONAD_APPLICATIONS_DIR — macOS app launcher directory override (default: ~/Applications)
+#   MONAD_DESKTOP_DIR     — Linux desktop launcher directory override (default: ~/Desktop)
+#   XDG_DATA_HOME         — Linux app-menu launcher root override (default: ~/.local/share)
+
+set -euo pipefail
+
+# ── Constants ──────────────────────────────────────────────────────────────────
+
+RELEASE_REPOSITORY="${MONAD_GITHUB_REPO:-Monadix-AI/monad}"
+RELEASE_BASE_URL="${MONAD_RELEASE_BASE_URL:-https://release.monadix.ai/monad}"
+INSTALL_DIR="${MONAD_INSTALL_DIR:-$HOME/.monad}"
+CHANNEL="stable"
+SKIP_VERIFY="${MONAD_SKIP_VERIFY:-0}"
+NO_PATH_MODIFY="${MONAD_NO_PATH_MODIFY:-0}"
+NO_DAEMON="${MONAD_NO_DAEMON:-0}"
+FORCE=0
+# Track whether the caller explicitly chose a bin dir (suppress PATH changes)
+_BIN_DIR_EXPLICIT="${MONAD_BIN_DIR:+1}"
+
+# ── Colours (disabled when not a tty) ─────────────────────────────────────────
+
+if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
+  RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
+  CYAN='\033[0;36m'; BLUE='\033[0;34m'; DIM='\033[2m'; BOLD='\033[1m'; RESET='\033[0m'
+  TTY=1
+else
+  RED=''; GREEN=''; YELLOW=''; CYAN=''; BLUE=''; DIM=''; BOLD=''; RESET=''
+  TTY=0
+fi
+
+# step()  — a primary "▸" milestone line (the spine of the install log)
+# info()  — an indented detail beneath the current step
+step()    { printf "${BLUE}${BOLD}▸${RESET} ${BOLD}%s${RESET}\n" "$*"; }
+info()    { printf "  ${DIM}%s${RESET}\n" "$*"; }
+success() { printf "${GREEN}${BOLD}▸${RESET} ${GREEN}%s${RESET}\n" "$*"; }
+warn()    { printf "${YELLOW}${BOLD}▸${RESET} ${YELLOW}%s${RESET}\n" "$*" >&2; }
+fatal()   { printf "${RED}${BOLD}▸ error:${RESET} ${RED}%s${RESET}\n" "$*" >&2; exit 1; }
+
+# ── OS + arch detection ────────────────────────────────────────────────────────
+
+detect_platform() {
+  local os arch
+
+  case "$(uname -s)" in
+    Darwin) os="darwin" ;;
+    Linux)  os="linux"  ;;
+    *)      fatal "Unsupported OS: $(uname -s). Only macOS and Linux are supported." ;;
+  esac
+
+  case "$(uname -m)" in
+    x86_64|amd64) arch="x64"   ;;
+    arm64|aarch64) arch="arm64" ;;
+    *)             fatal "Unsupported architecture: $(uname -m)." ;;
+  esac
+
+  echo "${os}-${arch}"
+}
+
+# Human-friendly platform label for the install banner, e.g. "macOS (Apple Silicon)".
+platform_label() {
+  local os arch
+  case "$(uname -s)" in
+    Darwin) os="macOS" ;;
+    Linux)  os="Linux" ;;
+    *)      os="$(uname -s)" ;;
+  esac
+  case "$(uname -m)" in
+    arm64) [ "$os" = "macOS" ] && arch="Apple Silicon" || arch="ARM64" ;;
+    aarch64) arch="ARM64" ;;
+    x86_64|amd64) [ "$os" = "macOS" ] && arch="Intel" || arch="x86_64" ;;
+    *) arch="$(uname -m)" ;;
+  esac
+  echo "${os} (${arch})"
+}
+
+# ── Downloader ────────────────────────────────────────────────────────────────
+
+download() {
+  local url="$1" dest="$2"
+  if command -v curl &>/dev/null; then
+    curl --proto '=https' --tlsv1.2 -fsSL --retry 3 --retry-delay 1 --connect-timeout 10 --max-time 120 --speed-limit 1024 --speed-time 30 -o "$dest" "$url"
+  elif command -v wget &>/dev/null; then
+    wget -q --https-only -O "$dest" "$url"
+  else
+    fatal "Neither curl nor wget found. Please install one and re-run."
+  fi
+}
+
+fetch_text() {
+  local url="$1"
+  if command -v curl &>/dev/null; then
+    curl --proto '=https' --tlsv1.2 -fsSL --connect-timeout 10 --max-time 30 "$url"
+  elif command -v wget &>/dev/null; then
+    wget -q --https-only -O - "$url"
+  else
+    fatal "Neither curl nor wget found. Please install one and re-run."
+  fi
+}
+
+url_exists() {
+  local url="$1"
+  if command -v curl &>/dev/null; then
+    curl --proto '=https' --tlsv1.2 -fsIL --connect-timeout 10 --max-time 30 "$url" >/dev/null 2>&1
+  elif command -v wget &>/dev/null; then
+    wget -q --https-only --spider "$url" >/dev/null 2>&1
+  else
+    return 1
+  fi
+}
+
+resolve_download_url() {
+  local mirror_url="$1" github_url="$2"
+  if url_exists "$mirror_url"; then
+    echo "$mirror_url"
+  else
+    echo "$github_url"
+  fi
+}
+
+# Width of the rendered progress bar, in blocks.
+BAR_WIDTH=20
+
+# Redraw the progress bar in place for a given percentage.
+# $2 ("1"/"0") toggles the blinking frontier block so the bar visibly pulses
+# at its leading edge even when the byte count hasn't moved between frames.
+draw_bar() {
+  local pct="$1" blink="$2"
+  [ "$pct" -gt 100 ] && pct=100
+  [ "$pct" -lt 0 ] && pct=0
+  local filled=$(( pct * BAR_WIDTH / 100 ))
+
+  local out="  ${DIM}[${RESET} " i
+  for (( i = 0; i < BAR_WIDTH; i++ )); do
+    if [ "$i" -lt "$filled" ]; then
+      if [ "$i" -eq $(( filled - 1 )) ] && [ "$pct" -lt 100 ]; then
+        # Leading (frontier) block — blink between a lit and an empty cell.
+        if [ "$blink" = "1" ]; then out+="${GREEN}${BOLD}▮${RESET}"; else out+="${DIM}▯${RESET}"; fi
+      else
+        out+="${GREEN}▮${RESET}"
+      fi
+    else
+      out+="${DIM}▯${RESET}"
+    fi
+  done
+  out+=" ${DIM}]${RESET} ${BOLD}${pct}%${RESET}"
+  printf "\r%b" "$out"
+}
+
+# Like download(), but renders a live ▮▯ progress bar on an interactive terminal.
+# Strategy: ask the server for Content-Length, download in the background, and poll the
+# partial file's byte count to drive draw_bar(). Falls back to a plain download when the
+# size is unknown, curl is missing, or stdout is not a tty (logs, CI, pipes).
+download_progress() {
+  local url="$1" dest="$2"
+
+  if [ "$TTY" != "1" ] || ! command -v curl &>/dev/null; then
+    download "$url" "$dest"
+    return
+  fi
+
+  # Resolve the final size across redirects (GitHub → CDN); take the last Content-Length seen.
+  local total
+  total=$(curl --proto '=https' --tlsv1.2 -sIL "$url" 2>/dev/null \
+            | tr -d '\r' | awk 'tolower($1) == "content-length:" { v = $2 } END { print v }' \
+            | tr -dc '0-9')
+
+  if ! [ "$total" -gt 0 ] 2>/dev/null; then
+    # Unknown size — fall back to curl's own bar so the user still sees motion.
+    # Both printf and curl -# write to stderr so the dim/reset wraps the bar correctly.
+    printf '%s' "${DIM}" >&2
+    curl --proto '=https' --tlsv1.2 -fSL --retry 3 --retry-delay 1 --connect-timeout 10 --max-time 120 --speed-limit 1024 --speed-time 30 -# -o "$dest" "$url"
+    local rc=$?
+    printf '%s' "${RESET}" >&2
+    return $rc
+  fi
+
+  : > "$dest"
+  curl --proto '=https' --tlsv1.2 -fsSL --retry 3 --retry-delay 1 --connect-timeout 10 --max-time 120 --speed-limit 1024 --speed-time 30 -o "$dest" "$url" &
+  local pid=$! cur pct frame=0
+  printf '\033[?25l'  # hide cursor while the bar animates
+  while kill -0 "$pid" 2>/dev/null; do
+    if [ -f "$dest" ]; then
+      cur=$(wc -c < "$dest" | tr -dc '0-9')
+    else
+      cur=0
+    fi
+    [ -n "$cur" ] || cur=0
+    pct=$(( cur * 100 / total ))
+    draw_bar "$pct" $(( (frame / 2) % 2 ))
+    frame=$(( frame + 1 ))
+    sleep 0.12
+  done
+  wait "$pid"
+  local rc=$?
+  if [ "$rc" -eq 0 ]; then
+    draw_bar 100 1
+  else
+    printf '\r\033[K'  # erase partial bar line on failure
+  fi
+  printf '\033[?25h\n'  # restore cursor, end the bar line
+  return "$rc"
+}
+
+# ── SHA256 verification ───────────────────────────────────────────────────────
+
+verify_sha256() {
+  local file="$1" checksum_file="$2"
+  local expected actual
+
+  expected=$(awk '{print $1}' "$checksum_file")
+
+  if command -v sha256sum &>/dev/null; then
+    actual=$(sha256sum "$file" | awk '{print $1}')
+  elif command -v shasum &>/dev/null; then
+    actual=$(shasum -a 256 "$file" | awk '{print $1}')
+  else
+    warn "No sha256sum or shasum found — skipping checksum verification."
+    return 0
+  fi
+
+  if [ "$actual" != "$expected" ]; then
+    fatal "SHA256 mismatch for $file\n  expected: $expected\n  got:      $actual"
+  fi
+}
+
+# ── PATH setup (production only) ──────────────────────────────────────────────
+
+ensure_on_path() {
+  local bin_dir="$1"
+
+  # Skip when the caller opted out or chose an explicit bin dir
+  if [ "$NO_PATH_MODIFY" = "1" ] || [ "${_BIN_DIR_EXPLICIT:-}" = "1" ]; then
+    return 0
+  fi
+
+  # Already on PATH
+  if echo ":$PATH:" | grep -q ":${bin_dir}:"; then
+    return 0
+  fi
+
+  local export_line="export PATH=\"${bin_dir}:\$PATH\""
+  local configs=()
+  [ -f "$HOME/.bashrc" ]       && configs+=("$HOME/.bashrc")
+  [ -f "$HOME/.bash_profile" ] && configs+=("$HOME/.bash_profile")
+  [ -f "$HOME/.zshrc" ]        && configs+=("$HOME/.zshrc")
+  [ -f "$HOME/.zprofile" ]     && configs+=("$HOME/.zprofile")
+
+  if [ ${#configs[@]} -eq 0 ]; then
+    warn "No shell config found. Add ${bin_dir} to your PATH manually."
+    return 0
+  fi
+
+  for cfg in "${configs[@]}"; do
+    if ! grep -qF "$bin_dir" "$cfg" 2>/dev/null; then
+      printf '\n# Added by monad installer\n%s\n' "$export_line" >> "$cfg"
+      info "Added PATH entry to ${cfg}"
+    fi
+  done
+
+  local fish_cfg="$HOME/.config/fish/config.fish"
+  if [ -f "$fish_cfg" ] && ! grep -qF "$bin_dir" "$fish_cfg" 2>/dev/null; then
+    printf '\n# Added by monad installer\nfish_add_path %s\n' "$bin_dir" >> "$fish_cfg"
+    info "Added PATH entry to ${fish_cfg}"
+  fi
+}
+
+# ── Desktop/app launcher setup ─────────────────────────────────────────────────
+
+quote_shell() {
+  printf "'%s'" "$(printf "%s" "$1" | sed "s/'/'\\\\''/g")"
+}
+
+install_macos_icon() {
+  local src="$1"
+  local resources_dir="$2"
+  [ -f "$src" ] || return 1
+
+  if command -v sips >/dev/null 2>&1 && command -v iconutil >/dev/null 2>&1; then
+    local tmp_root tmp_iconset
+    tmp_root="$(mktemp -d "${TMPDIR:-/tmp}/monad-icon.XXXXXX")"
+    tmp_iconset="${tmp_root}/MonadIcon.iconset"
+    mkdir -p "$tmp_iconset"
+    for size in 16 32 128 256 512; do
+      sips -s format png -z "$size" "$size" "$src" --out "${tmp_iconset}/icon_${size}x${size}.png" >/dev/null 2>&1 || true
+      local retina=$((size * 2))
+      sips -s format png -z "$retina" "$retina" "$src" --out "${tmp_iconset}/icon_${size}x${size}@2x.png" >/dev/null 2>&1 || true
+    done
+    if iconutil -c icns "$tmp_iconset" -o "${resources_dir}/MonadIcon.icns" >/dev/null 2>&1; then
+      rm -rf "$tmp_root"
+      return 0
+    fi
+    rm -rf "$tmp_root"
+  fi
+
+  cp "$src" "${resources_dir}/MonadIcon.svg"
+  return 1
+}
+
+install_app_launcher() {
+  local bin_dir="$1"
+  local monad_bin="${bin_dir}/monad"
+  local monad_icon_svg="${INSTALL_DIR}/assets/monad-icon-vector-solid.svg"
+
+  case "$(uname -s)" in
+    Darwin)
+      local apps_dir="${MONAD_APPLICATIONS_DIR:-$HOME/Applications}"
+      local app_dir="${apps_dir}/Monad.app"
+      local macos_dir="${app_dir}/Contents/MacOS"
+      local resources_dir="${app_dir}/Contents/Resources"
+      mkdir -p "$macos_dir" "$resources_dir"
+      local bundle_icon_file=""
+      if install_macos_icon "$monad_icon_svg" "$resources_dir"; then
+        bundle_icon_file="MonadIcon"
+      elif [ -f "${resources_dir}/MonadIcon.svg" ]; then
+        bundle_icon_file="MonadIcon.svg"
+      fi
+      cat >"${macos_dir}/monad" <<EOF
+#!/usr/bin/env bash
+exec $(quote_shell "$monad_bin") up
+EOF
+      chmod +x "${macos_dir}/monad"
+      cat >"${app_dir}/Contents/Info.plist" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleExecutable</key>
+  <string>monad</string>
+  <key>CFBundleIdentifier</key>
+  <string>ai.monad.launcher</string>
+  <key>CFBundleName</key>
+  <string>Monad</string>
+  <key>CFBundleIconFile</key>
+  <string>${bundle_icon_file}</string>
+  <key>CFBundlePackageType</key>
+  <string>APPL</string>
+</dict>
+</plist>
+EOF
+      info "App launcher → ${app_dir}"
+      ;;
+    Linux)
+      local data_home="${XDG_DATA_HOME:-$HOME/.local/share}"
+      local app_menu_dir="${data_home}/applications"
+      local desktop_dir="${MONAD_DESKTOP_DIR:-$HOME/Desktop}"
+      mkdir -p "$app_menu_dir" "$desktop_dir"
+      local desktop_file="[Desktop Entry]
+Type=Application
+Name=Monad
+Comment=Start Monad and open the Web UI
+Exec=${monad_bin} up
+Icon=${monad_icon_svg}
+Terminal=false
+Categories=Development;Utility;
+"
+      printf "%s" "$desktop_file" >"${app_menu_dir}/monad.desktop"
+      printf "%s" "$desktop_file" >"${desktop_dir}/Monad.desktop"
+      chmod +x "${desktop_dir}/Monad.desktop" 2>/dev/null || true
+      info "App launcher → ${app_menu_dir}/monad.desktop"
+      info "Desktop launcher → ${desktop_dir}/Monad.desktop"
+      ;;
+  esac
+}
+
+# ── Stop a running daemon before its binary is overwritten ──────────────────────
+
+# Uses the currently-installed binary (pre-overwrite) to stop the daemon, then waits for the
+# process to actually exit so the freshly installed one starts against a released lock + port.
+# Best-effort and a no-op on a clean machine (no binary / no daemon).
+stop_existing_daemon() {
+  local home="$1" bin_dir="$2"
+  local monad_bin="${bin_dir}/monad"
+  [ -x "$monad_bin" ] || return 0
+
+  local pid="" pidfile="${home}/runtime/monad.pid"
+  [ -f "$pidfile" ] && pid=$(tr -dc '0-9' <"$pidfile" 2>/dev/null)
+
+  step "Stopping running Monad"
+  MONAD_HOME="$home" "$monad_bin" stop >/dev/null 2>&1 || true
+
+  [ -n "$pid" ] || return 0
+  local i=0
+  while [ $i -lt 10 ]; do
+    kill -0 "$pid" 2>/dev/null || return 0
+    sleep 1
+    i=$((i + 1))
+  done
+  warn "Running daemon (pid ${pid}) did not exit; continuing anyway."
+}
+
+# ── Main ───────────────────────────────────────────────────────────────────────
+
+main() {
+  # ── 0. Parse CLI flags ────────────────────────────────────────────────────────
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --channel)
+        [ -n "${2:-}" ] || fatal "--channel requires an argument (stable|beta|nightly)"
+        CHANNEL="$2"; shift 2 ;;
+      --version)
+        [ -n "${2:-}" ] || fatal "--version requires an argument"
+        MONAD_VERSION="$2"; shift 2 ;;
+      --force)
+        FORCE=1; SKIP_VERIFY=1; shift ;;
+      --no-daemon)
+        NO_DAEMON=1; shift ;;
+      --no-verify)
+        SKIP_VERIFY=1; shift ;;
+      --no-path-modify)
+        NO_PATH_MODIFY=1; shift ;;
+      --*)
+        fatal "Unknown flag: $1 (see script header for supported flags)" ;;
+      *)
+        fatal "Unexpected argument: $1" ;;
+    esac
+  done
+
+  case "$CHANNEL" in
+    stable|beta|nightly) ;;
+    *) fatal "Unknown channel '${CHANNEL}'. Use: stable, beta, or nightly" ;;
+  esac
+
+  # ── 1. Determine install type ─────────────────────────────────────────────────
+
+  local bin_dir_probe="${MONAD_BIN_DIR:-}"
+  if [ -z "$bin_dir_probe" ]; then
+    if [ "$(id -u)" -eq 0 ]; then
+      bin_dir_probe="/usr/local/bin"
+    else
+      bin_dir_probe="$HOME/.local/bin"
+    fi
+  fi
+  local existing_version=""
+  if [ -x "${bin_dir_probe}/monad" ]; then
+    existing_version=$("${bin_dir_probe}/monad" --version 2>/dev/null | head -1 | grep -oE '[0-9]+\.[0-9]+\.[0-9][^ ]*' || echo "")
+  fi
+
+  # ── 2. Determine source tarball ──────────────────────────────────────────────
+
+  local tarball platform artifact_name
+  # Global var so the EXIT trap can reach it after main() returns
+  _MONAD_TMP=$(mktemp -d)
+  # Clean tmp on exit; also erase any partial progress bar and restore the cursor.
+  trap 'rm -rf "${_MONAD_TMP:-}"; [ "${TTY:-0}" = "1" ] && printf "\r\033[K\033[?25h"' EXIT
+
+  if [ -n "${MONAD_TARBALL:-}" ]; then
+    tarball="$MONAD_TARBALL"
+    step "Installing Monad CLI"
+    info "Using local tarball: $tarball"
+  else
+    platform=$(detect_platform)
+    local version="${MONAD_VERSION:-}"
+
+    step "Detected platform: $(platform_label)"
+
+    # Resolve version before choosing the step header so we can distinguish reinstall
+    # from upgrade (the comparison requires knowing the target version).
+    if [ -z "$version" ]; then
+      info "Resolving latest ${CHANNEL} release…"
+      version=$(download_latest_version)
+    fi
+    [ -n "$version" ] || fatal "Could not resolve latest ${CHANNEL} release. Use --version <version>."
+
+    if [ -n "$existing_version" ]; then
+      if [ "$existing_version" = "$version" ]; then
+        step "Reinstalling Monad CLI"
+      else
+        step "Upgrading Monad CLI"
+      fi
+    else
+      step "Installing Monad CLI"
+    fi
+    step "Resolved Monad ${version} (${CHANNEL} channel)"
+
+    # Note the transition explicitly when an older build is already present.
+    if [ -n "$existing_version" ] && [ "$existing_version" != "$version" ]; then
+      info "Replacing installed ${existing_version} → ${version}"
+    fi
+
+    local release_tag="$version"
+    case "$release_tag" in
+      v*) ;;
+      *) release_tag="v${release_tag}" ;;
+    esac
+    local artifact_version="${version#v}"
+    artifact_name="monad-${artifact_version}-${platform}"
+    local github_release_url="https://github.com/${RELEASE_REPOSITORY}/releases/download/${release_tag}/${artifact_name}.tar.gz"
+    local mirror_release_url="${RELEASE_BASE_URL}/${release_tag}/${artifact_name}.tar.gz"
+    local release_url checksum_url
+    release_url=$(resolve_download_url "$mirror_release_url" "$github_release_url")
+    checksum_url=$(resolve_download_url "${mirror_release_url}.sha256" "${github_release_url}.sha256")
+
+    step "Downloading Monad CLI"
+    info "${artifact_name}.tar.gz"
+    tarball="${_MONAD_TMP}/${artifact_name}.tar.gz"
+    download_progress "$release_url" "$tarball"
+
+    if [ "$SKIP_VERIFY" != "1" ]; then
+      local checksum_file="${tarball}.sha256"
+      download "$checksum_url" "$checksum_file"
+      step "Verifying Monad checksum"
+      verify_sha256 "$tarball" "$checksum_file"
+      info "SHA256 verified"
+    fi
+  fi
+
+  # ── 4. Resolve install locations ─────────────────────────────────────────────
+
+  local bin_dir="${bin_dir_probe}"
+  mkdir -p "$bin_dir"
+
+  # Resolve the data home — honour explicit MONAD_HOME (e.g. install-test.ts sets MONAD_BIN_DIR)
+  # but never inherit a value injected by a development shell.
+  local init_home
+  if [ "${_BIN_DIR_EXPLICIT:-}" = "1" ] && [ -n "${MONAD_HOME:-}" ]; then
+    init_home="$MONAD_HOME"
+  else
+    init_home="$HOME/.monad"
+  fi
+
+  # ── 5. Stop any running daemon (before we overwrite its binary) ───────────────
+
+  # The upgrade order is stop → overwrite → start: stop with the currently-installed binary so the
+  # singleton lock + port are released, then extract the new one over it, then start fresh.
+  stop_existing_daemon "$init_home" "$bin_dir"
+
+  # ── 6. Extract ───────────────────────────────────────────────────────────────
+
+  if [ "$FORCE" = "1" ] && { [ -e "$INSTALL_DIR" ] || [ -L "$INSTALL_DIR" ]; }; then
+    local resolved_install resolved_home resolved_cwd
+    resolved_install=$(cd "$INSTALL_DIR" 2>/dev/null && pwd -P) || fatal "Cannot safely clear install directory: ${INSTALL_DIR}"
+    resolved_home=$(cd "$HOME" && pwd -P)
+    resolved_cwd=$(pwd -P)
+    case "$resolved_install" in
+      /|"$resolved_home"|"$resolved_cwd")
+        fatal "Refusing to clear unsafe install directory: ${resolved_install}" ;;
+    esac
+    step "Clearing existing Monad installation"
+    info "$resolved_install"
+    rm -rf -- "$INSTALL_DIR"
+  fi
+
+  step "Installing Monad to ${INSTALL_DIR}"
+  mkdir -p "$INSTALL_DIR"
+  tar -xzf "$tarball" -C "$INSTALL_DIR" --strip-components=1
+  # macOS: remove quarantine attribute so Gatekeeper doesn't silently block execution
+  if [ "$(uname -s)" = "Darwin" ]; then
+    xattr -dr com.apple.quarantine "$INSTALL_DIR" 2>/dev/null || true
+  fi
+
+  # ── 7. Place binaries ─────────────────────────────────────────────────────────
+
+  for binary in "$INSTALL_DIR"/bin/*; do
+    local name
+    name=$(basename "$binary")
+    ln -sf "$binary" "${bin_dir}/${name}"
+    info "${name} → ${bin_dir}/${name}"
+  done
+
+  install_app_launcher "$bin_dir"
+
+  # ── 8. PATH (production only — skipped when bin dir is explicit or opted out) ──
+
+  ensure_on_path "$bin_dir"
+
+  success "Monad CLI installed"
+
+  # ── 9. Start — hand off to monad ──────────────────────────────────────────────
+
+  if [ "${NO_DAEMON}" != "1" ]; then
+    step "Starting Monad"
+    # Bare `monad` (→ `monad up`) seeds the home on boot, relays the ready banner, and opens the
+    # browser for setup. The old daemon was already stopped above, so this starts cleanly. Keeping
+    # start/browser in monad means a hand-run `monad` behaves identically to install. Logs land in
+    # ${init_home}/logs/daemon.log.
+    printf "\n"
+    if ! MONAD_HOME="$init_home" "${bin_dir}/monad"; then
+      warn "Daemon did not start cleanly — check ${init_home}/logs/daemon.log"
+    fi
+    if ! echo ":$PATH:" | grep -q ":${bin_dir}:"; then
+      warn "Add ${bin_dir} to your PATH to use monad from any directory."
+    fi
+  else
+    # No daemon: nothing will boot it, so seed the home explicitly — config.json + templates must
+    # exist for offline inspection (and the install smoke test asserts on them).
+    local init_log="${_MONAD_TMP}/init.log"
+    if MONAD_HOME="$init_home" "${bin_dir}/monad" init --non-interactive >"$init_log" 2>&1; then
+      info "Monad home initialised"
+    else
+      warn "Could not initialise monad home"
+      [ -s "$init_log" ] && warn "$(cat "$init_log")"
+    fi
+    printf "\n"
+    printf "    ${BOLD}Start:${RESET}  ${CYAN}monad${RESET}\n"
+    printf "    ${BOLD}CLI:${RESET}    ${CYAN}monad --help${RESET}\n"
+    printf "\n"
+    if ! echo ":$PATH:" | grep -q ":${bin_dir}:"; then
+      warn "Add ${bin_dir} to your PATH to use monad from any directory."
+    fi
+  fi
+}
+
+# ── Fetch latest release tag ──────────────────────────────────────────────────
+
+download_latest_version() {
+  local response
+
+  local latest_path="latest.txt"
+  [ "$CHANNEL" != "stable" ] && latest_path="latest-${CHANNEL}.txt"
+  response=$(fetch_text "${RELEASE_BASE_URL}/${latest_path}" 2>/dev/null || true)
+  if [ -n "$response" ]; then
+    echo "$response" | head -1 | tr -d '[:space:]'
+    return
+  fi
+
+  if [ "$CHANNEL" = "stable" ]; then
+    local latest_url="${RELEASE_BASE_URL}/install.sh"
+    if command -v curl &>/dev/null; then
+      response=$(curl --proto '=https' --tlsv1.2 -fsSL -o /dev/null -w '%{url_effective}' "$latest_url")
+    else
+      response=$(wget --https-only --server-response --spider --max-redirect=10 "$latest_url" 2>&1 | sed -n 's/^[[:space:]]*Location: //p' | tail -1)
+    fi
+    local tag
+    tag=$(echo "$response" | sed -E 's#.*(/releases/tag/|/download/)(v?[^/?#]+).*#\2#')
+    if [ "$tag" = "$response" ] || [ -z "$tag" ]; then
+      latest_url="https://github.com/${RELEASE_REPOSITORY}/releases/latest"
+      if command -v curl &>/dev/null; then
+        response=$(curl --proto '=https' --tlsv1.2 -fsSL -o /dev/null -w '%{url_effective}' "$latest_url")
+      else
+        response=$(wget --https-only --server-response --spider --max-redirect=10 "$latest_url" 2>&1 | sed -n 's/^[[:space:]]*Location: //p' | tail -1)
+      fi
+      tag=$(echo "$response" | sed -E 's#.*(/releases/tag/|/download/)(v?[^/?#]+).*#\2#')
+    fi
+    [ "$tag" != "$response" ] || tag=""
+    echo "$tag"
+  else
+    local api_url="https://api.github.com/repos/${RELEASE_REPOSITORY}/releases?per_page=50"
+    if command -v curl &>/dev/null; then
+      response=$(curl --proto '=https' --tlsv1.2 -fsSL "$api_url")
+    else
+      response=$(wget -q --https-only -O - "$api_url")
+    fi
+    local tag
+    tag=$(echo "$response" | grep '"tag_name"' | grep -- "-${CHANNEL}\." | head -1 \
+          | sed -E 's/.*"tag_name": *"([^"]+)".*/\1/')
+    if [ -z "$tag" ]; then
+      fatal "No ${CHANNEL} release found. Check https://github.com/${RELEASE_REPOSITORY}/releases or use MONAD_VERSION."
+    fi
+    echo "$tag"
+  fi
+}
+
+main "$@"

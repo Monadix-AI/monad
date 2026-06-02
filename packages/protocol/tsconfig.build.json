@@ -1,0 +1,16 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    // Sources import with explicit `.ts` specifiers; without the rewrite the emitted
+    // `.d.ts` would point at files that do not exist in the published tarball.
+    "rewriteRelativeImportExtensions": true,
+    "outDir": "dist",
+    // `src/avatar.ts` imports from the sibling `generated/` directory, so the emit root
+    // has to be the package root — the published entry point is `dist/src/index.js`.
+    "rootDir": "."
+  },
+  "include": ["src", "generated"]
+}

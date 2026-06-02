@@ -1,0 +1,276 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  merge_group:
+    branches: [main]
+  workflow_call:
+    inputs:
+      full:
+        description: Run the full merge-queue quality gate.
+        required: false
+        type: boolean
+        default: false
+      sha:
+        description: Commit to validate. Defaults to the triggering commit.
+        required: false
+        type: string
+
+# Cancel superseded runs on the same ref to save runner minutes.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # turbo.jsonc sets ui:"tui"; force the stream renderer in non-interactive CI.
+  TURBO_UI: "false"
+  # Optional Turbo remote cache. Set TURBO_TOKEN (Actions secret, repo-scoped) and
+  # TURBO_TEAM (Actions variable) to share the build cache across runs and runners.
+  # Both default to empty strings when unset — Turbo silently falls back to the
+  # local cache, so CI is fully functional without them.
+  TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+  TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+
+jobs:
+  # OS-independent checks — typecheck, lint, knip in one job to share bun install.
+  checks:
+    name: checks
+    # OS-independent (lint, typecheck, knip, generated-artifact drift). Linux runners bill at 1x;
+    # macOS at 10x. The OS-sensitive work is covered by the unit/e2e matrices below.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.sha || github.sha }}
+          persist-credentials: false
+      - uses: jdx/mise-action@5228313ee0372e111a38da051671ca30fc5a96db # v3.6.3
+        with:
+          version: 2026.6.11
+          install: true
+          cache: true
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: ${{ runner.os }}-bun-
+      - run: bun install --frozen-lockfile
+      - run: bun run agents:sync
+      - run: mise run --continue-on-error quality:check
+      - run: git diff --exit-code
+
+  # Pull requests get the Linux leg as a low-cost feedback loop. Merge queue candidates get the
+  # full cross-platform matrix before they are allowed onto main.
+  unit:
+    name: unit (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ${{ fromJSON((github.event_name == 'merge_group' || inputs.full) && '["ubuntu-latest","macos-latest","windows-latest"]' || '["ubuntu-latest"]') }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.sha || github.sha }}
+          persist-credentials: false
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: package.json
+
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Test unit
+        env:
+          MONAD_TEST_COVERAGE: ${{ runner.os == 'Linux' && '1' || '0' }}
+        run: |
+          bun scripts/quiet-run.ts bunx --bun turbo run test --force --output-logs=errors-only
+          bun scripts/bun-test.ts scripts/test/unit/ --only-failures
+
+      - name: Report coverage
+        if: runner.os == 'Linux' && !cancelled()
+        run: bun scripts/coverage-summary.ts
+
+      - name: Upload coverage
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: coverage
+          # Bun resolves the lcov reporter against the bunfig root, so workspace suites run
+          # through Turbo all land in the repo-root `coverage/`.
+          path: |
+            coverage/lcov.info
+            apps/*/coverage/lcov.info
+            packages/*/coverage/lcov.info
+          if-no-files-found: error
+
+  # Hermetic daemon E2E uses real HTTP/SSE/stdio transports and local subprocess fixtures, but
+  # excludes live providers, host-installed provider sessions, and dependency-container tests
+  # before Bun loads those files.
+  hermetic-e2e:
+    name: hermetic e2e (${{ matrix.os }})
+    if: github.event_name == 'merge_group' || inputs.full
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.sha || github.sha }}
+          persist-credentials: false
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: package.json
+
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build sandbox launcher (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          gcc -O2 -s -static \
+            -o "$(dirname "$(which bun)")/monad-sandbox-launcher" \
+            apps/monad/native/sandbox-launcher/main.c
+
+      - name: Install MinGW (Windows sandbox launcher cross-compile)
+        if: runner.os == 'Linux'
+        run: sudo apt-get install -y --no-install-recommends gcc-mingw-w64-x86-64
+
+      - name: Build Windows sandbox launchers (Low IL + AppContainer, x64 spike)
+        if: runner.os == 'Linux'
+        run: |
+          BUN_DIR="$(dirname "$(which bun)")"
+          # Low Integrity launcher — baseline, known-good
+          x86_64-w64-mingw32-gcc -O2 -s -static -municode \
+            -o "${BUN_DIR}/monad-sandbox-launcher.exe" \
+            apps/monad/native/sandbox-launcher/windows.c \
+            -ladvapi32
+          echo "✓ Low IL launcher compiled"
+          # AppContainer launcher — validates MinGW header availability for PROC_THREAD_ATTRIBUTE_SECURITY_CAPABILITIES
+          x86_64-w64-mingw32-gcc -O2 -s -static -municode \
+            -o "${BUN_DIR}/monad-sandbox-appcontainer.exe" \
+            apps/monad/native/sandbox-launcher/windows-appcontainer.c \
+            -ladvapi32 -luserenv
+          echo "✓ AppContainer launcher compiled"
+
+      - name: Test hermetic daemon E2E
+        run: bunx --bun turbo run test:e2e --force --filter=@monad/monad --output-logs=errors-only
+
+  # Browser E2E for the web UI. The specs stub daemon responses with Playwright request routing and
+  # Playwright starts its own Vite server, so this job needs no daemon and no provider credentials.
+  web-e2e:
+    name: web e2e (${{ matrix.shard }}/4)
+    if: github.event_name == 'merge_group' || inputs.full
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.sha || github.sha }}
+          persist-credentials: false
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: package.json
+
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      # Browser binaries are ~150 MB and pinned by the @playwright/test version in the lockfile.
+      - name: Cache Playwright browsers
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('bun.lock') }}
+
+      # --with-deps stays unconditional: the cache restores the browser payload but not the apt
+      # libraries it links against, and a cache hit without them fails at launch.
+      - name: Install Playwright browser
+        run: bun playwright install --with-deps chromium
+        working-directory: apps/web
+
+      - name: Test web E2E
+        env:
+          PLAYWRIGHT_SHARD: ${{ matrix.shard }}/4
+        run: bunx --bun turbo run test:e2e --force --filter=@monad/web --output-logs=errors-only
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: playwright-report-${{ matrix.shard }}
+          path: apps/web/playwright-report
+          retention-days: 7
+
+  # Real third-party dependency tests. The normal e2e suite uses mocks/local fixtures; tests that need
+  # provider CLIs or host archive binaries run inside a cached container image with those dependencies
+  # preinstalled.
+  e2e-deps:
+    name: e2e deps container
+    if: github.event_name == 'merge_group' || inputs.full
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.sha || github.sha }}
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          context: .
+          file: docker/Dockerfile.e2e-deps
+          target: test
+          cache-from: type=gha,scope=e2e-deps
+          cache-to: type=gha,scope=e2e-deps,mode=max
+
+  gate:
+    name: merge gate
+    if: always()
+    needs: [checks, unit, hermetic-e2e, web-e2e, e2e-deps]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify required jobs
+        env:
+          FULL_CI: ${{ github.event_name == 'merge_group' || inputs.full }}
+          CHECKS_RESULT: ${{ needs.checks.result }}
+          UNIT_RESULT: ${{ needs.unit.result }}
+          HERMETIC_E2E_RESULT: ${{ needs.hermetic-e2e.result }}
+          WEB_E2E_RESULT: ${{ needs.web-e2e.result }}
+          E2E_DEPS_RESULT: ${{ needs.e2e-deps.result }}
+        run: |
+          test "$CHECKS_RESULT" = success
+          test "$UNIT_RESULT" = success
+
+          if [[ "$FULL_CI" == true ]]; then
+            test "$HERMETIC_E2E_RESULT" = success
+            test "$WEB_E2E_RESULT" = success
+            test "$E2E_DEPS_RESULT" = success
+          fi

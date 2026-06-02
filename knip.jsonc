@@ -1,0 +1,81 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "ignoreFiles": [
+    // Wired up by in-flight MCP catalog work.
+    "apps/monad/src/handlers/settings/mcp-server/catalog.ts",
+    // Reserved RTK detail endpoints with no current consumers. Keep dependency analysis
+    // enabled while excluding only the unused-file finding.
+    "packages/client-rtk/src/endpoints/atoms/get-atom-pack.ts",
+    "packages/client-rtk/src/endpoints/atoms/get-installed-mcp.ts",
+    "packages/client-rtk/src/endpoints/atoms/get-installed-skill.ts",
+    "packages/client-rtk/src/endpoints/settings/acp-agents/get-acp-agent.ts",
+    "packages/client-rtk/src/endpoints/settings/channels/get-channel.ts",
+    "packages/client-rtk/src/endpoints/settings/mcp-servers/get-mcp-server.ts",
+    "packages/client-rtk/src/endpoints/settings/model/profiles/get-profile.ts",
+    "packages/client-rtk/src/endpoints/settings/model/providers/get-provider.ts",
+    "packages/client-rtk/src/endpoints/settings/model/providers/patch-provider.ts",
+    "packages/client-rtk/src/endpoints/settings/model/providers/set-provider-enabled.ts",
+    "packages/client-rtk/src/endpoints/settings/mesh-agents/get-mesh-agent.ts"
+  ],
+  "ignoreIssues": {
+    "apps/monad/src/capabilities/tools/registry/mcp/index.ts": ["exports"],
+    "packages/protocol/src/agent-credential.ts": ["duplicates"],
+    "packages/protocol/src/inbox.ts": ["duplicates"],
+    "packages/protocol/src/mesh-agent/mesh-agent-migration.ts": ["duplicates"],
+    "packages/protocol/src/mesh-agent/mesh-agent-runtime-spec.ts": ["duplicates"],
+    "packages/protocol/src/mesh-agent/session-member-binding.ts": ["duplicates"],
+    "packages/protocol/src/settings/appearance-settings.ts": ["duplicates"],
+    "packages/protocol/src/settings/developer-settings.ts": ["duplicates"],
+    "packages/protocol/src/settings/hooks-settings.ts": ["duplicates"],
+    "packages/protocol/src/settings/openai-compat-settings.ts": ["duplicates"],
+    "packages/protocol/src/settings/user-profile-settings.ts": ["duplicates"]
+  },
+  "typescript": true,
+  "bun": true,
+  "biome": true,
+  "lefthook": true,
+  "commitlint": true,
+  "syncpack": true,
+  // Root-level dependency invoked by generated tooling.
+  "ignoreDependencies": ["@inlang/paraglide-js"],
+  // System and prerequisite binaries invoked from scripts.
+  "ignoreBinaries": ["icacls", "shasum", "sha256sum"],
+  // Workspaces are auto-discovered from package.json "workspaces". Framework and tool
+  // entrypoints are handled by Knip plugins. The only repo-specific shape Knip can't infer is
+  // the Bun test wrapper (`bun ../../scripts/bun-test.ts ...`), so those test/fixture globs are
+  // attached to the bun plugin explicitly.
+  "workspaces": {
+    ".": {
+      "entry": ["scripts/**/*.ts"],
+      "project": ["scripts/**/*.ts"]
+    },
+    "apps/*": { "bun": { "entry": ["test/**/*.{ts,tsx}", "**/*.test.{ts,tsx}"] } },
+    "packages/*": { "bun": { "entry": ["test/**/*.{ts,tsx}", "**/*.test.{ts,tsx}"] } },
+
+    // bin.ts is the release entrypoint (build-release.ts), not the package.json
+    // `bin`; declaring it lets Knip see its dynamic @monad/web + @monad/monad imports.
+    "apps/cli": { "entry": ["src/bin.ts"], "bun": { "entry": ["test/**/*.{ts,tsx}", "**/*.test.{ts,tsx}"] } },
+    // run-unit-tests.ts is invoked as an argument to the quiet-run.ts wrapper
+    // (`bun ../../scripts/quiet-run.ts bun scripts/run-unit-tests.ts`), the same
+    // wrapped-script shape called out above for bun-test.ts.
+    "apps/monad": {
+      "entry": ["scripts/run-unit-tests.ts"],
+      "bun": { "entry": ["test/**/*.{ts,tsx}", "**/*.test.{ts,tsx}"] }
+    },
+    "apps/web": {
+      "playwright": true,
+      "bun": { "entry": ["test/**/*.{ts,tsx}", "**/*.test.{ts,tsx}"] },
+      "entry": ["src/routes/**/*.tsx"]
+    },
+    "packages/atoms": {
+      // Keep the previous public-export policy while allowing Knip to detect genuinely
+      // unreachable files. These internal exports can be made private incrementally.
+      "ignoreIssues": { "src/**/*.{ts,tsx}": ["exports", "types"] },
+      "bun": { "entry": ["test/**/*.{ts,tsx}", "**/*.test.{ts,tsx}"] }
+    },
+    "packages/monad-power-pack": {
+      "entry": ["src/experiences/kanban/client.tsx"],
+      "bun": { "entry": ["test/**/*.{ts,tsx}", "**/*.test.{ts,tsx}"] }
+    }
+  }
+}

@@ -1,0 +1,79 @@
+import type { createDaemonHandlers } from '#/handlers/daemon-handlers/index.ts';
+
+import {
+  channelIdSchema,
+  channelStatusResponseSchema,
+  getChannelResponseSchema,
+  httpErrorSchema,
+  listChannelsResponseSchema,
+  okResponseSchema,
+  setChannelCredentialRequestSchema,
+  upsertChannelRequestSchema
+} from '@monad/protocol';
+import { Elysia } from 'elysia';
+import { z } from 'zod';
+
+// HTTP-only surface: contract declared inline; reusable wire schemas (incl. the branded channel id)
+// come from @monad/protocol. enable/disable derive `enabled` from the path, so they take no body.
+const channelParams = z.object({ id: channelIdSchema });
+
+export function createChannelSettingsController(handlers: ReturnType<typeof createDaemonHandlers>) {
+  return new Elysia({ tags: ['http-only'] })
+    .get('/channels', async () => handlers.channel.listChannels(), {
+      response: { 200: listChannelsResponseSchema },
+      detail: { summary: 'List channels', description: 'Returns configured channel instances (no secrets).' }
+    })
+    .get('/channels/:id', async ({ params }) => handlers.channel.getChannel({ id: params.id }), {
+      params: channelParams,
+      response: { 200: getChannelResponseSchema, 404: httpErrorSchema },
+      detail: { summary: 'Get channel', description: 'Returns one channel instance by id (no secrets).' }
+    })
+    .put('/channels/:id', async ({ body }) => handlers.channel.upsertChannel(body), {
+      params: channelParams,
+      body: upsertChannelRequestSchema,
+      response: { 200: okResponseSchema },
+      detail: { summary: 'Upsert channel', description: 'Creates or updates a channel instance.' }
+    })
+    .post('/channels/:id/login', async ({ params }) => handlers.channel.loginChannel({ id: params.id }), {
+      params: channelParams,
+      response: { 200: okResponseSchema, 400: httpErrorSchema, 404: httpErrorSchema },
+      detail: { summary: 'Pair channel', description: 'Clears local pairing state and starts a fresh login.' }
+    })
+    .post(
+      '/channels/:id/enable',
+      async ({ params }) => handlers.channel.setChannelEnabled({ id: params.id, enabled: true }),
+      {
+        params: channelParams,
+        response: { 200: okResponseSchema, 404: httpErrorSchema },
+        detail: { summary: 'Enable channel', description: 'Enables a channel instance.' }
+      }
+    )
+    .post(
+      '/channels/:id/disable',
+      async ({ params }) => handlers.channel.setChannelEnabled({ id: params.id, enabled: false }),
+      {
+        params: channelParams,
+        response: { 200: okResponseSchema, 404: httpErrorSchema },
+        detail: { summary: 'Disable channel', description: 'Disables a channel instance.' }
+      }
+    )
+    .delete('/channels/:id', async ({ params }) => handlers.channel.removeChannel({ id: params.id }), {
+      params: channelParams,
+      response: { 200: okResponseSchema, 404: httpErrorSchema },
+      detail: { summary: 'Remove channel', description: 'Deletes a channel instance and its credential.' }
+    })
+    .put(
+      '/channels/:id/credential',
+      async ({ params, body }) => handlers.channel.setChannelCredential({ id: params.id, ...body }),
+      {
+        params: channelParams,
+        body: setChannelCredentialRequestSchema,
+        response: { 200: okResponseSchema, 404: httpErrorSchema },
+        detail: { summary: 'Set channel credential', description: 'Replaces or removes the channel bot token.' }
+      }
+    )
+    .get('/channels/status', async () => handlers.channel.channelStatus(), {
+      response: { 200: channelStatusResponseSchema },
+      detail: { summary: 'Channel status', description: 'Live connection status per channel.' }
+    });
+}

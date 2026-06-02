@@ -1,0 +1,106 @@
+import { expect, type Page, test } from '@playwright/test';
+
+/**
+ * Scrolling back through a real transcript must not move the content under the reader. Rows enter
+ * the viewport carrying an estimate and replace it with a measurement; the compensation for that
+ * has to be exact, or every mis-estimated row shifts the text the reader is mid-sentence in.
+ *
+ * The transcript is a real session captured from a running daemon: 146 rows from 2 to 5000
+ * characters, so estimates are wrong by an order of magnitude in both directions.
+ */
+
+const HARNESS = '/test/e2e/fixtures/virtual-list.html?dataset=session';
+/** Sub-pixel rounding in transforms and rects; anything above this is a visible jump. */
+const DRIFT_TOLERANCE_PX = 2;
+
+async function openHarness(page: Page): Promise<void> {
+  await page.goto(HARNESS);
+  const log = page.locator('[role="log"]');
+  await log.locator('[data-index]').first().waitFor();
+  await expect.poll(async () => (await page.evaluate(() => window.harness.state())).distanceFromBottom).toBe(0);
+  await log.hover();
+}
+
+async function settleLayout(page: Page): Promise<void> {
+  let previous = -1;
+  await expect
+    .poll(async () => {
+      const { scrollHeight } = await page.evaluate(() => window.harness.state());
+      const stable = scrollHeight === previous;
+      previous = scrollHeight;
+      return stable;
+    })
+    .toBe(true);
+}
+
+async function wheelBy(page: Page, deltaY: number): Promise<void> {
+  await page.mouse.wheel(0, deltaY);
+  await settleLayout(page);
+}
+
+async function anchorDriftAfterStableFrames(page: Page): Promise<number> {
+  return page.evaluate(async () => {
+    let previous = Number.NaN;
+    let stableFrames = 0;
+    let drift = 0;
+    for (let frame = 0; frame < 12; frame += 1) {
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      drift = window.harness.anchorDrift();
+      stableFrames = Math.abs(drift - previous) <= 0.01 ? stableFrames + 1 : 0;
+      if (stableFrames >= 3) break;
+      previous = drift;
+    }
+    return drift;
+  });
+}
+
+/**
+ * The worst content displacement seen over one wheel step, in px: the anchored row should travel
+ * across the viewport by exactly the gesture distance and not one pixel more.
+ */
+async function driftOverWheel(page: Page, deltaY: number): Promise<number> {
+  const anchored = await page.evaluate(() => window.harness.anchor());
+  if (anchored.id === null) return 0;
+  await wheelBy(page, deltaY);
+  const duringScroll = await page.evaluate(() => window.harness.anchorDrift());
+  const afterSettle = await anchorDriftAfterStableFrames(page);
+  return Math.max(Math.abs(duringScroll + deltaY), Math.abs(afterSettle + deltaY));
+}
+
+test('scrolling back through a real transcript holds the content still', async ({ page }) => {
+  await openHarness(page);
+
+  const drifts: number[] = [];
+  for (let step = 0; step < 12; step += 1) drifts.push(await driftOverWheel(page, -400));
+
+  expect(Math.max(...drifts)).toBeLessThanOrEqual(DRIFT_TOLERANCE_PX);
+});
+
+test('continuous backward scrolling holds the content still while measurements land mid-gesture', async ({ page }) => {
+  await openHarness(page);
+
+  // No settleLayout between steps: the wheel cadence stays inside the virtualizer's
+  // isScrolling window, so rows entering from above get their first estimate→actual
+  // measurement WHILE scrollDirection is still 'backward' — the case where a missing
+  // scroll compensation slides the content under the reader.
+  const drifts: number[] = [];
+  for (let step = 0; step < 12; step += 1) {
+    await page.evaluate(() => window.harness.anchor());
+    await page.mouse.wheel(0, -400);
+    await page.waitForTimeout(80);
+    const drift = await page.evaluate(() => window.harness.anchorDrift());
+    drifts.push(Math.abs(drift - 400));
+  }
+
+  expect(Math.max(...drifts)).toBeLessThanOrEqual(DRIFT_TOLERANCE_PX);
+});
+
+test('scrolling forward again through a real transcript holds the content still', async ({ page }) => {
+  await openHarness(page);
+  for (let step = 0; step < 12; step += 1) await wheelBy(page, -400);
+
+  const drifts: number[] = [];
+  for (let step = 0; step < 8; step += 1) drifts.push(await driftOverWheel(page, 300));
+
+  expect(Math.max(...drifts)).toBeLessThanOrEqual(DRIFT_TOLERANCE_PX);
+});

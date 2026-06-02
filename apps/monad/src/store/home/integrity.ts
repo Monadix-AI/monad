@@ -1,0 +1,118 @@
+import type { MonadPaths } from '@monad/environment';
+import type { Store } from '#/store/db/index.ts';
+
+import { emptyAuth, initMonadHome, loadAll, loadAuth, saveAgents, saveAuth } from '@monad/environment';
+
+export interface IntegrityReport {
+  config: 'ok' | 'missing';
+  agents: 'ok' | 'missing' | 'repaired';
+  mesh: 'ok' | 'missing';
+  auth: 'ok' | 'repaired' | 'missing';
+  db: 'ok' | 'version-mismatch';
+}
+
+/** Run integrity checks and auto-repair where safe. Safe to call on every daemon startup. */
+export async function checkAndRepair(paths: MonadPaths, store: Store): Promise<IntegrityReport> {
+  const report: IntegrityReport = { config: 'ok', agents: 'ok', mesh: 'ok', auth: 'ok', db: 'ok' };
+
+  let parsed = await loadAll(paths);
+  if (parsed === null) {
+    await initMonadHome(paths);
+    report.config = 'missing';
+    report.agents = 'missing';
+    report.mesh = 'missing';
+    parsed = await loadAll(paths);
+  }
+  if (!parsed) throw new Error('monad: config files missing after initialization');
+  validateRequiredProfileProviders(parsed);
+  let repaired = false;
+  repaired = repairDefaultProfile(parsed) || repaired;
+  repaired = repairProfileOptionalProviderRefs(parsed) || repaired;
+  repaired = repairAgentProfileRefs(parsed) || repaired;
+  if (repaired) {
+    await saveAgents(paths.agentsConfig, parsed);
+    if (report.agents === 'ok') report.agents = 'repaired';
+  }
+
+  {
+    let fileExists = true;
+    const parsed = await loadAuth(paths.auth).catch(() => null);
+
+    if (parsed === null) {
+      // Distinguish missing vs. corrupt to set the right report status.
+      try {
+        await Bun.file(paths.auth).text();
+      } catch (err) {
+        if ((err as NodeJS.ErrnoException).code === 'ENOENT') fileExists = false;
+      }
+
+      if (!fileExists) {
+        await saveAuth(paths.auth, emptyAuth());
+        report.auth = 'missing';
+      } else {
+        throw new Error(
+          `monad: auth.json requires manual migration to version 2 at ${paths.auth}; no compatibility reader is provided.`
+        );
+      }
+    }
+  }
+  if (!store.hasCurrentMigration()) {
+    report.db = 'version-mismatch';
+  }
+
+  return report;
+}
+
+function repairDefaultProfile(cfg: Awaited<ReturnType<typeof loadAll>>): boolean {
+  if (!cfg || cfg.model.profiles.length === 0) return false;
+  if (cfg.model.default && cfg.model.profiles.some((profile) => profile.alias === cfg.model.default)) return false;
+  const first = cfg.model.profiles[0];
+  if (!first) return false;
+  cfg.model.default = first.alias;
+  return true;
+}
+
+function validateRequiredProfileProviders(cfg: Awaited<ReturnType<typeof loadAll>>): void {
+  if (!cfg) return;
+  const providerIds = new Set(cfg.model.providers.map((provider) => provider.id));
+  for (const profile of cfg.model.profiles) {
+    if (!providerIds.has(profile.routes.chat.provider)) {
+      throw new Error(
+        `monad: profile "${profile.alias}" references missing provider "${profile.routes.chat.provider}"`
+      );
+    }
+  }
+}
+
+function repairProfileOptionalProviderRefs(cfg: Awaited<ReturnType<typeof loadAll>>): boolean {
+  if (!cfg) return false;
+  const providerIds = new Set(cfg.model.providers.map((provider) => provider.id));
+  let repaired = false;
+  for (const profile of cfg.model.profiles) {
+    for (const role of ['fast', 'vision', 'image', 'video', 'speech', 'embedding', 'memory'] as const) {
+      const route = profile.routes[role];
+      if (route && !providerIds.has(route.provider)) {
+        profile.routes[role] = undefined;
+        repaired = true;
+      }
+    }
+  }
+  return repaired;
+}
+
+function repairAgentProfileRefs(cfg: Awaited<ReturnType<typeof loadAll>>): boolean {
+  if (!cfg) return false;
+  const profileAliases = new Set(cfg.model.profiles.map((profile) => profile.alias));
+  let repaired = false;
+  for (const agent of cfg.agent.agents) {
+    if (agent.modelAlias && !profileAliases.has(agent.modelAlias)) {
+      agent.modelAlias = undefined;
+      repaired = true;
+    }
+    if (agent.model && agent.model !== 'inherit' && !profileAliases.has(agent.model)) {
+      agent.model = undefined;
+      repaired = true;
+    }
+  }
+  return repaired;
+}

@@ -1,0 +1,4 @@
+{
+  "extends": "./tsconfig.json",
+  "exclude": ["generated/paraglide", "src/catalog-types.ts"]
+}

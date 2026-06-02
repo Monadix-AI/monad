@@ -1,0 +1,173 @@
+/* Scoped motion + scrollbar styling for the Control Room surface only. Typography
+   now uses the shared product font stack from @monad/ui, so this file only carries
+   the namespaced extras that should not leak into the rest of the app. */
+
+@keyframes scdots {
+  0%,
+  80%,
+  100% {
+    opacity: 0.2;
+    transform: translateY(0);
+  }
+  40% {
+    opacity: 1;
+    transform: translateY(-2px);
+  }
+}
+
+.scwf-scroll::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.scwf-scroll::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 8px;
+}
+
+.workplace-rail-button:hover {
+  background: color-mix(in srgb, var(--accent-blue-soft) 58%, var(--card));
+}
+
+.project-provider-row {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 14px;
+}
+
+.project-provider-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.cli-dialog-dense {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.cli-dialog-dense__header {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 0 28px 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.cli-dialog-dense__identity {
+  flex: 1;
+  min-width: 0;
+}
+
+.cli-dialog-dense__title {
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+  font-size: 16px;
+  font-weight: 680;
+  color: var(--foreground);
+  white-space: nowrap;
+}
+
+.cli-dialog-dense__hint {
+  margin: 0;
+  font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--muted-foreground);
+}
+
+.cli-dialog-dense__row {
+  display: grid;
+  grid-template-columns: 112px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+}
+
+.cli-dialog-dense__row-label {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 10px;
+  color: var(--muted-foreground);
+}
+
+.cli-dialog-dense__field {
+  font-size: 12px;
+}
+
+.cli-dialog-dense__advanced {
+  border-top: 1px solid var(--border);
+}
+
+.cli-dialog-dense__advanced summary {
+  padding: 9px 0;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.cli-dialog-dense__advanced-body {
+  padding: 2px 0 0;
+}
+
+.cli-dialog-dense__save {
+  min-height: 34px;
+  padding: 7px 11px;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 11px;
+  font-weight: 650;
+  color: var(--primary-foreground);
+  background: var(--accent-blue);
+  border: 1px solid var(--accent-blue);
+  border-radius: 8px;
+}
+
+.cli-dialog-dense__save:disabled {
+  background: color-mix(in srgb, var(--accent-blue) 82%, var(--background));
+  opacity: 0.92;
+}
+
+@media (max-width: 1180px) {
+  .workplace-project-rail {
+    display: none;
+  }
+}
+
+@media (max-width: 920px) {
+  .workplace-agent-rail {
+    display: none;
+  }
+}
+
+@media (max-width: 720px) {
+  .workplace-layout {
+    min-height: 560px;
+  }
+
+  .project-provider-row {
+    grid-template-columns: 34px minmax(0, 1fr);
+  }
+
+  .project-provider-actions {
+    grid-column: 2;
+    justify-content: flex-start;
+  }
+
+  .cli-dialog-dense__row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 5px;
+  }
+
+  .cli-dialog-dense__field {
+    font-size: 16px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scwf-typing-dot {
+    animation: none;
+  }
+}

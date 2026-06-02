@@ -1,0 +1,10 @@
+{
+  "channel.approvalNeeded": "Approval required. Review this action in Monad.",
+  "channel.commandUnsupportedChat": "The current Chat Session does not support {command}.",
+  "channel.commandUnsupportedProject": "The current Project Session does not support {command}.",
+  "channel.connectedWelcome": "Monad is connected.\n\nSend /project list, then /project use <number> to choose a Project and start chatting here.",
+  "channel.error": "Cannot complete the action: {label}",
+  "channel.rateLimited": "Messages are arriving too quickly. Wait before sending another message.",
+  "channel.projectSessionPending": "Choose a session with /switch <number>, or send a message to create and bind a new Project Session.",
+  "channel.projectSessionRequired": "This channel is not connected to a Project Session. Use /project list to view available Projects, then /project use <number or name> to connect one."
+}

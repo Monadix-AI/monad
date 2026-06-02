@@ -1,0 +1,248 @@
+import type { MonadPaths } from '@monad/environment';
+import type { Logger } from '@monad/logger';
+import type { Event, EventType, Hooks, ProjectId, Session, SessionId, SessionMcpServer } from '@monad/protocol';
+import type { Agent, LoadedSkill } from '#/agent/index.ts';
+import type { McpConnection } from '#/capabilities/tools';
+import type { Tool, ToolBackends } from '#/capabilities/tools/types.ts';
+import type { ConfigAccess } from '#/config/manager.ts';
+import type { CommandBundle } from '#/handlers/commands/index.ts';
+import type { DelegationService } from '#/services/delegation/delegation.ts';
+import type { EventBus, EventSink } from '#/services/event-bus.ts';
+import type { I18nService } from '#/services/i18n.ts';
+import type { KvService } from '#/services/kv.ts';
+import type { MeshAgentHost } from '#/services/mesh-agent/host/index.ts';
+import type { MessageLookup } from '#/services/messages/lookup.ts';
+import type { MessageIngress } from '#/services/messages/types.ts';
+import type { OversightService } from '#/services/oversight.ts';
+import type { RoundCache } from '#/services/round-cache.ts';
+import type { SessionSandboxService } from '#/services/session-sandbox.ts';
+import type { Store } from '#/store/db/index.ts';
+
+import { eventDefinition } from '@monad/protocol';
+
+import { HandlerError } from '#/handlers/handler-error.ts';
+import { SessionSteerMailbox } from '#/handlers/session/steer-mailbox.ts';
+import { makeEvent } from '#/services/event-bus.ts';
+import { createMessageIngress } from '#/services/messages/ingress.ts';
+import { ManagedAgentSessionLifecycle } from '#/services/native-agent/agent-session-lifecycle.ts';
+
+export type Disposer = () => void;
+export type { EventSink };
+
+export interface SessionDeps {
+  store: Store;
+  agent: Agent;
+  bus: EventBus;
+  cache: RoundCache;
+  log?: Logger;
+  /** Distributed-state handle (embedded KV via Bun.RedisClient; cloud swaps in real Redis). Retained
+   *  as the reuse seam — no session-layer consumer today (cross-process resume was intentionally dropped). */
+  kv?: KvService;
+  localeService?: Pick<I18nService, 't'>;
+  oversight?: Pick<OversightService, 'cancelSession'>;
+  /** Reverse fs/terminal delegation for ACP-bridged sessions. Absent → no delegation (daemon sandbox). */
+  delegation?: DelegationService;
+  /** Per-session ephemeral sandbox roots (sandbox mode 'ephemeral'). Absent → no per-session root. */
+  sessionSandbox?: SessionSandboxService;
+  /** Config file paths — used to resolve agents on session create. */
+  paths?: Pick<MonadPaths, 'config' | 'agentsConfig' | 'mesh'> & Partial<Pick<MonadPaths, 'cache'>>;
+  configManager?: ConfigAccess;
+  /** Slash-command backend (registry + model/compact/skill hooks). Absent → commands disabled. */
+  commands?: CommandBundle;
+  /** Lifecycle hooks — SessionStart/SessionEnd fire from the lifecycle handlers. */
+  hooks?: Hooks;
+  /** Session deletion undo grace. Defaults to the product grace period. */
+  sessionDeleteGraceMs?: number;
+  /** cwd handed to command hooks (the resolved sandbox root). */
+  hookCwd?: string;
+  /** Discover project-local skills from a cwd, called on session create when cwd is set. */
+  discoverProjectSkills?: (cwd: string) => Promise<LoadedSkill[]>;
+  /** Per-session tool exposure filter from the bound Studio agent's atoms allow/deny policy. Returns
+   * undefined for unbound/unrestricted sessions; composed with any transport toolFilter on each turn. */
+  agentToolFilter?: (sessionId: SessionId) => ((toolName: string) => boolean) | undefined;
+  /** Effective global and private Skills for the session's bound Studio agent. */
+  agentSkills?: (sessionId: SessionId) => LoadedSkill[];
+  /** Per-session fs sandbox roots from the bound Studio agent's `sandbox` override (global ceiling
+   * applied). Returns undefined when there's no override → the caller inherits the daemon default. */
+  agentSandboxRoots?: (sessionId: SessionId) => string[] | undefined;
+  meshAgentHost?: Pick<
+    MeshAgentHost,
+    | 'preflight'
+    | 'input'
+    | 'list'
+    | 'start'
+    | 'stop'
+    | 'stopSession'
+    | 'archiveSession'
+    | 'unarchiveSession'
+    | 'deleteSession'
+    | 'pendingLoginRequirements'
+    | 'pendingLoginRequiredEvents'
+  >;
+  messageIngress?: MessageIngress;
+  messageLookup?: Pick<MessageLookup, 'getMany'>;
+}
+
+/** Execution config applied to every turn of a session, set out-of-band (the ACP bridge pushes the
+ * editor's sandbox roots + session-scoped MCP tools via `configureRuntime`). Absent → daemon defaults. */
+interface SessionRuntime {
+  /** Replaces the daemon's configured sandbox roots for this session (e.g. the editor's cwd). */
+  sandboxRoots?: string[];
+  /** Session-scoped tools (e.g. client-provided MCP servers) added to the loop for this session. */
+  extraTools?: Tool[];
+  /** Serializable MCP server descriptors pushed for this session, reusable for outbound ACP delegation. */
+  mcpServers?: SessionMcpServer[];
+  /** Live MCP connections backing `extraTools`; closed when the session is deleted/closed. */
+  mcpConnections?: McpConnection[];
+  /** Delegating fs/terminal backends (ACP editor performs the ops) — installed when the session
+   * advertised fs/terminal capability via configureRuntime's `delegate` flag. */
+  backends?: ToolBackends;
+  /** Drops daemon-host tools (process_*, code_execute, file_glob/grep) when execution is delegated. */
+  toolFilter?: (toolName: string) => boolean;
+  /** Project-local skills loaded from session.cwd/.monad/skills/ — merged into the loop for this session. */
+  extraSkills?: LoadedSkill[];
+}
+
+export interface SessionContext {
+  deps: SessionDeps;
+  messageIngress: MessageIngress;
+  managedAgentSessions: ManagedAgentSessionLifecycle;
+  aborts: Map<SessionId, AbortController>;
+  steers: Map<SessionId, SessionSteerMailbox>;
+  /** Per-transcript execution config (see {@link SessionRuntime}); keyed by session or project id. */
+  runtime: Map<SessionId, SessionRuntime>;
+  requireSession(id: SessionId): Session;
+  makeEmit(round: Event[]): (event: Event) => void;
+  touchSession(sessionId: SessionId): void;
+  persistAndRetire(sessionId: SessionId, round: Event[]): void;
+  emitLifecycle(
+    sessionId: SessionId,
+    type: EventType,
+    payload: Record<string, unknown>,
+    opts?: { projectId?: ProjectId }
+  ): void;
+  beginRun(sessionId: SessionId): { round: Event[]; signal: AbortSignal };
+  enqueueSteers(sessionId: SessionId, messages: string[]): boolean;
+  trackRun<T>(sessionId: SessionId, signal: AbortSignal, run: Promise<T>): Promise<T>;
+  waitForRun(sessionId: SessionId): Promise<void>;
+}
+
+export function createSessionContext(deps: SessionDeps): SessionContext {
+  const { store, bus, cache } = deps;
+  const aborts = new Map<SessionId, AbortController>();
+  const activeRuns = new Map<SessionId, Promise<void>>();
+  const steers = new Map<SessionId, SessionSteerMailbox>();
+  const runtime = new Map<SessionId, SessionRuntime>();
+  const messageIngress = deps.messageIngress ?? createMessageIngress({ store, bus });
+  const managedAgentSessions = new ManagedAgentSessionLifecycle({ store, bus });
+
+  function requireSession(id: SessionId): Session {
+    const session = store.getSession(id);
+    // `not_found`, not `invalid`: a well-formed id for a session that does not exist is a 404, and
+    // the `invalid` branch of the public-error mapper scrubs the message to "request validation
+    // failed" — so a caller used to get neither the right status nor the reason.
+    if (!session) throw new HandlerError('not_found', `session not found: ${id}`);
+    return session;
+  }
+
+  function makeEmit(round: Event[]): (event: Event) => void {
+    return (event: Event) => {
+      cache.append(event);
+      round.push(event);
+      bus.publish(event);
+    };
+  }
+
+  // Publish-only (not persisted via appendEvents): the control stream carries ephemeral list
+  // deltas — a reconnecting client re-fetches the list — so a per-turn event row would only bloat
+  // the log. Renames/state changes still persist through emitLifecycle.
+  function bumpSessionActivity(sessionId: SessionId): void {
+    const updated = store.updateSession(sessionId, {});
+    if (!updated) return;
+    bus.publish(makeEvent(sessionId, 'session.updated', { updatedAt: updated.updatedAt }));
+  }
+
+  function emitRunMarker(
+    sessionId: SessionId,
+    type: 'session.run.started' | 'session.run.completed' | 'session.run.failed' | 'session.run.cancelled',
+    payload: Record<string, unknown> = {}
+  ): void {
+    bus.publish(makeEvent(sessionId, type, { transcriptTargetId: sessionId, ...payload }));
+  }
+
+  function persistAndRetire(sessionId: SessionId, round: Event[]): void {
+    store.appendEvents(round.filter((event) => eventDefinition(event.type).persistence === 'durable'));
+    cache.retire(sessionId);
+  }
+
+  function emitLifecycle(
+    sessionId: SessionId,
+    type: EventType,
+    payload: Record<string, unknown>,
+    opts?: { projectId?: ProjectId }
+  ): void {
+    const projectId = opts?.projectId ?? store.getSession(sessionId)?.projectId;
+    const event: Event = makeEvent(sessionId, type, payload, projectId ? { projectId } : undefined);
+    store.appendEvents([event]);
+    bus.publish(event);
+  }
+
+  function beginRun(sessionId: SessionId): { round: Event[]; signal: AbortSignal } {
+    const round: Event[] = [];
+    const controller = new AbortController();
+    aborts.set(sessionId, controller);
+    steers.set(sessionId, new SessionSteerMailbox());
+    emitRunMarker(sessionId, 'session.run.started');
+    return { round, signal: controller.signal };
+  }
+
+  function trackRun<T>(sessionId: SessionId, signal: AbortSignal, run: Promise<T>): Promise<T> {
+    const settled = run.then(
+      () => emitRunMarker(sessionId, 'session.run.completed'),
+      (error: unknown) => {
+        if (signal.aborted) {
+          emitRunMarker(sessionId, 'session.run.cancelled', { reason: String(signal.reason ?? 'aborted') });
+          return;
+        }
+        const message = error instanceof Error ? error.message : String(error);
+        emitRunMarker(sessionId, 'session.run.failed', { error: { code: 'run_failed', message } });
+      }
+    );
+    activeRuns.set(sessionId, settled);
+    void settled.then(() => {
+      if (activeRuns.get(sessionId) === settled) activeRuns.delete(sessionId);
+      if (aborts.get(sessionId)?.signal === signal) {
+        aborts.delete(sessionId);
+        steers.delete(sessionId);
+      }
+    });
+    return run;
+  }
+
+  async function waitForRun(sessionId: SessionId): Promise<void> {
+    await activeRuns.get(sessionId);
+  }
+
+  function enqueueSteers(sessionId: SessionId, messages: string[]): boolean {
+    if (!activeRuns.has(sessionId)) return false;
+    return steers.get(sessionId)?.enqueueMany(messages) ?? false;
+  }
+
+  return {
+    deps,
+    messageIngress,
+    managedAgentSessions,
+    aborts,
+    steers,
+    runtime,
+    requireSession,
+    makeEmit,
+    touchSession: bumpSessionActivity,
+    persistAndRetire,
+    emitLifecycle,
+    beginRun,
+    enqueueSteers,
+    trackRun,
+    waitForRun
+  };
+}

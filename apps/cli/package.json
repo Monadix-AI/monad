@@ -1,0 +1,36 @@
+{
+  "name": "@monad/cli",
+  "version": "0.0.0",
+  "bin": {
+    "monad": "src/main.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/server": "^2.0.0",
+    "@monad/client": "workspace:*",
+    "@monad/environment": "workspace:*",
+    "@monad/i18n": "workspace:*",
+    "@monad/logger": "workspace:*",
+    "@monad/monad": "workspace:*",
+    "@monad/protocol": "workspace:*",
+    "@monad/tui": "workspace:*",
+    "@monad/utils": "workspace:*",
+    "@monad/web": "workspace:*",
+    "cac": "^7.0.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/client": "^2.0.0",
+    "@monad/tsconfig": "workspace:*"
+  },
+  "module": "src/main.ts",
+  "private": true,
+  "scripts": {
+    "dev": "bun --watch src/main.ts",
+    "link": "bun link",
+    "start": "bun src/main.ts",
+    "test": "bun ../../scripts/quiet-run.ts bun ../../scripts/bun-test.ts test/unit/ --only-failures",
+    "test:e2e": "bun ../../scripts/quiet-run.ts bun ../../scripts/bun-test.ts test/e2e/ --only-failures",
+    "typecheck": "bun ../../scripts/quiet-run.ts tsc --noEmit"
+  },
+  "type": "module"
+}

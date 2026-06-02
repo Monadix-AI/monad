@@ -1,0 +1,13 @@
+{
+  "daemon.ready.title": "Monad 已启动",
+  "daemon.ready.webUi": "Web 界面：",
+  "daemon.ready.cli": "命令行：",
+  "daemon.ready.configure": "配置 model provider：",
+  "daemon.singleton.alreadyRunning": "Monad Daemon 已在运行，请先运行 `monad stop` 停止它。",
+  "daemon.session.contextEvicted_other": "已从上下文清理约 {tokens} 个 token（{count} 个工具结果）。",
+  "daemon.session.contextHandoffSuggested": "上下文已使用 {pct}%，建议开启新会话。",
+  "daemon.mcp.taskRecovered.completed": "来自 {server} 的 MCP Task {taskId} 已在 Monad 重连期间完成。",
+  "daemon.mcp.taskRecovered.failed": "来自 {server} 的 MCP Task {taskId} 在 Monad 重连期间失败。",
+  "daemon.mcp.taskRecovered.cancelled": "来自 {server} 的 MCP Task {taskId} 已在 Monad 重连期间取消。",
+  "daemon.mcp.taskRecovered.inputRequired": "来自 {server} 的 MCP Task {taskId} 已恢复，需要你的输入。"
+}

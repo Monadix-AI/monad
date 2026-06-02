@@ -1,0 +1,11 @@
+[test]
+# `@testing-library/dom`'s `screen` singleton binds to `document` at MODULE EVALUATION time, and
+# `apps/web`'s suite runs every test/unit file in one Bun process — a per-file import ordering
+# trick can't win a race against a module the runner already evaluated for an earlier file, so
+# happy-dom must be registered before the runner resolves any test file's module graph at all.
+# `register-dom-first.ts` restores Bun's native fetch/Request/Response/Headers immediately after
+# registering (see that file) so real-network tests elsewhere in the suite are unaffected.
+preload = ["./test/register-dom-first.ts"]
+
+[run]
+silent = true

@@ -1,0 +1,56 @@
+import type { ReactElement } from 'react';
+import type { ProjectExperienceRuntime, ProjectExperienceRuntimeSource } from './runtime.ts';
+
+import { useMemo } from 'react';
+
+import { renderChatRoomWorkplaceExperience } from './chat-room/ui.tsx';
+import {
+  useWorkspaceProjectProjection as useProjection,
+  type WorkspaceProjectProjection
+} from './experience/use-workspace-project-projection.ts';
+import { createProjectExperienceRuntime as createRuntime } from './runtime.ts';
+
+export type { ProjectExperienceRuntimeSource } from './runtime.ts';
+
+type ProjectExperienceViewLike = {
+  runtime: unknown;
+};
+
+const builtinWorkplaceExperienceRenderers = {
+  'chat-room': (runtime: ProjectExperienceRuntime) =>
+    renderChatRoomWorkplaceExperience({ runtime: runtime.views['chat-room'] })
+} satisfies Record<string, (runtime: ProjectExperienceRuntime) => ReactElement>;
+
+export function renderBuiltinWorkplaceExperience(args: {
+  component: string;
+  view: ProjectExperienceViewLike;
+}): ReactElement | null {
+  const runtime = args.view.runtime as ProjectExperienceRuntime;
+  const renderer =
+    builtinWorkplaceExperienceRenderers[args.component as keyof typeof builtinWorkplaceExperienceRenderers];
+  return renderer?.(runtime) ?? null;
+}
+
+function buildProjectExperienceRuntime(
+  source: ProjectExperienceRuntimeSource,
+  opts: {
+    openAgentCard?: (id: string) => void;
+    switchExperience: (id: string) => void;
+  }
+): ProjectExperienceRuntime {
+  return createRuntime(source, opts);
+}
+
+export function useProjectExperienceProjection(args: Parameters<typeof useProjection>[0]): WorkspaceProjectProjection {
+  return useProjection(args);
+}
+
+export function useProjectExperienceRuntime(
+  source: ProjectExperienceRuntimeSource,
+  opts: {
+    openAgentCard?: (id: string) => void;
+    switchExperience: (id: string) => void;
+  }
+): ProjectExperienceRuntime {
+  return useMemo(() => buildProjectExperienceRuntime(source, opts), [source, opts]);
+}

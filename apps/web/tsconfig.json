@@ -1,0 +1,20 @@
+{
+  "extends": "@monad/tsconfig/tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "allowArbitraryExtensions": true,
+    "noUncheckedIndexedAccess": false,
+    "jsx": "react-jsx",
+    "paths": {
+      "#/*": ["./src/*", "./*", "../monad/src/*"],
+      "@monad/monad": ["../monad/src/public-api.ts"],
+      "@monad/monad/start": ["../monad/src/public-api.ts"],
+      "@monad/monad/log-maintenance": ["../monad/src/public-log-maintenance.ts"]
+    },
+    "allowJs": true,
+    "incremental": true
+  },
+  "include": ["**/*.ts", "**/*.tsx"],
+  "exclude": ["node_modules", ".next", "out"]
+}

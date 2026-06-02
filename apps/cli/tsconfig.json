@@ -1,0 +1,14 @@
+{
+  "extends": "@monad/tsconfig/tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ESNext", "DOM"],
+    "jsx": "react-jsx",
+    "paths": {
+      "#/*": ["../monad/src/*"],
+      "@monad/monad": ["../monad/src/public-api.ts"],
+      "@monad/monad/start": ["../monad/src/public-api.ts"],
+      "@monad/monad/log-maintenance": ["../monad/src/public-log-maintenance.ts"]
+    }
+  },
+  "include": ["src", "test"]
+}

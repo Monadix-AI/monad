@@ -1,0 +1,71 @@
+or {
+  `expect($value).toBeDefined()` as $match,
+  `expect($value).toBeTruthy()` as $match,
+  `expect($value).toBeFalsy()` as $match,
+  `expect($value).not.toBeNull()` as $match,
+  `expect($value).not.toBeUndefined()` as $match,
+  `expect($value).not.toBeFalsy()` as $match,
+  `expect($value).toBeInTheDocument()` as $match,
+  `expect(typeof $value).toBe('function')` as $match,
+  `expect(typeof $value).toBe("function")` as $match,
+  `test($name, () => {})` as $match,
+  `it($name, () => {})` as $match,
+  `const $discarded = $value` as $match where { $discarded <: r"^_[A-Za-z][A-Za-z0-9_]*$" },
+  `let $discarded = $value` as $match where { $discarded <: r"^_[A-Za-z][A-Za-z0-9_]*$" },
+  `expect($actual).$matcher($expected)` as $match where {
+    $matcher <: or {
+      `toContain`,
+      `toMatch`,
+      `toBe`,
+      `toEqual`
+    },
+    $actual <: r"^(?:markup|html|svg)$",
+    $expected <: r".*(?:(?:class|style|data-[\w-]+)=|</?[a-z][\w-]*\b).*"
+  },
+  `expect($actual).not.$matcher($expected)` as $match where {
+    $matcher <: or {
+      `toContain`,
+      `toMatch`,
+      `toBe`,
+      `toEqual`
+    },
+    $actual <: r"^(?:markup|html|svg)$",
+    $expected <: r".*(?:(?:class|style|data-[\w-]+)=|</?[a-z][\w-]*\b).*"
+  },
+  `expect($actual.match($pattern)).toHaveLength($count)` as $match where {
+    $actual <: r"^(?:markup|html|svg)$",
+    $pattern <: r".*(?:</?[a-z]|(?:class|style|data-[\w-]+)=).*"
+  },
+  `expect($actual).$matcher($expected)` as $match where {
+    $matcher <: or {
+      `toBe`,
+      `toEqual`
+    },
+    $actual <: contains or {
+      `getComputedStyle($...)`,
+      `$node.getBoundingClientRect()`,
+      `$node.boundingBox()`
+    }
+  },
+  `expect($actual).toEqual($expected)` as $match where {
+    $actual <: r"[\s\S]*(?:className\s*:|style\s*:\s*[\w.$?\[\]]+\.style\b)[\s\S]*"
+  },
+  `expect($actual).$matcher($expected)` as $match where {
+    $matcher <: or {
+      `toContain`,
+      `toMatch`
+    },
+    $actual <: r"^(?:source|code|bundle)$",
+    $expected <: r".*(?:(?:import|export|const|let|function|class|interface|type)\b|[A-Za-z_][A-Za-z0-9_]*\(|(?:process|Bun)\.).*"
+  },
+  `expect($actual).not.$matcher($expected)` as $match where {
+    $matcher <: or {
+      `toContain`,
+      `toMatch`
+    },
+    $actual <: r"^(?:source|code|bundle)$",
+    $expected <: r".*(?:(?:import|export|const|let|function|class|interface|type)\b|[A-Za-z_][A-Za-z0-9_]*\(|(?:process|Bun)\.).*"
+  }
+} where {
+  register_diagnostic(span=$match, message="Assert the exact observable outcome instead of existence or implementation shape.")
+}

@@ -1,0 +1,343 @@
+import type { SessionId } from '@monad/protocol';
+
+import { createLogger } from '@monad/logger';
+import { newId } from '@monad/protocol';
+
+import { createAgentRuntime } from '#/application/agent-runtime.ts';
+import { createCoreRuntime } from '#/application/core-runtime.ts';
+import { createNetworkRuntime } from '#/application/network-runtime.ts';
+import { runDaemonPreflight } from '#/application/preflight.ts';
+import { reconcileSessionPlanOutboxAtBoot } from '#/application/session-plan-boot.ts';
+import { launchDaemonTransports } from '#/application/transport-runtime.ts';
+import { createAtomPackRediscoverer } from '#/atoms/reload.ts';
+import { createMcpControls } from '#/capabilities/mcp/controls.ts';
+import { createObscuraController } from '#/capabilities/mcp/obscura.ts';
+import { createDaemonHandlers } from '#/handlers/daemon-handlers/index.ts';
+import { configureDaemonLogging } from '#/runtime/flags.ts';
+import { makeEvent } from '#/services/event-bus.ts';
+import { createMonadixProviderManager } from '#/services/monadix/index.ts';
+import { createMonadixTaskRunner } from '#/services/monadix/task-runner.ts';
+import { createUpgradeInfoMonitor } from '#/services/upgrade-info.ts';
+import { createHttpTransport } from '#/transports/http.ts';
+
+// Eden type-safe client inference (compile-time only). Derived from the transport factory
+// so it stays valid without a module-level app instance.
+// NOTE: this import intentionally uses a relative path so tsc emits a resolvable path in
+// dist/main.d.ts — the @/ alias is internal to @monad/monad and would not resolve for
+// consumers (e.g. @monad/client) reading the generated d.ts.
+type HttpTransport = ReturnType<typeof createHttpTransport>;
+export type App = HttpTransport;
+
+configureDaemonLogging();
+const logger = createLogger('monad-daemon');
+
+export async function startDaemon(opts?: { beforeListen?: (app: App) => void }): Promise<void> {
+  const preflight = await runDaemonPreflight({ supervisorEntryPath: import.meta.path, logger });
+  if (!preflight) return;
+  const { paths, flags } = preflight;
+  const {
+    stdioMode: STDIO_MODE,
+    stdoutRpc: STDOUT_RPC,
+    useMock: USE_MOCK,
+    devMode: DEV_MODE,
+    devSilent: DEV_SILENT
+  } = flags;
+  const core = await createCoreRuntime(preflight, logger);
+  const {
+    dataLayer,
+    cfg,
+    watchService,
+    runtime,
+    reloadTargets,
+    sandbox,
+    model,
+    capabilities,
+    atoms,
+    skills,
+    mcp: mcpRuntime,
+    interactions,
+    logMaintenance
+  } = core;
+  const { kv, store } = dataLayer;
+  const { sandboxRoots, sessionSandbox } = sandbox;
+  const { modelService, modelCatalog, embeddingIndexer } = model;
+  const { registry, commandRegistry } = capabilities;
+  const { loadedSkills, skillList, skillInstances, discoverProjectSkills, reloadSkills } = skills;
+  const {
+    activeAtomPacks,
+    atomConflicts,
+    atomDetailsByPack,
+    refreshWorkplaceExperienceSnapshot,
+    getWorkplaceExperienceSnapshot
+  } = atoms;
+
+  const networkRuntime = await createNetworkRuntime({
+    network: cfg.network,
+    initialOpenAiCompat: cfg.openaiCompat,
+    paths,
+    env: Bun.env,
+    loadConfig: async () => runtime.config.get().cfg
+  });
+  const { endpoint, remoteAccess } = networkRuntime;
+  const PORT = endpoint.port;
+  const HOST = endpoint.bindHost;
+
+  const agentRuntime = await createAgentRuntime(core, { host: HOST, port: PORT }, logger);
+  const {
+    bus,
+    messageIngress,
+    messageLookup,
+    cache,
+    oversight,
+    delegation,
+    agentPersona,
+    i18nService,
+    schedule,
+    memory,
+    hookRunner,
+    agent,
+    commandBundle,
+    channelService,
+    bindSessionGateway,
+    bindScheduledRun,
+    reconnectFileMcp,
+    setMonadixSync
+  } = agentRuntime;
+  const {
+    memoryService,
+    graphStore,
+    getMem0Data,
+    getLaws,
+    memoryPrepareBackend,
+    memorySetBackend,
+    memorySetMem0Models
+  } = memory;
+
+  // Handlers own the running experience workers, but the rediscovery sweep is built first — the
+  // sweep reads this holder after the swap so a fs-watcher-triggered reload rebinds them too.
+  let syncExperienceWorkers: (() => Promise<void>) | undefined;
+  const rediscoverAtomPacks = createAtomPackRediscoverer({
+    paths,
+    config: runtime.config,
+    atomConflicts,
+    atomDetailsByPack,
+    activeAtomPacks,
+    commandRegistry,
+    toolRegistry: registry,
+    modelProviderRegistry: modelService.registry,
+    i18nService,
+    reconnectFileMcp,
+    channelService,
+    interactions,
+    syncExperienceWorkers: () => syncExperienceWorkers?.() ?? Promise.resolve()
+  });
+
+  // Optional Obscura stdio MCP server: connect/disconnect/status behind a trust gate (pinned tool-set
+  // hash + per-tool auto-approve), one live connection (see #/capabilities/mcp/obscura.ts).
+  const { connectObscura, disconnectObscura, getObscuraStatus } = createObscuraController({ registry, log: logger });
+
+  const { getMcpStatus, mcpAuthorize, mcpReconnect, mcpTaskObserve, mcpTaskCancel } = createMcpControls({
+    paths,
+    registry,
+    logger,
+    config: runtime.config,
+    getConfigMcp: () => mcpRuntime.config,
+    setConfigMcp: (v) => {
+      mcpRuntime.replaceConfig(v);
+    },
+    fileMcpConnections: () => [...mcpRuntime.files],
+    obscuraStatus: () => getObscuraStatus()
+  });
+  const disposeMcpStatusStream = mcpRuntime.onStatusChange(() => {
+    bus.publish(makeEvent(newId('ses'), 'mcp.status_updated', {}));
+  });
+  process.on('exit', disposeMcpStatusStream);
+
+  const upgradeInfo = await createUpgradeInfoMonitor(paths);
+
+  const handlers = createDaemonHandlers({
+    store,
+    agent,
+    bus,
+    messageIngress,
+    messageLookup,
+    cache,
+    paths,
+    memoryService,
+    graphStore,
+    getMem0Data,
+    getLaws,
+    memoryPrepareBackend,
+    memorySetBackend,
+    memorySetMem0Models,
+    modelCatalog,
+    modelService,
+    kv,
+    mockMode: USE_MOCK,
+    oversight,
+    delegation,
+    hooks: hookRunner,
+    hookCwd: sandboxRoots?.[0] ?? paths.workspace,
+    sessionSandbox,
+    agentToolFilter: (sid) => {
+      return (name) => agentPersona.toolAllowed(sid, name, registry.sourceNameOf(name));
+    },
+    agentSkills: (sid) => agentPersona.skillsFor(sid, loadedSkills),
+    agentSandboxRoots: (sid) => agentPersona.sandboxRootsFor(sid),
+    interactions,
+    channelService,
+    localeService: i18nService,
+    configManager: runtime.config,
+    logMaintenance,
+    commands: commandBundle,
+    connectObscura,
+    disconnectObscura,
+    getObscuraStatus,
+    getMcpStatus,
+    mcpAuthorize,
+    mcpReconnect,
+    mcpTaskObserve,
+    mcpTaskCancel,
+    rediscoverAtomPacks: async () => {
+      await Promise.all([rediscoverAtomPacks(), reloadSkills()]);
+      await refreshWorkplaceExperienceSnapshot();
+    },
+    getAtomConflicts: () => atomConflicts,
+    getAtomDetails: (packName: string) => atomDetailsByPack.get(packName),
+    getWorkplaceExperienceSnapshot,
+    getWorkplaceExperienceApiHandler: (experienceId, method, path) =>
+      registry.getWorkplaceExperienceApiHandler(experienceId, method, path),
+    getWorkplaceExperienceApiRoute: (experienceId, method, path) =>
+      registry.getWorkplaceExperienceApiRoute(experienceId, method, path),
+    getExperienceWorkers: () => [...registry.experienceWorkers.values()],
+    getWorkplaceExperiences: () => [...registry.workplaceExperiences.values()],
+    reindexEmbeddings: () => {
+      const cleared = store.clearEmbeddings();
+      logger.info(`monad: cleared ${cleared} embedding(s) for re-index with the current embedding model`);
+      embeddingIndexer.kick();
+    },
+    indexerStatus: () => embeddingIndexer.status(),
+    skills: skillList,
+    skillInstances,
+    discoverProjectSkills,
+    getDaemonWarnings: () => networkRuntime.tls().warnings,
+    getNetworkRuntimeStatus: networkRuntime.status,
+    getCertFingerprint: () => networkRuntime.tls().fingerprint,
+    getCertExpiry: () => networkRuntime.tls().expiry,
+    networkHttps: cfg.network.https,
+    meshAgentServerUrl: endpoint.localUrl,
+    getUpgradeInfo: upgradeInfo.getUpgradeInfo,
+    log: logger
+  });
+
+  syncExperienceWorkers = handlers.syncExperienceWorkers;
+
+  bindSessionGateway(handlers.session);
+
+  // Republish any session-plan events durably saved but never confirmed published — a crash
+  // between `bus.publish` and marking the outbox row delivered, or a restart with the previous
+  // process's in-memory subscribers gone. Must run once subscribers (session gateway) are bound.
+  const planReconcile = reconcileSessionPlanOutboxAtBoot(store, bus);
+  if (planReconcile.drained > 0) {
+    logger.info(planReconcile, 'republished pending session-plan outbox events after restart');
+  }
+
+  // Watch the atoms directory for drop-in installs: a new atom pack folder (or a removed one)
+  // triggers the same rediscovery path as API-driven install/remove, so no daemon restart needed.
+  watchService.register({
+    name: 'atoms',
+    path: paths.atoms,
+    recursive: true,
+    // null = parent-dir rename event (macOS FSEvents coalescing). Any `.json` covers an atom-pack
+    // manifest, a pack's mcp.json, a standalone atoms/mcp/*.json, and an enable/disable .install.json
+    // edit — all of which the rediscovery sweep (re-scan packs + reconnect file MCP) must pick up.
+    filter: (filename) => filename === null || filename.endsWith('.json'),
+    onChange: () => {
+      logger.info('monad: Atoms directory changed — rediscovering Atom Packs');
+      return Promise.all([rediscoverAtomPacks(), reloadSkills()]).then(() => {});
+    }
+  });
+
+  bindScheduledRun(async (prompt, sessionId) => {
+    const sid =
+      (sessionId as SessionId | undefined) ?? (await handlers.session.create({ title: 'Scheduled' })).sessionId;
+    await handlers.session.generate({ sessionId: sid, text: prompt });
+  });
+  await schedule.load();
+  process.on('exit', () => schedule.dispose());
+
+  const serveCfg = runtime.config.get().cfg;
+  await launchDaemonTransports({
+    serveOptions: {
+      handlers,
+      paths,
+      host: HOST,
+      port: PORT,
+      https: serveCfg.network.https,
+      remoteAccess,
+      localHttpFallback: {
+        enabled: serveCfg.network.localHttpFallback.enabled,
+        port: endpoint.localHttpFallback?.port ?? serveCfg.network.localHttpFallback.port
+      },
+      developerMode: serveCfg.developerMode === true,
+      i18n: i18nService,
+      channelService,
+      flags: {
+        devMode: DEV_MODE,
+        devSilent: DEV_SILENT,
+        stdoutRpc: STDOUT_RPC,
+        stdioMode: STDIO_MODE,
+        useMock: USE_MOCK
+      },
+      beforeListen: opts?.beforeListen
+    },
+    runtime,
+    network: networkRuntime,
+    reloadTargets,
+    schedule,
+    watchers: watchService,
+    channels: channelService,
+    meshAgents: { stopAll: handlers._stopMeshAgents }
+  });
+  void handlers.meshAgentSettings
+    .refreshCatalog()
+    .catch((error) => logger.warn({ error }, 'MeshAgent catalog startup probe failed'));
+
+  // Monadix provider presence: one registration + realtime subscription PER public agent
+  // (`visibility.public`), dial-out over Supabase Realtime (no public URL). The manager reconciles
+  // the live set on boot and on every config reload (so a toggle applies without a restart). Runs
+  // after transports are listening so a served agent can answer inbound tasks immediately.
+  const setAgentPublished = async (
+    agentId: string,
+    published: { providerId: string; publishedAt: string } | undefined
+  ) => {
+    await runtime.config.updateConfig((live) => {
+      const target = live.agent.agents.find((a) => a.id === agentId);
+      if (target) target.published = published;
+    });
+  };
+  const monadixManager = createMonadixProviderManager({
+    getConfig: () => runtime.config.get().cfg.monadix,
+    getToken: async () => runtime.config.get().cfg.monadix.oauth?.accessToken,
+    runnerFor: (agentId) => createMonadixTaskRunner({ handlers, agentId, logger }),
+    persistProviderId: (agentId, providerId) =>
+      setAgentPublished(agentId, { providerId, publishedAt: new Date().toISOString() }),
+    clearProviderId: (agentId) => setAgentPublished(agentId, undefined),
+    logger
+  });
+  const monadixAgentsFrom = (c: typeof cfg) =>
+    c.agent.agents.map((a) => ({
+      id: a.id,
+      name: a.name,
+      description: `A Monad agent (${a.name}) on the Monadix network.`,
+      isPublic: a.visibility?.public === true,
+      providerId: a.published?.providerId
+    }));
+  setMonadixSync((freshCfg) => monadixManager.sync(monadixAgentsFrom(freshCfg)));
+  // Fire-and-forget: registration + realtime connect are external network I/O and must stay off the
+  // cold-start path (they run after listen anyway). Failures are logged inside the manager. Shutdown
+  // teardown is intentionally not wired to `process.on('exit')` — it can't await the async
+  // deregister/removeChannel; the daemon's presence heartbeat simply stops and cabinet's stale-provider
+  // cron reaps it. Live config-reload teardown (unpublish) still runs through the awaited sync path.
+  void monadixManager.sync(monadixAgentsFrom(runtime.config.get().cfg));
+}

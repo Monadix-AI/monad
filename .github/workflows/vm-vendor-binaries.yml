@@ -1,0 +1,134 @@
+name: VM vendor binaries
+
+# Builds the VM backend's own guest/host binaries and publishes them as release assets, so a
+# multi-megabyte rebuild never lands another copy in git history. The daemon downloads them on
+# demand and verifies them against the sha256 pins in packages/sandbox-vm/src/vendor-assets.ts —
+# which is also the gate here: a build that does not reproduce the pinned bytes fails instead of
+# publishing something the runtime would then refuse to run.
+#
+# Bump flow: edit the sources → run the native build scripts locally → `bun scripts/pin-vm-vendor.ts
+# --write` → bump VENDOR_ASSET_RELEASE → push the matching tag.
+
+on:
+  push:
+    tags: ['vm-vendor-v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to publish the assets on (must match VENDOR_ASSET_RELEASE)
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  # The four Go binaries cross-compile from one runner: CGO is off and every target is set through
+  # GOOS/GOARCH, so host arch does not affect the output.
+  go-binaries:
+    name: go binaries
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: packages/sandbox-vm/native/vsock-agent/go.mod
+
+      - name: Build vsock-agent (linux amd64 + arm64)
+        run: bash packages/sandbox-vm/native/vsock-agent/build.sh
+
+      - name: Build winvm-helper and gvforwarder
+        run: bash packages/sandbox-vm/native/winvm-helper/build.sh
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: vendor-go
+          path: |
+            packages/sandbox-vm/vendor/vsock-agent-*
+            packages/sandbox-vm/vendor/winvm-helper-*.exe
+            packages/sandbox-vm/vendor/gvforwarder-*
+          if-no-files-found: error
+
+  # The seccomp observer is static C built for the host arch, and its build script runs a real
+  # self-test against the produced binary — so each arch builds on its own runner rather than
+  # cross-compiling into an untested artifact. The gcc image is pinned for the same reason the pins
+  # exist: a different compiler emits different bytes. Keep this in lockstep with
+  # sandbox-vm-native.yml, which gates the same build on pull requests.
+  seccomp-observer:
+    name: seccomp-observer (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+            platform: linux/amd64
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+            platform: linux/arm64
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Build and self-test
+        run: |
+          docker run --rm --platform ${{ matrix.platform }} \
+            --security-opt seccomp=unconfined \
+            -v "$PWD:/src" \
+            -w /src/packages/sandbox-vm/native/seccomp-observer \
+            gcc:15-bookworm ./build.sh
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: vendor-seccomp-${{ matrix.arch }}
+          path: packages/sandbox-vm/vendor/seccomp-observer-${{ matrix.arch }}
+          if-no-files-found: error
+
+  publish:
+    name: verify and publish
+    needs: [go-binaries, seccomp-observer]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: package.json
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          path: packages/sandbox-vm/vendor
+          pattern: vendor-*
+          merge-multiple: true
+
+      # Exits non-zero when any built byte stream differs from its pin, so an unreproducible build
+      # can never become a published asset the runtime would reject.
+      - name: Verify against the committed sha256 pins
+        run: bun scripts/pin-vm-vendor.ts
+
+      - name: Check the tag matches VENDOR_ASSET_RELEASE
+        env:
+          TAG: ${{ github.event.inputs.tag || github.ref_name }}
+        run: |
+          expected=$(bun -e "import {VENDOR_ASSET_RELEASE} from './packages/sandbox-vm/src/vendor-assets.ts'; console.log(VENDOR_ASSET_RELEASE)")
+          if [ "$TAG" != "$expected" ]; then
+            echo "tag '$TAG' does not match VENDOR_ASSET_RELEASE '$expected'" >&2
+            exit 1
+          fi
+
+      - name: Publish assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.inputs.tag || github.ref_name }}
+        run: |
+          cd packages/sandbox-vm/vendor
+          gh release view "$TAG" >/dev/null 2>&1 ||
+            gh release create "$TAG" --title "VM vendor binaries $TAG" \
+              --notes "Guest and host binaries for the VM sandbox backend. Verified against the sha256 pins in packages/sandbox-vm/src/vendor-assets.ts."
+          gh release upload "$TAG" --clobber \
+            gvforwarder-amd64 gvforwarder-arm64 \
+            seccomp-observer-amd64 seccomp-observer-arm64 \
+            vsock-agent-amd64 vsock-agent-arm64 \
+            winvm-helper-amd64.exe winvm-helper-arm64.exe

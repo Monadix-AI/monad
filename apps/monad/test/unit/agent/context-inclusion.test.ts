@@ -1,0 +1,50 @@
+import type { ChatMessage, ModelContentPart } from '#/agent/index.ts';
+
+import { afterEach, expect, test } from 'bun:test';
+import { registerMessageType, unregisterMessageType } from '@monad/protocol';
+import { z } from 'zod';
+
+import { replayHistory } from '#/agent/index.ts';
+
+function msg(id: string, text: string, role: ChatMessage['role'] = 'user'): ChatMessage {
+  return { id, sessionId: 'ses_100000000000', role, text, createdAt: '2026-01-01T00:00:00Z' } as ChatMessage;
+}
+
+const content = (id: string, text: string): ModelContentPart[] => [
+  { type: 'text', text: `[Monad message: id=${id}]` },
+  { type: 'text', text }
+];
+
+afterEach(() => unregisterMessageType('demo:note'));
+
+test('a per-message includeInContext:false override drops the message from the prompt', () => {
+  const history: ChatMessage[] = [
+    msg('m1', 'hello'),
+    { ...msg('m2', 'secret ui note', 'assistant'), includeInContext: false },
+    msg('m3', 'goodbye', 'assistant')
+  ];
+  expect(replayHistory(history).map((m) => m.content)).toEqual([content('m1', 'hello'), content('m3', 'goodbye')]);
+});
+
+test('a per-message includeInContext:true override re-includes an otherwise-excluded type', () => {
+  const history: ChatMessage[] = [
+    msg('m1', 'hello'),
+    { ...msg('m2', 'kept directive', 'assistant'), type: 'directive', includeInContext: true }
+  ];
+  expect(replayHistory(history).map((m) => m.content)).toEqual([
+    content('m1', 'hello'),
+    content('m2', 'kept directive')
+  ]);
+});
+
+test('an atom type registered with includeInContext:false is excluded from the prompt', () => {
+  registerMessageType('demo', { type: 'note', dataSchema: z.unknown(), fallbacks: ['text'], includeInContext: false });
+  const history: ChatMessage[] = [
+    msg('m1', 'hello'),
+    { ...msg('m2', 'atom-pack chrome', 'assistant'), type: 'demo:note' },
+    msg('m3', 'world')
+  ];
+  expect(replayHistory(history).map((m) => m.content)).toEqual([
+    [...content('m1', 'hello'), { type: 'text', text: '\n\n' }, ...content('m3', 'world')]
+  ]);
+});

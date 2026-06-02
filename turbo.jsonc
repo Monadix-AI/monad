@@ -1,0 +1,139 @@
+{
+  "$schema": "./node_modules/turbo/schema.json",
+  "ui": "tui",
+  "globalDependencies": [".env*", "tsconfig*", "biome*"],
+  "globalEnv": ["MONAD_TEST_COVERAGE", "NEXT_OUTPUT", "NODE_ENV"],
+  "globalPassThroughEnv": [
+    // Monad runtime and local state roots.
+    "AI_SDK_DEVTOOLS_PORT",
+    "MONAD_AGENT_ID",
+    "MONAD_AGENT_TOKEN_FILE",
+    "MONAD_HOME",
+    "MONAD_HOST",
+    "MONAD_HTTP_PORT",
+    "MONAD_KV_UI_PORT",
+    "MONAD_QUALITY_LOUD",
+    "MONAD_MESH_SESSION_ID",
+    "MONAD_NO_OPEN",
+    "MONAD_PORT",
+    "MONAD_PROJECT_SESSION_ID",
+    "MONAD_SERVER_URL",
+    "MONAD_SKIP_GIT",
+    "MONAD_SKIP_SETUP",
+    "MONAD_SUPERVISOR_PID",
+
+    // Live model e2e (opt-in): provider key + model id. Read only by the live test suite.
+    "OPENROUTER_API_KEY",
+    "MONAD_LIVE_MODEL",
+    "MONAD_LIVE_AGENTS",
+    "MONAD_LIVE_OPENCLAW",
+    "TARBALL_GLOB",
+
+    // Live qdrant integration test (opt-in).
+    "MONAD_QDRANT_LIVE",
+    "MONAD_QDRANT_LIVE_PORT",
+
+    // MeshAgent real resume contract tests (opt-in local sessions).
+    "MONAD_MESH_AGENT_REAL_CODEX_SESSION",
+    "MONAD_MESH_AGENT_REAL_CODEX_CWD",
+    "MONAD_MESH_AGENT_REAL_CLAUDE_SESSION",
+    "MONAD_MESH_AGENT_REAL_CLAUDE_CWD",
+    "MONAD_MESH_AGENT_REAL_AUTH_STATUS",
+    "MONAD_TEST_CONTAINER_DEPS",
+    "MONAD_TEST_DEBUG",
+
+    // Web/dev server host and port wiring.
+    "MONAD_URL",
+    "WEB_HOST",
+    "WEB_PORT",
+    "WEB_STORYBOOK_PORT",
+    "UI_STORYBOOK_PORT",
+
+    // Generic terminal/runtime behavior.
+    "NO_COLOR",
+    "PORT",
+
+    // Written by the coverage summary step; provided by the Actions runner.
+    "GITHUB_STEP_SUMMARY",
+
+    // 3rd-party tooling paths.
+    "BUN_RUNTIME_TRANSPILER_CACHE_PATH",
+    "PLAYWRIGHT_BROWSERS_PATH",
+    "CLAUDE_CODE_GIT_BASH_PATH",
+
+    // User identity hints.
+    "HOME",
+    "USER",
+    "USERNAME",
+    "USERPROFILE",
+
+    // Windows shell and filesystem conventions.
+    "APPDATA",
+    "LOCALAPPDATA",
+    "PATHEXT",
+    "ProgramFiles",
+    "ProgramFiles(x86)",
+
+    // XDG base directories (Linux/macOS setups).
+    "XDG_CACHE_HOME",
+    "XDG_CONFIG_HOME",
+    "XDG_DATA_HOME",
+    "XDG_RUNTIME_DIR",
+    "XDG_STATE_HOME"
+  ],
+  "remoteCache": {
+    "enabled": true
+  },
+  "tasks": {
+    "build": {
+      "dependsOn": ["generate", "^build"],
+      "inputs": ["$TURBO_DEFAULT$", "!**/*.test.ts", "!**/*.test.tsx", "!test/**"],
+      "outputs": ["dist/**", "build/**", "out/**", ".next/**", "!.next/cache/**"]
+    },
+    "build-storybook": {
+      "dependsOn": ["generate", "^build"],
+      "outputs": ["storybook-static/**"]
+    },
+    "typecheck": {
+      "dependsOn": ["generate", "^typecheck"],
+      "inputs": ["$TURBO_DEFAULT$", "!**/*.test.ts", "!**/*.test.tsx", "!test/**"]
+    },
+    "test": {
+      "dependsOn": ["generate", "^build"]
+    },
+    "test:e2e": {
+      "dependsOn": ["generate", "^build"],
+      "env": ["PLAYWRIGHT_SHARD", "PLAYWRIGHT_TRACE", "PLAYWRIGHT_WORKERS"]
+    },
+    "generate": {
+      "dependsOn": ["^generate"],
+      "inputs": ["$TURBO_DEFAULT$", "!**/*.test.ts", "!**/*.test.tsx", "!test/**"],
+      "outputs": [
+        "generated/**",
+        "src/catalog-types.ts",
+        "src/routeTree.gen.ts",
+        "native/common/atlas.h",
+        "*.schema.json"
+      ]
+    },
+    "//#dev:open-storybooks": {
+      "persistent": true,
+      "cache": false
+    },
+    "start:dev": {
+      "dependsOn": ["generate"],
+      "persistent": true,
+      "cache": false
+    },
+    "devtools": {
+      "dependsOn": ["generate"],
+      "persistent": true,
+      "cache": false
+    },
+    "storybook": {
+      "dependsOn": ["generate"],
+      "persistent": true,
+      "cache": false
+    }
+  }
+}

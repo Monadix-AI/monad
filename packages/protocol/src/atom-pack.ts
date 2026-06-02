@@ -1,0 +1,449 @@
+// Atom pack manifest wire/validation schema. The manifest is untrusted input read off disk (or
+// fetched) before any atom pack code runs, so it is parsed, never cast. The authoring TS interface
+// is @monad/sdk-atom's AtomPackManifest; this schema must list the same atom kinds.
+
+import { z } from 'zod';
+
+import {
+  channelConnectionModeSchema,
+  channelEnvVarSchema,
+  channelIconSchema,
+  channelSetupGuideSchema
+} from './channel.ts';
+import { agentIdSchema } from './ids.ts';
+
+/** A bundle entry path is joined onto the atom pack dir to write (install) and import (discovery).
+ *  It MUST stay inside that dir — an absolute path or a `..` segment would let a crafted manifest
+ *  write/execute outside the sandbox (arbitrary file write + code load). Enforced here at the parse
+ *  boundary so every reader (install, discovery) gets the same guarantee. */
+const safeEntrySchema = z
+  .string()
+  .min(1)
+  .refine((p) => {
+    if (p.startsWith('/') || /^[a-z]:[\\/]/i.test(p) || p.includes('\\') || p.includes('\0')) return false;
+    return !p.split('/').some((seg) => seg === '..');
+  }, 'entry must be a relative path within the Atom Pack directory (no leading "/", drive, "\\", or ".." segments)');
+
+// 'locale', 'mcp', and 'skill' are file-based and self-declaring: their presence on disk
+// (under the pack's locales/ dir, mcp.json, or skills/ dir) is the declaration — they do NOT
+// need to appear in atoms[] for discovery to work. Listing them in atoms[] is allowed for
+// tooling/documentation purposes but has no runtime effect.
+export const atomKindSchema = z.enum([
+  'connector',
+  'channel',
+  'command',
+  'message-type',
+  'locale',
+  'provider',
+  'hook',
+  'sandbox',
+  'workplace-experience',
+  'agent-adapter',
+  'mcp',
+  'skill'
+]);
+export type AtomKind = z.infer<typeof atomKindSchema>;
+
+export const workplaceExperiencePermissionSchema = z.enum([
+  'experience.state',
+  'experience.worker',
+  'project.sessions.read',
+  'project.sessions.create',
+  'project.sessions.send',
+  'project.members.read',
+  'project.members.invite',
+  'project.members.update',
+  'project.members.remove',
+  'project.agents.control',
+  'project.observations.read',
+  'project.approvals.read',
+  'project.approvals.resolve'
+]);
+export type WorkplaceExperiencePermission = z.infer<typeof workplaceExperiencePermissionSchema>;
+
+export const atomPackManifestSchema = z.object({
+  name: z
+    .string()
+    .min(1)
+    .regex(/^[a-z0-9][a-z0-9._-]*$/i, 'Atom Pack name must be a safe slug'),
+  version: z.string().min(1),
+  sdkVersion: z.string().min(1),
+  /** Semver range of supported Monad host versions, e.g. ">=0.1.0 <0.2.0". Absent means no host-version gate. */
+  monadVersion: z.string().min(1).optional(),
+  atoms: z.array(atomKindSchema),
+  permissions: z.array(workplaceExperiencePermissionSchema).optional(),
+  entry: safeEntrySchema.optional(),
+  source: z.object({ repo: z.string(), commit: z.string() }).optional(),
+  integrity: z.string().optional(), // "sha256-…"
+  signature: z.string().optional(),
+  description: z.string().optional(),
+  author: z.string().optional(),
+  /** Relative dirs inside the package containing skill subdirectories. Default: ['skills']. */
+  skillDirs: z.array(z.string()).optional(),
+  /** Relative path to the mcp.json config file. Default: 'mcp.json'. */
+  mcpConfig: z.string().optional(),
+  /** Relative dirs inside the package containing locale files (<lng>/<namespace>.json). Default: ['locales']. */
+  localeDirs: z.array(z.string()).optional()
+});
+export type AtomPackManifestWire = z.infer<typeof atomPackManifestSchema>;
+
+export function parseAtomPackManifest(raw: unknown): AtomPackManifestWire {
+  return atomPackManifestSchema.parse(raw);
+}
+
+/** One concrete atom inside a pack (a single channel, command, provider, …), for the detail view.
+ *  `manifest.atoms` lists the pack's *kinds*; this lists the individual atoms of each kind. */
+export const atomDescriptorSchema = z.object({
+  kind: atomKindSchema,
+  id: z.string(),
+  name: z.string().optional(),
+  description: z.string().optional(),
+  icon: channelIconSchema.optional(),
+  channel: z
+    .object({
+      envVars: z.array(channelEnvVarSchema).default([]),
+      icon: channelIconSchema.optional(),
+      setup: channelSetupGuideSchema.optional(),
+      connectionMode: channelConnectionModeSchema.optional()
+    })
+    .optional()
+});
+export type AtomDescriptor = z.infer<typeof atomDescriptorSchema>;
+
+export const atomPackSourceKindSchema = z.enum(['github', 'local']);
+export type AtomPackSourceKind = z.infer<typeof atomPackSourceKindSchema>;
+
+export const installedAtomPackSchema = z.object({
+  /** The operable identity = install dir (folder) name. Unique across packs (a same-named pack from
+   *  a different source installs under a disambiguating suffix). Use this for enable/remove/pin. */
+  name: z.string(),
+  /** The pack's self-declared manifest name (display label); may collide across packs. */
+  displayName: z.string().optional(),
+  version: z.string(),
+  monadVersion: z.string().optional(),
+  atoms: z.array(atomKindSchema),
+  enabled: z.boolean(),
+  source: z.string().optional(), // the install spec, e.g. "github:owner/repo@v1.2.3"
+  sourceKind: atomPackSourceKindSchema.optional(),
+  revision: z.string().optional(),
+  canUpdate: z.boolean().default(false),
+  installedAt: z.string().optional(),
+  /** Manifest metadata surfaced in the atom-pack detail view. All optional — a drop-in pack may
+   *  declare none. `repository` is the manifest's `source` (repo + commit), distinct from the
+   *  install-spec `source` above. */
+  description: z.string().optional(),
+  author: z.string().optional(),
+  sdkVersion: z.string().optional(),
+  repository: z.object({ repo: z.string(), commit: z.string() }).optional(),
+  /** First-party pack bundled with monad (`monad-builtins`). Always enabled and not removable — the
+   *  UI surfaces it read-only, distinct from installed/drop-in packs. */
+  builtin: z.boolean().optional(),
+  /** The pack's individual atoms (empty when the daemon can't enumerate them, e.g. a drop-in pack
+   *  whose module isn't introspected — the UI then falls back to the kind summary). */
+  atomDetails: z.array(atomDescriptorSchema).default([])
+});
+export type InstalledAtomPack = z.infer<typeof installedAtomPackSchema>;
+
+// Atom kinds that share a namespace and can produce bare-id collisions.
+export const namespacedAtomKindSchema = z.enum(['channel', 'connector', 'command', 'skill']);
+export type NamespacedAtomKind = z.infer<typeof namespacedAtomKindSchema>;
+
+// A surfaced bare-name collision: two+ packs claimed the same id for a namespace-coexist kind. The
+// winner owns the bare name (pin ?? first-wins); shadowed packs stay reachable via `<packId>__<id>`.
+// The UI lists these so the user can pin a different winner (config.atomPins) or remove a pack.
+export const atomConflictSchema = z.object({
+  kind: namespacedAtomKindSchema,
+  bareId: z.string(),
+  winner: z.string(),
+  shadowed: z.array(z.string())
+});
+export type AtomConflict = z.infer<typeof atomConflictSchema>;
+
+// Set (or clear) the user pin that decides which pack wins a bare id for a namespace-coexist kind.
+// `packId: null` clears the pin → back to first-wins. Persisted to config.atomPins and re-resolved.
+export const setAtomPinRequestSchema = z.object({
+  kind: namespacedAtomKindSchema,
+  bareId: z.string().min(1),
+  packId: z.string().min(1).nullable()
+});
+export type SetAtomPinRequest = z.infer<typeof setAtomPinRequestSchema>;
+
+export const listAtomPacksResponseSchema = z.object({
+  atomPacks: z.array(installedAtomPackSchema),
+  /** Bare-name collisions from the last load sweep — empty when nothing collided. */
+  conflicts: z.array(atomConflictSchema).default([])
+});
+export type ListAtomPacksResponse = z.infer<typeof listAtomPacksResponseSchema>;
+
+export const getAtomPackResponseSchema = z.object({ atomPack: installedAtomPackSchema });
+export type GetAtomPackResponse = z.infer<typeof getAtomPackResponseSchema>;
+
+export const workplaceExperienceWebComponentEntrySchema = z.object({
+  type: z.literal('web-component'),
+  module: z.string().min(1),
+  tagName: z.string().min(1)
+});
+
+export const workplaceExperienceHostComponentEntrySchema = z.object({
+  type: z.literal('host-component'),
+  component: z.string().min(1)
+});
+
+export const workplaceExperienceEntrySchema = z.discriminatedUnion('type', [
+  workplaceExperienceWebComponentEntrySchema,
+  workplaceExperienceHostComponentEntrySchema
+]);
+export type WorkplaceExperienceEntry = z.infer<typeof workplaceExperienceEntrySchema>;
+
+export const workplaceExperienceApiMethodSchema = z.enum(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']);
+export type WorkplaceExperienceApiMethod = z.infer<typeof workplaceExperienceApiMethodSchema>;
+
+export const workplaceExperienceApiRouteSchema = z.object({
+  method: workplaceExperienceApiMethodSchema,
+  path: z.string().min(1).regex(/^\//, 'workplace experience API route path must start with "/"')
+});
+export type WorkplaceExperienceApiRoute = z.infer<typeof workplaceExperienceApiRouteSchema>;
+
+export const workplaceExperienceApiSchema = z.object({
+  routes: z.array(workplaceExperienceApiRouteSchema)
+});
+export type WorkplaceExperienceApi = z.infer<typeof workplaceExperienceApiSchema>;
+
+export const workplaceExperienceDefinitionSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1),
+  api: workplaceExperienceApiSchema.optional(),
+  icon: z.string().optional(),
+  entry: workplaceExperienceEntrySchema,
+  // Host-stamped, never author-supplied: the daemon replaces whatever an atom pack puts here with the
+  // permissions its manifest declared, so an experience cannot widen its own action surface.
+  permissions: z.array(workplaceExperiencePermissionSchema).optional()
+});
+export type WorkplaceExperienceDefinition = z.infer<typeof workplaceExperienceDefinitionSchema>;
+
+export const workplaceExperienceProjectDialogRequestSchema = z.discriminatedUnion('type', [
+  z.object({
+    type: z.literal('project-settings'),
+    open: z.boolean(),
+    intent: z.enum(['connect-agent', 'spawn-agent']).optional()
+  }),
+  z.object({
+    type: z.literal('project-member-settings'),
+    open: z.boolean(),
+    memberId: z.string().min(1).optional()
+  })
+]);
+export type WorkplaceExperienceProjectDialogRequest = z.infer<typeof workplaceExperienceProjectDialogRequestSchema>;
+
+/** A Studio settings section a workplace experience can navigate the host to. */
+export type WorkplaceExperienceStudioSection = 'models' | 'meshAgents';
+
+export interface WorkplaceExperienceHostApi<Snapshot = unknown, Actions = unknown> {
+  /** Contract version the host emitted this payload against; a component reads it to refuse/degrade
+   *  against an older major. Concrete Snapshot/Actions types live in @monad/sdk-atom
+   *  (WorkplaceExperienceHostApiV1) — they are UI view-models and cannot live in this wire layer. */
+  version: number;
+  snapshot: Snapshot;
+  actions: Actions;
+  embedded: boolean;
+  apiBaseUrl?: string;
+  /** Current voice-model configuration state, for experiences that surface voice input. */
+  voiceModelState?: 'checking' | 'configured' | 'missing' | 'failed';
+  requestProjectDialog(request: WorkplaceExperienceProjectDialogRequest): void;
+  /** Navigate the host to a Studio settings section. */
+  openStudio(section?: WorkplaceExperienceStudioSection): void;
+}
+
+export const listWorkplaceExperiencesResponseSchema = z.object({
+  experiences: z.array(workplaceExperienceDefinitionSchema)
+});
+export type ListWorkplaceExperiencesResponse = z.infer<typeof listWorkplaceExperiencesResponseSchema>;
+
+export const atomPackInstallSourceSchema = z
+  .string()
+  .min(1)
+  .refine(
+    (source) =>
+      source.startsWith('github:') ||
+      /^https:\/\/github\.com\//.test(source) ||
+      (source.startsWith('local:') && source.length > 'local:'.length) ||
+      source.startsWith('/') ||
+      source.startsWith('./') ||
+      source.startsWith('../') ||
+      /^[a-z]:[\\/]/i.test(source),
+    'Atom Pack source must be a GitHub repository or local development directory'
+  );
+
+export const installAtomPackRequestSchema = z.object({
+  source: atomPackInstallSourceSchema,
+  /** Caller asserts consent to the atom pack's declared atoms (default-deny without it). */
+  consent: z.boolean().default(false)
+});
+export type InstallAtomPackRequest = z.infer<typeof installAtomPackRequestSchema>;
+
+export const installAtomPackResponseSchema = z.object({
+  name: z.string(),
+  atoms: z.array(atomKindSchema),
+  /** Set when consent was required but not given — the caller should re-call with consent:true. */
+  needsConsent: z.boolean().optional(),
+  /** Advisory static-scan findings surfaced for the consent decision. */
+  warnings: z.array(z.string()).default([])
+});
+export type InstallAtomPackResponse = z.infer<typeof installAtomPackResponseSchema>;
+
+export const atomPackUpdateCheckSchema = z.object({
+  name: z.string(),
+  source: z.string(),
+  sourceKind: atomPackSourceKindSchema,
+  currentVersion: z.string(),
+  latestVersion: z.string(),
+  currentRevision: z.string(),
+  latestRevision: z.string(),
+  hasUpdate: z.boolean()
+});
+export type AtomPackUpdateCheck = z.infer<typeof atomPackUpdateCheckSchema>;
+
+export const updateAtomPackRequestSchema = z.object({ confirm: z.literal(true), revision: z.string().min(1) });
+export type UpdateAtomPackRequest = z.infer<typeof updateAtomPackRequestSchema>;
+
+// A skill installed from github: is version-locked via its `.install.json`; a hand-dropped skill
+// has no record (source/ref/commit absent). Distinct from atom packs: a skill is a single SKILL.md
+// packet, not a bundle.
+
+export const installedSkillSchema = z.object({
+  name: z.string(),
+  version: z.string().optional(),
+  icon: z.string().optional(),
+  source: z.string().optional(),
+  ref: z.string().optional(),
+  commit: z.string().optional(),
+  installedAt: z.string().optional()
+});
+export type InstalledSkill = z.infer<typeof installedSkillSchema>;
+
+export const listInstalledSkillsResponseSchema = z.object({ skills: z.array(installedSkillSchema) });
+export type ListInstalledSkillsResponse = z.infer<typeof listInstalledSkillsResponseSchema>;
+
+export const getInstalledSkillResponseSchema = z.object({ skill: installedSkillSchema });
+export type GetInstalledSkillResponse = z.infer<typeof getInstalledSkillResponseSchema>;
+
+export const skillInstallTargetSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('workspace') }),
+  z.object({ kind: z.literal('agent'), agentId: agentIdSchema })
+]);
+export type SkillInstallTarget = z.infer<typeof skillInstallTargetSchema>;
+
+export const installSkillRequestSchema = z.object({
+  source: z.string().min(1), // "github:owner/repo@<ref>"
+  /** Caller asserts consent after seeing the discovered skill names (default-deny without it). */
+  consent: z.boolean().default(false),
+  /** Replace an already-installed skill of the same name. */
+  overwrite: z.boolean().default(false),
+  target: skillInstallTargetSchema.optional()
+});
+export type InstallSkillRequest = z.infer<typeof installSkillRequestSchema>;
+
+export const installSkillResponseSchema = z.object({
+  skills: z.array(z.string()),
+  skillIds: z.array(z.string()).optional(),
+  commit: z.string().default(''),
+  needsConsent: z.boolean().optional(),
+  warnings: z.array(z.string()).default([])
+});
+export type InstallSkillResponse = z.infer<typeof installSkillResponseSchema>;
+
+// Re-install a github-tracked skill from its recorded source (the name travels in the path). Reuses
+// the install response (it IS an install with overwrite).
+export const updateSkillRequestSchema = z.object({ consent: z.boolean().default(false) });
+export type UpdateSkillRequest = z.infer<typeof updateSkillRequestSchema>;
+
+// Create/scaffold a personal-scope skill from raw SKILL.md content. The daemon validates the
+// frontmatter + name (parseSkillMd) and hot-reloads; the human running the CLI is the approver, so
+// no oversight gate (unlike the agent's skill_manage tool).
+export const createSkillRequestSchema = z.object({
+  name: z.string().min(1),
+  content: z.string().min(1),
+  target: skillInstallTargetSchema.optional()
+});
+export type CreateSkillRequest = z.infer<typeof createSkillRequestSchema>;
+
+export const createSkillResponseSchema = z.object({
+  id: z.string().optional(),
+  name: z.string(),
+  dir: z.string(),
+  warnings: z.array(z.string()).default([])
+});
+export type CreateSkillResponse = z.infer<typeof createSkillResponseSchema>;
+
+export const skillContentFileSchema = z.object({
+  contentType: z.string().optional(),
+  language: z.string().optional(),
+  path: z.string(),
+  preview: z.enum(['text', 'image', 'unsupported']).default('unsupported'),
+  size: z.number().int().nonnegative()
+});
+export type SkillContentFile = z.infer<typeof skillContentFileSchema>;
+
+export const skillContentQuerySchema = z.object({
+  file: z.string().optional(),
+  id: z.string().optional()
+});
+export type SkillContentQuery = z.infer<typeof skillContentQuerySchema>;
+
+export const getSkillContentResponseSchema = z.object({
+  name: z.string(),
+  content: z.string(),
+  contentType: z.string().optional(),
+  encoding: z.enum(['utf8', 'base64', 'none']).default('utf8'),
+  file: z.string().optional(),
+  files: z.array(skillContentFileSchema).default([]),
+  preview: z.enum(['text', 'image', 'unsupported']).default('text')
+});
+export type GetSkillContentResponse = z.infer<typeof getSkillContentResponseSchema>;
+
+export const updateSkillContentRequestSchema = z.object({
+  content: z.string().min(1)
+});
+export type UpdateSkillContentRequest = z.infer<typeof updateSkillContentRequestSchema>;
+
+export const uploadSkillQuerySchema = z.object({
+  filename: z.string().min(1),
+  overwrite: z.string().optional(),
+  agentId: agentIdSchema.optional()
+});
+export type UploadSkillQuery = z.infer<typeof uploadSkillQuerySchema>;
+
+// Install every skill found under a LOCAL filesystem path the daemon can read (the CLI resolves the
+// path, and clones git sources to a tmp dir first). Reuses the install response. Trusted operator
+// channel only (loopback + auth) — the daemon reads the caller-supplied path directly.
+export const installLocalSkillRequestSchema = z.object({
+  path: z.string().min(1),
+  overwrite: z.boolean().default(false)
+});
+export type InstallLocalSkillRequest = z.infer<typeof installLocalSkillRequestSchema>;
+
+// Lint every SKILL.md under a local path (parse + dir-name match) without installing.
+export const validateSkillsRequestSchema = z.object({ path: z.string().min(1) });
+export type ValidateSkillsRequest = z.infer<typeof validateSkillsRequestSchema>;
+
+export const skillValidationResultSchema = z.object({
+  name: z.string(),
+  dir: z.string(),
+  ok: z.boolean(),
+  error: z.string().optional(),
+  warnings: z.array(z.string()).default([])
+});
+export const validateSkillsResponseSchema = z.object({ results: z.array(skillValidationResultSchema) });
+export type ValidateSkillsResponse = z.infer<typeof validateSkillsResponseSchema>;
+
+export const skillUpdateSchema = z.object({
+  name: z.string(),
+  ref: z.string(),
+  current: z.string(),
+  latest: z.string(),
+  hasUpdate: z.boolean()
+});
+export type SkillUpdate = z.infer<typeof skillUpdateSchema>;
+
+export const checkSkillUpdatesResponseSchema = z.object({ updates: z.array(skillUpdateSchema) });
+export type CheckSkillUpdatesResponse = z.infer<typeof checkSkillUpdatesResponseSchema>;

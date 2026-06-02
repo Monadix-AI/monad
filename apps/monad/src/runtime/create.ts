@@ -1,0 +1,131 @@
+import type { MonadPaths } from '@monad/environment';
+import type { SkillWatchRegistrar } from '#/capabilities/skills/service.ts';
+import type { ConfigAccess, ConfigSnapshot, ConfigSource } from '#/config/manager.ts';
+import type { ReloadScheduler } from '#/config/reload.ts';
+import type { InteractionService } from '#/interactions/service.ts';
+import type { RuntimeModule } from './types.ts';
+
+import { createModelLifecycleModule } from '#/agent/model/lifecycle.ts';
+import { createAtomsLifecycleModule } from '#/atoms/lifecycle.ts';
+import { createCapabilitiesLifecycleModule } from '#/capabilities/lifecycle.ts';
+import { createMcpLifecycleModule } from '#/capabilities/mcp/lifecycle.ts';
+import { createSkillsLifecycleModule } from '#/capabilities/skills/lifecycle.ts';
+import { ConfigManager } from '#/config/manager.ts';
+import { createSandboxLifecycleModule } from '#/platform/sandbox/lifecycle.ts';
+import { createLogMaintenanceLifecycleModule } from '#/services/log-maintenance/lifecycle.ts';
+import { createStoreLifecycleModule, type StartDataLayer } from '#/store/lifecycle.ts';
+import { RuntimeKernel } from './kernel.ts';
+
+export interface DaemonModulesOptions {
+  initial: ConfigSnapshot;
+  paths: MonadPaths;
+  devMode: boolean;
+  useMock: boolean;
+  monadVersion: string;
+  watcher: SkillWatchRegistrar;
+  logger: { warn(message: string): void };
+  // The one interaction authority. Required (not defaulted) so an embedded caller cannot silently
+  // spin up a second instance that atom/Experience-initiated interactions would land in unseen.
+  interactions: InteractionService;
+  startStore?: StartDataLayer;
+  config?: () => ConfigAccess;
+}
+
+export function createDaemonModules(options: DaemonModulesOptions): RuntimeModule<ConfigSnapshot>[] {
+  return [
+    options.startStore === undefined
+      ? createStoreLifecycleModule({ paths: options.paths, devMode: options.devMode })
+      : createStoreLifecycleModule({ paths: options.paths, devMode: options.devMode }, options.startStore),
+    createSandboxLifecycleModule({
+      initial: options.initial,
+      paths: options.paths,
+      ...(options.config === undefined ? {} : { config: options.config })
+    }),
+    createLogMaintenanceLifecycleModule({
+      initial: options.initial,
+      paths: options.paths,
+      logger: options.logger,
+      ...(options.config === undefined ? {} : { config: options.config })
+    }),
+    createModelLifecycleModule({ initial: options.initial, paths: options.paths, useMock: options.useMock }),
+    createCapabilitiesLifecycleModule({ paths: options.paths }),
+    createAtomsLifecycleModule({
+      initial: options.initial,
+      paths: options.paths,
+      logger: options.logger,
+      interactions: options.interactions
+    }),
+    createSkillsLifecycleModule({
+      initial: options.initial,
+      paths: options.paths,
+      monadVersion: options.monadVersion,
+      watcher: options.watcher
+    }),
+    createMcpLifecycleModule({
+      initial: options.initial,
+      paths: options.paths,
+      ...(options.config === undefined ? {} : { config: options.config })
+    })
+  ];
+}
+
+export interface DaemonRuntimeOptions {
+  initial: ConfigSnapshot;
+  modules: readonly RuntimeModule<ConfigSnapshot>[];
+  source: ConfigSource;
+  debounceMs?: number;
+  equals?: (a: ConfigSnapshot, b: ConfigSnapshot) => boolean;
+  onConfigError?: (error: unknown) => void;
+  scheduler?: ReloadScheduler;
+  afterReload?: (snapshot: ConfigSnapshot) => Promise<void>;
+  watchOnStart?: boolean;
+}
+
+export interface DaemonRuntime {
+  readonly config: ConfigManager;
+  readonly kernel: RuntimeKernel<ConfigSnapshot>;
+  start(): Promise<void>;
+  startWatching(): void;
+  stop(): Promise<void>;
+}
+
+export function createDaemonRuntime(options: DaemonRuntimeOptions): DaemonRuntime {
+  const kernel = new RuntimeKernel<ConfigSnapshot>(options.modules);
+  const config = new ConfigManager({
+    initial: options.initial,
+    source: options.source,
+    apply: async (snapshot) => {
+      await kernel.reload(snapshot);
+      await options.afterReload?.(snapshot);
+    },
+    ...(options.debounceMs === undefined ? {} : { debounceMs: options.debounceMs }),
+    ...(options.equals === undefined ? {} : { equals: options.equals }),
+    ...(options.onConfigError === undefined ? {} : { onError: options.onConfigError }),
+    ...(options.scheduler === undefined ? {} : { scheduler: options.scheduler })
+  });
+
+  return {
+    config,
+    kernel,
+    async start() {
+      await kernel.start();
+      if (options.watchOnStart === false) return;
+      try {
+        config.startWatching();
+      } catch (error) {
+        await kernel.stop();
+        throw error;
+      }
+    },
+    startWatching() {
+      config.startWatching();
+    },
+    async stop() {
+      try {
+        await config.stop();
+      } finally {
+        await kernel.stop();
+      }
+    }
+  };
+}

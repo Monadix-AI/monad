@@ -1,0 +1,211 @@
+import type { ReactNode } from 'react';
+
+import { cva, type VariantProps } from 'class-variance-authority';
+
+import { cn } from '../lib/utils';
+
+export type ObservationVisualRole = 'user' | 'agent' | 'tool' | 'system' | 'warning' | 'error';
+
+const observationCardVariants = cva('w-full min-w-0 max-w-full rounded-lg border px-3 py-2.5', {
+  variants: {
+    visualRole: {
+      agent: 'border-primary/30 bg-primary/[0.04]',
+      error: 'border-destructive/45 bg-destructive/[0.06]',
+      system: 'border-border bg-background',
+      tool: 'border-warning/40 bg-warning/[0.04]',
+      user: 'border-border bg-background',
+      warning: 'border-warning/45 bg-warning/[0.06]'
+    }
+  },
+  defaultVariants: {
+    visualRole: 'system'
+  }
+});
+
+export interface ObservationCardProps extends VariantProps<typeof observationCardVariants> {
+  children: ReactNode;
+  className?: string;
+  header?: ReactNode;
+  timestamp?: string;
+  visualRole: ObservationVisualRole;
+}
+
+export function ObservationCard({ children, className, header, timestamp, visualRole }: ObservationCardProps) {
+  return (
+    <article
+      className={cn(observationCardVariants({ visualRole }), className)}
+      data-slot="observation-card"
+    >
+      <div className="flex min-h-6 w-full min-w-0 items-center gap-2 text-left">
+        {header ? <div className="min-w-0 flex-1">{header}</div> : <span className="min-w-0 flex-1" />}
+        {timestamp ? (
+          <time
+            className="shrink-0 font-mono text-[10px] text-muted-foreground"
+            dateTime={timestamp}
+          >
+            {timestamp}
+          </time>
+        ) : null}
+      </div>
+      <div className="pt-2.5">{children}</div>
+    </article>
+  );
+}
+
+export interface ObservationMetaProps {
+  children?: ReactNode;
+  className?: string;
+  compact?: boolean;
+  label?: string;
+  quiet?: boolean;
+  showSource?: boolean;
+  source: string;
+  title?: string;
+  type?: string;
+}
+
+export function ObservationMeta({
+  children,
+  className,
+  compact = false,
+  label,
+  quiet = false,
+  showSource = false,
+  source,
+  title,
+  type
+}: ObservationMetaProps) {
+  return (
+    <div
+      className={cn(
+        'flex flex-wrap items-center gap-1.5 font-mono text-[10px] uppercase leading-tight',
+        quiet && 'min-w-0 flex-nowrap gap-1.5 font-sans text-[13px] normal-case leading-5',
+        !compact && 'mb-2',
+        className
+      )}
+      data-slot="observation-meta"
+    >
+      {label ? (
+        <span
+          className={cn(
+            'rounded-full border border-border/75 px-1.5 py-0.5',
+            quiet && 'sr-only',
+            label === 'tool' || label === 'result' || label === 'tool call'
+              ? 'bg-warning/10 text-foreground'
+              : 'bg-primary/10 text-foreground',
+            label === 'system' && 'text-muted-foreground',
+            label === 'error' && 'border-destructive/40 bg-destructive/10 text-destructive',
+            label === 'warning' && 'border-warning/40 bg-warning/10 text-foreground'
+          )}
+          data-slot="observation-meta-label"
+        >
+          {label}
+        </span>
+      ) : null}
+      {title ? (
+        <span
+          className={cn('font-semibold text-foreground normal-case', quiet && 'min-w-0 shrink-0 font-normal')}
+          data-slot="observation-meta-title"
+        >
+          {title}
+        </span>
+      ) : null}
+      {showSource ? <span className="text-muted-foreground">{source}</span> : null}
+      {type ? <span className="text-muted-foreground">{type}</span> : null}
+      {children}
+    </div>
+  );
+}
+
+export interface ObservationTextProps {
+  className?: string;
+  compact?: boolean;
+  contained?: boolean;
+  observationRole: ObservationVisualRole;
+  text: string;
+}
+
+export function ObservationText({
+  className,
+  compact = false,
+  contained = false,
+  observationRole,
+  text
+}: ObservationTextProps) {
+  return (
+    <div
+      className={cn(
+        'wrap-anywhere whitespace-pre-wrap break-words leading-relaxed',
+        observationRole === 'system' ? 'text-muted-foreground' : 'text-foreground',
+        observationRole === 'tool' ? 'font-mono text-[11px]' : 'text-[13px]',
+        compact && 'text-xs',
+        contained && 'max-h-64 overflow-auto rounded-md border border-border/70 bg-secondary/55 p-2',
+        className
+      )}
+    >
+      {inlineCodeParts(text)}
+    </div>
+  );
+}
+
+function inlineCodeParts(text: string): ReactNode {
+  let offset = 0;
+  return text.split(/(`[^`]+`)/g).map((part) => {
+    const key = `${offset}:${part}`;
+    offset += part.length;
+    if (!(part.startsWith('`') && part.endsWith('`'))) return <span key={key}>{part}</span>;
+    return (
+      <code
+        className="rounded-md border border-border/80 bg-secondary/75 px-1 py-px font-mono text-[0.94em]"
+        key={key}
+      >
+        {part.slice(1, -1)}
+      </code>
+    );
+  });
+}
+
+export interface DefaultObservationToolPairProps {
+  callText: string;
+  callTool?: string;
+  provider: string;
+  resultText: string;
+  resultTool?: string;
+}
+
+export function DefaultObservationToolPair({
+  callText,
+  callTool,
+  provider,
+  resultText,
+  resultTool
+}: DefaultObservationToolPairProps) {
+  return (
+    <>
+      <ObservationMeta
+        label="tool"
+        source={provider}
+        type={callTool}
+      />
+      <ObservationText
+        compact
+        observationRole="tool"
+        text={callText}
+      />
+      <div className="mt-2 border-border/80 border-t pt-2">
+        <ObservationMeta
+          label="result"
+          source={provider}
+          type={resultTool}
+        />
+        <ObservationText
+          contained
+          observationRole="tool"
+          text={resultText}
+        />
+      </div>
+    </>
+  );
+}
+
+export { observationCardVariants };

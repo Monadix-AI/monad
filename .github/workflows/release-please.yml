@@ -1,0 +1,48 @@
+name: Release Please
+
+on:
+  push:
+    branches: [main]
+
+# Default GITHUB_TOKEN cannot trigger other workflows (including `on: pull_request` CI).
+# RELEASE_PLEASE_TOKEN is a fine-grained PAT with Contents + Pull Requests write on this repo.
+# To create one: GitHub → Settings → Developer settings → Fine-grained tokens → Generate.
+# Store it as repo secret RELEASE_PLEASE_TOKEN. Falls back to GITHUB_TOKEN if absent (CI
+# won't run on the release PR, but everything else still works).
+permissions:
+  contents: read
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    outputs:
+      release_created: ${{ steps.rp.outputs.release_created }}
+      tag_name: ${{ steps.rp.outputs.tag_name }}
+      sha: ${{ steps.rp.outputs.sha }}
+    steps:
+      - uses: googleapis/release-please-action@5c625bfb5d1ff62eadeeb3772007f7f66fdcf071 # v4.4.1
+        id: rp
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN || secrets.GITHUB_TOKEN }}
+
+  # The release lands as a draft (`"draft": true` in release-please-config.json), so the tag
+  # and the `latest` pointer do not exist yet. Release builds the assets into it and publishes
+  # it at the end — see the header comment in release.yml.
+  release-assets:
+    name: build and publish release assets
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true'
+    uses: ./.github/workflows/release.yml
+    permissions:
+      contents: write
+    secrets:
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+    with:
+      tag: ${{ needs.release-please.outputs.tag_name }}
+      sha: ${{ needs.release-please.outputs.sha }}
+      make_latest: true

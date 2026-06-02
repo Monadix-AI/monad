@@ -1,0 +1,51 @@
+{
+  "$schema": "./node_modules/syncpack/schema.json",
+  "versionGroups": [
+    {
+      "label": "applications are not reusable dependencies",
+      "packages": ["**"],
+      "dependencies": ["@monad/cli"],
+      "dependencyTypes": ["prod", "dev"],
+      "isBanned": true
+    },
+    {
+      "label": "only the release composition root depends on web or tui at runtime",
+      "packages": ["**", "!@monad/cli"],
+      "dependencies": ["@monad/web", "@monad/tui"],
+      "dependencyTypes": ["prod"],
+      "isBanned": true
+    },
+    {
+      "label": "web and tui are not development dependencies",
+      "packages": ["**"],
+      "dependencies": ["@monad/web", "@monad/tui"],
+      "dependencyTypes": ["dev"],
+      "isBanned": true
+    },
+    {
+      "label": "only the release composition root depends on the daemon at runtime",
+      "packages": ["**", "!@monad/cli"],
+      "dependencies": ["@monad/monad"],
+      "dependencyTypes": ["prod"],
+      "isBanned": true
+    },
+    {
+      "label": "only web derives daemon types during development",
+      "packages": ["**", "!@monad/web"],
+      "dependencies": ["@monad/monad"],
+      "dependencyTypes": ["dev"],
+      "isBanned": true
+    },
+    {
+      "label": "internal packages always use the workspace protocol",
+      "dependencies": ["@monad/**"],
+      "dependencyTypes": ["!local"],
+      "pinVersion": "workspace:*"
+    },
+    {
+      "label": "react stack must stay aligned across workspaces",
+      "dependencies": ["react", "react-dom", "@types/react", "@types/react-dom", "react-redux"],
+      "preferVersion": "highestSemver"
+    }
+  ]
+}

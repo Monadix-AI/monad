@@ -1,0 +1,20 @@
+{
+  "mcpServers": {
+    "fixture_fs": {
+      "command": "fixture-fs",
+      "args": ["--root", "."]
+    }
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [{ "type": "command", "command": "pre-hook" }]
+      }
+    ]
+  },
+  "env": {
+    "ANTHROPIC_API_KEY": "secret-value"
+  },
+  "inputNeededNotifEnabled": true
+}

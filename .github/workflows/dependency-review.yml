@@ -1,0 +1,33 @@
+name: Dependency review
+
+on:
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: dependency-review-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  review:
+    name: review
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          # The daemon holds provider credentials, so a known-vulnerable transitive
+          # dependency is a release blocker, not a warning.
+          fail-on-severity: moderate
+          # MIT project: reject copyleft licences that would contaminate distribution.
+          deny-licenses: AGPL-3.0, AGPL-3.0-only, AGPL-3.0-or-later, GPL-2.0, GPL-3.0, SSPL-1.0
+          comment-summary-in-pr: on-failure

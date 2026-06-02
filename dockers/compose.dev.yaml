@@ -1,0 +1,8 @@
+name: monad-dev
+
+services:
+  phoenix:
+    image: arizephoenix/phoenix
+    ports:
+      - "6006:6006"
+      - "4318:4318"

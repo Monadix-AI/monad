@@ -1,0 +1,774 @@
+import type { AvatarStyle, MeshSessionView, UIItem, UIMessageItem, UIPart } from '@monad/protocol';
+import type { ProjectMember } from '../../experience/project-members.ts';
+import type {
+  ActivityRow,
+  MeshAgentStreamView,
+  Message,
+  MessageAttachment,
+  Participant
+} from '../../experience/types.ts';
+
+import {
+  avatarCacheKey,
+  channelDisplayText,
+  defaultWorkplaceProjectMemberSettings,
+  entityAvatarUrl,
+  entityAvatarWriteUrl,
+  meshAgentDirectMessageMessageDataSchema,
+  meshAgentLoginRequiredPayloadSchema,
+  meshAgentProductDisplayName,
+  messageAttachmentSchema,
+  renameMeshAgentProjectMemberDisplayName
+} from '@monad/protocol';
+
+import { agentObservationCards } from '../../../agent-adapters/observation-cards.ts';
+import { meshAgentNeutralStreamItems } from '../../experience/mesh-agent-observation/mesh-agent-observation.ts';
+import {
+  meshAgentFacingCommandPhase,
+  meshAgentMemberActivityPhase,
+  meshAgentMemberPresence,
+  meshSessionIsGenerating
+} from '../../experience/mesh-agent-presence.ts';
+import { parseProjectMembers, productIcon } from '../../experience/project-members.ts';
+import {
+  avatarForAgent,
+  fmtTime,
+  HUMAN,
+  iconForAgent,
+  meshAgentTag,
+  projectParticipants
+} from '../../experience/project-projection.ts';
+
+const MESH_AGENT_FOLLOW_TEXT = 'CLI stream available';
+
+function textFromParts(parts: UIPart[]): string {
+  return parts
+    .filter((part): part is Extract<UIPart, { type: 'text' }> => part.type === 'text')
+    .map((part) => part.text)
+    .join('');
+}
+
+function attachmentsFromParts(parts: UIPart[]): MessageAttachment[] {
+  const attachments: MessageAttachment[] = [];
+  for (const part of parts) {
+    if (part.type !== 'custom' || part.name !== 'attachment') continue;
+    const parsed = messageAttachmentSchema.safeParse(part.data);
+    if (parsed.success) attachments.push(parsed.data);
+  }
+  return attachments;
+}
+
+function reasoningFromParts(parts: UIPart[]): string | undefined {
+  const text = parts
+    .filter((part): part is Extract<UIPart, { type: 'reasoning' }> => part.type === 'reasoning')
+    .map((part) => part.text)
+    .join('');
+  return text || undefined;
+}
+
+function displayTextFromMessage(item: UIMessageItem): string {
+  const text = textFromParts(item.parts);
+  if (text) return item.role === 'assistant' ? channelDisplayText(text) : text;
+  return directiveTextFromMessage(item) ?? '';
+}
+
+function directiveTextFromMessage(item: UIMessageItem): string | undefined {
+  const directive = item.parts.find((part) => part.type === 'artifact' && part.messageType === 'directive');
+  return directive?.type === 'artifact' ? (directive.text ?? '') : undefined;
+}
+
+export function isManagedMeshAgentReasoningOnlyMessage(item: UIMessageItem): boolean {
+  return (
+    item.source === 'managed-mesh-agent' &&
+    item.role === 'assistant' &&
+    !textFromParts(item.parts).trim() &&
+    reasoningFromParts(item.parts) !== undefined
+  );
+}
+
+export function messageToView(
+  item: UIMessageItem,
+  time = '',
+  meshAgentAvatarSeeds = new Map<string, string>(),
+  meshAgentTags = new Map<string, string>(),
+  meshAgentDisplayNames = new Map<string, string>(),
+  meshAgentIcons = new Map<string, Message['icon']>(),
+  human = HUMAN,
+  avatarStyle?: AvatarStyle
+): Message {
+  const directiveText = directiveTextFromMessage(item);
+  if (directiveText !== undefined && item.role === 'assistant') {
+    return {
+      id: item.id,
+      authorId: 'command',
+      authorName: 'Command',
+      av: 'CMD',
+      kind: 'system',
+      tag: 'SYS',
+      time,
+      text: '',
+      orderKey: item.seq,
+      systemDetail: directiveText,
+      systemPresentation: 'detail-tooltip',
+      streaming: item.status === 'streaming'
+    };
+  }
+  const directMessageArtifact = item.parts.find(
+    (part) => part.type === 'artifact' && part.messageType === 'mesh_agent_direct_message'
+  );
+  if (directMessageArtifact?.type === 'artifact') {
+    const parsed = meshAgentDirectMessageMessageDataSchema.safeParse(directMessageArtifact.data);
+    const directMessage = parsed.success ? parsed.data.message : undefined;
+    if (directMessage?.fromAgent) {
+      const fromAgentName = meshAgentDisplayNames.get(directMessage.fromAgent) ?? directMessage.fromAgent;
+      const toAgentId = directMessage.peer.startsWith('mesh-agent:')
+        ? directMessage.peer.slice('mesh-agent:'.length)
+        : directMessage.peer;
+      const toAgentName = meshAgentDisplayNames.get(toAgentId) ?? toAgentId;
+      return {
+        id: item.id,
+        authorId: 'monad',
+        authorName: 'Monad',
+        av: avatarForAgent('Monad'),
+        icon: iconForAgent('Monad'),
+        kind: 'system',
+        tag: 'SYS',
+        time,
+        text: directMessageArtifact.text ?? '',
+        orderKey: item.seq,
+        directMessage: {
+          fromAgentName,
+          toAgentName,
+          text: directMessage.text
+        }
+      };
+    }
+  }
+  const agent = item.role === 'assistant';
+  const rawName = agent ? (item.agentName ?? 'monad') : human.name;
+  const displayName = agent
+    ? (item.agentDisplayName ?? (rawName === 'monad' ? 'Monad' : (meshAgentDisplayNames.get(rawName) ?? rawName)))
+    : rawName;
+  const icon = agent ? (meshAgentIcons.get(rawName) ?? iconForAgent(displayName)) : undefined;
+  const reasoning = agent ? reasoningFromParts(item.parts) : undefined;
+  const attachments = attachmentsFromParts(item.parts);
+  const agentAvatarSeed =
+    meshAgentAvatarSeeds.get(displayName) ??
+    (item.source === 'managed-mesh-agent' ? `mesh-agent:${displayName}` : `agent:${displayName}`);
+  return {
+    id: item.id,
+    authorId: agent ? rawName : 'me',
+    authorName: displayName,
+    av: agent ? avatarForAgent(displayName) : human.av,
+    icon,
+    avatarUrl: agent ? (agentAvatarSeed ? entityAvatarUrl(agentAvatarSeed, avatarStyle) : undefined) : human.avatarUrl,
+    kind: agent ? 'agent' : human.kind,
+    tag: agent
+      ? displayName === 'Monad'
+        ? 'AI'
+        : (meshAgentTags.get(rawName) ?? meshAgentTags.get(displayName) ?? 'ACP')
+      : human.tag,
+    time,
+    text: displayTextFromMessage(item),
+    ...(item.replyToMessageId ? { replyToMessageId: item.replyToMessageId } : {}),
+    replyable: item.replyable,
+    ...(item.question ? { question: item.question } : {}),
+    orderKey: item.seq,
+    ...(item.meshSessionId ? { meshSessionId: item.meshSessionId } : {}),
+    ...(item.deliveryId ? { deliveryId: item.deliveryId } : {}),
+    ...(reasoning ? { reasoning } : {}),
+    ...(attachments.length ? { attachments } : {}),
+    streaming: item.status === 'streaming'
+  };
+}
+
+function meshAgentAvatarUrl(
+  displayName: string,
+  meshAgentAvatarSeeds = new Map<string, string>(),
+  avatarStyle?: AvatarStyle
+): string {
+  return entityAvatarUrl(meshAgentAvatarSeeds.get(displayName) ?? `mesh-agent:${displayName}`, avatarStyle);
+}
+
+function meshAgentSystemActorView({
+  actorId,
+  actorName,
+  projectMembers,
+  meshAgentDisplayNames,
+  meshAgentAvatarSeeds,
+  meshAgentIcons,
+  meshAgentTags,
+  avatarStyle
+}: {
+  actorId: string;
+  actorName?: string;
+  projectMembers: readonly ProjectMember[];
+  meshAgentDisplayNames: Map<string, string>;
+  meshAgentAvatarSeeds: Map<string, string>;
+  meshAgentIcons: Map<string, Message['icon']>;
+  meshAgentTags: Map<string, string>;
+  avatarStyle?: AvatarStyle;
+}): Pick<Message, 'authorId' | 'authorName' | 'av' | 'icon' | 'avatarUrl' | 'tag' | 'agentChip'> {
+  const member = projectMembers.find((candidate) => candidate.type === 'mesh-agent' && candidate.id === actorId);
+  const displayName = meshAgentDisplayNames.get(actorId) ?? member?.displayName ?? actorName ?? actorId;
+  const avatarUrl = meshAgentAvatarUrl(displayName, meshAgentAvatarSeeds, avatarStyle);
+  const icon =
+    meshAgentIcons.get(actorId) ?? (member ? meshAgentIcons.get(member.name) : undefined) ?? iconForAgent(displayName);
+  const tag = meshAgentTags.get(actorId) ?? (member ? meshAgentTags.get(member.name) : undefined) ?? 'CLI';
+  return {
+    authorId: actorId,
+    authorName: displayName,
+    av: avatarForAgent(displayName),
+    icon,
+    avatarUrl,
+    tag,
+    agentChip: {
+      id: actorId,
+      name: displayName,
+      icon,
+      avatarUrl,
+      tag
+    }
+  };
+}
+
+function projectMemberJoinMessageView(
+  member: ProjectMember & { joinedAt: string },
+  displayName: string,
+  meshAgentTags = new Map<string, string>(),
+  meshAgentIcons = new Map<string, Message['icon']>(),
+  meshAgentAvatarSeeds = new Map<string, string>(),
+  avatarStyle?: AvatarStyle
+): Message {
+  const actor = meshAgentSystemActorView({
+    actorId: member.id,
+    actorName: displayName,
+    projectMembers: [member],
+    meshAgentDisplayNames: new Map([[member.id, displayName]]),
+    meshAgentAvatarSeeds,
+    meshAgentIcons,
+    meshAgentTags,
+    avatarStyle
+  });
+  return {
+    id: `project-member-joined:${member.id}`,
+    ...actor,
+    kind: 'system',
+    time: fmtTime(member.joinedAt),
+    text: 'joined the project',
+    streaming: false,
+    orderKey: member.joinedAt
+  };
+}
+
+function meshAgentLoginRequiredMessage(
+  item: Extract<UIItem, { kind: 'custom' }>,
+  projectMembers: readonly ProjectMember[],
+  meshAgentDisplayNames: Map<string, string>,
+  meshAgentTags = new Map<string, string>(),
+  meshAgentIcons = new Map<string, Message['icon']>(),
+  meshAgentAvatarSeeds = new Map<string, string>(),
+  avatarStyle?: AvatarStyle
+): Message | null {
+  if (item.name !== 'mesh.login_required') return null;
+  const parsed = meshAgentLoginRequiredPayloadSchema.safeParse(item.data);
+  if (!parsed.success) return null;
+  const payload = parsed.data;
+  const displayName = meshAgentDisplayNames.get(payload.agentName) ?? payload.agentName;
+  return {
+    id: item.id,
+    ...meshAgentSystemActorView({
+      actorId: payload.agentName,
+      actorName: displayName,
+      projectMembers,
+      meshAgentDisplayNames,
+      meshAgentAvatarSeeds,
+      meshAgentIcons,
+      meshAgentTags,
+      avatarStyle
+    }),
+    kind: 'system',
+    tag: meshAgentTags.get(payload.agentName) ?? meshAgentTag(payload.provider),
+    time: '',
+    text: 'request sign in.',
+    systemActions: [
+      {
+        actionId: 'mesh-agent.sign-in',
+        inlineText: 'sign in',
+        payload: {
+          agentName: payload.authAgentName ?? payload.agentName,
+          projectMemberId: payload.agentName,
+          provider: payload.provider
+        }
+      }
+    ],
+    systemTone: 'error',
+    systemRaw: item.data,
+    orderKey: item.seq
+  };
+}
+
+function meshSessionDeveloperMessage(session: MeshSessionView): Message {
+  return meshSessionDeveloperMessageView(session, session.agentName);
+}
+
+function meshSessionDeveloperMessageView(
+  session: MeshSessionView,
+  displayName: string,
+  meshAgentAvatarSeeds = new Map<string, string>(),
+  avatarStyle?: AvatarStyle
+): Message {
+  return {
+    id: `mesh-session-developer:${session.id}`,
+    authorId: session.agentName,
+    authorName: displayName,
+    av: avatarForAgent(displayName),
+    icon: productIcon(session.productIcon),
+    avatarUrl: meshAgentAvatarUrl(displayName, meshAgentAvatarSeeds, avatarStyle),
+    kind: 'developer',
+    tag: 'DEV',
+    time: fmtTime(session.startedAt),
+    text: MESH_AGENT_FOLLOW_TEXT,
+    meshSessionId: session.id,
+    developerOnly: true,
+    orderKey: `${session.startedAt}:developer`
+  };
+}
+
+function meshSessionErrorMessages(
+  session: MeshSessionView,
+  displayName: string,
+  meshAgentAvatarSeeds = new Map<string, string>(),
+  avatarStyle?: AvatarStyle
+): Message[] {
+  if (session.runtimeRole !== 'managed-project-agent' || session.lifecycle.state !== 'terminal') return [];
+  const failure = session.lifecycle.termination.error;
+  if (session.lifecycle.termination.kind !== 'failed' || !failure) return [];
+  return [
+    {
+      id: `mesh-session-error:${session.id}`,
+      authorId: session.agentName,
+      authorName: displayName,
+      av: avatarForAgent(displayName),
+      icon: productIcon(session.productIcon),
+      avatarUrl: meshAgentAvatarUrl(displayName, meshAgentAvatarSeeds, avatarStyle),
+      kind: 'system',
+      tag: meshAgentTag(session.provider),
+      time: '',
+      text: failure.message,
+      meshSessionId: session.id,
+      systemTone: 'error',
+      systemDetail: failure.code,
+      systemRaw: failure,
+      orderKey: `${session.lifecycle.termination.at}:error`
+    }
+  ];
+}
+
+function projectMemberSessionErrorMessage(
+  member: ProjectMember,
+  displayName: string,
+  meshAgentAvatarSeeds = new Map<string, string>(),
+  meshAgentTags = new Map<string, string>(),
+  meshAgentIcons = new Map<string, Message['icon']>(),
+  avatarStyle?: AvatarStyle
+): Message | undefined {
+  const termination = member.agentSession?.termination;
+  if (termination?.reason !== 'failed' || !termination.error) return undefined;
+  const runtimeId = member.agentSession?.runtimeId;
+  return {
+    id: runtimeId ? `mesh-session-error:${runtimeId}` : `mesh-session-error:${member.id}`,
+    authorId: member.id,
+    authorName: displayName,
+    av: avatarForAgent(displayName),
+    icon: meshAgentIcons.get(member.id),
+    avatarUrl: meshAgentAvatarUrl(displayName, meshAgentAvatarSeeds, avatarStyle),
+    kind: 'system',
+    tag: meshAgentTags.get(member.id) ?? 'CLI',
+    time: '',
+    text: termination.error.message,
+    ...(runtimeId ? { meshSessionId: runtimeId } : {}),
+    systemTone: 'error',
+    systemDetail: termination.error.code,
+    systemRaw: termination.error,
+    orderKey: `${termination.at}:error`
+  };
+}
+
+export function sortMessagesOldestFirst(messages: Message[]): Message[] {
+  return [...messages].sort((a, b) => {
+    const order = (a.orderKey || a.id).localeCompare(b.orderKey || b.id);
+    return order === 0 ? a.id.localeCompare(b.id) : order;
+  });
+}
+
+function keepManagedMeshAgentRepliesAfterJoin(messages: Map<string, Message>): void {
+  const joinByAgent = new Map<string, string>();
+  for (const message of messages.values()) {
+    if (message.kind !== 'system' || !message.id.startsWith('project-member-joined:') || !message.orderKey) continue;
+    const existing = joinByAgent.get(message.authorId);
+    if (!existing || message.orderKey < existing) joinByAgent.set(message.authorId, message.orderKey);
+  }
+  for (const [id, message] of messages) {
+    if (message.kind !== 'agent' || !message.orderKey) continue;
+    const joinOrderKey = joinByAgent.get(message.authorId);
+    if (!joinOrderKey || message.orderKey > joinOrderKey) continue;
+    messages.set(id, { ...message, orderKey: `${joinOrderKey}:message:${message.orderKey}` });
+  }
+}
+
+function managedMeshAgentEchoKey(message: Message): string | undefined {
+  if (message.kind !== 'agent' || !message.deliveryId) return undefined;
+  return `delivery:${message.deliveryId}`;
+}
+
+function currentMeshSessionsByAgent(sessions: MeshSessionView[]): MeshSessionView[] {
+  const current = new Map<string, MeshSessionView>();
+  for (const session of [...sessions].sort((a, b) => {
+    const byUpdatedAt = (b.updatedAt || b.startedAt).localeCompare(a.updatedAt || a.startedAt);
+    return byUpdatedAt === 0 ? b.id.localeCompare(a.id) : byUpdatedAt;
+  })) {
+    if (current.has(session.agentName)) continue;
+    current.set(session.agentName, session);
+  }
+  return [...current.values()];
+}
+
+function meshAgentStreamFromSession(
+  session: MeshSessionView,
+  templateAgentNames = new Map<string, string>(),
+  agentAliases = new Map<string, string[]>()
+): MeshAgentStreamView {
+  const items: MeshAgentStreamView['items'] = [];
+  return {
+    id: session.id,
+    transcriptTargetId: session.sessionId,
+    agentName: session.agentName,
+    ...(agentAliases.get(session.agentName)?.length ? { agentAliases: agentAliases.get(session.agentName) } : {}),
+    ...(templateAgentNames.get(session.agentName)
+      ? { templateAgentName: templateAgentNames.get(session.agentName) }
+      : {}),
+    provider: session.provider,
+    tag: meshAgentTag(session.provider),
+    icon: productIcon(session.productIcon),
+    status: session.lifecycle.state === 'terminal' && session.lifecycle.termination.kind === 'failed' ? 'error' : 'ok',
+    workingPath: session.workingPath,
+    observedAt: session.updatedAt || session.startedAt,
+    output: '',
+    items
+  };
+}
+
+function meshAgentStreamFromActivity(
+  row: ActivityRow,
+  templateAgentNames = new Map<string, string>(),
+  agentAliases = new Map<string, string[]>()
+): MeshAgentStreamView | undefined {
+  if (!row.tool.startsWith('mesh-agent:')) return undefined;
+  const provider = row.tool.slice('mesh-agent:'.length);
+  const agentName = row.agentName ?? row.detail ?? provider;
+  const items = agentObservationCards(
+    meshAgentNeutralStreamItems({ id: row.id, provider, output: row.output }),
+    provider
+  );
+  return {
+    id: row.id,
+    agentName,
+    ...(agentAliases.get(agentName)?.length ? { agentAliases: agentAliases.get(agentName) } : {}),
+    ...(templateAgentNames.get(agentName) ? { templateAgentName: templateAgentNames.get(agentName) } : {}),
+    provider,
+    tag: meshAgentTag(provider),
+    status: row.status,
+    output: row.output ?? '',
+    items
+  };
+}
+
+export function buildMeshAgentStreams(
+  meshSessions: MeshSessionView[],
+  activity: ActivityRow[],
+  templateAgentNames = new Map<string, string>(),
+  agentAliases = new Map<string, string[]>()
+): MeshAgentStreamView[] {
+  const byId = new Map<string, MeshAgentStreamView>();
+  for (const session of meshSessions)
+    byId.set(session.id, meshAgentStreamFromSession(session, templateAgentNames, agentAliases));
+  for (const row of activity) {
+    const stream = meshAgentStreamFromActivity(row, templateAgentNames, agentAliases);
+    if (!stream) continue;
+    const existing = byId.get(stream.id);
+    byId.set(stream.id, {
+      ...existing,
+      ...stream,
+      agentName: existing?.agentName ?? stream.agentName,
+      templateAgentName: existing?.templateAgentName ?? stream.templateAgentName,
+      workingPath: existing?.workingPath,
+      output: stream.output || existing?.output || '',
+      items: stream.items.length > 0 ? stream.items : (existing?.items ?? [])
+    });
+  }
+  return [...byId.values()];
+}
+
+function acpAgentNameFromTool(item: Extract<UIItem, { kind: 'tool' }>): string | undefined {
+  if (!item.tool.startsWith('acp:')) return undefined;
+  const inputAgent = (item.input as { agent?: unknown } | undefined)?.agent;
+  if (typeof inputAgent === 'string' && inputAgent) return inputAgent;
+  const name = item.tool.slice(4);
+  return name || undefined;
+}
+
+function meshAgentSystemAgentName(id: string): string | undefined {
+  for (const prefix of [
+    'mesh-agent-connection-required:',
+    'mesh-agent-resume-failed:',
+    'mesh-agent-idle-resumed:',
+    'mesh-agent-idle-suspended:',
+    'mesh-agent-exited:',
+    'mesh-agent-failed:',
+    'mesh-agent-stopped:'
+  ]) {
+    if (id.startsWith(prefix)) return id.slice(prefix.length).split(':')[0];
+  }
+  return undefined;
+}
+
+export function acpProgressText(output: string | undefined): string {
+  const text = output?.trim() ?? '';
+  if (!text || text === 'waiting for response...') return '';
+  const responseMarker = 'response stream:';
+  const responseStart = text.lastIndexOf(responseMarker);
+  if (responseStart >= 0) {
+    const response = text.slice(responseStart + responseMarker.length).trim();
+    if (response) return response;
+  }
+  return text;
+}
+
+interface BuildProjectMessagesInput {
+  persistedMessages: Message[];
+  projectMembers?: readonly ProjectMember[];
+  meshSessions: MeshSessionView[];
+  liveItems: readonly UIItem[];
+  liveTools: readonly Extract<UIItem, { kind: 'tool' }>[];
+  meshAgentAvatarSeeds?: Map<string, string>;
+  meshAgentTags?: Map<string, string>;
+  meshAgentDisplayNames?: Map<string, string>;
+  meshAgentIcons?: Map<string, Message['icon']>;
+  human?: Participant;
+  avatarStyle?: AvatarStyle;
+  showDeveloperOnlyMessages?: boolean;
+}
+
+export function buildProjectMessages({
+  persistedMessages,
+  projectMembers = [],
+  meshSessions,
+  liveItems,
+  liveTools,
+  meshAgentAvatarSeeds = new Map(),
+  meshAgentTags = new Map(),
+  meshAgentDisplayNames = new Map(),
+  meshAgentIcons = new Map(),
+  human = HUMAN,
+  avatarStyle,
+  showDeveloperOnlyMessages = false
+}: BuildProjectMessagesInput): Message[] {
+  const shouldShowDeveloperOnlyMessages = process.env.NODE_ENV !== 'production' && showDeveloperOnlyMessages;
+  const byId = new Map<string, Message>();
+  const toView = (item: UIMessageItem) =>
+    messageToView(
+      item,
+      byId.get(item.id)?.time ?? '',
+      meshAgentAvatarSeeds,
+      meshAgentTags,
+      meshAgentDisplayNames,
+      meshAgentIcons,
+      human,
+      avatarStyle
+    );
+  for (const view of persistedMessages) byId.set(view.id, view);
+  const persistedEchoKeys = new Set(
+    persistedMessages.map(managedMeshAgentEchoKey).filter((key): key is string => key !== undefined)
+  );
+  for (const member of projectMembers) {
+    if (member.type !== 'mesh-agent') continue;
+    const displayName = meshAgentDisplayNames.get(member.id) ?? member.displayName ?? member.name;
+    if (member.joinedAt) {
+      byId.set(
+        `project-member-joined:${member.id}`,
+        projectMemberJoinMessageView(
+          member as ProjectMember & { joinedAt: string },
+          displayName,
+          meshAgentTags,
+          meshAgentIcons,
+          meshAgentAvatarSeeds,
+          avatarStyle
+        )
+      );
+    }
+    const errorMessage = projectMemberSessionErrorMessage(
+      member,
+      displayName,
+      meshAgentAvatarSeeds,
+      meshAgentTags,
+      meshAgentIcons,
+      avatarStyle
+    );
+    if (errorMessage) byId.set(errorMessage.id, errorMessage);
+  }
+  const currentMeshSessions = currentMeshSessionsByAgent(meshSessions);
+  for (const session of currentMeshSessions) {
+    const displayName = meshAgentDisplayNames.get(session.agentName) ?? session.agentName;
+    for (const message of meshSessionErrorMessages(session, displayName, meshAgentAvatarSeeds, avatarStyle)) {
+      byId.set(message.id, message);
+    }
+    if (shouldShowDeveloperOnlyMessages) {
+      byId.set(
+        `mesh-session-developer:${session.id}`,
+        meshSessionDeveloperMessageView(session, displayName, meshAgentAvatarSeeds, avatarStyle)
+      );
+    }
+  }
+  for (const item of liveItems) {
+    if (item.kind === 'custom') {
+      const message = meshAgentLoginRequiredMessage(
+        item,
+        projectMembers,
+        meshAgentDisplayNames,
+        meshAgentTags,
+        meshAgentIcons,
+        meshAgentAvatarSeeds,
+        avatarStyle
+      );
+      if (message) byId.set(item.id, message);
+      continue;
+    }
+    if (item.kind === 'system') {
+      if (item.event) {
+        byId.set(item.id, {
+          id: item.id,
+          ...meshAgentSystemActorView({
+            actorId: item.event.agentId,
+            actorName: item.event.agentName,
+            projectMembers,
+            meshAgentDisplayNames,
+            meshAgentAvatarSeeds,
+            meshAgentIcons,
+            meshAgentTags,
+            avatarStyle
+          }),
+          kind: 'system',
+          time: '',
+          text: item.text,
+          ...(item.level === 'error' ? { systemTone: 'error' as const } : {}),
+          orderKey: item.seq
+        });
+        continue;
+      }
+      const meshAgentLifecycleAgent = meshAgentSystemAgentName(item.id);
+      const authorName = meshAgentLifecycleAgent
+        ? (meshAgentDisplayNames.get(meshAgentLifecycleAgent) ?? meshAgentLifecycleAgent)
+        : 'Monad';
+      byId.set(item.id, {
+        id: item.id,
+        authorId: meshAgentLifecycleAgent ?? authorName,
+        authorName,
+        av: avatarForAgent(authorName),
+        icon: meshAgentLifecycleAgent ? meshAgentIcons.get(meshAgentLifecycleAgent) : iconForAgent(authorName),
+        avatarUrl: meshAgentLifecycleAgent
+          ? meshAgentAvatarSeeds.has(authorName)
+            ? meshAgentAvatarUrl(authorName, meshAgentAvatarSeeds, avatarStyle)
+            : entityAvatarUrl(`mesh-agent-resume:${authorName}`, avatarStyle)
+          : undefined,
+        kind: 'system',
+        tag: meshAgentLifecycleAgent ? (meshAgentTags.get(meshAgentLifecycleAgent) ?? 'CLI') : 'SYS',
+        time: '',
+        text: item.text,
+        ...(item.level === 'error' ? { systemTone: 'error' as const } : {}),
+        orderKey: item.seq
+      });
+      continue;
+    }
+    if (item.kind !== 'message') continue;
+    if (isManagedMeshAgentReasoningOnlyMessage(item)) continue;
+    const text = displayTextFromMessage(item);
+    const reasoning = item.role === 'assistant' ? reasoningFromParts(item.parts) : undefined;
+    if (text || reasoning || item.status !== 'streaming') {
+      const view = toView(item);
+      const echoKey = managedMeshAgentEchoKey(view);
+      if (!echoKey || !persistedEchoKeys.has(echoKey)) byId.set(item.id, view);
+    }
+  }
+  const streamingAgentNames = new Set(
+    [...byId.values()]
+      .filter((message) => message.kind === 'agent' && message.streaming)
+      .map((message) => message.authorName)
+  );
+  for (const item of liveTools) {
+    if (item.status !== 'running') continue;
+    const agentName = acpAgentNameFromTool(item);
+    if (!agentName || streamingAgentNames.has(agentName)) continue;
+    const text = acpProgressText(item.output);
+    if (!text) continue;
+    byId.set(`acp-progress:${item.id}`, {
+      id: `acp-progress:${item.id}`,
+      authorId: agentName,
+      authorName: agentName,
+      av: avatarForAgent(agentName),
+      icon: iconForAgent(agentName),
+      kind: 'agent',
+      tag: 'ACP',
+      time: '',
+      text,
+      streaming: true,
+      orderKey: item.seq
+    });
+  }
+  for (const item of liveTools) {
+    if (item.status !== 'running' || !item.tool.startsWith('mesh-agent:')) continue;
+    const input = item.input as { agent?: unknown; productIcon?: unknown; provider?: unknown } | undefined;
+    if (typeof input?.agent !== 'string') continue;
+    const displayName = meshAgentDisplayNames.get(input.agent) ?? input.agent;
+    if (shouldShowDeveloperOnlyMessages && item.output) {
+      byId.set(`mesh-session-developer:${item.id}`, {
+        id: `mesh-session-developer:${item.id}`,
+        authorId: input.agent,
+        authorName: displayName,
+        av: avatarForAgent(displayName),
+        icon: productIcon(input.productIcon),
+        avatarUrl: meshAgentAvatarUrl(displayName, meshAgentAvatarSeeds, avatarStyle),
+        kind: 'developer',
+        tag: 'DEV',
+        time: '',
+        text: MESH_AGENT_FOLLOW_TEXT,
+        meshSessionId: item.id,
+        developerOnly: true,
+        orderKey: `${item.seq}:developer`
+      });
+    }
+  }
+  keepManagedMeshAgentRepliesAfterJoin(byId);
+  return sortMessagesOldestFirst([...byId.values()]);
+}
+
+export const __workplaceProjectMessageTest = {
+  buildProjectMessages,
+  buildMeshAgentStreams,
+  avatarCacheKey,
+  defaultProjectMemberSettings: defaultWorkplaceProjectMemberSettings,
+  entityAvatarUrl,
+  entityAvatarWriteUrl,
+  meshAgentMemberPresence,
+  meshAgentMemberActivityPhase,
+  meshAgentFacingCommandPhase,
+  projectParticipants,
+  meshAgentProductDisplayName,
+  meshSessionIsGenerating,
+  meshAgentLoginRequiredMessage,
+  projectMemberJoinMessageView,
+  meshSessionDeveloperMessage,
+  parseProjectMembers,
+  renameMeshAgentProjectMemberDisplayName,
+  sortMessagesOldestFirst
+};

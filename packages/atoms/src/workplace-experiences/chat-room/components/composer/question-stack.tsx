@@ -1,0 +1,65 @@
+import type { Participant, QuestionView } from '../../../experience/types.ts';
+
+import { ComposerAskSheet } from '@monad/ui';
+import { AgentIdentity, AgentInstanceAvatar, resolveProductIcon } from '@monad/ui/components/AgentAvatar';
+
+import { workplaceExperienceT } from '../../../i18n.ts';
+import { buildClarifyAnswer } from '../../utils/clarify-answer.ts';
+
+export function QuestionStack({
+  asker,
+  onAnswer,
+  onDismiss,
+  position,
+  question,
+  total
+}: {
+  asker?: Pick<Participant, 'av' | 'avatarUrl' | 'icon' | 'name'>;
+  onAnswer: (requestId: string, answer: string) => void;
+  onDismiss: (requestId: string) => void;
+  position: number;
+  question: QuestionView;
+  total: number;
+}): React.ReactElement {
+  const t = workplaceExperienceT();
+  const displayAgent = asker ?? {
+    av: question.askerName.slice(0, 2).toUpperCase(),
+    name: question.askerName
+  };
+  const productIcon = resolveProductIcon(displayAgent);
+
+  return (
+    <ComposerAskSheet
+      askedLabel={t('web.workplace.askedQuestion')}
+      asker={
+        <>
+          <AgentInstanceAvatar
+            agent={displayAgent}
+            size={24}
+          />
+          <AgentIdentity
+            badgeGap={6}
+            icon={productIcon}
+            iconSize={13}
+            name={displayAgent.name}
+            nameStyle={{ fontSize: 13, fontWeight: 700 }}
+          />
+        </>
+      }
+      backLabel={t('web.common.back')}
+      buildAnswer={buildClarifyAnswer}
+      dismissLabel={t('web.inbox.skip')}
+      key={question.id}
+      nextLabel={t('web.common.next')}
+      onAnswer={onAnswer}
+      onDismiss={onDismiss}
+      otherAriaLabel={t('web.workplace.otherAnswer')}
+      otherPlaceholder={t('web.workplace.otherPlaceholder')}
+      position={position}
+      question={question}
+      questions={question.questions}
+      submitLabel={t('web.common.submit')}
+      total={total}
+    />
+  );
+}

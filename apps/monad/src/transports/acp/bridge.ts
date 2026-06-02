@@ -1,0 +1,196 @@
+// Bridge handlers: an AcpHandlers implementation that proxies to an already-running daemon over its
+// Unix socket (REST + inline SSE) instead of holding the daemon in-process. This is what lets
+// `monad acp` attach to a shared daemon — the same one backing the Web UI/CLI — so editor sessions
+// appear there and reuse one store/model config.
+//
+// We deliberately do NOT depend on @monad/client here: that package targets the DOM and the daemon
+// compiles against Bun-only libs, and pulling it in would create a monad→client→monad cycle. The
+// client surface the bridge needs is tiny (a handful of REST calls + one SSE consumer), so we build
+// it directly on Bun's fetch and validate every response with the protocol schema.
+//
+// Phase 1 (non-delegated): a turn runs on the daemon host with the daemon's own sandbox. The
+// permission + clarify round-trips already work cross-process because the daemon folds those
+// out-of-band events into the inline SSE response (createSessionMessageSseResponse), and the adapter
+// answers them via the oversight/clarify proxy methods below. fs/terminal delegation and per-session
+// sandbox roots arrive in later phases.
+
+import type { EventSink } from '#/handlers/session/index.ts';
+import type { AcpHandlers } from '#/transports/acp/connection.ts';
+
+import { createLogger } from '@monad/logger';
+import {
+  abortSessionResponseSchema,
+  branchSessionResponseSchema,
+  clarifyRespondResponseSchema,
+  commandsListResponseSchema,
+  createSessionResponseSchema,
+  delegationAckResponseSchema,
+  deleteSessionResponseSchema,
+  eventSchema,
+  getDefaultProfileResponseSchema,
+  getSessionResponseSchema,
+  listMessagesResponseSchema,
+  listModelsResponseSchema,
+  listProfilesResponseSchema,
+  listProvidersResponseSchema,
+  listSessionsResponseSchema,
+  okResponseSchema,
+  readTypedSseStream,
+  restoreSessionResponseSchema,
+  toolApproveResponseSchema
+} from '@monad/protocol';
+
+const log = createLogger('transport:acp:bridge');
+
+export interface BridgeOptions {
+  /** Daemon base URL (e.g. https://127.0.0.1:47749). With `unixSocket` set, the host/port is only
+   * used to build the URL + Host header; requests dial the socket. */
+  baseUrl: string;
+  /** TCP fallback base URL. When omitted, fallback reuses `baseUrl`. */
+  tcpBaseUrl?: string;
+  /** Daemon Unix-domain HTTP socket. Local daemons only. */
+  unixSocket?: string;
+  token?: string;
+}
+
+type FetchInit = RequestInit & { unix?: string };
+
+/** Bun's fetch accepts a `unix` option to dial a Unix-domain socket; the global RequestInit type
+ * doesn't model it, so we widen locally. */
+function bunFetch(url: string, init: FetchInit): Promise<Response> {
+  return fetch(url, init as RequestInit);
+}
+
+function buildQuery(params: Record<string, unknown>): string {
+  const sp = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) if (v !== undefined) sp.set(k, String(v));
+  const s = sp.toString();
+  return s ? `?${s}` : '';
+}
+
+/**
+ * Build an {@link AcpHandlers} backed by the daemon at `opts.baseUrl`/`opts.unixSocket`. The object
+ * is type-checked against the real handler surface (AcpHandlers is a `Pick` of it).
+ */
+export function createBridgeHandlers(opts: BridgeOptions): { handlers: AcpHandlers } {
+  const base = opts.baseUrl.replace(/\/$/, '');
+  const tcpBase = (opts.tcpBaseUrl ?? opts.baseUrl).replace(/\/$/, '');
+  const authHeaders: Record<string, string> = opts.token ? { authorization: `Bearer ${opts.token}` } : {};
+
+  // Dial the Unix socket when configured; on a connect-level failure (socket missing / daemon not
+  // listening) retry over TCP (the URL already carries baseUrl host:port) and latch to TCP for this
+  // bridge's lifetime — mirrors the CLI client's fetcher so `monad acp` survives a stale socket.
+  let fellBackToTcp = false;
+  async function bridgeFetch(url: string, init: FetchInit): Promise<Response> {
+    if (opts.unixSocket && !fellBackToTcp) {
+      try {
+        return await bunFetch(url, { ...init, unix: opts.unixSocket });
+      } catch {
+        fellBackToTcp = true;
+      }
+    }
+    return bunFetch(tcpFallbackUrl(url), init);
+  }
+
+  function tcpFallbackUrl(url: string): string {
+    if (base === tcpBase || !url.startsWith(base)) return url;
+    return `${tcpBase}${url.slice(base.length)}`;
+  }
+
+  async function request<T>(
+    method: string,
+    path: string,
+    schema: { parse(input: unknown): T },
+    body?: unknown
+  ): Promise<T> {
+    const init: FetchInit = {
+      method,
+      headers: { ...authHeaders, ...(body !== undefined ? { 'content-type': 'application/json' } : {}) },
+      ...(body !== undefined ? { body: JSON.stringify(body) } : {})
+    };
+    const res = await bridgeFetch(`${base}${path}`, init);
+    if (!res.ok) {
+      const detail = await res.text().catch(() => '');
+      throw new Error(`daemon ${method} ${path} failed (${res.status})${detail ? `: ${detail}` : ''}`);
+    }
+    return schema.parse(await res.json());
+  }
+
+  const get = <T>(path: string, schema: { parse(input: unknown): T }) => request('GET', path, schema);
+  const post = <T>(path: string, schema: { parse(input: unknown): T }, body?: unknown) =>
+    request('POST', path, schema, body);
+  const put = <T>(path: string, schema: { parse(input: unknown): T }, body?: unknown) =>
+    request('PUT', path, schema, body);
+  const del = <T>(path: string, schema: { parse(input: unknown): T }) => request('DELETE', path, schema);
+
+  /** Run a turn over the daemon's inline-SSE path and replay each event into the ACP sink. The
+   * daemon folds out-of-band oversight/clarify events into this same stream, so the adapter's sink
+   * sees and bridges them. Resolves when the stream closes (turn end). */
+  async function streamTurn(
+    sessionId: string,
+    text: string,
+    ambientContext: string | undefined,
+    sink: EventSink
+  ): Promise<void> {
+    const init: FetchInit = {
+      method: 'POST',
+      headers: { ...authHeaders, 'content-type': 'application/json', accept: 'text/event-stream' },
+      body: JSON.stringify({ text, ambientContext })
+    };
+    const res = await bridgeFetch(`${base}/v1/sessions/${sessionId}/messages`, init);
+    if (!res.ok || !res.body) {
+      throw new Error(`daemon turn failed (${res.status})`);
+    }
+    await readTypedSseStream(res.body.getReader(), eventSchema, sink, {
+      onInvalid: (err) => log.warn({ err }, 'dropping unparseable session event')
+    });
+  }
+
+  const handlers: AcpHandlers = {
+    session: {
+      create: (args) => post('/v1/sessions', createSessionResponseSchema, args),
+      get: ({ id }) => get(`/v1/sessions/${id}`, getSessionResponseSchema),
+      branch: ({ id, title, atMessageId, origin }) =>
+        post(`/v1/sessions/${id}/branch`, branchSessionResponseSchema, {
+          title,
+          atMessageId,
+          origin
+        }),
+      list: (params = {}) => get(`/v1/sessions${buildQuery(params)}`, listSessionsResponseSchema),
+      messages: ({ id, limit, before, includeInactive }) =>
+        get(`/v1/sessions/${id}/messages${buildQuery({ limit, before, includeInactive })}`, listMessagesResponseSchema),
+      delete: ({ id }) => del(`/v1/sessions/${id}`, deleteSessionResponseSchema),
+      abort: ({ id }) => post(`/v1/sessions/${id}/abort`, abortSessionResponseSchema),
+      restore: ({ id, toMessageId }) =>
+        post(`/v1/sessions/${id}/restore`, restoreSessionResponseSchema, { toMessageId }),
+      configureRuntime: ({ id, sandboxRoots, mcpServers, delegate }) =>
+        put(`/v1/sessions/${id}/runtime`, okResponseSchema, { sandboxRoots, mcpServers, delegate }),
+      sendInline: async ({ sessionId, text }, sink: EventSink, runOpts) => {
+        await streamTurn(sessionId, text, runOpts?.ambientContext, sink);
+      }
+    },
+    commands: {
+      list: () => get('/v1/commands', commandsListResponseSchema)
+    },
+    oversight: {
+      approve: (body) => post('/v1/tools/approve', toolApproveResponseSchema, body)
+    },
+    clarify: {
+      respond: (body) => post('/v1/clarifications/respond', clarifyRespondResponseSchema, body)
+    },
+    delegation: {
+      respond: (body) => post('/v1/delegation/respond', delegationAckResponseSchema, body),
+      output: (body) => post('/v1/delegation/output', delegationAckResponseSchema, body)
+    },
+    model: {
+      listProviders: () => get('/v1/settings/model/providers', listProvidersResponseSchema),
+      listModels: ({ providerId }: { providerId: string }) =>
+        get(`/v1/settings/model/providers/${providerId}/models`, listModelsResponseSchema),
+      listProfiles: () => get('/v1/settings/model/profiles', listProfilesResponseSchema),
+      getDefaultProfile: () => get('/v1/settings/model/default', getDefaultProfileResponseSchema),
+      setDefaultProfile: (body: { alias: string }) => put('/v1/settings/model/default', okResponseSchema, body)
+    }
+  };
+
+  return { handlers };
+}

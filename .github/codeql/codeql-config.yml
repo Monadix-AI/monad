@@ -1,0 +1,8 @@
+name: Monad CodeQL configuration
+
+paths-ignore:
+  - '**/test/**'
+  - '**/tests/**'
+  - '**/*.test.ts'
+  - '**/*.test.tsx'
+  - '**/fixtures/**'

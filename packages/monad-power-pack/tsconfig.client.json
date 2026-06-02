@@ -1,0 +1,18 @@
+{
+  "extends": "../tsconfig/tsconfig.base.json",
+  "compilerOptions": {
+    "allowArbitraryExtensions": true,
+    "jsx": "react-jsx",
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
+    "module": "ESNext"
+  },
+  "include": [
+    "src/browser.d.ts",
+    "src/experiences/kanban/client.tsx",
+    "src/experiences/kanban/client-logic.ts",
+    "src/experiences/kanban/client-styles.ts",
+    "src/experiences/kanban/domain.ts",
+    "src/experiences/kanban/inspector.tsx",
+    "src/experiences/kanban/member-palette.tsx"
+  ]
+}

@@ -1,0 +1,233 @@
+{
+  "$schema": "https://raw.githubusercontent.com/mintlify/mintlify/main/client/docs.json",
+  "theme": "mint",
+  "name": "Monad",
+  "description": "Daemon-first agent team runtime with headless architecture.",
+  "redirects": [
+    { "source": "/engineering/agent-credentials-dev-migration", "destination": "/usage/agent-runtime-credentials" },
+    { "source": "/engineering/cli-design", "destination": "/usage/cli" },
+    { "source": "/engineering/conventions", "destination": "/engineering/index" },
+    { "source": "/engineering/design-principles", "destination": "/design/product-principles" },
+    { "source": "/engineering/documentation-operations", "destination": "/engineering/index" },
+    { "source": "/engineering/dx", "destination": "/engineering/index" },
+    { "source": "/engineering/parallel-agents", "destination": "/engineering/index" },
+    { "source": "/engineering/performance-guidelines", "destination": "/engineering/index" },
+    { "source": "/engineering/security-guidelines", "destination": "/internals/infra/runtime" },
+    { "source": "/engineering/testing", "destination": "/engineering/index" },
+    { "source": "/engineering/worktree", "destination": "/engineering/index" },
+    { "source": "/design/ui-guidelines", "destination": "/design/index" },
+    { "source": "/design/ux-guidelines", "destination": "/design/index" },
+    { "source": "/design/ux-writing-guidelines", "destination": "/design/index" },
+    { "source": "/proposals/:slug*", "destination": "/engineering/index" }
+  ],
+  "colors": {
+    "primary": "#6e56cf",
+    "light": "#8e7bdb",
+    "dark": "#5a45b0"
+  },
+  "favicon": "/assets/favicon.svg",
+  "logo": {
+    "light": "/assets/monad-logo-light.svg",
+    "dark": "/assets/monad-logo-dark.svg"
+  },
+  "navigation": {
+    "languages": [
+      {
+        "language": "en",
+        "default": true,
+        "tabs": [
+          {
+            "tab": "Documentation",
+            "groups": [
+              {
+                "group": "Get Started",
+                "pages": ["index", "getting-started", "usage/installation", "concepts", "product", "usage/index"]
+              },
+              {
+                "group": "Monad Mesh: The Agent Team Runtime",
+                "pages": [
+                  "guides/from-one-agent-to-team",
+                  "guides/choosing-runtime",
+                  "usage/mesh-agents",
+                  "usage/native-cli-approvals"
+                ]
+              },
+              {
+                "group": "Monad Agent Runtime: The First-Party Agent",
+                "pages": ["usage/model-providers", "usage/skills", "usage/mcp", "usage/computer-use"]
+              },
+              {
+                "group": "Operate the Daemon",
+                "pages": [
+                  "usage/sessions",
+                  "usage/cli",
+                  "usage/web",
+                  "usage/tui",
+                  "usage/channels",
+                  "usage/api",
+                  "guides/remote-access"
+                ]
+              },
+              {
+                "group": "Trust and Policy",
+                "pages": ["usage/sandbox-backends", "usage/agent-runtime-credentials", "usage/privacy"]
+              },
+              {
+                "group": "Reference",
+                "pages": [
+                  "guides/comparison",
+                  "guides/alternatives",
+                  "guides/faq",
+                  "guides/use-cases",
+                  "usage/releases",
+                  "usage/troubleshooting"
+                ]
+              }
+            ]
+          },
+          {
+            "tab": "Developers",
+            "groups": [
+              {
+                "group": "Engineering",
+                "pages": [
+                  "engineering/index",
+                  "engineering/architecture",
+                  "engineering/philosophy",
+                  "engineering/tech-stack"
+                ]
+              },
+              {
+                "group": "Architecture",
+                "pages": ["internals/index", "internals/reference"]
+              },
+              {
+                "group": "Monad Mesh",
+                "pages": [
+                  "internals/agent-team-runtime/index",
+                  "internals/agent-team-runtime/project-sessions",
+                  "internals/agent-team-runtime/mesh-observation",
+                  "internals/agent-team-runtime/mesh-adapter-authoring",
+                  "internals/agent-team-runtime/acp",
+                  "internals/agent-team-runtime/peer-federation",
+                  "internals/agent-team-runtime/workplace-experiences"
+                ]
+              },
+              {
+                "group": "Monad Agent Runtime",
+                "pages": [
+                  "internals/agent-runtime/index",
+                  "internals/agent-runtime/tools",
+                  "internals/agent-runtime/context-management",
+                  "internals/agent-runtime/memory",
+                  "internals/agent-runtime/operation-source"
+                ]
+              },
+              {
+                "group": "Infrastructure",
+                "pages": [
+                  "internals/infra/index",
+                  "internals/infra/runtime",
+                  "internals/infra/daemon-architecture",
+                  "internals/infra/headless-runtime-contract",
+                  "internals/infra/realtime-channels",
+                  "internals/infra/channel-conformance",
+                  "internals/infra/model-providers",
+                  "internals/infra/atoms",
+                  "internals/infra/hooks",
+                  "internals/infra/host-interactions",
+                  "internals/infra/third-party-commands"
+                ]
+              },
+              {
+                "group": "Product Design",
+                "pages": ["design/index", "design/product-principles", "design/design-system"]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "language": "zh-Hans",
+        "navbar": {
+          "links": [{ "type": "github", "label": "GitHub", "href": "https://github.com/Monadix-AI/monad" }],
+          "primary": { "type": "button", "label": "开始使用", "href": "/zh-Hans/getting-started" }
+        },
+        "groups": [
+          {
+            "group": "开始使用",
+            "pages": [
+              "zh-Hans/index",
+              "zh-Hans/getting-started",
+              "zh-Hans/usage/installation",
+              "zh-Hans/product",
+              "zh-Hans/concepts"
+            ]
+          },
+          {
+            "group": "Monad Mesh：Agent 团队运行时",
+            "pages": ["zh-Hans/usage/mesh-agents"]
+          },
+          {
+            "group": "Monad Agent Runtime：第一方 Agent",
+            "pages": [
+              "zh-Hans/usage/model-providers",
+              "zh-Hans/usage/skills",
+              "zh-Hans/usage/mcp",
+              "zh-Hans/usage/computer-use"
+            ]
+          },
+          {
+            "group": "运行守护进程",
+            "pages": ["zh-Hans/usage/sessions", "zh-Hans/usage/cli", "zh-Hans/usage/tui", "zh-Hans/usage/channels"]
+          },
+          {
+            "group": "运行与维护",
+            "pages": [
+              "zh-Hans/usage/releases",
+              "zh-Hans/usage/privacy",
+              "zh-Hans/guides/alternatives",
+              "zh-Hans/guides/faq",
+              "zh-Hans/usage/troubleshooting"
+            ]
+          },
+          {
+            "group": "开发者",
+            "pages": ["zh-Hans/internals/index"]
+          }
+        ]
+      }
+    ]
+  },
+  "navbar": {
+    "links": [{ "type": "github", "label": "GitHub", "href": "https://github.com/Monadix-AI/monad" }],
+    "primary": { "type": "button", "label": "Get started", "href": "/getting-started" }
+  },
+  "footer": {
+    "socials": { "github": "https://github.com/Monadix-AI/monad" }
+  },
+  "contextual": {
+    "options": ["copy", "view", "chatgpt", "claude", "mcp", "cursor", "vscode"]
+  },
+  "search": {
+    "prompt": "Search Monad documentation"
+  },
+  "errors": {
+    "404": {
+      "redirect": true,
+      "title": "Page not found",
+      "description": "The page may have moved. Search the Monad documentation or return to the overview."
+    }
+  },
+  "seo": {
+    "metatags": {
+      "author": "Monadix",
+      "robots": "index, follow",
+      "googlebot": "index, follow",
+      "og:site_name": "Monad by Monadix",
+      "og:type": "website",
+      "application-name": "Monad",
+      "twitter:card": "summary_large_image"
+    }
+  }
+}

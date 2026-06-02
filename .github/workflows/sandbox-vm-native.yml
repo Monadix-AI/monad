@@ -1,0 +1,43 @@
+name: Sandbox VM Native Artifacts
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "packages/sandbox-vm/native/seccomp-observer/**"
+      - "packages/sandbox-vm/src/vendor-assets.ts"
+      - ".github/workflows/sandbox-vm-native.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  seccomp-observer:
+    strategy:
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            platform: linux/amd64
+            artifact: amd64
+          - runner: ubuntu-24.04-arm
+            platform: linux/arm64
+            artifact: arm64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Build and test native observer
+        run: |
+          docker run --rm --platform ${{ matrix.platform }} \
+            --security-opt seccomp=unconfined \
+            -v "$PWD:/src" \
+            -w /src/packages/sandbox-vm/native/seccomp-observer \
+            gcc:15-bookworm ./build.sh
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: package.json
+      # The binary is not committed (it ships as a release asset), so its sha256 pin — the same
+      # value the runtime verifies before executing a download — is what a rebuild is checked
+      # against. A source change that lands without re-pinning fails here.
+      - name: Verify the rebuild matches its sha256 pin
+        run: bun scripts/pin-vm-vendor.ts seccomp-observer-${{ matrix.artifact }}

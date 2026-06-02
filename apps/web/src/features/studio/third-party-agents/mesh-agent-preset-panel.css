@@ -1,0 +1,199 @@
+.mesh-agent-live-v2 {
+  display: grid;
+  grid-template-columns: minmax(160px, 0.72fr) minmax(0, 1.9fr);
+  gap: 14px;
+  padding: 12px;
+  background: color-mix(in srgb, var(--muted) 54%, transparent);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.mesh-agent-live-v2 p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--muted-foreground);
+}
+
+.mesh-agent-live-v2__list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.mesh-agent-live-v2__row {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  min-height: 54px;
+  padding: 8px 9px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.mesh-agent-live-v2__logo {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  background: var(--background);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+}
+
+.mesh-agent-live-v2__main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.mesh-agent-live-v2__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 13px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.mesh-agent-live-v2__actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.mesh-agent-live-v2__row--connected {
+  background: var(--card);
+}
+
+.mesh-agent-live-v2__row--connected .mesh-agent-live-v2__logo {
+  border-color: color-mix(in srgb, var(--success) 28%, var(--border));
+  box-shadow: 0 0 0 5px color-mix(in srgb, var(--success) 12%, transparent);
+}
+
+.mesh-agent-settings-page {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 100%;
+  padding: 18px;
+}
+
+.mesh-agent-preset-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+}
+
+.mesh-agent-preset-groups__sections {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.mesh-agent-preset-groups__section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mesh-agent-preset-groups__heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-inline: 2px;
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--muted-foreground);
+}
+
+.mesh-agent-preset-skeleton__block {
+  background: var(--muted);
+  animation: mesh-agent-skeleton-pulse 1.6s ease-in-out infinite;
+}
+
+.mesh-agent-preset-skeleton__name {
+  width: 6rem;
+  height: 0.75rem;
+  border-radius: 2px;
+}
+
+.mesh-agent-preset-skeleton__action {
+  width: 5rem;
+  height: 1.5rem;
+  border-radius: 6px;
+}
+
+@keyframes mesh-agent-skeleton-pulse {
+  0%,
+  100% {
+    opacity: 0.46;
+  }
+
+  50% {
+    opacity: 0.82;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mesh-agent-preset-skeleton__block {
+    animation: none;
+  }
+}
+
+.mesh-agent-preset-groups .mesh-agent-live-v2__list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 278px), 278px));
+  gap: 8px;
+}
+
+.mesh-agent-preset-groups .mesh-agent-live-v2__row {
+  grid-template-rows: 38px minmax(32px, 1fr);
+  grid-template-columns: 38px minmax(0, 1fr);
+  align-content: stretch;
+  min-height: 118px;
+  padding: 11px 12px 9px;
+  border-radius: 10px;
+}
+
+.mesh-agent-preset-groups .mesh-agent-live-v2__logo {
+  width: 38px;
+  height: 38px;
+}
+
+.mesh-agent-preset-groups .mesh-agent-live-v2__actions {
+  grid-column: 1 / -1;
+  align-self: end;
+  justify-content: flex-end;
+  padding-top: 8px;
+  margin-top: auto;
+  border-top: 1px solid var(--border);
+}
+
+@media (max-width: 760px) {
+  .mesh-agent-live-v2 {
+    grid-template-columns: 1fr;
+  }
+
+  .mesh-agent-live-v2__row {
+    grid-template-columns: 34px minmax(0, 1fr);
+  }
+
+  .mesh-agent-live-v2__actions {
+    grid-column: 2;
+  }
+
+  .mesh-agent-settings-page {
+    padding: 12px;
+  }
+
+  .mesh-agent-preset-groups .mesh-agent-live-v2__actions {
+    grid-column: 1 / -1;
+  }
+}

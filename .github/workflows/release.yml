@@ -1,0 +1,302 @@
+name: Release
+
+# Called by release-please once it has created the release as a DRAFT. Builds every binary
+# target, verifies the installers against them, uploads the assets, and only then takes the
+# release out of draft.
+#
+# The draft is load-bearing, not cosmetic: publishing is what creates the git tag and, for
+# stable releases, moves the `latest` pointer. `install.sh` resolves the latest tag and downloads
+# `releases/download/<tag>/monad-<version>-<platform>.tar.gz`. Publishing first would leave a
+# ~30-minute window where every `curl … | bash` resolves a tag whose assets do not exist yet.
+on:
+  workflow_call:
+    inputs:
+      tag:
+        description: Draft release tag created by release-please (e.g. v0.2.0).
+        required: true
+        type: string
+      sha:
+        description: Commit the release points at.
+        required: true
+        type: string
+      make_latest:
+        description: Whether publishing should move GitHub's latest stable release pointer.
+        required: false
+        type: boolean
+        default: false
+    secrets:
+      TURBO_TOKEN:
+        description: Token used to authenticate Turbo remote cache access.
+        required: false
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing draft release tag to rebuild and publish.
+        required: true
+        type: string
+      sha:
+        description: Commit to build. Defaults to the tag when empty.
+        required: false
+        type: string
+      make_latest:
+        description: Whether publishing should move GitHub's latest stable release pointer.
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  ci-gate:
+    name: validate release commit
+    uses: ./.github/workflows/ci.yml
+    with:
+      full: true
+      sha: ${{ inputs.sha || inputs.tag }}
+    secrets: inherit
+
+  atom-pack:
+    name: build monad power pack
+    needs: ci-gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.sha || inputs.tag }}
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.3.14
+
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Generate contracts
+        run: bun run generate
+
+      - name: Build Power Pack
+        run: bun run --cwd packages/monad-power-pack build:atom-pack
+
+      - name: Create canonical artifact
+        run: bun apps/cli/src/main.ts atom pack packages/monad-power-pack --out dist/monad-power-pack.atom-pack.zip
+
+      - name: Verify Power Pack
+        run: bun scripts/bun-test.ts packages/monad-power-pack/test/unit --only-failures
+
+      - name: Upload Power Pack artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: monad-power-pack
+          path: |
+            dist/monad-power-pack.atom-pack.zip
+            dist/monad-power-pack.atom-pack.zip.sha256
+          retention-days: 1
+
+  # ── Build ─────────────────────────────────────────────────────────────────────
+  # Split by OS: linux+windows cross-compile on a Linux runner; darwin builds on a macOS runner.
+  build:
+    name: build (${{ matrix.id }})
+    needs: ci-gate
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - id: linux-windows
+            runner: ubuntu-latest
+            os_filter: linux,windows
+          - id: darwin
+            runner: macos-latest
+            os_filter: darwin
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.sha || inputs.tag }}
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.3.14
+
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: ${{ runner.os }}-bun-
+
+      - name: Install cross-compilers for native sandbox launcher
+        if: matrix.id == 'linux-windows'
+        run: |
+          sudo apt-get update -qq
+          # gcc-aarch64-linux-gnu: linux-arm64 sandbox launcher
+          # musl-tools: linux-x64-musl sandbox launcher (musl-gcc)
+          # gcc-mingw-w64-x86-64: windows-x64 sandbox launcher (monad-sandbox-launcher.exe)
+          sudo apt-get install -y --no-install-recommends gcc-aarch64-linux-gnu musl-tools gcc-mingw-w64-x86-64
+
+      - name: Install llvm-mingw (Windows ARM64 cross-compiler)
+        if: matrix.id == 'linux-windows'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # aarch64-w64-mingw32-clang is not in Ubuntu apt — download from mstorsjo/llvm-mingw.
+          # The ucrt/ubuntu-20.04 tarball is statically linked and runs on any Ubuntu version.
+          TAG=$(curl -fsSL -H "Authorization: Bearer ${GH_TOKEN}" https://api.github.com/repos/mstorsjo/llvm-mingw/releases/latest | jq -r .tag_name)
+          TARBALL="llvm-mingw-${TAG}-ucrt-ubuntu-22.04-x86_64.tar.xz"
+          curl -fsSL "https://github.com/mstorsjo/llvm-mingw/releases/download/${TAG}/${TARBALL}" | tar -xJ
+          echo "$PWD/llvm-mingw-${TAG}-ucrt-ubuntu-22.04-x86_64/bin" >> "$GITHUB_PATH"
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      # macOS leg emits darwin-arm64 + darwin-x64; Linux leg emits linux*/windows*.
+      - name: Build release binaries
+        run: bun run scripts/build-release.ts --all --os=${{ matrix.os_filter }}
+
+      - name: Upload tarballs as artifacts (shared with install-test jobs)
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-tarballs-${{ matrix.id }}
+          path: |
+            dist/*.tar.gz
+            dist/*.sha256
+          retention-days: 1
+
+  # ── Install tests (one job per OS) ───────────────────────────────────────────
+  # Each job downloads only its own tarball and runs three flows:
+  #   1. fresh install  2. upgrade (re-run over existing)  3. overwrite (home data survives)
+  install-test:
+    name: install-test (${{ matrix.os }})
+    needs: build
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: linux
+            runner: ubuntu-latest
+            tarball_glob: monad-*-linux-x64.tar.gz
+            script: bun run scripts/test/install-test.ts
+          - os: macos
+            runner: macos-latest
+            tarball_glob: monad-*-darwin-arm64.tar.gz
+            script: bun run scripts/test/install-test.ts
+          - os: windows
+            runner: windows-latest
+            tarball_glob: monad-*-windows-x64.tar.gz
+            script: bun run scripts/test/install-test.ts
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.sha || inputs.tag }}
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.3.14
+
+      - name: Download tarballs
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: release-tarballs-*
+          merge-multiple: true
+          path: dist/
+
+      - name: Run install test (fresh + upgrade + overwrite)
+        run: ${{ matrix.script }}
+        env:
+          # Windows: skip the ~150 MB PortableGit download in CI.
+          # The Git Bash download path is covered by a dedicated job below.
+          MONAD_SKIP_GIT: "1"
+          TARBALL_GLOB: ${{ matrix.tarball_glob }}
+
+  # ── Git Bash download test (Windows only, network-gated) ─────────────────────
+  # Runs separately so a network hiccup doesn't block the main install-test matrix.
+  install-test-gitbash:
+    name: install-test git-bash download (windows)
+    needs: build
+    continue-on-error: true
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.sha || inputs.tag }}
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.3.14
+
+      - name: Download tarballs
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: release-tarballs-*
+          merge-multiple: true
+          path: dist/
+
+      - name: Run install test with real Git Bash download
+        run: bun run scripts/test/install-test.ts
+        env:
+          MONAD_SKIP_GIT: "0"
+
+  # ── Publish release assets ────────────────────────────────────────────────────
+  publish:
+    permissions:
+      contents: write
+    name: publish release assets
+    needs: [ci-gate, atom-pack, install-test, install-test-gitbash]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.sha || inputs.tag }}
+
+      - name: Download tarballs
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: release-tarballs-*
+          merge-multiple: true
+          path: dist/
+
+      - name: Download Power Pack
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: monad-power-pack
+          path: dist/
+
+      - name: Generate installer checksums
+        run: |
+          sha256sum scripts/install.sh > scripts/install.sh.sha256
+          sha256sum scripts/install.ps1 > scripts/install.ps1.sha256
+
+      - name: Upload release assets
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
+        with:
+          tag_name: ${{ inputs.tag }}
+          # Keep the release a draft while the assets land; the next step publishes it.
+          draft: true
+          files: |
+            dist/*.tar.gz
+            dist/*.sha256
+            dist/monad-power-pack.atom-pack.zip
+            scripts/install.sh
+            scripts/install.ps1
+            scripts/install.sh.sha256
+            scripts/install.ps1.sha256
+          fail_on_unmatched_files: true
+
+      # Publishing creates the git tag and, for stable releases, moves `latest`, so it must come
+      # last: from here on, `install.sh` can resolve this version and all of its assets exist.
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [[ "${{ inputs.make_latest }}" == "true" ]]; then
+            gh release edit "${{ inputs.tag }}" --draft=false --latest
+          else
+            gh release edit "${{ inputs.tag }}" --draft=false
+          fi

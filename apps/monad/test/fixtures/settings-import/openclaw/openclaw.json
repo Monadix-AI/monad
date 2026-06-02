@@ -1,0 +1,16 @@
+{
+  "model": { "provider": "openai", "default": "gpt-4.1" },
+  "mcp": {
+    "servers": [
+      {
+        "name": "fixture_browser",
+        "transport": "sse",
+        "url": "https://mcp.example.com/sse",
+        "headers": { "authorization": "${env:MCP_TOKEN}" },
+        "autoApprove": ["browser.open"]
+      }
+    ]
+  },
+  "plugins": [{ "id": "runtime-plugin" }],
+  "database": { "path": "./openclaw.db" }
+}

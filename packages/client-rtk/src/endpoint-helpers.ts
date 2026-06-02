@@ -1,0 +1,137 @@
+import type { MonadClient } from '@monad/client';
+import type { IdempotencyKey, PublicErrorDetails, RequestCorrelationId } from '@monad/protocol';
+
+import {
+  newId,
+  publicErrorDetailsSchema,
+  publicErrorRequestIdSchema,
+  publicErrorRetryableSchema
+} from '@monad/protocol';
+
+export interface MonadExtra {
+  client: MonadClient;
+}
+
+export function clientOf(api: { extra: unknown }): MonadClient {
+  const extra = api.extra as Partial<MonadExtra> | undefined;
+  if (!extra?.client) {
+    throw new Error(
+      'monadApi: the store has no MonadClient-compatible instance — build it with createMonadStore({ client }), ' +
+        'or set middleware thunk.extraArgument.client yourself.'
+    );
+  }
+  return extra.client;
+}
+
+export interface IdempotentMutationArgs {
+  idempotencyKey?: IdempotencyKey;
+}
+
+export function idempotencyOptions(args: IdempotentMutationArgs): { headers: Record<string, string> } | undefined {
+  if (!args.idempotencyKey) return undefined;
+  return { headers: { 'idempotency-key': args.idempotencyKey } };
+}
+
+export function createIdempotencyKey(): IdempotencyKey {
+  return newId('idem');
+}
+
+export function treatyJson<T>(raw: T | Response): Exclude<T, Response> {
+  if (raw instanceof Response) throw new Error('request returned a raw Response instead of JSON data');
+  return raw as Exclude<T, Response>;
+}
+
+/**
+ * The error shape every endpoint surfaces to the UI (the apiSlice baseQuery error type).
+ * `message` is always present for inline display; `status` and `code` are present for
+ * server-originated failures so the UI can route them — `status` for transport-level
+ * handling (401 → re-auth, ≥500 → global toast) and `code` for the daemon's machine code
+ * from httpErrorSchema (`VALIDATION`, `NOT_FOUND`, `INTERNAL`, …). Both absent ⇒ a
+ * client-side/network error that never reached the daemon.
+ */
+export interface MonadApiError {
+  message: string;
+  status?: number;
+  code?: string;
+  retryable?: boolean;
+  requestId?: RequestCorrelationId;
+  details?: PublicErrorDetails;
+  /** Raw server response body — present when the error came from the HTTP layer. */
+  raw?: unknown;
+}
+
+/** Eden Treaty's failure object: an HTTP status plus the parsed response body. */
+interface TreatyError {
+  status?: number;
+  value?: unknown;
+}
+
+function serializableRaw(value: unknown): unknown {
+  if (value == null) return value;
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return value;
+  if (value instanceof Error) return { name: value.name, message: value.message };
+  if (Array.isArray(value)) return value.map(serializableRaw);
+  if (typeof value === 'object') {
+    const out: Record<string, unknown> = {};
+    for (const [key, entry] of Object.entries(value)) {
+      out[key] = serializableRaw(entry);
+    }
+    return out;
+  }
+  return String(value);
+}
+
+/** Map a Treaty error (or a thrown network error) into the UI-facing MonadApiError. */
+export function toError(e: unknown): MonadApiError {
+  if (e && typeof e === 'object' && 'status' in e) {
+    const { status, value } = e as TreatyError;
+    const body =
+      value && typeof value === 'object' && !(value instanceof Error) ? (value as Record<string, unknown>) : {};
+    const retryable = publicErrorRetryableSchema.safeParse(body.retryable);
+    const requestId = publicErrorRequestIdSchema.safeParse(body.requestId);
+    const details = publicErrorDetailsSchema.safeParse(body.details);
+    return {
+      status,
+      ...(typeof body.code === 'string' ? { code: body.code } : {}),
+      ...(retryable.success ? { retryable: retryable.data } : {}),
+      ...(requestId.success ? { requestId: requestId.data } : {}),
+      ...(details.success ? { details: details.data } : {}),
+      message:
+        (typeof body.error === 'string' ? body.error : undefined) ??
+        (value instanceof Error
+          ? value.message
+          : status !== undefined
+            ? `request failed (${status})`
+            : 'request failed'),
+      raw: serializableRaw(value)
+    };
+  }
+  return { message: e instanceof Error ? e.message : String(e) };
+}
+
+/**
+ * Run a Treaty call inside an RTK Query `queryFn`, collapsing the two failure paths
+ * (Treaty's `{ error }` and a thrown exception) into one `{ error: MonadApiError }`.
+ * Pass `map` to reshape the raw response (entity-adapter normalization, filtering, etc.).
+ */
+export async function runTreaty<T>(
+  call: () => Promise<{ data: T | null | undefined; error: unknown }>
+): Promise<{ data: NonNullable<T> } | { error: MonadApiError }>;
+export async function runTreaty<R, T>(
+  call: () => Promise<{ data: R | null | undefined; error: unknown }>,
+  map: (raw: NonNullable<R>) => T
+): Promise<{ data: T } | { error: MonadApiError }>;
+export async function runTreaty<R, T>(
+  call: () => Promise<{ data: R | null | undefined; error: unknown }>,
+  map?: (raw: NonNullable<R>) => T
+): Promise<{ data: T } | { error: MonadApiError }> {
+  try {
+    const { data, error } = await call();
+    if (error) return { error: toError(error) };
+    if (data == null) return { error: { message: 'request returned no data' } };
+    const raw = data as NonNullable<R>;
+    return { data: (map ? map(raw) : raw) as T };
+  } catch (err) {
+    return { error: toError(err) };
+  }
+}

@@ -1,0 +1,181 @@
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { httpErrorSchema } from '@monad/protocol';
+
+import { registerMcpAppBridge, revokeMcpAppBridgesForServer } from '#/capabilities/tools/registry/mcp/app-bridge.ts';
+import { createHttpTransport } from '#/transports/http.ts';
+import { buildHandlers, mockModel } from '../../helpers.ts';
+
+// AGENTS.md: every daemon feature must behave identically over BOTH local transports — TCP loopback
+// and the Unix-domain socket. The CLI's new commands (status, doctor, session new/list, commands)
+// all reach the daemon over whichever transport the client dials, so we bind one app to both and
+// assert the endpoints those commands hit return the same thing on each.
+
+const app = createHttpTransport(buildHandlers(mockModel(['hello'])));
+const handler = (req: Request) => app.handle(req);
+const sockPath = join(tmpdir(), `monad-transport-${process.pid}.sock`);
+const EXTERNAL_DEPENDENCY_ROUTES = new Set([
+  '/v1/skills/search',
+  '/v1/settings/mcp-servers/catalog',
+  '/v1/settings/mcp-servers/registry/search',
+  '/v1/mesh/agents/presets'
+]);
+const STREAMING_ROUTES = new Set(['/v1/interactions/events']);
+
+let tcp: ReturnType<typeof Bun.serve>;
+let uds: ReturnType<typeof Bun.serve>;
+
+beforeAll(() => {
+  tcp = Bun.serve({ port: 0, fetch: handler });
+  uds = Bun.serve({ unix: sockPath, fetch: handler });
+});
+
+afterAll(() => {
+  tcp.stop(true);
+  uds.stop(true);
+});
+
+/** Fetch a path over TCP loopback and over the Unix socket; return both JSON bodies + statuses. */
+async function bothTransports(path: string, init?: RequestInit) {
+  const viaTcp = await fetch(`http://127.0.0.1:${tcp.port}${path}`, init);
+  const viaUds = await fetch(`http://localhost${path}`, { ...init, unix: sockPath });
+  return {
+    tcp: {
+      status: viaTcp.status,
+      body: await viaTcp.json(),
+      requestId: viaTcp.headers.get('x-monad-request-id')
+    },
+    uds: {
+      status: viaUds.status,
+      body: await viaUds.json(),
+      requestId: viaUds.headers.get('x-monad-request-id')
+    }
+  };
+}
+
+function normalizeRequestId(response: { body: unknown; requestId: string | null }): unknown {
+  if (!response.requestId) return response.body;
+  const body = httpErrorSchema.parse(response.body);
+  if (!body.requestId) throw new Error('canonical HTTP error omitted requestId');
+  expect(response.requestId).toBe(body.requestId);
+  return { ...body, requestId: '<request-id>' };
+}
+
+function normalizeDynamicBody(path: string, body: unknown): unknown {
+  if (path !== '/v1/mesh/usage' || !body || typeof body !== 'object' || Array.isArray(body)) return body;
+  return { ...(body as Record<string, unknown>), checkedAt: '<checked-at>' };
+}
+
+/** Every no-param GET route the live app mounts — these are read-only and must behave identically
+ *  on both transports. Parametrised routes (`:id`) need a fixture, covered separately below. */
+function readRoutes(): string[] {
+  const mounted = app as unknown as { routes: { method: string; path: string }[] };
+  return mounted.routes
+    .filter((r) => r.method === 'GET' && !r.path.includes(':'))
+    .filter((r) => !EXTERNAL_DEPENDENCY_ROUTES.has(r.path))
+    .filter((r) => !STREAMING_ROUTES.has(r.path))
+    .map((r) => r.path)
+    .sort();
+}
+
+describe('transport parity (TCP loopback ⇆ Unix socket)', () => {
+  test('MCP App live views have the same contract over both transports', async () => {
+    const bridgeId = registerMcpAppBridge({
+      server: 'transport-view',
+      sessionId: 'ses_transport123',
+      resourceUri: 'ui://transport/view',
+      callTool: async () => ({}),
+      readResource: async () => ({}),
+      readView: () => ({ resourceUri: 'ui://transport/view', html: '<main>live</main>', revision: 'one' })
+    });
+    const result = await bothTransports('/v1/mcp-apps/views', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ bridgeId, sessionId: 'ses_transport123' })
+    });
+
+    expect(result).toEqual({
+      tcp: {
+        status: 200,
+        body: {
+          changed: true,
+          view: { resourceUri: 'ui://transport/view', html: '<main>live</main>', revision: 'one' }
+        },
+        requestId: result.tcp.requestId
+      },
+      uds: {
+        status: 200,
+        body: {
+          changed: true,
+          view: { resourceUri: 'ui://transport/view', html: '<main>live</main>', revision: 'one' }
+        },
+        requestId: result.uds.requestId
+      }
+    });
+    revokeMcpAppBridgesForServer('transport-view');
+  });
+  // Breadth: every read endpoint returns the SAME status + body over both transports. Binding one
+  // app to both sockets means any divergence is a transport-layer bug, not a handler difference.
+  for (const path of readRoutes()) {
+    test(`GET ${path} is identical on both transports`, async () => {
+      const { tcp: t, uds: u } = await bothTransports(path);
+      expect(u.status, `${path} status`).toBe(t.status);
+      expect(normalizeDynamicBody(path, normalizeRequestId(u)), `${path} body`).toEqual(
+        normalizeDynamicBody(path, normalizeRequestId(t))
+      );
+    });
+  }
+
+  test('GET /v1/interactions/events streams over both transports', async () => {
+    const [viaTcp, viaUds] = await Promise.all([
+      fetch(`http://127.0.0.1:${tcp.port}/v1/interactions/events`),
+      fetch('http://localhost/v1/interactions/events', { unix: sockPath })
+    ]);
+    expect(viaTcp.status).toBe(200);
+    expect(viaUds.status).toBe(200);
+    expect(viaTcp.headers.get('content-type')).toStartWith('text/event-stream');
+    expect(viaUds.headers.get('content-type')).toStartWith('text/event-stream');
+    const tcpReader = viaTcp.body?.getReader();
+    const udsReader = viaUds.body?.getReader();
+    const [tcpChunk, udsChunk] = await Promise.all([tcpReader?.read(), udsReader?.read()]);
+    expect(new TextDecoder().decode(tcpChunk?.value)).toBe(': connected\n\n');
+    expect(new TextDecoder().decode(udsChunk?.value)).toBe(': connected\n\n');
+    await Promise.all([tcpReader?.cancel(), udsReader?.cancel()]);
+  });
+
+  test('GET /health (status / doctor) matches on both transports', async () => {
+    const { tcp: t, uds: u } = await bothTransports('/health');
+    expect(t.status).toBe(200);
+    expect(u.status).toBe(200);
+    expect(t.body).toMatchObject({ status: 'ok' });
+    expect(u.body).toEqual(t.body);
+  });
+
+  test('GET /v1/commands (monad commands) matches on both transports', async () => {
+    const { tcp: t, uds: u } = await bothTransports('/v1/commands');
+    expect(t.status).toBe(200);
+    expect(u.status).toBe(200);
+    expect(u.body).toEqual(t.body);
+  });
+
+  test('POST /v1/sessions (session new) works over both, returning a ses_ id', async () => {
+    const post = (title: string): RequestInit => ({
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ title })
+    });
+    const { tcp: t } = await bothTransports('/v1/sessions', post('over-tcp'));
+    const { uds: u } = await bothTransports('/v1/sessions', post('over-uds'));
+    expect((t.body as { sessionId: string }).sessionId).toMatch(/^ses_/);
+    expect((u.body as { sessionId: string }).sessionId).toMatch(/^ses_/);
+  });
+
+  test('GET /v1/sessions (session list) matches shape on both transports', async () => {
+    const { tcp: t, uds: u } = await bothTransports('/v1/sessions');
+    expect(t.status).toBe(200);
+    expect(u.status).toBe(200);
+    expect(Array.isArray((t.body as { sessions: unknown[] }).sessions)).toBe(true);
+    expect(Array.isArray((u.body as { sessions: unknown[] }).sessions)).toBe(true);
+  });
+});

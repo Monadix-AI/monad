@@ -1,0 +1,35 @@
+{
+  "name": "@monad/monad-power-pack",
+  "version": "0.0.0",
+  "dependencies": {
+    "@monad/protocol": "workspace:*",
+    "@monad/sandbox": "workspace:*",
+    "@monad/sdk-atom": "workspace:*",
+    "@monad/ui": "workspace:*",
+    "@xyflow/react": "^12.11.2",
+    "e2b": "^2.38.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.3.14",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "license": "MIT",
+  "module": "src/index.ts",
+  "private": true,
+  "scripts": {
+    "build:kanban": "bun build src/experiences/kanban/client.tsx --outfile src/experiences/kanban.js --target browser --format esm --production",
+    "build:atom-pack:kanban": "bun build src/experiences/kanban/client.tsx --outfile dist/experiences/kanban.js --target browser --format esm --production",
+    "build:atom-pack": "bun run build:atom-pack:kanban && bun build src/index.ts --outfile dist/atom-pack.js --target bun --format esm --production",
+    "test": "bun ../../scripts/quiet-run.ts bun ../../scripts/bun-test.ts test/unit/ --only-failures",
+    "typecheck": "bun ../../scripts/quiet-run.ts bun run typecheck:raw",
+    "typecheck:raw": "tsc --noEmit && tsc -p tsconfig.client.json --noEmit"
+  },
+  "type": "module"
+}

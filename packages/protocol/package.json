@@ -1,0 +1,21 @@
+{
+  "name": "@monad/protocol",
+  "version": "0.0.1",
+  "dependencies": {
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@monad/tsconfig": "workspace:*"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "module": "src/index.ts",
+  "private": true,
+  "scripts": {
+    "generate": "bun ../../scripts/generate-avatar-styles.ts",
+    "test": "bun ../../scripts/quiet-run.ts bun ../../scripts/bun-test.ts test/ --only-failures",
+    "typecheck": "bun ../../scripts/quiet-run.ts tsc --noEmit"
+  },
+  "type": "module"
+}

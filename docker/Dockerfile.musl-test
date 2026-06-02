@@ -1,0 +1,48 @@
+#
+# musl/Alpine coverage for the test suite. The GH Actions matrix covers glibc Linux
+# (ubuntu), macOS, and Windows; this fills in the musl-libc Linux corner that those
+# runners miss — catching libc-dependent runtime issues (unix sockets, bun:sqlite,
+# Bun.RedisClient) without needing a separate musl binary build.
+#
+# Runs the actual `bun test` suite under Alpine's musl Bun, not the install pipeline
+# (that's docker/Dockerfile.test on glibc/Debian).
+#
+# Usage:
+#   mise run docker:test:install:musl
+#   PLATFORM=linux/amd64 mise run docker:test:install:musl   # x64 under QEMU on Apple Silicon
+
+# Pin to the repo's bun version (package.json packageManager) so install/hoisting
+# behaviour matches CI and the host, not whatever floating 1.x the tag resolves to.
+FROM oven/bun:1.3.14-alpine@sha256:5acc90a93e91ff07bf72aa90a7c9f0fa189765aec90b47bdbf2152d2196383c0 AS musl-tester
+
+WORKDIR /workspace
+
+# Layer-cache bun install: copy manifests first, full source second.
+# This matches Dockerfile.test and Dockerfile.e2e patterns for consistent build behavior.
+COPY bun.lock package.json turbo.jsonc ./
+COPY --parents apps/*/package.json clients/*/package.json packages/*/package.json ./
+
+# bash is needed by the code-exec tool (and its tests); Alpine ships only sh by default.
+RUN apk add --no-cache bash
+
+# Retry to ride out transient registry flakiness (mirrors Dockerfile.test).
+RUN bun install --ignore-scripts --registry=https://registry.npmmirror.com --network-concurrency 4 \
+  || bun install --ignore-scripts --registry=https://registry.npmmirror.com --network-concurrency 1 \
+  || bun install --ignore-scripts --network-concurrency 1
+
+RUN apk add --no-cache openssl
+
+# Copy the whole repo source after install (node_modules/dist/etc. excluded via .dockerignore).
+COPY . .
+
+# turbo.jsonc sets ui:"tui"; force the stream renderer in this non-interactive build.
+ENV TURBO_UI=false
+
+# This stage's unique value is exercising the runtime under musl libc (unix sockets,
+# bun:sqlite, Bun.RedisClient). Playwright's Linux browser is glibc-only, so Web unit
+# tests run above while its browser E2E suite remains in the glibc matrix.
+RUN echo "[musl-test] test suite under musl Bun" \
+  && bun run test:unit \
+  && bunx turbo run test:e2e --filter='!@monad/web' --output-logs=errors-only
+
+RUN echo "[musl-test] All tests passed under Alpine/musl."

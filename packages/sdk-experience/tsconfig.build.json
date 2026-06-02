@@ -1,0 +1,17 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    // Sources import with explicit `.ts` specifiers; without the rewrite the emitted
+    // `.d.ts` would point at files that do not exist in the published tarball.
+    "rewriteRelativeImportExtensions": true,
+    "outDir": "dist",
+    "rootDir": "src"
+  },
+  "include": ["src"],
+  // `src/react` re-exports @monad/client-rtk and is not published; compiling it here would
+  // pull the daemon and web client into the declaration build.
+  "exclude": ["src/react"]
+}

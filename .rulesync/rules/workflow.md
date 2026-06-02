@@ -1,0 +1,110 @@
+---
+targets: ["*"]
+description: "Worktree dev environment and testing workflow"
+globs: ["**/*"]
+---
+
+# Dev environment
+
+Default workflow: never develop in the main checkout. Every feature, including
+single-file fixes, should happen in a dedicated git worktree unless the user explicitly
+asks to work on main. Full procedure: `docs/internal/development/worktree.md` / @docs/internal/development/worktree.md.
+
+```sh
+# from the main checkout
+git worktree add ../monad-<feature> -b feat/<feature>
+cd ../monad-<feature>
+bun install && bun run dev
+```
+
+`bun run dev` is safe in multiple worktrees; ports are assigned per worktree. When
+driving multiple agents in parallel, read `docs/internal/agents/parallel-agents.md` /
+@docs/internal/agents/parallel-agents.md first.
+
+# Commit messages
+
+When creating a commit, derive its message from the staged diff and use
+`type(scope)!: subject`:
+
+- Choose the smallest stable scope that best explains the change's impact. Prefer a
+  product or feature domain such as `auth`, `chat`, `session`, or `observation` when
+  one behavior spans apps and packages.
+- Use an entry point or engineering subsystem such as `web`, `cli`, `protocol`,
+  `runtime`, `store`, or `config` only when the change is specifically confined to
+  that surface or subsystem.
+- Use one scope. Do not encode touched paths or multiple scopes such as
+  `web:login|monad:login`; split independently meaningful changes into separate
+  commits, or choose their shared feature domain. Omit the scope when no single
+  stable domain dominates.
+- Write the subject as a concise user-visible or system-visible outcome. Put package
+  paths, implementation details, rationale, and migration notes in the body when
+  they matter.
+- Use `!` and a `BREAKING CHANGE:` footer only for an actual incompatible contract or
+  behavior change.
+
+```text
+feat(auth): support passwordless login
+feat(cli): add machine-readable status output
+refactor(protocol): unify session event contracts
+fix(chat): preserve chronological message order
+```
+
+# Testing
+
+Use `bun run test` for the full suite. When targeting a package, directory, or
+file, use `scripts/bun-test.ts ... --only-failures` so only failing case details
+are printed. Full testing conventions and patterns: `docs/internal/development/testing.md` /
+@docs/internal/development/testing.md.
+
+- Agents must not use `:loud` scripts or pass `--loud`. Keep test output focused on
+  failures; when diagnosing a failure, narrow the package, directory, file, or test
+  name and continue using the default quiet entry point or `--only-failures`.
+- Run each applicable lint, typecheck, or test scope once to completion and collect all
+  failures before editing. Fix the collected failures as one batch, then rerun the same
+  complete scope once to verify the batch. Do not alternate between fixing one failure
+  and rerunning the command when the script can report the full failure set in one pass.
+- Every new or modified test case must execute behavior and assert its observable
+  outcome. A case whose only claim is that something exists or does not exist is
+  invalid. Litmus test: what operation ran, and what result did it cause? If the answer
+  is only existence/absence, delete or rewrite. Rewrite patterns:
+  added field/feature → `toEqual` on the full exact contract shape (subsumes existence);
+  removed field → typecheck + strict schema parse + updated `toEqual` shapes, never a
+  standalone "is gone" case; new UI element → fire the interaction and assert its effect,
+  never `getBy* … toBeInTheDocument` (getBy already throws). Presence or absence is valid
+  only when it is the observable consequence of behavior exercised by the case (for
+  example create, delete, dismiss, redact, not-found, or final-page traversal) — then
+  assert the operation and exact consequence, and waive the gate with
+  `// biome-ignore lint/plugin: <operation and consequence>` for matcher diagnostics,
+  or `// behavior-ok: <operation and consequence>` for cross-statement layout checks.
+  Enforced by `quality:biome` and `quality:test-assertions` in `quality:check`; full table in
+  `docs/internal/development/testing.md` / @docs/internal/development/testing.md.
+- Every `apps/monad` feature must be exercised over **all transports** (TCP
+  loopback and the Unix socket) — behaviour must match on both. See
+  `docs/internals/infra/runtime.md` / @docs/internals/infra/runtime.md.
+
+# Merge gate and cleanup
+
+Before merging any branch into `main`:
+
+- Rebase or otherwise update the branch against current `main`, then run `bun run lint`,
+  `bun run typecheck`, and `bun run test`; all three must pass.
+- Audit the diff for weak assertions in every new or modified test case.
+- Put every user-facing string in the i18n catalog and use the repository's i18n APIs;
+  do not merge hard-coded UI, CLI, TUI, daemon, channel, notification, accessibility,
+  or interaction copy.
+- Review UI and UX copy against `docs/internal/development/design/ux-writing-guidelines.md` and the relevant
+  UI/UX guidelines. Fix non-conforming copy before merging.
+
+After merging, update the `main` checkout and run the same lint, typecheck, and test
+quality gate again. Do not report completion or clean up the task until all three pass
+on merged `main`. Then enumerate every worktree and local or remote branch used for the
+task, confirm each is merged into `main`, and remove it. Never delete an unmerged branch
+or a worktree that contains work intended to be kept.
+
+```ts#index.test.ts
+import { test, expect } from "bun:test";
+
+test("hello world", () => {
+  expect(1).toBe(1);
+});
+```

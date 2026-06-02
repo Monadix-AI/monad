@@ -1,0 +1,162 @@
+import type { CommandContext } from '../../src/commands/types.ts';
+
+import { afterEach, beforeEach, expect, test } from 'bun:test';
+import { rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { getPaths, initMonadHome, loadConfig } from '@monad/environment';
+
+import { command } from '../../src/commands/config.ts';
+
+// ── helpers ───────────────────────────────────────────────────────────────────
+
+/** Build a CommandContext for direct command invocation in tests. */
+function ctx(positionals: string[], client: unknown = null, yes = false): CommandContext {
+  return {
+    positionals,
+    flags: {},
+    globals: { json: false, quiet: false, verbose: 0, yes, color: false },
+    client: client as CommandContext['client']
+  };
+}
+
+const env = { ...Bun.env };
+let testDir: string;
+
+/** Capture stdout written via process.stdout.write during fn(). */
+async function captureOutput(fn: () => Promise<void>): Promise<string> {
+  const chunks: string[] = [];
+  const orig = process.stdout.write.bind(process.stdout);
+  process.stdout.write = ((chunk: string | Buffer) => {
+    chunks.push(typeof chunk === 'string' ? chunk : chunk.toString());
+    return true;
+  }) as typeof process.stdout.write;
+  try {
+    await fn();
+  } finally {
+    process.stdout.write = orig;
+  }
+  return chunks.join('');
+}
+
+beforeEach(async () => {
+  testDir = join(tmpdir(), `monad-cli-config-test-${Date.now()}`);
+  Bun.env.MONAD_HOME = testDir;
+  await initMonadHome(getPaths());
+});
+
+afterEach(async () => {
+  Object.assign(Bun.env, env);
+  if (!('MONAD_HOME' in env)) delete Bun.env.MONAD_HOME;
+  await rm(testDir, { recursive: true, force: true });
+});
+
+// ── path / list / get ───────────────────────────────────────────────────────────
+
+test('config path prints the config file path', async () => {
+  const output = await captureOutput(() => command.run(ctx(['path'])));
+  expect(output.trim()).toBe(getPaths().config);
+});
+
+test('config list prints flattened key = value lines', async () => {
+  const output = await captureOutput(() => command.run(ctx(['list'])));
+  expect(output).toMatch(/tcp|uds/);
+});
+
+test('config get reads a dotted key', async () => {
+  const output = await captureOutput(() => command.run(ctx(['get', 'network.transport'])));
+  expect(output.trim()).toMatch(/^(tcp|uds)$/);
+});
+
+test('config get on an unknown key throws', async () => {
+  await expect(captureOutput(() => command.run(ctx(['get', 'nope.nope'])))).rejects.toThrow();
+});
+
+// ── set ─────────────────────────────────────────────────────────────────────────
+
+test('config set network.transport uds writes uds', async () => {
+  await captureOutput(() => command.run(ctx(['set', 'network.transport', 'uds'])));
+  const cfg = await loadConfig(getPaths());
+  expect(cfg?.network.transport).toBe('uds');
+});
+
+test('config set coerces numeric values', async () => {
+  await captureOutput(() => command.run(ctx(['set', 'network.port', '8123'])));
+  const cfg = await loadConfig(getPaths());
+  expect(cfg?.network.port).toBe(8123);
+});
+
+test('config set enables HTTPS by default when remote access is enabled', async () => {
+  await captureOutput(() => command.run(ctx(['set', 'network.remoteAccess.enabled', 'true'])));
+
+  const cfg = await loadConfig(getPaths());
+  expect(cfg?.network).toMatchObject({
+    https: { enabled: true },
+    remoteAccess: { enabled: true, token: expect.any(String) }
+  });
+});
+
+test('config set accepts remote HTTP only after explicit global confirmation', async () => {
+  await captureOutput(() => command.run(ctx(['set', 'network.remoteAccess.enabled', 'true'])));
+  const output = await captureOutput(() => command.run(ctx(['set', 'network.https.enabled', 'false'], null, true)));
+
+  const cfg = await loadConfig(getPaths());
+  expect(cfg?.network).toMatchObject({
+    https: { enabled: false },
+    remoteAccess: { enabled: true }
+  });
+  expect(output).toContain('DANGER: REMOTE HTTP');
+});
+
+test('config set rejects an invalid value (schema validation)', async () => {
+  await expect(captureOutput(() => command.run(ctx(['set', 'network.transport', 'grpc'])))).rejects.toThrow();
+});
+
+// ── unknown action ───────────────────────────────────────────────────────────────
+
+test('config <unknown-action> throws usage', async () => {
+  await expect(captureOutput(() => command.run(ctx(['frobnicate'])))).rejects.toThrow();
+});
+
+test('config set echoes the secret masked, not in the clear', async () => {
+  const echoed = await captureOutput(() =>
+    command.run(ctx(['set', 'openaiCompat.token', 'sk-1fc680c815102147fab0bc92']))
+  );
+  expect(echoed).not.toContain('sk-1fc680c815102147fab0bc92');
+  expect(echoed).toContain('••••bc92');
+});
+
+test('config list masks a stored secret and says so', async () => {
+  await captureOutput(() => command.run(ctx(['set', 'openaiCompat.token', 'sk-1fc680c815102147fab0bc92'])));
+
+  const listed = await captureOutput(() => command.run(ctx(['list'])));
+
+  // The leak this closes: `config` reads config.json directly, so the daemon's own credential
+  // masking never applied and the raw key went straight to stdout.
+  expect(listed).not.toContain('sk-1fc680c815102147fab0bc92');
+  expect(listed).toContain('openaiCompat.token = ••••bc92');
+  expect(listed).toContain('--reveal');
+});
+
+test('config get masks the value fetched by a secret-named path', async () => {
+  await captureOutput(() => command.run(ctx(['set', 'openaiCompat.token', 'sk-1fc680c815102147fab0bc92'])));
+
+  const shown = await captureOutput(() => command.run(ctx(['get', 'openaiCompat.token'])));
+
+  expect(shown.trim()).toBe('••••bc92');
+});
+
+test('--reveal is refused when stdout is not a terminal', async () => {
+  await captureOutput(() => command.run(ctx(['set', 'openaiCompat.token', 'sk-1fc680c815102147fab0bc92'])));
+
+  // Under a test runner stdout is a pipe — exactly the case where a revealed secret would be
+  // captured into a log rather than read by a human.
+  const revealing = { ...ctx(['get', 'openaiCompat.token']), flags: { reveal: true } };
+  await expect(command.run(revealing)).rejects.toMatchObject({ code: 2 });
+});
+
+test('a non-secret value is printed in full', async () => {
+  const shown = await captureOutput(() => command.run(ctx(['get', 'network.transport'])));
+  expect(shown.trim().length).toBeGreaterThan(0);
+  expect(shown).not.toContain('••••');
+});

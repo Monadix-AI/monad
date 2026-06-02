@@ -1,0 +1,33 @@
+{
+  "name": "@monad/sdk-experience",
+  "version": "0.0.1",
+  "dependencies": {
+    "@monad/client-rtk": "workspace:*",
+    "@monad/protocol": "workspace:*"
+  },
+  "devDependencies": {},
+  "exports": {
+    ".": "./src/index.ts",
+    "./react": "./src/react/index.ts"
+  },
+  "license": "MIT",
+  "module": "src/index.ts",
+  "peerDependencies": {
+    "react": "^19.2.8",
+    "react-redux": "^9.3.0"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    },
+    "react-redux": {
+      "optional": true
+    }
+  },
+  "private": true,
+  "scripts": {
+    "test": "bun ../../scripts/quiet-run.ts bun ../../scripts/bun-test.ts test/unit/ --only-failures",
+    "typecheck": "bun ../../scripts/quiet-run.ts tsc --noEmit"
+  },
+  "type": "module"
+}

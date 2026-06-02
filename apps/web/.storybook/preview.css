@@ -1,0 +1,20 @@
+@import "../src/styles/globals.css";
+@import "../src/features/workspace/workspace.css";
+
+html,
+body,
+#storybook-root,
+.sb-show-main,
+.docs-story,
+[data-radix-popper-content-wrapper] {
+  font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+  font-size: var(--text-base);
+  line-height: var(--text-base--line-height);
+}
+
+body,
+#storybook-root {
+  min-height: 100vh;
+  color: var(--foreground);
+  background: var(--background);
+}

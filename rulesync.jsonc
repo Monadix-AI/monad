@@ -1,0 +1,16 @@
+{
+  "$schema": "https://github.com/dyoshikawa/rulesync/releases/latest/download/config-schema.json",
+  // Single source of truth: .rulesync/rules/*.md
+  // Edit those, then `bun run agents:sync`. Never hand-edit generated agent files.
+  //
+  // Generated agent files are local build output and are gitignored. After git sync,
+  // Lefthook rebuilds them when the .rulesync SSOT changed.
+  "targets": ["agentsmd", "codexcli", "copilot", "claudecode", "copilotcli"],
+  "features": ["rules", "mcp"],
+  "outputRoots": ["."],
+  "delete": false,
+  "verbose": false,
+  "silent": false,
+  "global": false,
+  "gitignoreTargetsOnly": true
+}

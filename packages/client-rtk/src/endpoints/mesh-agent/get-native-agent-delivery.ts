@@ -1,0 +1,24 @@
+import type { GetNativeAgentDeliveryResponse, NativeAgentDeliveryId, SessionId } from '@monad/protocol';
+
+import { getNativeAgentDeliveryResponseSchema } from '@monad/protocol';
+
+import { clientOf, runTreaty } from '../../endpoint-helpers.ts';
+import { sessionsApi } from '../sessions/index.ts';
+
+export const getNativeAgentDeliveryApi = sessionsApi.injectEndpoints({
+  overrideExisting: true,
+  endpoints: (builder) => ({
+    getNativeAgentDelivery: builder.query<
+      GetNativeAgentDeliveryResponse,
+      { id: NativeAgentDeliveryId; transcriptTargetId: SessionId }
+    >({
+      queryFn: ({ id, transcriptTargetId }, api: { extra: unknown }) =>
+        runTreaty(
+          () => clientOf(api).treaty.v1.mesh.deliveries({ id }).get({ query: { transcriptTargetId } }),
+          (raw) => getNativeAgentDeliveryResponseSchema.parse(raw)
+        )
+    })
+  })
+});
+
+export const { useGetNativeAgentDeliveryQuery } = getNativeAgentDeliveryApi;

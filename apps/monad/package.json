@@ -1,0 +1,90 @@
+{
+  "name": "@monad/monad",
+  "version": "0.0.0",
+  "dependencies": {
+    "@a2a-js/sdk": "^1.0.1",
+    "@agentclientprotocol/sdk": "^1.3.0",
+    "@arizeai/openinference-semantic-conventions": "^2.6.0",
+    "@arizeai/openinference-vercel": "^3.1.3",
+    "@dicebear/core": "^10.4.0",
+    "@dicebear/styles": "^10.3.0",
+    "@elysiajs/server-timing": "^1.4.1",
+    "@elysiajs/swagger": "^1.3.1",
+    "@modelcontextprotocol/client": "^2.0.0",
+    "@monad/atoms": "workspace:*",
+    "@monad/environment": "workspace:*",
+    "@monad/i18n": "workspace:*",
+    "@monad/logger": "workspace:*",
+    "@monad/protocol": "workspace:*",
+    "@monad/sandbox": "workspace:*",
+    "@monad/sandbox-vm": "workspace:*",
+    "@monad/sdk-atom": "workspace:*",
+    "@monad/utils": "workspace:*",
+    "@monadix/realtime-protocol": "0.0.3",
+    "@opentelemetry/api": "^1.9.1",
+    "@opentelemetry/context-async-hooks": "^2.10.0",
+    "@opentelemetry/exporter-metrics-otlp-proto": "^0.221.0",
+    "@opentelemetry/exporter-trace-otlp-proto": "^0.221.0",
+    "@opentelemetry/resources": "^2.10.0",
+    "@opentelemetry/sdk-metrics": "^2.10.0",
+    "@opentelemetry/sdk-trace-base": "^2.10.0",
+    "@opentelemetry/semantic-conventions": "^1.43.0",
+    "@supabase/supabase-js": "^2.112.1",
+    "drizzle-orm": "0.45.2",
+    "elysia": "^1.4.29",
+    "eta": "^4.0.0",
+    "mem0ai": "^3.1.5",
+    "partial-json": "^0.1.7",
+    "safe-regex2": "^5.1.1",
+    "zod": "^4.4.3",
+    "zustand": "^5.0.14"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/server": "^2.0.0",
+    "@monad/monad-power-pack": "workspace:*",
+    "@monad/tsconfig": "workspace:*",
+    "drizzle-kit": "0.31.10",
+    "openai": "^7.4.0"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/main.d.ts",
+      "monad-typecheck": "./dist/main.d.ts",
+      "default": "./src/main.ts"
+    },
+    "./start": {
+      "types": "./dist/main.d.ts",
+      "monad-typecheck": "./dist/main.d.ts",
+      "default": "./src/main.ts"
+    },
+    "./log-maintenance": {
+      "types": "./dist/services/log-maintenance.d.ts",
+      "monad-typecheck": "./dist/services/log-maintenance.d.ts",
+      "default": "./src/services/log-maintenance.ts"
+    }
+  },
+  "imports": {
+    "#/*": [
+      "./src/*",
+      "./src/*.ts",
+      "./src/*/index.ts"
+    ]
+  },
+  "module": "src/main.ts",
+  "private": true,
+  "scripts": {
+    "db:bundle": "bun scripts/generate-migration-assets.ts",
+    "db:check": "bun ./node_modules/drizzle-kit/bin.cjs check --config=drizzle.config.ts",
+    "db:drift": "bun scripts/check-migration-drift.ts",
+    "db:generate": "bun ./node_modules/drizzle-kit/bin.cjs generate --config=drizzle.config.ts",
+    "db:generate:custom": "bun ./node_modules/drizzle-kit/bin.cjs generate --custom --config=drizzle.config.ts",
+    "devtools": "bunx @ai-sdk/devtools",
+    "generate": "bun run --cwd ../web generate && bun ../../scripts/generate-licenses.ts",
+    "start": "bun src/main.ts",
+    "start:dev": "NODE_ENV=development bun --env-file=../../.env.local --watch ../cli/src/bin.ts daemon --dev",
+    "test": "bun ../../scripts/quiet-run.ts bun scripts/run-unit-tests.ts",
+    "test:e2e": "bun ../../scripts/quiet-run.ts bun ../../scripts/bun-test.ts test/e2e/ --timeout=15000 --path-ignore-patterns='**/live-*.test.ts' --path-ignore-patterns='**/*.local.test.ts' --monad-shards=auto --only-failures",
+    "typecheck": "bun ../../scripts/quiet-run.ts tsc --noEmit"
+  },
+  "type": "module"
+}

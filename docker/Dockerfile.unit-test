@@ -1,0 +1,41 @@
+#
+# Disposable Linux test run — exercises the cross-platform / native-cli test suite (including the
+# *.linux.test.ts cases that are skipped on the macOS dev box) inside a fresh glibc Linux image.
+# Tests run in a RUN layer, so a build failure == a test failure.
+#
+# Usage:  mise run docker:test:unit
+
+FROM oven/bun:1.3.14@sha256:e10577f0db68676a7024391c6e5cb4b879ebd17188ab750cf10024a6d700e5c4 AS test
+
+WORKDIR /workspace
+
+# Layer-cache bun install: manifests first, full source second.
+COPY bun.lock package.json turbo.jsonc ./
+COPY --parents apps/*/package.json clients/*/package.json packages/*/package.json ./
+
+RUN bun install --ignore-scripts --registry=https://registry.npmmirror.com --network-concurrency 4 \
+  || bun install --ignore-scripts --registry=https://registry.npmmirror.com --network-concurrency 1 \
+  || bun install --ignore-scripts --network-concurrency 1
+
+COPY . .
+
+# Generated build inputs are gitignored, so this image never receives them — the suite runs raw
+# `bun test` rather than a package script that would prepare them.
+RUN bun run generate
+
+# Hermetic loopback: the e2e tests dial the daemon over http://127.0.0.1, but a build-time proxy env
+# (e.g. inherited from the host) makes Bun's fetch route loopback through the proxy and fail. Force
+# all loopback traffic direct. NODE_ENV=test keeps the logger quiet;
+# process-tree.linux.test.ts spawns a real detached process group.
+ENV NODE_ENV=test \
+    NO_PROXY=* \
+    HTTP_PROXY="" HTTPS_PROXY="" ALL_PROXY="" \
+    http_proxy="" https_proxy="" all_proxy=""
+RUN bun scripts/bun-test.ts \
+  apps/cli/test/unit/browser-binary.linux.test.ts \
+  apps/monad/test/unit/mesh-agent/process-tree.linux.test.ts \
+  apps/monad/test/unit/tools/bwrap.linux.test.ts \
+  apps/monad/test/unit/tools/sandbox-escape.linux.test.ts \
+  apps/monad/test/e2e/sandbox-bwrap.linux.test.ts \
+  packages/environment/test/unit/home.linux.test.ts \
+  --only-failures

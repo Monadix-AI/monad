@@ -1,0 +1,101 @@
+import { expect, test } from 'bun:test';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+import {
+  resolvePlaywrightBrowserChannel,
+  resolvePlaywrightDaemonPort,
+  resolvePlaywrightShard,
+  resolvePlaywrightTrace,
+  resolvePlaywrightWebPort,
+  resolvePlaywrightWorkers
+} from '../../playwright.config.ts';
+
+test('resolvePlaywrightBrowserChannel uses native Chrome only for Windows ARM64', () => {
+  expect({
+    windowsArm: resolvePlaywrightBrowserChannel('win32', 'arm64'),
+    windowsX64: resolvePlaywrightBrowserChannel('win32', 'x64'),
+    macArm: resolvePlaywrightBrowserChannel('darwin', 'arm64')
+  }).toEqual({
+    windowsArm: 'chrome',
+    windowsX64: undefined,
+    macArm: undefined
+  });
+});
+
+test('resolvePlaywrightWebPort prefers explicit WEB_PORT', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'monad-pw-port-'));
+  const envPath = join(dir, '.env.local');
+  writeFileSync(envPath, 'WEB_PORT=3729\n');
+
+  try {
+    expect(resolvePlaywrightWebPort({ WEB_PORT: '3333' }, envPath)).toBe(3333);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('resolvePlaywrightWebPort reuses repo env WEB_PORT when explicit WEB_PORT is absent', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'monad-pw-port-'));
+  const envPath = join(dir, '.env.local');
+  writeFileSync(envPath, 'MONAD_PORT=52749\nWEB_PORT=3729\n');
+
+  try {
+    expect(resolvePlaywrightWebPort({}, envPath)).toBe(3729);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('resolvePlaywrightDaemonPort reuses repo env MONAD_PORT when explicit MONAD_PORT is absent', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'monad-pw-port-'));
+  const envPath = join(dir, '.env.local');
+  writeFileSync(envPath, 'MONAD_PORT=52522\nWEB_PORT=3729\n');
+
+  try {
+    expect(resolvePlaywrightDaemonPort({}, envPath)).toBe(52522);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('resolvePlaywrightDaemonPort prefers explicit MONAD_PORT', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'monad-pw-port-'));
+  const envPath = join(dir, '.env.local');
+  writeFileSync(envPath, 'MONAD_PORT=52522\n');
+
+  try {
+    expect(resolvePlaywrightDaemonPort({ MONAD_PORT: '52666' }, envPath)).toBe(52666);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('resolvePlaywrightWebPort falls back to the Playwright default', () => {
+  expect(resolvePlaywrightWebPort({}, '/no/such/env.local')).toBe(3201);
+});
+
+test('resolvePlaywrightWorkers keeps local runs fast and limits CI runner contention', () => {
+  expect({
+    local: resolvePlaywrightWorkers({}),
+    ci: resolvePlaywrightWorkers({ CI: '1' }),
+    explicit: resolvePlaywrightWorkers({ CI: '1', PLAYWRIGHT_WORKERS: '3' })
+  }).toEqual({ local: 5, ci: 2, explicit: 3 });
+});
+
+test('resolvePlaywrightTrace keeps routine local runs lean and preserves opt-in and CI diagnostics', () => {
+  expect({
+    local: resolvePlaywrightTrace({}),
+    localDebug: resolvePlaywrightTrace({ PLAYWRIGHT_TRACE: '1' }),
+    ci: resolvePlaywrightTrace({ CI: '1' })
+  }).toEqual({ local: 'off', localDebug: 'retain-on-failure', ci: 'on-first-retry' });
+});
+
+test('resolvePlaywrightShard converts the CI matrix value into the Playwright contract', () => {
+  expect(resolvePlaywrightShard('3/4')).toEqual({ current: 3, total: 4 });
+});
+
+test('resolvePlaywrightShard rejects an invalid or out-of-range matrix value', () => {
+  expect(() => resolvePlaywrightShard('5/4')).toThrow('invalid Playwright shard: 5/4');
+});

@@ -1,0 +1,12 @@
+{
+  "name": "@monad/tsconfig",
+  "version": "0.0.0",
+  "exports": {
+    "./tsconfig.base.json": "./tsconfig.base.json"
+  },
+  "files": [
+    "tsconfig.base.json"
+  ],
+  "private": true,
+  "type": "module"
+}

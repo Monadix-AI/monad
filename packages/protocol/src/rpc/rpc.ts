@@ -1,0 +1,49 @@
+import type { PublicErrorDescriptor } from '../public-error.ts';
+import type { EventNotification } from './control.ts';
+
+import { z } from 'zod';
+
+export const jsonRpcIdSchema = z.union([z.string(), z.number(), z.null()]);
+
+export const jsonRpcRequestEnvelopeSchema = z.object({
+  jsonrpc: z.literal('2.0'),
+  id: jsonRpcIdSchema.optional(),
+  method: z.string(),
+  params: z.unknown().optional()
+});
+
+export const jsonRpcRequestIdEnvelopeSchema = z.object({ id: jsonRpcIdSchema.optional() });
+
+export interface JsonRpcRequest {
+  jsonrpc: '2.0';
+  id: string | number;
+  method: string;
+  params?: unknown;
+}
+
+export interface JsonRpcResponse {
+  jsonrpc: '2.0';
+  id: string | number | null;
+  result?: unknown;
+  error?: JsonRpcError;
+}
+
+/** Server-push notification — no `id` field (fire-and-forget). */
+export type JsonRpcNotification = EventNotification;
+
+export interface JsonRpcError {
+  code: number;
+  message: string;
+  data: PublicErrorDescriptor;
+}
+
+export const RPC_ERRORS = {
+  PARSE_ERROR: { code: -32700, message: 'Parse error' },
+  INVALID_REQUEST: { code: -32600, message: 'Invalid request' },
+  METHOD_NOT_FOUND: { code: -32601, message: 'Method not found' },
+  INVALID_PARAMS: { code: -32602, message: 'Invalid params' },
+  INTERNAL_ERROR: { code: -32603, message: 'Internal error' },
+  RATE_LIMITED: { code: -32029, message: 'Rate limit exceeded' } // implementation-defined range (-32000..-32099)
+} as const;
+
+// `RpcMethod` and the method→params schema registry live in ./rpc-methods.ts.

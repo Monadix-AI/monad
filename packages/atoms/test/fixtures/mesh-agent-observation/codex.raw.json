@@ -1,0 +1,668 @@
+{
+  "provider": "codex",
+  "page": {
+    "records": [
+      {
+        "cursor": "<id:1>",
+        "data": {
+          "timestamp": "2000-01-01T00:00:00.000Z",
+          "type": "event_msg",
+          "payload": {
+            "type": "token_count",
+            "info": {
+              "total_token_usage": {
+                "input_tokens": 232739942,
+                "cached_input_tokens": 228518912,
+                "output_tokens": 418149,
+                "reasoning_output_tokens": 124361,
+                "total_tokens": 233158091
+              },
+              "last_token_usage": {
+                "input_tokens": 145053,
+                "cached_input_tokens": 143104,
+                "output_tokens": 254,
+                "reasoning_output_tokens": 129,
+                "total_tokens": 145307
+              },
+              "model_context_window": 258400
+            },
+            "rate_limits": {
+              "limit_id": "<id:2>",
+              "limit_name": null,
+              "primary": {
+                "used_percent": 21,
+                "window_minutes": 10080,
+                "resets_at": 1784954571
+              },
+              "secondary": null,
+              "credits": {
+                "has_credits": false,
+                "unlimited": false,
+                "balance": "<text:1>"
+              },
+              "individual_limit": null,
+              "plan_type": "<text:2>",
+              "rate_limit_reached_type": null
+            }
+          }
+        }
+      },
+      {
+        "cursor": "<id:3>",
+        "data": {
+          "timestamp": "2000-01-01T00:00:00.001Z",
+          "type": "response_item",
+          "payload": {
+            "type": "reasoning",
+            "id": "<id:4>",
+            "summary": [],
+            "encrypted_content": "<text:3>",
+            "internal_chat_message_metadata_passthrough": {
+              "turn_id": "<id:5>"
+            }
+          }
+        }
+      },
+      {
+        "cursor": "<id:6>",
+        "data": {
+          "timestamp": "2000-01-01T00:00:00.002Z",
+          "type": "response_item",
+          "payload": {
+            "type": "custom_tool_call",
+            "id": "<id:7>",
+            "status": "completed",
+            "call_id": "<id:8>",
+            "name": "exec",
+            "input": "<text:4>",
+            "internal_chat_message_metadata_passthrough": {
+              "turn_id": "<id:5>"
+            }
+          }
+        }
+      },
+      {
+        "cursor": "<id:9>",
+        "data": {
+          "timestamp": "2000-01-01T00:00:00.003Z",
+          "type": "response_item",
+          "payload": {
+            "type": "custom_tool_call_output",
+            "call_id": "<id:8>",
+            "output": [
+              {
+                "type": "input_text",
+                "text": "<text:5>"
+              },
+              {
+                "type": "input_text",
+                "text": "<text:6>"
+              }
+            ],
+            "internal_chat_message_metadata_passthrough": {
+              "turn_id": "<id:5>"
+            }
+          }
+        }
+      },
+      {
+        "cursor": "<id:10>",
+        "data": {
+          "timestamp": "2000-01-01T00:00:00.003Z",
+          "type": "event_msg",
+          "payload": {
+            "type": "token_count",
+            "info": {
+              "total_token_usage": {
+                "input_tokens": 232889932,
+                "cached_input_tokens": 228663040,
+                "output_tokens": 418521,
+                "reasoning_output_tokens": 124673,
+                "total_tokens": 233308453
+              },
+              "last_token_usage": {
+                "input_tokens": 149990,
+                "cached_input_tokens": 144128,
+                "output_tokens": 372,
+                "reasoning_output_tokens": 312,
+                "total_tokens": 150362
+              },
+              "model_context_window": 258400
+            },
+            "rate_limits": {
+              "limit_id": "<id:2>",
+              "limit_name": null,
+              "primary": {
+                "used_percent": 21,
+                "window_minutes": 10080,
+                "resets_at": 1784954571
+              },
+              "secondary": null,
+              "credits": {
+                "has_credits": false,
+                "unlimited": false,
+                "balance": "<text:1>"
+              },
+              "individual_limit": null,
+              "plan_type": "<text:2>",
+              "rate_limit_reached_type": null
+            }
+          }
+        }
+      },
+      {
+        "cursor": "<id:11>",
+        "data": {
+          "timestamp": "2000-01-01T00:00:00.004Z",
+          "type": "response_item",
+          "payload": {
+            "type": "reasoning",
+            "id": "<id:12>",
+            "summary": [],
+            "encrypted_content": "<text:7>",
+            "internal_chat_message_metadata_passthrough": {
+              "turn_id": "<id:5>"
+            }
+          }
+        }
+      },
+      {
+        "cursor": "<id:13>",
+        "data": {
+          "timestamp": "2000-01-01T00:00:00.005Z",
+          "type": "response_item",
+          "payload": {
+            "type": "custom_tool_call",
+            "id": "<id:14>",
+            "status": "completed",
+            "call_id": "<id:15>",
+            "name": "exec",
+            "input": "<text:8>",
+            "internal_chat_message_metadata_passthrough": {
+              "turn_id": "<id:5>"
+            }
+          }
+        }
+      },
+      {
+        "cursor": "<id:16>",
+        "data": {
+          "timestamp": "2000-01-01T00:00:00.006Z",
+          "type": "response_item",
+          "payload": {
+            "type": "custom_tool_call_output",
+            "call_id": "<id:15>",
+            "output": [
+              {
+                "type": "input_text",
+                "text": "<text:9>"
+              },
+              {
+                "type": "input_text",
+                "text": "<text:10>"
+              }
+            ],
+            "internal_chat_message_metadata_passthrough": {
+              "turn_id": "<id:5>"
+            }
+          }
+        }
+      },
+      {
+        "cursor": "<id:17>",
+        "data": {
+          "timestamp": "2000-01-01T00:00:00.006Z",
+          "type": "event_msg",
+          "payload": {
+            "type": "token_count",
+            "info": {
+              "total_token_usage": {
+                "input_tokens": 233040357,
+                "cached_input_tokens": 228812288,
+                "output_tokens": 418633,
+                "reasoning_output_tokens": 124705,
+                "total_tokens": 233458990
+              },
+              "last_token_usage": {
+                "input_tokens": 150425,
+                "cached_input_tokens": 149248,
+                "output_tokens": 112,
+                "reasoning_output_tokens": 32,
+                "total_tokens": 150537
+              },
+              "model_context_window": 258400
+            },
+            "rate_limits": {
+              "limit_id": "<id:2>",
+              "limit_name": null,
+              "primary": {
+                "used_percent": 21,
+                "window_minutes": 10080,
+                "resets_at": 1784954571
+              },
+              "secondary": null,
+              "credits": {
+                "has_credits": false,
+                "unlimited": false,
+                "balance": "<text:1>"
+              },
+              "individual_limit": null,
+              "plan_type": "<text:2>",
+              "rate_limit_reached_type": null
+            }
+          }
+        }
+      },
+      {
+        "cursor": "<id:18>",
+        "data": {
+          "timestamp": "2000-01-01T00:00:00.007Z",
+          "type": "response_item",
+          "payload": {
+            "type": "reasoning",
+            "id": "<id:19>",
+            "summary": [],
+            "encrypted_content": "<text:11>",
+            "internal_chat_message_metadata_passthrough": {
+              "turn_id": "<id:5>"
+            }
+          }
+        }
+      },
+      {
+        "cursor": "<id:20>",
+        "data": {
+          "timestamp": "2000-01-01T00:00:00.008Z",
+          "type": "response_item",
+          "payload": {
+            "type": "custom_tool_call",
+            "id": "<id:21>",
+            "status": "completed",
+            "call_id": "<id:22>",
+            "name": "exec",
+            "input": "<text:12>",
+            "internal_chat_message_metadata_passthrough": {
+              "turn_id": "<id:5>"
+            }
+          }
+        }
+      },
+      {
+        "cursor": "<id:23>",
+        "data": {
+          "timestamp": "2000-01-01T00:00:00.009Z",
+          "type": "event_msg",
+          "payload": {
+            "type": "mcp_tool_call_end",
+            "call_id": "<id:24>",
+            "invocation": {
+              "server": "<text:13>",
+              "tool": "<text:14>",
+              "arguments": {}
+            },
+            "duration": {
+              "secs": 0,
+              "nanos": 4067000
+            },
+            "result": {
+              "Ok": {
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "<text:15>"
+                  }
+                ],
+                "isError": false
+              }
+            }
+          }
+        }
+      },
+      {
+        "cursor": "<id:25>",
+        "data": {
+          "timestamp": "2000-01-01T00:00:00.010Z",
+          "type": "response_item",
+          "payload": {
+            "type": "custom_tool_call_output",
+            "call_id": "<id:22>",
+            "output": [
+              {
+                "type": "input_text",
+                "text": "<text:16>"
+              },
+              {
+                "type": "input_text",
+                "text": "<text:15>"
+              }
+            ],
+            "internal_chat_message_metadata_passthrough": {
+              "turn_id": "<id:5>"
+            }
+          }
+        }
+      },
+      {
+        "cursor": "<id:26>",
+        "data": {
+          "timestamp": "2000-01-01T00:00:00.010Z",
+          "type": "event_msg",
+          "payload": {
+            "type": "token_count",
+            "info": {
+              "total_token_usage": {
+                "input_tokens": 233191423,
+                "cached_input_tokens": 228962560,
+                "output_tokens": 418696,
+                "reasoning_output_tokens": 124717,
+                "total_tokens": 233610119
+              },
+              "last_token_usage": {
+                "input_tokens": 151066,
+                "cached_input_tokens": 150272,
+                "output_tokens": 63,
+                "reasoning_output_tokens": 12,
+                "total_tokens": 151129
+              },
+              "model_context_window": 258400
+            },
+            "rate_limits": {
+              "limit_id": "<id:2>",
+              "limit_name": null,
+              "primary": {
+                "used_percent": 21,
+                "window_minutes": 10080,
+                "resets_at": 1784954571
+              },
+              "secondary": null,
+              "credits": {
+                "has_credits": false,
+                "unlimited": false,
+                "balance": "<text:1>"
+              },
+              "individual_limit": null,
+              "plan_type": "<text:2>",
+              "rate_limit_reached_type": null
+            }
+          }
+        }
+      },
+      {
+        "cursor": "<id:27>",
+        "data": {
+          "timestamp": "2000-01-01T00:00:00.011Z",
+          "type": "response_item",
+          "payload": {
+            "type": "reasoning",
+            "id": "<id:28>",
+            "summary": [],
+            "encrypted_content": "<text:17>",
+            "internal_chat_message_metadata_passthrough": {
+              "turn_id": "<id:5>"
+            }
+          }
+        }
+      },
+      {
+        "cursor": "<id:29>",
+        "data": {
+          "timestamp": "2000-01-01T00:00:00.012Z",
+          "type": "response_item",
+          "payload": {
+            "type": "custom_tool_call",
+            "id": "<id:30>",
+            "status": "completed",
+            "call_id": "<id:31>",
+            "name": "exec",
+            "input": "<text:18>",
+            "internal_chat_message_metadata_passthrough": {
+              "turn_id": "<id:5>"
+            }
+          }
+        }
+      },
+      {
+        "cursor": "<id:32>",
+        "data": {
+          "timestamp": "2000-01-01T00:00:00.013Z",
+          "type": "event_msg",
+          "payload": {
+            "type": "mcp_tool_call_end",
+            "call_id": "<id:33>",
+            "invocation": {
+              "server": "<text:13>",
+              "tool": "<text:19>",
+              "arguments": {
+                "with": "<text:20>",
+                "limit": 5
+              }
+            },
+            "duration": {
+              "secs": 0,
+              "nanos": 4912667
+            },
+            "result": {
+              "Ok": {
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "<text:21>"
+                  }
+                ],
+                "isError": false
+              }
+            }
+          }
+        }
+      },
+      {
+        "cursor": "<id:34>",
+        "data": {
+          "timestamp": "2000-01-01T00:00:00.014Z",
+          "type": "response_item",
+          "payload": {
+            "type": "custom_tool_call_output",
+            "call_id": "<id:31>",
+            "output": [
+              {
+                "type": "input_text",
+                "text": "<text:16>"
+              },
+              {
+                "type": "input_text",
+                "text": "<text:21>"
+              }
+            ],
+            "internal_chat_message_metadata_passthrough": {
+              "turn_id": "<id:5>"
+            }
+          }
+        }
+      },
+      {
+        "cursor": "<id:35>",
+        "data": {
+          "timestamp": "2000-01-01T00:00:00.014Z",
+          "type": "event_msg",
+          "payload": {
+            "type": "token_count",
+            "info": {
+              "total_token_usage": {
+                "input_tokens": 233342608,
+                "cached_input_tokens": 229112832,
+                "output_tokens": 418772,
+                "reasoning_output_tokens": 124724,
+                "total_tokens": 233761380
+              },
+              "last_token_usage": {
+                "input_tokens": 151185,
+                "cached_input_tokens": 150272,
+                "output_tokens": 76,
+                "reasoning_output_tokens": 7,
+                "total_tokens": 151261
+              },
+              "model_context_window": 258400
+            },
+            "rate_limits": {
+              "limit_id": "<id:2>",
+              "limit_name": null,
+              "primary": {
+                "used_percent": 21,
+                "window_minutes": 10080,
+                "resets_at": 1784954571
+              },
+              "secondary": null,
+              "credits": {
+                "has_credits": false,
+                "unlimited": false,
+                "balance": "<text:1>"
+              },
+              "individual_limit": null,
+              "plan_type": "<text:2>",
+              "rate_limit_reached_type": null
+            }
+          }
+        }
+      },
+      {
+        "cursor": "<id:36>",
+        "data": {
+          "timestamp": "2000-01-01T00:00:00.015Z",
+          "type": "response_item",
+          "payload": {
+            "type": "reasoning",
+            "id": "<id:37>",
+            "summary": [],
+            "encrypted_content": "<text:22>",
+            "internal_chat_message_metadata_passthrough": {
+              "turn_id": "<id:5>"
+            }
+          }
+        }
+      },
+      {
+        "cursor": "<id:38>",
+        "data": {
+          "timestamp": "2000-01-01T00:00:00.016Z",
+          "type": "response_item",
+          "payload": {
+            "type": "custom_tool_call",
+            "id": "<id:39>",
+            "status": "completed",
+            "call_id": "<id:40>",
+            "name": "exec",
+            "input": "<text:23>",
+            "internal_chat_message_metadata_passthrough": {
+              "turn_id": "<id:5>"
+            }
+          }
+        }
+      },
+      {
+        "cursor": "<id:41>",
+        "data": {
+          "timestamp": "2000-01-01T00:00:00.017Z",
+          "type": "event_msg",
+          "payload": {
+            "type": "mcp_tool_call_end",
+            "call_id": "<id:42>",
+            "invocation": {
+              "server": "<text:13>",
+              "tool": "<text:19>",
+              "arguments": {
+                "with": "<text:20>",
+                "after": "<text:24>",
+                "limit": 20
+              }
+            },
+            "duration": {
+              "secs": 0,
+              "nanos": 2750500
+            },
+            "result": {
+              "Ok": {
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "<text:25>"
+                  }
+                ],
+                "isError": false
+              }
+            }
+          }
+        }
+      },
+      {
+        "cursor": "<id:43>",
+        "data": {
+          "timestamp": "2000-01-01T00:00:00.018Z",
+          "type": "response_item",
+          "payload": {
+            "type": "custom_tool_call_output",
+            "call_id": "<id:40>",
+            "output": [
+              {
+                "type": "input_text",
+                "text": "<text:16>"
+              },
+              {
+                "type": "input_text",
+                "text": "<text:25>"
+              }
+            ],
+            "internal_chat_message_metadata_passthrough": {
+              "turn_id": "<id:5>"
+            }
+          }
+        }
+      },
+      {
+        "cursor": "<id:44>",
+        "data": {
+          "timestamp": "2000-01-01T00:00:00.019Z",
+          "type": "event_msg",
+          "payload": {
+            "type": "token_count",
+            "info": {
+              "total_token_usage": {
+                "input_tokens": 233495328,
+                "cached_input_tokens": 229263104,
+                "output_tokens": 418878,
+                "reasoning_output_tokens": 124749,
+                "total_tokens": 233914206
+              },
+              "last_token_usage": {
+                "input_tokens": 152720,
+                "cached_input_tokens": 150272,
+                "output_tokens": 106,
+                "reasoning_output_tokens": 25,
+                "total_tokens": 152826
+              },
+              "model_context_window": 258400
+            },
+            "rate_limits": {
+              "limit_id": "<id:2>",
+              "limit_name": null,
+              "primary": {
+                "used_percent": 21,
+                "window_minutes": 10080,
+                "resets_at": 1784954571
+              },
+              "secondary": null,
+              "credits": {
+                "has_credits": false,
+                "unlimited": false,
+                "balance": "<text:1>"
+              },
+              "individual_limit": null,
+              "plan_type": "<text:2>",
+              "rate_limit_reached_type": null
+            }
+          }
+        }
+      }
+    ],
+    "coverage": "settled"
+  }
+}

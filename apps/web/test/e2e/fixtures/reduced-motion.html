@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <title>Reduced motion fixture</title>
+    <style>
+      @keyframes travel {
+        from {
+          transform: translateX(0);
+        }
+        to {
+          transform: translateX(320px);
+        }
+      }
+
+      button {
+        animation: travel 5s linear infinite;
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        button {
+          animation: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <button type="button">Run action</button>
+    <output>waiting</output>
+    <script>
+      document.querySelector('button').addEventListener('click', () => {
+        document.querySelector('output').textContent = 'completed';
+      });
+    </script>
+  </body>
+</html>

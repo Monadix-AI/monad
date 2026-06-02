@@ -1,0 +1,207 @@
+import type { MeshSessionView, Session, WorkplaceProject } from '@monad/protocol';
+
+import { expect, test } from 'bun:test';
+
+import { projectExperienceAction } from '../../src/features/shell/sidebar/project-session-experience-actions.ts';
+import { buildWorkspaceProjects } from '../../src/lib/workspace-sessions.ts';
+
+test('project experience action switches the selected project mode', () => {
+  let selected = '';
+  const action = projectExperienceAction({
+    activeExperienceId: 'chat-room',
+    experiences: [
+      { id: 'chat-room', label: 'Project session' },
+      { id: 'kanban', label: 'Kanban' }
+    ],
+    label: 'Experience',
+    onSelect: (id) => {
+      selected = id;
+    }
+  });
+
+  action?.items?.find((item) => item.value === 'kanban')?.onSelect?.();
+
+  expect(selected).toBe('kanban');
+  expect(action?.items?.map(({ checked, label, value }) => ({ checked, label, value }))).toEqual([
+    { checked: true, label: 'Project session', value: 'chat-room' },
+    { checked: false, label: 'Kanban', value: 'kanban' }
+  ]);
+});
+
+const project = (id: string, title: string): WorkplaceProject =>
+  ({
+    id,
+    title,
+    state: 'active',
+    archived: false,
+    origin: { surface: 'web', client: 'workplace', transport: 'http', writableBy: ['http'], branchableBy: ['http'] },
+    cwd: undefined,
+    memberTemplates: [],
+    createdAt: '2026-07-02T00:00:00.000Z',
+    updatedAt: '2026-07-02T00:00:00.000Z'
+  }) as WorkplaceProject;
+
+test('workspace project list keeps duplicate project names as separate projects', () => {
+  expect(buildWorkspaceProjects([project('prj_ACTIVE000000', 'demo'), project('prj_STOPPED00000', 'demo')])).toEqual([
+    {
+      id: 'prj_ACTIVE000000',
+      name: 'demo',
+      cwd: undefined,
+      hasRunningAgent: false,
+      sessions: [],
+      unreadCount: 0
+    },
+    {
+      id: 'prj_STOPPED00000',
+      name: 'demo',
+      cwd: undefined,
+      hasRunningAgent: false,
+      sessions: [],
+      unreadCount: 0
+    }
+  ]);
+});
+
+const meshSession = (id: string, sessionId: string, overrides: Partial<MeshSessionView> = {}): MeshSessionView =>
+  ({
+    id,
+    sessionId,
+    agentName: 'codex',
+    provider: 'codex',
+    workingPath: '/tmp/demo',
+    approvalOwnership: 'provider-owned',
+    runtimeRole: 'managed-project-agent',
+    agentRuntimeId: null,
+    lastDeliveredSeq: 0,
+    lastVisibleSeq: 0,
+    pendingApprovalCount: 0,
+    lifecycle: { state: 'active' },
+    activity: { state: 'running', pid: 123, queuedTurnCount: 0 },
+    connection: { state: 'connected' },
+    capabilities: {
+      input: true,
+      steer: false,
+      interrupt: false,
+      approvalResolution: false,
+      providerSessionContinuation: true,
+      runtimeRestoration: true,
+      sessionReopen: true
+    },
+    providerSessionRef: null,
+    startedAt: '2026-07-02T00:00:00.000Z',
+    updatedAt: '2026-07-02T00:00:00.000Z',
+    ...overrides
+  }) as MeshSessionView;
+
+test('workspace project list summarizes live runtime and unread native cli messages', () => {
+  expect(
+    buildWorkspaceProjects([project('prj_ACTIVE000000', 'active')], {
+      sessions: [session('ses_ACTIVE000000', 'prj_ACTIVE000000', 'ses_ACTIVE000000', '2026-07-02T00:00:00.000Z')],
+      liveMeshSessions: [
+        meshSession('mesh_ONE000000000', 'ses_ACTIVE000000', {
+          lastDeliveredSeq: 6,
+          lastVisibleSeq: 4,
+          pendingApprovalCount: 1
+        })
+      ]
+    })
+  ).toEqual([
+    {
+      id: 'prj_ACTIVE000000',
+      name: 'active',
+      cwd: undefined,
+      hasRunningAgent: true,
+      sessions: [{ id: 'ses_ACTIVE000000', pinned: false, title: 'ses_ACTIVE000000' }],
+      unreadCount: 3
+    }
+  ]);
+});
+
+test('workspace project list keeps unread messages from stopped native cli sessions without showing runtime active', () => {
+  expect(
+    buildWorkspaceProjects([project('prj_STOPPED00000', 'stopped')], {
+      sessions: [session('ses_STOPPED00000', 'prj_STOPPED00000', 'ses_STOPPED00000', '2026-07-02T00:00:00.000Z')],
+      meshSessions: [
+        meshSession('mesh_STOPPED00000', 'ses_STOPPED00000', {
+          lastDeliveredSeq: 8,
+          lastVisibleSeq: 5,
+          lifecycle: {
+            state: 'terminal',
+            termination: { kind: 'stopped', at: '2026-07-02T00:00:00.000Z' }
+          }
+        })
+      ]
+    })
+  ).toEqual([
+    {
+      id: 'prj_STOPPED00000',
+      name: 'stopped',
+      cwd: undefined,
+      hasRunningAgent: false,
+      sessions: [{ id: 'ses_STOPPED00000', pinned: false, title: 'ses_STOPPED00000' }],
+      unreadCount: 3
+    }
+  ]);
+});
+
+test('workspace project list marks pinned sessions without reordering projects', () => {
+  expect(
+    buildWorkspaceProjects(
+      [
+        project('prj_FIRST0000000', 'first'),
+        project('prj_SECOND000000', 'second'),
+        project('prj_THIRD0000000', 'third')
+      ],
+      {
+        pinnedSessionIds: new Set(['ses_SECOND000000', 'ses_THIRD0000000']),
+        sessions: [
+          session('ses_FIRST0000000', 'prj_FIRST0000000', 'first session', '2026-07-02T00:00:00.000Z'),
+          session('ses_SECOND000000', 'prj_SECOND000000', 'second session', '2026-07-02T00:00:00.000Z'),
+          session('ses_THIRD0000000', 'prj_THIRD0000000', 'third session', '2026-07-02T00:00:00.000Z')
+        ]
+      }
+    ).map((item) => ({ id: item.id, sessions: item.sessions }))
+  ).toEqual([
+    { id: 'prj_FIRST0000000', sessions: [{ id: 'ses_FIRST0000000', pinned: false, title: 'first session' }] },
+    { id: 'prj_SECOND000000', sessions: [{ id: 'ses_SECOND000000', pinned: true, title: 'second session' }] },
+    { id: 'prj_THIRD0000000', sessions: [{ id: 'ses_THIRD0000000', pinned: true, title: 'third session' }] }
+  ]);
+});
+
+function session(
+  id: string,
+  projectId: string,
+  title: string,
+  updatedAt: string
+): Pick<Session, 'id' | 'projectId' | 'title' | 'updatedAt'> {
+  return {
+    id: id as Session['id'],
+    projectId: projectId as Session['projectId'],
+    title,
+    updatedAt
+  };
+}
+
+test('workspace project list nests project sessions by recent activity', () => {
+  expect(
+    buildWorkspaceProjects([project('prj_FIRST0000000', 'first'), project('prj_SECOND000000', 'second')], {
+      sessions: [
+        session('ses_OLD000000000', 'prj_FIRST0000000', 'old session', '2026-07-02T00:00:00.000Z'),
+        session('ses_OTHER0000000', 'prj_SECOND000000', 'other session', '2026-07-03T00:00:00.000Z'),
+        session('ses_NEW000000000', 'prj_FIRST0000000', 'new session', '2026-07-04T00:00:00.000Z')
+      ]
+    }).map((item) => ({ id: item.id, sessions: item.sessions }))
+  ).toEqual([
+    {
+      id: 'prj_FIRST0000000',
+      sessions: [
+        { id: 'ses_NEW000000000', pinned: false, title: 'new session' },
+        { id: 'ses_OLD000000000', pinned: false, title: 'old session' }
+      ]
+    },
+    {
+      id: 'prj_SECOND000000',
+      sessions: [{ id: 'ses_OTHER0000000', pinned: false, title: 'other session' }]
+    }
+  ]);
+});

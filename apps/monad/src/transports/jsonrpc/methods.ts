@@ -1,0 +1,218 @@
+// JSON-RPC binding layer: maps each wire method to its DaemonHandlers invocation.
+// The method set and params schemas are the wire contract (@monad/protocol's
+// RPC_METHOD_PARAMS); this map is the app-side counterpart. The mapped type over
+// `RpcMethod` makes the binding exhaustive — a new method fails to compile until
+// it is bound here. Handlers receive already-parsed, schema-valid params.
+
+import type {
+  CreateOperationSourceHint,
+  InteractionEvent,
+  JsonRpcNotification,
+  JsonRpcResponse,
+  MessageGenerationFrame,
+  RpcMethod,
+  RpcParams,
+  RpcResult
+} from '@monad/protocol';
+import type { EventSink } from '#/handlers/session/index.ts';
+import type { InteractionService } from '#/interactions/service.ts';
+import type { ConnectionState } from '#/transports/jsonrpc/connection.ts';
+
+import { createDaemonHandlers } from '#/handlers/daemon-handlers/index.ts';
+import { buildOperationSource } from '#/handlers/session/origin.ts';
+
+export type Push = (msg: JsonRpcResponse | JsonRpcNotification) => void;
+
+/** Build a full session origin for the native socket: tui surface, shared `http` write-class. */
+const nativeOrigin = (origin?: CreateOperationSourceHint) =>
+  buildOperationSource({
+    transport: 'http',
+    surface: origin?.surface ?? 'tui',
+    client: origin?.client ?? 'monad-cli',
+    clientVersion: origin?.clientVersion
+  });
+
+/** Per-connection context the subscription methods need to wire an event sink. */
+export interface RpcContext {
+  state: ConnectionState;
+  push: Push;
+  interactions?: InteractionService;
+}
+
+type RpcHandlerMap = {
+  [M in RpcMethod]: (
+    params: RpcParams<M>,
+    handlers: ReturnType<typeof createDaemonHandlers>,
+    ctx: RpcContext
+  ) => Promise<RpcResult<M>>;
+};
+
+type D = ReturnType<typeof createDaemonHandlers>;
+
+// Several methods rename the wire `sessionId` to handlers' `id` — absorbed
+// per-handler via destructure + spread so the rename lives in exactly one place.
+export const RPC_HANDLERS: RpcHandlerMap = {
+  health: (_params, h: D) => h.health(),
+
+  // The wire folds the session id into `id` (matching the HTTP `:id` path param);
+  // handlers that take `sessionId` get the rename absorbed here, in one place.
+  'sessions.list': ({ archived, query, state, agentId, kind, limit, offset }, h: D) =>
+    h.session.list({ archived, query, state, agentId, kind, limit, offset }),
+  'sessions.attention.list': async ({ sessionIds }, h: D) => h.session.listAttention({ sessionIds }),
+  'sessions.attention.consume': async ({ id, ...rest }, h: D) => h.session.consumeAttention({ id, ...rest }),
+  'sessions.plan.list': async ({ id }, h: D) => h.session.listPlan({ id }),
+  'sessions.plan.todo.add': async ({ id, origin, ...rest }, h: D) =>
+    h.session.addPlanTodo({ id, origin: nativeOrigin(origin), ...rest }),
+  'sessions.plan.todo.update': async ({ id, todoId, origin, ...rest }, h: D) =>
+    h.session.updatePlanTodo({ id, todoId, origin: nativeOrigin(origin), ...rest }),
+  'sessions.plan.todo.delete': async ({ id, todoId, origin, ...rest }, h: D) =>
+    h.session.deletePlanTodo({ id, todoId, origin: nativeOrigin(origin), ...rest }),
+  'sessions.get': ({ id }, h: D) => h.session.get({ id }),
+  // The native JSON-RPC socket is the CLI/TUI control plane — it shares the `http` write-class
+  // (both are owner-local control transports), defaulting to the `tui` surface.
+  'sessions.create': ({ title, agentId, origin, cwd }, h: D) =>
+    h.session.create({ title, agentId, origin: nativeOrigin(origin), cwd }),
+  'sessions.update': ({ id, ...rest }, h: D) => h.session.update({ id, ...rest }),
+  'sessions.delete': ({ id }, h: D) => h.session.delete({ id }),
+  'sessions.undoDelete': ({ id }, h: D) => h.session.undoDelete({ id }),
+  'sessions.abort': ({ id }, h: D) => h.session.abort({ id }),
+  'sessions.reset': ({ id }, h: D) => h.session.reset({ id }),
+  'sessions.messages': ({ id, ...rest }, h: D) => h.session.messages({ id, ...rest }),
+  'sessions.resolveUiMessages': ({ id, ...rest }, h: D) => h.session.resolveUiMessages({ id, ...rest }),
+  'sessions.branch': ({ id, title, atMessageId, origin }, h: D) =>
+    h.session.branch({ id, title, atMessageId, origin: nativeOrigin(origin) }),
+  'sessions.restore': ({ id, ...rest }, h: D) => h.session.restore({ id, ...rest }),
+  'sessions.search': (params, h: D) => h.session.search(params),
+  'sessions.send': ({ id, ...rest }, h: D) => h.session.send({ sessionId: id, ...rest }),
+  'sessions.generate': ({ id, ...rest }, h: D) => h.session.generate({ sessionId: id, ...rest }),
+
+  'control.subscribe': async (_params, h: D, { state, push, interactions }) => {
+    // Idempotent: a second control.subscribe on this connection is a no-op.
+    if (!state.control) {
+      const sink: EventSink = (event) => {
+        push({
+          jsonrpc: '2.0',
+          method: 'sessions.event',
+          params: { sessionId: event.sessionId, event }
+        });
+      };
+      const { dispose } = h.session.subscribeControl(sink);
+      state.control = dispose;
+    }
+    if (interactions && !state.interactions) {
+      const sink = (event: InteractionEvent) => {
+        push({
+          jsonrpc: '2.0',
+          method: 'interactions.event',
+          params: { event }
+        });
+      };
+      state.interactions = interactions.subscribe(sink);
+      for (const interaction of interactions.listPending()) sink({ type: 'upsert', interaction });
+    }
+    return { subscribed: true };
+  },
+  'control.unsubscribe': async (_params, _h: D, { state }) => {
+    state.control?.();
+    state.control = undefined;
+    state.interactions?.();
+    state.interactions = undefined;
+    return {};
+  },
+
+  'session.messageGeneration.subscribe': async ({ id, messageId, afterEventId }, h: D, { state, push }) => {
+    if (!state.messageGenerations) state.messageGenerations = new Map();
+    const key = `message:${id}:${messageId}`;
+    if (state.messageGenerations.has(key)) return { subscribed: true, initial: [] };
+    const initial: MessageGenerationFrame[] = [];
+    let ready = false;
+    const sink = (frame: MessageGenerationFrame): void => {
+      if (!ready) {
+        initial.push(frame);
+        return;
+      }
+      push({
+        jsonrpc: '2.0',
+        method: 'session.messageGeneration.event',
+        params: { sessionId: id, messageId, frame }
+      });
+      if (
+        frame.kind === 'event' &&
+        ['session.message.completed', 'session.message.failed'].includes(frame.event.type)
+      ) {
+        state.messageGenerations?.delete(key);
+      }
+    };
+    const { dispose } = await h.session.subscribeMessageGeneration({ sessionId: id, messageId, afterEventId }, sink);
+    ready = true;
+    const terminal = initial.some(
+      (frame) =>
+        (frame.kind === 'snapshot' && ['complete', 'error'].includes(frame.message.stream.status)) ||
+        (frame.kind === 'event' && ['session.message.completed', 'session.message.failed'].includes(frame.event.type))
+    );
+    if (!terminal) state.messageGenerations.set(key, dispose);
+    return { subscribed: true, initial };
+  },
+  'session.messageGeneration.unsubscribe': async ({ id, messageId }, _h: D, { state }) => {
+    const key = `message:${id}:${messageId}`;
+    state.messageGenerations?.get(key)?.();
+    state.messageGenerations?.delete(key);
+    return {};
+  },
+
+  'tools.approve': (params, h: D) => h.oversight.approve(params),
+
+  'approvals.pending': (params, h: D) => h.oversight.pending(params),
+  'approvals.list': (params, h: D) => h.oversight.list(params),
+  'approvals.revoke': (params, h: D) => h.oversight.revoke(params),
+  'approvals.clear': (params, h: D) => h.oversight.clear(params),
+
+  'clarify.respond': (params, h: D) => h.clarify.respond(params),
+
+  'skills.list': (params, h: D) => h.skills.list(params),
+  'settings.skills.get': (_params, h: D) => h.skillsSettings.getSkillsSettings(),
+  'settings.skills.set': (params, h: D) => h.skillsSettings.setSkillsSettings(params),
+
+  'commands.list': (params, h: D) => h.commands.list(params),
+  'graph.get': async (params, h: D) => h.graph.get(params),
+  'memory.laws.get': (params, h: D) => h.laws.get(params),
+
+  'agents.list': (_params, h: D) => h.agent.listAgents(),
+  'agents.get': ({ id }, h: D) => h.agent.getAgent({ agentId: id }),
+  'agents.create': (params, h: D) => h.agent.createAgent(params),
+  'agents.update': ({ id, ...patch }, h: D) => h.agent.updateAgent({ agentId: id, ...patch }),
+  'agents.delete': ({ id }, h: D) => h.agent.deleteAgent({ agentId: id }),
+  'agents.prompt.get': ({ id }, h: D) => h.agent.getAgentPrompt({ agentId: id }),
+  'agents.prompt.set': ({ id, ...body }, h: D) => h.agent.setAgentPrompt({ agentId: id, ...body }),
+  'agents.default.get': (_params, h: D) => h.agent.getDefaultAgent(),
+  'agents.default.set': ({ agentId }, h: D) => h.agent.setDefaultAgent({ agentId }),
+
+  'mesh.session.start': async (request, h: D) => h.meshAgent.start({ request }),
+  'mesh.session.list': async ({ transcriptTargetId }, h: D) => h.meshAgent.list({ sessionId: transcriptTargetId }),
+  'mesh.session.get': async ({ id, transcriptTargetId }, h: D) => h.meshAgent.get({ id, transcriptTargetId }),
+  'mesh.session.usage': async ({ id, transcriptTargetId }, h: D) =>
+    h.meshAgent.sessionUsage({ id, transcriptTargetId }),
+  'mesh.session.input': async ({ id, transcriptTargetId, ...request }, h: D) =>
+    h.meshAgent.input({ id, transcriptTargetId, ...request }),
+  'mesh.session.interrupt': async ({ id, transcriptTargetId }, h: D) =>
+    h.meshAgent.interrupt({ id, transcriptTargetId }),
+  'mesh.session.steer': async ({ id, transcriptTargetId, ...request }, h: D) =>
+    h.meshAgent.steer({ id, transcriptTargetId, ...request }),
+  'mesh.session.approval': async ({ id, transcriptTargetId, ...request }, h: D) =>
+    h.meshAgent.approval({ id, transcriptTargetId, ...request }),
+  'mesh.session.resize': async ({ id, transcriptTargetId, ...request }, h: D) =>
+    h.meshAgent.resize({ id, transcriptTargetId, ...request }),
+  'mesh.session.stop': async ({ id, transcriptTargetId }, h: D) => h.meshAgent.stop({ id, transcriptTargetId }),
+  'mesh.usage.overview': async (_params, h: D) => h.meshAgent.usageOverview(),
+  'mesh.agent.usage': async ({ name }, h: D) => h.meshAgent.usage({ agentName: name }),
+  'mesh.agent.auth.start': async ({ name }, h: D) => h.meshAgent.startAuth({ agentName: name }),
+  'mesh.agent.auth.status': async ({ name }, h: D) => h.meshAgent.authStatus({ agentName: name }),
+  'mesh.authSession.get': async ({ id, controlToken }, h: D) => h.meshAgent.getAuth({ id, controlToken }),
+  'mesh.authSession.input': async ({ id, controlToken, ...request }, h: D) =>
+    h.meshAgent.inputAuth({ id, controlToken, ...request }),
+  'mesh.authSession.resize': async ({ id, controlToken, ...request }, h: D) =>
+    h.meshAgent.resizeAuth({ id, controlToken, ...request }),
+  'mesh.authSession.stop': async ({ id, controlToken }, h: D) => h.meshAgent.stopAuth({ id, controlToken })
+
+  // model/* settings (and the rest of /v1/settings/*) are HTTP-only — no RPC binding by design.
+};

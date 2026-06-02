@@ -1,0 +1,23 @@
+.mesh-agent-settings-form-wrap--quiet {
+  width: min(calc(100% - 32px), 590px);
+  padding: 4px;
+  margin: 18px auto 24px;
+}
+
+.mesh-agent-form--quiet {
+  gap: 18px;
+}
+
+.mesh-agent-form--quiet > :first-child {
+  padding: 4px 2px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.mesh-agent-form--quiet > .mesh-agent-form__advanced {
+  background: transparent;
+}
+
+.mesh-agent-form--quiet > .mesh-agent-form__submit--quiet {
+  align-self: flex-end;
+  min-width: 108px;
+}

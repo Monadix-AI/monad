@@ -1,0 +1,28 @@
+{
+  "name": "@monad/client-rtk",
+  "version": "0.0.0",
+  "dependencies": {
+    "@monad/client": "workspace:*",
+    "@monad/protocol": "workspace:*",
+    "@reduxjs/toolkit": "^2.12.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.18",
+    "react": "^19.2.8",
+    "react-redux": "^9.3.0"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "module": "src/index.ts",
+  "peerDependencies": {
+    "react": "^19.2.8",
+    "react-redux": "^9.3.0"
+  },
+  "private": true,
+  "scripts": {
+    "test": "bun ../../scripts/quiet-run.ts bun ../../scripts/bun-test.ts test/unit/ --only-failures",
+    "typecheck": "bun ../../scripts/quiet-run.ts tsc --noEmit"
+  },
+  "type": "module"
+}

@@ -1,0 +1,248 @@
+min_version = "2026.6.11"
+redactions = ["*_API_KEY", "*_PASSWORD", "*_SECRET", "*_TOKEN"]
+
+[settings]
+idiomatic_version_file_enable_tools = ["bun"]
+
+[settings.status]
+show_tools = true
+
+[tools]
+"github:boyter/scc" = "3.7.0"
+
+[env]
+_.file = ".env.local"
+_.path = [".dev/bin"]
+
+[tasks."quality:prepare"]
+description = "Refresh generated inputs before read-only quality checks"
+raw = true
+run = "bun run generate"
+
+[tasks."quality:database-history"]
+description = "Validate the committed database migration history"
+depends = ["quality:prepare"]
+raw = true
+run = "bun run --cwd apps/monad db:check"
+
+[tasks."quality:database-drift"]
+description = "Reject schema drift after validating migration history"
+depends = ["quality:database-history"]
+raw = true
+run = "bun run --cwd apps/monad db:drift"
+
+[tasks."quality:agents"]
+description = "Verify generated agent instruction targets"
+depends = ["quality:database-drift"]
+raw = true
+run = "bunx --bun rulesync generate --check"
+
+[tasks."quality:biome"]
+description = "Run the read-only Biome gate"
+depends = ["quality:database-drift"]
+raw = true
+run = "bunx --bun biome check ."
+
+[tasks."quality:i18n"]
+description = "Verify i18n catalogs, generated types, and Paraglide compilation"
+depends = ["quality:database-drift"]
+run = "bunx --bun @inlang/cli@3.2.0 validate --project packages/i18n/project.inlang && bun run scripts/i18n/catalog.ts --check && bunx --bun paraglide-js compile --project packages/i18n/project.inlang --outdir packages/i18n/generated/paraglide --output-structure locale-modules --no-emit-ts-declarations --no-emit-git-ignore --no-emit-prettier-ignore --no-emit-readme --silent"
+
+[tasks."quality:knip"]
+description = "Report unused files, dependencies, and exports"
+depends = ["quality:database-drift"]
+raw = true
+run = "bunx --bun knip-bun"
+
+[tasks."quality:syncpack"]
+description = "Validate workspace dependency policy"
+depends = ["quality:database-drift"]
+raw = true
+run = "bunx --bun syncpack lint"
+
+[tasks."quality:test-assertions"]
+description = "Reject weak test assertions"
+depends = ["quality:database-drift"]
+raw = true
+run = "bun run scripts/check-test-assertions.ts"
+
+[tasks."quality:typecheck"]
+description = "Typecheck the root and every workspace after generation"
+depends = ["quality:database-drift"]
+run = "bunx --bun tsc --noEmit && bunx --bun turbo run typecheck"
+
+[tasks."quality:check"]
+description = "Run every read-only quality check"
+depends = [
+  "quality:agents",
+  "quality:biome",
+  "quality:docs",
+  "quality:i18n",
+  "quality:knip",
+  "quality:syncpack",
+  "quality:test-assertions",
+  "quality:typecheck",
+]
+
+[tasks."quality:docs"]
+description = "Validate the direct Mintlify documentation project and every mapped page"
+run = "bun scripts/check-docs-site.ts && cd docs && bunx --bun mint validate && bunx --bun mint broken-links --check-redirects"
+
+[tasks."docs:dev"]
+description = "Preview the documentation site locally"
+raw = true
+run = "cd docs && bunx --bun mint dev"
+
+[tasks."quality:fix"]
+description = "Apply dependency, formatting, agent-rule, and generated-input fixes"
+run = "bunx --bun syncpack format && bunx --bun biome check --write --unsafe --no-errors-on-unmatched --files-ignore-unknown=true . && bun run agents:sync && bun run generate"
+
+[tasks.setup]
+description = "Initialize or repair this worktree"
+raw = true
+run = "bun run scripts/dev-init.ts"
+
+[tasks."agents:local"]
+description = "Generate gitignored personal agent-rule overlays"
+raw = true
+run = "bun run scripts/sync-agents-local.ts"
+
+[tasks."metrics:loc"]
+description = "Record today's TypeScript LOC snapshot without rewriting earlier history"
+raw = true
+run = "bun run scripts/loc-snapshot.ts"
+
+[tasks.storybook]
+description = "Run every workspace Storybook"
+raw = true
+run = "bunx --bun turbo run storybook"
+
+[tasks."storybook:build"]
+description = "Build every workspace Storybook"
+raw = true
+run = "bunx --bun turbo run build-storybook"
+
+[tasks."test:e2e:daemon"]
+description = "Run daemon and runtime end-to-end tests"
+raw = true
+run = "bunx --bun turbo run test:e2e --filter=@monad/monad --output-logs=errors-only"
+
+[tasks."test:e2e:web"]
+description = "Run web Playwright end-to-end tests"
+raw = true
+run = "bunx --bun turbo run test:e2e --filter=@monad/web --output-logs=errors-only"
+
+[tasks.clean]
+description = "Remove workspace dependencies, caches, and build outputs"
+raw = true
+run = "bunx --bun rimraf --glob \"**/node_modules\" \"**/.turbo\" \"**/.next\" \"**/dist\" \"**/out\""
+
+[tasks."release:build"]
+description = "Build a release archive for the host platform"
+raw = true
+run = "bun run scripts/build-release.ts"
+
+[tasks."release:deploy-local"]
+description = "Build and install the current checkout on this machine"
+depends = ["release:build"]
+shell = "bash -c"
+run = '''
+set -euo pipefail
+root="${MISE_PROJECT_ROOT:?}"
+tarball="$(ls -t "$root"/dist/monad-*.tar.gz 2>/dev/null | grep -v test-install | head -1 || true)"
+test -n "$tarball" || { echo "[deploy-local] No tarball found in dist/ after release:build" >&2; exit 1; }
+echo "[deploy-local] Installing $(basename "$tarball") to this machine…"
+cd /tmp
+env -u MONAD_HOME -u MONAD_PORT -u WEB_PORT MONAD_TARBALL="$tarball" bash "$root/scripts/install.sh"
+'''
+
+[tasks."release:test:install"]
+description = "Exercise the native install and upgrade flow"
+raw = true
+run = "bun run scripts/test/install-test.ts"
+
+[tasks."release:test:install:fake"]
+description = "Exercise the installer against a fake release endpoint"
+raw = true
+run = "bun run scripts/test/install-fake-e2e.ts"
+
+[tasks."test:e2e:binary"]
+description = "Run the packaged binary end-to-end suite"
+raw = true
+run = "bash scripts/test/e2e.sh"
+
+[tasks."dev:doctor"]
+description = "Diagnose the local development environment"
+raw = true
+run = "bun run scripts/dev-doctor/checks.ts"
+
+[tasks."dev:ports"]
+description = "Manage this worktree's development ports"
+raw = true
+run = "bun run scripts/dev-ports.ts"
+
+[tasks."dev:services"]
+description = "Start optional local observability services"
+raw = true
+run = "docker compose -f dockers/compose.dev.yaml up -d phoenix"
+
+[tasks."docker:shell"]
+description = "Build and open the Linux development image"
+raw = true
+run = "docker buildx bake --file docker/docker-bake.hcl shell && docker run --rm -it -e PATH=\"/opt/monad/local-bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\" monad-shell:dev bash"
+
+[tasks."docker:test:e2e"]
+description = "Run the end-to-end suite in Docker"
+raw = true
+run = "docker buildx bake --file docker/docker-bake.hcl --progress=plain test-e2e"
+
+[tasks."docker:test:e2e:deps"]
+description = "Verify the reusable end-to-end dependency image"
+raw = true
+run = "docker buildx bake --file docker/docker-bake.hcl --progress=plain test-e2e-deps"
+
+[tasks."docker:test:e2e:live"]
+description = "Run opt-in real-model end-to-end tests in Docker"
+run = "docker buildx bake --file docker/docker-bake.hcl --load test-e2e-live && docker run --rm -e OPENROUTER_API_KEY -e MONAD_LIVE_MODEL monad-e2e-live:dev /e2e-live.sh"
+
+[tasks."docker:test:install"]
+description = "Test the release installer in glibc Linux"
+raw = true
+run = "docker buildx bake --file docker/docker-bake.hcl --progress=plain test-install"
+
+[tasks."docker:test:install:musl"]
+description = "Test the release installer in musl Linux"
+raw = true
+run = "docker buildx bake --file docker/docker-bake.hcl --progress=plain test-install-musl"
+
+[tasks."docker:test:unit"]
+description = "Run platform-sensitive unit tests in Linux"
+raw = true
+run = "docker buildx bake --file docker/docker-bake.hcl --progress=plain test-unit"
+
+[tasks."i18n:types"]
+description = "Regenerate i18n runtime and types"
+raw = true
+run = "bun run scripts/i18n/catalog.ts --write"
+
+[tasks."smoke:mesh-agent-managed"]
+description = "Smoke-test an installed managed MeshAgent provider"
+raw = true
+run = "bun run scripts/mesh-agent-managed-smoke.ts"
+
+[tasks."vendor:vm"]
+description = "Fetch, verify, or rebuild sandbox VM binaries"
+raw = true
+run = "bun run scripts/vm-vendor.ts"
+
+[tasks."vendor:vm:pins"]
+description = "Recompute checksums for pinned external VM tools"
+raw = true
+run = "bun run scripts/pin-vm-toolchain.ts"
+
+# monad's own VM binaries, as opposed to the third-party tools above. CI gates every publish on
+# these digests, so a native/ change that lands without re-pinning fails the reproducibility check.
+[tasks."vendor:vm:pins:own"]
+description = "Recompute checksums for monad's own sandbox VM binaries"
+raw = true
+run = "bun run scripts/vm-vendor.ts --pin"

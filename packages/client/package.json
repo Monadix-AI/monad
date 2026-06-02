@@ -1,0 +1,22 @@
+{
+  "name": "@monad/client",
+  "version": "0.0.0",
+  "dependencies": {
+    "@elysiajs/eden": "^1.4.9",
+    "@monad/protocol": "workspace:*"
+  },
+  "devDependencies": {},
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "module": "src/index.ts",
+  "peerDependencies": {
+    "elysia": "^1.4.29"
+  },
+  "private": true,
+  "scripts": {
+    "test": "bun ../../scripts/quiet-run.ts bun ../../scripts/bun-test.ts test/unit/ --only-failures",
+    "typecheck": "bun ../../scripts/quiet-run.ts tsc --noEmit"
+  },
+  "type": "module"
+}

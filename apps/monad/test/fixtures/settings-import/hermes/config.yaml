@@ -1,0 +1,11 @@
+model:
+  provider: anthropic
+  default: anthropic/claude-sonnet-4-5
+mcp_servers:
+  fixture_memory:
+    command: fixture-memory
+    args:
+      - --store
+      - memory
+workflow:
+  enabled: true

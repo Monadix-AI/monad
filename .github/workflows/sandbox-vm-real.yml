@@ -1,0 +1,156 @@
+name: Sandbox VM Real Conformance
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 4 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sandbox-vm-real-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux-kvm:
+    name: real VM (Linux KVM x64)
+    if: github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, linux, x64, monad-vm, kvm]
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: package.json
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: ${{ runner.os }}-bun-
+      - run: bun install --frozen-lockfile
+      - run: bun run generate
+      # These jobs boot real VMs, so the guest binaries must be present before the run rather
+      # than fetched lazily in the middle of a conformance test.
+      - name: Fetch VM vendor binaries
+        run: bun run scripts/vm-vendor.ts
+      - name: Preflight KVM toolchain
+        run: bun packages/sandbox-vm/test/smoke/vm-preflight.ts
+      - name: Verify failed boot rollback
+        run: bun packages/sandbox-vm/test/smoke/vm-boot-rollback.ts
+      - name: Real KVM conformance
+        env:
+          MONAD_VM_IT: "1"
+        run: |
+          mkdir -p artifacts
+          set -o pipefail
+          bun run --cwd packages/sandbox-vm test:e2e 2>&1 | tee artifacts/sandbox-vm-linux-kvm.log
+      - name: Bound diagnostic artifact
+        if: always()
+        run: |
+          test ! -f artifacts/sandbox-vm-linux-kvm.log || tail -c 1048576 artifacts/sandbox-vm-linux-kvm.log > artifacts/sandbox-vm-linux-kvm.tail
+          test ! -f artifacts/sandbox-vm-linux-kvm.tail || mv artifacts/sandbox-vm-linux-kvm.tail artifacts/sandbox-vm-linux-kvm.log
+      - name: Upload bounded failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: sandbox-vm-linux-kvm-${{ github.run_id }}
+          path: artifacts/sandbox-vm-linux-kvm.log
+          if-no-files-found: ignore
+
+  macos-vfkit:
+    name: real VM (macOS vfkit arm64)
+    if: github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, macos, arm64, monad-vm, vfkit]
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: package.json
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: ${{ runner.os }}-bun-
+      - run: bun install --frozen-lockfile
+      - run: bun run generate
+      # These jobs boot real VMs, so the guest binaries must be present before the run rather
+      # than fetched lazily in the middle of a conformance test.
+      - name: Fetch VM vendor binaries
+        run: bun run scripts/vm-vendor.ts
+      - name: Preflight vfkit toolchain
+        run: bun packages/sandbox-vm/test/smoke/vm-preflight.ts
+      - name: Verify failed boot rollback
+        run: bun packages/sandbox-vm/test/smoke/vm-boot-rollback.ts
+      - name: Real vfkit conformance
+        env:
+          MONAD_VM_IT: "1"
+        run: |
+          mkdir -p artifacts
+          set -o pipefail
+          bun run --cwd packages/sandbox-vm test:e2e 2>&1 | tee artifacts/sandbox-vm-macos-vfkit.log
+      - name: Bound diagnostic artifact
+        if: always()
+        run: |
+          test ! -f artifacts/sandbox-vm-macos-vfkit.log || tail -c 1048576 artifacts/sandbox-vm-macos-vfkit.log > artifacts/sandbox-vm-macos-vfkit.tail
+          test ! -f artifacts/sandbox-vm-macos-vfkit.tail || mv artifacts/sandbox-vm-macos-vfkit.tail artifacts/sandbox-vm-macos-vfkit.log
+      - name: Upload bounded failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: sandbox-vm-macos-vfkit-${{ github.run_id }}
+          path: artifacts/sandbox-vm-macos-vfkit.log
+          if-no-files-found: ignore
+
+  windows-hyperv:
+    name: real VM (Windows Hyper-V x64)
+    if: github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, windows, x64, monad-vm, hyperv]
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: package.json
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: ${{ runner.os }}-bun-
+      - run: bun install --frozen-lockfile
+      - run: bun run generate
+      # These jobs boot real VMs, so the guest binaries must be present before the run rather
+      # than fetched lazily in the middle of a conformance test.
+      - name: Fetch VM vendor binaries
+        run: bun run scripts/vm-vendor.ts
+      - name: Preflight Hyper-V toolchain
+        run: bun packages/sandbox-vm/test/smoke/vm-preflight.ts
+      - name: Verify failed boot rollback
+        run: bun packages/sandbox-vm/test/smoke/vm-boot-rollback.ts
+      - name: Real Hyper-V conformance
+        env:
+          MONAD_VM_IT: "1"
+        run: |
+          New-Item -ItemType Directory -Force artifacts | Out-Null
+          & bun run --cwd packages/sandbox-vm test:e2e 2>&1 | Tee-Object artifacts/sandbox-vm-windows-hyperv.log
+          $code = $LASTEXITCODE
+          if ($code -ne 0) { exit $code }
+      - name: Bound diagnostic artifact
+        if: always()
+        shell: powershell
+        run: |
+          $path = 'artifacts/sandbox-vm-windows-hyperv.log'
+          if (Test-Path $path) {
+            $bytes = [IO.File]::ReadAllBytes($path)
+            if ($bytes.Length -gt 1048576) {
+              [IO.File]::WriteAllBytes($path, $bytes[($bytes.Length - 1048576)..($bytes.Length - 1)])
+            }
+          }
+      - name: Upload bounded failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: sandbox-vm-windows-hyperv-${{ github.run_id }}
+          path: artifacts/sandbox-vm-windows-hyperv.log
+          if-no-files-found: ignore

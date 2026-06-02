@@ -1,0 +1,260 @@
+import type { ChatMessage, ProjectId, SessionId } from '@monad/protocol';
+import type { ProjectSessionArtifact, ProjectSessionOperations } from '@monad/sdk-atom';
+import type { createSessionModule } from '#/handlers/session/index.ts';
+import type { OversightService } from '#/services/oversight.ts';
+import type { Store } from '#/store/db/index.ts';
+
+import { createHash } from 'node:crypto';
+import { ID_BODY_LENGTH } from '@monad/protocol';
+import { z } from 'zod';
+
+const MAX_OBSERVATION_TEXT = 512;
+const projectSessionRunSnapshotSchema = z.object({
+  id: z.string(),
+  state: z.enum(['scheduled', 'running', 'completed', 'failed', 'cancelled']),
+  error: z.string().optional()
+});
+
+function payloadString(payload: Record<string, unknown>, key: string): string | undefined {
+  const value = payload[key];
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+function messageText(payload: Record<string, unknown>): string | undefined {
+  const message = payload.message;
+  return message && typeof message === 'object' ? payloadString(message as Record<string, unknown>, 'text') : undefined;
+}
+
+function optionalString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+function messageArtifacts(message: ChatMessage): ProjectSessionArtifact[] {
+  if (!message.data || typeof message.data !== 'object' || Array.isArray(message.data)) return [];
+  const data = message.data as Record<string, unknown>;
+  if (!Array.isArray(data.attachments)) return [];
+  const memberId = optionalString(data.memberId);
+  return data.attachments.flatMap((value) => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return [];
+    const attachment = value as Record<string, unknown>;
+    const path = optionalString(attachment.path);
+    if (!path) return [];
+    const name = optionalString(attachment.name);
+    const mime = optionalString(attachment.mime);
+    return [
+      {
+        messageId: message.id,
+        ...(memberId ? { memberId } : {}),
+        ...(name ? { name } : {}),
+        path,
+        ...(mime ? { mime } : {}),
+        createdAt: message.createdAt
+      }
+    ];
+  });
+}
+
+function observationText(event: { type: string; payload: Record<string, unknown> }): string {
+  const tool = payloadString(event.payload, 'tool');
+  let text: string;
+  switch (event.type) {
+    case 'session.message.completed':
+      text = messageText(event.payload) ?? 'Agent message';
+      break;
+    case 'session.message.failed':
+      text = 'Agent run failed';
+      break;
+    case 'session.message.delta.appended':
+      text =
+        payloadString(event.payload, 'channel') === 'reasoning' ? 'Agent reasoning update' : 'Agent message update';
+      break;
+    case 'tool.called':
+      text = tool ? `Tool called: ${tool}` : 'Tool called';
+      break;
+    case 'tool.result':
+      text = tool ? `Tool completed: ${tool}` : 'Tool completed';
+      break;
+    case 'tool.approval_requested':
+      text = tool ? `Approval requested: ${tool}` : 'Tool approval requested';
+      break;
+    case 'tool.approval_resolved':
+      text = tool ? `Approval resolved: ${tool}` : 'Tool approval resolved';
+      break;
+    case 'session.run.completed':
+      text = 'Session turn ended';
+      break;
+    case 'session.run.failed':
+      text = 'Session turn failed';
+      break;
+    case 'session.run.cancelled':
+      text = 'Session turn cancelled';
+      break;
+    default:
+      text = event.type;
+  }
+  return text.slice(0, MAX_OBSERVATION_TEXT);
+}
+
+function stableSessionId(projectId: string, idempotencyKey: string): SessionId {
+  const digest = createHash('sha256').update(`${projectId}\0${idempotencyKey}`).digest('hex');
+  return `ses_${digest.slice(0, ID_BODY_LENGTH)}` as SessionId;
+}
+
+function assertProject(store: Store, projectId: string) {
+  const project = store.getWorkplaceProject(projectId);
+  if (!project) throw new Error(`project not found: ${projectId}`);
+  return project;
+}
+
+function assertProjectSession(store: Store, sessionId: string) {
+  const session = store.getSession(sessionId);
+  if (!session?.projectId) {
+    throw new Error(`project session not found: ${sessionId}`);
+  }
+  return session;
+}
+
+export function createProjectSessionOperations(input: {
+  store: Store;
+  sessions: ReturnType<typeof createSessionModule>;
+  oversight: OversightService;
+}): ProjectSessionOperations {
+  const { store, sessions, oversight } = input;
+  return {
+    list: async (projectId) => {
+      assertProject(store, projectId);
+      return store
+        .listSessions({ projectId: projectId as ProjectId })
+        .map((session) => ({ id: session.id, title: session.title, state: session.state }));
+    },
+    create: async (projectId, request) => {
+      assertProject(store, projectId);
+      const id = stableSessionId(projectId, request.idempotencyKey);
+      const existing = store.getSession(id);
+      if (existing) {
+        if (existing.projectId !== projectId) {
+          throw new Error(`idempotency collision for project session: ${id}`);
+        }
+        return { id };
+      }
+      const result = await sessions.createProjectSession({
+        projectId: projectId as ProjectId,
+        title: request.title,
+        cwd: request.cwd,
+        id,
+        memberPolicy: request.memberPolicy
+      });
+      return { id: result.sessionId };
+    },
+    sendMessage: async (sessionId, request) => {
+      assertProjectSession(store, sessionId);
+      const requestId = createHash('sha256').update(request.idempotencyKey).digest('hex').slice(0, 20);
+      const key = `experience:message:${requestId}`;
+      const existing = store.getMemory(sessionId, key);
+      if (existing) {
+        const state = z.object({ state: z.string().optional() }).parse(JSON.parse(existing)).state;
+        if (state === 'scheduled' || state === 'completed') return;
+      }
+      store.setMemory(sessionId, key, JSON.stringify({ state: 'scheduled' }));
+      try {
+        await sessions.generate({ sessionId: sessionId as SessionId, text: request.text });
+        store.setMemory(sessionId, key, JSON.stringify({ state: 'completed' }));
+      } catch (error) {
+        store.setMemory(sessionId, key, JSON.stringify({ state: 'failed' }));
+        throw error;
+      }
+    },
+    listMessages: async (sessionId, cursor) => {
+      assertProjectSession(store, sessionId);
+      const items = store.listMessages(sessionId, { before: cursor, latest: true, limit: 100 });
+      const oldest = items[0]?.id;
+      const hasOlder = oldest ? store.listMessages(sessionId, { before: oldest, limit: 1 }).length > 0 : false;
+      return {
+        items: items.map((message) => ({
+          id: message.id,
+          role: message.role,
+          text: message.text,
+          createdAt: message.createdAt
+        })),
+        nextCursor: hasOlder ? (oldest ?? null) : null
+      };
+    },
+    listArtifacts: async (sessionId) => {
+      assertProjectSession(store, sessionId);
+      return store.listMessages(sessionId, { latest: true, limit: 200 }).flatMap(messageArtifacts);
+    },
+    listObservations: async (sessionId, cursor) => {
+      assertProjectSession(store, sessionId);
+      const events = store.listEvents(sessionId, cursor).slice(0, 100);
+      return {
+        items: events.map((event) => ({
+          id: event.id,
+          kind: event.type,
+          text: observationText(event),
+          createdAt: event.at
+        })),
+        nextCursor: events.length === 100 ? (events.at(-1)?.id ?? null) : null
+      };
+    },
+    runTurn: async (sessionId, request) => {
+      assertProjectSession(store, sessionId);
+      const runId = createHash('sha256').update(`${sessionId}\0${request.idempotencyKey}`).digest('hex').slice(0, 20);
+      const key = `experience:run:${runId}`;
+      if (!store.getMemory(sessionId, key)) {
+        store.setMemory(sessionId, key, JSON.stringify({ id: runId, state: 'scheduled' }));
+        const timer = setTimeout(() => {
+          store.setMemory(sessionId, key, JSON.stringify({ id: runId, state: 'running' }));
+          void sessions
+            .generate({ sessionId: sessionId as SessionId, text: request.text })
+            .then(() => store.setMemory(sessionId, key, JSON.stringify({ id: runId, state: 'completed' })))
+            .catch((error) =>
+              store.setMemory(
+                sessionId,
+                key,
+                JSON.stringify({
+                  id: runId,
+                  state: 'failed',
+                  error: error instanceof Error ? error.message : String(error)
+                })
+              )
+            );
+        }, 0);
+        timer.unref();
+      }
+      return { runId };
+    },
+    getRun: async (sessionId, runId) => {
+      assertProjectSession(store, sessionId);
+      const value = store.getMemory(sessionId, `experience:run:${runId}`);
+      return value ? projectSessionRunSnapshotSchema.parse(JSON.parse(value)) : null;
+    },
+    pause: async (sessionId) => {
+      assertProjectSession(store, sessionId);
+      await sessions.abort({ id: sessionId as SessionId });
+    },
+    cancel: async (sessionId) => {
+      assertProjectSession(store, sessionId);
+      await sessions.update({ id: sessionId as SessionId, state: 'cancelled' });
+    },
+    listPendingApprovals: async (projectId, sessionId) => {
+      assertProject(store, projectId);
+      if (sessionId) {
+        const session = assertProjectSession(store, sessionId);
+        if (session.projectId !== projectId) throw new Error(`session does not belong to project: ${sessionId}`);
+      }
+      const projectSessionIds = new Set(
+        store.listSessions({ projectId: projectId as ProjectId }).map((session) => session.id)
+      );
+      return oversight
+        .listPendingRequests(sessionId)
+        .filter((approval) => projectSessionIds.has(approval.sessionId as SessionId));
+    },
+    resolveApproval: async (approvalId, decision) => {
+      const pending = oversight.listPendingRequests().find((approval) => approval.id === approvalId);
+      if (!pending) throw new Error(`approval not found: ${approvalId}`);
+      assertProjectSession(store, pending.sessionId);
+      const resolved = await oversight.respond(approvalId, decision === 'approved');
+      if (!resolved) throw new Error(`approval already resolved: ${approvalId}`);
+    }
+  };
+}

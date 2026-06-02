@@ -1,0 +1,5962 @@
+{
+  "provider": "codex",
+  "turns": [
+    {
+      "records": [
+        {
+          "data": {
+            "type": "thread.started",
+            "thread_id": "<id:1>"
+          }
+        },
+        {
+          "data": {
+            "type": "turn.started"
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:2>",
+              "type": "agent_message",
+              "text": "<text:1>"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:3>",
+              "type": "mcp_tool_call",
+              "server": "<text:2>",
+              "tool": "<text:3>",
+              "arguments": {},
+              "result": null,
+              "error": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:3>",
+              "type": "mcp_tool_call",
+              "server": "<text:2>",
+              "tool": "<text:3>",
+              "arguments": {},
+              "result": {
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "<text:4>"
+                  }
+                ],
+                "structured_content": null
+              },
+              "error": null,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:4>",
+              "type": "mcp_tool_call",
+              "server": "<text:2>",
+              "tool": "<text:5>",
+              "arguments": {
+                "limit": 12
+              },
+              "result": null,
+              "error": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:4>",
+              "type": "mcp_tool_call",
+              "server": "<text:2>",
+              "tool": "<text:5>",
+              "arguments": {
+                "limit": 12
+              },
+              "result": {
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "<text:6>"
+                  }
+                ],
+                "structured_content": null
+              },
+              "error": null,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:5>",
+              "type": "mcp_tool_call",
+              "server": "<text:2>",
+              "tool": "<text:7>",
+              "arguments": {
+                "requestId": "<id:6>",
+                "text": "<text:8>"
+              },
+              "result": null,
+              "error": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:5>",
+              "type": "mcp_tool_call",
+              "server": "<text:2>",
+              "tool": "<text:7>",
+              "arguments": {
+                "requestId": "<id:6>",
+                "text": "<text:8>"
+              },
+              "result": {
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "<text:9>"
+                  }
+                ],
+                "structured_content": null
+              },
+              "error": null,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:7>",
+              "type": "command_execution",
+              "command": "<path:1>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:7>",
+              "type": "command_execution",
+              "command": "<path:1>",
+              "aggregated_output": "<text:11>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:8>",
+              "type": "agent_message",
+              "text": "<text:12>"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:9>",
+              "type": "command_execution",
+              "command": "<path:2>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:9>",
+              "type": "command_execution",
+              "command": "<path:2>",
+              "aggregated_output": "<text:13>",
+              "exit_code": 1,
+              "status": "failed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:10>",
+              "type": "agent_message",
+              "text": "<text:14>"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:11>",
+              "type": "command_execution",
+              "command": "<path:3>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:11>",
+              "type": "command_execution",
+              "command": "<path:3>",
+              "aggregated_output": "<text:15>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:12>",
+              "type": "command_execution",
+              "command": "<path:4>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:12>",
+              "type": "command_execution",
+              "command": "<path:4>",
+              "aggregated_output": "<text:16>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:13>",
+              "type": "command_execution",
+              "command": "<path:5>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:13>",
+              "type": "command_execution",
+              "command": "<path:5>",
+              "aggregated_output": "<text:17>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:14>",
+              "type": "agent_message",
+              "text": "<text:18>"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:15>",
+              "type": "file_change",
+              "changes": [
+                {
+                  "path": "<path:6>",
+                  "kind": "update"
+                }
+              ],
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:15>",
+              "type": "file_change",
+              "changes": [
+                {
+                  "path": "<path:6>",
+                  "kind": "update"
+                }
+              ],
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:16>",
+              "type": "command_execution",
+              "command": "<path:7>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:16>",
+              "type": "command_execution",
+              "command": "<path:7>",
+              "aggregated_output": "<text:19>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:17>",
+              "type": "command_execution",
+              "command": "<path:8>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:17>",
+              "type": "command_execution",
+              "command": "<path:8>",
+              "aggregated_output": "<text:20>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:18>",
+              "type": "agent_message",
+              "text": "<text:21>"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:19>",
+              "type": "command_execution",
+              "command": "<path:9>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:19>",
+              "type": "command_execution",
+              "command": "<path:9>",
+              "aggregated_output": "<text:22>",
+              "exit_code": 1,
+              "status": "failed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:20>",
+              "type": "agent_message",
+              "text": "<text:23>"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:21>",
+              "type": "command_execution",
+              "command": "<path:10>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:21>",
+              "type": "command_execution",
+              "command": "<path:10>",
+              "aggregated_output": "<text:24>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:22>",
+              "type": "command_execution",
+              "command": "<path:11>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:22>",
+              "type": "command_execution",
+              "command": "<path:11>",
+              "aggregated_output": "<text:25>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:23>",
+              "type": "command_execution",
+              "command": "<path:12>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:23>",
+              "type": "command_execution",
+              "command": "<path:12>",
+              "aggregated_output": "<text:26>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:24>",
+              "type": "agent_message",
+              "text": "<text:27>"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:25>",
+              "type": "file_change",
+              "changes": [
+                {
+                  "path": "<path:13>",
+                  "kind": "update"
+                },
+                {
+                  "path": "<path:14>",
+                  "kind": "update"
+                }
+              ],
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:25>",
+              "type": "file_change",
+              "changes": [
+                {
+                  "path": "<path:13>",
+                  "kind": "update"
+                },
+                {
+                  "path": "<path:14>",
+                  "kind": "update"
+                }
+              ],
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:26>",
+              "type": "command_execution",
+              "command": "<path:15>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:26>",
+              "type": "command_execution",
+              "command": "<path:15>",
+              "aggregated_output": "<text:28>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:27>",
+              "type": "command_execution",
+              "command": "<path:16>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:28>",
+              "type": "command_execution",
+              "command": "<path:17>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:27>",
+              "type": "command_execution",
+              "command": "<path:16>",
+              "aggregated_output": "<text:29>",
+              "exit_code": 1,
+              "status": "failed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:28>",
+              "type": "command_execution",
+              "command": "<path:17>",
+              "aggregated_output": "<text:30>",
+              "exit_code": 1,
+              "status": "failed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:29>",
+              "type": "agent_message",
+              "text": "<text:31>"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:30>",
+              "type": "command_execution",
+              "command": "<path:18>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:30>",
+              "type": "command_execution",
+              "command": "<path:18>",
+              "aggregated_output": "<text:32>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:31>",
+              "type": "file_change",
+              "changes": [
+                {
+                  "path": "<path:19>",
+                  "kind": "update"
+                },
+                {
+                  "path": "<path:14>",
+                  "kind": "update"
+                }
+              ],
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:31>",
+              "type": "file_change",
+              "changes": [
+                {
+                  "path": "<path:19>",
+                  "kind": "update"
+                },
+                {
+                  "path": "<path:14>",
+                  "kind": "update"
+                }
+              ],
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:32>",
+              "type": "command_execution",
+              "command": "<path:20>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:32>",
+              "type": "command_execution",
+              "command": "<path:20>",
+              "aggregated_output": "<text:10>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:33>",
+              "type": "command_execution",
+              "command": "<path:21>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:34>",
+              "type": "command_execution",
+              "command": "<path:16>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:33>",
+              "type": "command_execution",
+              "command": "<path:21>",
+              "aggregated_output": "<text:33>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:34>",
+              "type": "command_execution",
+              "command": "<path:16>",
+              "aggregated_output": "<text:34>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:35>",
+              "type": "agent_message",
+              "text": "<text:35>"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:36>",
+              "type": "command_execution",
+              "command": "<path:9>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:36>",
+              "type": "command_execution",
+              "command": "<path:9>",
+              "aggregated_output": "<text:36>",
+              "exit_code": 1,
+              "status": "failed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:37>",
+              "type": "agent_message",
+              "text": "<text:37>"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:38>",
+              "type": "command_execution",
+              "command": "<path:22>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:38>",
+              "type": "command_execution",
+              "command": "<path:22>",
+              "aggregated_output": "<text:38>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:39>",
+              "type": "agent_message",
+              "text": "<text:39>"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:40>",
+              "type": "file_change",
+              "changes": [
+                {
+                  "path": "<path:23>",
+                  "kind": "update"
+                }
+              ],
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:40>",
+              "type": "file_change",
+              "changes": [
+                {
+                  "path": "<path:23>",
+                  "kind": "update"
+                }
+              ],
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:41>",
+              "type": "command_execution",
+              "command": "<path:24>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:41>",
+              "type": "command_execution",
+              "command": "<path:24>",
+              "aggregated_output": "<text:40>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:42>",
+              "type": "command_execution",
+              "command": "<path:25>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:43>",
+              "type": "command_execution",
+              "command": "<path:26>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:43>",
+              "type": "command_execution",
+              "command": "<path:26>",
+              "aggregated_output": "<text:41>",
+              "exit_code": 1,
+              "status": "failed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:42>",
+              "type": "command_execution",
+              "command": "<path:25>",
+              "aggregated_output": "<text:42>",
+              "exit_code": 1,
+              "status": "failed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:44>",
+              "type": "agent_message",
+              "text": "<text:43>"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:45>",
+              "type": "command_execution",
+              "command": "<path:27>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:45>",
+              "type": "command_execution",
+              "command": "<path:27>",
+              "aggregated_output": "<text:44>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:46>",
+              "type": "command_execution",
+              "command": "<path:28>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:46>",
+              "type": "command_execution",
+              "command": "<path:28>",
+              "aggregated_output": "<text:45>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:47>",
+              "type": "command_execution",
+              "command": "<path:29>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:47>",
+              "type": "command_execution",
+              "command": "<path:29>",
+              "aggregated_output": "<text:46>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:48>",
+              "type": "command_execution",
+              "command": "<path:30>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:48>",
+              "type": "command_execution",
+              "command": "<path:30>",
+              "aggregated_output": "<text:47>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:49>",
+              "type": "command_execution",
+              "command": "<path:31>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:49>",
+              "type": "command_execution",
+              "command": "<path:31>",
+              "aggregated_output": "<text:48>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:50>",
+              "type": "agent_message",
+              "text": "<text:49>"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:51>",
+              "type": "file_change",
+              "changes": [
+                {
+                  "path": "<path:23>",
+                  "kind": "update"
+                }
+              ],
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:51>",
+              "type": "file_change",
+              "changes": [
+                {
+                  "path": "<path:23>",
+                  "kind": "update"
+                }
+              ],
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:52>",
+              "type": "command_execution",
+              "command": "<path:32>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:52>",
+              "type": "command_execution",
+              "command": "<path:32>",
+              "aggregated_output": "<text:50>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:53>",
+              "type": "command_execution",
+              "command": "<path:9>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:53>",
+              "type": "command_execution",
+              "command": "<path:9>",
+              "aggregated_output": "<text:51>",
+              "exit_code": 1,
+              "status": "failed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:54>",
+              "type": "agent_message",
+              "text": "<text:52>"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:55>",
+              "type": "command_execution",
+              "command": "<path:33>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:55>",
+              "type": "command_execution",
+              "command": "<path:33>",
+              "aggregated_output": "<text:53>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:56>",
+              "type": "command_execution",
+              "command": "<path:34>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:56>",
+              "type": "command_execution",
+              "command": "<path:34>",
+              "aggregated_output": "<text:54>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:57>",
+              "type": "command_execution",
+              "command": "<path:35>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:57>",
+              "type": "command_execution",
+              "command": "<path:35>",
+              "aggregated_output": "<text:55>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:58>",
+              "type": "command_execution",
+              "command": "<path:36>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:58>",
+              "type": "command_execution",
+              "command": "<path:36>",
+              "aggregated_output": "<path:37>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:59>",
+              "type": "command_execution",
+              "command": "<path:38>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:59>",
+              "type": "command_execution",
+              "command": "<path:38>",
+              "aggregated_output": "<text:10>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:60>",
+              "type": "agent_message",
+              "text": "<text:56>"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:61>",
+              "type": "file_change",
+              "changes": [
+                {
+                  "path": "<path:39>",
+                  "kind": "update"
+                }
+              ],
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:61>",
+              "type": "file_change",
+              "changes": [
+                {
+                  "path": "<path:39>",
+                  "kind": "update"
+                }
+              ],
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:62>",
+              "type": "command_execution",
+              "command": "<path:40>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:62>",
+              "type": "command_execution",
+              "command": "<path:40>",
+              "aggregated_output": "<text:57>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:63>",
+              "type": "command_execution",
+              "command": "<path:41>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:63>",
+              "type": "command_execution",
+              "command": "<path:41>",
+              "aggregated_output": "<text:58>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:64>",
+              "type": "command_execution",
+              "command": "<path:42>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:65>",
+              "type": "command_execution",
+              "command": "<path:43>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:65>",
+              "type": "command_execution",
+              "command": "<path:43>",
+              "aggregated_output": "<text:59>",
+              "exit_code": 1,
+              "status": "failed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:64>",
+              "type": "command_execution",
+              "command": "<path:42>",
+              "aggregated_output": "<text:60>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:66>",
+              "type": "agent_message",
+              "text": "<text:61>"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:67>",
+              "type": "command_execution",
+              "command": "<path:44>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:67>",
+              "type": "command_execution",
+              "command": "<path:44>",
+              "aggregated_output": "<text:62>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:68>",
+              "type": "agent_message",
+              "text": "<text:63>"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:69>",
+              "type": "command_execution",
+              "command": "<path:9>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:69>",
+              "type": "command_execution",
+              "command": "<path:9>",
+              "aggregated_output": "<text:64>",
+              "exit_code": 1,
+              "status": "failed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:70>",
+              "type": "agent_message",
+              "text": "<text:65>"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:71>",
+              "type": "command_execution",
+              "command": "<path:45>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:71>",
+              "type": "command_execution",
+              "command": "<path:45>",
+              "aggregated_output": "<text:66>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:72>",
+              "type": "agent_message",
+              "text": "<text:67>"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:73>",
+              "type": "file_change",
+              "changes": [
+                {
+                  "path": "<path:46>",
+                  "kind": "update"
+                }
+              ],
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:73>",
+              "type": "file_change",
+              "changes": [
+                {
+                  "path": "<path:46>",
+                  "kind": "update"
+                }
+              ],
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:74>",
+              "type": "command_execution",
+              "command": "<path:47>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:74>",
+              "type": "command_execution",
+              "command": "<path:47>",
+              "aggregated_output": "<text:10>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:75>",
+              "type": "command_execution",
+              "command": "<path:48>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:76>",
+              "type": "command_execution",
+              "command": "<path:49>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:75>",
+              "type": "command_execution",
+              "command": "<path:48>",
+              "aggregated_output": "<text:50>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:76>",
+              "type": "command_execution",
+              "command": "<path:49>",
+              "aggregated_output": "<text:68>",
+              "exit_code": 1,
+              "status": "failed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:77>",
+              "type": "agent_message",
+              "text": "<text:69>"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:78>",
+              "type": "command_execution",
+              "command": "<path:9>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:78>",
+              "type": "command_execution",
+              "command": "<path:9>",
+              "aggregated_output": "<text:70>",
+              "exit_code": 1,
+              "status": "failed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:79>",
+              "type": "agent_message",
+              "text": "<text:71>"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:80>",
+              "type": "command_execution",
+              "command": "<path:50>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:80>",
+              "type": "command_execution",
+              "command": "<path:50>",
+              "aggregated_output": "<text:72>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:81>",
+              "type": "agent_message",
+              "text": "<text:73>"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:82>",
+              "type": "command_execution",
+              "command": "<path:51>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:82>",
+              "type": "command_execution",
+              "command": "<path:51>",
+              "aggregated_output": "<text:74>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:83>",
+              "type": "command_execution",
+              "command": "<path:9>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:83>",
+              "type": "command_execution",
+              "command": "<path:9>",
+              "aggregated_output": "<text:75>",
+              "exit_code": 1,
+              "status": "failed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:84>",
+              "type": "agent_message",
+              "text": "<text:76>"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:85>",
+              "type": "command_execution",
+              "command": "<path:52>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:85>",
+              "type": "command_execution",
+              "command": "<path:52>",
+              "aggregated_output": "<text:77>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:86>",
+              "type": "agent_message",
+              "text": "<text:78>"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:87>",
+              "type": "file_change",
+              "changes": [
+                {
+                  "path": "<path:53>",
+                  "kind": "update"
+                }
+              ],
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:87>",
+              "type": "file_change",
+              "changes": [
+                {
+                  "path": "<path:53>",
+                  "kind": "update"
+                }
+              ],
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:88>",
+              "type": "command_execution",
+              "command": "<path:54>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:88>",
+              "type": "command_execution",
+              "command": "<path:54>",
+              "aggregated_output": "<text:10>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:89>",
+              "type": "command_execution",
+              "command": "<path:55>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:90>",
+              "type": "command_execution",
+              "command": "<path:56>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:89>",
+              "type": "command_execution",
+              "command": "<path:55>",
+              "aggregated_output": "<text:79>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:90>",
+              "type": "command_execution",
+              "command": "<path:56>",
+              "aggregated_output": "<text:80>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:91>",
+              "type": "agent_message",
+              "text": "<text:81>"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:92>",
+              "type": "command_execution",
+              "command": "<path:9>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:92>",
+              "type": "command_execution",
+              "command": "<path:9>",
+              "aggregated_output": "<text:82>",
+              "exit_code": 1,
+              "status": "failed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:93>",
+              "type": "agent_message",
+              "text": "<text:83>"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:94>",
+              "type": "command_execution",
+              "command": "<path:57>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:94>",
+              "type": "command_execution",
+              "command": "<path:57>",
+              "aggregated_output": "<text:84>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:95>",
+              "type": "agent_message",
+              "text": "<text:85>"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:96>",
+              "type": "command_execution",
+              "command": "<path:58>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:96>",
+              "type": "command_execution",
+              "command": "<path:58>",
+              "aggregated_output": "<text:86>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:97>",
+              "type": "file_change",
+              "changes": [
+                {
+                  "path": "<path:59>",
+                  "kind": "delete"
+                }
+              ],
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:97>",
+              "type": "file_change",
+              "changes": [
+                {
+                  "path": "<path:59>",
+                  "kind": "delete"
+                }
+              ],
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:98>",
+              "type": "command_execution",
+              "command": "<path:60>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:98>",
+              "type": "command_execution",
+              "command": "<path:60>",
+              "aggregated_output": "<text:87>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:99>",
+              "type": "agent_message",
+              "text": "<text:88>"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:100>",
+              "type": "command_execution",
+              "command": "<path:61>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:100>",
+              "type": "command_execution",
+              "command": "<path:61>",
+              "aggregated_output": "<text:89>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:101>",
+              "type": "command_execution",
+              "command": "<path:62>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:101>",
+              "type": "command_execution",
+              "command": "<path:62>",
+              "aggregated_output": "<text:90>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:102>",
+              "type": "agent_message",
+              "text": "<text:91>"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:103>",
+              "type": "command_execution",
+              "command": "<path:63>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:103>",
+              "type": "command_execution",
+              "command": "<path:63>",
+              "aggregated_output": "<text:92>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:104>",
+              "type": "agent_message",
+              "text": "<text:93>"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:105>",
+              "type": "command_execution",
+              "command": "<path:64>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:105>",
+              "type": "command_execution",
+              "command": "<path:64>",
+              "aggregated_output": "<text:94>",
+              "exit_code": 1,
+              "status": "failed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:106>",
+              "type": "command_execution",
+              "command": "<path:9>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:106>",
+              "type": "command_execution",
+              "command": "<path:9>",
+              "aggregated_output": "<text:95>",
+              "exit_code": 1,
+              "status": "failed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:107>",
+              "type": "agent_message",
+              "text": "<text:96>"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:108>",
+              "type": "command_execution",
+              "command": "<path:65>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:108>",
+              "type": "command_execution",
+              "command": "<path:65>",
+              "aggregated_output": "<text:97>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:109>",
+              "type": "file_change",
+              "changes": [
+                {
+                  "path": "<path:66>",
+                  "kind": "update"
+                }
+              ],
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:109>",
+              "type": "file_change",
+              "changes": [
+                {
+                  "path": "<path:66>",
+                  "kind": "update"
+                }
+              ],
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:110>",
+              "type": "command_execution",
+              "command": "<path:67>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:110>",
+              "type": "command_execution",
+              "command": "<path:67>",
+              "aggregated_output": "<text:98>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:111>",
+              "type": "agent_message",
+              "text": "<text:99>"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:112>",
+              "type": "file_change",
+              "changes": [
+                {
+                  "path": "<path:66>",
+                  "kind": "update"
+                }
+              ],
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:112>",
+              "type": "file_change",
+              "changes": [
+                {
+                  "path": "<path:66>",
+                  "kind": "update"
+                }
+              ],
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:113>",
+              "type": "command_execution",
+              "command": "<path:68>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:113>",
+              "type": "command_execution",
+              "command": "<path:68>",
+              "aggregated_output": "<text:100>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:114>",
+              "type": "command_execution",
+              "command": "<path:9>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:114>",
+              "type": "command_execution",
+              "command": "<path:9>",
+              "aggregated_output": "<text:101>",
+              "exit_code": 1,
+              "status": "failed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:115>",
+              "type": "agent_message",
+              "text": "<text:102>"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:116>",
+              "type": "command_execution",
+              "command": "<path:69>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:116>",
+              "type": "command_execution",
+              "command": "<path:69>",
+              "aggregated_output": "<text:103>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:117>",
+              "type": "command_execution",
+              "command": "<path:70>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:117>",
+              "type": "command_execution",
+              "command": "<path:70>",
+              "aggregated_output": "<text:104>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:118>",
+              "type": "command_execution",
+              "command": "<path:71>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:118>",
+              "type": "command_execution",
+              "command": "<path:71>",
+              "aggregated_output": "<text:105>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:119>",
+              "type": "file_change",
+              "changes": [
+                {
+                  "path": "<path:66>",
+                  "kind": "update"
+                }
+              ],
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:119>",
+              "type": "file_change",
+              "changes": [
+                {
+                  "path": "<path:66>",
+                  "kind": "update"
+                }
+              ],
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:120>",
+              "type": "command_execution",
+              "command": "<path:72>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:120>",
+              "type": "command_execution",
+              "command": "<path:72>",
+              "aggregated_output": "<text:106>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:121>",
+              "type": "agent_message",
+              "text": "<text:107>"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:122>",
+              "type": "command_execution",
+              "command": "<path:73>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:122>",
+              "type": "command_execution",
+              "command": "<path:73>",
+              "aggregated_output": "<text:108>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:123>",
+              "type": "command_execution",
+              "command": "<path:9>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:123>",
+              "type": "command_execution",
+              "command": "<path:9>",
+              "aggregated_output": "<text:109>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:124>",
+              "type": "agent_message",
+              "text": "<text:110>"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:125>",
+              "type": "command_execution",
+              "command": "<path:74>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:125>",
+              "type": "command_execution",
+              "command": "<path:74>",
+              "aggregated_output": "<text:111>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:126>",
+              "type": "command_execution",
+              "command": "<path:75>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:126>",
+              "type": "command_execution",
+              "command": "<path:75>",
+              "aggregated_output": "<text:112>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:127>",
+              "type": "agent_message",
+              "text": "<text:113>"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:128>",
+              "type": "command_execution",
+              "command": "<path:76>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:128>",
+              "type": "command_execution",
+              "command": "<path:76>",
+              "aggregated_output": "<text:114>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:129>",
+              "type": "command_execution",
+              "command": "<path:2>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:129>",
+              "type": "command_execution",
+              "command": "<path:2>",
+              "aggregated_output": "<text:115>",
+              "exit_code": 1,
+              "status": "failed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:130>",
+              "type": "agent_message",
+              "text": "<text:116>"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:131>",
+              "type": "command_execution",
+              "command": "<path:77>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:131>",
+              "type": "command_execution",
+              "command": "<path:77>",
+              "aggregated_output": "<text:117>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:132>",
+              "type": "agent_message",
+              "text": "<text:118>"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:133>",
+              "type": "command_execution",
+              "command": "<path:78>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:133>",
+              "type": "command_execution",
+              "command": "<path:78>",
+              "aggregated_output": "<text:119>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:134>",
+              "type": "command_execution",
+              "command": "<path:9>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:134>",
+              "type": "command_execution",
+              "command": "<path:9>",
+              "aggregated_output": "<text:120>",
+              "exit_code": 1,
+              "status": "failed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:135>",
+              "type": "agent_message",
+              "text": "<text:121>"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:136>",
+              "type": "command_execution",
+              "command": "<path:79>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:136>",
+              "type": "command_execution",
+              "command": "<path:79>",
+              "aggregated_output": "<text:122>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:137>",
+              "type": "command_execution",
+              "command": "<path:80>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:137>",
+              "type": "command_execution",
+              "command": "<path:80>",
+              "aggregated_output": "<text:57>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:138>",
+              "type": "file_change",
+              "changes": [
+                {
+                  "path": "<path:81>",
+                  "kind": "delete"
+                },
+                {
+                  "path": "<path:82>",
+                  "kind": "delete"
+                }
+              ],
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:138>",
+              "type": "file_change",
+              "changes": [
+                {
+                  "path": "<path:81>",
+                  "kind": "delete"
+                },
+                {
+                  "path": "<path:82>",
+                  "kind": "delete"
+                }
+              ],
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:139>",
+              "type": "command_execution",
+              "command": "<path:83>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:139>",
+              "type": "command_execution",
+              "command": "<path:83>",
+              "aggregated_output": "<text:123>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:140>",
+              "type": "agent_message",
+              "text": "<text:124>"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:141>",
+              "type": "command_execution",
+              "command": "<path:84>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:141>",
+              "type": "command_execution",
+              "command": "<path:84>",
+              "aggregated_output": "<text:125>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:142>",
+              "type": "command_execution",
+              "command": "<path:85>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:142>",
+              "type": "command_execution",
+              "command": "<path:85>",
+              "aggregated_output": "<text:126>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:143>",
+              "type": "command_execution",
+              "command": "<path:9>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:143>",
+              "type": "command_execution",
+              "command": "<path:9>",
+              "aggregated_output": "<text:127>",
+              "exit_code": 1,
+              "status": "failed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:144>",
+              "type": "agent_message",
+              "text": "<text:128>"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:145>",
+              "type": "command_execution",
+              "command": "<path:86>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:145>",
+              "type": "command_execution",
+              "command": "<path:86>",
+              "aggregated_output": "<text:129>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:146>",
+              "type": "file_change",
+              "changes": [
+                {
+                  "path": "<path:66>",
+                  "kind": "update"
+                }
+              ],
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:146>",
+              "type": "file_change",
+              "changes": [
+                {
+                  "path": "<path:66>",
+                  "kind": "update"
+                }
+              ],
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:147>",
+              "type": "command_execution",
+              "command": "<path:67>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:147>",
+              "type": "command_execution",
+              "command": "<path:67>",
+              "aggregated_output": "<text:130>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:148>",
+              "type": "command_execution",
+              "command": "<path:9>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:148>",
+              "type": "command_execution",
+              "command": "<path:9>",
+              "aggregated_output": "<text:131>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:149>",
+              "type": "command_execution",
+              "command": "<path:87>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:149>",
+              "type": "command_execution",
+              "command": "<path:87>",
+              "aggregated_output": "<text:132>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:150>",
+              "type": "agent_message",
+              "text": "<text:133>"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:151>",
+              "type": "command_execution",
+              "command": "<path:88>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:152>",
+              "type": "command_execution",
+              "command": "<path:89>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:153>",
+              "type": "command_execution",
+              "command": "<path:90>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:154>",
+              "type": "command_execution",
+              "command": "<path:91>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:155>",
+              "type": "command_execution",
+              "command": "<path:92>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:151>",
+              "type": "command_execution",
+              "command": "<path:88>",
+              "aggregated_output": "<text:134>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:152>",
+              "type": "command_execution",
+              "command": "<path:89>",
+              "aggregated_output": "<text:135>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:155>",
+              "type": "command_execution",
+              "command": "<path:92>",
+              "aggregated_output": "<text:136>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:154>",
+              "type": "command_execution",
+              "command": "<path:91>",
+              "aggregated_output": "<text:137>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:153>",
+              "type": "command_execution",
+              "command": "<path:90>",
+              "aggregated_output": "<text:138>",
+              "exit_code": 1,
+              "status": "failed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:156>",
+              "type": "agent_message",
+              "text": "<text:139>"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:157>",
+              "type": "command_execution",
+              "command": "<path:93>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:157>",
+              "type": "command_execution",
+              "command": "<path:93>",
+              "aggregated_output": "<text:140>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:158>",
+              "type": "agent_message",
+              "text": "<text:141>"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:159>",
+              "type": "file_change",
+              "changes": [
+                {
+                  "path": "<path:94>",
+                  "kind": "update"
+                }
+              ],
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:159>",
+              "type": "file_change",
+              "changes": [
+                {
+                  "path": "<path:94>",
+                  "kind": "update"
+                }
+              ],
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:160>",
+              "type": "command_execution",
+              "command": "<path:95>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:160>",
+              "type": "command_execution",
+              "command": "<path:95>",
+              "aggregated_output": "<text:142>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:161>",
+              "type": "agent_message",
+              "text": "<text:143>"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:162>",
+              "type": "command_execution",
+              "command": "<path:96>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:162>",
+              "type": "command_execution",
+              "command": "<path:96>",
+              "aggregated_output": "<text:144>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:163>",
+              "type": "command_execution",
+              "command": "<path:97>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:163>",
+              "type": "command_execution",
+              "command": "<path:97>",
+              "aggregated_output": "<path:98>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:164>",
+              "type": "command_execution",
+              "command": "<path:99>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:164>",
+              "type": "command_execution",
+              "command": "<path:99>",
+              "aggregated_output": "<text:145>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:165>",
+              "type": "agent_message",
+              "text": "<text:146>"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:166>",
+              "type": "file_change",
+              "changes": [
+                {
+                  "path": "<path:100>",
+                  "kind": "update"
+                }
+              ],
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:166>",
+              "type": "file_change",
+              "changes": [
+                {
+                  "path": "<path:100>",
+                  "kind": "update"
+                }
+              ],
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:167>",
+              "type": "command_execution",
+              "command": "<path:101>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:167>",
+              "type": "command_execution",
+              "command": "<path:101>",
+              "aggregated_output": "<text:147>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:168>",
+              "type": "agent_message",
+              "text": "<text:148>"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:169>",
+              "type": "command_execution",
+              "command": "<path:102>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:169>",
+              "type": "command_execution",
+              "command": "<path:102>",
+              "aggregated_output": "<text:149>",
+              "exit_code": 1,
+              "status": "failed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:170>",
+              "type": "agent_message",
+              "text": "<text:150>"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:171>",
+              "type": "command_execution",
+              "command": "<path:103>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:171>",
+              "type": "command_execution",
+              "command": "<path:103>",
+              "aggregated_output": "<text:151>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:172>",
+              "type": "command_execution",
+              "command": "<path:104>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:172>",
+              "type": "command_execution",
+              "command": "<path:104>",
+              "aggregated_output": "<text:152>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:173>",
+              "type": "agent_message",
+              "text": "<text:153>"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:174>",
+              "type": "command_execution",
+              "command": "<path:105>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:174>",
+              "type": "command_execution",
+              "command": "<path:105>",
+              "aggregated_output": "<text:154>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:175>",
+              "type": "command_execution",
+              "command": "<path:106>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:175>",
+              "type": "command_execution",
+              "command": "<path:106>",
+              "aggregated_output": "<text:155>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:176>",
+              "type": "agent_message",
+              "text": "<text:156>"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:177>",
+              "type": "mcp_tool_call",
+              "server": "<text:2>",
+              "tool": "<text:3>",
+              "arguments": {},
+              "result": null,
+              "error": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:177>",
+              "type": "mcp_tool_call",
+              "server": "<text:2>",
+              "tool": "<text:3>",
+              "arguments": {},
+              "result": {
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "<text:157>"
+                  }
+                ],
+                "structured_content": null
+              },
+              "error": null,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:178>",
+              "type": "mcp_tool_call",
+              "server": "<text:2>",
+              "tool": "<text:5>",
+              "arguments": {
+                "limit": 16
+              },
+              "result": null,
+              "error": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:178>",
+              "type": "mcp_tool_call",
+              "server": "<text:2>",
+              "tool": "<text:5>",
+              "arguments": {
+                "limit": 16
+              },
+              "result": {
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "<text:158>"
+                  }
+                ],
+                "structured_content": null
+              },
+              "error": null,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:179>",
+              "type": "mcp_tool_call",
+              "server": "<text:2>",
+              "tool": "<text:7>",
+              "arguments": {
+                "requestId": "<id:180>",
+                "text": "<text:159>"
+              },
+              "result": null,
+              "error": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:179>",
+              "type": "mcp_tool_call",
+              "server": "<text:2>",
+              "tool": "<text:7>",
+              "arguments": {
+                "requestId": "<id:180>",
+                "text": "<text:159>"
+              },
+              "result": {
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "<text:160>"
+                  }
+                ],
+                "structured_content": null
+              },
+              "error": null,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:181>",
+              "type": "error",
+              "message": "<text:161>"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:182>",
+              "type": "agent_message",
+              "text": "<text:162>"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:183>",
+              "type": "mcp_tool_call",
+              "server": "<text:2>",
+              "tool": "<text:5>",
+              "arguments": {
+                "limit": 10
+              },
+              "result": null,
+              "error": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:183>",
+              "type": "mcp_tool_call",
+              "server": "<text:2>",
+              "tool": "<text:5>",
+              "arguments": {
+                "limit": 10
+              },
+              "result": {
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "<text:163>"
+                  }
+                ],
+                "structured_content": null
+              },
+              "error": null,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:184>",
+              "type": "agent_message",
+              "text": "<text:164>"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "turn.completed",
+            "usage": {
+              "input_tokens": 21476860,
+              "cached_input_tokens": 21027072,
+              "output_tokens": 39523,
+              "reasoning_output_tokens": 13909
+            }
+          }
+        }
+      ],
+      "coverage": "settled"
+    },
+    {
+      "records": [
+        {
+          "data": {
+            "type": "thread.started",
+            "thread_id": "<id:1>"
+          }
+        },
+        {
+          "data": {
+            "type": "turn.started"
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:2>",
+              "type": "agent_message",
+              "text": "<text:165>"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:3>",
+              "type": "mcp_tool_call",
+              "server": "<text:2>",
+              "tool": "<text:3>",
+              "arguments": {},
+              "result": null,
+              "error": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:3>",
+              "type": "mcp_tool_call",
+              "server": "<text:2>",
+              "tool": "<text:3>",
+              "arguments": {},
+              "result": {
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "<text:166>"
+                  }
+                ],
+                "structured_content": null
+              },
+              "error": null,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:4>",
+              "type": "agent_message",
+              "text": "<text:167>"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "turn.completed",
+            "usage": {
+              "input_tokens": 21607458,
+              "cached_input_tokens": 21155328,
+              "output_tokens": 39731,
+              "reasoning_output_tokens": 13988
+            }
+          }
+        }
+      ],
+      "coverage": "settled"
+    },
+    {
+      "records": [
+        {
+          "data": {
+            "type": "thread.started",
+            "thread_id": "<id:1>"
+          }
+        },
+        {
+          "data": {
+            "type": "turn.started"
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:2>",
+              "type": "agent_message",
+              "text": "<text:168>"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:3>",
+              "type": "command_execution",
+              "command": "<path:107>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:3>",
+              "type": "command_execution",
+              "command": "<path:107>",
+              "aggregated_output": "<text:169>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:4>",
+              "type": "command_execution",
+              "command": "<path:108>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:4>",
+              "type": "command_execution",
+              "command": "<path:108>",
+              "aggregated_output": "<text:170>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:5>",
+              "type": "command_execution",
+              "command": "<path:109>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:5>",
+              "type": "command_execution",
+              "command": "<path:109>",
+              "aggregated_output": "<text:171>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:7>",
+              "type": "mcp_tool_call",
+              "server": "<text:2>",
+              "tool": "<text:5>",
+              "arguments": {
+                "limit": 20
+              },
+              "result": null,
+              "error": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:7>",
+              "type": "mcp_tool_call",
+              "server": "<text:2>",
+              "tool": "<text:5>",
+              "arguments": {
+                "limit": 20
+              },
+              "result": {
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "<text:172>"
+                  }
+                ],
+                "structured_content": null
+              },
+              "error": null,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:8>",
+              "type": "mcp_tool_call",
+              "server": "<text:2>",
+              "tool": "<text:7>",
+              "arguments": {
+                "requestId": "<id:185>",
+                "text": "<text:173>"
+              },
+              "result": null,
+              "error": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:8>",
+              "type": "mcp_tool_call",
+              "server": "<text:2>",
+              "tool": "<text:7>",
+              "arguments": {
+                "requestId": "<id:185>",
+                "text": "<text:173>"
+              },
+              "result": {
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "<text:174>"
+                  }
+                ],
+                "structured_content": null
+              },
+              "error": null,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:9>",
+              "type": "todo_list",
+              "items": [
+                {
+                  "text": "<text:175>",
+                  "completed": false
+                },
+                {
+                  "text": "<text:176>",
+                  "completed": false
+                },
+                {
+                  "text": "<text:177>",
+                  "completed": false
+                },
+                {
+                  "text": "<text:178>",
+                  "completed": false
+                },
+                {
+                  "text": "<text:179>",
+                  "completed": false
+                },
+                {
+                  "text": "<text:180>",
+                  "completed": false
+                },
+                {
+                  "text": "<text:181>",
+                  "completed": false
+                }
+              ]
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:10>",
+              "type": "agent_message",
+              "text": "<text:182>"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:11>",
+              "type": "command_execution",
+              "command": "<path:110>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:11>",
+              "type": "command_execution",
+              "command": "<path:110>",
+              "aggregated_output": "<text:183>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:12>",
+              "type": "command_execution",
+              "command": "<path:111>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:12>",
+              "type": "command_execution",
+              "command": "<path:111>",
+              "aggregated_output": "<text:184>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:13>",
+              "type": "command_execution",
+              "command": "<path:112>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:13>",
+              "type": "command_execution",
+              "command": "<path:112>",
+              "aggregated_output": "<text:185>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:14>",
+              "type": "command_execution",
+              "command": "<path:113>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:14>",
+              "type": "command_execution",
+              "command": "<path:113>",
+              "aggregated_output": "<text:186>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:15>",
+              "type": "command_execution",
+              "command": "<path:114>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:15>",
+              "type": "command_execution",
+              "command": "<path:114>",
+              "aggregated_output": "<text:187>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:16>",
+              "type": "command_execution",
+              "command": "<path:115>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:16>",
+              "type": "command_execution",
+              "command": "<path:115>",
+              "aggregated_output": "<text:188>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:17>",
+              "type": "command_execution",
+              "command": "<path:116>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:17>",
+              "type": "command_execution",
+              "command": "<path:116>",
+              "aggregated_output": "<text:189>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:18>",
+              "type": "command_execution",
+              "command": "<path:117>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:19>",
+              "type": "command_execution",
+              "command": "<path:118>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:19>",
+              "type": "command_execution",
+              "command": "<path:118>",
+              "aggregated_output": "<text:190>",
+              "exit_code": 1,
+              "status": "failed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:18>",
+              "type": "command_execution",
+              "command": "<path:117>",
+              "aggregated_output": "<text:190>",
+              "exit_code": 1,
+              "status": "failed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:20>",
+              "type": "command_execution",
+              "command": "<path:119>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:20>",
+              "type": "command_execution",
+              "command": "<path:119>",
+              "aggregated_output": "<text:191>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:21>",
+              "type": "agent_message",
+              "text": "<text:192>"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:22>",
+              "type": "command_execution",
+              "command": "<path:120>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:22>",
+              "type": "command_execution",
+              "command": "<path:120>",
+              "aggregated_output": "<text:193>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:23>",
+              "type": "command_execution",
+              "command": "<path:121>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:24>",
+              "type": "command_execution",
+              "command": "<path:122>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:25>",
+              "type": "mcp_tool_call",
+              "server": "<text:2>",
+              "tool": "<text:5>",
+              "arguments": {
+                "after": "<id:186>",
+                "limit": 20
+              },
+              "result": null,
+              "error": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:25>",
+              "type": "mcp_tool_call",
+              "server": "<text:2>",
+              "tool": "<text:5>",
+              "arguments": {
+                "after": "<id:186>",
+                "limit": 20
+              },
+              "result": {
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "<text:194>"
+                  }
+                ],
+                "structured_content": null
+              },
+              "error": null,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:23>",
+              "type": "command_execution",
+              "command": "<path:121>",
+              "aggregated_output": "<text:195>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:26>",
+              "type": "command_execution",
+              "command": "<path:123>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:26>",
+              "type": "command_execution",
+              "command": "<path:123>",
+              "aggregated_output": "<text:196>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:24>",
+              "type": "command_execution",
+              "command": "<path:122>",
+              "aggregated_output": "<text:197>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:27>",
+              "type": "agent_message",
+              "text": "<text:198>"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:28>",
+              "type": "command_execution",
+              "command": "<path:124>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:29>",
+              "type": "command_execution",
+              "command": "<path:125>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:30>",
+              "type": "command_execution",
+              "command": "<path:126>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:31>",
+              "type": "command_execution",
+              "command": "<path:127>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:31>",
+              "type": "command_execution",
+              "command": "<path:127>",
+              "aggregated_output": "<path:128>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:30>",
+              "type": "command_execution",
+              "command": "<path:126>",
+              "aggregated_output": "<text:199>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:28>",
+              "type": "command_execution",
+              "command": "<path:124>",
+              "aggregated_output": "<text:200>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:29>",
+              "type": "command_execution",
+              "command": "<path:125>",
+              "aggregated_output": "<text:201>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:32>",
+              "type": "command_execution",
+              "command": "<path:129>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:32>",
+              "type": "command_execution",
+              "command": "<path:129>",
+              "aggregated_output": "<text:202>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:33>",
+              "type": "command_execution",
+              "command": "<path:130>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:34>",
+              "type": "command_execution",
+              "command": "<path:131>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:35>",
+              "type": "command_execution",
+              "command": "<path:132>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:33>",
+              "type": "command_execution",
+              "command": "<path:130>",
+              "aggregated_output": "<text:203>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:35>",
+              "type": "command_execution",
+              "command": "<path:132>",
+              "aggregated_output": "<text:204>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:34>",
+              "type": "command_execution",
+              "command": "<path:131>",
+              "aggregated_output": "<text:10>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:36>",
+              "type": "command_execution",
+              "command": "<path:133>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:36>",
+              "type": "command_execution",
+              "command": "<path:133>",
+              "aggregated_output": "<text:205>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:37>",
+              "type": "command_execution",
+              "command": "<path:134>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:37>",
+              "type": "command_execution",
+              "command": "<path:134>",
+              "aggregated_output": "<text:206>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:38>",
+              "type": "command_execution",
+              "command": "<path:135>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:39>",
+              "type": "command_execution",
+              "command": "<path:136>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:39>",
+              "type": "command_execution",
+              "command": "<path:136>",
+              "aggregated_output": "<text:207>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:38>",
+              "type": "command_execution",
+              "command": "<path:135>",
+              "aggregated_output": "<text:208>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:40>",
+              "type": "command_execution",
+              "command": "<path:137>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:40>",
+              "type": "command_execution",
+              "command": "<path:137>",
+              "aggregated_output": "<text:209>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:41>",
+              "type": "command_execution",
+              "command": "<path:138>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:41>",
+              "type": "command_execution",
+              "command": "<path:138>",
+              "aggregated_output": "<text:210>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:42>",
+              "type": "command_execution",
+              "command": "<path:139>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:42>",
+              "type": "command_execution",
+              "command": "<path:139>",
+              "aggregated_output": "<text:211>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:43>",
+              "type": "command_execution",
+              "command": "<path:140>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:43>",
+              "type": "command_execution",
+              "command": "<path:140>",
+              "aggregated_output": "<text:212>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:44>",
+              "type": "mcp_tool_call",
+              "server": "<text:2>",
+              "tool": "<text:3>",
+              "arguments": {},
+              "result": null,
+              "error": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:44>",
+              "type": "mcp_tool_call",
+              "server": "<text:2>",
+              "tool": "<text:3>",
+              "arguments": {},
+              "result": {
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "<text:213>"
+                  }
+                ],
+                "structured_content": null
+              },
+              "error": null,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:45>",
+              "type": "agent_message",
+              "text": "<text:214>"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:46>",
+              "type": "mcp_tool_call",
+              "server": "<text:2>",
+              "tool": "<text:215>",
+              "arguments": {
+                "requestId": "<id:187>",
+                "mode": "<text:216>",
+                "allowOther": true,
+                "question": "<text:217>",
+                "options": ["<text:218>", "<text:219>", "<text:220>"]
+              },
+              "result": null,
+              "error": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:47>",
+              "type": "agent_message",
+              "text": "<text:221>"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:48>",
+              "type": "agent_message",
+              "text": "<text:222>"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:46>",
+              "type": "mcp_tool_call",
+              "server": "<text:2>",
+              "tool": "<text:215>",
+              "arguments": {
+                "requestId": "<id:187>",
+                "mode": "<text:216>",
+                "allowOther": true,
+                "question": "<text:217>",
+                "options": ["<text:218>", "<text:219>", "<text:220>"]
+              },
+              "result": {
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "<text:223>"
+                  }
+                ],
+                "structured_content": null
+              },
+              "error": null,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:49>",
+              "type": "agent_message",
+              "text": "<text:224>"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.updated",
+            "item": {
+              "id": "<id:9>",
+              "type": "todo_list",
+              "items": [
+                {
+                  "text": "<text:175>",
+                  "completed": true
+                },
+                {
+                  "text": "<text:176>",
+                  "completed": true
+                },
+                {
+                  "text": "<text:177>",
+                  "completed": false
+                },
+                {
+                  "text": "<text:178>",
+                  "completed": false
+                },
+                {
+                  "text": "<text:179>",
+                  "completed": false
+                },
+                {
+                  "text": "<text:180>",
+                  "completed": false
+                },
+                {
+                  "text": "<text:181>",
+                  "completed": false
+                }
+              ]
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:50>",
+              "type": "mcp_tool_call",
+              "server": "<text:2>",
+              "tool": "<text:7>",
+              "arguments": {
+                "requestId": "<id:188>",
+                "text": "<text:225>"
+              },
+              "result": null,
+              "error": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:50>",
+              "type": "mcp_tool_call",
+              "server": "<text:2>",
+              "tool": "<text:7>",
+              "arguments": {
+                "requestId": "<id:188>",
+                "text": "<text:225>"
+              },
+              "result": {
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "<text:226>"
+                  }
+                ],
+                "structured_content": null
+              },
+              "error": null,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:51>",
+              "type": "mcp_tool_call",
+              "server": "<text:2>",
+              "tool": "<text:215>",
+              "arguments": {
+                "requestId": "<id:189>",
+                "mode": "<text:216>",
+                "allowOther": true,
+                "question": "<text:227>",
+                "options": ["<text:228>", "<text:229>", "<text:230>"]
+              },
+              "result": null,
+              "error": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:52>",
+              "type": "agent_message",
+              "text": "<text:231>"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:53>",
+              "type": "agent_message",
+              "text": "<text:232>"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:54>",
+              "type": "agent_message",
+              "text": "<text:233>"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:51>",
+              "type": "mcp_tool_call",
+              "server": "<text:2>",
+              "tool": "<text:215>",
+              "arguments": {
+                "requestId": "<id:189>",
+                "mode": "<text:216>",
+                "allowOther": true,
+                "question": "<text:227>",
+                "options": ["<text:228>", "<text:229>", "<text:230>"]
+              },
+              "result": {
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "<text:234>"
+                  }
+                ],
+                "structured_content": null
+              },
+              "error": null,
+              "status": "failed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:55>",
+              "type": "agent_message",
+              "text": "<text:235>"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:56>",
+              "type": "mcp_tool_call",
+              "server": "<text:2>",
+              "tool": "<text:5>",
+              "arguments": {
+                "after": "<id:190>",
+                "limit": 20
+              },
+              "result": null,
+              "error": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:56>",
+              "type": "mcp_tool_call",
+              "server": "<text:2>",
+              "tool": "<text:5>",
+              "arguments": {
+                "after": "<id:190>",
+                "limit": 20
+              },
+              "result": {
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "<text:236>"
+                  }
+                ],
+                "structured_content": null
+              },
+              "error": null,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:57>",
+              "type": "mcp_tool_call",
+              "server": "<text:2>",
+              "tool": "<text:7>",
+              "arguments": {
+                "requestId": "<id:191>",
+                "text": "<text:237>"
+              },
+              "result": null,
+              "error": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:57>",
+              "type": "mcp_tool_call",
+              "server": "<text:2>",
+              "tool": "<text:7>",
+              "arguments": {
+                "requestId": "<id:191>",
+                "text": "<text:237>"
+              },
+              "result": {
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "<text:238>"
+                  }
+                ],
+                "structured_content": null
+              },
+              "error": null,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:58>",
+              "type": "mcp_tool_call",
+              "server": "<text:2>",
+              "tool": "<text:215>",
+              "arguments": {
+                "requestId": "<id:192>",
+                "mode": "<text:216>",
+                "allowOther": true,
+                "question": "<text:239>",
+                "options": ["<text:240>", "<text:241>", "<text:242>"]
+              },
+              "result": null,
+              "error": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:59>",
+              "type": "agent_message",
+              "text": "<text:243>"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:60>",
+              "type": "agent_message",
+              "text": "<text:244>"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:61>",
+              "type": "agent_message",
+              "text": "<text:245>"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.updated",
+            "item": {
+              "id": "<id:9>",
+              "type": "todo_list",
+              "items": [
+                {
+                  "text": "<text:175>",
+                  "completed": true
+                },
+                {
+                  "text": "<text:176>",
+                  "completed": true
+                },
+                {
+                  "text": "<text:177>",
+                  "completed": true
+                },
+                {
+                  "text": "<text:178>",
+                  "completed": false
+                },
+                {
+                  "text": "<text:179>",
+                  "completed": false
+                },
+                {
+                  "text": "<text:180>",
+                  "completed": false
+                },
+                {
+                  "text": "<text:181>",
+                  "completed": false
+                }
+              ]
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:62>",
+              "type": "command_execution",
+              "command": "<path:141>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:63>",
+              "type": "command_execution",
+              "command": "<path:142>",
+              "aggregated_output": "<text:10>",
+              "exit_code": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:62>",
+              "type": "command_execution",
+              "command": "<path:141>",
+              "aggregated_output": "<text:246>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:63>",
+              "type": "command_execution",
+              "command": "<path:142>",
+              "aggregated_output": "<text:247>",
+              "exit_code": 0,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:64>",
+              "type": "agent_message",
+              "text": "<text:248>"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:9>",
+              "type": "todo_list",
+              "items": [
+                {
+                  "text": "<text:175>",
+                  "completed": true
+                },
+                {
+                  "text": "<text:176>",
+                  "completed": true
+                },
+                {
+                  "text": "<text:177>",
+                  "completed": true
+                },
+                {
+                  "text": "<text:178>",
+                  "completed": false
+                },
+                {
+                  "text": "<text:179>",
+                  "completed": false
+                },
+                {
+                  "text": "<text:180>",
+                  "completed": false
+                },
+                {
+                  "text": "<text:181>",
+                  "completed": false
+                }
+              ]
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "turn.completed",
+            "usage": {
+              "input_tokens": 26312163,
+              "cached_input_tokens": 25738496,
+              "output_tokens": 52444,
+              "reasoning_output_tokens": 18614
+            }
+          }
+        }
+      ],
+      "coverage": "settled"
+    },
+    {
+      "records": [
+        {
+          "data": {
+            "type": "thread.started",
+            "thread_id": "<id:1>"
+          }
+        },
+        {
+          "data": {
+            "type": "turn.started"
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:2>",
+              "type": "agent_message",
+              "text": "<text:249>"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.started",
+            "item": {
+              "id": "<id:3>",
+              "type": "mcp_tool_call",
+              "server": "<text:2>",
+              "tool": "<text:3>",
+              "arguments": {},
+              "result": null,
+              "error": null,
+              "status": "in_progress"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:3>",
+              "type": "mcp_tool_call",
+              "server": "<text:2>",
+              "tool": "<text:3>",
+              "arguments": {},
+              "result": {
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "<text:250>"
+                  }
+                ],
+                "structured_content": null
+              },
+              "error": null,
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "item.completed",
+            "item": {
+              "id": "<id:4>",
+              "type": "agent_message",
+              "text": "<text:251>"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "turn.completed",
+            "usage": {
+              "input_tokens": 26592924,
+              "cached_input_tokens": 26015488,
+              "output_tokens": 52700,
+              "reasoning_output_tokens": 18758
+            }
+          }
+        }
+      ],
+      "coverage": "settled"
+    }
+  ]
+}

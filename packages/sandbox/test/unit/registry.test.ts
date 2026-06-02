@@ -1,0 +1,127 @@
+import type { SandboxLauncher } from '@monad/sdk-atom';
+
+import { afterEach, expect, test } from 'bun:test';
+
+import * as registry from '../../src/registry.ts';
+import {
+  clearSandboxLaunchers,
+  disposeSandboxAgent,
+  disposeSandboxSession,
+  listSandboxBackendDescriptors,
+  registerSandboxLauncher,
+  resolveSandboxLauncher
+} from '../../src/registry.ts';
+
+function launcher(kind: string, name = kind): SandboxLauncher {
+  return {
+    kind,
+    descriptor: { name, description: `${name} backend` },
+    wrap: (argv) => argv
+  };
+}
+
+afterEach(() => clearSandboxLaunchers({ includeBuiltin: true }));
+
+test('lists built-in auto and source-qualified built-in launchers', () => {
+  registerSandboxLauncher(launcher('vm', 'Virtual machine'), { source: 'builtin', kind: 'vm' });
+
+  expect(listSandboxBackendDescriptors().map((entry) => entry.ref)).toEqual([
+    { source: 'builtin', kind: 'auto' },
+    { source: 'builtin', kind: 'vm' }
+  ]);
+});
+
+test('keeps duplicate kinds from different packs independently addressable', () => {
+  const first = launcher('cloud', 'Cloud A');
+  const second = launcher('cloud', 'Cloud B');
+  registerSandboxLauncher(first, { source: 'atom-pack', packId: 'vendor-a', kind: 'cloud' });
+  registerSandboxLauncher(second, { source: 'atom-pack', packId: 'vendor-b', kind: 'cloud' });
+
+  expect(resolveSandboxLauncher({ source: 'atom-pack', packId: 'vendor-a', kind: 'cloud' })).toBe(first);
+  expect(resolveSandboxLauncher({ source: 'atom-pack', packId: 'vendor-b', kind: 'cloud' })).toBe(second);
+  expect(listSandboxBackendDescriptors().filter((entry) => entry.ref.kind === 'cloud')).toHaveLength(2);
+});
+
+test('resolves a registered launcher by kind without falling back', () => {
+  const docker = launcher('docker', 'Containers');
+  registerSandboxLauncher(docker, { source: 'atom-pack', packId: 'container-pack', kind: 'docker' });
+  const resolveRegistered = Reflect.get(registry, 'resolveRegisteredSandboxLauncher') as
+    | ((kind: string) => SandboxLauncher | undefined)
+    | undefined;
+
+  expect(resolveRegistered).toBeFunction();
+  expect(resolveRegistered?.('docker')).toBe(docker);
+  expect(resolveRegistered?.('missing')).toBeUndefined();
+});
+
+test('rejects duplicate source-qualified identities', () => {
+  const ref = { source: 'atom-pack', packId: 'vendor-a', kind: 'cloud' } as const;
+  registerSandboxLauncher(launcher('cloud'), ref);
+
+  expect(() => registerSandboxLauncher(launcher('cloud'), ref)).toThrow(
+    'sandbox launcher already registered: atom-pack/vendor-a/cloud'
+  );
+});
+
+test('descriptor listings contain data only and retain trusted pack attribution', () => {
+  registerSandboxLauncher(launcher('docker', 'Containers'), {
+    source: 'atom-pack',
+    packId: 'container-pack',
+    kind: 'docker'
+  });
+
+  expect(listSandboxBackendDescriptors()).toContainEqual({
+    ref: { source: 'atom-pack', packId: 'container-pack', kind: 'docker' },
+    descriptor: { name: 'Containers', description: 'Containers backend' },
+    platforms: undefined,
+    enforces: undefined,
+    available: true
+  });
+  expect(JSON.stringify(listSandboxBackendDescriptors())).not.toContain('wrap');
+});
+
+test('rejects executable or unknown contributed field schemas at registration', () => {
+  const invalid = {
+    kind: 'unsafe',
+    descriptor: {
+      name: 'Unsafe',
+      settings: { fields: [{ id: 'content', type: 'html', label: 'Content' }] }
+    },
+    wrap: (argv: string[]) => argv
+  } as unknown as SandboxLauncher;
+
+  expect(() =>
+    registerSandboxLauncher(invalid, { source: 'atom-pack', packId: 'unsafe-pack', kind: 'unsafe' })
+  ).toThrow();
+});
+
+test('disposes resources only through launchers compatible with the host platform', () => {
+  const calls: string[] = [];
+  const incompatiblePlatform: NodeJS.Platform = process.platform === 'win32' ? 'linux' : 'win32';
+  const disposable = (kind: string, platforms?: NodeJS.Platform[]): SandboxLauncher => ({
+    ...launcher(kind),
+    platforms,
+    disposeSession: (sessionId) => {
+      calls.push(`${kind}:session:${sessionId}`);
+    },
+    disposeAgent: (agentId) => {
+      calls.push(`${kind}:agent:${agentId}`);
+    }
+  });
+
+  registerSandboxLauncher(disposable('compatible', [process.platform]), {
+    source: 'atom-pack',
+    packId: 'compatible-pack',
+    kind: 'compatible'
+  });
+  registerSandboxLauncher(disposable('incompatible', [incompatiblePlatform]), {
+    source: 'atom-pack',
+    packId: 'incompatible-pack',
+    kind: 'incompatible'
+  });
+
+  disposeSandboxSession('ses_platform');
+  disposeSandboxAgent('agt_platform');
+
+  expect(calls).toEqual(['compatible:session:ses_platform', 'compatible:agent:agt_platform']);
+});

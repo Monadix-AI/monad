@@ -1,0 +1,474 @@
+// The single OS-sandbox seam every child process passes through. code_execute, shell_exec,
+// and process_start all ultimately `Bun.spawn(argv, { cwd })` — without OS confinement that
+// child has the daemon's full privileges (see code-exec.ts security note). Routing every spawn
+// through sandboxedSpawn lets a per-OS launcher (Seatbelt / Landlock / AppContainer) wrap the
+// argv before it runs, while the caller's timeout/abort/stream handling stays untouched.
+//
+// The launcher is the `sandbox` atom kind: built-in launchers (in @monad/atoms) and any third-party
+// one register through the atom-pack loader, and the daemon picks one per platform at boot via the
+// registry, wiring it here with configureSandboxLauncher. Until then the default is `none` (identity).
+
+import type { SandboxLauncher, SandboxPolicy, SandboxSpawnOptions, SandboxTerminal } from '@monad/sdk-atom';
+
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { noneLauncher, sandboxCredential } from '@monad/sdk-atom';
+
+import {
+  type ProtectedCredential,
+  type ProtectedExecutionProxy,
+  startProtectedExecutionProxy
+} from './egress-proxy.ts';
+import { observeSandboxViolations } from './violation-store.ts';
+
+// The launcher contract (SandboxLauncher / SandboxPolicy) and the passthrough noneLauncher live in
+// @monad/sdk-atom — the `sandbox` atom kind — so launchers in @monad/atoms and third-party packs
+// share one definition. Re-exported here so the daemon's many sandbox consumers keep importing from
+// the tools barrel unchanged.
+export type { SandboxLauncher, SandboxPolicy } from '@monad/sdk-atom';
+
+export { noneLauncher } from '@monad/sdk-atom';
+
+let activeLauncher: SandboxLauncher = noneLauncher;
+
+export interface SandboxPtySpawnOptions {
+  cwd?: string | URL;
+  env?: Record<string, string | undefined>;
+  detached?: boolean;
+  terminal: {
+    cols?: number;
+    rows?: number;
+    data(terminal: unknown, data: Uint8Array): void;
+  };
+}
+
+export type SandboxPtyProcess = Bun.Subprocess<'ignore', 'ignore', 'ignore'> & { terminal?: SandboxTerminal };
+
+/** Wire the OS launcher once at daemon boot (per platform). Unset → `none`. */
+export function configureSandboxLauncher(launcher: SandboxLauncher): void {
+  activeLauncher = launcher;
+}
+
+export function sandboxLauncher(): SandboxLauncher {
+  return activeLauncher;
+}
+
+export class ProtectedExecutionError extends Error {
+  readonly code = 'protected_execution_unavailable';
+
+  constructor() {
+    super('protected_execution_unavailable');
+    this.name = 'ProtectedExecutionError';
+  }
+}
+
+export interface ProtectedCredentialResolution {
+  readonly credentials: readonly ProtectedCredential[];
+  readonly credentialVaultContainsSecrets: boolean;
+}
+
+export type ProtectedExecutionContext = Readonly<ProtectedCredentialResolution>;
+
+export type ProtectedCredentialResolver = (
+  agentId: string | undefined
+) => ProtectedCredentialResolution | Promise<ProtectedCredentialResolution>;
+
+type ProtectedExecutionProxyStarter = (credentials: readonly ProtectedCredential[]) => ProtectedExecutionProxy;
+
+let protectedCredentialResolver: ProtectedCredentialResolver | undefined;
+let protectedExecutionProxyStarter: ProtectedExecutionProxyStarter = startProtectedExecutionProxy;
+let protectedExecutionTlsEnabled = false;
+
+export function configureProtectedCredentialResolver(resolver: ProtectedCredentialResolver | undefined): void {
+  protectedCredentialResolver = resolver;
+}
+
+export function configureProtectedExecutionProxyStarter(starter: ProtectedExecutionProxyStarter | undefined): void {
+  protectedExecutionProxyStarter = starter ?? startProtectedExecutionProxy;
+}
+
+export function configureProtectedExecutionTls(enabled: boolean): void {
+  protectedExecutionTlsEnabled = enabled;
+}
+
+export function protectedExecutionAvailable(): boolean {
+  return Boolean(
+    protectedCredentialResolver &&
+      protectedExecutionTlsEnabled &&
+      activeLauncher.kind !== 'none' &&
+      activeLauncher.wrap &&
+      activeLauncher.enforces?.readDeny === true &&
+      activeLauncher.enforces?.net?.includes('filtered')
+  );
+}
+
+const noProtectedCredentials = Object.freeze([]) as readonly ProtectedCredential[];
+const noProtectedExecution = Object.freeze({
+  credentials: noProtectedCredentials,
+  credentialVaultContainsSecrets: false
+}) satisfies ProtectedExecutionContext;
+const protectedExecutionTeardowns = new WeakMap<object, Promise<void>>();
+
+export function waitForProtectedExecutionTeardown(process: object): Promise<void> {
+  return protectedExecutionTeardowns.get(process) ?? Promise.resolve();
+}
+
+export async function resolveProtectedExecutionForAgent(
+  agentId: string | undefined
+): Promise<ProtectedExecutionContext> {
+  const resolver = protectedCredentialResolver;
+  if (!resolver) {
+    if (!agentId) return noProtectedExecution;
+    throw new ProtectedExecutionError();
+  }
+  let resolved: ProtectedCredentialResolution;
+  try {
+    resolved = await resolver(agentId);
+  } catch {
+    throw new ProtectedExecutionError();
+  }
+  if (typeof resolved.credentialVaultContainsSecrets !== 'boolean' || !Array.isArray(resolved.credentials)) {
+    throw new ProtectedExecutionError();
+  }
+  const environmentVariables = new Set<string>();
+  const copies = resolved.credentials.map((credential) => {
+    if (
+      !credential.secret ||
+      !credential.environmentVariable ||
+      credential.allowedHosts.length === 0 ||
+      environmentVariables.has(credential.environmentVariable)
+    ) {
+      throw new ProtectedExecutionError();
+    }
+    environmentVariables.add(credential.environmentVariable);
+    return Object.freeze({
+      environmentVariable: credential.environmentVariable,
+      secret: credential.secret,
+      allowedHosts: Object.freeze([...credential.allowedHosts])
+    });
+  });
+  return Object.freeze({
+    credentials: Object.freeze(copies),
+    credentialVaultContainsSecrets: resolved.credentialVaultContainsSecrets
+  });
+}
+
+interface TrackableSandboxProcess {
+  readonly pid?: number;
+  readonly exited: Promise<unknown>;
+  kill(signal?: number | string): void;
+}
+
+// Process-tree tracking is a daemon concern (shutdown reaping); @monad/sandbox stays daemon-agnostic so
+// it can also back a standalone `msr`. The daemon injects its tracker at boot via
+// configureSandboxProcessTracker; unset → tracking is a no-op and the spawned child is simply untracked.
+export interface SandboxProcessTracker {
+  track(pid: number | undefined, label: string, fallbackKill: () => void): void;
+  untrack(pid: number | undefined): void;
+}
+
+let processTracker: SandboxProcessTracker | undefined;
+
+export function configureSandboxProcessTracker(tracker: SandboxProcessTracker | undefined): void {
+  processTracker = tracker;
+}
+
+function trackSandboxProcess(process: TrackableSandboxProcess, label = 'sandboxed-spawn'): void {
+  processTracker?.track(process.pid, label, () => process.kill('SIGTERM'));
+  void process.exited.then(() => processTracker?.untrack(process.pid));
+}
+
+// Network policy is daemon-wide config; writable roots are per-call. buildSandboxPolicy() unifies
+// the two so the three spawn sites construct identical policies. Defaults to 'unrestricted' (the
+// proxy that backs 'none'/'{allowProxyPort}' is a later phase).
+let netDefault: SandboxPolicy['net'] = 'unrestricted';
+
+/** Wire the daemon-wide network policy at boot. */
+export function configureSandboxNet(net: SandboxPolicy['net']): void {
+  netDefault = net;
+}
+
+export function sandboxNetMode(): SandboxPolicy['net'] {
+  return netDefault;
+}
+
+// Sensitive paths every confined child is denied read access to (credential dir, SSH/cloud keys).
+// Daemon-wide, resolved once at boot from the real home — see configureSandboxReadDeny.
+let readDenyDefault: string[] = [];
+
+/** Wire the daemon-wide read-deny roots at boot (credential/secret dirs). */
+export function configureSandboxReadDeny(roots: string[]): void {
+  readDenyDefault = Array.from(new Set(roots));
+}
+
+export function sandboxReadDenyRoots(): readonly string[] {
+  return Object.freeze([...readDenyDefault]);
+}
+
+// Env injected into every confined child (e.g. HTTP(S)_PROXY pointing at the local filtering proxy)
+// so the child's curl/pip/npm/git route through it. Set at boot for net:'filtered'; undefined = none.
+let proxyEnv: Record<string, string> | undefined;
+
+/** Wire the proxy env vars merged into confined children at boot. Pass undefined to clear. */
+export function configureSandboxProxyEnv(env: Record<string, string> | undefined): void {
+  proxyEnv = env;
+}
+
+// Static env vars from agent.sandbox.env config — API base URLs, locale overrides, etc.
+// Applied to ALL confined children (lower priority than proxyEnv so the proxy can override).
+let extraEnv: Record<string, string> = {};
+
+/** Wire user-configured env vars from agent.sandbox.env at daemon boot. */
+export function configureSandboxExtraEnv(env: Record<string, string>): void {
+  extraEnv = env;
+}
+
+/**
+ * Point HOME and the common package-manager/XDG cache dirs at the sandbox's writable root, so a
+ * confined child's pip/npm/cargo caches and `--user` installs land in the (disposable) sandbox
+ * instead of the real home — where the write would otherwise be blocked. The tools create these
+ * subdirs themselves; they're writable because they're under `home`, which is a writable root.
+ */
+export function sandboxHomeEnv(home: string): Record<string, string> {
+  return {
+    HOME: home,
+    XDG_CACHE_HOME: join(home, '.cache'),
+    XDG_CONFIG_HOME: join(home, '.config'),
+    XDG_DATA_HOME: join(home, '.local', 'share'),
+    XDG_STATE_HOME: join(home, '.local', 'state'),
+    npm_config_cache: join(home, '.npm'),
+    PIP_CACHE_DIR: join(home, '.cache', 'pip')
+  };
+}
+
+/**
+ * Build the policy for a spawn. `writableRoots === undefined` (unrestricted-mode session) stays
+ * undefined so no write confinement is applied; otherwise the roots (plus any call-specific extra
+ * dirs, e.g. a snippet temp dir) form the writable surface. Network comes from daemon config.
+ */
+export function buildSandboxPolicy(
+  writableRoots: string[] | undefined,
+  extraWritable: string[] = [],
+  sessionId?: string,
+  agentId?: string
+): SandboxPolicy {
+  // The system temp dir is always writable when confined: git, compilers, package managers and
+  // most tooling write scratch files to TMPDIR, so omitting it would break ordinary commands. It's
+  // ephemeral, so this doesn't compromise the "no host pollution" goal.
+  return {
+    writableRoots: writableRoots ? [...writableRoots, tmpdir(), ...extraWritable] : undefined,
+    readDenyRoots: readDenyDefault,
+    net: netDefault,
+    sessionId,
+    agentId
+  };
+}
+
+/**
+ * Drop-in for `Bun.spawn`: applies the active launcher's argv wrapping, then spawns. Mirrors
+ * Bun.spawn's three stdio generics so the precise Subprocess type (piped streams, stdin) flows
+ * through to callers unchanged.
+ */
+export function sandboxedSpawn<
+  const In extends Bun.SpawnOptions.Writable = 'ignore',
+  const Out extends Bun.SpawnOptions.Readable = 'pipe',
+  const Err extends Bun.SpawnOptions.Readable = 'inherit'
+>(
+  argv: string[],
+  options: Bun.SpawnOptions.SpawnOptions<In, Out, Err> | undefined,
+  policy: SandboxPolicy = {},
+  // confine:false escapes the sandbox entirely — no launcher wrap, no proxy env — for an explicit,
+  // approval-gated host run (code_execute target:'host'). Spawns exactly like plain Bun.spawn.
+  // sessionId lets a remote launcher reuse ONE off-box instance per session across calls; agentId
+  // lets a per-agent launcher (the VM backend) reuse ONE instance per agent across its sessions.
+  opts: {
+    confine?: boolean;
+    sessionId?: string;
+    agentId?: string;
+    protectedExecution?: ProtectedExecutionContext;
+  } = {}
+): Bun.Subprocess<In, Out, Err> {
+  const protectedExecution = opts.protectedExecution ?? noProtectedExecution;
+  const credentials = protectedExecution.credentials;
+  let protectedProxy: ProtectedExecutionProxy | undefined;
+  let executionPolicy = policy;
+  if (
+    protectedExecution.credentialVaultContainsSecrets &&
+    (opts.confine === false ||
+      activeLauncher.kind === 'none' ||
+      !activeLauncher.wrap ||
+      activeLauncher.enforces?.readDeny !== true)
+  ) {
+    throw new ProtectedExecutionError();
+  }
+  if (credentials.length > 0) {
+    if (
+      !protectedExecutionTlsEnabled ||
+      opts.confine === false ||
+      activeLauncher.kind === 'none' ||
+      !activeLauncher.wrap ||
+      !activeLauncher.enforces?.net?.includes('filtered')
+    ) {
+      throw new ProtectedExecutionError();
+    }
+    if (argv.some((arg) => credentials.some((credential) => arg.includes(credential.secret)))) {
+      throw new ProtectedExecutionError();
+    }
+    try {
+      protectedProxy = protectedExecutionProxyStarter(credentials);
+    } catch {
+      throw new ProtectedExecutionError();
+    }
+    executionPolicy = { ...policy, net: { allowProxyPort: protectedProxy.port } };
+  }
+
+  if (opts.confine === false) {
+    const proc = Bun.spawn<In, Out, Err>(argv, { ...options, detached: true });
+    trackSandboxProcess(proc, 'sandboxed-spawn');
+    return proc;
+  }
+
+  // Build the env overlay for a confined child: proxy vars (network routed through the filter) plus
+  // a writable HOME/cache redirect — but only when a launcher actually confines, so an inactive
+  // launcher (kind 'none' — sandbox disabled, or the platform's native helper binary missing) keeps
+  // today's inherited env.
+  const home = policy.writableRoots?.[0];
+  const overlay: Record<string, string> = {
+    ...extraEnv,
+    ...(proxyEnv ?? {}),
+    ...(protectedProxy?.childEnv ?? {}),
+    ...(protectedProxy?.proxyEnv ?? {}),
+    ...(activeLauncher.kind !== 'none' && home ? sandboxHomeEnv(home) : {})
+  };
+  const detached = !(process.platform === 'win32' && activeLauncher.kind === 'appcontainer');
+  const finalOptions =
+    Object.keys(overlay).length > 0
+      ? ({ ...options, detached, env: { ...(options?.env ?? Bun.env), ...overlay } } as typeof options)
+      : ({ ...options, detached } as typeof options);
+  if (
+    protectedProxy &&
+    Object.values(finalOptions?.env ?? {}).some((value) =>
+      credentials.some((credential) => typeof value === 'string' && value.includes(credential.secret))
+    )
+  ) {
+    void protectedProxy.close();
+    throw new ProtectedExecutionError();
+  }
+  // A REMOTE launcher (cloud sandbox) exposes spawn() instead of wrap() — it runs the
+  // process off-box and returns a SandboxProcess. The three call sites consume only that subset
+  // (stdout/stderr/stdin/exited/exitCode/kill/pid), so the handle bridges onto Bun.Subprocess's
+  // callers unchanged; the cast is the seam's single point of structural reconciliation.
+  if (!activeLauncher.wrap && activeLauncher.spawn) {
+    const spawnOptions: SandboxSpawnOptions = {
+      cwd: finalOptions?.cwd ? String(finalOptions.cwd) : undefined,
+      env: finalOptions?.env as Record<string, string | undefined> | undefined,
+      credential: sandboxCredential(),
+      sessionId: opts.sessionId,
+      agentId: opts.agentId ?? policy.agentId
+    };
+    const process = activeLauncher.spawn(argv, spawnOptions, executionPolicy);
+    observeSandboxViolations(process.violations);
+    return process as unknown as Bun.Subprocess<In, Out, Err>;
+  }
+  // LOCAL launchers (all built-ins) expose wrap(): rewrite argv, then Bun.spawn here.
+  if (!activeLauncher.wrap) {
+    throw new Error(`Sandbox launcher (${activeLauncher.kind}) implements neither wrap() nor spawn()`);
+  }
+  let wrapped: string[];
+  try {
+    wrapped = activeLauncher.wrap(argv, executionPolicy);
+  } catch (err) {
+    void protectedProxy?.close();
+    if (protectedProxy) throw new ProtectedExecutionError();
+    throw new Error(
+      `Sandbox launcher (${activeLauncher.kind}) failed to build argv: ${err instanceof Error ? err.message : String(err)}`
+    );
+  }
+  let proc: Bun.Subprocess<In, Out, Err>;
+  try {
+    proc = Bun.spawn<In, Out, Err>(wrapped, finalOptions);
+  } catch (error) {
+    void protectedProxy?.close();
+    if (protectedProxy) throw new ProtectedExecutionError();
+    throw error;
+  }
+  if (protectedProxy) {
+    const teardown = proc.exited.then(
+      () => protectedProxy.close(),
+      () => protectedProxy.close()
+    );
+    protectedExecutionTeardowns.set(proc, teardown);
+    void teardown.finally(() => protectedExecutionTeardowns.delete(proc)).catch(() => {});
+  }
+  trackSandboxProcess(proc, 'sandboxed-spawn');
+  return proc;
+}
+
+export function sandboxedPtySpawn(
+  argv: string[],
+  options: SandboxPtySpawnOptions,
+  policy: SandboxPolicy = {},
+  opts: {
+    confine?: boolean;
+    sessionId?: string;
+    agentId?: string;
+    protectedExecution?: ProtectedExecutionContext;
+  } = {}
+): SandboxPtyProcess {
+  if (
+    (opts.protectedExecution?.credentialVaultContainsSecrets ?? false) &&
+    (opts.confine === false ||
+      activeLauncher.kind === 'none' ||
+      !activeLauncher.wrap ||
+      activeLauncher.enforces?.readDeny !== true)
+  ) {
+    throw new ProtectedExecutionError();
+  }
+  if ((opts.protectedExecution?.credentials.length ?? 0) > 0 && (!activeLauncher.wrap || activeLauncher.spawn)) {
+    throw new ProtectedExecutionError();
+  }
+  if (!activeLauncher.wrap && activeLauncher.spawn) {
+    const terminalOptions = { cols: options.terminal.cols ?? 80, rows: options.terminal.rows ?? 24 };
+    const process = activeLauncher.spawn(
+      argv,
+      {
+        cwd: options.cwd ? String(options.cwd) : undefined,
+        env: options.env,
+        credential: sandboxCredential(),
+        sessionId: opts.sessionId,
+        agentId: opts.agentId ?? policy.agentId,
+        terminal: terminalOptions
+      },
+      policy
+    );
+    if (!process.terminal) throw new Error(`Sandbox launcher (${activeLauncher.kind}) did not return a PTY terminal`);
+    observeSandboxViolations(process.violations);
+    const output = process.stdout
+      ? process.stdout.pipeTo(
+          new WritableStream<Uint8Array>({
+            write: (data) => options.terminal.data(process.terminal as SandboxTerminal, data)
+          })
+        )
+      : Promise.resolve();
+    const exited = Promise.all([process.exited, output]).then(([code]) => code);
+    return {
+      get pid() {
+        return process.pid;
+      },
+      terminal: process.terminal,
+      exited,
+      get exitCode() {
+        return process.exitCode ?? null;
+      },
+      kill(signal?: number | string) {
+        process.kill(signal);
+      }
+    } as unknown as SandboxPtyProcess;
+  }
+  return sandboxedSpawn(
+    argv,
+    options as unknown as Bun.SpawnOptions.SpawnOptions<'ignore', 'ignore', 'ignore'>,
+    policy,
+    opts
+  ) as SandboxPtyProcess;
+}

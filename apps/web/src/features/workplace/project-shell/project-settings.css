@@ -1,0 +1,37 @@
+.project-settings-layout {
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 0.56fr);
+  gap: 20px;
+  align-content: start;
+  width: 100%;
+  max-width: 1040px;
+  margin-inline: auto;
+}
+
+.project-settings-layout > section:nth-of-type(1),
+.project-settings-layout > section:nth-of-type(2) {
+  min-width: 0;
+  padding: 16px;
+  background: color-mix(in srgb, var(--secondary) 52%, var(--card));
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.project-settings-layout > section:nth-of-type(1) {
+  background: color-mix(in srgb, var(--link) 6%, var(--card));
+  border-color: color-mix(in srgb, var(--link) 34%, var(--border));
+}
+
+.project-settings-layout > section:nth-of-type(n + 3),
+.project-settings-layout__notice {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 840px) {
+  .project-settings-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .project-settings-layout > section {
+    grid-column: 1;
+  }
+}

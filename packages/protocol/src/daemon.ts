@@ -1,0 +1,1 @@
+export const DAEMON_RESTART_EXIT_CODE = 75;

@@ -1,0 +1,25 @@
+{
+  "name": "monad-power-pack",
+  "version": "0.0.1",
+  "sdkVersion": "0",
+  "atoms": [
+    "sandbox",
+    "workplace-experience"
+  ],
+  "permissions": [
+    "experience.state",
+    "experience.worker",
+    "project.sessions.read",
+    "project.sessions.create",
+    "project.sessions.send",
+    "project.members.read",
+    "project.members.invite",
+    "project.members.remove",
+    "project.observations.read",
+    "project.approvals.read",
+    "project.approvals.resolve"
+  ],
+  "entry": "dist/atom-pack.js",
+  "description": "Opt-in contributed sandbox backends and project experiences for Monad.",
+  "author": "Monadix Labs"
+}

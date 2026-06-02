@@ -1,0 +1,131 @@
+// ── Per-worktree dev port assignment ─────────────────────────────────────────
+// The daemon binds a TCP port unconditionally (the WS push channel is TCP-only), so two worktrees
+// running `bun dev` at once would both grab the default 52749/52780/3000/6480/4983 and the second fails
+// with EADDRINUSE. A stable offset derived from the worktree path gives each checkout its own ports;
+// daemon and clients read these env vars, so they stay in sync.
+
+/** Stable 0–999 offset from a seed string (FNV-1a/32). Same path → same ports, always. */
+export function portOffset(seed: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < seed.length; i++) {
+    h ^= seed.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return (h >>> 0) % 1000;
+}
+
+export interface WorktreePorts {
+  MONAD_PORT: string; // 52000–52999
+  MONAD_HTTP_PORT: string; // 53000–53999 (loopback-only HTTP fallback)
+  WEB_PORT: string; // 3100–4099
+  WEB_STORYBOOK_PORT: string; // 4100–5099
+  MONAD_KV_UI_PORT: string; // 6400–7399 (dev KV debug UI)
+  AI_SDK_DEVTOOLS_PORT: string; // 7400–8399 (AI SDK DevTools)
+  UI_STORYBOOK_PORT: string; // 8400–9399
+}
+
+export const worktreePortKeys = [
+  'MONAD_PORT',
+  'MONAD_HTTP_PORT',
+  'WEB_PORT',
+  'WEB_STORYBOOK_PORT',
+  'MONAD_KV_UI_PORT',
+  'AI_SDK_DEVTOOLS_PORT',
+  'UI_STORYBOOK_PORT'
+] as const satisfies readonly (keyof WorktreePorts)[];
+
+export function portsForOffset(offset: number): WorktreePorts {
+  if (!Number.isInteger(offset) || offset < 0 || offset >= 1000) {
+    throw new RangeError(`port offset must be an integer from 0 to 999; received ${offset}`);
+  }
+  return {
+    MONAD_PORT: String(52000 + offset),
+    MONAD_HTTP_PORT: String(53000 + offset),
+    WEB_PORT: String(3100 + offset),
+    WEB_STORYBOOK_PORT: String(4100 + offset),
+    MONAD_KV_UI_PORT: String(6400 + offset),
+    AI_SDK_DEVTOOLS_PORT: String(7400 + offset),
+    UI_STORYBOOK_PORT: String(8400 + offset)
+  };
+}
+
+export function worktreePorts(root: string): WorktreePorts {
+  return portsForOffset(portOffset(root));
+}
+
+/**
+ * Append `KEY=value` lines for any port not already present in `envText` (a missing/blank key is
+ * treated as absent, so a hand-set value is never clobbered). Returns the new text plus the list
+ * of `KEY=value` strings that were added. Idempotent: a second call with the result adds nothing.
+ */
+export function ensurePortLines(envText: string, ports: WorktreePorts): { text: string; added: string[] } {
+  const present = new Set<string>();
+  for (const raw of envText.split('\n')) {
+    const line = raw.trim();
+    if (!line || line.startsWith('#')) continue;
+    const eq = line.indexOf('=');
+    if (eq === -1) continue;
+    const key = line.slice(0, eq).trim();
+    const val = line.slice(eq + 1).trim();
+    if (val) present.add(key);
+  }
+
+  let text = envText;
+  const added: string[] = [];
+  for (const [key, value] of Object.entries(ports)) {
+    if (present.has(key)) continue;
+    text += `${text.endsWith('\n') || text === '' ? '' : '\n'}${key}=${value}\n`;
+    added.push(`${key}=${value}`);
+  }
+  return { text, added };
+}
+
+export function replacePortLines(envText: string, ports: WorktreePorts): string {
+  const managedKeys = new Set<string>(worktreePortKeys);
+  const retained = envText.split('\n').filter((raw) => {
+    const line = raw.trim();
+    if (!line || line.startsWith('#')) return true;
+    const eq = line.indexOf('=');
+    if (eq === -1) return true;
+    return !managedKeys.has(line.slice(0, eq).trim());
+  });
+  while (retained.at(-1) === '') retained.pop();
+  const portLines = worktreePortKeys.map((key) => `${key}=${ports[key]}`);
+  return `${[...retained, ...portLines].join('\n')}\n`;
+}
+
+export function configuredPortOffset(env: Map<string, string>): number | null {
+  const daemonPort = Number(env.get('MONAD_PORT'));
+  const offset = daemonPort - 52000;
+  return Number.isInteger(offset) && offset >= 0 && offset < 1000 ? offset : null;
+}
+
+export async function nextAvailablePorts(
+  currentOffset: number,
+  isAvailable: (port: number) => Promise<boolean>
+): Promise<{ offset: number; ports: WorktreePorts } | null> {
+  for (let step = 1; step < 1000; step++) {
+    const offset = (currentOffset + step) % 1000;
+    const ports = portsForOffset(offset);
+    const availability = await Promise.all(worktreePortKeys.map((key) => isAvailable(Number(ports[key]))));
+    if (availability.every(Boolean)) return { offset, ports };
+  }
+  return null;
+}
+
+const xdgEnvKeys = ['XDG_CONFIG_HOME', 'XDG_DATA_HOME', 'XDG_CACHE_HOME', 'XDG_STATE_HOME', 'XDG_RUNTIME_DIR'];
+const blankXdgLinePattern = new RegExp(`^\\s*(${xdgEnvKeys.join('|')})\\s*=\\s*(?:""|''|)\\s*$`);
+
+export function removeBlankXdgLines(envText: string): { text: string; removed: string[] } {
+  const removed: string[] = [];
+  const lines = envText.split('\n');
+  const kept = lines.filter((line, index) => {
+    if (index === lines.length - 1 && line === '' && envText.endsWith('\n')) return true;
+    const match = line.match(blankXdgLinePattern);
+    if (!match) return true;
+    const key = match[1];
+    if (key) removed.push(key);
+    return false;
+  });
+  return { text: kept.join('\n'), removed };
+}
