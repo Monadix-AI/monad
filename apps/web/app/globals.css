@@ -1,0 +1,608 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "@monad/ui/styles.css";
+
+/* Allow Tailwind to detect utility classes used by streamdown (monorepo: hoisted to root node_modules). */
+@source "../../../node_modules/streamdown/dist/*.js";
+@source "../../../node_modules/@streamdown/mermaid/dist/*.js";
+
+/* Design tokens, the @theme mapping, the dark-mode variant, and the base
+   layer now live in @monad/ui/styles.css so they can be shared with the
+   future Electron client. Only web-specific styling — the /init onboarding
+   eye candy below — stays here. */
+
+/* ── /init onboarding — eye candy, warmth & microinteractions ──────────────────
+   A full-bleed beach scene sits behind a glassmorphic wizard card. The motion
+   here is intentionally gentle: a slow Ken-Burns drift on the photo, a soft
+   entrance for the card, light motes that float, and small spring reactions on
+   interactive elements. All looping/entrance motion is disabled under
+   prefers-reduced-motion further down. */
+@layer components {
+  /* Slow, breathing zoom on the background photo so it never feels static. */
+  @keyframes init-kenburns {
+    0% {
+      transform: scale(1.06) translate3d(0, 0, 0);
+    }
+    100% {
+      transform: scale(1.16) translate3d(-1.5%, -1.5%, 0);
+    }
+  }
+
+  /* Card / hero entrance: rise + settle with a touch of scale. */
+  @keyframes init-rise {
+    0% {
+      opacity: 0;
+      transform: translateY(20px) scale(0.985);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  /* Per-step content cross-fade as the wizard advances. */
+  @keyframes init-fade {
+    0% {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* Checkmarks and the success burst pop into place. */
+  @keyframes init-pop {
+    0% {
+      opacity: 0;
+      transform: scale(0.4);
+    }
+    60% {
+      opacity: 1;
+      transform: scale(1.18);
+    }
+    100% {
+      transform: scale(1);
+    }
+  }
+
+  /* Drifting light motes over the ocean. */
+  @keyframes init-float {
+    0%,
+    100% {
+      transform: translateY(0) translateX(0);
+      opacity: 0.35;
+    }
+    50% {
+      transform: translateY(-22px) translateX(8px);
+      opacity: 0.8;
+    }
+  }
+
+  /* The active step pip gently breathes. */
+  @keyframes init-pulse {
+    0%,
+    100% {
+      box-shadow: 0 0 0 0 oklch(1 0 0 / 0);
+    }
+    50% {
+      box-shadow: 0 0 0 4px oklch(1 0 0 / 0.18);
+    }
+  }
+
+  /* Expanding ring behind the final success check. */
+  @keyframes init-ring {
+    0% {
+      opacity: 0.5;
+      transform: scale(0.6);
+    }
+    100% {
+      opacity: 0;
+      transform: scale(2.4);
+    }
+  }
+
+  @keyframes monad-loading-bounce {
+    0%,
+    100% {
+      transform: translateY(0) scale(1);
+    }
+    38% {
+      transform: translateY(-5px) scale(1.055);
+    }
+    62% {
+      transform: translateY(1px) scale(0.985);
+    }
+  }
+
+  @keyframes monad-loading-sheen {
+    0% {
+      opacity: 0;
+      transform: translateX(-150%) rotate(18deg);
+    }
+    18% {
+      opacity: 0.9;
+    }
+    68% {
+      opacity: 0.75;
+    }
+    100% {
+      opacity: 0;
+      transform: translateX(150%) rotate(18deg);
+    }
+  }
+
+  @keyframes monad-loading-bloom {
+    0%,
+    100% {
+      opacity: 0.55;
+      transform: scale(0.92);
+    }
+    50% {
+      opacity: 0.9;
+      transform: scale(1.06);
+    }
+  }
+
+  .animate-init-kenburns {
+    animation: init-kenburns 28s ease-in-out infinite alternate;
+  }
+  .animate-init-rise {
+    animation: init-rise 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  .animate-init-fade {
+    animation: init-fade 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  .animate-init-pop {
+    animation: init-pop 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  .animate-init-float {
+    animation: init-float 9s ease-in-out infinite;
+  }
+  .animate-init-pulse {
+    animation: init-pulse 2.4s ease-in-out infinite;
+  }
+  .animate-init-ring {
+    animation: init-ring 1.4s ease-out forwards;
+  }
+
+  .monad-loading {
+    --monad-loading-fill: rgb(47 70 105 / 0.82);
+    --monad-loading-fill-top: rgb(76 103 148 / 0.88);
+    --monad-loading-fill-bottom: rgb(24 39 66 / 0.9);
+    --monad-loading-edge: rgb(15 23 42 / 0.38);
+    --monad-loading-inner-edge: rgb(255 255 255 / 0.26);
+    --monad-loading-highlight: rgb(226 232 240 / 0.18);
+    --monad-loading-glint: rgb(255 255 255 / 0.36);
+    --monad-loading-refraction: rgb(15 23 42 / 0.16);
+    --monad-loading-shadow: rgb(15 23 42 / 0.2);
+    color: var(--monad-loading-fill);
+  }
+
+  .dark .monad-loading {
+    --monad-loading-fill: rgb(255 255 255 / 0.2);
+    --monad-loading-fill-top: rgb(255 255 255 / 0.5);
+    --monad-loading-fill-bottom: rgb(255 255 255 / 0.14);
+    --monad-loading-edge: rgb(255 255 255 / 0.42);
+    --monad-loading-inner-edge: rgb(255 255 255 / 0.72);
+    --monad-loading-highlight: rgb(255 255 255 / 1);
+    --monad-loading-glint: rgb(255 255 255 / 0.98);
+    --monad-loading-refraction: rgb(255 255 255 / 0.18);
+    --monad-loading-shadow: rgb(0 0 0 / 0.36);
+  }
+
+  .monad-loading-mark {
+    position: relative;
+    display: block;
+    width: 72px;
+    aspect-ratio: 1;
+    overflow: hidden;
+    background:
+      radial-gradient(circle at 28% 18%, var(--monad-loading-highlight) 0 8%, rgb(255 255 255 / 0) 21%),
+      linear-gradient(
+        145deg,
+        var(--monad-loading-fill-top),
+        var(--monad-loading-fill) 46%,
+        var(--monad-loading-fill-bottom)
+      ),
+      currentColor;
+    border-radius: 28%;
+    box-shadow:
+      0 18px 42px var(--monad-loading-shadow),
+      0 0 0 1px var(--monad-loading-edge),
+      0 0 0 1px var(--monad-loading-inner-edge) inset,
+      0 8px 18px rgb(255 255 255 / 0.28) inset,
+      0 -10px 18px var(--monad-loading-refraction) inset;
+    -webkit-backdrop-filter: blur(18px) saturate(1.45) contrast(1.08);
+    backdrop-filter: blur(18px) saturate(1.45) contrast(1.08);
+    transform-origin: 50% 60%;
+    animation:
+      monad-loading-bounce 1.15s cubic-bezier(0.22, 1, 0.36, 1) infinite,
+      monad-loading-bloom 1.8s ease-in-out infinite;
+  }
+
+  .monad-loading-glass,
+  .monad-loading-sheen {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+
+  .monad-loading-glass {
+    background:
+      radial-gradient(circle at 29% 19%, var(--monad-loading-highlight) 0 5%, rgb(255 255 255 / 0) 14%),
+      linear-gradient(132deg, rgb(255 255 255 / 0.18), rgb(255 255 255 / 0.04) 32%, rgb(255 255 255 / 0) 48%),
+      linear-gradient(315deg, rgb(255 255 255 / 0) 50%, var(--monad-loading-refraction) 72%, rgb(255 255 255 / 0.08));
+    mix-blend-mode: normal;
+  }
+
+  .dark .monad-loading-glass {
+    mix-blend-mode: screen;
+  }
+
+  .monad-loading-sheen {
+    right: -65%;
+    left: -65%;
+    background: linear-gradient(
+      90deg,
+      rgb(255 255 255 / 0) 35%,
+      rgb(255 255 255 / 0.12) 43%,
+      var(--monad-loading-glint) 50%,
+      rgb(255 255 255 / 0.12) 57%,
+      rgb(255 255 255 / 0) 65%
+    );
+    filter: blur(0.2px);
+    animation: monad-loading-sheen 1.35s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+  }
+}
+
+@layer utilities {
+  :where(.monad-selectable, [data-selectable="true"]) {
+    cursor: text;
+    user-select: text;
+  }
+
+  .monad-interactive-cursor
+    :where(
+      a,
+      button,
+      input[type="button"],
+      input[type="submit"],
+      input[type="reset"],
+      option,
+      select,
+      summary,
+      [role="button"],
+      [role="link"],
+      [role="menuitem"],
+      [role="tab"],
+      [role="checkbox"],
+      [role="radio"],
+      [role="option"],
+      [role="switch"],
+      [role="combobox"],
+      [role="listbox"],
+      [role="slider"],
+      [role="listitem"],
+      [tabindex]:not([tabindex="-1"]),
+      .cursor-default,
+      .cursor-pointer
+    ):not(:disabled):not([aria-disabled="true"]):not([data-preserve-cursor="true"]) {
+    cursor: pointer;
+  }
+
+  html:not(.monad-interactive-cursor)
+    :where(
+      a,
+      button,
+      input[type="button"],
+      input[type="submit"],
+      input[type="reset"],
+      option,
+      select,
+      summary,
+      [role="button"],
+      [role="link"],
+      [role="menuitem"],
+      [role="tab"],
+      [role="checkbox"],
+      [role="radio"],
+      [role="option"],
+      [role="switch"],
+      [role="combobox"],
+      [role="listbox"],
+      [role="slider"],
+      [role="listitem"],
+      [tabindex]:not([tabindex="-1"]),
+      .cursor-default,
+      .cursor-pointer
+    ):not(:disabled):not([aria-disabled="true"]):not(.monad-selectable):not([data-selectable="true"]):not(
+      [data-preserve-cursor="true"]
+    ) {
+    cursor: auto;
+  }
+
+  html:not(.monad-interactive-cursor) :where(.monad-selectable, [data-selectable="true"]) {
+    cursor: text;
+    user-select: text;
+  }
+
+  html[data-sidebar-resizing="true"],
+  html[data-sidebar-resizing="true"] * {
+    cursor: col-resize;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-init-kenburns,
+  .animate-init-rise,
+  .animate-init-fade,
+  .animate-init-pop,
+  .animate-init-float,
+  .animate-init-pulse,
+  .animate-init-ring,
+  .monad-loading-mark,
+  .monad-loading-sheen {
+    animation: none;
+  }
+}
+
+@layer components {
+  .panel-nav {
+    position: relative;
+    background: var(--sidebar);
+    border-right: 1px solid var(--sidebar-border);
+  }
+
+  .panel-nav-overlay {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 30;
+    box-shadow: 12px 0 32px rgb(var(--backgroundColor-transparent) / 0.14);
+  }
+
+  .panel-nav[data-resizing="true"],
+  .panel-nav:has(.panel-nav-resize-handle:hover),
+  .panel-nav:has(.panel-nav-resize-handle:focus-visible) {
+    border-right-color: var(--foreground);
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .panel-nav[data-resizing="true"],
+    .panel-nav:has(.panel-nav-resize-handle:hover),
+    .panel-nav:has(.panel-nav-resize-handle:focus-visible) {
+      border-right-color: color-mix(in srgb, var(--foreground) 28%, var(--sidebar-border));
+    }
+  }
+
+  .panel-nav-resize-handle {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 10;
+    width: 16px;
+    height: auto;
+    padding: 0;
+    margin: 0;
+    cursor: col-resize;
+    outline: none;
+    background: transparent;
+    border: 0;
+  }
+
+  .panel-nav-resize-handle::after {
+    position: absolute;
+    top: 50%;
+    right: 6px;
+    width: 6px;
+    height: 52px;
+    content: "";
+    background: var(--sidebar);
+    border: 1px solid var(--foreground);
+    border-radius: 999px;
+    box-shadow:
+      0 1px 2px rgb(var(--backgroundColor-transparent) / 0.16),
+      inset 0 1px 0 rgb(var(--backgroundColor-surface-inverse) / 0.12);
+    opacity: 0;
+    -webkit-backdrop-filter: blur(10px) saturate(1.25);
+    backdrop-filter: blur(10px) saturate(1.25);
+    transform: translateY(-50%) scaleY(1);
+    transition: opacity linear;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .panel-nav-resize-handle::after {
+      background: color-mix(in srgb, var(--sidebar) 74%, transparent);
+      border: 1px solid color-mix(in srgb, var(--foreground) 18%, var(--sidebar-border));
+    }
+  }
+
+  .panel-nav[data-resizing="true"] .panel-nav-resize-handle::after,
+  .panel-nav-resize-handle:focus-visible::after {
+    background: var(--sidebar);
+    border-color: var(--foreground);
+    opacity: 1;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .panel-nav[data-resizing="true"] .panel-nav-resize-handle::after,
+    .panel-nav-resize-handle:focus-visible::after {
+      background: color-mix(in srgb, var(--sidebar) 58%, var(--foreground) 10%);
+      border-color: color-mix(in srgb, var(--foreground) 26%, var(--sidebar-border));
+    }
+  }
+
+  .panel-nav-resize-handle:hover::after {
+    opacity: 1;
+    transition-delay: 80ms;
+  }
+
+  .workspace-home-shell {
+    --workspace-home-spotlight-x: 58%;
+    --workspace-home-spotlight-y: 24%;
+    position: relative;
+    overflow: hidden;
+    isolation: isolate;
+  }
+
+  .workspace-home-background {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    overflow: hidden;
+    pointer-events: none;
+    background: rgb(var(--backgroundColor-primary));
+  }
+
+  .workspace-home-background::before {
+    position: absolute;
+    inset: -1px;
+    content: "";
+    background-image: radial-gradient(
+      circle at center,
+      rgb(var(--borderColor-secondary) / 0.18) 0 1px,
+      transparent 1.25px
+    );
+    background-position: 0 0;
+    background-size: 12px 12px;
+    opacity: 0.42;
+    -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 70%, transparent 100%);
+    mask-image: linear-gradient(to bottom, #000 0%, #000 70%, transparent 100%);
+  }
+
+  .workspace-home-background::after {
+    position: absolute;
+    top: var(--workspace-home-spotlight-y);
+    left: var(--workspace-home-spotlight-x);
+    width: min(54vw, 44rem);
+    aspect-ratio: 1;
+    content: "";
+    background: radial-gradient(
+      circle,
+      rgb(var(--backgroundColor-accent) / 0.18) 0%,
+      rgb(var(--backgroundColor-accent) / 0.1) 24%,
+      rgb(var(--backgroundColor-desktop) / 0.055) 46%,
+      transparent 70%
+    );
+    opacity: 0.9;
+    filter: blur(18px);
+    transform: translate(-50%, -50%);
+    transition:
+      left 90ms cubic-bezier(0.2, 0, 0, 1),
+      top 90ms cubic-bezier(0.2, 0, 0, 1),
+      opacity 180ms cubic-bezier(0.2, 0, 0, 1);
+  }
+
+  .dark .workspace-home-background::before {
+    opacity: 0.24;
+  }
+
+  .dark .workspace-home-background::after {
+    background: radial-gradient(
+      circle,
+      rgb(var(--backgroundColor-accent) / 0.28) 0%,
+      rgb(var(--backgroundColor-desktop) / 0.14) 28%,
+      rgb(var(--backgroundColor-mobile) / 0.06) 48%,
+      transparent 72%
+    );
+    mix-blend-mode: screen;
+    opacity: 0.68;
+  }
+
+  .message-actions {
+    transition: opacity 160ms ease;
+  }
+
+  .composer-lexical-input {
+    display: block;
+    width: 100%;
+    min-height: 62px;
+    max-height: 180px;
+    padding: 14px 20px 6px;
+    overflow-y: auto;
+    font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+    font-size: 14px;
+    line-height: 1.45;
+    color: var(--foreground);
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+    caret-color: var(--foreground);
+    outline: none;
+    scrollbar-width: thin;
+    background: transparent;
+    border: 0;
+  }
+
+  .composer-lexical-input[contenteditable="false"] {
+    color: var(--muted-foreground);
+    cursor: not-allowed;
+    background: color-mix(in srgb, var(--chat-input-surface) 92%, var(--muted));
+  }
+
+  .composer-lexical-placeholder {
+    position: absolute;
+    top: 14px;
+    left: 20px;
+    max-width: calc(100% - 40px);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 14px;
+    line-height: 1.45;
+    color: var(--chat-input-placeholder);
+    white-space: nowrap;
+    pointer-events: none;
+    user-select: none;
+  }
+
+  .workplace-action {
+    transition:
+      background 160ms ease,
+      border-color 160ms ease,
+      box-shadow 160ms ease,
+      color 160ms ease,
+      transform 160ms ease;
+  }
+
+  .workplace-action:hover:not(:disabled) {
+    background: var(--accent);
+    border-color: color-mix(in srgb, var(--primary) 42%, var(--border));
+  }
+
+  .workplace-action:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+
+  .workplace-action:active:not(:disabled) {
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workspace-home-background::after {
+    transition: none;
+  }
+}
+
+@media (max-width: 720px) {
+  .shared-composer-toolbar {
+    flex-wrap: wrap;
+  }
+
+  .shared-composer-tools {
+    flex-wrap: wrap;
+  }
+
+  .shared-composer-tools-right {
+    justify-content: flex-end;
+    width: 100%;
+  }
+
+  .shared-composer-pill {
+    max-width: calc(100vw - 112px);
+  }
+}

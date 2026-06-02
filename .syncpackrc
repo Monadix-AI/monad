@@ -1,0 +1,16 @@
+{
+  "$schema": "./node_modules/syncpack/schema.json",
+  "versionGroups": [
+    {
+      "label": "internal packages always use the workspace protocol",
+      "dependencies": ["@monad/**"],
+      "dependencyTypes": ["!local"],
+      "pinVersion": "workspace:*"
+    },
+    {
+      "label": "react stack must stay aligned across workspaces",
+      "dependencies": ["react", "react-dom", "@types/react", "@types/react-dom", "react-redux"],
+      "preferVersion": "highestSemver"
+    }
+  ]
+}

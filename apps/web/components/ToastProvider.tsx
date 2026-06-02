@@ -1,0 +1,409 @@
+'use client';
+
+import { Button, cn } from '@monad/ui';
+import { AlertCircle, Check, CheckCircle2, ChevronDown, ChevronUp, Copy, Info, X } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+
+import { useT } from '@/components/I18nProvider';
+
+type ToastVariant = 'success' | 'error' | 'info';
+
+interface ToastInput {
+  message: string;
+  variant?: ToastVariant;
+  duration?: number;
+  /** Raw payload shown in the expandable detail panel. */
+  detail?: unknown;
+}
+
+interface ToastItem extends Required<Omit<ToastInput, 'detail'>> {
+  id: string;
+  detail?: unknown;
+}
+
+interface ToastRecord extends ToastItem {
+  state: 'closing' | 'open';
+}
+
+type ToastListener = (toast: ToastRecord) => void;
+
+const TOAST_EXIT_MS = 180;
+const CARD_GAP = 10;
+const CARD_HEIGHT_FALLBACK = 64;
+
+const listeners = new Set<ToastListener>();
+const queued: ToastRecord[] = [];
+
+function createToast(input: ToastInput): ToastItem {
+  return {
+    id: globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`,
+    message: input.message,
+    variant: input.variant ?? 'info',
+    duration: input.duration ?? 4200,
+    detail: input.detail
+  };
+}
+
+function publish(input: ToastInput) {
+  const item: ToastRecord = { ...createToast(input), state: 'open' };
+  if (listeners.size === 0) {
+    queued.push(item);
+    return;
+  }
+  for (const listener of listeners) listener(item);
+}
+
+export const toast = {
+  info: (message: string, options?: Omit<ToastInput, 'message' | 'variant'>) =>
+    publish({ ...options, message, variant: 'info' }),
+  success: (message: string, options?: Omit<ToastInput, 'message' | 'variant'>) =>
+    publish({ ...options, message, variant: 'success' }),
+  error: (message: string, options?: Omit<ToastInput, 'message' | 'variant'>) =>
+    publish({ ...options, message, variant: 'error' })
+};
+
+// --- JSON syntax highlighting ---
+
+type TokenType = 'key' | 'string' | 'number' | 'boolean' | 'null' | 'plain';
+
+const TOKEN_RE =
+  /((?:"(?:[^"\\]|\\.)*")(?=\s*:))|("(?:[^"\\]|\\.)*")|(true|false)|(null)|(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)/g;
+
+const TOKEN_CLASSES: Record<TokenType, string> = {
+  key: 'text-sky-400',
+  string: 'text-emerald-400',
+  number: 'text-orange-400',
+  boolean: 'text-yellow-400',
+  null: 'italic text-zinc-500',
+  plain: 'text-zinc-500'
+};
+
+function JsonHighlight({ value }: { value: unknown }) {
+  const json = JSON.stringify(value, null, 2);
+  const nodes: React.ReactNode[] = [];
+  TOKEN_RE.lastIndex = 0;
+  let last = 0;
+  let i = 0;
+
+  for (let m = TOKEN_RE.exec(json); m !== null; m = TOKEN_RE.exec(json)) {
+    if (m.index > last)
+      nodes.push(
+        <span
+          className={TOKEN_CLASSES.plain}
+          key={i++}
+        >
+          {json.slice(last, m.index)}
+        </span>
+      );
+    const [, key, str, bool, nil, _num] = m;
+    const type: TokenType =
+      key !== undefined
+        ? 'key'
+        : str !== undefined
+          ? 'string'
+          : bool !== undefined
+            ? 'boolean'
+            : nil !== undefined
+              ? 'null'
+              : 'number';
+    nodes.push(
+      <span
+        className={TOKEN_CLASSES[type]}
+        key={i++}
+      >
+        {m[0]}
+      </span>
+    );
+    last = m.index + m[0].length;
+  }
+  if (last < json.length)
+    nodes.push(
+      <span
+        className={TOKEN_CLASSES.plain}
+        key={i}
+      >
+        {json.slice(last)}
+      </span>
+    );
+
+  return <>{nodes}</>;
+}
+
+// --- Copy button with flash ---
+
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = () => {
+    void navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  };
+
+  return (
+    <button
+      className="absolute top-2 right-2 rounded p-1 text-zinc-400 transition-colors hover:bg-white/10 hover:text-zinc-200"
+      onClick={handleCopy}
+      title="Copy"
+      type="button"
+    >
+      {copied ? <Check className="size-3.5 text-emerald-400" /> : <Copy className="size-3.5" />}
+    </button>
+  );
+}
+
+// --- Detail panel ---
+
+function DetailPanel({ detail }: { detail: unknown }) {
+  const isObj = detail !== null && typeof detail === 'object';
+  const text = isObj ? JSON.stringify(detail, null, 2) : String(detail);
+
+  return (
+    <div className="relative mt-1.5">
+      <pre className="max-h-48 overflow-auto rounded-md bg-black/30 p-3 pr-8 font-mono text-[11px] leading-relaxed">
+        {isObj ? <JsonHighlight value={detail} /> : <span className="text-zinc-300">{text}</span>}
+      </pre>
+      <CopyButton text={text} />
+    </div>
+  );
+}
+
+// --- Toast icon ---
+
+function ToastIcon({ variant }: { variant: ToastVariant }) {
+  if (variant === 'success') return <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-success" />;
+  if (variant === 'error') return <AlertCircle className="mt-0.5 size-4 shrink-0 text-destructive" />;
+  return <Info className="mt-0.5 size-4 shrink-0 text-info" />;
+}
+
+// --- Expandable message row ---
+
+function ExpandableMessage({
+  detail,
+  expanded,
+  message,
+  onToggle
+}: {
+  detail: unknown;
+  expanded: boolean;
+  message: string;
+  onToggle: () => void;
+}) {
+  const t = useT();
+  const hasDetail = detail !== undefined;
+  return (
+    <div className="flex items-baseline justify-between gap-2">
+      <p className="min-w-0 flex-1 text-[15px] leading-6">{message}</p>
+      {hasDetail && (
+        <button
+          className="ml-1 flex shrink-0 items-center gap-0.5 text-[11px] text-muted-foreground transition-colors hover:text-foreground"
+          onClick={onToggle}
+          type="button"
+        >
+          {expanded ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />}
+          {expanded ? t('web.toast.collapse') : t('web.toast.expand')}
+        </button>
+      )}
+    </div>
+  );
+}
+
+// --- Toast card ---
+
+function ToastCard({
+  item,
+  fromFront,
+  hovered,
+  expandedOffset,
+  onClose,
+  onMeasure
+}: {
+  item: ToastRecord;
+  fromFront: number;
+  hovered: boolean;
+  expandedOffset: number;
+  onClose: (id: string) => void;
+  onMeasure: (id: string, height: number) => void;
+}) {
+  const [entered, setEntered] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  const cardRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => setEntered(true));
+    return () => cancelAnimationFrame(raf);
+  }, []);
+
+  // Pause auto-dismiss while the detail panel is open.
+  useEffect(() => {
+    if (item.state !== 'open' || expanded) return;
+    const timer = window.setTimeout(() => onClose(item.id), item.duration);
+    return () => window.clearTimeout(timer);
+  }, [item.duration, item.id, item.state, onClose, expanded]);
+
+  // Initial measurement on mount.
+  const measureRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      cardRef.current = node;
+      if (node) onMeasure(item.id, node.offsetHeight);
+    },
+    [item.id, onMeasure]
+  );
+
+  // Re-measure after expand/collapse so the container grows/shrinks.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: expanded intentionally retriggers measurement.
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => {
+      if (cardRef.current) onMeasure(item.id, cardRef.current.offsetHeight);
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [expanded, item.id, onMeasure]);
+
+  const isHidden = fromFront >= 3;
+  const isClosing = item.state === 'closing';
+  const hasDetail = item.detail !== undefined;
+
+  const stackedY = fromFront * 8;
+  const stackedScale = 1 - fromFront * 0.05;
+
+  const transform = isClosing
+    ? 'translateY(-6px) scale(0.97)'
+    : !entered
+      ? 'translateY(-10px) scale(0.98)'
+      : hovered
+        ? `translateY(${expandedOffset}px) scale(1)`
+        : `translateY(${stackedY}px) scale(${stackedScale})`;
+
+  const opacity =
+    isClosing || !entered ? 0 : isHidden ? 0 : hovered ? 1 : fromFront === 0 ? 1 : fromFront === 1 ? 0.8 : 0.62;
+
+  return (
+    <div
+      aria-hidden={isHidden ? true : undefined}
+      className={cn(
+        'glass-surface pointer-events-auto absolute right-0 left-0 grid origin-top grid-cols-[1.125rem_minmax(0,1fr)] items-start gap-3 px-4 py-4 pr-12 text-popover-foreground shadow-lg',
+        'transition-[transform,opacity] ease-[cubic-bezier(0.32,0.72,0,1)]',
+        isClosing ? 'duration-[180ms]' : 'duration-300',
+        item.variant === 'error' && 'border-destructive/35',
+        item.variant === 'success' && 'border-success/35'
+      )}
+      ref={measureRef}
+      role={item.variant === 'error' ? 'alert' : 'status'}
+      style={{
+        transform,
+        opacity,
+        zIndex: 50 - fromFront,
+        pointerEvents: isHidden ? 'none' : undefined
+      }}
+    >
+      <ToastIcon variant={item.variant} />
+
+      <div className="min-w-0">
+        <ExpandableMessage
+          detail={item.detail}
+          expanded={expanded}
+          message={item.message}
+          onToggle={() => setExpanded((v) => !v)}
+        />
+        {expanded && hasDetail && <DetailPanel detail={item.detail} />}
+      </div>
+
+      <Button
+        aria-label="Dismiss notification"
+        className="absolute top-2.5 right-2.5 size-8"
+        onClick={() => onClose(item.id)}
+        size="icon"
+        variant="ghost"
+      >
+        <X className="size-4" />
+      </Button>
+    </div>
+  );
+}
+
+// --- Provider ---
+
+export function ToastProvider({ children }: { children: React.ReactNode }) {
+  const [toasts, setToasts] = useState<ToastRecord[]>([]);
+  const [hovered, setHovered] = useState(false);
+  const [heights, setHeights] = useState<Record<string, number>>({});
+
+  const removeToast = useCallback((id: string) => {
+    setToasts((current) => current.filter((item) => item.id !== id));
+    setHeights((prev) => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+  }, []);
+
+  const closeToast = useCallback(
+    (id: string) => {
+      setToasts((current) =>
+        current.map((item) => (item.id === id && item.state === 'open' ? { ...item, state: 'closing' } : item))
+      );
+      window.setTimeout(() => removeToast(id), TOAST_EXIT_MS);
+    },
+    [removeToast]
+  );
+
+  const handleMeasure = useCallback((id: string, height: number) => {
+    setHeights((prev) => (prev[id] === height ? prev : { ...prev, [id]: height }));
+  }, []);
+
+  useEffect(() => {
+    const listener: ToastListener = (item) => {
+      setToasts((current) => [...current, item].slice(-4));
+    };
+    listeners.add(listener);
+    for (const item of queued.splice(0)) listener(item);
+    return () => {
+      listeners.delete(listener);
+    };
+  }, []);
+
+  const expandedOffsets: number[] = new Array(toasts.length).fill(0);
+  let cumulative = 0;
+  for (let i = toasts.length - 1; i >= 0; i--) {
+    expandedOffsets[i] = cumulative;
+    cumulative += (heights[toasts[i].id] ?? CARD_HEIGHT_FALLBACK) + CARD_GAP;
+  }
+
+  const frontToast = toasts[toasts.length - 1];
+  const frontHeight = frontToast ? (heights[frontToast.id] ?? CARD_HEIGHT_FALLBACK) : 0;
+  const visibleBehind = Math.min(Math.max(toasts.length - 1, 0), 2);
+  const stackedHeight = frontHeight + visibleBehind * 8;
+  const expandedHeight = cumulative > 0 ? cumulative - CARD_GAP : 0;
+  const containerHeight = toasts.length === 0 ? 0 : hovered ? expandedHeight : stackedHeight;
+
+  return (
+    <>
+      {children}
+      <section
+        aria-label="Notifications"
+        aria-live="polite"
+        aria-relevant="additions text"
+        className="fixed top-4 left-1/2 z-50 w-[min(460px,calc(100vw-2rem))] -translate-x-1/2"
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+        style={{
+          height: containerHeight,
+          pointerEvents: toasts.length > 0 ? 'auto' : 'none'
+        }}
+      >
+        {toasts.map((item, index) => (
+          <ToastCard
+            expandedOffset={expandedOffsets[index]}
+            fromFront={toasts.length - 1 - index}
+            hovered={hovered}
+            item={item}
+            key={item.id}
+            onClose={closeToast}
+            onMeasure={handleMeasure}
+          />
+        ))}
+      </section>
+    </>
+  );
+}

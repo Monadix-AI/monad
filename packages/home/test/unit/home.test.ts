@@ -1,0 +1,595 @@
+import type { MonadPaths } from '../../src/paths.ts';
+
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { readFile, rm } from 'node:fs/promises';
+import { homedir, tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+import {
+  createDefaultConfig,
+  defaultTransport,
+  loadAll,
+  loadAuth,
+  loadConfig,
+  mcpServerSchema,
+  migrateConfig,
+  saveAuth,
+  saveSystemConfig,
+  tryParseConfig
+} from '../../src/config.ts';
+import { resolveClientConn } from '../../src/connection.ts';
+import { initMonadHome } from '../../src/init.ts';
+import { getPaths, xdgPaths } from '../../src/paths.ts';
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function makePaths(base: string): MonadPaths {
+  const runtime = join(base, 'runtime');
+  const credentials = join(base, 'credentials');
+  return {
+    home: base,
+    runtime,
+    configs: join(base, 'configs'),
+    config: join(base, 'configs', 'config.json'),
+    profile: join(base, 'configs', 'profile.json'),
+    approvals: join(base, 'configs', 'approvals.json'),
+    credentials,
+    auth: join(credentials, 'auth.json'),
+    tls: join(credentials, 'tls'),
+    workspace: join(base, 'agents', 'default'),
+    providers: join(base, 'atoms', 'providers'),
+    skills: join(base, 'atoms', 'skills'),
+    skillsLock: join(base, 'atoms', 'skills.lock'),
+    locales: join(base, 'atoms', 'locales'),
+    mcp: join(base, 'atoms', 'mcp'),
+    atoms: join(base, 'atoms'),
+    packs: join(base, 'atoms', 'packs'),
+    agents: join(base, 'agents'),
+    memory: join(base, 'memory'),
+    cache: join(base, 'cache'),
+    logs: join(base, 'logs'),
+    dbDir: join(base, 'db'),
+    db: join(base, 'db', 'monad.sqlite'),
+    backup: join(base, 'backup'),
+    bin: join(base, 'bin'),
+    sock: join(runtime, 'monad.sock'),
+    kvSock: join(runtime, 'kv.sock'),
+    pid: join(runtime, 'monad.pid')
+  };
+}
+
+let testDir: string;
+let paths: MonadPaths;
+
+beforeEach(() => {
+  testDir = join(tmpdir(), `monad-test-${Date.now()}`);
+  paths = makePaths(testDir);
+});
+
+afterEach(async () => {
+  // Windows releases SQLite/WAL handles slightly after store.close(), so an immediate recursive
+  // delete can hit EBUSY/EPERM. Bun's fs.rm ignores maxRetries, so retry by hand, then give up —
+  // a leftover temp dir on an ephemeral runner is harmless, but failing teardown isn't.
+  for (let attempt = 0; attempt < 10; attempt++) {
+    try {
+      await rm(testDir, { recursive: true, force: true });
+      return;
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code;
+      if (code !== 'EBUSY' && code !== 'EPERM' && code !== 'ENOTEMPTY') throw err;
+      await Bun.sleep(100);
+    }
+  }
+});
+
+// ── initMonadHome ─────────────────────────────────────────────────────────────
+
+describe('initMonadHome', () => {
+  test('creates config.json on first run with a prn_ principal id', async () => {
+    const result = await initMonadHome(paths, { displayName: 'test-user' });
+    expect(result.created).toBe(true);
+    expect(result.principalId).toMatch(/^prn_/);
+
+    const cfg = await loadAll(paths.config, paths.profile);
+    expect(cfg).not.toBeNull();
+    expect(cfg?.principal.id).toBe(result.principalId);
+    expect(cfg?.principal.displayName).toBe('test-user');
+    expect(cfg?.agent.sandbox.mode).toBe('workspace');
+    expect(cfg?.nativeCliAgents).toEqual([]);
+  });
+
+  test('native CLI agents are stored in system config and merged into loadAll', async () => {
+    await initMonadHome(paths);
+    const cfg = await loadAll(paths.config, paths.profile);
+    if (!cfg) throw new Error('config missing');
+    await saveSystemConfig(paths.config, {
+      ...cfg,
+      nativeCliAgents: [
+        {
+          name: 'codex',
+          provider: 'codex',
+          command: 'codex',
+          enabled: true,
+          defaultLaunchMode: 'pty',
+          allowDangerousMode: false,
+          approvalOwnership: 'provider-owned'
+        }
+      ]
+    });
+
+    expect((await loadConfig(paths.config))?.nativeCliAgents).toHaveLength(1);
+    expect((await loadAll(paths.config, paths.profile))?.nativeCliAgents[0]?.provider).toBe('codex');
+  });
+
+  test('preserves principal id across re-runs (idempotent)', async () => {
+    const first = await initMonadHome(paths);
+    const second = await initMonadHome(paths);
+
+    expect(second.created).toBe(false);
+    expect(second.principalId).toBe(first.principalId);
+  });
+
+  test('creates empty auth.json on first run', async () => {
+    await initMonadHome(paths);
+    const auth = await loadAuth(paths.auth);
+    expect(auth).not.toBeNull();
+    expect(auth?.version).toBe(1);
+    expect(auth?.credentialPool).toEqual({});
+  });
+
+  test('does not overwrite existing auth.json', async () => {
+    await initMonadHome(paths);
+    await saveAuth(paths.auth, {
+      version: 1,
+      activeProvider: 'openrouter',
+      updatedAt: new Date().toISOString(),
+      credentialPool: { openrouter: [] }
+    });
+    await initMonadHome(paths); // re-run
+
+    const auth = await loadAuth(paths.auth);
+    expect(auth?.activeProvider).toBe('openrouter');
+  });
+
+  test('seeds SOUL.md and AGENT.md in workspace', async () => {
+    await initMonadHome(paths);
+    const soul = await readFile(join(paths.workspace, 'SOUL.md'), 'utf-8');
+    const agent = await readFile(join(paths.workspace, 'AGENT.md'), 'utf-8');
+    expect(soul).toContain('Identity');
+    expect(agent).toContain('Workspace Instructions');
+  });
+
+  test('does not overwrite user-edited SOUL.md', async () => {
+    await initMonadHome(paths);
+    await Bun.write(join(paths.workspace, 'SOUL.md'), 'my custom soul');
+    await initMonadHome(paths); // re-run without reseed
+
+    const soul = await readFile(join(paths.workspace, 'SOUL.md'), 'utf-8');
+    expect(soul).toBe('my custom soul');
+  });
+
+  test('reseeds SOUL.md when reseed=true', async () => {
+    await initMonadHome(paths);
+    await Bun.write(join(paths.workspace, 'SOUL.md'), 'my custom soul');
+    await initMonadHome(paths, { reseed: true });
+
+    const soul = await readFile(join(paths.workspace, 'SOUL.md'), 'utf-8');
+    expect(soul).toContain('Identity');
+  });
+
+  test('seeds the starter skill on first init', async () => {
+    await initMonadHome(paths);
+    const [globalSkill, defaultAgentSkill, atomPackSkill, atomPackManifest, atomPackEntry] = await Promise.all([
+      readFile(join(paths.skills, 'summarize-changes', 'SKILL.md'), 'utf-8'),
+      readFile(join(paths.workspace, 'skills', 'summarize-changes', 'SKILL.md'), 'utf-8'),
+      readFile(join(paths.packs, 'monad-test', 'skills', 'summarize-changes', 'SKILL.md'), 'utf-8'),
+      readFile(join(paths.packs, 'monad-test', 'atom-pack.json'), 'utf-8'),
+      readFile(join(paths.packs, 'monad-test', 'dist', 'atom-pack.js'), 'utf-8')
+    ]);
+    expect(globalSkill).toContain('name: summarize-changes');
+    expect(defaultAgentSkill).toBe(globalSkill);
+    expect(atomPackSkill).toBe(globalSkill);
+    expect(JSON.parse(atomPackManifest)).toMatchObject({ name: 'monad-test', atoms: ['skill'] });
+    expect(atomPackEntry).toContain('register()');
+  });
+
+  test('does not re-seed a deleted starter skill on a later init', async () => {
+    await initMonadHome(paths);
+    await Promise.all([
+      rm(join(paths.skills, 'summarize-changes'), { recursive: true, force: true }),
+      rm(join(paths.workspace, 'skills', 'summarize-changes'), { recursive: true, force: true }),
+      rm(join(paths.packs, 'monad-test'), { recursive: true, force: true })
+    ]);
+    await initMonadHome(paths); // created=false now → no re-seed
+    await Promise.all([
+      expect(Bun.file(join(paths.skills, 'summarize-changes', 'SKILL.md')).exists()).resolves.toBe(false),
+      expect(Bun.file(join(paths.workspace, 'skills', 'summarize-changes', 'SKILL.md')).exists()).resolves.toBe(false),
+      expect(Bun.file(join(paths.packs, 'monad-test', 'atom-pack.json')).exists()).resolves.toBe(false)
+    ]);
+  });
+});
+
+// ── config schema / migration tests ──────────────────────────────────────────
+//
+// These fixtures ARE the historical schema snapshots.
+// When a new version is added:
+//  1. Keep all existing fixtures unchanged.
+//  2. Add a new fixture object for the old version.
+//  3. Add a test asserting migrateConfig(oldFixture) produces the new shape.
+//
+// This is the ONLY place old-version knowledge needs to be recorded.
+
+/** Canonical v1 fixture — frozen; never edit this once committed. */
+const CONFIG_V1_FIXTURE = {
+  version: 1,
+  principal: { id: 'prn_01TESTID', displayName: 'Alice', verification: 'unverified' },
+  model: { default: 'anthropic/claude-sonnet-4-6', provider: 'openrouter', fallbacks: [] },
+  agent: { sandbox: { mode: 'workspace' } }
+} as const;
+
+describe('migrateConfig', () => {
+  test('migrates a valid v1 fixture to the current version', async () => {
+    const cfg = await migrateConfig(CONFIG_V1_FIXTURE);
+    expect(cfg.version).toBe(1);
+    expect(cfg.principal.id).toBe('prn_01TESTID');
+    expect(cfg.model.default).toBe('anthropic/claude-sonnet-4-6');
+    expect(cfg.agent.sandbox.mode).toBe('workspace');
+    // globalSandbox is additive — a pre-field config gets the default-filled value.
+    expect(cfg.agent.globalSandbox).toEqual({ enabled: false, mode: 'workspace' });
+  });
+
+  test('throws on unknown version (newer than current)', async () => {
+    // spread version LAST so it wins over CONFIG_V1_FIXTURE's version: 1
+    await expect(migrateConfig({ ...CONFIG_V1_FIXTURE, version: 999 })).rejects.toThrow(/newer than/);
+  });
+
+  test('throws when version field is missing', async () => {
+    const { version: _v, ...noVersion } = CONFIG_V1_FIXTURE;
+    await expect(migrateConfig(noVersion)).rejects.toThrow();
+  });
+
+  test('fills network.transport with the OS default when the network block is absent', async () => {
+    const cfg = await migrateConfig(CONFIG_V1_FIXTURE);
+    expect(cfg.network.transport).toBe(defaultTransport());
+  });
+
+  test('preserves an explicit network.transport override', async () => {
+    const override = defaultTransport() === 'uds' ? 'tcp' : 'uds';
+    const cfg = await migrateConfig({
+      ...CONFIG_V1_FIXTURE,
+      network: { port: 52749, transport: override, remoteAccess: { enabled: false, token: null } }
+    });
+    expect(cfg.network.transport).toBe(override);
+  });
+
+  // ── Future migration test template ────────────────────────────────────────
+  // When v2 is added, uncomment and fill in:
+  //
+  // test('migrates v1 → v2', () => {
+  //   const cfg = migrateConfig(CONFIG_V1_FIXTURE);   // fixture stays as v1 shape
+  //   expect(cfg.version).toBe(2);
+  //   expect(cfg.model.primary).toBe('anthropic/claude-sonnet-4-6'); // renamed field
+  // });
+});
+
+describe('loadConfig', () => {
+  test('returns null when file does not exist', async () => {
+    expect(await loadConfig(paths.config)).toBeNull();
+  });
+
+  test('round-trips a valid config', async () => {
+    await initMonadHome(paths);
+    const cfg = await loadAll(paths.config, paths.profile);
+    expect(cfg?.version).toBe(1);
+    expect(cfg?.model.providers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'sample-openai-compatible',
+          type: 'openai-compatible',
+          baseUrl: 'https://api.example.com/v1'
+        })
+      ])
+    );
+    expect(cfg?.model.profiles).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          alias: 'sample-compatible',
+          provider: 'sample-openai-compatible',
+          modelId: 'example-model'
+        })
+      ])
+    );
+    expect(cfg?.model.default).toBe('');
+  });
+
+  test('migrates a v1 file written to disk', async () => {
+    // Simulate a file written by an older installation
+    await Bun.write(paths.config, JSON.stringify(CONFIG_V1_FIXTURE, null, 2));
+    const cfg = await loadConfig(paths.config);
+    expect(cfg?.version).toBe(1);
+    expect(cfg?.principal.displayName).toBe('Alice');
+  });
+
+  test('throws a user-friendly error for invalid config schema', async () => {
+    await Bun.write(paths.config, JSON.stringify({ version: 1, principal: { id: 'bad' } }, null, 2));
+
+    try {
+      await loadConfig(paths.config);
+      throw new Error('expected loadConfig to throw');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      expect(message).toContain('config.json has invalid fields');
+      expect(message).toContain('| Path');
+      expect(message).toContain('| Issue');
+      expect(message).toContain('principal.id');
+    }
+  });
+});
+
+describe('tryParseConfig', () => {
+  test('returns null for corrupt data', async () => {
+    expect(await tryParseConfig({ version: 1, broken: true })).toBeNull();
+  });
+
+  test('returns MonadConfig for valid fixture', async () => {
+    expect(await tryParseConfig(CONFIG_V1_FIXTURE)).not.toBeNull();
+  });
+
+  test('openaiCompat inbound approval defaults to local (fail-closed, not auto-approve)', () => {
+    expect(createDefaultConfig('prn_x', 'tester').openaiCompat.approval).toBe('local');
+  });
+});
+
+// ── mcpServers (external MCP servers connected at startup) ──────────────────────
+
+describe('mcpServers config', () => {
+  test('createDefaultConfig starts with no MCP servers', () => {
+    expect(createDefaultConfig('prn_x', 'tester').mcpServers).toEqual([]);
+  });
+
+  test('a config written before the field still parses, defaulting to []', async () => {
+    const cfg = createDefaultConfig('prn_x', 'tester') as Record<string, unknown>;
+    delete cfg.mcpServers; // simulate an older config on disk
+    const parsed = await tryParseConfig(cfg);
+    expect(parsed?.mcpServers).toEqual([]);
+  });
+
+  test('mcpServerSchema accepts a stdio server spec', () => {
+    const r = mcpServerSchema.safeParse({
+      name: 'fs',
+      transport: 'stdio',
+      command: 'npx',
+      args: ['-y', '@modelcontextprotocol/server-filesystem', '.']
+    });
+    expect(r.success).toBe(true);
+    if (r.success) {
+      expect(r.data).toMatchObject({ transport: 'stdio', enabled: true });
+      expect(r.data.trust.autoApproveTools).toEqual([]);
+    }
+  });
+
+  test('mcpServerSchema rejects a stdio spec missing command', () => {
+    expect(mcpServerSchema.safeParse({ name: 'fs' }).success).toBe(false);
+  });
+
+  test('mcpServerSchema accepts an http server with bearer auth', () => {
+    const r = mcpServerSchema.safeParse({
+      name: 'remote',
+      transport: 'http',
+      url: 'https://mcp.example.com/mcp',
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: testing literal secret-ref syntax
+      auth: { mode: 'bearer', token: '${env:REMOTE_TOKEN}' }
+    });
+    expect(r.success).toBe(true);
+    if (r.success && r.data.transport === 'http') expect(r.data.auth.mode).toBe('bearer');
+  });
+
+  test('mcpServerSchema rejects an http server with a non-URL', () => {
+    expect(mcpServerSchema.safeParse({ name: 'remote', transport: 'http', url: 'not-a-url' }).success).toBe(false);
+  });
+});
+
+// ── browser preset config schema (the buildBrowserMcpServer builder is daemon-side) ──
+
+describe('browser config', () => {
+  test('createDefaultConfig disables the browser by default', () => {
+    expect(createDefaultConfig('prn_x', 'tester').browser).toEqual({ enabled: false, vision: false, headless: true });
+  });
+
+  test('a config written before the browser field still parses, defaulting it', async () => {
+    const cfg = createDefaultConfig('prn_x', 'tester') as Record<string, unknown>;
+    delete cfg.browser;
+    const parsed = await tryParseConfig(cfg);
+    expect(parsed?.browser).toEqual({ enabled: false, vision: false, headless: true });
+  });
+});
+
+// ── network.transport (per-OS default + user override drives the client) ────────
+
+describe('network.transport', () => {
+  test('createDefaultConfig stamps the OS default transport at init', () => {
+    expect(createDefaultConfig('prn_x', 'x').network.transport).toBe(defaultTransport());
+  });
+
+  describe('resolveClientConn honours the setting', () => {
+    const env = { ...Bun.env };
+    let home: string;
+
+    beforeEach(() => {
+      home = join(tmpdir(), `monad-conn-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+      Bun.env.MONAD_HOME = home;
+    });
+    afterEach(async () => {
+      Object.assign(Bun.env, env);
+      if (!('MONAD_HOME' in env)) delete Bun.env.MONAD_HOME;
+      if (!('MONAD_PORT' in env)) delete Bun.env.MONAD_PORT;
+      await rm(home, { recursive: true, force: true });
+    });
+
+    async function setTransport(mode: 'tcp' | 'uds') {
+      const p = getPaths();
+      await initMonadHome(p);
+      const cfg = await loadAll(p.config, p.profile);
+      // biome-ignore lint/style/noNonNullAssertion: initMonadHome guarantees config exists
+      cfg!.network.transport = mode;
+      // biome-ignore lint/style/noNonNullAssertion: initMonadHome guarantees config exists
+      await saveSystemConfig(p.config, cfg!);
+      return p;
+    }
+
+    test('uds → returns the daemon unix socket path', async () => {
+      const p = await setTransport('uds');
+      const conn = await resolveClientConn();
+      expect(conn.unixSocket).toBe(p.sock);
+      expect(conn.baseUrl).toContain('127.0.0.1');
+    });
+
+    test('tcp → no unix socket (plain HTTP over loopback)', async () => {
+      await setTransport('tcp');
+      const conn = await resolveClientConn();
+      expect(conn.unixSocket).toBeUndefined();
+    });
+
+    test('MONAD_PORT overrides the configured port (per-worktree dev isolation)', async () => {
+      const p = await setTransport('tcp');
+      const cfg = await loadAll(p.config, p.profile);
+      // biome-ignore lint/style/noNonNullAssertion: initMonadHome guarantees config exists
+      cfg!.network.port = 52749;
+      // biome-ignore lint/style/noNonNullAssertion: initMonadHome guarantees config exists
+      await saveSystemConfig(p.config, cfg!);
+
+      Bun.env.MONAD_PORT = '53210';
+      const conn = await resolveClientConn();
+      expect(conn.baseUrl).toBe('http://127.0.0.1:53210');
+    });
+
+    test('without MONAD_PORT, falls back to the configured port', async () => {
+      const p = await setTransport('tcp');
+      const cfg = await loadAll(p.config, p.profile);
+      // biome-ignore lint/style/noNonNullAssertion: initMonadHome guarantees config exists
+      cfg!.network.port = 52801;
+      // biome-ignore lint/style/noNonNullAssertion: initMonadHome guarantees config exists
+      await saveSystemConfig(p.config, cfg!);
+
+      delete Bun.env.MONAD_PORT;
+      const conn = await resolveClientConn();
+      expect(conn.baseUrl).toBe('http://127.0.0.1:52801');
+    });
+  });
+});
+
+// ── getPaths ──────────────────────────────────────────────────────────────────
+
+describe('getPaths', () => {
+  const env = { ...Bun.env };
+  const repoRoot = join(import.meta.dir, '..', '..', '..', '..');
+
+  afterEach(() => {
+    // Restore env after each test
+    Object.assign(Bun.env, env);
+    for (const key of ['MONAD_HOME', 'NODE_ENV']) {
+      if (!(key in env)) delete Bun.env[key];
+    }
+  });
+
+  test('derives all paths from repo-local .dev/.monad by default in dev', () => {
+    Bun.env.NODE_ENV = 'development';
+    delete Bun.env.MONAD_HOME;
+
+    const p = getPaths();
+    const expected = join(repoRoot, '.dev', '.monad');
+
+    expect(p.home).toBe(expected);
+    expect(p.runtime).toBe(join(expected, 'runtime'));
+    expect(p.config).toBe(join(expected, 'configs', 'config.json'));
+    expect(p.auth).toBe(join(expected, 'credentials', 'auth.json'));
+    expect(p.workspace).toBe(join(expected, 'agents', 'default'));
+    expect(p.db).toBe(join(expected, 'db', 'monad.sqlite'));
+    expect(p.sock).toBe(join(expected, 'runtime', 'monad.sock'));
+  });
+
+  test('MONAD_HOME overrides the root for all derived paths', () => {
+    const custom = join(tmpdir(), 'monad-custom-home');
+    Bun.env.MONAD_HOME = custom;
+
+    const p = getPaths();
+
+    expect(p.home).toBe(custom);
+    expect(p.runtime).toBe(join(custom, 'runtime'));
+    expect(p.config).toBe(join(custom, 'configs', 'config.json'));
+    expect(p.auth).toBe(join(custom, 'credentials', 'auth.json'));
+    expect(p.workspace).toBe(join(custom, 'agents', 'default'));
+    expect(p.db).toBe(join(custom, 'db', 'monad.sqlite'));
+    expect(p.sock).toBe(join(custom, 'runtime', 'monad.sock'));
+  });
+
+  test('unknown env vars do not affect derived paths', () => {
+    Bun.env.MONAD_HOME = join(tmpdir(), 'monad-base');
+
+    const p = getPaths();
+    const expected = Bun.env.MONAD_HOME;
+
+    expect(p.home).toBe(expected);
+    expect(p.runtime).toBe(join(expected, 'runtime'));
+    expect(p.config).toBe(join(expected, 'configs', 'config.json'));
+    expect(p.auth).toBe(join(expected, 'credentials', 'auth.json'));
+    expect(p.db).toBe(join(expected, 'db', 'monad.sqlite'));
+    expect(p.sock).toBe(join(expected, 'runtime', 'monad.sock'));
+  });
+});
+
+// ── XDG layout ────────────────────────────────────────────────────────────────
+
+describe('xdgPaths', () => {
+  const env = { ...Bun.env };
+
+  afterEach(() => {
+    Object.assign(Bun.env, env);
+    for (const key of ['XDG_CONFIG_HOME', 'XDG_DATA_HOME', 'XDG_CACHE_HOME', 'XDG_STATE_HOME', 'XDG_RUNTIME_DIR']) {
+      if (!(key in env)) delete Bun.env[key];
+    }
+  });
+
+  test('splits config/data/cache/state/runtime across XDG roots', () => {
+    const h = homedir();
+    delete Bun.env.XDG_CONFIG_HOME;
+    delete Bun.env.XDG_DATA_HOME;
+    delete Bun.env.XDG_CACHE_HOME;
+    delete Bun.env.XDG_STATE_HOME;
+    delete Bun.env.XDG_RUNTIME_DIR;
+
+    const p = xdgPaths();
+
+    expect(p.config).toBe(join(h, '.config', 'monad', 'config.json'));
+    expect(p.auth).toBe(join(h, '.config', 'monad', 'auth.json'));
+    expect(p.db).toBe(join(h, '.local', 'share', 'monad', 'db', 'monad.sqlite'));
+    expect(p.cache).toBe(join(h, '.cache', 'monad'));
+    // No XDG_RUNTIME_DIR → socket falls back to $XDG_STATE_HOME
+    expect(p.sock).toBe(join(h, '.local', 'state', 'monad', 'monad.sock'));
+  });
+
+  test('honours XDG_CONFIG_HOME and XDG_DATA_HOME overrides', () => {
+    const cfgRoot = join(tmpdir(), 'xdg-cfg');
+    const dataRoot = join(tmpdir(), 'xdg-data');
+    Bun.env.XDG_CONFIG_HOME = cfgRoot;
+    Bun.env.XDG_DATA_HOME = dataRoot;
+
+    const p = xdgPaths();
+
+    expect(p.configs).toBe(join(cfgRoot, 'monad'));
+    expect(p.config).toBe(join(cfgRoot, 'monad', 'config.json'));
+    expect(p.db).toBe(join(dataRoot, 'monad', 'db', 'monad.sqlite'));
+    expect(p.atoms).toBe(join(dataRoot, 'monad', 'atoms'));
+  });
+
+  test('XDG_RUNTIME_DIR is used for sockets when set', () => {
+    const runtimeDir = join(tmpdir(), 'xdg-runtime');
+    Bun.env.XDG_RUNTIME_DIR = runtimeDir;
+
+    const p = xdgPaths();
+
+    expect(p.sock).toBe(join(runtimeDir, 'monad', 'monad.sock'));
+    expect(p.kvSock).toBe(join(runtimeDir, 'monad', 'kv.sock'));
+    expect(p.pid).toBe(join(runtimeDir, 'monad', 'monad.pid'));
+  });
+});

@@ -1,0 +1,124 @@
+// Security fail-closed boot guards (commit e83e66f15): the daemon must refuse to start rather than
+// silently downgrade when TLS can't be provisioned for remote access, or when sandbox confinement is
+// requested but no launcher is available. These branches are exactly the kind that regress quietly,
+// so they get explicit coverage.
+
+import type { MonadConfig } from '@monad/home';
+
+import { afterEach, beforeEach, expect, test } from 'bun:test';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { createDefaultConfig } from '@monad/home';
+
+import { finalizeSandboxLauncher } from '@/bootstrap/sandbox.ts';
+import { createTlsCert } from '@/bootstrap/tls.ts';
+import {
+  clearSandboxLaunchers,
+  configureSandboxLauncher,
+  noneLauncher,
+  registerSandboxLauncher
+} from '@/capabilities/tools';
+
+let tlsDir: string;
+beforeEach(async () => {
+  tlsDir = await mkdtemp(join(tmpdir(), 'monad-tls-'));
+  clearSandboxLaunchers();
+});
+afterEach(async () => {
+  configureSandboxLauncher(noneLauncher);
+  clearSandboxLaunchers();
+  configureSandboxLauncher(noneLauncher);
+  await rm(tlsDir, { recursive: true, force: true });
+});
+
+// ── TLS fail-closed ────────────────────────────────────────────────────────────
+const okDeps = {
+  findOpenssl: async () => '/usr/bin/openssl',
+  ensureTlsCert: async (dir: string) => ({ certPath: join(dir, 'cert.pem'), keyPath: join(dir, 'key.pem') })
+};
+
+test('createTlsCert is a no-op when remote access is disabled', async () => {
+  const out = await createTlsCert(
+    { enabled: false, tlsDir },
+    {
+      findOpenssl: async () => null,
+      ensureTlsCert: async () => {
+        throw new Error('should not be called');
+      }
+    }
+  );
+  expect(out.cert).toBeUndefined();
+  expect(out.warnings).toEqual([]);
+});
+
+test('createTlsCert throws when remote access is enabled but openssl is missing', async () => {
+  await expect(createTlsCert({ enabled: true, tlsDir }, { ...okDeps, findOpenssl: async () => null })).rejects.toThrow(
+    /openssl is not installed/
+  );
+});
+
+test('createTlsCert downgrades to a warning when allowInsecureHttp=true and openssl is missing', async () => {
+  const out = await createTlsCert(
+    { enabled: true, tlsDir, allowInsecureHttp: true },
+    { ...okDeps, findOpenssl: async () => null }
+  );
+  expect(out.cert).toBeUndefined();
+  expect(out.warnings).toContain('tls:openssl-not-found');
+});
+
+test('createTlsCert throws when cert generation fails (fail-closed)', async () => {
+  await expect(
+    createTlsCert(
+      { enabled: true, tlsDir },
+      {
+        ...okDeps,
+        ensureTlsCert: async () => {
+          throw new Error('openssl exploded');
+        }
+      }
+    )
+  ).rejects.toThrow(/TLS certificate generation failed/);
+});
+
+test('createTlsCert warns instead of throwing on cert failure when allowInsecureHttp=true', async () => {
+  const out = await createTlsCert(
+    { enabled: true, tlsDir, allowInsecureHttp: true },
+    {
+      ...okDeps,
+      ensureTlsCert: async () => {
+        throw new Error('openssl exploded');
+      }
+    }
+  );
+  expect(out.warnings).toContain('tls:cert-error');
+});
+
+// ── sandbox fail-closed ──────────────────────────────────────────────────────────
+function sandboxConfig(over: { confine: boolean; allowUnconfinedExec?: boolean }): MonadConfig {
+  const cfg = createDefaultConfig('prn_test', 'Test');
+  cfg.agent.sandbox.confine = over.confine;
+  cfg.agent.sandbox.allowUnconfinedExec = over.allowUnconfinedExec ?? false;
+  return cfg;
+}
+
+test('finalizeSandboxLauncher throws when confine=true but no launcher is available', () => {
+  // Registry is empty (cleared in beforeEach) → selectSandboxLauncher returns the none launcher.
+  expect(() => finalizeSandboxLauncher(sandboxConfig({ confine: true }))).toThrow(/no sandbox launcher is available/);
+});
+
+test('finalizeSandboxLauncher allows unconfined exec only when explicitly opted in', () => {
+  expect(() => finalizeSandboxLauncher(sandboxConfig({ confine: true, allowUnconfinedExec: true }))).not.toThrow();
+});
+
+test('finalizeSandboxLauncher does not throw when confinement is off', () => {
+  expect(() => finalizeSandboxLauncher(sandboxConfig({ confine: false }))).not.toThrow();
+});
+
+test('finalizeSandboxLauncher accepts an available launcher without opt-in', () => {
+  registerSandboxLauncher(
+    { kind: 'test-seatbelt', enforces: { readDeny: true, net: ['none', 'filtered', 'unrestricted'] } },
+    'builtin'
+  );
+  expect(() => finalizeSandboxLauncher(sandboxConfig({ confine: true }))).not.toThrow();
+});

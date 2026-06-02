@@ -1,0 +1,209 @@
+import type { MonadConfig } from '@monad/home';
+
+import { expect, test } from 'bun:test';
+import { createDefaultConfig } from '@monad/home';
+
+import { resolveAgentModelRole, resolveModelRole } from '@/config/resolve.ts';
+
+function model(over: Partial<MonadConfig['model']> = {}): MonadConfig['model'] {
+  return {
+    default: '',
+    providers: [],
+    profiles: [{ alias: 'default', provider: 'p', modelId: 'm', params: {}, fallbacks: [], roles: {} }],
+    roles: {},
+    tierOverrides: {},
+    kinds: {},
+    ...over
+  };
+}
+
+test('chat resolves to the default profile alias', () => {
+  expect(resolveModelRole(model(), 'chat')).toBe('default');
+  expect(resolveModelRole(model({ profiles: [] }), 'chat')).toBeUndefined();
+});
+
+test('chat resolves to the configured default profile alias when set', () => {
+  expect(
+    resolveModelRole(
+      model({
+        default: 'review',
+        profiles: [
+          { alias: 'default', provider: 'p', modelId: 'm', params: {}, fallbacks: [], roles: {} },
+          { alias: 'review', provider: 'p', modelId: 'review-model', params: {}, fallbacks: [], roles: {} }
+        ]
+      }),
+      'chat'
+    )
+  ).toBe('review');
+});
+
+test('vision falls back to the chat default when unassigned', () => {
+  expect(resolveModelRole(model(), 'vision')).toBe('default');
+  expect(
+    resolveModelRole(
+      model({
+        profiles: [
+          {
+            alias: 'default',
+            provider: 'p',
+            modelId: 'm',
+            params: {},
+            fallbacks: [],
+            roles: { vision: 'openai:gpt-5-vision' }
+          }
+        ]
+      }),
+      'vision'
+    )
+  ).toBe('openai:gpt-5-vision');
+});
+
+test('default profile role assignments are used instead of legacy global role assignments', () => {
+  expect(
+    resolveModelRole(
+      model({
+        roles: { vision: 'legacy:gpt-vision' },
+        profiles: [
+          {
+            alias: 'default',
+            provider: 'p',
+            modelId: 'm',
+            params: {},
+            fallbacks: [],
+            roles: { vision: 'profile:gpt-vision' }
+          }
+        ]
+      }),
+      'vision'
+    )
+  ).toBe('profile:gpt-vision');
+});
+
+test('role resolution can target a non-default profile alias', () => {
+  expect(
+    resolveModelRole(
+      model({
+        profiles: [
+          {
+            alias: 'review',
+            provider: 'p',
+            modelId: 'm',
+            params: {},
+            fallbacks: [],
+            roles: { image: 'profile:image' }
+          }
+        ]
+      }),
+      'image',
+      'review'
+    )
+  ).toBe('profile:image');
+});
+
+test('image/speech resolve from their role assignments', () => {
+  expect(resolveModelRole(model(), 'image')).toBeUndefined();
+  expect(resolveModelRole(model(), 'speech')).toBeUndefined();
+  expect(
+    resolveModelRole(
+      model({
+        profiles: [
+          {
+            alias: 'default',
+            provider: 'p',
+            modelId: 'm',
+            params: {},
+            fallbacks: [],
+            roles: { image: 'new:img', speech: 'new:tts' }
+          }
+        ]
+      }),
+      'image'
+    )
+  ).toBe('new:img');
+  expect(
+    resolveModelRole(
+      model({
+        profiles: [
+          {
+            alias: 'default',
+            provider: 'p',
+            modelId: 'm',
+            params: {},
+            fallbacks: [],
+            roles: { image: 'new:img', speech: 'new:tts' }
+          }
+        ]
+      }),
+      'speech'
+    )
+  ).toBe('new:tts');
+});
+
+test('embedding has no fallback — undefined until assigned (so semantic search degrades to keyword)', () => {
+  expect(resolveModelRole(model(), 'embedding')).toBeUndefined();
+  expect(
+    resolveModelRole(
+      model({
+        profiles: [
+          {
+            alias: 'default',
+            provider: 'p',
+            modelId: 'm',
+            params: {},
+            fallbacks: [],
+            roles: { embedding: 'openai:text-embedding-3-large' }
+          }
+        ]
+      }),
+      'embedding'
+    )
+  ).toBe('openai:text-embedding-3-large');
+});
+
+test('memory role falls back to the chat default until assigned', () => {
+  expect(resolveModelRole(model(), 'memory')).toBe('default');
+  expect(
+    resolveModelRole(
+      model({
+        profiles: [
+          {
+            alias: 'default',
+            provider: 'p',
+            modelId: 'm',
+            params: {},
+            fallbacks: [],
+            roles: { memory: 'oa:gpt-5-mini' }
+          }
+        ]
+      }),
+      'memory'
+    )
+  ).toBe('oa:gpt-5-mini');
+});
+
+test('resolveAgentModelRole: per-agent override > profile role > fallback', () => {
+  const m = model({
+    profiles: [
+      {
+        alias: 'default',
+        provider: 'p',
+        modelId: 'm',
+        params: {},
+        fallbacks: [],
+        roles: { memory: 'profile:cheap', embedding: 'profile:emb' }
+      }
+    ]
+  });
+  expect(resolveAgentModelRole(m, undefined, 'memory')).toBe('profile:cheap');
+  // agent override wins
+  expect(resolveAgentModelRole(m, { memory: 'agent:tiny' }, 'memory')).toBe('agent:tiny');
+  // unset agent role inherits the profile one
+  expect(resolveAgentModelRole(m, { vision: 'agent:v' }, 'embedding')).toBe('profile:emb');
+  // chat is never overridden per-role (it's the agent's modelAlias path, not roles)
+  expect(resolveAgentModelRole(m, { memory: 'x' }, 'chat')).toBe('default');
+});
+
+test('the default config carries an empty manual model-kind override map', () => {
+  // The override layer ("providerId:modelId" → kind) starts empty; operators opt in via config.
+  expect(createDefaultConfig('prn_x', 'x').model.kinds).toEqual({});
+});

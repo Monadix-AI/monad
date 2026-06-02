@@ -1,0 +1,407 @@
+import type { createDaemonHandlers } from '@/handlers/handlers.ts';
+
+import {
+  configureRuntimeRequestSchema,
+  daemonHttpContract,
+  eventIdSchema,
+  listUiItemsQuerySchema,
+  listUiItemsResponseSchema,
+  okResponseSchema,
+  responseInstanceSchema,
+  sessionIdSchema
+} from '@monad/protocol';
+import { Elysia } from 'elysia';
+import { z } from 'zod';
+
+import { buildSessionOrigin } from '@/handlers/session/origin.ts';
+import {
+  createSessionEventsSseResponse,
+  createSessionLogsSseResponse,
+  createSessionMessageSseResponse,
+  createSessionUiEventsSseResponse,
+  wantsInlineSessionStream
+} from '@/transports/http/sessions/stream.ts';
+
+// The two HTTP-only routes in this otherwise-universal controller (SSE events + out-of-band runtime
+// config) declare their contracts inline from protocol leaf schemas — they have no JSON-RPC twin, so
+// they don't belong in daemonHttpContract (which mirrors the universal METHOD_TABLE methods).
+const sessionParams = z.object({ id: sessionIdSchema });
+
+type ReqServer = { requestIP(req: Request): { address: string } | null } | null;
+
+// The daemon sits behind the web app's /api proxy, so the socket peer is the proxy — prefer the
+// forwarded client IP. We trust the header because the proxy is owner-controlled (loopback); a
+// hostile X-Forwarded-For only spoofs an audit-only field, never an access decision.
+function clientIp(server: ReqServer, request: Request): string | undefined {
+  const xff = request.headers.get('x-forwarded-for');
+  if (xff) return xff.split(',')[0]?.trim() || undefined; // first hop = original client
+  const xri = request.headers.get('x-real-ip')?.trim();
+  if (xri) return xri;
+  return server?.requestIP(request)?.address;
+}
+
+/** Highest-priority language tag from an Accept-Language header (drops q-values). */
+function preferredLocale(request: Request): string | undefined {
+  const header = request.headers.get('accept-language');
+  if (!header) return undefined;
+  // "en-US,en;q=0.9,fr;q=0.8" → "en-US" (the first tag wins; we ignore explicit q-ordering).
+  return header.split(',')[0]?.split(';')[0]?.trim() || undefined;
+}
+
+/** Audit-only environment snapshot from the request (never fed to the model). */
+function httpEnv(server: ReqServer, request: Request) {
+  return {
+    ip: clientIp(server, request),
+    userAgent: request.headers.get('user-agent') ?? undefined,
+    referer: request.headers.get('referer') ?? undefined,
+    locale: preferredLocale(request)
+  };
+}
+
+export function createSessionsController(handlers: ReturnType<typeof createDaemonHandlers>, encoder: TextEncoder) {
+  const contracts = daemonHttpContract.sessions;
+
+  return (
+    new Elysia()
+      .get('/sessions', async ({ query }) => handlers.session.list(query), {
+        query: contracts.list.query,
+        response: contracts.list.response,
+        detail: {
+          summary: 'List sessions',
+          description: 'Returns sessions filtered by archived/state query parameters.'
+        }
+      })
+      .post(
+        '/sessions',
+        async ({ body, server, request, status, set }) => {
+          // Identity (surface/client) is client-declared (a TUI sends surface:'tui'); transport and
+          // env are filled server-side and never trusted from the body. env is audit-only.
+          const origin = buildSessionOrigin({
+            transport: 'http',
+            surface: body.origin?.surface ?? 'web',
+            client: body.origin?.client ?? 'monad-web',
+            clientVersion: body.origin?.clientVersion,
+            writableBy: body.origin?.writableBy,
+            branchableBy: body.origin?.branchableBy,
+            ext: body.origin?.ext,
+            env: httpEnv(server, request)
+          });
+          const result = await handlers.session.create({
+            title: body.title,
+            agentId: body.agentId,
+            origin,
+            cwd: body.cwd
+          });
+          set.headers.location = `/v1/sessions/${result.sessionId}`;
+          return status(201, result);
+        },
+        {
+          body: contracts.create.body,
+          response: contracts.create.response,
+          detail: { summary: 'Create session', description: 'Creates a new session with the provided title.' }
+        }
+      )
+      // Elysia's radix trie gives static segments priority over dynamic ones — `/sessions/search`
+      // will never be captured by `/sessions/:id` regardless of registration order.
+      .get('/sessions/search', async ({ query }) => handlers.session.search(query), {
+        query: contracts.search.query,
+        response: contracts.search.response,
+        detail: {
+          summary: 'Search session messages',
+          description: 'Searches messages by keyword, semantic, or hybrid mode.'
+        }
+      })
+      .get(
+        '/sessions/:id',
+        async ({ params, set }) => {
+          const result = await handlers.session.get({ id: params.id });
+          set.headers.etag = `"${result.session.updatedAt}"`;
+          return result;
+        },
+        {
+          params: contracts.get.params,
+          response: contracts.get.response,
+          detail: { summary: 'Get session', description: 'Returns one session by id.' }
+        }
+      )
+      .patch(
+        '/sessions/:id',
+        async ({ params, body, request, set, status }) => {
+          const ifMatch = request.headers.get('if-match');
+          if (ifMatch && ifMatch !== '*') {
+            // Pre-check: tiny TOCTOU window is acceptable — SQLite is single-writer and
+            // the race window (read → update) is sub-millisecond in practice.
+            const current = await handlers.session.get({ id: params.id });
+            const etag = `"${current.session.updatedAt}"`;
+            if (ifMatch !== etag) {
+              set.headers.etag = etag;
+              return status(412, { error: 'precondition failed', code: 'PRECONDITION_FAILED' });
+            }
+          }
+          const result = await handlers.session.update({ id: params.id, ...body });
+          set.headers.etag = `"${result.session.updatedAt}"`;
+          return result;
+        },
+        {
+          params: contracts.update.params,
+          body: contracts.update.body,
+          response: contracts.update.response,
+          detail: { summary: 'Update session', description: 'Updates title/state/archive fields on a session.' }
+        }
+      )
+      .delete('/sessions/:id', async ({ params }) => handlers.session.delete({ id: params.id }), {
+        params: contracts.delete.params,
+        response: contracts.delete.response,
+        detail: { summary: 'Delete session', description: 'Deletes the session and associated data.' }
+      })
+      .post('/sessions/:id/abort', async ({ params }) => handlers.session.abort({ id: params.id }), {
+        params: contracts.abort.params,
+        response: contracts.abort.response,
+        detail: { summary: 'Abort session run', description: 'Cancels an in-flight run for a session if one exists.' }
+      })
+      .post('/sessions/:id/reset', async ({ params }) => handlers.session.reset({ id: params.id }), {
+        params: contracts.reset.params,
+        response: contracts.reset.response,
+        detail: {
+          summary: 'Reset session',
+          description: 'Clears all messages and events from a session, keeping the session itself.'
+        }
+      })
+      .post(
+        '/sessions/:id/branch',
+        async ({ params, body, server, request, status }) => {
+          // The child's origin is stamped from THIS (branching) transport, not the parent's.
+          const origin = buildSessionOrigin({
+            transport: 'http',
+            surface: body.origin?.surface ?? 'web',
+            client: body.origin?.client ?? 'monad-web',
+            clientVersion: body.origin?.clientVersion,
+            writableBy: body.origin?.writableBy,
+            branchableBy: body.origin?.branchableBy,
+            ext: body.origin?.ext,
+            env: httpEnv(server, request)
+          });
+          return status(
+            201,
+            await handlers.session.branch({ id: params.id, title: body.title, atMessageId: body.atMessageId, origin })
+          );
+        },
+        {
+          params: contracts.branch.params,
+          body: contracts.branch.body,
+          response: contracts.branch.response,
+          detail: { summary: 'Branch session', description: 'Creates a child session branched from a parent session.' }
+        }
+      )
+      .put(
+        '/sessions/:id/runtime',
+        async ({ params, body }) => handlers.session.configureRuntime({ id: params.id, ...body }),
+        {
+          params: sessionParams,
+          body: configureRuntimeRequestSchema,
+          response: { 200: okResponseSchema },
+          detail: {
+            tags: ['http-only'],
+            summary: 'Configure session runtime',
+            description: "Sets out-of-band per-turn execution config (e.g. the ACP editor's sandbox roots)."
+          }
+        }
+      )
+      .get(
+        '/sessions/:id/delegates',
+        async ({ params, query }) => handlers.session.delegates({ id: params.id, limit: query.limit }),
+        {
+          params: sessionParams,
+          query: z.object({ limit: z.coerce.number().int().min(1).max(200).optional() }),
+          detail: {
+            tags: ['http-only'],
+            summary: 'List session delegates',
+            description: 'Returns ACP delegate lifecycle records for a session (live + evicted), newest first.'
+          }
+        }
+      )
+      .get('/sessions/:id/provenance', async ({ params }) => handlers.session.provenance({ id: params.id }), {
+        params: contracts.provenance.params,
+        response: contracts.provenance.response,
+        detail: {
+          summary: 'Get session provenance',
+          description: 'Returns ancestors and descendants for session lineage.'
+        }
+      })
+      .post(
+        '/sessions/:id/restore',
+        async ({ params, body }) => handlers.session.restore({ id: params.id, toMessageId: body.toMessageId }),
+        {
+          params: contracts.restore.params,
+          body: contracts.restore.body,
+          response: contracts.restore.response,
+          detail: {
+            summary: 'Restore session',
+            description: 'Restores a session to the specified user message checkpoint.'
+          }
+        }
+      )
+      .get(
+        '/sessions/:id/messages',
+        async ({ params, query }) =>
+          handlers.session.messages({
+            id: params.id,
+            limit: query.limit,
+            before: query.before,
+            includeInactive: query.includeInactive,
+            includeAncestors: query.includeAncestors
+          }),
+        {
+          params: contracts.messages.params,
+          query: contracts.messages.query,
+          response: contracts.messages.response,
+          detail: {
+            summary: 'List session messages',
+            description: 'Returns session messages with pagination and lineage options.'
+          }
+        }
+      )
+      .get(
+        '/sessions/:id/ui-items',
+        async ({ params, query }) =>
+          handlers.session.uiItems({
+            id: params.id,
+            limit: query.limit,
+            before: query.before,
+            after: query.after,
+            around: query.around,
+            includeInactive: query.includeInactive,
+            includeAncestors: query.includeAncestors
+          }),
+        {
+          params: sessionParams,
+          query: listUiItemsQuerySchema,
+          response: { 200: listUiItemsResponseSchema },
+          detail: {
+            tags: ['http-only'],
+            summary: 'List projected session UI items',
+            description: 'Returns server-projected transcript and tool timeline items for the session.'
+          }
+        }
+      )
+      .post(
+        '/sessions/:id/messages',
+        async ({ params, body, headers }) => {
+          if (!wantsInlineSessionStream(headers.accept) || body.generate === false) {
+            return handlers.session.send({
+              sessionId: params.id,
+              text: body.text,
+              generate: body.generate,
+              ambientContext: body.ambientContext
+            });
+          }
+
+          return createSessionMessageSseResponse({
+            handlers,
+            sessionId: params.id,
+            text: body.text,
+            ambientContext: body.ambientContext,
+            encoder
+          });
+        },
+        {
+          params: contracts.send.params,
+          body: contracts.send.body,
+          headers: contracts.send.headers,
+          response: contracts.send.response,
+          detail: {
+            summary: 'Send session message',
+            description: 'Sends a user message; can return SSE stream when accept header requests it.'
+          }
+        }
+      )
+      .post(
+        '/sessions/:id/messages/block',
+        async ({ params, body }) => handlers.session.generate({ sessionId: params.id, text: body.text }),
+        {
+          params: contracts.generate.params,
+          body: contracts.generate.body,
+          response: contracts.generate.response,
+          detail: {
+            summary: 'Generate blocking response',
+            description: 'Runs a turn to completion and returns the full assistant message.'
+          }
+        }
+      )
+      .post(
+        '/sessions/:id/acp/:agent',
+        async ({ params, body }) =>
+          handlers.session.forwardToAcp({
+            sessionId: params.id,
+            agentName: params.agent,
+            text: body.text,
+            ambientContext: body.ambientContext
+          }),
+        {
+          params: contracts.forwardToAcp.params,
+          body: contracts.forwardToAcp.body,
+          response: contracts.forwardToAcp.response,
+          detail: {
+            tags: ['http-only'],
+            summary: 'Forward to ACP agent',
+            description: 'Sends a message directly to a configured ACP agent, bypassing the monad LLM layer.'
+          }
+        }
+      )
+      .get(
+        '/sessions/:id/events',
+        async ({ params, headers, query }) =>
+          createSessionEventsSseResponse({
+            handlers,
+            sessionId: params.id,
+            afterEventId: headers['last-event-id'] ?? query.after,
+            encoder
+          }),
+        {
+          params: sessionParams,
+          query: z.object({ after: eventIdSchema.optional() }),
+          headers: z.looseObject({ 'last-event-id': eventIdSchema.optional() }),
+          response: { 200: responseInstanceSchema },
+          detail: {
+            tags: ['http-only'],
+            summary: 'Stream session events',
+            description: 'Streams session events over Server-Sent Events with resume support.'
+          }
+        }
+      )
+      .get(
+        '/sessions/:id/logs',
+        async ({ params }) => createSessionLogsSseResponse({ sessionId: params.id, encoder }),
+        {
+          params: sessionParams,
+          response: { 200: responseInstanceSchema },
+          detail: {
+            tags: ['http-only'],
+            summary: 'Stream session developer logs',
+            description: 'Streams live structured logger records for a session over Server-Sent Events.'
+          }
+        }
+      )
+      .get(
+        '/sessions/:id/ui-stream',
+        async ({ params, headers, query }) =>
+          createSessionUiEventsSseResponse({
+            handlers,
+            sessionId: params.id,
+            afterEventId: headers['last-event-id'] ?? query.after,
+            encoder
+          }),
+        {
+          params: sessionParams,
+          query: z.object({ after: eventIdSchema.optional() }),
+          headers: z.looseObject({ 'last-event-id': eventIdSchema.optional() }),
+          response: { 200: responseInstanceSchema },
+          detail: {
+            tags: ['http-only'],
+            summary: 'Stream projected session UI events',
+            description: 'Streams server-projected UI snapshot and incremental updates over Server-Sent Events.'
+          }
+        }
+      )
+  );
+}

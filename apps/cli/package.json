@@ -1,0 +1,35 @@
+{
+  "name": "@monad/cli",
+  "version": "0.0.0",
+  "bin": {
+    "monad": "src/main.ts"
+  },
+  "dependencies": {
+    "@monad/client": "workspace:*",
+    "@monad/home": "workspace:*",
+    "@monad/i18n": "workspace:*",
+    "@monad/logger": "workspace:*",
+    "@monad/monad": "workspace:*",
+    "@monad/protocol": "workspace:*",
+    "@monad/tui": "workspace:*",
+    "@monad/web": "workspace:*",
+    "cac": "^7.0.0",
+    "qrcode-terminal": "^0.12.0"
+  },
+  "devDependencies": {
+    "@monad/config": "workspace:*"
+  },
+  "module": "src/main.ts",
+  "private": true,
+  "scripts": {
+    "dev": "bun --watch src/main.ts",
+    "link": "bun link",
+    "lint": "biome check .",
+    "start": "bun src/main.ts",
+    "test": "bun ../../scripts/bun-test.ts test/ --only-failures",
+    "test:loud": "bun ../../scripts/bun-test.ts test/ --loud",
+    "test:unit": "bun ../../scripts/bun-test.ts test/unit/ --only-failures",
+    "typecheck": "tsgo --noEmit"
+  },
+  "type": "module"
+}

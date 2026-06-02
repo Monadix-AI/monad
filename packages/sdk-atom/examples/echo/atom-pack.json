@@ -1,0 +1,8 @@
+{
+  "name": "echo",
+  "version": "1.0.0",
+  "sdkVersion": "0",
+  "atoms": ["channel"],
+  "description": "Loopback test channel — demonstrates the channel atom kind",
+  "entry": "dist/atom-pack.js"
+}

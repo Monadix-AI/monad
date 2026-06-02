@@ -1,0 +1,229 @@
+// Detect and install runtime tools (Node.js, uv) that MCP servers need but may be absent on the
+// target machine — especially relevant for a standalone binary install where node/uv are not
+// guaranteed. Called by the daemon handler for POST /init/env-deps (triggered interactively during
+// `monad init`). The daemon startup only does PATH prepending — no downloads, no detection.
+
+import type { Logger } from '@monad/logger';
+
+import { existsSync } from 'node:fs';
+import { chmod, mkdir } from 'node:fs/promises';
+import { join } from 'node:path';
+
+import { untar } from '@/atoms/install/untar.ts';
+import { parseChecksums, selectReleaseAsset } from '@/capabilities/mcp/install/binary.ts';
+
+type EnvDepResult = 'found' | 'installed' | 'failed' | 'skipped';
+
+// ─── Node.js ─────────────────────────────────────────────────────────────────
+
+function nodeBinName(file: 'node' | 'npx'): string {
+  return process.platform === 'win32' ? `${file}.exe` : file;
+}
+
+function nodePlatformStr(): string {
+  if (process.platform === 'darwin') return 'darwin';
+  if (process.platform === 'win32') return 'win';
+  return 'linux';
+}
+
+function nodeArchStr(arch: string): string {
+  if (arch === 'arm64') return 'arm64';
+  return 'x64';
+}
+
+async function resolveNodeVersion(): Promise<string> {
+  const res = await fetch('https://nodejs.org/dist/index.json', {
+    signal: AbortSignal.timeout(15_000),
+    headers: { 'User-Agent': 'monad' }
+  });
+  if (!res.ok) throw new Error(`nodejs.org index fetch failed: ${res.status}`);
+  const index = (await res.json()) as Array<{ version: string; lts: string | false }>;
+  const lts = index.find((e) => e.lts !== false);
+  if (!lts) throw new Error('no LTS version found in nodejs.org index');
+  return lts.version; // e.g. "v22.13.1"
+}
+
+async function ensureNode(binDir: string, log: Logger): Promise<EnvDepResult> {
+  const nodeBin = join(binDir, nodeBinName('node'));
+
+  // Already installed by us — skip. Don't re-check PATH: PATH varies; our binDir is canonical.
+  if (existsSync(nodeBin)) return 'found';
+
+  // Not installed — download Node.js LTS.
+  if (process.platform === 'win32') {
+    log.warn('env-deps: Node.js auto-install not supported on Windows — install Node.js manually');
+    return 'failed';
+  }
+
+  const platform = nodePlatformStr();
+  const arch = nodeArchStr(process.arch);
+  const version = await resolveNodeVersion();
+  const archiveName = `node-${version}-${platform}-${arch}.tar.gz`;
+  const baseUrl = `https://nodejs.org/dist/${version}`;
+
+  log.info(`env-deps: downloading Node.js ${version}…`);
+
+  const [dlRes, sumsRes] = await Promise.all([
+    fetch(`${baseUrl}/${archiveName}`, { signal: AbortSignal.timeout(120_000), headers: { 'User-Agent': 'monad' } }),
+    fetch(`${baseUrl}/SHASUMS256.txt`, {
+      signal: AbortSignal.timeout(15_000),
+      headers: { 'User-Agent': 'monad' }
+    }).catch(() => null)
+  ]);
+
+  if (!dlRes.ok) throw new Error(`Node.js download failed: ${dlRes.status}`);
+  const bytes = new Uint8Array(await dlRes.arrayBuffer());
+
+  // Verify checksum when SHASUMS256.txt is available.
+  if (sumsRes?.ok) {
+    const checksums = parseChecksums(await sumsRes.text());
+    const expected = checksums.get(archiveName)?.toLowerCase();
+    if (expected) {
+      const got = new Bun.CryptoHasher('sha256').update(bytes).digest('hex');
+      if (got !== expected) throw new Error(`Node.js SHA-256 mismatch for ${archiveName}: ${got} ≠ ${expected}`);
+    }
+  } else {
+    log.warn('env-deps: SHASUMS256.txt unavailable — proceeding on HTTPS trust');
+  }
+
+  // Extract bin/node and bin/npx from the tar.gz.
+  const files = untar(Bun.gunzipSync(bytes as Uint8Array<ArrayBuffer>));
+  await mkdir(binDir, { recursive: true });
+
+  for (const target of ['node', 'npx'] as const) {
+    const entryKey = [...files.keys()].find((k) => k.endsWith(`/bin/${target}`));
+    if (!entryKey) throw new Error(`${target} not found in Node.js archive`);
+    const dest = join(binDir, nodeBinName(target));
+    // biome-ignore lint/style/noNonNullAssertion: entryKey was just found via find(), value is guaranteed
+    await Bun.write(dest, files.get(entryKey)!);
+    await chmod(dest, 0o755);
+  }
+
+  log.info(`env-deps: Node.js ${version} installed to ${binDir}`);
+  return 'installed';
+}
+
+// ─── uv ──────────────────────────────────────────────────────────────────────
+
+function uvBinName(file: 'uv' | 'uvx'): string {
+  return process.platform === 'win32' ? `${file}.exe` : file;
+}
+
+async function ensureUv(binDir: string, log: Logger): Promise<EnvDepResult> {
+  const uvBin = join(binDir, uvBinName('uv'));
+  if (existsSync(uvBin)) return 'found';
+
+  const headers = { 'User-Agent': 'monad', Accept: 'application/vnd.github+json' };
+  const relRes = await fetch('https://api.github.com/repos/astral-sh/uv/releases/latest', {
+    signal: AbortSignal.timeout(15_000),
+    headers
+  });
+  if (!relRes.ok) throw new Error(`uv latest release fetch failed: ${relRes.status}`);
+  const release = (await relRes.json()) as {
+    tag_name: string;
+    assets: { name: string; browser_download_url: string }[];
+  };
+  const tag = release.tag_name;
+  const assets = release.assets ?? [];
+
+  const chosen = selectReleaseAsset(
+    assets.map((a) => a.name),
+    process.platform,
+    process.arch
+  );
+  if (!chosen) throw new Error(`no uv release asset for ${process.platform}/${process.arch}`);
+  const assetMeta = assets.find((a) => a.name === chosen);
+  if (!assetMeta) throw new Error(`uv asset ${chosen} not in release`);
+
+  log.info(`env-deps: downloading uv ${tag}…`);
+
+  const dlRes = await fetch(assetMeta.browser_download_url, {
+    signal: AbortSignal.timeout(120_000),
+    headers: { 'User-Agent': 'monad' }
+  });
+  if (!dlRes.ok) throw new Error(`uv download failed: ${dlRes.status}`);
+  const bytes = new Uint8Array(await dlRes.arrayBuffer());
+
+  // Best-effort checksum from the companion checksums asset.
+  const sumsMeta = assets.find((a) => /(^|[._-])(sha256sums?|checksums?)(\.txt)?$/i.test(a.name));
+  let checksums: Map<string, string> | undefined;
+  if (sumsMeta) {
+    const sumsRes = await fetch(sumsMeta.browser_download_url, {
+      signal: AbortSignal.timeout(15_000),
+      headers: { 'User-Agent': 'monad' }
+    }).catch(() => null);
+    if (sumsRes?.ok) checksums = parseChecksums(await sumsRes.text());
+  }
+
+  const expected = checksums?.get(chosen)?.toLowerCase();
+  if (expected) {
+    const got = new Bun.CryptoHasher('sha256').update(bytes).digest('hex');
+    if (got !== expected) throw new Error(`uv SHA-256 mismatch for ${chosen}: ${got} ≠ ${expected}`);
+  } else {
+    log.warn('env-deps: uv release published no checksums — proceeding on HTTPS trust');
+  }
+
+  const files = untar(Bun.gunzipSync(bytes as Uint8Array<ArrayBuffer>));
+  await mkdir(binDir, { recursive: true });
+
+  for (const target of ['uv', 'uvx'] as const) {
+    const name = uvBinName(target);
+    const entryKey = [...files.keys()].find((k) => {
+      const base = k.split('/').pop() ?? '';
+      return base === name || base === target; // handle with or without .exe
+    });
+    if (!entryKey) {
+      if (target === 'uvx') {
+        // uvx may be absent (symlink-only in some builds) — copy uv as uvx
+        const uvDest = join(binDir, uvBinName('uv'));
+        const uvxDest = join(binDir, name);
+        await Bun.write(uvxDest, Bun.file(uvDest));
+        await chmod(uvxDest, 0o755);
+        continue;
+      }
+      throw new Error(`uv binary not found in archive ${chosen}`);
+    }
+    const dest = join(binDir, name);
+    // biome-ignore lint/style/noNonNullAssertion: entryKey was just found via find(), value is guaranteed
+    await Bun.write(dest, files.get(entryKey)!);
+    await chmod(dest, 0o755);
+  }
+
+  log.info(`env-deps: uv ${tag} installed to ${binDir}`);
+  return 'installed';
+}
+
+// ─── Combined ─────────────────────────────────────────────────────────────────
+
+export interface EnvDepsInstallResult {
+  node: EnvDepResult;
+  uv: EnvDepResult;
+  errors?: Record<string, string>;
+}
+
+export async function installEnvDeps(
+  binDir: string,
+  opts: { installNode?: boolean; installUv?: boolean },
+  log: Logger
+): Promise<EnvDepsInstallResult> {
+  const errors: Record<string, string> = {};
+
+  const [node, uv] = await Promise.all([
+    opts.installNode
+      ? ensureNode(binDir, log).catch((err: unknown) => {
+          errors.node = String(err);
+          log.warn(`env-deps: node install failed: ${String(err)}`);
+          return 'failed' as const;
+        })
+      : Promise.resolve('skipped' as const),
+    opts.installUv
+      ? ensureUv(binDir, log).catch((err: unknown) => {
+          errors.uv = String(err);
+          log.warn(`env-deps: uv install failed: ${String(err)}`);
+          return 'failed' as const;
+        })
+      : Promise.resolve('skipped' as const)
+  ]);
+
+  return { node, uv, ...(Object.keys(errors).length ? { errors } : {}) };
+}

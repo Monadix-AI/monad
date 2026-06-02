@@ -1,0 +1,30 @@
+import type { InstallSkillResponse } from '@monad/protocol';
+
+import { clientOf } from '../../endpoint-helpers.ts';
+import { listInstalledSkillsApi } from './list-installed-skills.ts';
+
+type UploadSkillArg = { filename: string; body: BodyInit; overwrite?: boolean; contentType?: string };
+
+const uploadSkillApi = listInstalledSkillsApi.injectEndpoints({
+  overrideExisting: true,
+  endpoints: (builder) => ({
+    uploadSkill: builder.mutation<InstallSkillResponse, UploadSkillArg>({
+      queryFn: async (body, api: { extra: unknown }) => {
+        const params = new URLSearchParams({ filename: body.filename, overwrite: String(body.overwrite ?? false) });
+        const res = await clientOf(api).fetch(`/v1/atoms/skills/upload?${params}`, {
+          method: 'POST',
+          headers: { 'content-type': body.contentType ?? 'application/octet-stream' },
+          body: body.body
+        });
+        if (!res.ok) {
+          const parsed = (await res.json().catch(() => null)) as { error?: string; code?: string } | null;
+          return { error: { status: res.status, code: parsed?.code, message: parsed?.error ?? res.statusText } };
+        }
+        return { data: (await res.json()) as InstallSkillResponse };
+      },
+      invalidatesTags: ['InstalledSkills', 'Skills']
+    })
+  })
+});
+
+export const { useUploadSkillMutation } = uploadSkillApi;

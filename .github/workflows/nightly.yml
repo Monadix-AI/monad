@@ -1,0 +1,195 @@
+name: Nightly
+
+on:
+  schedule:
+    # 02:00 UTC every day
+    - cron: "0 2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  # ── Gate ──────────────────────────────────────────────────────────────────────
+  # Decide whether there are new commits since the last nightly, and pin the version
+  # metadata (date + sha) once so every build leg and the publish job agree even if the
+  # run straddles UTC midnight.
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      new: ${{ steps.check.outputs.new }}
+      date: ${{ steps.meta.outputs.date }}
+      sha: ${{ steps.meta.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history so we can compare against the last nightly tag
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Check for new commits since last nightly
+        id: check
+        run: |
+          LAST=$(git tag -l 'v*-nightly.*' | sort -V | tail -1)
+          if [ -z "$LAST" ]; then
+            echo "new=true" >> "$GITHUB_OUTPUT"
+          elif git merge-base --is-ancestor HEAD "$LAST" 2>/dev/null; then
+            echo "new=false" >> "$GITHUB_OUTPUT"
+            echo "No new commits since $LAST — build will be skipped."
+          else
+            echo "new=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Pin version metadata
+        id: meta
+        run: |
+          echo "date=$(date -u +%Y%m%d)" >> "$GITHUB_OUTPUT"
+          echo "sha=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+  # ── Build ─────────────────────────────────────────────────────────────────────
+  # Split by OS like release.yml: linux+windows cross-compile on a Linux runner; darwin
+  # builds on a macOS runner because the bundled Mo sprite (Cocoa GUI, apps/mo) can't
+  # cross-compile. A single Linux runner would ship darwin tarballs WITHOUT Mo.app.
+  build:
+    name: build (${{ matrix.id }})
+    needs: check
+    if: needs.check.outputs.new == 'true'
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - id: linux-windows
+            runner: ubuntu-latest
+            os_filter: linux,windows
+          - id: darwin
+            runner: macos-latest
+            os_filter: darwin
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: ${{ runner.os }}-bun-
+
+      - name: Install cross-compilers for native sandbox launcher
+        if: matrix.id == 'linux-windows'
+        run: |
+          sudo apt-get update -qq
+          # gcc-aarch64-linux-gnu: linux-arm64 sandbox launcher
+          # musl-tools: linux-x64-musl sandbox launcher
+          # gcc-mingw-w64-x86-64: windows-x64 sandbox launcher
+          # (Mo is macOS-only for now — no GTK deps needed on the Linux leg.)
+          sudo apt-get install -y --no-install-recommends gcc-aarch64-linux-gnu musl-tools gcc-mingw-w64-x86-64
+
+      - name: Install llvm-mingw (Windows ARM64 cross-compiler)
+        if: matrix.id == 'linux-windows'
+        run: |
+          TAG=$(curl -fsSL https://api.github.com/repos/mstorsjo/llvm-mingw/releases/latest | jq -r .tag_name)
+          TARBALL="llvm-mingw-${TAG}-ucrt-ubuntu-22.04-x86_64.tar.xz"
+          curl -fsSL "https://github.com/mstorsjo/llvm-mingw/releases/download/${TAG}/${TARBALL}" | tar -xJ
+          echo "$PWD/llvm-mingw-${TAG}-ucrt-ubuntu-22.04-x86_64/bin" >> "$GITHUB_PATH"
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      # macOS leg emits darwin-arm64 + darwin-x64 (+ universal Mo.app); Linux leg emits linux*/windows*.
+      - name: Build nightly binaries
+        run: >-
+          bun run scripts/build-release.ts --all
+          --os=${{ matrix.os_filter }}
+          --prerelease="nightly.${{ needs.check.outputs.date }}"
+          --build="${{ needs.check.outputs.sha }}"
+
+      - name: Upload tarballs as artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-tarballs-${{ matrix.id }}
+          path: |
+            dist/*.tar.gz
+            dist/*.sha256
+          retention-days: 1
+
+  # ── Publish ─────────────────────────────────────────────────────────────────────
+  # Merge both legs' tarballs, tag, publish, and prune. Runs once on a Linux runner.
+  publish:
+    needs: [check, build]
+    if: needs.check.outputs.new == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history + tags so the tag/prune git operations work.
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Download tarballs
+        uses: actions/download-artifact@v4
+        with:
+          pattern: nightly-tarballs-*
+          merge-multiple: true
+          path: dist/
+
+      - name: Publish nightly GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          DATE="${{ needs.check.outputs.date }}"
+          SHA="${{ needs.check.outputs.sha }}"
+          VERSION=$(jq -r '.version' package.json)
+          TAG="v${VERSION}-nightly.${DATE}+${SHA}"
+          # Delete any existing tag for today (idempotent re-runs)
+          gh release delete "$TAG" --yes 2>/dev/null || true
+          git tag -f "$TAG"
+          git push origin "$TAG" --force
+          gh release create "$TAG" dist/*.tar.gz dist/*.sha256 \
+            --title "Nightly ${DATE} (${SHA})" \
+            --notes "Automated nightly build from \`$(git rev-parse HEAD)\`." \
+            --prerelease
+
+      - name: Prune old nightly releases (keep latest 7)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # List all nightly releases sorted newest-first, skip the first 7, delete the rest.
+          gh release list --limit 100 --json tagName,isPrerelease \
+            --jq '[.[] | select(.isPrerelease and (.tagName | test("-nightly\\.")))] | .[7:] | .[].tagName' \
+          | while read -r tag; do
+              echo "Deleting old nightly release: $tag"
+              gh release delete "$tag" --yes 2>/dev/null || true
+              git push origin --delete "$tag" 2>/dev/null || echo "  note: could not delete tag $tag (may already be gone)"
+            done
+
+  # Real-model e2e against OpenRouter's free router — the network-bound complement to the offline
+  # mock e2e that runs on every PR. Independent of the build job (it verifies provider integration,
+  # not the binary). With no OPENROUTER_API_KEY secret the suite self-skips (describe.skipIf), so the
+  # job stays green on forks / unconfigured repos rather than failing.
+  live-e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Live model e2e (free model)
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          # Override to pin a specific free model, e.g. MONAD_LIVE_MODEL: "openrouter/free".
+          MONAD_LIVE_MODEL: ${{ vars.MONAD_LIVE_MODEL }}
+        run: >-
+          bun test
+          apps/monad/test/e2e/live-model.test.ts
+          apps/monad/test/e2e/live-approvals.test.ts
+          apps/monad/test/e2e/live-scenarios.test.ts
+          apps/monad/test/e2e/live-resilience.test.ts

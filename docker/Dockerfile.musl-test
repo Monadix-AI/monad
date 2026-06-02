@@ -1,0 +1,44 @@
+# syntax=docker/dockerfile:1
+#
+# musl/Alpine coverage for the test suite. The GH Actions matrix covers glibc Linux
+# (ubuntu), macOS, and Windows; this fills in the musl-libc Linux corner that those
+# runners miss — catching libc-dependent runtime issues (unix sockets, bun:sqlite,
+# Bun.RedisClient) without needing a separate musl binary build.
+#
+# Runs the actual `bun test` suite under Alpine's musl Bun, not the install pipeline
+# (that's docker/Dockerfile.test on glibc/Debian).
+#
+# Usage:
+#   bun run docker:test:install:musl
+#   PLATFORM=linux/amd64 bun run docker:test:install:musl   # x64 under QEMU on Apple Silicon
+
+# Pin to the repo's bun version (package.json packageManager) so install/hoisting
+# behaviour matches CI and the host, not whatever floating 1.x the tag resolves to.
+FROM oven/bun:1.3.14-alpine AS musl-tester
+
+WORKDIR /workspace
+
+# Layer-cache bun install: copy manifests first, full source second.
+# This matches Dockerfile.test and Dockerfile.e2e patterns for consistent build behavior.
+COPY bun.lock package.json turbo.jsonc ./
+COPY --parents apps/*/package.json clients/*/package.json packages/*/package.json ./
+
+# bash is needed by the code-exec tool (and its tests); Alpine ships only sh by default.
+RUN apk add --no-cache bash
+
+# Retry to ride out transient registry flakiness (mirrors Dockerfile.test).
+RUN BUN_RETRY=3 bun install
+
+# Copy the whole repo source after install (node_modules/dist/etc. excluded via .dockerignore).
+COPY . .
+
+# turbo.jsonc sets ui:"tui"; force the stream renderer in this non-interactive build.
+ENV TURBO_UI=false
+
+# Run only the test suite — this stage's unique value is exercising the RUNTIME under
+# musl libc (unix sockets, bun:sqlite, Bun.RedisClient). Typecheck is libc-independent
+# and already covered on glibc/macOS/Windows by the GH Actions matrix, so we skip it
+# here to keep the musl container off the heavy Next.js build graph.
+RUN echo "[musl-test] test suite under musl Bun" && bun run test
+
+RUN echo "[musl-test] All tests passed under Alpine/musl."

@@ -1,0 +1,163 @@
+import type { MonadPaths } from '@monad/home';
+
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { initMonadHome, loadAll, loadAuth, pathsForHome, saveProfile } from '@monad/home';
+
+import { createStore } from '@/store/db/index.ts';
+import { checkAndRepair } from '@/store/home/integrity.ts';
+
+function makePaths(base: string): MonadPaths {
+  return pathsForHome(base);
+}
+
+let testDir: string;
+let paths: MonadPaths;
+
+beforeEach(() => {
+  testDir = join(tmpdir(), `monad-test-${Date.now()}`);
+  paths = makePaths(testDir);
+});
+
+afterEach(async () => {
+  for (let attempt = 0; attempt < 10; attempt++) {
+    try {
+      await rm(testDir, { recursive: true, force: true });
+      return;
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code;
+      if (code !== 'EBUSY' && code !== 'EPERM' && code !== 'ENOTEMPTY') throw err;
+      await Bun.sleep(100);
+    }
+  }
+});
+
+describe('checkAndRepair', () => {
+  test('reports ok when everything is healthy', async () => {
+    await initMonadHome(paths);
+    const cfg = await loadAll(paths.config, paths.profile);
+    if (!cfg) throw new Error('config missing');
+    cfg.model.default = cfg.model.profiles[0]?.alias ?? '';
+    await saveProfile(paths.profile, cfg);
+
+    const store = createStore({ path: paths.db });
+    const report = await checkAndRepair(paths, store);
+    store.close();
+
+    expect(report.config).toBe('ok');
+    expect(report.profile).toBe('ok');
+    expect(report.auth).toBe('ok');
+    expect(report.db).toBe('ok');
+  });
+
+  test('repairs missing config.json', async () => {
+    // Provide auth only
+    await initMonadHome(paths);
+    await rm(paths.config);
+
+    const store = createStore({ path: paths.db });
+    const report = await checkAndRepair(paths, store);
+    store.close();
+
+    expect(report.config).toBe('missing');
+    // After repair, config should exist
+    expect(await loadAll(paths.config, paths.profile)).not.toBeNull();
+  });
+
+  test('throws when config.json is corrupt', async () => {
+    await initMonadHome(paths);
+    await Bun.write(paths.config, '{not valid json}');
+
+    const store = createStore({ path: paths.db });
+    await expect(checkAndRepair(paths, store)).rejects.toThrow('config.json is not valid JSON');
+    store.close();
+
+    const raw = await Bun.file(paths.config).text();
+    expect(raw).toBe('{not valid json}');
+  });
+
+  test('repairs corrupt auth.json', async () => {
+    await initMonadHome(paths);
+    await Bun.write(paths.auth, '{not valid json}');
+
+    const store = createStore({ path: paths.db });
+    const report = await checkAndRepair(paths, store);
+    store.close();
+
+    expect(report.auth).toBe('repaired');
+    expect(await loadAuth(paths.auth)).not.toBeNull();
+  });
+
+  test('repairs missing profile.json', async () => {
+    await initMonadHome(paths);
+    await rm(paths.profile);
+
+    const store = createStore({ path: paths.db });
+    const report = await checkAndRepair(paths, store);
+    store.close();
+
+    expect(report.profile).toBe('missing');
+    expect(await Bun.file(paths.profile).exists()).toBe(true);
+  });
+
+  test('repairs corrupt profile.json', async () => {
+    await initMonadHome(paths);
+    await Bun.write(paths.profile, '{not valid json}');
+
+    const store = createStore({ path: paths.db });
+    const report = await checkAndRepair(paths, store);
+    store.close();
+
+    expect(report.profile).toBe('repaired');
+    expect(await Bun.file(paths.profile).exists()).toBe(true);
+  });
+
+  test('repairs missing model default by selecting the first profile', async () => {
+    await initMonadHome(paths);
+    const cfg = await loadAll(paths.config, paths.profile);
+    if (!cfg) throw new Error('config missing');
+    cfg.model.default = '';
+    cfg.model.profiles = [
+      { alias: 'fast', provider: 'p', modelId: 'm1', params: {}, fallbacks: [], roles: {} },
+      { alias: 'smart', provider: 'p', modelId: 'm2', params: {}, fallbacks: [], roles: {} }
+    ];
+    await saveProfile(paths.profile, cfg);
+
+    const store = createStore({ path: paths.db });
+    const report = await checkAndRepair(paths, store);
+    store.close();
+
+    expect(report.profile).toBe('repaired');
+    expect((await loadAll(paths.config, paths.profile))?.model.default).toBe('fast');
+  });
+
+  test('repairs stale model default by selecting the first profile', async () => {
+    await initMonadHome(paths);
+    const cfg = await loadAll(paths.config, paths.profile);
+    if (!cfg) throw new Error('config missing');
+    cfg.model.default = 'missing';
+    cfg.model.profiles = [
+      { alias: 'fast', provider: 'p', modelId: 'm1', params: {}, fallbacks: [], roles: {} },
+      { alias: 'smart', provider: 'p', modelId: 'm2', params: {}, fallbacks: [], roles: {} }
+    ];
+    await saveProfile(paths.profile, cfg);
+
+    const store = createStore({ path: paths.db });
+    const report = await checkAndRepair(paths, store);
+    store.close();
+
+    expect(report.profile).toBe('repaired');
+    expect((await loadAll(paths.config, paths.profile))?.model.default).toBe('fast');
+  });
+
+  test('db schema version matches after migration', async () => {
+    await initMonadHome(paths);
+    const store = createStore({ path: paths.db });
+    const report = await checkAndRepair(paths, store);
+    store.close();
+
+    expect(report.db).toBe('ok');
+  });
+});

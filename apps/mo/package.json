@@ -1,0 +1,12 @@
+{
+  "name": "@monad/mo",
+  "description": "Mo — the monad desktop sprite. A pixel-art cat you drop files onto to start a session.",
+  "version": "0.0.0",
+  "devDependencies": {},
+  "private": true,
+  "scripts": {
+    "build": "bun run scripts/build.ts",
+    "lint": "biome check ."
+  },
+  "type": "module"
+}

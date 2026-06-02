@@ -1,0 +1,230 @@
+// Boot phase (terminal): build the HTTP transport and start listening — TCP (+ TLS when configured)
+// and a permission-gated Unix socket, or stdio in --stdio mode — then print the ready banner, wire
+// graceful-shutdown signals, and connect channels. No outputs: this is where startDaemon ends and
+// the daemon begins serving.
+
+import type { MonadConfig, MonadPaths } from '@monad/home';
+import type { ChannelService } from '@/channels/channel.ts';
+import type { createDaemonHandlers } from '@/handlers/handlers.ts';
+import type { I18nService } from '@/services/i18n.ts';
+
+import { chmod, unlink } from 'node:fs/promises';
+import { join } from 'node:path';
+import { logger } from '@monad/logger';
+import { MONAD_VERSION } from '@monad/protocol';
+import { Elysia } from 'elysia';
+
+import { createMoModule } from '@/handlers/mo/handlers.ts';
+import { printBanner, printGoodbye, printReadyInfo } from '@/infra/banner.ts';
+import { shutdownBus } from '@/infra/shutdown-bus.ts';
+import { MoService } from '@/services/mo.ts';
+import { createMoController } from '@/transports/http/mo/controller.ts';
+import { startStdioTransport } from '@/transports/stdio.ts';
+import { createHttpTransport } from '../transports/http.ts';
+
+// Cap buffered request bodies. The largest legitimate body is a sendMessage whose text is bounded
+// by MESSAGE_TEXT_MAX (1 MiB) plus JSON envelope/escaping overhead; 4 MiB leaves headroom while
+// preventing memory-exhaustion DoS from oversized POSTs (the body is buffered before any schema
+// .max() can reject it).
+const MAX_REQUEST_BODY_BYTES = 4 * 1024 * 1024;
+
+export interface ServeDeps {
+  handlers: ReturnType<typeof createDaemonHandlers>;
+  paths: MonadPaths;
+  host: string;
+  port: number;
+  remoteAccess: MonadConfig['network']['remoteAccess'];
+  moBinaryPath?: string;
+  /** Whether to auto-launch Mo on startup (config.json `mo.enabled`, default on). */
+  moEnabled: boolean;
+  /** Persist the Mo on/off choice so the start/stop toggle survives a daemon restart. */
+  setMoEnabled: (enabled: boolean) => Promise<void>;
+  tlsCert?: { certPath: string; keyPath: string };
+  tlsFingerprint?: string;
+  i18n: I18nService;
+  channelService: ChannelService;
+  flags: { devMode: boolean; devSilent: boolean; stdoutRpc: boolean; stdioMode: boolean; useMock: boolean };
+  beforeListen?: (app: ReturnType<typeof createHttpTransport>) => void;
+  openaiCompatConfig?: () => Promise<{ enabled: boolean; token?: string }>;
+}
+
+export async function serveDaemon(deps: ServeDeps): Promise<void> {
+  const {
+    handlers,
+    paths,
+    host,
+    port,
+    remoteAccess,
+    moBinaryPath,
+    moEnabled,
+    setMoEnabled,
+    tlsCert,
+    tlsFingerprint,
+    i18n,
+    channelService,
+    flags,
+    openaiCompatConfig
+  } = deps;
+  const { devMode, devSilent, stdoutRpc, stdioMode, useMock } = flags;
+
+  let enableDocs = false;
+  if (devMode && !stdoutRpc) {
+    enableDocs = devSilent || (await confirmDeveloperMode());
+  }
+
+  const httpApp = createHttpTransport(handlers, { docs: enableDocs, remoteAccess, openaiCompatConfig });
+
+  // Mo (the desktop sprite) is launched/quit through the daemon and dies with it: the exit handler
+  // runs on the same process.exit(0) that gracefulShutdown triggers for SIGINT/SIGTERM below.
+  // Its routes are mounted on the app INSTANCE here (not inside createHttpTransport) so they never
+  // enter its return type. This is deliberate on two counts, re-confirmed against the current
+  // tsc-declarations baseline: (1) /v1/mo/{launch,quit,drop,status} are imperative daemon-control
+  // RPCs from the settings panel, not data resources the web subscribes to — they belong outside
+  // the typed Eden treaty and are called via plain fetch by design; (2) that treaty is inferred from
+  // createHttpTransport's return type and sits near TS's instantiation ceiling, so folding one more
+  // route group back in risks degrading every endpoint's types. Cast to bare Elysia so this .use
+  // stays a runtime-only mutation (routes still serve on TCP + unix).
+  // config.json `mo.binaryPath` overrides; otherwise auto-locate the bundled Mo. `||` (not `??`) so
+  // an empty string in config doesn't suppress auto-location.
+  const moService = new MoService(moBinaryPath?.trim() || MoService.bundledPath(), paths.sock, port);
+  process.on('exit', () => moService.stop());
+  // Web UI URL Mo opens when clicked (also printed in the ready banner below): in dev, the separate
+  // Next server on WEB_PORT; otherwise the daemon serves the SPA at its own origin.
+  const isDev = devMode || devSilent;
+  const webUiUrl =
+    isDev && Bun.env.WEB_PORT
+      ? `http://localhost:${Bun.env.WEB_PORT}`
+      : `${tlsCert ? 'https' : 'http'}://${host === '0.0.0.0' ? 'localhost' : host}:${port}/`;
+  (httpApp as unknown as Elysia).use(
+    createMoController(createMoModule(handlers.session, moService, webUiUrl, setMoEnabled))
+  );
+
+  deps.beforeListen?.(httpApp);
+
+  const sockPath = paths.sock;
+
+  if (stdioMode) {
+    process.stderr.write('monad daemon: stdio mode\n');
+    await startStdioTransport(handlers);
+    return;
+  }
+
+  httpApp.listen({
+    hostname: host,
+    port,
+    maxRequestBodySize: MAX_REQUEST_BODY_BYTES,
+    ...(tlsCert ? { tls: { key: Bun.file(tlsCert.keyPath), cert: Bun.file(tlsCert.certPath) } } : {})
+  });
+
+  // Same Elysia app, second listener on a Unix domain socket. Local clients (the CLI) reach the
+  // daemon through this for lower latency than TCP loopback and filesystem-permission-gated access
+  // — no port, no bearer token needed. WS push (/v1/stream) stays TCP-only: Bun's WebSocket client
+  // can't dial a Unix socket.
+  // Windows: Bun has no Unix-socket support (named pipes unimplemented — oven-sh/bun#13042). Skip
+  // the second listener; local Windows clients always dial TCP loopback.
+  if (process.platform !== 'win32') {
+    await unlink(sockPath).catch(() => {}); // remove stale socket from a previous run
+    const unixServer = Bun.serve({
+      unix: sockPath,
+      fetch: (req) => httpApp.handle(req),
+      maxRequestBodySize: MAX_REQUEST_BODY_BYTES
+    });
+    // The socket grants unauthenticated RPC to anyone who can connect() — its filesystem
+    // permissions ARE its auth. Bun.serve does not restrict them, so lock it to owner-only.
+    await chmod(sockPath, 0o600).catch(() => {});
+    process.on('exit', () => {
+      unixServer.stop(true);
+    });
+  }
+
+  // Mo enabled (default on, or the persisted toggle): launch the sprite now that the socket it
+  // connects to is up. Best-effort — a missing binary (Mo not built / unsupported platform) just
+  // logs; it never blocks daemon startup. isRunning() re-adopts a Mo that outlived a prior daemon.
+  if (moEnabled) {
+    void moService.launch().then((r) => {
+      if (!r.ok) logger.info(`monad: Mo not launched — ${r.error}`);
+    });
+  }
+
+  const scheme = tlsCert ? 'https' : 'http';
+  const mockTag = useMock ? ' (mock model)' : '';
+  const docsTag = enableDocs ? ` docs:${scheme}://${host}:${port}/docs` : '';
+  printBanner(MONAD_VERSION, useMock);
+  logger.info(`monad daemon listening on ${scheme}://${host}:${port} unix:${sockPath}${mockTag}${docsTag}`);
+  if (tlsFingerprint) {
+    logger.info(`monad: TLS cert SHA-256 fingerprint: ${tlsFingerprint}`);
+  }
+
+  // The success/environment summary is owned by the daemon (single source of truth) so `monad
+  // start`, a manual `monad daemon`, and the installer all show identical info. `monad start`
+  // launches us detached and relays this stdout to the user until we're reachable.
+  printReadyInfo({
+    webUrl: webUiUrl,
+    configPath: paths.config,
+    guidePath: join(paths.workspace, 'templates/model-provider.sample.md'),
+    t: i18n.t
+  });
+
+  // Graceful shutdown. process.exit(0) synchronously runs every process.on('exit') handler
+  // registered above — that is what kills spawned MCP child processes (conn.close → proc.kill
+  // fires synchronously), stops the unix servers, and disposes timers. Idempotent: a second
+  // signal during teardown is ignored.
+  let shuttingDown = false;
+  const gracefulShutdown = (farewell: boolean): void => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    if (farewell) printGoodbye();
+    process.exit(0);
+  };
+  // Expose graceful shutdown to the HTTP layer (used by POST /v1/daemon/stop on Windows, where
+  // SIGTERM cannot be caught on a detached process). Must be registered before the signal handlers
+  // below so the HTTP route is ready the instant the daemon starts accepting connections.
+  shutdownBus.register(() => gracefulShutdown(false));
+
+  // SIGINT (Ctrl-C in a terminal `monad daemon`, all platforms) prints the farewell banner.
+  process.once('SIGINT', () => gracefulShutdown(true));
+  // SIGTERM (`monad stop` on Unix) skips the banner — the CLI prints Goodbye on its TTY instead,
+  // since the daemon runs detached without a TTY and its stdout has no reader. Per the Node docs
+  // SIGTERM "is not supported on Windows" (never OS-generated; process.kill SIGTERM = hard kill),
+  // so this handler only ever fires on Unix.
+  process.once('SIGTERM', () => gracefulShutdown(false));
+  // Windows-relevant console signals (Node docs): SIGBREAK fires on Ctrl+Break, SIGHUP when the
+  // console window is closed. These only reach the daemon when it owns an attached console (a
+  // foreground `monad daemon`), NOT the detached `monad start` background process — there is no
+  // way to send a catchable signal to a detached process on Windows. SIGHUP also covers a closed
+  // controlling terminal on Unix. Harmless to register everywhere — Bun emits only what the OS supports.
+  process.once('SIGBREAK', () => gracefulShutdown(false));
+  process.once('SIGHUP', () => gracefulShutdown(false));
+
+  // Connect channels after the banner so startup noise doesn't precede the "ready" signal.
+  // Non-fatal per-channel (start() already swallows individual errors); run detached so a slow IM
+  // handshake never delays the daemon becoming usable.
+  if (!useMock) {
+    process.on('exit', () => void channelService.stop());
+    // `bun --hot` re-evaluates this module on every source change WITHOUT exiting the process, so
+    // process.on('exit') never fires and the previous evaluation's channel poll loops are never
+    // aborted. For Telegram that means a second getUpdates long-poll on the same token → permanent
+    // "Conflict: terminated by other getUpdates request". Abort the old channels before the module
+    // is swapped so exactly one poll loop runs at a time. (No-op in prod: the production `start`
+    // script runs without --hot, so import.meta.hot is undefined.)
+    const hot = (import.meta as ImportMeta & { hot?: { dispose(cb: () => void): void } }).hot;
+    hot?.dispose(() => void channelService.stop());
+    void channelService.start();
+  }
+}
+
+async function confirmDeveloperMode(): Promise<boolean> {
+  if (!process.stdin.isTTY) return true;
+
+  const { createInterface } = await import('node:readline');
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+
+  const answer = await new Promise<string>((resolve) => {
+    rl.question('\nWould you like to enable the API docs browser at /docs? [Y/n] ', resolve);
+  });
+
+  rl.close();
+
+  const trimmed = answer.trim().toLowerCase();
+  return trimmed === '' || trimmed === 'y' || trimmed === 'yes';
+}

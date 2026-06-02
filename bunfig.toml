@@ -1,0 +1,10 @@
+[test]
+preload = ["./scripts/test-setup.ts"]
+coverageReporter = ["text", "lcov"]
+coverageSkipTestFiles = true
+
+[install]
+globalStore = false
+
+[run]
+noOrphans = true

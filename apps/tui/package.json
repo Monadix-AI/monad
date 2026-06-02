@@ -1,0 +1,35 @@
+{
+  "name": "@monad/tui",
+  "version": "0.0.0",
+  "dependencies": {
+    "@monad/client": "workspace:*",
+    "@monad/client-rtk": "workspace:*",
+    "@monad/home": "workspace:*",
+    "@monad/protocol": "workspace:*",
+    "@reduxjs/toolkit": "^2.12.0",
+    "ink": "^7.1.0",
+    "ink-text-input": "^6.0.0",
+    "react": "^19.2.7",
+    "react-redux": "^9.3.0",
+    "zustand": "^5.0.14"
+  },
+  "devDependencies": {
+    "@monad/config": "workspace:*",
+    "@types/react": "^19.2.17"
+  },
+  "exports": {
+    "./start": "./src/Main.tsx"
+  },
+  "module": "src/Main.tsx",
+  "private": true,
+  "scripts": {
+    "lint": "biome check .",
+    "start": "bun src/Main.tsx",
+    "start:dev": "bun --hot src/Main.tsx",
+    "test": "bun ../../scripts/bun-test.ts test/ --only-failures",
+    "test:loud": "bun ../../scripts/bun-test.ts test/ --loud",
+    "test:unit": "bun ../../scripts/bun-test.ts test/unit/ --only-failures",
+    "typecheck": "tsgo --noEmit"
+  },
+  "type": "module"
+}

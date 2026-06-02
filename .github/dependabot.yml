@@ -1,0 +1,23 @@
+version: 2
+updates:
+  # Bun/npm dependencies across the monorepo (root + workspaces).
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    groups:
+      # Batch low-risk dev tooling bumps into a single PR to cut noise.
+      dev-dependencies:
+        dependency-type: "development"
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+
+  # GitHub Actions used in workflows.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "ci"

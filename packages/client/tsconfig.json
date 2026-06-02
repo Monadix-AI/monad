@@ -1,0 +1,8 @@
+{
+  "extends": "@monad/config/tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ESNext", "DOM"]
+  },
+  "include": ["src", "test"],
+  "references": [{ "path": "../../apps/monad/tsconfig.build.json" }]
+}

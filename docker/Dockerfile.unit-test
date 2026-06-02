@@ -1,0 +1,37 @@
+# syntax=docker/dockerfile:1
+#
+# Disposable Linux test run — exercises the cross-platform / native-cli test suite (including the
+# *.linux.test.ts cases that are skipped on the macOS dev box) inside a fresh glibc Linux image.
+# Tests run in a RUN layer, so a build failure == a test failure.
+#
+# Usage:  bun run docker:test:unit
+
+FROM oven/bun:1 AS test
+
+WORKDIR /workspace
+
+# Layer-cache bun install: manifests first, full source second.
+COPY bun.lock package.json turbo.jsonc ./
+COPY --parents apps/*/package.json clients/*/package.json packages/*/package.json ./
+
+RUN BUN_RETRY=3 bun install
+
+COPY . .
+
+# Hermetic loopback: the e2e tests dial the daemon over http://127.0.0.1, but a build-time proxy env
+# (e.g. inherited from the host) makes Bun's fetch route loopback through the proxy and fail. Force
+# all loopback traffic direct. NODE_ENV=test keeps the logger quiet;
+# process-tree.linux.test.ts spawns a real detached process group.
+ENV NODE_ENV=test \
+    NO_PROXY=* \
+    HTTP_PROXY="" HTTPS_PROXY="" ALL_PROXY="" \
+    http_proxy="" https_proxy="" all_proxy=""
+RUN bun test \
+  packages/protocol/test/native-cli-agent.test.ts \
+  apps/monad/test/unit/native-cli-env.test.ts \
+  apps/monad/test/unit/native-cli-adapters.test.ts \
+  apps/monad/test/unit/native-cli-structured-lines.test.ts \
+  apps/monad/test/unit/native-cli/process-tree.linux.test.ts \
+  apps/monad/test/unit/store/native-cli-sessions.test.ts \
+  apps/monad/test/e2e/native-cli-agent-runtime.test.ts \
+  apps/monad/test/e2e/native-cli-agent-settings.test.ts

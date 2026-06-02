@@ -1,0 +1,91 @@
+// The single first-party atom pack — the registration entry for @monad/atoms. Default-exports the
+// built-in atom pack; the only named export is configureNativeLauncherPath, the daemon→launcher
+// config bridge the daemon must push before it selects a launcher (the native landlock/win32
+// launchers ship here, so their binary-path override lives here too). The daemon loads the pack
+// through the SAME atom-kind-gated path (loadManifestAtomPack) as any third-party pack — the "core
+// is all atoms" invariant: nothing first-party bypasses the gate.
+//
+// Every built-in *atom* monad ships — connectors, channels, reserved slash commands, and model
+// providers — is bundled here. Tools are NOT an atom kind: they are always first-party, built into
+// the daemon (apps/monad/src/tools), and wired straight into the tool registry — never through an
+// atom pack. The daemon owns the sandbox + credentials wrapping. See main.ts's builtin tool wiring.
+//
+// Commands route to the reserved builtin registry (not the third-party attribution path) — see the
+// daemon's builtin load branch. The built-in UI locales are NOT here — they live in @monad/i18n
+// (the i18n engine owns them); the daemon loads them from @monad/i18n/locale-dir at startup.
+//
+// Tests that need channel adapters, providers, or commands import directly from the source files
+// under packages/atoms/src/ (relative paths from apps/monad/test/).
+
+import { defineAtomPack, SDK_VERSION } from '@monad/sdk-atom';
+
+import { discordChannelAtom } from './channels/discord.ts';
+import { emailChannelAtom } from './channels/email.ts';
+import { feishuChannelAtom } from './channels/feishu.ts';
+import { googleChatChannelAtom } from './channels/google-chat.ts';
+import { imessageChannelAtom } from './channels/imessage.ts';
+import { ircChannelAtom } from './channels/irc.ts';
+import { lineChannelAtom } from './channels/line.ts';
+import { qqChannelAtom } from './channels/qq.ts';
+import { signalChannelAtom } from './channels/signal.ts';
+import { slackChannelAtom } from './channels/slack.ts';
+import { teamsChannelAtom } from './channels/teams.ts';
+import { telegramChannelAtom } from './channels/telegram.ts';
+import { twilioChannelAtom } from './channels/twilio.ts';
+import { webhookChannelAtom } from './channels/webhook.ts';
+import { wecomChannelAtom } from './channels/wecom.ts';
+import { whatsappChannelAtom } from './channels/whatsapp.ts';
+import { BUILTIN_COMMANDS } from './commands/builtins.ts';
+import { builtinConnectors } from './connectors/index.ts';
+import { builtinModelProviders } from './providers/index.ts';
+import { dockerLauncher } from './sandbox/docker.ts';
+import { e2bLauncher } from './sandbox/e2b.ts';
+import { landlockLauncher } from './sandbox/landlock.ts';
+import { seatbeltLauncher } from './sandbox/seatbelt.ts';
+import { win32Launcher } from './sandbox/win32.ts';
+
+export { configureDockerImage, detectDockerRuntime, dockerLauncher, dockerRuntimeAvailable } from './sandbox/docker.ts';
+export { __setE2bLoaderForTest, configureE2bApiKey, e2bLauncher } from './sandbox/e2b.ts';
+// The one named export: the daemon pushes config.agent.sandbox.launcherPath here before launcher
+// selection so the native landlock/win32 launchers can find their helper binary.
+export { configureNativeLauncherPath } from './sandbox/native-path.ts';
+
+export default defineAtomPack({
+  manifest: {
+    name: 'monad-builtins',
+    version: '1.0.0',
+    sdkVersion: SDK_VERSION,
+    atoms: ['connector', 'channel', 'command', 'provider', 'sandbox'],
+    description: 'First-party atoms bundled with monad',
+    author: 'monad'
+  },
+  connectors: builtinConnectors,
+  channels: [
+    telegramChannelAtom,
+    discordChannelAtom,
+    slackChannelAtom,
+    webhookChannelAtom,
+    ircChannelAtom,
+    lineChannelAtom,
+    whatsappChannelAtom,
+    twilioChannelAtom,
+    feishuChannelAtom,
+    wecomChannelAtom,
+    teamsChannelAtom,
+    googleChatChannelAtom,
+    emailChannelAtom,
+    signalChannelAtom,
+    qqChannelAtom,
+    imessageChannelAtom
+  ],
+  commands: BUILTIN_COMMANDS,
+  providers: builtinModelProviders,
+  // One launcher per supported platform, in the old platformSandboxLauncher precedence
+  // (macOS → Linux → Windows); bwrap is opt-in and not auto-registered.
+  // e2b is last: it matches any platform but requires an API key (isAvailable() gates it),
+  // so the local OS launcher wins whenever present; e2b kicks in only as explicit opt-in.
+  // OS launchers first (platform-specific, no credentials needed), then docker (any platform,
+  // requires runtime install), then e2b (any platform, requires API key). Registry picks the
+  // first fitting one in the builtin tier; third-party atom packs override all builtins.
+  sandboxes: [seatbeltLauncher, landlockLauncher, win32Launcher, dockerLauncher, e2bLauncher]
+});

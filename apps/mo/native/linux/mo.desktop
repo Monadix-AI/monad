@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Mo
+Comment=monad desktop sprite — drop a file on Mo to start a session
+Exec=mo
+Icon=mo
+Terminal=false
+Categories=Utility;
+X-GNOME-Autostart-enabled=true

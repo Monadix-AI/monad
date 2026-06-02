@@ -1,0 +1,12 @@
+model = "gpt-4.1"
+model_reasoning_effort = "high"
+sandbox_mode = "workspace-write"
+approval_policy = "on-request"
+
+[mcp_servers.fixture_stdio]
+command = "fixture-mcp"
+args = ["--stdio"]
+startup_timeout_sec = 5
+
+[plugins."browser@openai-bundled"]
+enabled = true

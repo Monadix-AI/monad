@@ -1,0 +1,115 @@
+# Monad
+
+> A local, single-user daemon for running agentic sessions — with a CLI and web UI.
+
+[![CI](https://github.com/monadix-labs/monad/actions/workflows/ci.yml/badge.svg)](https://github.com/monadix-labs/monad/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
+monad runs as a local daemon and serves a REST + SSE API over loopback and a
+Unix-domain socket. It ships with a CLI and a browser web UI, and keeps all
+state under `~/.monad/`. It binds **loopback only by
+default** — see the [security model](docs/runtime.md#security-model) before exposing it.
+
+**Contributing:** see [CONTRIBUTING.md](CONTRIBUTING.md) ·
+**Reporting a vulnerability:** see [SECURITY.md](SECURITY.md) ·
+**Community standards:** see [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
+
+## Install
+
+Pre-built, self-contained binaries (no Bun or Node needed at runtime) are published
+on the [Releases](https://github.com/monadix-labs/monad/releases) page for macOS,
+Linux, and Windows. Each asset is named `monad-<version>-<os>-<arch>.tar.gz` with a
+matching `.sha256`. Linux ships two libc flavours: the plain `linux-<arch>` build for
+glibc distros (Debian/Ubuntu/Fedora…) and a `linux-<arch>-musl` build for musl systems
+(Alpine and most embedded/Buildroot rootfs) — pick `-musl` if `ldd --version` mentions musl.
+
+**System requirements:** a 64-bit OS on **arm64 or x64** (32-bit ARM, RISC-V, and
+microcontrollers are not supported — the bundled Bun runtime needs a 64-bit host); ~100 MB
+free disk for the binary; **≥1 GB RAM** recommended (the idle daemon resides around ~300 MB);
+and outbound HTTPS to your model provider (monad orchestrates remote models, it does not run
+inference locally). This makes 64-bit Linux SBCs (e.g. Raspberry Pi 4/5) a viable target via
+the `linux-arm64`/`linux-arm64-musl` builds; bare-metal/RTOS embedded devices are out of scope.
+
+```bash
+# macOS (Apple Silicon) — swap the asset name for your os/arch (darwin|linux, arm64|x64)
+ASSET=monad-<version>-darwin-arm64
+curl -fsSL "https://github.com/monadix-labs/monad/releases/latest/download/$ASSET.tar.gz" -o "$ASSET.tar.gz"
+curl -fsSL "https://github.com/monadix-labs/monad/releases/latest/download/$ASSET.tar.gz.sha256" | shasum -a 256 -c -
+tar -xzf "$ASSET.tar.gz"
+
+./$ASSET/bin/monad --help
+./$ASSET/bin/monad up        # start the daemon + web UI together
+```
+
+On **Windows** (PowerShell), grab the `windows-x64` asset (`tar` ships with Windows 10 1803+ / 11):
+
+```powershell
+$ASSET = "monad-<version>-windows-x64"
+Invoke-WebRequest "https://github.com/monadix-labs/monad/releases/latest/download/$ASSET.tar.gz" -OutFile "$ASSET.tar.gz"
+tar -xzf "$ASSET.tar.gz"
+
+.\$ASSET\bin\monad.exe --help
+.\$ASSET\bin\monad.exe up        # start the daemon + web UI together
+```
+
+**Scripted install** — downloads the right asset, verifies the SHA256, and adds monad to your `PATH`:
+
+```bash
+# macOS / Linux
+curl -fsSL https://raw.githubusercontent.com/monadix-labs/monad/main/scripts/install.sh | bash
+```
+
+```powershell
+# Windows (PowerShell)
+irm https://raw.githubusercontent.com/monadix-labs/monad/main/scripts/install.ps1 | iex
+```
+
+To run from source instead, see [Setup](#setup).
+
+## Setup
+
+```bash
+bun install
+```
+
+## Running the daemon
+
+```bash
+bun run apps/monad/src/main.ts
+```
+
+The daemon writes all state to `~/.monad/` by default (created automatically on first run).
+
+## Local development isolation
+
+`bun run dev` automatically redirects all daemon state to `.dev/.monad/` (gitignored) — it never touches your real `~/.monad`. No configuration needed.
+
+To use a different home when running the daemon directly (e.g. to test a separate config):
+
+```bash
+MONAD_HOME=~/.monad-dev bun run apps/monad/src/main.ts
+```
+
+## Configuration
+
+Most settings live in `~/.monad/config.json` (created on first run) — daemon port,
+bind address, client transport, and remote-access token. No env vars are needed for
+normal use.
+
+For the transport model (TCP loopback vs Unix socket), the bootstrap environment
+variables, and the full security posture, see **[docs/runtime.md](docs/runtime.md)**.
+
+## CLI
+
+```bash
+bun run apps/cli/src/main.ts health
+bun run apps/cli/src/main.ts create "my session"
+bun run apps/cli/src/main.ts send <sessionId> "hello"
+bun run apps/cli/src/main.ts watch <sessionId>
+bun run apps/cli/src/main.ts config transport uds   # tcp | uds (see docs/runtime.md)
+```
+
+## Documentation
+
+See **[docs/](docs/README.md)** for architecture, design principles, conventions,
+and contributor docs.

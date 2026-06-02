@@ -1,0 +1,32 @@
+{
+  "name": "@monad/sdk-atom",
+  "version": "0.0.0",
+  "dependencies": {
+    "@monad/protocol": "workspace:*",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@monad/config": "workspace:*",
+    "@monad/i18n": "workspace:*"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./channel": "./src/channel.ts",
+    "./command": "./src/command.ts",
+    "./connector": "./src/connector.ts",
+    "./hook": "./src/hook.ts",
+    "./locale": "./src/locale.ts",
+    "./message-type": "./src/message-type.ts",
+    "./model": "./src/model.ts",
+    "./sandbox": "./src/sandbox.ts"
+  },
+  "module": "src/index.ts",
+  "private": true,
+  "scripts": {
+    "lint": "biome check .",
+    "test": "bun ../../scripts/bun-test.ts test/ --only-failures",
+    "test:loud": "bun ../../scripts/bun-test.ts test/ --loud",
+    "typecheck": "tsgo --noEmit"
+  },
+  "type": "module"
+}

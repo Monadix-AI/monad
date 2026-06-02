@@ -1,0 +1,791 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "version": {
+      "type": "number",
+      "const": 1
+    },
+    "model": {
+      "type": "object",
+      "properties": {
+        "default": {
+          "type": "string"
+        },
+        "providers": {
+          "default": [],
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "anthropic",
+                  "openai",
+                  "vercel-gateway",
+                  "openrouter",
+                  "google",
+                  "mistral",
+                  "amazon-bedrock",
+                  "azure",
+                  "openai-compatible",
+                  "cloudflare-gateway",
+                  "groq",
+                  "xai",
+                  "deepseek",
+                  "together",
+                  "fireworks",
+                  "cerebras",
+                  "perplexity",
+                  "moonshot",
+                  "zai",
+                  "minimax",
+                  "nvidia",
+                  "novita",
+                  "ollama",
+                  "huggingface"
+                ]
+              },
+              "baseUrl": {
+                "type": "string",
+                "format": "uri"
+              },
+              "extra": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": ["id", "label", "type"],
+            "additionalProperties": false
+          }
+        },
+        "profiles": {
+          "default": [],
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "alias": {
+                "type": "string"
+              },
+              "provider": {
+                "type": "string"
+              },
+              "modelId": {
+                "type": "string"
+              },
+              "params": {
+                "default": {},
+                "type": "object",
+                "properties": {
+                  "temperature": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 2
+                  },
+                  "maxTokens": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "topP": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  "reasoningEffort": {
+                    "type": "string",
+                    "enum": ["minimal", "low", "medium", "high"]
+                  }
+                },
+                "additionalProperties": false
+              },
+              "fallbacks": {
+                "default": [],
+                "type": "array",
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "profile": {
+                          "type": "string"
+                        }
+                      },
+                      "required": ["profile"],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "provider": {
+                          "type": "string"
+                        },
+                        "modelId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": ["provider", "modelId"],
+                      "additionalProperties": false
+                    }
+                  ]
+                }
+              }
+            },
+            "required": ["alias", "provider", "modelId", "params", "fallbacks"],
+            "additionalProperties": false
+          }
+        },
+        "roles": {
+          "default": {},
+          "type": "object",
+          "properties": {
+            "vision": {
+              "type": "string"
+            },
+            "image": {
+              "type": "string"
+            },
+            "speech": {
+              "type": "string"
+            },
+            "embedding": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "tierOverrides": {
+          "default": {},
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "type": "string",
+            "enum": ["fast", "smart", "power"]
+          }
+        },
+        "kinds": {
+          "default": {},
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "type": "string",
+            "enum": ["chat", "image", "speech", "embedding"]
+          }
+        }
+      },
+      "required": ["default", "providers", "profiles", "roles", "tierOverrides", "kinds"],
+      "additionalProperties": false
+    },
+    "agent": {
+      "default": {
+        "agents": [],
+        "tools": {
+          "webSearch": {
+            "provider": "auto"
+          },
+          "email": {
+            "backend": "auto"
+          },
+          "codeExecBackend": "local"
+        }
+      },
+      "type": "object",
+      "properties": {
+        "agents": {
+          "default": [],
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^agt_"
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
+              "modelAlias": {
+                "type": "string"
+              },
+              "framework": {
+                "type": "string",
+                "enum": ["openclaw", "hermes", "manus", "monad", "custom"]
+              },
+              "capabilities": {
+                "default": [],
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "declaredScopes": {
+                "default": [],
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "resource": {
+                      "type": "string"
+                    },
+                    "constraints": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "additionalProperties": {}
+                    }
+                  },
+                  "required": ["resource"],
+                  "additionalProperties": false
+                }
+              },
+              "skills": {
+                "type": "object",
+                "properties": {
+                  "autoload": {
+                    "type": "boolean"
+                  },
+                  "disabled": {
+                    "default": [],
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": ["disabled"],
+                "additionalProperties": false
+              },
+              "dir": {
+                "type": "string",
+                "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+              },
+              "description": {
+                "type": "string",
+                "maxLength": 1024
+              },
+              "model": {
+                "type": "string"
+              },
+              "atoms": {
+                "default": {
+                  "mode": "inherit",
+                  "allow": [],
+                  "deny": []
+                },
+                "type": "object",
+                "properties": {
+                  "mode": {
+                    "default": "inherit",
+                    "type": "string",
+                    "enum": ["inherit", "allowlist"]
+                  },
+                  "allow": {
+                    "default": [],
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "deny": {
+                    "default": [],
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": ["mode", "allow", "deny"],
+                "additionalProperties": false
+              },
+              "sandbox": {
+                "type": "object",
+                "properties": {
+                  "mode": {
+                    "type": "string",
+                    "enum": ["workspace", "home", "unrestricted", "ephemeral"]
+                  }
+                },
+                "required": ["mode"],
+                "additionalProperties": false
+              },
+              "visibility": {
+                "default": {
+                  "subagentCallable": false,
+                  "public": false
+                },
+                "type": "object",
+                "properties": {
+                  "subagentCallable": {
+                    "default": false,
+                    "type": "boolean"
+                  },
+                  "public": {
+                    "default": false,
+                    "type": "boolean"
+                  }
+                },
+                "required": ["subagentCallable", "public"],
+                "additionalProperties": false
+              },
+              "published": {
+                "type": "object",
+                "properties": {
+                  "providerId": {
+                    "type": "string"
+                  },
+                  "publishedAt": {
+                    "type": "string"
+                  },
+                  "lastConversationId": {
+                    "type": "string"
+                  }
+                },
+                "required": ["providerId", "publishedAt"],
+                "additionalProperties": false
+              }
+            },
+            "required": ["id", "name", "capabilities", "declaredScopes", "atoms", "visibility"],
+            "additionalProperties": false
+          }
+        },
+        "defaultAgentId": {
+          "type": "string"
+        },
+        "tools": {
+          "default": {
+            "webSearch": {
+              "provider": "auto"
+            },
+            "email": {
+              "backend": "auto"
+            },
+            "codeExecBackend": "local"
+          },
+          "type": "object",
+          "properties": {
+            "webSearch": {
+              "default": {
+                "provider": "auto"
+              },
+              "type": "object",
+              "properties": {
+                "provider": {
+                  "default": "auto",
+                  "type": "string",
+                  "enum": ["auto", "brave", "ddgs"]
+                },
+                "brave": {
+                  "type": "object",
+                  "properties": {
+                    "apiKey": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["apiKey"],
+                  "additionalProperties": false
+                }
+              },
+              "required": ["provider"],
+              "additionalProperties": false
+            },
+            "email": {
+              "default": {
+                "backend": "auto"
+              },
+              "type": "object",
+              "properties": {
+                "backend": {
+                  "default": "auto",
+                  "type": "string",
+                  "enum": ["auto", "smtp", "resend"]
+                },
+                "from": {
+                  "type": "string"
+                },
+                "resend": {
+                  "type": "object",
+                  "properties": {
+                    "apiKey": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["apiKey"],
+                  "additionalProperties": false
+                },
+                "smtp": {
+                  "type": "object",
+                  "properties": {
+                    "host": {
+                      "type": "string"
+                    },
+                    "port": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "user": {
+                      "type": "string"
+                    },
+                    "pass": {
+                      "type": "string"
+                    },
+                    "secure": {
+                      "type": "boolean"
+                    },
+                    "clientName": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["host"],
+                  "additionalProperties": false
+                }
+              },
+              "required": ["backend"],
+              "additionalProperties": false
+            },
+            "codeExecBackend": {
+              "default": "local",
+              "type": "string"
+            }
+          },
+          "required": ["webSearch", "email", "codeExecBackend"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["agents", "tools"],
+      "additionalProperties": false
+    },
+    "skills": {
+      "default": {
+        "autoload": true,
+        "disabled": []
+      },
+      "type": "object",
+      "properties": {
+        "autoload": {
+          "default": true,
+          "type": "boolean"
+        },
+        "disabled": {
+          "default": [],
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": ["autoload", "disabled"],
+      "additionalProperties": false
+    },
+    "browser": {
+      "default": {
+        "enabled": false,
+        "vision": false,
+        "headless": true
+      },
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "default": false,
+          "type": "boolean"
+        },
+        "vision": {
+          "default": false,
+          "type": "boolean"
+        },
+        "headless": {
+          "default": true,
+          "type": "boolean"
+        },
+        "command": {
+          "type": "string"
+        },
+        "args": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "engine": {
+          "type": "string",
+          "enum": ["chrome", "firefox", "webkit", "msedge"]
+        },
+        "device": {
+          "type": "string"
+        },
+        "allowedOrigins": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "blockedOrigins": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "userDataDir": {
+          "type": "string"
+        },
+        "storageState": {
+          "type": "string"
+        },
+        "isolated": {
+          "type": "boolean"
+        },
+        "autoApproveReadOnly": {
+          "type": "boolean"
+        }
+      },
+      "required": ["enabled", "vision", "headless"],
+      "additionalProperties": false
+    },
+    "computer": {
+      "default": {
+        "enabled": false,
+        "command": "uvx",
+        "args": ["computer-control-mcp@latest"]
+      },
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "default": false,
+          "type": "boolean"
+        },
+        "command": {
+          "default": "uvx",
+          "type": "string"
+        },
+        "args": {
+          "default": ["computer-control-mcp@latest"],
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "env": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "autoApproveReadOnly": {
+          "type": "boolean"
+        }
+      },
+      "required": ["enabled", "command", "args"],
+      "additionalProperties": false
+    },
+    "obscura": {
+      "default": {
+        "enabled": false,
+        "stealth": false
+      },
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "default": false,
+          "type": "boolean"
+        },
+        "stealth": {
+          "default": false,
+          "type": "boolean"
+        },
+        "requestTimeoutMs": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": ["enabled", "stealth"],
+      "additionalProperties": false
+    },
+    "channels": {
+      "default": [],
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^chn_"
+          },
+          "type": {
+            "type": "string",
+            "minLength": 1
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1
+          },
+          "enabled": {
+            "default": true,
+            "type": "boolean"
+          },
+          "agentId": {
+            "type": "string"
+          },
+          "options": {
+            "default": {},
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {}
+          },
+          "allowlist": {
+            "default": {
+              "allowAllUsers": false,
+              "allowedUsers": []
+            },
+            "type": "object",
+            "properties": {
+              "policy": {
+                "type": "string",
+                "enum": ["allowlist", "pairing", "open", "disabled"]
+              },
+              "allowAllUsers": {
+                "default": false,
+                "type": "boolean"
+              },
+              "allowedUsers": {
+                "default": [],
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": ["allowAllUsers", "allowedUsers"],
+            "additionalProperties": false
+          },
+          "groupPolicy": {
+            "type": "object",
+            "properties": {
+              "requireMention": {
+                "default": true,
+                "type": "boolean"
+              }
+            },
+            "required": ["requireMention"],
+            "additionalProperties": false
+          },
+          "agentHint": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "mapping": {
+            "default": {
+              "granularity": "per-conversation"
+            },
+            "type": "object",
+            "properties": {
+              "granularity": {
+                "default": "per-conversation",
+                "type": "string",
+                "enum": ["per-conversation", "per-thread", "per-user"]
+              },
+              "reset": {
+                "type": "object",
+                "properties": {
+                  "idleMinutes": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "daily": {
+                    "type": "boolean"
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "required": ["granularity"],
+            "additionalProperties": false
+          },
+          "tokenRef": {
+            "type": "string"
+          },
+          "rateLimitPerMin": {
+            "default": 20,
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "label",
+          "enabled",
+          "options",
+          "allowlist",
+          "mapping",
+          "tokenRef",
+          "rateLimitPerMin"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "locale": {
+      "default": "en",
+      "type": "string"
+    },
+    "atomPins": {
+      "default": {},
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "propertyNames": {
+          "type": "string"
+        },
+        "additionalProperties": {
+          "type": "string"
+        }
+      }
+    },
+    "$schema": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "version",
+    "model",
+    "agent",
+    "skills",
+    "browser",
+    "computer",
+    "obscura",
+    "channels",
+    "locale",
+    "atomPins"
+  ],
+  "additionalProperties": false
+}

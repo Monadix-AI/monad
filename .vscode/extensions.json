@@ -1,0 +1,15 @@
+{
+  "recommendations": [
+    "biomejs.biome",
+    "editorconfig.editorconfig",
+    "expo.vscode-expo-tools",
+    "vercel.turbo-vsc",
+    "oven.bun-vscode",
+    "bradlc.vscode-tailwindcss",
+    "ms-azuretools.vscode-docker",
+    "tamasfe.even-better-toml",
+    "github.vscode-github-actions",
+    "astudioplus.codegraph",
+    "typescriptteam.native-preview"
+  ]
+}

@@ -1,0 +1,49 @@
+{
+  "editor.formatOnSave": true,
+  "js/ts.experimental.useTsgo": true,
+  "js/ts.tsdk.promptToUseWorkspaceVersion": true,
+  "js/ts.preferGoToSourceDefinition": true,
+  "editor.gotoLocation.multipleDefinitions": "goto",
+  "editor.codeActionsOnSave": {
+    "source.organizeImports.biome": "explicit",
+    "source.action.useSortedAttributes.biome": "explicit",
+    "source.action.useSortedProperties.biome": "explicit",
+    "source.fixAll.biome": "explicit"
+  },
+  "[json]": {
+    "editor.defaultFormatter": "biomejs.biome"
+  },
+  "[jsonc]": {
+    "editor.defaultFormatter": "biomejs.biome"
+  },
+  "[typescript]": {
+    "editor.defaultFormatter": "biomejs.biome"
+  },
+  "[javascript]": {
+    "editor.defaultFormatter": "biomejs.biome"
+  },
+  "[typescriptreact]": {
+    "editor.defaultFormatter": "biomejs.biome"
+  },
+  "[javascriptreact]": {
+    "editor.defaultFormatter": "biomejs.biome"
+  },
+  "[css]": {
+    "editor.defaultFormatter": "biomejs.biome"
+  },
+  "[sql]": {
+    "editor.defaultFormatter": "biomejs.biome"
+  },
+  "[toml]": {
+    "editor.defaultFormatter": "tamasfe.even-better-toml"
+  },
+  "files.associations": {
+    "*.css": "tailwindcss"
+  },
+  "json.schemas": [
+    {
+      "fileMatch": ["~/.monad/config.json"],
+      "url": "./packages/home/config.schema.json"
+    }
+  ]
+}

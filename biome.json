@@ -1,0 +1,102 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.5.1/schema.json",
+  "root": true,
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true,
+    "defaultBranch": "main"
+  },
+  "files": {
+    "ignoreUnknown": false,
+    "includes": ["**", "!.agent", "!.claude", "!.superpowers", "!packages/i18n/src/generated/paraglide"]
+  },
+  "formatter": {
+    "enabled": true,
+    "useEditorconfig": true,
+    "lineWidth": 120,
+    "attributePosition": "multiline",
+    "formatWithErrors": true
+  },
+  "css": {
+    "parser": {
+      "cssModules": true,
+      "tailwindDirectives": true
+    }
+  },
+  "javascript": {
+    "parser": {
+      "unsafeParameterDecoratorsEnabled": true
+    },
+    "formatter": {
+      "semicolons": "always",
+      "quoteProperties": "asNeeded",
+      "trailingCommas": "none",
+      "quoteStyle": "single",
+      "jsxQuoteStyle": "double",
+      "expand": "auto"
+    }
+  },
+  "linter": {
+    "enabled": true,
+    "domains": {
+      "next": "recommended",
+      "react": "recommended",
+      "project": "recommended",
+      "test": "recommended",
+      "turborepo": "recommended",
+      "drizzle": "recommended",
+      "tailwind": "recommended",
+      "reactNative": "recommended",
+      "playwright": "recommended",
+      "types": "recommended"
+    },
+    "rules": {
+      "preset": "recommended",
+      "style": {
+        "noUnusedTemplateLiteral": "warn",
+        "useConst": "error",
+        "useImportType": "off"
+      },
+      "correctness": {
+        "noUnusedVariables": "error",
+        "noUnusedImports": "error"
+      },
+      "nursery": {
+        "preset": "recommended",
+        "useSortedClasses": "on"
+      },
+      "suspicious": {
+        "noConsole": "error",
+        "noDeprecatedImports": "error"
+      }
+    }
+  },
+  "assist": {
+    "enabled": true,
+    "actions": {
+      "source": {
+        "preset": "recommended",
+        "useSortedAttributes": "on",
+        "useSortedProperties": "on",
+        "organizeImports": {
+          "level": "on",
+          "options": {
+            "groups": [
+              { "type": true },
+              ":BLANK_LINE:",
+              [":URL:"],
+              ":BLANK_LINE:",
+              [":NODE:", ":BUN:"],
+              [":PACKAGE:", ":PACKAGE_WITH_PROTOCOL:"],
+              ":BLANK_LINE:",
+              [":ALIAS:", ":PATH:"],
+              ":BLANK_LINE:",
+              ["@monad/*"]
+            ]
+          }
+        }
+      }
+    }
+  }
+}

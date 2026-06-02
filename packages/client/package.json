@@ -1,0 +1,27 @@
+{
+  "name": "@monad/client",
+  "version": "0.0.0",
+  "dependencies": {
+    "@elysiajs/eden": "^1.4.9",
+    "@monad/protocol": "workspace:*"
+  },
+  "devDependencies": {
+    "@monad/config": "workspace:*",
+    "@monad/monad": "workspace:*"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "module": "src/index.ts",
+  "peerDependencies": {
+    "elysia": "^1.4.29"
+  },
+  "private": true,
+  "scripts": {
+    "lint": "biome check .",
+    "test": "bun ../../scripts/bun-test.ts test/ --only-failures",
+    "test:loud": "bun ../../scripts/bun-test.ts test/ --loud",
+    "typecheck": "tsgo --noEmit"
+  },
+  "type": "module"
+}

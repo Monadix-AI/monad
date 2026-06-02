@@ -1,0 +1,148 @@
+import { afterEach, describe, expect, test } from 'bun:test';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+// Reset module-level state between tests by manipulating env
+const originalEnv = { ...Bun.env };
+const ansiCodes = ['\x1B[0m', '\x1B[1m', '\x1B[2m', '\x1B[31m', '\x1B[32m', '\x1B[35m', '\x1B[36m'];
+const stripAnsi = (value: string) => ansiCodes.reduce((out, code) => out.replaceAll(code, ''), value);
+
+afterEach(() => {
+  process.env = { ...originalEnv };
+});
+
+describe('createLogger', () => {
+  test('returns a pino Logger instance', async () => {
+    const { createLogger } = await import('../../src/index.ts');
+    const log = createLogger('test');
+    // pino loggers expose these methods
+    expect(typeof log.info).toBe('function');
+    expect(typeof log.debug).toBe('function');
+    expect(typeof log.warn).toBe('function');
+    expect(typeof log.error).toBe('function');
+    expect(typeof log.child).toBe('function');
+  });
+
+  test('child logger carries parent bindings', async () => {
+    const { createLogger } = await import('../../src/index.ts');
+    const base = createLogger('parent');
+    const child = base.child({ requestId: 'abc-123' });
+    expect(typeof child.info).toBe('function');
+  });
+
+  test('createLogger accepts context bindings', async () => {
+    const { createLogger } = await import('../../src/index.ts');
+    const log = createLogger('svc', { env: 'test', version: '1.0' });
+    expect(typeof log.info).toBe('function');
+  });
+
+  test('NODE_ENV=test defaults to silent', async () => {
+    const proc = Bun.spawnSync({
+      cmd: ['bun', '-e', "import { createLogger } from './src/index.ts'; console.log(createLogger('probe').level)"],
+      cwd: join(import.meta.dir, '../..'),
+      env: { ...Bun.env, NODE_ENV: 'test' },
+      stdout: 'pipe',
+      stderr: 'pipe'
+    });
+    expect(proc.exitCode).toBe(0);
+    expect(proc.stdout.toString().trim()).toBe('silent');
+  });
+
+  test('developer log subscribers receive structured records with session ids', async () => {
+    const { createLogger, setLogLevel, subscribeDeveloperLogRecords } = await import('../../src/index.ts');
+    const records: Record<string, unknown>[] = [];
+    const dispose = subscribeDeveloperLogRecords((record) => records.push(record));
+    setLogLevel('debug');
+    const log = createLogger('subscriber-test');
+
+    log.debug({ sessionId: 'ses_LOGTEST', event: 'test.event' }, 'subscriber event');
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    dispose();
+
+    expect(records.some((record) => record.sessionId === 'ses_LOGTEST' && record.event === 'test.event')).toBe(true);
+  });
+});
+
+describe('formatPrettyMessage', () => {
+  test('formats HTTP transport calls as a single colored summary line', async () => {
+    const { formatPrettyMessage } = await import('../../src/index.ts');
+    const line = formatPrettyMessage({
+      name: 'transport:http',
+      msg: 'call',
+      method: 'GET',
+      path: '/health',
+      status: 200,
+      durationMs: 20
+    });
+
+    expect(stripAnsi(line)).toBe('[transport:http] GET 200 /health in 20ms');
+    expect(line).toContain('\x1B[');
+  });
+
+  test('colors error HTTP status codes differently from success codes', async () => {
+    const { formatPrettyMessage } = await import('../../src/index.ts');
+    const success = formatPrettyMessage({ name: 'transport:http', msg: 'call', method: 'GET', path: '/', status: 200 });
+    const serverError = formatPrettyMessage({
+      name: 'transport:http',
+      msg: 'call',
+      method: 'GET',
+      path: '/',
+      status: 500
+    });
+
+    expect(success).toContain('\x1B[32m200\x1B[0m');
+    expect(serverError).toContain('\x1B[31m500\x1B[0m');
+  });
+
+  test('formats non-HTTP transport calls with method, result, and duration', async () => {
+    const { formatPrettyMessage } = await import('../../src/index.ts');
+
+    const rpcLine = formatPrettyMessage({
+      name: 'transport:jsonrpc',
+      transport: 'stdio',
+      msg: 'call',
+      method: 'sessions.list',
+      durationMs: 3
+    });
+    expect(stripAnsi(rpcLine)).toBe('[transport:stdio] sessions.list ok in 3ms');
+
+    const acpLine = formatPrettyMessage({
+      name: 'transport:acp',
+      msg: 'call',
+      method: 'prompt',
+      err: true,
+      durationMs: 9
+    });
+    expect(stripAnsi(acpLine)).toBe('[transport:acp] prompt error in 9ms');
+  });
+
+  test('keeps the regular logger prefix for non-transport logs', async () => {
+    const { formatPrettyMessage } = await import('../../src/index.ts');
+
+    expect(formatPrettyMessage({ name: 'monad', msg: 'ready' })).toBe('\x1B[2m[monad]\x1B[0m ready');
+  });
+});
+
+describe('debugLogPath', () => {
+  test('defaults to OS temp dir with today date', async () => {
+    const { debugLogPath } = await import('../../src/index.ts');
+    const today = new Date().toISOString().slice(0, 10);
+    expect(debugLogPath).toContain('monad-debug-');
+    expect(debugLogPath).toContain(today);
+    expect(debugLogPath.startsWith(tmpdir())).toBe(true);
+  });
+
+  test('path includes the current date', async () => {
+    const { debugLogPath } = await import('../../src/index.ts');
+    const today = new Date().toISOString().slice(0, 10);
+    expect(debugLogPath).toBe(join(tmpdir(), `monad-debug-${today}.log`));
+  });
+});
+
+describe('default logger export', () => {
+  test('logger is a pino Logger', async () => {
+    const { logger } = await import('../../src/index.ts');
+    expect(typeof logger.info).toBe('function');
+    expect(typeof logger.child).toBe('function');
+  });
+});

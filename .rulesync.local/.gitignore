@@ -1,0 +1,6 @@
+# Personal agent overlay source — local to each machine, never committed.
+# Keep the convention visible in git (README + this file) but ignore all content,
+# so your private rules in rules.md never show up in a diff.
+*
+!.gitignore
+!README.md

@@ -1,0 +1,97 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Cancel superseded runs on the same ref to save runner minutes.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # turbo.jsonc sets ui:"tui"; force the stream renderer in non-interactive CI.
+  TURBO_UI: "false"
+  # Optional Turbo remote cache. Set TURBO_TOKEN (Actions secret, repo-scoped) and
+  # TURBO_TEAM (Actions variable) to share the build cache across runs and runners.
+  # Both default to empty strings when unset — Turbo silently falls back to the
+  # local cache, so CI is fully functional without them.
+  TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+  TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+
+jobs:
+  # OS-independent checks — typecheck, lint, knip in one job to share bun install.
+  checks:
+    name: checks
+    runs-on: macos-latest
+    if: "!startsWith(github.event.head_commit.message, 'chore(main): release')"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+      - uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: ${{ runner.os }}-bun-
+      - run: bun install --frozen-lockfile
+      - run: bun run typecheck
+      - run: bun run lint
+      - run: bun run knip
+
+  # Cross-OS coverage: the daemon/CLI ship to all three (build-release --all emits
+  # darwin/linux/windows). Unix-socket paths differ per OS — Linux & macOS use the
+  # UDS HTTP path, Windows falls back to TCP loopback — so each must run the suite.
+  test:
+    name: test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    if: "!startsWith(github.event.head_commit.message, 'chore(main): release')"
+    # One red OS shouldn't cancel the others — we want the full cross-OS picture.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build sandbox launcher (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          gcc -O2 -s -static \
+            -o "$(dirname "$(which bun)")/monad-sandbox-launcher" \
+            apps/monad/native/sandbox-launcher/main.c
+
+      # Compile-gate the macOS Mo sprite shell so it can't rot (it's outside the Bun
+      # build/typecheck). Mo is macOS-only for now (Cocoa); no Linux/Windows gate yet.
+      - name: Build Mo sprite (macOS)
+        if: runner.os == 'macOS'
+        run: bash apps/mo/native/macos/build.sh /tmp/Mo.app
+
+      - name: Test
+        run: bun run test
+
+      - name: Upload coverage
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: |
+            apps/*/coverage/lcov.info
+            packages/*/coverage/lcov.info
+          if-no-files-found: ignore
+

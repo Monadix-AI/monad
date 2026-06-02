@@ -1,0 +1,103 @@
+import { Database } from 'bun:sqlite';
+import { expect, test } from 'bun:test';
+
+import { CURRENT_SCHEMA_VERSION, migrate } from '@/store/db/migrations.ts';
+
+// Pre-release: migrations are additive. These tests assert migrate() builds the current
+// shape on a fresh DB and is safe to re-run.
+
+test('migrate() builds the current schema and stamps user_version', () => {
+  const db = new Database(':memory:');
+  migrate(db);
+
+  expect((db.prepare('PRAGMA user_version').get() as { user_version: number }).user_version).toBe(
+    CURRENT_SCHEMA_VERSION
+  );
+
+  const ledgerCols = (db.prepare('PRAGMA table_info(usage_ledger)').all() as { name: string }[]).map((c) => c.name);
+  expect(ledgerCols).toContain('day');
+  expect(ledgerCols).toContain('category');
+
+  const embedCols = (db.prepare('PRAGMA table_info(message_embeddings)').all() as { name: string }[]).map(
+    (c) => c.name
+  );
+  expect(embedCols).toContain('model');
+
+  const sessionCols = (db.prepare('PRAGMA table_info(sessions)').all() as { name: string }[]).map((c) => c.name);
+  expect(sessionCols).toContain('cwd');
+
+  const acpCols = (db.prepare('PRAGMA table_info(acp_delegates)').all() as { name: string }[]).map((c) => c.name);
+  for (const col of [
+    'id',
+    'session_id',
+    'agent_name',
+    'acp_session_id',
+    'pid',
+    'spawned_at',
+    'last_used_at',
+    'evicted_at',
+    'evict_reason',
+    'reuse_count',
+    'prompt_count'
+  ]) {
+    expect(acpCols).toContain(col);
+  }
+
+  const nativeCliCols = (db.prepare('PRAGMA table_info(native_cli_sessions)').all() as { name: string }[]).map(
+    (c) => c.name
+  );
+  for (const col of [
+    'id',
+    'project_session_id',
+    'agent_name',
+    'provider',
+    'working_path',
+    'launch_mode',
+    'state',
+    'pid',
+    'provider_session_ref',
+    'output_snapshot',
+    'exit_code',
+    'started_at',
+    'updated_at',
+    'exited_at'
+  ]) {
+    expect(nativeCliCols).toContain(col);
+  }
+  const nativeCliIndexes = db.prepare('PRAGMA index_list(native_cli_sessions)').all() as {
+    name: string;
+    unique: number;
+  }[];
+  expect(nativeCliIndexes).toContainEqual(
+    expect.objectContaining({ name: 'idx_native_cli_sessions_provider_ref', unique: 1 })
+  );
+
+  const roundCols = (db.prepare('PRAGMA table_info(channel_moderator_rounds)').all() as { name: string }[]).map(
+    (c) => c.name
+  );
+  for (const col of [
+    'id',
+    'channel_id',
+    'moderator_key',
+    'moderator_agent_id',
+    'original_inbound',
+    'depth',
+    'tasks',
+    'results',
+    'status',
+    'deadline_at'
+  ]) {
+    expect(roundCols).toContain(col);
+  }
+});
+
+test('migrate() is idempotent — running again is a no-op', () => {
+  const db = new Database(':memory:');
+  migrate(db);
+  db.exec(
+    `INSERT INTO usage_ledger (day, provider, model, category, updated_at)
+       VALUES ('2026-01-15', 'anthropic', 'claude-x', 'chat', '2026-01-15T08:30:00.000Z')`
+  );
+  migrate(db);
+  expect((db.prepare('SELECT COUNT(*) AS n FROM usage_ledger').get() as { n: number }).n).toBe(1);
+});

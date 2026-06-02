@@ -1,0 +1,35 @@
+pre-commit:
+  parallel: true
+  jobs:
+    - run: bun run knip --fix
+    - run: bun biome check --write --no-errors-on-unmatched --unsafe --files-ignore-unknown=true {staged_files}
+      stage_fixed: true
+    - run: bun syncpack lint
+    - run: bun syncpack format
+      stage_fixed: true
+    - run: bash .lefthook/typecheck-staged.sh {staged_files}
+      glob: "*.{ts,tsx}"
+
+post-merge:
+  commands:
+    sync-after-git:
+      run: bash .lefthook/sync-after-git.sh ORIG_HEAD HEAD
+      interactive: true
+
+post-checkout:
+  commands:
+    sync-after-git:
+      run: bash .lefthook/sync-after-git.sh {1} {2}
+      interactive: true
+    direnv-allow:
+      run: '[ "{3}" = ''1'' ] && [ -f .envrc ] && direnv allow || true'
+
+post-rewrite:
+  commands:
+    sync-after-git:
+      interactive: true
+      run: bash .lefthook/sync-after-git.sh ORIG_HEAD HEAD
+
+commit-msg:
+  jobs:
+    - run: bun commitlint --edit {1}

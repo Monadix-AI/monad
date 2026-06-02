@@ -1,0 +1,97 @@
+{
+  "$schema": "./node_modules/turbo/schema.json",
+  "ui": "tui",
+  "globalDependencies": [".env*", "tsconfig*", "biome*"],
+  "globalEnv": ["NEXT_OUTPUT", "NODE_ENV"],
+  "globalPassThroughEnv": [
+    // Monad runtime and local state roots.
+    "AI_SDK_DEVTOOLS_PORT",
+    "MONAD_HOME",
+    "MONAD_KV_UI_PORT",
+    "MONAD_PORT",
+    "MONAD_SKIP_SETUP",
+
+    // Live model e2e (opt-in): provider key + model id. Read only by the live test suite.
+    "OPENROUTER_API_KEY",
+    "MONAD_LIVE_MODEL",
+
+    // Live qdrant integration test (opt-in).
+    "MONAD_QDRANT_LIVE",
+    "MONAD_QDRANT_LIVE_PORT",
+
+    // Native CLI real resume contract tests (opt-in local sessions).
+    "MONAD_NATIVE_CLI_REAL_CODEX_SESSION",
+    "MONAD_NATIVE_CLI_REAL_CODEX_CWD",
+    "MONAD_NATIVE_CLI_REAL_CLAUDE_SESSION",
+    "MONAD_NATIVE_CLI_REAL_CLAUDE_CWD",
+    "MONAD_NATIVE_CLI_REAL_AUTH_STATUS",
+
+    // Web/dev server host and port wiring.
+    "MONAD_URL",
+    "WEB_HOST",
+    "WEB_PORT",
+
+    // Generic terminal/runtime behavior.
+    "NO_COLOR",
+    "PORT",
+
+    // 3rd-party tooling paths.
+    "BUN_RUNTIME_TRANSPILER_CACHE_PATH",
+    "PLAYWRIGHT_BROWSERS_PATH",
+    "CLAUDE_CODE_GIT_BASH_PATH",
+
+    // User identity hints.
+    "USER",
+    "USERNAME",
+
+    // Windows shell and filesystem conventions.
+    "APPDATA",
+    "LOCALAPPDATA",
+    "ProgramFiles",
+    "ProgramFiles(x86)",
+
+    // XDG base directories (Linux/macOS setups).
+    "XDG_CACHE_HOME",
+    "XDG_CONFIG_HOME",
+    "XDG_DATA_HOME",
+    "XDG_RUNTIME_DIR",
+    "XDG_STATE_HOME"
+  ],
+  "remoteCache": {
+    "enabled": true
+  },
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", "!**/*.test.ts", "!**/*.test.tsx", "!test/**"],
+      "outputs": ["dist/**", "build/**", ".next/**", "!.next/cache/**"]
+    },
+    "typecheck": {
+      "dependsOn": ["^typecheck"],
+      "inputs": ["$TURBO_DEFAULT$", "!**/*.test.ts", "!**/*.test.tsx", "!test/**"]
+    },
+    "test": {
+      "dependsOn": ["^build"]
+    },
+    "test:e2e": {
+      "dependsOn": ["^build"]
+    },
+    "test:e2e:loud": {
+      "dependsOn": ["^build"],
+      "cache": false
+    },
+    "test:loud": {
+      "dependsOn": ["^build"],
+      "cache": false
+    },
+    "lint": {},
+    "start:dev": {
+      "persistent": true,
+      "cache": false
+    },
+    "devtools": {
+      "persistent": true,
+      "cache": false
+    }
+  }
+}

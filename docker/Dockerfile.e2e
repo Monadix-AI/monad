@@ -1,0 +1,61 @@
+# syntax=docker/dockerfile:1
+#
+# Disposable build-verify + e2e pipeline — nothing touches the host.
+#
+#   Stage 1 (builder): compile the single `monad` binary (+ embedded SPA) into a tarball
+#   Stage 2 (runner):  install the tarball into /opt/monad in a fresh Debian image, then boot
+#                      daemon + web (offline mock model) and run the full e2e (scripts/e2e.sh)
+#
+# Platform defaults to the host's native architecture (fast, no QEMU). Override for CI:
+#   docker build --platform linux/amd64 -f docker/Dockerfile.e2e .
+#
+# Usage:  bun run docker:e2e   |   bun run docker:shell
+
+# ── Stage 1: build ────────────────────────────────────────────────────────────
+
+FROM oven/bun:1 AS builder
+WORKDIR /workspace
+
+# Layer-cache bun install: manifests first, full source second.
+COPY bun.lock package.json turbo.jsonc ./
+COPY --parents apps/*/package.json clients/*/package.json packages/*/package.json ./
+
+RUN BUN_RETRY=3 bun install
+COPY . .
+RUN bun run scripts/build-release.ts
+
+# ── Stage 2: install + e2e ─────────────────────────────────────────────────────
+
+FROM debian:bookworm-slim AS runner
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends ca-certificates curl \
+  && rm -rf /var/lib/apt/lists/*
+
+COPY scripts/install.sh        /install.sh
+COPY scripts/test/e2e.sh       /e2e.sh
+COPY scripts/test/e2e-live.sh  /e2e-live.sh
+RUN chmod +x /install.sh /e2e.sh /e2e-live.sh
+COPY --from=builder /workspace/dist/monad-*-linux-*.tar.gz /dist/
+
+# Install the single binary (isolated home; no PATH edits)
+RUN set -e; \
+  tarball=$(ls /dist/monad-*-linux-*.tar.gz | head -1); \
+  echo "[docker-e2e] installing $(basename "$tarball")"; \
+  MONAD_TARBALL="$tarball" MONAD_SKIP_VERIFY=1 \
+  MONAD_INSTALL_DIR=/opt/monad MONAD_BIN_DIR=/opt/monad/local-bin \
+  MONAD_HOME=/opt/monad/home MONAD_NO_PATH_MODIFY=1 \
+  bash /install.sh
+
+# Default command boots services + runs the full e2e against the installed binary.
+ENV MONAD_BIN=/opt/monad/local-bin/monad MONAD_HOME=/opt/monad/e2e-home DPORT=52749 WPORT=3000
+CMD ["/e2e.sh"]
+
+# The live, real-model e2e (/e2e-live.sh) is intentionally NOT a build-time RUN: it needs network
+# egress + a secret API key, so it runs at `docker run` time with the key injected then —
+# never baked into a layer. See `bun run docker:e2e:live`.
+
+# ── Stage 3: verify ────────────────────────────────────────────────────────────
+# Build-time gate: `docker build --target verify` fails if e2e fails, so the build itself
+# is the verification. `docker:shell` targets `runner` instead (no gate) for manual poking.
+FROM runner AS verify
+RUN /e2e.sh

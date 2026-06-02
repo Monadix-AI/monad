@@ -1,0 +1,12 @@
+{
+  "$schema": "https://github.com/dyoshikawa/rulesync/releases/latest/download/mcp-schema.json",
+  "mcpServers": {
+    "shadcn": {
+      "description": "MCP server for shadcn/ui component references",
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "shadcn-mcp"],
+      "env": {}
+    }
+  }
+}

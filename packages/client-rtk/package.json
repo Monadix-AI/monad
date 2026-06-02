@@ -1,0 +1,31 @@
+{
+  "name": "@monad/client-rtk",
+  "version": "0.0.0",
+  "dependencies": {
+    "@monad/client": "workspace:*",
+    "@reduxjs/toolkit": "^2.12.0"
+  },
+  "devDependencies": {
+    "@monad/config": "workspace:*",
+    "@monad/protocol": "workspace:*",
+    "@types/react": "^19.2.17",
+    "react": "^19.2.7",
+    "react-redux": "^9.3.0"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "module": "src/index.ts",
+  "peerDependencies": {
+    "react": "^19.2.7",
+    "react-redux": "^9.3.0"
+  },
+  "private": true,
+  "scripts": {
+    "lint": "biome check .",
+    "test": "bun ../../scripts/bun-test.ts test/ --only-failures",
+    "test:loud": "bun ../../scripts/bun-test.ts test/ --loud",
+    "typecheck": "tsgo --noEmit"
+  },
+  "type": "module"
+}

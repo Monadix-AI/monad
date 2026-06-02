@@ -1,0 +1,167 @@
+name: Release
+
+# Triggered by release-please after it merges its PR and publishes a GitHub Release.
+# Builds all binary targets and uploads them as release assets.
+on:
+  release:
+    types: [published]
+
+# Required to upload release assets.
+permissions:
+  contents: write
+
+jobs:
+  # ── Build ─────────────────────────────────────────────────────────────────────
+  # Split by OS: linux+windows cross-compile on a Linux runner; darwin builds on a
+  # macOS runner because the bundled Mo sprite (Cocoa GUI, apps/mo) can't cross-compile.
+  build:
+    name: build (${{ matrix.id }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - id: linux-windows
+            runner: ubuntu-latest
+            os_filter: linux,windows
+          - id: darwin
+            runner: macos-latest
+            os_filter: darwin
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: ${{ runner.os }}-bun-
+
+      - name: Install cross-compilers for native sandbox launcher
+        if: matrix.id == 'linux-windows'
+        run: |
+          sudo apt-get update -qq
+          # gcc-aarch64-linux-gnu: linux-arm64 sandbox launcher
+          # musl-tools: linux-x64-musl sandbox launcher (musl-gcc)
+          # gcc-mingw-w64-x86-64: windows-x64 sandbox launcher (monad-sandbox-launcher.exe)
+          # (Mo is macOS-only for now — no GTK deps needed on the Linux leg.)
+          sudo apt-get install -y --no-install-recommends gcc-aarch64-linux-gnu musl-tools gcc-mingw-w64-x86-64
+
+      - name: Install llvm-mingw (Windows ARM64 cross-compiler)
+        if: matrix.id == 'linux-windows'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # aarch64-w64-mingw32-clang is not in Ubuntu apt — download from mstorsjo/llvm-mingw.
+          # The ucrt/ubuntu-20.04 tarball is statically linked and runs on any Ubuntu version.
+          TAG=$(curl -fsSL -H "Authorization: Bearer ${GH_TOKEN}" https://api.github.com/repos/mstorsjo/llvm-mingw/releases/latest | jq -r .tag_name)
+          TARBALL="llvm-mingw-${TAG}-ucrt-ubuntu-22.04-x86_64.tar.xz"
+          curl -fsSL "https://github.com/mstorsjo/llvm-mingw/releases/download/${TAG}/${TARBALL}" | tar -xJ
+          echo "$PWD/llvm-mingw-${TAG}-ucrt-ubuntu-22.04-x86_64/bin" >> "$GITHUB_PATH"
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      # macOS leg emits darwin-arm64 + darwin-x64 (+ universal Mo.app); Linux leg emits linux*/windows*.
+      - name: Build release binaries
+        run: bun run scripts/build-release.ts --all --os=${{ matrix.os_filter }}
+
+      - name: Upload tarballs as artifacts (shared with install-test jobs)
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-tarballs-${{ matrix.id }}
+          path: |
+            dist/*.tar.gz
+            dist/*.sha256
+          retention-days: 1
+
+  # ── Install tests (one job per OS) ───────────────────────────────────────────
+  # Each job downloads only its own tarball and runs three flows:
+  #   1. fresh install  2. upgrade (re-run over existing)  3. overwrite (home data survives)
+  install-test:
+    name: install-test (${{ matrix.os }})
+    needs: build
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: linux
+            runner: ubuntu-latest
+            tarball_glob: monad-*-linux-x64.tar.gz
+            script: bash scripts/test/install-test.sh
+          - os: macos
+            runner: macos-latest
+            tarball_glob: monad-*-darwin-*.tar.gz
+            script: bash scripts/test/install-test.sh
+          - os: windows
+            runner: windows-latest
+            tarball_glob: monad-*-windows-x64.tar.gz
+            script: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test/install-test.ps1
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download tarballs
+        uses: actions/download-artifact@v4
+        with:
+          pattern: release-tarballs-*
+          merge-multiple: true
+          path: dist/
+
+      - name: Run install test (fresh + upgrade + overwrite)
+        run: ${{ matrix.script }}
+        env:
+          # Windows: skip the ~150 MB PortableGit download in CI.
+          # The Git Bash download path is covered by a dedicated job below.
+          MONAD_SKIP_GIT: "1"
+          TARBALL_GLOB: ${{ matrix.tarball_glob }}
+
+  # ── Git Bash download test (Windows only, network-gated) ─────────────────────
+  # Runs separately so a network hiccup doesn't block the main install-test matrix.
+  install-test-gitbash:
+    name: install-test git-bash download (windows)
+    needs: build
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download tarballs
+        uses: actions/download-artifact@v4
+        with:
+          pattern: release-tarballs-*
+          merge-multiple: true
+          path: dist/
+
+      - name: Run install test with real Git Bash download
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test/install-test.ps1
+        env:
+          MONAD_SKIP_GIT: "0"
+
+  # ── Publish release assets ────────────────────────────────────────────────────
+  publish:
+    name: publish release assets
+    needs: [install-test, install-test-gitbash]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download tarballs
+        uses: actions/download-artifact@v4
+        with:
+          pattern: release-tarballs-*
+          merge-multiple: true
+          path: dist/
+
+      - name: Upload release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.tar.gz
+            dist/*.sha256
+            scripts/install.sh
+            scripts/install.ps1
+          fail_on_unmatched_files: true

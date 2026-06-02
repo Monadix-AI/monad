@@ -1,0 +1,106 @@
+{
+  "version": 1,
+  "advisory": true,
+  "maxTextBytes": 524288,
+  "rules": [
+    {
+      "id": "shell-pipe-download",
+      "description": "Download-and-execute: piping curl/wget output directly into a shell interpreter",
+      "pattern": "\\b(curl|wget)\\b[^\\n|]*\\|\\s*(sudo\\s+)?(sh|bash|zsh)\\b",
+      "flags": "i",
+      "message": "pipes a download straight into a shell (curl|wget … | sh)"
+    },
+    {
+      "id": "base64-shell",
+      "description": "Decoding base64-encoded content and piping it into a shell (obfuscated execution)",
+      "pattern": "\\bbase64\\b\\s+(--?d(ecode)?|-D)\\b[^\\n|]*\\|\\s*(sh|bash|zsh)\\b",
+      "flags": "i",
+      "message": "decodes base64 into a shell"
+    },
+    {
+      "id": "destructive-command",
+      "description": "Commands that can irreversibly destroy data or disk partitions",
+      "pattern": "\\b(rm\\s+-rf\\s+[/~.]|mkfs|dd\\s+if=)",
+      "flags": "i",
+      "message": "contains a destructive command (rm -rf / mkfs / dd)"
+    },
+    {
+      "id": "credential-file-ref",
+      "description": "References to well-known credential files or secret environment variables",
+      "pattern": "(~/\\.ssh\\b|\\.aws/credentials|\\bid_rsa\\b|\\.netrc\\b|\\bGITHUB_TOKEN\\b|\\bAWS_SECRET|\\.npmrc\\b)",
+      "flags": "i",
+      "message": "references credential files or secret env vars"
+    },
+    {
+      "id": "private-key-material",
+      "description": "PEM-encoded private key material embedded in the skill body",
+      "pattern": "-----BEGIN\\s+[A-Z ]*PRIVATE KEY-----",
+      "flags": "",
+      "message": "embeds private key material"
+    },
+    {
+      "id": "credential-in-url",
+      "description": "Credentials (user:password) embedded directly in a URL",
+      "pattern": "https?://[^@\\s]+:[^@\\s]{4,}@\\S",
+      "flags": "",
+      "message": "embeds credentials in a URL (user:password@host)"
+    },
+    {
+      "id": "credential-variable-assignment",
+      "description": "Assignment of a substantive value (12+ chars) to a credential-named variable",
+      "pattern": "(api[_-]?key|api[_-]?token|auth[_-]?token|access[_-]?token|secret[_-]?key|password|passwd)\\s*[:=]\\s*\\S{12,}",
+      "flags": "i",
+      "message": "assigns a value to a credential variable"
+    },
+    {
+      "id": "aws-access-key",
+      "description": "AWS Access Key ID (AKIA prefix + 16 uppercase alphanumeric chars)",
+      "pattern": "\\bAKIA[0-9A-Z]{16}\\b",
+      "flags": "",
+      "message": "contains an AWS Access Key ID"
+    },
+    {
+      "id": "github-pat",
+      "description": "GitHub Personal Access Token (classic ghp_/gho_/ghu_/ghs_/ghr_ or fine-grained github_pat_)",
+      "pattern": "\\b(gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]+)\\b",
+      "flags": "",
+      "message": "contains a GitHub Personal Access Token"
+    },
+    {
+      "id": "jwt-token",
+      "description": "JSON Web Token: three base64url segments separated by dots, header always starts with eyJ",
+      "pattern": "eyJ[A-Za-z0-9+/._-]{20,}\\.[A-Za-z0-9+/._-]{10,}\\.[A-Za-z0-9+/._-]{10,}",
+      "flags": "",
+      "message": "contains a JWT token"
+    },
+    {
+      "id": "reverse-shell-tcp",
+      "description": "Bash TCP redirect to a remote host/port — the standard reverse shell technique",
+      "pattern": "/dev/tcp/[^/\\s]+/[0-9]+",
+      "flags": "",
+      "message": "contains a bash TCP reverse shell (>/dev/tcp/host/port)"
+    },
+    {
+      "id": "reverse-shell-nc",
+      "description": "Netcat -e flag executing a shell — classic bind/reverse shell pattern",
+      "pattern": "\\bnc(at)?\\s+.*-e\\s+/bin/(sh|bash|zsh)",
+      "flags": "i",
+      "message": "contains a netcat reverse shell (nc -e /bin/sh)"
+    },
+    {
+      "id": "prompt-injection-override",
+      "description": "Instruction-override prompt injection attempting to hijack agent behavior",
+      "pattern": "(ignore|disregard|forget|override)\\s+(all\\s+)?(previous|prior|above|earlier|your)\\s+instructions",
+      "flags": "i",
+      "message": "contains a prompt injection pattern (instruction override attempt)"
+    },
+    {
+      "id": "prompt-injection-system-block",
+      "description": "Fake system-prompt or instruction block injection using markup delimiters",
+      "pattern": "<\\s*/?\\s*system\\s*>|\\[SYSTEM\\]|\\[INST\\]|\\[\\s*SYSTEM\\s*\\]",
+      "flags": "i",
+      "message": "contains a fake system/instruction block (prompt injection)"
+    }
+  ],
+  "execExtensions": [".sh", ".bash", ".zsh", ".py", ".rb", ".pl", ".ps1", ".bat", ".cmd", ".exe"]
+}
