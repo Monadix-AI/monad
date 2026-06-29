@@ -6,11 +6,26 @@ import { expect, test } from 'bun:test';
 import { canvasToGraph, HUB_ID } from '../../components/workplace/presets/graph/graph-model.ts';
 import { toCanvas } from '../../components/workplace/presets/to-canvas.ts';
 
-const participant = (id: string, kind: Participant['kind']): Participant =>
-  ({ id, av: id.slice(0, 2).toUpperCase(), name: id, kind, tag: 'AI', presence: 'online' }) as Participant;
+const participant = (
+  id: string,
+  kind: Participant['kind'],
+  presence: Participant['presence'] = 'online'
+): Participant => ({ id, av: id.slice(0, 2).toUpperCase(), name: id, kind, tag: 'AI', presence }) as Participant;
 
 const activityRow = (id: string, tool: string, status: ActivityRow['status']): ActivityRow =>
   ({ id, av: 'MO', tool, detail: tool, status }) as ActivityRow;
+
+test('canvasToGraph: nodes carry live state — agent presence + activity status as color', () => {
+  const { nodes } = canvasToGraph({
+    participants: [participant('busy', 'agent', 'working'), participant('idle', 'agent', 'idle')],
+    activity: [activityRow('ok1', 'fs_read', 'ok'), activityRow('err1', 'shell', 'error')]
+  });
+  const byId = (id: string) => nodes.find((n) => n.id === id)?.style?.background;
+  // a working agent tints differently from an idle one
+  expect(byId('p:busy')).not.toBe(byId('p:idle'));
+  // a failed step is not colored like a successful one
+  expect(byId('a:ok1')).not.toBe(byId('a:err1'));
+});
 
 test('canvasToGraph: a monad hub, one node + edge per participant, recent activity attached', () => {
   const { nodes, edges } = canvasToGraph({

@@ -1,17 +1,33 @@
 import type { Edge, Node } from '@xyflow/react';
+import type { ActivityStatus, Participant } from '../../types';
 import type { ProjectCanvas } from '../types';
 
 // Pure projection of the chatroom canvas → React Flow nodes/edges. Deterministic (circular layout,
 // no random/layout engine) so it is unit-testable and stable across renders. A central "monad" hub
-// with participants around it and the most recent activity steps as a column; running steps animate.
+// with participants around it and the most recent activity steps as a column. Colors carry real
+// state: participants by presence (working/online/idle), activity steps by status (ok/error/running).
 type GraphInput = Pick<ProjectCanvas, 'participants' | 'activity'>;
 
 export const HUB_ID = 'hub:monad';
-const AGENT_COLOR = '#6366f1';
 const HUMAN_COLOR = '#0ea5e9';
-const STEP_COLOR = '#10b981';
 const HUB_COLOR = '#444441';
 const RECENT_ACTIVITY = 6;
+
+// Agent node tint by live presence; human participants keep a fixed color.
+const AGENT_PRESENCE_COLOR: Record<Participant['presence'], string> = {
+  working: '#f59e0b',
+  online: '#6366f1',
+  idle: '#6b7280'
+};
+const ACTIVITY_STATUS_COLOR: Record<ActivityStatus, string> = {
+  ok: '#10b981',
+  error: '#ef4444',
+  running: '#378add'
+};
+
+function participantColor(p: Participant): string {
+  return p.kind === 'human' ? HUMAN_COLOR : AGENT_PRESENCE_COLOR[p.presence];
+}
 
 function nodeStyle(background: string): Node['style'] {
   return {
@@ -39,7 +55,7 @@ export function canvasToGraph({ participants, activity }: GraphInput): { nodes: 
       id,
       position: { x: radius * Math.cos(angle), y: radius * Math.sin(angle) },
       data: { label: p.name },
-      style: nodeStyle(p.kind === 'human' ? HUMAN_COLOR : AGENT_COLOR)
+      style: nodeStyle(participantColor(p))
     });
     edges.push({ id: `e:p:${p.id}`, source: HUB_ID, target: id });
   });
@@ -50,7 +66,7 @@ export function canvasToGraph({ participants, activity }: GraphInput): { nodes: 
       id,
       position: { x: -radius - 160, y: (i - (RECENT_ACTIVITY - 1) / 2) * 64 },
       data: { label: a.tool },
-      style: nodeStyle(STEP_COLOR)
+      style: nodeStyle(ACTIVITY_STATUS_COLOR[a.status])
     });
     edges.push({ id: `e:a:${a.id}`, source: HUB_ID, target: id, animated: a.status === 'running' });
   });

@@ -61,9 +61,6 @@ const EMPTY_ITEMS: UIItem[] = [];
 const messageId = (m: Message): string => m.id;
 const CHANNEL_HOST_EXT_KEY = 'workplaceProjectModeratorAgentId';
 const PROJECT_MEMBERS_EXT_KEY = 'workplaceProjectMembers';
-// Which UI preset (skin) this project last used — the only preset state that persists.
-const PRESET_EXT_KEY = 'workplaceProjectPresetId';
-
 type ProjectMemberType = 'acp' | 'native-cli';
 
 interface ProjectMemberSettings {
@@ -556,8 +553,6 @@ export function useProject(projectId: string) {
     [sessions, sessionId]
   );
   const moderatorAgentId = normalizeModeratorAgentId(currentSession?.origin?.ext?.[CHANNEL_HOST_EXT_KEY]);
-  const presetExt = currentSession?.origin?.ext?.[PRESET_EXT_KEY];
-  const presetId = typeof presetExt === 'string' ? presetExt : 'chat';
 
   // --- actions ---
   const [sendProjectMessage] = useSendProjectMessageMutation();
@@ -804,15 +799,6 @@ export function useProject(projectId: string) {
     [currentSession, updateSession]
   );
 
-  const setPreset = useCallback(
-    async (id: string) => {
-      if (!currentSession?.origin) return;
-      const ext = { ...(currentSession.origin.ext ?? {}), [PRESET_EXT_KEY]: id };
-      await updateSession({ id: currentSession.id, origin: { ...currentSession.origin, ext } }).unwrap();
-    },
-    [currentSession, updateSession]
-  );
-
   return useMemo(
     () => ({
       projectId,
@@ -842,7 +828,6 @@ export function useProject(projectId: string) {
         setModeratorAgentId
       },
       workdir: { path: currentSession?.cwd, set: setWorkdir },
-      preset: { id: presetId, set: setPreset },
       paused: false,
       mentionTargets: railAgents.map((a) => ({ id: a.id, name: a.name })),
       // actions
@@ -880,8 +865,6 @@ export function useProject(projectId: string) {
       setModeratorAgentId,
       currentSession?.cwd,
       setWorkdir,
-      presetId,
-      setPreset,
       sendDirective,
       resolveApproval,
       approveAll,

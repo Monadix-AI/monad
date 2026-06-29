@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useState } from 'react';
 
 import { useT } from '@/components/I18nProvider';
+import { useProjectViewMode } from '../routes/workspace/use-project-view-mode';
 import { ghostButtonStyle } from './Bits';
 import { mono } from './styles';
 
@@ -116,6 +117,7 @@ export function ProjectHeader({
   embedded?: boolean;
 }): React.ReactElement {
   const t = useT();
+  const [, setViewMode] = useProjectViewMode(room.projectId);
   const activeProject = room.projects.find((p) => p.active);
   const moderatorAgentId = room.moderator.moderatorAgentId ?? '';
   const moderatorOptions = room.moderator.agents.map((agent) => ({
@@ -201,7 +203,7 @@ export function ProjectHeader({
         </span>
         <button
           className="workplace-action"
-          onClick={() => room.preset.set('chat')}
+          onClick={() => setViewMode('chat')}
           style={{
             fontFamily: mono,
             fontSize: 11,

@@ -5,18 +5,20 @@ import type { SessionId } from '@monad/protocol';
 import { Bug, ChevronDown, MessageSquare, Network, Settings } from 'lucide-react';
 import { useState } from 'react';
 
+import { useT } from '@/components/I18nProvider';
 import { ProjectDebugConsole } from '@/components/workplace/ProjectDebugConsole';
+import { getPreset, listPresets } from '@/components/workplace/presets/registry';
 
 interface ProjectTopBarProps {
-  mode: 'graph' | 'chat';
+  mode: string;
   projectName: string;
   sessionId: SessionId | null;
   status: string;
-  onModeChange: (mode: 'graph' | 'chat') => void;
+  onModeChange: (mode: string) => void;
   onOpenSettings: () => void;
 }
 
-const modeIcon = {
+const modeIcon: Record<string, typeof MessageSquare> = {
   chat: MessageSquare,
   graph: Network
 };
@@ -33,7 +35,8 @@ export function ProjectTopBar({
   onModeChange,
   onOpenSettings
 }: ProjectTopBarProps) {
-  const ModeIcon = modeIcon[mode];
+  const t = useT();
+  const ModeIcon = modeIcon[mode] ?? MessageSquare;
   const [developerModeOpen, setDeveloperModeOpen] = useState(false);
 
   return (
@@ -165,7 +168,7 @@ export function ProjectTopBar({
         <div className="project-topbar-spacer" />
         <label className="project-topbar-view">
           <ModeIcon size={14} />
-          <span className="project-topbar-view-label">{mode === 'graph' ? 'Graph view' : 'Chat room'}</span>
+          <span className="project-topbar-view-label">{t(getPreset(mode).labelKey)}</span>
           <ChevronDown
             className="project-topbar-chevron"
             size={14}
@@ -173,11 +176,17 @@ export function ProjectTopBar({
           <select
             aria-label="Project view mode"
             className="project-topbar-select"
-            onChange={(event) => onModeChange(event.target.value as 'graph' | 'chat')}
+            onChange={(event) => onModeChange(event.target.value)}
             value={mode}
           >
-            <option value="graph">Graph view</option>
-            <option value="chat">Chat room</option>
+            {listPresets().map((preset) => (
+              <option
+                key={preset.id}
+                value={preset.id}
+              >
+                {t(preset.labelKey)}
+              </option>
+            ))}
           </select>
         </label>
         {DEV_TRACE && (
