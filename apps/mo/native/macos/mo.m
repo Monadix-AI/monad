@@ -272,7 +272,7 @@ static NSString *const kMoFrameName = @"MoWindow";  // NSUserDefaults key for th
     return;
   }
 
-  NSString *urlStr = [NSString stringWithFormat:@"ws://127.0.0.1:%d/stream", port];
+  NSString *urlStr = [NSString stringWithFormat:@"ws://127.0.0.1:%d/v1/stream", port];
   NSURL *url = [NSURL URLWithString:urlStr];
 
   NSURLSessionConfiguration *cfg = [NSURLSessionConfiguration defaultSessionConfiguration];
