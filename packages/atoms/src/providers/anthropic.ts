@@ -37,15 +37,32 @@ export const anthropicProviderAtom = defineAiSdkProvider({
   // it here rather than via the gateway's generic /models fallback.
   async listModels(provider, cred, fetch = globalThis.fetch) {
     const base = (cred?.baseUrl ?? provider.baseUrl ?? 'https://api.anthropic.com').replace(/\/$/, '');
-    const res = await fetch(`${base}/v1/models?limit=1000`, {
-      headers: { 'x-api-key': cred?.accessToken ?? '', 'anthropic-version': '2023-06-01' }
-    });
-    if (!res.ok) {
-      const body = await res.text().catch(() => '');
-      throw new Error(`Anthropic models request failed: ${res.status}${body ? ` — ${body.slice(0, 200)}` : ''}`);
+    const headers = { 'x-api-key': cred?.accessToken ?? '', 'anthropic-version': '2023-06-01' };
+    const models: Array<{ id: string; label?: string }> = [];
+    let afterId: string | undefined;
+    const seenPages = new Set<string>();
+    for (;;) {
+      const query = new URLSearchParams({ limit: '1000' });
+      if (afterId) query.set('after_id', afterId);
+      const pageKey = query.toString();
+      if (seenPages.has(pageKey)) break;
+      seenPages.add(pageKey);
+
+      const res = await fetch(`${base}/v1/models?${query}`, { headers });
+      if (!res.ok) {
+        const body = await res.text().catch(() => '');
+        throw new Error(`Anthropic models request failed: ${res.status}${body ? ` — ${body.slice(0, 200)}` : ''}`);
+      }
+      const json = (await res.json()) as {
+        data?: Array<{ id: string; display_name?: string }>;
+        has_more?: boolean;
+        last_id?: string | null;
+      };
+      models.push(...(json.data ?? []).map((m) => ({ id: m.id, label: m.display_name })));
+      if (!json.has_more || !json.last_id) break;
+      afterId = json.last_id;
     }
-    const json = (await res.json()) as { data?: Array<{ id: string; display_name?: string }> };
-    return (json.data ?? []).map((m) => ({ id: m.id, label: m.display_name }));
+    return models;
   },
 
   async getUsageLimits(provider, cred) {

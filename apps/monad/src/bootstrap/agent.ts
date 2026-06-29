@@ -119,7 +119,7 @@ export function createDaemonAgent(deps: AgentDeps): DaemonAgent {
   // breakdowns and keep long sessions in-bounds.
   const defaultProfile = modelService.profiles.find((p) => p.alias === (cfg.model.default || 'default'));
   const defaultSpec = defaultProfile
-    ? { provider: defaultProfile.provider, modelId: defaultProfile.modelId }
+    ? { provider: defaultProfile.routes.chat.provider, modelId: defaultProfile.routes.chat.modelId }
     : undefined;
   const contextLimit = defaultSpec
     ? modelCatalog.lookupContextLimit(defaultSpec.provider, defaultSpec.modelId)

@@ -24,6 +24,7 @@ import { useNetworkSettings } from '@/hooks/use-network-settings';
 import { saveRemoteDaemonConnection } from '@/lib/daemon-connections';
 import { useMonadRuntime } from '@/lib/monad-runtime-provider';
 import { REMOTE_TOKEN_KEY, REMOTE_URL_KEY } from '@/lib/monad-store';
+import { SECRET_INPUT_PASSWORD_MANAGER_PROPS } from './studio/ModelSettings/secret-input-props';
 
 interface Props {
   onClose: () => void;
@@ -234,11 +235,11 @@ export function ConnectionSettings({ onClose }: Props) {
                   </Label>
                   <div className="flex gap-2">
                     <Input
-                      className="font-mono text-xs"
+                      className="font-mono text-xs [-webkit-text-security:disc]"
                       id="local-remote-token"
                       readOnly
-                      type="password"
                       value={remoteAccess?.token ?? ''}
+                      {...SECRET_INPUT_PASSWORD_MANAGER_PROPS}
                     />
                     <Button
                       aria-label={t('web.conn.copyToken')}
@@ -310,15 +311,15 @@ export function ConnectionSettings({ onClose }: Props) {
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="daemon-token">{t('web.conn.tokenLabel')}</Label>
             <Input
-              autoComplete="off"
+              className="[-webkit-text-security:disc]"
               id="daemon-token"
               onChange={(e) => {
                 setToken(e.target.value);
                 resetCheck();
               }}
               placeholder={t('web.conn.tokenPlaceholder')}
-              type="password"
               value={token}
+              {...SECRET_INPUT_PASSWORD_MANAGER_PROPS}
             />
           </div>
         </div>

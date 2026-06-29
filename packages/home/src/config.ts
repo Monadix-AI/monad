@@ -9,8 +9,10 @@ import {
   channelTypeSchema,
   fallbackTargetViewSchema,
   hookMatcherSettingSchema,
+  httpUrlSchema,
   ModelProviderType,
   modelKindSchema,
+  modelProfileRoutesSchema,
   modelRolesSchema,
   nativeCliAgentViewSchema,
   KNOWN_PROVIDER_TYPES as PROTOCOL_KNOWN_PROVIDER_TYPES,
@@ -170,7 +172,7 @@ const providerSchema = z.object({
   id: z.string(), // also the credentialPool bucket key in auth.json
   label: z.string(),
   type: providerTypeSchema,
-  baseUrl: z.url().optional(), // required for openai-compatible & cloudflare-gateway; optional override elsewhere
+  baseUrl: httpUrlSchema.optional(), // required for openai-compatible & cloudflare-gateway; optional override elsewhere
   extra: z.record(z.string(), z.string()).optional() // free-form provider knobs (e.g. cloudflare account id / gateway slug)
 });
 
@@ -187,13 +189,9 @@ const generationParamsSchema = z
 
 const profileSchema = z.object({
   alias: z.string(),
-  provider: z.string(), // providerSchema.id
-  modelId: z.string(),
-  fastProvider: z.string().optional(),
-  fastModelId: z.string().optional(),
+  routes: modelProfileRoutesSchema,
   params: generationParamsSchema.default({}),
-  fallbacks: z.array(fallbackTargetViewSchema).default([]),
-  roles: modelRolesSchema.default({})
+  fallbacks: z.array(fallbackTargetViewSchema).default([])
 });
 
 export type ModelProfile = z.infer<typeof profileSchema>;
@@ -963,11 +961,9 @@ export function createDefaultConfig(principalId: string, displayName: string): M
       profiles: [
         {
           alias: DEFAULT_SAMPLE_PROFILE_ALIAS,
-          provider: DEFAULT_SAMPLE_PROVIDER_ID,
-          modelId: 'example-model',
+          routes: { chat: { provider: DEFAULT_SAMPLE_PROVIDER_ID, modelId: 'example-model' } },
           params: { temperature: 0.7 },
-          fallbacks: [],
-          roles: {}
+          fallbacks: []
         }
       ],
       roles: {},

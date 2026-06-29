@@ -37,8 +37,7 @@ export type { ProviderCredential, ResolvedProviderConfig } from '@monad/sdk-atom
 
 interface ResolvedProfile {
   alias: string;
-  provider: string;
-  modelId: string;
+  routes: { chat: { provider: string; modelId: string } };
   params: GenerationParams;
   fallbacks: FallbackTargetView[];
 }
@@ -418,8 +417,8 @@ export class GatewayModelRouter implements ModelRouter {
     }
 
     out.push({
-      provider: profile.provider,
-      modelId: profile.modelId,
+      provider: profile.routes.chat.provider,
+      modelId: profile.routes.chat.modelId,
       params: isPrimary ? mergeParams(profile.params, overrideParams) : profile.params
     });
 

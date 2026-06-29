@@ -8,6 +8,7 @@ export { useReindexEmbeddingsMutation } from './embeddings/reindex.ts';
 export { modelAdapter, modelSelectors, useListModelsQuery } from './models/list-models.ts';
 export { useDeleteProfileMutation } from './profiles/delete-profile.ts';
 export { profileAdapter, profileSelectors, useListProfilesQuery } from './profiles/list-profiles.ts';
+export { useRenameProfileMutation } from './profiles/rename-profile.ts';
 export { useSetProfileMutation } from './profiles/set-profile.ts';
 export { useDeleteProviderMutation } from './providers/delete-provider.ts';
 export { providerAdapter, providerSelectors, useListProvidersQuery } from './providers/list-providers.ts';

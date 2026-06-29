@@ -8,10 +8,10 @@ export type CapabilityLookup = (provider: string, modelId: string) => ModelModal
 /** Resolve a model role to its effective model spec, applying the fallback chain in ONE place
  *  (image/speech/vision tools + the embedding pipeline all go through here):
  *   - chat      → the selected profile alias, defaulting to "default"
- *   - vision    → profile.roles.vision ?? default model (if it covers image input, else runtime error)
- *   - image     → profile.roles.image ?? default model (if it covers image output, else runtime error)
- *   - speech    → profile.roles.speech ?? default model (if it covers audio output, else runtime error)
- *   - embedding → profile.roles.embedding (no fallback; undefined ⇒ semantic search degrades to keyword)
+ *   - vision    → profile.routes.vision ?? default model (only if known to cover image input, else runtime error)
+ *   - image     → profile.routes.image ?? default model (only if known to cover image output, else runtime error)
+ *   - speech    → profile.routes.speech ?? default model (only if known to cover audio output, else runtime error)
+ *   - embedding → profile.routes.embedding (no fallback; undefined ⇒ semantic search degrades to keyword)
  *  When `lookupCapabilities` is provided the capability-based fallback is enforced; without it the
  *  legacy no-check behavior applies (e.g. callers that have no catalog access).
  *  Returns a profile alias (chat/vision) or a "providerId:modelId" spec, or undefined if unset. */
@@ -22,14 +22,17 @@ export function resolveModelRole(
   lookupCapabilities?: CapabilityLookup
 ): string | undefined {
   const profile = model.profiles.find((p) => p.alias === profileAlias);
-  const roles = profile?.roles ?? {};
+  const routes = profile?.routes;
+
+  const routeSpec = (route: { provider: string; modelId: string } | undefined): string | undefined =>
+    route ? `${route.provider}:${route.modelId}` : undefined;
 
   const defaultCovers = (check: (c: ModelModalities) => boolean): boolean => {
-    if (!profile?.provider || !profile?.modelId) return false;
-    const caps = lookupCapabilities?.(profile.provider, profile.modelId);
+    if (!routes?.chat.provider || !routes.chat.modelId) return false;
+    const caps = lookupCapabilities?.(routes.chat.provider, routes.chat.modelId);
     if (caps === undefined) {
       throw new Error(
-        `model: cannot determine capabilities for ${profile.provider}:${profile.modelId} — ` +
+        `model: cannot determine capabilities for ${routes.chat.provider}:${routes.chat.modelId} — ` +
           'the provider did not report them and the catalog has no entry; set the role model explicitly'
       );
     }
@@ -41,51 +44,49 @@ export function resolveModelRole(
       return profile ? profileAlias : undefined;
 
     case 'vision': {
-      if (roles.vision) return roles.vision;
+      const explicit = routeSpec(routes?.vision);
+      if (explicit) return explicit;
       if (!lookupCapabilities) return profileAlias || undefined; // legacy: no capability check
-      if (!profile?.provider || !profile?.modelId) return profileAlias || undefined;
-      const caps = lookupCapabilities(profile.provider, profile.modelId);
-      // Unknown capabilities → best-effort: let the default model try (most chat models accept
-      // image input, and an unlisted/local model self-reports nothing). Only reject when we KNOW
-      // it can't take images.
-      if (caps === undefined || caps.input?.includes('image')) return profileAlias || undefined;
+      if (defaultCovers((c) => !!c.input?.includes('image'))) return profileAlias || undefined;
       throw new Error(
         'model: vision role requires a model that accepts image input; ' +
-          `the default model "${profile?.modelId}" does not — set a vision model explicitly`
+          `the default model "${routes?.chat.modelId}" does not — set a vision model explicitly`
       );
     }
 
     case 'image': {
-      if (roles.image) return roles.image;
+      const explicit = routeSpec(routes?.image);
+      if (explicit) return explicit;
       if (!lookupCapabilities) return undefined; // legacy: no fallback
       if (defaultCovers((c) => c.kind === 'image' || !!c.output?.includes('image'))) return profileAlias || undefined;
       throw new Error(
         'model: image-generation role requires a model that generates images; ' +
-          `the default model "${profile?.modelId}" does not — set an image model explicitly`
+          `the default model "${routes?.chat.modelId}" does not — set an image model explicitly`
       );
     }
 
     case 'speech': {
-      if (roles.speech) return roles.speech;
+      const explicit = routeSpec(routes?.speech);
+      if (explicit) return explicit;
       if (!lookupCapabilities) return undefined; // legacy: no fallback
       if (defaultCovers((c) => c.kind === 'speech' || !!c.output?.includes('audio'))) return profileAlias || undefined;
       throw new Error(
         'model: speech role requires a model that generates audio; ' +
-          `the default model "${profile?.modelId}" does not — set a speech model explicitly`
+          `the default model "${routes?.chat.modelId}" does not — set a speech model explicitly`
       );
     }
 
     case 'video':
       // Video generation has no default fallback — a chat default never produces video, so the
       // role only resolves when assigned explicitly. (No runtime consumer yet; reserved.)
-      return roles.video;
+      return routeSpec(routes?.video);
 
     case 'embedding':
-      return roles.embedding;
+      return routeSpec(routes?.embedding);
 
     case 'memory':
       // The memory extractor/consolidator. A cheap model is ideal; falls back to the chat default.
-      return roles.memory ?? (profileAlias || undefined);
+      return routeSpec(routes?.memory) ?? (profileAlias || undefined);
   }
 }
 

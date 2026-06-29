@@ -17,7 +17,9 @@ function registryWith(provider: ModelProvider): ModelProviderRegistry {
 function deps(): GatewayDeps {
   return {
     providers: [{ id: 'mock', type: 'mock' }],
-    profiles: [{ alias: 'default', provider: 'mock', modelId: 'mock-model', params: {}, fallbacks: [] }],
+    profiles: [
+      { alias: 'default', routes: { chat: { provider: 'mock', modelId: 'mock-model' } }, params: {}, fallbacks: [] }
+    ],
     defaultProfile: 'default',
     credentialsFor: () => [{ id: 'c1', accessToken: 'k', authType: 'api_key', priority: 0 }]
   };

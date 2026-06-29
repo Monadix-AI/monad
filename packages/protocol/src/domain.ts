@@ -57,11 +57,29 @@ export const agentAtomsSchema = z.object({
 });
 export type AgentAtoms = z.infer<typeof agentAtomsSchema>;
 
-// Model roles (single source of truth — control.ts + @monad/home re-export). `chat` lives in
-// a profile's provider/modelId; the rest are `"providerId:modelId"` specs (or a profile alias for vision/memory).
-// `memory` = the model that extracts/consolidates long-term memory (cheap is ideal; falls back to chat).
+// Model routing roles (single source of truth — control.ts + @monad/home re-export).
+// A model profile is a recipe of route slots: `chat` is the required default model, `fast` is the
+// lightweight lane, and the remaining roles are capability-specific overrides.
 export const modelRoleSchema = z.enum(['chat', 'vision', 'image', 'video', 'speech', 'embedding', 'memory']);
 export type ModelRole = z.infer<typeof modelRoleSchema>;
+
+export const modelRouteTargetSchema = z.object({
+  provider: z.string(),
+  modelId: z.string()
+});
+export type ModelRouteTarget = z.infer<typeof modelRouteTargetSchema>;
+
+export const modelProfileRoutesSchema = z.object({
+  chat: modelRouteTargetSchema,
+  fast: modelRouteTargetSchema.optional(),
+  vision: modelRouteTargetSchema.optional(),
+  image: modelRouteTargetSchema.optional(),
+  video: modelRouteTargetSchema.optional(),
+  speech: modelRouteTargetSchema.optional(),
+  embedding: modelRouteTargetSchema.optional(),
+  memory: modelRouteTargetSchema.optional()
+});
+export type ModelProfileRoutes = z.infer<typeof modelProfileRoutesSchema>;
 
 export const modelRolesSchema = z.object({
   vision: z.string().optional(),

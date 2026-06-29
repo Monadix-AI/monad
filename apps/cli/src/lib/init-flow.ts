@@ -296,11 +296,9 @@ export async function runTerminalInit(client: MonadClient): Promise<boolean> {
     await client.treaty.v1.settings.model.profiles({ alias: profileAlias }).put({
       profile: {
         alias: profileAlias,
-        provider: chosenProvider.id,
-        modelId: defaultModelId,
+        routes: { chat: { provider: chosenProvider.id, modelId: defaultModelId } },
         params: {},
-        fallbacks: [],
-        roles: {}
+        fallbacks: []
       }
     })
   );
@@ -319,7 +317,7 @@ export async function runTerminalInit(client: MonadClient): Promise<boolean> {
   } else if (profiles.length > 1) {
     out(t('init.profiles.available'));
     for (const [i, p] of profiles.entries()) {
-      out(`  ${cyan(String(i + 1))}. ${p.alias}  ${dim(`(${p.modelId})`)}`);
+      out(`  ${cyan(String(i + 1))}. ${p.alias}  ${dim(`(${p.routes.chat.modelId})`)}`);
     }
     while (true) {
       const pick = await ask(t('init.profile.select', { n: profiles.length }));

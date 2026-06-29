@@ -30,6 +30,7 @@ import { z } from 'zod';
 // params are plain strings, so they stay transport-local.
 const providerParams = z.object({ id: z.string() });
 const profileParams = z.object({ alias: z.string() });
+const renameProfileBody = z.object({ alias: z.string() });
 const credentialParams = z.object({ id: z.string(), credId: z.string() });
 
 export function createModelSettingsController(handlers: ReturnType<typeof createDaemonHandlers>) {
@@ -66,6 +67,19 @@ export function createModelSettingsController(handlers: ReturnType<typeof create
       response: { 200: okResponseSchema },
       detail: { summary: 'Set model profile', description: 'Upserts a model profile configuration.' }
     })
+    .patch(
+      '/model/profiles/:alias/alias',
+      async ({ params, body }) => handlers.model.renameProfile({ alias: params.alias, nextAlias: body.alias }),
+      {
+        params: profileParams,
+        body: renameProfileBody,
+        response: { 200: okResponseSchema },
+        detail: {
+          summary: 'Rename model profile',
+          description: 'Renames a profile and rewrites default/agent references in one config commit.'
+        }
+      }
+    )
     .delete('/model/profiles/:alias', async ({ params }) => handlers.model.deleteProfile({ alias: params.alias }), {
       params: profileParams,
       response: { 200: okResponseSchema },

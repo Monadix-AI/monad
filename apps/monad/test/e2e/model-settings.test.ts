@@ -26,6 +26,15 @@ function makePaths(base: string): MonadPaths {
   return makeTestPaths(base);
 }
 
+function profile(alias: string, modelId: string) {
+  return {
+    alias,
+    routes: { chat: { provider: 'oai', modelId } },
+    params: {},
+    fallbacks: []
+  };
+}
+
 for (const kind of TRANSPORTS) {
   describe(`model-settings over ${kind}`, () => {
     let dir: string;
@@ -54,6 +63,16 @@ for (const kind of TRANSPORTS) {
         headers: { 'Content-Type': 'application/json' },
         body: body === undefined ? undefined : JSON.stringify(body)
       });
+
+    test('rejects invalid provider baseUrl at the HTTP schema boundary', async () => {
+      const res = await json('PUT', '/v1/settings/model/providers/bad-url', {
+        provider: { id: 'bad-url', label: 'Bad URL', type: 'openai-compatible', baseUrl: 'ftp://api.test/v1' }
+      });
+
+      expect(res.status).toBe(400);
+      const cfg = await loadConfig(paths.config);
+      expect(cfg?.model.providers.some((provider) => provider.id === 'bad-url')).toBe(false);
+    });
 
     test('provider + credential + profile + default CRUD round-trips and redacts secrets', async () => {
       // 1. add an provider
@@ -90,7 +109,7 @@ for (const kind of TRANSPORTS) {
 
       // 4. add a profile + set default; both persist to config.json
       await json('PUT', '/v1/settings/model/profiles/default', {
-        profile: { alias: 'default', provider: 'oai', modelId: 'gpt-x', params: { temperature: 0.5 }, fallbacks: [] }
+        profile: { ...profile('default', 'gpt-x'), params: { temperature: 0.5 } }
       });
       await json('PUT', '/v1/settings/model/default', { alias: 'default' });
       const profiles = (await (await json('GET', '/v1/settings/model/profiles')).json()) as {
@@ -99,11 +118,16 @@ for (const kind of TRANSPORTS) {
       };
       expect(profiles.defaultAlias).toBe('default');
       expect(profiles.profiles).toEqual(
-        expect.arrayContaining([expect.objectContaining({ alias: 'default', provider: 'oai', modelId: 'gpt-x' })])
+        expect.arrayContaining([
+          expect.objectContaining({
+            alias: 'default',
+            routes: { chat: { provider: 'oai', modelId: 'gpt-x' } }
+          })
+        ])
       );
 
       const cfg = await loadConfig(paths.config);
-      expect(cfg?.model.profiles.find((profile) => profile.alias === 'default')?.modelId).toBe('gpt-x');
+      expect(cfg?.model.profiles.find((profile) => profile.alias === 'default')?.routes.chat.modelId).toBe('gpt-x');
       expect(cfg?.model.providers).toEqual(expect.arrayContaining([expect.objectContaining({ id: 'oai' })]));
 
       // 5. delete the credential
@@ -124,10 +148,10 @@ for (const kind of TRANSPORTS) {
         provider: { id: 'oai', label: 'OpenAI-compatible', type: 'openai-compatible', baseUrl: 'https://api.test/v1' }
       });
       await json('PUT', '/v1/settings/model/profiles/default', {
-        profile: { alias: 'default', provider: 'oai', modelId: 'gpt-x', params: {}, fallbacks: [], roles: {} }
+        profile: profile('default', 'gpt-x')
       });
       await json('PUT', '/v1/settings/model/profiles/fast', {
-        profile: { alias: 'fast', provider: 'oai', modelId: 'gpt-fast', params: {}, fallbacks: [], roles: {} }
+        profile: profile('fast', 'gpt-fast')
       });
 
       const res = await json('PUT', '/v1/settings/model/default', { alias: 'fast' });
@@ -143,11 +167,11 @@ for (const kind of TRANSPORTS) {
         provider: { id: 'oai', label: 'OpenAI-compatible', type: 'openai-compatible', baseUrl: 'https://api.test/v1' }
       });
       await json('PUT', '/v1/settings/model/profiles/default', {
-        profile: { alias: 'default', provider: 'oai', modelId: 'gpt-x', params: {}, fallbacks: [], roles: {} }
+        profile: profile('default', 'gpt-x')
       });
 
       const res = await json('DELETE', '/v1/settings/model/profiles/default');
-      expect(res.status).toBeGreaterThanOrEqual(400);
+      expect(res.status).toBe(409);
 
       const cfg = await loadConfig(paths.config);
       expect(cfg?.model.profiles.some((profile) => profile.alias === 'default')).toBe(true);
@@ -158,18 +182,113 @@ for (const kind of TRANSPORTS) {
         provider: { id: 'oai', label: 'OpenAI-compatible', type: 'openai-compatible', baseUrl: 'https://api.test/v1' }
       });
       await json('PUT', '/v1/settings/model/profiles/default', {
-        profile: { alias: 'default', provider: 'oai', modelId: 'gpt-x', params: {}, fallbacks: [], roles: {} }
+        profile: profile('default', 'gpt-x')
       });
       await json('PUT', '/v1/settings/model/profiles/fast', {
-        profile: { alias: 'fast', provider: 'oai', modelId: 'gpt-fast', params: {}, fallbacks: [], roles: {} }
+        profile: profile('fast', 'gpt-fast')
       });
       await json('PUT', '/v1/settings/model/default', { alias: 'fast' });
 
       const res = await json('DELETE', '/v1/settings/model/profiles/fast');
-      expect(res.status).toBeGreaterThanOrEqual(400);
+      expect(res.status).toBe(409);
 
       const cfg = await loadConfig(paths.config);
       expect(cfg?.model.profiles.some((profile) => profile.alias === 'fast')).toBe(true);
+    });
+
+    test('rejects deleting a provider while any profile uses it', async () => {
+      await json('PUT', '/v1/settings/model/providers/oai', {
+        provider: { id: 'oai', label: 'OpenAI-compatible', type: 'openai-compatible', baseUrl: 'https://api.test/v1' }
+      });
+      await json('PUT', '/v1/settings/model/profiles/default', {
+        profile: profile('default', 'gpt-x')
+      });
+
+      const res = await json('DELETE', '/v1/settings/model/providers/oai');
+      expect(res.status).toBeGreaterThanOrEqual(400);
+
+      const cfg = await loadConfig(paths.config);
+      expect(cfg?.model.providers.some((provider) => provider.id === 'oai')).toBe(true);
+    });
+
+    test('rejects deleting a profile while any agent uses it', async () => {
+      await json('PUT', '/v1/settings/model/providers/oai', {
+        provider: { id: 'oai', label: 'OpenAI-compatible', type: 'openai-compatible', baseUrl: 'https://api.test/v1' }
+      });
+      await json('PUT', '/v1/settings/model/profiles/default', {
+        profile: profile('default', 'gpt-x')
+      });
+      await json('PUT', '/v1/settings/model/profiles/research', {
+        profile: profile('research', 'gpt-research')
+      });
+      await json('PUT', '/v1/settings/model/profiles/writer', {
+        profile: profile('writer', 'gpt-writer')
+      });
+      await json('POST', '/v1/agents', { name: 'Researcher', modelAlias: 'research', capabilities: [] });
+
+      const res = await json('DELETE', '/v1/settings/model/profiles/research');
+      expect(res.status).toBeGreaterThanOrEqual(400);
+
+      await json('POST', '/v1/agents', { name: 'Writer', model: 'writer', capabilities: [] });
+      const modelFieldRes = await json('DELETE', '/v1/settings/model/profiles/writer');
+      expect(modelFieldRes.status).toBeGreaterThanOrEqual(400);
+
+      const cfg = await loadConfig(paths.config);
+      expect(cfg?.model.profiles.some((profile) => profile.alias === 'research')).toBe(true);
+      expect(cfg?.model.profiles.some((profile) => profile.alias === 'writer')).toBe(true);
+    });
+
+    test('renames a profile atomically with default and agent references', async () => {
+      await json('PUT', '/v1/settings/model/providers/oai', {
+        provider: { id: 'oai', label: 'OpenAI-compatible', type: 'openai-compatible', baseUrl: 'https://api.test/v1' }
+      });
+      await json('PUT', '/v1/settings/model/profiles/default', {
+        profile: profile('default', 'gpt-x')
+      });
+      await json('PUT', '/v1/settings/model/profiles/research', {
+        profile: profile('research', 'gpt-research')
+      });
+      await json('PUT', '/v1/settings/model/default', { alias: 'research' });
+      await json('POST', '/v1/agents', { name: 'Researcher', modelAlias: 'research', capabilities: [] });
+      await json('POST', '/v1/agents', { name: 'Writer', model: 'research', capabilities: [] });
+
+      const res = await json('PATCH', '/v1/settings/model/profiles/research/alias', { alias: 'writer' });
+      expect(res.status).toBe(200);
+
+      const cfg = await loadConfig(paths.config);
+      expect(cfg?.model.default).toBe('writer');
+      expect(cfg?.model.profiles.some((profile) => profile.alias === 'research')).toBe(false);
+      expect(cfg?.model.profiles.some((profile) => profile.alias === 'writer')).toBe(true);
+      expect(cfg?.agent.agents.find((agent) => agent.name === 'Researcher')?.modelAlias).toBe('writer');
+      expect(cfg?.agent.agents.find((agent) => agent.name === 'Writer')?.model).toBe('writer');
+    });
+
+    test('renaming the default profile keeps init status initialized', async () => {
+      await json('PUT', '/v1/settings/model/providers/oai', {
+        provider: { id: 'oai', label: 'OpenAI-compatible', type: 'openai-compatible', baseUrl: 'https://api.test/v1' }
+      });
+      await json('POST', '/v1/settings/model/providers/oai/credentials', {
+        label: 'primary',
+        authType: 'api_key',
+        accessToken: 'sk-test'
+      });
+      await json('PUT', '/v1/settings/model/profiles/default', {
+        profile: profile('default', 'gpt-x')
+      });
+      await json('PUT', '/v1/settings/model/default', { alias: 'default' });
+      const agent = (await (
+        await json('POST', '/v1/agents', { name: 'Writer', modelAlias: 'default', capabilities: [] })
+      ).json()) as { agent: { id: string } };
+      await json('PUT', '/v1/agents/default', { agentId: agent.agent.id });
+
+      const rename = await json('PATCH', '/v1/settings/model/profiles/default/alias', { alias: 'writer' });
+      expect(rename.status).toBe(200);
+
+      const status = (await (await json('GET', '/v1/init/status')).json()) as {
+        initialized: boolean;
+        missing: string[];
+      };
+      expect(status).toMatchObject({ initialized: true, missing: [] });
     });
 
     test('model roles round-trip (GET → PUT → GET) and persist to config.json', async () => {
@@ -177,7 +296,7 @@ for (const kind of TRANSPORTS) {
         provider: { id: 'oai', label: 'OpenAI-compatible', type: 'openai-compatible', baseUrl: 'https://api.test/v1' }
       });
       await json('PUT', '/v1/settings/model/profiles/default', {
-        profile: { alias: 'default', provider: 'oai', modelId: 'gpt-x', params: {}, fallbacks: [], roles: {} }
+        profile: profile('default', 'gpt-x')
       });
       await json('PUT', '/v1/settings/model/default', { alias: 'default' });
 
@@ -195,9 +314,10 @@ for (const kind of TRANSPORTS) {
       expect(after.roles.embedding).toBe('oai:text-embedding-3-small');
 
       const cfg = await loadConfig(paths.config);
-      expect(cfg?.model.profiles.find((profile) => profile.alias === 'default')?.roles.embedding).toBe(
-        'oai:text-embedding-3-small'
-      );
+      expect(cfg?.model.profiles.find((profile) => profile.alias === 'default')?.routes.embedding).toEqual({
+        provider: 'oai',
+        modelId: 'text-embedding-3-small'
+      });
     });
 
     test('model roles are scoped to the active default profile', async () => {
@@ -205,18 +325,21 @@ for (const kind of TRANSPORTS) {
         provider: { id: 'oai', label: 'OpenAI-compatible', type: 'openai-compatible', baseUrl: 'https://api.test/v1' }
       });
       await json('PUT', '/v1/settings/model/profiles/default', {
-        profile: { alias: 'default', provider: 'oai', modelId: 'gpt-x', params: {}, fallbacks: [], roles: {} }
+        profile: profile('default', 'gpt-x')
       });
       await json('PUT', '/v1/settings/model/profiles/fast', {
-        profile: { alias: 'fast', provider: 'oai', modelId: 'gpt-fast', params: {}, fallbacks: [], roles: {} }
+        profile: profile('fast', 'gpt-fast')
       });
       await json('PUT', '/v1/settings/model/default', { alias: 'fast' });
 
       await json('PUT', '/v1/settings/model/roles', { roles: { image: 'oai:image-model' } });
 
       const cfg = await loadConfig(paths.config);
-      expect(cfg?.model.profiles.find((profile) => profile.alias === 'fast')?.roles.image).toBe('oai:image-model');
-      expect(cfg?.model.profiles.find((profile) => profile.alias === 'default')?.roles.image).toBeUndefined();
+      expect(cfg?.model.profiles.find((profile) => profile.alias === 'fast')?.routes.image).toEqual({
+        provider: 'oai',
+        modelId: 'image-model'
+      });
+      expect(cfg?.model.profiles.find((profile) => profile.alias === 'default')?.routes.image).toBeUndefined();
     });
 
     test('POST /v1/settings/model/embeddings/reindex resolves and returns ok', async () => {

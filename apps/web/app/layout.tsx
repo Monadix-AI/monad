@@ -14,16 +14,9 @@ export const metadata: Metadata = {
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   let devToolsWidget: React.ReactNode = null;
-  let impeccableLiveScript: React.ReactNode = null;
   if (process.env.NODE_ENV !== 'production') {
     const { DevToolsWidget } = await import('@/components/DevToolsWidget');
     devToolsWidget = <DevToolsWidget />;
-    impeccableLiveScript = (
-      <Script
-        src="http://localhost:8400/live.js"
-        strategy="afterInteractive"
-      />
-    );
   }
 
   return (
@@ -56,12 +49,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           <TooltipProvider delayDuration={200}>
             {children}
             {devToolsWidget}
-            {impeccableLiveScript}
           </TooltipProvider>
         </AppProviders>
-        {/* impeccable-live-start */}
-        <script src="http://localhost:8400/live.js"></script>
-        {/* impeccable-live-end */}
       </body>
     </html>
   );

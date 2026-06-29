@@ -8,6 +8,7 @@ import { type TFn, useT } from '@/components/I18nProvider';
 import { useAsyncAction } from '../hooks/use-async-action';
 import { useOpenaiCompatSettings } from '../hooks/use-openai-compat-settings';
 import { useMonadRuntime } from '../lib/monad-runtime-provider';
+import { SECRET_INPUT_PASSWORD_MANAGER_PROPS } from './studio/ModelSettings/secret-input-props';
 import { StudioPanel, StudioPanelHeader } from './studio/StudioPanel';
 
 export function OpenaiCompatSettings(_props: { onClose: () => void }) {
@@ -97,13 +98,13 @@ export function OpenaiCompatSettings(_props: { onClose: () => void }) {
                 <p className="text-muted-foreground text-xs">{t('web.api.bearerHint')}</p>
                 <div className="flex gap-2">
                   <Input
-                    className="font-mono text-xs"
+                    className="font-mono text-xs [-webkit-text-security:disc]"
                     disabled={busy}
                     id="openai-compat-token"
                     onChange={(e) => setToken(e.target.value)}
                     placeholder={t('web.api.tokenPlaceholder')}
-                    type="password"
                     value={token}
+                    {...SECRET_INPUT_PASSWORD_MANAGER_PROPS}
                   />
                   <Button
                     disabled={!token}

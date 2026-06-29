@@ -19,13 +19,14 @@ const cfg = {
     profiles: [
       {
         alias: 'default',
-        provider: 'oa',
-        modelId: 'gpt-4o-mini',
+        routes: {
+          chat: { provider: 'oa', modelId: 'gpt-4o-mini' },
+          embedding: { provider: 'oa', modelId: 'text-embedding-3-small' }
+        },
         params: {},
-        fallbacks: [],
-        roles: { embedding: 'oa:text-embedding-3-small' }
+        fallbacks: []
       },
-      { alias: 'claude', provider: 'an', modelId: 'claude-x', params: {}, fallbacks: [], roles: {} }
+      { alias: 'claude', routes: { chat: { provider: 'an', modelId: 'claude-x' } }, params: {}, fallbacks: [] }
     ],
     roles: {}
   }
@@ -74,7 +75,9 @@ test('no embedding configured errors', () => {
   const noEmb = {
     model: {
       ...cfg.model,
-      profiles: cfg.model.profiles.map((profile) => (profile.alias === 'default' ? { ...profile, roles: {} } : profile))
+      profiles: cfg.model.profiles.map((profile) =>
+        profile.alias === 'default' ? { ...profile, routes: { chat: profile.routes.chat }, roles: {} } : profile
+      )
     }
   } as unknown as MonadConfig;
   const r = resolveMem0Models(noEmb, auth, {});
@@ -90,11 +93,9 @@ test('openrouter LLM maps to openai provider with default base URL', () => {
         ...cfg.model.profiles,
         {
           alias: 'or-chat',
-          provider: 'or',
-          modelId: 'anthropic/claude-sonnet-4-6',
+          routes: { chat: { provider: 'or', modelId: 'anthropic/claude-sonnet-4-6' } },
           params: {},
-          fallbacks: [],
-          roles: {}
+          fallbacks: []
         }
       ]
     }

@@ -1,23 +1,41 @@
 'use client';
 
-import type { GenerationParamsView, ModelInfo, ModelRoles, ProfileView } from '@monad/protocol';
+import type { GenerationParamsView, ModelInfo, ProfileView } from '@monad/protocol';
 
+import { useListAgentsQuery } from '@monad/client-rtk';
 import { ModelProviderType } from '@monad/protocol';
 import { Button, ScrollArea } from '@monad/ui';
 import { Plus, RefreshCw } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
+import { flushSync } from 'react-dom';
 
 import { useT } from '@/components/I18nProvider';
 import { useModelSettings, useModelSettingsQueryState, useProviderDetail } from '@/hooks/use-model-settings';
 import { useProviderMeta } from '@/lib/ProviderMeta';
 import { StudioPanel, StudioPanelHeader } from '../StudioPanel';
+import { type DeleteBlock, profileDeleteBlock, providerDeleteBlock } from './delete-guards';
 import { splitModelSpec } from './model-picker';
+import { type ProfileKeyMap, profileDisplayKey, profileKeysForRename } from './profile-rename';
 import { ProfileCard } from './profiles';
 import { ProviderCard, ProviderDialog } from './providers';
 import { ModelEmptyState, ModelSection, ModelSettingsSkeleton } from './shared';
 
 function emptyProfile(): ProfileView {
-  return { alias: '', provider: '', modelId: '', params: {}, fallbacks: [], roles: {} };
+  return { alias: '', routes: { chat: { provider: '', modelId: '' } }, params: {}, fallbacks: [] };
+}
+
+type RouteKey = keyof ProfileView['routes'];
+
+function profileWithRoute(profile: ProfileView, role: RouteKey, spec: string): ProfileView {
+  const routes = { ...profile.routes };
+  if (!spec) {
+    if (role !== 'chat') routes[role] = undefined;
+    return { ...profile, routes };
+  }
+  const parsed = splitModelSpec(spec);
+  if (!parsed) return profile;
+  routes[role] = { provider: parsed.providerId, modelId: parsed.modelId };
+  return { ...profile, routes };
 }
 
 function ProviderModelsCollector({
@@ -38,7 +56,9 @@ export function ModelSettings(_props: { onClose: () => void }) {
   const t = useT();
   const settings = useModelSettings();
   const settingsQuery = useModelSettingsQueryState();
+  const agentsQuery = useListAgentsQuery();
   const { providers, profiles, defaultAlias } = settings;
+  const agents = agentsQuery.data?.agents ?? [];
 
   const { metaFor, catalog } = useProviderMeta();
   const PROVIDER_TYPES = catalog.map((e) => ({
@@ -51,6 +71,7 @@ export function ModelSettings(_props: { onClose: () => void }) {
 
   const [draftProfile, setDraftProfile] = useState<ProfileView | null>(null);
   const [modelsByProvider, setModelsByProvider] = useState<Record<string, ModelInfo[]>>({});
+  const [profileKeyMap, setProfileKeyMap] = useState<ProfileKeyMap>({});
 
   const onProviderModels = useCallback((id: string, models: ModelInfo[]) => {
     setModelsByProvider((prev) => (prev[id] === models ? prev : { ...prev, [id]: models }));
@@ -81,9 +102,9 @@ export function ModelSettings(_props: { onClose: () => void }) {
     }
   };
 
-  const updateProfileRoles = async (profile: ProfileView, roles: ModelRoles) => {
+  const updateProfileRoute = async (profile: ProfileView, role: RouteKey, spec: string) => {
     try {
-      await settings.setProfile({ ...profile, roles });
+      await settings.setProfile(profileWithRoute(profile, role, spec));
     } catch {
       //
     }
@@ -97,20 +118,20 @@ export function ModelSettings(_props: { onClose: () => void }) {
     }
   };
 
-  const updateProfileModel = async (profile: ProfileView, provider: string, modelId: string) => {
-    try {
-      await settings.setProfile({ ...profile, modelId, provider });
-    } catch {
-      //
-    }
-  };
-
   const renameProfile = async (profile: ProfileView, newAlias: string) => {
+    const trimmed = newAlias.trim();
+    if (!trimmed || trimmed === profile.alias) return;
+    flushSync(() => {
+      setProfileKeyMap((keys) => profileKeysForRename(keys, profile.alias, trimmed));
+    });
     try {
-      await settings.deleteProfile(profile.alias);
-      await settings.setProfile({ ...profile, alias: newAlias });
+      await settings.renameProfile(profile.alias, trimmed);
     } catch {
-      //
+      setProfileKeyMap((keys) => {
+        const next = { ...keys };
+        delete next[trimmed];
+        return next;
+      });
     }
   };
 
@@ -118,6 +139,19 @@ export function ModelSettings(_props: { onClose: () => void }) {
     providerDialogTarget && providerDialogTarget !== 'add'
       ? providers.find((p) => p.id === providerDialogTarget)
       : undefined;
+  const deleteReason = (block: DeleteBlock | null): string | undefined => {
+    if (!block) return undefined;
+    switch (block.kind) {
+      case 'default-profile':
+        return t('web.model.deleteProfileDefaultBlocked');
+      case 'single-profile':
+        return t('web.model.deleteProfileSingleBlocked');
+      case 'agent':
+        return t('web.model.deleteProfileAgentBlocked', { name: block.name });
+      case 'profile':
+        return t('web.model.deleteProviderProfileBlocked', { alias: block.alias });
+    }
+  };
 
   return (
     <StudioPanel className="overflow-hidden">
@@ -168,7 +202,9 @@ export function ModelSettings(_props: { onClose: () => void }) {
               <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,24rem),1fr))] items-start gap-3">
                 {providers.map((p) => (
                   <ProviderCard
+                    deleteDisabledReason={deleteReason(providerDeleteBlock(p, profiles))}
                     key={p.id}
+                    onDelete={() => void handleDeleteProvider(p.id)}
                     onEdit={() => setProviderDialogTarget(p.id)}
                     provider={p}
                   />
@@ -190,17 +226,21 @@ export function ModelSettings(_props: { onClose: () => void }) {
 
               {profiles.length === 0 && !draftProfile && <ModelEmptyState>{t('web.model.noProfiles')}</ModelEmptyState>}
 
-              <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,22rem),1fr))] items-stretch gap-3">
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,28rem),1fr))] items-stretch gap-3">
                 {draftProfile && (
                   <ProfileCard
-                    canDelete={false}
                     defaultAlias={defaultAlias}
                     isDraft
                     key="__draft__"
                     modelsByProvider={modelsByProvider}
                     onDelete={() => setDraftProfile(null)}
                     onDraftCreate={async () => {
-                      if (!draftProfile.alias || !draftProfile.provider || !draftProfile.modelId) return;
+                      if (
+                        !draftProfile.alias ||
+                        !draftProfile.routes.chat.provider ||
+                        !draftProfile.routes.chat.modelId
+                      )
+                        return;
                       try {
                         await settings.setProfile(draftProfile);
                         setDraftProfile(null);
@@ -208,25 +248,9 @@ export function ModelSettings(_props: { onClose: () => void }) {
                         /* ignore */
                       }
                     }}
-                    onFastModelChange={(spec) => {
-                      if (!spec) {
-                        setDraftProfile((d) => (d ? { ...d, fastProvider: undefined, fastModelId: undefined } : d));
-                        return;
-                      }
-                      const parsed = splitModelSpec(spec);
-                      if (!parsed) return;
-                      setDraftProfile((d) =>
-                        d ? { ...d, fastProvider: parsed.providerId, fastModelId: parsed.modelId } : d
-                      );
-                    }}
-                    onModelChange={(spec) => {
-                      const parsed = splitModelSpec(spec);
-                      if (!parsed) return;
-                      setDraftProfile((d) => (d ? { ...d, provider: parsed.providerId, modelId: parsed.modelId } : d));
-                    }}
                     onParamsChange={(params) => setDraftProfile((d) => (d ? { ...d, params } : d))}
                     onRename={(alias) => setDraftProfile((d) => (d ? { ...d, alias } : d))}
-                    onRolesChange={(roles) => setDraftProfile((d) => (d ? { ...d, roles } : d))}
+                    onRouteChange={(role, spec) => setDraftProfile((d) => (d ? profileWithRoute(d, role, spec) : d))}
                     onSetDefault={() => {}}
                     profile={draftProfile}
                     providers={providers}
@@ -234,28 +258,14 @@ export function ModelSettings(_props: { onClose: () => void }) {
                 )}
                 {profiles.map((p) => (
                   <ProfileCard
-                    canDelete={p.alias !== 'default' && profiles.length > 1}
                     defaultAlias={defaultAlias}
-                    key={p.alias}
+                    deleteDisabledReason={deleteReason(profileDeleteBlock(p, profiles, agents, defaultAlias))}
+                    key={profileDisplayKey(p.alias, profileKeyMap)}
                     modelsByProvider={modelsByProvider}
                     onDelete={() => void handleDeleteProfile(p.alias)}
-                    onFastModelChange={(spec) => {
-                      if (!spec) {
-                        void settings.setProfile({ ...p, fastProvider: undefined, fastModelId: undefined });
-                        return;
-                      }
-                      const parsed = splitModelSpec(spec);
-                      if (!parsed) return;
-                      void settings.setProfile({ ...p, fastProvider: parsed.providerId, fastModelId: parsed.modelId });
-                    }}
-                    onModelChange={(spec) => {
-                      const parsed = splitModelSpec(spec);
-                      if (!parsed) return;
-                      void updateProfileModel(p, parsed.providerId, parsed.modelId);
-                    }}
                     onParamsChange={(params) => void updateProfileParams(p, params)}
                     onRename={(newAlias) => void renameProfile(p, newAlias)}
-                    onRolesChange={(roles) => void updateProfileRoles(p, roles)}
+                    onRouteChange={(role, spec) => void updateProfileRoute(p, role, spec)}
                     onSetDefault={() => void handleSetDefaultProfile(p.alias)}
                     profile={p}
                     providers={providers}
@@ -271,7 +281,6 @@ export function ModelSettings(_props: { onClose: () => void }) {
         metaFor={metaFor}
         mode={providerDialogTarget === 'add' ? 'add' : 'edit'}
         onClose={() => setProviderDialogTarget(null)}
-        onDelete={editingProvider ? () => void handleDeleteProvider(editingProvider.id) : undefined}
         open={providerDialogTarget !== null}
         PROVIDER_TYPES={PROVIDER_TYPES}
         provider={editingProvider}

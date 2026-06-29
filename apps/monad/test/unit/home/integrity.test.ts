@@ -5,6 +5,7 @@ import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initMonadHome, loadAll, loadAuth, pathsForHome, saveProfile } from '@monad/home';
+import { ModelProviderType } from '@monad/protocol';
 
 import { createStore } from '@/store/db/index.ts';
 import { checkAndRepair } from '@/store/home/integrity.ts';
@@ -119,9 +120,12 @@ describe('checkAndRepair', () => {
     const cfg = await loadAll(paths.config, paths.profile);
     if (!cfg) throw new Error('config missing');
     cfg.model.default = '';
+    cfg.model.providers = [
+      { id: 'p', label: 'P', type: ModelProviderType.OpenAICompatible, baseUrl: 'https://api.example.com/v1' }
+    ];
     cfg.model.profiles = [
-      { alias: 'fast', provider: 'p', modelId: 'm1', params: {}, fallbacks: [], roles: {} },
-      { alias: 'smart', provider: 'p', modelId: 'm2', params: {}, fallbacks: [], roles: {} }
+      { alias: 'fast', routes: { chat: { provider: 'p', modelId: 'm1' } }, params: {}, fallbacks: [] },
+      { alias: 'smart', routes: { chat: { provider: 'p', modelId: 'm2' } }, params: {}, fallbacks: [] }
     ];
     await saveProfile(paths.profile, cfg);
 
@@ -138,9 +142,12 @@ describe('checkAndRepair', () => {
     const cfg = await loadAll(paths.config, paths.profile);
     if (!cfg) throw new Error('config missing');
     cfg.model.default = 'missing';
+    cfg.model.providers = [
+      { id: 'p', label: 'P', type: ModelProviderType.OpenAICompatible, baseUrl: 'https://api.example.com/v1' }
+    ];
     cfg.model.profiles = [
-      { alias: 'fast', provider: 'p', modelId: 'm1', params: {}, fallbacks: [], roles: {} },
-      { alias: 'smart', provider: 'p', modelId: 'm2', params: {}, fallbacks: [], roles: {} }
+      { alias: 'fast', routes: { chat: { provider: 'p', modelId: 'm1' } }, params: {}, fallbacks: [] },
+      { alias: 'smart', routes: { chat: { provider: 'p', modelId: 'm2' } }, params: {}, fallbacks: [] }
     ];
     await saveProfile(paths.profile, cfg);
 
@@ -150,6 +157,59 @@ describe('checkAndRepair', () => {
 
     expect(report.profile).toBe('repaired');
     expect((await loadAll(paths.config, paths.profile))?.model.default).toBe('fast');
+  });
+
+  test('repairs agent model aliases that point at missing profiles', async () => {
+    await initMonadHome(paths);
+    const cfg = await loadAll(paths.config, paths.profile);
+    if (!cfg) throw new Error('config missing');
+    cfg.model.providers = [
+      { id: 'p', label: 'P', type: ModelProviderType.OpenAICompatible, baseUrl: 'https://api.example.com/v1' }
+    ];
+    cfg.model.profiles = [
+      { alias: 'default', routes: { chat: { provider: 'p', modelId: 'm1' } }, params: {}, fallbacks: [] }
+    ];
+    cfg.model.default = 'default';
+    cfg.agent.agents = [
+      {
+        id: 'agt_STALEPROFILE',
+        name: 'A',
+        modelAlias: 'missing',
+        model: 'missing',
+        capabilities: [],
+        declaredScopes: [],
+        atoms: { mode: 'inherit', allow: [], deny: [] },
+        visibility: { subagentCallable: false, public: false }
+      }
+    ];
+    await saveProfile(paths.profile, cfg);
+
+    const store = createStore({ path: paths.db });
+    const report = await checkAndRepair(paths, store);
+    store.close();
+
+    const repaired = await loadAll(paths.config, paths.profile);
+    expect(report.profile).toBe('repaired');
+    expect(repaired?.agent.agents[0]?.modelAlias).toBeUndefined();
+    expect(repaired?.agent.agents[0]?.model).toBeUndefined();
+  });
+
+  test('fails startup health check when a profile references a missing provider', async () => {
+    await initMonadHome(paths);
+    const cfg = await loadAll(paths.config, paths.profile);
+    if (!cfg) throw new Error('config missing');
+    cfg.model.providers = [];
+    cfg.model.profiles = [
+      { alias: 'default', routes: { chat: { provider: 'missing', modelId: 'm1' } }, params: {}, fallbacks: [] }
+    ];
+    cfg.model.default = 'default';
+    await saveProfile(paths.profile, cfg);
+
+    const store = createStore({ path: paths.db });
+    await expect(checkAndRepair(paths, store)).rejects.toThrow(
+      /profile "default" references missing provider "missing"/
+    );
+    store.close();
   });
 
   test('db schema version matches after migration', async () => {

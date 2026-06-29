@@ -36,6 +36,7 @@ import { useState } from 'react';
 import { I18nTrans, useT } from '@/components/I18nProvider';
 import { useAsyncAction } from '../hooks/use-async-action';
 import { useChannelSettings } from '../hooks/use-channel-settings';
+import { SECRET_INPUT_PASSWORD_MANAGER_PROPS } from './studio/ModelSettings/secret-input-props';
 import { StudioPanel, StudioPanelHeader } from './studio/StudioPanel';
 
 const KNOWN_TYPES = ['telegram', 'slack', 'discord'];
@@ -294,10 +295,11 @@ function ChannelCard({
             <Label className="text-xs">{status?.hasToken ? t('web.ch.botTokenSet') : t('web.ch.botToken')}</Label>
             <div className="flex gap-2">
               <Input
+                className="[-webkit-text-security:disc]"
                 onChange={(e) => setTokenInput(e.target.value)}
                 placeholder={t('web.ch.tokenPlaceholder')}
-                type="password"
                 value={token}
+                {...SECRET_INPUT_PASSWORD_MANAGER_PROPS}
               />
               <Button
                 disabled={busy || !token}

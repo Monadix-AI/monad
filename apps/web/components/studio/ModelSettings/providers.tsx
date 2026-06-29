@@ -1,31 +1,57 @@
 'use client';
 
-import type { ProviderView } from '@monad/protocol';
-
-import { ModelProviderType } from '@monad/protocol';
-import {
-  Button,
-  Card,
-  cn,
-  Input,
-  Label,
-  ScrollArea,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from '@monad/ui';
-import { Loader2, Pencil, Plus, RefreshCw, Trash2, X } from 'lucide-react';
+import { httpUrlSchema, type ModelInfo, type ModelProviderType, type ProviderView } from '@monad/protocol';
+import { Button, Card, cn, Input, Label, Tooltip, TooltipContent, TooltipTrigger } from '@monad/ui';
+import { AlertTriangle, ArrowLeft, Loader2, Pencil, Plus, RefreshCw, Trash2, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import { useT } from '@/components/I18nProvider';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useModelSettings, useProviderDetail } from '@/hooks/use-model-settings';
 import { providerLogo, useProviderMeta } from '@/lib/ProviderMeta';
-import { type AddForm, emptyAddForm, FormMsg, ModelPriceTag, StatusDot, toErrorMessage } from './shared';
+import { ModelHoverCardBody, modelMatchesQuery, sortModelsForProvider } from './model-picker';
+import {
+  initialProviderDialogStep,
+  providerDialogCanGoBack,
+  providerDialogNextStep,
+  providerDialogPreviousStep
+} from './provider-dialog-flow';
+import { SECRET_INPUT_PASSWORD_MANAGER_PROPS } from './secret-input-props';
+import { type AddForm, emptyAddForm, FormMsg, StatusDot, toErrorMessage } from './shared';
 
-export function ProviderCard({ provider: p, onEdit }: { provider: ProviderView; onEdit: () => void }) {
+function ProviderModelCard({ model }: { model: ModelInfo }) {
+  return (
+    <div className="glass-foreground min-w-0 rounded-(--radius-sm) border border-border/60 p-3">
+      <ModelHoverCardBody model={model} />
+    </div>
+  );
+}
+
+function ProviderModelGrid({ models }: { models: ModelInfo[] }) {
+  return (
+    <div className="grid gap-2 sm:grid-cols-2">
+      {models.map((model) => (
+        <ProviderModelCard
+          key={model.id}
+          model={model}
+        />
+      ))}
+    </div>
+  );
+}
+
+export function ProviderCard({
+  deleteDisabledReason,
+  onDelete,
+  onEdit,
+  provider: p
+}: {
+  deleteDisabledReason?: string;
+  onDelete: () => void;
+  onEdit: () => void;
+  provider: ProviderView;
+}) {
   const { metaFor } = useProviderMeta();
   const meta = metaFor(p.type);
   const Logo = meta.logo;
@@ -47,30 +73,51 @@ export function ProviderCard({ provider: p, onEdit }: { provider: ProviderView; 
 
   return (
     <Card className="group gap-0 overflow-hidden py-0 transition-colors hover:bg-muted/20">
-      <div className="flex items-start gap-2.5 px-3 py-2.5">
-        <Logo className={cn('mt-0.5 size-4 shrink-0', meta.color)} />
-        <div className="min-w-0 flex-1">
-          <span className="block truncate font-medium text-sm leading-6">{p.label}</span>
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-muted-foreground text-xs">
-            <span className="flex items-center gap-1">
-              <span className={cn('inline-block size-1.5 shrink-0 rounded-full', credDotColor)} />
-              {credCount === 0 ? 'No keys' : `${credCount} key${credCount > 1 ? 's' : ''}`}
-              {okCount > 0 && errCount > 0 && <span className="text-destructive">({errCount} err)</span>}
-            </span>
-            {modelCount > 0 && <span>{modelCount.toLocaleString()} models</span>}
-            {detail.isLoadingModels && modelCount === 0 && <Loader2 className="size-3 animate-spin" />}
-            {p.baseUrl && <span className="max-w-[14rem] truncate opacity-60">{p.baseUrl}</span>}
-          </div>
+      <div className="flex min-h-12 items-center gap-2.5 px-3 py-2">
+        <Logo className={cn('size-4 shrink-0', meta.color)} />
+        <div className="flex min-w-0 flex-1 items-center gap-2">
+          <span className="min-w-0 truncate font-medium text-sm">{p.label}</span>
+          <span className="flex shrink-0 items-center gap-1 text-muted-foreground text-xs">
+            <span className={cn('inline-block size-1.5 shrink-0 rounded-full', credDotColor)} />
+            {credCount === 0 ? 'No keys' : `${credCount} key${credCount > 1 ? 's' : ''}`}
+            {okCount > 0 && errCount > 0 && <span className="text-destructive">({errCount} err)</span>}
+          </span>
+          {modelCount > 0 && (
+            <span className="shrink-0 text-muted-foreground text-xs">{modelCount.toLocaleString()} models</span>
+          )}
+          {detail.isLoadingModels && modelCount === 0 && (
+            <Loader2 className="size-3 shrink-0 animate-spin text-muted-foreground" />
+          )}
+          {p.baseUrl && <span className="min-w-0 truncate text-muted-foreground/60 text-xs">{p.baseUrl}</span>}
         </div>
-        <Button
-          aria-label="Edit provider"
-          className="mt-0.5 size-7 shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover:opacity-100"
-          onClick={onEdit}
-          size="icon"
-          variant="ghost"
-        >
-          <Pencil />
-        </Button>
+        <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+          <Button
+            aria-label="Edit provider"
+            className="size-7 text-muted-foreground hover:text-foreground"
+            onClick={onEdit}
+            size="icon"
+            variant="ghost"
+          >
+            <Pencil />
+          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="inline-flex">
+                <Button
+                  aria-label="Delete provider"
+                  className="size-7 text-muted-foreground hover:text-destructive disabled:hover:text-muted-foreground"
+                  disabled={!!deleteDisabledReason}
+                  onClick={deleteDisabledReason ? undefined : onDelete}
+                  size="icon"
+                  variant="ghost"
+                >
+                  <Trash2 />
+                </Button>
+              </span>
+            </TooltipTrigger>
+            {deleteDisabledReason && <TooltipContent>{deleteDisabledReason}</TooltipContent>}
+          </Tooltip>
+        </div>
       </div>
     </Card>
   );
@@ -80,7 +127,6 @@ export function ProviderDialog({
   mode,
   open,
   onClose,
-  onDelete,
   provider,
   providers,
   settings,
@@ -90,7 +136,6 @@ export function ProviderDialog({
   mode: 'add' | 'edit';
   open: boolean;
   onClose: () => void;
-  onDelete?: () => void;
   provider?: ProviderView;
   providers: ProviderView[];
   settings: ReturnType<typeof useModelSettings>;
@@ -100,9 +145,13 @@ export function ProviderDialog({
   const t = useT();
   const detail = useProviderDetail(provider?.id ?? '');
 
+  const [step, setStep] = useState(initialProviderDialogStep(mode));
   const [form, setForm] = useState<AddForm>(emptyAddForm);
   const [testing, setTesting] = useState(false);
   const [testMsg, setTestMsg] = useState<string | null>(null);
+  const [hasTestedProvider, setHasTestedProvider] = useState(false);
+  const [testedModels, setTestedModels] = useState<typeof detail.models>([]);
+  const [baseUrlError, setBaseUrlError] = useState<string | null>(null);
 
   const [addingKey, setAddingKey] = useState(false);
   const [keyLabel, setKeyLabel] = useState('');
@@ -112,56 +161,113 @@ export function ProviderDialog({
   const [credTest, setCredTest] = useState<Record<string, string>>({});
   const [modelFilter, setModelFilter] = useState('');
 
-  const filter = modelFilter.toLowerCase();
-  const allModels = detail.models;
-  const visibleModels = allModels.filter((m) => !filter || m.id.toLowerCase().includes(filter));
-
+  const updateAddForm = (next: (form: AddForm) => AddForm) => {
+    setForm(next);
+    setTestMsg(null);
+    setBaseUrlError(null);
+    setHasTestedProvider(false);
+    setTestedModels([]);
+  };
   useEffect(() => {
     if (!open) {
+      setStep(initialProviderDialogStep(mode));
       setForm(emptyAddForm());
       setTestMsg(null);
+      setBaseUrlError(null);
       setTesting(false);
+      setHasTestedProvider(false);
+      setTestedModels([]);
       setAddingKey(false);
       setKeyLabel('');
       setKeyToken('');
       setKeyMsg(null);
       setCredTest({});
       setModelFilter('');
+      return;
     }
-  }, [open]);
+    setStep(initialProviderDialogStep(mode));
+  }, [open, mode]);
 
-  const handleTestAndAdd = async () => {
-    if (!form.key) {
-      setTestMsg(t('web.model.enterKey'));
-      return;
-    }
-    const meta = metaFor(form.type);
-    if (meta.needsUrl && !form.baseUrl) {
-      setTestMsg(t('web.model.needBaseUrl'));
-      return;
-    }
+  const providerFromForm = (baseUrlOverride?: string): ProviderView => {
     const taken = new Set(providers.map((p) => p.id));
     let id: string = form.type;
     let n = 2;
     while (taken.has(id)) id = `${form.type}-${n++}`;
     const friendly = metaFor(form.type).label;
     const label = n > 2 ? `${friendly} ${n - 1}` : friendly;
-    const prov: ProviderView = { id, label, type: form.type, baseUrl: form.baseUrl || undefined };
+    const baseUrl = baseUrlOverride ?? form.baseUrl.trim();
+    return { id, label, type: form.type, baseUrl: baseUrl || undefined };
+  };
+
+  const validateBaseUrl = (): { baseUrl?: string; ok: true } | { ok: false } => {
+    if (!metaFor(form.type).needsUrl) {
+      setBaseUrlError(null);
+      return { ok: true };
+    }
+
+    const trimmed = form.baseUrl.trim();
+    if (!trimmed) {
+      setBaseUrlError(t('web.url.required'));
+      return { ok: false };
+    }
+    const parsed = httpUrlSchema.safeParse(trimmed);
+    if (!parsed.success) {
+      setBaseUrlError(t('web.url.httpOnly'));
+      return { ok: false };
+    }
+    setBaseUrlError(null);
+    return { baseUrl: parsed.data, ok: true };
+  };
+
+  const handleNext = () => {
+    const valid = validateBaseUrl();
+    if (!valid.ok) return;
+    if (valid.baseUrl && valid.baseUrl !== form.baseUrl) {
+      setForm((current) => ({ ...current, baseUrl: valid.baseUrl ?? '' }));
+    }
+    setStep((current) => providerDialogNextStep(mode, current));
+  };
+
+  const handleTestProvider = async () => {
+    if (!form.key) {
+      setTestMsg(t('web.model.enterKey'));
+      return;
+    }
+    const valid = validateBaseUrl();
+    if (!valid.ok) return;
+    const prov = providerFromForm(valid.baseUrl);
 
     setTesting(true);
     setTestMsg(t('web.model.testing'));
+    setHasTestedProvider(false);
+    setTestedModels([]);
     try {
       const test = await settings.testConnection(prov, form.key);
       if (!test.ok) {
         setTestMsg(`✗ ${test.error ?? t('web.model.connFailed')}`);
         return;
       }
-      await settings.addProvider(prov, { label: 'key 1', accessToken: form.key }, { models: test.models });
-      onClose();
+      setTestedModels(test.models ?? []);
+      setHasTestedProvider(true);
+      setTestMsg(null);
     } catch (e) {
       setTestMsg(`✗ ${toErrorMessage(e)}`);
     } finally {
       setTesting(false);
+    }
+  };
+
+  const handleAddTestedProvider = async () => {
+    if (!form.key || !hasTestedProvider) return;
+    try {
+      await settings.addProvider(
+        providerFromForm(),
+        { label: 'key 1', accessToken: form.key },
+        { models: testedModels }
+      );
+      onClose();
+    } catch (e) {
+      setTestMsg(`✗ ${toErrorMessage(e)}`);
     }
   };
 
@@ -203,8 +309,23 @@ export function ProviderDialog({
     }
   };
 
-  const provMeta = provider ? metaFor(provider.type) : null;
+  const selectedMeta = metaFor(form.type);
+  const selectedProvider: ProviderView = {
+    id: form.type,
+    label: selectedMeta.label,
+    type: form.type,
+    baseUrl: form.baseUrl || undefined
+  };
+  const activeProvider = mode === 'add' ? selectedProvider : provider;
+  const provMeta = activeProvider ? metaFor(activeProvider.type) : null;
   const Logo = provMeta?.logo;
+  const configuredModels = mode === 'add' ? testedModels : detail.models;
+  const configuredVisibleModels = sortModelsForProvider(
+    configuredModels.filter((m) => modelMatchesQuery(m, modelFilter)),
+    activeProvider?.type
+  );
+  const visibleModelLimit = configuredVisibleModels.slice(0, 50);
+  const canGoBack = providerDialogCanGoBack(mode, step);
 
   return (
     <Dialog
@@ -213,82 +334,105 @@ export function ProviderDialog({
       }}
       open={open}
     >
-      <DialogContent className="flex max-h-[82vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-xl">
+      <DialogContent className="flex max-h-[72vh] min-h-0 flex-col gap-0 overflow-hidden p-0 sm:max-w-xl">
         <DialogHeader className="border-b px-5 py-4">
           <DialogTitle className="flex items-center gap-2 font-semibold text-base">
+            {canGoBack && (
+              <Button
+                aria-label={t('web.common.back')}
+                className="-ml-2 size-7"
+                onClick={() => setStep((current) => providerDialogPreviousStep(mode, current))}
+                size="icon"
+                variant="ghost"
+              >
+                <ArrowLeft />
+              </Button>
+            )}
             {Logo && provMeta ? <Logo className={cn('size-4 shrink-0', provMeta.color)} /> : null}
             {mode === 'add' ? t('web.model.addProviderTitle') : (provider?.label ?? '')}
           </DialogTitle>
         </DialogHeader>
 
-        <ScrollArea className="flex-1">
+        <div className="min-h-0 flex-1 overflow-y-auto">
           <div className="flex flex-col gap-5 p-5">
-            {mode === 'add' ? (
+            {mode === 'add' && step === 'select' ? (
               <>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="flex flex-col gap-1.5">
-                    <Label>{t('web.model.providerType')}</Label>
-                    <Select
-                      onValueChange={(v) => setForm((f) => ({ ...f, type: v as ModelProviderType }))}
-                      value={form.type}
-                    >
-                      <SelectTrigger className="w-full">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {PROVIDER_TYPES.map((p) => {
-                          const { logo: PrvLogo, color } = providerLogo(p.value);
-                          return (
-                            <SelectItem
-                              key={p.value}
-                              value={p.value}
-                            >
-                              <span className="flex items-center gap-2">
-                                <PrvLogo className={cn('size-3.5 shrink-0', color)} />
-                                {p.label}
-                              </span>
-                            </SelectItem>
-                          );
-                        })}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  {metaFor(form.type).needsUrl && (
+                <div className="grid gap-2 sm:grid-cols-3">
+                  {PROVIDER_TYPES.map((p) => {
+                    const { logo: PrvLogo, color } = providerLogo(p.value);
+                    const active = form.type === p.value;
+                    return (
+                      <button
+                        className={cn(
+                          'glass-foreground flex min-h-12 items-center gap-2 rounded-md border px-3 py-2 text-left transition-colors',
+                          active
+                            ? 'border-primary/45 bg-primary/8 text-foreground'
+                            : 'border-border/70 bg-card hover:border-ring hover:bg-accent'
+                        )}
+                        key={p.value}
+                        onClick={() => updateAddForm((f) => ({ ...f, type: p.value, baseUrl: '' }))}
+                        type="button"
+                      >
+                        <PrvLogo className={cn('size-4 shrink-0', color)} />
+                        <span className="min-w-0 flex-1 truncate font-medium text-sm">{p.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="grid gap-3">
+                  {selectedMeta.needsUrl && (
                     <div className="flex flex-col gap-1.5">
                       <Label>{t('web.model.baseUrl')}</Label>
-                      <Input
-                        onChange={(e) => setForm((f) => ({ ...f, baseUrl: e.target.value }))}
-                        placeholder="https://…"
-                        value={form.baseUrl}
-                      />
+                      <Popover open={!!baseUrlError}>
+                        <PopoverTrigger asChild>
+                          <Input
+                            aria-invalid={!!baseUrlError || undefined}
+                            autoComplete="url"
+                            className="glass-foreground"
+                            inputMode="url"
+                            onChange={(e) => updateAddForm((f) => ({ ...f, baseUrl: e.target.value }))}
+                            onKeyDown={(event) => {
+                              if (event.key === 'Enter') {
+                                event.preventDefault();
+                                handleNext();
+                              }
+                            }}
+                            placeholder="https://…"
+                            spellCheck={false}
+                            type="url"
+                            value={form.baseUrl}
+                          />
+                        </PopoverTrigger>
+                        <PopoverContent
+                          align="start"
+                          className="w-auto max-w-72 border-destructive/40 bg-destructive/8 px-3 py-2 text-destructive"
+                          onOpenAutoFocus={(e) => e.preventDefault()}
+                          side="bottom"
+                        >
+                          <p className="flex items-center gap-1.5 text-sm">
+                            <AlertTriangle className="size-3.5 shrink-0" />
+                            {baseUrlError}
+                          </p>
+                        </PopoverContent>
+                      </Popover>
                     </div>
                   )}
                 </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label>{t('web.model.apiKey')}</Label>
-                  <Input
-                    autoComplete="off"
-                    onChange={(e) => setForm((f) => ({ ...f, key: e.target.value }))}
-                    placeholder="sk-…"
-                    type="password"
-                    value={form.key}
-                  />
-                </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center justify-end gap-2">
                   <Button
-                    disabled={testing}
-                    onClick={() => void handleTestAndAdd()}
+                    onClick={onClose}
+                    size="sm"
+                    variant="ghost"
+                  >
+                    {t('web.common.cancel')}
+                  </Button>
+                  <Button
+                    onClick={handleNext}
                     size="sm"
                   >
-                    {testing ? (
-                      <>
-                        <Loader2 className="animate-spin" /> {t('web.model.testing')}
-                      </>
-                    ) : (
-                      t('web.model.testAdd')
-                    )}
+                    {t('web.common.next')}
                   </Button>
-                  {testMsg && <FormMsg msg={testMsg} />}
                 </div>
               </>
             ) : (
@@ -298,174 +442,181 @@ export function ProviderDialog({
                     <span className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
                       {t('web.model.keys')}
                     </span>
-                    <Button
-                      onClick={() => {
-                        setAddingKey((v) => !v);
-                        setKeyMsg(null);
-                        setKeyLabel('');
-                        setKeyToken('');
-                      }}
-                      size="sm"
-                      variant="ghost"
-                    >
-                      {addingKey ? (
-                        t('web.model.cancel')
-                      ) : (
-                        <>
-                          <Plus /> {t('web.model.keyBtn')}
-                        </>
-                      )}
-                    </Button>
+                    {mode === 'edit' && (
+                      <Button
+                        onClick={() => {
+                          setAddingKey((v) => !v);
+                          setKeyMsg(null);
+                          setKeyLabel('');
+                          setKeyToken('');
+                        }}
+                        size="sm"
+                        variant="ghost"
+                      >
+                        {addingKey ? (
+                          t('web.model.cancel')
+                        ) : (
+                          <>
+                            <Plus /> {t('web.model.keyBtn')}
+                          </>
+                        )}
+                      </Button>
+                    )}
                   </div>
 
-                  {addingKey && (
-                    <div className="flex flex-wrap items-center gap-2 rounded-md border bg-muted/30 p-2.5">
+                  {mode === 'edit' && addingKey && (
+                    <div className="flex flex-wrap items-center gap-2">
                       <Input
-                        className="h-8 w-32"
+                        className="glass-foreground h-8 w-32"
                         onChange={(e) => setKeyLabel(e.target.value)}
                         placeholder={t('web.model.labelPlaceholder')}
                         value={keyLabel}
                       />
                       <Input
-                        autoComplete="off"
-                        className="h-8 min-w-48 flex-1"
+                        className="glass-foreground h-8 min-w-48 flex-1 [-webkit-text-security:disc]"
                         onChange={(e) => setKeyToken(e.target.value)}
                         placeholder={t('web.model.apiKeyPlaceholder')}
-                        type="password"
                         value={keyToken}
+                        {...SECRET_INPUT_PASSWORD_MANAGER_PROPS}
                       />
                       <Button
                         disabled={keyTesting}
                         onClick={() => void handleAddKey()}
                         size="sm"
                       >
-                        {keyTesting ? <Loader2 className="animate-spin" /> : t('web.model.testAdd')}
+                        {keyTesting ? <Loader2 className="animate-spin" /> : t('web.model.test')}
                       </Button>
                       {keyMsg && <FormMsg msg={keyMsg} />}
                     </div>
                   )}
 
-                  {detail.credentials.length === 0 && !addingKey && (
+                  {mode === 'add' && (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Input
+                        className="glass-foreground h-8 min-w-48 flex-1 [-webkit-text-security:disc]"
+                        onChange={(e) => updateAddForm((f) => ({ ...f, key: e.target.value }))}
+                        placeholder={t('web.model.apiKeyPlaceholder')}
+                        value={form.key}
+                        {...SECRET_INPUT_PASSWORD_MANAGER_PROPS}
+                      />
+                      <Button
+                        disabled={testing}
+                        onClick={() => void handleTestProvider()}
+                        size="sm"
+                      >
+                        {testing ? (
+                          <>
+                            <Loader2 className="animate-spin" /> {t('web.model.testing')}
+                          </>
+                        ) : (
+                          t('web.model.test')
+                        )}
+                      </Button>
+                      {hasTestedProvider && (
+                        <Button
+                          onClick={() => void handleAddTestedProvider()}
+                          size="sm"
+                        >
+                          {t('web.model.addProvider')}
+                        </Button>
+                      )}
+                      {testMsg && <FormMsg msg={testMsg} />}
+                    </div>
+                  )}
+
+                  {mode === 'edit' && detail.credentials.length === 0 && !addingKey && (
                     <p className="text-muted-foreground text-xs">{t('web.model.noKeys')}</p>
                   )}
 
-                  {detail.credentials.map((c) => {
-                    const result = credTest[c.id];
-                    return (
-                      <div
-                        className="flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-sm"
-                        key={c.id}
-                      >
-                        <StatusDot status={c.lastStatus} />
-                        <span className="font-medium">{c.label}</span>
-                        <span className="font-mono text-muted-foreground text-xs">{c.accessTokenPreview ?? '...'}</span>
-                        <span className="ml-auto text-muted-foreground text-xs">
-                          {t('web.model.req', { count: c.requestCount })}
-                        </span>
-                        {result && (
-                          <span
-                            className={cn('text-xs', result.startsWith('ok') ? 'text-success' : 'text-destructive')}
-                          >
-                            {result}
+                  {mode === 'edit' &&
+                    detail.credentials.map((c) => {
+                      const result = credTest[c.id];
+                      return (
+                        <div
+                          className="glass-foreground flex min-h-10 items-center gap-2 rounded-md border px-2.5 py-1.5 text-sm"
+                          key={c.id}
+                        >
+                          <StatusDot status={c.lastStatus} />
+                          <span className="inline-flex items-center font-medium leading-none">{c.label}</span>
+                          <span className="inline-flex items-center font-mono text-muted-foreground text-xs leading-none">
+                            {c.accessTokenPreview ?? '...'}
                           </span>
+                          <span className="ml-auto inline-flex items-center text-muted-foreground text-xs leading-none">
+                            {t('web.model.req', { count: c.requestCount })}
+                          </span>
+                          {result && (
+                            <span
+                              className={cn(
+                                'inline-flex items-center text-xs leading-none',
+                                result.startsWith('ok') ? 'text-success' : 'text-destructive'
+                              )}
+                            >
+                              {result}
+                            </span>
+                          )}
+                          <Button
+                            onClick={() => void handleTestKey(c.id)}
+                            size="sm"
+                            variant="ghost"
+                          >
+                            {t('web.model.test')}
+                          </Button>
+                          <Button
+                            aria-label={t('web.model.deleteKey')}
+                            className="size-7 text-muted-foreground hover:text-destructive"
+                            onClick={() => void detail.deleteCredential(c.id)}
+                            size="icon"
+                            variant="ghost"
+                          >
+                            <X />
+                          </Button>
+                        </div>
+                      );
+                    })}
+                </section>
+
+                {(mode === 'edit' || hasTestedProvider) && (
+                  <section className="flex flex-col gap-2">
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
+                        {t('web.model.models')}
+                        {configuredModels.length > 0 && (
+                          <span className="ml-1 text-muted-foreground/70">({configuredVisibleModels.length})</span>
                         )}
+                      </span>
+                      {mode === 'edit' && (
                         <Button
-                          onClick={() => void handleTestKey(c.id)}
+                          onClick={detail.refreshModels}
                           size="sm"
                           variant="ghost"
                         >
-                          {t('web.model.test')}
+                          <RefreshCw /> {t('web.model.refresh')}
                         </Button>
-                        <Button
-                          aria-label={t('web.model.deleteKey')}
-                          className="size-7 text-muted-foreground hover:text-destructive"
-                          onClick={() => void detail.deleteCredential(c.id)}
-                          size="icon"
-                          variant="ghost"
-                        >
-                          <X />
-                        </Button>
-                      </div>
-                    );
-                  })}
-                </section>
-
-                <section className="flex flex-col gap-2">
-                  <div className="flex items-center justify-between">
-                    <span className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
-                      {t('web.model.models')}
-                      {allModels.length > 0 && (
-                        <span className="ml-1 text-muted-foreground/70">({visibleModels.length})</span>
-                      )}
-                    </span>
-                    <Button
-                      onClick={detail.refreshModels}
-                      size="sm"
-                      variant="ghost"
-                    >
-                      <RefreshCw /> {t('web.model.refresh')}
-                    </Button>
-                  </div>
-
-                  {allModels.length > 8 && (
-                    <Input
-                      className="h-8"
-                      onChange={(e) => setModelFilter(e.target.value)}
-                      placeholder={t('web.model.filterPlaceholder')}
-                      value={modelFilter}
-                    />
-                  )}
-
-                  {detail.isLoadingModels && allModels.length === 0 ? (
-                    <p className="text-muted-foreground text-xs">{t('web.model.loadingModels')}</p>
-                  ) : visibleModels.length === 0 ? (
-                    <p className="text-muted-foreground text-xs">{t('web.model.noModels')}</p>
-                  ) : (
-                    <div className="grid gap-1.5">
-                      {visibleModels.slice(0, 50).map((m) => (
-                        <div
-                          className="flex items-center gap-2 rounded-md border px-2.5 py-2 text-sm"
-                          key={m.id}
-                        >
-                          <span className="min-w-0 flex-1">
-                            <span className="block truncate font-medium text-xs">{m.label ?? m.id}</span>
-                            {m.label && (
-                              <span className="block truncate font-mono text-[10px] text-muted-foreground">{m.id}</span>
-                            )}
-                          </span>
-                          {m.price && (
-                            <ModelPriceTag
-                              className="ml-auto"
-                              price={m.price}
-                            />
-                          )}
-                        </div>
-                      ))}
-                      {visibleModels.length > 50 && (
-                        <p className="px-2 py-1 text-muted-foreground text-xs">
-                          {t('web.model.moreFiltered', { count: visibleModels.length - 50 })}
-                        </p>
                       )}
                     </div>
-                  )}
-                </section>
 
-                {onDelete && (
-                  <div className="border-t pt-3">
-                    <Button
-                      className="text-destructive hover:text-destructive"
-                      onClick={onDelete}
-                      size="sm"
-                      variant="ghost"
-                    >
-                      <Trash2 /> {t('web.model.deleteProvider')}
-                    </Button>
-                  </div>
+                    {configuredModels.length > 8 && (
+                      <Input
+                        className="glass-foreground h-8"
+                        onChange={(e) => setModelFilter(e.target.value)}
+                        placeholder={t('web.model.filterPlaceholder')}
+                        value={modelFilter}
+                      />
+                    )}
+
+                    {mode === 'edit' && detail.isLoadingModels && configuredModels.length === 0 ? (
+                      <p className="text-muted-foreground text-xs">{t('web.model.loadingModels')}</p>
+                    ) : configuredVisibleModels.length === 0 ? (
+                      <p className="text-muted-foreground text-xs">{t('web.model.noModels')}</p>
+                    ) : (
+                      <ProviderModelGrid models={visibleModelLimit} />
+                    )}
+                  </section>
                 )}
               </>
             )}
           </div>
-        </ScrollArea>
+        </div>
       </DialogContent>
     </Dialog>
   );

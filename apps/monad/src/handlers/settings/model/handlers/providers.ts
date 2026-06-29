@@ -2,6 +2,7 @@ import type { SetProviderRequest } from '@monad/protocol';
 import type { ModelContext } from '@/handlers/settings/model/context.ts';
 
 import { listProviderModels } from '@/agent/index.ts';
+import { HandlerError } from '@/handlers/handler-error.ts';
 import {
   credentialToHandle,
   providerToResolved,
@@ -28,6 +29,15 @@ export function createProvidersHandlers(ctx: ModelContext) {
 
     async deleteProvider({ id }: { id: string }) {
       const { cfg, auth } = await ctx.read();
+      const profile = cfg.model.profiles.find((profile) =>
+        Object.values(profile.routes).some((route) => route?.provider === id)
+      );
+      if (profile) {
+        throw new HandlerError(
+          'conflict',
+          `model: provider "${id}" is used by profile "${profile.alias}" and cannot be deleted`
+        );
+      }
       cfg.model.providers = cfg.model.providers.filter((provider) => provider.id !== id);
       await ctx.commit(cfg, auth);
       return { ok: true as const };
@@ -45,6 +55,9 @@ export function createProvidersHandlers(ctx: ModelContext) {
       // across point versions).
       const enriched = models.map((m) => {
         const price = m.price ?? ctx.lookupPriceExact(provider.type, m.id);
+        const contextLimit = ctx.lookupContextLimit(provider.type, m.id);
+        const releaseDate = ctx.lookupReleaseDate(provider.type, m.id);
+        const modelsDevUrl = ctx.lookupModelsDevUrl(provider.type, m.id);
         const inferred = m.modalities ?? ctx.lookupCapabilities(provider.type, m.id);
         // A manual kind override (config model.kinds) is the final authority — it can correct or
         // supply a kind the layered inference missed (e.g. an embedding id the heuristic won't match).
@@ -54,6 +67,9 @@ export function createProvidersHandlers(ctx: ModelContext) {
           id: m.id,
           label: m.label,
           ...(price && Object.keys(price).length > 0 ? { price } : {}),
+          ...(contextLimit ? { contextLimit } : {}),
+          ...(releaseDate ? { releaseDate } : {}),
+          ...(modelsDevUrl ? { modelsDevUrl } : {}),
           ...(modalities ? { modalities } : {})
         };
       });

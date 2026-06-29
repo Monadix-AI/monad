@@ -417,7 +417,12 @@ export function liveModelDeps(
   // `modelId` may be a bogus id and `fallbacks` a working chain — that's how the routing-resilience
   // suite exercises GatewayModelRouter failover.
   cfg.model.profiles = [
-    { alias: 'default', provider: 'openrouter', modelId, params: {}, fallbacks: opts?.fallbacks ?? [], roles: {} }
+    {
+      alias: 'default',
+      routes: { chat: { provider: 'openrouter', modelId } },
+      params: {},
+      fallbacks: opts?.fallbacks ?? []
+    }
   ];
   cfg.model.default = 'default';
   const auth = {

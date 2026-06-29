@@ -54,6 +54,74 @@ test('image/speech are wired only on providers that build those models (openai),
   expect(byType.get('groq')?.generateImage).toBeUndefined();
 });
 
+test('OpenRouter listModels rejects invalid credentials even when public models are readable', async () => {
+  const openrouter = builtinModelProviders.find((p) => p.type === 'openrouter');
+  if (!openrouter?.listModels) throw new Error('openrouter provider missing');
+
+  const fetch = fakeFetch((u) => {
+    if (u.endsWith('/api/v1/auth/key')) return new Response('invalid key', { status: 401 });
+    return new Response(JSON.stringify({ data: [{ id: 'openai/gpt-test', name: 'GPT Test' }] }), {
+      headers: { 'Content-Type': 'application/json' }
+    });
+  });
+
+  await expect(openrouter.listModels({ id: 'openrouter', type: 'openrouter' }, CRED, fetch)).rejects.toThrow(
+    /OpenRouter auth failed: 401/
+  );
+});
+
+test('Anthropic listModels loads every paged result', async () => {
+  const anthropic = builtinModelProviders.find((p) => p.type === 'anthropic');
+  if (!anthropic?.listModels) throw new Error('anthropic provider missing');
+  const seen: string[] = [];
+  const fetch = fakeFetch((u) => {
+    seen.push(u);
+    const url = new URL(u);
+    if (url.searchParams.get('after_id') === 'm1') {
+      return new Response(
+        JSON.stringify({ data: [{ id: 'm2', display_name: 'Model 2' }], has_more: false, last_id: 'm2' }),
+        { headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+    return new Response(
+      JSON.stringify({ data: [{ id: 'm1', display_name: 'Model 1' }], has_more: true, last_id: 'm1' }),
+      { headers: { 'Content-Type': 'application/json' } }
+    );
+  });
+
+  const models = await anthropic.listModels({ id: 'anthropic', type: 'anthropic' }, CRED, fetch);
+
+  expect(models.map((m) => m.id)).toEqual(['m1', 'm2']);
+  expect(seen.map((u) => new URL(u).searchParams.get('after_id'))).toEqual([null, 'm1']);
+});
+
+test('Google listModels loads every paged result', async () => {
+  const google = builtinModelProviders.find((p) => p.type === 'google');
+  if (!google?.listModels) throw new Error('google provider missing');
+  const seen: string[] = [];
+  const fetch = fakeFetch((u) => {
+    seen.push(u);
+    const url = new URL(u);
+    if (url.searchParams.get('pageToken') === 'next') {
+      return new Response(JSON.stringify({ models: [{ name: 'models/gemini-2', displayName: 'Gemini 2' }] }), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+    return new Response(
+      JSON.stringify({
+        models: [{ name: 'models/gemini-1', displayName: 'Gemini 1' }],
+        nextPageToken: 'next'
+      }),
+      { headers: { 'Content-Type': 'application/json' } }
+    );
+  });
+
+  const models = await google.listModels({ id: 'google', type: 'google' }, CRED, fetch);
+
+  expect(models.map((m) => m.id)).toEqual(['gemini-1', 'gemini-2']);
+  expect(seen.map((u) => new URL(u).searchParams.get('pageToken'))).toEqual([null, 'next']);
+});
+
 // ── openai-compatible preset base URL ────────────────────────────────────────
 
 test('an openai-compatible preset targets the catalog default base URL', async () => {

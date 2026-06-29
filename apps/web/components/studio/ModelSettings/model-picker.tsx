@@ -2,50 +2,270 @@
 
 import type { ModelInfo, ProviderView } from '@monad/protocol';
 
+import { ModelProviderType } from '@monad/protocol';
+import { cn, Tooltip, TooltipContent, TooltipTrigger } from '@monad/ui';
 import {
-  cn,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger
-} from '@monad/ui';
-import {
+  ArrowLeft,
   ArrowRight,
   AudioWaveform,
+  BookOpenText,
   Check,
-  ChevronsUpDown,
   Database,
+  Download,
+  ExternalLink,
   FileText,
   ImageIcon,
-  Search,
   Type,
+  Upload,
   Video
 } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
-import { useT } from '@/components/I18nProvider';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useProviderMeta } from '@/lib/ProviderMeta';
 import { ModelPriceTag } from './shared';
 
-function ModelOptionContent({ model }: { model: ModelInfo }) {
+export interface HighlightPart {
+  match: boolean;
+  text: string;
+}
+
+function queryTerms(query: string): string[] {
+  return Array.from(
+    new Set(
+      query
+        .toLowerCase()
+        .split(/\s+/)
+        .map((term) => term.trim())
+        .filter(Boolean)
+    )
+  );
+}
+
+export function renderHighlightedModelText(text: string, query: string): HighlightPart[] {
+  const terms = queryTerms(query);
+  if (terms.length === 0) return [{ text, match: false }];
+
+  const lower = text.toLowerCase();
+  const ranges: Array<{ end: number; start: number }> = [];
+  for (const term of terms) {
+    let start = lower.indexOf(term);
+    while (start >= 0) {
+      ranges.push({ start, end: start + term.length });
+      start = lower.indexOf(term, start + term.length);
+    }
+  }
+  if (ranges.length === 0) return [{ text, match: false }];
+
+  ranges.sort((a, b) => a.start - b.start || b.end - a.end);
+  const merged: typeof ranges = [];
+  for (const range of ranges) {
+    const prev = merged.at(-1);
+    if (prev && range.start <= prev.end) {
+      prev.end = Math.max(prev.end, range.end);
+    } else {
+      merged.push({ ...range });
+    }
+  }
+
+  const parts: HighlightPart[] = [];
+  let cursor = 0;
+  for (const range of merged) {
+    if (range.start > cursor) parts.push({ text: text.slice(cursor, range.start), match: false });
+    parts.push({ text: text.slice(range.start, range.end), match: true });
+    cursor = range.end;
+  }
+  if (cursor < text.length) parts.push({ text: text.slice(cursor), match: false });
+  return parts;
+}
+
+function HighlightedModelText({ className, query, text }: { className?: string; query: string; text: string }) {
+  let offset = 0;
   return (
-    <span className="flex min-w-0 flex-col gap-0.5 py-0.5">
-      <span className="truncate font-medium text-xs">{model.label ?? model.id}</span>
-      {model.label && <span className="truncate font-mono text-[10px] text-muted-foreground">{model.id}</span>}
-      {model.price && <ModelPriceTag price={model.price} />}
+    <span className={cn('block min-w-0', className)}>
+      {renderHighlightedModelText(text, query).map((part) => {
+        const key = `${part.match ? 'match' : 'text'}-${offset}-${part.text}`;
+        offset += part.text.length;
+        return part.match ? (
+          <mark
+            className="rounded bg-primary/15 px-0.5 text-primary"
+            key={key}
+          >
+            {part.text}
+          </mark>
+        ) : (
+          <span key={key}>{part.text}</span>
+        );
+      })}
     </span>
   );
 }
 
-function modelMatchesQuery(model: ModelInfo, query: string): boolean {
-  const q = query.trim().toLowerCase();
-  if (!q) return true;
-  return model.id.toLowerCase().includes(q) || (model.label?.toLowerCase().includes(q) ?? false);
+function formatContextLimit(limit: number): string {
+  return `${Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(limit)}`;
+}
+
+function formatPriceValue(value: number | undefined): string {
+  if (value === undefined) return 'N/A';
+  return `$${value.toLocaleString('en-US', { maximumFractionDigits: 4 })}`;
+}
+
+function formatOptionalPriceValue(value: number | undefined): string | undefined {
+  return value === undefined ? undefined : formatPriceValue(value);
+}
+
+function formatCachePriceValue(cacheRead: number | undefined, cacheWrite: number | undefined): string {
+  const values = [formatOptionalPriceValue(cacheRead), formatOptionalPriceValue(cacheWrite)].filter(
+    (value): value is string => value !== undefined
+  );
+  return values.length > 0 ? values.join('/') : 'N/A';
+}
+
+function cachePriceTooltip(cacheRead: number | undefined, cacheWrite: number | undefined): React.ReactNode | undefined {
+  if (cacheRead === undefined && cacheWrite === undefined) return undefined;
+  return (
+    <span className="flex flex-col gap-1">
+      {cacheRead !== undefined && <span>Cache read {formatPriceValue(cacheRead)} /1M</span>}
+      {cacheWrite !== undefined && <span>Cache write {formatPriceValue(cacheWrite)} /1M</span>}
+    </span>
+  );
+}
+
+function ContextLimitTag({
+  limit,
+  orientation = 'horizontal',
+  tooltip = false
+}: {
+  limit: number;
+  orientation?: 'horizontal' | 'vertical';
+  tooltip?: boolean;
+}) {
+  const content = (
+    <span
+      className={cn(
+        'inline-flex text-muted-foreground tabular-nums',
+        orientation === 'vertical' ? 'flex-col items-start gap-1' : 'h-4 items-center gap-1'
+      )}
+    >
+      <BookOpenText className="size-3 text-muted-foreground/70" />
+      {formatContextLimit(limit)}
+    </span>
+  );
+  if (!tooltip) return content;
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{content}</TooltipTrigger>
+      <TooltipContent>Context window: {limit.toLocaleString('en-US')} tokens</TooltipContent>
+    </Tooltip>
+  );
+}
+
+function ModelMetricItem({
+  icon: Icon,
+  tooltip,
+  value
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  tooltip?: React.ReactNode;
+  value: string;
+}) {
+  const content = (
+    <span className="inline-flex min-w-0 flex-col items-start gap-1 text-muted-foreground tabular-nums">
+      <Icon className="size-3 text-muted-foreground/70" />
+      <span className="truncate">{value}</span>
+    </span>
+  );
+  if (!tooltip) return content;
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{content}</TooltipTrigger>
+      <TooltipContent>{tooltip}</TooltipContent>
+    </Tooltip>
+  );
+}
+
+function ModelOptionContent({ model, query }: { model: ModelInfo; query: string }) {
+  const label = model.label ?? model.id;
+  return (
+    <span className="flex min-w-0 flex-1 flex-col gap-1 py-0.5">
+      <span className="min-w-0">
+        <HighlightedModelText
+          className="truncate font-medium text-xs"
+          query={query}
+          text={label}
+        />
+      </span>
+      {model.label && (
+        <span className="min-w-0">
+          <HighlightedModelText
+            className="truncate font-mono text-[10px] text-muted-foreground"
+            query={query}
+            text={model.id}
+          />
+        </span>
+      )}
+      {(model.price || model.contextLimit) && (
+        <span className="flex select-none flex-wrap items-center gap-x-2 gap-y-1 text-[10px] [&>*]:inline-flex [&>*]:h-4 [&>*]:items-center">
+          {model.contextLimit && (
+            <span>
+              <ContextLimitTag limit={model.contextLimit} />
+            </span>
+          )}
+          {model.price && (
+            <ModelPriceTag
+              flat
+              price={model.price}
+              tooltip={false}
+            />
+          )}
+        </span>
+      )}
+    </span>
+  );
+}
+
+export function modelMatchesQuery(model: Pick<ModelInfo, 'id' | 'label'>, query: string): boolean {
+  const terms = queryTerms(query);
+  if (terms.length === 0) return true;
+  const haystack = `${model.label ?? ''} ${model.id}`.toLowerCase();
+  return terms.every((term) => haystack.includes(term));
+}
+
+const GATEWAY_PROVIDER_TYPES = new Set<string>([
+  ModelProviderType.CloudflareGateway,
+  ModelProviderType.OpenRouter,
+  ModelProviderType.VercelGateway
+]);
+
+function modelReleaseTime(model: ModelInfo): number {
+  if (!model.releaseDate) return 0;
+  const time = Date.parse(model.releaseDate);
+  return Number.isFinite(time) ? time : 0;
+}
+
+function modelBrandKey(model: ModelInfo): string {
+  return model.id.includes('/') ? model.id.split('/')[0]?.toLowerCase() || '' : '';
+}
+
+function modelNameKey(model: ModelInfo): string {
+  return (model.label ?? model.id).toLowerCase();
+}
+
+export function sortModelsForProvider(models: ModelInfo[], providerType: string | undefined): ModelInfo[] {
+  const shouldGroupByBrand = providerType ? GATEWAY_PROVIDER_TYPES.has(providerType) : false;
+  return [...models].sort((a, b) => {
+    if (shouldGroupByBrand) {
+      const brand = modelBrandKey(a).localeCompare(modelBrandKey(b));
+      if (brand !== 0) return brand;
+    }
+    const release = modelReleaseTime(b) - modelReleaseTime(a);
+    if (release !== 0) return release;
+    return modelNameKey(a).localeCompare(modelNameKey(b));
+  });
+}
+
+export function filterModelsForPicker<T extends Pick<ModelInfo, 'id' | 'label'>>(models: T[], query: string): T[] {
+  return query.trim() ? models.filter((model) => modelMatchesQuery(model, query)) : models;
 }
 
 export function splitModelSpec(value: string): { modelId: string; providerId: string } | null {
@@ -55,197 +275,6 @@ export function splitModelSpec(value: string): { modelId: string; providerId: st
 }
 
 export const ROLE_NONE = '__none__';
-
-function ModelPopover({
-  disabled,
-  emptyLabel,
-  modelFilter,
-  models: allModels,
-  noneLabel,
-  onSelect,
-  providerId,
-  selectedModelId,
-  triggerLabel
-}: {
-  disabled?: boolean;
-  emptyLabel?: string;
-  modelFilter?: (model: ModelInfo) => boolean;
-  models: ModelInfo[];
-  noneLabel?: string;
-  onSelect: (value: string) => void;
-  providerId: string;
-  selectedModelId: string;
-  triggerLabel?: string;
-}) {
-  const t = useT();
-  const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState('');
-  const [highlighted, setHighlighted] = useState(0);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const listRef = useRef<HTMLDivElement>(null);
-
-  // A model with no modality data passes every role filter — we can't prove it ineligible, so
-  // let the user decide (matches ProviderModelSelect's providerModels rule).
-  const eligibleModels = modelFilter ? allModels.filter((m) => !m.modalities || modelFilter(m)) : allModels;
-  const filteredModels = eligibleModels.filter((m) => modelMatchesQuery(m, query));
-  const selectedModel = allModels.find((m) => m.id === selectedModelId);
-
-  const listModels =
-    !query.trim() && selectedModel && !filteredModels.some((m) => m.id === selectedModel.id)
-      ? [selectedModel, ...filteredModels]
-      : filteredModels;
-
-  const hasNone = !!noneLabel;
-  const totalCount = listModels.length + (hasNone ? 1 : 0);
-
-  useEffect(() => {
-    if (!open) return;
-    setHighlighted(0);
-    setQuery('');
-    requestAnimationFrame(() => {
-      inputRef.current?.focus();
-      listRef.current?.querySelector('[data-selected]')?.scrollIntoView({ block: 'nearest' });
-    });
-  }, [open]);
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      setHighlighted((h) => Math.min(h + 1, totalCount - 1));
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      setHighlighted((h) => Math.max(h - 1, 0));
-    } else if (e.key === 'Enter') {
-      e.preventDefault();
-      if (hasNone && highlighted === 0) {
-        onSelect(ROLE_NONE);
-        setOpen(false);
-      } else {
-        const item = listModels[highlighted - (hasNone ? 1 : 0)];
-        if (item) {
-          onSelect(`${providerId}:${item.id}`);
-          setOpen(false);
-        }
-      }
-    } else if (e.key === 'Escape') {
-      setOpen(false);
-    }
-  };
-
-  return (
-    <Popover
-      onOpenChange={setOpen}
-      open={open}
-    >
-      <PopoverTrigger asChild>
-        {triggerLabel ? (
-          <button
-            className={cn(
-              'flex h-7 items-center rounded-(--radius-sm) border border-input bg-transparent px-2 text-muted-foreground text-xs outline-none transition-colors',
-              'hover:bg-accent hover:text-accent-foreground',
-              'disabled:cursor-not-allowed disabled:opacity-50',
-              'data-[state=open]:bg-accent data-[state=open]:text-accent-foreground'
-            )}
-            disabled={disabled}
-            type="button"
-          >
-            {triggerLabel}
-          </button>
-        ) : (
-          <button
-            className={cn(
-              'flex h-8 w-full items-center justify-between gap-1.5 rounded-(--radius-sm) border border-input bg-transparent px-2.5 py-1 text-sm leading-control outline-none transition-[background-color,border-color,box-shadow,color] duration-150',
-              'focus-visible:border-ring focus-visible:bg-card focus-visible:ring-[3px] focus-visible:ring-ring/30',
-              'disabled:cursor-not-allowed disabled:opacity-50',
-              'data-[state=open]:border-ring data-[state=open]:bg-card data-[state=open]:ring-[3px] data-[state=open]:ring-ring/30'
-            )}
-            disabled={disabled}
-            type="button"
-          >
-            <span className="min-w-0 flex-1 truncate text-left">
-              {selectedModel ? (
-                <span className="truncate font-medium text-sm">{selectedModel.label ?? selectedModel.id}</span>
-              ) : (
-                <span className="text-muted-foreground">{noneLabel ?? t('web.model.filterPlaceholder')}</span>
-              )}
-            </span>
-            <ChevronsUpDown className="size-3.5 shrink-0 text-muted-foreground" />
-          </button>
-        )}
-      </PopoverTrigger>
-      <PopoverContent
-        align="start"
-        className="w-max min-w-[max(var(--radix-popover-trigger-width),14rem)] max-w-[360px] p-0"
-        onOpenAutoFocus={(e) => e.preventDefault()}
-        sideOffset={4}
-      >
-        <div className="border-b p-1.5">
-          <div className="relative">
-            <Search className="pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-            <input
-              className="flex h-8 w-full rounded-(--radius-sm) bg-transparent pr-2 pl-7 text-xs outline-none placeholder:text-muted-foreground"
-              onChange={(e) => {
-                setQuery(e.target.value);
-                setHighlighted(0);
-              }}
-              onKeyDown={handleKeyDown}
-              placeholder={t('web.model.filterPlaceholder')}
-              ref={inputRef}
-              value={query}
-            />
-          </div>
-        </div>
-        <div
-          className="max-h-64 overflow-y-auto p-1"
-          ref={listRef}
-        >
-          {hasNone && (
-            <button
-              className={cn(
-                'flex w-full items-center rounded px-2 py-1.5 text-muted-foreground text-xs transition-colors hover:bg-accent hover:text-accent-foreground',
-                highlighted === 0 && 'bg-accent text-accent-foreground'
-              )}
-              onClick={() => {
-                onSelect(ROLE_NONE);
-                setOpen(false);
-              }}
-              onMouseEnter={() => setHighlighted(0)}
-              type="button"
-            >
-              {noneLabel}
-            </button>
-          )}
-          {listModels.map((model, i) => {
-            const idx = i + (hasNone ? 1 : 0);
-            const isSelected = model.id === selectedModelId;
-            return (
-              <button
-                className={cn(
-                  'flex w-full items-center gap-1.5 rounded px-2 py-1.5 text-left transition-colors hover:bg-accent hover:text-accent-foreground',
-                  idx === highlighted && 'bg-accent text-accent-foreground'
-                )}
-                data-selected={isSelected || undefined}
-                key={model.id}
-                onClick={() => {
-                  onSelect(`${providerId}:${model.id}`);
-                  setOpen(false);
-                }}
-                onMouseEnter={() => setHighlighted(idx)}
-                type="button"
-              >
-                <ModelOptionContent model={model} />
-                {isSelected && <Check className="ml-auto size-3 shrink-0 text-primary" />}
-              </button>
-            );
-          })}
-          {listModels.length === 0 && !hasNone && (
-            <p className="px-2 py-1.5 text-muted-foreground text-xs">{emptyLabel ?? 'No models'}</p>
-          )}
-        </div>
-      </PopoverContent>
-    </Popover>
-  );
-}
 
 function ProviderModelSelect({
   emptyLabel,
@@ -271,19 +300,29 @@ function ProviderModelSelect({
   const parsed = isNoneValue ? null : splitModelSpec(value);
   const firstProviderId = providers[0]?.id ?? '';
   const [draftProviderId, setDraftProviderId] = useState(parsed?.providerId ?? firstProviderId);
+  const [view, setView] = useState<'provider' | 'model'>(parsed?.providerId ? 'model' : 'provider');
   const providerId = draftProviderId;
-  const providerModels = (providerId ? (modelsByProvider[providerId] ?? []) : []).filter(
-    modelFilter ? (m) => !m.modalities || modelFilter(m) : () => true
-  );
+  const activeProvider = providers.find((provider) => provider.id === providerId);
+  const providerModels = useMemo(() => {
+    const filtered = (providerId ? (modelsByProvider[providerId] ?? []) : []).filter(
+      modelFilter ? (m) => !m.modalities || modelFilter(m) : () => true
+    );
+    return sortModelsForProvider(filtered, activeProvider?.type);
+  }, [activeProvider?.type, modelFilter, modelsByProvider, providerId]);
   const hasList = providerModels.length > 0;
   const selectedModelId = parsed?.modelId ?? '';
+  const modelButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
 
   // Local draft — not committed until Enter. Clears naturally when the popover closes
   // (ProviderModelSelect unmounts), so the next open starts fresh from selectedModelId.
   const [inputDraft, setInputDraft] = useState(selectedModelId);
+  const hasSearchQuery = inputDraft.trim().length > 0;
 
   useEffect(() => {
-    if (parsed?.providerId) setDraftProviderId(parsed.providerId);
+    if (parsed?.providerId) {
+      setDraftProviderId(parsed.providerId);
+      setView('model');
+    }
   }, [parsed?.providerId]);
 
   // Keep draft in sync when parent commits a value (e.g. list picker selection).
@@ -291,8 +330,17 @@ function ProviderModelSelect({
     setInputDraft(selectedModelId);
   }, [selectedModelId]);
 
-  const handleProviderChange = (nextProviderId: string) => {
+  useEffect(() => {
+    if (!hasSearchQuery) return;
+    const firstMatch = providerModels.find((model) => modelMatchesQuery(model, inputDraft));
+    if (!firstMatch) return;
+    modelButtonRefs.current[firstMatch.id]?.scrollIntoView({ block: 'nearest' });
+  }, [hasSearchQuery, inputDraft, providerModels]);
+
+  const selectProvider = (nextProviderId: string) => {
     setDraftProviderId(nextProviderId);
+    setInputDraft('');
+    setView('model');
   };
 
   const commitDraft = () => {
@@ -304,42 +352,75 @@ function ProviderModelSelect({
     (onSelect ?? onValueChange)(`${providerId}:${trimmed}`);
   };
 
-  return (
-    <div className="flex flex-col gap-1.5">
-      <div className="flex gap-1.5">
-        <Select
-          disabled={providers.length === 0}
-          onValueChange={handleProviderChange}
-          value={providerId}
-        >
-          <SelectTrigger className="w-[7rem] shrink-0">
-            <SelectValue placeholder="Provider" />
-          </SelectTrigger>
-          <SelectContent>
-            {providers.map((provider) => {
+  const shownModels = filterModelsForPicker(providerModels, inputDraft);
+
+  if (view === 'provider') {
+    return (
+      <div className="flex flex-col gap-1.5">
+        <div className="px-1 pb-1 font-medium text-muted-foreground text-xs">Provider</div>
+        <div className="max-h-72 overflow-y-auto">
+          {providers.length === 0 ? (
+            <p className="px-2 py-1.5 text-muted-foreground text-xs">No providers</p>
+          ) : (
+            providers.map((provider) => {
               const meta = metaFor(provider.type);
               const ProvLogo = meta.logo;
               return (
-                <SelectItem
+                <button
+                  className={cn(
+                    'flex h-9 w-full items-center gap-2 rounded-(--radius-sm) px-2 text-left text-sm transition-colors hover:bg-accent hover:text-accent-foreground',
+                    provider.id === providerId && 'bg-accent/60 text-accent-foreground'
+                  )}
                   key={provider.id}
-                  value={provider.id}
+                  onClick={() => selectProvider(provider.id)}
+                  type="button"
                 >
-                  <span className="flex items-center gap-1.5">
-                    <ProvLogo className={cn('size-3.5 shrink-0', meta.color)} />
-                    {provider.label}
-                  </span>
-                </SelectItem>
+                  <ProvLogo className={cn('size-3.5 shrink-0', meta.color)} />
+                  <span className="min-w-0 flex-1 truncate">{provider.label}</span>
+                  <ArrowRight className="size-3.5 shrink-0 text-muted-foreground" />
+                </button>
               );
-            })}
-          </SelectContent>
-        </Select>
+            })
+          )}
+        </div>
 
-        <div className="relative min-w-0 flex-1">
+        {noneLabel && (
+          <button
+            className="mt-1 rounded-(--radius-sm) px-2 py-1.5 text-left text-muted-foreground text-xs transition-colors hover:bg-accent hover:text-foreground"
+            onClick={() => (onSelect ?? onValueChange)(ROLE_NONE)}
+            type="button"
+          >
+            {noneLabel}
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  const activeMeta = metaFor(activeProvider?.type ?? '');
+  const ActiveLogo = activeMeta.logo;
+
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center gap-2 border-border/50 border-b px-1 pb-2">
+        <button
+          aria-label="Back to providers"
+          className="flex size-7 shrink-0 items-center justify-center rounded-(--radius-sm) text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          onClick={() => setView('provider')}
+          type="button"
+        >
+          <ArrowLeft className="size-3.5" />
+        </button>
+        <ActiveLogo className={cn('size-3.5 shrink-0', activeMeta.color)} />
+        <span className="min-w-0 flex-1 truncate font-medium text-sm">{activeProvider?.label ?? providerId}</span>
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <div className="relative min-w-0">
           <input
             className={cn(
               'flex h-8 w-full rounded-(--radius-sm) border border-input bg-transparent px-2.5 text-xs outline-none transition-[border-color,box-shadow] placeholder:text-muted-foreground',
-              'focus:border-ring focus:ring-[3px] focus:ring-ring/30',
-              hasList && 'pr-16'
+              'focus:border-ring focus:ring-[3px] focus:ring-ring/30'
             )}
             onChange={(e) => setInputDraft(e.target.value)}
             onKeyDown={(e) => {
@@ -348,36 +429,52 @@ function ProviderModelSelect({
             placeholder="model-id"
             value={inputDraft}
           />
-          {hasList && (
-            <div className="absolute inset-y-0 right-0 flex items-center pr-1">
-              <ModelPopover
-                disabled={!providerId}
-                emptyLabel={emptyLabel}
-                key={providerId}
-                modelFilter={modelFilter}
-                models={providerModels}
-                noneLabel={noneLabel}
-                onSelect={(spec) => (onSelect ?? onValueChange)(spec)}
-                providerId={providerId}
-                selectedModelId={selectedModelId}
-                triggerLabel="Select"
-              />
-            </div>
-          )}
         </div>
-      </div>
 
-      {noneLabel && (
-        <div className="flex justify-end">
+        {hasList ? (
+          <div className="max-h-64 overflow-y-auto rounded-(--radius-sm) border border-border/60 p-1">
+            {shownModels.map((model) => {
+              const isSelected = model.id === selectedModelId;
+              const isSearchMatch = hasSearchQuery && modelMatchesQuery(model, inputDraft);
+              return (
+                <button
+                  className={cn(
+                    'flex w-full items-center gap-1.5 rounded px-2 py-1.5 text-left transition-colors hover:bg-accent hover:text-accent-foreground',
+                    isSearchMatch && 'bg-accent/60 text-accent-foreground'
+                  )}
+                  key={model.id}
+                  onClick={() => (onSelect ?? onValueChange)(`${providerId}:${model.id}`)}
+                  ref={(node) => {
+                    modelButtonRefs.current[model.id] = node;
+                  }}
+                  type="button"
+                >
+                  <ModelOptionContent
+                    model={model}
+                    query={inputDraft}
+                  />
+                  {isSelected && <Check className="ml-auto size-3 shrink-0 text-primary" />}
+                </button>
+              );
+            })}
+            {shownModels.length === 0 && (
+              <p className="px-2 py-1.5 text-muted-foreground text-xs">{emptyLabel ?? 'No models'}</p>
+            )}
+          </div>
+        ) : (
+          <p className="px-2 py-1.5 text-muted-foreground text-xs">{emptyLabel ?? 'No models'}</p>
+        )}
+
+        {noneLabel && (
           <button
-            className="text-muted-foreground text-xs transition-colors hover:text-foreground"
+            className="self-end text-muted-foreground text-xs transition-colors hover:text-foreground"
             onClick={() => (onSelect ?? onValueChange)(ROLE_NONE)}
             type="button"
           >
             {noneLabel}
           </button>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }
@@ -412,54 +509,141 @@ function ModalityBadge({ name }: { name: string }) {
   const meta = MODALITY_ICON[name] ?? MODALITY_FALLBACK(name);
   const Icon = meta.icon;
   return (
+    <div className={cn('flex size-6 items-center justify-center rounded-(--radius-sm)', meta.bg)}>
+      <Icon className={cn('size-3.5', meta.fg)} />
+    </div>
+  );
+}
+
+function modalityListLabel(names: string[]): string {
+  return names.map((name) => (MODALITY_ICON[name] ?? MODALITY_FALLBACK(name)).label).join(', ');
+}
+
+function ModalityGroup({ label, names }: { label: 'Input' | 'Output'; names: string[] }) {
+  if (names.length === 0) return null;
+  return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <div className={cn('flex size-7 items-center justify-center rounded-lg', meta.bg)}>
-          <Icon className={cn('size-3.5', meta.fg)} />
+        <div
+          aria-label={`${label}: ${modalityListLabel(names)}`}
+          className="flex items-center gap-1"
+          role="img"
+        >
+          {names.map((cap) => (
+            <ModalityBadge
+              key={`${label}-${cap}`}
+              name={cap}
+            />
+          ))}
         </div>
       </TooltipTrigger>
-      <TooltipContent>{meta.label}</TooltipContent>
+      <TooltipContent>
+        {label}: {modalityListLabel(names)}
+      </TooltipContent>
     </Tooltip>
   );
 }
 
 export function ModelHoverCardBody({ model }: { model: ModelInfo | undefined }) {
   if (!model) return <p className="text-muted-foreground text-xs">Model details not loaded</p>;
+  const label = model.label && model.label !== model.id ? model.label : undefined;
   const inputMods = model.modalities?.input ?? [];
   const outputMods =
     model.modalities?.output ?? (model.modalities?.kind ? (KIND_OUTPUT[model.modalities.kind] ?? []) : []);
   const hasModalities = inputMods.length > 0 || outputMods.length > 0;
+  const detailLink = model.modelsDevUrl ? (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <a
+          aria-label="See detail"
+          className="inline-flex size-5 shrink-0 select-none items-center justify-center rounded-(--radius-sm) text-muted-foreground transition-colors hover:text-foreground"
+          draggable={false}
+          href={model.modelsDevUrl}
+          onDragStart={(event) => event.preventDefault()}
+          onMouseDown={(event) => event.preventDefault()}
+          rel="noreferrer"
+          target="_blank"
+        >
+          <ExternalLink className="size-3" />
+        </a>
+      </TooltipTrigger>
+      <TooltipContent>See detail</TooltipContent>
+    </Tooltip>
+  ) : null;
   return (
-    <div className="flex flex-col gap-2">
-      <div className="flex flex-col gap-0.5">
-        {model.label && model.label !== model.id && <p className="font-medium text-sm">{model.label}</p>}
-        <p className="break-all font-mono text-muted-foreground text-xs">{model.id}</p>
+    <div className="flex w-full min-w-0 flex-col gap-0">
+      <div className="flex flex-col gap-1 pb-3">
+        {label && (
+          <div className="flex min-w-0 items-center gap-1.5">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <p className="min-w-0 flex-1 truncate font-medium text-sm">{label}</p>
+              </TooltipTrigger>
+              <TooltipContent>{label}</TooltipContent>
+            </Tooltip>
+            {detailLink}
+          </div>
+        )}
+        <div className="flex min-w-0 items-center gap-1.5">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <p className="min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground leading-snug">
+                {model.id}
+              </p>
+            </TooltipTrigger>
+            <TooltipContent>{model.id}</TooltipContent>
+          </Tooltip>
+          {!label && detailLink}
+        </div>
       </div>
-      {model.price && (
-        <ModelPriceTag
-          className="flex-wrap"
-          price={model.price}
-        />
-      )}
+      <div className="flex select-none flex-wrap items-stretch border-border/60 border-t py-2.5 text-[10px] [&>*+*]:border-border/80 [&>*+*]:border-l [&>*:first-child]:pl-0 [&>*]:px-2">
+        <span className="inline-flex">
+          <ModelMetricItem
+            icon={BookOpenText}
+            tooltip={
+              model.contextLimit ? `Context window: ${model.contextLimit.toLocaleString('en-US')} tokens` : undefined
+            }
+            value={model.contextLimit ? formatContextLimit(model.contextLimit) : 'N/A'}
+          />
+        </span>
+        <span className="inline-flex">
+          <ModelMetricItem
+            icon={Download}
+            tooltip={model.price?.input !== undefined ? `Input ${formatPriceValue(model.price.input)} /1M` : undefined}
+            value={formatPriceValue(model.price?.input)}
+          />
+        </span>
+        <span className="inline-flex">
+          <ModelMetricItem
+            icon={Upload}
+            tooltip={
+              model.price?.output !== undefined ? `Output ${formatPriceValue(model.price.output)} /1M` : undefined
+            }
+            value={formatPriceValue(model.price?.output)}
+          />
+        </span>
+        <span className="inline-flex">
+          <ModelMetricItem
+            icon={Database}
+            tooltip={cachePriceTooltip(model.price?.cacheRead, model.price?.cacheWrite)}
+            value={formatCachePriceValue(model.price?.cacheRead, model.price?.cacheWrite)}
+          />
+        </span>
+      </div>
       {hasModalities && (
-        <div className="flex flex-col gap-1.5">
-          <p className="font-medium text-[10px] text-muted-foreground uppercase tracking-wide">Modalities</p>
+        <div className="flex select-none flex-wrap items-center gap-1.5 border-border/60 border-t pt-2.5">
           <div className="flex flex-wrap items-center gap-1">
-            {inputMods.map((cap) => (
-              <ModalityBadge
-                key={`in-${cap}`}
-                name={cap}
-              />
-            ))}
+            <ModalityGroup
+              label="Input"
+              names={inputMods}
+            />
             {inputMods.length > 0 && outputMods.length > 0 && (
               <ArrowRight className="size-3.5 shrink-0 text-muted-foreground/50" />
             )}
-            {outputMods.map((cap) => (
-              <ModalityBadge
-                key={`out-${cap}`}
-                name={cap}
-              />
-            ))}
+            <ModalityGroup
+              label="Output"
+              names={outputMods}
+            />
           </div>
         </div>
       )}
@@ -472,6 +656,7 @@ export function ModelPickerPopover({
   modelFilter,
   modelsByProvider,
   noneLabel,
+  onOpenChange,
   onValueChange,
   providers,
   value
@@ -480,14 +665,19 @@ export function ModelPickerPopover({
   modelFilter?: (model: ModelInfo) => boolean;
   modelsByProvider: Record<string, ModelInfo[]>;
   noneLabel?: string;
+  onOpenChange?: (open: boolean) => void;
   onValueChange: (value: string) => void;
   providers: ProviderView[];
   value: string;
 }) {
   const [open, setOpen] = useState(false);
+  const handleOpenChange = (nextOpen: boolean) => {
+    setOpen(nextOpen);
+    onOpenChange?.(nextOpen);
+  };
   return (
     <Popover
-      onOpenChange={setOpen}
+      onOpenChange={handleOpenChange}
       open={open}
     >
       <PopoverTrigger asChild>{children}</PopoverTrigger>
@@ -502,7 +692,7 @@ export function ModelPickerPopover({
           noneLabel={noneLabel}
           onSelect={(v) => {
             onValueChange(v);
-            setOpen(false);
+            handleOpenChange(false);
           }}
           onValueChange={onValueChange}
           providers={providers}

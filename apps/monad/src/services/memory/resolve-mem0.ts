@@ -77,8 +77,8 @@ function resolveRef(
   let modelId: string | undefined;
   const profile = cfg.model.profiles.find((p) => p.alias === ref);
   if (profile) {
-    providerId = profile.provider;
-    modelId = profile.modelId;
+    providerId = profile.routes.chat.provider;
+    modelId = profile.routes.chat.modelId;
   } else if (ref.includes(':')) {
     const i = ref.indexOf(':');
     providerId = ref.slice(0, i);

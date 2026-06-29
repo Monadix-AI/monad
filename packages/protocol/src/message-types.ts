@@ -1,5 +1,9 @@
 import { z } from 'zod';
 
+import { httpUrlSchema } from './url.ts';
+
+export { isHttpUrl } from './url.ts';
+
 // The message-type registry: the single shared source describing how each `type` renders, degrades,
 // and participates in the LLM context. Read by the daemon (enforcement), the store (defaults), and
 // every UI client / channel adaptor (degradation). Holds descriptor DATA only — never render
@@ -30,16 +34,8 @@ export interface MessageTypeDescriptor<D = unknown> {
 // Card data is model-produced (attacker-controlled via prompt injection) and a client renders the
 // action URL as an <a href>. `z.url()` alone accepts `javascript:`/`data:` schemes, which React does
 // NOT block — that is clickable XSS in the trusted web origin. Constrain to http(s) at the boundary.
-// Single source of truth for the scheme allowlist: the wire schema (below) and every render boundary
+// Single source of truth for the scheme allowlist: the wire schema and every render boundary
 // (e.g. apps/web's card renderer) import this so they can't drift apart.
-export function isHttpUrl(u: string): boolean {
-  try {
-    return /^https?:$/.test(new URL(u).protocol);
-  } catch {
-    return false;
-  }
-}
-const httpUrlSchema = z.url().refine(isHttpUrl, { message: 'url must be http(s)' });
 export const cardActionSchema = z.object({ label: z.string().min(1), url: httpUrlSchema.optional() });
 export const cardSchema = z.object({
   title: z.string().optional(),

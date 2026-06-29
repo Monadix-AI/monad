@@ -61,7 +61,12 @@ export default {manifest:{name:'wa',version:'1.0.0',sdkVersion:'0',atoms:['chann
   if (!cfg) throw new Error('config missing');
   cfg.model.providers = [{ id: 'review-provider', label: 'Review Provider', type: ModelProviderType.OpenAICompatible }];
   cfg.model.profiles = [
-    { alias: 'review', provider: 'review-provider', modelId: 'review-model', params: {}, fallbacks: [], roles: {} }
+    {
+      alias: 'review',
+      routes: { chat: { provider: 'review-provider', modelId: 'review-model' } },
+      params: {},
+      fallbacks: []
+    }
   ];
   cfg.model.default = 'review';
   cfg.skills.installReview = true;

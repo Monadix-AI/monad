@@ -302,11 +302,9 @@ function addModelProfileFromExternal(
   const modelId = model.includes('/') ? (model.split('/').pop() ?? model) : model;
   const profile: ModelProfile = {
     alias: `${targetPrefix}-${modelId}`.replace(/[^A-Za-z0-9_.-]+/g, '-'),
-    provider: provider.id,
-    modelId,
+    routes: { chat: { provider: provider.id, modelId } },
     params: {},
-    fallbacks: [],
-    roles: {}
+    fallbacks: []
   };
   addItem(items, {
     category: 'modelProviders',

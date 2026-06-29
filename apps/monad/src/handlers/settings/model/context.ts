@@ -24,6 +24,12 @@ export interface ModelContext {
   readonly registry: ModelProviderRegistry;
   /** Strict catalog price join for display — exact id match only (see ModelCatalogService). */
   lookupPriceExact(provider: string, modelId: string): ModelPrice | undefined;
+  /** Catalog context-window limit for display and runtime hints. */
+  lookupContextLimit(provider: string, modelId: string): number | undefined;
+  /** Catalog release date for display ordering. */
+  lookupReleaseDate(provider: string, modelId: string): string | undefined;
+  /** Exact models.dev page link when this model is present in the catalog. */
+  lookupModelsDevUrl(provider: string, modelId: string): string | undefined;
   /** Catalog modalities join (input/output/flags/kind) for role-candidate filtering. */
   lookupCapabilities(provider: string, modelId: string): ModelModalities | undefined;
 }
@@ -68,6 +74,9 @@ export function createModelContext({ paths, modelService, modelCatalog, configBu
     commitAuth,
     registry: modelService.registry,
     lookupPriceExact: (provider, modelId) => modelCatalog?.lookupPriceExact(provider, modelId),
+    lookupContextLimit: (provider, modelId) => modelCatalog?.lookupContextLimit(provider, modelId),
+    lookupReleaseDate: (provider, modelId) => modelCatalog?.lookupReleaseDate(provider, modelId),
+    lookupModelsDevUrl: (provider, modelId) => modelCatalog?.lookupModelsDevUrl(provider, modelId),
     lookupCapabilities: (provider, modelId) => modelCatalog?.lookupCapabilities(provider, modelId)
   };
 }

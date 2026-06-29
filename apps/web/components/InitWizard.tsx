@@ -29,6 +29,7 @@ import { InitBackground } from '@/components/InitBackground';
 import { InitLogoCanvas } from '@/components/InitLogoCanvas';
 import { useMonadRuntime } from '@/lib/monad-runtime-provider';
 import { useProviderMeta } from '@/lib/ProviderMeta';
+import { SECRET_INPUT_PASSWORD_MANAGER_PROPS } from './studio/ModelSettings/secret-input-props';
 
 interface DraftKey {
   id: string;
@@ -121,9 +122,9 @@ export function InitWizard({ homePath }: { homePath?: string }) {
         ? profileSelectors.selectAll(existingProfiles.profiles).find((p) => p.alias === existingProfiles.defaultAlias)
         : undefined;
       if (defaultProfile) {
-        setSelectedProviderId(defaultProfile.provider);
-        setSelectedModelId(defaultProfile.modelId);
-        setModelFilter(defaultProfile.modelId);
+        setSelectedProviderId(defaultProfile.routes.chat.provider);
+        setSelectedModelId(defaultProfile.routes.chat.modelId);
+        setModelFilter(defaultProfile.routes.chat.modelId);
       }
 
       if (existingAgents && loadedDefaultAgentId) {
@@ -340,11 +341,9 @@ export function InitWizard({ homePath }: { homePath?: string }) {
         const alias = 'default';
         await setProfile({
           alias,
-          provider: effectiveProviderId,
-          modelId: effectiveModelId,
+          routes: { chat: { provider: effectiveProviderId, modelId: effectiveModelId } },
           params: {},
-          fallbacks: [],
-          roles: {}
+          fallbacks: []
         });
         await setDefault({ alias });
         savedAlias = alias;
@@ -678,7 +677,7 @@ export function InitWizard({ homePath }: { homePath?: string }) {
                     setAddTested(false);
                   }}
                   placeholder={addingMeta.keyPlaceholder ?? 'your-api-key'}
-                  type="password"
+                  {...SECRET_INPUT_PASSWORD_MANAGER_PROPS}
                   value={addApiKey}
                 />
               </div>

@@ -27,26 +27,18 @@ function isKnownProviderType(value: string): value is Provider['type'] {
 export function profileToView(p: MonadConfig['model']['profiles'][number]): ProfileView {
   return {
     alias: p.alias,
-    provider: p.provider,
-    modelId: p.modelId,
-    fastProvider: p.fastProvider,
-    fastModelId: p.fastModelId,
+    routes: p.routes,
     params: p.params,
-    fallbacks: p.fallbacks,
-    roles: p.roles
+    fallbacks: p.fallbacks
   };
 }
 
 export function viewToProfile(v: ProfileView): MonadConfig['model']['profiles'][number] {
   return {
     alias: v.alias,
-    provider: v.provider,
-    modelId: v.modelId,
-    fastProvider: v.fastProvider,
-    fastModelId: v.fastModelId,
+    routes: v.routes,
     params: v.params,
-    fallbacks: v.fallbacks,
-    roles: v.roles
+    fallbacks: v.fallbacks
   };
 }
 

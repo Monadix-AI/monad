@@ -26,7 +26,7 @@ export const command: CommandDef = {
         }
         for (const p of result.profiles) {
           const star = p.alias === result.defaultAlias ? green(' *') : '';
-          out(cyan(p.alias) + star + dim('  ') + bold(`${p.provider}/${p.modelId}`));
+          out(cyan(p.alias) + star + dim('  ') + bold(`${p.routes.chat.provider}/${p.routes.chat.modelId}`));
         }
         return;
       }

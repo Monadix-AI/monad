@@ -21,13 +21,14 @@ export function computeInitStatus(cfg: MonadConfig, auth: MonadAuth | null): Ini
   if (!auth) return { initialized: false, missing: ['provider', 'credential', 'default'] };
   const missing: InitMissingItem[] = [];
 
-  const profile = cfg.model.profiles.find((p) => p.alias === 'default');
+  const defaultAlias = cfg.model.default || 'default';
+  const profile = cfg.model.profiles.find((p) => p.alias === defaultAlias);
   if (!profile) {
     missing.push('provider', 'credential', 'default');
     return { initialized: false, missing };
   }
 
-  const provider = cfg.model.providers.find((p) => p.id === profile.provider);
+  const provider = cfg.model.providers.find((p) => p.id === profile.routes.chat.provider);
   if (!provider || provider.id === DEFAULT_SAMPLE_PROVIDER_ID) {
     missing.push('provider', 'credential');
     return { initialized: false, missing };

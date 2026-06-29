@@ -109,6 +109,23 @@ function createOpenRouterProvider(call: OpenRouterProviderCall) {
   });
 }
 
+function openRouterApiOrigin(baseUrl: string | undefined): string {
+  return (baseUrl ?? 'https://openrouter.ai').replace(/\/api\/v1\/?$/, '').replace(/\/$/, '');
+}
+
+async function assertOpenRouterKey(
+  base: string,
+  cred: ProviderCredential,
+  fetch: typeof globalThis.fetch
+): Promise<void> {
+  if (!cred.accessToken) throw new Error('OpenRouter auth failed: missing API key');
+  const res = await fetch(`${base}/api/v1/auth/key`, {
+    headers: { authorization: `Bearer ${cred.accessToken}` }
+  });
+  if (res.ok) return;
+  throw new Error(`OpenRouter auth failed: ${res.status}`);
+}
+
 export const openrouterProviderAtom = defineAiSdkProvider({
   type: 'openrouter',
   descriptor: PROVIDER_DESCRIPTORS.openrouter,
@@ -123,9 +140,11 @@ export const openrouterProviderAtom = defineAiSdkProvider({
   },
 
   async listModels(provider, cred, fetch = globalThis.fetch) {
-    const base = (cred?.baseUrl ?? provider.baseUrl ?? 'https://openrouter.ai').replace(/\/$/, '');
+    if (!cred) throw new Error('OpenRouter auth failed: missing credential');
+    const base = openRouterApiOrigin(cred.baseUrl ?? provider.baseUrl);
     const headers: Record<string, string> = {};
-    if (cred?.accessToken) headers.authorization = `Bearer ${cred.accessToken}`;
+    await assertOpenRouterKey(base, cred, fetch);
+    headers.authorization = `Bearer ${cred.accessToken}`;
     // OpenRouter's default /models only returns text/chat models. All other categories require
     // separate ?output_modalities= requests (counts as of 2026-06):
     //   image (+25), audio (4, also in default), speech/TTS (9), embeddings (26),
@@ -183,7 +202,7 @@ export const openrouterProviderAtom = defineAiSdkProvider({
   },
 
   async getUsageLimits(provider, cred) {
-    const base = (cred.baseUrl ?? provider.baseUrl ?? 'https://openrouter.ai').replace(/\/$/, '');
+    const base = openRouterApiOrigin(cred.baseUrl ?? provider.baseUrl);
     try {
       const res = await fetch(`${base}/api/v1/auth/key`, {
         headers: { authorization: `Bearer ${cred.accessToken}` }

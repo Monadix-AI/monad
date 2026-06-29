@@ -118,7 +118,7 @@ function resolveUsableInstallReviewModel(cfg: MonadConfig, auth: MonadAuth | nul
     ...cfg.model.profiles.filter((p) => p.alias !== 'default')
   ];
   for (const profile of profiles) {
-    const provider = cfg.model.providers.find((p) => p.id === profile.provider);
+    const provider = cfg.model.providers.find((p) => p.id === profile.routes.chat.provider);
     if (!provider || provider.id === DEFAULT_SAMPLE_PROVIDER_ID) continue;
     if ((auth.credentialPool[provider.id] ?? []).some((credential) => credential.authType !== 'admin_api_key')) {
       return profile.alias;

@@ -70,8 +70,8 @@ export function createCommandBundle(deps: CommandBundleDeps): CommandBundle {
       const effective = store.getSession(sessionId)?.model ?? cfg.model.default;
       return modelService.profiles.map((p) => ({
         alias: p.alias,
-        provider: p.provider,
-        modelId: p.modelId,
+        provider: p.routes.chat.provider,
+        modelId: p.routes.chat.modelId,
         current: p.alias === effective
       }));
     },

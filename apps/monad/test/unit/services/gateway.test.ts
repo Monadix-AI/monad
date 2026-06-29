@@ -47,7 +47,7 @@ const PROVIDER = { id: 'u1', type: 'openai-compatible' as const, baseUrl: 'https
 function deps(over: Partial<GatewayDeps>): GatewayDeps {
   return {
     providers: [PROVIDER],
-    profiles: [{ alias: 'default', provider: 'u1', modelId: 'm1', params: {}, fallbacks: [] }],
+    profiles: [{ alias: 'default', routes: { chat: { provider: 'u1', modelId: 'm1' } }, params: {}, fallbacks: [] }],
     defaultProfile: 'default',
     credentialsFor: () => [{ id: 'c1', accessToken: 'key-1', authType: 'api_key', priority: 0 }],
     ...over
@@ -101,8 +101,7 @@ test('falls over to a raw fallback target when the primary provider has no crede
       profiles: [
         {
           alias: 'default',
-          provider: 'dead',
-          modelId: 'm1',
+          routes: { chat: { provider: 'dead', modelId: 'm1' } },
           params: {},
           fallbacks: [{ provider: 'live', modelId: 'm2' }]
         }
@@ -135,7 +134,12 @@ test('maps generation params onto the request body', async () => {
   const router = mkRouter(
     deps({
       profiles: [
-        { alias: 'default', provider: 'u1', modelId: 'm1', params: { temperature: 0.5, topP: 0.9 }, fallbacks: [] }
+        {
+          alias: 'default',
+          routes: { chat: { provider: 'u1', modelId: 'm1' } },
+          params: { temperature: 0.5, topP: 0.9 },
+          fallbacks: []
+        }
       ],
       fetch: fakeFetch(async (_url, init) => {
         body = JSON.parse(String(init?.body));
@@ -152,7 +156,14 @@ test('per-request params override the profile', async () => {
   let body: Record<string, unknown> = {};
   const router = mkRouter(
     deps({
-      profiles: [{ alias: 'default', provider: 'u1', modelId: 'm1', params: { temperature: 0.2 }, fallbacks: [] }],
+      profiles: [
+        {
+          alias: 'default',
+          routes: { chat: { provider: 'u1', modelId: 'm1' } },
+          params: { temperature: 0.2 },
+          fallbacks: []
+        }
+      ],
       fetch: fakeFetch(async (_url, init) => {
         body = JSON.parse(String(init?.body));
         return jsonResponse('ok');
@@ -167,8 +178,8 @@ test('guards against profile fallback cycles (terminates, throws when all fail)'
   const router = mkRouter(
     deps({
       profiles: [
-        { alias: 'a', provider: 'u1', modelId: 'ma', params: {}, fallbacks: [{ profile: 'b' }] },
-        { alias: 'b', provider: 'u1', modelId: 'mb', params: {}, fallbacks: [{ profile: 'a' }] }
+        { alias: 'a', routes: { chat: { provider: 'u1', modelId: 'ma' } }, params: {}, fallbacks: [{ profile: 'b' }] },
+        { alias: 'b', routes: { chat: { provider: 'u1', modelId: 'mb' } }, params: {}, fallbacks: [{ profile: 'a' }] }
       ],
       defaultProfile: 'a',
       fetch: fakeFetch(() => err429())
@@ -200,8 +211,7 @@ test('usage is attributed to the FALLBACK model that actually served the turn', 
       profiles: [
         {
           alias: 'default',
-          provider: 'dead',
-          modelId: 'm1',
+          routes: { chat: { provider: 'dead', modelId: 'm1' } },
           params: {},
           fallbacks: [{ provider: 'live', modelId: 'm2' }]
         }
@@ -223,7 +233,9 @@ test('countTokens delegates to a provider with a native endpoint', async () => {
   const router = mkRouter(
     deps({
       providers: [{ id: 'a1', type: 'anthropic', baseUrl: 'https://anthropic.test' }],
-      profiles: [{ alias: 'default', provider: 'a1', modelId: 'claude-x', params: {}, fallbacks: [] }],
+      profiles: [
+        { alias: 'default', routes: { chat: { provider: 'a1', modelId: 'claude-x' } }, params: {}, fallbacks: [] }
+      ],
       fetch: fakeFetch((url, init) => {
         seenUrl = url;
         seenBody = JSON.parse(String(init?.body));
@@ -251,7 +263,9 @@ test('countTokens forwards tool schemas so the count includes them', async () =>
   const router = mkRouter(
     deps({
       providers: [{ id: 'a1', type: 'anthropic', baseUrl: 'https://anthropic.test' }],
-      profiles: [{ alias: 'default', provider: 'a1', modelId: 'claude-x', params: {}, fallbacks: [] }],
+      profiles: [
+        { alias: 'default', routes: { chat: { provider: 'a1', modelId: 'claude-x' } }, params: {}, fallbacks: [] }
+      ],
       fetch: fakeFetch((_url, init) => {
         seenBody = JSON.parse(String(init?.body));
         return new Response(JSON.stringify({ input_tokens: 7 }), { headers: { 'Content-Type': 'application/json' } });
@@ -278,7 +292,9 @@ test('countTokens swallows a provider error and resolves undefined', async () =>
   const router = mkRouter(
     deps({
       providers: [{ id: 'a1', type: 'anthropic', baseUrl: 'https://anthropic.test' }],
-      profiles: [{ alias: 'default', provider: 'a1', modelId: 'claude-x', params: {}, fallbacks: [] }],
+      profiles: [
+        { alias: 'default', routes: { chat: { provider: 'a1', modelId: 'claude-x' } }, params: {}, fallbacks: [] }
+      ],
       fetch: fakeFetch(() => new Response('nope', { status: 500 }))
     })
   );

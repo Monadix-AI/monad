@@ -54,7 +54,12 @@ test('model: routes to profiles for list action', async () => {
 
 test('model: routes to profiles for set action', async () => {
   let called = false;
-  const profile = { alias: 'gpt4', provider: 'openai', modelId: 'gpt-4', params: {}, fallbacks: [] };
+  const profile = {
+    alias: 'gpt4',
+    routes: { chat: { provider: 'openai', modelId: 'gpt-4' } },
+    params: {},
+    fallbacks: []
+  };
   const client = {
     treaty: {
       v1: {

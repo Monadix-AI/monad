@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { readFile, rm } from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { ModelProviderType } from '@monad/protocol';
 
 import {
   createDefaultConfig,
@@ -19,6 +20,7 @@ import {
 } from '../../src/config.ts';
 import { resolveClientConn } from '../../src/connection.ts';
 import { initMonadHome } from '../../src/init.ts';
+import { computeInitStatus } from '../../src/init-status.ts';
 import { getPaths, xdgPaths } from '../../src/paths.ts';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -209,6 +211,69 @@ describe('initMonadHome', () => {
   });
 });
 
+// ── init status ───────────────────────────────────────────────────────────────
+
+describe('computeInitStatus', () => {
+  test('uses the configured default profile alias instead of requiring alias "default"', () => {
+    const cfg = createDefaultConfig('prn_test', 'test-user');
+    cfg.model.default = 'writer';
+    cfg.model.providers = [
+      {
+        id: 'oai',
+        label: 'OpenAI-compatible',
+        type: ModelProviderType.OpenAICompatible,
+        baseUrl: 'https://api.test/v1'
+      }
+    ];
+    cfg.model.profiles = [
+      {
+        alias: 'writer',
+        routes: { chat: { provider: 'oai', modelId: 'gpt-x' } },
+        params: {},
+        fallbacks: []
+      }
+    ];
+    cfg.agent.agents = [
+      {
+        id: 'agt_writer',
+        name: 'Writer',
+        capabilities: [],
+        declaredScopes: [],
+        atoms: { mode: 'inherit', allow: [], deny: [] },
+        visibility: { subagentCallable: false, public: false }
+      }
+    ];
+    cfg.agent.defaultAgentId = 'agt_writer';
+
+    expect(
+      computeInitStatus(cfg, {
+        version: 1,
+        activeProvider: 'oai',
+        updatedAt: new Date().toISOString(),
+        credentialPool: {
+          oai: [
+            {
+              id: 'cred_primary',
+              label: 'Primary',
+              authType: 'api_key',
+              priority: 0,
+              source: 'manual',
+              accessToken: 'sk-test',
+              lastStatus: 'unknown',
+              lastStatusAt: null,
+              lastErrorCode: null,
+              lastErrorReason: null,
+              lastErrorMessage: null,
+              lastErrorResetAt: null,
+              requestCount: 0
+            }
+          ]
+        }
+      })
+    ).toEqual({ initialized: true, missing: [] });
+  });
+});
+
 // ── config schema / migration tests ──────────────────────────────────────────
 //
 // These fixtures ARE the historical schema snapshots.
@@ -294,8 +359,7 @@ describe('loadConfig', () => {
       expect.arrayContaining([
         expect.objectContaining({
           alias: 'sample-compatible',
-          provider: 'sample-openai-compatible',
-          modelId: 'example-model'
+          routes: { chat: { provider: 'sample-openai-compatible', modelId: 'example-model' } }
         })
       ])
     );
@@ -322,6 +386,32 @@ describe('loadConfig', () => {
       expect(message).toContain('| Path');
       expect(message).toContain('| Issue');
       expect(message).toContain('principal.id');
+    }
+  });
+
+  test('rejects non-http provider baseUrl while loading config', async () => {
+    await initMonadHome(paths);
+    const profile = JSON.parse(await readFile(paths.profile, 'utf8')) as {
+      model: { providers: unknown[] };
+    };
+    profile.model.providers = [
+      {
+        id: 'bad-url',
+        label: 'Bad URL',
+        type: ModelProviderType.OpenAICompatible,
+        baseUrl: 'ftp://api.example.com/v1'
+      }
+    ];
+    await Bun.write(paths.profile, JSON.stringify(profile, null, 2));
+
+    try {
+      await loadConfig(paths.config);
+      throw new Error('expected loadConfig to throw');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      expect(message).toContain('profile.json has invalid fields');
+      expect(message).toContain('model.providers');
+      expect(message).toContain('url must be http(s)');
     }
   });
 });

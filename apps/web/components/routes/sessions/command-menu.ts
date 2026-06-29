@@ -1,8 +1,8 @@
-import type { CommandSpec, Session } from '@monad/protocol';
+import type { CommandSpec, ProfileView, Session } from '@monad/protocol';
 import type { TFn } from '@/components/I18nProvider';
 import type { SessionCommandMenuItem } from './SessionRoute';
 
-export type CommandMenuProfile = { alias: string; provider: string; modelId: string };
+export type CommandMenuProfile = ProfileView;
 
 export function skillCommandDisplayName(name: string): string {
   const parts = name.split(':');
@@ -158,7 +158,7 @@ export function buildCommandMenuItems(
         .map((pr) => ({
           key: pr.alias,
           label: pr.alias,
-          hint: `${pr.provider}:${pr.modelId}`,
+          hint: `${pr.routes.chat.provider}:${pr.routes.chat.modelId}`,
           insert: `/model ${pr.alias}`,
           dismissAfter: true
         }));

@@ -40,7 +40,25 @@ const CATALOG = {
   }
 };
 
-const okFetch = (async () => new Response(JSON.stringify(CATALOG), { status: 200 })) as unknown as typeof fetch;
+const PAGES = {
+  'openai/gpt-5.2': {
+    id: 'openai/gpt-5.2',
+    name: 'GPT-5.2',
+    family: 'gpt',
+    modalities: { input: ['text', 'image'], output: ['text'] }
+  },
+  'openai/gpt-5-mini': {
+    id: 'openai/gpt-5-mini',
+    name: 'GPT-5 Mini',
+    family: 'gpt',
+    modalities: { input: ['text'], output: ['text'] }
+  }
+};
+
+const okFetch = (async (url: string) =>
+  new Response(JSON.stringify(url.includes('models.json') ? PAGES : CATALOG), {
+    status: 200
+  })) as unknown as typeof fetch;
 const failFetch = (async () => new Response('nope', { status: 500 })) as unknown as typeof fetch;
 
 beforeEach(async () => {
@@ -227,10 +245,92 @@ test('lookupPriceExact requires an exact id match — no bare-name suffix fallba
   expect(svc.lookupPriceExact('openrouter', 'vendor/gpt-5.2')).toBeUndefined();
 });
 
+test('lookupModelsDevUrl matches models.dev pages by id and dot-normalized id', async () => {
+  const catalog = {
+    openrouter: {
+      models: {
+        'google/gemini-2.5-pro': {
+          id: 'google/gemini-2.5-pro',
+          name: 'Gemini 2.5 Pro',
+          family: 'gemini-pro',
+          modalities: { input: ['text', 'image'], output: ['text'] },
+          limit: { context: 1048576 },
+          cost: { input: 1.25, output: 10 }
+        },
+        'google/gemini-3.5-pro': {
+          id: 'google/gemini-3.5-pro',
+          name: 'Gemini 3.5 Pro',
+          family: 'gemini-pro',
+          modalities: { input: ['text', 'image'], output: ['text'] },
+          limit: { context: 1048576 },
+          cost: { input: 1.25, output: 10 }
+        }
+      }
+    },
+    deepseek: {
+      models: {
+        'deepseek-chat': {
+          id: 'deepseek-chat',
+          name: 'DeepSeek Chat',
+          family: 'deepseek',
+          modalities: { input: ['text'], output: ['text'] },
+          limit: { context: 1000000 },
+          cost: { input: 0.14, output: 0.28 }
+        }
+      }
+    },
+    google: {
+      models: {
+        'gemini-3.5-pro': {
+          id: 'gemini-3.5-pro',
+          name: 'Gemini 3.5 Pro',
+          family: 'gemini-pro',
+          modalities: { input: ['text', 'image'], output: ['text'] },
+          limit: { context: 1048576 },
+          cost: { input: 1.25, output: 10 }
+        }
+      }
+    }
+  };
+  const pages = {
+    'google/gemini-2.5-pro': {
+      id: 'google/gemini-2.5-pro'
+    },
+    'deepseek/deepseek-chat': {
+      id: 'deepseek/deepseek-chat'
+    },
+    'google/gemini-3-5-pro': {
+      id: 'google/gemini-3-5-pro'
+    }
+  };
+  const fetchImpl = (async (url: string) =>
+    new Response(JSON.stringify(url.includes('models.json') ? pages : catalog), {
+      status: 200
+    })) as unknown as typeof fetch;
+  const svc = new ModelCatalogService({
+    cachePath,
+    log,
+    fetchImpl,
+    url: 'https://x',
+    modelsUrl: 'https://x/models.json'
+  });
+  await svc.refresh();
+
+  expect(svc.lookupModelsDevUrl('openrouter', 'google/gemini-2.5-pro')).toBe(
+    'https://models.dev/models/google/gemini-2.5-pro'
+  );
+  expect(svc.lookupModelsDevUrl('openrouter', 'google/gemini-3.5-pro')).toBe(
+    'https://models.dev/models/google/gemini-3-5-pro'
+  );
+  expect(svc.lookupModelsDevUrl('deepseek', 'deepseek-chat')).toBe('https://models.dev/models/deepseek/deepseek-chat');
+  expect(svc.lookupModelsDevUrl('google', 'gemini-3.5-pro')).toBe('https://models.dev/models/google/gemini-3-5-pro');
+  expect(svc.lookupModelsDevUrl('openrouter', 'vendor/gpt-5.2')).toBeUndefined();
+});
+
 const PROFILES = [
-  { alias: 'p-mini', provider: 'openai', modelId: 'gpt-5-mini' }, // cheap → fast
-  { alias: 'p-big', provider: 'openai', modelId: 'gpt-5.2' }, // pricey → power
-  { alias: 'p-unknown', provider: 'custom', modelId: 'mystery-model' } // not in catalog → smart
+  { alias: 'p-mini', routes: { chat: { provider: 'openai', modelId: 'gpt-5-mini' } } }, // cheap → fast
+  { alias: 'p-big', routes: { chat: { provider: 'openai', modelId: 'gpt-5.2' } } }, // pricey → power
+  { alias: 'p-unknown', routes: { chat: { provider: 'custom', modelId: 'mystery-model' } } } // not in catalog → smart
 ];
 
 test('tierProfiles classifies configured profiles by alias', async () => {
@@ -250,15 +350,17 @@ test('pickProfileForTier resolves fast to a concrete model spec', async () => {
     svc.pickProfileForTier('fast', [
       {
         alias: 'custom-fast',
-        provider: 'openai',
-        modelId: 'gpt-5.2',
-        fastProvider: 'custom',
-        fastModelId: 'tiny'
+        routes: {
+          chat: { provider: 'openai', modelId: 'gpt-5.2' },
+          fast: { provider: 'custom', modelId: 'tiny' }
+        }
       },
       ...PROFILES
     ])
   ).toBe('custom:tiny');
-  expect(svc.pickProfileForTier('fast', [{ alias: 'p-unknown', provider: 'custom', modelId: 'mystery-model' }])).toBe(
-    undefined
-  );
+  expect(
+    svc.pickProfileForTier('fast', [
+      { alias: 'p-unknown', routes: { chat: { provider: 'custom', modelId: 'mystery-model' } } }
+    ])
+  ).toBe(undefined);
 });

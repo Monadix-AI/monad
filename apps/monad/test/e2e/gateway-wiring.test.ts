@@ -68,7 +68,7 @@ beforeEach(async () => {
     }
   ];
   cfg.model.profiles = [
-    { alias: 'default', provider: 'stub', modelId: 'stub-model', params: {}, fallbacks: [], roles: {} }
+    { alias: 'default', routes: { chat: { provider: 'stub', modelId: 'stub-model' } }, params: {}, fallbacks: [] }
   ];
   cfg.model.default = 'default';
   await saveAll(paths.config, paths.profile, cfg);

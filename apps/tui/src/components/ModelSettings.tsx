@@ -248,7 +248,7 @@ function RowView({ row, selected, defaultAlias }: { row: Row; selected: boolean;
       <Text color={selected ? TUI_THEME.accent : undefined}>{p.alias}</Text>
       <Text color={TUI_THEME.dim}>
         {'  '}
-        {p.provider}:{p.modelId}
+        {p.routes.chat.provider}:{p.routes.chat.modelId}
       </Text>
       {isDefault && <Text color={TUI_THEME.glow}>{'  '}[default]</Text>}
     </Box>

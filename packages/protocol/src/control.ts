@@ -10,6 +10,7 @@ import {
   agentVisibilitySchema,
   chatMessageSchema,
   eventSchema,
+  modelProfileRoutesSchema,
   modelRolesSchema,
   sandboxModeSchema,
   searchHitSchema,
@@ -21,6 +22,7 @@ import {
   sessionTransportSchema
 } from './domain.ts';
 import { agentIdSchema, messageIdSchema, sessionIdSchema } from './ids.ts';
+import { httpUrlSchema } from './url.ts';
 
 export const CONTROL_API_VERSION = 'v1' as const;
 
@@ -588,7 +590,7 @@ export const providerViewSchema = z.object({
   id: z.string(),
   label: z.string(),
   type: z.enum(KNOWN_PROVIDER_TYPES),
-  baseUrl: z.string().optional(),
+  baseUrl: httpUrlSchema.optional(),
   extra: z.record(z.string(), z.string()).optional()
 });
 export type ProviderView = z.infer<typeof providerViewSchema>;
@@ -612,13 +614,9 @@ export type FallbackTargetView = z.infer<typeof fallbackTargetViewSchema>;
 
 export const profileViewSchema = z.object({
   alias: z.string(),
-  provider: z.string(),
-  modelId: z.string(),
-  fastProvider: z.string().optional(),
-  fastModelId: z.string().optional(),
+  routes: modelProfileRoutesSchema,
   params: generationParamsViewSchema,
-  fallbacks: z.array(fallbackTargetViewSchema),
-  roles: modelRolesSchema.default({})
+  fallbacks: z.array(fallbackTargetViewSchema)
 });
 export type ProfileView = z.infer<typeof profileViewSchema>;
 
@@ -696,7 +694,10 @@ export const modelInfoSchema = z.object({
   id: z.string(),
   label: z.string().optional(),
   price: modelPriceSchema.optional(), // USD per 1M tokens; provider-native price preferred, else catalog
-  modalities: modelModalitiesSchema.optional() // input/output modalities, flags, kind; provider-native preferred, else catalog
+  modalities: modelModalitiesSchema.optional(), // input/output modalities, flags, kind; provider-native preferred, else catalog
+  contextLimit: z.number().int().positive().optional(),
+  releaseDate: z.string().optional(),
+  modelsDevUrl: z.string().url().optional()
 });
 export type ModelInfo = z.infer<typeof modelInfoSchema>;
 

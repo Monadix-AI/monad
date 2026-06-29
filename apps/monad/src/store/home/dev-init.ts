@@ -119,11 +119,9 @@ export async function ensureDevProvider(
 
   const profile = {
     alias: 'default',
-    provider: provider.id,
-    modelId: model,
+    routes: { chat: { provider: provider.id, modelId: model } },
     params: { reasoningEffort },
-    fallbacks: [],
-    roles: {}
+    fallbacks: []
   };
   const existingProfile = cfg.model.profiles.findIndex((p) => p.alias === 'default');
   if (existingProfile === -1) cfg.model.profiles.push(profile);

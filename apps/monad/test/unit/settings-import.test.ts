@@ -5,8 +5,13 @@ import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 import { createDefaultConfig, emptyAuth, loadAll, loadAuth, saveAll, saveAuth } from '@monad/home';
+import { ModelProviderType } from '@monad/protocol';
 
-import { createSettingsImportModule, previewSettingsImport } from '@/handlers/settings/import/index.ts';
+import {
+  applyModelRolesToConfiguredDefaultProfile,
+  createSettingsImportModule,
+  previewSettingsImport
+} from '@/handlers/settings/import/index.ts';
 import { ConfigBus } from '@/services/config-bus.ts';
 
 function pathsFor(dir: string): MonadPaths {
@@ -452,6 +457,34 @@ test('dry-run preview does not mutate config files', async () => {
   }
 });
 
+test('model role imports target the configured default profile alias', () => {
+  const cfg = createDefaultConfig('prn_test', 'test');
+  cfg.model.default = 'writer';
+  cfg.model.providers = [{ id: 'oai', label: 'OpenAI', type: ModelProviderType.OpenAICompatible }];
+  cfg.model.profiles = [
+    {
+      alias: 'default',
+      routes: { chat: { provider: 'oai', modelId: 'gpt-default' } },
+      params: {},
+      fallbacks: []
+    },
+    {
+      alias: 'writer',
+      routes: { chat: { provider: 'oai', modelId: 'gpt-writer' } },
+      params: {},
+      fallbacks: []
+    }
+  ];
+
+  applyModelRolesToConfiguredDefaultProfile(cfg, { embedding: 'oai:text-embedding-3-small' });
+
+  expect(cfg.model.profiles.find((profile) => profile.alias === 'writer')?.routes.embedding).toEqual({
+    provider: 'oai',
+    modelId: 'text-embedding-3-small'
+  });
+  expect(cfg.model.profiles.find((profile) => profile.alias === 'default')?.routes.embedding).toBeUndefined();
+});
+
 test('allSafe applies only low-risk add items', async () => {
   const { dir, paths, cleanup } = await makeHome();
   const codex = join(dir, 'codex');
@@ -769,8 +802,7 @@ test('apply selected imports MCP, model profile and skill', async () => {
     expect(cfg?.mcpServers.some((s) => s.name === 'echo')).toBe(true);
     expect(cfg?.model.default).toBe('default');
     expect(cfg?.model.profiles.find((profile) => profile.alias === 'default')).toMatchObject({
-      provider: 'openai',
-      modelId: 'gpt-4.1'
+      routes: { chat: { provider: 'openai', modelId: 'gpt-4.1' } }
     });
     expect(await Bun.file(join(paths.skills, 'hello', 'SKILL.md')).exists()).toBe(true);
     expect((await loadAuth(paths.auth))?.credentialPool).toEqual({});

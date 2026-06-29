@@ -1,6 +1,6 @@
 'use client';
 
-import type { MessageId, SessionId, UIItem, UIMessageItem } from '@monad/protocol';
+import type { MessageId, ProfileView, SessionId, UIItem, UIMessageItem } from '@monad/protocol';
 import type { VirtualListHandle } from '@/components/ui/VirtualList';
 import type { StudioSectionId } from './studio/sections';
 
@@ -70,7 +70,7 @@ const Settings = dynamic(() => import('./Settings').then((m) => m.Settings), { s
 const EMPTY_UI_ITEMS: UIItem[] = [];
 
 const viewMessageId = (item: ViewItem): string => item.id;
-const EMPTY_PROFILES: { alias: string; provider: string; modelId: string }[] = [];
+const EMPTY_PROFILES: ProfileView[] = [];
 
 const SEGMENT_COLORS: Record<string, string> = {
   customAgents: 'var(--success)',

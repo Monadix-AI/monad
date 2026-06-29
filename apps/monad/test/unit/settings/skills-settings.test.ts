@@ -70,11 +70,9 @@ test('install review setting can use any configured model with credentials', asy
   });
   cfg.model.profiles.push({
     alias: 'review',
-    provider: 'review-provider',
-    modelId: 'review-model',
+    routes: { chat: { provider: 'review-provider', modelId: 'review-model' } },
     params: {},
-    fallbacks: [],
-    roles: {}
+    fallbacks: []
   });
   await saveAll(paths.config, paths.profile, cfg);
   await saveAuth(paths.auth, {

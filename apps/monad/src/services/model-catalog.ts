@@ -13,6 +13,8 @@ import { z } from 'zod';
 export type { ModelKind, ModelModalities } from '@monad/protocol';
 
 const MODELS_DEV_URL = 'https://models.dev/api.json';
+const MODELS_DEV_MODELS_URL = 'https://models.dev/models.json';
+const MODELS_DEV_PAGE_BASE = 'https://models.dev/models/';
 const DEFAULT_REFRESH_MS = 24 * 60 * 60 * 1000; // daily
 const FETCH_TIMEOUT_MS = 15_000;
 
@@ -21,6 +23,7 @@ const catalogModelSchema = z
   .object({
     id: z.string(),
     name: z.string().optional(),
+    family: z.string().optional(),
     reasoning: z.boolean().optional(),
     tool_call: z.boolean().optional(),
     release_date: z.string().optional(),
@@ -42,6 +45,12 @@ const catalogModelSchema = z
   .loose();
 const catalogProviderSchema = z.object({ models: z.record(z.string(), z.unknown()).default({}) }).loose();
 const catalogResponseSchema = z.record(z.string(), catalogProviderSchema);
+const catalogPageModelSchema = z
+  .object({
+    id: z.string()
+  })
+  .loose();
+const catalogPageResponseSchema = z.record(z.string(), catalogPageModelSchema);
 
 /** The flattened, monad-facing metadata for one model (the subset we use for tiering). */
 export interface ModelCatalogEntry {
@@ -65,6 +74,8 @@ export interface ModelCatalogEntry {
   /** Primary role this model serves, derived from output modality + id (see classifyKind). */
   kind?: ModelKind;
   releaseDate?: string;
+  /** Canonical models.dev detail page id, e.g. "google/gemini-2.5-pro". */
+  modelsDevPageId?: string;
 }
 
 /** models.dev doesn't flag embedding models distinctly (they report in/out: ["text"]), so embedding
@@ -126,16 +137,41 @@ const entrySchema: z.ZodType<ModelCatalogEntry> = z.object({
   modalities: z.array(z.string()).optional(),
   outputModalities: z.array(z.string()).optional(),
   kind: z.enum(['chat', 'image', 'speech', 'embedding']).optional(),
-  releaseDate: z.string().optional()
+  releaseDate: z.string().optional(),
+  modelsDevPageId: z.string().optional()
 });
 
-function flatten(catalog: z.infer<typeof catalogResponseSchema>): ModelCatalogEntry[] {
+function dotNormalizedModelId(modelId: string): string {
+  const [lab, ...rest] = modelId.split('/');
+  if (rest.length === 0) return modelId.replaceAll('.', '-');
+  return `${lab}/${rest.join('/').replaceAll('.', '-')}`;
+}
+
+function createPageResolver(pages: z.infer<typeof catalogPageResponseSchema>) {
+  const byId = new Set(Object.keys(pages));
+  return (provider: string, model: { id: string }) => {
+    if (byId.has(model.id)) return model.id;
+    const providerScoped = `${provider}/${model.id}`;
+    if (byId.has(providerScoped)) return providerScoped;
+    const normalized = dotNormalizedModelId(model.id);
+    if (byId.has(normalized)) return normalized;
+    const normalizedProviderScoped = dotNormalizedModelId(providerScoped);
+    return byId.has(normalizedProviderScoped) ? normalizedProviderScoped : undefined;
+  };
+}
+
+function flatten(
+  catalog: z.infer<typeof catalogResponseSchema>,
+  pages: z.infer<typeof catalogPageResponseSchema> = {}
+): ModelCatalogEntry[] {
   const entries: ModelCatalogEntry[] = [];
+  const resolvePage = createPageResolver(pages);
   for (const [provider, p] of Object.entries(catalog)) {
     for (const raw of Object.values(p.models)) {
       const parsed = catalogModelSchema.safeParse(raw);
       if (!parsed.success) continue;
       const m = parsed.data;
+      const pageId = resolvePage(provider, m);
       entries.push({
         id: m.id,
         provider,
@@ -150,11 +186,26 @@ function flatten(catalog: z.infer<typeof catalogResponseSchema>): ModelCatalogEn
         modalities: m.modalities?.input,
         outputModalities: m.modalities?.output,
         kind: classifyKind(m.id, m.modalities?.output),
-        releaseDate: m.release_date
+        releaseDate: m.release_date,
+        modelsDevPageId: pageId
       });
     }
   }
   return entries;
+}
+
+async function fetchCatalogPages(
+  fetchImpl: typeof fetch,
+  modelsUrl: string
+): Promise<z.infer<typeof catalogPageResponseSchema>> {
+  try {
+    const res = await fetchImpl(modelsUrl, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
+    if (!res.ok) return {};
+    const parsed = catalogPageResponseSchema.safeParse(await res.json());
+    return parsed.success ? parsed.data : {};
+  } catch {
+    return {};
+  }
 }
 
 export interface ModelCatalogDeps {
@@ -164,15 +215,16 @@ export interface ModelCatalogDeps {
   /** Override for tests. */
   fetchImpl?: typeof fetch;
   url?: string;
+  modelsUrl?: string;
 }
 
-/** A configured model the daemon can run — a profile alias + the provider/model it resolves to. */
+/** A configured routing profile the daemon can run. */
 export interface TierableProfile {
   alias: string;
-  provider: string;
-  modelId: string;
-  fastProvider?: string;
-  fastModelId?: string;
+  routes: {
+    chat: { provider: string; modelId: string };
+    fast?: { provider: string; modelId: string };
+  };
 }
 
 export class ModelCatalogService {
@@ -187,16 +239,21 @@ export class ModelCatalogService {
   private priceBySuffix = new Map<string, ModelPrice>();
   private contextById = new Map<string, number>();
   private contextBySuffix = new Map<string, number>();
+  private releaseDateById = new Map<string, string>();
+  private releaseDateBySuffix = new Map<string, string>();
   private modalitiesById = new Map<string, ModelModalities>();
   private modalitiesBySuffix = new Map<string, ModelModalities>();
+  private modelsDevPageById = new Map<string, string>();
   private count = 0;
   private timer: ReturnType<typeof setInterval> | undefined;
   private readonly fetchImpl: typeof fetch;
   private readonly url: string;
+  private readonly modelsUrl: string;
 
   constructor(private readonly deps: ModelCatalogDeps) {
     this.fetchImpl = deps.fetchImpl ?? fetch;
     this.url = deps.url ?? MODELS_DEV_URL;
+    this.modelsUrl = deps.modelsUrl ?? MODELS_DEV_MODELS_URL;
   }
 
   /** Number of priced models indexed in memory. */
@@ -255,7 +312,7 @@ export class ModelCatalogService {
   /** Tier the configured profiles by their model's cost (keyed by alias). Overrides keyed by alias. */
   tierProfiles(profiles: TierableProfile[], overrides?: Record<string, ModelTier>): Map<string, ModelTier> {
     return assignTiers(
-      profiles.map((p) => ({ id: p.alias, cost: this.lookupCost(p.provider, p.modelId) })),
+      profiles.map((p) => ({ id: p.alias, cost: this.lookupCost(p.routes.chat.provider, p.routes.chat.modelId) })),
       overrides
     );
   }
@@ -272,17 +329,17 @@ export class ModelCatalogService {
     _overrides?: Record<string, ModelTier>
   ): string | undefined {
     // Explicit fast-model designation takes priority.
-    const withFast = profiles.find((p) => p.fastModelId && p.fastProvider);
-    if (withFast) return `${withFast.fastProvider}:${withFast.fastModelId}`;
+    const withFast = profiles.find((p) => p.routes.fast);
+    if (withFast?.routes.fast) return `${withFast.routes.fast.provider}:${withFast.routes.fast.modelId}`;
     // Fall back to the cheapest priced profile's model.
-    const cost = (p: TierableProfile) => this.lookupCost(p.provider, p.modelId);
+    const cost = (p: TierableProfile) => this.lookupCost(p.routes.chat.provider, p.routes.chat.modelId);
     const priced = profiles
       .flatMap((profile) => {
         const modelCost = cost(profile);
         return modelCost === undefined ? [] : [{ profile, cost: modelCost }];
       })
       .sort((a, b) => a.cost - b.cost);
-    return priced[0] ? `${priced[0].profile.provider}:${priced[0].profile.modelId}` : undefined;
+    return priced[0] ? `${priced[0].profile.routes.chat.provider}:${priced[0].profile.routes.chat.modelId}` : undefined;
   }
 
   /** Best-effort join from a configured (provider, modelId) to the model's context-window size. */
@@ -292,6 +349,21 @@ export class ModelCatalogService {
       this.contextById.get(`${provider}/${modelId}`) ??
       this.contextBySuffix.get(modelId.split('/').pop() ?? modelId)
     );
+  }
+
+  /** Best-effort join from a configured (provider, modelId) to the model release date. */
+  lookupReleaseDate(provider: string, modelId: string): string | undefined {
+    return (
+      this.releaseDateById.get(modelId) ??
+      this.releaseDateById.get(`${provider}/${modelId}`) ??
+      this.releaseDateBySuffix.get(modelId.split('/').pop() ?? modelId)
+    );
+  }
+
+  /** Link to the exact models.dev model page when the catalog has an exact id match. */
+  lookupModelsDevUrl(provider: string, modelId: string): string | undefined {
+    const id = this.modelsDevPageById.get(modelId) ?? this.modelsDevPageById.get(`${provider}/${modelId}`);
+    return id ? `${MODELS_DEV_PAGE_BASE}${id.split('/').map(encodeURIComponent).join('/')}` : undefined;
   }
 
   /** Best-effort join from a configured (provider, modelId) to the model's modalities — used to
@@ -312,13 +384,25 @@ export class ModelCatalogService {
     this.priceBySuffix = new Map();
     this.contextById = new Map();
     this.contextBySuffix = new Map();
+    this.releaseDateById = new Map();
+    this.releaseDateBySuffix = new Map();
     this.modalitiesById = new Map();
     this.modalitiesBySuffix = new Map();
+    this.modelsDevPageById = new Map();
     for (const e of entries) {
       const suffix = e.id.split('/').pop();
+      if (e.modelsDevPageId) {
+        this.modelsDevPageById.set(e.id, e.modelsDevPageId);
+        this.modelsDevPageById.set(`${e.provider}/${e.id}`, e.modelsDevPageId);
+      }
       if (e.contextLimit !== undefined) {
         this.contextById.set(e.id, e.contextLimit);
         if (suffix && !this.contextBySuffix.has(suffix)) this.contextBySuffix.set(suffix, e.contextLimit);
+      }
+      if (e.releaseDate) {
+        this.releaseDateById.set(e.id, e.releaseDate);
+        this.releaseDateById.set(`${e.provider}/${e.id}`, e.releaseDate);
+        if (suffix && !this.releaseDateBySuffix.has(suffix)) this.releaseDateBySuffix.set(suffix, e.releaseDate);
       }
       // Modalities are indexed for EVERY model (even unpriced ones, e.g. free embedding models) —
       // so it must come before the cost-gated `continue` below.
@@ -367,7 +451,8 @@ export class ModelCatalogService {
     try {
       const res = await this.fetchImpl(this.url, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const entries = flatten(catalogResponseSchema.parse(await res.json()));
+      const pages = await fetchCatalogPages(this.fetchImpl, this.modelsUrl);
+      const entries = flatten(catalogResponseSchema.parse(await res.json()), pages);
       this.indexCosts(entries);
       await this.writeCache(entries);
       this.deps.log('info', `model catalog: ${this.count} priced models indexed from models.dev`);

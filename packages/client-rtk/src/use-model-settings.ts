@@ -15,6 +15,7 @@ import {
   useDeleteProviderMutation,
   useListProfilesQuery,
   useListProvidersQuery,
+  useRenameProfileMutation,
   useSetDefaultMutation,
   useSetProfileMutation,
   useSetProviderMutation,
@@ -41,6 +42,7 @@ export interface ModelSettingsStore {
   ) => Promise<void>;
   deleteProvider: (id: string) => Promise<void>;
   setProfile: (profile: ProfileView) => Promise<void>;
+  renameProfile: (alias: string, nextAlias: string) => Promise<void>;
   deleteProfile: (alias: string) => Promise<void>;
   setDefaultProfile: (alias: string) => Promise<void>;
 }
@@ -59,6 +61,7 @@ export function useModelSettings(): ModelSettingsStore {
   const [deleteProviderMut] = useDeleteProviderMutation();
   const [addCredentialMut] = useAddCredentialMutation();
   const [setProfileMut] = useSetProfileMutation();
+  const [renameProfileMut] = useRenameProfileMutation();
   const [deleteProfileMut] = useDeleteProfileMutation();
   const [setDefaultMut] = useSetDefaultMutation();
   const [testConnectionMut] = useTestConnectionMutation();
@@ -116,6 +119,12 @@ export function useModelSettings(): ModelSettingsStore {
         await setProfileMut(profile).unwrap();
       },
       [setProfileMut]
+    ),
+    renameProfile: useCallback(
+      async (alias: string, nextAlias: string) => {
+        await renameProfileMut({ alias, nextAlias }).unwrap();
+      },
+      [renameProfileMut]
     ),
     deleteProfile: useCallback(
       async (alias: string) => {
