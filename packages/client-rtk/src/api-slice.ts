@@ -44,6 +44,8 @@ export const apiSlice = createApi({
     'Atoms',
     'Indexer',
     'Obscura',
+    'BrowserPreset',
+    'ComputerPreset',
     'OpenaiCompat',
     'ToolBackends',
     'Approvals',

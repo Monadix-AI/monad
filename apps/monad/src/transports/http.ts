@@ -42,7 +42,9 @@ import { createIpRateLimiter } from '@/transports/http/rate-limit.ts';
 import { createResponsesApiController } from '@/transports/http/responses-api/controller.ts';
 import { createSessionsController } from '@/transports/http/sessions/controller.ts';
 import { createAcpAgentSettingsController } from '@/transports/http/settings/acp-agent.ts';
+import { createBrowserPresetSettingsController } from '@/transports/http/settings/browser-preset.ts';
 import { createChannelSettingsController } from '@/transports/http/settings/channel.ts';
+import { createComputerPresetSettingsController } from '@/transports/http/settings/computer-preset.ts';
 import { createDeveloperSettingsController } from '@/transports/http/settings/developer.ts';
 import { createHooksSettingsController } from '@/transports/http/settings/hooks.ts';
 import { createSettingsImportController } from '@/transports/http/settings/import.ts';
@@ -88,7 +90,7 @@ const REMOTE_RATE_LIMIT = { capacity: 60, refillPerSec: 30 };
  * Never reflect an arbitrary origin together with `allow-credentials: true` — that
  * grants every cross-site page the ability to read credentialed responses.
  */
-export function resolveAllowedOrigin(request: Request): string | null {
+function resolveAllowedOrigin(request: Request): string | null {
   const origin = request.headers.get('origin');
   if (!origin) return null;
   let hostname: string;
@@ -126,7 +128,7 @@ function jsonResponse(status: number, body: { error: string; code?: string }, re
  * Constant-time token comparison. Protects against timing side-channels that let an
  * attacker enumerate token characters by observing response latency differences.
  */
-export function tokenMatches(provided: string, expected: string): boolean {
+function tokenMatches(provided: string, expected: string): boolean {
   const a = Buffer.from(provided);
   const b = Buffer.from(expected);
   const len = Math.max(a.length, b.length, 1);
@@ -323,6 +325,8 @@ export function createHttpTransport(
             .use(createNativeCliAgentSettingsController(handlers))
             .use(createMcpServerSettingsController(handlers))
             .use(createObscuraSettingsController(handlers))
+            .use(createBrowserPresetSettingsController(handlers))
+            .use(createComputerPresetSettingsController(handlers))
             .use(createOpenaiCompatSettingsController(handlers))
             .use(createNetworkSettingsController(handlers))
             .use(createToolBackendsSettingsController(handlers))

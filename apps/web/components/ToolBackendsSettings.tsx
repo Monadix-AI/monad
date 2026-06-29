@@ -2,18 +2,22 @@
 
 import type { SetToolBackendsRequest, SmtpSettings } from '@monad/protocol';
 
-import { Button, Card, Input, Label, ScrollArea, Switch } from '@monad/ui';
+import { Badge, Button, Card, Input, Label, ScrollArea, Switch } from '@monad/ui';
 import {
   Brain,
   CalendarClock,
   Check,
+  CheckCircle2,
   Code2,
   Cpu,
+  Download,
   FileSearch,
   FolderOpen,
   Globe,
   Loader2,
   Mail,
+  Monitor,
+  MonitorPlay,
   Network,
   RefreshCw,
   Settings2,
@@ -24,7 +28,11 @@ import { useEffect, useState } from 'react';
 
 import { useT } from '@/components/I18nProvider';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { useBrowserPresetSettings } from '@/hooks/use-browser-preset-settings';
+import { useComputerPresetSettings } from '@/hooks/use-computer-preset-settings';
 import { useToolBackendsSettings } from '@/hooks/use-tool-backends-settings';
+import { useAsyncAction } from '../hooks/use-async-action';
+import { useObscuraSettings } from '../hooks/use-obscura-settings';
 import { StudioPanel, StudioPanelHeader } from './studio/StudioPanel';
 
 export function ToolBackendsSettings(_props: { onClose: () => void }) {
@@ -51,7 +59,9 @@ export function ToolBackendsSettings(_props: { onClose: () => void }) {
   const [smtpSecure, setSmtpSecure] = useState(false);
   const [smtpClientName, setSmtpClientName] = useState('');
 
-  const [openTool, setOpenTool] = useState<'webSearch' | 'codeExec' | 'email' | null>(null);
+  const [openTool, setOpenTool] = useState<
+    'webSearch' | 'codeExec' | 'email' | 'browser' | 'computer' | 'obscura' | null
+  >(null);
 
   useEffect(() => {
     if (!config) return;
@@ -208,6 +218,9 @@ export function ToolBackendsSettings(_props: { onClose: () => void }) {
               optional
               summary={emailSummary}
             />
+            <BrowserPresetCard onConfigure={() => setOpenTool('browser')} />
+            <ComputerPresetCard onConfigure={() => setOpenTool('computer')} />
+            <ObscuraCard onConfigure={() => setOpenTool('obscura')} />
             <ToolCard
               description={t('web.tools.filesystemDesc')}
               icon={FolderOpen}
@@ -571,7 +584,422 @@ export function ToolBackendsSettings(_props: { onClose: () => void }) {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Browser (Playwright) dialog */}
+      <BrowserPresetDialog
+        onClose={() => setOpenTool(null)}
+        open={openTool === 'browser'}
+      />
+
+      {/* Computer Use dialog */}
+      <ComputerPresetDialog
+        onClose={() => setOpenTool(null)}
+        open={openTool === 'computer'}
+      />
+
+      {/* Obscura dialog */}
+      <ObscuraDialog
+        onClose={() => setOpenTool(null)}
+        open={openTool === 'obscura'}
+      />
     </StudioPanel>
+  );
+}
+
+function BrowserPresetCard({ onConfigure }: { onConfigure: () => void }) {
+  const t = useT();
+  const { config, save } = useBrowserPresetSettings();
+
+  const summary = config?.enabled
+    ? (config.engine ?? t('web.tools.browserEngineDefault'))
+    : t('web.tools.browserDisabled');
+
+  return (
+    <ToolCard
+      description={t('web.tools.browserPresetDesc')}
+      enabled={config?.enabled ?? false}
+      icon={MonitorPlay}
+      name={t('web.tools.browserPreset')}
+      onConfigure={onConfigure}
+      onToggle={(v) => void save({ enabled: v })}
+      optional
+      summary={summary}
+    />
+  );
+}
+
+function BrowserPresetDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const t = useT();
+  const { config, save } = useBrowserPresetSettings();
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string>();
+
+  const [headless, setHeadless] = useState(true);
+  const [vision, setVision] = useState(false);
+  const [engine, setEngine] = useState<'chrome' | 'firefox' | 'webkit' | 'msedge' | ''>('');
+
+  useEffect(() => {
+    if (!open || !config) return;
+    setHeadless(config.headless);
+    setVision(config.vision);
+    setEngine(config.engine ?? '');
+  }, [open, config]);
+
+  const handleSave = async () => {
+    setSaving(true);
+    setSaveError(undefined);
+    try {
+      await save({
+        headless,
+        vision,
+        engine: engine || null
+      });
+      onClose();
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog
+      onOpenChange={(o) => {
+        if (!o) onClose();
+      }}
+      open={open}
+    >
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <MonitorPlay className="size-4" /> {t('web.tools.browserPreset')}
+          </DialogTitle>
+        </DialogHeader>
+        <div className="flex flex-col gap-4">
+          <label className="flex cursor-pointer items-center gap-2">
+            <input
+              checked={headless}
+              className="size-4"
+              onChange={(e) => setHeadless(e.target.checked)}
+              type="checkbox"
+            />
+            <span className="text-sm">{t('web.tools.browserHeadless')}</span>
+          </label>
+          <label className="flex cursor-pointer items-center gap-2">
+            <input
+              checked={vision}
+              className="size-4"
+              onChange={(e) => setVision(e.target.checked)}
+              type="checkbox"
+            />
+            <span className="text-sm">{t('web.tools.browserVision')}</span>
+          </label>
+          <div className="flex flex-col gap-1.5">
+            <Label>{t('web.tools.browserEngine')}</Label>
+            <div className="flex flex-wrap gap-2">
+              {(['', 'chrome', 'firefox', 'webkit', 'msedge'] as const).map((e) => (
+                <button
+                  className={`rounded-md border px-3 py-1.5 text-sm ${engine === e ? 'border-ring bg-primary-subtle text-primary' : ''}`}
+                  key={e || 'default'}
+                  onClick={() => setEngine(e)}
+                  type="button"
+                >
+                  {e || t('web.tools.browserEngineDefault')}
+                </button>
+              ))}
+            </div>
+          </div>
+          <p className="text-muted-foreground text-xs">{t('web.tools.presetAppliesOnRestart')}</p>
+          {saveError && <p className="text-destructive text-xs">{saveError}</p>}
+          <div className="flex gap-2">
+            <Button
+              className="flex-1"
+              disabled={saving}
+              onClick={() => void handleSave()}
+              size="sm"
+            >
+              {saving ? <Loader2 className="animate-spin" /> : <Check />}
+              {saving ? t('web.common.saving') : t('web.common.save')}
+            </Button>
+            <Button
+              onClick={onClose}
+              size="sm"
+              variant="ghost"
+            >
+              {t('web.model.cancel')}
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ComputerPresetCard({ onConfigure }: { onConfigure: () => void }) {
+  const t = useT();
+  const { config, save } = useComputerPresetSettings();
+
+  const summary = config?.enabled ? config.command : t('web.tools.computerDisabled');
+
+  return (
+    <ToolCard
+      description={t('web.tools.computerPresetDesc')}
+      enabled={config?.enabled ?? false}
+      icon={Monitor}
+      name={t('web.tools.computerPreset')}
+      onConfigure={onConfigure}
+      onToggle={(v) => void save({ enabled: v })}
+      optional
+      summary={summary ?? t('web.tools.computerDisabled')}
+    />
+  );
+}
+
+function ComputerPresetDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const t = useT();
+  const { config, save } = useComputerPresetSettings();
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string>();
+
+  const [command, setCommand] = useState('uvx');
+  const [argsStr, setArgsStr] = useState('computer-control-mcp@latest');
+
+  useEffect(() => {
+    if (!open || !config) return;
+    setCommand(config.command);
+    setArgsStr(config.args.join(' '));
+  }, [open, config]);
+
+  const handleSave = async () => {
+    setSaving(true);
+    setSaveError(undefined);
+    try {
+      await save({
+        command: command || 'uvx',
+        args: argsStr
+          .split(' ')
+          .map((s) => s.trim())
+          .filter(Boolean)
+      });
+      onClose();
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog
+      onOpenChange={(o) => {
+        if (!o) onClose();
+      }}
+      open={open}
+    >
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Monitor className="size-4" /> {t('web.tools.computerPreset')}
+          </DialogTitle>
+        </DialogHeader>
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="computer-command">{t('web.tools.computerCommand')}</Label>
+            <Input
+              id="computer-command"
+              onChange={(e) => setCommand(e.target.value)}
+              placeholder="uvx"
+              value={command}
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="computer-args">{t('web.tools.computerArgs')}</Label>
+            <Input
+              id="computer-args"
+              onChange={(e) => setArgsStr(e.target.value)}
+              placeholder="computer-control-mcp@latest"
+              value={argsStr}
+            />
+          </div>
+          <p className="text-muted-foreground text-xs">{t('web.tools.presetAppliesOnRestart')}</p>
+          {saveError && <p className="text-destructive text-xs">{saveError}</p>}
+          <div className="flex gap-2">
+            <Button
+              className="flex-1"
+              disabled={saving}
+              onClick={() => void handleSave()}
+              size="sm"
+            >
+              {saving ? <Loader2 className="animate-spin" /> : <Check />}
+              {saving ? t('web.common.saving') : t('web.common.save')}
+            </Button>
+            <Button
+              onClick={onClose}
+              size="sm"
+              variant="ghost"
+            >
+              {t('web.model.cancel')}
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ObscuraCard({ onConfigure }: { onConfigure: () => void }) {
+  const t = useT();
+  const { status } = useObscuraSettings();
+
+  const summary = status?.connected
+    ? t('web.obscura.toolsLoaded', { count: status.tools.length })
+    : status?.enabled
+      ? t('web.obscura.connecting')
+      : t('web.tools.computerDisabled');
+
+  return (
+    <ToolCard
+      description={t('web.tools.obscuraDesc')}
+      icon={Globe}
+      name={t('web.tools.obscura')}
+      onConfigure={onConfigure}
+      summary={summary}
+    />
+  );
+}
+
+function ObscuraDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const t = useT();
+  const { status, enable, disable, set } = useObscuraSettings();
+  const { busy, run } = useAsyncAction();
+  const [stealthLocal, setStealthLocal] = useState(false);
+
+  useEffect(() => {
+    if (open) setStealthLocal(status?.stealth ?? false);
+  }, [open, status?.stealth]);
+
+  return (
+    <Dialog
+      onOpenChange={(o) => {
+        if (!o) onClose();
+      }}
+      open={open}
+    >
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Globe className="size-4" /> {t('web.obscura.title')}
+          </DialogTitle>
+        </DialogHeader>
+        <div className="flex flex-col gap-4">
+          <p className="text-muted-foreground text-xs">{t('web.tools.obscuraDesc')}</p>
+
+          {busy ? (
+            <div className="flex items-center gap-2 text-muted-foreground text-sm">
+              {status?.enabled ? (
+                <>
+                  <Loader2 className="size-4 animate-spin" />
+                  {t('web.obscura.connecting')}
+                </>
+              ) : (
+                <>
+                  <Download className="size-4 animate-pulse" />
+                  {t('web.obscura.downloading')}
+                </>
+              )}
+            </div>
+          ) : status?.connected ? (
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center gap-3">
+                <Badge
+                  className="gap-1 bg-success/15 text-success"
+                  variant="secondary"
+                >
+                  <CheckCircle2 className="size-3" />
+                  {t('web.obscura.connected')}
+                </Badge>
+                <span className="text-muted-foreground text-xs">
+                  {t('web.obscura.toolsLoaded', { count: status.tools.length })}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  checked={status.stealth}
+                  className="size-4 cursor-pointer"
+                  disabled={busy}
+                  id="obscura-stealth"
+                  onChange={(e) => run(() => set({ enabled: true, stealth: e.target.checked }))}
+                  type="checkbox"
+                />
+                <Label
+                  className="text-sm"
+                  htmlFor="obscura-stealth"
+                >
+                  {t('web.obscura.stealthMode')}
+                </Label>
+                <span className="text-muted-foreground text-xs">{t('web.obscura.stealthDesc')}</span>
+              </div>
+              <div className="rounded-md border p-3">
+                <p className="mb-2 text-muted-foreground text-xs">{t('web.obscura.availableTools')}</p>
+                <div className="flex flex-wrap gap-1">
+                  {status.tools.map((tool) => (
+                    <Badge
+                      className="font-mono text-[10px]"
+                      key={tool}
+                      variant="secondary"
+                    >
+                      {tool}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+              <Button
+                disabled={busy}
+                onClick={() => run(disable)}
+                size="sm"
+                variant="outline"
+              >
+                {busy ? <Loader2 className="animate-spin" /> : null}
+                {t('web.obscura.disable')}
+              </Button>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-3">
+              {!status?.installed ? (
+                <p className="text-muted-foreground text-xs">{t('web.obscura.installNeeded')}</p>
+              ) : (
+                <p className="text-muted-foreground text-xs">{t('web.obscura.installed')}</p>
+              )}
+              <div className="flex items-center gap-2">
+                <input
+                  checked={stealthLocal}
+                  className="size-4 cursor-pointer"
+                  disabled={busy}
+                  id="obscura-stealth-pre"
+                  onChange={(e) => setStealthLocal(e.target.checked)}
+                  type="checkbox"
+                />
+                <Label
+                  className="text-sm"
+                  htmlFor="obscura-stealth-pre"
+                >
+                  {t('web.obscura.stealthMode')}
+                </Label>
+              </div>
+              <Button
+                className="self-start"
+                disabled={busy}
+                onClick={() => run(() => enable({ stealth: stealthLocal }))}
+                size="sm"
+              >
+                {busy ? <Download className="animate-pulse" /> : <Download />}
+                {status?.installed ? t('web.obscura.enable') : t('web.obscura.downloadEnable')}
+              </Button>
+            </div>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 

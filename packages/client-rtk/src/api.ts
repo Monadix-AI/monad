@@ -105,6 +105,7 @@ import {
   useListAcpAgentsQuery,
   useUpsertAcpAgentMutation
 } from './endpoints/settings/acp-agents/index.ts';
+import { useGetBrowserPresetQuery, useSetBrowserPresetMutation } from './endpoints/settings/browser-preset/index.ts';
 import {
   channelAdapter,
   channelSelectors,
@@ -117,6 +118,7 @@ import {
   useSetChannelCredentialMutation,
   useUpsertChannelMutation
 } from './endpoints/settings/channels/index.ts';
+import { useGetComputerPresetQuery, useSetComputerPresetMutation } from './endpoints/settings/computer-preset/index.ts';
 import { useGetDeveloperQuery, useSetDeveloperMutation } from './endpoints/settings/developer/index.ts';
 import { useGetHooksQuery, useSetHooksMutation } from './endpoints/settings/hooks/index.ts';
 import { useApplySettingsImportMutation, usePreviewSettingsImportMutation } from './endpoints/settings/import/index.ts';
@@ -262,7 +264,9 @@ export {
   useGenerateMutation,
   useGetAgentPromptQuery,
   useGetAgentQuery,
+  useGetBrowserPresetQuery,
   useGetCatalogQuery,
+  useGetComputerPresetQuery,
   useGetDefaultAgentQuery,
   useGetDefaultQuery,
   useGetDeveloperQuery,
@@ -348,7 +352,9 @@ export {
   useSetAgentPromptMutation,
   useSetAtomPackEnabledMutation,
   useSetAtomPinMutation,
+  useSetBrowserPresetMutation,
   useSetChannelCredentialMutation,
+  useSetComputerPresetMutation,
   useSetDefaultAgentMutation,
   useSetDefaultMutation,
   useSetDeveloperMutation,

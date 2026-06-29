@@ -30,7 +30,6 @@ export type StudioSectionId =
   | 'acpAgents'
   | 'nativeCliAgents'
   | 'tools'
-  | 'browser'
   | 'api'
   | 'approvals'
   | 'memory'
@@ -52,7 +51,6 @@ export const STUDIO_SECTION_IDS = [
   'acpAgents',
   'nativeCliAgents',
   'tools',
-  'browser',
   'api',
   'approvals',
   'memory',
@@ -92,7 +90,6 @@ export const STUDIO_CAPABILITY_SECTIONS: StudioSectionItem[] = [
 
 export const STUDIO_RUNTIME_SECTIONS: StudioSectionItem[] = [
   { id: 'tools', icon: Wrench, i18nKey: 'web.settings.tools' },
-  { id: 'browser', icon: MonitorPlay, i18nKey: 'web.settings.browser' },
   { id: 'api', icon: PlugZap, i18nKey: 'web.settings.api' },
   { id: 'approvals', icon: ShieldHalf, i18nKey: 'web.settings.approvals' },
   // Memory folds the former standalone graph + mem0 sections into tabs (deep links /studio/graph and

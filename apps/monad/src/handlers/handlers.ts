@@ -66,7 +66,9 @@ import { createNativeCliModule } from '@/handlers/native-cli/index.ts';
 import { createSessionModule } from '@/handlers/session/index.ts';
 import { createAcpAgentModule } from '@/handlers/settings/acp-agent/index.ts';
 import { createAgentModule } from '@/handlers/settings/agent/index.ts';
+import { createBrowserPresetModule } from '@/handlers/settings/browser-preset/index.ts';
 import { createChannelModule } from '@/handlers/settings/channel/index.ts';
+import { createComputerPresetModule } from '@/handlers/settings/computer-preset/index.ts';
 import { createDeveloperModule } from '@/handlers/settings/developer/index.ts';
 import { createHooksModule } from '@/handlers/settings/hooks/index.ts';
 import { createSettingsImportModule } from '@/handlers/settings/import/index.ts';
@@ -474,6 +476,8 @@ export function createDaemonHandlers(deps: DaemonHandlerDeps) {
       mcpAuthorize: deps.mcpAuthorize,
       mcpReconnect: deps.mcpReconnect
     }),
+    browserPreset: createBrowserPresetModule(paths, deps.configBus),
+    computerPreset: createComputerPresetModule(paths, deps.configBus),
     obscura: createObscuraModule({
       paths,
       connectObscura: deps.connectObscura,

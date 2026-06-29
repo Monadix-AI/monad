@@ -11,7 +11,9 @@ import {
   listApprovalsResponseSchema,
   revokeApprovalRequestSchema
 } from './approvals.ts';
+import { browserPresetResponseSchema, setBrowserPresetRequestSchema } from './browser-preset.ts';
 import { commandsListResponseSchema } from './command.ts';
+import { computerPresetResponseSchema, setComputerPresetRequestSchema } from './computer-preset.ts';
 import {
   abortSessionResponseSchema,
   branchSessionRequestSchema,
@@ -271,6 +273,14 @@ export const daemonHttpContract = {
   obscuraSettings: {
     get: defineHttpEndpoint({ response: { 200: obscuraStatusResponseSchema } }),
     set: defineHttpEndpoint({ body: setObscuraRequestSchema, response: { 200: obscuraStatusResponseSchema } })
+  },
+  browserPresetSettings: {
+    get: defineHttpEndpoint({ response: { 200: browserPresetResponseSchema } }),
+    set: defineHttpEndpoint({ body: setBrowserPresetRequestSchema, response: { 200: browserPresetResponseSchema } })
+  },
+  computerPresetSettings: {
+    get: defineHttpEndpoint({ response: { 200: computerPresetResponseSchema } }),
+    set: defineHttpEndpoint({ body: setComputerPresetRequestSchema, response: { 200: computerPresetResponseSchema } })
   },
   openaiCompatSettings: {
     get: defineHttpEndpoint({ response: { 200: openaiCompatSettingsSchema } }),

@@ -30,7 +30,6 @@ const SkillsSettings = dynamic(() => import('../SkillsSettings').then((m) => m.S
 const ToolBackendsSettings = dynamic(() => import('../ToolBackendsSettings').then((m) => m.ToolBackendsSettings), {
   ssr: false
 });
-const ObscuraSettings = dynamic(() => import('../ObscuraSettings').then((m) => m.ObscuraSettings), { ssr: false });
 const OpenaiCompatSettings = dynamic(() => import('../OpenaiCompatSettings').then((m) => m.OpenaiCompatSettings), {
   ssr: false
 });
@@ -73,8 +72,6 @@ export function Studio({ onClose }: { onClose: () => void }) {
         <NativeCliAgentsSettings onClose={onClose} />
       ) : section === 'tools' ? (
         <ToolBackendsSettings onClose={onClose} />
-      ) : section === 'browser' ? (
-        <ObscuraSettings onClose={onClose} />
       ) : section === 'api' ? (
         <OpenaiCompatSettings onClose={onClose} />
       ) : section === 'approvals' ? (
