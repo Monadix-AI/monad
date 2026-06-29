@@ -5,6 +5,7 @@ import type * as Three from 'three';
 import { useEffect, useRef } from 'react';
 
 const MODEL_DEPTH = 54;
+const BEVEL_SIZE = 7.5;
 const FLOW_BAND_COUNT = 5;
 const ROTATE_SPEED_Y = 4300;
 const ROTATE_SPEED_Z = 6800;
@@ -37,7 +38,10 @@ export function InitLogoCanvas() {
     let reducedMotion = motionQuery.matches;
 
     async function setup() {
-      const three = await import('three');
+      const [three, { SVGLoader }] = await Promise.all([
+        import('three'),
+        import('three/examples/jsm/loaders/SVGLoader.js')
+      ]);
       if (disposed) return;
 
       renderer = new three.WebGLRenderer({
@@ -57,12 +61,13 @@ export function InitLogoCanvas() {
       camera = new three.PerspectiveCamera(34, 1, 0.1, 100);
       camera.position.set(0, 0, 4.8);
 
-      const iconTexture = await new Promise<Three.Texture>((resolve, reject) => {
-        new three.TextureLoader().load('/monad-icon.webp', resolve, undefined, reject);
-      });
-      iconTexture.colorSpace = three.SRGBColorSpace;
+      const svg = await fetch('/monad-icon-vector-solid.svg')
+        .then((response) => response.text())
+        .then((source) => source.replaceAll('currentColor', '#ffffff'));
       if (disposed || !scene) return;
 
+      const loader = new SVGLoader();
+      const data = loader.parse(svg);
       logoGroup = new three.Group();
 
       const glassMaterial = new three.MeshPhysicalMaterial({
@@ -119,61 +124,82 @@ export function InitLogoCanvas() {
         opacity: number;
       }> = [];
 
-      glassMaterial.alphaMap = iconTexture;
-      edgeMaterial.alphaMap = iconTexture;
+      for (const path of data.paths) {
+        const shapes = path.toShapes();
+        for (const shape of shapes) {
+          const geometry = new three.ExtrudeGeometry(shape, {
+            bevelEnabled: true,
+            bevelSegments: 8,
+            bevelSize: BEVEL_SIZE,
+            bevelThickness: BEVEL_SIZE,
+            curveSegments: 18,
+            depth: MODEL_DEPTH,
+            steps: 1
+          });
+          geometry.computeVertexNormals();
 
-      const size = new three.Vector3(2.35, 2.35, MODEL_DEPTH);
-      const logoGeometry = new three.PlaneGeometry(size.x, size.y);
-      const mesh = new three.Mesh(logoGeometry, glassMaterial);
-      const glow = new three.Mesh(
-        logoGeometry.clone(),
-        new three.MeshBasicMaterial({
-          alphaMap: iconTexture,
-          blending: three.AdditiveBlending,
-          color: 0xbdefff,
-          depthTest: false,
-          depthWrite: false,
-          opacity: 0.055,
-          side: three.DoubleSide,
-          transparent: true
-        })
-      );
-      glow.scale.setScalar(1.012);
-      glowShells.push({
-        mesh: glow,
-        opacity: 0.055,
-        phase: glowShells.length * 0.47,
-        scale: 1.012
+          const mesh = new three.Mesh(geometry, [glassMaterial, edgeMaterial]);
+          const glow = new three.Mesh(
+            geometry.clone(),
+            new three.MeshBasicMaterial({
+              blending: three.AdditiveBlending,
+              color: 0xbdefff,
+              depthTest: false,
+              depthWrite: false,
+              opacity: 0.055,
+              side: three.DoubleSide,
+              transparent: true
+            })
+          );
+          glow.scale.setScalar(1.012);
+          glowShells.push({
+            mesh: glow,
+            opacity: 0.055,
+            phase: glowShells.length * 0.47,
+            scale: 1.012
+          });
+          const innerFlow = new three.Mesh(
+            geometry.clone(),
+            new three.MeshBasicMaterial({
+              blending: three.AdditiveBlending,
+              color: glowShells.length % 2 === 0 ? 0x54f8ff : 0xff66f2,
+              depthTest: false,
+              depthWrite: false,
+              opacity: 0.034,
+              side: three.DoubleSide,
+              transparent: true
+            })
+          );
+          innerFlow.scale.setScalar(0.992);
+          glowShells.push({
+            mesh: innerFlow,
+            opacity: 0.034,
+            phase: glowShells.length * 0.61 + 1.2,
+            scale: 0.992
+          });
+          logoGroup.add(mesh);
+          logoGroup.add(glow);
+          logoGroup.add(innerFlow);
+        }
+      }
+
+      const box = new three.Box3().setFromObject(logoGroup);
+      const size = box.getSize(new three.Vector3());
+      const center = box.getCenter(new three.Vector3());
+      logoGroup.traverse((object) => {
+        const mesh = object as Three.Mesh;
+        mesh.geometry?.translate(-center.x, -center.y, -center.z);
       });
-      const innerFlow = new three.Mesh(
-        logoGeometry.clone(),
-        new three.MeshBasicMaterial({
-          alphaMap: iconTexture,
-          blending: three.AdditiveBlending,
-          color: 0xff66f2,
-          depthTest: false,
-          depthWrite: false,
-          opacity: 0.034,
-          side: three.DoubleSide,
-          transparent: true
-        })
-      );
-      innerFlow.scale.setScalar(0.992);
-      glowShells.push({
-        mesh: innerFlow,
-        opacity: 0.034,
-        phase: glowShells.length * 0.61 + 1.2,
-        scale: 0.992
-      });
-      logoGroup.add(mesh);
-      logoGroup.add(glow);
-      logoGroup.add(innerFlow);
+      const scale = 2.35 / Math.max(size.x, size.y);
+      logoGroup.scale.setScalar(scale);
 
       logoGroup.rotation.x = Math.PI;
       logoGroup.rotation.y = reducedMotion ? -0.5 : -0.46;
       logoGroup.rotation.z = 0.015;
       scene.add(logoGroup);
 
+      const flowMaskTexture = new three.TextureLoader().load('/monad-icon-vector-solid.svg');
+      flowMaskTexture.colorSpace = three.SRGBColorSpace;
       const flowSurfaceMaterial = new three.ShaderMaterial({
         blending: three.AdditiveBlending,
         depthTest: false,
@@ -181,7 +207,7 @@ export function InitLogoCanvas() {
         side: three.DoubleSide,
         transparent: true,
         uniforms: {
-          uMask: { value: iconTexture },
+          uMask: { value: flowMaskTexture },
           uTime: { value: 0 }
         },
         vertexShader: `
@@ -258,7 +284,7 @@ export function InitLogoCanvas() {
         })
       );
       highlight.rotation.set(0.06, 0.08, 0.62);
-      highlight.position.set(-0.05, 0.03, MODEL_DEPTH * 0.62);
+      highlight.position.set(-0.05, 0.03, MODEL_DEPTH * scale * 0.62);
       logoGroup.add(highlight);
 
       const flowBands: Array<{

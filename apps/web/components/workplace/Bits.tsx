@@ -39,8 +39,8 @@ export function Avatar({
           style={{
             width: Math.round(size * 0.58),
             height: Math.round(size * 0.58),
-            WebkitMaskImage: 'url("/monad-icon.webp")',
-            maskImage: 'url("/monad-icon.webp")',
+            WebkitMaskImage: 'url("/monad-icon-vector-solid.svg")',
+            maskImage: 'url("/monad-icon-vector-solid.svg")',
             WebkitMaskRepeat: 'no-repeat',
             maskRepeat: 'no-repeat',
             WebkitMaskPosition: 'center',

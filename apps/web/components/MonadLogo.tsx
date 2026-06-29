@@ -7,8 +7,8 @@ interface MonadLogoProps {
 }
 
 const logoStyle: CSSProperties = {
-  WebkitMaskImage: 'url("/monad-logo.webp")',
-  maskImage: 'url("/monad-logo.webp")',
+  WebkitMaskImage: 'url("/monad-logo-vector-solid.svg")',
+  maskImage: 'url("/monad-logo-vector-solid.svg")',
   WebkitMaskRepeat: 'no-repeat',
   maskRepeat: 'no-repeat',
   WebkitMaskPosition: 'center',
@@ -18,8 +18,8 @@ const logoStyle: CSSProperties = {
 };
 
 const iconStyle: CSSProperties = {
-  WebkitMaskImage: 'url("/monad-icon.webp")',
-  maskImage: 'url("/monad-icon.webp")',
+  WebkitMaskImage: 'url("/monad-icon-vector-solid.svg")',
+  maskImage: 'url("/monad-icon-vector-solid.svg")',
   WebkitMaskRepeat: 'no-repeat',
   maskRepeat: 'no-repeat',
   WebkitMaskPosition: 'center',

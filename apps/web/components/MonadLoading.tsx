@@ -10,8 +10,8 @@ interface MonadLoadingProps {
 }
 
 const iconMaskStyle: CSSProperties = {
-  WebkitMaskImage: 'url("/monad-icon.webp")',
-  maskImage: 'url("/monad-icon.webp")',
+  WebkitMaskImage: 'url("/monad-icon-vector-solid.svg")',
+  maskImage: 'url("/monad-icon-vector-solid.svg")',
   WebkitMaskRepeat: 'no-repeat',
   maskRepeat: 'no-repeat',
   WebkitMaskPosition: 'center',
