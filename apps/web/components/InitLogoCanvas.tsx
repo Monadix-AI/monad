@@ -119,7 +119,6 @@ export function InitLogoCanvas() {
         opacity: number;
       }> = [];
 
-      glassMaterial.map = iconTexture;
       glassMaterial.alphaMap = iconTexture;
       edgeMaterial.alphaMap = iconTexture;
 
