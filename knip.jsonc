@@ -9,7 +9,9 @@
     "apps/web/components/studio/CapabilityPicker.tsx",
     "apps/web/components/ui/command.tsx",
     "apps/web/components/ui/dialog.tsx",
-    "apps/web/components/ui/dropdown-menu.tsx"
+    "apps/web/components/ui/dropdown-menu.tsx",
+    // Re-exports generated catalog types (generated/catalog-types.ts is build-time only).
+    "packages/i18n/src/types.ts"
   ],
   // Both "duplicates" are intentional schema aliases in @monad/protocol
   // (a request schema deliberately mirrors its response schema).
@@ -45,7 +47,7 @@
     // cmdk/nanoid are pulled in dynamically.
     "apps/web": {
       "entry": ["test/**/*.{ts,tsx}", "**/*.test.{ts,tsx}"],
-      "ignoreDependencies": ["cmdk", "nanoid", "react-compiler-runtime"]
+      "ignoreDependencies": ["cmdk", "react-compiler-runtime"]
     },
     "apps/mo": {},
     // pino loads pino-pretty by name string (transport target), not by import.
