@@ -490,9 +490,10 @@ export class ChannelService {
       registry: bundle.registry,
       navigator: this.conversationNavigator(c, key, m.senderDisplay),
       principalId: this.principalFor(c.id),
-      // A channel guest is never the daemon owner (gates owner-only commands). The channel serializes
-      // per conversation (one run at a time), so a command never races an in-flight turn → not busy.
-      isOwner: false,
+      // A channel guest is the daemon owner only when its native user id is in this channel's
+      // ownerUsers allowlist (gates owner-only commands like /workdir). The channel serializes per
+      // conversation (one run at a time), so a command never races an in-flight turn → not busy.
+      isOwner: c.ownerUsers.includes(m.userId),
       isBusy: false,
       gate: approve ? (def) => approve(sessionId, def) : undefined,
       services: this.channelServices(bundle)

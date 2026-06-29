@@ -19,7 +19,8 @@ import type { Tool, ToolBackends } from '@/capabilities/tools/types.ts';
 import type { SessionContext } from '@/handlers/session/context.ts';
 
 import { statSync } from 'node:fs';
-import { isAbsolute, resolve } from 'node:path';
+import { homedir } from 'node:os';
+import { isAbsolute, join, resolve } from 'node:path';
 import { loadAll } from '@monad/home';
 import { createLogger } from '@monad/logger';
 
@@ -34,6 +35,7 @@ import {
 } from '@/capabilities/tools';
 import { HandlerError } from '@/handlers/handler-error.ts';
 import { SessionUiProjector } from '@/handlers/session/ui-projection.ts';
+import { readWorkspaceGit } from '@/handlers/session/workspace-git.ts';
 import { clearAcpDelegatesForSession } from '@/services/delegation/acp-delegate.ts';
 import { createRemoteFsBackend, createRemoteTerminalBackend } from '@/services/delegation/delegation.ts';
 
@@ -55,10 +57,15 @@ function assertBranchAllowed(parent: Session, transport: SessionTransport | unde
   }
 }
 
-/** Validate a working-folder path: absolute, existing, a directory. Returns the resolved path. */
-function resolveWorkspaceDir(cwd: string): string {
-  if (!isAbsolute(cwd)) throw new HandlerError('invalid', `working folder must be an absolute path: ${cwd}`);
-  const resolved = resolve(cwd);
+/** Resolve + validate a working-folder path: expands a leading `~`, resolves a relative path against
+ *  `base` (the session's current folder), then requires it to exist and be a directory. A relative
+ *  path with no base is rejected. Returns the absolute resolved path. */
+function resolveWorkspaceDir(cwd: string, base: string | undefined): string {
+  const expanded = cwd === '~' ? homedir() : cwd.startsWith('~/') ? join(homedir(), cwd.slice(2)) : cwd;
+  if (!isAbsolute(expanded) && !base) {
+    throw new HandlerError('invalid', `working folder must be an absolute path or start with ~: ${cwd}`);
+  }
+  const resolved = isAbsolute(expanded) ? resolve(expanded) : resolve(base as string, expanded);
   let stat: ReturnType<typeof statSync>;
   try {
     stat = statSync(resolved);
@@ -175,7 +182,8 @@ export function createLifecycleHandlers(ctx: SessionContext) {
       cwd?: string;
     }) {
       const resolvedId = await resolveAgentId(agentId);
-      const session = await agent.sessions.create(title, ownerPrincipalId, resolvedId, origin, cwd);
+      const resolvedCwd = cwd?.trim() ? resolveWorkspaceDir(cwd, undefined) : undefined;
+      const session = await agent.sessions.create(title, ownerPrincipalId, resolvedId, origin, resolvedCwd);
       await sessionSandbox?.ensure(session.id);
       // Broaden the runtime sandbox to the working folder (so fs/shell + delegated subagents reach it)
       // and load its project-local skills — mirrors setWorkspace for the create-time entry point.
@@ -218,7 +226,7 @@ export function createLifecycleHandlers(ctx: SessionContext) {
       }
       // The working folder carries a runtime side effect (sandbox + skills), so it goes through the
       // dedicated path; validation (absolute/existing/dir) happens there and rejects before any write.
-      const resolvedCwd = cwd === undefined ? undefined : cwd.trim() ? resolveWorkspaceDir(cwd) : null;
+      const resolvedCwd = cwd === undefined ? undefined : cwd.trim() ? resolveWorkspaceDir(cwd, current.cwd) : null;
       const resolvedAgentId = agentId === undefined || agentId === null ? agentId : await resolveAgentId(agentId);
       const session = store.updateSession(id, {
         title,
@@ -247,13 +255,19 @@ export function createLifecycleHandlers(ctx: SessionContext) {
      * reach it, refreshes project-local skills from the folder, and fans a `session.updated` delta.
      */
     async setWorkspace({ id, cwd }: { id: SessionId; cwd: string }): Promise<Session> {
-      requireSession(id);
-      const resolved = cwd.trim() ? resolveWorkspaceDir(cwd) : undefined;
+      const current = requireSession(id);
+      const resolved = cwd.trim() ? resolveWorkspaceDir(cwd, current.cwd) : undefined;
       const session = store.updateSession(id, { cwd: resolved ?? null });
       if (!session) throw new HandlerError('internal', 'set workspace failed');
       await applyWorkspaceRuntime(id, resolved);
       emitLifecycle(id, 'session.updated', { cwd: resolved ?? null });
       return session;
+    },
+
+    /** Best-effort git summary of the session's working folder (workplace header). No folder → not a repo. */
+    async workspaceGit({ id }: { id: SessionId }) {
+      const session = requireSession(id);
+      return session.cwd ? await readWorkspaceGit(session.cwd) : { isRepo: false };
     },
 
     async delete({ id }: { id: SessionId }) {

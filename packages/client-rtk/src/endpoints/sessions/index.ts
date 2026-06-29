@@ -6,6 +6,7 @@ export { useForwardToAcpMutation } from './forward-to-acp.ts';
 export { useGenerateMutation } from './generate.ts';
 export { getMessagesApi, useGetMessagesInfiniteQuery } from './get-messages.ts';
 export { useLazyGetUiItemsWindowQuery } from './get-ui-items.ts';
+export { useWorkspaceGitQuery,  } from './get-workspace-git.ts';
 export { sessionAdapter, sessionSelectors, useListSessionsQuery } from './list-sessions.ts';
 export { provenanceApi, useProvenanceQuery } from './provenance.ts';
 export { resetSessionApi, useResetSessionMutation } from './reset-session.ts';

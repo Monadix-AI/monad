@@ -153,6 +153,7 @@ function chConfig(over: Partial<ChannelInstanceConfig> = {}): ChannelInstanceCon
     options: {},
     allowlist: { allowAllUsers: true, allowedUsers: [] },
     mapping: { granularity: 'per-conversation' },
+    ownerUsers: [],
     tokenRef: 'tok',
     rateLimitPerMin: 1000,
     ...over

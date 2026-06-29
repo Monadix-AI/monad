@@ -1,5 +1,7 @@
+import type { SessionId } from '@monad/protocol';
 import type { ProjectController } from './use-project';
 
+import { useWorkspaceGitQuery } from '@monad/client-rtk';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@monad/ui';
 import { useState } from 'react';
 
@@ -82,6 +84,31 @@ function WorkdirControl({ workdir }: { workdir: ProjectController['workdir'] }):
   );
 }
 
+/** Compact git summary of the project's working folder. Renders nothing unless the folder is a repo. */
+function GitBadge({ sessionId, hasFolder }: { sessionId?: string; hasFolder: boolean }): React.ReactElement | null {
+  const { data } = useWorkspaceGitQuery((sessionId ?? '') as SessionId, { skip: !sessionId || !hasFolder });
+  if (!data?.isRepo) return null;
+  const counts = `${data.ahead ? ` ↑${data.ahead}` : ''}${data.behind ? ` ↓${data.behind}` : ''}`;
+  return (
+    <span
+      style={{
+        fontFamily: mono,
+        fontSize: 11,
+        color: 'var(--muted-foreground)',
+        border: `1px solid ${'var(--border)'}`,
+        borderRadius: 999,
+        padding: '6px 10px',
+        whiteSpace: 'nowrap'
+      }}
+      title={data.dirty ? 'git: uncommitted changes' : 'git: clean'}
+    >
+      ⎇ {data.branch ?? 'HEAD'}
+      {data.dirty ? '*' : ''}
+      {counts}
+    </span>
+  );
+}
+
 export function ProjectHeader({
   project: room
 }: {
@@ -122,6 +149,10 @@ export function ProjectHeader({
 
       <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
         <WorkdirControl workdir={room.workdir} />
+        <GitBadge
+          hasFolder={!!room.workdir.path}
+          sessionId={activeProject?.id}
+        />
         <div style={{ width: 190 }}>
           <Select
             disabled={!hasModeratorCandidates}

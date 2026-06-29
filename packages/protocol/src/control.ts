@@ -299,6 +299,17 @@ export type GetStatsResponse = z.infer<typeof getStatsResponseSchema>;
 export const getSessionResponseSchema = z.object({ session: sessionSchema });
 export type GetSessionResponse = z.infer<typeof getSessionResponseSchema>;
 
+/** Git summary of a session's working folder, for the workplace header. `isRepo:false` covers "no
+ *  working folder set", "not a git repo", and "git unavailable" — the UI treats all three the same. */
+export const workspaceGitSchema = z.object({
+  isRepo: z.boolean(),
+  branch: z.string().optional(),
+  dirty: z.boolean().optional(),
+  ahead: z.number().int().optional(),
+  behind: z.number().int().optional()
+});
+export type WorkspaceGit = z.infer<typeof workspaceGitSchema>;
+
 export const updateSessionRequestSchema = z.object({
   title: z.string().max(SESSION_TITLE_MAX).optional(),
   state: sessionStateSchema.optional(),

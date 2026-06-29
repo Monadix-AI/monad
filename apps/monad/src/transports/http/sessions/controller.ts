@@ -8,7 +8,8 @@ import {
   listUiItemsResponseSchema,
   okResponseSchema,
   responseInstanceSchema,
-  sessionIdSchema
+  sessionIdSchema,
+  workspaceGitSchema
 } from '@monad/protocol';
 import { Elysia } from 'elysia';
 import { z } from 'zod';
@@ -284,6 +285,15 @@ export function createSessionsController(handlers: ReturnType<typeof createDaemo
           }
         }
       )
+      .get('/sessions/:id/workspace-git', async ({ params }) => handlers.session.workspaceGit({ id: params.id }), {
+        params: sessionParams,
+        response: { 200: workspaceGitSchema },
+        detail: {
+          tags: ['http-only'],
+          summary: 'Git status of the session working folder',
+          description: 'Returns a best-effort git branch/dirty summary for the session’s working folder.'
+        }
+      })
       .post(
         '/sessions/:id/messages',
         async ({ params, body, headers }) => {

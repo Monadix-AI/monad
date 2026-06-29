@@ -106,6 +106,19 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
     requireSession
   } = ctx;
 
+  // Effective fs/shell sandbox roots for a turn, single precedence chain so every call site agrees:
+  // an explicit per-turn override (the editor's workspace) > the per-session runtime entry (set by
+  // applyWorkspaceRuntime on /workdir, create, update) > the persisted session.cwd (source of truth,
+  // so a working folder survives a daemon restart that left the in-memory runtime map empty) > the
+  // bound agent's per-agent override. A site that also has an async ephemeral fallback applies it to
+  // this result (`?? await …`).
+  const sandboxRootsFor = (
+    sessionId: SessionId,
+    cwd: string | undefined,
+    rt: { sandboxRoots?: string[] } | undefined,
+    override?: string[]
+  ) => override ?? rt?.sandboxRoots ?? (cwd ? [cwd] : agentSandboxRoots?.(sessionId));
+
   const runner = cmd ? { store, bus, lifecycle: cmd.lifecycle, commands: cmd.commands, ownerPrincipalId } : null;
 
   function startAcpAssignedTask({
@@ -164,7 +177,7 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
     directDelegate(spec, composeAcpChannelPrompt(text, ambientContext), {
       sessionId,
       signal: controller.signal,
-      sandboxRoots: rt?.sandboxRoots ?? agentSandboxRoots?.(sessionId),
+      sandboxRoots: sandboxRootsFor(sessionId, requireSession(sessionId).cwd, rt),
       backends: rt?.backends,
       toolFilter: rt?.toolFilter,
       extraTools: rt?.extraTools,
@@ -316,7 +329,7 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
       const loop = agent.loop(makeEmit(round), {
         modelOverride: session.model,
         ambientContext,
-        sandboxRoots: rt?.sandboxRoots ?? agentSandboxRoots?.(sessionId),
+        sandboxRoots: sandboxRootsFor(sessionId, session.cwd, rt),
         defaultCwd: session.cwd,
         extraTools: rt?.extraTools,
         extraSkills: rt?.extraSkills,
@@ -483,14 +496,10 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
       // ACP bridge proxies turns over HTTP and can't ship in-process backends, so it configures the
       // daemon out-of-band).
       const rt = runtime.get(sessionId);
-      // Sandbox roots priority: explicit per-turn runOpts (the editor's workspace) > configureRuntime
-      // roots (ACP bridge) > the bound agent's per-agent sandbox override > this session's disposable
-      // ephemeral root (sandbox mode 'ephemeral') > the loop's global default.
+      // Shared precedence (runOpts override > rt > session.cwd > per-agent), then this session's
+      // disposable ephemeral root (sandbox mode 'ephemeral'), then the loop's global default.
       const sandboxRoots =
-        runOpts?.sandboxRoots ??
-        rt?.sandboxRoots ??
-        agentSandboxRoots?.(sessionId) ??
-        (await sessionSandbox?.ensure(sessionId));
+        sandboxRootsFor(sessionId, session.cwd, rt, runOpts?.sandboxRoots) ?? (await sessionSandbox?.ensure(sessionId));
       const { round, signal } = beginRun(sessionId);
       const base = makeEmit(round);
       const loop = agent.loop(
@@ -554,7 +563,7 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
       const rt = runtime.get(sessionId);
       const loop = agent.loop(makeEmit(round), {
         modelOverride: session.model,
-        sandboxRoots: rt?.sandboxRoots ?? agentSandboxRoots?.(sessionId),
+        sandboxRoots: sandboxRootsFor(sessionId, session.cwd, rt),
         defaultCwd: session.cwd,
         extraTools: rt?.extraTools,
         extraSkills: rt?.extraSkills,
@@ -728,7 +737,7 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
       directDelegate(spec, composeAcpChannelPrompt(text, ambientContext), {
         sessionId,
         signal,
-        sandboxRoots: rt?.sandboxRoots ?? agentSandboxRoots?.(sessionId),
+        sandboxRoots: sandboxRootsFor(sessionId, requireSession(sessionId).cwd, rt),
         backends: rt?.backends,
         toolFilter: rt?.toolFilter,
         extraTools: rt?.extraTools,

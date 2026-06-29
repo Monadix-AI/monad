@@ -93,7 +93,8 @@ import {
   useStreamControlQuery,
   useStreamSessionQuery,
   useStreamUiItemsQuery,
-  useUpdateSessionMutation
+  useUpdateSessionMutation,
+  useWorkspaceGitQuery
 } from './endpoints/sessions/index.ts';
 import {
   acpAgentAdapter,
@@ -380,5 +381,6 @@ export {
   useUpsertAcpAgentMutation,
   useUpsertChannelMutation,
   useUpsertMcpServerMutation,
-  useUpsertNativeCliAgentMutation
+  useUpsertNativeCliAgentMutation,
+  useWorkspaceGitQuery
 };

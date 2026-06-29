@@ -238,6 +238,7 @@ function channelConfig(over: Partial<ChannelInstanceConfig> = {}): ChannelInstan
     options: {},
     allowlist: { allowAllUsers: false, allowedUsers: ['u1'] },
     mapping: { granularity: 'per-conversation' },
+    ownerUsers: [],
     tokenRef: 'literal-token',
     rateLimitPerMin: 100,
     ...over
@@ -496,6 +497,22 @@ test('channel: default-deny drops an unauthorized user (no session, no reply)', 
   await h.flush();
   expect(h.creates.length).toBe(0);
   expect(h.sends.length).toBe(0);
+});
+
+test('channel: an owner-only command (/workdir) is refused to a non-owner user', async () => {
+  const h = await makeHarness(channelConfig()); // ownerUsers: [] → u1 is allowed but not an owner
+  h.ctx.onMessage(inbound({ chatId: 'chat1', userId: 'u1', kind: 'command', command: 'workdir', text: '/workdir' }));
+  await h.flush();
+  expect(h.sends.at(-1)?.content).toContain('owner-only');
+});
+
+test('channel: an owner-only command (/workdir) runs for a user in ownerUsers', async () => {
+  const h = await makeHarness(channelConfig({ ownerUsers: ['u1'] }));
+  h.ctx.onMessage(inbound({ chatId: 'chat1', userId: 'u1', kind: 'command', command: 'workdir', text: '/workdir' }));
+  await h.flush();
+  // Gate passed → the show-mode reply ran (no folder set yet), never the owner-only refusal.
+  expect(h.sends.at(-1)?.content).not.toContain('owner-only');
+  expect(h.sends.at(-1)?.content?.toLowerCase()).toContain('working folder');
 });
 
 test('channel: self-echo and duplicate messages are dropped', async () => {
