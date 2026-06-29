@@ -4,6 +4,7 @@
 
 import type { Tool } from '../types.ts';
 
+import { httpUrlSchema } from '@monad/protocol';
 import { z } from 'zod';
 
 import { toolResult } from '../types.ts';
@@ -69,7 +70,7 @@ export function extractReadable(html: string): { title: string; text: string } {
 }
 
 const webExtractInput = z.object({
-  url: z.string().min(1),
+  url: httpUrlSchema,
   maxBytes: z.number().int().min(1).optional()
 });
 

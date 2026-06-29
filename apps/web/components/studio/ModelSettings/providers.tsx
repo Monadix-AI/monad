@@ -1,14 +1,17 @@
 'use client';
 
-import { httpUrlSchema, type ModelInfo, type ModelProviderType, type ProviderView } from '@monad/protocol';
+import type { ModelInfo, ModelProviderType, ProviderView } from '@monad/protocol';
+
 import { Button, Card, cn, Input, Label, Tooltip, TooltipContent, TooltipTrigger } from '@monad/ui';
 import { AlertTriangle, ArrowLeft, Loader2, Pencil, Plus, RefreshCw, Trash2, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { type Resolver, useForm } from 'react-hook-form';
 
 import { useT } from '@/components/I18nProvider';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useModelSettings, useProviderDetail } from '@/hooks/use-model-settings';
+import { providerFormSchema } from '@/lib/form-validation';
 import { providerLogo, useProviderMeta } from '@/lib/ProviderMeta';
 import { ModelHoverCardBody, modelMatchesQuery, sortModelsForProvider } from './model-picker';
 import {
@@ -151,7 +154,6 @@ export function ProviderDialog({
   const [testMsg, setTestMsg] = useState<string | null>(null);
   const [hasTestedProvider, setHasTestedProvider] = useState(false);
   const [testedModels, setTestedModels] = useState<typeof detail.models>([]);
-  const [baseUrlError, setBaseUrlError] = useState<string | null>(null);
 
   const [addingKey, setAddingKey] = useState(false);
   const [keyLabel, setKeyLabel] = useState('');
@@ -160,11 +162,34 @@ export function ProviderDialog({
   const [keyMsg, setKeyMsg] = useState<string | null>(null);
   const [credTest, setCredTest] = useState<Record<string, string>>({});
   const [modelFilter, setModelFilter] = useState('');
+  const providerResolver = ((values: AddForm) => {
+    const parsed = providerFormSchema(Boolean(metaFor(values.type).needsUrl)).safeParse(values);
+    if (parsed.success) {
+      return { values: { ...values, baseUrl: parsed.data.baseUrl }, errors: {} };
+    }
+    const issue = parsed.error.issues.find((item) => item.path[0] === 'baseUrl');
+    return {
+      values: {} as AddForm,
+      errors: {
+        baseUrl: { type: 'custom', message: issue?.message ?? 'url must be http(s)' }
+      }
+    };
+  }) as unknown as Resolver<AddForm>;
+  const providerForm = useForm<AddForm>({
+    values: form,
+    resolver: providerResolver
+  });
+  const baseUrlIssue = providerForm.formState.errors.baseUrl?.message;
+  const baseUrlError = baseUrlIssue
+    ? baseUrlIssue === 'url required'
+      ? t('web.url.required')
+      : t('web.url.httpOnly')
+    : null;
 
   const updateAddForm = (next: (form: AddForm) => AddForm) => {
     setForm(next);
     setTestMsg(null);
-    setBaseUrlError(null);
+    providerForm.clearErrors();
     setHasTestedProvider(false);
     setTestedModels([]);
   };
@@ -173,7 +198,7 @@ export function ProviderDialog({
       setStep(initialProviderDialogStep(mode));
       setForm(emptyAddForm());
       setTestMsg(null);
-      setBaseUrlError(null);
+      providerForm.clearErrors();
       setTesting(false);
       setHasTestedProvider(false);
       setTestedModels([]);
@@ -186,7 +211,7 @@ export function ProviderDialog({
       return;
     }
     setStep(initialProviderDialogStep(mode));
-  }, [open, mode]);
+  }, [open, mode, providerForm.clearErrors]);
 
   const providerFromForm = (baseUrlOverride?: string): ProviderView => {
     const taken = new Set(providers.map((p) => p.id));
@@ -199,33 +224,13 @@ export function ProviderDialog({
     return { id, label, type: form.type, baseUrl: baseUrl || undefined };
   };
 
-  const validateBaseUrl = (): { baseUrl?: string; ok: true } | { ok: false } => {
-    if (!metaFor(form.type).needsUrl) {
-      setBaseUrlError(null);
-      return { ok: true };
-    }
-
-    const trimmed = form.baseUrl.trim();
-    if (!trimmed) {
-      setBaseUrlError(t('web.url.required'));
-      return { ok: false };
-    }
-    const parsed = httpUrlSchema.safeParse(trimmed);
-    if (!parsed.success) {
-      setBaseUrlError(t('web.url.httpOnly'));
-      return { ok: false };
-    }
-    setBaseUrlError(null);
-    return { baseUrl: parsed.data, ok: true };
-  };
-
   const handleNext = () => {
-    const valid = validateBaseUrl();
-    if (!valid.ok) return;
-    if (valid.baseUrl && valid.baseUrl !== form.baseUrl) {
-      setForm((current) => ({ ...current, baseUrl: valid.baseUrl ?? '' }));
-    }
-    setStep((current) => providerDialogNextStep(mode, current));
+    void providerForm.handleSubmit((values) => {
+      if (values.baseUrl !== form.baseUrl) {
+        setForm((current) => ({ ...current, baseUrl: values.baseUrl }));
+      }
+      setStep((current) => providerDialogNextStep(mode, current));
+    })();
   };
 
   const handleTestProvider = async () => {
@@ -233,28 +238,31 @@ export function ProviderDialog({
       setTestMsg(t('web.model.enterKey'));
       return;
     }
-    const valid = validateBaseUrl();
-    if (!valid.ok) return;
-    const prov = providerFromForm(valid.baseUrl);
-
-    setTesting(true);
-    setTestMsg(t('web.model.testing'));
-    setHasTestedProvider(false);
-    setTestedModels([]);
-    try {
-      const test = await settings.testConnection(prov, form.key);
-      if (!test.ok) {
-        setTestMsg(`✗ ${test.error ?? t('web.model.connFailed')}`);
-        return;
+    await providerForm.handleSubmit(async (values) => {
+      if (values.baseUrl !== form.baseUrl) {
+        setForm((current) => ({ ...current, baseUrl: values.baseUrl }));
       }
-      setTestedModels(test.models ?? []);
-      setHasTestedProvider(true);
-      setTestMsg(null);
-    } catch (e) {
-      setTestMsg(`✗ ${toErrorMessage(e)}`);
-    } finally {
-      setTesting(false);
-    }
+      const prov = providerFromForm(values.baseUrl);
+
+      setTesting(true);
+      setTestMsg(t('web.model.testing'));
+      setHasTestedProvider(false);
+      setTestedModels([]);
+      try {
+        const test = await settings.testConnection(prov, form.key);
+        if (!test.ok) {
+          setTestMsg(`✗ ${test.error ?? t('web.model.connFailed')}`);
+          return;
+        }
+        setTestedModels(test.models ?? []);
+        setHasTestedProvider(true);
+        setTestMsg(null);
+      } catch (e) {
+        setTestMsg(`✗ ${toErrorMessage(e)}`);
+      } finally {
+        setTesting(false);
+      }
+    })();
   };
 
   const handleAddTestedProvider = async () => {

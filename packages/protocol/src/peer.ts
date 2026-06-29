@@ -5,12 +5,13 @@
 import { z } from 'zod';
 
 import { peerIdSchema } from './ids.ts';
+import { httpUrlSchema } from './url.ts';
 
 // What a client may see/write (upsert). The tokenRef/token are intentionally absent.
 export const peerViewSchema = z.object({
   id: peerIdSchema,
   label: z.string().min(1),
-  baseUrl: z.string().url(),
+  baseUrl: httpUrlSchema,
   defaultAgent: z.string().default('default'),
   enabled: z.boolean()
 });

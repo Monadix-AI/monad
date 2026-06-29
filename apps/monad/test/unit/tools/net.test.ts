@@ -7,6 +7,11 @@ import { netFetchTool, ToolSecurityError } from '@/capabilities/tools';
 // These assert the SSRF guards reject without ever opening a socket — no network needed.
 const ctx: ToolContext = { sessionId: 's1', sandboxRoots: undefined, log: () => {} };
 
+test('net_fetch input schema rejects non-http(s) URLs', () => {
+  expect(netFetchTool.inputSchema?.safeParse({ url: 'https://example.com/' }).success).toBe(true);
+  expect(netFetchTool.inputSchema?.safeParse({ url: 'file:///etc/passwd' }).success).toBe(false);
+});
+
 test('net_fetch rejects non-http(s) schemes', async () => {
   await expect(netFetchTool.run({ url: 'file:///etc/passwd' }, ctx)).rejects.toBeInstanceOf(ToolSecurityError);
 });

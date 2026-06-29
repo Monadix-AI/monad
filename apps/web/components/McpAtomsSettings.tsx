@@ -3,6 +3,7 @@
 import type { WebMessageIdWithoutParams } from '@monad/i18n';
 import type { InstalledMcpAtom, McpRegistryEntry, McpServerView } from '@monad/protocol';
 
+import { zodResolver } from '@hookform/resolvers/zod';
 import {
   useInstallMcpAtomMutation,
   useInstallMcpBinaryMutation,
@@ -14,12 +15,23 @@ import {
 import { Badge, Button, cn, Input, Label, ScrollArea } from '@monad/ui';
 import { AlertTriangle, Loader2, Plug, Plus, Power, RefreshCw, Search, Trash2, X } from 'lucide-react';
 import { useState } from 'react';
+import { useForm } from 'react-hook-form';
 
 import { useT } from '@/components/I18nProvider';
+import { mcpServerFormSchema } from '@/lib/form-validation';
 import { StudioPanel, StudioPanelHeader } from './studio/StudioPanel';
 
 type Mode = 'command' | 'url' | 'binary';
 type Panel = 'installed' | 'browse';
+type InstallFormValues = {
+  name: string;
+  transport: 'stdio' | 'http';
+  command: string;
+  args: string;
+  env: string;
+  cwd: string;
+  url: string;
+};
 
 const MODE_LABEL_KEYS: Record<Mode, WebMessageIdWithoutParams> = {
   binary: 'web.mcpAtom.mode.binary',
@@ -405,16 +417,29 @@ function InstallForm({ onDone }: { onDone: () => void }) {
 
   const isLoading = installingAtom || installingBinary;
   const trust = { autoApproveTools: [] };
+  const installForm = useForm<InstallFormValues>({
+    values: {
+      name,
+      transport: mode === 'url' ? 'http' : 'stdio',
+      command,
+      args,
+      env: '',
+      cwd: '',
+      url
+    },
+    resolver: zodResolver(mcpServerFormSchema)
+  });
+  const errors = installForm.formState.errors;
 
   const submit = async (consent: boolean) => {
-    if (!name.trim()) return;
     setError(null);
     try {
       if (mode === 'binary') {
+        if (!name.trim()) return;
         const m = release.trim().match(/^([^/]+)\/([^@]+)@(.+)$/);
         if (!m) return setError(t('web.mcpAtom.releaseInvalid'));
         const res = await installBinary({
-          name,
+          name: name.trim(),
           owner: m[1] as string,
           repo: m[2] as string,
           tag: m[3] as string,
@@ -423,14 +448,21 @@ function InstallForm({ onDone }: { onDone: () => void }) {
         }).unwrap();
         if (res.needsConsent) return setWarnings(res.warnings);
       } else {
+        const values = await new Promise<InstallFormValues | null>((resolve) => {
+          void installForm.handleSubmit(
+            (valid) => resolve(valid),
+            () => resolve(null)
+          )();
+        });
+        if (!values) return;
         const server: McpServerView =
-          mode === 'url'
-            ? { name, transport: 'http', url: url.trim(), auth: { mode: 'none' }, enabled: true, trust }
+          values.transport === 'http'
+            ? { name: values.name, transport: 'http', url: values.url, auth: { mode: 'none' }, enabled: true, trust }
             : {
-                name,
+                name: values.name,
                 transport: 'stdio',
-                command: command.trim(),
-                args: args.trim() ? args.trim().split(/\s+/) : [],
+                command: values.command,
+                args: values.args.trim() ? values.args.trim().split(/\s+/) : [],
                 enabled: true,
                 trust
               };
@@ -476,15 +508,18 @@ function InstallForm({ onDone }: { onDone: () => void }) {
       <div className="flex flex-col gap-1">
         <Label className="text-xs">{t('web.mcp.name')}</Label>
         <Input
+          aria-invalid={!!errors.name || undefined}
           onChange={(e) => setName(e.target.value)}
           placeholder="filesystem"
           value={name}
         />
+        {errors.name ? <p className="text-destructive text-xs">{t('web.url.required')}</p> : null}
       </div>
 
       {mode === 'command' ? (
         <>
           <Field
+            error={errors.command ? t('web.url.required') : undefined}
             label={t('web.mcp.command')}
             onChange={setCommand}
             placeholder="npx"
@@ -499,6 +534,7 @@ function InstallForm({ onDone }: { onDone: () => void }) {
         </>
       ) : mode === 'url' ? (
         <Field
+          error={errors.url ? t('web.url.httpOnly') : undefined}
           label={t('web.mcp.url')}
           onChange={setUrl}
           placeholder="https://mcp.example.com/mcp"
@@ -566,21 +602,25 @@ function Field({
   label,
   value,
   onChange,
-  placeholder
+  placeholder,
+  error
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   placeholder?: string;
+  error?: string;
 }) {
   return (
     <div className="flex flex-col gap-1">
       <Label className="text-xs">{label}</Label>
       <Input
+        aria-invalid={!!error || undefined}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         value={value}
       />
+      {error ? <p className="text-destructive text-xs">{error}</p> : null}
     </div>
   );
 }

@@ -14,6 +14,8 @@ import {
   loadConfig,
   mcpServerSchema,
   migrateConfig,
+  monadConfigSchema,
+  monadSystemConfigSchema,
   saveAuth,
   saveSystemConfig,
   tryParseConfig
@@ -413,6 +415,77 @@ describe('loadConfig', () => {
       expect(message).toContain('model.providers');
       expect(message).toContain('url must be http(s)');
     }
+  });
+
+  test('rejects invalid system URL boundary fields', () => {
+    const base = monadSystemConfigSchema.parse(createDefaultConfig('prn_test', 'Tester'));
+
+    expect(() =>
+      monadSystemConfigSchema.parse({
+        ...base,
+        observability: { endpoint: 'ftp://collector.example.com', developerMode: false }
+      })
+    ).toThrow();
+  });
+
+  test('rejects invalid profile URL boundary fields', () => {
+    const base = monadConfigSchema.parse(CONFIG_V1_FIXTURE);
+
+    expect(() =>
+      monadConfigSchema.parse({
+        ...base,
+        model: {
+          ...base.model,
+          providers: [
+            {
+              id: 'bad-provider',
+              label: 'Bad Provider',
+              type: ModelProviderType.OpenAICompatible,
+              baseUrl: 'ftp://api.example.com/v1'
+            }
+          ]
+        }
+      })
+    ).toThrow();
+
+    expect(() =>
+      monadConfigSchema.parse({
+        ...base,
+        browser: {
+          ...base.browser,
+          allowedOrigins: ['https://example.com/path']
+        }
+      })
+    ).toThrow();
+  });
+
+  test('rejects invalid auth URL boundary fields', async () => {
+    await initMonadHome(paths);
+    await Bun.write(
+      paths.auth,
+      JSON.stringify(
+        {
+          version: 1,
+          activeProvider: null,
+          updatedAt: new Date().toISOString(),
+          credentialPool: {},
+          mcpOAuth: {
+            server: {
+              accessToken: 'token',
+              tokenEndpoint: 'ftp://auth.example.com/token',
+              resource: 'https://api.example.com/mcp'
+            }
+          },
+          atomRegistries: {
+            npm: { token: 'token', registry: 'ftp://registry.example.com' }
+          }
+        },
+        null,
+        2
+      )
+    );
+
+    await expect(loadAuth(paths.auth)).resolves.toBeNull();
   });
 });
 

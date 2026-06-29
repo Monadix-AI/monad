@@ -9,6 +9,7 @@
 import type { Tool } from '../types.ts';
 
 import { lookup } from 'node:dns/promises';
+import { httpUrlSchema } from '@monad/protocol';
 import { z } from 'zod';
 
 import { assertUrlAllowed, isBlockedIp, ToolSecurityError } from '../security.ts';
@@ -19,7 +20,7 @@ const MAX_REDIRECTS = 5;
 const DEFAULT_TIMEOUT_MS = 30_000;
 
 const netFetchInput = z.object({
-  url: z.string().min(1),
+  url: httpUrlSchema,
   method: z.enum(['GET', 'HEAD']).optional(),
   headers: z.record(z.string(), z.string()).optional(),
   timeoutMs: z.number().int().min(1).max(120_000).optional()
