@@ -2,13 +2,16 @@ import { chmod, rename, unlink } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import {
+  absoluteUriSchema,
   agentAtomsSchema,
   agentVisibilitySchema,
+  blankableHttpUrlSchema,
   channelAllowlistSchema,
   channelGroupPolicySchema,
   channelTypeSchema,
   fallbackTargetViewSchema,
   hookMatcherSettingSchema,
+  httpOriginSchema,
   httpUrlSchema,
   ModelProviderType,
   modelKindSchema,
@@ -86,7 +89,7 @@ const credentialSchema = z.object({
   priority: z.number(),
   source: z.string(),
   accessToken: z.string(),
-  baseUrl: z.string().optional(),
+  baseUrl: httpUrlSchema.optional(),
   lastStatus: z.enum(['ok', 'error', 'unknown']),
   lastStatusAt: z.string().nullable(),
   lastErrorCode: z.string().nullable(),
@@ -118,15 +121,15 @@ const mcpOAuthTokenSchema = z.object({
   accessToken: z.string(),
   refreshToken: z.string().optional(),
   expiresAt: z.number().optional(), // epoch ms
-  tokenEndpoint: z.string(),
-  resource: z.string() // RFC 8707 canonical URI the token is bound to
+  tokenEndpoint: httpUrlSchema,
+  resource: absoluteUriSchema // RFC 8707 canonical URI the token is bound to
 });
 export type McpOAuthToken = z.infer<typeof mcpOAuthTokenSchema>;
 
 // Credentials for installing atoms from private sources. Secrets in auth.json, never config.json.
 const atomRegistriesSchema = z.object({
   github: z.object({ token: z.string() }).optional(),
-  npm: z.object({ token: z.string(), registry: z.string().optional() }).optional()
+  npm: z.object({ token: z.string(), registry: httpUrlSchema.optional() }).optional()
 });
 export type AtomRegistries = z.infer<typeof atomRegistriesSchema>;
 
@@ -325,7 +328,7 @@ const mcpHttpAuthSchema = z
 const mcpHttpServerSchema = z.object({
   name: z.string().min(1),
   transport: z.literal('http'),
-  url: z.string().url(),
+  url: httpUrlSchema,
   auth: mcpHttpAuthSchema,
   headers: z.record(z.string(), z.string()).optional(),
   requestTimeoutMs: z.number().int().positive().optional(),
@@ -385,8 +388,8 @@ export const browserConfigSchema = z
     /** Device to emulate, e.g. "iPhone 15". */
     device: z.string().optional(),
     /** Navigation allow/block lists (RFC origins) — constrain where the agent may browse. */
-    allowedOrigins: z.array(z.string()).optional(),
-    blockedOrigins: z.array(z.string()).optional(),
+    allowedOrigins: z.array(httpOriginSchema).optional(),
+    blockedOrigins: z.array(httpOriginSchema).optional(),
     /** Persistent profile dir (keeps logins across runs). Mutually exclusive with isolated. */
     userDataDir: z.string().optional(),
     /** Load cookies/localStorage from a Playwright storageState file into an isolated context. */
@@ -478,7 +481,7 @@ const peerSchema = z.object({
   id: z.string().regex(/^peer_/, 'peer id must start with peer_'),
   label: z.string().min(1),
   /** Remote daemon's OpenAI-compat base, e.g. https://host:port/openai (no trailing /v1). */
-  baseUrl: z.string().url(),
+  baseUrl: httpUrlSchema,
   /** Default target agent on the peer (name or agt_ id) when the model omits one. */
   defaultAgent: z.string().default('default'),
   /** Token reference: `${secret:peer/<id>/token}` (auth.json) or `${env:NAME}`. */
@@ -778,7 +781,7 @@ const monadConfigSchema = z.object({
       // Dev auto-starts Arize Phoenix on http://localhost:6006 (see scripts/setup-dev.ts) and
       // defaults the endpoint there; set this to "http://localhost:6006" to use it explicitly, or
       // point at any other OTLP/HTTP-protobuf collector.
-      endpoint: z.string().default(''),
+      endpoint: blankableHttpUrlSchema.default(''),
       developerMode: z.boolean().default(false)
     })
     .default({ endpoint: '', developerMode: false }),
@@ -856,10 +859,12 @@ export const monadSystemConfigSchema = z.object({
   nativeCliAgents: z.array(nativeCliAgentSchema).default([]),
   // Peer daemons (delegation targets + their credentials) → system config, like acpAgents.
   peers: z.array(peerSchema).default([]),
-  observability: z.object({ endpoint: z.string().default(''), developerMode: z.boolean().default(false) }).default({
-    endpoint: '',
-    developerMode: false
-  })
+  observability: z
+    .object({ endpoint: blankableHttpUrlSchema.default(''), developerMode: z.boolean().default(false) })
+    .default({
+      endpoint: '',
+      developerMode: false
+    })
 });
 export type MonadSystemConfig = z.infer<typeof monadSystemConfigSchema>;
 

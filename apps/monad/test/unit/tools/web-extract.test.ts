@@ -57,6 +57,8 @@ test('web_extract enforces the net SSRF guard (loopback/metadata blocked)', asyn
   await expect(webExtractTool.run({ url: 'http://localhost/' }, ctx)).rejects.toThrow();
 });
 
-test('web_extract schema rejects an empty url', () => {
+test('web_extract schema rejects invalid URLs', () => {
+  expect(webExtractTool.inputSchema?.safeParse({ url: 'https://example.com/' }).success).toBe(true);
   expect(webExtractTool.inputSchema?.safeParse({ url: '' }).success).toBe(false);
+  expect(webExtractTool.inputSchema?.safeParse({ url: 'file:///etc/passwd' }).success).toBe(false);
 });

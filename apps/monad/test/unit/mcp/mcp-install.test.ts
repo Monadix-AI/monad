@@ -103,3 +103,12 @@ test('list + remove round-trip', async () => {
   await removeMcpAtom(mcpDir, 'fs');
   expect((await listInstalledMcpAtoms(mcpDir)).map((s) => s.name)).toEqual(['git']);
 });
+
+test('list skips file-MCP atoms with non-http URLs', async () => {
+  await Bun.write(
+    join(mcpDir, 'bad.json'),
+    JSON.stringify({ mcpServers: { bad: { url: 'file:///etc/passwd' } } }, null, 2)
+  );
+
+  expect(await listInstalledMcpAtoms(mcpDir)).toEqual([]);
+});

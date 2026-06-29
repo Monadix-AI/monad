@@ -2,6 +2,7 @@
   "name": "@monad/web",
   "version": "0.0.0",
   "dependencies": {
+    "@hookform/resolvers": "^5.4.0",
     "@lexical/react": "^0.46.0",
     "@monad/client": "workspace:*",
     "@monad/client-rtk": "workspace:*",
@@ -26,11 +27,13 @@
     "react": "^19.2.7",
     "react-compiler-runtime": "^1.0.0",
     "react-dom": "^19.2.7",
+    "react-hook-form": "^7.80.0",
     "react-redux": "^9.3.0",
     "react-virtuoso": "^4.18.10",
     "shiki": "^4.3.0",
     "streamdown": "^2.5.0",
     "three": "^0.185.0",
+    "zod": "^4.4.3",
     "zustand": "^5.0.14"
   },
   "devDependencies": {

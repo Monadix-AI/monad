@@ -2,6 +2,7 @@
 
 import type { AgentId, ModelInfo, ProviderView } from '@monad/protocol';
 
+import { zodResolver } from '@hookform/resolvers/zod';
 import {
   profileSelectors,
   providerAdapter,
@@ -23,10 +24,12 @@ import { KNOWN_PROVIDER_TYPES, ModelProviderType } from '@monad/protocol';
 import { Button, cn, Input, Label } from '@monad/ui';
 import { Check, Lock, Plus, Sparkles, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { useForm } from 'react-hook-form';
 
 import { useT } from '@/components/I18nProvider';
 import { InitBackground } from '@/components/InitBackground';
 import { InitLogoCanvas } from '@/components/InitLogoCanvas';
+import { providerFormSchema } from '@/lib/form-validation';
 import { useMonadRuntime } from '@/lib/monad-runtime-provider';
 import { useProviderMeta } from '@/lib/ProviderMeta';
 import { SECRET_INPUT_PASSWORD_MANAGER_PROPS } from './studio/ModelSettings/secret-input-props';
@@ -161,6 +164,16 @@ export function InitWizard({ homePath }: { homePath?: string }) {
   // Only show base URL input when creating a new provider that requires it
   const showBaseUrlInput = (addingMeta.needsUrl ?? false) && addingExistingProvider === null;
   const extraFields = addingExistingProvider === null ? (addingMeta.extraFields ?? []) : [];
+  const addProviderForm = useForm<{ type: string; baseUrl: string }>({
+    values: { type: addingType, baseUrl: addBaseUrl },
+    resolver: zodResolver(providerFormSchema(showBaseUrlInput))
+  });
+  const addBaseUrlIssue = addProviderForm.formState.errors.baseUrl?.message;
+  const addBaseUrlError = addBaseUrlIssue
+    ? addBaseUrlIssue === 'url required'
+      ? t('web.url.required')
+      : t('web.url.httpOnly')
+    : '';
 
   // A credential is addable once the basic fields are filled — no model required.
   const keyOk = addApiKey.trim().length > 0 || (addingMeta.keyOptional ?? false);
@@ -232,67 +245,73 @@ export function InitWizard({ homePath }: { homePath?: string }) {
   async function handleTest() {
     setAddTestError('');
     setAddTested(false);
-    const baseUrl = addingExistingProvider?.baseUrl ?? (showBaseUrlInput ? addBaseUrl : undefined);
-    const extra = addingExistingProvider?.extra ?? (extraFields.length > 0 ? addExtra : undefined);
-    const provider: ProviderView = {
-      id: addingExistingProvider?.id ?? `${addingType}-test`,
-      label: addingMeta.label ?? addingType,
-      type: addingType as (typeof KNOWN_PROVIDER_TYPES)[number],
-      ...(baseUrl ? { baseUrl } : {}),
-      ...(extra ? { extra } : {})
-    };
-    const result = await testConnection({ provider, accessToken: addApiKey });
-    if ('error' in result) {
-      setAddTestError(t('web.init.connFailedKey'));
-      return;
-    }
-    const data = result.data;
-    if (!data.ok) {
-      setAddTestError(data.error ?? t('web.init.connFailed'));
-      return;
-    }
-    const availableModels = data.models ?? [];
-    setAddModels(availableModels);
-    setAddTested(true);
+    await addProviderForm.handleSubmit(async ({ baseUrl: parsedBaseUrl }) => {
+      if (parsedBaseUrl !== addBaseUrl) setAddBaseUrl(parsedBaseUrl);
+      const baseUrl = addingExistingProvider?.baseUrl ?? (showBaseUrlInput ? parsedBaseUrl : undefined);
+      const extra = addingExistingProvider?.extra ?? (extraFields.length > 0 ? addExtra : undefined);
+      const provider: ProviderView = {
+        id: addingExistingProvider?.id ?? `${addingType}-test`,
+        label: addingMeta.label ?? addingType,
+        type: addingType as (typeof KNOWN_PROVIDER_TYPES)[number],
+        ...(baseUrl ? { baseUrl } : {}),
+        ...(extra ? { extra } : {})
+      };
+      const result = await testConnection({ provider, accessToken: addApiKey });
+      if ('error' in result) {
+        setAddTestError(t('web.init.connFailedKey'));
+        return;
+      }
+      const data = result.data;
+      if (!data.ok) {
+        setAddTestError(data.error ?? t('web.init.connFailed'));
+        return;
+      }
+      const availableModels = data.models ?? [];
+      setAddModels(availableModels);
+      setAddTested(true);
+    })();
   }
 
   function handleAddKey() {
-    const newKey: DraftKey = { id: crypto.randomUUID(), accessToken: addApiKey };
-    const newExtra = extraFields.length > 0 ? addExtra : undefined;
-    const discoveredModels = addModels;
+    void addProviderForm.handleSubmit(({ baseUrl: parsedBaseUrl }) => {
+      if (parsedBaseUrl !== addBaseUrl) setAddBaseUrl(parsedBaseUrl);
+      const newKey: DraftKey = { id: crypto.randomUUID(), accessToken: addApiKey };
+      const newExtra = extraFields.length > 0 ? addExtra : undefined;
+      const discoveredModels = addModels;
 
-    setProviders((prev) => {
-      if (addingToProviderId) {
-        return prev.map((p) =>
-          p.id === addingToProviderId
-            ? { ...p, keys: [...p.keys, newKey], models: dedupeModels([...p.models, ...discoveredModels]) }
-            : p
-        );
-      }
-      // Non-URL providers share one provider entry per type regardless of how many keys are added.
-      const existing = !addingMeta.needsUrl ? prev.find((p) => p.type === addingType) : null;
-      if (existing) {
-        return prev.map((p) =>
-          p.id === existing.id
-            ? { ...p, keys: [...p.keys, newKey], models: dedupeModels([...p.models, ...discoveredModels]) }
-            : p
-        );
-      }
-      return [
-        ...prev,
-        {
-          type: addingType,
-          id: `${addingType}-${Date.now()}`,
-          baseUrl: addBaseUrl || undefined,
-          ...(newExtra ? { extra: newExtra } : {}),
-          keys: [newKey],
-          models: discoveredModels
+      setProviders((prev) => {
+        if (addingToProviderId) {
+          return prev.map((p) =>
+            p.id === addingToProviderId
+              ? { ...p, keys: [...p.keys, newKey], models: dedupeModels([...p.models, ...discoveredModels]) }
+              : p
+          );
         }
-      ];
-    });
+        // Non-URL providers share one provider entry per type regardless of how many keys are added.
+        const existing = !addingMeta.needsUrl ? prev.find((p) => p.type === addingType) : null;
+        if (existing) {
+          return prev.map((p) =>
+            p.id === existing.id
+              ? { ...p, keys: [...p.keys, newKey], models: dedupeModels([...p.models, ...discoveredModels]) }
+              : p
+          );
+        }
+        return [
+          ...prev,
+          {
+            type: addingType,
+            id: `${addingType}-${Date.now()}`,
+            baseUrl: parsedBaseUrl || undefined,
+            ...(newExtra ? { extra: newExtra } : {}),
+            keys: [newKey],
+            models: discoveredModels
+          }
+        ];
+      });
 
-    resetAddKeyForm();
-    setSubStep('list');
+      resetAddKeyForm();
+      setSubStep('list');
+    })();
   }
 
   function goToModelStep() {
@@ -634,14 +653,17 @@ export function InitWizard({ homePath }: { homePath?: string }) {
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor="base-url">{t('web.init.baseUrl')}</Label>
                   <Input
+                    aria-invalid={!!addBaseUrlError || undefined}
                     id="base-url"
                     onChange={(e) => {
                       setAddBaseUrl(e.target.value);
+                      addProviderForm.clearErrors('baseUrl');
                       setAddTested(false);
                     }}
                     placeholder="https://api.example.com/v1"
                     value={addBaseUrl}
                   />
+                  {addBaseUrlError && <p className="text-destructive text-xs">{addBaseUrlError}</p>}
                 </div>
               )}
               {addingExistingProvider?.baseUrl && (

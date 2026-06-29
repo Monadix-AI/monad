@@ -3,6 +3,7 @@
 import type { WebMessageIdWithoutParams } from '@monad/i18n';
 import type { McpCatalogEntry, McpServerStatus, McpServerView } from '@monad/protocol';
 
+import { zodResolver } from '@hookform/resolvers/zod';
 import {
   Badge,
   Button,
@@ -30,8 +31,10 @@ import {
   X
 } from 'lucide-react';
 import { useState } from 'react';
+import { useForm } from 'react-hook-form';
 
 import { I18nTrans, useT } from '@/components/I18nProvider';
+import { mcpServerFormSchema } from '@/lib/form-validation';
 import { useAsyncAction } from '../hooks/use-async-action';
 import { useMcpServerSettings } from '../hooks/use-mcp-server-settings';
 import { StudioPanel, StudioPanelHeader } from './studio/StudioPanel';
@@ -60,6 +63,15 @@ const strToMap = (s: string): Record<string, string> => {
 
 type AuthMode = 'none' | 'bearer' | 'headers' | 'oauth';
 type McpStatusState = NonNullable<McpServerStatus['state']> | 'connecting' | 'disabled';
+type McpServerFormValues = {
+  name: string;
+  transport: 'stdio' | 'http';
+  command: string;
+  args: string;
+  env: string;
+  cwd: string;
+  url: string;
+};
 
 const MCP_STATUS_LABEL_KEYS: Record<McpStatusState, WebMessageIdWithoutParams> = {
   connected: 'web.mcp.state.connected',
@@ -449,6 +461,12 @@ function ServerForm({
     mapToStr(server?.transport === 'http' && server.auth.mode === 'headers' ? server.auth.headers : undefined)
   );
   const [busy, setBusy] = useState(false);
+  const formValues: McpServerFormValues = { name, transport, command, args, env, cwd, url };
+  const serverForm = useForm<McpServerFormValues>({
+    values: formValues,
+    resolver: zodResolver(mcpServerFormSchema)
+  });
+  const errors = serverForm.formState.errors;
 
   // OAuth is configured in config.json (it needs the daemon's redirect/device flow); the form keeps
   // an existing oauth server's auth intact rather than letting a token field clobber it.
@@ -461,31 +479,28 @@ function ServerForm({
     return { mode: 'none' };
   };
 
-  const submit = async () => {
-    if (!name.trim()) return;
-    if (transport === 'stdio' && !command.trim()) return;
-    if (transport === 'http' && !url.trim()) return;
+  const submit = serverForm.handleSubmit(async (values) => {
     setBusy(true);
     try {
       const trust = server?.trust ?? { autoApproveTools: [] };
       let next: McpServerView;
-      if (transport === 'stdio') {
-        const envRec = strToMap(env);
+      if (values.transport === 'stdio') {
+        const envRec = strToMap(values.env);
         next = {
-          name: name.trim(),
+          name: values.name,
           transport: 'stdio',
-          command: command.trim(),
-          args: strToArgs(args),
+          command: values.command,
+          args: strToArgs(values.args),
           env: Object.keys(envRec).length ? envRec : undefined,
-          cwd: cwd.trim() || undefined,
+          cwd: values.cwd || undefined,
           enabled: server?.enabled ?? true,
           trust
         };
       } else {
         next = {
-          name: name.trim(),
+          name: values.name,
           transport: 'http',
-          url: url.trim(),
+          url: values.url,
           auth: buildAuth(),
           enabled: server?.enabled ?? true,
           trust
@@ -495,7 +510,7 @@ function ServerForm({
     } finally {
       setBusy(false);
     }
-  };
+  });
 
   const wrapper = title
     ? 'flex flex-col gap-3 rounded-md border border-primary/30 bg-primary/5 p-3'
@@ -522,11 +537,13 @@ function ServerForm({
       <div className="flex flex-col gap-1">
         <Label className="text-xs">{t('web.mcp.name')}</Label>
         <Input
+          aria-invalid={!!errors.name || undefined}
           disabled={nameLocked}
           onChange={(e) => setName(e.target.value)}
           placeholder={t('web.mcp.namePlaceholder')}
           value={name}
         />
+        {errors.name ? <p className="text-destructive text-xs">{t('web.url.required')}</p> : null}
       </div>
       <div className="flex flex-col gap-1">
         <Label className="text-xs">{t('web.mcp.transport')}</Label>
@@ -549,10 +566,12 @@ function ServerForm({
           <div className="flex flex-col gap-1">
             <Label className="text-xs">{t('web.mcp.command')}</Label>
             <Input
+              aria-invalid={!!errors.command || undefined}
               onChange={(e) => setCommand(e.target.value)}
               placeholder={t('web.mcp.commandPlaceholder')}
               value={command}
             />
+            {errors.command ? <p className="text-destructive text-xs">{t('web.url.required')}</p> : null}
           </div>
           <div className="flex flex-col gap-1">
             <Label className="text-xs">{t('web.mcp.args')}</Label>
@@ -585,10 +604,12 @@ function ServerForm({
           <div className="flex flex-col gap-1">
             <Label className="text-xs">{t('web.mcp.url')}</Label>
             <Input
+              aria-invalid={!!errors.url || undefined}
               onChange={(e) => setUrl(e.target.value)}
               placeholder={t('web.mcp.urlPlaceholder')}
               value={url}
             />
+            {errors.url ? <p className="text-destructive text-xs">{t('web.url.httpOnly')}</p> : null}
           </div>
           <div className="flex flex-col gap-1">
             <Label className="text-xs">{t('web.mcp.auth')}</Label>
@@ -635,7 +656,7 @@ function ServerForm({
       <Button
         className="self-start"
         disabled={busy || !name.trim() || (transport === 'stdio' ? !command.trim() : !url.trim())}
-        onClick={submit}
+        onClick={() => void submit()}
         size="sm"
       >
         {busy ? <Loader2 className="animate-spin" /> : title ? <Plus /> : <Save />} {submitLabel}

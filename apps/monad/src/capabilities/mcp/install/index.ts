@@ -8,6 +8,7 @@ import type { InstalledMcpAtom, McpServerView } from '@monad/protocol';
 
 import { readdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
+import { httpUrlSchema } from '@monad/protocol';
 import { z } from 'zod';
 
 export class McpInstallError extends Error {}
@@ -41,7 +42,7 @@ const fileMcpEntrySchema = z.object({
   command: z.string().optional(),
   args: z.array(z.string()).optional(),
   env: z.record(z.string(), z.string()).optional(),
-  url: z.string().optional(),
+  url: httpUrlSchema.optional(),
   headers: z.record(z.string(), z.string()).optional(),
   trust: z
     .object({ autoApproveTools: z.array(z.string()).optional(), pinnedToolHash: z.string().optional() })

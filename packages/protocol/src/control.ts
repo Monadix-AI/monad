@@ -22,7 +22,7 @@ import {
   sessionTransportSchema
 } from './domain.ts';
 import { agentIdSchema, messageIdSchema, sessionIdSchema } from './ids.ts';
-import { httpUrlSchema } from './url.ts';
+import { httpsUrlSchema, httpUrlSchema } from './url.ts';
 
 export const CONTROL_API_VERSION = 'v1' as const;
 
@@ -179,8 +179,8 @@ export const offsetPaginationResponseSchema = z.object({
   total: z.number().int().nonnegative(),
   limit: z.number().int().positive(),
   offset: z.number().int().nonnegative(),
-  next: z.string().url().optional(),
-  previous: z.string().url().optional()
+  next: httpUrlSchema.optional(),
+  previous: httpUrlSchema.optional()
 });
 export type OffsetPaginationResponse = z.infer<typeof offsetPaginationResponseSchema>;
 
@@ -194,8 +194,8 @@ export type CursorPaginationQuery = z.infer<typeof cursorPaginationQuerySchema>;
 /** Shared response envelope fields for cursor-based pagination. */
 export const cursorPaginationResponseSchema = z.object({
   nextCursor: z.string().optional(),
-  next: z.string().url().optional(),
-  previous: z.string().url().optional()
+  next: httpUrlSchema.optional(),
+  previous: httpUrlSchema.optional()
 });
 export type CursorPaginationResponse = z.infer<typeof cursorPaginationResponseSchema>;
 
@@ -376,7 +376,7 @@ const sessionMcpStdioSchema = z.object({
 const sessionMcpHttpSchema = z.object({
   name: z.string(),
   transport: z.literal('http'),
-  url: z.string(),
+  url: httpUrlSchema,
   headers: z.record(z.string(), z.string()).optional(),
   requestTimeoutMs: z.number().optional()
 });
@@ -521,7 +521,7 @@ export const modelProviderDescriptorSchema = z.object({
   type: z.string(),
   label: z.string(),
   strategy: z.enum(['native', 'openai-compatible']),
-  defaultBaseUrl: z.string().optional(),
+  defaultBaseUrl: httpUrlSchema.optional(),
   needsUrl: z.boolean().optional(),
   keyPlaceholder: z.string().optional(),
   npmPackage: z.string().optional(),
@@ -626,7 +626,7 @@ export const credentialViewSchema = z.object({
   authType: z.enum(['api_key', 'oauth', 'admin_api_key']),
   priority: z.number(),
   source: z.string(),
-  baseUrl: z.string().optional(),
+  baseUrl: httpUrlSchema.optional(),
   lastStatus: z.enum(['ok', 'error', 'unknown']),
   requestCount: z.number(),
   accessTokenPreview: z.string().optional() // masked tail, e.g. "…a1b2" — never the full token
@@ -697,7 +697,7 @@ export const modelInfoSchema = z.object({
   modalities: modelModalitiesSchema.optional(), // input/output modalities, flags, kind; provider-native preferred, else catalog
   contextLimit: z.number().int().positive().optional(),
   releaseDate: z.string().optional(),
-  modelsDevUrl: z.string().url().optional()
+  modelsDevUrl: httpsUrlSchema.optional()
 });
 export type ModelInfo = z.infer<typeof modelInfoSchema>;
 
@@ -719,7 +719,7 @@ export const addCredentialRequestSchema = z.object({
   label: z.string(),
   authType: z.enum(['api_key', 'oauth', 'admin_api_key']),
   accessToken: z.string(),
-  baseUrl: z.string().optional(),
+  baseUrl: httpUrlSchema.optional(),
   priority: z.number().optional()
 });
 export type AddCredentialRequest = z.infer<typeof addCredentialRequestSchema>;

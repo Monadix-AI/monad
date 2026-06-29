@@ -3,6 +3,7 @@
 import type { VersionCheckResult } from '@monad/client';
 import type { GetHealthResponse } from '@monad/protocol';
 
+import { zodResolver } from '@hookform/resolvers/zod';
 import { checkDaemonVersion } from '@monad/client';
 import { Button, Input, Label, Switch } from '@monad/ui';
 import {
@@ -18,10 +19,12 @@ import {
   XCircle
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { useForm } from 'react-hook-form';
 
 import { I18nTrans, useT } from '@/components/I18nProvider';
 import { useNetworkSettings } from '@/hooks/use-network-settings';
 import { saveRemoteDaemonConnection } from '@/lib/daemon-connections';
+import { daemonConnectionFormSchema } from '@/lib/form-validation';
 import { useMonadRuntime } from '@/lib/monad-runtime-provider';
 import { REMOTE_TOKEN_KEY, REMOTE_URL_KEY } from '@/lib/monad-store';
 import { SECRET_INPUT_PASSWORD_MANAGER_PROPS } from './studio/ModelSettings/secret-input-props';
@@ -55,6 +58,11 @@ export function ConnectionSettings({ onClose }: Props) {
   const [daysUntilExpiry, setDaysUntilExpiry] = useState<number | null>(null);
   const [networkCopied, setNetworkCopied] = useState(false);
   const network = useNetworkSettings();
+  const connectionForm = useForm({
+    values: { url, token },
+    resolver: zodResolver(daemonConnectionFormSchema)
+  });
+  const urlError = connectionForm.formState.errors.url ? t('web.url.httpOnly') : null;
 
   useEffect(() => {
     const storedUrl = localStorage.getItem(REMOTE_URL_KEY) ?? '';
@@ -104,10 +112,7 @@ export function ConnectionSettings({ onClose }: Props) {
     setCheck({ status: 'idle' });
   }
 
-  async function handleSave() {
-    const trimmedUrl = url.trim();
-    const trimmedToken = token.trim();
-
+  const handleSave = connectionForm.handleSubmit(async ({ url: trimmedUrl, token: trimmedToken }) => {
     if (trimmedUrl) {
       setCheck({ status: 'checking' });
       const result = await checkDaemonVersion(trimmedUrl, trimmedToken || undefined);
@@ -130,7 +135,7 @@ export function ConnectionSettings({ onClose }: Props) {
     }
     if (trimmedUrl) switchDaemonConnection({ connection: { url: trimmedUrl }, type: 'remote' });
     else switchDaemonConnection({ type: 'local' });
-  }
+  });
 
   function handleClear() {
     localStorage.removeItem(REMOTE_URL_KEY);
@@ -292,14 +297,17 @@ export function ConnectionSettings({ onClose }: Props) {
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="daemon-url">{t('web.conn.urlLabel')}</Label>
             <Input
+              aria-invalid={!!urlError || undefined}
               id="daemon-url"
               onChange={(e) => {
                 setUrl(e.target.value);
+                connectionForm.clearErrors('url');
                 resetCheck();
               }}
               placeholder="http://192.168.1.100:52749"
               value={url}
             />
+            {urlError ? <p className="text-destructive text-xs">{urlError}</p> : null}
             <p className="text-muted-foreground text-xs">
               <I18nTrans
                 components={{ code: <code /> }}
