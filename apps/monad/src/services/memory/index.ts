@@ -9,7 +9,16 @@
 // `/consolidate-memory` pass. mem0 stays passive (every-turn extraction + semantic recall).
 
 import type { Logger } from '@monad/logger';
-import type { AgentId, Fact, MemoryBackendId, MemoryScope, QdrantPhase, ScopeKind, SessionId } from '@monad/protocol';
+import type {
+  AgentId,
+  Fact,
+  MemoryBackendId,
+  MemoryScope,
+  MemoryStatusResponse,
+  QdrantPhase,
+  ScopeKind,
+  SessionId
+} from '@monad/protocol';
 import type { ModelRouter } from '@/agent/index.ts';
 import type { Mem0Resolution } from '@/services/memory/resolve-mem0.ts';
 import type { Store } from '@/store/db/index.ts';
@@ -44,6 +53,8 @@ export interface MemoryServiceDeps {
   buildMem0?: (opts: BuildMem0Options, log: Logger) => Promise<Mem0Client | null>;
   /** Current qdrant lifecycle state. Returns undefined when user configured their own vector store. */
   qdrantStatus?: () => { phase: string; error: string | null } | undefined;
+  /** L2 graph consolidation settings (read live, for the UI). undefined ⇒ unset (defaults apply). */
+  graphSettings?: () => { autoConsolidate?: boolean; intervalMinutes?: number } | undefined;
   log: Logger;
 }
 
@@ -94,17 +105,8 @@ export interface MemoryService {
   ): Promise<MemoryToolResult>;
   /** Manual consolidation (the /consolidate-memory command): dedup/merge/correct every durable scope. */
   consolidateAll(): Promise<ConsolidateResult[]>;
-  /** Active backend + mem0's resolved model selection (for the UI). */
-  status(): {
-    backend: MemoryBackendId;
-    mem0: {
-      llm: string | null;
-      embedder: string | null;
-      embedDim: number | null;
-      ready: boolean;
-      error: string | null;
-    };
-  };
+  /** Active backend + mem0's resolved model selection + L2 graph settings (for the UI). */
+  status(): MemoryStatusResponse;
   listFacts(kind: ScopeKind, id: string): Promise<Fact[]>;
   getCore(kind: ScopeKind, id: string): Promise<string>;
   putCore(kind: ScopeKind, id: string, md: string): Promise<void>;
@@ -343,10 +345,12 @@ export function createMemoryService(deps: MemoryServiceDeps): MemoryService {
       const backend = deps.backend();
       const r = deps.mem0Models();
       const qdrant = deps.qdrantStatus?.();
+      const graph = deps.graphSettings?.();
       return {
         backend,
         mem0: { llm: r.llm, embedder: r.embedder, embedDim: r.dim, ready: Boolean(r.models), error: r.error ?? null },
-        qdrant: qdrant ? { phase: qdrant.phase as QdrantPhase, error: qdrant.error } : undefined
+        qdrant: qdrant ? { phase: qdrant.phase as QdrantPhase, error: qdrant.error } : undefined,
+        graph: { autoConsolidate: graph?.autoConsolidate ?? null, intervalMinutes: graph?.intervalMinutes ?? null }
       };
     },
 

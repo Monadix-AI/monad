@@ -147,6 +147,7 @@ beforeEach(async () => {
     }),
     memorySetBackend: async () => {},
     memorySetMem0Models: async () => {},
+    memorySetGraph: async () => {},
     log: { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} } as never,
     skills: []
   });

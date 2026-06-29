@@ -24,6 +24,7 @@ import type {
   PickDirectoryResponse,
   SearchSkillsResponse,
   SetMem0ModelsRequest,
+  SetMemoryGraphRequest,
   SkillDetail,
   SkillListInstance,
   SkillListItem,
@@ -102,6 +103,8 @@ export interface DaemonHandlerDeps extends SessionDeps, ModelDeps {
   memorySetBackend: (backend: MemoryBackendId) => Promise<void>;
   /** Persist + hot-apply mem0's model selection (chosen from Monad's model registry). */
   memorySetMem0Models: (sel: SetMem0ModelsRequest) => Promise<void>;
+  /** Persist + hot-apply the L2 knowledge-graph consolidation settings. */
+  memorySetGraph: (sel: SetMemoryGraphRequest) => Promise<void>;
   mockMode?: boolean;
   /** Human-in-the-loop approval gate for high-risk tool calls. */
   oversight: OversightService;
@@ -497,7 +500,12 @@ export function createDaemonHandlers(deps: DaemonHandlerDeps) {
     }),
     session: createSessionModule({ ...deps, nativeCliHost }),
     nativeCli: createNativeCliModule({ paths, host: nativeCliHost, store: deps.store }),
-    memory: createMemoryModule(deps.memoryService, deps.memorySetBackend, deps.memorySetMem0Models),
+    memory: createMemoryModule(
+      deps.memoryService,
+      deps.memorySetBackend,
+      deps.memorySetMem0Models,
+      deps.memorySetGraph
+    ),
     oversight,
     clarify,
     system,

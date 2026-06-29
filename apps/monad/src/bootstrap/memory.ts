@@ -8,7 +8,7 @@
 // that config (no env vars).
 
 import type { MonadAuth, MonadConfig, MonadPaths } from '@monad/home';
-import type { MemoryBackendId, SessionId, SetMem0ModelsRequest } from '@monad/protocol';
+import type { MemoryBackendId, SessionId, SetMem0ModelsRequest, SetMemoryGraphRequest } from '@monad/protocol';
 import type { ModelRouter } from '@/agent/index.ts';
 import type { NoteStore } from '@/capabilities/tools/registry/memory.ts';
 import type { ConfigBus } from '@/services/config-bus.ts';
@@ -56,6 +56,7 @@ export interface MemorySubsystem {
   getMem0Data: () => Promise<Mem0Data>;
   memorySetBackend: (backend: MemoryBackendId) => Promise<void>;
   memorySetMem0Models: (sel: SetMem0ModelsRequest) => Promise<void>;
+  memorySetGraph: (sel: SetMemoryGraphRequest) => Promise<void>;
 }
 
 export function createMemorySubsystem(deps: MemorySubsystemDeps): MemorySubsystem {
@@ -106,6 +107,8 @@ export function createMemorySubsystem(deps: MemorySubsystemDeps): MemorySubsyste
     },
     // Return undefined when user has configured their own vectorStore — UI shows the custom-store note.
     qdrantStatus: () => (liveCfg().memory.mem0.vectorStore ? undefined : qdrant.getStatus()),
+    // L2 graph consolidation settings (read live so the UI reflects hot-reloaded changes).
+    graphSettings: () => liveCfg().memory.graph,
     log: createLogger('memory')
   });
 
@@ -210,6 +213,14 @@ export function createMemorySubsystem(deps: MemorySubsystemDeps): MemorySubsyste
       if (sel.embedDim !== undefined) m.mem0.embedDim = sel.embedDim ?? undefined;
     });
   };
+  const memorySetGraph = async (sel: SetMemoryGraphRequest): Promise<void> => {
+    await persistMemory((m) => {
+      // `memory.graph` is optional in the schema — materialize it on first write.
+      m.graph ??= {};
+      if (sel.autoConsolidate !== undefined) m.graph.autoConsolidate = sel.autoConsolidate ?? undefined;
+      if (sel.intervalMinutes !== undefined) m.graph.intervalMinutes = sel.intervalMinutes ?? undefined;
+    });
+  };
 
   // Memory lifecycle (recall / observe / session-end), folding the note-store block into recall's
   // BeforeTurn context. Shared with the e2e via registerMemoryHooks so the wiring can't drift.
@@ -225,6 +236,7 @@ export function createMemorySubsystem(deps: MemorySubsystemDeps): MemorySubsyste
     runGraphConsolidate,
     getMem0Data,
     memorySetBackend,
-    memorySetMem0Models
+    memorySetMem0Models,
+    memorySetGraph
   };
 }

@@ -467,7 +467,8 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
     runGraphConsolidate,
     getMem0Data,
     memorySetBackend,
-    memorySetMem0Models
+    memorySetMem0Models,
+    memorySetGraph
   } = createMemorySubsystem({
     store,
     paths,
@@ -789,6 +790,7 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
     getMem0Data,
     memorySetBackend,
     memorySetMem0Models,
+    memorySetGraph,
     modelCatalog,
     modelService,
     kv,

@@ -6,7 +6,6 @@ import {
   Bot,
   Brain,
   Cpu,
-  Database,
   MessageSquare,
   MonitorPlay,
   Network,
@@ -96,9 +95,9 @@ export const STUDIO_RUNTIME_SECTIONS: StudioSectionItem[] = [
   { id: 'browser', icon: MonitorPlay, i18nKey: 'web.settings.browser' },
   { id: 'api', icon: PlugZap, i18nKey: 'web.settings.api' },
   { id: 'approvals', icon: ShieldHalf, i18nKey: 'web.settings.approvals' },
+  // Memory folds the former standalone graph + mem0 sections into tabs (deep links /studio/graph and
+  // /studio/mem0 still resolve — they open the matching tab — so those ids stay in the union below).
   { id: 'memory', icon: Brain, i18nKey: 'web.settings.memory' },
-  { id: 'graph', icon: Network, i18nKey: 'web.settings.graph' },
-  { id: 'mem0', icon: Database, i18nKey: 'web.settings.mem0' },
   { id: 'hooks', icon: Workflow, i18nKey: 'web.studio.hooks' },
   { id: 'sandbox', icon: ShieldHalf, i18nKey: 'web.studio.sandbox' }
 ];

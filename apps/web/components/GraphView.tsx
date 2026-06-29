@@ -20,7 +20,6 @@ import { useMemo } from 'react';
 import '@xyflow/react/dist/style.css';
 
 import { useT } from '@/components/I18nProvider';
-import { StudioPanel, StudioPanelHeader } from './studio/StudioPanel';
 
 // A small, stable palette. Nodes are colored by SCOPE (which agent the entity belongs to) so a
 // multi-agent graph stays legible — you can tell whose entity is whose at a glance — with a legend
@@ -78,7 +77,9 @@ function toFlow(data: GetGraphResponse | undefined): { nodes: Node[]; edges: Edg
   return { nodes, edges };
 }
 
-export function GraphView(_props: { onClose: () => void }) {
+// Read-only L2 knowledge-graph visualization. Rendered as a tab inside the Memory panel, so it
+// supplies its own thin toolbar (count + refresh) rather than a full StudioPanelHeader.
+export function GraphView() {
   const t = useT();
   const { data, isLoading, refetch, isFetching } = useGetGraphQuery();
   const { nodes, edges } = useMemo(() => toFlow(data), [data]);
@@ -86,22 +87,21 @@ export function GraphView(_props: { onClose: () => void }) {
   const empty = !isLoading && nodes.length === 0;
 
   return (
-    <StudioPanel>
-      <StudioPanelHeader
-        actions={
-          <Button
-            disabled={isFetching}
-            onClick={() => refetch()}
-            size="sm"
-            variant="ghost"
-          >
-            {t('web.graph.refresh')}
-          </Button>
-        }
-        icon={<Network className="size-4 text-muted-foreground" />}
-        subtitle={data ? `${data.nodes.length} · ${data.edges.length}` : undefined}
-        title={t('web.settings.graph')}
-      />
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex items-center gap-3 border-b px-6 py-2">
+        <span className="text-muted-foreground text-xs">
+          {data ? `${data.nodes.length} · ${data.edges.length}` : ''}
+        </span>
+        <Button
+          className="ml-auto"
+          disabled={isFetching}
+          onClick={() => refetch()}
+          size="sm"
+          variant="ghost"
+        >
+          {t('web.graph.refresh')}
+        </Button>
+      </div>
 
       {scopes.length > 1 ? (
         <div className="flex flex-wrap items-center gap-3 border-b px-6 py-2">
@@ -146,6 +146,6 @@ export function GraphView(_props: { onClose: () => void }) {
           </ReactFlowProvider>
         )}
       </div>
-    </StudioPanel>
+    </div>
   );
 }

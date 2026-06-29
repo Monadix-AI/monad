@@ -8,7 +8,6 @@ import { Boxes, Database } from 'lucide-react';
 import { useMemo } from 'react';
 
 import { useT } from '@/components/I18nProvider';
-import { StudioPanel, StudioPanelHeader } from './studio/StudioPanel';
 
 const PALETTE = ['#6366f1', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#a855f7', '#ec4899', '#14b8a6'];
 function colorForScope(scope: string): string {
@@ -70,28 +69,27 @@ function ClusterMap({ entries }: { entries: Mem0EntryView[] }) {
   );
 }
 
-export function Mem0Explorer(_props: { onClose: () => void }) {
+// Read-only mem0 vector-memory explorer. Rendered as a tab inside the Memory panel, so it supplies
+// its own thin toolbar (count + refresh) rather than a full StudioPanelHeader.
+export function Mem0Explorer() {
   const t = useT();
   const { data, isLoading, isFetching, refetch } = useGetMem0DataQuery();
   const d: GetMem0DataResponse | undefined = data;
 
   return (
-    <StudioPanel>
-      <StudioPanelHeader
-        actions={
-          <Button
-            disabled={isFetching}
-            onClick={() => refetch()}
-            size="sm"
-            variant="ghost"
-          >
-            {t('web.graph.refresh')}
-          </Button>
-        }
-        icon={<Database className="size-4 text-muted-foreground" />}
-        subtitle={d?.available ? String(d.total) : undefined}
-        title={t('web.settings.mem0')}
-      />
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex items-center gap-3 border-b px-6 py-2">
+        <span className="text-muted-foreground text-xs">{d?.available ? String(d.total) : ''}</span>
+        <Button
+          className="ml-auto"
+          disabled={isFetching}
+          onClick={() => refetch()}
+          size="sm"
+          variant="ghost"
+        >
+          {t('web.graph.refresh')}
+        </Button>
+      </div>
 
       {!isLoading && !d?.available ? (
         <div className="flex h-full flex-col items-center justify-center gap-1 p-8 text-center text-muted-foreground text-sm">
@@ -165,6 +163,6 @@ export function Mem0Explorer(_props: { onClose: () => void }) {
           </section>
         </div>
       )}
-    </StudioPanel>
+    </div>
   );
 }

@@ -14,7 +14,8 @@ import type {
   OkResponse,
   PutMemoryCoreRequest,
   SetMem0ModelsRequest,
-  SetMemoryBackendRequest
+  SetMemoryBackendRequest,
+  SetMemoryGraphRequest
 } from '@monad/protocol';
 import type { MemoryService } from '@/services/memory/index.ts';
 
@@ -23,7 +24,8 @@ import { HandlerError } from '@/handlers/handler-error.ts';
 export function createMemoryModule(
   svc: MemoryService,
   setBackend: (b: MemoryBackendId) => Promise<void>,
-  setMem0Models: (sel: SetMem0ModelsRequest) => Promise<void>
+  setMem0Models: (sel: SetMem0ModelsRequest) => Promise<void>,
+  setGraph: (sel: SetMemoryGraphRequest) => Promise<void>
 ) {
   return {
     async status(): Promise<MemoryStatusResponse> {
@@ -35,6 +37,10 @@ export function createMemoryModule(
     },
     async setMem0Models(req: SetMem0ModelsRequest): Promise<OkResponse> {
       await setMem0Models(req);
+      return { ok: true };
+    },
+    async setGraph(req: SetMemoryGraphRequest): Promise<OkResponse> {
+      await setGraph(req);
       return { ok: true };
     },
     async listFacts(q: MemoryScopeQuery): Promise<ListMemoryFactsResponse> {

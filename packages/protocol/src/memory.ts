@@ -142,7 +142,13 @@ export const memoryStatusResponseSchema = z.object({
     error: z.string().nullable()
   }),
   // Local qdrant lifecycle state. Present when backend='mem0' and no explicit vectorStore override.
-  qdrant: z.object({ phase: qdrantPhaseSchema, error: z.string().nullable() }).optional()
+  qdrant: z.object({ phase: qdrantPhaseSchema, error: z.string().nullable() }).optional(),
+  // L2 knowledge-graph consolidation settings (off by default). null ⇒ unset (uses the defaults:
+  // autoConsolidate off, interval 30m). Lives under `memory.graph` in profile.json.
+  graph: z.object({
+    autoConsolidate: z.boolean().nullable(),
+    intervalMinutes: z.number().nullable()
+  })
 });
 export type MemoryStatusResponse = z.infer<typeof memoryStatusResponseSchema>;
 
@@ -157,3 +163,11 @@ export const setMem0ModelsRequestSchema = z.object({
   embedDim: z.number().int().positive().nullish()
 });
 export type SetMem0ModelsRequest = z.infer<typeof setMem0ModelsRequestSchema>;
+
+// L2 knowledge-graph consolidation settings. null clears an override (back to defaults); undefined
+// leaves the field unchanged. Persisted to `memory.graph` (hot-applied by the daemon's graph timer).
+export const setMemoryGraphRequestSchema = z.object({
+  autoConsolidate: z.boolean().nullish(),
+  intervalMinutes: z.number().int().positive().nullish()
+});
+export type SetMemoryGraphRequest = z.infer<typeof setMemoryGraphRequestSchema>;

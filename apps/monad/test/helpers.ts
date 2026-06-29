@@ -278,6 +278,7 @@ export function buildHandlers(
       }),
       memorySetBackend: async () => {},
       memorySetMem0Models: async () => {},
+      memorySetGraph: async () => {},
       log: { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} } as never,
       ...modelDeps
     }),

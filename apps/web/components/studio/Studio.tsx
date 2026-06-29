@@ -38,8 +38,6 @@ const ApprovalsSettings = dynamic(() => import('../ApprovalsSettings').then((m) 
   ssr: false
 });
 const MemorySettings = dynamic(() => import('../MemorySettings').then((m) => m.MemorySettings), { ssr: false });
-const GraphView = dynamic(() => import('../GraphView').then((m) => m.GraphView), { ssr: false });
-const Mem0Explorer = dynamic(() => import('../Mem0Explorer').then((m) => m.Mem0Explorer), { ssr: false });
 const HooksSettings = dynamic(() => import('../HooksSettings').then((m) => m.HooksSettings), { ssr: false });
 const McpAtomsSettings = dynamic(() => import('../McpAtomsSettings').then((m) => m.McpAtomsSettings), {
   ssr: false
@@ -84,9 +82,15 @@ export function Studio({ onClose }: { onClose: () => void }) {
       ) : section === 'memory' ? (
         <MemorySettings onClose={onClose} />
       ) : section === 'graph' ? (
-        <GraphView onClose={onClose} />
+        <MemorySettings
+          initialTab="graph"
+          onClose={onClose}
+        />
       ) : section === 'mem0' ? (
-        <Mem0Explorer onClose={onClose} />
+        <MemorySettings
+          initialTab="mem0"
+          onClose={onClose}
+        />
       ) : section === 'hooks' ? (
         <HooksSettings onClose={onClose} />
       ) : section === 'sandbox' ? (

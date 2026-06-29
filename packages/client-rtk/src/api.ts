@@ -63,7 +63,8 @@ import {
   useListMemoryFactsQuery,
   usePutMemoryCoreMutation,
   useSetMem0ModelsMutation,
-  useSetMemoryBackendMutation
+  useSetMemoryBackendMutation,
+  useSetMemoryGraphMutation
 } from './endpoints/memory/index.ts';
 import {
   useApproveNativeCliSessionMutation,
@@ -357,6 +358,7 @@ export {
   useSetMcpAtomEnabledMutation,
   useSetMem0ModelsMutation,
   useSetMemoryBackendMutation,
+  useSetMemoryGraphMutation,
   useSetNetworkMutation,
   useSetObscuraMutation,
   useSetOpenaiCompatMutation,

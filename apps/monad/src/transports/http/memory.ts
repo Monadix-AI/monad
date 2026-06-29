@@ -12,7 +12,8 @@ import {
   okResponseSchema,
   putMemoryCoreRequestSchema,
   setMem0ModelsRequestSchema,
-  setMemoryBackendRequestSchema
+  setMemoryBackendRequestSchema,
+  setMemoryGraphRequestSchema
 } from '@monad/protocol';
 import { Elysia } from 'elysia';
 
@@ -41,6 +42,11 @@ export function createMemoryController(handlers: ReturnType<typeof createDaemonH
         }
       }
     )
+    .put('/memory/graph', async ({ body }) => handlers.memory.setGraph(setMemoryGraphRequestSchema.parse(body)), {
+      body: setMemoryGraphRequestSchema,
+      response: { 200: okResponseSchema },
+      detail: { summary: 'Set graph settings', description: 'L2 knowledge-graph background consolidation.' }
+    })
     .get('/memory/facts', async ({ query }) => handlers.memory.listFacts(memoryScopeQuerySchema.parse(query)), {
       query: memoryScopeQuerySchema,
       response: { 200: listMemoryFactsResponseSchema },

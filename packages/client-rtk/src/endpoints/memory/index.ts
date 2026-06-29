@@ -8,7 +8,8 @@ import type {
   MemoryCoreResponse,
   MemoryScopeQuery,
   MemoryStatusResponse,
-  PutMemoryCoreRequest
+  PutMemoryCoreRequest,
+  SetMemoryGraphRequest
 } from '@monad/protocol';
 
 import { apiSlice } from '../../api-slice.ts';
@@ -32,6 +33,10 @@ export const memoryApi = apiSlice.injectEndpoints({
       { llm?: string | null; embedder?: string | null; embedDim?: number | null }
     >({
       queryFn: (body, api: { extra: unknown }) => runTreaty(() => clientOf(api).treaty.v1.memory.mem0.models.put(body)),
+      invalidatesTags: ['Memory']
+    }),
+    setMemoryGraph: builder.mutation<{ ok: boolean }, SetMemoryGraphRequest>({
+      queryFn: (body, api: { extra: unknown }) => runTreaty(() => clientOf(api).treaty.v1.memory.graph.put(body)),
       invalidatesTags: ['Memory']
     }),
     listMemoryFacts: builder.query<Fact[], MemoryScopeQuery>({
@@ -70,6 +75,7 @@ export const {
   useGetMemoryStatusQuery,
   useSetMemoryBackendMutation,
   useSetMem0ModelsMutation,
+  useSetMemoryGraphMutation,
   useListMemoryFactsQuery,
   useGetMemoryCoreQuery,
   usePutMemoryCoreMutation,
