@@ -457,12 +457,14 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
         return handlers.forwardToNativeCli({
           sessionId,
           agentName: route.agentName,
-          text: route.text
+          text: route.text,
+          displayText: route.displayText
         });
       return handlers.forwardToAcp({
         sessionId,
         agentName: route.agentName,
         text: route.text,
+        displayText: route.displayText,
         ambientContext,
         onComplete: dispatchStructuredNext
       });
@@ -650,12 +652,14 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
       sessionId,
       agentName,
       text,
+      displayText,
       ambientContext,
       onComplete
     }: {
       sessionId: SessionId;
       agentName: string;
       text: string;
+      displayText?: string;
       ambientContext?: string;
       onComplete?: (text: string) => void | Promise<void>;
     }) {
@@ -727,10 +731,10 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
         sessionId,
         type: 'user.message',
         actorAgentId: null,
-        payload: { messageId: userMsgId, text },
+        payload: { messageId: userMsgId, text: displayText ?? text },
         at: new Date().toISOString()
       });
-      store.insertMessage(userMsgId, sessionId, text, new Date().toISOString(), 'user');
+      store.insertMessage(userMsgId, sessionId, displayText ?? text, new Date().toISOString(), 'user');
 
       const rt = runtime.get(sessionId);
       emitAcpActivityStart();
@@ -842,11 +846,13 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
     async forwardToNativeCli({
       sessionId,
       agentName,
-      text
+      text,
+      displayText
     }: {
       sessionId: SessionId;
       agentName: string;
       text: string;
+      displayText?: string;
     }) {
       const session = requireSession(sessionId);
       assertWriteAllowed(session, 'http');
@@ -858,10 +864,10 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
         sessionId,
         type: 'user.message',
         actorAgentId: null,
-        payload: { messageId: userMsgId, text },
+        payload: { messageId: userMsgId, text: displayText ?? text },
         at: new Date().toISOString()
       });
-      store.insertMessage(userMsgId, sessionId, text, new Date().toISOString(), 'user');
+      store.insertMessage(userMsgId, sessionId, displayText ?? text, new Date().toISOString(), 'user');
       persistAndRetire(sessionId, userRound);
 
       const emitNativeCliError = (err: unknown, fallbackCode?: string) => {
@@ -917,14 +923,76 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
         const existing = nativeCliHost
           .list(sessionId)
           .sessions.find((candidate) => candidate.agentName === agentName && candidate.state === 'running');
-        const nativeSession =
-          existing ??
-          (await nativeCliHost.start({
-            projectSessionId: sessionId,
-            agentName,
-            workingPath: session.cwd,
-            launchMode: spec.defaultLaunchMode
-          }));
+        if (existing) {
+          nativeCliHost.input(existing.id, { input: text.endsWith('\n') ? text : `${text}\n` });
+          log?.debug(
+            { sessionId, event: 'session.forward_native_cli.accepted', agentName, nativeCliSessionId: existing.id },
+            'forward native cli accepted'
+          );
+          return { accepted: true as const };
+        }
+        const preflight = await nativeCliHost.preflight(agentName);
+        if (preflight.state !== 'ready') {
+          const reason = preflight.reason;
+          const round: Event[] = [];
+          const emit = makeEmit(round);
+          const agentMsgId = newId('msg');
+          if (preflight.state === 'not_authenticated' || preflight.state === 'unknown') {
+            emit({
+              id: newId('evt'),
+              sessionId,
+              type: 'native_cli.connection_required',
+              actorAgentId: null,
+              payload: {
+                agentName,
+                provider: spec.provider,
+                reason,
+                reconnectIn: 'studio'
+              },
+              at: new Date().toISOString()
+            });
+          }
+          store.insertMessage(agentMsgId, sessionId, reason, new Date().toISOString(), 'assistant', {
+            type: 'error',
+            data: { agentName }
+          });
+          emit({
+            id: newId('evt'),
+            sessionId,
+            type: 'agent.error',
+            actorAgentId: null,
+            payload: {
+              messageId: agentMsgId,
+              agentName,
+              code:
+                preflight.state === 'not_authenticated'
+                  ? 'provider_auth_required'
+                  : preflight.state === 'unavailable'
+                    ? 'provider_unavailable'
+                    : 'provider_readiness_unknown',
+              message: reason
+            },
+            at: new Date().toISOString()
+          });
+          persistAndRetire(sessionId, round);
+          log?.debug(
+            {
+              sessionId,
+              event: 'session.forward_native_cli.preflight_blocked',
+              agentName,
+              provider: spec.provider,
+              state: preflight.state
+            },
+            'forward native cli connection required'
+          );
+          return { accepted: true as const };
+        }
+        const nativeSession = await nativeCliHost.start({
+          projectSessionId: sessionId,
+          agentName,
+          workingPath: session.cwd,
+          launchMode: spec.defaultLaunchMode
+        });
         nativeCliHost.input(nativeSession.id, { input: text.endsWith('\n') ? text : `${text}\n` });
         log?.debug(
           { sessionId, event: 'session.forward_native_cli.accepted', agentName, nativeCliSessionId: nativeSession.id },

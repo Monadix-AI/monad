@@ -356,6 +356,7 @@ export const eventTypeSchema = z.enum([
   'delegation.terminal_request',
   'native_cli.started',
   'native_cli.output',
+  'native_cli.connection_required',
   'native_cli.approval_requested',
   'native_cli.approval_resolved',
   'native_cli.exited'

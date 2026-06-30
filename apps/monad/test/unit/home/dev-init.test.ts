@@ -60,9 +60,11 @@ describe('ensureDevProvider', () => {
     const auth = await loadAuth(paths.auth);
     if (!cfg) throw new Error('config missing');
     expect(cfg.model.providers.some((p) => p.id === 'openrouter' && p.type === 'openrouter')).toBe(true);
+    expect(cfg.model.default).toBe('default');
     expect(cfg.model.profiles.find((p) => p.alias === 'default')?.routes.chat.modelId).toBe(
       'anthropic/claude-sonnet-4-6'
     );
+    expect(cfg.agent.agents.find((agent) => agent.id === cfg.agent.defaultAgentId)?.modelAlias).toBe('default');
     expect(auth?.credentialPool.openrouter?.[0]?.accessToken).toBe('sk-or-test');
     expect(computeInitStatus(cfg, auth).initialized).toBe(true);
   });
@@ -85,7 +87,9 @@ describe('ensureDevProvider', () => {
     const cfg = await loadAll(paths.config, paths.profile);
     const auth = await loadAuth(paths.auth);
     if (!cfg) throw new Error('config missing');
-    expect(cfg.model.profiles.find((p) => p.alias === 'default')?.routes.chat.modelId).toBe('some/model');
+    expect(cfg.model.default).toBe('dev');
+    expect(cfg.model.profiles.find((p) => p.alias === 'dev')?.routes.chat.modelId).toBe('some/model');
+    expect(cfg.agent.agents.find((agent) => agent.id === cfg.agent.defaultAgentId)?.modelAlias).toBe('dev');
     expect(cfg.model.providers.some((p) => p.id === 'custom')).toBe(true);
     expect(auth?.credentialPool.custom?.[0]?.accessToken).toBe('sk-file');
     expect(cfg.channels.some((c) => c.id === 'chn_DEVTG' && c.type === 'telegram')).toBe(true);

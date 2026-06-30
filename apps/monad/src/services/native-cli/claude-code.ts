@@ -226,6 +226,7 @@ export const claudeCodeNativeCliAdapter: NativeCliProviderAdapter = {
       defaultLaunchMode: 'pty',
       supportedLaunchModes: ['pty', 'json-stream', 'remote-control'],
       installHint: 'Install Claude Code, then sign in with claude auth.',
+      installUrl: 'https://docs.anthropic.com/en/docs/claude-code/setup',
       installed,
       resolvedBinPath: claudeBin,
       capabilities: {
@@ -235,6 +236,9 @@ export const claudeCodeNativeCliAdapter: NativeCliProviderAdapter = {
         approval: 'provider-owned'
       }
     };
+  },
+  resolveCommand(command, probes = defaultBinProbes) {
+    return resolveBinary(command, [], probes);
   },
   buildLaunch: buildClaudeLaunch,
   buildAuthLaunch(agent) {
@@ -246,9 +250,8 @@ export const claudeCodeNativeCliAdapter: NativeCliProviderAdapter = {
   parseAuthStatus(output, exitCode) {
     const structured = parseStructuredAuthState(output);
     if (structured) return structured;
-    if (exitCode === 0 && /logged in|authenticated|signed in/i.test(output)) return 'authenticated';
-    if (/not logged in|not authenticated|logged out|unauthenticated|sign in|login/i.test(output))
-      return 'unauthenticated';
+    if (exitCode === 0) return 'authenticated';
+    if (exitCode === 1) return 'unauthenticated';
     return 'unknown';
   },
   parseOutput: parseClaudeStreamJson,

@@ -90,7 +90,7 @@ const REMOTE_RATE_LIMIT = { capacity: 60, refillPerSec: 30 };
  * Never reflect an arbitrary origin together with `allow-credentials: true` — that
  * grants every cross-site page the ability to read credentialed responses.
  */
-function resolveAllowedOrigin(request: Request): string | null {
+export function resolveAllowedOrigin(request: Request): string | null {
   const origin = request.headers.get('origin');
   if (!origin) return null;
   let hostname: string;
@@ -128,7 +128,7 @@ function jsonResponse(status: number, body: { error: string; code?: string }, re
  * Constant-time token comparison. Protects against timing side-channels that let an
  * attacker enumerate token characters by observing response latency differences.
  */
-function tokenMatches(provided: string, expected: string): boolean {
+export function tokenMatches(provided: string, expected: string): boolean {
   const a = Buffer.from(provided);
   const b = Buffer.from(expected);
   const len = Math.max(a.length, b.length, 1);

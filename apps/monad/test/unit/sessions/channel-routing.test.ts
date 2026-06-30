@@ -43,6 +43,7 @@ test('channel routing sends a single ACP mention directly to that ACP agent', ()
     kind: 'forward-acp',
     agentName: 'planner',
     text: 'draft options',
+    displayText: `${plannerMention} draft options`,
     direct: true
   });
 });
@@ -52,6 +53,7 @@ test('channel routing sends a single inline ACP mention directly to that ACP age
     kind: 'forward-acp',
     agentName: 'planner',
     text: 'please draft options',
+    displayText: `please ${plannerMention} draft options`,
     direct: true
   });
 });
@@ -67,6 +69,7 @@ test('channel routing sends a single native CLI mention directly to that native 
     kind: 'forward-native-cli',
     agentName: 'codex',
     text: 'inspect repo',
+    displayText: '@[name="codex" id="native-cli:codex"] inspect repo',
     direct: true
   });
 });
@@ -99,6 +102,7 @@ test('channel routing sends an explicit monad mention through normal session gen
   expect(routeChannelMessage({ text: '@[name="monad" id="monad"] summarize', acpAgentNames })).toEqual({
     kind: 'send',
     text: 'summarize',
+    displayText: '@[name="monad" id="monad"] summarize',
     direct: true
   });
 });

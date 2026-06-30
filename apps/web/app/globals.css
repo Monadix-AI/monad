@@ -1,6 +1,7 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "@monad/ui/styles.css";
+@import "@xterm/xterm/css/xterm.css";
 
 /* Allow Tailwind to detect utility classes used by streamdown (monorepo: hoisted to root node_modules). */
 @source "../../../node_modules/streamdown/dist/*.js";
@@ -437,6 +438,82 @@
   }
 
   .panel-nav-resize-handle:hover::after {
+    opacity: 1;
+    transition-delay: 80ms;
+  }
+
+  .workplace-agent-rail[data-resizing="true"],
+  .workplace-agent-rail:has(.workplace-agent-rail-resize-handle:hover),
+  .workplace-agent-rail:has(.workplace-agent-rail-resize-handle:focus-visible) {
+    border-left-color: var(--foreground);
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .workplace-agent-rail[data-resizing="true"],
+    .workplace-agent-rail:has(.workplace-agent-rail-resize-handle:hover),
+    .workplace-agent-rail:has(.workplace-agent-rail-resize-handle:focus-visible) {
+      border-left-color: color-mix(in srgb, var(--foreground) 28%, var(--border));
+    }
+  }
+
+  .workplace-agent-rail-resize-handle {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: -8px;
+    z-index: 12;
+    width: 24px;
+    height: auto;
+    padding: 0;
+    margin: 0;
+    pointer-events: auto;
+    cursor: col-resize;
+    outline: none;
+    background: transparent;
+    border: 0;
+  }
+
+  .workplace-agent-rail-resize-handle::after {
+    position: absolute;
+    top: 50%;
+    left: 11px;
+    width: 6px;
+    height: 52px;
+    content: "";
+    background: var(--card);
+    border: 1px solid var(--foreground);
+    border-radius: 999px;
+    box-shadow:
+      0 1px 2px rgb(var(--backgroundColor-transparent) / 0.16),
+      inset 0 1px 0 rgb(var(--backgroundColor-surface-inverse) / 0.12);
+    opacity: 0;
+    transform: translateY(-50%) scaleY(1);
+    transition: opacity 120ms ease-out;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .workplace-agent-rail-resize-handle::after {
+      background: color-mix(in srgb, var(--card) 74%, transparent);
+      border-color: color-mix(in srgb, var(--foreground) 18%, var(--border));
+    }
+  }
+
+  .workplace-agent-rail[data-resizing="true"] .workplace-agent-rail-resize-handle::after,
+  .workplace-agent-rail-resize-handle:focus-visible::after {
+    background: var(--card);
+    border-color: var(--foreground);
+    opacity: 1;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .workplace-agent-rail[data-resizing="true"] .workplace-agent-rail-resize-handle::after,
+    .workplace-agent-rail-resize-handle:focus-visible::after {
+      background: color-mix(in srgb, var(--card) 58%, var(--foreground) 10%);
+      border-color: color-mix(in srgb, var(--foreground) 26%, var(--border));
+    }
+  }
+
+  .workplace-agent-rail-resize-handle:hover::after {
     opacity: 1;
     transition-delay: 80ms;
   }

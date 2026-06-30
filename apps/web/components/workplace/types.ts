@@ -4,6 +4,7 @@
 // lives here — only types and small static UI config.
 
 export type ParticipantKind = 'human' | 'agent';
+type MessageKind = ParticipantKind | 'system' | 'developer';
 export type Presence = 'online' | 'working' | 'idle';
 
 export interface Participant {
@@ -11,7 +12,7 @@ export interface Participant {
   /** Avatar initials, e.g. "MO". */
   av: string;
   /** Official product mark for provider-owned or Monad participants. */
-  icon?: 'monad' | 'openai' | 'anthropic';
+  icon?: 'monad' | 'openai' | 'anthropic' | 'google';
   name: string;
   kind: ParticipantKind;
   /** Short label badge — User / AI / ACP. */
@@ -40,12 +41,21 @@ export interface Message {
   authorName: string;
   av: string;
   icon?: Participant['icon'];
-  kind: ParticipantKind;
+  kind: MessageKind;
   tag: string;
   time: string;
   text: string;
+  agentChip?: {
+    id: string;
+    name: string;
+    icon?: Participant['icon'];
+    tag: string;
+  };
+  nativeCliSessionId?: string;
+  developerOnly?: boolean;
   reasoning?: string;
   streaming?: boolean;
+  orderKey?: string;
   internals?: ToolChip[];
 }
 
@@ -75,6 +85,17 @@ export interface AgentTask {
   title: string;
   output?: string;
   status: ActivityStatus;
+}
+
+export interface NativeCliStreamView {
+  id: string;
+  agentName: string;
+  provider: string;
+  tag: string;
+  icon?: Participant['icon'];
+  status: ActivityStatus;
+  workingPath?: string;
+  output: string;
 }
 
 /** A real pending tool approval from the oversight gate. */

@@ -16,13 +16,24 @@ import type {
   Agent,
   AgentId,
   NativeCliLaunchMode,
+  NativeCliProvider,
+  NativeCliSessionView,
   Session,
   SessionId,
   UIItem,
   UIMessageItem,
   UIPart
 } from '@monad/protocol';
-import type { ActivityRow, AgentTask, ApprovalView, Message, Participant, Project, TypingIndicator } from './types';
+import type {
+  ActivityRow,
+  AgentTask,
+  ApprovalView,
+  Message,
+  NativeCliStreamView,
+  Participant,
+  Project,
+  TypingIndicator
+} from './types';
 
 import {
   profileSelectors,
@@ -34,10 +45,10 @@ import {
   useCreateSessionMutation,
   useInputNativeCliSessionMutation,
   useListAgentsQuery,
+  useListNativeCliSessionsQuery,
   useListProfilesQuery,
   useListSessionsQuery,
   useSendProjectMessageMutation,
-  useStartNativeCliAgentMutation,
   useStopNativeCliSessionMutation,
   useStreamUiItemsQuery,
   useUpdateSessionMutation
@@ -57,6 +68,8 @@ export type ApprovalDecision = 'approve' | 'reject';
 const EMPTY_PROFILES: { alias: string; provider: string; modelId: string }[] = [];
 const EMPTY_AGENTS: Agent[] = [];
 const EMPTY_ITEMS: UIItem[] = [];
+const EMPTY_NATIVE_CLI_SESSIONS: NativeCliSessionView[] = [];
+const SHOW_DEVELOPER_ONLY_MESSAGES = process.env.NODE_ENV !== 'production';
 
 const messageId = (m: Message): string => m.id;
 const CHANNEL_HOST_EXT_KEY = 'workplaceProjectModeratorAgentId';
@@ -192,17 +205,155 @@ function messageToView(item: UIMessageItem, time = ''): Message {
     tag: agent ? (displayName === 'monad' ? 'AI' : 'ACP') : HUMAN.tag,
     time,
     text: displayTextFromMessage(item),
+    orderKey: item.seq,
     ...(reasoning ? { reasoning } : {}),
     streaming: item.status === 'streaming'
   };
+}
+
+function nativeCliIcon(provider: NativeCliProvider | string | undefined): Participant['icon'] | undefined {
+  if (provider === 'codex') return 'openai';
+  if (provider === 'claude-code') return 'anthropic';
+  if (provider === 'gemini') return 'google';
+  return undefined;
+}
+
+function nativeCliTag(provider: NativeCliProvider | string | undefined): string {
+  if (provider === 'codex') return 'Codex';
+  if (provider === 'claude-code') return 'Claude';
+  if (provider === 'gemini') return 'Gemini';
+  return 'CLI';
+}
+
+function nativeCliApprovalName(provider: NativeCliProvider | string | undefined): string {
+  if (provider === 'codex') return 'Codex approval';
+  if (provider === 'claude-code') return 'Claude Code approval';
+  if (provider === 'gemini') return 'Gemini approval';
+  return 'CLI approval';
 }
 
 function iconForAgent(name: string): Participant['icon'] | undefined {
   if (name === 'monad') return 'monad';
   if (name === 'codex') return 'openai';
   if (name === 'claude-code') return 'anthropic';
+  if (name === 'gemini') return 'google';
   return undefined;
 }
+
+function nativeCliSessionMessage(session: NativeCliSessionView): Message {
+  const text =
+    session.state === 'failed'
+      ? 'failed to join the project'
+      : session.state === 'running'
+        ? 'joined the project'
+        : 'left the project';
+  return {
+    id: `native-cli-session:${session.id}`,
+    authorId: session.agentName,
+    authorName: session.agentName,
+    av: avatarForAgent(session.agentName),
+    icon: nativeCliIcon(session.provider),
+    kind: 'system',
+    tag: nativeCliTag(session.provider),
+    time: fmtTime(session.startedAt),
+    text,
+    agentChip: {
+      id: projectMemberId('native-cli', session.agentName),
+      name: session.agentName,
+      icon: nativeCliIcon(session.provider),
+      tag: nativeCliTag(session.provider)
+    },
+    nativeCliSessionId: session.id,
+    streaming: false,
+    orderKey: session.startedAt
+  };
+}
+
+function nativeCliSessionDeveloperMessage(session: NativeCliSessionView): Message {
+  const exitText =
+    session.state === 'running'
+      ? ''
+      : session.exitCode === null
+        ? `\nstate: ${session.state}`
+        : `\nstate: ${session.state} (${session.exitCode})`;
+  return {
+    id: `native-cli-session-developer:${session.id}`,
+    authorId: session.agentName,
+    authorName: session.agentName,
+    av: avatarForAgent(session.agentName),
+    icon: nativeCliIcon(session.provider),
+    kind: 'developer',
+    tag: 'DEV',
+    time: fmtTime(session.startedAt),
+    text: `started ${session.provider} in ${session.workingPath}${exitText}`,
+    nativeCliSessionId: session.id,
+    developerOnly: true,
+    orderKey: `${session.startedAt}:developer`
+  };
+}
+
+function sortMessagesOldestFirst(messages: Message[]): Message[] {
+  return [...messages].sort((a, b) => {
+    const order = (a.orderKey || a.id).localeCompare(b.orderKey || b.id);
+    return order === 0 ? a.id.localeCompare(b.id) : order;
+  });
+}
+
+function nativeCliStreamFromSession(session: NativeCliSessionView): NativeCliStreamView {
+  return {
+    id: session.id,
+    agentName: session.agentName,
+    provider: session.provider,
+    tag: nativeCliTag(session.provider),
+    icon: nativeCliIcon(session.provider),
+    status: session.state === 'failed' ? 'error' : session.state === 'running' ? 'running' : 'ok',
+    workingPath: session.workingPath,
+    output: session.outputSnapshot
+  };
+}
+
+function nativeCliStreamFromActivity(row: ActivityRow): NativeCliStreamView | undefined {
+  if (!row.tool.startsWith('native-cli:')) return undefined;
+  const provider = row.tool.slice('native-cli:'.length) || 'native-cli';
+  return {
+    id: row.id,
+    agentName: row.detail || provider,
+    provider,
+    tag: nativeCliTag(provider),
+    icon: nativeCliIcon(provider),
+    status: row.status,
+    output: row.output ?? ''
+  };
+}
+
+function buildNativeCliStreams(
+  nativeCliSessions: NativeCliSessionView[],
+  activity: ActivityRow[]
+): NativeCliStreamView[] {
+  const byId = new Map<string, NativeCliStreamView>();
+  for (const session of nativeCliSessions) byId.set(session.id, nativeCliStreamFromSession(session));
+  for (const row of activity) {
+    const stream = nativeCliStreamFromActivity(row);
+    if (!stream) continue;
+    const existing = byId.get(stream.id);
+    byId.set(stream.id, {
+      ...existing,
+      ...stream,
+      agentName: existing?.agentName ?? stream.agentName,
+      workingPath: existing?.workingPath,
+      output: stream.output || existing?.output || ''
+    });
+  }
+  return [...byId.values()];
+}
+
+export const __workplaceProjectMessageTest = {
+  buildProjectMessages,
+  buildNativeCliStreams,
+  nativeCliSessionMessage,
+  nativeCliSessionDeveloperMessage,
+  sortMessagesOldestFirst
+};
 
 function toolItems(items: UIItem[]): Extract<UIItem, { kind: 'tool' }>[] {
   return items.filter((item): item is Extract<UIItem, { kind: 'tool' }> => item.kind === 'tool');
@@ -226,6 +377,106 @@ export function acpProgressText(output: string | undefined): string {
     if (response) return response;
   }
   return text;
+}
+
+interface BuildProjectMessagesInput {
+  persistedMessages: Message[];
+  nativeCliSessions: NativeCliSessionView[];
+  liveItems: UIItem[];
+  liveTools: Extract<UIItem, { kind: 'tool' }>[];
+  showDeveloperOnlyMessages?: boolean;
+}
+
+function buildProjectMessages({
+  persistedMessages,
+  nativeCliSessions,
+  liveItems,
+  liveTools,
+  showDeveloperOnlyMessages = SHOW_DEVELOPER_ONLY_MESSAGES
+}: BuildProjectMessagesInput): Message[] {
+  const byId = new Map<string, Message>();
+  const toView = messageToView;
+  for (const view of persistedMessages) byId.set(view.id, view);
+  for (const session of nativeCliSessions) {
+    byId.set(`native-cli-session:${session.id}`, nativeCliSessionMessage(session));
+    if (showDeveloperOnlyMessages) {
+      byId.set(`native-cli-session-developer:${session.id}`, nativeCliSessionDeveloperMessage(session));
+    }
+  }
+  for (const item of liveItems) {
+    if (item.kind !== 'message') continue;
+    const text = displayTextFromMessage(item);
+    const reasoning = item.role === 'assistant' ? reasoningFromParts(item.parts) : undefined;
+    if (text || reasoning || item.status !== 'streaming') byId.set(item.id, toView(item));
+  }
+  const streamingAgentNames = new Set(
+    [...byId.values()]
+      .filter((message) => message.kind === 'agent' && message.streaming)
+      .map((message) => message.authorName)
+  );
+  for (const item of liveTools) {
+    if (item.status !== 'running') continue;
+    const agentName = acpAgentNameFromTool(item);
+    if (!agentName || streamingAgentNames.has(agentName)) continue;
+    const text = acpProgressText(item.output);
+    if (!text) continue;
+    byId.set(`acp-progress:${item.id}`, {
+      id: `acp-progress:${item.id}`,
+      authorId: agentName,
+      authorName: agentName,
+      av: avatarForAgent(agentName),
+      icon: iconForAgent(agentName),
+      kind: 'agent',
+      tag: 'ACP',
+      time: '',
+      text,
+      streaming: true,
+      orderKey: item.seq
+    });
+  }
+  for (const item of liveTools) {
+    if (item.status !== 'running' || !item.tool.startsWith('native-cli:')) continue;
+    const input = item.input as { agent?: unknown; provider?: unknown } | undefined;
+    if (typeof input?.agent !== 'string') continue;
+    const provider = typeof input.provider === 'string' ? input.provider : undefined;
+    byId.set(`native-cli-session:${item.id}`, {
+      id: `native-cli-session:${item.id}`,
+      authorId: input.agent,
+      authorName: input.agent,
+      av: avatarForAgent(input.agent),
+      icon: nativeCliIcon(provider),
+      kind: 'system',
+      tag: nativeCliTag(provider),
+      time: '',
+      text: 'joined the project',
+      agentChip: {
+        id: projectMemberId('native-cli', input.agent),
+        name: input.agent,
+        icon: nativeCliIcon(provider),
+        tag: nativeCliTag(provider)
+      },
+      nativeCliSessionId: item.id,
+      streaming: false,
+      orderKey: item.seq
+    });
+    if (showDeveloperOnlyMessages && item.output) {
+      byId.set(`native-cli-session-developer:${item.id}`, {
+        id: `native-cli-session-developer:${item.id}`,
+        authorId: input.agent,
+        authorName: input.agent,
+        av: avatarForAgent(input.agent),
+        icon: nativeCliIcon(provider),
+        kind: 'developer',
+        tag: 'DEV',
+        time: '',
+        text: item.output,
+        nativeCliSessionId: item.id,
+        developerOnly: true,
+        orderKey: `${item.seq}:developer`
+      });
+    }
+  }
+  return sortMessagesOldestFirst([...byId.values()]);
 }
 
 /** Short human summary of a tool call (delegations call out the target agent). */
@@ -292,6 +543,9 @@ export function useProject(projectId: string) {
 
   // --- live stream + lazy older history ---
   const stream = useStreamUiItemsQuery((sessionId ?? '') as SessionId, { skip: sessionId === null });
+  const nativeCliSessionsQ = useListNativeCliSessionsQuery((sessionId ?? '') as SessionId, {
+    skip: sessionId === null
+  });
   const transcript = useTranscriptHistory({
     sessionId,
     streamOldestCursor: stream.data?.oldestCursor,
@@ -312,6 +566,7 @@ export function useProject(projectId: string) {
 
   // --- participants ---
   const liveItems = stream.data?.items ?? EMPTY_ITEMS;
+  const nativeCliSessions = nativeCliSessionsQ.data ?? EMPTY_NATIVE_CLI_SESSIONS;
   const contextUsage = liveItems.find(
     (item): item is Extract<UIItem, { kind: 'context' }> => item.kind === 'context'
   )?.usage;
@@ -358,14 +613,14 @@ export function useProject(projectId: string) {
     const members: Participant[] = projectMembers.map((member) => {
       if (member.type === 'native-cli') {
         const agent = nativeCli.agents.find((candidate) => candidate.name === member.name);
-        const provider = agent?.provider ?? (member.name === 'codex' ? 'codex' : 'claude-code');
+        const provider = agent?.provider;
         return {
           id: member.id,
           av: initials(member.name),
-          icon: provider === 'codex' ? 'openai' : 'anthropic',
+          icon: nativeCliIcon(provider),
           name: member.name,
           kind: 'agent',
-          tag: provider === 'codex' ? 'Codex' : 'Claude',
+          tag: nativeCliTag(provider),
           role: 'CLI',
           presence: runningNativeCli.has(member.name) ? 'working' : agent?.enabled ? 'online' : 'idle'
         };
@@ -401,63 +656,13 @@ export function useProject(projectId: string) {
   }, [transcript.items]);
 
   const messages: Message[] = useMemo(() => {
-    const byId = new Map<string, Message>();
-    const toView = messageToView;
-    for (const view of persistedMessages) byId.set(view.id, view);
-    for (const item of liveItems) {
-      if (item.kind !== 'message') continue;
-      const text = displayTextFromMessage(item);
-      const reasoning = item.role === 'assistant' ? reasoningFromParts(item.parts) : undefined;
-      if (text || reasoning || item.status !== 'streaming') byId.set(item.id, toView(item));
-    }
-    const streamingAgentNames = new Set(
-      [...byId.values()]
-        .filter((message) => message.kind === 'agent' && message.streaming)
-        .map((message) => message.authorName)
-    );
-    for (const item of liveTools) {
-      if (item.status !== 'running') continue;
-      const agentName = acpAgentNameFromTool(item);
-      if (!agentName || streamingAgentNames.has(agentName)) continue;
-      const text = acpProgressText(item.output);
-      if (!text) continue;
-      byId.set(`acp-progress:${item.id}`, {
-        id: `acp-progress:${item.id}`,
-        authorId: agentName,
-        authorName: agentName,
-        av: avatarForAgent(agentName),
-        icon: iconForAgent(agentName),
-        kind: 'agent',
-        tag: 'ACP',
-        time: '',
-        text,
-        streaming: true
-      });
-    }
-    for (const item of liveTools) {
-      if (item.status !== 'running' || !item.tool.startsWith('native-cli:')) continue;
-      const input = item.input as { agent?: unknown; provider?: unknown } | undefined;
-      if (typeof input?.agent !== 'string') continue;
-      byId.set(`native-cli-progress:${item.id}`, {
-        id: `native-cli-progress:${item.id}`,
-        authorId: input.agent,
-        authorName: input.agent,
-        av: avatarForAgent(input.agent),
-        icon: typeof input.provider === 'string' && input.provider === 'codex' ? 'openai' : 'anthropic',
-        kind: 'agent',
-        tag: typeof input.provider === 'string' && input.provider === 'codex' ? 'Codex' : 'Claude',
-        time: '',
-        text: item.output ?? '',
-        streaming: true
-      });
-    }
-    return [...byId.values()];
-  }, [persistedMessages, liveItems, liveTools]);
+    return buildProjectMessages({ persistedMessages, nativeCliSessions, liveItems, liveTools });
+  }, [persistedMessages, liveItems, liveTools, nativeCliSessions]);
 
   const firstItemIndex = useFirstItemIndex(messages, messageId);
   const loadOlder = transcript.loadOlder;
 
-  const typingAgentName = [...runningDelegations][0] ?? 'monad';
+  const typingAgentName = [...runningDelegations][0] ?? [...runningNativeCli][0] ?? 'monad';
   const hasStreamingMessage = messages.some((message) => message.streaming && (message.text || message.reasoning));
   const typing: TypingIndicator | null =
     streaming && !hasStreamingMessage
@@ -484,6 +689,10 @@ export function useProject(projectId: string) {
         status: s.status
       })),
     [liveTools]
+  );
+  const nativeCliStreams = useMemo(
+    () => buildNativeCliStreams(nativeCliSessions, activity),
+    [nativeCliSessions, activity]
   );
 
   // --- agent tasks (running tool steps) ---
@@ -527,7 +736,7 @@ export function useProject(projectId: string) {
           name:
             (a.input as { approvalOwnership?: unknown; provider?: unknown } | undefined)?.approvalOwnership ===
               'provider-owned' && typeof (a.input as { provider?: unknown } | undefined)?.provider === 'string'
-              ? `${(a.input as { provider: string }).provider === 'codex' ? 'Codex' : 'Claude Code'} approval`
+              ? nativeCliApprovalName((a.input as { provider: string }).provider)
               : 'monad',
           tag:
             (a.input as { approvalOwnership?: unknown } | undefined)?.approvalOwnership === 'provider-owned'
@@ -560,7 +769,6 @@ export function useProject(projectId: string) {
   const [approveNativeCliSession] = useApproveNativeCliSessionMutation();
   const [abortSession] = useAbortSessionMutation();
   const [updateSession] = useUpdateSessionMutation();
-  const [startNativeCliAgent] = useStartNativeCliAgentMutation();
   const [inputNativeCliSession] = useInputNativeCliSessionMutation();
   const [stopNativeCliSession] = useStopNativeCliSessionMutation();
 
@@ -672,9 +880,9 @@ export function useProject(projectId: string) {
           type: 'native-cli' as const,
           name: agent.name,
           label: agent.name,
-          tag: agent.provider === 'codex' ? 'Codex' : 'Claude',
+          tag: nativeCliTag(agent.provider),
           enabled: agent.enabled,
-          icon: agent.provider === 'codex' ? ('openai' as const) : ('anthropic' as const)
+          icon: nativeCliIcon(agent.provider)
         }))
     ];
   }, [acp.agents, nativeCli.agents, projectMembers]);
@@ -695,33 +903,8 @@ export function useProject(projectId: string) {
               ...(nativeAgent?.defaultLaunchMode ? { launchMode: nativeAgent.defaultLaunchMode } : {})
             };
       await updateProjectMembers([...projectMembers, { id: projectMemberId(type, name), type, name, settings }]);
-      if (type === 'native-cli' && sessionId && currentSession?.cwd && nativeAgent?.enabled) {
-        await traceProjectDebugOperation(
-          {
-            layer: 'web',
-            label: 'native-cli.start',
-            sessionId,
-            data: { agentName: name, workingPath: currentSession.cwd, launchMode: settings.launchMode }
-          },
-          () =>
-            startNativeCliAgent({
-              sessionId,
-              agentName: name,
-              workingPath: currentSession.cwd as string,
-              launchMode: settings.launchMode
-            }).unwrap()
-        );
-      }
     },
-    [
-      acp.agents,
-      currentSession?.cwd,
-      nativeCli.agents,
-      projectMembers,
-      sessionId,
-      startNativeCliAgent,
-      updateProjectMembers
-    ]
+    [acp.agents, nativeCli.agents, projectMembers, updateProjectMembers]
   );
 
   const removeProjectMember = useCallback(
@@ -815,6 +998,7 @@ export function useProject(projectId: string) {
       loadOlder,
       typing,
       activity,
+      nativeCliStreams,
       tasks,
       contextUsage,
       modelProfiles,
@@ -855,6 +1039,7 @@ export function useProject(projectId: string) {
       loadOlder,
       typing,
       activity,
+      nativeCliStreams,
       tasks,
       contextUsage,
       modelProfiles,

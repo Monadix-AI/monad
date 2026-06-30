@@ -1,7 +1,7 @@
 import type { WebMessageIdWithoutParams } from '@monad/i18n';
 import type { ReactElement } from 'react';
 import type { TFn } from '@/components/I18nProvider';
-import type { ActivityRow, AgentTask, Message, Participant, TypingIndicator } from '../types';
+import type { ActivityRow, AgentTask, Message, NativeCliStreamView, Participant, TypingIndicator } from '../types';
 
 // A preset is pure presentation: the read-only mapping of chatroom data → UI. It never owns
 // management (members/moderator/approvals/workdir) or primary communication (the composer) — those
@@ -13,10 +13,13 @@ export interface ProjectCanvas {
   messages: Message[];
   participants: Participant[];
   activity: ActivityRow[];
+  nativeCliStreams: NativeCliStreamView[];
   tasks: AgentTask[];
   typing: TypingIndicator | null;
   firstItemIndex: number;
   loadOlder: () => void;
+  openAgentCard?: (id: string) => void;
+  followNativeCliSession?: (id: string) => void;
   sendNativeCliInput: (id: string, input: string) => Promise<void>;
   stopNativeCli: (id: string) => Promise<void>;
 }

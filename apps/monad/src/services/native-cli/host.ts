@@ -16,7 +16,12 @@ import type {
 } from '@monad/protocol';
 import type { EventBus } from '@/services/event-bus.ts';
 import type { StructuredLineBufferState } from '@/services/native-cli/structured-lines.ts';
-import type { NativeCliOutputEvent, NativeCliProviderAdapter } from '@/services/native-cli/types.ts';
+import type {
+  NativeCliLaunchSpec,
+  NativeCliOutputEvent,
+  NativeCliProviderAdapter,
+  NativeCliStartPreflight
+} from '@/services/native-cli/types.ts';
 import type { NativeCliSessionRow, Store } from '@/store/db/index.ts';
 
 import { existsSync, mkdirSync, readFileSync, realpathSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
@@ -30,7 +35,8 @@ import {
   buildNativeCliAuthLaunch,
   buildNativeCliAuthStatusLaunch,
   buildNativeCliLaunch,
-  getNativeCliProviderAdapter
+  getNativeCliProviderAdapter,
+  resolveNativeCliLaunchCommand
 } from '@/services/native-cli/index.ts';
 import { killNativeCliProcess } from '@/services/native-cli/process.ts';
 import { takeCompleteStructuredLines } from '@/services/native-cli/structured-lines.ts';
@@ -58,6 +64,8 @@ type NativeCliProcess = ReturnType<typeof Bun.spawn> & {
 interface LiveNativeCliSession {
   id: string;
   projectSessionId: SessionId;
+  agentName: string;
+  provider: NativeCliAgentView['provider'];
   proc: NativeCliProcess;
   adapter: NativeCliProviderAdapter;
   launchMode: NativeCliLaunchMode;
@@ -273,11 +281,6 @@ export class NativeCliHost {
     }
     if (!statSync(workingPath).isDirectory())
       throw new Error(`workingPath must be an existing directory: ${args.workingPath}`);
-    const launch = buildNativeCliLaunch(agent, {
-      workingPath,
-      launchMode: args.launchMode,
-      providerSessionRef: args.providerSessionRef
-    });
     const adapter = getNativeCliProviderAdapter(agent.provider);
     const id = newId('ncli');
     const now = new Date().toISOString();
@@ -285,7 +288,53 @@ export class NativeCliHost {
 
     let pendingCR = false;
     const decoder = new TextDecoder();
+    let launch: NativeCliLaunchSpec;
     let proc: NativeCliProcess;
+    try {
+      launch = resolveNativeCliLaunchCommand(
+        adapter,
+        buildNativeCliLaunch(agent, {
+          workingPath,
+          launchMode: args.launchMode,
+          providerSessionRef: args.providerSessionRef
+        })
+      );
+    } catch (error) {
+      const failedAt = new Date().toISOString();
+      this.deps.store.upsertNativeCliSession({
+        id,
+        projectSessionId: args.projectSessionId,
+        agentName: agent.name,
+        provider: agent.provider,
+        workingPath,
+        launchMode: args.launchMode ?? agent.defaultLaunchMode,
+        state: 'failed',
+        pid: null,
+        providerSessionRef: args.providerSessionRef ?? null,
+        outputSnapshot: error instanceof Error ? error.message : String(error),
+        exitCode: null,
+        startedAt: now,
+        updatedAt: failedAt,
+        exitedAt: failedAt
+      });
+      this.emit(args.projectSessionId, 'native_cli.exited', {
+        nativeCliSessionId: id,
+        exitCode: null,
+        state: 'failed'
+      });
+      this.log.error(
+        {
+          sessionId: args.projectSessionId,
+          event: 'native_cli.launch_failed',
+          nativeCliSessionId: id,
+          agentName: agent.name,
+          provider: agent.provider,
+          err: error instanceof Error ? { message: error.message, stack: error.stack } : String(error)
+        },
+        'native cli launch failed'
+      );
+      throw error;
+    }
     this.log.debug(
       {
         sessionId: args.projectSessionId,
@@ -389,6 +438,8 @@ export class NativeCliHost {
     const live: LiveNativeCliSession = {
       id,
       projectSessionId: args.projectSessionId,
+      agentName: agent.name,
+      provider: agent.provider,
       proc,
       adapter,
       launchMode: launch.launchMode,
@@ -578,7 +629,8 @@ export class NativeCliHost {
   async startAuth(agentName: string): Promise<NativeCliAuthSessionView> {
     this.pruneAuthSessions();
     const agent = await this.requireAgent(agentName);
-    const launch = buildNativeCliAuthLaunch(agent);
+    const adapter = getNativeCliProviderAdapter(agent.provider);
+    const launch = resolveNativeCliLaunchCommand(adapter, buildNativeCliAuthLaunch(agent));
     const id = newId('ncliauth');
     const now = new Date().toISOString();
     const decoder = new TextDecoder();
@@ -616,7 +668,7 @@ export class NativeCliHost {
       provider: agent.provider,
       proc,
       terminal: proc.terminal,
-      adapter: getNativeCliProviderAdapter(agent.provider),
+      adapter,
       authState: 'unknown',
       outputSnapshot: '',
       state: 'running',
@@ -690,7 +742,17 @@ export class NativeCliHost {
     this.pruneAuthSessions();
     const agent = await this.requireAgent(agentName);
     const adapter = getNativeCliProviderAdapter(agent.provider);
-    const launch = buildNativeCliAuthStatusLaunch(agent);
+    const launch = resolveNativeCliLaunchCommand(adapter, buildNativeCliAuthStatusLaunch(agent));
+    this.log.debug(
+      {
+        event: 'native_cli.auth_status',
+        agentName: agent.name,
+        provider: agent.provider,
+        argv: launch.argv,
+        cwd: launch.cwd
+      },
+      'native cli auth status probe'
+    );
     const proc = Bun.spawn(launch.argv, {
       cwd: launch.cwd,
       env: await this.buildSpawnEnv(launch.env),
@@ -709,15 +771,87 @@ export class NativeCliHost {
     const result = await Promise.race([proc.exited.then((code) => ({ timedOut: false as const, code })), timeout]);
     const output = await outputPromise.catch(() => '');
     if (result.timedOut) {
+      this.log.warn(
+        {
+          event: 'native_cli.auth_status_timeout',
+          agentName: agent.name,
+          provider: agent.provider,
+          argv: launch.argv,
+          cwd: launch.cwd,
+          timeoutMs: AUTH_STATUS_TIMEOUT_MS,
+          output
+        },
+        'native cli auth status probe timed out'
+      );
       throw new NativeCliError('provider_timeout', `timed out checking native CLI auth status: ${agent.name}`);
     }
+    const state = adapter.parseAuthStatus(output, result.code);
+    this.log.debug(
+      {
+        event: 'native_cli.auth_status_result',
+        agentName: agent.name,
+        provider: agent.provider,
+        exitCode: result.code,
+        state,
+        output
+      },
+      'native cli auth status probe result'
+    );
     return {
       agentName: agent.name,
       provider: agent.provider,
-      state: adapter.parseAuthStatus(output, result.code),
+      state,
       output,
       checkedAt: new Date().toISOString()
     };
+  }
+
+  async preflight(agentName: string): Promise<NativeCliStartPreflight> {
+    const checkedAt = new Date().toISOString();
+    const agent = await this.requireAgent(agentName);
+    try {
+      const auth = await this.authStatus(agentName);
+      if (auth.state === 'authenticated') {
+        return { state: 'ready', agentName: agent.name, provider: agent.provider, checkedAt: auth.checkedAt };
+      }
+      if (auth.state === 'unauthenticated') {
+        return {
+          state: 'not_authenticated',
+          agentName: agent.name,
+          provider: agent.provider,
+          checkedAt: auth.checkedAt,
+          action: 'reconnect_in_studio',
+          reason: `Reconnect ${agent.name} in Studio before using it in this project.`
+        };
+      }
+      return {
+        state: 'unknown',
+        agentName: agent.name,
+        provider: agent.provider,
+        checkedAt: auth.checkedAt,
+        action: 'manual_check_in_studio',
+        reason: `Check ${agent.name} connection in Studio before using it in this project.`
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (/Executable not found|ENOENT/i.test(message)) {
+        return {
+          state: 'unavailable',
+          agentName: agent.name,
+          provider: agent.provider,
+          checkedAt,
+          reason: message
+        };
+      }
+      return {
+        state: 'unknown',
+        agentName: agent.name,
+        provider: agent.provider,
+        checkedAt,
+        action: 'manual_check_in_studio',
+        reason: `Check ${agent.name} connection in Studio before using it in this project.`
+      };
+    }
   }
 
   private pruneAuthSessions(nowMs = Date.now()): void {
@@ -849,10 +983,27 @@ export class NativeCliHost {
       return;
     }
 
+    if (event.type === 'connection_required') {
+      const live = this.live.get(id);
+      this.emit(projectSessionId, 'native_cli.connection_required', {
+        nativeCliSessionId: id,
+        agentName: live?.agentName ?? adapter.provider,
+        provider: adapter.provider,
+        reason:
+          typeof event.payload.reason === 'string'
+            ? event.payload.reason
+            : `${adapter.provider} requires reconnect in Studio`,
+        reconnectIn: 'studio'
+      });
+      this.stop(id);
+      return;
+    }
+
     if (event.type === 'approval_requested') {
       const requestId =
         typeof event.payload.requestId === 'string' ? event.payload.requestId : String(event.payload.requestId);
       const live = this.live.get(id);
+      if (live?.pendingApprovals.has(requestId)) return;
       live?.pendingApprovals.set(requestId, event.payload);
       this.emit(projectSessionId, 'native_cli.approval_requested', {
         nativeCliSessionId: id,
@@ -895,9 +1046,11 @@ export class NativeCliHost {
 }
 
 function nativeCliApprovalText(event: NativeCliOutputEvent): string {
+  const action = typeof event.payload.action === 'string' ? event.payload.action : undefined;
   const command = typeof event.payload.command === 'string' ? event.payload.command : undefined;
   const reason = typeof event.payload.reason === 'string' ? event.payload.reason : undefined;
   const kind = typeof event.payload.kind === 'string' ? event.payload.kind : 'approval';
+  if (action) return action;
   if (command && reason) return `${kind}: ${command} (${reason})`;
   if (command) return `${kind}: ${command}`;
   if (reason) return `${kind}: ${reason}`;

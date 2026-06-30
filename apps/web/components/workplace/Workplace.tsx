@@ -2,11 +2,12 @@
 
 import type { CSSProperties } from 'react';
 
-import { useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 
 import { useT } from '@/components/I18nProvider';
 import { AgentTasksRail } from './AgentTasksRail';
 import { Composer } from './Composer';
+import { NativeCliStreamModal } from './NativeCliStreamModal';
 import { ProjectHeader } from './ProjectHeader';
 import { ProjectRail } from './ProjectRail';
 import { ProjectSettings } from './ProjectSettings';
@@ -30,12 +31,39 @@ export function Workplace({
 }): React.ReactElement {
   const project = useProject(projectId);
   const t = useT();
+  const [internalProjectSettingsOpen, setInternalProjectSettingsOpen] = useState(false);
+  const [selectedProjectMemberId, setSelectedProjectMemberId] = useState<string | null>(null);
+  const [followedNativeCliSessionId, setFollowedNativeCliSessionId] = useState<string | null>(null);
+  const settingsOpen = projectSettingsOpen || internalProjectSettingsOpen;
+  const closeProjectSettings = useCallback(() => {
+    setInternalProjectSettingsOpen(false);
+    setSelectedProjectMemberId(null);
+    onProjectSettingsOpenChange?.(false);
+  }, [onProjectSettingsOpenChange]);
+  const openAgentCard = useCallback(
+    (memberId: string) => {
+      setSelectedProjectMemberId(memberId);
+      setInternalProjectSettingsOpen(true);
+      onProjectSettingsOpenChange?.(true);
+    },
+    [onProjectSettingsOpenChange]
+  );
+  const followNativeCliSession = useCallback((id: string) => {
+    setFollowedNativeCliSessionId(id);
+  }, []);
+  const followedNativeCliStream = useMemo(
+    () => project.nativeCliStreams.find((stream) => stream.id === followedNativeCliSessionId),
+    [project.nativeCliStreams, followedNativeCliSessionId]
+  );
   // The body renders the active preset (chat / graph / future atom views); the management chrome
   // (header, composer, rails) is identical across presets and host-rendered below.
   const PresetView = getPreset(mode).render;
   // Rebuild the canvas only when the project view-model changes, not on every unrelated re-render
   // (settings open/close, locale) — keeps the transcript subtree from reconciling needlessly.
-  const canvas = useMemo(() => toCanvas(project), [project]);
+  const canvas = useMemo(
+    () => toCanvas(project, { followNativeCliSession, openAgentCard }),
+    [project, followNativeCliSession, openAgentCard]
+  );
 
   return (
     <div
@@ -149,10 +177,18 @@ export function Workplace({
 
           <AgentTasksRail room={project} />
         </div>
-        {projectSettingsOpen ? (
+        {settingsOpen ? (
           <ProjectSettings
-            onClose={() => onProjectSettingsOpenChange?.(false)}
+            initialMemberId={selectedProjectMemberId}
+            onClose={closeProjectSettings}
             room={project}
+          />
+        ) : null}
+        {followedNativeCliStream ? (
+          <NativeCliStreamModal
+            onClose={() => setFollowedNativeCliSessionId(null)}
+            onStop={(id) => void project.stopNativeCli(id)}
+            stream={followedNativeCliStream}
           />
         ) : null}
       </div>

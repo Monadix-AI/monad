@@ -1,7 +1,7 @@
 import type { ProjectController } from './use-project';
 
 import { ChevronDown, ChevronRight, Minus, Plus } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { useT } from '@/components/I18nProvider';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
@@ -106,14 +106,20 @@ function MemberSettings({ member, room }: { member: ProjectMember; room: Project
 
 export function ProjectSettings({
   room,
-  onClose
+  onClose,
+  initialMemberId = null
 }: {
   room: ProjectController;
   onClose: () => void;
+  initialMemberId?: string | null;
 }): React.ReactElement {
   const t = useT();
-  const [expanded, setExpanded] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState<string | null>(initialMemberId);
   const projectParticipants = room.participants.filter((participant) => participant.id !== 'monad');
+
+  useEffect(() => {
+    if (initialMemberId) setExpanded(initialMemberId);
+  }, [initialMemberId]);
 
   return (
     <Dialog

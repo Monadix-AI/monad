@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test';
 
 import {
+  nativeCliAgentPresetSchema,
   nativeCliAgentViewSchema,
   nativeCliApprovalResolutionRequestSchema,
   nativeCliAuthSessionViewSchema,
@@ -22,6 +23,36 @@ test('native CLI agent view requires provider-owned full-capability defaults', (
   expect(parsed.provider).toBe('codex');
   expect(parsed.defaultLaunchMode).toBe('pty');
   expect(parsed.approvalOwnership).toBe('provider-owned');
+});
+
+test('native CLI agent view accepts Gemini as a provider-owned native CLI provider', () => {
+  const parsed = nativeCliAgentViewSchema.parse({
+    name: 'gemini',
+    provider: 'gemini',
+    command: 'gemini',
+    enabled: true
+  });
+
+  expect(parsed.provider).toBe('gemini');
+  expect(parsed.defaultLaunchMode).toBe('pty');
+  expect(parsed.approvalOwnership).toBe('provider-owned');
+});
+
+test('native CLI preset view includes a provider install page', () => {
+  const parsed = nativeCliAgentPresetSchema.parse({
+    id: 'codex',
+    label: 'Codex',
+    provider: 'codex',
+    command: 'codex',
+    args: [],
+    defaultLaunchMode: 'pty',
+    supportedLaunchModes: ['pty'],
+    installHint: 'Install Codex.',
+    installUrl: 'https://developers.openai.com/codex/cli',
+    installed: false
+  });
+
+  expect(parsed.installUrl).toBe('https://developers.openai.com/codex/cli');
 });
 
 test('native CLI approval resolution request carries provider request id and decision', () => {

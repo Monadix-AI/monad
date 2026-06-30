@@ -16,7 +16,15 @@ import {
   streamUiItemsApi
 } from '../../src/endpoints/sessions/index.ts';
 import { channelsApi } from '../../src/endpoints/settings/channels/index.ts';
-import { createMonadStore, monadApi } from '../../src/index.ts';
+import {
+  createMonadStore,
+  monadApi,
+  useGetNativeCliAuthQuery,
+  useInputNativeCliAuthMutation,
+  useLazyGetNativeCliAuthStatusQuery,
+  useStartNativeCliAuthMutation,
+  useStopNativeCliAuthMutation
+} from '../../src/index.ts';
 
 function ok<T>(data: T): { data: T; status: number } {
   return { data, status: 200 };
@@ -183,6 +191,14 @@ function fakeClient(overrides: Record<string, unknown>): MonadClient {
   };
   return client as unknown as MonadClient;
 }
+
+test('native CLI auth hooks are exported from the package API', () => {
+  expect(typeof useGetNativeCliAuthQuery).toBe('function');
+  expect(typeof useInputNativeCliAuthMutation).toBe('function');
+  expect(typeof useLazyGetNativeCliAuthStatusQuery).toBe('function');
+  expect(typeof useStartNativeCliAuthMutation).toBe('function');
+  expect(typeof useStopNativeCliAuthMutation).toBe('function');
+});
 
 test('a query delegates to the client and caches by tag', async () => {
   let calls = 0;

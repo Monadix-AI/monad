@@ -1,10 +1,26 @@
-import type { CSSProperties } from 'react';
+import type {
+  CSSProperties,
+  KeyboardEvent as ReactKeyboardEvent,
+  MouseEvent as ReactMouseEvent,
+  PointerEvent as ReactPointerEvent
+} from 'react';
 import type { ActivityStatus } from './types';
 import type { ProjectController } from './use-project';
+
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { Avatar, MiniTag, PresenceBadge } from './Bits';
 import { boxR, mono, sans, sectionLabel } from './styles';
 import { WorkOutput } from './WorkOutput';
+
+const RAIL_WIDTH_STORAGE_KEY = 'monad.workplace.agentRail.width';
+const DEFAULT_RAIL_WIDTH = 296;
+const MIN_RAIL_WIDTH = 260;
+const MAX_RAIL_WIDTH = 620;
+
+function clampRailWidth(width: number): number {
+  return Math.min(MAX_RAIL_WIDTH, Math.max(MIN_RAIL_WIDTH, Math.round(width)));
+}
 
 function statusPill(status: ActivityStatus): CSSProperties {
   const color = status === 'ok' ? 'var(--success)' : status === 'error' ? 'var(--destructive)' : 'var(--accent-blue)';
@@ -30,20 +46,133 @@ function statusPill(status: ActivityStatus): CSSProperties {
 const statusText = (s: ActivityStatus): string => (s === 'ok' ? 'done' : s === 'error' ? 'error' : 'running');
 
 export function AgentTasksRail({ room }: { room: ProjectController }): React.ReactElement {
+  const [railWidth, setRailWidth] = useState(DEFAULT_RAIL_WIDTH);
+  const [resizing, setResizing] = useState(false);
+  const dragStartRef = useRef({ pointerX: 0, width: DEFAULT_RAIL_WIDTH });
+  const suppressMouseResizeRef = useRef(false);
+  const effectiveRailWidth = railWidth;
+
+  useEffect(() => {
+    const storedWidth = window.localStorage.getItem(RAIL_WIDTH_STORAGE_KEY);
+    if (!storedWidth) return;
+    const nextWidth = Number.parseInt(storedWidth, 10);
+    if (Number.isFinite(nextWidth)) setRailWidth(clampRailWidth(nextWidth));
+  }, []);
+
+  const setMeasuredRailWidth = useCallback((width: number) => {
+    const nextWidth = clampRailWidth(width);
+    setRailWidth(nextWidth);
+    window.localStorage.setItem(RAIL_WIDTH_STORAGE_KEY, String(nextWidth));
+  }, []);
+
+  const beginResize = useCallback(
+    ({
+      cancelEvent,
+      clientX,
+      moveEvent,
+      upEvent
+    }: {
+      cancelEvent?: 'pointercancel';
+      clientX: number;
+      moveEvent: 'mousemove' | 'pointermove';
+      upEvent: 'mouseup' | 'pointerup';
+    }) => {
+      dragStartRef.current = { pointerX: clientX, width: effectiveRailWidth };
+      setResizing(true);
+
+      const previousCursor = document.body.style.cursor;
+      const previousUserSelect = document.body.style.userSelect;
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+      document.documentElement.dataset.sidebarResizing = 'true';
+
+      const onResizeMove = (resizeEvent: MouseEvent | PointerEvent) => {
+        setMeasuredRailWidth(dragStartRef.current.width + dragStartRef.current.pointerX - resizeEvent.clientX);
+      };
+      const onResizeEnd = () => {
+        setResizing(false);
+        document.body.style.cursor = previousCursor;
+        document.body.style.userSelect = previousUserSelect;
+        delete document.documentElement.dataset.sidebarResizing;
+        window.removeEventListener(moveEvent, onResizeMove);
+        window.removeEventListener(upEvent, onResizeEnd);
+        if (cancelEvent) window.removeEventListener(cancelEvent, onResizeEnd);
+      };
+
+      window.addEventListener(moveEvent, onResizeMove);
+      window.addEventListener(upEvent, onResizeEnd);
+      if (cancelEvent) window.addEventListener(cancelEvent, onResizeEnd);
+    },
+    [effectiveRailWidth, setMeasuredRailWidth]
+  );
+
+  const onResizePointerDown = useCallback(
+    (event: ReactPointerEvent<HTMLHRElement>) => {
+      event.preventDefault();
+      suppressMouseResizeRef.current = true;
+      window.setTimeout(() => {
+        suppressMouseResizeRef.current = false;
+      }, 0);
+      beginResize({
+        cancelEvent: 'pointercancel',
+        clientX: event.clientX,
+        moveEvent: 'pointermove',
+        upEvent: 'pointerup'
+      });
+    },
+    [beginResize]
+  );
+
+  const onResizeMouseDown = useCallback(
+    (event: ReactMouseEvent<HTMLHRElement>) => {
+      if (event.button !== 0 || suppressMouseResizeRef.current) return;
+      event.preventDefault();
+      beginResize({ clientX: event.clientX, moveEvent: 'mousemove', upEvent: 'mouseup' });
+    },
+    [beginResize]
+  );
+
+  const onResizeKeyDown = useCallback(
+    (event: ReactKeyboardEvent<HTMLHRElement>) => {
+      if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight' && event.key !== 'Home' && event.key !== 'End')
+        return;
+      event.preventDefault();
+      if (event.key === 'Home') setMeasuredRailWidth(MIN_RAIL_WIDTH);
+      else if (event.key === 'End') setMeasuredRailWidth(MAX_RAIL_WIDTH);
+      else setMeasuredRailWidth(effectiveRailWidth + (event.key === 'ArrowLeft' ? 12 : -12));
+    },
+    [effectiveRailWidth, setMeasuredRailWidth]
+  );
+
   return (
     <div
       className="scwf-scroll workplace-agent-rail"
+      data-resizing={resizing}
       style={{
-        width: 296,
+        width: effectiveRailWidth,
         flex: 'none',
         borderLeft: `1px solid ${'var(--border)'}`,
         background: 'var(--muted)',
         minHeight: 0,
-        overflow: 'hidden',
+        overflow: 'visible',
         display: 'flex',
-        flexDirection: 'column'
+        flexDirection: 'column',
+        position: 'relative'
       }}
     >
+      <hr
+        aria-label="Resize project sidebar"
+        aria-orientation="vertical"
+        aria-valuemax={MAX_RAIL_WIDTH}
+        aria-valuemin={MIN_RAIL_WIDTH}
+        aria-valuenow={effectiveRailWidth}
+        className="workplace-agent-rail-resize-handle"
+        data-preserve-cursor="true"
+        onKeyDown={onResizeKeyDown}
+        onMouseDown={onResizeMouseDown}
+        onPointerDown={onResizePointerDown}
+        tabIndex={0}
+      />
       <div style={{ ...sectionLabel, padding: '13px 15px 8px' }}>ACTIVE WORK</div>
       <div
         className="scwf-scroll"

@@ -28,6 +28,32 @@ export interface NativeCliLaunchSpec {
   capabilities: NativeCliCapability[];
 }
 
+export type NativeCliStartPreflight =
+  | { state: 'ready'; agentName: string; provider: NativeCliProvider; checkedAt: string; providerSessionRef?: string }
+  | {
+      state: 'not_authenticated';
+      agentName: string;
+      provider: NativeCliProvider;
+      checkedAt: string;
+      action: 'reconnect_in_studio';
+      reason: string;
+    }
+  | {
+      state: 'unavailable';
+      agentName: string;
+      provider: NativeCliProvider;
+      checkedAt: string;
+      reason: string;
+    }
+  | {
+      state: 'unknown';
+      agentName: string;
+      provider: NativeCliProvider;
+      checkedAt: string;
+      action: 'manual_check_in_studio';
+      reason: string;
+    };
+
 export interface BuildNativeCliLaunchOptions {
   workingPath: string;
   launchMode?: NativeCliLaunchMode;
@@ -39,6 +65,7 @@ export interface NativeCliOutputEvent {
     | 'approval_requested'
     | 'approval_resolved'
     | 'agent_message'
+    | 'connection_required'
     | 'history_page'
     | 'session_ref'
     | 'tool_call'
@@ -83,6 +110,13 @@ export const nativeCliOutputEventSchema = z.discriminatedUnion('type', [
     payload: nativeCliOutputPayloadBase.extend({
       callId: z.union([z.string().min(1), z.number()]).optional(),
       status: z.string().optional()
+    })
+  }),
+  z.object({
+    type: z.literal('connection_required'),
+    payload: nativeCliOutputPayloadBase.extend({
+      code: z.string().min(1).optional(),
+      reason: z.string().min(1)
     })
   }),
   z.object({
@@ -141,6 +175,7 @@ interface NativeCliInitializeContext {
 export interface NativeCliProviderAdapter {
   provider: NativeCliProvider;
   detect(probes?: BinProbes): NativeCliAgentPresetView;
+  resolveCommand?(command: string, probes?: BinProbes): string | undefined;
   buildLaunch(agent: NativeCliAgentView, opts: BuildNativeCliLaunchOptions): NativeCliLaunchSpec;
   buildAuthLaunch(agent: NativeCliAgentView): NativeCliLaunchSpec;
   buildAuthStatusLaunch(agent: NativeCliAgentView): NativeCliLaunchSpec;

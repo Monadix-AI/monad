@@ -11,6 +11,13 @@ test('mentionSegments extracts strict agent mention tokens', () => {
   ]);
 });
 
+test('mentionSegments extracts leading native CLI mentions before message text', () => {
+  expect(mentionSegments('@[name="codex" id="native-cli:codex"] inspect repo')).toEqual([
+    { kind: 'mention', name: 'codex', id: 'native-cli:codex' },
+    { kind: 'text', text: ' inspect repo' }
+  ]);
+});
+
 test('mentionSegments does not split bare at text or email addresses', () => {
   expect(mentionSegments('send to z@example.com and ask @planner')).toEqual([
     { kind: 'text', text: 'send to z@example.com and ask @planner' }

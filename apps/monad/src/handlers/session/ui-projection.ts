@@ -4,6 +4,7 @@ import { channelDisplayText, channelStructuredVisibility, parseEventPayload } fr
 import { Allow, parse as parsePartialJson } from 'partial-json';
 
 const TEXT_TYPES = new Set(['text', 'markdown', 'error']);
+const MAX_NATIVE_CLI_UI_OUTPUT = 64 * 1024;
 
 interface MemorySummaryProjection {
   summary: string;
@@ -66,6 +67,11 @@ function channelStructuredJsonText(text: string): string {
   const trimmed = text.trim();
   const completeFence = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
   return (completeFence?.[1] ?? trimmed.replace(/^```(?:json)?\s*/i, '')).trim();
+}
+
+function appendBoundedText(current: string, chunk: string, maxBytes: number): string {
+  const next = `${current}${chunk}`;
+  return next.length > maxBytes ? next.slice(-maxBytes) : next;
 }
 
 // Hot path: invoked per `agent.token` with the full accumulated message text. A single tolerant
@@ -490,8 +496,39 @@ export class SessionUiProjector {
         ];
       }
       case 'native_cli.output': {
-        parseEventPayload('native_cli.output', event.payload);
-        return [];
+        const p = parseEventPayload('native_cli.output', event.payload);
+        const existing = this.items.get(itemKey('tool', p.nativeCliSessionId));
+        const output =
+          existing?.kind === 'tool'
+            ? appendBoundedText(existing.output ?? '', p.chunk, MAX_NATIVE_CLI_UI_OUTPUT)
+            : p.chunk;
+        const next: Extract<UIItem, { kind: 'tool' }> = {
+          kind: 'tool',
+          id: p.nativeCliSessionId,
+          tool: existing?.kind === 'tool' ? existing.tool : 'native-cli',
+          ...(existing?.kind === 'tool' && existing.input !== undefined ? { input: existing.input } : {}),
+          output,
+          status: existing?.kind === 'tool' ? existing.status : 'running',
+          seq: existing?.kind === 'tool' ? existing.seq : event.id
+        };
+        return [{ kind: 'upsert', cursor: event.id, item: this.upsert(next) }];
+      }
+      case 'native_cli.connection_required': {
+        const p = parseEventPayload('native_cli.connection_required', event.payload);
+        return [
+          {
+            kind: 'upsert',
+            cursor: event.id,
+            item: this.upsert({
+              kind: 'custom',
+              id: `native-cli-connection-required:${p.nativeCliSessionId ?? p.agentName}`,
+              name: 'native_cli.connection_required',
+              status: 'error',
+              data: p,
+              seq: event.id
+            })
+          }
+        ];
       }
       case 'native_cli.approval_requested': {
         const p = parseEventPayload('native_cli.approval_requested', event.payload);

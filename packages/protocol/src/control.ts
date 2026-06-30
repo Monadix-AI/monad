@@ -832,9 +832,18 @@ export type ListSkillsResponse = z.infer<typeof listSkillsResponseSchema>;
 export const initMissingItemSchema = z.enum(['provider', 'credential', 'default', 'agent']);
 export type InitMissingItem = z.infer<typeof initMissingItemSchema>;
 
+export const missingProviderCredentialSchema = z.object({
+  providerId: z.string(),
+  providerLabel: z.string().optional(),
+  profileAlias: z.string(),
+  route: z.literal('chat')
+});
+export type MissingProviderCredential = z.infer<typeof missingProviderCredentialSchema>;
+
 export const getInitStatusResponseSchema = z.object({
   initialized: z.boolean(),
   missing: z.array(initMissingItemSchema),
+  missingProviderCredentials: z.array(missingProviderCredentialSchema).optional(),
   homePath: z.string()
 });
 export type GetInitStatusResponse = z.infer<typeof getInitStatusResponseSchema>;

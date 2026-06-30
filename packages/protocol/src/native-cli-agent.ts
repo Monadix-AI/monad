@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 import { sessionIdSchema } from './ids.ts';
 
-export const nativeCliProviderSchema = z.enum(['codex', 'claude-code']);
+export const nativeCliProviderSchema = z.enum(['codex', 'claude-code', 'gemini']);
 export type NativeCliProvider = z.infer<typeof nativeCliProviderSchema>;
 
 export const nativeCliLaunchModeSchema = z.enum(['pty', 'json-stream', 'app-server', 'remote-control']);
@@ -66,6 +66,7 @@ export const nativeCliAgentPresetSchema = z.object({
   defaultLaunchMode: nativeCliLaunchModeSchema,
   supportedLaunchModes: z.array(nativeCliLaunchModeSchema),
   installHint: z.string(),
+  installUrl: z.string().url(),
   installed: z.boolean(),
   resolvedBinPath: z.string().optional(),
   capabilities: nativeCliAgentCapabilitiesSchema.optional()

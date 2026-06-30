@@ -8,9 +8,12 @@ import {
   buildNativeCliLaunch,
   claudeCodeNativeCliAdapter,
   codexNativeCliAdapter,
-  listNativeCliAgentPresets
+  geminiNativeCliAdapter,
+  listNativeCliAgentPresets,
+  resolveNativeCliLaunchCommand
 } from '@/services/native-cli/index.ts';
 import { killNativeCliProcess } from '@/services/native-cli/process.ts';
+import { normalizePtyInput } from '@/services/native-cli/pty.ts';
 import { nativeCliOutputEventSchema } from '@/services/native-cli/types.ts';
 
 const codexAgent: NativeCliAgentView = {
@@ -27,6 +30,16 @@ const claudeAgent: NativeCliAgentView = {
   name: 'claude-code',
   provider: 'claude-code',
   command: 'claude',
+  enabled: true,
+  defaultLaunchMode: 'pty',
+  allowDangerousMode: false,
+  approvalOwnership: 'provider-owned'
+};
+
+const geminiAgent: NativeCliAgentView = {
+  name: 'gemini',
+  provider: 'gemini',
+  command: 'gemini',
   enabled: true,
   defaultLaunchMode: 'pty',
   allowDangerousMode: false,
@@ -63,6 +76,8 @@ test('native CLI auth launches provider-owned login and status commands', () => 
   expect(buildNativeCliAuthStatusLaunch(codexAgent).argv).toEqual(['codex', 'login', 'status']);
   expect(buildNativeCliAuthLaunch(claudeAgent).argv).toEqual(['claude', 'auth', 'login']);
   expect(buildNativeCliAuthStatusLaunch(claudeAgent).argv).toEqual(['claude', 'auth', 'status']);
+  expect(buildNativeCliAuthLaunch(geminiAgent).argv).toEqual(['gemini']);
+  expect(buildNativeCliAuthStatusLaunch(geminiAgent).argv).toEqual(['gemini', '--list-sessions']);
   expect(codexNativeCliAdapter.detect({ which: () => undefined, exists: () => true }).capabilities).toEqual({
     auth: 'pty',
     history: 'paged',
@@ -75,15 +90,34 @@ test('native CLI auth launches provider-owned login and status commands', () => 
     resume: 'pty',
     approval: 'provider-owned'
   });
+  expect(geminiNativeCliAdapter.detect({ which: () => undefined, exists: () => true }).capabilities).toEqual({
+    auth: 'pty',
+    history: 'provider-owned',
+    resume: 'pty',
+    approval: 'provider-owned'
+  });
 });
 
-test('native CLI auth status parsers prefer structured provider output before text fallback', () => {
+test('native CLI auth status parsers use structured output or documented status exit codes', () => {
   expect(codexNativeCliAdapter.parseAuthStatus(JSON.stringify({ authenticated: true }), 0)).toBe('authenticated');
   expect(codexNativeCliAdapter.parseAuthStatus(JSON.stringify({ authenticated: false }), 0)).toBe('unauthenticated');
+  expect(codexNativeCliAdapter.parseAuthStatus('logged in as zeke', 0)).toBe('authenticated');
+  expect(codexNativeCliAdapter.parseAuthStatus('not logged in; run codex login', 1)).toBe('unauthenticated');
   expect(claudeCodeNativeCliAdapter.parseAuthStatus(JSON.stringify({ state: 'authenticated' }), 0)).toBe(
     'authenticated'
   );
-  expect(claudeCodeNativeCliAdapter.parseAuthStatus('command completed', 0)).toBe('unknown');
+  expect(claudeCodeNativeCliAdapter.parseAuthStatus('Authenticated', 0)).toBe('authenticated');
+  expect(claudeCodeNativeCliAdapter.parseAuthStatus('Please login', 1)).toBe('unauthenticated');
+  expect(claudeCodeNativeCliAdapter.parseAuthStatus('unexpected provider error', 2)).toBe('unknown');
+  expect(geminiNativeCliAdapter.parseAuthStatus(JSON.stringify({ authenticated: true }), 0)).toBe('authenticated');
+  expect(
+    geminiNativeCliAdapter.parseAuthStatus(
+      'Please set an Auth method in your /Users/zeke/.gemini/settings.json or specify GEMINI_API_KEY',
+      0
+    )
+  ).toBe('unknown');
+  expect(geminiNativeCliAdapter.parseAuthStatus('Waiting for authentication...', 0)).toBe('unknown');
+  expect(geminiNativeCliAdapter.parseAuthStatus('command completed', 0)).toBe('unknown');
 });
 
 test('Codex adapter initializes app-server sessions through the adapter hook', () => {
@@ -163,6 +197,15 @@ test('Codex adapter rejects dangerous bypass args unless enabled in config', () 
   ).toThrow(/dangerous/i);
 });
 
+test('Codex adapter allows dangerous bypass args only when explicitly enabled', () => {
+  const launch = buildNativeCliLaunch(
+    { ...codexAgent, args: ['--dangerously-bypass-approvals-and-sandbox'], allowDangerousMode: true },
+    { workingPath: '/tmp/project', launchMode: 'pty' }
+  );
+
+  expect(launch.argv).toContain('--dangerously-bypass-approvals-and-sandbox');
+});
+
 test('native CLI launch rejects shell command strings in command fields', () => {
   expect(() =>
     buildNativeCliLaunch({ ...codexAgent, command: 'codex --cd /tmp/project' }, { workingPath: '/tmp/project' })
@@ -213,12 +256,113 @@ test('Claude Code adapter resumes with the provider session ref in PTY and strea
   expect(stream.argv).toContain('claude-session-1');
 });
 
-test('native CLI presets detect Codex and Claude Code as direct client commands', () => {
+test('Gemini adapter launches in the requested cwd and advertises stream-json capability', () => {
+  const launch = buildNativeCliLaunch(geminiAgent, { workingPath: '/tmp/project', launchMode: 'pty' });
+
+  expect(launch.argv).toEqual(['gemini']);
+  expect(launch.cwd).toBe('/tmp/project');
+  expect(launch.capabilities).toContain('json-stream');
+  expect(launch.capabilities).toContain('structured-output');
+  expect(launch.capabilities).toContain('session-resume');
+  expect(launch.approvalOwnership).toBe('provider-owned');
+});
+
+test('Gemini adapter launches structured stream-json mode with official output-format flag', () => {
+  const launch = buildNativeCliLaunch(geminiAgent, { workingPath: '/tmp/project', launchMode: 'json-stream' });
+
+  expect(launch.argv).toEqual(['gemini', '-p', '', '--output-format', 'stream-json']);
+  expect(launch.cwd).toBe('/tmp/project');
+  expect(launch.launchMode).toBe('json-stream');
+});
+
+test('Gemini adapter resumes with the provider session ref in PTY and stream-json modes', () => {
+  const pty = buildNativeCliLaunch(geminiAgent, {
+    workingPath: '/tmp/project',
+    launchMode: 'pty',
+    providerSessionRef: 'gemini-session-1'
+  });
+  const stream = buildNativeCliLaunch(geminiAgent, {
+    workingPath: '/tmp/project',
+    launchMode: 'json-stream',
+    providerSessionRef: 'gemini-session-1'
+  });
+
+  expect(pty.argv).toEqual(['gemini', '--resume', 'gemini-session-1']);
+  expect(stream.argv).toContain('--resume');
+  expect(stream.argv).toContain('gemini-session-1');
+});
+
+test('Gemini adapter keeps yolo approval mode behind dangerous mode opt-in', () => {
+  expect(() =>
+    buildNativeCliLaunch({ ...geminiAgent, args: ['--approval-mode=yolo'] }, { workingPath: '/tmp/project' })
+  ).toThrow(/dangerous/i);
+  expect(() =>
+    buildNativeCliLaunch({ ...geminiAgent, args: ['--approval-mode', 'yolo'] }, { workingPath: '/tmp/project' })
+  ).toThrow(/dangerous/i);
+  expect(() => buildNativeCliLaunch({ ...geminiAgent, args: ['--yolo'] }, { workingPath: '/tmp/project' })).toThrow(
+    /dangerous/i
+  );
+
+  expect(
+    buildNativeCliLaunch(
+      { ...geminiAgent, args: ['--approval-mode=yolo'], allowDangerousMode: true },
+      { workingPath: '/tmp/project' }
+    ).argv
+  ).toContain('--approval-mode=yolo');
+});
+
+test('native CLI presets detect Codex, Claude Code, and Gemini as direct client commands', () => {
   const presets = listNativeCliAgentPresets({ which: (name) => `/bin/${name}`, exists: () => false });
 
-  expect(presets.map((preset) => preset.id).sort()).toEqual(['claude-code', 'codex']);
+  expect(presets.map((preset) => preset.id).sort()).toEqual(['claude-code', 'codex', 'gemini']);
   expect(presets.find((preset) => preset.id === 'codex')?.command).toBe('codex');
   expect(presets.find((preset) => preset.id === 'claude-code')?.command).toBe('claude');
+  expect(presets.find((preset) => preset.id === 'gemini')?.command).toBe('gemini');
+  expect(presets.find((preset) => preset.id === 'codex')?.installUrl).toBe('https://developers.openai.com/codex/cli');
+  expect(presets.find((preset) => preset.id === 'claude-code')?.installUrl).toBe(
+    'https://docs.anthropic.com/en/docs/claude-code/setup'
+  );
+  expect(presets.find((preset) => preset.id === 'gemini')?.installUrl).toBe(
+    'https://github.com/google-gemini/gemini-cli'
+  );
+});
+
+test('PTY input normalizes final newline to terminal Enter', () => {
+  expect(normalizePtyInput('hi\n')).toBe('hi\r');
+  expect(normalizePtyInput('first\nsecond\n')).toBe('first\nsecond\r');
+  expect(normalizePtyInput('hi')).toBe('hi');
+});
+
+test('native CLI launch resolves provider commands before spawn', () => {
+  const codexLaunch = resolveNativeCliLaunchCommand(
+    codexNativeCliAdapter,
+    buildNativeCliLaunch(codexAgent, { workingPath: '/tmp/project', launchMode: 'pty' }),
+    { which: () => undefined, exists: (path) => path === '/Applications/Codex.app/Contents/Resources/codex' }
+  );
+  const claudeLaunch = resolveNativeCliLaunchCommand(
+    claudeCodeNativeCliAdapter,
+    buildNativeCliLaunch(claudeAgent, { workingPath: '/tmp/project', launchMode: 'pty' }),
+    { which: (name) => (name === 'claude' ? '/Users/zeke/.local/bin/claude' : undefined), exists: () => false }
+  );
+  const geminiLaunch = resolveNativeCliLaunchCommand(
+    geminiNativeCliAdapter,
+    buildNativeCliLaunch(geminiAgent, { workingPath: '/tmp/project', launchMode: 'pty' }),
+    { which: (name) => (name === 'gemini' ? '/Users/zeke/.bun/bin/gemini' : undefined), exists: () => false }
+  );
+
+  expect(codexLaunch.argv[0]).toBe('/Applications/Codex.app/Contents/Resources/codex');
+  expect(claudeLaunch.argv[0]).toBe('/Users/zeke/.local/bin/claude');
+  expect(geminiLaunch.argv[0]).toBe('/Users/zeke/.bun/bin/gemini');
+});
+
+test('native CLI launch fails before spawn when provider command cannot be resolved', () => {
+  expect(() =>
+    resolveNativeCliLaunchCommand(
+      codexNativeCliAdapter,
+      buildNativeCliLaunch(codexAgent, { workingPath: '/tmp/project', launchMode: 'pty' }),
+      { which: () => undefined, exists: () => false }
+    )
+  ).toThrow(/Executable not found/);
 });
 
 test('Codex adapter parses app-server raw response item notifications into structured events', () => {
@@ -319,6 +463,66 @@ test('native CLI adapters ignore malformed and unknown provider output outside t
   );
   expect(invalidApproval.every((event) => nativeCliOutputEventSchema.safeParse(event).success)).toBe(false);
   expect(claudeCodeNativeCliAdapter.parseOutput('not-json\n{"type":"unknown","session_id":"s"}\n')).toEqual([]);
+  expect(geminiNativeCliAdapter.parseOutput('not-json\n{"type":"unknown","session_id":"s"}\n')).toEqual([]);
+});
+
+test('Gemini adapter translates stream-json events into the Monad native CLI contract', () => {
+  const chunk = [
+    JSON.stringify({ type: 'init', session_id: 'gemini-session-1', model: 'gemini-2.5-pro' }),
+    JSON.stringify({ type: 'message', role: 'assistant', text: 'I will inspect the project.' }),
+    JSON.stringify({ type: 'tool_use', id: 'tool-1', name: 'read_file', args: { path: 'README.md' } }),
+    JSON.stringify({ type: 'tool_result', id: 'tool-1', output: 'README contents' }),
+    JSON.stringify({ type: 'result', response: 'Done.' })
+  ].join('\n');
+
+  const events = geminiNativeCliAdapter.parseOutput(chunk);
+  expectNativeCliOutputContract(events);
+  expect(events).toEqual([
+    { type: 'session_ref', payload: { providerSessionRef: 'gemini-session-1', model: 'gemini-2.5-pro' } },
+    { type: 'agent_message', payload: { text: 'I will inspect the project.' } },
+    { type: 'tool_call', payload: { callId: 'tool-1', tool: 'read_file', input: { path: 'README.md' } } },
+    { type: 'tool_result', payload: { callId: 'tool-1', output: 'README contents' } },
+    { type: 'agent_message', payload: { text: 'Done.' } }
+  ]);
+});
+
+test('Gemini adapter does not infer semantics from PTY prompt text', () => {
+  const chunk = [
+    '\u001b[1mDo you trust the files in this folder?\u001b[22m',
+    '● 1. Trust folder (monad)',
+    "  3. Don't trust",
+    'Do you want to connect VS Code to Gemini CLI?',
+    '● 1. Yes',
+    '  2. No (esc)',
+    'Waiting for authentication... (Press Esc or Ctrl+C to cancel)'
+  ].join('\n');
+
+  const events = geminiNativeCliAdapter.parseOutput(chunk);
+  expectNativeCliOutputContract(events);
+  expect(events).toEqual([]);
+});
+
+test('Gemini adapter leaves PTY prompt resolution to the raw terminal input bridge', () => {
+  const writes: string[] = [];
+  const handle = {
+    launchMode: 'pty' as const,
+    terminal: {
+      write(input: string) {
+        writes.push(input);
+      },
+      resize() {},
+      close() {}
+    },
+    kill() {}
+  };
+
+  geminiNativeCliAdapter.resolveApproval(handle, {
+    requestId: 'gemini:folder-trust',
+    allow: true,
+    request: { kind: 'folder_trust' }
+  });
+
+  expect(writes).toEqual([]);
 });
 
 test('Codex adapter parses app-server thread start response into a provider session ref', () => {
@@ -688,4 +892,45 @@ test('native CLI process killer falls back to direct pid kill when Windows tree-
   );
 
   expect(calls).toEqual([[123, 'SIGTERM']]);
+});
+
+test('native CLI process killer ignores already-dead POSIX process groups', () => {
+  const calls: Array<[number, NodeJS.Signals]> = [];
+  expect(() =>
+    killNativeCliProcess(
+      123,
+      'SIGTERM',
+      (pid, signal) => {
+        calls.push([pid, signal]);
+        const error = new Error('No such process') as NodeJS.ErrnoException;
+        error.code = 'ESRCH';
+        throw error;
+      },
+      'darwin'
+    )
+  ).not.toThrow();
+
+  expect(calls).toEqual([[-123, 'SIGTERM']]);
+});
+
+test('native CLI process killer ignores already-dead direct fallback pids', () => {
+  const calls: Array<[number, NodeJS.Signals]> = [];
+  expect(() =>
+    killNativeCliProcess(
+      123,
+      'SIGTERM',
+      (pid, signal) => {
+        calls.push([pid, signal]);
+        const error = new Error('kill failed') as NodeJS.ErrnoException;
+        error.code = pid < 0 ? 'EPERM' : 'ESRCH';
+        throw error;
+      },
+      'darwin'
+    )
+  ).not.toThrow();
+
+  expect(calls).toEqual([
+    [-123, 'SIGTERM'],
+    [123, 'SIGTERM']
+  ]);
 });

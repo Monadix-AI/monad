@@ -76,6 +76,11 @@ async function runCrud(call: Call, paths: MonadPaths): Promise<void> {
   res = await call('GET', '/v1/settings/native-cli-agents');
   expect(((await res.json()) as AgentsBody).agents[0]?.enabled).toBe(false);
 
+  res = await call('POST', '/v1/settings/native-cli-agents/codex/enable');
+  expect(res.status).toBe(200);
+  res = await call('GET', '/v1/settings/native-cli-agents');
+  expect(((await res.json()) as AgentsBody).agents[0]?.enabled).toBe(true);
+
   res = await call('DELETE', '/v1/settings/native-cli-agents/codex');
   expect(res.status).toBe(200);
   res = await call('GET', '/v1/settings/native-cli-agents');
@@ -86,9 +91,10 @@ async function runPresets(call: Call): Promise<void> {
   const res = await call('GET', '/v1/settings/native-cli-agents/presets');
   expect(res.status).toBe(200);
   const { presets } = (await res.json()) as { presets: { id: string; command: string; defaultLaunchMode: string }[] };
-  expect(presets.map((p) => p.id).sort()).toEqual(['claude-code', 'codex']);
+  expect(presets.map((p) => p.id).sort()).toEqual(['claude-code', 'codex', 'gemini']);
   expect(presets.every((p) => p.defaultLaunchMode === 'pty')).toBe(true);
   expect(presets.find((p) => p.id === 'codex')?.command).toBe('codex');
+  expect(presets.find((p) => p.id === 'gemini')?.command).toBe('gemini');
 }
 
 async function runValidation(call: Call, paths: MonadPaths): Promise<void> {

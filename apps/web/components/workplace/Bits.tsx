@@ -11,7 +11,7 @@ export function Avatar({
   size = 34
 }: {
   av: string;
-  icon?: 'monad' | 'openai' | 'anthropic';
+  icon?: 'monad' | 'openai' | 'anthropic' | 'google';
   kind: ParticipantKind;
   size?: number;
 }): React.ReactElement {

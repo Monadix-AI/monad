@@ -540,6 +540,7 @@ export const codexNativeCliAdapter: NativeCliProviderAdapter = {
       defaultLaunchMode: 'pty',
       supportedLaunchModes: ['pty', 'app-server', 'remote-control'],
       installHint: 'Install Codex CLI or Codex.app, then sign in with codex login.',
+      installUrl: 'https://developers.openai.com/codex/cli',
       installed,
       resolvedBinPath: codexBin,
       capabilities: {
@@ -549,6 +550,9 @@ export const codexNativeCliAdapter: NativeCliProviderAdapter = {
         approval: 'provider-owned'
       }
     };
+  },
+  resolveCommand(command, probes = defaultBinProbes) {
+    return resolveBinary(command, command === 'codex' ? [CODEX_APP_BIN] : [], probes);
   },
   buildLaunch: buildCodexLaunch,
   buildAuthLaunch(agent) {
@@ -560,9 +564,8 @@ export const codexNativeCliAdapter: NativeCliProviderAdapter = {
   parseAuthStatus(output, exitCode) {
     const structured = parseStructuredAuthState(output);
     if (structured) return structured;
-    if (exitCode === 0 && /logged in|authenticated|signed in/i.test(output)) return 'authenticated';
-    if (/not logged in|not authenticated|logged out|unauthenticated|sign in|login/i.test(output))
-      return 'unauthenticated';
+    if (exitCode === 0) return 'authenticated';
+    if (exitCode !== null) return 'unauthenticated';
     return 'unknown';
   },
   initialize: initializeCodex,

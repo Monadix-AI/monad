@@ -65,6 +65,7 @@ test('toCanvas: exposes display data but drops every management/communication ac
     messages: [],
     participants: [participant('monad', 'agent')],
     activity: [],
+    nativeCliStreams: [],
     tasks: [],
     typing: null,
     firstItemIndex: 0,
@@ -85,6 +86,7 @@ test('toCanvas: exposes display data but drops every management/communication ac
 
   expect(canvas.ready).toBe(true);
   expect(canvas.participants).toHaveLength(1);
+  expect(canvas.nativeCliStreams).toEqual([]);
   // the passthrough live-agent controls are present (host-provided, surfaced inline)
   expect(typeof canvas.sendNativeCliInput).toBe('function');
   expect(typeof canvas.stopNativeCli).toBe('function');

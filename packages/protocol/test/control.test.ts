@@ -3,6 +3,7 @@ import { expect, test } from 'bun:test';
 import {
   branchSessionRequestSchema,
   createSessionRequestSchema,
+  getInitStatusResponseSchema,
   MESSAGE_TEXT_MAX,
   providerViewSchema,
   SEARCH_QUERY_MAX,
@@ -46,4 +47,22 @@ test('provider baseUrl accepts only http(s) URLs', () => {
   expect(providerViewSchema.safeParse({ ...provider, baseUrl: 'http://localhost:11434/v1' }).success).toBe(true);
   expect(providerViewSchema.safeParse({ ...provider, baseUrl: 'api.example.com/v1' }).success).toBe(false);
   expect(providerViewSchema.safeParse({ ...provider, baseUrl: 'ftp://api.example.com/v1' }).success).toBe(false);
+});
+
+test('init status can carry provider credential details alongside legacy missing flags', () => {
+  const parsed = getInitStatusResponseSchema.parse({
+    initialized: false,
+    missing: ['credential'],
+    missingProviderCredentials: [
+      {
+        providerId: 'oai',
+        providerLabel: 'OpenAI-compatible',
+        profileAlias: 'default',
+        route: 'chat'
+      }
+    ],
+    homePath: '/tmp/monad'
+  });
+
+  expect(parsed.missingProviderCredentials?.[0]?.providerId).toBe('oai');
 });

@@ -71,6 +71,10 @@ function requestBody(init: RequestInit | undefined): unknown {
   return Object.prototype.toString.call(body);
 }
 
+function isAbortError(error: unknown): boolean {
+  return error instanceof DOMException && error.name === 'AbortError';
+}
+
 function makeTracingFetcher(baseFetcher: typeof fetch): typeof fetch {
   return (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
@@ -97,6 +101,19 @@ function makeTracingFetcher(baseFetcher: typeof fetch): typeof fetch {
       });
       return response;
     } catch (error) {
+      if (init?.signal?.aborted || isAbortError(error)) {
+        globalThis.__MONAD_DEBUG_TRACE__?.({
+          direction: 'internal',
+          layer: 'http',
+          label: `${method} ${url}`,
+          data: {
+            aborted: true,
+            message: error instanceof Error ? error.message : String(error),
+            latencyMs: Math.round(performance.now() - startedAt)
+          }
+        });
+        throw error;
+      }
       globalThis.__MONAD_DEBUG_TRACE__?.({
         direction: 'error',
         layer: 'http',

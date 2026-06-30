@@ -43,7 +43,23 @@ const nativeCliApi = sessionsApi.injectEndpoints({
           () => clientOf(api).treaty.v1.sessions({ id: sessionId })['native-cli-agents'].start.post(body),
           (raw) => raw.session
         ),
-      invalidatesTags: ['Sessions']
+      async onQueryStarted({ sessionId }, { dispatch, queryFulfilled }) {
+        try {
+          const { data } = await queryFulfilled;
+          dispatch(
+            nativeCliApi.util.updateQueryData('listNativeCliSessions', sessionId, (draft) => {
+              const index = draft.findIndex((session) => session.id === data.id);
+              if (index >= 0) draft[index] = data;
+              else draft.push(data);
+            })
+          );
+        } catch {}
+      },
+      invalidatesTags: (_result, _error, { sessionId }) => [
+        'Sessions',
+        'NativeCliSessions',
+        { type: 'NativeCliSessions', id: sessionId }
+      ]
     }),
     getNativeCliSession: builder.query<NativeCliSessionView, string>({
       queryFn: (id, api: { extra: unknown }) =>
@@ -57,7 +73,8 @@ const nativeCliApi = sessionsApi.injectEndpoints({
         runTreaty(
           () => clientOf(api).treaty.v1.sessions({ id: sessionId })['native-cli-sessions'].get(),
           (raw) => raw.sessions
-        )
+        ),
+      providesTags: (_result, _error, sessionId) => ['NativeCliSessions', { type: 'NativeCliSessions', id: sessionId }]
     }),
     inputNativeCliSession: builder.mutation<{ ok: true }, NativeCliInputArgs>({
       queryFn: ({ id, input }, api: { extra: unknown }) =>
@@ -82,7 +99,8 @@ const nativeCliApi = sessionsApi.injectEndpoints({
     }),
     stopNativeCliSession: builder.mutation<{ ok: true }, string>({
       queryFn: (id, api: { extra: unknown }) =>
-        runTreaty(() => clientOf(api).treaty.v1['native-cli-sessions']({ id }).stop.post())
+        runTreaty(() => clientOf(api).treaty.v1['native-cli-sessions']({ id }).stop.post()),
+      invalidatesTags: ['NativeCliSessions']
     }),
     startNativeCliAuth: builder.mutation<NativeCliAuthSessionView, string>({
       queryFn: (name, api: { extra: unknown }) =>
@@ -120,11 +138,27 @@ const nativeCliApi = sessionsApi.injectEndpoints({
 export const {
   useApproveNativeCliSessionMutation,
 
+  useGetNativeCliAuthQuery,
+
+  useGetNativeCliSessionQuery,
+
   useInputNativeCliSessionMutation,
+
+  useInputNativeCliAuthMutation,
+
+  useLazyGetNativeCliAuthStatusQuery,
+
+  useListNativeCliSessionsQuery,
+
+  useResizeNativeCliAuthMutation,
 
   useResizeNativeCliSessionMutation,
 
+  useStartNativeCliAuthMutation,
+
   useStartNativeCliAgentMutation,
+
+  useStopNativeCliAuthMutation,
 
   useStopNativeCliSessionMutation
 } = nativeCliApi;

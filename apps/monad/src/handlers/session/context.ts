@@ -51,7 +51,7 @@ export interface SessionDeps {
   /** Per-session fs sandbox roots from the bound Studio agent's `sandbox` override (global ceiling
    * applied). Returns undefined when there's no override → the caller inherits the daemon default. */
   agentSandboxRoots?: (sessionId: SessionId) => string[] | undefined;
-  nativeCliHost?: Pick<NativeCliHost, 'input' | 'list' | 'start' | 'stopProject'>;
+  nativeCliHost?: Pick<NativeCliHost, 'preflight' | 'input' | 'list' | 'start' | 'stopProject'>;
 }
 
 /** Execution config applied to every turn of a session, set out-of-band (the ACP bridge pushes the

@@ -16,6 +16,8 @@ import {
   migrateConfig,
   monadConfigSchema,
   monadSystemConfigSchema,
+  PROFILE_SCHEMA_CONTENT,
+  SCHEMA_CONTENT,
   saveAuth,
   saveSystemConfig,
   tryParseConfig
@@ -216,6 +218,83 @@ describe('initMonadHome', () => {
 // ── init status ───────────────────────────────────────────────────────────────
 
 describe('computeInitStatus', () => {
+  test('reports the default profile provider when credentials are missing', () => {
+    const cfg = createDefaultConfig('prn_test', 'test-user');
+    cfg.model.default = 'writer';
+    cfg.model.providers = [
+      {
+        id: 'oai',
+        label: 'OpenAI-compatible',
+        type: ModelProviderType.OpenAICompatible,
+        baseUrl: 'https://api.test/v1'
+      }
+    ];
+    cfg.model.profiles = [
+      {
+        alias: 'writer',
+        routes: { chat: { provider: 'oai', modelId: 'gpt-x' } },
+        params: {},
+        fallbacks: []
+      }
+    ];
+
+    expect(
+      computeInitStatus(cfg, {
+        version: 1,
+        activeProvider: 'oai',
+        updatedAt: new Date().toISOString(),
+        credentialPool: {}
+      })
+    ).toEqual({
+      initialized: false,
+      missing: ['credential'],
+      missingProviderCredentials: [
+        {
+          providerId: 'oai',
+          providerLabel: 'OpenAI-compatible',
+          profileAlias: 'writer',
+          route: 'chat'
+        }
+      ]
+    });
+  });
+
+  test('reports replacement default profile provider when legacy sample profile is still selected', () => {
+    const cfg = createDefaultConfig('prn_test', 'test-user');
+    cfg.model.default = 'sample-compatible';
+    cfg.model.providers.push({
+      id: 'openrouter',
+      label: 'OpenRouter',
+      type: ModelProviderType.OpenRouter
+    });
+    cfg.model.profiles.push({
+      alias: 'default',
+      routes: { chat: { provider: 'openrouter', modelId: 'openrouter/free' } },
+      params: {},
+      fallbacks: []
+    });
+
+    expect(
+      computeInitStatus(cfg, {
+        version: 1,
+        activeProvider: null,
+        updatedAt: new Date().toISOString(),
+        credentialPool: {}
+      })
+    ).toEqual({
+      initialized: false,
+      missing: ['provider', 'credential'],
+      missingProviderCredentials: [
+        {
+          providerId: 'openrouter',
+          providerLabel: 'OpenRouter',
+          profileAlias: 'default',
+          route: 'chat'
+        }
+      ]
+    });
+  });
+
   test('uses the configured default profile alias instead of requiring alias "default"', () => {
     const cfg = createDefaultConfig('prn_test', 'test-user');
     cfg.model.default = 'writer';
@@ -500,6 +579,18 @@ describe('tryParseConfig', () => {
 
   test('openaiCompat inbound approval defaults to local (fail-closed, not auto-approve)', () => {
     expect(createDefaultConfig('prn_x', 'tester').openaiCompat.approval).toBe('local');
+  });
+});
+
+describe('editor JSON schemas', () => {
+  test('generated schema files match the runtime schema content', async () => {
+    const [configSchema, profileSchema] = await Promise.all([
+      readFile(join(import.meta.dir, '../../config.schema.json'), 'utf8'),
+      readFile(join(import.meta.dir, '../../profile.schema.json'), 'utf8')
+    ]);
+
+    expect(configSchema.trim()).toBe(SCHEMA_CONTENT.trim());
+    expect(profileSchema.trim()).toBe(PROFILE_SCHEMA_CONTENT.trim());
   });
 });
 

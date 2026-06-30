@@ -501,14 +501,87 @@ test('does not project raw native CLI PTY output into chat tool text', () => {
     })
   );
 
-  expect(out).toEqual([]);
+  expect(out).toHaveLength(1);
+  expect(out[0]).toMatchObject({
+    kind: 'upsert',
+    item: {
+      kind: 'tool',
+      id: nativeCliSessionId,
+      output:
+        'started claude-code in /Users/zeke/Projects/monad\u001b[?25l\u001b[38;2;255;193;7mNew MCP server found\u001b[39m'
+    }
+  });
   const snapshot = projector.snapshot();
   if (snapshot.kind !== 'snapshot') throw new Error('expected snapshot');
   expect(snapshot.items[0]).toMatchObject({
     kind: 'tool',
     id: nativeCliSessionId,
-    output: 'started claude-code in /Users/zeke/Projects/monad',
+    output:
+      'started claude-code in /Users/zeke/Projects/monad\u001b[?25l\u001b[38;2;255;193;7mNew MCP server found\u001b[39m',
     status: 'running'
+  });
+});
+
+test('projects native CLI provider-owned approvals as distinct approval items', () => {
+  const projector = new SessionUiProjector();
+  const [approval] = projector.applyEvent(
+    event('native_cli.approval_requested', {
+      nativeCliSessionId: 'ncli_gemini',
+      provider: 'gemini',
+      requestId: 'gemini:folder-trust',
+      text: 'trust this Gemini project folder',
+      data: {
+        requestId: 'gemini:folder-trust',
+        kind: 'folder_trust',
+        action: 'trust this Gemini project folder'
+      }
+    })
+  );
+
+  expect(approval).toMatchObject({
+    kind: 'upsert',
+    item: {
+      kind: 'approval',
+      id: 'gemini:folder-trust',
+      tool: 'gemini approval',
+      input: {
+        nativeCliSessionId: 'ncli_gemini',
+        provider: 'gemini',
+        text: 'trust this Gemini project folder',
+        approvalOwnership: 'provider-owned'
+      },
+      key: 'provider-owned:gemini'
+    }
+  });
+});
+
+test('projects native CLI reconnect requirements as visible custom items', () => {
+  const projector = new SessionUiProjector();
+  const [connection] = projector.applyEvent(
+    event('native_cli.connection_required', {
+      nativeCliSessionId: 'ncli_gemini',
+      agentName: 'gemini',
+      provider: 'gemini',
+      reason: 'Gemini CLI is waiting for provider authentication to complete.',
+      reconnectIn: 'studio'
+    })
+  );
+
+  expect(connection).toMatchObject({
+    kind: 'upsert',
+    item: {
+      kind: 'custom',
+      id: 'native-cli-connection-required:ncli_gemini',
+      name: 'native_cli.connection_required',
+      status: 'error',
+      data: {
+        nativeCliSessionId: 'ncli_gemini',
+        agentName: 'gemini',
+        provider: 'gemini',
+        reason: 'Gemini CLI is waiting for provider authentication to complete.',
+        reconnectIn: 'studio'
+      }
+    }
   });
 });
 

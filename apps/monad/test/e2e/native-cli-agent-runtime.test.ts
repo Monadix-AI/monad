@@ -292,7 +292,7 @@ async function configureMockAuthAgent(call: Call, dir: string): Promise<void> {
       '#!/usr/bin/env bun',
       'const args = process.argv.slice(2).join(" ");',
       'if (args === "auth status") {',
-      '  process.stdout.write("authenticated as test@example.com\\n");',
+      '  process.stdout.write(JSON.stringify({ state: "authenticated" }) + "\\n");',
       '  process.exit(0);',
       '}',
       'if (args === "auth login") {',
@@ -413,6 +413,65 @@ async function runRuntime(call: Call, projectDir: string, handlers: ReturnType<t
   );
 }
 
+async function startMockNativeCliSession(
+  call: Call,
+  projectDir: string
+): Promise<{ sessionId: SessionId; nativeSession: NativeCliSessionView }> {
+  await configureMockAgent(call);
+  const sessionId = await createSession(call, projectDir);
+  const res = await call('POST', `/v1/sessions/${sessionId}/native-cli-agents/start`, {
+    agentName: 'mock-cli',
+    workingPath: projectDir,
+    launchMode: 'pty'
+  });
+  expect(res.status).toBe(200);
+  return { sessionId, nativeSession: ((await res.json()) as { session: NativeCliSessionView }).session };
+}
+
+async function runSessionResetStopsNativeCliRuntime(
+  call: Call,
+  projectDir: string,
+  handlers: ReturnType<typeof buildHandlers>
+): Promise<void> {
+  const { sessionId, nativeSession } = await startMockNativeCliSession(call, projectDir);
+  await waitFor(() => {
+    const row = handlers.store.getNativeCliSession(nativeSession.id);
+    return row?.outputSnapshot.includes('ready') ? row : undefined;
+  });
+
+  const reset = await call('POST', `/v1/sessions/${sessionId}/reset`);
+  expect(reset.status).toBe(200);
+
+  const stopped = await waitFor(() => {
+    const row = handlers.store.getNativeCliSession(nativeSession.id);
+    return row?.state === 'stopped' ? row : undefined;
+  });
+  expect(stopped.exitCode).toBeNull();
+  await waitFor(async () =>
+    (await Bun.file(join(dirname(projectDir), 'native-cli-processes.json')).exists()) ? undefined : true
+  );
+}
+
+async function runSessionDeleteStopsNativeCliRuntime(
+  call: Call,
+  projectDir: string,
+  handlers: ReturnType<typeof buildHandlers>
+): Promise<void> {
+  const { sessionId, nativeSession } = await startMockNativeCliSession(call, projectDir);
+  await waitFor(() => {
+    const row = handlers.store.getNativeCliSession(nativeSession.id);
+    return row?.outputSnapshot.includes('ready') ? row : undefined;
+  });
+
+  const deleted = await call('DELETE', `/v1/sessions/${sessionId}`);
+  expect(deleted.status).toBe(200);
+
+  await waitFor(async () =>
+    (await Bun.file(join(dirname(projectDir), 'native-cli-processes.json')).exists()) ? undefined : true
+  );
+  expect(handlers.store.getNativeCliSession(nativeSession.id)).toBeNull();
+}
+
 async function runWorkingPathRealpathRuntime(call: Call, dir: string, projectDir: string): Promise<void> {
   await configureMockAgent(call);
   const linkDir = join(dir, 'project-link');
@@ -429,6 +488,23 @@ async function runWorkingPathRealpathRuntime(call: Call, dir: string, projectDir
   expect(nativeSession.workingPath).toBe(await realpath(projectDir));
 
   await call('POST', `/v1/native-cli-sessions/${nativeSession.id}/stop`);
+}
+
+async function runWorkingPathBoundaryRuntime(call: Call, dir: string, projectDir: string): Promise<void> {
+  await configureMockAgent(call);
+  const outsideDir = join(dir, 'outside-project');
+  await mkdir(outsideDir, { recursive: true });
+  const sessionId = await createSession(call, projectDir);
+
+  const res = await call('POST', `/v1/sessions/${sessionId}/native-cli-agents/start`, {
+    agentName: 'mock-cli',
+    workingPath: outsideDir,
+    launchMode: 'pty'
+  });
+  expect(res.status).toBe(400);
+  expect((await res.json()) as { error: string }).toMatchObject({
+    error: expect.stringContaining('workingPath must be within the session working directory')
+  });
 }
 
 async function runJsonStreamRuntime(
@@ -518,8 +594,10 @@ async function runProviderApprovalRuntime(
   const input = await call('POST', `/v1/native-cli-sessions/${nativeSession.id}/input`, { input: 'summarize' });
   expect(input.status).toBe(200);
   await waitFor(() => {
-    const raw = Bun.file(join(dir, 'mock-codex-stdin.jsonl'));
-    return raw.size > 0 ? true : undefined;
+    const text = Bun.file(join(dir, 'mock-codex-stdin.jsonl'))
+      .text()
+      .catch(() => '');
+    return text.then((value) => (value.includes('summarize') ? true : undefined));
   });
   const stdinLines = (await readFile(join(dir, 'mock-codex-stdin.jsonl'), 'utf8'))
     .trim()
@@ -780,11 +858,44 @@ for (const kind of TRANSPORTS) {
       }
     });
 
+    test('stops active native CLI sessions when a project session is reset', async () => {
+      const { dir, projectDir, app, handlers } = await setup();
+      const t = serveTransport(kind, app);
+      try {
+        await runSessionResetStopsNativeCliRuntime((m, p, b) => t.fetch(p, jsonInit(m, b)), projectDir, handlers);
+      } finally {
+        await t.stop();
+        await rm(dir, { recursive: true, force: true });
+      }
+    });
+
+    test('stops active native CLI sessions when a project session is deleted', async () => {
+      const { dir, projectDir, app, handlers } = await setup();
+      const t = serveTransport(kind, app);
+      try {
+        await runSessionDeleteStopsNativeCliRuntime((m, p, b) => t.fetch(p, jsonInit(m, b)), projectDir, handlers);
+      } finally {
+        await t.stop();
+        await rm(dir, { recursive: true, force: true });
+      }
+    });
+
     test('normalizes native CLI working paths through realpath', async () => {
       const { dir, projectDir, app } = await setup();
       const t = serveTransport(kind, app);
       try {
         await runWorkingPathRealpathRuntime((m, p, b) => t.fetch(p, jsonInit(m, b)), dir, projectDir);
+      } finally {
+        await t.stop();
+        await rm(dir, { recursive: true, force: true });
+      }
+    });
+
+    test('rejects direct native CLI starts outside the project working path', async () => {
+      const { dir, projectDir, app } = await setup();
+      const t = serveTransport(kind, app);
+      try {
+        await runWorkingPathBoundaryRuntime((m, p, b) => t.fetch(p, jsonInit(m, b)), dir, projectDir);
       } finally {
         await t.stop();
         await rm(dir, { recursive: true, force: true });

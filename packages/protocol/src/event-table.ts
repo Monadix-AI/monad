@@ -225,6 +225,14 @@ export const nativeCliOutputPayloadSchema = z.object({
   chunk: z.string()
 });
 
+export const nativeCliConnectionRequiredPayloadSchema = z.object({
+  nativeCliSessionId: z.string().optional(),
+  agentName: z.string(),
+  provider: nativeCliProviderSchema,
+  reason: z.string(),
+  reconnectIn: z.literal('studio')
+});
+
 export const nativeCliApprovalRequestedPayloadSchema = z.object({
   nativeCliSessionId: z.string(),
   provider: nativeCliProviderSchema,
@@ -272,6 +280,7 @@ export type DelegationFsRequestPayload = z.infer<typeof delegationFsRequestPaylo
 export type DelegationTerminalRequestPayload = z.infer<typeof delegationTerminalRequestPayloadSchema>;
 export type NativeCliStartedPayload = z.infer<typeof nativeCliStartedPayloadSchema>;
 export type NativeCliOutputPayload = z.infer<typeof nativeCliOutputPayloadSchema>;
+export type NativeCliConnectionRequiredPayload = z.infer<typeof nativeCliConnectionRequiredPayloadSchema>;
 export type NativeCliApprovalRequestedPayload = z.infer<typeof nativeCliApprovalRequestedPayloadSchema>;
 export type NativeCliApprovalResolvedPayload = z.infer<typeof nativeCliApprovalResolvedPayloadSchema>;
 export type NativeCliExitedPayload = z.infer<typeof nativeCliExitedPayloadSchema>;
@@ -307,6 +316,7 @@ export const EVENT_TABLE = {
   'delegation.terminal_request': delegationTerminalRequestPayloadSchema,
   'native_cli.started': nativeCliStartedPayloadSchema,
   'native_cli.output': nativeCliOutputPayloadSchema,
+  'native_cli.connection_required': nativeCliConnectionRequiredPayloadSchema,
   'native_cli.approval_requested': nativeCliApprovalRequestedPayloadSchema,
   'native_cli.approval_resolved': nativeCliApprovalResolvedPayloadSchema,
   'native_cli.exited': nativeCliExitedPayloadSchema

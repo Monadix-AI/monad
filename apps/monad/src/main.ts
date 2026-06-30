@@ -235,7 +235,14 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
   if (!USE_MOCK) {
     const initStatus = computeInitStatus(cfg, startupAuth ?? null);
     if (!initStatus.initialized) {
-      logger.warn(`monad is not initialized — run \`monad init\` or open http://${HOST}:${PORT}/`);
+      const missing = initStatus.missing.length ? `missing ${initStatus.missing.join(', ')}` : 'missing setup';
+      const providerCredentials = initStatus.missingProviderCredentials
+        ?.map((item) => `${item.providerLabel ?? item.providerId} (${item.providerId})`)
+        .join(', ');
+      const providerCredentialHint = providerCredentials ? `; provider credentials: ${providerCredentials}` : '';
+      logger.warn(
+        `monad is not initialized — ${missing}${providerCredentialHint} — run \`monad init\` or open http://${HOST}:${PORT}/`
+      );
     }
   }
 

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 
+import { humanReadableCliOutput } from './cli-output';
 import { mono, sans } from './styles';
 
 function latestLine(text: string): string {
@@ -34,7 +35,8 @@ export function WorkOutput({
   };
   const [follow, setFollow] = useState(true);
   const bodyRef = useRef<HTMLPreElement | null>(null);
-  const snippet = useMemo(() => latestLine(output), [output]);
+  const readableOutput = useMemo(() => humanReadableCliOutput(output), [output]);
+  const snippet = useMemo(() => latestLine(readableOutput), [readableOutput]);
   const outputLength = output.length;
 
   useEffect(() => {
@@ -138,7 +140,7 @@ export function WorkOutput({
               color: 'var(--muted-foreground)'
             }}
           >
-            {output}
+            {readableOutput || output}
           </pre>
         </div>
       ) : null}

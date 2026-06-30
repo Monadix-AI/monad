@@ -38,6 +38,20 @@ export function debugTraceText(entry: ProjectDebugTraceEntry): string {
   return JSON.stringify(entry.data ?? {}, null, 2);
 }
 
+export function formatDebugTimestamp(value: string, timeZone?: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat(undefined, {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    fractionalSecondDigits: 3,
+    hour12: false,
+    timeZoneName: 'shortOffset',
+    timeZone
+  }).format(date);
+}
+
 function eventLabel(event: Event): string {
   return event.type;
 }
@@ -263,7 +277,7 @@ export function ProjectDebugConsole({
                   fontSize: 11
                 }}
               >
-                <span style={{ color: 'var(--muted-foreground)' }}>{entry.at.slice(11, 23)}</span>
+                <span style={{ color: 'var(--muted-foreground)' }}>{formatDebugTimestamp(entry.at)}</span>
                 <span>{entry.layer}</span>
                 <span>{entry.direction}</span>
                 <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>

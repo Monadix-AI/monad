@@ -3,8 +3,26 @@
 import type { WebMessageIdWithoutParams } from '@monad/i18n';
 import type { NativeCliAgentPresetView, NativeCliAgentView, NativeCliProvider } from '@monad/protocol';
 
+import {
+  useGetNativeCliAuthQuery,
+  useInputNativeCliAuthMutation,
+  useStartNativeCliAuthMutation,
+  useStopNativeCliAuthMutation
+} from '@monad/client-rtk';
 import { Badge, Button, cn, Input, Label, ScrollArea } from '@monad/ui';
-import { Check, ChevronDown, ChevronRight, Loader2, Plus, Power, RefreshCw, Save, Trash2, X } from 'lucide-react';
+import {
+  ChevronDown,
+  ChevronRight,
+  ExternalLink,
+  Loader2,
+  PlugZap,
+  Plus,
+  Power,
+  RefreshCw,
+  Save,
+  Trash2,
+  X
+} from 'lucide-react';
 import { useState } from 'react';
 
 import { useT } from '@/components/I18nProvider';
@@ -12,6 +30,7 @@ import { providerLogo } from '@/lib/ProviderMeta';
 import { useAsyncAction } from '../hooks/use-async-action';
 import { useNativeCliAgentSettings } from '../hooks/use-native-cli-agent-settings';
 import { StudioPanel, StudioPanelHeader } from './studio/StudioPanel';
+import { CliTerminalModal } from './workplace/CliTerminalModal';
 
 const argsToStr = (args?: string[]): string => (args ?? []).join(' ');
 const strToArgs = (s: string): string[] => s.split(/\s+/).filter(Boolean);
@@ -53,8 +72,9 @@ const presetToView = (p: NativeCliAgentPresetView): NativeCliAgentView => ({
   approvalOwnership: 'provider-owned'
 });
 
-function presetLogo(id: string) {
-  return providerLogo(id === 'claude-code' ? 'anthropic' : 'openai').logo;
+function presetLogo(provider: NativeCliProvider) {
+  const providerType = provider === 'claude-code' ? 'anthropic' : provider === 'gemini' ? 'google' : 'openai';
+  return providerLogo(providerType).logo;
 }
 
 function presetHintKey(id: string): WebMessageIdWithoutParams {
@@ -65,6 +85,19 @@ export function NativeCliAgentsSettings(_props: { onClose: () => void }) {
   const t = useT();
   const { agents, presets, loading, saveAgent, removeAgent, setEnabled, refetch } = useNativeCliAgentSettings();
   const [draft, setDraft] = useState<NativeCliAgentView | null>(null);
+  const [authSession, setAuthSession] = useState<{ id: string; agentName: string } | null>(null);
+  const [startAuth] = useStartNativeCliAuthMutation();
+  const { busy: connectBusy, error: connectError, run: runConnect } = useAsyncAction();
+
+  const connectAgent = (agent: NativeCliAgentView) =>
+    runConnect(async () => {
+      await saveAgent(agent);
+      const session = await startAuth(agent.name).unwrap();
+      setAuthSession({ id: session.id, agentName: agent.name });
+    });
+  const openInstallPage = (preset: NativeCliAgentPresetView) => {
+    window.open(preset.installUrl, '_blank', 'noopener,noreferrer');
+  };
 
   return (
     <StudioPanel>
@@ -99,47 +132,173 @@ export function NativeCliAgentsSettings(_props: { onClose: () => void }) {
 
       <ScrollArea className="flex-1">
         <div className="flex flex-col gap-2 p-4">
+          {connectError ? (
+            <p className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-destructive text-xs">
+              {connectError}
+            </p>
+          ) : null}
+
           {presets.length > 0 && !draft ? (
-            <div className="flex flex-col gap-2 rounded-md border bg-muted/20 p-3">
-              <span className="font-medium text-xs">{t('web.nativeCli.invite')}</span>
-              <div className="flex flex-wrap gap-2">
+            <div className="native-cli-live-v2">
+              <style>{`
+                .native-cli-live-v2 {
+                  display: grid;
+                  grid-template-columns: minmax(160px, 0.72fr) minmax(0, 1.9fr);
+                  gap: 14px;
+                  border: 1px solid var(--border);
+                  border-radius: 10px;
+                  background: color-mix(in srgb, var(--muted) 54%, transparent);
+                  padding: 12px;
+                }
+
+                .native-cli-live-v2__header {
+                  display: flex;
+                  flex-direction: column;
+                  gap: 6px;
+                  padding: 2px 4px;
+                }
+
+                .native-cli-live-v2__header > span {
+                  font-size: 13px;
+                  font-weight: 650;
+                }
+
+                .native-cli-live-v2 p {
+                  margin: 0;
+                  color: var(--muted-foreground);
+                  font-size: 12px;
+                  line-height: 1.45;
+                }
+
+                .native-cli-live-v2__list {
+                  display: flex;
+                  flex-direction: column;
+                  gap: 6px;
+                }
+
+                .native-cli-live-v2__row {
+                  display: grid;
+                  grid-template-columns: 34px minmax(0, 1fr) auto;
+                  align-items: center;
+                  gap: 10px;
+                  min-height: 54px;
+                  border: 1px solid var(--border);
+                  border-radius: 8px;
+                  background: var(--card);
+                  padding: 8px 9px;
+                }
+
+                .native-cli-live-v2__logo {
+                  display: grid;
+                  place-items: center;
+                  width: 34px;
+                  height: 34px;
+                  border: 1px solid var(--border);
+                  border-radius: 7px;
+                  background: var(--background);
+                }
+
+                .native-cli-live-v2__main {
+                  display: flex;
+                  min-width: 0;
+                  flex-direction: column;
+                  gap: 2px;
+                }
+
+                .native-cli-live-v2__name {
+                  overflow: hidden;
+                  text-overflow: ellipsis;
+                  white-space: nowrap;
+                  font-size: 13px;
+                  font-weight: 650;
+                }
+
+                .native-cli-live-v2__meta {
+                  color: var(--muted-foreground);
+                  font-family: var(--font-mono), ui-monospace, monospace;
+                  font-size: 10px;
+                }
+
+                .native-cli-live-v2__actions {
+                  display: flex;
+                  align-items: center;
+                  gap: 6px;
+                }
+
+                @media (max-width: 760px) {
+                  .native-cli-live-v2 {
+                    grid-template-columns: 1fr;
+                  }
+
+                  .native-cli-live-v2__row {
+                    grid-template-columns: 34px minmax(0, 1fr);
+                  }
+
+                  .native-cli-live-v2__actions {
+                    grid-column: 2;
+                  }
+                }
+              `}</style>
+              <div className="native-cli-live-v2__header">
+                <span>{t('web.nativeCli.invite')}</span>
+                <p>{t('web.nativeCli.inviteHint')}</p>
+              </div>
+              <div className="native-cli-live-v2__list">
                 {presets.map((p) => {
-                  const ProductLogo = presetLogo(p.id);
+                  const ProductLogo = presetLogo(p.provider);
+                  const agent = presetToView(p);
                   return (
-                    <button
-                      className="flex min-h-20 w-64 items-center gap-3 rounded-md border bg-card/60 p-3 text-left shadow-sm transition-colors hover:border-primary/40 hover:bg-accent/60"
+                    <div
+                      className="native-cli-live-v2__row"
                       key={p.id}
-                      onClick={() => setDraft(presetToView(p))}
                       title={p.installed ? undefined : t(presetHintKey(p.id))}
-                      type="button"
                     >
-                      <span className="grid size-12 shrink-0 place-items-center rounded-md border bg-background shadow-xs">
-                        <ProductLogo className="size-7" />
+                      <span className="native-cli-live-v2__logo">
+                        <ProductLogo className="size-6" />
                       </span>
-                      <span className="flex min-w-0 flex-1 flex-col gap-2">
-                        <span className="truncate font-medium text-sm">{p.label}</span>
+                      <span className="native-cli-live-v2__main">
+                        <span className="native-cli-live-v2__name">{p.label}</span>
+                        <span className="native-cli-live-v2__meta">
+                          {p.installed ? t('web.acp.installed') : t('web.acp.notInstalled')}
+                          {p.capabilities?.auth ? ` · ${p.capabilities.auth}` : ''}
+                        </span>
+                      </span>
+                      <span className="native-cli-live-v2__actions">
                         {p.installed ? (
-                          <Badge
-                            className="w-fit gap-1 text-[10px]"
+                          <Button
+                            disabled={connectBusy}
+                            onClick={() => connectAgent(agent)}
+                            size="sm"
+                            type="button"
                             variant="secondary"
                           >
-                            <Check className="size-3" />
-                            {t('web.acp.installed')}
-                          </Badge>
+                            {connectBusy ? <Loader2 className="animate-spin" /> : <PlugZap />}
+                            {t('web.nativeCli.connect')}
+                          </Button>
                         ) : (
-                          <Badge
-                            className="w-fit text-[10px]"
-                            variant="outline"
+                          <Button
+                            onClick={() => openInstallPage(p)}
+                            size="sm"
+                            type="button"
+                            variant="secondary"
                           >
-                            {t('web.acp.notInstalled')}
-                          </Badge>
+                            <ExternalLink />
+                            {t('web.nativeCli.install')}
+                          </Button>
                         )}
+                        <Button
+                          onClick={() => setDraft(agent)}
+                          size="sm"
+                          type="button"
+                          variant="ghost"
+                        >
+                          {t('web.nativeCli.review')}
+                        </Button>
                       </span>
-                    </button>
+                    </div>
                   );
                 })}
               </div>
-              <p className="text-muted-foreground text-xs">{t('web.nativeCli.inviteHint')}</p>
             </div>
           ) : null}
 
@@ -172,7 +331,54 @@ export function NativeCliAgentsSettings(_props: { onClose: () => void }) {
           ))}
         </div>
       </ScrollArea>
+      {authSession ? (
+        <NativeCliAuthBridge
+          agentName={authSession.agentName}
+          onClose={() => setAuthSession(null)}
+          sessionId={authSession.id}
+        />
+      ) : null}
     </StudioPanel>
+  );
+}
+
+function NativeCliAuthBridge({
+  sessionId,
+  agentName,
+  onClose
+}: {
+  sessionId: string;
+  agentName: string;
+  onClose: () => void;
+}) {
+  const t = useT();
+  const { data } = useGetNativeCliAuthQuery(sessionId, { pollingInterval: 750 });
+  const [inputAuth] = useInputNativeCliAuthMutation();
+  const [stopAuth] = useStopNativeCliAuthMutation();
+  const output = data?.outputSnapshot ?? '';
+  const isLive = data ? data.state === 'starting' || data.state === 'running' : true;
+  const status = data?.state === 'failed' ? 'error' : isLive ? 'running' : 'ok';
+
+  return (
+    <CliTerminalModal
+      eyebrow={t('web.nativeCli.connectTitle')}
+      footerLabel={t('web.nativeCli.connectTerminalHint')}
+      id={sessionId}
+      onClose={onClose}
+      onInput={(input) => {
+        if (isLive) void inputAuth({ id: sessionId, input }).unwrap();
+      }}
+      onStop={() => {
+        void stopAuth(sessionId).unwrap();
+        onClose();
+      }}
+      output={output}
+      status={status}
+      stopLabel={t('web.nativeCli.stopConnect')}
+      subtitle={t('web.nativeCli.connectHint')}
+      tag={t('web.nativeCli.providerOwned')}
+      title={agentName}
+    />
   );
 }
 
@@ -366,6 +572,7 @@ function AgentForm({
         >
           <option value="codex">Codex</option>
           <option value="claude-code">Claude Code</option>
+          <option value="gemini">Gemini</option>
         </select>
       </div>
       <div className="flex flex-col gap-1">

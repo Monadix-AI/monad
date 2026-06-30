@@ -111,21 +111,22 @@ export async function ensureDevProvider(
   const model = (opts.model ?? seed.model ?? '').trim();
   if (!model) return { seeded: false, reason: 'no-model' };
 
-  const { provider, reasoningEffort } = seed;
+  const { provider, profileAlias, reasoningEffort } = seed;
 
   if (!cfg.model.providers.some((p) => p.id === provider.id)) {
     cfg.model.providers.push({ id: provider.id, label: provider.label, type: provider.type });
   }
 
   const profile = {
-    alias: 'default',
+    alias: profileAlias,
     routes: { chat: { provider: provider.id, modelId: model } },
     params: { reasoningEffort },
     fallbacks: []
   };
-  const existingProfile = cfg.model.profiles.findIndex((p) => p.alias === 'default');
+  const existingProfile = cfg.model.profiles.findIndex((p) => p.alias === profileAlias);
   if (existingProfile === -1) cfg.model.profiles.push(profile);
   else cfg.model.profiles[existingProfile] = profile;
+  cfg.model.default = profileAlias;
 
   auth.credentialPool[provider.id] ??= [];
   const pool = auth.credentialPool[provider.id] as Credential[];
@@ -153,7 +154,7 @@ export async function ensureDevProvider(
     cfg.agent.agents.push({
       id: agentId,
       name: 'Default Dev Agent',
-      modelAlias: 'default',
+      modelAlias: profileAlias,
       framework: undefined,
       capabilities: [],
       declaredScopes: [],
