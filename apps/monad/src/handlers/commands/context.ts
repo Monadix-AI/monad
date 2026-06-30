@@ -5,13 +5,14 @@
 
 import type { PrincipalId, SessionId } from '@monad/protocol';
 import type {
+  BeliefExplanation,
   CommandModelInfo,
   CommandRunContext,
   CommandSessionInfo,
   CommandSpec,
   CompactSummary,
-  ConsolidateMemorySummary,
-  GraphConsolidateSummary
+  ConsolidateSummary,
+  ContradictionCheckSummary
 } from '@monad/sdk-atom';
 
 export interface SessionNavigator {
@@ -24,8 +25,9 @@ export interface SessionNavigator {
 export interface CommandServices {
   resetHistory(sessionId: SessionId): Promise<{ clearedCount: number }>;
   compact(sessionId: SessionId): Promise<CompactSummary>;
-  consolidateMemory(): Promise<ConsolidateMemorySummary[]>;
-  consolidateGraph(): Promise<GraphConsolidateSummary>;
+  consolidate(level?: number): Promise<ConsolidateSummary>;
+  explainBelief(sessionId: SessionId, query: string): Promise<BeliefExplanation>;
+  checkMemory(): Promise<ContradictionCheckSummary>;
   listModels(sessionId: SessionId): Promise<CommandModelInfo[]>;
   setModel(sessionId: SessionId, alias: string): Promise<void>;
   getWorkdir(sessionId: SessionId): Promise<{ path?: string }>;
@@ -54,8 +56,9 @@ export function makeCommandRunContext(p: {
     switchSession: (target) => nav.switchSession(target),
     resetHistory: () => services.resetHistory(sessionId),
     compact: () => services.compact(sessionId),
-    consolidateMemory: () => services.consolidateMemory(),
-    consolidateGraph: () => services.consolidateGraph(),
+    consolidate: (level) => services.consolidate(level),
+    explainBelief: (query) => services.explainBelief(sessionId, query),
+    checkMemory: () => services.checkMemory(),
     listModels: () => services.listModels(sessionId),
     setModel: (alias) => services.setModel(sessionId, alias),
     getWorkdir: () => services.getWorkdir(sessionId),

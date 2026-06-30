@@ -8,6 +8,7 @@ import type {
   GetGraphResponse,
   GetHealthResponse,
   GetInitStatusResponse,
+  GetLawsResponse,
   GetLicensesResponse,
   GetMem0DataResponse,
   GetStatsResponse,
@@ -101,6 +102,8 @@ export interface DaemonHandlerDeps extends SessionDeps, ModelDeps {
   graphStore: L2Provider;
   /** Assemble the read-only mem0 explorer view (entries + cluster projection + status). */
   getMem0Data: () => Promise<GetMem0DataResponse>;
+  /** All L3 inferred laws across scopes (read-only Memory panel). */
+  getLaws: () => Promise<GetLawsResponse>;
   /** Persist + hot-apply the active memory backend (config write). */
   memorySetBackend: (backend: MemoryBackendId) => Promise<void>;
   /** Persist + hot-apply mem0's model selection (chosen from Monad's model registry). */
@@ -340,6 +343,12 @@ export function createDaemonHandlers(deps: DaemonHandlerDeps) {
     }
   };
 
+  const laws = {
+    get(): Promise<GetLawsResponse> {
+      return deps.getLaws();
+    }
+  };
+
   const graph = {
     get(): GetGraphResponse {
       const { nodes, edges } = deps.graphStore.snapshot();
@@ -523,6 +532,7 @@ export function createDaemonHandlers(deps: DaemonHandlerDeps) {
     licenses,
     graph,
     mem0Data,
+    laws,
     usage,
     stats,
     embeddings,

@@ -52,6 +52,7 @@ import { commandsApi, useListCommandsQuery } from './endpoints/commands/index.ts
 import { graphApi, useGetGraphQuery } from './endpoints/graph/index.ts';
 import { indexerApi, useGetIndexerStatusQuery } from './endpoints/indexer/get-indexer-status.ts';
 import { useInitStatusQuery, useSetInitHomeMutation } from './endpoints/init/index.ts';
+import { lawsApi, useGetLawsQuery } from './endpoints/laws/index.ts';
 import { licensesApi, useListLicensesQuery } from './endpoints/licenses/index.ts';
 import { mem0DataApi, useGetMem0DataQuery } from './endpoints/mem0-data/index.ts';
 import {
@@ -225,6 +226,7 @@ export {
   credentialSelectors,
   graphApi,
   indexerApi,
+  lawsApi,
   licensesApi,
   localeAdapter,
   localeApi,
@@ -287,6 +289,7 @@ export {
   useGetHealthQuery,
   useGetHooksQuery,
   useGetIndexerStatusQuery,
+  useGetLawsQuery,
   useGetLocaleQuery,
   useGetMem0DataQuery,
   useGetMemoryCoreQuery,

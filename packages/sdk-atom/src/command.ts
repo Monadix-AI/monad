@@ -39,12 +39,34 @@ export interface ConsolidateMemorySummary {
   after: number;
 }
 
-/** Outcome of a /consolidate-graph pass over the L2 knowledge graph. */
-export interface GraphConsolidateSummary {
-  sessionsExtracted: number;
+/** Outcome of a /consolidate pass over the layered memory pipeline, run up to `level`
+ *  (1 = L1 facts, 2 = + L2 graph, 3 = + L3 laws). Layers not reached report 0. */
+export interface ConsolidateSummary {
+  level: number;
+  l1Scopes: number;
   nodes: number;
   edges: number;
   prunedEdges: number;
+  laws: number;
+  lawScopes: number;
+}
+
+/** One law matched by a /why query, traced to its grounding: the facts it generalizes, the graph
+ *  relations it rests on, and the source messages those relations came from. */
+export interface BeliefMatch {
+  statement: string;
+  confidence: number;
+  facts: string[];
+  relations: string[];
+  sources: string[];
+}
+export interface BeliefExplanation {
+  matches: BeliefMatch[];
+}
+
+/** Outcome of a /check-memory pass: how many laws were flagged as contradicted by a current fact. */
+export interface ContradictionCheckSummary {
+  flagged: number;
 }
 
 /** Outcome of a manual /compact pass. */
@@ -68,10 +90,14 @@ export interface CommandRunContext {
   /** Context management. */
   resetHistory(): Promise<{ clearedCount: number }>;
   compact(): Promise<CompactSummary>;
-  /** Dedup/merge/correct every durable memory scope (the built-in backend's manual cleanup pass). */
-  consolidateMemory(): Promise<ConsolidateMemorySummary[]>;
-  /** Build/update the L2 knowledge graph from recent conversations (manual trigger). */
-  consolidateGraph(): Promise<GraphConsolidateSummary>;
+  /** Run the layered-memory consolidation pipeline up to `level` (defaults to the configured
+   *  memory.level): L1 fact dedup, then L2 graph, then L3 laws. */
+  consolidate(level?: number): Promise<ConsolidateSummary>;
+  /** Trace why the agent believes something: match the query against stored laws and return each
+   *  match's grounding (facts, relations, source messages). */
+  explainBelief(query: string): Promise<BeliefExplanation>;
+  /** Flag laws contradicted by a current fact (suppressed from recall until re-derived). */
+  checkMemory(): Promise<ContradictionCheckSummary>;
 
   /** Model selection (per-session override). */
   listModels(): Promise<CommandModelInfo[]>;

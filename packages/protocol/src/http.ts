@@ -63,6 +63,7 @@ import { hooksSettingsResponseSchema, setHooksSettingsRequestSchema } from './ho
 import { agentIdSchema, sessionIdSchema } from './ids.ts';
 import { getLicensesResponseSchema } from './licenses.ts';
 import { getMem0DataResponseSchema } from './mem0-data.ts';
+import { getLawsResponseSchema } from './memory.ts';
 import { networkSettingsSchema, setNetworkSettingsRequestSchema } from './network-settings.ts';
 import { obscuraStatusResponseSchema, setObscuraRequestSchema } from './obscura.ts';
 import { openaiCompatSettingsSchema, setOpenaiCompatRequestSchema } from './openai-compat-settings.ts';
@@ -380,6 +381,11 @@ export const daemonHttpContract = {
   mem0Data: {
     get: defineHttpEndpoint({
       response: { 200: getMem0DataResponseSchema }
+    })
+  },
+  laws: {
+    get: defineHttpEndpoint({
+      response: { 200: getLawsResponseSchema }
     })
   }
 } as const;

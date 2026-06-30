@@ -6,13 +6,12 @@
 import type { MonadConfig } from '@monad/home';
 import type { Logger } from '@monad/logger';
 import type { Event, SessionId } from '@monad/protocol';
+import type { BeliefExplanation, ConsolidateSummary, ContradictionCheckSummary } from '@monad/sdk-atom';
 import type { DurableSummarizer, ModelRouter } from '@/agent/index.ts';
 import type { SessionGateway } from '@/channels/channel.ts';
 import type { CommandBundle, CommandRegistry, SkillCommandView } from '@/handlers/commands/index.ts';
 import type { EventBus } from '@/services/event-bus.ts';
 import type { I18nService } from '@/services/i18n.ts';
-import type { GraphConsolidateResult } from '@/services/memory/graph/service.ts';
-import type { MemoryService } from '@/services/memory/index.ts';
 import type { ModelService } from '@/services/model.ts';
 import type { ModelCatalogService } from '@/services/model-catalog.ts';
 import type { OversightService } from '@/services/oversight.ts';
@@ -31,8 +30,9 @@ export interface CommandBundleDeps {
   modelCatalog: ModelCatalogService;
   agentModel: ModelRouter;
   history: DurableSummarizer;
-  memoryService: MemoryService;
-  runGraphConsolidate: () => Promise<GraphConsolidateResult>;
+  runConsolidate: (level?: number) => Promise<ConsolidateSummary>;
+  explainBelief: (sessionId: string, query: string) => Promise<BeliefExplanation>;
+  runCheckContradictions: () => Promise<ContradictionCheckSummary>;
   oversight: OversightService;
   i18n: I18nService;
   bus: EventBus;
@@ -51,8 +51,9 @@ export function createCommandBundle(deps: CommandBundleDeps): CommandBundle {
     modelCatalog,
     agentModel,
     history,
-    memoryService,
-    runGraphConsolidate,
+    runConsolidate,
+    explainBelief,
+    runCheckContradictions,
     oversight,
     i18n,
     bus,
@@ -155,8 +156,9 @@ export function createCommandBundle(deps: CommandBundleDeps): CommandBundle {
 
       return { sessionId: newSessionId };
     },
-    consolidateMemory: () => memoryService.consolidateAll(),
-    consolidateGraph: () => runGraphConsolidate(),
+    consolidate: (level) => runConsolidate(level),
+    explainBelief: (sid, query) => explainBelief(sid, query),
+    checkMemory: () => runCheckContradictions(),
     // A highRisk command (e.g. a third-party atom pack command) routes through the same human-approval
     // gate as a highRisk tool call before it runs; a denial throws (surfaced as the command reply).
     approveHighRisk: async (sessionId, def) => {

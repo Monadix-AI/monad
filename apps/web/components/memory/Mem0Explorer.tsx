@@ -8,20 +8,12 @@ import { Boxes, Database } from 'lucide-react';
 import { useMemo } from 'react';
 
 import { useT } from '@/components/I18nProvider';
-
-const PALETTE = ['#6366f1', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#a855f7', '#ec4899', '#14b8a6'];
-function colorForScope(scope: string): string {
-  let h = 0;
-  for (let i = 0; i < scope.length; i++) h = (h * 31 + scope.charCodeAt(i)) >>> 0;
-  return PALETTE[h % PALETTE.length];
-}
-function scopeLabel(scope: string): string {
-  return scope.startsWith('agent:') ? scope.slice('agent:'.length) : scope;
-}
+import { DataEmpty } from './DataEmpty';
+import { colorForScope, scopeLabel } from './scope';
 
 // 2D scatter of the embedding projection, points colored by scope. Hand-rolled SVG (no chart dep);
 // coordinates are min/max-normalized into the viewport. Hover shows the memory text via <title>.
-function ClusterMap({ entries }: { entries: Mem0EntryView[] }) {
+function ClusterMap({ entries, emptyLabel }: { entries: Mem0EntryView[]; emptyLabel: string }) {
   const pts = entries.filter((e): e is Mem0EntryView & { x: number; y: number } => e.x !== null && e.y !== null);
   const W = 560;
   const H = 320;
@@ -40,11 +32,7 @@ function ClusterMap({ entries }: { entries: Mem0EntryView[] }) {
   }, [pts]);
 
   if (layout.length === 0) {
-    return (
-      <div className="flex h-40 items-center justify-center text-muted-foreground text-xs">
-        No embeddings to plot (the vector store may be off or empty).
-      </div>
-    );
+    return <div className="flex h-40 items-center justify-center text-muted-foreground text-xs">{emptyLabel}</div>;
   }
   return (
     <svg
@@ -79,7 +67,7 @@ export function Mem0Explorer() {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex items-center gap-3 border-b px-6 py-2">
-        <span className="text-muted-foreground text-xs">{d?.available ? String(d.total) : ''}</span>
+        <span className="text-muted-foreground text-xs tabular-nums">{d?.available ? String(d.total) : ''}</span>
         <Button
           className="ml-auto"
           disabled={isFetching}
@@ -92,17 +80,17 @@ export function Mem0Explorer() {
       </div>
 
       {!isLoading && !d?.available ? (
-        <div className="flex h-full flex-col items-center justify-center gap-1 p-8 text-center text-muted-foreground text-sm">
-          <Database className="size-8 opacity-40" />
-          <p>{t('web.mem0.inactive')}</p>
-          <p className="text-xs">{t('web.mem0.inactiveHint')}</p>
-        </div>
+        <DataEmpty
+          hint={t('web.mem0.inactiveHint')}
+          icon={Database}
+          title={t('web.mem0.inactive')}
+        />
       ) : (
-        <div className="flex flex-1 flex-col gap-5 overflow-y-auto px-6 py-5">
+        <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-6 py-5">
           {/* Stats */}
           <section className="flex flex-wrap items-center gap-x-6 gap-y-2">
             <span className="text-sm">
-              <span className="font-medium">{d?.total ?? 0}</span>{' '}
+              <span className="font-medium tabular-nums">{d?.total ?? 0}</span>{' '}
               <span className="text-muted-foreground">{t('web.mem0.memories')}</span>
             </span>
             <span className="flex items-center gap-1.5 text-muted-foreground text-xs">
@@ -120,7 +108,7 @@ export function Mem0Explorer() {
                     className="inline-block size-2.5 rounded-full"
                     style={{ background: colorForScope(s.scope) }}
                   />
-                  {scopeLabel(s.scope)} · {s.count}
+                  {scopeLabel(s.scope)} · <span className="tabular-nums">{s.count}</span>
                 </span>
               ))}
             </div>
@@ -128,19 +116,18 @@ export function Mem0Explorer() {
 
           {/* Cluster map */}
           <section className="flex flex-col gap-2">
-            <h3 className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
-              {t('web.mem0.cluster')}
-            </h3>
+            <h3 className="font-medium text-muted-foreground text-xs">{t('web.mem0.cluster')}</h3>
             <div className="rounded-lg border bg-muted/20 p-2">
-              <ClusterMap entries={d?.entries ?? []} />
+              <ClusterMap
+                emptyLabel={t('web.mem0.noCluster')}
+                entries={d?.entries ?? []}
+              />
             </div>
           </section>
 
           {/* Entry list */}
           <section className="flex flex-col gap-2">
-            <h3 className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
-              {t('web.mem0.entries')}
-            </h3>
+            <h3 className="font-medium text-muted-foreground text-xs">{t('web.mem0.entries')}</h3>
             {(d?.entries.length ?? 0) === 0 ? (
               <p className="text-muted-foreground text-sm">{t('web.mem0.noEntries')}</p>
             ) : (

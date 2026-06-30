@@ -344,7 +344,7 @@
           "email": {
             "backend": "auto"
           },
-          "codeExecBackend": "local"
+          "codeExecBackend": "follow-system"
         }
       },
       "type": "object",
@@ -558,7 +558,7 @@
             "email": {
               "backend": "auto"
             },
-            "codeExecBackend": "local"
+            "codeExecBackend": "follow-system"
           },
           "type": "object",
           "properties": {
@@ -643,8 +643,27 @@
               "additionalProperties": false
             },
             "codeExecBackend": {
-              "default": "local",
+              "default": "follow-system",
               "type": "string"
+            },
+            "codeExecE2b": {
+              "type": "object",
+              "properties": {
+                "apiKey": {
+                  "type": "string"
+                }
+              },
+              "required": ["apiKey"],
+              "additionalProperties": false
+            },
+            "codeExecDocker": {
+              "type": "object",
+              "properties": {
+                "image": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false
             }
           },
           "required": ["webSearch", "email", "codeExecBackend"],
@@ -1494,6 +1513,7 @@
     "memory": {
       "default": {
         "backend": "builtin",
+        "level": 1,
         "mem0": {}
       },
       "type": "object",
@@ -1502,6 +1522,12 @@
           "default": "builtin",
           "type": "string",
           "enum": ["builtin", "mem0"]
+        },
+        "level": {
+          "default": 1,
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3
         },
         "mem0": {
           "default": {},
@@ -1566,9 +1592,24 @@
             }
           },
           "additionalProperties": false
+        },
+        "decay": {
+          "type": "object",
+          "properties": {
+            "halfLifeDays": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "floor": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            }
+          },
+          "additionalProperties": false
         }
       },
-      "required": ["backend", "mem0"],
+      "required": ["backend", "level", "mem0"],
       "additionalProperties": false
     },
     "$schema": {

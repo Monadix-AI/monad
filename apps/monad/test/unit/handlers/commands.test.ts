@@ -36,8 +36,9 @@ function fakeCtx(args: string, servicesOver: ServicesOver = {}): CommandRunConte
     services: {
       resetHistory: async () => ({ clearedCount: 3 }),
       compact: async () => ({ compacted: 1 }),
-      consolidateMemory: async () => [],
-      consolidateGraph: async () => ({ sessionsExtracted: 0, nodes: 0, edges: 0, prunedEdges: 0 }),
+      consolidate: async () => ({ level: 1, l1Scopes: 0, nodes: 0, edges: 0, prunedEdges: 0, laws: 0, lawScopes: 0 }),
+      explainBelief: async () => ({ matches: [] }),
+      checkMemory: async () => ({ flagged: 0 }),
       listModels: async () => models,
       setModel: async () => {},
       getWorkdir: async () => ({ path: undefined }),

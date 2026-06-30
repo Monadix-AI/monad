@@ -239,9 +239,10 @@ export function buildHandlers(
     listModels: async () => [],
     setModel: async () => {},
     compact: async () => ({ compacted: 0 }),
-    consolidateMemory: async () => [],
+    consolidate: async () => ({ level: 1, l1Scopes: 0, nodes: 0, edges: 0, prunedEdges: 0, laws: 0, lawScopes: 0 }),
+    explainBelief: async () => ({ matches: [] }),
+    checkMemory: async () => ({ flagged: 0 }),
     handoff: async () => ({ sessionId: 'ses_new' as SessionId }),
-    consolidateGraph: async () => ({ sessionsExtracted: 0, nodes: 0, edges: 0, prunedEdges: 0 }),
     t: i18n.t,
     log: () => {}
   };
@@ -276,6 +277,7 @@ export function buildHandlers(
         scopeCounts: [],
         entries: []
       }),
+      getLaws: async () => ({ laws: [] }),
       memorySetBackend: async () => {},
       memorySetMem0Models: async () => {},
       memorySetGraph: async () => {},

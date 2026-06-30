@@ -15,8 +15,10 @@ export interface GraphMessage {
 }
 interface GraphSession {
   id: string;
-  /** v1 writes to `agent:<id>`; a session with no agent is skipped. */
+  /** A session with no agent is skipped (no model to pick / no agent scope). */
   agentId: string | null;
+  /** The session's workspace key — when set, its graph also lands in `project:<key>`. */
+  projectKey: string | null;
 }
 
 export interface GraphConsolidateDeps {
@@ -95,7 +97,6 @@ export async function consolidateGraph(deps: GraphConsolidateDeps): Promise<Grap
       chars += len;
     }
 
-    const scope = `agent:${ses.agentId}`;
     const transcript = batch.map((m) => `${m.role}: ${m.text}`).join('\n');
     let graph: Awaited<ReturnType<typeof extractGraph>>;
     try {
@@ -110,39 +111,43 @@ export async function consolidateGraph(deps: GraphConsolidateDeps): Promise<Grap
     }
 
     const support = batch.map((m) => m.id);
-    // Resolve relation endpoints to node ids, upserting any endpoint the entity list missed so an edge
-    // is never dropped for a naming gap.
-    const idByName = new Map<string, string>();
-    const resolve = (name: string): string => {
-      const key = norm(name);
-      const hit = idByName.get(key);
-      if (hit) return hit;
-      const id = deps.store.upsertNode({ scope, name });
-      idByName.set(key, id);
-      nodes++;
-      return id;
-    };
-    for (const n of graph.nodes) {
-      const key = norm(n.name);
-      if (idByName.has(key)) continue;
-      const id = deps.store.upsertNode({ scope, name: n.name, type: n.type, aliases: n.aliases });
-      idByName.set(key, id);
-      nodes++;
-    }
-    for (const e of graph.edges) {
-      const src = resolve(e.src);
-      const dst = resolve(e.dst);
-      if (src === dst) continue; // skip self-loops
-      deps.store.upsertEdge({
-        scope,
-        src,
-        dst,
-        relation: e.relation,
-        provClass: 'machine',
-        support,
-        confidence: e.confidence ?? 0.6
-      });
-      edges++;
+    // Write the one extraction into every scope the session belongs to (its agent, and its workspace
+    // when set) — extraction is paid once; the upserts are cheap. Node ids are per-scope (hash includes
+    // scope), so each scope's subgraph resolves its own endpoints.
+    const scopes = [`agent:${ses.agentId}`, ...(ses.projectKey ? [`project:${ses.projectKey}`] : [])];
+    for (const scope of scopes) {
+      const idByName = new Map<string, string>();
+      const resolve = (name: string): string => {
+        const key = norm(name);
+        const hit = idByName.get(key);
+        if (hit) return hit;
+        const id = deps.store.upsertNode({ scope, name });
+        idByName.set(key, id);
+        nodes++;
+        return id;
+      };
+      for (const n of graph.nodes) {
+        const key = norm(n.name);
+        if (idByName.has(key)) continue;
+        const id = deps.store.upsertNode({ scope, name: n.name, type: n.type, aliases: n.aliases });
+        idByName.set(key, id);
+        nodes++;
+      }
+      for (const e of graph.edges) {
+        const src = resolve(e.src);
+        const dst = resolve(e.dst);
+        if (src === dst) continue; // skip self-loops
+        deps.store.upsertEdge({
+          scope,
+          src,
+          dst,
+          relation: e.relation,
+          provClass: 'machine',
+          support,
+          confidence: e.confidence ?? 0.6
+        });
+        edges++;
+      }
     }
 
     // Advance only to the last message we actually fed — a budget-truncated tail is picked up next pass.

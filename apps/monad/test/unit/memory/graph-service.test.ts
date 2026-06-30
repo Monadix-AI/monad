@@ -34,7 +34,7 @@ const after = (afterId: string | null): GraphMessage[] => {
 function deps(store: GraphStore, complete: () => Promise<string>, alive: Set<string>) {
   return {
     store,
-    sessions: () => [{ id: 'ses_1', agentId: 'a1' }],
+    sessions: () => [{ id: 'ses_1', agentId: 'a1', projectKey: null }],
     messagesAfter: (_sid: string, afterId: string | null) => after(afterId),
     isAlive: (id: string) => alive.has(id),
     complete,
@@ -85,6 +85,19 @@ test('consolidate extracts a graph, advances the per-session cursor, and is idem
   expect(r2.sessionsExtracted).toBe(0);
 });
 
+test('a session with a projectKey writes its graph into both the agent and project scopes', async () => {
+  const store = new GraphStore(':memory:');
+  const alive = new Set(['m1', 'm2', 'm3', 'm4']);
+  await consolidateGraph({
+    ...deps(store, async () => GRAPH_JSON, alive),
+    sessions: () => [{ id: 'ses_1', agentId: 'a1', projectKey: 'monad-abc123' }]
+  });
+  // one extraction, two subgraphs — the agent's and the workspace's
+  expect(store.searchNodes(['agent:a1'], 'Zeke').length).toBe(1);
+  expect(store.searchNodes(['project:monad-abc123'], 'Zeke').length).toBe(1);
+  expect(store.searchNodes(['agent:other'], 'Zeke').length).toBe(0); // not leaked to other scopes
+});
+
 test('cost: tool/non-prose messages are excluded from the extraction prompt (cursor still advances)', async () => {
   const store = new GraphStore(':memory:');
   const span: GraphMessage[] = [
@@ -95,7 +108,7 @@ test('cost: tool/non-prose messages are excluded from the extraction prompt (cur
   let prompt = '';
   await consolidateGraph({
     store,
-    sessions: () => [{ id: 'ses_t', agentId: 'a1' }],
+    sessions: () => [{ id: 'ses_t', agentId: 'a1', projectKey: null }],
     messagesAfter: () => span,
     isAlive: () => true,
     complete: async (_m, _s, user) => {
@@ -121,7 +134,7 @@ test('cost: a long span is capped to the char budget; the tail is consolidated o
   let calls = 0;
   const mk = () => ({
     store,
-    sessions: () => [{ id: 'ses_b', agentId: 'a1' }],
+    sessions: () => [{ id: 'ses_b', agentId: 'a1', projectKey: null }],
     messagesAfter: (_s: string, afterId: string | null) =>
       afterId ? big.slice(big.findIndex((m) => m.id === afterId) + 1) : big,
     isAlive: () => true,

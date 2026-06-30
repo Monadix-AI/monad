@@ -26,8 +26,9 @@ import type { Store } from '@/store/db/index.ts';
 import { join } from 'node:path';
 
 import { type MemoryTurn, renderMemoryBlock, sanitizeFact } from '@/agent/index.ts';
+import { fingerprint } from '@/services/memory/consolidation-state.ts';
 import { type BuildMem0Options, buildMem0Client, Mem0Adapter, type Mem0Client } from '@/services/memory/mem0.ts';
-import { factId, MemoryDir, scopeOf } from '@/store/db/index.ts';
+import { factId, MemoryDir, projectKey, scopeOf } from '@/store/db/index.ts';
 
 export interface MemoryServiceDeps {
   store: Store;
@@ -55,6 +56,13 @@ export interface MemoryServiceDeps {
   qdrantStatus?: () => { phase: string; error: string | null } | undefined;
   /** L2 graph consolidation settings (read live, for the UI). undefined ⇒ unset (defaults apply). */
   graphSettings?: () => { autoConsolidate?: boolean; intervalMinutes?: number } | undefined;
+  /** Consolidation pipeline depth (1-3, read live for the UI). Defaults to 1 when unset. */
+  level?: () => number;
+  /** Incremental L1: skip the dedup of a scope whose facts are unchanged since the last pass. */
+  consolidationState?: { get(key: string): string | null; set(key: string, fp: string): void };
+  /** L3 inferred laws for the given scopes (e.g. ['global','agent:<id>']). Injected into recall —
+   *  independent of the L1 backend (laws live in the graph DB). Unset ⇒ no law injection. */
+  laws?: (scopes: string[]) => { statement: string; confidence: number }[];
   log: Logger;
 }
 
@@ -82,7 +90,7 @@ function parseFactArray(text: string): string[] | null {
   }
 }
 
-export type MemoryToolScope = 'agent' | 'global';
+export type MemoryToolScope = 'agent' | 'global' | 'project';
 export type MemoryToolResult = { ok: boolean; note?: string; content?: string };
 interface ConsolidateResult {
   scope: string;
@@ -161,9 +169,17 @@ export function createMemoryService(deps: MemoryServiceDeps): MemoryService {
     return user || assistant ? { user, assistant } : null;
   };
 
-  // Resolve the write target scope for a tool call ('global' → shared, 'agent' → this session's agent).
+  // The workspace scope for a session = `project:<key>` derived from its cwd; null when it has none.
+  const projectScopeOf = (sessionId: SessionId): MemoryScope | null => {
+    const cwd = deps.store.getSession(sessionId)?.cwd;
+    return cwd ? scopeOf('project', projectKey(cwd)) : null;
+  };
+
+  // Resolve the write target scope for a tool call ('global' → shared, 'agent' → this session's agent,
+  // 'project' → the session's workspace).
   const writeScope = (sessionId: SessionId, scope: MemoryToolScope): MemoryScope | null => {
     if (scope === 'global') return scopeOf('global', '*');
+    if (scope === 'project') return projectScopeOf(sessionId);
     const agentId = agentOf(sessionId);
     return agentId ? scopeOf('agent', agentId) : null;
   };
@@ -175,6 +191,10 @@ export function createMemoryService(deps: MemoryServiceDeps): MemoryService {
     const label = scope.kind === 'global' ? 'global' : `${scope.kind}:${scope.id}`;
     const facts = memoryDir.listFacts(scope);
     if (facts.length < 2) return { scope: label, before: facts.length, after: facts.length };
+    // Incremental: skip the LLM dedup when this scope's fact set is unchanged since the last pass.
+    const fp = fingerprint(facts.map((f) => f.id));
+    if (deps.consolidationState?.get(`l1:${label}`) === fp)
+      return { scope: label, before: facts.length, after: facts.length };
     const model = deps.extractModel(scope.kind === 'agent' ? (scope.id as AgentId) : undefined);
     try {
       const res = await deps.router.complete({
@@ -196,6 +216,7 @@ export function createMemoryService(deps: MemoryServiceDeps): MemoryService {
       // Never let a non-empty scope be wiped to empty by one bad rewrite.
       if (safe.length === 0 && facts.length > 0) return { scope: label, before: facts.length, after: facts.length };
       memoryDir.replaceFacts(scope, safe);
+      deps.consolidationState?.set(`l1:${label}`, fingerprint(safe.map(factId)));
       deps.log.info(`memory: consolidate(${label}) ${facts.length} → ${safe.length} fact(s)`);
       return { scope: label, before: facts.length, after: safe.length };
     } catch (err) {
@@ -208,11 +229,15 @@ export function createMemoryService(deps: MemoryServiceDeps): MemoryService {
   // in scope — they're small and almost always relevant, and an agent shouldn't have to remember to
   // `view` what it learned about the user. AGENT-private facts can be large/situational, so they are
   // advertised by count and read on demand via the `view` action.
-  const buildBuiltinRecall = (agentId: AgentId): string => {
+  const buildBuiltinRecall = (agentId: AgentId, projectScope: MemoryScope | null): string => {
     const gFacts = memoryDir.listFacts(scopeOf('global', '*'));
     const aFacts = memoryDir.listFacts(scopeOf('agent', agentId));
+    const pFacts = projectScope ? memoryDir.listFacts(projectScope) : [];
     const parts: string[] = [];
     if (gFacts.length) parts.push(`What you know about the user:\n${gFacts.map((f) => `- ${f.content}`).join('\n')}`);
+    // Project facts are workspace-specific and almost always relevant when working here, so inline them.
+    if (pFacts.length)
+      parts.push(`What you know about this workspace:\n${pFacts.map((f) => `- ${f.content}`).join('\n')}`);
     if (aFacts.length)
       parts.push(
         `You also have ${aFacts.length} private memory note(s) for this agent — read them with the memory tool (action "view", scope "agent").`
@@ -237,25 +262,36 @@ export function createMemoryService(deps: MemoryServiceDeps): MemoryService {
     async recallContext(sessionId, query) {
       const agentId = agentOf(sessionId);
       if (!agentId) return undefined;
+      const projectScope = projectScopeOf(sessionId);
       const mem0 = await activeMem0();
       // Built-in: serve the frozen per-session snapshot so the cached system prefix stays stable.
       if (!mem0 && recallSnapshot.has(sessionId)) return recallSnapshot.get(sessionId);
       let rendered: string | undefined;
       if (mem0) {
-        // mem0: semantic recall of the actual facts (it has no flat index file).
+        // mem0: semantic recall across the user (global), this workspace (project), and this agent.
+        const scopes = [scopeOf('global', '*'), ...(projectScope ? [projectScope] : []), scopeOf('agent', agentId)];
         const block = await mem0.recall({
           query,
           sessionId,
           agentId,
+          scopes,
           advanced: false,
           budget: { facts: FACTS_CHAR_BUDGET, graph: 0, laws: 0 }
         });
         rendered = renderMemoryBlock(block);
       } else {
-        // Built-in: inline global facts + advertise agent-private memory (read on demand via `view`).
-        rendered = buildBuiltinRecall(agentId) || undefined;
-        recallSnapshot.set(sessionId, rendered); // freeze for the rest of the session
+        // Built-in: inline global + project facts + advertise agent-private memory (read on demand).
+        rendered = buildBuiltinRecall(agentId, projectScope) || undefined;
       }
+      // L3: append inferred laws (both backends — laws live in the graph DB, not the L1 store).
+      const lawScopes = ['global', `agent:${agentId}`];
+      if (projectScope) lawScopes.push(`project:${projectScope.id}`);
+      const laws = deps.laws?.(lawScopes) ?? [];
+      if (laws.length > 0) {
+        const block = ['Learned rules (general, follow these):', ...laws.map((l) => `- ${l.statement}`)].join('\n');
+        rendered = rendered ? `${rendered}\n\n${block}` : block;
+      }
+      if (!mem0) recallSnapshot.set(sessionId, rendered); // freeze the whole block (incl. laws) for the session
       return rendered;
     },
 
@@ -286,18 +322,21 @@ export function createMemoryService(deps: MemoryServiceDeps): MemoryService {
 
     async memoryTool(sessionId, action, args) {
       const mem0 = await activeMem0();
-      const scope = args.scope === 'global' ? 'global' : 'agent';
+      const scope: MemoryToolScope = args.scope ?? 'agent';
+      // The write target is missing for different reasons per scope (no agent vs no workspace) —
+      // tell the model the real one so it can fall back instead of dead-ending.
+      const noTarget = scope === 'project' ? 'this session has no workspace' : 'this session has no agent';
 
       if (action === 'view') {
         if (mem0) {
           const target = writeScope(sessionId, scope);
-          if (!target) return { ok: false, note: 'this session has no agent' };
+          if (!target) return { ok: false, note: noTarget };
           return { ok: true, content: renderFacts(await mem0.listFacts(target)) };
         }
         // No scope arg → return the index (what exists). With a scope → that scope's full facts.
         if (!args.scope) return { ok: true, content: memoryDir.readIndex().trim() || '(no memory recorded yet)' };
         const target = writeScope(sessionId, scope);
-        if (!target) return { ok: false, note: 'this session has no agent' };
+        if (!target) return { ok: false, note: noTarget };
         return { ok: true, content: renderFacts(memoryDir.listFacts(target)) };
       }
 
@@ -311,7 +350,7 @@ export function createMemoryService(deps: MemoryServiceDeps): MemoryService {
         };
       }
       const target = writeScope(sessionId, scope);
-      if (!target) return { ok: false, note: 'this session has no agent to attach memory to' };
+      if (!target) return { ok: false, note: `${noTarget} to attach memory to` };
 
       if (action === 'record') {
         const s = sanitizeFact(args.fact ?? '');
@@ -327,7 +366,6 @@ export function createMemoryService(deps: MemoryServiceDeps): MemoryService {
         const edited = memoryDir.editFact(target, factId(args.old.trim()), s.cleaned);
         return edited ? { ok: true } : { ok: false, note: 'no matching fact found to update' };
       }
-      // delete
       if (!args.fact?.trim()) return { ok: false, note: 'a non-empty "fact" to delete is required' };
       const removed = memoryDir.removeFact(target, factId(args.fact.trim()));
       return removed ? { ok: true } : { ok: false, note: 'no matching fact found' };
@@ -346,10 +384,15 @@ export function createMemoryService(deps: MemoryServiceDeps): MemoryService {
       const r = deps.mem0Models();
       const qdrant = deps.qdrantStatus?.();
       const graph = deps.graphSettings?.();
+      // Distinct workspaces with memory, derived from session cwds (key → path), for the project picker.
+      const byKey = new Map<string, string>();
+      for (const s of deps.store.listSessions()) if (s.cwd) byKey.set(projectKey(s.cwd), s.cwd);
       return {
         backend,
         mem0: { llm: r.llm, embedder: r.embedder, embedDim: r.dim, ready: Boolean(r.models), error: r.error ?? null },
         qdrant: qdrant ? { phase: qdrant.phase as QdrantPhase, error: qdrant.error } : undefined,
+        level: deps.level?.() ?? 1,
+        projects: [...byKey].map(([key, path]) => ({ key, path })),
         graph: { autoConsolidate: graph?.autoConsolidate ?? null, intervalMinutes: graph?.intervalMinutes ?? null }
       };
     },

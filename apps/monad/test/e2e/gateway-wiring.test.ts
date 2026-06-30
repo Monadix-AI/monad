@@ -145,6 +145,7 @@ beforeEach(async () => {
       scopeCounts: [],
       entries: []
     }),
+    getLaws: async () => ({ laws: [] }),
     memorySetBackend: async () => {},
     memorySetMem0Models: async () => {},
     memorySetGraph: async () => {},

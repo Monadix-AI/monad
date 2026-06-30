@@ -33,7 +33,7 @@ const OpenaiCompatSettings = dynamic(() => import('../OpenaiCompatSettings').the
 const ApprovalsSettings = dynamic(() => import('../ApprovalsSettings').then((m) => m.ApprovalsSettings), {
   ssr: false
 });
-const MemorySettings = dynamic(() => import('../MemorySettings').then((m) => m.MemorySettings), { ssr: false });
+const MemorySettings = dynamic(() => import('../memory/MemorySettings').then((m) => m.MemorySettings), { ssr: false });
 const HooksSettings = dynamic(() => import('../HooksSettings').then((m) => m.HooksSettings), { ssr: false });
 
 /**

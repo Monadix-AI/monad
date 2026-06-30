@@ -5,13 +5,14 @@
 import type { Translate } from '@monad/i18n';
 import type { ChatMessage, Event, PrincipalId, Session, SessionId, SessionOrigin } from '@monad/protocol';
 import type {
+  BeliefExplanation,
   CommandDefinition,
   CommandModelInfo,
   CommandResult,
   CommandSpec,
   CompactSummary,
-  ConsolidateMemorySummary,
-  GraphConsolidateSummary
+  ConsolidateSummary,
+  ContradictionCheckSummary
 } from '@monad/sdk-atom';
 import type { EventBus } from '@/services/event-bus.ts';
 import type { Store } from '@/store/db/index.ts';
@@ -100,9 +101,10 @@ export interface CommandBundle {
   listModels(sessionId: SessionId): Promise<CommandModelInfo[]>;
   setModel(sessionId: SessionId, alias: string): Promise<void>;
   compact(sessionId: SessionId): Promise<CompactSummary>;
-  consolidateMemory(): Promise<ConsolidateMemorySummary[]>;
+  consolidate(level?: number): Promise<ConsolidateSummary>;
+  explainBelief(sessionId: SessionId, query: string): Promise<BeliefExplanation>;
+  checkMemory(): Promise<ContradictionCheckSummary>;
   handoff(sessionId: SessionId, initialTask?: string): Promise<{ sessionId: string }>;
-  consolidateGraph(): Promise<GraphConsolidateSummary>;
   /** Route a `highRisk` command through human approval (oversight) before it runs; throws if denied. */
   approveHighRisk?(sessionId: SessionId, def: CommandDefinition): Promise<void>;
   /** Active-locale translator (hot-reloaded with config). */
@@ -165,8 +167,9 @@ function genericExecution(runner: SessionCommandRunner, session: Session, busy: 
     services: {
       resetHistory: (sid: SessionId) => runner.lifecycle.reset({ id: sid }),
       compact: (sid: SessionId) => commands.compact(sid),
-      consolidateMemory: () => commands.consolidateMemory(),
-      consolidateGraph: () => commands.consolidateGraph(),
+      consolidate: (level?: number) => commands.consolidate(level),
+      explainBelief: (sid: SessionId, query: string) => commands.explainBelief(sid, query),
+      checkMemory: () => commands.checkMemory(),
       listModels: (sid: SessionId) => commands.listModels(sid),
       setModel: (sid: SessionId, alias: string) => commands.setModel(sid, alias),
       getWorkdir: async (sid: SessionId) => ({ path: runner.store.getSession(sid)?.cwd }),

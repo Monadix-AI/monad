@@ -557,6 +557,10 @@ export type HooksConfig = z.infer<typeof hooksConfigSchema>;
 export const memorySettingsSchema = z
   .object({
     backend: z.enum(['builtin', 'mem0']).default('builtin'),
+    // How deep the consolidation pipeline runs: 1 = facts only (L1 dedup), 2 = + knowledge graph (L2),
+    // 3 = + inferred laws (L3). `/consolidate` and the opt-in background timer process up to this level;
+    // each layer past 1 costs an extraction LLM call. Default 1 (cheap, no model cost).
+    level: z.number().int().min(1).max(3).default(1),
     // mem0 selects its LLM + embedder FROM Monad's model registry — `llm`/`embedder` are profile
     // aliases (or `providerId:modelId`). Unset ⇒ LLM falls back to the fixed "default" profile,
     // embedder to the default profile's embedding role. `embedDim` overrides the auto-detected
@@ -578,17 +582,26 @@ export const memorySettingsSchema = z
         qdrant: z.object({ version: z.string().optional(), port: z.number().int().positive().optional() }).optional()
       })
       .default({}),
-    // L2 knowledge graph. Off by default — when on, the daemon runs /consolidate-graph in the
-    // background every `intervalMinutes` so the graph stays fresh (costs an extraction LLM call per
-    // session with new prose). Manual /consolidate-graph works regardless.
+    // Opt-in background consolidation. Off by default — when on, the daemon runs the full pipeline
+    // (to `level`) every `intervalMinutes` so memory stays fresh (each layer past L1 costs an
+    // extraction LLM call per session with new prose). Manual /consolidate works regardless.
     graph: z
       .object({
         autoConsolidate: z.boolean().optional(),
         intervalMinutes: z.number().int().positive().optional()
       })
+      .optional(),
+    // Temporal decay of L3 laws (read-time, no LLM). A law's confidence fades with age since it was
+    // last re-derived; `floor` (0-1) suppresses a decayed law from recall. Defaults: 365d half-life,
+    // floor 0 (decay visible but never suppresses until you raise the floor).
+    decay: z
+      .object({
+        halfLifeDays: z.number().positive().optional(),
+        floor: z.number().min(0).max(1).optional()
+      })
       .optional()
   })
-  .default({ backend: 'builtin', mem0: {} });
+  .default({ backend: 'builtin', level: 1, mem0: {} });
 export type MemorySettings = z.infer<typeof memorySettingsSchema>;
 
 const monadConfigSchema = z.object({
@@ -1023,7 +1036,7 @@ export function createDefaultConfig(principalId: string, displayName: string): M
     atomPins: {},
     observability: { endpoint: '', developerMode: false },
     openaiCompat: { enabled: false, approval: 'local' },
-    memory: { backend: 'builtin', mem0: {} }
+    memory: { backend: 'builtin', level: 1, mem0: {} }
   };
 }
 

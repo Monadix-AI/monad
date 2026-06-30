@@ -691,6 +691,16 @@ export class Store {
     } as MessageRow);
   }
 
+  /** Global lookup of a LIVE message's text by id (no session needed). Used to trace a graph edge
+   *  back to the source message it was extracted from (the bottom of the "why do you believe X"
+   *  chain) — `active = 1` so a soft-deleted message can't resurface before the next reconcile. */
+  getMessageText(messageId: string): string | null {
+    const row = this.sqlite.query('SELECT text FROM messages WHERE id = ? AND active = 1').get(messageId) as {
+      text: string;
+    } | null;
+    return row?.text ?? null;
+  }
+
   /** Per-session durable key/value (the `memory` table). Returns null when unset. */
   getMemory(sessionId: string, key: string): string | null {
     const row = this.sqlite.query('SELECT value FROM memory WHERE session_id = ? AND key = ?').get(sessionId, key) as {
@@ -1456,5 +1466,5 @@ export function createStore(opts?: StoreOptions): Store {
   return new Store(opts);
 }
 
-export { factId, MemoryDir, scopeOf } from './memory-dir.ts';
+export { factId, MemoryDir, projectKey, scopeOf } from './memory-dir.ts';
 export { CURRENT_SCHEMA_VERSION } from './migrations.ts';

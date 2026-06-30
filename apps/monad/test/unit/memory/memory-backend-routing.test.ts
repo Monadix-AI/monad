@@ -10,12 +10,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { createMemoryService } from '@/services/memory/index.ts';
-import { createStore } from '@/store/db/index.ts';
+import { createStore, projectKey } from '@/store/db/index.ts';
 
 const silent = { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} } as never;
 const router: ModelRouter = { stream: () => (async function* () {})(), complete: async () => ({ text: '' }) };
 
-function freshStore() {
+function freshStore(cwd?: string) {
   const store = createStore();
   store.insertSession({
     id: 'ses_1',
@@ -26,6 +26,7 @@ function freshStore() {
     parentSessionId: null,
     archived: false,
     restoreCount: 0,
+    cwd,
     createdAt: new Date(0).toISOString(),
     updatedAt: new Date(0).toISOString()
   });
@@ -53,10 +54,10 @@ class FakeMem0 implements Mem0Client {
   }
 }
 
-function svcWith(backend: 'builtin' | 'mem0', buildMem0?: () => Promise<Mem0Client | null>) {
+function svcWith(backend: 'builtin' | 'mem0', buildMem0?: () => Promise<Mem0Client | null>, cwd?: string) {
   const root = mkdtempSync(join(tmpdir(), 'mem-route-'));
   return createMemoryService({
-    store: freshStore(),
+    store: freshStore(cwd),
     root,
     dbRoot: root,
     router,
@@ -122,6 +123,25 @@ test('memory tool: record/update/delete on built-in, agent vs global scope', asy
     true
   );
   expect(await svc.listFacts('agent', 'agt_1')).toEqual([]);
+});
+
+test('memory tool: project scope records to the session’s workspace, not the agent', async () => {
+  const svc = svcWith('builtin', undefined, '/work/repo');
+  expect((await svc.memoryTool('ses_1', 'record', { fact: 'This repo deploys to fly.io', scope: 'project' })).ok).toBe(
+    true
+  );
+  // lands under the workspace scope, derived from the session cwd — not collapsed to the agent
+  expect((await svc.listFacts('project', projectKey('/work/repo'))).map((f) => f.content)).toEqual([
+    'This repo deploys to fly.io'
+  ]);
+  expect(await svc.listFacts('agent', 'agt_1')).toEqual([]);
+});
+
+test('memory tool: project scope on a session with no workspace reports the right reason', async () => {
+  const svc = svcWith('builtin'); // ses_1 has no cwd
+  const r = await svc.memoryTool('ses_1', 'record', { fact: 'x', scope: 'project' });
+  expect(r.ok).toBe(false);
+  expect(r.note).toContain('workspace'); // not "no agent" — the session has an agent
 });
 
 test('memory tool view returns the index (no scope) or a scope’s facts (with scope)', async () => {

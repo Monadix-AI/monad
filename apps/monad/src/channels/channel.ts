@@ -539,8 +539,9 @@ export class ChannelService {
           ? this.deps.session.reset({ id: sid })
           : Promise.reject(new Error('reset is unavailable')),
       compact: (sid) => bundle.compact(sid),
-      consolidateMemory: () => bundle.consolidateMemory(),
-      consolidateGraph: () => bundle.consolidateGraph(),
+      consolidate: (level?: number) => bundle.consolidate(level),
+      explainBelief: (sid, query) => bundle.explainBelief(sid, query),
+      checkMemory: () => bundle.checkMemory(),
       listModels: (sid) => bundle.listModels(sid),
       setModel: (sid, alias) => bundle.setModel(sid, alias),
       getWorkdir: async (sid) => ({ path: this.deps.store.getSession(sid)?.cwd }),

@@ -88,34 +88,55 @@ const compactCommandAtom = defineCommand({
   }
 });
 
-const consolidateMemoryCommandAtom = defineCommand({
-  name: 'consolidate-memory',
-  aliases: ['consolidate'],
-  description: 'Dedup, merge, and tidy your saved memory now',
+const consolidateCommandAtom = defineCommand({
+  name: 'consolidate',
+  aliases: ['memory'],
+  description: 'Consolidate memory: dedup facts, then update the graph and laws (to your memory level)',
   descriptionKey: 'cmd.consolidate.desc',
   async run(ctx) {
-    const results = await ctx.consolidateMemory();
-    if (results.length === 0) return { message: ctx.t('cmd.consolidate.none') };
-    const changed = results.filter((r) => r.after !== r.before).length;
-    const lines = results.map((r) => `  ${r.scope}: ${r.before} → ${r.after}`);
-    return { message: ctx.t('cmd.consolidate.done', { count: String(changed), list: lines.join('\n') }) };
+    // Optional depth override: `/consolidate 2` forces L1+L2 regardless of memory.level.
+    const arg = Number.parseInt(ctx.args.trim(), 10);
+    const level = arg >= 1 && arg <= 3 ? arg : undefined;
+    const r = await ctx.consolidate(level);
+    return {
+      message: ctx.t('cmd.consolidate.done', {
+        level: String(r.level),
+        scopes: String(r.l1Scopes),
+        nodes: String(r.nodes),
+        edges: String(r.edges),
+        laws: String(r.laws)
+      })
+    };
   }
 });
 
-const consolidateGraphCommandAtom = defineCommand({
-  name: 'consolidate-graph',
-  aliases: ['graph'],
-  description: 'Build/update your knowledge graph from recent conversations',
-  descriptionKey: 'cmd.graph.desc',
+const whyCommandAtom = defineCommand({
+  name: 'why',
+  description: 'Explain why the agent believes something, traced through its memory',
+  descriptionKey: 'cmd.why.desc',
   async run(ctx) {
-    const r = await ctx.consolidateGraph();
-    return {
-      message: ctx.t('cmd.graph.done', {
-        nodes: String(r.nodes),
-        edges: String(r.edges),
-        pruned: String(r.prunedEdges)
-      })
-    };
+    const query = ctx.args.trim();
+    if (!query) return { message: ctx.t('cmd.why.usage') };
+    const { matches } = await ctx.explainBelief(query);
+    if (matches.length === 0) return { message: ctx.t('cmd.why.none') };
+    const blocks = matches.map((m) => {
+      const lines = [`${m.statement} (${Math.round(m.confidence * 100)}%)`];
+      if (m.facts.length > 0) lines.push(`  ${ctx.t('cmd.why.facts')}: ${m.facts.join('; ')}`);
+      if (m.relations.length > 0) lines.push(`  ${ctx.t('cmd.why.relations')}: ${m.relations.join('; ')}`);
+      if (m.sources.length > 0) lines.push(`  ${ctx.t('cmd.why.sources')}: ${m.sources.join(' … ')}`);
+      return lines.join('\n');
+    });
+    return { message: blocks.join('\n\n') };
+  }
+});
+
+const checkMemoryCommandAtom = defineCommand({
+  name: 'check-memory',
+  description: 'Flag learned rules contradicted by a current fact (suppresses them until re-derived)',
+  descriptionKey: 'cmd.checkMemory.desc',
+  async run(ctx) {
+    const { flagged } = await ctx.checkMemory();
+    return { message: ctx.t('cmd.checkMemory.done', { flagged: String(flagged) }) };
   }
 });
 
@@ -212,8 +233,9 @@ export const BUILTIN_COMMANDS: CommandDefinition[] = [
   endCommandAtom,
   resetCommandAtom,
   compactCommandAtom,
-  consolidateMemoryCommandAtom,
-  consolidateGraphCommandAtom,
+  consolidateCommandAtom,
+  whyCommandAtom,
+  checkMemoryCommandAtom,
   clearCommandAtom,
   modelCommandAtom,
   workdirCommandAtom,

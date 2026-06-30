@@ -32,6 +32,7 @@ import { createGraphController } from '@/transports/http/graph/controller.ts';
 import { createHealthController } from '@/transports/http/health.ts';
 import { createIndexerController } from '@/transports/http/indexer.ts';
 import { createInitController } from '@/transports/http/init.ts';
+import { createLawsController } from '@/transports/http/laws/controller.ts';
 import { createLicensesController } from '@/transports/http/licenses/controller.ts';
 import { createLocaleCatalogController, createLocaleSettingsController } from '@/transports/http/locale.ts';
 import { createMem0DataController } from '@/transports/http/mem0-data/controller.ts';
@@ -311,6 +312,7 @@ export function createHttpTransport(
         .use(createLicensesController(handlers))
         .use(createGraphController(handlers))
         .use(createMem0DataController(handlers))
+        .use(createLawsController(handlers))
         .use(createMemoryController(handlers))
         .use(createAtomsController(handlers))
         .use(createNativeCliController(handlers))

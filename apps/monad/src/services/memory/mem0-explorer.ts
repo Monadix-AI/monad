@@ -18,9 +18,9 @@ export interface Mem0Data {
 export interface Mem0ExplorerDeps {
   available: () => boolean;
   vectorStoreName: () => string;
-  scopes: () => { scope: string; kind: 'global' | 'agent'; id: string }[];
+  scopes: () => { scope: string; kind: 'global' | 'agent' | 'project'; id: string }[];
   /** mem0 entries for one scope (routes through the adapter's getAll). */
-  listEntries: (kind: 'global' | 'agent', id: string) => Promise<{ id: string; text: string }[]>;
+  listEntries: (kind: 'global' | 'agent' | 'project', id: string) => Promise<{ id: string; text: string }[]>;
   /** id → embedding, from the vector store (qdrant scroll). Optional/best-effort: the cluster map
    *  degrades gracefully when absent or it throws. */
   fetchVectors?: () => Promise<Map<string, number[]>>;

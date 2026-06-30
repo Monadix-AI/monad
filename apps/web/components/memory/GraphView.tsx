@@ -20,21 +20,8 @@ import { useMemo } from 'react';
 import '@xyflow/react/dist/style.css';
 
 import { useT } from '@/components/I18nProvider';
-
-// A small, stable palette. Nodes are colored by SCOPE (which agent the entity belongs to) so a
-// multi-agent graph stays legible — you can tell whose entity is whose at a glance — with a legend
-// above. Unknown scopes fall back to a stable hash bucket. Type still shows in the node label.
-const PALETTE = ['#6366f1', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#a855f7', '#ec4899', '#14b8a6'];
-function colorFor(key: string): string {
-  let h = 0;
-  for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) >>> 0;
-  return PALETTE[h % PALETTE.length];
-}
-
-// `agent:agt_abc…` → `agt_abc…`; `global` stays `global`. Keeps the legend short.
-function scopeLabel(scope: string): string {
-  return scope.startsWith('agent:') ? scope.slice('agent:'.length) : scope;
-}
+import { DataEmpty } from './DataEmpty';
+import { colorForScope, scopeLabel } from './scope';
 
 // Deterministic circular layout — no native layout engine, fitView handles framing. Good enough for
 // the modest graphs L2 builds; swap for dagre/elk if it grows.
@@ -47,7 +34,7 @@ function toFlow(data: GetGraphResponse | undefined): { nodes: Node[]; edges: Edg
   const byScope = new Set(data.nodes.map((node) => node.scope)).size > 1;
   const nodes: Node[] = data.nodes.map((node, i) => {
     const angle = (2 * Math.PI * i) / n;
-    const color = colorFor(byScope ? node.scope : (node.type ?? 'type'));
+    const color = colorForScope(byScope ? node.scope : (node.type ?? 'type'));
     return {
       id: node.id,
       position: { x: radius + radius * Math.cos(angle), y: radius + radius * Math.sin(angle) },
@@ -89,7 +76,7 @@ export function GraphView() {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex items-center gap-3 border-b px-6 py-2">
-        <span className="text-muted-foreground text-xs">
+        <span className="text-muted-foreground text-xs tabular-nums">
           {data ? `${data.nodes.length} · ${data.edges.length}` : ''}
         </span>
         <Button
@@ -113,7 +100,7 @@ export function GraphView() {
             >
               <span
                 className="inline-block size-2.5 rounded-full"
-                style={{ background: colorFor(s) }}
+                style={{ background: colorForScope(s) }}
               />
               {scopeLabel(s)}
             </span>
@@ -123,11 +110,11 @@ export function GraphView() {
 
       <div className="relative min-h-0 flex-1">
         {empty ? (
-          <div className="flex h-full flex-col items-center justify-center gap-1 p-8 text-center text-muted-foreground text-sm">
-            <Network className="size-8 opacity-40" />
-            <p>{t('web.graph.empty')}</p>
-            <p className="text-xs">{t('web.graph.emptyHint')}</p>
-          </div>
+          <DataEmpty
+            hint={t('web.graph.emptyHint')}
+            icon={Network}
+            title={t('web.graph.empty')}
+          />
         ) : (
           <ReactFlowProvider>
             <ReactFlow
