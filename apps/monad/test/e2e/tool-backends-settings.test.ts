@@ -51,8 +51,8 @@ for (const kind of TRANSPORTS) {
         };
         expect(initial.webSearch.provider).toBe('auto');
         expect(initial.email.backend).toBe('auto');
-        expect(initial.codeExec.backend).toBe('local');
-        expect(initial.codeExec.availableBackends).toContain('local');
+        expect(initial.codeExec.backend).toBe('follow-system');
+        expect(initial.codeExec.availableBackends).toContain('follow-system');
 
         const putRes = await t.fetch('/v1/settings/tool-backends', {
           method: 'PUT',
@@ -89,22 +89,22 @@ for (const kind of TRANSPORTS) {
       const { base, paths, app } = await setup(kind);
       const t = serveTransport(kind, app);
       try {
-        // GET: default is 'local', availableBackends always includes 'local'
+        // GET: default is 'follow-system', availableBackends always includes 'follow-system'
         const getRes = await t.fetch('/v1/settings/tool-backends');
         const initial = (await getRes.json()) as { codeExec: { backend: string; availableBackends: string[] } };
-        expect(initial.codeExec.backend).toBe('local');
-        expect(initial.codeExec.availableBackends).toContain('local');
+        expect(initial.codeExec.backend).toBe('follow-system');
+        expect(initial.codeExec.availableBackends).toContain('follow-system');
 
-        // PUT: change to 'local' (can't test 'docker' without Docker installed)
+        // PUT: change to 'follow-system' (can't test 'docker' without Docker installed)
         await t.fetch('/v1/settings/tool-backends', {
           method: 'PUT',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ codeExec: { backend: 'local' } })
+          body: JSON.stringify({ codeExec: { backend: 'follow-system' } })
         });
 
         // Verify persisted to disk
         const cfg = await loadAll(paths.config, paths.profile);
-        expect(cfg?.agent.tools.codeExecBackend).toBe('local');
+        expect(cfg?.agent.tools.codeExecBackend).toBe('follow-system');
       } finally {
         t.stop();
         await rm(base, { recursive: true, force: true });

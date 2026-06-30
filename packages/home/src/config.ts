@@ -672,8 +672,13 @@ const monadConfigSchema = z.object({
         shellPath: z.string().optional(),
         /** Windows-only: override the Git Bash binary path (skips install-location scan). */
         gitBashPath: z.string().optional(),
-        /** Code-execute backend name. Only 'local' is built-in; plug in an external sandbox via MCP instead. */
-        codeExecBackend: z.string().default('local'),
+        /** Code-execute backend: 'follow-system' delegates to the active OS sandbox launcher; 'docker'/'e2b' force a specific backend. 'local' is a legacy alias for 'follow-system'. */
+        codeExecBackend: z.string().default('follow-system'),
+        /** E2B code-execute backend credentials. Supports ${env:NAME} secret refs.
+         *  TODO(P2): add templateId: z.string().optional() for custom e2b sandbox templates. */
+        codeExecE2b: z.object({ apiKey: z.string() }).optional(),
+        /** Docker/Podman code-execute backend settings. */
+        codeExecDocker: z.object({ image: z.string().optional() }).optional(),
         /** Web search configuration. Secrets (apiKey) support ${env:NAME} refs. */
         webSearch: z
           .object({
@@ -718,7 +723,7 @@ const monadConfigSchema = z.object({
           })
           .default({ backend: 'auto' })
       })
-      .default({ codeExecBackend: 'local', webSearch: { provider: 'auto' }, email: { backend: 'auto' } }),
+      .default({ codeExecBackend: 'follow-system', webSearch: { provider: 'auto' }, email: { backend: 'auto' } }),
     // Operator-set static approval policy (deny/ask/allow tool lists). Participates in the approval
     // engine as immutable source:'operator' rules; deny always wins over runtime allows.
     approvals: agentApprovalsSchema
@@ -850,9 +855,11 @@ export const monadSystemConfigSchema = z.object({
       .object({
         shellPath: z.string().optional(),
         gitBashPath: z.string().optional(),
-        codeExecBackend: z.string().default('local')
+        codeExecBackend: z.string().default('follow-system'),
+        codeExecE2b: z.object({ apiKey: z.string() }).optional(),
+        codeExecDocker: z.object({ image: z.string().optional() }).optional()
       })
-      .default({ codeExecBackend: 'local' }),
+      .default({ codeExecBackend: 'follow-system' }),
     // Operator static approval policy lives in system config (config.json), like mcpServers/acpAgents.
     approvals: agentApprovalsSchema
   }),
@@ -911,13 +918,15 @@ export const monadProfileSchema = z.object({
                 .optional()
             })
             .default({ backend: 'auto' }),
-          codeExecBackend: z.string().default('local')
+          codeExecBackend: z.string().default('follow-system'),
+          codeExecE2b: z.object({ apiKey: z.string() }).optional(),
+          codeExecDocker: z.object({ image: z.string().optional() }).optional()
         })
-        .default({ webSearch: { provider: 'auto' }, email: { backend: 'auto' }, codeExecBackend: 'local' })
+        .default({ webSearch: { provider: 'auto' }, email: { backend: 'auto' }, codeExecBackend: 'follow-system' })
     })
     .default({
       agents: [],
-      tools: { webSearch: { provider: 'auto' }, email: { backend: 'auto' }, codeExecBackend: 'local' }
+      tools: { webSearch: { provider: 'auto' }, email: { backend: 'auto' }, codeExecBackend: 'follow-system' }
     }),
   skills: z
     .object({
@@ -990,7 +999,7 @@ export function createDefaultConfig(principalId: string, displayName: string): M
         allowUnconfinedExec: false
       },
       globalSandbox: { enabled: false, mode: 'workspace' },
-      tools: { codeExecBackend: 'local', webSearch: { provider: 'auto' }, email: { backend: 'auto' } },
+      tools: { codeExecBackend: 'follow-system', webSearch: { provider: 'auto' }, email: { backend: 'auto' } },
       approvals: { deny: [], ask: [], allow: [] }
     },
     skills: { autoload: true, disabled: [], autoloadDisabled: [], installReview: false },
@@ -1111,7 +1120,9 @@ function extractProfile(cfg: MonadConfig): MonadProfile {
       tools: {
         webSearch: cfg.agent.tools.webSearch,
         email: cfg.agent.tools.email,
-        codeExecBackend: cfg.agent.tools.codeExecBackend
+        codeExecBackend: cfg.agent.tools.codeExecBackend,
+        codeExecE2b: cfg.agent.tools.codeExecE2b,
+        codeExecDocker: cfg.agent.tools.codeExecDocker
       }
     },
     skills: cfg.skills,
