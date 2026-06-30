@@ -29,6 +29,7 @@ export const atomKindSchema = z.enum([
   'provider',
   'hook',
   'sandbox',
+  'workspace-experience',
   'mcp',
   'skill'
 ]);
@@ -108,6 +109,26 @@ export const listAtomPacksResponseSchema = z.object({
   conflicts: z.array(atomConflictSchema).default([])
 });
 export type ListAtomPacksResponse = z.infer<typeof listAtomPacksResponseSchema>;
+
+export const workspaceExperienceEntrySchema = z.object({
+  type: z.literal('web-component'),
+  module: z.string().min(1),
+  tagName: z.string().min(1)
+});
+export type WorkspaceExperienceEntry = z.infer<typeof workspaceExperienceEntrySchema>;
+
+export const workspaceExperienceDefinitionSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1),
+  icon: z.string().optional(),
+  entry: workspaceExperienceEntrySchema
+});
+export type WorkspaceExperienceDefinition = z.infer<typeof workspaceExperienceDefinitionSchema>;
+
+export const listWorkspaceExperiencesResponseSchema = z.object({
+  experiences: z.array(workspaceExperienceDefinitionSchema)
+});
+export type ListWorkspaceExperiencesResponse = z.infer<typeof listWorkspaceExperiencesResponseSchema>;
 
 export const installAtomPackRequestSchema = z.object({
   source: z.string().min(1), // "github:owner/repo@sha" | "npm:@scope/name@ver" | "local:/abs/path"

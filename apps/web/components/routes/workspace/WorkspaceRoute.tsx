@@ -2,9 +2,11 @@
 
 import type { Session, SessionId } from '@monad/protocol';
 
+import { useListWorkspaceExperiencesQuery } from '@monad/client-rtk';
 import { useState } from 'react';
 
 import { WorkspaceHome } from '@/components/WorkspaceHome';
+import { listProjectExperiences, toProjectExperienceDefinitions } from '@/components/workplace/experiences/registry';
 import { Workplace } from '@/components/workplace/Workplace';
 import { ProjectTopBar } from './ProjectTopBar';
 import { useProjectViewMode } from './use-project-view-mode';
@@ -34,16 +36,17 @@ export function WorkspaceRoute({
 }: WorkspaceRouteProps) {
   const [mode, setMode] = useProjectViewMode(activeProjectId);
   const [projectSettingsOpen, setProjectSettingsOpen] = useState(false);
+  const { data: workspaceExperiences } = useListWorkspaceExperiencesQuery(undefined, { skip: !activeProjectId });
+  const experiences = listProjectExperiences(toProjectExperienceDefinitions(workspaceExperiences?.experiences ?? []));
   const projectName = projects.find((p) => p.id === activeProjectId)?.name ?? activeProjectId ?? 'Project';
 
   if (activeProjectId) {
     const openProjectSettings = () => {
-      setMode('chat');
       setProjectSettingsOpen(true);
     };
 
-    // Both view modes share the same host chrome (top bar + Workplace shell); only the body preset
-    // differs (chat transcript vs. live agent graph), resolved by Workplace via getPreset(mode).
+    // The active project experience owns the whole workplace region below the top bar, including its
+    // composer and secondary rails. The top bar stays host-owned so runtime switching remains stable.
     return (
       <>
         <style>{`
@@ -52,6 +55,7 @@ export function WorkspaceRoute({
         `}</style>
         <div className="g1-chatroom">
           <ProjectTopBar
+            experiences={experiences}
             mode={mode}
             onModeChange={setMode}
             onOpenSettings={openProjectSettings}
@@ -62,8 +66,10 @@ export function WorkspaceRoute({
           <div className="g1-chatroom-body">
             <Workplace
               embedded
+              experiences={experiences}
               key={activeProjectId}
               mode={mode}
+              onModeChange={setMode}
               onProjectSettingsOpenChange={setProjectSettingsOpen}
               projectId={activeProjectId}
               projectSettingsOpen={projectSettingsOpen}

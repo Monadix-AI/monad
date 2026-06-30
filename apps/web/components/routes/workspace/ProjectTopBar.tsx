@@ -1,26 +1,28 @@
 'use client';
 
 import type { SessionId } from '@monad/protocol';
+import type { ProjectExperienceDefinition } from '@/components/workplace/experiences/types';
 
 import { Bug, ChevronDown, MessageSquare, Network, Settings } from 'lucide-react';
 import { useState } from 'react';
 
 import { useT } from '@/components/I18nProvider';
+import { getProjectExperience } from '@/components/workplace/experiences/registry';
 import { ProjectDebugConsole } from '@/components/workplace/ProjectDebugConsole';
-import { getPreset, listPresets } from '@/components/workplace/presets/registry';
 
 interface ProjectTopBarProps {
   mode: string;
   projectName: string;
   sessionId: SessionId | null;
   status: string;
+  experiences: ProjectExperienceDefinition[];
   onModeChange: (mode: string) => void;
   onOpenSettings: () => void;
 }
 
 const modeIcon: Record<string, typeof MessageSquare> = {
-  chat: MessageSquare,
-  graph: Network
+  'chat-room': MessageSquare,
+  'graphic-view': Network
 };
 
 // The developer trace console captures message text / request bodies — dev-only. Gated on
@@ -32,12 +34,16 @@ export function ProjectTopBar({
   projectName,
   sessionId,
   status,
+  experiences,
   onModeChange,
   onOpenSettings
 }: ProjectTopBarProps) {
   const t = useT();
-  const ModeIcon = modeIcon[mode] ?? MessageSquare;
+  const activeExperience = getProjectExperience(mode, experiences);
+  const ModeIcon = modeIcon[activeExperience.id] ?? MessageSquare;
   const [developerModeOpen, setDeveloperModeOpen] = useState(false);
+  const activeLabel =
+    activeExperience.label ?? (activeExperience.labelKey ? t(activeExperience.labelKey) : activeExperience.id);
 
   return (
     <>
@@ -168,7 +174,7 @@ export function ProjectTopBar({
         <div className="project-topbar-spacer" />
         <label className="project-topbar-view">
           <ModeIcon size={14} />
-          <span className="project-topbar-view-label">{t(getPreset(mode).labelKey)}</span>
+          <span className="project-topbar-view-label">{activeLabel}</span>
           <ChevronDown
             className="project-topbar-chevron"
             size={14}
@@ -177,14 +183,14 @@ export function ProjectTopBar({
             aria-label="Project view mode"
             className="project-topbar-select"
             onChange={(event) => onModeChange(event.target.value)}
-            value={mode}
+            value={activeExperience.id}
           >
-            {listPresets().map((preset) => (
+            {experiences.map((experience) => (
               <option
-                key={preset.id}
-                value={preset.id}
+                key={experience.id}
+                value={experience.id}
               >
-                {t(preset.labelKey)}
+                {experience.label ?? (experience.labelKey ? t(experience.labelKey) : experience.id)}
               </option>
             ))}
           </select>

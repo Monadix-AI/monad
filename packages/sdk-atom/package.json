@@ -18,7 +18,8 @@
     "./locale": "./src/locale.ts",
     "./message-type": "./src/message-type.ts",
     "./model": "./src/model.ts",
-    "./sandbox": "./src/sandbox.ts"
+    "./sandbox": "./src/sandbox.ts",
+    "./workspace-experience": "./src/workspace-experience.ts"
   },
   "module": "src/index.ts",
   "private": true,

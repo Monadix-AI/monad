@@ -1,18 +1,16 @@
 'use client';
 
 import type { CSSProperties } from 'react';
+import type { ProjectExperienceDefinition } from './experiences/types';
 
 import { useCallback, useMemo, useState } from 'react';
 
 import { useT } from '@/components/I18nProvider';
-import { AgentTasksRail } from './AgentTasksRail';
-import { Composer } from './Composer';
+import { getProjectExperience } from './experiences/registry';
+import { toExperienceRuntime } from './experiences/to-runtime';
 import { NativeCliStreamModal } from './NativeCliStreamModal';
-import { ProjectHeader } from './ProjectHeader';
 import { ProjectRail } from './ProjectRail';
 import { ProjectSettings } from './ProjectSettings';
-import { getPreset } from './presets/registry';
-import { toCanvas } from './presets/to-canvas';
 import { boxR, mono, sans } from './styles';
 import { useProject } from './use-project';
 
@@ -20,13 +18,17 @@ export function Workplace({
   projectId,
   embedded = false,
   mode = 'chat',
+  experiences,
   projectSettingsOpen = false,
+  onModeChange,
   onProjectSettingsOpenChange
 }: {
   projectId: string;
   embedded?: boolean;
   mode?: string;
+  experiences?: ProjectExperienceDefinition[];
   projectSettingsOpen?: boolean;
+  onModeChange?: (mode: string) => void;
   onProjectSettingsOpenChange?: (open: boolean) => void;
 }): React.ReactElement {
   const project = useProject(projectId);
@@ -55,14 +57,15 @@ export function Workplace({
     () => project.nativeCliStreams.find((stream) => stream.id === followedNativeCliSessionId),
     [project.nativeCliStreams, followedNativeCliSessionId]
   );
-  // The body renders the active preset (chat / graph / future atom views); the management chrome
-  // (header, composer, rails) is identical across presets and host-rendered below.
-  const PresetView = getPreset(mode).render;
-  // Rebuild the canvas only when the project view-model changes, not on every unrelated re-render
-  // (settings open/close, locale) — keeps the transcript subtree from reconciling needlessly.
-  const canvas = useMemo(
-    () => toCanvas(project, { followNativeCliSession, openAgentCard }),
-    [project, followNativeCliSession, openAgentCard]
+  const experience = getProjectExperience(mode, experiences);
+  const runtime = useMemo(
+    () =>
+      toExperienceRuntime(project, {
+        followNativeCliSession,
+        openAgentCard,
+        switchExperience: onModeChange ?? (() => {})
+      }),
+    [project, followNativeCliSession, onModeChange, openAgentCard]
   );
 
   return (
@@ -160,22 +163,14 @@ export function Workplace({
         >
           {!embedded ? <ProjectRail project={project} /> : null}
 
-          <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-            <ProjectHeader
-              embedded={embedded}
-              project={project}
-            />
-            <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-              <PresetView
-                canvas={canvas}
-                embedded={embedded}
-                t={t}
-              />
-            </div>
-            <Composer room={project} />
-          </div>
-
-          <AgentTasksRail room={project} />
+          {experience.render({
+            embedded,
+            onProjectSettingsOpenChange,
+            project,
+            projectSettingsOpen: settingsOpen,
+            runtime,
+            t
+          })}
         </div>
         {settingsOpen ? (
           <ProjectSettings

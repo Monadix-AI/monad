@@ -18,7 +18,8 @@ import type {
   ManifestAtomPack,
   ManifestAtomPackHost,
   ModelProvider,
-  SandboxLauncher
+  SandboxLauncher,
+  WorkspaceExperienceDefinition
 } from '@monad/sdk-atom';
 
 import { registerMessageType } from '@monad/protocol';
@@ -39,6 +40,8 @@ interface ChannelAtomPackHostOptions {
    *  daemon collects them into a registry and selects one per platform — no namespace/first-wins
    *  here (selection is by platform + availability, third-party preferred over built-in). */
   onSandbox?: (launcher: SandboxLauncher) => void;
+  /** Receives each workspace experience an atom pack registers (atom-kind-gated like the others). */
+  onWorkspaceExperience?: (experience: WorkspaceExperienceDefinition, atomPackName: string) => void;
   /** Name of the atom pack currently being loaded — used to attribute collisions (same-pack dup vs
    *  cross-pack). The loader updates the source before each pack; absent → '' (single-pack callers). */
   currentAtomPack?: () => string;
@@ -114,6 +117,7 @@ function createChannelAtomPackHost(opts: ChannelAtomPackHostOptions = {}): {
     },
     registerHook: (h) => opts.onHook?.(h),
     registerSandbox: (s) => opts.onSandbox?.(s),
+    registerWorkspaceExperience: (experience) => opts.onWorkspaceExperience?.(experience, pack()),
     log: opts.log
   };
   const finalizeChannels = (): void => {
@@ -199,6 +203,7 @@ export async function loadChannelAtomPacks(
     onProvider: opts.onProvider,
     onHook: opts.onHook,
     onSandbox: opts.onSandbox,
+    onWorkspaceExperience: opts.onWorkspaceExperience,
     reservedProviderTypes: opts.reservedProviderTypes,
     channelPins: opts.channelPins,
     connectorPins: opts.connectorPins,

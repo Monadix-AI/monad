@@ -3,6 +3,12 @@ import type { ProjectController } from '../../components/workplace/use-project.t
 
 import { expect, test } from 'bun:test';
 
+import {
+  getProjectExperience,
+  listProjectExperiences,
+  toProjectExperienceDefinitions
+} from '../../components/workplace/experiences/registry.ts';
+import { toExperienceRuntime } from '../../components/workplace/experiences/to-runtime.ts';
 import { canvasToGraph, HUB_ID } from '../../components/workplace/presets/graph/graph-model.ts';
 import { toCanvas } from '../../components/workplace/presets/to-canvas.ts';
 
@@ -102,4 +108,87 @@ test('toCanvas: exposes display data but drops every management/communication ac
   ]) {
     expect(leaked in canvas).toBe(false);
   }
+});
+
+test('project experiences: built-ins expose full runtime-switchable project experiences', () => {
+  const experiences = listProjectExperiences();
+
+  expect(experiences.map((experience) => experience.id)).toEqual(['chat-room', 'graphic-view']);
+  expect(experiences.every((experience) => experience.source === 'builtin')).toBe(true);
+  expect(getProjectExperience('graphic-view').id).toBe('graphic-view');
+  expect(getProjectExperience('missing').id).toBe('chat-room');
+});
+
+test('project experiences: workspace-experience atoms join the runtime-switchable registry', () => {
+  const atoms = toProjectExperienceDefinitions([
+    {
+      id: 'custom-canvas',
+      title: 'Custom Canvas',
+      entry: { type: 'web-component', module: '/atoms/packs/custom/canvas.js', tagName: 'custom-canvas' }
+    }
+  ]);
+  const experiences = listProjectExperiences(atoms);
+
+  expect(experiences.map((experience) => experience.id)).toEqual(['chat-room', 'graphic-view', 'custom-canvas']);
+  expect(getProjectExperience('custom-canvas', experiences)).toMatchObject({
+    id: 'custom-canvas',
+    label: 'Custom Canvas',
+    source: 'atom'
+  });
+  expect(getProjectExperience('graph', experiences).id).toBe('graphic-view');
+  expect(getProjectExperience('missing', experiences).id).toBe('chat-room');
+});
+
+test('toExperienceRuntime: exposes project data and controlled communication actions', () => {
+  const calls: string[] = [];
+  const controller = {
+    ready: true,
+    projectId: 'project-1',
+    sessionId: 'sess-1',
+    projects: [],
+    participants: [participant('monad', 'agent')],
+    railAgents: [participant('monad', 'agent')],
+    projectMembers: [],
+    availableProjectMembers: [],
+    messages: [],
+    firstItemIndex: 0,
+    loadOlder: () => calls.push('loadOlder'),
+    typing: null,
+    activity: [],
+    nativeCliStreams: [],
+    tasks: [],
+    contextUsage: undefined,
+    modelProfiles: [],
+    approvals: [],
+    moderator: { agents: [], moderatorAgentId: undefined, setModeratorAgentId: async () => {} },
+    workdir: { path: undefined, set: async () => {} },
+    paused: false,
+    mentionTargets: [],
+    sendDirective: async (text: string) => calls.push(`send:${text}`),
+    resolveApproval: (id: string, decision: 'approve' | 'reject') => calls.push(`approval:${id}:${decision}`),
+    approveAll: () => calls.push('approveAll'),
+    pauseAll: () => calls.push('pauseAll'),
+    switchProject: () => calls.push('switchProject'),
+    addProjectMember: async () => {},
+    removeProjectMember: async () => {},
+    updateProjectMemberSettings: async () => {},
+    sendNativeCliInput: async (id: string, input: string) => calls.push(`input:${id}:${input}`),
+    stopNativeCli: async (id: string) => calls.push(`stop:${id}`)
+  } as unknown as ProjectController;
+
+  const runtime = toExperienceRuntime(controller, { switchExperience: (id) => calls.push(`experience:${id}`) });
+
+  expect(runtime.snapshot.projectId).toBe('project-1');
+  expect(runtime.snapshot.participants).toHaveLength(1);
+  expect(typeof runtime.actions.sendDirective).toBe('function');
+  expect(typeof runtime.actions.resolveApproval).toBe('function');
+  expect(typeof runtime.actions.switchExperience).toBe('function');
+  expect('switchProject' in runtime.actions).toBe(false);
+
+  runtime.actions.loadOlder();
+  void runtime.actions.sendDirective('hello');
+  runtime.actions.resolveApproval('approval-1', 'approve');
+  runtime.actions.switchExperience('graphic-view');
+
+  expect(calls).toEqual(['loadOlder', 'send:hello', 'approval:approval-1:approve', 'experience:graphic-view']);
 });

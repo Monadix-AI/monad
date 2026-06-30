@@ -3,19 +3,25 @@
 import { useCallback, useEffect } from 'react';
 import { create } from 'zustand';
 
-// The project's view mode — a preset id (e.g. 'chat', 'graph', or a future 'atom:<pack>:<id>').
+// The project's view mode — a project experience id (e.g. 'chat-room', 'graphic-view', or a future atom id).
 // Shared across components — the top-bar toggle and the in-project chrome both read and switch the
 // SAME mode, so e.g. the header's "jump to chat" works and every subscriber re-renders. Persisted
 // per project in localStorage, so a reload keeps the last choice (a per-device view preference, not
-// shared project state). Unknown ids resolve to the default preset via the registry's getPreset.
+// shared project state). Unknown ids resolve to the default project experience via the registry.
 export type ProjectViewMode = string;
 
-const DEFAULT_VIEW_MODE = 'graph';
+const DEFAULT_VIEW_MODE = 'graphic-view';
 const storageKey = (projectId: string): string => `monad.projectViewMode:${projectId}`;
+
+function normalizeMode(mode: string): ProjectViewMode {
+  if (mode === 'chat') return 'chat-room';
+  if (mode === 'graph') return 'graphic-view';
+  return mode;
+}
 
 function loadMode(projectId: string): ProjectViewMode {
   if (typeof window === 'undefined') return DEFAULT_VIEW_MODE;
-  return window.localStorage.getItem(storageKey(projectId)) ?? DEFAULT_VIEW_MODE;
+  return normalizeMode(window.localStorage.getItem(storageKey(projectId)) ?? DEFAULT_VIEW_MODE);
 }
 
 interface ViewModeStore {
@@ -44,7 +50,7 @@ export function useProjectViewMode(projectId: string | null): [ProjectViewMode, 
 
   const setMode = useCallback(
     (next: ProjectViewMode) => {
-      if (projectId) setInStore(projectId, next);
+      if (projectId) setInStore(projectId, normalizeMode(next));
     },
     [projectId, setInStore]
   );

@@ -21,6 +21,7 @@ function ok<T>(data: T): { data: T; status: number } {
 interface Calls {
   usageGet: number;
   atomsList: number;
+  workspaceExperiencesList: number;
 }
 
 function fakeClient(overrides: Record<string, unknown>, calls: Calls): MonadClient {
@@ -83,6 +84,20 @@ function fakeClient(overrides: Record<string, unknown>, calls: Calls): MonadClie
               calls.atomsList++;
               return ok({ atomPacks: [] });
             },
+            'workspace-experiences': {
+              get: async () => {
+                calls.workspaceExperiencesList++;
+                return ok({
+                  experiences: [
+                    {
+                      id: 'canvas',
+                      title: 'Canvas',
+                      entry: { type: 'web-component', module: './canvas.js', tagName: 'monad-canvas' }
+                    }
+                  ]
+                });
+              }
+            },
             install: {
               post: async (body: { source: string; consent: boolean }) => {
                 // Default-deny: without consent the daemon asks for it (no install committed).
@@ -111,7 +126,7 @@ function fakeClient(overrides: Record<string, unknown>, calls: Calls): MonadClie
 }
 
 test('resetUsage invalidates Usage, forcing the ledger to refetch', async () => {
-  const calls: Calls = { usageGet: 0, atomsList: 0 };
+  const calls: Calls = { usageGet: 0, atomsList: 0, workspaceExperiencesList: 0 };
   const store = createMonadStore({ client: fakeClient({}, calls) });
 
   await store.dispatch(getUsageApi.endpoints.getUsage.initiate());
@@ -124,7 +139,7 @@ test('resetUsage invalidates Usage, forcing the ledger to refetch', async () => 
 
 test('clarifyRespond delegates the answer and returns ok', async () => {
   let seen: { requestId: string; answer: string } | undefined;
-  const calls: Calls = { usageGet: 0, atomsList: 0 };
+  const calls: Calls = { usageGet: 0, atomsList: 0, workspaceExperiencesList: 0 };
   const store = createMonadStore({
     client: fakeClient(
       {
@@ -145,7 +160,7 @@ test('clarifyRespond delegates the answer and returns ok', async () => {
 
 test('branchSession returns the child id and passes the message checkpoint', async () => {
   let branchedAt: string | undefined;
-  const calls: Calls = { usageGet: 0, atomsList: 0 };
+  const calls: Calls = { usageGet: 0, atomsList: 0, workspaceExperiencesList: 0 };
   const store = createMonadStore({
     client: fakeClient(
       {
@@ -166,7 +181,7 @@ test('branchSession returns the child id and passes the message checkpoint', asy
 });
 
 test('restoreSession returns the restored count and new head', async () => {
-  const calls: Calls = { usageGet: 0, atomsList: 0 };
+  const calls: Calls = { usageGet: 0, atomsList: 0, workspaceExperiencesList: 0 };
   const store = createMonadStore({ client: fakeClient({}, calls) });
 
   const res = await store.dispatch(
@@ -177,7 +192,7 @@ test('restoreSession returns the restored count and new head', async () => {
 });
 
 test('provenance returns ancestors and descendants for the session', async () => {
-  const calls: Calls = { usageGet: 0, atomsList: 0 };
+  const calls: Calls = { usageGet: 0, atomsList: 0, workspaceExperiencesList: 0 };
   const store = createMonadStore({ client: fakeClient({}, calls) });
 
   const res = await store.dispatch(provenanceApi.endpoints.provenance.initiate('ses_1' as never));
@@ -186,7 +201,7 @@ test('provenance returns ancestors and descendants for the session', async () =>
 });
 
 test('listAtomPacks caches by the Atoms tag', async () => {
-  const calls: Calls = { usageGet: 0, atomsList: 0 };
+  const calls: Calls = { usageGet: 0, atomsList: 0, workspaceExperiencesList: 0 };
   const store = createMonadStore({ client: fakeClient({}, calls) });
 
   await store.dispatch(atomsApi.endpoints.listAtomPacks.initiate());
@@ -194,8 +209,19 @@ test('listAtomPacks caches by the Atoms tag', async () => {
   expect(calls.atomsList).toBe(1);
 });
 
+test('listWorkspaceExperiences caches by the Atoms tag', async () => {
+  const calls: Calls = { usageGet: 0, atomsList: 0, workspaceExperiencesList: 0 };
+  const store = createMonadStore({ client: fakeClient({}, calls) });
+
+  const first = await store.dispatch(atomsApi.endpoints.listWorkspaceExperiences.initiate());
+  await store.dispatch(atomsApi.endpoints.listWorkspaceExperiences.initiate());
+
+  expect(first.data?.experiences[0]?.id).toBe('canvas');
+  expect(calls.workspaceExperiencesList).toBe(1);
+});
+
 test('a committed install invalidates Atoms; a consent-needed install does not', async () => {
-  const calls: Calls = { usageGet: 0, atomsList: 0 };
+  const calls: Calls = { usageGet: 0, atomsList: 0, workspaceExperiencesList: 0 };
   const store = createMonadStore({ client: fakeClient({}, calls) });
 
   await store.dispatch(atomsApi.endpoints.listAtomPacks.initiate());
@@ -222,7 +248,7 @@ test('setEnabled, remove, and discover each invalidate Atoms', async () => {
     (store: ReturnType<typeof createMonadStore>) => store.dispatch(atomsApi.endpoints.removeAtomPack.initiate('pack')),
     (store: ReturnType<typeof createMonadStore>) => store.dispatch(atomsApi.endpoints.discoverAtomKinds.initiate())
   ]) {
-    const calls: Calls = { usageGet: 0, atomsList: 0 };
+    const calls: Calls = { usageGet: 0, atomsList: 0, workspaceExperiencesList: 0 };
     const store = createMonadStore({ client: fakeClient({}, calls) });
     await store.dispatch(atomsApi.endpoints.listAtomPacks.initiate());
     expect(calls.atomsList).toBe(1);
@@ -233,7 +259,7 @@ test('setEnabled, remove, and discover each invalidate Atoms', async () => {
 });
 
 test('listAtomKinds returns the registered kinds', async () => {
-  const calls: Calls = { usageGet: 0, atomsList: 0 };
+  const calls: Calls = { usageGet: 0, atomsList: 0, workspaceExperiencesList: 0 };
   const store = createMonadStore({ client: fakeClient({}, calls) });
 
   const res = await store.dispatch(atomsApi.endpoints.listAtomKinds.initiate());

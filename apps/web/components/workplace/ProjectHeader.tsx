@@ -203,7 +203,7 @@ export function ProjectHeader({
         </span>
         <button
           className="workplace-action"
-          onClick={() => setViewMode('chat')}
+          onClick={() => setViewMode('chat-room')}
           style={{
             fontFamily: mono,
             fontSize: 11,

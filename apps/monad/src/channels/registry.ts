@@ -5,7 +5,8 @@ import type {
   HookDefinition,
   ManifestAtomPack,
   ModelProvider,
-  SandboxLauncher
+  SandboxLauncher,
+  WorkspaceExperienceDefinition
 } from '@monad/sdk-atom';
 
 import builtinAtomPack from '@monad/atoms';
@@ -28,6 +29,7 @@ export function builtinChannelAdapters(
     onProvider?: (provider: ModelProvider) => void;
     onHook?: (hook: HookDefinition) => void;
     onSandbox?: (launcher: SandboxLauncher) => void;
+    onWorkspaceExperience?: (experience: WorkspaceExperienceDefinition, atomPackName: string) => void;
   } = {}
 ): Promise<Map<ChannelType, ChannelAdapterFactory>> {
   return loadChannelAtomPacks(BUILTIN_CHANNEL_ATOM_PACKS, { onError, ...sinks });
