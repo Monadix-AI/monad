@@ -5,7 +5,7 @@ import { createAnthropic } from '@ai-sdk/anthropic';
 import { defineAiSdkProvider, renderForCount } from './ai-sdk-adapter.ts';
 import { PROVIDER_DESCRIPTORS } from './catalog.ts';
 
-const THINKING_BUDGET: Record<'minimal' | 'low' | 'medium' | 'high', number> = {
+const THINKING_BUDGET = {
   minimal: 1024,
   low: 2048,
   medium: 8192,
@@ -26,9 +26,11 @@ export const anthropicProviderAtom = defineAiSdkProvider({
   },
 
   reasoningOptions(effort, maxThinkingTokens) {
+    const budgetTokens = maxThinkingTokens ?? THINKING_BUDGET[effort as keyof typeof THINKING_BUDGET];
+    if (budgetTokens === undefined) return undefined;
     return {
       anthropic: {
-        thinking: { type: 'enabled', budgetTokens: maxThinkingTokens ?? THINKING_BUDGET[effort] }
+        thinking: { type: 'enabled', budgetTokens }
       }
     };
   },

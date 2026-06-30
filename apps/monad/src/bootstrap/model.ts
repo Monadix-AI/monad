@@ -32,7 +32,7 @@ export async function createModelSubsystem(deps: {
   const modelService = new ModelService(paths.auth, cfg, auth, createEmptyProviderRegistry());
 
   const modelCatalog = new ModelCatalogService({
-    cachePath: join(paths.runtime, 'model-catalog.json'),
+    cachePath: join(paths.cache, 'model-catalog.json'),
     log: (level, message) => logger[level](message)
   });
   await modelCatalog.loadCache();

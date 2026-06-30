@@ -83,8 +83,13 @@ export interface ModelCatalogEntry {
  *  (`vision` is not a kind — it's an input capability, surfaced via `modalities` containing "image".) */
 export function classifyKind(id: string, output: string[] | undefined): ModelKind {
   if (/embed/i.test(id)) return 'embedding';
+  if (output?.includes('embeddings') || output?.includes('embedding')) return 'embedding';
   if (output?.includes('image')) return 'image';
-  if (output?.includes('audio')) return 'speech';
+  if (output?.includes('video')) return 'video';
+  if (output?.includes('speech')) return 'speech';
+  if (output?.includes('audio')) return 'audio';
+  if (output?.includes('rerank')) return 'rerank';
+  if (output?.includes('transcription')) return 'transcription';
   return 'chat';
 }
 
@@ -209,7 +214,7 @@ async function fetchCatalogPages(
 }
 
 export interface ModelCatalogDeps {
-  /** Path to the on-disk cache (e.g. ~/.monad/run/model-catalog.json). */
+  /** Path to the on-disk cache (e.g. ~/.monad/cache/model-catalog.json). */
   cachePath: string;
   log: (level: 'info' | 'warn', message: string) => void;
   /** Override for tests. */
@@ -244,6 +249,7 @@ export class ModelCatalogService {
   private modalitiesById = new Map<string, ModelModalities>();
   private modalitiesBySuffix = new Map<string, ModelModalities>();
   private modelsDevPageById = new Map<string, string>();
+  private nameById = new Map<string, string>();
   private count = 0;
   private timer: ReturnType<typeof setInterval> | undefined;
   private readonly fetchImpl: typeof fetch;
@@ -366,6 +372,11 @@ export class ModelCatalogService {
     return id ? `${MODELS_DEV_PAGE_BASE}${id.split('/').map(encodeURIComponent).join('/')}` : undefined;
   }
 
+  /** Display name from an exact models.dev id match. */
+  lookupLabel(provider: string, modelId: string): string | undefined {
+    return this.nameById.get(modelId) ?? this.nameById.get(`${provider}/${modelId}`);
+  }
+
   /** Best-effort join from a configured (provider, modelId) to the model's modalities — used to
    *  filter role candidates. Same 3-key fallback as {@link lookupCost}; modalities are stable
    *  across point versions so the bare-suffix fallback is safe. */
@@ -389,8 +400,13 @@ export class ModelCatalogService {
     this.modalitiesById = new Map();
     this.modalitiesBySuffix = new Map();
     this.modelsDevPageById = new Map();
+    this.nameById = new Map();
     for (const e of entries) {
       const suffix = e.id.split('/').pop();
+      if (e.name) {
+        this.nameById.set(e.id, e.name);
+        this.nameById.set(`${e.provider}/${e.id}`, e.name);
+      }
       if (e.modelsDevPageId) {
         this.modelsDevPageById.set(e.id, e.modelsDevPageId);
         this.modelsDevPageById.set(`${e.provider}/${e.id}`, e.modelsDevPageId);

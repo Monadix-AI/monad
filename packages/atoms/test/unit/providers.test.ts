@@ -43,6 +43,168 @@ test('every builtin provider carries a descriptor and a stream()', () => {
   }
 });
 
+test('Vercel AI Gateway lets the SDK use its default endpoint instead of requiring a base URL', () => {
+  const descriptor = PROVIDER_DESCRIPTORS['vercel-gateway'] as Record<string, unknown>;
+  expect(descriptor.defaultBaseUrl).toBeUndefined();
+  expect(descriptor.needsUrl).toBeUndefined();
+});
+
+test('Vercel AI Gateway listModels maps rich /v1/models metadata', async () => {
+  const vercel = builtinModelProviders.find((p) => p.type === 'vercel-gateway');
+  if (!vercel?.listModels) throw new Error('vercel gateway provider missing');
+  let seenAuthorization = '';
+  const fetch = fakeFetch((u, init) => {
+    expect(u).toBe('https://ai-gateway.vercel.sh/v1/models');
+    seenAuthorization = String(new Headers(init?.headers).get('authorization') ?? '');
+    return new Response(
+      JSON.stringify({
+        data: [
+          {
+            id: 'openai/gpt-4.1',
+            name: 'GPT-4.1',
+            context_window: 1047576,
+            released: 1744588800,
+            type: 'language',
+            tags: ['file-input', 'implicit-caching', 'tool-use', 'vision'],
+            pricing: {
+              input: '0.000002',
+              output: '0.000008',
+              input_cache_read: '0.0000005',
+              input_cache_write: '0'
+            }
+          },
+          {
+            id: 'alibaba/qwen-3-14b',
+            name: 'Qwen3-14B',
+            context_window: 40960,
+            released: 1745798400,
+            type: 'language',
+            tags: ['reasoning', 'tool-use'],
+            pricing: { input: '0.00000012', output: '0.00000024' }
+          },
+          {
+            id: 'openai/text-embedding-3-large',
+            name: 'Text Embedding 3 Large',
+            type: 'embedding',
+            pricing: { input: '0.00000013' }
+          },
+          {
+            id: 'deepgram/nova-3',
+            name: 'Nova 3',
+            type: 'transcription'
+          },
+          {
+            id: 'cohere/rerank-v3.5',
+            name: 'Rerank v3.5',
+            type: 'reranking'
+          },
+          {
+            id: 'alibaba/wan-v2.6-i2v-flash',
+            name: 'Wan v2.6 Image-to-Video Flash',
+            type: 'video',
+            tags: ['vision'],
+            pricing: {
+              video_duration_pricing: [
+                { resolution: '720p', cost_per_second: '0.05' },
+                { resolution: '1080p', cost_per_second: '0.075' }
+              ]
+            }
+          },
+          {
+            id: 'bytedance/seedance-2.0-fast',
+            name: 'Seedance 2.0 Fast',
+            type: 'video',
+            tags: ['vision'],
+            pricing: {
+              video_token_pricing: {
+                no_video_input: { cost_per_million_tokens: '5.6' },
+                with_video_input: { cost_per_million_tokens: '3.3' }
+              }
+            }
+          }
+        ]
+      }),
+      { headers: { 'Content-Type': 'application/json' } }
+    );
+  });
+
+  const listModels = vercel.listModels as unknown as (
+    provider: ResolvedProviderConfig,
+    cred: typeof CRED,
+    fetch: typeof globalThis.fetch
+  ) => Promise<
+    Array<{
+      id: string;
+      label?: string;
+      contextLimit?: number;
+      releaseDate?: string;
+      price?: unknown;
+      modalities?: unknown;
+    }>
+  >;
+  const models = await listModels({ id: 'vercel', type: 'vercel-gateway' }, CRED, fetch);
+
+  expect(seenAuthorization).toBe('Bearer key-1');
+  expect(models.find((m) => m.id === 'openai/gpt-4.1')).toMatchObject({
+    label: 'GPT-4.1',
+    contextLimit: 1047576,
+    releaseDate: '2025-04-14',
+    price: { input: 2, output: 8, cacheRead: 0.5, cacheWrite: 0 },
+    modalities: {
+      kind: 'chat',
+      input: ['text', 'image', 'file'],
+      output: ['text'],
+      toolCall: true
+    }
+  });
+  expect(models.find((m) => m.id === 'alibaba/qwen-3-14b')).toMatchObject({
+    contextLimit: 40960,
+    releaseDate: '2025-04-28',
+    modalities: { kind: 'chat', reasoning: true, toolCall: true }
+  });
+  expect(models.find((m) => m.id === 'openai/text-embedding-3-large')?.modalities).toMatchObject({
+    kind: 'embedding',
+    output: ['embeddings']
+  });
+  expect(models.find((m) => m.id === 'deepgram/nova-3')?.modalities).toMatchObject({
+    kind: 'transcription',
+    input: ['audio'],
+    output: ['transcription']
+  });
+  expect(models.find((m) => m.id === 'cohere/rerank-v3.5')?.modalities).toMatchObject({
+    kind: 'rerank',
+    output: ['rerank']
+  });
+  expect(models.find((m) => m.id === 'alibaba/wan-v2.6-i2v-flash')).toMatchObject({
+    label: 'Wan v2.6 Image-to-Video Flash',
+    price: {
+      videoSecond: 0.05,
+      units: [
+        { label: '720p', price: 0.05, unit: 'second' },
+        { label: '1080p', price: 0.075, unit: 'second' }
+      ]
+    },
+    modalities: {
+      kind: 'video',
+      input: ['text', 'image'],
+      output: ['video']
+    }
+  });
+  expect(models.find((m) => m.id === 'bytedance/seedance-2.0-fast')).toMatchObject({
+    price: {
+      units: [
+        { label: 'With Video Input', price: 3.3, unit: 'M' },
+        { label: 'No Video Input', price: 5.6, unit: 'M' }
+      ]
+    },
+    modalities: {
+      kind: 'video',
+      input: ['text', 'image'],
+      output: ['video']
+    }
+  });
+});
+
 test('image/speech are wired only on providers that build those models (openai), not text-only ones', () => {
   const byType = new Map(builtinModelProviders.map((p) => [p.type, p]));
   // openai supplies buildImageModel/buildSpeechModel → defineAiSdkProvider exposes the methods.
@@ -68,6 +230,664 @@ test('OpenRouter listModels rejects invalid credentials even when public models 
   await expect(openrouter.listModels({ id: 'openrouter', type: 'openrouter' }, CRED, fetch)).rejects.toThrow(
     /OpenRouter auth failed: 401/
   );
+});
+
+test('OpenRouter listModels does not send credentials to cross-origin model detail links', async () => {
+  const openrouter = builtinModelProviders.find((p) => p.type === 'openrouter');
+  if (!openrouter?.listModels) throw new Error('openrouter provider missing');
+  const seenUrls: string[] = [];
+  const seenAuthorizationByUrl = new Map<string, string | null>();
+
+  const fetch = fakeFetch((u, init) => {
+    seenUrls.push(u);
+    seenAuthorizationByUrl.set(u, new Headers(init?.headers).get('authorization'));
+    if (u.endsWith('/api/v1/auth/key')) {
+      return new Response(JSON.stringify({ data: {} }), { headers: { 'Content-Type': 'application/json' } });
+    }
+    if (u === 'https://openrouter.ai/evil/video-model') {
+      return new Response('<p>$0.01<span>/second</span></p>', { headers: { 'Content-Type': 'text/html' } });
+    }
+    if (u.startsWith('https://evil.example/')) {
+      return new Response(JSON.stringify({ data: { endpoints: [] } }), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+    return new Response(
+      JSON.stringify({
+        data: [
+          {
+            id: 'evil/video-model',
+            name: 'Evil Video Model',
+            architecture: {
+              modality: 'text->video',
+              input_modalities: ['text'],
+              output_modalities: ['video']
+            },
+            pricing: {
+              prompt: '0',
+              completion: '0'
+            },
+            links: {
+              details: 'https://evil.example/openrouter-detail'
+            }
+          }
+        ]
+      }),
+      { headers: { 'Content-Type': 'application/json' } }
+    );
+  });
+
+  const models = await openrouter.listModels({ id: 'openrouter', type: 'openrouter' }, CRED, fetch);
+
+  expect(seenUrls.some((u) => u.startsWith('https://evil.example/'))).toBe(false);
+  expect([...seenAuthorizationByUrl].filter(([u]) => u.includes('evil.example')).map(([, auth]) => auth)).toEqual([]);
+  expect(models.find((m) => m.id === 'evil/video-model')).toMatchObject({
+    price: {
+      videoSecond: 0.01,
+      units: [{ label: 'Video', price: 0.01, unit: 'second' }]
+    }
+  });
+});
+
+test('OpenRouter listModels maps provider-native reasoning efforts', async () => {
+  const openrouter = builtinModelProviders.find((p) => p.type === 'openrouter');
+  if (!openrouter?.listModels) throw new Error('openrouter provider missing');
+
+  const fetch = fakeFetch((u) => {
+    if (u.endsWith('/api/v1/auth/key')) {
+      return new Response(JSON.stringify({ data: {} }), { headers: { 'Content-Type': 'application/json' } });
+    }
+    if (u.endsWith('/api/v1/models/black-forest-labs/flux.2-pro/endpoints')) {
+      return new Response(
+        JSON.stringify({
+          data: {
+            endpoints: [
+              {
+                pricing: {
+                  prompt: '0',
+                  completion: '0',
+                  image_output: '0.00000732421875'
+                }
+              }
+            ]
+          }
+        }),
+        { headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+    if (u.endsWith('/api/v1/models/bytedance/seedance-2.0-fast-20260414/endpoints')) {
+      return new Response(
+        JSON.stringify({
+          data: {
+            endpoints: [
+              {
+                pricing: {
+                  prompt: '0',
+                  completion: '0',
+                  discount: 0
+                }
+              }
+            ]
+          }
+        }),
+        { headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+    if (u.endsWith('/api/v1/models/kwaivgi/kling-video-o1-20260420/endpoints')) {
+      return new Response(
+        JSON.stringify({
+          data: {
+            endpoints: [
+              {
+                pricing: {
+                  prompt: '0',
+                  completion: '0',
+                  discount: 0
+                }
+              }
+            ]
+          }
+        }),
+        { headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+    if (u.endsWith('/api/v1/models/cohere/rerank-4-pro/endpoints')) {
+      return new Response(
+        JSON.stringify({
+          data: {
+            endpoints: [
+              {
+                pricing: {
+                  prompt: '0',
+                  completion: '0',
+                  discount: 0
+                }
+              }
+            ]
+          }
+        }),
+        { headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+    if (u.endsWith('/api/v1/models/google/chirp-3/endpoints')) {
+      return new Response(
+        JSON.stringify({
+          data: {
+            endpoints: [
+              {
+                pricing: {
+                  prompt: '0.016',
+                  completion: '0',
+                  discount: 0
+                }
+              }
+            ]
+          }
+        }),
+        { headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+    if (u.endsWith('/api/v1/models/google/lyria-3-clip-preview-20260330/endpoints')) {
+      return new Response(
+        JSON.stringify({
+          data: {
+            endpoints: [
+              {
+                pricing: {
+                  prompt: '0',
+                  completion: '0',
+                  discount: 0
+                }
+              }
+            ]
+          }
+        }),
+        { headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+    if (u.endsWith('/api/v1/models/microsoft/mai-transcribe-1.5/endpoints')) {
+      return new Response(
+        JSON.stringify({
+          data: {
+            endpoints: [
+              {
+                pricing: {
+                  prompt: '0.36',
+                  completion: '0',
+                  discount: 0
+                }
+              }
+            ]
+          }
+        }),
+        { headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+    if (u.endsWith('/api/v1/models/qwen/qwen3-asr-flash-2026-02-10/endpoints')) {
+      return new Response(
+        JSON.stringify({
+          data: {
+            endpoints: [
+              {
+                pricing: {
+                  prompt: '0.000035',
+                  completion: '0',
+                  discount: 0
+                }
+              }
+            ]
+          }
+        }),
+        { headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+    if (u.endsWith('/bytedance/seedance-2.0-fast')) {
+      return new Response(
+        '<p class="text-sm font-semibold truncate mt-1">from $0.0538<span class="text-xs">/second</span></p>',
+        { headers: { 'Content-Type': 'text/html' } }
+      );
+    }
+    if (u.endsWith('/kwaivgi/kling-video-o1')) {
+      return new Response(
+        '<p class="text-sm font-semibold truncate mt-1">$0.112<span class="text-xs">/second</span></p>',
+        { headers: { 'Content-Type': 'text/html' } }
+      );
+    }
+    if (u.endsWith('/cohere/rerank-4-pro')) {
+      return new Response(
+        '<p class="text-sm font-semibold truncate mt-1">$0.0025<span class="text-xs">/search</span></p>',
+        { headers: { 'Content-Type': 'text/html' } }
+      );
+    }
+    if (u.endsWith('/google/chirp-3')) {
+      return new Response(
+        '<p class="text-sm font-semibold truncate mt-1">$0.016<span class="text-xs">/minute</span></p>',
+        { headers: { 'Content-Type': 'text/html' } }
+      );
+    }
+    if (u.endsWith('/google/lyria-3-clip-preview')) {
+      return new Response(
+        '<p class="text-sm font-semibold truncate mt-1">$0.04<span class="text-xs">/song</span></p>',
+        { headers: { 'Content-Type': 'text/html' } }
+      );
+    }
+    if (u.endsWith('/microsoft/mai-transcribe-1.5')) {
+      return new Response(
+        '<p class="text-sm font-semibold truncate mt-1">$0.36<span class="text-xs">/hour</span></p>',
+        { headers: { 'Content-Type': 'text/html' } }
+      );
+    }
+    if (u.endsWith('/qwen/qwen3-asr-flash-2026-02-10')) {
+      return new Response(
+        '<p class="text-sm font-semibold truncate mt-1">$0.000035<span class="text-xs">/second</span></p>',
+        { headers: { 'Content-Type': 'text/html' } }
+      );
+    }
+    return new Response(
+      JSON.stringify({
+        data: [
+          {
+            id: 'sakana/fugu-ultra',
+            name: 'Sakana: Fugu Ultra',
+            architecture: {
+              modality: 'text+image->text',
+              input_modalities: ['text', 'image'],
+              output_modalities: ['text']
+            },
+            reasoning: {
+              mandatory: true,
+              default_enabled: true,
+              supported_efforts: ['max', 'xhigh', 'high'],
+              default_effort: 'xhigh'
+            },
+            supported_parameters: ['include_reasoning', 'reasoning', 'tools']
+          },
+          {
+            id: 'openai/gpt-plain',
+            name: 'Plain Model',
+            architecture: {
+              modality: 'text->text',
+              input_modalities: ['text'],
+              output_modalities: ['text']
+            },
+            pricing: {
+              prompt: '0.000001',
+              completion: '0.000002'
+            },
+            supported_parameters: ['include_reasoning', 'reasoning']
+          },
+          {
+            id: 'alibaba/wan-video',
+            name: 'Alibaba: Wan Video',
+            architecture: {
+              modality: 'text+image->video',
+              input_modalities: ['text', 'image'],
+              output_modalities: ['video']
+            },
+            pricing: {
+              video_second: '0.08',
+              song: '0.02'
+            }
+          },
+          {
+            id: 'bytedance/seedance-2.0-fast',
+            name: 'ByteDance: Seedance 2.0 Fast',
+            created: 1776211362,
+            context_length: 0,
+            architecture: {
+              modality: 'text+image->video',
+              input_modalities: ['text', 'image'],
+              output_modalities: ['video']
+            },
+            pricing: {
+              prompt: '0',
+              completion: '0'
+            },
+            top_provider: {
+              context_length: 0
+            },
+            supported_parameters: ['frequency_penalty'],
+            links: {
+              details: '/api/v1/models/bytedance/seedance-2.0-fast-20260414/endpoints'
+            }
+          },
+          {
+            id: 'kwaivgi/kling-video-o1',
+            name: 'Kling: Video O1',
+            created: 1776704777,
+            context_length: 0,
+            architecture: {
+              modality: 'text+image->video',
+              input_modalities: ['text', 'image'],
+              output_modalities: ['video']
+            },
+            pricing: {
+              prompt: '0',
+              completion: '0'
+            },
+            supported_parameters: ['max_tokens', 'temperature', 'top_p'],
+            links: {
+              details: '/api/v1/models/kwaivgi/kling-video-o1-20260420/endpoints'
+            }
+          },
+          {
+            id: 'cohere/rerank-4-pro',
+            name: 'Cohere: Rerank 4 Pro',
+            created: 1775446247,
+            context_length: 32768,
+            architecture: {
+              modality: 'text->rerank',
+              input_modalities: ['text'],
+              output_modalities: ['rerank']
+            },
+            pricing: {
+              prompt: '0',
+              completion: '0'
+            },
+            top_provider: {
+              context_length: 32768
+            },
+            links: {
+              details: '/api/v1/models/cohere/rerank-4-pro/endpoints'
+            }
+          },
+          {
+            id: 'black-forest-labs/flux.2-pro',
+            name: 'Black Forest Labs: FLUX.2 Pro',
+            created: 1764030274,
+            context_length: 46864,
+            architecture: {
+              modality: 'text+image->image',
+              input_modalities: ['text', 'image'],
+              output_modalities: ['image']
+            },
+            pricing: {
+              prompt: '0',
+              completion: '0'
+            },
+            top_provider: {
+              context_length: 46864
+            },
+            supported_parameters: ['seed'],
+            links: {
+              details: '/api/v1/models/black-forest-labs/flux.2-pro/endpoints'
+            }
+          },
+          {
+            id: 'google/chirp-3',
+            name: 'Google: Chirp 3',
+            architecture: {
+              modality: 'audio->transcription',
+              input_modalities: ['audio'],
+              output_modalities: ['transcription']
+            },
+            pricing: {
+              prompt: '0.016',
+              completion: '0'
+            },
+            links: {
+              details: '/api/v1/models/google/chirp-3/endpoints'
+            }
+          },
+          {
+            id: 'google/lyria-3-clip-preview',
+            name: 'Google: Lyria 3 Clip Preview',
+            architecture: {
+              modality: 'text+image->text+audio',
+              input_modalities: ['text', 'image'],
+              output_modalities: ['text', 'audio']
+            },
+            pricing: {
+              prompt: '0',
+              completion: '0'
+            },
+            links: {
+              details: '/api/v1/models/google/lyria-3-clip-preview-20260330/endpoints'
+            }
+          },
+          {
+            id: 'microsoft/mai-transcribe-1.5',
+            name: 'Microsoft: MAI-Transcribe 1.5',
+            architecture: {
+              modality: 'audio->transcription',
+              input_modalities: ['audio'],
+              output_modalities: ['transcription']
+            },
+            pricing: {
+              prompt: '0.36',
+              completion: '0'
+            },
+            links: {
+              details: '/api/v1/models/microsoft/mai-transcribe-1.5/endpoints'
+            }
+          },
+          {
+            id: 'qwen/qwen3-asr-flash-2026-02-10',
+            name: 'Qwen: Qwen3 ASR Flash',
+            architecture: {
+              modality: 'audio->transcription',
+              input_modalities: ['audio'],
+              output_modalities: ['transcription']
+            },
+            pricing: {
+              prompt: '0.000035',
+              completion: '0'
+            },
+            links: {
+              details: '/api/v1/models/qwen/qwen3-asr-flash-2026-02-10/endpoints'
+            }
+          },
+          {
+            id: 'openai/embedding-model',
+            architecture: {
+              modality: 'text->embeddings',
+              input_modalities: ['text'],
+              output_modalities: ['embeddings']
+            }
+          },
+          {
+            id: 'openai/audio-model',
+            architecture: {
+              modality: 'text->audio',
+              input_modalities: ['text'],
+              output_modalities: ['audio']
+            }
+          },
+          {
+            id: 'openai/tts-model',
+            architecture: {
+              modality: 'text->speech',
+              input_modalities: ['text'],
+              output_modalities: ['speech']
+            }
+          },
+          {
+            id: 'openai/rerank-model',
+            architecture: {
+              modality: 'text->rerank',
+              input_modalities: ['text'],
+              output_modalities: ['rerank']
+            }
+          },
+          {
+            id: 'openai/transcribe-model',
+            architecture: {
+              modality: 'audio->transcription',
+              input_modalities: ['audio'],
+              output_modalities: ['transcription']
+            }
+          }
+        ]
+      }),
+      { headers: { 'Content-Type': 'application/json' } }
+    );
+  });
+
+  const models = await openrouter.listModels({ id: 'openrouter', type: 'openrouter' }, CRED, fetch);
+
+  expect(models.find((m) => m.id === 'sakana/fugu-ultra')?.modalities).toMatchObject({
+    reasoning: true,
+    reasoningEfforts: ['max', 'xhigh', 'high'],
+    defaultReasoningEffort: 'xhigh'
+  });
+  expect(models.find((m) => m.id === 'openai/gpt-plain')?.modalities).toMatchObject({
+    reasoning: true
+  });
+  expect(models.find((m) => m.id === 'openai/gpt-plain')?.modalities?.reasoningEfforts).toBeUndefined();
+  expect(models.find((m) => m.id === 'alibaba/wan-video')).toMatchObject({
+    price: {
+      videoSecond: 0.08,
+      units: [
+        { label: 'Video', price: 0.08, unit: 'second' },
+        { label: 'Song', price: 0.02, unit: 'song' }
+      ]
+    },
+    modalities: {
+      kind: 'video',
+      input: ['text', 'image'],
+      output: ['video']
+    }
+  });
+  expect(models.find((m) => m.id === 'bytedance/seedance-2.0-fast')).toMatchObject({
+    label: 'ByteDance: Seedance 2.0 Fast',
+    releaseDate: '2026-04-15',
+    price: {
+      videoSecond: 0.0538,
+      units: [{ label: 'Video', price: 0.0538, unit: 'second' }]
+    },
+    modalities: {
+      kind: 'video',
+      input: ['text', 'image'],
+      output: ['video']
+    }
+  });
+  expect(models.find((m) => m.id === 'kwaivgi/kling-video-o1')).toMatchObject({
+    label: 'Kling: Video O1',
+    releaseDate: '2026-04-20',
+    price: {
+      videoSecond: 0.112,
+      units: [{ label: 'Video', price: 0.112, unit: 'second' }]
+    },
+    modalities: {
+      kind: 'video',
+      input: ['text', 'image'],
+      output: ['video']
+    }
+  });
+  expect(models.find((m) => m.id === 'cohere/rerank-4-pro')).toMatchObject({
+    label: 'Cohere: Rerank 4 Pro',
+    contextLimit: 32768,
+    releaseDate: '2026-04-06',
+    detailUrl: 'https://openrouter.ai/cohere/rerank-4-pro',
+    price: {
+      units: [{ label: 'Search', price: 0.0025, unit: 'search' }]
+    },
+    modalities: {
+      kind: 'rerank',
+      input: ['text'],
+      output: ['rerank']
+    }
+  });
+  expect(models.find((m) => m.id === 'black-forest-labs/flux.2-pro')).toMatchObject({
+    label: 'Black Forest Labs: FLUX.2 Pro',
+    contextLimit: 46864,
+    releaseDate: '2025-11-25',
+    price: {
+      input: 0,
+      output: 0,
+      units: [
+        { label: 'Input', price: 0, unit: 'M' },
+        { label: 'Output', price: 0, unit: 'M' },
+        { label: 'Image output', price: 0.03, unit: 'megapixel' }
+      ]
+    },
+    modalities: {
+      kind: 'image',
+      input: ['text', 'image'],
+      output: ['image']
+    }
+  });
+  const chirp = models.find((m) => m.id === 'google/chirp-3');
+  expect(chirp).toMatchObject({
+    label: 'Google: Chirp 3',
+    detailUrl: 'https://openrouter.ai/google/chirp-3',
+    price: {
+      units: [{ label: 'Audio', price: 0.016, unit: 'minute' }]
+    },
+    modalities: {
+      kind: 'transcription',
+      input: ['audio'],
+      output: ['transcription']
+    }
+  });
+  expect(chirp?.price?.input).toBeUndefined();
+  expect(chirp?.price?.output).toBeUndefined();
+  const lyria = models.find((m) => m.id === 'google/lyria-3-clip-preview');
+  expect(lyria).toMatchObject({
+    label: 'Google: Lyria 3 Clip Preview',
+    detailUrl: 'https://openrouter.ai/google/lyria-3-clip-preview',
+    price: {
+      units: [{ label: 'Song', price: 0.04, unit: 'song' }]
+    },
+    modalities: {
+      kind: 'audio',
+      input: ['text', 'image'],
+      output: ['text', 'audio']
+    }
+  });
+  expect(lyria?.price?.input).toBeUndefined();
+  expect(lyria?.price?.output).toBeUndefined();
+  const maiTranscribe = models.find((m) => m.id === 'microsoft/mai-transcribe-1.5');
+  expect(maiTranscribe).toMatchObject({
+    label: 'Microsoft: MAI-Transcribe 1.5',
+    detailUrl: 'https://openrouter.ai/microsoft/mai-transcribe-1.5',
+    price: {
+      units: [{ label: 'Audio', price: 0.36, unit: 'hour' }]
+    },
+    modalities: {
+      kind: 'transcription',
+      input: ['audio'],
+      output: ['transcription']
+    }
+  });
+  expect(maiTranscribe?.price?.input).toBeUndefined();
+  expect(maiTranscribe?.price?.output).toBeUndefined();
+  const qwenAsr = models.find((m) => m.id === 'qwen/qwen3-asr-flash-2026-02-10');
+  expect(qwenAsr).toMatchObject({
+    label: 'Qwen: Qwen3 ASR Flash',
+    detailUrl: 'https://openrouter.ai/qwen/qwen3-asr-flash-2026-02-10',
+    price: {
+      videoSecond: 0.000035,
+      units: [{ label: 'Video', price: 0.000035, unit: 'second' }]
+    },
+    modalities: {
+      kind: 'transcription',
+      input: ['audio'],
+      output: ['transcription']
+    }
+  });
+  expect(qwenAsr?.price?.input).toBeUndefined();
+  expect(qwenAsr?.price?.output).toBeUndefined();
+  expect(models.find((m) => m.id === 'openai/embedding-model')?.modalities).toMatchObject({
+    kind: 'embedding',
+    output: ['embeddings']
+  });
+  expect(models.find((m) => m.id === 'openai/audio-model')?.modalities).toMatchObject({
+    kind: 'audio',
+    output: ['audio']
+  });
+  expect(models.find((m) => m.id === 'openai/tts-model')?.modalities).toMatchObject({
+    kind: 'speech',
+    output: ['speech']
+  });
+  expect(models.find((m) => m.id === 'openai/rerank-model')?.modalities).toMatchObject({
+    kind: 'rerank',
+    output: ['rerank']
+  });
+  expect(models.find((m) => m.id === 'openai/transcribe-model')?.modalities).toMatchObject({
+    kind: 'transcription',
+    output: ['transcription']
+  });
 });
 
 test('Anthropic listModels loads every paged result', async () => {

@@ -1,7 +1,7 @@
 import { useInstallSkillMutation } from '@monad/client-rtk';
 import { Button, Input } from '@monad/ui';
 import { AlertTriangle, ExternalLink, Loader2, Plus } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { useT } from '@/components/I18nProvider';
 import { MonadIcon } from '@/components/MonadLogo';
@@ -42,6 +42,14 @@ function InstallForm({ onInstalled }: { onCancel: () => void; onInstalled: () =>
   const [source, setSource] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [consent, setConsent] = useState<{ skills: string[]; warnings: string[] } | null>(null);
+  const mountedRef = useRef(true);
+  const consentToastIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   const submit = async (withConsent: boolean) => {
     const src = source.trim();
@@ -60,9 +68,33 @@ function InstallForm({ onInstalled }: { onCancel: () => void; onInstalled: () =>
       return;
     }
     if (res.needsConsent) {
-      setConsent({ skills: res.skills, warnings: res.warnings });
+      const consentInfo = { skills: res.skills, warnings: res.warnings };
+      setConsent(consentInfo);
+      consentToastIdRef.current = toast.info(t('web.skills.consentToast'), {
+        action: {
+          label: t('web.skills.consentConfirm'),
+          onClick: async () => {
+            const confirmed = await install({ source: normalized, consent: true })
+              .unwrap()
+              .catch(() => null);
+            if (!confirmed || confirmed.needsConsent) {
+              toast.error(t('web.skills.installFailed'));
+              return false;
+            }
+            toast.success(t('web.skills.installSucceeded'));
+            consentToastIdRef.current = null;
+            if (!mountedRef.current) return;
+            setConsent(null);
+            await onInstalled();
+          }
+        },
+        detail: consentInfo,
+        duration: Number.POSITIVE_INFINITY
+      });
       return;
     }
+    if (consentToastIdRef.current) toast.dismiss(consentToastIdRef.current);
+    consentToastIdRef.current = null;
     await onInstalled();
   };
 
@@ -91,6 +123,8 @@ function InstallForm({ onInstalled }: { onCancel: () => void; onInstalled: () =>
                   setSource(e.target.value);
                   setError(null);
                   setConsent(null);
+                  if (consentToastIdRef.current) toast.dismiss(consentToastIdRef.current);
+                  consentToastIdRef.current = null;
                 }}
                 onKeyDown={(event) => {
                   if (event.key === 'Enter') {

@@ -28,7 +28,6 @@ export const PROVIDER_DESCRIPTORS = {
     label: 'Vercel AI Gateway',
     strategy: 'native',
     npmPackage: '@ai-sdk/gateway',
-    needsUrl: true,
     keyPlaceholder: GENERIC_KEY_PLACEHOLDER
   },
   openrouter: {

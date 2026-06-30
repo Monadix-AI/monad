@@ -18,16 +18,17 @@ import {
   BookOpenText,
   Loader2,
   Plus,
-  RefreshCw,
-  Search,
   Shield,
   Sparkles,
   SquarePen,
+  Store,
   Upload
 } from 'lucide-react';
-import { useMemo, useRef, useState } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { useT } from '@/components/I18nProvider';
+import { isSkillMarketplacePath, skillMarketplacePath, studioPath } from '@/components/routes/route-paths';
 import { toast } from '@/components/ToastProvider';
 import {
   DropdownMenu,
@@ -49,13 +50,11 @@ import { loadSkillContent, sortSkillInstancesByName } from './utils';
 
 export function SkillsSettings({ onClose: _onClose }: { onClose: () => void }) {
   const t = useT();
+  const pathname = usePathname();
+  const router = useRouter();
   const { client: monadClient } = useMonadRuntime();
   const { data, isFetching, refetch } = useListInstalledSkillsQuery();
-  const {
-    data: liveSkillsData,
-    isFetching: fetchingLiveSkills,
-    refetch: refetchLiveSkills
-  } = useListSkillsQuery({ scope: ['global', 'atom-pack'] });
+  const { data: liveSkillsData, refetch: refetchLiveSkills } = useListSkillsQuery({ scope: ['global', 'atom-pack'] });
   const { data: settings, isFetching: loadingSettings } = useGetSkillsSettingsQuery();
   const [setSkillsSettings] = useSetSkillsSettingsMutation();
   const [uploadSkill, { isLoading: uploading }] = useUploadSkillMutation();
@@ -70,7 +69,7 @@ export function SkillsSettings({ onClose: _onClose }: { onClose: () => void }) {
   const [pendingSettingsControl, setPendingSettingsControl] = useState<'global' | string | null>(null);
   const [editError, setEditError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [panel, setPanel] = useState<Panel>('installed');
+  const [panel, setPanel] = useState<Panel>(() => (isSkillMarketplacePath(pathname) ? 'browse' : 'installed'));
   const skills = data?.skills ?? [];
   const installedSkillByName = useMemo(() => new Map(skills.map((skill) => [skill.name, skill])), [skills]);
   const skillInstances = liveSkillsData?.skillInstances ?? [];
@@ -90,6 +89,10 @@ export function SkillsSettings({ onClose: _onClose }: { onClose: () => void }) {
     [skillInstances]
   );
   const enabledCount = skillInstances.filter((skill) => skill.available && !disabledSkillSet.has(skill.id)).length;
+
+  useEffect(() => {
+    if (isSkillMarketplacePath(pathname)) setPanel('browse');
+  }, [pathname]);
 
   const refreshSkills = async () => {
     await Promise.all([refetch(), refetchLiveSkills()]);
@@ -419,24 +422,6 @@ export function SkillsSettings({ onClose: _onClose }: { onClose: () => void }) {
                   </TooltipTrigger>
                   <TooltipContent>{t('web.skills.checkUpdates')}</TooltipContent>
                 </Tooltip>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span className="inline-flex">
-                      <Button
-                        aria-label={t('web.refresh')}
-                        className="size-7"
-                        onClick={() => {
-                          void refreshSkills();
-                        }}
-                        size="icon"
-                        variant="ghost"
-                      >
-                        <RefreshCw className={cn((isFetching || fetchingLiveSkills) && 'animate-spin')} />
-                      </Button>
-                    </span>
-                  </TooltipTrigger>
-                  <TooltipContent>{t('web.refresh')}</TooltipContent>
-                </Tooltip>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button
@@ -469,14 +454,16 @@ export function SkillsSettings({ onClose: _onClose }: { onClose: () => void }) {
             <Button
               className="h-7 gap-1 px-2 text-xs"
               onClick={() => {
-                setPanel((p) => (p === 'browse' ? 'installed' : 'browse'));
+                const next = panel === 'browse' ? 'installed' : 'browse';
+                setPanel(next);
                 setAdding(false);
+                router.replace(next === 'browse' ? skillMarketplacePath() : studioPath('skills'));
               }}
               size="sm"
               variant="ghost"
             >
-              {panel === 'browse' ? <ArrowLeft className="size-3.5" /> : <Search className="size-3.5" />}
-              {panel === 'browse' ? t('web.skills.installedList') : t('web.skills.browse')}
+              {panel === 'browse' ? <ArrowLeft className="size-3.5" /> : <Store className="size-3.5" />}
+              {panel === 'browse' ? t('web.skills.installedList') : t('web.skills.marketplace')}
             </Button>
           </>
         }

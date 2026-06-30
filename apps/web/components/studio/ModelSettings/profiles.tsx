@@ -16,6 +16,7 @@ import { useEffect, useState } from 'react';
 
 import { useT } from '@/components/I18nProvider';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useProviderMeta } from '@/lib/ProviderMeta';
 import { ModelHoverCardBody, ModelPickerPopover, ROLE_NONE, splitModelSpec } from './model-picker';
 import { roleFallbackLabelKey } from './role-fallback';
@@ -29,6 +30,18 @@ const ROLE_DEFS: {
   match: (c?: ModelModalities) => boolean;
   icon: React.ComponentType<{ className?: string }>;
 }[] = [
+  {
+    role: 'memory',
+    labelKey: 'web.model.roleMemory',
+    match: (c) => !!c?.input?.includes('text') && !!c?.output?.includes('text'),
+    icon: Brain
+  },
+  {
+    role: 'embedding',
+    labelKey: 'web.model.roleEmbedding',
+    match: (c) => c?.kind === 'embedding' || !!c?.output?.some((v) => v === 'embedding' || v === 'embeddings'),
+    icon: Database
+  },
   { role: 'vision', labelKey: 'web.model.roleVision', match: (c) => !!c?.input?.includes('image'), icon: Eye },
   {
     role: 'image',
@@ -45,19 +58,17 @@ const ROLE_DEFS: {
   {
     role: 'speech',
     labelKey: 'web.model.roleSpeech',
-    match: (c) => c?.kind === 'speech' || !!c?.output?.includes('audio'),
+    match: (c) => c?.kind === 'speech' || !!c?.output?.includes('speech'),
     icon: Mic
-  },
-  { role: 'embedding', labelKey: 'web.model.roleEmbedding', match: (c) => c?.kind === 'embedding', icon: Database },
-  {
-    role: 'memory',
-    labelKey: 'web.model.roleMemory',
-    match: (c) => !!c?.input?.includes('text') && !!c?.output?.includes('text'),
-    icon: Brain
   }
 ];
 
-const REASONING_EFFORTS = ['minimal', 'low', 'medium', 'high'] as const;
+const HIDE_EFFORT_ROLES = new Set<RouteKey>(['video', 'speech', 'embedding']);
+
+function formatEffortLabel(effort: string | undefined): string {
+  if (!effort) return '';
+  return effort.charAt(0).toUpperCase() + effort.slice(1);
+}
 
 export function ProfileCard({
   defaultAlias,
@@ -66,7 +77,7 @@ export function ProfileCard({
   modelsByProvider,
   onDelete,
   onDraftCreate,
-  onParamsChange,
+  onRouteParamsChange,
   onRouteChange,
   onSetDefault,
   onRename,
@@ -79,7 +90,7 @@ export function ProfileCard({
   modelsByProvider: Record<string, ModelInfo[]>;
   onDelete: () => void;
   onDraftCreate?: () => void;
-  onParamsChange: (params: GenerationParamsView) => void;
+  onRouteParamsChange: (role: RouteKey, params: GenerationParamsView) => void;
   onRouteChange: (role: RouteKey, spec: string) => void;
   onSetDefault: () => void;
   onRename: (alias: string) => void;
@@ -92,6 +103,7 @@ export function ProfileCard({
 
   const [editingAlias, setEditingAlias] = useState(isDraft);
   const [aliasInput, setAliasInput] = useState(profile.alias);
+  const [openEffortPicker, setOpenEffortPicker] = useState<string | null>(null);
   const [openModelHover, setOpenModelHover] = useState<string | null>(null);
   const [openModelPicker, setOpenModelPicker] = useState<string | null>(null);
 
@@ -142,9 +154,72 @@ export function ProfileCard({
     if (open && openModelPicker !== null) return;
     setOpenModelHover(open ? key : null);
   };
+  const reasoningSummary = (role: RouteKey, model: ModelInfo | undefined) => {
+    const efforts = model?.modalities?.reasoningEfforts?.filter((effort) => effort.trim().length > 0) ?? [];
+    const selected = profile.routeParams?.[role]?.reasoningEffort ?? profile.params?.reasoningEffort;
+    const value = efforts.includes(selected ?? '')
+      ? selected
+      : model?.modalities?.defaultReasoningEffort && efforts.includes(model.modalities.defaultReasoningEffort)
+        ? model.modalities.defaultReasoningEffort
+        : efforts[0];
+    return { efforts, value };
+  };
+  const setRouteReasoningEffort = (role: RouteKey, effort: string) => {
+    const base = profile.routeParams?.[role] ?? {};
+    const next = { ...base, reasoningEffort: effort };
+    onRouteParamsChange(role, next);
+    setOpenEffortPicker(null);
+  };
+
+  const primaryRows = [
+    {
+      key: 'chat' as const,
+      label: t('web.model.defaultModel'),
+      icon: Star,
+      model: defaultModelEntry,
+      provMeta: defaultProvMeta,
+      spec: defaultSpec,
+      modelId: profile.routes.chat.modelId,
+      noneLabel: t('web.model.selectModel'),
+      noneClassName: 'italic',
+      modelFilter: (m: ModelInfo) => !m.modalities?.output || m.modalities.output.includes('text')
+    },
+    {
+      key: 'fast' as const,
+      label: t('web.model.fastModel'),
+      icon: Zap,
+      model: fastModelEntry,
+      provMeta: fastProvMeta,
+      spec: fastSpec || ROLE_NONE,
+      modelId: profile.routes.fast?.modelId ?? '',
+      noneLabel: t('web.model.useDefaultModel'),
+      modelFilter: (m: ModelInfo) => !m.modalities?.output || m.modalities.output.includes('text'),
+      help: t('web.model.fastModelHint')
+    }
+  ];
+
+  const roleRows = ROLE_DEFS.map(({ role, labelKey, match, icon }) => {
+    const route = profile.routes[role];
+    const current = route ? `${route.provider}:${route.modelId}` : '';
+    const parsed = current ? splitModelSpec(current) : null;
+    const model = parsed ? (modelsByProvider[parsed.providerId] ?? []).find((m) => m.id === parsed.modelId) : undefined;
+    const provMeta = parsed ? metaFor(providers.find((p) => p.id === parsed.providerId)?.type ?? '') : null;
+    return {
+      key: role,
+      label: t(labelKey),
+      icon,
+      model,
+      provMeta,
+      spec: current || ROLE_NONE,
+      modelId: parsed?.modelId ?? '',
+      noneLabel: t(roleFallbackLabelKey(defaultModelCaps, match)),
+      modelFilter: (m: ModelInfo) => match(m.modalities)
+    };
+  });
+  const rows = [...primaryRows, ...roleRows];
 
   return (
-    <Card className="flex flex-col overflow-hidden border-border/70 bg-card p-0">
+    <Card className="group/profile-card flex flex-col overflow-hidden border-border/70 bg-card p-0">
       <div className="flex h-10 items-center justify-between gap-2 border-border/50 border-b px-3">
         {editingAlias ? (
           <Input
@@ -180,7 +255,7 @@ export function ProfileCard({
             )}
           </button>
         )}
-        <div className="flex shrink-0 items-center gap-0.5">
+        <div className="pointer-events-none flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-focus-within/profile-card:pointer-events-auto group-focus-within/profile-card:opacity-100 group-hover/profile-card:pointer-events-auto group-hover/profile-card:opacity-100">
           {!isDefault && !isDraft && (
             <Button
               className="h-6 px-2 text-[11px] text-muted-foreground hover:text-foreground"
@@ -233,211 +308,153 @@ export function ProfileCard({
         </div>
       </div>
 
-      <div className="flex flex-1 flex-col">
-        <div className="border-border/40 border-b px-3 pb-2.5">
-          <div className="flex items-start justify-between px-0.5 py-1">
-            <span className="mr-3 flex shrink-0 items-center gap-1 text-[11px] text-muted-foreground">
-              <Star className="size-3" />
-              {t('web.model.defaultModel')}
-            </span>
-            <HoverCard
-              onOpenChange={(open) => handleModelHoverOpenChange('chat', open)}
-              open={openModelPicker === null && openModelHover === 'chat'}
-              openDelay={250}
+      <div className="flex flex-1 flex-col gap-1.5 p-2">
+        {rows.map((row) => {
+          const RoleIcon = row.icon;
+          const ProviderLogo = row.provMeta?.logo;
+          const modelLabel = row.modelId ? (row.model?.label ?? row.modelId) : row.noneLabel;
+          const showEffort = row.modelId && !HIDE_EFFORT_ROLES.has(row.key);
+          const { efforts, value } = showEffort
+            ? reasoningSummary(row.key, row.model)
+            : { efforts: [], value: undefined };
+          const configured = !!row.modelId;
+          return (
+            <div
+              className={cn(
+                'flex min-w-0 items-start gap-2 rounded-md border px-2.5 py-2 transition-colors',
+                configured
+                  ? 'border-border/60 bg-background/60 hover:border-border'
+                  : 'border-border/70 border-dashed bg-muted/15 hover:bg-muted/25'
+              )}
+              data-role-row={row.key}
+              key={row.key}
             >
-              <ModelPickerPopover
-                modelFilter={(m) => !m.modalities?.output || m.modalities.output.includes('text')}
-                modelsByProvider={modelsByProvider}
-                onOpenChange={(open) => handleModelPickerOpenChange('chat', open)}
-                onValueChange={(spec) => onRouteChange('chat', spec)}
-                providers={providers}
-                value={defaultSpec}
+              <span
+                className={cn(
+                  'mt-0.5 inline-flex size-6 shrink-0 items-center justify-center rounded-md',
+                  configured ? 'bg-primary/8 text-primary' : 'bg-muted/50 text-muted-foreground'
+                )}
               >
-                <HoverCardTrigger asChild>
-                  <button
-                    className="flex min-w-0 flex-1 items-center justify-end gap-1.5 text-right text-xs transition-colors hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    type="button"
-                  >
-                    {defaultProvMeta?.logo && profile.routes.chat.modelId && (
-                      <defaultProvMeta.logo className={cn('size-3 shrink-0', defaultProvMeta.color)} />
-                    )}
-                    {profile.routes.chat.modelId ? (
-                      <span className="min-w-0 truncate font-medium">
-                        {defaultModelEntry?.label ?? profile.routes.chat.modelId}
-                      </span>
-                    ) : (
-                      <span className="min-w-0 truncate text-muted-foreground italic">
-                        {t('web.model.selectModel')}
-                      </span>
-                    )}
-                  </button>
-                </HoverCardTrigger>
-              </ModelPickerPopover>
-              <HoverCardContent
-                className="w-72"
-                side="top"
-              >
-                <ModelHoverCardBody model={defaultModelEntry} />
-              </HoverCardContent>
-            </HoverCard>
-          </div>
+                <RoleIcon className="size-3.5" />
+              </span>
 
-          <div className="mt-1 flex items-start justify-between px-0.5 py-1">
-            <span className="mr-3 flex shrink-0 items-center gap-1 text-[11px] text-muted-foreground">
-              <Zap className="size-3" />
-              {t('web.model.fastModel')}
-              <HoverCard openDelay={200}>
-                <HoverCardTrigger asChild>
-                  <button
-                    className="inline-flex size-3.5 items-center justify-center rounded-full border border-muted-foreground/40 text-[9px] text-muted-foreground hover:border-muted-foreground/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    type="button"
-                  >
-                    ?
-                  </button>
-                </HoverCardTrigger>
-                <HoverCardContent
-                  className="w-64 text-muted-foreground text-xs"
-                  side="top"
-                >
-                  {t('web.model.fastModelHint')}
-                </HoverCardContent>
-              </HoverCard>
-            </span>
-            <HoverCard
-              onOpenChange={(open) => handleModelHoverOpenChange('fast', open)}
-              open={openModelPicker === null && openModelHover === 'fast'}
-              openDelay={250}
-            >
-              <ModelPickerPopover
-                modelFilter={(m) => !m.modalities?.output || m.modalities.output.includes('text')}
-                modelsByProvider={modelsByProvider}
-                noneLabel={t('web.model.useDefaultModel')}
-                onOpenChange={(open) => handleModelPickerOpenChange('fast', open)}
-                onValueChange={(spec) => onRouteChange('fast', spec === ROLE_NONE ? '' : spec)}
-                providers={providers}
-                value={fastSpec || ROLE_NONE}
-              >
-                <HoverCardTrigger asChild>
-                  <button
-                    className="flex min-w-0 flex-1 items-center justify-end gap-1.5 text-right text-xs transition-colors hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    type="button"
-                  >
-                    {fastProvMeta?.logo && profile.routes.fast?.modelId && (
-                      <fastProvMeta.logo className={cn('size-3 shrink-0', fastProvMeta.color)} />
-                    )}
-                    {profile.routes.fast?.modelId ? (
-                      <span className="min-w-0 truncate font-medium">
-                        {fastModelEntry?.label ?? profile.routes.fast.modelId}
-                      </span>
-                    ) : (
-                      <span className="min-w-0 truncate text-muted-foreground">{t('web.model.useDefaultModel')}</span>
-                    )}
-                  </button>
-                </HoverCardTrigger>
-              </ModelPickerPopover>
-              <HoverCardContent
-                className="w-72"
-                side="top"
-              >
-                <ModelHoverCardBody model={fastModelEntry} />
-              </HoverCardContent>
-            </HoverCard>
-          </div>
-        </div>
-
-        {defaultModelCaps?.reasoning && (
-          <div className="flex flex-wrap items-center justify-between gap-2 border-border/40 border-b px-3 py-2">
-            <span className="shrink-0 text-[11px] text-muted-foreground">{t('web.model.reasoningEffort')}</span>
-            <div className="flex flex-wrap justify-end gap-1">
-              {REASONING_EFFORTS.map((level) => {
-                const active = (profile.params?.reasoningEffort ?? 'medium') === level;
-                return (
-                  <button
-                    className={cn(
-                      'rounded-(--radius-sm) border px-2 py-0.5 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                      active
-                        ? 'border-primary bg-primary/10 font-medium text-primary'
-                        : 'border-input text-muted-foreground hover:border-ring hover:text-foreground'
-                    )}
-                    key={level}
-                    onClick={() => onParamsChange({ ...profile.params, reasoningEffort: level })}
-                    type="button"
-                  >
-                    {t(
-                      `web.model.reasoningEffort${level.charAt(0).toUpperCase()}${level.slice(1)}` as 'web.model.reasoningEffortMinimal'
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        <div className="grid gap-1.5 p-3 sm:grid-cols-2">
-          {ROLE_DEFS.map(({ role, labelKey, match, icon: RoleIcon }) => {
-            const route = profile.routes[role as RoleKey];
-            const current = route ? `${route.provider}:${route.modelId}` : '';
-            const isSet = !!current;
-            const fallbackLabelKey = roleFallbackLabelKey(defaultModelCaps, match);
-            const parsed = isSet ? splitModelSpec(current) : null;
-            const roleModel = parsed
-              ? (modelsByProvider[parsed.providerId] ?? []).find((m) => m.id === parsed.modelId)
-              : undefined;
-            const roleProvMeta = parsed ? metaFor(providers.find((p) => p.id === parsed.providerId)?.type ?? '') : null;
-            return (
-              <div
-                className="min-w-0 rounded-(--radius-md) bg-muted/20 px-2.5 py-2"
-                key={role}
-              >
-                <div className="mb-1 flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground">
-                  <RoleIcon className="size-3 shrink-0" />
-                  <span className="truncate">{t(labelKey)}</span>
-                </div>
-                <HoverCard
-                  onOpenChange={(open) => handleModelHoverOpenChange(role, open)}
-                  open={openModelPicker === null && openModelHover === role}
-                  openDelay={250}
-                >
-                  <ModelPickerPopover
-                    modelFilter={(m) => match(m.modalities)}
-                    modelsByProvider={modelsByProvider}
-                    noneLabel={t(fallbackLabelKey)}
-                    onOpenChange={(open) => handleModelPickerOpenChange(role, open)}
-                    onValueChange={(spec) => onRouteChange(role, spec === ROLE_NONE ? '' : spec)}
-                    providers={providers}
-                    value={current || ROLE_NONE}
-                  >
-                    <HoverCardTrigger asChild>
-                      <button
-                        className="flex w-full min-w-0 items-center gap-1.5 text-left text-xs transition-colors hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                        type="button"
+              <div className="min-w-0 flex-1">
+                <div className="flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground">
+                  <span className="truncate">{row.label}</span>
+                  {'help' in row && row.help && (
+                    <HoverCard openDelay={200}>
+                      <HoverCardTrigger asChild>
+                        <button
+                          className="inline-flex size-3.5 items-center justify-center rounded-full border border-muted-foreground/40 text-[9px] text-muted-foreground hover:border-muted-foreground/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          type="button"
+                        >
+                          ?
+                        </button>
+                      </HoverCardTrigger>
+                      <HoverCardContent
+                        className="w-64 text-muted-foreground text-xs"
+                        side="top"
                       >
-                        {isSet && roleProvMeta?.logo && (
-                          <roleProvMeta.logo className={cn('size-3 shrink-0', roleProvMeta.color)} />
-                        )}
-                        {isSet ? (
-                          <span className="min-w-0 truncate font-medium">
-                            {roleModel?.label ?? parsed?.modelId ?? current}
-                          </span>
-                        ) : (
-                          <span className="min-w-0 truncate text-muted-foreground">{t(fallbackLabelKey)}</span>
-                        )}
-                      </button>
-                    </HoverCardTrigger>
-                  </ModelPickerPopover>
-                  {isSet && (
-                    <HoverCardContent
-                      className="w-72"
-                      side="top"
-                    >
-                      <ModelHoverCardBody model={roleModel} />
-                    </HoverCardContent>
+                        {row.help}
+                      </HoverCardContent>
+                    </HoverCard>
                   )}
-                </HoverCard>
+                </div>
+
+                <div className="mt-1 flex min-h-6 min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                  <HoverCard
+                    onOpenChange={(open) => handleModelHoverOpenChange(row.key, open)}
+                    open={openModelPicker === null && openModelHover === row.key}
+                    openDelay={250}
+                  >
+                    <ModelPickerPopover
+                      modelFilter={row.modelFilter}
+                      modelsByProvider={modelsByProvider}
+                      noneLabel={row.key === 'chat' ? undefined : row.noneLabel}
+                      onOpenChange={(open) => handleModelPickerOpenChange(row.key, open)}
+                      onValueChange={(spec) =>
+                        onRouteChange(row.key, row.key !== 'chat' && spec === ROLE_NONE ? '' : spec)
+                      }
+                      providers={providers}
+                      value={row.spec}
+                    >
+                      <HoverCardTrigger asChild>
+                        <button
+                          className="flex min-w-0 flex-1 basis-44 items-center gap-1.5 text-left text-xs transition-colors hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          type="button"
+                        >
+                          {ProviderLogo && row.modelId && (
+                            <ProviderLogo className={cn('size-3 shrink-0', row.provMeta?.color)} />
+                          )}
+                          <span
+                            className={cn(
+                              'min-w-0 truncate',
+                              row.modelId ? 'font-medium' : 'text-muted-foreground',
+                              'noneClassName' in row && row.noneClassName
+                            )}
+                          >
+                            {modelLabel}
+                          </span>
+                        </button>
+                      </HoverCardTrigger>
+                    </ModelPickerPopover>
+                    {row.modelId && (
+                      <HoverCardContent
+                        className="w-72"
+                        side="top"
+                      >
+                        <ModelHoverCardBody model={row.model} />
+                      </HoverCardContent>
+                    )}
+                  </HoverCard>
+
+                  <div className="flex h-6 min-w-[4.75rem] shrink-0 items-center justify-end">
+                    {!row.modelId && !HIDE_EFFORT_ROLES.has(row.key) ? (
+                      <span className="inline-flex rounded-full bg-background px-2 py-0.5 text-[11px] text-muted-foreground ring-1 ring-border/70">
+                        Inherited default model
+                      </span>
+                    ) : efforts.length > 0 ? (
+                      <Popover
+                        onOpenChange={(open) => setOpenEffortPicker(open ? row.key : null)}
+                        open={openEffortPicker === row.key}
+                      >
+                        <PopoverTrigger asChild>
+                          <button
+                            className="inline-flex h-6 items-center gap-1 rounded-(--radius-sm) px-1.5 text-[11px] transition-colors hover:bg-muted/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            type="button"
+                          >
+                            <span className="text-muted-foreground">Effort</span>
+                            <span className="font-medium text-primary">{formatEffortLabel(value)}</span>
+                          </button>
+                        </PopoverTrigger>
+                        <PopoverContent
+                          align="end"
+                          className="w-28 p-1"
+                        >
+                          {efforts.map((level) => (
+                            <button
+                              className={cn(
+                                'flex w-full items-center rounded-(--radius-sm) px-2 py-1.5 text-left text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                                value === level
+                                  ? 'bg-primary/10 font-medium text-primary'
+                                  : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
+                              )}
+                              key={level}
+                              onClick={() => setRouteReasoningEffort(row.key, level)}
+                              type="button"
+                            >
+                              {formatEffortLabel(level)}
+                            </button>
+                          ))}
+                        </PopoverContent>
+                      </Popover>
+                    ) : null}
+                  </div>
+                </div>
               </div>
-            );
-          })}
-        </div>
+            </div>
+          );
+        })}
       </div>
     </Card>
   );

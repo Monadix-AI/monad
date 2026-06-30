@@ -9,8 +9,10 @@ import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initMonadHome, loadAuth, loadConfig } from '@monad/home';
+import { ModelProviderType } from '@monad/protocol';
 
 import { ModelService } from '@/handlers/settings/model/index.ts';
+import { ModelCatalogService } from '@/services/model-catalog.ts';
 import { createHttpTransport } from '@/transports/http.ts';
 import {
   buildHandlers,
@@ -33,6 +35,18 @@ function profile(alias: string, modelId: string) {
     params: {},
     fallbacks: []
   };
+}
+
+type ProviderModelCacheFile = {
+  providers: Record<string, { models: Array<{ id: string }> }>;
+};
+
+function providerModelCachePath(paths: MonadPaths): string {
+  return join(paths.cache, 'provider-models.json');
+}
+
+async function readProviderModelCache(paths: MonadPaths): Promise<ProviderModelCacheFile> {
+  return (await Bun.file(providerModelCachePath(paths)).json()) as ProviderModelCacheFile;
 }
 
 for (const kind of TRANSPORTS) {
@@ -209,6 +223,180 @@ for (const kind of TRANSPORTS) {
 
       const cfg = await loadConfig(paths.config);
       expect(cfg?.model.providers.some((provider) => provider.id === 'oai')).toBe(true);
+    });
+
+    test('deleting an unused provider also removes its credentials', async () => {
+      await json('PUT', '/v1/settings/model/providers/oai', {
+        provider: { id: 'oai', label: 'OpenAI-compatible', type: 'openai-compatible', baseUrl: 'https://api.test/v1' }
+      });
+      await json('POST', '/v1/settings/model/providers/oai/credentials', {
+        label: 'primary',
+        authType: 'api_key',
+        accessToken: 'sk-supersecret-1234'
+      });
+      await Bun.write(
+        providerModelCachePath(paths),
+        JSON.stringify({
+          providers: {
+            oai: {
+              providerType: ModelProviderType.OpenAICompatible,
+              baseUrl: 'https://api.test/v1',
+              credentialId: 'cached-cred',
+              updatedAt: new Date().toISOString(),
+              models: [{ id: 'cached-model' }]
+            }
+          }
+        })
+      );
+
+      const res = await json('DELETE', '/v1/settings/model/providers/oai');
+      expect(res.status).toBe(200);
+
+      const cfg = await loadConfig(paths.config);
+      const auth = await loadAuth(paths.auth);
+      const cache = await readProviderModelCache(paths);
+      expect(cfg?.model.providers.some((provider) => provider.id === 'oai')).toBe(false);
+      expect(auth?.credentialPool.oai).toBeUndefined();
+      expect(cache.providers.oai).toBeUndefined();
+    });
+
+    test('list models returns cached models immediately while refreshing in the background', async () => {
+      const cfg = await loadConfig(paths.config);
+      if (!cfg) throw new Error('config missing');
+      const registry = seededProviderRegistry();
+      const openai = registry.get(ModelProviderType.OpenAICompatible);
+      if (!openai) throw new Error('openai-compatible provider missing');
+
+      let calls = 0;
+      let releaseRefresh: (() => void) | undefined;
+      registry.register({
+        ...openai,
+        listModels: async () => {
+          calls += 1;
+          if (calls === 1) return [{ id: 'remote-first', label: 'Remote first' }];
+          await new Promise<void>((resolve) => {
+            releaseRefresh = resolve;
+          });
+          return [{ id: 'remote-fresh', label: 'Remote fresh' }];
+        }
+      });
+      const modelService = new ModelService(paths.auth, cfg, await loadAuth(paths.auth), registry);
+
+      await t.stop();
+      t = serveTransport(kind, createHttpTransport(buildHandlers(mockModel(), { paths, modelService })));
+
+      await json('PUT', '/v1/settings/model/providers/oai', {
+        provider: { id: 'oai', label: 'OpenAI-compatible', type: 'openai-compatible', baseUrl: 'https://api.test/v1' }
+      });
+      await json('POST', '/v1/settings/model/providers/oai/credentials', {
+        label: 'primary',
+        authType: 'api_key',
+        accessToken: 'sk-supersecret-1234'
+      });
+
+      const firstRes = await json('GET', '/v1/settings/model/providers/oai/models');
+      expect(firstRes.status).toBe(200);
+      const first = (await firstRes.json()) as {
+        models: Array<{ id: string }>;
+      };
+      expect(first.models.map((model) => model.id)).toEqual(['remote-first']);
+
+      const secondRes = await json('GET', '/v1/settings/model/providers/oai/models');
+      expect(secondRes.status).toBe(200);
+      const second = (await secondRes.json()) as {
+        models: Array<{ id: string }>;
+      };
+      expect(second.models.map((model) => model.id)).toEqual(['remote-first']);
+      expect(calls).toBe(2);
+
+      releaseRefresh?.();
+      for (let i = 0; i < 20; i += 1) {
+        const cached = (await readProviderModelCache(paths)).providers.oai?.models.map((model) => model.id);
+        if (cached?.[0] === 'remote-fresh') break;
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+      expect((await readProviderModelCache(paths)).providers.oai?.models.map((model) => model.id)).toEqual([
+        'remote-fresh'
+      ]);
+
+      const persistedConfig = await loadConfig(paths.config);
+      expect(persistedConfig).not.toHaveProperty('model.modelCache');
+    });
+
+    test('test connection enriches provider models with catalog fallback', async () => {
+      const cfg = await loadConfig(paths.config);
+      if (!cfg) throw new Error('config missing');
+      const registry = seededProviderRegistry();
+      const deepseek = registry.get(ModelProviderType.DeepSeek);
+      if (!deepseek) throw new Error('deepseek provider missing');
+      registry.register({
+        ...deepseek,
+        listModels: async () => [{ id: 'deepseek-v4-flash' }]
+      });
+      const modelService = new ModelService(paths.auth, cfg, await loadAuth(paths.auth), registry);
+      const catalog = new ModelCatalogService({
+        cachePath: join(dir, 'model-catalog.json'),
+        log: () => {},
+        url: 'https://catalog.test/api.json',
+        modelsUrl: 'https://catalog.test/models.json',
+        fetchImpl: (async (url: string) =>
+          new Response(
+            JSON.stringify(
+              url.includes('models.json')
+                ? {
+                    'deepseek/deepseek-v4-flash': {
+                      id: 'deepseek/deepseek-v4-flash',
+                      name: 'DeepSeek V4 Flash',
+                      modalities: { input: ['text'], output: ['text'] }
+                    }
+                  }
+                : {
+                    deepseek: {
+                      models: {
+                        'deepseek-v4-flash': {
+                          id: 'deepseek/deepseek-v4-flash',
+                          name: 'DeepSeek V4 Flash',
+                          modalities: { input: ['text'], output: ['text'] },
+                          limit: { context: 1000000 },
+                          cost: { input: 0.14, output: 0.28, cache_read: 0.0028 },
+                          release_date: '2026-02-01'
+                        }
+                      }
+                    }
+                  }
+            ),
+            { status: 200 }
+          )) as unknown as typeof fetch
+      });
+      await catalog.refresh();
+
+      await t.stop();
+      t = serveTransport(
+        kind,
+        createHttpTransport(buildHandlers(mockModel(), { paths, modelService, modelCatalog: catalog }))
+      );
+
+      const res = await json('POST', '/v1/settings/model/test-connection', {
+        provider: { id: 'deepseek', label: 'DeepSeek', type: ModelProviderType.DeepSeek },
+        accessToken: 'sk-test'
+      });
+
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as {
+        ok: boolean;
+        models?: Array<Record<string, unknown>>;
+      };
+      expect(body.ok).toBe(true);
+      expect(body.models?.[0]).toMatchObject({
+        id: 'deepseek-v4-flash',
+        label: 'DeepSeek V4 Flash',
+        contextLimit: 1000000,
+        releaseDate: '2026-02-01',
+        price: { input: 0.14, output: 0.28, cacheRead: 0.0028 },
+        modalities: { input: ['text'], output: ['text'], kind: 'chat' },
+        detailUrl: 'https://models.dev/models/deepseek/deepseek-v4-flash',
+        modelsDevUrl: 'https://models.dev/models/deepseek/deepseek-v4-flash'
+      });
     });
 
     test('rejects deleting a profile while any agent uses it', async () => {

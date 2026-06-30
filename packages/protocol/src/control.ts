@@ -11,6 +11,7 @@ import {
   chatMessageSchema,
   eventSchema,
   modelProfileRoutesSchema,
+  modelRoleSchema,
   modelRolesSchema,
   sandboxModeSchema,
   searchHitSchema,
@@ -550,51 +551,215 @@ export type GetProviderCatalogResponse = z.infer<typeof getProviderCatalogRespon
 // `modelPriceSchema`/`ModelPrice` further down this file.
 
 const PRICE_PER_MILLION = 1_000_000;
+const OPENAI_KNOWN_PRICE_KEYS = new Set([
+  'prompt',
+  'completion',
+  'input_cache_read',
+  'input_cache_write',
+  'video',
+  'video_second',
+  'video_per_second',
+  'per_second',
+  'per_minute',
+  'per_hour',
+  'image_output',
+  'search',
+  'web_search'
+]);
 
 function perMillion(v: unknown): number | undefined {
   const n = typeof v === 'string' ? Number.parseFloat(v) : typeof v === 'number' ? v : Number.NaN;
-  return Number.isFinite(n) && n > 0 ? n * PRICE_PER_MILLION : undefined;
+  return Number.isFinite(n) && n >= 0 ? n * PRICE_PER_MILLION : undefined;
 }
 
-function buildPrice(fields: Record<keyof ModelPrice, unknown>): ModelPrice | undefined {
+function unitPrice(v: unknown): number | undefined {
+  const n = typeof v === 'string' ? Number.parseFloat(v) : typeof v === 'number' ? v : Number.NaN;
+  return Number.isFinite(n) && n >= 0 ? n : undefined;
+}
+
+function firstDefined(...values: unknown[]): unknown {
+  return values.find((value) => value !== undefined && value !== null);
+}
+
+function buildPrice(fields: {
+  input?: unknown;
+  output?: unknown;
+  cacheRead?: unknown;
+  cacheWrite?: unknown;
+  videoSecond?: unknown;
+}): ModelPrice | undefined {
   const price: ModelPrice = {};
   for (const k of ['input', 'output', 'cacheRead', 'cacheWrite'] as const) {
     const v = perMillion(fields[k]);
     if (v !== undefined) price[k] = v;
   }
+  const videoSecond = unitPrice(fields.videoSecond);
+  if (videoSecond !== undefined) price.videoSecond = videoSecond;
   return Object.keys(price).length > 0 ? price : undefined;
+}
+
+function priceUnitMeta(key: string): { label: string; unit: string; multiplier: number } {
+  switch (key) {
+    case 'prompt':
+      return { label: 'Input', unit: 'M', multiplier: PRICE_PER_MILLION };
+    case 'completion':
+      return { label: 'Output', unit: 'M', multiplier: PRICE_PER_MILLION };
+    case 'input_cache_read':
+      return { label: 'Cache read', unit: 'M', multiplier: PRICE_PER_MILLION };
+    case 'input_cache_write':
+      return { label: 'Cache write', unit: 'M', multiplier: PRICE_PER_MILLION };
+    case 'video':
+    case 'video_second':
+    case 'video_per_second':
+    case 'per_second':
+      return { label: 'Video', unit: 'second', multiplier: 1 };
+    case 'per_minute':
+      return { label: 'Audio', unit: 'minute', multiplier: 1 };
+    case 'per_hour':
+      return { label: 'Audio', unit: 'hour', multiplier: 1 };
+    case 'image_output':
+      // OpenRouter reports image_output per 64x64 tile; normalize to the public $/megapixel unit.
+      return { label: 'Image output', unit: 'megapixel', multiplier: 4096 };
+    case 'search':
+    case 'web_search':
+      return { label: 'Search', unit: 'search', multiplier: 1 };
+  }
+  const normalized = key.replace(/^per_/, '').replace(/_/g, ' ');
+  const label = normalized.replace(/\b\w/g, (char) => char.toUpperCase());
+  if (key.includes('token')) return { label, unit: 'M', multiplier: PRICE_PER_MILLION };
+  if (key.includes('song')) return { label, unit: 'song', multiplier: 1 };
+  if (key.includes('second')) return { label, unit: 'second', multiplier: 1 };
+  if (key.includes('minute')) return { label, unit: 'minute', multiplier: 1 };
+  if (key.includes('image')) return { label, unit: 'image', multiplier: 1 };
+  if (key.includes('request')) return { label, unit: 'request', multiplier: 1 };
+  if (key.includes('search')) return { label, unit: 'search', multiplier: 1 };
+  return { label, unit: 'unit', multiplier: 1 };
+}
+
+type ModelPriceUnit = { label: string; price: number; unit: string };
+
+function titleCaseKey(key: string): string {
+  return key.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function openAiPriceUnits(p: Record<string, unknown>): ModelPriceUnit[] {
+  return Object.entries(p)
+    .flatMap(([key, value]) => {
+      const n = typeof value === 'string' ? Number.parseFloat(value) : typeof value === 'number' ? value : Number.NaN;
+      if (!Number.isFinite(n) || n < 0) return [];
+      if (n === 0 && !OPENAI_KNOWN_PRICE_KEYS.has(key)) return [];
+      const meta = priceUnitMeta(key);
+      return [{ label: meta.label, price: n * meta.multiplier, unit: meta.unit }];
+    })
+    .filter(
+      (item, index, items) =>
+        items.findIndex((other) => other.label === item.label && other.unit === item.unit) === index
+    );
+}
+
+function fieldString(record: Record<string, unknown>, key: string): string | undefined {
+  const value = record[key];
+  return typeof value === 'string' && value.length > 0 ? value : undefined;
+}
+
+function vercelVideoDurationPriceUnits(value: unknown): ModelPriceUnit[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .flatMap((item) => {
+      if (!item || typeof item !== 'object') return [];
+      const record = item as Record<string, unknown>;
+      const price = unitPrice(record.cost_per_second);
+      if (price === undefined) return [];
+      const parts = [
+        fieldString(record, 'resolution'),
+        fieldString(record, 'mode'),
+        typeof record.audio === 'boolean' ? (record.audio ? 'Audio' : 'No audio') : undefined
+      ].filter((part): part is string => !!part);
+      return [{ label: parts.length > 0 ? parts.join(' ') : 'Video', price, unit: 'second' }];
+    })
+    .sort((a, b) => a.price - b.price || a.label.localeCompare(b.label))
+    .filter(
+      (item, index, items) =>
+        items.findIndex(
+          (other) => other.label === item.label && other.price === item.price && other.unit === item.unit
+        ) === index
+    );
+}
+
+function vercelVideoTokenPriceUnits(value: unknown): ModelPriceUnit[] {
+  if (!value || typeof value !== 'object') return [];
+  return Object.entries(value as Record<string, unknown>)
+    .flatMap(([key, item]) => {
+      if (!item || typeof item !== 'object') return [];
+      const price = unitPrice((item as Record<string, unknown>).cost_per_million_tokens);
+      if (price === undefined) return [];
+      return [{ label: titleCaseKey(key), price, unit: 'M' }];
+    })
+    .sort((a, b) => a.price - b.price || a.label.localeCompare(b.label));
 }
 
 /** OpenAI/OpenRouter-style `/models` pricing block ($/token). */
 export function openAiPrice(
   p:
-    | { prompt?: unknown; completion?: unknown; input_cache_read?: unknown; input_cache_write?: unknown }
+    | {
+        [key: string]: unknown;
+        prompt?: unknown;
+        completion?: unknown;
+        input_cache_read?: unknown;
+        input_cache_write?: unknown;
+        video?: unknown;
+        video_second?: unknown;
+        video_per_second?: unknown;
+        per_second?: unknown;
+        per_minute?: unknown;
+        per_hour?: unknown;
+      }
     | null
     | undefined
 ): ModelPrice | undefined {
   if (!p) return undefined;
-  return buildPrice({
+  const price = buildPrice({
     input: p.prompt,
     output: p.completion,
     cacheRead: p.input_cache_read,
-    cacheWrite: p.input_cache_write
+    cacheWrite: p.input_cache_write,
+    videoSecond: firstDefined(p.video_second, p.video_per_second, p.per_second, p.video)
   });
+  const units = openAiPriceUnits(p);
+  if (!price && units.length === 0) return undefined;
+  return { ...(price ?? {}), ...(units.length > 0 ? { units } : {}) };
 }
 
 /** Vercel AI Gateway `getAvailableModels()` pricing block ($/token). */
 export function vercelGatewayPrice(
   p:
-    | { input?: unknown; output?: unknown; cachedInputTokens?: unknown; cacheCreationInputTokens?: unknown }
+    | {
+        input?: unknown;
+        output?: unknown;
+        cachedInputTokens?: unknown;
+        cacheCreationInputTokens?: unknown;
+        input_cache_read?: unknown;
+        input_cache_write?: unknown;
+        video_duration_pricing?: unknown;
+        video_token_pricing?: unknown;
+      }
     | null
     | undefined
 ): ModelPrice | undefined {
   if (!p) return undefined;
-  return buildPrice({
+  const price = buildPrice({
     input: p.input,
     output: p.output,
-    cacheRead: p.cachedInputTokens,
-    cacheWrite: p.cacheCreationInputTokens
+    cacheRead: firstDefined(p.cachedInputTokens, p.input_cache_read),
+    cacheWrite: firstDefined(p.cacheCreationInputTokens, p.input_cache_write)
   });
+  const videoDurationUnits = vercelVideoDurationPriceUnits(p.video_duration_pricing);
+  const videoTokenUnits = vercelVideoTokenPriceUnits(p.video_token_pricing);
+  const videoSecond = videoDurationUnits[0]?.price;
+  const units = [...videoDurationUnits, ...videoTokenUnits];
+  const withVideo = videoSecond === undefined ? price : { ...(price ?? {}), videoSecond };
+  if (!withVideo && units.length === 0) return undefined;
+  return { ...(withVideo ?? {}), ...(units.length > 0 ? { units } : {}) };
 }
 
 export const providerViewSchema = z.object({
@@ -610,7 +775,7 @@ export const generationParamsViewSchema = z.object({
   temperature: z.number().optional(),
   maxTokens: z.number().optional(),
   topP: z.number().optional(),
-  reasoningEffort: z.enum(['minimal', 'low', 'medium', 'high']).optional()
+  reasoningEffort: z.string().optional()
 });
 export type GenerationParamsView = z.infer<typeof generationParamsViewSchema>;
 /** Canonical generation params (single source). agent-core / sdk-atom / home all derive from
@@ -627,6 +792,7 @@ export const profileViewSchema = z.object({
   alias: z.string(),
   routes: modelProfileRoutesSchema,
   params: generationParamsViewSchema,
+  routeParams: z.partialRecord(modelRoleSchema, generationParamsViewSchema).optional(),
   fallbacks: z.array(fallbackTargetViewSchema)
 });
 export type ProfileView = z.infer<typeof profileViewSchema>;
@@ -670,7 +836,17 @@ export const modelPriceSchema = z
     input: z.number().optional(),
     output: z.number().optional(),
     cacheRead: z.number().optional(),
-    cacheWrite: z.number().optional()
+    cacheWrite: z.number().optional(),
+    videoSecond: z.number().optional(),
+    units: z
+      .array(
+        z.object({
+          label: z.string(),
+          price: z.number(),
+          unit: z.string()
+        })
+      )
+      .optional()
   })
   .partial();
 export type ModelPrice = z.infer<typeof modelPriceSchema>;
@@ -680,13 +856,22 @@ export type ModelPrice = z.infer<typeof modelPriceSchema>;
 // `input` containing "image". Data comes from the provider's listModels when rich, else the
 // models.dev catalog by id (mirroring price). embedding is detected by id (models.dev doesn't flag
 // it via modality), so kind=embedding is authoritative even when modalities look like text→text.
-export const modelKindSchema = z.enum(['chat', 'image', 'video', 'speech', 'embedding']);
+export const modelKindSchema = z.enum([
+  'chat',
+  'image',
+  'video',
+  'speech',
+  'embedding',
+  'audio',
+  'rerank',
+  'transcription'
+]);
 export type ModelKind = z.infer<typeof modelKindSchema>;
 
 /** A model-assignment slot. `chat` is special (it resolves to a profile, with params + fallback);
  *  the rest are profile role overrides. `vision` is a chat
  *  model that accepts image input. The role → required-capability mapping the UI filters on:
- *  chat=output⊇text · vision=input⊇image · image=output⊇image · speech=output⊇audio · embedding=kind. */
+ *  chat=output⊇text · vision=input⊇image · image=output⊇image · speech=output⊇speech · embedding=kind. */
 export const getRolesResponseSchema = z.object({ roles: modelRolesSchema });
 export type GetRolesResponse = z.infer<typeof getRolesResponseSchema>;
 export const setRolesRequestSchema = z.object({ roles: modelRolesSchema });
@@ -696,6 +881,8 @@ export const modelModalitiesSchema = z.object({
   input: z.array(z.string()).optional(),
   output: z.array(z.string()).optional(),
   reasoning: z.boolean().optional(),
+  reasoningEfforts: z.array(z.string()).optional(),
+  defaultReasoningEffort: z.string().optional(),
   toolCall: z.boolean().optional(),
   kind: modelKindSchema.optional()
 });
@@ -708,6 +895,7 @@ export const modelInfoSchema = z.object({
   modalities: modelModalitiesSchema.optional(), // input/output modalities, flags, kind; provider-native preferred, else catalog
   contextLimit: z.number().int().positive().optional(),
   releaseDate: z.string().optional(),
+  detailUrl: httpsUrlSchema.optional(),
   modelsDevUrl: httpsUrlSchema.optional()
 });
 export type ModelInfo = z.infer<typeof modelInfoSchema>;

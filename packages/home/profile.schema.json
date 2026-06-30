@@ -80,11 +80,116 @@
               "alias": {
                 "type": "string"
               },
-              "provider": {
-                "type": "string"
-              },
-              "modelId": {
-                "type": "string"
+              "routes": {
+                "type": "object",
+                "properties": {
+                  "chat": {
+                    "type": "object",
+                    "properties": {
+                      "provider": {
+                        "type": "string"
+                      },
+                      "modelId": {
+                        "type": "string"
+                      }
+                    },
+                    "required": ["provider", "modelId"],
+                    "additionalProperties": false
+                  },
+                  "fast": {
+                    "type": "object",
+                    "properties": {
+                      "provider": {
+                        "type": "string"
+                      },
+                      "modelId": {
+                        "type": "string"
+                      }
+                    },
+                    "required": ["provider", "modelId"],
+                    "additionalProperties": false
+                  },
+                  "vision": {
+                    "type": "object",
+                    "properties": {
+                      "provider": {
+                        "type": "string"
+                      },
+                      "modelId": {
+                        "type": "string"
+                      }
+                    },
+                    "required": ["provider", "modelId"],
+                    "additionalProperties": false
+                  },
+                  "image": {
+                    "type": "object",
+                    "properties": {
+                      "provider": {
+                        "type": "string"
+                      },
+                      "modelId": {
+                        "type": "string"
+                      }
+                    },
+                    "required": ["provider", "modelId"],
+                    "additionalProperties": false
+                  },
+                  "video": {
+                    "type": "object",
+                    "properties": {
+                      "provider": {
+                        "type": "string"
+                      },
+                      "modelId": {
+                        "type": "string"
+                      }
+                    },
+                    "required": ["provider", "modelId"],
+                    "additionalProperties": false
+                  },
+                  "speech": {
+                    "type": "object",
+                    "properties": {
+                      "provider": {
+                        "type": "string"
+                      },
+                      "modelId": {
+                        "type": "string"
+                      }
+                    },
+                    "required": ["provider", "modelId"],
+                    "additionalProperties": false
+                  },
+                  "embedding": {
+                    "type": "object",
+                    "properties": {
+                      "provider": {
+                        "type": "string"
+                      },
+                      "modelId": {
+                        "type": "string"
+                      }
+                    },
+                    "required": ["provider", "modelId"],
+                    "additionalProperties": false
+                  },
+                  "memory": {
+                    "type": "object",
+                    "properties": {
+                      "provider": {
+                        "type": "string"
+                      },
+                      "modelId": {
+                        "type": "string"
+                      }
+                    },
+                    "required": ["provider", "modelId"],
+                    "additionalProperties": false
+                  }
+                },
+                "required": ["chat"],
+                "additionalProperties": false
               },
               "params": {
                 "default": {},
@@ -106,11 +211,41 @@
                     "maximum": 1
                   },
                   "reasoningEffort": {
-                    "type": "string",
-                    "enum": ["minimal", "low", "medium", "high"]
+                    "type": "string"
                   }
                 },
                 "additionalProperties": false
+              },
+              "routeParams": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string",
+                  "enum": ["chat", "fast", "vision", "image", "video", "speech", "embedding", "memory"]
+                },
+                "additionalProperties": {
+                  "type": "object",
+                  "properties": {
+                    "temperature": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 2
+                    },
+                    "maxTokens": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "topP": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    "reasoningEffort": {
+                      "type": "string"
+                    }
+                  },
+                  "additionalProperties": false
+                }
               },
               "fallbacks": {
                 "default": [],
@@ -144,7 +279,7 @@
                 }
               }
             },
-            "required": ["alias", "provider", "modelId", "params", "fallbacks"],
+            "required": ["alias", "routes", "params", "fallbacks"],
             "additionalProperties": false
           }
         },
@@ -158,10 +293,16 @@
             "image": {
               "type": "string"
             },
+            "video": {
+              "type": "string"
+            },
             "speech": {
               "type": "string"
             },
             "embedding": {
+              "type": "string"
+            },
+            "memory": {
               "type": "string"
             }
           },
@@ -175,7 +316,7 @@
           },
           "additionalProperties": {
             "type": "string",
-            "enum": ["fast", "smart", "power"]
+            "enum": ["fast"]
           }
         },
         "kinds": {
@@ -186,7 +327,7 @@
           },
           "additionalProperties": {
             "type": "string",
-            "enum": ["chat", "image", "speech", "embedding"]
+            "enum": ["chat", "image", "video", "speech", "embedding", "audio", "rerank", "transcription"]
           }
         }
       },
@@ -225,6 +366,30 @@
               },
               "modelAlias": {
                 "type": "string"
+              },
+              "roles": {
+                "type": "object",
+                "properties": {
+                  "vision": {
+                    "type": "string"
+                  },
+                  "image": {
+                    "type": "string"
+                  },
+                  "video": {
+                    "type": "string"
+                  },
+                  "speech": {
+                    "type": "string"
+                  },
+                  "embedding": {
+                    "type": "string"
+                  },
+                  "memory": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
               },
               "framework": {
                 "type": "string",
@@ -328,6 +493,20 @@
                 "required": ["mode"],
                 "additionalProperties": false
               },
+              "maxTurns": {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991
+              },
+              "maxThinkingTokens": {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991
+              },
+              "maxBudgetUsd": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
               "visibility": {
                 "default": {
                   "subagentCallable": false,
@@ -392,7 +571,7 @@
                 "provider": {
                   "default": "auto",
                   "type": "string",
-                  "enum": ["auto", "brave", "ddgs"]
+                  "enum": ["auto", "native", "brave", "ddgs"]
                 },
                 "brave": {
                   "type": "object",
@@ -478,7 +657,9 @@
     "skills": {
       "default": {
         "autoload": true,
-        "disabled": []
+        "disabled": [],
+        "autoloadDisabled": [],
+        "installReview": false
       },
       "type": "object",
       "properties": {
@@ -492,9 +673,20 @@
           "items": {
             "type": "string"
           }
+        },
+        "autoloadDisabled": {
+          "default": [],
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "installReview": {
+          "default": false,
+          "type": "boolean"
         }
       },
-      "required": ["autoload", "disabled"],
+      "required": ["autoload", "disabled", "autoloadDisabled", "installReview"],
       "additionalProperties": false
     },
     "browser": {
@@ -536,13 +728,15 @@
         "allowedOrigins": {
           "type": "array",
           "items": {
-            "type": "string"
+            "type": "string",
+            "format": "uri"
           }
         },
         "blockedOrigins": {
           "type": "array",
           "items": {
-            "type": "string"
+            "type": "string",
+            "format": "uri"
           }
         },
         "userDataDir": {
@@ -598,6 +792,23 @@
         }
       },
       "required": ["enabled", "command", "args"],
+      "additionalProperties": false
+    },
+    "mo": {
+      "default": {
+        "enabled": true
+      },
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "default": true,
+          "type": "boolean"
+        },
+        "binaryPath": {
+          "type": "string"
+        }
+      },
+      "required": ["enabled"],
       "additionalProperties": false
     },
     "obscura": {
@@ -683,12 +894,23 @@
             "required": ["allowAllUsers", "allowedUsers"],
             "additionalProperties": false
           },
+          "ownerUsers": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "groupPolicy": {
             "type": "object",
             "properties": {
               "requireMention": {
                 "default": true,
                 "type": "boolean"
+              },
+              "moderatorAgentId": {
+                "type": "string",
+                "pattern": "^agt_"
               }
             },
             "required": ["requireMention"],
@@ -744,6 +966,7 @@
           "enabled",
           "options",
           "allowlist",
+          "ownerUsers",
           "mapping",
           "tokenRef",
           "rateLimitPerMin"
@@ -771,6 +994,583 @@
         }
       }
     },
+    "hooks": {
+      "type": "object",
+      "properties": {
+        "SessionStart": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "matcher": {
+                "type": "string"
+              },
+              "hooks": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "command": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "timeoutMs": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "onError": {
+                      "type": "string",
+                      "enum": ["allow", "deny"]
+                    }
+                  },
+                  "required": ["command"],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": ["hooks"],
+            "additionalProperties": false
+          }
+        },
+        "BeforeTurn": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "matcher": {
+                "type": "string"
+              },
+              "hooks": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "command": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "timeoutMs": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "onError": {
+                      "type": "string",
+                      "enum": ["allow", "deny"]
+                    }
+                  },
+                  "required": ["command"],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": ["hooks"],
+            "additionalProperties": false
+          }
+        },
+        "BeforeModel": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "matcher": {
+                "type": "string"
+              },
+              "hooks": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "command": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "timeoutMs": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "onError": {
+                      "type": "string",
+                      "enum": ["allow", "deny"]
+                    }
+                  },
+                  "required": ["command"],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": ["hooks"],
+            "additionalProperties": false
+          }
+        },
+        "BeforeTool": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "matcher": {
+                "type": "string"
+              },
+              "hooks": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "command": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "timeoutMs": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "onError": {
+                      "type": "string",
+                      "enum": ["allow", "deny"]
+                    }
+                  },
+                  "required": ["command"],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": ["hooks"],
+            "additionalProperties": false
+          }
+        },
+        "ApprovalRequest": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "matcher": {
+                "type": "string"
+              },
+              "hooks": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "command": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "timeoutMs": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "onError": {
+                      "type": "string",
+                      "enum": ["allow", "deny"]
+                    }
+                  },
+                  "required": ["command"],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": ["hooks"],
+            "additionalProperties": false
+          }
+        },
+        "AfterTool": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "matcher": {
+                "type": "string"
+              },
+              "hooks": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "command": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "timeoutMs": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "onError": {
+                      "type": "string",
+                      "enum": ["allow", "deny"]
+                    }
+                  },
+                  "required": ["command"],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": ["hooks"],
+            "additionalProperties": false
+          }
+        },
+        "AfterModel": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "matcher": {
+                "type": "string"
+              },
+              "hooks": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "command": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "timeoutMs": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "onError": {
+                      "type": "string",
+                      "enum": ["allow", "deny"]
+                    }
+                  },
+                  "required": ["command"],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": ["hooks"],
+            "additionalProperties": false
+          }
+        },
+        "BeforeCompact": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "matcher": {
+                "type": "string"
+              },
+              "hooks": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "command": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "timeoutMs": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "onError": {
+                      "type": "string",
+                      "enum": ["allow", "deny"]
+                    }
+                  },
+                  "required": ["command"],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": ["hooks"],
+            "additionalProperties": false
+          }
+        },
+        "AfterCompact": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "matcher": {
+                "type": "string"
+              },
+              "hooks": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "command": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "timeoutMs": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "onError": {
+                      "type": "string",
+                      "enum": ["allow", "deny"]
+                    }
+                  },
+                  "required": ["command"],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": ["hooks"],
+            "additionalProperties": false
+          }
+        },
+        "BeforeSubagent": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "matcher": {
+                "type": "string"
+              },
+              "hooks": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "command": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "timeoutMs": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "onError": {
+                      "type": "string",
+                      "enum": ["allow", "deny"]
+                    }
+                  },
+                  "required": ["command"],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": ["hooks"],
+            "additionalProperties": false
+          }
+        },
+        "AfterSubagent": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "matcher": {
+                "type": "string"
+              },
+              "hooks": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "command": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "timeoutMs": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "onError": {
+                      "type": "string",
+                      "enum": ["allow", "deny"]
+                    }
+                  },
+                  "required": ["command"],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": ["hooks"],
+            "additionalProperties": false
+          }
+        },
+        "AfterTurn": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "matcher": {
+                "type": "string"
+              },
+              "hooks": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "command": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "timeoutMs": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "onError": {
+                      "type": "string",
+                      "enum": ["allow", "deny"]
+                    }
+                  },
+                  "required": ["command"],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": ["hooks"],
+            "additionalProperties": false
+          }
+        },
+        "SessionEnd": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "matcher": {
+                "type": "string"
+              },
+              "hooks": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "command": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "timeoutMs": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "onError": {
+                      "type": "string",
+                      "enum": ["allow", "deny"]
+                    }
+                  },
+                  "required": ["command"],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": ["hooks"],
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "openaiCompat": {
+      "default": {
+        "enabled": false,
+        "approval": "local"
+      },
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "default": false,
+          "type": "boolean"
+        },
+        "token": {
+          "type": "string"
+        },
+        "approval": {
+          "default": "local",
+          "type": "string",
+          "enum": ["auto", "local", "deny"]
+        }
+      },
+      "required": ["enabled", "approval"],
+      "additionalProperties": false
+    },
+    "memory": {
+      "default": {
+        "backend": "builtin",
+        "mem0": {}
+      },
+      "type": "object",
+      "properties": {
+        "backend": {
+          "default": "builtin",
+          "type": "string",
+          "enum": ["builtin", "mem0"]
+        },
+        "mem0": {
+          "default": {},
+          "type": "object",
+          "properties": {
+            "llm": {
+              "type": "string"
+            },
+            "embedder": {
+              "type": "string"
+            },
+            "embedDim": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "vectorStore": {
+              "type": "object",
+              "properties": {
+                "provider": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "config": {
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string"
+                  },
+                  "additionalProperties": {}
+                }
+              },
+              "required": ["provider"],
+              "additionalProperties": false
+            },
+            "qdrant": {
+              "type": "object",
+              "properties": {
+                "version": {
+                  "type": "string"
+                },
+                "port": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        "graph": {
+          "type": "object",
+          "properties": {
+            "autoConsolidate": {
+              "type": "boolean"
+            },
+            "intervalMinutes": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "required": ["backend", "mem0"],
+      "additionalProperties": false
+    },
     "$schema": {
       "type": "string"
     }
@@ -782,10 +1582,13 @@
     "skills",
     "browser",
     "computer",
+    "mo",
     "obscura",
     "channels",
     "locale",
-    "atomPins"
+    "atomPins",
+    "openaiCompat",
+    "memory"
   ],
   "additionalProperties": false
 }

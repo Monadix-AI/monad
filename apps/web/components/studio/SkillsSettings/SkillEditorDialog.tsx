@@ -161,7 +161,7 @@ function SkillEditorForm({
       }}
       open
     >
-      <DialogContent className="flex max-h-[86vh] max-w-5xl flex-col overflow-hidden sm:max-w-5xl">
+      <DialogContent className="flex max-h-[86vh] max-w-3xl flex-col overflow-hidden sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>
             {editorTitle ? t('web.skills.editTitle', { name: editorTitle }) : t('web.skills.newTitle')}

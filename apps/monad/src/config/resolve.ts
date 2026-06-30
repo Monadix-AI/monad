@@ -10,7 +10,7 @@ export type CapabilityLookup = (provider: string, modelId: string) => ModelModal
  *   - chat      → the selected profile alias, defaulting to "default"
  *   - vision    → profile.routes.vision ?? default model (only if known to cover image input, else runtime error)
  *   - image     → profile.routes.image ?? default model (only if known to cover image output, else runtime error)
- *   - speech    → profile.routes.speech ?? default model (only if known to cover audio output, else runtime error)
+ *   - speech    → profile.routes.speech ?? default model (only if known to cover speech output, else runtime error)
  *   - embedding → profile.routes.embedding (no fallback; undefined ⇒ semantic search degrades to keyword)
  *  When `lookupCapabilities` is provided the capability-based fallback is enforced; without it the
  *  legacy no-check behavior applies (e.g. callers that have no catalog access).
@@ -69,7 +69,7 @@ export function resolveModelRole(
       const explicit = routeSpec(routes?.speech);
       if (explicit) return explicit;
       if (!lookupCapabilities) return undefined; // legacy: no fallback
-      if (defaultCovers((c) => c.kind === 'speech' || !!c.output?.includes('audio'))) return profileAlias || undefined;
+      if (defaultCovers((c) => c.kind === 'speech' || !!c.output?.includes('speech'))) return profileAlias || undefined;
       throw new Error(
         'model: speech role requires a model that generates audio; ' +
           `the default model "${routes?.chat.modelId}" does not — set a speech model explicitly`
@@ -96,7 +96,7 @@ export function resolveAgentModelRole(
   agentRoles: ModelRoles | undefined,
   role: ModelRole
 ): string | undefined {
-  if (role !== 'chat') {
+  if (role !== 'chat' && role !== 'fast') {
     const override = agentRoles?.[role];
     if (override) return override;
   }

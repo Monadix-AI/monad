@@ -5,9 +5,10 @@
 // daemon's reload watcher on atoms/skills picks the new skills up hot. fetch + consent are injected
 // so the orchestrator is fully testable offline; the real fetcher lives in fetch.ts.
 
+import type { Dirent } from 'node:fs';
 import type { AtomPackSource } from '@/atoms/install/source.ts';
 
-import { mkdir, mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { z } from 'zod';
@@ -83,6 +84,24 @@ async function skillNamesIn(dirs: string[]): Promise<string[]> {
   return Promise.all(dirs.map(async (d) => parseSkillMd(await Bun.file(join(d, 'SKILL.md')).text()).frontmatter.name));
 }
 
+async function findSkillDirsRecursive(root: string): Promise<string[]> {
+  if (await Bun.file(join(root, 'SKILL.md')).exists()) return [root];
+  let entries: Dirent<string>[];
+  try {
+    entries = await readdir(root, { encoding: 'utf8', withFileTypes: true });
+  } catch {
+    return [];
+  }
+
+  const dirs: string[] = [];
+  for (const entry of entries) {
+    if (!entry.isDirectory() && !entry.isSymbolicLink()) continue;
+    if (entry.name === '.git' || entry.name === 'node_modules') continue;
+    dirs.push(...(await findSkillDirsRecursive(join(root, entry.name))));
+  }
+  return dirs;
+}
+
 async function selectSkillDirs(
   source: Extract<AtomPackSource, { kind: 'github' }>,
   dirs: string[]
@@ -132,8 +151,9 @@ export async function installSkill(spec: string, deps: InstallSkillDeps): Promis
     );
 
     const discoveredDirs = await findSkillDirs(stagingDir);
-    if (discoveredDirs.length === 0) throw new SkillInstallError(`no SKILL.md found in ${spec}`);
-    const { dirs, names } = await selectSkillDirs(source, discoveredDirs);
+    const candidateDirs = source.skill ? await findSkillDirsRecursive(stagingDir) : discoveredDirs;
+    if (candidateDirs.length === 0) throw new SkillInstallError(`no SKILL.md found in ${spec}`);
+    const { dirs, names } = await selectSkillDirs(source, candidateDirs);
 
     const warnings: string[] = [];
     if (!/^[0-9a-f]{40}$/i.test(source.ref)) {

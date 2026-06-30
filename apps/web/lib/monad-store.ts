@@ -1,6 +1,6 @@
 'use client';
 
-import { createMonadStore, createMonadTreatyClient } from '@monad/client-rtk';
+import { createMonadStore, createMonadTreatyClient, type MonadApiError } from '@monad/client-rtk';
 
 import { toast } from '@/components/ToastProvider';
 import { REMOTE_TOKEN_KEY, REMOTE_URL_KEY } from './daemon-connections';
@@ -11,6 +11,88 @@ export interface MonadConnectionConfig {
   baseUrl: string;
   token?: string;
   wsBaseUrl?: string;
+}
+
+const ERROR_DETAIL_LIMIT = 3000;
+
+function truncate(value: string, limit = ERROR_DETAIL_LIMIT): string {
+  return value.length > limit ? `${value.slice(0, limit)}\n… truncated` : value;
+}
+
+function compactErrorPath(error: unknown): string | null {
+  if (!error || typeof error !== 'object') return null;
+  const path = (error as { path?: unknown }).path;
+  if (!Array.isArray(path) || path.length === 0) return null;
+  return path.map(String).join('.');
+}
+
+function compactRaw(raw: unknown): unknown {
+  if (raw === null || raw === undefined) return raw;
+  if (typeof raw !== 'object') return truncate(String(raw));
+
+  const record = raw as Record<string, unknown>;
+  const compact: Record<string, unknown> = {};
+  for (const key of ['type', 'on', 'property', 'message', 'error', 'code']) {
+    if (record[key] !== undefined) compact[key] = record[key];
+  }
+  if (Array.isArray(record.errors)) {
+    compact.errorCount = record.errors.length;
+    compact.errorPaths = record.errors.slice(0, 8).map(compactErrorPath).filter(Boolean);
+  }
+
+  if (Object.keys(compact).length > 0) return compact;
+  return truncate(JSON.stringify(raw, null, 2));
+}
+
+function parseErrorMessage(message: string): Record<string, unknown> | null {
+  const trimmed = message.trim();
+  if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) return null;
+  try {
+    const parsed = JSON.parse(trimmed);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : null;
+  } catch {
+    return null;
+  }
+}
+
+function parsedPayloadFromApiError(err: MonadApiError): Record<string, unknown> | null {
+  const fromMessage = parseErrorMessage(err.message);
+  if (fromMessage) return fromMessage;
+
+  if (!err.raw || typeof err.raw !== 'object') return null;
+  const raw = err.raw as Record<string, unknown>;
+  for (const key of ['message', 'error']) {
+    const value = raw[key];
+    if (typeof value === 'string') {
+      const parsed = parseErrorMessage(value);
+      if (parsed) return parsed;
+    }
+  }
+  return raw;
+}
+
+function toastMessageForApiError(err: MonadApiError): string {
+  const source = parsedPayloadFromApiError(err);
+  if (source) {
+    const msg = typeof source.message === 'string' ? source.message : undefined;
+    const property = typeof source.property === 'string' ? source.property : undefined;
+    const type = typeof source.type === 'string' ? source.type : undefined;
+    if (msg && property)
+      return `${type === 'validation' ? 'Validation error' : 'Request failed'}: ${property} — ${msg}`;
+    if (msg) return msg;
+  }
+
+  return truncate(err.message, 220);
+}
+
+function toastDetailForApiError(err: MonadApiError): unknown {
+  const parsed = parsedPayloadFromApiError(err);
+  return {
+    message: toastMessageForApiError(err),
+    ...(err.status !== undefined ? { status: err.status } : {}),
+    ...(err.code ? { code: err.code } : {}),
+    raw: compactRaw(parsed ?? err.raw)
+  };
 }
 
 export function resolveConnection(): MonadConnectionConfig {
@@ -44,7 +126,7 @@ export function createMonadRuntime(conn: MonadConnectionConfig = resolveConnecti
   });
   const store = createMonadStore({
     client,
-    onApiError: (err) => toast.error(err.message, { detail: err })
+    onApiError: (err) => toast.error(toastMessageForApiError(err), { detail: toastDetailForApiError(err) })
   });
 
   return {

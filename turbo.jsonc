@@ -73,6 +73,13 @@
     "test": {
       "dependsOn": ["^build"]
     },
+    "test:unit": {
+      "dependsOn": ["^build"]
+    },
+    "test:unit:loud": {
+      "dependsOn": ["^build"],
+      "cache": false
+    },
     "test:e2e": {
       "dependsOn": ["^build"]
     },

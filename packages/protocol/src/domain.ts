@@ -60,7 +60,7 @@ export type AgentAtoms = z.infer<typeof agentAtomsSchema>;
 // Model routing roles (single source of truth — control.ts + @monad/home re-export).
 // A model profile is a recipe of route slots: `chat` is the required default model, `fast` is the
 // lightweight lane, and the remaining roles are capability-specific overrides.
-export const modelRoleSchema = z.enum(['chat', 'vision', 'image', 'video', 'speech', 'embedding', 'memory']);
+export const modelRoleSchema = z.enum(['chat', 'fast', 'vision', 'image', 'video', 'speech', 'embedding', 'memory']);
 export type ModelRole = z.infer<typeof modelRoleSchema>;
 
 export const modelRouteTargetSchema = z.object({

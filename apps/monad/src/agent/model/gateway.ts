@@ -3,7 +3,7 @@
 // the filesystem. Also free of ai-sdk: the gateway resolves a profile → provider + credential and
 // drives the provider through the ai-sdk-free ModelProvider contract; ai-sdk lives in @monad/atoms.
 
-import type { FallbackTargetView } from '@monad/protocol';
+import type { FallbackTargetView, ModelRole } from '@monad/protocol';
 import type {
   ImageCall,
   ModelCall,
@@ -37,8 +37,11 @@ export type { ProviderCredential, ResolvedProviderConfig } from '@monad/sdk-atom
 
 interface ResolvedProfile {
   alias: string;
-  routes: { chat: { provider: string; modelId: string } };
+  routes: Partial<Record<ModelRole, { provider: string; modelId: string }>> & {
+    chat: { provider: string; modelId: string };
+  };
   params: GenerationParams;
+  routeParams?: Partial<Record<ModelRole, GenerationParams>>;
   fallbacks: FallbackTargetView[];
 }
 
@@ -391,7 +394,10 @@ export class GatewayModelRouter implements ModelRouter {
     // Raw "providerId:modelId" spec — bypasses profiles, no fallbacks.
     const rawSep = spec.indexOf(':');
     if (rawSep > 0) {
-      return [{ provider: spec.slice(0, rawSep), modelId: spec.slice(rawSep + 1), params: req.params ?? {} }];
+      const provider = spec.slice(0, rawSep);
+      const modelId = spec.slice(rawSep + 1);
+      const routeParams = this.paramsForRoute(provider, modelId);
+      return [{ provider, modelId, params: mergeParams(routeParams ?? {}, req.params) }];
     }
 
     const chain: Attempt[] = [];
@@ -419,13 +425,26 @@ export class GatewayModelRouter implements ModelRouter {
     out.push({
       provider: profile.routes.chat.provider,
       modelId: profile.routes.chat.modelId,
-      params: isPrimary ? mergeParams(profile.params, overrideParams) : profile.params
+      params: isPrimary
+        ? mergeParams(mergeParams(profile.params, profile.routeParams?.chat), overrideParams)
+        : mergeParams(profile.params, profile.routeParams?.chat)
     });
 
     for (const fb of profile.fallbacks) {
       if ('profile' in fb) this.expandProfile(fb.profile, undefined, visited, out, false);
       else out.push({ provider: fb.provider, modelId: fb.modelId, params: {} });
     }
+  }
+
+  private paramsForRoute(provider: string, modelId: string): GenerationParams | undefined {
+    for (const profile of this.deps.profiles) {
+      for (const role of Object.keys(profile.routes) as ModelRole[]) {
+        if (role === 'chat') continue;
+        const route = profile.routes[role];
+        if (route?.provider === provider && route.modelId === modelId) return profile.routeParams?.[role];
+      }
+    }
+    return undefined;
   }
 }
 
