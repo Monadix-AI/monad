@@ -6,6 +6,7 @@ import { memo } from 'react';
 
 import { CodeInline } from '@/components/ai-elements/code-block';
 import { Tool, ToolContent, ToolHeader, ToolInput, ToolOutput, type ToolPart } from '@/components/ai-elements/tool';
+import { useToolBackendsSettings } from '@/hooks/use-tool-backends-settings';
 import { useT } from './I18nProvider';
 
 export interface ToolItem {
@@ -88,6 +89,13 @@ interface ShellOutput {
   timedOut: boolean;
 }
 
+interface CodeExecOutput {
+  stdout: string;
+  stderr: string;
+  exitCode: number;
+  backend?: string;
+}
+
 interface DiffDisplay {
   type: 'diff';
   path: string;
@@ -144,6 +152,20 @@ function parseShellOutput(raw: string | undefined): ShellOutput | null {
   if (typeof obj.stdout !== 'string' || typeof obj.stderr !== 'string') return null;
   if (typeof obj.exitCode !== 'number' || typeof obj.timedOut !== 'boolean') return null;
   return { stdout: obj.stdout, stderr: obj.stderr, exitCode: obj.exitCode, timedOut: obj.timedOut };
+}
+
+function parseCodeExecOutput(raw: string | undefined): CodeExecOutput | null {
+  const parsed = parseJsonOutput(raw);
+  if (!parsed || typeof parsed !== 'object') return null;
+  const obj = parsed as Partial<CodeExecOutput>;
+  if (typeof obj.stdout !== 'string' || typeof obj.stderr !== 'string') return null;
+  if (typeof obj.exitCode !== 'number') return null;
+  return {
+    stdout: obj.stdout,
+    stderr: obj.stderr,
+    exitCode: obj.exitCode,
+    backend: typeof obj.backend === 'string' ? obj.backend : undefined
+  };
 }
 
 function parseAnsiText(text: string, baseClassName?: string): AnsiSegment[] {
@@ -327,6 +349,17 @@ function NestedToolView({ step, pendingLabel }: { step: ToolItem; pendingLabel: 
 
 function ToolDetails({ step, pendingLabel }: { step: ToolItem; pendingLabel: string }) {
   const isError = step.status === 'error';
+
+  if (step.tool === 'code_execute') {
+    return (
+      <CodeExecDetails
+        isError={isError}
+        pendingLabel={pendingLabel}
+        step={step}
+      />
+    );
+  }
+
   const isWebSearch = step.tool === 'web_search';
   const searchResults = isWebSearch ? parseWebSearchOutput(step.output) : null;
   const shellOutput = isShellTool(step.tool) ? parseShellOutput(step.output) : null;
@@ -390,6 +423,76 @@ function ToolDetails({ step, pendingLabel }: { step: ToolItem; pendingLabel: str
         />
       )}
     </>
+  );
+}
+
+function backendLabel(backend: string): string {
+  if (backend === 'follow-system') return 'system sandbox';
+  if (backend === 'e2b') return 'E2B';
+  return backend;
+}
+
+function CodeExecDetails({ step, pendingLabel, isError }: { step: ToolItem; pendingLabel: string; isError: boolean }) {
+  const { config } = useToolBackendsSettings();
+  const output = parseCodeExecOutput(step.output);
+  const backend = output?.backend ?? config?.codeExec?.backend ?? 'follow-system';
+  const input = step.input as Record<string, unknown> | null;
+  const language = typeof input?.language === 'string' ? input.language : undefined;
+  const code = typeof input?.code === 'string' ? input.code : undefined;
+  const isHost = input?.target === 'host';
+  const hasStdout = (output?.stdout.length ?? 0) > 0;
+  const hasStderr = (output?.stderr.length ?? 0) > 0;
+
+  return (
+    <div className="flex flex-col gap-2">
+      {code !== undefined && (
+        <div className="overflow-hidden rounded-md border border-border/70 bg-zinc-950 text-zinc-100 shadow-inner">
+          <div className="flex items-center gap-2 border-zinc-800 border-b bg-zinc-900 px-3 py-2 text-[11px] text-zinc-400">
+            <Terminal className="size-3.5" />
+            <span className="font-mono">{language ?? 'code'}</span>
+            <span className="rounded bg-zinc-700/60 px-1.5 py-0.5 font-mono text-[10px]">{backendLabel(backend)}</span>
+            {isHost && (
+              <span className="rounded bg-amber-500/15 px-1.5 py-0.5 font-mono text-[10px] text-amber-300">host</span>
+            )}
+          </div>
+          <pre className="max-h-64 overflow-auto whitespace-pre-wrap p-3 font-mono text-[12px] leading-relaxed">
+            {code}
+          </pre>
+        </div>
+      )}
+      {step.status === 'running' && !step.output ? (
+        <ToolPending label={pendingLabel} />
+      ) : output && !isError ? (
+        <div className="overflow-hidden rounded-md border border-border/70 bg-zinc-950 text-zinc-100 shadow-inner">
+          <div className="flex items-center border-zinc-800 border-b bg-zinc-900 px-3 py-2 text-[11px]">
+            <span
+              className={cn(
+                'ml-auto rounded-full px-2 py-0.5 font-mono',
+                output.exitCode === 0 ? 'bg-emerald-500/15 text-emerald-300' : 'bg-red-500/15 text-red-300'
+              )}
+            >
+              exit {output.exitCode}
+            </span>
+          </div>
+          <pre className="max-h-72 overflow-auto whitespace-pre-wrap p-3 font-mono text-[12px] leading-relaxed">
+            {hasStdout || hasStderr ? (
+              <>
+                {hasStdout && <AnsiText segments={parseAnsiText(output.stdout)} />}
+                {hasStdout && hasStderr && '\n'}
+                {hasStderr && <AnsiText segments={parseAnsiText(output.stderr, 'text-red-300')} />}
+              </>
+            ) : (
+              <span className="text-zinc-500">(no output)</span>
+            )}
+          </pre>
+        </div>
+      ) : (
+        <ToolOutput
+          errorText={isError ? step.output : undefined}
+          output={isError ? undefined : (parsedJsonObject(step.output) ?? step.output)}
+        />
+      )}
+    </div>
   );
 }
 

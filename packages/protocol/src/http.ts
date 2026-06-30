@@ -75,7 +75,7 @@ import {
   importSettingsRequestSchema
 } from './settings-import.ts';
 import { setSkillsSettingsRequestSchema, skillsSettingsResponseSchema } from './skills-settings.ts';
-import { setToolBackendsRequestSchema, toolBackendsResponseSchema } from './tool-backends.ts';
+import { initDockerResponseSchema, setToolBackendsRequestSchema, toolBackendsResponseSchema } from './tool-backends.ts';
 
 export const httpErrorSchema = z.object({
   error: z.string(),
@@ -292,7 +292,8 @@ export const daemonHttpContract = {
   },
   toolBackendsSettings: {
     get: defineHttpEndpoint({ response: { 200: toolBackendsResponseSchema } }),
-    set: defineHttpEndpoint({ body: setToolBackendsRequestSchema, response: { 200: toolBackendsResponseSchema } })
+    set: defineHttpEndpoint({ body: setToolBackendsRequestSchema, response: { 200: toolBackendsResponseSchema } }),
+    initDocker: defineHttpEndpoint({ response: { 200: initDockerResponseSchema } })
   },
   sandboxSettings: {
     get: defineHttpEndpoint({ response: { 200: sandboxSettingsResponseSchema } }),

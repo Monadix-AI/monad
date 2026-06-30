@@ -195,7 +195,11 @@ import { useGetObscuraQuery, useSetObscuraMutation } from './endpoints/settings/
 import { useGetOpenaiCompatQuery, useSetOpenaiCompatMutation } from './endpoints/settings/openai-compat/index.ts';
 import { useGetSandboxQuery, useSetSandboxMutation } from './endpoints/settings/sandbox/index.ts';
 import { useGetSkillsSettingsQuery, useSetSkillsSettingsMutation } from './endpoints/settings/skills/index.ts';
-import { useGetToolBackendsQuery, useSetToolBackendsMutation } from './endpoints/settings/tool-backends/index.ts';
+import {
+  useGetToolBackendsQuery,
+  useInitDockerBackendMutation,
+  useSetToolBackendsMutation
+} from './endpoints/settings/tool-backends/index.ts';
 import { skillsApi, useListSkillsQuery } from './endpoints/skills/index.ts';
 import { useGetHealthQuery } from './endpoints/system/get-health.ts';
 import { usePickDirectoryMutation } from './endpoints/system/pick-directory.ts';
@@ -299,6 +303,7 @@ export {
   useGetStatsQuery,
   useGetToolBackendsQuery,
   useGetUsageQuery,
+  useInitDockerBackendMutation,
   useInitStatusQuery,
   useInputNativeCliAuthMutation,
   useInputNativeCliSessionMutation,

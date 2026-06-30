@@ -16,5 +16,9 @@ export function createToolBackendsSettingsController(handlers: ReturnType<typeof
       body: c.set.body,
       response: c.set.response,
       detail: { summary: 'Update built-in tool backend configuration' }
+    })
+    .post('/tool-backends/init-docker', async () => handlers.toolBackends.initDockerBackend(), {
+      response: c.initDocker.response,
+      detail: { summary: 'Pull the configured Docker image for code execution' }
     });
 }

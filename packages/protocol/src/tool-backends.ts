@@ -23,7 +23,9 @@ export const toolBackendsResponseSchema = z.object({
   }),
   codeExec: z.object({
     backend: z.string(),
-    availableBackends: z.array(z.string())
+    availableBackends: z.array(z.string()),
+    e2bApiKey: z.string().optional(),
+    dockerImage: z.string().optional()
   })
 });
 export type ToolBackendsResponse = z.infer<typeof toolBackendsResponseSchema>;
@@ -43,6 +45,19 @@ export const setToolBackendsRequestSchema = z.object({
       smtp: smtpSettingsSchema.nullable().optional()
     })
     .optional(),
-  codeExec: z.object({ backend: z.enum(['local', 'docker']).optional() }).optional()
+  codeExec: z
+    .object({
+      backend: z.enum(['follow-system', 'docker', 'e2b']).optional(),
+      e2bApiKey: z.string().nullable().optional(),
+      dockerImage: z.string().nullable().optional()
+    })
+    .optional()
 });
 export type SetToolBackendsRequest = z.infer<typeof setToolBackendsRequestSchema>;
+
+export const initDockerResponseSchema = z.object({
+  ok: z.boolean(),
+  image: z.string(),
+  error: z.string().optional()
+});
+export type InitDockerResponse = z.infer<typeof initDockerResponseSchema>;

@@ -2,7 +2,8 @@
 
 import type { SetToolBackendsRequest, SmtpSettings } from '@monad/protocol';
 
-import { Badge, Button, Card, Input, Label, Switch } from '@monad/ui';
+import { useInitDockerBackendMutation } from '@monad/client-rtk';
+import { Badge, Button, Card, Input, Label, ScrollArea, Switch } from '@monad/ui';
 import {
   Brain,
   CalendarClock,
@@ -39,15 +40,20 @@ import { CapabilitySection } from './CapabilitySection';
 // optional ones (email, browser/computer presets) toggle. Tools cannot be added — only MCP can.
 export function ToolsSection() {
   const { config, loading, save, refetch } = useToolBackendsSettings();
+  const [initDocker, { isLoading: dockerInitializing }] = useInitDockerBackendMutation();
   const t = useT();
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string>();
+  const [dockerInitResult, setDockerInitResult] = useState<{ ok: boolean; error?: string } | null>(null);
 
   const [wsProvider, setWsProvider] = useState<'auto' | 'native' | 'brave' | 'ddgs'>('auto');
   const [braveApiKey, setBraveApiKey] = useState('');
 
-  const [codeExecBackend, setCodeExecBackend] = useState<'local' | 'docker'>('local');
-  const [availableCodeExecBackends, setAvailableCodeExecBackends] = useState<string[]>(['local']);
+  type CodeExecBackend = 'follow-system' | 'docker' | 'e2b';
+  const [codeExecBackend, setCodeExecBackend] = useState<CodeExecBackend>('follow-system');
+  const [availableCodeExecBackends, setAvailableCodeExecBackends] = useState<string[]>(['follow-system']);
+  const [e2bApiKey, setE2bApiKey] = useState('');
+  const [dockerImage, setDockerImage] = useState('');
 
   const [emailEnabled, setEmailEnabled] = useState(false);
   const [emailBackend, setEmailBackend] = useState<'auto' | 'smtp' | 'resend'>('auto');
@@ -88,8 +94,11 @@ export function ToolsSection() {
     if (!config) return;
     setWsProvider(config.webSearch.provider);
     setBraveApiKey(config.webSearch.braveApiKey ?? '');
-    setCodeExecBackend((config.codeExec.backend as 'local' | 'docker') ?? 'local');
+    const b = config.codeExec.backend;
+    setCodeExecBackend((b === 'local' ? 'follow-system' : b) as CodeExecBackend);
     setAvailableCodeExecBackends(config.codeExec.availableBackends);
+    setE2bApiKey(config.codeExec.e2bApiKey ?? '');
+    setDockerImage(config.codeExec.dockerImage ?? '');
     const hasEmailConfig = !!(config.email.from || config.email.smtp || config.email.resendApiKey);
     setEmailEnabled(hasEmailConfig);
     applyEmailConfig(config);
@@ -101,7 +110,10 @@ export function ToolsSection() {
       setWsProvider(config.webSearch.provider);
       setBraveApiKey(config.webSearch.braveApiKey ?? '');
     } else if (tool === 'codeExec') {
-      setCodeExecBackend((config.codeExec.backend as 'local' | 'docker') ?? 'local');
+      const b = config.codeExec.backend;
+      setCodeExecBackend((b === 'local' ? 'follow-system' : b) as CodeExecBackend);
+      setE2bApiKey(config.codeExec.e2bApiKey ?? '');
+      setDockerImage(config.codeExec.dockerImage ?? '');
     } else {
       applyEmailConfig(config);
     }
@@ -129,7 +141,11 @@ export function ToolsSection() {
         email: effectiveEmailEnabled
           ? { backend: emailBackend, from: emailFrom || undefined, resendApiKey: resendApiKey || undefined, smtp }
           : { backend: 'auto', from: undefined, resendApiKey: undefined, smtp: null },
-        codeExec: { backend: codeExecBackend }
+        codeExec: {
+          backend: codeExecBackend,
+          e2bApiKey: e2bApiKey || null,
+          dockerImage: dockerImage || null
+        }
       };
       await save(req);
       setOpenTool(null);
@@ -149,7 +165,12 @@ export function ToolsSection() {
           ? t('web.tools.searchProviderNative')
           : t('web.tools.searchProviderAuto');
 
-  const codeExecLabel = codeExecBackend === 'docker' ? t('web.tools.dockerBackend') : t('web.tools.localBackend');
+  const codeExecLabel =
+    codeExecBackend === 'docker'
+      ? t('web.tools.dockerBackend')
+      : codeExecBackend === 'e2b'
+        ? t('web.tools.e2bBackend')
+        : t('web.tools.followSystemBackend');
 
   const emailSummary = !emailEnabled
     ? t('web.tools.emailDisabled')
@@ -356,10 +377,14 @@ export function ToolsSection() {
       {/* Code Execution dialog */}
       <Dialog
         onOpenChange={(o) => {
-          if (!o) {
+          if (o) {
+            refetch();
+            setDockerInitResult(null);
+          } else {
             resetFromConfig('codeExec');
             setOpenTool(null);
             setSaveError(undefined);
+            setDockerInitResult(null);
           }
         }}
         open={openTool === 'codeExec'}
@@ -373,32 +398,97 @@ export function ToolsSection() {
           <div className="flex flex-col gap-4">
             <div className="flex flex-col gap-1.5">
               <Label>{t('web.tools.sandboxLabel')}</Label>
-              <div className="flex gap-2">
-                {(['local', 'docker'] as const).map((b) => {
-                  const available = availableCodeExecBackends.includes(b);
+              <div className="flex flex-wrap gap-2">
+                {(
+                  [
+                    { id: 'follow-system', label: t('web.tools.followSystemBackend') },
+                    { id: 'docker', label: t('web.tools.dockerBackend') },
+                    { id: 'e2b', label: t('web.tools.e2bBackend') }
+                  ] as const
+                ).map(({ id, label }) => {
+                  const available = availableCodeExecBackends.includes(id);
+                  const unavailableHint =
+                    id === 'docker'
+                      ? t('web.tools.dockerInstallHint')
+                      : id === 'e2b'
+                        ? t('web.tools.e2bNotAvailable')
+                        : undefined;
                   return (
                     <button
-                      className={`rounded-md border px-3 py-1.5 text-sm transition-opacity ${codeExecBackend === b ? 'border-ring bg-primary-subtle text-primary' : ''} ${!available ? 'cursor-not-allowed opacity-40' : ''}`}
+                      className={`rounded-md border px-3 py-1.5 text-sm transition-opacity ${codeExecBackend === id ? 'border-ring bg-primary-subtle text-primary' : ''} ${!available ? 'cursor-not-allowed opacity-40' : ''}`}
                       disabled={!available}
-                      key={b}
-                      onClick={() => available && setCodeExecBackend(b)}
-                      title={!available ? t('web.tools.dockerInstallHint') : undefined}
+                      key={id}
+                      onClick={() => available && setCodeExecBackend(id)}
+                      title={!available ? unavailableHint : undefined}
                       type="button"
                     >
-                      {b === 'local' ? t('web.tools.localBackend') : t('web.tools.dockerBackend')}
+                      {label}
                     </button>
                   );
                 })}
               </div>
               <p className="text-muted-foreground text-xs">
-                {codeExecBackend === 'docker' ? t('web.tools.dockerDesc') : t('web.tools.localDesc')}
-                {!availableCodeExecBackends.includes('docker') && (
-                  <span className="ml-1 text-warning">
-                    {t('web.tools.dockerNotRunning', { cmd: 'podman machine start' })}
-                  </span>
-                )}
+                {codeExecBackend === 'docker'
+                  ? t('web.tools.dockerDesc')
+                  : codeExecBackend === 'e2b'
+                    ? t('web.tools.e2bDesc')
+                    : t('web.tools.followSystemDesc')}
               </p>
             </div>
+
+            {codeExecBackend === 'e2b' && (
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="e2b-api-key">{t('web.tools.e2bApiKey')}</Label>
+                <Input
+                  id="e2b-api-key"
+                  onChange={(e) => setE2bApiKey(e.target.value)}
+                  placeholder={t('web.tools.e2bApiKeyPlaceholder')}
+                  value={e2bApiKey}
+                />
+              </div>
+            )}
+
+            {codeExecBackend === 'docker' && (
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="docker-image">{t('web.tools.dockerImageLabel')}</Label>
+                <Input
+                  id="docker-image"
+                  onChange={(e) => setDockerImage(e.target.value)}
+                  placeholder={t('web.tools.dockerImagePlaceholder')}
+                  value={dockerImage}
+                />
+                <div className="flex items-center gap-2">
+                  <Button
+                    disabled={dockerInitializing}
+                    onClick={() => {
+                      setDockerInitResult(null);
+                      void initDocker().then((res) => {
+                        if ('data' in res && res.data) {
+                          setDockerInitResult({ ok: res.data.ok, error: res.data.error });
+                        } else {
+                          const e = 'error' in res ? res.error : undefined;
+                          const msg = e && 'message' in e ? e.message : e ? JSON.stringify(e) : 'Request failed';
+                          setDockerInitResult({ ok: false, error: msg });
+                        }
+                      });
+                    }}
+                    size="sm"
+                    variant="outline"
+                  >
+                    {dockerInitializing ? <Loader2 className="animate-spin" /> : null}
+                    {dockerInitializing ? t('web.tools.dockerInitializing') : t('web.tools.dockerInitBtn')}
+                  </Button>
+                  {dockerInitResult && (
+                    <span
+                      className={`text-xs ${dockerInitResult.ok ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive'}`}
+                    >
+                      {dockerInitResult.ok ? t('web.tools.dockerInitSuccess') : (dockerInitResult.error ?? 'Failed')}
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+
             {saveError && <p className="text-destructive text-xs">{saveError}</p>}
             <div className="flex gap-2">
               <Button

@@ -4,12 +4,12 @@ import {
   CodeExecError,
   codeExecTool,
   configureCodeExec,
-  localBackend,
+  followSystemBackend,
   selectCodeExecBackend
 } from '@/capabilities/tools';
 
-beforeEach(() => configureCodeExec('local'));
-afterEach(() => configureCodeExec('local'));
+beforeEach(() => configureCodeExec('follow-system'));
+afterEach(() => configureCodeExec('follow-system'));
 
 test('code_execute gateKey distinguishes host escape from sandbox runs', () => {
   expect(codeExecTool.gateKey?.({ language: 'bash', code: 'x', target: 'host' })).toBe('target:host');
@@ -17,9 +17,9 @@ test('code_execute gateKey distinguishes host escape from sandbox runs', () => {
   expect(codeExecTool.gateKey?.({ language: 'bash', code: 'x' })).toBe('target:sandbox');
 });
 
-test('localBackend kills the snippet when the signal aborts', async () => {
+test('follow-system backend kills the snippet when the signal aborts', async () => {
   const controller = new AbortController();
-  const p = localBackend.execute({
+  const p = followSystemBackend.execute({
     language: 'bash',
     code: 'sleep 30',
     timeoutMs: 60_000,
@@ -31,8 +31,13 @@ test('localBackend kills the snippet when the signal aborts', async () => {
 
 // ── backend selection via configureCodeExec ───────────────────────────────────
 
-test('selectCodeExecBackend defaults to local', () => {
-  expect(selectCodeExecBackend().name).toBe('local');
+test('selectCodeExecBackend defaults to follow-system', () => {
+  expect(selectCodeExecBackend().name).toBe('follow-system');
+});
+
+test("'local' is a backward-compat alias for 'follow-system'", () => {
+  configureCodeExec('local');
+  expect(selectCodeExecBackend().name).toBe('follow-system');
 });
 
 test('selectCodeExecBackend throws on an unknown backend', () => {
@@ -46,22 +51,22 @@ test('code_execute is high-risk (gated) and schema-validated', () => {
   expect(codeExecTool.inputSchema?.safeParse({ language: 'ruby', code: 'x' }).success).toBe(false);
 });
 
-// ── local backend execution (runs under Bun; CI-only — the sandbox blocks the runtime) ──
+// ── follow-system backend execution (runs under Bun; CI-only — the sandbox blocks the runtime) ──
 
-test('local backend runs javascript and captures stdout + exit code', async () => {
-  const res = await localBackend.execute({ language: 'javascript', code: "console.log('hi from js')" });
+test('follow-system backend runs javascript and captures stdout + exit code', async () => {
+  const res = await followSystemBackend.execute({ language: 'javascript', code: "console.log('hi from js')" });
   expect(res.stdout.trim()).toBe('hi from js');
   expect(res.exitCode).toBe(0);
-  expect(res.backend).toBe('local');
+  expect(res.backend).toBe('follow-system');
 });
 
-test('local backend reports a non-zero exit code', async () => {
-  const res = await localBackend.execute({ language: 'javascript', code: 'process.exit(3)' });
+test('follow-system backend reports a non-zero exit code', async () => {
+  const res = await followSystemBackend.execute({ language: 'javascript', code: 'process.exit(3)' });
   expect(res.exitCode).toBe(3);
 });
 
-test('local backend enforces a timeout', async () => {
+test('follow-system backend enforces a timeout', async () => {
   await expect(
-    localBackend.execute({ language: 'javascript', code: 'setInterval(() => {}, 1e9)', timeoutMs: 150 })
+    followSystemBackend.execute({ language: 'javascript', code: 'setInterval(() => {}, 1e9)', timeoutMs: 150 })
   ).rejects.toBeInstanceOf(CodeExecError);
 });
