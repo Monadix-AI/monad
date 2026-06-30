@@ -29,6 +29,8 @@ import { type MemoryTurn, renderMemoryBlock, sanitizeFact } from '@/agent/index.
 import { fingerprint } from '@/services/memory/consolidation-state.ts';
 import { type BuildMem0Options, buildMem0Client, Mem0Adapter, type Mem0Client } from '@/services/memory/mem0.ts';
 import { factId, MemoryDir, projectKey, scopeOf } from '@/store/db/index.ts';
+// `with { type: 'file' }` embeds reliably in bun's --compile binary (unlike new URL+import.meta.url).
+import consolidatePromptPath from '../../agent/prompts/memory-consolidate-system-prompt.md' with { type: 'file' };
 
 export interface MemoryServiceDeps {
   store: Store;
@@ -71,9 +73,7 @@ const FACTS_CHAR_BUDGET = 2000;
 // background so no file balloons — one scope = one MD file, so we compress it rather than split it.
 const CONSOLIDATE_CHAR_TRIGGER = 2000;
 
-const CONSOLIDATE_SYSTEM = (
-  await Bun.file(new URL('../../agent/prompts/memory-consolidate-system-prompt.md', import.meta.url)).text()
-).trim();
+const CONSOLIDATE_SYSTEM = (await Bun.file(consolidatePromptPath).text()).trim();
 
 // Returns the parsed fact list, or null when the text has no usable JSON array (so the caller can
 // distinguish "model said empty" — [] — from "model output was unparseable" — null).

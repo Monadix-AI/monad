@@ -1,9 +1,10 @@
 import type { ModelResult, ModelRouter } from '@/agent/model/index.ts';
 
+// `with { type: 'file' }` embeds reliably in bun's --compile binary (unlike new URL+import.meta.url).
+import reviewPromptPath from './prompts/skill-install-review-prompt.md' with { type: 'file' };
+
 const MAX_REVIEW_CHARS = 48_000;
-const SKILL_INSTALL_REVIEW_PROMPT = (
-  await Bun.file(new URL('./prompts/skill-install-review-prompt.md', import.meta.url)).text()
-).trim();
+const SKILL_INSTALL_REVIEW_PROMPT = (await Bun.file(reviewPromptPath).text()).trim();
 
 export interface SkillInstallReviewInput {
   files: Map<string, Uint8Array>;

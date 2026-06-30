@@ -222,16 +222,32 @@ export class Store {
     this.db = drizzle(this.sqlite);
     if (opts.path && opts.path !== ':memory:') {
       // Run WAL checkpoints in a Worker so the periodic fsync (which can stall 10-100ms on busy
-      // WAL files) does not block the daemon's main event loop mid-request.
-      this.#checkpointWorker = new Worker(new URL('./workers/wal-checkpoint.ts', import.meta.url));
+      // WAL files) does not block the daemon's main event loop mid-request. The worker is a pure
+      // optimization: if it can't be created or loaded — `new Worker(new URL(…, import.meta.url))`
+      // fails to resolve the embedded script in a bun --compile binary on some platforms (Windows),
+      // surfacing as "Worker has been terminated" — degrade silently. SQLite still auto-checkpoints
+      // the WAL at its page threshold, so correctness is unaffected; we only lose the offloaded fsync.
       const dbPath = opts.path;
-      this.#checkpointTimer = setInterval(
-        () => {
-          this.#checkpointWorker?.postMessage({ type: 'checkpoint', path: dbPath });
-        },
-        5 * 60 * 1000
-      );
-      this.#checkpointTimer.unref();
+      try {
+        const worker = new Worker(new URL('./workers/wal-checkpoint.ts', import.meta.url));
+        worker.addEventListener('error', () => {
+          this.#checkpointWorker = undefined;
+        });
+        this.#checkpointWorker = worker;
+        this.#checkpointTimer = setInterval(
+          () => {
+            try {
+              this.#checkpointWorker?.postMessage({ type: 'checkpoint', path: dbPath });
+            } catch {
+              this.#checkpointWorker = undefined;
+            }
+          },
+          5 * 60 * 1000
+        );
+        this.#checkpointTimer.unref();
+      } catch {
+        this.#checkpointWorker = undefined;
+      }
     }
   }
 

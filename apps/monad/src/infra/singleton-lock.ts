@@ -88,25 +88,36 @@ function resolveLibc(): string {
 // "Local\\" scope = per-logon-session (adequate for a desktop daemon; "Global\\" would
 // require SeCreateGlobalPrivilege and is unnecessary for a single-user tool).
 const MUTEX_NAME = 'Local\\MonadDaemonSingleton';
-const ERROR_ALREADY_EXISTS = 183;
+const WAIT_TIMEOUT = 0x0000_0102;
 
 async function acquireWindowsMutex(t: DaemonTranslate): Promise<void> {
   const { dlopen, FFIType, ptr } = await import('bun:ffi');
   const { symbols } = dlopen('kernel32', {
     // HANDLE CreateMutexA(LPSECURITY_ATTRIBUTES, BOOL bInitialOwner, LPCSTR lpName)
     CreateMutexA: { args: [FFIType.ptr, FFIType.i32, FFIType.ptr], returns: FFIType.ptr },
-    GetLastError: { args: [], returns: FFIType.u32 }
+    // DWORD WaitForSingleObject(HANDLE, DWORD dwMilliseconds)
+    WaitForSingleObject: { args: [FFIType.ptr, FFIType.u32], returns: FFIType.u32 },
+    CloseHandle: { args: [FFIType.ptr], returns: FFIType.i32 }
   });
 
   const name = Buffer.from(`${MUTEX_NAME}\0`, 'ascii');
-  symbols.CreateMutexA(null, 1, ptr(name));
 
-  // ERROR_ALREADY_EXISTS means another process already owns the mutex.
-  // Any other GetLastError value means we successfully created (and own) it.
-  if (symbols.GetLastError() === ERROR_ALREADY_EXISTS) throw new AlreadyRunningError(t);
-
-  // The HANDLE is a kernel object that lives for the process lifetime — no GC concern and
-  // no explicit CloseHandle needed. Windows releases it automatically on any exit.
+  // Acquire ownership of the named mutex — atomic and race-free without reading GetLastError.
+  // Both concurrent starters' CreateMutexA calls resolve (in the kernel) to the SAME mutex object;
+  // WaitForSingleObject(0) then grants ownership to exactly ONE of them (WAIT_OBJECT_0) and returns
+  // WAIT_TIMEOUT to every other. We deliberately avoid the CreateMutexA+ERROR_ALREADY_EXISTS idiom:
+  // bun:ffi can interleave its own Win32 calls between CreateMutexA and a GetLastError read, clobbering
+  // the thread's last-error. WaitForSingleObject reports the result in its return value, so there is no
+  // last-error dependency and no detect-then-create TOCTOU window.
+  const handle = symbols.CreateMutexA(null, 0, ptr(name));
+  if (!handle) throw new Error('monad: CreateMutexA failed'); // FFI failure → degrade to PID probe
+  // WAIT_OBJECT_0 (0) or WAIT_ABANDONED (0x80, prior owner died) both mean we now hold it. Only
+  // WAIT_TIMEOUT means another live process owns it. Hold the HANDLE for our process lifetime — the
+  // kernel releases the mutex on any exit (including force-kill), so no ReleaseMutex/CloseHandle.
+  if (symbols.WaitForSingleObject(handle, 0) === WAIT_TIMEOUT) {
+    symbols.CloseHandle(handle);
+    throw new AlreadyRunningError(t);
+  }
 }
 
 async function acquirePidFallback(t: DaemonTranslate, lockPath: string): Promise<void> {
@@ -114,7 +125,11 @@ async function acquirePidFallback(t: DaemonTranslate, lockPath: string): Promise
     .text()
     .catch(() => '');
   const pid = parseInt(text.trim(), 10);
-  if (!Number.isNaN(pid)) {
+  // Skip our OWN pid: `monad start` writes the spawned daemon's pid into this same file BEFORE the
+  // daemon acquires the lock, so the daemon would otherwise read its own (alive) pid and falsely
+  // refuse to start. Only another live process's pid means a real prior instance. (This fallback is
+  // hit on Windows, where the bun:ffi mutex path can throw and degrade to here.)
+  if (!Number.isNaN(pid) && pid !== process.pid) {
     try {
       process.kill(pid, 0);
       throw new AlreadyRunningError(t);
