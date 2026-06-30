@@ -3,9 +3,9 @@
 import type { WebMessageIdWithoutParams } from '@monad/i18n';
 import type { AcpAgentPresetView, AcpAgentView } from '@monad/protocol';
 
-import { Badge, Button, cn, Input, Label, ScrollArea } from '@monad/ui';
+import { Badge, Button, cn, Input, Label, ScrollArea, Switch } from '@monad/ui';
 import { Check, ChevronDown, ChevronRight, Loader2, Plus, Power, RefreshCw, Save, Trash2, X } from 'lucide-react';
-import { useState } from 'react';
+import { useId, useState } from 'react';
 
 import { I18nTrans, useT } from '@/components/I18nProvider';
 import { providerLogo } from '@/lib/ProviderMeta';
@@ -308,6 +308,7 @@ function AgentForm({
   const [osSandbox, setOsSandbox] = useState(agent?.osSandbox ?? false);
   const [forwardMcp, setForwardMcp] = useState(agent?.forwardMcp ?? false);
   const [busy, setBusy] = useState(false);
+  const forwardMcpId = useId();
 
   const submit = async () => {
     if (!name.trim() || !command.trim()) return;
@@ -406,18 +407,27 @@ function AgentForm({
         </Button>
         <p className="text-[11px] text-muted-foreground">{t('web.acp.osSandboxHint')}</p>
       </div>
-      <div className="flex flex-col gap-1">
-        <Label className="text-xs">{t('web.acp.forwardMcp')}</Label>
-        <Button
-          className="self-start"
-          onClick={() => setForwardMcp((v) => !v)}
-          size="sm"
-          type="button"
-          variant={forwardMcp ? 'secondary' : 'outline'}
-        >
-          <Power /> {forwardMcp ? t('web.acp.forwardMcpOn') : t('web.acp.forwardMcpOff')}
-        </Button>
-        <p className="text-[11px] text-muted-foreground">{t('web.acp.forwardMcpHint')}</p>
+      <div className="flex items-center justify-between gap-3 rounded-md border px-3 py-2.5">
+        <div className="flex min-w-0 flex-col gap-1">
+          <Label
+            className="text-xs"
+            htmlFor={forwardMcpId}
+          >
+            {t('web.acp.forwardMcp')}
+          </Label>
+          <p className="text-[11px] text-muted-foreground">{t('web.acp.forwardMcpHint')}</p>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <span className="text-muted-foreground text-xs">
+            {forwardMcp ? t('web.acp.forwardMcpOn') : t('web.acp.forwardMcpOff')}
+          </span>
+          <Switch
+            aria-label={t('web.acp.forwardMcp')}
+            checked={forwardMcp}
+            id={forwardMcpId}
+            onCheckedChange={setForwardMcp}
+          />
+        </div>
       </div>
 
       <Button
