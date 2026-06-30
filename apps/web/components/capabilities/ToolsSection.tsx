@@ -2,7 +2,7 @@
 
 import type { SetToolBackendsRequest, SmtpSettings } from '@monad/protocol';
 
-import { Badge, Button, Card, Input, Label, ScrollArea, Switch } from '@monad/ui';
+import { Badge, Button, Card, Input, Label, Switch } from '@monad/ui';
 import {
   Brain,
   CalendarClock,
@@ -24,18 +24,20 @@ import {
   SquareCheckBig,
   Terminal
 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import { useT } from '@/components/I18nProvider';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useBrowserPresetSettings } from '@/hooks/use-browser-preset-settings';
 import { useComputerPresetSettings } from '@/hooks/use-computer-preset-settings';
 import { useToolBackendsSettings } from '@/hooks/use-tool-backends-settings';
-import { useAsyncAction } from '../hooks/use-async-action';
-import { useObscuraSettings } from '../hooks/use-obscura-settings';
-import { StudioPanel, StudioPanelHeader } from './studio/StudioPanel';
+import { useAsyncAction } from '../../hooks/use-async-action';
+import { useObscuraSettings } from '../../hooks/use-obscura-settings';
+import { CapabilitySection } from './CapabilitySection';
 
-export function ToolBackendsSettings(_props: { onClose: () => void }) {
+// The Tools half of the Capabilities panel: built-in tool cards. Core tools are always on; the
+// optional ones (email, browser/computer presets) toggle. Tools cannot be added — only MCP can.
+export function ToolsSection() {
   const { config, loading, save, refetch } = useToolBackendsSettings();
   const t = useT();
   const [saving, setSaving] = useState(false);
@@ -63,29 +65,35 @@ export function ToolBackendsSettings(_props: { onClose: () => void }) {
     'webSearch' | 'codeExec' | 'email' | 'browser' | 'computer' | 'obscura' | null
   >(null);
 
+  // Shared SMTP→state hydration used by both the initial load and the dialog cancel/reset path.
+  // useCallback (over stable setters) keeps it out of effect-dependency churn.
+  const applyEmailConfig = useCallback((cfg: NonNullable<typeof config>) => {
+    setEmailBackend(cfg.email.backend);
+    setEmailFrom(cfg.email.from ?? '');
+    setResendApiKey(cfg.email.resendApiKey ?? '');
+    if (cfg.email.smtp) {
+      setSmtpEnabled(true);
+      setSmtpHost(cfg.email.smtp.host);
+      setSmtpPort(cfg.email.smtp.port?.toString() ?? '');
+      setSmtpUser(cfg.email.smtp.user ?? '');
+      setSmtpPass(cfg.email.smtp.pass ?? '');
+      setSmtpSecure(cfg.email.smtp.secure ?? false);
+      setSmtpClientName(cfg.email.smtp.clientName ?? '');
+    } else {
+      setSmtpEnabled(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (!config) return;
     setWsProvider(config.webSearch.provider);
     setBraveApiKey(config.webSearch.braveApiKey ?? '');
     setCodeExecBackend((config.codeExec.backend as 'local' | 'docker') ?? 'local');
     setAvailableCodeExecBackends(config.codeExec.availableBackends);
-    setEmailBackend(config.email.backend);
-    setEmailFrom(config.email.from ?? '');
-    setResendApiKey(config.email.resendApiKey ?? '');
     const hasEmailConfig = !!(config.email.from || config.email.smtp || config.email.resendApiKey);
     setEmailEnabled(hasEmailConfig);
-    if (config.email.smtp) {
-      setSmtpEnabled(true);
-      setSmtpHost(config.email.smtp.host);
-      setSmtpPort(config.email.smtp.port?.toString() ?? '');
-      setSmtpUser(config.email.smtp.user ?? '');
-      setSmtpPass(config.email.smtp.pass ?? '');
-      setSmtpSecure(config.email.smtp.secure ?? false);
-      setSmtpClientName(config.email.smtp.clientName ?? '');
-    } else {
-      setSmtpEnabled(false);
-    }
-  }, [config]);
+    applyEmailConfig(config);
+  }, [config, applyEmailConfig]);
 
   const resetFromConfig = (tool: 'webSearch' | 'codeExec' | 'email') => {
     if (!config) return;
@@ -95,29 +103,17 @@ export function ToolBackendsSettings(_props: { onClose: () => void }) {
     } else if (tool === 'codeExec') {
       setCodeExecBackend((config.codeExec.backend as 'local' | 'docker') ?? 'local');
     } else {
-      setEmailBackend(config.email.backend);
-      setEmailFrom(config.email.from ?? '');
-      setResendApiKey(config.email.resendApiKey ?? '');
-      if (config.email.smtp) {
-        setSmtpEnabled(true);
-        setSmtpHost(config.email.smtp.host);
-        setSmtpPort(config.email.smtp.port?.toString() ?? '');
-        setSmtpUser(config.email.smtp.user ?? '');
-        setSmtpPass(config.email.smtp.pass ?? '');
-        setSmtpSecure(config.email.smtp.secure ?? false);
-        setSmtpClientName(config.email.smtp.clientName ?? '');
-      } else {
-        setSmtpEnabled(false);
-      }
+      applyEmailConfig(config);
     }
   };
 
-  const handleSave = async () => {
+  const handleSave = async (overrides?: { emailEnabled?: boolean }) => {
     setSaving(true);
     setSaveError(undefined);
+    const effectiveEmailEnabled = overrides?.emailEnabled ?? emailEnabled;
     try {
       const smtp: SmtpSettings | null =
-        emailEnabled && smtpEnabled && smtpHost
+        effectiveEmailEnabled && smtpEnabled && smtpHost
           ? {
               host: smtpHost,
               port: smtpPort ? parseInt(smtpPort, 10) : undefined,
@@ -130,7 +126,7 @@ export function ToolBackendsSettings(_props: { onClose: () => void }) {
 
       const req: SetToolBackendsRequest = {
         webSearch: { provider: wsProvider, braveApiKey: braveApiKey || undefined },
-        email: emailEnabled
+        email: effectiveEmailEnabled
           ? { backend: emailBackend, from: emailFrom || undefined, resendApiKey: resendApiKey || undefined, smtp }
           : { backend: 'auto', from: undefined, resendApiKey: undefined, smtp: null },
         codeExec: { backend: codeExecBackend }
@@ -163,11 +159,11 @@ export function ToolBackendsSettings(_props: { onClose: () => void }) {
         ? 'SMTP'
         : emailBackend === 'resend'
           ? 'Resend'
-          : 'Auto';
+          : t('web.tools.searchProviderAuto');
 
   return (
-    <StudioPanel>
-      <StudioPanelHeader
+    <>
+      <CapabilitySection
         actions={
           <Button
             aria-label={t('web.common.refresh')}
@@ -179,18 +175,16 @@ export function ToolBackendsSettings(_props: { onClose: () => void }) {
             <RefreshCw className={loading ? 'animate-spin' : ''} />
           </Button>
         }
-        subtitle={t('web.tools.subtitle')}
-        title={t('web.tools.title')}
-      />
-
-      {loading ? (
-        <div className="flex items-center gap-2 p-5 text-muted-foreground text-sm">
-          <Loader2 className="size-4 animate-spin" />
-          {t('web.common.loading')}
-        </div>
-      ) : (
-        <ScrollArea className="flex-1">
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,18rem),1fr))] gap-3 p-5">
+        subtitle={t('web.studio.capabilitiesToolsSubtitle')}
+        title={t('web.studio.capabilitiesToolsSection')}
+      >
+        {loading ? (
+          <div className="flex items-center gap-2 text-muted-foreground text-sm">
+            <Loader2 className="size-4 animate-spin" />
+            {t('web.common.loading')}
+          </div>
+        ) : (
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,18rem),1fr))] gap-3">
             <ToolCard
               description={t('web.tools.webSearchDesc')}
               icon={Globe}
@@ -213,7 +207,7 @@ export function ToolBackendsSettings(_props: { onClose: () => void }) {
               onConfigure={() => setOpenTool('email')}
               onToggle={(v) => {
                 setEmailEnabled(v);
-                if (!v) void handleSave();
+                if (!v) void handleSave({ emailEnabled: false });
               }}
               optional
               summary={emailSummary}
@@ -270,8 +264,8 @@ export function ToolBackendsSettings(_props: { onClose: () => void }) {
               summary={t('web.tools.alwaysOn')}
             />
           </div>
-        </ScrollArea>
-      )}
+        )}
+      </CapabilitySection>
 
       {/* Web Search dialog */}
       <Dialog
@@ -460,7 +454,7 @@ export function ToolBackendsSettings(_props: { onClose: () => void }) {
                     onClick={() => setEmailBackend(b)}
                     type="button"
                   >
-                    {b === 'auto' ? 'Auto' : b === 'smtp' ? 'SMTP' : 'Resend'}
+                    {b === 'auto' ? t('web.tools.searchProviderAuto') : b === 'smtp' ? 'SMTP' : 'Resend'}
                   </button>
                 ))}
               </div>
@@ -585,24 +579,19 @@ export function ToolBackendsSettings(_props: { onClose: () => void }) {
         </DialogContent>
       </Dialog>
 
-      {/* Browser (Playwright) dialog */}
       <BrowserPresetDialog
         onClose={() => setOpenTool(null)}
         open={openTool === 'browser'}
       />
-
-      {/* Computer Use dialog */}
       <ComputerPresetDialog
         onClose={() => setOpenTool(null)}
         open={openTool === 'computer'}
       />
-
-      {/* Obscura dialog */}
       <ObscuraDialog
         onClose={() => setOpenTool(null)}
         open={openTool === 'obscura'}
       />
-    </StudioPanel>
+    </>
   );
 }
 
@@ -649,11 +638,7 @@ function BrowserPresetDialog({ open, onClose }: { open: boolean; onClose: () => 
     setSaving(true);
     setSaveError(undefined);
     try {
-      await save({
-        headless,
-        vision,
-        engine: engine || null
-      });
+      await save({ headless, vision, engine: engine || null });
       onClose();
     } catch (e) {
       setSaveError(e instanceof Error ? e.message : String(e));

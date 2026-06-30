@@ -10,7 +10,6 @@ import {
   cn,
   Input,
   Label,
-  ScrollArea,
   Select,
   SelectContent,
   SelectItem,
@@ -35,14 +34,13 @@ import { useForm } from 'react-hook-form';
 
 import { I18nTrans, useT } from '@/components/I18nProvider';
 import { mcpServerFormSchema } from '@/lib/form-validation';
-import { useAsyncAction } from '../hooks/use-async-action';
-import { useMcpServerSettings } from '../hooks/use-mcp-server-settings';
-import { StudioPanel, StudioPanelHeader } from './studio/StudioPanel';
+import { useAsyncAction } from '../../hooks/use-async-action';
+import { useMcpServerSettings } from '../../hooks/use-mcp-server-settings';
 
 const envRef = (name: string) => `\${env:${name}}`;
 
-// `args` edited as one space-separated line; `env`/`headers` as KEY=VALUE lines; `autoApproveTools`
-// as one space-separated line. Secret values are `${env:NAME}` refs by convention — shown as-is.
+// `args` edited as one space-separated line; `env`/`headers` as KEY=VALUE lines. Secret values are
+// `${env:NAME}` refs by convention — shown as-is.
 const argsToStr = (args?: string[]): string => (args ?? []).join(' ');
 const strToArgs = (s: string): string[] => s.split(/\s+/).filter(Boolean);
 const mapToStr = (m?: Record<string, string>): string =>
@@ -80,8 +78,7 @@ const MCP_STATUS_LABEL_KEYS: Record<McpStatusState, WebMessageIdWithoutParams> =
   failed: 'web.mcp.state.failed'
 };
 
-// Map a catalog entry to a pre-filled (editable) add-form draft. Env vars become `${env:NAME}` refs
-// the user fills in before saving; nothing connects until the upsert.
+// Map a catalog entry to a pre-filled (editable) add-form draft.
 function catalogToServer(e: McpCatalogEntry): McpServerView {
   const trust = { autoApproveTools: [] as string[] };
   if (e.transport === 'http') {
@@ -91,7 +88,9 @@ function catalogToServer(e: McpCatalogEntry): McpServerView {
   return { name: e.id, transport: 'stdio', command: e.command ?? '', args: e.args, env, enabled: true, trust };
 }
 
-export function McpServersSettings(_props: { onClose: () => void }) {
+// The "built-in" half of the MCP section: system MCP servers declared in config.json, connected at
+// daemon boot. Editable here; changes apply on the next restart.
+export function McpServersSubsection() {
   const t = useT();
   const {
     servers,
@@ -106,7 +105,6 @@ export function McpServersSettings(_props: { onClose: () => void }) {
     refetch
   } = useMcpServerSettings();
   const [adding, setAdding] = useState(false);
-  // A pre-filled draft from the catalog → the add form opens populated (editable, name unlocked).
   const [draft, setDraft] = useState<McpServerView | null>(null);
   const [catalogOpen, setCatalogOpen] = useState(false);
 
@@ -121,47 +119,47 @@ export function McpServersSettings(_props: { onClose: () => void }) {
   };
 
   return (
-    <StudioPanel>
-      <StudioPanelHeader
-        actions={
-          <>
-            <Button
-              aria-label={t('web.refresh')}
-              className="size-7"
-              onClick={refetch}
-              size="icon"
-              variant="ghost"
-            >
-              <RefreshCw className={cn(loading && 'animate-spin')} />
-            </Button>
-            <Button
-              aria-label={t('web.mcp.catalog')}
-              className="size-7"
-              onClick={() => setCatalogOpen((v) => !v)}
-              size="icon"
-              variant={catalogOpen ? 'secondary' : 'ghost'}
-            >
-              <Boxes />
-            </Button>
-            <Button
-              aria-label={t('web.mcp.addServer')}
-              className="size-7"
-              onClick={() => {
-                setDraft(null);
-                setAdding(true);
-              }}
-              size="icon"
-              variant="ghost"
-            >
-              <Plus />
-            </Button>
-          </>
-        }
-        subtitle={t('web.mcp.subtitle')}
-        title={t('web.mcp.title')}
-      />
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center gap-3">
+        <div className="min-w-0">
+          <p className="font-medium text-sm">{t('web.mcp.configuredServers')}</p>
+          <p className="mt-0.5 text-muted-foreground text-xs">{t('web.mcp.configuredServersHint')}</p>
+        </div>
+        <div className="ml-auto flex shrink-0 items-center gap-1">
+          <Button
+            aria-label={t('web.refresh')}
+            className="size-7"
+            onClick={refetch}
+            size="icon"
+            variant="ghost"
+          >
+            <RefreshCw className={cn(loading && 'animate-spin')} />
+          </Button>
+          <Button
+            aria-label={t('web.mcp.catalog')}
+            className="size-7"
+            onClick={() => setCatalogOpen((v) => !v)}
+            size="icon"
+            variant={catalogOpen ? 'secondary' : 'ghost'}
+          >
+            <Boxes />
+          </Button>
+          <Button
+            aria-label={t('web.mcp.addServer')}
+            className="size-7"
+            onClick={() => {
+              setDraft(null);
+              setAdding(true);
+            }}
+            size="icon"
+            variant="ghost"
+          >
+            <Plus />
+          </Button>
+        </div>
+      </div>
 
-      <p className="border-b bg-muted/30 px-5 py-2 text-muted-foreground text-xs">
+      <p className="rounded-md border bg-muted/30 px-3 py-2 text-muted-foreground text-xs">
         <I18nTrans
           components={{ code: <code /> }}
           i18nKey="web.mcp.bootHint"
@@ -169,52 +167,46 @@ export function McpServersSettings(_props: { onClose: () => void }) {
         />
       </p>
 
-      <ScrollArea className="flex-1">
-        <div className="flex flex-col gap-2 p-4">
-          {catalogOpen ? (
-            <McpCatalog
-              catalog={catalog}
-              onAdd={addFromCatalog}
-            />
-          ) : null}
+      {catalogOpen ? (
+        <McpCatalog
+          catalog={catalog}
+          onAdd={addFromCatalog}
+        />
+      ) : null}
 
-          {adding ? (
-            <ServerForm
-              onCancel={closeForm}
-              onSubmit={async (s) => {
-                await saveServer(s);
-                closeForm();
-              }}
-              server={draft ?? undefined}
-              submitLabel={t('web.mcp.create')}
-              title={draft ? t('web.mcp.addFromCatalogTitle', { name: draft.name }) : t('web.mcp.addTitle')}
-            />
-          ) : null}
+      {adding ? (
+        <ServerForm
+          onCancel={closeForm}
+          onSubmit={async (s) => {
+            await saveServer(s);
+            closeForm();
+          }}
+          server={draft ?? undefined}
+          submitLabel={t('web.mcp.create')}
+          title={draft ? t('web.mcp.addFromCatalogTitle', { name: draft.name }) : t('web.mcp.addTitle')}
+        />
+      ) : null}
 
-          {servers.length === 0 && !adding ? (
-            <p className="px-1 py-8 text-center text-muted-foreground text-xs">{t('web.mcp.empty')}</p>
-          ) : null}
+      {servers.length === 0 && !adding ? (
+        <p className="px-1 py-6 text-center text-muted-foreground text-xs">{t('web.mcp.empty')}</p>
+      ) : null}
 
-          {servers.map((s) => (
-            <McpServerCard
-              key={s.name}
-              onAuthorize={() => authorize(s.name)}
-              onReconnect={() => reconnect(s.name)}
-              onRemove={() => removeServer(s.name)}
-              onSave={saveServer}
-              onToggle={(enabled) => setEnabled(s, enabled)}
-              server={s}
-              status={statusByName.get(s.name)}
-            />
-          ))}
-        </div>
-      </ScrollArea>
-    </StudioPanel>
+      {servers.map((s) => (
+        <McpServerCard
+          key={s.name}
+          onAuthorize={() => authorize(s.name)}
+          onReconnect={() => reconnect(s.name)}
+          onRemove={() => removeServer(s.name)}
+          onSave={saveServer}
+          onToggle={(enabled) => setEnabled(s, enabled)}
+          server={s}
+          status={statusByName.get(s.name)}
+        />
+      ))}
+    </div>
   );
 }
 
-// Curated directory of popular MCP servers — click Add to open the add form pre-filled (the user
-// reviews, fills any `${env:NAME}` secret refs, and saves).
 function McpCatalog({ catalog, onAdd }: { catalog: McpCatalogEntry[]; onAdd: (e: McpCatalogEntry) => void }) {
   const t = useT();
   return (
@@ -271,8 +263,6 @@ function McpCatalog({ catalog, onAdd }: { catalog: McpCatalogEntry[]; onAdd: (e:
   );
 }
 
-// Live connection health dot. No status yet (still polling) on an enabled server reads as
-// "connecting"; a disabled server is dimmed; connected/failed map to emerald/destructive.
 function McpStatusDot({ status, enabled }: { status?: McpServerStatus; enabled: boolean }) {
   const t = useT();
   const state = status?.state ?? (enabled ? 'connecting' : 'disabled');
@@ -339,6 +329,12 @@ function McpServerCard({
           variant="secondary"
         >
           {server.transport}
+        </Badge>
+        <Badge
+          className="text-[10px]"
+          variant="outline"
+        >
+          {t('web.mcp.sourceBuiltIn')}
         </Badge>
         <div className="ml-auto flex items-center gap-2 text-muted-foreground text-xs">
           {status?.state === 'connected' ? (
@@ -445,12 +441,10 @@ function ServerForm({
   const t = useT();
   const [name, setName] = useState(server?.name ?? '');
   const [transport, setTransport] = useState<'stdio' | 'http'>(server?.transport ?? 'stdio');
-  // stdio fields
   const [command, setCommand] = useState(server?.transport === 'stdio' ? server.command : '');
   const [args, setArgs] = useState(argsToStr(server?.transport === 'stdio' ? server.args : undefined));
   const [env, setEnv] = useState(mapToStr(server?.transport === 'stdio' ? server.env : undefined));
   const [cwd, setCwd] = useState((server?.transport === 'stdio' ? server.cwd : '') ?? '');
-  // http fields
   const [url, setUrl] = useState(server?.transport === 'http' ? server.url : '');
   const originalAuthMode: AuthMode = server?.transport === 'http' ? server.auth.mode : 'none';
   const [authMode, setAuthMode] = useState<AuthMode>(originalAuthMode);
@@ -468,8 +462,6 @@ function ServerForm({
   });
   const errors = serverForm.formState.errors;
 
-  // OAuth is configured in config.json (it needs the daemon's redirect/device flow); the form keeps
-  // an existing oauth server's auth intact rather than letting a token field clobber it.
   const oauthLocked = originalAuthMode === 'oauth' && authMode === 'oauth';
 
   const buildAuth = (): Extract<McpServerView, { transport: 'http' }>['auth'] => {

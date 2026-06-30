@@ -503,10 +503,10 @@ export function AppShell() {
         () => setStudioUrl('models'),
         () => setStudioUrl('atoms'),
         () => setStudioUrl('skills'),
-        () => setStudioUrl('mcpServers'),
-        () => setStudioUrl('mcpAtoms'),
         () => setStudioUrl('channels'),
-        () => setStudioUrl('acpAgents')
+        () => setStudioUrl('acpAgents'),
+        () => setStudioUrl('nativeCliAgents'),
+        () => setStudioUrl('capabilities')
       ];
     }
 

@@ -12,17 +12,15 @@ import {
   useRemoveMcpAtomMutation,
   useSetMcpAtomEnabledMutation
 } from '@monad/client-rtk';
-import { Badge, Button, cn, Input, Label, ScrollArea } from '@monad/ui';
+import { Badge, Button, cn, Input, Label } from '@monad/ui';
 import { AlertTriangle, Loader2, Plug, Plus, Power, RefreshCw, Search, Trash2, X } from 'lucide-react';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 
 import { useT } from '@/components/I18nProvider';
 import { mcpServerFormSchema } from '@/lib/form-validation';
-import { StudioPanel, StudioPanelHeader } from './studio/StudioPanel';
 
 type Mode = 'command' | 'url' | 'binary';
-type Panel = 'installed' | 'browse';
 type InstallFormValues = {
   name: string;
   transport: 'stdio' | 'http';
@@ -39,79 +37,73 @@ const MODE_LABEL_KEYS: Record<Mode, WebMessageIdWithoutParams> = {
   url: 'web.mcpAtom.mode.url'
 };
 
-// Hot MCP atoms (atoms/mcp/): npx/uvx command, a remote http url, or a prebuilt GitHub-release binary.
-// Mirrors `monad mcp`. The system config.json MCP servers live in McpServersSettings instead.
-export function McpAtomsSettings(_props: { onClose: () => void }) {
+// The "atom-pack" half of the MCP section: hot MCP atoms (atoms/mcp/) — npx/uvx command, a remote
+// http url, or a prebuilt GitHub-release binary. Mirrors `monad mcp`; connect live, no restart.
+export function McpAtomsSubsection() {
   const t = useT();
   const { data, isFetching, refetch } = useListInstalledMcpQuery();
   const [adding, setAdding] = useState(false);
-  const [panel, setPanel] = useState<Panel>('installed');
+  const [browseOpen, setBrowseOpen] = useState(false);
   const servers = data?.servers ?? [];
 
   return (
-    <StudioPanel>
-      <StudioPanelHeader
-        actions={
-          <>
-            {panel === 'installed' ? (
-              <>
-                <Button
-                  aria-label={t('web.refresh')}
-                  className="size-7"
-                  onClick={() => refetch()}
-                  size="icon"
-                  variant="ghost"
-                >
-                  <RefreshCw className={cn(isFetching && 'animate-spin')} />
-                </Button>
-                <Button
-                  aria-label={t('web.skills.add')}
-                  className="size-7"
-                  onClick={() => setAdding(true)}
-                  size="icon"
-                  variant="ghost"
-                >
-                  <Plus />
-                </Button>
-              </>
-            ) : null}
-            <Button
-              className="h-7 gap-1 px-2 text-xs"
-              onClick={() => {
-                setPanel((p) => (p === 'browse' ? 'installed' : 'browse'));
-                setAdding(false);
-              }}
-              size="sm"
-              variant={panel === 'browse' ? 'secondary' : 'ghost'}
-            >
-              <Search className="size-3.5" />
-              {t('web.mcpAtom.browse')}
-            </Button>
-          </>
-        }
-        subtitle={t('web.mcpAtom.subtitle')}
-        title={t('web.mcpAtom.title')}
-      />
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center gap-3">
+        <div className="min-w-0">
+          <p className="font-medium text-sm">{t('web.mcp.atomPackServers')}</p>
+          <p className="mt-0.5 text-muted-foreground text-xs">{t('web.mcp.atomPackServersHint')}</p>
+        </div>
+        <div className="ml-auto flex shrink-0 items-center gap-1">
+          <Button
+            aria-label={t('web.refresh')}
+            className="size-7"
+            onClick={() => refetch()}
+            size="icon"
+            variant="ghost"
+          >
+            <RefreshCw className={cn(isFetching && 'animate-spin')} />
+          </Button>
+          <Button
+            aria-label={t('web.skills.add')}
+            className="size-7"
+            onClick={() => {
+              setAdding((v) => !v);
+              setBrowseOpen(false);
+            }}
+            size="icon"
+            variant={adding ? 'secondary' : 'ghost'}
+          >
+            <Plus />
+          </Button>
+          <Button
+            className="h-7 gap-1 px-2 text-xs"
+            onClick={() => {
+              setBrowseOpen((v) => !v);
+              setAdding(false);
+            }}
+            size="sm"
+            variant={browseOpen ? 'secondary' : 'ghost'}
+          >
+            <Search className="size-3.5" />
+            {t('web.mcpAtom.browse')}
+          </Button>
+        </div>
+      </div>
 
-      {panel === 'browse' ? (
-        <BrowsePanel />
-      ) : (
-        <ScrollArea className="flex-1">
-          <div className="flex flex-col gap-2 p-4">
-            {adding ? <InstallForm onDone={() => setAdding(false)} /> : null}
-            {servers.length === 0 && !adding ? (
-              <p className="px-1 py-8 text-center text-muted-foreground text-xs">{t('web.mcp.empty')}</p>
-            ) : null}
-            {servers.map((s) => (
-              <McpAtomCard
-                key={s.name}
-                server={s}
-              />
-            ))}
-          </div>
-        </ScrollArea>
-      )}
-    </StudioPanel>
+      {browseOpen ? <BrowsePanel /> : null}
+      {adding ? <InstallForm onDone={() => setAdding(false)} /> : null}
+
+      {servers.length === 0 && !adding && !browseOpen ? (
+        <p className="px-1 py-6 text-center text-muted-foreground text-xs">{t('web.mcp.empty')}</p>
+      ) : null}
+
+      {servers.map((s) => (
+        <McpAtomCard
+          key={s.name}
+          server={s}
+        />
+      ))}
+    </div>
   );
 }
 
@@ -191,11 +183,9 @@ function BrowsePanel() {
       return m;
     });
 
-  const install = startInstall;
-
   return (
-    <div className="flex flex-1 flex-col gap-0 overflow-hidden">
-      <div className="flex gap-2 border-b px-4 py-3">
+    <div className="flex flex-col overflow-hidden rounded-md border">
+      <div className="flex gap-2 border-b px-3 py-2.5">
         <Input
           className="flex-1"
           onChange={(e) => setQuery(e.target.value)}
@@ -212,116 +202,114 @@ function BrowsePanel() {
           {isFetching ? <Loader2 className="size-3.5 animate-spin" /> : <Search className="size-3.5" />}
         </Button>
       </div>
-      <ScrollArea className="flex-1">
-        <div className="flex flex-col gap-2 p-4">
-          {isError ? (
-            <p className="px-1 py-8 text-center text-destructive text-xs">{t('web.mcpAtom.browseError')}</p>
-          ) : data && data.entries.length === 0 ? (
-            <p className="px-1 py-8 text-center text-muted-foreground text-xs">{t('web.mcpAtom.browseEmpty')}</p>
-          ) : null}
-          {(data?.entries ?? []).map((e) => {
-            const done = installed.has(e.id);
-            const consent = pending.get(e.id);
-            const isInstalling = installingId === e.id;
-            return (
-              <div
-                className="flex flex-col gap-1.5 rounded-md border p-3"
-                key={e.id}
-              >
-                <div className="flex items-center gap-2">
-                  <Plug className="size-3.5 shrink-0 text-muted-foreground" />
-                  <span className="truncate font-medium text-sm">{e.name}</span>
+      <div className="flex flex-col gap-2 p-3">
+        {isError ? (
+          <p className="px-1 py-6 text-center text-destructive text-xs">{t('web.mcpAtom.browseError')}</p>
+        ) : data && data.entries.length === 0 ? (
+          <p className="px-1 py-6 text-center text-muted-foreground text-xs">{t('web.mcpAtom.browseEmpty')}</p>
+        ) : null}
+        {(data?.entries ?? []).map((e) => {
+          const done = installed.has(e.id);
+          const consent = pending.get(e.id);
+          const isInstalling = installingId === e.id;
+          return (
+            <div
+              className="flex flex-col gap-1.5 rounded-md border p-3"
+              key={e.id}
+            >
+              <div className="flex items-center gap-2">
+                <Plug className="size-3.5 shrink-0 text-muted-foreground" />
+                <span className="truncate font-medium text-sm">{e.name}</span>
+                <Badge
+                  className="text-[10px]"
+                  variant="secondary"
+                >
+                  {e.transport}
+                </Badge>
+                {e.verified ? (
                   <Badge
                     className="text-[10px]"
                     variant="secondary"
                   >
-                    {e.transport}
+                    verified
                   </Badge>
-                  {e.verified ? (
-                    <Badge
-                      className="text-[10px]"
-                      variant="secondary"
-                    >
-                      verified
-                    </Badge>
-                  ) : null}
-                  {!consent ? (
-                    <Button
-                      className="ml-auto h-6 px-2 text-xs"
-                      disabled={done || isInstalling || installingId !== null}
-                      onClick={() => void install(e)}
-                      size="sm"
-                      variant={done ? 'secondary' : 'outline'}
-                    >
-                      {isInstalling ? (
-                        <Loader2 className="size-3 animate-spin" />
-                      ) : done ? (
-                        t('web.mcpAtom.browseInstalled')
-                      ) : (
-                        t('web.mcpAtom.browseInstall')
-                      )}
-                    </Button>
-                  ) : null}
-                </div>
-                {e.description ? <p className="text-muted-foreground text-xs">{e.description}</p> : null}
-                {e.command ? (
-                  <span className="truncate font-mono text-[10px] text-muted-foreground">
-                    {e.command} {(e.args ?? []).join(' ')}
-                  </span>
-                ) : e.url ? (
-                  <span className="truncate font-mono text-[10px] text-muted-foreground">{e.url}</span>
                 ) : null}
-                {e.env.length > 0 ? (
-                  <div className="flex flex-wrap gap-1">
-                    {e.env.map((v) => (
-                      <Badge
-                        className="text-[10px]"
-                        key={v}
-                        variant="outline"
-                      >
-                        {v}
-                      </Badge>
-                    ))}
-                  </div>
-                ) : null}
-                {consent ? (
-                  <div className="flex flex-col gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-2.5 text-xs">
-                    <span className="flex items-center gap-1 font-medium text-warning">
-                      <AlertTriangle className="size-3" />
-                      {t('web.skills.warningsTitle')}
-                    </span>
-                    {consent.warnings.map((w) => (
-                      <span
-                        className="text-muted-foreground"
-                        key={w}
-                      >
-                        {w}
-                      </span>
-                    ))}
-                    <div className="flex gap-2">
-                      <Button
-                        disabled={isInstalling}
-                        onClick={() => void confirmInstall(e.id)}
-                        size="sm"
-                      >
-                        {isInstalling ? <Loader2 className="size-3.5 animate-spin" /> : null}
-                        {t('web.skills.consentConfirm')}
-                      </Button>
-                      <Button
-                        onClick={() => cancelPending(e.id)}
-                        size="sm"
-                        variant="ghost"
-                      >
-                        {t('web.cancel')}
-                      </Button>
-                    </div>
-                  </div>
+                {!consent ? (
+                  <Button
+                    className="ml-auto h-6 px-2 text-xs"
+                    disabled={done || isInstalling || installingId !== null}
+                    onClick={() => void startInstall(e)}
+                    size="sm"
+                    variant={done ? 'secondary' : 'outline'}
+                  >
+                    {isInstalling ? (
+                      <Loader2 className="size-3 animate-spin" />
+                    ) : done ? (
+                      t('web.mcpAtom.browseInstalled')
+                    ) : (
+                      t('web.mcpAtom.browseInstall')
+                    )}
+                  </Button>
                 ) : null}
               </div>
-            );
-          })}
-        </div>
-      </ScrollArea>
+              {e.description ? <p className="text-muted-foreground text-xs">{e.description}</p> : null}
+              {e.command ? (
+                <span className="truncate font-mono text-[10px] text-muted-foreground">
+                  {e.command} {(e.args ?? []).join(' ')}
+                </span>
+              ) : e.url ? (
+                <span className="truncate font-mono text-[10px] text-muted-foreground">{e.url}</span>
+              ) : null}
+              {e.env.length > 0 ? (
+                <div className="flex flex-wrap gap-1">
+                  {e.env.map((v) => (
+                    <Badge
+                      className="text-[10px]"
+                      key={v}
+                      variant="outline"
+                    >
+                      {v}
+                    </Badge>
+                  ))}
+                </div>
+              ) : null}
+              {consent ? (
+                <div className="flex flex-col gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-2.5 text-xs">
+                  <span className="flex items-center gap-1 font-medium text-warning">
+                    <AlertTriangle className="size-3" />
+                    {t('web.skills.warningsTitle')}
+                  </span>
+                  {consent.warnings.map((w) => (
+                    <span
+                      className="text-muted-foreground"
+                      key={w}
+                    >
+                      {w}
+                    </span>
+                  ))}
+                  <div className="flex gap-2">
+                    <Button
+                      disabled={isInstalling}
+                      onClick={() => void confirmInstall(e.id)}
+                      size="sm"
+                    >
+                      {isInstalling ? <Loader2 className="size-3.5 animate-spin" /> : null}
+                      {t('web.skills.consentConfirm')}
+                    </Button>
+                    <Button
+                      onClick={() => cancelPending(e.id)}
+                      size="sm"
+                      variant="ghost"
+                    >
+                      {t('web.cancel')}
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -342,6 +330,12 @@ function McpAtomCard({ server }: { server: InstalledMcpAtom }) {
           variant="secondary"
         >
           {server.transport}
+        </Badge>
+        <Badge
+          className="text-[10px]"
+          variant="outline"
+        >
+          {t('web.mcp.sourceAtomPack')}
         </Badge>
         {!server.enabled ? <span className="text-muted-foreground text-xs">{t('web.mcp.disabled')}</span> : null}
         <span className="truncate font-mono text-[10px] text-muted-foreground">{server.command ?? server.url}</span>

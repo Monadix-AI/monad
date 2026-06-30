@@ -13,6 +13,7 @@ test('studio section route statically exports every known section', () => {
     { section: 'channels' },
     { section: 'acpAgents' },
     { section: 'nativeCliAgents' },
+    { section: 'capabilities' },
     { section: 'tools' },
     { section: 'api' },
     { section: 'approvals' },

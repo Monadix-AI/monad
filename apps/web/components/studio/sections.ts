@@ -10,13 +10,12 @@ import {
   MonitorPlay,
   Network,
   Package,
-  Plug,
   PlugZap,
   Puzzle,
+  Shapes,
   ShieldHalf,
   Users,
-  Workflow,
-  Wrench
+  Workflow
 } from 'lucide-react';
 
 export type StudioSectionId =
@@ -29,6 +28,7 @@ export type StudioSectionId =
   | 'channels'
   | 'acpAgents'
   | 'nativeCliAgents'
+  | 'capabilities'
   | 'tools'
   | 'api'
   | 'approvals'
@@ -50,6 +50,7 @@ export const STUDIO_SECTION_IDS = [
   'channels',
   'acpAgents',
   'nativeCliAgents',
+  'capabilities',
   'tools',
   'api',
   'approvals',
@@ -81,15 +82,13 @@ export const STUDIO_CAPABILITY_SECTIONS: StudioSectionItem[] = [
   { id: 'models', icon: Cpu, i18nKey: 'web.studio.models' },
   { id: 'atoms', icon: Package, i18nKey: 'web.studio.atoms' },
   { id: 'skills', icon: Puzzle, i18nKey: 'web.studio.skills' },
-  { id: 'mcpServers', icon: Plug, i18nKey: 'web.studio.mcpServers' },
-  { id: 'mcpAtoms', icon: Plug, i18nKey: 'web.settings.mcpAtoms' },
   { id: 'channels', icon: MessageSquare, i18nKey: 'web.studio.channels' },
   { id: 'acpAgents', icon: Bot, i18nKey: 'web.studio.acpAgents' },
   { id: 'nativeCliAgents', icon: MonitorPlay, i18nKey: 'web.studio.nativeCliAgents' }
 ];
 
 export const STUDIO_RUNTIME_SECTIONS: StudioSectionItem[] = [
-  { id: 'tools', icon: Wrench, i18nKey: 'web.settings.tools' },
+  { id: 'capabilities', icon: Shapes, i18nKey: 'web.studio.capabilities' },
   { id: 'api', icon: PlugZap, i18nKey: 'web.settings.api' },
   { id: 'approvals', icon: ShieldHalf, i18nKey: 'web.settings.approvals' },
   // Memory folds the former standalone graph + mem0 sections into tabs (deep links /studio/graph and

@@ -23,11 +23,8 @@ const NativeCliAgentsSettings = dynamic(
     ssr: false
   }
 );
-const McpServersSettings = dynamic(() => import('../McpServersSettings').then((m) => m.McpServersSettings), {
-  ssr: false
-});
 const SkillsSettings = dynamic(() => import('../SkillsSettings').then((m) => m.SkillsSettings), { ssr: false });
-const ToolBackendsSettings = dynamic(() => import('../ToolBackendsSettings').then((m) => m.ToolBackendsSettings), {
+const CapabilitiesSettings = dynamic(() => import('../CapabilitiesSettings').then((m) => m.CapabilitiesSettings), {
   ssr: false
 });
 const OpenaiCompatSettings = dynamic(() => import('../OpenaiCompatSettings').then((m) => m.OpenaiCompatSettings), {
@@ -38,9 +35,6 @@ const ApprovalsSettings = dynamic(() => import('../ApprovalsSettings').then((m) 
 });
 const MemorySettings = dynamic(() => import('../MemorySettings').then((m) => m.MemorySettings), { ssr: false });
 const HooksSettings = dynamic(() => import('../HooksSettings').then((m) => m.HooksSettings), { ssr: false });
-const McpAtomsSettings = dynamic(() => import('../McpAtomsSettings').then((m) => m.McpAtomsSettings), {
-  ssr: false
-});
 
 /**
  * Studio: the two-layer model/agent workbench. Capabilities (system-level atomic config, reusing
@@ -62,16 +56,12 @@ export function Studio({ onClose }: { onClose: () => void }) {
         <AtomsSettings onClose={onClose} />
       ) : section === 'skills' ? (
         <SkillsSettings onClose={onClose} />
-      ) : section === 'mcpServers' ? (
-        <McpServersSettings onClose={onClose} />
-      ) : section === 'mcpAtoms' ? (
-        <McpAtomsSettings onClose={onClose} />
+      ) : section === 'capabilities' || section === 'tools' || section === 'mcpServers' || section === 'mcpAtoms' ? (
+        <CapabilitiesSettings onClose={onClose} />
       ) : section === 'channels' ? (
         <ChannelsSettings onClose={onClose} />
       ) : section === 'nativeCliAgents' ? (
         <NativeCliAgentsSettings onClose={onClose} />
-      ) : section === 'tools' ? (
-        <ToolBackendsSettings onClose={onClose} />
       ) : section === 'api' ? (
         <OpenaiCompatSettings onClose={onClose} />
       ) : section === 'approvals' ? (
