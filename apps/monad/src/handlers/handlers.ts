@@ -82,6 +82,7 @@ import { createOpenaiCompatModule } from '@/handlers/settings/openai-compat/inde
 import { createPeerModule } from '@/handlers/settings/peer/index.ts';
 import { createSandboxModule } from '@/handlers/settings/sandbox/index.ts';
 import { createSkillsSettingsModule } from '@/handlers/settings/skills/index.ts';
+import { createStartupSettingsModule } from '@/handlers/settings/startup/index.ts';
 import { createToolBackendsModule } from '@/handlers/settings/tool-backends/index.ts';
 import { resolveNativeCliAgentEnv } from '@/services/native-cli/env.ts';
 import { NativeCliHost } from '@/services/native-cli/host.ts';
@@ -500,6 +501,10 @@ export function createDaemonHandlers(deps: DaemonHandlerDeps) {
     toolBackends: createToolBackendsModule(paths, deps.configBus),
     sandbox: createSandboxModule(paths, deps.configBus),
     developer: createDeveloperModule(paths, deps.configBus),
+    startup: createStartupSettingsModule({
+      monadHome: paths.home,
+      logPath: join(paths.logs, 'startup.log')
+    }),
     hooks: createHooksModule(paths, deps.configBus),
     settingsImport: createSettingsImportModule({
       paths,

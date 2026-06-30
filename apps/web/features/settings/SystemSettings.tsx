@@ -4,9 +4,11 @@ import {
   useDeleteSessionMutation,
   useGetDeveloperQuery,
   useGetHealthQuery,
+  useGetStartupQuery,
   useListSessionsQuery,
   useResetUsageMutation,
-  useSetDeveloperMutation
+  useSetDeveloperMutation,
+  useSetStartupMutation
 } from '@monad/client-rtk';
 import { Badge, Button, ScrollArea, Separator, Switch } from '@monad/ui';
 import {
@@ -16,6 +18,7 @@ import {
   Code2,
   Hand,
   Loader2,
+  Power,
   RefreshCcw,
   RotateCcw,
   Trash2,
@@ -36,6 +39,8 @@ export function SystemSettings({ onClose }: Props) {
   const [resetUsage, { isLoading: isResettingUsage }] = useResetUsageMutation();
   const { data: developer } = useGetDeveloperQuery();
   const [setDeveloper, { isLoading: isSavingDeveloper }] = useSetDeveloperMutation();
+  const { data: startup } = useGetStartupQuery();
+  const [setStartup, { isLoading: isSavingStartup }] = useSetStartupMutation();
   const [usageResetDone, setUsageResetDone] = useState(false);
   const { data: sessionData } = useListSessionsQuery(undefined);
   const sessionIds = Object.keys(sessionData?.sessions?.entities ?? {});
@@ -69,6 +74,10 @@ export function SystemSettings({ onClose }: Props) {
 
   async function handleDeveloperMode(enabled: boolean) {
     await setDeveloper({ developerMode: enabled }).unwrap();
+  }
+
+  async function handleStartup(enabled: boolean) {
+    await setStartup({ enabled }).unwrap();
   }
 
   useEffect(() => {
@@ -159,6 +168,31 @@ export function SystemSettings({ onClose }: Props) {
                 checked={developer?.developerMode === true}
                 disabled={isSavingDeveloper}
                 onCheckedChange={handleDeveloperMode}
+              />
+            </div>
+          </section>
+
+          <Separator />
+
+          <section className="flex flex-col gap-3">
+            <h3 className="font-semibold text-sm">{t('web.settings.system.startup')}</h3>
+            <div className="flex items-center justify-between gap-4 rounded-md border px-3 py-2.5">
+              <div className="flex min-w-0 items-start gap-2">
+                <Power className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
+                <div className="flex min-w-0 flex-col gap-0.5">
+                  <span className="text-sm">{t('web.settings.system.launchAtLogin')}</span>
+                  <span className="text-muted-foreground text-xs">
+                    {startup?.supported === false
+                      ? t('web.settings.system.launchAtLoginUnsupported')
+                      : t('web.settings.system.launchAtLoginDesc')}
+                  </span>
+                </div>
+              </div>
+              <Switch
+                aria-label={t('web.settings.system.launchAtLogin')}
+                checked={startup?.enabled === true}
+                disabled={isSavingStartup || startup?.supported === false}
+                onCheckedChange={handleStartup}
               />
             </div>
           </section>

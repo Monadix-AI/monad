@@ -197,6 +197,7 @@ import { useGetObscuraQuery, useSetObscuraMutation } from './endpoints/settings/
 import { useGetOpenaiCompatQuery, useSetOpenaiCompatMutation } from './endpoints/settings/openai-compat/index.ts';
 import { useGetSandboxQuery, useSetSandboxMutation } from './endpoints/settings/sandbox/index.ts';
 import { useGetSkillsSettingsQuery, useSetSkillsSettingsMutation } from './endpoints/settings/skills/index.ts';
+import { useGetStartupQuery, useSetStartupMutation } from './endpoints/settings/startup/index.ts';
 import {
   useGetToolBackendsQuery,
   useInitDockerBackendMutation,
@@ -304,6 +305,7 @@ export {
   useGetSandboxQuery,
   useGetSkillContentQuery,
   useGetSkillsSettingsQuery,
+  useGetStartupQuery,
   useGetStatsQuery,
   useGetToolBackendsQuery,
   useGetUsageQuery,
@@ -397,6 +399,7 @@ export {
   useSetRolesMutation,
   useSetSandboxMutation,
   useSetSkillsSettingsMutation,
+  useSetStartupMutation,
   useSetToolBackendsMutation,
   useStartNativeCliAgentMutation,
   useStartNativeCliAuthMutation,

@@ -76,6 +76,7 @@ import {
   importSettingsRequestSchema
 } from './settings-import.ts';
 import { setSkillsSettingsRequestSchema, skillsSettingsResponseSchema } from './skills-settings.ts';
+import { setStartupSettingsRequestSchema, startupSettingsSchema } from './startup-settings.ts';
 import { initDockerResponseSchema, setToolBackendsRequestSchema, toolBackendsResponseSchema } from './tool-backends.ts';
 
 export const httpErrorSchema = z.object({
@@ -323,6 +324,13 @@ export const daemonHttpContract = {
     set: defineHttpEndpoint({
       body: setDeveloperSettingsRequestSchema,
       response: { 200: developerSettingsSchema }
+    })
+  },
+  startupSettings: {
+    get: defineHttpEndpoint({ response: { 200: startupSettingsSchema } }),
+    set: defineHttpEndpoint({
+      body: setStartupSettingsRequestSchema,
+      response: { 200: startupSettingsSchema }
     })
   },
   tools: {

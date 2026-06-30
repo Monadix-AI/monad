@@ -41,6 +41,7 @@ export * from './sandbox-settings.ts';
 export * from './settings-import.ts';
 export * from './skills-settings.ts';
 export * from './sse.ts';
+export * from './startup-settings.ts';
 export * from './tool-backends.ts';
 export * from './ui.ts';
 export * from './url.ts';

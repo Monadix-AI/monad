@@ -54,6 +54,7 @@ export const apiSlice = createApi({
     'SandboxSettings',
     'NetworkSettings',
     'DeveloperSettings',
+    'StartupSettings',
     'Hooks',
     'Health'
   ],

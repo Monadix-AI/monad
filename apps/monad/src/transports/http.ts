@@ -58,6 +58,7 @@ import { createOpenaiCompatSettingsController } from '@/transports/http/settings
 import { createPeerSettingsController } from '@/transports/http/settings/peer.ts';
 import { createSandboxSettingsController } from '@/transports/http/settings/sandbox.ts';
 import { createSkillsSettingsController } from '@/transports/http/settings/skills.ts';
+import { createStartupSettingsController } from '@/transports/http/settings/startup.ts';
 import { createToolBackendsSettingsController } from '@/transports/http/settings/tool-backends.ts';
 import { createSkillsController } from '@/transports/http/skills.ts';
 import { createStatsController } from '@/transports/http/stats.ts';
@@ -334,6 +335,7 @@ export function createHttpTransport(
             .use(createToolBackendsSettingsController(handlers))
             .use(createSandboxSettingsController(handlers))
             .use(createDeveloperSettingsController(handlers))
+            .use(createStartupSettingsController(handlers))
             .use(createHooksSettingsController(handlers))
             .use(createSettingsImportController(handlers))
             .use(createLocaleSettingsController(handlers))
