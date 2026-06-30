@@ -11,8 +11,8 @@ import {
 import { parseSlashCommand } from '@monad/protocol';
 import { type Dispatch, type SetStateAction, useCallback, useEffect, useRef, useState } from 'react';
 
-import { type Msg } from '@/components/ChatMessage';
-import { textFromParts, viewItemKey } from '@/components/chat-view-items';
+import { type Msg } from '@/features/session/ChatMessage';
+import { textFromParts, viewItemKey } from '@/features/session/chat-view-items';
 
 type CommandEffect = { type: string; sessionId?: string; compacted?: number };
 

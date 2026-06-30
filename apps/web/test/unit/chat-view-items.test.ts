@@ -2,7 +2,7 @@ import type { UIMessageItem } from '@monad/protocol';
 
 import { expect, test } from 'bun:test';
 
-import { viewItemFromUi } from '../../components/chat-view-items.ts';
+import { viewItemFromUi } from '../../features/session/chat-view-items.ts';
 
 const structuredText = JSON.stringify({
   display: { kind: 'markdown', content: 'Rendered answer' },

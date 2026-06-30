@@ -3,7 +3,7 @@ import type { Agent, ProfileView, ProviderView } from '@monad/protocol';
 import { expect, test } from 'bun:test';
 import { ModelProviderType } from '@monad/protocol';
 
-import { profileDeleteBlock, providerDeleteBlock } from '../../components/studio/ModelSettings/delete-guards';
+import { profileDeleteBlock, providerDeleteBlock } from '../../features/studio/model-settings/delete-guards';
 
 const provider = (id: string): ProviderView => ({ id, label: id, type: ModelProviderType.OpenAICompatible });
 const profile = (alias: string, providerId = 'p'): ProfileView => ({

@@ -2,9 +2,9 @@
 
 import { useInitStatusQuery } from '@monad/client-rtk';
 
-import { InitBackground } from '@/components/InitBackground';
-import { InitWizard } from '@/components/InitWizard';
-import { MonadLoading } from '@/components/MonadLoading';
+import { InitBackground } from '@/features/init/InitBackground';
+import { InitWizard } from '@/features/init/InitWizard';
+import { MonadLoading } from '@/features/init/MonadLoading';
 
 export default function InitPage() {
   const { data, isLoading } = useInitStatusQuery();

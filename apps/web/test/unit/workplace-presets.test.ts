@@ -1,5 +1,5 @@
-import type { ActivityRow, Participant } from '../../components/workplace/types.ts';
-import type { ProjectController } from '../../components/workplace/use-project.ts';
+import type { ActivityRow, Participant } from '../../features/workplace/types.ts';
+import type { ProjectController } from '../../features/workplace/use-project.ts';
 
 import { expect, test } from 'bun:test';
 
@@ -7,10 +7,10 @@ import {
   getProjectExperience,
   listProjectExperiences,
   toProjectExperienceDefinitions
-} from '../../components/workplace/experiences/registry.ts';
-import { toExperienceRuntime } from '../../components/workplace/experiences/to-runtime.ts';
-import { canvasToGraph, HUB_ID } from '../../components/workplace/presets/graph/graph-model.ts';
-import { toCanvas } from '../../components/workplace/presets/to-canvas.ts';
+} from '../../features/workplace/experiences/registry.ts';
+import { toExperienceRuntime } from '../../features/workplace/experiences/to-runtime.ts';
+import { canvasToGraph, HUB_ID } from '../../features/workplace/presets/graph/graph-model.ts';
+import { toCanvas } from '../../features/workplace/presets/to-canvas.ts';
 
 const participant = (
   id: string,

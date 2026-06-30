@@ -7,7 +7,7 @@ import {
   buildCommandMenuItems,
   skillCommandDisplayName,
   skillCommandSource
-} from '../../components/routes/sessions/command-menu.ts';
+} from '../../features/routes/sessions/command-menu.ts';
 
 // The menu only translates source badges; a passthrough keeps assertions on the raw keys.
 const t = ((key: string) => key) as unknown as TFn;
