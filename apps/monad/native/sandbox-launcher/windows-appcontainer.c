@@ -41,6 +41,13 @@
 #define UNICODE
 #define _UNICODE
 #define WIN32_LEAN_AND_MEAN
+/* AppContainer APIs (CreateAppContainerProfile/DeriveAppContainerSidFromAppContainerName/
+ * DeleteAppContainerProfile) are declared in userenv.h only when the target Windows version is
+ * Win8+. Without this, clang (llvm-mingw, used for the arm64 release build) errors on the
+ * implicit declarations and gcc silently builds wrong int-returning stubs. */
+#ifndef _WIN32_WINNT
+#define _WIN32_WINNT 0x0A00 /* Windows 10 */
+#endif
 #include <windows.h>
 #include <sddl.h>
 #include <aclapi.h>
@@ -120,6 +127,56 @@ done:
   return ok;
 }
 
+/*
+ * Remove every ACE for `pSid` from `path`'s DACL — reverts a prior SetPathAce.
+ *
+ * We edit the ACL directly (GetAce + DeleteAce) rather than SetEntriesInAcl(REVOKE_ACCESS):
+ * REVOKE removes the trustee's ALLOW ACEs but leaves its DENY ACEs, so a reverted deny-read
+ * would linger as an orphaned-SID ACE. Deleting matching allow AND deny ACEs covers both, plus
+ * the inherit-only copy SetEntriesInAcl split out. Removing the inheritable ACE on a directory
+ * also clears the copies inherited onto its children.
+ */
+static void RemovePathAce(LPCWSTR path, PSID pSid) {
+  PACL pDacl = NULL;
+  PSECURITY_DESCRIPTOR pSD = NULL;
+  if (GetNamedSecurityInfoW(path, SE_FILE_OBJECT, DACL_SECURITY_INFORMATION,
+                            NULL, NULL, &pDacl, NULL, &pSD) != ERROR_SUCCESS)
+    return;
+
+  if (pDacl) {
+    BOOL changed = FALSE;
+    /* Walk backwards so DeleteAce's index shift doesn't skip the next entry. */
+    for (LONG i = (LONG)pDacl->AceCount - 1; i >= 0; i--) {
+      ACE_HEADER *hdr = NULL;
+      if (!GetAce(pDacl, (DWORD)i, (LPVOID *)&hdr)) continue;
+      PSID aceSid = NULL;
+      if (hdr->AceType == ACCESS_ALLOWED_ACE_TYPE)
+        aceSid = (PSID)&((ACCESS_ALLOWED_ACE *)hdr)->SidStart;
+      else if (hdr->AceType == ACCESS_DENIED_ACE_TYPE)
+        aceSid = (PSID)&((ACCESS_DENIED_ACE *)hdr)->SidStart;
+      else
+        continue;
+      if (EqualSid(aceSid, pSid)) { DeleteAce(pDacl, (DWORD)i); changed = TRUE; }
+    }
+    if (changed)
+      SetNamedSecurityInfoW((LPWSTR)path, SE_FILE_OBJECT, DACL_SECURITY_INFORMATION,
+                            NULL, NULL, pDacl, NULL);
+  }
+
+  if (pSD) LocalFree(pSD);
+}
+
+/*
+ * Revert all grant/deny ACEs applied for `acSid` before launch. Called on every exit path
+ * after the ACEs were set — normal child exit AND the CreateProcessW fallback — so the host's
+ * DACLs are never left mutated by a run (the ACEs are scoped to the child's lifetime).
+ */
+static void RevertAppliedAces(LPCWSTR *writable, int n_writable,
+                              LPCWSTR *denyRead, int n_denyRead, PSID acSid) {
+  for (int j = 0; j < n_writable; j++) RemovePathAce(writable[j], acSid);
+  for (int j = 0; j < n_denyRead; j++) RemovePathAce(denyRead[j], acSid);
+}
+
 /* ── AppContainer profile helpers ────────────────────────────────────────── */
 
 /*
@@ -151,6 +208,14 @@ static void AppendArg(wchar_t *buf, size_t cap, const wchar_t *arg) {
   if (len > 0 && len + 1 < cap) {
     buf[len]     = L' ';
     buf[len + 1] = L'\0';
+  }
+  /* Only quote when needed (arg empty, or contains space/tab/quote). Unconditional quoting
+   * breaks cmd.exe: it mis-parses `"cmd" "/c" "ver"` because a quoted `/c` switch and a quoted
+   * command tail defeat cmd's own quote-stripping. A normal exe's argv parser is unaffected
+   * either way, so conditional quoting is correct for every target and fixes cmd. */
+  if (arg[0] != L'\0' && !wcspbrk(arg, L" \t\"")) {
+    wcsncat(buf, arg, cap - wcslen(buf) - 1);
+    return;
   }
   wcsncat(buf, L"\"", cap - wcslen(buf) - 1);
   const wchar_t *p = arg;
@@ -238,53 +303,43 @@ int wmain(int argc, wchar_t *argv[]) {
   }
 
   /*
-   * Sweep mode: enumerate all AppContainer profiles under
-   *   HKCU\SOFTWARE\Microsoft\Windows NT\CurrentVersion\AppContainer\Mappings
-   * Each subkey is a SID string; the "Moniker" value is the human-readable name.
-   * Delete any profile whose moniker starts with the given prefix (e.g. "monad.").
-   * Used by the daemon on startup to reclaim orphaned profiles from prior crashes.
+   * Sweep mode: delete every AppContainer profile whose moniker starts with `sweepPrefix`
+   * (e.g. "monad."). Used by the daemon on startup to reclaim profiles orphaned by a prior
+   * crash (disposeSession was never called).
    *
-   * Per-user AppContainer profiles created by CreateAppContainerProfile live under
-   * HKEY_CURRENT_USER, not HKEY_LOCAL_MACHINE — sweeping the wrong hive finds nothing.
+   * A profile created by CreateAppContainerProfile materializes as a folder
+   *   %LOCALAPPDATA%\Packages\<moniker>
+   * The registry "AppContainer\Mappings" key is NOT a reliable enumeration source — it is
+   * absent on modern Windows (verified Win11 26200), so we enumerate the Packages folder
+   * directly: the folder name IS the moniker, and DeleteAppContainerProfile(moniker) removes
+   * both the profile and its folder.
    *
-   * Collect matching monikers FIRST, then delete: DeleteAppContainerProfile removes the
-   * SID subkey from Mappings, so deleting mid-enumeration shifts the remaining keys left
-   * and RegEnumKeyExW(idx++) would skip the next profile.
+   * Collect names FIRST, then delete: DeleteAppContainerProfile removes the folder, which
+   * would disrupt an interleaved FindNextFile enumeration.
    */
   if (sweepPrefix) {
-    static const WCHAR MAPPINGS[] =
-      L"SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\AppContainer\\Mappings";
-    HKEY hMap;
-    if (RegOpenKeyExW(HKEY_CURRENT_USER, MAPPINGS, 0, KEY_READ, &hMap) != ERROR_SUCCESS)
-      return 0; /* key absent → nothing to sweep */
+    WCHAR localAppData[MAX_PATH];
+    DWORD n = GetEnvironmentVariableW(L"LOCALAPPDATA", localAppData, _countof(localAppData));
+    if (n == 0 || n >= _countof(localAppData)) return 0;
 
-    DWORD prefixLen = (DWORD)wcslen(sweepPrefix);
-    WCHAR sidStr[256];
+    WCHAR pattern[MAX_PATH];
+    swprintf(pattern, _countof(pattern), L"%ls\\Packages\\%ls*", localAppData, sweepPrefix);
+
+    WIN32_FIND_DATAW fd;
+    HANDLE h = FindFirstFileW(pattern, &fd);
+    if (h == INVALID_HANDLE_VALUE) return 0; /* nothing matches → nothing to sweep */
+
     static WCHAR matches[256][256];
     int n_matches = 0;
-    for (DWORD idx = 0; n_matches < (int)(_countof(matches)); idx++) {
-      DWORD sidLen = (DWORD)(sizeof(sidStr) / sizeof(sidStr[0]));
-      LONG rc = RegEnumKeyExW(hMap, idx, sidStr, &sidLen, NULL, NULL, NULL, NULL);
-      if (rc == ERROR_NO_MORE_ITEMS) break;
-      if (rc != ERROR_SUCCESS) continue;
-
-      HKEY hSid;
-      if (RegOpenKeyExW(hMap, sidStr, 0, KEY_READ, &hSid) != ERROR_SUCCESS) continue;
-
-      WCHAR moniker[256] = {0};
-      DWORD monikerSz = sizeof(moniker);
-      DWORD type = REG_SZ;
-      rc = RegQueryValueExW(hSid, L"Moniker", NULL, &type, (LPBYTE)moniker, &monikerSz);
-      RegCloseKey(hSid);
-      if (rc != ERROR_SUCCESS || type != REG_SZ) continue;
-
-      if (wcsncmp(moniker, sweepPrefix, prefixLen) == 0) {
-        wcsncpy(matches[n_matches], moniker, _countof(matches[0]) - 1);
-        matches[n_matches][_countof(matches[0]) - 1] = L'\0';
-        n_matches++;
-      }
-    }
-    RegCloseKey(hMap);
+    do {
+      if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) continue;
+      if (fd.cFileName[0] == L'.') continue;
+      if (n_matches >= (int)_countof(matches)) break;
+      wcsncpy(matches[n_matches], fd.cFileName, _countof(matches[0]) - 1);
+      matches[n_matches][_countof(matches[0]) - 1] = L'\0';
+      n_matches++;
+    } while (FindNextFileW(h, &fd));
+    FindClose(h);
 
     for (int j = 0; j < n_matches; j++) {
       HRESULT hr = DeleteAppContainerProfile(matches[j]);
@@ -404,7 +459,10 @@ int wmain(int argc, wchar_t *argv[]) {
     warnw(L"CreateProcess %ls: error %lu", argv[cmd_idx], GetLastError());
     if (attrList) { DeleteProcThreadAttributeList(attrList); HeapFree(GetProcessHeap(), 0, attrList); }
     if (hJob)     CloseHandle(hJob);
-    if (acSid)    FreeSid(acSid);
+    if (acSid) {
+      RevertAppliedAces(writable, n_writable, denyRead, n_denyRead, acSid);
+      FreeSid(acSid);
+    }
     if (capNetClient) FreeSid(capNetClient);
     if (capNetSrv)    FreeSid(capNetSrv);
     if (capLoop)      FreeSid(capLoop);
@@ -416,7 +474,6 @@ int wmain(int argc, wchar_t *argv[]) {
   CloseHandle(pi.hThread);
 
   if (attrList) { DeleteProcThreadAttributeList(attrList); HeapFree(GetProcessHeap(), 0, attrList); }
-  if (acSid)    FreeSid(acSid);
   if (capNetClient) FreeSid(capNetClient);
   if (capNetSrv)    FreeSid(capNetSrv);
   if (capLoop)      FreeSid(capLoop);
@@ -426,6 +483,13 @@ int wmain(int argc, wchar_t *argv[]) {
   GetExitCodeProcess(pi.hProcess, &exitCode);
   CloseHandle(pi.hProcess);
   if (hJob) CloseHandle(hJob);
+
+  // Revert the grant/deny ACEs we set before launch — they are scoped to the child's lifetime,
+  // never left on the host. acSid is kept alive until here for exactly this; freed after.
+  if (acSid) {
+    RevertAppliedAces(writable, n_writable, denyRead, n_denyRead, acSid);
+    FreeSid(acSid);
+  }
 
   return (int)exitCode;
 }
