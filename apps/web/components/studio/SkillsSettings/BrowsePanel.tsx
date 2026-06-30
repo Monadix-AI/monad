@@ -116,6 +116,7 @@ function SkillDetailView({
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <div className="flex items-center gap-2 border-b px-4 py-2.5">
         <Button
+          aria-label={t('web.common.back')}
           className="size-7"
           onClick={onBack}
           size="icon"
