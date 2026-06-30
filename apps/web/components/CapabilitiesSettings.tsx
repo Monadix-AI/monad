@@ -18,7 +18,7 @@ export function CapabilitiesSettings(_props: { onClose: () => void }) {
         subtitle={t('web.studio.capabilitiesGroup')}
         title={t('web.studio.capabilities')}
       />
-      <ScrollArea className="flex-1">
+      <ScrollArea className="min-h-0 flex-1">
         <ToolsSection />
         <McpSection />
       </ScrollArea>

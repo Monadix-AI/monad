@@ -450,13 +450,13 @@ Use this editor-created skill in e2e.
   test('opens marketplace by route and syncs market selection into the URL', async ({ page }) => {
     await installSkillsApiMock(page);
 
-    await page.goto('/skills/marketplace/skills.sh');
+    await page.goto('/studio/skills/marketplace/skills.sh');
     await expect(page.getByRole('heading', { name: 'Skills', exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Installed' })).toBeVisible();
     await expect(page.getByRole('tab', { name: 'skills.sh' })).toHaveAttribute('aria-selected', 'true');
 
     await page.getByRole('tab', { name: 'ClawHub' }).click();
-    await expect(page).toHaveURL(/\/skills\/marketplace\/clawhub$/);
+    await expect(page).toHaveURL(/\/studio\/skills\/marketplace\/clawhub$/);
   });
 
   test('covers marketplace, search, sort, detail, consent install, and return to installed list', async ({ page }) => {

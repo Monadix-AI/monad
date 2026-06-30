@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test';
+import { SKILL_MARKETPLACE_SOURCES } from '@monad/protocol';
 
-import { generateStaticParams } from '../../app/(shell)/studio/[section]/page';
+import { generateStaticParams } from '../../app/(shell)/studio/[section]/[[...trail]]/page';
 
 test('studio section route statically exports every known section', () => {
   expect(generateStaticParams()).toEqual([
@@ -23,6 +24,7 @@ test('studio section route statically exports every known section', () => {
     { section: 'hooks' },
     { section: 'mcpAtoms' },
     { section: 'sandbox' },
-    { section: 'usage' }
+    { section: 'usage' },
+    ...SKILL_MARKETPLACE_SOURCES.map((entry) => ({ section: 'skills', trail: ['marketplace', entry.source] }))
   ]);
 });

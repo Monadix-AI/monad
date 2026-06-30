@@ -61,7 +61,6 @@ import { StudioRoute } from './routes/studio/StudioRoute';
 import { WorkspaceRoute } from './routes/workspace/WorkspaceRoute';
 import { SessionSidebar } from './SessionSidebar';
 import { loadSkillContent, SkillEditorDialog } from './SkillsSettings';
-import { isStudioSectionId } from './studio/sections';
 
 const Settings = dynamic(() => import('./Settings').then((m) => m.Settings), { ssr: false });
 
@@ -153,8 +152,7 @@ export function AppShell() {
   const isWorkspaceRoute = isWorkspacePath(pathname);
   const routedStudioSection = studioSectionFromPathname(pathname);
   const studioSection = routedStudioSection ?? 'agents';
-  const legacyStudioSection = searchParams.get('studio');
-  const showStudio = isStudioRoute || legacyStudioSection !== null;
+  const showStudio = isStudioRoute;
   const studioPileActive = isStudioRoute;
   const workspacePileActive = isWorkspaceRoute;
   const [showInspector, setShowInspector] = useState(false);
@@ -393,14 +391,6 @@ export function AppShell() {
   }, [sessions, sessionsLoading, currentId, setSessionUrl]);
 
   useEffect(() => {
-    if (legacyStudioSection) {
-      router.replace(studioPath(isStudioSectionId(legacyStudioSection) ? legacyStudioSection : 'agents'));
-      return;
-    }
-    if (isStudioRoute && routedStudioSection === null) {
-      router.replace(studioPath('agents'));
-      return;
-    }
     if (isStudioRoute) return;
     if (currentId) {
       openMonadChatSurface();
@@ -408,9 +398,6 @@ export function AppShell() {
       return;
     }
     if (routedProjectId) {
-      if (pathname.startsWith('/channels/')) {
-        router.replace(`/workplace/projects/${encodeURIComponent(routedProjectId)}`);
-      }
       openProjectSurface(routedProjectId);
       return;
     }
@@ -422,11 +409,7 @@ export function AppShell() {
     openWorkspaceSurface,
     rememberMonadSession,
     isStudioRoute,
-    legacyStudioSection,
-    routedStudioSection,
-    routedProjectId,
-    pathname,
-    router
+    routedProjectId
   ]);
 
   const selectSession = useCallback(

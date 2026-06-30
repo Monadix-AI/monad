@@ -327,6 +327,8 @@
   "web.mcp.atomPackServersHint": "Installed from a registry, command, or binary. Connect live — no restart.",
   "web.mcp.configuredServers": "Configured servers",
   "web.mcp.configuredServersHint": "Declared in config.json. Apply on the next daemon restart.",
+  "web.mcp.presets": "MCP presets",
+  "web.mcp.presetsHint": "Packaged MCP-backed runtimes and controls. Toggle or configure the preset, then agents see its tools through MCP.",
   "web.mcp.sourceAtomPack": "atom-pack",
   "web.mcp.sourceBuiltIn": "built-in",
   "web.mcp.state.connected": "Connected",

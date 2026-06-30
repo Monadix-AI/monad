@@ -704,6 +704,8 @@
   "web.mcp.atomPackServersHint": "从 registry、命令或二进制安装。实时连接，无需重启。",
   "web.mcp.configuredServers": "已配置的服务器",
   "web.mcp.configuredServersHint": "在 config.json 中声明，下次守护进程重启后生效。",
+  "web.mcp.presets": "MCP 预设",
+  "web.mcp.presetsHint": "打包好的 MCP 运行时和控制能力。启用或配置预设后，agent 会通过 MCP 使用这些工具。",
   "web.mcp.sourceAtomPack": "atom-pack",
   "web.mcp.sourceBuiltIn": "内置",
   "web.mcp.state.connected": "已连接",
