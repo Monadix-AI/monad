@@ -4,7 +4,7 @@ import {
   filterModelsForPicker,
   modelMatchesQuery,
   renderHighlightedModelText
-} from '../../components/studio/ModelSettings/model-picker';
+} from '../../features/studio/model-settings/model-picker';
 
 test('model search matches query segments across model label and id', () => {
   const model = { id: 'google/gemini-3.5-pro', label: 'Gemini 3.5 Pro' };

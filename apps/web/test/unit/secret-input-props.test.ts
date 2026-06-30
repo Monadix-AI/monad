@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { SECRET_INPUT_PASSWORD_MANAGER_PROPS } from '../../components/studio/ModelSettings/secret-input-props';
+import { SECRET_INPUT_PASSWORD_MANAGER_PROPS } from '../../lib/secret-input-props';
 
 test('secret inputs opt out of login password managers', () => {
   expect(SECRET_INPUT_PASSWORD_MANAGER_PROPS).toEqual({
@@ -18,11 +18,11 @@ test('secret inputs opt out of login password managers', () => {
 test('settings secret fields avoid native password inputs', () => {
   const root = join(import.meta.dir, '../..');
   const files = [
-    'components/ChannelsSettings.tsx',
-    'components/ConnectionSettings.tsx',
-    'components/InitWizard.tsx',
-    'components/OpenaiCompatSettings.tsx',
-    'components/studio/ModelSettings/providers.tsx'
+    'features/settings/ChannelsSettings.tsx',
+    'features/init/InitWizard.tsx',
+    'features/settings/ConnectionSettings.tsx',
+    'features/settings/OpenaiCompatSettings.tsx',
+    'features/studio/model-settings/providers.tsx'
   ];
 
   const nativePasswordInput = /\btype\s*=\s*(?:"password"|'password'|\{\s*["']password["']\s*\})/;

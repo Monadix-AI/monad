@@ -1,6 +1,6 @@
 import { SKILL_MARKETPLACE_SOURCES } from '@monad/protocol';
 
-import { STUDIO_SECTION_IDS } from '@/components/studio/sections';
+import { STUDIO_SECTION_IDS } from '@/features/studio/sections';
 
 export function generateStaticParams() {
   return [

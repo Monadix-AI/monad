@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 
-import { humanReadableCliOutput } from '../../components/workplace/cli-output.ts';
+import { humanReadableCliOutput } from '../../features/workplace/cli/cli-output.ts';
 
 test('humanReadableCliOutput strips terminal color and cursor controls', () => {
   expect(

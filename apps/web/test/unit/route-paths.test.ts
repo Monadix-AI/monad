@@ -11,7 +11,7 @@ import {
   skillMarketplaceSourceFromPathname,
   studioPath,
   studioSectionFromPathname
-} from '../../components/routes/route-paths.ts';
+} from '../../features/routes/route-paths.ts';
 
 describe('canonical web route helpers', () => {
   test('keeps Studio sections and their internal breadcrumbs under /studio', () => {

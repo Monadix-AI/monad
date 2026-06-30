@@ -7,7 +7,7 @@ import {
   filterDebugTraceEntries,
   formatDebugTimestamp,
   logRecordToDebugTrace
-} from '../../components/workplace/ProjectDebugConsole';
+} from '../../features/workplace/debug/ProjectDebugConsole';
 
 const entry = (overrides: Partial<ProjectDebugTraceEntry>): ProjectDebugTraceEntry => ({
   id: overrides.id ?? `dbg_${overrides.label ?? 'x'}`,

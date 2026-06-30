@@ -1,9 +1,9 @@
 import type { NativeCliSessionView } from '@monad/protocol';
-import type { Message } from '../../components/workplace/types.ts';
+import type { Message } from '../../features/workplace/types.ts';
 
 import { expect, test } from 'bun:test';
 
-import { __workplaceProjectMessageTest } from '../../components/workplace/use-project.ts';
+import { __workplaceProjectMessageTest } from '../../features/workplace/use-project.ts';
 
 const nativeCliSession = (overrides: Partial<NativeCliSessionView> = {}): NativeCliSessionView => ({
   id: 'ncli_01KWGEMINI000000000000000',

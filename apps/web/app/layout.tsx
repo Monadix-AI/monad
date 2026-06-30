@@ -15,7 +15,7 @@ export const metadata: Metadata = {
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   let devToolsWidget: React.ReactNode = null;
   if (process.env.NODE_ENV !== 'production') {
-    const { DevToolsWidget } = await import('@/components/DevToolsWidget');
+    const { DevToolsWidget } = await import('@/features/shell/DevToolsWidget');
     devToolsWidget = <DevToolsWidget />;
   }
 
