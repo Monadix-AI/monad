@@ -825,6 +825,7 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
     mcpReconnect,
     rediscoverAtomPacks: () => Promise.all([rediscoverAtomPacks(), reloadSkills()]).then(() => {}),
     getAtomConflicts: () => atomConflicts,
+    getWorkspaceExperiences: () => [...registry.workspaceExperiences.values()],
     reindexEmbeddings: () => {
       const cleared = store.clearEmbeddings();
       logger.info(`monad: cleared ${cleared} embedding(s) for re-index with the current embedding model`);

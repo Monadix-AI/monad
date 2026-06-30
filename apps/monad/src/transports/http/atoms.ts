@@ -16,6 +16,7 @@ import {
   listAtomPacksResponseSchema,
   listInstalledMcpAtomsResponseSchema,
   listInstalledSkillsResponseSchema,
+  listWorkspaceExperiencesResponseSchema,
   okResponseSchema,
   setAtomPinRequestSchema,
   updateSkillContentRequestSchema,
@@ -28,6 +29,7 @@ import { z } from 'zod';
 
 // HTTP-only surface: contract declared inline; reusable wire schemas come from @monad/protocol.
 const packParams = z.object({ name: z.string() });
+const assetParams = z.object({ name: z.string(), '*': z.string() });
 const uploadQuery = z.object({ filename: z.string().min(1), overwrite: z.string().optional() });
 const skillContentQuery = z.object({ file: z.string().optional(), id: z.string().optional() });
 
@@ -40,6 +42,32 @@ export function createAtomsController(handlers: ReturnType<typeof createDaemonHa
         description: 'Returns installed atom packs with declared atom kinds.'
       }
     })
+    .get('/atoms/workspace-experiences', async () => handlers.atoms.listWorkspaceExperiences(), {
+      response: { 200: listWorkspaceExperiencesResponseSchema },
+      detail: {
+        summary: 'List workspace experiences',
+        description: 'Returns workspace-experience atoms registered by loaded atom packs.'
+      }
+    })
+    .get(
+      '/atoms/:name/assets/*',
+      async ({ params }) => {
+        const asset = await handlers.atoms.getAtomPackAsset({ name: params.name, path: params['*'] });
+        return new Response(asset.bytes, {
+          headers: {
+            ...(asset.contentType ? { 'content-type': asset.contentType } : {}),
+            'cache-control': 'no-store'
+          }
+        });
+      },
+      {
+        params: assetParams,
+        detail: {
+          summary: 'Serve an atom pack asset',
+          description: 'Serves browser-loadable assets from an installed atom pack without path traversal.'
+        }
+      }
+    )
     .post('/atoms/install', async ({ body }) => handlers.atoms.installAtomPack(body), {
       body: installAtomPackRequestSchema,
       response: { 200: installAtomPackResponseSchema },

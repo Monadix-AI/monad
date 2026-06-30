@@ -4,7 +4,7 @@
 import type { MonadPaths } from '@monad/home';
 
 import { afterEach, beforeEach, expect, test } from 'bun:test';
-import { chmod, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createDefaultConfig, loadAll, saveAll } from '@monad/home';
@@ -108,6 +108,54 @@ test('install with consent → list → remove', async () => {
 
   expect(await mod.removeAtomPack({ name: 'wa' })).toEqual({ ok: true });
   expect(await installed()).toEqual([]);
+});
+
+test('listWorkspaceExperiences returns the daemon registry snapshot', async () => {
+  const m = createAtomPacksModule({
+    paths: paths(),
+    getWorkspaceExperiences: () => [
+      {
+        atomPackId: 'canvas-pack',
+        id: 'canvas',
+        title: 'Canvas',
+        entry: { type: 'web-component', module: './dist/canvas.js', tagName: 'monad-canvas' }
+      },
+      {
+        atomPackId: 'bad-pack',
+        id: 'bad',
+        title: 'Bad',
+        entry: { type: 'web-component', module: '../bad.js', tagName: 'bad-canvas' }
+      }
+    ]
+  });
+
+  expect(await m.listWorkspaceExperiences()).toEqual({
+    experiences: [
+      {
+        id: 'canvas',
+        title: 'Canvas',
+        entry: {
+          type: 'web-component',
+          module: '/v1/atoms/canvas-pack/assets/dist/canvas.js',
+          tagName: 'monad-canvas'
+        }
+      }
+    ]
+  });
+});
+
+test('getAtomPackAsset serves pack files without allowing path traversal', async () => {
+  await mod.installAtomPack({ source: `local:${stagedDir}`, consent: true });
+
+  const asset = await mod.getAtomPackAsset({ name: 'wa', path: 'dist/atom-pack.js' });
+  expect(asset.contentType).toBe('text/javascript');
+  expect(new TextDecoder().decode(asset.bytes)).toContain('registerChannel');
+
+  await expect(mod.getAtomPackAsset({ name: 'wa', path: '../atom-pack.json' })).rejects.toThrow();
+
+  await writeFile(join(base, 'secret.txt'), 'secret');
+  await symlink(join(base, 'secret.txt'), join(atomsDir, 'packs', 'wa', 'dist', 'secret-link.js'));
+  await expect(mod.getAtomPackAsset({ name: 'wa', path: 'dist/secret-link.js' })).rejects.toThrow();
 });
 
 test('removeAtomPack rejects path-traversal names', async () => {

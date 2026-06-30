@@ -18,6 +18,7 @@ export { listAtomPacksApi, useListAtomPacksQuery } from './list-atom-packs.ts';
 export { useListInstalledMcpQuery } from './list-installed-mcp.ts';
 // Standalone skill atoms (atoms/skills/) — install from github, list, remove, check updates.
 export { useListInstalledSkillsQuery } from './list-installed-skills.ts';
+export { useListWorkspaceExperiencesQuery } from './list-workspace-experiences.ts';
 export { useRemoveAtomPackMutation } from './remove-atom-pack.ts';
 export { useRemoveMcpAtomMutation } from './remove-mcp-atom.ts';
 export { useRemoveSkillMutation } from './remove-skill.ts';

@@ -7,6 +7,7 @@ import type { Connector } from './connector.ts';
 import type { HookDefinition } from './hook.ts';
 import type { ModelProvider } from './model.ts';
 import type { SandboxLauncher } from './sandbox.ts';
+import type { WorkspaceExperienceDefinition } from './workspace-experience.ts';
 
 export * from './channel.ts';
 export * from './command.ts';
@@ -17,6 +18,7 @@ export * from './message-type.ts';
 export * from './model.ts';
 export * from './provider-usage.ts';
 export * from './sandbox.ts';
+export * from './workspace-experience.ts';
 
 /** The SDK contract version. Atom packs are built against it; the host checks compatibility at load.
  *  Single source of truth — bump when the atom pack/channel contract changes incompatibly. */
@@ -59,6 +61,7 @@ export interface AtomPackContext {
   /** Register an OS/remote sandbox launcher. The daemon collects launchers into a registry and
    *  selects one per platform at boot — the LLM-facing tools (code_execute/…) are unchanged. */
   registerSandbox(launcher: SandboxLauncher): void;
+  registerWorkspaceExperience(experience: WorkspaceExperienceDefinition): void;
   log: AtomPackLog;
 }
 
@@ -81,6 +84,8 @@ export interface ManifestAtomPackHost {
   registerHook?(hook: HookDefinition): void;
   /** Optional: hosts that don't support sandbox launchers omit it; a sandbox registration then throws. */
   registerSandbox?(launcher: SandboxLauncher): void;
+  /** Optional: hosts that don't support workspace experiences omit it; registration then throws. */
+  registerWorkspaceExperience?(experience: WorkspaceExperienceDefinition): void;
   log?: AtomPackLog;
 }
 
@@ -95,6 +100,7 @@ export function defineAtomPack(spec: {
   providers?: ModelProvider[];
   hooks?: HookDefinition[];
   sandboxes?: SandboxLauncher[];
+  workspaceExperiences?: WorkspaceExperienceDefinition[];
 }): ManifestAtomPack {
   return {
     manifest: spec.manifest,
@@ -106,6 +112,7 @@ export function defineAtomPack(spec: {
       for (const provider of spec.providers ?? []) ctx.registerProvider(provider);
       for (const hook of spec.hooks ?? []) ctx.registerHook(hook);
       for (const sandbox of spec.sandboxes ?? []) ctx.registerSandbox(sandbox);
+      for (const experience of spec.workspaceExperiences ?? []) ctx.registerWorkspaceExperience(experience);
     }
   };
 }
@@ -160,6 +167,13 @@ export async function loadManifestAtomPack(
       gate('sandbox');
       if (!host.registerSandbox) throw new Error(`host does not accept sandbox launchers (atom pack "${name}")`);
       host.registerSandbox(s);
+    },
+    registerWorkspaceExperience: (experience) => {
+      gate('workspace-experience');
+      if (!host.registerWorkspaceExperience) {
+        throw new Error(`host does not accept workspace experiences (atom pack "${name}")`);
+      }
+      host.registerWorkspaceExperience(experience);
     },
     log: host.log ?? (() => {})
   };

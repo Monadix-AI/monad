@@ -1,9 +1,9 @@
 import type { ListAtomKindsResponse } from '@monad/protocol';
 
 import { clientOf, runTreaty } from '../../endpoint-helpers.ts';
-import { removeAtomPackApi } from './remove-atom-pack.ts';
+import { listWorkspaceExperiencesApi } from './list-workspace-experiences.ts';
 
-export const listAtomKindsApi = removeAtomPackApi.injectEndpoints({
+export const listAtomKindsApi = listWorkspaceExperiencesApi.injectEndpoints({
   overrideExisting: true,
   endpoints: (builder) => ({
     // The atom kinds registered system-wide (tool/connector/channel/command/message-type/locale/provider).

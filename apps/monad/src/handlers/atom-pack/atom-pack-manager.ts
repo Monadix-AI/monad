@@ -18,20 +18,23 @@ import type {
   ListAtomPacksResponse,
   ListInstalledMcpAtomsResponse,
   ListInstalledSkillsResponse,
+  ListWorkspaceExperiencesResponse,
   OkResponse,
   SetAtomPinRequest,
   SkillUpdate,
   UpdateSkillContentRequest,
   ValidateSkillsRequest,
-  ValidateSkillsResponse
+  ValidateSkillsResponse,
+  WorkspaceExperienceDefinition
 } from '@monad/protocol';
 import type { AtomConflict } from '@/atoms/resolve.ts';
+import type { RegisteredWorkspaceExperience } from '@/handlers/atom-pack/atom-pack-registry.ts';
 import type { ConfigBus } from '@/services/config-bus.ts';
 import type { ModelService } from '@/services/model.ts';
 
 import { Buffer } from 'node:buffer';
-import { mkdir, readdir, rm, stat } from 'node:fs/promises';
-import { basename, join, normalize, relative, sep } from 'node:path';
+import { lstat, mkdir, readdir, realpath, rm, stat } from 'node:fs/promises';
+import { basename, isAbsolute, join, normalize, relative, sep } from 'node:path';
 import { DEFAULT_SAMPLE_PROVIDER_ID, loadAll, loadAuth, saveProfile } from '@monad/home';
 import { DEFAULT_SKILL_MARKETPLACE_SOURCE, parseAtomPackManifest, skillMarketplaceSourceMeta } from '@monad/protocol';
 
@@ -76,6 +79,8 @@ export interface AtomPacksDeps {
   onChanged?: () => Promise<void>;
   /** Bare-name collisions from the last load sweep — surfaced read-only for the conflict UI. */
   getConflicts?: () => AtomConflict[];
+  /** Runtime-registered workspace experiences from loaded atom packs. */
+  getWorkspaceExperiences?: () => RegisteredWorkspaceExperience[];
   configBus?: ConfigBus;
   modelService?: ModelService;
 }
@@ -245,6 +250,97 @@ export function createAtomPacksModule(deps: AtomPacksDeps) {
       throw new HandlerError('invalid', `invalid skill file path: ${file}`);
     }
     return fullPath;
+  }
+
+  async function resolveAtomPackAssetPath(name: string, file: string): Promise<string> {
+    if (!SAFE_NAME.test(name)) throw new HandlerError('invalid', `invalid atom pack name: ${name}`);
+    const normalized = normalize(file);
+    if (
+      !normalized ||
+      normalized === '.' ||
+      normalized.startsWith('..') ||
+      normalized.startsWith('/') ||
+      /^[a-z]:[\\/]/i.test(normalized) ||
+      file.split(/[\\/]/).includes('..') ||
+      normalized.split(/[\\/]/).includes('..')
+    ) {
+      throw new HandlerError('invalid', `invalid atom pack asset path: ${file}`);
+    }
+    const packDir = join(dir, name);
+    const fullPath = join(packDir, normalized);
+    const rel = relative(packDir, fullPath);
+    if (!rel || rel.startsWith('..') || rel.includes(`..${sep}`) || isAbsolute(rel)) {
+      throw new HandlerError('invalid', `invalid atom pack asset path: ${file}`);
+    }
+    let realPackDir: string;
+    let realAssetPath: string;
+    let linkInfo: Awaited<ReturnType<typeof lstat>>;
+    try {
+      [realPackDir, realAssetPath, linkInfo] = await Promise.all([
+        realpath(packDir),
+        realpath(fullPath),
+        lstat(fullPath)
+      ]);
+    } catch {
+      throw new HandlerError('not_found', `atom pack asset not found: ${name}/${file}`);
+    }
+    if (linkInfo.isSymbolicLink()) throw new HandlerError('not_found', `atom pack asset not found: ${name}/${file}`);
+    const realRel = relative(realPackDir, realAssetPath);
+    if (!realRel || realRel.startsWith('..') || realRel.includes(`..${sep}`) || isAbsolute(realRel)) {
+      throw new HandlerError('invalid', `invalid atom pack asset path: ${file}`);
+    }
+    return realAssetPath;
+  }
+
+  function isPackRelativeModule(module: string): boolean {
+    try {
+      const url = new URL(module);
+      return url.protocol !== 'http:' && url.protocol !== 'https:';
+    } catch {
+      return !module.startsWith('/');
+    }
+  }
+
+  function normalizePackRelativeModule(module: string): string | null {
+    const normalized = normalize(module);
+    if (
+      !normalized ||
+      normalized === '.' ||
+      normalized.startsWith('..') ||
+      normalized.startsWith('/') ||
+      /^[a-z]:[\\/]/i.test(normalized) ||
+      module.split(/[\\/]/).includes('..') ||
+      normalized.split(/[\\/]/).includes('..')
+    ) {
+      return null;
+    }
+    return normalized.replaceAll('\\', '/');
+  }
+
+  function atomPackAssetUrl(atomPackId: string, module: string): string | null {
+    const normalized = normalizePackRelativeModule(module);
+    if (!normalized) return null;
+    return `/v1/atoms/${encodeURIComponent(atomPackId)}/assets/${normalized
+      .split('/')
+      .filter(Boolean)
+      .map(encodeURIComponent)
+      .join('/')}`;
+  }
+
+  function toPublicWorkspaceExperience(
+    experience: RegisteredWorkspaceExperience
+  ): WorkspaceExperienceDefinition | null {
+    const { atomPackId: _atomPackId, ...publicExperience } = experience;
+    if (!experience.atomPackId || !isPackRelativeModule(experience.entry.module)) return publicExperience;
+    const module = atomPackAssetUrl(experience.atomPackId, experience.entry.module);
+    if (!module) return null;
+    return {
+      ...publicExperience,
+      entry: {
+        ...publicExperience.entry,
+        module
+      }
+    };
   }
 
   async function listSkillContentFiles(dir: string): Promise<GetSkillContentResponse['files']> {
@@ -434,6 +530,28 @@ export function createAtomPacksModule(deps: AtomPacksDeps) {
         }
       }
       return { atomPacks, conflicts };
+    },
+
+    async listWorkspaceExperiences(): Promise<ListWorkspaceExperiencesResponse> {
+      return {
+        experiences: (deps.getWorkspaceExperiences?.() ?? []).flatMap((experience) => {
+          const publicExperience = toPublicWorkspaceExperience(experience);
+          return publicExperience ? [publicExperience] : [];
+        })
+      };
+    },
+
+    async getAtomPackAsset({ name, path }: { name: string; path: string }): Promise<{
+      bytes: Uint8Array;
+      contentType?: string;
+    }> {
+      const fullPath = await resolveAtomPackAssetPath(name, path);
+      const info = await stat(fullPath).catch(() => null);
+      if (!info?.isFile()) throw new HandlerError('not_found', `atom pack asset not found: ${name}/${path}`);
+      return {
+        bytes: new Uint8Array(await Bun.file(fullPath).arrayBuffer()),
+        contentType: contentTypeForSkillFile(path)
+      };
     },
 
     async installAtomPack({ source, consent }: InstallAtomPackRequest): Promise<InstallAtomPackResponse> {

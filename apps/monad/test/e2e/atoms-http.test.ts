@@ -5,7 +5,7 @@ import type { MonadPaths } from '@monad/home';
 import type { ModelRouter } from '@/agent/index.ts';
 
 import { afterEach, beforeEach, expect, test } from 'bun:test';
-import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initMonadHome, loadAuth, loadConfig, saveAll, saveAuth } from '@monad/home';
@@ -141,6 +141,23 @@ test('install with consent → list → remove over HTTP', async () => {
   expect(del.status).toBe(200);
   const afterDelete = ((await (await fetch(`${base}/v1/atoms`)).json()) as { atomPacks: { name: string }[] }).atomPacks;
   expect(afterDelete.some((pack) => pack.name === 'wa')).toBe(false);
+});
+
+test('GET /v1/atoms/:name/assets/* serves installed pack assets and rejects traversal', async () => {
+  await post('/v1/atoms/install', { source: `local:${stagedDir}`, consent: true });
+
+  const asset = await fetch(`${base}/v1/atoms/wa/assets/dist/atom-pack.js`);
+  expect(asset.status).toBe(200);
+  expect(asset.headers.get('content-type')).toContain('text/javascript');
+  expect(await asset.text()).toContain('registerChannel');
+
+  const traversal = await fetch(`${base}/v1/atoms/wa/assets/${encodeURIComponent('../atom-pack.json')}`);
+  expect(traversal.status).toBeGreaterThanOrEqual(400);
+
+  await writeFile(join(dir, 'secret.txt'), 'secret');
+  await symlink(join(dir, 'secret.txt'), join(paths.packs, 'wa', 'dist', 'secret-link.js'));
+  const symlinked = await fetch(`${base}/v1/atoms/wa/assets/dist/secret-link.js`);
+  expect(symlinked.status).toBeGreaterThanOrEqual(400);
 });
 
 test('disable sets enabled:false; enable restores it', async () => {
