@@ -92,7 +92,7 @@ export const localBackend: CodeExecBackend = {
         { cwd, stdout: 'pipe', stderr: 'pipe' },
         // Confine writes to the session roots plus the snippet temp dir; net comes from config.
         // When sandboxRoots is undefined (unrestricted) the policy applies no write confinement.
-        buildSandboxPolicy(req.sandboxRoots, [dir]),
+        buildSandboxPolicy(req.sandboxRoots, [dir], req.sessionId),
         { confine: req.confine ?? true, sessionId: req.sessionId }
       );
       let timedOut = false;

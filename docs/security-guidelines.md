@@ -194,12 +194,20 @@ Update it when a hardening item lands or is deliberately deferred.
 - `net: 'unrestricted'` leaves egress fully open (default for development convenience).
 - Tests: `apps/monad/test/unit/tools/seatbelt.macos.test.ts` (live kernel, 7 cases).
 
-**Linux — Landlock + seccomp-bpf** (`native/sandbox-launcher/main.c`)
+**Linux — bwrap (preferred, when installed) + Landlock + seccomp-bpf** (`packages/atoms/src/sandbox/bwrap.ts`, `native/sandbox-launcher/main.c`)
+
+bwrap launcher — auto-selected when `bwrap` is on PATH:
+- Uses bubblewrap's mount namespace to build an isolated FS view from scratch.
+- `readDenyRoots` enforced in two ways: (1) confined mode (`writableRoots` set) — credential dirs are simply never bound, so they're absent in the child's namespace; (2) unrestricted-write mode — `--tmpfs` is overlaid over each deny path, making it an empty, inaccessible mount.
+- `net:'none'` via `--unshare-net` (kernel network namespace, no IP sockets for child).
+- `--die-with-parent` + `--unshare-pid` prevent orphaned processes and `/proc` leaks.
+
+Landlock + seccomp-bpf launcher — fallback when `bwrap` is absent:
 - Landlock FS ruleset: write-access rights only (`WRITE_V1`–`WRITE_V3` per kernel ABI),
   applied to each `writableRoot`. Reads remain unrestricted. ABI version auto-detected.
-  **`readDenyRoots` is NOT enforced on Linux** — Landlock is an additive read *allowlist* and
+  **`readDenyRoots` is NOT enforced in this path** — Landlock is an additive read *allowlist* and
   can't express "deny `~/.ssh`, allow everything else"; the launcher deliberately doesn't forward
-  it (would require a deny-default mount namespace; see Known gaps). Credential read-deny is macOS-only.
+  it (would require a deny-default mount namespace). Credential read-deny requires bwrap (see Known gaps).
 - seccomp-bpf filter (after Landlock): `SECCOMP_RET_ERRNO | EPERM` on:
   - `ptrace` — prevents same-UID process injection
   - `process_vm_writev` — cross-process memory write (ptrace-equivalent without CAP)
@@ -216,17 +224,25 @@ Update it when a hardening item lands or is deliberately deferred.
 - Tests: `apps/monad/test/unit/tools/sandbox-escape.linux.test.ts` (12 cases, incl. net:'none' AF_INET/
   AF_INET6 block + default-net allow). Verified live against kernel 6.17 (Landlock + seccomp).
 
-**Windows — Low Integrity token + Job Object** (`native/sandbox-launcher/windows.c`)
-- Child process launched under a Low Integrity token (`S-1-16-4096`) via
-  `DuplicateTokenEx` + `SetTokenInformation(TokenIntegrityLevel)`.
-  Prevents writes to Medium/High integrity objects (user profile, registry, monad config, SSH keys).
-- Each `writableRoot` is granted `GENERIC_ALL` at Low IL before launch via `SetEntriesInAclW`
-  so the child can write into its session sandbox root.
-- Job Object with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` ensures the child process tree is
-  terminated if the launcher exits unexpectedly.
-- Low IL chosen over AppContainer: same write-restriction goal, but AppContainer requires
-  `CreateProcessW` + profile lifecycle management + per-path `SID_ALL_APP_PACKAGES` ACEs.
-  AppContainer upgrade path is tracked in §8 Known gaps.
+**Windows — AppContainer (preferred) + Low Integrity fallback** (`native/sandbox-launcher/windows-appcontainer.c`, `windows.c`)
+
+AppContainer launcher (`monad-sandbox-appcontainer.exe`) — selected when present:
+- Child launched via `CreateProcessW` + `PROC_THREAD_ATTRIBUTE_SECURITY_CAPABILITIES`
+  into a named AppContainer profile (`monad.<sessionId>`).
+- Writable roots granted `GENERIC_ALL` for the AppContainer SID before launch.
+- Credential dirs (`~/.ssh`, `~/.aws`, `~/.gnupg`, etc.) get an explicit `DENY_ACCESS` ACE for
+  the AppContainer SID — **closes the credential read-deny gap** that Low IL cannot address.
+- `net:'none'` enforced by omitting all network capability SIDs: the child has no IP sockets.
+- `net:'filtered'`/`'unrestricted'` grant `INTERNET_CLIENT + INTERNET_CLIENT_SERVER + LOCAL_LOOP`
+  capabilities; domain filtering relies on the egress proxy (app-layer, same as Linux filtered).
+- Profile lifecycle: per-session profiles created lazily, cleaned up via `disposeSession()`.
+  Falls back to unconfined `CreateProcessW` when `CreateAppContainerProfile` is unavailable
+  (pre-Win8 or restricted CI environments) so old environments stay functional.
+- Job Object with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` in both launchers.
+
+Low Integrity launcher (`monad-sandbox-launcher.exe`) — fallback when AppContainer binary absent:
+- Child launched under a Low IL token (`S-1-16-4096`) via `DuplicateTokenEx` + `SetTokenInformation`.
+- Prevents writes to Medium/High integrity objects. Does NOT enforce readDeny or net isolation.
 
 **Egress filtering (all platforms)**
 - `apps/monad/src/services/egress-proxy.ts`: raw-TCP local proxy on `127.0.0.1:0`
@@ -247,12 +263,13 @@ Update it when a hardening item lands or is deliberately deferred.
 | Gap | Severity | Notes |
 |---|---|---|
 | **Linux: `net:'filtered'` is app-layer (raw-socket bypass)** | Medium | `net:'none'` is now kernel-enforced on Linux (seccomp blocks `socket(AF_INET/6)`), so a no-egress sandbox is real. But `net:'filtered'` still relies on the application-layer proxy + `HTTP(S)_PROXY` env: seccomp can't allow-by-destination-IP, so a child that opens a raw socket instead of honouring the proxy bypasses the domain allowlist. True per-destination filtering requires a network namespace (`unshare --net` + veth/nft, needs `bubblewrap` or unprivileged userns). Deferred — `net:'none'` covers the "no exfil at all" case; filtered covers the cooperative-tooling case (package managers / curl). |
-| **Windows: no OS-level net isolation** | Medium | Low IL does not restrict outbound sockets; both `net:'none'` and `net:'filtered'` are advisory (proxy env only). True fix needs WFP filters or AppContainer network capability removal. Deferred. |
-| **Linux/Windows: credential read-deny not enforced** | Medium | `readDenyRoots` (`~/.ssh`, `~/.aws`, `~/.gnupg`, gcloud, the monad credential dir) is enforced only on macOS (Seatbelt last-match `deny file-read*`). Landlock is an additive read-allowlist (can't carve out a deny under allow-all), and Windows Low IL doesn't block reads of Medium-IL files. A prompt-injected `code_execute`/`shell_exec` on Linux/Windows can still read-then-exfiltrate credentials (exfil itself is blocked under `net:'none'`, but not under `filtered`/`unrestricted`). The daemon logs this gap at boot (`bootstrap/sandbox.ts`). True fix: a mount namespace bind-mounting an inaccessible dir over each deny root (unprivileged userns, bubblewrap-style) on Linux; deny ACEs / AppContainer on Windows. Deferred — needs per-platform testing infra. |
+| **Linux: `net:'filtered'` is app-layer (raw-socket bypass)** | Medium | `net:'none'` is kernel-enforced on Linux (seccomp blocks `socket(AF_INET/6)`). `net:'filtered'` relies on the proxy + `HTTP(S)_PROXY` env; a raw socket from the child bypasses it. True per-destination filtering requires a network namespace (bubblewrap/userns). Deferred. |
+| **Windows: `net:'filtered'` is app-layer** | Low | AppContainer `net:'none'` removes all network capabilities — enforced. `net:'filtered'` still grants `INTERNET_CLIENT` capabilities and relies on the egress proxy; a raw socket can bypass the domain allowlist. WFP filters would close this. Deferred. |
+| **Linux: credential read-deny enforced only when bwrap is installed** | Low | When `bwrap` is on PATH, `bwrapLauncher` is auto-selected and enforces readDeny: confined mode simply never binds credential dirs; unrestricted-write mode overlays `--tmpfs` over each deny path. When `bwrap` is absent (minimal containers, Alpine) `landlockLauncher` takes over; Landlock is an additive read-allowlist and cannot express deny — the gap remains on those hosts and the daemon warns at boot. |
 | **macOS: seccomp equivalent missing** | Low | Seatbelt's `(deny process*)` can prevent fork/exec but there is no fine-grained syscall filter equivalent to seccomp-bpf. Filed as future work if cross-process injection becomes a realistic threat model item. |
-| **Windows: AppContainer not implemented** | Medium | Current Windows launcher uses Low Integrity + Job Object (same tier as IE Protected Mode / Chrome renderer). AppContainer would add a stronger capability-based sandbox: isolated token, separate filesystem namespace (`AC\<name>`), network isolation via `SID_ALL_APP_PACKAGES`-gated ACLs, and no access to parent-session objects by default. Deferred because: (1) AppContainer requires `CreateProcessW` with `PROC_THREAD_ATTRIBUTE_SECURITY_CAPABILITIES` — can't self-restrict+exec like Low IL; (2) profile lifecycle (`CreateAppContainerProfile` / `DeleteAppContainerProfile`) must be managed; (3) each `writableRoot` needs an `SID_ALL_APP_PACKAGES` ACE added before launch; (4) implementation complexity is 3–5× higher for a marginal improvement over Low IL in the local-daemon threat model. Implement if requirements expand to: multi-user hosts, untrusted-plugin isolation, or compliance mandates. |
-| **Windows: Low IL doesn't protect named pipes / COM** | Low | Low Integrity label is not checked by all IPC mechanisms. COM objects and named pipes with default DACLs may be accessible. Documented; not a primary threat in the local agent model. |
-| **Windows: no sandbox tests in CI** | Low | `sandbox-escape.linux.test.ts` and `seatbelt.macos.test.ts` run in CI; there is no equivalent `win32.test.ts` because the Windows runner doesn't have the compiled `monad-sandbox-launcher.exe` available (cross-compiled on Linux). Pending: add a step that cross-compiles the Windows launcher and runs it in WSL or a Wine environment. |
+| **Windows: AppContainer DLL path grants** | Low | `bun.exe` loads runtime DLLs from its install directory. `System32` has `ALL_APPLICATION_PACKAGES` ACE so system DLLs load correctly. If bun's install dir lacks this ACE, the AppContainer child may fail to start; the launcher falls back to unconfined in that case. True fix: grant `ALL_APP_PACKAGES` on the bun install dir during install. Pending real-machine validation. |
+| **Windows: named pipes / COM not protected by AppContainer** | Low | Some legacy COM objects and named pipes with default DACLs may be accessible even from AppContainer. Not a primary threat in the local agent model. |
+| **Windows: no sandbox tests in CI** | Low | `sandbox-escape.linux.test.ts` and `seatbelt.macos.test.ts` run in CI; there is no equivalent `win32.test.ts`. The CI compile gate (ci.yml) validates both Windows launchers build cleanly, but runtime behaviour tests require a real Windows environment. Pending. |
 | **`seccomp: 2` test fragile inside Docker** | Info | `/proc/self/status Seccomp: 2` check assumes the process is not already in a seccomp sandbox. Docker's default seccomp profile will cause the check to pass incorrectly in some CI configurations. The test is already guarded by `if (!makeLandlockLauncher()) process.exit(0)` but there's no guard against a pre-existing filter. |
 
 Touching a network boundary, the filesystem, a credential, or tool dispatch? Confirm:

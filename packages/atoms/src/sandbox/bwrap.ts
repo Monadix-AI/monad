@@ -69,7 +69,11 @@ export function buildBwrapArgs(policy: SandboxPolicy): string[] {
     '--die-with-parent'
   ];
 
-  if (policy.net === 'none' || (typeof policy.net === 'object' && 'allowProxyPort' in policy.net)) {
+  if (policy.net === 'none') {
+    // net:'none' → kernel-level isolation via a new network namespace (no IP sockets at all).
+    // net:filtered (allowProxyPort) → do NOT unshare: the child must reach 127.0.0.1:<proxyPort>
+    // on the host loopback, which is unreachable from an isolated namespace. Filtering is
+    // application-layer (HTTP(S)_PROXY env) — same tier as Landlock on this axis.
     args.push('--unshare-net');
   }
 
@@ -78,6 +82,7 @@ export function buildBwrapArgs(policy: SandboxPolicy): string[] {
     args.push('--bind', '/', '/');
   } else {
     // Confined: read-only system tree, explicit rw roots only.
+    // Credential dirs (readDenyRoots) are simply never bound, so they're absent in the child.
     const dirs = fixedDirs();
     if (dirs.usr) args.push('--ro-bind', '/usr', '/usr');
     if (dirs.etc) args.push('--ro-bind', '/etc', '/etc');
@@ -104,6 +109,15 @@ export function buildBwrapArgs(policy: SandboxPolicy): string[] {
   // Overlay special filesystems last so they take precedence over any bind above.
   args.push('--dev', '/dev', '--proc', '/proc', '--tmpfs', '/run');
 
+  // readDenyRoots: shadow each deny path with a mode-000 tmpfs so the child cannot read it.
+  // --dir ensures the mount point exists in the namespace even if the path wasn't bound
+  // (confined mode, path outside writableRoots). --perms 000 makes the tmpfs inaccessible.
+  // If a path doesn't exist on the host at all, --dir creates a phantom entry — that is
+  // harmless: an empty mode-000 dir the child sees but cannot enter or read.
+  for (const deny of policy.readDenyRoots ?? []) {
+    args.push('--dir', deny, '--perms', '000', '--tmpfs', deny);
+  }
+
   return args;
 }
 
@@ -120,7 +134,8 @@ function bwrapBin(): string {
 export const bwrapLauncher: SandboxLauncher = defineLocalLauncher({
   kind: 'bwrap',
   platforms: ['linux'],
-  enforces: { writeConfine: true, net: ['none'] },
+  // readDeny: absent credential dirs (confined mode) + --tmpfs overlays (unrestricted-write mode)
+  enforces: { writeConfine: true, readDeny: true, net: ['none'] },
   isAvailable: () => Bun.which('bwrap') !== null,
   wrap(argv, policy) {
     return [bwrapBin(), ...buildBwrapArgs(policy), '--', ...argv];

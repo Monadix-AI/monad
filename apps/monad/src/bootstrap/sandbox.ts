@@ -8,7 +8,12 @@ import type { SessionSandboxService } from '../services/session-sandbox.ts';
 
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { configureDockerImage, configureNativeLauncherPath, detectDockerRuntime } from '@monad/atoms';
+import {
+  configureDockerImage,
+  configureNativeLauncherPath,
+  detectDockerRuntime,
+  sweepOrphanAppContainerProfiles
+} from '@monad/atoms';
 import { logger } from '@monad/logger';
 import { configureSandboxCredential } from '@monad/sdk-atom';
 
@@ -59,6 +64,8 @@ export async function createSandbox(
     // launchers are static atom objects that read it lazily). The actual launcher is selected after
     // the atom packs load — see finalizeSandboxLauncher().
     configureNativeLauncherPath(cfg.agent.sandbox.launcherPath);
+    // Reclaim AppContainer profiles orphaned by a prior crash on Windows. Best-effort.
+    void sweepOrphanAppContainerProfiles();
     // Deny confined children read access to credential stores even under open egress, so a
     // prompt-injected snippet can't read-then-exfiltrate secrets. The profile is allow-read by
     // default (interpreters must start); only these roots are blocked.

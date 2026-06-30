@@ -170,7 +170,7 @@ async function sandboxExec(
   const proc = sandboxedSpawn(
     argv,
     { cwd: dir, stdout: 'pipe', stderr: 'pipe', env: spawnEnv },
-    buildSandboxPolicy(sandboxRoots),
+    buildSandboxPolicy(sandboxRoots, [], sessionId),
     { sessionId }
   );
 
