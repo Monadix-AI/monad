@@ -16,6 +16,7 @@ import {
   ModelProviderType,
   modelKindSchema,
   modelProfileRoutesSchema,
+  modelRoleSchema,
   modelRolesSchema,
   nativeCliAgentViewSchema,
   KNOWN_PROVIDER_TYPES as PROTOCOL_KNOWN_PROVIDER_TYPES,
@@ -186,7 +187,7 @@ const generationParamsSchema = z
     temperature: z.number().min(0).max(2).optional(),
     maxTokens: z.number().int().positive().optional(),
     topP: z.number().min(0).max(1).optional(),
-    reasoningEffort: z.enum(['minimal', 'low', 'medium', 'high']).optional()
+    reasoningEffort: z.string().optional()
   })
   .strict();
 
@@ -194,6 +195,7 @@ const profileSchema = z.object({
   alias: z.string(),
   routes: modelProfileRoutesSchema,
   params: generationParamsSchema.default({}),
+  routeParams: z.partialRecord(modelRoleSchema, generationParamsSchema).optional(),
   fallbacks: z.array(fallbackTargetViewSchema).default([])
 });
 

@@ -96,10 +96,15 @@ test('refresh indexes blended cost in memory, writes full entries to disk, skips
   });
 });
 
-test('classifyKind: embedding by id, image/speech by output modality, else chat', () => {
+test('classifyKind: embedding by id and provider output modality, else chat', () => {
   expect(classifyKind('openai/text-embedding-3-large', ['text'])).toBe('embedding'); // id wins over text-out
+  expect(classifyKind('openrouter/embed', ['embeddings'])).toBe('embedding');
   expect(classifyKind('openai/dall-e-3', ['image'])).toBe('image');
-  expect(classifyKind('openai/tts-1', ['audio'])).toBe('speech');
+  expect(classifyKind('openai/sora', ['video'])).toBe('video');
+  expect(classifyKind('openai/tts-1', ['speech'])).toBe('speech');
+  expect(classifyKind('openai/audio-1', ['audio'])).toBe('audio');
+  expect(classifyKind('openrouter/reranker', ['rerank'])).toBe('rerank');
+  expect(classifyKind('openai/whisper', ['transcription'])).toBe('transcription');
   expect(classifyKind('openai/gpt-5.2', ['text'])).toBe('chat');
   expect(classifyKind('foo/bar', undefined)).toBe('chat'); // no output info → chat
 });

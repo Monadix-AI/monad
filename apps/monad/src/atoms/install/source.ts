@@ -78,11 +78,15 @@ export function parseAtomPackSource(spec: string): AtomPackSource {
   if (trimmed.startsWith('github:')) {
     const m = trimmed.slice('github:'.length).match(/^([^/]+)\/([^@]+?)(?:@(.+))?$/);
     if (!m) throw new AtomPackSourceError(`invalid github source: ${spec} (want github:owner/repo[@<ref>])`);
+    const refAndPath = (m[3] as string | undefined) ?? 'main';
+    const [ref = 'main', ...pathParts] = refAndPath.split('/');
+    const path = normalizeGithubPath(pathParts.join('/'));
     return {
       kind: 'github',
       owner: m[1] as string,
       repo: m[2] as string,
-      ref: (m[3] as string | undefined) ?? 'main',
+      ref,
+      ...(path ? { path } : {}),
       spec
     };
   }

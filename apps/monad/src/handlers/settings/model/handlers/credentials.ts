@@ -5,7 +5,12 @@ import type { ModelContext } from '@/handlers/settings/model/context.ts';
 import { newId } from '@monad/protocol';
 
 import { fetchProviderModels } from '@/agent/index.ts';
-import { credentialToHandle, credentialToView, providerToResolved } from '@/handlers/settings/model/utils.ts';
+import {
+  credentialToHandle,
+  credentialToView,
+  enrichModelInfo,
+  providerToResolved
+} from '@/handlers/settings/model/utils.ts';
 
 export function createCredentialsHandlers(ctx: ModelContext) {
   return {
@@ -70,6 +75,7 @@ export function createCredentialsHandlers(ctx: ModelContext) {
     },
 
     async testConnection({ provider, accessToken }: TestConnectionRequest) {
+      const { cfg } = await ctx.read();
       const resolved = {
         id: provider.id || 'probe',
         type: provider.type,
@@ -87,7 +93,11 @@ export function createCredentialsHandlers(ctx: ModelContext) {
       const startedAt = Date.now();
       try {
         const models = await fetchProviderModels(resolved, handle, ctx.registry);
-        return { ok: true as const, latencyMs: Date.now() - startedAt, models };
+        return {
+          ok: true as const,
+          latencyMs: Date.now() - startedAt,
+          models: models.map((model) => enrichModelInfo(ctx, cfg, resolved, model))
+        };
       } catch (err) {
         return {
           ok: false,

@@ -38,6 +38,17 @@ export function SkillSection({ title, children }: { title: string; children: Rea
   );
 }
 
+function atomPackName(skill: SkillListInstance): string | null {
+  if (skill.sourceKind !== 'atom-pack') return null;
+  for (const value of [skill.source, skill.sourceId, skill.id]) {
+    if (value.startsWith('Atom Pack:')) return value.slice('Atom Pack:'.length).trim();
+    const atomPackMarker = 'atom-pack:';
+    const index = value.indexOf(atomPackMarker);
+    if (index >= 0) return value.slice(index + atomPackMarker.length).split(':')[0] ?? null;
+  }
+  return null;
+}
+
 function GitHubMetadataRow({ icon, label, value }: { icon: ReactNode; label: string; value: ReactNode }) {
   return (
     <div className="grid min-w-0 grid-cols-[1rem_5.5rem_minmax(0,1fr)] items-start gap-2 text-[11px] leading-5">
@@ -118,7 +129,12 @@ export function SkillCard({
   const canManageInstalled = skill.sourceKind === 'global';
   const version = skill.version ?? installed?.version;
   const icon = skill.icon ?? installed?.icon;
+  const packName = atomPackName(skill);
   const pillClass = 'px-1.5 py-0 text-[9px] leading-3';
+  const keepActionsVisible = Boolean(confirmRemove || removing || updating || editing);
+  const actionVisibility = keepActionsVisible
+    ? 'opacity-100 pointer-events-auto'
+    : 'pointer-events-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100';
   const renderSkillCard = ({
     article,
     body,
@@ -219,6 +235,15 @@ export function SkillCard({
                     v{version}
                   </Badge>
                 ) : null}
+                {packName ? (
+                  <Badge
+                    className={cn('max-w-full gap-1', pillClass)}
+                    variant="outline"
+                  >
+                    <span className="text-muted-foreground">{t('web.skills.from')}</span>
+                    <span className="min-w-0 truncate">{packName}</span>
+                  </Badge>
+                ) : null}
                 {!available ? (
                   <Badge
                     className={cn('gap-1', pillClass)}
@@ -230,7 +255,13 @@ export function SkillCard({
                 ) : null}
               </div>
             </div>
-            <div className="flex shrink-0 items-center gap-1">
+            <div
+              className={cn(
+                'flex shrink-0 items-center gap-1 transition-opacity duration-150 ease-out',
+                actionVisibility
+              )}
+              data-slot="skill-card-actions"
+            >
               {canManageInstalled && hasUpdate ? (
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -361,7 +392,7 @@ export function SkillCard({
   );
 
   return renderSkillCard({
-    article: 'flex h-full w-full flex-col overflow-hidden rounded-md border border-border/70 bg-card',
+    article: 'group flex h-full w-full flex-col overflow-hidden rounded-md border border-border/70 bg-card',
     body: 'flex min-w-0 flex-1 items-start gap-3 p-3',
     controls: 'grid gap-0 border-t bg-muted/10 sm:grid-cols-2',
     description: 'mt-2 line-clamp-3 text-muted-foreground text-xs leading-5',

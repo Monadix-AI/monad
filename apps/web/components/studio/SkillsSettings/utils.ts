@@ -125,9 +125,13 @@ export function normalizeGithubSkillSource(raw: string): string | null {
   const owner = parts[0];
   const repo = parts[1].replace(/\.git$/, '');
   if (!/^[A-Za-z0-9_.-]+$/.test(owner) || !/^[A-Za-z0-9_.-]+$/.test(repo)) return null;
-  const ref = parts[2] === 'tree' && parts.length > 3 ? parts.slice(3).join('/') : undefined;
-  if (ref && !/^[A-Za-z0-9_./-]+$/.test(ref)) return null;
-  return `github:${owner}/${repo}${ref ? `@${ref}` : ''}`;
+  const marker = parts[2];
+  if ((marker === 'tree' || marker === 'blob') && parts.length > 3) {
+    const refAndPath = parts.slice(3).join('/');
+    if (!/^[A-Za-z0-9_./-]+$/.test(refAndPath)) return null;
+    return `https://github.com/${owner}/${repo}/${marker}/${refAndPath}`;
+  }
+  return `github:${owner}/${repo}`;
 }
 
 export async function loadSkillContent(

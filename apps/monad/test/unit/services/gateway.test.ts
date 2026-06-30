@@ -174,6 +174,30 @@ test('per-request params override the profile', async () => {
   expect(body.temperature).toBe(1.1);
 });
 
+test('raw specs that match profile role routes use that role params', async () => {
+  let body: Record<string, unknown> = {};
+  const router = mkRouter(
+    deps({
+      profiles: [
+        {
+          alias: 'default',
+          routes: { chat: { provider: 'u1', modelId: 'm1' }, fast: { provider: 'u1', modelId: 'm-fast' } },
+          params: {},
+          routeParams: { fast: { temperature: 0.7 } },
+          fallbacks: []
+        }
+      ],
+      fetch: fakeFetch(async (_url, init) => {
+        body = JSON.parse(String(init?.body));
+        return jsonResponse('ok');
+      })
+    })
+  );
+  await router.complete({ model: 'u1:m-fast', messages: userMsg });
+  expect(body.model).toBe('m-fast');
+  expect(body.temperature).toBe(0.7);
+});
+
 test('guards against profile fallback cycles (terminates, throws when all fail)', async () => {
   const router = mkRouter(
     deps({

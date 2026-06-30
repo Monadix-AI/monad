@@ -211,11 +211,41 @@
                     "maximum": 1
                   },
                   "reasoningEffort": {
-                    "type": "string",
-                    "enum": ["minimal", "low", "medium", "high"]
+                    "type": "string"
                   }
                 },
                 "additionalProperties": false
+              },
+              "routeParams": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string",
+                  "enum": ["chat", "fast", "vision", "image", "video", "speech", "embedding", "memory"]
+                },
+                "additionalProperties": {
+                  "type": "object",
+                  "properties": {
+                    "temperature": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 2
+                    },
+                    "maxTokens": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "topP": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    "reasoningEffort": {
+                      "type": "string"
+                    }
+                  },
+                  "additionalProperties": false
+                }
               },
               "fallbacks": {
                 "default": [],
@@ -297,7 +327,7 @@
           },
           "additionalProperties": {
             "type": "string",
-            "enum": ["chat", "image", "video", "speech", "embedding"]
+            "enum": ["chat", "image", "video", "speech", "embedding", "audio", "rerank", "transcription"]
           }
         }
       },

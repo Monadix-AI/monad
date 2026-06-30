@@ -83,8 +83,8 @@ async function installSkillsApiMock(
 ): Promise<{ requests: RequestLog[]; settings: SkillSettings }> {
   const requests: RequestLog[] = [];
   const settings = baseSettings();
-  const liveSkills = options.empty ? { skills: [], skillInstances: [] } : skillInstances();
-  const installed = options.empty ? { skills: [] } : installedSkills();
+  let liveSkills = options.empty ? { skills: [], skillInstances: [] } : skillInstances();
+  let installed = options.empty ? { skills: [] } : installedSkills();
 
   await page.route('**/*', async (route) => {
     const request = route.request();
@@ -168,7 +168,14 @@ async function installSkillsApiMock(
       }
       return json({ name: 'codegraph-navigator', dir: '/tmp/codegraph-navigator', warnings: [] });
     }
-    if (method === 'DELETE' && path === '/v1/atoms/skills/CodeGraph%20Navigator') return json({ ok: true });
+    if (method === 'DELETE' && path === '/v1/atoms/skills/CodeGraph%20Navigator') {
+      installed = { skills: [] };
+      liveSkills = {
+        skills: [],
+        skillInstances: liveSkills.skillInstances.filter((skill) => skill.id !== 'global:codegraph')
+      };
+      return json({ ok: true });
+    }
     if (method === 'POST' && path === '/v1/atoms/skills/CodeGraph%20Navigator/update') {
       return json({ skills: ['CodeGraph Navigator'], commit: 'abcdef0', warnings: [] });
     }
@@ -272,9 +279,38 @@ async function openSkills(page: Page) {
 }
 
 test.describe('Studio skills settings', () => {
-  test('covers installed settings, card controls, refresh, updates, edit, remove, and add menu flows', async ({
-    page
-  }) => {
+  test('removes a deleted global skill from the installed list', async ({ page }) => {
+    const { requests } = await installSkillsApiMock(page);
+    await openSkills(page);
+
+    const skillCard = page.locator('article').filter({ hasText: 'CodeGraph Navigator' });
+    await skillCard.hover();
+    await skillCard.getByRole('button', { name: 'Remove' }).click();
+    await expect(page.getByText('Remove this skill?')).toBeVisible();
+    await page.getByRole('button', { name: 'Remove' }).last().click();
+
+    expect(
+      requests.some(
+        (request) => request.method === 'DELETE' && request.path === '/v1/atoms/skills/CodeGraph%20Navigator'
+      )
+    ).toBe(true);
+    await expect(page.getByText('CodeGraph Navigator')).toBeHidden();
+    await expect(page.getByText('QA Checklist')).toBeVisible();
+  });
+
+  test('reveals installed skill actions only when the card is hovered', async ({ page }) => {
+    await installSkillsApiMock(page);
+    await openSkills(page);
+
+    const skillCard = page.locator('article').filter({ hasText: 'CodeGraph Navigator' });
+    const actions = skillCard.locator('[data-slot="skill-card-actions"]');
+
+    await expect(actions).toHaveCSS('opacity', '0');
+    await skillCard.hover();
+    await expect(actions).toHaveCSS('opacity', '1');
+  });
+
+  test('covers installed settings, card controls, updates, edit, remove, and add menu flows', async ({ page }) => {
     const { requests, settings } = await installSkillsApiMock(page);
     await openSkills(page);
 
@@ -283,6 +319,9 @@ test.describe('Studio skills settings', () => {
     await expect(page.getByText('Atom Pack skills')).toBeVisible();
     await expect(page.getByText('CodeGraph Navigator')).toBeVisible();
     await expect(page.getByText('QA Checklist')).toBeVisible();
+    const atomPackSkillCard = page.locator('article').filter({ hasText: 'QA Checklist' });
+    await expect(atomPackSkillCard.getByText('From:')).toBeVisible();
+    await expect(atomPackSkillCard.getByText('qa-tools')).toBeVisible();
     await expect(page.getByText('Unavailable')).toBeVisible();
 
     const globalAutoload = page.getByRole('switch', { name: 'Auto-load skills into context' });
@@ -307,20 +346,18 @@ test.describe('Studio skills settings', () => {
     await expect(page.getByRole('switch', { name: 'Toggle auto-load for CodeGraph Navigator' })).not.toBeChecked();
     expect(settings.autoloadDisabled).toContain('global:codegraph');
 
+    const codegraphSkillCard = page.locator('article').filter({ hasText: 'CodeGraph Navigator' });
     await page.getByRole('button', { name: 'Check for updates' }).click();
-    await expect(page.getByRole('button', { name: 'Update', exact: true })).toBeVisible();
-    await page.getByRole('button', { name: 'Update', exact: true }).click();
-
-    await page.getByRole('button', { name: 'Refresh', exact: true }).click();
-    await expect
-      .poll(() => requests.filter((request) => request.method === 'GET' && request.path === '/v1/atoms/skills').length)
-      .toBeGreaterThan(1);
+    await codegraphSkillCard.hover();
+    await expect(codegraphSkillCard.getByRole('button', { name: 'Update', exact: true })).toBeVisible();
+    await codegraphSkillCard.getByRole('button', { name: 'Update', exact: true }).click();
 
     await page.getByRole('button', { name: 'GitHub metadata' }).click();
     await expect(page.getByText('monadix-labs/codegraph-navigator')).toBeVisible();
     await page.keyboard.press('Escape');
 
-    await page.getByRole('button', { name: 'Edit' }).first().click();
+    await codegraphSkillCard.hover();
+    await codegraphSkillCard.getByRole('button', { name: 'Edit' }).click();
     await expect(page.getByRole('dialog', { name: 'Edit CodeGraph Navigator' })).toBeVisible();
     await page.getByRole('button', { name: 'Preview' }).click();
     await expect(page.getByText('Use CodeGraph first when the repository is indexed.')).toBeVisible();
@@ -329,12 +366,16 @@ test.describe('Studio skills settings', () => {
     await page.getByRole('button', { name: 'Save' }).click();
     await expect(page.getByRole('dialog', { name: 'Edit CodeGraph Navigator' })).toBeHidden();
 
-    await page.getByRole('button', { name: 'Remove' }).first().click();
+    await codegraphSkillCard.hover();
+    await codegraphSkillCard.getByRole('button', { name: 'Remove' }).click();
     await expect(page.getByText('Remove this skill?')).toBeVisible();
     await page.getByRole('button', { name: 'Cancel' }).click();
     await expect(page.getByText('Remove this skill?')).toBeHidden();
-    await page.getByRole('button', { name: 'Remove' }).first().click();
+    await codegraphSkillCard.hover();
+    await codegraphSkillCard.getByRole('button', { name: 'Remove' }).click();
     await page.getByRole('button', { name: 'Remove' }).last().click();
+    await expect(page.getByText('CodeGraph Navigator')).toBeHidden();
+    await expect(page.getByText('QA Checklist')).toBeVisible();
 
     await page.getByRole('main').getByRole('button', { name: 'Install skill' }).first().click();
     await page.getByText('Upload .md or .zip').click();
@@ -378,7 +419,11 @@ Use this editor-created skill in e2e.
       .fill('https://github.com/monadix-labs/marketplace-scout');
     await githubDialog.getByRole('button', { name: 'Install', exact: true }).last().click();
     await expect(page.getByText('This repo declares the following skills:')).toBeVisible();
-    await page.getByRole('button', { name: 'Install with consent' }).click();
+    const consentButton = page
+      .locator('[data-radix-popper-content-wrapper]')
+      .getByRole('button', { name: 'Install with consent' });
+    await expect(consentButton).toBeEnabled();
+    await consentButton.click({ force: true });
 
     expect(requests.some((request) => request.method === 'POST' && request.path === '/v1/atoms/skills/install')).toBe(
       true
@@ -402,15 +447,34 @@ Use this editor-created skill in e2e.
     ]);
   });
 
-  test('covers browse, search, sort, detail, consent install, and return to installed list', async ({ page }) => {
+  test('opens marketplace by route and syncs market selection into the URL', async ({ page }) => {
+    await installSkillsApiMock(page);
+
+    await page.goto('/skills/marketplace/skills.sh');
+    await expect(page.getByRole('heading', { name: 'Skills', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Installed' })).toBeVisible();
+    await expect(page.getByRole('tab', { name: 'skills.sh' })).toHaveAttribute('aria-selected', 'true');
+
+    await page.getByRole('tab', { name: 'ClawHub' }).click();
+    await expect(page).toHaveURL(/\/skills\/marketplace\/clawhub$/);
+  });
+
+  test('covers marketplace, search, sort, detail, consent install, and return to installed list', async ({ page }) => {
     const { requests } = await installSkillsApiMock(page);
     await openSkills(page);
 
-    await page.getByRole('main').getByRole('button', { name: 'Browse', exact: true }).click();
+    await page.getByRole('main').getByRole('button', { name: 'Marketplace', exact: true }).click();
     await expect(page.getByRole('button', { name: 'Installed' })).toBeVisible();
+    await expect(page.getByRole('tab', { name: 'ClawHub' })).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByRole('tab', { name: 'skills.sh' })).toBeVisible();
     await expect(page.getByText('Marketplace Scout')).toBeVisible();
+    const marketplaceCard = page.locator('[data-slot="skill-browse-card"]').filter({ hasText: 'Marketplace Scout' });
+    const marketplaceInstall = marketplaceCard.getByRole('button', { name: 'Install', exact: true });
+    await expect(marketplaceInstall).toHaveCSS('opacity', '0');
+    await marketplaceCard.hover();
+    await expect(marketplaceInstall).toHaveCSS('opacity', '1');
 
-    await page.getByRole('button', { name: 'Top' }).click();
+    await page.getByRole('tab', { name: 'Top' }).click();
     await expect
       .poll(() => requests.some((request) => request.path === '/v1/skills/browse' && request.method === 'GET'))
       .toBe(true);
@@ -424,11 +488,11 @@ Use this editor-created skill in e2e.
     await expect(page.getByText('Useful installable workflow.')).toBeVisible();
     await page.getByRole('button', { name: 'Install', exact: true }).click();
     await expect(page.getByText('This repo declares the following skills:')).toBeVisible();
-    await page.getByRole('button', { name: 'Install with consent' }).click();
-    await expect(page.getByRole('button', { name: '✓' })).toBeVisible();
-
-    await page.getByRole('button', { name: 'Back' }).click();
+    await expect(page.getByText('Skill install needs your consent.')).toBeVisible();
     await page.getByRole('button', { name: 'Installed' }).click();
+    await expect(page.getByText('Skill install needs your consent.')).toBeVisible();
+    await page.getByRole('button', { name: 'Install with consent' }).click();
+    await expect(page.getByText('Skill installed.')).toBeVisible();
     await expect(page.getByText('Global skills')).toBeVisible();
 
     const installRequests = requests.filter((request) => request.path === '/v1/atoms/skills/install');
@@ -494,7 +558,9 @@ The backend rejects this skill packet.
     await expect(newSkillDialog).toBeVisible();
     await newSkillDialog.getByRole('button', { name: 'Cancel' }).click();
 
-    await page.getByRole('button', { name: 'Edit' }).first().click();
+    const codegraphSkillCard = page.locator('article').filter({ hasText: 'CodeGraph Navigator' });
+    await codegraphSkillCard.hover();
+    await codegraphSkillCard.getByRole('button', { name: 'Edit' }).click();
     const editDialog = page.getByRole('dialog', { name: 'Edit CodeGraph Navigator' });
     await editDialog.getByRole('textbox').fill(`---
 name: renamed-skill

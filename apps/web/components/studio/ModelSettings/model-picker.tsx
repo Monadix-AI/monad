@@ -1,22 +1,24 @@
 'use client';
 
-import type { ModelInfo, ProviderView } from '@monad/protocol';
+import type { ModelInfo, ModelPrice, ProviderView } from '@monad/protocol';
 
 import { ModelProviderType } from '@monad/protocol';
 import { cn, Tooltip, TooltipContent, TooltipTrigger } from '@monad/ui';
 import {
   ArrowLeft,
   ArrowRight,
+  ArrowUpDown,
   AudioWaveform,
+  BadgeDollarSign,
   BookOpenText,
+  Brain,
+  Captions,
   Check,
   Database,
-  Download,
   ExternalLink,
   FileText,
   ImageIcon,
   Type,
-  Upload,
   Video
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -107,28 +109,90 @@ function formatContextLimit(limit: number): string {
 
 function formatPriceValue(value: number | undefined): string {
   if (value === undefined) return 'N/A';
-  return `$${value.toLocaleString('en-US', { maximumFractionDigits: 4 })}`;
+  const maximumFractionDigits = value > 0 && value < 0.0001 ? 8 : 4;
+  return `$${value.toLocaleString('en-US', { maximumFractionDigits })}`;
 }
 
-function formatOptionalPriceValue(value: number | undefined): string | undefined {
-  return value === undefined ? undefined : formatPriceValue(value);
+type PriceDisplayItem = { label: string; price: number; unit: string };
+
+function formatUnitPrice(item: PriceDisplayItem): string {
+  const unit = item.unit === 'second' ? 'seconds' : item.unit;
+  return `${formatPriceValue(item.price)}/${unit}`;
 }
 
-function formatCachePriceValue(cacheRead: number | undefined, cacheWrite: number | undefined): string {
-  const values = [formatOptionalPriceValue(cacheRead), formatOptionalPriceValue(cacheWrite)].filter(
-    (value): value is string => value !== undefined
-  );
-  return values.length > 0 ? values.join('/') : 'N/A';
+function priceDisplayItems(price: ModelPrice | undefined): PriceDisplayItem[] {
+  if (!price) return [];
+  if (price.units?.length) return price.units;
+  return [
+    price.input !== undefined ? { label: 'Input', price: price.input, unit: 'M' } : null,
+    price.output !== undefined ? { label: 'Output', price: price.output, unit: 'M' } : null,
+    price.cacheRead !== undefined ? { label: 'Cache read', price: price.cacheRead, unit: 'M' } : null,
+    price.cacheWrite !== undefined ? { label: 'Cache write', price: price.cacheWrite, unit: 'M' } : null,
+    price.videoSecond !== undefined ? { label: 'Video', price: price.videoSecond, unit: 'second' } : null
+  ].filter((item): item is PriceDisplayItem => item !== null);
 }
 
-function cachePriceTooltip(cacheRead: number | undefined, cacheWrite: number | undefined): React.ReactNode | undefined {
-  if (cacheRead === undefined && cacheWrite === undefined) return undefined;
+function priceSummaryFromItems(items: PriceDisplayItem[]): string {
+  if (items.length === 0) return 'N/A';
+  if (isTokenPriceSet(items)) return items.map(formatUnitPrice).join(' · ');
+  const primary = items.find((item) => item.unit !== 'M') ?? items[0];
+  if (!primary) return 'N/A';
+  return formatUnitPrice(primary);
+}
+
+const TOKEN_PRICE_LABELS = new Set(['Input', 'Output', 'Cache read', 'Cache write']);
+const PRIMARY_TOKEN_PRICE_LABELS = new Set(['Input', 'Output']);
+
+function isTokenPriceSet(items: PriceDisplayItem[]): boolean {
+  return items.length > 0 && items.every((item) => item.unit === 'M' && TOKEN_PRICE_LABELS.has(item.label));
+}
+
+function tokenPriceItems(items: PriceDisplayItem[]): PriceDisplayItem[] {
+  return items.filter((item) => item.unit === 'M' && PRIMARY_TOKEN_PRICE_LABELS.has(item.label));
+}
+
+function hasNonZeroPrimaryTokenPrice(items: PriceDisplayItem[]): boolean {
+  return tokenPriceItems(items).some((item) => item.price !== 0);
+}
+
+function primaryPriceItems(price: ModelPrice | undefined): PriceDisplayItem[] {
+  const items = priceDisplayItems(price);
+  if (hasNonZeroPrimaryTokenPrice(items)) {
+    const tokenItems = tokenPriceItems(items);
+    if (tokenItems.length > 0) return tokenItems;
+  }
+  if (isTokenPriceSet(items)) return items;
+  const primary = items.find((item) => item.unit !== 'M') ?? items[0];
+  return primary ? [primary] : [];
+}
+
+function priceSummary(price: ModelPrice | undefined): string {
+  return priceSummaryFromItems(primaryPriceItems(price));
+}
+
+function priceTooltip(price: ModelPrice | undefined): React.ReactNode | undefined {
+  return priceTooltipFromItems(priceDisplayItems(price));
+}
+
+function priceTooltipFromItems(items: PriceDisplayItem[]): React.ReactNode | undefined {
+  if (items.length === 0) return undefined;
   return (
     <span className="flex flex-col gap-1">
-      {cacheRead !== undefined && <span>Cache read {formatPriceValue(cacheRead)} /1M</span>}
-      {cacheWrite !== undefined && <span>Cache write {formatPriceValue(cacheWrite)} /1M</span>}
+      {items.map((item) => (
+        <span key={`${item.label}-${item.unit}`}>
+          {item.label} {formatUnitPrice(item)}
+        </span>
+      ))}
     </span>
   );
+}
+
+function videoPriceItems(price: ModelPrice | undefined): PriceDisplayItem[] {
+  return primaryPriceItems(price);
+}
+
+function videoPriceTooltip(price: ModelPrice | undefined): React.ReactNode | undefined {
+  return priceTooltipFromItems(priceDisplayItems(price));
 }
 
 function ContextLimitTag({
@@ -311,6 +375,7 @@ function ProviderModelSelect({
   }, [activeProvider?.type, modelFilter, modelsByProvider, providerId]);
   const hasList = providerModels.length > 0;
   const selectedModelId = parsed?.modelId ?? '';
+  const inputRef = useRef<HTMLInputElement | null>(null);
   const modelButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
 
   // Local draft — not committed until Enter. Clears naturally when the popover closes
@@ -336,6 +401,12 @@ function ProviderModelSelect({
     if (!firstMatch) return;
     modelButtonRefs.current[firstMatch.id]?.scrollIntoView({ block: 'nearest' });
   }, [hasSearchQuery, inputDraft, providerModels]);
+
+  useEffect(() => {
+    if (view !== 'model') return;
+    const frame = requestAnimationFrame(() => inputRef.current?.focus());
+    return () => cancelAnimationFrame(frame);
+  }, [view]);
 
   const selectProvider = (nextProviderId: string) => {
     setDraftProviderId(nextProviderId);
@@ -427,6 +498,7 @@ function ProviderModelSelect({
               if (e.key === 'Enter') commitDraft();
             }}
             placeholder="model-id"
+            ref={inputRef}
             value={inputDraft}
           />
         </div>
@@ -486,9 +558,13 @@ const MODALITY_ICON: Record<
   image: { icon: ImageIcon, bg: 'bg-green-500/20', fg: 'text-green-400', label: 'Image' },
   video: { icon: Video, bg: 'bg-amber-500/20', fg: 'text-amber-400', label: 'Video' },
   audio: { icon: AudioWaveform, bg: 'bg-purple-500/20', fg: 'text-purple-400', label: 'Audio' },
+  speech: { icon: AudioWaveform, bg: 'bg-fuchsia-500/20', fg: 'text-fuchsia-400', label: 'Speech' },
+  transcription: { icon: Captions, bg: 'bg-rose-500/20', fg: 'text-rose-400', label: 'Transcription' },
+  rerank: { icon: ArrowUpDown, bg: 'bg-indigo-500/20', fg: 'text-indigo-400', label: 'Rerank' },
   pdf: { icon: FileText, bg: 'bg-blue-500/20', fg: 'text-blue-400', label: 'PDF' },
   file: { icon: FileText, bg: 'bg-blue-500/20', fg: 'text-blue-400', label: 'File' },
-  embedding: { icon: Database, bg: 'bg-muted', fg: 'text-muted-foreground', label: 'Embedding' }
+  embedding: { icon: Database, bg: 'bg-muted', fg: 'text-muted-foreground', label: 'Embedding' },
+  embeddings: { icon: Database, bg: 'bg-muted', fg: 'text-muted-foreground', label: 'Embeddings' }
 };
 const MODALITY_FALLBACK = (name: string) => ({
   icon: FileText as React.ComponentType<{ className?: string }>,
@@ -501,8 +577,11 @@ const KIND_OUTPUT: Record<string, string[]> = {
   chat: ['text'],
   image: ['image'],
   video: ['video'],
-  speech: ['audio'],
-  embedding: ['embedding']
+  speech: ['speech'],
+  embedding: ['embeddings'],
+  audio: ['audio'],
+  rerank: ['rerank'],
+  transcription: ['transcription']
 };
 
 function ModalityBadge({ name }: { name: string }) {
@@ -551,14 +630,27 @@ export function ModelHoverCardBody({ model }: { model: ModelInfo | undefined }) 
   const outputMods =
     model.modalities?.output ?? (model.modalities?.kind ? (KIND_OUTPUT[model.modalities.kind] ?? []) : []);
   const hasModalities = inputMods.length > 0 || outputMods.length > 0;
-  const detailLink = model.modelsDevUrl ? (
+  const isVideoModel = model.modalities?.kind === 'video' || outputMods.includes('video');
+  const videoPrices = videoPriceItems(model.price);
+  const isReasoningHiddenModel =
+    model.modalities?.kind === 'embedding' ||
+    model.modalities?.kind === 'speech' ||
+    model.modalities?.kind === 'audio' ||
+    model.modalities?.kind === 'rerank' ||
+    model.modalities?.kind === 'transcription' ||
+    outputMods.some((mod) => mod === 'embeddings' || mod === 'embedding' || mod === 'speech');
+  const showReasoningMetric = !isReasoningHiddenModel;
+  const reasoningEfforts = model.modalities?.reasoningEfforts?.filter((effort) => effort.trim().length > 0) ?? [];
+  const reasoningSupported = reasoningEfforts.length > 0;
+  const detailUrl = model.detailUrl ?? model.modelsDevUrl;
+  const detailLink = detailUrl ? (
     <Tooltip>
       <TooltipTrigger asChild>
         <a
           aria-label="See detail"
           className="inline-flex size-5 shrink-0 select-none items-center justify-center rounded-(--radius-sm) text-muted-foreground transition-colors hover:text-foreground"
           draggable={false}
-          href={model.modelsDevUrl}
+          href={detailUrl}
           onDragStart={(event) => event.preventDefault()}
           onMouseDown={(event) => event.preventDefault()}
           rel="noreferrer"
@@ -596,40 +688,45 @@ export function ModelHoverCardBody({ model }: { model: ModelInfo | undefined }) 
           {!label && detailLink}
         </div>
       </div>
-      <div className="flex select-none flex-wrap items-stretch border-border/60 border-t py-2.5 text-[10px] [&>*+*]:border-border/80 [&>*+*]:border-l [&>*:first-child]:pl-0 [&>*]:px-2">
-        <span className="inline-flex">
-          <ModelMetricItem
-            icon={BookOpenText}
-            tooltip={
-              model.contextLimit ? `Context window: ${model.contextLimit.toLocaleString('en-US')} tokens` : undefined
-            }
-            value={model.contextLimit ? formatContextLimit(model.contextLimit) : 'N/A'}
-          />
-        </span>
-        <span className="inline-flex">
-          <ModelMetricItem
-            icon={Download}
-            tooltip={model.price?.input !== undefined ? `Input ${formatPriceValue(model.price.input)} /1M` : undefined}
-            value={formatPriceValue(model.price?.input)}
-          />
-        </span>
-        <span className="inline-flex">
-          <ModelMetricItem
-            icon={Upload}
-            tooltip={
-              model.price?.output !== undefined ? `Output ${formatPriceValue(model.price.output)} /1M` : undefined
-            }
-            value={formatPriceValue(model.price?.output)}
-          />
-        </span>
-        <span className="inline-flex">
-          <ModelMetricItem
-            icon={Database}
-            tooltip={cachePriceTooltip(model.price?.cacheRead, model.price?.cacheWrite)}
-            value={formatCachePriceValue(model.price?.cacheRead, model.price?.cacheWrite)}
-          />
-        </span>
-      </div>
+      {isVideoModel ? (
+        <div className="flex select-none flex-wrap items-stretch border-border/60 border-t py-2.5 text-[10px] [&>*+*]:border-border/80 [&>*+*]:border-l [&>*:first-child]:pl-0 [&>*]:px-2">
+          <span className="inline-flex">
+            <ModelMetricItem
+              icon={BadgeDollarSign}
+              tooltip={videoPriceTooltip(model.price)}
+              value={priceSummaryFromItems(videoPrices)}
+            />
+          </span>
+        </div>
+      ) : (
+        <div className="flex select-none flex-wrap items-stretch border-border/60 border-t py-2.5 text-[10px] [&>*+*]:border-border/80 [&>*+*]:border-l [&>*:first-child]:pl-0 [&>*]:px-2">
+          <span className="inline-flex">
+            <ModelMetricItem
+              icon={BookOpenText}
+              tooltip={
+                model.contextLimit ? `Context window: ${model.contextLimit.toLocaleString('en-US')} tokens` : undefined
+              }
+              value={model.contextLimit ? formatContextLimit(model.contextLimit) : 'N/A'}
+            />
+          </span>
+          {showReasoningMetric && (
+            <span className="inline-flex">
+              <ModelMetricItem
+                icon={Brain}
+                tooltip={reasoningSupported ? `Reasoning: ${reasoningEfforts.join(', ')}` : 'Reasoning: No'}
+                value={reasoningSupported ? 'Yes' : 'No'}
+              />
+            </span>
+          )}
+          <span className="inline-flex">
+            <ModelMetricItem
+              icon={BadgeDollarSign}
+              tooltip={priceTooltip(model.price)}
+              value={priceSummary(model.price)}
+            />
+          </span>
+        </div>
+      )}
       {hasModalities && (
         <div className="flex select-none flex-wrap items-center gap-1.5 border-border/60 border-t pt-2.5">
           <div className="flex flex-wrap items-center gap-1">

@@ -1,13 +1,22 @@
 # Testing
 
-Test runner: **Bun** (`bun test`). All tests live under `test/` inside each package or app.
+Test runners:
+- **Bun** (`bun test`) for package-local unit and daemon/runtime e2e tests.
+- **Playwright** for browser e2e tests in `apps/web/test/e2e`.
+
+All tests live under `test/` inside each package or app.
 
 ## Quick reference
 
 ```sh
 bun run test            # full suite (all packages via Turbo)
-bun ../../scripts/bun-test.ts test/unit/ --only-failures   # unit tests for the current package
-bun ../../scripts/bun-test.ts test/e2e/ --only-failures    # e2e tests for the current package
+bun run test:unit       # all package-local unit suites that expose test:unit
+bun run test:e2e        # all project e2e suites (daemon + web)
+bun run test:e2e:daemon # daemon/runtime e2e only
+bun run test:e2e:web    # web Playwright e2e only
+bun run test:loud       # full suite with verbose output
+bun run test:unit:loud  # unit suites with verbose output
+bun run test:e2e:loud   # e2e suites with verbose output
 bun ../../scripts/bun-test.ts test/e2e/*.smoke.test.ts --only-failures   # smoke tests only
 bun test/smoke/acp.ts   # subprocess smoke (ACP wire)
 ```
@@ -45,17 +54,60 @@ Rules:
 
 ## 2. package.json scripts
 
-Every package with tests must expose these scripts:
+Script names are layered by where they run:
+
+- Package-local scripts use generic names because the package is already the scope.
+- Root scripts either aggregate a whole test kind or include an explicit target suffix.
+- `:loud` always means the same test set with verbose output and no quiet failure filtering.
+- Target suffixes come after the test kind: `test:e2e:web`, `test:e2e:daemon`, `test:e2e:binary`.
+
+Root scripts:
+
+```json
+{
+  "test": "all package-local tests through Turbo",
+  "test:loud": "all package-local tests through Turbo with verbose output",
+  "test:unit": "all package-local unit tests through Turbo",
+  "test:unit:loud": "all package-local unit tests through Turbo with verbose output",
+  "test:e2e": "all project e2e suites",
+  "test:e2e:loud": "all project e2e suites with verbose output",
+  "test:e2e:daemon": "apps/monad daemon/runtime e2e only",
+  "test:e2e:daemon:loud": "apps/monad daemon/runtime e2e only, verbose",
+  "test:e2e:web": "apps/web Playwright e2e only",
+  "test:e2e:web:loud": "apps/web Playwright e2e only, verbose",
+  "test:e2e:binary": "packaged binary/install smoke e2e"
+}
+```
+
+Every package with Bun tests must expose these scripts when the matching
+directory exists:
 
 ```json
 {
   "test":      "bun ../../scripts/bun-test.ts test/ --only-failures",
+  "test:loud": "bun ../../scripts/bun-test.ts test/ --loud",
   "test:unit": "bun ../../scripts/bun-test.ts test/unit/ --only-failures",
-  "test:e2e":  "bun ../../scripts/bun-test.ts test/e2e/ --only-failures"
+  "test:unit:loud": "bun ../../scripts/bun-test.ts test/unit/ --loud",
+  "test:e2e":  "bun ../../scripts/bun-test.ts test/e2e/ --only-failures",
+  "test:e2e:loud": "bun ../../scripts/bun-test.ts test/e2e/ --loud"
 }
 ```
 
-Omit `test:e2e` when the package has no `test/e2e/` directory. The scripts must stay consistent so `turbo run test:unit` works across the monorepo.
+Omit `test:unit` / `test:unit:loud` when the package has no `test/unit/`
+directory. Omit `test:e2e` / `test:e2e:loud` when the package has no
+`test/e2e/` directory.
+
+`apps/web` is the browser-runner exception for e2e:
+
+```json
+{
+  "test:e2e": "playwright test",
+  "test:e2e:loud": "playwright test --reporter=list"
+}
+```
+
+Keep these names consistent so root `turbo run test:unit` and targeted root
+entrypoints remain predictable across the monorepo.
 
 ---
 

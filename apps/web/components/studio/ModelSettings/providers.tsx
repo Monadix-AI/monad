@@ -23,6 +23,50 @@ import {
 import { SECRET_INPUT_PASSWORD_MANAGER_PROPS } from './secret-input-props';
 import { type AddForm, emptyAddForm, FormMsg, StatusDot, toErrorMessage } from './shared';
 
+const MODEL_CATEGORY_TABS = [
+  { id: 'all', label: 'All' },
+  { id: 'text', label: 'Text' },
+  { id: 'image', label: 'Image' },
+  { id: 'embeddings', label: 'Embeddings' },
+  { id: 'audio', label: 'Audio' },
+  { id: 'video', label: 'Video' },
+  { id: 'rerank', label: 'Rerank' },
+  { id: 'speech', label: 'Speech' },
+  { id: 'transcription', label: 'Transcription' }
+] as const;
+type ModelCategoryTabId = (typeof MODEL_CATEGORY_TABS)[number]['id'];
+
+function modelOutputs(model: ModelInfo): string[] {
+  const output = model.modalities?.output?.filter((item) => item.length > 0) ?? [];
+  if (output.length > 0) return output;
+  switch (model.modalities?.kind) {
+    case 'embedding':
+      return ['embeddings'];
+    case 'image':
+    case 'video':
+    case 'speech':
+    case 'audio':
+    case 'rerank':
+    case 'transcription':
+      return [model.modalities.kind];
+    default:
+      return ['text'];
+  }
+}
+
+function modelMatchesCategory(model: ModelInfo, category: ModelCategoryTabId): boolean {
+  if (category === 'all') return true;
+  const output = modelOutputs(model);
+  if (category === 'embeddings') return output.includes('embeddings') || output.includes('embedding');
+  return output.includes(category);
+}
+
+function categoryCounts(models: ModelInfo[]): Record<ModelCategoryTabId, number> {
+  return Object.fromEntries(
+    MODEL_CATEGORY_TABS.map((tab) => [tab.id, models.filter((model) => modelMatchesCategory(model, tab.id)).length])
+  ) as Record<ModelCategoryTabId, number>;
+}
+
 function ProviderModelCard({ model }: { model: ModelInfo }) {
   return (
     <div className="glass-foreground min-w-0 rounded-(--radius-sm) border border-border/60 p-3">
@@ -185,6 +229,7 @@ export function ProviderDialog({
       ? t('web.url.required')
       : t('web.url.httpOnly')
     : null;
+  const [modelCategory, setModelCategory] = useState<ModelCategoryTabId>('all');
 
   const updateAddForm = (next: (form: AddForm) => AddForm) => {
     setForm(next);
@@ -208,6 +253,7 @@ export function ProviderDialog({
       setKeyMsg(null);
       setCredTest({});
       setModelFilter('');
+      setModelCategory('all');
       return;
     }
     setStep(initialProviderDialogStep(mode));
@@ -328,12 +374,17 @@ export function ProviderDialog({
   const provMeta = activeProvider ? metaFor(activeProvider.type) : null;
   const Logo = provMeta?.logo;
   const configuredModels = mode === 'add' ? testedModels : detail.models;
+  const configuredSearchModels = configuredModels.filter((m) => modelMatchesQuery(m, modelFilter));
+  const configuredCategoryCounts = categoryCounts(configuredSearchModels);
   const configuredVisibleModels = sortModelsForProvider(
-    configuredModels.filter((m) => modelMatchesQuery(m, modelFilter)),
+    configuredSearchModels.filter((m) => modelMatchesCategory(m, modelCategory)),
     activeProvider?.type
   );
-  const visibleModelLimit = configuredVisibleModels.slice(0, 50);
   const canGoBack = providerDialogCanGoBack(mode, step);
+
+  useEffect(() => {
+    if (modelCategory !== 'all' && configuredCategoryCounts[modelCategory] === 0) setModelCategory('all');
+  }, [configuredCategoryCounts, modelCategory]);
 
   return (
     <Dialog
@@ -612,12 +663,54 @@ export function ProviderDialog({
                       />
                     )}
 
+                    {configuredModels.length > 0 && (
+                      <div className="-mx-1 overflow-x-auto px-1 pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                        <div
+                          aria-label="Model category"
+                          className="flex w-max min-w-full items-center gap-3"
+                          role="tablist"
+                        >
+                          {MODEL_CATEGORY_TABS.filter(
+                            (tab) => tab.id === 'all' || configuredCategoryCounts[tab.id] > 0
+                          ).map((tab) => {
+                            const active = modelCategory === tab.id;
+                            const count = configuredCategoryCounts[tab.id];
+                            return (
+                              <button
+                                aria-selected={active}
+                                className={cn(
+                                  'relative inline-flex h-7 shrink-0 items-center gap-1.5 whitespace-nowrap px-0.5 font-medium text-xs transition-colors after:absolute after:right-0 after:bottom-0 after:left-0 after:h-px after:rounded-full after:transition-colors',
+                                  active
+                                    ? 'text-foreground after:bg-foreground'
+                                    : 'text-muted-foreground after:bg-transparent hover:text-foreground'
+                                )}
+                                key={tab.id}
+                                onClick={() => setModelCategory(tab.id)}
+                                role="tab"
+                                type="button"
+                              >
+                                <span>{tab.label}</span>
+                                <span
+                                  className={cn(
+                                    'text-[11px] tabular-nums',
+                                    active ? 'text-muted-foreground' : 'text-muted-foreground/70'
+                                  )}
+                                >
+                                  {count}
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
                     {mode === 'edit' && detail.isLoadingModels && configuredModels.length === 0 ? (
                       <p className="text-muted-foreground text-xs">{t('web.model.loadingModels')}</p>
                     ) : configuredVisibleModels.length === 0 ? (
                       <p className="text-muted-foreground text-xs">{t('web.model.noModels')}</p>
                     ) : (
-                      <ProviderModelGrid models={visibleModelLimit} />
+                      <ProviderModelGrid models={configuredVisibleModels} />
                     )}
                   </section>
                 )}

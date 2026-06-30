@@ -20,7 +20,7 @@ licenses.json
 # code coverage
 coverage
 *.lcov
-test-results/
+**/test-results/
 playwright-report/
 
 # logs

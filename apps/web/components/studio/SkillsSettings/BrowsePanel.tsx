@@ -13,23 +13,15 @@ import {
   SKILL_MARKETPLACE_SOURCES,
   skillMarketplaceSourceMeta
 } from '@monad/protocol';
-import {
-  Badge,
-  Button,
-  cn,
-  Input,
-  ScrollArea,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from '@monad/ui';
-import { ArrowLeft, ExternalLink, Loader2, Search, Sparkles, TrendingUp, Zap } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { Badge, Button, cn, Input, ScrollArea } from '@monad/ui';
+import { ArrowLeft, ExternalLink, Loader2, Search, Sparkles, TrendingUp, X, Zap } from 'lucide-react';
+import { usePathname, useRouter } from 'next/navigation';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { useT } from '@/components/I18nProvider';
 import { Markdown } from '@/components/Markdown';
+import { skillMarketplacePath, skillMarketplaceSourceFromPathname } from '@/components/routes/route-paths';
+import { toast } from '@/components/ToastProvider';
 import { ConsentPopover } from './ConsentPopover';
 import {
   BROWSE_MORE_SKELETON_KEYS,
@@ -41,6 +33,14 @@ import {
 import { safeHttpUrl } from './utils';
 
 const PAGE_SIZE = 10;
+
+const MARKETPLACE_ICONS: Record<SkillMarketplaceSource, { src: string; fallback: string }> = {
+  clawhub: { src: 'https://clawhub.ai/favicon.ico', fallback: 'C' },
+  'skills.sh': { src: 'https://skills.sh/favicon.ico', fallback: 'S' },
+  'mcpservers.org': { src: 'https://mcpservers.org/icon.png', fallback: 'M' },
+  'ClaudeSkills.info': { src: 'https://claudeskills.info/favicon.ico', fallback: 'C' },
+  SkillsLLM: { src: 'https://skillsllm.com/favicon.ico', fallback: 'L' }
+};
 
 const MARKETPLACE_SORT_TABS: { mode: SkillSortMode; icon: React.ReactNode; labelKey: WebMessageIdWithoutParams }[] = [
   { mode: 'trending', icon: <TrendingUp className="size-3.5" />, labelKey: 'web.skills.tabTrending' },
@@ -62,6 +62,32 @@ function marketplaceRequiresInstallSource(source: SkillMarketplaceSource): boole
 
 function marketplaceInstallSourcePrefix(source: SkillMarketplaceSource): string | undefined {
   return skillMarketplaceSourceMeta(source).installSourcePrefix;
+}
+
+function MarketplaceIcon({ source }: { source: SkillMarketplaceSource }) {
+  const icon = MARKETPLACE_ICONS[source];
+  const [failed, setFailed] = useState(false);
+
+  if (failed) {
+    return (
+      <span
+        aria-hidden="true"
+        className="grid size-4 shrink-0 place-items-center rounded-sm bg-muted text-[9px] text-muted-foreground"
+      >
+        {icon.fallback}
+      </span>
+    );
+  }
+
+  return (
+    // biome-ignore lint/performance/noImgElement: Marketplace tabs intentionally use official site favicons directly.
+    <img
+      alt=""
+      className="size-4 shrink-0 rounded-sm"
+      onError={() => setFailed(true)}
+      src={icon.src}
+    />
+  );
 }
 
 function installResultKey(result: Pick<SkillSearchResult, 'id' | 'installSource'>): string {
@@ -215,8 +241,11 @@ export function BrowsePanel({
   onInstallFailed: () => void;
 }) {
   const t = useT();
+  const pathname = usePathname();
+  const router = useRouter();
+  const routedSource = skillMarketplaceSourceFromPathname(pathname);
   const [sort, setSort] = useState<SkillSortMode>('trending');
-  const [source, setSource] = useState<SkillMarketplaceSource>(DEFAULT_SKILL_MARKETPLACE_SOURCE);
+  const [source, setSource] = useState<SkillMarketplaceSource>(routedSource ?? DEFAULT_SKILL_MARKETPLACE_SOURCE);
   const [query, setQuery] = useState('');
   const [detailSkill, setDetailSkill] = useState<Pick<SkillSearchResult, 'id' | 'source' | 'installSource'> | null>(
     null
@@ -234,19 +263,41 @@ export function BrowsePanel({
   const [installingId, setInstallingId] = useState<string | null>(null);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const browseScrollRootRef = useRef<HTMLDivElement>(null);
+  const mountedRef = useRef(true);
+  const consentToastIdsRef = useRef(new Map<string, string>());
 
-  const runSearch = () => {
-    const q = query.trim();
-    if (q) {
-      setVisibleCount(PAGE_SIZE);
-      void search({ q, source });
-    }
-  };
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  const runSearch = useCallback(
+    (opts?: { nextQuery?: string; nextSource?: SkillMarketplaceSource; nextSort?: SkillSortMode }) => {
+      const q = (opts?.nextQuery ?? query).trim();
+      if (q) {
+        setVisibleCount(PAGE_SIZE);
+        void search({ q, sort: opts?.nextSort ?? sort, source: opts?.nextSource ?? source });
+      }
+    },
+    [query, search, sort, source]
+  );
 
   const handleSortChange = (nextSort: SkillSortMode) => {
     setSort(nextSort);
     setDetailSkill(null);
     setVisibleCount(PAGE_SIZE);
+    runSearch({ nextSort });
+  };
+
+  const handleSourceChange = (nextSource: SkillMarketplaceSource) => {
+    const nextSort = marketplaceSupportsCuratedSorts(nextSource) ? sort : 'trending';
+    setSource(nextSource);
+    setSort(nextSort);
+    setDetailSkill(null);
+    setVisibleCount(PAGE_SIZE);
+    runSearch({ nextSource, nextSort });
+    router.replace(skillMarketplacePath(nextSource));
   };
 
   const startInstall = async (
@@ -271,9 +322,39 @@ export function BrowsePanel({
       if (res.needsConsent) {
         const consentInfo = { skills: res.skills, warnings: res.warnings };
         setPending((prev) => new Map(prev).set(resultKey, consentInfo));
+        const toastId = toast.info(t('web.skills.consentToast'), {
+          action: {
+            label: t('web.skills.consentConfirm'),
+            onClick: async () => {
+              const confirmed = await install({ source: installSource, consent: true })
+                .unwrap()
+                .catch(() => null);
+              if (!confirmed || confirmed.needsConsent) {
+                toast.error(t('web.skills.installFailed'));
+                return false;
+              }
+              toast.success(t('web.skills.installSucceeded'));
+              consentToastIdsRef.current.delete(resultKey);
+              if (!mountedRef.current) return;
+              setInstalled((prev) => new Set(prev).add(resultKey));
+              setPending((prev) => {
+                const m = new Map(prev);
+                m.delete(resultKey);
+                return m;
+              });
+              void onInstalled();
+            }
+          },
+          detail: consentInfo,
+          duration: Number.POSITIVE_INFINITY
+        });
+        consentToastIdsRef.current.set(resultKey, toastId);
         return { status: 'consent', consent: consentInfo };
       } else {
         setInstalled((prev) => new Set(prev).add(resultKey));
+        const consentToastId = consentToastIdsRef.current.get(resultKey);
+        if (consentToastId) toast.dismiss(consentToastId);
+        consentToastIdsRef.current.delete(resultKey);
         setPending((prev) => {
           const m = new Map(prev);
           m.delete(resultKey);
@@ -311,6 +392,25 @@ export function BrowsePanel({
     viewport.addEventListener('scroll', loadMoreIfNeeded, { passive: true });
     return () => viewport.removeEventListener('scroll', loadMoreIfNeeded);
   }, [hasMoreResults, results.length]);
+
+  useEffect(() => {
+    const q = query.trim();
+    if (!q) {
+      setVisibleCount(PAGE_SIZE);
+      return;
+    }
+    const timeout = window.setTimeout(() => runSearch({ nextQuery: q }), 250);
+    return () => window.clearTimeout(timeout);
+  }, [query, runSearch]);
+
+  useEffect(() => {
+    if (!routedSource || routedSource === source) return;
+    const nextSort = marketplaceSupportsCuratedSorts(routedSource) ? sort : 'trending';
+    setSource(routedSource);
+    setSort(nextSort);
+    setDetailSkill(null);
+    setVisibleCount(PAGE_SIZE);
+  }, [routedSource, sort, source]);
 
   if (detailSkill) {
     return (
@@ -351,10 +451,15 @@ export function BrowsePanel({
         const done = installed.has(resultKey);
         const consent = pending.get(resultKey);
         const isInstalling = installingId === resultKey;
+        const installVisibility =
+          done || consent || isInstalling
+            ? 'pointer-events-auto opacity-100'
+            : 'pointer-events-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100';
 
         return (
           <div
-            className={layout.card}
+            className={cn(layout.card, 'group')}
+            data-slot="skill-browse-card"
             key={resultKey}
           >
             <div className="flex min-w-0 flex-1 flex-col gap-2">
@@ -387,7 +492,7 @@ export function BrowsePanel({
                 onConfirm={() => startInstall(r, true)}
               >
                 <Button
-                  className={layout.installButton}
+                  className={cn(layout.installButton, 'transition-opacity duration-150 ease-out', installVisibility)}
                   disabled={
                     done ||
                     isInstalling ||
@@ -427,77 +532,89 @@ export function BrowsePanel({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-0 overflow-hidden">
-      <div className="flex flex-wrap items-center gap-2 border-b bg-muted/10 px-4 py-2">
-        <Select
-          onValueChange={(value) => {
-            const nextSource = value as SkillMarketplaceSource;
-            setSource(nextSource);
-            setDetailSkill(null);
-            setVisibleCount(PAGE_SIZE);
-            if (query.trim()) {
-              void search({ q: query.trim(), source: nextSource });
-            }
-          }}
-          value={source}
+      <div className="flex min-w-0 flex-col gap-2 border-b bg-muted/10 px-4 py-3">
+        <div
+          aria-label={t('web.skills.source')}
+          className="-mx-1 flex min-w-0 gap-1 overflow-x-auto px-1 pb-0.5"
+          role="tablist"
         >
-          <SelectTrigger className="h-7 w-[180px] border-border/70 bg-background/60">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {SKILL_MARKETPLACE_SOURCES.map((option) => (
-              <SelectItem
-                key={option.source}
-                value={option.source}
-              >
-                {option.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        {supportsCuratedSorts ? (
-          <div className="inline-flex min-w-0 items-center gap-0.5 rounded-md border border-border/70 bg-muted/20 p-0.5">
-            {MARKETPLACE_SORT_TABS.map((tab) => (
+          {SKILL_MARKETPLACE_SOURCES.map((option) => (
+            <button
+              aria-selected={source === option.source}
+              className={cn(
+                'inline-flex h-8 shrink-0 items-center gap-2 rounded-md border border-transparent px-2.5 font-medium text-muted-foreground text-xs transition-[background-color,border-color,color] duration-150 ease-out hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                source === option.source &&
+                  'border-border/70 bg-background/80 text-foreground shadow-sm hover:bg-background/80'
+              )}
+              key={option.source}
+              onClick={() => handleSourceChange(option.source)}
+              role="tab"
+              type="button"
+            >
+              <MarketplaceIcon source={option.source} />
+              <span className="whitespace-nowrap">{option.label}</span>
+            </button>
+          ))}
+        </div>
+
+        <div className="flex min-w-0 flex-col gap-2 lg:flex-row lg:items-center">
+          <div className="relative min-w-0 flex-1">
+            <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              className="h-8 pr-8 pl-8"
+              onChange={(e) => {
+                setQuery(e.target.value);
+                setVisibleCount(PAGE_SIZE);
+              }}
+              onKeyDown={(e) => e.key === 'Enter' && runSearch()}
+              placeholder={t('web.skills.browsePlaceholder', { source: marketplaceLabel(source) })}
+              value={query}
+            />
+            {query ? (
               <Button
-                className={cn(
-                  'h-7 justify-start gap-1.5 rounded-sm px-2 text-muted-foreground text-xs hover:bg-accent hover:text-accent-foreground',
-                  sort === tab.mode && 'bg-background text-foreground shadow-sm hover:bg-background'
-                )}
-                key={tab.mode}
-                onClick={() => handleSortChange(tab.mode)}
-                size="sm"
+                aria-label={t('web.common.clear')}
+                className="absolute top-1/2 right-1 size-6 -translate-y-1/2 text-muted-foreground"
+                onClick={() => {
+                  setQuery('');
+                  setVisibleCount(PAGE_SIZE);
+                }}
+                size="icon"
                 variant="ghost"
               >
-                {tab.icon}
-                {t(tab.labelKey)}
+                <X className="size-3.5" />
               </Button>
-            ))}
+            ) : null}
           </div>
-        ) : null}
-      </div>
 
-      <div className="flex gap-2 border-b px-4 py-3">
-        <Input
-          className="flex-1"
-          onChange={(e) => {
-            setQuery(e.target.value);
-            setVisibleCount(PAGE_SIZE);
-          }}
-          onKeyDown={(e) => e.key === 'Enter' && runSearch()}
-          placeholder={t('web.skills.browsePlaceholder', { source: marketplaceLabel(source) })}
-          value={query}
-        />
-        <Button
-          disabled={isFetching || !query.trim()}
-          onClick={runSearch}
-          size="sm"
-          variant="secondary"
-        >
+          {supportsCuratedSorts ? (
+            <div
+              aria-label={t('web.skills.sort')}
+              className="inline-flex min-w-0 items-center gap-0.5 self-start rounded-md border border-border/70 bg-muted/20 p-0.5 lg:self-auto"
+              role="tablist"
+            >
+              {MARKETPLACE_SORT_TABS.map((tab) => (
+                <Button
+                  aria-selected={sort === tab.mode}
+                  className={cn(
+                    'h-7 justify-start gap-1.5 rounded-sm px-2 text-muted-foreground text-xs hover:bg-accent hover:text-accent-foreground',
+                    sort === tab.mode && 'bg-background text-foreground shadow-sm hover:bg-background'
+                  )}
+                  key={tab.mode}
+                  onClick={() => handleSortChange(tab.mode)}
+                  role="tab"
+                  size="sm"
+                  variant="ghost"
+                >
+                  {tab.icon}
+                  {t(tab.labelKey)}
+                </Button>
+              ))}
+            </div>
+          ) : null}
           {isFetching && isSearching ? (
-            <Loader2 className="size-3.5 animate-spin text-foreground" />
-          ) : (
-            <Search className="size-3.5" />
-          )}
-        </Button>
+            <Loader2 className="size-3.5 shrink-0 animate-spin text-muted-foreground" />
+          ) : null}
+        </div>
       </div>
 
       <div

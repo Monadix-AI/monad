@@ -27,16 +27,57 @@ interface OpenRouterKeyResponse {
 }
 
 interface OpenRouterModelsResponse {
-  data?: Array<{
-    id: string;
-    name?: string;
-    pricing?: { prompt?: unknown; completion?: unknown; input_cache_read?: unknown; input_cache_write?: unknown };
-    architecture?: {
-      modality?: string;
-      input_modalities?: string[];
-      output_modalities?: string[];
-    };
-  }>;
+  data?: OpenRouterModelRecord[];
+}
+
+interface OpenRouterModelRecord {
+  id: string;
+  name?: string;
+  created?: unknown;
+  context_length?: unknown;
+  pricing?: OpenRouterPricing;
+  reasoning?: {
+    mandatory?: unknown;
+    default_enabled?: unknown;
+    supported_efforts?: unknown;
+    default_effort?: unknown;
+  };
+  supported_parameters?: unknown;
+  top_provider?: {
+    context_length?: unknown;
+  };
+  architecture?: {
+    modality?: string;
+    input_modalities?: string[];
+    output_modalities?: string[];
+  };
+  links?: {
+    details?: unknown;
+  };
+}
+
+interface OpenRouterPricing {
+  [key: string]: unknown;
+  prompt?: unknown;
+  completion?: unknown;
+  input_cache_read?: unknown;
+  input_cache_write?: unknown;
+  video?: unknown;
+  video_second?: unknown;
+  video_per_second?: unknown;
+  per_second?: unknown;
+  per_minute?: unknown;
+  per_hour?: unknown;
+  song?: unknown;
+  image_output?: unknown;
+}
+
+interface OpenRouterModelDetailsResponse {
+  data?: {
+    endpoints?: Array<{
+      pricing?: OpenRouterPricing;
+    }>;
+  };
 }
 
 function kindFromArchitecture(
@@ -46,15 +87,13 @@ function kindFromArchitecture(
 ): ModelModalities['kind'] {
   const out = outputModalities ?? [];
   if (out.includes('embeddings') || modality?.includes('embeddings')) return 'embedding';
+  if (out.includes('video') || modality?.includes('->video')) return 'video';
   if (out.includes('image') || modality?.includes('->image')) return 'image';
   // OpenRouter uses 'speech' (not 'audio') for TTS output modality.
-  if (
-    out.includes('audio') ||
-    out.includes('speech') ||
-    modality?.includes('->audio') ||
-    modality?.includes('->speech')
-  )
-    return 'speech';
+  if (out.includes('speech') || modality?.includes('->speech')) return 'speech';
+  if (out.includes('audio') || modality?.includes('->audio')) return 'audio';
+  if (out.includes('rerank') || modality?.includes('->rerank')) return 'rerank';
+  if (out.includes('transcription') || modality?.includes('->transcription')) return 'transcription';
   if (/embed/i.test(id)) return 'embedding';
   return 'chat';
 }
@@ -69,6 +108,118 @@ type ProviderMetadata = NonNullable<Awaited<ReturnType<MetadataExtractor['extrac
 function toJsonValue(value: unknown): JSONValue | undefined {
   if (value === undefined) return undefined;
   return JSON.parse(JSON.stringify(value)) as JSONValue;
+}
+
+function stringArray(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const strings = value.filter((item): item is string => typeof item === 'string' && item.length > 0);
+  return strings.length ? strings : undefined;
+}
+
+function positiveInteger(value: unknown): number | undefined {
+  const n = typeof value === 'string' ? Number.parseInt(value, 10) : typeof value === 'number' ? value : Number.NaN;
+  return Number.isInteger(n) && n > 0 ? n : undefined;
+}
+
+function releaseDateFromUnixSeconds(value: unknown): string | undefined {
+  const seconds = typeof value === 'string' ? Number.parseFloat(value) : typeof value === 'number' ? value : Number.NaN;
+  if (!Number.isFinite(seconds) || seconds <= 0) return undefined;
+  return new Date(seconds * 1000).toISOString().slice(0, 10);
+}
+
+function numericPrice(value: unknown): number | undefined {
+  const n = typeof value === 'string' ? Number.parseFloat(value) : typeof value === 'number' ? value : Number.NaN;
+  return Number.isFinite(n) && n >= 0 ? n : undefined;
+}
+
+function hasPositiveNonTokenPrice(pricing: OpenRouterPricing | undefined): boolean {
+  if (!pricing) return false;
+  return Object.entries(pricing).some(([key, value]) => {
+    if (key === 'prompt' || key === 'completion' || key === 'input_cache_read' || key === 'input_cache_write') {
+      return false;
+    }
+    const n = numericPrice(value);
+    return n !== undefined && n > 0;
+  });
+}
+
+function shouldFetchEndpointPricing(model: OpenRouterModelRecord): boolean {
+  if (typeof model.links?.details !== 'string') return false;
+  const output = model.architecture?.output_modalities ?? [];
+  const shouldUseDetailPricingFallback =
+    output.includes('image') ||
+    output.includes('video') ||
+    output.includes('rerank') ||
+    output.includes('audio') ||
+    output.includes('speech') ||
+    output.includes('transcription') ||
+    !!model.architecture?.modality?.includes('->image') ||
+    !!model.architecture?.modality?.includes('->video') ||
+    !!model.architecture?.modality?.includes('->rerank') ||
+    !!model.architecture?.modality?.includes('->audio') ||
+    !!model.architecture?.modality?.includes('->speech') ||
+    !!model.architecture?.modality?.includes('->transcription');
+  return shouldUseDetailPricingFallback && !hasPositiveNonTokenPrice(model.pricing);
+}
+
+async function fetchEndpointPricing(
+  base: string,
+  model: OpenRouterModelRecord,
+  headers: Record<string, string>,
+  fetch: typeof globalThis.fetch
+): Promise<OpenRouterPricing | undefined> {
+  const details = model.links?.details;
+  if (typeof details !== 'string') return undefined;
+  const detailsUrl = openRouterDetailsUrl(base, details);
+  if (!detailsUrl) return fetchModelPagePricing(base, model, fetch);
+  let endpointPricing: OpenRouterPricing | undefined;
+  try {
+    const res = await fetch(detailsUrl, { headers });
+    if (!res.ok) return undefined;
+    const json = (await res.json()) as OpenRouterModelDetailsResponse;
+    endpointPricing = json.data?.endpoints?.find((endpoint) => endpoint.pricing)?.pricing;
+  } catch {
+    return fetchModelPagePricing(base, model, fetch);
+  }
+  if (hasPositiveNonTokenPrice(endpointPricing)) return endpointPricing;
+  const pagePricing = await fetchModelPagePricing(base, model, fetch);
+  if (hasPositiveNonTokenPrice(pagePricing)) return pagePricing;
+  return mergePricing(endpointPricing, pagePricing);
+}
+
+async function fetchModelPagePricing(
+  _base: string,
+  model: OpenRouterModelRecord,
+  fetch: typeof globalThis.fetch
+): Promise<OpenRouterPricing | undefined> {
+  try {
+    const res = await fetch(openRouterModelPageUrl(model.id));
+    if (!res.ok) return undefined;
+    return priceFromOpenRouterModelPage(await res.text());
+  } catch {
+    return undefined;
+  }
+}
+
+function priceFromOpenRouterModelPage(html: string): OpenRouterPricing | undefined {
+  const match = html.match(
+    /(?:from\s*)?\$([0-9]+(?:\.[0-9]+)?)\s*<[^>]*>\s*\/(search|second|seconds|minute|minutes|hour|hours|song|songs)\s*</i
+  );
+  if (!match?.[1] || !match[2]) return undefined;
+  const unit = match[2].toLowerCase();
+  if (unit === 'search') return { search: match[1] };
+  if (unit === 'minute' || unit === 'minutes') return { per_minute: match[1] };
+  if (unit === 'hour' || unit === 'hours') return { per_hour: match[1] };
+  if (unit === 'song' || unit === 'songs') return { song: match[1] };
+  return { video_second: match[1] };
+}
+
+function mergePricing(
+  modelPricing: OpenRouterPricing | undefined,
+  endpointPricing: OpenRouterPricing | undefined
+): OpenRouterPricing | undefined {
+  if (!modelPricing && !endpointPricing) return undefined;
+  return { ...(modelPricing ?? {}), ...(endpointPricing ?? {}) };
 }
 
 function extractOpenRouterMetadata(parsedBody: unknown): ProviderMetadata | undefined {
@@ -111,6 +262,21 @@ function createOpenRouterProvider(call: OpenRouterProviderCall) {
 
 function openRouterApiOrigin(baseUrl: string | undefined): string {
   return (baseUrl ?? 'https://openrouter.ai').replace(/\/api\/v1\/?$/, '').replace(/\/$/, '');
+}
+
+function openRouterDetailsUrl(base: string, details: string): string | undefined {
+  try {
+    const baseUrl = new URL(base);
+    const detailsUrl = new URL(details, baseUrl);
+    if (detailsUrl.origin !== baseUrl.origin) return undefined;
+    return detailsUrl.toString();
+  } catch {
+    return undefined;
+  }
+}
+
+function openRouterModelPageUrl(modelId: string): string {
+  return new URL(`/${modelId}`, 'https://openrouter.ai').toString();
 }
 
 async function assertOpenRouterKey(
@@ -161,38 +327,64 @@ export const openrouterProviderAtom = defineAiSdkProvider({
       defaultRes.json() as Promise<OpenRouterModelsResponse>,
       ...extraResponses.map(safeJson)
     ]);
-    const toModelInfo = (m: NonNullable<OpenRouterModelsResponse['data']>[number]): ModelInfo => {
-      const price = openAiPrice(m.pricing);
+    const rawModels = [...(defaultJson.data ?? [])];
+    const seenRaw = new Set(rawModels.map((model) => model.id));
+    for (const extra of extraJsons) {
+      for (const model of extra.data ?? []) {
+        if (!seenRaw.has(model.id)) {
+          seenRaw.add(model.id);
+          rawModels.push(model);
+        }
+      }
+    }
+    const endpointPricing = new Map<string, OpenRouterPricing>();
+    await Promise.all(
+      rawModels.map(async (model) => {
+        if (!shouldFetchEndpointPricing(model)) return;
+        const pricing = await fetchEndpointPricing(base, model, headers, fetch);
+        if (pricing) endpointPricing.set(model.id, pricing);
+      })
+    );
+    const toModelInfo = (m: OpenRouterModelRecord): ModelInfo => {
+      const detailedPricing = endpointPricing.get(m.id);
+      const price = openAiPrice(
+        detailedPricing && hasPositiveNonTokenPrice(detailedPricing)
+          ? detailedPricing
+          : mergePricing(m.pricing, detailedPricing)
+      );
       const arch = m.architecture;
+      const contextLimit = positiveInteger(m.context_length) ?? positiveInteger(m.top_provider?.context_length);
+      const releaseDate = releaseDateFromUnixSeconds(m.created);
       const kind = kindFromArchitecture(arch?.modality, arch?.output_modalities, m.id);
-      // Normalize OpenRouter's output_modalities to protocol values:
-      // "speech" → "audio", "embeddings" is represented by kind alone.
-      const output = arch?.output_modalities
-        ?.map((v) => (v === 'speech' ? 'audio' : v === 'embeddings' ? null : v))
-        .filter((v): v is string => v !== null);
+      // OpenRouter reports audio and speech separately; keep speech distinct for TTS role matching.
+      const output = arch?.output_modalities?.filter((v) => v.length > 0);
+      const supportedParameters = stringArray(m.supported_parameters);
+      const reasoningEfforts = stringArray(m.reasoning?.supported_efforts);
+      const defaultReasoningEffort =
+        typeof m.reasoning?.default_effort === 'string' && m.reasoning.default_effort.length
+          ? m.reasoning.default_effort
+          : undefined;
+      const reasoning =
+        !!m.reasoning || !!supportedParameters?.some((param) => param === 'reasoning' || param === 'reasoning_effort');
       const modalities: ModelModalities = {
         kind,
         ...(arch?.input_modalities?.length ? { input: arch.input_modalities } : {}),
-        ...(output?.length ? { output } : {})
+        ...(output?.length ? { output } : {}),
+        ...(reasoning ? { reasoning: true } : {}),
+        ...(reasoningEfforts ? { reasoningEfforts } : {}),
+        ...(defaultReasoningEffort ? { defaultReasoningEffort } : {})
       };
       return {
         id: m.id,
         ...(m.name ? { label: m.name } : {}),
         ...(price ? { price } : {}),
+        ...(contextLimit ? { contextLimit } : {}),
+        ...(releaseDate ? { releaseDate } : {}),
+        detailUrl: openRouterModelPageUrl(m.id),
         modalities
       };
     };
-    const models = (defaultJson.data ?? []).map(toModelInfo);
-    const seen = new Set(models.map((m) => m.id));
-    for (const extra of extraJsons) {
-      for (const m of extra.data ?? []) {
-        if (!seen.has(m.id)) {
-          seen.add(m.id);
-          models.push(toModelInfo(m));
-        }
-      }
-    }
-    return models;
+    return rawModels.map((model) => toModelInfo(model));
   },
 
   // OpenRouter normalizes reasoning across upstreams behind one `reasoning.effort` knob; the

@@ -106,6 +106,13 @@ test('parseAtomPackSource handles github / npm / local', () => {
     repo: 'pixel2motion',
     ref: 'main'
   });
+  expect(parseAtomPackSource('github:vercel-labs/skills@main/skills/find-skills')).toMatchObject({
+    kind: 'github',
+    owner: 'vercel-labs',
+    repo: 'skills',
+    ref: 'main',
+    path: 'skills/find-skills'
+  });
   expect(parseAtomPackSource('https://github.com/nolangz/pixel2motion/blob/main/SKILL.md')).toMatchObject({
     kind: 'github',
     owner: 'nolangz',
@@ -140,9 +147,11 @@ test('github source identity includes subdirectory path but not ref', () => {
   const first = parseAtomPackSource('https://github.com/acme/skills/tree/main/pixel2motion');
   const second = parseAtomPackSource('https://github.com/acme/skills/tree/v2/pixel2motion');
   const other = parseAtomPackSource('https://github.com/acme/skills/tree/main/documents');
+  const shorthand = parseAtomPackSource('github:acme/skills@main/pixel2motion');
 
   expect(sourceIdentity(first)).toBe('github:acme/skills/pixel2motion');
   expect(sourceIdentity(second)).toBe(sourceIdentity(first));
+  expect(sourceIdentity(shorthand)).toBe(sourceIdentity(first));
   expect(sourceIdentity(other)).toBe('github:acme/skills/documents');
 });
 

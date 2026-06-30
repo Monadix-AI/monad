@@ -64,9 +64,11 @@
     "start": "bun --bun next start",
     "start:dev": "bun --env-file=../../.env.local --bun next dev --turbopack",
     "test": "bun ../../scripts/bun-test.ts test/ --only-failures",
-    "test:e2e": "playwright test",
+    "test:e2e": "playwright test --reporter=dot",
+    "test:e2e:loud": "playwright test --reporter=list",
     "test:loud": "bun ../../scripts/bun-test.ts test/ --loud",
     "test:unit": "bun ../../scripts/bun-test.ts test/unit/ --only-failures",
+    "test:unit:loud": "bun ../../scripts/bun-test.ts test/unit/ --loud",
     "typecheck": "tsgo --noEmit"
   },
   "type": "module"

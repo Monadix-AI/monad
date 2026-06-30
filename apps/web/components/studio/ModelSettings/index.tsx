@@ -5,7 +5,7 @@ import type { GenerationParamsView, ModelInfo, ProfileView } from '@monad/protoc
 import { useListAgentsQuery } from '@monad/client-rtk';
 import { ModelProviderType } from '@monad/protocol';
 import { Button, ScrollArea } from '@monad/ui';
-import { Plus, RefreshCw } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { flushSync } from 'react-dom';
 
@@ -110,9 +110,9 @@ export function ModelSettings(_props: { onClose: () => void }) {
     }
   };
 
-  const updateProfileParams = async (profile: ProfileView, params: GenerationParamsView) => {
+  const updateProfileRouteParams = async (profile: ProfileView, role: RouteKey, params: GenerationParamsView) => {
     try {
-      await settings.setProfile({ ...profile, params });
+      await settings.setProfile({ ...profile, routeParams: { ...profile.routeParams, [role]: params } });
     } catch {
       //
     }
@@ -156,22 +156,11 @@ export function ModelSettings(_props: { onClose: () => void }) {
   return (
     <StudioPanel className="overflow-hidden">
       <StudioPanelHeader
-        actions={
-          <Button
-            aria-label={t('web.common.refresh')}
-            className="size-7"
-            onClick={() => settingsQuery.refetch()}
-            size="icon"
-            variant="ghost"
-          >
-            <RefreshCw className={settingsQuery.isLoading ? 'animate-spin' : ''} />
-          </Button>
-        }
         subtitle={t('web.model.subtitle')}
         title={t('web.model.title')}
       />
 
-      <ScrollArea className="flex-1">
+      <ScrollArea className="min-h-0 flex-1">
         {settingsQuery.isLoading ? (
           <ModelSettingsSkeleton />
         ) : (
@@ -248,9 +237,11 @@ export function ModelSettings(_props: { onClose: () => void }) {
                         /* ignore */
                       }
                     }}
-                    onParamsChange={(params) => setDraftProfile((d) => (d ? { ...d, params } : d))}
                     onRename={(alias) => setDraftProfile((d) => (d ? { ...d, alias } : d))}
                     onRouteChange={(role, spec) => setDraftProfile((d) => (d ? profileWithRoute(d, role, spec) : d))}
+                    onRouteParamsChange={(role, params) =>
+                      setDraftProfile((d) => (d ? { ...d, routeParams: { ...d.routeParams, [role]: params } } : d))
+                    }
                     onSetDefault={() => {}}
                     profile={draftProfile}
                     providers={providers}
@@ -263,9 +254,9 @@ export function ModelSettings(_props: { onClose: () => void }) {
                     key={profileDisplayKey(p.alias, profileKeyMap)}
                     modelsByProvider={modelsByProvider}
                     onDelete={() => void handleDeleteProfile(p.alias)}
-                    onParamsChange={(params) => void updateProfileParams(p, params)}
                     onRename={(newAlias) => void renameProfile(p, newAlias)}
                     onRouteChange={(role, spec) => void updateProfileRoute(p, role, spec)}
+                    onRouteParamsChange={(role, params) => void updateProfileRouteParams(p, role, params)}
                     onSetDefault={() => void handleSetDefaultProfile(p.alias)}
                     profile={p}
                     providers={providers}
