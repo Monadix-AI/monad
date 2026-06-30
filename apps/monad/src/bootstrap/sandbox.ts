@@ -58,14 +58,17 @@ export async function createSandbox(
   await detectDockerRuntime();
   if (cfg.agent.sandbox.dockerImage) configureDockerImage(cfg.agent.sandbox.dockerImage);
 
+  // Reclaim AppContainer profiles orphaned by a prior crash on Windows. Best-effort, and
+  // unconditional: a run that flips confine true→false would otherwise strand the profiles the
+  // previous confined run created, leaking them on the host forever. No-op off Windows.
+  void sweepOrphanAppContainerProfiles();
+
   if (cfg.agent.sandbox.confine) {
     // The override path for the native Linux/Windows launcher binary (config.agent.sandbox.launcherPath)
     // must reach the launcher atoms before selection probes their isAvailable(); push it now (the
     // launchers are static atom objects that read it lazily). The actual launcher is selected after
     // the atom packs load — see finalizeSandboxLauncher().
     configureNativeLauncherPath(cfg.agent.sandbox.launcherPath);
-    // Reclaim AppContainer profiles orphaned by a prior crash on Windows. Best-effort.
-    void sweepOrphanAppContainerProfiles();
     // Deny confined children read access to credential stores even under open egress, so a
     // prompt-injected snippet can't read-then-exfiltrate secrets. The profile is allow-read by
     // default (interpreters must start); only these roots are blocked.

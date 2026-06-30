@@ -239,21 +239,30 @@ int wmain(int argc, wchar_t *argv[]) {
 
   /*
    * Sweep mode: enumerate all AppContainer profiles under
-   *   HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\AppContainer\Mappings
+   *   HKCU\SOFTWARE\Microsoft\Windows NT\CurrentVersion\AppContainer\Mappings
    * Each subkey is a SID string; the "Moniker" value is the human-readable name.
    * Delete any profile whose moniker starts with the given prefix (e.g. "monad.").
    * Used by the daemon on startup to reclaim orphaned profiles from prior crashes.
+   *
+   * Per-user AppContainer profiles created by CreateAppContainerProfile live under
+   * HKEY_CURRENT_USER, not HKEY_LOCAL_MACHINE — sweeping the wrong hive finds nothing.
+   *
+   * Collect matching monikers FIRST, then delete: DeleteAppContainerProfile removes the
+   * SID subkey from Mappings, so deleting mid-enumeration shifts the remaining keys left
+   * and RegEnumKeyExW(idx++) would skip the next profile.
    */
   if (sweepPrefix) {
     static const WCHAR MAPPINGS[] =
       L"SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\AppContainer\\Mappings";
     HKEY hMap;
-    if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, MAPPINGS, 0, KEY_READ, &hMap) != ERROR_SUCCESS)
+    if (RegOpenKeyExW(HKEY_CURRENT_USER, MAPPINGS, 0, KEY_READ, &hMap) != ERROR_SUCCESS)
       return 0; /* key absent → nothing to sweep */
 
     DWORD prefixLen = (DWORD)wcslen(sweepPrefix);
     WCHAR sidStr[256];
-    for (DWORD idx = 0; ; idx++) {
+    static WCHAR matches[256][256];
+    int n_matches = 0;
+    for (DWORD idx = 0; n_matches < (int)(_countof(matches)); idx++) {
       DWORD sidLen = (DWORD)(sizeof(sidStr) / sizeof(sidStr[0]));
       LONG rc = RegEnumKeyExW(hMap, idx, sidStr, &sidLen, NULL, NULL, NULL, NULL);
       if (rc == ERROR_NO_MORE_ITEMS) break;
@@ -270,12 +279,18 @@ int wmain(int argc, wchar_t *argv[]) {
       if (rc != ERROR_SUCCESS || type != REG_SZ) continue;
 
       if (wcsncmp(moniker, sweepPrefix, prefixLen) == 0) {
-        HRESULT hr = DeleteAppContainerProfile(moniker);
-        if (FAILED(hr) && hr != HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND))
-          warnw(L"sweep: DeleteAppContainerProfile '%ls': hr=0x%08lX", moniker, hr);
+        wcsncpy(matches[n_matches], moniker, _countof(matches[0]) - 1);
+        matches[n_matches][_countof(matches[0]) - 1] = L'\0';
+        n_matches++;
       }
     }
     RegCloseKey(hMap);
+
+    for (int j = 0; j < n_matches; j++) {
+      HRESULT hr = DeleteAppContainerProfile(matches[j]);
+      if (FAILED(hr) && hr != HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND))
+        warnw(L"sweep: DeleteAppContainerProfile '%ls': hr=0x%08lX", matches[j], hr);
+    }
     return 0;
   }
 
