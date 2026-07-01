@@ -283,6 +283,7 @@
   "web.init.removeKey": "Remove key",
   "web.init.restarting": "Restarting daemon with new home directory…",
   "web.init.saveError": "We could not save settings. Try again.",
+  "web.init.modelRequired": "Choose a model before continuing.",
   "web.init.savedKey": "Saved key",
   "web.init.saving": "Saving…",
   "web.init.step": "Step {{n}} of 4",

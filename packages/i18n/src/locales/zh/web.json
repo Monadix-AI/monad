@@ -130,6 +130,7 @@
   "web.init.saving": "保存中……",
   "web.init.next": "下一步 →",
   "web.init.saveError": "无法保存设置。请重试。",
+  "web.init.modelRequired": "继续前请选择一个模型。",
   "web.init.agentName": "Agent 名称",
   "web.init.agentNamePlaceholder": "我的 Agent",
   "web.init.capabilities": "能力",

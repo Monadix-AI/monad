@@ -105,7 +105,7 @@ export function InitWizard({ homePath }: { homePath?: string }) {
     if (seeded || !existingProviders || !existingProfiles || existingAgents === undefined) return;
 
     async function seed() {
-      const drafts: DraftProvider[] = await Promise.all(
+      const loaded = await Promise.all(
         providerSelectors.selectAll(existingProviders ?? providerAdapter.getInitialState()).map(async (p) => {
           const result = await monadClient.treaty.v1.settings.model.providers({ id: p.id }).credentials.get();
           const creds = result.data?.credentials ?? [];
@@ -119,12 +119,17 @@ export function InitWizard({ homePath }: { homePath?: string }) {
           };
         })
       );
+      // Only seed providers that already carry a credential. This drops the seeded sample
+      // placeholder (no credentials) so it can't be pre-selected and carried into a "complete"
+      // init that computeInitStatus then rejects as missing a provider/credential.
+      const drafts: DraftProvider[] = loaded.filter((p) => p.keys.length > 0);
       if (drafts.length > 0) setProviders(drafts);
 
       const defaultProfile = existingProfiles
         ? profileSelectors.selectAll(existingProfiles.profiles).find((p) => p.alias === existingProfiles.defaultAlias)
         : undefined;
-      if (defaultProfile) {
+      // Pre-select only when the default profile points at a credentialed provider we kept.
+      if (defaultProfile && drafts.some((p) => p.id === defaultProfile.routes.chat.provider)) {
         setSelectedProviderId(defaultProfile.routes.chat.provider);
         setSelectedModelId(defaultProfile.routes.chat.modelId);
         setModelFilter(defaultProfile.routes.chat.modelId);
@@ -340,7 +345,9 @@ export function InitWizard({ homePath }: { homePath?: string }) {
           ...(p.extra ? { extra: p.extra } : {})
         };
         // Skip setProvider for providers already in DB (PUT would be harmless but unnecessary).
-        if (!existingProviderIds.has(p.id)) await setProvider(pv);
+        // .unwrap() so a rejected write throws here instead of being silently swallowed — otherwise
+        // init would advance with nothing persisted and the home page reports "missing provider".
+        if (!existingProviderIds.has(p.id)) await setProvider(pv).unwrap();
         for (const k of p.keys) {
           if (k.saved) continue; // already persisted — don't create a duplicate
           await addCredential({
@@ -349,25 +356,27 @@ export function InitWizard({ homePath }: { homePath?: string }) {
             authType: 'api_key',
             accessToken: k.accessToken,
             ...(p.baseUrl ? { baseUrl: p.baseUrl } : {})
-          });
+          }).unwrap();
         }
       }
 
       const effectiveProviderId = selectedProviderId || providers[0]?.id || '';
       const effectiveModelId = selectedModelId || modelFilter.trim();
-      let savedAlias = '';
-      if (effectiveProviderId && effectiveModelId) {
-        const alias = 'default';
-        await setProfile({
-          alias,
-          routes: { chat: { provider: effectiveProviderId, modelId: effectiveModelId } },
-          params: {},
-          fallbacks: []
-        });
-        await setDefault({ alias });
-        savedAlias = alias;
+      // The default profile MUST point at a real provider+model for init to count as complete
+      // (computeInitStatus keys off it). Refuse to advance without one rather than finishing into a
+      // state the home page rejects as uninitialized.
+      if (!effectiveProviderId || !effectiveModelId) {
+        throw new Error(t('web.init.modelRequired'));
       }
-      setSavedModelAlias(savedAlias);
+      const alias = 'default';
+      await setProfile({
+        alias,
+        routes: { chat: { provider: effectiveProviderId, modelId: effectiveModelId } },
+        params: {},
+        fallbacks: []
+      }).unwrap();
+      await setDefault({ alias }).unwrap();
+      setSavedModelAlias(alias);
       setStep('agent');
     } catch (e) {
       setSaveError(e instanceof Error ? e.message : t('web.init.saveError'));
@@ -939,7 +948,7 @@ export function InitWizard({ homePath }: { homePath?: string }) {
                   try {
                     if (existingDefaultAgentId) {
                       // Agent already exists — re-affirm the default and finish.
-                      await setDefaultAgent({ agentId: existingDefaultAgentId });
+                      await setDefaultAgent({ agentId: existingDefaultAgentId }).unwrap();
                     } else {
                       const result = await createAgent({
                         name: agentName.trim(),
@@ -951,7 +960,7 @@ export function InitWizard({ homePath }: { homePath?: string }) {
                       });
                       if ('error' in result) throw new Error(String(result.error));
                       if (result.data?.agent?.id) {
-                        await setDefaultAgent({ agentId: result.data.agent.id });
+                        await setDefaultAgent({ agentId: result.data.agent.id }).unwrap();
                       }
                     }
                     setDone(true);
