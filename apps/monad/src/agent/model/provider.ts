@@ -60,12 +60,12 @@ export class ModelProviderRegistry {
           const mod = (await import(url)) as { default?: unknown };
           const providers = Array.isArray(mod.default) ? mod.default : [mod.default];
           for (const p of providers) {
-            if (
-              !p ||
-              typeof (p as ModelProvider).type !== 'string' ||
-              typeof (p as ModelProvider).stream !== 'function'
-            ) {
-              errors.push({ file: filename, error: 'default export must be a ModelProvider or ModelProvider[]' });
+            if (!isModelProvider(p)) {
+              errors.push({
+                file: filename,
+                error:
+                  'default export must be a ModelProvider or ModelProvider[] with at least one generation capability'
+              });
               continue;
             }
             this.register(p as ModelProvider);
@@ -79,4 +79,20 @@ export class ModelProviderRegistry {
 
     return { registered, errors };
   }
+}
+
+function isModelProvider(value: unknown): value is ModelProvider {
+  if (!value || typeof value !== 'object') return false;
+  const provider = value as Partial<ModelProvider>;
+  if (typeof provider.type !== 'string') return false;
+  return (
+    typeof provider.stream === 'function' ||
+    typeof provider.complete === 'function' ||
+    typeof provider.generateImage === 'function' ||
+    typeof provider.generateVideo === 'function' ||
+    typeof provider.generateSpeech === 'function' ||
+    typeof provider.transcribe === 'function' ||
+    typeof provider.rerank === 'function' ||
+    typeof provider.embed === 'function'
+  );
 }

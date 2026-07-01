@@ -210,10 +210,125 @@ test('image/speech are wired only on providers that build those models (openai),
   // openai supplies buildImageModel/buildSpeechModel → defineAiSdkProvider exposes the methods.
   expect(typeof byType.get('openai')?.generateImage).toBe('function');
   expect(typeof byType.get('openai')?.generateSpeech).toBe('function');
+  // Gateway-style providers advertise non-text model categories in listModels, so the matching
+  // call methods must be present too.
+  expect(typeof byType.get('openrouter')?.generateImage).toBe('function');
+  expect(typeof byType.get('openrouter')?.generateVideo).toBe('function');
+  expect(typeof byType.get('openrouter')?.generateSpeech).toBe('function');
+  expect(typeof byType.get('openrouter')?.transcribe).toBe('function');
+  expect(typeof byType.get('openrouter')?.rerank).toBe('function');
+  expect(typeof byType.get('openrouter')?.embed).toBe('function');
+  expect(typeof byType.get('vercel-gateway')?.generateImage).toBe('function');
+  expect(typeof byType.get('vercel-gateway')?.embed).toBe('function');
+  expect(typeof byType.get('vercel-gateway')?.generateVideo).toBe('function');
+  expect(typeof byType.get('vercel-gateway')?.generateSpeech).toBe('function');
+  expect(typeof byType.get('vercel-gateway')?.transcribe).toBe('function');
+  expect(typeof byType.get('vercel-gateway')?.rerank).toBe('function');
   // text-only providers must NOT advertise them (so the gateway fails over instead of throwing).
   expect(byType.get('anthropic')?.generateImage).toBeUndefined();
   expect(byType.get('mistral')?.generateSpeech).toBeUndefined();
   expect(byType.get('groq')?.generateImage).toBeUndefined();
+});
+
+test('OpenRouter native non-text endpoints map monad calls to REST payloads', async () => {
+  const openrouter = builtinModelProviders.find((p) => p.type === 'openrouter');
+  if (!openrouter?.generateSpeech || !openrouter.transcribe || !openrouter.rerank || !openrouter.generateVideo) {
+    throw new Error('openrouter provider missing native modality methods');
+  }
+  const seen: Array<{ url: string; body?: unknown }> = [];
+  const fetch = fakeFetch((u, init) => {
+    const body = init?.body ? JSON.parse(String(init.body)) : undefined;
+    seen.push({ url: u, body });
+    if (u.endsWith('/audio/speech')) {
+      return new Response(new Uint8Array([1, 2, 3]), { headers: { 'Content-Type': 'audio/wav' } });
+    }
+    if (u.endsWith('/audio/transcriptions')) {
+      return new Response(JSON.stringify({ text: 'hello', usage: { input_tokens: 2, total_tokens: 2 } }), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+    if (u.endsWith('/rerank')) {
+      return new Response(
+        JSON.stringify({
+          results: [
+            { index: 1, relevance_score: 0.9 },
+            { index: 0, relevance_score: 0.4 }
+          ],
+          usage: { total_tokens: 7 }
+        }),
+        { headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+    if (u.endsWith('/videos')) {
+      return new Response(JSON.stringify({ id: 'job-1', status: 'completed' }), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+    if (u.endsWith('/videos/job-1/content')) {
+      return new Response(new Uint8Array([4, 5]), { headers: { 'Content-Type': 'video/mp4' } });
+    }
+    return new Response('not found', { status: 404 });
+  });
+  const provider = { id: 'or', type: 'openrouter' };
+  const common = { provider, credential: CRED, fetch };
+
+  const speech = await openrouter.generateSpeech({ ...common, modelId: 'elevenlabs/tts', text: 'hi', voice: 'alloy' });
+  const transcript = await openrouter.transcribe({
+    ...common,
+    modelId: 'openai/whisper',
+    audio: new Uint8Array([82, 73, 70, 70]),
+    mediaType: 'audio/wav',
+    language: 'en'
+  });
+  const ranking = await openrouter.rerank({
+    ...common,
+    modelId: 'cohere/rerank',
+    query: 'capital',
+    documents: ['Berlin', 'Paris'],
+    topN: 2
+  });
+  const video = await openrouter.generateVideo({
+    ...common,
+    modelId: 'google/veo',
+    prompt: 'mountains',
+    aspectRatio: '16:9',
+    duration: 8,
+    resolution: '720p'
+  });
+
+  expect(speech).toEqual({ audio: new Uint8Array([1, 2, 3]), mediaType: 'audio/wav' });
+  expect(transcript).toMatchObject({ text: 'hello', usage: { inputTokens: 2, totalTokens: 2 } });
+  expect(ranking.ranking).toEqual([
+    { index: 1, score: 0.9, document: 'Paris' },
+    { index: 0, score: 0.4, document: 'Berlin' }
+  ]);
+  expect(video).toEqual({ video: new Uint8Array([4, 5]), mediaType: 'video/mp4' });
+  expect(seen.map((entry) => entry.url)).toEqual([
+    'https://openrouter.ai/api/v1/audio/speech',
+    'https://openrouter.ai/api/v1/audio/transcriptions',
+    'https://openrouter.ai/api/v1/rerank',
+    'https://openrouter.ai/api/v1/videos',
+    'https://openrouter.ai/api/v1/videos/job-1/content'
+  ]);
+  expect(seen[0]?.body).toMatchObject({ model: 'elevenlabs/tts', input: 'hi', voice: 'alloy' });
+  expect(seen[1]?.body).toMatchObject({
+    model: 'openai/whisper',
+    input_audio: { data: 'UklGRg==', format: 'wav' },
+    language: 'en'
+  });
+  expect(seen[2]?.body).toMatchObject({
+    model: 'cohere/rerank',
+    query: 'capital',
+    documents: ['Berlin', 'Paris'],
+    top_n: 2
+  });
+  expect(seen[3]?.body).toMatchObject({
+    model: 'google/veo',
+    prompt: 'mountains',
+    aspect_ratio: '16:9',
+    duration: 8,
+    resolution: '720p'
+  });
 });
 
 test('OpenRouter listModels rejects invalid credentials even when public models are readable', async () => {
@@ -951,6 +1066,7 @@ test('an openai-compatible preset targets the catalog default base URL', async (
     return sseResponse(['hi']);
   });
   const groq = makeOpenAICompatibleProvider(PROVIDER_DESCRIPTORS.groq);
+  if (!groq.stream) throw new Error('groq provider missing stream');
   // No baseUrl on provider/credential — must fall back to the descriptor preset.
   for await (const _ of groq.stream(call({ id: 'groq', type: 'groq' }, 'llama-3.3-70b', fetch))) {
     /* drain */
@@ -962,9 +1078,10 @@ test('an openai-compatible preset targets the catalog default base URL', async (
 
 test('Amazon Bedrock requires a region (extra.region)', async () => {
   const bedrock = builtinModelProviders.find((p) => p.type === 'amazon-bedrock');
-  if (!bedrock) throw new Error('bedrock provider missing');
+  if (!bedrock?.stream) throw new Error('bedrock provider missing stream');
+  const stream = bedrock.stream;
   const run = async () => {
-    for await (const _ of bedrock.stream(call({ id: 'bedrock', type: 'amazon-bedrock' }, 'claude', globalThis.fetch))) {
+    for await (const _ of stream(call({ id: 'bedrock', type: 'amazon-bedrock' }, 'claude', globalThis.fetch))) {
       /* drain */
     }
   };
@@ -975,6 +1092,7 @@ test('Amazon Bedrock requires a region (extra.region)', async () => {
 
 test('stream() yields one chunk per token delta', async () => {
   const provider = makeOpenAICompatibleProvider(PROVIDER_DESCRIPTORS.groq);
+  if (!provider.stream) throw new Error('groq provider missing stream');
   const fetch = fakeFetch(() => sseResponse(['Hel', 'lo']));
   const tokens: string[] = [];
   for await (const chunk of provider.stream(call({ id: 'g', type: 'groq' }, 'm', fetch)) as AsyncIterable<ModelChunk>) {

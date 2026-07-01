@@ -19,12 +19,18 @@ import type {
   ModelResult,
   ModelUsage,
   ProviderCredential,
+  RerankCall,
+  RerankResult,
   ResolvedProviderConfig,
   SpeechCall,
   SpeechResult,
   ToolCall,
   ToolSpec,
-  UsageLimits
+  TranscriptionCall,
+  TranscriptionResult,
+  UsageLimits,
+  VideoCall,
+  VideoResult
 } from '@monad/sdk-atom';
 import type {
   EmbeddingModel,
@@ -32,10 +38,12 @@ import type {
   JSONValue,
   LanguageModel,
   ProviderMetadata,
+  RerankingModel,
   ModelMessage as SdkMessage,
   SpeechModel,
   Telemetry,
-  ToolSet
+  ToolSet,
+  TranscriptionModel
 } from 'ai';
 
 import { anthropic } from '@ai-sdk/anthropic';
@@ -48,12 +56,16 @@ import {
   generateImage,
   experimental_generateSpeech as generateSpeech,
   generateText,
+  experimental_generateVideo as generateVideo,
   jsonSchema,
+  rerank,
   streamText,
-  tool
+  tool,
+  experimental_transcribe as transcribe
 } from 'ai';
 
 type ProviderOpts = Record<string, Record<string, JSONValue>>;
+type VideoModel = Parameters<typeof generateVideo>[0]['model'];
 
 /** Plain-text projection of a request for a native count-tokens call. */
 export interface CountTokensInput {
@@ -74,14 +86,21 @@ export interface AiSdkProviderSpec {
   type: string;
   descriptor: ModelProviderDescriptor;
   /** Build the ai-sdk language model for this call (reads call.provider / call.credential). */
-  build(call: ModelCall): LanguageModel;
+  build?(call: ModelCall): LanguageModel;
   reasoningOptions?(
     effort: NonNullable<GenerationParams['reasoningEffort']>,
     maxThinkingTokens?: number
   ): ProviderOpts | undefined;
   buildImageModel?(call: ImageCall): ImageModel;
+  buildVideoModel?(call: VideoCall): VideoModel;
   buildSpeechModel?(call: SpeechCall): SpeechModel;
+  buildTranscriptionModel?(call: TranscriptionCall): TranscriptionModel;
+  buildRerankingModel?(call: RerankCall): RerankingModel;
   buildEmbeddingModel?(call: EmbedCall): EmbeddingModel;
+  generateVideo?(call: VideoCall): Promise<VideoResult>;
+  generateSpeech?(call: SpeechCall): Promise<SpeechResult>;
+  transcribe?(call: TranscriptionCall): Promise<TranscriptionResult>;
+  rerank?(call: RerankCall): Promise<RerankResult>;
   listModels?(provider: ResolvedProviderConfig, cred?: ProviderCredential): Promise<ModelInfo[]>;
   countTokens?(call: ModelCall): Promise<number | undefined>;
   getUsageLimits?(provider: ResolvedProviderConfig, cred: ProviderCredential): Promise<UsageLimits | undefined>;
@@ -488,6 +507,11 @@ function buildTelemetry(
   return { runtimeContext, telemetry };
 }
 
+function buildLanguageModel(spec: AiSdkProviderSpec, call: ModelCall): LanguageModel {
+  if (!spec.build) throw new Error(`provider "${spec.type}" does not support text generation`);
+  return spec.build(call);
+}
+
 async function* streamViaAiSdk(call: ModelCall, spec: AiSdkProviderSpec): AsyncIterable<ModelChunk> {
   const { system, messages, allowSystemInMessages } = splitSystem(call.messages);
   const tools = buildSdkTools(call.tools, spec.type, call.searchToolProvider);
@@ -497,7 +521,7 @@ async function* streamViaAiSdk(call: ModelCall, spec: AiSdkProviderSpec): AsyncI
     : call.fetch;
   const telemetryConfig = buildTelemetry(call, spec, 'monad.stream');
   const result = streamText({
-    model: spec.build({ ...call, fetch: callFetch }),
+    model: buildLanguageModel(spec, { ...call, fetch: callFetch }),
     system,
     messages,
     ...(tools ? { tools } : {}),
@@ -565,7 +589,7 @@ async function completeViaAiSdk(call: ModelCall, spec: AiSdkProviderSpec): Promi
     : call.fetch;
   const telemetryConfig = buildTelemetry(call, spec, 'monad.complete');
   const { text, toolCalls, usage, finishReason, providerMetadata } = await generateText({
-    model: spec.build({ ...call, fetch: callFetch }),
+    model: buildLanguageModel(spec, { ...call, fetch: callFetch }),
     system,
     messages,
     ...(tools ? { tools } : {}),
@@ -595,6 +619,22 @@ async function imageViaAiSdk(call: ImageCall, model: ImageModel): Promise<ImageR
   return { image: image.uint8Array, mediaType: image.mediaType ?? 'image/png' };
 }
 
+async function videoViaAiSdk(call: VideoCall, model: VideoModel): Promise<VideoResult> {
+  const image = call.image instanceof URL ? call.image.toString() : call.image;
+  const prompt = image === undefined ? call.prompt : { image, ...(call.prompt ? { text: call.prompt } : {}) };
+  const { video } = await generateVideo({
+    model,
+    prompt,
+    ...(call.n ? { n: call.n } : {}),
+    ...(call.aspectRatio ? { aspectRatio: call.aspectRatio as `${number}:${number}` } : {}),
+    ...(call.resolution ? { resolution: call.resolution as `${number}x${number}` } : {}),
+    ...(call.duration ? { duration: call.duration } : {}),
+    ...(call.fps ? { fps: call.fps } : {}),
+    ...(call.signal ? { abortSignal: call.signal } : {})
+  });
+  return { video: video.uint8Array, mediaType: video.mediaType ?? 'video/mp4' };
+}
+
 async function embedViaAiSdk(call: EmbedCall, model: EmbeddingModel): Promise<EmbedResult> {
   const { embeddings, usage } = await embedMany({
     model,
@@ -617,13 +657,48 @@ async function speechViaAiSdk(call: SpeechCall, model: SpeechModel): Promise<Spe
   return { audio: audio.uint8Array, mediaType: audio.mediaType ?? 'audio/mpeg' };
 }
 
+async function transcribeViaAiSdk(call: TranscriptionCall, model: TranscriptionModel): Promise<TranscriptionResult> {
+  const { text, segments, language, durationInSeconds } = await transcribe({
+    model,
+    audio: call.audio,
+    ...(call.signal ? { abortSignal: call.signal } : {})
+  });
+  return {
+    text,
+    ...(segments.length ? { segments } : {}),
+    ...(language ? { language } : {}),
+    ...(durationInSeconds !== undefined ? { durationInSeconds } : {})
+  };
+}
+
+async function rerankViaAiSdk(call: RerankCall, model: RerankingModel): Promise<RerankResult> {
+  const result = await rerank({
+    model,
+    query: call.query,
+    documents: call.documents,
+    ...(call.topN ? { topN: call.topN } : {}),
+    ...(call.signal ? { abortSignal: call.signal } : {})
+  });
+  return {
+    ranking: result.ranking.map((ranked) => ({
+      index: ranked.originalIndex,
+      score: ranked.score,
+      document: ranked.document
+    }))
+  };
+}
+
 /** Wire an ai-sdk-backed spec into the ai-sdk-free ModelProvider contract. */
 export function defineAiSdkProvider(spec: AiSdkProviderSpec): ModelProvider {
   return {
     type: spec.type,
     descriptor: spec.descriptor,
-    stream: (call) => streamViaAiSdk(call, spec),
-    complete: (call) => completeViaAiSdk(call, spec),
+    ...(spec.build
+      ? {
+          stream: (call: ModelCall) => streamViaAiSdk(call, spec),
+          complete: (call: ModelCall) => completeViaAiSdk(call, spec)
+        }
+      : {}),
     ...(spec.buildImageModel
       ? {
           generateImage: (
@@ -632,14 +707,46 @@ export function defineAiSdkProvider(spec: AiSdkProviderSpec): ModelProvider {
           )(spec.buildImageModel)
         }
       : {}),
-    ...(spec.buildSpeechModel
-      ? {
-          generateSpeech: (
-            (buildSpeechModel) => (call: SpeechCall) =>
-              speechViaAiSdk(call, buildSpeechModel(call))
-          )(spec.buildSpeechModel)
-        }
-      : {}),
+    ...(spec.generateVideo
+      ? { generateVideo: spec.generateVideo }
+      : spec.buildVideoModel
+        ? {
+            generateVideo: (
+              (buildVideoModel) => (call: VideoCall) =>
+                videoViaAiSdk(call, buildVideoModel(call))
+            )(spec.buildVideoModel)
+          }
+        : {}),
+    ...(spec.generateSpeech
+      ? { generateSpeech: spec.generateSpeech }
+      : spec.buildSpeechModel
+        ? {
+            generateSpeech: (
+              (buildSpeechModel) => (call: SpeechCall) =>
+                speechViaAiSdk(call, buildSpeechModel(call))
+            )(spec.buildSpeechModel)
+          }
+        : {}),
+    ...(spec.transcribe
+      ? { transcribe: spec.transcribe }
+      : spec.buildTranscriptionModel
+        ? {
+            transcribe: (
+              (buildTranscriptionModel) => (call: TranscriptionCall) =>
+                transcribeViaAiSdk(call, buildTranscriptionModel(call))
+            )(spec.buildTranscriptionModel)
+          }
+        : {}),
+    ...(spec.rerank
+      ? { rerank: spec.rerank }
+      : spec.buildRerankingModel
+        ? {
+            rerank: (
+              (buildRerankingModel) => (call: RerankCall) =>
+                rerankViaAiSdk(call, buildRerankingModel(call))
+            )(spec.buildRerankingModel)
+          }
+        : {}),
     ...(spec.buildEmbeddingModel
       ? {
           embed: (

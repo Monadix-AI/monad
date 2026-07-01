@@ -10,9 +10,12 @@ import type {
   ModelChunk,
   ModelInfo,
   ProviderCredential,
+  RerankCall,
   ResolvedProviderConfig,
   SpeechCall,
-  UsageLimits
+  TranscriptionCall,
+  UsageLimits,
+  VideoCall
 } from '@monad/sdk-atom';
 import type {
   EmbedResult,
@@ -22,8 +25,14 @@ import type {
   ModelRequest,
   ModelResult,
   ModelRouter,
+  RerankRequest,
+  RerankResult,
   SpeechRequest,
-  SpeechResult
+  SpeechResult,
+  TranscriptionRequest,
+  TranscriptionResult,
+  VideoRequest,
+  VideoResult
 } from './index.ts';
 import type { ModelProvider } from './provider.ts';
 
@@ -103,6 +112,10 @@ export class GatewayModelRouter implements ModelRouter {
         continue;
       }
       const { provider, impl } = this.resolve(attempt.provider);
+      if (!impl.stream) {
+        errors.push(new Error(`provider "${attempt.provider}" does not support text generation`));
+        continue;
+      }
       for (const cred of creds) {
         let emitted = false;
         try {
@@ -160,7 +173,7 @@ export class GatewayModelRouter implements ModelRouter {
         }
       }
     }
-    throw new AggregateError(errors, 'gateway: all model attempts failed');
+    throw new AggregateError(errors, textGenerationErrorMessage(errors));
   }
 
   async complete(req: ModelRequest): Promise<ModelResult> {
@@ -182,10 +195,23 @@ export class GatewayModelRouter implements ModelRouter {
         continue;
       }
       const { provider, impl } = this.resolve(attempt.provider);
+      const complete = impl.complete;
+      const stream = impl.stream;
+      if (!complete && !stream) {
+        errors.push(new Error(`provider "${attempt.provider}" does not support text generation`));
+        continue;
+      }
       for (const cred of creds) {
         try {
           const call = this.call(req, attempt, provider, cred);
-          const result = impl.complete ? await impl.complete(call) : await aggregate(impl.stream(call));
+          let result: ModelResult;
+          if (complete) {
+            result = await complete(call);
+          } else if (stream) {
+            result = await aggregate(stream(call));
+          } else {
+            throw new Error(`provider "${attempt.provider}" does not support text generation`);
+          }
           this.deps.reportCredential?.(attempt.provider, cred.id, true);
           log.debug(
             {
@@ -214,7 +240,7 @@ export class GatewayModelRouter implements ModelRouter {
         }
       }
     }
-    throw new AggregateError(errors, 'gateway: all model attempts failed');
+    throw new AggregateError(errors, textGenerationErrorMessage(errors));
   }
 
   async generateImage(req: ImageRequest): Promise<ImageResult> {
@@ -286,6 +312,119 @@ export class GatewayModelRouter implements ModelRouter {
       }
     }
     throw new AggregateError(errors, 'gateway: speech generation failed');
+  }
+
+  async generateVideo(req: VideoRequest): Promise<VideoResult> {
+    const errors: unknown[] = [];
+    for (const attempt of this.buildChain({ model: req.model, messages: [] })) {
+      const creds = this.modelCreds(attempt.provider);
+      if (creds.length === 0) {
+        errors.push(new Error(`no credentials configured for provider "${attempt.provider}"`));
+        continue;
+      }
+      const { provider, impl } = this.resolve(attempt.provider);
+      if (!impl.generateVideo) {
+        errors.push(new Error(`provider "${attempt.provider}" does not support video generation`));
+        continue;
+      }
+      for (const cred of creds) {
+        try {
+          const call: VideoCall = {
+            modelId: attempt.modelId,
+            prompt: req.prompt,
+            ...(req.image ? { image: req.image } : {}),
+            ...(req.mediaType ? { mediaType: req.mediaType } : {}),
+            ...(req.aspectRatio ? { aspectRatio: req.aspectRatio } : {}),
+            ...(req.resolution ? { resolution: req.resolution } : {}),
+            ...(req.duration ? { duration: req.duration } : {}),
+            ...(req.fps ? { fps: req.fps } : {}),
+            ...(req.n ? { n: req.n } : {}),
+            provider,
+            credential: cred,
+            fetch: this.deps.fetch
+          };
+          const result = await impl.generateVideo(call);
+          this.deps.reportCredential?.(attempt.provider, cred.id, true);
+          return result;
+        } catch (err) {
+          this.deps.reportCredential?.(attempt.provider, cred.id, false, errInfo(err));
+          errors.push(err);
+        }
+      }
+    }
+    throw new AggregateError(errors, 'gateway: video generation failed');
+  }
+
+  async transcribe(req: TranscriptionRequest): Promise<TranscriptionResult> {
+    const errors: unknown[] = [];
+    for (const attempt of this.buildChain({ model: req.model, messages: [] })) {
+      const creds = this.modelCreds(attempt.provider);
+      if (creds.length === 0) {
+        errors.push(new Error(`no credentials configured for provider "${attempt.provider}"`));
+        continue;
+      }
+      const { provider, impl } = this.resolve(attempt.provider);
+      if (!impl.transcribe) {
+        errors.push(new Error(`provider "${attempt.provider}" does not support audio transcription`));
+        continue;
+      }
+      for (const cred of creds) {
+        try {
+          const call: TranscriptionCall = {
+            modelId: attempt.modelId,
+            audio: req.audio,
+            ...(req.mediaType ? { mediaType: req.mediaType } : {}),
+            ...(req.language ? { language: req.language } : {}),
+            provider,
+            credential: cred,
+            fetch: this.deps.fetch
+          };
+          const result = await impl.transcribe(call);
+          this.deps.reportCredential?.(attempt.provider, cred.id, true);
+          return result;
+        } catch (err) {
+          this.deps.reportCredential?.(attempt.provider, cred.id, false, errInfo(err));
+          errors.push(err);
+        }
+      }
+    }
+    throw new AggregateError(errors, 'gateway: audio transcription failed');
+  }
+
+  async rerank(req: RerankRequest): Promise<RerankResult> {
+    const errors: unknown[] = [];
+    for (const attempt of this.buildChain({ model: req.model, messages: [] })) {
+      const creds = this.modelCreds(attempt.provider);
+      if (creds.length === 0) {
+        errors.push(new Error(`no credentials configured for provider "${attempt.provider}"`));
+        continue;
+      }
+      const { provider, impl } = this.resolve(attempt.provider);
+      if (!impl.rerank) {
+        errors.push(new Error(`provider "${attempt.provider}" does not support reranking`));
+        continue;
+      }
+      for (const cred of creds) {
+        try {
+          const call: RerankCall = {
+            modelId: attempt.modelId,
+            query: req.query,
+            documents: req.documents,
+            ...(req.topN ? { topN: req.topN } : {}),
+            provider,
+            credential: cred,
+            fetch: this.deps.fetch
+          };
+          const result = await impl.rerank(call);
+          this.deps.reportCredential?.(attempt.provider, cred.id, true);
+          return result;
+        } catch (err) {
+          this.deps.reportCredential?.(attempt.provider, cred.id, false, errInfo(err));
+          errors.push(err);
+        }
+      }
+    }
+    throw new AggregateError(errors, 'gateway: reranking failed');
   }
 
   async countTokens(req: ModelRequest): Promise<number | undefined> {
@@ -526,6 +665,12 @@ function mergeParams(base: GenerationParams, over: GenerationParams | undefined)
   if (over.topP !== undefined) merged.topP = over.topP;
   if (over.reasoningEffort !== undefined) merged.reasoningEffort = over.reasoningEffort;
   return merged;
+}
+
+function textGenerationErrorMessage(errors: unknown[]): string {
+  return errors.some((err) => err instanceof Error && /text generation/i.test(err.message))
+    ? 'gateway: text generation failed'
+    : 'gateway: all model attempts failed';
 }
 
 function errInfo(err: unknown): { code?: string; message?: string } {

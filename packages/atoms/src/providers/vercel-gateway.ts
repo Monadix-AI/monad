@@ -71,24 +71,48 @@ async function modelsHttpError(res: Response): Promise<string> {
   return `Vercel AI Gateway /models failed: ${res.status}${text ? ` ${text.slice(0, 300)}` : ''}`;
 }
 
+function gatewayClient(call: {
+  credential: { accessToken: string; baseUrl?: string };
+  provider: { baseUrl?: string };
+  fetch?: typeof globalThis.fetch;
+}) {
+  return createGateway({
+    apiKey: call.credential.accessToken,
+    baseURL: call.credential.baseUrl ?? call.provider.baseUrl,
+    fetch: call.fetch
+  });
+}
+
 export const vercelGatewayProviderAtom = defineAiSdkProvider({
   type: 'vercel-gateway',
   descriptor: PROVIDER_DESCRIPTORS['vercel-gateway'],
 
   build(call) {
-    return createGateway({
-      apiKey: call.credential.accessToken,
-      baseURL: call.credential.baseUrl ?? call.provider.baseUrl,
-      fetch: call.fetch
-    }).languageModel(call.modelId);
+    return gatewayClient(call).languageModel(call.modelId);
+  },
+
+  buildImageModel(call) {
+    return gatewayClient(call).imageModel(call.modelId);
+  },
+
+  buildVideoModel(call) {
+    return gatewayClient(call).videoModel(call.modelId);
+  },
+
+  buildSpeechModel(call) {
+    return gatewayClient(call).speechModel(call.modelId);
+  },
+
+  buildTranscriptionModel(call) {
+    return gatewayClient(call).transcriptionModel(call.modelId);
+  },
+
+  buildRerankingModel(call) {
+    return gatewayClient(call).rerankingModel(call.modelId);
   },
 
   buildEmbeddingModel(call) {
-    return createGateway({
-      apiKey: call.credential.accessToken,
-      baseURL: call.credential.baseUrl ?? call.provider.baseUrl,
-      fetch: call.fetch
-    }).embeddingModel(call.modelId);
+    return gatewayClient(call).embeddingModel(call.modelId);
   },
 
   async listModels(provider, cred, fetch = globalThis.fetch) {

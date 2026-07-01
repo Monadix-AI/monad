@@ -97,16 +97,74 @@ test('countTokens returns undefined when the provider has no native counter', as
 });
 
 test('generateImage routes to a provider that supports it', async () => {
-  const imageProvider: ModelProvider = {
-    ...streamOnly,
+  const imageProvider = {
+    type: 'mock',
+    descriptor: { type: 'mock', label: 'Mock', strategy: 'native' },
     async generateImage(call) {
       return { image: new Uint8Array([call.prompt.length]), mediaType: 'image/png' };
     }
-  };
+  } satisfies ModelProvider;
   const router = new GatewayModelRouter(deps(), registryWith(imageProvider));
   const result = await router.generateImage({ model: 'default', prompt: 'cat' });
   expect(result.mediaType).toBe('image/png');
   expect(Array.from(result.image)).toEqual([3]); // 'cat'.length
+});
+
+test('transcribe routes to a provider that supports audio transcription', async () => {
+  const transcriptionProvider = {
+    type: 'mock',
+    descriptor: { type: 'mock', label: 'Mock', strategy: 'native' },
+    async transcribe(call) {
+      const length = call.audio instanceof Uint8Array ? call.audio.length : 0;
+      return { text: `${call.modelId}:${call.mediaType}`, usage: { inputTokens: length } };
+    }
+  } satisfies ModelProvider;
+  const router = new GatewayModelRouter(deps(), registryWith(transcriptionProvider));
+  const result = await router.transcribe({
+    model: 'default',
+    audio: new Uint8Array([1, 2, 3]),
+    mediaType: 'audio/wav'
+  });
+  expect(result).toEqual({ text: 'mock-model:audio/wav', usage: { inputTokens: 3 } });
+});
+
+test('rerank routes to a provider that supports reranking', async () => {
+  const rerankProvider = {
+    type: 'mock',
+    descriptor: { type: 'mock', label: 'Mock', strategy: 'native' },
+    async rerank(call) {
+      return {
+        ranking: call.documents.map((document, index) => ({
+          index,
+          score: index === 0 ? 0.2 : 0.8,
+          document
+        }))
+      };
+    }
+  } satisfies ModelProvider;
+  const router = new GatewayModelRouter(deps(), registryWith(rerankProvider));
+  const result = await router.rerank({
+    model: 'default',
+    query: 'best',
+    documents: ['a', 'b'],
+    topN: 2
+  });
+  expect(result.ranking).toEqual([
+    { index: 0, score: 0.2, document: 'a' },
+    { index: 1, score: 0.8, document: 'b' }
+  ]);
+});
+
+test('complete() fails clearly when the resolved provider has no text generation capability', async () => {
+  const imageOnly = {
+    type: 'mock',
+    descriptor: { type: 'mock', label: 'Mock', strategy: 'native' },
+    async generateImage() {
+      return { image: new Uint8Array([1]), mediaType: 'image/png' };
+    }
+  } satisfies ModelProvider;
+  const router = new GatewayModelRouter(deps(), registryWith(imageOnly));
+  await expect(router.complete({ model: 'default', messages: userMsg })).rejects.toThrow(/text generation/i);
 });
 
 test('generateImage throws when no provider in the chain supports image generation', async () => {
