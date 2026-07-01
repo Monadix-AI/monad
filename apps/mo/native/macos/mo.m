@@ -20,6 +20,7 @@
 #import "atlas.h"
 #import "behavior.h"
 #import "daemon.h"
+#import "input_panel.h"
 
 // Window matches the atlas cell aspect (192:208), scaled down for a desktop sprite.
 static const CGFloat kMoW = 105.6;
@@ -173,8 +174,7 @@ static NSString *const kMoFrameName = @"MoWindow";  // NSUserDefaults key for th
 @interface MoApp : NSObject <NSApplicationDelegate, NSWindowDelegate, MoDropTarget, NSURLSessionWebSocketDelegate>
 @property(nonatomic, strong) NSWindow *window;
 @property(nonatomic, strong) MoView *view;
-@property(nonatomic, strong) NSPanel *input;
-@property(nonatomic, strong) NSArray<NSString *> *pending;  // paths awaiting a prompt
+@property(nonatomic, strong) MoInputPanel *inputPanel;
 @property(nonatomic, strong) NSURLSession *wsSession;
 @property(nonatomic, strong) NSURLSessionWebSocketTask *wsTask;
 @property(nonatomic, copy) NSString *currentSessionId;  // most-recent drop's session; kept for WS re-subscribe
@@ -382,7 +382,7 @@ static NSString *const kMoFrameName = @"MoWindow";  // NSUserDefaults key for th
                   .daemon_ok = _daemonOk,
                   .activity = activity,
                   .file_hovering = self.view.dragging,
-                  .input_open = self.input != nil,
+                  .input_open = self.inputPanel.isOpen,
                   .user_dragging = userDragging,
                   .drag_dx = dx};
   mo_event ev = [self dequeueEvent];
@@ -422,34 +422,18 @@ static NSString *const kMoFrameName = @"MoWindow";  // NSUserDefaults key for th
 // --- drop → input box → session ----------------------------------------------
 
 - (void)openInputBoxForPaths:(NSArray<NSString *> *)paths {
-  self.pending = paths;
-
-  NSRect rect = NSMakeRect(0, 0, 300, 24);
-  self.input = [[NSPanel alloc] initWithContentRect:rect
-                                          styleMask:NSWindowStyleMaskTitled | NSWindowStyleMaskClosable
-                                            backing:NSBackingStoreBuffered
-                                              defer:NO];
-  self.input.title = paths.count > 1 ? @"Ask Mo about these files" : @"Ask Mo about this file";
-  self.input.level = NSFloatingWindowLevel;
-
-  NSTextField *field = [[NSTextField alloc] initWithFrame:NSInsetRect(rect, 6, 2)];
-  field.placeholderString = @"What should Mo do with it?";
-  field.target = self;
-  field.action = @selector(onSubmit:);  // fires on Enter
-  self.input.contentView = field;
-
-  [self.input center];
-  [self.input makeKeyAndOrderFront:nil];
-  [self.input makeFirstResponder:field];
-  [NSApp activateIgnoringOtherApps:YES];
+  if (!self.inputPanel) self.inputPanel = [[MoInputPanel alloc] init];
+  __weak MoApp *weakSelf = self;
+  [self.inputPanel presentForPaths:paths
+                            anchor:self.window.frame
+                          onSubmit:^(NSString *prompt, NSArray<NSString *> *files) {
+                            [weakSelf seedSessionWithPrompt:prompt paths:files];
+                          }
+                          onCancel:^{
+                          }];
 }
 
-- (void)onSubmit:(NSTextField *)field {
-  NSString *prompt = field.stringValue ?: @"";
-  NSArray<NSString *> *paths = self.pending;
-  [self.input close];
-  self.input = nil;
-  self.pending = nil;
+- (void)seedSessionWithPrompt:(NSString *)prompt paths:(NSArray<NSString *> *)paths {
   if (paths.count == 0) return;
 
   [self enqueueEvent:MO_EV_DROP];  // Mo "catches" the file (jumping) while the daemon call is in flight
@@ -488,6 +472,7 @@ static NSString *const kMoFrameName = @"MoWindow";  // NSUserDefaults key for th
 
 - (void)applicationWillTerminate:(NSNotification *)note {
   (void)note;
+  [self.inputPanel dismiss];
   [self.wsTask cancelWithCloseCode:NSURLSessionWebSocketCloseCodeNormalClosure reason:nil];
   mo_daemon_shutdown();
 }
