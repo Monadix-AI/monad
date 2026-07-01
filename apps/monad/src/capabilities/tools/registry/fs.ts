@@ -64,11 +64,15 @@ function sha256(text: string): string {
 
 function displayPath(path: string, ctx: ToolContext): string {
   const canonicalPath = canonicalize(path);
+  // Compare in posix form: realpathSync returns OS-native separators (backslash on Windows), so a
+  // `${root}/` prefix check with a hardcoded forward slash never matches on Windows — the file then
+  // falls through to its absolute path in the diff header instead of the sandbox-relative one.
+  const canonicalPathPosix = toPosix(canonicalPath);
   const root = ctx.sandboxRoots?.find((r) => {
-    const canonicalRoot = canonicalize(r);
-    return canonicalPath === canonicalRoot || canonicalPath.startsWith(`${canonicalRoot}/`);
+    const canonicalRootPosix = toPosix(canonicalize(r));
+    return canonicalPathPosix === canonicalRootPosix || canonicalPathPosix.startsWith(`${canonicalRootPosix}/`);
   });
-  return root ? toPosix(relative(canonicalize(root), canonicalPath)) : toPosix(canonicalPath);
+  return root ? toPosix(relative(canonicalize(root), canonicalPath)) : canonicalPathPosix;
 }
 
 function canonicalize(path: string): string {

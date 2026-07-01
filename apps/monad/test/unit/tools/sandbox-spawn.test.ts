@@ -33,7 +33,9 @@ test('default launcher is none (passthrough)', () => {
 });
 
 test('sandboxedSpawn passes argv straight through under the none launcher', async () => {
-  const proc = sandboxedSpawn(['echo', 'plain'], { stdout: 'pipe' });
+  // Spawn the bun binary itself, not a shell builtin like `echo`: `echo` is not a standalone
+  // executable on Windows (it's a cmd/bash builtin), so spawning it directly is ENOENT there.
+  const proc = sandboxedSpawn([process.execPath, '-e', 'process.stdout.write("plain")'], { stdout: 'pipe' });
   expect((await new Response(proc.stdout).text()).trim()).toBe('plain');
   expect(await proc.exited).toBe(0);
 });
