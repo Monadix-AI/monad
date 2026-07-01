@@ -50,10 +50,11 @@ import { ReloadService } from '@/reload/index.ts';
 import { ConfigBus } from '@/services/config-bus.ts';
 import { DelegationService } from '@/services/delegation/delegation.ts';
 import { createPeerDelegateTool, type PeerDelegateTarget } from '@/services/delegation/peer-delegate.ts';
-import { configureDeveloperLogTransport } from '@/services/developer-log.ts';
+import { configureDeveloperLogTransport, developerLogsDir } from '@/services/developer-log.ts';
 import { EventBus } from '@/services/event-bus.ts';
 import { AgentPersonaService, isToolExposed } from '@/services/generation/agent-persona.ts';
 import { I18nService, loadInstalledLocalePacks } from '@/services/i18n.ts';
+import { sweepStaleLogs } from '@/services/log-maintenance.ts';
 import { createGraphQueryTools } from '@/services/memory/graph/query-tools.ts';
 import { createMemoryAgentTools } from '@/services/memory/tools.ts';
 import { RoundCache } from '@/services/round-cache.ts';
@@ -205,6 +206,17 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
     24 * 60 * 60 * 1000
   );
   nativeCliPruneTimer.unref();
+  // Sweep stale on-disk logs the daemon owns: the daily temp-dir debug logs and per-session
+  // developer jsonl. (daemon.log itself is rotated by the CLI at its open boundary — its fd is
+  // inherited here and can't be rotated mid-run.) One sweep at startup, then daily.
+  const logsDir = developerLogsDir(paths);
+  const runLogSweep = () =>
+    void sweepStaleLogs({ logsDir }).then((n) => {
+      if (n > 0) logger.info({ removed: n }, 'swept stale logs');
+    });
+  runLogSweep();
+  const logSweepTimer = setInterval(runLogSweep, 24 * 60 * 60 * 1000);
+  logSweepTimer.unref();
   // Reverse fs/terminal delegation for ACP-bridged sessions. Unlike oversight/clarify, its events are
   // ephemeral RPC — bus-only, NEVER persisted (replaying a delegation request on reconnect is wrong).
   const delegation = new DelegationService({ publish: (event) => bus.publish(event) });

@@ -125,7 +125,7 @@ describe('formatPrettyMessage', () => {
 
 describe('debugLogPath', () => {
   test('defaults to OS temp dir with today date', async () => {
-    const { debugLogPath } = await import('../../src/index.ts');
+    const { debugLogPath } = await import('../../src/log-files.ts');
     const today = new Date().toISOString().slice(0, 10);
     expect(debugLogPath).toContain('monad-debug-');
     expect(debugLogPath).toContain(today);
@@ -133,7 +133,7 @@ describe('debugLogPath', () => {
   });
 
   test('path includes the current date', async () => {
-    const { debugLogPath } = await import('../../src/index.ts');
+    const { debugLogPath } = await import('../../src/log-files.ts');
     const today = new Date().toISOString().slice(0, 10);
     expect(debugLogPath).toBe(join(tmpdir(), `monad-debug-${today}.log`));
   });

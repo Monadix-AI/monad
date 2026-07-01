@@ -39,7 +39,8 @@
     "./start": {
       "types": "./dist/main.d.ts",
       "default": "./src/main.ts"
-    }
+    },
+    "./log-maintenance": "./src/services/log-maintenance.ts"
   },
   "module": "src/main.ts",
   "private": true,

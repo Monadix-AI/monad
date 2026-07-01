@@ -2,6 +2,7 @@ import { closeSync, openSync } from 'node:fs';
 import { mkdir, unlink } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { getPaths, loadAll, resolveClientConn } from '@monad/home';
+import { rotateDaemonLog } from '@monad/monad/log-maintenance';
 
 import { t } from './i18n.ts';
 import { bold, cyan, dim, green, out, printGoodbye, red, yellow } from './output.ts';
@@ -109,6 +110,9 @@ export async function startDaemon(): Promise<{ alreadyRunning: boolean }> {
   // pipe when we exit can't EPIPE it. --start-relay tells it to emit the banner and route logs.
   const logPath = join(getPaths().logs, 'daemon.log');
   await mkdir(getPaths().logs, { recursive: true });
+  // Size-cap daemon.log at this start boundary: the CLI's inherited stderr fd (below) pins the file
+  // open for the daemon's lifetime, so it can't be rotated mid-run — rotate before opening a fresh one.
+  rotateDaemonLog(logPath);
   const logFd = openSync(logPath, 'a');
 
   // Dev: resolve the daemon source from daemon.ts's own location (apps/cli/src/lib/ → apps/monad/src/).
