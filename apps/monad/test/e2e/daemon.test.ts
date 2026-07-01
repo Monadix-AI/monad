@@ -42,6 +42,31 @@ for (const kind of TRANSPORTS) {
       expect(((await res.json()) as { status: string }).status).toBe('ok');
     });
 
+    test('GET /health includes upgrade info when the daemon monitor has a result', async () => {
+      const withUpgrade = serveTransport(
+        kind,
+        createHttpTransport(
+          buildHandlers(mockModel([]), undefined, {
+            getUpgradeInfo: () => ({
+              latestVersion: '9.9.9',
+              latestVersionCheckedAt: '2026-07-01T00:00:00.000Z'
+            })
+          })
+        )
+      );
+      try {
+        const res = await withUpgrade.fetch('/health');
+        expect(res.status).toBe(200);
+        expect(await res.json()).toMatchObject({
+          status: 'ok',
+          latestVersion: '9.9.9',
+          latestVersionCheckedAt: '2026-07-01T00:00:00.000Z'
+        });
+      } finally {
+        await withUpgrade.stop();
+      }
+    });
+
     test('loopback browser requests receive CORS headers on validation errors', async () => {
       const sessionId = await createSession('cors-validation');
       const res = await t.fetch(`/v1/sessions/${sessionId}/messages?limit=abc`, {

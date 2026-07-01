@@ -187,6 +187,8 @@ export function buildHandlers(
     store?: ReturnType<typeof createStore>;
     /** Seed the L2 graph store (e.g. to exercise GET /v1/graph); defaults to an empty in-memory one. */
     graphStore?: GraphStore;
+    /** Upgrade metadata exposed by /health; defaults to absent. */
+    getUpgradeInfo?: () => { latestVersion: string; latestVersionCheckedAt: string } | null;
   }
 ) {
   const store = opts?.store ?? createStore();
@@ -278,6 +280,7 @@ export function buildHandlers(
         entries: []
       }),
       getLaws: async () => ({ laws: [] }),
+      getUpgradeInfo: opts?.getUpgradeInfo,
       memorySetBackend: async () => {},
       memorySetMem0Models: async () => {},
       memorySetGraph: async () => {},

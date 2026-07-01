@@ -43,7 +43,11 @@ export default defineConfig({
     trace: 'retain-on-failure'
   },
   webServer: {
-    command: `WEB_PORT=${port} NEXT_PUBLIC_MONAD_API_BASE=/api bun run dev`,
+    command: `bun --bun next dev --turbopack -p ${port}`,
+    env: {
+      WEB_PORT: String(port),
+      NEXT_PUBLIC_MONAD_API_BASE: '/api'
+    },
     url: `http://localhost:${port}`,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000
