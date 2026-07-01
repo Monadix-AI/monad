@@ -1,4 +1,5 @@
 import type { SkillInstallReviewer } from '@/capabilities/skills/install/index.ts';
+import type { DownloadProgress } from '@/services/download.ts';
 
 import { lstat, mkdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -9,19 +10,14 @@ import { upsertSkillsLock } from '@/capabilities/skills/install/clawhub.ts';
 import { assertStagingCompatibility } from '@/capabilities/skills/install/compat.ts';
 import { warningModelRequestFailed, warningsToStrings } from '@/capabilities/skills/install/review.ts';
 import { scanSkillDir } from '@/capabilities/skills/install/scan.ts';
+import { downloadBytes } from '@/services/download.ts';
 import { findSkillDirs, installSkillFromDir, parseSkillMd } from '@/store/home/skills.ts';
 
 const MAX_ENTRY_BYTES = 10 * 1024 * 1024; // 10 MB per file
 const MAX_TOTAL_BYTES = 50 * 1024 * 1024; // 50 MB extracted total
 const MAX_REVIEW_CHARS = 48_000;
 const MAX_REVIEW_BYTES_PER_FILE = 64 * 1024;
-async function fetchBytes(url: string): Promise<Uint8Array> {
-  const response = await fetch(url, { headers: { 'User-Agent': 'monad-skill-installer/1' } });
-  if (!response.ok) throw new Error(`HTTP ${response.status} fetching ${url}`);
-  if (!response.body) throw new Error(`empty response body for ${url}`);
-  const compressed = await response.arrayBuffer();
-  return new Uint8Array(compressed as ArrayBuffer);
-}
+type HttpSkillDownloadProgress = DownloadProgress & { source: string };
 
 async function collectReviewFiles(stagingDir: string, maxChars: number): Promise<Map<string, Uint8Array>> {
   const decoder = new TextDecoder();
@@ -63,8 +59,17 @@ async function collectReviewFiles(stagingDir: string, maxChars: number): Promise
 }
 
 /** Download a .tar.gz from a URL, harden-check every entry, and write the contents to destDir. */
-async function downloadSkillTarball(url: string, destDir: string): Promise<void> {
-  const compressed = await fetchBytes(url);
+async function downloadSkillTarball(
+  url: string,
+  destDir: string,
+  onDownloadProgress?: (progress: HttpSkillDownloadProgress) => void
+): Promise<void> {
+  const { bytes: compressed } = await downloadBytes(url, {
+    headers: { 'User-Agent': 'monad-skill-installer/1' },
+    accept: 'application/gzip, application/x-gzip, application/octet-stream',
+    allowedContentTypes: ['application/gzip', 'application/x-gzip', 'application/octet-stream'],
+    onProgress: (progress) => onDownloadProgress?.({ ...progress, source: url })
+  });
   const buf = Bun.gunzipSync(compressed as Uint8Array<ArrayBuffer>);
   const files = untar(buf);
 
@@ -104,6 +109,7 @@ export interface HttpSkillInstallDeps {
   review?: SkillInstallReviewer;
   overwrite?: boolean;
   now?: () => string;
+  onDownloadProgress?: (progress: HttpSkillDownloadProgress) => void;
 }
 
 export interface HttpSkillInstallOutcome {
@@ -119,7 +125,7 @@ export async function installHttpSkill(url: string, deps: HttpSkillInstallDeps):
   const stagingDir = join(tmpdir(), `monad-skill-http-${Date.now()}`);
   await mkdir(stagingDir, { recursive: true });
   try {
-    await downloadSkillTarball(url, stagingDir);
+    await downloadSkillTarball(url, stagingDir, deps.onDownloadProgress);
     const dirs = await findSkillDirs(stagingDir);
     const skills = await Promise.all(
       dirs.map(async (dir) => parseSkillMd(await Bun.file(join(dir, 'SKILL.md')).text()).frontmatter.name)

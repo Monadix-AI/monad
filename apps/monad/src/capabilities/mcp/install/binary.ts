@@ -13,6 +13,7 @@ import { basename, join } from 'node:path';
 
 import { untar } from '@/atoms/install/untar.ts';
 import { unzip } from '@/capabilities/mcp/install/unzip.ts';
+import { type DownloadProgress, downloadBytes } from '@/services/download.ts';
 
 export class McpBinaryInstallError extends Error {}
 
@@ -194,8 +195,12 @@ export async function installMcpBinary(
   return { name, assetName: asset.name, warnings };
 }
 
+export type ReleaseAssetDownloadProgress = DownloadProgress & { assetName: string };
+
 /** Real fetcher: resolve the release by tag, pick the platform/arch asset, download its bytes. */
-export function createReleaseAssetFetcher(opts: { githubToken?: string } = {}): ReleaseAssetFetcher {
+export function createReleaseAssetFetcher(
+  opts: { githubToken?: string; onDownloadProgress?: (progress: ReleaseAssetDownloadProgress) => void } = {}
+): ReleaseAssetFetcher {
   const headers = {
     'User-Agent': 'monad',
     Accept: 'application/vnd.github+json',
@@ -225,8 +230,14 @@ export function createReleaseAssetFetcher(opts: { githubToken?: string } = {}): 
       'User-Agent': 'monad',
       ...(opts.githubToken ? { Authorization: `Bearer ${opts.githubToken}` } : {})
     };
-    const dlRes = await fetch(asset.browser_download_url, { headers: dlHeaders });
-    if (!dlRes.ok) throw new McpBinaryInstallError(`download ${chosen} failed: ${dlRes.status}`);
+    const download = await downloadBytes(asset.browser_download_url, {
+      headers: dlHeaders,
+      accept: 'application/gzip, application/zip, application/octet-stream',
+      allowedContentTypes: ['application/gzip', 'application/x-gzip', 'application/zip', 'application/octet-stream'],
+      onProgress: (progress) => opts.onDownloadProgress?.({ ...progress, assetName: chosen })
+    }).catch((error: unknown) => {
+      throw new McpBinaryInstallError(error instanceof Error ? error.message : String(error));
+    });
 
     // Best-effort: a SHA256SUMS/checksums asset lets the install verify without a caller-supplied hash.
     const sums = assets.find((a) => /(^|[._-])(sha256sums?|checksums?)(\.txt)?$/i.test(a.name));
@@ -235,6 +246,6 @@ export function createReleaseAssetFetcher(opts: { githubToken?: string } = {}): 
       const sumRes = await fetch(sums.browser_download_url, { headers: dlHeaders }).catch(() => null);
       if (sumRes?.ok) checksums = parseChecksums(await sumRes.text());
     }
-    return { name: chosen, bytes: new Uint8Array(await dlRes.arrayBuffer()), checksums };
+    return { name: chosen, bytes: download.bytes, checksums };
   };
 }
