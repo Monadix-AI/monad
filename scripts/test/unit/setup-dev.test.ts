@@ -3,6 +3,7 @@ import { expect, test } from 'bun:test';
 import {
   ensurePortLines,
   portOffset,
+  postCheckoutHookText,
   removeBlankXdgLines,
   shouldInitCodeGraph,
   worktreePorts
@@ -95,4 +96,11 @@ test('shouldInitCodeGraph only initializes when codegraph is installed and the c
   expect(shouldInitCodeGraph(true, true)).toBe(false);
   expect(shouldInitCodeGraph(false, false)).toBe(false);
   expect(shouldInitCodeGraph(false, true)).toBe(false);
+});
+
+test('postCheckoutHookText runs monad bootstrap before lefthook', () => {
+  const hook = postCheckoutHookText();
+  expect(hook).toContain('monad managed post-checkout bootstrap');
+  expect(hook.indexOf('scripts/git-hooks/post-checkout.sh')).toBeLessThan(hook.indexOf('lefthook run "post-checkout"'));
+  expect(hook).toContain('$root/node_modules/.bin/lefthook');
 });
