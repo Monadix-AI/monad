@@ -601,6 +601,57 @@ export const memorySettingsSchema = z
   .default({ backend: 'builtin', level: 1, mem0: {} });
 export type MemorySettings = z.infer<typeof memorySettingsSchema>;
 
+// Context-window management: the cascade that keeps a turn's prompt within the model's window.
+// The defaults define the shipped cascade behavior (lossless eviction on, background compaction on).
+// To revert an individual stage to pre-cascade behavior, disable it explicitly: `eviction.enabled`
+// false drops the lossless stage, `summarize.background` false makes compaction synchronous again.
+// Fractions are of the active model's context limit.
+export const contextSettingsSchema = z
+  .object({
+    // Stage 1 — lossless: once the window crosses `atFraction`, replace OLD tool-result outputs with
+    // a short pointer placeholder (the model can re-run the tool), keeping the most recent
+    // `keepRecentRounds` tool rounds verbatim (a round = one assistant→tools step, kept whole even
+    // when it fired parallel calls). Only fires when a pass reclaims ≥ `clearAtLeast` tokens, and
+    // skips results smaller than `minResultTokens`.
+    eviction: z
+      .object({
+        enabled: z.boolean().default(true),
+        atFraction: z.number().min(0).max(1).default(0.5),
+        keepRecentRounds: z.number().int().min(0).default(3),
+        clearAtLeast: z.number().int().min(0).default(2000),
+        minResultTokens: z.number().int().min(0).default(200)
+      })
+      .default({ enabled: true, atFraction: 0.5, keepRecentRounds: 3, clearAtLeast: 2000, minResultTokens: 200 }),
+    // Stage 2 — lossy: fold older turns into a durable rolling summary at `softFraction`; a per-step
+    // hard truncation guard at `hardFraction` keeps the window from overflowing mid tool-loop.
+    // `background` runs soft-threshold compaction non-blocking (Mastra-style): the turn proceeds with
+    // the full window and the durable summary lands on a later turn; a turn at/over `hardFraction`
+    // waits for any in-flight compaction, then compacts synchronously if still over.
+    summarize: z
+      .object({
+        softFraction: z.number().min(0).max(1).default(0.6),
+        hardFraction: z.number().min(0).max(1).default(0.9),
+        background: z.boolean().default(true)
+      })
+      .default({ softFraction: 0.6, hardFraction: 0.9, background: true }),
+    // Stage 3 — re-anchor the current plan after compaction (implemented in a later phase).
+    recitation: z.object({ enabled: z.boolean().default(false) }).default({ enabled: false }),
+    // Promote durable facts out of compacted spans: off | suggest (propose, user confirms) | auto.
+    memoryPromotion: z.object({ mode: z.enum(['off', 'suggest', 'auto']).default('off') }).default({ mode: 'off' }),
+    // Nudge the user to hand off to a fresh session past `atFraction` at a task boundary.
+    handoffNudge: z
+      .object({ enabled: z.boolean().default(false), atFraction: z.number().min(0).max(1).default(0.7) })
+      .default({ enabled: false, atFraction: 0.7 })
+  })
+  .default({
+    eviction: { enabled: true, atFraction: 0.5, keepRecentRounds: 3, clearAtLeast: 2000, minResultTokens: 200 },
+    summarize: { softFraction: 0.6, hardFraction: 0.9, background: true },
+    recitation: { enabled: false },
+    memoryPromotion: { mode: 'off' },
+    handoffNudge: { enabled: false, atFraction: 0.7 }
+  });
+export type ContextSettings = z.infer<typeof contextSettingsSchema>;
+
 const monadConfigSchema = z.object({
   version: z.literal(CURRENT_CONFIG_VERSION),
   principal: z.object({
@@ -819,7 +870,8 @@ const monadConfigSchema = z.object({
       approval: z.enum(['auto', 'local', 'deny']).default('local')
     })
     .default({ enabled: false, approval: 'local' }),
-  memory: memorySettingsSchema
+  memory: memorySettingsSchema,
+  context: contextSettingsSchema
 });
 
 export { monadConfigSchema };
@@ -964,7 +1016,8 @@ export const monadProfileSchema = z.object({
       approval: z.enum(['auto', 'local', 'deny']).default('local')
     })
     .default({ enabled: false, approval: 'local' }),
-  memory: memorySettingsSchema
+  memory: memorySettingsSchema,
+  context: contextSettingsSchema
 });
 export type MonadProfile = z.infer<typeof monadProfileSchema>;
 
@@ -1033,7 +1086,14 @@ export function createDefaultConfig(principalId: string, displayName: string): M
     atomPins: {},
     observability: { endpoint: '', developerMode: false },
     openaiCompat: { enabled: false, approval: 'local' },
-    memory: { backend: 'builtin', level: 1, mem0: {} }
+    memory: { backend: 'builtin', level: 1, mem0: {} },
+    context: {
+      eviction: { enabled: true, atFraction: 0.5, keepRecentRounds: 3, clearAtLeast: 2000, minResultTokens: 200 },
+      summarize: { softFraction: 0.6, hardFraction: 0.9, background: true },
+      recitation: { enabled: false },
+      memoryPromotion: { mode: 'off' },
+      handoffNudge: { enabled: false, atFraction: 0.7 }
+    }
   };
 }
 
@@ -1095,7 +1155,8 @@ function mergeConfigs(system: MonadSystemConfig, profile: MonadProfile): MonadCo
     hooks: profile.hooks,
     observability: system.observability,
     openaiCompat: profile.openaiCompat,
-    memory: profile.memory
+    memory: profile.memory,
+    context: profile.context
   };
 }
 
@@ -1147,7 +1208,8 @@ function extractProfile(cfg: MonadConfig): MonadProfile {
     atomPins: cfg.atomPins,
     hooks: cfg.hooks,
     openaiCompat: cfg.openaiCompat,
-    memory: cfg.memory
+    memory: cfg.memory,
+    context: cfg.context
   });
 }
 

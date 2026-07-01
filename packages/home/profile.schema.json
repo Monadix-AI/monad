@@ -1894,6 +1894,184 @@
       ],
       "additionalProperties": false
     },
+    "context": {
+      "default": {
+        "eviction": {
+          "enabled": true,
+          "atFraction": 0.5,
+          "keepRecentRounds": 3,
+          "clearAtLeast": 2000,
+          "minResultTokens": 200
+        },
+        "summarize": {
+          "softFraction": 0.6,
+          "hardFraction": 0.9,
+          "background": true
+        },
+        "recitation": {
+          "enabled": false
+        },
+        "memoryPromotion": {
+          "mode": "off"
+        },
+        "handoffNudge": {
+          "enabled": false,
+          "atFraction": 0.7
+        }
+      },
+      "type": "object",
+      "properties": {
+        "eviction": {
+          "default": {
+            "enabled": true,
+            "atFraction": 0.5,
+            "keepRecentRounds": 3,
+            "clearAtLeast": 2000,
+            "minResultTokens": 200
+          },
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "default": true,
+              "type": "boolean"
+            },
+            "atFraction": {
+              "default": 0.5,
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "keepRecentRounds": {
+              "default": 3,
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "clearAtLeast": {
+              "default": 2000,
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "minResultTokens": {
+              "default": 200,
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "enabled",
+            "atFraction",
+            "keepRecentRounds",
+            "clearAtLeast",
+            "minResultTokens"
+          ],
+          "additionalProperties": false
+        },
+        "summarize": {
+          "default": {
+            "softFraction": 0.6,
+            "hardFraction": 0.9,
+            "background": true
+          },
+          "type": "object",
+          "properties": {
+            "softFraction": {
+              "default": 0.6,
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "hardFraction": {
+              "default": 0.9,
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "background": {
+              "default": true,
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "softFraction",
+            "hardFraction",
+            "background"
+          ],
+          "additionalProperties": false
+        },
+        "recitation": {
+          "default": {
+            "enabled": false
+          },
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "default": false,
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "enabled"
+          ],
+          "additionalProperties": false
+        },
+        "memoryPromotion": {
+          "default": {
+            "mode": "off"
+          },
+          "type": "object",
+          "properties": {
+            "mode": {
+              "default": "off",
+              "type": "string",
+              "enum": [
+                "off",
+                "suggest",
+                "auto"
+              ]
+            }
+          },
+          "required": [
+            "mode"
+          ],
+          "additionalProperties": false
+        },
+        "handoffNudge": {
+          "default": {
+            "enabled": false,
+            "atFraction": 0.7
+          },
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "default": false,
+              "type": "boolean"
+            },
+            "atFraction": {
+              "default": 0.7,
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            }
+          },
+          "required": [
+            "enabled",
+            "atFraction"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "eviction",
+        "summarize",
+        "recitation",
+        "memoryPromotion",
+        "handoffNudge"
+      ],
+      "additionalProperties": false
+    },
     "$schema": {
       "type": "string"
     }
@@ -1911,7 +2089,8 @@
     "locale",
     "atomPins",
     "openaiCompat",
-    "memory"
+    "memory",
+    "context"
   ],
   "additionalProperties": false
 }

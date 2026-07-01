@@ -16,6 +16,7 @@ import { SessionManager } from './session/index.ts';
 
 export * from './context/budget.ts';
 export * from './context/estimate.ts';
+export * from './context/eviction.ts';
 export * from './context/index.ts';
 export * from './history.ts';
 export * from './loop/index.ts';

@@ -318,6 +318,7 @@ export class AgentLoop {
         seg.emitToken(chunk.token);
       }
 
+      this.noteUsage(usage);
       // AfterModel fires immediately after each model call (here the single streamed response).
       text = await this.afterModel(sessionId, text);
       if (!(await seg.settle(text, reasoning))) await this.appendEmptyAnswer(sessionId, messageId);
@@ -377,6 +378,7 @@ export class AgentLoop {
         userId: this.deps.userId
       });
       const parsed = finishReasonSchema.safeParse(result.finishReason);
+      this.noteUsage(result.usage);
       const responseText = await this.afterModel(sessionId, result.text);
       const stop = await this.runStopHook(sessionId, responseText, result.usage);
       return this.finishTurn(sessionId, messageId, stop.text, result.usage, parsed.success ? parsed.data : undefined);
@@ -391,9 +393,24 @@ export class AgentLoop {
    *  input tokens in finishTurn to self-calibrate the chars/token estimator. */
   private lastSentChars = 0;
 
+  /** The provider's real input-token count from the most recent model step, retained across steps
+   *  and turns. Fed to the context engine so window-fraction decisions rest on a real count rather
+   *  than a whole-window estimate. Undefined until the first step reports usage. */
+  private lastRealInputTokens?: number;
+
+  /** Record a model step's real input-token count for the next prepare() to use as its base. */
+  private noteUsage(usage?: ModelUsage): void {
+    if (usage?.inputTokens && usage.inputTokens > 0) this.lastRealInputTokens = usage.inputTokens;
+  }
+
   private async prepare(sessionId: SessionId, messages: ModelMessage[]): Promise<ModelMessage[]> {
     const sent = this.deps.context
-      ? await this.deps.context.prepare(messages, { sessionId, emit: this.deps.emit, estimator: globalEstimator })
+      ? await this.deps.context.prepare(messages, {
+          sessionId,
+          emit: this.deps.emit,
+          estimator: globalEstimator,
+          lastRealInputTokens: this.lastRealInputTokens
+        })
       : messages;
     this.lastSentChars = sent.reduce((sum, m) => sum + messageChars(m), 0);
     return sent;
@@ -483,6 +500,7 @@ export class AgentLoop {
         sessionId,
         userId: this.deps.userId
       });
+      this.noteUsage(result.usage);
       // AfterModel fires per model step — including the intermediate responses that carry tool calls.
       const responseText = await this.afterModel(sessionId, result.text);
 
@@ -569,6 +587,7 @@ export class AgentLoop {
       );
       reasonBase = seg.reasonIndex();
       if (usage) lastUsage = usage;
+      this.noteUsage(usage);
       // Accumulate USD cost from this step when a budget is set.
       if (maxBudgetUsd && usage) {
         const sc = this.stepCost(usage);

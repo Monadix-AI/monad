@@ -91,6 +91,28 @@ function totalTokens(messages: ModelMessage[], est: TokenEstimator = globalEstim
   return messages.reduce((sum, m) => sum + messageTokens(m, est), 0);
 }
 
+/**
+ * Best available measure of how full the context window is, in input tokens — the basis for
+ * "trigger at X% of the limit" decisions. Prefers the provider's real input-token count from the
+ * last step (`ctx.lastRealInputTokens`): it is the true window occupancy (system prompt + tool
+ * schemas + messages), whereas a per-message estimate omits the static prefix and, on a cold
+ * first turn, runs on an un-calibrated ratio. Falls back to the self-calibrating non-system
+ * estimate before any real count exists. The one-step lag (the real count reflects the previous
+ * step's prompt) is acceptable for SOFT/eviction triggers; hard-overflow guards should stay on
+ * the estimate, which tracks in-turn growth without lag.
+ */
+export function effectiveInputTokens(
+  messages: ModelMessage[],
+  ctx?: ContextPrepareCtx,
+  est: TokenEstimator = globalEstimator
+): number {
+  if (ctx?.lastRealInputTokens && ctx.lastRealInputTokens > 0) return ctx.lastRealInputTokens;
+  return totalTokens(
+    messages.filter((m) => m.role !== 'system'),
+    ctx?.estimator ?? est
+  );
+}
+
 // ── TokenLimiter (pure truncation) ──────────────────────────────────────────────
 
 export interface TokenLimiterOptions {
@@ -187,14 +209,20 @@ export class SummarizingContextEngine implements ContextEngine {
 
     // The view we'd actually send: covered (summarized) prefix dropped, summary note injected.
     const reduced = this.withSummary(messages, state);
-    const tokens = totalTokens(
+    // Soft gate on real window occupancy (prefers the provider's last real input count); hard gate
+    // on the per-message estimate, which tracks in-turn growth without the real count's one-step lag.
+    const soft = effectiveInputTokens(reduced, ctx);
+    const estTokens = totalTokens(
       reduced.filter((m) => m.role !== 'system'),
       ctx.estimator
     );
 
-    if (tokens < this.opts.softThresholdTokens) return reduced; // fits — nothing to do
+    // Fits only when BOTH gates are clear: the (possibly one-step-lagged) real occupancy is under
+    // soft AND the in-turn estimate is under hard — else a huge mid-loop tool dump could sit under a
+    // stale soft reading and skip the estimate-based hard runaway guard below.
+    if (soft < this.opts.softThresholdTokens && estTokens < this.hardThreshold) return reduced;
 
-    if (tokens >= this.hardThreshold) {
+    if (estTokens >= this.hardThreshold) {
       // Runaway guard: compact synchronously so the window can't overflow this turn, then drop.
       await this.compact(messages, ctx, state);
       return this.withSummary(messages, state);

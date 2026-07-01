@@ -6,6 +6,13 @@ export const OBSERVATION_PREFIX = 'Observation: ';
 
 export const SUMMARY_MARKER = 'Summary of earlier conversation:';
 
+/** Pointer placeholder that replaces an old tool result's output when the context engine evicts it
+ *  to reclaim window space. Names the tool so the model knows what to re-run if it needs the bytes
+ *  again — the eviction is lossless in that the result is always recoverable by calling the tool. */
+export function evictedToolResult(toolName: string): string {
+  return `Earlier output from \`${toolName}\` was cleared to free context space. Re-run the tool if you need this result again.`;
+}
+
 export const GUI_TRACK_BOTH = [
   'You can operate a GUI two ways. Choose deliberately:',
   '- Web pages -> use the browser tools (`browser__*`): more reliable, cheaper, and constrainable.',

@@ -12,6 +12,7 @@ import defaultSystemPromptPath from './prompts/default-system-prompt.md' with { 
 import handoffPromptPath from './prompts/handoff-prompt.md' with { type: 'file' };
 import {
   BUDGET_EXCEEDED,
+  evictedToolResult,
   GUI_TRACK_BOTH,
   GUI_TRACK_BROWSER,
   GUI_TRACK_COMPUTER,
@@ -22,14 +23,20 @@ import {
 } from './prompts/short-text.ts';
 import summaryPromptPath from './prompts/summary-prompt.md' with { type: 'file' };
 import summaryReflectPromptPath from './prompts/summary-reflect-prompt.md' with { type: 'file' };
+import summaryStructuredPromptPath from './prompts/summary-structured-prompt.md' with { type: 'file' };
 
-export { BUDGET_EXCEEDED, OBSERVATION_PREFIX, SUMMARY_MARKER, TOOL_BUDGET_REACHED };
+export { BUDGET_EXCEEDED, evictedToolResult, OBSERVATION_PREFIX, SUMMARY_MARKER, TOOL_BUDGET_REACHED };
 
 /** Base persona/instructions when the host doesn't supply its own via `instructions`. */
 export const DEFAULT_SYSTEM_PROMPT = (await Bun.file(defaultSystemPromptPath).text()).trim();
 
 /** Instruction given to the (cheap) model that compacts old turns into the rolling summary. */
 export const SUMMARY_PROMPT = (await Bun.file(summaryPromptPath).text()).trim();
+
+/** Structured variant of {@link SUMMARY_PROMPT}: sections (objective/decisions/files/tasks/next)
+ *  with verbatim identifiers, so compaction preserves the file names and symbols the agent needs
+ *  to keep working. Used by the durable summarizer. */
+export const SUMMARY_STRUCTURED_PROMPT = (await Bun.file(summaryStructuredPromptPath).text()).trim();
 
 /** Instruction for the reflector pass that condenses an over-grown rolling summary (GC). */
 export const SUMMARY_REFLECT_PROMPT = (await Bun.file(summaryReflectPromptPath).text()).trim();
