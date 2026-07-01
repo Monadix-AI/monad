@@ -23,7 +23,28 @@ export async function createDataLayer(deps: {
   const kvServer = new KvServer();
   await unlink(paths.kvSock).catch(() => {});
   kvServer.start(paths.kvSock);
-  const kvClient = new Bun.RedisClient(kvServer.clientUrl);
+  // Bun.RedisClient connects lazily — probe once. If the Unix-socket URL can't be dialled (Bun rejects
+  // `redis+unix://` on Windows even though the listener bound), rebind the server on TCP loopback and
+  // reconnect, rather than letting every KV op fail. On POSIX the probe succeeds and this is a no-op.
+  let kvClient = new Bun.RedisClient(kvServer.clientUrl);
+  try {
+    // Race a timeout: a bound-but-unspeakable socket could leave get() pending instead of rejecting,
+    // and this probe gates the whole daemon boot. On POSIX the local empty-GET returns in microseconds
+    // so the timer is cleared unused; only a genuine hang hits the 500 ms ceiling then falls back.
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error('kv probe timeout')), 500);
+    });
+    try {
+      await Promise.race([kvClient.get('__monad_kv_conn_probe__'), timeout]);
+    } finally {
+      clearTimeout(timer);
+    }
+  } catch {
+    kvClient.close();
+    kvServer.bindTcpFallback();
+    kvClient = new Bun.RedisClient(kvServer.clientUrl);
+  }
   const kv = createKvService(kvServer, kvClient);
   process.on('exit', () => kvServer.stop());
 

@@ -42,20 +42,24 @@ Local clients (the CLI) choose which one to dial via `network.transport` in
 
 | value | meaning |
 |---|---|
-| `tcp` | HTTP over `127.0.0.1` loopback — default on **macOS/Windows** |
-| `uds` | HTTP over the Unix socket — default on **Linux** |
+| `uds` | HTTP over the Unix socket — **default on every platform** |
+| `tcp` | HTTP over `127.0.0.1` loopback |
 
-The default is picked per-OS at first run and is overridable at any time:
+`uds` is the default everywhere: Bun supports AF_UNIX on all platforms monad
+targets — including Windows (native since Windows 10 1803) — the daemon binds the
+socket on all of them, and a Unix socket is browser-safe (a web page can reach
+`127.0.0.1` but not an AF_UNIX path). It's overridable at any time:
 
 ```bash
 monad config get network.transport       # show current transport
-monad config set network.transport uds   # switch (applies to the next command — no restart)
+monad config set network.transport tcp   # switch (applies to the next command — no restart)
 ```
 
 If `uds` is selected but the socket can't be connected (older daemon, missing
-socket file, …), the client automatically falls back to TCP loopback for that run —
-the setting never makes the CLI unreachable. On Windows, `uds` relies on Bun's
-incomplete Unix-socket support, so `tcp` is the default and recommended there.
+socket file, a host where the bind failed, …), the client automatically falls back
+to TCP loopback for that run — the setting never makes the CLI unreachable. The
+daemon likewise falls back to TCP-only if it can't bind the socket, so it stays
+reachable everywhere.
 
 > This per-OS default + automatic fallback is decided **inside** the transport
 > adapter, not in feature code — the canonical example of the thin-glue-layer rule

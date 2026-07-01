@@ -202,19 +202,16 @@ const profileSchema = z.object({
 export type ModelProfile = z.infer<typeof profileSchema>;
 
 /**
- * Default client transport for this host, chosen at init and overridable later via
- * `network.transport` in config.json:
- *   - Linux        → "uds"  (HTTP-over-Unix-socket: idiomatic, no listening TCP port
- *                            needed for local RPC, and where UDS pays off most)
- *   - macOS/Windows → "tcp" (plain HTTP over 127.0.0.1 loopback; on macOS UDS shows
- *                            no latency win, and Bun's Windows UDS support is incomplete)
+ * Default LOCAL REST/SSE client transport — `uds` on every platform, overridable via
+ * `network.transport` in config.json. Bun supports AF_UNIX everywhere monad targets (Windows too,
+ * native since Win10), the daemon binds the socket on all of them, and a Unix socket is browser-safe
+ * (a page can reach `127.0.0.1` but not an AF_UNIX path) — so it's the better local default. If the
+ * socket ever can't be dialled the client falls back to TCP at connect time (see makeUnixFetcher).
  *
- * This selects only the LOCAL client's REST/SSE transport. The daemon always serves
- * both, and WS push is always TCP (Bun's WebSocket client has no unix-socket option).
+ * The daemon always serves TCP as well (WS push is TCP-only — Bun's WebSocket client has no
+ * unix-socket option — and the web UI needs a port), so this only picks the CLI's REST/SSE path.
  */
-export function defaultTransport(): 'tcp' | 'uds' {
-  return process.platform === 'linux' ? 'uds' : 'tcp';
-}
+export const DEFAULT_TRANSPORT = 'uds' as const;
 
 const agentConfigSchema = z.object({
   id: z.string().regex(/^agt_/, 'agent id must start with agt_'),
@@ -758,7 +755,7 @@ const monadConfigSchema = z.object({
     .object({
       port: z.number().int().min(1).max(65535).default(52749),
       // Which socket the LOCAL client dials — daemon always serves both; WS push is always TCP.
-      transport: z.enum(['tcp', 'uds']).default(defaultTransport),
+      transport: z.enum(['tcp', 'uds']).default(DEFAULT_TRANSPORT),
       remoteAccess: z.object({
         // When true, daemon binds to 0.0.0.0 and requires a Bearer token for non-localhost requests.
         enabled: z.boolean(),
@@ -772,7 +769,7 @@ const monadConfigSchema = z.object({
     })
     .default(() => ({
       port: 52749,
-      transport: defaultTransport(),
+      transport: DEFAULT_TRANSPORT,
       remoteAccess: { enabled: false, token: null, allowInsecureHttp: false }
     })),
   mcpServers: z.array(mcpServerSchema).default([]),
@@ -839,7 +836,7 @@ export const monadSystemConfigSchema = z.object({
   network: z
     .object({
       port: z.number().int().min(1).max(65535).default(52749),
-      transport: z.enum(['tcp', 'uds']).default(defaultTransport),
+      transport: z.enum(['tcp', 'uds']).default(DEFAULT_TRANSPORT),
       remoteAccess: z.object({
         enabled: z.boolean(),
         token: z.string().nullable(),
@@ -848,7 +845,7 @@ export const monadSystemConfigSchema = z.object({
     })
     .default(() => ({
       port: 52749,
-      transport: defaultTransport(),
+      transport: DEFAULT_TRANSPORT,
       remoteAccess: { enabled: false, token: null, allowInsecureHttp: false }
     })),
   agent: z.object({
@@ -1020,7 +1017,7 @@ export function createDefaultConfig(principalId: string, displayName: string): M
     skills: { autoload: true, disabled: [], autoloadDisabled: [], installReview: false },
     network: {
       port: 52749,
-      transport: defaultTransport(),
+      transport: DEFAULT_TRANSPORT,
       remoteAccess: { enabled: false, token: null, allowInsecureHttp: false }
     },
     mcpServers: [],

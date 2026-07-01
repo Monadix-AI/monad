@@ -58,9 +58,12 @@ export class KvServer {
   #observers = new Set<CommandObserver>();
   #nextConnId = 1;
   #clientUrl = '';
+  #socket: SocketHandler<ConnData> | null = null;
+  #sockPath: string | null = null;
 
-  /** The `Bun.RedisClient` URL a client dials to reach this server. Valid after start(). Unix
-   *  socket on POSIX (`redis+unix://…`), TCP loopback on Windows (`redis://127.0.0.1:<port>`). */
+  /** The `Bun.RedisClient` URL a client dials to reach this server. Valid after start(). A Unix
+   *  socket (`redis+unix://…`) when one was bound and the client can dial it; TCP loopback
+   *  (`redis://127.0.0.1:<port>`) after {@link bindTcpFallback}. */
   get clientUrl(): string {
     return this.#clientUrl;
   }
@@ -115,15 +118,14 @@ export class KvServer {
       }
     };
 
-    if (process.platform === 'win32') {
-      // Windows has no unix-domain sockets in Bun (named pipes are unimplemented — oven-sh/bun#13042),
-      // so the KV RESP server runs on TCP loopback. Bun.listen rejects port:0 (#1544), so claim a
-      // free port via Bun.serve first. Loopback-only; no auth (same exposure as the daemon's main
-      // loopback transport on Windows — local-only).
-      const port = freeLoopbackPort();
-      this.#server = Bun.listen<ConnData>({ hostname: '127.0.0.1', port, socket });
-      this.#clientUrl = `redis://127.0.0.1:${port}`;
-    } else {
+    this.#socket = socket;
+    this.#sockPath = sockPath;
+
+    // Prefer a Unix-domain socket on every platform (Bun supports AF_UNIX on Windows too). Fall back
+    // to a TCP loopback listener only if the socket can't be bound — keeping the KV server reachable
+    // in any environment where AF_UNIX is unavailable. (A bound socket whose CLIENT can't dial it —
+    // Bun.RedisClient rejects `redis+unix://` URLs on Windows — is handled by bindTcpFallback.)
+    try {
       // A non-graceful exit (crash, SIGKILL) leaves the socket file behind; Bun.listen({unix})
       // would then fail with EADDRINUSE. Remove the stale node first.
       try {
@@ -133,10 +135,41 @@ export class KvServer {
       }
       this.#server = Bun.listen<ConnData>({ unix: sockPath, socket });
       this.#clientUrl = kvSocketUrl(sockPath);
+    } catch {
+      // AF_UNIX unavailable — run the RESP server on TCP loopback instead. Bun.listen rejects port:0
+      // (#1544), so claim a free port via Bun.serve first. Loopback-only, same local-only exposure.
+      const port = freeLoopbackPort();
+      this.#server = Bun.listen<ConnData>({ hostname: '127.0.0.1', port, socket });
+      this.#clientUrl = `redis://127.0.0.1:${port}`;
     }
 
     const intervalMs = opts?.sweepIntervalMs ?? 30_000;
     this.#sweepTimer = setInterval(() => this.store.sweep(), intervalMs);
+  }
+
+  /**
+   * Re-bind on TCP loopback after the Unix-socket listener bound but its CLIENT couldn't connect —
+   * `Bun.RedisClient` rejects `redis+unix://` URLs on Windows even though `Bun.listen({ unix })`
+   * succeeds there. Reuses the same handler + store (only the transport changes) and returns the new
+   * `clientUrl`. No-op if already on TCP.
+   */
+  bindTcpFallback(): string {
+    if (this.#clientUrl.startsWith('redis://')) return this.#clientUrl;
+    if (!this.#socket) throw new Error('KvServer not started');
+    this.#server?.stop(true);
+    // The Unix listener bound, so its socket node exists on disk — remove it now that we're abandoning
+    // it, matching the stale-node cleanup the unix path does before every bind.
+    if (this.#sockPath) {
+      try {
+        unlinkSync(this.#sockPath);
+      } catch {
+        // already gone
+      }
+    }
+    const port = freeLoopbackPort();
+    this.#server = Bun.listen<ConnData>({ hostname: '127.0.0.1', port, socket: this.#socket });
+    this.#clientUrl = `redis://127.0.0.1:${port}`;
+    return this.#clientUrl;
   }
 
   stop(): void {

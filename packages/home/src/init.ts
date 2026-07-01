@@ -36,7 +36,12 @@ export async function initMonadHome(paths: MonadPaths, opts: InitOptions = {}): 
   const displayName = opts.displayName ?? Bun.env.USER ?? '';
 
   await mkdir(paths.home, { recursive: true });
-  await mkdir(paths.runtime, { recursive: true });
+  // The daemon's Unix socket lives under paths.runtime and grants UNAUTHENTICATED RPC to anyone who
+  // can reach it, so the directory's perms are part of its access control (security-guidelines.md §3:
+  // "create ~/.monad/run/ as 0o700"). mkdir's mode only applies on creation, so also chmod an existing
+  // dir. POSIX only — chmod is a no-op on Windows, where %APPDATA%\monad is already per-user via ACL.
+  await mkdir(paths.runtime, { recursive: true, mode: 0o700 });
+  if (process.platform !== 'win32') await chmod(paths.runtime, 0o700).catch(() => {});
   await mkdir(paths.backup, { recursive: true });
   await mkdir(paths.dbDir, { recursive: true }); // main sqlite + mem0 history + qdrant storage
   // config.json / profile.json reference their schema via a `$schema` file:// URL. In dev that

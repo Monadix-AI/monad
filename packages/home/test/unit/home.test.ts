@@ -8,7 +8,7 @@ import { ModelProviderType } from '@monad/protocol';
 
 import {
   createDefaultConfig,
-  defaultTransport,
+  DEFAULT_TRANSPORT,
   loadAll,
   loadAuth,
   loadConfig,
@@ -394,13 +394,13 @@ describe('migrateConfig', () => {
     await expect(migrateConfig(noVersion)).rejects.toThrow();
   });
 
-  test('fills network.transport with the OS default when the network block is absent', async () => {
+  test('fills network.transport with the default when the network block is absent', async () => {
     const cfg = await migrateConfig(CONFIG_V1_FIXTURE);
-    expect(cfg.network.transport).toBe(defaultTransport());
+    expect(cfg.network.transport).toBe(DEFAULT_TRANSPORT);
   });
 
   test('preserves an explicit network.transport override', async () => {
-    const override = defaultTransport() === 'uds' ? 'tcp' : 'uds';
+    const override = 'tcp'; // any value other than DEFAULT_TRANSPORT ('uds')
     const cfg = await migrateConfig({
       ...CONFIG_V1_FIXTURE,
       network: { port: 52749, transport: override, remoteAccess: { enabled: false, token: null } }
@@ -662,7 +662,7 @@ describe('browser config', () => {
 
 describe('network.transport', () => {
   test('createDefaultConfig stamps the OS default transport at init', () => {
-    expect(createDefaultConfig('prn_x', 'x').network.transport).toBe(defaultTransport());
+    expect(createDefaultConfig('prn_x', 'x').network.transport).toBe(DEFAULT_TRANSPORT);
   });
 
   describe('resolveClientConn honours the setting', () => {
@@ -702,18 +702,6 @@ describe('network.transport', () => {
       await setTransport('tcp');
       const conn = await resolveClientConn();
       expect(conn.unixSocket).toBeUndefined();
-    });
-
-    test('win32 → forces tcp even when configured uds (Bun has no Windows unix sockets)', async () => {
-      await setTransport('uds');
-      const original = process.platform;
-      Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
-      try {
-        const conn = await resolveClientConn();
-        expect(conn.unixSocket).toBeUndefined();
-      } finally {
-        Object.defineProperty(process, 'platform', { value: original, configurable: true });
-      }
     });
 
     test('MONAD_PORT overrides the configured port (per-worktree dev isolation)', async () => {
