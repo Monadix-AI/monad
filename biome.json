@@ -9,7 +9,15 @@
   },
   "files": {
     "ignoreUnknown": false,
-    "includes": ["**", "!.agent", "!.claude", "!.superpowers", "!packages/i18n/src/generated/paraglide"]
+    "includes": [
+      "**",
+      "!.agent",
+      "!.claude",
+      "!.superpowers",
+      "!packages/i18n/src/generated/paraglide",
+      "!packages/home/config.schema.json",
+      "!packages/home/profile.schema.json"
+    ]
   },
   "formatter": {
     "enabled": true,
