@@ -1,5 +1,6 @@
 {
   "init.daemonUnreachable": "✖ daemon did not become reachable in time",
+  "init.select.hint": "Use ↑/↓, numbers, and Enter.",
   "init.numRange": "  Please enter a number between 1 and {{n}}",
   "init.provider.choose": "Choose a provider type:",
   "init.provider.select": "Select [1-{{n}}]: ",
@@ -11,6 +12,10 @@
   "init.apiKeyOptional": "API key (optional, press Enter to skip): ",
   "init.testing": "  Testing connection…",
   "init.connFailed": "✖ Connection failed: {{error}}",
+  "init.provider.afterFailed": "Connection test failed. What would you like to do?",
+  "init.provider.afterFailedSelect": "Select [1-2]: ",
+  "init.provider.retry": "Retry this provider",
+  "init.provider.back": "Back to provider selection",
   "init.connOk": "✔ Connection successful",
   "init.title": "monad setup wizard",
   "init.step1": "Step 1/3 — Home directory",
