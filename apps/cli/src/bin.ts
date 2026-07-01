@@ -4,8 +4,13 @@ import { openUrl, resolveClientConn } from '@monad/home';
 import { setLogLevel } from '@monad/logger';
 import { MONAD_VERSION } from '@monad/protocol';
 
-// Must run before any logger is created (all subsystem imports are dynamic below).
-setLogLevel(process.argv.includes('--debug') ? 'debug' : 'silent');
+// Silence pino output for the CLI's own commands — they render their own human output and must not
+// leak log lines. The `daemon` subcommand is the exception: it IS the log producer, so it keeps the
+// default level (info) and manages routing itself in configureDaemonLogging(). Must run before any
+// logger is created — all subsystem imports below are dynamic, so nothing has materialised yet.
+if (process.argv[2] !== 'daemon') {
+  setLogLevel(process.argv.includes('--debug') ? 'debug' : 'silent');
+}
 
 async function dispatch(): Promise<void> {
   const sub = process.argv[2];

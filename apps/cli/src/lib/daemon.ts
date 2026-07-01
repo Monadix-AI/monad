@@ -117,7 +117,11 @@ export async function startDaemon(): Promise<{ alreadyRunning: boolean }> {
   const isDevEntry = await Bun.file(devEntry).exists();
   // --start-relay tells the daemon to emit its banner/ready-info to stdout for relay
   // to the user, and to route logs to stderr (daemon.log) so stdout stays clean.
-  const argv = isDevEntry ? ['bun', devEntry, '--start-relay'] : [process.execPath, 'daemon', '--start-relay'];
+  // Pass --log-file so the daemon writes daemon.log itself (see configureDaemonLogging). The `stderr:
+  // logFd` redirect below still captures native/pre-logger crash output on Unix, but a detached child
+  // does not inherit that fd on Windows — so the daemon owning the file is what populates it there.
+  const relayArgs = ['--start-relay', '--log-file', logPath];
+  const argv = isDevEntry ? ['bun', devEntry, ...relayArgs] : [process.execPath, 'daemon', ...relayArgs];
   const proc = Bun.spawn(argv, {
     stdin: 'ignore',
     stdout: 'pipe',

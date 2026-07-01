@@ -1,10 +1,10 @@
-import { mkdirSync } from 'node:fs';
+import { appendFileSync, mkdirSync } from 'node:fs';
 import { appendFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import pino from 'pino';
 
-import { getLogLevel, getLogStderr } from './level.ts';
+import { getLogFile, getLogLevel, getLogStderr } from './level.ts';
 
 export type Logger = pino.Logger;
 export type LogLevel = pino.Level;
@@ -26,7 +26,7 @@ type PrettyRecord = LogRecord & {
   transport?: unknown;
 };
 
-export { type LogLevelOverride, setLogLevel, setLogStderr } from './level.ts';
+export { type LogLevelOverride, setLogFile, setLogLevel, setLogStderr } from './level.ts';
 
 /** Daily-rotating debug log in OS temp dir (prod only). */
 export const debugLogPath: string = join(tmpdir(), `monad-debug-${new Date().toISOString().slice(0, 10)}.log`);
@@ -120,7 +120,38 @@ export function formatTransportCall(record: PrettyRecord): string {
   return `${cyan(method)} ${state}${duration}`;
 }
 
-export function createLogger(name?: string, context?: Record<string, unknown>): Logger {
+// Production primary sink: resolve the destination on EVERY write instead of snapshotting it when the
+// logger is built. A logger can be materialised before the daemon entrypoint calls setLogFile() /
+// setLogStderr() — some module logs during import — and a build-time snapshot would then be wrong for
+// the process's whole life (this left daemon.log empty on Windows). Per-write resolution is correct
+// regardless of timing; appendFileSync also sidesteps sonic-boom, which silently drops writes inside a
+// `bun build --compile` binary, and survives a hard kill of the detached daemon (no buffered tail).
+let ensuredLogDir: string | undefined;
+const primaryProductionStream: pino.DestinationStream = {
+  write(line: string) {
+    const file = getLogFile();
+    if (file) {
+      // Logging is best-effort: a full disk / read-only dir / perms change must not turn a log line
+      // into a synchronous throw at an arbitrary call site (or crash the daemon). Fall back to stderr.
+      try {
+        if (ensuredLogDir !== file) {
+          mkdirSync(dirname(file), { recursive: true });
+          ensuredLogDir = file;
+        }
+        appendFileSync(file, line);
+      } catch {
+        process.stderr.write(line);
+      }
+      return;
+    }
+    (getLogStderr() ? process.stderr : process.stdout).write(line);
+  }
+};
+
+// Build the concrete pino logger. Called LAZILY (see createLogger) so it reads the destination flags
+// — getLogStderr()/getLogFile() — at first USE, after the daemon entrypoint has set them, rather than
+// at import time when many module-level `const log = createLogger(...)` run before configuration.
+function buildLogger(name?: string, context?: Record<string, unknown>): Logger {
   const bindings = { ...(name ? { name } : {}), ...context };
   const LOG_LEVEL_OVERRIDE = getLogLevel() as PinoLevel | undefined;
 
@@ -172,13 +203,13 @@ export function createLogger(name?: string, context?: Record<string, unknown>): 
     return Object.keys(bindings).length > 0 ? base.child(bindings) : base;
   }
 
-  // Production: info+ → stdout (NDJSON), debug+ → rotating temp file
+  // Production: info+ → stdout (NDJSON) / stderr / a log file (resolved per-write), debug+ → temp file
   const effectiveLevel: PinoLevel = LOG_LEVEL_OVERRIDE ?? 'info';
   const streams = pino.multistream(
     [
       {
         level: effectiveLevel === 'silent' ? 'silent' : ('info' as LogLevel),
-        stream: dest === 2 ? process.stderr : process.stdout
+        stream: primaryProductionStream
       },
       {
         level: 'debug' as LogLevel,
@@ -194,6 +225,26 @@ export function createLogger(name?: string, context?: Record<string, unknown>): 
 
   const base = pino({ level: effectiveLevel === 'silent' ? 'silent' : 'debug', redact }, streams);
   return Object.keys(bindings).length > 0 ? base.child(bindings) : base;
+}
+
+// createLogger returns a LAZY logger: the underlying pino instance (and therefore its stdout / stderr
+// / file destination) is built on first USE, not at this call. Loggers are overwhelmingly created at
+// module scope (`const log = createLogger('x')`), which for the daemon runs at import time — before
+// the entrypoint calls setLogStderr()/setLogFile() in configureDaemonLogging(). Binding the
+// destination eagerly there sent JSON logs to stdout, leaking them into the CLI's stdout relay and
+// leaving daemon.log empty. Deferring to first log call reads the flags after they are set.
+export function createLogger(name?: string, context?: Record<string, unknown>): Logger {
+  let real: Logger | undefined;
+  const resolve = (): Logger => (real ??= buildLogger(name, context));
+  return new Proxy({} as Logger, {
+    get(_target, prop) {
+      const value = Reflect.get(resolve(), prop, resolve());
+      return typeof value === 'function' ? (value as (...args: unknown[]) => unknown).bind(resolve()) : value;
+    },
+    set(_target, prop, value) {
+      return Reflect.set(resolve(), prop, value);
+    }
+  }) as Logger;
 }
 
 export const logger: Logger = createLogger('monad');
