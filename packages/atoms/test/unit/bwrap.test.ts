@@ -57,18 +57,24 @@ test('writableRoots undefined → --bind / /', () => {
   expect(a[i + 2]).toBe('/');
 });
 
-test('writableRoots set → no catch-all --bind / /, but writable root is rw-bound', () => {
-  const a = args({ writableRoots: ['/tmp/session'] });
-  // No catch-all bind (--bind / /): find a --bind where both src and dst are "/"
-  const catchAll = a.findIndex((v, i) => v === '--bind' && a[i + 1] === '/' && a[i + 2] === '/');
-  expect(catchAll).toBe(-1);
-  // System dirs use --ro-bind
-  expect(a).toContain('--ro-bind');
-  // The writable root is bound rw: --bind /tmp/session /tmp/session
-  const bindIdx = a.findIndex((v, i) => v === '--bind' && a[i + 1] === '/tmp/session');
-  expect(bindIdx).toBeGreaterThanOrEqual(0);
-  expect(a[bindIdx + 2]).toBe('/tmp/session');
-});
+// Skipped on Windows: bwrap is a Linux-only launcher and buildBwrapArgs probes the host for the
+// system dirs it read-binds (/usr, /etc, /opt), which don't exist on Windows — so no `--ro-bind`
+// is emitted there. The confinement itself only ever runs on Linux (see bwrap.linux.test.ts).
+test.skipIf(process.platform === 'win32')(
+  'writableRoots set → no catch-all --bind / /, but writable root is rw-bound',
+  () => {
+    const a = args({ writableRoots: ['/tmp/session'] });
+    // No catch-all bind (--bind / /): find a --bind where both src and dst are "/"
+    const catchAll = a.findIndex((v, i) => v === '--bind' && a[i + 1] === '/' && a[i + 2] === '/');
+    expect(catchAll).toBe(-1);
+    // System dirs use --ro-bind
+    expect(a).toContain('--ro-bind');
+    // The writable root is bound rw: --bind /tmp/session /tmp/session
+    const bindIdx = a.findIndex((v, i) => v === '--bind' && a[i + 1] === '/tmp/session');
+    expect(bindIdx).toBeGreaterThanOrEqual(0);
+    expect(a[bindIdx + 2]).toBe('/tmp/session');
+  }
+);
 
 test('readableRoots added as --ro-bind', () => {
   const a = args({ writableRoots: ['/work'], readableRoots: ['/data/models'] });

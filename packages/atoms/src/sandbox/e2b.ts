@@ -2,7 +2,7 @@ import type { SandboxLauncher, SandboxPolicy, SandboxProcess, SandboxSpawnOption
 import type { Sandbox } from 'e2b';
 
 import { existsSync, readFileSync, statSync } from 'node:fs';
-import { basename } from 'node:path';
+import { basename, isAbsolute } from 'node:path';
 import { sandboxCredential } from '@monad/sdk-atom';
 
 // The API key. In the daemon it flows from config (agent.sandbox.credential) — injected per-run via
@@ -63,7 +63,9 @@ function cleanEnv(env: SandboxSpawnOptions['env']): Record<string, string> {
 async function stageLocalFiles(sandbox: Sandbox, argv: string[]): Promise<string[]> {
   const out: string[] = [];
   for (const arg of argv) {
-    if (arg.startsWith('/') && existsSync(arg) && statSync(arg).isFile()) {
+    // isAbsolute (not startsWith('/')): a local snippet path is `C:\…` on Windows, so a '/'-prefix
+    // check would never stage it there — the remote sandbox would then run a path that doesn't exist.
+    if (isAbsolute(arg) && existsSync(arg) && statSync(arg).isFile()) {
       const remote = `/home/user/${basename(arg)}`;
       await sandbox.files.write(remote, readFileSync(arg, 'utf8'));
       out.push(remote);
