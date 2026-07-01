@@ -5,26 +5,31 @@ import type { Agent, AgentId } from '@monad/protocol';
 import { useCreateAgentMutation, useDeleteAgentMutation, useListAgentsQuery } from '@monad/client-rtk';
 import { Badge, Button, ScrollArea, Textarea } from '@monad/ui';
 import { Bot, Check, Loader2, Plus, RefreshCw, Trash2, Upload, X } from 'lucide-react';
+import { usePathname, useRouter } from 'next/navigation';
 import { useMemo, useState } from 'react';
 
 import { useT } from '@/components/I18nProvider';
-import { PanelShell, PanelShellHeader } from '@/components/ui/panel-shell';
+import { PanelShell } from '@/components/ui/panel-shell';
+import { studioDetailPath, studioSubpathFromPathname } from '@/features/routes/route-paths';
 import { parseClaudeSubagent } from '@/lib/parse-agent-import';
 import { AgentEditor } from './agent-workshop/AgentEditor';
+import { StudioBreadcrumbHeader } from './StudioBreadcrumbHeader';
 
 /** Agents area of Studio: a master list of agents ↔ a single-agent editor. */
 export function AgentsPanel({ onClose }: { onClose: () => void }) {
   const t = useT();
+  const pathname = usePathname();
+  const router = useRouter();
   const { data, isLoading, refetch, isFetching } = useListAgentsQuery();
   const [createAgent, { isLoading: creating }] = useCreateAgentMutation();
   const [deleteAgent] = useDeleteAgentMutation();
-  const [editing, setEditing] = useState<AgentId | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<AgentId | null>(null);
   const [importing, setImporting] = useState(false);
   const [importText, setImportText] = useState('');
   const [importError, setImportError] = useState<string>();
 
   const agents = data?.agents ?? [];
+  const editing = (studioSubpathFromPathname(pathname)[0] as AgentId | undefined) ?? null;
 
   // Surface duplicate names so the user resolves them (we never silently shadow).
   const dupNames = useMemo(() => {
@@ -37,7 +42,6 @@ export function AgentsPanel({ onClose }: { onClose: () => void }) {
     return (
       <AgentEditor
         agentId={editing}
-        onBack={() => setEditing(null)}
         onClose={onClose}
       />
     );
@@ -45,7 +49,7 @@ export function AgentsPanel({ onClose }: { onClose: () => void }) {
 
   const handleCreate = async () => {
     const res = await createAgent({ name: t('web.studio.newAgentName'), capabilities: [] }).unwrap();
-    setEditing(res.agent.id);
+    router.replace(studioDetailPath('agents', res.agent.id));
   };
 
   const handleImport = async () => {
@@ -67,7 +71,7 @@ export function AgentsPanel({ onClose }: { onClose: () => void }) {
       }).unwrap();
       setImporting(false);
       setImportText('');
-      setEditing(res.agent.id);
+      router.replace(studioDetailPath('agents', res.agent.id));
     } catch (e) {
       setImportError((e as { message?: string }).message ?? 'Failed to create agent');
     }
@@ -75,7 +79,7 @@ export function AgentsPanel({ onClose }: { onClose: () => void }) {
 
   return (
     <PanelShell>
-      <PanelShellHeader
+      <StudioBreadcrumbHeader
         actions={
           <>
             <Button
@@ -176,7 +180,7 @@ export function AgentsPanel({ onClose }: { onClose: () => void }) {
             >
               <button
                 className="flex min-w-0 flex-1 flex-col items-stretch gap-1.5 text-left"
-                onClick={() => setEditing(a.id)}
+                onClick={() => router.replace(studioDetailPath('agents', a.id))}
                 type="button"
               >
                 <span className="flex items-center gap-2">

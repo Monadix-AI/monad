@@ -15,6 +15,7 @@ test('studio section route statically exports every known section', () => {
     'skills',
     'mcpServers',
     'channels',
+    'thirdPartyAgents',
     'acpAgents',
     'nativeCliAgents',
     'capabilities',

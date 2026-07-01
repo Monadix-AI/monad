@@ -30,6 +30,9 @@ import '../../src/endpoints/settings/openai-compat/get-openai-compat.ts';
 import '../../src/endpoints/settings/openai-compat/set-openai-compat.ts';
 import '../../src/endpoints/settings/tool-backends/get-tool-backends.ts';
 import '../../src/endpoints/settings/tool-backends/set-tool-backends.ts';
+import '../../src/endpoints/atoms/get-skill-content.ts';
+import '../../src/endpoints/atoms/update-skill-content.ts';
+import '../../src/endpoints/settings/model/profiles/rename-profile.ts';
 
 // ── helpers ─────────────────────────────────────────────────────────────────────
 
@@ -76,6 +79,28 @@ function fakeClient(handlers: Record<string, Handler> = {}): MonadClient {
     return ok({ ok: true });
   }
 
+  const skillRoute = (params: { name: string }) => ({
+    content: {
+      get: (arg?: unknown) => resolve('getSkillContent', '$raw', { name: params.name, content: '' }, params, arg),
+      put: (body: unknown, arg?: unknown) =>
+        resolve('updateSkillContent', '$raw', { name: params.name, dir: '', warnings: [] }, params, body, arg)
+    }
+  });
+  Object.assign(skillRoute, {
+    get: () => resolve('listInstalledSkills', '$raw', { skills: [], skillInstances: [] }),
+    post: (body: unknown) =>
+      resolve('createSkill', '$raw', { name: (body as { name?: string }).name ?? '', dir: '' }, body)
+  });
+
+  const profilesRoute = (params: { alias: string }) => ({
+    alias: {
+      patch: (body: unknown) => resolveMut('renameProfile', body, params)
+    }
+  });
+  Object.assign(profilesRoute, {
+    get: () => resolve('listProfiles', '$raw', { profiles: [], defaultAlias: 'default' })
+  });
+
   return {
     treaty: {
       v1: {
@@ -110,6 +135,9 @@ function fakeClient(handlers: Record<string, Handler> = {}): MonadClient {
           'tool-backends': {
             get: () => resolve('getToolBackends', 'toolBackends', {}),
             put: (body: unknown) => resolveMut('setToolBackends', body)
+          },
+          model: {
+            profiles: profilesRoute
           }
         },
         commands: {
@@ -162,9 +190,15 @@ function fakeClient(handlers: Record<string, Handler> = {}): MonadClient {
         approvals: {
           get: async () => ok({ rules: [] })
         },
-        atoms: {
-          get: async () => ok({ atomPacks: [] })
-        },
+        atoms: Object.assign(
+          () => ({
+            delete: () => ok({ ok: true })
+          }),
+          {
+            get: async () => ok({ atomPacks: [] }),
+            skills: skillRoute
+          }
+        ),
         usage: {
           get: async () =>
             ok({
@@ -528,6 +562,53 @@ test('getMem0Data: fetches mem0 data for the PCA explorer', async () => {
   expect((res.data as { mem0Data?: unknown } | undefined)?.mem0Data).toEqual(data);
 });
 
+test('getSkillContent: uses the typed treaty route for skill content reads', async () => {
+  let observed: unknown;
+  const client = fakeClient({
+    getSkillContent: handler('$raw', async (...args) => {
+      observed = args;
+      return { name: 'CodeGraph Navigator', content: 'body', files: [], preview: 'text' };
+    })
+  });
+  const store = createMonadStore({ client });
+
+  const res = await dispatchEndpoint(store, 'getSkillContent', {
+    name: 'CodeGraph Navigator',
+    id: 'atom-pack:codegraph',
+    file: 'SKILL.md'
+  });
+
+  expect((res.data as { content?: string } | undefined)?.content).toBe('body');
+  expect(observed).toEqual([
+    { name: 'CodeGraph Navigator' },
+    { query: { id: 'atom-pack:codegraph', file: 'SKILL.md' } }
+  ]);
+});
+
+test('updateSkillContent: uses the typed treaty route for skill content writes', async () => {
+  let observed: unknown;
+  const client = fakeClient({
+    updateSkillContent: handler('$raw', async (...args) => {
+      observed = args;
+      return { name: 'codegraph-navigator', dir: '/skills/codegraph-navigator', warnings: [] };
+    })
+  });
+  const store = createMonadStore({ client });
+
+  const res = await dispatchEndpoint(store, 'updateSkillContent', {
+    name: 'codegraph-navigator',
+    id: 'global:codegraph-navigator',
+    content: 'updated'
+  });
+
+  expect((res.data as { name?: string } | undefined)?.name).toBe('codegraph-navigator');
+  expect(observed).toEqual([
+    { name: 'codegraph-navigator' },
+    { content: 'updated' },
+    { query: { id: 'global:codegraph-navigator' } }
+  ]);
+});
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // Init status
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -783,4 +864,19 @@ test('setToolBackends: writes config and invalidates ToolBackends tag', async ()
   await new Promise((r) => setTimeout(r, 0));
   expect(getCalls).toBe(2);
   expect(written).toEqual({ webSearch: { provider: 'native' } });
+});
+
+test('renameProfile: uses the typed treaty route for profile alias changes', async () => {
+  let observed: unknown;
+  const client = fakeClient({
+    renameProfile: handler('ok', async (...args) => {
+      observed = args;
+    })
+  });
+  const store = createMonadStore({ client });
+
+  const res = await dispatchEndpoint(store, 'renameProfile', { alias: 'research', nextAlias: 'writer' });
+
+  expect((res.data as { ok?: boolean } | undefined)?.ok).toBe(true);
+  expect(observed).toEqual([{ alias: 'writer' }, { alias: 'research' }]);
 });

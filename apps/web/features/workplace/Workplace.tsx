@@ -3,9 +3,11 @@
 import type { CSSProperties } from 'react';
 import type { ProjectExperienceDefinition } from './experiences/types';
 
+import { useStartNativeCliAuthMutation } from '@monad/client-rtk';
 import { useCallback, useMemo, useState } from 'react';
 
 import { useT } from '@/components/I18nProvider';
+import { NativeCliAuthModal } from './cli/NativeCliAuthModal';
 import { NativeCliStreamModal } from './cli/NativeCliStreamModal';
 import { getProjectExperience } from './experiences/registry';
 import { toExperienceRuntime } from './experiences/to-runtime';
@@ -36,6 +38,9 @@ export function Workplace({
   const [internalProjectSettingsOpen, setInternalProjectSettingsOpen] = useState(false);
   const [selectedProjectMemberId, setSelectedProjectMemberId] = useState<string | null>(null);
   const [followedNativeCliSessionId, setFollowedNativeCliSessionId] = useState<string | null>(null);
+  const [nativeCliAuthSession, setNativeCliAuthSession] = useState<{ id: string; agentName: string } | null>(null);
+  const [startingNativeCliAuthAgent, setStartingNativeCliAuthAgent] = useState<string | null>(null);
+  const [startNativeCliAuth] = useStartNativeCliAuthMutation();
   const settingsOpen = projectSettingsOpen || internalProjectSettingsOpen;
   const closeProjectSettings = useCallback(() => {
     setInternalProjectSettingsOpen(false);
@@ -53,6 +58,20 @@ export function Workplace({
   const followNativeCliSession = useCallback((id: string) => {
     setFollowedNativeCliSessionId(id);
   }, []);
+  const startNativeCliAuthForAgent = useCallback(
+    (agentName: string) => {
+      setNativeCliAuthSession(null);
+      setStartingNativeCliAuthAgent(agentName);
+      startNativeCliAuth(agentName)
+        .unwrap()
+        .then((session) => setNativeCliAuthSession({ id: session.id, agentName: session.agentName }))
+        .catch(() => {
+          setNativeCliAuthSession(null);
+        })
+        .finally(() => setStartingNativeCliAuthAgent(null));
+    },
+    [startNativeCliAuth]
+  );
   const followedNativeCliStream = useMemo(
     () => project.nativeCliStreams.find((stream) => stream.id === followedNativeCliSessionId),
     [project.nativeCliStreams, followedNativeCliSessionId]
@@ -161,7 +180,13 @@ export function Workplace({
             overflow: 'hidden'
           }}
         >
-          {!embedded ? <ProjectRail project={project} /> : null}
+          {!embedded ? (
+            <ProjectRail
+              onStartNativeCliAuth={startNativeCliAuthForAgent}
+              project={project}
+              startingNativeCliAuthAgent={startingNativeCliAuthAgent}
+            />
+          ) : null}
 
           {experience.render({
             embedded,
@@ -184,6 +209,13 @@ export function Workplace({
             onClose={() => setFollowedNativeCliSessionId(null)}
             onStop={(id) => void project.stopNativeCli(id)}
             stream={followedNativeCliStream}
+          />
+        ) : null}
+        {nativeCliAuthSession ? (
+          <NativeCliAuthModal
+            agentName={nativeCliAuthSession.agentName}
+            onClose={() => setNativeCliAuthSession(null)}
+            sessionId={nativeCliAuthSession.id}
           />
         ) : null}
       </div>

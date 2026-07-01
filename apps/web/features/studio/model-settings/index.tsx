@@ -10,9 +10,10 @@ import { useCallback, useEffect, useState } from 'react';
 import { flushSync } from 'react-dom';
 
 import { useT } from '@/components/I18nProvider';
-import { PanelShell, PanelShellHeader } from '@/components/ui/panel-shell';
+import { PanelShell } from '@/components/ui/panel-shell';
 import { useModelSettings, useModelSettingsQueryState, useProviderDetail } from '@/hooks/use-model-settings';
 import { useProviderMeta } from '@/lib/ProviderMeta';
+import { StudioBreadcrumbHeader } from '../StudioBreadcrumbHeader';
 import { type DeleteBlock, profileDeleteBlock, providerDeleteBlock } from './delete-guards';
 import { splitModelSpec } from './model-picker';
 import { type ProfileKeyMap, profileDisplayKey, profileKeysForRename } from './profile-rename';
@@ -155,10 +156,7 @@ export function ModelSettings(_props: { onClose: () => void }) {
 
   return (
     <PanelShell className="overflow-hidden">
-      <PanelShellHeader
-        subtitle={t('web.model.subtitle')}
-        title={t('web.model.title')}
-      />
+      <StudioBreadcrumbHeader title={t('web.model.title')} />
 
       <ScrollArea className="min-h-0 flex-1">
         {settingsQuery.isLoading ? (

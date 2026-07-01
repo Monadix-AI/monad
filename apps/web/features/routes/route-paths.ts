@@ -15,11 +15,26 @@ export function studioPath(section: StudioSectionId = 'agents'): string {
   return `/studio/${encodeURIComponent(section)}`;
 }
 
+export function studioDetailPath(section: StudioSectionId, ...trail: string[]): string {
+  const encodedTrail = trail.filter(Boolean).map((part) => encodeURIComponent(part));
+  return [studioPath(section), ...encodedTrail].join('/');
+}
+
 export function studioSectionFromPathname(pathname: string): StudioSectionId | null {
   const raw = pathname.match(/^\/studio\/([^/?#]+)/)?.[1];
   if (!raw) return null;
   const section = safeDecode(raw);
+  if (section === 'acpAgents' || section === 'nativeCliAgents') return 'thirdPartyAgents';
   return isStudioSectionId(section) ? section : null;
+}
+
+export function studioSubpathFromPathname(pathname: string): string[] {
+  const raw = pathname.match(/^\/studio\/[^/?#]+\/([^?#]*)/)?.[1];
+  if (!raw) return [];
+  return raw
+    .split('/')
+    .filter(Boolean)
+    .map((part) => safeDecode(part));
 }
 
 export function isSkillMarketplacePath(pathname: string): boolean {

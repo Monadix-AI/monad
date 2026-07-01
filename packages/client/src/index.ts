@@ -2,13 +2,20 @@ import type {
   DeveloperLogRecord,
   Event,
   EventId,
+  NativeCliAuthSessionView,
   SendMessageResponse,
   SessionId,
   SessionUiEvent
 } from '@monad/protocol';
 import type { MonadTreaty, MonadTreatyConfig } from './treaty.ts';
 
-import { CONTROL_API_VERSION, developerLogRecordSchema, eventSchema, sessionUiEventSchema } from '@monad/protocol';
+import {
+  CONTROL_API_VERSION,
+  developerLogRecordSchema,
+  eventSchema,
+  nativeCliAuthSessionViewSchema,
+  sessionUiEventSchema
+} from '@monad/protocol';
 
 import { EventSocket } from './event-socket.ts';
 import { createMonadTreaty, makeLoopbackHttpsFetcher, makeUnixFetcher } from './treaty.ts';
@@ -37,6 +44,7 @@ export interface MonadClientOptions {
 export type EventHandler = (event: Event) => void;
 export type UiEventHandler = (event: SessionUiEvent) => void;
 export type LogRecordHandler = (record: DeveloperLogRecord) => void;
+export type NativeCliAuthSessionHandler = (session: NativeCliAuthSessionView) => void;
 
 interface SsePayloadSchema<T> {
   parse(value: unknown): T;
@@ -362,6 +370,52 @@ export class MonadClient {
           } else {
             const reader = response.body?.getReader();
             if (reader) await this.readSseEvents(reader, onRecord, developerLogRecordSchema, controller.signal);
+            delay = 1_000;
+          }
+        } catch (err) {
+          if (controller.signal.aborted) return;
+          opts?.onError?.({ kind: 'transient', cause: err });
+        }
+        await new Promise<void>((resolve) => {
+          const t = setTimeout(resolve, delay);
+          controller.signal.addEventListener('abort', () => {
+            clearTimeout(t);
+            resolve();
+          });
+        });
+        delay = Math.min(delay * 2, 30_000);
+      }
+    })();
+
+    return () => controller.abort();
+  }
+
+  streamNativeCliAuth(
+    id: string,
+    onSession: NativeCliAuthSessionHandler,
+    opts?: { onError?: (err: StreamError) => void }
+  ): () => void {
+    const controller = new AbortController();
+
+    void (async () => {
+      let delay = 1_000;
+      while (!controller.signal.aborted) {
+        try {
+          const response = await this.fetch(`/${CONTROL_API_VERSION}/native-cli-auth-sessions/${id}/events`, {
+            headers: { accept: 'text/event-stream' },
+            signal: controller.signal
+          });
+          if (response.status === 401 || response.status === 403 || response.status === 404) {
+            opts?.onError?.({ kind: 'fatal', status: response.status });
+            return;
+          }
+          if (!response.ok) {
+            opts?.onError?.({ kind: 'transient', status: response.status });
+          } else {
+            const reader = response.body?.getReader();
+            if (reader) {
+              await this.readSseEvents(reader, onSession, nativeCliAuthSessionViewSchema, controller.signal);
+            }
             delay = 1_000;
           }
         } catch (err) {

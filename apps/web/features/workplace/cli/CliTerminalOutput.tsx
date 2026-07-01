@@ -1,6 +1,6 @@
 'use client';
 
-import type { ITheme } from '@xterm/xterm';
+import type { ITheme } from 'ghostty-web';
 import type { CSSProperties } from 'react';
 
 import { useEffect, useRef } from 'react';
@@ -44,8 +44,8 @@ export function CliTerminalOutput({
   style
 }: CliTerminalOutputProps): React.ReactElement {
   const hostRef = useRef<HTMLDivElement | null>(null);
-  const terminalRef = useRef<import('@xterm/xterm').Terminal | null>(null);
-  const fitRef = useRef<import('@xterm/addon-fit').FitAddon | null>(null);
+  const terminalRef = useRef<import('ghostty-web').Terminal | null>(null);
+  const fitRef = useRef<import('ghostty-web').FitAddon | null>(null);
   const observerRef = useRef<ResizeObserver | null>(null);
   const inputDisposableRef = useRef<{ dispose: () => void } | null>(null);
   const writtenOutputRef = useRef('');
@@ -61,19 +61,17 @@ export function CliTerminalOutput({
     let disposed = false;
 
     async function mountTerminal(): Promise<void> {
-      const [{ Terminal }, { FitAddon }] = await Promise.all([import('@xterm/xterm'), import('@xterm/addon-fit')]);
+      const { FitAddon, Terminal, init } = await import('ghostty-web');
+      await init();
       if (disposed || !hostRef.current) return;
       const computed = getComputedStyle(hostRef.current);
       const readColor = (name: string, fallback: string) => computed.getPropertyValue(name).trim() || fallback;
       const terminal = new Terminal({
-        allowProposedApi: false,
         convertEol: true,
         cursorBlink: false,
         disableStdin: !onInputRef.current,
         fontFamily: readColor('--font-mono', 'ui-monospace, SFMono-Regular, Menlo, monospace'),
         fontSize: 11,
-        lineHeight: 1.35,
-        minimumContrastRatio: 4.5,
         rows: 12,
         scrollback: 3000,
         theme: TERMINAL_THEME
@@ -87,7 +85,7 @@ export function CliTerminalOutput({
       try {
         fitAddon.fit();
       } catch {
-        // xterm can throw before the container has measurable dimensions.
+        // The terminal can throw before the container has measurable dimensions.
       }
       if (outputRef.current) {
         terminal.write(outputRef.current);

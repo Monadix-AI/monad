@@ -62,41 +62,50 @@ export function DevToolsWidget() {
   };
 
   return (
-    <div className="glass-surface fixed right-4 bottom-4 z-50 flex items-center gap-1 p-1 text-popover-foreground">
-      <button
-        aria-label="Fix Impeccable live state"
-        className="inline-flex h-9 items-center gap-2 rounded-sm px-3 font-medium text-xs transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        onClick={fixImpeccable}
-        title="Clear Impeccable live state and reload"
-        type="button"
+    <div className="group glass-surface fixed right-4 bottom-4 z-50 flex items-center gap-1 overflow-hidden p-1 text-popover-foreground">
+      <div
+        aria-hidden="true"
+        className="flex h-9 items-center gap-2 rounded-sm px-3 font-medium text-muted-foreground text-xs"
       >
-        <RotateCcw
-          aria-hidden="true"
-          className="size-4"
-        />
-        <span>Fix Impeccable</span>
-      </button>
-      {links.map(({ href, icon: Icon, label, port }) => (
-        <a
-          aria-label={`Open ${label} on port ${port}`}
+        <Wrench className="size-4" />
+        <span>Dev</span>
+      </div>
+      <div className="flex max-w-0 translate-x-1 items-center gap-1 overflow-hidden opacity-0 transition-[max-width,opacity,transform] duration-200 ease-out group-focus-within:max-w-[720px] group-focus-within:translate-x-0 group-focus-within:opacity-100 group-hover:max-w-[720px] group-hover:translate-x-0 group-hover:opacity-100 motion-reduce:translate-x-0 motion-reduce:transition-none">
+        <button
+          aria-label="Fix Impeccable live state"
           className="inline-flex h-9 items-center gap-2 rounded-sm px-3 font-medium text-xs transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          href={href}
-          key={label}
-          rel="noreferrer"
-          target="_blank"
-          title={`Open ${label} (${port})`}
+          onClick={fixImpeccable}
+          title="Clear Impeccable live state and reload"
+          type="button"
         >
-          <Icon
+          <RotateCcw
             aria-hidden="true"
             className="size-4"
           />
-          <span>{label}</span>
-          <ExternalLink
-            aria-hidden="true"
-            className="size-3.5 opacity-65"
-          />
-        </a>
-      ))}
+          <span>Fix Impeccable</span>
+        </button>
+        {links.map(({ href, icon: Icon, label, port }) => (
+          <a
+            aria-label={`Open ${label} on port ${port}`}
+            className="inline-flex h-9 items-center gap-2 rounded-sm px-3 font-medium text-xs transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            href={href}
+            key={label}
+            rel="noreferrer"
+            target="_blank"
+            title={`Open ${label} (${port})`}
+          >
+            <Icon
+              aria-hidden="true"
+              className="size-4"
+            />
+            <span>{label}</span>
+            <ExternalLink
+              aria-hidden="true"
+              className="size-3.5 opacity-65"
+            />
+          </a>
+        ))}
+      </div>
     </div>
   );
 }

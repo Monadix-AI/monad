@@ -7,7 +7,6 @@ import {
   Brain,
   Cpu,
   MessageSquare,
-  MonitorPlay,
   Network,
   Package,
   PlugZap,
@@ -26,6 +25,7 @@ export type StudioSectionId =
   | 'skills'
   | 'mcpServers'
   | 'channels'
+  | 'thirdPartyAgents'
   | 'acpAgents'
   | 'nativeCliAgents'
   | 'capabilities'
@@ -48,6 +48,7 @@ export const STUDIO_SECTION_IDS = [
   'skills',
   'mcpServers',
   'channels',
+  'thirdPartyAgents',
   'acpAgents',
   'nativeCliAgents',
   'capabilities',
@@ -83,8 +84,7 @@ export const STUDIO_CAPABILITY_SECTIONS: StudioSectionItem[] = [
   { id: 'atoms', icon: Package, i18nKey: 'web.studio.atoms' },
   { id: 'skills', icon: Puzzle, i18nKey: 'web.studio.skills' },
   { id: 'channels', icon: MessageSquare, i18nKey: 'web.studio.channels' },
-  { id: 'acpAgents', icon: Bot, i18nKey: 'web.studio.acpAgents' },
-  { id: 'nativeCliAgents', icon: MonitorPlay, i18nKey: 'web.studio.nativeCliAgents' }
+  { id: 'thirdPartyAgents', icon: Bot, i18nKey: 'web.studio.thirdPartyAgents' }
 ];
 
 export const STUDIO_RUNTIME_SECTIONS: StudioSectionItem[] = [

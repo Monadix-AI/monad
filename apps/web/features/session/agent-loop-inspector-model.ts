@@ -60,7 +60,7 @@ function hasReasoning(item: UIItem): boolean {
   return item.kind === 'message' && item.parts.some((part) => part.type === 'reasoning' && part.text.length > 0);
 }
 
-export function classifyTool(tool: string): InspectorTone {
+function classifyTool(tool: string): InspectorTone {
   if (tool === 'skill') return 'skill';
   if (tool === 'agent_delegate' || tool === 'agent_delegate_to' || tool === 'agent_acp_delegate') return 'subagent';
   if (tool.startsWith('mcp_') || tool.includes('__mcp') || tool.includes('mcp__')) return 'mcp';

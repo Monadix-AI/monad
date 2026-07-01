@@ -149,6 +149,10 @@ export interface DaemonHandlerDeps extends SessionDeps, ModelDeps {
   certFingerprint?: string;
   /** ISO-8601 expiry of the active TLS cert, surfaced through /health so clients can warn before it expires. */
   certExpiry?: string;
+  /** Test/runtime override for browser-attached native CLI auth connect heartbeat pruning. */
+  nativeCliAuthHeartbeatTimeoutMs?: number;
+  /** Loopback URL that managed native CLI runtimes use to call the daemon. */
+  nativeCliServerUrl?: string;
   /** Getter for background upgrade check result — populated asynchronously after startup. */
   getUpgradeInfo?: () => { latestVersion: string; latestVersionCheckedAt: string } | null;
   log: Logger;
@@ -159,13 +163,16 @@ export function createDaemonHandlers(deps: DaemonHandlerDeps) {
   const nativeCliHost = new NativeCliHost({
     store: deps.store,
     bus: deps.bus,
+    monadHome: paths.home,
+    serverUrl: deps.nativeCliServerUrl ?? `http://127.0.0.1:${Bun.env.MONAD_PORT || '52749'}`,
     agents: async () => {
       const cfg = await loadAll(paths.config, paths.profile);
       return cfg?.nativeCliAgents ?? [];
     },
     resolveAgentEnv: async (env) => resolveNativeCliAgentEnv(env, (await loadAuth(paths.auth)) ?? undefined),
     nativeCliProcessRegistryPath: `${paths.runtime}/native-cli-processes.json`,
-    authProcessRegistryPath: `${paths.runtime}/native-cli-auth-processes.json`
+    authProcessRegistryPath: `${paths.runtime}/native-cli-auth-processes.json`,
+    authHeartbeatTimeoutMs: deps.nativeCliAuthHeartbeatTimeoutMs
   });
   nativeCliHost.reconcileOrphanedSessions();
 
@@ -521,6 +528,7 @@ export function createDaemonHandlers(deps: DaemonHandlerDeps) {
     }),
     session: createSessionModule({ ...deps, nativeCliHost }),
     nativeCli: createNativeCliModule({ paths, host: nativeCliHost, store: deps.store }),
+    _nativeAgentStore: deps.store,
     memory: createMemoryModule(
       deps.memoryService,
       deps.memorySetBackend,

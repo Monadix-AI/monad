@@ -1,5 +1,5 @@
 import type { MonadClient } from '@monad/client';
-import type { SkillListInstance } from '@monad/protocol';
+import type { SkillContentQuery, SkillListInstance } from '@monad/protocol';
 
 import { getSkillContentResponseSchema } from '@monad/protocol';
 
@@ -139,12 +139,12 @@ export async function loadSkillContent(
   client: MonadClient,
   file?: string
 ) {
-  const params = new URLSearchParams();
-  if (skill.id) params.set('id', skill.id);
-  if (file) params.set('file', file);
-  const qs = params.toString() ? `?${params}` : '';
-  const res = await client.fetch(`/v1/atoms/skills/${encodeURIComponent(skill.name)}/content${qs}`);
-  const body = await res.json();
-  if (!res.ok) throw new Error('failed to load skill content');
-  return getSkillContentResponseSchema.parse(body);
+  const query: SkillContentQuery = {};
+  if (skill.id) query.id = skill.id;
+  if (file) query.file = file;
+  const { data, error } = await client.treaty.v1.atoms
+    .skills({ name: skill.name })
+    .content.get(Object.keys(query).length > 0 ? { query } : undefined);
+  if (error) throw new Error('failed to load skill content');
+  return getSkillContentResponseSchema.parse(data);
 }

@@ -1,9 +1,22 @@
 import type { ProjectController } from '../use-project';
 
+import { KeyRound, Loader2 } from 'lucide-react';
+
 import { MiniTag, PresenceDot } from '../Bits';
 import { mono, sans, sectionLabel } from '../styles';
 
-export function ProjectRail({ project }: { project: ProjectController }): React.ReactElement {
+const presenceLabel = (presence: ProjectController['railAgents'][number]['presence']): string =>
+  presence === 'needs-login' ? 'needs login' : presence;
+
+export function ProjectRail({
+  project,
+  onStartNativeCliAuth,
+  startingNativeCliAuthAgent
+}: {
+  project: ProjectController;
+  onStartNativeCliAuth?: (agentName: string) => void;
+  startingNativeCliAuthAgent?: string | null;
+}): React.ReactElement {
   const room = project;
   return (
     <div
@@ -100,23 +113,63 @@ export function ProjectRail({ project }: { project: ProjectController }): React.
 
       <div style={{ ...sectionLabel, padding: '20px 12px 7px' }}>AGENTS</div>
       <div style={{ padding: '0 8px 12px', display: 'flex', flexDirection: 'column', gap: 1 }}>
-        {room.railAgents.map((a) => (
-          <div
-            key={a.id}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-              padding: '6px 8px',
-              fontFamily: sans,
-              fontSize: 14,
-              color: 'var(--muted-foreground)'
-            }}
-          >
-            <PresenceDot presence={a.presence} />
-            {a.name} <MiniTag tag={a.tag} />
-          </div>
-        ))}
+        {room.railAgents.map((a) => {
+          const canStartAuth = a.presence === 'needs-login' && a.id.startsWith('native-cli:') && onStartNativeCliAuth;
+          const startingAuth = startingNativeCliAuthAgent === a.name;
+          return (
+            <div
+              key={a.id}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                padding: '6px 8px',
+                fontFamily: sans,
+                fontSize: 14,
+                color: 'var(--muted-foreground)'
+              }}
+            >
+              <PresenceDot presence={a.presence} />
+              <span
+                style={{ color: 'var(--foreground)', overflow: 'hidden', textOverflow: 'ellipsis' }}
+                title={a.name}
+              >
+                {a.name}
+              </span>
+              <MiniTag tag={a.tag} />
+              {canStartAuth ? (
+                <button
+                  aria-label={`Connect ${a.name}`}
+                  className="workplace-action"
+                  disabled={startingAuth}
+                  onClick={() => onStartNativeCliAuth?.(a.name)}
+                  style={{
+                    marginLeft: 'auto',
+                    width: 24,
+                    height: 24,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    border: `1px solid ${'var(--border)'}`,
+                    borderRadius: 7,
+                    background: 'var(--card)',
+                    color: 'var(--foreground)',
+                    cursor: startingAuth ? 'default' : 'pointer',
+                    flex: 'none'
+                  }}
+                  title="Open provider login"
+                  type="button"
+                >
+                  {startingAuth ? <Loader2 size={13} /> : <KeyRound size={13} />}
+                </button>
+              ) : (
+                <span style={{ marginLeft: 'auto', fontFamily: mono, fontSize: 10, textTransform: 'uppercase' }}>
+                  {presenceLabel(a.presence)}
+                </span>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );

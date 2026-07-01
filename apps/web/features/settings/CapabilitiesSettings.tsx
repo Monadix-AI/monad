@@ -3,7 +3,8 @@
 import { ScrollArea } from '@monad/ui';
 
 import { useT } from '@/components/I18nProvider';
-import { PanelShell, PanelShellHeader } from '@/components/ui/panel-shell';
+import { PanelShell } from '@/components/ui/panel-shell';
+import { StudioBreadcrumbHeader } from '@/features/studio/StudioBreadcrumbHeader';
 import { McpSection } from './capabilities/McpSection';
 import { ToolsSection } from './capabilities/ToolsSection';
 
@@ -14,10 +15,7 @@ export function CapabilitiesSettings(_props: { onClose: () => void }) {
   const t = useT();
   return (
     <PanelShell>
-      <PanelShellHeader
-        subtitle={t('web.studio.capabilitiesGroup')}
-        title={t('web.studio.capabilities')}
-      />
+      <StudioBreadcrumbHeader title={t('web.studio.capabilities')} />
       <ScrollArea className="min-h-0 flex-1">
         <ToolsSection />
         <McpSection />

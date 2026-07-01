@@ -1,3 +1,4 @@
+import type { NativeCliAuthSessionView } from '@monad/protocol';
 import type { createDaemonHandlers } from '@/handlers/handlers.ts';
 
 import {
@@ -18,11 +19,47 @@ import {
 import { Elysia } from 'elysia';
 import { z } from 'zod';
 
+import { createBoundedSseEncoderSink, createSseResponse, encodeSseFrame } from '@/transports/http/sessions/sse.ts';
+
 const sessionParams = z.object({ id: z.string() });
 const nativeCliParams = z.object({ id: z.string() });
 const nativeCliAgentParams = z.object({ name: z.string().min(1) });
 
+function createNativeCliAuthEventsSseResponse(
+  handlers: ReturnType<typeof createDaemonHandlers>,
+  id: string,
+  encoder: TextEncoder
+): Response {
+  const pending: NativeCliAuthSessionView[] = [];
+  let sink: ((session: NativeCliAuthSessionView) => void) | undefined;
+  const subscription = handlers.nativeCli.subscribeAuth({
+    id,
+    onSession: (session) => {
+      if (sink) sink(session);
+      else pending.push(session);
+    }
+  });
+  pending.push(subscription.session);
+
+  const stream = new ReadableStream<Uint8Array>({
+    start(ctrl) {
+      sink = createBoundedSseEncoderSink<NativeCliAuthSessionView>(
+        ctrl,
+        (session) => encodeSseFrame({ event: 'native_cli.auth', data: session }, encoder),
+        subscription.dispose
+      );
+      for (const session of pending.splice(0)) sink(session);
+    },
+    cancel() {
+      sink = undefined;
+      subscription.dispose();
+    }
+  });
+  return createSseResponse(stream);
+}
+
 export function createNativeCliController(handlers: ReturnType<typeof createDaemonHandlers>) {
+  const encoder = new TextEncoder();
   return new Elysia()
     .post(
       '/sessions/:id/native-cli-agents/start',
@@ -116,6 +153,14 @@ export function createNativeCliController(handlers: ReturnType<typeof createDaem
       response: { 200: getNativeCliAuthSessionResponseSchema },
       detail: { summary: 'Get a native CLI auth session snapshot' }
     })
+    .get(
+      '/native-cli-auth-sessions/:id/events',
+      ({ params }) => createNativeCliAuthEventsSseResponse(handlers, params.id, encoder),
+      {
+        params: nativeCliParams,
+        detail: { summary: 'Stream native CLI auth session snapshots' }
+      }
+    )
     .post(
       '/native-cli-auth-sessions/:id/input',
       ({ params, body }) => handlers.nativeCli.inputAuth({ id: params.id, ...body }),
@@ -134,6 +179,15 @@ export function createNativeCliController(handlers: ReturnType<typeof createDaem
         body: nativeCliResizeRequestSchema,
         response: { 200: okResponseSchema },
         detail: { summary: 'Resize a native CLI auth PTY' }
+      }
+    )
+    .post(
+      '/native-cli-auth-sessions/:id/heartbeat',
+      ({ params }) => handlers.nativeCli.heartbeatAuth({ id: params.id }),
+      {
+        params: nativeCliParams,
+        response: { 200: okResponseSchema },
+        detail: { summary: 'Keep a native CLI auth PTY attached to a live browser surface' }
       }
     )
     .post('/native-cli-auth-sessions/:id/stop', ({ params }) => handlers.nativeCli.stopAuth({ id: params.id }), {

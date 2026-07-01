@@ -56,6 +56,11 @@ test('migrate() builds the current schema and stamps user_version', () => {
     'state',
     'pid',
     'provider_session_ref',
+    'runtime_role',
+    'agent_runtime_id',
+    'agent_runtime_token_hash',
+    'last_delivered_seq',
+    'last_visible_seq',
     'output_snapshot',
     'exit_code',
     'started_at',
@@ -70,6 +75,24 @@ test('migrate() builds the current schema and stamps user_version', () => {
   }[];
   expect(nativeCliIndexes).toContainEqual(
     expect.objectContaining({ name: 'idx_native_cli_sessions_provider_ref', unique: 1 })
+  );
+
+  const nativeDirectCols = (
+    db.prepare('PRAGMA table_info(native_agent_direct_messages)').all() as {
+      name: string;
+    }[]
+  ).map((c) => c.name);
+  for (const col of ['id', 'project_session_id', 'native_cli_session_id', 'from_agent', 'peer', 'text', 'created_at']) {
+    expect(nativeDirectCols).toContain(col);
+  }
+  const nativeDirectIndexes = db.prepare('PRAGMA index_list(native_agent_direct_messages)').all() as {
+    name: string;
+  }[];
+  expect(nativeDirectIndexes).toContainEqual(
+    expect.objectContaining({ name: 'idx_native_agent_direct_messages_session_peer' })
+  );
+  expect(nativeDirectIndexes).toContainEqual(
+    expect.objectContaining({ name: 'idx_native_agent_direct_messages_project_pair' })
   );
 
   const roundCols = (db.prepare('PRAGMA table_info(channel_moderator_rounds)').all() as { name: string }[]).map(

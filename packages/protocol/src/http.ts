@@ -64,6 +64,21 @@ import { agentIdSchema, sessionIdSchema } from './ids.ts';
 import { getLicensesResponseSchema } from './licenses.ts';
 import { getMem0DataResponseSchema } from './mem0-data.ts';
 import { getLawsResponseSchema } from './memory.ts';
+import {
+  nativeAgentProjectInboxAckRequestSchema,
+  nativeAgentProjectInboxAckResponseSchema,
+  nativeAgentProjectInboxRequestSchema,
+  nativeAgentProjectInboxResponseSchema,
+  nativeAgentProjectPostRequestSchema,
+  nativeAgentProjectPostResponseSchema,
+  nativeAgentProjectReadRequestSchema,
+  nativeAgentProjectReadResponseSchema,
+  nativeAgentReadRequestSchema,
+  nativeAgentReadResponseSchema,
+  nativeAgentRuntimeInfoResponseSchema,
+  nativeAgentSendRequestSchema,
+  nativeAgentSendResponseSchema
+} from './native-cli-agent.ts';
 import { networkSettingsSchema, setNetworkSettingsRequestSchema } from './network-settings.ts';
 import { obscuraStatusResponseSchema, setObscuraRequestSchema } from './obscura.ts';
 import { openaiCompatSettingsSchema, setOpenaiCompatRequestSchema } from './openai-compat-settings.ts';
@@ -394,6 +409,35 @@ export const daemonHttpContract = {
   laws: {
     get: defineHttpEndpoint({
       response: { 200: getLawsResponseSchema }
+    })
+  },
+  nativeAgent: {
+    projectPost: defineHttpEndpoint({
+      body: nativeAgentProjectPostRequestSchema,
+      response: { 200: nativeAgentProjectPostResponseSchema, 403: httpErrorSchema, 404: httpErrorSchema }
+    }),
+    projectRead: defineHttpEndpoint({
+      body: nativeAgentProjectReadRequestSchema,
+      response: { 200: nativeAgentProjectReadResponseSchema, 403: httpErrorSchema, 404: httpErrorSchema }
+    }),
+    projectInbox: defineHttpEndpoint({
+      body: nativeAgentProjectInboxRequestSchema,
+      response: { 200: nativeAgentProjectInboxResponseSchema, 403: httpErrorSchema, 404: httpErrorSchema }
+    }),
+    projectInboxAck: defineHttpEndpoint({
+      body: nativeAgentProjectInboxAckRequestSchema,
+      response: { 200: nativeAgentProjectInboxAckResponseSchema, 403: httpErrorSchema, 404: httpErrorSchema }
+    }),
+    agentSend: defineHttpEndpoint({
+      body: nativeAgentSendRequestSchema,
+      response: { 200: nativeAgentSendResponseSchema, 403: httpErrorSchema, 404: httpErrorSchema }
+    }),
+    agentRead: defineHttpEndpoint({
+      body: nativeAgentReadRequestSchema,
+      response: { 200: nativeAgentReadResponseSchema, 403: httpErrorSchema, 404: httpErrorSchema }
+    }),
+    runtimeInfo: defineHttpEndpoint({
+      response: { 200: nativeAgentRuntimeInfoResponseSchema, 403: httpErrorSchema, 404: httpErrorSchema }
     })
   }
 } as const;

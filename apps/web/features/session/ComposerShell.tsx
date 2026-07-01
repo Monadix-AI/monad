@@ -479,7 +479,7 @@ export function ComposerShell({
           </div>
         </div>
         <div
-          className="chat-input-surface"
+          className="chat-input-surface composer-live-dense"
           role="presentation"
         >
           <div className="chat-input-content">
@@ -500,7 +500,7 @@ export function ComposerShell({
             )}
             {mentionPreview ? (
               <div
-                className="flex flex-wrap items-center gap-1.5 px-5 pb-2"
+                className="flex flex-wrap items-center gap-1.5 px-4 pb-1.5 text-[13px]"
                 style={{ color: 'var(--muted-foreground)' }}
               >
                 {mentionPreview}
@@ -514,8 +514,8 @@ export function ComposerShell({
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              gap: 6,
-              padding: '4px 8px 8px'
+              gap: 5,
+              padding: '0 5px 5px'
             }}
           >
             <div
@@ -524,8 +524,9 @@ export function ComposerShell({
             >
               <ComposerSelect
                 ariaLabel="Permission mode"
-                icon={<ShieldAlert size={16} />}
+                icon={<ShieldAlert size={15} />}
                 onChange={(value) => access.onChange?.(value as 'auto' | 'ask')}
+                tone="ink"
                 value={access.mode}
               >
                 <option value="auto">Auto</option>
@@ -535,7 +536,7 @@ export function ComposerShell({
 
             <div
               className="shared-composer-tools shared-composer-tools-right"
-              style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}
+              style={{ display: 'flex', alignItems: 'center', gap: 4, minWidth: 0 }}
             >
               <ContextUsageButton
                 percent={budgetPercent}
@@ -545,6 +546,7 @@ export function ComposerShell({
                 ariaLabel="Model"
                 disabled={!model || model.options.length === 0}
                 onChange={(value) => model?.onChange?.(value)}
+                tone="ink"
                 value={model?.current ?? model?.options[0]?.value ?? ''}
               >
                 {(model?.options.length ? model.options : [{ label: 'Model', value: '' }]).map((option) => (
@@ -562,7 +564,7 @@ export function ComposerShell({
                 disabled={!onVoiceText || !voiceAvailable}
                 onClick={toggleVoice}
               >
-                <Mic size={18} />
+                <Mic size={17} />
               </ComposerIconButton>
               <button
                 aria-label={canStop ? 'Stop' : 'Send message'}
@@ -571,8 +573,8 @@ export function ComposerShell({
                 onClick={canStop ? onStop : onSubmit}
                 style={{
                   flex: 'none',
-                  width: 44,
-                  height: 44,
+                  width: 36,
+                  height: 36,
                   border: 'none',
                   borderRadius: '50%',
                   background: canSend || canStop ? 'var(--foreground)' : 'var(--secondary)',
@@ -587,10 +589,10 @@ export function ComposerShell({
                 {canStop ? (
                   <Square
                     fill="currentColor"
-                    size={17}
+                    size={16}
                   />
                 ) : (
-                  <ArrowUp size={19} />
+                  <ArrowUp size={18} />
                 )}
               </button>
             </div>
@@ -715,6 +717,7 @@ function ComposerSelect({
   disabled = false,
   icon,
   onChange,
+  tone = 'accent',
   value
 }: {
   ariaLabel: string;
@@ -722,6 +725,7 @@ function ComposerSelect({
   disabled?: boolean;
   icon?: ReactNode;
   onChange?: (value: string) => void;
+  tone?: 'accent' | 'ink';
   value: string;
 }): React.ReactElement {
   return (
@@ -732,15 +736,15 @@ function ComposerSelect({
         minHeight: 32,
         border: 'none',
         borderRadius: 999,
-        background: 'transparent',
-        color: disabled ? 'var(--muted-foreground)' : 'var(--accent-blue)',
+        background: 'var(--shared-composer-control-bg, transparent)',
+        color: disabled ? 'var(--muted-foreground)' : tone === 'ink' ? 'var(--foreground)' : 'var(--accent-blue)',
         cursor: disabled ? 'not-allowed' : 'pointer',
         display: 'flex',
         alignItems: 'center',
         gap: 6,
-        padding: '0 7px',
+        padding: '0 var(--shared-composer-pill-x, 7px)',
         fontFamily: 'var(--font-sans), ui-sans-serif, system-ui, sans-serif',
-        fontSize: 14,
+        fontSize: 'var(--shared-composer-font-size, 14px)',
         fontWeight: 600,
         whiteSpace: 'nowrap',
         opacity: disabled ? 0.62 : 1
@@ -797,7 +801,7 @@ function ComposerIconButton({
         height: 34,
         border: 'none',
         borderRadius: '50%',
-        background: active ? 'var(--accent-blue-soft)' : 'transparent',
+        background: active ? 'var(--accent-blue-soft)' : 'var(--shared-composer-control-bg, transparent)',
         color: active ? 'var(--accent-blue)' : 'var(--muted-foreground)',
         cursor: disabled ? 'not-allowed' : 'pointer',
         display: 'flex',

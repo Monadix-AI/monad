@@ -212,6 +212,12 @@ export const skillContentFileSchema = z.object({
 });
 export type SkillContentFile = z.infer<typeof skillContentFileSchema>;
 
+export const skillContentQuerySchema = z.object({
+  file: z.string().optional(),
+  id: z.string().optional()
+});
+export type SkillContentQuery = z.infer<typeof skillContentQuerySchema>;
+
 export const getSkillContentResponseSchema = z.object({
   name: z.string(),
   content: z.string(),
@@ -227,6 +233,12 @@ export const updateSkillContentRequestSchema = z.object({
   content: z.string().min(1)
 });
 export type UpdateSkillContentRequest = z.infer<typeof updateSkillContentRequestSchema>;
+
+export const uploadSkillQuerySchema = z.object({
+  filename: z.string().min(1),
+  overwrite: z.string().optional()
+});
+export type UploadSkillQuery = z.infer<typeof uploadSkillQuerySchema>;
 
 // Install every skill found under a LOCAL filesystem path the daemon can read (the CLI resolves the
 // path, and clones git sources to a tmp dir first). Reuses the install response. Trusted operator

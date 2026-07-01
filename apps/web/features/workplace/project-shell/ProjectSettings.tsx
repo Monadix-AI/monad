@@ -67,6 +67,19 @@ function MemberSettings({ member, room }: { member: ProjectMember; room: Project
             <option value="remote-control">{t('web.workplace.launchModeRemoteControl')}</option>
           </select>
         </label>
+        <button
+          className="workplace-action"
+          onClick={() =>
+            void room.updateProjectMemberSettings(member.id, {
+              managedProjectAgent: !settings.managedProjectAgent
+            })
+          }
+          style={{ ...toggleStyle(settings.managedProjectAgent === true), alignSelf: 'flex-start' }}
+          type="button"
+        >
+          {t('web.workplace.managedNativeCli')}{' '}
+          {settings.managedProjectAgent ? t('web.acp.osSandboxOn') : t('web.acp.osSandboxOff')}
+        </button>
       </div>
     );
   }

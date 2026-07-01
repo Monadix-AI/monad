@@ -29,11 +29,18 @@ interface DeveloperLogStream {
   stop(): void;
 }
 
+interface NativeCliAuthStream {
+  connected: Promise<void>;
+  done: Promise<NativeCliAuthSessionView[]>;
+  seen: NativeCliAuthSessionView[];
+  stop(): void;
+}
+
 function makePaths(base: string): MonadPaths {
   return makeTestPaths(base);
 }
 
-async function setup(): Promise<{
+async function setup(opts?: { nativeCliAuthHeartbeatTimeoutMs?: number }): Promise<{
   dir: string;
   projectDir: string;
   app: ReturnType<typeof createHttpTransport>;
@@ -48,7 +55,7 @@ async function setup(): Promise<{
   if (!cfg) throw new Error('config missing after init');
   setLogLevel('debug');
   const modelService = new ModelService(paths.auth, cfg, await loadAuth(paths.auth), seededProviderRegistry());
-  const handlers = buildHandlers(mockModel(), { paths, modelService });
+  const handlers = buildHandlers(mockModel(), { paths, modelService }, opts);
   const app = createHttpTransport(handlers);
   return { dir, projectDir, app, handlers };
 }
@@ -92,6 +99,69 @@ function streamSessionLogs(
             const record = JSON.parse(dataLine.slice(6)) as DeveloperLogRecord;
             seen.push(record);
             if (until(record)) {
+              controller.abort();
+              return seen;
+            }
+          }
+          sep = buf.indexOf('\n\n');
+        }
+      }
+    } catch {
+      return seen;
+    } finally {
+      clearTimeout(timer);
+      resolveConnected();
+    }
+    return seen;
+  })();
+
+  return {
+    connected,
+    done,
+    seen,
+    stop: () => controller.abort()
+  };
+}
+
+function streamNativeCliAuth(
+  fetchPath: FetchPath,
+  id: string,
+  until: (session: NativeCliAuthSessionView) => boolean,
+  timeoutMs = 2_000
+): NativeCliAuthStream {
+  const controller = new AbortController();
+  const seen: NativeCliAuthSessionView[] = [];
+  let resolveConnected: () => void = () => {};
+  const connected = new Promise<void>((resolve) => {
+    resolveConnected = resolve;
+  });
+
+  const done = (async () => {
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const res = await fetchPath(`/v1/native-cli-auth-sessions/${id}/events`, {
+        headers: { accept: 'text/event-stream' },
+        signal: controller.signal
+      });
+      resolveConnected();
+      if (!res.ok) throw new Error(`native CLI auth stream failed with ${res.status}`);
+      const reader = res.body?.getReader();
+      if (!reader) return seen;
+      const decoder = new TextDecoder();
+      let buf = '';
+      for (;;) {
+        const { done: streamDone, value } = await reader.read();
+        if (streamDone) break;
+        buf += decoder.decode(value, { stream: true }).replace(/\r\n/g, '\n');
+        let sep = buf.indexOf('\n\n');
+        while (sep !== -1) {
+          const frame = buf.slice(0, sep);
+          buf = buf.slice(sep + 2);
+          const dataLine = frame.split('\n').find((line) => line.startsWith('data: '));
+          if (dataLine) {
+            const session = JSON.parse(dataLine.slice(6)) as NativeCliAuthSessionView;
+            seen.push(session);
+            if (until(session)) {
               controller.abort();
               return seen;
             }
@@ -727,7 +797,12 @@ async function runCodexOversizedStructuredLineRuntime(
   await call('POST', `/v1/native-cli-sessions/${nativeSession.id}/stop`);
 }
 
-async function runAuthRelayRuntime(call: Call, dir: string, handlers: ReturnType<typeof buildHandlers>): Promise<void> {
+async function runAuthRelayRuntime(
+  call: Call,
+  fetchPath: FetchPath,
+  dir: string,
+  handlers: ReturnType<typeof buildHandlers>
+): Promise<void> {
   await configureMockAuthAgent(call, dir);
 
   let res = await call('POST', '/v1/native-cli-agents/mock-native-auth/auth/start');
@@ -738,19 +813,19 @@ async function runAuthRelayRuntime(call: Call, dir: string, handlers: ReturnType
   expect(authSession.authState).toBe('unknown');
   expect(await Bun.file(join(dir, 'native-cli-auth-processes.json')).exists()).toBe(true);
 
-  await waitFor(async () => {
-    const current = await call('GET', `/v1/native-cli-auth-sessions/${authSession.id}`);
-    const body = (await current.json()) as { session: NativeCliAuthSessionView };
-    return body.session.outputSnapshot.includes('provider.example/login') ? body.session : undefined;
-  });
+  let stream = streamNativeCliAuth(fetchPath, authSession.id, (session) =>
+    session.outputSnapshot.includes('provider.example/login')
+  );
+  await stream.connected;
+  expect((await stream.done).at(-1)?.outputSnapshot).toContain('provider.example/login');
 
   res = await call('POST', `/v1/native-cli-auth-sessions/${authSession.id}/input`, { input: '1234\n' });
   expect(res.status).toBe(200);
-  await waitFor(async () => {
-    const current = await call('GET', `/v1/native-cli-auth-sessions/${authSession.id}`);
-    const body = (await current.json()) as { session: NativeCliAuthSessionView };
-    return body.session.outputSnapshot.includes('auth-input:1234') ? body.session : undefined;
-  });
+  stream = streamNativeCliAuth(fetchPath, authSession.id, (session) =>
+    session.outputSnapshot.includes('auth-input:1234')
+  );
+  await stream.connected;
+  expect((await stream.done).at(-1)?.outputSnapshot).toContain('auth-input:1234');
 
   res = await call('POST', `/v1/native-cli-auth-sessions/${authSession.id}/resize`, { cols: 90, rows: 24 });
   expect(res.status).toBe(200);
@@ -768,6 +843,49 @@ async function runAuthRelayRuntime(call: Call, dir: string, handlers: ReturnType
   await waitFor(async () =>
     (await Bun.file(join(dir, 'native-cli-auth-processes.json')).exists()) ? undefined : true
   );
+}
+
+async function runAuthStartReplacesPreviousRuntime(call: Call, dir: string): Promise<void> {
+  await configureMockAuthAgent(call, dir);
+
+  let res = await call('POST', '/v1/native-cli-agents/mock-native-auth/auth/start');
+  expect(res.status).toBe(200);
+  const first = ((await res.json()) as { session: NativeCliAuthSessionView }).session;
+
+  res = await call('POST', '/v1/native-cli-agents/mock-native-auth/auth/start');
+  expect(res.status).toBe(200);
+  const second = ((await res.json()) as { session: NativeCliAuthSessionView }).session;
+
+  expect(second.id).not.toBe(first.id);
+  res = await call('GET', `/v1/native-cli-auth-sessions/${first.id}`);
+  expect(res.status).toBe(200);
+  expect(((await res.json()) as { session: NativeCliAuthSessionView }).session.state).toBe('stopped');
+
+  res = await call('GET', `/v1/native-cli-auth-sessions/${second.id}`);
+  expect(res.status).toBe(200);
+  expect(((await res.json()) as { session: NativeCliAuthSessionView }).session.state).toBe('running');
+  await call('POST', `/v1/native-cli-auth-sessions/${second.id}/stop`);
+}
+
+async function runAuthHeartbeatRuntime(call: Call, dir: string): Promise<void> {
+  await configureMockAuthAgent(call, dir);
+
+  let res = await call('POST', '/v1/native-cli-agents/mock-native-auth/auth/start');
+  expect(res.status).toBe(200);
+  const authSession = ((await res.json()) as { session: NativeCliAuthSessionView }).session;
+
+  res = await call('POST', `/v1/native-cli-auth-sessions/${authSession.id}/heartbeat`);
+  expect(res.status).toBe(200);
+
+  await Bun.sleep(100);
+  res = await call('GET', `/v1/native-cli-auth-sessions/${authSession.id}`);
+  expect(res.status).toBe(200);
+  expect(((await res.json()) as { session: NativeCliAuthSessionView }).session.state).toBe('running');
+
+  await Bun.sleep(750);
+  res = await call('GET', `/v1/native-cli-auth-sessions/${authSession.id}`);
+  expect(res.status).toBe(200);
+  expect(((await res.json()) as { session: NativeCliAuthSessionView }).session.state).toBe('stopped');
 }
 
 async function runAuthStatusTimeoutRuntime(call: Call, dir: string): Promise<void> {
@@ -970,7 +1088,29 @@ for (const kind of TRANSPORTS) {
       const { dir, app, handlers } = await setup();
       const t = serveTransport(kind, app);
       try {
-        await runAuthRelayRuntime((m, p, b) => t.fetch(p, jsonInit(m, b)), dir, handlers);
+        await runAuthRelayRuntime((m, p, b) => t.fetch(p, jsonInit(m, b)), t.fetch, dir, handlers);
+      } finally {
+        await t.stop();
+        await rm(dir, { recursive: true, force: true });
+      }
+    });
+
+    test('starting a native CLI auth connect flow stops the previous connect flow for that agent', async () => {
+      const { dir, app } = await setup();
+      const t = serveTransport(kind, app);
+      try {
+        await runAuthStartReplacesPreviousRuntime((m, p, b) => t.fetch(p, jsonInit(m, b)), dir);
+      } finally {
+        await t.stop();
+        await rm(dir, { recursive: true, force: true });
+      }
+    });
+
+    test('native CLI auth connect flows stop when their browser heartbeat expires', async () => {
+      const { dir, app } = await setup({ nativeCliAuthHeartbeatTimeoutMs: 500 });
+      const t = serveTransport(kind, app);
+      try {
+        await runAuthHeartbeatRuntime((m, p, b) => t.fetch(p, jsonInit(m, b)), dir);
       } finally {
         await t.stop();
         await rm(dir, { recursive: true, force: true });

@@ -3,6 +3,7 @@ import type { Agent, Event, Session, SessionId, SessionUiEvent, UIMessageItem, U
 import type { ModelChunk, ModelRequest, ModelRouter } from '@/agent/model/index.ts';
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { createHash } from 'node:crypto';
 import { chmod, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -21,6 +22,9 @@ import {
 } from '../helpers.ts';
 
 const CHANNEL_HOST_EXT_KEY = 'controlRoomModeratorAgentId';
+const WORKPLACE_PROJECT_MEMBERS_EXT_KEY = 'workplaceProjectMembers';
+const MANAGED_AGENT_TOKEN = 'managed-agent-token';
+const TEST_NATIVE_CLI_SERVER_URL = 'http://127.0.0.1:61234';
 const acpFixture = resolve(import.meta.dir, '../fixtures/mock-acp-agent.ts');
 
 function makePaths(base: string): MonadPaths {
@@ -33,7 +37,7 @@ const json = (method: string, body?: unknown, headers?: Record<string, string>):
   body: body === undefined ? undefined : JSON.stringify(body)
 });
 
-async function createSession(t: TransportHandle, cwd?: string): Promise<string> {
+async function createSession(t: TransportHandle, cwd?: string): Promise<SessionId> {
   const res = await t.fetch(
     '/v1/sessions',
     json('POST', {
@@ -43,7 +47,7 @@ async function createSession(t: TransportHandle, cwd?: string): Promise<string> 
     })
   );
   expect(res.status).toBe(201);
-  return ((await res.json()) as { sessionId: string }).sessionId;
+  return ((await res.json()) as { sessionId: SessionId }).sessionId;
 }
 
 async function getSession(t: TransportHandle, sessionId: string): Promise<Session> {
@@ -103,25 +107,45 @@ function requestText(req: ModelRequest): string {
     .join('\n');
 }
 
+const tokenHash = (token = MANAGED_AGENT_TOKEN): string => createHash('sha256').update(token).digest('hex');
+
+function managedBindingHeaders(sessionId: string, nativeCliSessionId: string, agentId: string): Record<string, string> {
+  void sessionId;
+  void agentId;
+  return {
+    authorization: `Bearer ${MANAGED_AGENT_TOKEN}`,
+    'x-monad-native-cli-session-id': nativeCliSessionId
+  };
+}
+
 async function configureMockNativeCliAgent(
   t: TransportHandle,
   root: string,
-  opts: { authState?: 'authenticated' | 'unauthenticated' | 'unknown' } = {}
-): Promise<{ stdinLog: string }> {
-  const script = join(root, 'mock-native-cli.js');
-  const stdinLog = join(root, 'mock-native-cli-stdin.log');
+  opts: { agentName?: string; authState?: 'authenticated' | 'unauthenticated' | 'unknown' } = {}
+): Promise<{ argsLog: string; envLog: string; stdinLog: string }> {
+  const agentName = opts.agentName ?? 'codex';
+  const script = join(root, `mock-native-cli-${agentName}.js`);
+  const argsLog = join(root, `mock-native-cli-${agentName}-args.log`);
+  const envLog = join(root, `mock-native-cli-${agentName}-env.jsonl`);
+  const stdinLog = join(root, `mock-native-cli-${agentName}-stdin.log`);
+  const command = process.platform === 'win32' ? process.execPath : script;
+  const args = process.platform === 'win32' ? [script] : [];
   await writeFile(
     script,
     [
       '#!/usr/bin/env bun',
       'import { appendFileSync } from "node:fs";',
+      `const argsLog = ${JSON.stringify(argsLog)};`,
+      `const envLog = ${JSON.stringify(envLog)};`,
       `const stdinLog = ${JSON.stringify(stdinLog)};`,
       `const authState = ${JSON.stringify(opts.authState ?? 'authenticated')};`,
       'const args = process.argv.slice(2).join(" ");',
-      'if (args === "login status") {',
+      'if (args === "login status" || args === "auth status") {',
       '  process.stdout.write(JSON.stringify({ state: authState }) + "\\n");',
       '  process.exit(0);',
       '}',
+      'appendFileSync(argsLog, args + "\\n");',
+      'appendFileSync(envLog, JSON.stringify({ MONAD_SERVER_URL: process.env.MONAD_SERVER_URL }) + "\\n");',
       'process.stdout.write("native-ready\\n");',
       'process.stdin.on("data", (d) => {',
       '  appendFileSync(stdinLog, d.toString());',
@@ -135,12 +159,65 @@ async function configureMockNativeCliAgent(
     '/v1/settings/native-cli-agents',
     json('PUT', {
       agent: {
-        name: 'codex',
+        name: agentName,
+        provider: agentName === 'claude' ? 'claude-code' : 'codex',
+        command,
+        args,
+        enabled: true,
+        defaultLaunchMode: 'pty',
+        allowDangerousMode: false,
+        approvalOwnership: 'provider-owned'
+      }
+    })
+  );
+  expect(res.status).toBe(200);
+  return { argsLog, envLog, stdinLog };
+}
+
+async function configureMockCodexResumeFailureAgent(t: TransportHandle, root: string): Promise<{ stdinLog: string }> {
+  const script = join(root, 'mock-codex-resume-failure.js');
+  const stdinLog = join(root, 'mock-codex-resume-failure-stdin.jsonl');
+  await writeFile(
+    script,
+    [
+      '#!/usr/bin/env bun',
+      'import { appendFileSync } from "node:fs";',
+      `const stdinLog = ${JSON.stringify(stdinLog)};`,
+      'const args = process.argv.slice(2).join(" ");',
+      'if (args === "login status") {',
+      '  process.stdout.write(JSON.stringify({ state: "authenticated" }) + "\\n");',
+      '  process.exit(0);',
+      '}',
+      'process.stdin.on("data", (d) => {',
+      '  appendFileSync(stdinLog, d.toString());',
+      '  for (const line of d.toString().trim().split(/\\n+/)) {',
+      '    if (!line) continue;',
+      '    const msg = JSON.parse(line);',
+      '    if (msg.method === "thread/resume") {',
+      '      process.stdout.write(JSON.stringify({ id: msg.id, error: { code: -32000, message: "resume missing" } }) + "\\n");',
+      '    }',
+      '    if (msg.method === "thread/start") {',
+      '      process.stdout.write(JSON.stringify({ id: msg.id, result: { thread: { id: "codex-thread-fresh" } } }) + "\\n");',
+      '    }',
+      '    if (msg.method === "thread/turns/list") {',
+      '      process.stdout.write(JSON.stringify({ id: msg.id, result: { data: [], nextCursor: null, backwardsCursor: null } }) + "\\n");',
+      '    }',
+      '  }',
+      '});',
+      'setInterval(() => {}, 1000);'
+    ].join('\n')
+  );
+  await chmod(script, 0o755);
+  const res = await t.fetch(
+    '/v1/settings/native-cli-agents',
+    json('PUT', {
+      agent: {
+        name: 'codex-resume-failure',
         provider: 'codex',
         command: script,
         args: [],
         enabled: true,
-        defaultLaunchMode: 'pty',
+        defaultLaunchMode: 'app-server',
         allowDangerousMode: false,
         approvalOwnership: 'provider-owned'
       }
@@ -159,6 +236,15 @@ async function waitForFile(path: string, expected: string): Promise<string> {
   return readFile(path, 'utf8');
 }
 
+async function waitForFileOccurrences(path: string, expected: string, count: number): Promise<string> {
+  for (let i = 0; i < 40; i++) {
+    const text = await readFile(path, 'utf8').catch(() => '');
+    if (text.split(expected).length - 1 >= count) return text;
+    await Bun.sleep(25);
+  }
+  return readFile(path, 'utf8');
+}
+
 function uiMessageText(item: UIMessageItem): string {
   return item.parts
     .filter((part): part is Extract<UIPart, { type: 'text' }> => part.type === 'text')
@@ -172,6 +258,7 @@ for (const kind of TRANSPORTS) {
     let t: TransportHandle;
     let modelRequests: ModelRequest[];
     let modelReplies: string[];
+    let handlers: ReturnType<typeof buildHandlers>;
 
     beforeEach(async () => {
       modelRequests = [];
@@ -182,10 +269,14 @@ for (const kind of TRANSPORTS) {
       const cfg = await loadConfig(paths.config);
       if (!cfg) throw new Error('config missing after init');
       const modelService = new ModelService(paths.auth, cfg, await loadAuth(paths.auth), seededProviderRegistry());
-      t = serveTransport(
-        kind,
-        createHttpTransport(buildHandlers(captureModel(modelRequests, modelReplies), { paths, modelService }))
+      handlers = buildHandlers(
+        captureModel(modelRequests, modelReplies),
+        { paths, modelService },
+        {
+          nativeCliServerUrl: TEST_NATIVE_CLI_SERVER_URL
+        }
       );
+      t = serveTransport(kind, createHttpTransport(handlers));
     });
 
     afterEach(async () => {
@@ -296,81 +387,417 @@ for (const kind of TRANSPORTS) {
       expect(modelRequests).toEqual([]);
     });
 
-    // Skipped on Windows: the provider-owned CLI is mocked as a `#!/usr/bin/env bun` script launched
-    // in `pty` mode. Windows can't run the shebang, and Bun's ConPTY doesn't capture output / deliver
-    // stdin, so the pty relay under test is a Bun-on-Windows limitation, not a product bug.
-    test.skipIf(process.platform === 'win32')(
-      'native CLI mention forwards input to the provider-owned CLI session through the project route',
-      async () => {
-        const projectDir = join(dir, 'project');
-        await mkdir(projectDir, { recursive: true });
-        const { stdinLog } = await configureMockNativeCliAgent(t, dir);
-        const sessionId = await createSession(t, projectDir);
+    test('managed native CLI project member is started and receives an inbox notice for public project messages', async () => {
+      const projectDir = join(dir, 'project');
+      await mkdir(projectDir, { recursive: true });
+      const { envLog, stdinLog } = await configureMockNativeCliAgent(t, dir);
+      const sessionId = await createSession(t, projectDir);
+      const session = await getSession(t, sessionId);
+      const origin = {
+        ...session.origin,
+        ext: {
+          ...(session.origin?.ext ?? {}),
+          [WORKPLACE_PROJECT_MEMBERS_EXT_KEY]: [
+            {
+              type: 'native-cli',
+              name: 'codex',
+              settings: { managedProjectAgent: true, launchMode: 'pty' }
+            }
+          ]
+        }
+      };
+      const update = await t.fetch(`/v1/sessions/${sessionId}`, json('PATCH', { agentId: null, origin }));
+      expect(update.status).toBe(200);
 
-        const eventsP = t.sse(`/v1/sessions/${sessionId}/events`, {
-          until: (event) =>
-            event.type === 'native_cli.output' &&
-            String((event.payload as { chunk?: unknown }).chunk).includes('inspect repo'),
-          timeoutMs: 3000
-        });
-        const send = await t.fetch(
-          `/v1/projects/${sessionId}/messages`,
-          json('POST', { text: '@[name="codex" id="native-cli:codex"] inspect repo' })
-        );
-        if (send.status !== 200) throw new Error(await send.text());
-        expect(send.status).toBe(200);
-        expect(await send.json()).toEqual({ accepted: true });
+      const send = await t.fetch(`/v1/projects/${sessionId}/messages`, json('POST', { text: 'please review this' }));
+      expect(send.status).toBe(200);
+      expect(await send.json()).toEqual({ accepted: true });
 
-        expect(await waitForFile(stdinLog, 'inspect repo\n')).toContain('inspect repo\n');
-        const messages = await waitForMessages(t, sessionId, 1);
-        expect(messages[0]?.text).toBe('@[name="codex" id="native-cli:codex"] inspect repo');
-        const events = await eventsP;
-        expect(events.some((event) => event.type === 'native_cli.started' && event.payload.agentName === 'codex')).toBe(
-          true
-        );
-        const listed = await t.fetch(`/v1/sessions/${sessionId}/native-cli-sessions`);
-        expect(listed.status).toBe(200);
-        const nativeSessionId = ((await listed.json()) as { sessions: Array<{ id: string }> }).sessions[0]?.id;
-        expect(typeof nativeSessionId).toBe('string');
-        await t.fetch(`/v1/native-cli-sessions/${nativeSessionId}/stop`, json('POST'));
+      const input = await waitForFile(stdinLog, 'monad project inbox check');
+      expect(input).toContain('please review this');
+      expect(input).toContain('monad project post');
+      const envText = await waitForFile(envLog, TEST_NATIVE_CLI_SERVER_URL);
+      expect(JSON.parse(envText.trim().split(/\n/).at(-1) ?? '{}')).toMatchObject({
+        MONAD_SERVER_URL: TEST_NATIVE_CLI_SERVER_URL
+      });
+      const messages = await waitForMessages(t, sessionId, 1);
+      expect(messages.map((message) => [message.role, message.text])).toEqual([['user', 'please review this']]);
+      const listed = await t.fetch(`/v1/sessions/${sessionId}/native-cli-sessions`);
+      expect(listed.status).toBe(200);
+      const [nativeSession] = (
+        (await listed.json()) as {
+          sessions: Array<{ id: string; runtimeRole: string; lastDeliveredSeq: number; workingPath: string }>;
+        }
+      ).sessions;
+      expect(nativeSession?.runtimeRole).toBe('managed-project-agent');
+      expect(nativeSession?.lastDeliveredSeq).toBeGreaterThan(0);
+      if (!nativeSession) throw new Error('managed native CLI session was not started');
+      expect(await readFile(join(nativeSession.workingPath, '.monad-agent-token'), 'utf8')).not.toBe('');
+      await t.fetch(`/v1/native-cli-sessions/${nativeSession.id}/stop`, json('POST'));
+      expect(
+        await readFile(join(nativeSession.workingPath, '.monad-agent-token'), 'utf8').catch(() => null)
+      ).toBeNull();
+      expect(await readFile(join(nativeSession.workingPath, 'MEMORY.md'), 'utf8')).toContain('managed project memory');
+    });
+
+    test('running managed native CLI member receives a busy inbox notice without the full project message body', async () => {
+      const projectDir = join(dir, 'project');
+      await mkdir(projectDir, { recursive: true });
+      const { stdinLog } = await configureMockNativeCliAgent(t, dir);
+      const sessionId = await createSession(t, projectDir);
+      const session = await getSession(t, sessionId);
+      const origin = {
+        ...session.origin,
+        ext: {
+          ...(session.origin?.ext ?? {}),
+          [WORKPLACE_PROJECT_MEMBERS_EXT_KEY]: [
+            {
+              type: 'native-cli',
+              name: 'codex',
+              settings: { managedProjectAgent: true, launchMode: 'pty' }
+            }
+          ]
+        }
+      };
+      const update = await t.fetch(`/v1/sessions/${sessionId}`, json('PATCH', { agentId: null, origin }));
+      expect(update.status).toBe(200);
+
+      const first = await t.fetch(`/v1/projects/${sessionId}/messages`, json('POST', { text: 'first project task' }));
+      expect(first.status).toBe(200);
+      await waitForFile(stdinLog, 'first project task');
+
+      const second = await t.fetch(
+        `/v1/projects/${sessionId}/messages`,
+        json('POST', { text: 'second secret busy task' })
+      );
+      expect(second.status).toBe(200);
+      const input = await waitForFileOccurrences(stdinLog, 'monad project inbox check', 2);
+      expect(input).toContain('first project task');
+      expect(input).not.toContain('second secret busy task');
+      expect(input).toContain('New Workplace Project message is available.');
+
+      const third = await t.fetch(
+        `/v1/projects/${sessionId}/messages`,
+        json('POST', { text: 'third secret busy task' })
+      );
+      expect(third.status).toBe(200);
+      await Bun.sleep(100);
+      const afterThird = await readFile(stdinLog, 'utf8');
+      expect(afterThird.split('monad project inbox check').length - 1).toBe(2);
+      expect(afterThird).not.toContain('third secret busy task');
+
+      const [nativeSession] = handlers.store.listNativeCliSessionsForProject(sessionId);
+      if (nativeSession) await t.fetch(`/v1/native-cli-sessions/${nativeSession.id}/stop`, json('POST'));
+    });
+
+    test('managed native CLI project member resumes a stored provider session ref', async () => {
+      const projectDir = join(dir, 'project');
+      await mkdir(projectDir, { recursive: true });
+      const { argsLog } = await configureMockNativeCliAgent(t, dir, { agentName: 'claude' });
+      const sessionId = await createSession(t, projectDir);
+      handlers.store.upsertNativeCliSession({
+        id: 'ncli_old_claude',
+        projectSessionId: sessionId,
+        agentName: 'claude',
+        provider: 'claude-code',
+        workingPath: projectDir,
+        launchMode: 'pty',
+        runtimeRole: 'managed-project-agent',
+        agentRuntimeId: 'ncli_old_claude',
+        agentRuntimeTokenHash: tokenHash(),
+        lastDeliveredSeq: 0,
+        lastVisibleSeq: 0,
+        state: 'stopped',
+        pid: null,
+        providerSessionRef: 'claude-session-resume',
+        outputSnapshot: '',
+        exitCode: null,
+        startedAt: '2026-06-30T00:00:00.000Z',
+        updatedAt: '2026-06-30T00:00:01.000Z',
+        exitedAt: '2026-06-30T00:00:01.000Z'
+      });
+      const session = await getSession(t, sessionId);
+      const origin = {
+        ...session.origin,
+        ext: {
+          ...(session.origin?.ext ?? {}),
+          [WORKPLACE_PROJECT_MEMBERS_EXT_KEY]: [
+            {
+              type: 'native-cli',
+              name: 'claude',
+              settings: { managedProjectAgent: true, launchMode: 'pty' }
+            }
+          ]
+        }
+      };
+      const update = await t.fetch(`/v1/sessions/${sessionId}`, json('PATCH', { agentId: null, origin }));
+      expect(update.status).toBe(200);
+
+      const send = await t.fetch(`/v1/projects/${sessionId}/messages`, json('POST', { text: 'resume this task' }));
+      expect(send.status).toBe(200);
+
+      const args = await waitForFile(argsLog, '--resume claude-session-resume');
+      expect(args).toContain('--append-system-prompt-file');
+      const resumed = handlers.store
+        .listNativeCliSessionsForProject(sessionId)
+        .find((candidate) => candidate.agentName === 'claude' && candidate.state === 'running');
+      expect(resumed?.providerSessionRef).toBe('claude-session-resume');
+      if (resumed) await t.fetch(`/v1/native-cli-sessions/${resumed.id}/stop`, json('POST'));
+    });
+
+    test('managed native CLI project member falls back to a cold start when provider resume fails', async () => {
+      const projectDir = join(dir, 'project');
+      await mkdir(projectDir, { recursive: true });
+      const { stdinLog } = await configureMockCodexResumeFailureAgent(t, dir);
+      const sessionId = await createSession(t, projectDir);
+      handlers.store.upsertNativeCliSession({
+        id: 'ncli_old_codex',
+        projectSessionId: sessionId,
+        agentName: 'codex-resume-failure',
+        provider: 'codex',
+        workingPath: projectDir,
+        launchMode: 'app-server',
+        runtimeRole: 'managed-project-agent',
+        agentRuntimeId: 'ncli_old_codex',
+        agentRuntimeTokenHash: tokenHash(),
+        lastDeliveredSeq: 0,
+        lastVisibleSeq: 0,
+        state: 'stopped',
+        pid: null,
+        providerSessionRef: 'codex-thread-stale',
+        outputSnapshot: '',
+        exitCode: null,
+        startedAt: '2026-06-30T00:00:00.000Z',
+        updatedAt: '2026-06-30T00:00:01.000Z',
+        exitedAt: '2026-06-30T00:00:01.000Z'
+      });
+      const session = await getSession(t, sessionId);
+      const origin = {
+        ...session.origin,
+        ext: {
+          ...(session.origin?.ext ?? {}),
+          [WORKPLACE_PROJECT_MEMBERS_EXT_KEY]: [
+            {
+              type: 'native-cli',
+              name: 'codex-resume-failure',
+              settings: { managedProjectAgent: true, launchMode: 'app-server' }
+            }
+          ]
+        }
+      };
+      const update = await t.fetch(`/v1/sessions/${sessionId}`, json('PATCH', { agentId: null, origin }));
+      expect(update.status).toBe(200);
+
+      const resumeFailedP = t.sse(`/v1/sessions/${sessionId}/events`, {
+        until: (event) => event.type === 'native_cli.resume_failed',
+        timeoutMs: 3000
+      });
+      const send = await t.fetch(
+        `/v1/projects/${sessionId}/messages`,
+        json('POST', { text: 'recover from stale resume' })
+      );
+      expect(send.status).toBe(200);
+      const resumeFailed = await resumeFailedP;
+      expect(resumeFailed.at(-1)?.payload).toMatchObject({
+        agentName: 'codex-resume-failure',
+        providerSessionRef: 'codex-thread-stale'
+      });
+
+      const rpc = await waitForFile(stdinLog, '"method":"thread/start"');
+      expect(rpc).toContain('"method":"thread/resume"');
+      expect(rpc).toContain('"threadId":"codex-thread-stale"');
+      const coldStarted = handlers.store
+        .listNativeCliSessionsForProject(sessionId)
+        .find((candidate) => candidate.agentName === 'codex-resume-failure' && candidate.state === 'running');
+      expect(coldStarted?.providerSessionRef).toBe('codex-thread-fresh');
+      expect(handlers.store.getNativeCliSession('ncli_old_codex')?.providerSessionRef).toBeNull();
+      if (coldStarted) await t.fetch(`/v1/native-cli-sessions/${coldStarted.id}/stop`, json('POST'));
+    });
+
+    test('managed native CLI project member requires Studio reconnect when provider auth is unauthenticated', async () => {
+      const projectDir = join(dir, 'project');
+      await mkdir(projectDir, { recursive: true });
+      const { stdinLog } = await configureMockNativeCliAgent(t, dir, { authState: 'unauthenticated' });
+      const sessionId = await createSession(t, projectDir);
+      const session = await getSession(t, sessionId);
+      const origin = {
+        ...session.origin,
+        ext: {
+          ...(session.origin?.ext ?? {}),
+          [WORKPLACE_PROJECT_MEMBERS_EXT_KEY]: [
+            {
+              type: 'native-cli',
+              name: 'codex',
+              settings: { managedProjectAgent: true, launchMode: 'pty' }
+            }
+          ]
+        }
+      };
+      const update = await t.fetch(`/v1/sessions/${sessionId}`, json('PATCH', { agentId: null, origin }));
+      expect(update.status).toBe(200);
+
+      const eventsP = t.sse(`/v1/sessions/${sessionId}/events`, {
+        until: (event) => event.type === 'native_cli.connection_required',
+        timeoutMs: 3000
+      });
+      const send = await t.fetch(`/v1/projects/${sessionId}/messages`, json('POST', { text: 'please review this' }));
+      expect(send.status).toBe(200);
+      expect(await send.json()).toEqual({ accepted: true });
+
+      const events = await eventsP;
+      expect(events.at(-1)?.payload).toMatchObject({
+        agentName: 'codex',
+        provider: 'codex',
+        reconnectIn: 'studio'
+      });
+      expect(await readFile(stdinLog, 'utf8').catch(() => '')).toBe('');
+      const messages = await waitForMessages(t, sessionId, 1);
+      expect(messages[0]?.text).toBe('please review this');
+      const listed = await t.fetch(`/v1/sessions/${sessionId}/native-cli-sessions`);
+      expect(listed.status).toBe(200);
+      expect(((await listed.json()) as { sessions: unknown[] }).sessions).toEqual([]);
+    });
+
+    test('managed native CLI project post fans out to other managed native CLI members', async () => {
+      const projectDir = join(dir, 'project');
+      await mkdir(projectDir, { recursive: true });
+      const { stdinLog: codexStdinLog } = await configureMockNativeCliAgent(t, dir, { agentName: 'codex' });
+      const { stdinLog: claudeStdinLog } = await configureMockNativeCliAgent(t, dir, { agentName: 'claude' });
+      const sessionId = await createSession(t, projectDir);
+      const session = await getSession(t, sessionId);
+      const origin = {
+        ...session.origin,
+        ext: {
+          ...(session.origin?.ext ?? {}),
+          [WORKPLACE_PROJECT_MEMBERS_EXT_KEY]: [
+            {
+              type: 'native-cli',
+              name: 'codex',
+              settings: { managedProjectAgent: true, launchMode: 'pty' }
+            },
+            {
+              type: 'native-cli',
+              name: 'claude',
+              settings: { managedProjectAgent: true, launchMode: 'pty' }
+            }
+          ]
+        }
+      };
+      const update = await t.fetch(`/v1/sessions/${sessionId}`, json('PATCH', { agentId: null, origin }));
+      expect(update.status).toBe(200);
+
+      const send = await t.fetch(`/v1/projects/${sessionId}/messages`, json('POST', { text: 'initial project task' }));
+      expect(send.status).toBe(200);
+      await waitForFile(codexStdinLog, 'initial project task');
+      await waitForFile(claudeStdinLog, 'initial project task');
+
+      const nativeSessions = handlers.store.listNativeCliSessionsForProject(sessionId);
+      const codexSession = nativeSessions.find((candidate) => candidate.agentName === 'codex');
+      expect(typeof codexSession?.id).toBe('string');
+      if (!codexSession) throw new Error('codex managed native CLI session was not started');
+      handlers.store.upsertNativeCliSession({ ...codexSession, agentRuntimeTokenHash: tokenHash() });
+
+      const post = await t.fetch(
+        '/v1/internal/native-agent/project/post',
+        json(
+          'POST',
+          { projectId: sessionId, text: 'codex public reply' },
+          managedBindingHeaders(sessionId, codexSession.id, 'codex')
+        )
+      );
+      if (post.status !== 200) throw new Error(await post.text());
+      expect(post.status).toBe(200);
+
+      expect(await waitForFile(claudeStdinLog, 'codex public reply')).toContain('monad project inbox check');
+      const messages = await waitForMessages(t, sessionId, 2);
+      expect(messages.map((message) => [message.role, message.text])).toEqual([
+        ['user', 'initial project task'],
+        ['assistant', 'codex public reply']
+      ]);
+      const direct = await t.fetch(
+        '/v1/internal/native-agent/agent/send',
+        json(
+          'POST',
+          { to: 'claude', text: 'codex private note' },
+          managedBindingHeaders(sessionId, codexSession.id, 'codex')
+        )
+      );
+      if (direct.status !== 200) throw new Error(await direct.text());
+      expect(direct.status).toBe(200);
+
+      const directNotice = await waitForFile(claudeStdinLog, 'codex private note');
+      expect(directNotice).toContain('New direct/private message from codex is available.');
+      expect(directNotice).toContain('monad agent read --with codex');
+      expect(await listMessages(t, sessionId)).toHaveLength(2);
+      for (const nativeSession of nativeSessions) {
+        await t.fetch(`/v1/native-cli-sessions/${nativeSession.id}/stop`, json('POST'));
       }
-    );
+    });
 
-    // Skipped on Windows: same shebang-script + pty mock limitation as above (the auth-status probe
-    // spawns the mocked CLI over a pty).
-    test.skipIf(process.platform === 'win32')(
-      'native CLI mention requires Studio reconnect when provider auth status is unauthenticated',
-      async () => {
-        const projectDir = join(dir, 'project');
-        await mkdir(projectDir, { recursive: true });
-        const { stdinLog } = await configureMockNativeCliAgent(t, dir, { authState: 'unauthenticated' });
-        const sessionId = await createSession(t, projectDir);
+    test('native CLI mention forwards input to the provider-owned CLI session through the project route', async () => {
+      const projectDir = join(dir, 'project');
+      await mkdir(projectDir, { recursive: true });
+      const { stdinLog } = await configureMockNativeCliAgent(t, dir);
+      const sessionId = await createSession(t, projectDir);
 
-        const eventsP = t.sse(`/v1/sessions/${sessionId}/events`, {
-          until: (event) => event.type === 'native_cli.connection_required',
-          timeoutMs: 3000
-        });
-        const send = await t.fetch(
-          `/v1/projects/${sessionId}/messages`,
-          json('POST', { text: '@[name="codex" id="native-cli:codex"] inspect repo' })
-        );
-        if (send.status !== 200) throw new Error(await send.text());
-        expect(send.status).toBe(200);
-        expect(await send.json()).toEqual({ accepted: true });
+      const eventsP = t.sse(`/v1/sessions/${sessionId}/events`, {
+        until: (event) =>
+          event.type === 'native_cli.output' &&
+          String((event.payload as { chunk?: unknown }).chunk).includes('inspect repo'),
+        timeoutMs: 3000
+      });
+      const send = await t.fetch(
+        `/v1/projects/${sessionId}/messages`,
+        json('POST', { text: '@[name="codex" id="native-cli:codex"] inspect repo' })
+      );
+      if (send.status !== 200) throw new Error(await send.text());
+      expect(send.status).toBe(200);
+      expect(await send.json()).toEqual({ accepted: true });
 
-        const events = await eventsP;
-        expect(events.at(-1)?.payload).toMatchObject({
-          agentName: 'codex',
-          provider: 'codex',
-          reconnectIn: 'studio'
-        });
-        const stdinText = await readFile(stdinLog, 'utf8').catch(() => '');
-        expect(stdinText).toBe('');
-        const messages = await waitForMessages(t, sessionId, 2);
-        expect(messages[0]?.text).toBe('@[name="codex" id="native-cli:codex"] inspect repo');
-        expect(messages[1]?.text).toContain('Reconnect codex in Studio');
-      }
-    );
+      expect(await waitForFile(stdinLog, 'inspect repo\n')).toContain('inspect repo\n');
+      const messages = await waitForMessages(t, sessionId, 1);
+      expect(messages[0]?.text).toBe('@[name="codex" id="native-cli:codex"] inspect repo');
+      const events = await eventsP;
+      expect(events.some((event) => event.type === 'native_cli.started' && event.payload.agentName === 'codex')).toBe(
+        true
+      );
+      const listed = await t.fetch(`/v1/sessions/${sessionId}/native-cli-sessions`);
+      expect(listed.status).toBe(200);
+      const nativeSessionId = ((await listed.json()) as { sessions: Array<{ id: string }> }).sessions[0]?.id;
+      expect(typeof nativeSessionId).toBe('string');
+      await t.fetch(`/v1/native-cli-sessions/${nativeSessionId}/stop`, json('POST'));
+    });
+
+    test('native CLI mention requires Studio reconnect when provider auth status is unauthenticated', async () => {
+      const projectDir = join(dir, 'project');
+      await mkdir(projectDir, { recursive: true });
+      const { stdinLog } = await configureMockNativeCliAgent(t, dir, { authState: 'unauthenticated' });
+      const sessionId = await createSession(t, projectDir);
+
+      const eventsP = t.sse(`/v1/sessions/${sessionId}/events`, {
+        until: (event) => event.type === 'native_cli.connection_required',
+        timeoutMs: 3000
+      });
+      const send = await t.fetch(
+        `/v1/projects/${sessionId}/messages`,
+        json('POST', { text: '@[name="codex" id="native-cli:codex"] inspect repo' })
+      );
+      if (send.status !== 200) throw new Error(await send.text());
+      expect(send.status).toBe(200);
+      expect(await send.json()).toEqual({ accepted: true });
+
+      const events = await eventsP;
+      expect(events.at(-1)?.payload).toMatchObject({
+        agentName: 'codex',
+        provider: 'codex',
+        reconnectIn: 'studio'
+      });
+      const stdinText = await readFile(stdinLog, 'utf8').catch(() => '');
+      expect(stdinText).toBe('');
+      const messages = await waitForMessages(t, sessionId, 2);
+      expect(messages[0]?.text).toBe('@[name="codex" id="native-cli:codex"] inspect repo');
+      expect(messages[1]?.text).toContain('Reconnect codex in Studio');
+    });
 
     test('native CLI mention requires Studio check when provider readiness is unknown', async () => {
       const projectDir = join(dir, 'project');

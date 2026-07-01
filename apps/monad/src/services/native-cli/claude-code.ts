@@ -27,6 +27,9 @@ function buildClaudeLaunch(agent: NativeCliAgentView, opts: BuildNativeCliLaunch
   if (opts.providerSessionRef && !args.includes('--resume') && !args.includes('-r')) {
     args.push('--resume', opts.providerSessionRef);
   }
+  if (opts.systemPromptFile && !args.includes('--append-system-prompt-file')) {
+    args.push('--append-system-prompt-file', opts.systemPromptFile);
+  }
   const launchArgs = launchMode === 'json-stream' ? withClaudeStreamJsonArgs(args) : args;
   return {
     argv: [agent.command, ...launchArgs],

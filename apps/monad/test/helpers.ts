@@ -189,6 +189,10 @@ export function buildHandlers(
     graphStore?: GraphStore;
     /** Upgrade metadata exposed by /health; defaults to absent. */
     getUpgradeInfo?: () => { latestVersion: string; latestVersionCheckedAt: string } | null;
+    /** Override native CLI auth connect heartbeat pruning for fast e2e coverage. */
+    nativeCliAuthHeartbeatTimeoutMs?: number;
+    /** Override the loopback URL injected into managed native CLI runtimes. */
+    nativeCliServerUrl?: string;
   }
 ) {
   const store = opts?.store ?? createStore();
@@ -284,6 +288,8 @@ export function buildHandlers(
       memorySetBackend: async () => {},
       memorySetMem0Models: async () => {},
       memorySetGraph: async () => {},
+      nativeCliAuthHeartbeatTimeoutMs: opts?.nativeCliAuthHeartbeatTimeoutMs,
+      nativeCliServerUrl: opts?.nativeCliServerUrl,
       log: { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} } as never,
       ...modelDeps
     }),
@@ -316,6 +322,8 @@ export const TRANSPORTS: readonly TransportKind[] = process.platform === 'win32'
 
 export interface TransportHandle {
   kind: TransportKind;
+  /** TCP base URL when this handle is backed by a TCP listener. */
+  baseUrl?: string;
   /** fetch() bound to this transport. `path` is a leading-slash path, e.g. '/v1/sessions'. */
   fetch: (path: string, init?: RequestInit) => Promise<Response>;
   /** Read an SSE stream over this transport (TCP or unix). */
@@ -333,6 +341,7 @@ export function serveTransport(kind: TransportKind, app: ReturnType<typeof creat
     const base = `http://127.0.0.1:${live.server.port}`;
     return {
       kind,
+      baseUrl: base,
       fetch: (path, init) => fetch(`${base}${path}`, init),
       sse: (path, opts) => readSSE(`${base}${path}`, opts),
       stop: async () => live.server.stop(true)

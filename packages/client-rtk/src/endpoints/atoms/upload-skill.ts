@@ -1,4 +1,4 @@
-import type { InstallSkillResponse } from '@monad/protocol';
+import type { InstallSkillResponse, UploadSkillQuery } from '@monad/protocol';
 
 import { clientOf } from '../../endpoint-helpers.ts';
 import { listInstalledSkillsApi } from './list-installed-skills.ts';
@@ -10,7 +10,10 @@ const uploadSkillApi = listInstalledSkillsApi.injectEndpoints({
   endpoints: (builder) => ({
     uploadSkill: builder.mutation<InstallSkillResponse, UploadSkillArg>({
       queryFn: async (body, api: { extra: unknown }) => {
-        const params = new URLSearchParams({ filename: body.filename, overwrite: String(body.overwrite ?? false) });
+        const query: UploadSkillQuery = { filename: body.filename, overwrite: String(body.overwrite ?? false) };
+        const params = new URLSearchParams(query);
+        // Intentional raw fetch escape hatch: this endpoint uploads arbitrary BodyInit/octet-stream bytes,
+        // while the treaty surfaces are JSON-shaped.
         const res = await clientOf(api).fetch(`/v1/atoms/skills/upload?${params}`, {
           method: 'POST',
           headers: { 'content-type': body.contentType ?? 'application/octet-stream' },

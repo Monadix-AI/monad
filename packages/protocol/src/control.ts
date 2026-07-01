@@ -825,6 +825,9 @@ export type ListProfilesResponse = z.infer<typeof listProfilesResponseSchema>;
 export const setProfileRequestSchema = z.object({ profile: profileViewSchema });
 export type SetProfileRequest = z.infer<typeof setProfileRequestSchema>;
 
+export const renameProfileRequestSchema = z.object({ alias: z.string() });
+export type RenameProfileRequest = z.infer<typeof renameProfileRequestSchema>;
+
 export const setDefaultProfileRequestSchema = z.object({ alias: z.string() });
 export type SetDefaultProfileRequest = z.infer<typeof setDefaultProfileRequestSchema>;
 

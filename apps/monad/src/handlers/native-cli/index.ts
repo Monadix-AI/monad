@@ -4,6 +4,7 @@ import type {
   GetNativeCliSessionResponse,
   ListNativeCliSessionsResponse,
   NativeCliApprovalResolutionRequest,
+  NativeCliAuthSessionView,
   NativeCliAuthStatusResponse,
   NativeCliHistoryPageRequest,
   NativeCliHistoryPageResponse,
@@ -86,6 +87,7 @@ export function createNativeCliModule({ paths, host, store }: NativeCliDeps) {
         agentName: request.agentName,
         workingPath: request.workingPath,
         launchMode: request.launchMode,
+        runtimeRole: request.runtimeRole,
         providerSessionRef: request.providerSessionRef
       });
       return { session };
@@ -142,6 +144,13 @@ export function createNativeCliModule({ paths, host, store }: NativeCliDeps) {
       return { session: host.getAuth(id) };
     },
 
+    subscribeAuth({ id, onSession }: { id: string; onSession: (session: NativeCliAuthSessionView) => void }): {
+      session: NativeCliAuthSessionView;
+      dispose: () => void;
+    } {
+      return host.subscribeAuth(id, onSession);
+    },
+
     inputAuth({ id, input }: { id: string } & NativeCliInputRequest): OkResponse {
       host.inputAuth(id, { input });
       return { ok: true };
@@ -149,6 +158,11 @@ export function createNativeCliModule({ paths, host, store }: NativeCliDeps) {
 
     resizeAuth({ id, cols, rows }: { id: string } & NativeCliResizeRequest): OkResponse {
       host.resizeAuth(id, { cols, rows });
+      return { ok: true };
+    },
+
+    heartbeatAuth({ id }: { id: string }): OkResponse {
+      host.heartbeatAuth(id);
       return { ok: true };
     },
 

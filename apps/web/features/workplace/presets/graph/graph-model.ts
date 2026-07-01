@@ -17,6 +17,9 @@ const RECENT_ACTIVITY = 6;
 const AGENT_PRESENCE_COLOR: Record<Participant['presence'], string> = {
   working: '#f59e0b',
   online: '#6366f1',
+  'needs-login': '#d97706',
+  failed: '#ef4444',
+  stopped: '#6b7280',
   idle: '#6b7280'
 };
 const ACTIVITY_STATUS_COLOR: Record<ActivityStatus, string> = {

@@ -13,6 +13,7 @@ import {
   listProfilesResponseSchema,
   listProvidersResponseSchema,
   okResponseSchema,
+  renameProfileRequestSchema,
   setDefaultProfileRequestSchema,
   setProfileRequestSchema,
   setProviderRequestSchema,
@@ -30,7 +31,6 @@ import { z } from 'zod';
 // params are plain strings, so they stay transport-local.
 const providerParams = z.object({ id: z.string() });
 const profileParams = z.object({ alias: z.string() });
-const renameProfileBody = z.object({ alias: z.string() });
 const credentialParams = z.object({ id: z.string(), credId: z.string() });
 
 export function createModelSettingsController(handlers: ReturnType<typeof createDaemonHandlers>) {
@@ -72,7 +72,7 @@ export function createModelSettingsController(handlers: ReturnType<typeof create
       async ({ params, body }) => handlers.model.renameProfile({ alias: params.alias, nextAlias: body.alias }),
       {
         params: profileParams,
-        body: renameProfileBody,
+        body: renameProfileRequestSchema,
         response: { 200: okResponseSchema },
         detail: {
           summary: 'Rename model profile',

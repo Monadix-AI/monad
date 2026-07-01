@@ -1,7 +1,6 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "@monad/ui/styles.css";
-@import "@xterm/xterm/css/xterm.css";
 
 /* Allow Tailwind to detect utility classes used by streamdown (monorepo: hoisted to root node_modules). */
 @source "../../../node_modules/streamdown/dist/*.js";
@@ -620,15 +619,57 @@
     background: color-mix(in srgb, var(--chat-input-surface) 92%, var(--muted));
   }
 
+  .composer-live-dense {
+    --shared-composer-control-bg: rgb(245 245 245 / 0.68);
+    --shared-composer-font-size: 13px;
+    --shared-composer-pill-x: 8px;
+    position: relative;
+    overflow: visible;
+    color: var(--foreground);
+    background: rgb(255 255 255 / 0.68);
+    border-radius: 18px;
+    box-shadow:
+      0 0 0 1px rgb(0 0 0 / 0.1),
+      0 6px 16px rgb(32 33 36 / 0.06);
+    transition:
+      box-shadow 180ms ease-out,
+      border-radius 180ms ease-out;
+  }
+
+  .shared-composer-panel {
+    overflow: visible;
+    border-radius: 18px;
+  }
+
+  .shared-composer-panel .chat-input-frame {
+    overflow: visible;
+    border-radius: inherit;
+  }
+
+  .composer-live-dense .chat-input-content {
+    position: relative;
+    z-index: 2;
+    min-height: 68px;
+    overflow: visible;
+  }
+
+  .composer-live-dense .composer-lexical-input {
+    min-height: 68px;
+    max-height: 148px;
+    padding: 15px 18px 7px;
+    font-size: 13.5px;
+    line-height: 1.52;
+  }
+
   .composer-lexical-placeholder {
     position: absolute;
-    top: 14px;
-    left: 20px;
-    max-width: calc(100% - 40px);
+    top: 15px;
+    left: 18px;
+    max-width: calc(100% - 36px);
     overflow: hidden;
     text-overflow: ellipsis;
-    font-size: 14px;
-    line-height: 1.45;
+    font-size: 13.5px;
+    line-height: 1.52;
     color: var(--chat-input-placeholder);
     white-space: nowrap;
     pointer-events: none;
@@ -657,10 +698,34 @@
   .workplace-action:active:not(:disabled) {
     transform: translateY(0);
   }
+
+  .composer-live-dense :where(.shared-composer-toolbar) {
+    padding: 0 5px 5px;
+  }
+
+  .composer-live-dense :where(.shared-composer-tools),
+  .composer-live-dense :where(.shared-composer-tools-right) {
+    gap: 4px;
+  }
+
+  .composer-live-dense :where(.shared-composer-pill) {
+    min-height: 30px;
+    padding-inline: 8px;
+    font-size: 13px;
+  }
+
+  .composer-live-dense :where(.shared-composer-submit) {
+    width: 36px;
+    height: 36px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .workspace-home-background::after {
+    transition: none;
+  }
+
+  .composer-live-dense {
     transition: none;
   }
 }

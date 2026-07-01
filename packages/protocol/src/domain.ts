@@ -359,6 +359,7 @@ export const eventTypeSchema = z.enum([
   'native_cli.connection_required',
   'native_cli.approval_requested',
   'native_cli.approval_resolved',
+  'native_cli.resume_failed',
   'native_cli.exited'
 ]);
 export type EventType = z.infer<typeof eventTypeSchema>;

@@ -114,7 +114,20 @@ const nativeCliApi = sessionsApi.injectEndpoints({
         runTreaty(
           () => clientOf(api).treaty.v1['native-cli-auth-sessions']({ id }).get(),
           (raw) => raw.session
-        )
+        ),
+      async onCacheEntryAdded(id, { cacheDataLoaded, cacheEntryRemoved, extra, updateCachedData }) {
+        let dispose: (() => void) | undefined;
+        try {
+          await cacheDataLoaded;
+          dispose = clientOf({ extra }).streamNativeCliAuth(id, (session) => {
+            updateCachedData(() => session);
+          });
+        } catch {
+          // Initial snapshot failures are surfaced by queryFn; cache removal still cleans up below.
+        }
+        await cacheEntryRemoved;
+        dispose?.();
+      }
     }),
     inputNativeCliAuth: builder.mutation<{ ok: true }, NativeCliInputArgs>({
       queryFn: ({ id, input }, api: { extra: unknown }) =>
@@ -123,6 +136,10 @@ const nativeCliApi = sessionsApi.injectEndpoints({
     resizeNativeCliAuth: builder.mutation<{ ok: true }, NativeCliResizeArgs>({
       queryFn: ({ id, cols, rows }, api: { extra: unknown }) =>
         runTreaty(() => clientOf(api).treaty.v1['native-cli-auth-sessions']({ id }).resize.post({ cols, rows }))
+    }),
+    heartbeatNativeCliAuth: builder.mutation<{ ok: true }, string>({
+      queryFn: (id, api: { extra: unknown }) =>
+        runTreaty(() => clientOf(api).treaty.v1['native-cli-auth-sessions']({ id }).heartbeat.post())
     }),
     stopNativeCliAuth: builder.mutation<{ ok: true }, string>({
       queryFn: (id, api: { extra: unknown }) =>
@@ -141,6 +158,8 @@ export const {
   useGetNativeCliAuthQuery,
 
   useGetNativeCliSessionQuery,
+
+  useHeartbeatNativeCliAuthMutation,
 
   useInputNativeCliSessionMutation,
 

@@ -1,6 +1,6 @@
 import type { OkResponse, ProfileView } from '@monad/protocol';
 
-import { clientOf, toError } from '../../../../endpoint-helpers.ts';
+import { clientOf, runTreaty } from '../../../../endpoint-helpers.ts';
 import { deleteProfileApi } from './delete-profile.ts';
 import { listProfilesApi, profileAdapter } from './list-profiles.ts';
 
@@ -14,18 +14,9 @@ const renameProfileApi = deleteProfileApi.injectEndpoints({
   endpoints: (builder) => ({
     renameProfile: builder.mutation<OkResponse, RenameProfileArg>({
       queryFn: async ({ alias, nextAlias }, api: { extra: unknown }) => {
-        try {
-          const res = await clientOf(api).fetch(`/v1/settings/model/profiles/${encodeURIComponent(alias)}/alias`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ alias: nextAlias })
-          });
-          if (!res.ok)
-            return { error: toError({ status: res.status, value: await res.json().catch(() => undefined) }) };
-          return { data: (await res.json()) as OkResponse };
-        } catch (error) {
-          return { error: toError(error) };
-        }
+        return runTreaty(() =>
+          clientOf(api).treaty.v1.settings.model.profiles({ alias }).alias.patch({ alias: nextAlias })
+        );
       },
       async onQueryStarted({ alias, nextAlias }, { dispatch, queryFulfilled }) {
         const trimmed = nextAlias.trim();

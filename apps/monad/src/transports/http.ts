@@ -37,6 +37,7 @@ import { createLicensesController } from '@/transports/http/licenses/controller.
 import { createLocaleCatalogController, createLocaleSettingsController } from '@/transports/http/locale.ts';
 import { createMem0DataController } from '@/transports/http/mem0-data/controller.ts';
 import { createMemoryController } from '@/transports/http/memory.ts';
+import { createNativeAgentController } from '@/transports/http/native-agent.ts';
 import { createNativeCliController } from '@/transports/http/native-cli.ts';
 import { createOpenAiCompatController } from '@/transports/http/openai-compat.ts';
 import { createIpRateLimiter } from '@/transports/http/rate-limit.ts';
@@ -316,6 +317,7 @@ export function createHttpTransport(
         .use(createLawsController(handlers))
         .use(createMemoryController(handlers))
         .use(createAtomsController(handlers))
+        .use(createNativeAgentController(handlers))
         .use(createNativeCliController(handlers))
         .use(createLocaleCatalogController(handlers))
         .use(createSystemController(handlers))

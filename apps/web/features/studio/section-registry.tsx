@@ -19,14 +19,8 @@ const ChannelsSettings = dynamic(() => import('@/features/settings/ChannelsSetti
 const AtomsSettings = dynamic(() => import('@/features/settings/AtomsSettings').then((m) => m.AtomsSettings), {
   ssr: false
 });
-const AcpAgentsSettings = dynamic(
-  () => import('@/features/settings/AcpAgentsSettings').then((m) => m.AcpAgentsSettings),
-  {
-    ssr: false
-  }
-);
-const NativeCliAgentsSettings = dynamic(
-  () => import('@/features/settings/NativeCliAgentsSettings').then((m) => m.NativeCliAgentsSettings),
+const ThirdPartyAgentsSettings = dynamic(
+  () => import('@/features/settings/ThirdPartyAgentsSettings').then((m) => m.ThirdPartyAgentsSettings),
   { ssr: false }
 );
 const SkillsSettings = dynamic(() => import('./skills-settings').then((m) => m.SkillsSettings), {
@@ -101,7 +95,7 @@ function UsageSection() {
 }
 
 export const STUDIO_SECTION_COMPONENTS: Record<StudioSectionId, StudioSectionComponent> = {
-  acpAgents: AcpAgentsSettings,
+  acpAgents: ThirdPartyAgentsSettings,
   agents: AgentsPanel,
   api: OpenaiCompatSettings,
   approvals: ApprovalsSettings,
@@ -115,10 +109,11 @@ export const STUDIO_SECTION_COMPONENTS: Record<StudioSectionId, StudioSectionCom
   mem0: Mem0MemorySettings,
   memory: MemorySettings,
   models: ModelSettings,
-  nativeCliAgents: NativeCliAgentsSettings,
+  nativeCliAgents: ThirdPartyAgentsSettings,
   orchestration: OrchestrationSection,
   sandbox: SandboxSection,
   skills: SkillsSettings,
+  thirdPartyAgents: ThirdPartyAgentsSettings,
   tools: CapabilitiesSettings,
   usage: UsageSection
 };

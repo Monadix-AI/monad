@@ -9,13 +9,15 @@ import {
   useUpdateAgentMutation
 } from '@monad/client-rtk';
 import { Button } from '@monad/ui';
-import { ArrowLeft, Check, ChevronRight, Loader2 } from 'lucide-react';
+import { Check, Loader2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import { useT } from '@/components/I18nProvider';
+import { studioPath } from '@/features/routes/route-paths';
+import { StudioBreadcrumbHeader } from '../StudioBreadcrumbHeader';
 import { AgentWorkshop } from './AgentWorkshop';
 
-export function AgentEditor({ agentId, onBack }: { agentId: AgentId; onBack: () => void; onClose: () => void }) {
+export function AgentEditor({ agentId }: { agentId: AgentId; onClose: () => void }) {
   const t = useT();
   const { data: agentData, isLoading } = useGetAgentQuery(agentId);
   const { data: promptData } = useGetAgentPromptQuery(agentId);
@@ -89,35 +91,28 @@ export function AgentEditor({ agentId, onBack }: { agentId: AgentId; onBack: () 
 
   return (
     <section className="flex min-w-0 flex-1 flex-col">
-      <header className="flex items-center gap-2 border-b px-5 py-3">
-        <Button
-          aria-label={t('web.common.back')}
-          className="size-7"
-          onClick={onBack}
-          size="icon"
-          variant="ghost"
-        >
-          <ArrowLeft />
-        </Button>
-        <span className="text-muted-foreground text-xs">{t('web.studio.agents')}</span>
-        <ChevronRight className="size-3 text-muted-foreground" />
-        <span className="font-medium text-sm">{name || agent.name}</span>
-        <div className="ml-auto flex items-center gap-2">
-          {exposed && (
-            <span className="rounded-full border border-warning/40 bg-warning/10 px-2.5 py-1 text-[11px] text-warning">
-              {t('web.studio.workshopExposed')}
-            </span>
-          )}
-          <Button
-            disabled={saving || savingPrompt}
-            onClick={() => void handleSave()}
-            size="sm"
-          >
-            {saving || savingPrompt ? <Loader2 className="animate-spin" /> : <Check />}
-            {t('web.common.save')}
-          </Button>
-        </div>
-      </header>
+      <StudioBreadcrumbHeader
+        actions={
+          <>
+            {exposed && (
+              <span className="rounded-full border border-warning/40 bg-warning/10 px-2.5 py-1 text-[11px] text-warning">
+                {t('web.studio.workshopExposed')}
+              </span>
+            )}
+            <Button
+              disabled={saving || savingPrompt}
+              onClick={() => void handleSave()}
+              size="sm"
+            >
+              {saving || savingPrompt ? <Loader2 className="animate-spin" /> : <Check />}
+              {t('web.common.save')}
+            </Button>
+          </>
+        }
+        backHref={studioPath('agents')}
+        parentTitle={t('web.studio.agents')}
+        title={name || agent.name}
+      />
 
       <AgentWorkshop
         atomsAllow={atomsAllow}

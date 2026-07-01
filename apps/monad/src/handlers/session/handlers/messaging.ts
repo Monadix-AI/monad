@@ -3,12 +3,14 @@ import type {
   ChannelResponseNextTarget,
   ChatMessage,
   Event,
+  NativeCliSessionView,
   SendMessageRequest,
   Session,
   SessionId,
   SessionMcpServer,
   SessionTransport,
-  SessionUiEvent
+  SessionUiEvent,
+  WorkplaceProjectMemberSettings
 } from '@monad/protocol';
 import type { ImageAttachment } from '@/agent/index.ts';
 import type { Tool, ToolBackends } from '@/capabilities/tools/types.ts';
@@ -16,7 +18,12 @@ import type { CommandBundle, LifecycleOps } from '@/handlers/commands/index.ts';
 import type { EventSink, SessionContext } from '@/handlers/session/context.ts';
 
 import { loadAll } from '@monad/home';
-import { newId, parseChannelStructuredResponse } from '@monad/protocol';
+import {
+  newId,
+  parseChannelStructuredResponse,
+  workplaceProjectMembersExtKey,
+  workplaceProjectMembersExtSchema
+} from '@monad/protocol';
 
 import { parseDurableSummary } from '@/agent/history.ts';
 import { extractError } from '@/agent/index.ts';
@@ -67,6 +74,24 @@ function composeFilter(a?: ToolFilter, b?: ToolFilter): ToolFilter | undefined {
   if (!a) return b;
   if (!b) return a;
   return (name) => a(name) && b(name);
+}
+
+function nativeCliProjectMemberSettings(
+  session: Session,
+  agentName: string
+): Pick<WorkplaceProjectMemberSettings, 'managedProjectAgent' | 'launchMode'> {
+  const parsed = workplaceProjectMembersExtSchema.safeParse(session.origin?.ext?.[workplaceProjectMembersExtKey]);
+  if (!parsed.success) return {};
+  const member = parsed.data.find((candidate) => candidate.type === 'native-cli' && candidate.name === agentName);
+  if (member?.settings) {
+    return {
+      ...(member.settings.managedProjectAgent !== undefined
+        ? { managedProjectAgent: member.settings.managedProjectAgent }
+        : {}),
+      ...(member.settings.launchMode ? { launchMode: member.settings.launchMode } : {})
+    };
+  }
+  return {};
 }
 
 function lastAgentMessageText(round: Event[]): string | null {
@@ -293,6 +318,293 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
       .join('\n\n');
   }
 
+  function managedNativeCliProjectMembers(
+    session: Session,
+    nativeCliAgents: readonly NativeCliAgentConfig[]
+  ): NativeCliAgentConfig[] {
+    return nativeCliAgents.filter((agent) => nativeCliProjectMemberSettings(session, agent.name).managedProjectAgent);
+  }
+
+  function managedNativeCliInboxNotice(text: string): string {
+    return [
+      'New Workplace Project message is available.',
+      '',
+      text,
+      '',
+      'Use `monad project inbox check` or `monad project read` to read project context.',
+      'Post public replies with `monad project post <text>`.',
+      'Use `monad agent send --to <agent|human> <text>` only for private/direct conversation.'
+    ].join('\n');
+  }
+
+  function managedNativeCliBusyInboxNotice(): string {
+    return [
+      'New Workplace Project message is available.',
+      '',
+      'You are already running. Use `monad project inbox check` or `monad project read` to fetch the latest project context.',
+      'Post public replies with `monad project post <text>`.',
+      'Use `monad agent send --to <agent|human> <text>` only for private/direct conversation.'
+    ].join('\n');
+  }
+
+  function managedNativeCliDirectNotice({ fromAgentName, text }: { fromAgentName: string; text: string }): string {
+    return [
+      `New direct/private message from ${fromAgentName} is available.`,
+      '',
+      text,
+      '',
+      `Use \`monad agent read --with ${fromAgentName}\` to read the private conversation.`,
+      `Reply privately with \`monad agent send --to ${fromAgentName} <text>\`.`,
+      'Use `monad project post` only when you want to speak publicly in the Workplace Project.',
+      'Terminal stdout/stderr is diagnostic output only. It is not a Workplace Project message.'
+    ].join('\n');
+  }
+
+  function managedNativeCliResumeRecoveryNotice(notice: string): string {
+    return [
+      'Provider session resume failed. Monad started a fresh managed project runtime.',
+      'Before replying, restore context from MEMORY.md and `monad project read`.',
+      '',
+      notice
+    ].join('\n');
+  }
+
+  function nativeCliInputText(input: string): string {
+    return input.endsWith('\n') ? input : `${input}\n`;
+  }
+
+  function normalizeManagedNativeCliDirectTarget(to: string): string {
+    return to.startsWith('native-cli:') ? to.slice('native-cli:'.length) : to;
+  }
+
+  function managedNativeCliSessionsForAgent(projectSessionId: SessionId, agentName: string): NativeCliSessionView[] {
+    return (ctx.deps.nativeCliHost?.list(projectSessionId).sessions ?? []).filter(
+      (candidate) => candidate.agentName === agentName && candidate.runtimeRole === 'managed-project-agent'
+    );
+  }
+
+  async function startManagedNativeCliRuntimeWithRecovery({
+    session,
+    spec,
+    launchMode,
+    providerSessionRef,
+    input
+  }: {
+    session: Session;
+    spec: NativeCliAgentConfig;
+    launchMode: NativeCliAgentConfig['defaultLaunchMode'];
+    providerSessionRef?: string;
+    input: string;
+  }): Promise<NativeCliSessionView> {
+    const nativeCliHost = ctx.deps.nativeCliHost;
+    if (!nativeCliHost) throw new HandlerError('internal', 'native CLI host not configured');
+    if (!session.cwd)
+      throw new HandlerError('invalid', `native CLI agent "${spec.name}" requires a project working path`);
+    const startArgs = {
+      projectSessionId: session.id,
+      agentName: spec.name,
+      workingPath: session.cwd,
+      launchMode,
+      runtimeRole: 'managed-project-agent' as const
+    };
+    try {
+      const nativeSession = await nativeCliHost.start({
+        ...startArgs,
+        providerSessionRef
+      });
+      nativeCliHost.input(nativeSession.id, { input: nativeCliInputText(input) });
+      return nativeSession;
+    } catch (err) {
+      if (!providerSessionRef) throw err;
+      const { code, message } = extractError(err);
+      log?.debug(
+        {
+          sessionId: session.id,
+          event: 'project.managed_native_cli.resume_failed_cold_start',
+          agentName: spec.name,
+          providerSessionRef,
+          code,
+          message
+        },
+        'managed native cli resume failed; cold starting'
+      );
+      const round: Event[] = [];
+      makeEmit(round)({
+        id: newId('evt'),
+        sessionId: session.id,
+        type: 'native_cli.resume_failed',
+        actorAgentId: null,
+        payload: {
+          agentName: spec.name,
+          provider: spec.provider,
+          providerSessionRef,
+          code,
+          message,
+          fallback: 'cold-start'
+        },
+        at: new Date().toISOString()
+      });
+      persistAndRetire(session.id, round);
+      const nativeSession = await nativeCliHost.start(startArgs);
+      nativeCliHost.input(nativeSession.id, { input: nativeCliInputText(managedNativeCliResumeRecoveryNotice(input)) });
+      return nativeSession;
+    }
+  }
+
+  async function deliverProjectMessageToManagedNativeCliMembers({
+    session,
+    nativeCliAgents,
+    text,
+    exceptAgentName
+  }: {
+    session: Session;
+    nativeCliAgents: readonly NativeCliAgentConfig[];
+    text: string;
+    exceptAgentName?: string;
+  }): Promise<void> {
+    const managedMembers = managedNativeCliProjectMembers(session, nativeCliAgents);
+    if (managedMembers.length === 0) return;
+    const nativeCliHost = ctx.deps.nativeCliHost;
+    if (!nativeCliHost || !session.cwd) return;
+    for (const spec of managedMembers) {
+      if (spec.name === exceptAgentName) continue;
+      try {
+        const notice = managedNativeCliInboxNotice(text);
+        const deliveredSeq = store.maxMessageSeq(session.id);
+        const managedSessions = managedNativeCliSessionsForAgent(session.id, spec.name);
+        const existing = managedSessions.find((candidate) => candidate.state === 'running');
+        if (existing) {
+          if (existing.lastDeliveredSeq <= existing.lastVisibleSeq) {
+            nativeCliHost.input(existing.id, { input: nativeCliInputText(managedNativeCliBusyInboxNotice()) });
+          }
+          store.setNativeCliDeliveredCursor(existing.id, deliveredSeq);
+          continue;
+        }
+        const resumeCandidate = managedSessions.find((candidate) => candidate.providerSessionRef);
+        const resumeFrom = resumeCandidate?.providerSessionRef;
+        const preflight = await nativeCliHost.preflight(spec.name);
+        if (preflight.state !== 'ready') {
+          const round: Event[] = [];
+          if (preflight.state === 'not_authenticated' || preflight.state === 'unknown') {
+            makeEmit(round)({
+              id: newId('evt'),
+              sessionId: session.id,
+              type: 'native_cli.connection_required',
+              actorAgentId: null,
+              payload: {
+                agentName: spec.name,
+                provider: spec.provider,
+                reason: preflight.reason,
+                reconnectIn: 'studio'
+              },
+              at: new Date().toISOString()
+            });
+            persistAndRetire(session.id, round);
+          }
+          continue;
+        }
+        const memberSettings = nativeCliProjectMemberSettings(session, spec.name);
+        if (resumeCandidate && resumeFrom) store.clearNativeCliSessionRef(resumeCandidate.id);
+        const nativeSession = await startManagedNativeCliRuntimeWithRecovery({
+          session,
+          spec,
+          launchMode: memberSettings.launchMode ?? spec.defaultLaunchMode,
+          providerSessionRef: resumeFrom ?? undefined,
+          input: notice
+        });
+        store.setNativeCliDeliveredCursor(nativeSession.id, deliveredSeq);
+        store.setNativeCliVisibleCursor(nativeSession.id, deliveredSeq);
+      } catch (err) {
+        const { code, message } = extractError(err);
+        log?.debug(
+          {
+            sessionId: session.id,
+            event: 'project.managed_native_cli.delivery_error',
+            agentName: spec.name,
+            code,
+            message
+          },
+          'managed native cli project delivery failed'
+        );
+      }
+    }
+  }
+
+  async function deliverDirectMessageToManagedNativeCliMember({
+    session,
+    nativeCliAgents,
+    fromAgentName,
+    to,
+    text
+  }: {
+    session: Session;
+    nativeCliAgents: readonly NativeCliAgentConfig[];
+    fromAgentName: string;
+    to: string;
+    text: string;
+  }): Promise<void> {
+    const targetName = normalizeManagedNativeCliDirectTarget(to);
+    if (!targetName || targetName === fromAgentName) return;
+    const spec = managedNativeCliProjectMembers(session, nativeCliAgents).find((agent) => agent.name === targetName);
+    if (!spec) return;
+    const nativeCliHost = ctx.deps.nativeCliHost;
+    if (!nativeCliHost || !session.cwd) return;
+    try {
+      const notice = managedNativeCliDirectNotice({ fromAgentName, text });
+      const managedSessions = managedNativeCliSessionsForAgent(session.id, spec.name);
+      const existing = managedSessions.find((candidate) => candidate.state === 'running');
+      if (existing) {
+        nativeCliHost.input(existing.id, { input: nativeCliInputText(notice) });
+        return;
+      }
+      const resumeCandidate = managedSessions.find((candidate) => candidate.providerSessionRef);
+      const resumeFrom = resumeCandidate?.providerSessionRef;
+      const preflight = await nativeCliHost.preflight(spec.name);
+      if (preflight.state !== 'ready') {
+        const round: Event[] = [];
+        if (preflight.state === 'not_authenticated' || preflight.state === 'unknown') {
+          makeEmit(round)({
+            id: newId('evt'),
+            sessionId: session.id,
+            type: 'native_cli.connection_required',
+            actorAgentId: null,
+            payload: {
+              agentName: spec.name,
+              provider: spec.provider,
+              reason: preflight.reason,
+              reconnectIn: 'studio'
+            },
+            at: new Date().toISOString()
+          });
+          persistAndRetire(session.id, round);
+        }
+        return;
+      }
+      const memberSettings = nativeCliProjectMemberSettings(session, spec.name);
+      if (resumeCandidate && resumeFrom) store.clearNativeCliSessionRef(resumeCandidate.id);
+      await startManagedNativeCliRuntimeWithRecovery({
+        session,
+        spec,
+        launchMode: memberSettings.launchMode ?? spec.defaultLaunchMode,
+        providerSessionRef: resumeFrom ?? undefined,
+        input: notice
+      });
+    } catch (err) {
+      const { code, message } = extractError(err);
+      log?.debug(
+        {
+          sessionId: session.id,
+          event: 'project.managed_native_cli.direct_delivery_error',
+          fromAgentName,
+          to,
+          code,
+          message
+        },
+        'managed native cli direct delivery failed'
+      );
+    }
+  }
+
   const handlers = {
     async send({
       sessionId,
@@ -445,14 +757,19 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
           ? (responseText: string) =>
               dispatchChannelNextTargets({ sessionId, responseText, ambientContext, acpAgents, mcpServers })
           : undefined;
-      if (route.kind === 'send')
-        return handlers.send({
+      if (route.kind === 'send') {
+        const result = await handlers.send({
           sessionId,
           text: route.text,
           generate: route.generate,
           ambientContext,
           onComplete: dispatchStructuredNext
         });
+        if (!route.direct && route.generate === false) {
+          await deliverProjectMessageToManagedNativeCliMembers({ session, nativeCliAgents, text: route.text });
+        }
+        return result;
+      }
       if (route.kind === 'forward-native-cli')
         return handlers.forwardToNativeCli({
           sessionId,
@@ -472,6 +789,46 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
 
     async sendChannelMessage({ sessionId, text }: { sessionId: SessionId; text: string }) {
       return handlers.sendProjectMessage({ sessionId, text });
+    },
+
+    async notifyManagedNativeCliProjectMembers({
+      sessionId,
+      text,
+      exceptAgentName
+    }: {
+      sessionId: SessionId;
+      text: string;
+      exceptAgentName?: string;
+    }) {
+      const session = requireSession(sessionId);
+      const paths = ctx.deps.paths;
+      const cfg = paths ? await loadAll(paths.config, paths.profile) : null;
+      const nativeCliAgents = (cfg?.nativeCliAgents ?? []).filter(
+        (agent: NativeCliAgentConfig) => agent.enabled !== false
+      );
+      await deliverProjectMessageToManagedNativeCliMembers({ session, nativeCliAgents, text, exceptAgentName });
+      return { accepted: true as const };
+    },
+
+    async notifyManagedNativeCliDirectMessage({
+      sessionId,
+      fromAgentName,
+      to,
+      text
+    }: {
+      sessionId: SessionId;
+      fromAgentName: string;
+      to: string;
+      text: string;
+    }) {
+      const session = requireSession(sessionId);
+      const paths = ctx.deps.paths;
+      const cfg = paths ? await loadAll(paths.config, paths.profile) : null;
+      const nativeCliAgents = (cfg?.nativeCliAgents ?? []).filter(
+        (agent: NativeCliAgentConfig) => agent.enabled !== false
+      );
+      await deliverDirectMessageToManagedNativeCliMember({ session, nativeCliAgents, fromAgentName, to, text });
+      return { accepted: true as const };
     },
 
     async sendInline(
@@ -920,9 +1277,12 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
       }
       log?.debug({ sessionId, event: 'session.forward_native_cli.start', agentName, text }, 'forward native cli start');
       try {
-        const existing = nativeCliHost
+        const memberSettings = nativeCliProjectMemberSettings(session, agentName);
+        const runtimeRole = memberSettings.managedProjectAgent ? 'managed-project-agent' : 'interactive';
+        const nativeSessions = nativeCliHost
           .list(sessionId)
-          .sessions.find((candidate) => candidate.agentName === agentName && candidate.state === 'running');
+          .sessions.filter((candidate) => candidate.agentName === agentName && candidate.runtimeRole === runtimeRole);
+        const existing = nativeSessions.find((candidate) => candidate.state === 'running');
         if (existing) {
           nativeCliHost.input(existing.id, { input: text.endsWith('\n') ? text : `${text}\n` });
           log?.debug(
@@ -987,13 +1347,29 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
           );
           return { accepted: true as const };
         }
-        const nativeSession = await nativeCliHost.start({
-          projectSessionId: sessionId,
-          agentName,
-          workingPath: session.cwd,
-          launchMode: spec.defaultLaunchMode
-        });
-        nativeCliHost.input(nativeSession.id, { input: text.endsWith('\n') ? text : `${text}\n` });
+        const resumeFrom =
+          runtimeRole === 'managed-project-agent'
+            ? nativeSessions.find((candidate) => candidate.providerSessionRef)?.providerSessionRef
+            : undefined;
+        const nativeSession =
+          runtimeRole === 'managed-project-agent'
+            ? await startManagedNativeCliRuntimeWithRecovery({
+                session,
+                spec,
+                launchMode: memberSettings.launchMode ?? spec.defaultLaunchMode,
+                providerSessionRef: resumeFrom ?? undefined,
+                input: text
+              })
+            : await nativeCliHost.start({
+                projectSessionId: sessionId,
+                agentName,
+                workingPath: session.cwd,
+                launchMode: memberSettings.launchMode ?? spec.defaultLaunchMode,
+                runtimeRole
+              });
+        if (runtimeRole !== 'managed-project-agent') {
+          nativeCliHost.input(nativeSession.id, { input: nativeCliInputText(text) });
+        }
         log?.debug(
           { sessionId, event: 'session.forward_native_cli.accepted', agentName, nativeCliSessionId: nativeSession.id },
           'forward native cli accepted'

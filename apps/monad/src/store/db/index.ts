@@ -6,8 +6,11 @@ import type {
   GetStatsResponse,
   LedgerCategory,
   MessageType,
+  NativeAgentDirectMessage,
+  NativeCliInboxItem,
   NativeCliLaunchMode,
   NativeCliProvider,
+  NativeCliRuntimeRole,
   NativeCliSessionState,
   SearchHit,
   SearchMode,
@@ -75,6 +78,11 @@ export interface NativeCliSessionRow {
   provider: NativeCliProvider;
   workingPath: string;
   launchMode: NativeCliLaunchMode;
+  runtimeRole: NativeCliRuntimeRole;
+  agentRuntimeId: string | null;
+  agentRuntimeTokenHash: string | null;
+  lastDeliveredSeq: number;
+  lastVisibleSeq: number;
   state: NativeCliSessionState;
   pid: number | null;
   providerSessionRef: string | null;
@@ -142,6 +150,11 @@ function rowToNativeCliSession(r: Record<string, unknown>): NativeCliSessionRow 
     provider: r.provider as NativeCliProvider,
     workingPath: r.working_path as string,
     launchMode: r.launch_mode as NativeCliLaunchMode,
+    runtimeRole: ((r.runtime_role as string | null) ?? 'interactive') as NativeCliRuntimeRole,
+    agentRuntimeId: (r.agent_runtime_id as string | null) ?? null,
+    agentRuntimeTokenHash: (r.agent_runtime_token_hash as string | null) ?? null,
+    lastDeliveredSeq: (r.last_delivered_seq as number | null) ?? 0,
+    lastVisibleSeq: (r.last_visible_seq as number | null) ?? 0,
     state: r.state as NativeCliSessionState,
     pid: (r.pid as number | null) ?? null,
     providerSessionRef: (r.provider_session_ref as string | null) ?? null,
@@ -167,6 +180,8 @@ export interface ListSessionsFilter {
 
 export interface ListMessagesOptions {
   limit?: number;
+  /** Restrict to a project thread: the root message id plus replies carrying data.threadId. */
+  threadId?: string;
   /** Exclusive cursor — return messages strictly before this message id (by rowid). */
   before?: string;
   /** Exclusive cursor — return messages strictly after this message id (by rowid). */
@@ -594,6 +609,8 @@ export class Store {
   listMessages(sessionId: string, opts: ListMessagesOptions = {}): ChatMessage[] {
     const binds: Record<string, string | number> = { $sid: sessionId };
     const active = opts.includeInactive ? '' : ' AND active = 1';
+    const thread = opts.threadId ? " AND (id = $threadId OR json_extract(data, '$.threadId') = $threadId)" : '';
+    if (opts.threadId) binds.$threadId = opts.threadId;
     let q: string;
     let reverse = false;
     if (opts.around) {
@@ -604,16 +621,17 @@ export class Store {
       binds.$lower = half;
       // `_rid` is aliased out because a UNION's outer ORDER BY can only reference output columns.
       q =
-        `SELECT * FROM (SELECT *, rowid AS _rid FROM messages WHERE session_id = $sid${active}` +
+        `SELECT * FROM (SELECT *, rowid AS _rid FROM messages WHERE session_id = $sid${active}${thread}` +
         ' AND rowid <= COALESCE((SELECT rowid FROM messages WHERE id = $around), 9.2e18)' +
         ' ORDER BY rowid DESC LIMIT $upper)' +
-        ` UNION ALL SELECT * FROM (SELECT *, rowid AS _rid FROM messages WHERE session_id = $sid${active}` +
+        ` UNION ALL SELECT * FROM (SELECT *, rowid AS _rid FROM messages WHERE session_id = $sid${active}${thread}` +
         ' AND rowid > COALESCE((SELECT rowid FROM messages WHERE id = $around), 9.2e18)' +
         ' ORDER BY rowid ASC LIMIT $lower)' +
         ' ORDER BY _rid ASC';
     } else {
       const clauses = ['session_id = $sid'];
       if (!opts.includeInactive) clauses.push('active = 1');
+      if (opts.threadId) clauses.push("(id = $threadId OR json_extract(data, '$.threadId') = $threadId)");
       if (opts.before) {
         clauses.push('rowid < COALESCE((SELECT rowid FROM messages WHERE id = $before), 9.2e18)');
         binds.$before = opts.before;
@@ -1337,15 +1355,22 @@ export class Store {
       .query(
         `INSERT INTO native_cli_sessions
            (id, project_session_id, agent_name, provider, working_path, launch_mode, state,
-            pid, provider_session_ref, output_snapshot, exit_code, started_at, updated_at, exited_at)
+            runtime_role, agent_runtime_id, agent_runtime_token_hash, last_delivered_seq, last_visible_seq, pid,
+            provider_session_ref, output_snapshot, exit_code, started_at, updated_at, exited_at)
          VALUES ($id, $projectSessionId, $agentName, $provider, $workingPath, $launchMode, $state,
-                 $pid, $providerSessionRef, $outputSnapshot, $exitCode, $startedAt, $updatedAt, $exitedAt)
+                 $runtimeRole, $agentRuntimeId, $agentRuntimeTokenHash, $lastDeliveredSeq, $lastVisibleSeq, $pid,
+                 $providerSessionRef, $outputSnapshot, $exitCode, $startedAt, $updatedAt, $exitedAt)
          ON CONFLICT(id) DO UPDATE SET
            project_session_id   = excluded.project_session_id,
            agent_name           = excluded.agent_name,
            provider             = excluded.provider,
            working_path         = excluded.working_path,
            launch_mode          = excluded.launch_mode,
+           runtime_role         = excluded.runtime_role,
+           agent_runtime_id     = excluded.agent_runtime_id,
+           agent_runtime_token_hash = excluded.agent_runtime_token_hash,
+           last_delivered_seq   = excluded.last_delivered_seq,
+           last_visible_seq     = excluded.last_visible_seq,
            state                = excluded.state,
            pid                  = excluded.pid,
            provider_session_ref = excluded.provider_session_ref,
@@ -1361,6 +1386,11 @@ export class Store {
         $provider: row.provider,
         $workingPath: row.workingPath,
         $launchMode: row.launchMode,
+        $runtimeRole: row.runtimeRole ?? 'interactive',
+        $agentRuntimeId: row.agentRuntimeId ?? null,
+        $agentRuntimeTokenHash: row.agentRuntimeTokenHash ?? null,
+        $lastDeliveredSeq: row.lastDeliveredSeq ?? 0,
+        $lastVisibleSeq: row.lastVisibleSeq ?? 0,
         $state: row.state,
         $pid: row.pid,
         $providerSessionRef: row.providerSessionRef,
@@ -1430,6 +1460,149 @@ export class Store {
       .query('UPDATE native_cli_sessions SET provider_session_ref = ?, updated_at = ? WHERE id = ?')
       .run(providerSessionRef, new Date().toISOString(), id);
     return result.changes > 0;
+  }
+
+  clearNativeCliSessionRef(id: string): boolean {
+    const result = this.sqlite
+      .query('UPDATE native_cli_sessions SET provider_session_ref = NULL, updated_at = ? WHERE id = ?')
+      .run(new Date().toISOString(), id);
+    return result.changes > 0;
+  }
+
+  setNativeCliVisibleCursor(id: string, seq: number): boolean {
+    const result = this.sqlite
+      .query(
+        `UPDATE native_cli_sessions
+         SET last_visible_seq = MAX(last_visible_seq, ?), updated_at = ?
+         WHERE id = ?`
+      )
+      .run(seq, new Date().toISOString(), id);
+    return result.changes > 0;
+  }
+
+  setNativeCliDeliveredCursor(id: string, seq: number): boolean {
+    const result = this.sqlite
+      .query(
+        `UPDATE native_cli_sessions
+         SET last_delivered_seq = MAX(last_delivered_seq, ?), updated_at = ?
+         WHERE id = ?`
+      )
+      .run(seq, new Date().toISOString(), id);
+    return result.changes > 0;
+  }
+
+  maxMessageSeq(sessionId: string): number {
+    const row = this.sqlite
+      .query('SELECT COALESCE(MAX(rowid), 0) AS seq FROM messages WHERE session_id = ?')
+      .get(sessionId) as { seq: number } | null;
+    return row?.seq ?? 0;
+  }
+
+  listNativeCliInbox(nativeCliSessionId: string, limit = 50): NativeCliInboxItem[] {
+    const session = this.getNativeCliSession(nativeCliSessionId);
+    if (!session) return [];
+    const rows = this.sqlite
+      .query(
+        `SELECT *, rowid AS _native_cli_seq
+         FROM messages
+         WHERE session_id = ?
+           AND active = 1
+           AND rowid > ?
+         ORDER BY rowid ASC
+         LIMIT ?`
+      )
+      .all(session.projectSessionId, session.lastVisibleSeq, limit) as Array<Record<string, unknown>>;
+    return rows.map((row) => ({
+      seq: row._native_cli_seq as number,
+      message: rowToMessage({
+        id: row.id as string,
+        sessionId: row.session_id as string,
+        role: row.role as string,
+        text: row.text as string,
+        type: row.type as string,
+        data: (row.data ?? null) as string | null,
+        streamStatus: row.stream_status as string,
+        active: row.active as number,
+        includeInContext: (row.include_in_context ?? null) as number | null,
+        createdAt: row.created_at as string,
+        updatedAt: (row.updated_at ?? null) as string | null
+      } as MessageRow)
+    }));
+  }
+
+  countNativeCliInbox(nativeCliSessionId: string): number {
+    const session = this.getNativeCliSession(nativeCliSessionId);
+    if (!session) return 0;
+    const row = this.sqlite
+      .query(
+        `SELECT COUNT(*) AS count
+         FROM messages
+         WHERE session_id = ?
+           AND active = 1
+           AND rowid > ?`
+      )
+      .get(session.projectSessionId, session.lastVisibleSeq) as { count: number } | null;
+    return row?.count ?? 0;
+  }
+
+  insertNativeAgentDirectMessage(row: NativeAgentDirectMessage): void {
+    this.sqlite
+      .query(
+        `INSERT INTO native_agent_direct_messages
+           (id, project_session_id, native_cli_session_id, from_agent, peer, text, created_at)
+         VALUES ($id, $projectSessionId, $nativeCliSessionId, $fromAgent, $peer, $text, $createdAt)`
+      )
+      .run({
+        $id: row.id,
+        $projectSessionId: row.projectSessionId,
+        $nativeCliSessionId: row.nativeCliSessionId,
+        $fromAgent: row.fromAgent,
+        $peer: row.peer,
+        $text: row.text,
+        $createdAt: row.createdAt
+      });
+  }
+
+  listNativeAgentDirectMessages(
+    nativeCliSessionId: string,
+    peer: string,
+    opts: { before?: string; after?: string; limit?: number } = {}
+  ): NativeAgentDirectMessage[] {
+    const session = this.getNativeCliSession(nativeCliSessionId);
+    if (!session) return [];
+    const binds: Record<string, string | number> = {
+      $nativeCliSessionId: nativeCliSessionId,
+      $projectSessionId: session.projectSessionId,
+      $self: session.agentName,
+      $peer: peer
+    };
+    const clauses = [
+      '(project_session_id = $projectSessionId OR (project_session_id IS NULL AND native_cli_session_id = $nativeCliSessionId))',
+      '((from_agent = $self AND peer = $peer) OR (from_agent = $peer AND peer = $self))'
+    ];
+    if (opts.before) {
+      clauses.push('rowid < COALESCE((SELECT rowid FROM native_agent_direct_messages WHERE id = $before), 9.2e18)');
+      binds.$before = opts.before;
+    }
+    if (opts.after) {
+      clauses.push('rowid > COALESCE((SELECT rowid FROM native_agent_direct_messages WHERE id = $after), 0)');
+      binds.$after = opts.after;
+    }
+    let query = `SELECT * FROM native_agent_direct_messages WHERE ${clauses.join(' AND ')} ORDER BY rowid ASC`;
+    if (opts.limit && opts.limit > 0) {
+      query += ' LIMIT $limit';
+      binds.$limit = opts.limit;
+    }
+    const rows = this.sqlite.query(query).all(binds) as Array<Record<string, unknown>>;
+    return rows.map((row) => ({
+      id: row.id as NativeAgentDirectMessage['id'],
+      projectSessionId: row.project_session_id as NativeAgentDirectMessage['projectSessionId'],
+      nativeCliSessionId: row.native_cli_session_id as string,
+      fromAgent: (row.from_agent as string | null) ?? null,
+      peer: row.peer as string,
+      text: row.text as string,
+      createdAt: row.created_at as string
+    }));
   }
 
   closeNativeCliSession(

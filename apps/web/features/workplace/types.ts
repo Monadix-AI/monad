@@ -5,7 +5,7 @@
 
 export type ParticipantKind = 'human' | 'agent';
 type MessageKind = ParticipantKind | 'system' | 'developer';
-export type Presence = 'online' | 'working' | 'idle';
+export type Presence = 'online' | 'working' | 'needs-login' | 'failed' | 'stopped' | 'idle';
 
 export interface Participant {
   id: string;

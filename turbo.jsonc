@@ -6,9 +6,14 @@
   "globalPassThroughEnv": [
     // Monad runtime and local state roots.
     "AI_SDK_DEVTOOLS_PORT",
+    "MONAD_AGENT_ID",
+    "MONAD_AGENT_TOKEN_FILE",
     "MONAD_HOME",
     "MONAD_KV_UI_PORT",
+    "MONAD_NATIVE_CLI_SESSION_ID",
     "MONAD_PORT",
+    "MONAD_PROJECT_SESSION_ID",
+    "MONAD_SERVER_URL",
     "MONAD_SKIP_SETUP",
 
     // Live model e2e (opt-in): provider key + model id. Read only by the live test suite.
@@ -47,6 +52,7 @@
     // Windows shell and filesystem conventions.
     "APPDATA",
     "LOCALAPPDATA",
+    "PATHEXT",
     "ProgramFiles",
     "ProgramFiles(x86)",
 

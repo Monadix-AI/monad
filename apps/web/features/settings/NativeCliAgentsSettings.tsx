@@ -3,31 +3,14 @@
 import type { WebMessageIdWithoutParams } from '@monad/i18n';
 import type { NativeCliAgentPresetView, NativeCliAgentView, NativeCliProvider } from '@monad/protocol';
 
-import {
-  useGetNativeCliAuthQuery,
-  useInputNativeCliAuthMutation,
-  useStartNativeCliAuthMutation,
-  useStopNativeCliAuthMutation
-} from '@monad/client-rtk';
-import { Badge, Button, cn, Input, Label, ScrollArea } from '@monad/ui';
-import {
-  ChevronDown,
-  ChevronRight,
-  ExternalLink,
-  Loader2,
-  PlugZap,
-  Plus,
-  Power,
-  RefreshCw,
-  Save,
-  Trash2,
-  X
-} from 'lucide-react';
+import { useStartNativeCliAuthMutation } from '@monad/client-rtk';
+import { Button, cn, Input, Label, ScrollArea } from '@monad/ui';
+import { CircleCheck, ExternalLink, Loader2, PlugZap, Plus, Power, RefreshCw, Save, X } from 'lucide-react';
 import { useState } from 'react';
 
 import { useT } from '@/components/I18nProvider';
 import { PanelShell, PanelShellHeader } from '@/components/ui/panel-shell';
-import { CliTerminalModal } from '@/features/workplace/cli/CliTerminalModal';
+import { NativeCliAuthModal } from '@/features/workplace/cli/NativeCliAuthModal';
 import { useAsyncAction } from '@/hooks/use-async-action';
 import { useNativeCliAgentSettings } from '@/hooks/use-native-cli-agent-settings';
 import { providerLogo } from '@/lib/ProviderMeta';
@@ -91,6 +74,7 @@ export function NativeCliAgentsSettings(_props: { onClose: () => void }) {
 
   const connectAgent = (agent: NativeCliAgentView) =>
     runConnect(async () => {
+      setAuthSession(null);
       await saveAgent(agent);
       const session = await startAuth(agent.name).unwrap();
       setAuthSession({ id: session.id, agentName: agent.name });
@@ -127,9 +111,6 @@ export function NativeCliAgentsSettings(_props: { onClose: () => void }) {
         subtitle={t('web.nativeCli.subtitle')}
         title={t('web.nativeCli.title')}
       />
-
-      <p className="border-b bg-muted/30 px-5 py-2 text-muted-foreground text-xs">{t('web.nativeCli.bootHint')}</p>
-
       <ScrollArea className="flex-1">
         <div className="flex flex-col gap-2 p-4">
           {connectError ? (
@@ -225,6 +206,28 @@ export function NativeCliAgentsSettings(_props: { onClose: () => void }) {
                   gap: 6px;
                 }
 
+                .native-cli-live-v2__row--connected {
+                  grid-template-columns: 34px minmax(0, 1fr) auto;
+                  background: var(--card);
+                }
+
+                .native-cli-live-v2__row--connected .native-cli-live-v2__logo {
+                  border-color: color-mix(in srgb, var(--success) 28%, var(--border));
+                  box-shadow: 0 0 0 5px color-mix(in srgb, var(--success) 12%, transparent);
+                }
+
+                .native-cli-live-v2__connected {
+                  display: inline-flex;
+                  align-items: center;
+                  gap: 5px;
+                  border-radius: 999px;
+                  background: color-mix(in srgb, var(--success) 12%, transparent);
+                  color: color-mix(in srgb, var(--success) 55%, var(--foreground));
+                  padding: 3px 8px;
+                  font-size: 12px;
+                  font-weight: 650;
+                }
+
                 @media (max-width: 760px) {
                   .native-cli-live-v2 {
                     grid-template-columns: 1fr;
@@ -249,7 +252,7 @@ export function NativeCliAgentsSettings(_props: { onClose: () => void }) {
                   const agent = presetToView(p);
                   return (
                     <div
-                      className="native-cli-live-v2__row"
+                      className={cn('native-cli-live-v2__row', p.installed && 'native-cli-live-v2__row--connected')}
                       key={p.id}
                       title={p.installed ? undefined : t(presetHintKey(p.id))}
                     >
@@ -258,23 +261,25 @@ export function NativeCliAgentsSettings(_props: { onClose: () => void }) {
                       </span>
                       <span className="native-cli-live-v2__main">
                         <span className="native-cli-live-v2__name">{p.label}</span>
-                        <span className="native-cli-live-v2__meta">
-                          {p.installed ? t('web.acp.installed') : t('web.acp.notInstalled')}
-                          {p.capabilities?.auth ? ` · ${p.capabilities.auth}` : ''}
-                        </span>
                       </span>
                       <span className="native-cli-live-v2__actions">
                         {p.installed ? (
-                          <Button
-                            disabled={connectBusy}
-                            onClick={() => connectAgent(agent)}
-                            size="sm"
-                            type="button"
-                            variant="secondary"
-                          >
-                            {connectBusy ? <Loader2 className="animate-spin" /> : <PlugZap />}
-                            {t('web.nativeCli.connect')}
-                          </Button>
+                          <>
+                            <span className="native-cli-live-v2__connected">
+                              <CircleCheck className="size-3.5" />
+                              {t('web.nativeCli.connected')}
+                            </span>
+                            <Button
+                              disabled={connectBusy}
+                              onClick={() => connectAgent(agent)}
+                              size="sm"
+                              type="button"
+                              variant="secondary"
+                            >
+                              {connectBusy ? <Loader2 className="animate-spin" /> : <PlugZap />}
+                              {t('web.nativeCli.connect')}
+                            </Button>
+                          </>
                         ) : (
                           <Button
                             onClick={() => openInstallPage(p)}
@@ -332,7 +337,7 @@ export function NativeCliAgentsSettings(_props: { onClose: () => void }) {
         </div>
       </ScrollArea>
       {authSession ? (
-        <NativeCliAuthBridge
+        <NativeCliAuthModal
           agentName={authSession.agentName}
           onClose={() => setAuthSession(null)}
           sessionId={authSession.id}
@@ -342,149 +347,13 @@ export function NativeCliAgentsSettings(_props: { onClose: () => void }) {
   );
 }
 
-function NativeCliAuthBridge({
-  sessionId,
-  agentName,
-  onClose
-}: {
-  sessionId: string;
-  agentName: string;
-  onClose: () => void;
-}) {
-  const t = useT();
-  const { data } = useGetNativeCliAuthQuery(sessionId, { pollingInterval: 750 });
-  const [inputAuth] = useInputNativeCliAuthMutation();
-  const [stopAuth] = useStopNativeCliAuthMutation();
-  const output = data?.outputSnapshot ?? '';
-  const isLive = data ? data.state === 'starting' || data.state === 'running' : true;
-  const status = data?.state === 'failed' ? 'error' : isLive ? 'running' : 'ok';
-
-  return (
-    <CliTerminalModal
-      eyebrow={t('web.nativeCli.connectTitle')}
-      footerLabel={t('web.nativeCli.connectTerminalHint')}
-      id={sessionId}
-      onClose={onClose}
-      onInput={(input) => {
-        if (isLive) void inputAuth({ id: sessionId, input }).unwrap();
-      }}
-      onStop={() => {
-        void stopAuth(sessionId).unwrap();
-        onClose();
-      }}
-      output={output}
-      status={status}
-      stopLabel={t('web.nativeCli.stopConnect')}
-      subtitle={t('web.nativeCli.connectHint')}
-      tag={t('web.nativeCli.providerOwned')}
-      title={agentName}
-    />
-  );
-}
-
-function NativeCliAgentCard({
-  agent,
-  onToggle,
-  onSave,
-  onRemove
-}: {
+function NativeCliAgentCard(_props: {
   agent: NativeCliAgentView;
   onToggle: (enabled: boolean) => Promise<void>;
   onSave: (a: NativeCliAgentView) => Promise<void>;
   onRemove: () => Promise<void>;
-}) {
-  const t = useT();
-  const [open, setOpen] = useState(false);
-  const { busy, run } = useAsyncAction();
-  const [confirmRemove, setConfirmRemove] = useState(false);
-
-  return (
-    <div className="rounded-md border">
-      <button
-        className="flex w-full items-center gap-2 px-3 py-2 text-left"
-        onClick={() => setOpen((v) => !v)}
-        type="button"
-      >
-        {open ? (
-          <ChevronDown className="size-4 text-muted-foreground" />
-        ) : (
-          <ChevronRight className="size-4 text-muted-foreground" />
-        )}
-        <span className="truncate font-medium text-sm">{agent.name}</span>
-        <Badge
-          className="text-[10px]"
-          variant="secondary"
-        >
-          {agent.provider}
-        </Badge>
-        <Badge
-          className="text-[10px]"
-          variant="outline"
-        >
-          {agent.defaultLaunchMode}
-        </Badge>
-        <div className="ml-auto flex items-center gap-2 text-muted-foreground text-xs">
-          {agent.enabled ? null : <span>{t('web.acp.disabled')}</span>}
-        </div>
-      </button>
-
-      {open ? (
-        <div className="flex flex-col gap-3 border-t px-3 py-3">
-          <div className="flex items-center gap-2">
-            <Button
-              disabled={busy}
-              onClick={() => run(() => onToggle(!agent.enabled))}
-              size="sm"
-              variant={agent.enabled ? 'secondary' : 'outline'}
-            >
-              <Power /> {agent.enabled ? t('web.acp.enabled') : t('web.acp.disabled')}
-            </Button>
-            <Badge variant="outline">{t('web.nativeCli.providerOwned')}</Badge>
-          </div>
-
-          <AgentForm
-            agent={agent}
-            nameLocked
-            onSubmit={async (a) => {
-              await run(() => onSave(a));
-            }}
-            submitLabel={t('web.save')}
-          />
-
-          <div className="flex items-center gap-2 border-t pt-2">
-            {confirmRemove ? (
-              <>
-                <span className="text-muted-foreground text-xs">{t('web.acp.confirmRemove')}</span>
-                <Button
-                  disabled={busy}
-                  onClick={() => run(onRemove)}
-                  size="sm"
-                  variant="destructive"
-                >
-                  {busy ? <Loader2 className="animate-spin" /> : <Trash2 />} {t('web.acp.remove')}
-                </Button>
-                <Button
-                  onClick={() => setConfirmRemove(false)}
-                  size="sm"
-                  variant="ghost"
-                >
-                  {t('web.cancel')}
-                </Button>
-              </>
-            ) : (
-              <Button
-                onClick={() => setConfirmRemove(true)}
-                size="sm"
-                variant="ghost"
-              >
-                <Trash2 /> {t('web.acp.remove')}
-              </Button>
-            )}
-          </div>
-        </div>
-      ) : null}
-    </div>
-  );
+}): null {
+  return null;
 }
 
 function AgentForm({

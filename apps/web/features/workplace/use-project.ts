@@ -15,14 +15,16 @@
 import type {
   Agent,
   AgentId,
-  NativeCliLaunchMode,
   NativeCliProvider,
   NativeCliSessionView,
   Session,
   SessionId,
   UIItem,
   UIMessageItem,
-  UIPart
+  UIPart,
+  WorkplaceProjectMember,
+  WorkplaceProjectMemberSettings,
+  WorkplaceProjectMemberType
 } from '@monad/protocol';
 import type {
   ActivityRow,
@@ -31,6 +33,7 @@ import type {
   Message,
   NativeCliStreamView,
   Participant,
+  Presence,
   Project,
   TypingIndicator
 } from './types';
@@ -53,7 +56,7 @@ import {
   useStreamUiItemsQuery,
   useUpdateSessionMutation
 } from '@monad/client-rtk';
-import { channelDisplayText } from '@monad/protocol';
+import { channelDisplayText, workplaceProjectMembersExtKey, workplaceProjectMembersExtSchema } from '@monad/protocol';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useAcpAgentSettings } from '@/hooks/use-acp-agent-settings';
@@ -73,22 +76,9 @@ const SHOW_DEVELOPER_ONLY_MESSAGES = process.env.NODE_ENV !== 'production';
 
 const messageId = (m: Message): string => m.id;
 const CHANNEL_HOST_EXT_KEY = 'workplaceProjectModeratorAgentId';
-const PROJECT_MEMBERS_EXT_KEY = 'workplaceProjectMembers';
-type ProjectMemberType = 'acp' | 'native-cli';
-
-interface ProjectMemberSettings {
-  cwd?: string;
-  osSandbox?: boolean;
-  forwardMcp?: boolean;
-  launchMode?: NativeCliLaunchMode;
-}
-
-interface ProjectMember {
-  id: string;
-  type: ProjectMemberType;
-  name: string;
-  settings?: ProjectMemberSettings;
-}
+type ProjectMemberType = WorkplaceProjectMemberType;
+type ProjectMemberSettings = WorkplaceProjectMemberSettings;
+type ProjectMember = WorkplaceProjectMember & { id: string };
 
 function studioHostId(agentId: string): string {
   return `agent:${agentId}`;
@@ -108,39 +98,9 @@ function normalizeModeratorAgentId(value: unknown): string | undefined {
 }
 
 function parseProjectMembers(value: unknown): ProjectMember[] {
-  if (!Array.isArray(value)) return [];
-  const members: ProjectMember[] = [];
-  for (const item of value) {
-    if (!item || typeof item !== 'object') continue;
-    const candidate = item as { type?: unknown; name?: unknown; settings?: unknown };
-    if (candidate.type !== 'acp' && candidate.type !== 'native-cli') continue;
-    if (typeof candidate.name !== 'string' || !candidate.name.trim()) continue;
-    const settings =
-      candidate.settings && typeof candidate.settings === 'object'
-        ? (candidate.settings as Record<string, unknown>)
-        : undefined;
-    members.push({
-      id: projectMemberId(candidate.type, candidate.name),
-      type: candidate.type,
-      name: candidate.name,
-      ...(settings
-        ? {
-            settings: {
-              ...(typeof settings.cwd === 'string' ? { cwd: settings.cwd } : {}),
-              ...(typeof settings.osSandbox === 'boolean' ? { osSandbox: settings.osSandbox } : {}),
-              ...(typeof settings.forwardMcp === 'boolean' ? { forwardMcp: settings.forwardMcp } : {}),
-              ...(settings.launchMode === 'pty' ||
-              settings.launchMode === 'json-stream' ||
-              settings.launchMode === 'app-server' ||
-              settings.launchMode === 'remote-control'
-                ? { launchMode: settings.launchMode }
-                : {})
-            }
-          }
-        : {})
-    });
-  }
-  return members;
+  const parsed = workplaceProjectMembersExtSchema.safeParse(value);
+  if (!parsed.success) return [];
+  return parsed.data.map((member) => ({ ...member, id: projectMemberId(member.type, member.name) }));
 }
 
 const HUMAN: Participant = {
@@ -292,6 +252,55 @@ function nativeCliSessionDeveloperMessage(session: NativeCliSessionView): Messag
   };
 }
 
+function hasNativeCliLoginNeed(text: string | undefined): boolean {
+  const normalized = text?.toLowerCase() ?? '';
+  return (
+    normalized.includes('connection_required') ||
+    normalized.includes('login required') ||
+    normalized.includes('not authenticated') ||
+    normalized.includes('unauthenticated') ||
+    normalized.includes('sign in')
+  );
+}
+
+function newestNativeCliSession(sessions: NativeCliSessionView[]): NativeCliSessionView | undefined {
+  return [...sessions].sort((a, b) => {
+    const bTime = b.updatedAt || b.startedAt;
+    const aTime = a.updatedAt || a.startedAt;
+    return bTime.localeCompare(aTime);
+  })[0];
+}
+
+function nativeCliMemberPresence({
+  agentName,
+  enabled,
+  nativeCliSessions,
+  liveTools
+}: {
+  agentName: string;
+  enabled: boolean;
+  nativeCliSessions: NativeCliSessionView[];
+  liveTools: Extract<UIItem, { kind: 'tool' }>[];
+}): Presence {
+  const liveTool = liveTools.find((item) => {
+    if (!item.tool.startsWith('native-cli:')) return false;
+    const inputAgent = (item.input as { agent?: unknown } | undefined)?.agent;
+    return inputAgent === agentName;
+  });
+  if (liveTool?.status === 'running') {
+    return hasNativeCliLoginNeed(liveTool.output) ? 'needs-login' : 'working';
+  }
+  const latest = newestNativeCliSession(nativeCliSessions.filter((session) => session.agentName === agentName));
+  if (!latest) return enabled ? 'online' : 'idle';
+  if ((latest.pendingApprovalCount ?? 0) > 0) return 'working';
+  if (latest.state === 'running') return 'online';
+  if (latest.state === 'starting') return 'working';
+  if (hasNativeCliLoginNeed(latest.outputSnapshot)) return 'needs-login';
+  if (latest.state === 'failed') return 'failed';
+  if (latest.state === 'stopped' || latest.state === 'exited') return 'stopped';
+  return enabled ? 'online' : 'idle';
+}
+
 function sortMessagesOldestFirst(messages: Message[]): Message[] {
   return [...messages].sort((a, b) => {
     const order = (a.orderKey || a.id).localeCompare(b.orderKey || b.id);
@@ -350,6 +359,7 @@ function buildNativeCliStreams(
 export const __workplaceProjectMessageTest = {
   buildProjectMessages,
   buildNativeCliStreams,
+  nativeCliMemberPresence,
   nativeCliSessionMessage,
   nativeCliSessionDeveloperMessage,
   sortMessagesOldestFirst
@@ -404,6 +414,25 @@ function buildProjectMessages({
     }
   }
   for (const item of liveItems) {
+    if (item.kind === 'system') {
+      const nativeCliResumeAgent = item.id.startsWith('native-cli-resume-failed:')
+        ? item.id.slice('native-cli-resume-failed:'.length).split(':')[0]
+        : undefined;
+      const authorName = nativeCliResumeAgent || 'monad';
+      byId.set(item.id, {
+        id: item.id,
+        authorId: authorName,
+        authorName,
+        av: avatarForAgent(authorName),
+        icon: iconForAgent(authorName),
+        kind: 'system',
+        tag: nativeCliResumeAgent ? 'CLI' : 'SYS',
+        time: '',
+        text: item.text,
+        orderKey: item.seq
+      });
+      continue;
+    }
     if (item.kind !== 'message') continue;
     const text = displayTextFromMessage(item);
     const reasoning = item.role === 'assistant' ? reasoningFromParts(item.parts) : undefined;
@@ -560,7 +589,7 @@ export function useProject(projectId: string) {
     [sessions, sessionId]
   );
   const projectMembers = useMemo(
-    () => parseProjectMembers(currentSession?.origin?.ext?.[PROJECT_MEMBERS_EXT_KEY]),
+    () => parseProjectMembers(currentSession?.origin?.ext?.[workplaceProjectMembersExtKey]),
     [currentSession?.origin?.ext]
   );
 
@@ -622,7 +651,12 @@ export function useProject(projectId: string) {
           kind: 'agent',
           tag: nativeCliTag(provider),
           role: 'CLI',
-          presence: runningNativeCli.has(member.name) ? 'working' : agent?.enabled ? 'online' : 'idle'
+          presence: nativeCliMemberPresence({
+            agentName: member.name,
+            enabled: agent?.enabled ?? false,
+            nativeCliSessions,
+            liveTools
+          })
         };
       }
       const agent = acp.agents.find((candidate) => candidate.name === member.name);
@@ -638,7 +672,7 @@ export function useProject(projectId: string) {
       };
     });
     return [monad, ...members];
-  }, [acp.agents, nativeCli.agents, projectMembers, streaming, runningDelegations, runningNativeCli]);
+  }, [acp.agents, nativeCli.agents, projectMembers, streaming, runningDelegations, nativeCliSessions, liveTools]);
   const railAgents = useMemo(() => participants.filter((p) => p.kind === 'agent'), [participants]);
 
   // --- messages (history ⊕ live) ---
@@ -847,7 +881,7 @@ export function useProject(projectId: string) {
           ...currentSession.origin,
           ext: {
             ...(currentSession.origin.ext ?? {}),
-            [PROJECT_MEMBERS_EXT_KEY]: nextMembers.map(({ type, name, settings }) => ({
+            [workplaceProjectMembersExtKey]: nextMembers.map(({ type, name, settings }) => ({
               type,
               name,
               ...(settings && Object.keys(settings).length > 0 ? { settings } : {})

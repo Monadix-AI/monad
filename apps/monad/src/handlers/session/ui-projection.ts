@@ -557,6 +557,23 @@ export class SessionUiProjector {
         const p = parseEventPayload('native_cli.approval_resolved', event.payload);
         return [this.remove('approval', p.requestId)];
       }
+      case 'native_cli.resume_failed': {
+        const p = parseEventPayload('native_cli.resume_failed', event.payload);
+        const label = p.provider === 'claude-code' ? 'Claude Code' : p.provider === 'gemini' ? 'Gemini' : 'Codex';
+        return [
+          {
+            kind: 'upsert',
+            cursor: event.id,
+            item: this.upsert({
+              kind: 'system',
+              id: `native-cli-resume-failed:${p.agentName}:${p.providerSessionRef}`,
+              text: `${label} resume failed for provider session ${p.providerSessionRef}; cold started a new runtime.`,
+              level: 'warn',
+              seq: event.id
+            })
+          }
+        ];
+      }
       case 'native_cli.exited': {
         const p = parseEventPayload('native_cli.exited', event.payload);
         const existing = this.items.get(itemKey('tool', p.nativeCliSessionId));

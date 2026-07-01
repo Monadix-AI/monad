@@ -19,8 +19,10 @@ import {
   listWorkspaceExperiencesResponseSchema,
   okResponseSchema,
   setAtomPinRequestSchema,
+  skillContentQuerySchema,
   updateSkillContentRequestSchema,
   updateSkillRequestSchema,
+  uploadSkillQuerySchema,
   validateSkillsRequestSchema,
   validateSkillsResponseSchema
 } from '@monad/protocol';
@@ -30,8 +32,6 @@ import { z } from 'zod';
 // HTTP-only surface: contract declared inline; reusable wire schemas come from @monad/protocol.
 const packParams = z.object({ name: z.string() });
 const assetParams = z.object({ name: z.string(), '*': z.string() });
-const uploadQuery = z.object({ filename: z.string().min(1), overwrite: z.string().optional() });
-const skillContentQuery = z.object({ file: z.string().optional(), id: z.string().optional() });
 
 export function createAtomsController(handlers: ReturnType<typeof createDaemonHandlers>) {
   return new Elysia({ tags: ['http-only'] })
@@ -131,7 +131,7 @@ export function createAtomsController(handlers: ReturnType<typeof createDaemonHa
           overwrite: query.overwrite === 'true'
         }),
       {
-        query: uploadQuery,
+        query: uploadSkillQuerySchema,
         response: { 200: installSkillResponseSchema },
         detail: {
           summary: 'Upload a skill file',
@@ -183,7 +183,7 @@ export function createAtomsController(handlers: ReturnType<typeof createDaemonHa
         handlers.atoms.getSkillContent({ name: params.name, file: query.file, id: query.id }),
       {
         params: packParams,
-        query: skillContentQuery,
+        query: skillContentQuerySchema,
         response: { 200: getSkillContentResponseSchema },
         detail: { summary: 'Read a skill file', description: 'Returns the installed SKILL.md content for editing.' }
       }
@@ -194,7 +194,7 @@ export function createAtomsController(handlers: ReturnType<typeof createDaemonHa
         handlers.atoms.updateSkillContent({ name: params.name, id: query.id, content: body.content }),
       {
         params: packParams,
-        query: skillContentQuery,
+        query: skillContentQuerySchema,
         body: updateSkillContentRequestSchema,
         response: { 200: createSkillResponseSchema },
         detail: { summary: 'Edit a skill file', description: 'Replaces an installed SKILL.md after validation.' }

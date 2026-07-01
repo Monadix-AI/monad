@@ -855,6 +855,7 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
     daemonWarnings,
     certFingerprint: tlsFingerprint,
     certExpiry: tlsCertExpiry,
+    nativeCliServerUrl: `http://127.0.0.1:${PORT}`,
     getUpgradeInfo: upgradeInfo.getUpgradeInfo,
     log: logger
   });

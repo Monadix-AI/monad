@@ -2,7 +2,7 @@ import type { Database } from 'bun:sqlite';
 
 // Pre-release: migrations are additive (new table = new version). Edit existing tables freely and
 // delete/recreate dev DBs as needed; never rename/drop columns in existing migrations.
-export const CURRENT_SCHEMA_VERSION = 1;
+export const CURRENT_SCHEMA_VERSION = 2;
 
 const MIGRATIONS: { version: number; sql: string }[] = [
   {
@@ -191,6 +191,11 @@ CREATE TABLE IF NOT EXISTS native_cli_sessions (
   provider              TEXT NOT NULL,
   working_path          TEXT NOT NULL,
   launch_mode           TEXT NOT NULL,
+  runtime_role          TEXT NOT NULL DEFAULT 'interactive',
+  agent_runtime_id      TEXT,
+  agent_runtime_token_hash TEXT,
+  last_delivered_seq    INTEGER NOT NULL DEFAULT 0,
+  last_visible_seq      INTEGER NOT NULL DEFAULT 0,
   state                 TEXT NOT NULL,
   pid                   INTEGER,
   provider_session_ref  TEXT,
@@ -206,6 +211,17 @@ CREATE INDEX IF NOT EXISTS idx_native_cli_sessions_live ON native_cli_sessions(s
 CREATE UNIQUE INDEX IF NOT EXISTS idx_native_cli_sessions_provider_ref
   ON native_cli_sessions(project_session_id, provider, provider_session_ref)
   WHERE provider_session_ref IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS native_agent_direct_messages (
+  id                    TEXT PRIMARY KEY,
+  native_cli_session_id TEXT NOT NULL,
+  from_agent            TEXT,
+  peer                  TEXT NOT NULL,
+  text                  TEXT NOT NULL,
+  created_at            TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_native_agent_direct_messages_session_peer
+  ON native_agent_direct_messages(native_cli_session_id, peer, created_at);
 
 CREATE TABLE IF NOT EXISTS channel_moderator_rounds (
   id                 TEXT PRIMARY KEY,
@@ -225,6 +241,16 @@ CREATE INDEX IF NOT EXISTS idx_channel_moderator_rounds_open
   ON channel_moderator_rounds(channel_id, status, deadline_at);
 
 PRAGMA user_version = 1;
+    `.trim()
+  },
+  {
+    version: 2,
+    sql: `
+ALTER TABLE native_agent_direct_messages ADD COLUMN project_session_id TEXT;
+CREATE INDEX IF NOT EXISTS idx_native_agent_direct_messages_project_pair
+  ON native_agent_direct_messages(project_session_id, from_agent, peer, created_at);
+
+PRAGMA user_version = 2;
     `.trim()
   }
 ];

@@ -1,6 +1,10 @@
 import type { NativeCliAgentPresetView, NativeCliAgentView, NativeCliProvider } from '@monad/protocol';
 import type { BinProbes } from '@/infra/resolve-binary.ts';
-import type { NativeCliLaunchSpec, NativeCliProviderAdapter } from '@/services/native-cli/types.ts';
+import type {
+  BuildNativeCliLaunchOptions,
+  NativeCliLaunchSpec,
+  NativeCliProviderAdapter
+} from '@/services/native-cli/types.ts';
 
 import { isAbsolute } from 'node:path';
 
@@ -41,7 +45,8 @@ function assertSafeArgs(agent: NativeCliAgentView): void {
   if (agent.allowDangerousMode) return;
   const args = agent.args ?? [];
   for (let index = 0; index < args.length; index += 1) {
-    const arg = args[index]!;
+    const arg = args[index];
+    if (arg === undefined) continue;
     if (isDangerousArg(arg, args[index + 1])) {
       throw new Error(`dangerous native CLI arg "${arg}" requires allowDangerousMode`);
     }
@@ -57,7 +62,7 @@ function assertCommandShape(agent: NativeCliAgentView): void {
 
 export function buildNativeCliLaunch(
   agent: NativeCliAgentView,
-  opts: { workingPath: string; launchMode?: NativeCliLaunchSpec['launchMode']; providerSessionRef?: string }
+  opts: BuildNativeCliLaunchOptions
 ): NativeCliLaunchSpec {
   assertSafeArgs(agent);
   if (!isAbsolute(opts.workingPath)) throw new Error('workingPath must be absolute');

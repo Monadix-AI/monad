@@ -249,6 +249,15 @@ export const nativeCliApprovalResolvedPayloadSchema = z.object({
   reason: z.string().optional()
 });
 
+export const nativeCliResumeFailedPayloadSchema = z.object({
+  agentName: z.string(),
+  provider: nativeCliProviderSchema,
+  providerSessionRef: z.string(),
+  code: z.string(),
+  message: z.string(),
+  fallback: z.literal('cold-start')
+});
+
 export const nativeCliExitedPayloadSchema = z.object({
   nativeCliSessionId: z.string(),
   exitCode: z.number().int().nullable(),
@@ -283,6 +292,7 @@ export type NativeCliOutputPayload = z.infer<typeof nativeCliOutputPayloadSchema
 export type NativeCliConnectionRequiredPayload = z.infer<typeof nativeCliConnectionRequiredPayloadSchema>;
 export type NativeCliApprovalRequestedPayload = z.infer<typeof nativeCliApprovalRequestedPayloadSchema>;
 export type NativeCliApprovalResolvedPayload = z.infer<typeof nativeCliApprovalResolvedPayloadSchema>;
+export type NativeCliResumeFailedPayload = z.infer<typeof nativeCliResumeFailedPayloadSchema>;
 export type NativeCliExitedPayload = z.infer<typeof nativeCliExitedPayloadSchema>;
 
 export const EVENT_TABLE = {
@@ -319,6 +329,7 @@ export const EVENT_TABLE = {
   'native_cli.connection_required': nativeCliConnectionRequiredPayloadSchema,
   'native_cli.approval_requested': nativeCliApprovalRequestedPayloadSchema,
   'native_cli.approval_resolved': nativeCliApprovalResolvedPayloadSchema,
+  'native_cli.resume_failed': nativeCliResumeFailedPayloadSchema,
   'native_cli.exited': nativeCliExitedPayloadSchema
 } as const satisfies Record<EventType, z.ZodTypeAny>;
 

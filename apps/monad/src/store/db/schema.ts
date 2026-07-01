@@ -72,6 +72,11 @@ const _nativeCliSessions = sqliteTable(
     provider: text('provider').notNull(),
     workingPath: text('working_path').notNull(),
     launchMode: text('launch_mode').notNull(),
+    runtimeRole: text('runtime_role').notNull().default('interactive'),
+    agentRuntimeId: text('agent_runtime_id'),
+    agentRuntimeTokenHash: text('agent_runtime_token_hash'),
+    lastDeliveredSeq: integer('last_delivered_seq').notNull().default(0),
+    lastVisibleSeq: integer('last_visible_seq').notNull().default(0),
     state: text('state').notNull(),
     pid: integer('pid'),
     providerSessionRef: text('provider_session_ref'),
@@ -87,6 +92,16 @@ const _nativeCliSessions = sqliteTable(
       .where(providerSessionRefNotNull)
   ]
 );
+
+const _nativeAgentDirectMessages = sqliteTable('native_agent_direct_messages', {
+  id: text('id').primaryKey(),
+  projectSessionId: text('project_session_id'),
+  nativeCliSessionId: text('native_cli_session_id').notNull(),
+  fromAgent: text('from_agent'),
+  peer: text('peer').notNull(),
+  text: text('text').notNull(),
+  createdAt: text('created_at').notNull()
+});
 
 export const messages = sqliteTable('messages', {
   id: text('id').primaryKey(),

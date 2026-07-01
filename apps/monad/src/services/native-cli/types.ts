@@ -58,6 +58,7 @@ export interface BuildNativeCliLaunchOptions {
   workingPath: string;
   launchMode?: NativeCliLaunchMode;
   providerSessionRef?: string;
+  systemPromptFile?: string;
 }
 
 export interface NativeCliOutputEvent {
@@ -170,6 +171,7 @@ interface NativeCliApprovalResolution {
 interface NativeCliInitializeContext {
   workingPath: string;
   providerSessionRef?: string;
+  developerInstructions?: string;
 }
 
 export interface NativeCliProviderAdapter {

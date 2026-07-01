@@ -413,11 +413,19 @@ function initializeCodex(
         params: {
           threadId: context.providerSessionRef,
           cwd: context.workingPath,
+          ...(context.developerInstructions ? { developerInstructions: context.developerInstructions } : {}),
           excludeTurns: true,
           initialTurnsPage: buildCodexInitialTurnsPage()
         }
       }
-    : { method: 'thread/start', id: threadId, params: { cwd: context.workingPath } };
+    : {
+        method: 'thread/start',
+        id: threadId,
+        params: {
+          cwd: context.workingPath,
+          ...(context.developerInstructions ? { developerInstructions: context.developerInstructions } : {})
+        }
+      };
   for (const message of [
     {
       method: 'initialize',
