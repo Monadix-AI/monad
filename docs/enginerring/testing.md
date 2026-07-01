@@ -25,6 +25,12 @@ When targeting a specific package, directory, or file, use `scripts/bun-test.ts`
 with `--only-failures` so the output stays focused on failing cases. Use `--loud`
 only when you intentionally need passing-case logs.
 
+For final verification or any broad quality gate, collect the whole failure surface
+before fixing: run typecheck, lint, and the relevant test suites once, record every
+failure/error, then make one concentrated repair pass. Continue to the next command
+after a failure when doing so is safe; the follow-up verification must still make the
+entire gate pass cleanly.
+
 ---
 
 ## 1. Directory structure

@@ -221,6 +221,10 @@ file, use `scripts/bun-test.ts ... --only-failures` so only failing case details
 are printed. Full testing conventions and patterns: `docs/enginerring/testing.md` /
 @docs/enginerring/testing.md.
 
+- When running lint, typecheck, and tests as a quality gate, prefer one
+  failure-collection pass that exposes all current errors before fixing them. Do not
+  bounce between a single failing command and a single fix when the broader failure
+  surface is available.
 - Every `apps/monad` feature must be exercised over **all transports** (TCP
   loopback and the Unix socket) — behaviour must match on both. See
   `docs/runtime.md` / @docs/runtime.md.
