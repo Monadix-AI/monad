@@ -122,6 +122,7 @@ export async function serveDaemon(deps: ServeDeps): Promise<void> {
   // can't dial a Unix socket.
   // Windows: Bun has no Unix-socket support (named pipes unimplemented — oven-sh/bun#13042). Skip
   // the second listener; local Windows clients always dial TCP loopback.
+  let unixBound = false;
   if (process.platform !== 'win32') {
     await unlink(sockPath).catch(() => {}); // remove stale socket from a previous run
     const unixServer = Bun.serve({
@@ -135,6 +136,7 @@ export async function serveDaemon(deps: ServeDeps): Promise<void> {
     process.on('exit', () => {
       unixServer.stop(true);
     });
+    unixBound = true;
   }
 
   // Mo enabled (default on, or the persisted toggle): launch the sprite now that the socket it
@@ -149,8 +151,11 @@ export async function serveDaemon(deps: ServeDeps): Promise<void> {
   const scheme = tlsCert ? 'https' : 'http';
   const mockTag = useMock ? ' (mock model)' : '';
   const docsTag = enableDocs ? ` docs:${scheme}://${host}:${port}/docs` : '';
+  // Only advertise the Unix socket when it was actually bound — on Windows it never is, so listing
+  // `unix:<path>` there is misleading (no listener exists at that path).
+  const unixTag = unixBound ? ` unix:${sockPath}` : '';
   printBanner(MONAD_VERSION, useMock);
-  logger.info(`monad daemon listening on ${scheme}://${host}:${port} unix:${sockPath}${mockTag}${docsTag}`);
+  logger.info(`monad daemon listening on ${scheme}://${host}:${port}${unixTag}${mockTag}${docsTag}`);
   if (tlsFingerprint) {
     logger.info(`monad: TLS cert SHA-256 fingerprint: ${tlsFingerprint}`);
   }

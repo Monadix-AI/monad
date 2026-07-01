@@ -704,6 +704,18 @@ describe('network.transport', () => {
       expect(conn.unixSocket).toBeUndefined();
     });
 
+    test('win32 → forces tcp even when configured uds (Bun has no Windows unix sockets)', async () => {
+      await setTransport('uds');
+      const original = process.platform;
+      Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
+      try {
+        const conn = await resolveClientConn();
+        expect(conn.unixSocket).toBeUndefined();
+      } finally {
+        Object.defineProperty(process, 'platform', { value: original, configurable: true });
+      }
+    });
+
     test('MONAD_PORT overrides the configured port (per-worktree dev isolation)', async () => {
       const p = await setTransport('tcp');
       const cfg = await loadAll(p.config, p.profile);
