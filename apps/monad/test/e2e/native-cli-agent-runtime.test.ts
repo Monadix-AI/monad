@@ -842,8 +842,12 @@ async function runSpawnFailureRuntime(
   expect(handlers.store.listEvents(sessionId).some((event) => event.type === 'native_cli.exited')).toBe(true);
 }
 
+// Windows-skipped: these drive mock provider CLIs that are `#!/usr/bin/env bun` scripts (directly
+// executable only via a Unix shebang), and several exercise PTY mode, which Bun's ConPTY support on
+// Windows cannot capture/relay. The native-cli adapter itself spawns a real provider .exe on Windows
+// and is covered by the unit adapter tests; only this mock-driven integration harness is Unix-shaped.
 for (const kind of TRANSPORTS) {
-  describe(`native-cli-agent runtime over ${kind}`, () => {
+  describe.skipIf(process.platform === 'win32')(`native-cli-agent runtime over ${kind}`, () => {
     test('starts a provider-owned CLI session and relays IO', async () => {
       const { dir, projectDir, app, handlers } = await setup();
       const t = serveTransport(kind, app);

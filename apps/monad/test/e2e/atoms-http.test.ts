@@ -19,6 +19,35 @@ function makePaths(base: string): MonadPaths {
   return makeTestPaths(base, { mcp: join(base, 'atoms', 'mcp') });
 }
 
+// Build a single-entry .tar.gz whose member name is an absolute path. `tar` strips the leading
+// slash and Windows has no `python3`, so the traversal fixture is assembled by hand: one 512-byte
+// ustar header + padded body + two zero blocks, gzip-compressed. Cross-platform, no external tool.
+function tarGzWithName(name: string, body: string): Uint8Array {
+  const enc = new TextEncoder();
+  const content = enc.encode(body);
+  const header = new Uint8Array(512);
+  const put = (str: string, off: number, len: number) => header.set(enc.encode(str).subarray(0, len), off);
+  const octal = (n: number, len: number) => `${n.toString(8).padStart(len - 1, '0')}\0`;
+  put(name, 0, 100);
+  put(octal(0o644, 8), 100, 8);
+  put(octal(0, 8), 108, 8);
+  put(octal(0, 8), 116, 8);
+  put(octal(content.length, 12), 124, 12);
+  put(octal(0, 12), 136, 12);
+  put('        ', 148, 8); // checksum computed over spaces, then overwritten
+  put('0', 156, 1); // typeflag: regular file
+  put('ustar\0', 257, 6);
+  put('00', 263, 2);
+  let sum = 0;
+  for (const b of header) sum += b;
+  put(`${sum.toString(8).padStart(6, '0')}\0 `, 148, 8);
+  const bodyBlocks = Math.ceil(content.length / 512) * 512;
+  const tar = new Uint8Array(512 + bodyBlocks + 1024);
+  tar.set(header, 0);
+  tar.set(content, 512);
+  return Bun.gzipSync(tar);
+}
+
 let dir: string;
 let stagedDir: string;
 let server: { port: number; stop: (f?: boolean) => void };
@@ -280,9 +309,8 @@ test('POST /v1/atoms/skills/install runs model review before remote install cons
 
 test('POST /v1/atoms/skills/install rejects tarballs with unsafe absolute paths', async () => {
   const archive = join(dir, 'unsafe-path.tar.gz');
-  await Bun.$`python3 -c ${`import io, tarfile; payload = b"---\\nname: unsafe\\ndescription: Unsafe path skill.\\n---\\nbody\\n"; archive = ${JSON.stringify(archive)}; info = tarfile.TarInfo(name='/absolute/unsafe/SKILL.md'); info.size = len(payload); tarfile.open(archive, 'w:gz').addfile(info, io.BytesIO(payload))`}`
-    .quiet()
-    .text();
+  const payload = '---\nname: unsafe\ndescription: Unsafe path skill.\n---\nbody\n';
+  await writeFile(archive, tarGzWithName('/absolute/unsafe/SKILL.md', payload));
 
   const origin = Bun.serve({
     hostname: '127.0.0.1',

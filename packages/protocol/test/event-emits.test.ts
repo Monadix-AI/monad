@@ -40,6 +40,7 @@ const SSE_GENERATION_EMITS: readonly EventType[] = [
   'native_cli.output',
   'native_cli.approval_requested',
   'native_cli.approval_resolved',
+  'native_cli.connection_required',
   'native_cli.exited'
 ];
 

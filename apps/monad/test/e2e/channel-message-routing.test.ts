@@ -296,70 +296,81 @@ for (const kind of TRANSPORTS) {
       expect(modelRequests).toEqual([]);
     });
 
-    test('native CLI mention forwards input to the provider-owned CLI session through the project route', async () => {
-      const projectDir = join(dir, 'project');
-      await mkdir(projectDir, { recursive: true });
-      const { stdinLog } = await configureMockNativeCliAgent(t, dir);
-      const sessionId = await createSession(t, projectDir);
+    // Skipped on Windows: the provider-owned CLI is mocked as a `#!/usr/bin/env bun` script launched
+    // in `pty` mode. Windows can't run the shebang, and Bun's ConPTY doesn't capture output / deliver
+    // stdin, so the pty relay under test is a Bun-on-Windows limitation, not a product bug.
+    test.skipIf(process.platform === 'win32')(
+      'native CLI mention forwards input to the provider-owned CLI session through the project route',
+      async () => {
+        const projectDir = join(dir, 'project');
+        await mkdir(projectDir, { recursive: true });
+        const { stdinLog } = await configureMockNativeCliAgent(t, dir);
+        const sessionId = await createSession(t, projectDir);
 
-      const eventsP = t.sse(`/v1/sessions/${sessionId}/events`, {
-        until: (event) =>
-          event.type === 'native_cli.output' &&
-          String((event.payload as { chunk?: unknown }).chunk).includes('inspect repo'),
-        timeoutMs: 3000
-      });
-      const send = await t.fetch(
-        `/v1/projects/${sessionId}/messages`,
-        json('POST', { text: '@[name="codex" id="native-cli:codex"] inspect repo' })
-      );
-      if (send.status !== 200) throw new Error(await send.text());
-      expect(send.status).toBe(200);
-      expect(await send.json()).toEqual({ accepted: true });
+        const eventsP = t.sse(`/v1/sessions/${sessionId}/events`, {
+          until: (event) =>
+            event.type === 'native_cli.output' &&
+            String((event.payload as { chunk?: unknown }).chunk).includes('inspect repo'),
+          timeoutMs: 3000
+        });
+        const send = await t.fetch(
+          `/v1/projects/${sessionId}/messages`,
+          json('POST', { text: '@[name="codex" id="native-cli:codex"] inspect repo' })
+        );
+        if (send.status !== 200) throw new Error(await send.text());
+        expect(send.status).toBe(200);
+        expect(await send.json()).toEqual({ accepted: true });
 
-      expect(await waitForFile(stdinLog, 'inspect repo\n')).toContain('inspect repo\n');
-      const messages = await waitForMessages(t, sessionId, 1);
-      expect(messages[0]?.text).toBe('@[name="codex" id="native-cli:codex"] inspect repo');
-      const events = await eventsP;
-      expect(events.some((event) => event.type === 'native_cli.started' && event.payload.agentName === 'codex')).toBe(
-        true
-      );
-      const listed = await t.fetch(`/v1/sessions/${sessionId}/native-cli-sessions`);
-      expect(listed.status).toBe(200);
-      const nativeSessionId = ((await listed.json()) as { sessions: Array<{ id: string }> }).sessions[0]?.id;
-      expect(typeof nativeSessionId).toBe('string');
-      await t.fetch(`/v1/native-cli-sessions/${nativeSessionId}/stop`, json('POST'));
-    });
+        expect(await waitForFile(stdinLog, 'inspect repo\n')).toContain('inspect repo\n');
+        const messages = await waitForMessages(t, sessionId, 1);
+        expect(messages[0]?.text).toBe('@[name="codex" id="native-cli:codex"] inspect repo');
+        const events = await eventsP;
+        expect(events.some((event) => event.type === 'native_cli.started' && event.payload.agentName === 'codex')).toBe(
+          true
+        );
+        const listed = await t.fetch(`/v1/sessions/${sessionId}/native-cli-sessions`);
+        expect(listed.status).toBe(200);
+        const nativeSessionId = ((await listed.json()) as { sessions: Array<{ id: string }> }).sessions[0]?.id;
+        expect(typeof nativeSessionId).toBe('string');
+        await t.fetch(`/v1/native-cli-sessions/${nativeSessionId}/stop`, json('POST'));
+      }
+    );
 
-    test('native CLI mention requires Studio reconnect when provider auth status is unauthenticated', async () => {
-      const projectDir = join(dir, 'project');
-      await mkdir(projectDir, { recursive: true });
-      const { stdinLog } = await configureMockNativeCliAgent(t, dir, { authState: 'unauthenticated' });
-      const sessionId = await createSession(t, projectDir);
+    // Skipped on Windows: same shebang-script + pty mock limitation as above (the auth-status probe
+    // spawns the mocked CLI over a pty).
+    test.skipIf(process.platform === 'win32')(
+      'native CLI mention requires Studio reconnect when provider auth status is unauthenticated',
+      async () => {
+        const projectDir = join(dir, 'project');
+        await mkdir(projectDir, { recursive: true });
+        const { stdinLog } = await configureMockNativeCliAgent(t, dir, { authState: 'unauthenticated' });
+        const sessionId = await createSession(t, projectDir);
 
-      const eventsP = t.sse(`/v1/sessions/${sessionId}/events`, {
-        until: (event) => event.type === 'native_cli.connection_required',
-        timeoutMs: 3000
-      });
-      const send = await t.fetch(
-        `/v1/projects/${sessionId}/messages`,
-        json('POST', { text: '@[name="codex" id="native-cli:codex"] inspect repo' })
-      );
-      if (send.status !== 200) throw new Error(await send.text());
-      expect(send.status).toBe(200);
-      expect(await send.json()).toEqual({ accepted: true });
+        const eventsP = t.sse(`/v1/sessions/${sessionId}/events`, {
+          until: (event) => event.type === 'native_cli.connection_required',
+          timeoutMs: 3000
+        });
+        const send = await t.fetch(
+          `/v1/projects/${sessionId}/messages`,
+          json('POST', { text: '@[name="codex" id="native-cli:codex"] inspect repo' })
+        );
+        if (send.status !== 200) throw new Error(await send.text());
+        expect(send.status).toBe(200);
+        expect(await send.json()).toEqual({ accepted: true });
 
-      const events = await eventsP;
-      expect(events.at(-1)?.payload).toMatchObject({
-        agentName: 'codex',
-        provider: 'codex',
-        reconnectIn: 'studio'
-      });
-      const stdinText = await readFile(stdinLog, 'utf8').catch(() => '');
-      expect(stdinText).toBe('');
-      const messages = await waitForMessages(t, sessionId, 2);
-      expect(messages[0]?.text).toBe('@[name="codex" id="native-cli:codex"] inspect repo');
-      expect(messages[1]?.text).toContain('Reconnect codex in Studio');
-    });
+        const events = await eventsP;
+        expect(events.at(-1)?.payload).toMatchObject({
+          agentName: 'codex',
+          provider: 'codex',
+          reconnectIn: 'studio'
+        });
+        const stdinText = await readFile(stdinLog, 'utf8').catch(() => '');
+        expect(stdinText).toBe('');
+        const messages = await waitForMessages(t, sessionId, 2);
+        expect(messages[0]?.text).toBe('@[name="codex" id="native-cli:codex"] inspect repo');
+        expect(messages[1]?.text).toContain('Reconnect codex in Studio');
+      }
+    );
 
     test('native CLI mention requires Studio check when provider readiness is unknown', async () => {
       const projectDir = join(dir, 'project');
