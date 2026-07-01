@@ -56,7 +56,9 @@ test('detection: codex NOT on PATH but present in the Codex.app bundle → insta
 });
 
 test('detection: login dir alone (no binary) still counts as set up', () => {
-  const probes: BinProbes = { which: () => undefined, exists: (p) => p.endsWith('/.codex') };
+  // `join(home, '.codex')` yields a backslash-separated path on Windows, so normalize before the
+  // suffix check — the probe must match the OS-native path the product actually stats.
+  const probes: BinProbes = { which: () => undefined, exists: (p) => p.replaceAll('\\', '/').endsWith('/.codex') };
   // biome-ignore lint/style/noNonNullAssertion: test invariant — preset must exist
   const codex = listAcpAgentPresets(probes).find((p) => p.id === 'codex')!;
   expect(codex.installed).toBe(true);
