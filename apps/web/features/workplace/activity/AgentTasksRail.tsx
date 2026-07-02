@@ -7,6 +7,8 @@ import type {
 import type { NativeCliStreamView, Participant } from '../types';
 import type { ProjectController } from '../use-project';
 
+import { BrainIcon, EyeIcon, MegaphoneIcon } from '@hugeicons/core-free-icons';
+import { HugeiconsIcon } from '@hugeicons/react';
 import { ProductIcon } from '@monad/ui';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
@@ -24,11 +26,49 @@ function clampRailWidth(width: number): number {
   return Math.min(MAX_RAIL_WIDTH, Math.max(MIN_RAIL_WIDTH, Math.round(width)));
 }
 
-function agentLatestStream(agentName: string | undefined, streams: readonly NativeCliStreamView[]) {
-  if (!agentName) return undefined;
+export function agentObservationStream(
+  observation:
+    | {
+        agentId?: string;
+        agentName?: string;
+        nativeCliSessionId?: string;
+      }
+    | null
+    | undefined,
+  streams: readonly NativeCliStreamView[]
+) {
+  if (!observation) return undefined;
+  if (observation.nativeCliSessionId) {
+    return streams.find((stream) => stream.id === observation.nativeCliSessionId);
+  }
+  const names = [observation.agentId, observation.agentName].filter((value): value is string => Boolean(value));
+  if (names.length === 0) return undefined;
+  const matchesAgent = (stream: NativeCliStreamView) => names.includes(stream.agentName);
   return (
-    streams.find((stream) => stream.agentName === agentName && stream.status === 'running') ??
-    streams.find((stream) => stream.agentName === agentName)
+    streams.find((stream) => matchesAgent(stream) && stream.status === 'running') ??
+    streams.find((stream) => matchesAgent(stream))
+  );
+}
+
+export function observedRailAgent(
+  observation:
+    | {
+        agentId?: string;
+        agentName?: string;
+        nativeCliSessionId?: string;
+      }
+    | null
+    | undefined,
+  observedStream: NativeCliStreamView | undefined,
+  agents: readonly Participant[]
+): Participant | undefined {
+  if (!observation) return undefined;
+  const streamAgentName = observedStream?.agentName;
+  return (
+    agents.find((agent) => agent.id === observation.agentId) ??
+    agents.find((agent) => agent.id === streamAgentName) ??
+    agents.find((agent) => agent.name === observation.agentName) ??
+    agents.find((agent) => agent.name === streamAgentName)
   );
 }
 
@@ -36,10 +76,44 @@ function isActiveRailAgent(agent: Participant): boolean {
   return agent.presence === 'working';
 }
 
+function agentActivityPhaseMeta(agent: Participant): {
+  label: string;
+  icon: typeof EyeIcon;
+} {
+  if (agent.activityPhase === 'reading') return { label: 'Reading', icon: EyeIcon };
+  if (agent.activityPhase === 'speaking') return { label: 'Speaking', icon: MegaphoneIcon };
+  return { label: 'Thinking', icon: BrainIcon };
+}
+
 const agentStatusRingCss = `
 @keyframes workplace-agent-status-breathe {
-  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--agent-presence-color) 34%, transparent); }
-  50% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--agent-presence-color) 0%, transparent); }
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--agent-presence-color) 58%, transparent); }
+  50% { box-shadow: 0 0 0 8px color-mix(in srgb, var(--agent-presence-color) 0%, transparent); }
+}
+
+@keyframes workplace-agent-status-radiate {
+  0% {
+    opacity: 0.72;
+    transform: scale(0.9);
+  }
+  70%, 100% {
+    opacity: 0;
+    transform: scale(1.65);
+  }
+}
+
+@keyframes workplace-agent-phase-thinking {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes workplace-agent-phase-reading {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-2px); }
+}
+
+@keyframes workplace-agent-phase-speaking {
+  0%, 100% { transform: scale(1); }
+  45% { transform: scale(1.22); }
 }
 
 .workplace-agent-status-row {
@@ -86,6 +160,45 @@ const agentStatusRingCss = `
   animation: workplace-agent-status-breathe 1.8s ease-in-out infinite;
 }
 
+.workplace-agent-status-avatar[data-active='true']::after {
+  position: absolute;
+  inset: -3px;
+  border: 1.5px solid color-mix(in srgb, var(--agent-presence-color) 72%, transparent);
+  border-radius: inherit;
+  content: '';
+  pointer-events: none;
+  animation: workplace-agent-status-radiate 1.8s ease-out infinite;
+}
+
+.workplace-agent-status-phase {
+  position: absolute;
+  right: -5px;
+  bottom: -5px;
+  z-index: 2;
+  width: 17px;
+  height: 17px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in srgb, var(--agent-presence-color) 72%, var(--sidebar-border));
+  border-radius: 999px;
+  background: var(--sidebar);
+  color: var(--agent-presence-color);
+  box-shadow: 0 0 0 2px var(--sidebar), 0 0 12px -4px var(--agent-presence-color);
+}
+
+.workplace-agent-status-phase[data-phase='thinking'] svg {
+  animation: workplace-agent-phase-thinking 1.4s linear infinite;
+}
+
+.workplace-agent-status-phase[data-phase='reading'] svg {
+  animation: workplace-agent-phase-reading 1.05s ease-in-out infinite;
+}
+
+.workplace-agent-status-phase[data-phase='speaking'] svg {
+  animation: workplace-agent-phase-speaking 0.8s ease-in-out infinite;
+}
+
 .workplace-agent-status-name {
   min-width: 0;
   flex: 1;
@@ -100,7 +213,9 @@ const agentStatusRingCss = `
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .workplace-agent-status-avatar {
+  .workplace-agent-status-avatar,
+  .workplace-agent-status-avatar::after,
+  .workplace-agent-status-phase svg {
     animation: none;
   }
 }
@@ -131,13 +246,8 @@ export function AgentTasksRail({ room }: { room: ProjectController }): React.Rea
   const observeProjectAgent = useWorkplaceUiStore((state) => state.observeProjectAgent);
   const closeRailObservation = useWorkplaceUiStore((state) => state.closeRailObservation);
   const groups = groupProjectRailAgents(room.railAgents);
-  const observedStream = observation?.nativeCliSessionId
-    ? room.nativeCliStreams.find((stream) => stream.id === observation.nativeCliSessionId)
-    : agentLatestStream(observation?.agentName, room.nativeCliStreams);
-  const observedAgent = observation
-    ? (room.railAgents.find((agent) => agent.id === observation.agentId) ??
-      room.railAgents.find((agent) => agent.name === (observation.agentName ?? observedStream?.agentName)))
-    : undefined;
+  const observedStream = agentObservationStream(observation, room.nativeCliStreams);
+  const observedAgent = observedRailAgent(observation, observedStream, room.railAgents);
 
   useEffect(() => {
     const storedWidth = window.localStorage.getItem(RAIL_WIDTH_STORAGE_KEY);
@@ -240,9 +350,12 @@ export function AgentTasksRail({ room }: { room: ProjectController }): React.Rea
 
   const renderAgent = (agent: Participant) => {
     const productIcon = resolveProductIcon(agent);
+    const active = isActiveRailAgent(agent);
+    const phase = active ? agentActivityPhaseMeta(agent) : null;
+    const PhaseIcon = phase?.icon;
     return (
       <button
-        aria-label={`Observe ${agent.name}`}
+        aria-label={phase ? `Observe ${agent.name}, ${phase.label}` : `Observe ${agent.name}`}
         aria-pressed={observedAgent?.id === agent.id}
         className="workplace-action workplace-agent-status-row"
         data-selected={observedAgent?.id === agent.id}
@@ -253,13 +366,27 @@ export function AgentTasksRail({ room }: { room: ProjectController }): React.Rea
       >
         <span
           className="workplace-agent-status-avatar"
-          data-active={isActiveRailAgent(agent) ? 'true' : undefined}
+          data-active={active ? 'true' : undefined}
         >
           <AgentInstanceAvatar
             agent={agent}
-            bordered={isActiveRailAgent(agent)}
+            bordered={active}
             size={28}
           />
+          {phase && PhaseIcon ? (
+            <span
+              className="workplace-agent-status-phase"
+              data-phase={agent.activityPhase}
+              title={phase.label}
+            >
+              <HugeiconsIcon
+                aria-hidden="true"
+                icon={PhaseIcon}
+                size={10}
+                strokeWidth={2.4}
+              />
+            </span>
+          ) : null}
         </span>
         <AgentIdentity
           badge={
@@ -309,16 +436,15 @@ export function AgentTasksRail({ room }: { room: ProjectController }): React.Rea
         tabIndex={0}
       />
       {observation ? (
-        <div style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateRows: 'auto minmax(0, 1fr) auto' }}>
-          <NativeCliObservationPanel
-            agent={observedAgent}
-            agentName={observedAgent?.name ?? observation.agentName}
-            icon={observedAgent?.icon ?? observedStream?.icon}
-            onBack={closeRailObservation}
-            onStop={(id) => void room.stopNativeCli(id)}
-            stream={observedStream}
-          />
-        </div>
+        <NativeCliObservationPanel
+          agent={observedAgent}
+          agentName={observedAgent?.name ?? observation.agentName}
+          focusTurnId={observation.turnId}
+          icon={observedAgent?.icon ?? observedStream?.icon}
+          onBack={closeRailObservation}
+          onStop={(id) => void room.stopNativeCli(id)}
+          stream={observedStream}
+        />
       ) : (
         <>
           <div style={{ ...sectionLabel, padding: '13px 15px 8px' }}>ACTIVE</div>

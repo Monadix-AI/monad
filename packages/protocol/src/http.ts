@@ -65,6 +65,8 @@ import { getLicensesResponseSchema } from './licenses.ts';
 import { getMem0DataResponseSchema } from './mem0-data.ts';
 import { getLawsResponseSchema } from './memory.ts';
 import {
+  nativeAgentProjectAskRequestSchema,
+  nativeAgentProjectAskResponseSchema,
   nativeAgentProjectInboxAckRequestSchema,
   nativeAgentProjectInboxAckResponseSchema,
   nativeAgentProjectInboxRequestSchema,
@@ -459,6 +461,10 @@ export const daemonHttpContract = {
     projectPost: defineHttpEndpoint({
       body: nativeAgentProjectPostRequestSchema,
       response: { 200: nativeAgentProjectPostResponseSchema, 403: httpErrorSchema, 404: httpErrorSchema }
+    }),
+    projectAsk: defineHttpEndpoint({
+      body: nativeAgentProjectAskRequestSchema,
+      response: { 200: nativeAgentProjectAskResponseSchema, 403: httpErrorSchema, 404: httpErrorSchema }
     }),
     projectRead: defineHttpEndpoint({
       body: nativeAgentProjectReadRequestSchema,

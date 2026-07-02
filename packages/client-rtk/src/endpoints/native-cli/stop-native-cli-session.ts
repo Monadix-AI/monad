@@ -3,7 +3,7 @@ import type { OkResponse } from '@monad/protocol';
 import { clientOf, runTreaty } from '../../endpoint-helpers.ts';
 import { sessionsApi } from '../sessions/index.ts';
 
-export const stopNativeCliSessionApi = sessionsApi.injectEndpoints({
+const stopNativeCliSessionApi = sessionsApi.injectEndpoints({
   overrideExisting: true,
   endpoints: (builder) => ({
     stopNativeCliSession: builder.mutation<OkResponse, string>({

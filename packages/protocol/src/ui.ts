@@ -84,6 +84,14 @@ export const uiClarificationItemSchema = z.object({
   id: z.string(),
   question: z.string(),
   options: z.array(z.string()).optional(),
+  mode: z.enum(['single', 'multiple']).optional(),
+  allowOther: z.boolean().optional(),
+  asker: z
+    .object({
+      id: z.string().optional(),
+      name: z.string()
+    })
+    .optional(),
   seq: z.string()
 });
 export type UIClarificationItem = z.infer<typeof uiClarificationItemSchema>;

@@ -87,7 +87,7 @@ test('the new canonical commands are all registered', () => {
 
 test('agent-facing project and direct-agent commands stay separate', () => {
   const reg = registry();
-  expect(reg.get('project')?.synopsis).toContain('project <post|read|inbox>');
+  expect(reg.get('project')?.synopsis).toContain('project <post|ask|read|inbox>');
   expect(reg.get('agent')?.synopsis).toContain('agent <send|read>');
   expect(reg.get('runtime')?.synopsis).toContain('runtime info');
   expect(reg.has('message')).toBe(false);

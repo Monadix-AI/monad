@@ -28,7 +28,11 @@ import { useEffect, useState } from 'react';
 
 import { ProfileCardHoverActions } from '@/components/HoverActions';
 import { useT } from '@/components/I18nProvider';
-import { ReasoningEffortControl, reasoningEffortOption } from '@/components/ReasoningEffortControl';
+import {
+  defaultReasoningEffort,
+  ReasoningEffortControl,
+  reasoningEffortOption
+} from '@/components/ReasoningEffortControl';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useProviderMeta } from '@/lib/ProviderMeta';
@@ -181,7 +185,7 @@ export function ProfileCard({
       ? selected
       : model?.modalities?.defaultReasoningEffort && efforts.includes(model.modalities.defaultReasoningEffort)
         ? model.modalities.defaultReasoningEffort
-        : efforts[0];
+        : defaultReasoningEffort(efforts);
     return { efforts, value };
   };
   const setRouteReasoningEffort = (role: RouteKey, effort: string) => {

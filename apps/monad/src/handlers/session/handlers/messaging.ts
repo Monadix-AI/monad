@@ -1,34 +1,22 @@
-import type { AcpAgentConfig, McpServerConfig, NativeCliAgentConfig } from '@monad/home';
+import type { AcpAgentConfig, NativeCliAgentConfig } from '@monad/home';
 import type {
-  ChannelResponseNextTarget,
   ChatMessage,
   Event,
-  ManagedNativeCliLifecycleLogEvent,
-  MessageId,
-  NativeCliSessionView,
   SendMessageRequest,
-  Session,
   SessionId,
-  SessionMcpServer,
   SessionTransport,
   SessionUiEvent,
   TranscriptTarget,
-  TranscriptTargetId,
-  WorkplaceProjectMember,
-  WorkplaceProjectMemberSettings
+  TranscriptTargetId
 } from '@monad/protocol';
 import type { ImageAttachment } from '@/agent/index.ts';
 import type { Tool, ToolBackends } from '@/capabilities/tools/types.ts';
 import type { CommandBundle, LifecycleOps } from '@/handlers/commands/index.ts';
 import type { EventSink, SessionContext } from '@/handlers/session/context.ts';
+import type { ManagedNativeCliProjectMessageSender } from '@/handlers/session/handlers/messaging-notices.ts';
 
 import { loadAll } from '@monad/home';
-import {
-  newId,
-  parseChannelStructuredResponse,
-  workplaceProjectMembersExtKey,
-  workplaceProjectMembersExtSchema
-} from '@monad/protocol';
+import { newId } from '@monad/protocol';
 
 import { parseDurableSummary } from '@/agent/history.ts';
 import { extractError } from '@/agent/index.ts';
@@ -40,14 +28,31 @@ import {
   normalizeChannelModeratorId,
   routeChannelMessage
 } from '@/handlers/session/channel-routing.ts';
-import { SessionUiProjector } from '@/handlers/session/ui-projection.ts';
+import { createAcpChannelDelegation } from '@/handlers/session/handlers/acp-channel-delegation.ts';
+import { createManagedNativeCliDelivery } from '@/handlers/session/handlers/managed-native-cli-delivery.ts';
 import {
-  acpAuthGuidance,
-  directDelegate,
-  sessionMcpServersToAcp,
-  toAcpMcpServers
-} from '@/services/delegation/acp-delegate.ts';
+  channelDelegateMcpServers,
+  isChannelStructuredSession,
+  isWorkplaceProjectTarget,
+  managedNativeCliProjectMembers,
+  nativeCliProjectMemberDisplayName,
+  nativeCliProjectMemberDisplayNameForAgent,
+  nativeCliProjectMemberRuntimeName,
+  nativeCliProjectMemberSettings,
+  nativeCliProjectMemberTemplateName,
+  workplaceProjectMembers
+} from '@/handlers/session/handlers/messaging-members.ts';
+import { SessionUiProjector } from '@/handlers/session/ui-projection.ts';
+import { acpAuthGuidance, directDelegate } from '@/services/delegation/acp-delegate.ts';
 import { managedProjectLaunchMode } from '@/services/native-cli/managed-project.ts';
+
+export type { ManagedNativeCliProjectMessageSender } from '@/handlers/session/handlers/messaging-notices.ts';
+
+// Re-exported for existing import sites (tests import member/channel helpers from this module).
+export {
+  channelDelegateMcpServers,
+  isChannelStructuredSession
+} from '@/handlers/session/handlers/messaging-members.ts';
 
 // Access control reads the write policy STORED on the session (origin.writableBy) — derived from the
 // originating surface at creation, overridable per-session — not a label→transport lookup at the call
@@ -67,37 +72,10 @@ export interface MessagingCommandDeps {
 }
 
 type ToolFilter = (toolName: string) => boolean;
-const CONTROL_ROOM_SESSION_PREFIX = 'Control Room: ';
-const WORKPLACE_SESSION_PREFIX = 'Workplace: ';
 
 // Size of the live UI snapshot window. Older history is paged lazily over GET /ui-items.
 // Keep ≥ a realistic single agent round so a tool call+result pair never straddles the window.
 const LIVE_SNAPSHOT_LIMIT = 80;
-const MANAGED_NATIVE_CLI_RESUME_FAILED_COLD_START_EVENT =
-  'project.managed_native_cli.resume_failed_cold_start' satisfies ManagedNativeCliLifecycleLogEvent;
-const MANAGED_NATIVE_CLI_DELIVERY_ERROR_EVENT =
-  'project.managed_native_cli.delivery_error' satisfies ManagedNativeCliLifecycleLogEvent;
-const MANAGED_NATIVE_CLI_DIRECT_DELIVERY_ERROR_EVENT =
-  'project.managed_native_cli.direct_delivery_error' satisfies ManagedNativeCliLifecycleLogEvent;
-type NativeCliProjectMemberShape = {
-  type: string;
-  name: string;
-  templateName?: string;
-  displayName?: string;
-  instanceId?: string;
-  settings?: WorkplaceProjectMemberSettings;
-};
-
-interface ManagedNativeCliProjectMember {
-  spec: NativeCliAgentConfig;
-  runtimeAgentName: string;
-  templateAgentName: string;
-  displayName: string;
-  settings: Pick<
-    WorkplaceProjectMemberSettings,
-    'managedProjectAgent' | 'launchMode' | 'modelName' | 'modelId' | 'reasoningEffort' | 'speed' | 'customPrompt'
-  >;
-}
 
 /** AND two optional tool filters: a tool passes only if every present filter admits it. Undefined-safe;
  *  returns undefined when neither is set so the loop keeps its no-filter fast path. */
@@ -105,64 +83,6 @@ function composeFilter(a?: ToolFilter, b?: ToolFilter): ToolFilter | undefined {
   if (!a) return b;
   if (!b) return a;
   return (name) => a(name) && b(name);
-}
-
-function nativeCliProjectMemberSettings(
-  session: TranscriptTarget,
-  agentName: string
-): Pick<
-  WorkplaceProjectMemberSettings,
-  'managedProjectAgent' | 'launchMode' | 'modelName' | 'modelId' | 'reasoningEffort' | 'speed' | 'customPrompt'
-> {
-  const parsed = workplaceProjectMembersExtSchema.safeParse(session.origin?.ext?.[workplaceProjectMembersExtKey]);
-  if (!parsed.success) return {};
-  const member = parsed.data.find(
-    (candidate) =>
-      candidate.type === 'native-cli' &&
-      (nativeCliProjectMemberRuntimeName(candidate) === agentName ||
-        nativeCliProjectMemberTemplateName(candidate) === agentName)
-  );
-  if (member?.settings) {
-    return {
-      managedProjectAgent: member.settings.managedProjectAgent !== false,
-      ...(member.settings.launchMode ? { launchMode: member.settings.launchMode } : {}),
-      ...(member.settings.modelName ? { modelName: member.settings.modelName } : {}),
-      ...(member.settings.modelId ? { modelId: member.settings.modelId } : {}),
-      ...(member.settings.reasoningEffort ? { reasoningEffort: member.settings.reasoningEffort } : {}),
-      ...(member.settings.speed ? { speed: member.settings.speed } : {}),
-      ...(member.settings.customPrompt ? { customPrompt: member.settings.customPrompt } : {})
-    };
-  }
-  return member ? { managedProjectAgent: true } : { managedProjectAgent: false };
-}
-
-function nativeCliProjectMemberDisplayNameForAgent(session: TranscriptTarget, agentName: string): string {
-  const parsed = workplaceProjectMembersExtSchema.safeParse(session.origin?.ext?.[workplaceProjectMembersExtKey]);
-  if (!parsed.success) return agentName;
-  const member = parsed.data.find(
-    (candidate) =>
-      candidate.type === 'native-cli' &&
-      (nativeCliProjectMemberRuntimeName(candidate) === agentName ||
-        nativeCliProjectMemberTemplateName(candidate) === agentName)
-  );
-  return member ? nativeCliProjectMemberDisplayName(member) : agentName;
-}
-
-function workplaceProjectMembers(session: TranscriptTarget): WorkplaceProjectMember[] {
-  const parsed = workplaceProjectMembersExtSchema.safeParse(session.origin?.ext?.[workplaceProjectMembersExtKey]);
-  return parsed.success ? parsed.data : [];
-}
-
-function nativeCliProjectMemberTemplateName(member: NativeCliProjectMemberShape): string {
-  return member.type === 'native-cli' ? (member.templateName ?? member.name) : member.name;
-}
-
-function nativeCliProjectMemberRuntimeName(member: NativeCliProjectMemberShape): string {
-  return member.type === 'native-cli' ? (member.instanceId ?? member.name) : member.name;
-}
-
-function nativeCliProjectMemberDisplayName(member: NativeCliProjectMemberShape): string {
-  return member.type === 'native-cli' ? (member.displayName ?? member.name) : member.name;
 }
 
 function lastAgentMessageText(round: Event[]): string | null {
@@ -173,26 +93,6 @@ function lastAgentMessageText(round: Event[]): string | null {
     return typeof text === 'string' ? text : null;
   }
   return null;
-}
-
-export function isChannelStructuredSession(session: Pick<Session, 'origin' | 'title'>): boolean {
-  return (
-    session.origin?.client === 'control-room' ||
-    session.origin?.client === 'workplace' ||
-    session.title.startsWith(CONTROL_ROOM_SESSION_PREFIX) ||
-    session.title.startsWith(WORKPLACE_SESSION_PREFIX)
-  );
-}
-
-function isWorkplaceProjectTarget(session: Pick<Session, 'origin' | 'title'>): boolean {
-  return session.origin?.client === 'workplace' || session.title.startsWith(WORKPLACE_SESSION_PREFIX);
-}
-
-export function channelDelegateMcpServers(
-  configured: readonly McpServerConfig[] | undefined,
-  sessionScoped: readonly SessionMcpServer[] | undefined
-) {
-  return [...toAcpMcpServers([...(configured ?? [])]), ...sessionMcpServersToAcp([...(sessionScoped ?? [])])];
 }
 
 export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingCommandDeps) {
@@ -223,806 +123,18 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
     (cwd ? [cwd] : sessionId.startsWith('ses_') ? agentSandboxRoots?.(sessionId as SessionId) : undefined);
 
   const runner = cmd ? { store, bus, lifecycle: cmd.lifecycle, commands: cmd.commands, ownerPrincipalId } : null;
-  const pendingManagedNativeCliWakeMessages = new Map<string, MessageId>();
 
-  function emitManagedNativeCliThinking(
-    sessionId: TranscriptTargetId,
-    nativeCliSessionId: string,
-    agentName: string
-  ): MessageId {
-    const existing = pendingManagedNativeCliWakeMessages.get(nativeCliSessionId);
-    if (existing) return existing;
-    const messageId = newId('msg');
-    // Entries are deleted on completion, but a native CLI session that dies mid-turn never
-    // completes; cap the map so abandoned wake placeholders can't accumulate for the daemon's
-    // lifetime (oldest-first eviction — Map preserves insertion order).
-    if (pendingManagedNativeCliWakeMessages.size >= 256) {
-      const oldest = pendingManagedNativeCliWakeMessages.keys().next().value;
-      if (oldest !== undefined) pendingManagedNativeCliWakeMessages.delete(oldest);
-    }
-    pendingManagedNativeCliWakeMessages.set(nativeCliSessionId, messageId);
-    store.insertMessage(messageId, sessionId, '', new Date().toISOString(), 'assistant', {
-      data: { agentName, nativeCliSessionId, reasoning: 'Thinking', source: 'managed-native-cli' },
-      includeInContext: false,
-      streamStatus: 'streaming'
-    });
-    const round: Event[] = [];
-    const emit = makeEmit(round);
-    emit({
-      id: newId('evt'),
-      transcriptTargetId: sessionId,
-      type: 'agent.token',
-      actorAgentId: null,
-      payload: { messageId, agentName, delta: '', index: 0, source: 'managed-native-cli' },
-      at: new Date().toISOString()
-    });
-    emit({
-      id: newId('evt'),
-      transcriptTargetId: sessionId,
-      type: 'agent.reasoning',
-      actorAgentId: null,
-      payload: { messageId, delta: 'Thinking', index: 0, source: 'managed-native-cli' },
-      at: new Date().toISOString()
-    });
-    persistAndRetire(sessionId, round);
-    return messageId;
-  }
+  const managedNativeCliDelivery = createManagedNativeCliDelivery(ctx);
+  const {
+    completeManagedNativeCliThinking,
+    retireManagedNativeCliThinking,
+    deliverProjectMessageToManagedNativeCliMembers,
+    deliverDirectMessageToManagedNativeCliMember,
+    startManagedNativeCliRuntimeWithRecovery
+  } = managedNativeCliDelivery;
 
-  function completeManagedNativeCliThinking({
-    sessionId,
-    nativeCliSessionId,
-    agentName,
-    text
-  }: {
-    sessionId: TranscriptTargetId;
-    nativeCliSessionId: string;
-    agentName: string;
-    text: string;
-  }): MessageId | null {
-    const messageId = pendingManagedNativeCliWakeMessages.get(nativeCliSessionId) ?? newId('msg');
-    pendingManagedNativeCliWakeMessages.delete(nativeCliSessionId);
-    const completed = store.setGenStatus(sessionId, messageId, 'complete', new Date().toISOString(), {
-      data: { agentName, nativeCliSessionId, source: 'managed-native-cli' },
-      includeInContext: true,
-      text
-    });
-    if (!completed && !store.getMessage(sessionId, messageId)) {
-      store.insertMessage(messageId, sessionId, text, new Date().toISOString(), 'assistant', {
-        data: { agentName, nativeCliSessionId, source: 'managed-native-cli' }
-      });
-    }
-    const round: Event[] = [];
-    makeEmit(round)({
-      id: newId('evt'),
-      transcriptTargetId: sessionId,
-      type: 'agent.message',
-      actorAgentId: null,
-      payload: { messageId, agentName, text, source: 'managed-native-cli' },
-      at: new Date().toISOString()
-    });
-    persistAndRetire(sessionId, round);
-    return messageId;
-  }
-
-  function startAcpAssignedTask({
-    sessionId,
-    spec,
-    text,
-    ambientContext,
-    mcpServers
-  }: {
-    sessionId: TranscriptTargetId;
-    spec: AcpAgentConfig;
-    text: string;
-    ambientContext?: string;
-    mcpServers?: Parameters<typeof directDelegate>[2]['mcpServers'];
-  }): void {
-    log?.debug({ sessionId, event: 'channel.next.dispatch', agent: spec.name, text }, 'channel next dispatch');
-    const round: Event[] = [];
-    const emit = makeEmit(round);
-    const controller = new AbortController();
-    const agentMsgId = newId('msg');
-    const acpToolCallId = newId('tc');
-    let tokenIndex = 0;
-    let acpProcessOutput = '';
-    let acpResponseOutput = '';
-
-    const emitAcpActivityProgress = () => {
-      const sections = [
-        acpProcessOutput.trim(),
-        acpResponseOutput ? `response stream:\n${acpResponseOutput}` : ''
-      ].filter(Boolean);
-      emit({
-        id: newId('evt'),
-        transcriptTargetId: sessionId,
-        type: 'tool.progress',
-        actorAgentId: null,
-        payload: {
-          toolCallId: acpToolCallId,
-          tool: `acp:${spec.name}`,
-          output: sections.join('\n\n') || 'waiting for response...'
-        },
-        at: new Date().toISOString()
-      });
-    };
-
-    emit({
-      id: newId('evt'),
-      transcriptTargetId: sessionId,
-      type: 'tool.called',
-      actorAgentId: null,
-      payload: { toolCallId: acpToolCallId, tool: `acp:${spec.name}`, input: { agent: spec.name } },
-      at: new Date().toISOString()
-    });
-    emitAcpActivityProgress();
-
-    const rt = runtimeForTranscriptTarget(sessionId);
-    directDelegate(spec, composeAcpChannelPrompt(text, ambientContext), {
-      sessionId,
-      signal: controller.signal,
-      sandboxRoots: sandboxRootsFor(sessionId, requireTranscriptTarget(sessionId).cwd, rt),
-      backends: rt?.backends,
-      toolFilter: rt?.toolFilter,
-      extraTools: rt?.extraTools,
-      extraSkills: rt?.extraSkills,
-      mcpServers,
-      onChunk: (delta) => {
-        emit({
-          id: newId('evt'),
-          transcriptTargetId: sessionId,
-          type: 'agent.token',
-          actorAgentId: null,
-          payload: { messageId: agentMsgId, agentName: spec.name, delta, index: tokenIndex++ },
-          at: new Date().toISOString()
-        });
-        acpResponseOutput += delta;
-        emitAcpActivityProgress();
-      },
-      onActivity: (output) => {
-        acpProcessOutput = output;
-        emitAcpActivityProgress();
-      }
-    })
-      .then((fullText) => {
-        emit({
-          id: newId('evt'),
-          transcriptTargetId: sessionId,
-          type: 'tool.result',
-          actorAgentId: null,
-          payload: { toolCallId: acpToolCallId, tool: `acp:${spec.name}`, ok: true, result: 'completed' },
-          at: new Date().toISOString()
-        });
-        store.insertMessage(agentMsgId, sessionId, fullText, new Date().toISOString(), 'assistant', {
-          data: { agentName: spec.name }
-        });
-        emit({
-          id: newId('evt'),
-          transcriptTargetId: sessionId,
-          type: 'agent.message',
-          actorAgentId: null,
-          payload: { messageId: agentMsgId, agentName: spec.name, text: fullText },
-          at: new Date().toISOString()
-        });
-        persistAndRetire(sessionId, round);
-      })
-      .catch((err: unknown) => {
-        const { code, message } = extractError(err);
-        emit({
-          id: newId('evt'),
-          transcriptTargetId: sessionId,
-          type: 'tool.result',
-          actorAgentId: null,
-          payload: { toolCallId: acpToolCallId, tool: `acp:${spec.name}`, ok: false, result: message },
-          at: new Date().toISOString()
-        });
-        store.insertMessage(
-          agentMsgId,
-          sessionId,
-          code ? `[${code}] ${message}` : message,
-          new Date().toISOString(),
-          'assistant',
-          { type: 'error', data: { agentName: spec.name } }
-        );
-        emit({
-          id: newId('evt'),
-          transcriptTargetId: sessionId,
-          type: 'agent.error',
-          actorAgentId: null,
-          payload: { messageId: agentMsgId, agentName: spec.name, code, message },
-          at: new Date().toISOString()
-        });
-        persistAndRetire(sessionId, round);
-      });
-  }
-
-  async function dispatchChannelNextTargets({
-    sessionId,
-    responseText,
-    ambientContext,
-    acpAgents,
-    mcpServers
-  }: {
-    sessionId: TranscriptTargetId;
-    responseText: string;
-    ambientContext: string;
-    acpAgents: readonly AcpAgentConfig[];
-    mcpServers?: Parameters<typeof directDelegate>[2]['mcpServers'];
-  }): Promise<void> {
-    const structured = parseChannelStructuredResponse(responseText);
-    if (!structured?.next.length) return;
-    const acpByName = new Map(acpAgents.map((agent) => [agent.name, agent]));
-    for (const target of structured.next) {
-      if (!target.agentId.startsWith('acp:')) continue;
-      const agentName = target.agentId.slice(4);
-      const spec = acpByName.get(agentName);
-      if (!spec) continue;
-      startAcpAssignedTask({
-        sessionId,
-        spec,
-        text: channelNextPrompt(target),
-        ambientContext,
-        mcpServers
-      });
-    }
-  }
-
-  function channelNextPrompt(target: ChannelResponseNextTarget): string {
-    return [
-      target.title ? `Task: ${target.title}` : '',
-      target.context ? `Context:\n${target.context}` : '',
-      target.prompt
-    ]
-      .filter(Boolean)
-      .join('\n\n');
-  }
-
-  function managedNativeCliProjectMembers(
-    session: TranscriptTarget,
-    nativeCliAgents: readonly NativeCliAgentConfig[]
-  ): ManagedNativeCliProjectMember[] {
-    const members = workplaceProjectMembers(session);
-    const configured = new Map(nativeCliAgents.map((agent) => [agent.name, agent]));
-    return members
-      .filter((member) => member.type === 'native-cli' && member.settings?.managedProjectAgent !== false)
-      .flatMap((member) => {
-        const templateAgentName = nativeCliProjectMemberTemplateName(member);
-        const spec = configured.get(templateAgentName);
-        if (!spec) return [];
-        return [
-          {
-            spec,
-            runtimeAgentName: nativeCliProjectMemberRuntimeName(member),
-            templateAgentName,
-            displayName: nativeCliProjectMemberDisplayName(member),
-            settings: {
-              managedProjectAgent: true,
-              ...(member.settings?.launchMode ? { launchMode: member.settings.launchMode } : {}),
-              ...(member.settings?.modelName ? { modelName: member.settings.modelName } : {}),
-              ...(member.settings?.modelId ? { modelId: member.settings.modelId } : {}),
-              ...(member.settings?.reasoningEffort ? { reasoningEffort: member.settings.reasoningEffort } : {}),
-              ...(member.settings?.speed ? { speed: member.settings.speed } : {}),
-              ...(member.settings?.customPrompt ? { customPrompt: member.settings.customPrompt } : {})
-            }
-          }
-        ];
-      });
-  }
-
-  function projectAcpMembers(session: TranscriptTarget, acpAgents: readonly AcpAgentConfig[]): AcpAgentConfig[] {
-    const configured = new Map(acpAgents.map((agent) => [agent.name, agent]));
-    return workplaceProjectMembers(session)
-      .filter((member) => member.type === 'acp')
-      .flatMap((member) => {
-        const spec = configured.get(member.name);
-        return spec ? [spec] : [];
-      });
-  }
-
-  async function deliverProjectMessageToAcpMembers({
-    session,
-    acpAgents,
-    mcpServers,
-    text,
-    ambientContext
-  }: {
-    session: TranscriptTarget;
-    acpAgents: readonly AcpAgentConfig[];
-    mcpServers: readonly McpServerConfig[] | undefined;
-    text: string;
-    ambientContext?: string;
-  }): Promise<void> {
-    const members = projectAcpMembers(session, acpAgents);
-    if (members.length === 0) return;
-    await Promise.all(
-      members.map(async (spec) => {
-        const round: Event[] = [];
-        const emit = makeEmit(round);
-        const agentMsgId = newId('msg');
-        const acpToolCallId = newId('tc');
-        let tokenIndex = 0;
-        let acpProcessOutput = '';
-        let acpResponseOutput = '';
-        const emitAcpActivityProgress = (output = 'waiting for response...') => {
-          emit({
-            id: newId('evt'),
-            transcriptTargetId: session.id,
-            type: 'tool.progress',
-            actorAgentId: null,
-            payload: { toolCallId: acpToolCallId, tool: `acp:${spec.name}`, output },
-            at: new Date().toISOString()
-          });
-        };
-        emit({
-          id: newId('evt'),
-          transcriptTargetId: session.id,
-          type: 'tool.called',
-          actorAgentId: null,
-          payload: { toolCallId: acpToolCallId, tool: `acp:${spec.name}`, input: { agent: spec.name } },
-          at: new Date().toISOString()
-        });
-        emitAcpActivityProgress();
-        try {
-          const rt = runtime.get(session.id);
-          const fullText = await directDelegate(spec, composeAcpChannelPrompt(text, ambientContext), {
-            sessionId: session.id,
-            signal: new AbortController().signal,
-            sandboxRoots: sandboxRootsFor(session.id, session.cwd, rt),
-            backends: rt?.backends,
-            toolFilter: rt?.toolFilter,
-            extraTools: rt?.extraTools,
-            extraSkills: rt?.extraSkills,
-            mcpServers: channelDelegateMcpServers(mcpServers, rt?.mcpServers),
-            onChunk: (delta) => {
-              emit({
-                id: newId('evt'),
-                transcriptTargetId: session.id,
-                type: 'agent.token',
-                actorAgentId: null,
-                payload: { messageId: agentMsgId, agentName: spec.name, delta, index: tokenIndex++ },
-                at: new Date().toISOString()
-              });
-              acpResponseOutput += delta;
-              const sections = [
-                acpProcessOutput.trim(),
-                acpResponseOutput ? `response stream:\n${acpResponseOutput}` : ''
-              ].filter(Boolean);
-              emitAcpActivityProgress(sections.join('\n\n') || 'waiting for response...');
-            },
-            onActivity: (output) => {
-              acpProcessOutput = output;
-              const sections = [
-                acpProcessOutput.trim(),
-                acpResponseOutput ? `response stream:\n${acpResponseOutput}` : ''
-              ].filter(Boolean);
-              emitAcpActivityProgress(sections.join('\n\n') || 'waiting for response...');
-            }
-          });
-          emit({
-            id: newId('evt'),
-            transcriptTargetId: session.id,
-            type: 'tool.result',
-            actorAgentId: null,
-            payload: { toolCallId: acpToolCallId, tool: `acp:${spec.name}`, ok: true, result: 'completed' },
-            at: new Date().toISOString()
-          });
-          store.insertMessage(agentMsgId, session.id, fullText, new Date().toISOString(), 'assistant', {
-            data: { agentName: spec.name }
-          });
-          emit({
-            id: newId('evt'),
-            transcriptTargetId: session.id,
-            type: 'agent.message',
-            actorAgentId: null,
-            payload: { messageId: agentMsgId, agentName: spec.name, text: fullText },
-            at: new Date().toISOString()
-          });
-        } catch (err) {
-          const { code, message } = extractError(err);
-          const hint = acpAuthGuidance(err, spec, ctx.deps.localeService?.t);
-          const errorText = hint ? `${message}\n\n${hint}` : message;
-          emit({
-            id: newId('evt'),
-            transcriptTargetId: session.id,
-            type: 'tool.result',
-            actorAgentId: null,
-            payload: { toolCallId: acpToolCallId, tool: `acp:${spec.name}`, ok: false, result: errorText },
-            at: new Date().toISOString()
-          });
-          store.insertMessage(
-            agentMsgId,
-            session.id,
-            code ? `[${code}] ${errorText}` : errorText,
-            new Date().toISOString(),
-            'assistant',
-            { type: 'error', data: { agentName: spec.name } }
-          );
-          emit({
-            id: newId('evt'),
-            transcriptTargetId: session.id,
-            type: 'agent.error',
-            actorAgentId: null,
-            payload: { messageId: agentMsgId, agentName: spec.name, code, message: errorText },
-            at: new Date().toISOString()
-          });
-        } finally {
-          persistAndRetire(session.id, round);
-        }
-      })
-    );
-  }
-
-  function managedNativeCliInboxNotice(member: ManagedNativeCliProjectMember, text: string): string {
-    return [
-      'New Workplace Project message is available.',
-      'Process this project message now.',
-      '',
-      `Your display name: ${member.displayName}`,
-      `Your runtime agent id: ${member.runtimeAgentName}`,
-      `Template agent: ${member.templateAgentName}`,
-      `Provider: ${member.spec.provider}`,
-      '',
-      text,
-      '',
-      'Run `monad project inbox check` or `monad project read` before answering if you need more context.',
-      'If a public response is appropriate, post it with `monad project post <text>`.',
-      'Use `monad agent send --to <agent|human> <text>` only for private/direct conversation.',
-      'Do not use greetings, small talk, or filler. Reply only with necessary project information.'
-    ].join('\n');
-  }
-
-  function managedNativeCliBusyInboxNotice(member: ManagedNativeCliProjectMember): string {
-    return [
-      'New Workplace Project message is available.',
-      'You are being woken to process the pending project inbox now.',
-      '',
-      `Your display name: ${member.displayName}`,
-      `Your runtime agent id: ${member.runtimeAgentName}`,
-      `Template agent: ${member.templateAgentName}`,
-      `Provider: ${member.spec.provider}`,
-      '',
-      'You are already running. Run `monad project inbox check` or `monad project read` to fetch the latest project context.',
-      'If a public response is appropriate, post it with `monad project post <text>`.',
-      'Use `monad agent send --to <agent|human> <text>` only for private/direct conversation.',
-      'Do not use greetings, small talk, or filler. Reply only with necessary project information.'
-    ].join('\n');
-  }
-
-  function managedNativeCliDirectNotice({ fromAgentName, text }: { fromAgentName: string; text: string }): string {
-    return [
-      `New direct/private message from ${fromAgentName} is available.`,
-      '',
-      text,
-      '',
-      `Use \`monad agent read --with ${fromAgentName}\` to read the private conversation.`,
-      `Reply privately with \`monad agent send --to ${fromAgentName} <text>\`.`,
-      'Use `monad project post` only when you want to speak publicly in the Workplace Project.',
-      'Terminal stdout/stderr is diagnostic output only. It is not a Workplace Project message.'
-    ].join('\n');
-  }
-
-  function managedNativeCliResumeRecoveryNotice(notice: string): string {
-    return [
-      'Provider session resume failed. Monad started a fresh managed project runtime.',
-      'Before replying, restore context from MEMORY.md and `monad project read`.',
-      '',
-      notice
-    ].join('\n');
-  }
-
-  function nativeCliInputText(input: string): string {
-    return input.endsWith('\n') ? input : `${input}\n`;
-  }
-
-  function normalizeManagedNativeCliDirectTarget(to: string): string {
-    return to.startsWith('native-cli:') ? to.slice('native-cli:'.length) : to;
-  }
-
-  function recordManagedNativeCliProjectDeliveryError(
-    sessionId: TranscriptTargetId,
-    agentName: string,
-    code: string | undefined,
-    message: string
-  ): void {
-    const text = `${agentName} failed to process the project message: ${message}`;
-    const messageId = newId('msg');
-    const round: Event[] = [];
-    store.insertMessage(messageId, sessionId, text, new Date().toISOString(), 'assistant', {
-      type: 'error',
-      data: { agentName }
-    });
-    makeEmit(round)({
-      id: newId('evt'),
-      transcriptTargetId: sessionId,
-      type: 'agent.error',
-      actorAgentId: null,
-      payload: {
-        messageId,
-        agentName,
-        code: code ?? 'managed_native_cli_delivery_failed',
-        message: text
-      },
-      at: new Date().toISOString()
-    });
-    persistAndRetire(sessionId, round);
-  }
-
-  function managedNativeCliSessionsForAgent(
-    transcriptTargetId: TranscriptTargetId,
-    agentName: string
-  ): NativeCliSessionView[] {
-    return (ctx.deps.nativeCliHost?.list(transcriptTargetId).sessions ?? []).filter(
-      (candidate) => candidate.agentName === agentName && candidate.runtimeRole === 'managed-project-agent'
-    );
-  }
-
-  async function startManagedNativeCliRuntimeWithRecovery({
-    session,
-    spec,
-    runtimeAgentName,
-    templateAgentName,
-    displayName,
-    modelName,
-    modelId,
-    reasoningEffort,
-    speed,
-    customPrompt,
-    launchMode,
-    providerSessionRef,
-    input
-  }: {
-    session: TranscriptTarget;
-    spec: NativeCliAgentConfig;
-    runtimeAgentName: string;
-    templateAgentName: string;
-    displayName: string;
-    modelName?: string;
-    modelId?: string;
-    reasoningEffort?: string;
-    speed?: 'standard' | 'fast';
-    customPrompt?: string;
-    launchMode: NativeCliAgentConfig['defaultLaunchMode'];
-    providerSessionRef?: string;
-    input: string;
-  }): Promise<NativeCliSessionView> {
-    const nativeCliHost = ctx.deps.nativeCliHost;
-    if (!nativeCliHost) throw new HandlerError('internal', 'native CLI host not configured');
-    if (!session.cwd)
-      throw new HandlerError('invalid', `native CLI agent "${spec.name}" requires a project working path`);
-    const startArgs = {
-      transcriptTargetId: session.id,
-      agentName: runtimeAgentName,
-      displayName,
-      templateAgentName,
-      workingPath: session.cwd,
-      launchMode,
-      runtimeRole: 'managed-project-agent' as const,
-      modelName,
-      modelId,
-      reasoningEffort,
-      speed,
-      customPrompt
-    };
-    try {
-      const nativeSession = await nativeCliHost.start({
-        ...startArgs,
-        providerSessionRef
-      });
-      nativeCliHost.input(nativeSession.id, { input: nativeCliInputText(input) });
-      return nativeSession;
-    } catch (err) {
-      if (!providerSessionRef) throw err;
-      const { code, message } = extractError(err);
-      log?.debug(
-        {
-          sessionId: session.id,
-          event: MANAGED_NATIVE_CLI_RESUME_FAILED_COLD_START_EVENT,
-          agentName: runtimeAgentName,
-          providerSessionRef,
-          code,
-          message
-        },
-        'managed native cli resume failed; cold starting'
-      );
-      const round: Event[] = [];
-      makeEmit(round)({
-        id: newId('evt'),
-        transcriptTargetId: session.id,
-        type: 'native_cli.resume_failed',
-        actorAgentId: null,
-        payload: {
-          agentName: runtimeAgentName,
-          provider: spec.provider,
-          providerSessionRef,
-          code,
-          message,
-          fallback: 'cold-start'
-        },
-        at: new Date().toISOString()
-      });
-      persistAndRetire(session.id, round);
-      const nativeSession = await nativeCliHost.start(startArgs);
-      nativeCliHost.input(nativeSession.id, { input: nativeCliInputText(managedNativeCliResumeRecoveryNotice(input)) });
-      return nativeSession;
-    }
-  }
-
-  async function deliverProjectMessageToManagedNativeCliMembers({
-    session,
-    nativeCliAgents,
-    text,
-    exceptAgentName
-  }: {
-    session: TranscriptTarget;
-    nativeCliAgents: readonly NativeCliAgentConfig[];
-    text: string;
-    exceptAgentName?: string;
-  }): Promise<void> {
-    const managedMembers = managedNativeCliProjectMembers(session, nativeCliAgents);
-    if (managedMembers.length === 0) return;
-    const nativeCliHost = ctx.deps.nativeCliHost;
-    if (!nativeCliHost || !session.cwd) return;
-    for (const member of managedMembers) {
-      const { spec, runtimeAgentName, templateAgentName, displayName, settings } = member;
-      if (runtimeAgentName === exceptAgentName) continue;
-      try {
-        const notice = managedNativeCliInboxNotice(member, text);
-        const deliveredSeq = store.maxMessageSeq(session.id);
-        const managedSessions = managedNativeCliSessionsForAgent(session.id, runtimeAgentName);
-        const existing = managedSessions.find((candidate) => candidate.state === 'running');
-        if (existing) {
-          if (deliveredSeq > 0) store.enqueueNativeCliInboxItem(existing.id, deliveredSeq);
-          emitManagedNativeCliThinking(session.id, existing.id, runtimeAgentName);
-          if (existing.lastDeliveredSeq === 0) {
-            nativeCliHost.input(existing.id, { input: nativeCliInputText(notice) });
-            if (deliveredSeq > 0) store.markNativeCliInboxVisible(existing.id, deliveredSeq);
-          } else if (existing.lastDeliveredSeq <= existing.lastVisibleSeq) {
-            nativeCliHost.input(existing.id, { input: nativeCliInputText(managedNativeCliBusyInboxNotice(member)) });
-          }
-          store.markNativeCliInboxDelivered(existing.id, deliveredSeq);
-          continue;
-        }
-        const resumeCandidate = managedSessions.find((candidate) => candidate.providerSessionRef);
-        const resumeFrom = resumeCandidate?.providerSessionRef;
-        const preflight = await nativeCliHost.preflight(templateAgentName);
-        if (preflight.state !== 'ready') {
-          const round: Event[] = [];
-          if (preflight.state === 'not_authenticated' || preflight.state === 'unknown') {
-            makeEmit(round)({
-              id: newId('evt'),
-              transcriptTargetId: session.id,
-              type: 'native_cli.connection_required',
-              actorAgentId: null,
-              payload: {
-                agentName: runtimeAgentName,
-                provider: spec.provider,
-                reason: preflight.reason,
-                reconnectIn: 'studio'
-              },
-              at: new Date().toISOString()
-            });
-            persistAndRetire(session.id, round);
-          }
-          continue;
-        }
-        if (resumeCandidate && resumeFrom) store.clearNativeCliSessionRef(resumeCandidate.id);
-        const nativeSession = await startManagedNativeCliRuntimeWithRecovery({
-          session,
-          spec,
-          runtimeAgentName,
-          templateAgentName,
-          displayName,
-          reasoningEffort: settings.reasoningEffort,
-          modelId: settings.modelId ?? settings.modelName,
-          speed: settings.speed,
-          customPrompt: settings.customPrompt,
-          launchMode: managedProjectLaunchMode(spec, settings.launchMode),
-          providerSessionRef: resumeFrom ?? undefined,
-          input: notice
-        });
-        if (deliveredSeq > 0) store.enqueueNativeCliInboxItem(nativeSession.id, deliveredSeq);
-        store.markNativeCliInboxDelivered(nativeSession.id, deliveredSeq);
-        store.markNativeCliInboxVisible(nativeSession.id, deliveredSeq);
-        emitManagedNativeCliThinking(session.id, nativeSession.id, runtimeAgentName);
-      } catch (err) {
-        const { code, message } = extractError(err);
-        recordManagedNativeCliProjectDeliveryError(session.id, runtimeAgentName, code, message);
-        log?.debug(
-          {
-            sessionId: session.id,
-            event: MANAGED_NATIVE_CLI_DELIVERY_ERROR_EVENT,
-            agentName: runtimeAgentName,
-            code,
-            message
-          },
-          'managed native cli project delivery failed'
-        );
-      }
-    }
-  }
-
-  async function deliverDirectMessageToManagedNativeCliMember({
-    session,
-    nativeCliAgents,
-    fromAgentName,
-    to,
-    text
-  }: {
-    session: TranscriptTarget;
-    nativeCliAgents: readonly NativeCliAgentConfig[];
-    fromAgentName: string;
-    to: string;
-    text: string;
-  }): Promise<void> {
-    const targetName = normalizeManagedNativeCliDirectTarget(to);
-    if (!targetName || targetName === fromAgentName) return;
-    const member = managedNativeCliProjectMembers(session, nativeCliAgents).find(
-      (candidate) => candidate.runtimeAgentName === targetName
-    );
-    if (!member) return;
-    const { spec, runtimeAgentName, templateAgentName, displayName, settings } = member;
-    const nativeCliHost = ctx.deps.nativeCliHost;
-    if (!nativeCliHost || !session.cwd) return;
-    try {
-      const notice = managedNativeCliDirectNotice({ fromAgentName, text });
-      const managedSessions = managedNativeCliSessionsForAgent(session.id, runtimeAgentName);
-      const existing = managedSessions.find((candidate) => candidate.state === 'running');
-      if (existing) {
-        nativeCliHost.input(existing.id, { input: nativeCliInputText(notice) });
-        return;
-      }
-      const resumeCandidate = managedSessions.find((candidate) => candidate.providerSessionRef);
-      const resumeFrom = resumeCandidate?.providerSessionRef;
-      const preflight = await nativeCliHost.preflight(templateAgentName);
-      if (preflight.state !== 'ready') {
-        const round: Event[] = [];
-        if (preflight.state === 'not_authenticated' || preflight.state === 'unknown') {
-          makeEmit(round)({
-            id: newId('evt'),
-            transcriptTargetId: session.id,
-            type: 'native_cli.connection_required',
-            actorAgentId: null,
-            payload: {
-              agentName: runtimeAgentName,
-              provider: spec.provider,
-              reason: preflight.reason,
-              reconnectIn: 'studio'
-            },
-            at: new Date().toISOString()
-          });
-          persistAndRetire(session.id, round);
-        }
-        return;
-      }
-      if (resumeCandidate && resumeFrom) store.clearNativeCliSessionRef(resumeCandidate.id);
-      await startManagedNativeCliRuntimeWithRecovery({
-        session,
-        spec,
-        runtimeAgentName,
-        templateAgentName,
-        displayName,
-        reasoningEffort: settings.reasoningEffort,
-        modelId: settings.modelId ?? settings.modelName,
-        speed: settings.speed,
-        customPrompt: settings.customPrompt,
-        launchMode: managedProjectLaunchMode(spec, settings.launchMode),
-        providerSessionRef: resumeFrom ?? undefined,
-        input: notice
-      });
-    } catch (err) {
-      const { code, message } = extractError(err);
-      log?.debug(
-        {
-          sessionId: session.id,
-          event: MANAGED_NATIVE_CLI_DIRECT_DELIVERY_ERROR_EVENT,
-          fromAgentName,
-          to,
-          code,
-          message
-        },
-        'managed native cli direct delivery failed'
-      );
-    }
-  }
+  const acpDelegation = createAcpChannelDelegation(ctx, sandboxRootsFor);
+  const { dispatchChannelNextTargets, deliverProjectMessageToAcpMembers } = acpDelegation;
 
   const runtimeForTranscriptTarget = (sessionId: TranscriptTargetId) => runtime.get(sessionId);
   const agentToolFilterForTranscriptTarget = (sessionId: TranscriptTargetId) =>
@@ -1232,8 +344,14 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
                 ambientContext: publicAmbientContext
               })
             : await handlers.send({ sessionId, text: route.text, generate: false });
+          const humanSender = { kind: 'human' as const, name: cfg?.principal.displayName ?? 'User', id: 'human' };
           await Promise.all([
-            deliverProjectMessageToManagedNativeCliMembers({ session, nativeCliAgents, text: route.text }),
+            deliverProjectMessageToManagedNativeCliMembers({
+              session,
+              nativeCliAgents,
+              text: route.text,
+              sender: humanSender
+            }),
             deliverProjectMessageToAcpMembers({
               session,
               acpAgents,
@@ -1254,7 +372,12 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
           onComplete: dispatchStructuredNext
         });
         if (!route.direct && route.generate === false) {
-          await deliverProjectMessageToManagedNativeCliMembers({ session, nativeCliAgents, text: route.text });
+          await deliverProjectMessageToManagedNativeCliMembers({
+            session,
+            nativeCliAgents,
+            text: route.text,
+            sender: { kind: 'human', name: cfg?.principal.displayName ?? 'User', id: 'human' }
+          });
         }
         return result;
       }
@@ -1282,10 +405,12 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
     async notifyManagedNativeCliProjectMembers({
       sessionId,
       text,
+      sender,
       exceptAgentName
     }: {
       sessionId: TranscriptTargetId;
       text: string;
+      sender?: ManagedNativeCliProjectMessageSender;
       exceptAgentName?: string;
     }) {
       const session = requireTranscriptTarget(sessionId);
@@ -1294,7 +419,7 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
       const nativeCliAgents = (cfg?.nativeCliAgents ?? []).filter(
         (agent: NativeCliAgentConfig) => agent.enabled !== false
       );
-      await deliverProjectMessageToManagedNativeCliMembers({ session, nativeCliAgents, text, exceptAgentName });
+      await deliverProjectMessageToManagedNativeCliMembers({ session, nativeCliAgents, text, sender, exceptAgentName });
       return { accepted: true as const };
     },
 
@@ -1323,16 +448,16 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
       sessionId,
       nativeCliSessionId,
       agentName,
-      text
+      text,
+      threadId
     }: {
       sessionId: TranscriptTargetId;
       nativeCliSessionId: string;
       agentName: string;
       text: string;
+      threadId?: string;
     }) {
-      return {
-        messageId: completeManagedNativeCliThinking({ sessionId, nativeCliSessionId, agentName, text })
-      };
+      return completeManagedNativeCliThinking({ sessionId, nativeCliSessionId, agentName, text, threadId });
     },
 
     async completeManagedNativeCliProviderMessage({
@@ -1340,21 +465,29 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
       nativeCliSessionId,
       agentName,
       text,
-      error
+      error,
+      post = true
     }: {
       sessionId: TranscriptTargetId;
       nativeCliSessionId: string;
       agentName: string;
       text: string;
       error?: boolean;
+      post?: boolean;
     }) {
-      const messageId =
-        completeManagedNativeCliThinking({ sessionId, nativeCliSessionId, agentName, text }) ?? newId('msg');
-      store.insertMessage(messageId, sessionId, text, new Date().toISOString(), 'assistant', {
-        ...(error ? { type: 'error' as const } : {}),
-        data: { agentName, nativeCliSessionId, source: 'native-cli-provider' }
+      if (!post && !error) {
+        const messageId = retireManagedNativeCliThinking(sessionId, nativeCliSessionId, agentName);
+        return { messageId };
+      }
+      const completed = completeManagedNativeCliThinking({
+        sessionId,
+        nativeCliSessionId,
+        agentName,
+        text,
+        source: 'native-cli-provider',
+        error
       });
-      return { messageId };
+      return { messageId: completed.messageId };
     },
 
     async sendInline(
@@ -1949,7 +1082,7 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
                 runtimeRole
               });
         if (runtimeRole !== 'managed-project-agent') {
-          nativeCliHost.input(nativeSession.id, { input: nativeCliInputText(text) });
+          nativeCliHost.input(nativeSession.id, { input: text.endsWith('\n') ? text : `${text}\n` });
         }
         log?.debug(
           { sessionId, event: 'session.forward_native_cli.accepted', agentName, nativeCliSessionId: nativeSession.id },

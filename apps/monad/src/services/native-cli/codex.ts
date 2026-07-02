@@ -1,4 +1,11 @@
-import type { NativeCliAgentView } from '@monad/protocol';
+import type {
+  CodexAppServerNotification,
+  CodexAppServerResponseItem,
+  CodexAppServerServerRequest,
+  CodexAppServerThreadReadResponse,
+  CodexAppServerTurnsPage,
+  NativeCliAgentView
+} from '@monad/protocol';
 import type {
   BuildNativeCliLaunchOptions,
   NativeCliLaunchSpec,
@@ -17,6 +24,29 @@ import { resizePty, sendPtyInput, stopPty } from '@/services/native-cli/pty.ts';
 const CODEX_APP_BIN = '/Applications/Codex.app/Contents/Resources/codex';
 const CODEX_NON_INTERACTIVE_ENV = { CODEX_NON_INTERACTIVE: '1' };
 const CODEX_SUPPORTED_MODELS = ['gpt-5.5', 'gpt-5.4', 'gpt-5.4-mini', 'gpt-5.3-codex', 'gpt-5.2'];
+
+type CodexJsonRpcResponse = {
+  id?: unknown;
+  error?: Record<string, unknown>;
+  result?: CodexAppServerThreadReadResponse | CodexAppServerTurnsPage | Record<string, unknown>;
+} & Record<string, unknown>;
+type CodexJsonRpcNotification = Partial<CodexAppServerNotification | CodexAppServerServerRequest> &
+  Record<string, unknown> & { method: string };
+type CodexResponseItemJson = Partial<CodexAppServerResponseItem> & Record<string, unknown> & { type: string };
+
+function isCodexJsonRpcNotification(record: Record<string, unknown>): record is CodexJsonRpcNotification {
+  return typeof record.method === 'string';
+}
+
+function isCodexJsonRpcResponse(record: Record<string, unknown>): record is CodexJsonRpcResponse {
+  return 'result' in record || 'error' in record;
+}
+
+function isCodexResponseItem(item: unknown): item is CodexResponseItemJson {
+  return (
+    !!item && typeof item === 'object' && !Array.isArray(item) && typeof (item as { type?: unknown }).type === 'string'
+  );
+}
 
 function hasFlag(args: string[], flag: string): boolean {
   return args.some((arg) => arg === flag || arg.startsWith(`${flag}=`));
@@ -168,6 +198,13 @@ function parseJsonObject(value: string): Record<string, unknown> | undefined {
   }
 }
 
+function stringValue(...values: unknown[]): string {
+  for (const value of values) {
+    if (typeof value === 'string') return value;
+  }
+  return '';
+}
+
 function parseStructuredAuthState(output: string): 'authenticated' | 'unauthenticated' | 'unknown' | undefined {
   for (const rawLine of output.split(/\r?\n/)) {
     const record = parseJsonObject(rawLine.trim());
@@ -201,7 +238,7 @@ function textFromCodexContent(content: unknown): string | undefined {
   return text || undefined;
 }
 
-function parseCodexResponseItem(item: Record<string, unknown>): NativeCliOutputEvent[] {
+function parseCodexResponseItem(item: CodexResponseItemJson): NativeCliOutputEvent[] {
   if (item.type === 'message' && item.role === 'assistant') {
     const text = textFromCodexContent(item.content);
     return text ? [{ type: 'agent_message', payload: { text } }] : [];
@@ -240,7 +277,7 @@ function parseCodexResponseItem(item: Record<string, unknown>): NativeCliOutputE
   return [];
 }
 
-function parseCodexApprovalRequest(record: Record<string, unknown>): NativeCliOutputEvent[] {
+function parseCodexApprovalRequest(record: CodexJsonRpcNotification): NativeCliOutputEvent[] {
   const params = record.params;
   if (!params || typeof params !== 'object' || Array.isArray(params)) return [];
   const p = params as Record<string, unknown>;
@@ -343,16 +380,25 @@ function parseCodexApprovalRequest(record: Record<string, unknown>): NativeCliOu
   return [];
 }
 
-function parseCodexServerNotification(record: Record<string, unknown>): NativeCliOutputEvent[] {
+function parseCodexServerNotification(record: CodexJsonRpcNotification): NativeCliOutputEvent[] {
   const params = record.params;
   if (!params || typeof params !== 'object' || Array.isArray(params)) return [];
   const p = params as Record<string, unknown>;
 
   if (record.method === 'rawResponseItem/completed') {
     const item = p.item;
-    if (item && typeof item === 'object' && !Array.isArray(item)) {
-      return parseCodexResponseItem(item as Record<string, unknown>);
+    if (isCodexResponseItem(item)) {
+      return parseCodexResponseItem(item);
     }
+  }
+
+  if (record.method === 'turn/completed') {
+    return [
+      {
+        type: 'agent_message',
+        payload: { text: stringValue(p.text, p.result, p.outputText), final: true }
+      }
+    ];
   }
 
   if (record.method === 'thread/status/changed' && typeof p.threadId === 'string') {
@@ -382,7 +428,7 @@ function parseCodexServerNotification(record: Record<string, unknown>): NativeCl
   return [];
 }
 
-function parseCodexClientResponse(record: Record<string, unknown>): NativeCliOutputEvent[] {
+function parseCodexClientResponse(record: CodexJsonRpcResponse): NativeCliOutputEvent[] {
   const error = record.error;
   if (error && typeof error === 'object' && !Array.isArray(error)) {
     const e = error as Record<string, unknown>;
@@ -436,15 +482,19 @@ function parseCodexSessionJsonl(chunk: string): NativeCliOutputEvent[] {
     const record = parseJsonObject(line);
     if (!record) continue;
     const payload = record.payload;
-    const responseEvents = parseCodexClientResponse(record);
-    if (responseEvents.length > 0) {
-      events.push(...responseEvents);
-      continue;
+    if (isCodexJsonRpcResponse(record)) {
+      const responseEvents = parseCodexClientResponse(record);
+      if (responseEvents.length > 0) {
+        events.push(...responseEvents);
+        continue;
+      }
     }
-    const appServerEvents = [...parseCodexApprovalRequest(record), ...parseCodexServerNotification(record)];
-    if (appServerEvents.length > 0) {
-      events.push(...appServerEvents);
-      continue;
+    if (isCodexJsonRpcNotification(record)) {
+      const appServerEvents = [...parseCodexApprovalRequest(record), ...parseCodexServerNotification(record)];
+      if (appServerEvents.length > 0) {
+        events.push(...appServerEvents);
+        continue;
+      }
     }
 
     if (!payload || typeof payload !== 'object') continue;
@@ -467,7 +517,7 @@ function parseCodexSessionJsonl(chunk: string): NativeCliOutputEvent[] {
       continue;
     }
 
-    if (record.type === 'response_item') events.push(...parseCodexResponseItem(p));
+    if (record.type === 'response_item' && isCodexResponseItem(p)) events.push(...parseCodexResponseItem(p));
   }
   return events;
 }

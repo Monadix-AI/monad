@@ -1,6 +1,6 @@
 'use client';
 
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 
 import { BrainIcon, EnergyIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
@@ -27,7 +27,7 @@ export function reasoningEffortOption(value: string): ReasoningEffortOption {
 
 export function defaultReasoningEffort(efforts: readonly string[] | undefined): string | undefined {
   const values = efforts?.filter((effort) => effort.trim().length > 0) ?? [];
-  return values.at(Math.max(0, values.length - 2));
+  return values.at(Math.min(1, values.length - 1));
 }
 
 function clampIndex(value: number, length: number): number {
@@ -162,6 +162,15 @@ export function ReasoningEffortControl({
   return (
     <div
       className={cn('min-w-0 rounded-lg border border-border/70 bg-card p-3 shadow-sm', compact && 'p-2.5', className)}
+      style={
+        {
+          '--effort-fill': 'var(--foreground)',
+          '--effort-fill-edge': 'color-mix(in srgb, var(--foreground) 24%, var(--border))',
+          '--effort-thumb': 'color-mix(in srgb, var(--card) 88%, var(--foreground) 12%)',
+          '--effort-track-end': 'color-mix(in srgb, var(--muted) 70%, var(--background))',
+          '--effort-track-start': 'color-mix(in srgb, var(--muted) 84%, var(--card))'
+        } as CSSProperties
+      }
     >
       <div className="flex items-center justify-between gap-3">
         <div className="inline-flex min-w-0 items-center gap-1 text-sm">
@@ -235,22 +244,36 @@ export function ReasoningEffortControl({
               style={{ left: `${THUMB_WIDTH_PX / 2}px` }}
             />
             <HugeiconsIcon
-              className="absolute top-1/2 size-4 -translate-x-1/2 -translate-y-1/2 transition-colors duration-150 ease-out"
+              className={cn(
+                'absolute top-1/2 size-4 -translate-x-1/2 -translate-y-1/2 transition-colors duration-150 ease-out',
+                progressRatio >= 1 ? 'text-background/90' : 'text-muted-foreground'
+              )}
               icon={BrainIcon}
               style={{ left: `calc(100% - ${THUMB_WIDTH_PX / 2}px)` }}
             />
           </div>
           <div
             aria-hidden="true"
-            className="absolute inset-0 rounded-[11px] border-[0.5px] border-border bg-muted shadow-[0_1px_2px_0px_rgba(0,0,0,0.1)] ring-1 ring-background ring-inset"
+            className="absolute inset-0 rounded-[11px]"
+            style={{
+              background: 'linear-gradient(180deg, var(--effort-track-start), var(--effort-track-end))',
+              border: '0.5px solid color-mix(in srgb, var(--foreground) 14%, var(--border))',
+              boxShadow:
+                'inset 0 1px 0 color-mix(in srgb, var(--foreground) 7%, transparent), 0 1px 2px rgb(0 0 0 / 0.12)'
+            }}
           />
           <div
             aria-hidden="true"
             className={cn(
-              'absolute inset-y-[0.5px] left-[0.5px] overflow-hidden rounded-[10.5px] bg-foreground shadow-xs',
+              'absolute inset-y-[0.5px] left-[0.5px] overflow-hidden rounded-[10.5px]',
               !interacting && 'transition-[width] duration-150 ease-out'
             )}
-            style={{ width: progressWidth }}
+            style={{
+              background:
+                'linear-gradient(180deg, color-mix(in srgb, white 16%, var(--effort-fill)), var(--effort-fill))',
+              boxShadow: 'inset 0 1px 0 color-mix(in srgb, white 28%, transparent), 0 0 0 1px var(--effort-fill-edge)',
+              width: progressWidth
+            }}
           />
           {sliderOptions.slice(1, -1).map((option, index) => {
             const optionIndex = index + 1;
@@ -280,10 +303,16 @@ export function ReasoningEffortControl({
           <span
             aria-hidden="true"
             className={cn(
-              'absolute inset-y-0 z-30 w-[22px] -translate-x-1/2 rounded-[11px] border-[0.5px] border-border bg-card transition-[background-color,border-color] duration-150 ease-out',
-              interacting ? 'bg-muted' : 'hover:bg-background'
+              'absolute inset-y-0 z-30 w-[22px] -translate-x-1/2 rounded-[11px] transition-[background-color,border-color,box-shadow] duration-150 ease-out',
+              interacting && 'brightness-110'
             )}
-            style={{ left: thumbCenterStyle(progressRatio) }}
+            style={{
+              background:
+                'linear-gradient(180deg, color-mix(in srgb, white 8%, var(--effort-thumb)), var(--effort-thumb))',
+              border: '0.5px solid color-mix(in srgb, var(--foreground) 18%, var(--effort-fill-edge))',
+              boxShadow: '0 2px 8px rgb(0 0 0 / 0.18), inset 0 1px 0 color-mix(in srgb, white 18%, transparent)',
+              left: thumbCenterStyle(progressRatio)
+            }}
           />
         </div>
       </div>

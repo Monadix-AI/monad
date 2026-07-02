@@ -3,7 +3,7 @@ export { useEditMemoryFactMutation } from './edit-memory-fact.ts';
 export { memoryApi, useForgetMemoryFactMutation } from './forget-memory-fact.ts';
 export { useGetMemoryCoreQuery } from './get-memory-core.ts';
 export { useGetMemoryStatusQuery } from './get-memory-status.ts';
-export { factAdapter, factSelectors, useListMemoryFactsQuery } from './list-memory-facts.ts';
+export { factSelectors, useListMemoryFactsQuery } from './list-memory-facts.ts';
 export { usePutMemoryCoreMutation } from './put-memory-core.ts';
 export { useSetMem0ModelsMutation } from './set-mem0-models.ts';
 export { useSetMemoryBackendMutation } from './set-memory-backend.ts';

@@ -47,20 +47,25 @@ export function mentionSegments(text: string): MentionSegment[] {
 export function MentionText({ text, className }: { text: string; className?: string }) {
   let offset = 0;
   return (
-    <span className={cn('whitespace-pre-wrap', className)}>
+    <span className={cn('whitespace-pre-wrap break-words [overflow-wrap:anywhere]', className)}>
       {mentionSegments(text).map((segment) => {
         const key = `${segment.kind}:${offset}`;
         offset += segment.kind === 'mention' ? mentionToken(segment).length : segment.text.length;
         return segment.kind === 'mention' ? (
           <span
-            className="mx-0.5 inline-flex max-w-full items-center rounded-md border border-accent-blue/45 bg-accent-blue-soft px-1.5 py-0.5 align-baseline font-medium text-accent-blue text-xs"
+            className="mx-0.5 inline-flex max-w-full items-center rounded bg-accent-blue px-1 align-baseline text-white"
             key={key}
             title={segment.id}
           >
             @{segment.name}
           </span>
         ) : (
-          <span key={key}>{segment.text}</span>
+          <span
+            className="[overflow-wrap:anywhere]"
+            key={key}
+          >
+            {segment.text}
+          </span>
         );
       })}
     </span>

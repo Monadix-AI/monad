@@ -3,7 +3,7 @@ import type { NativeCliAuthStatusResponse } from '@monad/protocol';
 import { clientOf, runTreaty } from '../../endpoint-helpers.ts';
 import { sessionsApi } from '../sessions/index.ts';
 
-export const getNativeCliAuthStatusApi = sessionsApi.injectEndpoints({
+const getNativeCliAuthStatusApi = sessionsApi.injectEndpoints({
   overrideExisting: true,
   endpoints: (builder) => ({
     getNativeCliAuthStatus: builder.query<NativeCliAuthStatusResponse, string>({
@@ -13,4 +13,4 @@ export const getNativeCliAuthStatusApi = sessionsApi.injectEndpoints({
   })
 });
 
-export const { useGetNativeCliAuthStatusQuery, useLazyGetNativeCliAuthStatusQuery } = getNativeCliAuthStatusApi;
+export const { useLazyGetNativeCliAuthStatusQuery } = getNativeCliAuthStatusApi;

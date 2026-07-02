@@ -5,7 +5,6 @@ import type {
   NativeCliArgumentSupport,
   NativeCliArgumentSupportProbe,
   NativeCliLaunchSpec,
-  NativeCliModelOptionsProbe,
   NativeCliProviderAdapter
 } from '@/services/native-cli/types.ts';
 
@@ -104,41 +103,12 @@ export function buildNativeCliAuthStatusLaunch(agent: NativeCliAgentView): Nativ
   return ADAPTERS[agent.provider].authStatus(agent).launch;
 }
 
-export function buildNativeCliModelOptionsProbe(agent: NativeCliAgentView): NativeCliModelOptionsProbe | undefined {
-  assertSafeArgs(agent);
-  assertCommandShape(agent);
-  return ADAPTERS[agent.provider].modelOptions?.(agent);
-}
-
 export function buildNativeCliArgumentSupportProbe(
   agent: NativeCliAgentView
 ): NativeCliArgumentSupportProbe | undefined {
   assertSafeArgs(agent);
   assertCommandShape(agent);
   return ADAPTERS[agent.provider].argumentSupport?.(agent);
-}
-
-export function probeNativeCliArgumentSupport(
-  agent: NativeCliAgentView,
-  probes: BinProbes = defaultBinProbes
-): NativeCliArgumentSupport | undefined {
-  const adapter = ADAPTERS[agent.provider];
-  const probe = adapter.argumentSupport?.(agent);
-  if (!probe) return undefined;
-  let launch: NativeCliLaunchSpec;
-  try {
-    launch = resolveNativeCliLaunchCommand(adapter, probe.launch, probes);
-  } catch {
-    return undefined;
-  }
-  const result = spawnSync(launch.argv[0] as string, launch.argv.slice(1), {
-    cwd: launch.cwd,
-    env: { ...process.env, ...(launch.env ?? {}) },
-    encoding: 'utf8',
-    timeout: 2000
-  });
-  const output = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
-  return probe.parse(output, typeof result.status === 'number' ? result.status : null);
 }
 
 export function listNativeCliAgentModelOptions(
@@ -165,6 +135,29 @@ export function listNativeCliAgentModelOptions(
   const output = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
   const parsed = probe.parse(output, typeof result.status === 'number' ? result.status : null);
   return parsed.length > 0 ? parsed : fallback;
+}
+
+function probeNativeCliArgumentSupport(
+  agent: NativeCliAgentView,
+  probes: BinProbes = defaultBinProbes
+): NativeCliArgumentSupport | undefined {
+  const adapter = ADAPTERS[agent.provider];
+  const probe = adapter.argumentSupport?.(agent);
+  if (!probe) return undefined;
+  let launch: NativeCliLaunchSpec;
+  try {
+    launch = resolveNativeCliLaunchCommand(adapter, probe.launch, probes);
+  } catch {
+    return undefined;
+  }
+  const result = spawnSync(launch.argv[0] as string, launch.argv.slice(1), {
+    cwd: launch.cwd,
+    env: { ...process.env, ...(launch.env ?? {}) },
+    encoding: 'utf8',
+    timeout: 2000
+  });
+  const output = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
+  return probe.parse(output, typeof result.status === 'number' ? result.status : null);
 }
 
 export function listNativeCliAgentReasoningEfforts(

@@ -194,12 +194,12 @@ interface NativeCliInitializeContext {
   speed?: 'standard' | 'fast';
 }
 
-export interface NativeCliAuthStatusProbe {
+interface NativeCliAuthStatusProbe {
   launch: NativeCliLaunchSpec;
   parse(output: string, exitCode: number | null): NativeCliAuthState;
 }
 
-export interface NativeCliModelOptionsProbe {
+interface NativeCliModelOptionsProbe {
   launch: NativeCliLaunchSpec;
   parse(output: string, exitCode: number | null): string[];
 }

@@ -82,10 +82,12 @@ function CandidateRow({
 export function ProjectAddMemberSection({
   candidates,
   onAdd,
+  promoted = false,
   title
 }: {
   candidates: AvailableProjectMember[];
   onAdd: (candidate: AvailableProjectMember) => void;
+  promoted?: boolean;
   title: string;
 }): React.ReactElement {
   const t = useT();
@@ -94,9 +96,9 @@ export function ProjectAddMemberSection({
       <div style={{ ...sectionLabel, color: 'var(--muted-foreground)' }}>{title}</div>
       <div
         style={{
-          border: `1px solid ${'var(--border)'}`,
+          border: `1px solid ${promoted ? 'color-mix(in srgb, var(--accent-blue) 48%, var(--border))' : 'var(--border)'}`,
           borderRadius: boxR,
-          background: 'var(--card)',
+          background: promoted ? 'color-mix(in srgb, var(--accent-blue) 5%, var(--card))' : 'var(--card)',
           display: 'flex',
           flexDirection: 'column'
         }}

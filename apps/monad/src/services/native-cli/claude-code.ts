@@ -1,3 +1,10 @@
+import type {
+  SDKAssistantMessage,
+  SDKMessage,
+  SDKResultMessage,
+  SDKSystemMessage,
+  SDKUserMessage
+} from '@anthropic-ai/claude-agent-sdk';
 import type { NativeCliAgentView } from '@monad/protocol';
 import type {
   BuildNativeCliLaunchOptions,
@@ -22,6 +29,29 @@ const CLAUDE_CODE_SUPPORTED_MODELS = [
   'claude-opus-4-6',
   'claude-sonnet-4-6'
 ];
+
+type ClaudeSdkJsonLine = Partial<SDKMessage> & Record<string, unknown> & { type: string };
+type ClaudeSystemInitJsonLine = Partial<SDKSystemMessage> &
+  Record<string, unknown> & { type: 'system'; subtype: 'init' };
+type ClaudeTranscriptJsonLine = Partial<SDKAssistantMessage | SDKUserMessage> &
+  Record<string, unknown> & { type: 'assistant' | 'user' };
+type ClaudeResultJsonLine = Partial<SDKResultMessage> & Record<string, unknown> & { type: 'result' };
+
+function isClaudeSdkMessage(record: Record<string, unknown>): record is ClaudeSdkJsonLine {
+  return typeof record.type === 'string';
+}
+
+function isClaudeSystemInitMessage(record: ClaudeSdkJsonLine): record is ClaudeSystemInitJsonLine {
+  return record.type === 'system' && record.subtype === 'init';
+}
+
+function isClaudeTranscriptMessage(record: ClaudeSdkJsonLine): record is ClaudeTranscriptJsonLine {
+  return record.type === 'assistant' || record.type === 'user';
+}
+
+function isClaudeResultMessage(record: ClaudeSdkJsonLine): record is ClaudeResultJsonLine {
+  return record.type === 'result';
+}
 function hasFlag(args: string[], flag: string): boolean {
   return args.some((arg) => arg === flag || arg.startsWith(`${flag}=`));
 }
@@ -233,9 +263,9 @@ function parseClaudeStreamJson(chunk: string): NativeCliOutputEvent[] {
     const line = rawLine.trim();
     if (!line.startsWith('{')) continue;
     const record = parseJsonObject(line);
-    if (!record) continue;
+    if (!record || !isClaudeSdkMessage(record)) continue;
 
-    if (record.type === 'system' && record.subtype === 'init') {
+    if (isClaudeSystemInitMessage(record)) {
       events.push({
         type: 'session_ref',
         payload: compactObject({
@@ -248,18 +278,15 @@ function parseClaudeStreamJson(chunk: string): NativeCliOutputEvent[] {
       continue;
     }
 
-    const message = record.message;
-    if (record.type === 'assistant' && message && typeof message === 'object' && !Array.isArray(message)) {
-      events.push(...parseClaudeMessageContent((message as Record<string, unknown>).content));
+    if (isClaudeTranscriptMessage(record)) {
+      const message = record.message;
+      if (message && typeof message === 'object' && !Array.isArray(message)) {
+        events.push(...parseClaudeMessageContent((message as unknown as Record<string, unknown>).content));
+      }
       continue;
     }
 
-    if (record.type === 'user' && message && typeof message === 'object' && !Array.isArray(message)) {
-      events.push(...parseClaudeMessageContent((message as Record<string, unknown>).content));
-      continue;
-    }
-
-    if (record.type === 'result' && typeof record.result === 'string') {
+    if (isClaudeResultMessage(record) && typeof record.result === 'string') {
       events.push({ type: 'agent_message', payload: { text: record.result, final: true } });
       events.push(...parseClaudePermissionDenials(record));
     }

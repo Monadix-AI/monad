@@ -66,6 +66,7 @@ interface ManagedProjectOutput {
   agentName: string;
   text: string;
   error?: boolean;
+  post?: boolean;
 }
 
 type ManagedProjectOutputHandler = (output: ManagedProjectOutput) => void | Promise<void>;
@@ -1218,6 +1219,15 @@ export class NativeCliHost {
       // instructs it to do. This keeps every provider consistent (codex never carried a terminal
       // `final` marker) and avoids double-posting the same text via both paths. Errors still surface
       // below via the provider_error branch.
+      if (event.payload.final === true) {
+        this.emitManagedProjectOutput(
+          transcriptTargetId,
+          id,
+          typeof event.payload.text === 'string' ? event.payload.text : '',
+          false,
+          false
+        );
+      }
       return;
     }
 
@@ -1296,6 +1306,42 @@ export class NativeCliHost {
       const requestId =
         typeof event.payload.requestId === 'string' ? event.payload.requestId : String(event.payload.requestId);
       const live = this.live.get(id);
+      if (live?.runtimeRole === 'managed-project-agent') {
+        const text = nativeCliApprovalText(event);
+        try {
+          live.adapter.resolveApproval(live, {
+            requestId,
+            allow: false,
+            reason: 'managed project native CLI provider approvals are disabled',
+            request: event.payload
+          });
+        } catch (err) {
+          this.log.debug(
+            {
+              sessionId: transcriptTargetId,
+              event: 'native_cli.managed_project_provider_approval_suppress_error',
+              nativeCliSessionId: id,
+              provider: adapter.provider,
+              requestId,
+              text,
+              err: err instanceof Error ? { message: err.message, stack: err.stack } : String(err)
+            },
+            'managed native cli provider approval suppress failed'
+          );
+        }
+        this.log.debug(
+          {
+            sessionId: transcriptTargetId,
+            event: 'native_cli.managed_project_provider_approval_suppressed',
+            nativeCliSessionId: id,
+            provider: adapter.provider,
+            requestId,
+            text
+          },
+          'managed native cli provider approval suppressed'
+        );
+        return;
+      }
       if (live?.pendingApprovals.has(requestId)) return;
       live?.pendingApprovals.set(requestId, event.payload);
       this.emit(transcriptTargetId, 'native_cli.approval_requested', {
@@ -1328,24 +1374,29 @@ export class NativeCliHost {
     transcriptTargetId: TranscriptTargetId,
     id: string,
     text: string,
-    error = false
+    error = false,
+    post = true
   ): void {
     const live = this.live.get(id);
     const row = this.deps.store.getNativeCliSession(id);
     const runtimeRole = live?.runtimeRole ?? row?.runtimeRole;
     if (runtimeRole !== 'managed-project-agent') return;
-    if (!this.deps.store.hasUnconsumedNativeCliInbox(id)) return;
+    if (post && !this.deps.store.hasUnconsumedNativeCliInbox(id)) return;
     const agentName = live?.agentName ?? row?.agentName;
     if (!agentName || !this.managedProjectOutputHandler) return;
-    const cursor = row?.lastDeliveredSeq ?? 0;
-    this.deps.store.markNativeCliInboxConsumed(id, cursor);
+    // Consume only what the agent actually saw in its input (visible), never items merely
+    // delivered mid-turn (busy notice sent without the message body) — those must survive
+    // this turn's settle so a later wake or `monad project inbox` can still surface them.
+    const cursor = row?.lastVisibleSeq ?? 0;
+    if (cursor > 0) this.deps.store.markNativeCliInboxConsumed(id, cursor);
     void Promise.resolve(
       this.managedProjectOutputHandler({
         sessionId: transcriptTargetId,
         nativeCliSessionId: id,
         agentName,
         text,
-        error
+        error,
+        post
       })
     ).catch((err: unknown) => {
       this.log.debug(

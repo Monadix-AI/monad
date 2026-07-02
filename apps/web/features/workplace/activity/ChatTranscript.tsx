@@ -1,18 +1,29 @@
 import type { ProjectCanvas } from '../presets/types';
 import type { Message, TypingIndicator } from '../types';
 
-import { TerminalIcon } from '@hugeicons/core-free-icons';
+import { ArrowDown01Icon, EyeIcon, TerminalIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { ProductIcon } from '@monad/ui';
-import { EyeIcon } from 'lucide-react';
 import { memo, useMemo, useRef, useState } from 'react';
 
-import { MentionText } from '@/components/MentionText';
+import { useT } from '@/components/I18nProvider';
+import { Markdown } from '@/components/Markdown';
+import { MentionText, parseMentionTokens } from '@/components/MentionText';
 import { VirtualList, type VirtualListHandle } from '@/components/ui/VirtualList';
+import { studioPath } from '@/features/routes/route-paths';
 import { AgentIdentity, AgentInstanceAvatar, Avatar, resolveProductIcon, TagChip } from '../Bits';
 import { boxR, mono, sans } from '../styles';
+import { useWorkplaceUiStore } from '../workplace-ui-store';
 
-const ROW_STYLE: React.CSSProperties = { display: 'flex', gap: 10, marginBottom: 16, maxWidth: '100%', minWidth: 0 };
+const ROW_STYLE: React.CSSProperties = {
+  boxSizing: 'border-box',
+  display: 'flex',
+  gap: 10,
+  marginBottom: 16,
+  maxWidth: '100%',
+  minWidth: 0,
+  width: '100%'
+};
 const NAME_STYLE: React.CSSProperties = { fontFamily: sans, fontSize: 14, fontWeight: 600 };
 const TIME_STYLE: React.CSSProperties = { fontFamily: mono, fontSize: 11, color: 'var(--muted-foreground)' };
 const HEADER_SPACER = <div style={{ height: 24 }} />;
@@ -72,6 +83,56 @@ const SYSTEM_EVENT_CSS = `
   flex: none;
 }
 `;
+const MESSAGE_MARKDOWN_CSS = `
+  .workplace-message-markdown {
+    color: inherit;
+    font-size: inherit;
+    font-weight: inherit;
+    line-height: inherit;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+.workplace-message-markdown :where(p, li, blockquote, table, th, td, code, pre) {
+  font-size: inherit;
+  font-weight: inherit;
+  line-height: inherit;
+}
+
+.workplace-message-markdown p {
+  margin-block: 0;
+}
+
+  .workplace-message-markdown :not(pre) > code {
+    border: 1px solid color-mix(in srgb, currentColor 16%, transparent);
+    border-radius: 7px;
+    background: color-mix(in srgb, currentColor 10%, transparent);
+    padding: 0.08em 0.42em;
+    font-family: ${mono};
+    font-size: 0.9em;
+    font-weight: 500;
+    overflow-wrap: anywhere;
+    white-space: normal;
+    word-break: break-word;
+  }
+
+.workplace-message-markdown pre code {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 0;
+  white-space: pre;
+}
+
+.workplace-message-markdown p:first-child {
+  margin-top: 0;
+}
+
+.workplace-message-markdown p:last-child {
+  margin-bottom: 0;
+}
+`;
 
 function FollowButton({
   nativeCliSessionId,
@@ -104,8 +165,9 @@ function FollowButton({
       title="Observe"
       type="button"
     >
-      <EyeIcon
+      <HugeiconsIcon
         aria-hidden="true"
+        icon={EyeIcon}
         size={13}
         strokeWidth={2}
       />
@@ -175,7 +237,7 @@ function SystemMessageRow({
             ))}
           </span>
         ) : null}
-        <span className="workplace-system-copy">{msg.text}</span>
+        {msg.text ? <span className="workplace-system-copy">{msg.text}</span> : null}
         {msg.time ? <span style={TIME_STYLE}>{msg.time}</span> : null}
         <span className="workplace-system-follow">
           <FollowButton
@@ -263,7 +325,7 @@ function MessageHeader({
   );
 }
 
-function MessageBubbleContent({
+export function MessageBubbleContent({
   agent,
   hasText,
   msg
@@ -272,28 +334,17 @@ function MessageBubbleContent({
   hasText: boolean;
   msg: Message;
 }): React.ReactElement | null {
+  const agentContent = agent ? (
+    <MarkdownWithMentions
+      streaming={msg.streaming}
+      text={msg.text}
+    />
+  ) : null;
   return (
     <>
-      {msg.reasoning ? (
-        <div
-          style={{
-            marginBottom: hasText ? 8 : 0,
-            borderLeft: `2px solid ${'var(--accent-blue)'}`,
-            paddingLeft: 9,
-            color: 'var(--muted-foreground)',
-            fontFamily: mono,
-            fontSize: 12,
-            lineHeight: 1.5,
-            whiteSpace: 'pre-wrap',
-            wordBreak: 'break-word'
-          }}
-        >
-          {msg.reasoning}
-        </div>
-      ) : null}
       {hasText ? (
-        <span>
-          <MentionText text={msg.text} />
+        <span style={{ display: 'block' }}>
+          {agent ? agentContent : <MentionText text={msg.text} />}
           {msg.streaming && agent ? (
             <span
               aria-hidden="true"
@@ -318,6 +369,24 @@ function MessageBubbleContent({
   );
 }
 
+function MarkdownWithMentions({ text, streaming }: { text: string; streaming?: boolean }): React.ReactElement {
+  const tokens = parseMentionTokens(text);
+  return (
+    <>
+      <style>{MESSAGE_MARKDOWN_CSS}</style>
+      {tokens.length > 0 ? (
+        <MentionText text={text} />
+      ) : (
+        <Markdown
+          className="workplace-message-markdown !text-current"
+          streaming={streaming}
+          text={text}
+        />
+      )}
+    </>
+  );
+}
+
 const MessageRow = memo(function MessageRow({
   msg,
   onAgentClick,
@@ -338,65 +407,69 @@ const MessageRow = memo(function MessageRow({
   }
   const agent = msg.kind === 'agent';
   const hasText = msg.text.trim().length > 0;
+  const avatar = agent ? (
+    <AgentInstanceAvatar
+      agent={{ av: msg.av, avatarUrl: msg.avatarUrl, icon: msg.icon, name: msg.authorName }}
+      bordered={false}
+      size={34}
+    />
+  ) : (
+    <Avatar
+      av={msg.av}
+      avatarUrl={msg.avatarUrl}
+      icon={msg.icon}
+      kind="human"
+      size={34}
+    />
+  );
+  const messageStack = (
+    <div
+      style={{
+        alignItems: agent ? 'flex-start' : 'flex-end',
+        display: 'flex',
+        flexDirection: 'column',
+        maxWidth: 'min(72ch, calc(100% - 44px))',
+        minWidth: 0
+      }}
+    >
+      <MessageHeader
+        align={agent ? 'left' : 'right'}
+        msg={msg}
+        onFollowNativeCliSession={onFollowNativeCliSession}
+      />
+      <div
+        style={{
+          background: agent ? 'var(--secondary)' : 'var(--foreground)',
+          border: `1px solid ${agent ? 'var(--border)' : 'var(--foreground)'}`,
+          borderRadius: agent ? boxR : '12px 12px 4px 12px',
+          color: agent ? 'var(--foreground)' : 'var(--background)',
+          fontFamily: sans,
+          fontSize: 15,
+          lineHeight: 1.55,
+          maxWidth: '100%',
+          overflowWrap: 'anywhere',
+          padding: '10px 14px',
+          wordBreak: 'break-word'
+        }}
+      >
+        <MessageBubbleContent
+          agent={agent}
+          hasText={hasText}
+          msg={msg}
+        />
+      </div>
+    </div>
+  );
   return (
     <div
       style={{
         ...ROW_STYLE,
-        flexDirection: agent ? 'row' : 'row-reverse',
-        justifyContent: agent ? 'flex-start' : 'flex-start'
+        flexDirection: 'row',
+        justifyContent: agent ? 'flex-start' : 'flex-end'
       }}
     >
-      {agent ? (
-        <AgentInstanceAvatar
-          agent={{ av: msg.av, avatarUrl: msg.avatarUrl, icon: msg.icon, name: msg.authorName }}
-          bordered={false}
-          size={34}
-        />
-      ) : (
-        <Avatar
-          av={msg.av}
-          avatarUrl={msg.avatarUrl}
-          icon={msg.icon}
-          kind="human"
-          size={34}
-        />
-      )}
-      <div
-        style={{
-          alignItems: agent ? 'flex-start' : 'flex-end',
-          display: 'flex',
-          flexDirection: 'column',
-          maxWidth: 'calc(100% - 44px)',
-          minWidth: 0
-        }}
-      >
-        <MessageHeader
-          align={agent ? 'left' : 'right'}
-          msg={msg}
-          onFollowNativeCliSession={onFollowNativeCliSession}
-        />
-        <div
-          style={{
-            background: agent ? 'var(--secondary)' : 'var(--foreground)',
-            border: `1px solid ${agent ? 'var(--border)' : 'var(--foreground)'}`,
-            borderRadius: agent ? boxR : '12px 12px 4px 12px',
-            color: agent ? 'var(--foreground)' : 'var(--background)',
-            fontFamily: sans,
-            fontSize: 15,
-            lineHeight: 1.55,
-            maxWidth: '100%',
-            overflowWrap: 'anywhere',
-            padding: '10px 14px',
-            wordBreak: 'break-word'
-          }}
-        >
-          <MessageBubbleContent
-            agent={agent}
-            hasText={hasText}
-            msg={msg}
-          />
-        </div>
-      </div>
+      {agent ? avatar : messageStack}
+      {agent ? messageStack : avatar}
     </div>
   );
 });
@@ -492,14 +565,20 @@ function TranscriptSkeleton(): React.ReactElement {
 }
 
 export function ChatTranscript({ room }: { room: ProjectCanvas }): React.ReactElement {
+  const t = useT();
   const listRef = useRef<VirtualListHandle>(null);
   const [atBottom, setAtBottom] = useState(true);
+  const openProjectSettings = useWorkplaceUiStore((state) => state.openProjectSettings);
   // Stable footer reference across streamed-token re-renders (only the typing indicator varies), so
   // VirtualList's header/footer context memo isn't invalidated every token.
   const footer = useMemo(
     () => (
       <>
-        {room.typing ? <TypingRow typing={room.typing} /> : null}
+        {room.typing ? (
+          <div style={{ boxSizing: 'border-box', padding: '0 16px', width: '100%' }}>
+            <TypingRow typing={room.typing} />
+          </div>
+        ) : null}
         {/* Keeps the last row clear of the floating composer; a footer spacer rather than
             scroller padding, which would skew Virtuoso's row measurement. */}
         <div style={{ height: 108 }} />
@@ -507,7 +586,6 @@ export function ChatTranscript({ room }: { room: ProjectCanvas }): React.ReactEl
     ),
     [room.typing]
   );
-  const emptyTitle = 'Start the agent conversation.';
 
   if (room.messages.length === 0) {
     if (!room.ready) {
@@ -533,51 +611,121 @@ export function ChatTranscript({ room }: { room: ProjectCanvas }): React.ReactEl
       >
         <div
           style={{
-            margin: '44px auto 0',
-            maxWidth: 360,
-            padding: '22px 24px',
-            border: `1px solid ${'color-mix(in srgb, var(--accent-blue) 55%, var(--border))'}`,
-            borderRadius: 16,
-            background: 'var(--muted)',
-            textAlign: 'center'
+            margin: '52px auto 0',
+            maxWidth: 470,
+            padding: '24px 26px',
+            border: `1px solid ${'var(--border)'}`,
+            borderRadius: 14,
+            background: 'color-mix(in srgb, var(--card) 88%, var(--muted))',
+            textAlign: 'left'
           }}
         >
+          <div style={{ display: 'flex', gap: 13, alignItems: 'flex-start' }}>
+            <div
+              style={{
+                flex: 'none',
+                width: 42,
+                height: 42,
+                borderRadius: 12,
+                background: 'var(--accent-blue)',
+                boxShadow: '0 8px 18px -12px color-mix(in srgb, var(--accent-blue) 80%, transparent)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
+            >
+              <span
+                aria-label="monad"
+                role="img"
+                style={{
+                  width: '52%',
+                  height: '52%',
+                  WebkitMaskImage: 'url("/monad-icon-vector-solid.svg")',
+                  maskImage: 'url("/monad-icon-vector-solid.svg")',
+                  WebkitMaskRepeat: 'no-repeat',
+                  maskRepeat: 'no-repeat',
+                  WebkitMaskPosition: 'center',
+                  maskPosition: 'center',
+                  WebkitMaskSize: 'contain',
+                  maskSize: 'contain',
+                  background: 'var(--primary-foreground)'
+                }}
+              />
+            </div>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontFamily: sans, fontSize: 18, fontWeight: 700, lineHeight: 1.3, marginBottom: 7 }}>
+                {t('web.workplace.emptyChatTitle')}
+              </div>
+              <div
+                style={{
+                  fontFamily: sans,
+                  fontSize: 14,
+                  lineHeight: 1.55,
+                  color: 'var(--muted-foreground)',
+                  maxWidth: 390
+                }}
+              >
+                {t('web.workplace.emptyChatDescription')}
+              </div>
+            </div>
+          </div>
+
           <div
             style={{
-              width: 40,
-              height: 40,
-              borderRadius: 11,
-              background: 'var(--accent-blue)',
-              boxShadow: '0 6px 16px -8px color-mix(in srgb, var(--accent-blue) 60%, transparent)',
               display: 'flex',
+              flexWrap: 'wrap',
               alignItems: 'center',
-              justifyContent: 'center',
-              margin: '0 auto 14px'
+              gap: 10,
+              marginTop: 20
             }}
           >
-            <span
-              aria-label="monad"
-              role="img"
+            <a
+              className="workplace-action"
+              href={studioPath('nativeCliAgents')}
               style={{
-                width: '52%',
-                height: '52%',
-                WebkitMaskImage: 'url("/monad-icon-vector-solid.svg")',
-                maskImage: 'url("/monad-icon-vector-solid.svg")',
-                WebkitMaskRepeat: 'no-repeat',
-                maskRepeat: 'no-repeat',
-                WebkitMaskPosition: 'center',
-                maskPosition: 'center',
-                WebkitMaskSize: 'contain',
-                maskSize: 'contain',
-                background: 'var(--primary-foreground)'
+                minHeight: 38,
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                border: `1px solid ${'var(--border)'}`,
+                borderRadius: 10,
+                background: 'var(--card)',
+                color: 'var(--foreground)',
+                fontFamily: sans,
+                fontSize: 14,
+                fontWeight: 650,
+                padding: '0 14px',
+                textDecoration: 'none'
               }}
-            />
-          </div>
-          <div style={{ fontFamily: sans, fontSize: 18, fontWeight: 700, lineHeight: 1.3, marginBottom: 8 }}>
-            {emptyTitle}
-          </div>
-          <div style={{ fontFamily: sans, fontSize: 14, lineHeight: 1.6, color: 'var(--muted-foreground)' }}>
-            Type a message, or use @ to assign an agent directly. Tool calls and approvals land in Activity.
+            >
+              {t('web.workplace.emptyConnectInStudio')}
+            </a>
+            <button
+              className="workplace-action"
+              onClick={() => openProjectSettings(room.projectId, 'spawn-agent')}
+              style={{
+                minHeight: 38,
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 7,
+                border: `1px solid ${'var(--accent-blue)'}`,
+                borderRadius: 10,
+                background: 'var(--accent-blue)',
+                color: 'var(--primary-foreground)',
+                fontFamily: sans,
+                fontSize: 14,
+                fontWeight: 650,
+                padding: '0 14px'
+              }}
+              type="button"
+            >
+              <HugeiconsIcon
+                icon={TerminalIcon}
+                size={15}
+              />
+              {t('web.workplace.emptySpawnAgentMember')}
+            </button>
           </div>
         </div>
         {room.typing ? (
@@ -604,40 +752,49 @@ export function ChatTranscript({ room }: { room: ProjectCanvas }): React.ReactEl
         onAtBottomChange={setAtBottom}
         onStartReached={room.loadOlder}
         renderItem={(msg) => (
-          <MessageRow
-            msg={msg}
-            onAgentClick={room.openAgentCard}
-            onFollowNativeCliSession={room.followNativeCliSession}
-          />
+          <div style={{ boxSizing: 'border-box', padding: '0 16px', width: '100%' }}>
+            <MessageRow
+              msg={msg}
+              onAgentClick={room.openAgentCard}
+              onFollowNativeCliSession={room.followNativeCliSession}
+            />
+          </div>
         )}
         role="log"
         stickToBottom
-        style={{ boxSizing: 'border-box', flex: 1, overflowX: 'hidden', padding: '0 16px' }}
+        style={{ boxSizing: 'border-box', flex: 1, overflowX: 'hidden' }}
       />
       {atBottom ? null : (
         <button
           aria-label="Jump to latest messages"
+          className="workplace-action"
           onClick={() => listRef.current?.scrollToBottom('smooth')}
           style={{
             position: 'absolute',
-            bottom: 120,
+            bottom: 12,
             left: '50%',
             transform: 'translateX(-50%)',
             display: 'inline-flex',
             alignItems: 'center',
-            gap: 6,
-            padding: '6px 14px',
+            justifyContent: 'center',
+            width: 38,
+            height: 38,
+            padding: 0,
             borderRadius: 999,
             border: `1px solid ${'var(--border)'}`,
             background: 'var(--card)',
-            boxShadow: 'var(--shadow-sm)',
-            color: 'var(--foreground)',
-            fontFamily: sans,
-            fontSize: 13
+            boxShadow: '0 10px 28px -18px rgb(0 0 0 / 0.45), var(--shadow-sm)',
+            color: 'var(--foreground)'
           }}
+          title="Jump to latest messages"
           type="button"
         >
-          ↓ Latest
+          <HugeiconsIcon
+            aria-hidden="true"
+            icon={ArrowDown01Icon}
+            size={18}
+            strokeWidth={2.2}
+          />
         </button>
       )}
     </div>

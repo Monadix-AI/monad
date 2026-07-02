@@ -10,7 +10,7 @@ import {
 
 type QueryEntry = { endpointName?: string; originalArgs?: unknown } | undefined;
 
-export const deleteWorkplaceProjectApi = apiSlice.injectEndpoints({
+const deleteWorkplaceProjectApi = apiSlice.injectEndpoints({
   overrideExisting: true,
   endpoints: (builder) => ({
     deleteWorkplaceProject: builder.mutation<DeleteWorkplaceProjectResponse, ProjectId>({

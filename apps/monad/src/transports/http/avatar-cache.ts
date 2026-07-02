@@ -11,7 +11,7 @@ const DICEBEAR_URL = 'https://api.dicebear.com/10.x/notionists/svg';
 function svgResponse(body: string): Response {
   return new Response(body, {
     headers: {
-      'cache-control': 'no-store',
+      'cache-control': 'public, max-age=31536000, immutable',
       'content-type': 'image/svg+xml; charset=utf-8'
     }
   });

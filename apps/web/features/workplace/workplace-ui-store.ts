@@ -7,10 +7,12 @@ interface RailObservation {
   agentId?: string;
   agentName?: string;
   nativeCliSessionId?: string;
+  turnId?: string;
 }
 
 interface ProjectSettingsState {
   projectId: string;
+  intent?: 'connect-agent' | 'spawn-agent';
 }
 
 interface ProjectMemberSettingsState {
@@ -39,10 +41,10 @@ interface WorkplaceUiState {
   nativeCliAuthSession: NativeCliAuthSessionState | null;
   startingNativeCliAuthAgent: string | null;
   showDevSystemMessagesInStream: boolean;
-  followNativeCliSession: (projectId: string, sessionId: string) => void;
+  followNativeCliSession: (projectId: string, sessionId: string, turnId?: string) => void;
   observeProjectAgent: (projectId: string, agent: { agentId: string; agentName: string }) => void;
   closeRailObservation: () => void;
-  openProjectSettings: (projectId: string) => void;
+  openProjectSettings: (projectId: string, intent?: ProjectSettingsState['intent']) => void;
   closeProjectSettings: () => void;
   openProjectMemberSettings: (projectId: string, memberId: string) => void;
   closeProjectMemberSettings: () => void;
@@ -59,12 +61,12 @@ export const useWorkplaceUiStore = create<WorkplaceUiState>((set) => ({
   nativeCliAuthSession: null,
   startingNativeCliAuthAgent: null,
   showDevSystemMessagesInStream: readShowDevSystemMessagesInStream(),
-  followNativeCliSession: (projectId, sessionId) =>
-    set({ railObservation: { projectId, nativeCliSessionId: sessionId } }),
+  followNativeCliSession: (projectId, sessionId, turnId) =>
+    set({ railObservation: { projectId, nativeCliSessionId: sessionId, ...(turnId ? { turnId } : {}) } }),
   observeProjectAgent: (projectId, agent) =>
     set({ railObservation: { projectId, agentId: agent.agentId, agentName: agent.agentName } }),
   closeRailObservation: () => set({ railObservation: null }),
-  openProjectSettings: (projectId) => set({ projectSettings: { projectId } }),
+  openProjectSettings: (projectId, intent) => set({ projectSettings: { projectId, ...(intent ? { intent } : {}) } }),
   closeProjectSettings: () => set({ projectSettings: null }),
   openProjectMemberSettings: (projectId, memberId) => set({ projectMemberSettings: { projectId, memberId } }),
   closeProjectMemberSettings: () => set({ projectMemberSettings: null }),

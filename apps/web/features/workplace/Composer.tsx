@@ -1,3 +1,5 @@
+import type { UseHotkeyDefinition } from '@tanstack/react-hotkeys';
+import type { Participant, QuestionView } from './types';
 import type { ProjectController } from './use-project';
 
 import {
@@ -6,15 +8,18 @@ import {
   useListProfilesQuery,
   useTranscribeAudioMutation
 } from '@monad/client-rtk';
-import { useRouter } from 'next/navigation';
-import { useMemo, useRef, useState } from 'react';
+import { ProductIcon } from '@monad/ui';
+import { useHotkeys } from '@tanstack/react-hotkeys';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { mentionToken, parseMentionTokens } from '@/components/MentionText';
 import { studioPath } from '@/features/routes/route-paths';
 import { ComposerShell } from '@/features/session/ComposerShell';
 import { audioBlobToBase64 } from '@/features/session/voice-transcription';
 import { ApprovalStack } from './activity/ApprovalStack';
-import { mono, sans } from './styles';
+import { AgentIdentity, AgentInstanceAvatar, ghostButtonStyle, inkButtonStyle, resolveProductIcon } from './Bits';
+import { boxR, mono, sans } from './styles';
 
 function activeMention(value: string, caret: number): { query: string; start: number } | null {
   const before = value.slice(0, caret);
@@ -28,8 +33,7 @@ function createMentionChip(target: { id: string; name: string }): HTMLSpanElemen
   chip.contentEditable = 'false';
   chip.dataset.mentionId = target.id;
   chip.dataset.mentionName = target.name;
-  chip.className =
-    'mx-1 inline-flex max-w-full items-center rounded-md border border-accent-blue/45 bg-accent-blue-soft px-1.5 py-0.5 align-baseline font-medium text-accent-blue text-xs';
+  chip.className = 'mx-1 inline-flex max-w-full items-center rounded bg-accent-blue px-1 align-baseline text-white';
   chip.title = target.id;
   chip.textContent = `@${target.name}`;
   return chip;
@@ -102,8 +106,306 @@ function insertPlainText(text: string): void {
   selection.addRange(range);
 }
 
+function QuestionStack({
+  asker,
+  onAnswer,
+  question
+}: {
+  asker?: Pick<Participant, 'av' | 'avatarUrl' | 'icon' | 'name'>;
+  onAnswer: (requestId: string, answer: string) => void;
+  question: QuestionView;
+}): React.ReactElement {
+  const [selected, setSelected] = useState<string[]>([]);
+  const [other, setOther] = useState('');
+  const panelRef = useRef<HTMLDivElement>(null);
+  const otherRef = useRef<HTMLTextAreaElement>(null);
+  const multiple = question.mode === 'multiple';
+  const canSend = selected.length > 0 || other.trim().length > 0;
+  const displayAgent = asker ?? {
+    av: question.askerName.slice(0, 2).toUpperCase(),
+    name: question.askerName
+  };
+  const productIcon = resolveProductIcon(displayAgent);
+
+  useEffect(() => {
+    panelRef.current?.focus();
+  }, []);
+
+  const toggle = (option: string): void => {
+    setSelected((current) =>
+      multiple
+        ? current.includes(option)
+          ? current.filter((item) => item !== option)
+          : [...current, option]
+        : [option]
+    );
+    if (!multiple) setOther('');
+  };
+  const skip = (): void => {
+    onAnswer(question.id, '');
+    setSelected([]);
+    setOther('');
+  };
+  const submit = (): void => {
+    const values = [...selected, ...(other.trim() ? [other.trim()] : [])];
+    if (values.length === 0) return;
+    onAnswer(question.id, multiple ? JSON.stringify(values) : (values[0] ?? ''));
+    setSelected([]);
+    setOther('');
+  };
+  const chooseShortcut = (index: number): void => {
+    const option = question.options[index - 1];
+    if (option) {
+      toggle(option);
+      return;
+    }
+    if (question.allowOther && index === question.options.length + 1) otherRef.current?.focus();
+  };
+  const hotkeys: UseHotkeyDefinition[] = [
+    ...Array.from({ length: Math.min(9, question.options.length + (question.allowOther ? 1 : 0)) }, (_, index) => ({
+      hotkey: String(index + 1) as UseHotkeyDefinition['hotkey'],
+      callback: () => chooseShortcut(index + 1)
+    })),
+    {
+      hotkey: 'Enter' as UseHotkeyDefinition['hotkey'],
+      callback: () => submit()
+    },
+    {
+      hotkey: 'Escape' as UseHotkeyDefinition['hotkey'],
+      callback: () => panelRef.current?.blur()
+    }
+  ];
+  useHotkeys(hotkeys, {
+    target: panelRef,
+    ignoreInputs: true,
+    preventDefault: true,
+    stopPropagation: true,
+    requireReset: true
+  });
+  return (
+    <div
+      ref={panelRef}
+      style={{
+        display: 'grid',
+        gap: 8,
+        outline: 'none',
+        transformOrigin: 'top center'
+      }}
+      // biome-ignore lint/a11y/noNoninteractiveTabindex: the question attachment is a scoped hotkey target.
+      tabIndex={0}
+    >
+      <div
+        style={{
+          border: '1px solid color-mix(in srgb, var(--accent-blue) 46%, var(--border))',
+          borderRadius: boxR,
+          background: 'color-mix(in srgb, var(--accent-blue) 10%, var(--card))',
+          padding: 10,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 9
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 9, minWidth: 0 }}>
+          <AgentInstanceAvatar
+            agent={displayAgent}
+            size={26}
+          />
+          <div style={{ minWidth: 0, display: 'flex', alignItems: 'center', gap: 7, fontFamily: sans }}>
+            <AgentIdentity
+              badge={
+                productIcon ? (
+                  <ProductIcon
+                    product={productIcon}
+                    size={13}
+                    title={displayAgent.name}
+                  />
+                ) : null
+              }
+              badgeGap={6}
+              name={displayAgent.name}
+              nameStyle={{ fontSize: 14, fontWeight: 700 }}
+            />
+            <span style={{ color: 'var(--muted-foreground)', fontSize: 13 }}>asked you a question</span>
+          </div>
+        </div>
+        <div style={{ fontFamily: sans, fontSize: 14, lineHeight: 1.45, whiteSpace: 'pre-wrap', paddingLeft: 35 }}>
+          {question.question}
+        </div>
+        {question.options.length > 0 ? (
+          <div style={{ display: 'grid', gap: 6, paddingLeft: 35 }}>
+            {question.options.map((option, index) => {
+              const active = selected.includes(option);
+              const number = index + 1;
+              return (
+                <button
+                  className="workplace-action"
+                  key={option}
+                  onClick={() => toggle(option)}
+                  style={{
+                    width: '100%',
+                    minHeight: 34,
+                    borderRadius: 9,
+                    border: `1px solid ${active ? 'var(--accent-blue)' : 'color-mix(in srgb, var(--border) 82%, transparent)'}`,
+                    background: active ? 'color-mix(in srgb, var(--accent-blue) 18%, var(--card))' : 'var(--card)',
+                    color: 'var(--foreground)',
+                    fontFamily: sans,
+                    fontSize: 13,
+                    padding: '6px 9px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 9,
+                    textAlign: 'left'
+                  }}
+                  type="button"
+                >
+                  {multiple ? (
+                    <span
+                      aria-hidden="true"
+                      style={{
+                        width: 16,
+                        height: 16,
+                        borderRadius: 4,
+                        border: `1px solid ${active ? 'var(--accent-blue)' : 'var(--border)'}`,
+                        background: active ? 'var(--accent-blue)' : 'transparent',
+                        color: 'var(--primary-foreground)',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontFamily: mono,
+                        fontSize: 10,
+                        lineHeight: 1,
+                        flex: 'none'
+                      }}
+                    >
+                      {active ? 'x' : ''}
+                    </span>
+                  ) : null}
+                  <span
+                    style={{
+                      flex: 'none',
+                      minWidth: 21,
+                      height: 21,
+                      borderRadius: 999,
+                      border: '1px solid var(--border)',
+                      color: 'var(--muted-foreground)',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontFamily: mono,
+                      fontSize: 11
+                    }}
+                  >
+                    {number}
+                  </span>
+                  <span style={{ minWidth: 0, overflowWrap: 'anywhere' }}>{option}</span>
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
+        {question.allowOther ? (
+          <div style={{ display: 'grid', gap: 6, paddingLeft: 35 }}>
+            <div
+              style={{
+                minHeight: 34,
+                borderRadius: 9,
+                border: '1px solid color-mix(in srgb, var(--border) 82%, transparent)',
+                background: 'var(--card)',
+                padding: '6px 9px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 9
+              }}
+            >
+              <span
+                style={{
+                  flex: 'none',
+                  minWidth: 21,
+                  height: 21,
+                  borderRadius: 999,
+                  border: '1px solid var(--border)',
+                  color: 'var(--muted-foreground)',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontFamily: mono,
+                  fontSize: 11
+                }}
+              >
+                {question.options.length + 1}
+              </span>
+              <textarea
+                aria-label="Other answer"
+                onChange={(event) => {
+                  setOther(event.target.value);
+                  if (!multiple && event.target.value.trim()) setSelected([]);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+                    event.preventDefault();
+                    submit();
+                  }
+                }}
+                placeholder="Other…"
+                ref={otherRef}
+                rows={1}
+                style={{
+                  width: '100%',
+                  resize: 'none',
+                  minHeight: 22,
+                  maxHeight: 70,
+                  border: 'none',
+                  background: 'transparent',
+                  color: 'var(--foreground)',
+                  fontFamily: sans,
+                  fontSize: 13,
+                  lineHeight: 1.45,
+                  padding: 0,
+                  outline: 'none'
+                }}
+                value={other}
+              />
+            </div>
+          </div>
+        ) : null}
+        <div
+          style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, paddingLeft: 35 }}
+        >
+          <span style={{ alignSelf: 'center', color: 'var(--muted-foreground)', fontFamily: mono, fontSize: 11 }}>
+            {multiple ? 'Numbers toggle choices' : 'Numbers choose one'}
+          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+            <button
+              className="workplace-action"
+              onClick={skip}
+              style={ghostButtonStyle({ height: 32, padding: '0 13px' })}
+              type="button"
+            >
+              Skip
+            </button>
+            <button
+              className="workplace-action"
+              disabled={!canSend}
+              onClick={submit}
+              style={
+                canSend
+                  ? inkButtonStyle({ height: 32, padding: '0 14px' })
+                  : ghostButtonStyle({ height: 32, opacity: 0.55, padding: '0 14px' })
+              }
+              type="button"
+            >
+              Send
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function Composer({ room }: { room: ProjectController }): React.ReactElement {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { data: modelRoles } = useGetRolesQuery(undefined);
   const { data: profileData } = useListProfilesQuery(undefined);
   const profiles = profileData ? profileSelectors.selectAll(profileData.profiles) : [];
@@ -114,6 +416,7 @@ export function Composer({ room }: { room: ProjectController }): React.ReactElem
   const [active, setActive] = useState(0);
   const [accessMode, setAccessMode] = useState<'auto' | 'ask'>('auto');
   const [submitting, setSubmitting] = useState(false);
+  const [askPanelTestAnswered, setAskPanelTestAnswered] = useState(false);
   const editorRef = useRef<HTMLDivElement>(null);
   const sendingRef = useRef(false);
   const submittingTextRef = useRef<string | null>(null);
@@ -124,6 +427,28 @@ export function Composer({ room }: { room: ProjectController }): React.ReactElem
     return room.mentionTargets.filter((target) => target.name.toLowerCase().startsWith(q));
   }, [mention, room.mentionTargets]);
   const menuOpen = mention !== null && options.length > 0;
+  const testQuestion: QuestionView | null =
+    searchParams.get('askPanelTest') === '1' && !askPanelTestAnswered
+      ? {
+          id: 'clarify_preview',
+          askerName: 'Lily',
+          question: 'Which direction should I take for the next step?',
+          options: ['Tighten the UI', 'Check the agent flow', 'Ship the current version'],
+          mode: 'multiple',
+          allowOther: true
+        }
+      : null;
+  const activeQuestion = room.questions[0] ?? testQuestion;
+  const questionAsker = activeQuestion
+    ? room.participants.find((participant) => participant.name === activeQuestion.askerName)
+    : undefined;
+  const answerQuestion = (requestId: string, answer: string): void => {
+    if (requestId === 'clarify_preview') {
+      setAskPanelTestAnswered(true);
+      return;
+    }
+    room.answerQuestion(requestId, answer);
+  };
 
   const syncMention = (value: string, caret: number): void => {
     const m = activeMention(value, caret);
@@ -195,6 +520,27 @@ export function Composer({ room }: { room: ProjectController }): React.ReactElem
         position: 'relative'
       }}
     >
+      {activeQuestion ? (
+        <div
+          style={{
+            position: 'absolute',
+            left: 16,
+            right: 16,
+            bottom: '100%',
+            marginBottom: 8,
+            zIndex: 20,
+            maxHeight: 'min(52vh, 420px)',
+            overflowY: 'auto'
+          }}
+        >
+          <QuestionStack
+            asker={questionAsker}
+            key={activeQuestion.id}
+            onAnswer={answerQuestion}
+            question={activeQuestion}
+          />
+        </div>
+      ) : null}
       <ApprovalStack room={room} />
 
       <div style={{ padding: '14px 16px 18px' }}>

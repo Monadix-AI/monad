@@ -10,6 +10,7 @@ export * from './atom-pack.ts';
 export * from './avatar.ts';
 export * from './browser-preset.ts';
 export * from './channel.ts';
+export * from './codex-app-server.ts';
 export * from './command.ts';
 export * from './computer-preset.ts';
 export * from './control.ts';

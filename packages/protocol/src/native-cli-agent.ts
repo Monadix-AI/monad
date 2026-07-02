@@ -304,7 +304,7 @@ export type ManagedProjectRuntimeSpec = z.infer<typeof managedProjectRuntimeSpec
 export const nativeAgentProjectPostRequestSchema = z.object({
   projectId: projectIdSchema.optional(),
   threadId: z.string().optional(),
-  text: z.string().min(1)
+  text: z.string().min(1).max(100_000)
 });
 export type NativeAgentProjectPostRequest = z.infer<typeof nativeAgentProjectPostRequestSchema>;
 
@@ -321,6 +321,22 @@ export const nativeAgentProjectPostResponseSchema = z.object({
   message: nativeAgentProjectMessageSchema
 });
 export type NativeAgentProjectPostResponse = z.infer<typeof nativeAgentProjectPostResponseSchema>;
+
+export const nativeAgentProjectAskRequestSchema = z.object({
+  projectId: projectIdSchema.optional(),
+  question: z.string().min(1).max(10_000),
+  options: z.array(z.string().min(1).max(1_000)).max(10).default([]),
+  mode: z.enum(['single', 'multiple']).default('single'),
+  allowOther: z.boolean().default(true)
+});
+export type NativeAgentProjectAskRequest = z.infer<typeof nativeAgentProjectAskRequestSchema>;
+
+export const nativeAgentProjectAskResponseSchema = z.object({
+  ok: z.literal(true),
+  requestId: z.string(),
+  answer: z.string()
+});
+export type NativeAgentProjectAskResponse = z.infer<typeof nativeAgentProjectAskResponseSchema>;
 
 export const nativeAgentProjectReadRequestSchema = z.object({
   projectId: projectIdSchema.optional(),
@@ -380,7 +396,10 @@ export const nativeAgentDirectMessageSchema = z.object({
 });
 export type NativeAgentDirectMessage = z.infer<typeof nativeAgentDirectMessageSchema>;
 
-export const nativeAgentSendRequestSchema = z.object({ to: z.string().min(1), text: z.string().min(1) });
+export const nativeAgentSendRequestSchema = z.object({
+  to: z.string().min(1).max(200),
+  text: z.string().min(1).max(100_000)
+});
 export type NativeAgentSendRequest = z.infer<typeof nativeAgentSendRequestSchema>;
 
 export const nativeAgentSendResponseSchema = z.object({

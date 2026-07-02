@@ -3,7 +3,7 @@ import type { ProjectId, UpdateWorkplaceProjectRequest, WorkplaceProject } from 
 import { apiSlice } from '../../api-slice.ts';
 import { clientOf, runTreaty } from '../../endpoint-helpers.ts';
 
-export const updateWorkplaceProjectApi = apiSlice.injectEndpoints({
+const updateWorkplaceProjectApi = apiSlice.injectEndpoints({
   overrideExisting: true,
   endpoints: (builder) => ({
     updateWorkplaceProject: builder.mutation<WorkplaceProject, { id: ProjectId } & UpdateWorkplaceProjectRequest>({

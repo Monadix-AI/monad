@@ -7,7 +7,7 @@ interface NativeCliResizeArgs extends NativeCliResizeRequest {
   id: string;
 }
 
-export const resizeNativeCliAuthApi = sessionsApi.injectEndpoints({
+const resizeNativeCliAuthApi = sessionsApi.injectEndpoints({
   overrideExisting: true,
   endpoints: (builder) => ({
     resizeNativeCliAuth: builder.mutation<OkResponse, NativeCliResizeArgs>({

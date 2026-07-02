@@ -4,10 +4,12 @@ import { createHash, randomBytes } from 'node:crypto';
 import { existsSync, lstatSync, mkdirSync, readdirSync, unlinkSync, writeFileSync } from 'node:fs';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 
+import managedProjectRuntimePromptPath from './prompts/managed-project-runtime-prompt.md' with { type: 'file' };
+
+const MANAGED_PROJECT_RUNTIME_PROMPT = (await Bun.file(managedProjectRuntimePromptPath).text()).trim();
+
 function buildManagedProjectPrompt(args: ManagedProjectRuntimePromptInput): string {
-  return [
-    'You are a Monad-managed native CLI agent participating in a Workplace Project.',
-    '',
+  const runtimeMetadata = [
     `Agent name: ${args.agentName}`,
     ...(args.displayName ? [`Display name: ${args.displayName}`] : []),
     ...(args.displayName ? ['Display name is your project communication name.'] : []),
@@ -18,26 +20,15 @@ function buildManagedProjectPrompt(args: ManagedProjectRuntimePromptInput): stri
     `Workspace: ${args.workspace}`,
     ...((args.modelId ?? args.modelName) ? [`Requested model: ${args.modelId ?? args.modelName}`] : []),
     ...(args.reasoningEffort ? [`Requested reasoning effort: ${args.reasoningEffort}`] : []),
-    ...(args.speed ? [`Requested speed: ${args.speed}`] : []),
-    '',
-    ...(args.customPrompt ? ['Project instance custom prompt:', args.customPrompt, ''] : []),
-    'Communication rules:',
-    '- When this managed project session starts, acknowledge that you joined by posting one concise status message with `monad project post <text>`.',
-    '- Public replies to project members must be sent with `monad project post <text>`.',
-    '- To reply inside a project thread, use `monad project post --thread <messageId> <text>`.',
-    '- When Monad wakes you for a project message, process the wake immediately.',
-    '- Run `monad project inbox check` to consume pending project messages.',
-    '- Use `monad project read` to recover project or thread history.',
-    '- Use `monad agent send --to <agent|human> <text>` only for direct/private conversation.',
-    '- Do not use greetings, small talk, or filler. Reply only with necessary project information.',
-    '- Use your display name, not your agentName, when referring to yourself in project messages.',
-    '- Use display names or human-readable names when referring to other project members.',
-    '- Use internal ids such as agentName, project id, and native CLI session id only when calling Monad APIs or CLI commands.',
-    '- Do not put internal ids such as agentName, project id, or native CLI session id into project messages as names.',
-    '- Terminal stdout/stderr is diagnostic output only. It is not a Workplace Project message.',
-    '- On startup, read MEMORY.md in the workspace before answering when it exists.',
-    '- Provider-owned tool calls, approvals, login, and auth prompts remain inside your native CLI environment.'
+    ...(args.speed ? [`Requested speed: ${args.speed}`] : [])
   ].join('\n');
+  const customPromptBlock = args.customPrompt
+    ? ['Project instance custom prompt:', args.customPrompt, ''].join('\n')
+    : '';
+  return MANAGED_PROJECT_RUNTIME_PROMPT.replace('{{runtimeMetadata}}', runtimeMetadata).replace(
+    '{{customPromptBlock}}',
+    customPromptBlock
+  );
 }
 
 function hashManagedAgentToken(token: string): string {

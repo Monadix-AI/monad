@@ -3,7 +3,7 @@ import type { NativeCliAuthSessionView } from '@monad/protocol';
 import { clientOf, runTreaty } from '../../endpoint-helpers.ts';
 import { sessionsApi } from '../sessions/index.ts';
 
-export const getNativeCliAuthApi = sessionsApi.injectEndpoints({
+const getNativeCliAuthApi = sessionsApi.injectEndpoints({
   overrideExisting: true,
   endpoints: (builder) => ({
     getNativeCliAuth: builder.query<NativeCliAuthSessionView, string>({

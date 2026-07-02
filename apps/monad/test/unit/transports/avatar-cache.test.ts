@@ -38,6 +38,7 @@ test('avatar cache only writes on explicit save warmup', async () => {
 
   const preview = await app.handle(new Request(readUrl));
   expect(preview.status).toBe(200);
+  expect(preview.headers.get('cache-control')).toBe('public, max-age=31536000, immutable');
   expect(await preview.text()).toBe('<svg>avatar</svg>');
   expect(existsSync(cachePath)).toBe(false);
 
@@ -47,5 +48,6 @@ test('avatar cache only writes on explicit save warmup', async () => {
 
   const cached = await app.handle(new Request(readUrl));
   expect(cached.status).toBe(200);
+  expect(cached.headers.get('cache-control')).toBe('public, max-age=31536000, immutable');
   expect(fetches).toBe(2);
 });

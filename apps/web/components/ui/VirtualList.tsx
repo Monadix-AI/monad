@@ -67,7 +67,7 @@ const FooterSlot = ({ context }: { context?: SlotContext }) => <>{context?.foote
 const VIRTUOSO_COMPONENTS = { Header: HeaderSlot, Footer: FooterSlot };
 
 /** Px from the true bottom within which the user still counts as "pinned". */
-const STICK_THRESHOLD = 120;
+const STICK_THRESHOLD = 32;
 
 /** True when the scroll position is within `threshold` px of the very bottom. */
 export function isAtBottom(
@@ -91,9 +91,11 @@ export function indexOfKey<T>(items: T[], getKey: (item: T) => string, key: stri
 export function reducePinnedOnScroll(
   prevPinned: boolean,
   selfScroll: boolean,
-  atBottom: boolean
+  atBottom: boolean,
+  direction: 'up' | 'down' | 'none' = 'none'
 ): { pinned: boolean; selfScrollConsumed: boolean } {
   if (selfScroll) return { pinned: prevPinned, selfScrollConsumed: true };
+  if (direction === 'up') return { pinned: false, selfScrollConsumed: false };
   return { pinned: atBottom, selfScrollConsumed: false };
 }
 
@@ -134,11 +136,18 @@ export function VirtualList<T>({
   // (flagged via `selfScrollRef`) so a streaming pin never looks like the user arriving.
   const pinnedRef = useRef(true);
   const selfScrollRef = useRef(false);
+  const userScrolledRef = useRef(false);
+  const lastScrollTopRef = useRef<number | null>(null);
 
   const measurePinned = useCallback(() => {
     const el = scrollerRef.current;
     if (!el) return;
-    const next = reducePinnedOnScroll(pinnedRef.current, selfScrollRef.current, isAtBottom(el));
+    const previousTop = lastScrollTopRef.current;
+    const direction =
+      previousTop === null ? 'none' : el.scrollTop < previousTop ? 'up' : el.scrollTop > previousTop ? 'down' : 'none';
+    lastScrollTopRef.current = el.scrollTop;
+    if (!selfScrollRef.current && direction !== 'none') userScrolledRef.current = true;
+    const next = reducePinnedOnScroll(pinnedRef.current, selfScrollRef.current, isAtBottom(el), direction);
     pinnedRef.current = next.pinned;
     if (next.selfScrollConsumed) selfScrollRef.current = false;
   }, []);
@@ -151,12 +160,14 @@ export function VirtualList<T>({
     if (el.scrollTop < max) {
       selfScrollRef.current = true;
       el.scrollTop = el.scrollHeight;
+      lastScrollTopRef.current = el.scrollTop;
     }
   }, [stickToBottom]);
 
   // Pin now, then once more next frame: a freshly appended row reports its real height a
   // frame after it mounts, so a single re-pin catches the residual gap that one pass leaves.
   const pinToBottomSoon = useCallback(() => {
+    if (userScrolledRef.current && !pinnedRef.current) return;
     pinToBottom();
     requestAnimationFrame(pinToBottom);
   }, [pinToBottom]);
@@ -205,6 +216,7 @@ export function VirtualList<T>({
     let raf = 0;
     const deadline = performance.now() + 700;
     const tick = () => {
+      if (userScrolledRef.current) return;
       pinToBottom();
       if (pinnedRef.current && performance.now() < deadline) raf = requestAnimationFrame(tick);
     };

@@ -1,7 +1,13 @@
 import type { createDaemonHandlers } from '@/handlers/handlers.ts';
 
 import { createHash, timingSafeEqual } from 'node:crypto';
-import { daemonHttpContract, newId, type ProjectId } from '@monad/protocol';
+import {
+  daemonHttpContract,
+  newId,
+  type ProjectId,
+  workplaceProjectMembersExtKey,
+  workplaceProjectMembersExtSchema
+} from '@monad/protocol';
 import { Elysia } from 'elysia';
 
 import { HandlerError } from '@/handlers/handler-error.ts';
@@ -20,6 +26,61 @@ function tokenMatchesHash(providedToken: string, expectedHash: string): boolean 
   const provided = Buffer.from(hashToken(providedToken), 'hex');
   const expected = Buffer.from(expectedHash, 'hex');
   return provided.length === expected.length && timingSafeEqual(provided, expected);
+}
+
+function managedNativeCliDisplayName(
+  store: ReturnType<typeof createDaemonHandlers>['_nativeAgentStore'],
+  projectId: ProjectId,
+  agentId: string
+): string {
+  const session = store.getSession(projectId) ?? store.getWorkplaceProject(projectId);
+  const parsed = workplaceProjectMembersExtSchema.safeParse(session?.origin?.ext?.[workplaceProjectMembersExtKey]);
+  if (!parsed.success) return agentId;
+  const member = parsed.data.find(
+    (candidate) => candidate.type === 'native-cli' && (candidate.instanceId === agentId || candidate.name === agentId)
+  );
+  return member?.displayName ?? member?.name ?? agentId;
+}
+
+function readableAnswer(answer: string): string {
+  try {
+    const parsed = JSON.parse(answer) as unknown;
+    if (Array.isArray(parsed) && parsed.every((item) => typeof item === 'string')) return parsed.join(', ');
+    if (typeof parsed === 'string') return parsed;
+  } catch {
+    // Plain text answer.
+  }
+  return answer;
+}
+
+function projectAskSummary(args: {
+  askerName: string;
+  question: string;
+  options: readonly string[];
+  answer: string;
+}): string {
+  return [
+    'Project Q&A summary:',
+    `Asked by: ${args.askerName}`,
+    `Question: ${args.question}`,
+    ...(args.options.length ? [`Options: ${args.options.join(' | ')}`] : []),
+    `User answer: ${readableAnswer(args.answer)}`,
+    '',
+    'Use this as shared project context. Do not repeat it unless it changes your task-relevant response.'
+  ].join('\n');
+}
+
+function enqueueProjectSummaryForManagedRuntimes(
+  store: ReturnType<typeof createDaemonHandlers>['_nativeAgentStore'],
+  projectId: ProjectId,
+  summarySeq: number,
+  exceptNativeCliSessionId: string
+): void {
+  for (const session of store.listNativeCliSessionsForTranscriptTarget(projectId)) {
+    if (session.id === exceptNativeCliSessionId) continue;
+    if (session.runtimeRole !== 'managed-project-agent') continue;
+    store.enqueueNativeCliInboxItem(session.id, summarySeq);
+  }
 }
 
 export function createNativeAgentController(handlers: ReturnType<typeof createDaemonHandlers>) {
@@ -86,22 +147,72 @@ export function createNativeAgentController(handlers: ReturnType<typeof createDa
           sessionId: transcriptTargetId,
           nativeCliSessionId: binding.nativeCliSessionId,
           agentName: binding.agentId,
-          text: body.text
+          text: body.text,
+          threadId: body.threadId
         });
         const messageId = completed.messageId ?? newId('msg');
         const createdAt = new Date().toISOString();
-        store.insertMessage(messageId, transcriptTargetId, body.text, createdAt, 'assistant', {
-          data: { agentName: binding.agentId, threadId: body.threadId, nativeCliSessionId: binding.nativeCliSessionId }
-        });
         store.markNativeCliInboxConsumed(binding.nativeCliSessionId, store.maxMessageSeq(transcriptTargetId));
-        await handlers.session.notifyManagedNativeCliProjectMembers({
-          sessionId: transcriptTargetId,
-          text: body.text,
-          exceptAgentName: binding.agentId
-        });
+        if (completed.posted) {
+          await handlers.session.notifyManagedNativeCliProjectMembers({
+            sessionId: transcriptTargetId,
+            text: body.text,
+            sender: { kind: 'native-cli-agent', name: binding.agentId, id: binding.agentId },
+            exceptAgentName: binding.agentId
+          });
+        }
         return { ok: true, message: { id: messageId, projectId, text: body.text, createdAt } };
       },
       { body: contracts.projectPost.body, response: contracts.projectPost.response }
+    )
+    .post(
+      '/internal/native-agent/project/ask',
+      async ({ body, request, server }) => {
+        const { binding } = requireManagedBinding(request);
+        const projectId = body.projectId ?? binding.projectId;
+        if (binding.projectId !== projectId) {
+          throw new HandlerError('forbidden', 'project id does not match managed runtime', 'PROJECT_MISMATCH');
+        }
+        // The response is held open until a human answers (up to the clarify timeout, 10 min).
+        // Bun's default idleTimeout closes a silent connection after ~10s, which would drop the
+        // answer while the clarify stays pending — disable it for this request only.
+        server?.timeout(request, 0);
+        const askerName = managedNativeCliDisplayName(store, projectId, binding.agentId);
+        const result = await handlers.clarify.askStructured(projectId, {
+          question: body.question,
+          options: body.options,
+          mode: body.mode,
+          allowOther: body.allowOther,
+          asker: { id: binding.agentId, name: askerName }
+        });
+        if (result.requestId && result.answer.trim()) {
+          const summary = projectAskSummary({
+            askerName,
+            question: body.question,
+            options: body.options,
+            answer: result.answer
+          });
+          store.insertMessage(newId('msg'), projectId, summary, new Date().toISOString(), 'system', {
+            data: {
+              source: 'managed-native-cli-question',
+              requestId: result.requestId,
+              agentName: binding.agentId,
+              nativeCliSessionId: binding.nativeCliSessionId
+            },
+            includeInContext: true
+          });
+          const summarySeq = store.maxMessageSeq(projectId);
+          enqueueProjectSummaryForManagedRuntimes(store, projectId, summarySeq, binding.nativeCliSessionId);
+          await handlers.session.notifyManagedNativeCliProjectMembers({
+            sessionId: projectId,
+            text: summary,
+            sender: { kind: 'system', name: 'Project Q&A summary', id: 'system:project-qa' },
+            exceptAgentName: binding.agentId
+          });
+        }
+        return { ok: true, requestId: result.requestId, answer: result.answer };
+      },
+      { body: contracts.projectAsk.body, response: contracts.projectAsk.response }
     )
     .post(
       '/internal/native-agent/project/read',

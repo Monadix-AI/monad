@@ -221,6 +221,7 @@ export function Workplace({
         </div>
         {settingsOpen ? (
           <ProjectSettings
+            initialIntent={projectSettings.intent}
             onClose={closeProjectSettings}
             onDeleted={onProjectDeleted}
             room={project}

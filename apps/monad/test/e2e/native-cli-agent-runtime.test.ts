@@ -795,6 +795,41 @@ async function runProviderApprovalRuntime(
   expect(stop.status).toBe(200);
 }
 
+async function runManagedProviderApprovalSuppressedRuntime(
+  call: Call,
+  dir: string,
+  projectDir: string,
+  handlers: ReturnType<typeof buildHandlers>
+): Promise<void> {
+  await configureMockCodexApprovalAgent(call, dir);
+  const sessionId = await createSession(call, projectDir);
+
+  const res = await call('POST', `/v1/sessions/${sessionId}/native-cli-agents/start`, {
+    agentName: 'mock-codex-approval',
+    workingPath: projectDir,
+    launchMode: 'app-server',
+    runtimeRole: 'managed-project-agent'
+  });
+  expect(res.status).toBe(200);
+  const nativeSession = ((await res.json()) as { session: NativeCliSessionView }).session;
+
+  await waitFor(async () => {
+    const text = await Bun.file(join(dir, 'mock-codex-stdin.jsonl'))
+      .text()
+      .catch(() => '');
+    if (!text.includes('"id":"req_provider_1"') || !text.includes('"decision":"decline"')) return undefined;
+    return true;
+  });
+
+  const events = handlers.store.listEvents(sessionId);
+  expect(events.some((event) => event.type === 'native_cli.approval_requested')).toBe(false);
+  expect(events.some((event) => event.type === 'native_cli.approval_resolved')).toBe(false);
+  expect(handlers.store.getNativeCliSession(nativeSession.id)?.runtimeRole).toBe('managed-project-agent');
+
+  const stop = await call('POST', `/v1/native-cli-sessions/${nativeSession.id}/stop`);
+  expect(stop.status).toBe(200);
+}
+
 async function runCodexResumeRuntime(call: Call, dir: string, projectDir: string): Promise<void> {
   await configureMockCodexApprovalAgent(call, dir);
   const sessionId = await createSession(call, projectDir);
@@ -1145,6 +1180,22 @@ for (const kind of TRANSPORTS) {
       const t = serveTransport(kind, app);
       try {
         await runProviderApprovalRuntime((m, p, b) => t.fetch(p, jsonInit(m, b)), dir, projectDir, handlers);
+      } finally {
+        await t.stop();
+        await rm(dir, { recursive: true, force: true });
+      }
+    });
+
+    test('suppresses provider-owned approvals for managed native CLI runtimes', async () => {
+      const { dir, projectDir, app, handlers } = await setup();
+      const t = serveTransport(kind, app);
+      try {
+        await runManagedProviderApprovalSuppressedRuntime(
+          (m, p, b) => t.fetch(p, jsonInit(m, b)),
+          dir,
+          projectDir,
+          handlers
+        );
       } finally {
         await t.stop();
         await rm(dir, { recursive: true, force: true });

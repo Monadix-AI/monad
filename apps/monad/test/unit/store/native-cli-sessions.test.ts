@@ -96,6 +96,23 @@ test('reconcileOrphanedNativeCliSessions preserves managed provider refs for lat
   });
 });
 
+test('failOrphanedStreamingMessages retires empty managed native CLI thinking placeholders', () => {
+  store.insertMessage('msg_thinking', 'prj_project', '', '2026-06-28T00:00:01.000Z', 'assistant', {
+    data: {
+      agentName: 'codex',
+      nativeCliSessionId: 'ncli_1',
+      reasoning: 'Thinking',
+      source: 'managed-native-cli'
+    },
+    includeInContext: false,
+    streamStatus: 'streaming'
+  });
+
+  expect(store.failOrphanedStreamingMessages('2026-06-28T00:00:02.000Z')).toBe(1);
+
+  expect(store.listMessages('prj_project')).toEqual([]);
+});
+
 test('native CLI inbox diagnostics count pending visible messages', () => {
   store.insertMessage('msg_1', 'prj_project', 'seen', '2026-06-28T00:00:01.000Z', 'user');
   store.insertMessage('msg_2', 'prj_project', 'pending one', '2026-06-28T00:00:02.000Z', 'user');

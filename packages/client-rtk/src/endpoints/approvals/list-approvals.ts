@@ -5,7 +5,7 @@ import { createEntityAdapter, type EntityState } from '@reduxjs/toolkit';
 import { apiSlice } from '../../api-slice.ts';
 import { clientOf, runTreaty } from '../../endpoint-helpers.ts';
 
-export const approvalRuleAdapter = createEntityAdapter<ApprovalRule>();
+const approvalRuleAdapter = createEntityAdapter<ApprovalRule>();
 export const approvalRuleSelectors = approvalRuleAdapter.getSelectors();
 
 export const listApprovalsApi = apiSlice.injectEndpoints({

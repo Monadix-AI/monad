@@ -30,6 +30,17 @@ const nativeCliSession = (overrides: Partial<NativeCliSessionView> = {}): Native
   pendingApprovalCount: overrides.pendingApprovalCount ?? 0
 });
 
+const observationFields = (
+  items: NonNullable<ReturnType<typeof __workplaceProjectMessageTest.buildNativeCliStreams>[number]>['items']
+) =>
+  items.map(({ id, providerEventType, role, source, text }) => ({
+    id,
+    role,
+    text,
+    source,
+    providerEventType
+  }));
+
 test('native CLI sessions project to durable chat messages', () => {
   const message = __workplaceProjectMessageTest.nativeCliSessionMessage(nativeCliSession());
 
@@ -248,7 +259,7 @@ test('managed native CLI timeline messages use display names instead of runtime 
   expect(messages[0]?.agentChip).toMatchObject({ id: 'pmem_codex_abcd1234', name: 'codex-reviewer' });
 });
 
-test('managed native CLI fanout thinking uses display names instead of runtime ids', () => {
+test('managed native CLI reasoning-only streaming messages stay off the transcript wall', () => {
   const messages = __workplaceProjectMessageTest.buildProjectMessages({
     persistedMessages: [],
     nativeCliSessions: [],
@@ -268,11 +279,30 @@ test('managed native CLI fanout thinking uses display names instead of runtime i
     nativeCliDisplayNames: new Map([['pmem_codex_abcd1234', 'codex-reviewer']])
   });
 
-  expect(messages).toHaveLength(1);
-  expect(messages[0]).toMatchObject({
-    text: 'codex-reviewer is thinking',
-    fanoutAgents: [{ id: 'pmem_codex_abcd1234', name: 'codex-reviewer' }]
+  expect(messages).toHaveLength(0);
+});
+
+test('managed native CLI terminal reasoning-only messages stay off the transcript wall', () => {
+  const messages = __workplaceProjectMessageTest.buildProjectMessages({
+    persistedMessages: [],
+    nativeCliSessions: [],
+    liveItems: [
+      {
+        kind: 'message',
+        id: 'msg_codex_orphaned_thinking',
+        role: 'assistant',
+        agentName: 'pmem_codex_abcd1234',
+        source: 'managed-native-cli',
+        parts: [{ type: 'reasoning', text: 'Thinking' }],
+        status: 'error',
+        seq: '002'
+      }
+    ],
+    liveTools: [],
+    nativeCliDisplayNames: new Map([['pmem_codex_abcd1234', 'codex-reviewer']])
   });
+
+  expect(messages).toHaveLength(0);
 });
 
 test('native CLI live start projects joined without raw terminal output', () => {
@@ -311,7 +341,7 @@ test('native CLI live start projects joined without raw terminal output', () => 
   expect(developer?.text).not.toContain('raw terminal output');
 });
 
-test('managed native CLI fanout thinking is projected as one stable system divider', () => {
+test('managed native CLI reasoning-only fanout does not project a system divider', () => {
   const messages = __workplaceProjectMessageTest.buildProjectMessages({
     persistedMessages: [
       {
@@ -352,17 +382,11 @@ test('managed native CLI fanout thinking is projected as one stable system divid
     liveTools: []
   });
 
-  expect(messages).toHaveLength(2);
-  expect(messages[1]).toMatchObject({
-    id: 'native-cli-fanout',
-    kind: 'system',
-    text: 'codex, claude-code are thinking',
-    fanoutAgents: [{ name: 'codex' }, { name: 'claude-code' }],
-    orderKey: '001:fanout'
-  });
+  expect(messages).toHaveLength(1);
+  expect(messages.map((message) => message.id)).toEqual(['msg_user']);
 });
 
-test('managed native CLI fanout divider keeps its waterline while agents finish out of order', () => {
+test('managed native CLI finished replies render without a thinking placeholder', () => {
   const messages = __workplaceProjectMessageTest.buildProjectMessages({
     persistedMessages: [
       {
@@ -403,12 +427,78 @@ test('managed native CLI fanout divider keeps its waterline while agents finish 
     liveTools: []
   });
 
-  const divider = messages.find((message) => message.id === 'native-cli-fanout');
-  expect(divider).toMatchObject({
-    text: 'claude-code is thinking',
-    orderKey: '001:fanout'
+  expect(messages.map((message) => message.id)).toEqual(['msg_user', 'msg_codex_reply']);
+});
+
+test('managed native CLI spawn projects joined without a thinking placeholder', () => {
+  const messages = __workplaceProjectMessageTest.buildProjectMessages({
+    persistedMessages: [],
+    nativeCliSessions: [],
+    liveItems: [
+      {
+        kind: 'message',
+        id: 'msg_steve_thinking',
+        role: 'assistant',
+        agentName: 'pmem_steve',
+        source: 'managed-native-cli',
+        parts: [{ type: 'reasoning', text: 'Thinking' }],
+        status: 'streaming',
+        seq: '001'
+      }
+    ],
+    liveTools: [
+      {
+        kind: 'tool',
+        id: 'ncli_steve',
+        tool: 'native-cli:codex',
+        input: { agent: 'pmem_steve', provider: 'codex', productIcon: 'codex' },
+        status: 'running',
+        seq: '002'
+      }
+    ],
+    nativeCliDisplayNames: new Map([['pmem_steve', 'Steve']])
   });
-  expect(messages.map((message) => message.id)).toEqual(['msg_user', 'native-cli-fanout', 'msg_codex_reply']);
+
+  expect(messages.map((message) => [message.id, message.text])).toEqual([
+    ['native-cli-session:ncli_steve', 'joined the project']
+  ]);
+});
+
+test('managed native CLI join stays before its first room message when live tool seq uses event ids', () => {
+  const messages = __workplaceProjectMessageTest.buildProjectMessages({
+    persistedMessages: [
+      {
+        id: 'msg_agent_greeting',
+        authorId: 'pmem_codex_a',
+        authorName: 'A',
+        av: 'A',
+        icon: 'codex',
+        kind: 'agent',
+        tag: 'Codex',
+        time: '',
+        text: 'A joined and is ready to take project work.',
+        orderKey: '2026-07-02T10:00:02.000Z'
+      }
+    ],
+    nativeCliSessions: [],
+    liveItems: [],
+    liveTools: [
+      {
+        kind: 'tool',
+        id: 'ncli_a',
+        tool: 'native-cli:codex',
+        input: { agent: 'pmem_codex_a', provider: 'codex', productIcon: 'codex' },
+        status: 'running',
+        seq: 'evt_01KWHJOIN'
+      }
+    ],
+    nativeCliDisplayNames: new Map([['pmem_codex_a', 'A']])
+  });
+
+  expect(messages.map((message) => [message.id, message.text])).toEqual([
+    ['native-cli-session:ncli_a', 'joined the project'],
+    ['msg_agent_greeting', 'A joined and is ready to take project work.']
+  ]);
 });
 
 test('native CLI streams prefer live activity output over persisted snapshot', () => {
@@ -434,6 +524,21 @@ test('native CLI streams prefer live activity output over persisted snapshot', (
     output: 'live output',
     items: [{ id: 'ncli_01KWGEMINI000000000000000:0', role: 'agent', text: 'live output' }],
     status: 'running'
+  });
+});
+
+test('native CLI durable running sessions remain observable without marking generation active', () => {
+  const [stream] = __workplaceProjectMessageTest.buildNativeCliStreams(
+    [nativeCliSession({ outputSnapshot: 'previous turn output', state: 'running' })],
+    []
+  );
+
+  expect(stream).toMatchObject({
+    id: 'ncli_01KWGEMINI000000000000000',
+    agentName: 'gemini',
+    output: 'previous turn output',
+    status: 'ok',
+    items: [{ id: 'ncli_01KWGEMINI000000000000000:0', role: 'agent', text: 'previous turn output' }]
   });
 });
 
@@ -490,16 +595,20 @@ test('native CLI structured result output is projected as readable observation i
     ]
   );
 
-  expect(stream.items).toEqual([
+  expect(observationFields(stream.items)).toEqual([
     {
       id: 'ncli_structured_codex:result',
       role: 'agent',
-      text: '仍被拦截，无法发出。卡点未变：`monad project` 命令需要你批准。'
+      text: '仍被拦截，无法发出。卡点未变：`monad project` 命令需要你批准。',
+      source: 'codex-exec',
+      providerEventType: 'result'
     },
     {
       id: 'ncli_structured_codex:denial:0',
       role: 'tool',
-      text: 'Permission blocked Bash: monad project post "你好！"'
+      text: 'Permission blocked Bash: monad project post "你好！"',
+      source: 'codex-exec',
+      providerEventType: 'permission_denial'
     }
   ]);
 });
@@ -529,21 +638,51 @@ test('native CLI stream-json events are projected as readable observation items'
       {
         id: 'ncli_stream_events',
         av: 'CO',
-        agentName: 'codex',
-        tool: 'native-cli:codex',
-        detail: 'native-cli:codex',
+        agentName: 'claude-code',
+        tool: 'native-cli:claude-code',
+        detail: 'native-cli:claude-code',
         output,
         status: 'running'
       }
     ]
   );
 
-  expect(stream.items).toEqual([
-    { id: 'ncli_stream_events:json:0:message:0', role: 'agent', text: 'I can help.' },
-    { id: 'ncli_stream_events:json:0:tool:1', role: 'tool', text: 'Tool call Bash' },
-    { id: 'ncli_stream_events:json:1:delta', role: 'agent', text: 'Streaming text.' },
-    { id: 'ncli_stream_events:json:2:tool-result', role: 'tool', text: 'command output' },
-    { id: 'ncli_stream_events:json:3:result', role: 'agent', text: 'Done.' }
+  expect(observationFields(stream.items)).toEqual([
+    {
+      id: 'ncli_stream_events:json:0:message:0',
+      role: 'agent',
+      text: 'I can help.',
+      source: 'claude-code-sdk',
+      providerEventType: 'assistant'
+    },
+    {
+      id: 'ncli_stream_events:json:0:tool:1',
+      role: 'tool',
+      text: 'Tool call Bash',
+      source: 'claude-code-sdk',
+      providerEventType: 'assistant'
+    },
+    {
+      id: 'ncli_stream_events:json:1:delta',
+      role: 'agent',
+      text: 'Streaming text.',
+      source: 'claude-code-sdk',
+      providerEventType: 'content_block_delta'
+    },
+    {
+      id: 'ncli_stream_events:json:2:tool-result',
+      role: 'tool',
+      text: 'command output',
+      source: 'claude-code-sdk',
+      providerEventType: 'tool_result'
+    },
+    {
+      id: 'ncli_stream_events:json:3:result',
+      role: 'agent',
+      text: 'Done.',
+      source: 'claude-code-sdk',
+      providerEventType: 'result'
+    }
   ]);
 });
 
@@ -569,9 +708,21 @@ test('native CLI projection ignores startup prose before stream-json objects', (
     ]
   );
 
-  expect(stream.items).toEqual([
-    { id: 'ncli_mixed_claude:json:0:system', role: 'system', text: 'init' },
-    { id: 'ncli_mixed_claude:json:1:result', role: 'agent', text: 'Need approval before posting.' }
+  expect(observationFields(stream.items)).toEqual([
+    {
+      id: 'ncli_mixed_claude:json:0:system',
+      role: 'system',
+      text: 'init',
+      source: 'claude-code-sdk',
+      providerEventType: 'system'
+    },
+    {
+      id: 'ncli_mixed_claude:json:1:result',
+      role: 'agent',
+      text: 'Need approval before posting.',
+      source: 'claude-code-sdk',
+      providerEventType: 'result'
+    }
   ]);
   expect(stream.items.map((item) => item.text).join('\n')).not.toContain('started claude-code');
 });
@@ -613,18 +764,26 @@ test('native CLI app-server JSON-RPC output is projected as readable observation
     ]
   );
 
-  expect(stream.items).toEqual([
+  expect(observationFields(stream.items)).toEqual([
     {
       id: 'ncli_app_server_codex:json:0:thread-started',
       role: 'system',
-      text: 'Thread started in /Users/zeke/.codex/worktrees/28ea/monad/.dev/.monad/workplace-agents/project/test'
+      text: 'Thread started in /Users/zeke/.codex/worktrees/28ea/monad/.dev/.monad/workplace-agents/project/test',
+      source: 'codex-app-server',
+      providerEventType: 'thread/started'
     },
-    { id: 'ncli_app_server_codex:json:1:mcp-status', role: 'tool', text: 'node_repl starting' }
+    {
+      id: 'ncli_app_server_codex:json:1:mcp-status',
+      role: 'tool',
+      text: 'node_repl starting',
+      source: 'codex-app-server',
+      providerEventType: 'mcpServer/startupStatus/updated'
+    }
   ]);
   expect(stream.items.map((item) => item.text).join('\n')).not.toContain('"method"');
 });
 
-test('native CLI follow streams do not expose persisted raw terminal snapshots', () => {
+test('native CLI follow streams restore persisted terminal snapshots', () => {
   const [stream] = __workplaceProjectMessageTest.buildNativeCliStreams(
     [nativeCliSession({ outputSnapshot: '\\x1b[38;2;255;193;7mraw terminal output' })],
     []
@@ -632,8 +791,15 @@ test('native CLI follow streams do not expose persisted raw terminal snapshots',
 
   expect(stream).toMatchObject({
     id: 'ncli_01KWGEMINI000000000000000',
-    output: '',
-    items: []
+    output: '\\x1b[38;2;255;193;7mraw terminal output',
+    items: [
+      {
+        id: 'ncli_01KWGEMINI000000000000000:0',
+        role: 'agent',
+        source: 'plain-text',
+        text: '\\x1b[38;2;255;193;7mraw terminal output'
+      }
+    ]
   });
 });
 

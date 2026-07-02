@@ -7,7 +7,7 @@ interface NativeCliInputArgs extends NativeCliInputRequest {
   id: string;
 }
 
-export const inputNativeCliAuthApi = sessionsApi.injectEndpoints({
+const inputNativeCliAuthApi = sessionsApi.injectEndpoints({
   overrideExisting: true,
   endpoints: (builder) => ({
     inputNativeCliAuth: builder.mutation<OkResponse, NativeCliInputArgs>({

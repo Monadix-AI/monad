@@ -1,3 +1,4 @@
+import type { NativeCliObservationEvent } from '@monad/protocol';
 import type { ProductIconId } from '@monad/ui';
 
 // UI view-model types for the workplace surface. These are render shapes the components
@@ -8,6 +9,11 @@ import type { ProductIconId } from '@monad/ui';
 export type ParticipantKind = 'human' | 'agent';
 type MessageKind = ParticipantKind | 'system' | 'developer';
 export type Presence = 'online' | 'working' | 'needs-login' | 'failed' | 'stopped' | 'idle';
+export type AgentActivityPhase = 'reading' | 'thinking' | 'speaking';
+export interface AgentActivityOverride {
+  phase: AgentActivityPhase;
+  expiresAt: number;
+}
 
 export interface Participant {
   id: string;
@@ -23,6 +29,7 @@ export interface Participant {
   /** Sub-label in the roster, e.g. "supervisor", "agent". */
   role?: string;
   presence: Presence;
+  activityPhase?: AgentActivityPhase;
 }
 
 /** Workplace Project list item shown in the supervisor's multi-agent project rail. */
@@ -110,11 +117,7 @@ export interface NativeCliStreamView {
   status: ActivityStatus;
   workingPath?: string;
   output: string;
-  items: Array<{
-    id: string;
-    role: 'agent' | 'system' | 'tool';
-    text: string;
-  }>;
+  items: NativeCliObservationEvent[];
 }
 
 /** A real pending tool approval from the oversight gate. */
@@ -135,9 +138,16 @@ export interface ApprovalView {
   meta: string;
 }
 
-export const PROJECT_TABS = [
+export interface QuestionView {
+  id: string;
+  askerName: string;
+  question: string;
+  options: string[];
+  mode: 'single' | 'multiple';
+  allowOther: boolean;
+}
+
+const _PROJECT_TABS = [
   { key: 'chat', label: 'Chat', badge: null as string | null },
   { key: 'activity', label: 'Activity', badge: null as string | null }
 ] as const;
-
-export type ProjectTabKey = (typeof PROJECT_TABS)[number]['key'];

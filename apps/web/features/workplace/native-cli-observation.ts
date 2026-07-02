@@ -1,9 +1,38 @@
-import type { NativeCliObservationEvent, NativeCliProvider } from '@monad/protocol';
+import type {
+  SDKAssistantMessage,
+  SDKMessage,
+  SDKPartialAssistantMessage,
+  SDKResultMessage,
+  SDKSystemMessage,
+  SDKUserMessage
+} from '@anthropic-ai/claude-agent-sdk';
+import type {
+  CodexAppServerNotification,
+  CodexAppServerResponseItem,
+  CodexAppServerServerRequest,
+  NativeCliObservationEvent,
+  NativeCliProvider
+} from '@monad/protocol';
 
 import { nativeCliObservationEventSchema } from '@monad/protocol';
 
 type ObservationRole = NativeCliObservationEvent['role'];
 type ObservationSource = NativeCliObservationEvent['source'];
+type CodexObservationResponseItem = Partial<CodexAppServerResponseItem> & Record<string, unknown> & { type: string };
+type CodexObservationNotification = Partial<CodexAppServerNotification | CodexAppServerServerRequest> &
+  Record<string, unknown> & { method: string };
+type ClaudeObservationMessage = Partial<SDKMessage> & Record<string, unknown> & { type: string };
+type ClaudeTranscriptMessage = Partial<SDKAssistantMessage | SDKUserMessage> &
+  Record<string, unknown> & { type: 'assistant' | 'user' };
+type ClaudeResultMessage = Partial<SDKResultMessage> & Record<string, unknown> & { type: 'result' };
+type ClaudeStreamEventMessage = Partial<SDKPartialAssistantMessage> &
+  Record<string, unknown> & { type: 'stream_event' };
+type ClaudeSystemMessage = Partial<SDKSystemMessage> & Record<string, unknown> & { type: 'system' };
+type NativeCliObservationStreamItem = NativeCliObservationEvent;
+type JsonRecordEntry = {
+  record: Record<string, unknown>;
+  raw: string;
+};
 
 const CODEX_APP_SERVER_METHODS = new Set([
   'thread/started',
@@ -46,8 +75,9 @@ function observation(args: {
   source: ObservationSource;
   providerEventType?: string;
   raw?: unknown;
+  preserveWhitespace?: boolean;
 }): NativeCliObservationEvent[] {
-  const text = args.text?.trim();
+  const text = args.preserveWhitespace ? args.text : args.text?.trim();
   if (!text) return [];
   const parsed = nativeCliObservationEventSchema.safeParse({
     id: args.id,
@@ -69,6 +99,36 @@ function parseJsonObject(value: string): Record<string, unknown> | undefined {
   } catch {
     return undefined;
   }
+}
+
+function isCodexObservationResponseItem(item: unknown): item is CodexObservationResponseItem {
+  return (
+    !!item && typeof item === 'object' && !Array.isArray(item) && typeof (item as { type?: unknown }).type === 'string'
+  );
+}
+
+function isCodexObservationNotification(record: Record<string, unknown>): record is CodexObservationNotification {
+  return typeof record.method === 'string';
+}
+
+function isClaudeObservationMessage(record: Record<string, unknown>): record is ClaudeObservationMessage {
+  return typeof record.type === 'string';
+}
+
+function isClaudeResultMessage(record: ClaudeObservationMessage): record is ClaudeResultMessage {
+  return record.type === 'result';
+}
+
+function isClaudeTranscriptMessage(record: ClaudeObservationMessage): record is ClaudeTranscriptMessage {
+  return record.type === 'assistant' || record.type === 'user';
+}
+
+function isClaudeStreamEventMessage(record: ClaudeObservationMessage): record is ClaudeStreamEventMessage {
+  return record.type === 'stream_event';
+}
+
+function isClaudeSystemMessage(record: ClaudeObservationMessage): record is ClaudeSystemMessage {
+  return record.type === 'system';
 }
 
 function jsonObjectsInText(text: string): Record<string, unknown>[] {
@@ -108,23 +168,97 @@ function jsonObjectsInText(text: string): Record<string, unknown>[] {
   return records;
 }
 
-function jsonRecords(text: string): Record<string, unknown>[] {
+function jsonRecordEntries(text: string): JsonRecordEntry[] {
   if (!text.includes('{')) return [];
-  const whole = parseJsonObject(text);
-  if (whole) return [whole];
+  const trimmed = text.trim();
+  const whole = parseJsonObject(trimmed);
+  if (whole) return [{ record: whole, raw: trimmed }];
   const lineRecords = text
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter((line) => line.startsWith('{'))
-    .map(parseJsonObject)
-    .filter((record): record is Record<string, unknown> => !!record);
+    .map((line) => {
+      const record = parseJsonObject(line);
+      return record ? { record, raw: line } : undefined;
+    })
+    .filter((entry): entry is JsonRecordEntry => !!entry);
   if (lineRecords.length > 0) return lineRecords;
-  return jsonObjectsInText(text);
+  return jsonObjectsInText(text).map((record) => ({ record, raw: JSON.stringify(record) }));
+}
+
+function parsedJsonEvents(args: {
+  id: string;
+  provider?: NativeCliProvider | string;
+  entries: JsonRecordEntry[];
+}): NativeCliObservationEvent[] {
+  return args.entries.flatMap((entry, index) => {
+    const events = recordEvents(args.id, args.provider, entry.record, index);
+    if (events.length > 0) return events;
+    return rawJsonObservation(args.id, entry.raw, entry.record, index);
+  });
+}
+
+function rawJsonObservation(
+  id: string,
+  rawLine: string,
+  record: Record<string, unknown>,
+  recordIndex: number
+): NativeCliObservationEvent[] {
+  return observation({
+    id: `${id}:json:${recordIndex}:raw`,
+    role: 'system',
+    text: rawLine,
+    source: 'unknown',
+    providerEventType: 'raw_json',
+    raw: record,
+    preserveWhitespace: true
+  });
 }
 
 function textValue(...values: unknown[]): string | undefined {
   for (const value of values) {
     if (typeof value === 'string' && value.trim()) return value.trim();
+  }
+  return undefined;
+}
+
+function compactJson(value: unknown): string | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value === 'string') return value.trim() || undefined;
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
+function commandText(command: unknown): string | undefined {
+  if (Array.isArray(command))
+    return (
+      command
+        .map((part) => String(part))
+        .join(' ')
+        .trim() || undefined
+    );
+  return textValue(command);
+}
+
+function resultMarkerText(record: Record<string, unknown>): string {
+  const subtype = textValue(record.subtype) ?? (record.is_error ? 'error' : 'completed');
+  const stopReason = textValue(record.stop_reason);
+  return stopReason ? `Result: ${subtype} (${stopReason})` : `Result: ${subtype}`;
+}
+
+function claudeResultText(record: ClaudeResultMessage): string {
+  return textValue(record.result) ?? textValue(record.response) ?? resultMarkerText(record);
+}
+
+// Streaming deltas carry their own boundary whitespace (a space after a period, a
+// leading space on the next fragment). Trimming here would drop it, and the chunk
+// merge cannot re-insert a space after clause punctuation — so keep deltas verbatim.
+function rawTextValue(...values: unknown[]): string | undefined {
+  for (const value of values) {
+    if (typeof value === 'string' && value.length > 0) return value;
   }
   return undefined;
 }
@@ -221,7 +355,7 @@ function permissionDenialEvents(
 
 function codexResponseItem(
   id: string,
-  item: Record<string, unknown>,
+  item: CodexObservationResponseItem,
   recordIndex: number,
   source: ObservationSource,
   raw: unknown
@@ -281,6 +415,75 @@ function codexResponseItem(
   return [];
 }
 
+function codexAppServerItemRecord(p: Record<string, unknown>): Record<string, unknown> | undefined {
+  const item = p.item;
+  if (item && typeof item === 'object' && !Array.isArray(item)) return item as Record<string, unknown>;
+  return p;
+}
+
+function codexAppServerToolName(item: Record<string, unknown>, fallback = 'tool'): string {
+  return textValue(item.name, item.tool, item.toolName, item.kind, item.type) ?? fallback;
+}
+
+function isCodexAppServerToolLikeItem(item: Record<string, unknown>): boolean {
+  const type = textValue(item.type, item.kind, item.itemType);
+  if (!type) return Boolean(item.command || item.name || item.tool || item.toolName || item.arguments || item.input);
+  if (type === 'message' || type === 'agent_message' || type === 'reasoning') return false;
+  return (
+    type.includes('command') ||
+    type.includes('exec') ||
+    type.includes('tool') ||
+    type.includes('mcp') ||
+    type.includes('file') ||
+    type.includes('function') ||
+    type.includes('web_search')
+  );
+}
+
+function codexAppServerToolInput(item: Record<string, unknown>): unknown {
+  return item.arguments ?? item.input ?? item.args ?? item.command ?? item.path ?? item.query;
+}
+
+function codexAppServerToolCallObservation(args: {
+  id: string;
+  recordIndex: number;
+  method: string;
+  record: unknown;
+  item: Record<string, unknown>;
+}): NativeCliObservationEvent[] {
+  const tool = codexAppServerToolName(args.item);
+  const input = codexAppServerToolInput(args.item);
+  const inputText = compactJson(input);
+  return observation({
+    id: `${args.id}:json:${args.recordIndex}:tool-call`,
+    role: 'tool',
+    text: `Tool call ${tool}${inputText ? ` ${inputText}` : ''}`,
+    source: 'codex-app-server',
+    providerEventType: 'function_call',
+    raw: args.record
+  });
+}
+
+function codexAppServerToolResultObservation(args: {
+  id: string;
+  recordIndex: number;
+  method: string;
+  record: unknown;
+  item: Record<string, unknown>;
+}): NativeCliObservationEvent[] {
+  const output =
+    textValue(args.item.output, args.item.result, args.item.content, args.item.message, args.item.error) ??
+    compactJson(args.item.output ?? args.item.result ?? args.item.content ?? args.item);
+  return observation({
+    id: `${args.id}:json:${args.recordIndex}:tool-result`,
+    role: 'tool',
+    text: output,
+    source: 'codex-app-server',
+    providerEventType: 'function_call_output',
+    raw: args.record
+  });
+}
+
 function codexExecRecordEvents(
   id: string,
   record: Record<string, unknown>,
@@ -308,8 +511,8 @@ function codexExecRecordEvents(
   }
   if (type === 'item.completed' || type === 'item.started') {
     const item = record.item;
-    if (item && typeof item === 'object' && !Array.isArray(item)) {
-      return codexResponseItem(id, item as Record<string, unknown>, recordIndex, 'codex-exec', record);
+    if (isCodexObservationResponseItem(item)) {
+      return codexResponseItem(id, item, recordIndex, 'codex-exec', record);
     }
   }
   if (type === 'event_msg') {
@@ -329,8 +532,8 @@ function codexExecRecordEvents(
   }
   if (type === 'response_item') {
     const payload = record.payload;
-    if (payload && typeof payload === 'object' && !Array.isArray(payload)) {
-      return codexResponseItem(id, payload as Record<string, unknown>, recordIndex, 'codex-exec', record);
+    if (isCodexObservationResponseItem(payload)) {
+      return codexResponseItem(id, payload, recordIndex, 'codex-exec', record);
     }
   }
   return [];
@@ -338,10 +541,10 @@ function codexExecRecordEvents(
 
 function codexAppServerRecordEvents(
   id: string,
-  record: Record<string, unknown>,
+  record: CodexObservationNotification,
   recordIndex: number
 ): NativeCliObservationEvent[] {
-  const method = typeof record.method === 'string' ? record.method : undefined;
+  const method = record.method;
   if (!method || !CODEX_APP_SERVER_METHODS.has(method)) return [];
   const params =
     record.params && typeof record.params === 'object' && !Array.isArray(record.params) ? record.params : {};
@@ -373,18 +576,52 @@ function codexAppServerRecordEvents(
   }
   if (method === 'rawResponseItem/completed') {
     const item = p.item;
-    return item && typeof item === 'object' && !Array.isArray(item)
-      ? codexResponseItem(id, item as Record<string, unknown>, recordIndex, 'codex-app-server', record)
+    return isCodexObservationResponseItem(item)
+      ? codexResponseItem(id, item, recordIndex, 'codex-app-server', record)
       : [];
+  }
+  if (method === 'item/started') {
+    const item = codexAppServerItemRecord(p);
+    if (!item) return [];
+    if (!isCodexAppServerToolLikeItem(item)) return [];
+    return codexAppServerToolCallObservation({ id, recordIndex, method, record, item });
+  }
+  if (method === 'item/completed') {
+    const item = codexAppServerItemRecord(p);
+    if (!item) return [];
+    if (isCodexObservationResponseItem(item)) {
+      const responseItem = codexResponseItem(id, item, recordIndex, 'codex-app-server', record);
+      if (responseItem.length > 0) return responseItem;
+    }
+    if (!isCodexAppServerToolLikeItem(item)) return [];
+    return codexAppServerToolResultObservation({ id, recordIndex, method, record, item });
+  }
+  if (
+    method === 'item/commandExecution/outputDelta' ||
+    method === 'command/exec/outputDelta' ||
+    method === 'process/outputDelta' ||
+    method === 'item/fileChange/outputDelta' ||
+    method === 'item/mcpToolCall/progress'
+  ) {
+    return observation({
+      id: `${id}:json:${recordIndex}:tool-delta`,
+      role: 'tool',
+      text: rawTextValue(p.delta, p.output, p.text, p.message),
+      source: 'codex-app-server',
+      providerEventType: method,
+      raw: record,
+      preserveWhitespace: true
+    });
   }
   if (method === 'item/agentMessage/delta') {
     return observation({
       id: `${id}:json:${recordIndex}:agent-delta`,
       role: 'agent',
-      text: textValue(p.delta, p.text),
+      text: rawTextValue(p.delta, p.text),
       source: 'codex-app-server',
       providerEventType: method,
-      raw: record
+      raw: record,
+      preserveWhitespace: true
     });
   }
   if (method === 'turn/started' || method === 'turn/completed' || method === 'thread/status/changed') {
@@ -398,7 +635,7 @@ function codexAppServerRecordEvents(
     });
   }
   if (method.includes('Approval') || method.includes('approval')) {
-    const command = Array.isArray(p.command) ? p.command.join(' ') : textValue(p.command);
+    const command = commandText(p.command);
     const reason = textValue(p.reason);
     return observation({
       id: `${id}:json:${recordIndex}:approval`,
@@ -414,17 +651,16 @@ function codexAppServerRecordEvents(
 
 function claudeRecordEvents(
   id: string,
-  record: Record<string, unknown>,
+  record: ClaudeObservationMessage,
   recordIndex: number
 ): NativeCliObservationEvent[] {
-  const type = record.type;
   const base = recordIndex === 0 ? id : `${id}:json:${recordIndex}`;
-  if (type === 'result') {
+  if (isClaudeResultMessage(record)) {
     return [
       ...observation({
         id: `${base}:result`,
-        role: 'agent',
-        text: textValue(record.result, record.response, record.text),
+        role: record.is_error ? 'system' : 'agent',
+        text: claudeResultText(record),
         source: 'claude-code-sdk',
         providerEventType: 'result',
         raw: record
@@ -437,29 +673,39 @@ function claudeRecordEvents(
       )
     ];
   }
-  if (type === 'assistant' || type === 'user') {
+  if (isClaudeTranscriptMessage(record)) {
     const message = record.message;
     const content =
       message && typeof message === 'object' && !Array.isArray(message)
-        ? (message as Record<string, unknown>).content
+        ? (message as unknown as Record<string, unknown>).content
         : record.content;
     return contentEvents({
       id,
       content,
       recordIndex,
       source: 'claude-code-sdk',
-      providerEventType: String(type),
+      providerEventType: record.type,
       raw: record
     });
   }
-  if (type === 'stream_event') {
+  if (record.type === 'tool_result') {
+    return observation({
+      id: `${base}:tool-result`,
+      role: 'tool',
+      text: textValue(record.output, record.result, record.content) ?? JSON.stringify(record),
+      source: 'claude-code-sdk',
+      providerEventType: 'tool_result',
+      raw: record
+    });
+  }
+  if (isClaudeStreamEventMessage(record)) {
     const event = record.event;
     if (!event || typeof event !== 'object' || Array.isArray(event)) return [];
-    const e = event as Record<string, unknown>;
+    const e = event as unknown as Record<string, unknown>;
     const delta = e.delta;
     if (e.type === 'content_block_delta' && delta && typeof delta === 'object' && !Array.isArray(delta)) {
       const d = delta as Record<string, unknown>;
-      const text = textValue(d.text, d.partial_json);
+      const text = rawTextValue(d.text, d.partial_json);
       const role = d.type === 'input_json_delta' || d.partial_json ? 'tool' : 'agent';
       return observation({
         id: `${id}:json:${recordIndex}:delta`,
@@ -467,7 +713,8 @@ function claudeRecordEvents(
         text,
         source: 'claude-code-sdk',
         providerEventType: String(e.type),
-        raw: record
+        raw: record,
+        preserveWhitespace: true
       });
     }
     if (e.type === 'content_block_start') {
@@ -487,7 +734,7 @@ function claudeRecordEvents(
       }
     }
   }
-  if (type === 'system') {
+  if (isClaudeSystemMessage(record)) {
     return observation({
       id: `${id}:json:${recordIndex}:system`,
       role: 'system',
@@ -587,13 +834,15 @@ function recordEvents(
   record: Record<string, unknown>,
   recordIndex: number
 ): NativeCliObservationEvent[] {
-  const appServer = codexAppServerRecordEvents(id, record, recordIndex);
-  if (appServer.length > 0) return appServer;
+  if (isCodexObservationNotification(record)) {
+    const appServer = codexAppServerRecordEvents(id, record, recordIndex);
+    if (appServer.length > 0) return appServer;
+  }
   if (provider === 'codex') {
     const codex = codexExecRecordEvents(id, record, recordIndex);
     if (codex.length > 0) return codex;
   }
-  if (provider === 'claude-code') {
+  if (provider === 'claude-code' && isClaudeObservationMessage(record)) {
     const claude = claudeRecordEvents(id, record, recordIndex);
     if (claude.length > 0) return claude;
   }
@@ -603,22 +852,94 @@ function recordEvents(
   }
   return [
     ...codexExecRecordEvents(id, record, recordIndex),
-    ...claudeRecordEvents(id, record, recordIndex),
+    ...(isClaudeObservationMessage(record) ? claudeRecordEvents(id, record, recordIndex) : []),
     ...geminiRecordEvents(id, record, recordIndex),
     ...unknownJsonRpcError(id, record, recordIndex)
   ];
 }
 
-export function nativeCliObservationEvents(args: {
+function removeAdjacentDuplicateObservations(events: NativeCliObservationEvent[]): NativeCliObservationEvent[] {
+  const out: NativeCliObservationEvent[] = [];
+  for (const event of events) {
+    const previous = out.at(-1);
+    if (
+      previous &&
+      previous.role === event.role &&
+      previous.source === event.source &&
+      previous.text.trim() === event.text.trim()
+    ) {
+      // A result whose text just repeats the assistant message it settles still marks a
+      // query boundary — keep it as a compact marker instead of dropping it outright.
+      if (
+        event.providerEventType === 'result' &&
+        event.raw &&
+        typeof event.raw === 'object' &&
+        !Array.isArray(event.raw)
+      ) {
+        out.push({ ...event, text: resultMarkerText(event.raw as Record<string, unknown>) });
+      }
+      continue;
+    }
+    out.push(event);
+  }
+  return out;
+}
+
+function isChunkObservation(event: NativeCliObservationEvent): boolean {
+  return event.providerEventType?.endsWith('/delta') === true || event.providerEventType?.endsWith('Delta') === true;
+}
+
+// Streaming deltas are emitted to be concatenated verbatim: each already carries its own
+// boundary whitespace (codex sends " the", " CLI"; a mid-word split sends "impl" then
+// "ementation"). Guessing a space between two alphanumeric edges corrupts both cases —
+// it inserts a spurious space inside a split word and, worse, between CJK characters that
+// never take inter-character spaces (我来 + 先做 → "我来 先做"). Always join verbatim.
+function appendChunkText(previous: string, next: string): string {
+  return `${previous}${next}`;
+}
+
+function mergeAdjacentChunkObservations(events: NativeCliObservationEvent[]): NativeCliObservationEvent[] {
+  const out: NativeCliObservationEvent[] = [];
+  for (const event of events) {
+    const previous = out.at(-1);
+    if (
+      previous &&
+      isChunkObservation(previous) &&
+      isChunkObservation(event) &&
+      previous.role === event.role &&
+      previous.source === event.source &&
+      previous.providerEventType === event.providerEventType
+    ) {
+      out[out.length - 1] = {
+        ...previous,
+        text: appendChunkText(previous.text, event.text),
+        raw: [previous.raw, event.raw]
+      };
+      continue;
+    }
+    out.push(event);
+  }
+  // Deltas were kept verbatim to preserve internal boundary whitespace; trim the
+  // outer edges of each merged block and drop chunks that were whitespace-only.
+  return out.flatMap((event) => {
+    if (!isChunkObservation(event)) return [event];
+    const text = event.text.trim();
+    return text ? [{ ...event, text }] : [];
+  });
+}
+
+function nativeCliObservationEvents(args: {
   id: string;
   provider?: NativeCliProvider | string;
   output?: string;
 }): NativeCliObservationEvent[] | undefined {
   const text = args.output?.trim();
   if (!text) return [];
-  const records = jsonRecords(text);
-  if (records.length > 0) {
-    return records.flatMap((record, index) => recordEvents(args.id, args.provider, record, index));
+  const entries = jsonRecordEntries(text);
+  if (entries.length > 0) {
+    return removeAdjacentDuplicateObservations(
+      mergeAdjacentChunkObservations(parsedJsonEvents({ id: args.id, provider: args.provider, entries }))
+    );
   }
   return undefined;
 }
@@ -627,11 +948,11 @@ export function nativeCliStreamItems(args: {
   id: string;
   provider?: NativeCliProvider | string;
   output?: string;
-}): Array<Pick<NativeCliObservationEvent, 'id' | 'role' | 'text'>> {
-  const structured = nativeCliObservationEvents(args);
-  if (structured) return structured.map(({ id, role, text }) => ({ id, role, text }));
+}): NativeCliObservationStreamItem[] {
   const text = args.output?.trim();
   if (!text) return [];
+  const structured = nativeCliObservationEvents(args);
+  if (structured) return structured;
   return text
     .split(/\n{2,}/)
     .map((part) => part.trim())
@@ -639,6 +960,7 @@ export function nativeCliStreamItems(args: {
     .map((part, index) => ({
       id: `${args.id}:${index}`,
       role: part.startsWith('tool:') ? ('tool' as const) : ('agent' as const),
-      text: part
+      text: part,
+      source: 'plain-text' as const
     }));
 }

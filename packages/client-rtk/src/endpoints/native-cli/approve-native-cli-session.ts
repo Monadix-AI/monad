@@ -7,7 +7,7 @@ interface NativeCliApprovalArgs extends NativeCliApprovalResolutionRequest {
   id: string;
 }
 
-export const approveNativeCliSessionApi = sessionsApi.injectEndpoints({
+const approveNativeCliSessionApi = sessionsApi.injectEndpoints({
   overrideExisting: true,
   endpoints: (builder) => ({
     approveNativeCliSession: builder.mutation<OkResponse, NativeCliApprovalArgs>({

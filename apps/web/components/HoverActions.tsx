@@ -7,7 +7,7 @@ export const hoverActionsVisibleClassName = 'pointer-events-auto opacity-100';
 export const hoverActionsClassName =
   'pointer-events-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100 [@media_(hover:none),_(pointer:coarse)]:pointer-events-auto [@media_(hover:none),_(pointer:coarse)]:opacity-100';
 
-export const profileCardHoverActionsClassName =
+const profileCardHoverActionsClassName =
   'pointer-events-none opacity-0 group-hover/profile-card:pointer-events-auto group-hover/profile-card:opacity-100 group-focus-within/profile-card:pointer-events-auto group-focus-within/profile-card:opacity-100 [@media_(hover:none),_(pointer:coarse)]:pointer-events-auto [@media_(hover:none),_(pointer:coarse)]:opacity-100';
 
 export function HoverActions({

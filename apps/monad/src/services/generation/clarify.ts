@@ -17,6 +17,22 @@ interface Pending {
   sessionId: TranscriptTargetId;
 }
 
+export interface ClarifyAskRequest {
+  question: string;
+  options?: string[];
+  mode?: 'single' | 'multiple';
+  allowOther?: boolean;
+  asker?: {
+    id?: string;
+    name: string;
+  };
+}
+
+export interface ClarifyAskResult {
+  requestId: string;
+  answer: string;
+}
+
 export interface ClarifyOptions {
   /** Persist + fan out an event (main.ts injects store.appendEvents + bus.publish). */
   publish: (event: Event) => void;
@@ -39,12 +55,16 @@ export class ClarifyService {
   }
 
   /** Ask the user a free-text question; resolves with their answer (or '' on timeout/overflow). */
-  readonly ask = (sessionId: string, question: string, options?: string[]): Promise<string> =>
-    new Promise<string>((resolve) => {
+  readonly ask = async (sessionId: string, question: string, options?: string[]): Promise<string> =>
+    (await this.askStructured(sessionId, { question, options })).answer;
+
+  /** Ask the user a structured question; resolves with their answer (or '' on timeout/overflow). */
+  readonly askStructured = (sessionId: string, request: ClarifyAskRequest): Promise<ClarifyAskResult> =>
+    new Promise<ClarifyAskResult>((resolve) => {
       // Bound the pending registry — a flood of questions must not accumulate unbounded
       // timers/promises. Over the cap, resolve empty (no entry created) so the agent proceeds.
       if (this.pending.size >= this.maxPending) {
-        resolve('');
+        resolve({ requestId: '', answer: '' });
         return;
       }
       const requestId = newId('clarify');
@@ -52,11 +72,18 @@ export class ClarifyService {
       const timer = setTimeout(() => {
         if (this.pending.delete(requestId)) {
           this.emit(sid, 'clarify.resolved', { requestId, answer: '', reason: 'timeout' });
-          resolve('');
+          resolve({ requestId, answer: '' });
         }
       }, this.timeoutMs);
-      this.pending.set(requestId, { resolve, timer, sessionId: sid });
-      this.emit(sid, 'clarify.requested', { requestId, question, options });
+      this.pending.set(requestId, { resolve: (answer) => resolve({ requestId, answer }), timer, sessionId: sid });
+      this.emit(sid, 'clarify.requested', {
+        requestId,
+        question: request.question,
+        ...(request.options ? { options: request.options } : {}),
+        ...(request.mode ? { mode: request.mode } : {}),
+        ...(request.allowOther !== undefined ? { allowOther: request.allowOther } : {}),
+        ...(request.asker ? { asker: request.asker } : {})
+      });
     });
 
   /** Resolve a pending question. Returns false if the id is unknown or already resolved. */

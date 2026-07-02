@@ -276,6 +276,7 @@ export function createDaemonHandlers(deps: DaemonHandlerDeps) {
   };
 
   const clarify = {
+    askStructured: deps.clarify.askStructured,
     async respond({ requestId, answer }: { requestId: string; answer: string }): Promise<{ ok: boolean }> {
       return { ok: deps.clarify.respond(requestId, answer) };
     }

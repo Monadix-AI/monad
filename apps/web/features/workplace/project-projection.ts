@@ -8,7 +8,7 @@ import type {
   WorkplaceProjectMemberSettings,
   WorkplaceProjectMemberType
 } from '@monad/protocol';
-import type { ActivityRow, Message, NativeCliStreamView, Participant, Presence } from './types';
+import type { ActivityRow, AgentActivityPhase, Message, NativeCliStreamView, Participant, Presence } from './types';
 
 import {
   avatarCacheKey,
@@ -192,6 +192,15 @@ function displayTextFromMessage(item: UIMessageItem): string {
   return item.role === 'assistant' ? channelDisplayText(text) : text;
 }
 
+export function isManagedNativeCliReasoningOnlyMessage(item: UIMessageItem): boolean {
+  return (
+    item.source === 'managed-native-cli' &&
+    item.role === 'assistant' &&
+    !textFromParts(item.parts).trim() &&
+    reasoningFromParts(item.parts) !== undefined
+  );
+}
+
 export function messageToView(
   item: UIMessageItem,
   time = '',
@@ -333,12 +342,72 @@ function hasNativeCliLoginNeed(text: string | undefined): boolean {
   );
 }
 
+export function nativeCliAgentFacingCommandPhase(text: string | undefined): AgentActivityPhase | undefined {
+  const normalized = text?.toLowerCase() ?? '';
+  if (!normalized) return undefined;
+  if (/\bmonad\s+project\s+(post|send)\b/.test(normalized)) return 'speaking';
+  if (
+    /\bmonad\s+project\s+read\b/.test(normalized) ||
+    /\bmonad\s+project\s+inbox\s+(check|read)\b/.test(normalized) ||
+    /\bmonad\s+inbox\s+(check|read)\b/.test(normalized)
+  ) {
+    return 'reading';
+  }
+  return undefined;
+}
+
 function newestNativeCliSession(sessions: NativeCliSessionView[]): NativeCliSessionView | undefined {
   return [...sessions].sort((a, b) => {
     const bTime = b.updatedAt || b.startedAt;
     const aTime = a.updatedAt || a.startedAt;
     return bTime.localeCompare(aTime);
   })[0];
+}
+
+function recordValue(record: unknown, key: string): unknown {
+  return record && typeof record === 'object' && !Array.isArray(record)
+    ? (record as Record<string, unknown>)[key]
+    : undefined;
+}
+
+function codexStatusType(raw: unknown): string | undefined {
+  const params = recordValue(raw, 'params');
+  const status = recordValue(params, 'status');
+  const value = recordValue(status, 'type') ?? recordValue(params, 'type');
+  return typeof value === 'string' ? value : undefined;
+}
+
+export function nativeCliSessionIsGenerating(session: NativeCliSessionView): boolean {
+  if (session.runtimeRole !== 'managed-project-agent' || session.state !== 'running') return false;
+  let active = false;
+  const items = nativeCliStreamItems({ id: session.id, provider: session.provider, output: session.outputSnapshot });
+  for (const item of items) {
+    const eventType = item.providerEventType;
+    if (eventType === 'turn/started') {
+      active = true;
+      continue;
+    }
+    if (eventType === 'turn/completed' || eventType === 'result' || eventType === 'error') {
+      active = false;
+      continue;
+    }
+    if (eventType === 'thread/status/changed') {
+      active = codexStatusType(item.raw) !== 'idle';
+      continue;
+    }
+    if (
+      eventType?.endsWith('/delta') === true ||
+      eventType?.endsWith('Delta') === true ||
+      eventType === 'item/started' ||
+      eventType === 'function_call' ||
+      eventType === 'content_block_start' ||
+      eventType === 'content_block_delta' ||
+      eventType === 'tool_use'
+    ) {
+      active = true;
+    }
+  }
+  return active;
 }
 
 export function nativeCliMemberPresence({
@@ -366,6 +435,7 @@ export function nativeCliMemberPresence({
   const latest = newestNativeCliSession(nativeCliSessions.filter((session) => session.agentName === agentName));
   if (!latest) return enabled ? 'online' : 'idle';
   if ((latest.pendingApprovalCount ?? 0) > 0) return 'working';
+  if (nativeCliSessionIsGenerating(latest)) return 'working';
   if (latest.state === 'running') return 'online';
   if (latest.state === 'starting') return 'working';
   if (hasNativeCliLoginNeed(latest.outputSnapshot)) return 'needs-login';
@@ -374,11 +444,49 @@ export function nativeCliMemberPresence({
   return enabled ? 'online' : 'idle';
 }
 
+export function nativeCliMemberActivityPhase({
+  agentName,
+  liveTools,
+  nativeCliSessions
+}: {
+  agentName: string;
+  liveTools: Extract<UIItem, { kind: 'tool' }>[];
+  nativeCliSessions: NativeCliSessionView[];
+}): AgentActivityPhase | undefined {
+  const runningTool = liveTools.some((item) => {
+    if (!item.tool.startsWith('native-cli:')) return false;
+    const inputAgent = (item.input as { agent?: unknown } | undefined)?.agent;
+    return item.status === 'running' && inputAgent === agentName;
+  });
+  if (runningTool) return 'thinking';
+  const latest = newestNativeCliSession(nativeCliSessions.filter((session) => session.agentName === agentName));
+  if (!latest) return undefined;
+  if ((latest.pendingApprovalCount ?? 0) > 0 || latest.state === 'starting') return 'thinking';
+  if (nativeCliSessionIsGenerating(latest)) return 'thinking';
+  return undefined;
+}
+
 export function sortMessagesOldestFirst(messages: Message[]): Message[] {
   return [...messages].sort((a, b) => {
     const order = (a.orderKey || a.id).localeCompare(b.orderKey || b.id);
     return order === 0 ? a.id.localeCompare(b.id) : order;
   });
+}
+
+function keepManagedNativeCliRepliesAfterJoin(messages: Map<string, Message>): void {
+  const joinOrderByAgent = new Map<string, string>();
+  for (const message of messages.values()) {
+    if (message.kind !== 'system' || !message.nativeCliSessionId || !message.orderKey) continue;
+    if (message.text !== 'joined the project' && message.text !== 'failed to join the project') continue;
+    const existing = joinOrderByAgent.get(message.authorId);
+    if (!existing || message.orderKey < existing) joinOrderByAgent.set(message.authorId, message.orderKey);
+  }
+  for (const [id, message] of messages) {
+    if (message.kind !== 'agent' || !message.orderKey) continue;
+    const joinOrder = joinOrderByAgent.get(message.authorId);
+    if (!joinOrder || message.orderKey > joinOrder) continue;
+    messages.set(id, { ...message, orderKey: `${joinOrder}:message:${message.orderKey}` });
+  }
 }
 
 function firstNativeCliSessionsByAgent(sessions: NativeCliSessionView[]): NativeCliSessionView[] {
@@ -390,27 +498,18 @@ function firstNativeCliSessionsByAgent(sessions: NativeCliSessionView[]): Native
   return [...first.values()];
 }
 
-function nativeCliFanoutOrderKey(persistedMessages: Message[], liveMessages: UIMessageItem[]): string {
-  const firstLiveOrderKey = liveMessages.map((item) => item.seq).sort()[0] ?? 'native-cli-fanout';
-  const previousPersistedOrderKey = persistedMessages
-    .map((message) => message.orderKey || message.id)
-    .filter((orderKey) => orderKey.localeCompare(firstLiveOrderKey) < 0)
-    .sort()
-    .at(-1);
-  return previousPersistedOrderKey ? `${previousPersistedOrderKey}:fanout` : firstLiveOrderKey;
-}
-
 function nativeCliStreamFromSession(session: NativeCliSessionView): NativeCliStreamView {
+  const items = nativeCliStreamItems({ id: session.id, provider: session.provider, output: session.outputSnapshot });
   return {
     id: session.id,
     agentName: session.agentName,
     provider: session.provider,
     tag: nativeCliTag(session.provider),
     icon: productIcon(session.productIcon),
-    status: session.state === 'failed' ? 'error' : session.state === 'running' ? 'running' : 'ok',
+    status: session.state === 'failed' ? 'error' : 'ok',
     workingPath: session.workingPath,
-    output: '',
-    items: []
+    output: session.outputSnapshot,
+    items
   };
 }
 
@@ -518,8 +617,6 @@ export function buildProjectMessages({
       );
     }
   }
-  const nativeCliThinkingMessages: UIMessageItem[] = [];
-  const managedNativeCliLiveMessages: UIMessageItem[] = [];
   for (const item of liveItems) {
     if (item.kind === 'system') {
       const nativeCliResumeAgent = item.id.startsWith('native-cli-resume-failed:')
@@ -542,44 +639,10 @@ export function buildProjectMessages({
       continue;
     }
     if (item.kind !== 'message') continue;
-    if (item.source === 'managed-native-cli') managedNativeCliLiveMessages.push(item);
+    if (isManagedNativeCliReasoningOnlyMessage(item)) continue;
     const text = displayTextFromMessage(item);
     const reasoning = item.role === 'assistant' ? reasoningFromParts(item.parts) : undefined;
-    if (item.source === 'managed-native-cli' && item.status === 'streaming' && reasoning && !text) {
-      nativeCliThinkingMessages.push(item);
-      continue;
-    }
     if (text || reasoning || item.status !== 'streaming') byId.set(item.id, toView(item));
-  }
-  if (nativeCliThinkingMessages.length > 0) {
-    const agents = nativeCliThinkingMessages
-      .filter((item) => item.agentName)
-      .map((item) => {
-        const runtimeName = item.agentName as string;
-        const name = nativeCliDisplayNames.get(runtimeName) ?? runtimeName;
-        return {
-          id: runtimeName,
-          name,
-          avatarUrl: nativeCliAvatarUrl(name, nativeCliAvatarSeeds),
-          tag: 'CLI'
-        };
-      });
-    const names = agents.map((agent) => agent.name).join(', ');
-    const orderKey = nativeCliFanoutOrderKey(persistedMessages, managedNativeCliLiveMessages);
-    byId.set('native-cli-fanout', {
-      id: 'native-cli-fanout',
-      authorId: 'monad',
-      authorName: 'monad',
-      av: 'MO',
-      icon: 'monad',
-      kind: 'system',
-      tag: 'SYS',
-      time: '',
-      text: `${names || 'Agents'} ${agents.length === 1 ? 'is' : 'are'} thinking`,
-      fanoutAgents: agents,
-      streaming: true,
-      orderKey
-    });
   }
   const streamingAgentNames = new Set(
     [...byId.values()]
@@ -655,6 +718,7 @@ export function buildProjectMessages({
       });
     }
   }
+  keepManagedNativeCliRepliesAfterJoin(byId);
   return sortMessagesOldestFirst([...byId.values()]);
 }
 
@@ -675,7 +739,10 @@ export const __workplaceProjectMessageTest = {
   entityAvatarUrl,
   entityAvatarWriteUrl,
   nativeCliMemberPresence,
+  nativeCliMemberActivityPhase,
+  nativeCliAgentFacingCommandPhase,
   nativeCliProductDisplayName,
+  nativeCliSessionIsGenerating,
   nativeCliSessionMessage,
   nativeCliSessionDeveloperMessage,
   parseProjectMembers,

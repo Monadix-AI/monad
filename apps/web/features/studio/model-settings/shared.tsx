@@ -1,11 +1,9 @@
 'use client';
 
-import type { CredentialView, ModelPrice } from '@monad/protocol';
+import type { CredentialView } from '@monad/protocol';
 
-import { ArrowDownToLineIcon, ArrowUpFromLineIcon, DatabaseIcon } from '@hugeicons/core-free-icons';
-import { HugeiconsIcon } from '@hugeicons/react';
 import { ModelProviderType } from '@monad/protocol';
-import { cn, Tooltip, TooltipContent, TooltipTrigger } from '@monad/ui';
+import { cn } from '@monad/ui';
 
 export interface AddForm {
   type: ModelProviderType;
@@ -38,110 +36,8 @@ export function FormMsg({ msg }: { msg: string }) {
   return <p className={cn('w-full text-xs', fail ? 'text-destructive' : 'text-muted-foreground')}>{msg}</p>;
 }
 
-function usd(n: number): string {
+function _usd(n: number): string {
   return `$${n.toLocaleString('en-US', { maximumFractionDigits: 4 })}`;
-}
-
-export function ModelPriceTag({
-  className,
-  flat = false,
-  orientation = 'horizontal',
-  price,
-  tooltip = true
-}: {
-  className?: string;
-  flat?: boolean;
-  orientation?: 'horizontal' | 'vertical';
-  price: ModelPrice;
-  tooltip?: boolean;
-}) {
-  const present = (v: number | undefined): v is number => v !== undefined;
-  const cache = [price.cacheRead, price.cacheWrite].filter(present).map(usd).join('/');
-  const items = [
-    price.input !== undefined
-      ? { icon: ArrowDownToLineIcon, label: 'Input', value: usd(price.input), title: `Input ${usd(price.input)} /1M` }
-      : null,
-    price.output !== undefined
-      ? {
-          icon: ArrowUpFromLineIcon,
-          label: 'Output',
-          value: usd(price.output),
-          title: `Output ${usd(price.output)} /1M`
-        }
-      : null,
-    cache ? { icon: DatabaseIcon, label: 'Cached', value: cache, title: `Cached ${cache} /1M` } : null
-  ].filter((item): item is { icon: typeof ArrowDownToLineIcon; label: string; title: string; value: string } =>
-    Boolean(item)
-  );
-
-  if (items.length === 0) return null;
-  if (orientation === 'vertical' || flat) {
-    return (
-      <>
-        {items.map(({ icon: Icon, label, title, value }) => {
-          const content = (
-            <span
-              className={cn(
-                'inline-flex min-w-0',
-                orientation === 'vertical' ? 'flex-col items-start gap-1' : 'h-4 items-center gap-1'
-              )}
-            >
-              <HugeiconsIcon
-                className="size-3 text-muted-foreground/70"
-                icon={Icon}
-              />
-              <span className="truncate">
-                {value}
-                <span className="text-muted-foreground/60"> /1M</span>
-              </span>
-            </span>
-          );
-          return (
-            <span
-              className={cn('inline-flex text-[10px] text-muted-foreground tabular-nums', className)}
-              key={label}
-            >
-              {tooltip ? (
-                <Tooltip>
-                  <TooltipTrigger asChild>{content}</TooltipTrigger>
-                  <TooltipContent>{title}</TooltipContent>
-                </Tooltip>
-              ) : (
-                content
-              )}
-            </span>
-          );
-        })}
-      </>
-    );
-  }
-  return (
-    <span
-      className={cn('flex shrink-0 items-center gap-1.5 text-[10px] text-muted-foreground tabular-nums', className)}
-    >
-      {items.map(({ icon: Icon, label, title, value }) => {
-        const content = (
-          <span className="inline-flex h-4 min-w-0 items-center gap-1">
-            <HugeiconsIcon
-              className="size-3 text-muted-foreground/70"
-              icon={Icon}
-            />
-            <span className="truncate">
-              {value}
-              <span className="text-muted-foreground/60"> /1M</span>
-            </span>
-          </span>
-        );
-        if (!tooltip) return <span key={label}>{content}</span>;
-        return (
-          <Tooltip key={label}>
-            <TooltipTrigger asChild>{content}</TooltipTrigger>
-            <TooltipContent>{title}</TooltipContent>
-          </Tooltip>
-        );
-      })}
-    </span>
-  );
 }
 
 export function ModelSection({ children, title }: { children: React.ReactNode; title: string }) {

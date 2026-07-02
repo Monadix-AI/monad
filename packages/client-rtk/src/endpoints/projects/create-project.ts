@@ -3,7 +3,7 @@ import type { CreateWorkplaceProjectRequest, CreateWorkplaceProjectResponse, Pro
 import { apiSlice } from '../../api-slice.ts';
 import { clientOf, runTreaty } from '../../endpoint-helpers.ts';
 
-export const createWorkplaceProjectApi = apiSlice.injectEndpoints({
+const createWorkplaceProjectApi = apiSlice.injectEndpoints({
   overrideExisting: true,
   endpoints: (builder) => ({
     createWorkplaceProject: builder.mutation<

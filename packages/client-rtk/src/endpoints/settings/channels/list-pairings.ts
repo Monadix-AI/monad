@@ -5,7 +5,7 @@ import { createEntityAdapter, type EntityState } from '@reduxjs/toolkit';
 import { clientOf, runTreaty } from '../../../endpoint-helpers.ts';
 import { setChannelCredentialApi } from './set-channel-credential.ts';
 
-export const channelPairingAdapter = createEntityAdapter<ChannelPairingRequest, string>({
+const channelPairingAdapter = createEntityAdapter<ChannelPairingRequest, string>({
   selectId: (p) => p.code
 });
 export const channelPairingSelectors = channelPairingAdapter.getSelectors();

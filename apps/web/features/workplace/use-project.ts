@@ -12,7 +12,17 @@
 //   - projects   = your Workplace Projects (useListWorkplaceProjectsQuery).
 
 import type { NativeCliSessionView, ProfileView, ProjectId, UIItem, WorkplaceProject } from '@monad/protocol';
-import type { ActivityRow, AgentTask, ApprovalView, Message, Participant, Project, TypingIndicator } from './types';
+import type {
+  ActivityRow,
+  AgentActivityOverride,
+  AgentTask,
+  ApprovalView,
+  Message,
+  Participant,
+  Project,
+  QuestionView,
+  TypingIndicator
+} from './types';
 
 import {
   nativeCliSessionSelectors,
@@ -20,6 +30,7 @@ import {
   useAbortSessionMutation,
   useApproveNativeCliSessionMutation,
   useApproveToolMutation,
+  useClarifyRespondMutation,
   useDeleteWorkplaceProjectMutation,
   useGetProfileSettingsQuery,
   useInputNativeCliSessionMutation,
@@ -54,12 +65,16 @@ import {
   HUMAN,
   iconForAgent,
   initials,
+  isManagedNativeCliReasoningOnlyMessage,
   messageToView,
+  nativeCliAgentFacingCommandPhase,
   nativeCliApprovalName,
   nativeCliAvatarSeed,
+  nativeCliMemberActivityPhase,
   nativeCliMemberPresence,
   nativeCliProductDisplayName,
   nativeCliProjectMemberAvatarSeed,
+  nativeCliSessionIsGenerating,
   nativeCliTag,
   newNativeCliInstanceId,
   type ProjectMember,
@@ -194,6 +209,50 @@ export function useProject(projectId: string) {
     (item): item is Extract<UIItem, { kind: 'context' }> => item.kind === 'context'
   )?.usage;
   const liveTools = useMemo(() => toolItems(liveItems), [liveItems]);
+  const [nativeCliActivityOverrides, setNativeCliActivityOverrides] = useState<Record<string, AgentActivityOverride>>(
+    {}
+  );
+  useEffect(() => {
+    const now = Date.now();
+    const next: Record<string, AgentActivityOverride> = {};
+    let changed = false;
+    for (const [agentName, override] of Object.entries(nativeCliActivityOverrides)) {
+      if (override.expiresAt <= now) {
+        changed = true;
+        continue;
+      }
+      next[agentName] = override;
+    }
+    for (const item of liveTools) {
+      if (!item.tool.startsWith('native-cli:')) continue;
+      if (item.status !== 'running') continue;
+      const input = item.input as { agent?: unknown } | undefined;
+      if (typeof input?.agent !== 'string') continue;
+      const phase = nativeCliAgentFacingCommandPhase(`${JSON.stringify(item.input ?? {})}\n${item.output ?? ''}`);
+      if (!phase) continue;
+      const expiresAt = now + (phase === 'speaking' ? 3000 : 5000);
+      const current = next[input.agent];
+      if (!current || current.phase !== phase) {
+        next[input.agent] = { phase, expiresAt };
+        changed = true;
+      }
+    }
+    if (changed) setNativeCliActivityOverrides(next);
+  }, [liveTools, nativeCliActivityOverrides]);
+  useEffect(() => {
+    const expiresAt = Math.min(...Object.values(nativeCliActivityOverrides).map((override) => override.expiresAt));
+    if (!Number.isFinite(expiresAt)) return;
+    const timer = window.setTimeout(
+      () => {
+        const now = Date.now();
+        setNativeCliActivityOverrides((current) =>
+          Object.fromEntries(Object.entries(current).filter(([, override]) => override.expiresAt > now))
+        );
+      },
+      Math.max(0, expiresAt - Date.now())
+    );
+    return () => window.clearTimeout(timer);
+  }, [nativeCliActivityOverrides]);
   const nativeCliStreamingAgentNames = useMemo(() => {
     const names = new Set<string>();
     for (const item of liveItems) {
@@ -203,6 +262,14 @@ export function useProject(projectId: string) {
     }
     return names;
   }, [liveItems]);
+  const nativeCliActiveAgentNames = useMemo(() => {
+    const names = new Set(nativeCliStreamingAgentNames);
+    for (const agentName of Object.keys(nativeCliActivityOverrides)) names.add(agentName);
+    for (const session of nativeCliSessions) {
+      if (nativeCliSessionIsGenerating(session)) names.add(session.agentName);
+    }
+    return names;
+  }, [nativeCliActivityOverrides, nativeCliSessions, nativeCliStreamingAgentNames]);
   const monadStreaming = liveItems.some(
     (item) =>
       item.kind === 'message' &&
@@ -236,7 +303,8 @@ export function useProject(projectId: string) {
           kind: 'agent',
           tag: 'AI',
           role: 'agent',
-          presence: monadStreaming ? 'working' : 'online'
+          presence: monadStreaming ? 'working' : 'online',
+          activityPhase: monadStreaming ? 'thinking' : undefined
         };
       }
       if (member.type === 'native-cli') {
@@ -244,6 +312,15 @@ export function useProject(projectId: string) {
         const displayName = member.displayName ?? member.name;
         const agent = nativeCli.agents.find((candidate) => candidate.name === templateName);
         const provider = agent?.provider;
+        const stableAgentName = projectMemberStableId(member);
+        const presence = nativeCliMemberPresence({
+          activeAgentNames: nativeCliActiveAgentNames,
+          agentName: stableAgentName,
+          enabled: agent?.enabled ?? false,
+          nativeCliSessions,
+          liveTools
+        });
+        const activityOverride = nativeCliActivityOverrides[stableAgentName];
         return {
           id: member.id,
           av: initials(displayName),
@@ -253,13 +330,17 @@ export function useProject(projectId: string) {
           kind: 'agent',
           tag: nativeCliTag(provider),
           role: 'CLI',
-          presence: nativeCliMemberPresence({
-            activeAgentNames: nativeCliStreamingAgentNames,
-            agentName: projectMemberStableId(member),
-            enabled: agent?.enabled ?? false,
-            nativeCliSessions,
-            liveTools
-          })
+          presence,
+          activityPhase:
+            presence === 'working'
+              ? (activityOverride?.phase ??
+                nativeCliMemberActivityPhase({
+                  agentName: stableAgentName,
+                  liveTools,
+                  nativeCliSessions
+                }) ??
+                'thinking')
+              : undefined
         };
       }
       const agent = acp.agents.find((candidate) => candidate.name === member.name);
@@ -273,7 +354,8 @@ export function useProject(projectId: string) {
         kind: 'agent',
         tag: 'ACP',
         role: 'delegate',
-        presence: runningDelegations.has(member.name) ? 'working' : agent?.enabled ? 'online' : 'idle'
+        presence: runningDelegations.has(member.name) ? 'working' : agent?.enabled ? 'online' : 'idle',
+        activityPhase: runningDelegations.has(member.name) ? 'thinking' : undefined
       };
     });
     return members;
@@ -283,9 +365,10 @@ export function useProject(projectId: string) {
     projectMembers,
     monadStreaming,
     runningDelegations,
-    nativeCliStreamingAgentNames,
     nativeCliSessions,
     liveTools,
+    nativeCliActiveAgentNames,
+    nativeCliActivityOverrides,
     nativeCliAvatarSeeds
   ]);
   const railAgents = useMemo(() => projectMemberParticipants(participants), [participants]);
@@ -300,6 +383,7 @@ export function useProject(projectId: string) {
     const out: Message[] = [];
     for (const item of transcript.items) {
       if (item.kind !== 'message') continue;
+      if (isManagedNativeCliReasoningOnlyMessage(item)) continue;
       out.push(
         messageToView(item, fmtTime(item.seq), nativeCliAvatarSeeds, nativeCliTags, nativeCliDisplayNames, human)
       );
@@ -431,6 +515,21 @@ export function useProject(projectId: string) {
     [liveItems]
   );
 
+  const questions: QuestionView[] = useMemo(
+    () =>
+      liveItems
+        .filter((item): item is Extract<UIItem, { kind: 'clarification' }> => item.kind === 'clarification')
+        .map((item) => ({
+          id: item.id,
+          askerName: item.asker?.name ?? 'Agent',
+          question: item.question,
+          options: item.options ?? [],
+          mode: item.mode ?? 'single',
+          allowOther: item.allowOther !== false
+        })),
+    [liveItems]
+  );
+
   // --- projects ---
   const projects: Project[] = useMemo(
     () =>
@@ -444,6 +543,7 @@ export function useProject(projectId: string) {
   // --- actions ---
   const [sendProjectMessage] = useSendProjectMessageMutation();
   const [approveTool] = useApproveToolMutation();
+  const [clarifyRespond] = useClarifyRespondMutation();
   const [approveNativeCliSession] = useApproveNativeCliSessionMutation();
   const [abortSession] = useAbortSessionMutation();
   const [updateWorkplaceProject] = useUpdateWorkplaceProjectMutation();
@@ -511,6 +611,21 @@ export function useProject(projectId: string) {
       void approveTool({ requestId: a.id, allow: true, scope: 'once' });
     }
   }, [approveNativeCliSession, approveTool, approvals]);
+
+  const answerQuestion = useCallback(
+    (requestId: string, answer: string) => {
+      void traceProjectDebugOperation(
+        {
+          layer: 'web',
+          label: 'clarify.respond',
+          sessionId: activeProjectId ?? undefined,
+          data: { requestId }
+        },
+        () => clarifyRespond({ requestId, answer }).unwrap()
+      );
+    },
+    [activeProjectId, clarifyRespond]
+  );
 
   const pauseAll = useCallback(() => {
     if (activeProjectId) void abortSession(activeProjectId);
@@ -724,6 +839,7 @@ export function useProject(projectId: string) {
       contextUsage,
       modelProfiles,
       approvals,
+      questions,
       workdir: { path: currentProject?.cwd, set: setWorkdir },
       paused: false,
       mentionTargets: railAgents.map((a) => ({ id: a.id, name: a.name })),
@@ -731,6 +847,7 @@ export function useProject(projectId: string) {
       sendDirective,
       resolveApproval,
       approveAll,
+      answerQuestion,
       pauseAll,
       deleteProject,
       switchProject,
@@ -759,11 +876,13 @@ export function useProject(projectId: string) {
       contextUsage,
       modelProfiles,
       approvals,
+      questions,
       currentProject?.cwd,
       setWorkdir,
       sendDirective,
       resolveApproval,
       approveAll,
+      answerQuestion,
       pauseAll,
       deleteProject,
       switchProject,

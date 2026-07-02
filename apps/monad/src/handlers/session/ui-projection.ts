@@ -395,7 +395,7 @@ export class SessionUiProjector {
             role: 'user',
             parts: [{ type: 'text', text: p.text }],
             status: 'done',
-            seq: event.id
+            seq: event.at
           })
         ];
       }
@@ -437,7 +437,7 @@ export class SessionUiProjector {
             ...(p.source ? { source: p.source } : existing?.source ? { source: existing.source } : {}),
             parts,
             status: 'streaming',
-            seq: existing?.seq ?? event.id
+            seq: existing?.seq ?? event.at
           })
         ];
       }
@@ -457,7 +457,7 @@ export class SessionUiProjector {
             ...(p.source ? { source: p.source } : existing?.source ? { source: existing.source } : {}),
             parts,
             status: 'streaming',
-            seq: existing?.seq ?? event.id
+            seq: existing?.seq ?? event.at
           })
         ];
       }
@@ -489,7 +489,7 @@ export class SessionUiProjector {
             ...(p.source ? { source: p.source } : existing?.source ? { source: existing.source } : {}),
             parts,
             status: 'done',
-            seq: p.source === 'managed-native-cli' ? event.id : (existing?.seq ?? event.id)
+            seq: p.source === 'managed-native-cli' ? event.at : (existing?.seq ?? event.at)
           })
         ];
       }
@@ -507,7 +507,7 @@ export class SessionUiProjector {
             role: 'assistant',
             parts: [{ type: 'text', text: p.code ? `[${p.code}] ${p.message}` : p.message }],
             status: 'error',
-            seq: event.id
+            seq: (p.messageId ? this.findMessage(p.messageId)?.seq : undefined) ?? event.at
           })
         ];
       }
@@ -572,7 +572,7 @@ export class SessionUiProjector {
             role: 'assistant',
             parts,
             status: 'streaming',
-            seq: existing?.seq ?? event.id
+            seq: existing?.seq ?? event.at
           })
         ];
       }
@@ -592,7 +592,7 @@ export class SessionUiProjector {
               }
             ],
             status: p.ok ? 'done' : 'error',
-            seq: this.findMessage(p.messageId)?.seq ?? event.id
+            seq: this.findMessage(p.messageId)?.seq ?? event.at
           })
         ];
       }
@@ -753,6 +753,9 @@ export class SessionUiProjector {
               id: p.requestId,
               question: p.question,
               ...(p.options ? { options: p.options } : {}),
+              ...(p.mode ? { mode: p.mode } : {}),
+              ...(p.allowOther !== undefined ? { allowOther: p.allowOther } : {}),
+              ...(p.asker ? { asker: p.asker } : {}),
               seq: event.id
             })
           }

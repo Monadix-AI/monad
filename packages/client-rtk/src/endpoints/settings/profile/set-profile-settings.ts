@@ -11,7 +11,7 @@ type UserProfileSettingsTreaty = {
   };
 };
 
-export const setProfileSettingsApi = getProfileSettingsApi.injectEndpoints({
+const setProfileSettingsApi = getProfileSettingsApi.injectEndpoints({
   overrideExisting: true,
   endpoints: (builder) => ({
     setProfileSettings: builder.mutation<UserProfileSettings, SetUserProfileSettingsRequest>({

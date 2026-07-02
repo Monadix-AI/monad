@@ -651,7 +651,7 @@ export class Store {
     messageId: string,
     next: StreamStatus,
     updatedAt: string,
-    content?: { text?: string; data?: unknown; type?: MessageType; includeInContext?: boolean }
+    content?: { text?: string; data?: unknown; type?: MessageType; includeInContext?: boolean; createdAt?: string }
   ): boolean {
     const row = this.sqlite
       .query('SELECT stream_status FROM messages WHERE id = ? AND transcript_target_id = ?')
@@ -690,6 +690,14 @@ export class Store {
       sets.push('include_in_context = $includeInContext');
       binds.$includeInContext = content.includeInContext ? 1 : 0;
     }
+    // A streaming message's row is inserted when its placeholder is reserved (e.g. a managed native
+    // CLI "thinking" wake, stamped at fan-out time). The wall orders by created_at, so leaving it at
+    // reserve time makes replies sort by when the agent was woken, not when it actually posted —
+    // re-stamping on completion aligns the durable order with post order.
+    if (content?.createdAt !== undefined) {
+      sets.push('created_at = $createdAt');
+      binds.$createdAt = content.createdAt;
+    }
     this.sqlite
       .query(`UPDATE messages SET ${sets.join(', ')} WHERE id = $id AND transcript_target_id = $target`)
       .run(binds);
@@ -710,6 +718,16 @@ export class Store {
       }
     ).c;
     if (n > 0) {
+      this.sqlite
+        .query(
+          `UPDATE messages
+           SET active = 0, stream_status = 'complete', include_in_context = 0, updated_at = $at
+           WHERE stream_status IN ('pending', 'streaming')
+             AND role = 'assistant'
+             AND text = ''
+             AND json_extract(data, '$.source') = 'managed-native-cli'`
+        )
+        .run({ $at: updatedAt });
       this.sqlite
         .query(
           "UPDATE messages SET stream_status = 'error', include_in_context = 0, updated_at = $at WHERE stream_status IN ('pending', 'streaming')"
@@ -837,6 +855,96 @@ export class Store {
       createdAt: row.created_at as string,
       updatedAt: (row.updated_at ?? null) as string | null
     } as MessageRow);
+  }
+
+  findManagedNativeCliStreamingMessage(
+    transcriptTargetId: string,
+    nativeCliSessionId: string,
+    agentName: string
+  ): string | null {
+    const row = this.sqlite
+      .query(
+        `SELECT id FROM messages
+         WHERE transcript_target_id = $target
+           AND role = 'assistant'
+           AND active = 1
+           AND stream_status IN ('pending', 'streaming')
+           AND json_extract(data, '$.source') = 'managed-native-cli'
+           AND json_extract(data, '$.nativeCliSessionId') = $nativeCliSessionId
+           AND json_extract(data, '$.agentName') = $agentName
+         ORDER BY rowid DESC
+         LIMIT 1`
+      )
+      .get({ $target: transcriptTargetId, $nativeCliSessionId: nativeCliSessionId, $agentName: agentName }) as {
+      id: string;
+    } | null;
+    return row?.id ?? null;
+  }
+
+  retireManagedNativeCliStreamingMessage(
+    transcriptTargetId: string,
+    messageId: string,
+    nativeCliSessionId: string,
+    agentName: string,
+    updatedAt = new Date().toISOString()
+  ): boolean {
+    const result = this.sqlite
+      .query(
+        `UPDATE messages
+         SET active = 0, stream_status = 'complete', updated_at = $updatedAt
+         WHERE id = $id
+           AND transcript_target_id = $target
+           AND role = 'assistant'
+           AND active = 1
+           AND stream_status IN ('pending', 'streaming')
+           AND json_extract(data, '$.source') = 'managed-native-cli'
+           AND json_extract(data, '$.nativeCliSessionId') = $nativeCliSessionId
+           AND json_extract(data, '$.agentName') = $agentName`
+      )
+      .run({
+        $updatedAt: updatedAt,
+        $id: messageId,
+        $target: transcriptTargetId,
+        $nativeCliSessionId: nativeCliSessionId,
+        $agentName: agentName
+      });
+    return result.changes === 1;
+  }
+
+  findRecentManagedNativeCliMessage(args: {
+    transcriptTargetId: string;
+    nativeCliSessionId: string;
+    agentName: string;
+    text: string;
+    withinMs?: number;
+  }): string | null {
+    // Bounded window: this dedupes the same reply arriving twice around one turn settle
+    // (provider final + explicit post). Without the bound, an agent legitimately posting
+    // the same text again hours later would be silently swallowed.
+    const since = new Date(Date.now() - (args.withinMs ?? 5 * 60_000)).toISOString();
+    const row = this.sqlite
+      .query(
+        `SELECT id FROM messages
+         WHERE transcript_target_id = $target
+           AND role = 'assistant'
+           AND active = 1
+           AND text = $text
+           AND created_at >= $since
+           AND stream_status IN ('settled', 'complete')
+           AND json_extract(data, '$.source') = 'managed-native-cli'
+           AND json_extract(data, '$.nativeCliSessionId') = $nativeCliSessionId
+           AND json_extract(data, '$.agentName') = $agentName
+         ORDER BY rowid DESC
+         LIMIT 1`
+      )
+      .get({
+        $target: args.transcriptTargetId,
+        $nativeCliSessionId: args.nativeCliSessionId,
+        $agentName: args.agentName,
+        $text: args.text,
+        $since: since
+      }) as { id: string } | null;
+    return row?.id ?? null;
   }
 
   /** Global lookup of a LIVE message's text by id (no session needed). Used to trace a graph edge
@@ -1713,6 +1821,13 @@ export class Store {
       .query('SELECT COALESCE(MAX(rowid), 0) AS seq FROM messages WHERE transcript_target_id = ?')
       .get(sessionId) as { seq: number } | null;
     return row?.seq ?? 0;
+  }
+
+  maxMessageCreatedAt(sessionId: string): string | null {
+    const row = this.sqlite
+      .query('SELECT MAX(created_at) AS created_at FROM messages WHERE transcript_target_id = ?')
+      .get(sessionId) as { created_at: string | null } | null;
+    return row?.created_at ?? null;
   }
 
   listNativeCliInbox(nativeCliSessionId: string, limit = 50): NativeCliInboxItem[] {

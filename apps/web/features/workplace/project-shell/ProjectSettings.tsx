@@ -31,11 +31,13 @@ export function ProjectSettings({
   room,
   onClose,
   onDeleted,
+  initialIntent,
   initialMemberId = null
 }: {
   room: ProjectController;
   onClose: () => void;
   onDeleted?: () => void;
+  initialIntent?: 'connect-agent' | 'spawn-agent';
   initialMemberId?: string | null;
 }): React.ReactElement {
   const t = useT();
@@ -105,6 +107,28 @@ export function ProjectSettings({
           </div>
 
           <div className="scwf-scroll flex min-h-0 flex-1 flex-col overflow-y-auto p-[18px]">
+            {initialIntent ? (
+              <div
+                style={{
+                  marginBottom: 16,
+                  border: `1px solid ${'color-mix(in srgb, var(--accent-blue) 42%, var(--border))'}`,
+                  borderRadius: 12,
+                  background: 'color-mix(in srgb, var(--accent-blue) 9%, var(--card))',
+                  padding: '10px 12px'
+                }}
+              >
+                <div style={{ fontFamily: sans, fontSize: 13, fontWeight: 650, color: 'var(--foreground)' }}>
+                  {initialIntent === 'spawn-agent'
+                    ? t('web.workplace.emptySpawnHintTitle')
+                    : t('web.workplace.emptyConnectHintTitle')}
+                </div>
+                <p style={{ margin: '3px 0 0', fontFamily: sans, fontSize: 12, color: 'var(--muted-foreground)' }}>
+                  {initialIntent === 'spawn-agent'
+                    ? t('web.workplace.emptySpawnHint')
+                    : t('web.workplace.emptyConnectHint')}
+                </p>
+              </div>
+            ) : null}
             <section style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               <div style={sectionLabel}>{t('web.workplace.currentMembers')}</div>
               <div style={{ border: `1px solid ${'var(--border)'}`, borderRadius: boxR, background: 'var(--card)' }}>
@@ -210,6 +234,7 @@ export function ProjectSettings({
               <ProjectAddMemberSection
                 candidates={regularCandidates}
                 onAdd={(candidate) => void room.addProjectMember(candidate.type, candidate.name)}
+                promoted={initialIntent === 'connect-agent'}
                 title={t('web.workplace.agentMembers')}
               />
               <ProjectAddMemberSection
@@ -220,6 +245,7 @@ export function ProjectSettings({
                     draft: { reasoningEffort: defaultReasoningEffort(candidate.reasoningEfforts) }
                   })
                 }
+                promoted={initialIntent === 'spawn-agent'}
                 title={t('web.workplace.nativeCliAgentMembers')}
               />
             </section>

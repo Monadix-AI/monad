@@ -19,7 +19,7 @@ import { nativeCliAvatarSeed, type ProjectController } from '../use-project';
 type AvailableProjectMember = ProjectController['availableProjectMembers'][number];
 type ProjectMember = ProjectController['projectMembers'][number];
 
-export type NativeCliDraft = {
+type NativeCliDraft = {
   displayName?: string;
   modelId?: string;
   reasoningEffort?: string;
@@ -265,7 +265,9 @@ export function NativeCliMemberDialog({
                     >
                       {
                         reasoningEffortOption(
-                          invite.draft.reasoningEffort ?? defaultReasoningEffort(invite.candidate.reasoningEfforts) ?? ''
+                          invite.draft.reasoningEffort ??
+                            defaultReasoningEffort(invite.candidate.reasoningEfforts) ??
+                            ''
                         ).label
                       }
                       <HugeiconsIcon

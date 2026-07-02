@@ -31,6 +31,30 @@ test('ask emits a request and blocks until answered', async () => {
   expect(clarify.pendingCount).toBe(0);
 });
 
+test('askStructured emits selectable question metadata and resolves with the request id', async () => {
+  const { events, clarify } = capture();
+  const p = clarify.askStructured('ses_TEST', {
+    question: 'Pick reviewers',
+    options: ['Lily', 'Steve'],
+    mode: 'multiple',
+    allowOther: true,
+    asker: { id: 'pmem_codex_1', name: 'Codex reviewer' }
+  });
+
+  expect(requested(events)[0]?.payload).toMatchObject({
+    question: 'Pick reviewers',
+    options: ['Lily', 'Steve'],
+    mode: 'multiple',
+    allowOther: true,
+    asker: { id: 'pmem_codex_1', name: 'Codex reviewer' }
+  });
+  const requestId = requested(events)[0]?.payload.requestId as string;
+
+  expect(clarify.respond(requestId, '["Lily"]')).toBe(true);
+  await expect(p).resolves.toEqual({ requestId, answer: '["Lily"]' });
+  expect(resolved(events)[0]?.payload).toMatchObject({ requestId, answer: '["Lily"]' });
+});
+
 test('respond on an unknown/expired id returns false', () => {
   const { clarify } = capture();
   expect(clarify.respond('clarify_NOPE', 'hi')).toBe(false);

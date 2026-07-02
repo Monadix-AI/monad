@@ -8,14 +8,14 @@ import { SessionUiProjector } from '@/handlers/session/ui-projection.ts';
 
 const sessionId = 'ses_test' as SessionId;
 
-function event(type: Event['type'], payload: Record<string, unknown>): Event {
+function event(type: Event['type'], payload: Record<string, unknown>, at = new Date().toISOString()): Event {
   return {
     id: newId('evt'),
     transcriptTargetId: sessionId,
     type,
     actorAgentId: null,
     payload,
-    at: new Date().toISOString()
+    at
   };
 }
 
@@ -376,6 +376,60 @@ test('hydrates a persisted managed native CLI thinking message after refresh', (
   ]);
 });
 
+test('managed native CLI completion moves live order to completion time', () => {
+  const projector = new SessionUiProjector();
+  const startedAt = '2026-06-24T00:00:01.000Z';
+  const completedAt = '2026-06-24T00:00:09.000Z';
+  projector.applyEvent(
+    event(
+      'agent.token',
+      { messageId: 'msg_CLI', agentName: 'codex', delta: '', index: 0, source: 'managed-native-cli' },
+      startedAt
+    )
+  );
+  projector.applyEvent(
+    event(
+      'agent.message',
+      { messageId: 'msg_CLI', agentName: 'codex', text: 'done', source: 'managed-native-cli' },
+      completedAt
+    )
+  );
+
+  const snapshot = projector.snapshot();
+  if (snapshot.kind !== 'snapshot') throw new Error('expected snapshot');
+  expect(snapshot.items).toEqual([
+    expect.objectContaining({
+      kind: 'message',
+      id: 'msg_CLI',
+      status: 'done',
+      seq: completedAt
+    })
+  ]);
+});
+
+test('live user messages keep chronological order before later managed native CLI replies', () => {
+  const projector = new SessionUiProjector();
+  projector.applyEvent(event('user.message', { messageId: 'msg_USER', text: 'hi all' }, '2026-06-24T10:00:00.000Z'));
+  projector.applyEvent(
+    event(
+      'agent.token',
+      { messageId: 'msg_CLI', agentName: 'claude', delta: '', index: 0, source: 'managed-native-cli' },
+      '2026-06-24T10:00:01.000Z'
+    )
+  );
+  projector.applyEvent(
+    event(
+      'agent.message',
+      { messageId: 'msg_CLI', agentName: 'claude', text: 'I can take this.', source: 'managed-native-cli' },
+      '2026-06-24T10:00:02.000Z'
+    )
+  );
+
+  const snapshot = projector.snapshot();
+  if (snapshot.kind !== 'snapshot') throw new Error('expected snapshot');
+  expect(snapshot.items.map((item) => item.id)).toEqual(['msg_USER', 'msg_CLI']);
+});
+
 test('channel projector streams only structured display content', () => {
   const projector = new SessionUiProjector({ channelStructured: true });
   const first = projector.applyEvent(
@@ -574,6 +628,38 @@ test('adds and removes approval items', () => {
     event('tool.approval_resolved', { requestId: 'req_1', tool: 'browser', allow: true })
   );
   expect(removed).toEqual(expect.objectContaining({ kind: 'remove', target: { kind: 'approval', id: 'req_1' } }));
+});
+
+test('projects structured clarification requests for composer questions', () => {
+  const projector = new SessionUiProjector();
+  const [added] = projector.applyEvent(
+    event('clarify.requested', {
+      requestId: 'clarify_1',
+      question: 'Which direction should I take?',
+      options: ['Ship it', 'Revise it'],
+      mode: 'single',
+      allowOther: true,
+      asker: { id: 'pmem_codex_1', name: 'Lily' }
+    })
+  );
+
+  expect(added).toMatchObject({
+    kind: 'upsert',
+    item: {
+      kind: 'clarification',
+      id: 'clarify_1',
+      question: 'Which direction should I take?',
+      options: ['Ship it', 'Revise it'],
+      mode: 'single',
+      allowOther: true,
+      asker: { id: 'pmem_codex_1', name: 'Lily' }
+    }
+  });
+
+  const [removed] = projector.applyEvent(event('clarify.resolved', { requestId: 'clarify_1', answer: 'Ship it' }));
+  expect(removed).toEqual(
+    expect.objectContaining({ kind: 'remove', target: { kind: 'clarification', id: 'clarify_1' } })
+  );
 });
 
 test('keeps tool progress on the standard tool item', () => {

@@ -568,8 +568,7 @@ for (const kind of TRANSPORTS) {
               item.kind === 'message' &&
               item.role === 'assistant' &&
               item.agentName === 'codex' &&
-              item.status === 'streaming' &&
-              item.source === 'managed-native-cli'
+              item.status === 'streaming'
           )
       ).toBe(true);
       await waitForFile(codex.envLog, TEST_NATIVE_CLI_SERVER_URL);
@@ -758,8 +757,15 @@ for (const kind of TRANSPORTS) {
 
       const input = await waitForFile(stdinLog, 'monad project inbox check');
       expect(input).toContain('Process this project message now.');
+      expect(input).toContain('Sender kind: human');
+      expect(input).toContain('Sender name:');
+      expect(input).toContain('Sender mention token:');
+      expect(input).toContain('human');
       expect(input).toContain('please review this');
       expect(input).toContain('monad project post');
+      expect(input).toContain('first acknowledge ownership');
+      expect(input).toContain('strict capsule token');
+      expect(input).toContain('display name');
       const envText = await waitForFile(envLog, TEST_NATIVE_CLI_SERVER_URL);
       expect(JSON.parse(envText.trim().split(/\n/).at(-1) ?? '{}')).toMatchObject({
         MONAD_SERVER_URL: TEST_NATIVE_CLI_SERVER_URL
@@ -829,7 +835,8 @@ for (const kind of TRANSPORTS) {
       expect(input).not.toContain('second secret busy task');
       expect(input).toContain('New Workplace Project message is available.');
       expect(input).toContain('You are being woken to process the pending project inbox now.');
-      expect(input).toContain('If a public response is appropriate, post it with `monad project post <text>`.');
+      expect(input).toContain('If a public response is appropriate, post it with `monad project post -` and stdin.');
+      expect(input).toContain('Do not pass message text inline in a shell command');
 
       const third = await t.fetch(
         `/v1/projects/${sessionId}/messages`,
@@ -1095,19 +1102,22 @@ for (const kind of TRANSPORTS) {
       if (post.status !== 200) throw new Error(await post.text());
       expect(post.status).toBe(200);
 
-      expect(await waitForFile(claudeStdinLog, 'codex public reply')).toContain('monad project inbox check');
-      const claudeSession = handlers.store
-        .listNativeCliSessionsForTranscriptTarget(sessionId)
-        .find((candidate) => candidate.agentName === 'claude');
-      expect(claudeSession && handlers.store.listNativeCliInbox(claudeSession.id).at(-1)).toMatchObject({
-        deliveryState: 'delivered',
-        message: { text: 'codex public reply' }
-      });
-      const messages = await waitForMessages(t, sessionId, 2);
-      expect(messages.map((message) => [message.role, message.text])).toEqual([
-        ['user', 'initial project task'],
-        ['assistant', 'codex public reply']
-      ]);
+      const claudeInput = await waitForFile(claudeStdinLog, 'codex public reply');
+      expect(claudeInput).toContain('monad project inbox check');
+      expect(claudeInput).toContain('Sender kind: native-cli-agent');
+      expect(claudeInput).toContain('Sender name: codex');
+      expect(claudeInput).toContain('Sender mention token:');
+      expect(claudeInput).toContain('native-cli:codex');
+      const transcriptMessages = handlers.store
+        .listMessages(sessionId, { latest: true })
+        .filter((message) => message.text)
+        .map((message) => [message.role, message.text]);
+      expect(transcriptMessages).toEqual(
+        expect.arrayContaining([
+          ['user', 'initial project task'],
+          ['assistant', 'codex public reply']
+        ])
+      );
       const direct = await t.fetch(
         '/v1/internal/native-agent/agent/send',
         json(
@@ -1122,7 +1132,9 @@ for (const kind of TRANSPORTS) {
       const directNotice = await waitForFile(claudeStdinLog, 'codex private note');
       expect(directNotice).toContain('New direct/private message from codex is available.');
       expect(directNotice).toContain('monad agent read --with codex');
-      expect(await listMessages(t, sessionId)).toHaveLength(2);
+      expect(handlers.store.listMessages(sessionId, { latest: true }).filter((message) => message.text)).toHaveLength(
+        2
+      );
       for (const nativeSession of nativeSessions) {
         await t.fetch(`/v1/native-cli-sessions/${nativeSession.id}/stop`, json('POST'));
       }

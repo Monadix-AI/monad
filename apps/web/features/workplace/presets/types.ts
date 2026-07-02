@@ -9,6 +9,7 @@ import type { ActivityRow, AgentTask, Message, NativeCliStreamView, Participant,
 // hands a preset; it carries display data only, plus the two host-provided live-agent callbacks the
 // activity view surfaces inline (the preset renders the affordance, the host owns the function).
 export interface ProjectCanvas {
+  projectId: string;
   ready: boolean;
   messages: Message[];
   participants: Participant[];

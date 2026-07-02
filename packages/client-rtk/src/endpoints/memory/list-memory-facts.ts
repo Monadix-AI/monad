@@ -5,7 +5,7 @@ import { createEntityAdapter, type EntityState } from '@reduxjs/toolkit';
 import { clientOf, runTreaty } from '../../endpoint-helpers.ts';
 import { setMemoryGraphApi } from './set-memory-graph.ts';
 
-export const factAdapter = createEntityAdapter<Fact>();
+const factAdapter = createEntityAdapter<Fact>();
 export const factSelectors = factAdapter.getSelectors();
 
 export const listMemoryFactsApi = setMemoryGraphApi.injectEndpoints({

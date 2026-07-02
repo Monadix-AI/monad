@@ -9,7 +9,7 @@ interface StartNativeCliAgentArgs extends StartNativeCliAgentRequest {
   sessionId: SessionId;
 }
 
-export const startNativeCliAgentApi = listNativeCliSessionsApi.injectEndpoints({
+const startNativeCliAgentApi = listNativeCliSessionsApi.injectEndpoints({
   overrideExisting: true,
   endpoints: (builder) => ({
     startNativeCliAgent: builder.mutation<NativeCliSessionView, StartNativeCliAgentArgs>({

@@ -835,6 +835,22 @@ test('native CLI adapters ignore malformed and unknown provider output outside t
   expect(qwenNativeCliAdapter.parseOutput('not-json\n{"type":"unknown","session_id":"s"}\n')).toEqual([]);
 });
 
+test('Codex app-server turn completion is a final diagnostic event', () => {
+  const events = codexNativeCliAdapter.parseOutput(
+    JSON.stringify({
+      method: 'turn/completed',
+      params: {
+        threadId: 'thr_123',
+        turnId: 'turn_456',
+        result: 'No action needed.'
+      }
+    })
+  );
+
+  expectNativeCliOutputContract(events);
+  expect(events).toEqual([{ type: 'agent_message', payload: { text: 'No action needed.', final: true } }]);
+});
+
 test('Gemini adapter translates stream-json events into the Monad native CLI contract', () => {
   const chunk = [
     JSON.stringify({ type: 'init', session_id: 'gemini-session-1', model: 'gemini-2.5-pro' }),

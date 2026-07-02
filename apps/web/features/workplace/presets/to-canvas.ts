@@ -9,6 +9,7 @@ export function toCanvas(
   actions?: Pick<ProjectCanvas, 'followNativeCliSession' | 'openAgentCard'>
 ): ProjectCanvas {
   return {
+    projectId: c.projectId,
     ready: c.ready,
     messages: c.messages,
     participants: c.participants,

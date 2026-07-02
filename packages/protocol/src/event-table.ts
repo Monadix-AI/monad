@@ -168,10 +168,21 @@ export const toolApprovalResolvedPayloadSchema = z.object({
   reason: z.string().optional()
 });
 
+export const clarifyChoiceModeSchema = z.enum(['single', 'multiple']);
+export type ClarifyChoiceMode = z.infer<typeof clarifyChoiceModeSchema>;
+
 export const clarifyRequestedPayloadSchema = z.object({
   requestId: requestIdSchema,
   question: z.string(),
-  options: z.array(z.string()).optional()
+  options: z.array(z.string()).optional(),
+  mode: clarifyChoiceModeSchema.optional(),
+  allowOther: z.boolean().optional(),
+  asker: z
+    .object({
+      id: z.string().optional(),
+      name: z.string()
+    })
+    .optional()
 });
 
 export const clarifyResolvedPayloadSchema = z.object({
