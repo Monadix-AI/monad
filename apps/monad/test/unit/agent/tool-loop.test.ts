@@ -633,7 +633,7 @@ test('collapses persisted tool steps on cross-turn replay (no `tool` role to the
   const s = sid();
   messages.append({
     id: newId('msg'),
-    sessionId: s,
+    transcriptTargetId: s,
     role: 'assistant',
     text: '{"tool":"x"}',
     createdAt: '',
@@ -641,7 +641,7 @@ test('collapses persisted tool steps on cross-turn replay (no `tool` role to the
   });
   messages.append({
     id: newId('msg'),
-    sessionId: s,
+    transcriptTargetId: s,
     role: 'tool',
     text: 'echoed:1',
     createdAt: '',
@@ -671,7 +671,7 @@ test('replays persisted tool steps WITH data structurally (native tool-call/tool
   const s = sid();
   messages.append({
     id: newId('msg'),
-    sessionId: s,
+    transcriptTargetId: s,
     role: 'assistant',
     text: '{"tool":"fs_read","input":{"path":"a"}}',
     createdAt: '',
@@ -680,7 +680,7 @@ test('replays persisted tool steps WITH data structurally (native tool-call/tool
   });
   messages.append({
     id: newId('msg'),
-    sessionId: s,
+    transcriptTargetId: s,
     role: 'tool',
     text: 'contents of a',
     createdAt: '',
@@ -719,7 +719,7 @@ test('replay uses persisted result.modelContent as the model-facing source of tr
   const s = sid();
   messages.append({
     id: newId('msg'),
-    sessionId: s,
+    transcriptTargetId: s,
     role: 'assistant',
     text: '{"tool":"fs_edit","input":{"path":"a"}}',
     createdAt: '',
@@ -728,7 +728,7 @@ test('replay uses persisted result.modelContent as the model-facing source of tr
   });
   messages.append({
     id: newId('msg'),
-    sessionId: s,
+    transcriptTargetId: s,
     role: 'tool',
     text: 'legacy output',
     createdAt: '',

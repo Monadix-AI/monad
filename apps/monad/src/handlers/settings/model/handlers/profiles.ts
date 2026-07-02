@@ -111,7 +111,7 @@ export function createProfilesHandlers(ctx: ModelContext) {
       return { ok: true as const };
     },
 
-    /** Non-chat model-role assignments (vision/image/speech/embedding). chat = the default profile. */
+    /** Non-chat model-role assignments. chat = the default profile. */
     async getRoles() {
       const { cfg } = await ctx.read();
       const roles: ModelProfileRoutes | undefined = cfg.model.profiles.find(
@@ -123,6 +123,7 @@ export function createProfilesHandlers(ctx: ModelContext) {
           ...(specFromRoute(roles?.image) ? { image: specFromRoute(roles?.image) } : {}),
           ...(specFromRoute(roles?.video) ? { video: specFromRoute(roles?.video) } : {}),
           ...(specFromRoute(roles?.speech) ? { speech: specFromRoute(roles?.speech) } : {}),
+          ...(specFromRoute(roles?.transcription) ? { transcription: specFromRoute(roles?.transcription) } : {}),
           ...(specFromRoute(roles?.embedding) ? { embedding: specFromRoute(roles?.embedding) } : {}),
           ...(specFromRoute(roles?.memory) ? { memory: specFromRoute(roles?.memory) } : {})
         }
@@ -142,6 +143,7 @@ export function createProfilesHandlers(ctx: ModelContext) {
         image: routeFromSpec(roles.image),
         video: routeFromSpec(roles.video),
         speech: routeFromSpec(roles.speech),
+        transcription: routeFromSpec(roles.transcription),
         embedding: routeFromSpec(roles.embedding),
         memory: routeFromSpec(roles.memory)
       };

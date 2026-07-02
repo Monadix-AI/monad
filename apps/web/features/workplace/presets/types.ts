@@ -4,7 +4,7 @@ import type { TFn } from '@/components/I18nProvider';
 import type { ActivityRow, AgentTask, Message, NativeCliStreamView, Participant, TypingIndicator } from '../types';
 
 // A preset is pure presentation: the read-only mapping of chatroom data → UI. It never owns
-// management (members/moderator/approvals/workdir) or primary communication (the composer) — those
+// management (members/approvals/workdir) or primary communication (the composer) — those
 // are host-rendered and identical across presets. `ProjectCanvas` is the narrowed surface the host
 // hands a preset; it carries display data only, plus the two host-provided live-agent callbacks the
 // activity view surfaces inline (the preset renders the affordance, the host owns the function).

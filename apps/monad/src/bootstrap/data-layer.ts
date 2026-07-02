@@ -2,6 +2,10 @@
 // the debug UI) and the SQLite store, with a startup repair pass. Returns the kv + store handles
 // the rest of startDaemon threads everywhere; the KV server/client/logger stay internal (their only
 // consumers are the exit/debug/trace hooks registered here).
+//
+// KV is retained on purpose even though the runtime has no local consumer today: the embedded server
+// speaks RESP and is reached through `Bun.RedisClient`, so the cloud build swaps in a distributed
+// Redis by changing only the client URL — the interface stays identical. Do not gate this behind dev.
 
 import type { MonadPaths } from '@monad/home';
 import type { KvService } from '@/services/kv.ts';

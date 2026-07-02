@@ -5,7 +5,7 @@ import type {
   MessageStream,
   MessageType,
   ModelPrice,
-  SessionId,
+  TranscriptTargetId,
   ChatMessage as WireChatMessage
 } from '@monad/protocol';
 import type { Tool, ToolBackends, ToolGate } from '@/capabilities/tools/types.ts';
@@ -18,7 +18,7 @@ import type { PromptReplayCache } from './replay.ts';
 /** A chat message as the loop sees it: a minimal persisted row view derived from @monad/protocol. */
 export type ChatMessage = Pick<WireChatMessage, 'role' | 'text' | 'createdAt' | 'data' | 'includeInContext'> & {
   id: string;
-  sessionId: string;
+  transcriptTargetId: TranscriptTargetId;
   type?: MessageType;
   /** In-flight rows have no settled content yet, so replayHistory skips them from the prompt. */
   stream?: MessageStream;
@@ -81,7 +81,7 @@ export interface AgentLoopDeps {
   /** Active model context-window size for context.usage events. */
   contextLimit?: number;
   /** Records one turn's real provider usage and returns computed cost for agent.message. */
-  recordTurnUsage?: (sessionId: SessionId, usage: ModelUsage, modelId: string) => Cost | undefined;
+  recordTurnUsage?: (sessionId: TranscriptTargetId, usage: ModelUsage, modelId: string) => Cost | undefined;
   context?: ContextEngine;
   /** Durable, bounded-load history strategy. */
   history?: HistoryProvider;
@@ -90,9 +90,9 @@ export interface AgentLoopDeps {
   /** Marks the static system+tools prefix with a prompt-cache breakpoint. */
   cacheSystemPrompt?: boolean;
   /** Base behavior template for the system prompt. */
-  instructions?: string | ((sessionId?: SessionId) => string | undefined);
+  instructions?: string | ((sessionId?: TranscriptTargetId) => string | undefined);
   /** User-editable prompt slots (e.g. SOUL/AGENT/USER), resolved per turn. */
-  promptSlots?: UserPromptSlots | ((sessionId?: SessionId) => UserPromptSlots | undefined);
+  promptSlots?: UserPromptSlots | ((sessionId?: TranscriptTargetId) => UserPromptSlots | undefined);
   environment?: AgentEnvironment;
   /** Dynamic per-turn context appended to the last user message. */
   ambientContext?: string;

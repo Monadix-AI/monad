@@ -6,6 +6,31 @@
       "type": "number",
       "const": 1
     },
+    "user": {
+      "default": {
+        "avatarDataUrl": null
+      },
+      "type": "object",
+      "properties": {
+        "avatarDataUrl": {
+          "default": null,
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 786432,
+              "pattern": "^data:image\\/(?:png|jpeg|webp|gif);base64,[A-Za-z0-9+/=]+$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "avatarDataUrl"
+      ],
+      "additionalProperties": false
+    },
     "model": {
       "type": "object",
       "properties": {
@@ -183,6 +208,22 @@
                     ],
                     "additionalProperties": false
                   },
+                  "transcription": {
+                    "type": "object",
+                    "properties": {
+                      "provider": {
+                        "type": "string"
+                      },
+                      "modelId": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "provider",
+                      "modelId"
+                    ],
+                    "additionalProperties": false
+                  },
                   "embedding": {
                     "type": "object",
                     "properties": {
@@ -257,6 +298,7 @@
                     "image",
                     "video",
                     "speech",
+                    "transcription",
                     "embedding",
                     "memory"
                   ]
@@ -336,6 +378,9 @@
           "default": {},
           "type": "object",
           "properties": {
+            "fast": {
+              "type": "string"
+            },
             "vision": {
               "type": "string"
             },
@@ -346,6 +391,9 @@
               "type": "string"
             },
             "speech": {
+              "type": "string"
+            },
+            "transcription": {
               "type": "string"
             },
             "embedding": {
@@ -437,6 +485,9 @@
               "roles": {
                 "type": "object",
                 "properties": {
+                  "fast": {
+                    "type": "string"
+                  },
                   "vision": {
                     "type": "string"
                   },
@@ -447,6 +498,9 @@
                     "type": "string"
                   },
                   "speech": {
+                    "type": "string"
+                  },
+                  "transcription": {
                     "type": "string"
                   },
                   "embedding": {
@@ -2078,6 +2132,7 @@
   },
   "required": [
     "version",
+    "user",
     "model",
     "agent",
     "skills",

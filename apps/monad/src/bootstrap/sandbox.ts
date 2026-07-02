@@ -122,7 +122,10 @@ export async function createSandbox(
     log: (m) => logger.info(`monad: ${m}`)
   });
   if (sessionSandbox.enabled) {
-    await sessionSandbox.sweep(store.listSessions().map((s) => s.id));
+    await sessionSandbox.sweep([
+      ...store.listSessions().map((s) => s.id),
+      ...store.listWorkplaceProjects().map((p) => p.id)
+    ]);
     logger.info('monad: ephemeral sandbox mode — each session runs in a disposable root');
   }
 

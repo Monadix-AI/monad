@@ -1,21 +1,20 @@
+import type { IconSvgElement } from '@hugeicons/react';
 import type { WebMessageIdWithoutParams } from '@monad/i18n';
-import type { LucideIcon } from 'lucide-react';
 
 import {
-  BarChart3,
-  Bot,
-  Brain,
-  Cpu,
-  MessageSquare,
-  Network,
-  Package,
-  PlugZap,
-  Puzzle,
-  Shapes,
-  ShieldHalf,
-  Users,
-  Workflow
-} from 'lucide-react';
+  Activity01Icon,
+  BotIcon,
+  BrainIcon,
+  CpuIcon,
+  GeometricShapesIcon,
+  MessageSquareCodeIcon,
+  NeuralNetworkIcon,
+  PackageIcon,
+  PuzzleIcon,
+  ShieldHalfIcon,
+  UserGroupIcon,
+  WorkflowSquare01Icon
+} from '@hugeicons/core-free-icons';
 
 export type StudioSectionId =
   | 'agents'
@@ -30,7 +29,6 @@ export type StudioSectionId =
   | 'nativeCliAgents'
   | 'capabilities'
   | 'tools'
-  | 'api'
   | 'approvals'
   | 'memory'
   | 'graph'
@@ -53,7 +51,6 @@ export const STUDIO_SECTION_IDS = [
   'nativeCliAgents',
   'capabilities',
   'tools',
-  'api',
   'approvals',
   'memory',
   'graph',
@@ -70,36 +67,35 @@ export function isStudioSectionId(value: string | null | undefined): value is St
 
 export interface StudioSectionItem {
   id: StudioSectionId;
-  icon: LucideIcon;
+  icon: IconSvgElement;
   i18nKey: WebMessageIdWithoutParams;
 }
 
 export const STUDIO_AGENT_SECTIONS: StudioSectionItem[] = [
-  { id: 'agents', icon: Users, i18nKey: 'web.studio.allAgents' },
-  { id: 'orchestration', icon: Network, i18nKey: 'web.studio.orchestration' }
+  { id: 'agents', icon: UserGroupIcon, i18nKey: 'web.studio.allAgents' },
+  { id: 'orchestration', icon: NeuralNetworkIcon, i18nKey: 'web.studio.orchestration' }
 ];
 
 export const STUDIO_CAPABILITY_SECTIONS: StudioSectionItem[] = [
-  { id: 'models', icon: Cpu, i18nKey: 'web.studio.models' },
-  { id: 'atoms', icon: Package, i18nKey: 'web.studio.atoms' },
-  { id: 'skills', icon: Puzzle, i18nKey: 'web.studio.skills' },
-  { id: 'channels', icon: MessageSquare, i18nKey: 'web.studio.channels' },
-  { id: 'thirdPartyAgents', icon: Bot, i18nKey: 'web.studio.thirdPartyAgents' }
+  { id: 'models', icon: CpuIcon, i18nKey: 'web.studio.models' },
+  { id: 'atoms', icon: PackageIcon, i18nKey: 'web.studio.atoms' },
+  { id: 'skills', icon: PuzzleIcon, i18nKey: 'web.studio.skills' },
+  { id: 'channels', icon: MessageSquareCodeIcon, i18nKey: 'web.studio.channels' },
+  { id: 'thirdPartyAgents', icon: BotIcon, i18nKey: 'web.studio.thirdPartyAgents' }
 ];
 
 export const STUDIO_RUNTIME_SECTIONS: StudioSectionItem[] = [
-  { id: 'capabilities', icon: Shapes, i18nKey: 'web.studio.capabilities' },
-  { id: 'api', icon: PlugZap, i18nKey: 'web.settings.api' },
-  { id: 'approvals', icon: ShieldHalf, i18nKey: 'web.settings.approvals' },
+  { id: 'capabilities', icon: GeometricShapesIcon, i18nKey: 'web.studio.capabilities' },
+  { id: 'approvals', icon: ShieldHalfIcon, i18nKey: 'web.settings.approvals' },
   // Memory folds the former standalone graph + mem0 sections into tabs (deep links /studio/graph and
   // /studio/mem0 still resolve — they open the matching tab — so those ids stay in the union below).
-  { id: 'memory', icon: Brain, i18nKey: 'web.settings.memory' },
-  { id: 'hooks', icon: Workflow, i18nKey: 'web.studio.hooks' },
-  { id: 'sandbox', icon: ShieldHalf, i18nKey: 'web.studio.sandbox' }
+  { id: 'memory', icon: BrainIcon, i18nKey: 'web.settings.memory' },
+  { id: 'hooks', icon: WorkflowSquare01Icon, i18nKey: 'web.studio.hooks' },
+  { id: 'sandbox', icon: ShieldHalfIcon, i18nKey: 'web.studio.sandbox' }
 ];
 
 export const STUDIO_USAGE_SECTION: StudioSectionItem = {
   id: 'usage',
-  icon: BarChart3,
+  icon: Activity01Icon,
   i18nKey: 'web.studio.usage'
 };

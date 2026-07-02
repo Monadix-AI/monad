@@ -2,10 +2,11 @@
 
 import type { GenerationParamsView, ModelInfo, ProfileView } from '@monad/protocol';
 
+import { CpuIcon, PlusSignIcon } from '@hugeicons/core-free-icons';
+import { HugeiconsIcon } from '@hugeicons/react';
 import { useListAgentsQuery } from '@monad/client-rtk';
 import { ModelProviderType } from '@monad/protocol';
 import { Button, ScrollArea } from '@monad/ui';
-import { Plus } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { flushSync } from 'react-dom';
 
@@ -156,7 +157,16 @@ export function ModelSettings(_props: { onClose: () => void }) {
 
   return (
     <PanelShell className="overflow-hidden">
-      <StudioBreadcrumbHeader title={t('web.model.title')} />
+      <StudioBreadcrumbHeader
+        icon={
+          <HugeiconsIcon
+            className="size-4"
+            icon={CpuIcon}
+          />
+        }
+        showSubtitle={false}
+        title={t('web.model.title')}
+      />
 
       <ScrollArea className="min-h-0 flex-1">
         {settingsQuery.isLoading ? (
@@ -180,7 +190,7 @@ export function ModelSettings(_props: { onClose: () => void }) {
                   size="sm"
                   variant="ghost"
                 >
-                  <Plus /> {t('web.model.providerBtn')}
+                  <HugeiconsIcon icon={PlusSignIcon} /> {t('web.model.providerBtn')}
                 </Button>
               </div>
 
@@ -207,7 +217,7 @@ export function ModelSettings(_props: { onClose: () => void }) {
                   size="sm"
                   variant="ghost"
                 >
-                  <Plus /> {t('web.model.profileBtn')}
+                  <HugeiconsIcon icon={PlusSignIcon} /> {t('web.model.profileBtn')}
                 </Button>
               </div>
 

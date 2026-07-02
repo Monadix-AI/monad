@@ -3,6 +3,17 @@ import type { SkillMarketplaceSource, SkillSearchResult, SkillSortMode } from '@
 import type { SkillInstallAttempt, SkillPending } from './types';
 
 import {
+  Activity01Icon,
+  ArrowLeft01Icon,
+  Cancel01Icon,
+  ExternalLinkIcon,
+  LoaderPinwheelIcon,
+  Search01Icon,
+  SparklesIcon,
+  ZapIcon
+} from '@hugeicons/core-free-icons';
+import { HugeiconsIcon } from '@hugeicons/react';
+import {
   useBrowseSkillsQuery,
   useFetchSkillDetailQuery,
   useInstallSkillMutation,
@@ -14,10 +25,10 @@ import {
   skillMarketplaceSourceMeta
 } from '@monad/protocol';
 import { Badge, Button, cn, Input, ScrollArea } from '@monad/ui';
-import { ArrowLeft, ExternalLink, Loader2, Search, Sparkles, TrendingUp, X, Zap } from 'lucide-react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { hoverActionsClassName, hoverActionsVisibleClassName } from '@/components/HoverActions';
 import { useT } from '@/components/I18nProvider';
 import { Markdown } from '@/components/Markdown';
 import { toast } from '@/components/ToastProvider';
@@ -43,9 +54,36 @@ const MARKETPLACE_ICONS: Record<SkillMarketplaceSource, { src: string; fallback:
 };
 
 const MARKETPLACE_SORT_TABS: { mode: SkillSortMode; icon: React.ReactNode; labelKey: WebMessageIdWithoutParams }[] = [
-  { mode: 'trending', icon: <TrendingUp className="size-3.5" />, labelKey: 'web.skills.tabTrending' },
-  { mode: 'top', icon: <Zap className="size-3.5" />, labelKey: 'web.skills.tabTop' },
-  { mode: 'new', icon: <Sparkles className="size-3.5" />, labelKey: 'web.skills.tabNew' }
+  {
+    mode: 'trending',
+    icon: (
+      <HugeiconsIcon
+        className="size-3.5"
+        icon={Activity01Icon}
+      />
+    ),
+    labelKey: 'web.skills.tabTrending'
+  },
+  {
+    mode: 'top',
+    icon: (
+      <HugeiconsIcon
+        className="size-3.5"
+        icon={ZapIcon}
+      />
+    ),
+    labelKey: 'web.skills.tabTop'
+  },
+  {
+    mode: 'new',
+    icon: (
+      <HugeiconsIcon
+        className="size-3.5"
+        icon={SparklesIcon}
+      />
+    ),
+    labelKey: 'web.skills.tabNew'
+  }
 ];
 
 function marketplaceLabel(source: SkillMarketplaceSource): string {
@@ -148,7 +186,10 @@ function SkillDetailView({
           size="icon"
           variant="ghost"
         >
-          <ArrowLeft className="size-4" />
+          <HugeiconsIcon
+            className="size-4"
+            icon={ArrowLeft01Icon}
+          />
         </Button>
         {isFetching ? (
           <>
@@ -182,7 +223,10 @@ function SkillDetailView({
                       rel="noopener noreferrer"
                       target="_blank"
                     >
-                      <ExternalLink className="size-3.5" />
+                      <HugeiconsIcon
+                        className="size-3.5"
+                        icon={ExternalLinkIcon}
+                      />
                     </a>
                   </Button>
                 ) : null}
@@ -203,7 +247,12 @@ function SkillDetailView({
                     size="sm"
                     variant="ghost"
                   >
-                    {installing ? <Loader2 className="size-3.5 animate-spin" /> : null}
+                    {installing ? (
+                      <HugeiconsIcon
+                        className="size-3.5 animate-spin"
+                        icon={LoaderPinwheelIcon}
+                      />
+                    ) : null}
                     {done ? '✓' : consent ? t('web.skills.consentReview') : t('web.skills.browseInstall')}
                   </Button>
                 </ConsentPopover>
@@ -452,9 +501,7 @@ export function BrowsePanel({
         const consent = pending.get(resultKey);
         const isInstalling = installingId === resultKey;
         const installVisibility =
-          done || consent || isInstalling
-            ? 'pointer-events-auto opacity-100'
-            : 'pointer-events-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100';
+          done || consent || isInstalling ? hoverActionsVisibleClassName : hoverActionsClassName;
 
         return (
           <div
@@ -504,7 +551,10 @@ export function BrowsePanel({
                   variant="ghost"
                 >
                   {isInstalling ? (
-                    <Loader2 className="size-3 animate-spin text-foreground" />
+                    <HugeiconsIcon
+                      className="size-3 animate-spin text-foreground"
+                      icon={LoaderPinwheelIcon}
+                    />
                   ) : done ? (
                     '✓'
                   ) : consent ? (
@@ -559,7 +609,10 @@ export function BrowsePanel({
 
         <div className="flex min-w-0 flex-col gap-2 lg:flex-row lg:items-center">
           <div className="relative min-w-0 flex-1">
-            <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
+            <HugeiconsIcon
+              className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground"
+              icon={Search01Icon}
+            />
             <Input
               className="h-8 pr-8 pl-8"
               onChange={(e) => {
@@ -581,7 +634,10 @@ export function BrowsePanel({
                 size="icon"
                 variant="ghost"
               >
-                <X className="size-3.5" />
+                <HugeiconsIcon
+                  className="size-3.5"
+                  icon={Cancel01Icon}
+                />
               </Button>
             ) : null}
           </div>
@@ -612,7 +668,10 @@ export function BrowsePanel({
             </div>
           ) : null}
           {isFetching && isSearching ? (
-            <Loader2 className="size-3.5 shrink-0 animate-spin text-muted-foreground" />
+            <HugeiconsIcon
+              className="size-3.5 shrink-0 animate-spin text-muted-foreground"
+              icon={LoaderPinwheelIcon}
+            />
           ) : null}
         </div>
       </div>

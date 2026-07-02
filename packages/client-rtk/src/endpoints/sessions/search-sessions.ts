@@ -9,8 +9,12 @@ const searchSessionsApi = apiSlice.injectEndpoints({
     // Returns the full response (hits + indexingPending) so the UI can flag incomplete recall
     // while the background embedding indexer is still catching up.
     searchSessions: builder.query<SearchSessionsResponse, SearchSessionsRequest>({
-      queryFn: ({ q, mode, limit }: SearchSessionsRequest, api: { extra: unknown }) =>
-        runTreaty(() => clientOf(api).treaty.v1.sessions.search.get({ query: { q, mode, limit } }))
+      queryFn: ({ q, mode, limit, transcriptTargetId }: SearchSessionsRequest, api: { extra: unknown }) =>
+        runTreaty(() =>
+          clientOf(api).treaty.v1.sessions.search.get({
+            query: { q, mode, limit, transcriptTargetId }
+          })
+        )
     })
   })
 });

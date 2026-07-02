@@ -2,80 +2,102 @@
 
 import type { CSSProperties } from 'react';
 import type { ProjectExperienceDefinition } from './experiences/types';
+import type { ProjectController } from './use-project';
 
 import { useStartNativeCliAuthMutation } from '@monad/client-rtk';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 
 import { useT } from '@/components/I18nProvider';
 import { NativeCliAuthModal } from './cli/NativeCliAuthModal';
-import { NativeCliStreamModal } from './cli/NativeCliStreamModal';
 import { getProjectExperience } from './experiences/registry';
 import { toExperienceRuntime } from './experiences/to-runtime';
+import { ProjectMemberDialog } from './project-shell/ProjectMemberDialog';
 import { ProjectRail } from './project-shell/ProjectRail';
 import { ProjectSettings } from './project-shell/ProjectSettings';
 import { boxR, mono, sans } from './styles';
 import { useProject } from './use-project';
+import { useWorkplaceUiStore } from './workplace-ui-store';
 
 export function Workplace({
   projectId,
   embedded = false,
   mode = 'chat',
   experiences,
-  projectSettingsOpen = false,
   onModeChange,
-  onProjectSettingsOpenChange
+  onProjectControllerChange,
+  onProjectDeleted
 }: {
   projectId: string;
   embedded?: boolean;
   mode?: string;
   experiences?: ProjectExperienceDefinition[];
-  projectSettingsOpen?: boolean;
   onModeChange?: (mode: string) => void;
-  onProjectSettingsOpenChange?: (open: boolean) => void;
+  onProjectControllerChange?: (project: ProjectController) => void;
+  onProjectDeleted?: () => void;
 }): React.ReactElement {
   const project = useProject(projectId);
   const t = useT();
-  const [internalProjectSettingsOpen, setInternalProjectSettingsOpen] = useState(false);
-  const [selectedProjectMemberId, setSelectedProjectMemberId] = useState<string | null>(null);
-  const [followedNativeCliSessionId, setFollowedNativeCliSessionId] = useState<string | null>(null);
-  const [nativeCliAuthSession, setNativeCliAuthSession] = useState<{ id: string; agentName: string } | null>(null);
-  const [startingNativeCliAuthAgent, setStartingNativeCliAuthAgent] = useState<string | null>(null);
   const [startNativeCliAuth] = useStartNativeCliAuthMutation();
-  const settingsOpen = projectSettingsOpen || internalProjectSettingsOpen;
+  const openNativeCliObservation = useWorkplaceUiStore((state) => state.followNativeCliSession);
+  const projectSettings = useWorkplaceUiStore((state) =>
+    state.projectSettings?.projectId === projectId ? state.projectSettings : null
+  );
+  const projectMemberSettings = useWorkplaceUiStore((state) =>
+    state.projectMemberSettings?.projectId === projectId ? state.projectMemberSettings : null
+  );
+  const openProjectSettingsInStore = useWorkplaceUiStore((state) => state.openProjectSettings);
+  const closeProjectSettingsInStore = useWorkplaceUiStore((state) => state.closeProjectSettings);
+  const openProjectMemberSettings = useWorkplaceUiStore((state) => state.openProjectMemberSettings);
+  const closeProjectMemberSettings = useWorkplaceUiStore((state) => state.closeProjectMemberSettings);
+  const nativeCliAuthSession = useWorkplaceUiStore((state) => state.nativeCliAuthSession);
+  const startingNativeCliAuthAgent = useWorkplaceUiStore((state) => state.startingNativeCliAuthAgent);
+  const setNativeCliAuthSession = useWorkplaceUiStore((state) => state.setNativeCliAuthSession);
+  const clearNativeCliAuthSession = useWorkplaceUiStore((state) => state.clearNativeCliAuthSession);
+  const setStartingNativeCliAuthAgent = useWorkplaceUiStore((state) => state.setStartingNativeCliAuthAgent);
+  const settingsOpen = projectSettings !== null;
   const closeProjectSettings = useCallback(() => {
-    setInternalProjectSettingsOpen(false);
-    setSelectedProjectMemberId(null);
-    onProjectSettingsOpenChange?.(false);
-  }, [onProjectSettingsOpenChange]);
+    closeProjectSettingsInStore();
+  }, [closeProjectSettingsInStore]);
+  const setProjectSettingsOpen = useCallback(
+    (open: boolean) => {
+      if (open) openProjectSettingsInStore(projectId);
+      else closeProjectSettingsInStore();
+    },
+    [closeProjectSettingsInStore, openProjectSettingsInStore, projectId]
+  );
   const openAgentCard = useCallback(
     (memberId: string) => {
-      setSelectedProjectMemberId(memberId);
-      setInternalProjectSettingsOpen(true);
-      onProjectSettingsOpenChange?.(true);
+      openProjectMemberSettings(projectId, memberId);
     },
-    [onProjectSettingsOpenChange]
+    [openProjectMemberSettings, projectId]
   );
-  const followNativeCliSession = useCallback((id: string) => {
-    setFollowedNativeCliSessionId(id);
-  }, []);
+  const followNativeCliSession = useCallback(
+    (id: string) => {
+      openNativeCliObservation(projectId, id);
+    },
+    [openNativeCliObservation, projectId]
+  );
   const startNativeCliAuthForAgent = useCallback(
     (agentName: string) => {
-      setNativeCliAuthSession(null);
+      clearNativeCliAuthSession();
       setStartingNativeCliAuthAgent(agentName);
       startNativeCliAuth(agentName)
         .unwrap()
-        .then((session) => setNativeCliAuthSession({ id: session.id, agentName: session.agentName }))
+        .then((session) => {
+          if (session.authState !== 'authenticated') {
+            setNativeCliAuthSession({ id: session.id, agentName: session.agentName });
+          }
+        })
         .catch(() => {
-          setNativeCliAuthSession(null);
+          clearNativeCliAuthSession();
         })
         .finally(() => setStartingNativeCliAuthAgent(null));
     },
-    [startNativeCliAuth]
+    [clearNativeCliAuthSession, setNativeCliAuthSession, setStartingNativeCliAuthAgent, startNativeCliAuth]
   );
-  const followedNativeCliStream = useMemo(
-    () => project.nativeCliStreams.find((stream) => stream.id === followedNativeCliSessionId),
-    [project.nativeCliStreams, followedNativeCliSessionId]
-  );
+  useEffect(() => {
+    onProjectControllerChange?.(project);
+  }, [onProjectControllerChange, project]);
   const experience = getProjectExperience(mode, experiences);
   const runtime = useMemo(
     () =>
@@ -190,7 +212,7 @@ export function Workplace({
 
           {experience.render({
             embedded,
-            onProjectSettingsOpenChange,
+            onProjectSettingsOpenChange: setProjectSettingsOpen,
             project,
             projectSettingsOpen: settingsOpen,
             runtime,
@@ -199,22 +221,20 @@ export function Workplace({
         </div>
         {settingsOpen ? (
           <ProjectSettings
-            initialMemberId={selectedProjectMemberId}
             onClose={closeProjectSettings}
+            onDeleted={onProjectDeleted}
             room={project}
           />
         ) : null}
-        {followedNativeCliStream ? (
-          <NativeCliStreamModal
-            onClose={() => setFollowedNativeCliSessionId(null)}
-            onStop={(id) => void project.stopNativeCli(id)}
-            stream={followedNativeCliStream}
-          />
-        ) : null}
+        <ProjectMemberDialog
+          memberId={projectMemberSettings?.memberId ?? null}
+          onClose={closeProjectMemberSettings}
+          room={project}
+        />
         {nativeCliAuthSession ? (
           <NativeCliAuthModal
             agentName={nativeCliAuthSession.agentName}
-            onClose={() => setNativeCliAuthSession(null)}
+            onClose={clearNativeCliAuthSession}
             sessionId={nativeCliAuthSession.id}
           />
         ) : null}

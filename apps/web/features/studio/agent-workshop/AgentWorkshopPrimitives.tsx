@@ -1,10 +1,11 @@
 'use client';
 
 import type { SandboxMode } from '@monad/protocol';
-import type { ComponentType, DragEvent, ReactNode } from 'react';
+import type { DragEvent, ReactNode } from 'react';
 
+import { GripVerticalIcon } from '@hugeicons/core-free-icons';
+import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react';
 import { Badge, cn } from '@monad/ui';
-import { GripVertical } from 'lucide-react';
 
 export const SANDBOX_MODES: SandboxMode[] = ['workspace', 'home', 'unrestricted', 'ephemeral'];
 export const INHERIT = '__inherit__';
@@ -42,7 +43,7 @@ export function parsePayload(event: DragEvent<HTMLElement>): DragPayload | null 
 
 interface PartCardProps {
   body: string;
-  icon: ComponentType<{ className?: string }>;
+  icon: IconSvgElement;
   onDragEnd: () => void;
   onSelect: () => void;
   onStartDrag: () => void;
@@ -70,12 +71,18 @@ export function PartCard({ body, icon: Icon, onDragEnd, onSelect, onStartDrag, p
       type="button"
     >
       <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-xl bg-secondary text-secondary-foreground">
-        <Icon className="size-4" />
+        <HugeiconsIcon
+          className="size-4"
+          icon={Icon}
+        />
       </span>
       <span className="min-w-0 flex-1">
         <span className="flex items-center gap-1.5 font-medium text-sm">
           {title}
-          <GripVertical className="size-3.5 text-muted-foreground" />
+          <HugeiconsIcon
+            className="size-3.5 text-muted-foreground"
+            icon={GripVerticalIcon}
+          />
         </span>
         <span className="mt-1 block text-muted-foreground text-xs leading-relaxed">{body}</span>
       </span>
@@ -87,7 +94,7 @@ interface WorkshopSlotProps {
   active: boolean;
   body: ReactNode;
   dragging: boolean;
-  icon: ComponentType<{ className?: string }>;
+  icon: IconSvgElement;
   onDrop: (part: WorkshopPart, event: DragEvent<HTMLButtonElement | HTMLDivElement>) => void;
   onSelect: () => void;
   part: WorkshopPart;
@@ -121,7 +128,10 @@ export function WorkshopSlot({
     >
       <div className="flex items-center gap-3">
         <span className="flex size-10 items-center justify-center rounded-xl bg-secondary text-secondary-foreground">
-          <Icon className="size-4" />
+          <HugeiconsIcon
+            className="size-4"
+            icon={Icon}
+          />
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">

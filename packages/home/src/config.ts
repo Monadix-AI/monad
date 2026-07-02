@@ -20,7 +20,8 @@ import {
   modelRolesSchema,
   nativeCliAgentViewSchema,
   KNOWN_PROVIDER_TYPES as PROTOCOL_KNOWN_PROVIDER_TYPES,
-  sandboxModeSchema
+  sandboxModeSchema,
+  userAvatarDataUrlSchema
 } from '@monad/protocol';
 
 // GenerationParams / FallbackTarget are owned by @monad/protocol (single source). home keeps its
@@ -659,6 +660,11 @@ const monadConfigSchema = z.object({
     displayName: z.string(),
     verification: z.enum(['unverified', 'email', 'domain', 'attested'])
   }),
+  user: z
+    .object({
+      avatarDataUrl: userAvatarDataUrlSchema.nullable().default(null)
+    })
+    .default({ avatarDataUrl: null }),
   model: z.object({
     default: z.string(), // legacy; runtime defaults to the fixed "default" profile
     providers: z.array(providerSchema).default([]),
@@ -945,6 +951,11 @@ export type MonadSystemConfig = z.infer<typeof monadSystemConfigSchema>;
 // Contains business and user-facing settings that hot-reload without restart.
 export const monadProfileSchema = z.object({
   version: z.literal(CURRENT_PROFILE_VERSION),
+  user: z
+    .object({
+      avatarDataUrl: userAvatarDataUrlSchema.nullable().default(null)
+    })
+    .default({ avatarDataUrl: null }),
   model: z.object({
     default: z.string(),
     providers: z.array(providerSchema).default([]),
@@ -1030,6 +1041,7 @@ export function createDefaultConfig(principalId: string, displayName: string): M
   return {
     version: CURRENT_CONFIG_VERSION,
     principal: { id: principalId, displayName, verification: 'unverified' },
+    user: { avatarDataUrl: null },
     model: {
       default: '',
       providers: [
@@ -1132,6 +1144,7 @@ function mergeConfigs(system: MonadSystemConfig, profile: MonadProfile): MonadCo
   return {
     version: system.version,
     principal: system.principal,
+    user: profile.user,
     network: system.network,
     agent: {
       ...system.agent,
@@ -1186,6 +1199,7 @@ function extractSystemConfig(cfg: MonadConfig): MonadSystemConfig {
 function extractProfile(cfg: MonadConfig): MonadProfile {
   return monadProfileSchema.parse({
     version: CURRENT_PROFILE_VERSION,
+    user: cfg.user,
     model: cfg.model,
     agent: {
       agents: cfg.agent.agents,

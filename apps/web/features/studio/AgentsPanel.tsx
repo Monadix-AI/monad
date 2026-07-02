@@ -1,26 +1,36 @@
 'use client';
 
 import type { Agent, AgentId } from '@monad/protocol';
+import type { StudioSectionProps } from './section-registry';
 
+import {
+  BotIcon,
+  Cancel01Icon,
+  CheckIcon,
+  Delete02Icon,
+  LoaderPinwheelIcon,
+  PlusSignIcon,
+  Upload01Icon
+} from '@hugeicons/core-free-icons';
+import { HugeiconsIcon } from '@hugeicons/react';
 import { useCreateAgentMutation, useDeleteAgentMutation, useListAgentsQuery } from '@monad/client-rtk';
 import { Badge, Button, ScrollArea, Textarea } from '@monad/ui';
-import { Bot, Check, Loader2, Plus, RefreshCw, Trash2, Upload, X } from 'lucide-react';
-import { usePathname, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { useMemo, useState } from 'react';
 
 import { useT } from '@/components/I18nProvider';
 import { PanelShell } from '@/components/ui/panel-shell';
-import { studioDetailPath, studioSubpathFromPathname } from '@/features/routes/route-paths';
+import { studioDetailPath } from '@/features/routes/route-paths';
 import { parseClaudeSubagent } from '@/lib/parse-agent-import';
 import { AgentEditor } from './agent-workshop/AgentEditor';
+import { OpenaiCompatSettings } from './api-settings';
 import { StudioBreadcrumbHeader } from './StudioBreadcrumbHeader';
 
 /** Agents area of Studio: a master list of agents ↔ a single-agent editor. */
-export function AgentsPanel({ onClose }: { onClose: () => void }) {
+export function AgentsPanel({ onClose, subpath = [] }: StudioSectionProps) {
   const t = useT();
-  const pathname = usePathname();
   const router = useRouter();
-  const { data, isLoading, refetch, isFetching } = useListAgentsQuery();
+  const { data, isLoading } = useListAgentsQuery();
   const [createAgent, { isLoading: creating }] = useCreateAgentMutation();
   const [deleteAgent] = useDeleteAgentMutation();
   const [confirmDelete, setConfirmDelete] = useState<AgentId | null>(null);
@@ -29,7 +39,7 @@ export function AgentsPanel({ onClose }: { onClose: () => void }) {
   const [importError, setImportError] = useState<string>();
 
   const agents = data?.agents ?? [];
-  const editing = (studioSubpathFromPathname(pathname)[0] as AgentId | undefined) ?? null;
+  const editing = (subpath[0] as AgentId | undefined) ?? null;
 
   // Surface duplicate names so the user resolves them (we never silently shadow).
   const dupNames = useMemo(() => {
@@ -81,38 +91,30 @@ export function AgentsPanel({ onClose }: { onClose: () => void }) {
     <PanelShell>
       <StudioBreadcrumbHeader
         actions={
-          <>
-            <Button
-              aria-label={t('web.common.refresh')}
-              onClick={() => void refetch()}
-              size="icon"
-              variant="ghost"
-            >
-              <RefreshCw className={isFetching ? 'animate-spin' : undefined} />
-            </Button>
-            <Button
-              onClick={() => {
-                setImporting((v) => !v);
-                setImportError(undefined);
-              }}
-              size="sm"
-              variant="ghost"
-            >
-              <Upload />
-              {t('web.studio.import')}
-            </Button>
-            <Button
-              disabled={creating}
-              onClick={() => void handleCreate()}
-              size="sm"
-              variant="outline"
-            >
-              {creating ? <Loader2 className="animate-spin" /> : <Plus />}
-              {t('web.studio.newAgent')}
-            </Button>
-          </>
+          <Button
+            disabled={creating}
+            onClick={() => void handleCreate()}
+            size="sm"
+            variant="ghost"
+          >
+            {creating ? (
+              <HugeiconsIcon
+                className="animate-spin"
+                icon={LoaderPinwheelIcon}
+              />
+            ) : (
+              <HugeiconsIcon icon={PlusSignIcon} />
+            )}
+            {t('web.studio.newAgent')}
+          </Button>
         }
-        icon={<Bot className="size-4" />}
+        icon={
+          <HugeiconsIcon
+            className="size-4"
+            icon={BotIcon}
+          />
+        }
+        showSubtitle={false}
         title={t('web.studio.agents')}
       />
 
@@ -121,7 +123,10 @@ export function AgentsPanel({ onClose }: { onClose: () => void }) {
           {importing && (
             <div className="flex flex-col gap-2 rounded-lg border bg-card p-4">
               <div className="flex items-center gap-2">
-                <Upload className="size-4 text-muted-foreground" />
+                <HugeiconsIcon
+                  className="size-4 text-muted-foreground"
+                  icon={Upload01Icon}
+                />
                 <span className="font-medium text-sm">{t('web.studio.importTitle')}</span>
               </div>
               <p className="text-muted-foreground text-xs">{t('web.studio.importHint')}</p>
@@ -138,7 +143,14 @@ export function AgentsPanel({ onClose }: { onClose: () => void }) {
                   onClick={() => void handleImport()}
                   size="sm"
                 >
-                  {creating ? <Loader2 className="animate-spin" /> : <Upload />}
+                  {creating ? (
+                    <HugeiconsIcon
+                      className="animate-spin"
+                      icon={LoaderPinwheelIcon}
+                    />
+                  ) : (
+                    <HugeiconsIcon icon={Upload01Icon} />
+                  )}
                   {t('web.studio.import')}
                 </Button>
                 <Button
@@ -155,11 +167,19 @@ export function AgentsPanel({ onClose }: { onClose: () => void }) {
             </div>
           )}
 
-          {isLoading && <Loader2 className="size-4 animate-spin text-muted-foreground" />}
+          {isLoading && (
+            <HugeiconsIcon
+              className="size-4 animate-spin text-muted-foreground"
+              icon={LoaderPinwheelIcon}
+            />
+          )}
 
           {!isLoading && agents.length === 0 && (
             <div className="mx-auto flex max-w-xs flex-col items-center gap-3 py-16 text-center">
-              <Bot className="size-8 text-muted-foreground/60" />
+              <HugeiconsIcon
+                className="size-8 text-muted-foreground/60"
+                icon={BotIcon}
+              />
               <p className="font-medium text-sm">{t('web.studio.emptyTitle')}</p>
               <p className="text-muted-foreground text-sm">{t('web.studio.emptyBody')}</p>
               <Button
@@ -167,7 +187,7 @@ export function AgentsPanel({ onClose }: { onClose: () => void }) {
                 onClick={() => void handleCreate()}
                 size="sm"
               >
-                <Plus />
+                <HugeiconsIcon icon={PlusSignIcon} />
                 {t('web.studio.createFirst')}
               </Button>
             </div>
@@ -216,7 +236,10 @@ export function AgentsPanel({ onClose }: { onClose: () => void }) {
                       size="icon"
                       variant="ghost"
                     >
-                      <Check className="size-3.5" />
+                      <HugeiconsIcon
+                        className="size-3.5"
+                        icon={CheckIcon}
+                      />
                     </Button>
                     <Button
                       aria-label={t('web.common.cancel')}
@@ -225,7 +248,10 @@ export function AgentsPanel({ onClose }: { onClose: () => void }) {
                       size="icon"
                       variant="ghost"
                     >
-                      <X className="size-3.5" />
+                      <HugeiconsIcon
+                        className="size-3.5"
+                        icon={Cancel01Icon}
+                      />
                     </Button>
                   </>
                 ) : (
@@ -236,12 +262,20 @@ export function AgentsPanel({ onClose }: { onClose: () => void }) {
                     size="icon"
                     variant="ghost"
                   >
-                    <Trash2 className="size-3.5" />
+                    <HugeiconsIcon
+                      className="size-3.5"
+                      icon={Delete02Icon}
+                    />
                   </Button>
                 )}
               </span>
             </div>
           ))}
+
+          <OpenaiCompatSettings
+            embedded
+            onClose={onClose}
+          />
         </div>
       </ScrollArea>
     </PanelShell>

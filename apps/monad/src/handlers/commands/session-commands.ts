@@ -3,7 +3,16 @@
 // persisted directive message plus a live event — so HTTP/ACP/WS/CLI all render it identically.
 
 import type { Translate } from '@monad/i18n';
-import type { ChatMessage, Event, PrincipalId, Session, SessionId, SessionOrigin } from '@monad/protocol';
+import type {
+  ChatMessage,
+  Event,
+  PrincipalId,
+  Session,
+  SessionId,
+  SessionOrigin,
+  TranscriptTarget,
+  TranscriptTargetId
+} from '@monad/protocol';
 import type {
   BeliefExplanation,
   CommandDefinition,
@@ -42,7 +51,7 @@ export interface CommandExecution {
  *  the text is not a host command (plain text or a skill → caller's loop). */
 export async function executeCommand(
   exec: CommandExecution,
-  sessionId: SessionId,
+  sessionId: TranscriptTargetId,
   text: string
 ): Promise<CommandResult | null> {
   try {
@@ -72,7 +81,7 @@ export async function executeCommand(
 export function emitCommandTurn(
   store: Store,
   emit: (e: Event) => void,
-  sessionId: SessionId,
+  sessionId: TranscriptTargetId,
   text: string,
   result: CommandResult
 ): ChatMessage {
@@ -89,9 +98,9 @@ export interface LifecycleOps {
     agentId?: string;
     origin?: SessionOrigin;
   }): Promise<{ sessionId: string }>;
-  reset(args: { id: SessionId }): Promise<{ clearedCount: number }>;
+  reset(args: { id: TranscriptTargetId }): Promise<{ clearedCount: number }>;
   list(args: { limit?: number }): Promise<{ sessions: Session[] }>;
-  setWorkspace(args: { id: SessionId; cwd: string }): Promise<Session>;
+  setWorkspace(args: { id: TranscriptTargetId; cwd: string }): Promise<{ cwd?: string }>;
 }
 
 /** Backend hooks for the non-navigation verbs, wired in main.ts. */
@@ -123,7 +132,12 @@ export interface SessionCommandRunner {
 
 /** A principal-scoped navigator for generic transports: it creates sessions and resolves targets,
  *  but holds no server-side "active session" pointer — the client navigates via the returned effect. */
-function genericNavigator(runner: SessionCommandRunner, session: Session): SessionNavigator {
+function sessionOnlyId(sessionId: TranscriptTargetId, command: string): SessionId {
+  if (sessionId.startsWith('ses_')) return sessionId as SessionId;
+  throw new Error(`${command} is only available in Monad agent sessions`);
+}
+
+function genericNavigator(runner: SessionCommandRunner, session: TranscriptTarget): SessionNavigator {
   const { lifecycle } = runner;
   const owned = async () => {
     const { sessions } = await lifecycle.list({ limit: 50 });
@@ -134,7 +148,7 @@ function genericNavigator(runner: SessionCommandRunner, session: Session): Sessi
       const { sessionId } = await lifecycle.createForPrincipal({
         title: label ?? 'New conversation',
         principalId: session.ownerPrincipalId,
-        agentId: session.agentIds[0],
+        agentId: 'agentIds' in session ? session.agentIds[0] : undefined,
         // A /new spawned inside a session inherits its provenance (a /new in Telegram → Telegram).
         origin: session.origin
       });
@@ -154,7 +168,7 @@ function genericNavigator(runner: SessionCommandRunner, session: Session): Sessi
 }
 
 /** The generic (principal-scoped) execution context for a session command. */
-function genericExecution(runner: SessionCommandRunner, session: Session, busy: boolean): CommandExecution {
+function genericExecution(runner: SessionCommandRunner, session: TranscriptTarget, busy: boolean): CommandExecution {
   const { commands } = runner;
   const approve = commands.approveHighRisk;
   return {
@@ -163,21 +177,25 @@ function genericExecution(runner: SessionCommandRunner, session: Session, busy: 
     principalId: session.ownerPrincipalId,
     isOwner: session.ownerPrincipalId === runner.ownerPrincipalId,
     isBusy: busy,
-    gate: approve ? (def) => approve(session.id as SessionId, def) : undefined,
+    gate: approve ? (def) => approve(sessionOnlyId(session.id, 'approval'), def) : undefined,
     services: {
-      resetHistory: (sid: SessionId) => runner.lifecycle.reset({ id: sid }),
-      compact: (sid: SessionId) => commands.compact(sid),
+      resetHistory: (sid: TranscriptTargetId) => runner.lifecycle.reset({ id: sid }),
+      compact: (sid: TranscriptTargetId) => commands.compact(sessionOnlyId(sid, 'compact')),
       consolidate: (level?: number) => commands.consolidate(level),
-      explainBelief: (sid: SessionId, query: string) => commands.explainBelief(sid, query),
+      explainBelief: (sid: TranscriptTargetId, query: string) =>
+        commands.explainBelief(sessionOnlyId(sid, 'belief'), query),
       checkMemory: () => commands.checkMemory(),
-      listModels: (sid: SessionId) => commands.listModels(sid),
-      setModel: (sid: SessionId, alias: string) => commands.setModel(sid, alias),
-      getWorkdir: async (sid: SessionId) => ({ path: runner.store.getSession(sid)?.cwd }),
-      setWorkdir: async (sid: SessionId, path: string) => ({
+      listModels: (sid: TranscriptTargetId) => commands.listModels(sessionOnlyId(sid, 'model')),
+      setModel: (sid: TranscriptTargetId, alias: string) => commands.setModel(sessionOnlyId(sid, 'model'), alias),
+      getWorkdir: async (sid: TranscriptTargetId) => ({
+        path: (runner.store.getSession(sid) ?? runner.store.getWorkplaceProject(sid))?.cwd
+      }),
+      setWorkdir: async (sid: TranscriptTargetId, path: string) => ({
         path: (await runner.lifecycle.setWorkspace({ id: sid, cwd: path })).cwd
       }),
       listCommands: async (): Promise<CommandSpec[]> => commands.registry.list(commands.skills(), commands.t),
-      handoff: (sid: SessionId, initialTask?: string) => commands.handoff(sid, initialTask),
+      handoff: (sid: TranscriptTargetId, initialTask?: string) =>
+        commands.handoff(sessionOnlyId(sid, 'handoff'), initialTask),
       t: commands.t,
       log: commands.log
     }
@@ -188,11 +206,11 @@ function genericExecution(runner: SessionCommandRunner, session: Session, busy: 
  *  threw, or null when the text is not a host command (plain text or a skill → caller's loop). */
 export function executeSessionCommand(
   runner: SessionCommandRunner,
-  session: Session,
+  session: TranscriptTarget,
   text: string,
   opts: { busy?: boolean } = {}
 ): Promise<CommandResult | null> {
-  return executeCommand(genericExecution(runner, session, opts.busy ?? false), session.id as SessionId, text);
+  return executeCommand(genericExecution(runner, session, opts.busy ?? false), session.id, text);
 }
 
 /** Run a slash command and emit the turn. Returns true when handled (caller skips the loop), false
@@ -200,7 +218,7 @@ export function executeSessionCommand(
  *  prompt stream); `busy` flags that a turn is streaming (concurrency guard). */
 export async function tryRunSessionCommand(
   runner: SessionCommandRunner,
-  session: Session,
+  session: TranscriptTarget,
   text: string,
   opts: { sink?: (event: Event) => void; busy?: boolean } = {}
 ): Promise<boolean> {
@@ -213,7 +231,7 @@ export async function tryRunSessionCommand(
       bus.publish(e);
       opts.sink?.(e);
     },
-    session.id as SessionId,
+    session.id,
     text,
     result
   );
@@ -222,7 +240,12 @@ export async function tryRunSessionCommand(
 
 /** Persist a command turn (echo + directive reply) and return the reply ChatMessage. Used by the
  *  blocking `generate` path, where the reply is the response body. */
-function _directiveMessage(store: Store, sessionId: SessionId, text: string, result: CommandResult): ChatMessage {
+function _directiveMessage(
+  store: Store,
+  sessionId: TranscriptTargetId,
+  text: string,
+  result: CommandResult
+): ChatMessage {
   persistEcho(store, sessionId, text);
   const id = newId('msg');
   const createdAt = new Date().toISOString();
@@ -230,7 +253,7 @@ function _directiveMessage(store: Store, sessionId: SessionId, text: string, res
   store.insertMessage(id, sessionId, result.message ?? '', createdAt, 'assistant', { type: 'directive', data });
   return {
     id,
-    sessionId,
+    transcriptTargetId: sessionId,
     role: 'assistant',
     text: result.message ?? '',
     type: 'directive',
@@ -241,7 +264,7 @@ function _directiveMessage(store: Store, sessionId: SessionId, text: string, res
   };
 }
 
-function persistEcho(store: Store, sessionId: SessionId, text: string): `msg_${string}` {
+function persistEcho(store: Store, sessionId: TranscriptTargetId, text: string): `msg_${string}` {
   const id = newId('msg');
   store.insertMessage(id, sessionId, text, new Date().toISOString(), 'user', { type: 'directive' });
   return id;
@@ -250,7 +273,7 @@ function persistEcho(store: Store, sessionId: SessionId, text: string): `msg_${s
 function emitDirective(
   store: Store,
   emit: (e: Event) => void,
-  sessionId: SessionId,
+  sessionId: TranscriptTargetId,
   result: CommandResult
 ): ChatMessage {
   const id = newId('msg');
@@ -261,7 +284,7 @@ function emitDirective(
   emit(event(sessionId, 'agent.message', { messageId: id, text, ...(data !== undefined ? { data } : {}) }));
   return {
     id,
-    sessionId,
+    transcriptTargetId: sessionId,
     role: 'assistant',
     text,
     type: 'directive',
@@ -272,6 +295,13 @@ function emitDirective(
   };
 }
 
-function event(sessionId: SessionId, type: Event['type'], payload: Record<string, unknown>): Event {
-  return { id: newId('evt'), sessionId, type, actorAgentId: null, payload, at: new Date().toISOString() };
+function event(sessionId: TranscriptTargetId, type: Event['type'], payload: Record<string, unknown>): Event {
+  return {
+    id: newId('evt'),
+    transcriptTargetId: sessionId,
+    type,
+    actorAgentId: null,
+    payload,
+    at: new Date().toISOString()
+  };
 }

@@ -22,6 +22,7 @@ function logHttpCall(method: string, path: string, status: number, durationMs?: 
 import { createAgentsController } from '@/transports/http/agents.ts';
 import { createApprovalsController } from '@/transports/http/approvals.ts';
 import { createAtomsController } from '@/transports/http/atoms.ts';
+import { createAvatarCacheController } from '@/transports/http/avatar-cache.ts';
 import { isBrowserRequestAllowed } from '@/transports/http/browser-guard.ts';
 import { createChannelsController } from '@/transports/http/channels.ts';
 import { createClarifyController } from '@/transports/http/clarify.ts';
@@ -57,6 +58,7 @@ import { createNetworkSettingsController } from '@/transports/http/settings/netw
 import { createObscuraSettingsController } from '@/transports/http/settings/obscura.ts';
 import { createOpenaiCompatSettingsController } from '@/transports/http/settings/openai-compat.ts';
 import { createPeerSettingsController } from '@/transports/http/settings/peer.ts';
+import { createUserProfileSettingsController } from '@/transports/http/settings/profile.ts';
 import { createSandboxSettingsController } from '@/transports/http/settings/sandbox.ts';
 import { createSkillsSettingsController } from '@/transports/http/settings/skills.ts';
 import { createStartupSettingsController } from '@/transports/http/settings/startup.ts';
@@ -290,6 +292,7 @@ export function createHttpTransport(
 
   return app
     .use(createHealthController(handlers))
+    .use(createAvatarCacheController(handlers))
     .group('/openai', (g) => {
       const compatConfig = openaiCompatConfig ?? (() => Promise.resolve({ enabled: false }));
       return g
@@ -300,7 +303,7 @@ export function createHttpTransport(
       v1
         .use(createInitController(handlers))
         .use(createAgentsController(handlers))
-        .use(createChannelsController(handlers))
+        .use(createChannelsController(handlers, encoder))
         .use(createSessionsController(handlers, encoder))
         .use(createUsageController(handlers))
         .use(createStatsController(handlers))
@@ -336,6 +339,7 @@ export function createHttpTransport(
             .use(createNetworkSettingsController(handlers))
             .use(createToolBackendsSettingsController(handlers))
             .use(createSandboxSettingsController(handlers))
+            .use(createUserProfileSettingsController(handlers))
             .use(createDeveloperSettingsController(handlers))
             .use(createStartupSettingsController(handlers))
             .use(createHooksSettingsController(handlers))

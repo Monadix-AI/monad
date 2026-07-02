@@ -1,7 +1,17 @@
 'use client';
 
+import {
+  AlertCircleIcon,
+  Cancel01Icon,
+  CheckIcon,
+  CheckmarkCircle02Icon,
+  ChevronDownIcon,
+  ChevronUpIcon,
+  Copy01Icon,
+  InformationCircleIcon
+} from '@hugeicons/core-free-icons';
+import { HugeiconsIcon } from '@hugeicons/react';
 import { Button, cn } from '@monad/ui';
-import { AlertCircle, Check, CheckCircle2, ChevronDown, ChevronUp, Copy, Info, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { useT } from '@/components/I18nProvider';
@@ -170,7 +180,17 @@ function CopyButton({ text }: { text: string }) {
       title="Copy"
       type="button"
     >
-      {copied ? <Check className="size-3.5 text-emerald-400" /> : <Copy className="size-3.5" />}
+      {copied ? (
+        <HugeiconsIcon
+          className="size-3.5 text-emerald-400"
+          icon={CheckIcon}
+        />
+      ) : (
+        <HugeiconsIcon
+          className="size-3.5"
+          icon={Copy01Icon}
+        />
+      )}
     </button>
   );
 }
@@ -194,9 +214,26 @@ function DetailPanel({ detail }: { detail: unknown }) {
 // --- Toast icon ---
 
 function ToastIcon({ variant }: { variant: ToastVariant }) {
-  if (variant === 'success') return <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-success" />;
-  if (variant === 'error') return <AlertCircle className="mt-0.5 size-4 shrink-0 text-destructive" />;
-  return <Info className="mt-0.5 size-4 shrink-0 text-info" />;
+  if (variant === 'success')
+    return (
+      <HugeiconsIcon
+        className="mt-0.5 size-4 shrink-0 text-success"
+        icon={CheckmarkCircle02Icon}
+      />
+    );
+  if (variant === 'error')
+    return (
+      <HugeiconsIcon
+        className="mt-0.5 size-4 shrink-0 text-destructive"
+        icon={AlertCircleIcon}
+      />
+    );
+  return (
+    <HugeiconsIcon
+      className="mt-0.5 size-4 shrink-0 text-info"
+      icon={InformationCircleIcon}
+    />
+  );
 }
 
 // --- Expandable message row ---
@@ -223,7 +260,17 @@ function ExpandableMessage({
           onClick={onToggle}
           type="button"
         >
-          {expanded ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />}
+          {expanded ? (
+            <HugeiconsIcon
+              className="size-3"
+              icon={ChevronUpIcon}
+            />
+          ) : (
+            <HugeiconsIcon
+              className="size-3"
+              icon={ChevronDownIcon}
+            />
+          )}
           {expanded ? t('web.toast.collapse') : t('web.toast.expand')}
         </button>
       )}
@@ -361,7 +408,10 @@ function ToastCard({
         size="icon"
         variant="ghost"
       >
-        <X className="size-3.5" />
+        <HugeiconsIcon
+          className="size-3.5"
+          icon={Cancel01Icon}
+        />
       </Button>
     </div>
   );

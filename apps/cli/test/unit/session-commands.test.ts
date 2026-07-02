@@ -285,8 +285,8 @@ test('session tree: throws usage error when session id is missing', async () => 
 test('session search: returns hits for keyword query', async () => {
   const hits = [
     {
-      sessionId: 'ses_1',
-      sessionTitle: 'Test',
+      transcriptTargetId: 'ses_1',
+      transcriptTargetTitle: 'Test',
       matchedBy: 'keyword',
       score: 0.95,
       role: 'user',

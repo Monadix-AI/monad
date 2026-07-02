@@ -185,6 +185,8 @@ export function buildHandlers(
     memoryService?: (store: ReturnType<typeof createStore>) => MemoryService;
     /** Share an external store (so a memory service + the agent see the same messages/sessions). */
     store?: ReturnType<typeof createStore>;
+    /** Inject a RoundCache so a test can stage an in-flight round before subscribing. */
+    cache?: RoundCache;
     /** Seed the L2 graph store (e.g. to exercise GET /v1/graph); defaults to an empty in-memory one. */
     graphStore?: GraphStore;
     /** Upgrade metadata exposed by /health; defaults to absent. */
@@ -199,6 +201,7 @@ export function buildHandlers(
   // Wire oversight like the daemon (publish → bus, gate → agent) so the approval flow — including
   // the ACP permission bridge — actually exercises end to end. With no tools the gate is never hit.
   const bus = new EventBus();
+  const cache = opts?.cache ?? new RoundCache();
   const oversight =
     opts?.oversight ??
     new OversightService({
@@ -219,7 +222,7 @@ export function buildHandlers(
     },
     messageRepo: {
       list: (sessionId) => store.listMessages(sessionId),
-      append: (m) => store.insertMessage(m.id, m.sessionId, m.text, m.createdAt, m.role)
+      append: (m) => store.insertMessage(m.id, m.transcriptTargetId, m.text, m.createdAt, m.role)
     },
     defaultModel: opts?.defaultModel ?? 'mock'
   });
@@ -259,7 +262,7 @@ export function buildHandlers(
       store,
       agent,
       bus,
-      cache: new RoundCache(),
+      cache,
       ownerPrincipalId: newId('prn'),
       oversight,
       clarify,
@@ -293,7 +296,7 @@ export function buildHandlers(
       log: { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} } as never,
       ...modelDeps
     }),
-    { store }
+    { store, cache, bus }
   );
 }
 

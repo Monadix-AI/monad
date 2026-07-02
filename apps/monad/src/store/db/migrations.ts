@@ -2,7 +2,7 @@ import type { Database } from 'bun:sqlite';
 
 // Pre-release: migrations are additive (new table = new version). Edit existing tables freely and
 // delete/recreate dev DBs as needed; never rename/drop columns in existing migrations.
-export const CURRENT_SCHEMA_VERSION = 2;
+export const CURRENT_SCHEMA_VERSION = 1;
 
 const MIGRATIONS: { version: number; sql: string }[] = [
   {
@@ -34,6 +34,20 @@ CREATE TABLE IF NOT EXISTS sessions (
   updated_at             TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_sessions_parent ON sessions(parent_session_id);
+
+CREATE TABLE IF NOT EXISTS workplace_projects (
+  id                      TEXT PRIMARY KEY,
+  title                   TEXT NOT NULL,
+  owner_principal_id      TEXT NOT NULL,
+  state                   TEXT NOT NULL,
+  archived                INTEGER NOT NULL DEFAULT 0,
+  model                   TEXT,
+  cwd                     TEXT,
+  origin                  TEXT,
+  created_at              TEXT NOT NULL,
+  updated_at              TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_workplace_projects_state ON workplace_projects(state, archived);
 
 -- Global usage accounting ("账本") — a (local-day, provider, model, category) rollup, monotonic,
 -- survives session deletion. Only a manual clearLedger() resets it. Distinct from per-session usage
@@ -70,7 +84,7 @@ CREATE INDEX IF NOT EXISTS idx_tasks_session ON tasks(session_id);
 
 CREATE TABLE IF NOT EXISTS messages (
   id            TEXT PRIMARY KEY,
-  session_id    TEXT NOT NULL,
+  transcript_target_id TEXT NOT NULL,
   role          TEXT NOT NULL,
   text          TEXT NOT NULL,
   type          TEXT NOT NULL DEFAULT 'text',
@@ -81,8 +95,8 @@ CREATE TABLE IF NOT EXISTS messages (
   created_at    TEXT NOT NULL,
   updated_at    TEXT
 );
-CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id);
-CREATE INDEX IF NOT EXISTS idx_messages_active ON messages(session_id, active);
+CREATE INDEX IF NOT EXISTS idx_messages_transcript_target ON messages(transcript_target_id);
+CREATE INDEX IF NOT EXISTS idx_messages_active ON messages(transcript_target_id, active);
 
 CREATE TABLE IF NOT EXISTS memory (
   session_id  TEXT NOT NULL,
@@ -94,14 +108,14 @@ CREATE TABLE IF NOT EXISTS memory (
 -- Durable event log — the post-completion tier behind the in-process RoundCache.
 CREATE TABLE IF NOT EXISTS events (
   id                TEXT PRIMARY KEY,
-  session_id        TEXT NOT NULL,
+  transcript_target_id TEXT NOT NULL,
   type              TEXT NOT NULL,
   actor_agent_id    TEXT,
   task_id           TEXT,
   payload           TEXT NOT NULL,
   at                TEXT NOT NULL
 );
-CREATE INDEX IF NOT EXISTS idx_events_session ON events(session_id, id);
+CREATE INDEX IF NOT EXISTS idx_events_transcript_target ON events(transcript_target_id, id);
 
 -- Channel atom: CORE-owned conversation→session mapping (the atom never sees session ids).
 -- One row per (channel, conversation) holds the CURRENT active session pointer; it is repointed
@@ -186,7 +200,7 @@ CREATE INDEX IF NOT EXISTS idx_acp_delegates_live ON acp_delegates(evicted_at) W
 
 CREATE TABLE IF NOT EXISTS native_cli_sessions (
   id                    TEXT PRIMARY KEY,
-  project_session_id    TEXT NOT NULL,
+  transcript_target_id  TEXT NOT NULL,
   agent_name            TEXT NOT NULL,
   provider              TEXT NOT NULL,
   working_path          TEXT NOT NULL,
@@ -205,15 +219,16 @@ CREATE TABLE IF NOT EXISTS native_cli_sessions (
   updated_at            TEXT NOT NULL,
   exited_at             TEXT
 );
-CREATE INDEX IF NOT EXISTS idx_native_cli_sessions_project ON native_cli_sessions(project_session_id);
+CREATE INDEX IF NOT EXISTS idx_native_cli_sessions_transcript_target ON native_cli_sessions(transcript_target_id);
 CREATE INDEX IF NOT EXISTS idx_native_cli_sessions_live ON native_cli_sessions(state)
   WHERE state IN ('starting', 'running');
 CREATE UNIQUE INDEX IF NOT EXISTS idx_native_cli_sessions_provider_ref
-  ON native_cli_sessions(project_session_id, provider, provider_session_ref)
+  ON native_cli_sessions(transcript_target_id, provider, provider_session_ref)
   WHERE provider_session_ref IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS native_agent_direct_messages (
   id                    TEXT PRIMARY KEY,
+  project_id            TEXT NOT NULL,
   native_cli_session_id TEXT NOT NULL,
   from_agent            TEXT,
   peer                  TEXT NOT NULL,
@@ -222,6 +237,8 @@ CREATE TABLE IF NOT EXISTS native_agent_direct_messages (
 );
 CREATE INDEX IF NOT EXISTS idx_native_agent_direct_messages_session_peer
   ON native_agent_direct_messages(native_cli_session_id, peer, created_at);
+CREATE INDEX IF NOT EXISTS idx_native_agent_direct_messages_project_pair
+  ON native_agent_direct_messages(project_id, from_agent, peer, created_at);
 
 CREATE TABLE IF NOT EXISTS channel_moderator_rounds (
   id                 TEXT PRIMARY KEY,
@@ -240,17 +257,20 @@ CREATE TABLE IF NOT EXISTS channel_moderator_rounds (
 CREATE INDEX IF NOT EXISTS idx_channel_moderator_rounds_open
   ON channel_moderator_rounds(channel_id, status, deadline_at);
 
-PRAGMA user_version = 1;
-    `.trim()
-  },
-  {
-    version: 2,
-    sql: `
-ALTER TABLE native_agent_direct_messages ADD COLUMN project_session_id TEXT;
-CREATE INDEX IF NOT EXISTS idx_native_agent_direct_messages_project_pair
-  ON native_agent_direct_messages(project_session_id, from_agent, peer, created_at);
+CREATE TABLE IF NOT EXISTS native_cli_inbox_items (
+  native_cli_session_id TEXT NOT NULL,
+  message_seq           INTEGER NOT NULL,
+  state                 TEXT NOT NULL DEFAULT 'queued',
+  created_at            TEXT NOT NULL,
+  delivered_at          TEXT,
+  visible_at            TEXT,
+  consumed_at           TEXT,
+  PRIMARY KEY (native_cli_session_id, message_seq)
+);
+CREATE INDEX IF NOT EXISTS idx_native_cli_inbox_items_pending
+  ON native_cli_inbox_items(native_cli_session_id, state, message_seq);
 
-PRAGMA user_version = 2;
+PRAGMA user_version = 1;
     `.trim()
   }
 ];

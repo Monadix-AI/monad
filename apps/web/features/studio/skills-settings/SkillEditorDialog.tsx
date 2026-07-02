@@ -2,9 +2,10 @@ import type { SkillContentFile } from '@monad/protocol';
 import type { BundledLanguage } from 'shiki';
 import type { SkillAttachmentPreview, SkillEditorState } from './types';
 
+import { ArrowLeft01Icon, LoaderPinwheelIcon } from '@hugeicons/core-free-icons';
+import { HugeiconsIcon } from '@hugeicons/react';
 import { useUpdateSkillContentMutation, useUploadSkillMutation } from '@monad/client-rtk';
 import { Badge, Button, ScrollArea, Textarea } from '@monad/ui';
-import { ArrowLeft, Loader2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
 import { CodeBlock } from '@/components/ai-elements/code-block';
@@ -180,7 +181,10 @@ function SkillEditorForm({
                   size="sm"
                   variant="ghost"
                 >
-                  <ArrowLeft className="size-3.5" />
+                  <HugeiconsIcon
+                    className="size-3.5"
+                    icon={ArrowLeft01Icon}
+                  />
                   SKILL.md
                 </Button>
               ) : (
@@ -294,7 +298,10 @@ function SkillEditorForm({
                       variant={attachmentPreview?.file.path === file.path ? 'secondary' : 'ghost'}
                     >
                       {attachmentLoading === file.path ? (
-                        <Loader2 className="size-3.5 shrink-0 animate-spin text-foreground" />
+                        <HugeiconsIcon
+                          className="size-3.5 shrink-0 animate-spin text-foreground"
+                          icon={LoaderPinwheelIcon}
+                        />
                       ) : (
                         <FileIcon
                           className="size-3.5 shrink-0 text-muted-foreground"
@@ -328,7 +335,12 @@ function SkillEditorForm({
               disabled={saving || !content.trim()}
               onClick={() => void save()}
             >
-              {saving ? <Loader2 className="size-3.5 animate-spin" /> : null}
+              {saving ? (
+                <HugeiconsIcon
+                  className="size-3.5 animate-spin"
+                  icon={LoaderPinwheelIcon}
+                />
+              ) : null}
               {t('web.save')}
             </Button>
           ) : null}

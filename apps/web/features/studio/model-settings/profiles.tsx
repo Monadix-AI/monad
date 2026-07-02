@@ -10,11 +10,25 @@ import type {
   ProviderView
 } from '@monad/protocol';
 
+import {
+  BrainIcon,
+  CaptionsIcon,
+  DatabaseIcon,
+  Delete02Icon,
+  EyeIcon,
+  MagicWand02Icon,
+  Mic01Icon,
+  StarIcon,
+  VideoIcon,
+  ZapIcon
+} from '@hugeicons/core-free-icons';
+import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react';
 import { Button, Card, cn, Input, Tooltip, TooltipContent, TooltipTrigger } from '@monad/ui';
-import { Brain, Database, Eye, Mic, Star, Trash2, Video, Wand2, Zap } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
+import { ProfileCardHoverActions } from '@/components/HoverActions';
 import { useT } from '@/components/I18nProvider';
+import { ReasoningEffortControl, reasoningEffortOption } from '@/components/ReasoningEffortControl';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useProviderMeta } from '@/lib/ProviderMeta';
@@ -28,42 +42,48 @@ const ROLE_DEFS: {
   role: RoleKey;
   labelKey: WebMessageIdWithoutParams;
   match: (c?: ModelModalities) => boolean;
-  icon: React.ComponentType<{ className?: string }>;
+  icon: IconSvgElement;
 }[] = [
   {
     role: 'memory',
     labelKey: 'web.model.roleMemory',
     match: (c) => !!c?.input?.includes('text') && !!c?.output?.includes('text'),
-    icon: Brain
+    icon: BrainIcon
   },
   {
     role: 'embedding',
     labelKey: 'web.model.roleEmbedding',
     match: (c) => c?.kind === 'embedding' || !!c?.output?.some((v) => v === 'embedding' || v === 'embeddings'),
-    icon: Database
+    icon: DatabaseIcon
   },
-  { role: 'vision', labelKey: 'web.model.roleVision', match: (c) => !!c?.input?.includes('image'), icon: Eye },
+  { role: 'vision', labelKey: 'web.model.roleVision', match: (c) => !!c?.input?.includes('image'), icon: EyeIcon },
   {
     role: 'image',
     labelKey: 'web.model.roleImage',
     match: (c) => c?.kind === 'image' || !!c?.output?.includes('image'),
-    icon: Wand2
+    icon: MagicWand02Icon
   },
   {
     role: 'video',
     labelKey: 'web.model.roleVideo',
     match: (c) => c?.kind === 'video' || !!c?.output?.includes('video'),
-    icon: Video
+    icon: VideoIcon
   },
   {
     role: 'speech',
     labelKey: 'web.model.roleSpeech',
     match: (c) => c?.kind === 'speech' || !!c?.output?.includes('speech'),
-    icon: Mic
+    icon: Mic01Icon
+  },
+  {
+    role: 'transcription',
+    labelKey: 'web.model.roleTranscription',
+    match: (c) => c?.kind === 'transcription' || !!c?.output?.includes('transcription'),
+    icon: CaptionsIcon
   }
 ];
 
-const HIDE_EFFORT_ROLES = new Set<RouteKey>(['video', 'speech', 'embedding']);
+const HIDE_EFFORT_ROLES = new Set<RouteKey>(['video', 'speech', 'transcription', 'embedding']);
 
 function formatEffortLabel(effort: string | undefined): string {
   if (!effort) return '';
@@ -175,7 +195,7 @@ export function ProfileCard({
     {
       key: 'chat' as const,
       label: t('web.model.defaultModel'),
-      icon: Star,
+      icon: StarIcon,
       model: defaultModelEntry,
       provMeta: defaultProvMeta,
       spec: defaultSpec,
@@ -187,7 +207,7 @@ export function ProfileCard({
     {
       key: 'fast' as const,
       label: t('web.model.fastModel'),
-      icon: Zap,
+      icon: ZapIcon,
       model: fastModelEntry,
       provMeta: fastProvMeta,
       spec: fastSpec || ROLE_NONE,
@@ -255,7 +275,7 @@ export function ProfileCard({
             )}
           </button>
         )}
-        <div className="pointer-events-none flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-focus-within/profile-card:pointer-events-auto group-focus-within/profile-card:opacity-100 group-hover/profile-card:pointer-events-auto group-hover/profile-card:opacity-100">
+        <ProfileCardHoverActions>
           {!isDefault && !isDraft && (
             <Button
               className="h-6 px-2 text-[11px] text-muted-foreground hover:text-foreground"
@@ -298,14 +318,14 @@ export function ProfileCard({
                     size="icon"
                     variant="ghost"
                   >
-                    <Trash2 />
+                    <HugeiconsIcon icon={Delete02Icon} />
                   </Button>
                 </span>
               </TooltipTrigger>
               {deleteDisabledReason && <TooltipContent>{deleteDisabledReason}</TooltipContent>}
             </Tooltip>
           )}
-        </div>
+        </ProfileCardHoverActions>
       </div>
 
       <div className="flex flex-1 flex-col gap-1.5 p-2">
@@ -335,7 +355,10 @@ export function ProfileCard({
                   configured ? 'bg-primary/8 text-primary' : 'bg-muted/50 text-muted-foreground'
                 )}
               >
-                <RoleIcon className="size-3.5" />
+                <HugeiconsIcon
+                  className="size-3.5"
+                  icon={RoleIcon}
+                />
               </span>
 
               <div className="min-w-0 flex-1">
@@ -429,23 +452,17 @@ export function ProfileCard({
                         </PopoverTrigger>
                         <PopoverContent
                           align="end"
-                          className="w-28 p-1"
+                          className="w-72 p-0"
                         >
-                          {efforts.map((level) => (
-                            <button
-                              className={cn(
-                                'flex w-full items-center rounded-(--radius-sm) px-2 py-1.5 text-left text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                                value === level
-                                  ? 'bg-primary/10 font-medium text-primary'
-                                  : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
-                              )}
-                              key={level}
-                              onClick={() => setRouteReasoningEffort(row.key, level)}
-                              type="button"
-                            >
-                              {formatEffortLabel(level)}
-                            </button>
-                          ))}
+                          <ReasoningEffortControl
+                            className="border-0 shadow-none"
+                            compact
+                            onChange={(level) => {
+                              if (level) setRouteReasoningEffort(row.key, level);
+                            }}
+                            options={efforts.map(reasoningEffortOption)}
+                            value={value}
+                          />
                         </PopoverContent>
                       </Popover>
                     ) : null}

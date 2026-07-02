@@ -1,4 +1,5 @@
-import type { ChatMessage, Event, SessionId } from '@monad/protocol';
+import type { ChatMessage, Event, SessionId, UIItem } from '@monad/protocol';
+import type { NativeCliSessionSnapshot } from '@/handlers/session/ui-projection.ts';
 
 import { expect, test } from 'bun:test';
 import { newId } from '@monad/protocol';
@@ -8,7 +9,14 @@ import { SessionUiProjector } from '@/handlers/session/ui-projection.ts';
 const sessionId = 'ses_test' as SessionId;
 
 function event(type: Event['type'], payload: Record<string, unknown>): Event {
-  return { id: newId('evt'), sessionId, type, actorAgentId: null, payload, at: new Date().toISOString() };
+  return {
+    id: newId('evt'),
+    transcriptTargetId: sessionId,
+    type,
+    actorAgentId: null,
+    payload,
+    at: new Date().toISOString()
+  };
 }
 
 test('hydrates persisted tool calls into one tool item', () => {
@@ -16,7 +24,7 @@ test('hydrates persisted tool calls into one tool item', () => {
   const messages: ChatMessage[] = [
     {
       id: 'msg_tool_call',
-      sessionId,
+      transcriptTargetId: sessionId,
       role: 'assistant',
       text: '',
       type: 'tool_call',
@@ -27,7 +35,7 @@ test('hydrates persisted tool calls into one tool item', () => {
     },
     {
       id: 'msg_tool_result',
-      sessionId,
+      transcriptTargetId: sessionId,
       role: 'tool',
       text: 'ok',
       type: 'tool_result',
@@ -110,7 +118,7 @@ test('hydrates structured tool display from persisted full result envelope', () 
   const messages: ChatMessage[] = [
     {
       id: 'msg_tool_call',
-      sessionId,
+      transcriptTargetId: sessionId,
       role: 'assistant',
       text: '',
       type: 'tool_call',
@@ -121,7 +129,7 @@ test('hydrates structured tool display from persisted full result envelope', () 
     },
     {
       id: 'msg_tool_result',
-      sessionId,
+      transcriptTargetId: sessionId,
       role: 'tool',
       text: 'Modified file: /tmp/a.txt. 1 added, 1 removed.',
       type: 'tool_result',
@@ -177,7 +185,7 @@ test('hydrates without model hallucinated tool calls', () => {
   const messages: ChatMessage[] = [
     {
       id: 'msg_tool_call',
-      sessionId,
+      transcriptTargetId: sessionId,
       role: 'assistant',
       text: '',
       type: 'tool_call',
@@ -188,7 +196,7 @@ test('hydrates without model hallucinated tool calls', () => {
     },
     {
       id: 'msg_tool_result',
-      sessionId,
+      transcriptTargetId: sessionId,
       role: 'tool',
       text: 'Error: unknown tool "missing_tool"',
       type: 'tool_result',
@@ -210,7 +218,7 @@ test('hydrates persisted raw terminal output after refresh', () => {
   const messages: ChatMessage[] = [
     {
       id: 'msg_tool_call',
-      sessionId,
+      transcriptTargetId: sessionId,
       role: 'assistant',
       text: '',
       type: 'tool_call',
@@ -221,7 +229,7 @@ test('hydrates persisted raw terminal output after refresh', () => {
     },
     {
       id: 'msg_tool_result',
-      sessionId,
+      transcriptTargetId: sessionId,
       role: 'tool',
       text: 'red plain',
       type: 'tool_result',
@@ -248,7 +256,7 @@ test('hydrates durable memory summary at the compaction boundary', () => {
   const messages: ChatMessage[] = [
     {
       id: 'msg_1',
-      sessionId,
+      transcriptTargetId: sessionId,
       role: 'user',
       text: 'old request',
       type: 'text',
@@ -258,7 +266,7 @@ test('hydrates durable memory summary at the compaction boundary', () => {
     },
     {
       id: 'msg_2',
-      sessionId,
+      transcriptTargetId: sessionId,
       role: 'assistant',
       text: 'recent answer',
       type: 'text',
@@ -290,6 +298,82 @@ test('streams reasoning and text onto the same message item', () => {
     { type: 'text', text: 'hello' }
   ]);
   expect(final.item.status).toBe('done');
+});
+
+test('accumulates streamed text deltas across tokens (non-channel session)', () => {
+  const projector = new SessionUiProjector();
+  projector.applyEvent(event('agent.token', { messageId: 'msg_1', delta: 'Hello', index: 0 }));
+  const [second] = projector.applyEvent(event('agent.token', { messageId: 'msg_1', delta: ' world', index: 1 }));
+  if (second?.kind !== 'upsert' || second.item.kind !== 'message') throw new Error('expected message upsert');
+  expect(second.item.parts).toEqual([{ type: 'text', text: 'Hello world' }]);
+  expect(second.item.status).toBe('streaming');
+
+  const [third] = projector.applyEvent(event('agent.token', { messageId: 'msg_1', delta: '!', index: 2 }));
+  if (third?.kind !== 'upsert' || third.item.kind !== 'message') throw new Error('expected message upsert');
+  expect(third.item.parts).toEqual([{ type: 'text', text: 'Hello world!' }]);
+});
+
+test('clears accumulated streaming text after the message settles', () => {
+  const projector = new SessionUiProjector();
+  projector.applyEvent(event('agent.token', { messageId: 'msg_1', delta: 'draft', index: 0 }));
+  projector.applyEvent(event('agent.message', { messageId: 'msg_1', text: 'final' }));
+  // A reused messageId must not resume from the prior message's accumulated buffer.
+  const [restart] = projector.applyEvent(event('agent.token', { messageId: 'msg_1', delta: 'fresh', index: 0 }));
+  if (restart?.kind !== 'upsert' || restart.item.kind !== 'message') throw new Error('expected message upsert');
+  expect(restart.item.parts).toEqual([{ type: 'text', text: 'fresh' }]);
+});
+
+test('reasoning deltas preserve the streaming message agent name', () => {
+  const projector = new SessionUiProjector();
+  projector.applyEvent(event('agent.token', { messageId: 'msg_1', agentName: 'codex', delta: '', index: 0 }));
+  const [reasoning] = projector.applyEvent(
+    event('agent.reasoning', { messageId: 'msg_1', delta: 'Thinking', index: 0 })
+  );
+
+  expect(reasoning).toMatchObject({
+    kind: 'upsert',
+    item: {
+      kind: 'message',
+      id: 'msg_1',
+      role: 'assistant',
+      agentName: 'codex',
+      status: 'streaming',
+      parts: [
+        { type: 'reasoning', text: 'Thinking' },
+        { type: 'text', text: '' }
+      ]
+    }
+  });
+});
+
+test('hydrates a persisted managed native CLI thinking message after refresh', () => {
+  const projector = new SessionUiProjector();
+  projector.hydrateMessages([
+    {
+      id: 'msg_thinking',
+      transcriptTargetId: sessionId,
+      role: 'assistant',
+      text: '',
+      type: 'text',
+      data: { agentName: 'pmem_codex_reviewer', source: 'managed-native-cli', reasoning: 'Thinking' },
+      stream: { status: 'streaming' },
+      active: true,
+      createdAt: '2026-06-24T00:00:00.000Z'
+    }
+  ]);
+
+  const snapshot = projector.snapshot();
+  if (snapshot.kind !== 'snapshot') throw new Error('expected snapshot');
+  expect(snapshot.items).toEqual([
+    expect.objectContaining({
+      kind: 'message',
+      id: 'msg_thinking',
+      agentName: 'pmem_codex_reviewer',
+      source: 'managed-native-cli',
+      status: 'streaming',
+      parts: [{ type: 'reasoning', text: 'Thinking' }]
+    })
+  ]);
 });
 
 test('channel projector streams only structured display content', () => {
@@ -366,12 +450,35 @@ test('channel projector hides a silent reply mid-stream before the JSON closes',
   expect(text).toBe('');
 });
 
+test('channel projector throttles re-parse across small tokens yet stays correct at boundaries', () => {
+  const projector = new SessionUiProjector({ channelStructured: true });
+  const textOf = (events: ReturnType<SessionUiProjector['applyEvent']>): string | undefined => {
+    const item = events.at(-1);
+    return item?.kind === 'upsert' && item.item.kind === 'message' && item.item.parts[0]?.type === 'text'
+      ? item.item.parts[0].text
+      : undefined;
+  };
+  // Opening + first content parses (no cache yet).
+  textOf(
+    projector.applyEvent(event('agent.token', { messageId: 'msg_1', delta: '{"display":{"content":"a', index: 0 }))
+  );
+  // Several tiny content tokens (each < 32 chars, no `}`) — these reuse the cached parse.
+  for (let i = 1; i <= 5; i++) {
+    textOf(projector.applyEvent(event('agent.token', { messageId: 'msg_1', delta: 'b', index: i })));
+  }
+  // A delta carrying `}` (structural close) forces a re-parse: the full content is now rendered.
+  const closed = textOf(
+    projector.applyEvent(event('agent.token', { messageId: 'msg_1', delta: 'c"},"next":[]}', index: 6 }))
+  );
+  expect(closed).toBe('abbbbbc');
+});
+
 test('channel projector hydrates persisted structured assistant content as display text', () => {
   const projector = new SessionUiProjector({ channelStructured: true });
   const messages: ChatMessage[] = [
     {
       id: 'msg_structured',
-      sessionId,
+      transcriptTargetId: sessionId,
       role: 'assistant',
       text: JSON.stringify({
         display: { kind: 'markdown', content: 'visible host reply' },
@@ -399,7 +506,7 @@ test('channel projector hides silent structured moderator replies', () => {
   const messages: ChatMessage[] = [
     {
       id: 'msg_silent',
-      sessionId,
+      transcriptTargetId: sessionId,
       role: 'assistant',
       text: JSON.stringify({
         visibility: 'silent',
@@ -507,8 +614,7 @@ test('does not project raw native CLI PTY output into chat tool text', () => {
     item: {
       kind: 'tool',
       id: nativeCliSessionId,
-      output:
-        'started claude-code in /Users/zeke/Projects/monad\u001b[?25l\u001b[38;2;255;193;7mNew MCP server found\u001b[39m'
+      output: '\u001b[?25l\u001b[38;2;255;193;7mNew MCP server found\u001b[39m'
     }
   });
   const snapshot = projector.snapshot();
@@ -516,8 +622,7 @@ test('does not project raw native CLI PTY output into chat tool text', () => {
   expect(snapshot.items[0]).toMatchObject({
     kind: 'tool',
     id: nativeCliSessionId,
-    output:
-      'started claude-code in /Users/zeke/Projects/monad\u001b[?25l\u001b[38;2;255;193;7mNew MCP server found\u001b[39m',
+    output: '\u001b[?25l\u001b[38;2;255;193;7mNew MCP server found\u001b[39m',
     status: 'running'
   });
 });
@@ -619,7 +724,7 @@ test('snapshot emits oldestCursor (oldest raw message id) and hasMore when bound
   const messages: ChatMessage[] = [
     {
       id: m0,
-      sessionId,
+      transcriptTargetId: sessionId,
       role: 'user',
       text: 'first',
       type: 'text',
@@ -630,7 +735,7 @@ test('snapshot emits oldestCursor (oldest raw message id) and hasMore when bound
     },
     {
       id: m1,
-      sessionId,
+      transcriptTargetId: sessionId,
       role: 'assistant',
       text: 'second',
       type: 'text',
@@ -661,4 +766,183 @@ test('snapshot omits oldestCursor when there are no messages', () => {
   if (snap.kind !== 'snapshot') throw new Error('expected snapshot');
   expect(snap.oldestCursor).toBeUndefined();
   expect(snap.hasMore).toBeUndefined();
+});
+
+function cliSession(overrides: Partial<NativeCliSessionSnapshot> = {}): NativeCliSessionSnapshot {
+  return {
+    id: 'ncli_1',
+    provider: 'codex',
+    agentName: 'codex',
+    workingPath: '/w',
+    launchMode: 'app-server',
+    state: 'running',
+    exitCode: null,
+    outputSnapshot: 'line one\nline two',
+    startedAt: '2026-06-24T00:00:00.500Z',
+    ...overrides
+  };
+}
+
+test('hydrateNativeCliSessions rebuilds a running tool card from the output snapshot', () => {
+  const projector = new SessionUiProjector();
+  projector.hydrateNativeCliSessions([cliSession()]);
+  const snap = projector.snapshot();
+  if (snap.kind !== 'snapshot') throw new Error('expected snapshot');
+  expect(snap.items).toHaveLength(1);
+  expect(snap.items[0]).toMatchObject({
+    kind: 'tool',
+    id: 'ncli_1',
+    tool: 'native-cli:codex',
+    status: 'running',
+    output: 'line one\nline two',
+    input: { agent: 'codex', provider: 'codex', launchMode: 'app-server' }
+  });
+});
+
+test('hydrateNativeCliSessions maps terminal state and appends the exit line', () => {
+  const failed = new SessionUiProjector();
+  failed.hydrateNativeCliSessions([cliSession({ id: 'ncli_f', state: 'failed', exitCode: 1 })]);
+  const fSnap = failed.snapshot();
+  if (fSnap.kind !== 'snapshot' || fSnap.items[0]?.kind !== 'tool') throw new Error('expected tool');
+  expect(fSnap.items[0].status).toBe('error');
+  expect(fSnap.items[0].output).toContain('\nfailed (1)');
+
+  const exited = new SessionUiProjector();
+  exited.hydrateNativeCliSessions([cliSession({ id: 'ncli_e', state: 'exited', exitCode: 0 })]);
+  const eSnap = exited.snapshot();
+  if (eSnap.kind !== 'snapshot' || eSnap.items[0]?.kind !== 'tool') throw new Error('expected tool');
+  expect(eSnap.items[0].status).toBe('ok');
+  expect(eSnap.items[0].output).toContain('\nexited (0)');
+});
+
+test('hydrateNativeCliSessions interleaves cards with messages by startedAt', () => {
+  const projector = new SessionUiProjector();
+  const mkMsg = (id: `msg_${string}`, at: string): ChatMessage => ({
+    id,
+    transcriptTargetId: sessionId,
+    role: 'user',
+    text: id,
+    type: 'text',
+    stream: { status: 'complete' },
+    active: true,
+    createdAt: at
+  });
+  // Messages at 00:00 and 00:01; a CLI run started at 00:00:00.500 must land between them.
+  projector.hydrateMessages([mkMsg('msg_a', '2026-06-24T00:00:00.000Z'), mkMsg('msg_b', '2026-06-24T00:00:01.000Z')]);
+  projector.hydrateNativeCliSessions([cliSession()]);
+  const snap = projector.snapshot();
+  if (snap.kind !== 'snapshot') throw new Error('expected snapshot');
+  expect(snap.items.map((i) => i.id)).toEqual(['msg_a', 'ncli_1', 'msg_b']);
+});
+
+test('hydrateNativeCliSessions updates an existing card in place without duplicating', () => {
+  const projector = new SessionUiProjector();
+  projector.hydrateNativeCliSessions([cliSession({ outputSnapshot: 'first' })]);
+  projector.hydrateNativeCliSessions([cliSession({ outputSnapshot: 'second', state: 'stopped' })]);
+  const snap = projector.snapshot();
+  if (snap.kind !== 'snapshot' || snap.items[0]?.kind !== 'tool') throw new Error('expected tool');
+  expect(snap.items).toHaveLength(1);
+  expect(snap.items[0].output).toContain('second');
+  expect(snap.items[0].output).not.toContain('first');
+  expect(snap.items[0].status).toBe('ok');
+});
+
+test('live streaming evicts oldest settled items past the cap but keeps active and pending ones', () => {
+  const projector = new SessionUiProjector();
+  projector.hydrateMessages([]);
+  projector.snapshot(); // commit the initial view → enable live eviction
+  // A pending approval and a still-streaming assistant message, both inserted early.
+  projector.applyEvent(event('tool.approval_requested', { requestId: 'req_1', tool: 'shell_exec', input: {} }));
+  projector.applyEvent(event('agent.token', { messageId: 'msg_LIVE', delta: 'streaming', index: 0 }));
+  // Flood with settled user messages well past MAX_LIVE_UI_ITEMS (1000).
+  for (let i = 0; i < 1100; i++) {
+    projector.applyEvent(event('user.message', { messageId: `msg_${i}`, text: `m${i}` }));
+  }
+  const snap = projector.snapshot();
+  if (snap.kind !== 'snapshot') throw new Error('expected snapshot');
+  expect(snap.items.length).toBeLessThanOrEqual(1000);
+  // Never-evictable items survive despite being the oldest.
+  expect(snap.items.some((i) => i.kind === 'approval' && i.id === 'req_1')).toBe(true);
+  expect(snap.items.some((i) => i.kind === 'message' && i.id === 'msg_LIVE' && i.status === 'streaming')).toBe(true);
+  // Oldest settled messages were dropped; the newest remain.
+  expect(snap.items.some((i) => i.id === 'msg_0')).toBe(false);
+  expect(snap.items.some((i) => i.id === 'msg_1099')).toBe(true);
+});
+
+// What the user actually sees is the projected item sequence, so these assert order + content across
+// the realistic multi-agent flows: concurrent streaming, an agent joining, and a reply hitting the wall.
+function messageView(item: UIItem): { role?: string; agent?: string; text?: string; status?: string } | string {
+  if (item.kind !== 'message') return `${item.kind}:${item.id}`;
+  const text = item.parts.find((p) => p.type === 'text');
+  return {
+    role: item.role,
+    agent: item.agentName,
+    text: text?.type === 'text' ? text.text : undefined,
+    status: item.status
+  };
+}
+
+test('two agents streaming concurrently keep per-bubble order and content (no cross-contamination)', () => {
+  const p = new SessionUiProjector();
+  p.applyEvent(event('user.message', { messageId: 'msg_U', text: 'review please' }));
+  // codex and claude stream at the same time, tokens interleaved; claude settles before codex.
+  p.applyEvent(event('agent.token', { messageId: 'msg_A', agentName: 'codex', delta: 'Look', index: 0 }));
+  p.applyEvent(event('agent.token', { messageId: 'msg_B', agentName: 'claude', delta: 'I dis', index: 0 }));
+  p.applyEvent(event('agent.token', { messageId: 'msg_A', agentName: 'codex', delta: 'ing', index: 1 }));
+  p.applyEvent(event('agent.token', { messageId: 'msg_B', agentName: 'claude', delta: 'agree', index: 1 }));
+  p.applyEvent(event('agent.message', { messageId: 'msg_B', agentName: 'claude', text: 'I disagree' }));
+  p.applyEvent(event('agent.message', { messageId: 'msg_A', agentName: 'codex', text: 'Looking good' }));
+  const snap = p.snapshot();
+  if (snap.kind !== 'snapshot') throw new Error('expected snapshot');
+  // Order is by first appearance (U, then A, then B) regardless of which settles first; text is the
+  // settled content per agent — never mixed.
+  expect(snap.items.map(messageView)).toEqual([
+    { role: 'user', agent: undefined, text: 'review please', status: 'done' },
+    { role: 'assistant', agent: 'codex', text: 'Looking good', status: 'done' },
+    { role: 'assistant', agent: 'claude', text: 'I disagree', status: 'done' }
+  ]);
+});
+
+test('agent join, its output card, and its wall reply project in chronological order', () => {
+  const p = new SessionUiProjector();
+  p.applyEvent(event('user.message', { messageId: 'msg_U', text: 'please review' }));
+  p.applyEvent(
+    event('native_cli.started', {
+      nativeCliSessionId: 'ncli_1',
+      agentName: 'codex',
+      provider: 'codex',
+      launchMode: 'pty',
+      workingPath: '/w',
+      pid: 123
+    })
+  );
+  p.applyEvent(event('native_cli.output', { nativeCliSessionId: 'ncli_1', stream: 'stdout', chunk: 'analyzing repo' }));
+  // The reply reaching the wall: a Thinking placeholder that settles into the posted text.
+  p.applyEvent(
+    event('agent.token', { messageId: 'msg_R', agentName: 'codex', delta: '', index: 0, source: 'managed-native-cli' })
+  );
+  p.applyEvent(
+    event('agent.reasoning', { messageId: 'msg_R', delta: 'Thinking', index: 0, source: 'managed-native-cli' })
+  );
+  p.applyEvent(
+    event('agent.message', {
+      messageId: 'msg_R',
+      agentName: 'codex',
+      text: 'looks good to me',
+      source: 'managed-native-cli'
+    })
+  );
+  const snap = p.snapshot();
+  if (snap.kind !== 'snapshot') throw new Error('expected snapshot');
+  expect(snap.items.map((i) => `${i.kind}:${i.id}`)).toEqual(['message:msg_U', 'tool:ncli_1', 'message:msg_R']);
+  const card = snap.items.find((i) => i.kind === 'tool');
+  if (card?.kind !== 'tool') throw new Error('expected tool card');
+  expect(card.tool).toBe('native-cli:codex');
+  expect(card.output).toContain('analyzing repo');
+  const reply = snap.items.find((i) => i.id === 'msg_R');
+  if (reply?.kind !== 'message') throw new Error('expected reply message');
+  expect(reply.status).toBe('done');
+  expect(
+    reply.parts.find((x) => x.type === 'text')?.type === 'text' && reply.parts.find((x) => x.type === 'text')
+  ).toMatchObject({ text: 'looks good to me' });
 });

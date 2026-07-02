@@ -3,8 +3,17 @@
 import type { Session } from '@monad/protocol';
 import type { CSSProperties, PointerEvent } from 'react';
 
+import {
+  ArrowRight01Icon,
+  BoxesIcon,
+  MessageSquareCodeIcon,
+  PlusSignIcon,
+  Settings02Icon,
+  Shield01Icon,
+  SlidersHorizontalIcon
+} from '@hugeicons/core-free-icons';
+import { HugeiconsIcon } from '@hugeicons/react';
 import { Button } from '@monad/ui';
-import { ArrowRight, Boxes, MessageSquare, Plus, Settings2, ShieldCheck, SlidersHorizontal } from 'lucide-react';
 
 import { useT } from '@/components/I18nProvider';
 import { MonadLogo } from '@/components/MonadLogo';
@@ -82,7 +91,10 @@ export function WorkspaceHome({
             size="sm"
             variant="ghost"
           >
-            <SlidersHorizontal data-icon="inline-start" />
+            <HugeiconsIcon
+              data-icon="inline-start"
+              icon={SlidersHorizontalIcon}
+            />
             {t('web.studio.title')}
           </Button>
           <Button
@@ -91,7 +103,10 @@ export function WorkspaceHome({
             size="sm"
             variant="ghost"
           >
-            <Settings2 data-icon="inline-start" />
+            <HugeiconsIcon
+              data-icon="inline-start"
+              icon={Settings02Icon}
+            />
             {t('web.sidebar.settings')}
           </Button>
           <ThemeToggle />
@@ -110,28 +125,40 @@ export function WorkspaceHome({
               </p>
               <div className="flex flex-wrap gap-2">
                 <Button onClick={onOpenAgentChat}>
-                  <MessageSquare data-icon="inline-start" />
+                  <HugeiconsIcon
+                    data-icon="inline-start"
+                    icon={MessageSquareCodeIcon}
+                  />
                   {t('web.workspace.openAgent')}
                 </Button>
                 <Button
                   onClick={onNewAgentChat}
                   variant="outline"
                 >
-                  <Plus data-icon="inline-start" />
+                  <HugeiconsIcon
+                    data-icon="inline-start"
+                    icon={PlusSignIcon}
+                  />
                   {t('web.workspace.newAgentSession')}
                 </Button>
                 <Button
                   onClick={onNewProject}
                   variant="outline"
                 >
-                  <Plus data-icon="inline-start" />
+                  <HugeiconsIcon
+                    data-icon="inline-start"
+                    icon={PlusSignIcon}
+                  />
                   {t('web.workplace.newProject')}
                 </Button>
               </div>
             </div>
             <div className="rounded-lg border border-border bg-muted/40 px-4 py-4">
               <div className="flex items-center gap-2 text-muted-foreground text-xs">
-                <ShieldCheck className="size-4 text-link" />
+                <HugeiconsIcon
+                  className="size-4 text-link"
+                  icon={Shield01Icon}
+                />
                 <span>{t('web.workspace.localDaemon')}</span>
               </div>
               <div className="mt-3 text-muted-foreground text-xs">{t('web.workspace.latestSession')}</div>
@@ -145,7 +172,10 @@ export function WorkspaceHome({
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-2">
                     <span className="grid size-9 place-items-center rounded-md border border-border bg-muted text-foreground">
-                      <MessageSquare className="size-4" />
+                      <HugeiconsIcon
+                        className="size-4"
+                        icon={MessageSquareCodeIcon}
+                      />
                     </span>
                     <h2 className="font-semibold text-base text-foreground">{t('web.workspace.agentTitle')}</h2>
                   </div>
@@ -165,14 +195,20 @@ export function WorkspaceHome({
                   size="sm"
                 >
                   {t('web.workspace.openAgent')}
-                  <ArrowRight data-icon="inline-end" />
+                  <HugeiconsIcon
+                    data-icon="inline-end"
+                    icon={ArrowRight01Icon}
+                  />
                 </Button>
                 <Button
                   onClick={onNewAgentChat}
                   size="sm"
                   variant="outline"
                 >
-                  <Plus data-icon="inline-start" />
+                  <HugeiconsIcon
+                    data-icon="inline-start"
+                    icon={PlusSignIcon}
+                  />
                   {t('web.workspace.newAgentSession')}
                 </Button>
               </div>
@@ -189,14 +225,20 @@ export function WorkspaceHome({
                   size="sm"
                   variant="outline"
                 >
-                  <Plus data-icon="inline-start" />
+                  <HugeiconsIcon
+                    data-icon="inline-start"
+                    icon={PlusSignIcon}
+                  />
                   {t('web.workplace.newProject')}
                 </Button>
               </div>
               {projects.length === 0 ? (
                 <div className="flex min-h-56 flex-col items-start justify-center gap-3 px-5 py-8">
                   <span className="grid size-10 place-items-center rounded-md border border-border bg-muted text-muted-foreground">
-                    <Boxes className="size-5" />
+                    <HugeiconsIcon
+                      className="size-5"
+                      icon={BoxesIcon}
+                    />
                   </span>
                   <div>
                     <div className="font-medium text-foreground text-sm">{t('web.workplace.noProjects')}</div>
@@ -221,7 +263,10 @@ export function WorkspaceHome({
                             {t('web.workplace.projectSummary')}
                           </p>
                         </div>
-                        <ArrowRight className="size-4 shrink-0 text-muted-foreground" />
+                        <HugeiconsIcon
+                          className="size-4 shrink-0 text-muted-foreground"
+                          icon={ArrowRight01Icon}
+                        />
                       </button>
                     </li>
                   ))}
@@ -236,7 +281,10 @@ export function WorkspaceHome({
               onClick={onOpenSettings}
               type="button"
             >
-              <Settings2 className="size-4 text-muted-foreground" />
+              <HugeiconsIcon
+                className="size-4 text-muted-foreground"
+                icon={Settings02Icon}
+              />
               <div className="mt-3 font-medium text-foreground text-sm">{t('web.sidebar.settings')}</div>
               <p className="mt-1 text-muted-foreground text-sm">{t('web.workspace.settingsSummary')}</p>
             </button>
@@ -246,13 +294,19 @@ export function WorkspaceHome({
               variant="outline"
             >
               <span>
-                <SlidersHorizontal className="size-4 text-muted-foreground" />
+                <HugeiconsIcon
+                  className="size-4 text-muted-foreground"
+                  icon={SlidersHorizontalIcon}
+                />
                 <span className="mt-3 block font-medium text-sm">{t('web.studio.title')}</span>
                 <span className="mt-1 block text-muted-foreground text-sm">{t('web.workspace.studioSummary')}</span>
               </span>
             </Button>
             <div className="rounded-lg border border-border bg-muted/35 px-4 py-4">
-              <ShieldCheck className="size-4 text-link" />
+              <HugeiconsIcon
+                className="size-4 text-link"
+                icon={Shield01Icon}
+              />
               <div className="mt-3 font-medium text-foreground text-sm">{t('web.workspace.localDaemon')}</div>
               <p className="mt-1 text-muted-foreground text-sm">{t('web.workspace.localDaemonSummary')}</p>
             </div>

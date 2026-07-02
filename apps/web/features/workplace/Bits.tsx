@@ -1,5 +1,8 @@
-import type { CSSProperties } from 'react';
-import type { ParticipantKind, Presence } from './types';
+import type { ProductIconId } from '@monad/ui';
+import type { CSSProperties, ReactNode } from 'react';
+import type { Participant, ParticipantKind, Presence } from './types';
+
+import { isProductIconId, ProductIcon } from '@monad/ui';
 
 import { providerLogo } from '@/lib/ProviderMeta';
 import { boxR, mono, presenceColor, sans } from './styles';
@@ -7,23 +10,29 @@ import { boxR, mono, presenceColor, sans } from './styles';
 export function Avatar({
   av,
   icon,
+  avatarUrl,
   kind,
-  size = 34
+  size = 34,
+  bare = false,
+  bordered = true
 }: {
   av: string;
-  icon?: 'monad' | 'openai' | 'anthropic' | 'google';
+  icon?: Participant['icon'];
+  avatarUrl?: string;
   kind: ParticipantKind;
   size?: number;
+  bare?: boolean;
+  bordered?: boolean;
 }): React.ReactElement {
   const agent = kind === 'agent';
-  const ProductLogo = icon && icon !== 'monad' ? providerLogo(icon).logo : null;
+  const ProviderLogo = icon && icon !== 'monad' && !isProductIconId(icon) ? providerLogo(icon).logo : null;
   const style: CSSProperties = {
     flex: 'none',
     width: size,
     height: size,
-    border: `1.5px solid ${agent ? 'var(--accent-blue)' : 'var(--border)'}`,
-    borderRadius: agent ? Math.round(size * 0.23) : '50%',
-    background: agent ? 'var(--accent-blue-soft)' : 'var(--secondary)',
+    border: bordered && !bare ? `1.5px solid ${agent ? 'var(--accent-blue)' : 'var(--border)'}` : 'none',
+    borderRadius: '50%',
+    background: bare ? 'transparent' : agent ? 'var(--accent-blue-soft)' : 'var(--secondary)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -32,7 +41,20 @@ export function Avatar({
   };
   return (
     <div style={style}>
-      {icon === 'monad' ? (
+      {avatarUrl ? (
+        <span
+          aria-hidden="true"
+          style={{
+            width: '100%',
+            height: '100%',
+            borderRadius: '50%',
+            backgroundImage: `url("${avatarUrl}")`,
+            backgroundPosition: 'center',
+            backgroundRepeat: 'no-repeat',
+            backgroundSize: 'cover'
+          }}
+        />
+      ) : icon === 'monad' ? (
         <span
           aria-label="monad"
           role="img"
@@ -50,12 +72,46 @@ export function Avatar({
             background: 'currentColor'
           }}
         />
-      ) : ProductLogo ? (
-        <ProductLogo className="size-[58%]" />
+      ) : icon && isProductIconId(icon) ? (
+        <ProductIcon
+          product={icon}
+          size={Math.round(size * 0.72)}
+        />
+      ) : ProviderLogo ? (
+        <ProviderLogo className="size-[58%]" />
       ) : (
         av
       )}
     </div>
+  );
+}
+
+export function AgentInstanceAvatar({
+  agent,
+  bare,
+  bordered,
+  size = 34
+}: {
+  agent: {
+    av?: string;
+    avatarUrl?: string;
+    icon?: Participant['icon'];
+    name: string;
+  };
+  bare?: boolean;
+  bordered?: boolean;
+  size?: number;
+}): React.ReactElement {
+  return (
+    <Avatar
+      av={agent.av ?? agent.name.slice(0, 2).toUpperCase()}
+      avatarUrl={agent.avatarUrl}
+      bare={bare}
+      bordered={bordered}
+      icon={agent.icon}
+      kind="agent"
+      size={size}
+    />
   );
 }
 
@@ -91,6 +147,55 @@ export function MiniTag({ tag }: { tag: string }): React.ReactElement {
       }}
     >
       {tag}
+    </span>
+  );
+}
+
+export function resolveProductIcon(agent: { icon?: string; tag?: string; name: string }): ProductIconId | undefined {
+  if (isProductIconId(agent.icon)) return agent.icon;
+  const haystack = `${agent.tag ?? ''} ${agent.name}`.toLowerCase();
+  if (haystack.includes('codex')) return 'codex';
+  if (haystack.includes('claude')) return 'claude-code';
+  if (haystack.includes('gemini')) return 'gemini';
+  if (haystack.includes('qwen')) return 'qwen';
+  return undefined;
+}
+
+export function AgentIdentity({
+  name,
+  badge,
+  badgeGap = 8,
+  className,
+  nameStyle
+}: {
+  name: string;
+  badge?: ReactNode;
+  badgeGap?: number;
+  className?: string;
+  nameStyle?: CSSProperties;
+}): React.ReactElement {
+  return (
+    <span
+      className={className}
+      style={{ display: 'inline-flex', alignItems: 'center', minWidth: 0 }}
+    >
+      <span
+        style={{
+          minWidth: 0,
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+          ...nameStyle
+        }}
+        title={name}
+      >
+        {name}
+      </span>
+      {badge ? (
+        <span style={{ flex: 'none', marginLeft: badgeGap, display: 'inline-flex', alignItems: 'center' }}>
+          {badge}
+        </span>
+      ) : null}
     </span>
   );
 }
@@ -133,7 +238,6 @@ export function inkButtonStyle(extra?: CSSProperties): CSSProperties {
     borderRadius: boxR,
     background: 'var(--accent-blue)',
     color: 'var(--primary-foreground)',
-    cursor: 'pointer',
     fontFamily: sans,
     fontWeight: 600,
     ...extra
@@ -146,7 +250,6 @@ export function ghostButtonStyle(extra?: CSSProperties): CSSProperties {
     borderRadius: boxR,
     background: 'var(--card)',
     color: 'var(--foreground)',
-    cursor: 'pointer',
     fontFamily: sans,
     fontWeight: 500,
     ...extra

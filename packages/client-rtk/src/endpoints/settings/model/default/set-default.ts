@@ -17,7 +17,7 @@ export const setDefaultApi = getDefaultApi.injectEndpoints({
           patch.undo();
         }
       },
-      invalidatesTags: ['Default', 'Profiles', 'InitStatus']
+      invalidatesTags: ['Default', 'Profiles', 'Roles', 'InitStatus']
     })
   })
 });

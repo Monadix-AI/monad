@@ -12,7 +12,7 @@ export function toExperienceRuntime(
   return {
     snapshot: {
       projectId: c.projectId,
-      sessionId: c.sessionId,
+      activeProjectId: c.activeProjectId,
       ready: c.ready,
       projects: c.projects,
       participants: c.participants,
@@ -31,7 +31,6 @@ export function toExperienceRuntime(
       contextUsage: c.contextUsage,
       modelProfiles: c.modelProfiles,
       approvals: c.approvals,
-      moderator: c.moderator,
       workdir: c.workdir,
       paused: c.paused,
       mentionTargets: c.mentionTargets,

@@ -5,6 +5,8 @@ import { readFileSync } from 'node:fs';
 
 import { nativeCliAuthSessionForView } from '../../features/workplace/cli/NativeCliAuthModal';
 
+const readSource = (path: string) => readFileSync(new URL(`../../${path}`, import.meta.url), 'utf8');
+
 const authSession = (overrides: Partial<NativeCliAuthSessionView> = {}): NativeCliAuthSessionView => ({
   id: 'ncliauth_01KWAUTH000000000000000',
   agentName: 'codex',
@@ -43,15 +45,15 @@ test('native CLI auth modal accepts query data for the active connect session', 
 });
 
 test('native CLI auth terminal remounts when the connect session changes', () => {
-  const source = readFileSync('apps/web/features/workplace/cli/CliTerminalModal.tsx', 'utf8');
+  const source = readSource('features/workplace/cli/CliTerminalModal.tsx');
 
   expect(source).toContain('key={id}');
 });
 
 test('native CLI auth callers clear the previous connect window before starting another provider', () => {
-  const workplace = readFileSync('apps/web/features/workplace/Workplace.tsx', 'utf8');
-  const settings = readFileSync('apps/web/features/settings/NativeCliAgentsSettings.tsx', 'utf8');
+  const workplace = readSource('features/workplace/Workplace.tsx');
+  const settings = readSource('features/studio/third-party-agents/NativeCliAgentsSettings.tsx');
 
-  expect(workplace).toContain('setNativeCliAuthSession(null);');
+  expect(workplace).toContain('clearNativeCliAuthSession();');
   expect(settings).toContain('setAuthSession(null);');
 });

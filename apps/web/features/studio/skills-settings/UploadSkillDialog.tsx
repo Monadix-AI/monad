@@ -1,6 +1,7 @@
 import type { RefObject } from 'react';
 
-import { FileArchive, FileText, Loader2 } from 'lucide-react';
+import { FileArchiveIcon, LoaderPinwheelIcon, TextIcon } from '@hugeicons/core-free-icons';
+import { HugeiconsIcon } from '@hugeicons/react';
 
 import { useT } from '@/components/I18nProvider';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -42,12 +43,26 @@ export function UploadSkillDialog({
           type="button"
         >
           <div className="flex items-center text-muted-foreground/50 [&>*+*]:-ml-2">
-            <FileText className="size-10 rotate-[-8deg] rounded-md bg-background/70 p-2" />
-            <FileText className="z-1 size-12 rounded-md bg-background/90 p-2.5" />
-            <FileArchive className="size-10 rotate-[8deg] rounded-md bg-background/70 p-2" />
+            <HugeiconsIcon
+              className="size-10 rotate-[-8deg] rounded-md bg-background/70 p-2"
+              icon={TextIcon}
+            />
+            <HugeiconsIcon
+              className="z-1 size-12 rounded-md bg-background/90 p-2.5"
+              icon={TextIcon}
+            />
+            <HugeiconsIcon
+              className="size-10 rotate-[8deg] rounded-md bg-background/70 p-2"
+              icon={FileArchiveIcon}
+            />
           </div>
           <span className="font-medium text-lg text-muted-foreground">{t('web.skills.uploadDrop')}</span>
-          {loading ? <Loader2 className="size-4 animate-spin text-foreground" /> : null}
+          {loading ? (
+            <HugeiconsIcon
+              className="size-4 animate-spin text-foreground"
+              icon={LoaderPinwheelIcon}
+            />
+          ) : null}
         </button>
         <div className="flex flex-col gap-2 text-sm">
           <h3 className="font-medium">{t('web.skills.fileRequirements')}</h3>

@@ -3,6 +3,7 @@ import { expect, test } from 'bun:test';
 import {
   filterModelsForPicker,
   modelMatchesQuery,
+  modelPickerPriceSummary,
   renderHighlightedModelText
 } from '../../features/studio/model-settings/model-picker';
 
@@ -34,4 +35,13 @@ test('model picker search only shows matching models', () => {
   expect(filterModelsForPicker(models, 'gemini')).toEqual([models[1]]);
   expect(filterModelsForPicker(models, 'claude sonnet')).toEqual([models[2]]);
   expect(filterModelsForPicker(models, '')).toEqual(models);
+});
+
+test('model picker price summary uses the same units as provider model details', () => {
+  expect(
+    modelPickerPriceSummary({
+      units: [{ label: 'Image', price: 0.04, unit: 'image' }]
+    })
+  ).toBe('$0.04/image');
+  expect(modelPickerPriceSummary({ videoSecond: 0.08 })).toBe('$0.08/seconds');
 });

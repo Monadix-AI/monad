@@ -6,6 +6,7 @@
 import type { Fact } from '@monad/protocol';
 import type { ModelRouter } from '@/agent/index.ts';
 import type { Mem0Client, Mem0Memory } from '@/services/memory/mem0.ts';
+import type { createStore } from '@/store/db/index.ts';
 
 import { describe, expect, test } from 'bun:test';
 import { mkdtempSync } from 'node:fs';
@@ -41,9 +42,9 @@ class FakeMem0 implements Mem0Client {
 }
 
 function mem0Service(fake: Mem0Client) {
-  return () =>
+  return (store: ReturnType<typeof createStore>) =>
     createMemoryService({
-      store: { getSession: () => undefined, listMessages: () => [] } as never,
+      store,
       root: mkdtempSync(join(tmpdir(), 'mem0-e2e-')),
       dbRoot: mkdtempSync(join(tmpdir(), 'mem0-e2e-')),
       router,
@@ -91,7 +92,7 @@ for (const kind of TRANSPORTS) {
         expect(add.status).toBe(200);
         expect(((await add.json()) as { fact: Fact }).fact.content).toBe('User uses Bun');
         expect(fake.mem.map((m) => m.memory)).toEqual(['User uses Bun']);
-        expect(fake.userIds).toContain('agt_1');
+        expect(fake.userIds).toContain('agent:agt_1');
 
         // list reads back through mem0
         const list = (await (await t.fetch('/v1/memory/facts?scopeKind=agent&scopeId=agt_1')).json()) as {

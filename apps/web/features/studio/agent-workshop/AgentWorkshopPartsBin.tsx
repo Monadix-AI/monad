@@ -1,7 +1,17 @@
 'use client';
 
+import {
+  BrainIcon,
+  EyeIcon,
+  GripVerticalIcon,
+  PackageIcon,
+  Plug01Icon,
+  ShieldHalfIcon,
+  SparklesIcon,
+  Wrench01Icon
+} from '@hugeicons/core-free-icons';
+import { HugeiconsIcon } from '@hugeicons/react';
 import { ScrollArea } from '@monad/ui';
-import { Brain, Eye, GripVertical, Package, Plug, ShieldHalf, Sparkles, Wrench } from 'lucide-react';
 
 import { useT } from '@/components/I18nProvider';
 import { type CapabilityItem, PartCard, serializePayload, type WorkshopPart } from './AgentWorkshopPrimitives';
@@ -33,7 +43,7 @@ export function AgentWorkshopPartsBin({
           <div className="flex flex-col gap-3">
             <PartCard
               body={t('web.studio.workshopBrainHint')}
-              icon={Brain}
+              icon={BrainIcon}
               onDragEnd={() => setDraggingPart(null)}
               onSelect={() => setSelectedPart('brain')}
               onStartDrag={() => setDraggingPart('brain')}
@@ -43,7 +53,7 @@ export function AgentWorkshopPartsBin({
             />
             <PartCard
               body={t('web.studio.workshopPromptHint')}
-              icon={Sparkles}
+              icon={SparklesIcon}
               onDragEnd={() => setDraggingPart(null)}
               onSelect={() => setSelectedPart('prompt')}
               onStartDrag={() => setDraggingPart('prompt')}
@@ -53,7 +63,7 @@ export function AgentWorkshopPartsBin({
             />
             <PartCard
               body={t('web.studio.workshopToolsHint')}
-              icon={Wrench}
+              icon={Wrench01Icon}
               onDragEnd={() => setDraggingPart(null)}
               onSelect={() => setSelectedPart('tools')}
               onStartDrag={() => setDraggingPart('tools')}
@@ -63,7 +73,7 @@ export function AgentWorkshopPartsBin({
             />
             <PartCard
               body={t('web.studio.workshopSafetyHint')}
-              icon={ShieldHalf}
+              icon={ShieldHalfIcon}
               onDragEnd={() => setDraggingPart(null)}
               onSelect={() => setSelectedPart('safety')}
               onStartDrag={() => setDraggingPart('safety')}
@@ -73,7 +83,7 @@ export function AgentWorkshopPartsBin({
             />
             <PartCard
               body={t('web.studio.workshopVisibilityHint')}
-              icon={Eye}
+              icon={EyeIcon}
               onDragEnd={() => setDraggingPart(null)}
               onSelect={() => setSelectedPart('visibility')}
               onStartDrag={() => setDraggingPart('visibility')}
@@ -116,13 +126,26 @@ export function AgentWorkshopPartsBin({
                   type="button"
                 >
                   <span className="flex size-8 items-center justify-center rounded-xl bg-secondary text-secondary-foreground">
-                    {capability.sourceKind === 'atom' ? <Package className="size-4" /> : <Plug className="size-4" />}
+                    {capability.sourceKind === 'atom' ? (
+                      <HugeiconsIcon
+                        className="size-4"
+                        icon={PackageIcon}
+                      />
+                    ) : (
+                      <HugeiconsIcon
+                        className="size-4"
+                        icon={Plug01Icon}
+                      />
+                    )}
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="block font-medium text-sm">{capability.name}</span>
                     <span className="block truncate text-muted-foreground text-xs">{capability.detail}</span>
                   </span>
-                  <GripVertical className="size-3.5 text-muted-foreground" />
+                  <HugeiconsIcon
+                    className="size-3.5 text-muted-foreground"
+                    icon={GripVerticalIcon}
+                  />
                 </button>
               ))
             )}

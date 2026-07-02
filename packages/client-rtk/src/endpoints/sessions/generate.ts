@@ -1,4 +1,4 @@
-import type { ChatMessage, SendMessageRequest, SessionId } from '@monad/protocol';
+import type { ChatMessage, GenerateMessageResponse, SendMessageRequest, SessionId } from '@monad/protocol';
 
 import { clientOf, runTreaty } from '../../endpoint-helpers.ts';
 import { createSessionApi } from './create-session.ts';
@@ -9,7 +9,11 @@ export const generateApi = createSessionApi.injectEndpoints({
     generate: builder.mutation<ChatMessage, { id: SessionId } & SendMessageRequest>({
       queryFn: ({ id, text, ambientContext }: { id: SessionId } & SendMessageRequest, api: { extra: unknown }) =>
         runTreaty(
-          () => clientOf(api).treaty.v1.sessions({ id }).messages.block.post({ text, ambientContext }),
+          () =>
+            clientOf(api).treaty.v1.sessions({ id }).messages.block.post({ text, ambientContext }) as Promise<{
+              data: GenerateMessageResponse | null | undefined;
+              error: unknown;
+            }>,
           (raw) => raw.message
         )
     })

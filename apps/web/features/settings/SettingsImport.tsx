@@ -10,20 +10,21 @@ import type {
   ImportSettingsSource
 } from '@monad/protocol';
 
+import {
+  Alert01Icon,
+  Cancel01Icon,
+  CheckIcon,
+  ChevronDownIcon,
+  FileInputIcon,
+  InformationCircleIcon,
+  LoaderPinwheelIcon,
+  RotateLeft01Icon,
+  Shield01Icon,
+  SlidersHorizontalIcon
+} from '@hugeicons/core-free-icons';
+import { HugeiconsIcon } from '@hugeicons/react';
 import { useApplySettingsImportMutation, usePreviewSettingsImportMutation } from '@monad/client-rtk';
 import { Badge, Button, cn, Input, Label, ScrollArea, Separator, Switch } from '@monad/ui';
-import {
-  AlertTriangle,
-  Check,
-  ChevronDown,
-  FileInput,
-  Info,
-  Loader2,
-  RefreshCcw,
-  ShieldCheck,
-  SlidersHorizontal,
-  X
-} from 'lucide-react';
 import { useMemo, useState } from 'react';
 
 import { useT } from '@/components/I18nProvider';
@@ -211,7 +212,10 @@ export function SettingsImport({ onClose }: Props) {
     <div className="flex min-w-0 flex-1 flex-col">
       <div className="flex items-center justify-between border-b px-6 py-4">
         <div className="flex items-center gap-2">
-          <FileInput className="size-4 text-muted-foreground" />
+          <HugeiconsIcon
+            className="size-4 text-muted-foreground"
+            icon={FileInputIcon}
+          />
           <span className="font-semibold text-sm">{t('web.settings.import')}</span>
         </div>
         <Button
@@ -221,7 +225,7 @@ export function SettingsImport({ onClose }: Props) {
           size="icon"
           variant="ghost"
         >
-          <X />
+          <HugeiconsIcon icon={Cancel01Icon} />
         </Button>
       </div>
 
@@ -229,7 +233,10 @@ export function SettingsImport({ onClose }: Props) {
         <div className="flex flex-col gap-5 p-6">
           <section className="flex flex-col gap-3">
             <div className="flex items-center gap-2">
-              <SlidersHorizontal className="size-4 text-muted-foreground" />
+              <HugeiconsIcon
+                className="size-4 text-muted-foreground"
+                icon={SlidersHorizontalIcon}
+              />
               <h3 className="font-semibold text-sm">{t('web.settings.import.source')}</h3>
             </div>
             <div className="grid gap-3 md:grid-cols-[12rem_1fr]">
@@ -282,7 +289,10 @@ export function SettingsImport({ onClose }: Props) {
             </div>
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border px-3 py-2.5">
               <div className="flex min-w-0 items-center gap-2">
-                <AlertTriangle className="size-3.5 shrink-0 text-muted-foreground" />
+                <HugeiconsIcon
+                  className="size-3.5 shrink-0 text-muted-foreground"
+                  icon={Alert01Icon}
+                />
                 <span className="text-muted-foreground text-xs">{t('web.settings.import.replaceDesc')}</span>
               </div>
               <Switch
@@ -300,9 +310,15 @@ export function SettingsImport({ onClose }: Props) {
                 size="sm"
               >
                 {previewState.isLoading ? (
-                  <Loader2 className="size-3.5 animate-spin" />
+                  <HugeiconsIcon
+                    className="size-3.5 animate-spin"
+                    icon={LoaderPinwheelIcon}
+                  />
                 ) : (
-                  <RefreshCcw className="size-3.5" />
+                  <HugeiconsIcon
+                    className="size-3.5"
+                    icon={RotateLeft01Icon}
+                  />
                 )}
                 {t('web.settings.import.preview')}
               </Button>
@@ -314,7 +330,10 @@ export function SettingsImport({ onClose }: Props) {
                     size="sm"
                     variant="outline"
                   >
-                    <ShieldCheck className="size-3.5" />
+                    <HugeiconsIcon
+                      className="size-3.5"
+                      icon={Shield01Icon}
+                    />
                     {t('web.settings.import.selectSafe')}
                   </Button>
                   <Button
@@ -411,7 +430,10 @@ export function SettingsImport({ onClose }: Props) {
                         className="flex gap-2 text-muted-foreground text-xs"
                         key={warning}
                       >
-                        <AlertTriangle className="mt-0.5 size-3 shrink-0" />
+                        <HugeiconsIcon
+                          className="mt-0.5 size-3 shrink-0"
+                          icon={Alert01Icon}
+                        />
                         <span>{warning}</span>
                       </div>
                     ))}
@@ -464,7 +486,12 @@ export function SettingsImport({ onClose }: Props) {
                                     : 'border-input bg-background'
                               )}
                             >
-                              {selected || applied ? <Check className="size-3" /> : null}
+                              {selected || applied ? (
+                                <HugeiconsIcon
+                                  className="size-3"
+                                  icon={CheckIcon}
+                                />
+                              ) : null}
                             </span>
                             <span className="flex flex-col gap-1">
                               <span className="flex items-center gap-1.5">
@@ -475,9 +502,15 @@ export function SettingsImport({ onClose }: Props) {
                                   {item.action}
                                 </Badge>
                                 {!applyable ? (
-                                  <Info className="size-3 text-muted-foreground" />
+                                  <HugeiconsIcon
+                                    className="size-3 text-muted-foreground"
+                                    icon={InformationCircleIcon}
+                                  />
                                 ) : skipped ? (
-                                  <AlertTriangle className="size-3 text-muted-foreground" />
+                                  <HugeiconsIcon
+                                    className="size-3 text-muted-foreground"
+                                    icon={Alert01Icon}
+                                  />
                                 ) : null}
                               </span>
                               <span className="font-mono text-[10px] text-muted-foreground">{item.id}</span>
@@ -496,8 +529,9 @@ export function SettingsImport({ onClose }: Props) {
                               ) : null}
                               {!applyable || skipped ? (
                                 <span className="mt-1 inline-flex items-center gap-1 text-foreground">
-                                  <ChevronDown
+                                  <HugeiconsIcon
                                     className={cn('size-3 transition-transform', expanded ? 'rotate-180' : null)}
+                                    icon={ChevronDownIcon}
                                   />
                                   {t('web.settings.import.details')}
                                 </span>
@@ -541,9 +575,15 @@ export function SettingsImport({ onClose }: Props) {
                     size="sm"
                   >
                     {applyState.isLoading ? (
-                      <Loader2 className="size-3.5 animate-spin" />
+                      <HugeiconsIcon
+                        className="size-3.5 animate-spin"
+                        icon={LoaderPinwheelIcon}
+                      />
                     ) : (
-                      <Check className="size-3.5" />
+                      <HugeiconsIcon
+                        className="size-3.5"
+                        icon={CheckIcon}
+                      />
                     )}
                     {t('web.settings.import.apply')}
                   </Button>

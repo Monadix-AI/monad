@@ -6,7 +6,7 @@ import type {
   EventType,
   HookCaller,
   Hooks,
-  SessionId
+  TranscriptTargetId
 } from '@monad/protocol';
 import type { Tool, ToolGate, ToolModelContent, ToolResult, ToolResultPart } from '@/capabilities/tools/types.ts';
 import type { ModelContentPart, ModelMessage, ModelUsage, ToolCall, ToolSpec } from '../model/index.ts';
@@ -125,7 +125,7 @@ export class AgentLoop {
 
   /** BeforeModel: fired before each reasoning LLM request. A hook may deny (abort the turn) or rewrite
    *  the request's messages. Returns the (possibly rewritten) messages to send. */
-  private async beforeModel(sessionId: SessionId, messages: ModelMessage[]): Promise<ModelMessage[]> {
+  private async beforeModel(sessionId: TranscriptTargetId, messages: ModelMessage[]): Promise<ModelMessage[]> {
     const d = await this.hooks.run({
       event: 'BeforeModel',
       sessionId,
@@ -142,7 +142,7 @@ export class AgentLoop {
   /** AfterModel: fired after a SUCCESSFUL reasoning LLM response. A hook may rewrite the response text
    *  (e.g. redact). Returns the (possibly rewritten) text. A failed model call doesn't fire this — it
    *  ends the turn via the catch → emitError → AfterTurn(reason:'error') path. */
-  private async afterModel(sessionId: SessionId, text: string): Promise<string> {
+  private async afterModel(sessionId: TranscriptTargetId, text: string): Promise<string> {
     const d = await this.hooks.run({
       event: 'AfterModel',
       sessionId,
@@ -160,7 +160,7 @@ export class AgentLoop {
    * effective prompt or a block reason.
    */
   private async userPromptSubmit(
-    sessionId: SessionId,
+    sessionId: TranscriptTargetId,
     userText: string
   ): Promise<{ blocked: true; reason: string } | { blocked: false; text: string }> {
     const d = await this.hooks.run({
@@ -228,7 +228,7 @@ export class AgentLoop {
         if (this.isToolGranted(request.tool)) return { allow: true };
         const d = await this.hooks.run({
           event: 'ApprovalRequest',
-          sessionId: request.sessionId as SessionId,
+          sessionId: request.sessionId as TranscriptTargetId,
           cwd: this.hookCwd(),
           timestamp: new Date().toISOString(),
           toolName: request.tool,
@@ -244,7 +244,7 @@ export class AgentLoop {
   }
 
   async runStream(
-    sessionId: SessionId,
+    sessionId: TranscriptTargetId,
     userText: string,
     signal?: AbortSignal,
     attachments?: ImageAttachment[]
@@ -332,7 +332,11 @@ export class AgentLoop {
     }
   }
 
-  async runBlock(sessionId: SessionId, userText: string, attachments?: ImageAttachment[]): Promise<ChatMessage> {
+  async runBlock(
+    sessionId: TranscriptTargetId,
+    userText: string,
+    attachments?: ImageAttachment[]
+  ): Promise<ChatMessage> {
     this.turnAttachments = attachments;
     this.pendingSkillExpansion = null;
     const submit = await this.userPromptSubmit(sessionId, userText);
@@ -403,7 +407,7 @@ export class AgentLoop {
     if (usage?.inputTokens && usage.inputTokens > 0) this.lastRealInputTokens = usage.inputTokens;
   }
 
-  private async prepare(sessionId: SessionId, messages: ModelMessage[]): Promise<ModelMessage[]> {
+  private async prepare(sessionId: TranscriptTargetId, messages: ModelMessage[]): Promise<ModelMessage[]> {
     const sent = this.deps.context
       ? await this.deps.context.prepare(messages, {
           sessionId,
@@ -477,7 +481,7 @@ export class AgentLoop {
    * them (gate + sandbox via invokeTool), feed structured tool results back, and re-prompt —
    * up to a step budget. Returns the model's final prose.
    */
-  private async runToolLoop(sessionId: SessionId): Promise<{ text: string; usage?: ModelUsage }> {
+  private async runToolLoop(sessionId: TranscriptTargetId): Promise<{ text: string; usage?: ModelUsage }> {
     const maxTurns = this.deps.maxTurns;
     const maxBudgetUsd = this.deps.maxBudgetUsd;
     let messages = await this.buildPrompt(sessionId, true);
@@ -554,7 +558,7 @@ export class AgentLoop {
    * tools are registered.
    */
   private async runStreamWithTools(
-    sessionId: SessionId,
+    sessionId: TranscriptTargetId,
     messageId: `msg_${string}`,
     signal?: AbortSignal
   ): Promise<void> {
@@ -673,10 +677,10 @@ export class AgentLoop {
   /** Persist an empty assistant row so a turn that ended with no closing text still has an answer
    * message (the UI anchors the turn on it). Excluded from context — an empty assistant turn must
    * not reach the next prompt (some providers reject empty assistant content). */
-  private async appendEmptyAnswer(sessionId: SessionId, messageId: `msg_${string}`): Promise<void> {
+  private async appendEmptyAnswer(sessionId: TranscriptTargetId, messageId: `msg_${string}`): Promise<void> {
     await this.deps.messages.append({
       id: messageId,
-      sessionId,
+      transcriptTargetId: sessionId,
       role: 'assistant',
       text: '',
       includeInContext: false,
@@ -695,8 +699,8 @@ export class AgentLoop {
     tools: ToolSpec[],
     emitToken: (delta: string) => void,
     emitReasoning: (delta: string) => void,
-    signal?: AbortSignal,
-    sessionId?: string
+    signal: AbortSignal | undefined,
+    sessionId: TranscriptTargetId
   ): Promise<{
     text: string;
     reasoning: string;
@@ -714,7 +718,7 @@ export class AgentLoop {
 
     for await (const chunk of this.deps.model.stream({
       model: this.modelId(),
-      messages: await this.beforeModel(sessionId as SessionId, messages),
+      messages: await this.beforeModel(sessionId, messages),
       tools,
       sessionId,
       userId: this.deps.userId
@@ -749,7 +753,7 @@ export class AgentLoop {
     }
     // AfterModel fires per model step here — every streamed step (intermediate tool steps included),
     // paired with this method's BeforeModel, so the rewritten text flows to settle / tools / final.
-    const afterText = await this.afterModel(sessionId as SessionId, text);
+    const afterText = await this.afterModel(sessionId, text);
     return { text: afterText, reasoning, calls, providerExecuted, usage };
   }
 
@@ -760,7 +764,7 @@ export class AgentLoop {
    * since tool-results carry text at the provider boundary.
    */
   private async runToolCalls(
-    sessionId: SessionId,
+    sessionId: TranscriptTargetId,
     assistantText: string,
     calls: ToolCall[],
     messages: ModelMessage[],
@@ -826,7 +830,7 @@ export class AgentLoop {
   }
 
   private async executeToolCall(
-    sessionId: SessionId,
+    sessionId: TranscriptTargetId,
     call: ToolCall,
     signal?: AbortSignal
   ): Promise<{
@@ -1014,7 +1018,7 @@ export class AgentLoop {
    * degrades them to text observations instead — providers reject stale tool_use IDs.
    */
   private async persistToolStep(
-    sessionId: SessionId,
+    sessionId: TranscriptTargetId,
     call: ToolCall,
     observation: string,
     providerExecuted = false,
@@ -1041,7 +1045,7 @@ export class AgentLoop {
     };
     await this.deps.messages.append({
       id: newId('msg'),
-      sessionId,
+      transcriptTargetId: sessionId,
       role: 'assistant',
       text: JSON.stringify({ tool: call.toolName, input: call.input }),
       createdAt: new Date().toISOString(),
@@ -1050,7 +1054,7 @@ export class AgentLoop {
     });
     await this.deps.messages.append({
       id: newId('msg'),
-      sessionId,
+      transcriptTargetId: sessionId,
       role: 'tool',
       text: observation,
       createdAt: new Date().toISOString(),
@@ -1096,7 +1100,11 @@ export class AgentLoop {
    * still sum to the real total — and falls back to a local estimate when the provider returns
    * no usage. Clients group the itemized segments by category for the `/context` view.
    */
-  private async emitContextUsage(sessionId: SessionId, withTools: boolean, inputTokens?: number): Promise<void> {
+  private async emitContextUsage(
+    sessionId: TranscriptTargetId,
+    withTools: boolean,
+    inputTokens?: number
+  ): Promise<void> {
     const contextLimit = this.deps.contextLimit;
     if (!contextLimit) return;
 
@@ -1149,14 +1157,14 @@ export class AgentLoop {
   }
 
   private async beginTurn(
-    sessionId: SessionId,
+    sessionId: TranscriptTargetId,
     userText: string,
     modelInput?: PersistedModelInputOverride
   ): Promise<`msg_${string}`> {
     const userMessageId = newId('msg');
     await this.deps.messages.append({
       id: userMessageId,
-      sessionId,
+      transcriptTargetId: sessionId,
       role: 'user',
       text: userText,
       data: modelInput,
@@ -1177,7 +1185,7 @@ export class AgentLoop {
    * `settle(text)` writes the final content in place (append-fallback for non-streaming repos); it
    * returns false when the segment produced no text, so the caller can skip an empty row.
    */
-  private beginSegment(sessionId: SessionId, segmentId: `msg_${string}`, reasonBase: number) {
+  private beginSegment(sessionId: TranscriptTargetId, segmentId: `msg_${string}`, reasonBase: number) {
     let opened = false;
     let tokenIndex = 0;
     let reasonIndex = reasonBase;
@@ -1188,7 +1196,7 @@ export class AgentLoop {
           // Synchronous for the store-backed repo (bun:sqlite); a no-op for the in-memory repo.
           void this.deps.messages.open?.({
             id: segmentId,
-            sessionId,
+            transcriptTargetId: sessionId,
             role: 'assistant',
             text: '',
             createdAt: new Date().toISOString()
@@ -1203,7 +1211,7 @@ export class AgentLoop {
         if (!opened && text === '') return false;
         const message: ChatMessage = {
           id: segmentId,
-          sessionId,
+          transcriptTargetId: sessionId,
           role: 'assistant',
           text,
           createdAt: new Date().toISOString(),
@@ -1219,19 +1227,19 @@ export class AgentLoop {
   // Tools are offered to the model natively (function-calling), so the system prompt only
   // carries the L1 skill listing here; the model pulls a skill body via the `skill` tool.
   /** The base system prompt template: host instructions (or the default). */
-  private systemPromptTemplate(sessionId?: SessionId): string {
+  private systemPromptTemplate(sessionId?: TranscriptTargetId): string {
     const resolved =
       typeof this.deps.instructions === 'function' ? this.deps.instructions(sessionId) : this.deps.instructions;
     return resolved || DEFAULT_SYSTEM_PROMPT;
   }
 
-  private userPromptSlots(sessionId?: SessionId) {
+  private userPromptSlots(sessionId?: TranscriptTargetId) {
     const resolved =
       typeof this.deps.promptSlots === 'function' ? this.deps.promptSlots(sessionId) : this.deps.promptSlots;
     return resolved ?? {};
   }
 
-  private async buildPrompt(sessionId: SessionId, withTools = false): Promise<ModelMessage[]> {
+  private async buildPrompt(sessionId: TranscriptTargetId, withTools = false): Promise<ModelMessage[]> {
     let replayed: ModelMessage[];
     let summary: string | undefined;
     if (this.deps.history) {
@@ -1324,7 +1332,7 @@ export class AgentLoop {
   }
 
   private async finishTurn(
-    sessionId: SessionId,
+    sessionId: TranscriptTargetId,
     messageId: `msg_${string}`,
     text: string,
     usage?: AgentMessagePayload['usage'],
@@ -1333,7 +1341,7 @@ export class AgentLoop {
   ): Promise<ChatMessage> {
     const message: ChatMessage = {
       id: messageId,
-      sessionId,
+      transcriptTargetId: sessionId,
       role: 'assistant',
       text,
       createdAt: new Date().toISOString(),
@@ -1354,7 +1362,7 @@ export class AgentLoop {
    * record real usage/cost, self-calibrate the token estimator, emit `agent.message` and the
    * `context.usage` breakdown. The assistant row itself is written by the segment/finishTurn path. */
   private async finishBookkeeping(
-    sessionId: SessionId,
+    sessionId: TranscriptTargetId,
     messageId: `msg_${string}`,
     text: string,
     usage?: AgentMessagePayload['usage'],
@@ -1373,7 +1381,7 @@ export class AgentLoop {
    * by `maxStopContinues` so a hook can't loop forever. Fired exactly once per final-answer decision.
    */
   private async runStopHook(
-    sessionId: SessionId,
+    sessionId: TranscriptTargetId,
     text: string,
     usage?: ModelUsage,
     reason: 'completed' | 'aborted' = 'completed'
@@ -1398,20 +1406,24 @@ export class AgentLoop {
 
   /** Best-effort re-persist of a settled segment when a Stop hook rewrote the final text (the
    * streamed row was already settled with the original). No-op for repos without `settle`. */
-  private async repersistFinalText(sessionId: SessionId, messageId: `msg_${string}`, text: string): Promise<void> {
+  private async repersistFinalText(
+    sessionId: TranscriptTargetId,
+    messageId: `msg_${string}`,
+    text: string
+  ): Promise<void> {
     await this.deps.messages.settle?.(
-      { id: messageId, sessionId, role: 'assistant', text, createdAt: new Date().toISOString() },
+      { id: messageId, transcriptTargetId: sessionId, role: 'assistant', text, createdAt: new Date().toISOString() },
       'complete'
     );
   }
 
   /** Emit one reasoning/extended-thinking delta on its own channel (transient, not persisted). */
-  private emitReasoning(sessionId: SessionId, messageId: `msg_${string}`, delta: string, index: number): void {
+  private emitReasoning(sessionId: TranscriptTargetId, messageId: `msg_${string}`, delta: string, index: number): void {
     const payload: AgentReasoningPayload = { messageId, delta, index };
     this.deps.emit(this.event(sessionId, 'agent.reasoning', payload));
   }
 
-  private async emitError(sessionId: SessionId, messageId: string, err: unknown): Promise<void> {
+  private async emitError(sessionId: TranscriptTargetId, messageId: string, err: unknown): Promise<void> {
     const { code, message } = extractError(err);
     const text = code ? `[${code}] ${message}` : message;
     // Persist the failure as an assistant message so it survives in history and is visible even when
@@ -1419,7 +1431,7 @@ export class AgentLoop {
     // the model. Settle the row opened in beginTurn (→ error); repos without the lifecycle append it.
     const errMessage: ChatMessage = {
       id: messageId,
-      sessionId,
+      transcriptTargetId: sessionId,
       role: 'assistant',
       text,
       createdAt: new Date().toISOString(),
@@ -1447,10 +1459,10 @@ export class AgentLoop {
     });
   }
 
-  private event(sessionId: SessionId, type: EventType, payload: object): Event {
+  private event(sessionId: TranscriptTargetId, type: EventType, payload: object): Event {
     return {
       id: newId('evt'),
-      sessionId,
+      transcriptTargetId: sessionId,
       type,
       actorAgentId: null,
       payload: payload as Record<string, unknown>,

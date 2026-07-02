@@ -7,7 +7,7 @@ import type { ProjectController } from '../use-project';
 
 interface ProjectExperienceSnapshot extends ProjectCanvas {
   projectId: string;
-  sessionId: ProjectController['sessionId'];
+  activeProjectId: ProjectController['activeProjectId'];
   projects: ProjectController['projects'];
   railAgents: ProjectController['railAgents'];
   projectMembers: ProjectController['projectMembers'];
@@ -16,7 +16,6 @@ interface ProjectExperienceSnapshot extends ProjectCanvas {
   contextUsage: ProjectController['contextUsage'];
   modelProfiles: ProjectController['modelProfiles'];
   approvals: ProjectController['approvals'];
-  moderator: ProjectController['moderator'];
   workdir: ProjectController['workdir'];
   paused: ProjectController['paused'];
   mentionTargets: ProjectController['mentionTargets'];

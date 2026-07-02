@@ -1,7 +1,8 @@
 'use client';
 
+import { ComputerTerminal01Icon, ExternalLinkIcon, TextIcon } from '@hugeicons/core-free-icons';
+import { HugeiconsIcon } from '@hugeicons/react';
 import { cn } from '@monad/ui';
-import { ExternalLink, FileText, Terminal } from 'lucide-react';
 import { memo } from 'react';
 
 import { CodeInline } from '@/components/ai-elements/code-block';
@@ -448,7 +449,10 @@ function CodeExecDetails({ step, pendingLabel, isError }: { step: ToolItem; pend
       {code !== undefined && (
         <div className="overflow-hidden rounded-md border border-border/70 bg-zinc-950 text-zinc-100 shadow-inner">
           <div className="flex items-center gap-2 border-zinc-800 border-b bg-zinc-900 px-3 py-2 text-[11px] text-zinc-400">
-            <Terminal className="size-3.5" />
+            <HugeiconsIcon
+              className="size-3.5"
+              icon={ComputerTerminal01Icon}
+            />
             <span className="font-mono">{language ?? 'code'}</span>
             <span className="rounded bg-zinc-700/60 px-1.5 py-0.5 font-mono text-[10px]">{backendLabel(backend)}</span>
             {isHost && (
@@ -508,7 +512,10 @@ function ShellOutputBlock({ output, command }: { output: ShellOutput; command?: 
   return (
     <div className="overflow-hidden rounded-md border border-border/70 bg-zinc-950 text-zinc-100 shadow-inner">
       <div className="flex items-center gap-2 border-zinc-800 border-b bg-zinc-900 px-3 py-2 text-[11px] text-zinc-400">
-        <Terminal className="size-3.5" />
+        <HugeiconsIcon
+          className="size-3.5"
+          icon={ComputerTerminal01Icon}
+        />
         {command ? <ShellCommand command={command} /> : <span className="min-w-0 truncate font-mono">terminal</span>}
         <span
           className={cn(
@@ -567,7 +574,10 @@ function FileReadOutputBlock({ output, path }: { output: string; path?: string }
   return (
     <div className="overflow-hidden rounded-md border border-border/70 bg-background">
       <div className="flex items-center gap-2 border-border/70 border-b bg-muted/50 px-3 py-2 text-muted-foreground text-xs">
-        <FileText className="size-3.5" />
+        <HugeiconsIcon
+          className="size-3.5"
+          icon={TextIcon}
+        />
         <span className="min-w-0 truncate font-mono">{path ?? 'file'}</span>
       </div>
       <pre className="max-h-80 overflow-auto whitespace-pre p-3 font-mono text-[12px] text-foreground leading-relaxed">
@@ -595,7 +605,10 @@ function FileDiffOutputBlock({ display }: { display: DiffDisplay }) {
   return (
     <div className="overflow-hidden rounded-md border border-border/70 bg-background">
       <div className="flex items-center gap-2 border-border/70 border-b bg-muted/50 px-3 py-2 text-muted-foreground text-xs">
-        <FileText className="size-3.5" />
+        <HugeiconsIcon
+          className="size-3.5"
+          icon={TextIcon}
+        />
         <span className="min-w-0 truncate font-mono">{display.path}</span>
         <span className="ml-auto shrink-0 font-mono text-[11px]">
           <span className="text-emerald-500">+{added}</span>
@@ -662,7 +675,10 @@ const WebSearchResults = memo(function WebSearchResults({
                   target="_blank"
                 >
                   <span className="truncate">{r.title || hostname}</span>
-                  <ExternalLink className="size-2.5 shrink-0 text-muted-foreground/40" />
+                  <HugeiconsIcon
+                    className="size-2.5 shrink-0 text-muted-foreground/40"
+                    icon={ExternalLinkIcon}
+                  />
                 </a>
                 <div className="mt-0.5 truncate text-[10px] text-muted-foreground/50">{hostname}</div>
                 {r.snippet && (

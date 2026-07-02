@@ -171,7 +171,7 @@ export function createMemoryService(deps: MemoryServiceDeps): MemoryService {
 
   // The workspace scope for a session = `project:<key>` derived from its cwd; null when it has none.
   const projectScopeOf = (sessionId: SessionId): MemoryScope | null => {
-    const cwd = deps.store.getSession(sessionId)?.cwd;
+    const cwd = (deps.store.getSession(sessionId) ?? deps.store.getWorkplaceProject(sessionId))?.cwd;
     return cwd ? scopeOf('project', projectKey(cwd)) : null;
   };
 
@@ -384,9 +384,10 @@ export function createMemoryService(deps: MemoryServiceDeps): MemoryService {
       const r = deps.mem0Models();
       const qdrant = deps.qdrantStatus?.();
       const graph = deps.graphSettings?.();
-      // Distinct workspaces with memory, derived from session cwds (key → path), for the project picker.
+      // Distinct workspaces with memory, derived from transcript target cwds (key → path), for the project picker.
       const byKey = new Map<string, string>();
       for (const s of deps.store.listSessions()) if (s.cwd) byKey.set(projectKey(s.cwd), s.cwd);
+      for (const p of deps.store.listWorkplaceProjects()) if (p.cwd) byKey.set(projectKey(p.cwd), p.cwd);
       return {
         backend,
         mem0: { llm: r.llm, embedder: r.embedder, embedDim: r.dim, ready: Boolean(r.models), error: r.error ?? null },

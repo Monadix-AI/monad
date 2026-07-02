@@ -1,4 +1,4 @@
-import type { AcpAgentPresetView } from '@monad/protocol';
+import { type AcpAgentPresetView, listAcpAgentPresetsResponseSchema } from '@monad/protocol';
 
 import { clientOf, runTreaty } from '../../../endpoint-helpers.ts';
 import { sessionsApi } from '../../sessions/index.ts';
@@ -12,7 +12,7 @@ const listAcpAgentPresetsApi = sessionsApi.injectEndpoints({
       queryFn: (_arg, api: { extra: unknown }) =>
         runTreaty(
           () => clientOf(api).treaty.v1.settings['acp-agents'].presets.get(),
-          (raw) => raw.presets
+          (raw) => listAcpAgentPresetsResponseSchema.parse(raw).presets
         ),
       providesTags: ['AcpAgents']
     })

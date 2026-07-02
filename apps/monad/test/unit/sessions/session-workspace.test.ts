@@ -143,6 +143,17 @@ test('setWorkspace resolves a relative path against the session’s current fold
   h.store.close();
 });
 
+test('workspaceMeta wraps the git summary and workspaceGit remains a git-only alias', async () => {
+  const h = buildHandlers(mockModel());
+  const { sessionId } = await h.session.create({ title: 'room', cwd: tmpDir() });
+
+  await expect(h.session.workspaceMeta({ id: sessionId as SessionId })).resolves.toEqual({
+    git: { isRepo: false }
+  });
+  await expect(h.session.workspaceGit({ id: sessionId as SessionId })).resolves.toEqual({ isRepo: false });
+  h.store.close();
+});
+
 test('switching/clearing the folder drops the prior folder’s project skills (no stale carry-over)', async () => {
   const { store, ctx, handlers } = lifecycleCtx();
   const s = fixtureSession();

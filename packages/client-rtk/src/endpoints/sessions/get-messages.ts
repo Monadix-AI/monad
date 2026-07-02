@@ -1,4 +1,4 @@
-import type { ChatMessage, MessageId, SessionId } from '@monad/protocol';
+import type { ChatMessage, ListMessagesResponse, MessageId, SessionId } from '@monad/protocol';
 
 import { apiSlice } from '../../api-slice.ts';
 import { clientOf, runTreaty } from '../../endpoint-helpers.ts';
@@ -30,7 +30,7 @@ export const getMessagesApi = apiSlice.injectEndpoints({
                   includeInactive: false,
                   includeAncestors: false
                 }
-              }),
+              }) as Promise<{ data: ListMessagesResponse | null | undefined; error: unknown }>,
           (raw) => ({ messages: raw.messages.filter((m) => m.active), nextCursor: raw.nextCursor })
         ),
       providesTags: (_result, _error, sessionId) => [{ type: 'Messages', id: sessionId }]

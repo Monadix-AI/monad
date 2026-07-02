@@ -14,7 +14,8 @@ import type {
   SessionId,
   StartNativeCliAgentRequest,
   StartNativeCliAgentResponse,
-  StartNativeCliAuthResponse
+  StartNativeCliAuthResponse,
+  TranscriptTargetId
 } from '@monad/protocol';
 import type { NativeCliHost } from '@/services/native-cli/host.ts';
 import type { Store } from '@/store/db/index.ts';
@@ -22,6 +23,11 @@ import type { Store } from '@/store/db/index.ts';
 import { realpathSync } from 'node:fs';
 import { isAbsolute, relative, resolve } from 'node:path';
 import { loadAll } from '@monad/home';
+import {
+  getNativeCliSessionResponseSchema,
+  listNativeCliSessionsResponseSchema,
+  startNativeCliAgentResponseSchema
+} from '@monad/protocol';
 
 import { HandlerError } from '@/handlers/handler-error.ts';
 import { NativeCliError } from '@/services/native-cli/errors.ts';
@@ -72,25 +78,22 @@ export function createNativeCliModule({ paths, host, store }: NativeCliDeps) {
       request: StartNativeCliAgentRequest;
     }): Promise<StartNativeCliAgentResponse> {
       await requireConfig();
-      const projectSession = store.getSession(sessionId);
-      if (!projectSession) throw new HandlerError('not_found', `session not found: ${sessionId}`);
-      // When the project pins a working folder, the CLI must launch within it — mirrors the
-      // channel-routed path so the direct API can't start an agent outside the project root.
-      if (projectSession.cwd && !isWithin(projectSession.cwd, request.workingPath)) {
-        throw new HandlerError(
-          'invalid',
-          `workingPath must be within the session working directory: ${projectSession.cwd}`
-        );
+      const project = store.getSession(sessionId) ?? store.getWorkplaceProject(sessionId);
+      if (!project) throw new HandlerError('not_found', `project not found: ${sessionId}`);
+      // When the project pins a working folder, the CLI must launch within it so the direct API
+      // can't start an agent outside the project root.
+      if (project.cwd && !isWithin(project.cwd, request.workingPath)) {
+        throw new HandlerError('invalid', `workingPath must be within the project working directory: ${project.cwd}`);
       }
       const session = await host.start({
-        projectSessionId: sessionId,
+        transcriptTargetId: sessionId,
         agentName: request.agentName,
         workingPath: request.workingPath,
         launchMode: request.launchMode,
         runtimeRole: request.runtimeRole,
         providerSessionRef: request.providerSessionRef
       });
-      return { session };
+      return startNativeCliAgentResponseSchema.parse({ session });
     },
 
     input({ id, input }: { id: string } & NativeCliInputRequest): OkResponse {
@@ -99,11 +102,11 @@ export function createNativeCliModule({ paths, host, store }: NativeCliDeps) {
     },
 
     get({ id }: { id: string }): GetNativeCliSessionResponse {
-      return { session: host.get(id) };
+      return getNativeCliSessionResponseSchema.parse({ session: host.get(id) });
     },
 
-    list({ sessionId }: { sessionId: SessionId }): ListNativeCliSessionsResponse {
-      return host.list(sessionId);
+    list({ sessionId }: { sessionId: TranscriptTargetId }): ListNativeCliSessionsResponse {
+      return listNativeCliSessionsResponseSchema.parse(host.list(sessionId));
     },
 
     resize({ id, cols, rows }: { id: string } & NativeCliResizeRequest): OkResponse {

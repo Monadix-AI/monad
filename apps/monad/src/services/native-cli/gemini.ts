@@ -10,7 +10,10 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 
 import { defaultBinProbes, resolveBinary } from '@/infra/resolve-binary.ts';
+import { parseNativeCliArgumentSupport } from '@/services/native-cli/argument-support.ts';
 import { resizePty, sendPtyInput, stopPty } from '@/services/native-cli/pty.ts';
+
+const GEMINI_SUPPORTED_MODELS = ['gemini-2.5-pro', 'gemini-2.5-flash'];
 
 function hasFlag(args: string[], flag: string): boolean {
   return args.some((arg) => arg === flag || arg.startsWith(`${flag}=`));
@@ -23,12 +26,22 @@ function withGeminiStreamJsonArgs(args: string[]): string[] {
   return next;
 }
 
+function withGeminiSkipApprovalArgs(args: string[], skipProviderApprovals: boolean): string[] {
+  if (!skipProviderApprovals || hasFlag(args, '--approval-mode') || hasFlag(args, '--yolo')) return args;
+  return [...args, '--approval-mode=yolo'];
+}
+
 function buildGeminiLaunch(agent: NativeCliAgentView, opts: BuildNativeCliLaunchOptions): NativeCliLaunchSpec {
   const launchMode = opts.launchMode ?? agent.defaultLaunchMode;
-  const args = [...(agent.args ?? [])];
+  let args = [...(agent.args ?? [])];
   if (opts.providerSessionRef && !hasFlag(args, '--resume') && !hasFlag(args, '-r')) {
     args.push('--resume', opts.providerSessionRef);
   }
+  const modelId = opts.modelId ?? opts.modelName;
+  if (modelId && !hasFlag(args, '--model') && !hasFlag(args, '-m')) {
+    args.push('--model', modelId);
+  }
+  args = withGeminiSkipApprovalArgs(args, !!opts.skipProviderApprovals);
   const launchArgs = launchMode === 'json-stream' ? withGeminiStreamJsonArgs(args) : args;
   return {
     argv: [agent.command, ...launchArgs],
@@ -44,6 +57,55 @@ function buildGeminiLaunch(agent: NativeCliAgentView, opts: BuildNativeCliLaunch
 function buildGeminiAuthLaunch(agent: NativeCliAgentView, args: string[]): NativeCliLaunchSpec {
   return {
     argv: [agent.command, ...args],
+    cwd: homedir(),
+    env: {
+      TERM: 'xterm-256color',
+      COLORTERM: 'truecolor',
+      ...agent.env,
+      NO_BROWSER: 'true'
+    },
+    launchMode: 'pty',
+    provider: 'gemini',
+    approvalOwnership: 'provider-owned',
+    capabilities: ['pty', 'provider-approval']
+  };
+}
+
+function buildGeminiAuthStatusLaunch(agent: NativeCliAgentView): NativeCliLaunchSpec {
+  void agent;
+  const script = String.raw`
+const { existsSync, readFileSync } = require('node:fs');
+const { homedir } = require('node:os');
+const { join } = require('node:path');
+
+function readJson(path) {
+  try {
+    return JSON.parse(readFileSync(path, 'utf8'));
+  } catch {
+    return undefined;
+  }
+}
+
+const home = homedir();
+const settings = readJson(join(home, '.gemini', 'settings.json'));
+const accounts = readJson(join(home, '.gemini', 'google_accounts.json'));
+const selectedType = settings?.security?.auth?.selectedType;
+const hasApiKey = Boolean(process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY);
+const hasActiveGoogleAccount = typeof accounts?.active === 'string' && accounts.active.length > 0;
+const hasAdc =
+  (process.env.GOOGLE_APPLICATION_CREDENTIALS && existsSync(process.env.GOOGLE_APPLICATION_CREDENTIALS)) ||
+  existsSync(join(home, '.config', 'gcloud', 'application_default_credentials.json'));
+
+let state = 'unknown';
+if (hasApiKey || hasActiveGoogleAccount || hasAdc) state = 'authenticated';
+else if (selectedType === 'oauth-personal' || selectedType === 'gemini-api-key' || selectedType === 'vertex-ai') {
+  state = 'unauthenticated';
+}
+
+process.stdout.write(JSON.stringify({ state }) + '\n');
+`;
+  return {
+    argv: [process.execPath, '--eval', script],
     cwd: homedir(),
     env: agent.env,
     launchMode: 'pty',
@@ -145,7 +207,7 @@ function parseGeminiStreamJson(chunk: string): NativeCliOutputEvent[] {
 
     if (record.type === 'result') {
       const text = stringValue(record.response, record.result, record.text);
-      if (text) events.push({ type: 'agent_message', payload: { text } });
+      if (text) events.push({ type: 'agent_message', payload: { text, final: true } });
     }
   }
   return events;
@@ -187,6 +249,7 @@ function resolveGeminiApproval(
 
 export const geminiNativeCliAdapter: NativeCliProviderAdapter = {
   provider: 'gemini',
+  productIcon: 'gemini',
   detect(probes = defaultBinProbes) {
     const geminiBin = resolveBinary('gemini', [], probes);
     const installed = geminiBin !== undefined || probes.exists(join(homedir(), '.gemini'));
@@ -194,8 +257,10 @@ export const geminiNativeCliAdapter: NativeCliProviderAdapter = {
       id: 'gemini',
       label: 'Gemini CLI',
       provider: 'gemini',
+      productIcon: geminiNativeCliAdapter.productIcon,
       command: 'gemini',
       args: [],
+      modelOptions: geminiNativeCliAdapter.listSupportedModels(),
       defaultLaunchMode: 'pty',
       supportedLaunchModes: ['pty', 'json-stream'],
       installHint: 'Install Gemini CLI, then complete its provider-owned authentication flow.',
@@ -213,12 +278,27 @@ export const geminiNativeCliAdapter: NativeCliProviderAdapter = {
   resolveCommand(command, probes = defaultBinProbes) {
     return resolveBinary(command, [], probes);
   },
+  listSupportedModels(agent) {
+    return agent?.modelOptions?.length ? agent.modelOptions : GEMINI_SUPPORTED_MODELS;
+  },
   buildLaunch: buildGeminiLaunch,
   buildAuthLaunch(agent) {
     return buildGeminiAuthLaunch(agent, []);
   },
   buildAuthStatusLaunch(agent) {
-    return buildGeminiAuthLaunch(agent, ['--list-sessions']);
+    return buildGeminiAuthStatusLaunch(agent);
+  },
+  authStatus(agent) {
+    return {
+      launch: buildGeminiAuthStatusLaunch(agent),
+      parse: (output, exitCode) => geminiNativeCliAdapter.parseAuthStatus(output, exitCode)
+    };
+  },
+  argumentSupport(agent) {
+    return {
+      launch: buildGeminiAuthLaunch(agent, ['--help']),
+      parse: (output) => parseNativeCliArgumentSupport(output)
+    };
   },
   parseAuthStatus(output, exitCode) {
     const structured = parseStructuredAuthState(output);

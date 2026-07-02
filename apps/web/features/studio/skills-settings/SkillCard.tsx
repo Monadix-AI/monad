@@ -1,26 +1,29 @@
 import type { InstalledSkill, SkillListInstance, SkillUpdate } from '@monad/protocol';
 import type { ReactNode } from 'react';
 
+import {
+  BoxIcon,
+  CalendarDaysIcon,
+  CircleSlash2Icon,
+  Delete02Icon,
+  ExternalLinkIcon,
+  GitBranchIcon,
+  GitCommitIcon,
+  GitForkIcon,
+  LoaderPinwheelIcon,
+  PencilEdit01Icon,
+  SquareArrowUp01Icon
+} from '@hugeicons/core-free-icons';
+import { HugeiconsIcon } from '@hugeicons/react';
 import { useRemoveSkillMutation, useUpdateSkillMutation } from '@monad/client-rtk';
 import { Badge, Button, cn, Switch, Tooltip, TooltipContent, TooltipTrigger } from '@monad/ui';
-import {
-  ArrowUpCircle,
-  Box,
-  CalendarDays,
-  CircleSlash,
-  ExternalLink,
-  GitBranch,
-  GitCommit,
-  GitFork,
-  Loader2,
-  Pencil,
-  Trash2
-} from 'lucide-react';
 import { useState } from 'react';
 
+import { HoverActions } from '@/components/HoverActions';
 import { useT } from '@/components/I18nProvider';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { renderableIconText } from '@/lib/renderable-icon-text';
 import { GitHubMark } from './GitHubMark';
 import { formatDate, githubRefKind, githubRepositoryHref, githubSourceDetails, isHttpIcon } from './utils';
 
@@ -80,7 +83,10 @@ function GitHubRepositoryRow({ address, label, openLabel }: { address: string; l
           rel="noreferrer"
           target="_blank"
         >
-          <ExternalLink className="size-3" />
+          <HugeiconsIcon
+            className="size-3"
+            icon={ExternalLinkIcon}
+          />
         </a>
       </span>
     </div>
@@ -129,12 +135,10 @@ export function SkillCard({
   const canManageInstalled = skill.sourceKind === 'global';
   const version = skill.version ?? installed?.version;
   const icon = skill.icon ?? installed?.icon;
+  const textIcon = renderableIconText(icon);
   const packName = atomPackName(skill);
   const pillClass = 'px-1.5 py-0 text-[9px] leading-3';
   const keepActionsVisible = Boolean(confirmRemove || removing || updating || editing);
-  const actionVisibility = keepActionsVisible
-    ? 'opacity-100 pointer-events-auto'
-    : 'pointer-events-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100';
   const renderSkillCard = ({
     article,
     body,
@@ -156,10 +160,13 @@ export function SkillCard({
               className="size-full bg-center bg-cover"
               style={{ backgroundImage: `url("${encodeURI(icon ?? '').replace(/"/g, '%22')}")` }}
             />
-          ) : icon ? (
-            <span className="truncate px-1">{icon}</span>
+          ) : textIcon ? (
+            <span className="truncate px-1">{textIcon}</span>
           ) : (
-            <Box className="size-4 text-muted-foreground" />
+            <HugeiconsIcon
+              className="size-4 text-muted-foreground"
+              icon={BoxIcon}
+            />
           )}
         </div>
         <div className="min-w-0 flex-1">
@@ -197,9 +204,15 @@ export function SkillCard({
                           <GitHubMetadataRow
                             icon={
                               githubRefKindValue === 'main' ? (
-                                <GitFork className="size-3" />
+                                <HugeiconsIcon
+                                  className="size-3"
+                                  icon={GitForkIcon}
+                                />
                               ) : (
-                                <GitBranch className="size-3" />
+                                <HugeiconsIcon
+                                  className="size-3"
+                                  icon={GitBranchIcon}
+                                />
                               )
                             }
                             label={t('web.skills.githubRef')}
@@ -207,14 +220,24 @@ export function SkillCard({
                           />
                           {installed?.commit ? (
                             <GitHubMetadataRow
-                              icon={<GitCommit className="size-3" />}
+                              icon={
+                                <HugeiconsIcon
+                                  className="size-3"
+                                  icon={GitCommitIcon}
+                                />
+                              }
                               label={t('web.skills.githubCommit')}
                               value={installed.commit.slice(0, 7)}
                             />
                           ) : null}
                           {installedAt ? (
                             <GitHubMetadataRow
-                              icon={<CalendarDays className="size-3" />}
+                              icon={
+                                <HugeiconsIcon
+                                  className="size-3"
+                                  icon={CalendarDaysIcon}
+                                />
+                              }
                               label={t('web.skills.githubInstalledAt')}
                               value={<span className="font-sans">{installedAt}</span>}
                             />
@@ -249,18 +272,19 @@ export function SkillCard({
                     className={cn('gap-1', pillClass)}
                     variant="outline"
                   >
-                    <CircleSlash className="size-3 text-muted-foreground" />
+                    <HugeiconsIcon
+                      className="size-3 text-muted-foreground"
+                      icon={CircleSlash2Icon}
+                    />
                     {t('web.skills.unavailable')}
                   </Badge>
                 ) : null}
               </div>
             </div>
-            <div
-              className={cn(
-                'flex shrink-0 items-center gap-1 transition-opacity duration-150 ease-out',
-                actionVisibility
-              )}
+            <HoverActions
+              className="gap-1 duration-150 ease-out"
               data-slot="skill-card-actions"
+              visible={keepActionsVisible}
             >
               {canManageInstalled && hasUpdate ? (
                 <Tooltip>
@@ -278,9 +302,15 @@ export function SkillCard({
                         variant="secondary"
                       >
                         {updating ? (
-                          <Loader2 className="size-3.5 animate-spin text-foreground" />
+                          <HugeiconsIcon
+                            className="size-3.5 animate-spin text-foreground"
+                            icon={LoaderPinwheelIcon}
+                          />
                         ) : (
-                          <ArrowUpCircle className="size-3.5" />
+                          <HugeiconsIcon
+                            className="size-3.5"
+                            icon={SquareArrowUp01Icon}
+                          />
                         )}
                         {t('web.skills.update')}
                       </Button>
@@ -298,9 +328,15 @@ export function SkillCard({
                 variant="ghost"
               >
                 {editing ? (
-                  <Loader2 className="size-3.5 animate-spin text-foreground" />
+                  <HugeiconsIcon
+                    className="size-3.5 animate-spin text-foreground"
+                    icon={LoaderPinwheelIcon}
+                  />
                 ) : (
-                  <Pencil className="size-3.5" />
+                  <HugeiconsIcon
+                    className="size-3.5"
+                    icon={PencilEdit01Icon}
+                  />
                 )}
               </Button>
               {canManageInstalled ? (
@@ -315,7 +351,10 @@ export function SkillCard({
                       size="icon"
                       variant="ghost"
                     >
-                      <Trash2 className="size-3.5" />
+                      <HugeiconsIcon
+                        className="size-3.5"
+                        icon={Delete02Icon}
+                      />
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent
@@ -325,7 +364,10 @@ export function SkillCard({
                   >
                     <div className="flex flex-col gap-3">
                       <div className="flex items-start gap-2">
-                        <Trash2 className="mt-0.5 size-4 shrink-0 text-destructive" />
+                        <HugeiconsIcon
+                          className="mt-0.5 size-4 shrink-0 text-destructive"
+                          icon={Delete02Icon}
+                        />
                         <div className="min-w-0">
                           <div className="font-medium text-sm">{t('web.skills.confirmRemove')}</div>
                         </div>
@@ -350,7 +392,17 @@ export function SkillCard({
                           size="sm"
                           variant="destructive"
                         >
-                          {removing ? <Loader2 className="size-3.5 animate-spin" /> : <Trash2 className="size-3.5" />}
+                          {removing ? (
+                            <HugeiconsIcon
+                              className="size-3.5 animate-spin"
+                              icon={LoaderPinwheelIcon}
+                            />
+                          ) : (
+                            <HugeiconsIcon
+                              className="size-3.5"
+                              icon={Delete02Icon}
+                            />
+                          )}
                           {t('web.skills.remove')}
                         </Button>
                       </div>
@@ -358,7 +410,7 @@ export function SkillCard({
                   </PopoverContent>
                 </Popover>
               ) : null}
-            </div>
+            </HoverActions>
           </div>
           <p className={description}>{skill.description || t('web.skills.noDescription')}</p>
         </div>

@@ -81,7 +81,7 @@ export const RPC_HANDLERS: RpcHandlerMap = {
         push({
           jsonrpc: '2.0',
           method: 'sessions.event',
-          params: { sessionId: event.sessionId, event }
+          params: { sessionId: event.transcriptTargetId, event }
         });
       };
       const { dispose } = h.session.subscribeControl(sink);

@@ -1,26 +1,25 @@
 'use client';
 
-import type { LucideIcon } from 'lucide-react';
-
 import {
-  Braces,
-  Database,
-  File,
-  FileArchive,
-  FileAudio,
-  FileCode,
-  FileCog,
-  FileImage,
-  FileJson,
-  FileLock,
-  FileSpreadsheet,
-  FileText,
-  FileType,
-  FileVideo,
-  FileX,
-  Settings,
-  Terminal
-} from 'lucide-react';
+  BracesIcon,
+  ComputerTerminal01Icon,
+  DatabaseIcon,
+  File01Icon,
+  FileArchiveIcon,
+  FileAudioIcon,
+  FileBracesIcon,
+  FileCodeIcon,
+  FileCogIcon,
+  FileImageIcon,
+  FileLockIcon,
+  FileSpreadsheetIcon,
+  FileTypeIcon,
+  FileVideoIcon,
+  FileXIcon,
+  Settings02Icon,
+  TextIcon
+} from '@hugeicons/core-free-icons';
+import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react';
 
 type FilePreviewKind = 'image' | 'text' | 'unsupported';
 
@@ -78,29 +77,29 @@ function extensionOf(fileName: string): string {
   return dot > 0 ? baseName.slice(dot + 1) : '';
 }
 
-function getFileIconForName({ contentType, fileName, preview }: FileIconInput): LucideIcon {
+function getFileIconForName({ contentType, fileName, preview }: FileIconInput): IconSvgElement {
   const baseName = fileName.split('/').pop()?.toLowerCase() ?? fileName.toLowerCase();
   const ext = extensionOf(fileName);
   const type = contentType?.toLowerCase() ?? '';
 
-  if (baseName === 'skill.md') return FileText;
-  if (configNames.has(baseName)) return Settings;
-  if (preview === 'unsupported') return FileX;
-  if (preview === 'image' || type.startsWith('image/') || imageExtensions.has(ext)) return FileImage;
-  if (type.startsWith('audio/') || audioExtensions.has(ext)) return FileAudio;
-  if (type.startsWith('video/') || videoExtensions.has(ext)) return FileVideo;
-  if (archiveExtensions.has(ext)) return FileArchive;
-  if (fontExtensions.has(ext)) return FileType;
-  if (spreadsheetExtensions.has(ext)) return FileSpreadsheet;
-  if (dataExtensions.has(ext)) return Database;
-  if (shellExtensions.has(ext)) return Terminal;
-  if (ext === 'json' || ext === 'jsonc' || ext === 'jsonl') return FileJson;
-  if (ext === 'yaml' || ext === 'yml' || ext === 'toml') return Braces;
-  if (baseName.includes('secret') || baseName.includes('credential') || baseName.includes('key')) return FileLock;
-  if (codeExtensions.has(ext)) return FileCode;
-  if (preview === 'text' || type.startsWith('text/') || textExtensions.has(ext)) return FileText;
-  if (baseName.endsWith('config')) return FileCog;
-  return File;
+  if (baseName === 'skill.md') return TextIcon;
+  if (configNames.has(baseName)) return Settings02Icon;
+  if (preview === 'unsupported') return FileXIcon;
+  if (preview === 'image' || type.startsWith('image/') || imageExtensions.has(ext)) return FileImageIcon;
+  if (type.startsWith('audio/') || audioExtensions.has(ext)) return FileAudioIcon;
+  if (type.startsWith('video/') || videoExtensions.has(ext)) return FileVideoIcon;
+  if (archiveExtensions.has(ext)) return FileArchiveIcon;
+  if (fontExtensions.has(ext)) return FileTypeIcon;
+  if (spreadsheetExtensions.has(ext)) return FileSpreadsheetIcon;
+  if (dataExtensions.has(ext)) return DatabaseIcon;
+  if (shellExtensions.has(ext)) return ComputerTerminal01Icon;
+  if (ext === 'json' || ext === 'jsonc' || ext === 'jsonl') return FileBracesIcon;
+  if (ext === 'yaml' || ext === 'yml' || ext === 'toml') return BracesIcon;
+  if (baseName.includes('secret') || baseName.includes('credential') || baseName.includes('key')) return FileLockIcon;
+  if (codeExtensions.has(ext)) return FileCodeIcon;
+  if (preview === 'text' || type.startsWith('text/') || textExtensions.has(ext)) return TextIcon;
+  if (baseName.endsWith('config')) return FileCogIcon;
+  return File01Icon;
 }
 
 export function FileIcon({
@@ -112,5 +111,10 @@ export function FileIcon({
   className?: string;
 }) {
   const Icon = getFileIconForName({ contentType, fileName, preview });
-  return <Icon className={className} />;
+  return (
+    <HugeiconsIcon
+      className={className}
+      icon={Icon}
+    />
+  );
 }

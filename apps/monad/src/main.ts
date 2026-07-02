@@ -180,7 +180,7 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
   const { sandboxRoots, sessionSandbox } = await createSandbox(cfg, paths, store, startupAuth);
 
   const bus = new EventBus();
-  const cache = new RoundCache(kv);
+  const cache = new RoundCache();
   const { oversight, clarify, reloadApprovalPolicy } = await createInterruptServices({ paths, cfg, store, bus });
   // Kill any adapter processes that were live when the daemon last stopped and mark their rows evicted.
   store.reconcileOrphanedDelegates();

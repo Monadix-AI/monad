@@ -7,6 +7,7 @@ import {
   buildManagedProjectCliWrapperScript,
   cleanupManagedProjectOrphanTokens,
   managedProjectCliWrapperName,
+  managedProjectLaunchMode,
   prepareManagedProjectRuntime
 } from '@/services/native-cli/managed-project.ts';
 
@@ -44,7 +45,7 @@ test('managed project runtime uses the platform wrapper filename', async () => {
     monadHome,
     serverUrl: 'http://127.0.0.1:1234',
     agentName: 'codex',
-    projectSessionId: 'ses_PROJECT',
+    projectId: 'prj_PROJECT',
     nativeCliSessionId: 'ncli_windows',
     provider: 'codex',
     platform: 'win32'
@@ -52,6 +53,28 @@ test('managed project runtime uses the platform wrapper filename', async () => {
 
   expect(prepared.wrapperBin.endsWith(`${managedProjectCliWrapperName('win32')}`)).toBe(true);
   expect(await readFile(prepared.wrapperBin, 'utf8')).toStartWith('@echo off\r\n');
+});
+
+test('managed project runtime uses non-interactive Codex launches', () => {
+  const monadHome = join(tmpdir(), `monad-managed-runtime-${Date.now()}-${process.hrtime.bigint()}`);
+  const prepared = prepareManagedProjectRuntime({
+    monadHome,
+    serverUrl: 'http://127.0.0.1:1234',
+    agentName: 'codex',
+    projectId: 'prj_PROJECT',
+    nativeCliSessionId: 'ncli_codex',
+    provider: 'codex'
+  });
+
+  expect(prepared.env.CODEX_NON_INTERACTIVE).toBe('1');
+});
+
+test('managed project runtime prefers structured launch modes over interactive PTY', () => {
+  expect(managedProjectLaunchMode({ provider: 'codex', defaultLaunchMode: 'pty' }, 'pty')).toBe('app-server');
+  expect(managedProjectLaunchMode({ provider: 'claude-code', defaultLaunchMode: 'pty' }, 'pty')).toBe('json-stream');
+  expect(managedProjectLaunchMode({ provider: 'gemini', defaultLaunchMode: 'pty' }, 'pty')).toBe('json-stream');
+  expect(managedProjectLaunchMode({ provider: 'qwen', defaultLaunchMode: 'pty' }, 'pty')).toBe('json-stream');
+  expect(managedProjectLaunchMode({ provider: 'codex', defaultLaunchMode: 'pty' }, 'app-server')).toBe('app-server');
 });
 
 test('managed project runtime rejects agent names that escape the project workspace', async () => {
@@ -63,7 +86,7 @@ test('managed project runtime rejects agent names that escape the project worksp
       monadHome,
       serverUrl: 'http://127.0.0.1:1234',
       agentName: '../../escaped-agent',
-      projectSessionId: 'ses_PROJECT',
+      projectId: 'prj_PROJECT',
       nativeCliSessionId: 'ncli_escape',
       provider: 'codex'
     })
@@ -78,7 +101,7 @@ test('managed project runtime rotates its agent token for each prepared native C
     monadHome,
     serverUrl: 'http://127.0.0.1:1234',
     agentName: 'codex',
-    projectSessionId: 'ses_PROJECT',
+    projectId: 'prj_PROJECT',
     nativeCliSessionId: 'ncli_first',
     provider: 'codex'
   });
@@ -87,7 +110,7 @@ test('managed project runtime rotates its agent token for each prepared native C
     monadHome,
     serverUrl: 'http://127.0.0.1:1234',
     agentName: 'codex',
-    projectSessionId: 'ses_PROJECT',
+    projectId: 'prj_PROJECT',
     nativeCliSessionId: 'ncli_second',
     provider: 'codex'
   });
@@ -96,9 +119,27 @@ test('managed project runtime rotates its agent token for each prepared native C
   expect(second.tokenHash).not.toBe(first.tokenHash);
 });
 
+test('managed project runtime writes the prompt file it returns', async () => {
+  const monadHome = join(tmpdir(), `monad-managed-runtime-${Date.now()}-${process.hrtime.bigint()}`);
+  const prepared = prepareManagedProjectRuntime({
+    monadHome,
+    serverUrl: 'http://127.0.0.1:1234',
+    agentName: 'codex',
+    displayName: 'Reviewer',
+    projectId: 'prj_PROJECT',
+    nativeCliSessionId: 'ncli_prompt',
+    provider: 'codex',
+    modelId: 'gpt-5.5',
+    reasoningEffort: 'high',
+    speed: 'fast'
+  });
+
+  expect(await readFile(prepared.promptFile, 'utf8')).toBe(prepared.prompt);
+});
+
 test('managed project runtime recreates token files with owner-only permissions', async () => {
   const monadHome = join(tmpdir(), `monad-managed-runtime-${Date.now()}-${process.hrtime.bigint()}`);
-  const workspace = join(monadHome, 'workplace-agents', 'ses_PROJECT', 'codex');
+  const workspace = join(monadHome, 'workplace-agents', 'prj_PROJECT', 'codex');
   await mkdir(workspace, { recursive: true });
   const tokenFile = join(workspace, '.monad-agent-token');
   await writeFile(tokenFile, 'stale-token');
@@ -108,7 +149,7 @@ test('managed project runtime recreates token files with owner-only permissions'
     monadHome,
     serverUrl: 'http://127.0.0.1:1234',
     agentName: 'codex',
-    projectSessionId: 'ses_PROJECT',
+    projectId: 'prj_PROJECT',
     nativeCliSessionId: 'ncli_first',
     provider: 'codex'
   });
@@ -120,7 +161,7 @@ test('managed project runtime recreates token files with owner-only permissions'
 
 test('managed project orphan token cleanup removes stale runtime tokens without deleting memory', async () => {
   const monadHome = join(tmpdir(), `monad-managed-runtime-${Date.now()}-${process.hrtime.bigint()}`);
-  const workspace = join(monadHome, 'workplace-agents', 'ses_PROJECT', 'codex');
+  const workspace = join(monadHome, 'workplace-agents', 'prj_PROJECT', 'codex');
   await mkdir(workspace, { recursive: true });
   await writeFile(join(workspace, '.monad-agent-token'), 'stale-token');
   await writeFile(join(workspace, 'MEMORY.md'), '# durable memory\n');

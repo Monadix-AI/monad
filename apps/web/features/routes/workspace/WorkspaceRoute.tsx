@@ -1,12 +1,14 @@
 'use client';
 
-import type { Session, SessionId } from '@monad/protocol';
+import type { ProjectId, Session } from '@monad/protocol';
+import type { ProjectController } from '@/features/workplace/use-project';
 
 import { useListWorkspaceExperiencesQuery } from '@monad/client-rtk';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 
 import { listProjectExperiences, toProjectExperienceDefinitions } from '@/features/workplace/experiences/registry';
 import { Workplace } from '@/features/workplace/Workplace';
+import { useWorkplaceUiStore } from '@/features/workplace/workplace-ui-store';
 import { ProjectTopBar } from './ProjectTopBar';
 import { useProjectViewMode } from './use-project-view-mode';
 import { WorkspaceHome } from './WorkspaceHome';
@@ -14,11 +16,12 @@ import { WorkspaceHome } from './WorkspaceHome';
 interface WorkspaceRouteProps {
   activeProjectId: string | null;
   agentSession: Session | null;
-  projects: { id: string; name: string }[];
+  projects: { id: string; name: string; cwd?: string }[];
   onNewAgentChat: () => void;
   onNewProject: () => void;
   onOpenAgentChat: () => void;
   onOpenProject: (projectId: string) => void;
+  onProjectDeleted: () => void;
   onOpenSettings: () => void;
   onOpenStudio: () => void;
 }
@@ -31,20 +34,25 @@ export function WorkspaceRoute({
   onNewProject,
   onOpenAgentChat,
   onOpenProject,
+  onProjectDeleted,
   onOpenSettings,
   onOpenStudio
 }: WorkspaceRouteProps) {
   const [mode, setMode] = useProjectViewMode(activeProjectId);
-  const [projectSettingsOpen, setProjectSettingsOpen] = useState(false);
+  const [activeProjectController, setActiveProjectController] = useState<ProjectController | null>(null);
+  const openProjectSettingsInStore = useWorkplaceUiStore((state) => state.openProjectSettings);
   const { data: workspaceExperiences } = useListWorkspaceExperiencesQuery(undefined, { skip: !activeProjectId });
   const experiences = listProjectExperiences(toProjectExperienceDefinitions(workspaceExperiences?.experiences ?? []));
-  const projectName = projects.find((p) => p.id === activeProjectId)?.name ?? activeProjectId ?? 'Project';
+  const activeProject = projects.find((p) => p.id === activeProjectId);
+  const projectName = activeProject?.name ?? activeProjectId ?? 'Project';
+  const openProjectSettings = useCallback(() => {
+    if (activeProjectId) openProjectSettingsInStore(activeProjectId);
+  }, [activeProjectId, openProjectSettingsInStore]);
+  const updateProjectController = useCallback((project: ProjectController) => {
+    setActiveProjectController(project);
+  }, []);
 
   if (activeProjectId) {
-    const openProjectSettings = () => {
-      setProjectSettingsOpen(true);
-    };
-
     // The active project experience owns the whole workplace region below the top bar, including its
     // composer and secondary rails. The top bar stays host-owned so runtime switching remains stable.
     return (
@@ -59,9 +67,10 @@ export function WorkspaceRoute({
             mode={mode}
             onModeChange={setMode}
             onOpenSettings={openProjectSettings}
+            participants={activeProjectController?.participants ?? []}
+            projectId={activeProjectId as ProjectId}
             projectName={projectName}
-            sessionId={activeProjectId as SessionId}
-            status="Active"
+            projectWorkdir={activeProject?.cwd}
           />
           <div className="g1-chatroom-body">
             <Workplace
@@ -70,9 +79,9 @@ export function WorkspaceRoute({
               key={activeProjectId}
               mode={mode}
               onModeChange={setMode}
-              onProjectSettingsOpenChange={setProjectSettingsOpen}
+              onProjectControllerChange={updateProjectController}
+              onProjectDeleted={onProjectDeleted}
               projectId={activeProjectId}
-              projectSettingsOpen={projectSettingsOpen}
             />
           </div>
         </div>

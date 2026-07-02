@@ -1,8 +1,9 @@
 'use client';
 
+import { Cancel01Icon, ExternalLinkIcon, JusticeScaleIcon } from '@hugeicons/core-free-icons';
+import { HugeiconsIcon } from '@hugeicons/react';
 import { useListLicensesQuery } from '@monad/client-rtk';
 import { Button, Input } from '@monad/ui';
-import { ExternalLink, Scale, X } from 'lucide-react';
 import { useState } from 'react';
 
 import { useT } from '@/components/I18nProvider';
@@ -24,11 +25,52 @@ export function LicensesSettings({ onClose }: Props) {
       )
     : packages;
 
+  const renderLicenses = () =>
+    isLoading ? (
+      <p className="text-muted-foreground text-sm">{t('web.licenses.loading')}</p>
+    ) : filtered.length === 0 ? (
+      <p className="text-muted-foreground text-sm">{t('web.licenses.empty')}</p>
+    ) : (
+      <div className="licenses-list">
+        {filtered.map((pkg) => (
+          <div
+            className="licenses-row"
+            key={pkg.name}
+          >
+            <div className="licenses-package flex min-w-0 flex-col">
+              <span className="licenses-name truncate font-mono text-sm">{pkg.name}</span>
+              <span className="licenses-version text-muted-foreground text-xs">{pkg.version}</span>
+            </div>
+            <div className="licenses-meta flex shrink-0 items-center gap-2">
+              <span className="licenses-badge">{pkg.license}</span>
+              {pkg.homepage && (
+                <a
+                  aria-label={`${pkg.name} homepage`}
+                  className="licenses-link"
+                  href={pkg.homepage}
+                  rel="noreferrer"
+                  target="_blank"
+                >
+                  <HugeiconsIcon
+                    className="size-3.5"
+                    icon={ExternalLinkIcon}
+                  />
+                </a>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+
   return (
-    <div className="flex min-w-0 flex-1 flex-col">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       <div className="flex items-center justify-between border-b px-6 py-4">
         <div className="flex items-center gap-2">
-          <Scale className="size-4 text-muted-foreground" />
+          <HugeiconsIcon
+            className="size-4 text-muted-foreground"
+            icon={JusticeScaleIcon}
+          />
           <span className="font-semibold text-sm">{t('web.licenses.title')}</span>
           {filtered.length > 0 && (
             <span className="rounded-full bg-muted px-2 py-0.5 text-muted-foreground text-xs">{filtered.length}</span>
@@ -41,7 +83,7 @@ export function LicensesSettings({ onClose }: Props) {
           size="icon"
           variant="ghost"
         >
-          <X />
+          <HugeiconsIcon icon={Cancel01Icon} />
         </Button>
       </div>
 
@@ -54,40 +96,7 @@ export function LicensesSettings({ onClose }: Props) {
         />
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-6">
-        {isLoading ? (
-          <p className="text-muted-foreground text-sm">{t('web.licenses.loading')}</p>
-        ) : filtered.length === 0 ? (
-          <p className="text-muted-foreground text-sm">{t('web.licenses.empty')}</p>
-        ) : (
-          <div className="flex flex-col gap-1">
-            {filtered.map((pkg) => (
-              <div
-                className="flex items-center justify-between rounded-md px-2 py-2 hover:bg-muted/50"
-                key={pkg.name}
-              >
-                <div className="flex min-w-0 flex-col">
-                  <span className="truncate font-mono text-sm">{pkg.name}</span>
-                  <span className="text-muted-foreground text-xs">{pkg.version}</span>
-                </div>
-                <div className="flex shrink-0 items-center gap-2">
-                  <span className="rounded border px-1.5 py-0.5 font-medium text-xs">{pkg.license}</span>
-                  {pkg.homepage && (
-                    <a
-                      className="text-muted-foreground hover:text-foreground"
-                      href={pkg.homepage}
-                      rel="noreferrer"
-                      target="_blank"
-                    >
-                      <ExternalLink className="size-3.5" />
-                    </a>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+      <div className="licenses-scroll min-h-0 flex-1 overflow-y-auto px-6 pb-6">{renderLicenses()}</div>
     </div>
   );
 }

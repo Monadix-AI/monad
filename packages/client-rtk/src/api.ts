@@ -10,6 +10,7 @@ import {
   useUpdateAgentMutation
 } from './endpoints/agents/index.ts';
 import {
+  approvalRuleSelectors,
   approvalsApi,
   useClearApprovalsMutation,
   useListApprovalsQuery,
@@ -56,6 +57,7 @@ import { lawsApi, useGetLawsQuery } from './endpoints/laws/index.ts';
 import { licensesApi, useListLicensesQuery } from './endpoints/licenses/index.ts';
 import { mem0DataApi, useGetMem0DataQuery } from './endpoints/mem0-data/index.ts';
 import {
+  factSelectors,
   memoryApi,
   useAddMemoryFactMutation,
   useEditMemoryFactMutation,
@@ -69,6 +71,8 @@ import {
   useSetMemoryGraphMutation
 } from './endpoints/memory/index.ts';
 import {
+  nativeCliSessionAdapter,
+  nativeCliSessionSelectors,
   useApproveNativeCliSessionMutation,
   useGetNativeCliAuthQuery,
   useGetNativeCliSessionQuery,
@@ -84,7 +88,15 @@ import {
   useStopNativeCliAuthMutation,
   useStopNativeCliSessionMutation
 } from './endpoints/native-cli/index.ts';
-import { useSendProjectMessageMutation } from './endpoints/projects/index.ts';
+import {
+  useCreateWorkplaceProjectMutation,
+  useDeleteWorkplaceProjectMutation,
+  useListWorkplaceProjectsQuery,
+  useSendProjectMessageMutation,
+  useUpdateWorkplaceProjectMutation,
+  workplaceProjectAdapter,
+  workplaceProjectSelectors
+} from './endpoints/projects/index.ts';
 import {
   sessionAdapter,
   sessionSelectors,
@@ -106,7 +118,9 @@ import {
   useStreamSessionQuery,
   useStreamUiItemsQuery,
   useUpdateSessionMutation,
-  useWorkspaceGitQuery
+  useWorkspaceActionMutation,
+  useWorkspaceGitQuery,
+  useWorkspaceMetaQuery
 } from './endpoints/sessions/index.ts';
 import {
   acpAgentAdapter,
@@ -119,6 +133,7 @@ import {
 import { useGetBrowserPresetQuery, useSetBrowserPresetMutation } from './endpoints/settings/browser-preset/index.ts';
 import {
   channelAdapter,
+  channelPairingSelectors,
   channelSelectors,
   channelsApi,
   useApproveChannelPairingMutation,
@@ -183,7 +198,8 @@ import {
   useSetProviderMutation,
   useSetRolesMutation,
   useTestConnectionMutation,
-  useTestCredentialMutation
+  useTestCredentialMutation,
+  useTranscribeAudioMutation
 } from './endpoints/settings/model/index.ts';
 import {
   nativeCliAgentAdapter,
@@ -196,6 +212,7 @@ import {
 import { useGetNetworkQuery, useSetNetworkMutation } from './endpoints/settings/network/index.ts';
 import { useGetObscuraQuery, useSetObscuraMutation } from './endpoints/settings/obscura/index.ts';
 import { useGetOpenaiCompatQuery, useSetOpenaiCompatMutation } from './endpoints/settings/openai-compat/index.ts';
+import { useGetProfileSettingsQuery, useSetProfileSettingsMutation } from './endpoints/settings/profile/index.ts';
 import { useGetSandboxQuery, useSetSandboxMutation } from './endpoints/settings/sandbox/index.ts';
 import { useGetSkillsSettingsQuery, useSetSkillsSettingsMutation } from './endpoints/settings/skills/index.ts';
 import { useGetStartupQuery, useSetStartupMutation } from './endpoints/settings/startup/index.ts';
@@ -218,14 +235,17 @@ export const monadApi = modelApi;
 export {
   acpAgentAdapter,
   acpAgentSelectors,
+  approvalRuleSelectors,
   approvalsApi,
   atomsApi,
   channelAdapter,
+  channelPairingSelectors,
   channelSelectors,
   channelsApi,
   commandsApi,
   credentialAdapter,
   credentialSelectors,
+  factSelectors,
   graphApi,
   indexerApi,
   lawsApi,
@@ -241,6 +261,8 @@ export {
   modelSelectors,
   nativeCliAgentAdapter,
   nativeCliAgentSelectors,
+  nativeCliSessionAdapter,
+  nativeCliSessionSelectors,
   profileAdapter,
   profileSelectors,
   providerAdapter,
@@ -264,6 +286,7 @@ export {
   useClearApprovalsMutation,
   useCreateAgentMutation,
   useCreateSessionMutation,
+  useCreateWorkplaceProjectMutation,
   useDeleteAcpAgentMutation,
   useDeleteAgentMutation,
   useDeleteChannelMutation,
@@ -273,6 +296,7 @@ export {
   useDeleteProfileMutation,
   useDeleteProviderMutation,
   useDeleteSessionMutation,
+  useDeleteWorkplaceProjectMutation,
   useDiscoverAtomKindsMutation,
   useEditMemoryFactMutation,
   useFetchSkillDetailQuery,
@@ -302,6 +326,7 @@ export {
   useGetNetworkQuery,
   useGetObscuraQuery,
   useGetOpenaiCompatQuery,
+  useGetProfileSettingsQuery,
   useGetRolesQuery,
   useGetSandboxQuery,
   useGetSkillContentQuery,
@@ -353,6 +378,7 @@ export {
   useListProvidersQuery,
   useListSessionsQuery,
   useListSkillsQuery,
+  useListWorkplaceProjectsQuery,
   useListWorkspaceExperiencesQuery,
   usePickDirectoryMutation,
   usePreviewSettingsImportMutation,
@@ -397,6 +423,7 @@ export {
   useSetObscuraMutation,
   useSetOpenaiCompatMutation,
   useSetProfileMutation,
+  useSetProfileSettingsMutation,
   useSetProviderMutation,
   useSetRolesMutation,
   useSetSandboxMutation,
@@ -412,14 +439,20 @@ export {
   useStreamUiItemsQuery,
   useTestConnectionMutation,
   useTestCredentialMutation,
+  useTranscribeAudioMutation,
   useUpdateAgentMutation,
   useUpdateSessionMutation,
   useUpdateSkillContentMutation,
   useUpdateSkillMutation,
+  useUpdateWorkplaceProjectMutation,
   useUploadSkillMutation,
   useUpsertAcpAgentMutation,
   useUpsertChannelMutation,
   useUpsertMcpServerMutation,
   useUpsertNativeCliAgentMutation,
-  useWorkspaceGitQuery
+  useWorkspaceActionMutation,
+  useWorkspaceGitQuery,
+  useWorkspaceMetaQuery,
+  workplaceProjectAdapter,
+  workplaceProjectSelectors
 };

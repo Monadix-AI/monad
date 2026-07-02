@@ -543,6 +543,7 @@ test.describe('Studio model settings', () => {
             chat: { provider: 'oai', modelId: 'gpt-5.1' },
             embedding: { provider: 'oai', modelId: 'text-embedding-3-large' },
             speech: { provider: 'oai', modelId: 'tts-1' },
+            transcription: { provider: 'oai', modelId: 'transcription-1' },
             video: { provider: 'oai', modelId: 'video-gen-1' }
           },
           params: {},
@@ -554,6 +555,7 @@ test.describe('Studio model settings', () => {
     const defaultCard = page.locator('.rounded-lg').filter({ hasText: 'default' }).first();
     await expect(defaultCard.locator('[data-role-row="video"]').getByText('Inherited')).toHaveCount(0);
     await expect(defaultCard.locator('[data-role-row="speech"]').getByText('Inherited')).toHaveCount(0);
+    await expect(defaultCard.locator('[data-role-row="transcription"]').getByText('Inherited')).toHaveCount(0);
     await expect(defaultCard.locator('[data-role-row="embedding"]').getByText('Inherited')).toHaveCount(0);
 
     await defaultCard.getByRole('button', { name: 'OpenAI GPT 5.1' }).hover();

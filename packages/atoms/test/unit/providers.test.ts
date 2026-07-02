@@ -149,7 +149,7 @@ test('Vercel AI Gateway listModels maps rich /v1/models metadata', async () => {
     label: 'GPT-4.1',
     contextLimit: 1047576,
     releaseDate: '2025-04-14',
-    price: { input: 2, output: 8, cacheRead: 0.5, cacheWrite: 0 },
+    price: { input: 2, output: 8, cacheRead: 0.5 },
     modalities: {
       kind: 'chat',
       input: ['text', 'image', 'file'],
@@ -908,13 +908,7 @@ test('OpenRouter listModels maps provider-native reasoning efforts', async () =>
     contextLimit: 46864,
     releaseDate: '2025-11-25',
     price: {
-      input: 0,
-      output: 0,
-      units: [
-        { label: 'Input', price: 0, unit: 'M' },
-        { label: 'Output', price: 0, unit: 'M' },
-        { label: 'Image output', price: 0.03, unit: 'megapixel' }
-      ]
+      units: [{ label: 'Image output', price: 0.03, unit: 'megapixel' }]
     },
     modalities: {
       kind: 'image',

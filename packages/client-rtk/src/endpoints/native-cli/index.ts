@@ -1,183 +1,20 @@
-import type {
-  NativeCliApprovalResolutionRequest,
-  NativeCliAuthSessionView,
-  NativeCliAuthStatusResponse,
-  NativeCliHistoryPageRequest,
-  NativeCliHistoryPageResponse,
-  NativeCliInputRequest,
-  NativeCliResizeRequest,
-  NativeCliSessionView,
-  SessionId,
-  StartNativeCliAgentRequest
-} from '@monad/protocol';
-
-import { clientOf, runTreaty } from '../../endpoint-helpers.ts';
-import { sessionsApi } from '../sessions/index.ts';
-
-interface StartNativeCliAgentArgs extends StartNativeCliAgentRequest {
-  sessionId: SessionId;
-}
-
-interface NativeCliInputArgs extends NativeCliInputRequest {
-  id: string;
-}
-
-interface NativeCliResizeArgs extends NativeCliResizeRequest {
-  id: string;
-}
-
-interface NativeCliApprovalArgs extends NativeCliApprovalResolutionRequest {
-  id: string;
-}
-
-interface NativeCliHistoryPageArgs extends NativeCliHistoryPageRequest {
-  id: string;
-}
-
-const nativeCliApi = sessionsApi.injectEndpoints({
-  overrideExisting: true,
-  endpoints: (builder) => ({
-    startNativeCliAgent: builder.mutation<NativeCliSessionView, StartNativeCliAgentArgs>({
-      queryFn: ({ sessionId, ...body }, api: { extra: unknown }) =>
-        runTreaty(
-          () => clientOf(api).treaty.v1.sessions({ id: sessionId })['native-cli-agents'].start.post(body),
-          (raw) => raw.session
-        ),
-      async onQueryStarted({ sessionId }, { dispatch, queryFulfilled }) {
-        try {
-          const { data } = await queryFulfilled;
-          dispatch(
-            nativeCliApi.util.updateQueryData('listNativeCliSessions', sessionId, (draft) => {
-              const index = draft.findIndex((session) => session.id === data.id);
-              if (index >= 0) draft[index] = data;
-              else draft.push(data);
-            })
-          );
-        } catch {}
-      },
-      invalidatesTags: (_result, _error, { sessionId }) => [
-        'Sessions',
-        'NativeCliSessions',
-        { type: 'NativeCliSessions', id: sessionId }
-      ]
-    }),
-    getNativeCliSession: builder.query<NativeCliSessionView, string>({
-      queryFn: (id, api: { extra: unknown }) =>
-        runTreaty(
-          () => clientOf(api).treaty.v1['native-cli-sessions']({ id }).get(),
-          (raw) => raw.session
-        )
-    }),
-    listNativeCliSessions: builder.query<NativeCliSessionView[], SessionId>({
-      queryFn: (sessionId, api: { extra: unknown }) =>
-        runTreaty(
-          () => clientOf(api).treaty.v1.sessions({ id: sessionId })['native-cli-sessions'].get(),
-          (raw) => raw.sessions
-        ),
-      providesTags: (_result, _error, sessionId) => ['NativeCliSessions', { type: 'NativeCliSessions', id: sessionId }]
-    }),
-    inputNativeCliSession: builder.mutation<{ ok: true }, NativeCliInputArgs>({
-      queryFn: ({ id, input }, api: { extra: unknown }) =>
-        runTreaty(() => clientOf(api).treaty.v1['native-cli-sessions']({ id }).input.post({ input }))
-    }),
-    resizeNativeCliSession: builder.mutation<{ ok: true }, NativeCliResizeArgs>({
-      queryFn: ({ id, cols, rows }, api: { extra: unknown }) =>
-        runTreaty(() => clientOf(api).treaty.v1['native-cli-sessions']({ id }).resize.post({ cols, rows }))
-    }),
-    approveNativeCliSession: builder.mutation<{ ok: true }, NativeCliApprovalArgs>({
-      queryFn: ({ id, requestId, allow, reason }, api: { extra: unknown }) =>
-        runTreaty(() =>
-          clientOf(api).treaty.v1['native-cli-sessions']({ id }).approval.post({ requestId, allow, reason })
-        )
-    }),
-    loadNativeCliHistoryPage: builder.mutation<NativeCliHistoryPageResponse['page'], NativeCliHistoryPageArgs>({
-      queryFn: ({ id, ...body }, api: { extra: unknown }) =>
-        runTreaty(
-          () => clientOf(api).treaty.v1['native-cli-sessions']({ id })['history-page'].post(body),
-          (raw) => raw.page
-        )
-    }),
-    stopNativeCliSession: builder.mutation<{ ok: true }, string>({
-      queryFn: (id, api: { extra: unknown }) =>
-        runTreaty(() => clientOf(api).treaty.v1['native-cli-sessions']({ id }).stop.post()),
-      invalidatesTags: ['NativeCliSessions']
-    }),
-    startNativeCliAuth: builder.mutation<NativeCliAuthSessionView, string>({
-      queryFn: (name, api: { extra: unknown }) =>
-        runTreaty(
-          () => clientOf(api).treaty.v1['native-cli-agents']({ name }).auth.start.post(),
-          (raw) => raw.session
-        )
-    }),
-    getNativeCliAuth: builder.query<NativeCliAuthSessionView, string>({
-      queryFn: (id, api: { extra: unknown }) =>
-        runTreaty(
-          () => clientOf(api).treaty.v1['native-cli-auth-sessions']({ id }).get(),
-          (raw) => raw.session
-        ),
-      async onCacheEntryAdded(id, { cacheDataLoaded, cacheEntryRemoved, extra, updateCachedData }) {
-        let dispose: (() => void) | undefined;
-        try {
-          await cacheDataLoaded;
-          dispose = clientOf({ extra }).streamNativeCliAuth(id, (session) => {
-            updateCachedData(() => session);
-          });
-        } catch {
-          // Initial snapshot failures are surfaced by queryFn; cache removal still cleans up below.
-        }
-        await cacheEntryRemoved;
-        dispose?.();
-      }
-    }),
-    inputNativeCliAuth: builder.mutation<{ ok: true }, NativeCliInputArgs>({
-      queryFn: ({ id, input }, api: { extra: unknown }) =>
-        runTreaty(() => clientOf(api).treaty.v1['native-cli-auth-sessions']({ id }).input.post({ input }))
-    }),
-    resizeNativeCliAuth: builder.mutation<{ ok: true }, NativeCliResizeArgs>({
-      queryFn: ({ id, cols, rows }, api: { extra: unknown }) =>
-        runTreaty(() => clientOf(api).treaty.v1['native-cli-auth-sessions']({ id }).resize.post({ cols, rows }))
-    }),
-    heartbeatNativeCliAuth: builder.mutation<{ ok: true }, string>({
-      queryFn: (id, api: { extra: unknown }) =>
-        runTreaty(() => clientOf(api).treaty.v1['native-cli-auth-sessions']({ id }).heartbeat.post())
-    }),
-    stopNativeCliAuth: builder.mutation<{ ok: true }, string>({
-      queryFn: (id, api: { extra: unknown }) =>
-        runTreaty(() => clientOf(api).treaty.v1['native-cli-auth-sessions']({ id }).stop.post())
-    }),
-    getNativeCliAuthStatus: builder.query<NativeCliAuthStatusResponse, string>({
-      queryFn: (name, api: { extra: unknown }) =>
-        runTreaty(() => clientOf(api).treaty.v1['native-cli-agents']({ name }).auth.status.get())
-    })
-  })
-});
-
-export const {
-  useApproveNativeCliSessionMutation,
-
-  useGetNativeCliAuthQuery,
-
-  useGetNativeCliSessionQuery,
-
-  useHeartbeatNativeCliAuthMutation,
-
-  useInputNativeCliSessionMutation,
-
-  useInputNativeCliAuthMutation,
-
-  useLazyGetNativeCliAuthStatusQuery,
-
-  useListNativeCliSessionsQuery,
-
-  useResizeNativeCliAuthMutation,
-
-  useResizeNativeCliSessionMutation,
-
-  useStartNativeCliAuthMutation,
-
-  useStartNativeCliAgentMutation,
-
-  useStopNativeCliAuthMutation,
-
-  useStopNativeCliSessionMutation
-} = nativeCliApi;
+export { useApproveNativeCliSessionMutation } from './approve-native-cli-session.ts';
+export { useGetNativeCliAuthQuery } from './get-native-cli-auth.ts';
+export { useGetNativeCliAuthStatusQuery, useLazyGetNativeCliAuthStatusQuery } from './get-native-cli-auth-status.ts';
+export { useGetNativeCliSessionQuery } from './get-native-cli-session.ts';
+export { useHeartbeatNativeCliAuthMutation } from './heartbeat-native-cli-auth.ts';
+export { useInputNativeCliAuthMutation } from './input-native-cli-auth.ts';
+export { useInputNativeCliSessionMutation } from './input-native-cli-session.ts';
+export {
+  listNativeCliSessionsApi,
+  nativeCliSessionAdapter,
+  nativeCliSessionSelectors,
+  useListNativeCliSessionsQuery
+} from './list-native-cli-sessions.ts';
+export { useLoadNativeCliHistoryPageMutation } from './load-native-cli-history-page.ts';
+export { useResizeNativeCliAuthMutation } from './resize-native-cli-auth.ts';
+export { useResizeNativeCliSessionMutation } from './resize-native-cli-session.ts';
+export { useStartNativeCliAgentMutation } from './start-native-cli-agent.ts';
+export { useStartNativeCliAuthMutation } from './start-native-cli-auth.ts';
+export { useStopNativeCliAuthMutation } from './stop-native-cli-auth.ts';
+export { useStopNativeCliSessionMutation } from './stop-native-cli-session.ts';

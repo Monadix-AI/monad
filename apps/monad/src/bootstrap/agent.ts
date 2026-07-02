@@ -318,7 +318,7 @@ export function createDaemonAgent(deps: AgentDeps): DaemonAgent {
       // Lineage-aware: a branched session sees its ancestors' history up to the branch point.
       list: (sessionId) => store.listMessagesWithLineage(sessionId),
       append: (m) => {
-        store.insertMessage(m.id, m.sessionId, m.text, m.createdAt, m.role, {
+        store.insertMessage(m.id, m.transcriptTargetId, m.text, m.createdAt, m.role, {
           type: m.type,
           // Structured tool-call/tool-result payload, so a later turn can replay the step
           // as native function-calling instead of degrading it to text.
@@ -335,7 +335,7 @@ export function createDaemonAgent(deps: AgentDeps): DaemonAgent {
       // Open a text segment's row as `pending` at its first token so a mid-turn /messages refetch
       // exposes a live row with a subscription `source` (rowToMessage reconstructs it for live rows).
       open: (m) =>
-        store.insertMessage(m.id, m.sessionId, m.text, m.createdAt, m.role, {
+        store.insertMessage(m.id, m.transcriptTargetId, m.text, m.createdAt, m.role, {
           type: m.type,
           streamStatus: 'pending',
           includeInContext: m.includeInContext
@@ -347,7 +347,7 @@ export function createDaemonAgent(deps: AgentDeps): DaemonAgent {
       // i.e. after any tool rows that ran before it, so it already sorts correctly. Returns whether a
       // row was updated (false ⇒ the caller appends instead — e.g. a non-streaming block turn).
       settle: (m, status) =>
-        store.setGenStatus(m.sessionId, m.id, status, new Date().toISOString(), {
+        store.setGenStatus(m.transcriptTargetId, m.id, status, new Date().toISOString(), {
           text: m.text,
           data: m.data,
           type: m.type
@@ -371,7 +371,7 @@ export function createDaemonAgent(deps: AgentDeps): DaemonAgent {
           // Prefer the provider's REAL reported cost (e.g. OpenRouter usage accounting) over a
           // catalog-price estimate; computeCost uses it verbatim as the authoritative source.
           const cost = computeCost(usage, price, usage.costUsd);
-          store.addUsage(sessionId, usage, cost.usd ?? 0);
+          if (sessionId.startsWith('ses_')) store.addUsage(sessionId, usage, cost.usd ?? 0);
           store.recordLedger(provider, modelId, 'chat', usage, cost.usd ?? 0);
           // The assistant turn's text settled outside messageRepo.append — index it now.
           embeddingIndexer.kick();

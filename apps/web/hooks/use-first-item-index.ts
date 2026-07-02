@@ -13,12 +13,13 @@ const FIRST_ITEM_BASE = 1_000_000;
 export function useFirstItemIndex<T>(items: T[], getId: (item: T) => string): number {
   const [firstItemIndex, setFirstItemIndex] = useState(FIRST_ITEM_BASE);
   const prevFirstIdRef = useRef<string | null>(null);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: getId is assumed stable; re-run on items
+  const getIdRef = useRef(getId);
+  getIdRef.current = getId;
   useLayoutEffect(() => {
-    const newFirst = items.length > 0 ? getId(items[0] as T) : null;
+    const newFirst = items.length > 0 ? getIdRef.current(items[0] as T) : null;
     const prevFirst = prevFirstIdRef.current;
     if (prevFirst !== null && newFirst !== prevFirst) {
-      const idx = items.findIndex((item) => getId(item) === prevFirst);
+      const idx = items.findIndex((item) => getIdRef.current(item) === prevFirst);
       if (idx > 0) setFirstItemIndex((f) => f - idx);
       else if (idx === -1) setFirstItemIndex(FIRST_ITEM_BASE);
     }

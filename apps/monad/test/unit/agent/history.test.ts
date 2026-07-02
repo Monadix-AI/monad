@@ -94,7 +94,7 @@ async function settle(eng: DurableSummarizer, sid: string): Promise<void> {
 
 const msg = (id: string, role: ChatMessage['role'], text: string): ChatMessage => ({
   id,
-  sessionId: 'ses_x',
+  transcriptTargetId: 'ses_x',
   role,
   text,
   createdAt: ''

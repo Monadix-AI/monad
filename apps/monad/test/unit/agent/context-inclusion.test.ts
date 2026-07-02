@@ -7,7 +7,7 @@ import { z } from 'zod';
 import { replayHistory } from '@/agent/index.ts';
 
 function msg(id: string, text: string, role: ChatMessage['role'] = 'user'): ChatMessage {
-  return { id, sessionId: 'ses_1', role, text, createdAt: '2026-01-01T00:00:00Z' } as ChatMessage;
+  return { id, transcriptTargetId: 'ses_1', role, text, createdAt: '2026-01-01T00:00:00Z' } as ChatMessage;
 }
 
 afterEach(() => unregisterMessageType('demo:note'));

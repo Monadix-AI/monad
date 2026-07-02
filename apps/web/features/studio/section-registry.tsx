@@ -10,50 +10,39 @@ import { Orchestration } from './Orchestration';
 import { SandboxDefaults } from './SandboxDefaults';
 import { Usage } from './Usage';
 
-export type StudioSectionComponent = ComponentType<{ onClose: () => void }>;
+export interface StudioSectionProps {
+  onClose: () => void;
+  subpath?: string[];
+}
+
+export type StudioSectionComponent = ComponentType<StudioSectionProps>;
 
 const ModelSettings = dynamic(() => import('./model-settings').then((m) => m.ModelSettings), { ssr: false });
-const ChannelsSettings = dynamic(() => import('@/features/settings/ChannelsSettings').then((m) => m.ChannelsSettings), {
+const ChannelsSettings = dynamic(() => import('./channels-settings').then((m) => m.ChannelsSettings), {
   ssr: false
 });
-const AtomsSettings = dynamic(() => import('@/features/settings/AtomsSettings').then((m) => m.AtomsSettings), {
+const AtomsSettings = dynamic(() => import('./atoms-settings').then((m) => m.AtomsSettings), {
   ssr: false
 });
-const ThirdPartyAgentsSettings = dynamic(
-  () => import('@/features/settings/ThirdPartyAgentsSettings').then((m) => m.ThirdPartyAgentsSettings),
-  { ssr: false }
-);
+const ThirdPartyAgentsSettings = dynamic(() => import('./third-party-agents').then((m) => m.ThirdPartyAgentsSettings), {
+  ssr: false
+});
 const SkillsSettings = dynamic(() => import('./skills-settings').then((m) => m.SkillsSettings), {
   ssr: false
 });
-const CapabilitiesSettings = dynamic(
-  () => import('@/features/settings/CapabilitiesSettings').then((m) => m.CapabilitiesSettings),
-  {
-    ssr: false
-  }
-);
-const OpenaiCompatSettings = dynamic(
-  () => import('@/features/settings/OpenaiCompatSettings').then((m) => m.OpenaiCompatSettings),
-  {
-    ssr: false
-  }
-);
-const ApprovalsSettings = dynamic(
-  () => import('@/features/settings/ApprovalsSettings').then((m) => m.ApprovalsSettings),
-  {
-    ssr: false
-  }
-);
-const MemorySettings = dynamic(
-  () => import('@/features/settings/memory/MemorySettings').then((m) => m.MemorySettings),
-  {
-    ssr: false
-  }
-);
+const CapabilitiesSettings = dynamic(() => import('./capabilities-settings').then((m) => m.CapabilitiesSettings), {
+  ssr: false
+});
+const ApprovalsSettings = dynamic(() => import('./approvals-settings').then((m) => m.ApprovalsSettings), {
+  ssr: false
+});
+const MemorySettings = dynamic(() => import('./memory-settings/MemorySettings').then((m) => m.MemorySettings), {
+  ssr: false
+});
 const GraphMemorySettings = dynamic(
   () =>
-    import('@/features/settings/memory/MemorySettings').then((m) => {
-      return function GraphMemorySettings(props: { onClose: () => void }) {
+    import('./memory-settings/MemorySettings').then((m) => {
+      return function GraphMemorySettings(props: StudioSectionProps) {
         return (
           <m.MemorySettings
             {...props}
@@ -66,8 +55,8 @@ const GraphMemorySettings = dynamic(
 );
 const Mem0MemorySettings = dynamic(
   () =>
-    import('@/features/settings/memory/MemorySettings').then((m) => {
-      return function Mem0MemorySettings(props: { onClose: () => void }) {
+    import('./memory-settings/MemorySettings').then((m) => {
+      return function Mem0MemorySettings(props: StudioSectionProps) {
         return (
           <m.MemorySettings
             {...props}
@@ -78,7 +67,7 @@ const Mem0MemorySettings = dynamic(
     }),
   { ssr: false }
 );
-const HooksSettings = dynamic(() => import('@/features/settings/hooks/HooksSettings').then((m) => m.HooksSettings), {
+const HooksSettings = dynamic(() => import('./hooks-settings/HooksSettings').then((m) => m.HooksSettings), {
   ssr: false
 });
 
@@ -97,7 +86,6 @@ function UsageSection() {
 export const STUDIO_SECTION_COMPONENTS: Record<StudioSectionId, StudioSectionComponent> = {
   acpAgents: ThirdPartyAgentsSettings,
   agents: AgentsPanel,
-  api: OpenaiCompatSettings,
   approvals: ApprovalsSettings,
   atoms: AtomsSettings,
   capabilities: CapabilitiesSettings,

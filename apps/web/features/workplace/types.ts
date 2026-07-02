@@ -1,3 +1,5 @@
+import type { ProductIconId } from '@monad/ui';
+
 // UI view-model types for the workplace surface. These are render shapes the components
 // consume; use-project.ts derives them from the real monad session backend (stream
 // messages, tool steps, pending approvals, configured ACP agents). No mock data
@@ -12,7 +14,8 @@ export interface Participant {
   /** Avatar initials, e.g. "MO". */
   av: string;
   /** Official product mark for provider-owned or Monad participants. */
-  icon?: 'monad' | 'openai' | 'anthropic' | 'google';
+  icon?: 'monad' | ProductIconId | 'openai' | 'anthropic' | 'google';
+  avatarUrl?: string;
   name: string;
   kind: ParticipantKind;
   /** Short label badge — User / AI / ACP. */
@@ -22,7 +25,7 @@ export interface Participant {
   presence: Presence;
 }
 
-/** A project = a monad session. Projects list the supervisor's multi-agent sessions. */
+/** Workplace Project list item shown in the supervisor's multi-agent project rail. */
 export interface Project {
   id: string;
   name: string;
@@ -41,6 +44,7 @@ export interface Message {
   authorName: string;
   av: string;
   icon?: Participant['icon'];
+  avatarUrl?: string;
   kind: MessageKind;
   tag: string;
   time: string;
@@ -49,8 +53,16 @@ export interface Message {
     id: string;
     name: string;
     icon?: Participant['icon'];
+    avatarUrl?: string;
     tag: string;
   };
+  fanoutAgents?: Array<{
+    id: string;
+    name: string;
+    icon?: Participant['icon'];
+    avatarUrl?: string;
+    tag: string;
+  }>;
   nativeCliSessionId?: string;
   developerOnly?: boolean;
   reasoning?: string;
@@ -63,6 +75,7 @@ export interface Message {
 export interface TypingIndicator {
   av: string;
   icon?: Participant['icon'];
+  avatarUrl?: string;
   name: string;
   detail: string;
 }
@@ -73,6 +86,7 @@ export type ActivityStatus = 'running' | 'ok' | 'error';
 export interface ActivityRow {
   id: string;
   av: string;
+  agentName?: string;
   tool: string;
   detail: string;
   output?: string;
@@ -96,6 +110,11 @@ export interface NativeCliStreamView {
   status: ActivityStatus;
   workingPath?: string;
   output: string;
+  items: Array<{
+    id: string;
+    role: 'agent' | 'system' | 'tool';
+    text: string;
+  }>;
 }
 
 /** A real pending tool approval from the oversight gate. */

@@ -7,6 +7,7 @@ import type {
   LedgerCategory,
   MessageType,
   NativeAgentDirectMessage,
+  NativeCliInboxDeliveryState,
   NativeCliInboxItem,
   NativeCliLaunchMode,
   NativeCliProvider,
@@ -15,13 +16,14 @@ import type {
   SearchHit,
   SearchMode,
   Session,
-  SessionId,
   SessionState,
   StatsRange,
   StreamStatus,
   Task,
   TaskState,
-  TokenUsage
+  TokenUsage,
+  TranscriptTargetId,
+  WorkplaceProject
 } from '@monad/protocol';
 
 import { Database } from 'bun:sqlite';
@@ -38,10 +40,11 @@ import {
   rowToConversation,
   rowToMessage,
   rowToSession,
+  rowToWorkplaceProject,
   type SearchRow,
   toIntFlag
 } from './row-mappers.ts';
-import { messages, sessions, tasks } from './schema.ts';
+import { messages, sessions, tasks, workplaceProjects } from './schema.ts';
 import {
   clearLedger,
   computeStats,
@@ -73,7 +76,7 @@ export interface AcpDelegateRow {
 
 export interface NativeCliSessionRow {
   id: string;
-  projectSessionId: SessionId;
+  transcriptTargetId: TranscriptTargetId;
   agentName: string;
   provider: NativeCliProvider;
   workingPath: string;
@@ -145,7 +148,7 @@ function rowToChannelModeratorRound(r: Record<string, unknown>): ChannelModerato
 function rowToNativeCliSession(r: Record<string, unknown>): NativeCliSessionRow {
   return {
     id: r.id as string,
-    projectSessionId: r.project_session_id as SessionId,
+    transcriptTargetId: r.transcript_target_id as TranscriptTargetId,
     agentName: r.agent_name as string,
     provider: r.provider as NativeCliProvider,
     workingPath: r.working_path as string,
@@ -200,7 +203,7 @@ export interface SearchOptions {
   q: string;
   mode?: SearchMode;
   limit?: number;
-  sessionId?: string;
+  transcriptTargetId?: TranscriptTargetId;
 }
 
 function rowToAcpDelegate(r: Record<string, unknown>): AcpDelegateRow {
@@ -305,8 +308,6 @@ export class Store {
     if (filter.archived !== undefined) conds.push(eq(sessions.archived, filter.archived ? 1 : 0));
     if (filter.state !== undefined) conds.push(eq(sessions.state, filter.state));
     const where = conds.length === 1 ? conds[0] : conds.length > 1 ? and(...conds) : undefined;
-    // Most-recently-active first (updatedAt is bumped on every turn); id breaks ties so the
-    // order is stable when several sessions share a timestamp.
     const base = this.db.select().from(sessions).where(where).orderBy(desc(sessions.updatedAt), desc(sessions.id));
     const limited = filter.limit !== undefined ? base.limit(filter.limit) : base;
     const paged = filter.offset !== undefined ? limited.offset(filter.offset) : limited;
@@ -355,13 +356,116 @@ export class Store {
   deleteSession(id: string): boolean {
     const tx = this.sqlite.transaction((sid: string) => {
       this.sqlite
-        .query('DELETE FROM message_embeddings WHERE message_id IN (SELECT id FROM messages WHERE session_id = ?)')
+        .query(
+          'DELETE FROM message_embeddings WHERE message_id IN (SELECT id FROM messages WHERE transcript_target_id = ?)'
+        )
         .run(sid);
-      this.sqlite.query('DELETE FROM messages WHERE session_id = ?').run(sid);
-      this.sqlite.query('DELETE FROM events WHERE session_id = ?').run(sid);
+      this.sqlite.query('DELETE FROM tasks WHERE session_id = ?').run(sid);
+      this.sqlite.query('DELETE FROM memory WHERE session_id = ?').run(sid);
+      this.sqlite.query('DELETE FROM messages WHERE transcript_target_id = ?').run(sid);
+      this.sqlite.query('DELETE FROM events WHERE transcript_target_id = ?').run(sid);
       this.sqlite.query('DELETE FROM acp_delegates WHERE session_id = ?').run(sid);
-      this.sqlite.query('DELETE FROM native_cli_sessions WHERE project_session_id = ?').run(sid);
+      this.sqlite.query('DELETE FROM channel_conversation_sessions WHERE session_id = ?').run(sid);
+      this.sqlite.query('DELETE FROM channel_conversations WHERE active_session_id = ?').run(sid);
+      this.sqlite.query('DELETE FROM native_agent_direct_messages WHERE project_id = ?').run(sid);
+      this.sqlite
+        .query(
+          `DELETE FROM native_cli_inbox_items
+           WHERE native_cli_session_id IN (SELECT id FROM native_cli_sessions WHERE transcript_target_id = ?)`
+        )
+        .run(sid);
+      this.sqlite.query('DELETE FROM native_cli_sessions WHERE transcript_target_id = ?').run(sid);
       return this.sqlite.query('DELETE FROM sessions WHERE id = ?').run(sid).changes;
+    });
+    return tx(id) > 0;
+  }
+
+  insertWorkplaceProject(project: WorkplaceProject): void {
+    this.db
+      .insert(workplaceProjects)
+      .values({
+        id: project.id,
+        title: project.title,
+        ownerPrincipalId: project.ownerPrincipalId,
+        state: project.state,
+        archived: project.archived ? 1 : 0,
+        model: project.model ?? null,
+        cwd: project.cwd ?? null,
+        origin: project.origin ? JSON.stringify(project.origin) : null,
+        createdAt: project.createdAt,
+        updatedAt: project.updatedAt
+      })
+      .run();
+  }
+
+  listWorkplaceProjects(filter: ListSessionsFilter = {}): WorkplaceProject[] {
+    const conds = [];
+    if (filter.archived !== undefined) conds.push(eq(workplaceProjects.archived, filter.archived ? 1 : 0));
+    if (filter.state !== undefined) conds.push(eq(workplaceProjects.state, filter.state));
+    const where = conds.length === 1 ? conds[0] : conds.length > 1 ? and(...conds) : undefined;
+    const base = this.db
+      .select()
+      .from(workplaceProjects)
+      .where(where)
+      .orderBy(desc(workplaceProjects.updatedAt), desc(workplaceProjects.id));
+    const limited = filter.limit !== undefined ? base.limit(filter.limit) : base;
+    const paged = filter.offset !== undefined ? limited.offset(filter.offset) : limited;
+    return paged.all().map(rowToWorkplaceProject);
+  }
+
+  countWorkplaceProjects(filter: Omit<ListSessionsFilter, 'limit' | 'offset'> = {}): number {
+    const conds = [];
+    if (filter.archived !== undefined) conds.push(eq(workplaceProjects.archived, filter.archived ? 1 : 0));
+    if (filter.state !== undefined) conds.push(eq(workplaceProjects.state, filter.state));
+    const where = conds.length === 1 ? conds[0] : conds.length > 1 ? and(...conds) : undefined;
+    return this.db.select({ count: count() }).from(workplaceProjects).where(where).get()?.count ?? 0;
+  }
+
+  getWorkplaceProject(id: string): WorkplaceProject | null {
+    const row = this.db.select().from(workplaceProjects).where(eq(workplaceProjects.id, id)).get();
+    return row ? rowToWorkplaceProject(row) : null;
+  }
+
+  updateWorkplaceProject(
+    id: string,
+    patch: {
+      title?: string;
+      state?: SessionState;
+      archived?: boolean;
+      model?: string | null;
+      cwd?: string | null;
+      origin?: WorkplaceProject['origin'] | null;
+    }
+  ): WorkplaceProject | null {
+    const sets: Partial<typeof workplaceProjects.$inferInsert> = { updatedAt: new Date().toISOString() };
+    if (patch.title !== undefined) sets.title = patch.title;
+    if (patch.state !== undefined) sets.state = patch.state;
+    if (patch.archived !== undefined) sets.archived = patch.archived ? 1 : 0;
+    if (patch.model !== undefined) sets.model = patch.model;
+    if (patch.cwd !== undefined) sets.cwd = patch.cwd;
+    if (patch.origin !== undefined) sets.origin = patch.origin ? JSON.stringify(patch.origin) : null;
+    this.db.update(workplaceProjects).set(sets).where(eq(workplaceProjects.id, id)).run();
+    return this.getWorkplaceProject(id);
+  }
+
+  deleteWorkplaceProject(id: string): boolean {
+    const tx = this.sqlite.transaction((projectId: string) => {
+      this.sqlite
+        .query(
+          'DELETE FROM message_embeddings WHERE message_id IN (SELECT id FROM messages WHERE transcript_target_id = ?)'
+        )
+        .run(projectId);
+      this.sqlite.query('DELETE FROM messages WHERE transcript_target_id = ?').run(projectId);
+      this.sqlite.query('DELETE FROM events WHERE transcript_target_id = ?').run(projectId);
+      this.sqlite.query('DELETE FROM native_agent_direct_messages WHERE project_id = ?').run(projectId);
+      this.sqlite
+        .query(
+          `DELETE FROM native_cli_inbox_items
+           WHERE native_cli_session_id IN (SELECT id FROM native_cli_sessions WHERE transcript_target_id = ?)`
+        )
+        .run(projectId);
+      this.sqlite.query('DELETE FROM native_cli_sessions WHERE transcript_target_id = ?').run(projectId);
+      return this.sqlite.query('DELETE FROM workplace_projects WHERE id = ?').run(projectId).changes;
     });
     return tx(id) > 0;
   }
@@ -371,16 +475,20 @@ export class Store {
       // Count BEFORE deleting: the messages table has AFTER-DELETE FTS triggers, and bun:sqlite's
       // `result.changes` includes trigger-affected rows — so a DELETE's `.changes` over-counts. A
       // direct COUNT(*) is the only reliable "how many messages did we clear" (drives /reset's reply).
-      const row = this.sqlite.query('SELECT COUNT(*) AS n FROM messages WHERE session_id = ?').get(sid) as {
+      const row = this.sqlite.query('SELECT COUNT(*) AS n FROM messages WHERE transcript_target_id = ?').get(sid) as {
         n: number;
       };
       this.sqlite
-        .query('DELETE FROM message_embeddings WHERE message_id IN (SELECT id FROM messages WHERE session_id = ?)')
+        .query(
+          'DELETE FROM message_embeddings WHERE message_id IN (SELECT id FROM messages WHERE transcript_target_id = ?)'
+        )
         .run(sid);
-      this.sqlite.query('DELETE FROM messages WHERE session_id = ?').run(sid);
-      this.sqlite.query('DELETE FROM events WHERE session_id = ?').run(sid);
+      this.sqlite.query('DELETE FROM messages WHERE transcript_target_id = ?').run(sid);
+      this.sqlite.query('DELETE FROM events WHERE transcript_target_id = ?').run(sid);
       this.sqlite.query("DELETE FROM memory WHERE session_id = ? AND key = 'ctx:summary'").run(sid);
-      this.db.update(sessions).set({ updatedAt: new Date().toISOString() }).where(eq(sessions.id, sid)).run();
+      const updatedAt = new Date().toISOString();
+      this.db.update(sessions).set({ updatedAt }).where(eq(sessions.id, sid)).run();
+      this.db.update(workplaceProjects).set({ updatedAt }).where(eq(workplaceProjects.id, sid)).run();
       return row.n;
     });
     return tx(id);
@@ -512,7 +620,7 @@ export class Store {
 
   insertMessage(
     id: string,
-    sessionId: string,
+    transcriptTargetId: string,
     text: string,
     createdAt: string,
     role: ChatMessage['role'] = 'user',
@@ -522,7 +630,7 @@ export class Store {
       .insert(messages)
       .values({
         id,
-        sessionId,
+        transcriptTargetId,
         role,
         text,
         type: opts.type ?? 'text',
@@ -539,15 +647,15 @@ export class Store {
    * same write (so a `complete` transition lands the settled content atomically). Returns false if
    * the row is missing or the transition is disallowed. */
   setGenStatus(
-    sessionId: string,
+    transcriptTargetId: string,
     messageId: string,
     next: StreamStatus,
     updatedAt: string,
-    content?: { text?: string; data?: unknown; type?: MessageType }
+    content?: { text?: string; data?: unknown; type?: MessageType; includeInContext?: boolean }
   ): boolean {
     const row = this.sqlite
-      .query('SELECT stream_status FROM messages WHERE id = ? AND session_id = ?')
-      .get(messageId, sessionId) as { stream_status: string } | null;
+      .query('SELECT stream_status FROM messages WHERE id = ? AND transcript_target_id = ?')
+      .get(messageId, transcriptTargetId) as { stream_status: string } | null;
     if (!row) return false;
     const cur = row.stream_status as StreamStatus;
     if (cur === 'complete' || cur === 'error') return false;
@@ -564,7 +672,7 @@ export class Store {
       $status: next,
       $updatedAt: updatedAt,
       $id: messageId,
-      $sid: sessionId
+      $target: transcriptTargetId
     };
     if (content?.text !== undefined) {
       sets.push('text = $text');
@@ -578,7 +686,13 @@ export class Store {
       sets.push('type = $type');
       binds.$type = content.type;
     }
-    this.sqlite.query(`UPDATE messages SET ${sets.join(', ')} WHERE id = $id AND session_id = $sid`).run(binds);
+    if (content?.includeInContext !== undefined) {
+      sets.push('include_in_context = $includeInContext');
+      binds.$includeInContext = content.includeInContext ? 1 : 0;
+    }
+    this.sqlite
+      .query(`UPDATE messages SET ${sets.join(', ')} WHERE id = $id AND transcript_target_id = $target`)
+      .run(binds);
     return true;
   }
 
@@ -606,8 +720,8 @@ export class Store {
   }
 
   /** Ordered by sqlite rowid (insertion order). Defaults to active (non-rewound) messages only. */
-  listMessages(sessionId: string, opts: ListMessagesOptions = {}): ChatMessage[] {
-    const binds: Record<string, string | number> = { $sid: sessionId };
+  listMessages(transcriptTargetId: string, opts: ListMessagesOptions = {}): ChatMessage[] {
+    const binds: Record<string, string | number> = { $target: transcriptTargetId };
     const active = opts.includeInactive ? '' : ' AND active = 1';
     const thread = opts.threadId ? " AND (id = $threadId OR json_extract(data, '$.threadId') = $threadId)" : '';
     if (opts.threadId) binds.$threadId = opts.threadId;
@@ -621,15 +735,15 @@ export class Store {
       binds.$lower = half;
       // `_rid` is aliased out because a UNION's outer ORDER BY can only reference output columns.
       q =
-        `SELECT * FROM (SELECT *, rowid AS _rid FROM messages WHERE session_id = $sid${active}${thread}` +
+        `SELECT * FROM (SELECT *, rowid AS _rid FROM messages WHERE transcript_target_id = $target${active}${thread}` +
         ' AND rowid <= COALESCE((SELECT rowid FROM messages WHERE id = $around), 9.2e18)' +
         ' ORDER BY rowid DESC LIMIT $upper)' +
-        ` UNION ALL SELECT * FROM (SELECT *, rowid AS _rid FROM messages WHERE session_id = $sid${active}${thread}` +
+        ` UNION ALL SELECT * FROM (SELECT *, rowid AS _rid FROM messages WHERE transcript_target_id = $target${active}${thread}` +
         ' AND rowid > COALESCE((SELECT rowid FROM messages WHERE id = $around), 9.2e18)' +
         ' ORDER BY rowid ASC LIMIT $lower)' +
         ' ORDER BY _rid ASC';
     } else {
-      const clauses = ['session_id = $sid'];
+      const clauses = ['transcript_target_id = $target'];
       if (!opts.includeInactive) clauses.push('active = 1');
       if (opts.threadId) clauses.push("(id = $threadId OR json_extract(data, '$.threadId') = $threadId)");
       if (opts.before) {
@@ -656,7 +770,7 @@ export class Store {
     return rows.map((r) =>
       rowToMessage({
         id: r.id as string,
-        sessionId: r.session_id as string,
+        transcriptTargetId: r.transcript_target_id as string,
         role: r.role as string,
         text: r.text as string,
         type: r.type as string,
@@ -705,14 +819,14 @@ export class Store {
     return sliceAfter(out);
   }
 
-  getMessage(sessionId: string, messageId: string): ChatMessage | null {
+  getMessage(transcriptTargetId: string, messageId: string): ChatMessage | null {
     const row = this.sqlite
-      .query('SELECT * FROM messages WHERE id = ? AND session_id = ?')
-      .get(messageId, sessionId) as Record<string, unknown> | null;
+      .query('SELECT * FROM messages WHERE id = ? AND transcript_target_id = ?')
+      .get(messageId, transcriptTargetId) as Record<string, unknown> | null;
     if (!row) return null;
     return rowToMessage({
       id: row.id as string,
-      sessionId: row.session_id as string,
+      transcriptTargetId: row.transcript_target_id as string,
       role: row.role as string,
       text: row.text as string,
       type: row.type as string,
@@ -776,14 +890,14 @@ export class Store {
       const { n } = this.sqlite
         .query(
           `SELECT COUNT(*) AS n FROM messages
-           WHERE session_id = $sid AND active = 1
+           WHERE transcript_target_id = $sid AND active = 1
              AND rowid >= (SELECT rowid FROM messages WHERE id = $mid)`
         )
         .get({ $sid: sessionId, $mid: toMessageId }) as { n: number };
       this.sqlite
         .query(
           `UPDATE messages SET active = 0, updated_at = $at
-           WHERE session_id = $sid AND active = 1
+           WHERE transcript_target_id = $sid AND active = 1
              AND rowid >= (SELECT rowid FROM messages WHERE id = $mid)`
         )
         .run({ $at: at, $sid: sessionId, $mid: toMessageId });
@@ -794,8 +908,8 @@ export class Store {
              FROM messages target
              JOIN messages boundary ON boundary.id = $boundary
              WHERE target.id = $mid
-               AND target.session_id = $sid
-               AND boundary.session_id = $sid
+               AND target.transcript_target_id = $sid
+               AND boundary.transcript_target_id = $sid
                AND target.rowid <= boundary.rowid
              LIMIT 1`
           )
@@ -815,7 +929,7 @@ export class Store {
     });
     const restoredCount = tx();
     const head = this.sqlite
-      .query('SELECT id FROM messages WHERE session_id = ? AND active = 1 ORDER BY rowid DESC LIMIT 1')
+      .query('SELECT id FROM messages WHERE transcript_target_id = ? AND active = 1 ORDER BY rowid DESC LIMIT 1')
       .get(sessionId) as { id: string } | null;
     return { restoredCount, newHeadMessageId: head?.id ?? null };
   }
@@ -828,14 +942,14 @@ export class Store {
     const q = opts.q.trim();
     if (!q) return [];
     const limit = opts.limit ?? 20;
-    const sid = opts.sessionId;
+    const transcriptTargetId = opts.transcriptTargetId;
     const hits = new Map<string, SearchHit>();
 
     const add = (r: SearchRow, score: number): void => {
       if (hits.has(r.id)) return;
       hits.set(r.id, {
-        sessionId: r.session_id as SearchHit['sessionId'],
-        sessionTitle: r.stitle,
+        transcriptTargetId: r.transcript_target_id as SearchHit['transcriptTargetId'],
+        transcriptTargetTitle: r.stitle,
         messageId: r.id as SearchHit['messageId'],
         role: r.role as SearchHit['role'],
         snippet: makeSnippet(r.text, q),
@@ -847,17 +961,22 @@ export class Store {
 
     const ftsMatch = `"${q.replace(/"/g, '""')}"`; // phrase query — neutralizes FTS5 operators
     const queryFts = (table: 'messages_fts' | 'messages_fts_trigram'): void => {
-      const where = `${table} MATCH $q AND m.active = 1${sid ? ' AND m.session_id = $sid' : ''}`;
+      const where = `${table} MATCH $q AND m.active = 1${transcriptTargetId ? ' AND m.transcript_target_id = $target' : ''}`;
       const rows = this.sqlite
         .query(
-          `SELECT m.id, m.session_id, m.role, m.text, m.created_at, s.title AS stitle, bm25(${table}) AS rank
+          `SELECT m.id, m.transcript_target_id, m.role, m.text, m.created_at, COALESCE(s.title, p.title) AS stitle, bm25(${table}) AS rank
            FROM ${table} f
            JOIN messages m ON m.rowid = f.rowid
-           JOIN sessions s ON s.id = m.session_id
+           LEFT JOIN sessions s ON s.id = m.transcript_target_id
+           LEFT JOIN workplace_projects p ON p.id = m.transcript_target_id
            WHERE ${where}
            ORDER BY rank LIMIT $lim`
         )
-        .all(sid ? { $q: ftsMatch, $sid: sid, $lim: limit } : { $q: ftsMatch, $lim: limit }) as SearchRow[];
+        .all(
+          transcriptTargetId
+            ? { $q: ftsMatch, $target: transcriptTargetId, $lim: limit }
+            : { $q: ftsMatch, $lim: limit }
+        ) as SearchRow[];
       for (const r of rows) add(r, -(r.rank ?? 0)); // bm25 returns negative scores; negate for ranking
     };
 
@@ -871,13 +990,18 @@ export class Store {
     if (hits.size === 0) {
       const rows = this.sqlite
         .query(
-          `SELECT m.id, m.session_id, m.role, m.text, m.created_at, s.title AS stitle
+          `SELECT m.id, m.transcript_target_id, m.role, m.text, m.created_at, COALESCE(s.title, p.title) AS stitle
            FROM messages m
-           JOIN sessions s ON s.id = m.session_id
-           WHERE m.active = 1 AND m.text LIKE $like${sid ? ' AND m.session_id = $sid' : ''}
+           LEFT JOIN sessions s ON s.id = m.transcript_target_id
+           LEFT JOIN workplace_projects p ON p.id = m.transcript_target_id
+           WHERE m.active = 1 AND m.text LIKE $like${transcriptTargetId ? ' AND m.transcript_target_id = $target' : ''}
            ORDER BY m.rowid DESC LIMIT $lim`
         )
-        .all(sid ? { $like: `%${q}%`, $sid: sid, $lim: limit } : { $like: `%${q}%`, $lim: limit }) as SearchRow[];
+        .all(
+          transcriptTargetId
+            ? { $like: `%${q}%`, $target: transcriptTargetId, $lim: limit }
+            : { $like: `%${q}%`, $lim: limit }
+        ) as SearchRow[];
       for (const r of rows) add(r, 0.1);
     }
 
@@ -905,10 +1029,10 @@ export class Store {
    * (whole-corpus) backfill so a single request can't materialize + embed the entire DB at
    * once; a session-scoped call is already bounded by that session and can omit it.
    */
-  messagesMissingEmbedding(sessionId?: string, limit?: number): { id: string; text: string }[] {
-    const where = sessionId ? 'AND m.session_id = ?' : '';
+  messagesMissingEmbedding(transcriptTargetId?: string, limit?: number): { id: string; text: string }[] {
+    const where = transcriptTargetId ? 'AND m.transcript_target_id = ?' : '';
     const cap = limit && limit > 0 ? ' LIMIT ?' : '';
-    const binds: (string | number)[] = sessionId ? [sessionId] : [];
+    const binds: (string | number)[] = transcriptTargetId ? [transcriptTargetId] : [];
     if (cap) binds.push(limit as number);
     const rows = this.sqlite
       .query(
@@ -922,9 +1046,9 @@ export class Store {
 
   /** How many active, non-empty messages still lack an embedding — surfaced as an "indexing N
    *  left" hint so a semantic search can tell the user recall may be incomplete. */
-  pendingEmbeddingCount(sessionId?: string): number {
-    const where = sessionId ? 'AND m.session_id = ?' : '';
-    const binds = sessionId ? [sessionId] : [];
+  pendingEmbeddingCount(transcriptTargetId?: string): number {
+    const where = transcriptTargetId ? 'AND m.transcript_target_id = ?' : '';
+    const binds = transcriptTargetId ? [transcriptTargetId] : [];
     const row = this.sqlite
       .query(
         `SELECT COUNT(*) AS n FROM messages m
@@ -944,7 +1068,10 @@ export class Store {
     return row.n;
   }
 
-  searchSemantic(queryVec: number[], opts: { limit?: number; sessionId?: string } = {}): SearchHit[] {
+  searchSemantic(
+    queryVec: number[],
+    opts: { limit?: number; transcriptTargetId?: TranscriptTargetId } = {}
+  ): SearchHit[] {
     const limit = opts.limit ?? 20;
     // Precompute the query norm ONCE — cosine() used to recompute it for every row (N redundant
     // O(dim) passes). A zero/empty query can't match anything.
@@ -956,7 +1083,7 @@ export class Store {
     // Lean scan: pull only (id, vec) for active rows of the matching dimension — NOT each row's
     // text/title (transferring N message bodies just to drop all but `limit` is the dominant waste).
     // Still a linear scan: bun:sqlite can't load sqlite-vec, so there's no native ANN index to use.
-    const where = opts.sessionId ? 'AND m.session_id = ?' : '';
+    const where = opts.transcriptTargetId ? 'AND m.transcript_target_id = ?' : '';
     const rows = this.sqlite
       .query(
         `SELECT e.message_id AS id, e.vec AS vec
@@ -964,7 +1091,10 @@ export class Store {
          JOIN messages m ON m.id = e.message_id
          WHERE e.dim = ? AND m.active = 1 ${where}`
       )
-      .all(queryVec.length, ...(opts.sessionId ? [opts.sessionId] : [])) as { id: string; vec: Uint8Array }[];
+      .all(queryVec.length, ...(opts.transcriptTargetId ? [opts.transcriptTargetId] : [])) as {
+      id: string;
+      vec: Uint8Array;
+    }[];
 
     const scored: { id: string; score: number }[] = [];
     for (const r of rows) {
@@ -988,8 +1118,10 @@ export class Store {
     const placeholders = top.map(() => '?').join(',');
     const display = this.sqlite
       .query(
-        `SELECT m.id, m.session_id, m.role, m.text, m.created_at, s.title AS stitle
-         FROM messages m JOIN sessions s ON s.id = m.session_id
+        `SELECT m.id, m.transcript_target_id, m.role, m.text, m.created_at, COALESCE(s.title, p.title) AS stitle
+         FROM messages m
+         LEFT JOIN sessions s ON s.id = m.transcript_target_id
+         LEFT JOIN workplace_projects p ON p.id = m.transcript_target_id
          WHERE m.id IN (${placeholders})`
       )
       .all(...top.map((t) => t.id)) as SearchRow[];
@@ -1000,8 +1132,8 @@ export class Store {
       if (!r) return [];
       return [
         {
-          sessionId: r.session_id as SearchHit['sessionId'],
-          sessionTitle: r.stitle,
+          transcriptTargetId: r.transcript_target_id as SearchHit['transcriptTargetId'],
+          transcriptTargetTitle: r.stitle,
           messageId: r.id as SearchHit['messageId'],
           role: r.role as SearchHit['role'],
           snippet: r.text.length > 80 ? `${r.text.slice(0, 80)}…` : r.text,
@@ -1017,13 +1149,13 @@ export class Store {
   appendEvents(batch: Event[]): void {
     if (batch.length === 0) return;
     const insert = this.sqlite.query(
-      'INSERT OR IGNORE INTO events (id, session_id, type, actor_agent_id, task_id, payload, at) VALUES ($id, $sessionId, $type, $actorAgentId, $taskId, $payload, $at)'
+      'INSERT OR IGNORE INTO events (id, transcript_target_id, type, actor_agent_id, task_id, payload, at) VALUES ($id, $transcriptTargetId, $type, $actorAgentId, $taskId, $payload, $at)'
     );
     const tx = this.sqlite.transaction((rows: Event[]) => {
       for (const e of rows) {
         insert.run({
           $id: e.id,
-          $sessionId: e.sessionId,
+          $transcriptTargetId: e.transcriptTargetId,
           $type: e.type,
           $actorAgentId: e.actorAgentId,
           $taskId: e.taskId ?? null,
@@ -1044,7 +1176,7 @@ export class Store {
   }> {
     const approvals = this.sqlite
       .query(
-        `SELECT session_id,
+        `SELECT transcript_target_id,
                 json_extract(payload, '$.requestId') AS request_id,
                 json_extract(payload, '$.tool')      AS tool
          FROM events
@@ -1052,53 +1184,60 @@ export class Store {
            AND NOT EXISTS (
              SELECT 1 FROM events r
              WHERE r.type = 'tool.approval_resolved'
-               AND r.session_id = events.session_id
+               AND r.transcript_target_id = events.transcript_target_id
                AND json_extract(r.payload, '$.requestId') = json_extract(events.payload, '$.requestId')
            )`
       )
-      .all() as Array<{ session_id: string; request_id: string | null; tool: string | null }>;
+      .all() as Array<{ transcript_target_id: string; request_id: string | null; tool: string | null }>;
     const clarifies = this.sqlite
       .query(
-        `SELECT session_id,
+        `SELECT transcript_target_id,
                 json_extract(payload, '$.requestId') AS request_id
          FROM events
          WHERE type = 'clarify.requested'
            AND NOT EXISTS (
              SELECT 1 FROM events r
              WHERE r.type = 'clarify.resolved'
-               AND r.session_id = events.session_id
+               AND r.transcript_target_id = events.transcript_target_id
                AND json_extract(r.payload, '$.requestId') = json_extract(events.payload, '$.requestId')
            )`
       )
-      .all() as Array<{ session_id: string; request_id: string | null }>;
+      .all() as Array<{ transcript_target_id: string; request_id: string | null }>;
     return [
       ...approvals
         .filter((r): r is typeof r & { request_id: string } => r.request_id !== null)
         .map((r) => ({
           type: 'approval' as const,
           requestId: r.request_id,
-          sessionId: r.session_id,
+          sessionId: r.transcript_target_id,
           tool: r.tool ?? undefined
         })),
       ...clarifies
         .filter((r): r is typeof r & { request_id: string } => r.request_id !== null)
-        .map((r) => ({ type: 'clarify' as const, requestId: r.request_id, sessionId: r.session_id }))
+        .map((r) => ({ type: 'clarify' as const, requestId: r.request_id, sessionId: r.transcript_target_id }))
     ];
+  }
+
+  /** True when `eventId` is present in the durable event log. Lets callers distinguish a persisted
+   *  cursor from an un-persisted live one (e.g. an `agent.token`) before calling {@link listEvents},
+   *  whose missing-cursor fallback would otherwise replay the whole session. */
+  hasEvent(eventId: string): boolean {
+    return this.sqlite.query('SELECT 1 FROM events WHERE id = ? LIMIT 1').get(eventId) !== null;
   }
 
   /** Exclusive cursor; falls back to the whole session if `afterEventId` is not in the log. */
   listEvents(sessionId: string, afterEventId?: string): Event[] {
     const rows = this.sqlite
       .query(
-        `SELECT id, session_id, type, actor_agent_id, task_id, payload, at
+        `SELECT id, transcript_target_id, type, actor_agent_id, task_id, payload, at
          FROM events
-         WHERE session_id = $sessionId
+         WHERE transcript_target_id = $transcriptTargetId
            AND rowid > COALESCE((SELECT rowid FROM events WHERE id = $after), -1)
          ORDER BY rowid ASC`
       )
-      .all({ $sessionId: sessionId, $after: afterEventId ?? null }) as Array<{
+      .all({ $transcriptTargetId: sessionId, $after: afterEventId ?? null }) as Array<{
       id: string;
-      session_id: string;
+      transcript_target_id: string;
       type: string;
       actor_agent_id: string | null;
       task_id: string | null;
@@ -1107,7 +1246,7 @@ export class Store {
     }>;
     return rows.map((r) => ({
       id: r.id as Event['id'],
-      sessionId: r.session_id as Event['sessionId'],
+      transcriptTargetId: r.transcript_target_id as Event['transcriptTargetId'],
       type: r.type as Event['type'],
       actorAgentId: r.actor_agent_id as Event['actorAgentId'],
       taskId: (r.task_id ?? undefined) as Event['taskId'],
@@ -1354,14 +1493,14 @@ export class Store {
     this.sqlite
       .query(
         `INSERT INTO native_cli_sessions
-           (id, project_session_id, agent_name, provider, working_path, launch_mode, state,
+           (id, transcript_target_id, agent_name, provider, working_path, launch_mode, state,
             runtime_role, agent_runtime_id, agent_runtime_token_hash, last_delivered_seq, last_visible_seq, pid,
             provider_session_ref, output_snapshot, exit_code, started_at, updated_at, exited_at)
-         VALUES ($id, $projectSessionId, $agentName, $provider, $workingPath, $launchMode, $state,
+         VALUES ($id, $transcriptTargetId, $agentName, $provider, $workingPath, $launchMode, $state,
                  $runtimeRole, $agentRuntimeId, $agentRuntimeTokenHash, $lastDeliveredSeq, $lastVisibleSeq, $pid,
                  $providerSessionRef, $outputSnapshot, $exitCode, $startedAt, $updatedAt, $exitedAt)
          ON CONFLICT(id) DO UPDATE SET
-           project_session_id   = excluded.project_session_id,
+           transcript_target_id = excluded.transcript_target_id,
            agent_name           = excluded.agent_name,
            provider             = excluded.provider,
            working_path         = excluded.working_path,
@@ -1381,7 +1520,7 @@ export class Store {
       )
       .run({
         $id: row.id,
-        $projectSessionId: row.projectSessionId,
+        $transcriptTargetId: row.transcriptTargetId,
         $agentName: row.agentName,
         $provider: row.provider,
         $workingPath: row.workingPath,
@@ -1410,11 +1549,11 @@ export class Store {
     return row ? rowToNativeCliSession(row) : null;
   }
 
-  listNativeCliSessionsForProject(projectSessionId: string): NativeCliSessionRow[] {
+  listNativeCliSessionsForTranscriptTarget(transcriptTargetId: string): NativeCliSessionRow[] {
     return (
       this.sqlite
-        .query('SELECT * FROM native_cli_sessions WHERE project_session_id = ? ORDER BY started_at DESC')
-        .all(projectSessionId) as Array<Record<string, unknown>>
+        .query('SELECT * FROM native_cli_sessions WHERE transcript_target_id = ? ORDER BY started_at DESC')
+        .all(transcriptTargetId) as Array<Record<string, unknown>>
     ).map(rowToNativeCliSession);
   }
 
@@ -1491,9 +1630,87 @@ export class Store {
     return result.changes > 0;
   }
 
+  enqueueNativeCliInboxItem(
+    nativeCliSessionId: string,
+    messageSeq: number,
+    createdAt = new Date().toISOString()
+  ): boolean {
+    const result = this.sqlite
+      .query(
+        `INSERT OR IGNORE INTO native_cli_inbox_items
+           (native_cli_session_id, message_seq, state, created_at)
+         VALUES (?, ?, 'queued', ?)`
+      )
+      .run(nativeCliSessionId, messageSeq, createdAt);
+    return result.changes > 0;
+  }
+
+  markNativeCliInboxDelivered(nativeCliSessionId: string, cursor: number, at = new Date().toISOString()): boolean {
+    const update = this.sqlite
+      .query(
+        `UPDATE native_cli_inbox_items
+         SET state = CASE WHEN state = 'queued' THEN 'delivered' ELSE state END,
+             delivered_at = COALESCE(delivered_at, ?)
+         WHERE native_cli_session_id = ?
+           AND message_seq <= ?
+           AND state IN ('queued', 'delivered', 'visible')`
+      )
+      .run(at, nativeCliSessionId, cursor);
+    const cursorUpdated = this.setNativeCliDeliveredCursor(nativeCliSessionId, cursor);
+    return update.changes > 0 || cursorUpdated;
+  }
+
+  markNativeCliInboxVisible(nativeCliSessionId: string, cursor: number, at = new Date().toISOString()): boolean {
+    const update = this.sqlite
+      .query(
+        `UPDATE native_cli_inbox_items
+         SET state = CASE WHEN state IN ('queued', 'delivered') THEN 'visible' ELSE state END,
+             visible_at = COALESCE(visible_at, ?)
+         WHERE native_cli_session_id = ?
+           AND message_seq <= ?
+           AND state IN ('queued', 'delivered', 'visible')`
+      )
+      .run(at, nativeCliSessionId, cursor);
+    const cursorUpdated = this.setNativeCliVisibleCursor(nativeCliSessionId, cursor);
+    return update.changes > 0 || cursorUpdated;
+  }
+
+  markNativeCliInboxConsumed(nativeCliSessionId: string, cursor: number, at = new Date().toISOString()): boolean {
+    const update = this.sqlite
+      .query(
+        `UPDATE native_cli_inbox_items
+         SET state = 'consumed',
+             consumed_at = COALESCE(consumed_at, ?)
+         WHERE native_cli_session_id = ?
+           AND message_seq <= ?
+           AND state IN ('queued', 'delivered', 'visible')`
+      )
+      .run(at, nativeCliSessionId, cursor);
+    const visibleUpdated = this.setNativeCliVisibleCursor(nativeCliSessionId, cursor);
+    return update.changes > 0 || visibleUpdated;
+  }
+
+  hasUnconsumedNativeCliInbox(nativeCliSessionId: string, cursor?: number): boolean {
+    const session = this.getNativeCliSession(nativeCliSessionId);
+    if (!session) return false;
+    const maxSeq = cursor ?? session.lastDeliveredSeq;
+    if (maxSeq <= 0) return false;
+    const row = this.sqlite
+      .query(
+        `SELECT 1 AS found
+         FROM native_cli_inbox_items
+         WHERE native_cli_session_id = ?
+           AND message_seq <= ?
+           AND state != 'consumed'
+         LIMIT 1`
+      )
+      .get(nativeCliSessionId, maxSeq) as { found: number } | null;
+    return !!row;
+  }
+
   maxMessageSeq(sessionId: string): number {
     const row = this.sqlite
-      .query('SELECT COALESCE(MAX(rowid), 0) AS seq FROM messages WHERE session_id = ?')
+      .query('SELECT COALESCE(MAX(rowid), 0) AS seq FROM messages WHERE transcript_target_id = ?')
       .get(sessionId) as { seq: number } | null;
     return row?.seq ?? 0;
   }
@@ -1503,20 +1720,23 @@ export class Store {
     if (!session) return [];
     const rows = this.sqlite
       .query(
-        `SELECT *, rowid AS _native_cli_seq
-         FROM messages
-         WHERE session_id = ?
-           AND active = 1
-           AND rowid > ?
-         ORDER BY rowid ASC
+        `SELECT m.*, i.message_seq AS _native_cli_seq, i.state AS _native_cli_state
+         FROM native_cli_inbox_items i
+         JOIN messages m ON m.rowid = i.message_seq
+         WHERE i.native_cli_session_id = ?
+           AND i.message_seq > ?
+           AND i.state != 'consumed'
+           AND m.active = 1
+         ORDER BY i.message_seq ASC
          LIMIT ?`
       )
-      .all(session.projectSessionId, session.lastVisibleSeq, limit) as Array<Record<string, unknown>>;
+      .all(nativeCliSessionId, session.lastVisibleSeq, limit) as Array<Record<string, unknown>>;
     return rows.map((row) => ({
       seq: row._native_cli_seq as number,
+      deliveryState: row._native_cli_state as NativeCliInboxDeliveryState,
       message: rowToMessage({
         id: row.id as string,
-        sessionId: row.session_id as string,
+        transcriptTargetId: row.transcript_target_id as string,
         role: row.role as string,
         text: row.text as string,
         type: row.type as string,
@@ -1536,12 +1756,14 @@ export class Store {
     const row = this.sqlite
       .query(
         `SELECT COUNT(*) AS count
-         FROM messages
-         WHERE session_id = ?
-           AND active = 1
-           AND rowid > ?`
+         FROM native_cli_inbox_items i
+         JOIN messages m ON m.rowid = i.message_seq
+         WHERE i.native_cli_session_id = ?
+           AND i.message_seq > ?
+           AND i.state != 'consumed'
+           AND m.active = 1`
       )
-      .get(session.projectSessionId, session.lastVisibleSeq) as { count: number } | null;
+      .get(nativeCliSessionId, session.lastVisibleSeq) as { count: number } | null;
     return row?.count ?? 0;
   }
 
@@ -1549,12 +1771,12 @@ export class Store {
     this.sqlite
       .query(
         `INSERT INTO native_agent_direct_messages
-           (id, project_session_id, native_cli_session_id, from_agent, peer, text, created_at)
-         VALUES ($id, $projectSessionId, $nativeCliSessionId, $fromAgent, $peer, $text, $createdAt)`
+          (id, project_id, native_cli_session_id, from_agent, peer, text, created_at)
+         VALUES ($id, $projectId, $nativeCliSessionId, $fromAgent, $peer, $text, $createdAt)`
       )
       .run({
         $id: row.id,
-        $projectSessionId: row.projectSessionId,
+        $projectId: row.projectId,
         $nativeCliSessionId: row.nativeCliSessionId,
         $fromAgent: row.fromAgent,
         $peer: row.peer,
@@ -1572,12 +1794,12 @@ export class Store {
     if (!session) return [];
     const binds: Record<string, string | number> = {
       $nativeCliSessionId: nativeCliSessionId,
-      $projectSessionId: session.projectSessionId,
+      $projectId: session.transcriptTargetId,
       $self: session.agentName,
       $peer: peer
     };
     const clauses = [
-      '(project_session_id = $projectSessionId OR (project_session_id IS NULL AND native_cli_session_id = $nativeCliSessionId))',
+      'project_id = $projectId',
       '((from_agent = $self AND peer = $peer) OR (from_agent = $peer AND peer = $self))'
     ];
     if (opts.before) {
@@ -1596,7 +1818,7 @@ export class Store {
     const rows = this.sqlite.query(query).all(binds) as Array<Record<string, unknown>>;
     return rows.map((row) => ({
       id: row.id as NativeAgentDirectMessage['id'],
-      projectSessionId: row.project_session_id as NativeAgentDirectMessage['projectSessionId'],
+      projectId: row.project_id as NativeAgentDirectMessage['projectId'],
       nativeCliSessionId: row.native_cli_session_id as string,
       fromAgent: (row.from_agent as string | null) ?? null,
       peer: row.peer as string,

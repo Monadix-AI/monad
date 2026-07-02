@@ -7,6 +7,7 @@
 export * from './acp-agent.ts';
 export * from './approvals.ts';
 export * from './atom-pack.ts';
+export * from './avatar.ts';
 export * from './browser-preset.ts';
 export * from './channel.ts';
 export * from './command.ts';
@@ -45,4 +46,6 @@ export * from './startup-settings.ts';
 export * from './tool-backends.ts';
 export * from './ui.ts';
 export * from './url.ts';
+export * from './user-profile-settings.ts';
 export * from './version.ts';
+export * from './workplace-project.ts';

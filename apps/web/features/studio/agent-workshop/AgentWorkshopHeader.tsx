@@ -4,8 +4,9 @@ import type { WebMessageIdWithoutParams } from '@monad/i18n';
 import type { SandboxMode } from '@monad/protocol';
 import type { WorkshopPart } from './AgentWorkshopPrimitives';
 
+import { SparklesIcon } from '@hugeicons/core-free-icons';
+import { HugeiconsIcon } from '@hugeicons/react';
 import { Badge, Button, cn, Input, Label } from '@monad/ui';
-import { Sparkles } from 'lucide-react';
 
 import { useT } from '@/components/I18nProvider';
 
@@ -56,7 +57,10 @@ export function AgentWorkshopHeader({
       <div className="grid gap-3 lg:grid-cols-[1.1fr_0.9fr]">
         <div className="rounded-2xl border bg-card p-5">
           <div className="mb-4 flex items-center gap-2">
-            <Sparkles className="size-4 text-primary" />
+            <HugeiconsIcon
+              className="size-4 text-primary"
+              icon={SparklesIcon}
+            />
             <span className="font-medium text-sm">{t('web.studio.workshopIdentity')}</span>
           </div>
           <div className="grid gap-3 sm:grid-cols-[1fr_220px]">

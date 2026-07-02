@@ -2,18 +2,19 @@
 // I/O — split out of index.ts so the Store class is just query orchestration. Row shapes come from
 // the drizzle schema ($inferSelect); domain shapes come from @monad/protocol.
 
-import type { ChatMessage, MessageType, Session, SessionState, StreamStatus } from '@monad/protocol';
+import type { ChatMessage, MessageType, Session, SessionState, StreamStatus, WorkplaceProject } from '@monad/protocol';
 
 import { sessionOriginSchema } from '@monad/protocol';
 
-import { messages, sessions } from './schema.ts';
+import { messages, sessions, workplaceProjects } from './schema.ts';
 
 export type SessionRow = typeof sessions.$inferSelect;
+export type WorkplaceProjectRow = typeof workplaceProjects.$inferSelect;
 export type MessageRow = typeof messages.$inferSelect;
 
 export interface SearchRow {
   id: string;
-  session_id: string;
+  transcript_target_id: string;
   role: string;
   text: string;
   created_at: string;
@@ -107,9 +108,24 @@ export function rowToSession(row: SessionRow): Session {
   };
 }
 
+export function rowToWorkplaceProject(row: WorkplaceProjectRow): WorkplaceProject {
+  return {
+    id: row.id as WorkplaceProject['id'],
+    title: row.title,
+    ownerPrincipalId: row.ownerPrincipalId as WorkplaceProject['ownerPrincipalId'],
+    state: row.state as SessionState,
+    archived: row.archived === 1,
+    model: row.model ?? undefined,
+    cwd: row.cwd ?? undefined,
+    origin: parseOrigin(row.origin),
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt
+  };
+}
+
 export function rowToMessage(row: MessageRow): ChatMessage {
   const status = row.streamStatus as StreamStatus;
-  const sessionId = row.sessionId as ChatMessage['sessionId'];
+  const transcriptTargetId = row.transcriptTargetId as ChatMessage['transcriptTargetId'];
   const messageId = row.id as ChatMessage['id'];
   const type = row.type as MessageType;
   // `source` is not persisted; reconstruct it for live rows so a UI can subscribe. The assistant's
@@ -119,14 +135,14 @@ export function rowToMessage(row: MessageRow): ChatMessage {
   const prose = row.role === 'assistant' && (type === 'text' || type === 'markdown');
   return {
     id: messageId,
-    sessionId,
+    transcriptTargetId,
     role: row.role as ChatMessage['role'],
     text: row.text,
     type,
     data: row.data != null ? (JSON.parse(row.data) as unknown) : undefined,
     stream: {
       status,
-      source: live ? { sessionId, messageId, channel: prose ? undefined : `message:${messageId}` } : undefined
+      source: live ? { transcriptTargetId, messageId, channel: prose ? undefined : `message:${messageId}` } : undefined
     },
     active: row.active === 1,
     ...(row.includeInContext != null ? { includeInContext: row.includeInContext === 1 } : {}),

@@ -7,14 +7,14 @@
 // timeout: a human composing an answer needs longer than a yes/no, and a timeout yields an
 // empty answer (the agent proceeds with what it has) rather than a fail-closed denial.
 
-import type { Event, SessionId } from '@monad/protocol';
+import type { Event, TranscriptTargetId } from '@monad/protocol';
 
 import { newId } from '@monad/protocol';
 
 interface Pending {
   resolve: (answer: string) => void;
   timer: ReturnType<typeof setTimeout>;
-  sessionId: SessionId;
+  sessionId: TranscriptTargetId;
 }
 
 export interface ClarifyOptions {
@@ -48,7 +48,7 @@ export class ClarifyService {
         return;
       }
       const requestId = newId('clarify');
-      const sid = sessionId as SessionId;
+      const sid = sessionId as TranscriptTargetId;
       const timer = setTimeout(() => {
         if (this.pending.delete(requestId)) {
           this.emit(sid, 'clarify.resolved', { requestId, answer: '', reason: 'timeout' });
@@ -75,13 +75,13 @@ export class ClarifyService {
   }
 
   private emit(
-    sessionId: SessionId,
+    sessionId: TranscriptTargetId,
     type: 'clarify.requested' | 'clarify.resolved',
     payload: Record<string, unknown>
   ): void {
     this.publish({
       id: newId('evt'),
-      sessionId,
+      transcriptTargetId: sessionId,
       type,
       actorAgentId: null,
       payload,

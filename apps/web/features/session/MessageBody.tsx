@@ -1,9 +1,10 @@
 import type { Card, ClientRenderCaps } from '@monad/protocol';
 import type { ComponentType, ReactNode } from 'react';
 
+import { BoxIcon } from '@hugeicons/core-free-icons';
+import { HugeiconsIcon } from '@hugeicons/react';
 import { isHttpUrl, pickRepresentation } from '@monad/protocol';
 import { Button, cn } from '@monad/ui';
-import { Box } from 'lucide-react';
 
 import { Markdown } from '@/components/Markdown';
 import { MentionText } from '@/components/MentionText';
@@ -154,7 +155,10 @@ function UserMessageText({ text, onSkillPreview }: { text: string; onSkillPrevie
         onClick={() => onSkillPreview?.(id)}
         type="button"
       >
-        <Box className="size-3.5 shrink-0" />
+        <HugeiconsIcon
+          className="size-3.5 shrink-0"
+          icon={BoxIcon}
+        />
         <span className="truncate font-medium">{skillLabel(id)}</span>
         {skillSource(id) ? (
           <span className="shrink-0 rounded-(--radius-xs) border border-current/15 bg-accent px-1.5 py-0.5 text-[10px] text-muted-foreground">

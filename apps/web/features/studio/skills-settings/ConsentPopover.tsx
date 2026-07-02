@@ -1,8 +1,9 @@
 import type { ReactNode } from 'react';
 import type { SkillPending } from './types';
 
+import { Alert01Icon, LoaderPinwheelIcon } from '@hugeicons/core-free-icons';
+import { HugeiconsIcon } from '@hugeicons/react';
 import { Badge, Button } from '@monad/ui';
-import { AlertTriangle, Loader2 } from 'lucide-react';
 
 import { useT } from '@/components/I18nProvider';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -40,7 +41,10 @@ export function ConsentPopover({
         >
           <div className="flex flex-col gap-3 text-xs">
             <div className="flex items-start gap-2">
-              <AlertTriangle className="mt-0.5 size-4 shrink-0 text-warning" />
+              <HugeiconsIcon
+                className="mt-0.5 size-4 shrink-0 text-warning"
+                icon={Alert01Icon}
+              />
               <div className="min-w-0">
                 <div className="font-medium text-sm leading-5">{t('web.skills.consentTitle')}</div>
                 <div className="mt-1 flex flex-wrap gap-1.5">
@@ -59,7 +63,10 @@ export function ConsentPopover({
             {consent.warnings.length > 0 ? (
               <div className="flex flex-col gap-1.5 border-border/70 border-t pt-3">
                 <span className="flex items-center gap-1 font-medium text-warning">
-                  <AlertTriangle className="size-3" />
+                  <HugeiconsIcon
+                    className="size-3"
+                    icon={Alert01Icon}
+                  />
                   {t('web.skills.warningsTitle')}
                 </span>
                 {consent.warnings.map((w) => (
@@ -85,7 +92,12 @@ export function ConsentPopover({
                 onClick={() => void onConfirm()}
                 size="sm"
               >
-                {isInstalling ? <Loader2 className="size-3.5 animate-spin" /> : null}
+                {isInstalling ? (
+                  <HugeiconsIcon
+                    className="size-3.5 animate-spin"
+                    icon={LoaderPinwheelIcon}
+                  />
+                ) : null}
                 {t('web.skills.consentConfirm')}
               </Button>
             </div>

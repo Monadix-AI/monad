@@ -68,7 +68,7 @@ export function createNativeCliController(handlers: ReturnType<typeof createDaem
         params: sessionParams,
         body: startNativeCliAgentRequestSchema,
         response: { 200: startNativeCliAgentResponseSchema },
-        detail: { summary: 'Start a native CLI agent in a project session' }
+        detail: { summary: 'Start a native CLI agent in a project' }
       }
     )
     .get(
@@ -77,7 +77,16 @@ export function createNativeCliController(handlers: ReturnType<typeof createDaem
       {
         params: sessionParams,
         response: { 200: listNativeCliSessionsResponseSchema },
-        detail: { summary: 'List native CLI sessions for a project session' }
+        detail: { summary: 'List native CLI sessions for a project' }
+      }
+    )
+    .get(
+      '/projects/:id/native-cli-sessions',
+      ({ params }) => handlers.nativeCli.list({ sessionId: params.id as `prj_${string}` }),
+      {
+        params: sessionParams,
+        response: { 200: listNativeCliSessionsResponseSchema },
+        detail: { summary: 'List native CLI sessions for a Workplace Project', tags: ['http-only'] }
       }
     )
     .get('/native-cli-sessions/:id', ({ params }) => handlers.nativeCli.get({ id: params.id }), {
@@ -158,7 +167,7 @@ export function createNativeCliController(handlers: ReturnType<typeof createDaem
       ({ params }) => createNativeCliAuthEventsSseResponse(handlers, params.id, encoder),
       {
         params: nativeCliParams,
-        detail: { summary: 'Stream native CLI auth session snapshots' }
+        detail: { summary: 'Stream native CLI auth session snapshots', tags: ['http-only'] }
       }
     )
     .post(
@@ -187,7 +196,7 @@ export function createNativeCliController(handlers: ReturnType<typeof createDaem
       {
         params: nativeCliParams,
         response: { 200: okResponseSchema },
-        detail: { summary: 'Keep a native CLI auth PTY attached to a live browser surface' }
+        detail: { summary: 'Keep a native CLI auth PTY attached to a live browser surface', tags: ['http-only'] }
       }
     )
     .post('/native-cli-auth-sessions/:id/stop', ({ params }) => handlers.nativeCli.stopAuth({ id: params.id }), {

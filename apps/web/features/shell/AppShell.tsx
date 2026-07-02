@@ -2,6 +2,7 @@
 
 import type { MessageId, ProfileView, SessionId, UIItem, UIMessageItem } from '@monad/protocol';
 import type { VirtualListHandle } from '@/components/ui/VirtualList';
+import type { SessionCommandMenuItem } from '@/features/routes/sessions/SessionRoute';
 import type { StudioSectionId } from '@/features/studio/sections';
 
 import {
@@ -11,15 +12,20 @@ import {
   useApproveToolMutation,
   useClarifyRespondMutation,
   useCreateSessionMutation,
+  useCreateWorkplaceProjectMutation,
   useGetHealthQuery,
+  useGetRolesQuery,
   useListCommandsQuery,
   useListProfilesQuery,
   useListSessionsQuery,
+  useListWorkplaceProjectsQuery,
   useStreamControlQuery,
-  useStreamUiItemsQuery
+  useStreamUiItemsQuery,
+  useTranscribeAudioMutation,
+  workplaceProjectAdapter,
+  workplaceProjectSelectors
 } from '@monad/client-rtk';
-import { Button, cn } from '@monad/ui';
-import { PanelLeftOpen } from 'lucide-react';
+import { cn } from '@monad/ui';
 import dynamic from 'next/dynamic';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -39,9 +45,6 @@ import {
   skillCommandDisplayName,
   skillCommandMeta
 } from '@/features/routes/sessions/command-menu';
-import { type SessionCommandMenuItem, SessionRoute } from '@/features/routes/sessions/SessionRoute';
-import { StudioRoute } from '@/features/routes/studio/StudioRoute';
-import { WorkspaceRoute } from '@/features/routes/workspace/WorkspaceRoute';
 import {
   compactDividerItems,
   groupToolCalls,
@@ -50,6 +53,7 @@ import {
   viewItemFromUi,
   viewItemKey
 } from '@/features/session/chat-view-items';
+import { audioBlobToBase64 } from '@/features/session/voice-transcription';
 import { SkillEditorDialog } from '@/features/studio/skills-settings/SkillEditorDialog';
 import { loadSkillContent } from '@/features/studio/skills-settings/utils';
 import { useChatComposer } from '@/hooks/use-chat-composer';
@@ -58,8 +62,10 @@ import { useNavigableModal } from '@/hooks/use-navigable-modal';
 import { useSidebarShortcuts } from '@/hooks/use-sidebar-shortcuts';
 import { useTranscriptHistory } from '@/hooks/use-transcript-history';
 import { useMonadRuntime } from '@/lib/monad-runtime-provider';
-import { getWorkplaceProjectName, isWorkplaceProject, WORKPLACE_PROJECT_PREFIX } from '@/lib/workspace-sessions';
+import { buildWorkspaceProjects } from '@/lib/workspace-sessions';
 import { useWorkspaceShellStore, type WorkspaceShellState } from '@/lib/workspace-shell-store';
+import { AppShellRoutes } from './AppShellRoutes';
+import { AppShellSidebarReveal } from './AppShellSidebarReveal';
 import { NewProjectDialog } from './NewProjectDialog';
 import { SessionSidebar } from './SessionSidebar';
 
@@ -99,18 +105,14 @@ export function AppShell() {
   );
 
   const { data: sessionData, isLoading: sessionsLoading } = useListSessionsQuery(undefined);
+  const { data: projectData, isLoading: projectsLoading } = useListWorkplaceProjectsQuery(undefined);
   const sessions = sessionSelectors.selectAll(sessionData?.sessions ?? sessionAdapter.getInitialState());
-  const directSessions = useMemo(() => sessions.filter((session) => !isWorkplaceProject(session)), [sessions]);
-  const workspaceProjects = useMemo(() => {
-    const projects = new Map<string, { id: string; name: string }>();
-    for (const session of sessions) {
-      if (!isWorkplaceProject(session)) continue;
-      const name = getWorkplaceProjectName(session);
-      if (projects.has(name)) continue;
-      projects.set(name, { id: session.id, name });
-    }
-    return Array.from(projects.values());
-  }, [sessions]);
+  const projectRows = useMemo(
+    () => workplaceProjectSelectors.selectAll(projectData?.projects ?? workplaceProjectAdapter.getInitialState()),
+    [projectData]
+  );
+  const directSessions = sessions;
+  const workspaceProjects = useMemo(() => buildWorkspaceProjects(projectRows), [projectRows]);
   // Keep the session list live: re-fetch (and re-sort by last activity) when any session changes
   // anywhere — another tab, or a turn started from a third-party channel.
   useStreamControlQuery(undefined);
@@ -121,31 +123,45 @@ export function AppShell() {
   // Model profiles drive `/model <alias>` argument autocomplete.
   const { data: profileData } = useListProfilesQuery(undefined);
   const profiles = profileData ? profileSelectors.selectAll(profileData.profiles) : EMPTY_PROFILES;
+  const defaultProfile = profiles.find((profile) => profile.alias === profileData?.defaultAlias);
+  const { data: modelRoles } = useGetRolesQuery(undefined);
+  const voiceModelConfigured = Boolean(
+    modelRoles?.transcription && defaultProfile?.routes.chat.provider && defaultProfile.routes.chat.modelId
+  );
+  const [transcribeAudio] = useTranscribeAudioMutation();
   const [createSession] = useCreateSessionMutation();
+  const [createWorkplaceProject] = useCreateWorkplaceProjectMutation();
   const [approveTool] = useApproveToolMutation();
   const [clarifyRespond] = useClarifyRespondMutation();
 
   const currentId = (sessionIdFromPathname(pathname) as SessionId | null) || null;
   const routedProjectId = projectIdFromPathname(pathname);
   const currentSession = sessions.find((s) => s.id === currentId) ?? null;
-  const primaryAgentSession =
-    currentSession && !isWorkplaceProject(currentSession) ? currentSession : (directSessions[0] ?? null);
+  const primaryAgentSession = currentSession ?? directSessions[0] ?? null;
   const shellSurface = useWorkspaceShellStore((state: WorkspaceShellState) => state.surface);
   const lastMonadSessionId = useWorkspaceShellStore((state: WorkspaceShellState) => state.lastMonadSessionId);
-  const activeProjectId = routedProjectId;
+  const activeProjectId =
+    routedProjectId && workspaceProjects.some((project) => project.id === routedProjectId) ? routedProjectId : null;
   const rememberMonadSession = useWorkspaceShellStore((state: WorkspaceShellState) => state.rememberMonadSession);
   const openWorkspaceSurface = useWorkspaceShellStore((state: WorkspaceShellState) => state.openWorkspace);
   const openMonadChatSurface = useWorkspaceShellStore((state: WorkspaceShellState) => state.openMonadChat);
   const openProjectSurface = useWorkspaceShellStore((state: WorkspaceShellState) => state.openProject);
+  const sidebarCollapsed = useWorkspaceShellStore((state: WorkspaceShellState) => state.sidebarCollapsed);
+  const sidebarAutoReveal = useWorkspaceShellStore((state: WorkspaceShellState) => state.sidebarAutoReveal);
+  const newProjectOpen = useWorkspaceShellStore((state: WorkspaceShellState) => state.newProjectOpen);
+  const showInspector = useWorkspaceShellStore((state: WorkspaceShellState) => state.sessionInspectorOpen);
+  const revealSidebar = useWorkspaceShellStore((state: WorkspaceShellState) => state.revealSidebar);
+  const autoRevealSidebar = useWorkspaceShellStore((state: WorkspaceShellState) => state.autoRevealSidebar);
+  const collapseSidebar = useWorkspaceShellStore((state: WorkspaceShellState) => state.collapseSidebar);
+  const toggleSidebarCollapsed = useWorkspaceShellStore((state: WorkspaceShellState) => state.toggleSidebarCollapsed);
+  const setNewProjectOpen = useWorkspaceShellStore((state: WorkspaceShellState) => state.setNewProjectOpen);
+  const toggleSessionInspector = useWorkspaceShellStore((state: WorkspaceShellState) => state.toggleSessionInspector);
 
   // The web client writes over HTTP — read-only when the session's policy excludes it.
   const writableBy = currentSession?.origin?.writableBy;
   const isReadOnly = writableBy != null && !writableBy.includes('http');
   const [hiddenViewItemKeysBySession, setHiddenViewItemKeysBySession] = useState<Record<string, string[]>>({});
   const [input, setInput] = useState('');
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [sidebarAutoReveal, setSidebarAutoReveal] = useState(false);
-  const [newProjectOpen, setNewProjectOpen] = useState(false);
   const [accessMode, setAccessMode] = useState<'auto' | 'ask'>('auto');
   const [settingsTab, setSettingsTab] = useNavigableModal('settings');
   const showSettings = settingsTab !== null;
@@ -156,7 +172,6 @@ export function AppShell() {
   const showStudio = isStudioRoute;
   const studioPileActive = isStudioRoute;
   const workspacePileActive = isWorkspaceRoute;
-  const [showInspector, setShowInspector] = useState(false);
   const [activeSkill, setActiveSkill] = useState(0);
   const [skillMenuDismissed, setSkillMenuDismissed] = useState(false);
   const [skillPreview, setSkillPreview] = useState<{
@@ -194,7 +209,7 @@ export function AppShell() {
   const stream = useStreamUiItemsQuery(currentId as SessionId, { skip: currentId === null });
   // Older history (and deep-linked windows) load lazily; the live tail arrives over `stream`.
   const transcript = useTranscriptHistory({
-    sessionId: currentId,
+    transcriptTargetId: currentId,
     streamOldestCursor: stream.data?.oldestCursor,
     streamHasMore: stream.data?.hasMore ?? false
   });
@@ -392,6 +407,11 @@ export function AppShell() {
   }, [sessions, sessionsLoading, currentId, setSessionUrl]);
 
   useEffect(() => {
+    if (projectsLoading || !routedProjectId) return;
+    if (!workspaceProjects.find((project) => project.id === routedProjectId)) setWorkspaceUrl();
+  }, [projectsLoading, routedProjectId, setWorkspaceUrl, workspaceProjects]);
+
+  useEffect(() => {
     if (isStudioRoute) return;
     if (currentId) {
       openMonadChatSurface();
@@ -453,21 +473,21 @@ export function AppShell() {
     setSessionUrl
   ]);
 
-  const handleNewProject = useCallback(() => setNewProjectOpen(true), []);
+  const handleNewProject = useCallback(() => setNewProjectOpen(true), [setNewProjectOpen]);
 
   const handleCreateProject = useCallback(
     ({ name, cwd }: { name: string; cwd?: string }) => {
       setNewProjectOpen(false);
-      createSession({
-        title: WORKPLACE_PROJECT_PREFIX + name,
-        origin: { surface: 'web', client: 'workplace' },
+      createWorkplaceProject({
+        title: name,
+        origin: { surface: 'web' },
         ...(cwd ? { cwd } : {})
       })
         .unwrap()
         .then((id) => openProject(id))
         .catch(() => {});
     },
-    [createSession, openProject]
+    [createWorkplaceProject, openProject, setNewProjectOpen]
   );
 
   const openSettings = useCallback(() => {
@@ -504,9 +524,7 @@ export function AppShell() {
   const { shortcutModifierLabel, showSidebarShortcutBadges } = useSidebarShortcuts({
     sidebarShortcutActions,
     showSettings,
-    toggleSettings,
-    setSidebarAutoReveal,
-    setSidebarCollapsed
+    toggleSettings
   });
 
   const applyItem = useCallback(
@@ -620,19 +638,10 @@ export function AppShell() {
             setStudioUrl(section);
           }}
           onOpenWorkspace={setWorkspaceUrl}
-          onRequestCollapse={() => {
-            setSidebarAutoReveal(false);
-            setSidebarCollapsed(true);
-          }}
-          onRequestPersistentExpand={() => {
-            setSidebarAutoReveal(false);
-            setSidebarCollapsed(false);
-          }}
+          onRequestCollapse={collapseSidebar}
+          onRequestPersistentExpand={revealSidebar}
           onSwitchDaemonConnection={switchDaemonConnection}
-          onToggleCollapsed={() => {
-            setSidebarAutoReveal(false);
-            setSidebarCollapsed((collapsed) => !collapsed);
-          }}
+          onToggleCollapsed={toggleSidebarCollapsed}
           onToggleSettings={toggleSettings}
           onToggleStudio={() => {
             setStudioUrl();
@@ -651,32 +660,11 @@ export function AppShell() {
 
       <main className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden">
         {shouldShowSidebar && sidebarCollapsed ? (
-          <>
-            <div
-              aria-hidden="true"
-              className="absolute inset-y-0 left-0 z-20 w-3"
-              onPointerDown={() => {
-                setSidebarAutoReveal(true);
-                setSidebarCollapsed(false);
-              }}
-              onPointerEnter={() => {
-                setSidebarAutoReveal(true);
-                setSidebarCollapsed(false);
-              }}
-            />
-            <Button
-              aria-label={t('web.sidebar.expand')}
-              className="glass-control absolute top-3 left-3 z-20 size-8"
-              onClick={() => {
-                setSidebarAutoReveal(false);
-                setSidebarCollapsed(false);
-              }}
-              size="icon"
-              variant="secondary"
-            >
-              <PanelLeftOpen />
-            </Button>
-          </>
+          <AppShellSidebarReveal
+            autoRevealSidebar={autoRevealSidebar}
+            revealSidebar={revealSidebar}
+            t={t}
+          />
         ) : null}
         <div
           className={cn(
@@ -684,79 +672,85 @@ export function AppShell() {
             isWorkspaceHome ? 'bg-background' : 'app-main-frame'
           )}
         >
-          {showStudio ? (
-            <StudioRoute onClose={setWorkspaceUrl} />
-          ) : currentId === null ? (
-            <WorkspaceRoute
-              activeProjectId={activeProjectId}
-              agentSession={primaryAgentSession}
-              onNewAgentChat={() => void handleNewSession()}
-              onNewProject={handleNewProject}
-              onOpenAgentChat={() => void handleOpenMonadChat()}
-              onOpenProject={openProject}
-              onOpenSettings={() => {
-                openSettings();
-              }}
-              onOpenStudio={() => {
-                setStudioUrl();
-              }}
-              projects={workspaceProjects}
-            />
-          ) : (
-            <SessionRoute
-              accessMode={accessMode}
-              activeInputSkillToken={activeInputSkillToken}
-              activeSkill={activeSkill}
-              atBottom={atBottom}
-              contextUsage={sessionContextUsage}
-              currentSession={currentSession}
-              currentSessionId={currentId}
-              disabled={isReadOnly}
-              firstItemIndex={firstItemIndex}
-              inspectorItems={inspectorItems}
-              isBusy={isBusy}
-              isReadOnly={isReadOnly}
-              menuItems={menuItems}
-              messageQueue={messageQueue}
-              model={sessionModel}
-              onAccessModeChange={setAccessMode}
-              onApproval={(approval, allow, scope, reason) => {
+          <AppShellRoutes
+            currentSessionId={currentId}
+            onCloseStudio={setWorkspaceUrl}
+            sessionRouteProps={{
+              accessMode,
+              activeInputSkillToken,
+              activeSkill,
+              atBottom,
+              contextUsage: sessionContextUsage,
+              currentSession,
+              disabled: isReadOnly,
+              firstItemIndex,
+              inspectorItems,
+              isBusy,
+              isReadOnly,
+              menuItems,
+              messageQueue,
+              model: sessionModel,
+              onAccessModeChange: setAccessMode,
+              onApproval: (approval, allow, scope, reason) => {
                 void approveTool({ requestId: approval.requestId, allow, scope, reason });
-              }}
-              onAtBottomChange={setAtBottom}
-              onBranch={handleBranch}
-              onClarifyAnswer={(requestId, answer) => void clarifyRespond({ requestId, answer })}
-              onClearQueue={() => setMessageQueue([])}
-              onCommandItemApply={applyItem}
-              onCommandItemHover={setActiveSkill}
-              onEndReached={transcript.loadNewer}
-              onInputChange={(value) => {
+              },
+              onAtBottomChange: setAtBottom,
+              onBranch: handleBranch,
+              onClarifyAnswer: (requestId, answer) => void clarifyRespond({ requestId, answer }),
+              onClearQueue: () => setMessageQueue([]),
+              onCommandItemApply: applyItem,
+              onCommandItemHover: setActiveSkill,
+              onEndReached: transcript.loadNewer,
+              onInputChange: (value) => {
                 setInput(value);
                 setActiveSkill(0);
                 setSkillMenuDismissed(false);
-              }}
-              onKeyDown={handleTextareaKeyDown}
-              onRestore={handleRestore}
-              onScrollToBottom={scrollToBottom}
-              onSelectSession={selectSession}
-              onSkillPreview={openSkillPreview}
-              onStartReached={transcript.loadOlder}
-              onStop={handleStop}
-              onSubmit={() => void handleSubmit()}
-              onToggleInspector={() => setShowInspector((value) => !value)}
-              onVoiceText={(text) => {
+              },
+              onKeyDown: handleTextareaKeyDown,
+              onRestore: handleRestore,
+              onScrollToBottom: scrollToBottom,
+              onSelectSession: selectSession,
+              onSkillPreview: openSkillPreview,
+              onStartReached: transcript.loadOlder,
+              onStop: handleStop,
+              onSubmit: () => void handleSubmit(),
+              onToggleInspector: toggleSessionInspector,
+              onVoiceSettingsClick: () => router.push(studioPath('models')),
+              onVoiceText: (text) => {
                 setInput((current) => (current.trim() ? `${current.trimEnd()} ${text}` : text));
                 setSkillMenuDismissed(false);
-              }}
-              pendingApprovals={pendingApprovals}
-              pendingClarifications={pendingClarifications}
-              showInspector={showInspector}
-              skillMenuOpen={skillMenuOpen}
-              transcriptRef={transcriptRef}
-              value={input}
-              viewMessages={viewMessages}
-            />
-          )}
+              },
+              onVoiceTranscribe: async (audio) => {
+                const body = await audioBlobToBase64(audio);
+                return (await transcribeAudio(body).unwrap()).text;
+              },
+              pendingApprovals,
+              pendingClarifications,
+              showInspector,
+              skillMenuOpen,
+              transcriptRef,
+              value: input,
+              viewMessages,
+              voiceModelConfigured
+            }}
+            showStudio={showStudio}
+            workspaceRouteProps={{
+              activeProjectId,
+              agentSession: primaryAgentSession,
+              onNewAgentChat: () => void handleNewSession(),
+              onNewProject: handleNewProject,
+              onOpenAgentChat: () => void handleOpenMonadChat(),
+              onOpenProject: openProject,
+              onOpenSettings: () => {
+                openSettings();
+              },
+              onOpenStudio: () => {
+                setStudioUrl();
+              },
+              onProjectDeleted: setWorkspaceUrl,
+              projects: workspaceProjects
+            }}
+          />
         </div>
       </main>
 

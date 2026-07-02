@@ -1,10 +1,13 @@
+import type { NativeCliAgentConfig } from '@monad/home';
 import type {
   AgentId,
   BranchSessionRequest,
   ConfigureRuntimeRequest,
   ListUiItemsResponse,
+  ManagedNativeCliLifecycleLogEvent,
   MessageId,
   PrincipalId,
+  ProjectId,
   RestoreSessionRequest,
   RestoreSessionResponse,
   Session,
@@ -12,7 +15,12 @@ import type {
   SessionOrigin,
   SessionState,
   SessionTransport,
-  UpdateSessionRequest
+  TranscriptTargetId,
+  UpdateSessionRequest,
+  UpdateWorkplaceProjectRequest,
+  WorkplaceProject,
+  WorkspaceActionRequest,
+  WorkspaceActionResponse
 } from '@monad/protocol';
 import type { McpConnection } from '@/capabilities/tools';
 import type { Tool, ToolBackends } from '@/capabilities/tools/types.ts';
@@ -23,6 +31,7 @@ import { homedir } from 'node:os';
 import { isAbsolute, join, resolve } from 'node:path';
 import { loadAll } from '@monad/home';
 import { createLogger } from '@monad/logger';
+import { newId, workplaceProjectMembersExtKey, workplaceProjectMembersExtSchema } from '@monad/protocol';
 
 import { parseDurableSummary } from '@/agent/history.ts';
 import { canTransition } from '@/agent/index.ts';
@@ -35,11 +44,21 @@ import {
 } from '@/capabilities/tools';
 import { HandlerError } from '@/handlers/handler-error.ts';
 import { SessionUiProjector } from '@/handlers/session/ui-projection.ts';
+import { runWorkspaceAction } from '@/handlers/session/workspace-actions.ts';
 import { readWorkspaceGit } from '@/handlers/session/workspace-git.ts';
 import { clearAcpDelegatesForSession } from '@/services/delegation/acp-delegate.ts';
 import { createRemoteFsBackend, createRemoteTerminalBackend } from '@/services/delegation/delegation.ts';
+import { managedProjectLaunchMode } from '@/services/native-cli/managed-project.ts';
 
 const log = createLogger('session');
+const MANAGED_NATIVE_CLI_MEMBER_START_ERROR_EVENT =
+  'project.managed_native_cli.member_start_error' satisfies ManagedNativeCliLifecycleLogEvent;
+
+type NativeCliMemberContainer = {
+  id: TranscriptTargetId;
+  cwd?: string;
+  origin?: SessionOrigin;
+};
 
 /** Identity-only origin fields for observability — NEVER the env block (PII). */
 function originLog(origin?: SessionOrigin): Record<string, string | undefined> {
@@ -76,6 +95,43 @@ function resolveWorkspaceDir(cwd: string, base: string | undefined): string {
   return resolved;
 }
 
+function managedNativeCliMembers(origin: SessionOrigin | null | undefined) {
+  const parsed = workplaceProjectMembersExtSchema.safeParse(origin?.ext?.[workplaceProjectMembersExtKey]);
+  if (!parsed.success) return [];
+  return parsed.data.filter((member) => member.type === 'native-cli' && member.settings?.managedProjectAgent !== false);
+}
+
+function nativeCliMemberTemplateName(member: ReturnType<typeof managedNativeCliMembers>[number]): string {
+  return member.templateName ?? member.name;
+}
+
+function nativeCliMemberRuntimeName(member: ReturnType<typeof managedNativeCliMembers>[number]): string {
+  return member.instanceId ?? member.name;
+}
+
+function nativeCliMemberDisplayName(member: ReturnType<typeof managedNativeCliMembers>[number]): string {
+  return member.displayName ?? member.name;
+}
+
+function nativeCliMemberInstanceKey(member: ReturnType<typeof managedNativeCliMembers>[number]): string {
+  return member.instanceId ?? nativeCliMemberRuntimeName(member);
+}
+
+function nativeCliInputText(input: string): string {
+  return input.endsWith('\n') ? input : `${input}\n`;
+}
+
+function managedNativeCliJoinGreetingNotice(): string {
+  return [
+    'You have just joined this Workplace Project as a managed native CLI agent.',
+    'Acknowledge that you joined by posting one concise status message now.',
+    '',
+    'Use `monad project post <text>` for the public status message.',
+    'Do not use greetings, small talk, or filler.',
+    'Terminal stdout/stderr is diagnostic output only. It is not a Workplace Project message.'
+  ].join('\n');
+}
+
 export function createLifecycleHandlers(ctx: SessionContext) {
   const {
     deps: {
@@ -93,8 +149,139 @@ export function createLifecycleHandlers(ctx: SessionContext) {
     aborts,
     runtime,
     requireSession,
+    requireTranscriptTarget,
     emitLifecycle
   } = ctx;
+
+  function projectView(project: WorkplaceProject): WorkplaceProject {
+    return {
+      id: project.id,
+      title: project.title,
+      ownerPrincipalId: project.ownerPrincipalId,
+      state: project.state,
+      archived: project.archived,
+      ...(project.model ? { model: project.model } : {}),
+      ...(project.cwd ? { cwd: project.cwd } : {}),
+      ...(project.origin ? { origin: project.origin } : {}),
+      createdAt: project.createdAt,
+      updatedAt: project.updatedAt
+    };
+  }
+
+  function requireProject(id: ProjectId): WorkplaceProject {
+    const project = store.getWorkplaceProject(id);
+    if (!project) throw new HandlerError('invalid', `workplace project not found: ${id}`);
+    return project;
+  }
+
+  function recordManagedNativeCliProjectError(sessionId: TranscriptTargetId, agentName: string, message: string): void {
+    const text = `${agentName} failed to join the project: ${message}`;
+    const messageId = newId('msg');
+    store.insertMessage(messageId, sessionId, text, new Date().toISOString(), 'assistant', {
+      type: 'error',
+      data: { agentName }
+    });
+    emitLifecycle(sessionId, 'agent.error', {
+      messageId,
+      agentName,
+      code: 'managed_native_cli_start_failed',
+      message: text
+    });
+  }
+
+  async function startAddedManagedNativeCliMembers(
+    previous: NativeCliMemberContainer,
+    next: NativeCliMemberContainer
+  ): Promise<void> {
+    if (!ctx.deps.nativeCliHost || !paths || !next.cwd) return;
+    const before = new Set(managedNativeCliMembers(previous.origin).map(nativeCliMemberInstanceKey));
+    const added = managedNativeCliMembers(next.origin).filter(
+      (member) => !before.has(nativeCliMemberInstanceKey(member))
+    );
+    if (added.length === 0) return;
+    const cfg = await loadAll(paths.config, paths.profile);
+    const configured = new Map(
+      (cfg?.nativeCliAgents ?? [])
+        .filter((agent: NativeCliAgentConfig) => agent.enabled !== false)
+        .map((agent: NativeCliAgentConfig) => [agent.name, agent])
+    );
+    for (const member of added) {
+      const templateAgentName = nativeCliMemberTemplateName(member);
+      const runtimeAgentName = nativeCliMemberRuntimeName(member);
+      const spec = configured.get(templateAgentName);
+      if (!spec) continue;
+      const managedSessions = ctx.deps.nativeCliHost
+        .list(next.id)
+        .sessions.filter(
+          (candidate) => candidate.agentName === runtimeAgentName && candidate.runtimeRole === 'managed-project-agent'
+        );
+      if (managedSessions.some((candidate) => candidate.state === 'running')) continue;
+      try {
+        const resumeCandidate = managedSessions.find((candidate) => candidate.providerSessionRef);
+        const resumeFrom = resumeCandidate?.providerSessionRef;
+        const preflight = await ctx.deps.nativeCliHost.preflight(templateAgentName);
+        if (preflight.state !== 'ready') {
+          if (preflight.state === 'not_authenticated' || preflight.state === 'unknown') {
+            emitLifecycle(next.id, 'native_cli.connection_required', {
+              agentName: runtimeAgentName,
+              provider: spec.provider,
+              reason: preflight.reason,
+              reconnectIn: 'studio'
+            });
+          }
+          continue;
+        }
+        const startArgs = {
+          transcriptTargetId: next.id,
+          agentName: runtimeAgentName,
+          displayName: nativeCliMemberDisplayName(member),
+          templateAgentName,
+          workingPath: next.cwd,
+          launchMode: managedProjectLaunchMode(spec, member.settings?.launchMode),
+          runtimeRole: 'managed-project-agent' as const,
+          modelName: member.settings?.modelName ?? member.settings?.modelId,
+          reasoningEffort: member.settings?.reasoningEffort,
+          modelId: member.settings?.modelId,
+          speed: member.settings?.speed,
+          customPrompt: member.settings?.customPrompt
+        };
+        if (resumeCandidate && resumeFrom) store.clearNativeCliSessionRef(resumeCandidate.id);
+        try {
+          const nativeSession = await ctx.deps.nativeCliHost.start({
+            ...startArgs,
+            providerSessionRef: resumeFrom ?? undefined
+          });
+          ctx.deps.nativeCliHost.input(nativeSession.id, {
+            input: nativeCliInputText(managedNativeCliJoinGreetingNotice())
+          });
+        } catch (err) {
+          if (!resumeFrom) throw err;
+          emitLifecycle(next.id, 'native_cli.resume_failed', {
+            agentName: runtimeAgentName,
+            provider: spec.provider,
+            providerSessionRef: resumeFrom,
+            message: err instanceof Error ? err.message : String(err),
+            fallback: 'cold-start'
+          });
+          const nativeSession = await ctx.deps.nativeCliHost.start(startArgs);
+          ctx.deps.nativeCliHost.input(nativeSession.id, {
+            input: nativeCliInputText(managedNativeCliJoinGreetingNotice())
+          });
+        }
+      } catch (err) {
+        recordManagedNativeCliProjectError(next.id, runtimeAgentName, err instanceof Error ? err.message : String(err));
+        log.debug(
+          {
+            sessionId: next.id,
+            event: MANAGED_NATIVE_CLI_MEMBER_START_ERROR_EVENT,
+            agentName: runtimeAgentName,
+            err: err instanceof Error ? { message: err.message, stack: err.stack } : String(err)
+          },
+          'managed native cli member start failed'
+        );
+      }
+    }
+  }
 
   // SessionStart/SessionEnd are observe-only here: SessionStart's additionalContext is stashed by the
   // runner and injected into the session's first turn; session lifecycle never blocks on a hook.
@@ -116,7 +303,7 @@ export function createLifecycleHandlers(ctx: SessionContext) {
    *  skills from it. `resolved === undefined` clears the override back to the daemon/agent default.
    *  The working folder fully determines both fields, so switching/clearing it drops the prior
    *  folder's skills (no stale carry-over); other runtime config (MCP tools/connections) survives. */
-  async function applyWorkspaceRuntime(id: SessionId, resolved: string | undefined): Promise<void> {
+  async function applyWorkspaceRuntime(id: TranscriptTargetId, resolved: string | undefined): Promise<void> {
     const previous = runtime.get(id);
     const extraSkills = resolved && discoverProjectSkills ? await discoverProjectSkills(resolved).catch(() => []) : [];
     runtime.set(id, {
@@ -127,7 +314,7 @@ export function createLifecycleHandlers(ctx: SessionContext) {
   }
 
   /** Close + forget a session's out-of-band runtime config (MCP connections, sandbox roots). */
-  function disposeRuntime(id: SessionId): void {
+  function disposeRuntime(id: TranscriptTargetId): void {
     const rt = runtime.get(id);
     if (!rt) return;
     for (const conn of rt.mcpConnections ?? []) void conn.close().catch(() => {});
@@ -164,6 +351,97 @@ export function createLifecycleHandlers(ctx: SessionContext) {
         limit,
         offset
       };
+    },
+
+    async listProjects(params: { archived?: boolean; state?: SessionState; limit?: number; offset?: number } = {}) {
+      const limit = params.limit ?? 50;
+      const offset = params.offset ?? 0;
+      const filter = { archived: params.archived, state: params.state };
+      return {
+        projects: store.listWorkplaceProjects({ ...filter, limit, offset }).map(projectView),
+        total: store.countWorkplaceProjects(filter),
+        limit,
+        offset
+      };
+    },
+
+    async getProject({ id }: { id: ProjectId }) {
+      return { project: projectView(requireProject(id)) };
+    },
+
+    async createProject({ title, origin, cwd }: { title: string; origin?: SessionOrigin; cwd?: string }) {
+      const resolvedCwd = cwd?.trim() ? resolveWorkspaceDir(cwd, undefined) : undefined;
+      const now = new Date().toISOString();
+      const project: WorkplaceProject = {
+        id: newId('prj'),
+        title,
+        ownerPrincipalId,
+        state: 'active',
+        archived: false,
+        ...(resolvedCwd ? { cwd: resolvedCwd } : {}),
+        ...(origin ? { origin } : {}),
+        createdAt: now,
+        updatedAt: now
+      };
+      store.insertWorkplaceProject(project);
+      await sessionSandbox?.ensure(project.id);
+      if (project.cwd) await applyWorkspaceRuntime(project.id, project.cwd);
+      log.info({ projectId: project.id, ...originLog(origin) }, 'workplace project created');
+      emitLifecycle(project.id, 'session.created', {
+        title: project.title,
+        kind: 'workplace_project'
+      });
+      return { projectId: project.id };
+    },
+
+    async updateProject({
+      id,
+      title,
+      state,
+      archived,
+      origin,
+      cwd,
+      model
+    }: { id: ProjectId } & UpdateWorkplaceProjectRequest) {
+      const current = requireProject(id);
+      if (state !== undefined && !canTransition(current.state, state)) {
+        throw new HandlerError('invalid', `illegal state transition: ${current.state} -> ${state}`);
+      }
+      const resolvedCwd =
+        cwd === undefined ? undefined : cwd === null ? null : cwd.trim() ? resolveWorkspaceDir(cwd, current.cwd) : null;
+      const project = store.updateWorkplaceProject(id, {
+        title,
+        state,
+        archived,
+        model,
+        origin,
+        ...(resolvedCwd !== undefined ? { cwd: resolvedCwd } : {})
+      });
+      if (!project) throw new HandlerError('internal', 'update project failed');
+      if (resolvedCwd !== undefined) await applyWorkspaceRuntime(id, resolvedCwd ?? undefined);
+      await startAddedManagedNativeCliMembers(current, project);
+      emitLifecycle(id, 'session.updated', {
+        title,
+        state,
+        archived,
+        ...(resolvedCwd !== undefined ? { cwd: resolvedCwd } : {}),
+        kind: 'workplace_project'
+      });
+      return { project: projectView(project) };
+    },
+
+    async deleteProject({ id }: { id: ProjectId }) {
+      requireProject(id);
+      aborts.get(id)?.abort();
+      aborts.delete(id);
+      disposeRuntime(id);
+      clearProcessesForSession(id);
+      ctx.deps.nativeCliHost?.stopTranscriptTarget(id);
+      await sessionSandbox?.dispose(id);
+      disposeSandboxSession(id);
+      store.deleteWorkplaceProject(id);
+      emitLifecycle(id, 'session.deleted', { kind: 'workplace_project' });
+      return { deleted: true as const };
     },
 
     async get({ id }: { id: SessionId }) {
@@ -238,6 +516,7 @@ export function createLifecycleHandlers(ctx: SessionContext) {
       });
       if (!session) throw new HandlerError('internal', 'update failed');
       if (resolvedCwd !== undefined) await applyWorkspaceRuntime(id, resolvedCwd ?? undefined);
+      await startAddedManagedNativeCliMembers(current, session);
       emitLifecycle(id, 'session.updated', {
         title,
         state,
@@ -248,26 +527,45 @@ export function createLifecycleHandlers(ctx: SessionContext) {
     },
 
     /**
-     * Set (or clear, with an empty string) the session's shared working folder. This is the single
-     * source of truth behind every entry point (the `/workdir` command, the session update RPC, and
-     * room creation): it persists `session.cwd`, broadens the session's runtime sandbox roots to that
-     * folder so fs/shell tools — and any delegated subagent that inherits `ctx.sandboxRoots` — can
-     * reach it, refreshes project-local skills from the folder, and fans a `session.updated` delta.
+     * Set (or clear, with an empty string) the transcript target's shared working folder. This is the
+     * single source of truth behind every entry point (the `/workdir` command, session/project update
+     * RPCs, and room creation): it persists cwd, broadens the runtime sandbox roots to that folder so
+     * fs/shell tools — and any delegated subagent that inherits `ctx.sandboxRoots` — can reach it,
+     * refreshes project-local skills from the folder, and fans a `session.updated` delta.
      */
-    async setWorkspace({ id, cwd }: { id: SessionId; cwd: string }): Promise<Session> {
-      const current = requireSession(id);
+    async setWorkspace({ id, cwd }: { id: TranscriptTargetId; cwd: string }): Promise<Session | WorkplaceProject> {
+      const current = requireTranscriptTarget(id);
       const resolved = cwd.trim() ? resolveWorkspaceDir(cwd, current.cwd) : undefined;
-      const session = store.updateSession(id, { cwd: resolved ?? null });
-      if (!session) throw new HandlerError('internal', 'set workspace failed');
+      const updatedSession = store.updateSession(id, { cwd: resolved ?? null });
+      const updatedProject = updatedSession
+        ? null
+        : store.updateWorkplaceProject(id as ProjectId, { cwd: resolved ?? null });
+      if (!updatedSession && !updatedProject) throw new HandlerError('internal', 'set workspace failed');
       await applyWorkspaceRuntime(id, resolved);
       emitLifecycle(id, 'session.updated', { cwd: resolved ?? null });
-      return session;
+      return updatedSession ?? (updatedProject as WorkplaceProject);
     },
 
-    /** Best-effort git summary of the session's working folder (workplace header). No folder → not a repo. */
+    /** Best-effort workspace metadata for the session's working folder. No folder → not a git repo. */
+    async workspaceMeta({ id }: { id: TranscriptTargetId }) {
+      const session = requireTranscriptTarget(id);
+      return { git: session.cwd ? await readWorkspaceGit(session.cwd) : { isRepo: false } };
+    },
+
+    /** Backward-compatible alias for callers that still read only the git slice. */
     async workspaceGit({ id }: { id: SessionId }) {
-      const session = requireSession(id);
+      const session = requireTranscriptTarget(id);
       return session.cwd ? await readWorkspaceGit(session.cwd) : { isRepo: false };
+    },
+
+    async workspaceAction({
+      id,
+      action
+    }: { id: TranscriptTargetId } & WorkspaceActionRequest): Promise<WorkspaceActionResponse> {
+      const session = requireTranscriptTarget(id);
+      if (!session.cwd) throw new HandlerError('invalid', 'working folder is not set');
+      await runWorkspaceAction(action, session.cwd);
+      return { ok: true, action };
     },
 
     async delete({ id }: { id: SessionId }) {
@@ -277,11 +575,11 @@ export function createLifecycleHandlers(ctx: SessionContext) {
       disposeRuntime(id);
       clearProcessesForSession(id);
       clearAcpDelegatesForSession(id); // kill any reused external ACP adapters held for this session
-      ctx.deps.nativeCliHost?.stopProject(id as SessionId);
-      oversight?.cancelSession(id as SessionId, 'session_deleted');
-      delegation?.cancelSession(id as SessionId, 'session_deleted');
+      ctx.deps.nativeCliHost?.stopTranscriptTarget(id);
+      oversight?.cancelSession(id, 'session_deleted');
+      delegation?.cancelSession(id, 'session_deleted');
       // SessionEnd fires before teardown (abort only pauses a turn, so it does not end the session).
-      await fireSessionHook('SessionEnd', id as SessionId);
+      await fireSessionHook('SessionEnd', id);
       await sessionSandbox?.dispose(id);
       // Release any remote launcher instance kept for this session (e.g. an e2b cloud sandbox).
       disposeSandboxSession(id);
@@ -342,28 +640,32 @@ export function createLifecycleHandlers(ctx: SessionContext) {
       return { ok: true as const };
     },
 
-    async reset({ id }: { id: SessionId }) {
-      requireSession(id);
+    async reset({ id }: { id: TranscriptTargetId }) {
+      requireTranscriptTarget(id);
       aborts.get(id)?.abort();
       aborts.delete(id);
       clearProcessesForSession(id);
       clearAcpDelegatesForSession(id); // the sub-agent's continued context no longer matches a reset parent
-      ctx.deps.nativeCliHost?.stopProject(id as SessionId);
+      ctx.deps.nativeCliHost?.stopTranscriptTarget(id);
       const clearedCount = store.clearMessages(id);
       emitLifecycle(id, 'session.updated', { reset: true });
       return { clearedCount };
     },
 
-    async abort({ id }: { id: SessionId }) {
-      const current = requireSession(id);
+    async abort({ id }: { id: TranscriptTargetId }) {
+      const current = requireTranscriptTarget(id);
       const controller = aborts.get(id);
       const aborted = controller !== undefined;
       controller?.abort();
       aborts.delete(id);
-      oversight?.cancelSession(id as SessionId, 'session_aborted');
-      delegation?.cancelSession(id as SessionId, 'session_aborted');
+      if (id.startsWith('ses_')) {
+        const sessionId = id as SessionId;
+        oversight?.cancelSession(sessionId, 'session_aborted');
+        delegation?.cancelSession(sessionId, 'session_aborted');
+      }
       if (aborted && canTransition(current.state, 'paused')) {
-        store.updateSession(id, { state: 'paused' });
+        if (store.getSession(id)) store.updateSession(id, { state: 'paused' });
+        else store.updateWorkplaceProject(id, { state: 'paused' });
         emitLifecycle(id, 'session.updated', { state: 'paused' });
       }
       return { aborted };
@@ -376,13 +678,13 @@ export function createLifecycleHandlers(ctx: SessionContext) {
       includeInactive,
       includeAncestors
     }: {
-      id: SessionId;
+      id: TranscriptTargetId;
       limit?: number;
       before?: string;
       includeInactive?: boolean;
       includeAncestors?: boolean;
     }) {
-      requireSession(id);
+      requireTranscriptTarget(id);
       if (!includeAncestors) {
         return { messages: store.listMessages(id, { limit, before, includeInactive }) };
       }
@@ -398,7 +700,7 @@ export function createLifecycleHandlers(ctx: SessionContext) {
       includeInactive,
       includeAncestors
     }: {
-      id: SessionId;
+      id: TranscriptTargetId;
       limit?: number;
       before?: string;
       after?: string;
@@ -406,7 +708,7 @@ export function createLifecycleHandlers(ctx: SessionContext) {
       includeInactive?: boolean;
       includeAncestors?: boolean;
     }): Promise<ListUiItemsResponse> {
-      requireSession(id);
+      requireTranscriptTarget(id);
       // `around` opens an inclusive window centred on a message; `after` pages forward
       // (oldest-first from the cursor); otherwise take the newest window (optionally older than
       // `before`) — all returned oldest→newest by listMessages.
@@ -419,6 +721,21 @@ export function createLifecycleHandlers(ctx: SessionContext) {
             : store.listMessages(id, { limit, before, includeInactive, latest: true });
       const projector = new SessionUiProjector();
       projector.hydrateMessages(messages, parseDurableSummary(store.getMemory(id, 'ctx:summary')));
+      // Rebuild native CLI tool cards from their durable snapshots for this window (native_cli.output
+      // chunks aren't persisted as events). Scope to the page's time span so a card lands on the page
+      // it belongs to; the full lineage view takes them all. Cross-page overlap is harmless — the
+      // client merges transcript items by key.
+      const cliSessions = store.listNativeCliSessionsForTranscriptTarget(id);
+      if (includeAncestors) projector.hydrateNativeCliSessions(cliSessions);
+      else {
+        const oldestTs = messages.at(0)?.createdAt;
+        const newestTs = messages.at(-1)?.createdAt;
+        if (oldestTs !== undefined && newestTs !== undefined) {
+          projector.hydrateNativeCliSessions(
+            cliSessions.filter((s) => s.startedAt >= oldestTs && s.startedAt <= newestTs)
+          );
+        }
+      }
       const snapshot = projector.snapshot();
       const items = snapshot.kind === 'snapshot' ? snapshot.items : [];
       if (includeAncestors) return { items };

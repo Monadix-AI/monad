@@ -50,6 +50,7 @@ export const uiMessageItemSchema = z.object({
   id: z.string(),
   role: uiMessageRoleSchema,
   agentName: z.string().optional(),
+  source: z.enum(['managed-native-cli']).optional(),
   parts: z.array(uiPartSchema),
   status: uiItemStatusSchema.optional(),
   seq: z.string()

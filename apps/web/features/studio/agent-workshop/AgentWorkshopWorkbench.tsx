@@ -3,8 +3,8 @@
 import type { SandboxMode } from '@monad/protocol';
 import type { DragEvent } from 'react';
 
+import { BrainIcon, EyeIcon, ShieldHalfIcon, SparklesIcon, Wrench01Icon } from '@hugeicons/core-free-icons';
 import { Badge, ScrollArea } from '@monad/ui';
-import { Brain, Eye, ShieldHalf, Sparkles, Wrench } from 'lucide-react';
 
 import { useT } from '@/components/I18nProvider';
 import { type WorkshopPart, WorkshopSlot } from './AgentWorkshopPrimitives';
@@ -68,7 +68,7 @@ export function AgentWorkshopWorkbench({
             </>
           }
           dragging={draggingPart === 'brain'}
-          icon={Brain}
+          icon={BrainIcon}
           onDrop={onDrop}
           onSelect={() => setSelectedPart('brain')}
           part="brain"
@@ -89,7 +89,7 @@ export function AgentWorkshopWorkbench({
             </div>
           }
           dragging={draggingPart === 'prompt'}
-          icon={Sparkles}
+          icon={SparklesIcon}
           onDrop={onDrop}
           onSelect={() => setSelectedPart('prompt')}
           part="prompt"
@@ -123,7 +123,7 @@ export function AgentWorkshopWorkbench({
             </div>
           }
           dragging={draggingPart === 'tools'}
-          icon={Wrench}
+          icon={Wrench01Icon}
           onDrop={onDrop}
           onSelect={() => setSelectedPart('tools')}
           part="tools"
@@ -154,7 +154,7 @@ export function AgentWorkshopWorkbench({
             </div>
           }
           dragging={draggingPart === 'safety'}
-          icon={ShieldHalf}
+          icon={ShieldHalfIcon}
           onDrop={onDrop}
           onSelect={() => setSelectedPart('safety')}
           part="safety"
@@ -172,7 +172,7 @@ export function AgentWorkshopWorkbench({
             </div>
           }
           dragging={draggingPart === 'visibility'}
-          icon={Eye}
+          icon={EyeIcon}
           onDrop={onDrop}
           onSelect={() => setSelectedPart('visibility')}
           part="visibility"

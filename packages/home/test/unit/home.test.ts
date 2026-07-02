@@ -15,10 +15,12 @@ import {
   mcpServerSchema,
   migrateConfig,
   monadConfigSchema,
+  monadProfileSchema,
   monadSystemConfigSchema,
   PROFILE_SCHEMA_CONTENT,
   SCHEMA_CONTENT,
   saveAuth,
+  saveProfile,
   saveSystemConfig,
   tryParseConfig
 } from '../../src/config.ts';
@@ -445,6 +447,26 @@ describe('loadConfig', () => {
       ])
     );
     expect(cfg?.model.default).toBe('');
+  });
+
+  test('profile slice stores user avatar data without moving principal identity out of system config', async () => {
+    await initMonadHome(paths);
+    const cfg = await loadAll(paths.config, paths.profile);
+    const initialDisplayName = cfg?.principal.displayName;
+    expect(typeof initialDisplayName).toBe('string');
+    expect(cfg?.user.avatarDataUrl).toBeNull();
+    if (!cfg) throw new Error('expected config');
+
+    cfg.user.avatarDataUrl = 'data:image/png;base64,ZmFrZQ==';
+    await saveProfile(paths.profile, cfg);
+
+    const profile = monadProfileSchema.parse(JSON.parse(await readFile(paths.profile, 'utf8')));
+    expect(profile.user.avatarDataUrl).toBe('data:image/png;base64,ZmFrZQ==');
+    expect('principal' in profile).toBe(false);
+
+    const reloaded = await loadAll(paths.config, paths.profile);
+    expect(reloaded?.principal.displayName).toBe(initialDisplayName);
+    expect(reloaded?.user.avatarDataUrl).toBe('data:image/png;base64,ZmFrZQ==');
   });
 
   test('migrates a v1 file written to disk', async () => {

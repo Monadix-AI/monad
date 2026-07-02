@@ -106,7 +106,7 @@ beforeEach(async () => {
     sessionRepo: { insertSession: (s) => store.insertSession(s), getSession: (id) => store.getSession(id) },
     messageRepo: {
       list: (sid) => store.listMessages(sid),
-      append: (m) => store.insertMessage(m.id, m.sessionId, m.text, m.createdAt, m.role)
+      append: (m) => store.insertMessage(m.id, m.transcriptTargetId, m.text, m.createdAt, m.role)
     },
     defaultModel: cfg.model.default
   });

@@ -1,5 +1,11 @@
 import type { MonadPaths } from '@monad/home';
-import type { DeveloperLogRecord, NativeCliAuthSessionView, NativeCliSessionView, SessionId } from '@monad/protocol';
+import type {
+  DeveloperLogRecord,
+  NativeCliAuthSessionView,
+  NativeCliSessionView,
+  SessionId,
+  SessionUiEvent
+} from '@monad/protocol';
 
 import { describe, expect, test } from 'bun:test';
 import { chmod, mkdir, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises';
@@ -316,6 +322,41 @@ async function configureMockCodexApprovalAgent(call: Call, dir: string): Promise
   return;
 }
 
+async function configureMockSlowCodexAppServerAgent(call: Call, dir: string): Promise<void> {
+  const script = join(dir, 'mock-codex-slow-app-server.js');
+  await writeFile(
+    script,
+    [
+      '#!/usr/bin/env bun',
+      'process.stdin.on("data", (d) => {',
+      '  for (const line of d.toString().trim().split(/\\n+/)) {',
+      '    if (!line) continue;',
+      '    const msg = JSON.parse(line);',
+      '    if (msg.method !== "thread/start" && msg.method !== "thread/resume") continue;',
+      '    setTimeout(() => {',
+      '      process.stdout.write(JSON.stringify({id:msg.id, result:{thread:{id:"codex-thread-slow"}}}) + "\\n");',
+      '    }, 1500);',
+      '  }',
+      '});',
+      'setInterval(() => {}, 1000);'
+    ].join('\n')
+  );
+  await chmod(script, 0o755);
+  const res = await call('PUT', '/v1/settings/native-cli-agents', {
+    agent: {
+      name: 'mock-codex-slow-app-server',
+      provider: 'codex',
+      command: script,
+      args: [],
+      enabled: true,
+      defaultLaunchMode: 'app-server',
+      allowDangerousMode: false,
+      approvalOwnership: 'provider-owned'
+    }
+  });
+  expect(res.status).toBe(200);
+}
+
 async function configureMockCodexOversizedLineAgent(call: Call, dir: string): Promise<void> {
   const script = join(dir, 'mock-codex-oversized-line.js');
   await writeFile(
@@ -354,18 +395,31 @@ async function configureMockCodexOversizedLineAgent(call: Call, dir: string): Pr
   expect(res.status).toBe(200);
 }
 
-async function configureMockAuthAgent(call: Call, dir: string): Promise<void> {
+async function configureMockAuthAgent(
+  call: Call,
+  dir: string,
+  opts: { initiallyAuthenticated?: boolean; loginAuthenticates?: boolean } = {}
+): Promise<void> {
   const script = join(dir, 'mock-native-auth.js');
+  const authMarker = join(dir, 'mock-native-authenticated');
+  const loginMarker = join(dir, 'mock-native-login-started');
+  if (opts.initiallyAuthenticated) await writeFile(authMarker, '1');
   await writeFile(
     script,
     [
       '#!/usr/bin/env bun',
+      'import { existsSync, writeFileSync } from "node:fs";',
+      `const authMarker = ${JSON.stringify(authMarker)};`,
+      `const loginMarker = ${JSON.stringify(loginMarker)};`,
+      `const loginAuthenticates = ${JSON.stringify(opts.loginAuthenticates ?? true)};`,
       'const args = process.argv.slice(2).join(" ");',
-      'if (args === "auth status") {',
-      '  process.stdout.write(JSON.stringify({ state: "authenticated" }) + "\\n");',
+      'if (args.startsWith("auth status")) {',
+      '  process.stdout.write(JSON.stringify({ state: existsSync(authMarker) ? "authenticated" : "unauthenticated" }) + "\\n");',
       '  process.exit(0);',
       '}',
-      'if (args === "auth login") {',
+      'if (args.startsWith("auth login")) {',
+      '  writeFileSync(loginMarker, "1");',
+      '  if (loginAuthenticates) writeFileSync(authMarker, "1");',
       '  process.stdout.write("Open https://provider.example/login and enter code ABCD\\n");',
       '  process.stdin.on("data", (d) => process.stdout.write("auth-input:" + d));',
       '  setInterval(() => {}, 1000);',
@@ -395,7 +449,7 @@ async function configureHangingAuthStatusAgent(call: Call, dir: string): Promise
     [
       '#!/usr/bin/env bun',
       'const args = process.argv.slice(2).join(" ");',
-      'if (args === "auth status") setInterval(() => {}, 1000);'
+      'if (args.startsWith("auth status")) setInterval(() => {}, 1000);'
     ].join('\n')
   );
   await chmod(script, 0o755);
@@ -573,7 +627,7 @@ async function runWorkingPathBoundaryRuntime(call: Call, dir: string, projectDir
   });
   expect(res.status).toBe(400);
   expect((await res.json()) as { error: string }).toMatchObject({
-    error: expect.stringContaining('workingPath must be within the session working directory')
+    error: expect.stringContaining('workingPath must be within the project working directory')
   });
 }
 
@@ -608,9 +662,27 @@ async function runJsonStreamRuntime(
       : undefined;
   });
 
+  // native_cli.output chunks are delivered live and captured in the bounded output snapshot, but are
+  // NOT persisted as durable event rows (one row per chunk would grow the log without bound). The
+  // milestone events (started/exited) stay durable.
   let events = handlers.store.listEvents(sessionId);
-  expect(events.some((event) => event.type === 'native_cli.output')).toBe(true);
-  expect(events.some((event) => event.type === 'native_cli.output' && event.payload.stream === 'stderr')).toBe(true);
+  expect(events.some((event) => event.type === 'native_cli.output')).toBe(false);
+  expect(events.some((event) => event.type === 'native_cli.started')).toBe(true);
+
+  // A fresh UI subscription rebuilds the native CLI tool card from the durable snapshot, so the
+  // terminal output survives a page refresh even though the per-chunk events aren't persisted. The
+  // snapshot is delivered synchronously during subscribe, so it is captured by the time await resolves.
+  let hydrated: SessionUiEvent | undefined;
+  const sub = await handlers.session.subscribeUi({ sessionId }, (event) => {
+    if (!hydrated && event.kind === 'snapshot') hydrated = event;
+  });
+  sub.dispose();
+  if (hydrated?.kind !== 'snapshot') throw new Error('expected hydrated snapshot');
+  const card = hydrated.items.find((item) => item.kind === 'tool' && item.id === nativeSession.id);
+  if (card?.kind !== 'tool') throw new Error('expected native CLI tool card in hydrated snapshot');
+  expect(card.tool).toBe('native-cli:claude-code');
+  expect(card.output).toContain('ready-json');
+  expect(card.output).toContain('stderr-json');
   await waitFor(() => (logs.seen.some((record) => record.event === 'native_cli.launch') ? true : undefined));
 
   const input = await call('POST', `/v1/native-cli-sessions/${nativeSession.id}/input`, { input: 'hello-json' });
@@ -764,6 +836,22 @@ async function runCodexResumeRuntime(call: Call, dir: string, projectDir: string
   await call('POST', `/v1/native-cli-sessions/${nativeSession.id}/stop`);
 }
 
+async function runSlowCodexAppServerStartupRuntime(call: Call, dir: string, projectDir: string): Promise<void> {
+  await configureMockSlowCodexAppServerAgent(call, dir);
+  const sessionId = await createSession(call, projectDir);
+
+  const res = await call('POST', `/v1/sessions/${sessionId}/native-cli-agents/start`, {
+    agentName: 'mock-codex-slow-app-server',
+    workingPath: projectDir,
+    launchMode: 'app-server'
+  });
+  expect(res.status).toBe(200);
+  const nativeSession = ((await res.json()) as { session: NativeCliSessionView }).session;
+  expect(nativeSession.launchMode).toBe('app-server');
+
+  await call('POST', `/v1/native-cli-sessions/${nativeSession.id}/stop`);
+}
+
 async function runCodexOversizedStructuredLineRuntime(
   call: Call,
   dir: string,
@@ -834,7 +922,7 @@ async function runAuthRelayRuntime(
   expect(res.status).toBe(200);
   expect(((await res.json()) as { state: string }).state).toBe('authenticated');
 
-  expect(handlers.store.listNativeCliSessionsForProject('ses_UNKNOWN')).toHaveLength(0);
+  expect(handlers.store.listNativeCliSessionsForTranscriptTarget('ses_UNKNOWN')).toHaveLength(0);
 
   res = await call('POST', `/v1/native-cli-auth-sessions/${authSession.id}/stop`);
   expect(res.status).toBe(200);
@@ -846,7 +934,7 @@ async function runAuthRelayRuntime(
 }
 
 async function runAuthStartReplacesPreviousRuntime(call: Call, dir: string): Promise<void> {
-  await configureMockAuthAgent(call, dir);
+  await configureMockAuthAgent(call, dir, { loginAuthenticates: false });
 
   let res = await call('POST', '/v1/native-cli-agents/mock-native-auth/auth/start');
   expect(res.status).toBe(200);
@@ -868,7 +956,7 @@ async function runAuthStartReplacesPreviousRuntime(call: Call, dir: string): Pro
 }
 
 async function runAuthHeartbeatRuntime(call: Call, dir: string): Promise<void> {
-  await configureMockAuthAgent(call, dir);
+  await configureMockAuthAgent(call, dir, { loginAuthenticates: false });
 
   let res = await call('POST', '/v1/native-cli-agents/mock-native-auth/auth/start');
   expect(res.status).toBe(200);
@@ -886,6 +974,23 @@ async function runAuthHeartbeatRuntime(call: Call, dir: string): Promise<void> {
   res = await call('GET', `/v1/native-cli-auth-sessions/${authSession.id}`);
   expect(res.status).toBe(200);
   expect(((await res.json()) as { session: NativeCliAuthSessionView }).session.state).toBe('stopped');
+}
+
+async function runAuthStartSkipsLoginWhenAlreadyAuthenticatedRuntime(call: Call, dir: string): Promise<void> {
+  await configureMockAuthAgent(call, dir, { initiallyAuthenticated: true });
+
+  const res = await call('POST', '/v1/native-cli-agents/mock-native-auth/auth/start');
+  expect(res.status).toBe(200);
+  const authSession = ((await res.json()) as { session: NativeCliAuthSessionView }).session;
+
+  expect(authSession.id.startsWith('ncliauth_')).toBe(true);
+  expect(authSession.provider).toBe('claude-code');
+  expect(authSession.authState).toBe('authenticated');
+  expect(authSession.state).toBe('exited');
+  expect(authSession.exitCode).toBe(0);
+  expect(authSession.pid).toBe(0);
+  expect(await Bun.file(join(dir, 'mock-native-login-started')).exists()).toBe(false);
+  expect(await Bun.file(join(dir, 'native-cli-auth-processes.json')).exists()).toBe(false);
 }
 
 async function runAuthStatusTimeoutRuntime(call: Call, dir: string): Promise<void> {
@@ -951,7 +1056,7 @@ async function runSpawnFailureRuntime(
 
   const failed = await waitFor(() => {
     const row = handlers.store
-      .listNativeCliSessionsForProject(sessionId)
+      .listNativeCliSessionsForTranscriptTarget(sessionId)
       .find((candidate) => candidate.state === 'failed');
     return row?.outputSnapshot.includes('/definitely/not/a/native-cli-provider') ? row : undefined;
   });
@@ -973,7 +1078,7 @@ for (const kind of TRANSPORTS) {
         await runRuntime((m, p, b) => t.fetch(p, jsonInit(m, b)), projectDir, handlers);
       } finally {
         await t.stop();
-        for (const row of handlers.store.listNativeCliSessionsForProject('ses_UNKNOWN')) {
+        for (const row of handlers.store.listNativeCliSessionsForTranscriptTarget('ses_UNKNOWN')) {
           handlers.store.closeNativeCliSession(row.id, new Date().toISOString(), null, 'stopped');
         }
         await rm(dir, { recursive: true, force: true });
@@ -1057,6 +1162,17 @@ for (const kind of TRANSPORTS) {
       }
     });
 
+    test('allows slow Codex app-server thread startup during managed runtime cold starts', async () => {
+      const { dir, projectDir, app } = await setup();
+      const t = serveTransport(kind, app);
+      try {
+        await runSlowCodexAppServerStartupRuntime((m, p, b) => t.fetch(p, jsonInit(m, b)), dir, projectDir);
+      } finally {
+        await t.stop();
+        await rm(dir, { recursive: true, force: true });
+      }
+    });
+
     test('keeps parsing structured app-server events after an oversized provider line', async () => {
       const { dir, projectDir, app, handlers } = await setup();
       const t = serveTransport(kind, app);
@@ -1089,6 +1205,17 @@ for (const kind of TRANSPORTS) {
       const t = serveTransport(kind, app);
       try {
         await runAuthRelayRuntime((m, p, b) => t.fetch(p, jsonInit(m, b)), t.fetch, dir, handlers);
+      } finally {
+        await t.stop();
+        await rm(dir, { recursive: true, force: true });
+      }
+    });
+
+    test('skips provider login when native CLI auth status is already authenticated', async () => {
+      const { dir, app } = await setup();
+      const t = serveTransport(kind, app);
+      try {
+        await runAuthStartSkipsLoginWhenAlreadyAuthenticatedRuntime((m, p, b) => t.fetch(p, jsonInit(m, b)), dir);
       } finally {
         await t.stop();
         await rm(dir, { recursive: true, force: true });

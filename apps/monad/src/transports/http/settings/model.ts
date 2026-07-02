@@ -21,7 +21,9 @@ import {
   testConnectionRequestSchema,
   testConnectionResponseSchema,
   testCredentialBodySchema,
-  testCredentialResponseSchema
+  testCredentialResponseSchema,
+  transcribeAudioRequestSchema,
+  transcribeAudioResponseSchema
 } from '@monad/protocol';
 import { Elysia } from 'elysia';
 import { z } from 'zod';
@@ -102,6 +104,14 @@ export function createModelSettingsController(handlers: ReturnType<typeof create
       body: setRolesRequestSchema,
       response: { 200: okResponseSchema },
       detail: { summary: 'Set model role assignments', description: 'Replaces the non-chat model role assignments.' }
+    })
+    .post('/model/transcribe', async ({ body }) => handlers.model.transcribeAudio(body), {
+      body: transcribeAudioRequestSchema,
+      response: { 200: transcribeAudioResponseSchema },
+      detail: {
+        summary: 'Transcribe audio',
+        description: 'Uses the default profile transcription role to transcribe an audio recording.'
+      }
     })
     .post('/model/embeddings/reindex', async () => handlers.embeddings.reindex(), {
       response: { 200: okResponseSchema },

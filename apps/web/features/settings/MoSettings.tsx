@@ -1,7 +1,8 @@
 'use client';
 
+import { Cancel01Icon, CatIcon, LoaderPinwheelIcon, PlayIcon, SquareIcon } from '@hugeicons/core-free-icons';
+import { HugeiconsIcon } from '@hugeicons/react';
 import { Button, cn } from '@monad/ui';
-import { Cat, Loader2, Play, Square, X } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 
 import { useT } from '@/components/I18nProvider';
@@ -76,7 +77,10 @@ export function MoSettings({ onClose }: Props) {
     <div className="flex min-w-0 flex-1 flex-col">
       <div className="flex items-center justify-between border-b px-6 py-4">
         <div className="flex items-center gap-2">
-          <Cat className="size-4 text-muted-foreground" />
+          <HugeiconsIcon
+            className="size-4 text-muted-foreground"
+            icon={CatIcon}
+          />
           <span className="font-semibold text-sm">{t('web.settings.mo')}</span>
         </div>
         <Button
@@ -86,7 +90,7 @@ export function MoSettings({ onClose }: Props) {
           size="icon"
           variant="ghost"
         >
-          <X />
+          <HugeiconsIcon icon={Cancel01Icon} />
         </Button>
       </div>
 
@@ -111,7 +115,17 @@ export function MoSettings({ onClose }: Props) {
               size="sm"
               variant="secondary"
             >
-              {busy ? <Loader2 className="size-4 animate-spin" /> : <Square className="size-4" />}
+              {busy ? (
+                <HugeiconsIcon
+                  className="size-4 animate-spin"
+                  icon={LoaderPinwheelIcon}
+                />
+              ) : (
+                <HugeiconsIcon
+                  className="size-4"
+                  icon={SquareIcon}
+                />
+              )}
               {t('web.settings.moQuit')}
             </Button>
           ) : (
@@ -121,7 +135,17 @@ export function MoSettings({ onClose }: Props) {
               onClick={() => void run(() => post('/v1/mo/launch'))}
               size="sm"
             >
-              {busy ? <Loader2 className="size-4 animate-spin" /> : <Play className="size-4" />}
+              {busy ? (
+                <HugeiconsIcon
+                  className="size-4 animate-spin"
+                  icon={LoaderPinwheelIcon}
+                />
+              ) : (
+                <HugeiconsIcon
+                  className="size-4"
+                  icon={PlayIcon}
+                />
+              )}
               {t('web.settings.moLaunch')}
             </Button>
           )}

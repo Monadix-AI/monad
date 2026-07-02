@@ -20,7 +20,6 @@ test('studio section route statically exports every known section', () => {
     'nativeCliAgents',
     'capabilities',
     'tools',
-    'api',
     'approvals',
     'memory',
     'graph',

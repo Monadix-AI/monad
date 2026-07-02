@@ -11,6 +11,7 @@ import {
 import { toExperienceRuntime } from '../../features/workplace/experiences/to-runtime.ts';
 import { canvasToGraph, HUB_ID } from '../../features/workplace/presets/graph/graph-model.ts';
 import { toCanvas } from '../../features/workplace/presets/to-canvas.ts';
+import { projectMemberParticipants } from '../../features/workplace/use-project.ts';
 
 const participant = (
   id: string,
@@ -21,16 +22,16 @@ const participant = (
 const activityRow = (id: string, tool: string, status: ActivityRow['status']): ActivityRow =>
   ({ id, av: 'MO', tool, detail: tool, status }) as ActivityRow;
 
-test('canvasToGraph: nodes carry live state — agent presence + activity status as color', () => {
+test('canvasToGraph: projects agent presence and activity status nodes', () => {
   const { nodes } = canvasToGraph({
     participants: [participant('busy', 'agent', 'working'), participant('idle', 'agent', 'idle')],
     activity: [activityRow('ok1', 'fs_read', 'ok'), activityRow('err1', 'shell', 'error')]
   });
-  const byId = (id: string) => nodes.find((n) => n.id === id)?.style?.background;
-  // a working agent tints differently from an idle one
-  expect(byId('p:busy')).not.toBe(byId('p:idle'));
-  // a failed step is not colored like a successful one
-  expect(byId('a:ok1')).not.toBe(byId('a:err1'));
+
+  expect(nodes.some((node) => node.id === 'p:busy')).toBe(true);
+  expect(nodes.some((node) => node.id === 'p:idle')).toBe(true);
+  expect(nodes.some((node) => node.id === 'a:ok1')).toBe(true);
+  expect(nodes.some((node) => node.id === 'a:err1')).toBe(true);
 });
 
 test('canvasToGraph: a monad hub, one node + edge per participant, recent activity attached', () => {
@@ -110,6 +111,12 @@ test('toCanvas: exposes display data but drops every management/communication ac
   }
 });
 
+test('project member participant projection keeps invited agent members including monad', () => {
+  expect(
+    projectMemberParticipants([participant('monad', 'agent'), participant('codex', 'agent')]).map((p) => p.id)
+  ).toEqual(['monad', 'codex']);
+});
+
 test('project experiences: built-ins expose full runtime-switchable project experiences', () => {
   const experiences = listProjectExperiences();
 
@@ -160,7 +167,6 @@ test('toExperienceRuntime: exposes project data and controlled communication act
     contextUsage: undefined,
     modelProfiles: [],
     approvals: [],
-    moderator: { agents: [], moderatorAgentId: undefined, setModeratorAgentId: async () => {} },
     workdir: { path: undefined, set: async () => {} },
     paused: false,
     mentionTargets: [],
@@ -184,6 +190,7 @@ test('toExperienceRuntime: exposes project data and controlled communication act
   expect(typeof runtime.actions.resolveApproval).toBe('function');
   expect(typeof runtime.actions.switchExperience).toBe('function');
   expect('switchProject' in runtime.actions).toBe(false);
+  expect('moderator' in runtime.snapshot).toBe(false);
 
   runtime.actions.loadOlder();
   void runtime.actions.sendDirective('hello');

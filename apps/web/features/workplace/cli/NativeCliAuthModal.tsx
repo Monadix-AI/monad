@@ -56,6 +56,7 @@ export function NativeCliAuthModal({
     <CliTerminalModal
       eyebrow={t('web.nativeCli.connectTitle')}
       footerLabel={t('web.nativeCli.connectTerminalHint')}
+      icon={session?.productIcon}
       id={sessionId}
       onClose={onClose}
       onInput={(input) => {

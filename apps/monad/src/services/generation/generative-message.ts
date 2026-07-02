@@ -41,7 +41,7 @@ export function startGenerativeMessage(opts: StartGenerativeMessageOptions): Gen
 
   const event = (etype: Event['type'], payload: Record<string, unknown>): Event => ({
     id: newId('evt'),
-    sessionId,
+    transcriptTargetId: sessionId,
     type: etype,
     actorAgentId: null,
     payload,

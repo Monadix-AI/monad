@@ -1,7 +1,8 @@
 'use client';
 
+import { Moon02Icon, Sun03Icon } from '@hugeicons/core-free-icons';
+import { HugeiconsIcon } from '@hugeicons/react';
 import { Button, Tooltip, TooltipContent, TooltipTrigger } from '@monad/ui';
-import { Moon, Sun } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import { useT } from '@/components/I18nProvider';
@@ -42,7 +43,7 @@ export function ThemeToggle() {
           size="icon"
           variant="ghost"
         >
-          {dark ? <Sun /> : <Moon />}
+          {dark ? <HugeiconsIcon icon={Sun03Icon} /> : <HugeiconsIcon icon={Moon02Icon} />}
         </Button>
       </TooltipTrigger>
       <TooltipContent>{dark ? t('web.theme.light') : t('web.theme.dark')}</TooltipContent>

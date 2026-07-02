@@ -1,4 +1,4 @@
-import type { SessionId } from '@monad/protocol';
+import type { ProjectId, SessionUiEvent } from '@monad/protocol';
 
 import { afterEach, describe, expect, test } from 'bun:test';
 import { createHash } from 'node:crypto';
@@ -23,14 +23,14 @@ async function responseError(res: Response): Promise<{ error?: string; code?: st
   return (await res.json().catch(() => ({}))) as { error?: string; code?: string };
 }
 
-async function createSession(t: TransportHandle): Promise<SessionId> {
-  const res = await t.fetch('/v1/sessions', json({ title: 'Workplace: managed native agent' }));
+async function createSession(t: TransportHandle): Promise<ProjectId> {
+  const res = await t.fetch('/v1/workplace/projects', json({ title: 'Workplace: managed native agent' }));
   expect(res.status).toBe(201);
-  return ((await res.json()) as { sessionId: SessionId }).sessionId;
+  return ((await res.json()) as { projectId: ProjectId }).projectId;
 }
 
-async function messages(t: TransportHandle, sessionId: SessionId): Promise<Array<{ role: string; text: string }>> {
-  const res = await t.fetch(`/v1/sessions/${sessionId}/messages`);
+async function messages(t: TransportHandle, sessionId: ProjectId): Promise<Array<{ role: string; text: string }>> {
+  const res = await t.fetch(`/v1/projects/${sessionId}/messages`);
   expect(res.status).toBe(200);
   return ((await res.json()) as { messages: Array<{ role: string; text: string }> }).messages.map(({ role, text }) => ({
     role,
@@ -39,7 +39,7 @@ async function messages(t: TransportHandle, sessionId: SessionId): Promise<Array
 }
 
 function bindingHeaders(
-  _sessionId: SessionId,
+  _sessionId: ProjectId,
   nativeCliSessionId = 'ncli_test',
   _agentId = 'codex'
 ): Record<string, string> {
@@ -51,14 +51,14 @@ function bindingHeaders(
 
 function createManagedNativeSession(
   handlers: ReturnType<typeof buildHandlers>,
-  sessionId: SessionId,
+  sessionId: ProjectId,
   id = 'ncli_test',
   agentName = 'codex',
   state: 'running' | 'stopped' = 'running'
 ): void {
   handlers.store.upsertNativeCliSession({
     id,
-    projectSessionId: sessionId,
+    transcriptTargetId: sessionId,
     agentName,
     provider: agentName === 'claude' ? 'claude-code' : 'codex',
     workingPath: '/tmp/project',
@@ -100,6 +100,102 @@ for (const kind of TRANSPORTS) {
 
       expect(res.status).toBe(200);
       expect(await messages(t, sessionId)).toEqual([{ role: 'assistant', text: 'managed reply' }]);
+    });
+
+    test('multiple managed replies reach the wall in post order and hydrate identically for a late viewer', async () => {
+      const handlers = buildHandlers(mockModel());
+      t = serveTransport(kind, createHttpTransport(handlers));
+      const sessionId = await createSession(t);
+      createManagedNativeSession(handlers, sessionId, 'ncli_codex', 'codex');
+      createManagedNativeSession(handlers, sessionId, 'ncli_claude', 'claude');
+
+      // Two agents post to the wall in sequence.
+      const first = await t.fetch(
+        '/v1/internal/native-agent/project/post',
+        json({ projectId: sessionId, text: 'codex: looks good' }, bindingHeaders(sessionId, 'ncli_codex', 'codex'))
+      );
+      expect(first.status).toBe(200);
+      const second = await t.fetch(
+        '/v1/internal/native-agent/project/post',
+        json({ projectId: sessionId, text: 'claude: I agree' }, bindingHeaders(sessionId, 'ncli_claude', 'claude'))
+      );
+      expect(second.status).toBe(200);
+
+      // Raw transcript: both on the wall, in the order they were posted, with exact content.
+      expect(await messages(t, sessionId)).toEqual([
+        { role: 'assistant', text: 'codex: looks good' },
+        { role: 'assistant', text: 'claude: I agree' }
+      ]);
+
+      // A viewer opening the project afterwards sees the same order + content in the projected UI.
+      const events = await t.sse(`/v1/projects/${sessionId}/ui-stream`, {
+        until: (e) => (e as unknown as SessionUiEvent).kind === 'snapshot',
+        timeoutMs: 3000
+      });
+      const snap = (events as unknown as SessionUiEvent[]).find((e) => e.kind === 'snapshot');
+      if (snap?.kind !== 'snapshot') throw new Error('expected ui-stream snapshot');
+      const wall = snap.items
+        .filter((i) => i.kind === 'message')
+        .map((i) => (i.kind === 'message' ? i.parts.find((p) => p.type === 'text') : undefined))
+        .map((p) => (p?.type === 'text' ? p.text : undefined));
+      expect(wall).toEqual(['codex: looks good', 'claude: I agree']);
+    });
+
+    test('project post is streamed live even without a pending wake placeholder', async () => {
+      const handlers = buildHandlers(mockModel());
+      t = serveTransport(kind, createHttpTransport(handlers));
+      const sessionId = await createSession(t);
+      createManagedNativeSession(handlers, sessionId);
+      const eventP = t.sse(`/v1/projects/${sessionId}/events`, {
+        until: (event) =>
+          event.type === 'agent.message' &&
+          (event.payload as { agentName?: unknown; text?: unknown }).agentName === 'codex' &&
+          (event.payload as { text?: unknown }).text === 'live managed reply',
+        timeoutMs: 3000
+      });
+      const uiP = t.sse(`/v1/projects/${sessionId}/ui-stream`, {
+        until: (event) => {
+          const uiEvent = event as unknown as SessionUiEvent;
+          return (
+            uiEvent.kind === 'upsert' &&
+            uiEvent.item.kind === 'message' &&
+            uiEvent.item.role === 'assistant' &&
+            uiEvent.item.agentName === 'codex' &&
+            uiEvent.item.parts.some((part) => part.type === 'text' && part.text === 'live managed reply')
+          );
+        },
+        timeoutMs: 3000
+      });
+
+      const res = await t.fetch(
+        '/v1/internal/native-agent/project/post',
+        json({ projectId: sessionId, text: 'live managed reply' }, bindingHeaders(sessionId))
+      );
+
+      expect(res.status).toBe(200);
+      expect((await eventP).some((event) => event.type === 'agent.message')).toBe(true);
+      expect((await uiP).some((event) => (event as unknown as SessionUiEvent).kind === 'upsert')).toBe(true);
+      expect(await messages(t, sessionId)).toEqual([{ role: 'assistant', text: 'live managed reply' }]);
+    });
+
+    test('project post is idempotent for duplicate managed native CLI output from the same runtime', async () => {
+      const handlers = buildHandlers(mockModel());
+      t = serveTransport(kind, createHttpTransport(handlers));
+      const sessionId = await createSession(t);
+      createManagedNativeSession(handlers, sessionId);
+
+      const first = await t.fetch(
+        '/v1/internal/native-agent/project/post',
+        json({ projectId: sessionId, text: 'KTzhou joined. Ready for tasks.' }, bindingHeaders(sessionId))
+      );
+      const second = await t.fetch(
+        '/v1/internal/native-agent/project/post',
+        json({ projectId: sessionId, text: 'KTzhou joined. Ready for tasks.' }, bindingHeaders(sessionId))
+      );
+
+      expect(first.status).toBe(200);
+      expect(second.status).toBe(200);
+      expect(await messages(t, sessionId)).toEqual([{ role: 'assistant', text: 'KTzhou joined. Ready for tasks.' }]);
     });
 
     test('agent send stays out of the Workplace Project transcript', async () => {
@@ -181,6 +277,7 @@ for (const kind of TRANSPORTS) {
         { data: { threadId: 'msg_ROOT', agentName: 'codex' } }
       );
       handlers.store.insertMessage('msg_OTHER', sessionId, 'unrelated', '2026-06-30T00:00:03.000Z', 'user');
+      handlers.store.enqueueNativeCliInboxItem('ncli_test', 3);
 
       const read = await t.fetch(
         '/v1/internal/native-agent/project/read',
@@ -289,6 +386,7 @@ for (const kind of TRANSPORTS) {
       const sessionId = await createSession(t);
       createManagedNativeSession(handlers, sessionId, 'ncli_inbox');
       handlers.store.insertMessage('msg_INBOX1', sessionId, 'please review this', '2026-06-30T00:00:01.000Z', 'user');
+      handlers.store.enqueueNativeCliInboxItem('ncli_inbox', 1);
 
       const first = await t.fetch(
         '/v1/internal/native-agent/project/inbox',
@@ -313,6 +411,7 @@ for (const kind of TRANSPORTS) {
       const sessionId = await createSession(t);
       createManagedNativeSession(handlers, sessionId, 'ncli_ack');
       handlers.store.insertMessage('msg_ACK1', sessionId, 'ack me', '2026-06-30T00:00:01.000Z', 'user');
+      handlers.store.enqueueNativeCliInboxItem('ncli_ack', 1);
 
       const ack = await t.fetch(
         '/v1/internal/native-agent/project/inbox/ack',
@@ -335,7 +434,9 @@ for (const kind of TRANSPORTS) {
       createManagedNativeSession(handlers, sessionId, 'ncli_runtime_info');
       handlers.store.insertMessage('msg_INFO1', sessionId, 'first pending', '2026-06-30T00:00:01.000Z', 'user');
       handlers.store.insertMessage('msg_INFO2', sessionId, 'second pending', '2026-06-30T00:00:02.000Z', 'user');
-      handlers.store.setNativeCliDeliveredCursor('ncli_runtime_info', handlers.store.maxMessageSeq(sessionId));
+      handlers.store.enqueueNativeCliInboxItem('ncli_runtime_info', 1);
+      handlers.store.enqueueNativeCliInboxItem('ncli_runtime_info', 2);
+      handlers.store.markNativeCliInboxDelivered('ncli_runtime_info', handlers.store.maxMessageSeq(sessionId));
 
       const res = await t.fetch('/v1/internal/native-agent/runtime/info', {
         headers: bindingHeaders(sessionId, 'ncli_runtime_info')
@@ -344,7 +445,7 @@ for (const kind of TRANSPORTS) {
       expect(res.status).toBe(200);
       expect(await res.json()).toMatchObject({
         agentId: 'codex',
-        projectSessionId: sessionId,
+        projectId: sessionId,
         nativeCliSessionId: 'ncli_runtime_info',
         lastDeliveredSeq: 2,
         lastVisibleSeq: 0,

@@ -36,6 +36,34 @@ test('a clean repo reports the branch and dirty:false', async () => {
   expect(g.dirty).toBe(false);
 });
 
+test('a GitHub origin is exposed as a browser URL', async () => {
+  const dir = tmpDir();
+  await git(dir, 'init', '-b', 'work');
+  await git(dir, 'config', 'user.email', 't@t.dev');
+  await git(dir, 'config', 'user.name', 'T');
+  await git(dir, 'remote', 'add', 'origin', 'git@github.com:monad/monad.git');
+  writeFileSync(join(dir, 'a.txt'), 'hello\n');
+  await git(dir, 'add', '.');
+  await git(dir, 'commit', '-m', 'init');
+
+  const g = await readWorkspaceGit(dir);
+  expect(g.remoteUrl).toBe('https://github.com/monad/monad');
+});
+
+test('a non-GitHub origin does not expose an Open in GitHub URL', async () => {
+  const dir = tmpDir();
+  await git(dir, 'init', '-b', 'work');
+  await git(dir, 'config', 'user.email', 't@t.dev');
+  await git(dir, 'config', 'user.name', 'T');
+  await git(dir, 'remote', 'add', 'origin', 'https://gitlab.com/monad/monad.git');
+  writeFileSync(join(dir, 'a.txt'), 'hello\n');
+  await git(dir, 'add', '.');
+  await git(dir, 'commit', '-m', 'init');
+
+  const g = await readWorkspaceGit(dir);
+  expect(g.remoteUrl).toBeUndefined();
+});
+
 test('an uncommitted change flips dirty to true', async () => {
   const dir = tmpDir();
   await git(dir, 'init', '-b', 'main');

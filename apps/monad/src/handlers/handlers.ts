@@ -41,6 +41,7 @@ import type { ModelDeps } from '@/handlers/settings/model/index.ts';
 import type { ConfigBus } from '@/services/config-bus.ts';
 import type { ClarifyService } from '@/services/generation/clarify.ts';
 import type { I18nService } from '@/services/i18n.ts';
+import type { KvService } from '@/services/kv.ts';
 import type { L2Provider } from '@/services/memory/graph/types.ts';
 import type { MemoryService } from '@/services/memory/index.ts';
 import type { OversightService } from '@/services/oversight.ts';
@@ -80,6 +81,7 @@ import { createNetworkModule } from '@/handlers/settings/network/index.ts';
 import { createObscuraModule } from '@/handlers/settings/obscura/index.ts';
 import { createOpenaiCompatModule } from '@/handlers/settings/openai-compat/index.ts';
 import { createPeerModule } from '@/handlers/settings/peer/index.ts';
+import { createUserProfileModule } from '@/handlers/settings/profile/index.ts';
 import { createSandboxModule } from '@/handlers/settings/sandbox/index.ts';
 import { createSkillsSettingsModule } from '@/handlers/settings/skills/index.ts';
 import { createStartupSettingsModule } from '@/handlers/settings/startup/index.ts';
@@ -111,6 +113,7 @@ export interface DaemonHandlerDeps extends SessionDeps, ModelDeps {
   memorySetMem0Models: (sel: SetMem0ModelsRequest) => Promise<void>;
   /** Persist + hot-apply the L2 knowledge-graph consolidation settings. */
   memorySetGraph: (sel: SetMemoryGraphRequest) => Promise<void>;
+  kv?: KvService;
   mockMode?: boolean;
   /** Human-in-the-loop approval gate for high-risk tool calls. */
   oversight: OversightService;
@@ -467,6 +470,10 @@ export function createDaemonHandlers(deps: DaemonHandlerDeps) {
       return deps.indexerStatus?.() ?? { pending: 0, running: false };
     }
   };
+  const session = createSessionModule({ ...deps, nativeCliHost });
+  nativeCliHost.setManagedProjectOutputHandler(async (output) => {
+    await session.completeManagedNativeCliProviderMessage(output);
+  });
 
   return {
     health: async (): Promise<GetHealthResponse> => {
@@ -508,6 +515,7 @@ export function createDaemonHandlers(deps: DaemonHandlerDeps) {
     toolBackends: createToolBackendsModule(paths, deps.configBus),
     sandbox: createSandboxModule(paths, deps.configBus),
     developer: createDeveloperModule(paths, deps.configBus),
+    profile: createUserProfileModule(paths, deps.configBus),
     startup: createStartupSettingsModule({
       monadHome: paths.home,
       logPath: join(paths.logs, 'startup.log')
@@ -526,7 +534,7 @@ export function createDaemonHandlers(deps: DaemonHandlerDeps) {
       configBus: deps.configBus,
       modelService: deps.modelService
     }),
-    session: createSessionModule({ ...deps, nativeCliHost }),
+    session,
     nativeCli: createNativeCliModule({ paths, host: nativeCliHost, store: deps.store }),
     _nativeAgentStore: deps.store,
     memory: createMemoryModule(

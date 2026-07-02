@@ -1,52 +1,22 @@
 'use client';
 
-import type { JSX, ReactNode } from 'react';
+import type { ComponentPropsWithoutRef, ReactNode } from 'react';
 
-import { LexicalComposer } from '@lexical/react/LexicalComposer';
-import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
-import { ContentEditable } from '@lexical/react/LexicalContentEditable';
-import { LexicalErrorBoundary } from '@lexical/react/LexicalErrorBoundary';
-import { OnChangePlugin } from '@lexical/react/LexicalOnChangePlugin';
-import { PlainTextPlugin } from '@lexical/react/LexicalPlainTextPlugin';
-import { ChatInputChrome } from '@monad/ui';
 import {
-  $createParagraphNode,
-  $createTextNode,
-  $getRoot,
-  DecoratorNode,
-  type EditorState,
-  type LexicalEditor,
-  type NodeKey,
-  type SerializedLexicalNode
-} from 'lexical';
-import { ArrowUp, Box, ChevronDown, Mic, ShieldAlert, Square } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+  ArrowUp01Icon,
+  ChevronDownIcon,
+  MagicWand02Icon,
+  Mic01Icon,
+  ShieldQuestionMarkIcon,
+  SquareIcon
+} from '@hugeicons/core-free-icons';
+import { HugeiconsIcon } from '@hugeicons/react';
+import { ChatInputChrome } from '@monad/ui';
+import { forwardRef } from 'react';
 
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
-
-type SpeechRecognitionLike = {
-  continuous: boolean;
-  interimResults: boolean;
-  lang: string;
-  onend: (() => void) | null;
-  onerror: (() => void) | null;
-  onresult: ((event: SpeechRecognitionEventLike) => void) | null;
-  start: () => void;
-  stop: () => void;
-};
-
-type SpeechRecognitionEventLike = {
-  resultIndex: number;
-  results: ArrayLike<{ 0?: { transcript?: string }; isFinal?: boolean }>;
-};
-
-type SpeechRecognitionConstructor = new () => SpeechRecognitionLike;
-
-type SpeechWindow = Window &
-  typeof globalThis & {
-    SpeechRecognition?: SpeechRecognitionConstructor;
-    webkitSpeechRecognition?: SpeechRecognitionConstructor;
-  };
+import { LexicalComposerInput } from './ComposerLexicalInput';
+import { useComposerVoice } from './use-composer-voice';
 
 type ComposerShellProps = {
   access?: {
@@ -63,6 +33,7 @@ type ComposerShellProps = {
     segments?: { category: string; color?: string; label: string; tokens: number }[];
     used: number;
   };
+  controls?: Partial<Record<'access' | 'context' | 'model' | 'submit' | 'voice', boolean>>;
   disabled?: boolean;
   editorSlot?: ReactNode;
   mentionMenu?: ReactNode;
@@ -84,6 +55,11 @@ type ComposerShellProps = {
   onStop?: () => void;
   onSubmit: () => void;
   onVoiceText?: (text: string) => void;
+  voice?: {
+    modelConfigured?: boolean;
+    onSettingsClick?: () => void;
+    transcribeAudio?: (audio: Blob) => Promise<string>;
+  };
   model?: {
     current?: string;
     onChange?: (model: string) => void;
@@ -92,293 +68,6 @@ type ComposerShellProps = {
   textareaRef?: React.Ref<HTMLDivElement>;
 };
 
-type SkillTokenPayload = {
-  id: string;
-  label: string;
-  source?: string;
-  icon?: string;
-  version?: string;
-  raw: string;
-  onClick?: () => void;
-};
-
-type SerializedSkillTokenNode = SerializedLexicalNode & {
-  payload: Omit<SkillTokenPayload, 'onClick'>;
-};
-
-const EMPTY_SKILL_TOKEN: SkillTokenPayload = {
-  id: '',
-  label: '',
-  raw: ''
-};
-
-class SkillTokenNode extends DecoratorNode<JSX.Element> {
-  __payload: SkillTokenPayload;
-
-  static getType(): string {
-    return 'skill-token';
-  }
-
-  static clone(node: SkillTokenNode): SkillTokenNode {
-    return new SkillTokenNode(node.__payload, node.__key);
-  }
-
-  static importJSON(serializedNode: SerializedSkillTokenNode): SkillTokenNode {
-    return new SkillTokenNode(serializedNode.payload);
-  }
-
-  constructor(payload: SkillTokenPayload = EMPTY_SKILL_TOKEN, key?: NodeKey) {
-    super(key);
-    this.__payload = payload;
-  }
-
-  createDOM(): HTMLElement {
-    const span = document.createElement('span');
-    span.style.display = 'inline-block';
-    return span;
-  }
-
-  updateDOM(): false {
-    return false;
-  }
-
-  isInline(): true {
-    return true;
-  }
-
-  isKeyboardSelectable(): false {
-    return false;
-  }
-
-  getTextContent(): string {
-    return this.__payload.raw;
-  }
-
-  decorate(): JSX.Element {
-    return <SkillTokenChip token={this.__payload} />;
-  }
-
-  exportJSON(): SerializedSkillTokenNode {
-    const { onClick: _onClick, ...payload } = this.__payload;
-    return {
-      ...super.exportJSON(),
-      payload
-    };
-  }
-}
-
-function $createSkillTokenNode(payload: SkillTokenPayload): SkillTokenNode {
-  return new SkillTokenNode(payload);
-}
-
-const SKILL_ID_RE =
-  /\/((?:global:[a-z0-9-]+)|(?:atom-pack:[a-z0-9-]+:[a-z0-9-]+)|(?:agent:[a-z0-9-]+:[a-z0-9-]+))(?=\s|$)/g;
-
-function fallbackSkillLabel(id: string): string {
-  const parts = id.split(':');
-  if (parts.length === 2 && parts[0] === 'global') return parts[1] ?? id;
-  if (parts.length === 3 && (parts[0] === 'atom-pack' || parts[0] === 'agent')) return parts[2] ?? id;
-  return id;
-}
-
-function fallbackSkillSource(id: string): string | undefined {
-  const parts = id.split(':');
-  if (parts.length === 2 && parts[0] === 'global') return 'Global';
-  if (parts.length === 3 && parts[0] === 'atom-pack') return `Atom Pack: ${parts[1]}`;
-  if (parts.length === 3 && parts[0] === 'agent') return `Agent: ${parts[1]}`;
-  return undefined;
-}
-
-function appendParsedComposerText(text: string, skillToken?: SkillTokenPayload): void {
-  const root = $getRoot();
-  root.clear();
-  const paragraph = $createParagraphNode();
-  let last = 0;
-  for (const match of text.matchAll(SKILL_ID_RE)) {
-    const start = match.index ?? 0;
-    const id = match[1] as string;
-    const raw = `/${id}`;
-    if (start > last) paragraph.append($createTextNode(text.slice(last, start)));
-    paragraph.append(
-      $createSkillTokenNode(
-        skillToken?.raw === raw
-          ? skillToken
-          : {
-              id,
-              label: fallbackSkillLabel(id),
-              source: fallbackSkillSource(id),
-              raw
-            }
-      )
-    );
-    last = start + raw.length;
-  }
-  if (last < text.length) paragraph.append($createTextNode(text.slice(last)));
-  if (text.length === 0) paragraph.append($createTextNode(''));
-  root.append(paragraph);
-  paragraph.selectEnd();
-}
-
-function editorText(editorState: EditorState): string {
-  let text = '';
-  editorState.read(() => {
-    text = $getRoot().getTextContent();
-  });
-  return text;
-}
-
-function syncEditor(editor: LexicalEditor, value: string, skillToken: SkillTokenPayload | undefined): void {
-  editor.update(() => appendParsedComposerText(value, skillToken));
-}
-
-function SkillTokenChip({ token }: { token: SkillTokenPayload }): JSX.Element {
-  return (
-    <button
-      aria-label={token.label}
-      className="mx-0.5 inline-flex max-w-full translate-y-[2px] items-center gap-1.5 rounded-(--radius-md) border border-primary/20 bg-background px-2 py-0.5 text-left text-accent-foreground text-sm shadow-xs transition hover:border-primary/35 hover:bg-accent/70 focus-visible:outline-2 focus-visible:outline-ring/60"
-      contentEditable={false}
-      onClick={(event) => {
-        event.preventDefault();
-        token.onClick?.();
-      }}
-      type="button"
-    >
-      {token.icon?.startsWith('http://') || token.icon?.startsWith('https://') ? (
-        <span
-          className="size-4 shrink-0 rounded bg-center bg-cover"
-          style={{ backgroundImage: `url(${token.icon})` }}
-        />
-      ) : token.icon ? (
-        <span className="grid size-4 shrink-0 place-items-center text-xs">{token.icon}</span>
-      ) : (
-        <Box className="size-3.5 shrink-0" />
-      )}
-      <span className="truncate font-medium">{token.label}</span>
-      {token.source ? (
-        <span className="shrink-0 rounded-(--radius-xs) border border-current/15 bg-accent px-1.5 py-0.5 text-[10px] text-muted-foreground">
-          {token.source}
-        </span>
-      ) : null}
-      {token.version ? (
-        <span className="shrink-0 rounded-(--radius-xs) border border-current/15 px-1.5 py-0.5 text-[10px] text-muted-foreground">
-          v{token.version}
-        </span>
-      ) : null}
-    </button>
-  );
-}
-
-function LexicalComposerInput({
-  ariaLabel,
-  disabled,
-  editorRef,
-  onBlur,
-  onChange,
-  onKeyDown,
-  onKeyUp,
-  placeholder,
-  skillToken,
-  value
-}: {
-  ariaLabel: string;
-  disabled: boolean;
-  editorRef?: React.Ref<HTMLDivElement>;
-  onBlur?: React.FocusEventHandler<HTMLElement>;
-  onChange: (value: string) => void;
-  onKeyDown?: React.KeyboardEventHandler<HTMLElement>;
-  onKeyUp?: React.KeyboardEventHandler<HTMLElement>;
-  placeholder: string;
-  skillToken?: SkillTokenPayload;
-  value: string;
-}): React.ReactElement {
-  const initialValueRef = useRef(value);
-  const initialSkillTokenRef = useRef(skillToken);
-  const lastEditorTextRef = useRef(value);
-  const skillKey = skillToken
-    ? `${skillToken.raw}:${skillToken.label}:${skillToken.source ?? ''}:${skillToken.icon ?? ''}:${skillToken.version ?? ''}`
-    : '';
-  const initialConfig = useMemo(
-    () => ({
-      namespace: 'monad-composer',
-      nodes: [SkillTokenNode],
-      onError(error: Error) {
-        throw error;
-      },
-      editorState(editor: LexicalEditor) {
-        syncEditor(editor, initialValueRef.current, initialSkillTokenRef.current);
-      },
-      editable: true,
-      theme: {
-        paragraph: 'm-0'
-      }
-    }),
-    []
-  );
-
-  return (
-    <LexicalComposer initialConfig={initialConfig}>
-      <ComposerInputSync
-        disabled={disabled}
-        skillKey={skillKey}
-        skillToken={skillToken}
-        value={value}
-        valueRef={lastEditorTextRef}
-      />
-      <PlainTextPlugin
-        contentEditable={
-          <ContentEditable
-            ariaLabel={ariaLabel}
-            className="composer-lexical-input"
-            onBlur={onBlur}
-            onKeyDown={onKeyDown}
-            onKeyUp={onKeyUp}
-            ref={editorRef}
-          />
-        }
-        ErrorBoundary={LexicalErrorBoundary}
-        placeholder={<div className="composer-lexical-placeholder">{placeholder}</div>}
-      />
-      <OnChangePlugin
-        onChange={(editorState) => {
-          const text = editorText(editorState);
-          lastEditorTextRef.current = text;
-          onChange(text);
-        }}
-      />
-    </LexicalComposer>
-  );
-}
-
-function ComposerInputSync({
-  disabled,
-  skillKey,
-  skillToken,
-  value,
-  valueRef
-}: {
-  disabled: boolean;
-  skillKey: string;
-  skillToken?: SkillTokenPayload;
-  value: string;
-  valueRef: React.MutableRefObject<string>;
-}): null {
-  const [editor] = useLexicalComposerContext();
-  const lastSkillKeyRef = useRef(skillKey);
-
-  useEffect(() => {
-    editor.setEditable(!disabled);
-  }, [disabled, editor]);
-
-  useEffect(() => {
-    if (valueRef.current === value && lastSkillKeyRef.current === skillKey) return;
-    valueRef.current = value;
-    lastSkillKeyRef.current = skillKey;
-    syncEditor(editor, value, skillToken);
-  }, [editor, skillKey, skillToken, value, valueRef]);
-
-  return null;
-}
-
 export function ComposerShell({
   access = { mode: 'auto' },
   ariaLabel,
@@ -386,6 +75,7 @@ export function ComposerShell({
   placeholder,
   busy = false,
   contextUsage,
+  controls,
   disabled = false,
   editorSlot,
   mentionMenu,
@@ -398,20 +88,21 @@ export function ComposerShell({
   onStop,
   onSubmit,
   onVoiceText,
+  voice,
   model,
   textareaRef
 }: ComposerShellProps): React.ReactElement {
-  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
-  const [listening, setListening] = useState(false);
-  const canSend = value.trim().length > 0 && !disabled;
+  const { listening, toggleVoice, voiceActive, voiceBusy, voiceDisabledReason, voiceModelConfigured } =
+    useComposerVoice({
+      onVoiceText,
+      voice
+    });
+  const canSend = value.trim().length > 0 && !disabled && !voiceActive;
   const canStop = busy && onStop;
   const submitDisabled = !canSend && !canStop;
   const budgetPercent = contextUsage
     ? Math.min(100, Math.round((contextUsage.used / Math.max(1, contextUsage.limit)) * 100))
     : 0;
-  const voiceAvailable =
-    typeof window !== 'undefined' &&
-    Boolean((window as SpeechWindow).SpeechRecognition ?? (window as SpeechWindow).webkitSpeechRecognition);
   const composerSkillToken = skillToken
     ? {
         id: skillToken.raw.startsWith('/') ? skillToken.raw.slice(1) : skillToken.raw,
@@ -423,36 +114,16 @@ export function ComposerShell({
         onClick: skillToken.onClick
       }
     : undefined;
-
-  const toggleVoice = (): void => {
-    if (!onVoiceText || !voiceAvailable) return;
-    if (recognitionRef.current && listening) {
-      recognitionRef.current.stop();
-      setListening(false);
-      return;
-    }
-    const SpeechRecognition =
-      (window as SpeechWindow).SpeechRecognition ?? (window as SpeechWindow).webkitSpeechRecognition;
-    if (!SpeechRecognition) return;
-    const recognition = new SpeechRecognition();
-    recognition.continuous = true;
-    recognition.interimResults = false;
-    recognition.lang = navigator.language || 'en-US';
-    recognition.onresult = (event) => {
-      let text = '';
-      for (let i = event.resultIndex; i < event.results.length; i += 1) {
-        const result = event.results[i];
-        if (result?.isFinal) text += result[0]?.transcript ?? '';
-      }
-      const trimmed = text.trim();
-      if (trimmed) onVoiceText(trimmed);
-    };
-    recognition.onerror = () => setListening(false);
-    recognition.onend = () => setListening(false);
-    recognitionRef.current = recognition;
-    setListening(true);
-    recognition.start();
+  const enabledControls = {
+    access: controls?.access ?? true,
+    context: controls?.context ?? true,
+    model: controls?.model ?? true,
+    submit: controls?.submit ?? true,
+    voice: controls?.voice ?? true
   };
+  const showLeftTools = enabledControls.access;
+  const showRightTools =
+    enabledControls.context || enabledControls.model || enabledControls.voice || enabledControls.submit;
 
   return (
     <ChatInputChrome className="shared-composer-panel">
@@ -482,12 +153,32 @@ export function ComposerShell({
           className="chat-input-surface composer-live-dense"
           role="presentation"
         >
-          <div className="chat-input-content">
-            {mentionMenu}
+          <div
+            aria-busy={voiceActive || undefined}
+            className="chat-input-content"
+            onBeforeInputCapture={(event) => {
+              if (voiceActive) event.preventDefault();
+            }}
+            onDropCapture={(event) => {
+              if (voiceActive) event.preventDefault();
+            }}
+            onKeyDownCapture={(event) => {
+              if (voiceActive) event.preventDefault();
+            }}
+            onPasteCapture={(event) => {
+              if (voiceActive) event.preventDefault();
+            }}
+            style={{
+              opacity: voiceActive ? 0.72 : 1,
+              pointerEvents: voiceActive ? 'none' : undefined
+            }}
+            title={voiceBusy ? 'Cleaning up transcript' : listening ? 'Recording voice input' : undefined}
+          >
+            {!voiceActive ? mentionMenu : null}
             {editorSlot ?? (
               <LexicalComposerInput
                 ariaLabel={ariaLabel}
-                disabled={disabled}
+                disabled={disabled || voiceActive}
                 editorRef={textareaRef}
                 onBlur={onBlur}
                 onChange={(nextValue) => onChange?.(nextValue)}
@@ -518,84 +209,165 @@ export function ComposerShell({
               padding: '0 5px 5px'
             }}
           >
-            <div
-              className="shared-composer-tools"
-              style={{ display: 'flex', alignItems: 'center', gap: 4, minWidth: 0 }}
-            >
-              <ComposerSelect
-                ariaLabel="Permission mode"
-                icon={<ShieldAlert size={15} />}
-                onChange={(value) => access.onChange?.(value as 'auto' | 'ask')}
-                tone="ink"
-                value={access.mode}
+            {showLeftTools ? (
+              <div
+                className="shared-composer-tools"
+                style={{ display: 'flex', alignItems: 'center', gap: 4, minWidth: 0 }}
               >
-                <option value="auto">Auto</option>
-                <option value="ask">Ask for approval</option>
-              </ComposerSelect>
-            </div>
-
-            <div
-              className="shared-composer-tools shared-composer-tools-right"
-              style={{ display: 'flex', alignItems: 'center', gap: 4, minWidth: 0 }}
-            >
-              <ContextUsageButton
-                percent={budgetPercent}
-                usage={contextUsage}
-              />
-              <ComposerSelect
-                ariaLabel="Model"
-                disabled={!model || model.options.length === 0}
-                onChange={(value) => model?.onChange?.(value)}
-                tone="ink"
-                value={model?.current ?? model?.options[0]?.value ?? ''}
-              >
-                {(model?.options.length ? model.options : [{ label: 'Model', value: '' }]).map((option) => (
-                  <option
-                    key={option.value}
-                    value={option.value}
+                {enabledControls.access ? (
+                  <ComposerSelect
+                    ariaLabel="Permission mode"
+                    icon={
+                      <HugeiconsIcon
+                        icon={ShieldQuestionMarkIcon}
+                        size={15}
+                      />
+                    }
+                    onChange={(value) => access.onChange?.(value as 'auto' | 'ask')}
+                    tone="ink"
+                    value={access.mode}
                   >
-                    {option.label}
-                  </option>
-                ))}
-              </ComposerSelect>
-              <ComposerIconButton
-                active={listening}
-                ariaLabel={listening ? 'Stop voice input' : voiceAvailable ? 'Voice input' : 'Voice input unavailable'}
-                disabled={!onVoiceText || !voiceAvailable}
-                onClick={toggleVoice}
+                    <option value="auto">Auto</option>
+                    <option value="ask">Ask for approval</option>
+                  </ComposerSelect>
+                ) : null}
+              </div>
+            ) : null}
+
+            {showRightTools ? (
+              <div
+                className="shared-composer-tools shared-composer-tools-right"
+                style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 'auto', minWidth: 0 }}
               >
-                <Mic size={17} />
-              </ComposerIconButton>
-              <button
-                aria-label={canStop ? 'Stop' : 'Send message'}
-                className="workplace-action shared-composer-submit"
-                disabled={submitDisabled}
-                onClick={canStop ? onStop : onSubmit}
-                style={{
-                  flex: 'none',
-                  width: 36,
-                  height: 36,
-                  border: 'none',
-                  borderRadius: '50%',
-                  background: canSend || canStop ? 'var(--foreground)' : 'var(--secondary)',
-                  color: canSend || canStop ? 'var(--background)' : 'var(--muted-foreground)',
-                  cursor: canSend || canStop ? 'pointer' : 'not-allowed',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center'
-                }}
-                type="button"
-              >
-                {canStop ? (
-                  <Square
-                    fill="currentColor"
-                    size={16}
+                {enabledControls.context ? (
+                  <ContextUsageButton
+                    percent={budgetPercent}
+                    usage={contextUsage}
                   />
-                ) : (
-                  <ArrowUp size={18} />
-                )}
-              </button>
-            </div>
+                ) : null}
+                {enabledControls.model ? (
+                  <ComposerSelect
+                    ariaLabel="Model"
+                    disabled={!model || model.options.length === 0}
+                    onChange={(value) => model?.onChange?.(value)}
+                    tone="ink"
+                    value={model?.current ?? model?.options[0]?.value ?? ''}
+                  >
+                    {(model?.options.length ? model.options : [{ label: 'Model', value: '' }]).map((option) => (
+                      <option
+                        key={option.value}
+                        value={option.value}
+                      >
+                        {option.label}
+                      </option>
+                    ))}
+                  </ComposerSelect>
+                ) : null}
+                {enabledControls.voice ? (
+                  <HoverCard
+                    closeDelay={80}
+                    openDelay={120}
+                  >
+                    <HoverCardTrigger asChild>
+                      <ComposerIconButton
+                        active={listening || voiceBusy}
+                        ariaDisabled={Boolean(voiceDisabledReason && !listening && !voiceBusy)}
+                        ariaLabel={
+                          listening
+                            ? 'Recording voice input'
+                            : voiceBusy
+                              ? 'Cleaning up transcript'
+                              : voiceDisabledReason
+                                ? voiceDisabledReason
+                                : 'Voice input'
+                        }
+                        disabled={!onVoiceText}
+                        onClick={() => void toggleVoice()}
+                      >
+                        {voiceBusy ? (
+                          <HugeiconsIcon
+                            className="animate-spin"
+                            icon={MagicWand02Icon}
+                            size={17}
+                          />
+                        ) : (
+                          <span className="relative inline-flex items-center justify-center">
+                            {listening ? (
+                              <span className="absolute inline-flex size-7 animate-ping rounded-full bg-destructive/30" />
+                            ) : null}
+                            <HugeiconsIcon
+                              className={listening ? 'text-destructive' : undefined}
+                              icon={Mic01Icon}
+                              size={17}
+                            />
+                            {listening ? (
+                              <span className="absolute -right-0.5 -bottom-0.5 size-1.5 rounded-full bg-destructive" />
+                            ) : null}
+                          </span>
+                        )}
+                      </ComposerIconButton>
+                    </HoverCardTrigger>
+                    {voiceDisabledReason ? (
+                      <HoverCardContent
+                        align="end"
+                        className="w-64 text-sm leading-relaxed"
+                      >
+                        {!voiceModelConfigured ? (
+                          <span>
+                            Voice input requires default and transcription models. Go to{' '}
+                            <button
+                              className="font-medium text-accent-blue underline underline-offset-2"
+                              onClick={() => voice?.onSettingsClick?.()}
+                              type="button"
+                            >
+                              model settings
+                            </button>{' '}
+                            to set them up.
+                          </span>
+                        ) : (
+                          voiceDisabledReason
+                        )}
+                      </HoverCardContent>
+                    ) : null}
+                  </HoverCard>
+                ) : null}
+                {enabledControls.submit ? (
+                  <button
+                    aria-label={canStop ? 'Stop' : 'Send message'}
+                    className="workplace-action shared-composer-submit"
+                    disabled={submitDisabled}
+                    onClick={canStop ? onStop : onSubmit}
+                    style={{
+                      flex: 'none',
+                      width: 36,
+                      height: 36,
+                      border: 'none',
+                      borderRadius: '50%',
+                      background: canSend || canStop ? 'var(--foreground)' : 'var(--secondary)',
+                      color: canSend || canStop ? 'var(--background)' : 'var(--muted-foreground)',
+                      cursor: canSend || canStop ? 'pointer' : 'not-allowed',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}
+                    type="button"
+                  >
+                    {canStop ? (
+                      <HugeiconsIcon
+                        fill="currentColor"
+                        icon={SquareIcon}
+                        size={16}
+                      />
+                    ) : (
+                      <HugeiconsIcon
+                        icon={ArrowUp01Icon}
+                        size={18}
+                      />
+                    )}
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
           </div>
         </div>
       </div>
@@ -768,33 +540,34 @@ function ComposerSelect({
       >
         {children}
       </select>
-      <ChevronDown
+      <HugeiconsIcon
         aria-hidden
+        icon={ChevronDownIcon}
         size={14}
       />
     </label>
   );
 }
 
-function ComposerIconButton({
-  active = false,
-  ariaLabel,
-  children,
-  disabled = false,
-  onClick
-}: {
+type ComposerIconButtonProps = Omit<ComponentPropsWithoutRef<'button'>, 'aria-label'> & {
   active?: boolean;
+  ariaDisabled?: boolean;
   ariaLabel: string;
   children: ReactNode;
-  disabled?: boolean;
-  onClick?: () => void;
-}): React.ReactElement {
+};
+
+const ComposerIconButton = forwardRef<HTMLButtonElement, ComposerIconButtonProps>(function ComposerIconButton(
+  { active = false, ariaDisabled = false, ariaLabel, children, disabled = false, style, ...props },
+  ref
+): React.ReactElement {
   return (
     <button
+      {...props}
+      aria-disabled={ariaDisabled || disabled}
       aria-label={ariaLabel}
       className="workplace-action"
       disabled={disabled}
-      onClick={onClick}
+      ref={ref}
       style={{
         flex: 'none',
         width: 34,
@@ -803,18 +576,19 @@ function ComposerIconButton({
         borderRadius: '50%',
         background: active ? 'var(--accent-blue-soft)' : 'var(--shared-composer-control-bg, transparent)',
         color: active ? 'var(--accent-blue)' : 'var(--muted-foreground)',
-        cursor: disabled ? 'not-allowed' : 'pointer',
+        cursor: disabled || ariaDisabled ? 'not-allowed' : 'pointer',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        opacity: disabled ? 0.48 : 1
+        opacity: disabled || ariaDisabled ? 0.48 : 1,
+        ...style
       }}
       type="button"
     >
       {children}
     </button>
   );
-}
+});
 
 function formatCompact(value: number): string {
   if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(value >= 10_000_000 ? 0 : 1)}M`;

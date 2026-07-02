@@ -4,6 +4,19 @@ import type { SkillListInstance } from '@monad/protocol';
 import type { Panel, SkillEditorState } from './types';
 
 import {
+  BookOpenTextIcon,
+  LoaderPinwheelIcon,
+  PencilEdit01Icon,
+  PlusSignIcon,
+  PuzzleIcon,
+  ShieldIcon,
+  SparklesIcon,
+  SquareArrowUp01Icon,
+  Store01Icon,
+  Upload01Icon
+} from '@hugeicons/core-free-icons';
+import { HugeiconsIcon } from '@hugeicons/react';
+import {
   useGetSkillsSettingsQuery,
   useLazyCheckSkillUpdatesQuery,
   useListInstalledSkillsQuery,
@@ -11,19 +24,7 @@ import {
   useSetSkillsSettingsMutation,
   useUploadSkillMutation
 } from '@monad/client-rtk';
-import { Badge, Button, cn, ScrollArea, Switch, Tooltip, TooltipContent, TooltipTrigger } from '@monad/ui';
-import {
-  ArrowLeft,
-  ArrowUpCircle,
-  BookOpenText,
-  Loader2,
-  Plus,
-  Shield,
-  Sparkles,
-  SquarePen,
-  Store,
-  Upload
-} from 'lucide-react';
+import { Button, cn, ScrollArea, Switch, Tooltip, TooltipContent, TooltipTrigger } from '@monad/ui';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
@@ -35,8 +36,9 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
-import { PanelShell, PanelShellHeader } from '@/components/ui/panel-shell';
+import { PanelShell } from '@/components/ui/panel-shell';
 import { isSkillMarketplacePath, skillMarketplacePath, studioPath } from '@/features/routes/route-paths';
+import { StudioBreadcrumbHeader } from '@/features/studio/StudioBreadcrumbHeader';
 import { useMonadRuntime } from '@/lib/monad-runtime-provider';
 import { BrowsePanel } from './BrowsePanel';
 import { GitHubMark } from './GitHubMark';
@@ -88,10 +90,8 @@ export function SkillsSettings({ onClose: _onClose }: { onClose: () => void }) {
     () => sortSkillInstancesByName(skillInstances.filter((skill) => skill.sourceKind === 'atom-pack')),
     [skillInstances]
   );
-  const enabledCount = skillInstances.filter((skill) => skill.available && !disabledSkillSet.has(skill.id)).length;
-
   useEffect(() => {
-    if (isSkillMarketplacePath(pathname)) setPanel('browse');
+    setPanel(isSkillMarketplacePath(pathname) ? 'browse' : 'installed');
   }, [pathname]);
 
   const refreshSkills = async () => {
@@ -178,7 +178,12 @@ export function SkillsSettings({ onClose: _onClose }: { onClose: () => void }) {
   const renderAutoloadHelp = () => (
     <InlineHelpHover
       body={t('web.skills.autoloadHelpBody')}
-      icon={<BookOpenText className="mt-0.5 size-4 shrink-0 text-muted-foreground" />}
+      icon={
+        <HugeiconsIcon
+          className="mt-0.5 size-4 shrink-0 text-muted-foreground"
+          icon={BookOpenTextIcon}
+        />
+      }
       label={t('web.skills.autoloadHelp')}
       sections={[t('web.skills.autoloadHelpOff'), t('web.skills.autoloadHelpPerSkill')]}
       title={t('web.skills.autoloadHelpTitle')}
@@ -188,7 +193,12 @@ export function SkillsSettings({ onClose: _onClose }: { onClose: () => void }) {
   const renderInstallReviewHelp = () => (
     <InlineHelpHover
       body={t('web.skills.installReviewHelpBody')}
-      icon={<Shield className="mt-0.5 size-4 shrink-0" />}
+      icon={
+        <HugeiconsIcon
+          className="mt-0.5 size-4 shrink-0"
+          icon={ShieldIcon}
+        />
+      }
       label={t('web.skills.installReviewHelp')}
       sections={[t('web.skills.installReviewHelpConfirm'), t('web.skills.installReviewHelpUnavailable')]}
       title={t('web.skills.installReviewHelpTitle')}
@@ -203,7 +213,7 @@ export function SkillsSettings({ onClose: _onClose }: { onClose: () => void }) {
       : installReviewAvailable
         ? t('web.skills.installReviewHint')
         : t('web.skills.installReviewUnavailableHint');
-    const Icon = isAutoload ? BookOpenText : Shield;
+    const Icon = isAutoload ? BookOpenTextIcon : ShieldIcon;
     const help = isAutoload ? renderAutoloadHelp() : renderInstallReviewHelp();
     const control = (
       <Switch
@@ -224,7 +234,10 @@ export function SkillsSettings({ onClose: _onClose }: { onClose: () => void }) {
           <div className="flex h-full flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex min-w-0 flex-col gap-1">
               <div className="flex flex-wrap items-center gap-2">
-                <Icon className={cn('size-4 shrink-0', isAutoload && 'text-muted-foreground')} />
+                <HugeiconsIcon
+                  className={cn('size-4 shrink-0', isAutoload && 'text-muted-foreground')}
+                  icon={Icon}
+                />
                 <h3 className="min-w-0 flex-1 text-wrap font-medium text-sm">{title}</h3>
               </div>
               <div className="inline-flex max-w-[68ch] flex-wrap items-center gap-x-1 text-muted-foreground text-sm">
@@ -242,7 +255,10 @@ export function SkillsSettings({ onClose: _onClose }: { onClose: () => void }) {
       return (
         <div className="flex min-w-0 items-center justify-between gap-3 rounded-md border bg-card/60 px-3 py-2">
           <div className="flex min-w-0 items-center gap-2">
-            <Icon className={cn('size-4 shrink-0', isAutoload && 'text-muted-foreground')} />
+            <HugeiconsIcon
+              className={cn('size-4 shrink-0', isAutoload && 'text-muted-foreground')}
+              icon={Icon}
+            />
             <span className="min-w-0 truncate font-medium text-sm">{title}</span>
             {help}
           </div>
@@ -255,7 +271,10 @@ export function SkillsSettings({ onClose: _onClose }: { onClose: () => void }) {
       <div className="flex min-w-0 items-center justify-between gap-4 border-b py-3 last:border-b-0">
         <div className="min-w-0">
           <div className="flex min-w-0 items-center gap-2">
-            <Icon className={cn('size-4 shrink-0', isAutoload && 'text-muted-foreground')} />
+            <HugeiconsIcon
+              className={cn('size-4 shrink-0', isAutoload && 'text-muted-foreground')}
+              icon={Icon}
+            />
             <span className="min-w-0 truncate font-medium text-sm">{title}</span>
             {help}
           </div>
@@ -347,7 +366,10 @@ export function SkillsSettings({ onClose: _onClose }: { onClose: () => void }) {
 
       {skillInstances.length === 0 && !adding && !(isFetching || loadingSettings) ? (
         <div className="flex flex-col items-center gap-2 py-10 text-center">
-          <Sparkles className="size-7 text-muted-foreground" />
+          <HugeiconsIcon
+            className="size-7 text-muted-foreground"
+            icon={SparklesIcon}
+          />
           <p className="font-medium text-sm">{t('web.skills.empty')}</p>
           <p className="max-w-sm text-muted-foreground text-sm">{t('web.skills.emptyHint')}</p>
           <Button
@@ -355,7 +377,10 @@ export function SkillsSettings({ onClose: _onClose }: { onClose: () => void }) {
             onClick={() => setAdding(true)}
             size="sm"
           >
-            <Plus className="size-3.5" />
+            <HugeiconsIcon
+              className="size-3.5"
+              icon={PlusSignIcon}
+            />
             {t('web.skills.add')}
           </Button>
         </div>
@@ -400,7 +425,7 @@ export function SkillsSettings({ onClose: _onClose }: { onClose: () => void }) {
 
   return (
     <PanelShell>
-      <PanelShellHeader
+      <StudioBreadcrumbHeader
         actions={
           <>
             {panel === 'installed' ? (
@@ -416,7 +441,10 @@ export function SkillsSettings({ onClose: _onClose }: { onClose: () => void }) {
                         size="icon"
                         variant="ghost"
                       >
-                        <ArrowUpCircle className={cn(checking && 'animate-pulse text-foreground')} />
+                        <HugeiconsIcon
+                          className={cn(checking && 'animate-pulse text-foreground')}
+                          icon={SquareArrowUp01Icon}
+                        />
                       </Button>
                     </span>
                   </TooltipTrigger>
@@ -431,7 +459,14 @@ export function SkillsSettings({ onClose: _onClose }: { onClose: () => void }) {
                       size="icon"
                       variant="ghost"
                     >
-                      {uploading ? <Loader2 className="animate-spin" /> : <Plus />}
+                      {uploading ? (
+                        <HugeiconsIcon
+                          className="animate-spin"
+                          icon={LoaderPinwheelIcon}
+                        />
+                      ) : (
+                        <HugeiconsIcon icon={PlusSignIcon} />
+                      )}
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
@@ -440,43 +475,52 @@ export function SkillsSettings({ onClose: _onClose }: { onClose: () => void }) {
                       {t('web.skills.addGithub')}
                     </DropdownMenuItem>
                     <DropdownMenuItem onSelect={() => setUploadDialogOpen(true)}>
-                      <Upload className="size-4" />
+                      <HugeiconsIcon
+                        className="size-4"
+                        icon={Upload01Icon}
+                      />
                       {t('web.skills.addUpload')}
                     </DropdownMenuItem>
                     <DropdownMenuItem onSelect={() => setEditor({ content: '' })}>
-                      <SquarePen className="size-4" />
+                      <HugeiconsIcon
+                        className="size-4"
+                        icon={PencilEdit01Icon}
+                      />
                       {t('web.skills.addEditor')}
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
               </>
             ) : null}
-            <Button
-              className="h-7 gap-1 px-2 text-xs"
-              onClick={() => {
-                const next = panel === 'browse' ? 'installed' : 'browse';
-                setPanel(next);
-                setAdding(false);
-                router.replace(next === 'browse' ? skillMarketplacePath() : studioPath('skills'));
-              }}
-              size="sm"
-              variant="ghost"
-            >
-              {panel === 'browse' ? <ArrowLeft className="size-3.5" /> : <Store className="size-3.5" />}
-              {panel === 'browse' ? t('web.skills.installedList') : t('web.skills.marketplace')}
-            </Button>
+            {panel === 'installed' ? (
+              <Button
+                className="h-7 gap-1 px-2 text-xs"
+                onClick={() => {
+                  setAdding(false);
+                  router.replace(skillMarketplacePath());
+                }}
+                size="sm"
+                variant="ghost"
+              >
+                <HugeiconsIcon
+                  className="size-3.5"
+                  icon={Store01Icon}
+                />
+                {t('web.skills.marketplace')}
+              </Button>
+            ) : null}
           </>
         }
-        badge={
-          <Badge
-            className="h-5 px-1.5 text-[10px]"
-            variant="secondary"
-          >
-            {t('web.skills.enabledCount', { enabled: enabledCount, total: skillInstances.length })}
-          </Badge>
+        backHref={panel === 'browse' ? studioPath('skills') : undefined}
+        icon={
+          <HugeiconsIcon
+            className="size-4"
+            icon={PuzzleIcon}
+          />
         }
-        subtitle={t('web.skills.subtitle')}
-        title={t('web.skills.title')}
+        parentTitle={panel === 'browse' ? t('web.skills.title') : undefined}
+        showSubtitle={false}
+        title={panel === 'browse' ? t('web.skills.marketplace') : t('web.skills.title')}
       />
 
       <input

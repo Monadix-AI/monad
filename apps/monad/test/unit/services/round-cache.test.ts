@@ -5,10 +5,10 @@ import { newId } from '@monad/protocol';
 
 import { RoundCache } from '@/services/round-cache.ts';
 
-function evt(sessionId: SessionId): Event {
+function evt(transcriptTargetId: SessionId): Event {
   return {
     id: newId('evt'),
-    sessionId,
+    transcriptTargetId,
     type: 'agent.token',
     actorAgentId: null,
     payload: {},
@@ -16,7 +16,7 @@ function evt(sessionId: SessionId): Event {
   };
 }
 
-test('since() replays buffered events after the cursor, retire() clears them', async () => {
+test('since() replays buffered events after the cursor, retire() clears them', () => {
   const cache = new RoundCache();
   const sessionId = newId('ses') as SessionId;
   const a = evt(sessionId);
@@ -27,15 +27,15 @@ test('since() replays buffered events after the cursor, retire() clears them', a
   cache.append(c);
 
   // no cursor → full buffer
-  expect((await cache.since(sessionId)).map((e) => e.id)).toEqual([a.id, b.id, c.id]);
+  expect(cache.since(sessionId).map((e) => e.id)).toEqual([a.id, b.id, c.id]);
   // cursor → only newer
-  expect((await cache.since(sessionId, a.id)).map((e) => e.id)).toEqual([b.id, c.id]);
+  expect(cache.since(sessionId, a.id).map((e) => e.id)).toEqual([b.id, c.id]);
 
   cache.retire(sessionId);
-  expect(await cache.since(sessionId)).toEqual([]);
+  expect(cache.since(sessionId)).toEqual([]);
 });
 
-test('since() on an unknown session returns empty (falls back to durable log)', async () => {
+test('since() on an unknown session returns empty (falls back to durable log)', () => {
   const cache = new RoundCache();
-  expect(await cache.since(newId('ses') as SessionId, newId('evt'))).toEqual([]);
+  expect(cache.since(newId('ses') as SessionId, newId('evt'))).toEqual([]);
 });

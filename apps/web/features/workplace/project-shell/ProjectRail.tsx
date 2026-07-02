@@ -1,6 +1,7 @@
 import type { ProjectController } from '../use-project';
 
-import { KeyRound, Loader2 } from 'lucide-react';
+import { Key01Icon, LoaderPinwheelIcon } from '@hugeicons/core-free-icons';
+import { HugeiconsIcon } from '@hugeicons/react';
 
 import { MiniTag, PresenceDot } from '../Bits';
 import { mono, sans, sectionLabel } from '../styles';
@@ -80,7 +81,6 @@ export function ProjectRail({
                   fontSize: 14,
                   fontWeight: ch.active ? 600 : 500,
                   textAlign: 'left',
-                  cursor: 'pointer',
                   color: ch.active ? 'var(--accent-blue)' : 'var(--muted-foreground)',
                   background: ch.active ? 'var(--accent-blue-soft)' : 'transparent',
                   border: ch.active ? `1px solid ${'var(--accent-blue)'}` : '1px solid transparent'
@@ -154,13 +154,22 @@ export function ProjectRail({
                     borderRadius: 7,
                     background: 'var(--card)',
                     color: 'var(--foreground)',
-                    cursor: startingAuth ? 'default' : 'pointer',
                     flex: 'none'
                   }}
                   title="Open provider login"
                   type="button"
                 >
-                  {startingAuth ? <Loader2 size={13} /> : <KeyRound size={13} />}
+                  {startingAuth ? (
+                    <HugeiconsIcon
+                      icon={LoaderPinwheelIcon}
+                      size={13}
+                    />
+                  ) : (
+                    <HugeiconsIcon
+                      icon={Key01Icon}
+                      size={13}
+                    />
+                  )}
                 </button>
               ) : (
                 <span style={{ marginLeft: 'auto', fontFamily: mono, fontSize: 10, textTransform: 'uppercase' }}>

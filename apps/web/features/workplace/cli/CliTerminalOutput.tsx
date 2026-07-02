@@ -33,6 +33,7 @@ interface CliTerminalOutputProps {
   minHeight?: number;
   maxHeight?: string | number;
   onInput?: (input: string) => void;
+  resetKey?: string;
   style?: CSSProperties;
 }
 
@@ -41,6 +42,7 @@ export function CliTerminalOutput({
   minHeight = 180,
   maxHeight = 'min(48vh, 420px)',
   onInput,
+  resetKey,
   style
 }: CliTerminalOutputProps): React.ReactElement {
   const hostRef = useRef<HTMLDivElement | null>(null);
@@ -56,9 +58,19 @@ export function CliTerminalOutput({
   onInputRef.current = onInput;
 
   useEffect(() => {
+    void resetKey;
     const host = hostRef.current;
     if (!host) return;
     let disposed = false;
+    host.replaceChildren();
+    observerRef.current?.disconnect();
+    observerRef.current = null;
+    inputDisposableRef.current?.dispose();
+    inputDisposableRef.current = null;
+    terminalRef.current?.dispose();
+    terminalRef.current = null;
+    fitRef.current = null;
+    writtenOutputRef.current = '';
 
     async function mountTerminal(): Promise<void> {
       const { FitAddon, Terminal, init } = await import('ghostty-web');
@@ -114,7 +126,7 @@ export function CliTerminalOutput({
       fitRef.current = null;
       writtenOutputRef.current = '';
     };
-  }, []);
+  }, [resetKey]);
 
   useEffect(() => {
     const terminal = terminalRef.current;
@@ -125,6 +137,7 @@ export function CliTerminalOutput({
       if (delta) terminal.write(delta);
     } else {
       terminal.reset();
+      terminal.write('\x1b[3J\x1b[2J\x1b[H');
       if (output) terminal.write(output);
     }
     writtenOutputRef.current = output;

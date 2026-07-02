@@ -60,7 +60,7 @@ import {
 import { developerSettingsSchema, setDeveloperSettingsRequestSchema } from './developer-settings.ts';
 import { getGraphResponseSchema } from './graph.ts';
 import { hooksSettingsResponseSchema, setHooksSettingsRequestSchema } from './hooks-settings.ts';
-import { agentIdSchema, sessionIdSchema } from './ids.ts';
+import { agentIdSchema, projectIdSchema, sessionIdSchema } from './ids.ts';
 import { getLicensesResponseSchema } from './licenses.ts';
 import { getMem0DataResponseSchema } from './mem0-data.ts';
 import { getLawsResponseSchema } from './memory.ts';
@@ -93,6 +93,17 @@ import {
 import { setSkillsSettingsRequestSchema, skillsSettingsResponseSchema } from './skills-settings.ts';
 import { setStartupSettingsRequestSchema, startupSettingsSchema } from './startup-settings.ts';
 import { initDockerResponseSchema, setToolBackendsRequestSchema, toolBackendsResponseSchema } from './tool-backends.ts';
+import { setUserProfileSettingsRequestSchema, userProfileSettingsSchema } from './user-profile-settings.ts';
+import {
+  createWorkplaceProjectRequestSchema,
+  createWorkplaceProjectResponseSchema,
+  deleteWorkplaceProjectResponseSchema,
+  getWorkplaceProjectResponseSchema,
+  listWorkplaceProjectsQuerySchema,
+  listWorkplaceProjectsResponseSchema,
+  updateWorkplaceProjectRequestSchema,
+  updateWorkplaceProjectResponseSchema
+} from './workplace-project.ts';
 
 export const httpErrorSchema = z.object({
   error: z.string(),
@@ -163,6 +174,7 @@ export function coercifyQuery<T extends z.ZodObject<z.ZodRawShape>>(schema: T): 
 export const responseInstanceSchema = z.custom<Response>((value: unknown) => value instanceof Response);
 
 const sessionParamsSchema = z.object({ id: sessionIdSchema });
+const projectParamsSchema = z.object({ id: projectIdSchema });
 const agentParamsSchema = z.object({ id: agentIdSchema });
 
 // Reusable wire type (consumed by the daemon handler + the web client), so it lives in protocol even
@@ -248,6 +260,31 @@ export const daemonHttpContract = {
       body: forwardToAcpRequestSchema,
       response: { 200: forwardToAcpResponseSchema }
     })
+  },
+  workplace: {
+    projects: {
+      list: defineHttpEndpoint({
+        query: coercifyQuery(listWorkplaceProjectsQuerySchema),
+        response: { 200: listWorkplaceProjectsResponseSchema }
+      }),
+      create: defineHttpEndpoint({
+        body: createWorkplaceProjectRequestSchema,
+        response: { 201: createWorkplaceProjectResponseSchema }
+      }),
+      get: defineHttpEndpoint({
+        params: projectParamsSchema,
+        response: { 200: getWorkplaceProjectResponseSchema }
+      }),
+      update: defineHttpEndpoint({
+        params: projectParamsSchema,
+        body: updateWorkplaceProjectRequestSchema,
+        response: { 200: updateWorkplaceProjectResponseSchema, 412: httpErrorSchema }
+      }),
+      delete: defineHttpEndpoint({
+        params: projectParamsSchema,
+        response: { 200: deleteWorkplaceProjectResponseSchema }
+      })
+    }
   },
   agents: {
     list: defineHttpEndpoint({
@@ -346,6 +383,13 @@ export const daemonHttpContract = {
     set: defineHttpEndpoint({
       body: setStartupSettingsRequestSchema,
       response: { 200: startupSettingsSchema }
+    })
+  },
+  userProfileSettings: {
+    get: defineHttpEndpoint({ response: { 200: userProfileSettingsSchema } }),
+    set: defineHttpEndpoint({
+      body: setUserProfileSettingsRequestSchema,
+      response: { 200: userProfileSettingsSchema }
     })
   },
   tools: {

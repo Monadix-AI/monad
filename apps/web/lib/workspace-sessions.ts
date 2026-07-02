@@ -1,6 +1,4 @@
-import type { Session } from '@monad/protocol';
-
-export const WORKPLACE_PROJECT_PREFIX = 'Workplace: ';
+import type { WorkplaceProject } from '@monad/protocol';
 
 export const safeDecode = (value: string): string => {
   let current = value;
@@ -16,14 +14,11 @@ export const safeDecode = (value: string): string => {
   return current;
 };
 
-export const isWorkplaceProject = (session: Pick<Session, 'title'>): boolean =>
-  session.title.startsWith(WORKPLACE_PROJECT_PREFIX);
+export const getWorkplaceProjectName = (session: Pick<WorkplaceProject, 'title'>): string =>
+  formatProjectDisplayName(safeDecode(session.title));
 
-const getWorkplaceProjectSlug = (session: Pick<Session, 'title'>): string =>
-  session.title.slice(WORKPLACE_PROJECT_PREFIX.length);
-
-export const getWorkplaceProjectName = (session: Pick<Session, 'title'>): string =>
-  formatProjectDisplayName(safeDecode(getWorkplaceProjectSlug(session)));
+export const buildWorkspaceProjects = (projects: Pick<WorkplaceProject, 'id' | 'title' | 'cwd'>[] = []) =>
+  projects.map((project) => ({ id: project.id, name: getWorkplaceProjectName(project), cwd: project.cwd }));
 
 const createChannelName = (date = new Date()): string => {
   const stamp = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}-${String(date.getHours()).padStart(2, '0')}${String(date.getMinutes()).padStart(2, '0')}${String(date.getSeconds()).padStart(2, '0')}`;

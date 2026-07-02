@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react';
 
+import { HelpCircleIcon } from '@hugeicons/core-free-icons';
+import { HugeiconsIcon } from '@hugeicons/react';
 import { Button } from '@monad/ui';
-import { HelpCircle } from 'lucide-react';
 
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 
@@ -30,7 +31,10 @@ export function InlineHelpHover({
           size="icon"
           variant="ghost"
         >
-          <HelpCircle className="size-3.5" />
+          <HugeiconsIcon
+            className="size-3.5"
+            icon={HelpCircleIcon}
+          />
         </Button>
       </HoverCardTrigger>
       <HoverCardContent

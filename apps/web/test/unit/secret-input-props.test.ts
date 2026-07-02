@@ -18,10 +18,10 @@ test('secret inputs opt out of login password managers', () => {
 test('settings secret fields avoid native password inputs', () => {
   const root = join(import.meta.dir, '../..');
   const files = [
-    'features/settings/ChannelsSettings.tsx',
+    'features/studio/channels-settings/index.tsx',
     'features/init/InitWizard.tsx',
     'features/settings/ConnectionSettings.tsx',
-    'features/settings/OpenaiCompatSettings.tsx',
+    'features/studio/api-settings/index.tsx',
     'features/studio/model-settings/providers.tsx'
   ];
 

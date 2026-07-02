@@ -22,7 +22,7 @@ import {
   sessionSurfaceSchema,
   sessionTransportSchema
 } from './domain.ts';
-import { agentIdSchema, messageIdSchema, sessionIdSchema } from './ids.ts';
+import { agentIdSchema, messageIdSchema, sessionIdSchema, transcriptTargetIdSchema } from './ids.ts';
 import { httpsUrlSchema, httpUrlSchema } from './url.ts';
 
 export const CONTROL_API_VERSION = 'v1' as const;
@@ -307,9 +307,29 @@ export const workspaceGitSchema = z.object({
   branch: z.string().optional(),
   dirty: z.boolean().optional(),
   ahead: z.number().int().optional(),
-  behind: z.number().int().optional()
+  behind: z.number().int().optional(),
+  remoteUrl: z.string().optional()
 });
 export type WorkspaceGit = z.infer<typeof workspaceGitSchema>;
+
+export const workspaceMetaSchema = z.object({
+  git: workspaceGitSchema
+});
+export type WorkspaceMeta = z.infer<typeof workspaceMetaSchema>;
+
+export const workspaceActionSchema = z.enum(['show-in-file-manager', 'open-terminal']);
+export type WorkspaceAction = z.infer<typeof workspaceActionSchema>;
+
+export const workspaceActionRequestSchema = z.object({
+  action: workspaceActionSchema
+});
+export type WorkspaceActionRequest = z.infer<typeof workspaceActionRequestSchema>;
+
+export const workspaceActionResponseSchema = z.object({
+  ok: z.literal(true),
+  action: workspaceActionSchema
+});
+export type WorkspaceActionResponse = z.infer<typeof workspaceActionResponseSchema>;
 
 export const updateSessionRequestSchema = z.object({
   title: z.string().max(SESSION_TITLE_MAX).optional(),
@@ -435,7 +455,7 @@ export const searchSessionsRequestSchema = z.object({
   q: z.string().max(SEARCH_QUERY_MAX).optional().default(''),
   mode: searchModeSchema.optional(),
   limit: z.number().int().positive().optional(),
-  sessionId: sessionIdSchema.optional()
+  transcriptTargetId: transcriptTargetIdSchema.optional()
 });
 export type SearchSessionsRequest = z.infer<typeof searchSessionsRequestSchema>;
 
@@ -551,30 +571,15 @@ export type GetProviderCatalogResponse = z.infer<typeof getProviderCatalogRespon
 // `modelPriceSchema`/`ModelPrice` further down this file.
 
 const PRICE_PER_MILLION = 1_000_000;
-const OPENAI_KNOWN_PRICE_KEYS = new Set([
-  'prompt',
-  'completion',
-  'input_cache_read',
-  'input_cache_write',
-  'video',
-  'video_second',
-  'video_per_second',
-  'per_second',
-  'per_minute',
-  'per_hour',
-  'image_output',
-  'search',
-  'web_search'
-]);
 
 function perMillion(v: unknown): number | undefined {
   const n = typeof v === 'string' ? Number.parseFloat(v) : typeof v === 'number' ? v : Number.NaN;
-  return Number.isFinite(n) && n >= 0 ? n * PRICE_PER_MILLION : undefined;
+  return Number.isFinite(n) && n > 0 ? n * PRICE_PER_MILLION : undefined;
 }
 
 function unitPrice(v: unknown): number | undefined {
   const n = typeof v === 'string' ? Number.parseFloat(v) : typeof v === 'number' ? v : Number.NaN;
-  return Number.isFinite(n) && n >= 0 ? n : undefined;
+  return Number.isFinite(n) && n > 0 ? n : undefined;
 }
 
 function firstDefined(...values: unknown[]): unknown {
@@ -646,8 +651,7 @@ function openAiPriceUnits(p: Record<string, unknown>): ModelPriceUnit[] {
   return Object.entries(p)
     .flatMap(([key, value]) => {
       const n = typeof value === 'string' ? Number.parseFloat(value) : typeof value === 'number' ? value : Number.NaN;
-      if (!Number.isFinite(n) || n < 0) return [];
-      if (n === 0 && !OPENAI_KNOWN_PRICE_KEYS.has(key)) return [];
+      if (!Number.isFinite(n) || n <= 0) return [];
       const meta = priceUnitMeta(key);
       return [{ label: meta.label, price: n * meta.multiplier, unit: meta.unit }];
     })
@@ -874,11 +878,20 @@ export type ModelKind = z.infer<typeof modelKindSchema>;
 /** A model-assignment slot. `chat` is special (it resolves to a profile, with params + fallback);
  *  the rest are profile role overrides. `vision` is a chat
  *  model that accepts image input. The role → required-capability mapping the UI filters on:
- *  chat=output⊇text · vision=input⊇image · image=output⊇image · speech=output⊇speech · embedding=kind. */
+ *  chat=output⊇text · vision=input⊇image · image=output⊇image · speech=output⊇speech ·
+ *  transcription=kind|output⊇transcription · embedding=kind. */
 export const getRolesResponseSchema = z.object({ roles: modelRolesSchema });
 export type GetRolesResponse = z.infer<typeof getRolesResponseSchema>;
 export const setRolesRequestSchema = z.object({ roles: modelRolesSchema });
 export type SetRolesRequest = z.infer<typeof setRolesRequestSchema>;
+export const transcribeAudioRequestSchema = z.object({
+  audioBase64: z.string().min(1).max(25_000_000),
+  mediaType: z.string().min(1).max(200).optional(),
+  language: z.string().min(1).max(64).optional()
+});
+export type TranscribeAudioRequest = z.infer<typeof transcribeAudioRequestSchema>;
+export const transcribeAudioResponseSchema = z.object({ text: z.string() });
+export type TranscribeAudioResponse = z.infer<typeof transcribeAudioResponseSchema>;
 
 export const modelModalitiesSchema = z.object({
   input: z.array(z.string()).optional(),

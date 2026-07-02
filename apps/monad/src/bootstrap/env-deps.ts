@@ -102,11 +102,10 @@ async function ensureNode(
   await mkdir(binDir, { recursive: true });
 
   for (const target of ['node', 'npx'] as const) {
-    const entryKey = [...files.keys()].find((k) => k.endsWith(`/bin/${target}`));
-    if (!entryKey) throw new Error(`${target} not found in Node.js archive`);
+    const entry = [...files.entries()].find(([k]) => k.endsWith(`/bin/${target}`));
+    if (!entry) throw new Error(`${target} not found in Node.js archive`);
     const dest = join(binDir, nodeBinName(target));
-    // biome-ignore lint/style/noNonNullAssertion: entryKey was just found via find(), value is guaranteed
-    await Bun.write(dest, files.get(entryKey)!);
+    await Bun.write(dest, entry[1]);
     await chmod(dest, 0o755);
   }
 
@@ -184,11 +183,11 @@ async function ensureUv(
 
   for (const target of ['uv', 'uvx'] as const) {
     const name = uvBinName(target);
-    const entryKey = [...files.keys()].find((k) => {
+    const entry = [...files.entries()].find(([k]) => {
       const base = k.split('/').pop() ?? '';
       return base === name || base === target; // handle with or without .exe
     });
-    if (!entryKey) {
+    if (!entry) {
       if (target === 'uvx') {
         // uvx may be absent (symlink-only in some builds) — copy uv as uvx
         const uvDest = join(binDir, uvBinName('uv'));
@@ -200,8 +199,7 @@ async function ensureUv(
       throw new Error(`uv binary not found in archive ${chosen}`);
     }
     const dest = join(binDir, name);
-    // biome-ignore lint/style/noNonNullAssertion: entryKey was just found via find(), value is guaranteed
-    await Bun.write(dest, files.get(entryKey)!);
+    await Bun.write(dest, entry[1]);
     await chmod(dest, 0o755);
   }
 

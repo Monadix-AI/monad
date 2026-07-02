@@ -1,5 +1,7 @@
 'use client';
 
+import { Cancel01Icon, CheckIcon, LanguageSquareIcon } from '@hugeicons/core-free-icons';
+import { HugeiconsIcon } from '@hugeicons/react';
 import {
   localeAdapter,
   localeSelectors,
@@ -8,7 +10,6 @@ import {
   useSetLocaleMutation
 } from '@monad/client-rtk';
 import { Button, cn } from '@monad/ui';
-import { Check, Languages, X } from 'lucide-react';
 
 import { useT } from '@/components/I18nProvider';
 
@@ -27,7 +28,10 @@ export function LanguageSettings({ onClose }: Props) {
     <div className="flex min-w-0 flex-1 flex-col">
       <div className="flex items-center justify-between border-b px-6 py-4">
         <div className="flex items-center gap-2">
-          <Languages className="size-4 text-muted-foreground" />
+          <HugeiconsIcon
+            className="size-4 text-muted-foreground"
+            icon={LanguageSquareIcon}
+          />
           <span className="font-semibold text-sm">{t('web.settings.language')}</span>
         </div>
         <Button
@@ -37,7 +41,7 @@ export function LanguageSettings({ onClose }: Props) {
           size="icon"
           variant="ghost"
         >
-          <X />
+          <HugeiconsIcon icon={Cancel01Icon} />
         </Button>
       </div>
 
@@ -56,7 +60,12 @@ export function LanguageSettings({ onClose }: Props) {
                 variant={current ? 'secondary' : 'ghost'}
               >
                 <span>{name}</span>
-                {current && <Check className="size-4" />}
+                {current && (
+                  <HugeiconsIcon
+                    className="size-4"
+                    icon={CheckIcon}
+                  />
+                )}
               </Button>
             );
           })}

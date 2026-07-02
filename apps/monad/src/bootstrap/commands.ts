@@ -68,7 +68,8 @@ export function createCommandBundle(deps: CommandBundleDeps): CommandBundle {
     registry: commandRegistry,
     skills,
     listModels: async (sessionId) => {
-      const effective = store.getSession(sessionId)?.model ?? cfg.model.default;
+      const effective =
+        (store.getSession(sessionId) ?? store.getWorkplaceProject(sessionId))?.model ?? cfg.model.default;
       return modelService.profiles.map((p) => ({
         alias: p.alias,
         provider: p.routes.chat.provider,
@@ -80,7 +81,9 @@ export function createCommandBundle(deps: CommandBundleDeps): CommandBundle {
       if (!modelService.profiles.some((p) => p.alias === alias)) {
         throw new Error(`Unknown model profile: ${alias}`);
       }
-      store.updateSession(sessionId, { model: alias });
+      if (store.updateSession(sessionId, { model: alias })) return;
+      if (store.updateWorkplaceProject(sessionId, { model: alias })) return;
+      throw new Error(`Transcript target not found: ${sessionId}`);
     },
     compact: async (sessionId) => {
       return history.compact(sessionId);
@@ -145,7 +148,7 @@ export function createCommandBundle(deps: CommandBundleDeps): CommandBundle {
       store.insertMessage(msgId, newSessionId as SessionId, firstMessage, now, 'user', { type: 'text' });
       const evt: Event = {
         id: newId('evt'),
-        sessionId: newSessionId as SessionId,
+        transcriptTargetId: newSessionId as SessionId,
         type: 'user.message',
         actorAgentId: null,
         payload: { messageId: msgId, text: firstMessage },

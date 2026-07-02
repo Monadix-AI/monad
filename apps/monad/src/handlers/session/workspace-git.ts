@@ -4,7 +4,7 @@ import { buildSandboxPolicy, sandboxedSpawn, sandboxLauncher } from '@/capabilit
 
 /** Parse `git status --porcelain=v1 --branch` output. The first `## ` line carries the branch and
  *  ahead/behind counts; any other line means the tree is dirty. */
-function parseGitStatus(out: string): WorkspaceGit {
+function parseGitStatus(out: string, remoteUrl?: string): WorkspaceGit {
   const lines = out.split('\n').filter((l) => l.length > 0);
   const head = lines.find((l) => l.startsWith('## '))?.slice(3) ?? '';
   const dirty = lines.some((l) => !l.startsWith('## '));
@@ -19,8 +19,18 @@ function parseGitStatus(out: string): WorkspaceGit {
     branch,
     dirty,
     ...(ahead ? { ahead: Number(ahead) } : {}),
-    ...(behind ? { behind: Number(behind) } : {})
+    ...(behind ? { behind: Number(behind) } : {}),
+    ...(remoteUrl ? { remoteUrl } : {})
   };
+}
+
+function normalizeGitRemote(value: string): string | undefined {
+  const remote = value.trim();
+  if (!remote) return undefined;
+  const ssh = /^git@github\.com:(.+?)(?:\.git)?$/.exec(remote);
+  if (ssh?.[1]) return `https://github.com/${ssh[1]}`;
+  if (remote.startsWith('https://github.com/')) return remote.replace(/\.git$/, '');
+  return undefined;
 }
 
 /** Read a read-only git summary of `cwd`. Runs git through the OS sandbox seam (never bare spawn),
@@ -41,13 +51,22 @@ export async function readWorkspaceGit(cwd: string): Promise<WorkspaceGit> {
       buildSandboxPolicy([cwd]),
       { confine }
     );
-    const [stdout, , exitCode] = await Promise.all([
+    const remoteProc = sandboxedSpawn(
+      ['git', '-c', 'core.fsmonitor=', '--no-optional-locks', '-C', cwd, 'remote', 'get-url', 'origin'],
+      { stdout: 'pipe', stderr: 'pipe' },
+      buildSandboxPolicy([cwd]),
+      { confine }
+    );
+    const [stdout, , exitCode, remoteStdout, , remoteExitCode] = await Promise.all([
       new Response(proc.stdout).text(),
       new Response(proc.stderr).text(),
-      proc.exited
+      proc.exited,
+      new Response(remoteProc.stdout).text(),
+      new Response(remoteProc.stderr).text(),
+      remoteProc.exited
     ]);
     if (exitCode !== 0) return { isRepo: false };
-    return parseGitStatus(stdout);
+    return parseGitStatus(stdout, remoteExitCode === 0 ? normalizeGitRemote(remoteStdout) : undefined);
   } catch {
     return { isRepo: false };
   }

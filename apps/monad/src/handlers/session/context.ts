@@ -1,5 +1,15 @@
 import type { Logger } from '@monad/logger';
-import type { Event, EventType, Hooks, PrincipalId, Session, SessionId, SessionMcpServer } from '@monad/protocol';
+import type {
+  Event,
+  EventType,
+  Hooks,
+  PrincipalId,
+  Session,
+  SessionId,
+  SessionMcpServer,
+  TranscriptTarget,
+  TranscriptTargetId
+} from '@monad/protocol';
 import type { Agent, LoadedSkill } from '@/agent/index.ts';
 import type { McpConnection } from '@/capabilities/tools';
 import type { Tool, ToolBackends } from '@/capabilities/tools/types.ts';
@@ -28,6 +38,8 @@ export interface SessionDeps {
   cache: RoundCache;
   log?: Logger;
   ownerPrincipalId: PrincipalId;
+  /** Distributed-state handle (embedded KV via Bun.RedisClient; cloud swaps in real Redis). Retained
+   *  as the reuse seam — no session-layer consumer today (cross-process resume was intentionally dropped). */
   kv?: KvService;
   localeService?: Pick<I18nService, 't'>;
   oversight?: Pick<OversightService, 'cancelSession'>;
@@ -51,7 +63,7 @@ export interface SessionDeps {
   /** Per-session fs sandbox roots from the bound Studio agent's `sandbox` override (global ceiling
    * applied). Returns undefined when there's no override → the caller inherits the daemon default. */
   agentSandboxRoots?: (sessionId: SessionId) => string[] | undefined;
-  nativeCliHost?: Pick<NativeCliHost, 'preflight' | 'input' | 'list' | 'start' | 'stopProject'>;
+  nativeCliHost?: Pick<NativeCliHost, 'preflight' | 'input' | 'list' | 'start' | 'stopTranscriptTarget'>;
 }
 
 /** Execution config applied to every turn of a session, set out-of-band (the ACP bridge pushes the
@@ -76,25 +88,34 @@ interface SessionRuntime {
 
 export interface SessionContext {
   deps: SessionDeps;
-  aborts: Map<SessionId, AbortController>;
-  /** Per-session execution config (see {@link SessionRuntime}); keyed by session id. */
-  runtime: Map<SessionId, SessionRuntime>;
+  aborts: Map<TranscriptTargetId, AbortController>;
+  /** Per-transcript execution config (see {@link SessionRuntime}); keyed by session or project id. */
+  runtime: Map<TranscriptTargetId, SessionRuntime>;
   requireSession(id: SessionId): Session;
+  requireTranscriptTarget(id: TranscriptTargetId): TranscriptTarget;
   makeEmit(round: Event[]): (event: Event) => void;
-  persistAndRetire(sessionId: SessionId, round: Event[]): void;
-  emitLifecycle(sessionId: SessionId, type: EventType, payload: Record<string, unknown>): void;
-  beginRun(sessionId: SessionId): { round: Event[]; signal: AbortSignal };
+  persistAndRetire(sessionId: TranscriptTargetId, round: Event[]): void;
+  emitLifecycle(sessionId: TranscriptTargetId, type: EventType, payload: Record<string, unknown>): void;
+  beginRun(sessionId: TranscriptTargetId): { round: Event[]; signal: AbortSignal };
 }
 
 export function createSessionContext(deps: SessionDeps): SessionContext {
-  const { store, bus, cache, kv } = deps;
-  const aborts = new Map<SessionId, AbortController>();
-  const runtime = new Map<SessionId, SessionRuntime>();
+  const { store, bus, cache } = deps;
+  const aborts = new Map<TranscriptTargetId, AbortController>();
+  const runtime = new Map<TranscriptTargetId, SessionRuntime>();
 
   function requireSession(id: SessionId): Session {
     const session = store.getSession(id);
     if (!session) throw new HandlerError('invalid', `session not found: ${id}`);
     return session;
+  }
+
+  function requireTranscriptTarget(id: TranscriptTargetId): TranscriptTarget {
+    const session = store.getSession(id);
+    if (session) return session;
+    const project = store.getWorkplaceProject(id);
+    if (!project) throw new HandlerError('invalid', `transcript target not found: ${id}`);
+    return project;
   }
 
   function makeEmit(round: Event[]): (event: Event) => void {
@@ -106,23 +127,19 @@ export function createSessionContext(deps: SessionDeps): SessionContext {
       // updatedAt and fan a sessions.updated delta to the control stream so every client's session
       // list re-sorts to the top, even ones not viewing this session. Channel-originated turns flow
       // through here too, so a Telegram message bubbles the session up in the web sidebar live.
-      if (event.type === 'user.message') bumpSessionActivity(event.sessionId);
-      if (kv && event.type === 'agent.token') {
-        const token = (event.payload as { token?: string }).token;
-        if (token) kv.publish(`session:${event.sessionId}:tokens`, token);
-      }
+      if (event.type === 'user.message') bumpSessionActivity(event.transcriptTargetId);
     };
   }
 
   // Publish-only (not persisted via appendEvents): the control stream carries ephemeral list
   // deltas — a reconnecting client re-fetches the list — so a per-turn event row would only bloat
   // the log. Renames/state changes still persist through emitLifecycle.
-  function bumpSessionActivity(sessionId: SessionId): void {
-    const updated = store.updateSession(sessionId, {});
+  function bumpSessionActivity(sessionId: TranscriptTargetId): void {
+    const updated = store.updateSession(sessionId, {}) ?? store.updateWorkplaceProject(sessionId, {});
     if (!updated) return;
     bus.publish({
       id: newId('evt'),
-      sessionId,
+      transcriptTargetId: sessionId,
       type: 'session.updated',
       actorAgentId: null,
       payload: { updatedAt: updated.updatedAt },
@@ -133,10 +150,13 @@ export function createSessionContext(deps: SessionDeps): SessionContext {
   // Publish-only stream-lifecycle markers (never persisted): they tell clients holding the control
   // stream *when* a turn is generating, so they open/close a per-session SSE subscription on demand.
   // Generation tokens themselves never travel the control/WS plane — only these coarse signals do.
-  function emitStreamMarker(sessionId: SessionId, type: 'session.stream_started' | 'session.stream_ended'): void {
+  function emitStreamMarker(
+    sessionId: TranscriptTargetId,
+    type: 'session.stream_started' | 'session.stream_ended'
+  ): void {
     bus.publish({
       id: newId('evt'),
-      sessionId,
+      transcriptTargetId: sessionId,
       type,
       actorAgentId: null,
       payload: {},
@@ -144,23 +164,18 @@ export function createSessionContext(deps: SessionDeps): SessionContext {
     });
   }
 
-  function persistAndRetire(sessionId: SessionId, round: Event[]): void {
+  function persistAndRetire(sessionId: TranscriptTargetId, round: Event[]): void {
     // agent.token / agent.reasoning are transient stream deltas — delivered live over the bus,
     // never persisted as event rows (the final agent.message carries the durable text).
     store.appendEvents(round.filter((e) => e.type !== 'agent.token' && e.type !== 'agent.reasoning'));
     cache.retire(sessionId);
     emitStreamMarker(sessionId, 'session.stream_ended');
-    if (kv) {
-      kv.keys(`run:${sessionId}:*`).then((keys) => {
-        if (keys.length > 0) kv.del(...(keys as [string, ...string[]]));
-      });
-    }
   }
 
-  function emitLifecycle(sessionId: SessionId, type: EventType, payload: Record<string, unknown>): void {
+  function emitLifecycle(sessionId: TranscriptTargetId, type: EventType, payload: Record<string, unknown>): void {
     const event: Event = {
       id: newId('evt'),
-      sessionId,
+      transcriptTargetId: sessionId,
       type,
       actorAgentId: null,
       payload,
@@ -170,11 +185,10 @@ export function createSessionContext(deps: SessionDeps): SessionContext {
     bus.publish(event);
   }
 
-  function beginRun(sessionId: SessionId): { round: Event[]; signal: AbortSignal } {
+  function beginRun(sessionId: TranscriptTargetId): { round: Event[]; signal: AbortSignal } {
     const round: Event[] = [];
     const controller = new AbortController();
     aborts.set(sessionId, controller);
-    kv?.set(`run:${sessionId}:status`, 'running', { ex: 60 });
     emitStreamMarker(sessionId, 'session.stream_started');
     return { round, signal: controller.signal };
   }
@@ -184,6 +198,7 @@ export function createSessionContext(deps: SessionDeps): SessionContext {
     aborts,
     runtime,
     requireSession,
+    requireTranscriptTarget,
     makeEmit,
     persistAndRetire,
     emitLifecycle,

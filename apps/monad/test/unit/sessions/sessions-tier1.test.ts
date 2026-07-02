@@ -1,10 +1,11 @@
-import type { Session } from '@monad/protocol';
+import type { Session, SessionId, WorkplaceProject } from '@monad/protocol';
 
 import { expect, test } from 'bun:test';
 import { newId } from '@monad/protocol';
 import { sql } from 'drizzle-orm';
 
 import { createStore } from '@/store/db/index.ts';
+import { sessions, tasks, workplaceProjects } from '@/store/db/schema.ts';
 
 function fixtureSession(over: Partial<Session> = {}): Session {
   const now = new Date().toISOString();
@@ -26,6 +27,20 @@ function fixtureSession(over: Partial<Session> = {}): Session {
       reasoningTokens: 0
     },
     costUsd: 0,
+    createdAt: now,
+    updatedAt: now,
+    ...over
+  };
+}
+
+function fixtureProject(over: Partial<WorkplaceProject> = {}): WorkplaceProject {
+  const now = new Date().toISOString();
+  return {
+    id: newId('prj'),
+    title: 'project',
+    ownerPrincipalId: newId('prn'),
+    state: 'active',
+    archived: false,
     createdAt: now,
     updatedAt: now,
     ...over
@@ -59,15 +74,88 @@ test('listSessions filters by archived and state', () => {
   store.close();
 });
 
-test('deleteSession cascades messages and events', () => {
+test('workplace projects use explicit project storage instead of agent sessions', () => {
+  const store = createStore();
+  const project = fixtureProject({
+    title: 'project',
+    origin: {
+      surface: 'web',
+      client: 'workplace',
+      transport: 'http',
+      writableBy: ['http'],
+      branchableBy: ['http']
+    },
+    cwd: '/tmp/workplace-project'
+  });
+  const agentSession = fixtureSession({ title: 'agent', agentIds: [newId('agt')] });
+  const now = new Date().toISOString();
+
+  store.insertWorkplaceProject(project);
+  store.insertSession(agentSession);
+  store.insertTask({
+    id: newId('tsk'),
+    sessionId: agentSession.id,
+    title: 'session task',
+    assigneeAgentId: null,
+    dependsOn: [],
+    state: 'pending',
+    version: 0,
+    createdAt: now,
+    updatedAt: now
+  });
+  store.setMemory(agentSession.id, 'ctx:summary', JSON.stringify({ summary: 'session memory' }));
+
+  expect(store.db.select().from(sessions).all()).toHaveLength(1);
+  expect(store.db.select().from(workplaceProjects).all()).toHaveLength(1);
+  expect(store.getSession(project.id)).toBeNull();
+  expect(store.getWorkplaceProject(project.id)?.title).toBe('project');
+  expect(store.listSessions().map((session) => session.id)).not.toContain(project.id);
+  expect(store.listWorkplaceProjects().map((candidate) => candidate.id)).toContain(project.id);
+
+  const updated = store.updateWorkplaceProject(project.id, { title: 'renamed', archived: true });
+  expect(updated?.title).toBe('renamed');
+  expect(updated?.archived).toBe(true);
+  expect(store.countSessions({ archived: true })).toBe(0);
+  expect(store.countWorkplaceProjects({ archived: true })).toBe(1);
+
+  expect(store.deleteWorkplaceProject(project.id)).toBe(true);
+  expect(store.getWorkplaceProject(project.id)).toBeNull();
+  expect(store.db.select().from(workplaceProjects).all()).toHaveLength(0);
+  expect(store.getSession(agentSession.id)).not.toBeNull();
+  expect(store.db.select().from(tasks).all()).toHaveLength(1);
+  expect(store.getMemory(agentSession.id, 'ctx:summary')).not.toBeNull();
+  store.close();
+});
+
+test('deleteSession cascades session-owned project data', () => {
   const store = createStore();
   const s = fixtureSession();
   store.insertSession(s);
+  const now = new Date().toISOString();
   store.insertMessage(newId('msg'), s.id, 'hi', new Date().toISOString(), 'user');
+  store.insertTask({
+    id: newId('tsk'),
+    sessionId: s.id,
+    title: 'task',
+    assigneeAgentId: null,
+    dependsOn: [],
+    state: 'pending',
+    version: 0,
+    createdAt: now,
+    updatedAt: now
+  });
+  store.setMemory(s.id, 'ctx:summary', JSON.stringify({ summary: 'delete me' }));
+  store.setActiveSession({
+    channelId: 'discord',
+    conversationKey: 'thread-1',
+    sessionId: s.id,
+    principalId: s.ownerPrincipalId,
+    label: 'project'
+  });
   store.appendEvents([
     {
       id: newId('evt'),
-      sessionId: s.id,
+      transcriptTargetId: s.id,
       type: 'session.created',
       actorAgentId: null,
       payload: {},
@@ -79,6 +167,10 @@ test('deleteSession cascades messages and events', () => {
   expect(store.getSession(s.id)).toBeNull();
   expect(store.listMessages(s.id).length).toBe(0);
   expect(store.listEvents(s.id).length).toBe(0);
+  expect(store.db.select().from(tasks).all()).toHaveLength(0);
+  expect(store.getMemory(s.id, 'ctx:summary')).toBeNull();
+  expect(store.getActiveConversation('discord', 'thread-1')).toBeNull();
+  expect(store.listConversationSessions('discord', 'thread-1')).toHaveLength(0);
   expect(store.deleteSession(s.id)).toBe(false); // already gone
   store.close();
 });
@@ -92,7 +184,7 @@ test('clearMessages removes messages + events but keeps the session', () => {
   store.appendEvents([
     {
       id: newId('evt'),
-      sessionId: s.id,
+      transcriptTargetId: s.id,
       type: 'session.created',
       actorAgentId: null,
       payload: {},
@@ -105,6 +197,33 @@ test('clearMessages removes messages + events but keeps the session', () => {
   expect(store.listMessages(s.id)).toHaveLength(0);
   expect(store.listEvents(s.id)).toHaveLength(0);
   expect(store.getSession(s.id)).not.toBeNull(); // session itself survives
+  store.close();
+});
+
+test('clearMessages removes Workplace Project transcript data and keeps the project', () => {
+  const store = createStore();
+  const project = fixtureProject({ title: 'project', updatedAt: '2000-01-01T00:00:00.000Z' });
+  store.insertWorkplaceProject(project);
+  store.insertMessage(newId('msg'), project.id, 'hi', new Date().toISOString(), 'user');
+  store.appendEvents([
+    {
+      id: newId('evt'),
+      transcriptTargetId: project.id as unknown as SessionId,
+      type: 'session.created',
+      actorAgentId: null,
+      payload: {},
+      at: new Date().toISOString()
+    }
+  ]);
+  store.setMemory(project.id, 'ctx:summary', JSON.stringify({ summary: 'delete me' }));
+
+  const cleared = store.clearMessages(project.id);
+  expect(cleared).toBe(1);
+  expect(store.listMessages(project.id)).toHaveLength(0);
+  expect(store.listEvents(project.id)).toHaveLength(0);
+  expect(store.getMemory(project.id, 'ctx:summary')).toBeNull();
+  expect(store.getWorkplaceProject(project.id)?.updatedAt).not.toBe('2000-01-01T00:00:00.000Z');
+  expect(store.getSession(project.id)).toBeNull();
   store.close();
 });
 

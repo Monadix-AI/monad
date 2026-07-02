@@ -201,6 +201,28 @@ test('memory role falls back to the chat default until assigned', () => {
   ).toBe('oa:gpt-5-mini');
 });
 
+test('fast role falls back to the chat default until assigned', () => {
+  expect(resolveModelRole(model(), 'fast')).toBe('default');
+  expect(
+    resolveModelRole(
+      model({
+        profiles: [
+          {
+            alias: 'default',
+            routes: {
+              chat: { provider: 'p', modelId: 'm' },
+              fast: { provider: 'oa', modelId: 'gpt-5-mini' }
+            },
+            params: {},
+            fallbacks: []
+          }
+        ]
+      }),
+      'fast'
+    )
+  ).toBe('oa:gpt-5-mini');
+});
+
 test('resolveAgentModelRole: per-agent override > profile role > fallback', () => {
   const m = model({
     profiles: [

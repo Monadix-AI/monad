@@ -65,8 +65,7 @@ test('settings shortcut prevents browser default without stopping propagation', 
   const shortcut = shortcutEvent({ key: ',', code: 'Comma', metaKey: true });
   const handler = createSidebarShortcutHandler({
     applePlatform: true,
-    setSidebarAutoReveal: () => {},
-    setSidebarCollapsed: () => {},
+    revealSidebar: () => {},
     showSettings: false,
     sidebarShortcutActions: [],
     toggleSettings: () => {
@@ -86,8 +85,7 @@ test('number shortcuts reveal the sidebar and run the matching action', () => {
   const shortcut = shortcutEvent({ key: '2', code: 'Digit2', metaKey: true });
   const handler = createSidebarShortcutHandler({
     applePlatform: true,
-    setSidebarAutoReveal: (value) => calls.push(`auto:${String(value)}`),
-    setSidebarCollapsed: (value) => calls.push(`collapsed:${String(value)}`),
+    revealSidebar: () => calls.push('reveal'),
     showSettings: false,
     sidebarShortcutActions: [() => calls.push('one'), () => calls.push('two')],
     toggleSettings: () => calls.push('settings')
@@ -95,7 +93,7 @@ test('number shortcuts reveal the sidebar and run the matching action', () => {
 
   handler(shortcut.event);
 
-  expect(calls).toEqual(['auto:false', 'collapsed:false', 'two']);
+  expect(calls).toEqual(['reveal', 'two']);
   expect(shortcut.prevented()).toBe(1);
   expect(shortcut.stopped()).toBe(0);
 });

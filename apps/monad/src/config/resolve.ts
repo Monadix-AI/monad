@@ -6,11 +6,13 @@ export const DEFAULT_PROFILE_ALIAS = 'default';
 export type CapabilityLookup = (provider: string, modelId: string) => ModelModalities | undefined;
 
 /** Resolve a model role to its effective model spec, applying the fallback chain in ONE place
- *  (image/speech/vision tools + the embedding pipeline all go through here):
+ *  (image/speech/transcription/vision tools + the embedding pipeline all go through here):
  *   - chat      → the selected profile alias, defaulting to "default"
  *   - vision    → profile.routes.vision ?? default model (only if known to cover image input, else runtime error)
  *   - image     → profile.routes.image ?? default model (only if known to cover image output, else runtime error)
  *   - speech    → profile.routes.speech ?? default model (only if known to cover speech output, else runtime error)
+ *   - transcription → profile.routes.transcription ?? default model (only if known to transcribe audio, else runtime error)
+ *   - fast      → profile.routes.fast ?? default model
  *   - embedding → profile.routes.embedding (no fallback; undefined ⇒ semantic search degrades to keyword)
  *  When `lookupCapabilities` is provided the capability-based fallback is enforced; without it the
  *  legacy no-check behavior applies (e.g. callers that have no catalog access).
@@ -76,6 +78,19 @@ export function resolveModelRole(
       );
     }
 
+    case 'transcription': {
+      const explicit = routeSpec(routes?.transcription);
+      if (explicit) return explicit;
+      if (!lookupCapabilities) return undefined; // legacy: no fallback
+      if (defaultCovers((c) => c.kind === 'transcription' || !!c.output?.includes('transcription'))) {
+        return profileAlias || undefined;
+      }
+      throw new Error(
+        'model: transcription role requires a model that transcribes audio; ' +
+          `the default model "${routes?.chat.modelId}" does not — set a transcription model explicitly`
+      );
+    }
+
     case 'video':
       // Video generation has no default fallback — a chat default never produces video, so the
       // role only resolves when assigned explicitly. (No runtime consumer yet; reserved.)
@@ -83,6 +98,9 @@ export function resolveModelRole(
 
     case 'embedding':
       return routeSpec(routes?.embedding);
+
+    case 'fast':
+      return routeSpec(routes?.fast) ?? (profileAlias || undefined);
 
     case 'memory':
       // The memory extractor/consolidator. A cheap model is ideal; falls back to the chat default.

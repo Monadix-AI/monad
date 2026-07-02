@@ -1,7 +1,7 @@
 import type { createDaemonHandlers } from '@/handlers/handlers.ts';
 
 import { createHash, timingSafeEqual } from 'node:crypto';
-import { daemonHttpContract, newId } from '@monad/protocol';
+import { daemonHttpContract, newId, type ProjectId } from '@monad/protocol';
 import { Elysia } from 'elysia';
 
 import { HandlerError } from '@/handlers/handler-error.ts';
@@ -52,6 +52,13 @@ export function createNativeAgentController(handlers: ReturnType<typeof createDa
     if (nativeSession.state !== 'running') {
       throw new HandlerError('forbidden', 'managed native CLI session is not active', 'NATIVE_CLI_SESSION_NOT_ACTIVE');
     }
+    if (!nativeSession.transcriptTargetId.startsWith('prj_')) {
+      throw new HandlerError(
+        'forbidden',
+        'managed native CLI session is not bound to a Workplace Project',
+        'NOT_PROJECT_MANAGED_NATIVE_CLI'
+      );
+    }
     const token = request.headers.get('authorization')?.match(/^Bearer\s+(.+)$/i)?.[1] ?? '';
     if (!nativeSession.agentRuntimeTokenHash || !tokenMatchesHash(token, nativeSession.agentRuntimeTokenHash)) {
       throw new HandlerError('forbidden', 'invalid managed native CLI agent token', 'INVALID_NATIVE_AGENT_TOKEN');
@@ -59,7 +66,7 @@ export function createNativeAgentController(handlers: ReturnType<typeof createDa
     return {
       binding: {
         agentId: nativeSession.agentName,
-        projectSessionId: nativeSession.projectSessionId,
+        projectId: nativeSession.transcriptTargetId as ProjectId,
         nativeCliSessionId: binding.nativeCliSessionId
       },
       nativeSession
@@ -70,18 +77,25 @@ export function createNativeAgentController(handlers: ReturnType<typeof createDa
       '/internal/native-agent/project/post',
       async ({ body, request }) => {
         const { binding } = requireManagedBinding(request);
-        const projectId = body.projectId ?? binding.projectSessionId;
-        if (binding.projectSessionId !== projectId) {
+        const projectId = body.projectId ?? binding.projectId;
+        if (binding.projectId !== projectId) {
           throw new HandlerError('forbidden', 'project id does not match managed runtime', 'PROJECT_MISMATCH');
         }
-        const messageId = newId('msg');
+        const transcriptTargetId = projectId;
+        const completed = await handlers.session.completeManagedNativeCliProjectMessage({
+          sessionId: transcriptTargetId,
+          nativeCliSessionId: binding.nativeCliSessionId,
+          agentName: binding.agentId,
+          text: body.text
+        });
+        const messageId = completed.messageId ?? newId('msg');
         const createdAt = new Date().toISOString();
-        store.insertMessage(messageId, projectId, body.text, createdAt, 'assistant', {
+        store.insertMessage(messageId, transcriptTargetId, body.text, createdAt, 'assistant', {
           data: { agentName: binding.agentId, threadId: body.threadId, nativeCliSessionId: binding.nativeCliSessionId }
         });
-        store.setNativeCliVisibleCursor(binding.nativeCliSessionId, store.maxMessageSeq(projectId));
+        store.markNativeCliInboxConsumed(binding.nativeCliSessionId, store.maxMessageSeq(transcriptTargetId));
         await handlers.session.notifyManagedNativeCliProjectMembers({
-          sessionId: projectId,
+          sessionId: transcriptTargetId,
           text: body.text,
           exceptAgentName: binding.agentId
         });
@@ -93,11 +107,12 @@ export function createNativeAgentController(handlers: ReturnType<typeof createDa
       '/internal/native-agent/project/read',
       ({ body, request }) => {
         const { binding } = requireManagedBinding(request);
-        const projectId = body.projectId ?? binding.projectSessionId;
-        if (binding.projectSessionId !== projectId) {
+        const projectId = body.projectId ?? binding.projectId;
+        if (binding.projectId !== projectId) {
           throw new HandlerError('forbidden', 'project id does not match managed runtime', 'PROJECT_MISMATCH');
         }
-        const messages = store.listMessages(projectId, {
+        const transcriptTargetId = projectId;
+        const messages = store.listMessages(transcriptTargetId, {
           limit: body.limit ?? 50,
           threadId: body.threadId,
           before: body.before,
@@ -106,8 +121,8 @@ export function createNativeAgentController(handlers: ReturnType<typeof createDa
           latest: !body.before && !body.after && !body.around
         });
         if (!body.threadId && !body.before && !body.after && !body.around) {
-          const visibleSeq = store.maxMessageSeq(projectId);
-          if (visibleSeq > 0) store.setNativeCliVisibleCursor(binding.nativeCliSessionId, visibleSeq);
+          const visibleSeq = store.maxMessageSeq(transcriptTargetId);
+          if (visibleSeq > 0) store.markNativeCliInboxVisible(binding.nativeCliSessionId, visibleSeq);
         }
         return { messages };
       },
@@ -117,14 +132,14 @@ export function createNativeAgentController(handlers: ReturnType<typeof createDa
       '/internal/native-agent/project/inbox',
       ({ body, request }) => {
         const { binding, nativeSession } = requireManagedBinding(request);
-        const projectId = body?.projectId ?? binding.projectSessionId;
-        if (projectId !== binding.projectSessionId) {
+        const projectId = body?.projectId ?? binding.projectId;
+        if (projectId !== binding.projectId) {
           throw new HandlerError('forbidden', 'project id does not match managed runtime', 'PROJECT_MISMATCH');
         }
         const nativeCliSessionId = binding.nativeCliSessionId;
         const items = store.listNativeCliInbox(nativeCliSessionId);
         const cursor = items.at(-1)?.seq ?? nativeSession.lastVisibleSeq;
-        if (items.length > 0) store.setNativeCliVisibleCursor(nativeCliSessionId, cursor);
+        if (items.length > 0) store.markNativeCliInboxVisible(nativeCliSessionId, cursor);
         return { items, projectId, cursor };
       },
       { body: contracts.projectInbox.body, response: contracts.projectInbox.response }
@@ -133,12 +148,12 @@ export function createNativeAgentController(handlers: ReturnType<typeof createDa
       '/internal/native-agent/project/inbox/ack',
       ({ body, request }) => {
         const { binding } = requireManagedBinding(request);
-        const projectId = body?.projectId ?? binding.projectSessionId;
-        if (projectId !== binding.projectSessionId) {
+        const projectId = body?.projectId ?? binding.projectId;
+        if (projectId !== binding.projectId) {
           throw new HandlerError('forbidden', 'project id does not match managed runtime', 'PROJECT_MISMATCH');
         }
         const cursor = body?.cursor ?? store.maxMessageSeq(projectId);
-        store.setNativeCliVisibleCursor(binding.nativeCliSessionId, cursor);
+        store.markNativeCliInboxConsumed(binding.nativeCliSessionId, cursor);
         return { ok: true, projectId, cursor };
       },
       { body: contracts.projectInboxAck.body, response: contracts.projectInboxAck.response }
@@ -149,7 +164,7 @@ export function createNativeAgentController(handlers: ReturnType<typeof createDa
         const { binding } = requireManagedBinding(request);
         const message = {
           id: newId('msg'),
-          projectSessionId: binding.projectSessionId,
+          projectId: binding.projectId,
           nativeCliSessionId: binding.nativeCliSessionId,
           fromAgent: binding.agentId,
           peer: body.to,
@@ -158,7 +173,7 @@ export function createNativeAgentController(handlers: ReturnType<typeof createDa
         };
         store.insertNativeAgentDirectMessage(message);
         await handlers.session.notifyManagedNativeCliDirectMessage({
-          sessionId: binding.projectSessionId,
+          sessionId: binding.projectId,
           fromAgentName: binding.agentId,
           to: body.to,
           text: body.text

@@ -1,24 +1,62 @@
-import type { SessionId } from '@monad/protocol';
+import type { ProjectId, WorkspaceAction } from '@monad/protocol';
 import type { ProjectController } from '../use-project';
 
-import { useWorkspaceGitQuery } from '@monad/client-rtk';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@monad/ui';
+import {
+  ComputerTerminal01Icon,
+  Copy01Icon,
+  ExternalLinkIcon,
+  FolderOpenIcon,
+  GitBranchIcon
+} from '@hugeicons/core-free-icons';
+import { HugeiconsIcon } from '@hugeicons/react';
+import { useWorkspaceActionMutation, useWorkspaceMetaQuery } from '@monad/client-rtk';
 import { useState } from 'react';
 
 import { useT } from '@/components/I18nProvider';
-import { useProjectViewMode } from '@/features/routes/workspace/use-project-view-mode';
-import { ghostButtonStyle } from '../Bits';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu';
 import { mono } from '../styles';
 
-const NO_MODERATOR = '__none__';
+function workdirLabel(path: string | undefined, fallback: string): string {
+  if (!path) return fallback;
+  const trimmed = path.replace(/[\\/]+$/, '');
+  return trimmed.split(/[\\/]/).at(-1) || trimmed || fallback;
+}
 
-/** Shared working folder for the project — set it once and every agent (moderator + delegated
- *  subagents) resolves fs/shell paths against it. Empty input clears it back to the default workspace. */
-function WorkdirControl({ workdir }: { workdir: ProjectController['workdir'] }): React.ReactElement {
+function fileManagerLabel(): string {
+  if (typeof navigator === 'undefined') return 'Show in file manager';
+  const platform = navigator.platform.toLowerCase();
+  if (platform.includes('mac')) return 'Show in Finder';
+  if (platform.includes('win')) return 'Show in Explorer';
+  return 'Show in file manager';
+}
+
+function terminalLabel(): string {
+  if (typeof navigator === 'undefined') return 'Open in terminal';
+  return navigator.platform.toLowerCase().includes('mac') ? 'Open in Terminal' : 'Open in terminal';
+}
+
+/** Shared working folder for the project — set it once and every project agent resolves fs/shell paths
+ *  against it. Empty input clears it back to the default workspace. */
+function WorkdirControl({
+  gitRemoteUrl,
+  projectId,
+  workdir
+}: {
+  gitRemoteUrl?: string;
+  projectId?: ProjectId;
+  workdir: ProjectController['workdir'];
+}): React.ReactElement {
   const t = useT();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
   const [busy, setBusy] = useState(false);
+  const [runWorkspaceAction, workspaceAction] = useWorkspaceActionMutation();
 
   const commit = async (value: string) => {
     setBusy(true);
@@ -56,57 +94,91 @@ function WorkdirControl({ workdir }: { workdir: ProjectController['workdir'] }):
     );
   }
 
-  return (
-    <button
-      className="workplace-action"
-      onClick={() => {
-        setDraft(workdir.path ?? '');
-        setEditing(true);
-      }}
-      style={{
-        fontFamily: mono,
-        fontSize: 11,
-        color: 'var(--foreground)',
-        border: `1px solid ${'var(--border)'}`,
-        background: 'var(--card)',
-        borderRadius: 999,
-        padding: '6px 10px',
-        cursor: 'pointer',
-        maxWidth: 280,
-        overflow: 'hidden',
-        textOverflow: 'ellipsis',
-        whiteSpace: 'nowrap'
-      }}
-      title={workdir.path ?? t('web.workplace.setFolderHint')}
-      type="button"
-    >
-      📁 {workdir.path ?? t('web.workplace.setFolder')}
-    </button>
-  );
-}
+  const label = workdirLabel(workdir.path, t('web.workplace.setFolder'));
+  const path = workdir.path;
+  const copyPath = async () => {
+    if (path) await navigator.clipboard.writeText(path);
+  };
+  const performWorkspaceAction = (action: WorkspaceAction) => {
+    if (projectId && path) void runWorkspaceAction({ id: projectId, action });
+  };
+  const openGitHub = () => {
+    if (gitRemoteUrl) window.open(gitRemoteUrl, '_blank', 'noopener,noreferrer');
+  };
+  const actionDisabled = !projectId || !path || workspaceAction.isLoading;
 
-/** Compact git summary of the project's working folder. Renders nothing unless the folder is a repo. */
-function GitBadge({ sessionId, hasFolder }: { sessionId?: string; hasFolder: boolean }): React.ReactElement | null {
-  const { data } = useWorkspaceGitQuery((sessionId ?? '') as SessionId, { skip: !sessionId || !hasFolder });
-  if (!data?.isRepo) return null;
-  const counts = `${data.ahead ? ` ↑${data.ahead}` : ''}${data.behind ? ` ↓${data.behind}` : ''}`;
   return (
-    <span
-      style={{
-        fontFamily: mono,
-        fontSize: 11,
-        color: 'var(--muted-foreground)',
-        border: `1px solid ${'var(--border)'}`,
-        borderRadius: 999,
-        padding: '6px 10px',
-        whiteSpace: 'nowrap'
-      }}
-      title={data.dirty ? 'git: uncommitted changes' : 'git: clean'}
-    >
-      ⎇ {data.branch ?? 'HEAD'}
-      {data.dirty ? '*' : ''}
-      {counts}
-    </span>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          className="workplace-action"
+          onDoubleClick={() => {
+            setDraft(workdir.path ?? '');
+            setEditing(true);
+          }}
+          style={{
+            fontFamily: mono,
+            fontSize: 11,
+            color: 'var(--foreground)',
+            border: '1px solid transparent',
+            background: 'transparent',
+            borderRadius: 999,
+            padding: '6px 10px',
+            maxWidth: 280,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap'
+          }}
+          title={workdir.path ?? t('web.workplace.setFolderHint')}
+          type="button"
+        >
+          📁 {label}
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        align="end"
+        className="min-w-60"
+      >
+        <DropdownMenuItem
+          disabled={actionDisabled}
+          onSelect={() => performWorkspaceAction('show-in-file-manager')}
+        >
+          <HugeiconsIcon icon={FolderOpenIcon} />
+          {fileManagerLabel()}
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          disabled={!path}
+          onSelect={() => void copyPath()}
+        >
+          <HugeiconsIcon icon={Copy01Icon} />
+          Copy01Icon path
+        </DropdownMenuItem>
+        {gitRemoteUrl ? (
+          <DropdownMenuItem onSelect={openGitHub}>
+            <HugeiconsIcon icon={GitBranchIcon} />
+            Open repo in GitHub
+          </DropdownMenuItem>
+        ) : null}
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          disabled={actionDisabled}
+          onSelect={() => performWorkspaceAction('open-terminal')}
+        >
+          <HugeiconsIcon icon={ComputerTerminal01Icon} />
+          {terminalLabel()}
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          onSelect={() => {
+            setDraft(workdir.path ?? '');
+            setEditing(true);
+          }}
+        >
+          <HugeiconsIcon icon={ExternalLinkIcon} />
+          Change path
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -116,17 +188,12 @@ export function ProjectHeader({
   project: ProjectController;
   embedded?: boolean;
 }): React.ReactElement {
-  const t = useT();
-  const [, setViewMode] = useProjectViewMode(room.projectId);
   const activeProject = room.projects.find((p) => p.active);
-  const moderatorAgentId = room.moderator.moderatorAgentId ?? '';
-  const moderatorOptions = room.moderator.agents.map((agent) => ({
-    id: String(agent.id),
-    label: String(agent.name || agent.id)
-  }));
-  const moderatorMissing =
-    moderatorAgentId && !moderatorOptions.some((agent) => agent.id === moderatorAgentId) ? moderatorAgentId : null;
-  const hasModeratorCandidates = room.moderator.agents.length > 0;
+  const activeProjectId = activeProject?.id as ProjectId | undefined;
+  const { data: workspaceMeta } = useWorkspaceMetaQuery(activeProjectId ?? ('prj_' as ProjectId), {
+    skip: !activeProject?.id || !room.workdir.path
+  });
+  const git = workspaceMeta?.git;
   return (
     <div
       style={{
@@ -150,94 +217,11 @@ export function ProjectHeader({
       </div>
 
       <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
-        <WorkdirControl workdir={room.workdir} />
-        <GitBadge
-          hasFolder={!!room.workdir.path}
-          sessionId={activeProject?.id}
+        <WorkdirControl
+          gitRemoteUrl={git?.remoteUrl}
+          projectId={activeProject?.id as ProjectId | undefined}
+          workdir={room.workdir}
         />
-        <div style={{ width: 190 }}>
-          <Select
-            disabled={!hasModeratorCandidates}
-            onValueChange={(value) =>
-              void room.moderator.setModeratorAgentId(value === NO_MODERATOR ? undefined : value)
-            }
-            value={moderatorAgentId || NO_MODERATOR}
-          >
-            <SelectTrigger
-              className="h-8 rounded-full font-mono text-[11px]"
-              title={hasModeratorCandidates ? t('web.ch.moderatorAgent') : t('web.workplace.createAgentFirst')}
-            >
-              <SelectValue placeholder={t('web.ch.moderatorAgentPlaceholder')} />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={NO_MODERATOR}>{t('web.ch.noModeratorAgent')}</SelectItem>
-              {moderatorMissing ? (
-                <SelectItem value={moderatorMissing}>
-                  {t('web.ch.missingModeratorAgent', { id: moderatorMissing })}
-                </SelectItem>
-              ) : null}
-              {moderatorOptions.map((agent) => (
-                <SelectItem
-                  key={agent.id}
-                  value={agent.id}
-                >
-                  {agent.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <span
-          style={{
-            fontFamily: mono,
-            fontSize: 11,
-            color: 'var(--foreground)',
-            border: `1px solid ${'var(--border)'}`,
-            background: 'var(--card)',
-            borderRadius: 999,
-            padding: '6px 10px',
-            whiteSpace: 'nowrap'
-          }}
-        >
-          {t('web.workplace.agentCount', { count: room.railAgents.length })}
-        </span>
-        <button
-          className="workplace-action"
-          onClick={() => setViewMode('chat-room')}
-          style={{
-            fontFamily: mono,
-            fontSize: 11,
-            color: 'var(--foreground)',
-            border: `1px solid ${room.approvals.length > 0 ? 'var(--accent-blue)' : 'var(--border)'}`,
-            background:
-              room.approvals.length > 0 ? 'color-mix(in srgb, var(--accent-blue) 16%, transparent)' : 'var(--card)',
-            borderRadius: 999,
-            padding: '6px 10px',
-            cursor: 'pointer',
-            whiteSpace: 'nowrap'
-          }}
-          type="button"
-        >
-          ⚠{' '}
-          {room.approvals.length === 0
-            ? t('web.workplace.noApprovals')
-            : t('web.workplace.approvalsToReview', { count: room.approvals.length })}
-        </button>
-        <button
-          className="workplace-action"
-          onClick={room.pauseAll}
-          style={ghostButtonStyle({
-            height: 34,
-            padding: '0 13px',
-            fontSize: 13,
-            whiteSpace: 'nowrap',
-            borderRadius: 999,
-            background: room.paused ? 'color-mix(in srgb, var(--accent-blue) 16%, transparent)' : 'var(--card)'
-          })}
-          type="button"
-        >
-          {room.paused ? `▶ ${t('web.workplace.resumeAll')}` : `⏸ ${t('web.workplace.pauseAll')}`}
-        </button>
       </div>
     </div>
   );

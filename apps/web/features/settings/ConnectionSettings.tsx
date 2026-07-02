@@ -4,20 +4,21 @@ import type { VersionCheckResult } from '@monad/client';
 import type { GetHealthResponse } from '@monad/protocol';
 
 import { zodResolver } from '@hookform/resolvers/zod';
+import {
+  Alert01Icon,
+  Cancel01Icon,
+  CancelCircleIcon,
+  CheckmarkCircle02Icon,
+  Copy01Icon,
+  GlobeIcon,
+  LoaderPinwheelIcon,
+  RotateLeft01Icon,
+  Shield01Icon,
+  ShieldQuestionMarkIcon
+} from '@hugeicons/core-free-icons';
+import { HugeiconsIcon } from '@hugeicons/react';
 import { checkDaemonVersion } from '@monad/client';
 import { Button, Input, Label, Switch } from '@monad/ui';
-import {
-  AlertTriangle,
-  CheckCircle2,
-  Copy,
-  Globe,
-  Loader2,
-  RotateCcw,
-  ShieldAlert,
-  ShieldCheck,
-  X,
-  XCircle
-} from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 
@@ -174,7 +175,10 @@ export function ConnectionSettings({ onClose }: Props) {
     <div className="flex min-w-0 flex-1 flex-col">
       <div className="flex items-center justify-between border-b px-6 py-4">
         <div className="flex items-center gap-2">
-          <Globe className="size-4 text-muted-foreground" />
+          <HugeiconsIcon
+            className="size-4 text-muted-foreground"
+            icon={GlobeIcon}
+          />
           <span className="font-semibold text-sm">{t('web.conn.title')}</span>
           {isRemote && (
             <span className="rounded bg-primary/10 px-1.5 py-0.5 font-medium text-[10px] text-primary uppercase tracking-wide">
@@ -189,7 +193,7 @@ export function ConnectionSettings({ onClose }: Props) {
           size="icon"
           variant="ghost"
         >
-          <X />
+          <HugeiconsIcon icon={Cancel01Icon} />
         </Button>
       </div>
 
@@ -212,7 +216,10 @@ export function ConnectionSettings({ onClose }: Props) {
 
           {network.loading ? (
             <div className="flex items-center gap-2 text-muted-foreground text-xs">
-              <Loader2 className="size-3.5 animate-spin" />
+              <HugeiconsIcon
+                className="size-3.5 animate-spin"
+                icon={LoaderPinwheelIcon}
+              />
               {t('web.common.loading')}
             </div>
           ) : (
@@ -253,7 +260,10 @@ export function ConnectionSettings({ onClose }: Props) {
                       size="icon"
                       variant="outline"
                     >
-                      <Copy className={networkCopied ? 'text-success' : undefined} />
+                      <HugeiconsIcon
+                        className={networkCopied ? 'text-success' : undefined}
+                        icon={Copy01Icon}
+                      />
                     </Button>
                     <Button
                       aria-label={t('web.conn.rotateToken')}
@@ -262,7 +272,7 @@ export function ConnectionSettings({ onClose }: Props) {
                       size="icon"
                       variant="outline"
                     >
-                      <RotateCcw />
+                      <HugeiconsIcon icon={RotateLeft01Icon} />
                     </Button>
                   </div>
                 </div>
@@ -283,7 +293,10 @@ export function ConnectionSettings({ onClose }: Props) {
 
               {network.settings?.restartRequired && (
                 <div className="flex items-start gap-2 rounded border border-warning/30 bg-warning/5 px-2.5 py-2 text-warning text-xs">
-                  <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+                  <HugeiconsIcon
+                    className="mt-0.5 size-3.5 shrink-0"
+                    icon={Alert01Icon}
+                  />
                   <span>{t('web.conn.restartRequired')}</span>
                 </div>
               )}
@@ -335,7 +348,10 @@ export function ConnectionSettings({ onClose }: Props) {
         {/* TLS warning: openssl missing or cert generation failed */}
         {tlsWarning && (
           <div className="flex items-start gap-2 rounded-md border border-warning/30 bg-warning/5 px-3 py-2.5 text-sm text-warning">
-            <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+            <HugeiconsIcon
+              className="mt-0.5 size-4 shrink-0"
+              icon={Alert01Icon}
+            />
             <div className="flex flex-col gap-0.5">
               <span className="font-medium">{t('web.conn.tlsWarningTitle')}</span>
               <span className="text-xs opacity-80">
@@ -348,7 +364,10 @@ export function ConnectionSettings({ onClose }: Props) {
         {/* Cert expiry warning */}
         {daysUntilExpiry !== null && (
           <div className="flex items-start gap-2 rounded-md border border-warning/30 bg-warning/5 px-3 py-2.5 text-sm text-warning">
-            <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+            <HugeiconsIcon
+              className="mt-0.5 size-4 shrink-0"
+              icon={Alert01Icon}
+            />
             <div className="flex flex-col gap-0.5">
               <span className="font-medium">
                 {t('web.conn.certExpiryWarning', { days: daysUntilExpiry, count: daysUntilExpiry })}
@@ -362,7 +381,10 @@ export function ConnectionSettings({ onClose }: Props) {
         {certFp?.status === 'changed' && (
           <div className="flex flex-col gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2.5 text-destructive text-sm">
             <div className="flex items-start gap-2">
-              <ShieldAlert className="mt-0.5 size-4 shrink-0" />
+              <HugeiconsIcon
+                className="mt-0.5 size-4 shrink-0"
+                icon={ShieldQuestionMarkIcon}
+              />
               <div className="flex flex-col gap-0.5">
                 <span className="font-medium">{t('web.conn.certFpChanged')}</span>
                 <span className="text-xs opacity-80">{t('web.conn.certFpChangedHint')}</span>
@@ -390,9 +412,15 @@ export function ConnectionSettings({ onClose }: Props) {
           <div className="flex flex-col gap-1 rounded-md border bg-muted/30 px-3 py-2.5">
             <div className="flex items-center gap-1.5">
               {certFp.status === 'verified' ? (
-                <ShieldCheck className="size-3.5 text-success" />
+                <HugeiconsIcon
+                  className="size-3.5 text-success"
+                  icon={Shield01Icon}
+                />
               ) : (
-                <ShieldCheck className="size-3.5 text-muted-foreground" />
+                <HugeiconsIcon
+                  className="size-3.5 text-muted-foreground"
+                  icon={Shield01Icon}
+                />
               )}
               <span className="font-medium text-muted-foreground text-xs">{t('web.conn.certFpLabel')}</span>
             </div>
@@ -413,9 +441,15 @@ export function ConnectionSettings({ onClose }: Props) {
             }`}
           >
             {check.result.compatible ? (
-              <CheckCircle2 className="mt-0.5 size-4 shrink-0" />
+              <HugeiconsIcon
+                className="mt-0.5 size-4 shrink-0"
+                icon={CheckmarkCircle02Icon}
+              />
             ) : (
-              <XCircle className="mt-0.5 size-4 shrink-0" />
+              <HugeiconsIcon
+                className="mt-0.5 size-4 shrink-0"
+                icon={CancelCircleIcon}
+              />
             )}
             <div className="flex flex-col gap-0.5">
               {check.result.compatible ? (
@@ -450,7 +484,10 @@ export function ConnectionSettings({ onClose }: Props) {
           >
             {checking ? (
               <>
-                <Loader2 className="animate-spin" />
+                <HugeiconsIcon
+                  className="animate-spin"
+                  icon={LoaderPinwheelIcon}
+                />
                 {t('web.conn.checking')}
               </>
             ) : (

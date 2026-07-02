@@ -5,7 +5,8 @@ import type {
   NativeCliAuthSessionView,
   SendMessageResponse,
   SessionId,
-  SessionUiEvent
+  SessionUiEvent,
+  TranscriptTargetId
 } from '@monad/protocol';
 import type { MonadTreaty, MonadTreatyConfig } from './treaty.ts';
 
@@ -247,7 +248,7 @@ export class MonadClient {
     };
 
     const unsubControl = this.subscribeControl((event) => {
-      if (event.sessionId !== sessionId) return;
+      if (event.transcriptTargetId !== sessionId) return;
       if (event.type === 'session.stream_started') {
         openSse();
         return;
@@ -295,7 +296,7 @@ export class MonadClient {
   }
 
   streamEvents(
-    sessionId: SessionId,
+    sessionId: TranscriptTargetId,
     onEvent: EventHandler,
     opts?: { afterEventId?: EventId; onError?: (err: StreamError) => void }
   ): () => void {
@@ -306,6 +307,26 @@ export class MonadClient {
       let delay = 1_000;
       while (!controller.signal.aborted) {
         try {
+          if (sessionId.startsWith('prj_')) {
+            const query = afterEventId ? `?after=${encodeURIComponent(afterEventId)}` : '';
+            const res = await this.fetch(`/v1/projects/${encodeURIComponent(sessionId)}/events${query}`, {
+              headers: afterEventId ? { 'last-event-id': afterEventId } : undefined,
+              signal: controller.signal
+            });
+            if (!res.ok) {
+              if (res.status === 401 || res.status === 403 || res.status === 404) {
+                opts?.onError?.({ kind: 'fatal', status: res.status });
+                return;
+              }
+              opts?.onError?.({ kind: 'transient', status: res.status });
+            } else {
+              const lastId = await this.consumeSseStream(res, onEvent, eventSchema, controller.signal);
+              if (lastId) afterEventId = lastId as EventId;
+            }
+            delay = 1_000;
+            continue;
+          }
+
           const result = await this.treaty.v1.sessions({ id: sessionId }).events.get({
             headers: afterEventId ? { 'last-event-id': afterEventId } : undefined,
             fetch: { signal: controller.signal }
@@ -437,7 +458,7 @@ export class MonadClient {
   }
 
   streamUiEvents(
-    sessionId: SessionId,
+    sessionId: TranscriptTargetId,
     onEvent: UiEventHandler,
     opts?: { afterEventId?: EventId; onError?: (err: StreamError) => void }
   ): () => void {
@@ -448,6 +469,26 @@ export class MonadClient {
       let delay = 1_000;
       while (!controller.signal.aborted) {
         try {
+          if (sessionId.startsWith('prj_')) {
+            const query = afterEventId ? `?after=${encodeURIComponent(afterEventId)}` : '';
+            const res = await this.fetch(`/v1/projects/${encodeURIComponent(sessionId)}/ui-stream${query}`, {
+              headers: afterEventId ? { 'last-event-id': afterEventId } : undefined,
+              signal: controller.signal
+            });
+            if (!res.ok) {
+              if (res.status === 401 || res.status === 403 || res.status === 404) {
+                opts?.onError?.({ kind: 'fatal', status: res.status });
+                return;
+              }
+              opts?.onError?.({ kind: 'transient', status: res.status });
+            } else {
+              const lastId = await this.consumeSseStream(res, onEvent, sessionUiEventSchema, controller.signal);
+              if (lastId) afterEventId = lastId as EventId;
+            }
+            delay = 1_000;
+            continue;
+          }
+
           const result = await this.treaty.v1.sessions({ id: sessionId })['ui-stream'].get({
             headers: afterEventId ? { 'last-event-id': afterEventId } : undefined,
             fetch: { signal: controller.signal }

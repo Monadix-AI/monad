@@ -1,0 +1,347 @@
+'use client';
+
+import type { useT } from '@/components/I18nProvider';
+
+import {
+  CircleCheckIcon,
+  HouseIcon,
+  PlusSignIcon,
+  ServerStack01Icon,
+  Settings02Icon,
+  SlidersHorizontalIcon
+} from '@hugeicons/core-free-icons';
+import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react';
+import { Button, cn, Tooltip, TooltipContent, TooltipTrigger } from '@monad/ui';
+import { type KeyboardEvent as ReactKeyboardEvent, useEffect, useState } from 'react';
+
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuShortcut,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu';
+import {
+  daemonDisplayHost,
+  getActiveDaemonConnection,
+  LOCAL_DAEMON_ID,
+  type RemoteDaemonConnection,
+  readRemoteDaemonConnections,
+  saveRemoteDaemonConnection
+} from '@/lib/daemon-connections';
+import { RemoteDaemonDialog } from './SessionSidebarRemoteDaemonDialog';
+
+type TFunction = ReturnType<typeof useT>;
+
+function DaemonMenuTile({
+  active,
+  icon: Icon,
+  label,
+  onClick
+}: {
+  active: boolean;
+  icon: IconSvgElement;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      className={cn(
+        'flex min-h-18 flex-col items-center justify-center gap-2 rounded-(--radius-md) px-2.5 py-3 text-center font-normal text-base leading-control outline-hidden transition hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground',
+        active && 'bg-accent text-accent-foreground'
+      )}
+      onClick={onClick}
+      type="button"
+    >
+      <span className="grid size-8 place-items-center rounded-(--radius-sm) border border-border bg-background/60">
+        <HugeiconsIcon
+          className="size-4"
+          icon={Icon}
+        />
+      </span>
+      <span className="font-normal">{label}</span>
+    </button>
+  );
+}
+
+function DaemonConnectionItem({
+  active,
+  label,
+  meta,
+  onSelect,
+  statusClass,
+  statusText,
+  version
+}: {
+  active: boolean;
+  label: string;
+  meta: string;
+  onSelect: () => void;
+  statusClass?: string;
+  statusText?: string;
+  version?: string;
+}) {
+  const showDetails = Boolean(statusText || version);
+
+  return (
+    <DropdownMenuItem
+      className={cn('items-center gap-2.5 py-2', active && 'bg-accent text-accent-foreground')}
+      onSelect={onSelect}
+    >
+      <HugeiconsIcon
+        className="size-4"
+        icon={ServerStack01Icon}
+      />
+      <span className="min-w-0 flex-1">
+        <span className="block truncate font-medium text-sm">{label}</span>
+        <span className="block truncate text-muted-foreground text-xs">{meta}</span>
+      </span>
+      {showDetails ? (
+        <span className="flex shrink-0 items-center gap-1.5 text-muted-foreground">
+          {statusText ? (
+            <span className="inline-flex items-center gap-1 text-[11px] leading-none">
+              {statusClass ? <span className={cn('size-1.5 rounded-full', statusClass)} /> : null}
+              {statusText}
+            </span>
+          ) : null}
+          {version ? <span className="font-mono text-[10px] leading-none">v{version}</span> : null}
+        </span>
+      ) : null}
+      {active ? (
+        <HugeiconsIcon
+          className="size-4 text-success"
+          icon={CircleCheckIcon}
+        />
+      ) : null}
+    </DropdownMenuItem>
+  );
+}
+
+export function DaemonMenu({
+  daemonBaseUrl,
+  daemonStatus,
+  daemonStatusClass,
+  daemonStatusText,
+  daemonVersion,
+  hasUpgrade,
+  menuOpen,
+  onOpenChange,
+  onOpenWorkspace,
+  onToggleSettings,
+  onToggleStudio,
+  shortcutModifierLabel,
+  onSwitchDaemonConnection,
+  showSettings,
+  studioPileActive,
+  t,
+  workspacePileActive
+}: {
+  daemonBaseUrl: string;
+  daemonStatus: 'checking' | 'online' | 'offline';
+  daemonStatusClass: string;
+  daemonStatusText: string;
+  daemonVersion?: string;
+  hasUpgrade?: boolean;
+  menuOpen: boolean;
+  onOpenChange: (open: boolean) => void;
+  onOpenWorkspace: () => void;
+  onToggleSettings: () => void;
+  onToggleStudio: () => void;
+  shortcutModifierLabel: string;
+  onSwitchDaemonConnection: (
+    request: { type: 'local' } | { connection: RemoteDaemonConnection; type: 'remote' }
+  ) => void;
+  showSettings: boolean;
+  studioPileActive: boolean;
+  t: TFunction;
+  workspacePileActive: boolean;
+}) {
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [remoteConnections, setRemoteConnections] = useState<RemoteDaemonConnection[]>([]);
+  const [activeConnection, setActiveConnection] = useState(() => getActiveDaemonConnection(daemonBaseUrl));
+  const [showConnectionLabel, setShowConnectionLabel] = useState(false);
+  const hasConnectionChoices = remoteConnections.length > 0;
+  const activeConnectionMeta = daemonStatus === 'online' ? 'Connected' : daemonStatusText;
+  const activeConnectionVersion = daemonStatus === 'online' ? daemonVersion : undefined;
+
+  useEffect(() => {
+    setRemoteConnections(readRemoteDaemonConnections());
+    setActiveConnection(getActiveDaemonConnection(daemonBaseUrl));
+  }, [daemonBaseUrl]);
+
+  useEffect(() => {
+    if (!hasConnectionChoices) {
+      setShowConnectionLabel(false);
+      return;
+    }
+
+    setShowConnectionLabel(true);
+    const interval = window.setInterval(() => {
+      setShowConnectionLabel((visible) => !visible);
+    }, 3200);
+    return () => window.clearInterval(interval);
+  }, [hasConnectionChoices]);
+
+  const onSelectLocalDaemon = () => {
+    if (activeConnection.id === LOCAL_DAEMON_ID) return;
+    onSwitchDaemonConnection({ type: 'local' });
+  };
+
+  const onSelectRemoteDaemon = (connection: RemoteDaemonConnection) => {
+    if (activeConnection.id === connection.id) return;
+    const saved = saveRemoteDaemonConnection(connection);
+    onSwitchDaemonConnection({ connection: saved, type: 'remote' });
+  };
+
+  const onMenuKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (event.nativeEvent.isComposing || event.altKey || event.shiftKey) return;
+    if (!event.metaKey && !event.ctrlKey) return;
+    if (event.key !== ',') return;
+
+    event.preventDefault();
+    onToggleSettings();
+  };
+
+  return (
+    <>
+      <DropdownMenu
+        onOpenChange={onOpenChange}
+        open={menuOpen}
+      >
+        <DropdownMenuTrigger asChild>
+          <button
+            className={cn(
+              'flex min-w-0 flex-1 items-center gap-2.5 rounded-(--radius-md) px-2.5 py-2 text-left transition hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
+              (showSettings || menuOpen) && 'bg-sidebar-accent text-sidebar-accent-foreground'
+            )}
+            type="button"
+          >
+            <div className="rounded-full border border-border/80 bg-background/60 p-1.5">
+              <HugeiconsIcon
+                className="size-4"
+                icon={ServerStack01Icon}
+              />
+            </div>
+            {showConnectionLabel ? (
+              <span className="min-w-0 flex-1 font-normal leading-tight">
+                <span className="block truncate text-ui">{activeConnection.label}</span>
+                <span className="block truncate text-muted-foreground text-xs">{activeConnectionMeta}</span>
+              </span>
+            ) : (
+              <span className="min-w-0 flex-1 font-normal text-ui leading-control">Daemon</span>
+            )}
+            {hasUpgrade ? <span className="ml-auto size-2 shrink-0 rounded-full bg-accent-blue" /> : null}
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent
+          align="start"
+          className="w-[min(20rem,calc(100vw-1rem))]"
+          onKeyDown={onMenuKeyDown}
+          side="top"
+        >
+          <DropdownMenuGroup>
+            <DropdownMenuLabel className="flex items-center gap-2 font-normal text-base leading-control">
+              <span className="text-foreground">Daemon</span>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    aria-label="Connect remote Monad Daemon"
+                    className="ml-auto size-7 shrink-0"
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      setDialogOpen(true);
+                    }}
+                    size="icon"
+                    variant="ghost"
+                  >
+                    <HugeiconsIcon icon={PlusSignIcon} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Connect remote Monad Daemon</TooltipContent>
+              </Tooltip>
+            </DropdownMenuLabel>
+          </DropdownMenuGroup>
+          <DropdownMenuSeparator />
+          <DropdownMenuGroup>
+            <DaemonConnectionItem
+              active={activeConnection.id === LOCAL_DAEMON_ID}
+              label="Local"
+              meta={daemonDisplayHost(daemonBaseUrl)}
+              onSelect={onSelectLocalDaemon}
+              statusClass={activeConnection.id === LOCAL_DAEMON_ID ? daemonStatusClass : undefined}
+              statusText={activeConnection.id === LOCAL_DAEMON_ID ? daemonStatusText : undefined}
+              version={activeConnection.id === LOCAL_DAEMON_ID ? activeConnectionVersion : undefined}
+            />
+            {remoteConnections.map((connection) => (
+              <DaemonConnectionItem
+                active={activeConnection.id === connection.id}
+                key={connection.id}
+                label={connection.label}
+                meta={connection.url}
+                onSelect={() => onSelectRemoteDaemon(connection)}
+                statusClass={activeConnection.id === connection.id ? daemonStatusClass : undefined}
+                statusText={activeConnection.id === connection.id ? daemonStatusText : undefined}
+                version={activeConnection.id === connection.id ? activeConnectionVersion : connection.version}
+              />
+            ))}
+          </DropdownMenuGroup>
+          <DropdownMenuSeparator />
+          <DropdownMenuGroup className="grid grid-cols-2 gap-1">
+            <DaemonMenuTile
+              active={workspacePileActive}
+              icon={HouseIcon}
+              label="Workplace"
+              onClick={onOpenWorkspace}
+            />
+            <DaemonMenuTile
+              active={studioPileActive}
+              icon={SlidersHorizontalIcon}
+              label={t('web.studio.title')}
+              onClick={onToggleStudio}
+            />
+          </DropdownMenuGroup>
+          <DropdownMenuSeparator />
+          <DropdownMenuGroup>
+            <DropdownMenuItem
+              className={cn(showSettings && 'bg-accent text-accent-foreground')}
+              onSelect={onToggleSettings}
+            >
+              <HugeiconsIcon
+                className="size-4"
+                icon={Settings02Icon}
+              />
+              <span>{t('web.sidebar.settings')}</span>
+              {hasUpgrade ? <span className="size-2 shrink-0 rounded-full bg-accent-blue" /> : null}
+              <DropdownMenuShortcut>
+                {shortcutModifierLabel}
+                {','}
+              </DropdownMenuShortcut>
+            </DropdownMenuItem>
+          </DropdownMenuGroup>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <RemoteDaemonDialog
+        onConnected={(connection) => {
+          setRemoteConnections((connections) => [
+            connection,
+            ...connections.filter((existing) => existing.id !== connection.id)
+          ]);
+          setActiveConnection({
+            id: connection.id,
+            label: connection.label,
+            type: 'remote',
+            url: connection.url
+          });
+          onSwitchDaemonConnection({ connection, type: 'remote' });
+          setDialogOpen(false);
+        }}
+        onOpenChange={setDialogOpen}
+        open={dialogOpen}
+      />
+    </>
+  );
+}

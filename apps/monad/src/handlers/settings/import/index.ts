@@ -114,6 +114,7 @@ export function applyModelRolesToConfiguredDefaultProfile(cfg: MonadConfig, role
     image: routeFromSpec(roles.image),
     video: routeFromSpec(roles.video),
     speech: routeFromSpec(roles.speech),
+    transcription: routeFromSpec(roles.transcription),
     embedding: routeFromSpec(roles.embedding),
     memory: routeFromSpec(roles.memory)
   };

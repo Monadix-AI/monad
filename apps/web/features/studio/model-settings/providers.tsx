@@ -2,11 +2,22 @@
 
 import type { ModelInfo, ModelProviderType, ProviderView } from '@monad/protocol';
 
+import {
+  Alert01Icon,
+  ArrowLeft01Icon,
+  Cancel01Icon,
+  Delete02Icon,
+  LoaderPinwheelIcon,
+  PencilEdit01Icon,
+  PlusSignIcon,
+  Refresh01Icon
+} from '@hugeicons/core-free-icons';
+import { HugeiconsIcon } from '@hugeicons/react';
 import { Button, Card, cn, Input, Label, Tooltip, TooltipContent, TooltipTrigger } from '@monad/ui';
-import { AlertTriangle, ArrowLeft, Loader2, Pencil, Plus, RefreshCw, Trash2, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { type Resolver, useForm } from 'react-hook-form';
 
+import { HoverActions } from '@/components/HoverActions';
 import { useT } from '@/components/I18nProvider';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -133,11 +144,14 @@ export function ProviderCard({
             <span className="shrink-0 text-muted-foreground text-xs">{modelCount.toLocaleString()} models</span>
           )}
           {detail.isLoadingModels && modelCount === 0 && (
-            <Loader2 className="size-3 shrink-0 animate-spin text-muted-foreground" />
+            <HugeiconsIcon
+              className="size-3 shrink-0 animate-spin text-muted-foreground"
+              icon={LoaderPinwheelIcon}
+            />
           )}
           {p.baseUrl && <span className="min-w-0 truncate text-muted-foreground/60 text-xs">{p.baseUrl}</span>}
         </div>
-        <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+        <HoverActions>
           <Button
             aria-label="Edit provider"
             className="size-7 text-muted-foreground hover:text-foreground"
@@ -145,7 +159,7 @@ export function ProviderCard({
             size="icon"
             variant="ghost"
           >
-            <Pencil />
+            <HugeiconsIcon icon={PencilEdit01Icon} />
           </Button>
           <Tooltip>
             <TooltipTrigger asChild>
@@ -158,13 +172,13 @@ export function ProviderCard({
                   size="icon"
                   variant="ghost"
                 >
-                  <Trash2 />
+                  <HugeiconsIcon icon={Delete02Icon} />
                 </Button>
               </span>
             </TooltipTrigger>
             {deleteDisabledReason && <TooltipContent>{deleteDisabledReason}</TooltipContent>}
           </Tooltip>
-        </div>
+        </HoverActions>
       </div>
     </Card>
   );
@@ -404,7 +418,7 @@ export function ProviderDialog({
                 size="icon"
                 variant="ghost"
               >
-                <ArrowLeft />
+                <HugeiconsIcon icon={ArrowLeft01Icon} />
               </Button>
             )}
             {Logo && provMeta ? <Logo className={cn('size-4 shrink-0', provMeta.color)} /> : null}
@@ -470,7 +484,10 @@ export function ProviderDialog({
                           side="bottom"
                         >
                           <p className="flex items-center gap-1.5 text-sm">
-                            <AlertTriangle className="size-3.5 shrink-0" />
+                            <HugeiconsIcon
+                              className="size-3.5 shrink-0"
+                              icon={Alert01Icon}
+                            />
                             {baseUrlError}
                           </p>
                         </PopoverContent>
@@ -516,7 +533,7 @@ export function ProviderDialog({
                           t('web.model.cancel')
                         ) : (
                           <>
-                            <Plus /> {t('web.model.keyBtn')}
+                            <HugeiconsIcon icon={PlusSignIcon} /> {t('web.model.keyBtn')}
                           </>
                         )}
                       </Button>
@@ -543,7 +560,14 @@ export function ProviderDialog({
                         onClick={() => void handleAddKey()}
                         size="sm"
                       >
-                        {keyTesting ? <Loader2 className="animate-spin" /> : t('web.model.test')}
+                        {keyTesting ? (
+                          <HugeiconsIcon
+                            className="animate-spin"
+                            icon={LoaderPinwheelIcon}
+                          />
+                        ) : (
+                          t('web.model.test')
+                        )}
                       </Button>
                       {keyMsg && <FormMsg msg={keyMsg} />}
                     </div>
@@ -565,7 +589,11 @@ export function ProviderDialog({
                       >
                         {testing ? (
                           <>
-                            <Loader2 className="animate-spin" /> {t('web.model.testing')}
+                            <HugeiconsIcon
+                              className="animate-spin"
+                              icon={LoaderPinwheelIcon}
+                            />{' '}
+                            {t('web.model.testing')}
                           </>
                         ) : (
                           t('web.model.test')
@@ -627,7 +655,7 @@ export function ProviderDialog({
                             size="icon"
                             variant="ghost"
                           >
-                            <X />
+                            <HugeiconsIcon icon={Cancel01Icon} />
                           </Button>
                         </div>
                       );
@@ -649,7 +677,7 @@ export function ProviderDialog({
                           size="sm"
                           variant="ghost"
                         >
-                          <RefreshCw /> {t('web.model.refresh')}
+                          <HugeiconsIcon icon={Refresh01Icon} /> {t('web.model.refresh')}
                         </Button>
                       )}
                     </div>

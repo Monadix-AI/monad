@@ -1,7 +1,3 @@
-import type { SessionId } from '@monad/protocol';
-
-import { sessionIdSchema } from '@monad/protocol';
-
 import { resolveText } from '../lib/chat.ts';
 import { json, out } from '../lib/output.ts';
 import { requireTreatyData } from '../lib/treaty.ts';
@@ -15,14 +11,6 @@ function runtimeHeaders(): Record<string, string> {
   return headers;
 }
 
-function optionalProjectId(flags: Record<string, unknown>): SessionId | undefined {
-  const value = flags.project;
-  if (!value) return undefined;
-  const parsed = sessionIdSchema.safeParse(String(value));
-  if (!parsed.success) throw usageError('usage: --project must be a session id');
-  return parsed.data;
-}
-
 function print(data: unknown): void {
   json(data);
   out(JSON.stringify(data, null, 2));
@@ -33,7 +21,6 @@ export const projectCommand: CommandDef = {
   synopsis: 'project <post|read|inbox> [options]',
   description: 'post to or read the current Workplace Project room',
   flags: {
-    project: { type: 'string', description: 'project session id (defaults to the managed runtime project)' },
     thread: { type: 'string', description: 'project message id for threaded context' },
     before: { type: 'string', description: 'read messages before this message id' },
     after: { type: 'string', description: 'read messages after this message id' },
@@ -43,11 +30,10 @@ export const projectCommand: CommandDef = {
     const [action, subaction, ...rest] = positionals;
     if (action === 'post') {
       const text = await resolveText([subaction, ...rest].filter((part): part is string => !!part));
-      if (!text) throw usageError('usage: monad project post [--project <id>] <text|->');
+      if (!text) throw usageError('usage: monad project post <text|->');
       const data = requireTreatyData(
         await client.treaty.v1.internal['native-agent'].project.post.post(
           {
-            projectId: optionalProjectId(flags),
             threadId: flags.thread ? String(flags.thread) : undefined,
             text
           },
@@ -62,7 +48,6 @@ export const projectCommand: CommandDef = {
       const data = requireTreatyData(
         await client.treaty.v1.internal['native-agent'].project.read.post(
           {
-            projectId: optionalProjectId(flags),
             threadId: flags.thread ? String(flags.thread) : undefined,
             before: flags.before ? String(flags.before) : undefined,
             after: flags.after ? String(flags.after) : undefined,
@@ -77,10 +62,7 @@ export const projectCommand: CommandDef = {
 
     if (action === 'inbox' && (subaction === undefined || subaction === 'check')) {
       const data = requireTreatyData(
-        await client.treaty.v1.internal['native-agent'].project.inbox.post(
-          flags.project ? { projectId: optionalProjectId(flags) } : {},
-          { headers: runtimeHeaders() }
-        )
+        await client.treaty.v1.internal['native-agent'].project.inbox.post({}, { headers: runtimeHeaders() })
       );
       print(data);
       return;
@@ -88,10 +70,7 @@ export const projectCommand: CommandDef = {
 
     if (action === 'inbox' && subaction === 'ack') {
       const data = requireTreatyData(
-        await client.treaty.v1.internal['native-agent'].project.inbox.ack.post(
-          flags.project ? { projectId: optionalProjectId(flags) } : {},
-          { headers: runtimeHeaders() }
-        )
+        await client.treaty.v1.internal['native-agent'].project.inbox.ack.post({}, { headers: runtimeHeaders() })
       );
       print(data);
       return;

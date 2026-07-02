@@ -101,14 +101,19 @@ export function createMemoryAgentTools(svc: MemoryService): Tool[] {
       { action: 'delete', fact: 'User likes cheese pizza' }
     ],
     run: async (input, ctx: ToolContext) =>
-      toolResult(
-        await svc.memoryTool(ctx.sessionId as SessionId, input.action, {
-          fact: input.fact,
-          old: input.old,
-          replacement: input.replacement,
-          scope: input.scope
-        })
-      )
+      ctx.sessionId.startsWith('ses_')
+        ? toolResult(
+            await svc.memoryTool(ctx.sessionId as SessionId, input.action, {
+              fact: input.fact,
+              old: input.old,
+              replacement: input.replacement,
+              scope: input.scope
+            })
+          )
+        : toolResult({
+            ok: false,
+            content: 'The memory tool is only available inside Monad agent sessions, not Workplace Projects.'
+          })
   };
 
   return [memory];

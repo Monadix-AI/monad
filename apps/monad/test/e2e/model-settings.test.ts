@@ -11,6 +11,7 @@ import { join } from 'node:path';
 import { initMonadHome, loadAuth, loadConfig } from '@monad/home';
 import { ModelProviderType } from '@monad/protocol';
 
+import { ModelProviderRegistry } from '@/agent/index.ts';
 import { ModelService } from '@/handlers/settings/model/index.ts';
 import { ModelCatalogService } from '@/services/model-catalog.ts';
 import { createHttpTransport } from '@/transports/http.ts';
@@ -528,6 +529,82 @@ for (const kind of TRANSPORTS) {
         modelId: 'image-model'
       });
       expect(cfg?.model.profiles.find((profile) => profile.alias === 'default')?.routes.image).toBeUndefined();
+    });
+
+    test('POST /v1/settings/model/transcribe uses transcription then cleans up with the fast role', async () => {
+      await t.stop();
+      const registry = new ModelProviderRegistry();
+      const calls: Array<{ kind: 'transcribe' | 'complete'; modelId: string; content?: string }> = [];
+      registry.register({
+        type: ModelProviderType.OpenAICompatible,
+        descriptor: {
+          type: ModelProviderType.OpenAICompatible,
+          label: 'OpenAI-compatible',
+          strategy: 'openai-compatible'
+        },
+        transcribe: async (call) => {
+          calls.push({
+            kind: 'transcribe',
+            modelId: call.modelId,
+            content: `${call.mediaType}:${call.language}:${call.audio instanceof Uint8Array ? call.audio.length : 0}`
+          });
+          return { text: 'um I am using Ollama with LLAMA 3.2 and it works' };
+        },
+        complete: async (call) => {
+          const userMessage = call.messages.at(-1)?.content;
+          calls.push({
+            kind: 'complete',
+            modelId: call.modelId,
+            content: typeof userMessage === 'string' ? userMessage : JSON.stringify(userMessage)
+          });
+          return { text: 'I am using Ollama with Llama 3.2, and it works.' };
+        }
+      });
+      const cfg = await loadConfig(paths.config);
+      if (!cfg) throw new Error('config missing');
+      const modelService = new ModelService(paths.auth, cfg, await loadAuth(paths.auth), registry);
+      t = serveTransport(kind, createHttpTransport(buildHandlers(mockModel(), { paths, modelService })));
+
+      await json('PUT', '/v1/settings/model/providers/oai', {
+        provider: { id: 'oai', label: 'OpenAI-compatible', type: 'openai-compatible', baseUrl: 'https://api.test/v1' }
+      });
+      await json('POST', '/v1/settings/model/providers/oai/credentials', {
+        label: 'primary',
+        authType: 'api_key',
+        accessToken: 'sk-test'
+      });
+      await json('PUT', '/v1/settings/model/profiles/default', {
+        profile: {
+          alias: 'default',
+          routes: {
+            chat: { provider: 'oai', modelId: 'gpt-x' },
+            fast: { provider: 'oai', modelId: 'fast-cleaner' },
+            transcription: { provider: 'oai', modelId: 'whisper-test' }
+          },
+          params: {},
+          fallbacks: []
+        }
+      });
+      await json('PUT', '/v1/settings/model/default', { alias: 'default' });
+
+      const res = await json('POST', '/v1/settings/model/transcribe', {
+        audioBase64: Buffer.from([1, 2, 3, 4]).toString('base64'),
+        mediaType: 'audio/wav',
+        language: 'en'
+      });
+
+      expect(res.status).toBe(200);
+      expect((await res.json()) as { text: string }).toEqual({
+        text: 'I am using Ollama with Llama 3.2, and it works.'
+      });
+      expect(calls).toEqual([
+        { kind: 'transcribe', modelId: 'whisper-test', content: 'audio/wav:en:4' },
+        {
+          kind: 'complete',
+          modelId: 'fast-cleaner',
+          content: '<raw_text>um I am using Ollama with LLAMA 3.2 and it works</raw_text>'
+        }
+      ]);
     });
 
     test('POST /v1/settings/model/embeddings/reindex resolves and returns ok', async () => {

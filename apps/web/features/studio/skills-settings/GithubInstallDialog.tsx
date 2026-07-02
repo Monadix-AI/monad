@@ -1,6 +1,7 @@
+import { Alert01Icon, ExternalLinkIcon, LoaderPinwheelIcon, PlusSignIcon } from '@hugeicons/core-free-icons';
+import { HugeiconsIcon } from '@hugeicons/react';
 import { useInstallSkillMutation } from '@monad/client-rtk';
 import { Button, Input } from '@monad/ui';
-import { AlertTriangle, ExternalLink, Loader2, Plus } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
 import { useT } from '@/components/I18nProvider';
@@ -143,7 +144,10 @@ function InstallForm({ onInstalled }: { onCancel: () => void; onInstalled: () =>
                 size="icon"
                 variant="ghost"
               >
-                <ExternalLink className="size-4" />
+                <HugeiconsIcon
+                  className="size-4"
+                  icon={ExternalLinkIcon}
+                />
               </Button>
             </div>
           </PopoverTrigger>
@@ -154,7 +158,10 @@ function InstallForm({ onInstalled }: { onCancel: () => void; onInstalled: () =>
             side="bottom"
           >
             <p className="flex items-center gap-1.5 text-sm">
-              <AlertTriangle className="size-3.5 shrink-0" />
+              <HugeiconsIcon
+                className="size-3.5 shrink-0"
+                icon={Alert01Icon}
+              />
               {error}
             </p>
           </PopoverContent>
@@ -173,7 +180,14 @@ function InstallForm({ onInstalled }: { onCancel: () => void; onInstalled: () =>
           disabled={isLoading || !source.trim()}
           onClick={() => void submit(false)}
         >
-          {isLoading ? <Loader2 className="size-3.5 animate-spin" /> : <Plus />}
+          {isLoading ? (
+            <HugeiconsIcon
+              className="size-3.5 animate-spin"
+              icon={LoaderPinwheelIcon}
+            />
+          ) : (
+            <HugeiconsIcon icon={PlusSignIcon} />
+          )}
           {isLoading ? t('web.skills.installing') : consent ? t('web.skills.consentReview') : t('web.skills.install')}
         </Button>
       </ConsentPopover>

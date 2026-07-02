@@ -48,7 +48,7 @@ test('migrate() builds the current schema and stamps user_version', () => {
   );
   for (const col of [
     'id',
-    'project_session_id',
+    'transcript_target_id',
     'agent_name',
     'provider',
     'working_path',
@@ -77,12 +77,31 @@ test('migrate() builds the current schema and stamps user_version', () => {
     expect.objectContaining({ name: 'idx_native_cli_sessions_provider_ref', unique: 1 })
   );
 
+  const nativeInboxCols = (db.prepare('PRAGMA table_info(native_cli_inbox_items)').all() as { name: string }[]).map(
+    (c) => c.name
+  );
+  for (const col of [
+    'native_cli_session_id',
+    'message_seq',
+    'state',
+    'created_at',
+    'delivered_at',
+    'visible_at',
+    'consumed_at'
+  ]) {
+    expect(nativeInboxCols).toContain(col);
+  }
+  const nativeInboxIndexes = db.prepare('PRAGMA index_list(native_cli_inbox_items)').all() as {
+    name: string;
+  }[];
+  expect(nativeInboxIndexes).toContainEqual(expect.objectContaining({ name: 'idx_native_cli_inbox_items_pending' }));
+
   const nativeDirectCols = (
     db.prepare('PRAGMA table_info(native_agent_direct_messages)').all() as {
       name: string;
     }[]
   ).map((c) => c.name);
-  for (const col of ['id', 'project_session_id', 'native_cli_session_id', 'from_agent', 'peer', 'text', 'created_at']) {
+  for (const col of ['id', 'project_id', 'native_cli_session_id', 'from_agent', 'peer', 'text', 'created_at']) {
     expect(nativeDirectCols).toContain(col);
   }
   const nativeDirectIndexes = db.prepare('PRAGMA index_list(native_agent_direct_messages)').all() as {

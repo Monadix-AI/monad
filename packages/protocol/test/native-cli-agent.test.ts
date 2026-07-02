@@ -35,12 +35,14 @@ test('native CLI agent view requires provider-owned full-capability defaults', (
     name: 'codex',
     provider: 'codex',
     command: 'codex',
+    reasoningEfforts: ['low', 'medium', 'high'],
     enabled: true,
     defaultLaunchMode: 'pty',
     allowDangerousMode: false
   });
 
   expect(parsed.provider).toBe('codex');
+  expect(parsed.reasoningEfforts).toEqual(['low', 'medium', 'high']);
   expect(parsed.defaultLaunchMode).toBe('pty');
   expect(parsed.approvalOwnership).toBe('provider-owned');
 });
@@ -54,6 +56,19 @@ test('native CLI agent view accepts Gemini as a provider-owned native CLI provid
   });
 
   expect(parsed.provider).toBe('gemini');
+  expect(parsed.defaultLaunchMode).toBe('pty');
+  expect(parsed.approvalOwnership).toBe('provider-owned');
+});
+
+test('native CLI agent view accepts Qwen as a provider-owned native CLI provider', () => {
+  const parsed = nativeCliAgentViewSchema.parse({
+    name: 'qwen',
+    provider: 'qwen',
+    command: 'qwen',
+    enabled: true
+  });
+
+  expect(parsed.provider).toBe('qwen');
   expect(parsed.defaultLaunchMode).toBe('pty');
   expect(parsed.approvalOwnership).toBe('provider-owned');
 });
@@ -86,16 +101,19 @@ test('native CLI preset view includes a provider install page', () => {
     id: 'codex',
     label: 'Codex',
     provider: 'codex',
+    productIcon: 'codex',
     command: 'codex',
     args: [],
     defaultLaunchMode: 'pty',
     supportedLaunchModes: ['pty'],
+    reasoningEfforts: ['low', 'medium', 'high'],
     installHint: 'Install Codex.',
     installUrl: 'https://developers.openai.com/codex/cli',
     installed: false
   });
 
   expect(parsed.installUrl).toBe('https://developers.openai.com/codex/cli');
+  expect(parsed.reasoningEfforts).toEqual(['low', 'medium', 'high']);
 });
 
 test('native CLI approval resolution request carries provider request id and decision', () => {
@@ -123,7 +141,7 @@ test('start request requires an absolute working path', () => {
 test('native CLI session view preserves provider session lifecycle fields', () => {
   const parsed = nativeCliSessionViewSchema.parse({
     id: 'ncli_1',
-    projectSessionId: 'ses_PROJECT',
+    transcriptTargetId: 'prj_PROJECT',
     agentName: 'claude-code',
     provider: 'claude-code',
     workingPath: '/tmp/project',
@@ -139,6 +157,9 @@ test('native CLI session view preserves provider session lifecycle fields', () =
   });
 
   expect(parsed.approvalOwnership).toBe('provider-owned');
+  expect(parsed.transcriptTargetId).toBe('prj_PROJECT');
+  expect('projectSessionId' in parsed).toBe(false);
+  expect('projectId' in parsed).toBe(false);
   expect(parsed.runtimeRole).toBe('interactive');
   expect(parsed.exitCode).toBeNull();
 });
@@ -146,7 +167,7 @@ test('native CLI session view preserves provider session lifecycle fields', () =
 test('native CLI session view carries managed project runtime fields', () => {
   const parsed = nativeCliSessionViewSchema.parse({
     id: 'ncli_1',
-    projectSessionId: 'ses_PROJECT',
+    transcriptTargetId: 'prj_PROJECT',
     agentName: 'codex',
     provider: 'codex',
     workingPath: '/tmp/project',
@@ -166,6 +187,9 @@ test('native CLI session view carries managed project runtime fields', () => {
   });
 
   expect(parsed.runtimeRole).toBe('managed-project-agent');
+  expect(parsed.transcriptTargetId).toBe('prj_PROJECT');
+  expect('projectSessionId' in parsed).toBe(false);
+  expect('projectId' in parsed).toBe(false);
   expect(parsed.agentRuntimeId).toBe('nclirt_codex_project');
   expect(parsed.lastDeliveredSeq).toBe(42);
   expect(parsed.lastVisibleSeq).toBe(40);
@@ -188,6 +212,35 @@ test('workplace project members ext schema is shared by web and daemon', () => {
     workplaceProjectMembersExtSchema.safeParse([{ type: 'native-cli', name: 'codex', settings: { launchMode: 'bad' } }])
       .success
   ).toBe(false);
+});
+
+test('workplace native CLI members can be instantiated multiple times from one template', () => {
+  const parsed = workplaceProjectMembersExtSchema.parse([
+    {
+      type: 'native-cli',
+      name: 'codex-reviewer',
+      templateName: 'codex',
+      displayName: 'codex-reviewer',
+      instanceId: 'pmem_codex_reviewer',
+      settings: { modelName: 'gpt-5.5', reasoningEffort: 'high', speed: 'fast', customPrompt: 'Review changes only.' }
+    },
+    {
+      type: 'native-cli',
+      name: 'codex-tester',
+      templateName: 'codex',
+      displayName: 'codex-tester',
+      instanceId: 'pmem_codex_tester'
+    }
+  ]);
+
+  expect(parsed.map((member) => [member.name, member.templateName, member.displayName, member.instanceId])).toEqual([
+    ['codex-reviewer', 'codex', 'codex-reviewer', 'pmem_codex_reviewer'],
+    ['codex-tester', 'codex', 'codex-tester', 'pmem_codex_tester']
+  ]);
+  expect(parsed[0]?.settings?.customPrompt).toBe('Review changes only.');
+  expect(parsed[0]?.settings?.modelName).toBe('gpt-5.5');
+  expect(parsed[0]?.settings?.reasoningEffort).toBe('high');
+  expect(parsed[0]?.settings?.speed).toBe('fast');
 });
 
 test('native CLI auth views model provider-owned login relay without project session fields', () => {
@@ -220,21 +273,28 @@ test('native CLI auth views model provider-owned login relay without project ses
 test('managed project runtime prompt and prepared spec are protocol contracts', () => {
   const promptInput = managedProjectRuntimePromptInputSchema.parse({
     agentName: 'codex',
-    projectSessionId: 'ses_PROJECT',
+    projectId: 'prj_PROJECT',
     nativeCliSessionId: 'ncli_1',
     provider: 'codex',
-    workspace: '/tmp/monad/workplace-agents/ses_PROJECT/codex'
+    workspace: '/tmp/monad/workplace-agents/prj_PROJECT/codex',
+    modelName: 'gpt-5.5',
+    reasoningEffort: 'high',
+    speed: 'fast'
   });
 
-  expect(promptInput.projectSessionId).toBe('ses_PROJECT');
+  expect(promptInput.projectId).toBe('prj_PROJECT');
+  expect('projectSessionId' in promptInput).toBe(false);
   expect(promptInput.provider).toBe('codex');
+  expect(promptInput.modelName).toBe('gpt-5.5');
+  expect(promptInput.reasoningEffort).toBe('high');
+  expect(promptInput.speed).toBe('fast');
 
   const spec = managedProjectRuntimeSpecSchema.parse({
-    workspace: '/tmp/monad/workplace-agents/ses_PROJECT/codex',
-    promptFile: '/tmp/monad/workplace-agents/ses_PROJECT/codex/managed-prompt.md',
-    tokenFile: '/tmp/monad/workplace-agents/ses_PROJECT/codex/.monad-agent-token',
+    workspace: '/tmp/monad/workplace-agents/prj_PROJECT/codex',
+    promptFile: '/tmp/monad/workplace-agents/prj_PROJECT/codex/managed-prompt.md',
+    tokenFile: '/tmp/monad/workplace-agents/prj_PROJECT/codex/.monad-agent-token',
     tokenHash: 'abc123',
-    wrapperBin: '/tmp/monad/workplace-agents/ses_PROJECT/codex/bin/monad',
+    wrapperBin: '/tmp/monad/workplace-agents/prj_PROJECT/codex/bin/monad',
     env: {
       MONAD_NATIVE_CLI_SESSION_ID: 'ncli_1'
     },
@@ -248,20 +308,20 @@ test('managed project runtime prompt and prepared spec are protocol contracts', 
 test('native agent project command schemas allow runtime-bound project defaults and require non-empty text', () => {
   expect(
     nativeAgentProjectPostRequestSchema.parse({
-      projectId: 'ses_PROJECT',
+      projectId: 'prj_PROJECT',
       threadId: 'msg_PARENT',
       text: 'hello project'
     })
-  ).toEqual({ projectId: 'ses_PROJECT', threadId: 'msg_PARENT', text: 'hello project' });
+  ).toEqual({ projectId: 'prj_PROJECT', threadId: 'msg_PARENT', text: 'hello project' });
 
   expect(nativeAgentProjectPostRequestSchema.safeParse({ projectId: 'not-a-session', text: 'hello' }).success).toBe(
     false
   );
   expect(nativeAgentProjectPostRequestSchema.parse({ text: 'hello' })).toEqual({ text: 'hello' });
-  expect(nativeAgentProjectPostRequestSchema.safeParse({ projectId: 'ses_PROJECT', text: '' }).success).toBe(false);
+  expect(nativeAgentProjectPostRequestSchema.safeParse({ projectId: 'prj_PROJECT', text: '' }).success).toBe(false);
   expect(
     nativeAgentProjectReadRequestSchema.parse({
-      projectId: 'ses_PROJECT',
+      projectId: 'prj_PROJECT',
       after: 'msg_OLD',
       limit: 25
     }).limit
@@ -270,14 +330,14 @@ test('native agent project command schemas allow runtime-bound project defaults 
 
 test('native agent inbox and runtime info schemas carry project-managed runtime state', () => {
   const inbox = nativeAgentProjectInboxResponseSchema.parse({
-    projectId: 'ses_PROJECT',
+    projectId: 'prj_PROJECT',
     cursor: 7,
     items: [
       {
         seq: 7,
         message: {
           id: 'msg_INBOX',
-          sessionId: 'ses_PROJECT',
+          transcriptTargetId: 'prj_PROJECT',
           role: 'user',
           text: 'please take a look',
           type: 'text',
@@ -293,7 +353,7 @@ test('native agent inbox and runtime info schemas carry project-managed runtime 
 
   const info = nativeAgentRuntimeInfoResponseSchema.parse({
     agentId: 'codex',
-    projectSessionId: 'ses_PROJECT',
+    projectId: 'prj_PROJECT',
     nativeCliSessionId: 'ncli_1',
     serverUrl: 'http://127.0.0.1:3000',
     workdir: '/tmp/project',
@@ -305,6 +365,7 @@ test('native agent inbox and runtime info schemas carry project-managed runtime 
 
   expect(info.providerSessionRef).toBeNull();
   expect(info.pendingInboxCount).toBe(2);
+  expect('projectSessionId' in info).toBe(false);
 });
 
 test('native agent direct message schemas stay separate from project transcript', () => {
@@ -315,7 +376,7 @@ test('native agent direct message schemas stay separate from project transcript'
 
   const message = nativeAgentDirectMessageSchema.parse({
     id: 'msg_DIRECT',
-    projectSessionId: 'ses_PROJECT',
+    projectId: 'prj_PROJECT',
     nativeCliSessionId: 'ncli_1',
     fromAgent: 'codex',
     peer: 'human',
@@ -323,7 +384,8 @@ test('native agent direct message schemas stay separate from project transcript'
     createdAt: '2026-06-28T00:00:00.000Z'
   });
 
-  expect(message.projectSessionId).toBe('ses_PROJECT');
+  expect(message.projectId).toBe('prj_PROJECT');
+  expect('projectSessionId' in message).toBe(false);
   expect(message.peer).toBe('human');
 });
 

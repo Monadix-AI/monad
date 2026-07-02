@@ -159,11 +159,37 @@ export function createMemorySubsystem(deps: MemorySubsystemDeps): MemorySubsyste
   process.on('exit', () => graphStore.close());
   const graphScopesFor = (sessionId: string): string[] => {
     const s = store.getSession(sessionId as SessionId);
+    const p = s ? null : store.getWorkplaceProject(sessionId);
     const scopes: string[] = [];
     if (s?.agentIds[0]) scopes.push(`agent:${s.agentIds[0]}`);
-    if (s?.cwd) scopes.push(`project:${projectKey(s.cwd)}`); // the session's workspace
+    const cwd = s?.cwd ?? p?.cwd;
+    if (cwd) scopes.push(`project:${projectKey(cwd)}`);
     return scopes;
   };
+
+  const projectScopeWorkspaces = (): string[] => {
+    const seen = new Set<string>();
+    for (const target of [...store.listSessions(), ...store.listWorkplaceProjects()]) {
+      if (!target.cwd) continue;
+      const key = projectKey(target.cwd);
+      if (seen.has(key)) continue;
+      seen.add(key);
+    }
+    return [...seen];
+  };
+
+  const graphConsolidationTargets = () => [
+    ...store.listSessions().map((s) => ({
+      id: s.id,
+      agentId: s.agentIds[0] ?? null,
+      projectKey: s.cwd ? projectKey(s.cwd) : null
+    })),
+    ...store.listWorkplaceProjects().map((p) => ({
+      id: p.id,
+      agentId: null,
+      projectKey: p.cwd ? projectKey(p.cwd) : null
+    }))
+  ];
 
   // Parse a scope string back to (kind, id) for a fact lookup — the inverse of the `<kind>:<id>` form.
   const splitScope = (scope: string): { kind: 'global' | 'agent' | 'project'; id: string } =>
@@ -180,12 +206,7 @@ export function createMemorySubsystem(deps: MemorySubsystemDeps): MemorySubsyste
       { scope: 'global', kind: 'global', id: '*' },
       ...liveCfg().agent.agents.map((a) => ({ scope: `agent:${a.id}`, kind: 'agent' as const, id: a.id }))
     ];
-    const seen = new Set<string>();
-    for (const s of store.listSessions()) {
-      if (!s.cwd) continue;
-      const key = projectKey(s.cwd);
-      if (seen.has(key)) continue;
-      seen.add(key);
+    for (const key of projectScopeWorkspaces()) {
       refs.push({ scope: `project:${key}`, kind: 'project', id: key });
     }
     return refs;
@@ -194,18 +215,14 @@ export function createMemorySubsystem(deps: MemorySubsystemDeps): MemorySubsyste
     let activeIds: Set<string> | null = null; // built once per pass: every live (active) message id
     return consolidateGraph({
       store: graphStore,
-      sessions: () =>
-        store.listSessions().map((s) => ({
-          id: s.id,
-          agentId: s.agentIds[0] ?? null,
-          projectKey: s.cwd ? projectKey(s.cwd) : null
-        })),
+      sessions: graphConsolidationTargets,
       messagesAfter: (sid, after) =>
         store.listMessages(sid, after ? { after } : {}).map((m) => ({ id: m.id, role: m.role, text: m.text })),
       isAlive: (messageId) => {
         if (!activeIds) {
           activeIds = new Set<string>();
           for (const s of store.listSessions()) for (const m of store.listMessages(s.id)) activeIds.add(m.id);
+          for (const p of store.listWorkplaceProjects()) for (const m of store.listMessages(p.id)) activeIds.add(m.id);
         }
         return activeIds.has(messageId);
       },

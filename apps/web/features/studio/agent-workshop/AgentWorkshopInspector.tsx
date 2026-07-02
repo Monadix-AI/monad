@@ -3,6 +3,20 @@
 import type { SandboxMode } from '@monad/protocol';
 
 import {
+  BrainIcon,
+  CheckIcon,
+  CircleDashedIcon,
+  EyeIcon,
+  GlobeIcon,
+  PackageIcon,
+  Plug01Icon,
+  ShieldHalfIcon,
+  SparklesIcon,
+  UserGroupIcon,
+  Wrench01Icon
+} from '@hugeicons/core-free-icons';
+import { HugeiconsIcon } from '@hugeicons/react';
+import {
   Button,
   cn,
   Input,
@@ -15,19 +29,6 @@ import {
   Switch,
   Textarea
 } from '@monad/ui';
-import {
-  Brain,
-  Check,
-  CircleDashed,
-  Eye,
-  Globe,
-  Package,
-  Plug,
-  ShieldHalf,
-  Sparkles,
-  Users,
-  Wrench
-} from 'lucide-react';
 
 import { useT } from '@/components/I18nProvider';
 import { Markdown } from '@/components/Markdown';
@@ -100,7 +101,10 @@ export function AgentWorkshopInspector({
     <div className="flex flex-col gap-4 p-5">
       <div className="rounded-2xl border bg-card p-4">
         <div className="flex items-center gap-2">
-          <CircleDashed className="size-4 text-primary" />
+          <HugeiconsIcon
+            className="size-4 text-primary"
+            icon={CircleDashedIcon}
+          />
           <div>
             <div className="font-medium text-sm">{t('web.studio.workshopInspector')}</div>
             <div className="text-muted-foreground text-xs">{t('web.studio.workshopInspectorHint')}</div>
@@ -111,7 +115,10 @@ export function AgentWorkshopInspector({
       {selectedPart === 'brain' && (
         <div className="flex flex-col gap-4 rounded-2xl border bg-card p-4">
           <div className="flex items-center gap-2">
-            <Brain className="size-4 text-primary" />
+            <HugeiconsIcon
+              className="size-4 text-primary"
+              icon={BrainIcon}
+            />
             <span className="font-medium text-sm">{t('web.studio.workshopBrain')}</span>
           </div>
           <div className="flex flex-col gap-1.5">
@@ -166,7 +173,10 @@ export function AgentWorkshopInspector({
       {selectedPart === 'prompt' && (
         <div className="flex flex-col gap-4 rounded-2xl border bg-card p-4">
           <div className="flex items-center gap-2">
-            <Sparkles className="size-4 text-primary" />
+            <HugeiconsIcon
+              className="size-4 text-primary"
+              icon={SparklesIcon}
+            />
             <span className="font-medium text-sm">{t('web.studio.workshopPrompt')}</span>
           </div>
           <div className="flex w-fit items-center gap-1 rounded-full border p-1 text-xs">
@@ -202,7 +212,10 @@ export function AgentWorkshopInspector({
       {selectedPart === 'tools' && (
         <div className="flex flex-col gap-4 rounded-2xl border bg-card p-4">
           <div className="flex items-center gap-2">
-            <Wrench className="size-4 text-primary" />
+            <HugeiconsIcon
+              className="size-4 text-primary"
+              icon={Wrench01Icon}
+            />
             <span className="font-medium text-sm">{t('web.studio.workshopTools')}</span>
           </div>
           <div className="flex items-center gap-3 rounded-2xl border bg-background/80 px-4 py-3">
@@ -224,7 +237,17 @@ export function AgentWorkshopInspector({
                   key={capability.name}
                 >
                   <span className="flex size-8 items-center justify-center rounded-xl bg-secondary text-secondary-foreground">
-                    {capability.sourceKind === 'atom' ? <Package className="size-4" /> : <Plug className="size-4" />}
+                    {capability.sourceKind === 'atom' ? (
+                      <HugeiconsIcon
+                        className="size-4"
+                        icon={PackageIcon}
+                      />
+                    ) : (
+                      <HugeiconsIcon
+                        className="size-4"
+                        icon={Plug01Icon}
+                      />
+                    )}
                   </span>
                   <div className="min-w-0 flex-1">
                     <div className="font-medium text-sm">{capability.name}</div>
@@ -251,7 +274,10 @@ export function AgentWorkshopInspector({
       {selectedPart === 'safety' && (
         <div className="flex flex-col gap-4 rounded-2xl border bg-card p-4">
           <div className="flex items-center gap-2">
-            <ShieldHalf className="size-4 text-primary" />
+            <HugeiconsIcon
+              className="size-4 text-primary"
+              icon={ShieldHalfIcon}
+            />
             <span className="font-medium text-sm">{t('web.studio.workshopSafety')}</span>
           </div>
           <div className="flex flex-col gap-2">
@@ -316,13 +342,19 @@ export function AgentWorkshopInspector({
       {selectedPart === 'visibility' && (
         <div className="flex flex-col gap-4 rounded-2xl border bg-card p-4">
           <div className="flex items-center gap-2">
-            <Eye className="size-4 text-primary" />
+            <HugeiconsIcon
+              className="size-4 text-primary"
+              icon={EyeIcon}
+            />
             <span className="font-medium text-sm">{t('web.studio.workshopVisibility')}</span>
           </div>
           <div className="rounded-2xl border bg-background/80 px-4 py-3">
             <div className="flex items-start gap-3">
               <span className="mt-0.5 flex size-8 items-center justify-center rounded-xl bg-secondary text-secondary-foreground">
-                <Check className="size-4" />
+                <HugeiconsIcon
+                  className="size-4"
+                  icon={CheckIcon}
+                />
               </span>
               <div>
                 <div className="font-medium text-sm">{t('web.studio.visStandalone')}</div>
@@ -331,7 +363,10 @@ export function AgentWorkshopInspector({
             </div>
           </div>
           <div className="flex items-center gap-3 rounded-2xl border bg-background/80 px-4 py-3">
-            <Users className="size-4 text-primary" />
+            <HugeiconsIcon
+              className="size-4 text-primary"
+              icon={UserGroupIcon}
+            />
             <div className="flex-1">
               <div className="font-medium text-sm">{t('web.studio.visSubagent')}</div>
               <div className="text-muted-foreground text-xs">{t('web.studio.visSubagentDesc')}</div>
@@ -342,7 +377,10 @@ export function AgentWorkshopInspector({
             />
           </div>
           <div className="flex items-center gap-3 rounded-2xl border bg-background/80 px-4 py-3">
-            <Globe className="size-4 text-primary" />
+            <HugeiconsIcon
+              className="size-4 text-primary"
+              icon={GlobeIcon}
+            />
             <div className="flex-1">
               <div className="font-medium text-sm">{t('web.studio.visPublic')}</div>
               <div className="text-muted-foreground text-xs">{t('web.studio.visPublicDesc')}</div>
@@ -362,7 +400,10 @@ export function AgentWorkshopInspector({
 
       <div className="rounded-2xl border bg-card p-4">
         <div className="flex items-center gap-2 text-muted-foreground text-xs">
-          <ShieldHalf className="size-3.5 text-primary" />
+          <HugeiconsIcon
+            className="size-3.5 text-primary"
+            icon={ShieldHalfIcon}
+          />
           {t('web.studio.exposeSubset')}
         </div>
       </div>

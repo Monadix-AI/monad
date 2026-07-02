@@ -12,7 +12,8 @@ import type {
   NativeCliLaunchMode,
   NativeCliResizeRequest,
   NativeCliSessionView,
-  SessionId
+  ProjectId,
+  TranscriptTargetId
 } from '@monad/protocol';
 import type { EventBus } from '@/services/event-bus.ts';
 import type { StructuredLineBufferState } from '@/services/native-cli/structured-lines.ts';
@@ -33,7 +34,6 @@ import { mergeNativeCliChildEnv } from '@/services/native-cli/env.ts';
 import { NativeCliError } from '@/services/native-cli/errors.ts';
 import {
   buildNativeCliAuthLaunch,
-  buildNativeCliAuthStatusLaunch,
   buildNativeCliLaunch,
   getNativeCliProviderAdapter,
   resolveNativeCliLaunchCommand
@@ -60,6 +60,16 @@ interface NativeCliStdin {
   end?(): void | Promise<void>;
 }
 
+interface ManagedProjectOutput {
+  sessionId: TranscriptTargetId;
+  nativeCliSessionId: string;
+  agentName: string;
+  text: string;
+  error?: boolean;
+}
+
+type ManagedProjectOutputHandler = (output: ManagedProjectOutput) => void | Promise<void>;
+
 type NativeCliProcess = ReturnType<typeof Bun.spawn> & {
   terminal?: NativeCliTerminal;
   stdin?: NativeCliStdin;
@@ -69,9 +79,10 @@ type NativeCliProcess = ReturnType<typeof Bun.spawn> & {
 
 interface LiveNativeCliSession {
   id: string;
-  projectSessionId: SessionId;
+  transcriptTargetId: TranscriptTargetId;
   agentName: string;
   provider: NativeCliAgentView['provider'];
+  runtimeRole: NativeCliSessionView['runtimeRole'];
   proc: NativeCliProcess;
   adapter: NativeCliProviderAdapter;
   launchMode: NativeCliLaunchMode;
@@ -104,7 +115,7 @@ interface LiveNativeCliAuthSession {
   id: string;
   agentName: string;
   provider: NativeCliAgentView['provider'];
-  proc: NativeCliProcess;
+  proc?: NativeCliProcess;
   terminal?: NativeCliTerminal;
   adapter: NativeCliProviderAdapter;
   authState: NativeCliAuthState;
@@ -142,15 +153,17 @@ const AUTH_RUNNING_TTL_MS = 30 * 60 * 1000;
 const AUTH_TERMINAL_TTL_MS = 10 * 60 * 1000;
 const HISTORY_PAGE_TIMEOUT_MS = 5_000;
 const AUTH_STATUS_TIMEOUT_MS = 2_000;
-const APP_SERVER_STARTUP_TIMEOUT_MS = 1_000;
+const APP_SERVER_STARTUP_TIMEOUT_MS = 15_000;
 const DEFAULT_AUTH_HEARTBEAT_TIMEOUT_MS = 20_000;
 type NativeCliOutputStream = 'stdout' | 'stderr' | 'pty';
 type NativeCliAuthListener = (session: NativeCliAuthSessionView) => void;
 
 function toView(row: NativeCliSessionRow, pendingApprovalCount = 0): NativeCliSessionView {
+  const { transcriptTargetId, ...view } = row;
   return {
-    ...row,
-    projectSessionId: row.projectSessionId,
+    ...view,
+    transcriptTargetId: transcriptTargetId,
+    productIcon: getNativeCliProviderAdapter(row.provider).productIcon,
     pendingApprovalCount,
     approvalOwnership: 'provider-owned'
   };
@@ -161,6 +174,7 @@ function authToView(session: LiveNativeCliAuthSession): NativeCliAuthSessionView
     id: session.id,
     agentName: session.agentName,
     provider: session.provider,
+    productIcon: getNativeCliProviderAdapter(session.provider).productIcon,
     approvalOwnership: 'provider-owned',
     authState: session.authState,
     state: session.state,
@@ -231,8 +245,13 @@ export class NativeCliHost {
     string,
     Partial<Record<NativeCliOutputStream, StructuredLineBufferState>>
   >();
+  private managedProjectOutputHandler: ManagedProjectOutputHandler | null = null;
 
   constructor(private readonly deps: NativeCliHostDeps) {}
+
+  setManagedProjectOutputHandler(handler: ManagedProjectOutputHandler): void {
+    this.managedProjectOutputHandler = handler;
+  }
 
   /** Resolve secret refs in the launch env, then merge with the daemon env (minus nested-session
    *  markers and injection vectors) to form the child CLI's environment. */
@@ -293,14 +312,22 @@ export class NativeCliHost {
   }
 
   async start(args: {
-    projectSessionId: SessionId;
+    transcriptTargetId: TranscriptTargetId;
     agentName: string;
+    displayName?: string;
+    templateAgentName?: string;
     workingPath: string;
     launchMode?: NativeCliLaunchMode;
     runtimeRole?: NativeCliSessionView['runtimeRole'];
     providerSessionRef?: string;
+    modelName?: string;
+    modelId?: string;
+    reasoningEffort?: string;
+    speed?: 'standard' | 'fast';
+    customPrompt?: string;
   }): Promise<NativeCliSessionView> {
-    const agent = await this.requireAgent(args.agentName);
+    const runtimeAgentName = args.agentName;
+    const agent = await this.requireAgent(args.templateAgentName ?? args.agentName);
     if (!isAbsolute(args.workingPath)) throw new Error('workingPath must be absolute');
     let workingPath: string;
     try {
@@ -320,10 +347,16 @@ export class NativeCliHost {
         ? prepareManagedProjectRuntime({
             monadHome: this.deps.monadHome ?? dirname(this.deps.nativeCliProcessRegistryPath ?? workingPath),
             serverUrl: this.deps.serverUrl ?? `http://127.0.0.1:${Bun.env.MONAD_PORT || '52749'}`,
-            agentName: agent.name,
-            projectSessionId: args.projectSessionId,
+            agentName: runtimeAgentName,
+            displayName: args.displayName,
+            projectId: args.transcriptTargetId as ProjectId,
             nativeCliSessionId: id,
             provider: agent.provider,
+            modelName: args.modelName,
+            modelId: args.modelId,
+            reasoningEffort: args.reasoningEffort,
+            speed: args.speed,
+            customPrompt: args.customPrompt,
             baseEnvPath: Bun.env.PATH
           })
         : null;
@@ -340,7 +373,12 @@ export class NativeCliHost {
           workingPath,
           launchMode: args.launchMode,
           systemPromptFile: agent.provider === 'claude-code' ? (managed?.promptFile ?? undefined) : undefined,
-          providerSessionRef: args.providerSessionRef
+          skipProviderApprovals: !!managed,
+          providerSessionRef: args.providerSessionRef,
+          modelName: args.modelName,
+          reasoningEffort: args.reasoningEffort,
+          speed: args.speed,
+          modelId: args.modelId
         })
       );
     } catch (error) {
@@ -348,8 +386,8 @@ export class NativeCliHost {
       const failedAt = new Date().toISOString();
       this.deps.store.upsertNativeCliSession({
         id,
-        projectSessionId: args.projectSessionId,
-        agentName: agent.name,
+        transcriptTargetId: args.transcriptTargetId,
+        agentName: runtimeAgentName,
         provider: agent.provider,
         workingPath,
         launchMode: args.launchMode ?? agent.defaultLaunchMode,
@@ -367,17 +405,17 @@ export class NativeCliHost {
         updatedAt: failedAt,
         exitedAt: failedAt
       });
-      this.emit(args.projectSessionId, 'native_cli.exited', {
+      this.emit(args.transcriptTargetId, 'native_cli.exited', {
         nativeCliSessionId: id,
         exitCode: null,
         state: 'failed'
       });
       this.log.error(
         {
-          sessionId: args.projectSessionId,
+          sessionId: args.transcriptTargetId,
           event: 'native_cli.launch_failed',
           nativeCliSessionId: id,
-          agentName: agent.name,
+          agentName: runtimeAgentName,
           provider: agent.provider,
           err: error instanceof Error ? { message: error.message, stack: error.stack } : String(error)
         },
@@ -387,10 +425,10 @@ export class NativeCliHost {
     }
     this.log.debug(
       {
-        sessionId: args.projectSessionId,
+        sessionId: args.transcriptTargetId,
         event: 'native_cli.launch',
         nativeCliSessionId: id,
-        agentName: agent.name,
+        agentName: runtimeAgentName,
         provider: agent.provider,
         argv: launch.argv,
         cwd: launch.cwd,
@@ -420,7 +458,7 @@ export class NativeCliHost {
                   pendingCR = text.endsWith('\r');
                   if (pendingCR) text = text.slice(0, -1);
                   text = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-                  if (text) this.output(args.projectSessionId, id, text, 'pty', adapter);
+                  if (text) this.output(args.transcriptTargetId, id, text, 'pty', adapter);
                 }
               }
             } as Bun.SpawnOptions.OptionsObject<'ignore', 'ignore', 'ignore'>) as NativeCliProcess)
@@ -437,8 +475,8 @@ export class NativeCliHost {
       const failedAt = new Date().toISOString();
       this.deps.store.upsertNativeCliSession({
         id,
-        projectSessionId: args.projectSessionId,
-        agentName: agent.name,
+        transcriptTargetId: args.transcriptTargetId,
+        agentName: runtimeAgentName,
         provider: agent.provider,
         workingPath,
         launchMode: launch.launchMode,
@@ -456,17 +494,17 @@ export class NativeCliHost {
         updatedAt: failedAt,
         exitedAt: failedAt
       });
-      this.emit(args.projectSessionId, 'native_cli.exited', {
+      this.emit(args.transcriptTargetId, 'native_cli.exited', {
         nativeCliSessionId: id,
         exitCode: null,
         state: 'failed'
       });
       this.log.error(
         {
-          sessionId: args.projectSessionId,
+          sessionId: args.transcriptTargetId,
           event: 'native_cli.launch_failed',
           nativeCliSessionId: id,
-          agentName: agent.name,
+          agentName: runtimeAgentName,
           provider: agent.provider,
           err: error instanceof Error ? { message: error.message, stack: error.stack } : String(error)
         },
@@ -477,8 +515,8 @@ export class NativeCliHost {
 
     const row: NativeCliSessionRow = {
       id,
-      projectSessionId: args.projectSessionId,
-      agentName: agent.name,
+      transcriptTargetId: args.transcriptTargetId,
+      agentName: runtimeAgentName,
       provider: agent.provider,
       workingPath,
       launchMode: launch.launchMode,
@@ -499,9 +537,10 @@ export class NativeCliHost {
     this.deps.store.upsertNativeCliSession(row);
     const live: LiveNativeCliSession = {
       id,
-      projectSessionId: args.projectSessionId,
-      agentName: agent.name,
+      transcriptTargetId: args.transcriptTargetId,
+      agentName: runtimeAgentName,
       provider: agent.provider,
+      runtimeRole,
       proc,
       adapter,
       launchMode: launch.launchMode,
@@ -532,12 +571,16 @@ export class NativeCliHost {
           })
         : null;
     if (launch.launchMode !== 'pty') {
-      this.readPipe(args.projectSessionId, id, proc.stdout, 'stdout', adapter);
-      this.readPipe(args.projectSessionId, id, proc.stderr, 'stderr', adapter);
+      this.readPipe(args.transcriptTargetId, id, proc.stdout, 'stdout', adapter);
+      this.readPipe(args.transcriptTargetId, id, proc.stderr, 'stderr', adapter);
       adapter.initialize?.(live, {
         workingPath,
         providerSessionRef: args.providerSessionRef,
-        developerInstructions: agent.provider === 'codex' ? (managed?.prompt ?? undefined) : undefined
+        developerInstructions: agent.provider === 'codex' ? (managed?.prompt ?? undefined) : undefined,
+        modelName: args.modelName,
+        reasoningEffort: args.reasoningEffort,
+        speed: args.speed,
+        modelId: args.modelId
       });
     }
     if (waitForAppServerStartup) {
@@ -564,20 +607,21 @@ export class NativeCliHost {
         throw error;
       }
     }
-    this.emit(args.projectSessionId, 'native_cli.started', {
+    this.emit(args.transcriptTargetId, 'native_cli.started', {
       nativeCliSessionId: id,
-      agentName: agent.name,
+      agentName: runtimeAgentName,
       provider: agent.provider,
+      productIcon: adapter.productIcon,
       launchMode: launch.launchMode,
       workingPath,
       pid: proc.pid
     });
     this.log.debug(
       {
-        sessionId: args.projectSessionId,
+        sessionId: args.transcriptTargetId,
         event: 'native_cli.started',
         nativeCliSessionId: id,
-        agentName: agent.name,
+        agentName: runtimeAgentName,
         provider: agent.provider,
         launchMode: launch.launchMode,
         workingPath,
@@ -603,8 +647,8 @@ export class NativeCliHost {
       pendingCR = remainingText.endsWith('\r');
       if (pendingCR) remainingText = remainingText.slice(0, -1);
       remainingText = remainingText.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-      if (remainingText) this.output(args.projectSessionId, id, remainingText, 'pty', adapter);
-      if (pendingCR) this.output(args.projectSessionId, id, '\n', 'pty', adapter);
+      if (remainingText) this.output(args.transcriptTargetId, id, remainingText, 'pty', adapter);
+      if (pendingCR) this.output(args.transcriptTargetId, id, '\n', 'pty', adapter);
       this.flushSnapshot(id);
       this.live.delete(id);
       if (runtimeRole === 'managed-project-agent') cleanupManagedProjectRuntimeToken(workingPath);
@@ -613,10 +657,10 @@ export class NativeCliHost {
       const exitedAt = new Date().toISOString();
       const state = code === 0 ? 'exited' : 'failed';
       this.deps.store.closeNativeCliSession(id, exitedAt, code, state);
-      this.emit(args.projectSessionId, 'native_cli.exited', { nativeCliSessionId: id, exitCode: code, state });
+      this.emit(args.transcriptTargetId, 'native_cli.exited', { nativeCliSessionId: id, exitCode: code, state });
       this.log[state === 'failed' ? 'error' : 'debug'](
         {
-          sessionId: args.projectSessionId,
+          sessionId: args.transcriptTargetId,
           event: 'native_cli.exited',
           nativeCliSessionId: id,
           exitCode: code,
@@ -633,7 +677,7 @@ export class NativeCliHost {
     const live = this.live.get(id);
     if (!live) throw new Error(`native CLI session is not running: ${id}`);
     this.log.debug(
-      { sessionId: live.projectSessionId, event: 'native_cli.input', nativeCliSessionId: id, input: req.input },
+      { sessionId: live.transcriptTargetId, event: 'native_cli.input', nativeCliSessionId: id, input: req.input },
       'native cli input'
     );
     live.adapter.sendInput(live, req.input);
@@ -645,10 +689,10 @@ export class NativeCliHost {
     return toView(row, this.live.get(id)?.pendingApprovals.size ?? 0);
   }
 
-  list(projectSessionId: SessionId): ListNativeCliSessionsResponse {
+  list(transcriptTargetId: TranscriptTargetId): ListNativeCliSessionsResponse {
     return {
       sessions: this.deps.store
-        .listNativeCliSessionsForProject(projectSessionId)
+        .listNativeCliSessionsForTranscriptTarget(transcriptTargetId)
         .map((row) => toView(row, this.live.get(row.id)?.pendingApprovals.size ?? 0))
     };
   }
@@ -658,7 +702,7 @@ export class NativeCliHost {
     if (!live) throw new Error(`native CLI session is not running: ${id}`);
     this.log.debug(
       {
-        sessionId: live.projectSessionId,
+        sessionId: live.transcriptTargetId,
         event: 'native_cli.resize',
         nativeCliSessionId: id,
         cols: req.cols,
@@ -675,7 +719,7 @@ export class NativeCliHost {
     const request = live.pendingApprovals.get(req.requestId);
     live.adapter.resolveApproval(live, { ...req, request });
     live.pendingApprovals.delete(req.requestId);
-    this.emit(live.projectSessionId, 'native_cli.approval_resolved', {
+    this.emit(live.transcriptTargetId, 'native_cli.approval_resolved', {
       nativeCliSessionId: id,
       provider: live.adapter.provider,
       requestId: req.requestId,
@@ -688,7 +732,7 @@ export class NativeCliHost {
     const live = this.live.get(id);
     if (!live) return;
     this.log.debug(
-      { sessionId: live.projectSessionId, event: 'native_cli.stop', nativeCliSessionId: id },
+      { sessionId: live.transcriptTargetId, event: 'native_cli.stop', nativeCliSessionId: id },
       'native cli stop'
     );
     try {
@@ -716,12 +760,16 @@ export class NativeCliHost {
     this.structuredOutputBuffers.delete(id);
     const exitedAt = new Date().toISOString();
     this.deps.store.closeNativeCliSession(id, exitedAt, null, 'stopped');
-    this.emit(live.projectSessionId, 'native_cli.exited', { nativeCliSessionId: id, exitCode: null, state: 'stopped' });
+    this.emit(live.transcriptTargetId, 'native_cli.exited', {
+      nativeCliSessionId: id,
+      exitCode: null,
+      state: 'stopped'
+    });
   }
 
-  stopProject(projectSessionId: SessionId): void {
+  stopTranscriptTarget(transcriptTargetId: TranscriptTargetId): void {
     for (const live of [...this.live.values()]) {
-      if (live.projectSessionId === projectSessionId) this.stop(live.id);
+      if (live.transcriptTargetId === transcriptTargetId) this.stop(live.id);
     }
   }
 
@@ -756,10 +804,35 @@ export class NativeCliHost {
   async startAuth(agentName: string): Promise<NativeCliAuthSessionView> {
     this.pruneAuthSessions();
     const agent = await this.requireAgent(agentName);
+    const adapter = getNativeCliProviderAdapter(agent.provider);
+    const preflight = await this.authStatus(agent.name).catch(() => null);
     for (const live of [...this.liveAuth.values()]) {
       if (live.agentName === agent.name && live.state === 'running') this.stopAuth(live.id);
     }
-    const adapter = getNativeCliProviderAdapter(agent.provider);
+    if (preflight?.state === 'authenticated') {
+      const id = newId('ncliauth');
+      const now = new Date().toISOString();
+      const live: LiveNativeCliAuthSession = {
+        id,
+        agentName: agent.name,
+        provider: agent.provider,
+        adapter,
+        authState: 'authenticated',
+        outputSnapshot: preflight.output,
+        state: 'exited',
+        pid: 0,
+        startedAtMs: Date.now(),
+        updatedAtMs: Date.now(),
+        lastSeenAtMs: Date.now(),
+        exitCode: 0,
+        startedAt: now,
+        updatedAt: now,
+        exitedAt: now,
+        kill: () => {}
+      };
+      this.liveAuth.set(id, live);
+      return authToView(live);
+    }
     const launch = resolveNativeCliLaunchCommand(adapter, buildNativeCliAuthLaunch(agent));
     const id = newId('ncliauth');
     const now = new Date().toISOString();
@@ -915,7 +988,8 @@ export class NativeCliHost {
     this.pruneAuthSessions();
     const agent = await this.requireAgent(agentName);
     const adapter = getNativeCliProviderAdapter(agent.provider);
-    const launch = resolveNativeCliLaunchCommand(adapter, buildNativeCliAuthStatusLaunch(agent));
+    const statusProbe = adapter.authStatus(agent);
+    const launch = resolveNativeCliLaunchCommand(adapter, statusProbe.launch);
     this.log.debug(
       {
         event: 'native_cli.auth_status',
@@ -958,7 +1032,7 @@ export class NativeCliHost {
       );
       throw new NativeCliError('provider_timeout', `timed out checking native CLI auth status: ${agent.name}`);
     }
-    const state = adapter.parseAuthStatus(output, result.code);
+    const state = statusProbe.parse(output, result.code);
     this.log.debug(
       {
         event: 'native_cli.auth_status_result',
@@ -1056,7 +1130,7 @@ export class NativeCliHost {
   }
 
   private readPipe(
-    projectSessionId: SessionId,
+    transcriptTargetId: TranscriptTargetId,
     id: string,
     stream: ReadableStream<Uint8Array> | undefined,
     name: 'stdout' | 'stderr',
@@ -1067,15 +1141,15 @@ export class NativeCliHost {
     void (async () => {
       for await (const data of stream) {
         const text = decoder.decode(data);
-        if (text) this.output(projectSessionId, id, text, name, adapter);
+        if (text) this.output(transcriptTargetId, id, text, name, adapter);
       }
       const remainingText = decoder.flush();
-      if (remainingText) this.output(projectSessionId, id, remainingText, name, adapter);
+      if (remainingText) this.output(transcriptTargetId, id, remainingText, name, adapter);
     })();
   }
 
   private output(
-    projectSessionId: SessionId,
+    transcriptTargetId: TranscriptTargetId,
     id: string,
     chunk: string,
     stream: 'stdout' | 'stderr' | 'pty',
@@ -1090,13 +1164,13 @@ export class NativeCliHost {
     } else {
       this.deps.store.appendNativeCliOutput(id, chunk, MAX_OUTPUT_SNAPSHOT);
     }
-    this.emit(projectSessionId, 'native_cli.output', { nativeCliSessionId: id, stream, chunk });
+    this.publishEphemeral(transcriptTargetId, 'native_cli.output', { nativeCliSessionId: id, stream, chunk });
     const structuredChunk = stream === 'pty' ? chunk : this.takeCompleteStructuredLines(id, stream, chunk);
     if (!structuredChunk) return;
     for (const event of adapter.parseOutput(structuredChunk)) {
       const parsed = nativeCliOutputEventSchema.safeParse(event);
       if (!parsed.success) continue;
-      this.emitStructuredOutputEvent(projectSessionId, id, adapter, parsed.data);
+      this.emitStructuredOutputEvent(transcriptTargetId, id, adapter, parsed.data);
     }
   }
 
@@ -1132,11 +1206,21 @@ export class NativeCliHost {
   }
 
   private emitStructuredOutputEvent(
-    projectSessionId: SessionId,
+    transcriptTargetId: TranscriptTargetId,
     id: string,
     adapter: NativeCliProviderAdapter,
     event: NativeCliOutputEvent
   ): void {
+    if (event.type === 'agent_message') {
+      // A managed provider's own message is diagnostic output — observable through the native_cli
+      // output card, never auto-posted to the Workplace Project wall. A reply reaches the room only
+      // when the agent explicitly posts via the bridge (`monad project post`), which the wake notice
+      // instructs it to do. This keeps every provider consistent (codex never carried a terminal
+      // `final` marker) and avoids double-posting the same text via both paths. Errors still surface
+      // below via the provider_error branch.
+      return;
+    }
+
     if (event.type === 'session_ref') {
       const providerSessionRef =
         typeof event.payload.providerSessionRef === 'string' ? event.payload.providerSessionRef : undefined;
@@ -1173,7 +1257,7 @@ export class NativeCliHost {
 
     if (event.type === 'connection_required') {
       const live = this.live.get(id);
-      this.emit(projectSessionId, 'native_cli.connection_required', {
+      this.emit(transcriptTargetId, 'native_cli.connection_required', {
         nativeCliSessionId: id,
         agentName: live?.agentName ?? adapter.provider,
         provider: adapter.provider,
@@ -1187,13 +1271,34 @@ export class NativeCliHost {
       return;
     }
 
+    if (event.type === 'provider_error') {
+      const live = this.live.get(id);
+      const message =
+        typeof event.payload.message === 'string' ? event.payload.message : `${adapter.provider} provider error`;
+      if (live?.startup) {
+        clearTimeout(live.startup.timeout);
+        live.startup.reject(new NativeCliError('provider_protocol_error', message));
+        live.startup = undefined;
+      }
+      this.emit(transcriptTargetId, 'native_cli.output', {
+        nativeCliSessionId: id,
+        stream: 'stderr',
+        chunk: message,
+        provider: adapter.provider,
+        code: event.payload.code,
+        responseId: event.payload.responseId
+      });
+      this.emitManagedProjectOutput(transcriptTargetId, id, message, true);
+      return;
+    }
+
     if (event.type === 'approval_requested') {
       const requestId =
         typeof event.payload.requestId === 'string' ? event.payload.requestId : String(event.payload.requestId);
       const live = this.live.get(id);
       if (live?.pendingApprovals.has(requestId)) return;
       live?.pendingApprovals.set(requestId, event.payload);
-      this.emit(projectSessionId, 'native_cli.approval_requested', {
+      this.emit(transcriptTargetId, 'native_cli.approval_requested', {
         nativeCliSessionId: id,
         provider: adapter.provider,
         requestId,
@@ -1209,7 +1314,7 @@ export class NativeCliHost {
       const live = this.live.get(id);
       if (!live?.pendingApprovals.has(requestId)) return;
       live.pendingApprovals.delete(requestId);
-      this.emit(projectSessionId, 'native_cli.approval_resolved', {
+      this.emit(transcriptTargetId, 'native_cli.approval_resolved', {
         nativeCliSessionId: id,
         provider: adapter.provider,
         requestId,
@@ -1219,17 +1324,67 @@ export class NativeCliHost {
     }
   }
 
-  private emit(sessionId: SessionId, type: Event['type'], payload: Record<string, unknown>): void {
-    const event: Event = {
+  private emitManagedProjectOutput(
+    transcriptTargetId: TranscriptTargetId,
+    id: string,
+    text: string,
+    error = false
+  ): void {
+    const live = this.live.get(id);
+    const row = this.deps.store.getNativeCliSession(id);
+    const runtimeRole = live?.runtimeRole ?? row?.runtimeRole;
+    if (runtimeRole !== 'managed-project-agent') return;
+    if (!this.deps.store.hasUnconsumedNativeCliInbox(id)) return;
+    const agentName = live?.agentName ?? row?.agentName;
+    if (!agentName || !this.managedProjectOutputHandler) return;
+    const cursor = row?.lastDeliveredSeq ?? 0;
+    this.deps.store.markNativeCliInboxConsumed(id, cursor);
+    void Promise.resolve(
+      this.managedProjectOutputHandler({
+        sessionId: transcriptTargetId,
+        nativeCliSessionId: id,
+        agentName,
+        text,
+        error
+      })
+    ).catch((err: unknown) => {
+      this.log.debug(
+        {
+          sessionId: transcriptTargetId,
+          event: 'native_cli.managed_project_output_error',
+          nativeCliSessionId: id,
+          agentName,
+          err: err instanceof Error ? { message: err.message, stack: err.stack } : String(err)
+        },
+        'managed native cli provider output failed to project'
+      );
+    });
+  }
+
+  private buildEvent(sessionId: TranscriptTargetId, type: Event['type'], payload: Record<string, unknown>): Event {
+    return {
       id: newId('evt'),
-      sessionId,
+      transcriptTargetId: sessionId,
       type,
       actorAgentId: null,
       payload,
       at: new Date().toISOString()
     };
+  }
+
+  /** Durable milestone event (started/exited/approval/…): persisted to the event log and published. */
+  private emit(sessionId: TranscriptTargetId, type: Event['type'], payload: Record<string, unknown>): void {
+    const event = this.buildEvent(sessionId, type, payload);
     this.deps.store.appendEvents([event]);
     this.deps.bus.publish(event);
+  }
+
+  /** Publish-only (never persisted). For high-frequency `native_cli.output` chunks: delivered live over
+   *  the bus and captured in the bounded per-session output snapshot, so one durable row per chunk would
+   *  grow the event log without bound. Hydration rebuilds the tool card from that snapshot instead
+   *  (see SessionUiProjector.hydrateNativeCliSessions), so no durable output rows are needed. */
+  private publishEphemeral(sessionId: TranscriptTargetId, type: Event['type'], payload: Record<string, unknown>): void {
+    this.deps.bus.publish(this.buildEvent(sessionId, type, payload));
   }
 }
 

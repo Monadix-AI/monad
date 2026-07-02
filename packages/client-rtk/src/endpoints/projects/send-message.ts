@@ -1,4 +1,4 @@
-import type { SendMessageRequest, SendMessageResponse, SessionId } from '@monad/protocol';
+import type { ProjectId, SendMessageRequest, SendMessageResponse } from '@monad/protocol';
 
 import { clientOf, runTreaty } from '../../endpoint-helpers.ts';
 import { createSessionApi } from '../sessions/create-session.ts';
@@ -8,10 +8,10 @@ const sendProjectMessageApi = createSessionApi.injectEndpoints({
   endpoints: (builder) => ({
     sendProjectMessage: builder.mutation<
       SendMessageResponse,
-      { projectId: SessionId } & Pick<SendMessageRequest, 'text'>
+      { projectId: ProjectId } & Pick<SendMessageRequest, 'text'>
     >({
       queryFn: (
-        { projectId, text }: { projectId: SessionId } & Pick<SendMessageRequest, 'text'>,
+        { projectId, text }: { projectId: ProjectId } & Pick<SendMessageRequest, 'text'>,
         api: { extra: unknown }
       ) =>
         runTreaty(

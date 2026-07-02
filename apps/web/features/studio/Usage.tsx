@@ -1,8 +1,9 @@
 'use client';
 
+import { Delete02Icon, LoaderPinwheelIcon } from '@hugeicons/core-free-icons';
+import { HugeiconsIcon } from '@hugeicons/react';
 import { useGetStatsQuery, useResetUsageMutation } from '@monad/client-rtk';
 import { Button, Card, cn } from '@monad/ui';
-import { Loader2, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 
 import { useT } from '@/components/I18nProvider';
@@ -20,7 +21,13 @@ export function Usage() {
 
   const { data: stats, isLoading } = useGetStatsQuery(range);
 
-  if (isLoading) return <Loader2 className="size-4 animate-spin text-muted-foreground" />;
+  if (isLoading)
+    return (
+      <HugeiconsIcon
+        className="size-4 animate-spin text-muted-foreground"
+        icon={LoaderPinwheelIcon}
+      />
+    );
 
   const fmtTokens = (n: number) => {
     if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
@@ -108,7 +115,14 @@ export function Usage() {
                   size="sm"
                   variant="destructive"
                 >
-                  {resetting ? <Loader2 className="size-3 animate-spin" /> : t('web.settings.system.resetUsage')}
+                  {resetting ? (
+                    <HugeiconsIcon
+                      className="size-3 animate-spin"
+                      icon={LoaderPinwheelIcon}
+                    />
+                  ) : (
+                    t('web.settings.system.resetUsage')
+                  )}
                 </Button>
                 <Button
                   onClick={() => setConfirmReset(false)}
@@ -125,7 +139,10 @@ export function Usage() {
                 size="sm"
                 variant="ghost"
               >
-                <Trash2 className="size-3.5" />
+                <HugeiconsIcon
+                  className="size-3.5"
+                  icon={Delete02Icon}
+                />
               </Button>
             ))}
         </div>

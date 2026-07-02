@@ -2,16 +2,21 @@ import type { NativeCliAgentPresetView, NativeCliAgentView, NativeCliProvider } 
 import type { BinProbes } from '@/infra/resolve-binary.ts';
 import type {
   BuildNativeCliLaunchOptions,
+  NativeCliArgumentSupport,
+  NativeCliArgumentSupportProbe,
   NativeCliLaunchSpec,
+  NativeCliModelOptionsProbe,
   NativeCliProviderAdapter
 } from '@/services/native-cli/types.ts';
 
+import { spawnSync } from 'node:child_process';
 import { isAbsolute } from 'node:path';
 
 import { defaultBinProbes } from '@/infra/resolve-binary.ts';
 import { claudeCodeNativeCliAdapter } from '@/services/native-cli/claude-code.ts';
 import { codexNativeCliAdapter } from '@/services/native-cli/codex.ts';
 import { geminiNativeCliAdapter } from '@/services/native-cli/gemini.ts';
+import { qwenNativeCliAdapter } from '@/services/native-cli/qwen.ts';
 
 export type {
   NativeCliLaunchSpec,
@@ -21,6 +26,7 @@ export type {
 export { claudeCodeNativeCliAdapter } from '@/services/native-cli/claude-code.ts';
 export { codexNativeCliAdapter } from '@/services/native-cli/codex.ts';
 export { geminiNativeCliAdapter } from '@/services/native-cli/gemini.ts';
+export { qwenNativeCliAdapter } from '@/services/native-cli/qwen.ts';
 
 const DANGEROUS_ARGS = new Set([
   '--dangerously-bypass-approvals-and-sandbox',
@@ -38,7 +44,8 @@ function isDangerousArg(arg: string, next: string | undefined): boolean {
 const ADAPTERS: Record<NativeCliProvider, NativeCliProviderAdapter> = {
   codex: codexNativeCliAdapter,
   'claude-code': claudeCodeNativeCliAdapter,
-  gemini: geminiNativeCliAdapter
+  gemini: geminiNativeCliAdapter,
+  qwen: qwenNativeCliAdapter
 };
 
 function assertSafeArgs(agent: NativeCliAgentView): void {
@@ -94,7 +101,78 @@ export function buildNativeCliAuthLaunch(agent: NativeCliAgentView): NativeCliLa
 export function buildNativeCliAuthStatusLaunch(agent: NativeCliAgentView): NativeCliLaunchSpec {
   assertSafeArgs(agent);
   assertCommandShape(agent);
-  return ADAPTERS[agent.provider].buildAuthStatusLaunch(agent);
+  return ADAPTERS[agent.provider].authStatus(agent).launch;
+}
+
+export function buildNativeCliModelOptionsProbe(agent: NativeCliAgentView): NativeCliModelOptionsProbe | undefined {
+  assertSafeArgs(agent);
+  assertCommandShape(agent);
+  return ADAPTERS[agent.provider].modelOptions?.(agent);
+}
+
+export function buildNativeCliArgumentSupportProbe(
+  agent: NativeCliAgentView
+): NativeCliArgumentSupportProbe | undefined {
+  assertSafeArgs(agent);
+  assertCommandShape(agent);
+  return ADAPTERS[agent.provider].argumentSupport?.(agent);
+}
+
+export function probeNativeCliArgumentSupport(
+  agent: NativeCliAgentView,
+  probes: BinProbes = defaultBinProbes
+): NativeCliArgumentSupport | undefined {
+  const adapter = ADAPTERS[agent.provider];
+  const probe = adapter.argumentSupport?.(agent);
+  if (!probe) return undefined;
+  let launch: NativeCliLaunchSpec;
+  try {
+    launch = resolveNativeCliLaunchCommand(adapter, probe.launch, probes);
+  } catch {
+    return undefined;
+  }
+  const result = spawnSync(launch.argv[0] as string, launch.argv.slice(1), {
+    cwd: launch.cwd,
+    env: { ...process.env, ...(launch.env ?? {}) },
+    encoding: 'utf8',
+    timeout: 2000
+  });
+  const output = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
+  return probe.parse(output, typeof result.status === 'number' ? result.status : null);
+}
+
+export function listNativeCliAgentModelOptions(
+  agent: NativeCliAgentView,
+  probes: BinProbes = defaultBinProbes
+): string[] {
+  const adapter = ADAPTERS[agent.provider];
+  if (agent.modelOptions?.length) return agent.modelOptions;
+  const fallback = adapter.listSupportedModels(agent);
+  const probe = adapter.modelOptions?.(agent);
+  if (!probe) return fallback;
+  let launch: NativeCliLaunchSpec;
+  try {
+    launch = resolveNativeCliLaunchCommand(adapter, probe.launch, probes);
+  } catch {
+    return fallback;
+  }
+  const result = spawnSync(launch.argv[0] as string, launch.argv.slice(1), {
+    cwd: launch.cwd,
+    env: { ...process.env, ...(launch.env ?? {}) },
+    encoding: 'utf8',
+    timeout: 2000
+  });
+  const output = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
+  const parsed = probe.parse(output, typeof result.status === 'number' ? result.status : null);
+  return parsed.length > 0 ? parsed : fallback;
+}
+
+export function listNativeCliAgentReasoningEfforts(
+  agent: NativeCliAgentView,
+  probes: BinProbes = defaultBinProbes
+): string[] {
+  const support = probeNativeCliArgumentSupport(agent, probes);
+  return support?.reasoningEfforts ?? [];
 }
 
 export function getNativeCliProviderAdapter(provider: NativeCliProvider): NativeCliProviderAdapter {
@@ -105,6 +183,37 @@ export function listNativeCliAgentPresets(probes: BinProbes = defaultBinProbes):
   return [
     codexNativeCliAdapter.detect(probes),
     claudeCodeNativeCliAdapter.detect(probes),
-    geminiNativeCliAdapter.detect(probes)
-  ];
+    geminiNativeCliAdapter.detect(probes),
+    qwenNativeCliAdapter.detect(probes)
+  ].map((preset) => ({
+    ...preset,
+    modelOptions: listNativeCliAgentModelOptions(
+      {
+        name: preset.id,
+        provider: preset.provider,
+        productIcon: preset.productIcon,
+        command: preset.command,
+        args: preset.args,
+        enabled: preset.installed,
+        defaultLaunchMode: preset.defaultLaunchMode,
+        allowDangerousMode: false,
+        approvalOwnership: 'provider-owned'
+      },
+      probes
+    ),
+    reasoningEfforts: listNativeCliAgentReasoningEfforts(
+      {
+        name: preset.id,
+        provider: preset.provider,
+        productIcon: preset.productIcon,
+        command: preset.command,
+        args: preset.args,
+        enabled: preset.installed,
+        defaultLaunchMode: preset.defaultLaunchMode,
+        allowDangerousMode: false,
+        approvalOwnership: 'provider-owned'
+      },
+      probes
+    )
+  }));
 }

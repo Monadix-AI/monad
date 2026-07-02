@@ -43,6 +43,14 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           id="interactive-cursor-init"
           strategy="beforeInteractive"
         />
+        <Script
+          // biome-ignore lint/security/noDangerouslySetInnerHtml: tiny static snippet, no user input
+          dangerouslySetInnerHTML={{
+            __html: `(()=>{const d=document.documentElement;const k=new Set(['Tab','ArrowUp','ArrowRight','ArrowDown','ArrowLeft','Home','End','PageUp','PageDown']);d.setAttribute('data-input-modality','pointer');addEventListener('pointerdown',()=>d.setAttribute('data-input-modality','pointer'),true);addEventListener('keydown',e=>{if(k.has(e.key))d.setAttribute('data-input-modality','keyboard')},true)})()`
+          }}
+          id="input-modality-init"
+          strategy="beforeInteractive"
+        />
       </head>
       <body className="h-full overflow-hidden">
         <AppProviders>
@@ -51,9 +59,6 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             {devToolsWidget}
           </TooltipProvider>
         </AppProviders>
-        {/* impeccable-live-start */}
-        <script src="http://localhost:8403/live.js"></script>
-        {/* impeccable-live-end */}
       </body>
     </html>
   );

@@ -14,11 +14,25 @@ test('openAiPrice normalizes $/token to $/1M and drops non-positive / missing va
       input_cache_read: '0.0000005',
       input_cache_write: '0.00000625'
     })
-  ).toEqual({ input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 });
+  ).toEqual({
+    input: 5,
+    output: 25,
+    cacheRead: 0.5,
+    cacheWrite: 6.25,
+    units: [
+      { label: 'Input', unit: 'M', price: 5 },
+      { label: 'Output', unit: 'M', price: 25 },
+      { label: 'Cache read', unit: 'M', price: 0.5 },
+      { label: 'Cache write', unit: 'M', price: 6.25 }
+    ]
+  });
   // A free tier ("0") must yield no price rather than a misleading $0.
   expect(openAiPrice({ prompt: '0', completion: '0' })).toBeUndefined();
   expect(openAiPrice(null)).toBeUndefined();
-  expect(openAiPrice({ prompt: '0.000001' })).toEqual({ input: 1 });
+  expect(openAiPrice({ prompt: '0.000001' })).toEqual({
+    input: 1,
+    units: [{ label: 'Input', unit: 'M', price: 1 }]
+  });
 });
 
 test('vercelGatewayPrice maps cache field names and normalizes', () => {
@@ -52,7 +66,14 @@ test('fetchProviderModels attaches normalized provider-native price (OpenRouter 
   // openAiPrice) runs; an empty registry is enough to exercise it.
   const models = await fetchProviderModels(provider, cred, new ModelProviderRegistry(), fetchImpl);
 
-  expect(models.find((m) => m.id === 'anthropic/claude-opus-4.8')?.price).toEqual({ input: 5, output: 25 });
+  expect(models.find((m) => m.id === 'anthropic/claude-opus-4.8')?.price).toEqual({
+    input: 5,
+    output: 25,
+    units: [
+      { label: 'Input', unit: 'M', price: 5 },
+      { label: 'Output', unit: 'M', price: 25 }
+    ]
+  });
   expect(models.find((m) => m.id === 'free/model')?.price).toBeUndefined();
   expect(models.find((m) => m.id === 'no/price')?.price).toBeUndefined();
 });

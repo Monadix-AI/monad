@@ -9,7 +9,8 @@ import {
   messageIdSchema,
   principalIdSchema,
   sessionIdSchema,
-  taskIdSchema
+  taskIdSchema,
+  transcriptTargetIdSchema
 } from './ids.ts';
 
 // Schema-first at wire boundaries (HTTP/WS/disk). Types with no runtime boundary yet
@@ -60,7 +61,17 @@ export type AgentAtoms = z.infer<typeof agentAtomsSchema>;
 // Model routing roles (single source of truth — control.ts + @monad/home re-export).
 // A model profile is a recipe of route slots: `chat` is the required default model, `fast` is the
 // lightweight lane, and the remaining roles are capability-specific overrides.
-export const modelRoleSchema = z.enum(['chat', 'fast', 'vision', 'image', 'video', 'speech', 'embedding', 'memory']);
+export const modelRoleSchema = z.enum([
+  'chat',
+  'fast',
+  'vision',
+  'image',
+  'video',
+  'speech',
+  'transcription',
+  'embedding',
+  'memory'
+]);
 export type ModelRole = z.infer<typeof modelRoleSchema>;
 
 export const modelRouteTargetSchema = z.object({
@@ -76,16 +87,19 @@ export const modelProfileRoutesSchema = z.object({
   image: modelRouteTargetSchema.optional(),
   video: modelRouteTargetSchema.optional(),
   speech: modelRouteTargetSchema.optional(),
+  transcription: modelRouteTargetSchema.optional(),
   embedding: modelRouteTargetSchema.optional(),
   memory: modelRouteTargetSchema.optional()
 });
 export type ModelProfileRoutes = z.infer<typeof modelProfileRoutesSchema>;
 
 export const modelRolesSchema = z.object({
+  fast: z.string().optional(),
   vision: z.string().optional(),
   image: z.string().optional(),
   video: z.string().optional(),
   speech: z.string().optional(),
+  transcription: z.string().optional(),
   embedding: z.string().optional(),
   memory: z.string().optional()
 });
@@ -274,7 +288,7 @@ export type StreamStatus = z.infer<typeof streamStatusSchema>;
  * a non-assistant generative message streams over `message.delta` keyed by this `channel`.
  * `afterEventId` is the resume cursor. */
 export const streamRefSchema = z.object({
-  sessionId: sessionIdSchema,
+  transcriptTargetId: transcriptTargetIdSchema,
   messageId: messageIdSchema,
   channel: z.string().optional(),
   afterEventId: eventIdSchema.optional()
@@ -292,7 +306,7 @@ export type MessageStream = z.infer<typeof messageStreamSchema>;
 // can subscribe to an in-flight assistant turn.
 export const chatMessageSchema = z.object({
   id: messageIdSchema,
-  sessionId: sessionIdSchema,
+  transcriptTargetId: transcriptTargetIdSchema,
   role: messageRoleSchema,
   text: z.string(),
   type: messageTypeSchema,
@@ -309,8 +323,8 @@ export const chatMessageSchema = z.object({
 export type ChatMessage = z.infer<typeof chatMessageSchema>;
 
 export const searchHitSchema = z.object({
-  sessionId: sessionIdSchema,
-  sessionTitle: z.string(),
+  transcriptTargetId: transcriptTargetIdSchema,
+  transcriptTargetTitle: z.string(),
   messageId: messageIdSchema,
   role: messageRoleSchema,
   snippet: z.string(),
@@ -366,7 +380,7 @@ export type EventType = z.infer<typeof eventTypeSchema>;
 
 export const eventSchema = z.object({
   id: eventIdSchema,
-  sessionId: sessionIdSchema,
+  transcriptTargetId: transcriptTargetIdSchema,
   type: eventTypeSchema,
   actorAgentId: agentIdSchema.nullable(), // null = system- or human-originated
   taskId: taskIdSchema.optional(),

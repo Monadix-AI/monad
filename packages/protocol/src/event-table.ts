@@ -14,7 +14,7 @@ import { z } from 'zod';
 
 import { costSchema, type EventType, finishReasonSchema, messageTypeSchema, tokenUsageSchema } from './domain.ts';
 import { agentIdSchema, messageIdSchema, sessionIdSchema } from './ids.ts';
-import { nativeCliLaunchModeSchema, nativeCliProviderSchema } from './native-cli-agent.ts';
+import { nativeCliLaunchModeSchema, nativeCliProductIconSchema, nativeCliProviderSchema } from './native-cli-agent.ts';
 
 const requestIdSchema = z.string();
 
@@ -92,13 +92,15 @@ export const agentTokenPayloadSchema = z.object({
   messageId: messageIdSchema,
   agentName: z.string().optional(),
   delta: z.string(),
-  index: z.number().int().nonnegative()
+  index: z.number().int().nonnegative(),
+  source: z.enum(['managed-native-cli']).optional()
 });
 
 export const agentReasoningPayloadSchema = z.object({
   messageId: messageIdSchema,
   delta: z.string(),
-  index: z.number().int().nonnegative()
+  index: z.number().int().nonnegative(),
+  source: z.enum(['managed-native-cli']).optional()
 });
 
 export const agentMessagePayloadSchema = z.object({
@@ -106,6 +108,7 @@ export const agentMessagePayloadSchema = z.object({
   agentName: z.string().optional(),
   text: z.string(),
   data: z.unknown().optional(),
+  source: z.enum(['managed-native-cli']).optional(),
   usage: tokenUsageSchema.optional(),
   cost: costSchema.optional(),
   finishReason: finishReasonSchema.optional()
@@ -214,6 +217,7 @@ export const nativeCliStartedPayloadSchema = z.object({
   nativeCliSessionId: z.string(),
   agentName: z.string(),
   provider: nativeCliProviderSchema,
+  productIcon: nativeCliProductIconSchema.optional(),
   launchMode: nativeCliLaunchModeSchema,
   workingPath: z.string(),
   pid: z.number().int().nullable()

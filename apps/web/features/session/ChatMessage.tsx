@@ -1,7 +1,16 @@
 'use client';
 
+import {
+  AlertCircleIcon,
+  CheckIcon,
+  ComputerTerminal01Icon,
+  Copy01Icon,
+  GitBranchIcon,
+  LoaderPinwheelIcon,
+  RotateLeft01Icon
+} from '@hugeicons/core-free-icons';
+import { HugeiconsIcon } from '@hugeicons/react';
 import { Button, cn } from '@monad/ui';
-import { AlertCircle, Check, Copy, GitBranch, Loader2, RotateCcw, Terminal } from 'lucide-react';
 import { memo, useState } from 'react';
 
 import {
@@ -79,7 +88,10 @@ export const Message = memo(function Message({
       <div className="flex items-center gap-3 self-stretch py-1 text-[10px] text-muted-foreground/50">
         <span className="h-px flex-1 bg-border/40" />
         <span className="label-mono flex items-center gap-1">
-          <Terminal className="size-2.5" />
+          <HugeiconsIcon
+            className="size-2.5"
+            icon={ComputerTerminal01Icon}
+          />
           {msg.text}
         </span>
         <span className="h-px flex-1 bg-border/40" />
@@ -118,10 +130,16 @@ export const Message = memo(function Message({
         )}
       >
         {msg.pending ? (
-          <Loader2 className="size-4 animate-spin text-muted-foreground" />
+          <HugeiconsIcon
+            className="size-4 animate-spin text-muted-foreground"
+            icon={LoaderPinwheelIcon}
+          />
         ) : msg.error ? (
           <div className="flex items-start gap-2">
-            <AlertCircle className="mt-0.5 size-4 shrink-0" />
+            <HugeiconsIcon
+              className="mt-0.5 size-4 shrink-0"
+              icon={AlertCircleIcon}
+            />
             <MessageBody
               data={msg.data}
               isUser={isUser}
@@ -194,7 +212,17 @@ export const Message = memo(function Message({
               onClick={copy}
               tooltip={t('web.chat.copyMsg')}
             >
-              {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+              {copied ? (
+                <HugeiconsIcon
+                  className="size-3.5"
+                  icon={CheckIcon}
+                />
+              ) : (
+                <HugeiconsIcon
+                  className="size-3.5"
+                  icon={Copy01Icon}
+                />
+              )}
             </MessageAction>
             {canEdit && onBranch && (
               <MessageAction
@@ -202,7 +230,10 @@ export const Message = memo(function Message({
                 onClick={() => onBranch(msg.id)}
                 tooltip={t('web.chat.branchHere')}
               >
-                <GitBranch className="size-3.5" />
+                <HugeiconsIcon
+                  className="size-3.5"
+                  icon={GitBranchIcon}
+                />
               </MessageAction>
             )}
             {canEdit && onRestore && (
@@ -211,7 +242,10 @@ export const Message = memo(function Message({
                 onClick={() => setConfirmRestore(true)}
                 tooltip={t('web.chat.restoreHere')}
               >
-                <RotateCcw className="size-3.5" />
+                <HugeiconsIcon
+                  className="size-3.5"
+                  icon={RotateLeft01Icon}
+                />
               </MessageAction>
             )}
           </MessageActions>

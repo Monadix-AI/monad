@@ -3,27 +3,28 @@
 import type { UIItem } from '@monad/protocol';
 import type { NodeProps } from '@xyflow/react';
 
+import {
+  Alert01Icon,
+  BrainIcon,
+  CheckmarkCircle02Icon,
+  CircleIcon,
+  Clock3Icon,
+  ComputerTerminal01Icon,
+  CpuIcon,
+  GitBranchIcon,
+  HelpCircleIcon,
+  MessageSquareCodeIcon,
+  PackageOpenIcon,
+  ShieldQuestionMarkIcon,
+  SparklesIcon,
+  Target01Icon,
+  TextIcon,
+  Wrench01Icon,
+  ZapIcon
+} from '@hugeicons/core-free-icons';
+import { HugeiconsIcon } from '@hugeicons/react';
 import { cn } from '@monad/ui';
 import { Background, Controls, Handle, Position, ReactFlow, ReactFlowProvider } from '@xyflow/react';
-import {
-  AlertTriangle,
-  Brain,
-  CheckCircle2,
-  Circle,
-  Clock3,
-  Cpu,
-  FileText,
-  GitBranch,
-  HelpCircle,
-  MessagesSquare,
-  PackageOpen,
-  ShieldAlert,
-  Sparkles,
-  Target,
-  Terminal,
-  Wrench,
-  Zap
-} from 'lucide-react';
 import { memo, useEffect, useMemo, useState } from 'react';
 
 import '@xyflow/react/dist/style.css';
@@ -68,48 +69,48 @@ const STATUS_CLASS: Record<InspectorStatus, string> = {
 function nodeIcon(tone: InspectorTone) {
   switch (tone) {
     case 'approval':
-      return ShieldAlert;
+      return ShieldQuestionMarkIcon;
     case 'clarification':
-      return HelpCircle;
+      return HelpCircleIcon;
     case 'compact':
-      return PackageOpen;
+      return PackageOpenIcon;
     case 'context':
-      return FileText;
+      return TextIcon;
     case 'custom':
-      return Sparkles;
+      return SparklesIcon;
     case 'mcp':
-      return Zap;
+      return ZapIcon;
     case 'model':
-      return Cpu;
+      return CpuIcon;
     case 'output':
-      return MessagesSquare;
+      return MessageSquareCodeIcon;
     case 'skill':
-      return PackageOpen;
+      return PackageOpenIcon;
     case 'subagent':
-      return GitBranch;
+      return GitBranchIcon;
     case 'system':
-      return Terminal;
+      return ComputerTerminal01Icon;
     case 'thinking':
-      return Brain;
+      return BrainIcon;
     case 'tool':
-      return Wrench;
+      return Wrench01Icon;
     default:
-      return Circle;
+      return CircleIcon;
   }
 }
 
 function statusIcon(status: InspectorStatus) {
   switch (status) {
     case 'active':
-      return Clock3;
+      return Clock3Icon;
     case 'blocked':
-      return AlertTriangle;
+      return Alert01Icon;
     case 'done':
-      return CheckCircle2;
+      return CheckmarkCircle02Icon;
     case 'error':
-      return AlertTriangle;
+      return Alert01Icon;
     default:
-      return Circle;
+      return CircleIcon;
   }
 }
 
@@ -164,7 +165,10 @@ function InspectorNodeView({ data }: NodeProps<InspectorNode>) {
       />
       <div className="flex items-start gap-2.5">
         <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-md border border-current/15 bg-background/65">
-          <Icon className="size-4" />
+          <HugeiconsIcon
+            className="size-4"
+            icon={Icon}
+          />
         </span>
         <div className="min-w-0 flex-1">
           <div className="truncate font-medium text-foreground">{data.title}</div>
@@ -173,7 +177,10 @@ function InspectorNodeView({ data }: NodeProps<InspectorNode>) {
       </div>
       <div className="mt-3 flex items-center justify-between gap-2 text-xs">
         <span className={cn('inline-flex items-center gap-1.5', STATUS_CLASS[data.status])}>
-          <StatusIcon className={cn('size-3.5', data.status === 'active' && 'animate-pulse')} />
+          <HugeiconsIcon
+            className={cn('size-3.5', data.status === 'active' && 'animate-pulse')}
+            icon={StatusIcon}
+          />
           {data.status}
         </span>
         {data.meta ? <span className="truncate font-mono text-muted-foreground">{data.meta}</span> : null}
@@ -257,7 +264,10 @@ function InspectorControls({
         onClick={() => onFollowChange(!followCurrent)}
         type="button"
       >
-        <Target className="size-3.5" />
+        <HugeiconsIcon
+          className="size-3.5"
+          icon={Target01Icon}
+        />
         {t('web.inspector.followCurrent')}
       </button>
     </div>
@@ -270,7 +280,10 @@ function CurrentStep({ current, t }: { current: InspectorNode | null; t: TFn }) 
   return (
     <div className="flex items-center gap-2 border-border/70 border-b px-4 py-2.5 text-xs">
       <span className={cn('inline-flex items-center gap-1.5', STATUS_CLASS[current.data.status])}>
-        <Icon className={cn('size-3.5', current.data.status === 'active' && 'animate-pulse')} />
+        <HugeiconsIcon
+          className={cn('size-3.5', current.data.status === 'active' && 'animate-pulse')}
+          icon={Icon}
+        />
         {t('web.inspector.current')}
       </span>
       <span className="min-w-0 truncate font-medium">{current.data.title}</span>
@@ -397,7 +410,10 @@ export function AgentLoopInspector({ items }: { items: UIItem[] }) {
       <div className="flex items-center justify-between gap-3 border-border/70 border-b px-4 py-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <Cpu className="size-4 text-muted-foreground" />
+            <HugeiconsIcon
+              className="size-4 text-muted-foreground"
+              icon={CpuIcon}
+            />
             <h2 className="font-semibold text-sm">{t('web.inspector.title')}</h2>
           </div>
           <p className="mt-0.5 truncate text-muted-foreground text-xs">{t('web.inspector.subtitle')}</p>
@@ -429,7 +445,10 @@ export function AgentLoopInspector({ items }: { items: UIItem[] }) {
       <div className="relative min-h-0 flex-1">
         {empty ? (
           <div className="flex h-full flex-col items-center justify-center gap-2 px-8 text-center text-muted-foreground text-sm">
-            <Cpu className="size-8 opacity-45" />
+            <HugeiconsIcon
+              className="size-8 opacity-45"
+              icon={CpuIcon}
+            />
             <p className="font-medium text-foreground">{t('web.inspector.empty')}</p>
             <p className="max-w-72 text-xs">{t('web.inspector.emptyHint')}</p>
           </div>

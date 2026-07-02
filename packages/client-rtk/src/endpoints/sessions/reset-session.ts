@@ -33,7 +33,7 @@ export const resetSessionApi = apiSlice.injectEndpoints({
           uiStreamPatch.undo();
         }
       },
-      invalidatesTags: ['Messages']
+      invalidatesTags: ['Messages', 'Sessions']
     })
   })
 });

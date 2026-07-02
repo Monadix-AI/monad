@@ -4,7 +4,7 @@ import { parseSseFrame, readSseStream, type SseByteReader } from '../src/sse.ts'
 
 const event = {
   id: 'evt_01ABC',
-  sessionId: 'ses_01ABC',
+  transcriptTargetId: 'ses_01ABC',
   type: 'session.updated',
   actorAgentId: null,
   payload: {},

@@ -14,7 +14,8 @@ import type {
   PrincipalId,
   SessionId,
   SessionOrigin,
-  SessionTransport
+  SessionTransport,
+  TranscriptTargetId
 } from '@monad/protocol';
 import type { ChannelAdapter, ChannelAdapterFactory, ChannelLog } from '@monad/sdk-atom';
 import type { EventBus, EventSink } from '@/services/event-bus.ts';
@@ -67,15 +68,20 @@ export interface SessionGateway {
     runOpts?: { transport?: SessionTransport }
   ): Promise<void>;
   /** Clear a session's history (for /reset over a channel). Optional: tests omit the command path. */
-  reset?(args: { id: SessionId }): Promise<{ clearedCount: number }>;
+  reset?(args: { id: TranscriptTargetId }): Promise<{ clearedCount: number }>;
   /** Set the session's shared working folder (for /workdir over a channel). Optional: tests omit it. */
-  setWorkspace?(args: { id: SessionId; cwd: string }): Promise<{ cwd?: string }>;
+  setWorkspace?(args: { id: TranscriptTargetId; cwd: string }): Promise<{ cwd?: string }>;
 }
 
 export interface ChannelLogger {
   info(msg: string): void;
   warn(msg: string): void;
   error(msg: string): void;
+}
+
+function sessionOnlyId(sessionId: TranscriptTargetId, command: string): SessionId {
+  if (sessionId.startsWith('ses_')) return sessionId as SessionId;
+  throw new Error(`${command} is only available in Monad agent sessions`);
 }
 
 export interface ChannelServiceDeps {
@@ -170,10 +176,10 @@ export class ChannelService {
     // Clean up outbound mirrors when sessions are deleted from any client.
     this.controlUnsubscribe = this.deps.bus.subscribeControl((event) => {
       if (event.type === 'session.deleted') {
-        const mirror = this.sessionMirrors.get(event.sessionId);
+        const mirror = this.sessionMirrors.get(event.transcriptTargetId);
         if (mirror) {
           mirror.unsubscribe();
-          this.sessionMirrors.delete(event.sessionId);
+          this.sessionMirrors.delete(event.transcriptTargetId);
         }
       }
     });
@@ -538,18 +544,20 @@ export class ChannelService {
         this.deps.session.reset
           ? this.deps.session.reset({ id: sid })
           : Promise.reject(new Error('reset is unavailable')),
-      compact: (sid) => bundle.compact(sid),
+      compact: (sid) => bundle.compact(sessionOnlyId(sid, 'compact')),
       consolidate: (level?: number) => bundle.consolidate(level),
-      explainBelief: (sid, query) => bundle.explainBelief(sid, query),
+      explainBelief: (sid, query) => bundle.explainBelief(sessionOnlyId(sid, 'belief'), query),
       checkMemory: () => bundle.checkMemory(),
-      listModels: (sid) => bundle.listModels(sid),
-      setModel: (sid, alias) => bundle.setModel(sid, alias),
-      getWorkdir: async (sid) => ({ path: this.deps.store.getSession(sid)?.cwd }),
+      listModels: (sid) => bundle.listModels(sessionOnlyId(sid, 'model')),
+      setModel: (sid, alias) => bundle.setModel(sessionOnlyId(sid, 'model'), alias),
+      getWorkdir: async (sid) => ({
+        path: (this.deps.store.getSession(sid) ?? this.deps.store.getWorkplaceProject(sid))?.cwd
+      }),
       setWorkdir: (sid, path) =>
         this.deps.session.setWorkspace
           ? this.deps.session.setWorkspace({ id: sid, cwd: path }).then((r) => ({ path: r.cwd }))
           : Promise.reject(new Error('setWorkspace is unavailable')),
-      handoff: (sid, initialTask) => bundle.handoff(sid, initialTask),
+      handoff: (sid, initialTask) => bundle.handoff(sessionOnlyId(sid, 'handoff'), initialTask),
       listCommands: async () => bundle.registry.list(bundle.skills(), this.deps.t),
       t: this.deps.t,
       log: bundle.log

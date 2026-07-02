@@ -4,9 +4,20 @@ import type { Session, SessionId, UIItem } from '@monad/protocol';
 import type { ComponentProps, KeyboardEventHandler, Ref } from 'react';
 import type { VirtualListHandle } from '@/components/ui/VirtualList';
 
+import {
+  Activity01Icon,
+  ArrowDown01Icon,
+  ArrowUp01Icon,
+  BoxIcon,
+  Cancel01Icon,
+  CheckIcon,
+  GitBranchIcon,
+  HelpCircleIcon,
+  ShieldQuestionMarkIcon
+} from '@hugeicons/core-free-icons';
+import { HugeiconsIcon } from '@hugeicons/react';
 import { useProvenanceQuery } from '@monad/client-rtk';
 import { Button, cn, ScrollArea, Textarea } from '@monad/ui';
-import { Activity, ArrowDown, ArrowUp, Box, Check, GitBranch, HelpCircle, ShieldAlert, X } from 'lucide-react';
 import { memo, useState } from 'react';
 
 import { useT } from '@/components/I18nProvider';
@@ -22,6 +33,7 @@ import {
 } from '@/features/session/chat-view-items';
 import { MemorySummaryDivider } from '@/features/session/MemorySummaryDivider';
 import { ToolStepView } from '@/features/session/ToolStepView';
+import { renderableIconText } from '@/lib/renderable-icon-text';
 
 export interface SessionCommandMenuItem {
   badge?: string;
@@ -92,13 +104,16 @@ interface SessionRouteProps {
   onStop: () => void;
   onSubmit: () => void;
   onToggleInspector: () => void;
+  onVoiceSettingsClick: () => void;
   onVoiceText: (text: string) => void;
+  onVoiceTranscribe: (audio: Blob) => Promise<string>;
   pendingApprovals: PendingApproval[];
   pendingClarifications: PendingClarification[];
   showInspector: boolean;
   skillMenuOpen: boolean;
   transcriptRef: Ref<VirtualListHandle>;
   value: string;
+  voiceModelConfigured: boolean;
   viewMessages: ViewItem[];
 }
 
@@ -137,13 +152,16 @@ export function SessionRoute({
   onStop,
   onSubmit,
   onToggleInspector,
+  onVoiceSettingsClick,
   onVoiceText,
+  onVoiceTranscribe,
   pendingApprovals,
   pendingClarifications,
   showInspector,
   skillMenuOpen,
   transcriptRef,
   value,
+  voiceModelConfigured,
   viewMessages
 }: SessionRouteProps) {
   const t = useT();
@@ -166,7 +184,10 @@ export function SessionRoute({
           size="sm"
           variant={showInspector ? 'secondary' : 'ghost'}
         >
-          <Activity className="size-3.5" />
+          <HugeiconsIcon
+            className="size-3.5"
+            icon={Activity01Icon}
+          />
           {t('web.inspector.toggle')}
         </Button>
       </div>
@@ -252,7 +273,10 @@ export function SessionRoute({
                 size="sm"
                 variant="secondary"
               >
-                <ArrowDown className="size-3.5" />
+                <HugeiconsIcon
+                  className="size-3.5"
+                  icon={ArrowDown01Icon}
+                />
                 {t('web.chat.pendingActions', {
                   count: pendingApprovals.length + pendingClarifications.length
                 })}
@@ -265,7 +289,10 @@ export function SessionRoute({
                 size="icon"
                 variant="secondary"
               >
-                <ArrowDown className="size-4" />
+                <HugeiconsIcon
+                  className="size-4"
+                  icon={ArrowDown01Icon}
+                />
               </Button>
             ))}
         </div>
@@ -294,7 +321,10 @@ export function SessionRoute({
                 title={t('web.chat.clearQueue')}
                 type="button"
               >
-                <X className="size-3" />
+                <HugeiconsIcon
+                  className="size-3"
+                  icon={Cancel01Icon}
+                />
               </button>
             </div>
           ) : null}
@@ -326,6 +356,11 @@ export function SessionRoute({
                 placeholder={t('web.chat.placeholder')}
                 skillToken={activeInputSkillToken}
                 value={value}
+                voice={{
+                  modelConfigured: voiceModelConfigured,
+                  onSettingsClick: onVoiceSettingsClick,
+                  transcribeAudio: onVoiceTranscribe
+                }}
               />
             </div>
           </div>
@@ -352,7 +387,10 @@ function ApprovalCard({
   return (
     <div className="panel-subtle flex max-w-170 flex-col gap-2 self-start border-warning/40 bg-warning/10 px-4 py-4">
       <div className="flex items-center gap-2 font-medium text-sm text-warning">
-        <ShieldAlert className="size-4" />
+        <HugeiconsIcon
+          className="size-4"
+          icon={ShieldQuestionMarkIcon}
+        />
         {approval.tool === 'fs_path_access' ? (
           t('web.chat.pathAccessTitle')
         ) : (
@@ -376,7 +414,7 @@ function ApprovalCard({
           onClick={() => onApproval(approval, true, 'once')}
           size="sm"
         >
-          <Check /> {t('web.chat.approveOnce')}
+          <HugeiconsIcon icon={CheckIcon} /> {t('web.chat.approveOnce')}
         </Button>
         <Button
           onClick={() => onApproval(approval, true, 'session')}
@@ -399,7 +437,7 @@ function ApprovalCard({
           size="sm"
           variant="outline"
         >
-          <X /> {t('web.chat.deny')}
+          <HugeiconsIcon icon={Cancel01Icon} /> {t('web.chat.deny')}
         </Button>
       </div>
     </div>
@@ -438,19 +476,22 @@ function CommandMenu({
               type="button"
             >
               <span className="flex w-full items-center gap-1.5">
-                {item.icon ? (
+                {item.icon && (item.icon.startsWith('http://') || item.icon.startsWith('https://')) ? (
                   <span className="grid size-5 shrink-0 place-items-center rounded border bg-background text-xs">
-                    {item.icon.startsWith('http://') || item.icon.startsWith('https://') ? (
-                      <span
-                        className="size-full rounded bg-center bg-cover"
-                        style={{ backgroundImage: `url(${item.icon})` }}
-                      />
-                    ) : (
-                      item.icon
-                    )}
+                    <span
+                      className="size-full rounded bg-center bg-cover"
+                      style={{ backgroundImage: `url(${item.icon})` }}
+                    />
+                  </span>
+                ) : renderableIconText(item.icon) ? (
+                  <span className="grid size-5 shrink-0 place-items-center rounded border bg-background text-xs">
+                    {renderableIconText(item.icon)}
                   </span>
                 ) : item.typeBadge === 'Skill' ? (
-                  <Box className="size-3.5 shrink-0 text-muted-foreground" />
+                  <HugeiconsIcon
+                    className="size-3.5 shrink-0 text-muted-foreground"
+                    icon={BoxIcon}
+                  />
                 ) : null}
                 <span className="font-medium font-mono text-xs">{item.label}</span>
                 {item.version ? (
@@ -495,7 +536,10 @@ const SessionLineage = memo(function SessionLineage({
           onClick={() => onSelect(parent.id)}
           type="button"
         >
-          <GitBranch className="size-3" />
+          <HugeiconsIcon
+            className="size-3"
+            icon={GitBranchIcon}
+          />
           <span className="text-muted-foreground/70">{t('web.chat.lineageParent')}</span>
           <span className="max-w-40 truncate font-medium text-foreground">{parent.title}</span>
         </button>
@@ -529,7 +573,10 @@ const ClarifyPrompt = memo(function ClarifyPrompt({
   return (
     <div className="flex max-w-170 flex-col gap-2 self-start rounded-lg border border-info/40 bg-info/10 px-3.5 py-3">
       <div className="flex items-center gap-2 font-medium text-info text-sm">
-        <HelpCircle className="size-4" />
+        <HugeiconsIcon
+          className="size-4"
+          icon={HelpCircleIcon}
+        />
         {t('web.chat.clarifyTitle')}
       </div>
       <p className="whitespace-pre-wrap text-foreground text-sm">{question}</p>
@@ -566,7 +613,10 @@ const ClarifyPrompt = memo(function ClarifyPrompt({
           onClick={() => submit(value)}
           size="sm"
         >
-          <ArrowUp className="size-4" />
+          <HugeiconsIcon
+            className="size-4"
+            icon={ArrowUp01Icon}
+          />
           {t('web.chat.clarifySend')}
         </Button>
       </div>

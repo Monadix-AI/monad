@@ -1,11 +1,20 @@
 import type { ProjectController } from './use-project';
 
+import {
+  profileSelectors,
+  useGetRolesQuery,
+  useListProfilesQuery,
+  useTranscribeAudioMutation
+} from '@monad/client-rtk';
+import { useRouter } from 'next/navigation';
 import { useMemo, useRef, useState } from 'react';
 
 import { mentionToken, parseMentionTokens } from '@/components/MentionText';
+import { studioPath } from '@/features/routes/route-paths';
 import { ComposerShell } from '@/features/session/ComposerShell';
+import { audioBlobToBase64 } from '@/features/session/voice-transcription';
 import { ApprovalStack } from './activity/ApprovalStack';
-import { boxR, mono, sans, softShadow } from './styles';
+import { mono, sans } from './styles';
 
 function activeMention(value: string, caret: number): { query: string; start: number } | null {
   const before = value.slice(0, caret);
@@ -20,7 +29,7 @@ function createMentionChip(target: { id: string; name: string }): HTMLSpanElemen
   chip.dataset.mentionId = target.id;
   chip.dataset.mentionName = target.name;
   chip.className =
-    'mx-0.5 inline-flex max-w-full items-center rounded-md border border-accent-blue/45 bg-accent-blue-soft px-1.5 py-0.5 align-baseline font-medium text-accent-blue text-xs';
+    'mx-1 inline-flex max-w-full items-center rounded-md border border-accent-blue/45 bg-accent-blue-soft px-1.5 py-0.5 align-baseline font-medium text-accent-blue text-xs';
   chip.title = target.id;
   chip.textContent = `@${target.name}`;
   return chip;
@@ -94,6 +103,12 @@ function insertPlainText(text: string): void {
 }
 
 export function Composer({ room }: { room: ProjectController }): React.ReactElement {
+  const router = useRouter();
+  const { data: modelRoles } = useGetRolesQuery(undefined);
+  const { data: profileData } = useListProfilesQuery(undefined);
+  const profiles = profileData ? profileSelectors.selectAll(profileData.profiles) : [];
+  const defaultProfile = profiles.find((profile) => profile.alias === profileData?.defaultAlias);
+  const [transcribeAudio] = useTranscribeAudioMutation();
   const [draft, setDraft] = useState('');
   const [mention, setMention] = useState<{ query: string; start: number } | null>(null);
   const [active, setActive] = useState(0);
@@ -112,8 +127,8 @@ export function Composer({ room }: { room: ProjectController }): React.ReactElem
 
   const syncMention = (value: string, caret: number): void => {
     const m = activeMention(value, caret);
+    if (!mention || !m || mention.start !== m.start) setActive(0);
     setMention(m);
-    setActive(0);
   };
 
   const syncFromEditor = (): void => {
@@ -177,9 +192,7 @@ export function Composer({ room }: { room: ProjectController }): React.ReactElem
     <div
       style={{
         flex: 'none',
-        position: 'relative',
-        borderTop: `1px solid ${'var(--border)'}`,
-        background: 'var(--muted)'
+        position: 'relative'
       }}
     >
       <ApprovalStack room={room} />
@@ -202,13 +215,14 @@ export function Composer({ room }: { room: ProjectController }): React.ReactElem
                 }
               : undefined
           }
+          controls={{ access: false, context: false, model: false, submit: true, voice: true }}
           disabled={submitting}
           editorSlot={
             // biome-ignore lint/a11y/useSemanticElements: contenteditable is required for inline atomic mention chips.
             <div
               aria-label="Message agents"
               aria-multiline
-              className="max-h-45 min-h-21 overflow-y-auto px-6 pt-6 pb-3 text-[15px] leading-relaxed outline-none empty:before:text-muted-foreground empty:before:content-[attr(data-placeholder)]"
+              className="max-h-40 min-h-16 overflow-y-auto px-4 pt-3.5 pb-2 text-[15px] leading-relaxed outline-none empty:before:text-muted-foreground empty:before:content-[attr(data-placeholder)]"
               contentEditable={!submitting}
               data-placeholder="Ask for follow-up changes"
               onBlur={() => setMention(null)}
@@ -264,17 +278,14 @@ export function Composer({ room }: { room: ProjectController }): React.ReactElem
           mentionMenu={
             menuOpen ? (
               <div
+                className="glass-surface"
                 style={{
                   position: 'absolute',
                   left: 18,
                   bottom: 10,
                   minWidth: 180,
-                  border: `1px solid ${'var(--border)'}`,
-                  borderRadius: boxR,
-                  background: 'var(--card)',
-                  boxShadow: softShadow,
                   overflow: 'hidden',
-                  zIndex: 8
+                  zIndex: 60
                 }}
               >
                 <div
@@ -303,13 +314,13 @@ export function Composer({ room }: { room: ProjectController }): React.ReactElem
                       width: '100%',
                       textAlign: 'left',
                       border: 'none',
-                      cursor: 'pointer',
                       fontFamily: sans,
                       fontSize: 14,
-                      fontWeight: i === active ? 600 : 500,
+                      fontWeight: 500,
                       padding: '6px 10px',
-                      color: 'var(--foreground)',
-                      background: i === active ? 'var(--accent-blue-soft)' : 'transparent'
+                      color: i === active ? 'var(--accent-foreground)' : 'var(--foreground)',
+                      background:
+                        i === active ? 'color-mix(in srgb, var(--accent-blue) 30%, var(--card))' : 'transparent'
                     }}
                     type="button"
                   >
@@ -339,6 +350,16 @@ export function Composer({ room }: { room: ProjectController }): React.ReactElem
           }}
           placeholder="Ask for follow-up changes"
           value={draft}
+          voice={{
+            modelConfigured: Boolean(
+              modelRoles?.transcription && defaultProfile?.routes.chat.provider && defaultProfile.routes.chat.modelId
+            ),
+            onSettingsClick: () => router.push(studioPath('models')),
+            transcribeAudio: async (audio) => {
+              const body = await audioBlobToBase64(audio);
+              return (await transcribeAudio(body).unwrap()).text;
+            }
+          }}
         />
       </div>
     </div>

@@ -63,7 +63,6 @@ export function WorkOutput({
           alignItems: 'center',
           gap: 8,
           padding: '3px 6px',
-          cursor: 'pointer',
           textAlign: 'left'
         }}
         title={expanded ? 'Hide details' : 'Show details'}
@@ -113,7 +112,6 @@ export function WorkOutput({
                 borderRadius: 999,
                 background: follow ? 'var(--accent-blue-soft)' : 'transparent',
                 color: follow ? 'var(--accent-blue)' : 'var(--muted-foreground)',
-                cursor: 'pointer',
                 fontFamily: sans,
                 fontSize: 11,
                 fontWeight: 600,

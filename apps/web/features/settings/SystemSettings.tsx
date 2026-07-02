@@ -1,6 +1,19 @@
 'use client';
 
 import {
+  Alert01Icon,
+  Cancel01Icon,
+  CheckIcon,
+  Delete02Icon,
+  FileCodeIcon,
+  HandIcon,
+  LoaderPinwheelIcon,
+  PowerIcon,
+  RotateLeft01Icon,
+  SquareArrowUp01Icon
+} from '@hugeicons/core-free-icons';
+import { HugeiconsIcon } from '@hugeicons/react';
+import {
   useDeleteSessionMutation,
   useGetDeveloperQuery,
   useGetHealthQuery,
@@ -11,19 +24,6 @@ import {
   useSetStartupMutation
 } from '@monad/client-rtk';
 import { Badge, Button, ScrollArea, Separator, Switch } from '@monad/ui';
-import {
-  AlertTriangle,
-  ArrowUpCircle,
-  Check,
-  Code2,
-  Hand,
-  Loader2,
-  Power,
-  RefreshCcw,
-  RotateCcw,
-  Trash2,
-  X
-} from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import { useT } from '@/components/I18nProvider';
@@ -94,7 +94,10 @@ export function SystemSettings({ onClose }: Props) {
       <div className="flex min-h-full flex-col">
         <div className="flex items-center justify-between border-b px-6 py-4">
           <div className="flex items-center gap-2">
-            <RefreshCcw className="size-4 text-muted-foreground" />
+            <HugeiconsIcon
+              className="size-4 text-muted-foreground"
+              icon={RotateLeft01Icon}
+            />
             <span className="font-semibold text-sm">{t('web.settings.system')}</span>
           </div>
           <Button
@@ -104,7 +107,7 @@ export function SystemSettings({ onClose }: Props) {
             size="icon"
             variant="ghost"
           >
-            <X />
+            <HugeiconsIcon icon={Cancel01Icon} />
           </Button>
         </div>
 
@@ -114,7 +117,10 @@ export function SystemSettings({ onClose }: Props) {
             <h3 className="font-semibold text-sm">{t('web.settings.system.version')}</h3>
             <div className="flex items-center gap-3">
               {isLoading ? (
-                <Loader2 className="size-4 animate-spin text-muted-foreground" />
+                <HugeiconsIcon
+                  className="size-4 animate-spin text-muted-foreground"
+                  icon={LoaderPinwheelIcon}
+                />
               ) : (
                 <>
                   <span className="font-mono text-sm">{version}</span>
@@ -123,7 +129,10 @@ export function SystemSettings({ onClose }: Props) {
                       className="gap-1 text-xs"
                       variant="outline"
                     >
-                      <ArrowUpCircle className="size-3" />
+                      <HugeiconsIcon
+                        className="size-3"
+                        icon={SquareArrowUp01Icon}
+                      />
                       {t('web.settings.system.updateAvailable', { version: latestVersion })}
                     </Badge>
                   ) : (
@@ -131,7 +140,10 @@ export function SystemSettings({ onClose }: Props) {
                       className="gap-1 text-xs"
                       variant="secondary"
                     >
-                      <Check className="size-3" />
+                      <HugeiconsIcon
+                        className="size-3"
+                        icon={CheckIcon}
+                      />
                       {t('web.settings.system.upToDate')}
                     </Badge>
                   )}
@@ -152,7 +164,10 @@ export function SystemSettings({ onClose }: Props) {
             <h3 className="font-semibold text-sm">{t('web.settings.system.developer')}</h3>
             <div className="flex items-center justify-between gap-4 rounded-md border px-3 py-2.5">
               <div className="flex min-w-0 items-start gap-2">
-                <Code2 className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
+                <HugeiconsIcon
+                  className="mt-0.5 size-3.5 shrink-0 text-muted-foreground"
+                  icon={FileCodeIcon}
+                />
                 <div className="flex min-w-0 flex-col gap-0.5">
                   <span className="text-sm">{t('web.settings.system.developerMode')}</span>
                   <span className="text-muted-foreground text-xs">{t('web.settings.system.developerModeDesc')}</span>
@@ -178,7 +193,10 @@ export function SystemSettings({ onClose }: Props) {
             <h3 className="font-semibold text-sm">{t('web.settings.system.startup')}</h3>
             <div className="flex items-center justify-between gap-4 rounded-md border px-3 py-2.5">
               <div className="flex min-w-0 items-start gap-2">
-                <Power className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
+                <HugeiconsIcon
+                  className="mt-0.5 size-3.5 shrink-0 text-muted-foreground"
+                  icon={PowerIcon}
+                />
                 <div className="flex min-w-0 flex-col gap-0.5">
                   <span className="text-sm">{t('web.settings.system.launchAtLogin')}</span>
                   <span className="text-muted-foreground text-xs">
@@ -203,7 +221,10 @@ export function SystemSettings({ onClose }: Props) {
             <h3 className="font-semibold text-sm">{t('web.settings.system.interactiveCursor')}</h3>
             <div className="flex items-center justify-between gap-4 rounded-md border px-3 py-2.5">
               <div className="flex min-w-0 items-start gap-2">
-                <Hand className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
+                <HugeiconsIcon
+                  className="mt-0.5 size-3.5 shrink-0 text-muted-foreground"
+                  icon={HandIcon}
+                />
                 <div className="flex min-w-0 flex-col gap-0.5">
                   <span className="text-sm">{t('web.settings.system.interactiveCursor')}</span>
                   <span className="text-muted-foreground text-xs">
@@ -242,14 +263,23 @@ export function SystemSettings({ onClose }: Props) {
                 >
                   {usageResetDone ? (
                     <>
-                      <Check className="size-3.5" />
+                      <HugeiconsIcon
+                        className="size-3.5"
+                        icon={CheckIcon}
+                      />
                       {t('web.settings.system.done')}
                     </>
                   ) : isResettingUsage ? (
-                    <Loader2 className="size-3.5 animate-spin" />
+                    <HugeiconsIcon
+                      className="size-3.5 animate-spin"
+                      icon={LoaderPinwheelIcon}
+                    />
                   ) : (
                     <>
-                      <RotateCcw className="size-3.5" />
+                      <HugeiconsIcon
+                        className="size-3.5"
+                        icon={RotateLeft01Icon}
+                      />
                       {t('web.settings.system.reset')}
                     </>
                   )}
@@ -273,14 +303,23 @@ export function SystemSettings({ onClose }: Props) {
                 >
                   {sessionsCleared ? (
                     <>
-                      <Check className="size-3.5" />
+                      <HugeiconsIcon
+                        className="size-3.5"
+                        icon={CheckIcon}
+                      />
                       {t('web.settings.system.done')}
                     </>
                   ) : clearingAllSessions ? (
-                    <Loader2 className="size-3.5 animate-spin" />
+                    <HugeiconsIcon
+                      className="size-3.5 animate-spin"
+                      icon={LoaderPinwheelIcon}
+                    />
                   ) : (
                     <>
-                      <Trash2 className="size-3.5" />
+                      <HugeiconsIcon
+                        className="size-3.5"
+                        icon={Delete02Icon}
+                      />
                       {t('web.settings.system.clearSessions')}
                     </>
                   )}
@@ -289,7 +328,10 @@ export function SystemSettings({ onClose }: Props) {
 
               {/* CLI-only operations notice */}
               <div className="flex items-start gap-2 rounded-md border border-dashed px-3 py-2.5 text-muted-foreground">
-                <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+                <HugeiconsIcon
+                  className="mt-0.5 size-3.5 shrink-0"
+                  icon={Alert01Icon}
+                />
                 <p className="text-xs">{t('web.settings.system.cliOnlyHint')}</p>
               </div>
             </div>

@@ -1,7 +1,8 @@
 import type { CompactCommandViewItem } from './chat-view-items';
 
+import { BookOpenTextIcon } from '@hugeicons/core-free-icons';
+import { HugeiconsIcon } from '@hugeicons/react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@monad/ui';
-import { BookOpenText } from 'lucide-react';
 import { memo } from 'react';
 
 import { useT } from '@/components/I18nProvider';
@@ -29,7 +30,10 @@ export const MemorySummaryDivider = memo(function MemorySummaryDivider({
         <span className="font-medium text-muted-foreground text-xs">{label}</span>
         {pending ? (
           <div className="flex size-8 items-center justify-center rounded-full border border-border/80 bg-background text-muted-foreground shadow-sm">
-            <BookOpenText className="size-3.5 animate-pulse" />
+            <HugeiconsIcon
+              className="size-3.5 animate-pulse"
+              icon={BookOpenTextIcon}
+            />
           </div>
         ) : item ? (
           <Tooltip>
@@ -39,7 +43,10 @@ export const MemorySummaryDivider = memo(function MemorySummaryDivider({
                 className="flex size-8 items-center justify-center rounded-full border border-border/80 bg-background text-muted-foreground shadow-sm transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 type="button"
               >
-                <BookOpenText className="size-3.5" />
+                <HugeiconsIcon
+                  className="size-3.5"
+                  icon={BookOpenTextIcon}
+                />
               </button>
             </TooltipTrigger>
             <TooltipContent className="max-w-md whitespace-pre-wrap text-left leading-relaxed">

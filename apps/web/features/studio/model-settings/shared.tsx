@@ -2,9 +2,10 @@
 
 import type { CredentialView, ModelPrice } from '@monad/protocol';
 
+import { ArrowDownToLineIcon, ArrowUpFromLineIcon, DatabaseIcon } from '@hugeicons/core-free-icons';
+import { HugeiconsIcon } from '@hugeicons/react';
 import { ModelProviderType } from '@monad/protocol';
 import { cn, Tooltip, TooltipContent, TooltipTrigger } from '@monad/ui';
-import { ArrowDownToLine, ArrowUpFromLine, Database } from 'lucide-react';
 
 export interface AddForm {
   type: ModelProviderType;
@@ -58,13 +59,18 @@ export function ModelPriceTag({
   const cache = [price.cacheRead, price.cacheWrite].filter(present).map(usd).join('/');
   const items = [
     price.input !== undefined
-      ? { icon: ArrowDownToLine, label: 'Input', value: usd(price.input), title: `Input ${usd(price.input)} /1M` }
+      ? { icon: ArrowDownToLineIcon, label: 'Input', value: usd(price.input), title: `Input ${usd(price.input)} /1M` }
       : null,
     price.output !== undefined
-      ? { icon: ArrowUpFromLine, label: 'Output', value: usd(price.output), title: `Output ${usd(price.output)} /1M` }
+      ? {
+          icon: ArrowUpFromLineIcon,
+          label: 'Output',
+          value: usd(price.output),
+          title: `Output ${usd(price.output)} /1M`
+        }
       : null,
-    cache ? { icon: Database, label: 'Cached', value: cache, title: `Cached ${cache} /1M` } : null
-  ].filter((item): item is { icon: typeof ArrowDownToLine; label: string; title: string; value: string } =>
+    cache ? { icon: DatabaseIcon, label: 'Cached', value: cache, title: `Cached ${cache} /1M` } : null
+  ].filter((item): item is { icon: typeof ArrowDownToLineIcon; label: string; title: string; value: string } =>
     Boolean(item)
   );
 
@@ -80,7 +86,10 @@ export function ModelPriceTag({
                 orientation === 'vertical' ? 'flex-col items-start gap-1' : 'h-4 items-center gap-1'
               )}
             >
-              <Icon className="size-3 text-muted-foreground/70" />
+              <HugeiconsIcon
+                className="size-3 text-muted-foreground/70"
+                icon={Icon}
+              />
               <span className="truncate">
                 {value}
                 <span className="text-muted-foreground/60"> /1M</span>
@@ -113,7 +122,10 @@ export function ModelPriceTag({
       {items.map(({ icon: Icon, label, title, value }) => {
         const content = (
           <span className="inline-flex h-4 min-w-0 items-center gap-1">
-            <Icon className="size-3 text-muted-foreground/70" />
+            <HugeiconsIcon
+              className="size-3 text-muted-foreground/70"
+              icon={Icon}
+            />
             <span className="truncate">
               {value}
               <span className="text-muted-foreground/60"> /1M</span>

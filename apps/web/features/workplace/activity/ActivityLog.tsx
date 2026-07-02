@@ -138,7 +138,6 @@ function ActivityRowView({
                 fontSize: 12,
                 fontWeight: 600,
                 padding: '5px 10px',
-                cursor: input ? 'pointer' : 'default',
                 opacity: input ? 1 : 0.55
               }}
               type="button"
@@ -156,8 +155,7 @@ function ActivityRowView({
                 fontFamily: sans,
                 fontSize: 12,
                 fontWeight: 600,
-                padding: '5px 10px',
-                cursor: 'pointer'
+                padding: '5px 10px'
               }}
               type="button"
             >
@@ -232,8 +230,7 @@ export function ActivityLog({ room }: { room: ProjectCanvas }): React.ReactEleme
                 background: active ? 'var(--accent-blue-soft)' : 'var(--card)',
                 color: active ? 'var(--accent-blue)' : 'var(--muted-foreground)',
                 borderRadius: 999,
-                padding: '4px 11px',
-                cursor: 'pointer'
+                padding: '4px 11px'
               }}
               type="button"
             >

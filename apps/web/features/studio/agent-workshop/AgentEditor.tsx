@@ -2,6 +2,8 @@
 
 import type { AgentId } from '@monad/protocol';
 
+import { CheckIcon, LoaderPinwheelIcon } from '@hugeicons/core-free-icons';
+import { HugeiconsIcon } from '@hugeicons/react';
 import {
   useGetAgentPromptQuery,
   useGetAgentQuery,
@@ -9,7 +11,6 @@ import {
   useUpdateAgentMutation
 } from '@monad/client-rtk';
 import { Button } from '@monad/ui';
-import { Check, Loader2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import { useT } from '@/components/I18nProvider';
@@ -82,7 +83,10 @@ export function AgentEditor({ agentId }: { agentId: AgentId; onClose: () => void
   if (isLoading || !agent) {
     return (
       <section className="flex min-w-0 flex-1 items-center justify-center">
-        <Loader2 className="size-4 animate-spin text-muted-foreground" />
+        <HugeiconsIcon
+          className="size-4 animate-spin text-muted-foreground"
+          icon={LoaderPinwheelIcon}
+        />
       </section>
     );
   }
@@ -104,7 +108,14 @@ export function AgentEditor({ agentId }: { agentId: AgentId; onClose: () => void
               onClick={() => void handleSave()}
               size="sm"
             >
-              {saving || savingPrompt ? <Loader2 className="animate-spin" /> : <Check />}
+              {saving || savingPrompt ? (
+                <HugeiconsIcon
+                  className="animate-spin"
+                  icon={LoaderPinwheelIcon}
+                />
+              ) : (
+                <HugeiconsIcon icon={CheckIcon} />
+              )}
               {t('web.common.save')}
             </Button>
           </>

@@ -1,8 +1,9 @@
 'use client';
 
+import { FolderOpenIcon } from '@hugeicons/core-free-icons';
+import { HugeiconsIcon } from '@hugeicons/react';
 import { usePickDirectoryMutation } from '@monad/client-rtk';
 import { Button, Input, Label } from '@monad/ui';
-import { FolderOpen } from 'lucide-react';
 import { useState } from 'react';
 
 import { useT } from '@/components/I18nProvider';
@@ -105,7 +106,10 @@ export function NewProjectDialog({ open, onClose, onCreate }: NewProjectDialogPr
                 type="button"
                 variant="outline"
               >
-                <FolderOpen className="size-4" />
+                <HugeiconsIcon
+                  className="size-4"
+                  icon={FolderOpenIcon}
+                />
                 {t('web.workplace.workdirBrowse')}
               </Button>
             </div>

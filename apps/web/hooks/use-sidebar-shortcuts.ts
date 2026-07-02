@@ -1,15 +1,15 @@
 import { matchesKeyboardEvent } from '@tanstack/hotkeys';
 import { useKeyHold } from '@tanstack/react-hotkeys';
-import { type Dispatch, type SetStateAction, useEffect, useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 
 import { isApplePlatform } from '@/lib/keyboard';
+import { useWorkspaceShellStore } from '@/lib/workspace-shell-store';
 
 interface UseSidebarShortcutsArgs {
   sidebarShortcutActions: (() => void)[];
   showSettings: boolean;
   toggleSettings: () => void;
-  setSidebarAutoReveal: Dispatch<SetStateAction<boolean>>;
-  setSidebarCollapsed: Dispatch<SetStateAction<boolean>>;
+  revealSidebar?: () => void;
 }
 
 export const settingsHotkey = 'Mod+,' as const;
@@ -31,8 +31,7 @@ export function createSidebarShortcutHandler({
   sidebarShortcutActions,
   showSettings,
   toggleSettings,
-  setSidebarAutoReveal,
-  setSidebarCollapsed,
+  revealSidebar,
   applePlatform
 }: UseSidebarShortcutsArgs & { applePlatform: boolean }) {
   const platform = applePlatform ? 'mac' : 'windows';
@@ -52,24 +51,18 @@ export function createSidebarShortcutHandler({
     if (!action) return;
 
     event.preventDefault();
-    setSidebarAutoReveal(false);
-    setSidebarCollapsed(false);
+    revealSidebar?.();
     action();
   };
 }
 
 // Global primary-modifier shortcuts: `⌘,` toggles settings, `⌘1..9` jumps to a sidebar pile.
 // Holding the modifier reveals the numbered badges so the bindings are discoverable.
-export function useSidebarShortcuts({
-  sidebarShortcutActions,
-  showSettings,
-  toggleSettings,
-  setSidebarAutoReveal,
-  setSidebarCollapsed
-}: UseSidebarShortcutsArgs) {
+export function useSidebarShortcuts({ sidebarShortcutActions, showSettings, toggleSettings }: UseSidebarShortcutsArgs) {
   const applePlatform = useMemo(() => isApplePlatform(), []);
   const shortcutModifierLabel = applePlatform ? '⌘' : 'Ctrl';
   const showSidebarShortcutBadges = useKeyHold(applePlatform ? 'Meta' : 'Control');
+  const revealSidebar = useWorkspaceShellStore((state) => state.revealSidebar);
 
   const shortcutHandler = useMemo(
     () =>
@@ -77,11 +70,10 @@ export function useSidebarShortcuts({
         sidebarShortcutActions,
         showSettings,
         toggleSettings,
-        setSidebarAutoReveal,
-        setSidebarCollapsed,
+        revealSidebar,
         applePlatform
       }),
-    [sidebarShortcutActions, showSettings, toggleSettings, setSidebarAutoReveal, setSidebarCollapsed, applePlatform]
+    [sidebarShortcutActions, showSettings, toggleSettings, revealSidebar, applePlatform]
   );
 
   useEffect(() => {

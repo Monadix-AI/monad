@@ -2,9 +2,16 @@
 
 import type { Agent } from '@monad/protocol';
 
+import {
+  ArrowRight01Icon,
+  BotIcon,
+  LoaderPinwheelIcon,
+  NeuralNetworkIcon,
+  UserGroupIcon
+} from '@hugeicons/core-free-icons';
+import { HugeiconsIcon } from '@hugeicons/react';
 import { useListAgentsQuery } from '@monad/client-rtk';
 import { Badge, ScrollArea } from '@monad/ui';
-import { ArrowRight, Bot, Loader2, Network, Users } from 'lucide-react';
 
 import { useT } from '@/components/I18nProvider';
 
@@ -26,18 +33,29 @@ export function Orchestration() {
     <ScrollArea className="flex-1">
       <div className="mx-auto flex max-w-3xl flex-col gap-6 p-5">
         <header className="flex items-start gap-3">
-          <Network className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+          <HugeiconsIcon
+            className="mt-0.5 size-4 shrink-0 text-muted-foreground"
+            icon={NeuralNetworkIcon}
+          />
           <div className="flex flex-col gap-1">
             <h2 className="font-medium text-base">{t('web.studio.orchestrationTitle')}</h2>
             <p className="text-muted-foreground text-sm">{t('web.studio.orchestrationDesc')}</p>
           </div>
         </header>
 
-        {isLoading && <Loader2 className="size-4 animate-spin text-muted-foreground" />}
+        {isLoading && (
+          <HugeiconsIcon
+            className="size-4 animate-spin text-muted-foreground"
+            icon={LoaderPinwheelIcon}
+          />
+        )}
 
         {!isLoading && targets.length === 0 && (
           <div className="mx-auto flex max-w-xs flex-col items-center gap-3 py-16 text-center">
-            <Network className="size-8 text-muted-foreground/60" />
+            <HugeiconsIcon
+              className="size-8 text-muted-foreground/60"
+              icon={NeuralNetworkIcon}
+            />
             <p className="font-medium text-sm">{t('web.studio.orchestrationEmpty')}</p>
             <p className="text-muted-foreground text-sm">{t('web.studio.orchestrationEmptyHint')}</p>
           </div>
@@ -47,9 +65,15 @@ export function Orchestration() {
           <div className="flex gap-6">
             {/* hub: any agent is a potential caller */}
             <div className="flex shrink-0 flex-col items-center gap-1.5 self-start rounded-lg border bg-card px-4 py-3">
-              <Users className="size-5 text-primary" />
+              <HugeiconsIcon
+                className="size-5 text-primary"
+                icon={UserGroupIcon}
+              />
               <span className="font-medium text-sm">{t('web.studio.orchestrationAnyAgent')}</span>
-              <ArrowRight className="size-4 text-muted-foreground" />
+              <HugeiconsIcon
+                className="size-4 text-muted-foreground"
+                icon={ArrowRight01Icon}
+              />
             </div>
 
             {/* spokes: each delegatable target */}
@@ -60,7 +84,10 @@ export function Orchestration() {
                   key={a.id}
                 >
                   <div className="flex items-center gap-2">
-                    <Bot className="size-4 text-muted-foreground" />
+                    <HugeiconsIcon
+                      className="size-4 text-muted-foreground"
+                      icon={BotIcon}
+                    />
                     <span className="font-medium text-sm">{a.name}</span>
                     {a.visibility?.public && <Badge variant="secondary">{t('web.studio.badgePublic')}</Badge>}
                     <span className="ml-auto font-mono text-[11px] text-muted-foreground">

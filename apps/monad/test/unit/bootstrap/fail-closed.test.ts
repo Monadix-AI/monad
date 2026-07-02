@@ -6,12 +6,13 @@
 import type { MonadConfig } from '@monad/home';
 
 import { afterEach, beforeEach, expect, test } from 'bun:test';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
+import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createDefaultConfig } from '@monad/home';
+import { createDefaultConfig, pathsForHome } from '@monad/home';
 
-import { finalizeSandboxLauncher } from '@/bootstrap/sandbox.ts';
+import { createSandbox, finalizeSandboxLauncher } from '@/bootstrap/sandbox.ts';
 import { createTlsCert } from '@/bootstrap/tls.ts';
 import {
   clearSandboxLaunchers,
@@ -121,4 +122,30 @@ test('finalizeSandboxLauncher accepts an available launcher without opt-in', () 
     'builtin'
   );
   expect(() => finalizeSandboxLauncher(sandboxConfig({ confine: true }))).not.toThrow();
+});
+
+test('createSandbox boot sweep keeps Workplace Project sandbox roots alive', async () => {
+  const home = await mkdtemp(join(tmpdir(), 'monad-sandbox-bootstrap-'));
+  const paths = pathsForHome(home);
+  const cfg = createDefaultConfig('prn_test', 'Test');
+  cfg.agent.sandbox.mode = 'ephemeral';
+  cfg.agent.sandbox.confine = false;
+
+  const sandboxDir = join(paths.cache, 'sandboxes');
+  await mkdir(join(sandboxDir, 'ses_live'), { recursive: true });
+  await mkdir(join(sandboxDir, 'ses_project'), { recursive: true });
+  await mkdir(join(sandboxDir, 'ses_dead'), { recursive: true });
+
+  try {
+    await createSandbox(cfg, paths, {
+      listSessions: () => [{ id: 'ses_live' }],
+      listWorkplaceProjects: () => [{ id: 'ses_project' }]
+    } as never);
+
+    expect(existsSync(join(sandboxDir, 'ses_live'))).toBe(true);
+    expect(existsSync(join(sandboxDir, 'ses_project'))).toBe(true);
+    expect(existsSync(join(sandboxDir, 'ses_dead'))).toBe(false);
+  } finally {
+    await rm(home, { recursive: true, force: true });
+  }
 });

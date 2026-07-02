@@ -2,6 +2,8 @@
 
 import type { SetSandboxSettingsRequest } from '@monad/protocol';
 
+import { CheckIcon, LoaderPinwheelIcon } from '@hugeicons/core-free-icons';
+import { HugeiconsIcon } from '@hugeicons/react';
 import { useGetSandboxQuery, useSetSandboxMutation } from '@monad/client-rtk';
 import {
   Button,
@@ -14,7 +16,6 @@ import {
   SelectValue,
   Switch
 } from '@monad/ui';
-import { Check, Loader2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import { useT } from '@/components/I18nProvider';
@@ -89,7 +90,10 @@ export function SandboxDefaults() {
   if (isLoading) {
     return (
       <div className="flex flex-1 items-center justify-center">
-        <Loader2 className="size-4 animate-spin text-muted-foreground" />
+        <HugeiconsIcon
+          className="size-4 animate-spin text-muted-foreground"
+          icon={LoaderPinwheelIcon}
+        />
       </div>
     );
   }
@@ -200,11 +204,21 @@ export function SandboxDefaults() {
             disabled={saving}
             onClick={handleSave}
           >
-            {saving ? <Loader2 className="size-3.5 animate-spin" /> : t('web.common.save')}
+            {saving ? (
+              <HugeiconsIcon
+                className="size-3.5 animate-spin"
+                icon={LoaderPinwheelIcon}
+              />
+            ) : (
+              t('web.common.save')
+            )}
           </Button>
           {saved && (
             <span className="flex items-center gap-1 text-muted-foreground text-xs">
-              <Check className="size-3.5 text-primary" />
+              <HugeiconsIcon
+                className="size-3.5 text-primary"
+                icon={CheckIcon}
+              />
               {t('web.studio.sandboxSaved')}
             </span>
           )}

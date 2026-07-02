@@ -17,3 +17,4 @@ export { useSetProviderMutation } from './providers/set-provider.ts';
 export { useGetRolesQuery } from './roles/get-roles.ts';
 export { useSetRolesMutation } from './roles/set-roles.ts';
 export { testConnectionApi as modelApi, useTestConnectionMutation } from './test-connection.ts';
+export { useTranscribeAudioMutation } from './transcription/transcribe-audio.ts';
