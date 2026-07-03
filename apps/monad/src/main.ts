@@ -20,7 +20,6 @@ import type { McpServerStatus, PrincipalId, SessionId } from '@monad/protocol';
 import type { AtomConflict } from '@/atoms/resolve.ts';
 import type { Tool } from '@/capabilities/tools/types.ts';
 
-import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   computeInitStatus,
@@ -50,16 +49,14 @@ import { ReloadService } from '@/reload/index.ts';
 import { ConfigBus } from '@/services/config-bus.ts';
 import { DelegationService } from '@/services/delegation/delegation.ts';
 import { createPeerDelegateTool, type PeerDelegateTarget } from '@/services/delegation/peer-delegate.ts';
-import { configureDeveloperLogTransport, developerLogsDir } from '@/services/developer-log.ts';
+import { configureDeveloperLogTransport } from '@/services/developer-log.ts';
 import { EventBus } from '@/services/event-bus.ts';
 import { AgentPersonaService, isToolExposed } from '@/services/generation/agent-persona.ts';
 import { I18nService, loadInstalledLocalePacks } from '@/services/i18n.ts';
-import { sweepStaleLogs } from '@/services/log-maintenance.ts';
 import { createGraphQueryTools } from '@/services/memory/graph/query-tools.ts';
 import { createMemoryAgentTools } from '@/services/memory/tools.ts';
 import { RoundCache } from '@/services/round-cache.ts';
 import { ScheduleService } from '@/services/scheduling/schedule.ts';
-import { ensureDevProvider } from '@/store/home/dev-init.ts';
 import { resolveSkillState } from '@/store/home/skills.ts';
 import { loadWorkspacePromptSlots, WORKSPACE_CONTEXT_FILES } from '@/store/home/workspace-context.ts';
 import { runAcpBridge } from '@/transports/acp/launch.ts';
@@ -83,6 +80,11 @@ import { configureDaemonLogging, readDaemonRuntimeFlags } from './bootstrap/runt
 import { createSandbox, finalizeSandboxLauncher } from './bootstrap/sandbox.ts';
 import { serveDaemon } from './bootstrap/serve.ts';
 import { createSkillSubsystem } from './bootstrap/skills.ts';
+import {
+  prependMonadBinToPath,
+  seedDevProviderIfNeeded,
+  startStartupHousekeeping
+} from './bootstrap/startup-housekeeping.ts';
 import { createTlsCert } from './bootstrap/tls.ts';
 import { configureToolBackends } from './bootstrap/tool-backends.ts';
 import { withCredentialsProtection, withSandboxConstraints } from './bootstrap/tool-protection.ts';
@@ -130,19 +132,14 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
 
   await initMonadHome(paths);
 
-  // Prepend ~/.monad/bin to PATH so tools installed during `monad init` are found by MCP spawns.
-  // No detection or download here — installation happens interactively via POST /init/env-deps.
-  if (existsSync(paths.bin)) {
-    const pathSep = process.platform === 'win32' ? ';' : ':';
-    Bun.env.PATH = `${paths.bin}${pathSep}${Bun.env.PATH ?? ''}`;
-  }
-
-  if ((DEV_MODE || DEV_SILENT) && !USE_MOCK) {
-    const seeded = await ensureDevProvider(paths);
-    if (seeded.seeded) logger.info(`dev: seeded provider from config.init.json (model ${seeded.model})`);
-    else if (seeded.reason === 'no-key') logger.warn('dev: no API key in config.init.json — complete setup at /init');
-    else if (seeded.reason === 'no-model') logger.warn('dev: no model in config.init.json — complete setup at /init');
-  }
+  prependMonadBinToPath(paths);
+  await seedDevProviderIfNeeded({
+    paths,
+    useMock: USE_MOCK,
+    devMode: DEV_MODE,
+    devSilent: DEV_SILENT,
+    logger
+  });
 
   // KV server + SQLite store with a startup repair pass (see ./bootstrap/data-layer.ts).
   const { kv, store } = await createDataLayer({ paths, devMode: DEV_MODE || DEV_SILENT });
@@ -182,41 +179,7 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
   const bus = new EventBus();
   const cache = new RoundCache();
   const { oversight, clarify, reloadApprovalPolicy } = await createInterruptServices({ paths, cfg, store, bus });
-  // Kill any adapter processes that were live when the daemon last stopped and mark their rows evicted.
-  store.reconcileOrphanedDelegates();
-  // Clean up evicted delegate rows older than the retention window (7 days).
-  const pruned = store.pruneOldAcpDelegates();
-  if (pruned > 0) logger.info({ pruned }, 'pruned old acp_delegates rows');
-  const delegatePruneTimer = setInterval(
-    () => {
-      const n = store.pruneOldAcpDelegates();
-      if (n > 0) logger.info({ pruned: n }, 'pruned old acp_delegates rows');
-    },
-    24 * 60 * 60 * 1000
-  );
-  delegatePruneTimer.unref();
-  // Bound native_cli_sessions growth (one row per CLI launch, up to 256 KB snapshot each).
-  const prunedNativeCli = store.pruneExitedNativeCliSessions();
-  if (prunedNativeCli > 0) logger.info({ pruned: prunedNativeCli }, 'pruned old native_cli_sessions rows');
-  const nativeCliPruneTimer = setInterval(
-    () => {
-      const n = store.pruneExitedNativeCliSessions();
-      if (n > 0) logger.info({ pruned: n }, 'pruned old native_cli_sessions rows');
-    },
-    24 * 60 * 60 * 1000
-  );
-  nativeCliPruneTimer.unref();
-  // Sweep stale on-disk logs the daemon owns: the daily temp-dir debug logs and per-session
-  // developer jsonl. (daemon.log itself is rotated by the CLI at its open boundary — its fd is
-  // inherited here and can't be rotated mid-run.) One sweep at startup, then daily.
-  const logsDir = developerLogsDir(paths);
-  const runLogSweep = () =>
-    void sweepStaleLogs({ logsDir }).then((n) => {
-      if (n > 0) logger.info({ removed: n }, 'swept stale logs');
-    });
-  runLogSweep();
-  const logSweepTimer = setInterval(runLogSweep, 24 * 60 * 60 * 1000);
-  logSweepTimer.unref();
+  startStartupHousekeeping({ paths, store, logger });
   // Reverse fs/terminal delegation for ACP-bridged sessions. Unlike oversight/clarify, its events are
   // ephemeral RPC — bus-only, NEVER persisted (replaying a delegation request on reconnect is wrong).
   const delegation = new DelegationService({ publish: (event) => bus.publish(event) });
