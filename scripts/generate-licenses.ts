@@ -70,19 +70,46 @@ async function readPkgJson(pkgName: string): Promise<Record<string, unknown> | n
   return null;
 }
 
-// Curated DiceBear avatar styles offered as a profile picture choice — must match AVATAR_STYLES in
+// DiceBear avatar styles offered as a profile picture choice — must match AVATAR_STYLES in
 // packages/protocol/src/avatar.ts (which derives its display list from this generated file).
 const AVATAR_STYLES: ReadonlyArray<readonly [string, string]> = [
-  ['notionists', 'Notionists'],
-  ['avataaars', 'Avataaars'],
-  ['lorelei', 'Lorelei'],
-  ['micah', 'Micah'],
-  ['open-peeps', 'Open Peeps'],
-  ['personas', 'Personas'],
   ['adventurer', 'Adventurer'],
+  ['adventurer-neutral', 'Adventurer Neutral'],
+  ['avataaars', 'Avataaars'],
+  ['avataaars-neutral', 'Avataaars Neutral'],
+  ['big-ears', 'Big Ears'],
+  ['big-ears-neutral', 'Big Ears Neutral'],
   ['big-smile', 'Big Smile'],
   ['bottts', 'Bottts'],
-  ['thumbs', 'Thumbs']
+  ['bottts-neutral', 'Bottts Neutral'],
+  ['croodles', 'Croodles'],
+  ['croodles-neutral', 'Croodles Neutral'],
+  ['disco', 'Disco'],
+  ['dylan', 'Dylan'],
+  ['fun-emoji', 'Fun Emoji'],
+  ['glass', 'Glass'],
+  ['glyphs', 'Glyphs'],
+  ['icons', 'Icons'],
+  ['identicon', 'Identicon'],
+  ['initial-face', 'Initial Face'],
+  ['initials', 'Initials'],
+  ['lorelei', 'Lorelei'],
+  ['lorelei-neutral', 'Lorelei Neutral'],
+  ['micah', 'Micah'],
+  ['miniavs', 'Miniavs'],
+  ['notionists', 'Notionists'],
+  ['notionists-neutral', 'Notionists Neutral'],
+  ['open-peeps', 'Open Peeps'],
+  ['personas', 'Personas'],
+  ['pixel-art', 'Pixel Art'],
+  ['pixel-art-neutral', 'Pixel Art Neutral'],
+  ['rings', 'Rings'],
+  ['shape-grid', 'Shape Grid'],
+  ['shapes', 'Shapes'],
+  ['stripes', 'Stripes'],
+  ['thumbs', 'Thumbs'],
+  ['toon-head', 'Toon Head'],
+  ['triangles', 'Triangles']
 ];
 
 interface DicebearStyleMeta {

@@ -39,6 +39,7 @@ import { createNativeCliModule } from '@/handlers/native-cli/index.ts';
 import { createSessionModule } from '@/handlers/session/index.ts';
 import { createAcpAgentModule } from '@/handlers/settings/acp-agent/index.ts';
 import { createAgentModule } from '@/handlers/settings/agent/index.ts';
+import { createAppearanceModule } from '@/handlers/settings/appearance/index.ts';
 import { createBrowserPresetModule } from '@/handlers/settings/browser-preset/index.ts';
 import { createChannelModule } from '@/handlers/settings/channel/index.ts';
 import { createComputerPresetModule } from '@/handlers/settings/computer-preset/index.ts';
@@ -296,6 +297,7 @@ export function createDaemonHandlers(deps: DaemonHandlerDeps) {
     }),
     openaiCompat: createOpenaiCompatModule(paths),
     network: createNetworkModule(paths, deps.configBus),
+    appearance: createAppearanceModule(paths, deps.configBus),
     toolBackends: createToolBackendsModule(paths, deps.configBus),
     sandbox: createSandboxModule(paths, deps.configBus),
     developer: createDeveloperModule(paths, deps.configBus),

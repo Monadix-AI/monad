@@ -17,6 +17,7 @@ import type { ApprovalView, Participant, Project, QuestionView } from './types';
 import {
   nativeCliSessionSelectors,
   profileSelectors,
+  useGetAppearanceQuery,
   useGetProfileSettingsQuery,
   useListNativeCliSessionsQuery,
   useListProfilesQuery,
@@ -69,6 +70,7 @@ export function useProject(projectId: string) {
   // --- projects ---
   const { data: projectData } = useListWorkplaceProjectsQuery(undefined);
   const { data: userProfile } = useGetProfileSettingsQuery();
+  const { data: appearance } = useGetAppearanceQuery();
   const { data: profileData } = useListProfilesQuery(undefined);
   const workplaceProjects: WorkplaceProject[] = useMemo(
     () => workplaceProjectSelectors.selectAll(projectData?.projects ?? workplaceProjectAdapter.getInitialState()),
@@ -122,9 +124,9 @@ export function useProject(projectId: string) {
       ...HUMAN,
       av: initials(name),
       name,
-      avatarUrl: userProfile?.avatarDataUrl ?? entityAvatarUrl(`user:${name}`, userProfile?.avatarStyle)
+      avatarUrl: userProfile?.avatarDataUrl ?? entityAvatarUrl(`user:${name}`, appearance?.avatarStyle)
     };
-  }, [userProfile?.avatarDataUrl, userProfile?.avatarStyle, userProfile?.displayName]);
+  }, [userProfile?.avatarDataUrl, appearance?.avatarStyle, userProfile?.displayName]);
   const nativeCliAvatarSeeds = useMemo(() => {
     const seeds = new Map<string, string>();
     for (const member of projectMembers) {
@@ -242,7 +244,10 @@ export function useProject(projectId: string) {
           id: member.id,
           av: initials(displayName),
           icon: productIcon(agent?.productIcon),
-          avatarUrl: entityAvatarUrl(nativeCliAvatarSeeds.get(displayName) ?? `native-cli:${displayName}`),
+          avatarUrl: entityAvatarUrl(
+            nativeCliAvatarSeeds.get(displayName) ?? `native-cli:${displayName}`,
+            appearance?.avatarStyle
+          ),
           name: displayName,
           kind: 'agent',
           tag: nativeCliTag(provider),
@@ -266,7 +271,7 @@ export function useProject(projectId: string) {
         id: member.id,
         av: initials(member.name),
         icon,
-        avatarUrl: icon ? undefined : entityAvatarUrl(`acp:${member.name}`),
+        avatarUrl: icon ? undefined : entityAvatarUrl(`acp:${member.name}`, appearance?.avatarStyle),
         name: member.name,
         kind: 'agent',
         tag: 'ACP',
@@ -286,7 +291,8 @@ export function useProject(projectId: string) {
     liveTools,
     nativeCliActiveAgentNames,
     nativeCliActivityOverrides,
-    nativeCliAvatarSeeds
+    nativeCliAvatarSeeds,
+    appearance?.avatarStyle
   ]);
   const railAgents = useMemo(() => projectMemberParticipants(participants), [participants]);
   const showDevSystemMessagesInStream = useWorkplaceUiStore((state) => state.showDevSystemMessagesInStream);
@@ -427,6 +433,7 @@ export function useProject(projectId: string) {
     approvals,
     acpAgents: acp.agents,
     nativeCliAgents: nativeCli.agents,
+    avatarStyle: appearance?.avatarStyle,
     setResolvedProjectId
   });
 
@@ -453,6 +460,7 @@ export function useProject(projectId: string) {
         liveTools,
         nativeCliSessions,
         human,
+        avatarStyle: appearance?.avatarStyle,
         nativeCliAvatarSeeds,
         nativeCliTags,
         nativeCliDisplayNames,
@@ -494,6 +502,7 @@ export function useProject(projectId: string) {
       liveTools,
       nativeCliSessions,
       human,
+      appearance?.avatarStyle,
       nativeCliAvatarSeeds,
       nativeCliTags,
       nativeCliDisplayNames,

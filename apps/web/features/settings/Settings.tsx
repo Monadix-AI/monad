@@ -4,6 +4,7 @@ import type { WebMessageIdWithoutParams } from '@monad/i18n';
 
 import {
   CatIcon,
+  ColorsIcon,
   FileInputIcon,
   GlobeIcon,
   JusticeScaleIcon,
@@ -25,16 +26,20 @@ const ConnectionSettings = dynamic(() => import('./ConnectionSettings').then((m)
 });
 const LanguageSettings = dynamic(() => import('./LanguageSettings').then((m) => m.LanguageSettings), { ssr: false });
 const ProfileSettings = dynamic(() => import('./ProfileSettings').then((m) => m.ProfileSettings), { ssr: false });
+const AppearanceSettings = dynamic(() => import('./AppearanceSettings').then((m) => m.AppearanceSettings), {
+  ssr: false
+});
 const MoSettings = dynamic(() => import('./MoSettings').then((m) => m.MoSettings), { ssr: false });
 const LicensesSettings = dynamic(() => import('./Licenses').then((m) => m.LicensesSettings), { ssr: false });
 const SystemSettings = dynamic(() => import('./SystemSettings').then((m) => m.SystemSettings), { ssr: false });
 const SettingsImport = dynamic(() => import('./SettingsImport').then((m) => m.SettingsImport), { ssr: false });
 
-type SectionId = 'connection' | 'profile' | 'import' | 'language' | 'mo' | 'licenses' | 'system';
+type SectionId = 'connection' | 'profile' | 'appearance' | 'import' | 'language' | 'mo' | 'licenses' | 'system';
 
 const SECTIONS: { id: SectionId; labelKey: WebMessageIdWithoutParams; icon: typeof SlidersHorizontalIcon }[] = [
   { id: 'connection', labelKey: 'web.settings.connection', icon: GlobeIcon },
   { id: 'profile', labelKey: 'web.settings.profile', icon: UserGroupIcon },
+  { id: 'appearance', labelKey: 'web.settings.appearance', icon: ColorsIcon },
   { id: 'import', labelKey: 'web.settings.import', icon: FileInputIcon },
   { id: 'language', labelKey: 'web.settings.language', icon: LanguageSquareIcon },
   { id: 'mo', labelKey: 'web.settings.mo', icon: CatIcon },
@@ -169,6 +174,8 @@ export function Settings({ onClose }: { onClose: () => void }) {
             <LanguageSettings onClose={onClose} />
           ) : section === 'profile' ? (
             <ProfileSettings onClose={onClose} />
+          ) : section === 'appearance' ? (
+            <AppearanceSettings onClose={onClose} />
           ) : section === 'import' ? (
             <SettingsImport onClose={onClose} />
           ) : section === 'mo' ? (

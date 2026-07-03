@@ -153,7 +153,8 @@ export function NativeCliMemberDialog({
                   nativeCliAvatarSeed(
                     room.activeProjectId ?? room.projectId,
                     invite.draft.displayName?.trim() || invite.candidate.label
-                  )
+                  ),
+                  room.source.avatarStyle
                 ),
                 name: invite.draft.displayName?.trim() || invite.candidate.label
               }}

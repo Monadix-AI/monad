@@ -5,6 +5,7 @@
 // gate.*/contract.*/action.* event taxonomy land here when that phase begins.
 
 export * from './acp-agent.ts';
+export * from './appearance-settings.ts';
 export * from './approvals.ts';
 export * from './atom-pack.ts';
 export * from './avatar.ts';

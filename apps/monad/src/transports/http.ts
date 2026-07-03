@@ -45,6 +45,7 @@ import { createIpRateLimiter } from '@/transports/http/rate-limit.ts';
 import { createResponsesApiController } from '@/transports/http/responses-api/controller.ts';
 import { createSessionsController } from '@/transports/http/sessions/controller.ts';
 import { createAcpAgentSettingsController } from '@/transports/http/settings/acp-agent.ts';
+import { createAppearanceSettingsController } from '@/transports/http/settings/appearance.ts';
 import { createBrowserPresetSettingsController } from '@/transports/http/settings/browser-preset.ts';
 import { createChannelSettingsController } from '@/transports/http/settings/channel.ts';
 import { createComputerPresetSettingsController } from '@/transports/http/settings/computer-preset.ts';
@@ -337,6 +338,7 @@ export function createHttpTransport(
             .use(createComputerPresetSettingsController(handlers))
             .use(createOpenaiCompatSettingsController(handlers))
             .use(createNetworkSettingsController(handlers))
+            .use(createAppearanceSettingsController(handlers))
             .use(createToolBackendsSettingsController(handlers))
             .use(createSandboxSettingsController(handlers))
             .use(createUserProfileSettingsController(handlers))

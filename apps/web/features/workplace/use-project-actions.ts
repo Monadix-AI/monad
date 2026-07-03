@@ -1,4 +1,4 @@
-import type { ProjectId, WorkplaceProject } from '@monad/protocol';
+import type { AvatarStyle, ProjectId, WorkplaceProject } from '@monad/protocol';
 import type { useAcpAgentSettings } from '@/hooks/use-acp-agent-settings';
 import type { useNativeCliAgentSettings } from '@/hooks/use-native-cli-agent-settings';
 import type { ApprovalView } from './types';
@@ -48,6 +48,7 @@ export function useProjectActions(args: {
   approvals: ApprovalView[];
   acpAgents: ReturnType<typeof useAcpAgentSettings>['agents'];
   nativeCliAgents: ReturnType<typeof useNativeCliAgentSettings>['agents'];
+  avatarStyle?: AvatarStyle;
   setResolvedProjectId: (id: ProjectId | null) => void;
 }) {
   const {
@@ -57,6 +58,7 @@ export function useProjectActions(args: {
     approvals,
     acpAgents,
     nativeCliAgents,
+    avatarStyle,
     setResolvedProjectId
   } = args;
 
@@ -179,9 +181,9 @@ export function useProjectActions(args: {
           }
         }
       }).unwrap();
-      for (const seed of projectMemberAvatarSeeds(currentProject.id, nextMembers)) warmEntityAvatar(seed);
+      for (const seed of projectMemberAvatarSeeds(currentProject.id, nextMembers)) warmEntityAvatar(seed, avatarStyle);
     },
-    [currentProject, updateWorkplaceProject]
+    [currentProject, updateWorkplaceProject, avatarStyle]
   );
 
   const addProjectMember = useCallback(

@@ -117,10 +117,16 @@ const monadConfigSchema = z.object({
   }),
   user: z
     .object({
-      avatarDataUrl: userAvatarDataUrlSchema.nullable().default(null),
+      avatarDataUrl: userAvatarDataUrlSchema.nullable().default(null)
+    })
+    .default({ avatarDataUrl: null }),
+  // App-wide presentation settings — not per-user, not restart-required (see AGENTS.md config-vs-env
+  // split). Kept separate from `user` so the avatar style picker isn't bundled with profile identity.
+  appearance: z
+    .object({
       avatarStyle: avatarStyleSchema.default(DEFAULT_AVATAR_STYLE)
     })
-    .default({ avatarDataUrl: null, avatarStyle: DEFAULT_AVATAR_STYLE }),
+    .default({ avatarStyle: DEFAULT_AVATAR_STYLE }),
   model: z.object({
     default: z.string(), // legacy; runtime defaults to the fixed "default" profile
     providers: z.array(providerSchema).default([]),
@@ -409,10 +415,14 @@ export const monadProfileSchema = z.object({
   version: z.literal(CURRENT_PROFILE_VERSION),
   user: z
     .object({
-      avatarDataUrl: userAvatarDataUrlSchema.nullable().default(null),
+      avatarDataUrl: userAvatarDataUrlSchema.nullable().default(null)
+    })
+    .default({ avatarDataUrl: null }),
+  appearance: z
+    .object({
       avatarStyle: avatarStyleSchema.default(DEFAULT_AVATAR_STYLE)
     })
-    .default({ avatarDataUrl: null, avatarStyle: DEFAULT_AVATAR_STYLE }),
+    .default({ avatarStyle: DEFAULT_AVATAR_STYLE }),
   model: z.object({
     default: z.string(),
     providers: z.array(providerSchema).default([]),
@@ -498,7 +508,8 @@ export function createDefaultConfig(principalId: string, displayName: string): M
   return {
     version: CURRENT_CONFIG_VERSION,
     principal: { id: principalId, displayName, verification: 'unverified' },
-    user: { avatarDataUrl: null, avatarStyle: DEFAULT_AVATAR_STYLE },
+    user: { avatarDataUrl: null },
+    appearance: { avatarStyle: DEFAULT_AVATAR_STYLE },
     model: {
       default: '',
       providers: [

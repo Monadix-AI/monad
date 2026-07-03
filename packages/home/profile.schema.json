@@ -8,8 +8,7 @@
     },
     "user": {
       "default": {
-        "avatarDataUrl": null,
-        "avatarStyle": "notionists"
+        "avatarDataUrl": null
       },
       "type": "object",
       "properties": {
@@ -25,26 +24,64 @@
               "type": "null"
             }
           ]
-        },
+        }
+      },
+      "required": [
+        "avatarDataUrl"
+      ],
+      "additionalProperties": false
+    },
+    "appearance": {
+      "default": {
+        "avatarStyle": "notionists"
+      },
+      "type": "object",
+      "properties": {
         "avatarStyle": {
           "default": "notionists",
           "type": "string",
           "enum": [
-            "notionists",
-            "avataaars",
-            "lorelei",
-            "micah",
-            "open-peeps",
-            "personas",
             "adventurer",
+            "adventurer-neutral",
+            "avataaars",
+            "avataaars-neutral",
+            "big-ears",
+            "big-ears-neutral",
             "big-smile",
             "bottts",
-            "thumbs"
+            "bottts-neutral",
+            "croodles",
+            "croodles-neutral",
+            "disco",
+            "dylan",
+            "fun-emoji",
+            "glass",
+            "glyphs",
+            "icons",
+            "identicon",
+            "initial-face",
+            "initials",
+            "lorelei",
+            "lorelei-neutral",
+            "micah",
+            "miniavs",
+            "notionists",
+            "notionists-neutral",
+            "open-peeps",
+            "personas",
+            "pixel-art",
+            "pixel-art-neutral",
+            "rings",
+            "shape-grid",
+            "shapes",
+            "stripes",
+            "thumbs",
+            "toon-head",
+            "triangles"
           ]
         }
       },
       "required": [
-        "avatarDataUrl",
         "avatarStyle"
       ],
       "additionalProperties": false
@@ -2151,6 +2188,7 @@
   "required": [
     "version",
     "user",
+    "appearance",
     "model",
     "agent",
     "skills",

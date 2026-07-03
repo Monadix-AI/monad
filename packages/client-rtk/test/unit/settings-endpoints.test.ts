@@ -150,10 +150,13 @@ function fakeClient(handlers: Record<string, Handler> = {}): MonadClient {
             get: () =>
               resolve('getProfileSettings', '$raw', {
                 displayName: 'Operator',
-                avatarDataUrl: null,
-                avatarStyle: 'notionists'
+                avatarDataUrl: null
               }),
             put: (body: unknown) => resolve('setProfileSettings', '$raw', body, body)
+          },
+          appearance: {
+            get: () => resolve('getAppearance', '$raw', { avatarStyle: 'notionists' }),
+            put: (body: unknown) => resolve('setAppearance', '$raw', body, body)
           },
           model: {
             default: {
@@ -949,7 +952,7 @@ test('setOpenaiCompat: writes config and invalidates OpenaiCompat tag', async ()
 });
 
 test('getProfileSettings: fetches user profile settings', async () => {
-  const profile = { displayName: 'Zeke', avatarDataUrl: 'data:image/png;base64,ZmFrZQ==', avatarStyle: 'notionists' };
+  const profile = { displayName: 'Zeke', avatarDataUrl: 'data:image/png;base64,ZmFrZQ==' };
   const client = fakeClient({ getProfileSettings: handler('$raw', async () => profile) });
   const store = createMonadStore({ client });
 
@@ -960,11 +963,11 @@ test('getProfileSettings: fetches user profile settings', async () => {
 test('setProfileSettings: writes display name and avatar through the profile settings endpoint', async () => {
   let getCalls = 0;
   let written: unknown;
-  const next = { displayName: 'Zeke', avatarDataUrl: null, avatarStyle: 'notionists' };
+  const next = { displayName: 'Zeke', avatarDataUrl: null };
   const client = fakeClient({
     getProfileSettings: handler('$raw', async () => {
       getCalls++;
-      return { displayName: 'Operator', avatarDataUrl: null, avatarStyle: 'notionists' };
+      return { displayName: 'Operator', avatarDataUrl: null };
     }),
     setProfileSettings: handler('$raw', async (body: unknown) => {
       written = body;
@@ -981,6 +984,25 @@ test('setProfileSettings: writes display name and avatar through the profile set
   expect(res.data).toEqual(next);
   expect(written).toEqual(next);
   expect(getCalls).toBe(2);
+});
+
+test('getAppearance/setAppearance: avatar style is a system setting, not part of the user profile', async () => {
+  let written: unknown;
+  const client = fakeClient({
+    getAppearance: handler('$raw', async () => ({ avatarStyle: 'notionists' })),
+    setAppearance: handler('$raw', async (body: unknown) => {
+      written = body;
+      return body;
+    })
+  });
+  const store = createMonadStore({ client });
+
+  const res = await dispatchEndpoint(store, 'getAppearance');
+  expect(res.data).toEqual({ avatarStyle: 'notionists' });
+
+  const setRes = await dispatchEndpoint(store, 'setAppearance', { avatarStyle: 'bottts' });
+  expect(setRes.data).toEqual({ avatarStyle: 'bottts' });
+  expect(written).toEqual({ avatarStyle: 'bottts' });
 });
 
 test('setProfile: invalidates model roles so voice availability updates without reload', async () => {

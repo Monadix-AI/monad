@@ -4,6 +4,7 @@
 
 import { z } from 'zod';
 
+import { appearanceSettingsSchema, setAppearanceSettingsRequestSchema } from './appearance-settings.ts';
 import {
   approvalMutationResponseSchema,
   clearApprovalsRequestSchema,
@@ -346,6 +347,13 @@ export const daemonHttpContract = {
   networkSettings: {
     get: defineHttpEndpoint({ response: { 200: networkSettingsSchema } }),
     set: defineHttpEndpoint({ body: setNetworkSettingsRequestSchema, response: { 200: networkSettingsSchema } })
+  },
+  appearanceSettings: {
+    get: defineHttpEndpoint({ response: { 200: appearanceSettingsSchema } }),
+    set: defineHttpEndpoint({
+      body: setAppearanceSettingsRequestSchema,
+      response: { 200: appearanceSettingsSchema }
+    })
   },
   toolBackendsSettings: {
     get: defineHttpEndpoint({ response: { 200: toolBackendsResponseSchema } }),

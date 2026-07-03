@@ -1,4 +1,11 @@
-import type { NativeCliObservationEvent, NativeCliSessionView, UIItem, UIMessageItem, UIPart } from '@monad/protocol';
+import type {
+  AvatarStyle,
+  NativeCliObservationEvent,
+  NativeCliSessionView,
+  UIItem,
+  UIMessageItem,
+  UIPart
+} from '@monad/protocol';
 import type { ActivityRow, Message, MessageAttachment, NativeCliStreamView, Participant } from '../../types';
 
 import {
@@ -76,7 +83,8 @@ export function messageToView(
   nativeCliAvatarSeeds = new Map<string, string>(),
   nativeCliTags = new Map<string, string>(),
   nativeCliDisplayNames = new Map<string, string>(),
-  human = HUMAN
+  human = HUMAN,
+  avatarStyle?: AvatarStyle
 ): Message {
   const agent = item.role === 'assistant';
   const rawName = agent ? (item.agentName ?? 'monad') : human.name;
@@ -96,7 +104,7 @@ export function messageToView(
     authorName: displayName,
     av: agent ? avatarForAgent(displayName) : human.av,
     icon: agent ? iconForAgent(displayName) : undefined,
-    avatarUrl: agent ? (agentAvatarSeed ? entityAvatarUrl(agentAvatarSeed) : undefined) : human.avatarUrl,
+    avatarUrl: agent ? (agentAvatarSeed ? entityAvatarUrl(agentAvatarSeed, avatarStyle) : undefined) : human.avatarUrl,
     kind: agent ? 'agent' : human.kind,
     tag: agent ? (displayName === 'monad' ? 'AI' : (nativeCliTags.get(displayName) ?? 'ACP')) : human.tag,
     time,
@@ -114,16 +122,21 @@ function nativeCliSessionMessage(session: NativeCliSessionView): Message {
   return nativeCliSessionMessageView(session, session.agentName);
 }
 
-function nativeCliAvatarUrl(displayName: string, nativeCliAvatarSeeds = new Map<string, string>()): string {
-  return entityAvatarUrl(nativeCliAvatarSeeds.get(displayName) ?? `native-cli:${displayName}`);
+function nativeCliAvatarUrl(
+  displayName: string,
+  nativeCliAvatarSeeds = new Map<string, string>(),
+  avatarStyle?: AvatarStyle
+): string {
+  return entityAvatarUrl(nativeCliAvatarSeeds.get(displayName) ?? `native-cli:${displayName}`, avatarStyle);
 }
 
 function nativeCliSessionMessageView(
   session: NativeCliSessionView,
   displayName: string,
-  nativeCliAvatarSeeds = new Map<string, string>()
+  nativeCliAvatarSeeds = new Map<string, string>(),
+  avatarStyle?: AvatarStyle
 ): Message {
-  const avatarUrl = nativeCliAvatarUrl(displayName, nativeCliAvatarSeeds);
+  const avatarUrl = nativeCliAvatarUrl(displayName, nativeCliAvatarSeeds, avatarStyle);
   const text = session.state === 'failed' ? 'failed to join the project' : 'joined the project';
   return {
     id: `native-cli-session:${session.id}`,
@@ -156,7 +169,8 @@ function nativeCliSessionDeveloperMessage(session: NativeCliSessionView): Messag
 function nativeCliSessionDeveloperMessageView(
   session: NativeCliSessionView,
   displayName: string,
-  nativeCliAvatarSeeds = new Map<string, string>()
+  nativeCliAvatarSeeds = new Map<string, string>(),
+  avatarStyle?: AvatarStyle
 ): Message {
   return {
     id: `native-cli-session-developer:${session.id}`,
@@ -164,7 +178,7 @@ function nativeCliSessionDeveloperMessageView(
     authorName: displayName,
     av: avatarForAgent(displayName),
     icon: productIcon(session.productIcon),
-    avatarUrl: nativeCliAvatarUrl(displayName, nativeCliAvatarSeeds),
+    avatarUrl: nativeCliAvatarUrl(displayName, nativeCliAvatarSeeds, avatarStyle),
     kind: 'developer',
     tag: 'DEV',
     time: fmtTime(session.startedAt),
@@ -179,10 +193,11 @@ function nativeCliSessionErrorMessageView(
   session: NativeCliSessionView,
   displayName: string,
   item: NativeCliObservationEvent,
-  nativeCliAvatarSeeds = new Map<string, string>()
+  nativeCliAvatarSeeds = new Map<string, string>(),
+  avatarStyle?: AvatarStyle
 ): Message {
   const icon = productIcon(session.productIcon);
-  const avatarUrl = nativeCliAvatarUrl(displayName, nativeCliAvatarSeeds);
+  const avatarUrl = nativeCliAvatarUrl(displayName, nativeCliAvatarSeeds, avatarStyle);
   return {
     id: `native-cli-session-error:${session.id}:${item.id}`,
     authorId: session.agentName,
@@ -212,7 +227,8 @@ function nativeCliSessionErrorMessageView(
 function nativeCliSessionErrorMessages(
   session: NativeCliSessionView,
   displayName: string,
-  nativeCliAvatarSeeds = new Map<string, string>()
+  nativeCliAvatarSeeds = new Map<string, string>(),
+  avatarStyle?: AvatarStyle
 ): Message[] {
   return nativeCliStreamItems({
     id: session.id,
@@ -221,7 +237,7 @@ function nativeCliSessionErrorMessages(
     observedAt: session.updatedAt || session.startedAt
   })
     .filter((item) => item.providerEventType === 'server_error')
-    .map((item) => nativeCliSessionErrorMessageView(session, displayName, item, nativeCliAvatarSeeds));
+    .map((item) => nativeCliSessionErrorMessageView(session, displayName, item, nativeCliAvatarSeeds, avatarStyle));
 }
 
 function sortMessagesOldestFirst(messages: Message[]): Message[] {
@@ -356,6 +372,7 @@ interface BuildProjectMessagesInput {
   nativeCliTags?: Map<string, string>;
   nativeCliDisplayNames?: Map<string, string>;
   human?: Participant;
+  avatarStyle?: AvatarStyle;
   showDeveloperOnlyMessages?: boolean;
 }
 
@@ -368,12 +385,13 @@ export function buildProjectMessages({
   nativeCliTags = new Map(),
   nativeCliDisplayNames = new Map(),
   human = HUMAN,
+  avatarStyle,
   showDeveloperOnlyMessages = false
 }: BuildProjectMessagesInput): Message[] {
   const shouldShowDeveloperOnlyMessages = process.env.NODE_ENV !== 'production' && showDeveloperOnlyMessages;
   const byId = new Map<string, Message>();
   const toView = (item: UIMessageItem) =>
-    messageToView(item, '', nativeCliAvatarSeeds, nativeCliTags, nativeCliDisplayNames, human);
+    messageToView(item, '', nativeCliAvatarSeeds, nativeCliTags, nativeCliDisplayNames, human, avatarStyle);
   for (const view of persistedMessages) byId.set(view.id, view);
   const firstNativeCliSessions = firstNativeCliSessionsByAgent(nativeCliSessions);
   const firstNativeCliAgentNames = new Set(firstNativeCliSessions.map((session) => session.agentName));
@@ -381,15 +399,15 @@ export function buildProjectMessages({
     const displayName = nativeCliDisplayNames.get(session.agentName) ?? session.agentName;
     byId.set(
       `native-cli-session:${session.id}`,
-      nativeCliSessionMessageView(session, displayName, nativeCliAvatarSeeds)
+      nativeCliSessionMessageView(session, displayName, nativeCliAvatarSeeds, avatarStyle)
     );
-    for (const message of nativeCliSessionErrorMessages(session, displayName, nativeCliAvatarSeeds)) {
+    for (const message of nativeCliSessionErrorMessages(session, displayName, nativeCliAvatarSeeds, avatarStyle)) {
       byId.set(message.id, message);
     }
     if (shouldShowDeveloperOnlyMessages) {
       byId.set(
         `native-cli-session-developer:${session.id}`,
-        nativeCliSessionDeveloperMessageView(session, displayName, nativeCliAvatarSeeds)
+        nativeCliSessionDeveloperMessageView(session, displayName, nativeCliAvatarSeeds, avatarStyle)
       );
     }
   }
@@ -405,7 +423,7 @@ export function buildProjectMessages({
         authorName,
         av: avatarForAgent(authorName),
         icon: iconForAgent(authorName),
-        avatarUrl: nativeCliResumeAgent ? entityAvatarUrl(`native-cli-resume:${authorName}`) : undefined,
+        avatarUrl: nativeCliResumeAgent ? entityAvatarUrl(`native-cli-resume:${authorName}`, avatarStyle) : undefined,
         kind: 'system',
         tag: nativeCliResumeAgent ? 'CLI' : 'SYS',
         time: '',
@@ -459,7 +477,7 @@ export function buildProjectMessages({
         authorName: displayName,
         av: avatarForAgent(displayName),
         icon,
-        avatarUrl: nativeCliAvatarUrl(displayName, nativeCliAvatarSeeds),
+        avatarUrl: nativeCliAvatarUrl(displayName, nativeCliAvatarSeeds, avatarStyle),
         kind: 'system',
         tag: nativeCliTag(provider),
         time: '',
@@ -468,7 +486,7 @@ export function buildProjectMessages({
           id: input.agent,
           name: displayName,
           icon,
-          avatarUrl: nativeCliAvatarUrl(displayName, nativeCliAvatarSeeds),
+          avatarUrl: nativeCliAvatarUrl(displayName, nativeCliAvatarSeeds, avatarStyle),
           tag: nativeCliTag(provider)
         },
         nativeCliSessionId: item.id,
@@ -483,7 +501,7 @@ export function buildProjectMessages({
         authorName: displayName,
         av: avatarForAgent(displayName),
         icon,
-        avatarUrl: nativeCliAvatarUrl(displayName, nativeCliAvatarSeeds),
+        avatarUrl: nativeCliAvatarUrl(displayName, nativeCliAvatarSeeds, avatarStyle),
         kind: 'developer',
         tag: 'DEV',
         time: '',

@@ -6,7 +6,6 @@ import {
   CheckIcon,
   Delete02Icon,
   FileCodeIcon,
-  HandIcon,
   LoaderPinwheelIcon,
   PowerIcon,
   RotateLeft01Icon,
@@ -24,10 +23,9 @@ import {
   useSetStartupMutation
 } from '@monad/client-rtk';
 import { Badge, Button, ScrollArea, Separator, Switch } from '@monad/ui';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 
 import { useT } from '@/components/I18nProvider';
-import { isInteractiveCursorEnabled, setInteractiveCursorEnabled } from '@/lib/interactive-cursor';
 
 interface Props {
   onClose: () => void;
@@ -48,7 +46,6 @@ export function SystemSettings({ onClose }: Props) {
   const [deleteSession] = useDeleteSessionMutation();
   const [clearingAllSessions, setClearingAllSessions] = useState(false);
   const [sessionsCleared, setSessionsCleared] = useState(false);
-  const [interactiveCursor, setInteractiveCursor] = useState(false);
 
   const version = health?.version ?? '—';
   const latestVersion = (health as { latestVersion?: string } | undefined)?.latestVersion;
@@ -78,15 +75,6 @@ export function SystemSettings({ onClose }: Props) {
 
   async function handleStartup(enabled: boolean) {
     await setStartup({ enabled }).unwrap();
-  }
-
-  useEffect(() => {
-    setInteractiveCursor(isInteractiveCursorEnabled());
-  }, []);
-
-  function handleInteractiveCursor(enabled: boolean) {
-    setInteractiveCursor(enabled);
-    setInteractiveCursorEnabled(enabled);
   }
 
   return (
@@ -211,31 +199,6 @@ export function SystemSettings({ onClose }: Props) {
                 checked={startup?.enabled === true}
                 disabled={isSavingStartup || startup?.supported === false}
                 onCheckedChange={handleStartup}
-              />
-            </div>
-          </section>
-
-          <Separator />
-
-          <section className="flex flex-col gap-3">
-            <h3 className="font-semibold text-sm">{t('web.settings.system.interactiveCursor')}</h3>
-            <div className="flex items-center justify-between gap-4 rounded-md border px-3 py-2.5">
-              <div className="flex min-w-0 items-start gap-2">
-                <HugeiconsIcon
-                  className="mt-0.5 size-3.5 shrink-0 text-muted-foreground"
-                  icon={HandIcon}
-                />
-                <div className="flex min-w-0 flex-col gap-0.5">
-                  <span className="text-sm">{t('web.settings.system.interactiveCursor')}</span>
-                  <span className="text-muted-foreground text-xs">
-                    {t('web.settings.system.interactiveCursorDesc')}
-                  </span>
-                </div>
-              </div>
-              <Switch
-                aria-label={t('web.settings.system.interactiveCursor')}
-                checked={interactiveCursor}
-                onCheckedChange={handleInteractiveCursor}
               />
             </div>
           </section>

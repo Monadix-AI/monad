@@ -57,6 +57,7 @@ function mergeConfigs(system: MonadSystemConfig, profile: MonadProfile): MonadCo
     version: system.version,
     principal: system.principal,
     user: profile.user,
+    appearance: profile.appearance,
     network: system.network,
     agent: {
       ...system.agent,
@@ -112,6 +113,7 @@ function extractProfile(cfg: MonadConfig): MonadProfile {
   return monadProfileSchema.parse({
     version: CURRENT_PROFILE_VERSION,
     user: cfg.user,
+    appearance: cfg.appearance,
     model: cfg.model,
     agent: {
       agents: cfg.agent.agents,

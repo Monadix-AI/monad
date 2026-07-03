@@ -1,26 +1,55 @@
 import { z } from 'zod';
 
-// Curated subset of DiceBear's avatar styles (https://www.dicebear.com/licenses/) offered as a
-// profile picture style choice. Kept as a fixed allowlist rather than the full style set both to
-// keep the settings picker manageable and because the server only bundles (and can only render)
-// the styles imported below. Adding/removing a slug here also requires updating the AVATAR_STYLES
-// list in scripts/generate-licenses.ts and the static imports in avatar-cache.ts.
+// All avatar styles bundled by @dicebear/styles (https://www.dicebear.com/licenses/), offered as a
+// profile picture style choice. This must match the full style set: the server only bundles (and
+// can only render) the styles imported below. Adding/removing a slug here also requires updating
+// the AVATAR_STYLES list in scripts/generate-licenses.ts and the static imports in avatar-cache.ts.
 export const AVATAR_STYLES = [
-  { slug: 'notionists', label: 'Notionists' },
-  { slug: 'avataaars', label: 'Avataaars' },
-  { slug: 'lorelei', label: 'Lorelei' },
-  { slug: 'micah', label: 'Micah' },
-  { slug: 'open-peeps', label: 'Open Peeps' },
-  { slug: 'personas', label: 'Personas' },
   { slug: 'adventurer', label: 'Adventurer' },
+  { slug: 'adventurer-neutral', label: 'Adventurer Neutral' },
+  { slug: 'avataaars', label: 'Avataaars' },
+  { slug: 'avataaars-neutral', label: 'Avataaars Neutral' },
+  { slug: 'big-ears', label: 'Big Ears' },
+  { slug: 'big-ears-neutral', label: 'Big Ears Neutral' },
   { slug: 'big-smile', label: 'Big Smile' },
   { slug: 'bottts', label: 'Bottts' },
-  { slug: 'thumbs', label: 'Thumbs' }
+  { slug: 'bottts-neutral', label: 'Bottts Neutral' },
+  { slug: 'croodles', label: 'Croodles' },
+  { slug: 'croodles-neutral', label: 'Croodles Neutral' },
+  { slug: 'disco', label: 'Disco' },
+  { slug: 'dylan', label: 'Dylan' },
+  { slug: 'fun-emoji', label: 'Fun Emoji' },
+  { slug: 'glass', label: 'Glass' },
+  { slug: 'glyphs', label: 'Glyphs' },
+  { slug: 'icons', label: 'Icons' },
+  { slug: 'identicon', label: 'Identicon' },
+  { slug: 'initial-face', label: 'Initial Face' },
+  { slug: 'initials', label: 'Initials' },
+  { slug: 'lorelei', label: 'Lorelei' },
+  { slug: 'lorelei-neutral', label: 'Lorelei Neutral' },
+  { slug: 'micah', label: 'Micah' },
+  { slug: 'miniavs', label: 'Miniavs' },
+  { slug: 'notionists', label: 'Notionists' },
+  { slug: 'notionists-neutral', label: 'Notionists Neutral' },
+  { slug: 'open-peeps', label: 'Open Peeps' },
+  { slug: 'personas', label: 'Personas' },
+  { slug: 'pixel-art', label: 'Pixel Art' },
+  { slug: 'pixel-art-neutral', label: 'Pixel Art Neutral' },
+  { slug: 'rings', label: 'Rings' },
+  { slug: 'shape-grid', label: 'Shape Grid' },
+  { slug: 'shapes', label: 'Shapes' },
+  { slug: 'stripes', label: 'Stripes' },
+  { slug: 'thumbs', label: 'Thumbs' },
+  { slug: 'toon-head', label: 'Toon Head' },
+  { slug: 'triangles', label: 'Triangles' }
 ] as const;
 
 export type AvatarStyle = (typeof AVATAR_STYLES)[number]['slug'];
 
 export const DEFAULT_AVATAR_STYLE: AvatarStyle = 'notionists';
+
+const avatarStyleValues = AVATAR_STYLES.map((style) => style.slug) as [AvatarStyle, ...AvatarStyle[]];
+export const avatarStyleSchema = z.enum(avatarStyleValues);
 
 const AVATAR_STYLE_SLUGS: ReadonlySet<string> = new Set(AVATAR_STYLES.map((style) => style.slug));
 

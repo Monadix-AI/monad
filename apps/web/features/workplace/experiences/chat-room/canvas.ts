@@ -1,4 +1,5 @@
 import type {
+  AvatarStyle,
   ContextUsagePayload,
   NativeAgentDeliveryId,
   NativeCliSessionView,
@@ -77,6 +78,7 @@ interface ChatRoomCanvasSource {
     nativeCliAvatarSeeds: Map<string, string>;
     nativeCliTags: Map<string, string>;
     nativeCliDisplayNames: Map<string, string>;
+    avatarStyle?: AvatarStyle;
     showDeveloperOnlyMessages: boolean;
   };
   contextUsage?: ContextUsagePayload;
@@ -110,7 +112,8 @@ export function toChatRoomCanvas(
         source.nativeCliAvatarSeeds,
         source.nativeCliTags,
         source.nativeCliDisplayNames,
-        source.human
+        source.human,
+        source.avatarStyle
       )
     );
   const messages = buildProjectMessages({
@@ -122,6 +125,7 @@ export function toChatRoomCanvas(
     nativeCliTags: source.nativeCliTags,
     nativeCliDisplayNames: source.nativeCliDisplayNames,
     human: source.human,
+    avatarStyle: source.avatarStyle,
     showDeveloperOnlyMessages: source.showDeveloperOnlyMessages
   });
   const activity = activityRowsFromTools(liveTools);
@@ -164,7 +168,7 @@ export function toChatRoomCanvas(
           av: avatarForAgent(typingAgentName),
           icon: iconForAgent(typingAgentName),
           avatarUrl: source?.nativeCliAvatarSeeds.has(typingAgentName)
-            ? entityAvatarUrl(source.nativeCliAvatarSeeds.get(typingAgentName) as string)
+            ? entityAvatarUrl(source.nativeCliAvatarSeeds.get(typingAgentName) as string, source.avatarStyle)
             : undefined,
           name: typingAgentName,
           detail: 'is working…'

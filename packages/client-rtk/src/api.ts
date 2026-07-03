@@ -136,6 +136,7 @@ import {
   useListAcpAgentsQuery,
   useUpsertAcpAgentMutation
 } from './endpoints/settings/acp-agents/index.ts';
+import { useGetAppearanceQuery, useSetAppearanceMutation } from './endpoints/settings/appearance/index.ts';
 import { useGetBrowserPresetQuery, useSetBrowserPresetMutation } from './endpoints/settings/browser-preset/index.ts';
 import {
   channelAdapter,
@@ -311,6 +312,7 @@ export {
   useGenerateMutation,
   useGetAgentPromptQuery,
   useGetAgentQuery,
+  useGetAppearanceQuery,
   useGetBrowserPresetQuery,
   useGetCatalogQuery,
   useGetComputerPresetQuery,
@@ -415,6 +417,7 @@ export {
   useSendMessageMutation,
   useSendProjectMessageMutation,
   useSetAgentPromptMutation,
+  useSetAppearanceMutation,
   useSetAtomPackEnabledMutation,
   useSetAtomPinMutation,
   useSetBrowserPresetMutation,

@@ -10,8 +10,7 @@ export function createUserProfileModule(paths: MonadPaths, configBus?: ConfigBus
     if (!cfg) throw new Error('profile settings: config.json missing');
     return {
       displayName: cfg.principal.displayName,
-      avatarDataUrl: cfg.user.avatarDataUrl,
-      avatarStyle: cfg.user.avatarStyle
+      avatarDataUrl: cfg.user.avatarDataUrl
     };
   }
 
@@ -20,7 +19,6 @@ export function createUserProfileModule(paths: MonadPaths, configBus?: ConfigBus
     if (!cfg) throw new Error('profile settings: config.json missing');
     cfg.principal.displayName = req.displayName.trim();
     cfg.user.avatarDataUrl = req.avatarDataUrl;
-    cfg.user.avatarStyle = req.avatarStyle;
     await saveAll(paths.config, paths.profile, cfg);
     if (configBus) await configBus.publish({ cfg, auth: await loadAuth(paths.auth) });
     return getProfileSettings();

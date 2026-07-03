@@ -53,6 +53,7 @@ export const apiSlice = createApi({
     'Memory',
     'SandboxSettings',
     'NetworkSettings',
+    'AppearanceSettings',
     'DeveloperSettings',
     'UserProfileSettings',
     'StartupSettings',

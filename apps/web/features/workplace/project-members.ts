@@ -1,4 +1,5 @@
 import type {
+  AvatarStyle,
   NativeCliProvider,
   WorkplaceProjectMember,
   WorkplaceProjectMemberSettings,
@@ -96,8 +97,8 @@ export function projectMemberAvatarSeeds(projectId: string, members: readonly Pr
   });
 }
 
-export function warmEntityAvatar(seed: string): void {
-  void fetch(entityAvatarWriteUrl(seed)).catch(() => {});
+export function warmEntityAvatar(seed: string, avatarStyle?: AvatarStyle): void {
+  void fetch(entityAvatarWriteUrl(seed, avatarStyle)).catch(() => {});
 }
 
 export function defaultProjectMemberSettings(
