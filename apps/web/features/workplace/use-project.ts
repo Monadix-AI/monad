@@ -143,9 +143,9 @@ export function useProject(projectId: string) {
       ...HUMAN,
       av: initials(name),
       name,
-      avatarUrl: userProfile?.avatarDataUrl ?? entityAvatarUrl(`user:${name}`)
+      avatarUrl: userProfile?.avatarDataUrl ?? entityAvatarUrl(`user:${name}`, userProfile?.avatarStyle)
     };
-  }, [userProfile?.avatarDataUrl, userProfile?.displayName]);
+  }, [userProfile?.avatarDataUrl, userProfile?.avatarStyle, userProfile?.displayName]);
   const nativeCliAvatarSeeds = useMemo(() => {
     const seeds = new Map<string, string>();
     for (const member of projectMembers) {

@@ -59,7 +59,7 @@ import { createStartupSettingsModule } from '@/handlers/settings/startup/index.t
 import { createToolBackendsModule } from '@/handlers/settings/tool-backends/index.ts';
 import { resolveNativeCliAgentEnv } from '@/services/native-cli/env.ts';
 import { NativeCliHost } from '@/services/native-cli/host.ts';
-import licensesData from '../generated/licenses.json';
+import licensesData from '../../generated/licenses.json';
 
 export { HandlerError } from '@/handlers/handler-error.ts';
 

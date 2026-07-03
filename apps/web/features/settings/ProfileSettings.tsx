@@ -9,7 +9,13 @@ import {
 } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { useGetProfileSettingsQuery, useSetProfileSettingsMutation } from '@monad/client-rtk';
-import { entityAvatarUrl, entityAvatarWriteUrl } from '@monad/protocol';
+import {
+  AVATAR_STYLES,
+  type AvatarStyle,
+  DEFAULT_AVATAR_STYLE,
+  entityAvatarUrl,
+  entityAvatarWriteUrl
+} from '@monad/protocol';
 import { Button, Input, Label } from '@monad/ui';
 import Image from 'next/image';
 import { useEffect, useRef, useState } from 'react';
@@ -39,16 +45,23 @@ export function ProfileSettings({ onClose }: Props) {
   const [setProfile, { isLoading: isSaving }] = useSetProfileSettingsMutation();
   const [displayName, setDisplayName] = useState('');
   const [avatarDataUrl, setAvatarDataUrl] = useState<string | null>(null);
+  const [avatarStyle, setAvatarStyle] = useState<AvatarStyle>(DEFAULT_AVATAR_STYLE);
   const [error, setError] = useState<string | null>(null);
   const trimmedName = displayName.trim();
-  const changed = data ? trimmedName !== data.displayName || avatarDataUrl !== data.avatarDataUrl : false;
+  const changed = data
+    ? trimmedName !== data.displayName || avatarDataUrl !== data.avatarDataUrl || avatarStyle !== data.avatarStyle
+    : false;
   const generatedAvatarSeed = `user:${trimmedName || data?.displayName || 'Operator'}`;
-  const generatedAvatarUrl = entityAvatarUrl(generatedAvatarSeed);
+  const generatedAvatarUrl = entityAvatarUrl(generatedAvatarSeed, avatarStyle);
+  // Stable seed for the style-picker swatches: tracks the saved name (not every keystroke of the
+  // display-name input) so comparing styles doesn't refetch all of them on every character typed.
+  const styleSwatchSeed = `user:${data?.displayName || 'Operator'}`;
 
   useEffect(() => {
     if (!data) return;
     setDisplayName(data.displayName);
     setAvatarDataUrl(data.avatarDataUrl);
+    setAvatarStyle(data.avatarStyle);
     setError(null);
   }, [data]);
 
@@ -73,8 +86,8 @@ export function ProfileSettings({ onClose }: Props) {
     }
     setError(null);
     try {
-      await setProfile({ displayName: trimmedName, avatarDataUrl }).unwrap();
-      if (!avatarDataUrl) void fetch(entityAvatarWriteUrl(`user:${trimmedName}`)).catch(() => {});
+      await setProfile({ displayName: trimmedName, avatarDataUrl, avatarStyle }).unwrap();
+      if (!avatarDataUrl) void fetch(entityAvatarWriteUrl(`user:${trimmedName}`, avatarStyle)).catch(() => {});
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
@@ -163,6 +176,39 @@ export function ProfileSettings({ onClose }: Props) {
                 {t('web.settings.profile.avatarRemove')}
               </Button>
             </div>
+          </div>
+        </section>
+
+        <section className="flex flex-col gap-3">
+          <div>
+            <h3 className="font-semibold text-sm">{t('web.settings.profile.avatarStyle')}</h3>
+            <p className="text-muted-foreground text-xs">{t('web.settings.profile.avatarStyleDesc')}</p>
+          </div>
+          <div className="grid grid-cols-5 gap-3 sm:grid-cols-8">
+            {AVATAR_STYLES.map((style) => (
+              <button
+                aria-label={style.label}
+                aria-pressed={avatarStyle === style.slug}
+                className={`flex flex-col items-center gap-1 rounded-md border p-2 text-center transition-colors ${
+                  avatarStyle === style.slug ? 'border-primary bg-primary/5' : 'border-transparent hover:bg-muted'
+                }`}
+                disabled={isLoading || isSaving}
+                key={style.slug}
+                onClick={() => setAvatarStyle(style.slug)}
+                type="button"
+              >
+                <div className="relative size-10 shrink-0 overflow-hidden rounded-full bg-muted">
+                  <Image
+                    alt=""
+                    className="size-full object-cover"
+                    fill
+                    src={entityAvatarUrl(styleSwatchSeed, style.slug)}
+                    unoptimized
+                  />
+                </div>
+                <span className="truncate text-xs">{style.label}</span>
+              </button>
+            ))}
           </div>
         </section>
 

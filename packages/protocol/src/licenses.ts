@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { avatarStyleCreditSchema } from './avatar.ts';
+
 export const licenseEntrySchema = z.object({
   name: z.string(),
   version: z.string(),
@@ -13,6 +15,7 @@ export const licenseEntrySchema = z.object({
 export type LicenseEntry = z.infer<typeof licenseEntrySchema>;
 
 export const getLicensesResponseSchema = z.object({
-  packages: z.array(licenseEntrySchema)
+  packages: z.array(licenseEntrySchema),
+  avatarStyles: z.array(avatarStyleCreditSchema)
 });
 export type GetLicensesResponse = z.infer<typeof getLicensesResponseSchema>;

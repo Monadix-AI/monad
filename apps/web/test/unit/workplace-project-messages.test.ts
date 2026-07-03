@@ -1058,7 +1058,7 @@ test('native CLI project member rename preserves runtime identity fields', () =>
 test('generated avatars use local cache URLs keyed by stable seeds', () => {
   const url = __workplaceProjectMessageTest.entityAvatarUrl('Felix754865');
   expect(url).toBe(
-    `/api/avatar-cache/${__workplaceProjectMessageTest.avatarCacheKey('Felix754865')}.svg?seed=Felix754865`
+    `/api/avatar-cache/${__workplaceProjectMessageTest.avatarCacheKey('Felix754865')}.svg?seed=Felix754865&style=notionists`
   );
   expect(__workplaceProjectMessageTest.entityAvatarWriteUrl('Felix754865')).toBe(`${url}&write=1`);
   expect(__workplaceProjectMessageTest.avatarCacheKey('user:Operator')).not.toBe(

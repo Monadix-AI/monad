@@ -1,7 +1,9 @@
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import {
+  avatarStyleSchema,
   blankableHttpUrlSchema,
+  DEFAULT_AVATAR_STYLE,
   ModelProviderType,
   modelKindSchema,
   modelRolesSchema,
@@ -115,9 +117,10 @@ const monadConfigSchema = z.object({
   }),
   user: z
     .object({
-      avatarDataUrl: userAvatarDataUrlSchema.nullable().default(null)
+      avatarDataUrl: userAvatarDataUrlSchema.nullable().default(null),
+      avatarStyle: avatarStyleSchema.default(DEFAULT_AVATAR_STYLE)
     })
-    .default({ avatarDataUrl: null }),
+    .default({ avatarDataUrl: null, avatarStyle: DEFAULT_AVATAR_STYLE }),
   model: z.object({
     default: z.string(), // legacy; runtime defaults to the fixed "default" profile
     providers: z.array(providerSchema).default([]),
@@ -406,9 +409,10 @@ export const monadProfileSchema = z.object({
   version: z.literal(CURRENT_PROFILE_VERSION),
   user: z
     .object({
-      avatarDataUrl: userAvatarDataUrlSchema.nullable().default(null)
+      avatarDataUrl: userAvatarDataUrlSchema.nullable().default(null),
+      avatarStyle: avatarStyleSchema.default(DEFAULT_AVATAR_STYLE)
     })
-    .default({ avatarDataUrl: null }),
+    .default({ avatarDataUrl: null, avatarStyle: DEFAULT_AVATAR_STYLE }),
   model: z.object({
     default: z.string(),
     providers: z.array(providerSchema).default([]),
@@ -494,7 +498,7 @@ export function createDefaultConfig(principalId: string, displayName: string): M
   return {
     version: CURRENT_CONFIG_VERSION,
     principal: { id: principalId, displayName, verification: 'unverified' },
-    user: { avatarDataUrl: null },
+    user: { avatarDataUrl: null, avatarStyle: DEFAULT_AVATAR_STYLE },
     model: {
       default: '',
       providers: [
