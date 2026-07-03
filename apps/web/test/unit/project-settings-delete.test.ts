@@ -35,11 +35,11 @@ test('project member settings use dialogs instead of inline expansion panels', (
 });
 
 test('system message observation action uses observe semantics', () => {
-  const transcriptSource = readSource('features/workplace/activity/ChatTranscript.tsx');
+  const followButtonSource = readSource('features/workplace/activity/SystemMessageRow.tsx');
 
-  expect(transcriptSource).toContain("aria-label={t('web.workplace.observe')}");
-  expect(transcriptSource).toContain("title={t('web.workplace.observe')}");
-  expect(transcriptSource).not.toContain('<span>Follow</span>');
+  expect(followButtonSource).toContain("aria-label={t('web.workplace.observe')}");
+  expect(followButtonSource).toContain("title={t('web.workplace.observe')}");
+  expect(followButtonSource).not.toContain('<span>Follow</span>');
 });
 
 test('agent card opens member settings without opening project settings', () => {
