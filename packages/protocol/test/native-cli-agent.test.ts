@@ -4,8 +4,15 @@ import { resolve } from 'node:path';
 
 import { daemonHttpContract, httpErrorSchema } from '../src/http.ts';
 import {
+  attachmentPreviewText,
+  attachmentReadResponseSchema,
   managedProjectRuntimePromptInputSchema,
   managedProjectRuntimeSpecSchema,
+  messageAttachmentRefSchema,
+  NATIVE_AGENT_ATTACHMENT_PREVIEW_MAX,
+  NATIVE_AGENT_ATTACHMENTS_MAX,
+  NATIVE_AGENT_INLINE_TEXT_MAX,
+  nativeAgentAttachmentInputSchema,
   nativeAgentDirectMessageSchema,
   nativeAgentProjectInboxAckRequestSchema,
   nativeAgentProjectInboxAckResponseSchema,
@@ -389,6 +396,72 @@ test('native agent direct message schemas stay separate from project transcript'
   expect(message.peer).toBe('human');
 });
 
+test('messages carry file attachment references; the inline cap stays as the fallback guard', () => {
+  const overInline = 'x'.repeat(NATIVE_AGENT_INLINE_TEXT_MAX + 1);
+
+  // Inline path keeps its DoS cap.
+  expect(nativeAgentProjectPostRequestSchema.safeParse({ text: overInline }).success).toBe(false);
+  expect(nativeAgentSendRequestSchema.safeParse({ to: 'human', text: overInline }).success).toBe(false);
+
+  // File references can replace (or accompany) the inline body, several per message.
+  expect(
+    nativeAgentProjectPostRequestSchema.parse({ attachments: [{ path: '/tmp/report.md' }, { path: '/tmp/log.txt' }] })
+  ).toEqual({ attachments: [{ path: '/tmp/report.md' }, { path: '/tmp/log.txt' }] });
+  expect(
+    nativeAgentSendRequestSchema.parse({ to: 'human', text: 'see report', attachments: [{ path: '/tmp/report.md' }] })
+  ).toEqual({ to: 'human', text: 'see report', attachments: [{ path: '/tmp/report.md' }] });
+
+  // Attachment paths are cross-platform absolute; relative paths are rejected.
+  expect(nativeAgentAttachmentInputSchema.safeParse({ path: 'relative/report.md' }).success).toBe(false);
+  expect(nativeAgentAttachmentInputSchema.safeParse({ path: 'C:\\work\\report.md' }).success).toBe(true);
+
+  // One of text/attachments is required; the list is non-empty and capped.
+  expect(nativeAgentProjectPostRequestSchema.safeParse({}).success).toBe(false);
+  expect(nativeAgentSendRequestSchema.safeParse({ to: 'human' }).success).toBe(false);
+  expect(nativeAgentProjectPostRequestSchema.safeParse({ attachments: [] }).success).toBe(false);
+  expect(
+    nativeAgentProjectPostRequestSchema.safeParse({
+      attachments: Array.from({ length: NATIVE_AGENT_ATTACHMENTS_MAX + 1 }, (_, i) => ({ path: `/tmp/f${i}` }))
+    }).success
+  ).toBe(false);
+});
+
+test('attachment previews are bounded snippets and never split a surrogate pair', () => {
+  expect(attachmentPreviewText('short')).toBe('short');
+  const long = 'y'.repeat(NATIVE_AGENT_ATTACHMENT_PREVIEW_MAX + 100);
+  const preview = attachmentPreviewText(long);
+  expect(preview.length).toBe(NATIVE_AGENT_ATTACHMENT_PREVIEW_MAX + 1);
+  expect(preview.endsWith('…')).toBe(true);
+
+  // '😀' is a surrogate pair; an odd-position cut must back off instead of leaving a lone surrogate.
+  const emoji = '😀'.repeat(NATIVE_AGENT_ATTACHMENT_PREVIEW_MAX);
+  const emojiPreview = attachmentPreviewText(emoji);
+  const lastBeforeEllipsis = emojiPreview.charCodeAt(emojiPreview.length - 2);
+  expect(lastBeforeEllipsis >= 0xd800 && lastBeforeEllipsis <= 0xdbff).toBe(false);
+});
+
+test('attachment refs and direct messages carry the structured file reference', () => {
+  const ref = messageAttachmentRefSchema.parse({
+    id: 'att_01ABC',
+    path: '/tmp/project/report.md',
+    name: 'report.md',
+    mime: 'text/markdown',
+    bytes: 12345,
+    createdAt: '2026-06-28T00:00:00.000Z'
+  });
+  const message = nativeAgentDirectMessageSchema.parse({
+    id: 'msg_DIRECT',
+    projectId: 'prj_PROJECT',
+    nativeCliSessionId: 'ncli_1',
+    fromAgent: 'codex',
+    peer: 'human',
+    text: 'preview…',
+    attachments: [ref],
+    createdAt: '2026-06-28T00:00:00.000Z'
+  });
+  expect(message.attachments?.[0]?.path).toBe('/tmp/project/report.md');
+});
+
 test('native agent HTTP endpoints are declared in the protocol daemon contract', () => {
   expect(daemonHttpContract.nativeAgent.projectPost.body).toBe(nativeAgentProjectPostRequestSchema);
   expect(daemonHttpContract.nativeAgent.projectPost.response).toEqual({
@@ -406,6 +479,7 @@ test('native agent HTTP endpoints are declared in the protocol daemon contract',
   expect(daemonHttpContract.nativeAgent.agentRead.body).toBe(nativeAgentReadRequestSchema);
   expect(daemonHttpContract.nativeAgent.agentRead.response[200]).toBe(nativeAgentReadResponseSchema);
   expect(daemonHttpContract.nativeAgent.runtimeInfo.response[200]).toBe(nativeAgentRuntimeInfoResponseSchema);
+  expect(daemonHttpContract.nativeAgent.attachmentRead.response[200]).toBe(attachmentReadResponseSchema);
 });
 
 test('native agent daemon transport reuses protocol schemas instead of local zod copies', () => {

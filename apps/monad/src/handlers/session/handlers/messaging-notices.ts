@@ -73,6 +73,7 @@ export function managedNativeCliInboxNotice(
     'Run `monad project inbox check` or `monad project read` before answering if you need more context.',
     'If a public response is appropriate, post it with `monad project post -` and stdin.',
     "Pass message text through a quoted heredoc, for example `monad project post - <<'MONAD_MESSAGE'`. Do not pass message text inline in a shell command because backticks, `$()`, and quotes will be interpreted by the shell before Monad receives them.",
+    'To share local files for humans to read, add `--file <path>` (repeatable). An `[Attachment … — file at <path>]` marker in a message means the full content is in that file; read it directly if you need it.',
     'Use `monad agent send --to <agent|human> -` with stdin only for private/direct conversation.',
     'For any non-trivial task, first acknowledge ownership in the project room before doing longer work.',
     'During long-running work, post brief progress updates at meaningful milestones, blockers, input needs, or direction changes.',
@@ -109,6 +110,7 @@ export function managedNativeCliBusyInboxNotice(
     'You are already running. Run `monad project inbox check` or `monad project read` to fetch the latest project context.',
     'If a public response is appropriate, post it with `monad project post -` and stdin.',
     "Pass message text through a quoted heredoc, for example `monad project post - <<'MONAD_MESSAGE'`. Do not pass message text inline in a shell command because backticks, `$()`, and quotes will be interpreted by the shell before Monad receives them.",
+    'To share local files for humans to read, add `--file <path>` (repeatable). An `[Attachment … — file at <path>]` marker in a message means the full content is in that file; read it directly if you need it.',
     'Use `monad agent send --to <agent|human> -` with stdin only for private/direct conversation.',
     'For any non-trivial task, first acknowledge ownership in the project room before doing longer work.',
     'During long-running work, post brief progress updates at meaningful milestones, blockers, input needs, or direction changes.',
@@ -130,6 +132,7 @@ export function managedNativeCliDirectNotice({ fromAgentName, text }: { fromAgen
     '',
     `Use \`monad agent read --with ${fromAgentName}\` to read the private conversation.`,
     `Reply privately with \`monad agent send --to ${fromAgentName} -\` and stdin.`,
+    'An `[Attachment … — file at <path>]` marker in the message means the full content is in that file; read it directly if you need it.',
     'Use `monad project post` only when you want to speak publicly in the Workplace Project.',
     'Terminal stdout/stderr is diagnostic output only. It is not a Workplace Project message.'
   ].join('\n');

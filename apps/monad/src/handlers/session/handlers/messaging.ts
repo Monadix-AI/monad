@@ -2,6 +2,7 @@ import type { AcpAgentConfig, NativeCliAgentConfig } from '@monad/home';
 import type {
   ChatMessage,
   Event,
+  MessageAttachmentRef,
   SendMessageRequest,
   SessionId,
   SessionTransport,
@@ -454,15 +455,24 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
       nativeCliSessionId,
       agentName,
       text,
-      threadId
+      threadId,
+      attachments
     }: {
       sessionId: TranscriptTargetId;
       nativeCliSessionId: string;
       agentName: string;
       text: string;
       threadId?: string;
+      attachments?: MessageAttachmentRef[];
     }) {
-      return completeManagedNativeCliThinking({ sessionId, nativeCliSessionId, agentName, text, threadId });
+      return completeManagedNativeCliThinking({
+        sessionId,
+        nativeCliSessionId,
+        agentName,
+        text,
+        threadId,
+        attachments
+      });
     },
 
     async completeManagedNativeCliProviderMessage({

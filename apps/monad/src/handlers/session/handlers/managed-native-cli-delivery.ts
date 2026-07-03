@@ -2,6 +2,7 @@ import type { NativeCliAgentConfig } from '@monad/home';
 import type {
   Event,
   ManagedNativeCliLifecycleLogEvent,
+  MessageAttachmentRef,
   MessageId,
   NativeCliSessionView,
   TranscriptTarget,
@@ -104,6 +105,7 @@ export function createManagedNativeCliDelivery(ctx: SessionContext) {
     agentName,
     text,
     threadId,
+    attachments,
     source = 'managed-native-cli',
     error = false
   }: {
@@ -112,6 +114,7 @@ export function createManagedNativeCliDelivery(ctx: SessionContext) {
     agentName: string;
     text: string;
     threadId?: string;
+    attachments?: MessageAttachmentRef[];
     source?: 'managed-native-cli' | 'native-cli-provider';
     error?: boolean;
   }): { messageId: MessageId } {
@@ -120,7 +123,13 @@ export function createManagedNativeCliDelivery(ctx: SessionContext) {
       store.findManagedNativeCliStreamingMessage(sessionId, nativeCliSessionId, agentName);
     pendingManagedNativeCliWakeMessages.delete(nativeCliSessionId);
     const messageId = (pendingMessageId ?? newId('msg')) as MessageId;
-    const data = { agentName, nativeCliSessionId, source, ...(threadId ? { threadId } : {}) };
+    const data = {
+      agentName,
+      nativeCliSessionId,
+      source,
+      ...(threadId ? { threadId } : {}),
+      ...(attachments?.length ? { attachments } : {})
+    };
     // Post order is the wall order, and created_at is millisecond-resolution: two replies settling
     // in the same tick would tie and fall back to placeholder (fan-out) order. Keep the completion
     // stamp strictly monotonic per session so a later post always sorts after an earlier one.
@@ -149,7 +158,7 @@ export function createManagedNativeCliDelivery(ctx: SessionContext) {
       transcriptTargetId: sessionId,
       type: 'agent.message',
       actorAgentId: null,
-      payload: { messageId, agentName, text, source },
+      payload: { messageId, agentName, text, source, ...(attachments?.length ? { attachments } : {}) },
       at: new Date().toISOString()
     });
     persistAndRetire(sessionId, round);

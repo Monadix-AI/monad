@@ -1,4 +1,4 @@
-import type { NativeCliObservationEvent } from '@monad/protocol';
+import type { MessageAttachmentRef, NativeCliObservationEvent } from '@monad/protocol';
 import type { ProductIconId } from '@monad/ui';
 
 // UI view-model types for the workplace surface. These are render shapes the components
@@ -76,7 +76,13 @@ export interface Message {
   streaming?: boolean;
   orderKey?: string;
   internals?: ToolChip[];
+  /** Structured references to local files shared for human reading (reports, spilled long bodies). */
+  attachments?: MessageAttachment[];
 }
+
+/** Reference to a file on the daemon host — content stays in the file and is read on demand.
+ *  Aliased to the wire schema so the UI type can never drift from what the daemon emits. */
+export type MessageAttachment = MessageAttachmentRef;
 
 /** Live "is working" footer row, shown while the agent is streaming a reply. */
 export interface TypingIndicator {

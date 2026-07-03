@@ -79,7 +79,7 @@ function statusFromMessage(message: ChatMessage): UIMessageItem['status'] {
 function partsFromMessage(message: ChatMessage, opts: { channelStructured?: boolean } = {}): UIPart[] {
   const text = opts.channelStructured && message.role === 'assistant' ? channelDisplayText(message.text) : message.text;
   const parts: UIPart[] = [];
-  const data = message.data as { reasoning?: string } | undefined;
+  const data = message.data as { reasoning?: string; attachments?: unknown } | undefined;
   if (typeof data?.reasoning === 'string' && data.reasoning.length > 0) {
     parts.push({ type: 'reasoning', text: data.reasoning });
   }
@@ -92,6 +92,14 @@ function partsFromMessage(message: ChatMessage, opts: { channelStructured?: bool
     });
   } else if (text || parts.length === 0) {
     parts.push({ type: 'text', text });
+  }
+  // File references shared with the message — one custom part per file so clients render a
+  // download/preview chip for each below the text.
+  if (Array.isArray(data?.attachments)) {
+    for (const attachment of data.attachments) {
+      if (attachment && typeof attachment === 'object')
+        parts.push({ type: 'custom', name: 'attachment', data: attachment });
+    }
   }
   return parts;
 }
@@ -476,6 +484,9 @@ export class SessionUiProjector {
             ? { type: 'artifact', messageType: 'directive', text, data: p.data }
             : { type: 'text', text }
         );
+        if (p.attachments?.length && !parts.some((part) => part.type === 'custom' && part.name === 'attachment')) {
+          for (const attachment of p.attachments) parts.push({ type: 'custom', name: 'attachment', data: attachment });
+        }
         return [
           this.setMessage({
             kind: 'message',

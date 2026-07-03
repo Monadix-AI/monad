@@ -2,7 +2,7 @@ import type { Database } from 'bun:sqlite';
 
 // Pre-release: migrations are additive (new table = new version). Edit existing tables freely and
 // delete/recreate dev DBs as needed; never rename/drop columns in existing migrations.
-export const CURRENT_SCHEMA_VERSION = 1;
+export const CURRENT_SCHEMA_VERSION = 2;
 
 const MIGRATIONS: { version: number; sql: string }[] = [
   {
@@ -271,6 +271,40 @@ CREATE INDEX IF NOT EXISTS idx_native_cli_inbox_items_pending
   ON native_cli_inbox_items(native_cli_session_id, state, message_seq);
 
 PRAGMA user_version = 1;
+    `.trim()
+  },
+  {
+    version: 2,
+    // Wrapped in a transaction because of the non-idempotent ALTER: either the whole block (incl.
+    // user_version = 2) lands or none of it does, so a crash can't leave a half-applied v2 that
+    // fails on re-run.
+    sql: `
+BEGIN;
+
+-- Message attachment REGISTRY: a message can reference a local file (human-readable payload —
+-- a report, a spilled long body). Only the reference + a metadata snapshot is stored; content
+-- stays in the file and is read on demand by the wall preview/download endpoint. Registered ids
+-- gate that endpoint: it serves only files an agent actually referenced from a message.
+CREATE TABLE IF NOT EXISTS message_attachments (
+  id          TEXT PRIMARY KEY,
+  project_id  TEXT NOT NULL,
+  path        TEXT NOT NULL,
+  name        TEXT NOT NULL,
+  mime        TEXT NOT NULL,
+  bytes       INTEGER NOT NULL,
+  preview     TEXT NOT NULL,
+  created_by  TEXT,
+  created_at  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_message_attachments_project
+  ON message_attachments(project_id);
+
+-- JSON array of message_attachments ids referenced by the direct message (NULL = none).
+ALTER TABLE native_agent_direct_messages ADD COLUMN attachment_ids TEXT;
+
+PRAGMA user_version = 2;
+
+COMMIT;
     `.trim()
   }
 ];

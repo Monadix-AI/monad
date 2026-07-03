@@ -14,6 +14,7 @@ export type EventId = `evt_${string}`;
 export type MessageId = `msg_${string}`;
 export type ChannelId = `chn_${string}`; // a configured channel instance (one bot token / one workspace app)
 export type PeerId = `peer_${string}`; // a configured peer daemon (a delegation target)
+export type AttachmentId = `att_${string}`; // an out-of-band message body (spilled long content)
 
 export type ISO8601 = string; // always UTC ISO-8601
 
@@ -34,6 +35,7 @@ export const eventIdSchema: z.ZodType<EventId> = prefixedIdSchema<EventId>('evt'
 export const messageIdSchema: z.ZodType<MessageId> = prefixedIdSchema<MessageId>('msg');
 export const channelIdSchema: z.ZodType<ChannelId> = prefixedIdSchema<ChannelId>('chn');
 export const peerIdSchema: z.ZodType<PeerId> = prefixedIdSchema<PeerId>('peer');
+export const attachmentIdSchema: z.ZodType<AttachmentId> = prefixedIdSchema<AttachmentId>('att');
 
 export const iso8601Schema: z.ZodType<ISO8601> = z.union([
   z.string(),

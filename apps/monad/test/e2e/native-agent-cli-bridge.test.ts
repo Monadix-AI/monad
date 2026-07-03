@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import { createHash } from 'node:crypto';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { type Event, type ProjectId, type SessionUiEvent, workplaceProjectMembersExtKey } from '@monad/protocol';
@@ -53,14 +53,15 @@ function createManagedNativeSession(
   sessionId: ProjectId,
   id = 'ncli_test',
   agentName = 'codex',
-  state: 'running' | 'stopped' = 'running'
+  state: 'running' | 'stopped' = 'running',
+  workingPath = '/tmp/project'
 ): void {
   handlers.store.upsertNativeCliSession({
     id,
     transcriptTargetId: sessionId,
     agentName,
     provider: agentName === 'claude' ? 'claude-code' : 'codex',
-    workingPath: '/tmp/project',
+    workingPath,
     launchMode: 'app-server',
     runtimeRole: 'managed-project-agent',
     agentRuntimeId: id,
@@ -99,6 +100,166 @@ for (const kind of TRANSPORTS) {
 
       expect(res.status).toBe(200);
       expect(await messages(t, sessionId)).toEqual([{ role: 'assistant', text: 'managed reply' }]);
+    });
+
+    test('file attachment post: reference registered, wall stores marker-free preview, web reads the file', async () => {
+      const handlers = buildHandlers(mockModel());
+      t = serveTransport(kind, createHttpTransport(handlers));
+      const sessionId = await createSession(t);
+      // realpath: attachment refs are canonicalized, and registration confines paths to the
+      // runtime's working directory — the session's workingPath must be the (real) test dir.
+      const dir = await realpath(await mkdtemp(join(tmpdir(), 'monad-attachment-')));
+      createManagedNativeSession(handlers, sessionId, 'ncli_test', 'codex', 'running', dir);
+      try {
+        const longBody = `START ${'x'.repeat(150_000)} END`;
+        const filePath = join(dir, 'report.md');
+        const extraPath = join(dir, 'notes.txt');
+        await writeFile(filePath, longBody, 'utf8');
+        await writeFile(extraPath, 'side notes', 'utf8');
+
+        const posted = await t.fetch(
+          '/v1/internal/native-agent/project/post',
+          json(
+            { projectId: sessionId, attachments: [{ path: filePath }, { path: extraPath }] },
+            bindingHeaders(sessionId)
+          )
+        );
+        expect(posted.status).toBe(200);
+        const postedBody = (await posted.json()) as {
+          message: { text: string; attachments?: Array<{ id: string; path: string; name: string; bytes: number }> };
+        };
+        const attachments = postedBody.message.attachments ?? [];
+        expect(attachments).toHaveLength(2);
+        const attachment = attachments[0];
+        if (!attachment) throw new Error('expected attachment ref on posted message');
+        expect(attachment.id.startsWith('att_')).toBe(true);
+        expect(attachment.path).toBe(filePath);
+        expect(attachment.name).toBe('report.md');
+        expect(attachment.bytes).toBe(Buffer.byteLength(longBody, 'utf8'));
+        expect(attachments[1]?.name).toBe('notes.txt');
+
+        // Wall stores only the bounded, marker-free preview; the structured refs live in message
+        // data (rendered as chips) and reference markers appear only in stdin notices.
+        const wall = await messages(t, sessionId);
+        expect(wall).toHaveLength(1);
+        const wallText = wall[0]?.text ?? '';
+        expect(wallText.startsWith('START ')).toBe(true);
+        expect(wallText).not.toContain('[Attachment');
+        expect(wallText.length).toBeLessThan(3_000);
+
+        // Client-facing read (web wall): bounded JSON preview and raw download from the file.
+        const webRes = await t.fetch(`/v1/attachments/${attachment.id}`);
+        expect(webRes.status).toBe(200);
+        const webBody = (await webRes.json()) as { text: string; truncated?: boolean };
+        expect(webBody.text.startsWith('START ')).toBe(true);
+        const download = await t.fetch(`/v1/attachments/${attachment.id}?download=1`);
+        expect(download.status).toBe(200);
+        expect(download.headers.get('content-disposition')).toContain('report.md');
+        expect(await download.text()).toBe(longBody);
+
+        // Reference semantics: deleting the file makes later reads report the reference as gone.
+        await rm(filePath);
+        expect((await t.fetch(`/v1/attachments/${attachment.id}`)).status).toBe(410);
+      } finally {
+        await rm(dir, { recursive: true, force: true });
+      }
+    });
+
+    test('non-Latin-1 attachment names download with an RFC 5987 content-disposition', async () => {
+      const handlers = buildHandlers(mockModel());
+      t = serveTransport(kind, createHttpTransport(handlers));
+      const sessionId = await createSession(t);
+      const dir = await realpath(await mkdtemp(join(tmpdir(), 'monad-attachment-')));
+      createManagedNativeSession(handlers, sessionId, 'ncli_test', 'codex', 'running', dir);
+      try {
+        const filePath = join(dir, '项目报告.md');
+        await writeFile(filePath, '# 报告', 'utf8');
+        const posted = await t.fetch(
+          '/v1/internal/native-agent/project/post',
+          json({ attachments: [{ path: filePath }] }, bindingHeaders(sessionId))
+        );
+        expect(posted.status).toBe(200);
+        const { message } = (await posted.json()) as { message: { attachments?: Array<{ id: string }> } };
+        const id = message.attachments?.[0]?.id;
+        if (!id) throw new Error('expected attachment ref');
+        const download = await t.fetch(`/v1/attachments/${id}?download=1`);
+        expect(download.status).toBe(200);
+        expect(download.headers.get('content-disposition')).toContain("filename*=UTF-8''");
+        expect(await download.text()).toBe('# 报告');
+      } finally {
+        await rm(dir, { recursive: true, force: true });
+      }
+    });
+
+    test('attachment endpoint serves only registered references; bad paths are rejected at post', async () => {
+      const handlers = buildHandlers(mockModel());
+      t = serveTransport(kind, createHttpTransport(handlers));
+      const sessionId = await createSession(t);
+      const dir = await realpath(await mkdtemp(join(tmpdir(), 'monad-attachment-')));
+      const outsideDir = await realpath(await mkdtemp(join(tmpdir(), 'monad-outside-')));
+      createManagedNativeSession(handlers, sessionId, 'ncli_test', 'codex', 'running', dir);
+      try {
+        // The web endpoint is id-gated: unregistered ids never resolve to file reads.
+        expect((await t.fetch('/v1/attachments/att_UNKNOWN')).status).toBe(404);
+
+        // Referencing a nonexistent file fails the post outright; nothing lands on the wall.
+        const missing = await t.fetch(
+          '/v1/internal/native-agent/project/post',
+          json({ attachments: [{ path: join(dir, 'nope.md') }] }, bindingHeaders(sessionId))
+        );
+        expect(missing.status).toBe(400);
+
+        // Containment: a file outside the runtime's working directory is refused — the daemon
+        // must not read (or expose) paths the agent could not reach itself.
+        const secretPath = join(outsideDir, 'secret.txt');
+        await writeFile(secretPath, 'not yours', 'utf8');
+        const outside = await t.fetch(
+          '/v1/internal/native-agent/project/post',
+          json({ attachments: [{ path: secretPath }] }, bindingHeaders(sessionId))
+        );
+        expect(outside.status).toBe(403);
+        expect((await responseError(outside)).code).toBe('ATTACHMENT_PATH_OUTSIDE_WORKSPACE');
+
+        expect(await messages(t, sessionId)).toEqual([]);
+      } finally {
+        await rm(dir, { recursive: true, force: true });
+        await rm(outsideDir, { recursive: true, force: true });
+      }
+    });
+
+    test('agent send with a file attachment keeps the direct ledger bounded to preview + reference', async () => {
+      const handlers = buildHandlers(mockModel());
+      t = serveTransport(kind, createHttpTransport(handlers));
+      const sessionId = await createSession(t);
+      const dir = await realpath(await mkdtemp(join(tmpdir(), 'monad-attachment-')));
+      createManagedNativeSession(handlers, sessionId, 'ncli_test', 'codex', 'running', dir);
+      try {
+        const longBody = `PRIVATE ${'y'.repeat(140_000)}`;
+        const filePath = join(dir, 'private-note.txt');
+        await writeFile(filePath, longBody, 'utf8');
+
+        const sent = await t.fetch(
+          '/v1/internal/native-agent/agent/send',
+          json({ to: 'human:zeke', attachments: [{ path: filePath }] }, bindingHeaders(sessionId))
+        );
+        expect(sent.status).toBe(200);
+
+        const read = await t.fetch(
+          '/v1/internal/native-agent/agent/read',
+          json({ with: 'human:zeke' }, bindingHeaders(sessionId))
+        );
+        const { messages: direct } = (await read.json()) as {
+          messages: Array<{ text: string; attachments?: Array<{ id: string; path: string }> }>;
+        };
+        expect(direct).toHaveLength(1);
+        expect(direct[0]?.attachments?.[0]?.path).toBe(filePath);
+        expect(direct[0]?.text.startsWith('PRIVATE ')).toBe(true);
+        expect(direct[0]?.text).not.toContain('[Attachment');
+        expect(direct[0]?.text.length ?? 0).toBeLessThan(3_000);
+        expect(await messages(t, sessionId)).toEqual([]);
+      } finally {
+        await rm(dir, { recursive: true, force: true });
+      }
     });
 
     test('project ask renders a structured question and returns the user answer to the managed runtime', async () => {

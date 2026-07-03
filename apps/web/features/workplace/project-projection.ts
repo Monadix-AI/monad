@@ -8,13 +8,22 @@ import type {
   WorkplaceProjectMemberSettings,
   WorkplaceProjectMemberType
 } from '@monad/protocol';
-import type { ActivityRow, AgentActivityPhase, Message, NativeCliStreamView, Participant, Presence } from './types';
+import type {
+  ActivityRow,
+  AgentActivityPhase,
+  Message,
+  MessageAttachment,
+  NativeCliStreamView,
+  Participant,
+  Presence
+} from './types';
 
 import {
   avatarCacheKey,
   channelDisplayText,
   entityAvatarUrl,
   entityAvatarWriteUrl,
+  messageAttachmentRefSchema,
   workplaceProjectMembersExtSchema
 } from '@monad/protocol';
 import { isProductIconId } from '@monad/ui';
@@ -179,6 +188,16 @@ function textFromParts(parts: UIPart[]): string {
     .join('');
 }
 
+function attachmentsFromParts(parts: UIPart[]): MessageAttachment[] {
+  const attachments: MessageAttachment[] = [];
+  for (const part of parts) {
+    if (part.type !== 'custom' || part.name !== 'attachment') continue;
+    const parsed = messageAttachmentRefSchema.safeParse(part.data);
+    if (parsed.success) attachments.push(parsed.data);
+  }
+  return attachments;
+}
+
 function reasoningFromParts(parts: UIPart[]): string | undefined {
   const text = parts
     .filter((part): part is Extract<UIPart, { type: 'reasoning' }> => part.type === 'reasoning')
@@ -213,6 +232,7 @@ export function messageToView(
   const rawName = agent ? (item.agentName ?? 'monad') : human.name;
   const displayName = agent ? (nativeCliDisplayNames.get(rawName) ?? rawName) : rawName;
   const reasoning = agent ? reasoningFromParts(item.parts) : undefined;
+  const attachments = attachmentsFromParts(item.parts);
   const agentAvatarSeed =
     nativeCliAvatarSeeds.get(displayName) ??
     (displayName === 'monad'
@@ -233,6 +253,7 @@ export function messageToView(
     text: displayTextFromMessage(item),
     orderKey: item.seq,
     ...(reasoning ? { reasoning } : {}),
+    ...(attachments.length ? { attachments } : {}),
     streaming: item.status === 'streaming'
   };
 }

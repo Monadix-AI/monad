@@ -65,6 +65,7 @@ import { getLicensesResponseSchema } from './licenses.ts';
 import { getMem0DataResponseSchema } from './mem0-data.ts';
 import { getLawsResponseSchema } from './memory.ts';
 import {
+  attachmentReadResponseSchema,
   nativeAgentProjectAskRequestSchema,
   nativeAgentProjectAskResponseSchema,
   nativeAgentProjectInboxAckRequestSchema,
@@ -488,6 +489,11 @@ export const daemonHttpContract = {
     }),
     runtimeInfo: defineHttpEndpoint({
       response: { 200: nativeAgentRuntimeInfoResponseSchema, 403: httpErrorSchema, 404: httpErrorSchema }
+    }),
+    // Client-facing wall read (GET /v1/attachments/:id). `?download=1` streams the raw file and
+    // bypasses schema validation; 410 = the referenced file no longer exists.
+    attachmentRead: defineHttpEndpoint({
+      response: { 200: attachmentReadResponseSchema, 404: httpErrorSchema, 410: httpErrorSchema }
     })
   }
 } as const;

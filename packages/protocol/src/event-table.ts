@@ -15,7 +15,12 @@ import { z } from 'zod';
 import { clarifyAskerSchema, clarifyChoiceModeSchema } from './clarify.ts';
 import { costSchema, type EventType, finishReasonSchema, messageTypeSchema, tokenUsageSchema } from './domain.ts';
 import { agentIdSchema, messageIdSchema, sessionIdSchema } from './ids.ts';
-import { nativeCliLaunchModeSchema, nativeCliProductIconSchema, nativeCliProviderSchema } from './native-cli-agent.ts';
+import {
+  messageAttachmentRefSchema,
+  nativeCliLaunchModeSchema,
+  nativeCliProductIconSchema,
+  nativeCliProviderSchema
+} from './native-cli-agent.ts';
 
 const requestIdSchema = z.string();
 
@@ -109,6 +114,9 @@ export const agentMessagePayloadSchema = z.object({
   agentName: z.string().optional(),
   text: z.string(),
   data: z.unknown().optional(),
+  // File references shared with the message — lets live UI projections render the attachment
+  // chips without reloading the persisted message row.
+  attachments: z.array(messageAttachmentRefSchema).optional(),
   source: z.enum(['managed-native-cli']).optional(),
   usage: tokenUsageSchema.optional(),
   cost: costSchema.optional(),

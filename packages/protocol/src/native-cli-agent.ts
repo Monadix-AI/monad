@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 import { clarifyChoiceModeSchema } from './clarify.ts';
 import { chatMessageSchema } from './domain.ts';
-import { messageIdSchema, projectIdSchema, transcriptTargetIdSchema } from './ids.ts';
+import { attachmentIdSchema, messageIdSchema, projectIdSchema, transcriptTargetIdSchema } from './ids.ts';
 
 export const nativeCliProviderSchema = z.enum(['codex', 'claude-code', 'gemini', 'qwen']);
 export type NativeCliProvider = z.infer<typeof nativeCliProviderSchema>;
@@ -178,7 +178,12 @@ export type NativeCliSessionView = z.infer<typeof nativeCliSessionViewSchema>;
 // Accept POSIX (`/abs`) and Windows (`C:\abs`, `C:/abs`, `\\server\share`) absolute paths. This is a
 // wire/browser-shared schema, so it can't import node:path — the daemon re-checks with path.isAbsolute.
 const ABSOLUTE_PATH_RE = /^(?:\/|[A-Za-z]:[\\/]|\\\\)/;
-const absolutePathSchema = z.string().refine((value) => ABSOLUTE_PATH_RE.test(value), 'workingPath must be absolute');
+const absolutePath = (message: string) =>
+  z
+    .string()
+    .min(1)
+    .refine((value) => ABSOLUTE_PATH_RE.test(value), message);
+const absolutePathSchema = absolutePath('workingPath must be absolute');
 
 export const listNativeCliAgentsResponseSchema = z.object({ agents: z.array(nativeCliAgentViewSchema) });
 export type ListNativeCliAgentsResponse = z.infer<typeof listNativeCliAgentsResponseSchema>;
@@ -302,17 +307,86 @@ export const managedProjectRuntimeSpecSchema = z.object({
 });
 export type ManagedProjectRuntimeSpec = z.infer<typeof managedProjectRuntimeSpecSchema>;
 
-export const nativeAgentProjectPostRequestSchema = z.object({
-  projectId: projectIdSchema.optional(),
-  threadId: z.string().optional(),
-  text: z.string().min(1).max(100_000)
+// Inline request-body cap (DoS guard). Longer content is spilled to a file and referenced as an
+// attachment: the message/notice/inbox copies carry only a bounded preview + the file reference.
+export const NATIVE_AGENT_INLINE_TEXT_MAX = 100_000;
+// Preview snippet length embedded in wall messages and stdin fan-out notices.
+export const NATIVE_AGENT_ATTACHMENT_PREVIEW_MAX = 2_000;
+
+/** Bounded preview snippet for spilled content — what wall messages and fan-out notices embed.
+ *  The cut point backs off one unit rather than splitting a surrogate pair (a split pair would
+ *  render as � and re-encode as ill-formed UTF-8). */
+export function attachmentPreviewText(text: string): string {
+  if (text.length <= NATIVE_AGENT_ATTACHMENT_PREVIEW_MAX) return text;
+  let end = NATIVE_AGENT_ATTACHMENT_PREVIEW_MAX;
+  const last = text.charCodeAt(end - 1);
+  if (last >= 0xd800 && last <= 0xdbff) end -= 1;
+  return `${text.slice(0, end)}…`;
+}
+
+/** Mime families whose content is rendered as an inline text preview (daemon read + web button).
+ *  Shared so the server's preview behavior and the client's Preview affordance never drift. */
+const PREVIEWABLE_ATTACHMENT_MIME_RE = /^(text\/|application\/(json|x?ya?ml|xml|toml|javascript|typescript))/;
+export function isPreviewableAttachmentMime(mime: string): boolean {
+  return PREVIEWABLE_ATTACHMENT_MIME_RE.test(mime);
+}
+
+/** A message attachment is a STRUCTURED REFERENCE to a file on the daemon host — for humans to
+ *  read (wall preview/download), never an execution input. The daemon registers the reference and
+ *  snapshots metadata at post time; content stays in the file and is read on demand, so a later
+ *  edit/delete of the file changes/breaks the preview (reference semantics, by design). */
+export const messageAttachmentRefSchema = z.object({
+  id: attachmentIdSchema,
+  /** Absolute path on the daemon host (typically inside the posting agent's workspace). */
+  path: z.string().min(1),
+  name: z.string().min(1).max(200),
+  mime: z.string().min(1).max(100),
+  /** File size snapshot taken when the reference was registered. */
+  bytes: z.number().int().nonnegative(),
+  createdAt: z.string()
 });
+export type MessageAttachmentRef = z.infer<typeof messageAttachmentRefSchema>;
+
+/** Caller-side attachment input: the local file to reference from the message. */
+export const nativeAgentAttachmentInputSchema = z.object({
+  path: absolutePath('attachment path must be absolute'),
+  name: z.string().min(1).max(200).optional(),
+  mime: z.string().min(1).max(100).optional()
+});
+export type NativeAgentAttachmentInput = z.infer<typeof nativeAgentAttachmentInputSchema>;
+
+/** Client-facing read of a registered attachment (web wall preview). `text` is a bounded inline
+ *  read of the referenced file; `truncated` marks a partial read of a larger file. */
+export const attachmentReadResponseSchema = z.object({
+  attachment: messageAttachmentRefSchema,
+  text: z.string(),
+  truncated: z.boolean().optional()
+});
+export type AttachmentReadResponse = z.infer<typeof attachmentReadResponseSchema>;
+
+// Per-message attachment count cap.
+export const NATIVE_AGENT_ATTACHMENTS_MAX = 10;
+
+const attachmentInputsSchema = z.array(nativeAgentAttachmentInputSchema).min(1).max(NATIVE_AGENT_ATTACHMENTS_MAX);
+
+// `text` is the inline body; `attachments` reference local files whose content is the
+// human-readable payload (the stored message text is then a preview + reference markers). At least
+// one must be present; the inline cap stays as the fallback DoS guard.
+export const nativeAgentProjectPostRequestSchema = z
+  .object({
+    projectId: projectIdSchema.optional(),
+    threadId: z.string().optional(),
+    text: z.string().min(1).max(NATIVE_AGENT_INLINE_TEXT_MAX).optional(),
+    attachments: attachmentInputsSchema.optional()
+  })
+  .refine((v) => v.text !== undefined || v.attachments !== undefined, 'text or attachments is required');
 export type NativeAgentProjectPostRequest = z.infer<typeof nativeAgentProjectPostRequestSchema>;
 
 export const nativeAgentProjectMessageSchema = z.object({
   id: messageIdSchema,
   projectId: projectIdSchema,
   text: z.string(),
+  attachments: z.array(messageAttachmentRefSchema).optional(),
   createdAt: z.string()
 });
 export type NativeAgentProjectMessage = z.infer<typeof nativeAgentProjectMessageSchema>;
@@ -393,14 +467,19 @@ export const nativeAgentDirectMessageSchema = z.object({
   fromAgent: z.string().nullable(),
   peer: z.string(),
   text: z.string(),
+  attachments: z.array(messageAttachmentRefSchema).optional(),
   createdAt: z.string()
 });
 export type NativeAgentDirectMessage = z.infer<typeof nativeAgentDirectMessageSchema>;
 
-export const nativeAgentSendRequestSchema = z.object({
-  to: z.string().min(1).max(200),
-  text: z.string().min(1).max(100_000)
-});
+// Same inline/attachments split as project post — see nativeAgentProjectPostRequestSchema.
+export const nativeAgentSendRequestSchema = z
+  .object({
+    to: z.string().min(1).max(200),
+    text: z.string().min(1).max(NATIVE_AGENT_INLINE_TEXT_MAX).optional(),
+    attachments: attachmentInputsSchema.optional()
+  })
+  .refine((v) => v.text !== undefined || v.attachments !== undefined, 'text or attachments is required');
 export type NativeAgentSendRequest = z.infer<typeof nativeAgentSendRequestSchema>;
 
 export const nativeAgentSendResponseSchema = z.object({

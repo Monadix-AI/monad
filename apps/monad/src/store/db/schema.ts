@@ -113,6 +113,19 @@ const _nativeAgentDirectMessages = sqliteTable('native_agent_direct_messages', {
   fromAgent: text('from_agent'),
   peer: text('peer').notNull(),
   text: text('text').notNull(),
+  attachmentIds: text('attachment_ids'), // JSON string[] of message_attachments ids
+  createdAt: text('created_at').notNull()
+});
+
+const _messageAttachments = sqliteTable('message_attachments', {
+  id: text('id').primaryKey(),
+  projectId: text('project_id').notNull(),
+  path: text('path').notNull(),
+  name: text('name').notNull(),
+  mime: text('mime').notNull(),
+  bytes: integer('bytes').notNull(),
+  preview: text('preview').notNull(),
+  createdBy: text('created_by'),
   createdAt: text('created_at').notNull()
 });
 

@@ -168,6 +168,69 @@ test('native CLI inbox delivery and visible cursors update queued item state', (
   expect(store.hasUnconsumedNativeCliInbox('ncli_inbox_diag')).toBe(false);
 });
 
+test('message attachments register a file reference snapshot, not content', () => {
+  const ref = store.registerMessageAttachment({
+    id: 'att_1',
+    projectId: 'prj_project',
+    path: '/tmp/project/report.md',
+    name: 'report.md',
+    mime: 'text/markdown',
+    bytes: 12345,
+    preview: 'long messag…',
+    createdBy: 'codex',
+    createdAt: '2026-06-28T00:00:01.000Z'
+  });
+  expect(ref).toEqual({
+    id: 'att_1',
+    path: '/tmp/project/report.md',
+    name: 'report.md',
+    mime: 'text/markdown',
+    bytes: 12345,
+    createdAt: '2026-06-28T00:00:01.000Z'
+  });
+
+  const fetched = store.getMessageAttachment('att_1');
+  expect(fetched).toMatchObject({ id: 'att_1', projectId: 'prj_project', path: '/tmp/project/report.md' });
+  expect(store.getMessageAttachment('att_missing')).toBeNull();
+});
+
+test('native agent direct messages round-trip an attachment reference', () => {
+  store.upsertNativeCliSession({ ...row, id: 'ncli_direct' });
+  const ref = store.registerMessageAttachment({
+    id: 'att_1',
+    projectId: 'prj_project',
+    path: '/tmp/project/report.md',
+    name: 'report.md',
+    mime: 'text/markdown',
+    bytes: 12345,
+    preview: '',
+    createdAt: '2026-06-28T00:00:00.000Z'
+  });
+  store.insertNativeAgentDirectMessage({
+    id: 'msg_D1',
+    projectId: 'prj_project',
+    nativeCliSessionId: 'ncli_direct',
+    fromAgent: 'codex',
+    peer: 'human',
+    text: 'preview…',
+    attachments: [ref],
+    createdAt: '2026-06-28T00:00:01.000Z'
+  });
+  store.insertNativeAgentDirectMessage({
+    id: 'msg_D2',
+    projectId: 'prj_project',
+    nativeCliSessionId: 'ncli_direct',
+    fromAgent: 'codex',
+    peer: 'human',
+    text: 'inline',
+    createdAt: '2026-06-28T00:00:02.000Z'
+  });
+
+  const messages = store.listNativeAgentDirectMessages('ncli_direct', 'human');
+  expect(messages[0]?.attachments).toEqual([ref]);
+  expect(messages[1]?.attachments).toBeUndefined();
+});
+
 test('provider session refs are unique per project session and provider when present', () => {
   store.upsertNativeCliSession({ ...row, id: 'ncli_1', providerSessionRef: 'provider-thread-1' });
   store.upsertNativeCliSession({ ...row, id: 'ncli_2', providerSessionRef: null });
