@@ -30,8 +30,9 @@ import {
   routeChannelMessage
 } from '@/handlers/session/channel-routing.ts';
 import { createAcpChannelDelegation } from '@/handlers/session/handlers/acp-channel-delegation.ts';
+import { createForwardAcpHandler } from '@/handlers/session/handlers/forward-acp.ts';
+import { createForwardNativeCliHandler } from '@/handlers/session/handlers/forward-native-cli.ts';
 import { createManagedNativeCliDelivery } from '@/handlers/session/handlers/managed-native-cli-delivery.ts';
-import { createForwardHandlers } from '@/handlers/session/handlers/messaging-forward.ts';
 import {
   channelDelegateMcpServers,
   isChannelStructuredSession,
@@ -135,11 +136,8 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
   const acpDelegation = createAcpChannelDelegation(ctx, sandboxRootsFor);
   const { dispatchChannelNextTargets, deliverProjectMessageToAcpMembers } = acpDelegation;
 
-  const { forwardToAcp, forwardToNativeCli } = createForwardHandlers(
-    ctx,
-    sandboxRootsFor,
-    startManagedNativeCliRuntimeWithRecovery
-  );
+  const forwardToAcp = createForwardAcpHandler(ctx, sandboxRootsFor);
+  const forwardToNativeCli = createForwardNativeCliHandler(ctx, startManagedNativeCliRuntimeWithRecovery);
 
   const runtimeForTranscriptTarget = (sessionId: TranscriptTargetId) => runtime.get(sessionId);
   const agentToolFilterForTranscriptTarget = (sessionId: TranscriptTargetId) =>

@@ -1,4 +1,4 @@
-import type { AcpAgentConfig, NativeCliAgentConfig } from '@monad/home';
+import type { NativeCliAgentConfig } from '@monad/home';
 import type { Event, NativeCliSessionView, TranscriptTarget, TranscriptTargetId } from '@monad/protocol';
 import type { SessionContext } from '@/handlers/session/context.ts';
 
@@ -6,23 +6,13 @@ import { loadAll } from '@monad/home';
 import { newId } from '@monad/protocol';
 
 import { extractError } from '@/agent/index.ts';
-import { composeAcpChannelPrompt } from '@/agent/prompts/channel.ts';
 import { HandlerError } from '@/handlers/handler-error.ts';
 import {
-  channelDelegateMcpServers,
   managedNativeCliProjectMembers,
   nativeCliProjectMemberDisplayNameForAgent,
   nativeCliProjectMemberSettings
 } from '@/handlers/session/handlers/messaging-members.ts';
-import { acpAuthGuidance, directDelegate } from '@/services/delegation/acp-delegate.ts';
 import { managedProjectLaunchMode } from '@/services/native-cli/managed-project.ts';
-
-type SandboxRootsFor = (
-  sessionId: TranscriptTargetId,
-  cwd: string | undefined,
-  rt: { sandboxRoots?: string[] } | undefined,
-  override?: string[]
-) => string[] | undefined;
 
 type StartManagedNativeCliRuntimeWithRecovery = (args: {
   session: TranscriptTarget;
@@ -40,233 +30,29 @@ type StartManagedNativeCliRuntimeWithRecovery = (args: {
   input: string;
 }) => Promise<NativeCliSessionView>;
 
-/** Direct-forward handlers that bypass the monad LLM/routing layer entirely: `forwardToAcp` and
- *  `forwardToNativeCli` send text straight to a named ACP or native-CLI agent, emitting the same
- *  user.message/agent.token/agent.message event shape a normal turn would. Extracted from
- *  messaging.ts because both are self-contained request handlers, not shared delivery plumbing. */
-export function createForwardHandlers(
+// Access control reads the write policy STORED on the session (origin.writableBy) — mirrors the
+// check in messaging.ts (kept local so this module has no import-cycle back to it).
+function assertWriteAllowed(session: TranscriptTarget, transport: 'http'): void {
+  const writableBy = session.origin?.writableBy;
+  if (!writableBy) return;
+  if (!writableBy.includes(transport)) {
+    throw new HandlerError('forbidden', `transport '${transport}' cannot write to this session`);
+  }
+}
+
+/** Send text directly to a named native-CLI agent, bypassing the monad LLM/routing layer entirely. */
+export function createForwardNativeCliHandler(
   ctx: SessionContext,
-  sandboxRootsFor: SandboxRootsFor,
   startManagedNativeCliRuntimeWithRecovery: StartManagedNativeCliRuntimeWithRecovery
 ) {
   const {
     deps: { store, log },
-    aborts,
-    runtime,
-    beginRun,
     makeEmit,
     persistAndRetire,
     requireTranscriptTarget
   } = ctx;
 
-  const runtimeForTranscriptTarget = (sessionId: TranscriptTargetId) => runtime.get(sessionId);
-
-  // Access control reads the write policy STORED on the session (origin.writableBy) — mirrors the
-  // check in messaging.ts (kept local so this module has no import-cycle back to it).
-  function assertWriteAllowed(session: TranscriptTarget, transport: 'http'): void {
-    const writableBy = session.origin?.writableBy;
-    if (!writableBy) return;
-    if (!writableBy.includes(transport)) {
-      throw new HandlerError('forbidden', `transport '${transport}' cannot write to this session`);
-    }
-  }
-
-  /** Send text directly to a configured ACP agent, bypassing the monad LLM layer.
-   *  Emits user.message + streaming agent.token + final agent.message into the session event stream
-   *  so the existing session subscriber sees the exchange without any monad turn overhead. */
-  async function forwardToAcp({
-    sessionId,
-    agentName,
-    text,
-    displayText,
-    ambientContext,
-    onComplete
-  }: {
-    sessionId: TranscriptTargetId;
-    agentName: string;
-    text: string;
-    displayText?: string;
-    ambientContext?: string;
-    onComplete?: (text: string) => void | Promise<void>;
-  }) {
-    const session = requireTranscriptTarget(sessionId);
-    assertWriteAllowed(session, 'http');
-    // Reject if a turn is already streaming for this session — same concurrency guard as `send`.
-    if (aborts.has(sessionId)) throw new HandlerError('conflict', 'a turn is already in progress for this session');
-    const paths = ctx.deps.paths;
-    if (!paths) throw new HandlerError('internal', 'daemon paths not configured');
-    const cfg = await loadAll(paths.config, paths.profile);
-    const spec = (cfg?.acpAgents ?? []).find((a: AcpAgentConfig) => a.name === agentName && a.enabled !== false);
-    if (!spec) throw new HandlerError('invalid', `ACP agent "${agentName}" not found or disabled`);
-    log?.debug({ sessionId, event: 'session.forward_acp.start', agentName, text, ambientContext }, 'forward acp start');
-
-    const { round, signal } = beginRun(sessionId);
-    const emit = makeEmit(round);
-    const userMsgId = newId('msg');
-    const agentMsgId = newId('msg');
-    const acpToolCallId = newId('tc');
-    let tokenIndex = 0;
-    let acpActivityStarted = false;
-    let acpProcessOutput = '';
-    let acpResponseOutput = '';
-
-    const emitAcpActivityStart = () => {
-      if (acpActivityStarted) return;
-      acpActivityStarted = true;
-      emit({
-        id: newId('evt'),
-        transcriptTargetId: sessionId,
-        type: 'tool.called',
-        actorAgentId: null,
-        payload: { toolCallId: acpToolCallId, tool: `acp:${spec.name}`, input: { agent: spec.name } },
-        at: new Date().toISOString()
-      });
-      emit({
-        id: newId('evt'),
-        transcriptTargetId: sessionId,
-        type: 'tool.progress',
-        actorAgentId: null,
-        payload: { toolCallId: acpToolCallId, tool: `acp:${spec.name}`, output: 'waiting for response...' },
-        at: new Date().toISOString()
-      });
-    };
-    const emitAcpActivityProgress = () => {
-      const sections = [
-        acpProcessOutput.trim(),
-        acpResponseOutput ? `response stream:\n${acpResponseOutput}` : ''
-      ].filter(Boolean);
-      emit({
-        id: newId('evt'),
-        transcriptTargetId: sessionId,
-        type: 'tool.progress',
-        actorAgentId: null,
-        payload: {
-          toolCallId: acpToolCallId,
-          tool: `acp:${spec.name}`,
-          output: sections.join('\n\n') || 'waiting for response...'
-        },
-        at: new Date().toISOString()
-      });
-    };
-
-    emit({
-      id: newId('evt'),
-      transcriptTargetId: sessionId,
-      type: 'user.message',
-      actorAgentId: null,
-      payload: { messageId: userMsgId, text: displayText ?? text },
-      at: new Date().toISOString()
-    });
-    store.insertMessage(userMsgId, sessionId, displayText ?? text, new Date().toISOString(), 'user');
-
-    const rt = runtimeForTranscriptTarget(sessionId);
-    emitAcpActivityStart();
-    directDelegate(spec, composeAcpChannelPrompt(text, ambientContext), {
-      sessionId,
-      signal,
-      sandboxRoots: sandboxRootsFor(sessionId, requireTranscriptTarget(sessionId).cwd, rt),
-      backends: rt?.backends,
-      toolFilter: rt?.toolFilter,
-      extraTools: rt?.extraTools,
-      extraSkills: rt?.extraSkills,
-      mcpServers: channelDelegateMcpServers(cfg?.mcpServers, rt?.mcpServers),
-      onChunk: (delta) => {
-        emit({
-          id: newId('evt'),
-          transcriptTargetId: sessionId,
-          type: 'agent.token',
-          actorAgentId: null,
-          payload: { messageId: agentMsgId, agentName: spec.name, delta, index: tokenIndex++ },
-          at: new Date().toISOString()
-        });
-        acpResponseOutput += delta;
-        emitAcpActivityProgress();
-      },
-      onActivity: (output) => {
-        acpProcessOutput = output;
-        emitAcpActivityProgress();
-      }
-    })
-      .then(async (fullText) => {
-        log?.debug(
-          { sessionId, event: 'session.forward_acp.complete', agentName: spec.name, fullText },
-          'forward acp complete'
-        );
-        emit({
-          id: newId('evt'),
-          transcriptTargetId: sessionId,
-          type: 'tool.result',
-          actorAgentId: null,
-          payload: { toolCallId: acpToolCallId, tool: `acp:${spec.name}`, ok: true, result: 'completed' },
-          at: new Date().toISOString()
-        });
-        store.insertMessage(agentMsgId, sessionId, fullText, new Date().toISOString(), 'assistant', {
-          data: { agentName: spec.name }
-        });
-        emit({
-          id: newId('evt'),
-          transcriptTargetId: sessionId,
-          type: 'agent.message',
-          actorAgentId: null,
-          payload: { messageId: agentMsgId, agentName: spec.name, text: fullText },
-          at: new Date().toISOString()
-        });
-        if (onComplete) {
-          try {
-            await onComplete(fullText);
-          } catch (err) {
-            process.stderr.write(`channel next dispatch error (${sessionId}): ${err}\n`);
-          }
-        }
-        persistAndRetire(sessionId, round);
-      })
-      .catch((err: unknown) => {
-        const { code, message } = extractError(err);
-        log?.debug(
-          { sessionId, event: 'session.forward_acp.error', agentName: spec.name, code, message },
-          'forward acp error'
-        );
-        const hint = acpAuthGuidance(err, spec, ctx.deps.localeService?.t);
-        const errorText = hint ? `${message}\n\n${hint}` : message;
-        emit({
-          id: newId('evt'),
-          transcriptTargetId: sessionId,
-          type: 'tool.result',
-          actorAgentId: null,
-          payload: { toolCallId: acpToolCallId, tool: `acp:${spec.name}`, ok: false, result: errorText },
-          at: new Date().toISOString()
-        });
-        store.insertMessage(
-          agentMsgId,
-          sessionId,
-          code ? `[${code}] ${errorText}` : errorText,
-          new Date().toISOString(),
-          'assistant',
-          {
-            type: 'error',
-            data: { agentName: spec.name }
-          }
-        );
-        emit({
-          id: newId('evt'),
-          transcriptTargetId: sessionId,
-          type: 'agent.error',
-          actorAgentId: null,
-          payload: { messageId: agentMsgId, agentName: spec.name, code, message: errorText },
-          at: new Date().toISOString()
-        });
-        try {
-          persistAndRetire(sessionId, round);
-        } catch (innerErr) {
-          process.stderr.write(`forwardToAcp persistAndRetire error (${sessionId}): ${innerErr}\n`);
-        }
-      })
-      .finally(() => aborts.delete(sessionId));
-
-    return { accepted: true as const };
-  }
-
-  async function forwardToNativeCli({
+  return async function forwardToNativeCli({
     sessionId,
     agentName,
     text,
@@ -467,7 +253,5 @@ export function createForwardHandlers(
       emitNativeCliError(err);
     }
     return { accepted: true as const };
-  }
-
-  return { forwardToAcp, forwardToNativeCli };
+  };
 }
