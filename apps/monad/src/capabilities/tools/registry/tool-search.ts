@@ -7,6 +7,9 @@ import { z } from 'zod';
 import { toolInputJsonSchema } from '@/capabilities/tools/schema.ts';
 import { getCatalog } from '@/capabilities/tools/tool-catalog.ts';
 import { toolResult } from '@/capabilities/tools/types.ts';
+// `with { type: 'file' }` embeds reliably in bun's --compile binary; `new URL(..., import.meta.url)`
+// resolves against the bundled module's relocated path and breaks in the standalone binary.
+import searchPromptPath from '../../../agent/prompts/tool-search-system-prompt.md' with { type: 'file' };
 
 const log = createLogger('tool-search');
 
@@ -23,9 +26,7 @@ export interface ToolSearchDeps {
   topK?: number;
 }
 
-const SEARCH_PROMPT = (
-  await Bun.file(new URL('../../../agent/prompts/tool-search-system-prompt.md', import.meta.url)).text()
-).trim();
+const SEARCH_PROMPT = (await Bun.file(searchPromptPath).text()).trim();
 
 export function createToolSearchTool(deps: ToolSearchDeps): Tool<{ query: string }, string> {
   const topK = deps.topK ?? 5;

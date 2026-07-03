@@ -2,8 +2,9 @@
 
 import type * as React from 'react';
 
+import { CheckIcon, ChevronDownIcon, ChevronUpIcon } from '@hugeicons/core-free-icons';
+import { HugeiconsIcon } from '@hugeicons/react';
 import * as SelectPrimitive from '@radix-ui/react-select';
-import { CheckIcon, ChevronDownIcon, ChevronUpIcon } from 'lucide-react';
 
 import { cn } from '../lib/utils';
 
@@ -43,7 +44,10 @@ function SelectTrigger({
     >
       {children}
       <SelectPrimitive.Icon asChild>
-        <ChevronDownIcon className="size-4 opacity-50" />
+        <HugeiconsIcon
+          className="size-4 opacity-50"
+          icon={ChevronDownIcon}
+        />
       </SelectPrimitive.Icon>
     </SelectPrimitive.Trigger>
   );
@@ -96,7 +100,10 @@ function SelectItem({ className, children, ...props }: React.ComponentProps<type
     >
       <span className="absolute right-2 flex size-3.5 items-center justify-center">
         <SelectPrimitive.ItemIndicator>
-          <CheckIcon className="size-4" />
+          <HugeiconsIcon
+            className="size-4"
+            icon={CheckIcon}
+          />
         </SelectPrimitive.ItemIndicator>
       </span>
       <SelectPrimitive.ItemText>{children}</SelectPrimitive.ItemText>
@@ -111,7 +118,10 @@ function SelectScrollUpButton({ className, ...props }: React.ComponentProps<type
       data-slot="select-scroll-up-button"
       {...props}
     >
-      <ChevronUpIcon className="size-4" />
+      <HugeiconsIcon
+        className="size-4"
+        icon={ChevronUpIcon}
+      />
     </SelectPrimitive.ScrollUpButton>
   );
 }
@@ -126,7 +136,10 @@ function SelectScrollDownButton({
       data-slot="select-scroll-down-button"
       {...props}
     >
-      <ChevronDownIcon className="size-4" />
+      <HugeiconsIcon
+        className="size-4"
+        icon={ChevronDownIcon}
+      />
     </SelectPrimitive.ScrollDownButton>
   );
 }

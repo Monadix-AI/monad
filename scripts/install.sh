@@ -42,17 +42,22 @@ _BIN_DIR_EXPLICIT="${MONAD_BIN_DIR:+1}"
 
 # ── Colours (disabled when not a tty) ─────────────────────────────────────────
 
-if [ -t 1 ]; then
+if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
   RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
-  CYAN='\033[0;36m'; BOLD='\033[1m'; RESET='\033[0m'
+  CYAN='\033[0;36m'; BLUE='\033[0;34m'; DIM='\033[2m'; BOLD='\033[1m'; RESET='\033[0m'
+  TTY=1
 else
-  RED=''; GREEN=''; YELLOW=''; CYAN=''; BOLD=''; RESET=''
+  RED=''; GREEN=''; YELLOW=''; CYAN=''; BLUE=''; DIM=''; BOLD=''; RESET=''
+  TTY=0
 fi
 
-info()    { printf "${CYAN}[monad]${RESET} %s\n" "$*"; }
-success() { printf "${GREEN}[monad]${RESET} %s\n" "$*"; }
-warn()    { printf "${YELLOW}[monad]${RESET} %s\n" "$*" >&2; }
-fatal()   { printf "${RED}[monad] error:${RESET} %s\n" "$*" >&2; exit 1; }
+# step()  — a primary "▸" milestone line (the spine of the install log)
+# info()  — an indented detail beneath the current step
+step()    { printf "${BLUE}${BOLD}▸${RESET} ${BOLD}%s${RESET}\n" "$*"; }
+info()    { printf "  ${DIM}%s${RESET}\n" "$*"; }
+success() { printf "${GREEN}${BOLD}▸${RESET} ${GREEN}%s${RESET}\n" "$*"; }
+warn()    { printf "${YELLOW}${BOLD}▸${RESET} ${YELLOW}%s${RESET}\n" "$*" >&2; }
+fatal()   { printf "${RED}${BOLD}▸ error:${RESET} ${RED}%s${RESET}\n" "$*" >&2; exit 1; }
 
 # ── OS + arch detection ────────────────────────────────────────────────────────
 
@@ -74,6 +79,23 @@ detect_platform() {
   echo "${os}-${arch}"
 }
 
+# Human-friendly platform label for the install banner, e.g. "macOS (Apple Silicon)".
+platform_label() {
+  local os arch
+  case "$(uname -s)" in
+    Darwin) os="macOS" ;;
+    Linux)  os="Linux" ;;
+    *)      os="$(uname -s)" ;;
+  esac
+  case "$(uname -m)" in
+    arm64) [ "$os" = "macOS" ] && arch="Apple Silicon" || arch="ARM64" ;;
+    aarch64) arch="ARM64" ;;
+    x86_64|amd64) [ "$os" = "macOS" ] && arch="Intel" || arch="x86_64" ;;
+    *) arch="$(uname -m)" ;;
+  esac
+  echo "${os} (${arch})"
+}
+
 # ── Downloader ────────────────────────────────────────────────────────────────
 
 download() {
@@ -85,6 +107,85 @@ download() {
   else
     fatal "Neither curl nor wget found. Please install one and re-run."
   fi
+}
+
+# Width of the rendered progress bar, in blocks.
+BAR_WIDTH=20
+
+# Redraw the progress bar in place for a given percentage.
+# $2 ("1"/"0") toggles the blinking frontier block so the bar visibly pulses
+# at its leading edge even when the byte count hasn't moved between frames.
+draw_bar() {
+  local pct="$1" blink="$2"
+  [ "$pct" -gt 100 ] && pct=100
+  [ "$pct" -lt 0 ] && pct=0
+  local filled=$(( pct * BAR_WIDTH / 100 ))
+
+  local out="  ${DIM}[${RESET} " i
+  for (( i = 0; i < BAR_WIDTH; i++ )); do
+    if [ "$i" -lt "$filled" ]; then
+      if [ "$i" -eq $(( filled - 1 )) ] && [ "$pct" -lt 100 ]; then
+        # Leading (frontier) block — blink between a lit and an empty cell.
+        if [ "$blink" = "1" ]; then out+="${GREEN}${BOLD}▮${RESET}"; else out+="${DIM}▯${RESET}"; fi
+      else
+        out+="${GREEN}▮${RESET}"
+      fi
+    else
+      out+="${DIM}▯${RESET}"
+    fi
+  done
+  out+=" ${DIM}]${RESET} ${BOLD}${pct}%${RESET}"
+  printf "\r%b" "$out"
+}
+
+# Like download(), but renders a live ▮▯ progress bar on an interactive terminal.
+# Strategy: ask the server for Content-Length, download in the background, and poll the
+# partial file's byte count to drive draw_bar(). Falls back to a plain download when the
+# size is unknown, curl is missing, or stdout is not a tty (logs, CI, pipes).
+download_progress() {
+  local url="$1" dest="$2"
+
+  if [ "$TTY" != "1" ] || ! command -v curl &>/dev/null; then
+    download "$url" "$dest"
+    return
+  fi
+
+  # Resolve the final size across redirects (GitHub → CDN); take the last Content-Length seen.
+  local total
+  total=$(curl --proto '=https' --tlsv1.2 -sIL "$url" 2>/dev/null \
+            | tr -d '\r' | awk 'tolower($1) == "content-length:" { v = $2 } END { print v }' \
+            | tr -dc '0-9')
+
+  if ! [ "$total" -gt 0 ] 2>/dev/null; then
+    # Unknown size — fall back to curl's own bar so the user still sees motion.
+    # Both printf and curl -# write to stderr so the dim/reset wraps the bar correctly.
+    printf '%s' "${DIM}" >&2
+    curl --proto '=https' --tlsv1.2 -fSL --retry 3 --retry-delay 1 -# -o "$dest" "$url"
+    local rc=$?
+    printf '%s' "${RESET}" >&2
+    return $rc
+  fi
+
+  curl --proto '=https' --tlsv1.2 -fsSL --retry 3 --retry-delay 1 -o "$dest" "$url" &
+  local pid=$! cur pct frame=0
+  printf '\033[?25l'  # hide cursor while the bar animates
+  while kill -0 "$pid" 2>/dev/null; do
+    cur=$(wc -c < "$dest" 2>/dev/null | tr -dc '0-9')
+    [ -n "$cur" ] || cur=0
+    pct=$(( cur * 100 / total ))
+    draw_bar "$pct" $(( (frame / 2) % 2 ))
+    frame=$(( frame + 1 ))
+    sleep 0.12
+  done
+  wait "$pid"
+  local rc=$?
+  if [ "$rc" -eq 0 ]; then
+    draw_bar 100 1
+  else
+    printf '\r\033[K'  # erase partial bar line on failure
+  fi
+  printf '\033[?25h\n'  # restore cursor, end the bar line
+  return "$rc"
 }
 
 # ── SHA256 verification ───────────────────────────────────────────────────────
@@ -139,14 +240,14 @@ ensure_on_path() {
   for cfg in "${configs[@]}"; do
     if ! grep -qF "$bin_dir" "$cfg" 2>/dev/null; then
       printf '\n# Added by monad installer\n%s\n' "$export_line" >> "$cfg"
-      info "  Added PATH entry to ${cfg}"
+      info "Added PATH entry to ${cfg}"
     fi
   done
 
   local fish_cfg="$HOME/.config/fish/config.fish"
   if [ -f "$fish_cfg" ] && ! grep -qF "$bin_dir" "$fish_cfg" 2>/dev/null; then
     printf '\n# Added by monad installer\nfish_add_path %s\n' "$bin_dir" >> "$fish_cfg"
-    info "  Added PATH entry to ${fish_cfg}"
+    info "Added PATH entry to ${fish_cfg}"
   fi
 }
 
@@ -163,7 +264,7 @@ stop_existing_daemon() {
   local pid="" pidfile="${home}/runtime/monad.pid"
   [ -f "$pidfile" ] && pid=$(tr -dc '0-9' <"$pidfile" 2>/dev/null)
 
-  info "Stopping running monad…"
+  step "Stopping running Monad"
   MONAD_HOME="$home" "$monad_bin" stop >/dev/null 2>&1 || true
 
   [ -n "$pid" ] || return 0
@@ -226,45 +327,57 @@ main() {
   local tarball platform artifact_name
   # Global var so the EXIT trap can reach it after main() returns
   _MONAD_TMP=$(mktemp -d)
-  trap 'rm -rf "${_MONAD_TMP:-}"' EXIT
+  # Clean tmp on exit; also erase any partial progress bar and restore the cursor.
+  trap 'rm -rf "${_MONAD_TMP:-}"; [ "${TTY:-0}" = "1" ] && printf "\r\033[K\033[?25h"' EXIT
 
   if [ -n "${MONAD_TARBALL:-}" ]; then
     tarball="$MONAD_TARBALL"
+    step "Installing Monad CLI"
     info "Using local tarball: $tarball"
   else
     platform=$(detect_platform)
     local version="${MONAD_VERSION:-}"
 
+    step "Detected platform: $(platform_label)"
+
+    # Resolve version before choosing the step header so we can distinguish reinstall
+    # from upgrade (the comparison requires knowing the target version).
     if [ -z "$version" ]; then
-      info "Fetching latest ${CHANNEL} release version…"
+      info "Resolving latest ${CHANNEL} release…"
       version=$(download_latest_version)
     fi
 
-    # Log install type now that we know the target version
     if [ -n "$existing_version" ]; then
       if [ "$existing_version" = "$version" ]; then
-        info "Reinstalling monad ${version} (${CHANNEL} channel)…"
+        step "Reinstalling Monad CLI"
       else
-        info "Upgrading monad ${existing_version} → ${version} (${CHANNEL} channel)…"
+        step "Upgrading Monad CLI"
       fi
     else
-      info "Installing monad ${version} (${CHANNEL} channel)…"
+      step "Installing Monad CLI"
+    fi
+    step "Resolved Monad ${version} (${CHANNEL} channel)"
+
+    # Note the transition explicitly when an older build is already present.
+    if [ -n "$existing_version" ] && [ "$existing_version" != "$version" ]; then
+      info "Replacing installed ${existing_version} → ${version}"
     fi
 
     artifact_name="monad-${version}-${platform}"
     local release_url="https://github.com/${GITHUB_REPO}/releases/download/${version}/${artifact_name}.tar.gz"
     local checksum_url="${release_url}.sha256"
 
-    info "Downloading ${artifact_name}…"
+    step "Downloading Monad CLI"
+    info "${artifact_name}.tar.gz"
     tarball="${_MONAD_TMP}/${artifact_name}.tar.gz"
-    download "$release_url" "$tarball"
+    download_progress "$release_url" "$tarball"
 
     if [ "$SKIP_VERIFY" != "1" ]; then
       local checksum_file="${tarball}.sha256"
       download "$checksum_url" "$checksum_file"
-      info "Verifying checksum…"
+      step "Verifying Monad checksum"
       verify_sha256 "$tarball" "$checksum_file"
-      success "Checksum verified"
+      info "SHA256 verified"
     fi
   fi
 
@@ -290,14 +403,13 @@ main() {
 
   # ── 6. Extract ───────────────────────────────────────────────────────────────
 
-  info "Extracting to ${INSTALL_DIR}…"
+  step "Installing Monad to ${INSTALL_DIR}"
   mkdir -p "$INSTALL_DIR"
   tar -xzf "$tarball" -C "$INSTALL_DIR" --strip-components=1
   # macOS: remove quarantine attribute so Gatekeeper doesn't silently block execution
   if [ "$(uname -s)" = "Darwin" ]; then
     xattr -dr com.apple.quarantine "$INSTALL_DIR" 2>/dev/null || true
   fi
-  success "Extracted"
 
   # ── 7. Place binaries ─────────────────────────────────────────────────────────
 
@@ -305,16 +417,19 @@ main() {
     local name
     name=$(basename "$binary")
     ln -sf "$binary" "${bin_dir}/${name}"
-    info "  ${name} → ${bin_dir}/${name}"
+    info "${name} → ${bin_dir}/${name}"
   done
 
   # ── 8. PATH (production only — skipped when bin dir is explicit or opted out) ──
 
   ensure_on_path "$bin_dir"
 
+  success "Monad CLI installed"
+
   # ── 9. Start — hand off to monad ──────────────────────────────────────────────
 
   if [ "${NO_DAEMON}" != "1" ]; then
+    step "Starting Monad"
     # Bare `monad` (→ `monad up`) seeds the home on boot, relays the ready banner, and opens the
     # browser for setup. The old daemon was already stopped above, so this starts cleanly. Keeping
     # start/browser in monad means a hand-run `monad` behaves identically to install. Logs land in
@@ -331,15 +446,14 @@ main() {
     # exist for offline inspection (and the install smoke test asserts on them).
     local init_log="${_MONAD_TMP}/init.log"
     if MONAD_HOME="$init_home" "${bin_dir}/monad" init --non-interactive >"$init_log" 2>&1; then
-      success "Monad home initialised"
+      info "Monad home initialised"
     else
       warn "Could not initialise monad home"
       [ -s "$init_log" ] && warn "$(cat "$init_log")"
     fi
-    success "monad installed successfully!"
     printf "\n"
-    printf "  ${BOLD}Start:${RESET}                monad\n"
-    printf "  ${BOLD}CLI:${RESET}                  monad --help\n"
+    printf "    ${BOLD}Start:${RESET}  ${CYAN}monad${RESET}\n"
+    printf "    ${BOLD}CLI:${RESET}    ${CYAN}monad --help${RESET}\n"
     printf "\n"
     if ! echo ":$PATH:" | grep -q ":${bin_dir}:"; then
       warn "Add ${bin_dir} to your PATH to use monad from any directory."

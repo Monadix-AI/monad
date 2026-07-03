@@ -1,11 +1,13 @@
 import type { MonadPaths, ObscuraConfig } from '@monad/home';
 import type { ObscuraStatusResponse, SetObscuraRequest } from '@monad/protocol';
+import type { DownloadProgress } from '@/services/download.ts';
 
 import { chmodSync, mkdirSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { loadAll, saveProfile } from '@monad/home';
 
 import { resolveBinary } from '@/infra/resolve-binary.ts';
+import { downloadBytes } from '@/services/download.ts';
 
 function obscuraBinaryAssetName(): string {
   const os = process.platform === 'darwin' ? 'macos' : process.platform === 'win32' ? 'windows' : 'linux';
@@ -13,7 +15,12 @@ function obscuraBinaryAssetName(): string {
   return `obscura-${arch}-${os}`;
 }
 
-async function ensureObscuraBinary(home: string): Promise<string> {
+export type ObscuraDownloadProgress = DownloadProgress & { assetName: string };
+
+async function ensureObscuraBinary(
+  home: string,
+  onDownloadProgress?: (progress: ObscuraDownloadProgress) => void
+): Promise<string> {
   const binDir = join(home, 'bin');
   const binPath = join(binDir, process.platform === 'win32' ? 'obscura.exe' : 'obscura');
 
@@ -31,28 +38,33 @@ async function ensureObscuraBinary(home: string): Promise<string> {
   if (!asset) throw new Error(`obscura: no release asset for platform "${assetName}"`);
   const sha256Asset = rel.assets.find((a) => a.name === `${asset.name}.sha256`);
 
-  const buf = await fetch(asset.browser_download_url).then((r) => r.arrayBuffer());
+  const { bytes } = await downloadBytes(asset.browser_download_url, {
+    headers: { 'User-Agent': 'monad-daemon' },
+    accept: 'application/gzip, application/zip, application/octet-stream',
+    allowedContentTypes: ['application/gzip', 'application/x-gzip', 'application/zip', 'application/octet-stream'],
+    onProgress: (progress) => onDownloadProgress?.({ ...progress, assetName: asset.name })
+  });
 
   if (sha256Asset) {
     const { createHash } = await import('node:crypto');
     const expected = (await fetch(sha256Asset.browser_download_url).then((r) => r.text())).trim();
-    const actual = createHash('sha256').update(new Uint8Array(buf)).digest('hex');
+    const actual = createHash('sha256').update(bytes).digest('hex');
     if (!expected.startsWith(actual)) throw new Error('obscura: SHA256 mismatch — download may be tampered');
   }
 
   mkdirSync(binDir, { recursive: true });
   if (asset.name.endsWith('.tar.gz')) {
     const tmp = `${binPath}.tar.gz`;
-    await Bun.write(tmp, buf);
+    await Bun.write(tmp, bytes);
     await Bun.$`tar -xzf ${tmp} -C ${binDir}`.quiet();
     unlinkSync(tmp);
   } else if (asset.name.endsWith('.zip')) {
     const tmp = `${binPath}.zip`;
-    await Bun.write(tmp, buf);
+    await Bun.write(tmp, bytes);
     await Bun.$`unzip -o ${tmp} -d ${binDir}`.quiet();
     unlinkSync(tmp);
   } else {
-    await Bun.write(binPath, buf);
+    await Bun.write(binPath, bytes);
   }
   if (process.platform !== 'win32') chmodSync(binPath, 0o755);
   return binPath;
@@ -63,9 +75,16 @@ export interface ObscuraModuleDeps {
   connectObscura?: (config: ObscuraConfig, command: string) => Promise<{ connected: boolean; tools: string[] }>;
   disconnectObscura?: () => Promise<void>;
   getObscuraStatus?: () => { connected: boolean; tools: string[] };
+  onDownloadProgress?: (progress: ObscuraDownloadProgress) => void;
 }
 
-export function createObscuraModule({ paths, connectObscura, disconnectObscura, getObscuraStatus }: ObscuraModuleDeps) {
+export function createObscuraModule({
+  paths,
+  connectObscura,
+  disconnectObscura,
+  getObscuraStatus,
+  onDownloadProgress
+}: ObscuraModuleDeps) {
   function isBinaryPresent(): boolean {
     const binPath = join(paths.home, 'bin', process.platform === 'win32' ? 'obscura.exe' : 'obscura');
     return resolveBinary('obscura', [binPath]) !== undefined;
@@ -88,7 +107,7 @@ export function createObscuraModule({ paths, connectObscura, disconnectObscura, 
     if (!cfg) throw new Error('obscura settings: config missing');
 
     if (req.enabled) {
-      const command = await ensureObscuraBinary(paths.home);
+      const command = await ensureObscuraBinary(paths.home, onDownloadProgress);
       cfg.obscura = { enabled: true, stealth: req.stealth ?? false, requestTimeoutMs: req.requestTimeoutMs };
       await saveProfile(paths.profile, cfg);
       const result = await (connectObscura?.(cfg.obscura, command) ?? { connected: false, tools: [] });

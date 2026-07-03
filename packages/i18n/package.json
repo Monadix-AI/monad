@@ -26,6 +26,8 @@
     "start:dev": "bun ../../scripts/i18n.ts --watch",
     "test": "bun ../../scripts/i18n.ts --write && bun ../../scripts/bun-test.ts test/ --only-failures",
     "test:loud": "bun ../../scripts/i18n.ts --write && bun ../../scripts/bun-test.ts test/ --loud",
+    "test:unit": "bun ../../scripts/i18n.ts --write && bun ../../scripts/bun-test.ts test/unit/ --only-failures",
+    "test:unit:loud": "bun ../../scripts/i18n.ts --write && bun ../../scripts/bun-test.ts test/unit/ --loud",
     "typecheck": "bun ../../scripts/i18n.ts --write && tsgo -p tsconfig.typecheck.json --noEmit"
   },
   "sideEffects": false,

@@ -4,14 +4,71 @@ import { channelDisplayText, channelStructuredVisibility, parseEventPayload } fr
 import { Allow, parse as parsePartialJson } from 'partial-json';
 
 const TEXT_TYPES = new Set(['text', 'markdown', 'error']);
+const MAX_NATIVE_CLI_UI_OUTPUT = 64 * 1024;
+// Min chars to accumulate before re-running the O(current-length) channel partial-JSON parse. Parses
+// also fire whenever a delta carries a `}` (a structural close — end of the display/visibility object),
+// so completion and `silent` flips are never missed regardless of this throttle.
+const CHANNEL_REPARSE_MIN_DELTA = 32;
+// Ceiling on live-streamed items a single held-open subscription's projector retains. Well above the
+// hydration window (LIVE_SNAPSHOT_LIMIT); only a very long-lived viewer streaming thousands of turns
+// hits it. Eviction drops the OLDEST already-settled items (the client keeps its own copy and the
+// projector never re-emits a settled item), so it bounds memory without any client-visible effect.
+const MAX_LIVE_UI_ITEMS = 1000;
 
 interface MemorySummaryProjection {
   summary: string;
   uptoMessageId: string;
 }
 
+/** Durable per-run projection of a native CLI session, used to rebuild its tool card during
+ *  hydration (page refresh / reconnect) from the bounded output snapshot rather than from the
+ *  per-chunk `native_cli.output` event stream. Structurally satisfied by the store's session row. */
+export interface NativeCliSessionSnapshot {
+  id: string;
+  provider: string;
+  agentName: string;
+  workingPath: string;
+  launchMode: string;
+  state: 'starting' | 'running' | 'exited' | 'failed' | 'stopped';
+  exitCode: number | null;
+  outputSnapshot: string;
+  startedAt: string;
+}
+
 function itemKey(kind: UIItem['kind'], id: string): string {
   return `${kind}:${id}`;
+}
+
+// Safe to drop from a live projector once it settles: it won't receive further deltas and the client
+// keeps its own copy. Active/streaming items and pending interactions (approval/clarification) are
+// never evicted — late events still target them; singletons (context) and markers are kept too.
+function isEvictable(item: UIItem): boolean {
+  if (item.kind === 'message' || item.kind === 'custom') return item.status === 'done' || item.status === 'error';
+  if (item.kind === 'tool') return item.status === 'ok' || item.status === 'error';
+  return false;
+}
+
+function nativeCliToolItem(s: NativeCliSessionSnapshot): Extract<UIItem, { kind: 'tool' }> {
+  const status = s.state === 'failed' ? 'error' : s.state === 'starting' || s.state === 'running' ? 'running' : 'ok';
+  // Mirror the live `native_cli.exited` decoration so a refreshed terminal run reads the same as one
+  // watched live; keep the running state undecorated.
+  const exitText = status === 'running' ? '' : s.exitCode === null ? `\n${s.state}` : `\n${s.state} (${s.exitCode})`;
+  const output = appendBoundedText(s.outputSnapshot, exitText, MAX_NATIVE_CLI_UI_OUTPUT);
+  return {
+    kind: 'tool',
+    id: s.id,
+    tool: `native-cli:${s.provider}`,
+    input: {
+      agent: s.agentName,
+      provider: s.provider,
+      workingPath: s.workingPath,
+      launchMode: s.launchMode,
+      approvalOwnership: 'provider-owned'
+    },
+    ...(output ? { output } : {}),
+    status,
+    seq: s.startedAt
+  };
 }
 
 function statusFromMessage(message: ChatMessage): UIMessageItem['status'] {
@@ -51,6 +108,12 @@ function agentNameFromData(data: unknown): string | undefined {
   return typeof agentName === 'string' && agentName ? agentName : undefined;
 }
 
+function sourceFromData(data: unknown): UIMessageItem['source'] | undefined {
+  if (!data || typeof data !== 'object') return undefined;
+  const source = (data as { source?: unknown }).source;
+  return source === 'managed-native-cli' ? source : undefined;
+}
+
 function isUnknownToolResult(tool: string | undefined, output: string | undefined): boolean {
   if (!tool || !output) return false;
   return output === `unknown tool "${tool}"` || output === `Error: unknown tool "${tool}"`;
@@ -66,6 +129,11 @@ function channelStructuredJsonText(text: string): string {
   const trimmed = text.trim();
   const completeFence = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
   return (completeFence?.[1] ?? trimmed.replace(/^```(?:json)?\s*/i, '')).trim();
+}
+
+function appendBoundedText(current: string, chunk: string, maxBytes: number): string {
+  const next = `${current}${chunk}`;
+  return next.length > maxBytes ? next.slice(-maxBytes) : next;
 }
 
 // Hot path: invoked per `agent.token` with the full accumulated message text. A single tolerant
@@ -93,10 +161,17 @@ export class SessionUiProjector {
   private readonly items = new Map<string, UIItem>();
   private readonly order: string[] = [];
   private readonly rawStreamingText = new Map<string, string>();
+  // Per-message channel-display parse cache: the raw length at the last parse + the text it yielded,
+  // so intermediate tokens can reuse it instead of re-parsing the whole accumulated JSON each time.
+  private readonly channelDisplayCache = new Map<string, { len: number; text: string }>();
   private lastCursor: string | undefined;
   // Oldest RAW message id hydrated — the `before` cursor a client uses to page older history.
   // (Not a UI-item id: projection is not 1:1, so the client cannot derive this from the items.)
   private oldestMessageId: string | undefined;
+  // Live-eviction only applies after the initial snapshot is taken, so a bounded hydration window or a
+  // full includeAncestors snapshot is never trimmed — only unbounded live streaming on a held-open
+  // subscription is.
+  private snapshotted = false;
 
   constructor(private readonly opts: { channelStructured?: boolean } = {}) {}
 
@@ -108,9 +183,29 @@ export class SessionUiProjector {
 
   private upsert(item: UIItem): UIItem {
     const key = itemKey(item.kind, item.id);
-    if (!this.items.has(key)) this.order.push(key);
+    if (!this.items.has(key)) {
+      this.order.push(key);
+      if (this.snapshotted) this.evictOldestSettled();
+    }
     this.items.set(key, item);
     return item;
+  }
+
+  // Bound a long-lived subscription's memory: when live items exceed the ceiling, drop the oldest
+  // already-settled ones. Only runs post-snapshot and on genuine growth (new keys), so it's off the
+  // per-token update path and never trims a hydration/lineage snapshot.
+  private evictOldestSettled(): void {
+    let overflow = this.order.length - MAX_LIVE_UI_ITEMS;
+    if (overflow <= 0) return;
+    for (let i = 0; i < this.order.length && overflow > 0; ) {
+      const key = this.order[i];
+      const item = key === undefined ? undefined : this.items.get(key);
+      if (item && isEvictable(item)) {
+        this.items.delete(key as string);
+        this.order.splice(i, 1);
+        overflow--;
+      } else i++;
+    }
   }
 
   private remove(kind: 'message' | 'approval' | 'clarification' | 'custom' | 'tool', id: string): SessionUiEvent {
@@ -247,12 +342,45 @@ export class SessionUiProjector {
         ...(message.role === 'assistant' && agentNameFromData(message.data)
           ? { agentName: agentNameFromData(message.data) }
           : {}),
+        ...(message.role === 'assistant' && sourceFromData(message.data)
+          ? { source: sourceFromData(message.data) }
+          : {}),
         parts: partsFromMessage(message, this.opts),
         status: statusFromMessage(message),
         seq: message.createdAt
       });
       if (message.id === memorySummary?.uptoMessageId) insertSummary();
     }
+  }
+
+  /**
+   * Rebuild native CLI tool cards from their durable output snapshots. Call after {@link hydrateMessages}
+   * so a page refresh / reconnect shows a session's terminal output without replaying the (non-durable)
+   * per-chunk `native_cli.output` events. Each card is inserted at its `startedAt` position so it
+   * interleaves with messages in array-order clients; seq-sorting clients order it the same way.
+   */
+  hydrateNativeCliSessions(sessions: NativeCliSessionSnapshot[]): void {
+    for (const session of sessions) {
+      const item = nativeCliToolItem(session);
+      const key = itemKey('tool', item.id);
+      if (this.items.has(key)) {
+        this.items.set(key, item);
+        continue;
+      }
+      this.items.set(key, item);
+      this.insertOrdered(key, item.seq);
+    }
+  }
+
+  /** Insert `key` into the display order at the first position whose item sorts after `seq`
+   *  (memory-summary markers are skipped — their seq is a message id, not a timestamp). */
+  private insertOrdered(key: string, seq: string): void {
+    const pos = this.order.findIndex((k) => {
+      const item = this.items.get(k);
+      return item !== undefined && item.kind !== 'memory_summary' && item.seq > seq;
+    });
+    if (pos === -1) this.order.push(key);
+    else this.order.splice(pos, 0, key);
   }
 
   applyEvent(event: Event): SessionUiEvent[] {
@@ -267,7 +395,7 @@ export class SessionUiProjector {
             role: 'user',
             parts: [{ type: 'text', text: p.text }],
             status: 'done',
-            seq: event.id
+            seq: event.at
           })
         ];
       }
@@ -276,9 +404,24 @@ export class SessionUiProjector {
         const existing = this.findMessage(p.messageId);
         const text = existing?.parts.find((part) => part.type === 'text');
         const parts = existing ? existing.parts.slice() : [];
+        // Accumulate the full streamed text for every session, not just channel-structured ones: each
+        // `agent.token` carries only its own delta, so the running text is reassembled here. The
+        // existing text part holds *display* text (for a channel session, a filtered projection of the
+        // raw JSON) and can't be appended to directly. Cleared on agent.message / agent.error.
         const rawText = `${this.rawStreamingText.get(p.messageId) ?? ''}${p.delta}`;
-        if (this.opts.channelStructured) this.rawStreamingText.set(p.messageId, rawText);
-        const visibleText = this.opts.channelStructured ? channelPartialDisplayText(rawText) : rawText;
+        this.rawStreamingText.set(p.messageId, rawText);
+        let visibleText: string;
+        if (this.opts.channelStructured) {
+          const cached = this.channelDisplayCache.get(p.messageId);
+          if (cached && rawText.length - cached.len < CHANNEL_REPARSE_MIN_DELTA && !p.delta.includes('}')) {
+            visibleText = cached.text;
+          } else {
+            visibleText = channelPartialDisplayText(rawText);
+            this.channelDisplayCache.set(p.messageId, { len: rawText.length, text: visibleText });
+          }
+        } else {
+          visibleText = rawText;
+        }
         if (text?.type === 'text') text.text = visibleText;
         else parts.push({ type: 'text', text: visibleText });
         return [
@@ -291,9 +434,10 @@ export class SessionUiProjector {
               : existing?.agentName
                 ? { agentName: existing.agentName }
                 : {}),
+            ...(p.source ? { source: p.source } : existing?.source ? { source: existing.source } : {}),
             parts,
             status: 'streaming',
-            seq: existing?.seq ?? event.id
+            seq: existing?.seq ?? event.at
           })
         ];
       }
@@ -309,9 +453,11 @@ export class SessionUiProjector {
             kind: 'message',
             id: p.messageId,
             role: 'assistant',
+            ...(existing?.agentName ? { agentName: existing.agentName } : {}),
+            ...(p.source ? { source: p.source } : existing?.source ? { source: existing.source } : {}),
             parts,
             status: 'streaming',
-            seq: existing?.seq ?? event.id
+            seq: existing?.seq ?? event.at
           })
         ];
       }
@@ -319,6 +465,7 @@ export class SessionUiProjector {
         const p = parseEventPayload('agent.message', event.payload);
         const existing = this.findMessage(p.messageId);
         this.rawStreamingText.delete(p.messageId);
+        this.channelDisplayCache.delete(p.messageId);
         if (this.opts.channelStructured && channelStructuredVisibility(p.text) === 'silent') {
           return existing ? [this.remove('message', p.messageId)] : [];
         }
@@ -339,15 +486,20 @@ export class SessionUiProjector {
               : existing?.agentName
                 ? { agentName: existing.agentName }
                 : {}),
+            ...(p.source ? { source: p.source } : existing?.source ? { source: existing.source } : {}),
             parts,
             status: 'done',
-            seq: existing?.seq ?? event.id
+            seq: p.source === 'managed-native-cli' ? event.at : (existing?.seq ?? event.at)
           })
         ];
       }
       case 'agent.error': {
         const p = parseEventPayload('agent.error', event.payload);
         const id = p.messageId ?? `err-${event.id}`;
+        if (p.messageId) {
+          this.rawStreamingText.delete(p.messageId);
+          this.channelDisplayCache.delete(p.messageId);
+        }
         return [
           this.setMessage({
             kind: 'message',
@@ -355,7 +507,7 @@ export class SessionUiProjector {
             role: 'assistant',
             parts: [{ type: 'text', text: p.code ? `[${p.code}] ${p.message}` : p.message }],
             status: 'error',
-            seq: event.id
+            seq: (p.messageId ? this.findMessage(p.messageId)?.seq : undefined) ?? event.at
           })
         ];
       }
@@ -420,7 +572,7 @@ export class SessionUiProjector {
             role: 'assistant',
             parts,
             status: 'streaming',
-            seq: existing?.seq ?? event.id
+            seq: existing?.seq ?? event.at
           })
         ];
       }
@@ -440,7 +592,7 @@ export class SessionUiProjector {
               }
             ],
             status: p.ok ? 'done' : 'error',
-            seq: this.findMessage(p.messageId)?.seq ?? event.id
+            seq: this.findMessage(p.messageId)?.seq ?? event.at
           })
         ];
       }
@@ -478,11 +630,11 @@ export class SessionUiProjector {
               input: {
                 agent: p.agentName,
                 provider: p.provider,
+                productIcon: p.productIcon,
                 workingPath: p.workingPath,
                 launchMode: p.launchMode,
                 approvalOwnership: 'provider-owned'
               },
-              output: `started ${p.provider} in ${p.workingPath}`,
               status: 'running',
               seq: event.id
             })
@@ -490,8 +642,39 @@ export class SessionUiProjector {
         ];
       }
       case 'native_cli.output': {
-        parseEventPayload('native_cli.output', event.payload);
-        return [];
+        const p = parseEventPayload('native_cli.output', event.payload);
+        const existing = this.items.get(itemKey('tool', p.nativeCliSessionId));
+        const output =
+          existing?.kind === 'tool'
+            ? appendBoundedText(existing.output ?? '', p.chunk, MAX_NATIVE_CLI_UI_OUTPUT)
+            : p.chunk;
+        const next: Extract<UIItem, { kind: 'tool' }> = {
+          kind: 'tool',
+          id: p.nativeCliSessionId,
+          tool: existing?.kind === 'tool' ? existing.tool : 'native-cli',
+          ...(existing?.kind === 'tool' && existing.input !== undefined ? { input: existing.input } : {}),
+          output,
+          status: existing?.kind === 'tool' ? existing.status : 'running',
+          seq: existing?.kind === 'tool' ? existing.seq : event.id
+        };
+        return [{ kind: 'upsert', cursor: event.id, item: this.upsert(next) }];
+      }
+      case 'native_cli.connection_required': {
+        const p = parseEventPayload('native_cli.connection_required', event.payload);
+        return [
+          {
+            kind: 'upsert',
+            cursor: event.id,
+            item: this.upsert({
+              kind: 'custom',
+              id: `native-cli-connection-required:${p.nativeCliSessionId ?? p.agentName}`,
+              name: 'native_cli.connection_required',
+              status: 'error',
+              data: p,
+              seq: event.id
+            })
+          }
+        ];
       }
       case 'native_cli.approval_requested': {
         const p = parseEventPayload('native_cli.approval_requested', event.payload);
@@ -520,6 +703,30 @@ export class SessionUiProjector {
         const p = parseEventPayload('native_cli.approval_resolved', event.payload);
         return [this.remove('approval', p.requestId)];
       }
+      case 'native_cli.resume_failed': {
+        const p = parseEventPayload('native_cli.resume_failed', event.payload);
+        const label =
+          p.provider === 'claude-code'
+            ? 'Claude Code'
+            : p.provider === 'gemini'
+              ? 'Gemini'
+              : p.provider === 'qwen'
+                ? 'Qwen'
+                : 'Codex';
+        return [
+          {
+            kind: 'upsert',
+            cursor: event.id,
+            item: this.upsert({
+              kind: 'system',
+              id: `native-cli-resume-failed:${p.agentName}:${p.providerSessionRef}`,
+              text: `${label} resume failed for provider session ${p.providerSessionRef}; cold started a new runtime.`,
+              level: 'warn',
+              seq: event.id
+            })
+          }
+        ];
+      }
       case 'native_cli.exited': {
         const p = parseEventPayload('native_cli.exited', event.payload);
         const existing = this.items.get(itemKey('tool', p.nativeCliSessionId));
@@ -546,6 +753,9 @@ export class SessionUiProjector {
               id: p.requestId,
               question: p.question,
               ...(p.options ? { options: p.options } : {}),
+              ...(p.mode ? { mode: p.mode } : {}),
+              ...(p.allowOther !== undefined ? { allowOther: p.allowOther } : {}),
+              ...(p.asker ? { asker: p.asker } : {}),
               seq: event.id
             })
           }
@@ -604,6 +814,8 @@ export class SessionUiProjector {
   }
 
   snapshot(opts: { hasMore?: boolean } = {}): SessionUiEvent {
+    // From here on the initial view is committed; subsequent live growth may be evicted (see upsert).
+    this.snapshotted = true;
     return {
       kind: 'snapshot',
       ...(this.lastCursor ? { cursor: this.lastCursor as `evt_${string}` } : {}),

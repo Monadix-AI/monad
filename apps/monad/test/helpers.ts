@@ -185,14 +185,23 @@ export function buildHandlers(
     memoryService?: (store: ReturnType<typeof createStore>) => MemoryService;
     /** Share an external store (so a memory service + the agent see the same messages/sessions). */
     store?: ReturnType<typeof createStore>;
+    /** Inject a RoundCache so a test can stage an in-flight round before subscribing. */
+    cache?: RoundCache;
     /** Seed the L2 graph store (e.g. to exercise GET /v1/graph); defaults to an empty in-memory one. */
     graphStore?: GraphStore;
+    /** Upgrade metadata exposed by /health; defaults to absent. */
+    getUpgradeInfo?: () => { latestVersion: string; latestVersionCheckedAt: string } | null;
+    /** Override native CLI auth connect heartbeat pruning for fast e2e coverage. */
+    nativeCliAuthHeartbeatTimeoutMs?: number;
+    /** Override the loopback URL injected into managed native CLI runtimes. */
+    nativeCliServerUrl?: string;
   }
 ) {
   const store = opts?.store ?? createStore();
   // Wire oversight like the daemon (publish → bus, gate → agent) so the approval flow — including
   // the ACP permission bridge — actually exercises end to end. With no tools the gate is never hit.
   const bus = new EventBus();
+  const cache = opts?.cache ?? new RoundCache();
   const oversight =
     opts?.oversight ??
     new OversightService({
@@ -213,7 +222,7 @@ export function buildHandlers(
     },
     messageRepo: {
       list: (sessionId) => store.listMessages(sessionId),
-      append: (m) => store.insertMessage(m.id, m.sessionId, m.text, m.createdAt, m.role)
+      append: (m) => store.insertMessage(m.id, m.transcriptTargetId, m.text, m.createdAt, m.role)
     },
     defaultModel: opts?.defaultModel ?? 'mock'
   });
@@ -239,9 +248,10 @@ export function buildHandlers(
     listModels: async () => [],
     setModel: async () => {},
     compact: async () => ({ compacted: 0 }),
-    consolidateMemory: async () => [],
+    consolidate: async () => ({ level: 1, l1Scopes: 0, nodes: 0, edges: 0, prunedEdges: 0, laws: 0, lawScopes: 0 }),
+    explainBelief: async () => ({ matches: [] }),
+    checkMemory: async () => ({ flagged: 0 }),
     handoff: async () => ({ sessionId: 'ses_new' as SessionId }),
-    consolidateGraph: async () => ({ sessionsExtracted: 0, nodes: 0, edges: 0, prunedEdges: 0 }),
     t: i18n.t,
     log: () => {}
   };
@@ -252,7 +262,7 @@ export function buildHandlers(
       store,
       agent,
       bus,
-      cache: new RoundCache(),
+      cache,
       ownerPrincipalId: newId('prn'),
       oversight,
       clarify,
@@ -276,12 +286,17 @@ export function buildHandlers(
         scopeCounts: [],
         entries: []
       }),
+      getLaws: async () => ({ laws: [] }),
+      getUpgradeInfo: opts?.getUpgradeInfo,
       memorySetBackend: async () => {},
       memorySetMem0Models: async () => {},
+      memorySetGraph: async () => {},
+      nativeCliAuthHeartbeatTimeoutMs: opts?.nativeCliAuthHeartbeatTimeoutMs,
+      nativeCliServerUrl: opts?.nativeCliServerUrl,
       log: { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} } as never,
       ...modelDeps
     }),
-    { store }
+    { store, cache, bus }
   );
 }
 
@@ -310,6 +325,8 @@ export const TRANSPORTS: readonly TransportKind[] = process.platform === 'win32'
 
 export interface TransportHandle {
   kind: TransportKind;
+  /** TCP base URL when this handle is backed by a TCP listener. */
+  baseUrl?: string;
   /** fetch() bound to this transport. `path` is a leading-slash path, e.g. '/v1/sessions'. */
   fetch: (path: string, init?: RequestInit) => Promise<Response>;
   /** Read an SSE stream over this transport (TCP or unix). */
@@ -327,6 +344,7 @@ export function serveTransport(kind: TransportKind, app: ReturnType<typeof creat
     const base = `http://127.0.0.1:${live.server.port}`;
     return {
       kind,
+      baseUrl: base,
       fetch: (path, init) => fetch(`${base}${path}`, init),
       sse: (path, opts) => readSSE(`${base}${path}`, opts),
       stop: async () => live.server.stop(true)
@@ -417,7 +435,12 @@ export function liveModelDeps(
   // `modelId` may be a bogus id and `fallbacks` a working chain — that's how the routing-resilience
   // suite exercises GatewayModelRouter failover.
   cfg.model.profiles = [
-    { alias: 'default', provider: 'openrouter', modelId, params: {}, fallbacks: opts?.fallbacks ?? [], roles: {} }
+    {
+      alias: 'default',
+      routes: { chat: { provider: 'openrouter', modelId } },
+      params: {},
+      fallbacks: opts?.fallbacks ?? []
+    }
   ];
   cfg.model.default = 'default';
   const auth = {

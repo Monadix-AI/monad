@@ -26,6 +26,19 @@ export const sessions = sqliteTable('sessions', {
   updatedAt: text('updated_at').notNull()
 });
 
+export const workplaceProjects = sqliteTable('workplace_projects', {
+  id: text('id').primaryKey(),
+  title: text('title').notNull(),
+  ownerPrincipalId: text('owner_principal_id').notNull(),
+  state: text('state').notNull(),
+  archived: integer('archived').notNull().default(0),
+  model: text('model'),
+  cwd: text('cwd'),
+  origin: text('origin'),
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull()
+});
+
 // Global, append-only usage accounting — the "账本". Bucketed by (local day, provider, model,
 // category), monotonic, survives session deletion; only a manual clearLedger() resets it. Distinct
 // from per-session usage (which is cleared when a session is reset).
@@ -67,11 +80,16 @@ const _nativeCliSessions = sqliteTable(
   'native_cli_sessions',
   {
     id: text('id').primaryKey(),
-    projectSessionId: text('project_session_id').notNull(),
+    transcriptTargetId: text('transcript_target_id').notNull(),
     agentName: text('agent_name').notNull(),
     provider: text('provider').notNull(),
     workingPath: text('working_path').notNull(),
     launchMode: text('launch_mode').notNull(),
+    runtimeRole: text('runtime_role').notNull().default('interactive'),
+    agentRuntimeId: text('agent_runtime_id'),
+    agentRuntimeTokenHash: text('agent_runtime_token_hash'),
+    lastDeliveredSeq: integer('last_delivered_seq').notNull().default(0),
+    lastVisibleSeq: integer('last_visible_seq').notNull().default(0),
     state: text('state').notNull(),
     pid: integer('pid'),
     providerSessionRef: text('provider_session_ref'),
@@ -83,14 +101,38 @@ const _nativeCliSessions = sqliteTable(
   },
   (t) => [
     uniqueIndex('idx_native_cli_sessions_provider_ref')
-      .on(t.projectSessionId, t.provider, t.providerSessionRef)
+      .on(t.transcriptTargetId, t.provider, t.providerSessionRef)
       .where(providerSessionRefNotNull)
   ]
 );
 
+const _nativeAgentDirectMessages = sqliteTable('native_agent_direct_messages', {
+  id: text('id').primaryKey(),
+  projectId: text('project_id').notNull(),
+  nativeCliSessionId: text('native_cli_session_id').notNull(),
+  fromAgent: text('from_agent'),
+  peer: text('peer').notNull(),
+  text: text('text').notNull(),
+  createdAt: text('created_at').notNull()
+});
+
+const _nativeCliInboxItems = sqliteTable(
+  'native_cli_inbox_items',
+  {
+    nativeCliSessionId: text('native_cli_session_id').notNull(),
+    messageSeq: integer('message_seq').notNull(),
+    state: text('state').notNull().default('queued'),
+    createdAt: text('created_at').notNull(),
+    deliveredAt: text('delivered_at'),
+    visibleAt: text('visible_at'),
+    consumedAt: text('consumed_at')
+  },
+  (t) => [primaryKey({ columns: [t.nativeCliSessionId, t.messageSeq] })]
+);
+
 export const messages = sqliteTable('messages', {
   id: text('id').primaryKey(),
-  sessionId: text('session_id').notNull(),
+  transcriptTargetId: text('transcript_target_id').notNull(),
   role: text('role').notNull(),
   text: text('text').notNull(),
   type: text('type').notNull().default('text'),
@@ -143,7 +185,7 @@ const _channelModeratorRounds = sqliteTable('channel_moderator_rounds', {
 // `id` is a sortable evt_ ULID so ordering/resume-after-cursor is a string compare.
 const _events = sqliteTable('events', {
   id: text('id').primaryKey(),
-  sessionId: text('session_id').notNull(),
+  transcriptTargetId: text('transcript_target_id').notNull(),
   type: text('type').notNull(),
   actorAgentId: text('actor_agent_id'),
   taskId: text('task_id'),

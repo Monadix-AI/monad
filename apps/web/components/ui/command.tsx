@@ -1,8 +1,9 @@
 'use client';
 
+import { Search01Icon } from '@hugeicons/core-free-icons';
+import { HugeiconsIcon } from '@hugeicons/react';
 import { cn } from '@monad/ui';
 import { Command as CommandPrimitive } from 'cmdk';
-import { SearchIcon } from 'lucide-react';
 import * as React from 'react';
 
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -57,7 +58,10 @@ function CommandInput({ className, ...props }: React.ComponentProps<typeof Comma
       className="flex h-9 items-center gap-2 border-b px-3"
       data-slot="command-input-wrapper"
     >
-      <SearchIcon className="size-4 shrink-0 opacity-50" />
+      <HugeiconsIcon
+        className="size-4 shrink-0 opacity-50"
+        icon={Search01Icon}
+      />
       <CommandPrimitive.Input
         className={cn(
           'flex h-10 w-full rounded-md bg-transparent py-3 text-sm outline-hidden placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50',

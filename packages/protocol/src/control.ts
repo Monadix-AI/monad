@@ -20,7 +20,8 @@ import {
   sessionSurfaceSchema,
   sessionTransportSchema
 } from './domain.ts';
-import { agentIdSchema, messageIdSchema, sessionIdSchema } from './ids.ts';
+import { agentIdSchema, messageIdSchema, sessionIdSchema, transcriptTargetIdSchema } from './ids.ts';
+import { httpUrlSchema } from './url.ts';
 
 export const CONTROL_API_VERSION = 'v1' as const;
 
@@ -177,8 +178,8 @@ export const offsetPaginationResponseSchema = z.object({
   total: z.number().int().nonnegative(),
   limit: z.number().int().positive(),
   offset: z.number().int().nonnegative(),
-  next: z.string().url().optional(),
-  previous: z.string().url().optional()
+  next: httpUrlSchema.optional(),
+  previous: httpUrlSchema.optional()
 });
 export type OffsetPaginationResponse = z.infer<typeof offsetPaginationResponseSchema>;
 
@@ -192,8 +193,8 @@ export type CursorPaginationQuery = z.infer<typeof cursorPaginationQuerySchema>;
 /** Shared response envelope fields for cursor-based pagination. */
 export const cursorPaginationResponseSchema = z.object({
   nextCursor: z.string().optional(),
-  next: z.string().url().optional(),
-  previous: z.string().url().optional()
+  next: httpUrlSchema.optional(),
+  previous: httpUrlSchema.optional()
 });
 export type CursorPaginationResponse = z.infer<typeof cursorPaginationResponseSchema>;
 
@@ -297,6 +298,37 @@ export type GetStatsResponse = z.infer<typeof getStatsResponseSchema>;
 export const getSessionResponseSchema = z.object({ session: sessionSchema });
 export type GetSessionResponse = z.infer<typeof getSessionResponseSchema>;
 
+/** Git summary of a session's working folder, for the workplace header. `isRepo:false` covers "no
+ *  working folder set", "not a git repo", and "git unavailable" — the UI treats all three the same. */
+export const workspaceGitSchema = z.object({
+  isRepo: z.boolean(),
+  branch: z.string().optional(),
+  dirty: z.boolean().optional(),
+  ahead: z.number().int().optional(),
+  behind: z.number().int().optional(),
+  remoteUrl: z.string().optional()
+});
+export type WorkspaceGit = z.infer<typeof workspaceGitSchema>;
+
+export const workspaceMetaSchema = z.object({
+  git: workspaceGitSchema
+});
+export type WorkspaceMeta = z.infer<typeof workspaceMetaSchema>;
+
+export const workspaceActionSchema = z.enum(['show-in-file-manager', 'open-terminal']);
+export type WorkspaceAction = z.infer<typeof workspaceActionSchema>;
+
+export const workspaceActionRequestSchema = z.object({
+  action: workspaceActionSchema
+});
+export type WorkspaceActionRequest = z.infer<typeof workspaceActionRequestSchema>;
+
+export const workspaceActionResponseSchema = z.object({
+  ok: z.literal(true),
+  action: workspaceActionSchema
+});
+export type WorkspaceActionResponse = z.infer<typeof workspaceActionResponseSchema>;
+
 export const updateSessionRequestSchema = z.object({
   title: z.string().max(SESSION_TITLE_MAX).optional(),
   state: sessionStateSchema.optional(),
@@ -374,7 +406,7 @@ const sessionMcpStdioSchema = z.object({
 const sessionMcpHttpSchema = z.object({
   name: z.string(),
   transport: z.literal('http'),
-  url: z.string(),
+  url: httpUrlSchema,
   headers: z.record(z.string(), z.string()).optional(),
   requestTimeoutMs: z.number().optional()
 });
@@ -421,7 +453,7 @@ export const searchSessionsRequestSchema = z.object({
   q: z.string().max(SEARCH_QUERY_MAX).optional().default(''),
   mode: searchModeSchema.optional(),
   limit: z.number().int().positive().optional(),
-  sessionId: sessionIdSchema.optional()
+  transcriptTargetId: transcriptTargetIdSchema.optional()
 });
 export type SearchSessionsRequest = z.infer<typeof searchSessionsRequestSchema>;
 
@@ -432,342 +464,6 @@ export const searchSessionsResponseSchema = z.object({
   indexingPending: z.number().optional()
 });
 export type SearchSessionsResponse = z.infer<typeof searchSessionsResponseSchema>;
-
-// Self-contained view shapes for model settings (gateway), no dependency on @monad/home. Secrets
-// never cross this boundary: a CredentialView carries only a short `accessTokenPreview`.
-
-export enum ModelProviderType {
-  // Native: a dedicated AI SDK package backs buildModel()
-  Anthropic = 'anthropic',
-  OpenAI = 'openai',
-  VercelGateway = 'vercel-gateway',
-  OpenRouter = 'openrouter',
-  Google = 'google',
-  Mistral = 'mistral',
-  AmazonBedrock = 'amazon-bedrock',
-  Azure = 'azure',
-  // OpenAI-compatible: bundled adapter + a preset base URL
-  OpenAICompatible = 'openai-compatible',
-  CloudflareGateway = 'cloudflare-gateway',
-  Groq = 'groq',
-  XAI = 'xai',
-  DeepSeek = 'deepseek',
-  Together = 'together',
-  Fireworks = 'fireworks',
-  Cerebras = 'cerebras',
-  Perplexity = 'perplexity',
-  Moonshot = 'moonshot',
-  ZAI = 'zai',
-  MiniMax = 'minimax',
-  Nvidia = 'nvidia',
-  Novita = 'novita',
-  Ollama = 'ollama',
-  HuggingFace = 'huggingface'
-}
-
-export const KNOWN_PROVIDER_TYPES = [
-  ModelProviderType.Anthropic,
-  ModelProviderType.OpenAI,
-  ModelProviderType.VercelGateway,
-  ModelProviderType.OpenRouter,
-  ModelProviderType.Google,
-  ModelProviderType.Mistral,
-  ModelProviderType.AmazonBedrock,
-  ModelProviderType.Azure,
-  ModelProviderType.OpenAICompatible,
-  ModelProviderType.CloudflareGateway,
-  ModelProviderType.Groq,
-  ModelProviderType.XAI,
-  ModelProviderType.DeepSeek,
-  ModelProviderType.Together,
-  ModelProviderType.Fireworks,
-  ModelProviderType.Cerebras,
-  ModelProviderType.Perplexity,
-  ModelProviderType.Moonshot,
-  ModelProviderType.ZAI,
-  ModelProviderType.MiniMax,
-  ModelProviderType.Nvidia,
-  ModelProviderType.Novita,
-  ModelProviderType.Ollama,
-  ModelProviderType.HuggingFace
-] as const;
-
-export type ProviderType = `${ModelProviderType}`;
-
-// Single source of truth for the providers monad offers. The web wizard, CLI, and
-// agent-core registry all derive from this. `strategy`:
-//   'native'            → a dedicated AI SDK package (agent-core bundles it)
-//   'openai-compatible' → bundled @ai-sdk/openai-compatible adapter at `defaultBaseUrl`
-
-export type ProviderStrategy = 'native' | 'openai-compatible';
-
-/** An extra config field a provider needs beyond key + base URL (e.g. AWS region).
- *  Persisted into `Provider.extra` and read back in the atom's buildModel(). */
-export const providerExtraFieldSchema = z.object({
-  key: z.string(),
-  label: z.string(),
-  placeholder: z.string().optional(),
-  required: z.boolean().optional()
-});
-export type ProviderExtraField = z.infer<typeof providerExtraFieldSchema>;
-
-/** Self-describing metadata a `ModelProvider` atom carries. The daemon assembles the provider
- *  catalog (consumed by the UI/CLI) from registered providers' descriptors — the built-in catalog
- *  DATA lives in @monad/atoms, not here; protocol holds only the shape + the known-type enum.
- *  `type` is an open string: a third-party provider atom may introduce a brand-new type. */
-export const modelProviderDescriptorSchema = z.object({
-  type: z.string(),
-  label: z.string(),
-  strategy: z.enum(['native', 'openai-compatible']),
-  defaultBaseUrl: z.string().optional(),
-  needsUrl: z.boolean().optional(),
-  keyPlaceholder: z.string().optional(),
-  npmPackage: z.string().optional(),
-  extraFields: z.array(providerExtraFieldSchema).optional(),
-  keyOptional: z.boolean().optional()
-});
-export type ModelProviderDescriptor = z.infer<typeof modelProviderDescriptorSchema>;
-
-export const getProviderCatalogResponseSchema = z.object({ providers: z.array(modelProviderDescriptorSchema) });
-export type GetProviderCatalogResponse = z.infer<typeof getProviderCatalogResponseSchema>;
-
-// Parse a provider catalogue's native pricing block ($/token) into the canonical ModelPrice
-// (defined below, $/1M). Live here (not agent-core) so both the gateway and the ai-sdk-free
-// provider atoms can attach price to a model listing. ModelPrice itself is single-sourced as
-// `modelPriceSchema`/`ModelPrice` further down this file.
-
-const PRICE_PER_MILLION = 1_000_000;
-
-function perMillion(v: unknown): number | undefined {
-  const n = typeof v === 'string' ? Number.parseFloat(v) : typeof v === 'number' ? v : Number.NaN;
-  return Number.isFinite(n) && n > 0 ? n * PRICE_PER_MILLION : undefined;
-}
-
-function buildPrice(fields: Record<keyof ModelPrice, unknown>): ModelPrice | undefined {
-  const price: ModelPrice = {};
-  for (const k of ['input', 'output', 'cacheRead', 'cacheWrite'] as const) {
-    const v = perMillion(fields[k]);
-    if (v !== undefined) price[k] = v;
-  }
-  return Object.keys(price).length > 0 ? price : undefined;
-}
-
-/** OpenAI/OpenRouter-style `/models` pricing block ($/token). */
-export function openAiPrice(
-  p:
-    | { prompt?: unknown; completion?: unknown; input_cache_read?: unknown; input_cache_write?: unknown }
-    | null
-    | undefined
-): ModelPrice | undefined {
-  if (!p) return undefined;
-  return buildPrice({
-    input: p.prompt,
-    output: p.completion,
-    cacheRead: p.input_cache_read,
-    cacheWrite: p.input_cache_write
-  });
-}
-
-/** Vercel AI Gateway `getAvailableModels()` pricing block ($/token). */
-export function vercelGatewayPrice(
-  p:
-    | { input?: unknown; output?: unknown; cachedInputTokens?: unknown; cacheCreationInputTokens?: unknown }
-    | null
-    | undefined
-): ModelPrice | undefined {
-  if (!p) return undefined;
-  return buildPrice({
-    input: p.input,
-    output: p.output,
-    cacheRead: p.cachedInputTokens,
-    cacheWrite: p.cacheCreationInputTokens
-  });
-}
-
-export const providerViewSchema = z.object({
-  id: z.string(),
-  label: z.string(),
-  type: z.enum(KNOWN_PROVIDER_TYPES),
-  baseUrl: z.string().optional(),
-  extra: z.record(z.string(), z.string()).optional()
-});
-export type ProviderView = z.infer<typeof providerViewSchema>;
-
-export const generationParamsViewSchema = z.object({
-  temperature: z.number().optional(),
-  maxTokens: z.number().optional(),
-  topP: z.number().optional(),
-  reasoningEffort: z.enum(['minimal', 'low', 'medium', 'high']).optional()
-});
-export type GenerationParamsView = z.infer<typeof generationParamsViewSchema>;
-/** Canonical generation params (single source). agent-core / sdk-atom / home all derive from
- *  this rather than redeclaring the shape. Identical to the wire view. */
-export type GenerationParams = GenerationParamsView;
-
-export const fallbackTargetViewSchema = z.union([
-  z.object({ profile: z.string() }),
-  z.object({ provider: z.string(), modelId: z.string() })
-]);
-export type FallbackTargetView = z.infer<typeof fallbackTargetViewSchema>;
-
-export const profileViewSchema = z.object({
-  alias: z.string(),
-  provider: z.string(),
-  modelId: z.string(),
-  fastProvider: z.string().optional(),
-  fastModelId: z.string().optional(),
-  params: generationParamsViewSchema,
-  fallbacks: z.array(fallbackTargetViewSchema),
-  roles: modelRolesSchema.default({})
-});
-export type ProfileView = z.infer<typeof profileViewSchema>;
-
-export const credentialViewSchema = z.object({
-  id: z.string(),
-  label: z.string(),
-  authType: z.enum(['api_key', 'oauth', 'admin_api_key']),
-  priority: z.number(),
-  source: z.string(),
-  baseUrl: z.string().optional(),
-  lastStatus: z.enum(['ok', 'error', 'unknown']),
-  requestCount: z.number(),
-  accessTokenPreview: z.string().optional() // masked tail, e.g. "…a1b2" — never the full token
-});
-export type CredentialView = z.infer<typeof credentialViewSchema>;
-
-export const listProvidersResponseSchema = z.object({ providers: z.array(providerViewSchema) });
-export type ListProvidersResponse = z.infer<typeof listProvidersResponseSchema>;
-
-export const setProviderRequestSchema = z.object({ provider: providerViewSchema });
-export type SetProviderRequest = z.infer<typeof setProviderRequestSchema>;
-
-export const listProfilesResponseSchema = z.object({
-  profiles: z.array(profileViewSchema),
-  defaultAlias: z.string()
-});
-export type ListProfilesResponse = z.infer<typeof listProfilesResponseSchema>;
-
-export const setProfileRequestSchema = z.object({ profile: profileViewSchema });
-export type SetProfileRequest = z.infer<typeof setProfileRequestSchema>;
-
-export const setDefaultProfileRequestSchema = z.object({ alias: z.string() });
-export type SetDefaultProfileRequest = z.infer<typeof setDefaultProfileRequestSchema>;
-
-export const getDefaultProfileResponseSchema = z.object({ alias: z.string() });
-export type GetDefaultProfileResponse = z.infer<typeof getDefaultProfileResponseSchema>;
-
-export const modelPriceSchema = z
-  .object({
-    input: z.number().optional(),
-    output: z.number().optional(),
-    cacheRead: z.number().optional(),
-    cacheWrite: z.number().optional()
-  })
-  .partial();
-export type ModelPrice = z.infer<typeof modelPriceSchema>;
-
-// Model capabilities (drives the model-role picker).
-// `kind` is the model's primary output role; `vision` is a separate input capability surfaced via
-// `input` containing "image". Data comes from the provider's listModels when rich, else the
-// models.dev catalog by id (mirroring price). embedding is detected by id (models.dev doesn't flag
-// it via modality), so kind=embedding is authoritative even when modalities look like text→text.
-export const modelKindSchema = z.enum(['chat', 'image', 'video', 'speech', 'embedding']);
-export type ModelKind = z.infer<typeof modelKindSchema>;
-
-/** A model-assignment slot. `chat` is special (it resolves to a profile, with params + fallback);
- *  the rest are profile role overrides. `vision` is a chat
- *  model that accepts image input. The role → required-capability mapping the UI filters on:
- *  chat=output⊇text · vision=input⊇image · image=output⊇image · speech=output⊇audio · embedding=kind. */
-export const getRolesResponseSchema = z.object({ roles: modelRolesSchema });
-export type GetRolesResponse = z.infer<typeof getRolesResponseSchema>;
-export const setRolesRequestSchema = z.object({ roles: modelRolesSchema });
-export type SetRolesRequest = z.infer<typeof setRolesRequestSchema>;
-
-export const modelModalitiesSchema = z.object({
-  input: z.array(z.string()).optional(),
-  output: z.array(z.string()).optional(),
-  reasoning: z.boolean().optional(),
-  toolCall: z.boolean().optional(),
-  kind: modelKindSchema.optional()
-});
-export type ModelModalities = z.infer<typeof modelModalitiesSchema>;
-
-export const modelInfoSchema = z.object({
-  id: z.string(),
-  label: z.string().optional(),
-  price: modelPriceSchema.optional(), // USD per 1M tokens; provider-native price preferred, else catalog
-  modalities: modelModalitiesSchema.optional() // input/output modalities, flags, kind; provider-native preferred, else catalog
-});
-export type ModelInfo = z.infer<typeof modelInfoSchema>;
-
-export const listModelsResponseSchema = z.object({
-  providerId: z.string(),
-  models: z.array(modelInfoSchema)
-});
-export type ListModelsResponse = z.infer<typeof listModelsResponseSchema>;
-
-export const listCredentialsResponseSchema = z.object({
-  providerId: z.string(),
-  credentials: z.array(credentialViewSchema)
-});
-export type ListCredentialsResponse = z.infer<typeof listCredentialsResponseSchema>;
-
-// `providerId` travels in the path params; HTTP body derives via .omit().
-export const addCredentialRequestSchema = z.object({
-  providerId: z.string(),
-  label: z.string(),
-  authType: z.enum(['api_key', 'oauth', 'admin_api_key']),
-  accessToken: z.string(),
-  baseUrl: z.string().optional(),
-  priority: z.number().optional()
-});
-export type AddCredentialRequest = z.infer<typeof addCredentialRequestSchema>;
-
-export const addCredentialBodySchema = addCredentialRequestSchema.omit({ providerId: true });
-
-export const addCredentialResponseSchema = z.object({ id: z.string() });
-export type AddCredentialResponse = z.infer<typeof addCredentialResponseSchema>;
-
-// `providerId` + `credentialId` travel in path params; HTTP body derives via .pick().
-export const testCredentialRequestSchema = z.object({
-  providerId: z.string(),
-  credentialId: z.string(),
-  /** Model id to probe with; falls back to a profile that uses this provider. */
-  modelId: z.string().optional()
-});
-export type TestCredentialRequest = z.infer<typeof testCredentialRequestSchema>;
-
-export const deleteCredentialRequestSchema = testCredentialRequestSchema.pick({
-  providerId: true,
-  credentialId: true
-});
-export type DeleteCredentialRequest = z.infer<typeof deleteCredentialRequestSchema>;
-
-export const testCredentialBodySchema = testCredentialRequestSchema.pick({ modelId: true }).optional();
-
-export const testCredentialResponseSchema = z.object({
-  ok: z.boolean(),
-  latencyMs: z.number().optional(),
-  error: z.string().optional()
-});
-export type TestCredentialResponse = z.infer<typeof testCredentialResponseSchema>;
-
-// Stateless "test before add": lists the provider's model catalogue (authenticated GET,
-// no generation tokens spent) without persisting anything. On success, `models` is
-// returned so the UI can immediately offer model choices.
-export const testConnectionRequestSchema = z.object({
-  provider: providerViewSchema,
-  accessToken: z.string()
-});
-export type TestConnectionRequest = z.infer<typeof testConnectionRequestSchema>;
-
-export const testConnectionResponseSchema = z.object({
-  ok: z.boolean(),
-  latencyMs: z.number().optional(),
-  error: z.string().optional(),
-  models: z.array(modelInfoSchema).optional()
-});
-export type TestConnectionResponse = z.infer<typeof testConnectionResponseSchema>;
 
 export const okResponseSchema = z.object({ ok: z.literal(true) });
 export type OkResponse = z.infer<typeof okResponseSchema>;
@@ -820,9 +516,18 @@ export type ListSkillsResponse = z.infer<typeof listSkillsResponseSchema>;
 export const initMissingItemSchema = z.enum(['provider', 'credential', 'default', 'agent']);
 export type InitMissingItem = z.infer<typeof initMissingItemSchema>;
 
+export const missingProviderCredentialSchema = z.object({
+  providerId: z.string(),
+  providerLabel: z.string().optional(),
+  profileAlias: z.string(),
+  route: z.literal('chat')
+});
+export type MissingProviderCredential = z.infer<typeof missingProviderCredentialSchema>;
+
 export const getInitStatusResponseSchema = z.object({
   initialized: z.boolean(),
   missing: z.array(initMissingItemSchema),
+  missingProviderCredentials: z.array(missingProviderCredentialSchema).optional(),
   homePath: z.string()
 });
 export type GetInitStatusResponse = z.infer<typeof getInitStatusResponseSchema>;
@@ -881,3 +586,5 @@ export type InfinitePaginateResponse<T, K extends string = 'data'> = {
 export type PaginateResponse<T, K extends string = 'data'> = {
   [P in K]: T[];
 } & { limit: number; offset: number; total: number };
+
+export * from './control-model.ts';

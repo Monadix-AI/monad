@@ -14,6 +14,11 @@ const SESSION_LIST_EVENTS: ReadonlySet<Event['type']> = new Set([
   'session.restored'
 ] as const satisfies ReadonlyArray<Event['type']>);
 
+const NATIVE_CLI_SESSION_EVENTS: ReadonlySet<Event['type']> = new Set([
+  'native_cli.started',
+  'native_cli.exited'
+] as const satisfies ReadonlyArray<Event['type']>);
+
 /**
  * Subscribes to the cross-session control stream for the lifetime of the cache entry. There is no
  * data to read — mount it once (e.g. `useStreamControlQuery()`) and it keeps the session list live.
@@ -31,6 +36,14 @@ export const streamControlApi = apiSlice.injectEndpoints({
           dispose = client.subscribeControl((event: Event) => {
             if (SESSION_LIST_EVENTS.has(event.type)) {
               dispatch(apiSlice.util.invalidateTags(['Sessions']));
+            }
+            if (NATIVE_CLI_SESSION_EVENTS.has(event.type)) {
+              dispatch(
+                apiSlice.util.invalidateTags([
+                  'NativeCliSessions',
+                  { type: 'NativeCliSessions', id: event.transcriptTargetId }
+                ])
+              );
             }
           });
         } catch {

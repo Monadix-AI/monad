@@ -4,6 +4,7 @@
 
 import type { AtomPackFetcher, FileAtoms, StagedAtomPack } from '@/atoms/install/index.ts';
 import type { AtomPackSource } from '@/atoms/install/source.ts';
+import type { DownloadProgress } from '@/services/download.ts';
 
 import { readdir } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -11,6 +12,7 @@ import { z } from 'zod';
 
 import { InstallError } from '@/atoms/install/index.ts';
 import { untar } from '@/atoms/install/untar.ts';
+import { downloadBytes } from '@/services/download.ts';
 
 // Untrusted downloaded/staged JSON — parsed (not cast) on read. The atom-pack.json read here only
 // needs `entry` to locate the bundle; the full manifest is validated later by parseAtomPackManifest.
@@ -23,6 +25,7 @@ export interface FetcherOptions {
   /** npm registry token + base URL (private packages). */
   npmToken?: string;
   npmRegistry?: string;
+  onDownloadProgress?: (progress: DownloadProgress & { source: string }) => void;
 }
 
 const ENTRY_DEFAULT = 'dist/atom-pack.js';
@@ -99,20 +102,31 @@ async function fetchLocal(path: string): Promise<StagedAtomPack> {
 
 async function fetchGithub(
   source: Extract<AtomPackSource, { kind: 'github' }>,
-  token?: string
+  opts: FetcherOptions
 ): Promise<StagedAtomPack> {
   const get = async (filePath: string): Promise<Uint8Array> => {
     const url = `https://api.github.com/repos/${source.owner}/${source.repo}/contents/${filePath}?ref=${encodeURIComponent(source.ref)}`;
-    const res = await fetch(url, {
-      headers: {
-        Accept: 'application/vnd.github.raw',
-        'User-Agent': 'monad',
-        ...(token ? { Authorization: `Bearer ${token}` } : {})
-      }
-    });
-    if (!res.ok)
-      throw new InstallError(`github fetch ${filePath}@${source.ref} failed: ${res.status} ${res.statusText}`);
-    return new Uint8Array(await res.arrayBuffer());
+    const headers = {
+      Accept: 'application/vnd.github.raw',
+      'User-Agent': 'monad',
+      ...(opts.githubToken ? { Authorization: `Bearer ${opts.githubToken}` } : {})
+    };
+    return (
+      await downloadBytes(url, {
+        headers,
+        allowedContentTypes: [
+          'application/vnd.github.raw',
+          'application/octet-stream',
+          'application/json',
+          'text/plain'
+        ],
+        onProgress: (progress) => opts.onDownloadProgress?.({ ...progress, source: url })
+      }).catch((error: unknown) => {
+        throw new InstallError(
+          `github fetch ${filePath}@${source.ref} failed: ${error instanceof Error ? error.message : String(error)}`
+        );
+      })
+    ).bytes;
   };
 
   const manifestRaw = stagedManifestSchema.parse(JSON.parse(new TextDecoder().decode(await get('atom-pack.json'))));
@@ -126,7 +140,7 @@ async function fetchGithub(
       headers: {
         Accept: 'application/vnd.github+json',
         'User-Agent': 'monad',
-        ...(token ? { Authorization: `Bearer ${token}` } : {})
+        ...(opts.githubToken ? { Authorization: `Bearer ${opts.githubToken}` } : {})
       }
     });
     if (treeRes.ok) {
@@ -160,9 +174,15 @@ async function fetchNpm(
   const tarUrl = meta.versions?.[source.version]?.dist?.tarball;
   if (!tarUrl) throw new InstallError(`npm: ${source.name}@${source.version} not found`);
 
-  const tgzRes = await fetch(tarUrl, { headers: auth });
-  if (!tgzRes.ok) throw new InstallError(`npm tarball fetch failed: ${tgzRes.status}`);
-  const files = untar(Bun.gunzipSync(new Uint8Array(await tgzRes.arrayBuffer())));
+  const { bytes } = await downloadBytes(tarUrl, {
+    headers: auth,
+    accept: 'application/gzip, application/x-gzip, application/octet-stream',
+    allowedContentTypes: ['application/gzip', 'application/x-gzip', 'application/octet-stream'],
+    onProgress: (progress) => opts.onDownloadProgress?.({ ...progress, source: tarUrl })
+  }).catch((error: unknown) => {
+    throw new InstallError(`npm tarball fetch failed: ${error instanceof Error ? error.message : String(error)}`);
+  });
+  const files = untar(Bun.gunzipSync(bytes as Uint8Array<ArrayBuffer>));
 
   const read = (p: string): Uint8Array | undefined => files.get(`package/${p}`);
   const manifestBytes = read('atom-pack.json');
@@ -180,7 +200,7 @@ export function createAtomFetcher(opts: FetcherOptions = {}): AtomPackFetcher {
       case 'local':
         return fetchLocal(source.path);
       case 'github':
-        return fetchGithub(source, opts.githubToken);
+        return fetchGithub(source, opts);
       case 'npm':
         return fetchNpm(source, opts);
     }

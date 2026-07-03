@@ -5,7 +5,7 @@
 // (Cross-CALL overrides — builtin vs discovered — are deliberate and handled by mergeRegistries.)
 
 import type { MessageTypeDescriptor } from '@monad/protocol';
-import type { ModelProvider } from '@monad/sdk-atom';
+import type { ModelProvider, WorkspaceExperienceDefinition } from '@monad/sdk-atom';
 
 import { afterEach, expect, test } from 'bun:test';
 import { unregisterMessageType } from '@monad/protocol';
@@ -13,6 +13,7 @@ import { defineAtomPack, defineChannel, defineProvider, SDK_VERSION } from '@mon
 import { z } from 'zod';
 
 import { loadChannelAtomPacks } from '@/channels/atom-pack-host.ts';
+import { AtomPackRegistry } from '@/handlers/atom-pack/atom-pack-registry.ts';
 
 const caps = {
   edit: false,
@@ -54,6 +55,12 @@ function provider(type: string): ModelProvider {
     }
   });
 }
+
+const projectExperience: WorkspaceExperienceDefinition = {
+  id: 'custom-workspace',
+  title: 'Custom workspace',
+  entry: { type: 'web-component', module: './workspace-experience.js', tagName: 'custom-workspace' }
+};
 
 function pack(name: string, opts: { channels?: string[]; providers?: string[] }) {
   return defineAtomPack({
@@ -222,4 +229,44 @@ test('message-type same-pack duplicate aborts that pack; cross-pack same name is
   expect(String((errors[0]?.error as Error).message)).toContain('message type already registered');
   expect(errors.length).toBe(1); // other-msg loaded fine
   expect(channelMap.has('dup-ch')).toBe(true); // dup-ch registered before the throw, survives
+});
+
+test('workspace-experience atoms are forwarded to the daemon sink', async () => {
+  const registered: WorkspaceExperienceDefinition[] = [];
+  const experiencePack = defineAtomPack({
+    manifest: { name: 'px', version: '1.0.0', sdkVersion: SDK_VERSION, atoms: ['workspace-experience'] },
+    workspaceExperiences: [projectExperience]
+  });
+
+  await loadChannelAtomPacks([experiencePack], { onWorkspaceExperience: (experience) => registered.push(experience) });
+
+  expect(registered).toEqual([projectExperience]);
+});
+
+test('workspace-experience duplicate ids are rejected by the daemon registry', () => {
+  const registry = new AtomPackRegistry();
+  registry.registerWorkspaceExperience(projectExperience, 'first-pack');
+
+  expect(() =>
+    registry.registerWorkspaceExperience({ ...projectExperience, title: 'Other custom workspace' }, 'second-pack')
+  ).toThrow(/duplicate workspace experience id "custom-workspace"/);
+  expect([...registry.workspaceExperiences.values()]).toEqual([{ ...projectExperience, atomPackId: 'first-pack' }]);
+});
+
+test('undeclared workspace-experience atoms are rejected during daemon atom loading', async () => {
+  const registered: WorkspaceExperienceDefinition[] = [];
+  const errors: { atomPack: string; error: unknown }[] = [];
+  const experiencePack = defineAtomPack({
+    manifest: { name: 'px-sneaky', version: '1.0.0', sdkVersion: SDK_VERSION, atoms: [] },
+    workspaceExperiences: [projectExperience]
+  });
+
+  await loadChannelAtomPacks([experiencePack], {
+    onError: (atomPack, error) => errors.push({ atomPack, error }),
+    onWorkspaceExperience: (experience) => registered.push(experience)
+  });
+
+  expect(registered).toEqual([]);
+  expect(errors[0]?.atomPack).toBe('px-sneaky');
+  expect((errors[0]?.error as Error).name).toBe('UndeclaredAtomError');
 });

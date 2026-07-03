@@ -51,17 +51,31 @@ test('observe forwards the exchange to mem0.add under the agent userId', async (
     { sessionId: 'ses_1', scope: { kind: 'agent', id: 'agt_1' } }
   );
   expect(client.addCalls).toHaveLength(1);
-  expect(client.addCalls[0]?.userId).toBe('agt_1');
+  expect(client.addCalls[0]?.userId).toBe('agent:agt_1'); // userId namespaced by kind
   expect(client.addCalls[0]?.messages.map((m) => m.content)).toEqual(['I use Bun', 'noted']);
 });
 
-test('recall searches mem0 and maps results to facts, budget-capped', async () => {
+test('recall searches every requested scope and merges (global facts no longer lost)', async () => {
   const client = new FakeMem0();
-  await client.add([{ role: 'user', content: 'fact A' }], { userId: 'agt_1' });
-  await client.add([{ role: 'user', content: 'fact B' }], { userId: 'agt_1' });
+  await client.add([{ role: 'user', content: 'global fact' }], { userId: 'global' });
+  await client.add([{ role: 'user', content: 'project fact' }], { userId: 'project:p1' });
+  await client.add([{ role: 'user', content: 'agent fact' }], { userId: 'agent:agt_1' });
   const a = new Mem0Adapter(client, silent);
-  const block = await a.recall({ query: 'q', sessionId: 'ses_1', agentId: 'agt_1', advanced: false, budget });
-  expect(block.facts.map((f) => f.content)).toEqual(['fact A', 'fact B']);
+  const block = await a.recall({
+    query: 'q',
+    sessionId: 'ses_1',
+    agentId: 'agt_1',
+    scopes: [
+      { kind: 'global', id: '*' },
+      { kind: 'project', id: 'p1' },
+      { kind: 'agent', id: 'agt_1' }
+    ],
+    advanced: false,
+    budget
+  });
+  // Previously only the agent scope was searched, so "global fact"/"project fact" were never recalled.
+  expect(block.facts.map((f) => f.content).sort()).toEqual(['agent fact', 'global fact', 'project fact']);
+  expect(block.facts.map((f) => f.scope.kind).sort()).toEqual(['agent', 'global', 'project']);
 });
 
 test('facade: addFact (infer:false) / listFacts / forgetFact map to mem0', async () => {

@@ -110,7 +110,7 @@ token). Markdown rendering during streaming is the single biggest hot path.
   selector. The streaming reducer fires constantly — subscribers must be surgical.
 - **Virtualize long transcripts.** Past a few hundred messages, render only the visible
   window. Mounting the full DOM tree blows the INP and LCP budgets.
-- **Keep the bundle lean.** Import icons individually from `lucide-react` (no
+- **Keep the bundle lean.** Import `HugeiconsIcon` plus named icons from `@hugeicons/core-free-icons` (no
   barrel-import of the whole set). Lazy-load heavy, rarely-shown widgets (mermaid
   diagrams, syntax highlighting, settings panels) with `next/dynamic`.
 - **Don't fetch on every keystroke.** Debounce search/filter inputs; the daemon's

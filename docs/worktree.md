@@ -125,14 +125,20 @@ git add <resolved-files>
 git rebase --continue
 ```
 
-After a clean rebase, run the full quality gate in order — stop at the first
-failure and fix before continuing:
+After a clean rebase, run one failure-collection pass across the full quality gate
+before fixing. The goal is to expose the complete lint, typecheck, and test failure
+surface once, then make a concentrated repair pass instead of cycling through
+test → fix → test → fix for one command at a time:
 
 ```sh
 bun run typecheck       # TypeScript — must have zero errors
 bun run lint            # Biome — auto-fixes style issues, then exits non-zero on remaining errors
 bun run test            # all unit + e2e — must be green
 ```
+
+If one command fails, record its failures and continue to the remaining quality-gate
+commands when it is safe to do so. After the concentrated fix pass, re-run the same
+gate and require all three commands to pass.
 
 If the rebase exposed a type error or test failure that was not present before,
 it is a real regression introduced by the merge of main — fix it in this branch,

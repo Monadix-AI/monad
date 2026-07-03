@@ -1,3 +1,10 @@
+import type {
+  SDKAssistantMessage,
+  SDKMessage,
+  SDKResultMessage,
+  SDKSystemMessage,
+  SDKUserMessage
+} from '@anthropic-ai/claude-agent-sdk';
 import type { NativeCliAgentView } from '@monad/protocol';
 import type {
   BuildNativeCliLaunchOptions,
@@ -10,7 +17,44 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 
 import { defaultBinProbes, resolveBinary } from '@/infra/resolve-binary.ts';
+import { parseNativeCliArgumentSupport } from '@/services/native-cli/argument-support.ts';
 import { resizePty, sendPtyInput, stopPty } from '@/services/native-cli/pty.ts';
+
+const CLAUDE_CODE_SUPPORTED_MODELS = [
+  'claude-fable-5',
+  'claude-opus-4-8',
+  'claude-sonnet-5',
+  'claude-haiku-4-5',
+  'claude-opus-4-7',
+  'claude-opus-4-6',
+  'claude-sonnet-4-6'
+];
+
+type ClaudeSdkJsonLine = Partial<SDKMessage> & Record<string, unknown> & { type: string };
+type ClaudeSystemInitJsonLine = Partial<SDKSystemMessage> &
+  Record<string, unknown> & { type: 'system'; subtype: 'init' };
+type ClaudeTranscriptJsonLine = Partial<SDKAssistantMessage | SDKUserMessage> &
+  Record<string, unknown> & { type: 'assistant' | 'user' };
+type ClaudeResultJsonLine = Partial<SDKResultMessage> & Record<string, unknown> & { type: 'result' };
+
+function isClaudeSdkMessage(record: Record<string, unknown>): record is ClaudeSdkJsonLine {
+  return typeof record.type === 'string';
+}
+
+function isClaudeSystemInitMessage(record: ClaudeSdkJsonLine): record is ClaudeSystemInitJsonLine {
+  return record.type === 'system' && record.subtype === 'init';
+}
+
+function isClaudeTranscriptMessage(record: ClaudeSdkJsonLine): record is ClaudeTranscriptJsonLine {
+  return record.type === 'assistant' || record.type === 'user';
+}
+
+function isClaudeResultMessage(record: ClaudeSdkJsonLine): record is ClaudeResultJsonLine {
+  return record.type === 'result';
+}
+function hasFlag(args: string[], flag: string): boolean {
+  return args.some((arg) => arg === flag || arg.startsWith(`${flag}=`));
+}
 
 function withClaudeStreamJsonArgs(args: string[]): string[] {
   const next = [...args];
@@ -21,12 +65,58 @@ function withClaudeStreamJsonArgs(args: string[]): string[] {
   return next;
 }
 
+function applyClaudeUltracodeSetting(args: string[]): string[] {
+  const next = [...args];
+  const settingsIndex = next.findIndex((arg) => arg === '--settings' || arg.startsWith('--settings='));
+  if (settingsIndex < 0) return [...next, '--settings', '{"ultracode":true}'];
+
+  const rawSettings = next[settingsIndex]?.startsWith('--settings=')
+    ? next[settingsIndex]?.slice('--settings='.length)
+    : next[settingsIndex + 1];
+  if (!rawSettings) return next;
+
+  const settings = parseJsonObject(rawSettings);
+  if (!settings) return next;
+
+  const merged = JSON.stringify({ ...settings, ultracode: true });
+  if (next[settingsIndex]?.startsWith('--settings=')) {
+    next[settingsIndex] = `--settings=${merged}`;
+  } else {
+    next[settingsIndex + 1] = merged;
+  }
+  return next;
+}
+
+function allowManagedBridgeTools(args: string[], managed: boolean): string[] {
+  if (!managed || hasFlag(args, '--allowedTools') || hasFlag(args, '--allowed-tools')) return args;
+  return [...args, '--allowedTools', 'Bash(monad project *)', 'Bash(monad agent *)', 'Bash(monad runtime info)'];
+}
+
+function withClaudeSkipApprovalArgs(args: string[], skipProviderApprovals: boolean): string[] {
+  if (!skipProviderApprovals || hasFlag(args, '--dangerously-skip-permissions')) return args;
+  return [...args, '--dangerously-skip-permissions'];
+}
+
 function buildClaudeLaunch(agent: NativeCliAgentView, opts: BuildNativeCliLaunchOptions): NativeCliLaunchSpec {
   const launchMode = opts.launchMode ?? agent.defaultLaunchMode;
-  const args = [...(agent.args ?? [])];
+  let args = [...(agent.args ?? [])];
   if (opts.providerSessionRef && !args.includes('--resume') && !args.includes('-r')) {
     args.push('--resume', opts.providerSessionRef);
   }
+  const modelId = opts.modelId ?? opts.modelName;
+  if (modelId && !hasFlag(args, '--model')) {
+    args.push('--model', modelId);
+  }
+  if (opts.reasoningEffort === 'ultracode') {
+    args = applyClaudeUltracodeSetting(args);
+  } else if (opts.reasoningEffort && !hasFlag(args, '--effort')) {
+    args.push('--effort', opts.reasoningEffort);
+  }
+  if (opts.systemPromptFile && !args.includes('--append-system-prompt-file')) {
+    args.push('--append-system-prompt-file', opts.systemPromptFile);
+  }
+  args = allowManagedBridgeTools(args, !!opts.systemPromptFile);
+  args = withClaudeSkipApprovalArgs(args, !!opts.skipProviderApprovals);
   const launchArgs = launchMode === 'json-stream' ? withClaudeStreamJsonArgs(args) : args;
   return {
     argv: [agent.command, ...launchArgs],
@@ -135,15 +225,47 @@ function parseClaudeMessageContent(content: unknown): NativeCliOutputEvent[] {
   return text ? [{ type: 'agent_message', payload: { text } }, ...events] : events;
 }
 
+function parseClaudePermissionDenials(record: Record<string, unknown>): NativeCliOutputEvent[] {
+  const denials = record.permission_denials;
+  if (!Array.isArray(denials) || denials.length === 0) return [];
+  const messages = denials
+    .map((denial) => {
+      if (!denial || typeof denial !== 'object' || Array.isArray(denial)) return '';
+      const item = denial as Record<string, unknown>;
+      const toolName = typeof item.tool_name === 'string' ? item.tool_name : 'tool';
+      const toolInput = item.tool_input;
+      const input =
+        toolInput && typeof toolInput === 'object' && !Array.isArray(toolInput)
+          ? (toolInput as Record<string, unknown>)
+          : {};
+      const command = typeof input.command === 'string' ? input.command : undefined;
+      return command ? `${toolName}: ${command}` : toolName;
+    })
+    .filter(Boolean);
+  if (messages.length === 0) return [];
+  const result = typeof record.result === 'string' ? record.result.trim() : '';
+  return [
+    {
+      type: 'provider_error',
+      payload: {
+        code: 'permission_denied',
+        message: result
+          ? `${result}\n\nBlocked command: ${messages.join('; ')}`
+          : `Blocked command: ${messages.join('; ')}`
+      }
+    }
+  ];
+}
+
 function parseClaudeStreamJson(chunk: string): NativeCliOutputEvent[] {
   const events: NativeCliOutputEvent[] = [];
   for (const rawLine of chunk.split(/\r?\n/)) {
     const line = rawLine.trim();
     if (!line.startsWith('{')) continue;
     const record = parseJsonObject(line);
-    if (!record) continue;
+    if (!record || !isClaudeSdkMessage(record)) continue;
 
-    if (record.type === 'system' && record.subtype === 'init') {
+    if (isClaudeSystemInitMessage(record)) {
       events.push({
         type: 'session_ref',
         payload: compactObject({
@@ -156,19 +278,17 @@ function parseClaudeStreamJson(chunk: string): NativeCliOutputEvent[] {
       continue;
     }
 
-    const message = record.message;
-    if (record.type === 'assistant' && message && typeof message === 'object' && !Array.isArray(message)) {
-      events.push(...parseClaudeMessageContent((message as Record<string, unknown>).content));
+    if (isClaudeTranscriptMessage(record)) {
+      const message = record.message;
+      if (message && typeof message === 'object' && !Array.isArray(message)) {
+        events.push(...parseClaudeMessageContent((message as unknown as Record<string, unknown>).content));
+      }
       continue;
     }
 
-    if (record.type === 'user' && message && typeof message === 'object' && !Array.isArray(message)) {
-      events.push(...parseClaudeMessageContent((message as Record<string, unknown>).content));
-      continue;
-    }
-
-    if (record.type === 'result' && typeof record.result === 'string') {
-      events.push({ type: 'agent_message', payload: { text: record.result } });
+    if (isClaudeResultMessage(record) && typeof record.result === 'string') {
+      events.push({ type: 'agent_message', payload: { text: record.result, final: true } });
+      events.push(...parseClaudePermissionDenials(record));
     }
   }
   return events;
@@ -214,6 +334,7 @@ function resolveClaudeApproval(): void {
 
 export const claudeCodeNativeCliAdapter: NativeCliProviderAdapter = {
   provider: 'claude-code',
+  productIcon: 'claude-code',
   detect(probes = defaultBinProbes) {
     const claudeBin = resolveBinary('claude', [], probes);
     const installed = claudeBin !== undefined || probes.exists(join(homedir(), '.claude'));
@@ -221,11 +342,14 @@ export const claudeCodeNativeCliAdapter: NativeCliProviderAdapter = {
       id: 'claude-code',
       label: 'Claude Code',
       provider: 'claude-code',
+      productIcon: claudeCodeNativeCliAdapter.productIcon,
       command: 'claude',
       args: [],
+      modelOptions: claudeCodeNativeCliAdapter.listSupportedModels(),
       defaultLaunchMode: 'pty',
       supportedLaunchModes: ['pty', 'json-stream', 'remote-control'],
       installHint: 'Install Claude Code, then sign in with claude auth.',
+      installUrl: 'https://docs.anthropic.com/en/docs/claude-code/setup',
       installed,
       resolvedBinPath: claudeBin,
       capabilities: {
@@ -236,6 +360,12 @@ export const claudeCodeNativeCliAdapter: NativeCliProviderAdapter = {
       }
     };
   },
+  resolveCommand(command, probes = defaultBinProbes) {
+    return resolveBinary(command, [], probes);
+  },
+  listSupportedModels(agent) {
+    return agent?.modelOptions?.length ? agent.modelOptions : CLAUDE_CODE_SUPPORTED_MODELS;
+  },
   buildLaunch: buildClaudeLaunch,
   buildAuthLaunch(agent) {
     return buildClaudeAuthLaunch(agent, ['auth', 'login']);
@@ -243,12 +373,23 @@ export const claudeCodeNativeCliAdapter: NativeCliProviderAdapter = {
   buildAuthStatusLaunch(agent) {
     return buildClaudeAuthLaunch(agent, ['auth', 'status']);
   },
+  authStatus(agent) {
+    return {
+      launch: buildClaudeAuthLaunch(agent, ['auth', 'status', '--json']),
+      parse: (output, exitCode) => claudeCodeNativeCliAdapter.parseAuthStatus(output, exitCode)
+    };
+  },
+  argumentSupport(agent) {
+    return {
+      launch: buildClaudeAuthLaunch(agent, ['--help']),
+      parse: (output) => parseNativeCliArgumentSupport(output)
+    };
+  },
   parseAuthStatus(output, exitCode) {
     const structured = parseStructuredAuthState(output);
     if (structured) return structured;
-    if (exitCode === 0 && /logged in|authenticated|signed in/i.test(output)) return 'authenticated';
-    if (/not logged in|not authenticated|logged out|unauthenticated|sign in|login/i.test(output))
-      return 'unauthenticated';
+    if (exitCode === 0) return 'authenticated';
+    if (exitCode === 1) return 'unauthenticated';
     return 'unknown';
   },
   parseOutput: parseClaudeStreamJson,

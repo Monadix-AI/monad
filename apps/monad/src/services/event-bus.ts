@@ -1,4 +1,4 @@
-import type { Event, EventType, SessionId } from '@monad/protocol';
+import type { Event, EventType, TranscriptTargetId } from '@monad/protocol';
 
 export type EventSink = (event: Event) => void;
 
@@ -31,18 +31,18 @@ const CONTROL_EVENT_TYPES: ReadonlySet<EventType> = new Set<EventType>([
  * string so the topic axis can later widen (e.g. `principal:<id>`) without
  * touching the publish/subscribe plumbing.
  */
-type Topic = `session:${SessionId}` | 'control';
+type Topic = `session:${TranscriptTargetId}` | 'control';
 
 const CONTROL_TOPIC = 'control' as const;
 
-const sessionTopic = (sessionId: SessionId): Topic => `session:${sessionId}`;
+const sessionTopic = (sessionId: TranscriptTargetId): Topic => `session:${sessionId}`;
 
 /** In-process pub/sub. Every control-API WS/SSE push originates here. */
 export class EventBus {
   private readonly subs = new Map<Topic, Set<EventSink>>();
 
   /** Subscribe to one session's full event stream. */
-  subscribe(sessionId: SessionId, sink: EventSink): () => void {
+  subscribe(sessionId: TranscriptTargetId, sink: EventSink): () => void {
     return this.subscribeTopic(sessionTopic(sessionId), sink);
   }
 
@@ -56,7 +56,7 @@ export class EventBus {
   }
 
   publish(event: Event): void {
-    this.emit(sessionTopic(event.sessionId), event);
+    this.emit(sessionTopic(event.transcriptTargetId), event);
     // List-level events also reach control subscribers. A sink subscribed to both
     // the session and control topics receives the event twice — clients dedupe by
     // `event.id` (events are idempotent by id).

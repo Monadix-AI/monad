@@ -8,7 +8,8 @@ export {
   codeExecTool,
   configureCodeExec,
   configureHostExec,
-  localBackend,
+  detectDockerRuntime,
+  followSystemBackend,
   selectCodeExecBackend
 } from './registry/code-exec.ts';
 export {

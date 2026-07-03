@@ -8,7 +8,7 @@ import { createBoundedSseSink } from '@/transports/http/sessions/sse.ts';
 function evt(): Event {
   return {
     id: newId('evt'),
-    sessionId: newId('ses') as SessionId,
+    transcriptTargetId: newId('ses') as SessionId,
     type: 'agent.token',
     actorAgentId: newId('agt'),
     payload: { text: 'x'.repeat(64) },

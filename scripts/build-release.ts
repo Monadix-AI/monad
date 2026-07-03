@@ -142,11 +142,9 @@ try {
     const isWindows = t.os === 'windows';
     const binName = isWindows ? 'monad.exe' : 'monad';
 
-    // ── 2a. Compile native sandbox launcher ─────────────────────────────────────
-    // Ships alongside bin/monad as bin/monad-sandbox-launcher[.exe]. The launcher
-    // applies OS-native write-restriction before spawning the child:
-    //   Linux   → Landlock FS ruleset (bin/monad-sandbox-launcher)
-    //   Windows → Low Integrity token + Job Object (bin/monad-sandbox-launcher.exe)
+    // ── 2a. Compile native sandbox launchers ────────────────────────────────────
+    // Ship alongside bin/monad as bin/monad-sandbox-launcher[.exe] (Low IL / Landlock)
+    // and bin/monad-sandbox-appcontainer.exe (AppContainer, Windows-only, preferred).
     // Skipped gracefully when the cross-compiler isn't found.
     if (t.os === 'linux') {
       const launcherSrc = join(ROOT, 'apps/monad/native/sandbox-launcher/main.c');
@@ -167,24 +165,32 @@ try {
       }
     }
     if (t.os === 'windows') {
-      const launcherSrc = join(ROOT, 'apps/monad/native/sandbox-launcher/windows.c');
-      const launcherOut = join(binDir, 'monad-sandbox-launcher.exe');
-      // x64: MinGW cross-compiler (standard Ubuntu package).
-      // arm64: requires llvm-mingw (not in Ubuntu apt); falls back gracefully if absent.
-      //        Install from https://github.com/mstorsjo/llvm-mingw/releases and add to PATH.
       const cc =
         t.arch === 'arm64'
-          ? 'aarch64-w64-mingw32-clang' // llvm-mingw provides this
+          ? 'aarch64-w64-mingw32-clang' // llvm-mingw provides this; not in Ubuntu apt
           : 'x86_64-w64-mingw32-gcc';
-      const flags =
-        t.arch === 'arm64'
-          ? ['-O2', '-s', '-municode', '-o', launcherOut, launcherSrc, '-ladvapi32']
-          : ['-O2', '-s', '-static', '-municode', '-o', launcherOut, launcherSrc, '-ladvapi32'];
-      const r = await $`${cc} ${flags}`.nothrow().quiet();
-      if (r.exitCode !== 0) {
-        log(`  ⚠ ${cc} not found — ${artifact} sandbox launcher omitted (child runs unconfined on Windows)`);
+      const staticFlag = t.arch === 'arm64' ? [] : ['-static']; // llvm-mingw links dynamically
+
+      // Low Integrity launcher (monad-sandbox-launcher.exe) — fallback when AppContainer is unavailable
+      const lowILSrc = join(ROOT, 'apps/monad/native/sandbox-launcher/windows.c');
+      const lowILOut = join(binDir, 'monad-sandbox-launcher.exe');
+      const lowILFlags = ['-O2', '-s', ...staticFlag, '-municode', '-o', lowILOut, lowILSrc, '-ladvapi32'];
+      const rLowIL = await $`${cc} ${lowILFlags}`.nothrow().quiet();
+      if (rLowIL.exitCode !== 0) {
+        log(`  ⚠ ${cc} not found — ${artifact} Low IL sandbox launcher omitted`);
       } else {
-        log(`  ✓ sandbox launcher (${cc})`);
+        log(`  ✓ sandbox launcher / Low IL (${cc})`);
+      }
+
+      // AppContainer launcher (monad-sandbox-appcontainer.exe) — preferred over Low IL
+      const acSrc = join(ROOT, 'apps/monad/native/sandbox-launcher/windows-appcontainer.c');
+      const acOut = join(binDir, 'monad-sandbox-appcontainer.exe');
+      const acFlags = ['-O2', '-s', ...staticFlag, '-municode', '-o', acOut, acSrc, '-ladvapi32', '-luserenv'];
+      const rAC = await $`${cc} ${acFlags}`.nothrow().quiet();
+      if (rAC.exitCode !== 0) {
+        log(`  ⚠ ${artifact} AppContainer launcher omitted (Low IL fallback remains)`);
+      } else {
+        log(`  ✓ sandbox launcher / AppContainer (${cc})`);
       }
     }
 

@@ -242,7 +242,7 @@ export function startPipeProcess(command: string, dir: string, ctx: ToolContext)
   const proc = sandboxedSpawn(
     shellArgv(command),
     { cwd: dir, stdin: 'pipe', stdout: 'pipe', stderr: 'pipe', detached: true },
-    buildSandboxPolicy(ctx.sandboxRoots),
+    buildSandboxPolicy(ctx.sandboxRoots, [], ctx.sessionId),
     { sessionId: ctx.sessionId }
   );
   return pipeHandle(proc);
@@ -275,7 +275,7 @@ export function startPtyProcess(
         }
       }
     },
-    buildSandboxPolicy(ctx.sandboxRoots),
+    buildSandboxPolicy(ctx.sandboxRoots, [], ctx.sessionId),
     { sessionId: ctx.sessionId }
   );
   if (!proc.terminal) throw new ToolSecurityError('failed to start pty terminal');

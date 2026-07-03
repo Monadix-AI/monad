@@ -28,8 +28,20 @@ import '../../src/endpoints/settings/obscura/get-obscura.ts';
 import '../../src/endpoints/settings/obscura/set-obscura.ts';
 import '../../src/endpoints/settings/openai-compat/get-openai-compat.ts';
 import '../../src/endpoints/settings/openai-compat/set-openai-compat.ts';
+import '../../src/endpoints/settings/profile/get-profile-settings.ts';
+import '../../src/endpoints/settings/profile/set-profile-settings.ts';
 import '../../src/endpoints/settings/tool-backends/get-tool-backends.ts';
 import '../../src/endpoints/settings/tool-backends/set-tool-backends.ts';
+import '../../src/endpoints/settings/model/profiles/set-profile.ts';
+import '../../src/endpoints/settings/model/roles/get-roles.ts';
+import '../../src/endpoints/atoms/get-skill-content.ts';
+import '../../src/endpoints/atoms/update-skill-content.ts';
+import '../../src/endpoints/settings/model/profiles/rename-profile.ts';
+import '../../src/endpoints/settings/model/transcription/transcribe-audio.ts';
+import '../../src/endpoints/projects/create-project.ts';
+import '../../src/endpoints/projects/delete-project.ts';
+import '../../src/endpoints/projects/list-projects.ts';
+import '../../src/endpoints/projects/update-project.ts';
 
 // ── helpers ─────────────────────────────────────────────────────────────────────
 
@@ -76,6 +88,29 @@ function fakeClient(handlers: Record<string, Handler> = {}): MonadClient {
     return ok({ ok: true });
   }
 
+  const skillRoute = (params: { name: string }) => ({
+    content: {
+      get: (arg?: unknown) => resolve('getSkillContent', '$raw', { name: params.name, content: '' }, params, arg),
+      put: (body: unknown, arg?: unknown) =>
+        resolve('updateSkillContent', '$raw', { name: params.name, dir: '', warnings: [] }, params, body, arg)
+    }
+  });
+  Object.assign(skillRoute, {
+    get: () => resolve('listInstalledSkills', '$raw', { skills: [], skillInstances: [] }),
+    post: (body: unknown) =>
+      resolve('createSkill', '$raw', { name: (body as { name?: string }).name ?? '', dir: '' }, body)
+  });
+
+  const profilesRoute = (params: { alias: string }) => ({
+    put: (body: unknown) => resolveMut('setProfile', body, params),
+    alias: {
+      patch: (body: unknown) => resolveMut('renameProfile', body, params)
+    }
+  });
+  Object.assign(profilesRoute, {
+    get: () => resolve('listProfiles', '$raw', { profiles: [], defaultAlias: 'default' })
+  });
+
   return {
     treaty: {
       v1: {
@@ -110,6 +145,21 @@ function fakeClient(handlers: Record<string, Handler> = {}): MonadClient {
           'tool-backends': {
             get: () => resolve('getToolBackends', 'toolBackends', {}),
             put: (body: unknown) => resolveMut('setToolBackends', body)
+          },
+          profile: {
+            get: () => resolve('getProfileSettings', '$raw', { displayName: 'Operator', avatarDataUrl: null }),
+            put: (body: unknown) => resolve('setProfileSettings', '$raw', body, body)
+          },
+          model: {
+            default: {
+              get: () => resolve('getDefault', 'alias', 'default'),
+              put: (body: unknown) => resolveMut('setDefault', body)
+            },
+            profiles: profilesRoute,
+            roles: {
+              get: () => resolve('getRoles', '$raw', { roles: {} }),
+              put: (body: unknown) => resolveMut('setRoles', body)
+            }
           }
         },
         commands: {
@@ -142,6 +192,36 @@ function fakeClient(handlers: Record<string, Handler> = {}): MonadClient {
             post: (body: unknown) => resolveMut('setInitHome', body)
           }
         },
+        workplace: {
+          projects: Object.assign(
+            (params: { id: string }) => ({
+              patch: (body: unknown) =>
+                resolve(
+                  'updateWorkplaceProject',
+                  '$raw',
+                  { project: { id: params.id, ...(body as Record<string, unknown>) } },
+                  params,
+                  body
+                ),
+              delete: () => resolve('deleteWorkplaceProject', '$raw', { deleted: true }, params)
+            }),
+            {
+              get: (arg?: unknown) =>
+                resolve(
+                  'listWorkplaceProjects',
+                  '$raw',
+                  {
+                    projects: [],
+                    total: 0,
+                    limit: 50,
+                    offset: 0
+                  },
+                  arg
+                ),
+              post: (body: unknown) => resolve('createWorkplaceProject', '$raw', { projectId: 'ses_project' }, body)
+            }
+          )
+        },
         // Session endpoints needed by the endpoint chain (sandbox/openai-compat/hooks
         // inject off sessionsApi).
         sessions: (..._args: unknown[]) => ({
@@ -162,9 +242,15 @@ function fakeClient(handlers: Record<string, Handler> = {}): MonadClient {
         approvals: {
           get: async () => ok({ rules: [] })
         },
-        atoms: {
-          get: async () => ok({ atomPacks: [] })
-        },
+        atoms: Object.assign(
+          () => ({
+            delete: () => ok({ ok: true })
+          }),
+          {
+            get: async () => ok({ atomPacks: [] }),
+            skills: skillRoute
+          }
+        ),
         usage: {
           get: async () =>
             ok({
@@ -528,6 +614,53 @@ test('getMem0Data: fetches mem0 data for the PCA explorer', async () => {
   expect((res.data as { mem0Data?: unknown } | undefined)?.mem0Data).toEqual(data);
 });
 
+test('getSkillContent: uses the typed treaty route for skill content reads', async () => {
+  let observed: unknown;
+  const client = fakeClient({
+    getSkillContent: handler('$raw', async (...args) => {
+      observed = args;
+      return { name: 'CodeGraph Navigator', content: 'body', files: [], preview: 'text' };
+    })
+  });
+  const store = createMonadStore({ client });
+
+  const res = await dispatchEndpoint(store, 'getSkillContent', {
+    name: 'CodeGraph Navigator',
+    id: 'atom-pack:codegraph',
+    file: 'SKILL.md'
+  });
+
+  expect((res.data as { content?: string } | undefined)?.content).toBe('body');
+  expect(observed).toEqual([
+    { name: 'CodeGraph Navigator' },
+    { query: { id: 'atom-pack:codegraph', file: 'SKILL.md' } }
+  ]);
+});
+
+test('updateSkillContent: uses the typed treaty route for skill content writes', async () => {
+  let observed: unknown;
+  const client = fakeClient({
+    updateSkillContent: handler('$raw', async (...args) => {
+      observed = args;
+      return { name: 'codegraph-navigator', dir: '/skills/codegraph-navigator', warnings: [] };
+    })
+  });
+  const store = createMonadStore({ client });
+
+  const res = await dispatchEndpoint(store, 'updateSkillContent', {
+    name: 'codegraph-navigator',
+    id: 'global:codegraph-navigator',
+    content: 'updated'
+  });
+
+  expect((res.data as { name?: string } | undefined)?.name).toBe('codegraph-navigator');
+  expect(observed).toEqual([
+    { name: 'codegraph-navigator' },
+    { content: 'updated' },
+    { query: { id: 'global:codegraph-navigator' } }
+  ]);
+});
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // Init status
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -561,6 +694,63 @@ test('setInitHome: posts home config and invalidates InitStatus tag', async () =
   await new Promise((r) => setTimeout(r, 0));
   expect(statusCalls).toBe(2);
   expect(posted).toEqual({ home: '/tmp/monad-home' });
+});
+
+test('workplace projects: list/create/update/delete use the typed treaty project routes', async () => {
+  const calls: unknown[] = [];
+  const project = {
+    id: 'ses_project',
+    title: 'Workplace: alpha',
+    ownerPrincipalId: 'prn_owner',
+    state: 'active',
+    archived: false,
+    createdAt: '2026-07-02T00:00:00.000Z',
+    updatedAt: '2026-07-02T00:00:00.000Z'
+  };
+  let deleted = false;
+  const client = fakeClient({
+    listWorkplaceProjects: handler('$raw', async (arg) => {
+      calls.push(['list', arg]);
+      return { projects: deleted ? [] : [project], total: deleted ? 0 : 1, limit: 50, offset: 0 };
+    }),
+    createWorkplaceProject: handler('$raw', async (body) => {
+      calls.push(['create', body]);
+      return { projectId: project.id };
+    }),
+    updateWorkplaceProject: handler('$raw', async (params, body) => {
+      calls.push(['update', params, body]);
+      return { project: { ...project, ...(body as object) } };
+    }),
+    deleteWorkplaceProject: handler('$raw', async (params) => {
+      calls.push(['delete', params]);
+      deleted = true;
+      return { deleted: true };
+    })
+  });
+  const store = createMonadStore({ client });
+
+  const list = await dispatchEndpoint(store, 'listWorkplaceProjects', { archived: false });
+  expect((list.data as { total?: number } | undefined)?.total).toBe(1);
+  await dispatchEndpoint(store, 'createWorkplaceProject', { title: project.title, origin: { surface: 'web' } });
+  await dispatchEndpoint(store, 'updateWorkplaceProject', { id: project.id, title: 'Workplace: beta' });
+  await dispatchEndpoint(store, 'deleteWorkplaceProject', project.id);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  const cached = store.getState().monadApi.queries;
+  const projectLists = Object.values(cached).filter((entry) => entry?.endpointName === 'listWorkplaceProjects');
+  expect(
+    projectLists.some((entry) => {
+      const ids = ((entry?.data as { projects?: { ids?: string[] } } | undefined)?.projects?.ids ?? []) as string[];
+      return ids.includes(project.id);
+    })
+  ).toBe(false);
+
+  expect(calls).toContainEqual([
+    'list',
+    { query: { archived: false, state: undefined, limit: undefined, offset: undefined } }
+  ]);
+  expect(calls).toContainEqual(['create', { title: project.title, origin: { surface: 'web' } }]);
+  expect(calls).toContainEqual(['update', { id: project.id }, { title: 'Workplace: beta' }]);
+  expect(calls).toContainEqual(['delete', { id: project.id }]);
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -753,6 +943,98 @@ test('setOpenaiCompat: writes config and invalidates OpenaiCompat tag', async ()
   expect(written).toEqual({ enabled: true });
 });
 
+test('getProfileSettings: fetches user profile settings', async () => {
+  const profile = { displayName: 'Zeke', avatarDataUrl: 'data:image/png;base64,ZmFrZQ==' };
+  const client = fakeClient({ getProfileSettings: handler('$raw', async () => profile) });
+  const store = createMonadStore({ client });
+
+  const res = await dispatchEndpoint(store, 'getProfileSettings');
+  expect(res.data).toEqual(profile);
+});
+
+test('setProfileSettings: writes display name and avatar through the profile settings endpoint', async () => {
+  let getCalls = 0;
+  let written: unknown;
+  const next = { displayName: 'Zeke', avatarDataUrl: null };
+  const client = fakeClient({
+    getProfileSettings: handler('$raw', async () => {
+      getCalls++;
+      return { displayName: 'Operator', avatarDataUrl: null };
+    }),
+    setProfileSettings: handler('$raw', async (body: unknown) => {
+      written = body;
+      return body;
+    })
+  });
+  const store = createMonadStore({ client });
+
+  await dispatchEndpoint(store, 'getProfileSettings');
+  expect(getCalls).toBe(1);
+
+  const res = await dispatchEndpoint(store, 'setProfileSettings', next);
+  await new Promise((r) => setTimeout(r, 0));
+  expect(res.data).toEqual(next);
+  expect(written).toEqual(next);
+  expect(getCalls).toBe(2);
+});
+
+test('setProfile: invalidates model roles so voice availability updates without reload', async () => {
+  let rolesCalls = 0;
+  let written: unknown;
+  const profile = {
+    alias: 'default',
+    routes: {
+      chat: { provider: 'oai', modelId: 'gpt-5-mini' },
+      transcription: { provider: 'oai', modelId: 'whisper-1' }
+    },
+    params: {},
+    fallbacks: []
+  };
+  const client = fakeClient({
+    getRoles: handler('$raw', async () => {
+      rolesCalls++;
+      return { roles: rolesCalls > 1 ? { transcription: 'oai:whisper-1' } : {} };
+    }),
+    setProfile: handler('ok', async (body: unknown) => {
+      written = body;
+    })
+  });
+  const store = createMonadStore({ client });
+
+  await dispatchEndpoint(store, 'getRoles');
+  expect(rolesCalls).toBe(1);
+
+  await dispatchEndpoint(store, 'setProfile', profile);
+  await new Promise((r) => setTimeout(r, 0));
+
+  expect(written).toEqual({ profile });
+  expect(rolesCalls).toBe(2);
+});
+
+test('setDefault: invalidates model roles because effective roles are default-profile scoped', async () => {
+  let rolesCalls = 0;
+  let written: unknown;
+  const client = fakeClient({
+    getRoles: handler('$raw', async () => {
+      rolesCalls++;
+      return { roles: rolesCalls > 1 ? { transcription: 'oai:whisper-fast' } : {} };
+    }),
+    setDefault: handler('ok', async (body: unknown) => {
+      written = body;
+    })
+  });
+  const store = createMonadStore({ client });
+
+  await dispatchEndpoint(store, 'getRoles');
+  expect(rolesCalls).toBe(1);
+
+  await dispatchEndpoint(store, 'setDefault', { alias: 'voice' });
+  await new Promise((r) => setTimeout(r, 0));
+
+  expect(written).toEqual({ alias: 'voice' });
+  expect(rolesCalls).toBe(2);
+});
+
 test('getToolBackends: fetches tool backend settings', async () => {
   const cfg = { backends: [{ id: 'local', type: 'local' as const, enabled: true }] };
   const client = fakeClient({ getToolBackends: handler('toolBackends', async () => cfg) });
@@ -783,4 +1065,48 @@ test('setToolBackends: writes config and invalidates ToolBackends tag', async ()
   await new Promise((r) => setTimeout(r, 0));
   expect(getCalls).toBe(2);
   expect(written).toEqual({ webSearch: { provider: 'native' } });
+});
+
+test('renameProfile: uses the typed treaty route for profile alias changes', async () => {
+  let observed: unknown;
+  const client = fakeClient({
+    renameProfile: handler('ok', async (...args) => {
+      observed = args;
+    })
+  });
+  const store = createMonadStore({ client });
+
+  const res = await dispatchEndpoint(store, 'renameProfile', { alias: 'research', nextAlias: 'writer' });
+
+  expect((res.data as { ok?: boolean } | undefined)?.ok).toBe(true);
+  expect(observed).toEqual([{ alias: 'writer' }, { alias: 'research' }]);
+});
+
+test('transcribeAudio: posts audio payload to the model transcription endpoint', async () => {
+  let observed: { path: string; body: unknown } | undefined;
+  const client = {
+    ...fakeClient({}),
+    fetch: async (path: string, init?: RequestInit) => {
+      observed = {
+        path,
+        body: init?.body ? JSON.parse(String(init.body)) : undefined
+      };
+      return new Response(JSON.stringify({ text: 'hello from audio' }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' }
+      });
+    }
+  } as unknown as MonadClient;
+  const store = createMonadStore({ client });
+
+  const res = await dispatchEndpoint(store, 'transcribeAudio', {
+    audioBase64: 'YWJj',
+    mediaType: 'audio/webm'
+  });
+
+  expect(res.data).toEqual({ text: 'hello from audio' });
+  expect(observed).toEqual({
+    path: '/v1/settings/model/transcribe',
+    body: { audioBase64: 'YWJj', mediaType: 'audio/webm' }
+  });
 });

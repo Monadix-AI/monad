@@ -6,6 +6,7 @@
 
 import type { AtomPackSource } from '@/atoms/install/source.ts';
 import type { SkillFetcher, StagedSkillRepo } from '@/capabilities/skills/install/index.ts';
+import type { DownloadProgress } from '@/services/download.ts';
 
 import { mkdtemp, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -13,8 +14,13 @@ import { join, relative, sep } from 'node:path';
 
 import { untar } from '@/atoms/install/untar.ts';
 import { SkillInstallError } from '@/capabilities/skills/install/index.ts';
+import { downloadBytes } from '@/services/download.ts';
 
 type GithubSource = Extract<AtomPackSource, { kind: 'github' }>;
+type SkillFetcherOptions = {
+  githubToken?: string;
+  onDownloadProgress?: (progress: DownloadProgress & { source: string }) => void;
+};
 
 function ghHeaders(token?: string): Record<string, string> {
   return {
@@ -49,14 +55,21 @@ export async function resolveGithubCommit(source: GithubSource, token?: string):
   return (await res.text()).trim();
 }
 
-async function fetchGithubTarball(source: GithubSource, token?: string): Promise<StagedSkillRepo> {
-  const commit = await resolveGithubCommit(source, token);
+async function fetchGithubTarball(source: GithubSource, opts: SkillFetcherOptions): Promise<StagedSkillRepo> {
+  const commit = await resolveGithubCommit(source, opts.githubToken);
   const url = `https://api.github.com/repos/${source.owner}/${source.repo}/tarball/${commit}`;
-  const res = await fetch(url, { headers: ghHeaders(token), redirect: 'follow' });
-  if (!res.ok)
-    throw new SkillInstallError(`github tarball ${source.owner}/${source.repo}@${source.ref} failed: ${res.status}`);
+  const { bytes } = await downloadBytes(url, {
+    headers: ghHeaders(opts.githubToken),
+    accept: 'application/gzip, application/x-gzip, application/octet-stream',
+    allowedContentTypes: ['application/gzip', 'application/x-gzip', 'application/octet-stream'],
+    onProgress: (progress) => opts.onDownloadProgress?.({ ...progress, source: url })
+  }).catch((error: unknown) => {
+    throw new SkillInstallError(
+      `github tarball ${source.owner}/${source.repo}@${source.ref} failed: ${error instanceof Error ? error.message : String(error)}`
+    );
+  });
 
-  const archive = untar(Bun.gunzipSync(new Uint8Array(await res.arrayBuffer())));
+  const archive = untar(Bun.gunzipSync(bytes as Uint8Array<ArrayBuffer>));
   // GitHub tarballs nest everything under a single `<owner>-<repo>-<sha>/` dir — strip it.
   const files = new Map<string, Uint8Array>();
   for (const [path, bytes] of archive) {
@@ -136,10 +149,10 @@ async function fetchGithubViaGit(source: GithubSource): Promise<StagedSkillRepo>
   }
 }
 
-export function createSkillFetcher(opts: { githubToken?: string } = {}): SkillFetcher {
+export function createSkillFetcher(opts: SkillFetcherOptions = {}): SkillFetcher {
   return async (source) => {
     try {
-      return await fetchGithubTarball(source, opts.githubToken);
+      return await fetchGithubTarball(source, opts);
     } catch (err) {
       if (!isAuthOrPermissionError(err)) throw err;
       return fetchGithubViaGit(source);

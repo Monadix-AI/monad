@@ -1,6 +1,7 @@
 import type { CommandDef } from './types.ts';
 
 import { command as acp } from './acp.ts';
+import { agentCommand, projectCommand, runtimeCommand } from './agent-facing.ts';
 import { command as approvals } from './approvals.ts';
 import { command as atom } from './atom.ts';
 import { command as channel } from './channel.ts';
@@ -61,6 +62,9 @@ export const commands: CommandDef[] = [
   channel,
   peer,
   session,
+  projectCommand,
+  agentCommand,
+  runtimeCommand,
   model,
   provider,
   credential,

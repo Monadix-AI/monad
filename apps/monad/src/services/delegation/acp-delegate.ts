@@ -732,8 +732,12 @@ async function promptDelegate(
     d.idleTimer = null;
   }
   // The session's delegating backend if present (so a bridged editor session delegating onward routes
-  // the sub-agent's files/shell to the editor too), else a sandbox scoped to the session roots.
-  const backends = ctx.backends ?? createSandboxBackends(ctx.sandboxRoots);
+  // the sub-agent's files/shell to the editor too), else a sandbox scoped to the session roots. When
+  // the bound agent declares its own working folder (spec.cwd) it leads the roots, so monad-serviced
+  // fs/terminal requests from that agent reach it (and use it as the default cwd), not only the parent
+  // session's folder — keeping the monad sandbox consistent with the cwd the adapter was spawned in.
+  const delegateRoots = d.spec.cwd ? [d.spec.cwd, ...(ctx.sandboxRoots ?? [])] : ctx.sandboxRoots;
+  const backends = ctx.backends ?? createSandboxBackends(delegateRoots);
   d.turn = { ctx, gate, backends, result: '', activity: '', processActivity: '', onChunk, onActivity };
 
   // A turn abort (stop button / session cancel) kills the adapter and evicts the delegate; the next

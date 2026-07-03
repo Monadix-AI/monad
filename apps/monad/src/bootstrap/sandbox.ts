@@ -8,7 +8,12 @@ import type { SessionSandboxService } from '../services/session-sandbox.ts';
 
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { configureDockerImage, configureNativeLauncherPath, detectDockerRuntime } from '@monad/atoms';
+import {
+  configureDockerImage,
+  configureNativeLauncherPath,
+  detectDockerRuntime,
+  sweepOrphanAppContainerProfiles
+} from '@monad/atoms';
 import { logger } from '@monad/logger';
 import { configureSandboxCredential } from '@monad/sdk-atom';
 
@@ -52,6 +57,11 @@ export async function createSandbox(
   // finalizeSandboxLauncher() so dockerLauncher.isAvailable() returns correctly at selection time.
   await detectDockerRuntime();
   if (cfg.agent.sandbox.dockerImage) configureDockerImage(cfg.agent.sandbox.dockerImage);
+
+  // Reclaim AppContainer profiles orphaned by a prior crash on Windows. Best-effort, and
+  // unconditional: a run that flips confine true→false would otherwise strand the profiles the
+  // previous confined run created, leaking them on the host forever. No-op off Windows.
+  void sweepOrphanAppContainerProfiles();
 
   if (cfg.agent.sandbox.confine) {
     // The override path for the native Linux/Windows launcher binary (config.agent.sandbox.launcherPath)
@@ -112,7 +122,10 @@ export async function createSandbox(
     log: (m) => logger.info(`monad: ${m}`)
   });
   if (sessionSandbox.enabled) {
-    await sessionSandbox.sweep(store.listSessions().map((s) => s.id));
+    await sessionSandbox.sweep([
+      ...store.listSessions().map((s) => s.id),
+      ...store.listWorkplaceProjects().map((p) => p.id)
+    ]);
     logger.info('monad: ephemeral sandbox mode — each session runs in a disposable root');
   }
 

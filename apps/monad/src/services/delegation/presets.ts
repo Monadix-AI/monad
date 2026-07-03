@@ -9,6 +9,8 @@
 // CLI binary (incl. known app-bundle locations, since the Codex.app binary is not on PATH) and the
 // login dir. Auth flows through the agent's existing credentials (~/.codex, ~/.claude) or an env key.
 
+import type { NativeCliProductIcon } from '@monad/protocol';
+
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
@@ -18,6 +20,7 @@ import { type BinProbes, defaultBinProbes, resolveBinary } from '@/infra/resolve
 interface AcpAgentPreset {
   id: string; // stable preset key, also the default agent `name`
   label: string; // human label for the UI
+  productIcon: NativeCliProductIcon;
   command: string; // e.g. 'npx'
   args: string[]; // e.g. ['-y', '@zed-industries/claude-code-acp']
   env?: Record<string, string>; // optional auth env (secret refs), merged at spawn
@@ -51,6 +54,7 @@ const PRESETS: PresetDef[] = [
   {
     id: 'claude-code',
     label: 'Claude Code',
+    productIcon: 'claude-code',
     command: 'npx',
     args: ['-y', CLAUDE_AGENT_ACP_PKG],
     // Best-effort: forward ANTHROPIC_API_KEY if set in the daemon env; silently skip if not, so the
@@ -65,6 +69,7 @@ const PRESETS: PresetDef[] = [
   {
     id: 'codex',
     label: 'Codex',
+    productIcon: 'codex',
     command: 'npx',
     args: ['-y', CODEX_ACP_PKG],
     // Best-effort: forward OPENAI_API_KEY if set in the daemon env; silently skip if not.
@@ -85,4 +90,8 @@ export function listAcpAgentPresets(probes: BinProbes = defaultBinProbes): AcpAg
     const loggedIn = setupPaths.some((p) => probes.exists(p));
     return { ...preset, installed: Boolean(resolvedBinPath) || loggedIn, resolvedBinPath };
   });
+}
+
+export function productIconForAcpAgent(name: string): NativeCliProductIcon | undefined {
+  return PRESETS.find((preset) => preset.id === name)?.productIcon;
 }

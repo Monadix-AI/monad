@@ -12,9 +12,12 @@ export type {
   ModelPrice,
   ModelResult,
   ModelUsage,
+  RerankResult,
   SpeechResult,
   ToolCall,
-  ToolSpec
+  ToolSpec,
+  TranscriptionResult,
+  VideoResult
 } from '@monad/sdk-atom';
 
 import type {
@@ -25,8 +28,11 @@ import type {
   ModelMessage,
   ModelResult,
   ModelUsage,
+  RerankResult,
   SpeechResult,
-  ToolSpec
+  ToolSpec,
+  TranscriptionResult,
+  VideoResult
 } from '@monad/sdk-atom';
 
 /** A model spec ("providerId:modelId" or profile alias) supplied either eagerly or as a thunk.
@@ -72,6 +78,35 @@ export interface SpeechRequest {
   voice?: string;
 }
 
+export interface VideoRequest {
+  /** Video-model spec: a raw "providerId:modelId" or a profile alias. */
+  model: string;
+  prompt: string;
+  image?: string | URL | Uint8Array;
+  mediaType?: string;
+  aspectRatio?: string;
+  resolution?: string;
+  duration?: number;
+  fps?: number;
+  n?: number;
+}
+
+export interface TranscriptionRequest {
+  /** Transcription-model spec: a raw "providerId:modelId" or a profile alias. */
+  model: string;
+  audio: string | URL | Uint8Array;
+  mediaType?: string;
+  language?: string;
+}
+
+export interface RerankRequest {
+  /** Rerank-model spec: a raw "providerId:modelId" or a profile alias. */
+  model: string;
+  query: string;
+  documents: string[];
+  topN?: number;
+}
+
 export interface ModelRouter {
   stream(req: ModelRequest): AsyncIterable<ModelChunk>;
   complete(req: ModelRequest): Promise<ModelResult>;
@@ -79,7 +114,10 @@ export interface ModelRouter {
    *  Returns vectors + token usage (stamped with the resolved provider/model for ledger booking). */
   embed?(texts: string[]): Promise<EmbedResult>;
   generateImage?(req: ImageRequest): Promise<ImageResult>;
+  generateVideo?(req: VideoRequest): Promise<VideoResult>;
   generateSpeech?(req: SpeechRequest): Promise<SpeechResult>;
+  transcribe?(req: TranscriptionRequest): Promise<TranscriptionResult>;
+  rerank?(req: RerankRequest): Promise<RerankResult>;
   /**
    * Exact input-token count for a request, when the resolved provider exposes a native
    * count-tokens endpoint. Returns `undefined` otherwise (callers fall back to the char

@@ -3,7 +3,7 @@
 //
 // An agent's structured config (model, atoms, sandbox, visibility) lives in profile.json and is
 // authoritative for the live system. AGENT.md owns the *system-prompt body*; its YAML frontmatter
-// is a Claude-Code-subagent superset kept only so a subagent `.md` imports cleanly.
+// is a native CLI subagent superset kept only so a subagent `.md` imports cleanly.
 
 import { mkdir, rm } from 'node:fs/promises';
 import { isAbsolute, join, normalize, sep } from 'node:path';
@@ -14,7 +14,7 @@ const AGENT_NAME_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 const AGENT_MD_FILENAME = 'AGENT.md';
 
-/** AGENT.md YAML frontmatter — a Claude Code subagent superset (`name`, `description`, `tools`,
+/** AGENT.md YAML frontmatter — a native CLI subagent superset (`name`, `description`, `tools`,
  *  `disallowedTools`, `model`) so an external subagent file imports cleanly. Only the body is
  *  load-bearing at runtime; the config row in profile.json wins for structured fields. */
 const agentFrontmatterSchema = z.object({
@@ -22,9 +22,9 @@ const agentFrontmatterSchema = z.object({
   description: z.string().max(1024).optional(),
   /** alias | tier(fast/smart/power) | 'inherit' */
   model: z.string().optional(),
-  /** Claude `tools` allowlist — space/comma-separated or a YAML list (normalised to a string). */
+  /** `tools` allowlist — space/comma-separated or a YAML list (normalised to a string). */
   tools: z.string().optional(),
-  /** Claude `disallowedTools` denylist — same shape as `tools`. */
+  /** `disallowedTools` denylist — same shape as `tools`. */
   disallowedTools: z.string().optional()
 });
 type AgentFrontmatter = z.infer<typeof agentFrontmatterSchema>;

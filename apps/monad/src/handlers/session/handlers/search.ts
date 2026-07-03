@@ -1,4 +1,4 @@
-import type { SearchHit, SearchMode, SearchSessionsResponse, SessionId } from '@monad/protocol';
+import type { SearchHit, SearchMode, SearchSessionsResponse, TranscriptTargetId } from '@monad/protocol';
 import type { SessionContext } from '@/handlers/session/context.ts';
 
 function rrfMerge(keyword: SearchHit[], semantic: SearchHit[], limit: number): SearchHit[] {
@@ -36,15 +36,15 @@ export function createSearchHandlers(ctx: SessionContext) {
       q,
       mode = 'hybrid',
       limit,
-      sessionId
+      transcriptTargetId
     }: {
       q: string;
       mode?: SearchMode;
       limit?: number;
-      sessionId?: SessionId;
+      transcriptTargetId?: TranscriptTargetId;
     }): Promise<SearchSessionsResponse> {
       const keywordOnly = (): SearchSessionsResponse => ({
-        hits: store.searchMessages({ q, mode: 'keyword', limit, sessionId })
+        hits: store.searchMessages({ q, mode: 'keyword', limit, transcriptTargetId })
       });
       const embed = agent.model.embed?.bind(agent.model);
       if ((mode !== 'semantic' && mode !== 'hybrid') || !embed) return keywordOnly();
@@ -59,11 +59,11 @@ export function createSearchHandlers(ctx: SessionContext) {
         } = await embed([q]);
         if (!qVec) return keywordOnly();
 
-        const indexingPending = store.pendingEmbeddingCount(sessionId);
-        const semantic = store.searchSemantic(qVec, { limit: k * 2, sessionId });
+        const indexingPending = store.pendingEmbeddingCount(transcriptTargetId);
+        const semantic = store.searchSemantic(qVec, { limit: k * 2, transcriptTargetId });
         if (mode === 'semantic') return { hits: semantic.slice(0, k), indexingPending };
 
-        const keyword = store.searchMessages({ q, mode: 'keyword', limit: k * 2, sessionId });
+        const keyword = store.searchMessages({ q, mode: 'keyword', limit: k * 2, transcriptTargetId });
         return { hits: rrfMerge(keyword, semantic, k), indexingPending };
       } catch {
         // No embedding model / provider failure — semantic search is best-effort, never fatal.

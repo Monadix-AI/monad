@@ -1,6 +1,7 @@
 // The memory service selects the active backend from cfg.memory.backend, routes recall/observe/
 // facade to it, and falls back to built-in when mem0 is unavailable.
 
+import type { SessionId } from '@monad/protocol';
 import type { ModelRouter } from '@/agent/index.ts';
 import type { BuildMem0Options, Mem0Client, Mem0Memory } from '@/services/memory/mem0.ts';
 
@@ -10,12 +11,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { createMemoryService } from '@/services/memory/index.ts';
-import { createStore } from '@/store/db/index.ts';
+import { createStore, projectKey } from '@/store/db/index.ts';
 
 const silent = { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} } as never;
 const router: ModelRouter = { stream: () => (async function* () {})(), complete: async () => ({ text: '' }) };
 
-function freshStore() {
+function freshStore(cwd?: string) {
   const store = createStore();
   store.insertSession({
     id: 'ses_1',
@@ -26,8 +27,32 @@ function freshStore() {
     parentSessionId: null,
     archived: false,
     restoreCount: 0,
+    cwd,
     createdAt: new Date(0).toISOString(),
     updatedAt: new Date(0).toISOString()
+  });
+  return store;
+}
+
+function freshStoreWithProject(cwd: string) {
+  const store = freshStore();
+  const now = new Date(0).toISOString();
+  store.insertWorkplaceProject({
+    id: 'prj_project',
+    title: 'project',
+    ownerPrincipalId: 'prn_1',
+    state: 'active',
+    archived: false,
+    cwd,
+    origin: {
+      surface: 'web',
+      client: 'workplace',
+      transport: 'http',
+      writableBy: ['http'],
+      branchableBy: ['http']
+    },
+    createdAt: now,
+    updatedAt: now
   });
   return store;
 }
@@ -53,10 +78,10 @@ class FakeMem0 implements Mem0Client {
   }
 }
 
-function svcWith(backend: 'builtin' | 'mem0', buildMem0?: () => Promise<Mem0Client | null>) {
+function svcWith(backend: 'builtin' | 'mem0', buildMem0?: () => Promise<Mem0Client | null>, cwd?: string) {
   const root = mkdtempSync(join(tmpdir(), 'mem-route-'));
   return createMemoryService({
-    store: freshStore(),
+    store: freshStore(cwd),
     root,
     dbRoot: root,
     router,
@@ -69,6 +94,20 @@ function svcWith(backend: 'builtin' | 'mem0', buildMem0?: () => Promise<Mem0Clie
       dim: 1536
     }),
     buildMem0: buildMem0 ? async () => buildMem0() : undefined,
+    log: silent
+  });
+}
+
+function svcWithStore(store: ReturnType<typeof createStore>) {
+  const root = mkdtempSync(join(tmpdir(), 'mem-route-'));
+  return createMemoryService({
+    store,
+    root,
+    dbRoot: root,
+    router,
+    extractModel: () => 'test',
+    backend: () => 'builtin',
+    mem0Models: () => ({ models: undefined, llm: null, embedder: null, dim: null }),
     log: silent
   });
 }
@@ -122,6 +161,46 @@ test('memory tool: record/update/delete on built-in, agent vs global scope', asy
     true
   );
   expect(await svc.listFacts('agent', 'agt_1')).toEqual([]);
+});
+
+test('memory tool: project scope records to the session’s workspace, not the agent', async () => {
+  const svc = svcWith('builtin', undefined, '/work/repo');
+  expect((await svc.memoryTool('ses_1', 'record', { fact: 'This repo deploys to fly.io', scope: 'project' })).ok).toBe(
+    true
+  );
+  // lands under the workspace scope, derived from the session cwd — not collapsed to the agent
+  expect((await svc.listFacts('project', projectKey('/work/repo'))).map((f) => f.content)).toEqual([
+    'This repo deploys to fly.io'
+  ]);
+  expect(await svc.listFacts('agent', 'agt_1')).toEqual([]);
+});
+
+test('memory tool: project scope records to a Workplace Project workspace without a Monad agent session', async () => {
+  const svc = svcWithStore(freshStoreWithProject('/work/workplace'));
+  expect(
+    (
+      await svc.memoryTool('prj_project' as unknown as SessionId, 'record', {
+        fact: 'Project uses native CLI agents',
+        scope: 'project'
+      })
+    ).ok
+  ).toBe(true);
+  expect((await svc.listFacts('project', projectKey('/work/workplace'))).map((f) => f.content)).toEqual([
+    'Project uses native CLI agents'
+  ]);
+  expect(await svc.listFacts('agent', 'agt_1')).toEqual([]);
+});
+
+test('memory status includes Workplace Project workspaces in the project picker', () => {
+  const svc = svcWithStore(freshStoreWithProject('/work/workplace'));
+  expect(svc.status().projects).toContainEqual({ key: projectKey('/work/workplace'), path: '/work/workplace' });
+});
+
+test('memory tool: project scope on a session with no workspace reports the right reason', async () => {
+  const svc = svcWith('builtin'); // ses_1 has no cwd
+  const r = await svc.memoryTool('ses_1', 'record', { fact: 'x', scope: 'project' });
+  expect(r.ok).toBe(false);
+  expect(r.note).toContain('workspace'); // not "no agent" — the session has an agent
 });
 
 test('memory tool view returns the index (no scope) or a scope’s facts (with scope)', async () => {

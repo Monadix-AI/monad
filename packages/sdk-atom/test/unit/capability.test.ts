@@ -4,12 +4,21 @@ import type {
   Connector,
   HookDefinition,
   ManifestAtomPack,
-  ManifestAtomPackHost
+  ManifestAtomPackHost,
+  WorkspaceExperienceDefinition
 } from '../../src/index.ts';
 
 import { expect, test } from 'bun:test';
 
-import { defineAtomPack, defineChannel, loadManifestAtomPack, UndeclaredAtomError } from '../../src/index.ts';
+import {
+  bindWorkspaceExperience,
+  defineAtomPack,
+  defineChannel,
+  defineWorkspaceExperience,
+  loadManifestAtomPack,
+  UndeclaredAtomError,
+  WORKSPACE_EXPERIENCE_UPDATE_EVENT
+} from '../../src/index.ts';
 
 const SDK_VERSION = '0';
 
@@ -21,25 +30,38 @@ function collectingHost(): ManifestAtomPackHost & {
   connectors: Connector[];
   channels: ChannelDefinition[];
   hooks: HookDefinition[];
+  workspaceExperiences: WorkspaceExperienceDefinition[];
 } {
   const connectors: Connector[] = [];
   const channels: ChannelDefinition[] = [];
   const hooks: HookDefinition[] = [];
+  const workspaceExperiences: WorkspaceExperienceDefinition[] = [];
   return {
     connectors,
     channels,
     hooks,
+    workspaceExperiences,
     registerConnector: (c) => connectors.push(c),
     registerChannel: (c) => channels.push(c as ChannelDefinition),
     registerCommand: () => {},
     registerMessageType: () => {},
-    registerHook: (h) => hooks.push(h)
+    registerHook: (h) => hooks.push(h),
+    registerWorkspaceExperience: (experience) => workspaceExperiences.push(experience)
   };
 }
 
 const dummyHook: HookDefinition = { event: 'BeforeTool', handler: () => {} };
 
 const dummyConnector: Connector = { name: 'c', scopes: [], start: async () => {}, stop: async () => {} };
+const dummyWorkspaceExperience: WorkspaceExperienceDefinition = {
+  id: 'custom-workspace',
+  title: 'Custom workspace',
+  entry: {
+    module: './workspace-experience.js',
+    tagName: 'custom-workspace',
+    type: 'web-component'
+  }
+};
 const dummyChannelAtom = defineChannel({
   type: 'echo',
   name: 'Echo',
@@ -140,4 +162,77 @@ test('registering a hook WITHOUT the `hook` atom kind throws', async () => {
   const pack = defineAtomPack({ manifest: manifest({ name: 'sneaky', atoms: [] }), hooks: [dummyHook] });
   await expect(loadManifestAtomPack(pack, host)).rejects.toBeInstanceOf(UndeclaredAtomError);
   expect(host.hooks.length).toBe(0);
+});
+
+test('a declared `workspace-experience` atom routes to the host', async () => {
+  const host = collectingHost();
+  const pack = defineAtomPack({
+    manifest: manifest({ atoms: ['workspace-experience'] }),
+    workspaceExperiences: [dummyWorkspaceExperience]
+  });
+  await loadManifestAtomPack(pack, host);
+  expect(host.workspaceExperiences).toEqual([dummyWorkspaceExperience]);
+});
+
+test('registering a workspace experience WITHOUT the atom kind throws', async () => {
+  const host = collectingHost();
+  const pack = defineAtomPack({
+    manifest: manifest({ name: 'sneaky', atoms: [] }),
+    workspaceExperiences: [dummyWorkspaceExperience]
+  });
+  await expect(loadManifestAtomPack(pack, host)).rejects.toBeInstanceOf(UndeclaredAtomError);
+  expect(host.workspaceExperiences).toHaveLength(0);
+});
+
+test('defineWorkspaceExperience preserves the descriptor and exposes the update event name', () => {
+  expect(defineWorkspaceExperience(dummyWorkspaceExperience)).toBe(dummyWorkspaceExperience);
+  expect(WORKSPACE_EXPERIENCE_UPDATE_EVENT).toBe('monad-workspace-experience:update');
+});
+
+test('bindWorkspaceExperience receives the current host api, update events, and unsubscribes', () => {
+  type Api = {
+    snapshot: { id: string };
+    actions: Record<string, never>;
+    embedded: boolean;
+    requestProjectSettings(open: boolean): void;
+  };
+  const listeners = new Set<(event: { type: typeof WORKSPACE_EXPERIENCE_UPDATE_EVENT; detail: Api }) => void>();
+  const target = {
+    monadWorkspaceExperience: {
+      actions: {},
+      embedded: true,
+      requestProjectSettings: () => {},
+      snapshot: { id: 'initial' }
+    },
+    addEventListener: (
+      _type: typeof WORKSPACE_EXPERIENCE_UPDATE_EVENT,
+      listener: (event: { type: typeof WORKSPACE_EXPERIENCE_UPDATE_EVENT; detail: Api }) => void
+    ) => {
+      listeners.add(listener);
+    },
+    removeEventListener: (
+      _type: typeof WORKSPACE_EXPERIENCE_UPDATE_EVENT,
+      listener: (event: { type: typeof WORKSPACE_EXPERIENCE_UPDATE_EVENT; detail: Api }) => void
+    ) => {
+      listeners.delete(listener);
+    }
+  };
+  const seen: string[] = [];
+
+  const unbind = bindWorkspaceExperience(target, (api) => seen.push(api.snapshot.id));
+  for (const listener of listeners) {
+    listener({
+      type: WORKSPACE_EXPERIENCE_UPDATE_EVENT,
+      detail: { actions: {}, embedded: false, requestProjectSettings: () => {}, snapshot: { id: 'next' } }
+    });
+  }
+  unbind();
+  for (const listener of listeners) {
+    listener({
+      type: WORKSPACE_EXPERIENCE_UPDATE_EVENT,
+      detail: { actions: {}, embedded: false, requestProjectSettings: () => {}, snapshot: { id: 'after-unbind' } }
+    });
+  }
+
+  expect(seen).toEqual(['initial', 'next']);
 });

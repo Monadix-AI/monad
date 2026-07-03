@@ -1,20 +1,13 @@
-import { chmod, rename, unlink } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import {
-  agentAtomsSchema,
-  agentVisibilitySchema,
-  channelAllowlistSchema,
-  channelGroupPolicySchema,
-  channelTypeSchema,
-  fallbackTargetViewSchema,
-  hookMatcherSettingSchema,
+  blankableHttpUrlSchema,
   ModelProviderType,
   modelKindSchema,
   modelRolesSchema,
-  nativeCliAgentViewSchema,
   KNOWN_PROVIDER_TYPES as PROTOCOL_KNOWN_PROVIDER_TYPES,
-  sandboxModeSchema
+  sandboxModeSchema,
+  userAvatarDataUrlSchema
 } from '@monad/protocol';
 
 // GenerationParams / FallbackTarget are owned by @monad/protocol (single source). home keeps its
@@ -31,20 +24,34 @@ export type { ModelProviderType } from '@monad/protocol';
 
 export { PROTOCOL_KNOWN_PROVIDER_TYPES as KNOWN_PROVIDER_TYPES };
 
-import { friendlySchemaError } from './config-errors.ts';
-import { runMigrations } from './migrate.ts';
-import { matchEnvRef } from './secret-ref.ts';
+import {
+  acpAgentSchema,
+  agentApprovalsSchema,
+  agentConfigSchema,
+  browserConfigSchema,
+  channelInstanceSchema,
+  computerConfigSchema,
+  contextSettingsSchema,
+  DEFAULT_SAMPLE_PROFILE_ALIAS,
+  DEFAULT_SAMPLE_PROVIDER_ID,
+  hooksConfigSchema,
+  mcpServerSchema,
+  memorySettingsSchema,
+  moConfigSchema,
+  nativeCliAgentSchema,
+  obscuraConfigSchema,
+  peerSchema,
+  profileSchema,
+  providerSchema
+} from './config-schema.ts';
 
-const CONFIG_MIGRATIONS_DIR = join(import.meta.dir, 'migrations', 'config');
-const PROFILE_MIGRATIONS_DIR = join(import.meta.dir, 'migrations', 'profile');
-const AUTH_MIGRATIONS_DIR = join(import.meta.dir, 'migrations', 'auth');
+export * from './config-schema.ts';
 
 // Pre-release: the full schema is a single v1 entry — edit it freely instead of writing
 // incremental migrations. When the schema changes post-release: bump the constant, update the
 // schema below, drop a new vN.ts in the matching migrations/ subdirectory, and add a test fixture.
 export const CURRENT_CONFIG_VERSION = 1;
 export const CURRENT_PROFILE_VERSION = 1;
-export const CURRENT_AUTH_VERSION = 1;
 
 // config.schema.json / profile.schema.json are dev-only generated artifacts (gitignored): the
 // editor `$schema` points at them during dev. The schema CONTENT shipped in the binary (written
@@ -77,513 +84,27 @@ export function setSchemaRuntimeDir(runtimeDir: string): void {
   }
 }
 
-const credentialSchema = z.object({
-  id: z.string(),
-  label: z.string(),
-  authType: z.enum(['api_key', 'oauth', 'admin_api_key']),
-  priority: z.number(),
-  source: z.string(),
-  accessToken: z.string(),
-  baseUrl: z.string().optional(),
-  lastStatus: z.enum(['ok', 'error', 'unknown']),
-  lastStatusAt: z.string().nullable(),
-  lastErrorCode: z.string().nullable(),
-  lastErrorReason: z.string().nullable(),
-  lastErrorMessage: z.string().nullable(),
-  lastErrorResetAt: z.string().nullable(),
-  requestCount: z.number()
-});
-
-// Channel bot credentials, keyed by channel instance id (chn_…). Secrets live in
-// auth.json, never config.json (config stores only a `${secret:channel/<id>/token}` ref).
-const channelCredentialSchema = z.object({
-  token: z.string(),
-  extra: z.record(z.string(), z.string()).optional()
-});
-export type ChannelCredential = z.infer<typeof channelCredentialSchema>;
-
-// Peer daemon credentials, keyed by peer id (peer_…). The token is the remote daemon's
-// OpenAI-compat bearer; it lives in auth.json, never config.json (config stores only a
-// `${secret:peer/<id>/token}` ref).
-const peerCredentialSchema = z.object({
-  token: z.string()
-});
-export type PeerCredential = z.infer<typeof peerCredentialSchema>;
-
-// OAuth tokens for http MCP servers, keyed by server config name. Secrets live in auth.json, never config.json.
-const mcpOAuthTokenSchema = z.object({
-  clientId: z.string().optional(), // from DCR or preconfigured
-  accessToken: z.string(),
-  refreshToken: z.string().optional(),
-  expiresAt: z.number().optional(), // epoch ms
-  tokenEndpoint: z.string(),
-  resource: z.string() // RFC 8707 canonical URI the token is bound to
-});
-export type McpOAuthToken = z.infer<typeof mcpOAuthTokenSchema>;
-
-// Credentials for installing atoms from private sources. Secrets in auth.json, never config.json.
-const atomRegistriesSchema = z.object({
-  github: z.object({ token: z.string() }).optional(),
-  npm: z.object({ token: z.string(), registry: z.string().optional() }).optional()
-});
-export type AtomRegistries = z.infer<typeof atomRegistriesSchema>;
-
-const monadAuthSchema = z.object({
-  version: z.literal(CURRENT_AUTH_VERSION),
-  activeProvider: z.string().nullable(),
-  updatedAt: z.string(),
-  credentialPool: z.record(z.string(), z.array(credentialSchema)),
-  mcpOAuth: z.record(z.string(), mcpOAuthTokenSchema).optional(),
-  channelCredentials: z.record(z.string(), channelCredentialSchema).optional(),
-  peerCredentials: z.record(z.string(), peerCredentialSchema).optional(),
-  atomRegistries: atomRegistriesSchema.optional(),
-  namedSecrets: z.record(z.string(), z.string()).optional()
-});
-
-export type MonadAuth = z.infer<typeof monadAuthSchema>;
-export type Credential = z.infer<typeof credentialSchema>;
-
-/** A fresh empty auth record — the fallback when auth.json is absent. One source so a new required
- *  MonadAuth field can't be silently missed by an ad-hoc literal. */
-export function emptyAuth(): MonadAuth {
-  return {
-    version: CURRENT_AUTH_VERSION,
-    activeProvider: null,
-    updatedAt: new Date().toISOString(),
-    credentialPool: {}
-  };
+/** Current `$schema` URL for config.json ($schema annotation written on save). */
+export function getSchemaUrl(): string {
+  return _schemaUrl;
 }
 
-// monad's model layer is a "gateway of gateways": every `provider` is one place a
-// request can be sent — a direct provider (anthropic/openai/openai-compatible) or
-// another gateway (vercel/openrouter/cloudflare). A `profile` is a named, user-facing
-// model config (alias → provider + modelId + params + fallbacks + role overrides). The
-// fixed "default" profile is used when a request doesn't specify one. Secrets never live here —
-// credentials are stored per-provider in auth.json's credentialPool.
-
-const providerTypeSchema = z.enum(PROTOCOL_KNOWN_PROVIDER_TYPES);
-
-export const DEFAULT_SAMPLE_PROVIDER_ID = 'sample-openai-compatible';
-export const DEFAULT_SAMPLE_PROFILE_ALIAS = 'sample-compatible';
-
-const providerSchema = z.object({
-  id: z.string(), // also the credentialPool bucket key in auth.json
-  label: z.string(),
-  type: providerTypeSchema,
-  baseUrl: z.url().optional(), // required for openai-compatible & cloudflare-gateway; optional override elsewhere
-  extra: z.record(z.string(), z.string()).optional() // free-form provider knobs (e.g. cloudflare account id / gateway slug)
-});
-
-export type Provider = z.infer<typeof providerSchema>;
-
-const generationParamsSchema = z
-  .object({
-    temperature: z.number().min(0).max(2).optional(),
-    maxTokens: z.number().int().positive().optional(),
-    topP: z.number().min(0).max(1).optional(),
-    reasoningEffort: z.enum(['minimal', 'low', 'medium', 'high']).optional()
-  })
-  .strict();
-
-const profileSchema = z.object({
-  alias: z.string(),
-  provider: z.string(), // providerSchema.id
-  modelId: z.string(),
-  fastProvider: z.string().optional(),
-  fastModelId: z.string().optional(),
-  params: generationParamsSchema.default({}),
-  fallbacks: z.array(fallbackTargetViewSchema).default([]),
-  roles: modelRolesSchema.default({})
-});
-
-export type ModelProfile = z.infer<typeof profileSchema>;
+/** Current `$schema` URL for profile.json ($schema annotation written on save). */
+export function getProfileSchemaUrl(): string {
+  return _profileSchemaUrl;
+}
 
 /**
- * Default client transport for this host, chosen at init and overridable later via
- * `network.transport` in config.json:
- *   - Linux        → "uds"  (HTTP-over-Unix-socket: idiomatic, no listening TCP port
- *                            needed for local RPC, and where UDS pays off most)
- *   - macOS/Windows → "tcp" (plain HTTP over 127.0.0.1 loopback; on macOS UDS shows
- *                            no latency win, and Bun's Windows UDS support is incomplete)
+ * Default LOCAL REST/SSE client transport — `uds` on every platform, overridable via
+ * `network.transport` in config.json. Bun supports AF_UNIX everywhere monad targets (Windows too,
+ * native since Win10), the daemon binds the socket on all of them, and a Unix socket is browser-safe
+ * (a page can reach `127.0.0.1` but not an AF_UNIX path) — so it's the better local default. If the
+ * socket ever can't be dialled the client falls back to TCP at connect time (see makeUnixFetcher).
  *
- * This selects only the LOCAL client's REST/SSE transport. The daemon always serves
- * both, and WS push is always TCP (Bun's WebSocket client has no unix-socket option).
+ * The daemon always serves TCP as well (WS push is TCP-only — Bun's WebSocket client has no
+ * unix-socket option — and the web UI needs a port), so this only picks the CLI's REST/SSE path.
  */
-export function defaultTransport(): 'tcp' | 'uds' {
-  return process.platform === 'linux' ? 'uds' : 'tcp';
-}
-
-const agentConfigSchema = z.object({
-  id: z.string().regex(/^agt_/, 'agent id must start with agt_'),
-  name: z.string().min(1).max(100),
-  /** Model profile alias this agent uses by default. Falls back to the fixed "default" profile if unset. */
-  modelAlias: z.string().optional(),
-  /** Per-agent model-role overrides. Any unset role inherits the selected profile's role assignment
-   *  (resolveAgentModelRole). E.g. an agent can use a cheaper memory model. */
-  roles: modelRolesSchema.optional(),
-  framework: z.enum(['openclaw', 'hermes', 'manus', 'monad', 'custom']).optional(),
-  capabilities: z.array(z.string()).default([]),
-  declaredScopes: z
-    .array(z.object({ resource: z.string(), constraints: z.record(z.string(), z.unknown()).optional() }))
-    .default([]),
-  /** Per-agent skill auto-load override: `autoload` overrides the global master for this agent;
-   *  `disabled` stores skill instance ids whose descriptions don't auto-load for it. */
-  skills: z
-    .object({
-      autoload: z.boolean().optional(),
-      disabled: z.array(z.string()).default([])
-    })
-    .optional(),
-  /** Slug dir under <paths.agents> holding this agent's AGENT.md (frontmatter + system-prompt body)
-   *  and per-agent workspace. Absent on legacy rows → name slug. Traversal-safe. */
-  dir: z
-    .string()
-    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
-    .optional(),
-  /** One-line description (Claude-subagent frontmatter `description`) — drives delegation routing. */
-  description: z.string().max(1024).optional(),
-  /** Profile alias | 'inherit'. Falls back to the fixed "default" profile when unset. */
-  model: z.string().optional(),
-  /** Per-agent tool/atom exposure filter. Empty/inherit → daemon-enabled atoms. */
-  atoms: agentAtomsSchema.default({ mode: 'inherit', allow: [], deny: [] }),
-  /** Per-agent sandbox override. Absent → inherit cfg.agent.sandbox; globalSandbox still ceilings it. */
-  sandbox: z.object({ mode: sandboxModeSchema }).optional(),
-  maxTurns: z.number().int().positive().optional(),
-  maxThinkingTokens: z.number().int().positive().optional(),
-  maxBudgetUsd: z.number().positive().optional(),
-  visibility: agentVisibilitySchema.default({ subagentCallable: false, public: false }),
-  /** P3 — populated when published to Monadix; absent until then. */
-  published: z
-    .object({
-      providerId: z.string(),
-      publishedAt: z.string(),
-      lastConversationId: z.string().optional()
-    })
-    .optional()
-});
-
-export type AgentConfig = z.infer<typeof agentConfigSchema>;
-
-// External MCP servers the daemon connects to at startup. Transport: `stdio` (subprocess,
-// implemented) or `http` (streamable HTTP, schema-ready for a later phase).
-// Secrets: string values in `env`/`token`/`headers` may use `${env:NAME}` — resolved
-// from the daemon's environment at connect time (see resolveSecretRef). This keeps tokens
-// out of config.json. `${secret:name}` is reserved for a later phase.
-
-// autoApproveTools lists fully-qualified tool names (`<server>.<tool>`) exempt from the
-// per-call approval gate; pinnedToolHash locks the advertised tool set so a server can't
-// silently swap tool behaviour (rug-pull) after the operator vetted it.
-// hostEscape marks a server whose NON-auto-approved tools drive the user's real machine
-// (computer-use): those tools are gated as host-escape — approvable for a session but never as a
-// permanent global/agent "always allow" (see the approval engine's host-control class).
-export const mcpTrustSchema = z
-  .object({
-    autoApproveTools: z.array(z.string()).default([]),
-    pinnedToolHash: z.string().optional(),
-    hostEscape: z.boolean().default(false)
-  })
-  .default({ autoApproveTools: [], hostEscape: false });
-
-// Operator-set static approval policy. Each entry is a tool name or `tool:key` (the Tool.gateKey
-// form, e.g. 'code_execute:target:host', 'shell_exec:git'). `deny` hard-refuses (deny wins over any
-// runtime allow); `allow` auto-approves; `ask` is the default and listed only for documentation.
-// These are immutable (source:'operator') — the engine never persists over them.
-export const agentApprovalsSchema = z
-  .object({
-    deny: z.array(z.string()).default([]),
-    ask: z.array(z.string()).default([]),
-    allow: z.array(z.string()).default([])
-  })
-  .default({ deny: [], ask: [], allow: [] });
-
-const mcpStdioServerSchema = z.object({
-  name: z.string().min(1),
-  transport: z.literal('stdio'),
-  command: z.string().min(1),
-  args: z.array(z.string()).optional(),
-  env: z.record(z.string(), z.string()).optional(),
-  cwd: z.string().optional(),
-  requestTimeoutMs: z.number().int().positive().optional(),
-  enabled: z.boolean().default(true),
-  trust: mcpTrustSchema
-});
-
-const mcpHttpAuthSchema = z
-  .discriminatedUnion('mode', [
-    z.object({ mode: z.literal('none') }),
-    z.object({ mode: z.literal('bearer'), token: z.string() }),
-    z.object({ mode: z.literal('headers'), headers: z.record(z.string(), z.string()) }),
-    z.object({
-      mode: z.literal('oauth'),
-      clientId: z.string().optional(),
-      scopes: z.array(z.string()).default([]),
-      // 'loopback' = browser + localhost redirect (default); 'device' = RFC 8628 device
-      // code, for headless/remote daemons where a loopback redirect is unreachable.
-      flow: z.enum(['loopback', 'device']).default('loopback')
-    })
-  ])
-  .default({ mode: 'none' });
-
-const mcpHttpServerSchema = z.object({
-  name: z.string().min(1),
-  transport: z.literal('http'),
-  url: z.string().url(),
-  auth: mcpHttpAuthSchema,
-  headers: z.record(z.string(), z.string()).optional(),
-  requestTimeoutMs: z.number().int().positive().optional(),
-  enabled: z.boolean().default(true),
-  trust: mcpTrustSchema
-});
-
-export const mcpServerSchema = z.discriminatedUnion('transport', [mcpStdioServerSchema, mcpHttpServerSchema]);
-export type McpServerConfig = z.infer<typeof mcpServerSchema>;
-
-// External ACP agents monad can DELEGATE subtasks to (monad drives them as an ACP client via the
-// `agent_acp_delegate` tool). The model picks a registered NAME — arbitrary commands are never
-// allowed (that would be RCE); only operator-vetted entries here can be spawned. `env` values may
-// use `${env:NAME}` secret refs (resolved at spawn time), keeping tokens out of config.json.
-export const acpAgentSchema = z.object({
-  name: z.string().min(1),
-  command: z.string().min(1),
-  args: z.array(z.string()).optional(),
-  env: z.record(z.string(), z.string()).optional(),
-  cwd: z.string().optional(),
-  enabled: z.boolean().default(true),
-  // Opt-in OS-level double-sandbox: when true, the adapter PROCESS is also wrapped by monad's
-  // sandbox launcher (writes jailed to the session roots) on top of ACP's capability-level
-  // interception. Named `osSandbox` to disambiguate from the daemon-wide `agent.sandbox.confine`
-  // (which ARMS the launcher). Default OFF because the launcher redirects HOME, which breaks adapters
-  // that read the user's real login state (~/.codex, ~/.claude). Operators enable it per agent once
-  // they've supplied auth via env (e.g. ANTHROPIC_API_KEY / CODEX_HOME) so it survives the redirect.
-  osSandbox: z.boolean().default(false),
-  // Opt-in: forward monad's configured MCP servers (with resolved secrets) to THIS agent's delegated
-  // session so it shares monad's external tools. Default OFF — forwarding hands resolved credentials
-  // to third-party adapter code and spawns a second copy of each stdio MCP server, so it's a per-agent
-  // choice (like `osSandbox`), not blanket behavior.
-  forwardMcp: z.boolean().default(false)
-});
-export type AcpAgentConfig = z.infer<typeof acpAgentSchema>;
-
-export const nativeCliAgentSchema = nativeCliAgentViewSchema;
-export type NativeCliAgentConfig = z.infer<typeof nativeCliAgentSchema>;
-
-// Browser automation preset. When enabled, the daemon auto-connects the official
-// Playwright MCP server named "browser" — no manual mcpServers entry needed.
-// A user-defined mcpServers entry named "browser" takes precedence and this preset
-// steps aside (see main.ts), letting operators bring a remote/cloud browser via config only.
-export const browserConfigSchema = z
-  .object({
-    enabled: z.boolean().default(false),
-    vision: z.boolean().default(false),
-    headless: z.boolean().default(true),
-    /** Override the launch command to point at a non-Playwright browser MCP server (e.g.
-     *  chrome-devtools-mcp, Stagehand). When set, `args` is used verbatim and the Playwright-specific
-     *  flags + read-only auto-approve below are skipped (those tool names are Playwright's). Leave
-     *  unset for the default `npx @playwright/mcp`. */
-    command: z.string().optional(),
-    args: z.array(z.string()).optional(),
-    /** Browser engine/channel: chrome | firefox | webkit | msedge. */
-    engine: z.enum(['chrome', 'firefox', 'webkit', 'msedge']).optional(),
-    /** Device to emulate, e.g. "iPhone 15". */
-    device: z.string().optional(),
-    /** Navigation allow/block lists (RFC origins) — constrain where the agent may browse. */
-    allowedOrigins: z.array(z.string()).optional(),
-    blockedOrigins: z.array(z.string()).optional(),
-    /** Persistent profile dir (keeps logins across runs). Mutually exclusive with isolated. */
-    userDataDir: z.string().optional(),
-    /** Load cookies/localStorage from a Playwright storageState file into an isolated context. */
-    storageState: z.string().optional(),
-    /** Keep the profile in memory only (no disk persistence). */
-    isolated: z.boolean().optional(),
-    /** Auto-approve the read-only browser tools (snapshot/screenshot/reads) so the agent
-     *  isn't gated on every page read; mutating tools (navigate/click/type/evaluate) still
-     *  route through the approval gate. Default-on; set false to gate everything. */
-    autoApproveReadOnly: z.boolean().optional()
-  })
-  .default({ enabled: false, vision: false, headless: true });
-export type BrowserConfig = z.infer<typeof browserConfigSchema>;
-
-// Computer-use preset. When enabled, the daemon auto-connects an off-the-shelf desktop-control
-// MCP server (screenshot + mouse/keyboard) as a synthesized "computer" stdio server — unless the
-// operator already defined one named "computer". Unlike the browser preset there is no single
-// canonical server, so command/args are overridable; the default targets the cross-platform
-// AB498/computer-control-mcp (run via uvx). Point it at any other (trycua, MCPControl, a sandbox
-// VM's server…) by setting command/args.
-// SECURITY: this drives the REAL desktop and can click/type anywhere. It is OFF by default; every
-// mutating action still routes through the per-call approval gate (only read-only tools below are
-// auto-approved). Prefer a sandboxed/VM server over host control for untrusted tasks.
-export const computerConfigSchema = z
-  .object({
-    enabled: z.boolean().default(false),
-    /** Launch command for the computer-use MCP server. */
-    command: z.string().default('uvx'),
-    /** Args for the launch command. */
-    args: z.array(z.string()).default(['computer-control-mcp@latest']),
-    /** Extra env for the server process (values may use ${env:NAME}). */
-    env: z.record(z.string(), z.string()).optional(),
-    /** Auto-approve read-only tools (screenshot/screen-size/cursor/window-list); mutating tools
-     *  (click/type/drag/key/scroll) always route through the approval gate. Default-on. */
-    autoApproveReadOnly: z.boolean().optional()
-  })
-  .default({ enabled: false, command: 'uvx', args: ['computer-control-mcp@latest'] });
-export type ComputerConfig = z.infer<typeof computerConfigSchema>;
-
-export const obscuraConfigSchema = z
-  .object({
-    enabled: z.boolean().default(false),
-    stealth: z.boolean().default(false),
-    requestTimeoutMs: z.number().int().positive().optional()
-  })
-  .default({ enabled: false, stealth: false });
-export type ObscuraConfig = z.infer<typeof obscuraConfigSchema>;
-
-export const moConfigSchema = z
-  .object({
-    // Whether the daemon launches the Mo desktop sprite on startup. Defaults on (Mo is enabled out of
-    // the box); the web/cli start-stop toggle persists this so the choice survives a daemon restart.
-    enabled: z.boolean().default(true),
-    // Absolute path to the Mo desktop-sprite binary. Absent/empty → the daemon auto-locates the
-    // bundled Mo next to bin/monad (and the repo build in dev); set this only to point at a custom
-    // build. A config key rather than an env var so the override is observable in config.json.
-    binaryPath: z.string().optional()
-  })
-  .default({ enabled: true });
-export type MoConfig = z.infer<typeof moConfigSchema>;
-
-/**
- * Resolve a peer token reference. Mirrors resolveChannelSecretRef for the
- * `${secret:peer/<id>/token}` scheme (reads auth.json's peerCredentials), so the remote
- * daemon's bearer never lives in config.json. `${env:NAME}` and plain values still pass.
- */
-export function resolvePeerSecretRef(ref: string, auth: MonadAuth): string {
-  const envRef = matchEnvRef(ref);
-  if (envRef) {
-    const key = envRef[1] as string;
-    const resolved = Bun.env[key];
-    if (resolved === undefined) throw new Error(`peer token "${ref}" is unset (env ${key} not defined)`);
-    return resolved;
-  }
-  const secretRef = ref.match(/^\$\{secret:peer\/([^/]+)\/token\}$/);
-  if (secretRef) {
-    const id = secretRef[1] as string;
-    const token = auth.peerCredentials?.[id]?.token;
-    if (!token) throw new Error(`peer token "${ref}" is unset (no auth.json credential for peer ${id})`);
-    return token;
-  }
-  return ref;
-}
-
-// A peer is another monad daemon this one can delegate tasks to over its OpenAI-compat API.
-// The model never sees the url/token — it names a peer; the tool resolves it here. Infra/security
-// concern (a delegation target + its credential), so it lives in system config like acpAgents.
-const peerSchema = z.object({
-  id: z.string().regex(/^peer_/, 'peer id must start with peer_'),
-  label: z.string().min(1),
-  /** Remote daemon's OpenAI-compat base, e.g. https://host:port/openai (no trailing /v1). */
-  baseUrl: z.string().url(),
-  /** Default target agent on the peer (name or agt_ id) when the model omits one. */
-  defaultAgent: z.string().default('default'),
-  /** Token reference: `${secret:peer/<id>/token}` (auth.json) or `${env:NAME}`. */
-  tokenRef: z.string(),
-  /** Created disabled; enabled once a token is set so the tool only offers usable peers. */
-  enabled: z.boolean().default(false)
-});
-export type PeerConfig = z.infer<typeof peerSchema>;
-
-const channelInstanceSchema = z.object({
-  id: z.string().regex(/^chn_/, 'channel id must start with chn_'),
-  type: channelTypeSchema,
-  label: z.string().min(1),
-  enabled: z.boolean().default(true),
-  /** Agent this channel's sessions use; falls back to agent.defaultAgentId. */
-  agentId: z.string().optional(),
-  /** Non-secret adapter options (e.g. telegram poll timeout). */
-  options: z.record(z.string(), z.unknown()).default({}),
-  // Default-DENY: a new channel rejects everyone until the operator allowlists native user ids (or
-  // approves them via the pairing flow). The access policy + allowlist schema is shared with the
-  // wire DTO in @monad/protocol so config and HTTP view stay in lockstep.
-  allowlist: channelAllowlistSchema.default({ allowAllUsers: false, allowedUsers: [] }),
-  // Group behaviour: by default the bot only answers in a group when addressed (mention/reply).
-  // Optional for back-compat — the core resolves an absent policy to requireMention=true.
-  groupPolicy: channelGroupPolicySchema.optional(),
-  /** Per-channel system-prompt hint injected into this channel's sessions (Hermes platform_hint). */
-  agentHint: z.string().max(2000).optional(),
-  // Conversation→session granularity is a CORE policy; the atom pack never sees it.
-  mapping: z
-    .object({
-      granularity: z.enum(['per-conversation', 'per-thread', 'per-user']).default('per-conversation'),
-      reset: z.object({ idleMinutes: z.number().int().positive().optional(), daily: z.boolean().optional() }).optional()
-    })
-    .default({ granularity: 'per-conversation' }),
-  /** Token reference: `${env:TELEGRAM_BOT_TOKEN}` or `${secret:channel/<id>/token}` (auth.json). */
-  tokenRef: z.string(),
-  /** Per-(channel,user) rate limit (messages/min). */
-  rateLimitPerMin: z.number().int().positive().default(20)
-});
-export type ChannelInstanceConfig = z.infer<typeof channelInstanceSchema>;
-
-// Lifecycle command hooks (shell), in an `event → matcher[] → hooks[]` shape. The matcher (a regex)
-// filters BeforeTool/AfterTool by tool name. In-process atom-pack hooks register separately via the
-// SDK. Secrets never belong here.
-// The command-hook + matcher leaf shape is owned by @monad/protocol (hookMatcherSettingSchema);
-// home derives the per-event config from it rather than re-declaring the fields.
-const hookEventArraySchema = z.array(hookMatcherSettingSchema);
-const hooksConfigSchema = z.object({
-  SessionStart: hookEventArraySchema.optional(),
-  BeforeTurn: hookEventArraySchema.optional(),
-  BeforeModel: hookEventArraySchema.optional(),
-  BeforeTool: hookEventArraySchema.optional(),
-  ApprovalRequest: hookEventArraySchema.optional(),
-  AfterTool: hookEventArraySchema.optional(),
-  AfterModel: hookEventArraySchema.optional(),
-  BeforeCompact: hookEventArraySchema.optional(),
-  AfterCompact: hookEventArraySchema.optional(),
-  BeforeSubagent: hookEventArraySchema.optional(),
-  AfterSubagent: hookEventArraySchema.optional(),
-  AfterTurn: hookEventArraySchema.optional(),
-  SessionEnd: hookEventArraySchema.optional()
-});
-export type HooksConfig = z.infer<typeof hooksConfigSchema>;
-
-// Active L1 memory backend (single, mutually-exclusive). 'builtin' = local Markdown store;
-// 'mem0' = mem0 OSS (local storage, cloud extraction — data leaves the machine, so OTR is
-// disabled while it's active). Hot-reloadable user preference (lives in profile.json).
-export const memorySettingsSchema = z
-  .object({
-    backend: z.enum(['builtin', 'mem0']).default('builtin'),
-    // mem0 selects its LLM + embedder FROM Monad's model registry — `llm`/`embedder` are profile
-    // aliases (or `providerId:modelId`). Unset ⇒ LLM falls back to the fixed "default" profile,
-    // embedder to the default profile's embedding role. `embedDim` overrides the auto-detected
-    // embedding dimension.
-    mem0: z
-      .object({
-        llm: z.string().optional(),
-        embedder: z.string().optional(),
-        embedDim: z.number().int().positive().optional(),
-        // By DEFAULT (vectorStore unset) mem0 persists to a daemon-managed local qdrant, downloaded on
-        // first use (see `qdrant` below). Set `vectorStore` to override with your own store, e.g.
-        // { provider: 'pgvector', config: { … } }, or { provider: 'memory' } to opt out (in-RAM, resets
-        // on restart). collectionName + dimension are filled in automatically.
-        vectorStore: z
-          .object({ provider: z.string().min(1), config: z.record(z.string(), z.unknown()).optional() })
-          .optional(),
-        // Settings for the default managed local qdrant (used when vectorStore is unset). `port` is its
-        // loopback REST port (gRPC binds port+1); set per worktree to avoid collisions.
-        qdrant: z.object({ version: z.string().optional(), port: z.number().int().positive().optional() }).optional()
-      })
-      .default({}),
-    // L2 knowledge graph. Off by default — when on, the daemon runs /consolidate-graph in the
-    // background every `intervalMinutes` so the graph stays fresh (costs an extraction LLM call per
-    // session with new prose). Manual /consolidate-graph works regardless.
-    graph: z
-      .object({
-        autoConsolidate: z.boolean().optional(),
-        intervalMinutes: z.number().int().positive().optional()
-      })
-      .optional()
-  })
-  .default({ backend: 'builtin', mem0: {} });
-export type MemorySettings = z.infer<typeof memorySettingsSchema>;
+export const DEFAULT_TRANSPORT = 'uds' as const;
 
 const monadConfigSchema = z.object({
   version: z.literal(CURRENT_CONFIG_VERSION),
@@ -592,6 +113,11 @@ const monadConfigSchema = z.object({
     displayName: z.string(),
     verification: z.enum(['unverified', 'email', 'domain', 'attested'])
   }),
+  user: z
+    .object({
+      avatarDataUrl: userAvatarDataUrlSchema.nullable().default(null)
+    })
+    .default({ avatarDataUrl: null }),
   model: z.object({
     default: z.string(), // legacy; runtime defaults to the fixed "default" profile
     providers: z.array(providerSchema).default([]),
@@ -668,8 +194,13 @@ const monadConfigSchema = z.object({
         shellPath: z.string().optional(),
         /** Windows-only: override the Git Bash binary path (skips install-location scan). */
         gitBashPath: z.string().optional(),
-        /** Code-execute backend name. Only 'local' is built-in; plug in an external sandbox via MCP instead. */
-        codeExecBackend: z.string().default('local'),
+        /** Code-execute backend: 'follow-system' delegates to the active OS sandbox launcher; 'docker'/'e2b' force a specific backend. 'local' is a legacy alias for 'follow-system'. */
+        codeExecBackend: z.string().default('follow-system'),
+        /** E2B code-execute backend credentials. Supports ${env:NAME} secret refs.
+         *  TODO(P2): add templateId: z.string().optional() for custom e2b sandbox templates. */
+        codeExecE2b: z.object({ apiKey: z.string() }).optional(),
+        /** Docker/Podman code-execute backend settings. */
+        codeExecDocker: z.object({ image: z.string().optional() }).optional(),
         /** Web search configuration. Secrets (apiKey) support ${env:NAME} refs. */
         webSearch: z
           .object({
@@ -714,7 +245,7 @@ const monadConfigSchema = z.object({
           })
           .default({ backend: 'auto' })
       })
-      .default({ codeExecBackend: 'local', webSearch: { provider: 'auto' }, email: { backend: 'auto' } }),
+      .default({ codeExecBackend: 'follow-system', webSearch: { provider: 'auto' }, email: { backend: 'auto' } }),
     // Operator-set static approval policy (deny/ask/allow tool lists). Participates in the approval
     // engine as immutable source:'operator' rules; deny always wins over runtime allows.
     approvals: agentApprovalsSchema
@@ -734,7 +265,7 @@ const monadConfigSchema = z.object({
     .object({
       port: z.number().int().min(1).max(65535).default(52749),
       // Which socket the LOCAL client dials — daemon always serves both; WS push is always TCP.
-      transport: z.enum(['tcp', 'uds']).default(defaultTransport),
+      transport: z.enum(['tcp', 'uds']).default(DEFAULT_TRANSPORT),
       remoteAccess: z.object({
         // When true, daemon binds to 0.0.0.0 and requires a Bearer token for non-localhost requests.
         enabled: z.boolean(),
@@ -748,7 +279,7 @@ const monadConfigSchema = z.object({
     })
     .default(() => ({
       port: 52749,
-      transport: defaultTransport(),
+      transport: DEFAULT_TRANSPORT,
       remoteAccess: { enabled: false, token: null, allowInsecureHttp: false }
     })),
   mcpServers: z.array(mcpServerSchema).default([]),
@@ -780,7 +311,7 @@ const monadConfigSchema = z.object({
       // Dev auto-starts Arize Phoenix on http://localhost:6006 (see scripts/setup-dev.ts) and
       // defaults the endpoint there; set this to "http://localhost:6006" to use it explicitly, or
       // point at any other OTLP/HTTP-protobuf collector.
-      endpoint: z.string().default(''),
+      endpoint: blankableHttpUrlSchema.default(''),
       developerMode: z.boolean().default(false)
     })
     .default({ endpoint: '', developerMode: false }),
@@ -798,7 +329,8 @@ const monadConfigSchema = z.object({
       approval: z.enum(['auto', 'local', 'deny']).default('local')
     })
     .default({ enabled: false, approval: 'local' }),
-  memory: memorySettingsSchema
+  memory: memorySettingsSchema,
+  context: contextSettingsSchema
 });
 
 export { monadConfigSchema };
@@ -815,7 +347,7 @@ export const monadSystemConfigSchema = z.object({
   network: z
     .object({
       port: z.number().int().min(1).max(65535).default(52749),
-      transport: z.enum(['tcp', 'uds']).default(defaultTransport),
+      transport: z.enum(['tcp', 'uds']).default(DEFAULT_TRANSPORT),
       remoteAccess: z.object({
         enabled: z.boolean(),
         token: z.string().nullable(),
@@ -824,7 +356,7 @@ export const monadSystemConfigSchema = z.object({
     })
     .default(() => ({
       port: 52749,
-      transport: defaultTransport(),
+      transport: DEFAULT_TRANSPORT,
       remoteAccess: { enabled: false, token: null, allowInsecureHttp: false }
     })),
   agent: z.object({
@@ -846,9 +378,11 @@ export const monadSystemConfigSchema = z.object({
       .object({
         shellPath: z.string().optional(),
         gitBashPath: z.string().optional(),
-        codeExecBackend: z.string().default('local')
+        codeExecBackend: z.string().default('follow-system'),
+        codeExecE2b: z.object({ apiKey: z.string() }).optional(),
+        codeExecDocker: z.object({ image: z.string().optional() }).optional()
       })
-      .default({ codeExecBackend: 'local' }),
+      .default({ codeExecBackend: 'follow-system' }),
     // Operator static approval policy lives in system config (config.json), like mcpServers/acpAgents.
     approvals: agentApprovalsSchema
   }),
@@ -858,16 +392,23 @@ export const monadSystemConfigSchema = z.object({
   nativeCliAgents: z.array(nativeCliAgentSchema).default([]),
   // Peer daemons (delegation targets + their credentials) → system config, like acpAgents.
   peers: z.array(peerSchema).default([]),
-  observability: z.object({ endpoint: z.string().default(''), developerMode: z.boolean().default(false) }).default({
-    endpoint: '',
-    developerMode: false
-  })
+  observability: z
+    .object({ endpoint: blankableHttpUrlSchema.default(''), developerMode: z.boolean().default(false) })
+    .default({
+      endpoint: '',
+      developerMode: false
+    })
 });
 export type MonadSystemConfig = z.infer<typeof monadSystemConfigSchema>;
 
 // Contains business and user-facing settings that hot-reload without restart.
 export const monadProfileSchema = z.object({
   version: z.literal(CURRENT_PROFILE_VERSION),
+  user: z
+    .object({
+      avatarDataUrl: userAvatarDataUrlSchema.nullable().default(null)
+    })
+    .default({ avatarDataUrl: null }),
   model: z.object({
     default: z.string(),
     providers: z.array(providerSchema).default([]),
@@ -905,13 +446,15 @@ export const monadProfileSchema = z.object({
                 .optional()
             })
             .default({ backend: 'auto' }),
-          codeExecBackend: z.string().default('local')
+          codeExecBackend: z.string().default('follow-system'),
+          codeExecE2b: z.object({ apiKey: z.string() }).optional(),
+          codeExecDocker: z.object({ image: z.string().optional() }).optional()
         })
-        .default({ webSearch: { provider: 'auto' }, email: { backend: 'auto' }, codeExecBackend: 'local' })
+        .default({ webSearch: { provider: 'auto' }, email: { backend: 'auto' }, codeExecBackend: 'follow-system' })
     })
     .default({
       agents: [],
-      tools: { webSearch: { provider: 'auto' }, email: { backend: 'auto' }, codeExecBackend: 'local' }
+      tools: { webSearch: { provider: 'auto' }, email: { backend: 'auto' }, codeExecBackend: 'follow-system' }
     }),
   skills: z
     .object({
@@ -937,7 +480,8 @@ export const monadProfileSchema = z.object({
       approval: z.enum(['auto', 'local', 'deny']).default('local')
     })
     .default({ enabled: false, approval: 'local' }),
-  memory: memorySettingsSchema
+  memory: memorySettingsSchema,
+  context: contextSettingsSchema
 });
 export type MonadProfile = z.infer<typeof monadProfileSchema>;
 
@@ -950,6 +494,7 @@ export function createDefaultConfig(principalId: string, displayName: string): M
   return {
     version: CURRENT_CONFIG_VERSION,
     principal: { id: principalId, displayName, verification: 'unverified' },
+    user: { avatarDataUrl: null },
     model: {
       default: '',
       providers: [
@@ -963,11 +508,9 @@ export function createDefaultConfig(principalId: string, displayName: string): M
       profiles: [
         {
           alias: DEFAULT_SAMPLE_PROFILE_ALIAS,
-          provider: DEFAULT_SAMPLE_PROVIDER_ID,
-          modelId: 'example-model',
+          routes: { chat: { provider: DEFAULT_SAMPLE_PROVIDER_ID, modelId: 'example-model' } },
           params: { temperature: 0.7 },
-          fallbacks: [],
-          roles: {}
+          fallbacks: []
         }
       ],
       roles: {},
@@ -986,13 +529,13 @@ export function createDefaultConfig(principalId: string, displayName: string): M
         allowUnconfinedExec: false
       },
       globalSandbox: { enabled: false, mode: 'workspace' },
-      tools: { codeExecBackend: 'local', webSearch: { provider: 'auto' }, email: { backend: 'auto' } },
+      tools: { codeExecBackend: 'follow-system', webSearch: { provider: 'auto' }, email: { backend: 'auto' } },
       approvals: { deny: [], ask: [], allow: [] }
     },
     skills: { autoload: true, disabled: [], autoloadDisabled: [], installReview: false },
     network: {
       port: 52749,
-      transport: defaultTransport(),
+      transport: DEFAULT_TRANSPORT,
       remoteAccess: { enabled: false, token: null, allowInsecureHttp: false }
     },
     mcpServers: [],
@@ -1008,269 +551,15 @@ export function createDefaultConfig(principalId: string, displayName: string): M
     atomPins: {},
     observability: { endpoint: '', developerMode: false },
     openaiCompat: { enabled: false, approval: 'local' },
-    memory: { backend: 'builtin', mem0: {} }
+    memory: { backend: 'builtin', level: 1, mem0: {} },
+    context: {
+      eviction: { enabled: true, atFraction: 0.5, keepRecentRounds: 3, clearAtLeast: 2000, minResultTokens: 200 },
+      summarize: { softFraction: 0.6, hardFraction: 0.9, background: true },
+      recitation: { enabled: false },
+      memoryPromotion: { mode: 'off' },
+      handoffNudge: { enabled: false, atFraction: 0.7 }
+    }
   };
 }
 
-export async function migrateConfig(raw: unknown): Promise<MonadConfig> {
-  return runMigrations(raw, CURRENT_CONFIG_VERSION, CONFIG_MIGRATIONS_DIR, (data) => monadConfigSchema.parse(data));
-}
-
-export async function tryParseConfig(raw: unknown): Promise<MonadConfig | null> {
-  try {
-    return await migrateConfig(raw);
-  } catch {
-    return null;
-  }
-}
-
-export async function tryParseProfile(profilePath: string): Promise<MonadProfile | null> {
-  try {
-    const raw = JSON.parse(await Bun.file(profilePath).text());
-    return await migrateProfile(raw);
-  } catch {
-    return null;
-  }
-}
-
-async function migrateSystemConfig(raw: unknown): Promise<MonadSystemConfig> {
-  return runMigrations(raw, CURRENT_CONFIG_VERSION, CONFIG_MIGRATIONS_DIR, (data) =>
-    monadSystemConfigSchema.parse(data)
-  );
-}
-
-async function migrateProfile(raw: unknown): Promise<MonadProfile> {
-  return runMigrations(raw, CURRENT_PROFILE_VERSION, PROFILE_MIGRATIONS_DIR, (data) => monadProfileSchema.parse(data));
-}
-
-function mergeConfigs(system: MonadSystemConfig, profile: MonadProfile): MonadConfig {
-  return {
-    version: system.version,
-    principal: system.principal,
-    network: system.network,
-    agent: {
-      ...system.agent,
-      tools: { ...system.agent.tools, ...profile.agent.tools },
-      agents: profile.agent.agents,
-      defaultAgentId: profile.agent.defaultAgentId
-    },
-    mcpServers: system.mcpServers,
-    acpAgents: system.acpAgents,
-    nativeCliAgents: system.nativeCliAgents,
-    peers: system.peers,
-    model: profile.model,
-    skills: profile.skills,
-    browser: profile.browser,
-    computer: profile.computer,
-    mo: profile.mo,
-    obscura: profile.obscura,
-    channels: profile.channels,
-    locale: profile.locale,
-    atomPins: profile.atomPins,
-    hooks: profile.hooks,
-    observability: system.observability,
-    openaiCompat: profile.openaiCompat,
-    memory: profile.memory
-  };
-}
-
-// Extract only the system fields from a full MonadConfig for writing to config.json.
-function extractSystemConfig(cfg: MonadConfig): MonadSystemConfig {
-  return monadSystemConfigSchema.parse({
-    version: cfg.version,
-    principal: cfg.principal,
-    network: cfg.network,
-    agent: {
-      sandbox: cfg.agent.sandbox,
-      globalSandbox: cfg.agent.globalSandbox,
-      tools: cfg.agent.tools,
-      // Round-trip the operator approval policy; omitting it lets the schema default ({}) silently
-      // overwrite the on-disk allow/deny/ask rules on every system-config save.
-      approvals: cfg.agent.approvals
-    },
-    mcpServers: cfg.mcpServers,
-    acpAgents: cfg.acpAgents,
-    nativeCliAgents: cfg.nativeCliAgents,
-    peers: cfg.peers,
-    observability: cfg.observability
-  });
-}
-
-// Extract only the profile fields from a full MonadConfig for writing to profile.json.
-function extractProfile(cfg: MonadConfig): MonadProfile {
-  return monadProfileSchema.parse({
-    version: CURRENT_PROFILE_VERSION,
-    model: cfg.model,
-    agent: {
-      agents: cfg.agent.agents,
-      defaultAgentId: cfg.agent.defaultAgentId,
-      tools: {
-        webSearch: cfg.agent.tools.webSearch,
-        email: cfg.agent.tools.email,
-        codeExecBackend: cfg.agent.tools.codeExecBackend
-      }
-    },
-    skills: cfg.skills,
-    browser: cfg.browser,
-    computer: cfg.computer,
-    mo: cfg.mo,
-    obscura: cfg.obscura,
-    channels: cfg.channels,
-    locale: cfg.locale,
-    atomPins: cfg.atomPins,
-    hooks: cfg.hooks,
-    openaiCompat: cfg.openaiCompat,
-    memory: cfg.memory
-  });
-}
-
-/**
- * Load both config.json (system) and profile.json (business settings) and merge
- * into a single MonadConfig. If profile.json is missing but config.json contains
- * profile fields (first boot after upgrade), profile.json is bootstrapped from it.
- */
-export async function loadAll(configPath: string, profilePath: string): Promise<MonadConfig | null> {
-  const [rawSystem, rawProfile] = await Promise.all([
-    Bun.file(configPath)
-      .text()
-      .catch((err: unknown) => {
-        if (isMissingFile(err)) return null;
-        throw err;
-      }),
-    // initMonadHome always writes both files together; an absent profile.json falls back to defaults.
-    Bun.file(profilePath)
-      .text()
-      .catch((err: unknown) => {
-        if (isMissingFile(err)) return null;
-        throw err;
-      })
-  ]);
-
-  if (rawSystem === null) return null;
-
-  let parsedSystem: unknown;
-  try {
-    parsedSystem = JSON.parse(rawSystem);
-  } catch {
-    throw new Error(`monad: config.json is not valid JSON at ${configPath}. Fix the file and retry.`);
-  }
-  let system: MonadSystemConfig;
-  try {
-    system = await migrateSystemConfig(parsedSystem);
-  } catch (err) {
-    throw friendlySchemaError('config.json', configPath, err);
-  }
-
-  let profile: MonadProfile;
-  if (rawProfile !== null) {
-    let parsedProfile: unknown;
-    try {
-      parsedProfile = JSON.parse(rawProfile);
-    } catch {
-      throw new Error(`monad: profile.json is not valid JSON at ${profilePath}. Fix the file and retry.`);
-    }
-    try {
-      profile = await migrateProfile(parsedProfile);
-    } catch (err) {
-      throw friendlySchemaError('profile.json', profilePath, err);
-    }
-  } else {
-    profile = monadProfileSchema.parse({ version: CURRENT_PROFILE_VERSION, model: { default: '' } });
-  }
-
-  return mergeConfigs(system, profile);
-}
-
-export async function saveSystemConfig(configPath: string, cfg: MonadConfig): Promise<void> {
-  const system = extractSystemConfig(cfg);
-  try {
-    monadSystemConfigSchema.parse(system);
-  } catch (err) {
-    throw friendlySchemaError('config.json', configPath, err);
-  }
-  await atomicWrite(configPath, `${JSON.stringify({ $schema: _schemaUrl, ...system }, null, 2)}\n`);
-  await setSecurePermissions(configPath); // holds network.remoteAccess.token — owner-only
-}
-
-export async function saveProfile(profilePath: string, cfg: MonadConfig): Promise<void> {
-  const profile = extractProfile(cfg);
-  try {
-    monadProfileSchema.parse(profile);
-  } catch (err) {
-    throw friendlySchemaError('profile.json', profilePath, err);
-  }
-  await atomicWrite(profilePath, `${JSON.stringify({ $schema: _profileSchemaUrl, ...profile }, null, 2)}\n`);
-  await setSecurePermissions(profilePath);
-}
-
-// Write config.json then profile.json in sequence so a file-watcher that fires
-// between writes always reads a consistent state (system is stable before profile lands).
-export async function saveAll(configPath: string, profilePath: string, cfg: MonadConfig): Promise<void> {
-  await saveSystemConfig(configPath, cfg);
-  await saveProfile(profilePath, cfg);
-}
-
-export async function tryParseAuth(raw: unknown): Promise<MonadAuth | null> {
-  try {
-    return await runMigrations(raw, CURRENT_AUTH_VERSION, AUTH_MIGRATIONS_DIR, (data) => monadAuthSchema.parse(data));
-  } catch {
-    return null;
-  }
-}
-
-async function atomicWrite(filePath: string, content: string): Promise<void> {
-  const tmp = `${filePath}.tmp`;
-  await Bun.write(tmp, content);
-  if (process.platform === 'win32') {
-    try {
-      await unlink(filePath);
-    } catch {
-      /* target may not exist yet */
-    }
-  }
-  await rename(tmp, filePath);
-}
-
-async function setSecurePermissions(filePath: string): Promise<void> {
-  if (process.platform !== 'win32') {
-    await chmod(filePath, 0o600);
-  }
-}
-
-// ENOTDIR can also mean "no file here" when a path component is a file, not a dir.
-function isMissingFile(err: unknown): boolean {
-  const code = (err as NodeJS.ErrnoException).code;
-  return code === 'ENOENT' || code === 'ENOTDIR';
-}
-
-export async function loadConfig(configPath: string): Promise<MonadConfig | null> {
-  const siblingProfilePath = join(dirname(configPath), 'profile.json');
-  return loadAll(configPath, siblingProfilePath);
-}
-
-export async function loadAuth(authPath: string): Promise<MonadAuth | null> {
-  let raw: string;
-  try {
-    raw = await Bun.file(authPath).text();
-  } catch (err) {
-    if (isMissingFile(err)) return null;
-    throw err;
-  }
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    return null;
-  }
-  return tryParseAuth(parsed);
-}
-
-export async function saveAuth(authPath: string, auth: MonadAuth): Promise<void> {
-  try {
-    monadAuthSchema.parse(auth);
-  } catch (err) {
-    throw friendlySchemaError('auth.json', authPath, err);
-  }
-  await atomicWrite(authPath, `${JSON.stringify(auth, null, 2)}\n`);
-  await setSecurePermissions(authPath);
-}
+export * from './config-io.ts';

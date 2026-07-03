@@ -1,4 +1,5 @@
 import { afterEach, expect, test } from 'bun:test';
+import { realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { detectDockerRuntime, dockerLauncher, dockerRuntimeAvailable } from '@monad/atoms';
@@ -63,7 +64,11 @@ test('host env not leaked into container', async () => {
 test('write inside writable root succeeds', async () => {
   const root = join(tmpdir(), 'docker-test-rw');
   await Bun.write(join(root, '.keep'), '');
-  const r = await runInDocker(['/bin/sh', '-c', `echo ok > ${root}/out.txt && cat ${root}/out.txt`], [root]);
+  const containerRoot = realpathSync(root);
+  const r = await runInDocker(
+    ['/bin/sh', '-c', `echo ok > ${containerRoot}/out.txt && cat ${containerRoot}/out.txt`],
+    [root]
+  );
   expect(r.stdout.trim()).toBe('ok');
   expect(r.exitCode).toBe(0);
 }, 60_000);

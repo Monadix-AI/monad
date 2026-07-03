@@ -8,6 +8,7 @@ import type {
   GetGraphResponse,
   GetHealthResponse,
   GetInitStatusResponse,
+  GetLawsResponse,
   GetLicensesResponse,
   GetMem0DataResponse,
   GetStatsResponse,
@@ -24,6 +25,7 @@ import type {
   PickDirectoryResponse,
   SearchSkillsResponse,
   SetMem0ModelsRequest,
+  SetMemoryGraphRequest,
   SkillDetail,
   SkillListInstance,
   SkillListItem,
@@ -39,6 +41,7 @@ import type { ModelDeps } from '@/handlers/settings/model/index.ts';
 import type { ConfigBus } from '@/services/config-bus.ts';
 import type { ClarifyService } from '@/services/generation/clarify.ts';
 import type { I18nService } from '@/services/i18n.ts';
+import type { KvService } from '@/services/kv.ts';
 import type { L2Provider } from '@/services/memory/graph/types.ts';
 import type { MemoryService } from '@/services/memory/index.ts';
 import type { OversightService } from '@/services/oversight.ts';
@@ -65,7 +68,9 @@ import { createNativeCliModule } from '@/handlers/native-cli/index.ts';
 import { createSessionModule } from '@/handlers/session/index.ts';
 import { createAcpAgentModule } from '@/handlers/settings/acp-agent/index.ts';
 import { createAgentModule } from '@/handlers/settings/agent/index.ts';
+import { createBrowserPresetModule } from '@/handlers/settings/browser-preset/index.ts';
 import { createChannelModule } from '@/handlers/settings/channel/index.ts';
+import { createComputerPresetModule } from '@/handlers/settings/computer-preset/index.ts';
 import { createDeveloperModule } from '@/handlers/settings/developer/index.ts';
 import { createHooksModule } from '@/handlers/settings/hooks/index.ts';
 import { createSettingsImportModule } from '@/handlers/settings/import/index.ts';
@@ -76,8 +81,10 @@ import { createNetworkModule } from '@/handlers/settings/network/index.ts';
 import { createObscuraModule } from '@/handlers/settings/obscura/index.ts';
 import { createOpenaiCompatModule } from '@/handlers/settings/openai-compat/index.ts';
 import { createPeerModule } from '@/handlers/settings/peer/index.ts';
+import { createUserProfileModule } from '@/handlers/settings/profile/index.ts';
 import { createSandboxModule } from '@/handlers/settings/sandbox/index.ts';
 import { createSkillsSettingsModule } from '@/handlers/settings/skills/index.ts';
+import { createStartupSettingsModule } from '@/handlers/settings/startup/index.ts';
 import { createToolBackendsModule } from '@/handlers/settings/tool-backends/index.ts';
 import { resolveNativeCliAgentEnv } from '@/services/native-cli/env.ts';
 import { NativeCliHost } from '@/services/native-cli/host.ts';
@@ -98,10 +105,15 @@ export interface DaemonHandlerDeps extends SessionDeps, ModelDeps {
   graphStore: L2Provider;
   /** Assemble the read-only mem0 explorer view (entries + cluster projection + status). */
   getMem0Data: () => Promise<GetMem0DataResponse>;
+  /** All L3 inferred laws across scopes (read-only Memory panel). */
+  getLaws: () => Promise<GetLawsResponse>;
   /** Persist + hot-apply the active memory backend (config write). */
   memorySetBackend: (backend: MemoryBackendId) => Promise<void>;
   /** Persist + hot-apply mem0's model selection (chosen from Monad's model registry). */
   memorySetMem0Models: (sel: SetMem0ModelsRequest) => Promise<void>;
+  /** Persist + hot-apply the L2 knowledge-graph consolidation settings. */
+  memorySetGraph: (sel: SetMemoryGraphRequest) => Promise<void>;
+  kv?: KvService;
   mockMode?: boolean;
   /** Human-in-the-loop approval gate for high-risk tool calls. */
   oversight: OversightService;
@@ -125,6 +137,8 @@ export interface DaemonHandlerDeps extends SessionDeps, ModelDeps {
   rediscoverAtomPacks?: () => Promise<void>;
   /** Bare-name collisions surfaced from the last load sweep (for the conflict UI). */
   getAtomConflicts?: () => AtomConflict[];
+  /** Workspace experiences registered by atom packs during the last load sweep. */
+  getWorkspaceExperiences?: () => import('@monad/protocol').WorkspaceExperienceDefinition[];
   /** Clear all stored embeddings and kick the indexer to rebuild — invoked when the user switches
    *  the embedding model and opts to re-index from scratch. */
   reindexEmbeddings?: () => void;
@@ -138,6 +152,10 @@ export interface DaemonHandlerDeps extends SessionDeps, ModelDeps {
   certFingerprint?: string;
   /** ISO-8601 expiry of the active TLS cert, surfaced through /health so clients can warn before it expires. */
   certExpiry?: string;
+  /** Test/runtime override for browser-attached native CLI auth connect heartbeat pruning. */
+  nativeCliAuthHeartbeatTimeoutMs?: number;
+  /** Loopback URL that managed native CLI runtimes use to call the daemon. */
+  nativeCliServerUrl?: string;
   /** Getter for background upgrade check result — populated asynchronously after startup. */
   getUpgradeInfo?: () => { latestVersion: string; latestVersionCheckedAt: string } | null;
   log: Logger;
@@ -148,13 +166,16 @@ export function createDaemonHandlers(deps: DaemonHandlerDeps) {
   const nativeCliHost = new NativeCliHost({
     store: deps.store,
     bus: deps.bus,
+    monadHome: paths.home,
+    serverUrl: deps.nativeCliServerUrl ?? `http://127.0.0.1:${Bun.env.MONAD_PORT || '52749'}`,
     agents: async () => {
       const cfg = await loadAll(paths.config, paths.profile);
       return cfg?.nativeCliAgents ?? [];
     },
     resolveAgentEnv: async (env) => resolveNativeCliAgentEnv(env, (await loadAuth(paths.auth)) ?? undefined),
     nativeCliProcessRegistryPath: `${paths.runtime}/native-cli-processes.json`,
-    authProcessRegistryPath: `${paths.runtime}/native-cli-auth-processes.json`
+    authProcessRegistryPath: `${paths.runtime}/native-cli-auth-processes.json`,
+    authHeartbeatTimeoutMs: deps.nativeCliAuthHeartbeatTimeoutMs
   });
   nativeCliHost.reconcileOrphanedSessions();
 
@@ -255,6 +276,7 @@ export function createDaemonHandlers(deps: DaemonHandlerDeps) {
   };
 
   const clarify = {
+    askStructured: deps.clarify.askStructured,
     async respond({ requestId, answer }: { requestId: string; answer: string }): Promise<{ ok: boolean }> {
       return { ok: deps.clarify.respond(requestId, answer) };
     }
@@ -330,6 +352,12 @@ export function createDaemonHandlers(deps: DaemonHandlerDeps) {
   const mem0Data = {
     get(): Promise<GetMem0DataResponse> {
       return deps.getMem0Data();
+    }
+  };
+
+  const laws = {
+    get(): Promise<GetLawsResponse> {
+      return deps.getLaws();
     }
   };
 
@@ -443,6 +471,10 @@ export function createDaemonHandlers(deps: DaemonHandlerDeps) {
       return deps.indexerStatus?.() ?? { pending: 0, running: false };
     }
   };
+  const session = createSessionModule({ ...deps, nativeCliHost });
+  nativeCliHost.setManagedProjectOutputHandler(async (output) => {
+    await session.completeManagedNativeCliProviderMessage(output);
+  });
 
   return {
     health: async (): Promise<GetHealthResponse> => {
@@ -471,6 +503,8 @@ export function createDaemonHandlers(deps: DaemonHandlerDeps) {
       mcpAuthorize: deps.mcpAuthorize,
       mcpReconnect: deps.mcpReconnect
     }),
+    browserPreset: createBrowserPresetModule(paths, deps.configBus),
+    computerPreset: createComputerPresetModule(paths, deps.configBus),
     obscura: createObscuraModule({
       paths,
       connectObscura: deps.connectObscura,
@@ -482,6 +516,11 @@ export function createDaemonHandlers(deps: DaemonHandlerDeps) {
     toolBackends: createToolBackendsModule(paths, deps.configBus),
     sandbox: createSandboxModule(paths, deps.configBus),
     developer: createDeveloperModule(paths, deps.configBus),
+    profile: createUserProfileModule(paths, deps.configBus),
+    startup: createStartupSettingsModule({
+      monadHome: paths.home,
+      logPath: join(paths.logs, 'startup.log')
+    }),
     hooks: createHooksModule(paths, deps.configBus),
     settingsImport: createSettingsImportModule({
       paths,
@@ -492,12 +531,19 @@ export function createDaemonHandlers(deps: DaemonHandlerDeps) {
       paths,
       onChanged: deps.rediscoverAtomPacks,
       getConflicts: deps.getAtomConflicts,
+      getWorkspaceExperiences: deps.getWorkspaceExperiences,
       configBus: deps.configBus,
       modelService: deps.modelService
     }),
-    session: createSessionModule({ ...deps, nativeCliHost }),
+    session,
     nativeCli: createNativeCliModule({ paths, host: nativeCliHost, store: deps.store }),
-    memory: createMemoryModule(deps.memoryService, deps.memorySetBackend, deps.memorySetMem0Models),
+    _nativeAgentStore: deps.store,
+    memory: createMemoryModule(
+      deps.memoryService,
+      deps.memorySetBackend,
+      deps.memorySetMem0Models,
+      deps.memorySetGraph
+    ),
     oversight,
     clarify,
     system,
@@ -508,6 +554,7 @@ export function createDaemonHandlers(deps: DaemonHandlerDeps) {
     licenses,
     graph,
     mem0Data,
+    laws,
     usage,
     stats,
     embeddings,

@@ -1,6 +1,6 @@
 import type { LogLevelOverride } from '@monad/logger';
 
-import { setLogLevel, setLogStderr } from '@monad/logger';
+import { setLogFile, setLogLevel, setLogStderr } from '@monad/logger';
 
 export interface DaemonRuntimeFlags {
   stdioMode: boolean;
@@ -22,6 +22,13 @@ export function configureDaemonLogging(): void {
     });
     process.on('SIGPIPE', () => {});
   }
+
+  // `monad start` detaches the daemon and passes --log-file so the daemon writes its own daemon.log
+  // directly, rather than relying on the parent redirecting the child's stderr fd — which a detached
+  // child does not inherit on Windows. In --stdio/--acp the host reads stderr, so no file is set.
+  const logFileIdx = process.argv.indexOf('--log-file');
+  const logFile = logFileIdx !== -1 ? process.argv[logFileIdx + 1] : undefined;
+  if (logFile && process.argv.includes('--start-relay')) setLogFile(logFile);
 
   const logIdx = process.argv.indexOf('--log');
   const logOverride = logIdx !== -1 ? (process.argv[logIdx + 1] as LogLevelOverride) : undefined;

@@ -68,7 +68,7 @@ beforeEach(async () => {
     }
   ];
   cfg.model.profiles = [
-    { alias: 'default', provider: 'stub', modelId: 'stub-model', params: {}, fallbacks: [], roles: {} }
+    { alias: 'default', routes: { chat: { provider: 'stub', modelId: 'stub-model' } }, params: {}, fallbacks: [] }
   ];
   cfg.model.default = 'default';
   await saveAll(paths.config, paths.profile, cfg);
@@ -106,7 +106,7 @@ beforeEach(async () => {
     sessionRepo: { insertSession: (s) => store.insertSession(s), getSession: (id) => store.getSession(id) },
     messageRepo: {
       list: (sid) => store.listMessages(sid),
-      append: (m) => store.insertMessage(m.id, m.sessionId, m.text, m.createdAt, m.role)
+      append: (m) => store.insertMessage(m.id, m.transcriptTargetId, m.text, m.createdAt, m.role)
     },
     defaultModel: cfg.model.default
   });
@@ -145,8 +145,10 @@ beforeEach(async () => {
       scopeCounts: [],
       entries: []
     }),
+    getLaws: async () => ({ laws: [] }),
     memorySetBackend: async () => {},
     memorySetMem0Models: async () => {},
+    memorySetGraph: async () => {},
     log: { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} } as never,
     skills: []
   });

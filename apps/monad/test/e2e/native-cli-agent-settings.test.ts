@@ -26,6 +26,7 @@ const agentView = () => ({
   provider: 'codex',
   command: 'codex',
   args: ['--ask-for-approval', 'on-request'],
+  modelOptions: ['gpt-5.5', 'custom-codex'],
   enabled: true,
   defaultLaunchMode: 'pty',
   allowDangerousMode: false,
@@ -67,14 +68,21 @@ async function runCrud(call: Call, paths: MonadPaths): Promise<void> {
   expect(agents).toHaveLength(1);
   expect(agents[0]?.approvalOwnership).toBe('provider-owned');
   expect(agents[0]?.provider).toBe('codex');
+  expect(agents[0]?.modelOptions).toEqual(['gpt-5.5', 'custom-codex']);
 
   expect((await loadConfig(paths.config))?.nativeCliAgents).toHaveLength(1);
+  expect((await loadConfig(paths.config))?.nativeCliAgents[0]?.modelOptions).toEqual(['gpt-5.5', 'custom-codex']);
   expect((await loadAll(paths.config, paths.profile))?.nativeCliAgents).toHaveLength(1);
 
   res = await call('POST', '/v1/settings/native-cli-agents/codex/disable');
   expect(res.status).toBe(200);
   res = await call('GET', '/v1/settings/native-cli-agents');
   expect(((await res.json()) as AgentsBody).agents[0]?.enabled).toBe(false);
+
+  res = await call('POST', '/v1/settings/native-cli-agents/codex/enable');
+  expect(res.status).toBe(200);
+  res = await call('GET', '/v1/settings/native-cli-agents');
+  expect(((await res.json()) as AgentsBody).agents[0]?.enabled).toBe(true);
 
   res = await call('DELETE', '/v1/settings/native-cli-agents/codex');
   expect(res.status).toBe(200);
@@ -86,9 +94,11 @@ async function runPresets(call: Call): Promise<void> {
   const res = await call('GET', '/v1/settings/native-cli-agents/presets');
   expect(res.status).toBe(200);
   const { presets } = (await res.json()) as { presets: { id: string; command: string; defaultLaunchMode: string }[] };
-  expect(presets.map((p) => p.id).sort()).toEqual(['claude-code', 'codex']);
+  expect(presets.map((p) => p.id).sort()).toEqual(['claude-code', 'codex', 'gemini', 'qwen']);
   expect(presets.every((p) => p.defaultLaunchMode === 'pty')).toBe(true);
   expect(presets.find((p) => p.id === 'codex')?.command).toBe('codex');
+  expect(presets.find((p) => p.id === 'gemini')?.command).toBe('gemini');
+  expect(presets.find((p) => p.id === 'qwen')?.command).toBe('qwen');
 }
 
 async function runValidation(call: Call, paths: MonadPaths): Promise<void> {

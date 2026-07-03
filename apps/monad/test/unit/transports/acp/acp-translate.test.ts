@@ -13,7 +13,14 @@ import {
 } from '@/transports/acp/translate.ts';
 
 function evt(type: Event['type'], payload: Record<string, unknown>): Event {
-  return { id: 'evt_1', sessionId: 'ses_1', type, actorAgentId: null, payload, at: '2026-01-01T00:00:00.000Z' };
+  return {
+    id: 'evt_1',
+    transcriptTargetId: 'ses_1',
+    type,
+    actorAgentId: null,
+    payload,
+    at: '2026-01-01T00:00:00.000Z'
+  };
 }
 
 test('eventToPlanUpdate maps a todo_write result to an ACP plan', () => {

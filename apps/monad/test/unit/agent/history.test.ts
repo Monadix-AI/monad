@@ -65,9 +65,36 @@ function capturingModel(reply: string): { model: ModelRouter; lastPrompt: () => 
   };
 }
 
+/** A summary model whose complete() blocks on an externally-released gate — lets a test hold a
+ *  background compaction "in flight" and assert non-blocking behavior deterministically. */
+function gatedModel(text: string): { model: ModelRouter; started: () => number; release: () => void } {
+  let started = 0;
+  let release!: () => void;
+  const gate = new Promise<void>((r) => {
+    release = r;
+  });
+  return {
+    started: () => started,
+    release: () => release(),
+    model: {
+      async *stream() {},
+      async complete(): Promise<ModelResult> {
+        started++;
+        await gate;
+        return { text, finishReason: 'stop' };
+      }
+    }
+  };
+}
+
+/** Drain microtasks until this session's background compaction has settled. */
+async function settle(eng: DurableSummarizer, sid: string): Promise<void> {
+  for (let i = 0; i < 20 && eng.pendingCompaction(sid); i++) await new Promise((r) => setTimeout(r, 0));
+}
+
 const msg = (id: string, role: ChatMessage['role'], text: string): ChatMessage => ({
   id,
-  sessionId: 'ses_x',
+  transcriptTargetId: 'ses_x',
   role,
   text,
   createdAt: ''
@@ -321,4 +348,124 @@ test('re-compaction folds the prior summary into the new one (priorBlock in summ
   expect(lastPrompt()).toContain('Previous summary:');
   // Boundary advances to m5 (the last older row).
   expect(store.rec()?.uptoMessageId).toBe('m5');
+});
+
+// ── background (Mastra-style) compaction ────────────────────────────────────────
+
+test('background: soft threshold compacts WITHOUT blocking; the result lands on a later turn', async () => {
+  const rows = [msg('m1', 'user', big('A')), msg('m2', 'assistant', big('B')), msg('m3', 'user', 'recent')];
+  const store = memStore();
+  const g = gatedModel('BG_SUMMARY');
+  const eng = new DurableSummarizer({
+    messages: source(rows),
+    summaryStore: store,
+    model: g.model,
+    summaryModel: 'mock',
+    softThresholdTokens: 50,
+    keepRecent: 1,
+    background: true
+  });
+
+  // Non-blocking: the turn returns the FULL window with nothing compacted yet.
+  const out = await eng.assemble('ses_x');
+  expect(out.summary).toBeUndefined();
+  expect(out.messages).toHaveLength(3);
+  expect(eng.pendingCompaction('ses_x')).toBe(true);
+  expect(store.rec()).toBeNull(); // background hasn't committed while the model call is gated
+
+  // Let the background compaction finish; it persists durably.
+  g.release();
+  await settle(eng, 'ses_x');
+  expect(eng.pendingCompaction('ses_x')).toBe(false);
+  expect(store.rec()?.summary).toBe('BG_SUMMARY');
+  expect(store.rec()?.uptoMessageId).toBe('m2'); // older = [m1, m2]
+
+  // A later turn picks up the durable summary + the bounded (since-boundary) window.
+  const out2 = await eng.assemble('ses_x');
+  expect(out2.summary).toBe('BG_SUMMARY');
+  expect(out2.messages.map((m) => m.content)).toEqual(['recent']);
+});
+
+test('background: a second turn does not start a duplicate compaction while one is in flight', async () => {
+  const rows = [msg('m1', 'user', big('A')), msg('m2', 'assistant', big('B')), msg('m3', 'user', 'recent')];
+  const g = gatedModel('BG');
+  const eng = new DurableSummarizer({
+    messages: source(rows),
+    summaryStore: memStore(),
+    model: g.model,
+    summaryModel: 'mock',
+    softThresholdTokens: 50,
+    keepRecent: 1,
+    background: true
+  });
+
+  await eng.assemble('ses_x'); // kicks a background compaction (gated)
+  await eng.assemble('ses_x'); // soft again, but inFlight → no second kick
+  expect(g.started()).toBe(1);
+
+  g.release();
+  await settle(eng, 'ses_x');
+  expect(g.started()).toBe(1); // exactly one compaction total
+});
+
+test('background: a hard-threshold turn waits for the in-flight compaction instead of racing a duplicate', async () => {
+  // Deterministic sizing independent of the shared estimator ratio: tiny rows keep turn 1 under the
+  // hard threshold (soft → background), huge rows push turn 2 over it (hard → must wait for in-flight).
+  const tiny = (s: string) => s.repeat(10);
+  const huge = (s: string) => s.repeat(4000);
+  const rows = [msg('m1', 'user', tiny('a')), msg('m2', 'assistant', tiny('b')), msg('m3', 'user', tiny('c'))];
+  const store = memStore();
+  const g = gatedModel('BG');
+  const eng = new DurableSummarizer({
+    messages: source(rows),
+    summaryStore: store,
+    model: g.model,
+    summaryModel: 'mock',
+    softThresholdTokens: 1,
+    hardThresholdTokens: 100,
+    keepRecent: 1,
+    background: true
+  });
+
+  // Turn 1: window well under hard → background kicked (gated, not committed).
+  await eng.assemble('ses_x');
+  expect(eng.pendingCompaction('ses_x')).toBe(true);
+
+  // Huge rows arrive, pushing the window over the hard threshold before the background finished.
+  rows.push(msg('m4', 'user', huge('D')), msg('m5', 'assistant', huge('E')));
+
+  // Turn 2 is at/over hard with a compaction in flight → it must WAIT, not launch a duplicate.
+  const p = eng.assemble('ses_x');
+  await new Promise((r) => setTimeout(r, 0));
+  expect(g.started()).toBe(1); // no second compaction started concurrently — turn 2 is parked on inFlight
+  expect(store.rec()).toBeNull(); // nothing committed while the in-flight job is gated
+
+  g.release();
+  const out2 = await p;
+  await settle(eng, 'ses_x');
+  expect(store.rec()).not.toBeNull(); // the awaited compaction committed durably
+  expect(out2.summary).toBe('BG'); // turn 2 proceeds off the advanced boundary + durable summary
+});
+
+test('background: a hard-threshold turn with no in-flight compaction compacts synchronously', async () => {
+  const rows = [msg('m1', 'user', big('A')), msg('m2', 'assistant', big('B')), msg('m3', 'user', 'recent')];
+  const store = memStore();
+  const { model, calls } = summaryModel('SYNC');
+  const eng = new DurableSummarizer({
+    messages: source(rows),
+    summaryStore: store,
+    model,
+    summaryModel: 'mock',
+    softThresholdTokens: 50,
+    hardThresholdTokens: 50, // window is already over hard
+    keepRecent: 1,
+    background: true
+  });
+
+  const out = await eng.assemble('ses_x');
+  expect(calls()).toBe(1); // compacted inline this turn (no background needed)
+  expect(out.summary).toBe('SYNC');
+  expect(out.messages.map((m) => m.content)).toEqual(['recent']);
+  expect(store.rec()?.uptoMessageId).toBe('m2');
+  expect(eng.pendingCompaction('ses_x')).toBe(false);
 });

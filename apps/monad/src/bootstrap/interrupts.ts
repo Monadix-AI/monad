@@ -1,5 +1,5 @@
 import type { MonadConfig, MonadPaths } from '@monad/home';
-import type { Event, SessionId } from '@monad/protocol';
+import type { Event, TranscriptTargetId } from '@monad/protocol';
 import type { EventBus } from '@/services/event-bus.ts';
 import type { Store } from '@/store/db/index.ts';
 
@@ -41,7 +41,7 @@ export async function createInterruptServices(deps: {
       return [
         {
           id: newId('evt'),
-          sessionId: d.sessionId as SessionId,
+          transcriptTargetId: d.sessionId as TranscriptTargetId,
           type: 'tool.approval_resolved' as const,
           actorAgentId: null,
           payload: { requestId: d.requestId, tool: d.tool, allow: false, reason: 'daemon_restarted' },
@@ -52,7 +52,7 @@ export async function createInterruptServices(deps: {
     return [
       {
         id: newId('evt'),
-        sessionId: d.sessionId as SessionId,
+        transcriptTargetId: d.sessionId as TranscriptTargetId,
         type: 'clarify.resolved' as const,
         actorAgentId: null,
         payload: { requestId: d.requestId, answer: '', reason: 'daemon_restarted' },

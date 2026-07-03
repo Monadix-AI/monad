@@ -4,21 +4,29 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { readFile, rm } from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { ModelProviderType } from '@monad/protocol';
 
 import {
   createDefaultConfig,
-  defaultTransport,
+  DEFAULT_TRANSPORT,
   loadAll,
   loadAuth,
   loadConfig,
   mcpServerSchema,
   migrateConfig,
+  monadConfigSchema,
+  monadProfileSchema,
+  monadSystemConfigSchema,
+  PROFILE_SCHEMA_CONTENT,
+  SCHEMA_CONTENT,
   saveAuth,
+  saveProfile,
   saveSystemConfig,
   tryParseConfig
 } from '../../src/config.ts';
 import { resolveClientConn } from '../../src/connection.ts';
 import { initMonadHome } from '../../src/init.ts';
+import { computeInitStatus } from '../../src/init-status.ts';
 import { getPaths, xdgPaths } from '../../src/paths.ts';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -209,6 +217,146 @@ describe('initMonadHome', () => {
   });
 });
 
+// ── init status ───────────────────────────────────────────────────────────────
+
+describe('computeInitStatus', () => {
+  test('reports the default profile provider when credentials are missing', () => {
+    const cfg = createDefaultConfig('prn_test', 'test-user');
+    cfg.model.default = 'writer';
+    cfg.model.providers = [
+      {
+        id: 'oai',
+        label: 'OpenAI-compatible',
+        type: ModelProviderType.OpenAICompatible,
+        baseUrl: 'https://api.test/v1'
+      }
+    ];
+    cfg.model.profiles = [
+      {
+        alias: 'writer',
+        routes: { chat: { provider: 'oai', modelId: 'gpt-x' } },
+        params: {},
+        fallbacks: []
+      }
+    ];
+
+    expect(
+      computeInitStatus(cfg, {
+        version: 1,
+        activeProvider: 'oai',
+        updatedAt: new Date().toISOString(),
+        credentialPool: {}
+      })
+    ).toEqual({
+      initialized: false,
+      missing: ['credential'],
+      missingProviderCredentials: [
+        {
+          providerId: 'oai',
+          providerLabel: 'OpenAI-compatible',
+          profileAlias: 'writer',
+          route: 'chat'
+        }
+      ]
+    });
+  });
+
+  test('reports replacement default profile provider when legacy sample profile is still selected', () => {
+    const cfg = createDefaultConfig('prn_test', 'test-user');
+    cfg.model.default = 'sample-compatible';
+    cfg.model.providers.push({
+      id: 'openrouter',
+      label: 'OpenRouter',
+      type: ModelProviderType.OpenRouter
+    });
+    cfg.model.profiles.push({
+      alias: 'default',
+      routes: { chat: { provider: 'openrouter', modelId: 'openrouter/free' } },
+      params: {},
+      fallbacks: []
+    });
+
+    expect(
+      computeInitStatus(cfg, {
+        version: 1,
+        activeProvider: null,
+        updatedAt: new Date().toISOString(),
+        credentialPool: {}
+      })
+    ).toEqual({
+      initialized: false,
+      missing: ['provider', 'credential'],
+      missingProviderCredentials: [
+        {
+          providerId: 'openrouter',
+          providerLabel: 'OpenRouter',
+          profileAlias: 'default',
+          route: 'chat'
+        }
+      ]
+    });
+  });
+
+  test('uses the configured default profile alias instead of requiring alias "default"', () => {
+    const cfg = createDefaultConfig('prn_test', 'test-user');
+    cfg.model.default = 'writer';
+    cfg.model.providers = [
+      {
+        id: 'oai',
+        label: 'OpenAI-compatible',
+        type: ModelProviderType.OpenAICompatible,
+        baseUrl: 'https://api.test/v1'
+      }
+    ];
+    cfg.model.profiles = [
+      {
+        alias: 'writer',
+        routes: { chat: { provider: 'oai', modelId: 'gpt-x' } },
+        params: {},
+        fallbacks: []
+      }
+    ];
+    cfg.agent.agents = [
+      {
+        id: 'agt_writer',
+        name: 'Writer',
+        capabilities: [],
+        declaredScopes: [],
+        atoms: { mode: 'inherit', allow: [], deny: [] },
+        visibility: { subagentCallable: false, public: false }
+      }
+    ];
+    cfg.agent.defaultAgentId = 'agt_writer';
+
+    expect(
+      computeInitStatus(cfg, {
+        version: 1,
+        activeProvider: 'oai',
+        updatedAt: new Date().toISOString(),
+        credentialPool: {
+          oai: [
+            {
+              id: 'cred_primary',
+              label: 'Primary',
+              authType: 'api_key',
+              priority: 0,
+              source: 'manual',
+              accessToken: 'sk-test',
+              lastStatus: 'unknown',
+              lastStatusAt: null,
+              lastErrorCode: null,
+              lastErrorReason: null,
+              lastErrorMessage: null,
+              lastErrorResetAt: null,
+              requestCount: 0
+            }
+          ]
+        }
+      })
+    ).toEqual({ initialized: true, missing: [] });
+  });
+});
+
 // ── config schema / migration tests ──────────────────────────────────────────
 //
 // These fixtures ARE the historical schema snapshots.
@@ -248,13 +396,13 @@ describe('migrateConfig', () => {
     await expect(migrateConfig(noVersion)).rejects.toThrow();
   });
 
-  test('fills network.transport with the OS default when the network block is absent', async () => {
+  test('fills network.transport with the default when the network block is absent', async () => {
     const cfg = await migrateConfig(CONFIG_V1_FIXTURE);
-    expect(cfg.network.transport).toBe(defaultTransport());
+    expect(cfg.network.transport).toBe(DEFAULT_TRANSPORT);
   });
 
   test('preserves an explicit network.transport override', async () => {
-    const override = defaultTransport() === 'uds' ? 'tcp' : 'uds';
+    const override = 'tcp'; // any value other than DEFAULT_TRANSPORT ('uds')
     const cfg = await migrateConfig({
       ...CONFIG_V1_FIXTURE,
       network: { port: 52749, transport: override, remoteAccess: { enabled: false, token: null } }
@@ -294,12 +442,31 @@ describe('loadConfig', () => {
       expect.arrayContaining([
         expect.objectContaining({
           alias: 'sample-compatible',
-          provider: 'sample-openai-compatible',
-          modelId: 'example-model'
+          routes: { chat: { provider: 'sample-openai-compatible', modelId: 'example-model' } }
         })
       ])
     );
     expect(cfg?.model.default).toBe('');
+  });
+
+  test('profile slice stores user avatar data without moving principal identity out of system config', async () => {
+    await initMonadHome(paths);
+    const cfg = await loadAll(paths.config, paths.profile);
+    const initialDisplayName = cfg?.principal.displayName;
+    expect(typeof initialDisplayName).toBe('string');
+    expect(cfg?.user.avatarDataUrl).toBeNull();
+    if (!cfg) throw new Error('expected config');
+
+    cfg.user.avatarDataUrl = 'data:image/png;base64,ZmFrZQ==';
+    await saveProfile(paths.profile, cfg);
+
+    const profile = monadProfileSchema.parse(JSON.parse(await readFile(paths.profile, 'utf8')));
+    expect(profile.user.avatarDataUrl).toBe('data:image/png;base64,ZmFrZQ==');
+    expect('principal' in profile).toBe(false);
+
+    const reloaded = await loadAll(paths.config, paths.profile);
+    expect(reloaded?.principal.displayName).toBe(initialDisplayName);
+    expect(reloaded?.user.avatarDataUrl).toBe('data:image/png;base64,ZmFrZQ==');
   });
 
   test('migrates a v1 file written to disk', async () => {
@@ -324,6 +491,103 @@ describe('loadConfig', () => {
       expect(message).toContain('principal.id');
     }
   });
+
+  test('rejects non-http provider baseUrl while loading config', async () => {
+    await initMonadHome(paths);
+    const profile = JSON.parse(await readFile(paths.profile, 'utf8')) as {
+      model: { providers: unknown[] };
+    };
+    profile.model.providers = [
+      {
+        id: 'bad-url',
+        label: 'Bad URL',
+        type: ModelProviderType.OpenAICompatible,
+        baseUrl: 'ftp://api.example.com/v1'
+      }
+    ];
+    await Bun.write(paths.profile, JSON.stringify(profile, null, 2));
+
+    try {
+      await loadConfig(paths.config);
+      throw new Error('expected loadConfig to throw');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      expect(message).toContain('profile.json has invalid fields');
+      expect(message).toContain('model.providers');
+      expect(message).toContain('url must be http(s)');
+    }
+  });
+
+  test('rejects invalid system URL boundary fields', () => {
+    const base = monadSystemConfigSchema.parse(createDefaultConfig('prn_test', 'Tester'));
+
+    expect(() =>
+      monadSystemConfigSchema.parse({
+        ...base,
+        observability: { endpoint: 'ftp://collector.example.com', developerMode: false }
+      })
+    ).toThrow();
+  });
+
+  test('rejects invalid profile URL boundary fields', () => {
+    const base = monadConfigSchema.parse(CONFIG_V1_FIXTURE);
+
+    expect(() =>
+      monadConfigSchema.parse({
+        ...base,
+        model: {
+          ...base.model,
+          providers: [
+            {
+              id: 'bad-provider',
+              label: 'Bad Provider',
+              type: ModelProviderType.OpenAICompatible,
+              baseUrl: 'ftp://api.example.com/v1'
+            }
+          ]
+        }
+      })
+    ).toThrow();
+
+    expect(() =>
+      monadConfigSchema.parse({
+        ...base,
+        browser: {
+          ...base.browser,
+          allowedOrigins: ['https://example.com/path']
+        }
+      })
+    ).toThrow();
+  });
+
+  test('rejects invalid auth URL boundary fields', async () => {
+    await initMonadHome(paths);
+    await Bun.write(
+      paths.auth,
+      JSON.stringify(
+        {
+          version: 1,
+          activeProvider: null,
+          updatedAt: new Date().toISOString(),
+          credentialPool: {},
+          mcpOAuth: {
+            server: {
+              accessToken: 'token',
+              tokenEndpoint: 'ftp://auth.example.com/token',
+              resource: 'https://api.example.com/mcp'
+            }
+          },
+          atomRegistries: {
+            npm: { token: 'token', registry: 'ftp://registry.example.com' }
+          }
+        },
+        null,
+        2
+      )
+    );
+
+    await expect(loadAuth(paths.auth)).resolves.toBeNull();
+  });
 });
 
 describe('tryParseConfig', () => {
@@ -337,6 +601,18 @@ describe('tryParseConfig', () => {
 
   test('openaiCompat inbound approval defaults to local (fail-closed, not auto-approve)', () => {
     expect(createDefaultConfig('prn_x', 'tester').openaiCompat.approval).toBe('local');
+  });
+});
+
+describe('editor JSON schemas', () => {
+  test('generated schema files match the runtime schema content', async () => {
+    const [configSchema, profileSchema] = await Promise.all([
+      readFile(join(import.meta.dir, '../../config.schema.json'), 'utf8'),
+      readFile(join(import.meta.dir, '../../profile.schema.json'), 'utf8')
+    ]);
+
+    expect(configSchema.trim()).toBe(SCHEMA_CONTENT.trim());
+    expect(profileSchema.trim()).toBe(PROFILE_SCHEMA_CONTENT.trim());
   });
 });
 
@@ -408,7 +684,7 @@ describe('browser config', () => {
 
 describe('network.transport', () => {
   test('createDefaultConfig stamps the OS default transport at init', () => {
-    expect(createDefaultConfig('prn_x', 'x').network.transport).toBe(defaultTransport());
+    expect(createDefaultConfig('prn_x', 'x').network.transport).toBe(DEFAULT_TRANSPORT);
   });
 
   describe('resolveClientConn honours the setting', () => {

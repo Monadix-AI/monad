@@ -15,21 +15,74 @@ interface ReleaseInfo {
   tag_name: string;
 }
 
-async function fetchLatestVersion(channel: string): Promise<string | null> {
+interface ResolvedRelease {
+  tag: string;
+  version: string;
+}
+
+type FetchFn = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+
+interface UpgradeCommandDeps {
+  binaryPath?: string | (() => string);
+  platform?: NodeJS.Platform;
+  releaseApiBaseUrl?: string;
+  releaseDownloadBaseUrl?: string;
+  installScriptUrl?: string;
+  installerEnv?: Record<string, string>;
+  fetch?: FetchFn;
+}
+
+interface ResolvedUpgradeCommandDeps {
+  binaryPath: () => string;
+  platform: NodeJS.Platform;
+  installScriptName: string;
+  releaseApiBaseUrl: string;
+  releaseDownloadBaseUrl: string;
+  installScriptUrl: string;
+  installerEnv: Record<string, string>;
+  fetch: FetchFn;
+}
+
+function resolveDeps(deps: UpgradeCommandDeps = {}): ResolvedUpgradeCommandDeps {
+  const binaryPath = deps.binaryPath;
+  const platform = deps.platform ?? process.platform;
+  const installScriptName = platform === 'win32' ? 'install.ps1' : 'install.sh';
+  return {
+    binaryPath: typeof binaryPath === 'function' ? binaryPath : () => binaryPath ?? process.execPath,
+    platform,
+    installScriptName,
+    releaseApiBaseUrl: deps.releaseApiBaseUrl ?? `https://api.github.com/repos/${GITHUB_REPO}`,
+    releaseDownloadBaseUrl: deps.releaseDownloadBaseUrl ?? 'https://github.com',
+    installScriptUrl:
+      deps.installScriptUrl ?? `https://raw.githubusercontent.com/${GITHUB_REPO}/main/scripts/${installScriptName}`,
+    installerEnv: deps.installerEnv ?? {},
+    fetch: deps.fetch ?? ((...args) => globalThis.fetch(...args))
+  };
+}
+
+function normalizeReleaseVersion(tag: string): string {
+  return tag.replace(/^v/, '');
+}
+
+async function fetchLatestRelease(channel: string, deps: ResolvedUpgradeCommandDeps): Promise<ResolvedRelease | null> {
   try {
     const headers = { 'User-Agent': 'monad-cli' };
     if (channel === 'stable') {
-      const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/releases/latest`, { headers });
+      const res = await deps.fetch(`${deps.releaseApiBaseUrl}/releases/latest`, { headers });
       if (!res.ok) return null;
       const data = (await res.json()) as ReleaseInfo;
-      return data.tag_name ?? null;
+      return data.tag_name ? { tag: data.tag_name, version: normalizeReleaseVersion(data.tag_name) } : null;
     }
-    const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/releases?per_page=50`, { headers });
+    const res = await deps.fetch(`${deps.releaseApiBaseUrl}/releases?per_page=50`, { headers });
     if (!res.ok) return null;
     const releases = (await res.json()) as Array<{ tag_name?: string; prerelease?: boolean }>;
     for (const rel of releases) {
-      if (channel === 'beta' && rel.prerelease) return rel.tag_name ?? null;
-      if (channel === 'nightly' && rel.tag_name?.includes('nightly')) return rel.tag_name ?? null;
+      if (channel === 'beta' && rel.prerelease && rel.tag_name) {
+        return { tag: rel.tag_name, version: normalizeReleaseVersion(rel.tag_name) };
+      }
+      if (channel === 'nightly' && rel.tag_name?.includes('nightly')) {
+        return { tag: rel.tag_name, version: normalizeReleaseVersion(rel.tag_name) };
+      }
     }
     return null;
   } catch {
@@ -37,29 +90,35 @@ async function fetchLatestVersion(channel: string): Promise<string | null> {
   }
 }
 
-async function fetchInstallScriptHash(tag: string): Promise<string | null> {
+async function fetchInstallScriptHash(tag: string, deps: ResolvedUpgradeCommandDeps): Promise<string> {
   try {
-    const res = await fetch(`https://github.com/${GITHUB_REPO}/releases/download/${tag}/install.sh.sha256`, {
-      headers: { 'User-Agent': 'monad-cli' }
-    });
-    if (!res.ok) return null;
+    const res = await deps.fetch(
+      `${deps.releaseDownloadBaseUrl}/${GITHUB_REPO}/releases/download/${tag}/${deps.installScriptName}.sha256`,
+      {
+        headers: { 'User-Agent': 'monad-cli' }
+      }
+    );
+    if (!res.ok) throw new Error(`missing ${deps.installScriptName}.sha256: HTTP ${res.status}`);
     const text = await res.text();
-    return text.trim().split(/\s+/)[0] ?? null;
-  } catch {
-    return null;
+    const hash = text.trim().split(/\s+/)[0];
+    if (!hash || !/^[a-f0-9]{64}$/i.test(hash)) throw new Error(`invalid ${deps.installScriptName}.sha256`);
+    return hash.toLowerCase();
+  } catch (err) {
+    if (err instanceof Error) throw err;
+    throw new Error(`failed to fetch ${deps.installScriptName}.sha256`);
   }
 }
 
-async function fetchReleaseNotes(channel: string): Promise<string | null> {
+async function fetchReleaseNotes(channel: string, deps: ResolvedUpgradeCommandDeps): Promise<string | null> {
   try {
     const headers = { 'User-Agent': 'monad-cli' };
     if (channel === 'stable') {
-      const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/releases/latest`, { headers });
+      const res = await deps.fetch(`${deps.releaseApiBaseUrl}/releases/latest`, { headers });
       if (!res.ok) return null;
       const data = (await res.json()) as { body?: string };
       return data.body ?? null;
     }
-    const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/releases?per_page=10`, { headers });
+    const res = await deps.fetch(`${deps.releaseApiBaseUrl}/releases?per_page=10`, { headers });
     if (!res.ok) return null;
     const releases = (await res.json()) as Array<{ tag_name?: string; prerelease?: boolean; body?: string }>;
     for (const rel of releases) {
@@ -72,104 +131,103 @@ async function fetchReleaseNotes(channel: string): Promise<string | null> {
   }
 }
 
-export const command: CommandDef = {
-  local: true,
-  name: 'upgrade',
-  synopsis: 'upgrade [rollback] [--check] [--channel <stable|beta|nightly>]',
-  description: 'check for and apply monad updates; rollback reverts the last upgrade',
-  descriptionKey: 'cli.cmd.upgrade.desc',
-  flags: {
-    check: {
-      type: 'boolean',
-      description: 'check for updates without applying them',
-      descriptionKey: 'cli.cmd.upgrade.checkFlag'
-    },
-    channel: {
-      type: 'string',
-      description: 'release channel: stable (default), beta, or nightly',
-      descriptionKey: 'cli.cmd.upgrade.channelFlag'
-    },
-    'prune-backups': {
-      type: 'boolean',
-      description: 'remove all but the 3 most recent binary backups and exit',
-      descriptionKey: 'cli.cmd.upgrade.pruneFlag'
-    },
-    notes: {
-      type: 'boolean',
-      description: 'show release notes alongside version info',
-      descriptionKey: 'cli.cmd.upgrade.notesFlag'
-    }
-  },
-  async run({ positionals, flags, globals }) {
-    const sub = positionals[0];
-
-    if (sub === 'rollback') {
-      await runRollback(globals.json);
-      return;
-    }
-
-    if (flags['prune-backups'] === true) {
-      await pruneBackups(3);
-      return;
-    }
-
-    const channel = (flags.channel as string | undefined) ?? 'stable';
-    const checkOnly = flags.check === true;
-
-    out(t('cli.upgrade.checking'));
-
-    const latest = await fetchLatestVersion(channel);
-    if (!latest) {
-      out(yellow(t('cli.upgrade.fetchFailed')));
-      process.exit(1);
-    }
-
-    const current = MONAD_VERSION;
-    const upToDate = current === latest;
-
-    if (globals.json) {
-      json({ current, latest, upToDate, channel });
-      return;
-    }
-
-    if (upToDate) {
-      out(`${green('✓')} ${t('cli.upgrade.upToDate', { version: bold(current) })}`);
-      return;
-    }
-
-    out(t('cli.upgrade.available', { current: bold(current), latest: bold(latest) }));
-
-    if (flags.notes === true) {
-      const notes = await fetchReleaseNotes(channel);
-      if (notes) {
-        out('');
-        // Truncate to first 20 lines so it doesn't flood the terminal
-        const lines = notes.split('\n').slice(0, 20);
-        for (const line of lines) out(dim(line));
-        if (notes.split('\n').length > 20) out(dim('…'));
-        out('');
+export function createUpgradeCommand(commandDeps: UpgradeCommandDeps = {}): CommandDef {
+  const deps = resolveDeps(commandDeps);
+  return {
+    local: true,
+    name: 'upgrade',
+    synopsis: 'upgrade [rollback] [--check] [--channel <stable|beta|nightly>]',
+    description: 'check for and apply monad updates; rollback reverts the last upgrade',
+    descriptionKey: 'cli.cmd.upgrade.desc',
+    flags: {
+      check: {
+        type: 'boolean',
+        description: 'check for updates without applying them',
+        descriptionKey: 'cli.cmd.upgrade.checkFlag'
+      },
+      channel: {
+        type: 'string',
+        description: 'release channel: stable (default), beta, or nightly',
+        descriptionKey: 'cli.cmd.upgrade.channelFlag'
+      },
+      'prune-backups': {
+        type: 'boolean',
+        description: 'remove all but the 3 most recent binary backups and exit',
+        descriptionKey: 'cli.cmd.upgrade.pruneFlag'
+      },
+      notes: {
+        type: 'boolean',
+        description: 'show release notes alongside version info',
+        descriptionKey: 'cli.cmd.upgrade.notesFlag'
       }
-    }
+    },
+    async run({ positionals, flags, globals }) {
+      const sub = positionals[0];
 
-    if (checkOnly) return;
+      if (sub === 'rollback') {
+        await runRollback(globals.json, deps);
+        return;
+      }
 
-    out(dim(t('cli.upgrade.applying')));
+      if (flags['prune-backups'] === true) {
+        await pruneBackups(3);
+        return;
+      }
 
-    // Back up the current binary before overwriting it
-    await backupBinary(current);
+      const channel = (flags.channel as string | undefined) ?? 'stable';
+      const checkOnly = flags.check === true;
 
-    const scriptPath = join(tmpdir(), `monad-install-${Date.now()}.sh`);
-    try {
-      const res = await fetch(`https://raw.githubusercontent.com/${GITHUB_REPO}/main/scripts/install.sh`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const script = await res.text();
-      if (!script.trim().startsWith('#!')) throw new Error('unexpected install.sh content');
-      await writeFile(scriptPath, script, { mode: 0o700 });
+      out(t('cli.upgrade.checking'));
 
-      // Verify SHA-256 if available (best-effort — a missing hash file doesn't block the upgrade).
-      // Hash the on-disk bytes (not the in-memory string) so the verified content matches what bash executes.
-      const expectedHash = await fetchInstallScriptHash(latest);
-      if (expectedHash) {
+      const latestRelease = await fetchLatestRelease(channel, deps);
+      if (!latestRelease) {
+        out(yellow(t('cli.upgrade.fetchFailed')));
+        process.exit(1);
+      }
+
+      const current = MONAD_VERSION;
+      const latest = latestRelease.version;
+      const upToDate = current === latest;
+
+      if (globals.json) {
+        json({ current, latest, upToDate, channel });
+        return;
+      }
+
+      if (upToDate) {
+        out(`${green('✓')} ${t('cli.upgrade.upToDate', { version: bold(current) })}`);
+        return;
+      }
+
+      out(t('cli.upgrade.available', { current: bold(current), latest: bold(latest) }));
+
+      if (flags.notes === true) {
+        const notes = await fetchReleaseNotes(channel, deps);
+        if (notes) {
+          out('');
+          // Truncate to first 20 lines so it doesn't flood the terminal
+          const lines = notes.split('\n').slice(0, 20);
+          for (const line of lines) out(dim(line));
+          if (notes.split('\n').length > 20) out(dim('…'));
+          out('');
+        }
+      }
+
+      if (checkOnly) return;
+
+      out(dim(t('cli.upgrade.applying')));
+
+      await backupBinary(current, deps);
+
+      const scriptPath = join(tmpdir(), `monad-install-${Date.now()}-${deps.installScriptName}`);
+      try {
+        const res = await deps.fetch(deps.installScriptUrl);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const script = await res.text();
+        if (!isExpectedInstallScript(script, deps)) throw new Error(`unexpected ${deps.installScriptName} content`);
+        await writeFile(scriptPath, script, { mode: 0o700 });
+
+        const expectedHash = await fetchInstallScriptHash(latestRelease.tag, deps);
         const fileBytes = await Bun.file(scriptPath).arrayBuffer();
         const hasher = new Bun.CryptoHasher('sha256');
         hasher.update(fileBytes);
@@ -180,33 +238,58 @@ export const command: CommandDef = {
           process.exit(1);
         }
         out(dim(t('cli.upgrade.hashOk')));
+      } catch (err) {
+        await import('node:fs/promises').then((m) => m.unlink(scriptPath)).catch(() => {});
+        out(yellow(t('cli.upgrade.scriptFetchFailed', { err: String(err) })));
+        process.exit(1);
       }
-    } catch (err) {
-      out(yellow(t('cli.upgrade.scriptFetchFailed', { err: String(err) })));
-      process.exit(1);
+
+      const proc = Bun.spawn(installerArgs(scriptPath, channel, deps), {
+        stdout: 'inherit',
+        stderr: 'inherit',
+        stdin: 'inherit',
+        env: installerEnv(channel, deps)
+      });
+      const code = await proc.exited;
+      // clean up temp script regardless of exit code
+      await import('node:fs/promises').then((m) => m.unlink(scriptPath)).catch(() => {});
+      // code is null when the process was killed by a signal (e.g. SIGKILL); treat that as failure
+      if (code == null || code !== 0) process.exit(code ?? 1);
     }
+  };
+}
 
-    const proc = Bun.spawn(['bash', scriptPath, ...(channel !== 'stable' ? ['--channel', channel] : [])], {
-      stdout: 'inherit',
-      stderr: 'inherit',
-      stdin: 'inherit',
-      env: { ...process.env }
-    });
-    const code = await proc.exited;
-    // clean up temp script regardless of exit code
-    await import('node:fs/promises').then((m) => m.unlink(scriptPath)).catch(() => {});
-    // code is null when the process was killed by a signal (e.g. SIGKILL); treat that as failure
-    if (code == null || code !== 0) process.exit(code ?? 1);
+export const command: CommandDef = createUpgradeCommand();
+
+function isExpectedInstallScript(script: string, deps: ResolvedUpgradeCommandDeps): boolean {
+  const trimmed = script.trimStart();
+  if (deps.platform === 'win32') return trimmed.startsWith('<#') || trimmed.startsWith('#Requires');
+  return trimmed.startsWith('#!');
+}
+
+function installerArgs(scriptPath: string, channel: string, deps: ResolvedUpgradeCommandDeps): string[] {
+  if (deps.platform === 'win32') {
+    return ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', scriptPath];
   }
-};
+  return ['bash', scriptPath, ...(channel !== 'stable' ? ['--channel', channel] : [])];
+}
 
-async function backupBinary(currentVersion: string): Promise<void> {
+function installerEnv(channel: string, deps: ResolvedUpgradeCommandDeps): Record<string, string> {
+  return {
+    ...process.env,
+    MONAD_UPGRADE_TARGET: deps.binaryPath(),
+    ...(deps.platform === 'win32' && channel !== 'stable' ? { MONAD_CHANNEL: channel } : {}),
+    ...deps.installerEnv
+  };
+}
+
+async function backupBinary(currentVersion: string, deps: ResolvedUpgradeCommandDeps): Promise<void> {
   const paths = getPaths();
   const backupDir = join(paths.backup, 'binaries');
   await mkdir(backupDir, { recursive: true });
   const dest = join(backupDir, `monad-${currentVersion}`);
   try {
-    await cp(process.execPath, dest);
+    await cp(deps.binaryPath(), dest);
     out(dim(t('cli.upgrade.backedUp', { path: dest })));
   } catch {
     // non-fatal — backup is best-effort
@@ -232,7 +315,7 @@ async function backupBinary(currentVersion: string): Promise<void> {
   }
 }
 
-async function runRollback(asJson: boolean): Promise<void> {
+async function runRollback(asJson: boolean, deps: ResolvedUpgradeCommandDeps): Promise<void> {
   const paths = getPaths();
   const backupDir = join(paths.backup, 'binaries');
 
@@ -262,7 +345,7 @@ async function runRollback(asJson: boolean): Promise<void> {
 
   const src = join(backupDir, latest.name);
   try {
-    await cp(src, process.execPath, { force: true });
+    await cp(src, deps.binaryPath(), { force: true });
     out(green(t('cli.upgrade.rolledBack', { name: latest.name })));
     if (asJson) json({ ok: true, restoredFrom: latest.name });
   } catch (err) {

@@ -7,6 +7,7 @@ import { z } from 'zod';
 
 import { okResponseSchema } from './control.ts';
 import { channelIdSchema } from './ids.ts';
+import { httpUrlSchema } from './url.ts';
 
 // First-party channel types bundled with the daemon. The schema is OPEN (any string) so a
 // third-party atom can declare its own platform (e.g. "whatsapp", "matrix"); KNOWN_CHANNEL_TYPES
@@ -93,7 +94,9 @@ export const channelInboundSchema = z.object({
   chatType: channelChatTypeSchema.optional(), // dm/group/channel — undefined ⇒ treated as 'dm'
   mentionedSelf: z.boolean().optional(), // bot was @mentioned (or replied-to) — gates group responses
   isSelf: z.boolean().default(false), // bot's own message → dropped
-  media: z.array(z.object({ kind: z.string(), url: z.string().optional(), name: z.string().optional() })).default([]),
+  media: z
+    .array(z.object({ kind: z.string(), url: httpUrlSchema.optional(), name: z.string().optional() }))
+    .default([]),
   at: z.string() // ISO-8601
 });
 export type ChannelInbound = z.infer<typeof channelInboundSchema>;
@@ -103,7 +106,7 @@ export const channelResponseAttachmentSchema = z.object({
   kind: z.string().min(1),
   name: z.string().optional(),
   mimeType: z.string().optional(),
-  url: z.string().url().optional(),
+  url: httpUrlSchema.optional(),
   text: z.string().optional()
 });
 export type ChannelResponseAttachment = z.infer<typeof channelResponseAttachmentSchema>;

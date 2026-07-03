@@ -1,4 +1,4 @@
-import type { OkResponse } from '../../../../../protocol/src/control.ts';
+import type { OkResponse } from '@monad/protocol';
 
 import { clientOf, runTreaty } from '../../../endpoint-helpers.ts';
 import { listMcpServersApi, mcpServerAdapter } from './list-mcp-servers.ts';

@@ -343,7 +343,8 @@ test('listApprovals: fetches approval rules', async () => {
   const store = createMonadStore({ client });
 
   const res = await store.dispatch(approvalsApi.endpoints.listApprovals.initiate(undefined));
-  expect(res.data).toHaveLength(1);
+  expect(res.data?.ids).toEqual(['rule_1']);
+  expect(res.data?.entities.rule_1?.tool).toBe('bash');
 });
 
 test('revokeApproval: invalidates Approvals cache', async () => {
@@ -461,7 +462,8 @@ test('listMemoryFacts: fetches facts and caches by Memory tag', async () => {
 
   const res = await store.dispatch(memoryApi.endpoints.listMemoryFacts.initiate({ scopeKind: 'global', scopeId: '*' }));
   expect(calls).toBe(1);
-  expect(res.data).toHaveLength(1);
+  expect(res.data?.ids).toEqual(['fact_1']);
+  expect(res.data?.entities.fact_1?.content).toBe('user likes cats');
 
   await store.dispatch(memoryApi.endpoints.listMemoryFacts.initiate({ scopeKind: 'global', scopeId: '*' }));
   expect(calls).toBe(1); // cache hit

@@ -1,4 +1,4 @@
-import type { Session } from '@monad/protocol';
+import type { Session, WorkplaceProject } from '@monad/protocol';
 
 import { expect, test } from 'bun:test';
 import { newId } from '@monad/protocol';
@@ -23,6 +23,21 @@ function seedSession(store: ReturnType<typeof createStore>, title: string): Sess
   return s;
 }
 
+function seedProject(store: ReturnType<typeof createStore>, title: string): WorkplaceProject {
+  const now = new Date().toISOString();
+  const project: WorkplaceProject = {
+    id: newId('prj'),
+    title,
+    ownerPrincipalId: newId('prn'),
+    state: 'active',
+    archived: false,
+    createdAt: now,
+    updatedAt: now
+  };
+  store.insertWorkplaceProject(project);
+  return project;
+}
+
 test('keyword search finds ASCII word matches with session context', () => {
   const store = createStore();
   const s = seedSession(store, 'Deploy notes');
@@ -37,7 +52,7 @@ test('keyword search finds ASCII word matches with session context', () => {
 
   const hits = store.searchMessages({ q: 'streaming' });
   expect(hits.length).toBe(1);
-  expect(hits[0]?.sessionTitle).toBe('Deploy notes');
+  expect(hits[0]?.transcriptTargetTitle).toBe('Deploy notes');
   expect(hits[0]?.snippet).toContain('streaming');
   expect(hits[0]?.matchedBy).toBe('keyword');
 });
@@ -60,7 +75,7 @@ test('short queries fall back to LIKE', () => {
   expect(hits.length).toBe(1);
 });
 
-test('search excludes soft-deleted (restored) messages and respects sessionId scope', () => {
+test('search excludes soft-deleted (restored) messages and respects transcript target scope', () => {
   const store = createStore();
   const a = seedSession(store, 'A');
   const b = seedSession(store, 'B');
@@ -69,8 +84,24 @@ test('search excludes soft-deleted (restored) messages and respects sessionId sc
   store.insertMessage(newId('msg'), b.id, 'shared keyword apples', new Date().toISOString(), 'user');
 
   expect(store.searchMessages({ q: 'apples' }).length).toBe(2);
-  expect(store.searchMessages({ q: 'apples', sessionId: a.id }).length).toBe(1);
+  expect(store.searchMessages({ q: 'apples', transcriptTargetId: a.id }).length).toBe(1);
 
   store.restoreMessages(a.id, m1); // soft-delete a's message
-  expect(store.searchMessages({ q: 'apples', sessionId: a.id }).length).toBe(0);
+  expect(store.searchMessages({ q: 'apples', transcriptTargetId: a.id }).length).toBe(0);
+});
+
+test('keyword search includes Workplace Project transcripts and respects project scope', () => {
+  const store = createStore();
+  const s = seedSession(store, 'Session notes');
+  const p = seedProject(store, 'Project room');
+  store.insertMessage(newId('msg'), s.id, 'shared keyword apples in session', new Date().toISOString(), 'user');
+  store.insertMessage(newId('msg'), p.id, 'shared keyword apples in project', new Date().toISOString(), 'user');
+
+  const all = store.searchMessages({ q: 'apples' });
+  expect(all.map((hit) => hit.transcriptTargetTitle).sort()).toEqual(['Project room', 'Session notes']);
+
+  const scoped = store.searchMessages({ q: 'apples', transcriptTargetId: p.id });
+  expect(scoped).toHaveLength(1);
+  expect(scoped[0]?.transcriptTargetId).toBe(p.id);
+  expect(scoped[0]?.transcriptTargetTitle).toBe('Project room');
 });

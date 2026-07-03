@@ -26,9 +26,10 @@ function testCommandBundle(): CommandBundle {
     listModels: async () => [{ alias: 'fast', provider: 'p', modelId: 'm', current: true }],
     setModel: async () => {},
     compact: async () => ({ compacted: 0 }),
-    consolidateMemory: async () => [],
+    consolidate: async () => ({ level: 1, l1Scopes: 0, nodes: 0, edges: 0, prunedEdges: 0, laws: 0, lawScopes: 0 }),
+    explainBelief: async () => ({ matches: [] }),
+    checkMemory: async () => ({ flagged: 0 }),
     handoff: async () => ({ sessionId: 'ses_new' as SessionId }),
-    consolidateGraph: async () => ({ sessionsExtracted: 0, nodes: 0, edges: 0, prunedEdges: 0 }),
     t,
     log: () => {}
   };
@@ -66,7 +67,7 @@ const EMPTY_AUTH: MonadAuth = { version: 1, activeProvider: null, updatedAt: '',
 function tokenEvent(delta: string, index: number): Event {
   return {
     id: newId('evt'),
-    sessionId: 'ses_X' as SessionId,
+    transcriptTargetId: 'ses_X' as SessionId,
     type: 'agent.token',
     actorAgentId: null,
     payload: { messageId: 'msg_X' as MessageId, delta, index },
@@ -76,7 +77,7 @@ function tokenEvent(delta: string, index: number): Event {
 function messageEvent(text: string): Event {
   return {
     id: newId('evt'),
-    sessionId: 'ses_X' as SessionId,
+    transcriptTargetId: 'ses_X' as SessionId,
     type: 'agent.message',
     actorAgentId: null,
     payload: { messageId: 'msg_X' as MessageId, text },
@@ -169,7 +170,7 @@ test('renderer: agent.error surfaces an error message and resets stream state', 
   r.consume(tokenEvent('partial', 0)); // start a streaming bubble
   r.consume({
     id: newId('evt'),
-    sessionId: 'ses_X' as SessionId,
+    transcriptTargetId: 'ses_X' as SessionId,
     type: 'agent.error',
     actorAgentId: null,
     payload: { message: 'upstream 503', code: '503' },
@@ -190,7 +191,7 @@ test('renderer: agent.error without code still includes the message', async () =
   const r = createRenderer({ adapter, chatId: 'c1', log: () => {}, t });
   r.consume({
     id: newId('evt'),
-    sessionId: 'ses_X' as SessionId,
+    transcriptTargetId: 'ses_X' as SessionId,
     type: 'agent.error',
     actorAgentId: null,
     payload: { message: 'something broke' },
@@ -205,7 +206,7 @@ test('renderer: surfaces an approval notice (no channel approver)', async () => 
   const r = createRenderer({ adapter, chatId: 'c1', log: () => {}, t });
   r.consume({
     id: newId('evt'),
-    sessionId: 'ses_X' as SessionId,
+    transcriptTargetId: 'ses_X' as SessionId,
     type: 'tool.approval_requested',
     actorAgentId: null,
     payload: {},
@@ -238,6 +239,7 @@ function channelConfig(over: Partial<ChannelInstanceConfig> = {}): ChannelInstan
     options: {},
     allowlist: { allowAllUsers: false, allowedUsers: ['u1'] },
     mapping: { granularity: 'per-conversation' },
+    ownerUsers: [],
     tokenRef: 'literal-token',
     rateLimitPerMin: 100,
     ...over
@@ -498,6 +500,22 @@ test('channel: default-deny drops an unauthorized user (no session, no reply)', 
   expect(h.sends.length).toBe(0);
 });
 
+test('channel: an owner-only command (/workdir) is refused to a non-owner user', async () => {
+  const h = await makeHarness(channelConfig()); // ownerUsers: [] → u1 is allowed but not an owner
+  h.ctx.onMessage(inbound({ chatId: 'chat1', userId: 'u1', kind: 'command', command: 'workdir', text: '/workdir' }));
+  await h.flush();
+  expect(h.sends.at(-1)?.content).toContain('owner-only');
+});
+
+test('channel: an owner-only command (/workdir) runs for a user in ownerUsers', async () => {
+  const h = await makeHarness(channelConfig({ ownerUsers: ['u1'] }));
+  h.ctx.onMessage(inbound({ chatId: 'chat1', userId: 'u1', kind: 'command', command: 'workdir', text: '/workdir' }));
+  await h.flush();
+  // Gate passed → the show-mode reply ran (no folder set yet), never the owner-only refusal.
+  expect(h.sends.at(-1)?.content).not.toContain('owner-only');
+  expect(h.sends.at(-1)?.content?.toLowerCase()).toContain('working folder');
+});
+
 test('channel: self-echo and duplicate messages are dropped', async () => {
   const h = await makeHarness(channelConfig());
   h.ctx.onMessage(inbound({ chatId: 'chat1', userId: 'u1', text: 'echo', isSelf: true }));
@@ -652,8 +670,8 @@ async function makeMirrorHarness(mirror: boolean): Promise<{
   };
 }
 
-function makeAgentEvent(sessionId: SessionId, type: Event['type'], payload: Record<string, unknown>): Event {
-  return { id: newId('evt'), sessionId, type, actorAgentId: null, payload, at: '' };
+function makeAgentEvent(transcriptTargetId: SessionId, type: Event['type'], payload: Record<string, unknown>): Event {
+  return { id: newId('evt'), transcriptTargetId, type, actorAgentId: null, payload, at: '' };
 }
 
 test('mirror: web-UI agent reply is forwarded to the adapter when outboundMirror is true', async () => {
@@ -720,7 +738,7 @@ test('mirror: Telegram inbound dispatch is not double-sent (activeDispatches gua
         // Simulate real behavior: publish to bus AND call the direct sink.
         sendInline: async ({ sessionId, text }, sink) => {
           const evt = messageEvent(`reply: ${text}`);
-          const withSid = { ...evt, sessionId: sessionId as SessionId };
+          const withSid = { ...evt, transcriptTargetId: sessionId as SessionId };
           bus.publish(withSid);
           sink(withSid);
         },

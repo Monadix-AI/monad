@@ -10,37 +10,43 @@ export interface WorkspaceShellState {
   surface: WorkspaceSurface;
   lastMonadSessionId: SessionId | null;
   activeProjectId: string | null;
-  // Working folder chosen in the New project dialog, keyed by project slug. The session is created
-  // lazily by useProject on first visit, which consumes (and clears) this so the cwd lands on it.
-  pendingProjectCwd: Record<string, string>;
+  sidebarCollapsed: boolean;
+  sidebarAutoReveal: boolean;
+  newProjectOpen: boolean;
+  sessionInspectorOpen: boolean;
   setSurface: (surface: WorkspaceSurface) => void;
   rememberMonadSession: (sessionId: SessionId | null) => void;
   openWorkspace: () => void;
   openMonadChat: () => void;
   openProject: (projectId: string) => void;
-  stashProjectCwd: (projectId: string, cwd: string) => void;
-  takeProjectCwd: (projectId: string) => string | undefined;
+  setSidebarCollapsed: (collapsed: boolean) => void;
+  toggleSidebarCollapsed: () => void;
+  revealSidebar: () => void;
+  autoRevealSidebar: () => void;
+  collapseSidebar: () => void;
+  setNewProjectOpen: (open: boolean) => void;
+  toggleSessionInspector: () => void;
 }
 
-export const useWorkspaceShellStore = create<WorkspaceShellState>()((set, get) => ({
+export const useWorkspaceShellStore = create<WorkspaceShellState>()((set) => ({
   surface: 'workspace',
   lastMonadSessionId: null,
   activeProjectId: null,
-  pendingProjectCwd: {},
+  sidebarCollapsed: false,
+  sidebarAutoReveal: false,
+  newProjectOpen: false,
+  sessionInspectorOpen: false,
   setSurface: (surface) => set({ surface }),
   rememberMonadSession: (sessionId) => set({ lastMonadSessionId: sessionId }),
   openWorkspace: () => set({ surface: 'workspace', activeProjectId: null }),
   openMonadChat: () => set({ surface: 'monadChat' }),
   openProject: (projectId) => set({ surface: 'workspace', activeProjectId: projectId }),
-  stashProjectCwd: (projectId, cwd) =>
-    set((state) => ({ pendingProjectCwd: { ...state.pendingProjectCwd, [projectId]: cwd } })),
-  takeProjectCwd: (projectId) => {
-    const cwd = get().pendingProjectCwd[projectId];
-    if (cwd === undefined) return undefined;
-    set((state) => {
-      const { [projectId]: _, ...rest } = state.pendingProjectCwd;
-      return { pendingProjectCwd: rest };
-    });
-    return cwd;
-  }
+  setSidebarCollapsed: (collapsed) => set({ sidebarCollapsed: collapsed, sidebarAutoReveal: false }),
+  toggleSidebarCollapsed: () =>
+    set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed, sidebarAutoReveal: false })),
+  revealSidebar: () => set({ sidebarCollapsed: false, sidebarAutoReveal: false }),
+  autoRevealSidebar: () => set({ sidebarCollapsed: false, sidebarAutoReveal: true }),
+  collapseSidebar: () => set({ sidebarCollapsed: true, sidebarAutoReveal: false }),
+  setNewProjectOpen: (open) => set({ newProjectOpen: open }),
+  toggleSessionInspector: () => set((state) => ({ sessionInspectorOpen: !state.sessionInspectorOpen }))
 }));

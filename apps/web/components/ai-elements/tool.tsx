@@ -3,8 +3,16 @@
 import type { DynamicToolUIPart, ToolUIPart } from 'ai';
 import type { ComponentProps, ReactNode } from 'react';
 
+import {
+  CancelCircleIcon,
+  CheckmarkCircle02Icon,
+  ChevronDownIcon,
+  CircleIcon,
+  Clock01Icon,
+  Wrench01Icon
+} from '@hugeicons/core-free-icons';
+import { HugeiconsIcon } from '@hugeicons/react';
 import { Badge, cn } from '@monad/ui';
-import { CheckCircleIcon, ChevronDownIcon, CircleIcon, ClockIcon, WrenchIcon, XCircleIcon } from 'lucide-react';
 import { isValidElement } from 'react';
 
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -44,13 +52,48 @@ const statusLabels: Record<ToolPart['state'], string> = {
 };
 
 const statusIcons: Record<ToolPart['state'], ReactNode> = {
-  'approval-requested': <ClockIcon className="size-4 text-warning" />,
-  'approval-responded': <CheckCircleIcon className="size-4 text-info" />,
-  'input-available': <ClockIcon className="size-4 animate-pulse" />,
-  'input-streaming': <CircleIcon className="size-4" />,
-  'output-available': <CheckCircleIcon className="size-4 text-success" />,
-  'output-denied': <XCircleIcon className="size-4 text-warning" />,
-  'output-error': <XCircleIcon className="size-4 text-destructive" />
+  'approval-requested': (
+    <HugeiconsIcon
+      className="size-4 text-warning"
+      icon={Clock01Icon}
+    />
+  ),
+  'approval-responded': (
+    <HugeiconsIcon
+      className="size-4 text-info"
+      icon={CheckmarkCircle02Icon}
+    />
+  ),
+  'input-available': (
+    <HugeiconsIcon
+      className="size-4 animate-pulse"
+      icon={Clock01Icon}
+    />
+  ),
+  'input-streaming': (
+    <HugeiconsIcon
+      className="size-4"
+      icon={CircleIcon}
+    />
+  ),
+  'output-available': (
+    <HugeiconsIcon
+      className="size-4 text-success"
+      icon={CheckmarkCircle02Icon}
+    />
+  ),
+  'output-denied': (
+    <HugeiconsIcon
+      className="size-4 text-warning"
+      icon={CancelCircleIcon}
+    />
+  ),
+  'output-error': (
+    <HugeiconsIcon
+      className="size-4 text-destructive"
+      icon={CancelCircleIcon}
+    />
+  )
 };
 
 const getStatusBadge = (status: ToolPart['state']) => (
@@ -72,11 +115,17 @@ export const ToolHeader = ({ className, title, type, state, toolName, ...props }
       {...props}
     >
       <div className="flex items-center gap-2">
-        <WrenchIcon className="size-4 text-muted-foreground" />
+        <HugeiconsIcon
+          className="size-4 text-muted-foreground"
+          icon={Wrench01Icon}
+        />
         <span className="font-medium text-sm">{title ?? derivedName}</span>
         {getStatusBadge(state)}
       </div>
-      <ChevronDownIcon className="size-4 text-muted-foreground transition-transform group-data-[state=open]/tool:rotate-180" />
+      <HugeiconsIcon
+        className="size-4 text-muted-foreground transition-transform group-data-[state=open]/tool:rotate-180"
+        icon={ChevronDownIcon}
+      />
     </CollapsibleTrigger>
   );
 };

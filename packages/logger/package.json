@@ -7,10 +7,18 @@
   },
   "devDependencies": {
     "@monad/config": "workspace:*",
+    "@monad/protocol": "workspace:*",
     "@types/bun": "^1.3.14"
   },
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./log-files": "./src/log-files.ts"
+  },
+  "imports": {
+    "#platform-sink": {
+      "browser": "./src/sink.browser.ts",
+      "default": "./src/sink.node.ts"
+    }
   },
   "module": "src/index.ts",
   "private": true,
@@ -18,7 +26,10 @@
     "lint": "biome check .",
     "test": "bun ../../scripts/bun-test.ts test/ --only-failures",
     "test:loud": "bun ../../scripts/bun-test.ts test/ --loud",
+    "test:unit": "bun ../../scripts/bun-test.ts test/unit/ --only-failures",
+    "test:unit:loud": "bun ../../scripts/bun-test.ts test/unit/ --loud",
     "typecheck": "tsgo --noEmit"
   },
+  "sideEffects": false,
   "type": "module"
 }

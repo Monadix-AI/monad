@@ -5,9 +5,9 @@ import { expect, test } from 'bun:test';
 import { EventBus } from '@/services/event-bus.ts';
 
 let counter = 0;
-const ev = (type: EventType, sessionId: string): Event => ({
+const ev = (type: EventType, transcriptTargetId: string): Event => ({
   id: `evt_${(counter++).toString().padStart(26, '0')}` as Event['id'],
-  sessionId: sessionId as SessionId,
+  transcriptTargetId: transcriptTargetId as SessionId,
   type,
   actorAgentId: null,
   payload: { title: 't' },

@@ -1,4 +1,4 @@
-import type { NativeCliAgentPresetView } from '@monad/protocol';
+import { listNativeCliAgentPresetsResponseSchema, type NativeCliAgentPresetView } from '@monad/protocol';
 
 import { clientOf, runTreaty } from '../../../endpoint-helpers.ts';
 import { sessionsApi } from '../../sessions/index.ts';
@@ -10,7 +10,7 @@ const listNativeCliAgentPresetsApi = sessionsApi.injectEndpoints({
       queryFn: (_arg, api: { extra: unknown }) =>
         runTreaty(
           () => clientOf(api).treaty.v1.settings['native-cli-agents'].presets.get(),
-          (raw) => raw.presets
+          (raw) => listNativeCliAgentPresetsResponseSchema.parse(raw).presets
         ),
       providesTags: ['NativeCliAgents']
     })

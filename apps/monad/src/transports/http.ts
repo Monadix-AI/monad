@@ -22,6 +22,7 @@ function logHttpCall(method: string, path: string, status: number, durationMs?: 
 import { createAgentsController } from '@/transports/http/agents.ts';
 import { createApprovalsController } from '@/transports/http/approvals.ts';
 import { createAtomsController } from '@/transports/http/atoms.ts';
+import { createAvatarCacheController } from '@/transports/http/avatar-cache.ts';
 import { isBrowserRequestAllowed } from '@/transports/http/browser-guard.ts';
 import { createChannelsController } from '@/transports/http/channels.ts';
 import { createClarifyController } from '@/transports/http/clarify.ts';
@@ -32,17 +33,21 @@ import { createGraphController } from '@/transports/http/graph/controller.ts';
 import { createHealthController } from '@/transports/http/health.ts';
 import { createIndexerController } from '@/transports/http/indexer.ts';
 import { createInitController } from '@/transports/http/init.ts';
+import { createLawsController } from '@/transports/http/laws/controller.ts';
 import { createLicensesController } from '@/transports/http/licenses/controller.ts';
 import { createLocaleCatalogController, createLocaleSettingsController } from '@/transports/http/locale.ts';
 import { createMem0DataController } from '@/transports/http/mem0-data/controller.ts';
 import { createMemoryController } from '@/transports/http/memory.ts';
+import { createNativeAgentController } from '@/transports/http/native-agent.ts';
 import { createNativeCliController } from '@/transports/http/native-cli.ts';
 import { createOpenAiCompatController } from '@/transports/http/openai-compat.ts';
 import { createIpRateLimiter } from '@/transports/http/rate-limit.ts';
 import { createResponsesApiController } from '@/transports/http/responses-api/controller.ts';
 import { createSessionsController } from '@/transports/http/sessions/controller.ts';
 import { createAcpAgentSettingsController } from '@/transports/http/settings/acp-agent.ts';
+import { createBrowserPresetSettingsController } from '@/transports/http/settings/browser-preset.ts';
 import { createChannelSettingsController } from '@/transports/http/settings/channel.ts';
+import { createComputerPresetSettingsController } from '@/transports/http/settings/computer-preset.ts';
 import { createDeveloperSettingsController } from '@/transports/http/settings/developer.ts';
 import { createHooksSettingsController } from '@/transports/http/settings/hooks.ts';
 import { createSettingsImportController } from '@/transports/http/settings/import.ts';
@@ -53,8 +58,10 @@ import { createNetworkSettingsController } from '@/transports/http/settings/netw
 import { createObscuraSettingsController } from '@/transports/http/settings/obscura.ts';
 import { createOpenaiCompatSettingsController } from '@/transports/http/settings/openai-compat.ts';
 import { createPeerSettingsController } from '@/transports/http/settings/peer.ts';
+import { createUserProfileSettingsController } from '@/transports/http/settings/profile.ts';
 import { createSandboxSettingsController } from '@/transports/http/settings/sandbox.ts';
 import { createSkillsSettingsController } from '@/transports/http/settings/skills.ts';
+import { createStartupSettingsController } from '@/transports/http/settings/startup.ts';
 import { createToolBackendsSettingsController } from '@/transports/http/settings/tool-backends.ts';
 import { createSkillsController } from '@/transports/http/skills.ts';
 import { createStatsController } from '@/transports/http/stats.ts';
@@ -285,6 +292,7 @@ export function createHttpTransport(
 
   return app
     .use(createHealthController(handlers))
+    .use(createAvatarCacheController(handlers))
     .group('/openai', (g) => {
       const compatConfig = openaiCompatConfig ?? (() => Promise.resolve({ enabled: false }));
       return g
@@ -295,7 +303,7 @@ export function createHttpTransport(
       v1
         .use(createInitController(handlers))
         .use(createAgentsController(handlers))
-        .use(createChannelsController(handlers))
+        .use(createChannelsController(handlers, encoder))
         .use(createSessionsController(handlers, encoder))
         .use(createUsageController(handlers))
         .use(createStatsController(handlers))
@@ -309,8 +317,10 @@ export function createHttpTransport(
         .use(createLicensesController(handlers))
         .use(createGraphController(handlers))
         .use(createMem0DataController(handlers))
+        .use(createLawsController(handlers))
         .use(createMemoryController(handlers))
         .use(createAtomsController(handlers))
+        .use(createNativeAgentController(handlers))
         .use(createNativeCliController(handlers))
         .use(createLocaleCatalogController(handlers))
         .use(createSystemController(handlers))
@@ -323,11 +333,15 @@ export function createHttpTransport(
             .use(createNativeCliAgentSettingsController(handlers))
             .use(createMcpServerSettingsController(handlers))
             .use(createObscuraSettingsController(handlers))
+            .use(createBrowserPresetSettingsController(handlers))
+            .use(createComputerPresetSettingsController(handlers))
             .use(createOpenaiCompatSettingsController(handlers))
             .use(createNetworkSettingsController(handlers))
             .use(createToolBackendsSettingsController(handlers))
             .use(createSandboxSettingsController(handlers))
+            .use(createUserProfileSettingsController(handlers))
             .use(createDeveloperSettingsController(handlers))
+            .use(createStartupSettingsController(handlers))
             .use(createHooksSettingsController(handlers))
             .use(createSettingsImportController(handlers))
             .use(createLocaleSettingsController(handlers))

@@ -3,12 +3,13 @@
 import type { UIMessage } from 'ai';
 import type { ComponentProps, HTMLAttributes, ReactElement } from 'react';
 
+import { ChevronLeftIcon, ChevronRightIcon } from '@hugeicons/core-free-icons';
+import { HugeiconsIcon } from '@hugeicons/react';
 import { Button, ButtonGroup, ButtonGroupText, cn, Tooltip, TooltipContent, TooltipTrigger } from '@monad/ui';
 import { cjk } from '@streamdown/cjk';
 import { code } from '@streamdown/code';
 import { math } from '@streamdown/math';
 import { mermaid } from '@streamdown/mermaid';
-import { ChevronLeftIcon, ChevronRightIcon } from 'lucide-react';
 import { createContext, memo, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { Streamdown } from 'streamdown';
 
@@ -221,7 +222,12 @@ const _MessageBranchPrevious = ({ children, ...props }: MessageBranchPreviousPro
       variant="ghost"
       {...props}
     >
-      {children ?? <ChevronLeftIcon size={14} />}
+      {children ?? (
+        <HugeiconsIcon
+          icon={ChevronLeftIcon}
+          size={14}
+        />
+      )}
     </Button>
   );
 };
@@ -241,7 +247,12 @@ const _MessageBranchNext = ({ children, ...props }: MessageBranchNextProps) => {
       variant="ghost"
       {...props}
     >
-      {children ?? <ChevronRightIcon size={14} />}
+      {children ?? (
+        <HugeiconsIcon
+          icon={ChevronRightIcon}
+          size={14}
+        />
+      )}
     </Button>
   );
 };

@@ -50,7 +50,7 @@ test('a screenshot returned by an MCP tool reaches the model as an image content
     sessionRepo: { insertSession: (s) => store.insertSession(s), getSession: (id) => store.getSession(id) },
     messageRepo: {
       list: (sessionId) => store.listMessages(sessionId),
-      append: (m) => store.insertMessage(m.id, m.sessionId, m.text, m.createdAt, m.role)
+      append: (m) => store.insertMessage(m.id, m.transcriptTargetId, m.text, m.createdAt, m.role)
     },
     defaultModel: 'mock'
   });

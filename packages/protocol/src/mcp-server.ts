@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { httpsUrlSchema, httpUrlSchema } from './url.ts';
+
 // Settings-UI view of a configured MCP server. Mirrors @monad/home's mcpServerSchema (the stdio/http
 // discriminated union) field-for-field. Secret-bearing values (env / headers / bearer token) follow
 // the `${env:NAME}` ref convention — resolved at connect time — so the view carries them as-is, no
@@ -38,7 +40,7 @@ const mcpHttpAuthViewSchema = z.discriminatedUnion('mode', [
 const mcpHttpViewSchema = z.object({
   name: z.string().min(1),
   transport: z.literal('http'),
-  url: z.string().url(),
+  url: httpUrlSchema,
   auth: mcpHttpAuthViewSchema,
   headers: z.record(z.string(), z.string()).optional(),
   requestTimeoutMs: z.number().int().positive().optional(),
@@ -103,7 +105,7 @@ export const installedMcpAtomSchema = z.object({
   name: z.string(),
   transport: z.enum(['stdio', 'http']),
   command: z.string().optional(),
-  url: z.string().optional(),
+  url: httpUrlSchema.optional(),
   enabled: z.boolean().default(true)
 });
 export type InstalledMcpAtom = z.infer<typeof installedMcpAtomSchema>;
@@ -140,11 +142,11 @@ export const mcpCatalogEntrySchema = z.object({
   name: z.string(),
   description: z.string(),
   /** Optional docs/homepage link shown in the picker. */
-  homepage: z.string().url().optional(),
+  homepage: httpsUrlSchema.optional(),
   transport: z.enum(['stdio', 'http']),
   command: z.string().optional(),
   args: z.array(z.string()).optional(),
-  url: z.string().optional(),
+  url: httpUrlSchema.optional(),
   /** Env var names the server needs (e.g. 'GITHUB_TOKEN'); the form pre-fills `${env:NAME}` refs. */
   env: z.array(z.string()).default([])
 });

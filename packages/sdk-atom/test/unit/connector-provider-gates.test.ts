@@ -187,6 +187,7 @@ test('defineProvider: stream is callable and yields chunks', async () => {
     provider: { id: 'test', type: 'test' },
     credential: { id: 'cred_1', accessToken: 'key', authType: 'api_key' as const, priority: 0 }
   };
+  if (!dummyProvider.stream) throw new Error('dummy provider missing stream');
   for await (const chunk of dummyProvider.stream(call)) {
     chunks.push(chunk.type);
   }

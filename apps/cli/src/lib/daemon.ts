@@ -2,6 +2,7 @@ import { closeSync, openSync } from 'node:fs';
 import { mkdir, unlink } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { getPaths, loadAll, resolveClientConn } from '@monad/home';
+import { rotateDaemonLog } from '@monad/monad/log-maintenance';
 
 import { t } from './i18n.ts';
 import { bold, cyan, dim, green, out, printGoodbye, red, yellow } from './output.ts';
@@ -109,6 +110,9 @@ export async function startDaemon(): Promise<{ alreadyRunning: boolean }> {
   // pipe when we exit can't EPIPE it. --start-relay tells it to emit the banner and route logs.
   const logPath = join(getPaths().logs, 'daemon.log');
   await mkdir(getPaths().logs, { recursive: true });
+  // Size-cap daemon.log at this start boundary: the CLI's inherited stderr fd (below) pins the file
+  // open for the daemon's lifetime, so it can't be rotated mid-run — rotate before opening a fresh one.
+  rotateDaemonLog(logPath);
   const logFd = openSync(logPath, 'a');
 
   // Dev: resolve the daemon source from daemon.ts's own location (apps/cli/src/lib/ → apps/monad/src/).
@@ -117,7 +121,11 @@ export async function startDaemon(): Promise<{ alreadyRunning: boolean }> {
   const isDevEntry = await Bun.file(devEntry).exists();
   // --start-relay tells the daemon to emit its banner/ready-info to stdout for relay
   // to the user, and to route logs to stderr (daemon.log) so stdout stays clean.
-  const argv = isDevEntry ? ['bun', devEntry, '--start-relay'] : [process.execPath, 'daemon', '--start-relay'];
+  // Pass --log-file so the daemon writes daemon.log itself (see configureDaemonLogging). The `stderr:
+  // logFd` redirect below still captures native/pre-logger crash output on Unix, but a detached child
+  // does not inherit that fd on Windows — so the daemon owning the file is what populates it there.
+  const relayArgs = ['--start-relay', '--log-file', logPath];
+  const argv = isDevEntry ? ['bun', devEntry, ...relayArgs] : [process.execPath, 'daemon', ...relayArgs];
   const proc = Bun.spawn(argv, {
     stdin: 'ignore',
     stdout: 'pipe',

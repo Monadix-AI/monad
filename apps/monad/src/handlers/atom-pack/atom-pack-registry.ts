@@ -1,6 +1,10 @@
 import type { HookEvent } from '@monad/protocol';
-import type { Connector, HookDefinition } from '@monad/sdk-atom';
+import type { Connector, HookDefinition, WorkspaceExperienceDefinition } from '@monad/sdk-atom';
 import type { Tool } from '@/capabilities/tools/types.ts';
+
+export interface RegisteredWorkspaceExperience extends WorkspaceExperienceDefinition {
+  atomPackId?: string;
+}
 
 /** Collects tools/connectors/hooks registered by loaded atom packs — the daemon's host sink for the
  *  `tool`/`connector`/`hook` atom kinds (see createChannelRegistry). */
@@ -8,6 +12,7 @@ export class AtomPackRegistry {
   readonly tools = new Map<string, Tool>();
   readonly connectors = new Map<string, Connector>();
   readonly hooks = new Map<HookEvent, HookDefinition[]>();
+  readonly workspaceExperiences = new Map<string, RegisteredWorkspaceExperience>();
   /** toolName → its source tag, so a rediscovery sweep can drop just the reloadable sources. */
   private readonly toolSources = new Map<string, string>();
   /** toolName → its specific origin name (atom-pack id / MCP server name), for per-agent atom
@@ -73,6 +78,22 @@ export class AtomPackRegistry {
     const list = this.hooks.get(hook.event) ?? [];
     list.push(hook);
     this.hooks.set(hook.event, list);
+  }
+
+  registerWorkspaceExperience(experience: WorkspaceExperienceDefinition, atomPackId?: string): void {
+    const existing = this.workspaceExperiences.get(experience.id);
+    if (existing) {
+      const current = existing.atomPackId ?? 'builtin';
+      const next = atomPackId ?? 'builtin';
+      throw new Error(
+        `duplicate workspace experience id "${experience.id}" from "${next}" already registered by "${current}"`
+      );
+    }
+    this.workspaceExperiences.set(experience.id, { ...experience, ...(atomPackId ? { atomPackId } : {}) });
+  }
+
+  clearWorkspaceExperiences(): void {
+    this.workspaceExperiences.clear();
   }
 
   /** Drop all registered hooks. Used before a re-discovery sweep so a removed atom pack's hooks

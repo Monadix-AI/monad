@@ -2,8 +2,8 @@ import type { Session, SessionId } from '@monad/protocol';
 import type { Agent } from '@/agent/index.ts';
 
 import { expect, test } from 'bun:test';
-import { mkdtempSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { homedir, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { newId } from '@monad/protocol';
 
@@ -120,6 +120,38 @@ test('setWorkspace resolves the path and preserves existing runtime config (MCP 
   expect(rt?.sandboxRoots).toEqual([resolve(dir)]); // normalized, not the raw '/x/./sub/..'
   expect(rt?.extraTools).toEqual([sentinelTool]); // merge did not drop the MCP tool
   store.close();
+});
+
+test('setWorkspace expands a leading ~ to the home directory', async () => {
+  const h = buildHandlers(mockModel());
+  const { sessionId } = await h.session.create({ title: 'room' });
+  const set = await h.session.setWorkspace({ id: sessionId as SessionId, cwd: '~' });
+  expect(set.cwd).toBe(homedir());
+  h.store.close();
+});
+
+test('setWorkspace resolves a relative path against the session’s current folder', async () => {
+  const h = buildHandlers(mockModel());
+  const { sessionId } = await h.session.create({ title: 'room' });
+  const base = tmpDir();
+  mkdirSync(join(base, 'sub'));
+
+  await h.session.setWorkspace({ id: sessionId as SessionId, cwd: base });
+  // 'sub' is relative → resolves against the current folder (base), not rejected.
+  const set = await h.session.setWorkspace({ id: sessionId as SessionId, cwd: 'sub' });
+  expect(set.cwd).toBe(join(base, 'sub'));
+  h.store.close();
+});
+
+test('workspaceMeta wraps the git summary and workspaceGit remains a git-only alias', async () => {
+  const h = buildHandlers(mockModel());
+  const { sessionId } = await h.session.create({ title: 'room', cwd: tmpDir() });
+
+  await expect(h.session.workspaceMeta({ id: sessionId as SessionId })).resolves.toEqual({
+    git: { isRepo: false }
+  });
+  await expect(h.session.workspaceGit({ id: sessionId as SessionId })).resolves.toEqual({ isRepo: false });
+  h.store.close();
 });
 
 test('switching/clearing the folder drops the prior folder’s project skills (no stale carry-over)', async () => {

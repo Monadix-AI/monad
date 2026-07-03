@@ -1,4 +1,11 @@
-import type { NativeCliAgentView } from '@monad/protocol';
+import type {
+  CodexAppServerNotification,
+  CodexAppServerResponseItem,
+  CodexAppServerServerRequest,
+  CodexAppServerThreadReadResponse,
+  CodexAppServerTurnsPage,
+  NativeCliAgentView
+} from '@monad/protocol';
 import type {
   BuildNativeCliLaunchOptions,
   NativeCliLaunchSpec,
@@ -10,16 +17,104 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 
 import { defaultBinProbes, resolveBinary } from '@/infra/resolve-binary.ts';
+import { parseNativeCliArgumentSupport } from '@/services/native-cli/argument-support.ts';
 import { NativeCliError } from '@/services/native-cli/errors.ts';
 import { resizePty, sendPtyInput, stopPty } from '@/services/native-cli/pty.ts';
 
 const CODEX_APP_BIN = '/Applications/Codex.app/Contents/Resources/codex';
+const CODEX_NON_INTERACTIVE_ENV = { CODEX_NON_INTERACTIVE: '1' };
+const CODEX_SUPPORTED_MODELS = ['gpt-5.5', 'gpt-5.4', 'gpt-5.4-mini', 'gpt-5.3-codex', 'gpt-5.2'];
+
+type CodexJsonRpcResponse = {
+  id?: unknown;
+  error?: Record<string, unknown>;
+  result?: CodexAppServerThreadReadResponse | CodexAppServerTurnsPage | Record<string, unknown>;
+} & Record<string, unknown>;
+type CodexJsonRpcNotification = Partial<CodexAppServerNotification | CodexAppServerServerRequest> &
+  Record<string, unknown> & { method: string };
+type CodexResponseItemJson = Partial<CodexAppServerResponseItem> & Record<string, unknown> & { type: string };
+
+function isCodexJsonRpcNotification(record: Record<string, unknown>): record is CodexJsonRpcNotification {
+  return typeof record.method === 'string';
+}
+
+function isCodexJsonRpcResponse(record: Record<string, unknown>): record is CodexJsonRpcResponse {
+  return 'result' in record || 'error' in record;
+}
+
+function isCodexResponseItem(item: unknown): item is CodexResponseItemJson {
+  return (
+    !!item && typeof item === 'object' && !Array.isArray(item) && typeof (item as { type?: unknown }).type === 'string'
+  );
+}
+
+function hasFlag(args: string[], flag: string): boolean {
+  return args.some((arg) => arg === flag || arg.startsWith(`${flag}=`));
+}
+
+function withCodexSkipApprovalArgs(args: string[], skipProviderApprovals: boolean): string[] {
+  if (!skipProviderApprovals || hasFlag(args, '--ask-for-approval')) return args;
+  return [...args, '--ask-for-approval', 'never'];
+}
+
+function codexSkipApprovalArgs(args: string[], skipProviderApprovals: boolean): string[] {
+  if (!skipProviderApprovals || hasFlag(args, '--ask-for-approval')) return [];
+  return ['--ask-for-approval', 'never'];
+}
+
+function codexNonInteractiveEnv(env?: Record<string, string>): Record<string, string> {
+  return { ...(env ?? {}), ...CODEX_NON_INTERACTIVE_ENV };
+}
+
+function uniqueModelNames(names: string[]): string[] {
+  return [...new Set(names.map((name) => name.trim()).filter(Boolean))];
+}
+
+function parseCodexModelOptions(output: string): string[] {
+  const catalog = parseJsonObject(output);
+  const models = Array.isArray(catalog?.models) ? catalog.models : [];
+  const names = models
+    .map((model) => {
+      if (!model || typeof model !== 'object' || Array.isArray(model)) return undefined;
+      const item = model as Record<string, unknown>;
+      return item.visibility === 'list' && typeof item.slug === 'string' ? item.slug : undefined;
+    })
+    .filter((name): name is string => !!name);
+  return uniqueModelNames(names);
+}
+
+function parseCodexArgumentSupport(output: string): ReturnType<typeof parseNativeCliArgumentSupport> {
+  const catalog = parseJsonObject(output);
+  const models = Array.isArray(catalog?.models) ? catalog.models : [];
+  const reasoningEfforts = uniqueModelNames(
+    models.flatMap((model) => {
+      if (!model || typeof model !== 'object' || Array.isArray(model)) return [];
+      const levels = (model as Record<string, unknown>).supported_reasoning_levels;
+      if (!Array.isArray(levels)) return [];
+      return levels
+        .map((level) => {
+          if (!level || typeof level !== 'object' || Array.isArray(level)) return undefined;
+          const effort = (level as Record<string, unknown>).effort;
+          return typeof effort === 'string' ? effort : undefined;
+        })
+        .filter((effort): effort is string => !!effort);
+    })
+  );
+  const speeds = uniqueModelNames(
+    models.flatMap((model) => {
+      if (!model || typeof model !== 'object' || Array.isArray(model)) return [];
+      const tiers = (model as Record<string, unknown>).additional_speed_tiers;
+      return Array.isArray(tiers) ? tiers.filter((tier): tier is string => typeof tier === 'string') : [];
+    })
+  );
+  return { ...parseNativeCliArgumentSupport(output), reasoningEfforts, speeds };
+}
 
 function buildCodexAuthLaunch(agent: NativeCliAgentView, args: string[]): NativeCliLaunchSpec {
   return {
     argv: [agent.command, ...args],
     cwd: homedir(),
-    env: agent.env,
+    env: codexNonInteractiveEnv(agent.env),
     launchMode: 'pty',
     provider: 'codex',
     approvalOwnership: 'provider-owned',
@@ -28,11 +123,17 @@ function buildCodexAuthLaunch(agent: NativeCliAgentView, args: string[]): Native
 }
 
 function buildCodexLaunch(agent: NativeCliAgentView, opts: BuildNativeCliLaunchOptions): NativeCliLaunchSpec {
-  const args = agent.args ?? [];
+  let args = [...(agent.args ?? [])];
   const launchMode = opts.launchMode ?? agent.defaultLaunchMode;
   if (launchMode === 'app-server') {
     return {
-      argv: [agent.command, 'app-server', '--stdio', ...args],
+      argv: [
+        agent.command,
+        ...codexSkipApprovalArgs(args, !!opts.skipProviderApprovals),
+        'app-server',
+        '--stdio',
+        ...args
+      ],
       cwd: opts.workingPath,
       env: agent.env,
       launchMode,
@@ -53,6 +154,14 @@ function buildCodexLaunch(agent: NativeCliAgentView, opts: BuildNativeCliLaunchO
 
   const hasCd = args.includes('--cd') || args.includes('-C');
   const hasAltScreen = args.includes('--no-alt-screen');
+  args = withCodexSkipApprovalArgs(args, !!opts.skipProviderApprovals);
+  const modelId = opts.modelId ?? opts.modelName;
+  if (modelId && !hasFlag(args, '--model') && !hasFlag(args, '-m')) {
+    args.push('--model', modelId);
+  }
+  if (opts.reasoningEffort && !args.some((arg) => arg.startsWith('model_reasoning_effort'))) {
+    args.push('-c', `model_reasoning_effort="${opts.reasoningEffort}"`);
+  }
   return {
     argv: [
       agent.command,
@@ -89,6 +198,13 @@ function parseJsonObject(value: string): Record<string, unknown> | undefined {
   }
 }
 
+function stringValue(...values: unknown[]): string {
+  for (const value of values) {
+    if (typeof value === 'string') return value;
+  }
+  return '';
+}
+
 function parseStructuredAuthState(output: string): 'authenticated' | 'unauthenticated' | 'unknown' | undefined {
   for (const rawLine of output.split(/\r?\n/)) {
     const record = parseJsonObject(rawLine.trim());
@@ -122,7 +238,7 @@ function textFromCodexContent(content: unknown): string | undefined {
   return text || undefined;
 }
 
-function parseCodexResponseItem(item: Record<string, unknown>): NativeCliOutputEvent[] {
+function parseCodexResponseItem(item: CodexResponseItemJson): NativeCliOutputEvent[] {
   if (item.type === 'message' && item.role === 'assistant') {
     const text = textFromCodexContent(item.content);
     return text ? [{ type: 'agent_message', payload: { text } }] : [];
@@ -161,7 +277,7 @@ function parseCodexResponseItem(item: Record<string, unknown>): NativeCliOutputE
   return [];
 }
 
-function parseCodexApprovalRequest(record: Record<string, unknown>): NativeCliOutputEvent[] {
+function parseCodexApprovalRequest(record: CodexJsonRpcNotification): NativeCliOutputEvent[] {
   const params = record.params;
   if (!params || typeof params !== 'object' || Array.isArray(params)) return [];
   const p = params as Record<string, unknown>;
@@ -264,16 +380,25 @@ function parseCodexApprovalRequest(record: Record<string, unknown>): NativeCliOu
   return [];
 }
 
-function parseCodexServerNotification(record: Record<string, unknown>): NativeCliOutputEvent[] {
+function parseCodexServerNotification(record: CodexJsonRpcNotification): NativeCliOutputEvent[] {
   const params = record.params;
   if (!params || typeof params !== 'object' || Array.isArray(params)) return [];
   const p = params as Record<string, unknown>;
 
   if (record.method === 'rawResponseItem/completed') {
     const item = p.item;
-    if (item && typeof item === 'object' && !Array.isArray(item)) {
-      return parseCodexResponseItem(item as Record<string, unknown>);
+    if (isCodexResponseItem(item)) {
+      return parseCodexResponseItem(item);
     }
+  }
+
+  if (record.method === 'turn/completed') {
+    return [
+      {
+        type: 'agent_message',
+        payload: { text: stringValue(p.text, p.result, p.outputText), final: true }
+      }
+    ];
   }
 
   if (record.method === 'thread/status/changed' && typeof p.threadId === 'string') {
@@ -303,7 +428,21 @@ function parseCodexServerNotification(record: Record<string, unknown>): NativeCl
   return [];
 }
 
-function parseCodexClientResponse(record: Record<string, unknown>): NativeCliOutputEvent[] {
+function parseCodexClientResponse(record: CodexJsonRpcResponse): NativeCliOutputEvent[] {
+  const error = record.error;
+  if (error && typeof error === 'object' && !Array.isArray(error)) {
+    const e = error as Record<string, unknown>;
+    return [
+      {
+        type: 'provider_error',
+        payload: compactObject({
+          responseId: record.id,
+          code: e.code,
+          message: typeof e.message === 'string' ? e.message : JSON.stringify(e)
+        })
+      }
+    ];
+  }
   const result = record.result;
   if (!result || typeof result !== 'object' || Array.isArray(result)) return [];
   const r = result as Record<string, unknown>;
@@ -343,15 +482,19 @@ function parseCodexSessionJsonl(chunk: string): NativeCliOutputEvent[] {
     const record = parseJsonObject(line);
     if (!record) continue;
     const payload = record.payload;
-    const responseEvents = parseCodexClientResponse(record);
-    if (responseEvents.length > 0) {
-      events.push(...responseEvents);
-      continue;
+    if (isCodexJsonRpcResponse(record)) {
+      const responseEvents = parseCodexClientResponse(record);
+      if (responseEvents.length > 0) {
+        events.push(...responseEvents);
+        continue;
+      }
     }
-    const appServerEvents = [...parseCodexApprovalRequest(record), ...parseCodexServerNotification(record)];
-    if (appServerEvents.length > 0) {
-      events.push(...appServerEvents);
-      continue;
+    if (isCodexJsonRpcNotification(record)) {
+      const appServerEvents = [...parseCodexApprovalRequest(record), ...parseCodexServerNotification(record)];
+      if (appServerEvents.length > 0) {
+        events.push(...appServerEvents);
+        continue;
+      }
     }
 
     if (!payload || typeof payload !== 'object') continue;
@@ -374,7 +517,7 @@ function parseCodexSessionJsonl(chunk: string): NativeCliOutputEvent[] {
       continue;
     }
 
-    if (record.type === 'response_item') events.push(...parseCodexResponseItem(p));
+    if (record.type === 'response_item' && isCodexResponseItem(p)) events.push(...parseCodexResponseItem(p));
   }
   return events;
 }
@@ -413,11 +556,23 @@ function initializeCodex(
         params: {
           threadId: context.providerSessionRef,
           cwd: context.workingPath,
+          ...((context.modelId ?? context.modelName) ? { model: context.modelId ?? context.modelName } : {}),
+          ...(context.reasoningEffort ? { modelReasoningEffort: context.reasoningEffort } : {}),
+          ...(context.developerInstructions ? { developerInstructions: context.developerInstructions } : {}),
           excludeTurns: true,
           initialTurnsPage: buildCodexInitialTurnsPage()
         }
       }
-    : { method: 'thread/start', id: threadId, params: { cwd: context.workingPath } };
+    : {
+        method: 'thread/start',
+        id: threadId,
+        params: {
+          cwd: context.workingPath,
+          ...((context.modelId ?? context.modelName) ? { model: context.modelId ?? context.modelName } : {}),
+          ...(context.reasoningEffort ? { modelReasoningEffort: context.reasoningEffort } : {}),
+          ...(context.developerInstructions ? { developerInstructions: context.developerInstructions } : {})
+        }
+      };
   for (const message of [
     {
       method: 'initialize',
@@ -528,6 +683,7 @@ function stopCodex(handle: Parameters<NativeCliProviderAdapter['stop']>[0]): voi
 
 export const codexNativeCliAdapter: NativeCliProviderAdapter = {
   provider: 'codex',
+  productIcon: 'codex',
   detect(probes = defaultBinProbes) {
     const codexBin = resolveBinary('codex', [CODEX_APP_BIN], probes);
     const installed = codexBin !== undefined || probes.exists(join(homedir(), '.codex'));
@@ -535,11 +691,14 @@ export const codexNativeCliAdapter: NativeCliProviderAdapter = {
       id: 'codex',
       label: 'Codex',
       provider: 'codex',
+      productIcon: codexNativeCliAdapter.productIcon,
       command: 'codex',
       args: [],
+      modelOptions: codexNativeCliAdapter.listSupportedModels(),
       defaultLaunchMode: 'pty',
       supportedLaunchModes: ['pty', 'app-server', 'remote-control'],
       installHint: 'Install Codex CLI or Codex.app, then sign in with codex login.',
+      installUrl: 'https://developers.openai.com/codex/cli',
       installed,
       resolvedBinPath: codexBin,
       capabilities: {
@@ -550,6 +709,18 @@ export const codexNativeCliAdapter: NativeCliProviderAdapter = {
       }
     };
   },
+  resolveCommand(command, probes = defaultBinProbes) {
+    return resolveBinary(command, command === 'codex' ? [CODEX_APP_BIN] : [], probes);
+  },
+  listSupportedModels(agent) {
+    return agent?.modelOptions?.length ? agent.modelOptions : CODEX_SUPPORTED_MODELS;
+  },
+  modelOptions(agent) {
+    return {
+      launch: buildCodexAuthLaunch(agent, ['debug', 'models', '--bundled']),
+      parse: (output) => parseCodexModelOptions(output)
+    };
+  },
   buildLaunch: buildCodexLaunch,
   buildAuthLaunch(agent) {
     return buildCodexAuthLaunch(agent, ['login']);
@@ -557,12 +728,23 @@ export const codexNativeCliAdapter: NativeCliProviderAdapter = {
   buildAuthStatusLaunch(agent) {
     return buildCodexAuthLaunch(agent, ['login', 'status']);
   },
+  authStatus(agent) {
+    return {
+      launch: buildCodexAuthLaunch(agent, ['login', 'status']),
+      parse: (output, exitCode) => codexNativeCliAdapter.parseAuthStatus(output, exitCode)
+    };
+  },
+  argumentSupport(agent) {
+    return {
+      launch: buildCodexAuthLaunch(agent, ['debug', 'models', '--bundled']),
+      parse: (output) => parseCodexArgumentSupport(output)
+    };
+  },
   parseAuthStatus(output, exitCode) {
     const structured = parseStructuredAuthState(output);
     if (structured) return structured;
-    if (exitCode === 0 && /logged in|authenticated|signed in/i.test(output)) return 'authenticated';
-    if (/not logged in|not authenticated|logged out|unauthenticated|sign in|login/i.test(output))
-      return 'unauthenticated';
+    if (exitCode === 0) return 'authenticated';
+    if (exitCode !== null) return 'unauthenticated';
     return 'unknown';
   },
   initialize: initializeCodex,

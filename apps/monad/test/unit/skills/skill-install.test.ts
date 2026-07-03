@@ -156,6 +156,26 @@ test('accepts a github repo URL with ?skill= selector and installs only the matc
   expect(await Bun.file(join(skillsDir, 'alpha', 'SKILL.md')).exists()).toBe(false);
 });
 
+test('uses a github ?skill= selector to find a nested skill packet', async () => {
+  const out = await installSkill('https://github.com/acme/suite?skill=grill-me', {
+    skillsDir,
+    fetch: fakeFetch(
+      {
+        'README.md': 'suite',
+        'skills/personal/grill-me/SKILL.md': md('grill-me'),
+        'skills/personal/grill-me/examples.md': 'examples',
+        'skills/personal/edit-article/SKILL.md': md('edit-article')
+      },
+      SHA
+    ),
+    consent: () => true
+  });
+
+  expect(out.skills).toEqual(['grill-me']);
+  expect(await Bun.file(join(skillsDir, 'grill-me', 'examples.md')).exists()).toBe(true);
+  expect(await Bun.file(join(skillsDir, 'edit-article', 'SKILL.md')).exists()).toBe(false);
+});
+
 test('accepts a GitHub SKILL.md page URL and installs that skill directory at that ref', async () => {
   let fetched: Parameters<SkillFetcher>[0] | undefined;
   const out = await installSkill('https://github.com/nolangz/skills/blob/main/pixel2motion/SKILL.md', {

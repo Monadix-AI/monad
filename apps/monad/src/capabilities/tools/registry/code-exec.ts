@@ -1,15 +1,27 @@
-// code_execute — pluggable backend (configured via agent.tools.codeExecBackend, default 'local').
-// Managed microVM backends (E2B, Vercel Sandbox) plug in behind CodeExecBackend later.
+// code_execute — pluggable backend (configured via agent.tools.codeExecBackend).
 //
-// SECURITY: the local backend runs in a plain subprocess — gated (highRisk) and capped,
-// but NOT truly isolated (no microVM). A snippet can do anything the daemon user can,
-// same as shell_exec. For untrusted code, use a real sandbox backend.
+// Backends:
+//   follow-system (default, alias: local) — delegates to the active OS sandbox launcher via
+//     sandboxedSpawn; whatever launcher is configured (Seatbelt, Docker, E2B, none) applies.
+//   docker — forces a disposable Docker/Podman container regardless of the OS sandbox setting.
+//   e2b   — forces an E2B cloud microVM regardless of the OS sandbox setting.
+//
+// SECURITY: 'follow-system' with launcher kind:'none' runs in a plain subprocess — gated
+// (highRisk) and capped, but NOT truly isolated. For strong isolation use docker or e2b.
 
+import type { SandboxProcess } from '@monad/sdk-atom';
 import type { Tool } from '../types.ts';
 
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import {
+  configureDockerImage,
+  detectDockerRuntime,
+  dockerLauncher,
+  dockerRuntimeAvailable,
+  e2bLauncher
+} from '@monad/atoms';
 import { z } from 'zod';
 
 import { findGitBash } from '../backends.ts';
@@ -35,6 +47,8 @@ interface CodeExecRequest {
   sessionId?: string;
   /** Session cancellation — the backend should kill the running snippet when it aborts. */
   signal?: AbortSignal;
+  /** Per-call e2b API key override (from config, resolved before reaching here). */
+  e2bCredential?: string;
 }
 
 export interface CodeExecResult {
@@ -77,68 +91,169 @@ function interpreter(language: CodeLanguage): string {
   return 'bash';
 }
 
-export const localBackend: CodeExecBackend = {
-  name: 'local',
+// Docker and E2B backends run Linux containers regardless of host OS — always use Linux names.
+function containerInterpreter(language: CodeLanguage): string {
+  if (language === 'python') return 'python3';
+  if (language === 'javascript') return 'bun';
+  return 'bash';
+}
+
+// Shared helper: drain a SandboxProcess's stdout/stderr with a timeout + abort signal.
+async function drainProcess(
+  proc: SandboxProcess,
+  req: Pick<CodeExecRequest, 'timeoutMs' | 'signal'>,
+  backendName: string
+): Promise<CodeExecResult> {
+  const limit = req.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    proc.kill('SIGKILL');
+  }, limit);
+  const completion = (async () => {
+    const [out, err] = await Promise.all([
+      new Response(proc.stdout as ReadableStream<Uint8Array>).bytes(),
+      new Response(proc.stderr as ReadableStream<Uint8Array>).bytes()
+    ]);
+    return { out, err, exitCode: await proc.exited };
+  })();
+  // Suppress unhandled rejection when the abort path wins the race and completion later fails.
+  completion.catch(() => {});
+  let abortCleanup: (() => void) | undefined;
+  const aborted = new Promise<never>((_, reject) => {
+    const fail = () => {
+      proc.kill('SIGKILL');
+      reject(new CodeExecError('code execution aborted'));
+    };
+    if (req.signal?.aborted) {
+      fail();
+    } else if (req.signal) {
+      const sig = req.signal;
+      sig.addEventListener('abort', fail, { once: true });
+      abortCleanup = () => sig.removeEventListener('abort', fail);
+    }
+  });
+  try {
+    const { out, err, exitCode } = req.signal ? await Promise.race([completion, aborted]) : await completion;
+    if (timedOut) throw new CodeExecError(`code execution timed out after ${limit}ms`);
+    return { stdout: clip(out), stderr: clip(err), exitCode, backend: backendName };
+  } finally {
+    clearTimeout(timer);
+    abortCleanup?.();
+  }
+}
+
+// 'follow-system' (alias 'local'): routes through sandboxedSpawn → activeLauncher.
+// Whatever OS sandbox the daemon has selected (Seatbelt / Docker / E2B / none) applies.
+export const followSystemBackend: CodeExecBackend = {
+  name: 'follow-system',
   isAvailable: () => true,
   async execute(req) {
     const dir = await mkdtemp(join(tmpdir(), 'monad-code-'));
     const file = join(dir, `snippet.${FILE_EXT[req.language]}`);
     try {
       await Bun.write(file, req.code);
-      const limit = req.timeoutMs ?? DEFAULT_TIMEOUT_MS;
       const cwd = req.cwd ?? process.cwd();
       const proc = sandboxedSpawn(
         [interpreter(req.language), file],
         { cwd, stdout: 'pipe', stderr: 'pipe' },
         // Confine writes to the session roots plus the snippet temp dir; net comes from config.
         // When sandboxRoots is undefined (unrestricted) the policy applies no write confinement.
-        buildSandboxPolicy(req.sandboxRoots, [dir]),
+        buildSandboxPolicy(req.sandboxRoots, [dir], req.sessionId),
         { confine: req.confine ?? true, sessionId: req.sessionId }
       );
-      let timedOut = false;
-      const timer = setTimeout(() => {
-        timedOut = true;
-        proc.kill('SIGKILL');
-      }, limit);
-      // Race completion against abort: a killed interpreter may leave a grandchild (e.g. a
-      // `sleep` spawned by a bash script) holding the stdout pipe open, so we must not block
-      // on the stream read after an abort — reject promptly instead.
-      const completion = (async () => {
-        const [out, err] = await Promise.all([new Response(proc.stdout).bytes(), new Response(proc.stderr).bytes()]);
-        return { out, err, exitCode: await proc.exited };
-      })();
-      const aborted = new Promise<never>((_, reject) => {
-        const fail = () => {
-          proc.kill('SIGKILL');
-          reject(new CodeExecError('code execution aborted'));
-        };
-        if (req.signal?.aborted) fail();
-        else req.signal?.addEventListener('abort', fail, { once: true });
-      });
-      try {
-        const { out, err, exitCode } = req.signal ? await Promise.race([completion, aborted]) : await completion;
-        if (timedOut) throw new CodeExecError(`code execution timed out after ${limit}ms`);
-        return { stdout: clip(out), stderr: clip(err), exitCode, backend: 'local' };
-      } finally {
-        clearTimeout(timer);
-      }
+      return await drainProcess(proc as unknown as SandboxProcess, req, 'follow-system');
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
   }
 };
 
-const BACKENDS: Record<string, CodeExecBackend> = { local: localBackend };
+// 'docker': forces a fresh Docker/Podman container per run, regardless of OS sandbox config.
+// The temp dir is mounted rw so the interpreter can read the staged snippet file.
+const dockerCodeExecBackend: CodeExecBackend = {
+  name: 'docker',
+  isAvailable: () => dockerRuntimeAvailable(),
+  async execute(req) {
+    if (!dockerRuntimeAvailable())
+      throw new CodeExecError('docker backend: no container runtime available (install Docker or Podman)');
+    const dir = await mkdtemp(join(tmpdir(), 'monad-code-'));
+    const file = join(dir, `snippet.${FILE_EXT[req.language]}`);
+    try {
+      await Bun.write(file, req.code);
+      // Docker runs in an isolated container — only the temp snippet dir needs to be writable.
+      // Passing [dir] as writableRoots (not undefined) prevents the docker launcher from falling
+      // through to its unrestricted-mode branch that would mount the entire host root rw.
+      const policy = buildSandboxPolicy([dir], []);
+      if (!dockerLauncher.spawn) throw new CodeExecError('docker backend: launcher does not support spawn');
+      const proc = dockerLauncher.spawn(
+        [containerInterpreter(req.language), file],
+        { cwd: dir, sessionId: req.sessionId },
+        policy
+      );
+      return await drainProcess(proc, req, 'docker');
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  }
+};
 
-let _codeExecBackend = 'local';
+// 'e2b': forces an E2B cloud microVM per run (or reuses a session-scoped one).
+// e2bLauncher.spawn's stageLocalFiles uploads the local snippet to the remote sandbox.
+const e2bCodeExecBackend: CodeExecBackend = {
+  name: 'e2b',
+  isAvailable: () => Boolean(_e2bApiKey),
+  async execute(req) {
+    const apiKey = req.e2bCredential ?? _e2bApiKey;
+    if (!apiKey) throw new CodeExecError('e2b backend: no API key configured (set agent.tools.codeExecE2b.apiKey)');
+    const dir = await mkdtemp(join(tmpdir(), 'monad-code-'));
+    const file = join(dir, `snippet.${FILE_EXT[req.language]}`);
+    try {
+      await Bun.write(file, req.code);
+      // TODO(P2): pass templateId from config (codeExecE2b.templateId) once the field is added.
+      if (!e2bLauncher.spawn) throw new CodeExecError('e2b backend: launcher does not support spawn');
+      const proc = e2bLauncher.spawn(
+        [containerInterpreter(req.language), file],
+        { cwd: '/home/user', sessionId: req.sessionId, credential: apiKey },
+        {}
+      );
+      return await drainProcess(proc, req, 'e2b');
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  }
+};
+
+// Keep 'local' as a backward-compatible alias for 'follow-system'.
+const BACKENDS: Record<string, CodeExecBackend> = {
+  'follow-system': followSystemBackend,
+  local: followSystemBackend,
+  docker: dockerCodeExecBackend,
+  e2b: e2bCodeExecBackend
+};
+
+let _codeExecBackend = 'follow-system';
+let _e2bApiKey: string | undefined;
 
 /** Policy for the target:'host' escape — run unconfined on the real host. */
 export type HostExecPolicy = 'deny' | 'ask' | 'allow';
 let _hostExec: HostExecPolicy = 'ask';
 
+export interface CodeExecConfig {
+  backend: string;
+  e2bApiKey?: string;
+  dockerImage?: string;
+}
+
 /** Call once after config load to wire up the code-exec backend from config.agent.tools. */
-export function configureCodeExec(backendName: string): void {
-  _codeExecBackend = backendName;
+export function configureCodeExec(cfg: string | CodeExecConfig): void {
+  if (typeof cfg === 'string') {
+    _codeExecBackend = cfg;
+    return;
+  }
+  _codeExecBackend = cfg.backend;
+  _e2bApiKey = cfg.e2bApiKey;
+  if (cfg.dockerImage) configureDockerImage(cfg.dockerImage);
 }
 
 /** Call once after config load to set the host-execution policy (agent.sandbox.hostExec). */
@@ -146,12 +261,27 @@ export function configureHostExec(policy: HostExecPolicy): void {
   _hostExec = policy;
 }
 
+/** Probe docker availability (async, cached). Call at boot so isAvailable() is synchronous. */
+export { detectDockerRuntime };
+
+/** Returns the backends with their current availability. Used by the tool-backends handler. */
+function _codeExecBackendStatus(): { backend: string; available: Record<string, boolean> } {
+  return {
+    backend: _codeExecBackend,
+    available: {
+      'follow-system': true,
+      docker: dockerRuntimeAvailable(),
+      e2b: Boolean(_e2bApiKey)
+    }
+  };
+}
+
 export function selectCodeExecBackend(): CodeExecBackend {
   const name = _codeExecBackend;
   const backend = BACKENDS[name];
   if (!backend) {
     throw new CodeExecError(
-      `unknown code-exec backend "${name}" (built-in: ${Object.keys(BACKENDS).join(', ')}). For a real sandbox, configure an external sandbox MCP server instead.`
+      `unknown code-exec backend "${name}" (built-in: follow-system, docker, e2b). For a real sandbox, configure an external sandbox MCP server instead.`
     );
   }
   return backend;
@@ -177,6 +307,9 @@ export const codeExecTool: Tool<z.infer<typeof codeExecInput>, CodeExecResult> =
   // sandbox run is safe to execute without interrupting the user — the sandbox is the control.
   needsApproval: (input) => {
     if ((input.target ?? 'sandbox') === 'host') return true;
+    // Docker and E2B are always confined — no approval needed even without an OS launcher.
+    const b = _codeExecBackend;
+    if (b === 'docker' || b === 'e2b') return false;
     return sandboxLauncher().kind === 'none';
   },
   // Separate remembered approvals for host escape vs sandbox runs. 'target:host' is the dangerous
@@ -188,6 +321,20 @@ export const codeExecTool: Tool<z.infer<typeof codeExecInput>, CodeExecResult> =
       throw new CodeExecError('host execution is disabled by policy (agent.sandbox.hostExec="deny")');
     }
     const backend = selectCodeExecBackend();
+    if (!backend.isAvailable()) {
+      if (backend.name === 'docker') {
+        throw new CodeExecError(
+          'code_execute: Docker/Podman is not running — start Docker Desktop or run `podman machine start`, then retry. ' +
+            'To use a different backend, update agent.tools.codeExecBackend in settings.'
+        );
+      }
+      if (backend.name === 'e2b') {
+        throw new CodeExecError(
+          'code_execute: E2B backend has no API key — set agent.tools.codeExecE2b.apiKey in config or switch to a different backend in settings.'
+        );
+      }
+      throw new CodeExecError(`code_execute: backend "${backend.name}" is not available`);
+    }
     const result = await backend.execute({
       language,
       code,
@@ -195,7 +342,8 @@ export const codeExecTool: Tool<z.infer<typeof codeExecInput>, CodeExecResult> =
       sandboxRoots: ctx.sandboxRoots,
       confine: target !== 'host',
       sessionId: ctx.sessionId,
-      timeoutMs
+      timeoutMs,
+      e2bCredential: _e2bApiKey
     });
     return toolResult(result);
   }

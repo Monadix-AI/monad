@@ -1,22 +1,22 @@
-import type { AcpAgentConfig, McpServerConfig, NativeCliAgentConfig } from '@monad/home';
+import type { AcpAgentConfig, NativeCliAgentConfig } from '@monad/home';
 import type {
-  ChannelResponseNextTarget,
   ChatMessage,
   Event,
   SendMessageRequest,
-  Session,
   SessionId,
-  SessionMcpServer,
   SessionTransport,
-  SessionUiEvent
+  SessionUiEvent,
+  TranscriptTarget,
+  TranscriptTargetId
 } from '@monad/protocol';
 import type { ImageAttachment } from '@/agent/index.ts';
 import type { Tool, ToolBackends } from '@/capabilities/tools/types.ts';
 import type { CommandBundle, LifecycleOps } from '@/handlers/commands/index.ts';
 import type { EventSink, SessionContext } from '@/handlers/session/context.ts';
+import type { ManagedNativeCliProjectMessageSender } from '@/handlers/session/handlers/messaging-notices.ts';
 
 import { loadAll } from '@monad/home';
-import { newId, parseChannelStructuredResponse } from '@monad/protocol';
+import { newId } from '@monad/protocol';
 
 import { parseDurableSummary } from '@/agent/history.ts';
 import { extractError } from '@/agent/index.ts';
@@ -28,18 +28,36 @@ import {
   normalizeChannelModeratorId,
   routeChannelMessage
 } from '@/handlers/session/channel-routing.ts';
-import { SessionUiProjector } from '@/handlers/session/ui-projection.ts';
+import { createAcpChannelDelegation } from '@/handlers/session/handlers/acp-channel-delegation.ts';
+import { createManagedNativeCliDelivery } from '@/handlers/session/handlers/managed-native-cli-delivery.ts';
 import {
-  acpAuthGuidance,
-  directDelegate,
-  sessionMcpServersToAcp,
-  toAcpMcpServers
-} from '@/services/delegation/acp-delegate.ts';
+  channelDelegateMcpServers,
+  isChannelStructuredSession,
+  isWorkplaceProjectTarget,
+  managedNativeCliProjectMembers,
+  nativeCliProjectMemberDisplayName,
+  nativeCliProjectMemberDisplayNameForAgent,
+  nativeCliProjectMemberRuntimeName,
+  nativeCliProjectMemberSettings,
+  nativeCliProjectMemberTemplateName,
+  workplaceProjectMembers
+} from '@/handlers/session/handlers/messaging-members.ts';
+import { SessionUiProjector } from '@/handlers/session/ui-projection.ts';
+import { acpAuthGuidance, directDelegate } from '@/services/delegation/acp-delegate.ts';
+import { managedProjectLaunchMode } from '@/services/native-cli/managed-project.ts';
+
+export type { ManagedNativeCliProjectMessageSender } from '@/handlers/session/handlers/messaging-notices.ts';
+
+// Re-exported for existing import sites (tests import member/channel helpers from this module).
+export {
+  channelDelegateMcpServers,
+  isChannelStructuredSession
+} from '@/handlers/session/handlers/messaging-members.ts';
 
 // Access control reads the write policy STORED on the session (origin.writableBy) — derived from the
 // originating surface at creation, overridable per-session — not a label→transport lookup at the call
 // site. Sessions with no origin stay unrestricted.
-function assertWriteAllowed(session: Session, transport: SessionTransport): void {
+function assertWriteAllowed(session: TranscriptTarget, transport: SessionTransport): void {
   const writableBy = session.origin?.writableBy;
   if (!writableBy) return;
   if (!writableBy.includes(transport)) {
@@ -54,8 +72,6 @@ export interface MessagingCommandDeps {
 }
 
 type ToolFilter = (toolName: string) => boolean;
-const CONTROL_ROOM_SESSION_PREFIX = 'Control Room: ';
-const WORKPLACE_SESSION_PREFIX = 'Workplace: ';
 
 // Size of the live UI snapshot window. Older history is paged lazily over GET /ui-items.
 // Keep ≥ a realistic single agent round so a tool call+result pair never straddles the window.
@@ -79,22 +95,6 @@ function lastAgentMessageText(round: Event[]): string | null {
   return null;
 }
 
-export function isChannelStructuredSession(session: Pick<Session, 'origin' | 'title'>): boolean {
-  return (
-    session.origin?.client === 'control-room' ||
-    session.origin?.client === 'workplace' ||
-    session.title.startsWith(CONTROL_ROOM_SESSION_PREFIX) ||
-    session.title.startsWith(WORKPLACE_SESSION_PREFIX)
-  );
-}
-
-export function channelDelegateMcpServers(
-  configured: readonly McpServerConfig[] | undefined,
-  sessionScoped: readonly SessionMcpServer[] | undefined
-) {
-  return [...toAcpMcpServers([...(configured ?? [])]), ...sessionMcpServersToAcp([...(sessionScoped ?? [])])];
-}
-
 export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingCommandDeps) {
   const {
     deps: { agent, bus, cache, store, ownerPrincipalId, sessionSandbox, agentToolFilter, agentSandboxRoots, log },
@@ -103,182 +103,44 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
     beginRun,
     makeEmit,
     persistAndRetire,
-    requireSession
+    requireTranscriptTarget
   } = ctx;
+
+  // Effective fs/shell sandbox roots for a turn, single precedence chain so every call site agrees:
+  // an explicit per-turn override (the editor's workspace) > the per-session runtime entry (set by
+  // applyWorkspaceRuntime on /workdir, create, update) > the persisted session.cwd (source of truth,
+  // so a working folder survives a daemon restart that left the in-memory runtime map empty) > the
+  // bound agent's per-agent override. A site that also has an async ephemeral fallback applies it to
+  // this result (`?? await …`).
+  const sandboxRootsFor = (
+    sessionId: TranscriptTargetId,
+    cwd: string | undefined,
+    rt: { sandboxRoots?: string[] } | undefined,
+    override?: string[]
+  ) =>
+    override ??
+    rt?.sandboxRoots ??
+    (cwd ? [cwd] : sessionId.startsWith('ses_') ? agentSandboxRoots?.(sessionId as SessionId) : undefined);
 
   const runner = cmd ? { store, bus, lifecycle: cmd.lifecycle, commands: cmd.commands, ownerPrincipalId } : null;
 
-  function startAcpAssignedTask({
-    sessionId,
-    spec,
-    text,
-    ambientContext,
-    mcpServers
-  }: {
-    sessionId: SessionId;
-    spec: AcpAgentConfig;
-    text: string;
-    ambientContext?: string;
-    mcpServers?: Parameters<typeof directDelegate>[2]['mcpServers'];
-  }): void {
-    log?.debug({ sessionId, event: 'channel.next.dispatch', agent: spec.name, text }, 'channel next dispatch');
-    const round: Event[] = [];
-    const emit = makeEmit(round);
-    const controller = new AbortController();
-    const agentMsgId = newId('msg');
-    const acpToolCallId = newId('tc');
-    let tokenIndex = 0;
-    let acpProcessOutput = '';
-    let acpResponseOutput = '';
+  const managedNativeCliDelivery = createManagedNativeCliDelivery(ctx);
+  const {
+    completeManagedNativeCliThinking,
+    retireManagedNativeCliThinking,
+    deliverProjectMessageToManagedNativeCliMembers,
+    deliverDirectMessageToManagedNativeCliMember,
+    startManagedNativeCliRuntimeWithRecovery,
+    beginProjectQaWallMessage,
+    completeProjectQaWallMessage
+  } = managedNativeCliDelivery;
 
-    const emitAcpActivityProgress = () => {
-      const sections = [
-        acpProcessOutput.trim(),
-        acpResponseOutput ? `response stream:\n${acpResponseOutput}` : ''
-      ].filter(Boolean);
-      emit({
-        id: newId('evt'),
-        sessionId,
-        type: 'tool.progress',
-        actorAgentId: null,
-        payload: {
-          toolCallId: acpToolCallId,
-          tool: `acp:${spec.name}`,
-          output: sections.join('\n\n') || 'waiting for response...'
-        },
-        at: new Date().toISOString()
-      });
-    };
+  const acpDelegation = createAcpChannelDelegation(ctx, sandboxRootsFor);
+  const { dispatchChannelNextTargets, deliverProjectMessageToAcpMembers } = acpDelegation;
 
-    emit({
-      id: newId('evt'),
-      sessionId,
-      type: 'tool.called',
-      actorAgentId: null,
-      payload: { toolCallId: acpToolCallId, tool: `acp:${spec.name}`, input: { agent: spec.name } },
-      at: new Date().toISOString()
-    });
-    emitAcpActivityProgress();
-
-    const rt = runtime.get(sessionId);
-    directDelegate(spec, composeAcpChannelPrompt(text, ambientContext), {
-      sessionId,
-      signal: controller.signal,
-      sandboxRoots: rt?.sandboxRoots ?? agentSandboxRoots?.(sessionId),
-      backends: rt?.backends,
-      toolFilter: rt?.toolFilter,
-      extraTools: rt?.extraTools,
-      extraSkills: rt?.extraSkills,
-      mcpServers,
-      onChunk: (delta) => {
-        emit({
-          id: newId('evt'),
-          sessionId,
-          type: 'agent.token',
-          actorAgentId: null,
-          payload: { messageId: agentMsgId, agentName: spec.name, delta, index: tokenIndex++ },
-          at: new Date().toISOString()
-        });
-        acpResponseOutput += delta;
-        emitAcpActivityProgress();
-      },
-      onActivity: (output) => {
-        acpProcessOutput = output;
-        emitAcpActivityProgress();
-      }
-    })
-      .then((fullText) => {
-        emit({
-          id: newId('evt'),
-          sessionId,
-          type: 'tool.result',
-          actorAgentId: null,
-          payload: { toolCallId: acpToolCallId, tool: `acp:${spec.name}`, ok: true, result: 'completed' },
-          at: new Date().toISOString()
-        });
-        store.insertMessage(agentMsgId, sessionId, fullText, new Date().toISOString(), 'assistant', {
-          data: { agentName: spec.name }
-        });
-        emit({
-          id: newId('evt'),
-          sessionId,
-          type: 'agent.message',
-          actorAgentId: null,
-          payload: { messageId: agentMsgId, agentName: spec.name, text: fullText },
-          at: new Date().toISOString()
-        });
-        persistAndRetire(sessionId, round);
-      })
-      .catch((err: unknown) => {
-        const { code, message } = extractError(err);
-        emit({
-          id: newId('evt'),
-          sessionId,
-          type: 'tool.result',
-          actorAgentId: null,
-          payload: { toolCallId: acpToolCallId, tool: `acp:${spec.name}`, ok: false, result: message },
-          at: new Date().toISOString()
-        });
-        store.insertMessage(
-          agentMsgId,
-          sessionId,
-          code ? `[${code}] ${message}` : message,
-          new Date().toISOString(),
-          'assistant',
-          { type: 'error', data: { agentName: spec.name } }
-        );
-        emit({
-          id: newId('evt'),
-          sessionId,
-          type: 'agent.error',
-          actorAgentId: null,
-          payload: { messageId: agentMsgId, agentName: spec.name, code, message },
-          at: new Date().toISOString()
-        });
-        persistAndRetire(sessionId, round);
-      });
-  }
-
-  async function dispatchChannelNextTargets({
-    sessionId,
-    responseText,
-    ambientContext,
-    acpAgents,
-    mcpServers
-  }: {
-    sessionId: SessionId;
-    responseText: string;
-    ambientContext: string;
-    acpAgents: readonly AcpAgentConfig[];
-    mcpServers?: Parameters<typeof directDelegate>[2]['mcpServers'];
-  }): Promise<void> {
-    const structured = parseChannelStructuredResponse(responseText);
-    if (!structured?.next.length) return;
-    const acpByName = new Map(acpAgents.map((agent) => [agent.name, agent]));
-    for (const target of structured.next) {
-      if (!target.agentId.startsWith('acp:')) continue;
-      const agentName = target.agentId.slice(4);
-      const spec = acpByName.get(agentName);
-      if (!spec) continue;
-      startAcpAssignedTask({
-        sessionId,
-        spec,
-        text: channelNextPrompt(target),
-        ambientContext,
-        mcpServers
-      });
-    }
-  }
-
-  function channelNextPrompt(target: ChannelResponseNextTarget): string {
-    return [
-      target.title ? `Task: ${target.title}` : '',
-      target.context ? `Context:\n${target.context}` : '',
-      target.prompt
-    ]
-      .filter(Boolean)
-      .join('\n\n');
-  }
+  const runtimeForTranscriptTarget = (sessionId: TranscriptTargetId) => runtime.get(sessionId);
+  const agentToolFilterForTranscriptTarget = (sessionId: TranscriptTargetId) =>
+    sessionId.startsWith('ses_') ? agentToolFilter?.(sessionId as SessionId) : undefined;
 
   const handlers = {
     async send({
@@ -287,8 +149,8 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
       generate,
       ambientContext,
       onComplete
-    }: { sessionId: SessionId; onComplete?: (text: string) => void | Promise<void> } & SendMessageRequest) {
-      const session = requireSession(sessionId);
+    }: { sessionId: TranscriptTargetId; onComplete?: (text: string) => void | Promise<void> } & SendMessageRequest) {
+      const session = requireTranscriptTarget(sessionId);
       assertWriteAllowed(session, 'http');
       log?.debug({ sessionId, event: 'session.send.accept', text, generate, ambientContext }, 'session send accept');
       // `busy` = a prior turn is still streaming for this session — the concurrency guard refuses a
@@ -301,7 +163,7 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
         store.insertMessage(messageId, sessionId, text, new Date().toISOString(), 'user');
         makeEmit(round)({
           id: newId('evt'),
-          sessionId,
+          transcriptTargetId: sessionId,
           type: 'user.message',
           actorAgentId: null,
           payload: { messageId, text },
@@ -312,15 +174,15 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
         return { accepted: true as const };
       }
       const { round, signal } = beginRun(sessionId);
-      const rt = runtime.get(sessionId);
+      const rt = runtimeForTranscriptTarget(sessionId);
       const loop = agent.loop(makeEmit(round), {
         modelOverride: session.model,
         ambientContext,
-        sandboxRoots: rt?.sandboxRoots ?? agentSandboxRoots?.(sessionId),
+        sandboxRoots: sandboxRootsFor(sessionId, session.cwd, rt),
         defaultCwd: session.cwd,
         extraTools: rt?.extraTools,
         extraSkills: rt?.extraSkills,
-        toolFilter: composeFilter(rt?.toolFilter, agentToolFilter?.(sessionId))
+        toolFilter: composeFilter(rt?.toolFilter, agentToolFilterForTranscriptTarget(sessionId))
       });
       loop
         .runStream(sessionId, text, signal)
@@ -353,27 +215,38 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
       return { accepted: true as const };
     },
 
-    async sendProjectMessage({ sessionId, text }: { sessionId: SessionId; text: string }) {
-      const session = requireSession(sessionId);
+    async sendProjectMessage({ sessionId, text }: { sessionId: TranscriptTargetId; text: string }) {
+      const session = requireTranscriptTarget(sessionId);
       const paths = ctx.deps.paths;
       const cfg = paths ? await loadAll(paths.config, paths.profile) : null;
       const acpAgents = (cfg?.acpAgents ?? []).filter((agent: AcpAgentConfig) => agent.enabled !== false);
       const nativeCliAgents = (cfg?.nativeCliAgents ?? []).filter(
         (agent: NativeCliAgentConfig) => agent.enabled !== false
       );
+      const isWorkplaceProject = isWorkplaceProjectTarget(session);
+      const projectMembers = isWorkplaceProject ? workplaceProjectMembers(session) : [];
+      const projectAcpAgentNames = projectMembers
+        .filter((member) => member.type === 'acp')
+        .map((member) => member.name);
+      const projectNativeCliAgentNames = projectMembers
+        .filter((member) => member.type === 'native-cli')
+        .map((member) => nativeCliProjectMemberRuntimeName(member));
+      const hasMonadMember = projectMembers.some((member) => member.type === 'monad');
       const moderatorAgentId = normalizeChannelModeratorId(session.origin?.ext?.[CHANNEL_HOST_EXT_KEY]);
       const route = routeChannelMessage({
         text,
         moderatorAgentId,
-        acpAgentNames: acpAgents.map((agent: AcpAgentConfig) => agent.name),
-        nativeCliAgentNames: nativeCliAgents.map((agent: NativeCliAgentConfig) => agent.name)
+        acpAgentNames: isWorkplaceProject ? projectAcpAgentNames : acpAgents.map((agent: AcpAgentConfig) => agent.name),
+        nativeCliAgentNames: isWorkplaceProject
+          ? projectNativeCliAgentNames
+          : nativeCliAgents.map((agent: NativeCliAgentConfig) => agent.name)
       });
       if (route.kind === 'none') return { accepted: true as const };
       const targetRole = moderatorAgentId && !route.direct ? 'moderator' : 'agent';
       log?.debug(
         {
           sessionId,
-          projectSessionId: sessionId,
+          transcriptTargetId: sessionId,
           event: 'project.message.route',
           text,
           moderatorAgentId,
@@ -393,6 +266,23 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
       const studioHostName = moderatorAgentId?.startsWith('agent:')
         ? (studioAgents.find((agent) => `agent:${agent.id}` === moderatorAgentId)?.name ?? moderatorAgentId)
         : undefined;
+      const nativeCliParticipants: ChannelParticipant[] = isWorkplaceProject
+        ? projectMembers
+            .filter((member) => member.type === 'native-cli')
+            .map((member) => {
+              const templateName = nativeCliProjectMemberTemplateName(member);
+              return {
+                id: `native-cli:${nativeCliProjectMemberRuntimeName(member)}`,
+                name: nativeCliProjectMemberDisplayName(member),
+                kind: 'native-cli' as const,
+                description: `template:${templateName}`
+              };
+            })
+        : nativeCliAgents.map((agent: NativeCliAgentConfig) => ({
+            id: `native-cli:${agent.name}`,
+            name: agent.name,
+            kind: 'native-cli' as const
+          }));
       const participants: ChannelParticipant[] = [
         { id: 'human', name: 'User', kind: 'human' },
         ...studioAgents.map((agent) => ({
@@ -406,11 +296,7 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
           name: agent.name,
           kind: 'acp' as const
         })),
-        ...nativeCliAgents.map((agent: NativeCliAgentConfig) => ({
-          id: `native-cli:${agent.name}`,
-          name: agent.name,
-          kind: 'native-cli' as const
-        }))
+        ...nativeCliParticipants
       ];
       const ambientContext =
         route.kind === 'send' && route.generate === false
@@ -426,41 +312,191 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
               participants,
               targetMention: route.targetMention
             });
-      const mcpServers = channelDelegateMcpServers(cfg?.mcpServers, runtime.get(sessionId)?.mcpServers);
+      const mcpServers = channelDelegateMcpServers(cfg?.mcpServers, runtimeForTranscriptTarget(sessionId)?.mcpServers);
+      const isPublicProjectFanout = isWorkplaceProject && route.kind === 'send' && !route.direct && !moderatorAgentId;
+      const publicAmbientContext = buildChannelTurnContext({
+        channelId: session.title,
+        sessionId,
+        routeKind: route.kind,
+        targetName: 'project members',
+        targetRole,
+        responseMode,
+        moderatorAgentId,
+        participants,
+        targetMention: route.targetMention
+      });
       const dispatchStructuredNext =
         ambientContext && (responseMode === 'moderator_structured' || responseMode === 'direct_structured')
           ? (responseText: string) =>
-              dispatchChannelNextTargets({ sessionId, responseText, ambientContext, acpAgents, mcpServers })
+              dispatchChannelNextTargets({
+                sessionId,
+                responseText,
+                ambientContext,
+                acpAgents,
+                mcpServers
+              })
           : undefined;
-      if (route.kind === 'send')
-        return handlers.send({
+      if (route.kind === 'send') {
+        if (isPublicProjectFanout) {
+          const shouldRunMonad = hasMonadMember || route.generate === true;
+          const result = shouldRunMonad
+            ? await handlers.send({
+                sessionId,
+                text: route.text,
+                ambientContext: publicAmbientContext
+              })
+            : await handlers.send({ sessionId, text: route.text, generate: false });
+          const humanSender = { kind: 'human' as const, name: cfg?.principal.displayName ?? 'User', id: 'human' };
+          await Promise.all([
+            deliverProjectMessageToManagedNativeCliMembers({
+              session,
+              nativeCliAgents,
+              text: route.text,
+              sender: humanSender
+            }),
+            deliverProjectMessageToAcpMembers({
+              session,
+              acpAgents,
+              mcpServers: cfg?.mcpServers,
+              text: route.text,
+              ambientContext: publicAmbientContext
+            })
+          ]);
+          return result;
+        }
+        const routeGenerate =
+          moderatorAgentId || !isWorkplaceProject ? route.generate : hasMonadMember ? route.generate : false;
+        const result = await handlers.send({
           sessionId,
           text: route.text,
-          generate: route.generate,
+          generate: routeGenerate,
           ambientContext,
           onComplete: dispatchStructuredNext
         });
+        if (!route.direct && route.generate === false) {
+          await deliverProjectMessageToManagedNativeCliMembers({
+            session,
+            nativeCliAgents,
+            text: route.text,
+            sender: { kind: 'human', name: cfg?.principal.displayName ?? 'User', id: 'human' }
+          });
+        }
+        return result;
+      }
       if (route.kind === 'forward-native-cli')
         return handlers.forwardToNativeCli({
           sessionId,
           agentName: route.agentName,
-          text: route.text
+          text: route.text,
+          displayText: route.displayText
         });
       return handlers.forwardToAcp({
         sessionId,
         agentName: route.agentName,
         text: route.text,
+        displayText: route.displayText,
         ambientContext,
         onComplete: dispatchStructuredNext
       });
     },
 
-    async sendChannelMessage({ sessionId, text }: { sessionId: SessionId; text: string }) {
+    async sendChannelMessage({ sessionId, text }: { sessionId: TranscriptTargetId; text: string }) {
       return handlers.sendProjectMessage({ sessionId, text });
     },
 
+    beginProjectQaWallMessage,
+    completeProjectQaWallMessage,
+
+    async notifyManagedNativeCliProjectMembers({
+      sessionId,
+      text,
+      sender,
+      exceptAgentName
+    }: {
+      sessionId: TranscriptTargetId;
+      text: string;
+      sender?: ManagedNativeCliProjectMessageSender;
+      exceptAgentName?: string;
+    }) {
+      const session = requireTranscriptTarget(sessionId);
+      const paths = ctx.deps.paths;
+      const cfg = paths ? await loadAll(paths.config, paths.profile) : null;
+      const nativeCliAgents = (cfg?.nativeCliAgents ?? []).filter(
+        (agent: NativeCliAgentConfig) => agent.enabled !== false
+      );
+      await deliverProjectMessageToManagedNativeCliMembers({ session, nativeCliAgents, text, sender, exceptAgentName });
+      return { accepted: true as const };
+    },
+
+    async notifyManagedNativeCliDirectMessage({
+      sessionId,
+      fromAgentName,
+      to,
+      text
+    }: {
+      sessionId: TranscriptTargetId;
+      fromAgentName: string;
+      to: string;
+      text: string;
+    }) {
+      const session = requireTranscriptTarget(sessionId);
+      const paths = ctx.deps.paths;
+      const cfg = paths ? await loadAll(paths.config, paths.profile) : null;
+      const nativeCliAgents = (cfg?.nativeCliAgents ?? []).filter(
+        (agent: NativeCliAgentConfig) => agent.enabled !== false
+      );
+      await deliverDirectMessageToManagedNativeCliMember({ session, nativeCliAgents, fromAgentName, to, text });
+      return { accepted: true as const };
+    },
+
+    async completeManagedNativeCliProjectMessage({
+      sessionId,
+      nativeCliSessionId,
+      agentName,
+      text,
+      threadId
+    }: {
+      sessionId: TranscriptTargetId;
+      nativeCliSessionId: string;
+      agentName: string;
+      text: string;
+      threadId?: string;
+    }) {
+      return completeManagedNativeCliThinking({ sessionId, nativeCliSessionId, agentName, text, threadId });
+    },
+
+    async completeManagedNativeCliProviderMessage({
+      sessionId,
+      nativeCliSessionId,
+      agentName,
+      text,
+      error,
+      post = true
+    }: {
+      sessionId: TranscriptTargetId;
+      nativeCliSessionId: string;
+      agentName: string;
+      text: string;
+      error?: boolean;
+      post?: boolean;
+    }) {
+      if (!post && !error) {
+        const messageId = retireManagedNativeCliThinking(sessionId, nativeCliSessionId, agentName);
+        return { messageId };
+      }
+      const completed = completeManagedNativeCliThinking({
+        sessionId,
+        nativeCliSessionId,
+        agentName,
+        text,
+        source: 'native-cli-provider',
+        error
+      });
+      return { messageId: completed.messageId };
+    },
+
     async sendInline(
-      { sessionId, text }: { sessionId: SessionId } & SendMessageRequest,
+      { sessionId, text }: { sessionId: TranscriptTargetId } & SendMessageRequest,
       sink: EventSink,
       // ACP sessions pass a delegating backend (fs/shell run in the connected editor), a toolFilter
       // dropping tools that would otherwise run on the daemon host, and any image attachments for
@@ -475,22 +511,18 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
         sandboxRoots?: string[];
       }
     ) {
-      const session = requireSession(sessionId);
+      const session = requireTranscriptTarget(sessionId);
       assertWriteAllowed(session, runOpts?.transport ?? 'acp');
       if (runner && (await tryRunSessionCommand(runner, session, text, { sink, busy: aborts.has(sessionId) }))) return;
       // Out-of-band per-session runtime config (sandbox roots / session-scoped MCP tools / delegating
       // backends) set via configureRuntime — used when the caller doesn't pass explicit runOpts (the
       // ACP bridge proxies turns over HTTP and can't ship in-process backends, so it configures the
       // daemon out-of-band).
-      const rt = runtime.get(sessionId);
-      // Sandbox roots priority: explicit per-turn runOpts (the editor's workspace) > configureRuntime
-      // roots (ACP bridge) > the bound agent's per-agent sandbox override > this session's disposable
-      // ephemeral root (sandbox mode 'ephemeral') > the loop's global default.
+      const rt = runtimeForTranscriptTarget(sessionId);
+      // Shared precedence (runOpts override > rt > session.cwd > per-agent), then this session's
+      // disposable ephemeral root (sandbox mode 'ephemeral'), then the loop's global default.
       const sandboxRoots =
-        runOpts?.sandboxRoots ??
-        rt?.sandboxRoots ??
-        agentSandboxRoots?.(sessionId) ??
-        (await sessionSandbox?.ensure(sessionId));
+        sandboxRootsFor(sessionId, session.cwd, rt, runOpts?.sandboxRoots) ?? (await sessionSandbox?.ensure(sessionId));
       const { round, signal } = beginRun(sessionId);
       const base = makeEmit(round);
       const loop = agent.loop(
@@ -500,7 +532,10 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
         },
         {
           backends: runOpts?.backends ?? rt?.backends,
-          toolFilter: composeFilter(runOpts?.toolFilter ?? rt?.toolFilter, agentToolFilter?.(sessionId)),
+          toolFilter: composeFilter(
+            runOpts?.toolFilter ?? rt?.toolFilter,
+            agentToolFilterForTranscriptTarget(sessionId)
+          ),
           ambientContext: runOpts?.ambientContext,
           extraTools: runOpts?.extraTools ?? rt?.extraTools,
           extraSkills: rt?.extraSkills,
@@ -536,8 +571,8 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
       }
     },
 
-    async generate({ sessionId, text }: { sessionId: SessionId } & SendMessageRequest) {
-      const session = requireSession(sessionId);
+    async generate({ sessionId, text }: { sessionId: TranscriptTargetId } & SendMessageRequest) {
+      const session = requireTranscriptTarget(sessionId);
       assertWriteAllowed(session, 'http');
       log?.debug({ sessionId, event: 'session.generate.start', text }, 'session generate start');
       if (runner) {
@@ -551,21 +586,21 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
         }
       }
       const round: Event[] = [];
-      const rt = runtime.get(sessionId);
+      const rt = runtimeForTranscriptTarget(sessionId);
       const loop = agent.loop(makeEmit(round), {
         modelOverride: session.model,
-        sandboxRoots: rt?.sandboxRoots ?? agentSandboxRoots?.(sessionId),
+        sandboxRoots: sandboxRootsFor(sessionId, session.cwd, rt),
         defaultCwd: session.cwd,
         extraTools: rt?.extraTools,
         extraSkills: rt?.extraSkills,
-        toolFilter: composeFilter(rt?.toolFilter, agentToolFilter?.(sessionId))
+        toolFilter: composeFilter(rt?.toolFilter, agentToolFilterForTranscriptTarget(sessionId))
       });
       try {
         const msg = await loop.runBlock(sessionId, text);
         log?.debug({ sessionId, event: 'session.generate.complete', text: msg.text }, 'session generate complete');
         const message: ChatMessage = {
           id: msg.id as ChatMessage['id'],
-          sessionId: msg.sessionId as ChatMessage['sessionId'],
+          transcriptTargetId: msg.transcriptTargetId as ChatMessage['transcriptTargetId'],
           role: msg.role,
           text: msg.text,
           type: 'text',
@@ -586,19 +621,36 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
       }
     },
 
-    async subscribe({ sessionId, afterEventId }: { sessionId: SessionId; afterEventId?: string }, sink: EventSink) {
-      const buffered = await cache.since(sessionId, afterEventId);
-      const replay = buffered.length > 0 ? buffered : store.listEvents(sessionId, afterEventId);
+    async subscribe(
+      { sessionId, afterEventId }: { sessionId: TranscriptTargetId; afterEventId?: string },
+      sink: EventSink
+    ) {
+      const buffered = cache.since(sessionId, afterEventId);
+      let replay: Event[];
+      if (afterEventId !== undefined && store.hasEvent(afterEventId)) {
+        // Reconnect from a persisted cursor: durable events after it cover COMPLETED rounds the client
+        // missed while disconnected, while `buffered` holds only the in-flight (un-persisted) round.
+        // Using `buffered` alone would drop every finished round between the cursor and the active one.
+        // Merge, de-duped by id (the two sets are normally disjoint — tokens are never persisted).
+        const durable = store.listEvents(sessionId, afterEventId);
+        const seen = new Set(durable.map((e) => e.id));
+        replay = [...durable, ...buffered.filter((e) => !seen.has(e.id))];
+      } else {
+        // Fresh subscribe, or a cursor that is an un-persisted live event (client resuming within the
+        // active round): `buffered` is the correct tail; fall back to durable only when idle. Passing
+        // an un-persisted cursor to listEvents would replay the whole session (missing-cursor fallback).
+        replay = buffered.length > 0 ? buffered : store.listEvents(sessionId, afterEventId);
+      }
       for (const event of replay) sink(event);
       const dispose = bus.subscribe(sessionId, sink);
       return { subscribed: true as const, dispose };
     },
 
     async subscribeUi(
-      { sessionId, afterEventId }: { sessionId: SessionId; afterEventId?: string },
+      { sessionId, afterEventId }: { sessionId: TranscriptTargetId; afterEventId?: string },
       sink: (event: SessionUiEvent) => void
     ) {
-      const session = requireSession(sessionId);
+      const session = requireTranscriptTarget(sessionId);
       const projector = new SessionUiProjector({ channelStructured: isChannelStructuredSession(session) });
       // Bound the initial snapshot to the most-recent window; older history is loaded lazily by
       // the client over GET /ui-items. A full window implies there may be older messages.
@@ -609,14 +661,31 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
       });
       const hasMore = recent.length === LIVE_SNAPSHOT_LIMIT;
       projector.hydrateMessages(recent, parseDurableSummary(store.getMemory(sessionId, 'ctx:summary')));
-      // Replay in-flight (un-persisted) round events on top of the hydrated window. On a fresh
-      // subscribe, hydration already covers every persisted message, so we must NOT fall back to
-      // the full event history — that would re-introduce older messages and scramble the bounded
-      // snapshot. Only a reconnect (afterEventId set) needs the durable replay since its cursor.
-      const buffered = await cache.since(sessionId, afterEventId);
-      const replay =
-        buffered.length > 0 ? buffered : afterEventId !== undefined ? store.listEvents(sessionId, afterEventId) : [];
-      for (const event of replay) projector.applyEvent(event);
+      // Rebuild native CLI tool cards from their durable output snapshots (native_cli.output chunks are
+      // not persisted as events). Scope to this window: runs that started within it, plus any still
+      // active, so an in-flight or recent CLI run survives a refresh/reconnect without dragging every
+      // historical run into the bounded snapshot.
+      const oldestTs = recent[0]?.createdAt;
+      projector.hydrateNativeCliSessions(
+        store
+          .listNativeCliSessionsForTranscriptTarget(sessionId)
+          .filter(
+            (s) =>
+              s.runtimeRole === 'managed-project-agent' ||
+              s.state === 'running' ||
+              s.state === 'starting' ||
+              oldestTs === undefined ||
+              s.startedAt >= oldestTs
+          )
+      );
+      // Replay only the in-flight (un-persisted) round on top of the hydrated window. This is a
+      // snapshot endpoint (the client replaces its view wholesale), so hydration IS the reconnect
+      // baseline — every settled round is already in the bounded message window. We must NOT replay
+      // the durable event log here: a reconnect cursor is usually an `agent.token` id that isn't in
+      // the log, so listEvents would fall back to a full-session replay and scramble the bounded
+      // snapshot (breaking oldestCursor/hasMore pagination). The active round lives only in `buffered`.
+      const buffered = cache.since(sessionId, afterEventId);
+      for (const event of buffered) projector.applyEvent(event);
       sink(projector.snapshot({ hasMore }));
       const dispose = bus.subscribe(sessionId, (event) => {
         for (const uiEvent of projector.applyEvent(event)) sink(uiEvent);
@@ -641,16 +710,18 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
       sessionId,
       agentName,
       text,
+      displayText,
       ambientContext,
       onComplete
     }: {
-      sessionId: SessionId;
+      sessionId: TranscriptTargetId;
       agentName: string;
       text: string;
+      displayText?: string;
       ambientContext?: string;
       onComplete?: (text: string) => void | Promise<void>;
     }) {
-      const session = requireSession(sessionId);
+      const session = requireTranscriptTarget(sessionId);
       assertWriteAllowed(session, 'http');
       // Reject if a turn is already streaming for this session — same concurrency guard as `send`.
       if (aborts.has(sessionId)) throw new HandlerError('conflict', 'a turn is already in progress for this session');
@@ -679,7 +750,7 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
         acpActivityStarted = true;
         emit({
           id: newId('evt'),
-          sessionId,
+          transcriptTargetId: sessionId,
           type: 'tool.called',
           actorAgentId: null,
           payload: { toolCallId: acpToolCallId, tool: `acp:${spec.name}`, input: { agent: spec.name } },
@@ -687,7 +758,7 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
         });
         emit({
           id: newId('evt'),
-          sessionId,
+          transcriptTargetId: sessionId,
           type: 'tool.progress',
           actorAgentId: null,
           payload: { toolCallId: acpToolCallId, tool: `acp:${spec.name}`, output: 'waiting for response...' },
@@ -701,7 +772,7 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
         ].filter(Boolean);
         emit({
           id: newId('evt'),
-          sessionId,
+          transcriptTargetId: sessionId,
           type: 'tool.progress',
           actorAgentId: null,
           payload: {
@@ -715,20 +786,20 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
 
       emit({
         id: newId('evt'),
-        sessionId,
+        transcriptTargetId: sessionId,
         type: 'user.message',
         actorAgentId: null,
-        payload: { messageId: userMsgId, text },
+        payload: { messageId: userMsgId, text: displayText ?? text },
         at: new Date().toISOString()
       });
-      store.insertMessage(userMsgId, sessionId, text, new Date().toISOString(), 'user');
+      store.insertMessage(userMsgId, sessionId, displayText ?? text, new Date().toISOString(), 'user');
 
-      const rt = runtime.get(sessionId);
+      const rt = runtimeForTranscriptTarget(sessionId);
       emitAcpActivityStart();
       directDelegate(spec, composeAcpChannelPrompt(text, ambientContext), {
         sessionId,
         signal,
-        sandboxRoots: rt?.sandboxRoots ?? agentSandboxRoots?.(sessionId),
+        sandboxRoots: sandboxRootsFor(sessionId, requireTranscriptTarget(sessionId).cwd, rt),
         backends: rt?.backends,
         toolFilter: rt?.toolFilter,
         extraTools: rt?.extraTools,
@@ -737,7 +808,7 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
         onChunk: (delta) => {
           emit({
             id: newId('evt'),
-            sessionId,
+            transcriptTargetId: sessionId,
             type: 'agent.token',
             actorAgentId: null,
             payload: { messageId: agentMsgId, agentName: spec.name, delta, index: tokenIndex++ },
@@ -758,7 +829,7 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
           );
           emit({
             id: newId('evt'),
-            sessionId,
+            transcriptTargetId: sessionId,
             type: 'tool.result',
             actorAgentId: null,
             payload: { toolCallId: acpToolCallId, tool: `acp:${spec.name}`, ok: true, result: 'completed' },
@@ -769,7 +840,7 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
           });
           emit({
             id: newId('evt'),
-            sessionId,
+            transcriptTargetId: sessionId,
             type: 'agent.message',
             actorAgentId: null,
             payload: { messageId: agentMsgId, agentName: spec.name, text: fullText },
@@ -794,7 +865,7 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
           const errorText = hint ? `${message}\n\n${hint}` : message;
           emit({
             id: newId('evt'),
-            sessionId,
+            transcriptTargetId: sessionId,
             type: 'tool.result',
             actorAgentId: null,
             payload: { toolCallId: acpToolCallId, tool: `acp:${spec.name}`, ok: false, result: errorText },
@@ -813,7 +884,7 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
           );
           emit({
             id: newId('evt'),
-            sessionId,
+            transcriptTargetId: sessionId,
             type: 'agent.error',
             actorAgentId: null,
             payload: { messageId: agentMsgId, agentName: spec.name, code, message: errorText },
@@ -833,26 +904,28 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
     async forwardToNativeCli({
       sessionId,
       agentName,
-      text
+      text,
+      displayText
     }: {
-      sessionId: SessionId;
+      sessionId: TranscriptTargetId;
       agentName: string;
       text: string;
+      displayText?: string;
     }) {
-      const session = requireSession(sessionId);
+      const session = requireTranscriptTarget(sessionId);
       assertWriteAllowed(session, 'http');
       const userRound: Event[] = [];
       const userEmit = makeEmit(userRound);
       const userMsgId = newId('msg');
       userEmit({
         id: newId('evt'),
-        sessionId,
+        transcriptTargetId: sessionId,
         type: 'user.message',
         actorAgentId: null,
-        payload: { messageId: userMsgId, text },
+        payload: { messageId: userMsgId, text: displayText ?? text },
         at: new Date().toISOString()
       });
-      store.insertMessage(userMsgId, sessionId, text, new Date().toISOString(), 'user');
+      store.insertMessage(userMsgId, sessionId, displayText ?? text, new Date().toISOString(), 'user');
       persistAndRetire(sessionId, userRound);
 
       const emitNativeCliError = (err: unknown, fallbackCode?: string) => {
@@ -870,7 +943,7 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
         );
         emit({
           id: newId('evt'),
-          sessionId,
+          transcriptTargetId: sessionId,
           type: 'agent.error',
           actorAgentId: null,
           payload: { messageId: agentMsgId, agentName, code: code ?? fallbackCode, message },
@@ -890,9 +963,17 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
         return { accepted: true as const };
       }
       const cfg = await loadAll(paths.config, paths.profile);
-      const spec = (cfg?.nativeCliAgents ?? []).find(
-        (agent: NativeCliAgentConfig) => agent.name === agentName && agent.enabled !== false
+      const configuredNativeCliAgents = (cfg?.nativeCliAgents ?? []).filter(
+        (agent: NativeCliAgentConfig) => agent.enabled !== false
       );
+      const managedMember = managedNativeCliProjectMembers(session, configuredNativeCliAgents).find(
+        (candidate) => candidate.runtimeAgentName === agentName || candidate.templateAgentName === agentName
+      );
+      const runtimeAgentName = managedMember?.runtimeAgentName ?? agentName;
+      const templateAgentName = managedMember?.templateAgentName ?? agentName;
+      const spec =
+        managedMember?.spec ??
+        configuredNativeCliAgents.find((agent: NativeCliAgentConfig) => agent.name === templateAgentName);
       if (!spec) {
         emitNativeCliError(new HandlerError('invalid', `native CLI agent "${agentName}" not found or disabled`));
         return { accepted: true as const };
@@ -905,18 +986,109 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
       }
       log?.debug({ sessionId, event: 'session.forward_native_cli.start', agentName, text }, 'forward native cli start');
       try {
-        const existing = nativeCliHost
+        const memberSettings = managedMember?.settings ?? nativeCliProjectMemberSettings(session, runtimeAgentName);
+        const runtimeRole = memberSettings.managedProjectAgent ? 'managed-project-agent' : 'interactive';
+        const nativeSessions = nativeCliHost
           .list(sessionId)
-          .sessions.find((candidate) => candidate.agentName === agentName && candidate.state === 'running');
+          .sessions.filter(
+            (candidate) => candidate.agentName === runtimeAgentName && candidate.runtimeRole === runtimeRole
+          );
+        const existing = nativeSessions.find((candidate) => candidate.state === 'running');
+        if (existing) {
+          nativeCliHost.input(existing.id, { input: text.endsWith('\n') ? text : `${text}\n` });
+          log?.debug(
+            { sessionId, event: 'session.forward_native_cli.accepted', agentName, nativeCliSessionId: existing.id },
+            'forward native cli accepted'
+          );
+          return { accepted: true as const };
+        }
+        const preflight = await nativeCliHost.preflight(templateAgentName);
+        if (preflight.state !== 'ready') {
+          const reason = preflight.reason;
+          const round: Event[] = [];
+          const emit = makeEmit(round);
+          const agentMsgId = newId('msg');
+          if (preflight.state === 'not_authenticated' || preflight.state === 'unknown') {
+            emit({
+              id: newId('evt'),
+              transcriptTargetId: sessionId,
+              type: 'native_cli.connection_required',
+              actorAgentId: null,
+              payload: {
+                agentName,
+                provider: spec.provider,
+                reason,
+                reconnectIn: 'studio'
+              },
+              at: new Date().toISOString()
+            });
+          }
+          store.insertMessage(agentMsgId, sessionId, reason, new Date().toISOString(), 'assistant', {
+            type: 'error',
+            data: { agentName }
+          });
+          emit({
+            id: newId('evt'),
+            transcriptTargetId: sessionId,
+            type: 'agent.error',
+            actorAgentId: null,
+            payload: {
+              messageId: agentMsgId,
+              agentName,
+              code:
+                preflight.state === 'not_authenticated'
+                  ? 'provider_auth_required'
+                  : preflight.state === 'unavailable'
+                    ? 'provider_unavailable'
+                    : 'provider_readiness_unknown',
+              message: reason
+            },
+            at: new Date().toISOString()
+          });
+          persistAndRetire(sessionId, round);
+          log?.debug(
+            {
+              sessionId,
+              event: 'session.forward_native_cli.preflight_blocked',
+              agentName,
+              provider: spec.provider,
+              state: preflight.state
+            },
+            'forward native cli connection required'
+          );
+          return { accepted: true as const };
+        }
+        const resumeFrom =
+          runtimeRole === 'managed-project-agent'
+            ? nativeSessions.find((candidate) => candidate.providerSessionRef)?.providerSessionRef
+            : undefined;
         const nativeSession =
-          existing ??
-          (await nativeCliHost.start({
-            projectSessionId: sessionId,
-            agentName,
-            workingPath: session.cwd,
-            launchMode: spec.defaultLaunchMode
-          }));
-        nativeCliHost.input(nativeSession.id, { input: text.endsWith('\n') ? text : `${text}\n` });
+          runtimeRole === 'managed-project-agent'
+            ? await startManagedNativeCliRuntimeWithRecovery({
+                session,
+                spec,
+                runtimeAgentName,
+                templateAgentName,
+                displayName: nativeCliProjectMemberDisplayNameForAgent(session, runtimeAgentName),
+                reasoningEffort: memberSettings.reasoningEffort,
+                modelId: memberSettings.modelId ?? memberSettings.modelName,
+                speed: memberSettings.speed,
+                customPrompt: memberSettings.customPrompt,
+                launchMode: managedProjectLaunchMode(spec, memberSettings.launchMode),
+                providerSessionRef: resumeFrom ?? undefined,
+                input: text
+              })
+            : await nativeCliHost.start({
+                transcriptTargetId: sessionId,
+                agentName: runtimeAgentName,
+                templateAgentName,
+                workingPath: session.cwd,
+                launchMode: memberSettings.launchMode ?? spec.defaultLaunchMode,
+                runtimeRole
+              });
+        if (runtimeRole !== 'managed-project-agent') {
+          nativeCliHost.input(nativeSession.id, { input: text.endsWith('\n') ? text : `${text}\n` });
+        }
         log?.debug(
           { sessionId, event: 'session.forward_native_cli.accepted', agentName, nativeCliSessionId: nativeSession.id },
           'forward native cli accepted'

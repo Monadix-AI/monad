@@ -116,25 +116,34 @@ export async function serveDaemon(deps: ServeDeps): Promise<void> {
     ...(tlsCert ? { tls: { key: Bun.file(tlsCert.keyPath), cert: Bun.file(tlsCert.certPath) } } : {})
   });
 
-  // Same Elysia app, second listener on a Unix domain socket. Local clients (the CLI) reach the
-  // daemon through this for lower latency than TCP loopback and filesystem-permission-gated access
-  // — no port, no bearer token needed. WS push (/v1/stream) stays TCP-only: Bun's WebSocket client
-  // can't dial a Unix socket.
-  // Windows: Bun has no Unix-socket support (named pipes unimplemented — oven-sh/bun#13042). Skip
-  // the second listener; local Windows clients always dial TCP loopback.
-  if (process.platform !== 'win32') {
+  // Same Elysia app, second listener on a Unix domain socket. Local clients (the CLI) reach the daemon
+  // through it for lower latency than TCP loopback and filesystem-gated access — no port, no bearer
+  // token. WS push (/v1/stream) stays TCP-only: Bun's WebSocket client can't dial a Unix socket.
+  // Bun supports AF_UNIX on every platform monad targets — including Windows (native since Win10 1803).
+  // Binding is best-effort: if it fails (an older OS/Bun, or a locked-down environment) the daemon
+  // keeps serving on TCP and stays fully reachable — clients fall back to TCP at connect time.
+  let unixBound = false;
+  try {
     await unlink(sockPath).catch(() => {}); // remove stale socket from a previous run
     const unixServer = Bun.serve({
       unix: sockPath,
       fetch: (req) => httpApp.handle(req),
       maxRequestBodySize: MAX_REQUEST_BODY_BYTES
     });
-    // The socket grants unauthenticated RPC to anyone who can connect() — its filesystem
-    // permissions ARE its auth. Bun.serve does not restrict them, so lock it to owner-only.
-    await chmod(sockPath, 0o600).catch(() => {});
+    // Register teardown and mark bound BEFORE anything else that could throw — a live listener must
+    // never be left un-torn-down (and unadvertised) by a later failure.
     process.on('exit', () => {
       unixServer.stop(true);
     });
+    unixBound = true;
+    // The socket grants unauthenticated RPC to anyone who can connect() — its perms are its auth.
+    // POSIX: chmod 0600 locks it to the owner. Windows: chmod is a no-op, so access is bounded by the
+    // NTFS ACL of the per-user ~/.monad runtime dir; browsers can't reach AF_UNIX on any platform.
+    await chmod(sockPath, 0o600).catch(() => {});
+  } catch (err) {
+    logger.info(
+      `monad: Unix socket unavailable (${err instanceof Error ? err.message : String(err)}) — serving TCP only`
+    );
   }
 
   // Mo enabled (default on, or the persisted toggle): launch the sprite now that the socket it
@@ -149,8 +158,11 @@ export async function serveDaemon(deps: ServeDeps): Promise<void> {
   const scheme = tlsCert ? 'https' : 'http';
   const mockTag = useMock ? ' (mock model)' : '';
   const docsTag = enableDocs ? ` docs:${scheme}://${host}:${port}/docs` : '';
+  // Only advertise the Unix socket when it was actually bound — listing `unix:<path>` when the bind
+  // was skipped/failed would be misleading (no listener exists at that path).
+  const unixTag = unixBound ? ` unix:${sockPath}` : '';
   printBanner(MONAD_VERSION, useMock);
-  logger.info(`monad daemon listening on ${scheme}://${host}:${port} unix:${sockPath}${mockTag}${docsTag}`);
+  logger.info(`monad daemon listening on ${scheme}://${host}:${port}${unixTag}${mockTag}${docsTag}`);
   if (tlsFingerprint) {
     logger.info(`monad: TLS cert SHA-256 fingerprint: ${tlsFingerprint}`);
   }

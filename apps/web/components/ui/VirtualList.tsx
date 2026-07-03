@@ -44,9 +44,16 @@ export interface VirtualListProps<T> {
   role?: string;
   /** ARIA live politeness for the scroll region. */
   ariaLive?: 'off' | 'polite' | 'assertive';
+  /** Elastic rubber-band nudge when wheeling past the top/bottom edge (skipped under prefers-reduced-motion). */
+  bounce?: boolean;
   className?: string;
   style?: CSSProperties;
 }
+
+/** Max px the viewport is allowed to rubber-band past an edge. */
+const BOUNCE_MAX_OFFSET = 14;
+/** How long after the last qualifying wheel tick the viewport springs back. */
+const BOUNCE_SETTLE_MS = 120;
 
 interface SlotContext {
   header?: ReactNode;
@@ -60,7 +67,7 @@ const FooterSlot = ({ context }: { context?: SlotContext }) => <>{context?.foote
 const VIRTUOSO_COMPONENTS = { Header: HeaderSlot, Footer: FooterSlot };
 
 /** Px from the true bottom within which the user still counts as "pinned". */
-const STICK_THRESHOLD = 120;
+const STICK_THRESHOLD = 32;
 
 /** True when the scroll position is within `threshold` px of the very bottom. */
 export function isAtBottom(
@@ -84,9 +91,11 @@ export function indexOfKey<T>(items: T[], getKey: (item: T) => string, key: stri
 export function reducePinnedOnScroll(
   prevPinned: boolean,
   selfScroll: boolean,
-  atBottom: boolean
+  atBottom: boolean,
+  direction: 'up' | 'down' | 'none' = 'none'
 ): { pinned: boolean; selfScrollConsumed: boolean } {
   if (selfScroll) return { pinned: prevPinned, selfScrollConsumed: true };
+  if (direction === 'up') return { pinned: false, selfScrollConsumed: false };
   return { pinned: atBottom, selfScrollConsumed: false };
 }
 
@@ -111,12 +120,15 @@ export function VirtualList<T>({
   restoreStateFrom,
   role,
   ariaLive,
+  bounce = false,
   className,
   style
 }: VirtualListProps<T>): React.ReactElement {
   const context = useMemo<SlotContext>(() => ({ header, footer }), [header, footer]);
   const handleRef = useRef<VirtuosoHandle>(null);
   const scrollerRef = useRef<HTMLElement | null>(null);
+  const bounceOffsetRef = useRef(0);
+  const bounceSettleTimeoutRef = useRef<number | undefined>(undefined);
   // `pinnedRef` tracks whether we keep following the bottom. Detection rests on one fact:
   // content growth (a row expanding, new rows) does NOT fire a scroll event — only the user
   // and our own pinning move the scrollbar. So we read "is the user at the bottom" purely
@@ -124,11 +136,18 @@ export function VirtualList<T>({
   // (flagged via `selfScrollRef`) so a streaming pin never looks like the user arriving.
   const pinnedRef = useRef(true);
   const selfScrollRef = useRef(false);
+  const userScrolledRef = useRef(false);
+  const lastScrollTopRef = useRef<number | null>(null);
 
   const measurePinned = useCallback(() => {
     const el = scrollerRef.current;
     if (!el) return;
-    const next = reducePinnedOnScroll(pinnedRef.current, selfScrollRef.current, isAtBottom(el));
+    const previousTop = lastScrollTopRef.current;
+    const direction =
+      previousTop === null ? 'none' : el.scrollTop < previousTop ? 'up' : el.scrollTop > previousTop ? 'down' : 'none';
+    lastScrollTopRef.current = el.scrollTop;
+    if (!selfScrollRef.current && direction !== 'none') userScrolledRef.current = true;
+    const next = reducePinnedOnScroll(pinnedRef.current, selfScrollRef.current, isAtBottom(el), direction);
     pinnedRef.current = next.pinned;
     if (next.selfScrollConsumed) selfScrollRef.current = false;
   }, []);
@@ -141,12 +160,14 @@ export function VirtualList<T>({
     if (el.scrollTop < max) {
       selfScrollRef.current = true;
       el.scrollTop = el.scrollHeight;
+      lastScrollTopRef.current = el.scrollTop;
     }
   }, [stickToBottom]);
 
   // Pin now, then once more next frame: a freshly appended row reports its real height a
   // frame after it mounts, so a single re-pin catches the residual gap that one pass leaves.
   const pinToBottomSoon = useCallback(() => {
+    if (userScrolledRef.current && !pinnedRef.current) return;
     pinToBottom();
     requestAnimationFrame(pinToBottom);
   }, [pinToBottom]);
@@ -195,6 +216,7 @@ export function VirtualList<T>({
     let raf = 0;
     const deadline = performance.now() + 700;
     const tick = () => {
+      if (userScrolledRef.current) return;
       pinToBottom();
       if (pinnedRef.current && performance.now() < deadline) raf = requestAnimationFrame(tick);
     };
@@ -202,16 +224,54 @@ export function VirtualList<T>({
     return () => cancelAnimationFrame(raf);
   }, []);
 
+  const applyBounceOffset = useCallback((offset: number, animated: boolean) => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    el.style.transition = animated ? 'transform 260ms cubic-bezier(0.34, 1.56, 0.64, 1)' : 'none';
+    el.style.transform = offset === 0 ? '' : `translateY(${offset}px)`;
+  }, []);
+
+  // Elastic rubber-band: nudge the viewport when wheeling past an edge, then spring back once
+  // the wheel goes quiet. Direct DOM writes (no state) since wheel fires far too often for React.
+  const handleBounceWheel = useCallback(
+    (event: WheelEvent) => {
+      const el = scrollerRef.current;
+      if (!el) return;
+      const atTop = el.scrollTop <= 0;
+      const atBottomEdge = el.scrollTop >= el.scrollHeight - el.clientHeight - 1;
+      if (!((event.deltaY < 0 && atTop) || (event.deltaY > 0 && atBottomEdge))) return;
+      const direction = event.deltaY < 0 ? 1 : -1;
+      const step = Math.min(Math.abs(event.deltaY) * 0.4, 8);
+      const next = Math.max(
+        -BOUNCE_MAX_OFFSET,
+        Math.min(BOUNCE_MAX_OFFSET, bounceOffsetRef.current + direction * step)
+      );
+      bounceOffsetRef.current = next;
+      applyBounceOffset(next, false);
+      window.clearTimeout(bounceSettleTimeoutRef.current);
+      bounceSettleTimeoutRef.current = window.setTimeout(() => {
+        bounceOffsetRef.current = 0;
+        applyBounceOffset(0, true);
+      }, BOUNCE_SETTLE_MS);
+    },
+    [applyBounceOffset]
+  );
+
   const setScroller = useCallback(
     (el: HTMLElement | Window | null) => {
       const node = el instanceof HTMLElement ? el : null;
       scrollerRef.current = node;
-      if (node) {
-        if (role) node.setAttribute('role', role);
-        if (ariaLive) node.setAttribute('aria-live', ariaLive);
-      }
+      if (!node) return;
+      if (role) node.setAttribute('role', role);
+      if (ariaLive) node.setAttribute('aria-live', ariaLive);
+      if (!bounce || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+      node.addEventListener('wheel', handleBounceWheel, { passive: true });
+      return () => {
+        node.removeEventListener('wheel', handleBounceWheel);
+        window.clearTimeout(bounceSettleTimeoutRef.current);
+      };
     },
-    [role, ariaLive]
+    [role, ariaLive, bounce, handleBounceWheel]
   );
 
   // Only forward firstItemIndex when paginating: Virtuoso computes `data-item-index` as

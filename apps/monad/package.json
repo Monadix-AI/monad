@@ -2,7 +2,7 @@
   "name": "@monad/monad",
   "version": "0.0.0",
   "dependencies": {
-    "@agentclientprotocol/sdk": "^1.0.0",
+    "@agentclientprotocol/sdk": "^1.1.0",
     "@arizeai/openinference-semantic-conventions": "^2.5.0",
     "@arizeai/openinference-vercel": "^3.1.0",
     "@elysiajs/swagger": "^1.3.1",
@@ -23,11 +23,12 @@
     "@opentelemetry/semantic-conventions": "^1.41.1",
     "drizzle-orm": "^0.45.2",
     "elysia": "^1.4.29",
-    "mem0ai": "^3.0.12",
+    "mem0ai": "^3.0.13",
     "partial-json": "^0.1.7",
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@anthropic-ai/claude-agent-sdk": "0.3.198",
     "@monad/config": "workspace:*",
     "openai": "^6.45.0"
   },
@@ -39,7 +40,8 @@
     "./start": {
       "types": "./dist/main.d.ts",
       "default": "./src/main.ts"
-    }
+    },
+    "./log-maintenance": "./src/services/log-maintenance.ts"
   },
   "module": "src/main.ts",
   "private": true,
@@ -54,6 +56,7 @@
     "test:e2e:loud": "bun ../../scripts/bun-test.ts test/e2e/ --loud",
     "test:loud": "bun ../../scripts/bun-test.ts test/ --loud",
     "test:unit": "bun ../../scripts/bun-test.ts test/unit/ --only-failures",
+    "test:unit:loud": "bun ../../scripts/bun-test.ts test/unit/ --loud",
     "typecheck": "tsgo --noEmit"
   },
   "type": "module"

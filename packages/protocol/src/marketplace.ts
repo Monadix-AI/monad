@@ -1,15 +1,17 @@
 import { z } from 'zod';
 
+import { httpsUrlSchema, httpUrlSchema } from './url.ts';
+
 export const mcpRegistryEntrySchema = z.object({
   id: z.string(),
   registry: z.string(),
   name: z.string(),
   description: z.string(),
-  homepage: z.string().url().optional(),
+  homepage: httpsUrlSchema.optional(),
   transport: z.enum(['stdio', 'http']),
   command: z.string().optional(),
   args: z.array(z.string()).optional(),
-  url: z.string().optional(),
+  url: httpUrlSchema.optional(),
   env: z.array(z.string()),
   verified: z.boolean().optional(),
   stats: z.object({ weeklyDownloads: z.number().optional(), stars: z.number().optional() }).optional()
@@ -74,7 +76,7 @@ export const skillSearchResultSchema = z.object({
   score: z.number().nullish(),
   version: z.string().nullish(),
   downloads: z.number().nullish(),
-  homepage: z.string().url().nullish(),
+  homepage: httpsUrlSchema.nullish(),
   installSource: z.string().nullish()
 });
 export type SkillSearchResult = z.infer<typeof skillSearchResultSchema>;
@@ -95,7 +97,7 @@ export const skillDetailSchema = z.object({
   content: z.string(),
   downloads: z.number().nullish(),
   version: z.string().nullish(),
-  homepage: z.string().url().nullish(),
+  homepage: httpsUrlSchema.nullish(),
   installSource: z.string().nullish()
 });
 export type SkillDetail = z.infer<typeof skillDetailSchema>;

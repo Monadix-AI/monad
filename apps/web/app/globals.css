@@ -11,6 +11,14 @@
    future Electron client. Only web-specific styling — the /init onboarding
    eye candy below — stays here. */
 
+@layer utilities {
+  html[data-input-modality="pointer"] :where(button, a, input, textarea, select, [tabindex]):focus-visible {
+    --tw-ring-shadow: 0 0 #0000;
+    outline: none;
+    box-shadow: none;
+  }
+}
+
 /* ── /init onboarding — eye candy, warmth & microinteractions ──────────────────
    A full-bleed beach scene sits behind a glassmorphic wizard card. The motion
    here is intentionally gentle: a slow Ken-Burns drift on the photo, a soft
@@ -355,6 +363,156 @@
     border-right: 1px solid var(--sidebar-border);
   }
 
+  .scwf-scroll {
+    overscroll-behavior-y: contain;
+    scrollbar-color: transparent transparent;
+    scrollbar-width: thin;
+  }
+
+  .scwf-scroll:hover,
+  .scwf-scroll:focus-within {
+    scrollbar-color: color-mix(in srgb, var(--foreground) 22%, transparent) transparent;
+  }
+
+  .scwf-scroll::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .scwf-scroll::-webkit-scrollbar-thumb {
+    background-color: transparent;
+    border-radius: 999px;
+    transition: background-color 200ms ease;
+  }
+
+  .scwf-scroll:hover::-webkit-scrollbar-thumb,
+  .scwf-scroll:focus-within::-webkit-scrollbar-thumb {
+    background-color: color-mix(in srgb, var(--foreground) 22%, transparent);
+  }
+
+  .settings-polish-a {
+    gap: 10px;
+    background: var(--card);
+    border-right: 1px solid var(--border);
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .settings-polish-a {
+      background: color-mix(in srgb, var(--card) 76%, transparent);
+    }
+  }
+
+  .settings-polish-a-head {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    min-width: 0;
+    padding: 2px 8px 4px;
+  }
+
+  .settings-polish-a-icon {
+    display: grid;
+    place-items: center;
+    width: 30px;
+    height: 30px;
+    color: var(--foreground);
+    background: var(--muted);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .settings-polish-a-icon {
+      background: color-mix(in srgb, var(--muted) 68%, transparent);
+      border-color: color-mix(in srgb, var(--border) 70%, transparent);
+    }
+  }
+
+  .settings-polish-a-kicker {
+    margin: 0 0 2px;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1.2;
+    color: var(--muted-foreground);
+  }
+
+  .settings-polish-a-title {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 650;
+    line-height: 1.1;
+    color: var(--foreground);
+    letter-spacing: 0;
+  }
+
+  .settings-polish-a-summary {
+    padding: 0 8px 2px;
+    margin: 0;
+    font-size: 11px;
+    line-height: 1.45;
+    color: var(--muted-foreground);
+  }
+
+  .settings-polish-a-divider {
+    height: 1px;
+    margin: 2px 8px 0;
+    background: var(--border);
+  }
+
+  .settings-polish-a-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .settings-polish-a-item {
+    gap: 9px;
+    justify-content: flex-start;
+    min-height: 34px;
+    padding-inline: 8px;
+    color: var(--muted-foreground);
+    text-align: left;
+    border: 1px solid transparent;
+    border-radius: var(--radius);
+  }
+
+  .settings-polish-a .settings-polish-a-item {
+    justify-content: flex-start;
+    width: 100%;
+    text-align: left;
+  }
+
+  .settings-polish-a-item:hover {
+    color: var(--foreground);
+    background: var(--accent);
+  }
+
+  .settings-polish-a-item.is-active {
+    color: var(--foreground);
+    background: var(--secondary);
+    border-color: var(--border);
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .settings-polish-a-item.is-active {
+      background: color-mix(in srgb, var(--accent-blue) 13.64%, var(--secondary));
+      border-color: color-mix(in srgb, var(--accent-blue) 27.28%, var(--border));
+    }
+  }
+
+  .settings-polish-a-item-icon {
+    display: grid;
+    place-items: center;
+    width: 22px;
+    height: 22px;
+    color: inherit;
+  }
+
+  .settings-polish-a-item-label {
+    display: block;
+    flex: 1;
+    text-align: left;
+  }
+
   .panel-nav-overlay {
     position: absolute;
     top: 0;
@@ -437,6 +595,82 @@
   }
 
   .panel-nav-resize-handle:hover::after {
+    opacity: 1;
+    transition-delay: 80ms;
+  }
+
+  .workplace-agent-rail[data-resizing="true"],
+  .workplace-agent-rail:has(.workplace-agent-rail-resize-handle:hover),
+  .workplace-agent-rail:has(.workplace-agent-rail-resize-handle:focus-visible) {
+    border-left-color: var(--foreground);
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .workplace-agent-rail[data-resizing="true"],
+    .workplace-agent-rail:has(.workplace-agent-rail-resize-handle:hover),
+    .workplace-agent-rail:has(.workplace-agent-rail-resize-handle:focus-visible) {
+      border-left-color: color-mix(in srgb, var(--foreground) 28%, var(--border));
+    }
+  }
+
+  .workplace-agent-rail-resize-handle {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: -8px;
+    z-index: 12;
+    width: 24px;
+    height: auto;
+    padding: 0;
+    margin: 0;
+    pointer-events: auto;
+    cursor: col-resize;
+    outline: none;
+    background: transparent;
+    border: 0;
+  }
+
+  .workplace-agent-rail-resize-handle::after {
+    position: absolute;
+    top: 50%;
+    left: 11px;
+    width: 6px;
+    height: 52px;
+    content: "";
+    background: var(--card);
+    border: 1px solid var(--foreground);
+    border-radius: 999px;
+    box-shadow:
+      0 1px 2px rgb(var(--backgroundColor-transparent) / 0.16),
+      inset 0 1px 0 rgb(var(--backgroundColor-surface-inverse) / 0.12);
+    opacity: 0;
+    transform: translateY(-50%) scaleY(1);
+    transition: opacity 120ms ease-out;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .workplace-agent-rail-resize-handle::after {
+      background: color-mix(in srgb, var(--card) 74%, transparent);
+      border-color: color-mix(in srgb, var(--foreground) 18%, var(--border));
+    }
+  }
+
+  .workplace-agent-rail[data-resizing="true"] .workplace-agent-rail-resize-handle::after,
+  .workplace-agent-rail-resize-handle:focus-visible::after {
+    background: var(--card);
+    border-color: var(--foreground);
+    opacity: 1;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .workplace-agent-rail[data-resizing="true"] .workplace-agent-rail-resize-handle::after,
+    .workplace-agent-rail-resize-handle:focus-visible::after {
+      background: color-mix(in srgb, var(--card) 58%, var(--foreground) 10%);
+      border-color: color-mix(in srgb, var(--foreground) 26%, var(--border));
+    }
+  }
+
+  .workplace-agent-rail-resize-handle:hover::after {
     opacity: 1;
     transition-delay: 80ms;
   }
@@ -543,15 +777,56 @@
     background: color-mix(in srgb, var(--chat-input-surface) 92%, var(--muted));
   }
 
+  .composer-live-dense {
+    --shared-composer-control-bg: var(--accent);
+    --shared-composer-font-size: 13px;
+    --shared-composer-pill-x: 8px;
+    position: relative;
+    overflow: visible;
+    color: var(--foreground);
+    background: var(--chat-input-surface);
+    border: 1px solid var(--chat-input-border);
+    border-radius: 18px;
+    box-shadow: 0 10px 24px rgb(0 0 0 / 0.14);
+    transition:
+      box-shadow 180ms ease-out,
+      border-radius 180ms ease-out;
+  }
+
+  .shared-composer-panel {
+    overflow: visible;
+    border-radius: 18px;
+  }
+
+  .shared-composer-panel .chat-input-frame {
+    overflow: visible;
+    border-radius: inherit;
+  }
+
+  .composer-live-dense .chat-input-content {
+    position: relative;
+    z-index: 2;
+    min-height: 68px;
+    overflow: visible;
+  }
+
+  .composer-live-dense .composer-lexical-input {
+    min-height: 68px;
+    max-height: 148px;
+    padding: 15px 18px 7px;
+    font-size: 13.5px;
+    line-height: 1.52;
+  }
+
   .composer-lexical-placeholder {
     position: absolute;
-    top: 14px;
-    left: 20px;
-    max-width: calc(100% - 40px);
+    top: 15px;
+    left: 18px;
+    max-width: calc(100% - 36px);
     overflow: hidden;
     text-overflow: ellipsis;
-    font-size: 14px;
-    line-height: 1.45;
+    font-size: 13.5px;
+    line-height: 1.52;
     color: var(--chat-input-placeholder);
     white-space: nowrap;
     pointer-events: none;
@@ -580,10 +855,34 @@
   .workplace-action:active:not(:disabled) {
     transform: translateY(0);
   }
+
+  .composer-live-dense :where(.shared-composer-toolbar) {
+    padding: 0 5px 5px;
+  }
+
+  .composer-live-dense :where(.shared-composer-tools),
+  .composer-live-dense :where(.shared-composer-tools-right) {
+    gap: 4px;
+  }
+
+  .composer-live-dense :where(.shared-composer-pill) {
+    min-height: 30px;
+    padding-inline: 8px;
+    font-size: 13px;
+  }
+
+  .composer-live-dense :where(.shared-composer-submit) {
+    width: 36px;
+    height: 36px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .workspace-home-background::after {
+    transition: none;
+  }
+
+  .composer-live-dense {
     transition: none;
   }
 }

@@ -50,9 +50,16 @@ export async function checkAndRepair(paths: MonadPaths, store: Store): Promise<I
     if (parsed === null) {
       await initMonadHome(paths);
       report.config = 'missing';
-    } else if (repairDefaultProfile(parsed)) {
-      await saveProfile(paths.profile, parsed);
-      report.profile = 'repaired';
+    } else {
+      validateRequiredProfileProviders(parsed);
+      let repaired = false;
+      repaired = repairDefaultProfile(parsed) || repaired;
+      repaired = repairProfileOptionalProviderRefs(parsed) || repaired;
+      repaired = repairAgentProfileRefs(parsed) || repaired;
+      if (repaired) {
+        await saveProfile(paths.profile, parsed);
+        report.profile = 'repaired';
+      }
     }
   }
 
@@ -100,4 +107,49 @@ function repairDefaultProfile(cfg: Awaited<ReturnType<typeof loadAll>>): boolean
   if (!first) return false;
   cfg.model.default = first.alias;
   return true;
+}
+
+function validateRequiredProfileProviders(cfg: Awaited<ReturnType<typeof loadAll>>): void {
+  if (!cfg) return;
+  const providerIds = new Set(cfg.model.providers.map((provider) => provider.id));
+  for (const profile of cfg.model.profiles) {
+    if (!providerIds.has(profile.routes.chat.provider)) {
+      throw new Error(
+        `monad: profile "${profile.alias}" references missing provider "${profile.routes.chat.provider}"`
+      );
+    }
+  }
+}
+
+function repairProfileOptionalProviderRefs(cfg: Awaited<ReturnType<typeof loadAll>>): boolean {
+  if (!cfg) return false;
+  const providerIds = new Set(cfg.model.providers.map((provider) => provider.id));
+  let repaired = false;
+  for (const profile of cfg.model.profiles) {
+    for (const role of ['fast', 'vision', 'image', 'video', 'speech', 'embedding', 'memory'] as const) {
+      const route = profile.routes[role];
+      if (route && !providerIds.has(route.provider)) {
+        profile.routes[role] = undefined;
+        repaired = true;
+      }
+    }
+  }
+  return repaired;
+}
+
+function repairAgentProfileRefs(cfg: Awaited<ReturnType<typeof loadAll>>): boolean {
+  if (!cfg) return false;
+  const profileAliases = new Set(cfg.model.profiles.map((profile) => profile.alias));
+  let repaired = false;
+  for (const agent of cfg.agent.agents) {
+    if (agent.modelAlias && !profileAliases.has(agent.modelAlias)) {
+      agent.modelAlias = undefined;
+      repaired = true;
+    }
+    if (agent.model && agent.model !== 'inherit' && !profileAliases.has(agent.model)) {
+      agent.model = undefined;
+      repaired = true;
+    }
+  }
+  return repaired;
 }

@@ -9,8 +9,11 @@ import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initMonadHome, loadAuth, loadConfig } from '@monad/home';
+import { ModelProviderType } from '@monad/protocol';
 
+import { ModelProviderRegistry } from '@/agent/index.ts';
 import { ModelService } from '@/handlers/settings/model/index.ts';
+import { ModelCatalogService } from '@/services/model-catalog.ts';
 import { createHttpTransport } from '@/transports/http.ts';
 import {
   buildHandlers,
@@ -24,6 +27,27 @@ import {
 
 function makePaths(base: string): MonadPaths {
   return makeTestPaths(base);
+}
+
+function profile(alias: string, modelId: string) {
+  return {
+    alias,
+    routes: { chat: { provider: 'oai', modelId } },
+    params: {},
+    fallbacks: []
+  };
+}
+
+type ProviderModelCacheFile = {
+  providers: Record<string, { models: Array<{ id: string }> }>;
+};
+
+function providerModelCachePath(paths: MonadPaths): string {
+  return join(paths.cache, 'provider-models.json');
+}
+
+async function readProviderModelCache(paths: MonadPaths): Promise<ProviderModelCacheFile> {
+  return (await Bun.file(providerModelCachePath(paths)).json()) as ProviderModelCacheFile;
 }
 
 for (const kind of TRANSPORTS) {
@@ -54,6 +78,16 @@ for (const kind of TRANSPORTS) {
         headers: { 'Content-Type': 'application/json' },
         body: body === undefined ? undefined : JSON.stringify(body)
       });
+
+    test('rejects invalid provider baseUrl at the HTTP schema boundary', async () => {
+      const res = await json('PUT', '/v1/settings/model/providers/bad-url', {
+        provider: { id: 'bad-url', label: 'Bad URL', type: 'openai-compatible', baseUrl: 'ftp://api.test/v1' }
+      });
+
+      expect(res.status).toBe(400);
+      const cfg = await loadConfig(paths.config);
+      expect(cfg?.model.providers.some((provider) => provider.id === 'bad-url')).toBe(false);
+    });
 
     test('provider + credential + profile + default CRUD round-trips and redacts secrets', async () => {
       // 1. add an provider
@@ -90,7 +124,7 @@ for (const kind of TRANSPORTS) {
 
       // 4. add a profile + set default; both persist to config.json
       await json('PUT', '/v1/settings/model/profiles/default', {
-        profile: { alias: 'default', provider: 'oai', modelId: 'gpt-x', params: { temperature: 0.5 }, fallbacks: [] }
+        profile: { ...profile('default', 'gpt-x'), params: { temperature: 0.5 } }
       });
       await json('PUT', '/v1/settings/model/default', { alias: 'default' });
       const profiles = (await (await json('GET', '/v1/settings/model/profiles')).json()) as {
@@ -99,11 +133,16 @@ for (const kind of TRANSPORTS) {
       };
       expect(profiles.defaultAlias).toBe('default');
       expect(profiles.profiles).toEqual(
-        expect.arrayContaining([expect.objectContaining({ alias: 'default', provider: 'oai', modelId: 'gpt-x' })])
+        expect.arrayContaining([
+          expect.objectContaining({
+            alias: 'default',
+            routes: { chat: { provider: 'oai', modelId: 'gpt-x' } }
+          })
+        ])
       );
 
       const cfg = await loadConfig(paths.config);
-      expect(cfg?.model.profiles.find((profile) => profile.alias === 'default')?.modelId).toBe('gpt-x');
+      expect(cfg?.model.profiles.find((profile) => profile.alias === 'default')?.routes.chat.modelId).toBe('gpt-x');
       expect(cfg?.model.providers).toEqual(expect.arrayContaining([expect.objectContaining({ id: 'oai' })]));
 
       // 5. delete the credential
@@ -124,10 +163,10 @@ for (const kind of TRANSPORTS) {
         provider: { id: 'oai', label: 'OpenAI-compatible', type: 'openai-compatible', baseUrl: 'https://api.test/v1' }
       });
       await json('PUT', '/v1/settings/model/profiles/default', {
-        profile: { alias: 'default', provider: 'oai', modelId: 'gpt-x', params: {}, fallbacks: [], roles: {} }
+        profile: profile('default', 'gpt-x')
       });
       await json('PUT', '/v1/settings/model/profiles/fast', {
-        profile: { alias: 'fast', provider: 'oai', modelId: 'gpt-fast', params: {}, fallbacks: [], roles: {} }
+        profile: profile('fast', 'gpt-fast')
       });
 
       const res = await json('PUT', '/v1/settings/model/default', { alias: 'fast' });
@@ -143,11 +182,11 @@ for (const kind of TRANSPORTS) {
         provider: { id: 'oai', label: 'OpenAI-compatible', type: 'openai-compatible', baseUrl: 'https://api.test/v1' }
       });
       await json('PUT', '/v1/settings/model/profiles/default', {
-        profile: { alias: 'default', provider: 'oai', modelId: 'gpt-x', params: {}, fallbacks: [], roles: {} }
+        profile: profile('default', 'gpt-x')
       });
 
       const res = await json('DELETE', '/v1/settings/model/profiles/default');
-      expect(res.status).toBeGreaterThanOrEqual(400);
+      expect(res.status).toBe(409);
 
       const cfg = await loadConfig(paths.config);
       expect(cfg?.model.profiles.some((profile) => profile.alias === 'default')).toBe(true);
@@ -158,18 +197,287 @@ for (const kind of TRANSPORTS) {
         provider: { id: 'oai', label: 'OpenAI-compatible', type: 'openai-compatible', baseUrl: 'https://api.test/v1' }
       });
       await json('PUT', '/v1/settings/model/profiles/default', {
-        profile: { alias: 'default', provider: 'oai', modelId: 'gpt-x', params: {}, fallbacks: [], roles: {} }
+        profile: profile('default', 'gpt-x')
       });
       await json('PUT', '/v1/settings/model/profiles/fast', {
-        profile: { alias: 'fast', provider: 'oai', modelId: 'gpt-fast', params: {}, fallbacks: [], roles: {} }
+        profile: profile('fast', 'gpt-fast')
       });
       await json('PUT', '/v1/settings/model/default', { alias: 'fast' });
 
       const res = await json('DELETE', '/v1/settings/model/profiles/fast');
-      expect(res.status).toBeGreaterThanOrEqual(400);
+      expect(res.status).toBe(409);
 
       const cfg = await loadConfig(paths.config);
       expect(cfg?.model.profiles.some((profile) => profile.alias === 'fast')).toBe(true);
+    });
+
+    test('rejects deleting a provider while any profile uses it', async () => {
+      await json('PUT', '/v1/settings/model/providers/oai', {
+        provider: { id: 'oai', label: 'OpenAI-compatible', type: 'openai-compatible', baseUrl: 'https://api.test/v1' }
+      });
+      await json('PUT', '/v1/settings/model/profiles/default', {
+        profile: profile('default', 'gpt-x')
+      });
+
+      const res = await json('DELETE', '/v1/settings/model/providers/oai');
+      expect(res.status).toBeGreaterThanOrEqual(400);
+
+      const cfg = await loadConfig(paths.config);
+      expect(cfg?.model.providers.some((provider) => provider.id === 'oai')).toBe(true);
+    });
+
+    test('deleting an unused provider also removes its credentials', async () => {
+      await json('PUT', '/v1/settings/model/providers/oai', {
+        provider: { id: 'oai', label: 'OpenAI-compatible', type: 'openai-compatible', baseUrl: 'https://api.test/v1' }
+      });
+      await json('POST', '/v1/settings/model/providers/oai/credentials', {
+        label: 'primary',
+        authType: 'api_key',
+        accessToken: 'sk-supersecret-1234'
+      });
+      await Bun.write(
+        providerModelCachePath(paths),
+        JSON.stringify({
+          providers: {
+            oai: {
+              providerType: ModelProviderType.OpenAICompatible,
+              baseUrl: 'https://api.test/v1',
+              credentialId: 'cached-cred',
+              updatedAt: new Date().toISOString(),
+              models: [{ id: 'cached-model' }]
+            }
+          }
+        })
+      );
+
+      const res = await json('DELETE', '/v1/settings/model/providers/oai');
+      expect(res.status).toBe(200);
+
+      const cfg = await loadConfig(paths.config);
+      const auth = await loadAuth(paths.auth);
+      const cache = await readProviderModelCache(paths);
+      expect(cfg?.model.providers.some((provider) => provider.id === 'oai')).toBe(false);
+      expect(auth?.credentialPool.oai).toBeUndefined();
+      expect(cache.providers.oai).toBeUndefined();
+    });
+
+    test('list models returns cached models immediately while refreshing in the background', async () => {
+      const cfg = await loadConfig(paths.config);
+      if (!cfg) throw new Error('config missing');
+      const registry = seededProviderRegistry();
+      const openai = registry.get(ModelProviderType.OpenAICompatible);
+      if (!openai) throw new Error('openai-compatible provider missing');
+
+      let calls = 0;
+      let releaseRefresh: (() => void) | undefined;
+      registry.register({
+        ...openai,
+        listModels: async () => {
+          calls += 1;
+          if (calls === 1) return [{ id: 'remote-first', label: 'Remote first' }];
+          await new Promise<void>((resolve) => {
+            releaseRefresh = resolve;
+          });
+          return [{ id: 'remote-fresh', label: 'Remote fresh' }];
+        }
+      });
+      const modelService = new ModelService(paths.auth, cfg, await loadAuth(paths.auth), registry);
+
+      await t.stop();
+      t = serveTransport(kind, createHttpTransport(buildHandlers(mockModel(), { paths, modelService })));
+
+      await json('PUT', '/v1/settings/model/providers/oai', {
+        provider: { id: 'oai', label: 'OpenAI-compatible', type: 'openai-compatible', baseUrl: 'https://api.test/v1' }
+      });
+      await json('POST', '/v1/settings/model/providers/oai/credentials', {
+        label: 'primary',
+        authType: 'api_key',
+        accessToken: 'sk-supersecret-1234'
+      });
+
+      const firstRes = await json('GET', '/v1/settings/model/providers/oai/models');
+      expect(firstRes.status).toBe(200);
+      const first = (await firstRes.json()) as {
+        models: Array<{ id: string }>;
+      };
+      expect(first.models.map((model) => model.id)).toEqual(['remote-first']);
+
+      const secondRes = await json('GET', '/v1/settings/model/providers/oai/models');
+      expect(secondRes.status).toBe(200);
+      const second = (await secondRes.json()) as {
+        models: Array<{ id: string }>;
+      };
+      expect(second.models.map((model) => model.id)).toEqual(['remote-first']);
+      expect(calls).toBe(2);
+
+      releaseRefresh?.();
+      for (let i = 0; i < 20; i += 1) {
+        const cached = (await readProviderModelCache(paths)).providers.oai?.models.map((model) => model.id);
+        if (cached?.[0] === 'remote-fresh') break;
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+      expect((await readProviderModelCache(paths)).providers.oai?.models.map((model) => model.id)).toEqual([
+        'remote-fresh'
+      ]);
+
+      const persistedConfig = await loadConfig(paths.config);
+      expect(persistedConfig).not.toHaveProperty('model.modelCache');
+    });
+
+    test('test connection enriches provider models with catalog fallback', async () => {
+      const cfg = await loadConfig(paths.config);
+      if (!cfg) throw new Error('config missing');
+      const registry = seededProviderRegistry();
+      const deepseek = registry.get(ModelProviderType.DeepSeek);
+      if (!deepseek) throw new Error('deepseek provider missing');
+      registry.register({
+        ...deepseek,
+        listModels: async () => [{ id: 'deepseek-v4-flash' }]
+      });
+      const modelService = new ModelService(paths.auth, cfg, await loadAuth(paths.auth), registry);
+      const catalog = new ModelCatalogService({
+        cachePath: join(dir, 'model-catalog.json'),
+        log: () => {},
+        url: 'https://catalog.test/api.json',
+        modelsUrl: 'https://catalog.test/models.json',
+        fetchImpl: (async (url: string) =>
+          new Response(
+            JSON.stringify(
+              url.includes('models.json')
+                ? {
+                    'deepseek/deepseek-v4-flash': {
+                      id: 'deepseek/deepseek-v4-flash',
+                      name: 'DeepSeek V4 Flash',
+                      modalities: { input: ['text'], output: ['text'] }
+                    }
+                  }
+                : {
+                    deepseek: {
+                      models: {
+                        'deepseek-v4-flash': {
+                          id: 'deepseek/deepseek-v4-flash',
+                          name: 'DeepSeek V4 Flash',
+                          modalities: { input: ['text'], output: ['text'] },
+                          limit: { context: 1000000 },
+                          cost: { input: 0.14, output: 0.28, cache_read: 0.0028 },
+                          release_date: '2026-02-01'
+                        }
+                      }
+                    }
+                  }
+            ),
+            { status: 200 }
+          )) as unknown as typeof fetch
+      });
+      await catalog.refresh();
+
+      await t.stop();
+      t = serveTransport(
+        kind,
+        createHttpTransport(buildHandlers(mockModel(), { paths, modelService, modelCatalog: catalog }))
+      );
+
+      const res = await json('POST', '/v1/settings/model/test-connection', {
+        provider: { id: 'deepseek', label: 'DeepSeek', type: ModelProviderType.DeepSeek },
+        accessToken: 'sk-test'
+      });
+
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as {
+        ok: boolean;
+        models?: Array<Record<string, unknown>>;
+      };
+      expect(body.ok).toBe(true);
+      expect(body.models?.[0]).toMatchObject({
+        id: 'deepseek-v4-flash',
+        label: 'DeepSeek V4 Flash',
+        contextLimit: 1000000,
+        releaseDate: '2026-02-01',
+        price: { input: 0.14, output: 0.28, cacheRead: 0.0028 },
+        modalities: { input: ['text'], output: ['text'], kind: 'chat' },
+        detailUrl: 'https://models.dev/models/deepseek/deepseek-v4-flash',
+        modelsDevUrl: 'https://models.dev/models/deepseek/deepseek-v4-flash'
+      });
+    });
+
+    test('rejects deleting a profile while any agent uses it', async () => {
+      await json('PUT', '/v1/settings/model/providers/oai', {
+        provider: { id: 'oai', label: 'OpenAI-compatible', type: 'openai-compatible', baseUrl: 'https://api.test/v1' }
+      });
+      await json('PUT', '/v1/settings/model/profiles/default', {
+        profile: profile('default', 'gpt-x')
+      });
+      await json('PUT', '/v1/settings/model/profiles/research', {
+        profile: profile('research', 'gpt-research')
+      });
+      await json('PUT', '/v1/settings/model/profiles/writer', {
+        profile: profile('writer', 'gpt-writer')
+      });
+      await json('POST', '/v1/agents', { name: 'Researcher', modelAlias: 'research', capabilities: [] });
+
+      const res = await json('DELETE', '/v1/settings/model/profiles/research');
+      expect(res.status).toBeGreaterThanOrEqual(400);
+
+      await json('POST', '/v1/agents', { name: 'Writer', model: 'writer', capabilities: [] });
+      const modelFieldRes = await json('DELETE', '/v1/settings/model/profiles/writer');
+      expect(modelFieldRes.status).toBeGreaterThanOrEqual(400);
+
+      const cfg = await loadConfig(paths.config);
+      expect(cfg?.model.profiles.some((profile) => profile.alias === 'research')).toBe(true);
+      expect(cfg?.model.profiles.some((profile) => profile.alias === 'writer')).toBe(true);
+    });
+
+    test('renames a profile atomically with default and agent references', async () => {
+      await json('PUT', '/v1/settings/model/providers/oai', {
+        provider: { id: 'oai', label: 'OpenAI-compatible', type: 'openai-compatible', baseUrl: 'https://api.test/v1' }
+      });
+      await json('PUT', '/v1/settings/model/profiles/default', {
+        profile: profile('default', 'gpt-x')
+      });
+      await json('PUT', '/v1/settings/model/profiles/research', {
+        profile: profile('research', 'gpt-research')
+      });
+      await json('PUT', '/v1/settings/model/default', { alias: 'research' });
+      await json('POST', '/v1/agents', { name: 'Researcher', modelAlias: 'research', capabilities: [] });
+      await json('POST', '/v1/agents', { name: 'Writer', model: 'research', capabilities: [] });
+
+      const res = await json('PATCH', '/v1/settings/model/profiles/research/alias', { alias: 'writer' });
+      expect(res.status).toBe(200);
+
+      const cfg = await loadConfig(paths.config);
+      expect(cfg?.model.default).toBe('writer');
+      expect(cfg?.model.profiles.some((profile) => profile.alias === 'research')).toBe(false);
+      expect(cfg?.model.profiles.some((profile) => profile.alias === 'writer')).toBe(true);
+      expect(cfg?.agent.agents.find((agent) => agent.name === 'Researcher')?.modelAlias).toBe('writer');
+      expect(cfg?.agent.agents.find((agent) => agent.name === 'Writer')?.model).toBe('writer');
+    });
+
+    test('renaming the default profile keeps init status initialized', async () => {
+      await json('PUT', '/v1/settings/model/providers/oai', {
+        provider: { id: 'oai', label: 'OpenAI-compatible', type: 'openai-compatible', baseUrl: 'https://api.test/v1' }
+      });
+      await json('POST', '/v1/settings/model/providers/oai/credentials', {
+        label: 'primary',
+        authType: 'api_key',
+        accessToken: 'sk-test'
+      });
+      await json('PUT', '/v1/settings/model/profiles/default', {
+        profile: profile('default', 'gpt-x')
+      });
+      await json('PUT', '/v1/settings/model/default', { alias: 'default' });
+      const agent = (await (
+        await json('POST', '/v1/agents', { name: 'Writer', modelAlias: 'default', capabilities: [] })
+      ).json()) as { agent: { id: string } };
+      await json('PUT', '/v1/agents/default', { agentId: agent.agent.id });
+
+      const rename = await json('PATCH', '/v1/settings/model/profiles/default/alias', { alias: 'writer' });
+      expect(rename.status).toBe(200);
+
+      const status = (await (await json('GET', '/v1/init/status')).json()) as {
+        initialized: boolean;
+        missing: string[];
+      };
+      expect(status).toMatchObject({ initialized: true, missing: [] });
     });
 
     test('model roles round-trip (GET → PUT → GET) and persist to config.json', async () => {
@@ -177,7 +485,7 @@ for (const kind of TRANSPORTS) {
         provider: { id: 'oai', label: 'OpenAI-compatible', type: 'openai-compatible', baseUrl: 'https://api.test/v1' }
       });
       await json('PUT', '/v1/settings/model/profiles/default', {
-        profile: { alias: 'default', provider: 'oai', modelId: 'gpt-x', params: {}, fallbacks: [], roles: {} }
+        profile: profile('default', 'gpt-x')
       });
       await json('PUT', '/v1/settings/model/default', { alias: 'default' });
 
@@ -195,9 +503,10 @@ for (const kind of TRANSPORTS) {
       expect(after.roles.embedding).toBe('oai:text-embedding-3-small');
 
       const cfg = await loadConfig(paths.config);
-      expect(cfg?.model.profiles.find((profile) => profile.alias === 'default')?.roles.embedding).toBe(
-        'oai:text-embedding-3-small'
-      );
+      expect(cfg?.model.profiles.find((profile) => profile.alias === 'default')?.routes.embedding).toEqual({
+        provider: 'oai',
+        modelId: 'text-embedding-3-small'
+      });
     });
 
     test('model roles are scoped to the active default profile', async () => {
@@ -205,18 +514,97 @@ for (const kind of TRANSPORTS) {
         provider: { id: 'oai', label: 'OpenAI-compatible', type: 'openai-compatible', baseUrl: 'https://api.test/v1' }
       });
       await json('PUT', '/v1/settings/model/profiles/default', {
-        profile: { alias: 'default', provider: 'oai', modelId: 'gpt-x', params: {}, fallbacks: [], roles: {} }
+        profile: profile('default', 'gpt-x')
       });
       await json('PUT', '/v1/settings/model/profiles/fast', {
-        profile: { alias: 'fast', provider: 'oai', modelId: 'gpt-fast', params: {}, fallbacks: [], roles: {} }
+        profile: profile('fast', 'gpt-fast')
       });
       await json('PUT', '/v1/settings/model/default', { alias: 'fast' });
 
       await json('PUT', '/v1/settings/model/roles', { roles: { image: 'oai:image-model' } });
 
       const cfg = await loadConfig(paths.config);
-      expect(cfg?.model.profiles.find((profile) => profile.alias === 'fast')?.roles.image).toBe('oai:image-model');
-      expect(cfg?.model.profiles.find((profile) => profile.alias === 'default')?.roles.image).toBeUndefined();
+      expect(cfg?.model.profiles.find((profile) => profile.alias === 'fast')?.routes.image).toEqual({
+        provider: 'oai',
+        modelId: 'image-model'
+      });
+      expect(cfg?.model.profiles.find((profile) => profile.alias === 'default')?.routes.image).toBeUndefined();
+    });
+
+    test('POST /v1/settings/model/transcribe uses transcription then cleans up with the fast role', async () => {
+      await t.stop();
+      const registry = new ModelProviderRegistry();
+      const calls: Array<{ kind: 'transcribe' | 'complete'; modelId: string; content?: string }> = [];
+      registry.register({
+        type: ModelProviderType.OpenAICompatible,
+        descriptor: {
+          type: ModelProviderType.OpenAICompatible,
+          label: 'OpenAI-compatible',
+          strategy: 'openai-compatible'
+        },
+        transcribe: async (call) => {
+          calls.push({
+            kind: 'transcribe',
+            modelId: call.modelId,
+            content: `${call.mediaType}:${call.language}:${call.audio instanceof Uint8Array ? call.audio.length : 0}`
+          });
+          return { text: 'um I am using Ollama with LLAMA 3.2 and it works' };
+        },
+        complete: async (call) => {
+          const userMessage = call.messages.at(-1)?.content;
+          calls.push({
+            kind: 'complete',
+            modelId: call.modelId,
+            content: typeof userMessage === 'string' ? userMessage : JSON.stringify(userMessage)
+          });
+          return { text: 'I am using Ollama with Llama 3.2, and it works.' };
+        }
+      });
+      const cfg = await loadConfig(paths.config);
+      if (!cfg) throw new Error('config missing');
+      const modelService = new ModelService(paths.auth, cfg, await loadAuth(paths.auth), registry);
+      t = serveTransport(kind, createHttpTransport(buildHandlers(mockModel(), { paths, modelService })));
+
+      await json('PUT', '/v1/settings/model/providers/oai', {
+        provider: { id: 'oai', label: 'OpenAI-compatible', type: 'openai-compatible', baseUrl: 'https://api.test/v1' }
+      });
+      await json('POST', '/v1/settings/model/providers/oai/credentials', {
+        label: 'primary',
+        authType: 'api_key',
+        accessToken: 'sk-test'
+      });
+      await json('PUT', '/v1/settings/model/profiles/default', {
+        profile: {
+          alias: 'default',
+          routes: {
+            chat: { provider: 'oai', modelId: 'gpt-x' },
+            fast: { provider: 'oai', modelId: 'fast-cleaner' },
+            transcription: { provider: 'oai', modelId: 'whisper-test' }
+          },
+          params: {},
+          fallbacks: []
+        }
+      });
+      await json('PUT', '/v1/settings/model/default', { alias: 'default' });
+
+      const res = await json('POST', '/v1/settings/model/transcribe', {
+        audioBase64: Buffer.from([1, 2, 3, 4]).toString('base64'),
+        mediaType: 'audio/wav',
+        language: 'en'
+      });
+
+      expect(res.status).toBe(200);
+      expect((await res.json()) as { text: string }).toEqual({
+        text: 'I am using Ollama with Llama 3.2, and it works.'
+      });
+      expect(calls).toEqual([
+        { kind: 'transcribe', modelId: 'whisper-test', content: 'audio/wav:en:4' },
+        {
+          kind: 'complete',
+          modelId: 'fast-cleaner',
+          content: '<raw_text>um I am using Ollama with LLAMA 3.2 and it works</raw_text>'
+        }
+      ]);
     });
 
     test('POST /v1/settings/model/embeddings/reindex resolves and returns ok', async () => {

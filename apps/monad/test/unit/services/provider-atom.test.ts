@@ -76,7 +76,7 @@ test('a discovered provider atom pack is registered into the registry and usable
 
   const deps: GatewayDeps = {
     providers: [{ id: 'e2e', type: 'e2e' }],
-    profiles: [{ alias: 'default', provider: 'e2e', modelId: 'm', params: {}, fallbacks: [] }],
+    profiles: [{ alias: 'default', routes: { chat: { provider: 'e2e', modelId: 'm' } }, params: {}, fallbacks: [] }],
     defaultProfile: 'default',
     credentialsFor: () => [{ id: 'c1', accessToken: 'k', authType: 'api_key', priority: 0 }]
   };

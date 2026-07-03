@@ -1,5 +1,5 @@
 // Boot-phase helper: wraps the atom-pack rediscovery sweep (connectors / commands / hooks /
-// providers / locales / file-MCP) in a serialised, closure-free factory so main.ts can hand the
+// providers / workspace experiences / locales / file-MCP) in a serialised, closure-free factory so main.ts can hand the
 // returned function to both the API handler and the fs-watcher without re-capturing local variables.
 // Tools are first-party only (wired once at startup) and never part of a rediscovery sweep.
 
@@ -56,10 +56,13 @@ export function createAtomPackRediscoverer(deps: AtomPackRediscovererDeps): () =
       // doesn't leave stale entries; the sweep below re-adds the survivors.
       commandRegistry.clearAtoms();
       toolRegistry.clearHooks();
+      toolRegistry.clearWorkspaceExperiences();
 
       const builtin: BuiltinSinks = {
         onProvider: (p) => modelProviderRegistry.register(p),
-        onHook: (h) => toolRegistry.registerHook(h)
+        onHook: (h) => toolRegistry.registerHook(h),
+        onWorkspaceExperience: (experience, atomPackId) =>
+          toolRegistry.registerWorkspaceExperience(experience, atomPackId)
       };
       const discovered: DiscoveredSinks = {
         onProvider: (p) => modelProviderRegistry.register(p),
@@ -67,7 +70,9 @@ export function createAtomPackRediscoverer(deps: AtomPackRediscovererDeps): () =
         connectorPins: pins.connector,
         onCommand: (atomName, cmd) => commandRegistry.registerAtom(atomName, cmd),
         onCollision: (c) => atomConflicts.push(c),
-        onHook: (h) => toolRegistry.registerHook(h)
+        onHook: (h) => toolRegistry.registerHook(h),
+        onWorkspaceExperience: (experience, atomPackId) =>
+          toolRegistry.registerWorkspaceExperience(experience, atomPackId)
       };
       const reg = await createChannelRegistry(paths, { builtin, discovered });
       commandRegistry.resolvePins(pins.command, (c) => atomConflicts.push(c));

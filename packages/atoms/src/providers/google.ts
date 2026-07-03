@@ -53,14 +53,32 @@ export const googleProviderAtom = defineAiSdkProvider({
   // Gemini exposes a non-OpenAI catalogue route (x-goog-api-key, `models/…` ids).
   async listModels(provider, cred, fetch = globalThis.fetch) {
     const base = (cred?.baseUrl ?? provider.baseUrl ?? DEFAULT_BASE).replace(/\/$/, '');
-    const res = await fetch(`${base}/models`, {
-      headers: cred?.accessToken ? { 'x-goog-api-key': cred.accessToken } : {}
-    });
-    if (!res.ok) {
-      const body = await res.text().catch(() => '');
-      throw new Error(`Google models request failed: ${res.status}${body ? ` — ${body.slice(0, 200)}` : ''}`);
+    const headers: Record<string, string> = cred?.accessToken ? { 'x-goog-api-key': cred.accessToken } : {};
+    const models: Array<{ id: string; label?: string }> = [];
+    let pageToken: string | undefined;
+    const seenPages = new Set<string>();
+    for (;;) {
+      const query = new URLSearchParams({ pageSize: '1000' });
+      if (pageToken) query.set('pageToken', pageToken);
+      const pageKey = query.toString();
+      if (seenPages.has(pageKey)) break;
+      seenPages.add(pageKey);
+
+      const res = await fetch(`${base}/models?${query}`, { headers });
+      if (!res.ok) {
+        const body = await res.text().catch(() => '');
+        throw new Error(`Google models request failed: ${res.status}${body ? ` — ${body.slice(0, 200)}` : ''}`);
+      }
+      const json = (await res.json()) as {
+        models?: Array<{ name?: string; displayName?: string }>;
+        nextPageToken?: string;
+      };
+      models.push(
+        ...(json.models ?? []).map((m) => ({ id: (m.name ?? '').replace(/^models\//, ''), label: m.displayName }))
+      );
+      if (!json.nextPageToken) break;
+      pageToken = json.nextPageToken;
     }
-    const json = (await res.json()) as { models?: Array<{ name?: string; displayName?: string }> };
-    return (json.models ?? []).map((m) => ({ id: (m.name ?? '').replace(/^models\//, ''), label: m.displayName }));
+    return models;
   }
 });

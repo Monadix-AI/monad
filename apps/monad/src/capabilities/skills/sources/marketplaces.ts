@@ -30,6 +30,10 @@ interface CacheEntry {
 
 const cache = new Map<SkillMarketplaceSource, CacheEntry>();
 
+export function __clearRemoteMarketplaceCacheForTest(): void {
+  cache.clear();
+}
+
 function decodeEscapes(value: string): string {
   return value
     .replace(/\\"/g, '"')
@@ -118,10 +122,11 @@ function unique(records: MarketplaceRecord[]): MarketplaceRecord[] {
 }
 
 function parseSkillsSh(html: string): MarketplaceRecord[] {
+  const searchableHtml = decodeEscapes(html);
   const pattern =
     /\{"source":"([^"]+)","skillId":"([^"]+)","name":"([^"]+)","installs":(\d+),"weeklyInstalls":\[([^\]]*)\](?:,"isOfficial":(true|false))?/g;
   const records: MarketplaceRecord[] = [];
-  for (const match of html.matchAll(pattern)) {
+  for (const match of searchableHtml.matchAll(pattern)) {
     const [, rawSourceRepo, rawSkillId, rawName, rawDownloads, rawWeeklyInstalls] = match;
     if (!rawSourceRepo || !rawSkillId || !rawName || !rawDownloads || rawWeeklyInstalls == null) continue;
     const sourceRepo = decodeEscapes(rawSourceRepo);
@@ -150,11 +155,12 @@ function parseSkillsSh(html: string): MarketplaceRecord[] {
 }
 
 function parseMcpServers(html: string): MarketplaceRecord[] {
+  const searchableHtml = decodeEscapes(html);
   const pattern =
     /slug:"([^"]+)",skillName:"([^"]+)",name:"([^"]+)",description:"([^"]*)",url:"([^"]+)",downloadUrl:[^,]*,author:"([^"]*)"/g;
   const records: MarketplaceRecord[] = [];
   let index = 0;
-  for (const match of html.matchAll(pattern)) {
+  for (const match of searchableHtml.matchAll(pattern)) {
     const [, rawSlug, , rawName, rawDescription, rawRepoUrl, rawAuthor] = match;
     if (!rawSlug || !rawName || rawDescription == null || !rawRepoUrl || rawAuthor == null) continue;
     const slug = decodeEscapes(rawSlug);

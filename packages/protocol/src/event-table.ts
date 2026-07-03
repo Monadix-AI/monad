@@ -12,9 +12,10 @@
 
 import { z } from 'zod';
 
+import { clarifyAskerSchema, clarifyChoiceModeSchema } from './clarify.ts';
 import { costSchema, type EventType, finishReasonSchema, messageTypeSchema, tokenUsageSchema } from './domain.ts';
 import { agentIdSchema, messageIdSchema, sessionIdSchema } from './ids.ts';
-import { nativeCliLaunchModeSchema, nativeCliProviderSchema } from './native-cli-agent.ts';
+import { nativeCliLaunchModeSchema, nativeCliProductIconSchema, nativeCliProviderSchema } from './native-cli-agent.ts';
 
 const requestIdSchema = z.string();
 
@@ -92,13 +93,15 @@ export const agentTokenPayloadSchema = z.object({
   messageId: messageIdSchema,
   agentName: z.string().optional(),
   delta: z.string(),
-  index: z.number().int().nonnegative()
+  index: z.number().int().nonnegative(),
+  source: z.enum(['managed-native-cli']).optional()
 });
 
 export const agentReasoningPayloadSchema = z.object({
   messageId: messageIdSchema,
   delta: z.string(),
-  index: z.number().int().nonnegative()
+  index: z.number().int().nonnegative(),
+  source: z.enum(['managed-native-cli']).optional()
 });
 
 export const agentMessagePayloadSchema = z.object({
@@ -106,6 +109,7 @@ export const agentMessagePayloadSchema = z.object({
   agentName: z.string().optional(),
   text: z.string(),
   data: z.unknown().optional(),
+  source: z.enum(['managed-native-cli']).optional(),
   usage: tokenUsageSchema.optional(),
   cost: costSchema.optional(),
   finishReason: finishReasonSchema.optional()
@@ -168,7 +172,10 @@ export const toolApprovalResolvedPayloadSchema = z.object({
 export const clarifyRequestedPayloadSchema = z.object({
   requestId: requestIdSchema,
   question: z.string(),
-  options: z.array(z.string()).optional()
+  options: z.array(z.string()).optional(),
+  mode: clarifyChoiceModeSchema.optional(),
+  allowOther: z.boolean().optional(),
+  asker: clarifyAskerSchema.optional()
 });
 
 export const clarifyResolvedPayloadSchema = z.object({
@@ -214,6 +221,7 @@ export const nativeCliStartedPayloadSchema = z.object({
   nativeCliSessionId: z.string(),
   agentName: z.string(),
   provider: nativeCliProviderSchema,
+  productIcon: nativeCliProductIconSchema.optional(),
   launchMode: nativeCliLaunchModeSchema,
   workingPath: z.string(),
   pid: z.number().int().nullable()
@@ -223,6 +231,14 @@ export const nativeCliOutputPayloadSchema = z.object({
   nativeCliSessionId: z.string(),
   stream: z.enum(['stdout', 'stderr', 'pty']),
   chunk: z.string()
+});
+
+export const nativeCliConnectionRequiredPayloadSchema = z.object({
+  nativeCliSessionId: z.string().optional(),
+  agentName: z.string(),
+  provider: nativeCliProviderSchema,
+  reason: z.string(),
+  reconnectIn: z.literal('studio')
 });
 
 export const nativeCliApprovalRequestedPayloadSchema = z.object({
@@ -239,6 +255,15 @@ export const nativeCliApprovalResolvedPayloadSchema = z.object({
   requestId: requestIdSchema,
   allow: z.boolean(),
   reason: z.string().optional()
+});
+
+export const nativeCliResumeFailedPayloadSchema = z.object({
+  agentName: z.string(),
+  provider: nativeCliProviderSchema,
+  providerSessionRef: z.string(),
+  code: z.string(),
+  message: z.string(),
+  fallback: z.literal('cold-start')
 });
 
 export const nativeCliExitedPayloadSchema = z.object({
@@ -272,8 +297,10 @@ export type DelegationFsRequestPayload = z.infer<typeof delegationFsRequestPaylo
 export type DelegationTerminalRequestPayload = z.infer<typeof delegationTerminalRequestPayloadSchema>;
 export type NativeCliStartedPayload = z.infer<typeof nativeCliStartedPayloadSchema>;
 export type NativeCliOutputPayload = z.infer<typeof nativeCliOutputPayloadSchema>;
+export type NativeCliConnectionRequiredPayload = z.infer<typeof nativeCliConnectionRequiredPayloadSchema>;
 export type NativeCliApprovalRequestedPayload = z.infer<typeof nativeCliApprovalRequestedPayloadSchema>;
 export type NativeCliApprovalResolvedPayload = z.infer<typeof nativeCliApprovalResolvedPayloadSchema>;
+export type NativeCliResumeFailedPayload = z.infer<typeof nativeCliResumeFailedPayloadSchema>;
 export type NativeCliExitedPayload = z.infer<typeof nativeCliExitedPayloadSchema>;
 
 export const EVENT_TABLE = {
@@ -307,8 +334,10 @@ export const EVENT_TABLE = {
   'delegation.terminal_request': delegationTerminalRequestPayloadSchema,
   'native_cli.started': nativeCliStartedPayloadSchema,
   'native_cli.output': nativeCliOutputPayloadSchema,
+  'native_cli.connection_required': nativeCliConnectionRequiredPayloadSchema,
   'native_cli.approval_requested': nativeCliApprovalRequestedPayloadSchema,
   'native_cli.approval_resolved': nativeCliApprovalResolvedPayloadSchema,
+  'native_cli.resume_failed': nativeCliResumeFailedPayloadSchema,
   'native_cli.exited': nativeCliExitedPayloadSchema
 } as const satisfies Record<EventType, z.ZodTypeAny>;
 

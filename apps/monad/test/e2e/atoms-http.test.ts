@@ -5,7 +5,7 @@ import type { MonadPaths } from '@monad/home';
 import type { ModelRouter } from '@/agent/index.ts';
 
 import { afterEach, beforeEach, expect, test } from 'bun:test';
-import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initMonadHome, loadAuth, loadConfig, saveAll, saveAuth } from '@monad/home';
@@ -17,6 +17,35 @@ import { buildHandlers, makeTestPaths, mockModel, seededProviderRegistry } from 
 
 function makePaths(base: string): MonadPaths {
   return makeTestPaths(base, { mcp: join(base, 'atoms', 'mcp') });
+}
+
+// Build a single-entry .tar.gz whose member name is an absolute path. `tar` strips the leading
+// slash and Windows has no `python3`, so the traversal fixture is assembled by hand: one 512-byte
+// ustar header + padded body + two zero blocks, gzip-compressed. Cross-platform, no external tool.
+function tarGzWithName(name: string, body: string): Uint8Array {
+  const enc = new TextEncoder();
+  const content = enc.encode(body);
+  const header = new Uint8Array(512);
+  const put = (str: string, off: number, len: number) => header.set(enc.encode(str).subarray(0, len), off);
+  const octal = (n: number, len: number) => `${n.toString(8).padStart(len - 1, '0')}\0`;
+  put(name, 0, 100);
+  put(octal(0o644, 8), 100, 8);
+  put(octal(0, 8), 108, 8);
+  put(octal(0, 8), 116, 8);
+  put(octal(content.length, 12), 124, 12);
+  put(octal(0, 12), 136, 12);
+  put('        ', 148, 8); // checksum computed over spaces, then overwritten
+  put('0', 156, 1); // typeflag: regular file
+  put('ustar\0', 257, 6);
+  put('00', 263, 2);
+  let sum = 0;
+  for (const b of header) sum += b;
+  put(`${sum.toString(8).padStart(6, '0')}\0 `, 148, 8);
+  const bodyBlocks = Math.ceil(content.length / 512) * 512;
+  const tar = new Uint8Array(512 + bodyBlocks + 1024);
+  tar.set(header, 0);
+  tar.set(content, 512);
+  return Bun.gzipSync(tar);
 }
 
 let dir: string;
@@ -61,7 +90,12 @@ export default {manifest:{name:'wa',version:'1.0.0',sdkVersion:'0',atoms:['chann
   if (!cfg) throw new Error('config missing');
   cfg.model.providers = [{ id: 'review-provider', label: 'Review Provider', type: ModelProviderType.OpenAICompatible }];
   cfg.model.profiles = [
-    { alias: 'review', provider: 'review-provider', modelId: 'review-model', params: {}, fallbacks: [], roles: {} }
+    {
+      alias: 'review',
+      routes: { chat: { provider: 'review-provider', modelId: 'review-model' } },
+      params: {},
+      fallbacks: []
+    }
   ];
   cfg.model.default = 'review';
   cfg.skills.installReview = true;
@@ -136,6 +170,23 @@ test('install with consent → list → remove over HTTP', async () => {
   expect(del.status).toBe(200);
   const afterDelete = ((await (await fetch(`${base}/v1/atoms`)).json()) as { atomPacks: { name: string }[] }).atomPacks;
   expect(afterDelete.some((pack) => pack.name === 'wa')).toBe(false);
+});
+
+test('GET /v1/atoms/:name/assets/* serves installed pack assets and rejects traversal', async () => {
+  await post('/v1/atoms/install', { source: `local:${stagedDir}`, consent: true });
+
+  const asset = await fetch(`${base}/v1/atoms/wa/assets/dist/atom-pack.js`);
+  expect(asset.status).toBe(200);
+  expect(asset.headers.get('content-type')).toContain('text/javascript');
+  expect(await asset.text()).toContain('registerChannel');
+
+  const traversal = await fetch(`${base}/v1/atoms/wa/assets/${encodeURIComponent('../atom-pack.json')}`);
+  expect(traversal.status).toBeGreaterThanOrEqual(400);
+
+  await writeFile(join(dir, 'secret.txt'), 'secret');
+  await symlink(join(dir, 'secret.txt'), join(paths.packs, 'wa', 'dist', 'secret-link.js'));
+  const symlinked = await fetch(`${base}/v1/atoms/wa/assets/dist/secret-link.js`);
+  expect(symlinked.status).toBeGreaterThanOrEqual(400);
 });
 
 test('disable sets enabled:false; enable restores it', async () => {
@@ -258,9 +309,8 @@ test('POST /v1/atoms/skills/install runs model review before remote install cons
 
 test('POST /v1/atoms/skills/install rejects tarballs with unsafe absolute paths', async () => {
   const archive = join(dir, 'unsafe-path.tar.gz');
-  await Bun.$`python3 -c ${`import io, tarfile; payload = b"---\\nname: unsafe\\ndescription: Unsafe path skill.\\n---\\nbody\\n"; archive = ${JSON.stringify(archive)}; info = tarfile.TarInfo(name='/absolute/unsafe/SKILL.md'); info.size = len(payload); tarfile.open(archive, 'w:gz').addfile(info, io.BytesIO(payload))`}`
-    .quiet()
-    .text();
+  const payload = '---\nname: unsafe\ndescription: Unsafe path skill.\n---\nbody\n';
+  await writeFile(archive, tarGzWithName('/absolute/unsafe/SKILL.md', payload));
 
   const origin = Bun.serve({
     hostname: '127.0.0.1',

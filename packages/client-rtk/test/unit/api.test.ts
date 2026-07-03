@@ -7,8 +7,10 @@ import type { Event } from '@monad/protocol';
 
 import { expect, test } from 'bun:test';
 
+import { listNativeCliSessionsApi } from '../../src/endpoints/native-cli/list-native-cli-sessions.ts';
 import {
   getMessagesApi,
+  listSessionsApi,
   resetSessionApi,
   sessionAdapter,
   sessionSelectors,
@@ -16,7 +18,15 @@ import {
   streamUiItemsApi
 } from '../../src/endpoints/sessions/index.ts';
 import { channelsApi } from '../../src/endpoints/settings/channels/index.ts';
-import { createMonadStore, monadApi } from '../../src/index.ts';
+import {
+  createMonadStore,
+  monadApi,
+  useGetNativeCliAuthQuery,
+  useInputNativeCliAuthMutation,
+  useLazyGetNativeCliAuthStatusQuery,
+  useStartNativeCliAuthMutation,
+  useStopNativeCliAuthMutation
+} from '../../src/index.ts';
 
 function ok<T>(data: T): { data: T; status: number } {
   return { data, status: 200 };
@@ -54,6 +64,12 @@ function fakeClient(overrides: Record<string, unknown>): MonadClient {
                 return ok({ items: fn ? await fn(id) : [], nextCursor: undefined });
               }
             },
+            'native-cli-sessions': {
+              get: async () => {
+                const fn = overrides.listNativeCliSessions as ((sessionId: string) => Promise<unknown[]>) | undefined;
+                return ok({ sessions: fn ? await fn(id) : [] });
+              }
+            },
             reset: {
               post: async () => {
                 const fn = overrides.resetSession as
@@ -75,6 +91,16 @@ function fakeClient(overrides: Record<string, unknown>): MonadClient {
             }
           }
         ),
+        projects: ({ id }: { id: string }) => ({
+          'native-cli-sessions': {
+            get: async () => {
+              const fn = overrides.listProjectNativeCliSessions as
+                | ((projectId: string) => Promise<unknown[]>)
+                | undefined;
+              return ok({ sessions: fn ? await fn(id) : [] });
+            }
+          }
+        }),
         settings: {
           model: {
             providers: Object.assign(
@@ -184,6 +210,14 @@ function fakeClient(overrides: Record<string, unknown>): MonadClient {
   return client as unknown as MonadClient;
 }
 
+test('native CLI auth hooks are exported from the package API', () => {
+  expect(typeof useGetNativeCliAuthQuery).toBe('function');
+  expect(typeof useInputNativeCliAuthMutation).toBe('function');
+  expect(typeof useLazyGetNativeCliAuthStatusQuery).toBe('function');
+  expect(typeof useStartNativeCliAuthMutation).toBe('function');
+  expect(typeof useStopNativeCliAuthMutation).toBe('function');
+});
+
 test('a query delegates to the client and caches by tag', async () => {
   let calls = 0;
   const client = fakeClient({
@@ -252,6 +286,50 @@ test('client errors surface on the RTKQ error branch, not as throws', async () =
   expect((res.error as { message?: string } | undefined)?.message).toBe('boom');
 });
 
+test('listNativeCliSessions uses the typed project treaty route for Workplace Projects', async () => {
+  const seen: string[] = [];
+  const now = new Date().toISOString();
+  const client = fakeClient({
+    listProjectNativeCliSessions: async (projectId: string) => {
+      seen.push(projectId);
+      return [
+        {
+          id: 'ncli_1',
+          transcriptTargetId: projectId,
+          agentName: 'codex',
+          provider: 'codex',
+          workingPath: '/tmp/project',
+          launchMode: 'app-server',
+          runtimeRole: 'managed-project-agent',
+          state: 'running',
+          pid: 123,
+          outputSnapshot: '',
+          exitCode: null,
+          startedAt: now,
+          updatedAt: now,
+          exitedAt: null
+        }
+      ];
+    }
+  });
+  const store = createMonadStore({ client });
+
+  const res = await store.dispatch(
+    (
+      listNativeCliSessionsApi.endpoints as typeof listNativeCliSessionsApi.endpoints & {
+        listNativeCliSessions: {
+          initiate: (
+            id: string
+          ) => ReturnType<typeof listNativeCliSessionsApi.endpoints.listNativeCliSessions.initiate>;
+        };
+      }
+    ).listNativeCliSessions.initiate('prj_1')
+  );
+
+  expect(seen).toEqual(['prj_1']);
+  expect('data' in res && res.data?.ids).toEqual(['ncli_1']);
+});
+
 test('credential mutations invalidate that provider’s credential list', async () => {
   let credCalls = 0;
   const client = fakeClient({
@@ -278,11 +356,16 @@ test('credential mutations invalidate that provider’s credential list', async 
   expect(credCalls).toBe(2);
 });
 
-test('resetSession invalidates Messages, forcing a refetch', async () => {
+test('resetSession invalidates Messages and Sessions, forcing refetches', async () => {
   let msgCalls = 0;
+  let sessionCalls = 0;
   const client = fakeClient({
     getMessages: async () => {
       msgCalls++;
+      return [];
+    },
+    listSessions: async () => {
+      sessionCalls++;
       return [];
     },
     resetSession: async () => ({ clearedCount: 1 })
@@ -290,11 +373,14 @@ test('resetSession invalidates Messages, forcing a refetch', async () => {
   const store = createMonadStore({ client });
 
   await store.dispatch(getMessagesApi.endpoints.getMessages.initiate('ses_abc'));
+  await store.dispatch(listSessionsApi.endpoints.listSessions.initiate(undefined));
   expect(msgCalls).toBe(1);
+  expect(sessionCalls).toBe(1);
 
   await store.dispatch(resetSessionApi.endpoints.resetSession.initiate('ses_abc'));
   await new Promise((r) => setTimeout(r, 0));
   expect(msgCalls).toBe(2);
+  expect(sessionCalls).toBe(2);
 });
 
 test('resetSession clears the live stream cache immediately', async () => {
@@ -350,7 +436,7 @@ test('streamControl subscribes to the control stream and invalidates Sessions on
   // A SESSION_LIST_EVENT triggers a Sessions tag invalidation → listSessions refetches.
   controlHandler?.({
     id: 'evt_1',
-    sessionId: 'ses_1',
+    transcriptTargetId: 'ses_1',
     type: 'session.created',
     actorAgentId: null,
     payload: {},
@@ -361,10 +447,82 @@ test('streamControl subscribes to the control stream and invalidates Sessions on
   expect(listCalls).toBe(2);
 
   // A non-list event must NOT trigger a refetch.
-  controlHandler?.({ id: 'evt_2', sessionId: 'ses_1', type: 'tool.called', actorAgentId: null, payload: {}, at: '' });
+  controlHandler?.({
+    id: 'evt_2',
+    transcriptTargetId: 'ses_1',
+    type: 'tool.called',
+    actorAgentId: null,
+    payload: {},
+    at: ''
+  });
   await Promise.resolve();
   await new Promise((r) => setTimeout(r, 0));
   expect(listCalls).toBe(2);
+});
+
+test('streamControl invalidates native CLI sessions when a project native CLI runtime starts', async () => {
+  let nativeCliCalls = 0;
+  let controlHandler: ((event: Event) => void) | undefined;
+  const now = new Date().toISOString();
+
+  const client = fakeClient({
+    listProjectNativeCliSessions: async (projectId: string) => {
+      nativeCliCalls++;
+      return [
+        {
+          id: 'ncli_1',
+          transcriptTargetId: projectId,
+          agentName: 'pmem_codex_reviewer',
+          provider: 'codex',
+          workingPath: '/tmp/project',
+          launchMode: 'app-server',
+          runtimeRole: 'managed-project-agent',
+          state: 'running',
+          pid: 123,
+          outputSnapshot: '',
+          exitCode: null,
+          startedAt: now,
+          updatedAt: now,
+          exitedAt: null
+        }
+      ];
+    },
+    subscribeControl: (handler: (event: Event) => void) => {
+      controlHandler = handler;
+      return () => {};
+    }
+  });
+  const store = createMonadStore({ client });
+
+  await store.dispatch(
+    (
+      listNativeCliSessionsApi.endpoints as typeof listNativeCliSessionsApi.endpoints & {
+        listNativeCliSessions: {
+          initiate: (
+            id: string
+          ) => ReturnType<typeof listNativeCliSessionsApi.endpoints.listNativeCliSessions.initiate>;
+        };
+      }
+    ).listNativeCliSessions.initiate('prj_1')
+  );
+  expect(nativeCliCalls).toBe(1);
+
+  store.dispatch(streamControlApi.endpoints.streamControl.initiate());
+  await new Promise((r) => setTimeout(r, 0));
+  expect(controlHandler).toBeDefined();
+
+  controlHandler?.({
+    id: 'evt_native_cli_started',
+    transcriptTargetId: 'prj_1',
+    type: 'native_cli.started',
+    actorAgentId: null,
+    payload: { nativeCliSessionId: 'ncli_1' },
+    at: ''
+  });
+  await Promise.resolve();
+  await new Promise((r) => setTimeout(r, 0));
+
+  expect(nativeCliCalls).toBe(2);
 });
 
 test('listChannels caches by the Channels tag', async () => {

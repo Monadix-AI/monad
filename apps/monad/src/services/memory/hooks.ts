@@ -28,8 +28,11 @@ export function registerMemoryHooks(
     event: 'BeforeTurn',
     handler: async (input) => {
       const extra = opts?.extraContext?.(input.sessionId);
-      const recalled = await memoryService.recallContext(input.sessionId as SessionId, input.prompt ?? '');
-      const nudge = memoryService.toolsActive() ? MEMORY_NUDGE : undefined;
+      const isSession = input.sessionId.startsWith('ses_');
+      const recalled = isSession
+        ? await memoryService.recallContext(input.sessionId as SessionId, input.prompt ?? '')
+        : undefined;
+      const nudge = isSession && memoryService.toolsActive() ? MEMORY_NUDGE : undefined;
       const ctx = [extra, recalled, nudge].filter((s): s is string => Boolean(s)).join('\n\n');
       return ctx ? { additionalContext: ctx } : undefined;
     }
@@ -37,6 +40,7 @@ export function registerMemoryHooks(
   registry.registerHook({
     event: 'AfterTurn',
     handler: (input) => {
+      if (!input.sessionId.startsWith('ses_')) return undefined;
       memoryService.observeTurn(input.sessionId as SessionId);
       return undefined;
     }
@@ -44,6 +48,7 @@ export function registerMemoryHooks(
   registry.registerHook({
     event: 'SessionEnd',
     handler: (input) => {
+      if (!input.sessionId.startsWith('ses_')) return undefined;
       void memoryService.endSession(input.sessionId as SessionId);
       return undefined;
     }

@@ -21,7 +21,7 @@ export const setProfileApi = listProfilesApi.injectEndpoints({
           patch.undo();
         }
       },
-      invalidatesTags: ['Profiles']
+      invalidatesTags: ['Profiles', 'Roles']
     })
   })
 });

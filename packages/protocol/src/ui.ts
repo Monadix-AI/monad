@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { clarifyAskerSchema, clarifyChoiceModeSchema } from './clarify.ts';
 import { listMessagesQuerySchema } from './control.ts';
 import { contextUsagePayloadSchema } from './event-table.ts';
 import { eventIdSchema, messageIdSchema } from './ids.ts';
@@ -50,6 +51,7 @@ export const uiMessageItemSchema = z.object({
   id: z.string(),
   role: uiMessageRoleSchema,
   agentName: z.string().optional(),
+  source: z.enum(['managed-native-cli']).optional(),
   parts: z.array(uiPartSchema),
   status: uiItemStatusSchema.optional(),
   seq: z.string()
@@ -83,6 +85,9 @@ export const uiClarificationItemSchema = z.object({
   id: z.string(),
   question: z.string(),
   options: z.array(z.string()).optional(),
+  mode: clarifyChoiceModeSchema.optional(),
+  allowOther: z.boolean().optional(),
+  asker: clarifyAskerSchema.optional(),
   seq: z.string()
 });
 export type UIClarificationItem = z.infer<typeof uiClarificationItemSchema>;

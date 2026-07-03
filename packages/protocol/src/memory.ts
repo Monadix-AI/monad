@@ -9,7 +9,7 @@ import { z } from 'zod';
 
 import { agentIdSchema, iso8601Schema, sessionIdSchema } from './ids.ts';
 
-export const scopeKindSchema = z.enum(['session', 'agent', 'global']); // 'org' reserved (future tier)
+export const scopeKindSchema = z.enum(['session', 'agent', 'project', 'global']); // 'org' reserved (future tier)
 export type ScopeKind = z.infer<typeof scopeKindSchema>;
 
 // id = sessionId | agentId | '*' (global). One record's isolation key.
@@ -42,6 +42,8 @@ export interface RecallCtx {
   query: string;
   sessionId: SessionId;
   agentId: AgentId;
+  /** Scopes to recall across (e.g. global + this agent + this workspace), highest-priority first. */
+  scopes: MemoryScope[];
   advanced: boolean; // L2+L3 toggle; false in P0
   budget: RecallBudget;
 }
@@ -142,7 +144,18 @@ export const memoryStatusResponseSchema = z.object({
     error: z.string().nullable()
   }),
   // Local qdrant lifecycle state. Present when backend='mem0' and no explicit vectorStore override.
-  qdrant: z.object({ phase: qdrantPhaseSchema, error: z.string().nullable() }).optional()
+  qdrant: z.object({ phase: qdrantPhaseSchema, error: z.string().nullable() }).optional(),
+  // How deep the consolidation pipeline runs: 1 = facts only, 2 = + graph, 3 = + inferred laws.
+  level: z.number().int().min(1).max(3),
+  // Workspaces that have memory (distinct session cwds): the project scope key + its path, so the UI
+  // can offer a project picker without the user knowing the hashed key.
+  projects: z.array(z.object({ key: z.string(), path: z.string() })),
+  // L2 knowledge-graph consolidation settings (off by default). null ⇒ unset (uses the defaults:
+  // autoConsolidate off, interval 30m). Lives under `memory.graph` in profile.json.
+  graph: z.object({
+    autoConsolidate: z.boolean().nullable(),
+    intervalMinutes: z.number().nullable()
+  })
 });
 export type MemoryStatusResponse = z.infer<typeof memoryStatusResponseSchema>;
 
@@ -157,3 +170,44 @@ export const setMem0ModelsRequestSchema = z.object({
   embedDim: z.number().int().positive().nullish()
 });
 export type SetMem0ModelsRequest = z.infer<typeof setMem0ModelsRequestSchema>;
+
+// Memory consolidation settings. `level` sets the pipeline depth (1-3); `autoConsolidate`/
+// `intervalMinutes` gate the background timer. null clears an override (back to defaults); undefined
+// leaves the field unchanged. Persisted to `memory.level` / `memory.graph` (hot-applied by the timer).
+export const setMemoryGraphRequestSchema = z.object({
+  level: z.number().int().min(1).max(3).nullish(),
+  autoConsolidate: z.boolean().nullish(),
+  intervalMinutes: z.number().int().positive().nullish()
+});
+export type SetMemoryGraphRequest = z.infer<typeof setMemoryGraphRequestSchema>;
+
+// What an L3 law is grounded in: the L1 facts and L2 graph relations it generalizes (the daemon
+// resolves the law's stored id refs into these at read time — the "why do you believe X" provenance).
+export const lawGroundingSchema = z.object({
+  facts: z.array(z.object({ id: z.string(), content: z.string() })),
+  edges: z.array(z.object({ id: z.string(), label: z.string() }))
+});
+export type LawGrounding = z.infer<typeof lawGroundingSchema>;
+
+// Wire view of an L3 inferred law for the read-only Memory panel. The daemon flattens its SQLite
+// store into these (all scopes); the UI groups them by scope and expands grounding on demand.
+export const lawViewSchema = z.object({
+  id: z.string(),
+  scope: z.string(),
+  statement: z.string(),
+  /** Confidence at derivation (peak). */
+  confidence: z.number(),
+  /** Confidence after time-decay since `updatedAt` — what recall actually weighs. */
+  effectiveConfidence: z.number(),
+  /** Invalidated: the law had grounding refs but none resolve any more (its facts/edges are gone). */
+  stale: z.boolean(),
+  /** The text of a current fact that contradicts this law, or null. Such a law is suppressed from
+   *  recall; the UI flags it so the user can re-derive (/consolidate) or correct the fact. */
+  contradictedBy: z.string().nullable(),
+  grounding: lawGroundingSchema,
+  updatedAt: z.number()
+});
+export type LawView = z.infer<typeof lawViewSchema>;
+
+export const getLawsResponseSchema = z.object({ laws: z.array(lawViewSchema) });
+export type GetLawsResponse = z.infer<typeof getLawsResponseSchema>;

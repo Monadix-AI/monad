@@ -9,7 +9,7 @@ function model(over: Partial<MonadConfig['model']> = {}): MonadConfig['model'] {
   return {
     default: '',
     providers: [],
-    profiles: [{ alias: 'default', provider: 'p', modelId: 'm', params: {}, fallbacks: [], roles: {} }],
+    profiles: [{ alias: 'default', routes: { chat: { provider: 'p', modelId: 'm' } }, params: {}, fallbacks: [] }],
     roles: {},
     tierOverrides: {},
     kinds: {},
@@ -28,8 +28,13 @@ test('chat resolves to the configured default profile alias when set', () => {
       model({
         default: 'review',
         profiles: [
-          { alias: 'default', provider: 'p', modelId: 'm', params: {}, fallbacks: [], roles: {} },
-          { alias: 'review', provider: 'p', modelId: 'review-model', params: {}, fallbacks: [], roles: {} }
+          { alias: 'default', routes: { chat: { provider: 'p', modelId: 'm' } }, params: {}, fallbacks: [] },
+          {
+            alias: 'review',
+            routes: { chat: { provider: 'p', modelId: 'review-model' } },
+            params: {},
+            fallbacks: []
+          }
         ]
       }),
       'chat'
@@ -45,17 +50,24 @@ test('vision falls back to the chat default when unassigned', () => {
         profiles: [
           {
             alias: 'default',
-            provider: 'p',
-            modelId: 'm',
+            routes: {
+              chat: { provider: 'p', modelId: 'm' },
+              vision: { provider: 'openai', modelId: 'gpt-5-vision' }
+            },
             params: {},
-            fallbacks: [],
-            roles: { vision: 'openai:gpt-5-vision' }
+            fallbacks: []
           }
         ]
       }),
       'vision'
     )
   ).toBe('openai:gpt-5-vision');
+});
+
+test('vision requires an explicit role model when default model capabilities are unknown', () => {
+  expect(() => resolveModelRole(model(), 'vision', undefined, () => undefined)).toThrow(
+    /cannot determine capabilities.*set the role model explicitly/
+  );
 });
 
 test('default profile role assignments are used instead of legacy global role assignments', () => {
@@ -66,11 +78,12 @@ test('default profile role assignments are used instead of legacy global role as
         profiles: [
           {
             alias: 'default',
-            provider: 'p',
-            modelId: 'm',
+            routes: {
+              chat: { provider: 'p', modelId: 'm' },
+              vision: { provider: 'profile', modelId: 'gpt-vision' }
+            },
             params: {},
-            fallbacks: [],
-            roles: { vision: 'profile:gpt-vision' }
+            fallbacks: []
           }
         ]
       }),
@@ -86,11 +99,12 @@ test('role resolution can target a non-default profile alias', () => {
         profiles: [
           {
             alias: 'review',
-            provider: 'p',
-            modelId: 'm',
+            routes: {
+              chat: { provider: 'p', modelId: 'm' },
+              image: { provider: 'profile', modelId: 'image' }
+            },
             params: {},
-            fallbacks: [],
-            roles: { image: 'profile:image' }
+            fallbacks: []
           }
         ]
       }),
@@ -109,11 +123,13 @@ test('image/speech resolve from their role assignments', () => {
         profiles: [
           {
             alias: 'default',
-            provider: 'p',
-            modelId: 'm',
+            routes: {
+              chat: { provider: 'p', modelId: 'm' },
+              image: { provider: 'new', modelId: 'img' },
+              speech: { provider: 'new', modelId: 'tts' }
+            },
             params: {},
-            fallbacks: [],
-            roles: { image: 'new:img', speech: 'new:tts' }
+            fallbacks: []
           }
         ]
       }),
@@ -126,11 +142,13 @@ test('image/speech resolve from their role assignments', () => {
         profiles: [
           {
             alias: 'default',
-            provider: 'p',
-            modelId: 'm',
+            routes: {
+              chat: { provider: 'p', modelId: 'm' },
+              image: { provider: 'new', modelId: 'img' },
+              speech: { provider: 'new', modelId: 'tts' }
+            },
             params: {},
-            fallbacks: [],
-            roles: { image: 'new:img', speech: 'new:tts' }
+            fallbacks: []
           }
         ]
       }),
@@ -147,11 +165,12 @@ test('embedding has no fallback — undefined until assigned (so semantic search
         profiles: [
           {
             alias: 'default',
-            provider: 'p',
-            modelId: 'm',
+            routes: {
+              chat: { provider: 'p', modelId: 'm' },
+              embedding: { provider: 'openai', modelId: 'text-embedding-3-large' }
+            },
             params: {},
-            fallbacks: [],
-            roles: { embedding: 'openai:text-embedding-3-large' }
+            fallbacks: []
           }
         ]
       }),
@@ -168,15 +187,38 @@ test('memory role falls back to the chat default until assigned', () => {
         profiles: [
           {
             alias: 'default',
-            provider: 'p',
-            modelId: 'm',
+            routes: {
+              chat: { provider: 'p', modelId: 'm' },
+              memory: { provider: 'oa', modelId: 'gpt-5-mini' }
+            },
             params: {},
-            fallbacks: [],
-            roles: { memory: 'oa:gpt-5-mini' }
+            fallbacks: []
           }
         ]
       }),
       'memory'
+    )
+  ).toBe('oa:gpt-5-mini');
+});
+
+test('fast role falls back to the chat default until assigned', () => {
+  expect(resolveModelRole(model(), 'fast')).toBe('default');
+  expect(
+    resolveModelRole(
+      model({
+        profiles: [
+          {
+            alias: 'default',
+            routes: {
+              chat: { provider: 'p', modelId: 'm' },
+              fast: { provider: 'oa', modelId: 'gpt-5-mini' }
+            },
+            params: {},
+            fallbacks: []
+          }
+        ]
+      }),
+      'fast'
     )
   ).toBe('oa:gpt-5-mini');
 });
@@ -186,11 +228,13 @@ test('resolveAgentModelRole: per-agent override > profile role > fallback', () =
     profiles: [
       {
         alias: 'default',
-        provider: 'p',
-        modelId: 'm',
+        routes: {
+          chat: { provider: 'p', modelId: 'm' },
+          memory: { provider: 'profile', modelId: 'cheap' },
+          embedding: { provider: 'profile', modelId: 'emb' }
+        },
         params: {},
-        fallbacks: [],
-        roles: { memory: 'profile:cheap', embedding: 'profile:emb' }
+        fallbacks: []
       }
     ]
   });

@@ -8,7 +8,7 @@ import type {
   TestConnectionResponse
 } from '@monad/protocol';
 
-import { createInterface } from 'node:readline';
+import { createInterface, emitKeypressEvents } from 'node:readline';
 import { getPaths, initMonadHome, isHomeInitialized, loadAll, openUrl, setMonadRoot } from '@monad/home';
 import { KNOWN_PROVIDER_TYPES } from '@monad/protocol';
 
@@ -28,6 +28,110 @@ export function ask(question: string): Promise<string> {
       resolve(ans.trim());
     })
   );
+}
+
+type InitFlowIO = {
+  ask?: (question: string) => Promise<string>;
+};
+
+type SelectOption<T> = {
+  label: string;
+  value: T;
+  detail?: string;
+};
+
+function askWith(io: InitFlowIO | undefined): (question: string) => Promise<string> {
+  return io?.ask ?? ask;
+}
+
+async function selectOption<T>(
+  question: string,
+  options: SelectOption<T>[],
+  io: InitFlowIO | undefined,
+  fallbackPrompt: string
+): Promise<T> {
+  const prompt = askWith(io);
+  const useArrowSelect = !io?.ask && process.stdin.isTTY && process.stdout.isTTY && options.length > 0;
+  if (!useArrowSelect) {
+    out(question);
+    for (let i = 0; i < options.length; i++) {
+      const option = options[i];
+      if (option) out(`  ${cyan(String(i + 1))}. ${option.label}${option.detail ? dim(`  ${option.detail}`) : ''}`);
+    }
+    while (true) {
+      const pick = await prompt(fallbackPrompt);
+      const idx = parseInt(pick, 10) - 1;
+      if (idx >= 0 && idx < options.length) {
+        // biome-ignore lint/style/noNonNullAssertion: bounds checked above
+        return options[idx]!.value;
+      }
+      out(yellow(t('init.numRange', { n: options.length })));
+    }
+  }
+
+  let index = 0;
+  const stdin = process.stdin;
+  const stdout = process.stdout;
+  const rawMode = typeof stdin.setRawMode === 'function' && stdin.isTTY;
+  const render = () => {
+    stdout.write(`\r\x1b[2K${question}\n`);
+    for (let i = 0; i < options.length; i++) {
+      const option = options[i];
+      if (!option) continue;
+      const marker = i === index ? cyan('›') : ' ';
+      stdout.write(`\x1b[2K${marker} ${option.label}${option.detail ? dim(`  ${option.detail}`) : ''}\n`);
+    }
+    stdout.write(`\x1b[2K${dim(t('init.select.hint'))}\n`);
+    stdout.write(`\x1b[${options.length + 2}A`);
+  };
+
+  return await new Promise<T>((resolve, reject) => {
+    let digits = '';
+    const cleanup = () => {
+      stdin.off('keypress', onKeypress);
+      if (rawMode) stdin.setRawMode(false);
+      stdout.write(`\x1b[${options.length + 2}B`);
+    };
+    const onKeypress = (_str: string, key: { name?: string; ctrl?: boolean; sequence?: string }) => {
+      if (key.ctrl && key.name === 'c') {
+        cleanup();
+        reject(new Error('cancelled'));
+        return;
+      }
+      if (key.name === 'up') {
+        index = (index - 1 + options.length) % options.length;
+        render();
+        return;
+      }
+      if (key.name === 'down') {
+        index = (index + 1) % options.length;
+        render();
+        return;
+      }
+      if (key.name === 'return') {
+        cleanup();
+        // biome-ignore lint/style/noNonNullAssertion: non-empty options checked above
+        resolve(options[index]!.value);
+        return;
+      }
+      if (/^[1-9]$/.test(key.sequence ?? '')) {
+        digits += key.sequence;
+        const idx = parseInt(digits, 10) - 1;
+        if (idx >= 0 && idx < options.length) {
+          index = idx;
+          render();
+        }
+        return;
+      }
+      if (key.name === 'backspace') {
+        digits = digits.slice(0, -1);
+      }
+    };
+    emitKeypressEvents(stdin);
+    if (rawMode) stdin.setRawMode(true);
+    stdin.on('keypress', onKeypress);
+    render();
+  });
 }
 
 /** Check init status via HTTP if daemon is reachable, otherwise from disk. */
@@ -70,96 +174,143 @@ async function ensureDaemonRunning(client: MonadClient): Promise<boolean> {
 }
 
 /** Interactively collect provider details, test connection, and persist provider + credential. */
-async function addProviderInteractive(client: MonadClient): Promise<{ id: string; label: string } | null> {
+export async function addProviderInteractive(
+  client: MonadClient,
+  io?: InitFlowIO
+): Promise<{ id: string; label: string } | null> {
+  const prompt = askWith(io);
   // The provider catalog is assembled by the daemon from registered providers' descriptors
   // (first- and third-party), so the CLI never hardcodes the provider list.
   const catalog = requireTreatyData<GetProviderCatalogResponse>(
     await client.treaty.v1.settings.model.providers.catalog.get()
   ).providers;
-  out(t('init.provider.choose'));
-  for (let i = 0; i < catalog.length; i++) {
-    const e = catalog[i];
-    out(`  ${cyan(String(i + 1))}. ${e?.label}${e?.defaultBaseUrl ? dim(`  ${e.defaultBaseUrl}`) : ''}`);
-  }
 
-  let chosen: (typeof catalog)[number] | undefined;
-  while (!chosen) {
-    const pick = await ask(t('init.provider.select', { n: catalog.length }));
+  while (true) {
+    const chosen = await selectOption(
+      t('init.provider.choose'),
+      catalog.map((entry) => ({
+        label: entry.label,
+        value: entry,
+        detail: entry.defaultBaseUrl
+      })),
+      io,
+      t('init.provider.select', { n: catalog.length })
+    );
+    const chosenType = chosen.type;
+
+    while (true) {
+      let baseUrl: string | undefined;
+      if (chosen.needsUrl) {
+        while (!baseUrl) {
+          const u = await prompt(t('init.provider.baseUrl'));
+          if (u) baseUrl = u;
+          else out(yellow(t('init.provider.baseUrlRequired')));
+        }
+      }
+
+      const extra: Record<string, string> = {};
+      for (const f of chosen.extraFields ?? []) {
+        let v: string | undefined;
+        while (!v) {
+          const ans = await prompt(`${f.label}${f.placeholder ? dim(` (e.g. ${f.placeholder})`) : ''}: `);
+          if (ans) v = ans;
+          else if (!f.required) break;
+          else out(yellow(t('init.field.required', { label: f.label })));
+        }
+        if (v) extra[f.key] = v;
+      }
+      const hasExtra = Object.keys(extra).length > 0;
+
+      const providerLabel = chosen.label;
+      const providerId = `${chosenType}-${Date.now()}`;
+
+      let apiKey: string | undefined;
+      if (!chosen.keyOptional) {
+        while (!apiKey) {
+          const hint = chosen.keyPlaceholder ? dim(` (e.g. ${chosen.keyPlaceholder})`) : '';
+          const k = await prompt(t('init.apiKey', { hint }));
+          if (k) apiKey = k;
+          else out(yellow(t('init.apiKeyRequired')));
+        }
+      } else {
+        apiKey = (await prompt(t('init.apiKeyOptional'))) || '';
+      }
+
+      out(dim(t('init.testing')));
+      const provider = {
+        id: providerId,
+        label: providerLabel,
+        type: chosenType as (typeof KNOWN_PROVIDER_TYPES)[number],
+        ...(baseUrl ? { baseUrl } : {}),
+        ...(hasExtra ? { extra } : {})
+      };
+      const testResult = requireTreatyData<TestConnectionResponse>(
+        await client.treaty.v1.settings.model['test-connection'].post({ provider, accessToken: apiKey ?? '' })
+      );
+
+      if (!testResult.ok) {
+        out(red(t('init.connFailed', { error: testResult.error ?? 'unknown error' })));
+        const action = await selectOption(
+          t('init.provider.afterFailed'),
+          [
+            { label: t('init.provider.retry'), value: 'retry' as const },
+            { label: t('init.provider.back'), value: 'back' as const }
+          ],
+          io,
+          t('init.provider.afterFailedSelect')
+        );
+        if (action === 'back') break;
+        continue;
+      }
+      out(green(t('init.connOk')));
+
+      requireTreatyData(await client.treaty.v1.settings.model.providers({ id: provider.id }).put({ provider }));
+      requireTreatyData(
+        await client.treaty.v1.settings.model.providers({ id: providerId }).credentials.post({
+          label: `${providerLabel} key`,
+          authType: 'api_key',
+          accessToken: apiKey ?? '',
+          ...(baseUrl ? { baseUrl } : {})
+        })
+      );
+
+      return { id: providerId, label: providerLabel };
+    }
+  }
+}
+
+export async function chooseDefaultModelInteractive(
+  models: ListModelsResponse['models'],
+  io?: InitFlowIO
+): Promise<string | undefined> {
+  const prompt = askWith(io);
+  let defaultModelId: string | undefined;
+
+  if (models.length > 0) {
+    out(`\n${t('init.models.available')}`);
+    for (let i = 0; i < Math.min(models.length, 15); i++) {
+      const m = models[i];
+      if (m) out(`  ${cyan(String(i + 1))}. ${m.id}${m.label ? dim(` — ${m.label}`) : ''}`);
+    }
+    if (models.length > 15) out(dim(t('init.models.more', { n: models.length - 15 })));
+
+    defaultModelId = models[0]?.id;
+    const pick = await prompt(`\n${t('init.model.default', { model: bold(defaultModelId ?? '') })}`);
     const idx = parseInt(pick, 10) - 1;
-    if (idx >= 0 && idx < catalog.length) {
-      chosen = catalog[idx];
-    } else {
-      out(yellow(t('init.numRange', { n: catalog.length })));
-    }
-  }
-  const chosenType = chosen.type;
-
-  let baseUrl: string | undefined;
-  if (chosen.needsUrl) {
-    while (!baseUrl) {
-      const u = await ask(t('init.provider.baseUrl'));
-      if (u) baseUrl = u;
-      else out(yellow(t('init.provider.baseUrlRequired')));
-    }
-  }
-
-  const extra: Record<string, string> = {};
-  for (const f of chosen.extraFields ?? []) {
-    let v: string | undefined;
-    while (!v) {
-      const ans = await ask(`${f.label}${f.placeholder ? dim(` (e.g. ${f.placeholder})`) : ''}: `);
-      if (ans) v = ans;
-      else if (!f.required) break;
-      else out(yellow(t('init.field.required', { label: f.label })));
-    }
-    if (v) extra[f.key] = v;
-  }
-  const hasExtra = Object.keys(extra).length > 0;
-
-  const providerLabel = chosen.label;
-  const providerId = `${chosenType}-${Date.now()}`;
-
-  let apiKey: string | undefined;
-  if (!chosen.keyOptional) {
-    while (!apiKey) {
-      const hint = chosen.keyPlaceholder ? dim(` (e.g. ${chosen.keyPlaceholder})`) : '';
-      const k = await ask(t('init.apiKey', { hint }));
-      if (k) apiKey = k;
-      else out(yellow(t('init.apiKeyRequired')));
+    if (idx >= 0 && idx < models.length) {
+      defaultModelId = models[idx]?.id;
+    } else if (pick) {
+      defaultModelId = pick;
     }
   } else {
-    apiKey = (await ask(t('init.apiKeyOptional'))) || '';
+    while (!defaultModelId) {
+      const id = await prompt(t('init.model.idPrompt'));
+      if (id) defaultModelId = id;
+      else out(yellow(t('init.model.idRequired')));
+    }
   }
 
-  out(dim(t('init.testing')));
-  const provider = {
-    id: providerId,
-    label: providerLabel,
-    type: chosenType as (typeof KNOWN_PROVIDER_TYPES)[number],
-    ...(baseUrl ? { baseUrl } : {}),
-    ...(hasExtra ? { extra } : {})
-  };
-  const testResult = requireTreatyData<TestConnectionResponse>(
-    await client.treaty.v1.settings.model['test-connection'].post({ provider, accessToken: apiKey ?? '' })
-  );
-
-  if (!testResult.ok) {
-    out(red(t('init.connFailed', { error: testResult.error ?? 'unknown error' })));
-    return null;
-  }
-  out(green(t('init.connOk')));
-
-  requireTreatyData(await client.treaty.v1.settings.model.providers({ id: provider.id }).put({ provider }));
-  requireTreatyData(
-    await client.treaty.v1.settings.model.providers({ id: providerId }).credentials.post({
-      label: `${providerLabel} key`,
-      authType: 'api_key',
-      accessToken: apiKey ?? '',
-      ...(baseUrl ? { baseUrl } : {})
-    })
-  );
-
-  return { id: providerId, label: providerLabel };
+  return defaultModelId;
 }
 
 /** Interactive terminal init wizard. */
@@ -236,20 +387,16 @@ export async function runTerminalInit(client: MonadClient): Promise<boolean> {
   // biome-ignore lint/style/noNonNullAssertion: length > 0 checked above
   let chosenProvider = savedProviders[0]!;
   if (savedProviders.length > 1) {
-    out(t('init.providers.configured'));
-    for (const [i, p] of savedProviders.entries()) {
-      out(`  ${cyan(String(i + 1))}. ${p.label} (${p.type})`);
-    }
-    while (true) {
-      const pick = await ask(t('init.provider.selectN', { n: savedProviders.length }));
-      const idx = parseInt(pick, 10) - 1;
-      if (idx >= 0 && idx < savedProviders.length) {
-        // biome-ignore lint/style/noNonNullAssertion: bounds checked above
-        chosenProvider = savedProviders[idx]!;
-        break;
-      }
-      out(yellow(t('init.numRange', { n: savedProviders.length })));
-    }
+    chosenProvider = await selectOption(
+      t('init.providers.configured'),
+      savedProviders.map((provider) => ({
+        label: provider.label,
+        value: provider,
+        detail: `(${provider.type})`
+      })),
+      undefined,
+      t('init.provider.selectN', { n: savedProviders.length })
+    );
   } else {
     out(dim(t('init.provider.using', { label: chosenProvider.label })));
   }
@@ -259,32 +406,7 @@ export async function runTerminalInit(client: MonadClient): Promise<boolean> {
     await client.treaty.v1.settings.model.providers({ id: chosenProvider.id }).models.get()
   );
 
-  let defaultModelId: string | undefined;
-
-  if (models.length > 0) {
-    out(`\n${t('init.models.available')}`);
-    for (let i = 0; i < Math.min(models.length, 15); i++) {
-      const m = models[i];
-      if (m) out(`  ${cyan(String(i + 1))}. ${m.id}${m.label ? dim(` — ${m.label}`) : ''}`);
-    }
-    if (models.length > 15) out(dim(t('init.models.more', { n: models.length - 15 })));
-
-    defaultModelId = models[0]?.id;
-    const pick = await ask(`\n${t('init.model.default', { model: bold(defaultModelId ?? '') })}`);
-    const idx = parseInt(pick, 10) - 1;
-    if (idx >= 0 && idx < models.length) {
-      defaultModelId = models[idx]?.id;
-    } else if (pick) {
-      defaultModelId = pick; // allow typing a model id directly
-    }
-  } else {
-    // Providers without a /models route (e.g. Bedrock, Azure) — enter one by hand.
-    while (!defaultModelId) {
-      const id = await ask(t('init.model.idPrompt'));
-      if (id) defaultModelId = id;
-      else out(yellow(t('init.model.idRequired')));
-    }
-  }
+  const defaultModelId = await chooseDefaultModelInteractive(models);
 
   if (!defaultModelId) {
     out(yellow(t('init.noModel')));
@@ -296,11 +418,9 @@ export async function runTerminalInit(client: MonadClient): Promise<boolean> {
     await client.treaty.v1.settings.model.profiles({ alias: profileAlias }).put({
       profile: {
         alias: profileAlias,
-        provider: chosenProvider.id,
-        modelId: defaultModelId,
+        routes: { chat: { provider: chosenProvider.id, modelId: defaultModelId } },
         params: {},
-        fallbacks: [],
-        roles: {}
+        fallbacks: []
       }
     })
   );
@@ -317,19 +437,17 @@ export async function runTerminalInit(client: MonadClient): Promise<boolean> {
     agentModelAlias = profiles[0]?.alias;
     out(dim(t('init.profile.using', { alias: agentModelAlias ?? '' })));
   } else if (profiles.length > 1) {
-    out(t('init.profiles.available'));
-    for (const [i, p] of profiles.entries()) {
-      out(`  ${cyan(String(i + 1))}. ${p.alias}  ${dim(`(${p.modelId})`)}`);
-    }
-    while (true) {
-      const pick = await ask(t('init.profile.select', { n: profiles.length }));
-      const idx = parseInt(pick, 10) - 1;
-      if (idx >= 0 && idx < profiles.length) {
-        agentModelAlias = profiles[idx]?.alias;
-        break;
-      }
-      out(yellow(t('init.numRange', { n: profiles.length })));
-    }
+    const profile = await selectOption(
+      t('init.profiles.available'),
+      profiles.map((profile) => ({
+        label: profile.alias,
+        value: profile,
+        detail: `(${profile.routes.chat.modelId})`
+      })),
+      undefined,
+      t('init.profile.select', { n: profiles.length })
+    );
+    agentModelAlias = profile.alias;
   }
 
   const { agent: createdAgent } = requireTreatyData<CreateAgentResponse>(

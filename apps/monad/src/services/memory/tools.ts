@@ -33,7 +33,8 @@ const memoryInput: ToolInputSchema<MemoryInput> = {
       return { success: false, error: new Error(`"action" must be one of: ${ACTIONS.join(', ')}`) };
     }
     const action = o.action as MemoryAction;
-    const scope = o.scope === 'global' ? 'global' : o.scope === 'agent' ? 'agent' : undefined;
+    const scope =
+      o.scope === 'global' ? 'global' : o.scope === 'project' ? 'project' : o.scope === 'agent' ? 'agent' : undefined;
     if (action === 'record' && (typeof o.fact !== 'string' || !o.fact.trim()))
       return { success: false, error: new Error('record requires a non-empty "fact"') };
     if (action === 'delete' && (typeof o.fact !== 'string' || !o.fact.trim()))
@@ -66,9 +67,10 @@ const memoryInput: ToolInputSchema<MemoryInput> = {
       },
       scope: {
         type: 'string',
-        enum: ['agent', 'global'],
+        enum: ['agent', 'global', 'project'],
         description:
-          "agent (default) = private to you; global = shared across all the user's agents (use for facts about the user)"
+          "agent (default) = private to you; global = shared across all the user's agents (use for facts about " +
+          'the user); project = specific to the current workspace (use for repo/project conventions and tooling)'
       },
       fact: {
         type: 'string',
@@ -88,7 +90,8 @@ export function createMemoryAgentTools(svc: MemoryService): Tool[] {
       'Read and curate your durable, cross-session memory. Your injected index shows which scopes hold ' +
       'memory; use action "view" to read a scope, and "record"/"update"/"delete" to keep it accurate. ' +
       'Store only stable, reusable facts (preferences, tooling, conventions, identity) — not ephemeral ' +
-      'task details. Use scope "global" for facts about the user, "agent" (default) for facts specific to you.',
+      'task details. Use scope "global" for facts about the user, "project" for facts about the current ' +
+      'workspace, "agent" (default) for facts specific to you.',
     scopes: [{ resource: 'memory:write' }],
     inputSchema: memoryInput,
     inputExamples: [
@@ -98,14 +101,19 @@ export function createMemoryAgentTools(svc: MemoryService): Tool[] {
       { action: 'delete', fact: 'User likes cheese pizza' }
     ],
     run: async (input, ctx: ToolContext) =>
-      toolResult(
-        await svc.memoryTool(ctx.sessionId as SessionId, input.action, {
-          fact: input.fact,
-          old: input.old,
-          replacement: input.replacement,
-          scope: input.scope
-        })
-      )
+      ctx.sessionId.startsWith('ses_')
+        ? toolResult(
+            await svc.memoryTool(ctx.sessionId as SessionId, input.action, {
+              fact: input.fact,
+              old: input.old,
+              replacement: input.replacement,
+              scope: input.scope
+            })
+          )
+        : toolResult({
+            ok: false,
+            content: 'The memory tool is only available inside Monad agent sessions, not Workplace Projects.'
+          })
   };
 
   return [memory];

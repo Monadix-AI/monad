@@ -5,8 +5,14 @@
 
 import type { LoadedSkill } from './loop/index.ts';
 
+// `with { type: 'file' }` is the embed mechanism bun's --compile reliably bundles AND path-rewrites
+// for the standalone binary; `Bun.file(new URL(..., import.meta.url))` resolves against the bundled
+// module's relocated path and breaks in the compiled binary (ENOENT, notably on Windows).
+import defaultSystemPromptPath from './prompts/default-system-prompt.md' with { type: 'file' };
+import handoffPromptPath from './prompts/handoff-prompt.md' with { type: 'file' };
 import {
   BUDGET_EXCEEDED,
+  evictedToolResult,
   GUI_TRACK_BOTH,
   GUI_TRACK_BROWSER,
   GUI_TRACK_COMPUTER,
@@ -15,24 +21,28 @@ import {
   SUMMARY_MARKER,
   TOOL_BUDGET_REACHED
 } from './prompts/short-text.ts';
+import summaryPromptPath from './prompts/summary-prompt.md' with { type: 'file' };
+import summaryReflectPromptPath from './prompts/summary-reflect-prompt.md' with { type: 'file' };
+import summaryStructuredPromptPath from './prompts/summary-structured-prompt.md' with { type: 'file' };
 
-export { BUDGET_EXCEEDED, OBSERVATION_PREFIX, SUMMARY_MARKER, TOOL_BUDGET_REACHED };
+export { BUDGET_EXCEEDED, evictedToolResult, OBSERVATION_PREFIX, SUMMARY_MARKER, TOOL_BUDGET_REACHED };
 
 /** Base persona/instructions when the host doesn't supply its own via `instructions`. */
-export const DEFAULT_SYSTEM_PROMPT = (
-  await Bun.file(new URL('./prompts/default-system-prompt.md', import.meta.url)).text()
-).trim();
+export const DEFAULT_SYSTEM_PROMPT = (await Bun.file(defaultSystemPromptPath).text()).trim();
 
 /** Instruction given to the (cheap) model that compacts old turns into the rolling summary. */
-export const SUMMARY_PROMPT = (await Bun.file(new URL('./prompts/summary-prompt.md', import.meta.url)).text()).trim();
+export const SUMMARY_PROMPT = (await Bun.file(summaryPromptPath).text()).trim();
+
+/** Structured variant of {@link SUMMARY_PROMPT}: sections (objective/decisions/files/tasks/next)
+ *  with verbatim identifiers, so compaction preserves the file names and symbols the agent needs
+ *  to keep working. Used by the durable summarizer. */
+export const SUMMARY_STRUCTURED_PROMPT = (await Bun.file(summaryStructuredPromptPath).text()).trim();
 
 /** Instruction for the reflector pass that condenses an over-grown rolling summary (GC). */
-export const SUMMARY_REFLECT_PROMPT = (
-  await Bun.file(new URL('./prompts/summary-reflect-prompt.md', import.meta.url)).text()
-).trim();
+export const SUMMARY_REFLECT_PROMPT = (await Bun.file(summaryReflectPromptPath).text()).trim();
 
 /** Instruction for the /handoff summary: a structured cross-session context block. */
-export const HANDOFF_PROMPT = (await Bun.file(new URL('./prompts/handoff-prompt.md', import.meta.url)).text()).trim();
+export const HANDOFF_PROMPT = (await Bun.file(handoffPromptPath).text()).trim();
 
 /**
  * Ambient context the host knows about the run (none of which agent-core can introspect on its

@@ -64,7 +64,11 @@ test('start → captures stdout and exit code of a short process', async () => {
   expect(r.stdout).toContain('42');
 });
 
-test('start defaults to a pty and can answer an interactive prompt', async () => {
+// Interactive PTY tests are Windows-skipped: Bun's terminal/PTY (ConPTY) mode does not capture
+// output or deliver interactive stdin on Windows, so a `read`-driven prompt never round-trips
+// there — consistent with the pty size/resize, signal, and process-group tests already gated
+// below. Pipe-mode process_start (the common path) is exercised cross-platform above.
+test.skipIf(process.platform === 'win32')('start defaults to a pty and can answer an interactive prompt', async () => {
   const { id } = await startProcess(
     {
       command: 'printf "Proceed? [y/N] "; read ans; echo answer:$ans'
@@ -81,7 +85,7 @@ test('start defaults to a pty and can answer an interactive prompt', async () =>
   expect(r.stdout).not.toContain('\r\n');
 });
 
-test('wait returns when output contains a literal pattern', async () => {
+test.skipIf(process.platform === 'win32')('wait returns when output contains a literal pattern', async () => {
   const { id } = await startProcess(
     {
       command: 'printf "Proceed? [y/N] "; read ans; echo answer:$ans'
@@ -98,7 +102,7 @@ test('wait returns when output contains a literal pattern', async () => {
   expect(answer.stdout).toContain('answer:y');
 });
 
-test('wait supports regex matching', async () => {
+test.skipIf(process.platform === 'win32')('wait supports regex matching', async () => {
   const { id } = await startProcess(
     {
       command: 'printf "Proceed? [y/N] "; read ans; echo answer:$ans'
@@ -131,7 +135,7 @@ test('logs and wait can strip ANSI sequences', async () => {
   expect(stripped.stdout).not.toContain('\x1b');
 });
 
-test('write supports structured keys', async () => {
+test.skipIf(process.platform === 'win32')('write supports structured keys', async () => {
   const { id } = await startProcess(
     {
       command: 'printf "Proceed? [y/N] "; read ans; echo answer:$ans'

@@ -4,6 +4,7 @@
 // `monad init`). The daemon startup only does PATH prepending — no downloads, no detection.
 
 import type { Logger } from '@monad/logger';
+import type { DownloadProgress } from '@/services/download.ts';
 
 import { existsSync } from 'node:fs';
 import { chmod, mkdir } from 'node:fs/promises';
@@ -11,8 +12,10 @@ import { join } from 'node:path';
 
 import { untar } from '@/atoms/install/untar.ts';
 import { parseChecksums, selectReleaseAsset } from '@/capabilities/mcp/install/binary.ts';
+import { downloadBytes } from '@/services/download.ts';
 
 type EnvDepResult = 'found' | 'installed' | 'failed' | 'skipped';
+type EnvDepsDownloadProgress = DownloadProgress & { dependency: 'node' | 'uv'; artifact: string };
 
 // ─── Node.js ─────────────────────────────────────────────────────────────────
 
@@ -43,7 +46,11 @@ async function resolveNodeVersion(): Promise<string> {
   return lts.version; // e.g. "v22.13.1"
 }
 
-async function ensureNode(binDir: string, log: Logger): Promise<EnvDepResult> {
+async function ensureNode(
+  binDir: string,
+  log: Logger,
+  onDownloadProgress?: (progress: EnvDepsDownloadProgress) => void
+): Promise<EnvDepResult> {
   const nodeBin = join(binDir, nodeBinName('node'));
 
   // Already installed by us — skip. Don't re-check PATH: PATH varies; our binDir is canonical.
@@ -63,16 +70,20 @@ async function ensureNode(binDir: string, log: Logger): Promise<EnvDepResult> {
 
   log.info(`env-deps: downloading Node.js ${version}…`);
 
-  const [dlRes, sumsRes] = await Promise.all([
-    fetch(`${baseUrl}/${archiveName}`, { signal: AbortSignal.timeout(120_000), headers: { 'User-Agent': 'monad' } }),
+  const [download, sumsRes] = await Promise.all([
+    downloadBytes(`${baseUrl}/${archiveName}`, {
+      headers: { 'User-Agent': 'monad' },
+      accept: 'application/gzip, application/x-gzip, application/octet-stream',
+      allowedContentTypes: ['application/gzip', 'application/x-gzip', 'application/octet-stream'],
+      timeoutMs: 120_000,
+      onProgress: (progress) => onDownloadProgress?.({ ...progress, dependency: 'node', artifact: archiveName })
+    }),
     fetch(`${baseUrl}/SHASUMS256.txt`, {
       signal: AbortSignal.timeout(15_000),
       headers: { 'User-Agent': 'monad' }
     }).catch(() => null)
   ]);
-
-  if (!dlRes.ok) throw new Error(`Node.js download failed: ${dlRes.status}`);
-  const bytes = new Uint8Array(await dlRes.arrayBuffer());
+  const { bytes } = download;
 
   // Verify checksum when SHASUMS256.txt is available.
   if (sumsRes?.ok) {
@@ -91,11 +102,10 @@ async function ensureNode(binDir: string, log: Logger): Promise<EnvDepResult> {
   await mkdir(binDir, { recursive: true });
 
   for (const target of ['node', 'npx'] as const) {
-    const entryKey = [...files.keys()].find((k) => k.endsWith(`/bin/${target}`));
-    if (!entryKey) throw new Error(`${target} not found in Node.js archive`);
+    const entry = [...files.entries()].find(([k]) => k.endsWith(`/bin/${target}`));
+    if (!entry) throw new Error(`${target} not found in Node.js archive`);
     const dest = join(binDir, nodeBinName(target));
-    // biome-ignore lint/style/noNonNullAssertion: entryKey was just found via find(), value is guaranteed
-    await Bun.write(dest, files.get(entryKey)!);
+    await Bun.write(dest, entry[1]);
     await chmod(dest, 0o755);
   }
 
@@ -109,7 +119,11 @@ function uvBinName(file: 'uv' | 'uvx'): string {
   return process.platform === 'win32' ? `${file}.exe` : file;
 }
 
-async function ensureUv(binDir: string, log: Logger): Promise<EnvDepResult> {
+async function ensureUv(
+  binDir: string,
+  log: Logger,
+  onDownloadProgress?: (progress: EnvDepsDownloadProgress) => void
+): Promise<EnvDepResult> {
   const uvBin = join(binDir, uvBinName('uv'));
   if (existsSync(uvBin)) return 'found';
 
@@ -137,12 +151,13 @@ async function ensureUv(binDir: string, log: Logger): Promise<EnvDepResult> {
 
   log.info(`env-deps: downloading uv ${tag}…`);
 
-  const dlRes = await fetch(assetMeta.browser_download_url, {
-    signal: AbortSignal.timeout(120_000),
-    headers: { 'User-Agent': 'monad' }
+  const { bytes } = await downloadBytes(assetMeta.browser_download_url, {
+    headers: { 'User-Agent': 'monad' },
+    accept: 'application/gzip, application/x-gzip, application/octet-stream',
+    allowedContentTypes: ['application/gzip', 'application/x-gzip', 'application/octet-stream'],
+    timeoutMs: 120_000,
+    onProgress: (progress) => onDownloadProgress?.({ ...progress, dependency: 'uv', artifact: chosen })
   });
-  if (!dlRes.ok) throw new Error(`uv download failed: ${dlRes.status}`);
-  const bytes = new Uint8Array(await dlRes.arrayBuffer());
 
   // Best-effort checksum from the companion checksums asset.
   const sumsMeta = assets.find((a) => /(^|[._-])(sha256sums?|checksums?)(\.txt)?$/i.test(a.name));
@@ -168,11 +183,11 @@ async function ensureUv(binDir: string, log: Logger): Promise<EnvDepResult> {
 
   for (const target of ['uv', 'uvx'] as const) {
     const name = uvBinName(target);
-    const entryKey = [...files.keys()].find((k) => {
+    const entry = [...files.entries()].find(([k]) => {
       const base = k.split('/').pop() ?? '';
       return base === name || base === target; // handle with or without .exe
     });
-    if (!entryKey) {
+    if (!entry) {
       if (target === 'uvx') {
         // uvx may be absent (symlink-only in some builds) — copy uv as uvx
         const uvDest = join(binDir, uvBinName('uv'));
@@ -184,8 +199,7 @@ async function ensureUv(binDir: string, log: Logger): Promise<EnvDepResult> {
       throw new Error(`uv binary not found in archive ${chosen}`);
     }
     const dest = join(binDir, name);
-    // biome-ignore lint/style/noNonNullAssertion: entryKey was just found via find(), value is guaranteed
-    await Bun.write(dest, files.get(entryKey)!);
+    await Bun.write(dest, entry[1]);
     await chmod(dest, 0o755);
   }
 
@@ -201,23 +215,29 @@ export interface EnvDepsInstallResult {
   errors?: Record<string, string>;
 }
 
+export interface EnvDepsInstallOptions {
+  installNode?: boolean;
+  installUv?: boolean;
+  onDownloadProgress?: (progress: EnvDepsDownloadProgress) => void;
+}
+
 export async function installEnvDeps(
   binDir: string,
-  opts: { installNode?: boolean; installUv?: boolean },
+  opts: EnvDepsInstallOptions,
   log: Logger
 ): Promise<EnvDepsInstallResult> {
   const errors: Record<string, string> = {};
 
   const [node, uv] = await Promise.all([
     opts.installNode
-      ? ensureNode(binDir, log).catch((err: unknown) => {
+      ? ensureNode(binDir, log, opts.onDownloadProgress).catch((err: unknown) => {
           errors.node = String(err);
           log.warn(`env-deps: node install failed: ${String(err)}`);
           return 'failed' as const;
         })
       : Promise.resolve('skipped' as const),
     opts.installUv
-      ? ensureUv(binDir, log).catch((err: unknown) => {
+      ? ensureUv(binDir, log, opts.onDownloadProgress).catch((err: unknown) => {
           errors.uv = String(err);
           log.warn(`env-deps: uv install failed: ${String(err)}`);
           return 'failed' as const;

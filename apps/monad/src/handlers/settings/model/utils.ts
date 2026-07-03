@@ -1,5 +1,6 @@
 import type { Credential, MonadConfig, Provider } from '@monad/home';
-import type { CredentialView, ProfileView, ProviderView } from '@monad/protocol';
+import type { CredentialView, ModelInfo, ProfileView, ProviderView } from '@monad/protocol';
+import type { ModelContext } from '@/handlers/settings/model/context.ts';
 
 import { ModelProviderType } from '@monad/protocol';
 
@@ -27,26 +28,20 @@ function isKnownProviderType(value: string): value is Provider['type'] {
 export function profileToView(p: MonadConfig['model']['profiles'][number]): ProfileView {
   return {
     alias: p.alias,
-    provider: p.provider,
-    modelId: p.modelId,
-    fastProvider: p.fastProvider,
-    fastModelId: p.fastModelId,
+    routes: p.routes,
     params: p.params,
-    fallbacks: p.fallbacks,
-    roles: p.roles
+    routeParams: p.routeParams,
+    fallbacks: p.fallbacks
   };
 }
 
 export function viewToProfile(v: ProfileView): MonadConfig['model']['profiles'][number] {
   return {
     alias: v.alias,
-    provider: v.provider,
-    modelId: v.modelId,
-    fastProvider: v.fastProvider,
-    fastModelId: v.fastModelId,
+    routes: v.routes,
     params: v.params,
-    fallbacks: v.fallbacks,
-    roles: v.roles
+    routeParams: v.routeParams,
+    fallbacks: v.fallbacks
   };
 }
 
@@ -66,6 +61,10 @@ export function credentialToView(c: Credential): CredentialView {
 
 function maskSecret(token: string): string {
   return token.length > 4 ? `...${token.slice(-4)}` : '...';
+}
+
+function positiveContextLimit(value: number | undefined): number | undefined {
+  return typeof value === 'number' && Number.isInteger(value) && value > 0 ? value : undefined;
 }
 
 export function providerToResolved(provider: Provider): {
@@ -90,4 +89,37 @@ export function credentialToHandle(c: Credential): {
   priority: number;
 } {
   return { id: c.id, accessToken: c.accessToken, authType: c.authType, baseUrl: c.baseUrl, priority: c.priority };
+}
+
+export function enrichModelInfo(
+  ctx: ModelContext,
+  cfg: MonadConfig,
+  provider: Pick<Provider, 'id' | 'type'>,
+  model: ModelInfo
+): ModelInfo {
+  // Prefer provider-native metadata; fill missing fields from the models.dev catalog.
+  const price = model.price ?? ctx.lookupPriceExact(provider.type, model.id);
+  const contextLimit =
+    positiveContextLimit(model.contextLimit) ?? positiveContextLimit(ctx.lookupContextLimit(provider.type, model.id));
+  const releaseDate = model.releaseDate ?? ctx.lookupReleaseDate(provider.type, model.id);
+  const modelsDevUrl = model.modelsDevUrl ?? ctx.lookupModelsDevUrl(provider.type, model.id);
+  const detailUrl = model.detailUrl ?? modelsDevUrl;
+  const label = model.label ?? ctx.lookupLabel(provider.type, model.id);
+  const inferred = model.modalities ?? ctx.lookupCapabilities(provider.type, model.id);
+  // A manual kind override (config model.kinds) is the final authority — it can correct or
+  // supply a kind the layered inference missed (e.g. an embedding id the heuristic won't match).
+  const override = cfg.model.kinds[`${provider.id}:${model.id}`];
+  const modalities = override ? { ...(inferred ?? {}), kind: override } : inferred;
+  const { contextLimit: _rawContextLimit, ...baseModel } = model;
+
+  return {
+    ...baseModel,
+    ...(label ? { label } : {}),
+    ...(price && Object.keys(price).length > 0 ? { price } : {}),
+    ...(contextLimit !== undefined ? { contextLimit } : {}),
+    ...(releaseDate ? { releaseDate } : {}),
+    ...(detailUrl ? { detailUrl } : {}),
+    ...(modelsDevUrl ? { modelsDevUrl } : {}),
+    ...(modalities ? { modalities } : {})
+  };
 }

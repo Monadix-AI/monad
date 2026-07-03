@@ -76,6 +76,27 @@ jobs:
             -o "$(dirname "$(which bun)")/monad-sandbox-launcher" \
             apps/monad/native/sandbox-launcher/main.c
 
+      - name: Install MinGW (Windows sandbox launcher cross-compile)
+        if: runner.os == 'Linux'
+        run: sudo apt-get install -y --no-install-recommends gcc-mingw-w64-x86-64
+
+      - name: Build Windows sandbox launchers (Low IL + AppContainer, x64 spike)
+        if: runner.os == 'Linux'
+        run: |
+          BUN_DIR="$(dirname "$(which bun)")"
+          # Low Integrity launcher — baseline, known-good
+          x86_64-w64-mingw32-gcc -O2 -s -static -municode \
+            -o "${BUN_DIR}/monad-sandbox-launcher.exe" \
+            apps/monad/native/sandbox-launcher/windows.c \
+            -ladvapi32
+          echo "✓ Low IL launcher compiled"
+          # AppContainer launcher — validates MinGW header availability for PROC_THREAD_ATTRIBUTE_SECURITY_CAPABILITIES
+          x86_64-w64-mingw32-gcc -O2 -s -static -municode \
+            -o "${BUN_DIR}/monad-sandbox-appcontainer.exe" \
+            apps/monad/native/sandbox-launcher/windows-appcontainer.c \
+            -ladvapi32 -luserenv
+          echo "✓ AppContainer launcher compiled"
+
       # Compile-gate the macOS Mo sprite shell so it can't rot (it's outside the Bun
       # build/typecheck). Mo is macOS-only for now (Cocoa); no Linux/Windows gate yet.
       - name: Build Mo sprite (macOS)

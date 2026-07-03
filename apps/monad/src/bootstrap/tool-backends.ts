@@ -4,12 +4,27 @@
 
 import type { MonadAuth, MonadConfig } from '@monad/home';
 
-import { configureCodeExec, configureEmail, configureShell, configureWebSearch } from '@/capabilities/tools';
+import {
+  configureCodeExec,
+  configureEmail,
+  configureShell,
+  configureWebSearch,
+  detectDockerRuntime
+} from '@/capabilities/tools';
 import { resolveSecretRef } from '@/config/secrets.ts';
 
 export async function configureToolBackends(cfg: MonadConfig, auth?: MonadAuth): Promise<void> {
   configureShell({ shellPath: cfg.agent.tools.shellPath, gitBashPath: cfg.agent.tools.gitBashPath });
-  configureCodeExec(cfg.agent.tools.codeExecBackend);
+  // Kick off docker probe so isAvailable() is synchronous by first tool execution.
+  void detectDockerRuntime();
+  configureCodeExec({
+    backend: cfg.agent.tools.codeExecBackend,
+    e2bApiKey:
+      cfg.agent.tools.codeExecE2b?.apiKey !== undefined
+        ? resolveSecretRef(cfg.agent.tools.codeExecE2b.apiKey, auth)
+        : undefined,
+    dockerImage: cfg.agent.tools.codeExecDocker?.image
+  });
 
   const wsCfg = cfg.agent.tools.webSearch;
   configureWebSearch({

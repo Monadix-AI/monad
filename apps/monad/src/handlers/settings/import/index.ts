@@ -4,7 +4,8 @@ import type {
   ImportSettingsApplyResult,
   ImportSettingsItem,
   ImportSettingsPreview,
-  ImportSettingsRequest
+  ImportSettingsRequest,
+  ModelRoles
 } from '@monad/protocol';
 import type { ParsedImport, PlannedItem, SettingsImportDeps } from './types.ts';
 
@@ -96,6 +97,29 @@ function itemHash(item: PlannedItem): string {
   return sha256(stableJson({ ...publicItemWithoutHash(item), payload: payloadFingerprint(item.payload) }));
 }
 
+function routeFromSpec(spec: string | undefined): { provider: string; modelId: string } | undefined {
+  if (!spec) return undefined;
+  const i = spec.indexOf(':');
+  return i > 0 ? { provider: spec.slice(0, i), modelId: spec.slice(i + 1) } : undefined;
+}
+
+export function applyModelRolesToConfiguredDefaultProfile(cfg: MonadConfig, roles: ModelRoles): void {
+  const defaultAlias = cfg.model.default || 'default';
+  const profile = cfg.model.profiles.find((p) => p.alias === defaultAlias);
+  if (!profile) throw new Error(`settings import: default profile "${defaultAlias}" is not configured`);
+  profile.routes = {
+    chat: profile.routes.chat,
+    fast: profile.routes.fast,
+    vision: routeFromSpec(roles.vision),
+    image: routeFromSpec(roles.image),
+    video: routeFromSpec(roles.video),
+    speech: routeFromSpec(roles.speech),
+    transcription: routeFromSpec(roles.transcription),
+    embedding: routeFromSpec(roles.embedding),
+    memory: routeFromSpec(roles.memory)
+  };
+}
+
 function publicItemWithoutHash(item: PlannedItem): Omit<ImportSettingsItem, 'hash'> {
   const { payload: _payload, ...rest } = item;
   return rest;
@@ -122,7 +146,7 @@ function summarizeConflict(item: PlannedItem, cfg: MonadConfig): string | undefi
     case 'modelProfile': {
       const existing = cfg.model.profiles.find((p) => p.alias === payload.profile.alias);
       return existing
-        ? `existing=${existing.provider}/${existing.modelId} incoming=${payload.profile.provider}/${payload.profile.modelId}`
+        ? `existing=${existing.routes.chat.provider}/${existing.routes.chat.modelId} incoming=${payload.profile.routes.chat.provider}/${payload.profile.routes.chat.modelId}`
         : undefined;
     }
     case 'agent': {
@@ -281,11 +305,7 @@ export function createSettingsImportModule({ paths, configBus, mcpReconnect }: S
             wroteProfile = true;
             break;
           case 'modelRoles':
-            {
-              const profile = cfg.model.profiles.find((p) => p.alias === 'default');
-              if (!profile) throw new Error('settings import: default profile is not configured');
-              profile.roles = payload.roles;
-            }
+            applyModelRolesToConfiguredDefaultProfile(cfg, payload.roles);
             wroteProfile = true;
             break;
           case 'credential':

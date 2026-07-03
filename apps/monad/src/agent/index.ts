@@ -1,4 +1,4 @@
-import type { Event, Hooks, SessionId } from '@monad/protocol';
+import type { Event, Hooks, TranscriptTargetId } from '@monad/protocol';
 import type { Tool, ToolBackends, ToolGate } from '@/capabilities/tools/types.ts';
 import type { ContextEngine } from './context/index.ts';
 import type { HistoryProvider } from './history.ts';
@@ -16,6 +16,7 @@ import { SessionManager } from './session/index.ts';
 
 export * from './context/budget.ts';
 export * from './context/estimate.ts';
+export * from './context/eviction.ts';
 export * from './context/index.ts';
 export * from './history.ts';
 export * from './loop/index.ts';
@@ -57,10 +58,10 @@ export interface AgentConfig {
   cacheSystemPrompt?: boolean;
   /** Base behavior template for the system prompt. Default: DEFAULT_SYSTEM_PROMPT. A function is
    * resolved per-turn so the daemon can hot-reload template overrides without rebuilding. */
-  instructions?: string | ((sessionId?: SessionId) => string | undefined);
+  instructions?: string | ((sessionId?: TranscriptTargetId) => string | undefined);
   /** User-editable prompt slots (e.g. SOUL/AGENT/USER), resolved per-turn so workspace or per-agent
    * files hot-reload without rebuilding the agent. */
-  promptSlots?: UserPromptSlots | ((sessionId?: SessionId) => UserPromptSlots | undefined);
+  promptSlots?: UserPromptSlots | ((sessionId?: TranscriptTargetId) => UserPromptSlots | undefined);
   /** Ambient run context (date/cwd/os/sandbox…) rendered into the system prompt. */
   environment?: AgentEnvironment;
   /** Absent → high-risk tools are denied. */

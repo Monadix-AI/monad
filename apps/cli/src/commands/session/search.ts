@@ -36,8 +36,8 @@ export const command: SessionCommandDef = {
       return;
     }
     for (const h of hits) {
-      out(cyan(h.sessionId) + dim(`  ${h.matchedBy}  ${h.score.toFixed(3)}`));
-      out(`  ${bold(h.sessionTitle)} ${dim(h.role)}  ${h.snippet}`);
+      out(cyan(h.transcriptTargetId) + dim(`  ${h.matchedBy}  ${h.score.toFixed(3)}`));
+      out(`  ${bold(h.transcriptTargetTitle)} ${dim(h.role)}  ${h.snippet}`);
     }
   }
 };

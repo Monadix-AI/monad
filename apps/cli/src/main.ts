@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
 
+import { readFileSync } from 'node:fs';
 import { checkDaemonVersion, MonadClient } from '@monad/client';
 import { openUrl, resolveClientConn } from '@monad/home';
 import { setLogLevel } from '@monad/logger';
@@ -191,9 +192,10 @@ export async function main(): Promise<void> {
 
   // All remaining commands (and the no-command default) require a live daemon connection.
   const { baseUrl, token: configToken, unixSocket } = await resolveClientConn();
-  const conn = applyConnOverride({ baseUrl, unixSocket }, globals);
+  const envConn = Bun.env.MONAD_SERVER_URL ? { baseUrl: Bun.env.MONAD_SERVER_URL, unixSocket: undefined } : null;
+  const conn = applyConnOverride(envConn ?? { baseUrl, unixSocket }, globals);
   // --token overrides the config token (used when --host points to a remote daemon with its own auth).
-  const token = globals.token ?? configToken;
+  const token = globals.token ?? readAgentTokenFile() ?? configToken;
 
   // Version check for remote connections only — local daemon is always same build.
   if (isRemoteUrl(conn.baseUrl)) {
@@ -228,6 +230,17 @@ export async function main(): Promise<void> {
 
   // cmd is defined (daemon command) — command && !cmd was handled above.
   await cmd?.run({ positionals, flags, globals, client });
+}
+
+function readAgentTokenFile(): string | null {
+  const file = Bun.env.MONAD_AGENT_TOKEN_FILE;
+  if (!file) return null;
+  try {
+    const token = readFileSync(file, 'utf8').trim();
+    return token || null;
+  } catch {
+    return null;
+  }
 }
 
 /** Honor per-invocation --host/--port overrides. --host may be a bare host or a full URL (with an

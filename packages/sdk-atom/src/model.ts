@@ -174,6 +174,24 @@ export interface SpeechResult {
   mediaType: string;
 }
 
+export interface VideoResult {
+  video: Uint8Array;
+  mediaType: string;
+}
+
+export interface TranscriptionResult {
+  text: string;
+  segments?: Array<{ text: string; startSecond: number; endSecond: number }>;
+  language?: string;
+  durationInSeconds?: number;
+  usage?: ModelUsage;
+}
+
+export interface RerankResult {
+  ranking: Array<{ index: number; score: number; document: string }>;
+  usage?: ModelUsage;
+}
+
 /** A provider instance the gateway resolved from config (no secrets). */
 export interface ResolvedProviderConfig {
   id: string;
@@ -235,6 +253,44 @@ export interface SpeechCall {
   fetch?: typeof globalThis.fetch;
 }
 
+export interface VideoCall {
+  modelId: string;
+  prompt: string;
+  image?: string | URL | Uint8Array;
+  mediaType?: string;
+  aspectRatio?: string;
+  resolution?: string;
+  duration?: number;
+  fps?: number;
+  n?: number;
+  provider: ResolvedProviderConfig;
+  credential: ProviderCredential;
+  signal?: AbortSignal;
+  fetch?: typeof globalThis.fetch;
+}
+
+export interface TranscriptionCall {
+  modelId: string;
+  audio: string | URL | Uint8Array;
+  mediaType?: string;
+  language?: string;
+  provider: ResolvedProviderConfig;
+  credential: ProviderCredential;
+  signal?: AbortSignal;
+  fetch?: typeof globalThis.fetch;
+}
+
+export interface RerankCall {
+  modelId: string;
+  query: string;
+  documents: string[];
+  topN?: number;
+  provider: ResolvedProviderConfig;
+  credential: ProviderCredential;
+  signal?: AbortSignal;
+  fetch?: typeof globalThis.fetch;
+}
+
 export interface EmbedCall {
   modelId: string;
   /** Batch of texts to embed; the provider returns one vector per input, in order. */
@@ -255,17 +311,20 @@ export interface EmbedResult {
 /**
  * The provider contract. `type` matches the configured `Provider.type`. `descriptor` is the
  * self-describing catalog metadata (label, default base URL, key placeholder, extra fields…).
- * `stream` is the only required call; everything else is optional and capability-probed by the
- * gateway (a missing `generateImage` ⇒ this provider can't make images, the gateway fails over).
+ * All generation calls are optional and capability-probed by the gateway, so a provider can be
+ * image/video/embedding-only without pretending to support text generation.
  */
 export interface ModelProvider {
   type: string;
   descriptor: ModelProviderDescriptor;
-  stream(call: ModelCall): AsyncIterable<ModelChunk>;
+  stream?(call: ModelCall): AsyncIterable<ModelChunk>;
   /** Optional blocking variant. When absent the gateway aggregates `stream`. */
   complete?(call: ModelCall): Promise<ModelResult>;
   generateImage?(call: ImageCall): Promise<ImageResult>;
+  generateVideo?(call: VideoCall): Promise<VideoResult>;
   generateSpeech?(call: SpeechCall): Promise<SpeechResult>;
+  transcribe?(call: TranscriptionCall): Promise<TranscriptionResult>;
+  rerank?(call: RerankCall): Promise<RerankResult>;
   /** Embed a batch of texts → one vector per input (+ token usage). Absent ⇒ no embedding model. */
   embed?(call: EmbedCall): Promise<EmbedResult>;
   /** Enumerate the provider's model catalogue (powers the connection test + model picker). */

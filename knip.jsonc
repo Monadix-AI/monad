@@ -6,10 +6,15 @@
     "apps/monad/src/handlers/settings/mcp-server/catalog.ts",
     "apps/web/components/ai-elements/context.tsx",
     "apps/web/components/ai-elements/prompt-input.tsx",
-    "apps/web/components/studio/CapabilityPicker.tsx",
+    "apps/web/components/ai-elements/prompt-input-context.tsx",
+    "apps/web/components/ai-elements/prompt-input-controls.tsx",
     "apps/web/components/ui/command.tsx",
     "apps/web/components/ui/dialog.tsx",
-    "apps/web/components/ui/dropdown-menu.tsx"
+    "apps/web/components/ui/dropdown-menu.tsx",
+    "apps/web/components/ui/slider.tsx",
+    "apps/web/features/workplace/activity/ActivityLog.tsx",
+    "apps/web/features/workplace/activity/WorkOutput.tsx",
+    "apps/web/features/workplace/project-shell/ProjectHeader.tsx"
   ],
   // Both "duplicates" are intentional schema aliases in @monad/protocol
   // (a request schema deliberately mirrors its response schema).
@@ -17,7 +22,7 @@
   // Root-level devDependency used via git hooks (lefthook.yml), not imported.
   "ignoreDependencies": ["@evilmartians/lefthook", "@inlang/paraglide-js"],
   // System binaries invoked from scripts; not npm-installed.
-  "ignoreBinaries": ["powershell", "shasum", "sha256sum"],
+  "ignoreBinaries": ["codex", "powershell", "shasum", "sha256sum"],
   // Workspaces are auto-discovered from package.json "workspaces"; production
   // entries (main/module/bin/exports) and the Next.js app are inferred per
   // package.json. The only thing Knip can't infer is Bun's test layer: the bun
@@ -45,7 +50,7 @@
     // cmdk/nanoid are pulled in dynamically.
     "apps/web": {
       "entry": ["test/**/*.{ts,tsx}", "**/*.test.{ts,tsx}"],
-      "ignoreDependencies": ["cmdk", "nanoid", "react-compiler-runtime"]
+      "ignoreDependencies": ["cmdk", "react-compiler-runtime"]
     },
     "apps/mo": {},
     // pino loads pino-pretty by name string (transport target), not by import.

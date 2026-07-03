@@ -1,3 +1,4 @@
+import type { GenerateMessageResponse, ListMessagesResponse } from '@monad/protocol';
 import type { createDaemonHandlers } from '@/handlers/handlers.ts';
 
 import {
@@ -8,7 +9,11 @@ import {
   listUiItemsResponseSchema,
   okResponseSchema,
   responseInstanceSchema,
-  sessionIdSchema
+  sessionIdSchema,
+  workspaceActionRequestSchema,
+  workspaceActionResponseSchema,
+  workspaceGitSchema,
+  workspaceMetaSchema
 } from '@monad/protocol';
 import { Elysia } from 'elysia';
 import { z } from 'zod';
@@ -243,7 +248,7 @@ export function createSessionsController(handlers: ReturnType<typeof createDaemo
       )
       .get(
         '/sessions/:id/messages',
-        async ({ params, query }) =>
+        async ({ params, query }): Promise<ListMessagesResponse> =>
           handlers.session.messages({
             id: params.id,
             limit: query.limit,
@@ -284,6 +289,38 @@ export function createSessionsController(handlers: ReturnType<typeof createDaemo
           }
         }
       )
+      .get('/sessions/:id/workspace-git', async ({ params }) => handlers.session.workspaceGit({ id: params.id }), {
+        params: sessionParams,
+        response: { 200: workspaceGitSchema },
+        detail: {
+          tags: ['http-only'],
+          summary: 'Git status of the session working folder',
+          description: 'Deprecated alias for workspace-meta.git.'
+        }
+      })
+      .get('/sessions/:id/workspace-meta', async ({ params }) => handlers.session.workspaceMeta({ id: params.id }), {
+        params: sessionParams,
+        response: { 200: workspaceMetaSchema },
+        detail: {
+          tags: ['http-only'],
+          summary: 'Workspace metadata for the session working folder',
+          description: 'Returns best-effort metadata slices for the session’s working folder.'
+        }
+      })
+      .post(
+        '/sessions/:id/workspace-action',
+        async ({ params, body }) => handlers.session.workspaceAction({ id: params.id, action: body.action }),
+        {
+          params: sessionParams,
+          body: workspaceActionRequestSchema,
+          response: { 200: workspaceActionResponseSchema },
+          detail: {
+            tags: ['http-only'],
+            summary: 'Open the session working folder on the daemon host',
+            description: 'Runs a platform-native file manager or terminal action for the session working folder.'
+          }
+        }
+      )
       .post(
         '/sessions/:id/messages',
         async ({ params, body, headers }) => {
@@ -317,7 +354,8 @@ export function createSessionsController(handlers: ReturnType<typeof createDaemo
       )
       .post(
         '/sessions/:id/messages/block',
-        async ({ params, body }) => handlers.session.generate({ sessionId: params.id, text: body.text }),
+        async ({ params, body }): Promise<GenerateMessageResponse> =>
+          handlers.session.generate({ sessionId: params.id, text: body.text }),
         {
           params: contracts.generate.params,
           body: contracts.generate.body,

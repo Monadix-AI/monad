@@ -1,12 +1,33 @@
 import { expect, test } from 'bun:test';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
+import { daemonHttpContract, httpErrorSchema } from '../src/http.ts';
 import {
+  managedProjectRuntimePromptInputSchema,
+  managedProjectRuntimeSpecSchema,
+  nativeAgentDirectMessageSchema,
+  nativeAgentProjectInboxAckRequestSchema,
+  nativeAgentProjectInboxAckResponseSchema,
+  nativeAgentProjectInboxResponseSchema,
+  nativeAgentProjectPostRequestSchema,
+  nativeAgentProjectPostResponseSchema,
+  nativeAgentProjectReadRequestSchema,
+  nativeAgentProjectReadResponseSchema,
+  nativeAgentReadRequestSchema,
+  nativeAgentReadResponseSchema,
+  nativeAgentRuntimeInfoResponseSchema,
+  nativeAgentSendRequestSchema,
+  nativeAgentSendResponseSchema,
+  nativeCliAgentPresetSchema,
   nativeCliAgentViewSchema,
   nativeCliApprovalResolutionRequestSchema,
   nativeCliAuthSessionViewSchema,
   nativeCliAuthStatusResponseSchema,
   nativeCliSessionViewSchema,
-  startNativeCliAgentRequestSchema
+  startNativeCliAgentRequestSchema,
+  workplaceProjectMembersExtKey,
+  workplaceProjectMembersExtSchema
 } from '../src/native-cli-agent.ts';
 
 test('native CLI agent view requires provider-owned full-capability defaults', () => {
@@ -14,14 +35,85 @@ test('native CLI agent view requires provider-owned full-capability defaults', (
     name: 'codex',
     provider: 'codex',
     command: 'codex',
+    reasoningEfforts: ['low', 'medium', 'high'],
     enabled: true,
     defaultLaunchMode: 'pty',
     allowDangerousMode: false
   });
 
   expect(parsed.provider).toBe('codex');
+  expect(parsed.reasoningEfforts).toEqual(['low', 'medium', 'high']);
   expect(parsed.defaultLaunchMode).toBe('pty');
   expect(parsed.approvalOwnership).toBe('provider-owned');
+});
+
+test('native CLI agent view accepts Gemini as a provider-owned native CLI provider', () => {
+  const parsed = nativeCliAgentViewSchema.parse({
+    name: 'gemini',
+    provider: 'gemini',
+    command: 'gemini',
+    enabled: true
+  });
+
+  expect(parsed.provider).toBe('gemini');
+  expect(parsed.defaultLaunchMode).toBe('pty');
+  expect(parsed.approvalOwnership).toBe('provider-owned');
+});
+
+test('native CLI agent view accepts Qwen as a provider-owned native CLI provider', () => {
+  const parsed = nativeCliAgentViewSchema.parse({
+    name: 'qwen',
+    provider: 'qwen',
+    command: 'qwen',
+    enabled: true
+  });
+
+  expect(parsed.provider).toBe('qwen');
+  expect(parsed.defaultLaunchMode).toBe('pty');
+  expect(parsed.approvalOwnership).toBe('provider-owned');
+});
+
+test('native CLI agent names are safe single path segments', () => {
+  const validAgent = {
+    name: 'Claude Code',
+    provider: 'claude-code',
+    command: 'claude',
+    enabled: true
+  };
+
+  expect(nativeCliAgentViewSchema.safeParse(validAgent).success).toBe(true);
+  expect(
+    startNativeCliAgentRequestSchema.safeParse({ agentName: 'Claude Code', workingPath: '/tmp/project' }).success
+  ).toBe(true);
+  expect(workplaceProjectMembersExtSchema.safeParse([{ type: 'native-cli', name: 'Claude Code' }]).success).toBe(true);
+
+  for (const unsafeName of ['../codex', '..\\codex', '.', '..', 'C:codex', 'codex/child', 'codex\\child', 'codex\0x']) {
+    expect(nativeCliAgentViewSchema.safeParse({ ...validAgent, name: unsafeName }).success).toBe(false);
+    expect(
+      startNativeCliAgentRequestSchema.safeParse({ agentName: unsafeName, workingPath: '/tmp/project' }).success
+    ).toBe(false);
+    expect(workplaceProjectMembersExtSchema.safeParse([{ type: 'native-cli', name: unsafeName }]).success).toBe(false);
+  }
+});
+
+test('native CLI preset view includes a provider install page', () => {
+  const parsed = nativeCliAgentPresetSchema.parse({
+    id: 'codex',
+    label: 'Codex',
+    provider: 'codex',
+    productIcon: 'codex',
+    command: 'codex',
+    args: [],
+    defaultLaunchMode: 'pty',
+    supportedLaunchModes: ['pty'],
+    reasoningEfforts: ['low', 'medium', 'high'],
+    installHint: 'Install Codex.',
+    installUrl: 'https://developers.openai.com/codex/cli',
+    installed: false
+  });
+
+  expect(parsed.installUrl).toBe('https://developers.openai.com/codex/cli');
+  expect(parsed.reasoningEfforts).toEqual(['low', 'medium', 'high']);
 });
 
 test('native CLI approval resolution request carries provider request id and decision', () => {
@@ -49,7 +141,7 @@ test('start request requires an absolute working path', () => {
 test('native CLI session view preserves provider session lifecycle fields', () => {
   const parsed = nativeCliSessionViewSchema.parse({
     id: 'ncli_1',
-    projectSessionId: 'ses_PROJECT',
+    transcriptTargetId: 'prj_PROJECT',
     agentName: 'claude-code',
     provider: 'claude-code',
     workingPath: '/tmp/project',
@@ -65,7 +157,90 @@ test('native CLI session view preserves provider session lifecycle fields', () =
   });
 
   expect(parsed.approvalOwnership).toBe('provider-owned');
+  expect(parsed.transcriptTargetId).toBe('prj_PROJECT');
+  expect('projectSessionId' in parsed).toBe(false);
+  expect('projectId' in parsed).toBe(false);
+  expect(parsed.runtimeRole).toBe('interactive');
   expect(parsed.exitCode).toBeNull();
+});
+
+test('native CLI session view carries managed project runtime fields', () => {
+  const parsed = nativeCliSessionViewSchema.parse({
+    id: 'ncli_1',
+    transcriptTargetId: 'prj_PROJECT',
+    agentName: 'codex',
+    provider: 'codex',
+    workingPath: '/tmp/project',
+    launchMode: 'app-server',
+    runtimeRole: 'managed-project-agent',
+    agentRuntimeId: 'nclirt_codex_project',
+    lastDeliveredSeq: 42,
+    lastVisibleSeq: 40,
+    state: 'running',
+    pid: 123,
+    providerSessionRef: 'provider-thread',
+    outputSnapshot: '',
+    exitCode: null,
+    startedAt: '2026-06-28T00:00:00.000Z',
+    updatedAt: '2026-06-28T00:00:01.000Z',
+    exitedAt: null
+  });
+
+  expect(parsed.runtimeRole).toBe('managed-project-agent');
+  expect(parsed.transcriptTargetId).toBe('prj_PROJECT');
+  expect('projectSessionId' in parsed).toBe(false);
+  expect('projectId' in parsed).toBe(false);
+  expect(parsed.agentRuntimeId).toBe('nclirt_codex_project');
+  expect(parsed.lastDeliveredSeq).toBe(42);
+  expect(parsed.lastVisibleSeq).toBe(40);
+});
+
+test('workplace project members ext schema is shared by web and daemon', () => {
+  const parsed = workplaceProjectMembersExtSchema.parse([
+    { type: 'acp', name: 'reviewer', settings: { cwd: '/tmp/project', forwardMcp: true } },
+    {
+      type: 'native-cli',
+      name: 'codex',
+      settings: { launchMode: 'app-server', managedProjectAgent: true, osSandbox: false }
+    }
+  ]);
+
+  expect(workplaceProjectMembersExtKey).toBe('workplaceProjectMembers');
+  expect(parsed[1]?.settings?.launchMode).toBe('app-server');
+  expect(workplaceProjectMembersExtSchema.safeParse([{ type: 'native-cli', name: '' }]).success).toBe(false);
+  expect(
+    workplaceProjectMembersExtSchema.safeParse([{ type: 'native-cli', name: 'codex', settings: { launchMode: 'bad' } }])
+      .success
+  ).toBe(false);
+});
+
+test('workplace native CLI members can be instantiated multiple times from one template', () => {
+  const parsed = workplaceProjectMembersExtSchema.parse([
+    {
+      type: 'native-cli',
+      name: 'codex-reviewer',
+      templateName: 'codex',
+      displayName: 'codex-reviewer',
+      instanceId: 'pmem_codex_reviewer',
+      settings: { modelName: 'gpt-5.5', reasoningEffort: 'high', speed: 'fast', customPrompt: 'Review changes only.' }
+    },
+    {
+      type: 'native-cli',
+      name: 'codex-tester',
+      templateName: 'codex',
+      displayName: 'codex-tester',
+      instanceId: 'pmem_codex_tester'
+    }
+  ]);
+
+  expect(parsed.map((member) => [member.name, member.templateName, member.displayName, member.instanceId])).toEqual([
+    ['codex-reviewer', 'codex', 'codex-reviewer', 'pmem_codex_reviewer'],
+    ['codex-tester', 'codex', 'codex-tester', 'pmem_codex_tester']
+  ]);
+  expect(parsed[0]?.settings?.customPrompt).toBe('Review changes only.');
+  expect(parsed[0]?.settings?.modelName).toBe('gpt-5.5');
+  expect(parsed[0]?.settings?.reasoningEffort).toBe('high');
+  expect(parsed[0]?.settings?.speed).toBe('fast');
 });
 
 test('native CLI auth views model provider-owned login relay without project session fields', () => {
@@ -93,6 +268,155 @@ test('native CLI auth views model provider-owned login relay without project ses
       checkedAt: '2026-06-28T00:00:02.000Z'
     }).state
   ).toBe('unauthenticated');
+});
+
+test('managed project runtime prompt and prepared spec are protocol contracts', () => {
+  const promptInput = managedProjectRuntimePromptInputSchema.parse({
+    agentName: 'codex',
+    projectId: 'prj_PROJECT',
+    nativeCliSessionId: 'ncli_1',
+    provider: 'codex',
+    workspace: '/tmp/monad/workplace-agents/prj_PROJECT/codex',
+    modelName: 'gpt-5.5',
+    reasoningEffort: 'high',
+    speed: 'fast'
+  });
+
+  expect(promptInput.projectId).toBe('prj_PROJECT');
+  expect('projectSessionId' in promptInput).toBe(false);
+  expect(promptInput.provider).toBe('codex');
+  expect(promptInput.modelName).toBe('gpt-5.5');
+  expect(promptInput.reasoningEffort).toBe('high');
+  expect(promptInput.speed).toBe('fast');
+
+  const spec = managedProjectRuntimeSpecSchema.parse({
+    workspace: '/tmp/monad/workplace-agents/prj_PROJECT/codex',
+    promptFile: '/tmp/monad/workplace-agents/prj_PROJECT/codex/managed-prompt.md',
+    tokenFile: '/tmp/monad/workplace-agents/prj_PROJECT/codex/.monad-agent-token',
+    tokenHash: 'abc123',
+    wrapperBin: '/tmp/monad/workplace-agents/prj_PROJECT/codex/bin/monad',
+    env: {
+      MONAD_NATIVE_CLI_SESSION_ID: 'ncli_1'
+    },
+    prompt: 'Use monad project post for public replies.'
+  });
+
+  expect(spec.env.MONAD_NATIVE_CLI_SESSION_ID).toBe('ncli_1');
+  expect(managedProjectRuntimeSpecSchema.safeParse({ ...spec, env: undefined }).success).toBe(false);
+});
+
+test('native agent project command schemas allow runtime-bound project defaults and require non-empty text', () => {
+  expect(
+    nativeAgentProjectPostRequestSchema.parse({
+      projectId: 'prj_PROJECT',
+      threadId: 'msg_PARENT',
+      text: 'hello project'
+    })
+  ).toEqual({ projectId: 'prj_PROJECT', threadId: 'msg_PARENT', text: 'hello project' });
+
+  expect(nativeAgentProjectPostRequestSchema.safeParse({ projectId: 'not-a-session', text: 'hello' }).success).toBe(
+    false
+  );
+  expect(nativeAgentProjectPostRequestSchema.parse({ text: 'hello' })).toEqual({ text: 'hello' });
+  expect(nativeAgentProjectPostRequestSchema.safeParse({ projectId: 'prj_PROJECT', text: '' }).success).toBe(false);
+  expect(
+    nativeAgentProjectReadRequestSchema.parse({
+      projectId: 'prj_PROJECT',
+      after: 'msg_OLD',
+      limit: 25
+    }).limit
+  ).toBe(25);
+});
+
+test('native agent inbox and runtime info schemas carry project-managed runtime state', () => {
+  const inbox = nativeAgentProjectInboxResponseSchema.parse({
+    projectId: 'prj_PROJECT',
+    cursor: 7,
+    items: [
+      {
+        seq: 7,
+        message: {
+          id: 'msg_INBOX',
+          transcriptTargetId: 'prj_PROJECT',
+          role: 'user',
+          text: 'please take a look',
+          type: 'text',
+          stream: { status: 'settled' },
+          active: true,
+          createdAt: '2026-06-28T00:00:00.000Z'
+        }
+      }
+    ]
+  });
+
+  expect(inbox.items[0]?.message.id).toBe('msg_INBOX');
+
+  const info = nativeAgentRuntimeInfoResponseSchema.parse({
+    agentId: 'codex',
+    projectId: 'prj_PROJECT',
+    nativeCliSessionId: 'ncli_1',
+    serverUrl: 'http://127.0.0.1:3000',
+    workdir: '/tmp/project',
+    providerSessionRef: null,
+    lastDeliveredSeq: 9,
+    lastVisibleSeq: 7,
+    pendingInboxCount: 2
+  });
+
+  expect(info.providerSessionRef).toBeNull();
+  expect(info.pendingInboxCount).toBe(2);
+  expect('projectSessionId' in info).toBe(false);
+});
+
+test('native agent direct message schemas stay separate from project transcript', () => {
+  expect(nativeAgentSendRequestSchema.parse({ to: 'human', text: 'private note' })).toEqual({
+    to: 'human',
+    text: 'private note'
+  });
+
+  const message = nativeAgentDirectMessageSchema.parse({
+    id: 'msg_DIRECT',
+    projectId: 'prj_PROJECT',
+    nativeCliSessionId: 'ncli_1',
+    fromAgent: 'codex',
+    peer: 'human',
+    text: 'private note',
+    createdAt: '2026-06-28T00:00:00.000Z'
+  });
+
+  expect(message.projectId).toBe('prj_PROJECT');
+  expect('projectSessionId' in message).toBe(false);
+  expect(message.peer).toBe('human');
+});
+
+test('native agent HTTP endpoints are declared in the protocol daemon contract', () => {
+  expect(daemonHttpContract.nativeAgent.projectPost.body).toBe(nativeAgentProjectPostRequestSchema);
+  expect(daemonHttpContract.nativeAgent.projectPost.response).toEqual({
+    200: nativeAgentProjectPostResponseSchema,
+    403: httpErrorSchema,
+    404: httpErrorSchema
+  });
+  expect(daemonHttpContract.nativeAgent.projectRead.body).toBe(nativeAgentProjectReadRequestSchema);
+  expect(daemonHttpContract.nativeAgent.projectRead.response[200]).toBe(nativeAgentProjectReadResponseSchema);
+  expect(daemonHttpContract.nativeAgent.projectInbox.response[200]).toBe(nativeAgentProjectInboxResponseSchema);
+  expect(daemonHttpContract.nativeAgent.projectInboxAck.body).toBe(nativeAgentProjectInboxAckRequestSchema);
+  expect(daemonHttpContract.nativeAgent.projectInboxAck.response[200]).toBe(nativeAgentProjectInboxAckResponseSchema);
+  expect(daemonHttpContract.nativeAgent.agentSend.body).toBe(nativeAgentSendRequestSchema);
+  expect(daemonHttpContract.nativeAgent.agentSend.response[200]).toBe(nativeAgentSendResponseSchema);
+  expect(daemonHttpContract.nativeAgent.agentRead.body).toBe(nativeAgentReadRequestSchema);
+  expect(daemonHttpContract.nativeAgent.agentRead.response[200]).toBe(nativeAgentReadResponseSchema);
+  expect(daemonHttpContract.nativeAgent.runtimeInfo.response[200]).toBe(nativeAgentRuntimeInfoResponseSchema);
+});
+
+test('native agent daemon transport reuses protocol schemas instead of local zod copies', () => {
+  const source = readFileSync(
+    resolve(import.meta.dir, '../../../apps/monad/src/transports/http/native-agent.ts'),
+    'utf8'
+  );
+
+  expect(source).toContain('daemonHttpContract.nativeAgent');
+  expect(source).not.toContain("from 'zod'");
+  expect(source).not.toContain('z.object');
 });
 
 // The workingPath schema is cross-platform: it travels over the wire from any client OS, so it must

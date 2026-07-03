@@ -5,8 +5,9 @@ import { expect, test } from 'bun:test';
 import {
   debugTraceText,
   filterDebugTraceEntries,
+  formatDebugTimestamp,
   logRecordToDebugTrace
-} from '../../components/workplace/ProjectDebugConsole';
+} from '../../features/workplace/debug/ProjectDebugConsole';
 
 const entry = (overrides: Partial<ProjectDebugTraceEntry>): ProjectDebugTraceEntry => ({
   id: overrides.id ?? `dbg_${overrides.label ?? 'x'}`,
@@ -47,6 +48,14 @@ test('project debug console renders entry data as formatted JSON', () => {
   expect(debugTraceText(entry({ data: { chunk: '\u001b[?25l' } }))).toContain('"chunk":');
 });
 
+test('project debug console formats timestamps in the requested time zone', () => {
+  const formatted = formatDebugTimestamp('2026-06-29T10:00:00.123Z', 'Asia/Shanghai');
+
+  expect(formatted).toContain('18:00:00');
+  expect(formatted).not.toContain('.123');
+  expect(formatted).not.toContain('GMT+8');
+});
+
 test('project debug console maps logger records to log trace entries', () => {
   expect(
     logRecordToDebugTrace({
@@ -67,4 +76,21 @@ test('project debug console maps logger records to log trace entries', () => {
       msg: 'native cli started'
     }
   });
+});
+
+test('project debug console owns the dev stream message toggle', async () => {
+  const [consoleSource, storeSource, projectSource, projectionSource] = await Promise.all([
+    Bun.file(new URL('../../features/workplace/debug/ProjectDebugConsole.tsx', import.meta.url)).text(),
+    Bun.file(new URL('../../features/workplace/workplace-ui-store.ts', import.meta.url)).text(),
+    Bun.file(new URL('../../features/workplace/use-project.ts', import.meta.url)).text(),
+    Bun.file(new URL('../../features/workplace/project-projection.ts', import.meta.url)).text()
+  ]);
+
+  expect(consoleSource).toContain('show dev system messages in stream');
+  expect(consoleSource).toContain('setShowDevSystemMessagesInStream');
+  expect(storeSource).toContain('monad.workplace.showDevSystemMessagesInStream');
+  expect(storeSource).toContain("process.env.NODE_ENV !== 'production'");
+  expect(projectSource).toContain('showDeveloperOnlyMessages: DEV_SYSTEM_MESSAGES_IN_STREAM_ENABLED &&');
+  expect(projectionSource).toContain("process.env.NODE_ENV !== 'production' && showDeveloperOnlyMessages");
+  expect(projectionSource).toContain('showDeveloperOnlyMessages = false');
 });

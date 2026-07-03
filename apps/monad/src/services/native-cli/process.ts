@@ -7,6 +7,18 @@ function taskkillTree(pid: number): void {
   Bun.spawnSync(['taskkill', '/T', '/F', '/PID', String(pid)]);
 }
 
+function isMissingProcessError(error: unknown): boolean {
+  return error instanceof Error && 'code' in error && (error as NodeJS.ErrnoException).code === 'ESRCH';
+}
+
+function killIfPresent(pid: number, signal: NodeJS.Signals, kill: NativeCliKillFn): void {
+  try {
+    kill(pid, signal);
+  } catch (error) {
+    if (!isMissingProcessError(error)) throw error;
+  }
+}
+
 export function killNativeCliProcess(
   pid: number | undefined,
   signal: NodeJS.Signals = 'SIGTERM',
@@ -22,7 +34,7 @@ export function killNativeCliProcess(
     } catch {
       // taskkill unavailable — fall back to a direct pid kill (leader only)
     }
-    kill(pid, signal);
+    killIfPresent(pid, signal, kill);
     return;
   }
   try {
@@ -30,8 +42,9 @@ export function killNativeCliProcess(
     // the whole group (the CLI + anything it spawned).
     kill(-pid, signal);
     return;
-  } catch {
+  } catch (error) {
+    if (isMissingProcessError(error)) return;
     // fall through to direct pid kill
   }
-  kill(pid, signal);
+  killIfPresent(pid, signal, kill);
 }

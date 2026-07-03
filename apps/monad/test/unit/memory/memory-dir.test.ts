@@ -7,7 +7,16 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { factId, MemoryDir, scopeOf } from '@/store/db/index.ts';
+import { factId, MemoryDir, projectKey, scopeOf } from '@/store/db/index.ts';
+
+test('projectKey is filename-safe, stable, and disambiguates distinct paths', () => {
+  const k = projectKey('/Users/zeke/Projects/Monad');
+  expect(k).toMatch(/^[a-z0-9-]+$/); // safe to embed in MEMORY_project_<key>.md
+  expect(k.startsWith('monad-')).toBe(true); // recognizable basename
+  expect(projectKey('/Users/zeke/Projects/Monad')).toBe(k); // stable
+  expect(projectKey('/Users/zeke/Projects/Monad/')).toBe(k); // normalized (trailing slash)
+  expect(projectKey('/other/Monad')).not.toBe(k); // same basename, different path → different key
+});
 
 const roots: string[] = [];
 function freshDir(): MemoryDir {

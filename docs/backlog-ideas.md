@@ -165,3 +165,41 @@ P0 (MVP): add `orchestration` to `monadProfileSchema` + a `router` model role
 `/v1/settings/orchestration` HTTP controller + web/CLI surface, following the `peer/`
 three-file pattern. No reuse of the peer-federation network layer (this is purely
 in-process); deterministic planner→workers→reviewer pipelines explicitly out of scope.
+
+---
+
+## Provider key rotation policies
+
+**Status:** `parked`
+**Discussed:** 2026-06-29
+
+Allow a provider with multiple configured keys to choose an explicit credential rotation
+policy instead of only using static priority ordering. Candidate policies include
+round-robin distribution across eligible keys and priority fallback where higher-priority
+keys are tried first, with lower-priority keys used only after quota/rate-limit/auth
+failures.
+
+**Why it came up:** Users may configure several keys for the same provider and want
+different operational behaviour depending on intent: spread traffic across equivalent
+keys, reserve backup keys for failure cases, or keep a preferred paid/team key ahead of
+personal fallback keys.
+
+**Why it's parked:**
+
+- Current credential records already have `priority`, and the gateway can sort/use them
+  without adding another policy surface.
+- Correct rotation needs failure classification semantics (rate limit vs auth error vs
+  transient provider error), observability, and persistence for round-robin cursors.
+- The UX needs to make side effects clear: round robin can spend quota across all keys;
+  fallback protects backup keys but may hide partial provider degradation.
+
+**Re-evaluate when:**
+- Users report rate-limit pressure or quota balancing needs on providers with multiple
+  keys.
+- Credential health reporting is rich enough to distinguish retryable provider failures
+  from bad credentials.
+
+**Minimum-cost path if revisited:** Add a provider-level `credentialPolicy`
+(`priority-fallback` default, `round-robin` optional) plus a small per-provider rotation
+state in daemon storage. Keep selection in the gateway, emit which credential id was
+chosen and why, and add e2e coverage for rate-limit fallback and stable round-robin order.

@@ -2,13 +2,21 @@ import type {
   DeveloperLogRecord,
   Event,
   EventId,
+  NativeCliAuthSessionView,
   SendMessageResponse,
   SessionId,
-  SessionUiEvent
+  SessionUiEvent,
+  TranscriptTargetId
 } from '@monad/protocol';
 import type { MonadTreaty, MonadTreatyConfig } from './treaty.ts';
 
-import { CONTROL_API_VERSION, developerLogRecordSchema, eventSchema, sessionUiEventSchema } from '@monad/protocol';
+import {
+  CONTROL_API_VERSION,
+  developerLogRecordSchema,
+  eventSchema,
+  nativeCliAuthSessionViewSchema,
+  sessionUiEventSchema
+} from '@monad/protocol';
 
 import { EventSocket } from './event-socket.ts';
 import { createMonadTreaty, makeLoopbackHttpsFetcher, makeUnixFetcher } from './treaty.ts';
@@ -37,6 +45,7 @@ export interface MonadClientOptions {
 export type EventHandler = (event: Event) => void;
 export type UiEventHandler = (event: SessionUiEvent) => void;
 export type LogRecordHandler = (record: DeveloperLogRecord) => void;
+export type NativeCliAuthSessionHandler = (session: NativeCliAuthSessionView) => void;
 
 interface SsePayloadSchema<T> {
   parse(value: unknown): T;
@@ -239,7 +248,7 @@ export class MonadClient {
     };
 
     const unsubControl = this.subscribeControl((event) => {
-      if (event.sessionId !== sessionId) return;
+      if (event.transcriptTargetId !== sessionId) return;
       if (event.type === 'session.stream_started') {
         openSse();
         return;
@@ -287,7 +296,7 @@ export class MonadClient {
   }
 
   streamEvents(
-    sessionId: SessionId,
+    sessionId: TranscriptTargetId,
     onEvent: EventHandler,
     opts?: { afterEventId?: EventId; onError?: (err: StreamError) => void }
   ): () => void {
@@ -298,6 +307,26 @@ export class MonadClient {
       let delay = 1_000;
       while (!controller.signal.aborted) {
         try {
+          if (sessionId.startsWith('prj_')) {
+            const query = afterEventId ? `?after=${encodeURIComponent(afterEventId)}` : '';
+            const res = await this.fetch(`/v1/projects/${encodeURIComponent(sessionId)}/events${query}`, {
+              headers: afterEventId ? { 'last-event-id': afterEventId } : undefined,
+              signal: controller.signal
+            });
+            if (!res.ok) {
+              if (res.status === 401 || res.status === 403 || res.status === 404) {
+                opts?.onError?.({ kind: 'fatal', status: res.status });
+                return;
+              }
+              opts?.onError?.({ kind: 'transient', status: res.status });
+            } else {
+              const lastId = await this.consumeSseStream(res, onEvent, eventSchema, controller.signal);
+              if (lastId) afterEventId = lastId as EventId;
+            }
+            delay = 1_000;
+            continue;
+          }
+
           const result = await this.treaty.v1.sessions({ id: sessionId }).events.get({
             headers: afterEventId ? { 'last-event-id': afterEventId } : undefined,
             fetch: { signal: controller.signal }
@@ -382,8 +411,54 @@ export class MonadClient {
     return () => controller.abort();
   }
 
+  streamNativeCliAuth(
+    id: string,
+    onSession: NativeCliAuthSessionHandler,
+    opts?: { onError?: (err: StreamError) => void }
+  ): () => void {
+    const controller = new AbortController();
+
+    void (async () => {
+      let delay = 1_000;
+      while (!controller.signal.aborted) {
+        try {
+          const response = await this.fetch(`/${CONTROL_API_VERSION}/native-cli-auth-sessions/${id}/events`, {
+            headers: { accept: 'text/event-stream' },
+            signal: controller.signal
+          });
+          if (response.status === 401 || response.status === 403 || response.status === 404) {
+            opts?.onError?.({ kind: 'fatal', status: response.status });
+            return;
+          }
+          if (!response.ok) {
+            opts?.onError?.({ kind: 'transient', status: response.status });
+          } else {
+            const reader = response.body?.getReader();
+            if (reader) {
+              await this.readSseEvents(reader, onSession, nativeCliAuthSessionViewSchema, controller.signal);
+            }
+            delay = 1_000;
+          }
+        } catch (err) {
+          if (controller.signal.aborted) return;
+          opts?.onError?.({ kind: 'transient', cause: err });
+        }
+        await new Promise<void>((resolve) => {
+          const t = setTimeout(resolve, delay);
+          controller.signal.addEventListener('abort', () => {
+            clearTimeout(t);
+            resolve();
+          });
+        });
+        delay = Math.min(delay * 2, 30_000);
+      }
+    })();
+
+    return () => controller.abort();
+  }
+
   streamUiEvents(
-    sessionId: SessionId,
+    sessionId: TranscriptTargetId,
     onEvent: UiEventHandler,
     opts?: { afterEventId?: EventId; onError?: (err: StreamError) => void }
   ): () => void {
@@ -394,6 +469,26 @@ export class MonadClient {
       let delay = 1_000;
       while (!controller.signal.aborted) {
         try {
+          if (sessionId.startsWith('prj_')) {
+            const query = afterEventId ? `?after=${encodeURIComponent(afterEventId)}` : '';
+            const res = await this.fetch(`/v1/projects/${encodeURIComponent(sessionId)}/ui-stream${query}`, {
+              headers: afterEventId ? { 'last-event-id': afterEventId } : undefined,
+              signal: controller.signal
+            });
+            if (!res.ok) {
+              if (res.status === 401 || res.status === 403 || res.status === 404) {
+                opts?.onError?.({ kind: 'fatal', status: res.status });
+                return;
+              }
+              opts?.onError?.({ kind: 'transient', status: res.status });
+            } else {
+              const lastId = await this.consumeSseStream(res, onEvent, sessionUiEventSchema, controller.signal);
+              if (lastId) afterEventId = lastId as EventId;
+            }
+            delay = 1_000;
+            continue;
+          }
+
           const result = await this.treaty.v1.sessions({ id: sessionId })['ui-stream'].get({
             headers: afterEventId ? { 'last-event-id': afterEventId } : undefined,
             fetch: { signal: controller.signal }

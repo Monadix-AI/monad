@@ -9,7 +9,12 @@ import type {
 
 import { loadAll, saveSystemConfig } from '@monad/home';
 
-import { listNativeCliAgentPresets } from '@/services/native-cli/index.ts';
+import {
+  getNativeCliProviderAdapter,
+  listNativeCliAgentModelOptions,
+  listNativeCliAgentPresets,
+  listNativeCliAgentReasoningEfforts
+} from '@/services/native-cli/index.ts';
 
 export interface NativeCliAgentDeps {
   paths: MonadPaths;
@@ -47,9 +52,12 @@ function restoreRedactedEnv(
 const toView = (a: NativeCliAgentConfig): NativeCliAgentView => ({
   name: a.name,
   provider: a.provider,
+  productIcon: getNativeCliProviderAdapter(a.provider).productIcon,
   command: a.command,
   args: a.args,
   env: redactEnvForView(a.env),
+  modelOptions: listNativeCliAgentModelOptions(a),
+  reasoningEfforts: listNativeCliAgentReasoningEfforts(a),
   enabled: a.enabled,
   defaultLaunchMode: a.defaultLaunchMode,
   allowDangerousMode: a.allowDangerousMode,
@@ -61,6 +69,7 @@ const fromView = (v: NativeCliAgentView, stored?: NativeCliAgentConfig): NativeC
   provider: v.provider,
   command: v.command,
   args: v.args,
+  modelOptions: v.modelOptions,
   env: restoreRedactedEnv(v.env, stored?.env),
   enabled: v.enabled,
   defaultLaunchMode: v.defaultLaunchMode,

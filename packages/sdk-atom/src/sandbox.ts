@@ -26,6 +26,10 @@ export interface SandboxPolicy {
   readDenyRoots?: string[];
   /** 'none' = no egress; { allowProxyPort } = only the local filtering proxy; 'unrestricted' = open. */
   net?: 'none' | { allowProxyPort: number } | 'unrestricted';
+  /** The session this run belongs to. Local launchers that create per-session OS artifacts
+   *  (e.g. AppContainer profiles) use this to name and reuse the artifact across calls.
+   *  Undefined for non-session runs (a fixed default profile or no profile is used). */
+  sessionId?: string;
 }
 
 /** What a launcher declares it actually enforces, so the daemon can log honestly at boot WITHOUT
@@ -132,12 +136,14 @@ export function defineLocalLauncher(spec: {
   enforces?: SandboxEnforcement;
   isAvailable?: () => boolean;
   wrap: (argv: string[], policy: SandboxPolicy) => string[];
+  disposeSession?: (sessionId: string) => void | Promise<void>;
 }): SandboxLauncher {
   return {
     kind: spec.kind,
     platforms: spec.platforms,
     enforces: spec.enforces,
     isAvailable: spec.isAvailable,
-    wrap: spec.wrap
+    wrap: spec.wrap,
+    disposeSession: spec.disposeSession
   };
 }

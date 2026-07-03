@@ -50,10 +50,11 @@ import { ReloadService } from '@/reload/index.ts';
 import { ConfigBus } from '@/services/config-bus.ts';
 import { DelegationService } from '@/services/delegation/delegation.ts';
 import { createPeerDelegateTool, type PeerDelegateTarget } from '@/services/delegation/peer-delegate.ts';
-import { configureDeveloperLogTransport } from '@/services/developer-log.ts';
+import { configureDeveloperLogTransport, developerLogsDir } from '@/services/developer-log.ts';
 import { EventBus } from '@/services/event-bus.ts';
 import { AgentPersonaService, isToolExposed } from '@/services/generation/agent-persona.ts';
 import { I18nService, loadInstalledLocalePacks } from '@/services/i18n.ts';
+import { sweepStaleLogs } from '@/services/log-maintenance.ts';
 import { createGraphQueryTools } from '@/services/memory/graph/query-tools.ts';
 import { createMemoryAgentTools } from '@/services/memory/tools.ts';
 import { RoundCache } from '@/services/round-cache.ts';
@@ -179,7 +180,7 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
   const { sandboxRoots, sessionSandbox } = await createSandbox(cfg, paths, store, startupAuth);
 
   const bus = new EventBus();
-  const cache = new RoundCache(kv);
+  const cache = new RoundCache();
   const { oversight, clarify, reloadApprovalPolicy } = await createInterruptServices({ paths, cfg, store, bus });
   // Kill any adapter processes that were live when the daemon last stopped and mark their rows evicted.
   store.reconcileOrphanedDelegates();
@@ -205,6 +206,17 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
     24 * 60 * 60 * 1000
   );
   nativeCliPruneTimer.unref();
+  // Sweep stale on-disk logs the daemon owns: the daily temp-dir debug logs and per-session
+  // developer jsonl. (daemon.log itself is rotated by the CLI at its open boundary — its fd is
+  // inherited here and can't be rotated mid-run.) One sweep at startup, then daily.
+  const logsDir = developerLogsDir(paths);
+  const runLogSweep = () =>
+    void sweepStaleLogs({ logsDir }).then((n) => {
+      if (n > 0) logger.info({ removed: n }, 'swept stale logs');
+    });
+  runLogSweep();
+  const logSweepTimer = setInterval(runLogSweep, 24 * 60 * 60 * 1000);
+  logSweepTimer.unref();
   // Reverse fs/terminal delegation for ACP-bridged sessions. Unlike oversight/clarify, its events are
   // ephemeral RPC — bus-only, NEVER persisted (replaying a delegation request on reconnect is wrong).
   const delegation = new DelegationService({ publish: (event) => bus.publish(event) });
@@ -235,7 +247,14 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
   if (!USE_MOCK) {
     const initStatus = computeInitStatus(cfg, startupAuth ?? null);
     if (!initStatus.initialized) {
-      logger.warn(`monad is not initialized — run \`monad init\` or open http://${HOST}:${PORT}/`);
+      const missing = initStatus.missing.length ? `missing ${initStatus.missing.join(', ')}` : 'missing setup';
+      const providerCredentials = initStatus.missingProviderCredentials
+        ?.map((item) => `${item.providerLabel ?? item.providerId} (${item.providerId})`)
+        .join(', ');
+      const providerCredentialHint = providerCredentials ? `; provider credentials: ${providerCredentials}` : '';
+      logger.warn(
+        `monad is not initialized — ${missing}${providerCredentialHint} — run \`monad init\` or open http://${HOST}:${PORT}/`
+      );
     }
   }
 
@@ -464,10 +483,14 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
     memoryService,
     graphStore,
     graphScopesFor,
-    runGraphConsolidate,
+    runConsolidate,
+    runCheckContradictions,
+    explainBelief,
     getMem0Data,
+    getLaws,
     memorySetBackend,
-    memorySetMem0Models
+    memorySetMem0Models,
+    memorySetGraph
   } = createMemorySubsystem({
     store,
     paths,
@@ -581,8 +604,9 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
     modelCatalog,
     agentModel,
     history,
-    memoryService,
-    runGraphConsolidate,
+    runConsolidate,
+    runCheckContradictions,
+    explainBelief,
     oversight,
     i18n: i18nService,
     bus,
@@ -787,8 +811,10 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
     memoryService,
     graphStore,
     getMem0Data,
+    getLaws,
     memorySetBackend,
     memorySetMem0Models,
+    memorySetGraph,
     modelCatalog,
     modelService,
     kv,
@@ -816,6 +842,7 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
     mcpReconnect,
     rediscoverAtomPacks: () => Promise.all([rediscoverAtomPacks(), reloadSkills()]).then(() => {}),
     getAtomConflicts: () => atomConflicts,
+    getWorkspaceExperiences: () => [...registry.workspaceExperiences.values()],
     reindexEmbeddings: () => {
       const cleared = store.clearEmbeddings();
       logger.info(`monad: cleared ${cleared} embedding(s) for re-index with the current embedding model`);
@@ -828,6 +855,7 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
     daemonWarnings,
     certFingerprint: tlsFingerprint,
     certExpiry: tlsCertExpiry,
+    nativeCliServerUrl: `http://127.0.0.1:${PORT}`,
     getUpgradeInfo: upgradeInfo.getUpgradeInfo,
     log: logger
   });

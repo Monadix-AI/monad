@@ -38,10 +38,10 @@ const MEM0_CAPS: L1Capabilities = {
 
 const estimateTokens = (s: string): number => Math.ceil(s.length / 4);
 
-// mem0's scope key. We map each agent to a mem0 `userId` (per-agent isolation). mem0 is a wholesale
-// black box, so our finer global/session granularity is not represented.
+// mem0's scope key: one `userId` per memory scope. Namespaced by kind so an agent id and a project
+// key (or session id) can never collide in mem0's flat user space.
 function userIdFor(scope: MemoryScope): string {
-  return scope.kind === 'global' ? 'global' : scope.id;
+  return scope.kind === 'global' ? 'global' : `${scope.kind}:${scope.id}`;
 }
 
 export class Mem0Adapter implements L1Adapter {
@@ -59,21 +59,35 @@ export class Mem0Adapter implements L1Adapter {
   }
 
   async recall(ctx: RecallCtx): Promise<MemoryBlock> {
-    try {
-      const res = await this.client.search(ctx.query, { topK: 20, filters: { user_id: ctx.agentId } });
-      const facts: Fact[] = [];
-      let used = 0;
-      for (const m of res.results) {
-        const cost = m.memory.length + 3;
-        if (used + cost > ctx.budget.facts) break;
-        facts.push({ id: m.id, content: m.memory, scope: { kind: 'agent', id: ctx.agentId }, provClass: 'machine' });
+    // One query per scope (mem0 filters by a single user_id), fired in parallel — the searches have no
+    // data dependency. Merge round-robin by relevance rank across scopes so no scope starves another:
+    // a many-fact global scope can't crowd out the agent's own specific facts under the char budget.
+    const perScope = await Promise.all(
+      ctx.scopes.map((scope) =>
+        this.client
+          .search(ctx.query, { topK: 20, filters: { user_id: userIdFor(scope) } })
+          .then((res) => res.results.map((m) => ({ m, scope })))
+          .catch((err): { m: Mem0Memory; scope: MemoryScope }[] => {
+            this.log.warn(`mem0: recall(${userIdFor(scope)}) failed: ${String(err)}`);
+            return [];
+          })
+      )
+    );
+
+    const facts: Fact[] = [];
+    let used = 0;
+    const depth = Math.max(0, ...perScope.map((r) => r.length));
+    outer: for (let rank = 0; rank < depth; rank++) {
+      for (const hits of perScope) {
+        const hit = hits[rank];
+        if (!hit) continue;
+        const cost = hit.m.memory.length + 3;
+        if (used + cost > ctx.budget.facts) break outer;
+        facts.push({ id: hit.m.id, content: hit.m.memory, scope: hit.scope, provClass: 'machine' });
         used += cost;
       }
-      return { facts, tokens: estimateTokens(facts.map((f) => f.content).join('\n')) };
-    } catch (err) {
-      this.log.warn(`mem0: recall failed: ${String(err)}`);
-      return { facts: [], tokens: 0 };
     }
+    return { facts, tokens: estimateTokens(facts.map((f) => f.content).join('\n')) };
   }
 
   async observe(turn: MemoryTurn, ctx: WriteCtx): Promise<void> {

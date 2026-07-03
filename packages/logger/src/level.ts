@@ -24,3 +24,17 @@ export function setLogStderr(on: boolean): void {
 export function getLogStderr(): boolean {
   return _stderr;
 }
+
+// When set, the production info+ log stream is written to this file instead of stdout/stderr. The
+// daemon uses this for `monad start` (--start-relay): stdout is reserved for the banner the CLI
+// relays, and the daemon owns writing its own daemon.log — which, unlike the parent redirecting the
+// child's stderr fd, works for a detached child on Windows too. Set before the first log call.
+let _logFile: string | undefined;
+
+export function setLogFile(path: string | undefined): void {
+  _logFile = path;
+}
+
+export function getLogFile(): string | undefined {
+  return _logFile;
+}

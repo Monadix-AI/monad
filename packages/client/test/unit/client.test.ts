@@ -99,7 +99,7 @@ test('streamEvents delivers live SSE events (Eden parses the body into an async-
   const sessionId = 'ses_STREAMTEST' as const;
   const mkEvent = (i: number, delta: string) => ({
     id: `evt_TOK${i}`,
-    sessionId,
+    transcriptTargetId: sessionId,
     type: 'agent.token',
     actorAgentId: null,
     payload: { messageId: 'msg_STREAMTEST', delta, index: i },
@@ -268,7 +268,7 @@ test('watchSession: opens SSE on stream_started, closes on stream_ended, de-dupe
   };
 
   const ev = (id: string, type: string, sessionId = 'ses_W'): Event =>
-    ({ id, sessionId, type, actorAgentId: null, payload: {}, at: '' }) as unknown as Event;
+    ({ id, transcriptTargetId: sessionId, type, actorAgentId: null, payload: {}, at: '' }) as unknown as Event;
 
   const seen: string[] = [];
   const dispose = client.watchSession('ses_W' as SessionId, (e) => seen.push(e.id));

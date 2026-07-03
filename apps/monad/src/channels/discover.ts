@@ -17,7 +17,8 @@ import type {
   HookDefinition,
   ManifestAtomPack,
   ModelProvider,
-  SandboxLauncher
+  SandboxLauncher,
+  WorkspaceExperienceDefinition
 } from '@monad/sdk-atom';
 import type { AtomConflict } from '@/atoms/resolve.ts';
 
@@ -55,6 +56,8 @@ export async function discoverChannelAdapters(
     /** Receives each sandbox launcher a discovered pack registers (e.g. a cloud e2b/Vercel
      *  launcher) — routed to the daemon's sandbox registry, preferred over built-ins on select. */
     onSandbox?: (launcher: SandboxLauncher) => void;
+    /** Receives each workspace experience descriptor a discovered pack registers. */
+    onWorkspaceExperience?: (experience: WorkspaceExperienceDefinition, atomPackName: string) => void;
     /** Provider types owned by the built-in pass — a discovered `provider` claiming one is a hard
      *  error (globally-unique providers; prevents shadowing a built-in like `openai`). */
     reservedProviderTypes?: ReadonlySet<string>;
@@ -153,6 +156,7 @@ export async function discoverChannelAdapters(
     onProvider: sinks.onProvider,
     onHook: sinks.onHook,
     onSandbox: sinks.onSandbox,
+    onWorkspaceExperience: sinks.onWorkspaceExperience,
     reservedProviderTypes: sinks.reservedProviderTypes,
     channelPins: sinks.channelPins,
     connectorPins: sinks.connectorPins,

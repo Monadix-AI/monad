@@ -1,4 +1,4 @@
-import type { SessionId, SessionUiEvent, UIItem } from '@monad/protocol';
+import type { SessionUiEvent, TranscriptTargetId, UIItem } from '@monad/protocol';
 
 import { clientOf } from '../../endpoint-helpers.ts';
 import { sendMessageApi } from './send-message.ts';
@@ -50,10 +50,10 @@ export function applyUiEvent(draft: SessionUiStreamState, event: SessionUiEvent,
 export const streamUiItemsApi = sendMessageApi.injectEndpoints({
   overrideExisting: true,
   endpoints: (builder) => ({
-    streamUiItems: builder.query<SessionUiStreamState, SessionId>({
+    streamUiItems: builder.query<SessionUiStreamState, TranscriptTargetId>({
       queryFn: () => ({ data: { items: [], hasMore: false } }),
       async onCacheEntryAdded(
-        sessionId: SessionId,
+        sessionId: TranscriptTargetId,
         {
           cacheDataLoaded,
           cacheEntryRemoved,

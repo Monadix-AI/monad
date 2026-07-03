@@ -13,6 +13,7 @@ import {
   listProfilesResponseSchema,
   listProvidersResponseSchema,
   okResponseSchema,
+  renameProfileRequestSchema,
   setDefaultProfileRequestSchema,
   setProfileRequestSchema,
   setProviderRequestSchema,
@@ -20,7 +21,9 @@ import {
   testConnectionRequestSchema,
   testConnectionResponseSchema,
   testCredentialBodySchema,
-  testCredentialResponseSchema
+  testCredentialResponseSchema,
+  transcribeAudioRequestSchema,
+  transcribeAudioResponseSchema
 } from '@monad/protocol';
 import { Elysia } from 'elysia';
 import { z } from 'zod';
@@ -66,6 +69,19 @@ export function createModelSettingsController(handlers: ReturnType<typeof create
       response: { 200: okResponseSchema },
       detail: { summary: 'Set model profile', description: 'Upserts a model profile configuration.' }
     })
+    .patch(
+      '/model/profiles/:alias/alias',
+      async ({ params, body }) => handlers.model.renameProfile({ alias: params.alias, nextAlias: body.alias }),
+      {
+        params: profileParams,
+        body: renameProfileRequestSchema,
+        response: { 200: okResponseSchema },
+        detail: {
+          summary: 'Rename model profile',
+          description: 'Renames a profile and rewrites default/agent references in one config commit.'
+        }
+      }
+    )
     .delete('/model/profiles/:alias', async ({ params }) => handlers.model.deleteProfile({ alias: params.alias }), {
       params: profileParams,
       response: { 200: okResponseSchema },
@@ -88,6 +104,14 @@ export function createModelSettingsController(handlers: ReturnType<typeof create
       body: setRolesRequestSchema,
       response: { 200: okResponseSchema },
       detail: { summary: 'Set model role assignments', description: 'Replaces the non-chat model role assignments.' }
+    })
+    .post('/model/transcribe', async ({ body }) => handlers.model.transcribeAudio(body), {
+      body: transcribeAudioRequestSchema,
+      response: { 200: transcribeAudioResponseSchema },
+      detail: {
+        summary: 'Transcribe audio',
+        description: 'Uses the default profile transcription role to transcribe an audio recording.'
+      }
     })
     .post('/model/embeddings/reindex', async () => handlers.embeddings.reindex(), {
       response: { 200: okResponseSchema },

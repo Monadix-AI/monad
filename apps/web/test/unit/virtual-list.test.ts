@@ -7,10 +7,10 @@ test('isAtBottom: at the exact bottom', () => {
 });
 
 test('isAtBottom: within the default threshold counts as at-bottom', () => {
-  // 119px from the bottom (< 120 default)
-  expect(isAtBottom({ scrollHeight: 1000, scrollTop: 381, clientHeight: 500 })).toBe(true);
-  // 121px from the bottom (> 120 default)
-  expect(isAtBottom({ scrollHeight: 1000, scrollTop: 379, clientHeight: 500 })).toBe(false);
+  // 31px from the bottom (< 32 default)
+  expect(isAtBottom({ scrollHeight: 1000, scrollTop: 469, clientHeight: 500 })).toBe(true);
+  // 33px from the bottom (> 32 default)
+  expect(isAtBottom({ scrollHeight: 1000, scrollTop: 467, clientHeight: 500 })).toBe(false);
 });
 
 test('isAtBottom: honors a custom threshold', () => {
@@ -32,6 +32,10 @@ test('reducePinnedOnScroll: a genuine scroll sets pinned from the at-bottom read
   expect(reducePinnedOnScroll(true, false, false)).toEqual({ pinned: false, selfScrollConsumed: false });
   // User scrolls back to the bottom → re-pin.
   expect(reducePinnedOnScroll(false, false, true)).toEqual({ pinned: true, selfScrollConsumed: false });
+});
+
+test('reducePinnedOnScroll: upward user scroll unpins even within the bottom threshold', () => {
+  expect(reducePinnedOnScroll(true, false, true, 'up')).toEqual({ pinned: false, selfScrollConsumed: false });
 });
 
 test('reducePinnedOnScroll: our own pinning scroll is ignored and consumes the flag', () => {

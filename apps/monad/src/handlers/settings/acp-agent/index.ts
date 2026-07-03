@@ -10,7 +10,7 @@ import type {
 
 import { loadAll, saveSystemConfig } from '@monad/home';
 
-import { listAcpAgentPresets } from '@/services/delegation/presets.ts';
+import { listAcpAgentPresets, productIconForAcpAgent } from '@/services/delegation/presets.ts';
 
 export interface AcpAgentDeps {
   paths: MonadPaths;
@@ -22,6 +22,7 @@ export interface AcpAgentDeps {
 // `env` values are `${env:NAME}` refs, not secrets, so the view is the full config — nothing to strip.
 const toView = (a: AcpAgentConfig): AcpAgentView => ({
   name: a.name,
+  productIcon: productIconForAcpAgent(a.name),
   command: a.command,
   args: a.args,
   env: a.env,

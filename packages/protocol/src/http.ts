@@ -11,7 +11,9 @@ import {
   listApprovalsResponseSchema,
   revokeApprovalRequestSchema
 } from './approvals.ts';
+import { browserPresetResponseSchema, setBrowserPresetRequestSchema } from './browser-preset.ts';
 import { commandsListResponseSchema } from './command.ts';
+import { computerPresetResponseSchema, setComputerPresetRequestSchema } from './computer-preset.ts';
 import {
   abortSessionResponseSchema,
   branchSessionRequestSchema,
@@ -58,9 +60,27 @@ import {
 import { developerSettingsSchema, setDeveloperSettingsRequestSchema } from './developer-settings.ts';
 import { getGraphResponseSchema } from './graph.ts';
 import { hooksSettingsResponseSchema, setHooksSettingsRequestSchema } from './hooks-settings.ts';
-import { agentIdSchema, sessionIdSchema } from './ids.ts';
+import { agentIdSchema, projectIdSchema, sessionIdSchema } from './ids.ts';
 import { getLicensesResponseSchema } from './licenses.ts';
 import { getMem0DataResponseSchema } from './mem0-data.ts';
+import { getLawsResponseSchema } from './memory.ts';
+import {
+  nativeAgentProjectAskRequestSchema,
+  nativeAgentProjectAskResponseSchema,
+  nativeAgentProjectInboxAckRequestSchema,
+  nativeAgentProjectInboxAckResponseSchema,
+  nativeAgentProjectInboxRequestSchema,
+  nativeAgentProjectInboxResponseSchema,
+  nativeAgentProjectPostRequestSchema,
+  nativeAgentProjectPostResponseSchema,
+  nativeAgentProjectReadRequestSchema,
+  nativeAgentProjectReadResponseSchema,
+  nativeAgentReadRequestSchema,
+  nativeAgentReadResponseSchema,
+  nativeAgentRuntimeInfoResponseSchema,
+  nativeAgentSendRequestSchema,
+  nativeAgentSendResponseSchema
+} from './native-cli-agent.ts';
 import { networkSettingsSchema, setNetworkSettingsRequestSchema } from './network-settings.ts';
 import { obscuraStatusResponseSchema, setObscuraRequestSchema } from './obscura.ts';
 import { openaiCompatSettingsSchema, setOpenaiCompatRequestSchema } from './openai-compat-settings.ts';
@@ -73,7 +93,19 @@ import {
   importSettingsRequestSchema
 } from './settings-import.ts';
 import { setSkillsSettingsRequestSchema, skillsSettingsResponseSchema } from './skills-settings.ts';
-import { setToolBackendsRequestSchema, toolBackendsResponseSchema } from './tool-backends.ts';
+import { setStartupSettingsRequestSchema, startupSettingsSchema } from './startup-settings.ts';
+import { initDockerResponseSchema, setToolBackendsRequestSchema, toolBackendsResponseSchema } from './tool-backends.ts';
+import { setUserProfileSettingsRequestSchema, userProfileSettingsSchema } from './user-profile-settings.ts';
+import {
+  createWorkplaceProjectRequestSchema,
+  createWorkplaceProjectResponseSchema,
+  deleteWorkplaceProjectResponseSchema,
+  getWorkplaceProjectResponseSchema,
+  listWorkplaceProjectsQuerySchema,
+  listWorkplaceProjectsResponseSchema,
+  updateWorkplaceProjectRequestSchema,
+  updateWorkplaceProjectResponseSchema
+} from './workplace-project.ts';
 
 export const httpErrorSchema = z.object({
   error: z.string(),
@@ -144,6 +176,7 @@ export function coercifyQuery<T extends z.ZodObject<z.ZodRawShape>>(schema: T): 
 export const responseInstanceSchema = z.custom<Response>((value: unknown) => value instanceof Response);
 
 const sessionParamsSchema = z.object({ id: sessionIdSchema });
+const projectParamsSchema = z.object({ id: projectIdSchema });
 const agentParamsSchema = z.object({ id: agentIdSchema });
 
 // Reusable wire type (consumed by the daemon handler + the web client), so it lives in protocol even
@@ -230,6 +263,31 @@ export const daemonHttpContract = {
       response: { 200: forwardToAcpResponseSchema }
     })
   },
+  workplace: {
+    projects: {
+      list: defineHttpEndpoint({
+        query: coercifyQuery(listWorkplaceProjectsQuerySchema),
+        response: { 200: listWorkplaceProjectsResponseSchema }
+      }),
+      create: defineHttpEndpoint({
+        body: createWorkplaceProjectRequestSchema,
+        response: { 201: createWorkplaceProjectResponseSchema }
+      }),
+      get: defineHttpEndpoint({
+        params: projectParamsSchema,
+        response: { 200: getWorkplaceProjectResponseSchema }
+      }),
+      update: defineHttpEndpoint({
+        params: projectParamsSchema,
+        body: updateWorkplaceProjectRequestSchema,
+        response: { 200: updateWorkplaceProjectResponseSchema, 412: httpErrorSchema }
+      }),
+      delete: defineHttpEndpoint({
+        params: projectParamsSchema,
+        response: { 200: deleteWorkplaceProjectResponseSchema }
+      })
+    }
+  },
   agents: {
     list: defineHttpEndpoint({
       response: { 200: listAgentsResponseSchema }
@@ -272,6 +330,14 @@ export const daemonHttpContract = {
     get: defineHttpEndpoint({ response: { 200: obscuraStatusResponseSchema } }),
     set: defineHttpEndpoint({ body: setObscuraRequestSchema, response: { 200: obscuraStatusResponseSchema } })
   },
+  browserPresetSettings: {
+    get: defineHttpEndpoint({ response: { 200: browserPresetResponseSchema } }),
+    set: defineHttpEndpoint({ body: setBrowserPresetRequestSchema, response: { 200: browserPresetResponseSchema } })
+  },
+  computerPresetSettings: {
+    get: defineHttpEndpoint({ response: { 200: computerPresetResponseSchema } }),
+    set: defineHttpEndpoint({ body: setComputerPresetRequestSchema, response: { 200: computerPresetResponseSchema } })
+  },
   openaiCompatSettings: {
     get: defineHttpEndpoint({ response: { 200: openaiCompatSettingsSchema } }),
     set: defineHttpEndpoint({ body: setOpenaiCompatRequestSchema, response: { 200: openaiCompatSettingsSchema } })
@@ -282,7 +348,8 @@ export const daemonHttpContract = {
   },
   toolBackendsSettings: {
     get: defineHttpEndpoint({ response: { 200: toolBackendsResponseSchema } }),
-    set: defineHttpEndpoint({ body: setToolBackendsRequestSchema, response: { 200: toolBackendsResponseSchema } })
+    set: defineHttpEndpoint({ body: setToolBackendsRequestSchema, response: { 200: toolBackendsResponseSchema } }),
+    initDocker: defineHttpEndpoint({ response: { 200: initDockerResponseSchema } })
   },
   sandboxSettings: {
     get: defineHttpEndpoint({ response: { 200: sandboxSettingsResponseSchema } }),
@@ -311,6 +378,20 @@ export const daemonHttpContract = {
     set: defineHttpEndpoint({
       body: setDeveloperSettingsRequestSchema,
       response: { 200: developerSettingsSchema }
+    })
+  },
+  startupSettings: {
+    get: defineHttpEndpoint({ response: { 200: startupSettingsSchema } }),
+    set: defineHttpEndpoint({
+      body: setStartupSettingsRequestSchema,
+      response: { 200: startupSettingsSchema }
+    })
+  },
+  userProfileSettings: {
+    get: defineHttpEndpoint({ response: { 200: userProfileSettingsSchema } }),
+    set: defineHttpEndpoint({
+      body: setUserProfileSettingsRequestSchema,
+      response: { 200: userProfileSettingsSchema }
     })
   },
   tools: {
@@ -369,6 +450,44 @@ export const daemonHttpContract = {
   mem0Data: {
     get: defineHttpEndpoint({
       response: { 200: getMem0DataResponseSchema }
+    })
+  },
+  laws: {
+    get: defineHttpEndpoint({
+      response: { 200: getLawsResponseSchema }
+    })
+  },
+  nativeAgent: {
+    projectPost: defineHttpEndpoint({
+      body: nativeAgentProjectPostRequestSchema,
+      response: { 200: nativeAgentProjectPostResponseSchema, 403: httpErrorSchema, 404: httpErrorSchema }
+    }),
+    projectAsk: defineHttpEndpoint({
+      body: nativeAgentProjectAskRequestSchema,
+      response: { 200: nativeAgentProjectAskResponseSchema, 403: httpErrorSchema, 404: httpErrorSchema }
+    }),
+    projectRead: defineHttpEndpoint({
+      body: nativeAgentProjectReadRequestSchema,
+      response: { 200: nativeAgentProjectReadResponseSchema, 403: httpErrorSchema, 404: httpErrorSchema }
+    }),
+    projectInbox: defineHttpEndpoint({
+      body: nativeAgentProjectInboxRequestSchema,
+      response: { 200: nativeAgentProjectInboxResponseSchema, 403: httpErrorSchema, 404: httpErrorSchema }
+    }),
+    projectInboxAck: defineHttpEndpoint({
+      body: nativeAgentProjectInboxAckRequestSchema,
+      response: { 200: nativeAgentProjectInboxAckResponseSchema, 403: httpErrorSchema, 404: httpErrorSchema }
+    }),
+    agentSend: defineHttpEndpoint({
+      body: nativeAgentSendRequestSchema,
+      response: { 200: nativeAgentSendResponseSchema, 403: httpErrorSchema, 404: httpErrorSchema }
+    }),
+    agentRead: defineHttpEndpoint({
+      body: nativeAgentReadRequestSchema,
+      response: { 200: nativeAgentReadResponseSchema, 403: httpErrorSchema, 404: httpErrorSchema }
+    }),
+    runtimeInfo: defineHttpEndpoint({
+      response: { 200: nativeAgentRuntimeInfoResponseSchema, 403: httpErrorSchema, 404: httpErrorSchema }
     })
   }
 } as const;

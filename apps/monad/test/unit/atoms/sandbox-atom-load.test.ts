@@ -23,9 +23,17 @@ test('built-in pack registers sandbox launchers through the gated loader', async
       registerSandboxLauncher(l, 'builtin');
     }
   });
-  // Seatbelt / Landlock / Low-Integrity / Docker / E2B all registered (registration is platform-agnostic;
-  // availability is checked at select time).
-  expect(got.map((l) => l.kind).sort()).toEqual(['docker', 'e2b', 'landlock', 'lowintegrity', 'seatbelt']);
+  // Seatbelt / bwrap / Landlock / AppContainer / Low-Integrity / Docker / E2B all registered
+  // (registration is platform-agnostic; availability is checked at select time).
+  expect(got.map((l) => l.kind).sort()).toEqual([
+    'appcontainer',
+    'bwrap',
+    'docker',
+    'e2b',
+    'landlock',
+    'lowintegrity',
+    'seatbelt'
+  ]);
   // macOS always resolves to Seatbelt (sandbox-exec ships with the OS).
   expect(selectSandboxLauncher('darwin').kind).toBe('seatbelt');
 });

@@ -6,6 +6,7 @@ export * from './components/ChatInput';
 export * from './components/Input';
 export * from './components/InputGroup';
 export * from './components/Label';
+export * from './components/ProductIcon';
 export * from './components/Progress';
 export * from './components/ScrollArea';
 export * from './components/Select';

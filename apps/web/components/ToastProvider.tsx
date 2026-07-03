@@ -1,7 +1,17 @@
 'use client';
 
+import {
+  AlertCircleIcon,
+  Cancel01Icon,
+  CheckIcon,
+  CheckmarkCircle02Icon,
+  ChevronDownIcon,
+  ChevronUpIcon,
+  Copy01Icon,
+  InformationCircleIcon
+} from '@hugeicons/core-free-icons';
+import { HugeiconsIcon } from '@hugeicons/react';
 import { Button, cn } from '@monad/ui';
-import { AlertCircle, Check, CheckCircle2, ChevronDown, ChevronUp, Copy, Info, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { useT } from '@/components/I18nProvider';
@@ -14,11 +24,19 @@ interface ToastInput {
   duration?: number;
   /** Raw payload shown in the expandable detail panel. */
   detail?: unknown;
+  action?: {
+    label: string;
+    onClick: () => boolean | undefined | Promise<boolean | undefined>;
+  };
 }
 
-interface ToastItem extends Required<Omit<ToastInput, 'detail'>> {
+interface ToastItem {
   id: string;
-  detail?: unknown;
+  message: string;
+  variant: ToastVariant;
+  duration: number;
+  detail?: ToastInput['detail'];
+  action?: ToastInput['action'];
 }
 
 interface ToastRecord extends ToastItem {
@@ -26,13 +44,16 @@ interface ToastRecord extends ToastItem {
 }
 
 type ToastListener = (toast: ToastRecord) => void;
+type ToastCloseListener = (id: string) => void;
 
 const TOAST_EXIT_MS = 180;
 const CARD_GAP = 10;
 const CARD_HEIGHT_FALLBACK = 64;
 
 const listeners = new Set<ToastListener>();
+const closeListeners = new Set<ToastCloseListener>();
 const queued: ToastRecord[] = [];
+const queuedCloses: string[] = [];
 
 function createToast(input: ToastInput): ToastItem {
   return {
@@ -40,17 +61,27 @@ function createToast(input: ToastInput): ToastItem {
     message: input.message,
     variant: input.variant ?? 'info',
     duration: input.duration ?? 4200,
-    detail: input.detail
+    detail: input.detail,
+    action: input.action
   };
 }
 
-function publish(input: ToastInput) {
+function publish(input: ToastInput): string {
   const item: ToastRecord = { ...createToast(input), state: 'open' };
   if (listeners.size === 0) {
     queued.push(item);
-    return;
+    return item.id;
   }
   for (const listener of listeners) listener(item);
+  return item.id;
+}
+
+function dismiss(id: string): void {
+  if (closeListeners.size === 0) {
+    queuedCloses.push(id);
+    return;
+  }
+  for (const listener of closeListeners) listener(id);
 }
 
 export const toast = {
@@ -59,7 +90,8 @@ export const toast = {
   success: (message: string, options?: Omit<ToastInput, 'message' | 'variant'>) =>
     publish({ ...options, message, variant: 'success' }),
   error: (message: string, options?: Omit<ToastInput, 'message' | 'variant'>) =>
-    publish({ ...options, message, variant: 'error' })
+    publish({ ...options, message, variant: 'error' }),
+  dismiss
 };
 
 // --- JSON syntax highlighting ---
@@ -148,7 +180,17 @@ function CopyButton({ text }: { text: string }) {
       title="Copy"
       type="button"
     >
-      {copied ? <Check className="size-3.5 text-emerald-400" /> : <Copy className="size-3.5" />}
+      {copied ? (
+        <HugeiconsIcon
+          className="size-3.5 text-emerald-400"
+          icon={CheckIcon}
+        />
+      ) : (
+        <HugeiconsIcon
+          className="size-3.5"
+          icon={Copy01Icon}
+        />
+      )}
     </button>
   );
 }
@@ -161,7 +203,7 @@ function DetailPanel({ detail }: { detail: unknown }) {
 
   return (
     <div className="relative mt-1.5">
-      <pre className="max-h-48 overflow-auto rounded-md bg-black/30 p-3 pr-8 font-mono text-[11px] leading-relaxed">
+      <pre className="max-h-36 overflow-auto rounded-md bg-black/30 p-2.5 pr-8 font-mono text-[11px] leading-relaxed">
         {isObj ? <JsonHighlight value={detail} /> : <span className="text-zinc-300">{text}</span>}
       </pre>
       <CopyButton text={text} />
@@ -172,9 +214,26 @@ function DetailPanel({ detail }: { detail: unknown }) {
 // --- Toast icon ---
 
 function ToastIcon({ variant }: { variant: ToastVariant }) {
-  if (variant === 'success') return <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-success" />;
-  if (variant === 'error') return <AlertCircle className="mt-0.5 size-4 shrink-0 text-destructive" />;
-  return <Info className="mt-0.5 size-4 shrink-0 text-info" />;
+  if (variant === 'success')
+    return (
+      <HugeiconsIcon
+        className="mt-0.5 size-4 shrink-0 text-success"
+        icon={CheckmarkCircle02Icon}
+      />
+    );
+  if (variant === 'error')
+    return (
+      <HugeiconsIcon
+        className="mt-0.5 size-4 shrink-0 text-destructive"
+        icon={AlertCircleIcon}
+      />
+    );
+  return (
+    <HugeiconsIcon
+      className="mt-0.5 size-4 shrink-0 text-info"
+      icon={InformationCircleIcon}
+    />
+  );
 }
 
 // --- Expandable message row ---
@@ -194,14 +253,24 @@ function ExpandableMessage({
   const hasDetail = detail !== undefined;
   return (
     <div className="flex items-baseline justify-between gap-2">
-      <p className="min-w-0 flex-1 text-[15px] leading-6">{message}</p>
+      <p className="line-clamp-2 min-w-0 flex-1 break-words text-[13px] leading-5">{message}</p>
       {hasDetail && (
         <button
           className="ml-1 flex shrink-0 items-center gap-0.5 text-[11px] text-muted-foreground transition-colors hover:text-foreground"
           onClick={onToggle}
           type="button"
         >
-          {expanded ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />}
+          {expanded ? (
+            <HugeiconsIcon
+              className="size-3"
+              icon={ChevronUpIcon}
+            />
+          ) : (
+            <HugeiconsIcon
+              className="size-3"
+              icon={ChevronDownIcon}
+            />
+          )}
           {expanded ? t('web.toast.collapse') : t('web.toast.expand')}
         </button>
       )}
@@ -228,6 +297,7 @@ function ToastCard({
 }) {
   const [entered, setEntered] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
   const cardRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -238,6 +308,7 @@ function ToastCard({
   // Pause auto-dismiss while the detail panel is open.
   useEffect(() => {
     if (item.state !== 'open' || expanded) return;
+    if (!Number.isFinite(item.duration)) return;
     const timer = window.setTimeout(() => onClose(item.id), item.duration);
     return () => window.clearTimeout(timer);
   }, [item.duration, item.id, item.state, onClose, expanded]);
@@ -278,11 +349,22 @@ function ToastCard({
   const opacity =
     isClosing || !entered ? 0 : isHidden ? 0 : hovered ? 1 : fromFront === 0 ? 1 : fromFront === 1 ? 0.8 : 0.62;
 
+  const handleAction = async () => {
+    if (!item.action || actionLoading) return;
+    setActionLoading(true);
+    try {
+      const shouldClose = await item.action.onClick();
+      if (shouldClose !== false) onClose(item.id);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   return (
     <div
       aria-hidden={isHidden ? true : undefined}
       className={cn(
-        'glass-surface pointer-events-auto absolute right-0 left-0 grid origin-top grid-cols-[1.125rem_minmax(0,1fr)] items-start gap-3 px-4 py-4 pr-12 text-popover-foreground shadow-lg',
+        'glass-surface pointer-events-auto absolute right-0 left-0 grid origin-top grid-cols-[1rem_minmax(0,1fr)] items-start gap-2.5 px-3 py-3 pr-10 text-popover-foreground shadow-lg',
         'transition-[transform,opacity] ease-[cubic-bezier(0.32,0.72,0,1)]',
         isClosing ? 'duration-[180ms]' : 'duration-300',
         item.variant === 'error' && 'border-destructive/35',
@@ -307,16 +389,29 @@ function ToastCard({
           onToggle={() => setExpanded((v) => !v)}
         />
         {expanded && hasDetail && <DetailPanel detail={item.detail} />}
+        {item.action ? (
+          <Button
+            className="mt-2 h-7 px-2 text-xs"
+            disabled={actionLoading}
+            onClick={() => void handleAction()}
+            size="sm"
+          >
+            {item.action.label}
+          </Button>
+        ) : null}
       </div>
 
       <Button
         aria-label="Dismiss notification"
-        className="absolute top-2.5 right-2.5 size-8"
+        className="absolute top-2 right-2 size-7"
         onClick={() => onClose(item.id)}
         size="icon"
         variant="ghost"
       >
-        <X className="size-4" />
+        <HugeiconsIcon
+          className="size-3.5"
+          icon={Cancel01Icon}
+        />
       </Button>
     </div>
   );
@@ -363,6 +458,14 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
+  useEffect(() => {
+    closeListeners.add(closeToast);
+    for (const id of queuedCloses.splice(0)) closeToast(id);
+    return () => {
+      closeListeners.delete(closeToast);
+    };
+  }, [closeToast]);
+
   const expandedOffsets: number[] = new Array(toasts.length).fill(0);
   let cumulative = 0;
   for (let i = toasts.length - 1; i >= 0; i--) {
@@ -384,7 +487,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
         aria-label="Notifications"
         aria-live="polite"
         aria-relevant="additions text"
-        className="fixed top-4 left-1/2 z-50 w-[min(460px,calc(100vw-2rem))] -translate-x-1/2"
+        className="fixed top-4 left-1/2 z-50 w-[min(390px,calc(100vw-2rem))] -translate-x-1/2"
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
         style={{

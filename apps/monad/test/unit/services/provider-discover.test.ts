@@ -35,6 +35,24 @@ test('discover() registers a default-exported ModelProvider from a .js file', as
   });
 });
 
+test('discover() accepts a non-text ModelProvider without stream()', async () => {
+  await withDir(async (dir) => {
+    await writeFile(
+      join(dir, 'image-only.js'),
+      `export default {
+        type: 'image-only',
+        descriptor: { type: 'image-only', label: 'Image Only', strategy: 'native' },
+        async generateImage() { return { image: new Uint8Array([1]), mediaType: 'image/png' }; }
+      };`
+    );
+    const reg = new ModelProviderRegistry();
+    const result = await reg.discover(dir);
+    expect(result.registered).toEqual(['image-only']);
+    expect(result.errors).toEqual([]);
+    expect(reg.has('image-only')).toBe(true);
+  });
+});
+
 test('discover() accepts an array default export and registers each', async () => {
   await withDir(async (dir) => {
     await writeFile(

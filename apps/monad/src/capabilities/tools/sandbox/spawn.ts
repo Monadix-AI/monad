@@ -112,14 +112,19 @@ export function sandboxHomeEnv(home: string): Record<string, string> {
  * undefined so no write confinement is applied; otherwise the roots (plus any call-specific extra
  * dirs, e.g. a snippet temp dir) form the writable surface. Network comes from daemon config.
  */
-export function buildSandboxPolicy(writableRoots: string[] | undefined, extraWritable: string[] = []): SandboxPolicy {
+export function buildSandboxPolicy(
+  writableRoots: string[] | undefined,
+  extraWritable: string[] = [],
+  sessionId?: string
+): SandboxPolicy {
   // The system temp dir is always writable when confined: git, compilers, package managers and
   // most tooling write scratch files to TMPDIR, so omitting it would break ordinary commands. It's
   // ephemeral, so this doesn't compromise the "no host pollution" goal.
   return {
     writableRoots: writableRoots ? [...writableRoots, tmpdir(), ...extraWritable] : undefined,
     readDenyRoots: readDenyDefault,
-    net: netDefault
+    net: netDefault,
+    sessionId
   };
 }
 

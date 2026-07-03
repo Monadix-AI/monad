@@ -1,7 +1,18 @@
 'use client';
 
-import { useRouter, useSearchParams } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback } from 'react';
+
+export function buildNavigableModalUrl(pathname: string, search: string, param: string, next: string | null): string {
+  const params = new URLSearchParams(search);
+  if (next === null) {
+    params.delete(param);
+  } else {
+    params.set(param, next);
+  }
+  const qs = params.toString();
+  return qs ? `${pathname}?${qs}` : pathname;
+}
 
 /**
  * Sync a modal/panel open-state with a URL search param so that:
@@ -16,26 +27,20 @@ import { useCallback } from 'react';
  */
 export function useNavigableModal(param: string): [string | null, (value: string | null) => void] {
   const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const current = searchParams.get(param);
 
   const set = useCallback(
     (next: string | null) => {
-      const params = new URLSearchParams(searchParams.toString());
-      if (next === null) {
-        params.delete(param);
-      } else {
-        params.set(param, next);
-      }
-      const qs = params.toString();
-      const url = qs ? `?${qs}` : location.pathname;
+      const url = buildNavigableModalUrl(pathname, searchParams.toString(), param, next);
       if (next !== null && current === null) {
         router.push(url);
       } else {
         router.replace(url);
       }
     },
-    [router, searchParams, param, current]
+    [router, pathname, searchParams, param, current]
   );
 
   return [current, set];

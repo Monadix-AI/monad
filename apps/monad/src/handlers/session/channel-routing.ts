@@ -9,11 +9,19 @@ interface ChannelTargetMention {
 
 export type ChannelRouteAction =
   | { kind: 'none' }
-  | { kind: 'send'; text: string; generate?: boolean; direct?: boolean; targetMention?: ChannelTargetMention }
+  | {
+      kind: 'send';
+      text: string;
+      displayText?: string;
+      generate?: boolean;
+      direct?: boolean;
+      targetMention?: ChannelTargetMention;
+    }
   | {
       kind: 'forward-acp';
       agentName: string;
       text: string;
+      displayText?: string;
       direct?: boolean;
       targetMention?: ChannelTargetMention;
     }
@@ -21,6 +29,7 @@ export type ChannelRouteAction =
       kind: 'forward-native-cli';
       agentName: string;
       text: string;
+      displayText?: string;
       direct?: boolean;
       targetMention?: ChannelTargetMention;
     };
@@ -47,17 +56,24 @@ export function routeChannelMessage({
   if (singleTarget) {
     const rest = singleMention ? withoutMention(trimmed, singleMention).trim() : '';
     if (singleTarget.agentName) {
-      return { kind: 'forward-acp', agentName: singleTarget.agentName, text: rest || trimmed, direct: true };
+      return {
+        kind: 'forward-acp',
+        agentName: singleTarget.agentName,
+        text: rest || trimmed,
+        displayText: trimmed,
+        direct: true
+      };
     }
     if (singleTarget.nativeCliAgentName) {
       return {
         kind: 'forward-native-cli',
         agentName: singleTarget.nativeCliAgentName,
         text: rest || trimmed,
+        displayText: trimmed,
         direct: true
       };
     }
-    return { kind: 'send', text: rest || trimmed, direct: true };
+    return { kind: 'send', text: rest || trimmed, displayText: trimmed, direct: true };
   }
 
   return { kind: 'send', text: trimmed, generate: trimmed.startsWith('/') };

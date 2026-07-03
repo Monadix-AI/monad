@@ -26,9 +26,9 @@ test('net:unrestricted omits --unshare-net', () => {
   expect(args).not.toContain('--unshare-net');
 });
 
-test('net:{ allowProxyPort } adds --unshare-net (bwrap cannot enforce proxy-only at kernel level)', () => {
+test('net:{ allowProxyPort } does NOT add --unshare-net (child must reach host proxy on loopback)', () => {
   const args = buildBwrapArgs({ writableRoots: ['/sandbox'], net: { allowProxyPort: 9000 } });
-  expect(args).toContain('--unshare-net');
+  expect(args).not.toContain('--unshare-net');
 });
 
 test('writable roots get --bind entries', () => {

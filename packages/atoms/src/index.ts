@@ -38,17 +38,20 @@ import { whatsappChannelAtom } from './channels/whatsapp.ts';
 import { BUILTIN_COMMANDS } from './commands/builtins.ts';
 import { builtinConnectors } from './connectors/index.ts';
 import { builtinModelProviders } from './providers/index.ts';
+import { bwrapLauncher } from './sandbox/bwrap.ts';
 import { dockerLauncher } from './sandbox/docker.ts';
 import { e2bLauncher } from './sandbox/e2b.ts';
 import { landlockLauncher } from './sandbox/landlock.ts';
 import { seatbeltLauncher } from './sandbox/seatbelt.ts';
 import { win32Launcher } from './sandbox/win32.ts';
+import { win32AppContainerLauncher } from './sandbox/win32-appcontainer.ts';
 
 export { configureDockerImage, detectDockerRuntime, dockerLauncher, dockerRuntimeAvailable } from './sandbox/docker.ts';
 export { __setE2bLoaderForTest, configureE2bApiKey, e2bLauncher } from './sandbox/e2b.ts';
 // The one named export: the daemon pushes config.agent.sandbox.launcherPath here before launcher
 // selection so the native landlock/win32 launchers can find their helper binary.
 export { configureNativeLauncherPath } from './sandbox/native-path.ts';
+export { sweepOrphanAppContainerProfiles } from './sandbox/win32-appcontainer.ts';
 
 export default defineAtomPack({
   manifest: {
@@ -80,12 +83,19 @@ export default defineAtomPack({
   ],
   commands: BUILTIN_COMMANDS,
   providers: builtinModelProviders,
-  // One launcher per supported platform, in the old platformSandboxLauncher precedence
-  // (macOS → Linux → Windows); bwrap is opt-in and not auto-registered.
-  // e2b is last: it matches any platform but requires an API key (isAvailable() gates it),
-  // so the local OS launcher wins whenever present; e2b kicks in only as explicit opt-in.
-  // OS launchers first (platform-specific, no credentials needed), then docker (any platform,
-  // requires runtime install), then e2b (any platform, requires API key). Registry picks the
-  // first fitting one in the builtin tier; third-party atom packs override all builtins.
-  sandboxes: [seatbeltLauncher, landlockLauncher, win32Launcher, dockerLauncher, e2bLauncher]
+  // Launcher priority (first-match-wins within the builtin tier):
+  //   macOS  → Seatbelt (system sandbox-exec, enforces write+readDeny+net)
+  //   Linux  → bwrap when installed (enforces write+readDeny+net) → Landlock (write+net only)
+  //   Windows→ AppContainer when binary present (write+readDeny+net) → Low IL (write only)
+  //   any    → Docker (requires runtime) → E2B (requires API key, explicit opt-in)
+  // Third-party atom packs override the entire builtin tier (atom > builtin in registry).
+  sandboxes: [
+    seatbeltLauncher,
+    bwrapLauncher,
+    landlockLauncher,
+    win32AppContainerLauncher,
+    win32Launcher,
+    dockerLauncher,
+    e2bLauncher
+  ]
 });

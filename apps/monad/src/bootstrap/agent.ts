@@ -20,12 +20,14 @@ import type { Store } from '@/store/db/index.ts';
 import { createLogger } from '@monad/logger';
 
 import {
+  CompositeContextEngine,
   computeCost,
   createAgent,
   DurableSummarizer,
   parseDurableSummary,
   type SummaryStore,
-  TokenLimiterContext
+  TokenLimiterContext,
+  ToolResultEvictionContext
 } from '@/agent/index.ts';
 import { register as clarifyRegister } from '@/capabilities/tools/registry/clarify.ts';
 import { only } from '@/capabilities/tools/registry/contract.ts';
@@ -119,7 +121,7 @@ export function createDaemonAgent(deps: AgentDeps): DaemonAgent {
   // breakdowns and keep long sessions in-bounds.
   const defaultProfile = modelService.profiles.find((p) => p.alias === (cfg.model.default || 'default'));
   const defaultSpec = defaultProfile
-    ? { provider: defaultProfile.provider, modelId: defaultProfile.modelId }
+    ? { provider: defaultProfile.routes.chat.provider, modelId: defaultProfile.routes.chat.modelId }
     : undefined;
   const contextLimit = defaultSpec
     ? modelCatalog.lookupContextLimit(defaultSpec.provider, defaultSpec.modelId)
@@ -142,7 +144,9 @@ export function createDaemonAgent(deps: AgentDeps): DaemonAgent {
     load: (sid) => parseDurableSummary(store.getMemory(sid, 'ctx:summary')),
     save: (sid, rec) => store.setMemory(sid, 'ctx:summary', JSON.stringify(rec))
   };
-  const historySoftThreshold = Math.floor((contextLimit ?? 120_000) * 0.6);
+  const ctxCfg = cfg.context;
+  const historySoftThreshold = Math.floor((contextLimit ?? 120_000) * ctxCfg.summarize.softFraction);
+  const historyHardThreshold = Math.floor((contextLimit ?? 120_000) * ctxCfg.summarize.hardFraction);
   const history = new DurableSummarizer({
     messages: {
       list: (sid) => store.listMessagesWithLineage(sid),
@@ -155,6 +159,8 @@ export function createDaemonAgent(deps: AgentDeps): DaemonAgent {
     model: agentModel,
     summaryModel,
     softThresholdTokens: historySoftThreshold,
+    hardThresholdTokens: historyHardThreshold,
+    background: ctxCfg.summarize.background,
     // BeforeCompact lifecycle event: let hooks inject "preserve this" instructions before lossy
     // compaction. Failures never block compaction — fall back to no extra instructions.
     preCompact: async ({ sessionId, trigger, tokens }) => {
@@ -184,7 +190,26 @@ export function createDaemonAgent(deps: AgentDeps): DaemonAgent {
         .catch(() => {});
     }
   });
-  const context = contextLimit ? new TokenLimiterContext({ maxTokens: Math.floor(contextLimit * 0.9) }) : undefined;
+  // In-turn context cascade (runs each model step, after the durable summarizer has assembled the
+  // prompt): lossless tool-result eviction first, then a hard truncation guard so the window can't
+  // overflow mid tool-loop even if summarization lagged. DurableSummarizer (above) remains the
+  // durable, lineage-aware summary stage at assemble time.
+  const context = contextLimit
+    ? new CompositeContextEngine([
+        ...(ctxCfg.eviction.enabled
+          ? [
+              new ToolResultEvictionContext({
+                contextLimit,
+                atFraction: ctxCfg.eviction.atFraction,
+                keepRecentRounds: ctxCfg.eviction.keepRecentRounds,
+                clearAtLeast: ctxCfg.eviction.clearAtLeast,
+                minResultTokens: ctxCfg.eviction.minResultTokens
+              })
+            ]
+          : []),
+        new TokenLimiterContext({ maxTokens: Math.floor(contextLimit * ctxCfg.summarize.hardFraction) })
+      ])
+    : undefined;
 
   // Static (non-registry) tools — always visible to the model regardless of deferred mode. Each
   // module exposes the uniform `register(deps) => Tool[]` entry; we compose them with bootstrap-local
@@ -293,7 +318,7 @@ export function createDaemonAgent(deps: AgentDeps): DaemonAgent {
       // Lineage-aware: a branched session sees its ancestors' history up to the branch point.
       list: (sessionId) => store.listMessagesWithLineage(sessionId),
       append: (m) => {
-        store.insertMessage(m.id, m.sessionId, m.text, m.createdAt, m.role, {
+        store.insertMessage(m.id, m.transcriptTargetId, m.text, m.createdAt, m.role, {
           type: m.type,
           // Structured tool-call/tool-result payload, so a later turn can replay the step
           // as native function-calling instead of degrading it to text.
@@ -310,7 +335,7 @@ export function createDaemonAgent(deps: AgentDeps): DaemonAgent {
       // Open a text segment's row as `pending` at its first token so a mid-turn /messages refetch
       // exposes a live row with a subscription `source` (rowToMessage reconstructs it for live rows).
       open: (m) =>
-        store.insertMessage(m.id, m.sessionId, m.text, m.createdAt, m.role, {
+        store.insertMessage(m.id, m.transcriptTargetId, m.text, m.createdAt, m.role, {
           type: m.type,
           streamStatus: 'pending',
           includeInContext: m.includeInContext
@@ -322,7 +347,7 @@ export function createDaemonAgent(deps: AgentDeps): DaemonAgent {
       // i.e. after any tool rows that ran before it, so it already sorts correctly. Returns whether a
       // row was updated (false ⇒ the caller appends instead — e.g. a non-streaming block turn).
       settle: (m, status) =>
-        store.setGenStatus(m.sessionId, m.id, status, new Date().toISOString(), {
+        store.setGenStatus(m.transcriptTargetId, m.id, status, new Date().toISOString(), {
           text: m.text,
           data: m.data,
           type: m.type
@@ -346,7 +371,7 @@ export function createDaemonAgent(deps: AgentDeps): DaemonAgent {
           // Prefer the provider's REAL reported cost (e.g. OpenRouter usage accounting) over a
           // catalog-price estimate; computeCost uses it verbatim as the authoritative source.
           const cost = computeCost(usage, price, usage.costUsd);
-          store.addUsage(sessionId, usage, cost.usd ?? 0);
+          if (sessionId.startsWith('ses_')) store.addUsage(sessionId, usage, cost.usd ?? 0);
           store.recordLedger(provider, modelId, 'chat', usage, cost.usd ?? 0);
           // The assistant turn's text settled outside messageRepo.append — index it now.
           embeddingIndexer.kick();

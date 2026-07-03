@@ -4,6 +4,7 @@ import type {
   NativeCliAuthState,
   NativeCliHistoryPageRequest,
   NativeCliLaunchMode,
+  NativeCliProductIcon,
   NativeCliProvider
 } from '@monad/protocol';
 import type { BinProbes } from '@/infra/resolve-binary.ts';
@@ -28,10 +29,42 @@ export interface NativeCliLaunchSpec {
   capabilities: NativeCliCapability[];
 }
 
+export type NativeCliStartPreflight =
+  | { state: 'ready'; agentName: string; provider: NativeCliProvider; checkedAt: string; providerSessionRef?: string }
+  | {
+      state: 'not_authenticated';
+      agentName: string;
+      provider: NativeCliProvider;
+      checkedAt: string;
+      action: 'reconnect_in_studio';
+      reason: string;
+    }
+  | {
+      state: 'unavailable';
+      agentName: string;
+      provider: NativeCliProvider;
+      checkedAt: string;
+      reason: string;
+    }
+  | {
+      state: 'unknown';
+      agentName: string;
+      provider: NativeCliProvider;
+      checkedAt: string;
+      action: 'manual_check_in_studio';
+      reason: string;
+    };
+
 export interface BuildNativeCliLaunchOptions {
   workingPath: string;
   launchMode?: NativeCliLaunchMode;
   providerSessionRef?: string;
+  systemPromptFile?: string;
+  skipProviderApprovals?: boolean;
+  modelName?: string;
+  modelId?: string;
+  reasoningEffort?: string;
+  speed?: 'standard' | 'fast';
 }
 
 export interface NativeCliOutputEvent {
@@ -39,7 +72,9 @@ export interface NativeCliOutputEvent {
     | 'approval_requested'
     | 'approval_resolved'
     | 'agent_message'
+    | 'connection_required'
     | 'history_page'
+    | 'provider_error'
     | 'session_ref'
     | 'tool_call'
     | 'tool_result'
@@ -60,7 +95,8 @@ export const nativeCliOutputEventSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('agent_message'),
     payload: nativeCliOutputPayloadBase.extend({
-      text: z.string()
+      text: z.string(),
+      final: z.boolean().optional()
     })
   }),
   z.object({
@@ -83,6 +119,21 @@ export const nativeCliOutputEventSchema = z.discriminatedUnion('type', [
     payload: nativeCliOutputPayloadBase.extend({
       callId: z.union([z.string().min(1), z.number()]).optional(),
       status: z.string().optional()
+    })
+  }),
+  z.object({
+    type: z.literal('connection_required'),
+    payload: nativeCliOutputPayloadBase.extend({
+      code: z.string().min(1).optional(),
+      reason: z.string().min(1)
+    })
+  }),
+  z.object({
+    type: z.literal('provider_error'),
+    payload: nativeCliOutputPayloadBase.extend({
+      responseId: z.union([z.string().min(1), z.number()]).optional(),
+      code: z.union([z.string().min(1), z.number()]).optional(),
+      message: z.string().min(1)
     })
   }),
   z.object({
@@ -136,14 +187,46 @@ interface NativeCliApprovalResolution {
 interface NativeCliInitializeContext {
   workingPath: string;
   providerSessionRef?: string;
+  developerInstructions?: string;
+  modelName?: string;
+  modelId?: string;
+  reasoningEffort?: string;
+  speed?: 'standard' | 'fast';
+}
+
+interface NativeCliAuthStatusProbe {
+  launch: NativeCliLaunchSpec;
+  parse(output: string, exitCode: number | null): NativeCliAuthState;
+}
+
+interface NativeCliModelOptionsProbe {
+  launch: NativeCliLaunchSpec;
+  parse(output: string, exitCode: number | null): string[];
+}
+
+export interface NativeCliArgumentSupport {
+  flags: string[];
+  reasoningEfforts: string[];
+  speeds: string[];
+}
+
+export interface NativeCliArgumentSupportProbe {
+  launch: NativeCliLaunchSpec;
+  parse(output: string, exitCode: number | null): NativeCliArgumentSupport;
 }
 
 export interface NativeCliProviderAdapter {
   provider: NativeCliProvider;
+  productIcon: NativeCliProductIcon;
   detect(probes?: BinProbes): NativeCliAgentPresetView;
+  listSupportedModels(agent?: NativeCliAgentView): string[];
+  modelOptions?(agent: NativeCliAgentView): NativeCliModelOptionsProbe;
+  resolveCommand?(command: string, probes?: BinProbes): string | undefined;
   buildLaunch(agent: NativeCliAgentView, opts: BuildNativeCliLaunchOptions): NativeCliLaunchSpec;
   buildAuthLaunch(agent: NativeCliAgentView): NativeCliLaunchSpec;
   buildAuthStatusLaunch(agent: NativeCliAgentView): NativeCliLaunchSpec;
+  authStatus(agent: NativeCliAgentView): NativeCliAuthStatusProbe;
+  argumentSupport?(agent: NativeCliAgentView): NativeCliArgumentSupportProbe;
   parseAuthStatus(output: string, exitCode: number | null): NativeCliAuthState;
   requestHistoryPage?(handle: NativeCliRuntimeHandle, request: NativeCliHistoryPageRequest): string | number;
   initialize?(handle: NativeCliRuntimeHandle, context: NativeCliInitializeContext): void;

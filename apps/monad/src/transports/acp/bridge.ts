@@ -160,10 +160,10 @@ export function createBridgeHandlers(opts: BridgeOptions): { handlers: AcpHandle
     },
     model: {
       listProviders: () => get('/v1/settings/model/providers'),
-      listModels: ({ providerId }) => get(`/v1/settings/model/providers/${providerId}/models`),
+      listModels: ({ providerId }: { providerId: string }) => get(`/v1/settings/model/providers/${providerId}/models`),
       listProfiles: () => get('/v1/settings/model/profiles'),
       getDefaultProfile: () => get('/v1/settings/model/default'),
-      setDefaultProfile: (body) => put('/v1/settings/model/default', body)
+      setDefaultProfile: (body: { alias: string }) => put('/v1/settings/model/default', body)
     }
   };
 

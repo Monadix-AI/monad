@@ -94,7 +94,8 @@ export const dockerLauncher: SandboxLauncher = {
     }
     // readDenyRoots are simply not mounted — they don't exist inside the container.
 
-    const cwd = options.cwd ?? policy.writableRoots?.[0] ?? '/tmp';
+    const requestedCwd = options.cwd ?? policy.writableRoots?.[0];
+    const cwd = requestedCwd ? canonical(requestedCwd) : '/tmp';
     args.push('--workdir', cwd);
 
     if (options.env) {

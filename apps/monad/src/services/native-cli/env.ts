@@ -2,8 +2,8 @@ import type { MonadAuth } from '@monad/home';
 
 import { tryResolveSecretMap } from '@/config/secrets.ts';
 
-// Markers a nested CLI must not inherit. Claude Code refuses to start when it sees its own
-// nested-session guard (which leaks down whenever monad was itself launched from a Claude Code
+// Markers a nested CLI must not inherit. The CLI refuses to start when it sees its own
+// nested-session guard (which leaks down whenever monad was itself launched from the same
 // session), and monad's own session markers should never reach a child agent.
 const STRIPPED_CHILD_ENV = ['CLAUDECODE', 'CLAUDE_CODE_ENTRYPOINT'] as const;
 

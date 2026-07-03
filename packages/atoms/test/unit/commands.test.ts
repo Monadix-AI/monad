@@ -10,10 +10,10 @@ test('ships the expected first-party commands', () => {
   const names = BUILTIN_COMMANDS.map((c) => c.name).sort();
   expect(names).toEqual(
     [
+      'check-memory',
       'clear',
       'compact',
-      'consolidate-graph',
-      'consolidate-memory',
+      'consolidate',
       'end',
       'handoff',
       'help',
@@ -22,6 +22,7 @@ test('ships the expected first-party commands', () => {
       'reset',
       'sessions',
       'switch',
+      'why',
       'workdir'
     ].sort()
   );

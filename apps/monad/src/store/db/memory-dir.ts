@@ -1,4 +1,4 @@
-// Layered-memory L1 store (design A) — Claude Code-style machine-written Markdown in ONE flat dir,
+// Layered-memory L1 store (design A) — CLI-agent-style machine-written Markdown in ONE flat dir,
 // keyed by scope, with a cheap injectable index. MD is the source of truth (human-readable, hand-
 // editable); there is no SQLite event table for L1 (deliberate divergence — see docs/memory-design.md).
 //
@@ -7,7 +7,7 @@
 //   <home>/memory/MEMORY_agent_<agentId>.md  ← persists for that agent across sessions
 //   <home>/memory/MEMORY_session_<sid>.md    ← session-local; dropped with the session
 //
-// Each scope file carries frontmatter (name/description/metadata) in the same shape Claude Code uses;
+// Each scope file carries frontmatter (name/description/metadata) in the same shape the native CLI uses;
 // the agent supplies only fact text, the store stamps provenance (scope/updated/count). A fact's
 // identity is the hash of its trimmed content — stable across reads, since the MD world has no event id.
 
@@ -15,7 +15,7 @@ import type { Fact, MemoryScope, ScopeKind } from '@monad/protocol';
 
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { basename, join, resolve } from 'node:path';
 
 const INDEX_FILE = 'MEMORY.md';
 
@@ -42,6 +42,20 @@ export function factId(content: string): string {
   return createHash('sha256').update(normalizeFact(content)).digest('hex').slice(0, 12);
 }
 
+/** Stable, filename-safe id for a workspace = sanitized basename + a hash of the absolute path, so
+ *  `project:<key>` is both recognizable (which project) and unique (full path disambiguates). The
+ *  scope id becomes a filename segment, so the result is `[a-z0-9-]` only. */
+export function projectKey(cwd: string): string {
+  const abs = resolve(cwd);
+  const base =
+    basename(abs)
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 24) || 'project';
+  return `${base}-${createHash('sha256').update(abs).digest('hex').slice(0, 6)}`;
+}
+
 // The scope id becomes part of an on-disk filename under the memory root. It arrives straight from
 // the control API, so this is the authoritative containment check: reject anything that could escape
 // the root via traversal (`..`), an empty/dot segment, or separator/NUL injection. A single segment
@@ -62,6 +76,7 @@ function scopeFile(scope: MemoryScope): string {
 function defaultDescription(scope: MemoryScope): string {
   if (scope.kind === 'global') return 'Shared facts about the user, usable by all agents.';
   if (scope.kind === 'agent') return `Facts specific to agent ${scope.id}.`;
+  if (scope.kind === 'project') return `Facts specific to the workspace (${scope.id}).`;
   return `Session-local memory (${scope.id}).`;
 }
 
@@ -243,7 +258,7 @@ export class MemoryDir {
       if (sep < 0) continue;
       const kind = stem.slice(0, sep);
       const id = stem.slice(sep + 1);
-      if ((kind === 'agent' || kind === 'session') && id) out.push({ kind, id });
+      if ((kind === 'agent' || kind === 'project' || kind === 'session') && id) out.push({ kind, id });
     }
     return out;
   }

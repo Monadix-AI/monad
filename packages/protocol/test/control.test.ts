@@ -3,7 +3,9 @@ import { expect, test } from 'bun:test';
 import {
   branchSessionRequestSchema,
   createSessionRequestSchema,
+  getInitStatusResponseSchema,
   MESSAGE_TEXT_MAX,
+  providerViewSchema,
   SEARCH_QUERY_MAX,
   SESSION_TITLE_MAX,
   sendMessageRequestSchema,
@@ -37,4 +39,30 @@ test('sessions.search q: bounded against oversized queries', () => {
   const search = RPC_METHOD_PARAMS['sessions.search'];
   expect(search.safeParse({ q: 'x'.repeat(SEARCH_QUERY_MAX) }).success).toBe(true);
   expect(search.safeParse({ q: 'x'.repeat(SEARCH_QUERY_MAX + 1) }).success).toBe(false);
+});
+
+test('provider baseUrl accepts only http(s) URLs', () => {
+  const provider = { id: 'p', label: 'Provider', type: 'openai-compatible' };
+  expect(providerViewSchema.safeParse({ ...provider, baseUrl: 'https://api.example.com/v1' }).success).toBe(true);
+  expect(providerViewSchema.safeParse({ ...provider, baseUrl: 'http://localhost:11434/v1' }).success).toBe(true);
+  expect(providerViewSchema.safeParse({ ...provider, baseUrl: 'api.example.com/v1' }).success).toBe(false);
+  expect(providerViewSchema.safeParse({ ...provider, baseUrl: 'ftp://api.example.com/v1' }).success).toBe(false);
+});
+
+test('init status can carry provider credential details alongside legacy missing flags', () => {
+  const parsed = getInitStatusResponseSchema.parse({
+    initialized: false,
+    missing: ['credential'],
+    missingProviderCredentials: [
+      {
+        providerId: 'oai',
+        providerLabel: 'OpenAI-compatible',
+        profileAlias: 'default',
+        route: 'chat'
+      }
+    ],
+    homePath: '/tmp/monad'
+  });
+
+  expect(parsed.missingProviderCredentials?.[0]?.providerId).toBe('oai');
 });

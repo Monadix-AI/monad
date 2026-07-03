@@ -3,15 +3,16 @@
 // sessions over one chat (conversation-keyed), while web/ACP/CLI navigate sessions client-side
 // (principal-scoped). Everything else (reset/compact/model/listCommands) is daemon-uniform.
 
-import type { PrincipalId, SessionId } from '@monad/protocol';
+import type { PrincipalId, TranscriptTargetId } from '@monad/protocol';
 import type {
+  BeliefExplanation,
   CommandModelInfo,
   CommandRunContext,
   CommandSessionInfo,
   CommandSpec,
   CompactSummary,
-  ConsolidateMemorySummary,
-  GraphConsolidateSummary
+  ConsolidateSummary,
+  ContradictionCheckSummary
 } from '@monad/sdk-atom';
 
 export interface SessionNavigator {
@@ -22,23 +23,24 @@ export interface SessionNavigator {
 
 /** Daemon-uniform backing for the non-navigation verbs. */
 export interface CommandServices {
-  resetHistory(sessionId: SessionId): Promise<{ clearedCount: number }>;
-  compact(sessionId: SessionId): Promise<CompactSummary>;
-  consolidateMemory(): Promise<ConsolidateMemorySummary[]>;
-  consolidateGraph(): Promise<GraphConsolidateSummary>;
-  listModels(sessionId: SessionId): Promise<CommandModelInfo[]>;
-  setModel(sessionId: SessionId, alias: string): Promise<void>;
-  getWorkdir(sessionId: SessionId): Promise<{ path?: string }>;
-  setWorkdir(sessionId: SessionId, path: string): Promise<{ path?: string }>;
+  resetHistory(sessionId: TranscriptTargetId): Promise<{ clearedCount: number }>;
+  compact(sessionId: TranscriptTargetId): Promise<CompactSummary>;
+  consolidate(level?: number): Promise<ConsolidateSummary>;
+  explainBelief(sessionId: TranscriptTargetId, query: string): Promise<BeliefExplanation>;
+  checkMemory(): Promise<ContradictionCheckSummary>;
+  listModels(sessionId: TranscriptTargetId): Promise<CommandModelInfo[]>;
+  setModel(sessionId: TranscriptTargetId, alias: string): Promise<void>;
+  getWorkdir(sessionId: TranscriptTargetId): Promise<{ path?: string }>;
+  setWorkdir(sessionId: TranscriptTargetId, path: string): Promise<{ path?: string }>;
   listCommands(): Promise<CommandSpec[]>;
-  handoff(sessionId: SessionId, initialTask?: string): Promise<{ sessionId: string }>;
+  handoff(sessionId: TranscriptTargetId, initialTask?: string): Promise<{ sessionId: string }>;
   /** Active-locale translator, shared across every command on this transport. */
   t: CommandRunContext['t'];
   log: CommandRunContext['log'];
 }
 
 export function makeCommandRunContext(p: {
-  sessionId: SessionId;
+  sessionId: TranscriptTargetId;
   principalId: PrincipalId;
   args: string;
   nav: SessionNavigator;
@@ -54,8 +56,9 @@ export function makeCommandRunContext(p: {
     switchSession: (target) => nav.switchSession(target),
     resetHistory: () => services.resetHistory(sessionId),
     compact: () => services.compact(sessionId),
-    consolidateMemory: () => services.consolidateMemory(),
-    consolidateGraph: () => services.consolidateGraph(),
+    consolidate: (level) => services.consolidate(level),
+    explainBelief: (query) => services.explainBelief(sessionId, query),
+    checkMemory: () => services.checkMemory(),
     listModels: () => services.listModels(sessionId),
     setModel: (alias) => services.setModel(sessionId, alias),
     getWorkdir: () => services.getWorkdir(sessionId),

@@ -21,14 +21,14 @@ append-only stream left is the **`messages` table** (SQLite, per-session, stable
 | **Deletion** | **Support-liveness reconciliation** (no delete events). Messages are *soft-deleted* (`active=0`) by restore/branch, so an edge survives only while ≥1 supporting message row exists **and is `active=1`**; otherwise it is retracted. A whole-session hard-delete is caught by the same row-existence check. |
 | **Query API** | **CodeGraph-shaped**: `graph_explore(query)` → matching entities + the edges/paths between them; `graph_node(entity)` → one entity + its neighbours. |
 | **Surfacing** | **Tool, pulled** (not injected) — consistent with design-A "agent queries its own memory"; no prefix-cache pressure. |
-| **Storage** | Self-built **`{home}/db/graph.sqlite`** behind an `L2Provider` interface (vendor swap — Zep/Graphiti/Cozo — later; no native bindings in v1). |
+| **Storage** | Self-built **`{home}/db/memory.sqlite`** behind an `L2Provider` interface (vendor swap — Zep/Graphiti/Cozo — later; no native bindings in v1). |
 | **Extraction** | Reuse the **`memory` model role**; one LLM pass over a message span → `{nodes, edges}`. |
 | **Entity dedup** | Per-scope **normalized name + aliases** (lexical; no embeddings in v1). |
 | **Edge schema** | `(scope, src, dst, relation)` + `validFrom/validTo` + `support[]` + `confidence` + `provClass ∈ {machine, user}`. |
 | **Trigger** | **Manual** `/consolidate-graph` + an **opt-in background timer** (`memory.graph.autoConsolidate`, off by default; `intervalMinutes` default 30). No on-task-success hook yet. |
 | **Match** | `graph_explore` matching = **SQLite FTS5** over node name/aliases + relation text. Semantic match deferred (note: `message_embeddings` infra already exists for later). |
 
-## 2. Data model (`graph.sqlite`)
+## 2. Data model (`memory.sqlite`)
 
 ```sql
 graph_node(
@@ -96,7 +96,7 @@ Both read-only; scoped to the calling agent (+ global). No injection into the pr
 
 ## 5. Build plan
 
-- **P0 — schema + store.** `graph.sqlite` (`bun:sqlite`), `GraphStore` (upsert node/edge, merge
+- **P0 — schema + store.** `memory.sqlite` (`bun:sqlite`), `GraphStore` (upsert node/edge, merge
   support, retract, FTS query) behind `L2Provider`. Wired under `paths.dbDir`. Unit tests.
 - **P1 — extraction + consolidate.** `extractGraph(messages, model)`; the two-phase pass (forward +
   reconcile); `/consolidate-graph` command across transports. Tests: idempotency, watermark advance,

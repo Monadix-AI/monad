@@ -3,8 +3,9 @@
 import type { ComponentProps, CSSProperties, HTMLAttributes } from 'react';
 import type { BundledLanguage, BundledTheme, HighlighterGeneric, ThemedToken } from 'shiki';
 
+import { CheckIcon, Copy01Icon } from '@hugeicons/core-free-icons';
+import { HugeiconsIcon } from '@hugeicons/react';
 import { Button, cn, Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@monad/ui';
-import { CheckIcon, CopyIcon } from 'lucide-react';
 import { createContext, memo, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { createHighlighter } from 'shiki';
 
@@ -492,7 +493,7 @@ const _CodeBlockCopyButton = ({
     []
   );
 
-  const Icon = isCopied ? CheckIcon : CopyIcon;
+  const Icon = isCopied ? CheckIcon : Copy01Icon;
 
   return (
     <Button
@@ -502,7 +503,12 @@ const _CodeBlockCopyButton = ({
       variant="ghost"
       {...props}
     >
-      {children ?? <Icon size={14} />}
+      {children ?? (
+        <HugeiconsIcon
+          icon={Icon}
+          size={14}
+        />
+      )}
     </Button>
   );
 };
