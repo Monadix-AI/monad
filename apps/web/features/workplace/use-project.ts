@@ -14,7 +14,6 @@
 import type { NativeCliSessionView, ProfileView, ProjectId, UIItem, WorkplaceProject } from '@monad/protocol';
 import type {
   ActivityRow,
-  AgentActivityOverride,
   AgentTask,
   ApprovalView,
   Message,
@@ -27,47 +26,34 @@ import type {
 import {
   nativeCliSessionSelectors,
   profileSelectors,
-  useAbortSessionMutation,
-  useApproveNativeCliSessionMutation,
-  useApproveToolMutation,
-  useClarifyRespondMutation,
-  useDeleteWorkplaceProjectMutation,
   useGetProfileSettingsQuery,
-  useInputNativeCliSessionMutation,
   useListNativeCliSessionsQuery,
   useListProfilesQuery,
   useListWorkplaceProjectsQuery,
-  useSendProjectMessageMutation,
-  useStopNativeCliSessionMutation,
   useStreamUiItemsQuery,
-  useUpdateWorkplaceProjectMutation,
   workplaceProjectAdapter,
   workplaceProjectSelectors
 } from '@monad/client-rtk';
 import { entityAvatarUrl, workplaceProjectMembersExtKey } from '@monad/protocol';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { useAcpAgentSettings } from '@/hooks/use-acp-agent-settings';
 import { useFirstItemIndex } from '@/hooks/use-first-item-index';
 import { useNativeCliAgentSettings } from '@/hooks/use-native-cli-agent-settings';
 import { useTranscriptHistory } from '@/hooks/use-transcript-history';
-import { traceProjectDebugOperation } from '@/lib/project-debug-trace';
 import { getWorkplaceProjectName } from '@/lib/workspace-sessions';
 import {
   __workplaceProjectMessageTest,
-  type AddProjectMemberOptions,
   acpProgressText,
   avatarForAgent,
   buildNativeCliStreams,
   buildProjectMessages,
-  defaultProjectMemberSettings,
   fmtTime,
   HUMAN,
   iconForAgent,
   initials,
   isManagedNativeCliReasoningOnlyMessage,
   messageToView,
-  nativeCliAgentFacingCommandPhase,
   nativeCliApprovalName,
   nativeCliAvatarSeed,
   nativeCliMemberActivityPhase,
@@ -76,27 +62,22 @@ import {
   nativeCliProjectMemberAvatarSeed,
   nativeCliSessionIsGenerating,
   nativeCliTag,
-  newNativeCliInstanceId,
-  type ProjectMember,
-  type ProjectMemberSettings,
-  type ProjectMemberType,
   parseProjectMembers,
   productIcon,
-  projectMemberAvatarSeeds,
   projectMemberId,
   projectMemberParticipants,
   projectMemberStableId,
-  renameNativeCliProjectMemberDisplayName,
-  safeNativeCliDisplayName,
   summarizeTool,
-  toolItems,
-  uniqueNativeCliDisplayName,
-  warmEntityAvatar
+  toolItems
 } from './project-projection';
+import { useNativeCliActivityOverrides } from './use-native-cli-activity-overrides';
+import { useProjectActions } from './use-project-actions';
 import { DEV_SYSTEM_MESSAGES_IN_STREAM_ENABLED, useWorkplaceUiStore } from './workplace-ui-store';
 
+export type { ApprovalDecision } from './use-project-actions';
+
 export { __workplaceProjectMessageTest, acpProgressText, nativeCliAvatarSeed, projectMemberParticipants };
-export type ApprovalDecision = 'approve' | 'reject';
+
 const EMPTY_PROFILES: ProfileView[] = [];
 const EMPTY_ITEMS: UIItem[] = [];
 const EMPTY_NATIVE_CLI_SESSIONS: NativeCliSessionView[] = [];
@@ -209,61 +190,7 @@ export function useProject(projectId: string) {
     (item): item is Extract<UIItem, { kind: 'context' }> => item.kind === 'context'
   )?.usage;
   const liveTools = useMemo(() => toolItems(liveItems), [liveItems]);
-  const [nativeCliActivityOverrides, setNativeCliActivityOverrides] = useState<Record<string, AgentActivityOverride>>(
-    {}
-  );
-  // This effect fires on every streamed token. A tool call's input is immutable, so its
-  // stringified form is cached per item id; only the output tail can newly match a phase.
-  const nativeCliToolInputJson = useRef(new Map<string, string>());
-  useEffect(() => {
-    const now = Date.now();
-    const next: Record<string, AgentActivityOverride> = {};
-    let changed = false;
-    for (const [agentName, override] of Object.entries(nativeCliActivityOverrides)) {
-      if (override.expiresAt <= now) {
-        changed = true;
-        continue;
-      }
-      next[agentName] = override;
-    }
-    const inputJsonCache = nativeCliToolInputJson.current;
-    if (inputJsonCache.size > 256) inputJsonCache.clear();
-    for (const item of liveTools) {
-      if (!item.tool.startsWith('native-cli:')) continue;
-      if (item.status !== 'running') continue;
-      const input = item.input as { agent?: unknown } | undefined;
-      if (typeof input?.agent !== 'string') continue;
-      let inputJson = inputJsonCache.get(item.id);
-      if (inputJson === undefined) {
-        inputJson = JSON.stringify(item.input ?? {});
-        inputJsonCache.set(item.id, inputJson);
-      }
-      const outputTail = item.output && item.output.length > 500 ? item.output.slice(-500) : (item.output ?? '');
-      const phase = nativeCliAgentFacingCommandPhase(`${inputJson}\n${outputTail}`);
-      if (!phase) continue;
-      const expiresAt = now + (phase === 'speaking' ? 3000 : 5000);
-      const current = next[input.agent];
-      if (!current || current.phase !== phase) {
-        next[input.agent] = { phase, expiresAt };
-        changed = true;
-      }
-    }
-    if (changed) setNativeCliActivityOverrides(next);
-  }, [liveTools, nativeCliActivityOverrides]);
-  useEffect(() => {
-    const expiresAt = Math.min(...Object.values(nativeCliActivityOverrides).map((override) => override.expiresAt));
-    if (!Number.isFinite(expiresAt)) return;
-    const timer = window.setTimeout(
-      () => {
-        const now = Date.now();
-        setNativeCliActivityOverrides((current) =>
-          Object.fromEntries(Object.entries(current).filter(([, override]) => override.expiresAt > now))
-        );
-      },
-      Math.max(0, expiresAt - Date.now())
-    );
-    return () => window.clearTimeout(timer);
-  }, [nativeCliActivityOverrides]);
+  const nativeCliActivityOverrides = useNativeCliActivityOverrides(liveTools);
   const nativeCliStreamingAgentNames = useMemo(() => {
     const names = new Set<string>();
     for (const item of liveItems) {
@@ -551,140 +478,6 @@ export function useProject(projectId: string) {
       })),
     [activeProjectId, workplaceProjects]
   );
-  // --- actions ---
-  const [sendProjectMessage] = useSendProjectMessageMutation();
-  const [approveTool] = useApproveToolMutation();
-  const [clarifyRespond] = useClarifyRespondMutation();
-  const [approveNativeCliSession] = useApproveNativeCliSessionMutation();
-  const [abortSession] = useAbortSessionMutation();
-  const [updateWorkplaceProject] = useUpdateWorkplaceProjectMutation();
-  const [deleteWorkplaceProject] = useDeleteWorkplaceProjectMutation();
-  const [inputNativeCliSession] = useInputNativeCliSessionMutation();
-  const [stopNativeCliSession] = useStopNativeCliSessionMutation();
-
-  const sendDirective = useCallback(
-    async (text: string) => {
-      if (!activeProjectId) return;
-      await traceProjectDebugOperation(
-        { layer: 'web', label: 'project.message.send', sessionId: activeProjectId, data: { text } },
-        () => sendProjectMessage({ projectId: activeProjectId, text }).unwrap()
-      );
-    },
-    [activeProjectId, sendProjectMessage]
-  );
-
-  const resolveApproval = useCallback(
-    (requestId: string, decision: ApprovalDecision) => {
-      const approval = approvals.find((candidate) => candidate.id === requestId);
-      if (approval?.approvalOwnership === 'provider-owned' && approval.nativeCliSessionId) {
-        void traceProjectDebugOperation(
-          {
-            layer: 'web',
-            label: 'native-cli.approval.resolve',
-            sessionId: approval.nativeCliSessionId,
-            data: { requestId, decision }
-          },
-          () =>
-            approveNativeCliSession({
-              id: approval.nativeCliSessionId as string,
-              requestId,
-              allow: decision === 'approve',
-              ...(decision === 'reject' ? { reason: 'denied by operator' } : {})
-            }).unwrap()
-        );
-        return;
-      }
-      void traceProjectDebugOperation(
-        {
-          layer: 'web',
-          label: 'tool.approval.resolve',
-          sessionId: activeProjectId ?? undefined,
-          data: { requestId, decision }
-        },
-        () =>
-          approveTool({
-            requestId,
-            allow: decision === 'approve',
-            scope: 'once',
-            ...(decision === 'reject' ? { reason: 'denied by operator' } : {})
-          }).unwrap()
-      );
-    },
-    [activeProjectId, approveNativeCliSession, approveTool, approvals]
-  );
-
-  const approveAll = useCallback(() => {
-    for (const a of approvals) {
-      if (a.approvalOwnership === 'provider-owned' && a.nativeCliSessionId) {
-        void approveNativeCliSession({ id: a.nativeCliSessionId, requestId: a.id, allow: true });
-        continue;
-      }
-      void approveTool({ requestId: a.id, allow: true, scope: 'once' });
-    }
-  }, [approveNativeCliSession, approveTool, approvals]);
-
-  const answerQuestion = useCallback(
-    (requestId: string, answer: string) => {
-      void traceProjectDebugOperation(
-        {
-          layer: 'web',
-          label: 'clarify.respond',
-          sessionId: activeProjectId ?? undefined,
-          data: { requestId }
-        },
-        () => clarifyRespond({ requestId, answer }).unwrap()
-      );
-    },
-    [activeProjectId, clarifyRespond]
-  );
-
-  const pauseAll = useCallback(() => {
-    if (activeProjectId) void abortSession(activeProjectId);
-  }, [activeProjectId, abortSession]);
-
-  const deleteProject = useCallback(async () => {
-    if (!activeProjectId) return;
-    const deletedProjectId = activeProjectId;
-    setResolvedProjectId(null);
-    try {
-      await traceProjectDebugOperation({ layer: 'web', label: 'project.delete', sessionId: deletedProjectId }, () =>
-        deleteWorkplaceProject(deletedProjectId).unwrap()
-      );
-    } catch (error) {
-      setResolvedProjectId(deletedProjectId);
-      throw error;
-    }
-  }, [activeProjectId, deleteWorkplaceProject]);
-
-  const switchProject = useCallback((id: string) => setResolvedProjectId(id as ProjectId), []);
-
-  const updateProjectMembers = useCallback(
-    async (nextMembers: ProjectMember[]) => {
-      if (!currentProject?.origin) return;
-      await updateWorkplaceProject({
-        id: currentProject.id,
-        origin: {
-          ...currentProject.origin,
-          ext: {
-            ...(currentProject.origin.ext ?? {}),
-            [workplaceProjectMembersExtKey]: nextMembers.map(
-              ({ type, name, templateName, displayName, instanceId, settings }) => ({
-                type,
-                name,
-                ...(templateName ? { templateName } : {}),
-                ...(displayName ? { displayName } : {}),
-                ...(instanceId ? { instanceId } : {}),
-                ...(settings && Object.keys(settings).length > 0 ? { settings } : {})
-              })
-            )
-          }
-        }
-      }).unwrap();
-      for (const seed of projectMemberAvatarSeeds(currentProject.id, nextMembers)) warmEntityAvatar(seed);
-    },
-    [currentProject, updateWorkplaceProject]
-  );
-
   const availableProjectMembers = useMemo(() => {
     const current = new Set(projectMembers.map((member) => member.id));
     return [
@@ -731,103 +524,30 @@ export function useProject(projectId: string) {
     ];
   }, [acp.agents, nativeCli.agents, projectMembers]);
 
-  const addProjectMember = useCallback(
-    async (type: ProjectMemberType, name: string, options: AddProjectMemberOptions = {}) => {
-      if (type !== 'native-cli' && projectMembers.some((member) => member.type === type && member.name === name))
-        return;
-      const acpAgent = type === 'acp' ? acp.agents.find((agent) => agent.name === name) : undefined;
-      const nativeAgent = type === 'native-cli' ? nativeCli.agents.find((agent) => agent.name === name) : undefined;
-      const settings = {
-        ...defaultProjectMemberSettings(type, type === 'acp' ? acpAgent : nativeAgent),
-        ...(options.modelId ? { modelId: options.modelId } : {}),
-        ...(options.reasoningEffort ? { reasoningEffort: options.reasoningEffort } : {}),
-        ...(options.speed ? { speed: options.speed } : {}),
-        ...(options.customPrompt ? { customPrompt: options.customPrompt } : {})
-      };
-      if (type === 'native-cli') {
-        const defaultDisplayName = nativeCliProductDisplayName(
-          productIcon(nativeAgent?.productIcon),
-          nativeAgent?.provider,
-          name
-        );
-        const displayName = safeNativeCliDisplayName(
-          uniqueNativeCliDisplayName(options.displayName?.trim() || defaultDisplayName, projectMembers)
-        );
-        const instanceId = newNativeCliInstanceId(name);
-        await updateProjectMembers([
-          ...projectMembers,
-          {
-            id: instanceId,
-            type,
-            name: displayName,
-            templateName: name,
-            displayName,
-            instanceId,
-            settings
-          }
-        ]);
-        return;
-      }
-      await updateProjectMembers([...projectMembers, { id: projectMemberId(type, name), type, name, settings }]);
-    },
-    [acp.agents, nativeCli.agents, projectMembers, updateProjectMembers]
-  );
-
-  const removeProjectMember = useCallback(
-    async (id: string) => {
-      await updateProjectMembers(projectMembers.filter((member) => member.id !== id));
-    },
-    [projectMembers, updateProjectMembers]
-  );
-
-  const updateProjectMemberSettings = useCallback(
-    async (id: string, patch: ProjectMemberSettings) => {
-      await updateProjectMembers(
-        projectMembers.map((member) =>
-          member.id === id ? { ...member, settings: { ...(member.settings ?? {}), ...patch } } : member
-        )
-      );
-    },
-    [projectMembers, updateProjectMembers]
-  );
-
-  const updateProjectMemberIdentity = useCallback(
-    async (id: string, patch: { displayName?: string }) => {
-      await updateProjectMembers(
-        projectMembers.map((member) => {
-          if (member.id !== id) return member;
-          return renameNativeCliProjectMemberDisplayName(member, patch.displayName);
-        })
-      );
-    },
-    [projectMembers, updateProjectMembers]
-  );
-
-  const sendNativeCliInput = useCallback(
-    async (id: string, input: string) => {
-      await traceProjectDebugOperation(
-        { layer: 'web', label: 'native-cli.input', sessionId: id, data: { id, input } },
-        () => inputNativeCliSession({ id, input }).unwrap()
-      );
-    },
-    [inputNativeCliSession]
-  );
-  const stopNativeCli = useCallback(
-    async (id: string) => {
-      await traceProjectDebugOperation({ layer: 'web', label: 'native-cli.stop', sessionId: id, data: { id } }, () =>
-        stopNativeCliSession(id).unwrap()
-      );
-    },
-    [stopNativeCliSession]
-  );
-
-  const setWorkdir = useCallback(
-    async (path: string) => {
-      if (!currentProject) return;
-      await updateWorkplaceProject({ id: currentProject.id, cwd: path }).unwrap();
-    },
-    [currentProject, updateWorkplaceProject]
-  );
+  const {
+    sendDirective,
+    resolveApproval,
+    approveAll,
+    answerQuestion,
+    pauseAll,
+    deleteProject,
+    switchProject,
+    addProjectMember,
+    removeProjectMember,
+    updateProjectMemberSettings,
+    updateProjectMemberIdentity,
+    sendNativeCliInput,
+    stopNativeCli,
+    setWorkdir
+  } = useProjectActions({
+    activeProjectId,
+    currentProject,
+    projectMembers,
+    approvals,
+    acpAgents: acp.agents,
+    nativeCliAgents: nativeCli.agents,
+    setResolvedProjectId
+  });
 
   return useMemo(
     () => ({
