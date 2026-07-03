@@ -893,13 +893,17 @@ function isChunkObservation(event: NativeCliObservationEvent): boolean {
 // boundary whitespace (codex sends " the", " CLI"; a mid-word split sends "impl" then
 // "ementation"). Guessing a space between two alphanumeric edges corrupts both cases —
 // it inserts a spurious space inside a split word and, worse, between CJK characters that
-// never take inter-character spaces (我来 + 先做 → "我来 先做"). Always join verbatim.
-function appendChunkText(previous: string, next: string): string {
-  return `${previous}${next}`;
-}
-
+// never take inter-character spaces (我来 + 先做 → "我来 先做"). Always join verbatim,
+// accumulating a run's fragments and joining once so folding k deltas stays O(k).
 function mergeAdjacentChunkObservations(events: NativeCliObservationEvent[]): NativeCliObservationEvent[] {
   const out: NativeCliObservationEvent[] = [];
+  let runTexts: string[] = [];
+  let runRaws: unknown[] = [];
+  const settleRun = () => {
+    if (runTexts.length < 2) return;
+    const previous = out.at(-1);
+    if (previous) out[out.length - 1] = { ...previous, text: runTexts.join(''), raw: runRaws };
+  };
   for (const event of events) {
     const previous = out.at(-1);
     if (
@@ -910,15 +914,16 @@ function mergeAdjacentChunkObservations(events: NativeCliObservationEvent[]): Na
       previous.source === event.source &&
       previous.providerEventType === event.providerEventType
     ) {
-      out[out.length - 1] = {
-        ...previous,
-        text: appendChunkText(previous.text, event.text),
-        raw: [previous.raw, event.raw]
-      };
+      runTexts.push(event.text);
+      runRaws.push(event.raw);
       continue;
     }
+    settleRun();
     out.push(event);
+    runTexts = isChunkObservation(event) ? [event.text] : [];
+    runRaws = isChunkObservation(event) ? [event.raw] : [];
   }
+  settleRun();
   // Deltas were kept verbatim to preserve internal boundary whitespace; trim the
   // outer edges of each merged block and drop chunks that were whitespace-only.
   return out.flatMap((event) => {

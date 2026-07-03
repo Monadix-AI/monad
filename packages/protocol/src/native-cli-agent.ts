@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { clarifyChoiceModeSchema } from './clarify.ts';
 import { chatMessageSchema } from './domain.ts';
 import { messageIdSchema, projectIdSchema, transcriptTargetIdSchema } from './ids.ts';
 
@@ -326,7 +327,7 @@ export const nativeAgentProjectAskRequestSchema = z.object({
   projectId: projectIdSchema.optional(),
   question: z.string().min(1).max(10_000),
   options: z.array(z.string().min(1).max(1_000)).max(10).default([]),
-  mode: z.enum(['single', 'multiple']).default('single'),
+  mode: clarifyChoiceModeSchema.default('single'),
   allowOther: z.boolean().default(true)
 });
 export type NativeAgentProjectAskRequest = z.infer<typeof nativeAgentProjectAskRequestSchema>;

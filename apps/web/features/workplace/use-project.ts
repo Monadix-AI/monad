@@ -45,7 +45,7 @@ import {
   workplaceProjectSelectors
 } from '@monad/client-rtk';
 import { entityAvatarUrl, workplaceProjectMembersExtKey } from '@monad/protocol';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useAcpAgentSettings } from '@/hooks/use-acp-agent-settings';
 import { useFirstItemIndex } from '@/hooks/use-first-item-index';
@@ -212,6 +212,9 @@ export function useProject(projectId: string) {
   const [nativeCliActivityOverrides, setNativeCliActivityOverrides] = useState<Record<string, AgentActivityOverride>>(
     {}
   );
+  // This effect fires on every streamed token. A tool call's input is immutable, so its
+  // stringified form is cached per item id; only the output tail can newly match a phase.
+  const nativeCliToolInputJson = useRef(new Map<string, string>());
   useEffect(() => {
     const now = Date.now();
     const next: Record<string, AgentActivityOverride> = {};
@@ -223,12 +226,20 @@ export function useProject(projectId: string) {
       }
       next[agentName] = override;
     }
+    const inputJsonCache = nativeCliToolInputJson.current;
+    if (inputJsonCache.size > 256) inputJsonCache.clear();
     for (const item of liveTools) {
       if (!item.tool.startsWith('native-cli:')) continue;
       if (item.status !== 'running') continue;
       const input = item.input as { agent?: unknown } | undefined;
       if (typeof input?.agent !== 'string') continue;
-      const phase = nativeCliAgentFacingCommandPhase(`${JSON.stringify(item.input ?? {})}\n${item.output ?? ''}`);
+      let inputJson = inputJsonCache.get(item.id);
+      if (inputJson === undefined) {
+        inputJson = JSON.stringify(item.input ?? {});
+        inputJsonCache.set(item.id, inputJson);
+      }
+      const outputTail = item.output && item.output.length > 500 ? item.output.slice(-500) : (item.output ?? '');
+      const phase = nativeCliAgentFacingCommandPhase(`${inputJson}\n${outputTail}`);
       if (!phase) continue;
       const expiresAt = now + (phase === 'speaking' ? 3000 : 5000);
       const current = next[input.agent];

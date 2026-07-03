@@ -168,10 +168,14 @@ for (const kind of TRANSPORTS) {
       expect(res.status).toBe(200);
       expect(await res.json()).toMatchObject({ ok: true, requestId, answer: '["Ship"]' });
       const wall = await messages(t, sessionId);
-      expect(wall).toHaveLength(1);
-      const summaryText = wall[0]?.text;
+      expect(wall).toHaveLength(2);
+      expect(wall[0]).toEqual({
+        role: 'assistant',
+        text: 'Q: Which path should I take?\nOptions: Ship | Revise\nA: Ship'
+      });
+      const summaryText = wall[1]?.text;
       if (!summaryText) throw new Error('expected project Q&A summary text');
-      expect(wall[0]?.role).toBe('system');
+      expect(wall[1]?.role).toBe('system');
       expect(summaryText).toContain('Project Q&A summary:');
       expect(summaryText).toContain('Asked by: Lily');
       expect(summaryText).toContain('Question: Which path should I take?');
@@ -332,7 +336,7 @@ for (const kind of TRANSPORTS) {
       expect(await messages(t, sessionId)).toEqual([{ role: 'assistant', text: 'live managed reply' }]);
     });
 
-    test('project post is idempotent for duplicate managed native CLI output from the same runtime', async () => {
+    test('duplicate project posts from the same runtime land as separate messages', async () => {
       const handlers = buildHandlers(mockModel());
       t = serveTransport(kind, createHttpTransport(handlers));
       const sessionId = await createSession(t);
@@ -349,7 +353,10 @@ for (const kind of TRANSPORTS) {
 
       expect(first.status).toBe(200);
       expect(second.status).toBe(200);
-      expect(await messages(t, sessionId)).toEqual([{ role: 'assistant', text: 'KTzhou joined. Ready for tasks.' }]);
+      expect(await messages(t, sessionId)).toEqual([
+        { role: 'assistant', text: 'KTzhou joined. Ready for tasks.' },
+        { role: 'assistant', text: 'KTzhou joined. Ready for tasks.' }
+      ]);
     });
 
     test('provider completion without a project post clears the managed native CLI thinking placeholder', async () => {

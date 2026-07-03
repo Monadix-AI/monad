@@ -911,42 +911,6 @@ export class Store {
     return result.changes === 1;
   }
 
-  findRecentManagedNativeCliMessage(args: {
-    transcriptTargetId: string;
-    nativeCliSessionId: string;
-    agentName: string;
-    text: string;
-    withinMs?: number;
-  }): string | null {
-    // Bounded window: this dedupes the same reply arriving twice around one turn settle
-    // (provider final + explicit post). Without the bound, an agent legitimately posting
-    // the same text again hours later would be silently swallowed.
-    const since = new Date(Date.now() - (args.withinMs ?? 5 * 60_000)).toISOString();
-    const row = this.sqlite
-      .query(
-        `SELECT id FROM messages
-         WHERE transcript_target_id = $target
-           AND role = 'assistant'
-           AND active = 1
-           AND text = $text
-           AND created_at >= $since
-           AND stream_status IN ('settled', 'complete')
-           AND json_extract(data, '$.source') = 'managed-native-cli'
-           AND json_extract(data, '$.nativeCliSessionId') = $nativeCliSessionId
-           AND json_extract(data, '$.agentName') = $agentName
-         ORDER BY rowid DESC
-         LIMIT 1`
-      )
-      .get({
-        $target: args.transcriptTargetId,
-        $nativeCliSessionId: args.nativeCliSessionId,
-        $agentName: args.agentName,
-        $text: args.text,
-        $since: since
-      }) as { id: string } | null;
-    return row?.id ?? null;
-  }
-
   /** Global lookup of a LIVE message's text by id (no session needed). Used to trace a graph edge
    *  back to the source message it was extracted from (the bottom of the "why do you believe X"
    *  chain) — `active = 1` so a soft-deleted message can't resurface before the next reconcile. */

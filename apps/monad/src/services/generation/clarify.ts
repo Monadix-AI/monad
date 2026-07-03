@@ -7,25 +7,22 @@
 // timeout: a human composing an answer needs longer than a yes/no, and a timeout yields an
 // empty answer (the agent proceeds with what it has) rather than a fail-closed denial.
 
-import type { Event, TranscriptTargetId } from '@monad/protocol';
+import type { ClarifyAsker, ClarifyChoiceMode, Event, TranscriptTargetId } from '@monad/protocol';
 
 import { newId } from '@monad/protocol';
 
 interface Pending {
   resolve: (answer: string) => void;
-  timer: ReturnType<typeof setTimeout>;
+  timer?: ReturnType<typeof setTimeout>;
   sessionId: TranscriptTargetId;
 }
 
 export interface ClarifyAskRequest {
   question: string;
   options?: string[];
-  mode?: 'single' | 'multiple';
+  mode?: ClarifyChoiceMode;
   allowOther?: boolean;
-  asker?: {
-    id?: string;
-    name: string;
-  };
+  asker?: ClarifyAsker;
 }
 
 export interface ClarifyAskResult {
@@ -58,8 +55,13 @@ export class ClarifyService {
   readonly ask = async (sessionId: string, question: string, options?: string[]): Promise<string> =>
     (await this.askStructured(sessionId, { question, options })).answer;
 
-  /** Ask the user a structured question; resolves with their answer (or '' on timeout/overflow). */
-  readonly askStructured = (sessionId: string, request: ClarifyAskRequest): Promise<ClarifyAskResult> =>
+  /** Ask the user a structured question; resolves with their answer (or '' on timeout/overflow).
+   *  `waitForever: true` skips the auto-resolve timer — the promise settles only on a human answer. */
+  readonly askStructured = (
+    sessionId: string,
+    request: ClarifyAskRequest,
+    opts?: { waitForever?: boolean }
+  ): Promise<ClarifyAskResult> =>
     new Promise<ClarifyAskResult>((resolve) => {
       // Bound the pending registry — a flood of questions must not accumulate unbounded
       // timers/promises. Over the cap, resolve empty (no entry created) so the agent proceeds.
@@ -69,12 +71,14 @@ export class ClarifyService {
       }
       const requestId = newId('clarify');
       const sid = sessionId as TranscriptTargetId;
-      const timer = setTimeout(() => {
-        if (this.pending.delete(requestId)) {
-          this.emit(sid, 'clarify.resolved', { requestId, answer: '', reason: 'timeout' });
-          resolve({ requestId, answer: '' });
-        }
-      }, this.timeoutMs);
+      const timer = opts?.waitForever
+        ? undefined
+        : setTimeout(() => {
+            if (this.pending.delete(requestId)) {
+              this.emit(sid, 'clarify.resolved', { requestId, answer: '', reason: 'timeout' });
+              resolve({ requestId, answer: '' });
+            }
+          }, this.timeoutMs);
       this.pending.set(requestId, { resolve: (answer) => resolve({ requestId, answer }), timer, sessionId: sid });
       this.emit(sid, 'clarify.requested', {
         requestId,
@@ -90,7 +94,7 @@ export class ClarifyService {
   respond(requestId: string, answer: string): boolean {
     const p = this.pending.get(requestId);
     if (!p) return false;
-    clearTimeout(p.timer);
+    if (p.timer) clearTimeout(p.timer);
     this.pending.delete(requestId);
     this.emit(p.sessionId, 'clarify.resolved', { requestId, answer });
     p.resolve(answer);

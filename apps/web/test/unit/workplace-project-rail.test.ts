@@ -138,6 +138,27 @@ test('native CLI stopped sessions remain available when the template is enabled'
   expect(presence).toBe('online');
 });
 
+test('native CLI generating flag tracks snapshot changes for the same session id', () => {
+  const generatingOutput = [
+    '{"method":"turn/started","params":{}}',
+    '{"method":"item/agentMessage/delta","params":{"delta":"Working"}}'
+  ].join('\n');
+  const idleOutput = [generatingOutput, '{"method":"turn/completed","params":{}}'].join('\n');
+
+  expect(
+    __workplaceProjectMessageTest.nativeCliSessionIsGenerating(nativeCliSession({ outputSnapshot: generatingOutput }))
+  ).toBe(true);
+  expect(
+    __workplaceProjectMessageTest.nativeCliSessionIsGenerating(nativeCliSession({ outputSnapshot: idleOutput }))
+  ).toBe(false);
+  expect(
+    __workplaceProjectMessageTest.nativeCliSessionIsGenerating(nativeCliSession({ outputSnapshot: generatingOutput }))
+  ).toBe(true);
+  expect(
+    __workplaceProjectMessageTest.nativeCliSessionIsGenerating(nativeCliSession({ outputSnapshot: generatingOutput }))
+  ).toBe(true);
+});
+
 test('native CLI presence follows provider turn activity before a project message streams', () => {
   const generatingOutput = [
     '{"method":"turn/started","params":{}}',

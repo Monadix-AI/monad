@@ -55,6 +55,30 @@ test('Codex app-server observation merges adjacent agent message chunks', () => 
   ]);
 });
 
+test('Codex app-server observation collects merged chunk raw records into a flat array', () => {
+  const records = [
+    { method: 'item/agentMessage/delta', params: { delta: 'a' } },
+    { method: 'item/agentMessage/delta', params: { delta: 'b' } },
+    { method: 'item/agentMessage/delta', params: { delta: 'c' } }
+  ];
+  const output = records.map((record) => JSON.stringify(record)).join('\n');
+
+  const items = nativeCliStreamItems({ id: 'ncli_codex', provider: 'codex', output });
+
+  expect(items).toHaveLength(1);
+  expect(items[0]?.text).toBe('abc');
+  expect(items[0]?.raw).toEqual(records);
+});
+
+test('Codex app-server observation keeps a lone chunk raw record unwrapped', () => {
+  const record = { method: 'item/agentMessage/delta', params: { delta: 'solo' } };
+
+  const items = nativeCliStreamItems({ id: 'ncli_codex', provider: 'codex', output: JSON.stringify(record) });
+
+  expect(items).toHaveLength(1);
+  expect(items[0]?.raw).toEqual(record);
+});
+
 test('Codex app-server observation concatenates deltas verbatim without injecting spaces', () => {
   const output = [
     JSON.stringify({ method: 'item/agentMessage/delta', params: { delta: 'impl' } }),

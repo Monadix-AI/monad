@@ -35,6 +35,15 @@ const MANAGED_NATIVE_CLI_DIRECT_DELIVERY_ERROR_EVENT =
 /** Delivery of Workplace Project messages (fan-out + direct) to managed native-CLI project members,
  *  plus the "thinking" placeholder lifecycle that mirrors their streamed replies into the transcript.
  *  Stateful: owns `pendingManagedNativeCliWakeMessages`, shared across every function here. */
+// Shared across every createManagedNativeCliDelivery closure (messaging + join each create one):
+// the running-state guard both callers use is check-then-act across several awaits, so two
+// concurrent flows (double updateProject, or join racing a fan-out) would otherwise cold-start
+// the same member twice and deliver its input twice. Entries live only for the start window.
+const inflightManagedNativeCliStarts = new Map<
+  string,
+  { promise: Promise<NativeCliSessionView>; inputs: Set<string> }
+>();
+
 export function createManagedNativeCliDelivery(ctx: SessionContext) {
   const {
     deps: { store, log, nativeCliHost },
@@ -105,20 +114,11 @@ export function createManagedNativeCliDelivery(ctx: SessionContext) {
     threadId?: string;
     source?: 'managed-native-cli' | 'native-cli-provider';
     error?: boolean;
-  }): { messageId: MessageId; posted: boolean } {
+  }): { messageId: MessageId } {
     const pendingMessageId =
       pendingManagedNativeCliWakeMessages.get(nativeCliSessionId) ??
       store.findManagedNativeCliStreamingMessage(sessionId, nativeCliSessionId, agentName);
     pendingManagedNativeCliWakeMessages.delete(nativeCliSessionId);
-    if (!pendingMessageId && source === 'managed-native-cli') {
-      const duplicate = store.findRecentManagedNativeCliMessage({
-        transcriptTargetId: sessionId,
-        nativeCliSessionId,
-        agentName,
-        text
-      });
-      if (duplicate) return { messageId: duplicate as MessageId, posted: false };
-    }
     const messageId = (pendingMessageId ?? newId('msg')) as MessageId;
     const data = { agentName, nativeCliSessionId, source, ...(threadId ? { threadId } : {}) };
     // Post order is the wall order, and created_at is millisecond-resolution: two replies settling
@@ -153,7 +153,7 @@ export function createManagedNativeCliDelivery(ctx: SessionContext) {
       at: new Date().toISOString()
     });
     persistAndRetire(sessionId, round);
-    return { messageId, posted: true };
+    return { messageId };
   }
 
   function retireManagedNativeCliThinking(
@@ -229,7 +229,30 @@ export function createManagedNativeCliDelivery(ctx: SessionContext) {
     );
   }
 
-  async function startManagedNativeCliRuntimeWithRecovery({
+  async function startManagedNativeCliRuntimeWithRecovery(
+    args: Parameters<typeof startManagedNativeCliRuntime>[0]
+  ): Promise<NativeCliSessionView> {
+    if (!nativeCliHost) throw new HandlerError('internal', 'native CLI host not configured');
+    const key = `${args.session.id}:${args.runtimeAgentName}`;
+    const inflight = inflightManagedNativeCliStarts.get(key);
+    if (inflight) {
+      const nativeSession = await inflight.promise;
+      if (!inflight.inputs.has(args.input)) {
+        inflight.inputs.add(args.input);
+        nativeCliHost.input(nativeSession.id, { input: nativeCliInputText(args.input) });
+      }
+      return nativeSession;
+    }
+    const entry = { promise: startManagedNativeCliRuntime(args), inputs: new Set([args.input]) };
+    inflightManagedNativeCliStarts.set(key, entry);
+    try {
+      return await entry.promise;
+    } finally {
+      inflightManagedNativeCliStarts.delete(key);
+    }
+  }
+
+  async function startManagedNativeCliRuntime({
     session,
     spec,
     runtimeAgentName,
@@ -508,6 +531,58 @@ export function createManagedNativeCliDelivery(ctx: SessionContext) {
     }
   }
 
+  function beginProjectQaWallMessage({
+    sessionId,
+    agentName,
+    text
+  }: {
+    sessionId: TranscriptTargetId;
+    agentName: string;
+    text: string;
+  }): { messageId: MessageId } {
+    const messageId = newId('msg');
+    store.insertMessage(messageId, sessionId, text, new Date().toISOString(), 'assistant', {
+      data: { agentName, kind: 'project-qa' },
+      includeInContext: false,
+      streamStatus: 'streaming'
+    });
+    const round: Event[] = [];
+    makeEmit(round)({
+      id: newId('evt'),
+      transcriptTargetId: sessionId,
+      type: 'agent.message',
+      actorAgentId: null,
+      payload: { messageId, agentName, text },
+      at: new Date().toISOString()
+    });
+    persistAndRetire(sessionId, round);
+    return { messageId };
+  }
+
+  function completeProjectQaWallMessage({
+    sessionId,
+    messageId,
+    agentName,
+    text
+  }: {
+    sessionId: TranscriptTargetId;
+    messageId: MessageId;
+    agentName: string;
+    text: string;
+  }): void {
+    store.setGenStatus(sessionId, messageId, 'complete', new Date().toISOString(), { text });
+    const round: Event[] = [];
+    makeEmit(round)({
+      id: newId('evt'),
+      transcriptTargetId: sessionId,
+      type: 'agent.message',
+      actorAgentId: null,
+      payload: { messageId, agentName, text },
+      at: new Date().toISOString()
+    });
+    persistAndRetire(sessionId, round);
+  }
+
   return {
     emitManagedNativeCliThinking,
     completeManagedNativeCliThinking,
@@ -515,7 +590,9 @@ export function createManagedNativeCliDelivery(ctx: SessionContext) {
     deliverProjectMessageToManagedNativeCliMembers,
     deliverDirectMessageToManagedNativeCliMember,
     managedNativeCliSessionsForAgent,
-    startManagedNativeCliRuntimeWithRecovery
+    startManagedNativeCliRuntimeWithRecovery,
+    beginProjectQaWallMessage,
+    completeProjectQaWallMessage
   };
 }
 

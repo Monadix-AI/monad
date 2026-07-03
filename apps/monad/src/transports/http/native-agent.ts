@@ -1,16 +1,11 @@
 import type { createDaemonHandlers } from '@/handlers/handlers.ts';
 
 import { createHash, timingSafeEqual } from 'node:crypto';
-import {
-  daemonHttpContract,
-  newId,
-  type ProjectId,
-  workplaceProjectMembersExtKey,
-  workplaceProjectMembersExtSchema
-} from '@monad/protocol';
+import { daemonHttpContract, newId, type ProjectId } from '@monad/protocol';
 import { Elysia } from 'elysia';
 
 import { HandlerError } from '@/handlers/handler-error.ts';
+import { nativeCliProjectMemberDisplayNameForAgent } from '@/handlers/session/handlers/messaging-members.ts';
 
 function runtimeBinding(request: Request) {
   return {
@@ -34,12 +29,7 @@ function managedNativeCliDisplayName(
   agentId: string
 ): string {
   const session = store.getSession(projectId) ?? store.getWorkplaceProject(projectId);
-  const parsed = workplaceProjectMembersExtSchema.safeParse(session?.origin?.ext?.[workplaceProjectMembersExtKey]);
-  if (!parsed.success) return agentId;
-  const member = parsed.data.find(
-    (candidate) => candidate.type === 'native-cli' && (candidate.instanceId === agentId || candidate.name === agentId)
-  );
-  return member?.displayName ?? member?.name ?? agentId;
+  return session ? nativeCliProjectMemberDisplayNameForAgent(session, agentId) : agentId;
 }
 
 function readableAnswer(answer: string): string {
@@ -51,6 +41,14 @@ function readableAnswer(answer: string): string {
     // Plain text answer.
   }
   return answer;
+}
+
+function projectQaWallText(args: { question: string; options: readonly string[]; answer?: string }): string {
+  return [
+    `Q: ${args.question}`,
+    ...(args.options.length ? [`Options: ${args.options.join(' | ')}`] : []),
+    ...(args.answer === undefined ? [] : [`A: ${args.answer.trim() ? readableAnswer(args.answer) : '(skipped)'}`])
+  ].join('\n');
 }
 
 function projectAskSummary(args: {
@@ -153,14 +151,12 @@ export function createNativeAgentController(handlers: ReturnType<typeof createDa
         const messageId = completed.messageId ?? newId('msg');
         const createdAt = new Date().toISOString();
         store.markNativeCliInboxConsumed(binding.nativeCliSessionId, store.maxMessageSeq(transcriptTargetId));
-        if (completed.posted) {
-          await handlers.session.notifyManagedNativeCliProjectMembers({
-            sessionId: transcriptTargetId,
-            text: body.text,
-            sender: { kind: 'native-cli-agent', name: binding.agentId, id: binding.agentId },
-            exceptAgentName: binding.agentId
-          });
-        }
+        await handlers.session.notifyManagedNativeCliProjectMembers({
+          sessionId: transcriptTargetId,
+          text: body.text,
+          sender: { kind: 'native-cli-agent', name: binding.agentId, id: binding.agentId },
+          exceptAgentName: binding.agentId
+        });
         return { ok: true, message: { id: messageId, projectId, text: body.text, createdAt } };
       },
       { body: contracts.projectPost.body, response: contracts.projectPost.response }
@@ -173,17 +169,33 @@ export function createNativeAgentController(handlers: ReturnType<typeof createDa
         if (binding.projectId !== projectId) {
           throw new HandlerError('forbidden', 'project id does not match managed runtime', 'PROJECT_MISMATCH');
         }
-        // The response is held open until a human answers (up to the clarify timeout, 10 min).
-        // Bun's default idleTimeout closes a silent connection after ~10s, which would drop the
+        // The response is held open until a human answers — indefinitely by design. Bun's
+        // default idleTimeout closes a silent connection after ~10s, which would drop the
         // answer while the clarify stays pending — disable it for this request only.
         server?.timeout(request, 0);
         const askerName = managedNativeCliDisplayName(store, projectId, binding.agentId);
-        const result = await handlers.clarify.askStructured(projectId, {
-          question: body.question,
-          options: body.options,
-          mode: body.mode,
-          allowOther: body.allowOther,
-          asker: { id: binding.agentId, name: askerName }
+        const wallQuestion = projectQaWallText({ question: body.question, options: body.options });
+        const wall = handlers.session.beginProjectQaWallMessage({
+          sessionId: projectId,
+          agentName: askerName,
+          text: wallQuestion
+        });
+        const result = await handlers.clarify.askStructured(
+          projectId,
+          {
+            question: body.question,
+            options: body.options,
+            mode: body.mode,
+            allowOther: body.allowOther,
+            asker: { id: binding.agentId, name: askerName }
+          },
+          { waitForever: true }
+        );
+        handlers.session.completeProjectQaWallMessage({
+          sessionId: projectId,
+          messageId: wall.messageId,
+          agentName: askerName,
+          text: projectQaWallText({ question: body.question, options: body.options, answer: result.answer })
         });
         if (result.requestId && result.answer.trim()) {
           const summary = projectAskSummary({

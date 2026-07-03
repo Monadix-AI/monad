@@ -377,8 +377,26 @@ function codexStatusType(raw: unknown): string | undefined {
   return typeof value === 'string' ? value : undefined;
 }
 
+// Callers evaluate this several times per member per recompute, and each evaluation
+// would re-parse the session's full outputSnapshot (up to 256KB JSONL). Cache the flag
+// per session id keyed on the snapshot so the parse runs once per snapshot change.
+const nativeCliGeneratingCache = new Map<string, { snapshot: string | undefined; value: boolean }>();
+const NATIVE_CLI_GENERATING_CACHE_LIMIT = 128;
+
 export function nativeCliSessionIsGenerating(session: NativeCliSessionView): boolean {
   if (session.runtimeRole !== 'managed-project-agent' || session.state !== 'running') return false;
+  const cached = nativeCliGeneratingCache.get(session.id);
+  if (cached && cached.snapshot === session.outputSnapshot) return cached.value;
+  const value = computeNativeCliSessionIsGenerating(session);
+  if (!cached && nativeCliGeneratingCache.size >= NATIVE_CLI_GENERATING_CACHE_LIMIT) {
+    const oldest = nativeCliGeneratingCache.keys().next().value;
+    if (oldest !== undefined) nativeCliGeneratingCache.delete(oldest);
+  }
+  nativeCliGeneratingCache.set(session.id, { snapshot: session.outputSnapshot, value });
+  return value;
+}
+
+function computeNativeCliSessionIsGenerating(session: NativeCliSessionView): boolean {
   let active = false;
   const items = nativeCliStreamItems({ id: session.id, provider: session.provider, output: session.outputSnapshot });
   for (const item of items) {
