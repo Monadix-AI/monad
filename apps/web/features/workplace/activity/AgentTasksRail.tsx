@@ -5,7 +5,6 @@ import type {
   MouseEvent as ReactMouseEvent,
   PointerEvent as ReactPointerEvent
 } from 'react';
-import type { ChatRoomCanvas } from '../experiences/chat-room/canvas';
 import type { NativeCliStreamView, Participant } from '../types';
 
 import { BrainIcon, EyeIcon, MegaphoneIcon } from '@hugeicons/core-free-icons';
@@ -265,7 +264,14 @@ export function groupProjectRailAgents(agents: readonly Participant[]): {
   return { active, standBy };
 }
 
-export function AgentTasksRail({ room }: { room: ChatRoomCanvas }): React.ReactElement {
+type AgentTasksRailRoom = {
+  nativeCliStreams: NativeCliStreamView[];
+  projectId: string;
+  railAgents: Participant[];
+  stopNativeCli: (id: string) => void;
+};
+
+export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.ReactElement {
   const t = useT();
   const [railWidth, setRailWidth] = useState(DEFAULT_RAIL_WIDTH);
   const [resizing, setResizing] = useState(false);

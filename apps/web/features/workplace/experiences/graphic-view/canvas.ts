@@ -1,7 +1,7 @@
 import type { ActivityRow, Participant } from '../../types';
 import type { ProjectController } from '../../use-project';
 
-import { activityRowsFromTools } from '../chat-room/canvas';
+import { activityRowsFromTools } from '../shared/activity';
 
 export interface GraphicViewCanvas {
   participants: Participant[];

@@ -1,4 +1,3 @@
-import type { UIItem } from '@monad/protocol';
 import type {
   ActivityRow,
   AgentTask,
@@ -15,6 +14,7 @@ import type { ProjectExperienceActions, ProjectExperienceSnapshot, ProjectMentio
 import { entityAvatarUrl } from '@monad/protocol';
 
 import { avatarForAgent, fmtTime, iconForAgent, summarizeTool, toolItems } from '../../project-projection';
+import { activityRowsFromTools } from '../shared/activity';
 import {
   buildNativeCliStreams,
   buildProjectMessages,
@@ -46,23 +46,6 @@ export interface ChatRoomCanvas {
   pauseAll: ProjectExperienceActions['pauseAll'];
   sendNativeCliInput: ProjectExperienceActions['sendNativeCliInput'];
   stopNativeCli: ProjectExperienceActions['stopNativeCli'];
-}
-
-export function activityRowsFromTools(liveTools: Extract<UIItem, { kind: 'tool' }>[]): ActivityRow[] {
-  return liveTools.map((s) => ({
-    id: s.id,
-    av:
-      typeof (s.input as { agent?: unknown } | undefined)?.agent === 'string'
-        ? avatarForAgent((s.input as { agent: string }).agent)
-        : 'MO',
-    ...(typeof (s.input as { agent?: unknown } | undefined)?.agent === 'string'
-      ? { agentName: (s.input as { agent: string }).agent }
-      : {}),
-    tool: s.tool,
-    detail: summarizeTool(s.tool, s.input),
-    ...(s.output ? { output: s.output } : {}),
-    status: s.status
-  }));
 }
 
 export function toChatRoomCanvas(

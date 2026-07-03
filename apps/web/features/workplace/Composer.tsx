@@ -1,5 +1,6 @@
-import type { ChatRoomCanvas } from './experiences/chat-room/canvas';
-import type { QuestionView } from './types';
+import type { ContextUsagePayload, ProfileView } from '@monad/protocol';
+import type { ProjectMentionTarget } from './experiences/contracts';
+import type { ApprovalView, Participant, QuestionView, TypingIndicator } from './types';
 
 import {
   profileSelectors,
@@ -28,7 +29,21 @@ import {
 import { QuestionStack } from './QuestionStack';
 import { mono, sans } from './styles';
 
-export function Composer({ room }: { room: ChatRoomCanvas }): React.ReactElement {
+type ComposerRoom = {
+  answerQuestion: (requestId: string, answer: string) => void;
+  approvals: ApprovalView[];
+  contextUsage?: ContextUsagePayload | null;
+  mentionTargets: ProjectMentionTarget[];
+  modelProfiles: ProfileView[];
+  participants: Participant[];
+  pauseAll: () => void;
+  questions: QuestionView[];
+  resolveApproval: (requestId: string, action: 'approve' | 'reject') => void;
+  sendDirective: (text: string) => Promise<void> | void;
+  typing: TypingIndicator | null;
+};
+
+export function Composer({ room }: { room: ComposerRoom }): React.ReactElement {
   const t = useT();
   const router = useRouter();
   const searchParams = useSearchParams();

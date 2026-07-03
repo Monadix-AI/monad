@@ -1,4 +1,4 @@
-import type { ChatRoomCanvas } from '../experiences/chat-room/canvas';
+import type { Message, TypingIndicator } from '../types';
 
 import { ArrowDown01Icon, TerminalIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
@@ -16,9 +16,19 @@ import { TranscriptSkeleton, TypingRow } from './TranscriptSkeleton';
 export { MessageBubbleContent } from './MessageRow';
 
 const HEADER_SPACER = <div style={{ height: 24 }} />;
-const messageId = (m: ChatRoomCanvas['messages'][number]): string => m.id;
+const messageId = (m: Message): string => m.id;
 
-export function ChatTranscript({ room }: { room: ChatRoomCanvas }): React.ReactElement {
+type ChatTranscriptRoom = {
+  followNativeCliSession?: (id: string) => void;
+  loadOlder: () => void;
+  messages: Message[];
+  openAgentCard?: (id: string) => void;
+  projectId: string;
+  ready: boolean;
+  typing: TypingIndicator | null;
+};
+
+export function ChatTranscript({ room }: { room: ChatTranscriptRoom }): React.ReactElement {
   const t = useT();
   const listRef = useRef<VirtualListHandle>(null);
   const [atBottom, setAtBottom] = useState(true);

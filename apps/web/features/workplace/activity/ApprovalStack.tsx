@@ -1,9 +1,14 @@
-import type { ChatRoomCanvas } from '../experiences/chat-room/canvas';
+import type { ApprovalView } from '../types';
 
 import { ghostButtonStyle, inkButtonStyle } from '../Bits';
 import { boxR, mono, sans, softShadow } from '../styles';
 
-export function ApprovalStack({ room }: { room: ChatRoomCanvas }): React.ReactElement | null {
+type ApprovalStackRoom = {
+  approvals: ApprovalView[];
+  resolveApproval: (requestId: string, action: 'approve' | 'reject') => void;
+};
+
+export function ApprovalStack({ room }: { room: ApprovalStackRoom }): React.ReactElement | null {
   const { approvals } = room;
   if (approvals.length === 0) return null;
   const top = approvals[0];

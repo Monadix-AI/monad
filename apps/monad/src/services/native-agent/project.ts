@@ -12,7 +12,7 @@ import type {
   ProjectId
 } from '@monad/protocol';
 import type { createDaemonHandlers } from '@/handlers/handlers.ts';
-import type { NativeAgentAttachmentResolver } from '@/services/native-agent/attachments.ts';
+import type { NativeAgentAttachmentResolver } from './attachments.ts';
 
 import { newId } from '@monad/protocol';
 
@@ -94,7 +94,7 @@ function enqueueProjectSummaryForManagedRuntimes(
   }
 }
 
-export function createChatRoomNativeAgentProjectCapabilities(
+export function createNativeAgentProjectCapabilities(
   handlers: ReturnType<typeof createDaemonHandlers>,
   resolveAttachmentPayload: NativeAgentAttachmentResolver
 ) {
@@ -185,7 +185,8 @@ export function createChatRoomNativeAgentProjectCapabilities(
           options: args.body.options,
           answer: result.answer
         });
-        store.insertMessage(newId('msg'), projectId, summary, new Date().toISOString(), 'system', {
+        const summaryMessageId = newId('msg');
+        store.insertMessage(summaryMessageId, projectId, summary, new Date().toISOString(), 'system', {
           data: {
             source: 'managed-native-cli-question',
             requestId: result.requestId,
@@ -194,7 +195,7 @@ export function createChatRoomNativeAgentProjectCapabilities(
           },
           includeInContext: true
         });
-        const summarySeq = store.maxMessageSeq(projectId);
+        const summarySeq = store.messageSeq(projectId, summaryMessageId);
         enqueueProjectSummaryForManagedRuntimes(store, projectId, summarySeq, args.binding.nativeCliSessionId);
         await handlers.session.notifyManagedNativeCliProjectMembers({
           sessionId: projectId,

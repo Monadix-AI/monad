@@ -176,6 +176,9 @@ export function NativeCliMemberDialog({
               </DialogTitle>
             </div>
           </div>
+          <p style={{ margin: 0, fontFamily: sans, fontSize: 12, lineHeight: 1.45, color: 'var(--muted-foreground)' }}>
+            {t('web.workplace.managedNativeCliAutomationHint')}
+          </p>
           <div
             style={{
               display: 'flex',

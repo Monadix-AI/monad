@@ -702,6 +702,13 @@ export class Store {
       .run();
   }
 
+  messageSeq(transcriptTargetId: string, messageId: string): number {
+    const row = this.sqlite
+      .query('SELECT rowid AS seq FROM messages WHERE id = ? AND transcript_target_id = ?')
+      .get(messageId, transcriptTargetId) as { seq: number } | null;
+    return row?.seq ?? 0;
+  }
+
   /** Advance a generative message's lifecycle, rejecting illegal/backward transitions
    * (anything leaving a terminal `complete`/`error`). Optionally set the final `text`/`data` in the
    * same write (so a `complete` transition lands the settled content atomically). Returns false if
