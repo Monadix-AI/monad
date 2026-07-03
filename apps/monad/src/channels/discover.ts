@@ -18,6 +18,7 @@ import type {
   ManifestAtomPack,
   ModelProvider,
   SandboxLauncher,
+  WorkspaceExperienceApi,
   WorkspaceExperienceDefinition
 } from '@monad/sdk-atom';
 import type { AtomConflict } from '@/atoms/resolve.ts';
@@ -58,6 +59,8 @@ export async function discoverChannelAdapters(
     onSandbox?: (launcher: SandboxLauncher) => void;
     /** Receives each workspace experience descriptor a discovered pack registers. */
     onWorkspaceExperience?: (experience: WorkspaceExperienceDefinition, atomPackName: string) => void;
+    /** Receives each workspace experience API route set a discovered pack registers. */
+    onWorkspaceExperienceApi?: (api: WorkspaceExperienceApi, atomPackName: string) => void;
     /** Provider types owned by the built-in pass — a discovered `provider` claiming one is a hard
      *  error (globally-unique providers; prevents shadowing a built-in like `openai`). */
     reservedProviderTypes?: ReadonlySet<string>;
@@ -157,6 +160,7 @@ export async function discoverChannelAdapters(
     onHook: sinks.onHook,
     onSandbox: sinks.onSandbox,
     onWorkspaceExperience: sinks.onWorkspaceExperience,
+    onWorkspaceExperienceApi: sinks.onWorkspaceExperienceApi,
     reservedProviderTypes: sinks.reservedProviderTypes,
     channelPins: sinks.channelPins,
     connectorPins: sinks.connectorPins,

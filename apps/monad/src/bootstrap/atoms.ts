@@ -61,6 +61,7 @@ export function createAtomPackRediscoverer(deps: AtomPackRediscovererDeps): () =
       const builtin: BuiltinSinks = {
         onProvider: (p) => modelProviderRegistry.register(p),
         onHook: (h) => toolRegistry.registerHook(h),
+        onWorkspaceExperienceApi: (api, atomPackId) => toolRegistry.registerWorkspaceExperienceApi(api, atomPackId),
         onWorkspaceExperience: (experience, atomPackId) =>
           toolRegistry.registerWorkspaceExperience(experience, atomPackId)
       };
@@ -71,6 +72,7 @@ export function createAtomPackRediscoverer(deps: AtomPackRediscovererDeps): () =
         onCommand: (atomName, cmd) => commandRegistry.registerAtom(atomName, cmd),
         onCollision: (c) => atomConflicts.push(c),
         onHook: (h) => toolRegistry.registerHook(h),
+        onWorkspaceExperienceApi: (api, atomPackId) => toolRegistry.registerWorkspaceExperienceApi(api, atomPackId),
         onWorkspaceExperience: (experience, atomPackId) =>
           toolRegistry.registerWorkspaceExperience(experience, atomPackId)
       };

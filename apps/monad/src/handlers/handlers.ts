@@ -33,7 +33,7 @@ import type {
   SkillSortMode,
   StatsRange
 } from '@monad/protocol';
-import type { EmbedResult, ModelMessage, ModelResult, ToolSpec } from '@monad/sdk-atom';
+import type { EmbedResult, ModelMessage, ModelResult, ToolSpec, WorkspaceExperienceApiHandler } from '@monad/sdk-atom';
 import type { AtomConflict } from '@/atoms/resolve.ts';
 import type { ChannelService } from '@/channels/channel.ts';
 import type { SessionDeps } from '@/handlers/session/index.ts';
@@ -139,6 +139,12 @@ export interface DaemonHandlerDeps extends SessionDeps, ModelDeps {
   getAtomConflicts?: () => AtomConflict[];
   /** Workspace experiences registered by atom packs during the last load sweep. */
   getWorkspaceExperiences?: () => import('@monad/protocol').WorkspaceExperienceDefinition[];
+  /** Workspace experience API routes registered by atom packs during the last load sweep. */
+  getWorkspaceExperienceApiHandler?: (
+    experienceId: string,
+    method: string,
+    path: string
+  ) => WorkspaceExperienceApiHandler | undefined;
   /** Clear all stored embeddings and kick the indexer to rebuild — invoked when the user switches
    *  the embedding model and opts to re-index from scratch. */
   reindexEmbeddings?: () => void;
@@ -531,6 +537,7 @@ export function createDaemonHandlers(deps: DaemonHandlerDeps) {
       paths,
       onChanged: deps.rediscoverAtomPacks,
       getConflicts: deps.getAtomConflicts,
+      getWorkspaceExperienceApiHandler: deps.getWorkspaceExperienceApiHandler,
       getWorkspaceExperiences: deps.getWorkspaceExperiences,
       configBus: deps.configBus,
       modelService: deps.modelService

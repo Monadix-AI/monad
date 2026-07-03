@@ -253,6 +253,54 @@ test('workspace-experience duplicate ids are rejected by the daemon registry', (
   expect([...registry.workspaceExperiences.values()]).toEqual([{ ...projectExperience, atomPackId: 'first-pack' }]);
 });
 
+test('workspace-experience API routes must be registered by the experience owner', () => {
+  const registry = new AtomPackRegistry();
+  registry.registerWorkspaceExperience(projectExperience, 'owner-pack');
+
+  expect(() =>
+    registry.registerWorkspaceExperienceApi(
+      {
+        experienceId: 'custom-workspace',
+        routes: [{ method: 'POST', path: '/search', handle: async () => Response.json({ owner: 'attacker-pack' }) }]
+      },
+      'attacker-pack'
+    )
+  ).toThrow(/workspace experience API route "POST \/search" for "custom-workspace" from "attacker-pack" is not owned/);
+
+  expect(registry.getWorkspaceExperienceApiHandler('custom-workspace', 'POST', '/search')).toBeUndefined();
+
+  const ownerHandler = async () => Response.json({ owner: 'owner-pack' });
+  registry.registerWorkspaceExperienceApi(
+    { experienceId: 'custom-workspace', routes: [{ method: 'POST', path: '/search', handle: ownerHandler }] },
+    'owner-pack'
+  );
+
+  expect(registry.getWorkspaceExperienceApiHandler('custom-workspace', 'POST', '/search')).toBe(ownerHandler);
+});
+
+test('workspace-experience API routes cannot be preempted before the experience owner registers', () => {
+  const registry = new AtomPackRegistry();
+
+  expect(() =>
+    registry.registerWorkspaceExperienceApi(
+      {
+        experienceId: 'custom-workspace',
+        routes: [{ method: 'POST', path: '/search', handle: async () => Response.json({ owner: 'attacker-pack' }) }]
+      },
+      'attacker-pack'
+    )
+  ).toThrow(/unknown workspace experience id "custom-workspace"/);
+
+  registry.registerWorkspaceExperience(projectExperience, 'owner-pack');
+  const ownerHandler = async () => Response.json({ owner: 'owner-pack' });
+  registry.registerWorkspaceExperienceApi(
+    { experienceId: 'custom-workspace', routes: [{ method: 'POST', path: '/search', handle: ownerHandler }] },
+    'owner-pack'
+  );
+
+  expect(registry.getWorkspaceExperienceApiHandler('custom-workspace', 'POST', '/search')).toBe(ownerHandler);
+});
+
 test('undeclared workspace-experience atoms are rejected during daemon atom loading', async () => {
   const registered: WorkspaceExperienceDefinition[] = [];
   const errors: { atomPack: string; error: unknown }[] = [];

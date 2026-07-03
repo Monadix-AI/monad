@@ -117,9 +117,24 @@ export const workspaceExperienceEntrySchema = z.object({
 });
 export type WorkspaceExperienceEntry = z.infer<typeof workspaceExperienceEntrySchema>;
 
+export const workspaceExperienceApiMethodSchema = z.enum(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']);
+export type WorkspaceExperienceApiMethod = z.infer<typeof workspaceExperienceApiMethodSchema>;
+
+export const workspaceExperienceApiRouteSchema = z.object({
+  method: workspaceExperienceApiMethodSchema,
+  path: z.string().min(1).regex(/^\//, 'workspace experience API route path must start with "/"')
+});
+export type WorkspaceExperienceApiRoute = z.infer<typeof workspaceExperienceApiRouteSchema>;
+
+export const workspaceExperienceApiSchema = z.object({
+  routes: z.array(workspaceExperienceApiRouteSchema)
+});
+export type WorkspaceExperienceApi = z.infer<typeof workspaceExperienceApiSchema>;
+
 export const workspaceExperienceDefinitionSchema = z.object({
   id: z.string().min(1),
   title: z.string().min(1),
+  api: workspaceExperienceApiSchema.optional(),
   icon: z.string().optional(),
   entry: workspaceExperienceEntrySchema
 });

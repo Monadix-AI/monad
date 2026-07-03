@@ -20,6 +20,7 @@
  *      and warns if its apiKey is empty.
  *   5. Initializes CodeGraph when the local machine has it installed and this checkout is unindexed.
  *   6. Prints a connection summary (daemon URL, data dir).
+ *   7. Regenerates checked-in/generated dev artifacts used by typecheck and local builds.
  *
  * The bootstrap body runs only when executed directly (import.meta.main); the pure
  * port helpers below are exported so setup-dev.test.ts can unit-test them without
@@ -476,9 +477,15 @@ async function main(): Promise<void> {
   log(`API key ${apiKey ? 'set' : 'NOT SET — add to config.init.json'}`);
   log('─────────────────────────────────────────');
 
-  // ── 6. Config schema ─────────────────────────────────────────────────────────
+  // ── 6. Generated dev artifacts ────────────────────────────────────────────────
   // `monad` is linked into node_modules/.bin by `bun install` (via apps/cli bin field).
   // Run the CLI with `bun monad <cmd>`, which resolves the workspace bin automatically.
+
+  await Bun.spawn(['bun', 'run', join(root, 'scripts/generate-codex-app-server-protocol.ts')], {
+    stdout: 'inherit',
+    stderr: 'inherit'
+  }).exited;
+  log('codex app-server      protocol generated');
 
   await Bun.spawn(['bun', 'run', join(root, 'packages/home/scripts/gen-config-schema.ts')], {
     stdout: 'inherit',

@@ -1,9 +1,23 @@
 import type { HookEvent } from '@monad/protocol';
-import type { Connector, HookDefinition, WorkspaceExperienceDefinition } from '@monad/sdk-atom';
+import type {
+  Connector,
+  HookDefinition,
+  WorkspaceExperienceApi,
+  WorkspaceExperienceApiHandler,
+  WorkspaceExperienceDefinition
+} from '@monad/sdk-atom';
 import type { Tool } from '@/capabilities/tools/types.ts';
 
 export interface RegisteredWorkspaceExperience extends WorkspaceExperienceDefinition {
   atomPackId?: string;
+}
+
+export interface RegisteredWorkspaceExperienceApiRoute {
+  atomPackId?: string;
+  experienceId: string;
+  handler: WorkspaceExperienceApiHandler;
+  method: string;
+  path: string;
 }
 
 /** Collects tools/connectors/hooks registered by loaded atom packs — the daemon's host sink for the
@@ -13,6 +27,7 @@ export class AtomPackRegistry {
   readonly connectors = new Map<string, Connector>();
   readonly hooks = new Map<HookEvent, HookDefinition[]>();
   readonly workspaceExperiences = new Map<string, RegisteredWorkspaceExperience>();
+  readonly workspaceExperienceApiRoutes = new Map<string, RegisteredWorkspaceExperienceApiRoute>();
   /** toolName → its source tag, so a rediscovery sweep can drop just the reloadable sources. */
   private readonly toolSources = new Map<string, string>();
   /** toolName → its specific origin name (atom-pack id / MCP server name), for per-agent atom
@@ -92,8 +107,50 @@ export class AtomPackRegistry {
     this.workspaceExperiences.set(experience.id, { ...experience, ...(atomPackId ? { atomPackId } : {}) });
   }
 
+  registerWorkspaceExperienceApi(api: WorkspaceExperienceApi, atomPackId?: string): void {
+    const experience = this.workspaceExperiences.get(api.experienceId);
+    if (!experience) {
+      throw new Error(`unknown workspace experience id "${api.experienceId}"`);
+    }
+    for (const route of api.routes) {
+      const normalized = normalizeWorkspaceExperienceApiRoute(route.method, route.path);
+      if (experience.atomPackId !== atomPackId) {
+        const owner = experience.atomPackId ?? 'builtin';
+        const next = atomPackId ?? 'builtin';
+        throw new Error(
+          `workspace experience API route "${normalized.method} ${normalized.path}" for "${api.experienceId}" from "${next}" is not owned by "${owner}"`
+        );
+      }
+      const existing = this.workspaceExperienceApiRoutes.get(`${api.experienceId}:${normalized.key}`);
+      if (existing) {
+        const current = existing.atomPackId ?? 'builtin';
+        const next = atomPackId ?? 'builtin';
+        throw new Error(
+          `duplicate workspace experience API route "${route.method} ${route.path}" for "${api.experienceId}" from "${next}" already registered by "${current}"`
+        );
+      }
+      this.workspaceExperienceApiRoutes.set(`${api.experienceId}:${normalized.key}`, {
+        ...(atomPackId ? { atomPackId } : {}),
+        experienceId: api.experienceId,
+        handler: route.handle,
+        method: normalized.method,
+        path: normalized.path
+      });
+    }
+  }
+
+  getWorkspaceExperienceApiHandler(
+    experienceId: string,
+    method: string,
+    path: string
+  ): WorkspaceExperienceApiHandler | undefined {
+    const normalized = normalizeWorkspaceExperienceApiRoute(method, path);
+    return this.workspaceExperienceApiRoutes.get(`${experienceId}:${normalized.key}`)?.handler;
+  }
+
   clearWorkspaceExperiences(): void {
     this.workspaceExperiences.clear();
+    this.workspaceExperienceApiRoutes.clear();
   }
 
   /** Drop all registered hooks. Used before a re-discovery sweep so a removed atom pack's hooks
@@ -102,4 +159,14 @@ export class AtomPackRegistry {
   clearHooks(): void {
     this.hooks.clear();
   }
+}
+
+function normalizeWorkspaceExperienceApiRoute(
+  method: string,
+  path: string
+): { key: string; method: string; path: string } {
+  const upperMethod = method.toUpperCase();
+  const pathname = path.startsWith('/') ? path : `/${path}`;
+  const normalizedPath = pathname.length > 1 ? pathname.replace(/\/+$/, '') : pathname;
+  return { key: `${upperMethod} ${normalizedPath}`, method: upperMethod, path: normalizedPath };
 }
