@@ -480,6 +480,7 @@ function NativeCliSettingsDialogBody({
   variant?: 'base' | 'framed' | 'compact' | 'quiet';
   onSave: (agent: NativeCliAgentView) => Promise<void>;
 }) {
+  const t = useT();
   const headerClass = cn(
     'border-b px-5 pr-12',
     variant === 'compact' ? 'py-3' : 'py-4',

@@ -383,7 +383,7 @@ export function ModelHoverCardBody({ model }: { model: ModelInfo | undefined }) 
         <div className="flex select-none flex-wrap items-center gap-1.5 border-border/60 border-t pt-2.5">
           <div className="flex flex-wrap items-center gap-1">
             <ModalityGroup
-              label={t('web.common.input')}
+              label="Input"
               names={inputMods}
             />
             {inputMods.length > 0 && outputMods.length > 0 && (
@@ -393,7 +393,7 @@ export function ModelHoverCardBody({ model }: { model: ModelInfo | undefined }) 
               />
             )}
             <ModalityGroup
-              label={t('web.common.output')}
+              label="Output"
               names={outputMods}
             />
           </div>

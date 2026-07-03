@@ -389,6 +389,7 @@ function ContextUsageButton({
     used: number;
   };
 }): React.ReactElement {
+  const t = useT();
   const circumference = 2 * Math.PI * 10;
   const dashOffset = circumference * (1 - percent / 100);
 

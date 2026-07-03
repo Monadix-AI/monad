@@ -122,7 +122,7 @@ describe('/workdir (shared working folder)', () => {
     const none = await dispatchCommand(r, '/workdir', (a) =>
       fakeCtx(a, { t: zhT, getWorkdir: async () => ({ path: undefined }) })
     );
-    expect(none?.message).toBe('未设置工作文件夹——使用默认工作区。');
+    expect(none?.message).toBe('未设置工作文件夹——使用默认 workspace。');
 
     const set = await dispatchCommand(r, '/workdir /tmp/project', (a) =>
       fakeCtx(a, { t: zhT, setWorkdir: async (_sid, path) => ({ path }) })

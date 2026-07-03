@@ -37,8 +37,8 @@ test('project member settings use dialogs instead of inline expansion panels', (
 test('system message observation action uses observe semantics', () => {
   const transcriptSource = readSource('features/workplace/activity/ChatTranscript.tsx');
 
-  expect(transcriptSource).toContain('aria-label="Observe"');
-  expect(transcriptSource).toContain('title="Observe"');
+  expect(transcriptSource).toContain("aria-label={t('web.workplace.observe')}");
+  expect(transcriptSource).toContain("title={t('web.workplace.observe')}");
   expect(transcriptSource).not.toContain('<span>Follow</span>');
 });
 

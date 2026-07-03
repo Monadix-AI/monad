@@ -10,7 +10,7 @@
   "cmd.compact.done": "🗜️ 上下文已压缩。",
   "cmd.compact.noop": "还没有可压缩的内容——最近上下文仍会按原文保留。",
   "cmd.handoff.done": "✅ 上下文已总结，新对话已开启。",
-  "cmd.handoff.desc": "总结当前对话并在新 session 中继续",
+  "cmd.handoff.desc": "总结当前对话并在新会话中继续",
   "cmd.consolidate.done": "🧠 已整理到 L{{level}}：{{scopes}} 个事实范围，+{{nodes}} 个实体/{{edges}} 条关系，{{laws}} 条律。",
   "cmd.why.desc": "解释 agent 为何相信某事，并追溯到它的记忆来源",
   "cmd.why.usage": "用法：/why <想让我解释的内容>",
