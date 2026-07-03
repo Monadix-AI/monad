@@ -44,6 +44,19 @@ export type AtomPackManifest = AtomPackManifestWire;
 
 export type AtomPackLog = (level: 'info' | 'warn' | 'error', msg: string, fields?: Record<string, unknown>) => void;
 
+export type WorkspaceExperienceApiHandler = (request: Request) => Response | Promise<Response>;
+
+export interface WorkspaceExperienceApiRoute {
+  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+  path: string;
+  handle: WorkspaceExperienceApiHandler;
+}
+
+export interface WorkspaceExperienceApi {
+  experienceId: string;
+  routes: WorkspaceExperienceApiRoute[];
+}
+
 /** The host facade passed to register(). Every registerX is gated by manifest.atoms.
  *  skill/mcp/locale are file-based and do NOT appear here — they are installed at the
  *  atom-pack-manager level and discovered from disk at daemon startup.
@@ -62,6 +75,7 @@ export interface AtomPackContext {
    *  selects one per platform at boot — the LLM-facing tools (code_execute/…) are unchanged. */
   registerSandbox(launcher: SandboxLauncher): void;
   registerWorkspaceExperience(experience: WorkspaceExperienceDefinition): void;
+  registerWorkspaceExperienceApi(api: WorkspaceExperienceApi): void;
   log: AtomPackLog;
 }
 
@@ -86,6 +100,8 @@ export interface ManifestAtomPackHost {
   registerSandbox?(launcher: SandboxLauncher): void;
   /** Optional: hosts that don't support workspace experiences omit it; registration then throws. */
   registerWorkspaceExperience?(experience: WorkspaceExperienceDefinition): void;
+  /** Optional: hosts that don't support workspace experience APIs omit it; registration then throws. */
+  registerWorkspaceExperienceApi?(api: WorkspaceExperienceApi): void;
   log?: AtomPackLog;
 }
 
@@ -100,6 +116,7 @@ export function defineAtomPack(spec: {
   providers?: ModelProvider[];
   hooks?: HookDefinition[];
   sandboxes?: SandboxLauncher[];
+  workspaceExperienceApis?: WorkspaceExperienceApi[];
   workspaceExperiences?: WorkspaceExperienceDefinition[];
 }): ManifestAtomPack {
   return {
@@ -113,6 +130,7 @@ export function defineAtomPack(spec: {
       for (const hook of spec.hooks ?? []) ctx.registerHook(hook);
       for (const sandbox of spec.sandboxes ?? []) ctx.registerSandbox(sandbox);
       for (const experience of spec.workspaceExperiences ?? []) ctx.registerWorkspaceExperience(experience);
+      for (const api of spec.workspaceExperienceApis ?? []) ctx.registerWorkspaceExperienceApi(api);
     }
   };
 }
@@ -174,6 +192,13 @@ export async function loadManifestAtomPack(
         throw new Error(`host does not accept workspace experiences (atom pack "${name}")`);
       }
       host.registerWorkspaceExperience(experience);
+    },
+    registerWorkspaceExperienceApi: (api) => {
+      gate('workspace-experience');
+      if (!host.registerWorkspaceExperienceApi) {
+        throw new Error(`host does not accept workspace experience APIs (atom pack "${name}")`);
+      }
+      host.registerWorkspaceExperienceApi(api);
     },
     log: host.log ?? (() => {})
   };

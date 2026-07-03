@@ -29,9 +29,12 @@ import {
 import { Elysia } from 'elysia';
 import { z } from 'zod';
 
+import { HandlerError } from '@/handlers/handler-error.ts';
+
 // HTTP-only surface: contract declared inline; reusable wire schemas come from @monad/protocol.
 const packParams = z.object({ name: z.string() });
 const assetParams = z.object({ name: z.string(), '*': z.string() });
+const workspaceExperienceApiParams = z.object({ experienceId: z.string(), '*': z.string() });
 
 export function createAtomsController(handlers: ReturnType<typeof createDaemonHandlers>) {
   return new Elysia({ tags: ['http-only'] })
@@ -49,6 +52,28 @@ export function createAtomsController(handlers: ReturnType<typeof createDaemonHa
         description: 'Returns workspace-experience atoms registered by loaded atom packs.'
       }
     })
+    .all(
+      '/atoms/workspace-experiences/:experienceId/api/*',
+      async ({ params, request }) => {
+        const path = `/${params['*'] ?? ''}`;
+        const handler = handlers.atoms.getWorkspaceExperienceApiHandler(params.experienceId, request.method, path);
+        if (!handler) {
+          throw new HandlerError(
+            'not_found',
+            `workspace experience API route not found: ${request.method} ${params.experienceId}${path}`
+          );
+        }
+        return handler(request);
+      },
+      {
+        params: workspaceExperienceApiParams,
+        detail: {
+          summary: 'Dispatch a workspace experience API request',
+          description:
+            'Fixed daemon endpoint that routes to the registered API handler for a workspace-experience atom.'
+        }
+      }
+    )
     .get(
       '/atoms/:name/assets/*',
       async ({ params }) => {

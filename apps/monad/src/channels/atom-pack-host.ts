@@ -19,6 +19,7 @@ import type {
   ManifestAtomPackHost,
   ModelProvider,
   SandboxLauncher,
+  WorkspaceExperienceApi,
   WorkspaceExperienceDefinition
 } from '@monad/sdk-atom';
 
@@ -42,6 +43,8 @@ interface ChannelAtomPackHostOptions {
   onSandbox?: (launcher: SandboxLauncher) => void;
   /** Receives each workspace experience an atom pack registers (atom-kind-gated like the others). */
   onWorkspaceExperience?: (experience: WorkspaceExperienceDefinition, atomPackName: string) => void;
+  /** Receives each workspace experience API route set an atom pack registers (same atom-kind gate). */
+  onWorkspaceExperienceApi?: (api: WorkspaceExperienceApi, atomPackName: string) => void;
   /** Name of the atom pack currently being loaded — used to attribute collisions (same-pack dup vs
    *  cross-pack). The loader updates the source before each pack; absent → '' (single-pack callers). */
   currentAtomPack?: () => string;
@@ -117,6 +120,7 @@ function createChannelAtomPackHost(opts: ChannelAtomPackHostOptions = {}): {
     },
     registerHook: (h) => opts.onHook?.(h),
     registerSandbox: (s) => opts.onSandbox?.(s),
+    registerWorkspaceExperienceApi: (api) => opts.onWorkspaceExperienceApi?.(api, pack()),
     registerWorkspaceExperience: (experience) => opts.onWorkspaceExperience?.(experience, pack()),
     log: opts.log
   };
@@ -204,6 +208,7 @@ export async function loadChannelAtomPacks(
     onHook: opts.onHook,
     onSandbox: opts.onSandbox,
     onWorkspaceExperience: opts.onWorkspaceExperience,
+    onWorkspaceExperienceApi: opts.onWorkspaceExperienceApi,
     reservedProviderTypes: opts.reservedProviderTypes,
     channelPins: opts.channelPins,
     connectorPins: opts.connectorPins,

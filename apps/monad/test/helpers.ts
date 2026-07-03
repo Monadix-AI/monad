@@ -2,7 +2,15 @@
 // mock model (no network), plus a tiny SSE reader for the event stream.
 
 import type { MonadPaths } from '@monad/home';
-import type { Event, Hooks, SessionId, SkillListInstance, SkillListItem } from '@monad/protocol';
+import type {
+  Event,
+  Hooks,
+  SessionId,
+  SkillListInstance,
+  SkillListItem,
+  WorkspaceExperienceDefinition
+} from '@monad/protocol';
+import type { WorkspaceExperienceApiHandler } from '@monad/sdk-atom';
 import type { PolicyEngine } from '@/agent/approvals/engine.ts';
 import type { ModelRouter } from '@/agent/index.ts';
 import type { Tool } from '@/capabilities/tools/types.ts';
@@ -195,6 +203,14 @@ export function buildHandlers(
     nativeCliAuthHeartbeatTimeoutMs?: number;
     /** Override the loopback URL injected into managed native CLI runtimes. */
     nativeCliServerUrl?: string;
+    /** Dynamic workspace experience API route resolver for atom HTTP tests. */
+    getWorkspaceExperienceApiHandler?: (
+      experienceId: string,
+      method: string,
+      path: string
+    ) => WorkspaceExperienceApiHandler | undefined;
+    /** Dynamic workspace experience descriptors for atom HTTP tests. */
+    getWorkspaceExperiences?: () => WorkspaceExperienceDefinition[];
   }
 ) {
   const store = opts?.store ?? createStore();
@@ -288,6 +304,8 @@ export function buildHandlers(
       }),
       getLaws: async () => ({ laws: [] }),
       getUpgradeInfo: opts?.getUpgradeInfo,
+      getWorkspaceExperienceApiHandler: opts?.getWorkspaceExperienceApiHandler,
+      getWorkspaceExperiences: opts?.getWorkspaceExperiences,
       memorySetBackend: async () => {},
       memorySetMem0Models: async () => {},
       memorySetGraph: async () => {},

@@ -118,6 +118,7 @@ test('listWorkspaceExperiences returns the daemon registry snapshot', async () =
         atomPackId: 'canvas-pack',
         id: 'canvas',
         title: 'Canvas',
+        api: { routes: [{ method: 'POST', path: '/search' }] },
         entry: { type: 'web-component', module: './dist/canvas.js', tagName: 'monad-canvas' }
       },
       {
@@ -134,6 +135,7 @@ test('listWorkspaceExperiences returns the daemon registry snapshot', async () =
       {
         id: 'canvas',
         title: 'Canvas',
+        api: { routes: [{ method: 'POST', path: '/search' }] },
         entry: {
           type: 'web-component',
           module: '/v1/atoms/canvas-pack/assets/dist/canvas.js',

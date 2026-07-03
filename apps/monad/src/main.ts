@@ -397,6 +397,7 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
         commandRegistry.registerBuiltin(cmd as Parameters<typeof commandRegistry.registerBuiltin>[0]),
       onProvider: (p) => modelService.registry.register(p),
       onHook: (h) => registry.registerHook(h),
+      onWorkspaceExperienceApi: (api, atomPackId) => registry.registerWorkspaceExperienceApi(api, atomPackId),
       // Built-in sandbox launchers (Seatbelt/Landlock/Low-Integrity) register into the launcher
       // registry; finalizeSandboxLauncher() below picks one per platform. Boot-only: not wired into
       // the rediscovery sweep, so a hot-installed launcher takes effect on the next daemon start.
@@ -419,6 +420,7 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
       // An atom pack declaring the `hook` capability registers lifecycle hooks into the registry,
       // which the HookRunner reads alongside config.json command hooks.
       onHook: (h) => registry.registerHook(h),
+      onWorkspaceExperienceApi: (api, atomPackId) => registry.registerWorkspaceExperienceApi(api, atomPackId),
       // A discovered pack declaring the `sandbox` capability (e.g. a cloud e2b/Vercel launcher)
       // registers into the launcher registry, preferred over built-ins on select.
       onSandbox: (l) => registerSandboxLauncher(l, 'atom')
@@ -842,6 +844,8 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
     mcpReconnect,
     rediscoverAtomPacks: () => Promise.all([rediscoverAtomPacks(), reloadSkills()]).then(() => {}),
     getAtomConflicts: () => atomConflicts,
+    getWorkspaceExperienceApiHandler: (experienceId, method, path) =>
+      registry.getWorkspaceExperienceApiHandler(experienceId, method, path),
     getWorkspaceExperiences: () => [...registry.workspaceExperiences.values()],
     reindexEmbeddings: () => {
       const cleared = store.clearEmbeddings();

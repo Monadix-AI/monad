@@ -27,6 +27,7 @@ import type {
   ValidateSkillsResponse,
   WorkspaceExperienceDefinition
 } from '@monad/protocol';
+import type { WorkspaceExperienceApiHandler } from '@monad/sdk-atom';
 import type { AtomConflict } from '@/atoms/resolve.ts';
 import type { RegisteredWorkspaceExperience } from '@/handlers/atom-pack/atom-pack-registry.ts';
 import type { ConfigBus } from '@/services/config-bus.ts';
@@ -81,6 +82,12 @@ export interface AtomPacksDeps {
   getConflicts?: () => AtomConflict[];
   /** Runtime-registered workspace experiences from loaded atom packs. */
   getWorkspaceExperiences?: () => RegisteredWorkspaceExperience[];
+  /** Runtime-registered workspace experience API route resolver from loaded atom packs. */
+  getWorkspaceExperienceApiHandler?: (
+    experienceId: string,
+    method: string,
+    path: string
+  ) => WorkspaceExperienceApiHandler | undefined;
   configBus?: ConfigBus;
   modelService?: ModelService;
 }
@@ -539,6 +546,14 @@ export function createAtomPacksModule(deps: AtomPacksDeps) {
           return publicExperience ? [publicExperience] : [];
         })
       };
+    },
+
+    getWorkspaceExperienceApiHandler(
+      experienceId: string,
+      method: string,
+      path: string
+    ): WorkspaceExperienceApiHandler | undefined {
+      return deps.getWorkspaceExperienceApiHandler?.(experienceId, method, path);
     },
 
     async getAtomPackAsset({ name, path }: { name: string; path: string }): Promise<{

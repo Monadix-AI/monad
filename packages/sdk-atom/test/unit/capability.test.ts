@@ -5,6 +5,7 @@ import type {
   HookDefinition,
   ManifestAtomPack,
   ManifestAtomPackHost,
+  WorkspaceExperienceApi,
   WorkspaceExperienceDefinition
 } from '../../src/index.ts';
 
@@ -30,22 +31,26 @@ function collectingHost(): ManifestAtomPackHost & {
   connectors: Connector[];
   channels: ChannelDefinition[];
   hooks: HookDefinition[];
+  workspaceExperienceApis: WorkspaceExperienceApi[];
   workspaceExperiences: WorkspaceExperienceDefinition[];
 } {
   const connectors: Connector[] = [];
   const channels: ChannelDefinition[] = [];
   const hooks: HookDefinition[] = [];
+  const workspaceExperienceApis: WorkspaceExperienceApi[] = [];
   const workspaceExperiences: WorkspaceExperienceDefinition[] = [];
   return {
     connectors,
     channels,
     hooks,
+    workspaceExperienceApis,
     workspaceExperiences,
     registerConnector: (c) => connectors.push(c),
     registerChannel: (c) => channels.push(c as ChannelDefinition),
     registerCommand: () => {},
     registerMessageType: () => {},
     registerHook: (h) => hooks.push(h),
+    registerWorkspaceExperienceApi: (api) => workspaceExperienceApis.push(api),
     registerWorkspaceExperience: (experience) => workspaceExperiences.push(experience)
   };
 }
@@ -56,11 +61,24 @@ const dummyConnector: Connector = { name: 'c', scopes: [], start: async () => {}
 const dummyWorkspaceExperience: WorkspaceExperienceDefinition = {
   id: 'custom-workspace',
   title: 'Custom workspace',
+  api: {
+    routes: [{ method: 'POST', path: '/search' }]
+  },
   entry: {
     module: './workspace-experience.js',
     tagName: 'custom-workspace',
     type: 'web-component'
   }
+};
+const dummyWorkspaceExperienceApi: WorkspaceExperienceApi = {
+  experienceId: 'custom-workspace',
+  routes: [
+    {
+      method: 'POST',
+      path: '/search',
+      handle: async () => Response.json({ ok: true })
+    }
+  ]
 };
 const dummyChannelAtom = defineChannel({
   type: 'echo',
@@ -168,20 +186,34 @@ test('a declared `workspace-experience` atom routes to the host', async () => {
   const host = collectingHost();
   const pack = defineAtomPack({
     manifest: manifest({ atoms: ['workspace-experience'] }),
+    workspaceExperienceApis: [dummyWorkspaceExperienceApi],
     workspaceExperiences: [dummyWorkspaceExperience]
   });
   await loadManifestAtomPack(pack, host);
   expect(host.workspaceExperiences).toEqual([dummyWorkspaceExperience]);
+  expect(host.workspaceExperienceApis).toEqual([dummyWorkspaceExperienceApi]);
 });
 
 test('registering a workspace experience WITHOUT the atom kind throws', async () => {
   const host = collectingHost();
   const pack = defineAtomPack({
     manifest: manifest({ name: 'sneaky', atoms: [] }),
+    workspaceExperienceApis: [dummyWorkspaceExperienceApi],
     workspaceExperiences: [dummyWorkspaceExperience]
   });
   await expect(loadManifestAtomPack(pack, host)).rejects.toBeInstanceOf(UndeclaredAtomError);
   expect(host.workspaceExperiences).toHaveLength(0);
+  expect(host.workspaceExperienceApis).toHaveLength(0);
+});
+
+test('registering a workspace experience API WITHOUT the atom kind throws', async () => {
+  const host = collectingHost();
+  const pack = defineAtomPack({
+    manifest: manifest({ name: 'sneaky-api', atoms: [] }),
+    workspaceExperienceApis: [dummyWorkspaceExperienceApi]
+  });
+  await expect(loadManifestAtomPack(pack, host)).rejects.toBeInstanceOf(UndeclaredAtomError);
+  expect(host.workspaceExperienceApis).toHaveLength(0);
 });
 
 test('defineWorkspaceExperience preserves the descriptor and exposes the update event name', () => {

@@ -104,3 +104,8 @@ test('postCheckoutHookText runs monad bootstrap before lefthook', () => {
   expect(hook.indexOf('scripts/git-hooks/post-checkout.sh')).toBeLessThan(hook.indexOf('lefthook run "post-checkout"'));
   expect(hook).toContain('$root/node_modules/.bin/lefthook');
 });
+
+test('setup-dev regenerates Codex app-server protocol artifacts', async () => {
+  const source = await Bun.file(new URL('../../setup-dev.ts', import.meta.url)).text();
+  expect(source).toContain('scripts/generate-codex-app-server-protocol.ts');
+});
