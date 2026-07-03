@@ -47,13 +47,16 @@ const gitCommonDir = await Bun.$`git rev-parse --git-common-dir`
 const mainRoot = gitCommonDir ? resolve(gitCommonDir, '..') : ROOT;
 
 // Bun installs workspace-specific deps in each workspace's own node_modules rather than hoisting
-// all of them to the root. Build a list of all candidate node_modules dirs to search.
-const nmDirs = [
-  join(mainRoot, 'node_modules'),
+// all of them to the root. Build a list of all candidate node_modules dirs to search. A worktree
+// can also have its own independently-installed node_modules (e.g. a dependency added only there),
+// so search both roots rather than assuming everything is hoisted to the main checkout.
+const roots = mainRoot === ROOT ? [mainRoot] : [mainRoot, ROOT];
+const nmDirs = roots.flatMap((root) => [
+  join(root, 'node_modules'),
   ...Object.keys(lockfile.workspaces)
     .filter((k) => k !== '')
-    .map((k) => join(mainRoot, k, 'node_modules'))
-];
+    .map((k) => join(root, k, 'node_modules'))
+]);
 
 async function readPkgJson(pkgName: string): Promise<Record<string, unknown> | null> {
   const segments = pkgName.split('/');
@@ -66,6 +69,55 @@ async function readPkgJson(pkgName: string): Promise<Record<string, unknown> | n
   }
   return null;
 }
+
+// Curated DiceBear avatar styles offered as a profile picture choice — must match AVATAR_STYLES in
+// packages/protocol/src/avatar.ts (which derives its display list from this generated file).
+const AVATAR_STYLES: ReadonlyArray<readonly [string, string]> = [
+  ['notionists', 'Notionists'],
+  ['avataaars', 'Avataaars'],
+  ['lorelei', 'Lorelei'],
+  ['micah', 'Micah'],
+  ['open-peeps', 'Open Peeps'],
+  ['personas', 'Personas'],
+  ['adventurer', 'Adventurer'],
+  ['big-smile', 'Big Smile'],
+  ['bottts', 'Bottts'],
+  ['thumbs', 'Thumbs']
+];
+
+interface DicebearStyleMeta {
+  license?: { name?: string; url?: string };
+  creator?: { name?: string; url?: string };
+  source?: { name?: string; url?: string };
+}
+
+async function readStyleMeta(slug: string): Promise<DicebearStyleMeta | null> {
+  for (const nmDir of nmDirs) {
+    try {
+      const json = await Bun.file(join(nmDir, '@dicebear', 'styles', 'dist', `${slug}.min.json`)).json();
+      return (json.meta as DicebearStyleMeta) ?? {};
+    } catch {
+      // not in this node_modules — try next
+    }
+  }
+  return null;
+}
+
+const avatarStyles = await Promise.all(
+  AVATAR_STYLES.map(async ([slug, label]) => {
+    const meta = (await readStyleMeta(slug)) ?? {};
+    return {
+      slug,
+      label,
+      creator: meta.creator?.name ?? 'Unknown',
+      ...(meta.creator?.url ? { creatorUrl: meta.creator.url } : {}),
+      source: meta.source?.name ?? label,
+      ...(meta.source?.url ? { sourceUrl: meta.source.url } : {}),
+      license: meta.license?.name ?? 'Unknown',
+      licenseUrl: meta.license?.url ?? ''
+    };
+  })
+);
 
 const entries: Array<{ name: string; version: string; license: string; homepage?: string; author?: string }> = [];
 
@@ -89,9 +141,9 @@ await Promise.all(
 
 entries.sort((a, b) => a.name.localeCompare(b.name));
 
-const outDir = join(ROOT, 'apps/monad/src/generated');
+const outDir = join(ROOT, 'apps/monad/generated');
 await mkdir(outDir, { recursive: true });
-await Bun.write(join(outDir, 'licenses.json'), `${JSON.stringify({ packages: entries }, null, 2)}\n`);
+await Bun.write(join(outDir, 'licenses.json'), `${JSON.stringify({ packages: entries, avatarStyles }, null, 2)}\n`);
 process.stdout.write(
-  `[generate-licenses] ${entries.length} production packages → apps/monad/src/generated/licenses.json\n`
+  `[generate-licenses] ${entries.length} production packages, ${avatarStyles.length} avatar styles → apps/monad/generated/licenses.json\n`
 );

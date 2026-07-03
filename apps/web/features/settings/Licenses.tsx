@@ -12,12 +12,49 @@ interface Props {
   onClose: () => void;
 }
 
+interface LicenseRowProps {
+  name: string;
+  subtitle: string;
+  badge: string;
+  linkUrl?: string;
+  linkLabel: string;
+}
+
+function LicenseRow({ name, subtitle, badge, linkUrl, linkLabel }: LicenseRowProps) {
+  return (
+    <div className="licenses-row">
+      <div className="licenses-package flex min-w-0 flex-col">
+        <span className="licenses-name truncate font-mono text-sm">{name}</span>
+        <span className="licenses-version text-muted-foreground text-xs">{subtitle}</span>
+      </div>
+      <div className="licenses-meta flex shrink-0 items-center gap-2">
+        <span className="licenses-badge">{badge}</span>
+        {linkUrl && (
+          <a
+            aria-label={linkLabel}
+            className="licenses-link"
+            href={linkUrl}
+            rel="noreferrer"
+            target="_blank"
+          >
+            <HugeiconsIcon
+              className="size-3.5"
+              icon={ExternalLinkIcon}
+            />
+          </a>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function LicensesSettings({ onClose }: Props) {
   const t = useT();
   const { data, isLoading } = useListLicensesQuery();
   const [search, setSearch] = useState('');
 
   const packages = data?.packages ?? [];
+  const avatarStyles = data?.avatarStyles ?? [];
   const filtered = search
     ? packages.filter(
         (p) =>
@@ -33,32 +70,14 @@ export function LicensesSettings({ onClose }: Props) {
     ) : (
       <div className="licenses-list">
         {filtered.map((pkg) => (
-          <div
-            className="licenses-row"
+          <LicenseRow
+            badge={pkg.license}
             key={pkg.name}
-          >
-            <div className="licenses-package flex min-w-0 flex-col">
-              <span className="licenses-name truncate font-mono text-sm">{pkg.name}</span>
-              <span className="licenses-version text-muted-foreground text-xs">{pkg.version}</span>
-            </div>
-            <div className="licenses-meta flex shrink-0 items-center gap-2">
-              <span className="licenses-badge">{pkg.license}</span>
-              {pkg.homepage && (
-                <a
-                  aria-label={`${pkg.name} homepage`}
-                  className="licenses-link"
-                  href={pkg.homepage}
-                  rel="noreferrer"
-                  target="_blank"
-                >
-                  <HugeiconsIcon
-                    className="size-3.5"
-                    icon={ExternalLinkIcon}
-                  />
-                </a>
-              )}
-            </div>
-          </div>
+            linkLabel={`${pkg.name} homepage`}
+            linkUrl={pkg.homepage}
+            name={pkg.name}
+            subtitle={pkg.version}
+          />
         ))}
       </div>
     );
@@ -96,7 +115,28 @@ export function LicensesSettings({ onClose }: Props) {
         />
       </div>
 
-      <div className="licenses-scroll min-h-0 flex-1 overflow-y-auto px-6 pb-6">{renderLicenses()}</div>
+      <div className="licenses-scroll min-h-0 flex-1 overflow-y-auto px-6 pb-6">
+        {renderLicenses()}
+
+        <div className="mt-6 flex flex-col gap-3 border-t pt-4">
+          <div>
+            <span className="font-semibold text-sm">{t('web.licenses.avatarStylesTitle')}</span>
+            <p className="text-muted-foreground text-sm">{t('web.licenses.avatarStylesDesc')}</p>
+          </div>
+          <div className="licenses-list">
+            {avatarStyles.map((credit) => (
+              <LicenseRow
+                badge={credit.license}
+                key={credit.slug}
+                linkLabel={`${credit.label} license`}
+                linkUrl={credit.licenseUrl}
+                name={credit.label}
+                subtitle={t('web.licenses.avatarStyleCreator', { creator: credit.creator })}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

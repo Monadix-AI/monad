@@ -147,7 +147,12 @@ function fakeClient(handlers: Record<string, Handler> = {}): MonadClient {
             put: (body: unknown) => resolveMut('setToolBackends', body)
           },
           profile: {
-            get: () => resolve('getProfileSettings', '$raw', { displayName: 'Operator', avatarDataUrl: null }),
+            get: () =>
+              resolve('getProfileSettings', '$raw', {
+                displayName: 'Operator',
+                avatarDataUrl: null,
+                avatarStyle: 'notionists'
+              }),
             put: (body: unknown) => resolve('setProfileSettings', '$raw', body, body)
           },
           model: {
@@ -944,7 +949,7 @@ test('setOpenaiCompat: writes config and invalidates OpenaiCompat tag', async ()
 });
 
 test('getProfileSettings: fetches user profile settings', async () => {
-  const profile = { displayName: 'Zeke', avatarDataUrl: 'data:image/png;base64,ZmFrZQ==' };
+  const profile = { displayName: 'Zeke', avatarDataUrl: 'data:image/png;base64,ZmFrZQ==', avatarStyle: 'notionists' };
   const client = fakeClient({ getProfileSettings: handler('$raw', async () => profile) });
   const store = createMonadStore({ client });
 
@@ -955,11 +960,11 @@ test('getProfileSettings: fetches user profile settings', async () => {
 test('setProfileSettings: writes display name and avatar through the profile settings endpoint', async () => {
   let getCalls = 0;
   let written: unknown;
-  const next = { displayName: 'Zeke', avatarDataUrl: null };
+  const next = { displayName: 'Zeke', avatarDataUrl: null, avatarStyle: 'notionists' };
   const client = fakeClient({
     getProfileSettings: handler('$raw', async () => {
       getCalls++;
-      return { displayName: 'Operator', avatarDataUrl: null };
+      return { displayName: 'Operator', avatarDataUrl: null, avatarStyle: 'notionists' };
     }),
     setProfileSettings: handler('$raw', async (body: unknown) => {
       written = body;

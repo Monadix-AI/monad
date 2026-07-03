@@ -7,7 +7,6 @@ import { avatarCacheKey } from '@monad/protocol';
 
 import { createAvatarCacheController } from '@/transports/http/avatar-cache.ts';
 
-const realFetch = globalThis.fetch;
 const realHome = Bun.env.MONAD_HOME;
 
 let home: string;
@@ -18,18 +17,11 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  globalThis.fetch = realFetch;
   Bun.env.MONAD_HOME = realHome;
   rmSync(home, { recursive: true, force: true });
 });
 
 test('avatar cache only writes on explicit save warmup', async () => {
-  let fetches = 0;
-  globalThis.fetch = (async () => {
-    fetches += 1;
-    return new Response('<svg>avatar</svg>', { headers: { 'content-type': 'image/svg+xml' } });
-  }) as unknown as typeof fetch;
-
   const app = createAvatarCacheController({} as never);
   const seed = 'user:Operator';
   const key = avatarCacheKey(seed);
@@ -39,15 +31,48 @@ test('avatar cache only writes on explicit save warmup', async () => {
   const preview = await app.handle(new Request(readUrl));
   expect(preview.status).toBe(200);
   expect(preview.headers.get('cache-control')).toBe('public, max-age=31536000, immutable');
-  expect(await preview.text()).toBe('<svg>avatar</svg>');
+  const svg = await preview.text();
+  expect(svg).toContain('<svg');
   expect(existsSync(cachePath)).toBe(false);
 
   const warm = await app.handle(new Request(`${readUrl}&write=1`));
   expect(warm.status).toBe(200);
-  expect(await readFile(cachePath, 'utf8')).toBe('<svg>avatar</svg>');
+  expect(await readFile(cachePath, 'utf8')).toBe(svg);
 
   const cached = await app.handle(new Request(readUrl));
   expect(cached.status).toBe(200);
   expect(cached.headers.get('cache-control')).toBe('public, max-age=31536000, immutable');
-  expect(fetches).toBe(2);
+  expect(await cached.text()).toBe(svg);
+});
+
+test('avatar rendering is deterministic per seed and style', async () => {
+  const app = createAvatarCacheController({} as never);
+  const seed = 'user:Renamed';
+  const style = 'avataaars';
+  const key = avatarCacheKey(seed, style);
+  const url = `http://localhost/api/avatar-cache/${key}.svg?seed=${encodeURIComponent(seed)}&style=${style}`;
+
+  const first = await app.handle(new Request(url));
+  const second = await app.handle(new Request(url));
+  expect(first.status).toBe(200);
+  expect(await first.text()).toBe(await second.text());
+
+  const defaultKey = avatarCacheKey(seed);
+  expect(defaultKey).not.toBe(key);
+});
+
+test('rejects a key that does not match the seed/style hash', async () => {
+  const app = createAvatarCacheController({} as never);
+  const res = await app.handle(new Request('http://localhost/api/avatar-cache/bogus.svg?seed=user:Operator'));
+  expect(res.status).toBe(400);
+});
+
+test('falls back to the default style for an unknown style param', async () => {
+  const app = createAvatarCacheController({} as never);
+  const seed = 'user:Operator';
+  const key = avatarCacheKey(seed);
+  const url = `http://localhost/api/avatar-cache/${key}.svg?seed=${encodeURIComponent(seed)}&style=not-a-real-style`;
+
+  const res = await app.handle(new Request(url));
+  expect(res.status).toBe(200);
 });

@@ -8,7 +8,8 @@
     },
     "user": {
       "default": {
-        "avatarDataUrl": null
+        "avatarDataUrl": null,
+        "avatarStyle": "notionists"
       },
       "type": "object",
       "properties": {
@@ -24,10 +25,27 @@
               "type": "null"
             }
           ]
+        },
+        "avatarStyle": {
+          "default": "notionists",
+          "type": "string",
+          "enum": [
+            "notionists",
+            "avataaars",
+            "lorelei",
+            "micah",
+            "open-peeps",
+            "personas",
+            "adventurer",
+            "big-smile",
+            "bottts",
+            "thumbs"
+          ]
         }
       },
       "required": [
-        "avatarDataUrl"
+        "avatarDataUrl",
+        "avatarStyle"
       ],
       "additionalProperties": false
     },

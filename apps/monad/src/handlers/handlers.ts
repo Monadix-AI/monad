@@ -60,7 +60,7 @@ import { createToolBackendsModule } from '@/handlers/settings/tool-backends/inde
 import { createTranscriptProjector } from '@/handlers/transcript/projector.ts';
 import { resolveNativeCliAgentEnv } from '@/services/native-cli/env.ts';
 import { NativeCliHost } from '@/services/native-cli/host.ts';
-import licensesData from '../generated/licenses.json';
+import licensesData from '../../generated/licenses.json';
 
 export { HandlerError } from '@/handlers/handler-error.ts';
 
