@@ -7,7 +7,10 @@ import dynamic from 'next/dynamic';
 
 import { AgentsPanel } from './AgentsPanel';
 import { Orchestration } from './Orchestration';
+import { RuntimeOverview } from './RuntimeOverview';
+import { SafetyAndHooks } from './SafetyAndHooks';
 import { SandboxDefaults } from './SandboxDefaults';
+import { SwarmOverview, SwarmPlaceholder } from './SwarmOverview';
 import { Usage } from './Usage';
 
 export interface StudioSectionProps {
@@ -85,6 +88,7 @@ function UsageSection() {
 
 export const STUDIO_SECTION_COMPONENTS: Record<StudioSectionId, StudioSectionComponent> = {
   acpAgents: ThirdPartyAgentsSettings,
+  acpDelegates: ThirdPartyAgentsSettings,
   agents: AgentsPanel,
   approvals: ApprovalsSettings,
   atoms: AtomsSettings,
@@ -97,11 +101,48 @@ export const STUDIO_SECTION_COMPONENTS: Record<StudioSectionId, StudioSectionCom
   mem0: Mem0MemorySettings,
   memory: MemorySettings,
   models: ModelSettings,
-  nativeCliAgents: ThirdPartyAgentsSettings,
+  nativeCliAgents: NativeCliAgentsSection,
   orchestration: OrchestrationSection,
+  projectMembers: ProjectMembersSection,
+  runtime: RuntimeOverview,
   sandbox: SandboxSection,
+  safety: SafetyAndHooks,
   skills: SkillsSettings,
+  swarm: SwarmOverview,
+  swarmTasks: SwarmTasksSection,
   thirdPartyAgents: ThirdPartyAgentsSettings,
   tools: CapabilitiesSettings,
-  usage: UsageSection
+  usage: UsageSection,
+  workplaceProjects: WorkplaceProjectsSection
 };
+
+function NativeCliAgentsSection(props: StudioSectionProps) {
+  return <ThirdPartyNativeCliAgents {...props} />;
+}
+
+const ThirdPartyNativeCliAgents = dynamic(
+  () =>
+    import('./third-party-agents/NativeCliAgentsSettings').then((m) => {
+      return function NativeCliAgentsPage(props: StudioSectionProps) {
+        return (
+          <m.NativeCliAgentsSettings
+            {...props}
+            embedded={false}
+          />
+        );
+      };
+    }),
+  { ssr: false }
+);
+
+function WorkplaceProjectsSection() {
+  return <SwarmPlaceholder kind="projects" />;
+}
+
+function ProjectMembersSection() {
+  return <SwarmPlaceholder kind="members" />;
+}
+
+function SwarmTasksSection() {
+  return <SwarmPlaceholder kind="tasks" />;
+}

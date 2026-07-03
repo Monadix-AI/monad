@@ -168,7 +168,7 @@ export function AppShell() {
   const isStudioRoute = isStudioPath(pathname);
   const isWorkspaceRoute = isWorkspacePath(pathname);
   const routedStudioSection = studioSectionFromPathname(pathname);
-  const studioSection = routedStudioSection ?? 'agents';
+  const studioSection = routedStudioSection ?? 'runtime';
   const showStudio = isStudioRoute;
   const studioPileActive = isStudioRoute;
   const workspacePileActive = isWorkspaceRoute;

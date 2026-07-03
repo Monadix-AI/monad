@@ -17,25 +17,26 @@ import {
 
 describe('canonical web route helpers', () => {
   test('keeps Studio sections and their internal breadcrumbs under /studio', () => {
-    expect(studioPath()).toBe('/studio/agents');
+    expect(studioPath()).toBe('/studio/runtime');
     expect(studioPath('skills')).toBe('/studio/skills');
-    expect(studioPath('thirdPartyAgents')).toBe('/studio/thirdPartyAgents');
+    expect(studioPath('acpDelegates')).toBe('/studio/acpDelegates');
+    expect(studioPath('nativeCliAgents')).toBe('/studio/nativeCliAgents');
     expect(skillMarketplacePath(DEFAULT_SKILL_MARKETPLACE_SOURCE)).toBe(
       `/studio/skills/marketplace/${encodeURIComponent(DEFAULT_SKILL_MARKETPLACE_SOURCE)}`
     );
     expect(isStudioPath('/studio/skills/marketplace/clawhub')).toBe(true);
     expect(isSkillMarketplacePath('/studio/skills/marketplace/clawhub')).toBe(true);
     expect(studioSectionFromPathname('/studio/skills/marketplace/clawhub')).toBe('skills');
-    expect(studioSectionFromPathname('/studio/acpAgents')).toBe('thirdPartyAgents');
-    expect(studioSectionFromPathname('/studio/nativeCliAgents')).toBe('thirdPartyAgents');
+    expect(studioSectionFromPathname('/studio/acpAgents')).toBe('acpDelegates');
+    expect(studioSectionFromPathname('/studio/nativeCliAgents')).toBe('nativeCliAgents');
     expect(skillMarketplaceSourceFromPathname('/studio/skills/marketplace/clawhub')).toBe('clawhub');
   });
 
   test('keeps Studio secondary pages URL-backed for breadcrumb navigation', () => {
     expect(studioDetailPath('agents', 'agent 1')).toBe('/studio/agents/agent%201');
-    expect(studioDetailPath('thirdPartyAgents', 'cli')).toBe('/studio/thirdPartyAgents/cli');
+    expect(studioDetailPath('nativeCliAgents', 'cli')).toBe('/studio/nativeCliAgents/cli');
     expect(studioSubpathFromPathname('/studio/agents/agent%201')).toEqual(['agent 1']);
-    expect(studioSubpathFromPathname('/studio/thirdPartyAgents/acp')).toEqual(['acp']);
+    expect(studioSubpathFromPathname('/studio/nativeCliAgents/cli')).toEqual(['cli']);
     expect(studioSubpathFromPathname('/studio/models')).toEqual([]);
   });
 

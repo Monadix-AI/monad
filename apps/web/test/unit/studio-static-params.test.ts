@@ -8,6 +8,7 @@ test('studio section route statically exports every known section', () => {
   // enumerated for `output: export` (see the page's generateStaticParams comment). The section list
   // stays hardcoded as a guard against accidental additions/removals in STUDIO_SECTION_IDS.
   const sections = [
+    'runtime',
     'agents',
     'orchestration',
     'models',
@@ -16,8 +17,13 @@ test('studio section route statically exports every known section', () => {
     'mcpServers',
     'channels',
     'thirdPartyAgents',
+    'acpDelegates',
     'acpAgents',
+    'swarm',
     'nativeCliAgents',
+    'workplaceProjects',
+    'projectMembers',
+    'swarmTasks',
     'capabilities',
     'tools',
     'approvals',
@@ -27,6 +33,7 @@ test('studio section route statically exports every known section', () => {
     'hooks',
     'mcpAtoms',
     'sandbox',
+    'safety',
     'usage'
   ];
   expect(generateStaticParams()).toEqual([

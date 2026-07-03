@@ -6,6 +6,29 @@ import { create } from 'zustand';
 
 type WorkspaceSurface = 'workspace' | 'monadChat';
 
+export const SIDEBAR_COLLAPSED_STORAGE_KEY = 'monad:sidebarCollapsed';
+
+function sidebarStorage(): Storage | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
+  }
+}
+
+export function readStoredSidebarCollapsed(): boolean {
+  return sidebarStorage()?.getItem(SIDEBAR_COLLAPSED_STORAGE_KEY) === 'true';
+}
+
+export function writeStoredSidebarCollapsed(collapsed: boolean): void {
+  try {
+    sidebarStorage()?.setItem(SIDEBAR_COLLAPSED_STORAGE_KEY, String(collapsed));
+  } catch {
+    // Local UI preference only; ignore private-mode/quota failures.
+  }
+}
+
 export interface WorkspaceShellState {
   surface: WorkspaceSurface;
   lastMonadSessionId: SessionId | null;
@@ -32,7 +55,7 @@ export const useWorkspaceShellStore = create<WorkspaceShellState>()((set) => ({
   surface: 'workspace',
   lastMonadSessionId: null,
   activeProjectId: null,
-  sidebarCollapsed: false,
+  sidebarCollapsed: readStoredSidebarCollapsed(),
   sidebarAutoReveal: false,
   newProjectOpen: false,
   sessionInspectorOpen: false,
@@ -41,12 +64,25 @@ export const useWorkspaceShellStore = create<WorkspaceShellState>()((set) => ({
   openWorkspace: () => set({ surface: 'workspace', activeProjectId: null }),
   openMonadChat: () => set({ surface: 'monadChat' }),
   openProject: (projectId) => set({ surface: 'workspace', activeProjectId: projectId }),
-  setSidebarCollapsed: (collapsed) => set({ sidebarCollapsed: collapsed, sidebarAutoReveal: false }),
+  setSidebarCollapsed: (collapsed) => {
+    writeStoredSidebarCollapsed(collapsed);
+    set({ sidebarCollapsed: collapsed, sidebarAutoReveal: false });
+  },
   toggleSidebarCollapsed: () =>
-    set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed, sidebarAutoReveal: false })),
-  revealSidebar: () => set({ sidebarCollapsed: false, sidebarAutoReveal: false }),
+    set((state) => {
+      const sidebarCollapsed = !state.sidebarCollapsed;
+      writeStoredSidebarCollapsed(sidebarCollapsed);
+      return { sidebarCollapsed, sidebarAutoReveal: false };
+    }),
+  revealSidebar: () => {
+    writeStoredSidebarCollapsed(false);
+    set({ sidebarCollapsed: false, sidebarAutoReveal: false });
+  },
   autoRevealSidebar: () => set({ sidebarCollapsed: false, sidebarAutoReveal: true }),
-  collapseSidebar: () => set({ sidebarCollapsed: true, sidebarAutoReveal: false }),
+  collapseSidebar: () => {
+    writeStoredSidebarCollapsed(true);
+    set({ sidebarCollapsed: true, sidebarAutoReveal: false });
+  },
   setNewProjectOpen: (open) => set({ newProjectOpen: open }),
   toggleSessionInspector: () => set((state) => ({ sessionInspectorOpen: !state.sessionInspectorOpen }))
 }));

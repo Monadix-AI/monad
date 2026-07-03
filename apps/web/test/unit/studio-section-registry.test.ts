@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 
 import { STUDIO_SECTION_COMPONENTS } from '../../features/studio/section-registry';
-import { STUDIO_CAPABILITY_SECTIONS, STUDIO_SECTION_IDS } from '../../features/studio/sections';
+import { STUDIO_RUNTIME_SECTIONS, STUDIO_SECTION_IDS, STUDIO_SWARM_SECTIONS } from '../../features/studio/sections';
 
 const readSource = (path: string) => readFileSync(new URL(`../../${path}`, import.meta.url), 'utf8');
 
@@ -10,26 +10,32 @@ test('studio section registry covers every studio section id', () => {
   expect(Object.keys(STUDIO_SECTION_COMPONENTS).sort()).toEqual([...STUDIO_SECTION_IDS].sort());
 });
 
-test('Studio sidebar merges ACP and native CLI agents into third-party agents', () => {
-  const capabilitySectionIds = STUDIO_CAPABILITY_SECTIONS.map((item) => item.id);
+test('Studio sidebar separates runtime delegates from provider-owned swarm agents', () => {
+  const runtimeSectionIds = STUDIO_RUNTIME_SECTIONS.map((item) => item.id);
+  const swarmSectionIds = STUDIO_SWARM_SECTIONS.map((item) => item.id);
 
-  expect(capabilitySectionIds).toContain('thirdPartyAgents');
-  expect(capabilitySectionIds).not.toContain('acpAgents');
-  expect(capabilitySectionIds).not.toContain('nativeCliAgents');
-  expect(STUDIO_SECTION_COMPONENTS.acpAgents).toBe(STUDIO_SECTION_COMPONENTS.thirdPartyAgents);
-  expect(STUDIO_SECTION_COMPONENTS.nativeCliAgents).toBe(STUDIO_SECTION_COMPONENTS.thirdPartyAgents);
+  expect(runtimeSectionIds).toContain('runtime');
+  expect(runtimeSectionIds).toContain('acpDelegates');
+  expect(runtimeSectionIds).not.toContain('nativeCliAgents');
+  expect(swarmSectionIds).toContain('swarm');
+  expect(swarmSectionIds).toContain('nativeCliAgents');
+  expect(swarmSectionIds).toContain('workplaceProjects');
+  expect(swarmSectionIds).not.toContain('acpDelegates');
+  expect(swarmSectionIds).not.toContain('projectMembers');
+  expect(swarmSectionIds).not.toContain('swarmTasks');
+  expect(STUDIO_SECTION_COMPONENTS.acpAgents).toBe(STUDIO_SECTION_COMPONENTS.acpDelegates);
+  expect(STUDIO_SECTION_COMPONENTS.nativeCliAgents).not.toBe(STUDIO_SECTION_COMPONENTS.acpDelegates);
+  expect(STUDIO_SECTION_COMPONENTS.projectMembers).toBeDefined();
+  expect(STUDIO_SECTION_COMPONENTS.swarmTasks).toBeDefined();
 });
 
-test('third-party agents page manages ACP and native CLI modes as cards', () => {
+test('ACP delegates page only manages ACP agents', () => {
   const source = readSource('features/studio/third-party-agents/index.tsx');
 
   expect(source).toContain('AcpAgentsSettings');
-  expect(source).toContain('NativeCliAgentsSettings');
-  expect(source).toContain('web.thirdPartyAgents.acpMode');
-  expect(source).toContain('web.thirdPartyAgents.cliMode');
-  expect(source).toContain("mode === 'acp' || mode === 'cli'");
-  expect(source).toContain("studioPath('thirdPartyAgents')");
-  expect(source).toContain('backHref={studioPath');
+  expect(source).not.toContain('NativeCliAgentsSettings');
+  expect(source).toContain('web.studio.acpDelegates');
+  expect(source).toContain('web.studio.acpDelegatesDesc');
 });
 
 test('native CLI connected presets open their settings in a dialog', () => {

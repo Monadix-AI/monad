@@ -7,16 +7,16 @@ import {
   BrainIcon,
   CpuIcon,
   GeometricShapesIcon,
+  Home01Icon,
   MessageSquareCodeIcon,
   NeuralNetworkIcon,
-  PackageIcon,
-  PuzzleIcon,
   ShieldHalfIcon,
-  UserGroupIcon,
-  WorkflowSquare01Icon
+  TerminalIcon,
+  UserGroupIcon
 } from '@hugeicons/core-free-icons';
 
 export type StudioSectionId =
+  | 'runtime'
   | 'agents'
   | 'orchestration'
   | 'models'
@@ -25,8 +25,13 @@ export type StudioSectionId =
   | 'mcpServers'
   | 'channels'
   | 'thirdPartyAgents'
+  | 'acpDelegates'
   | 'acpAgents'
+  | 'swarm'
   | 'nativeCliAgents'
+  | 'workplaceProjects'
+  | 'projectMembers'
+  | 'swarmTasks'
   | 'capabilities'
   | 'tools'
   | 'approvals'
@@ -36,9 +41,11 @@ export type StudioSectionId =
   | 'hooks'
   | 'mcpAtoms'
   | 'sandbox'
+  | 'safety'
   | 'usage';
 
 export const STUDIO_SECTION_IDS = [
+  'runtime',
   'agents',
   'orchestration',
   'models',
@@ -47,8 +54,13 @@ export const STUDIO_SECTION_IDS = [
   'mcpServers',
   'channels',
   'thirdPartyAgents',
+  'acpDelegates',
   'acpAgents',
+  'swarm',
   'nativeCliAgents',
+  'workplaceProjects',
+  'projectMembers',
+  'swarmTasks',
   'capabilities',
   'tools',
   'approvals',
@@ -58,6 +70,7 @@ export const STUDIO_SECTION_IDS = [
   'hooks',
   'mcpAtoms',
   'sandbox',
+  'safety',
   'usage'
 ] as const satisfies readonly StudioSectionId[];
 
@@ -71,27 +84,22 @@ export interface StudioSectionItem {
   i18nKey: WebMessageIdWithoutParams;
 }
 
-export const STUDIO_AGENT_SECTIONS: StudioSectionItem[] = [
-  { id: 'agents', icon: UserGroupIcon, i18nKey: 'web.studio.allAgents' },
-  { id: 'orchestration', icon: NeuralNetworkIcon, i18nKey: 'web.studio.orchestration' }
-];
-
-export const STUDIO_CAPABILITY_SECTIONS: StudioSectionItem[] = [
-  { id: 'models', icon: CpuIcon, i18nKey: 'web.studio.models' },
-  { id: 'atoms', icon: PackageIcon, i18nKey: 'web.studio.atoms' },
-  { id: 'skills', icon: PuzzleIcon, i18nKey: 'web.studio.skills' },
-  { id: 'channels', icon: MessageSquareCodeIcon, i18nKey: 'web.studio.channels' },
-  { id: 'thirdPartyAgents', icon: BotIcon, i18nKey: 'web.studio.thirdPartyAgents' }
-];
-
 export const STUDIO_RUNTIME_SECTIONS: StudioSectionItem[] = [
+  { id: 'runtime', icon: Home01Icon, i18nKey: 'web.studio.runtimeOverview' },
+  { id: 'models', icon: CpuIcon, i18nKey: 'web.studio.modelsAndProviders' },
+  { id: 'agents', icon: UserGroupIcon, i18nKey: 'web.studio.monadAgents' },
   { id: 'capabilities', icon: GeometricShapesIcon, i18nKey: 'web.studio.capabilities' },
-  { id: 'approvals', icon: ShieldHalfIcon, i18nKey: 'web.settings.approvals' },
+  { id: 'acpDelegates', icon: BotIcon, i18nKey: 'web.studio.acpDelegates' },
   // Memory folds the former standalone graph + mem0 sections into tabs (deep links /studio/graph and
   // /studio/mem0 still resolve — they open the matching tab — so those ids stay in the union below).
   { id: 'memory', icon: BrainIcon, i18nKey: 'web.settings.memory' },
-  { id: 'hooks', icon: WorkflowSquare01Icon, i18nKey: 'web.studio.hooks' },
-  { id: 'sandbox', icon: ShieldHalfIcon, i18nKey: 'web.studio.sandbox' }
+  { id: 'safety', icon: ShieldHalfIcon, i18nKey: 'web.studio.safetyAndHooks' }
+];
+
+export const STUDIO_SWARM_SECTIONS: StudioSectionItem[] = [
+  { id: 'swarm', icon: NeuralNetworkIcon, i18nKey: 'web.studio.swarmOverview' },
+  { id: 'nativeCliAgents', icon: TerminalIcon, i18nKey: 'web.studio.nativeCliAgents' },
+  { id: 'workplaceProjects', icon: MessageSquareCodeIcon, i18nKey: 'web.studio.workplaceProjects' }
 ];
 
 export const STUDIO_USAGE_SECTION: StudioSectionItem = {
@@ -99,3 +107,6 @@ export const STUDIO_USAGE_SECTION: StudioSectionItem = {
   icon: Activity01Icon,
   i18nKey: 'web.studio.usage'
 };
+
+const _STUDIO_AGENT_SECTIONS = STUDIO_RUNTIME_SECTIONS;
+const _STUDIO_CAPABILITY_SECTIONS = STUDIO_SWARM_SECTIONS;
