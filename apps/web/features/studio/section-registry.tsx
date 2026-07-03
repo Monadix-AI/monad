@@ -94,6 +94,7 @@ export const STUDIO_SECTION_COMPONENTS: Record<StudioSectionId, StudioSectionCom
   atoms: AtomsSettings,
   capabilities: CapabilitiesSettings,
   channels: ChannelsSettings,
+  frameworkAgents: FrameworkAgentsSection,
   graph: GraphMemorySettings,
   hooks: HooksSettings,
   mcpAtoms: CapabilitiesSettings,
@@ -126,6 +127,25 @@ const ThirdPartyNativeCliAgents = dynamic(
       return function NativeCliAgentsPage(props: StudioSectionProps) {
         return (
           <m.NativeCliAgentsSettings
+            {...props}
+            embedded={false}
+          />
+        );
+      };
+    }),
+  { ssr: false }
+);
+
+function FrameworkAgentsSection(props: StudioSectionProps) {
+  return <ThirdPartyFrameworkAgents {...props} />;
+}
+
+const ThirdPartyFrameworkAgents = dynamic(
+  () =>
+    import('./third-party-agents/FrameworkAgentsSettings').then((m) => {
+      return function FrameworkAgentsPage(props: StudioSectionProps) {
+        return (
+          <m.FrameworkAgentsSettings
             {...props}
             embedded={false}
           />

@@ -21,6 +21,7 @@ test('studio section route statically exports every known section', () => {
     'acpAgents',
     'swarm',
     'nativeCliAgents',
+    'frameworkAgents',
     'workplaceProjects',
     'projectMembers',
     'swarmTasks',

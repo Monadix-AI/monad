@@ -19,12 +19,16 @@ test('Studio sidebar separates runtime delegates from provider-owned swarm agent
   expect(runtimeSectionIds).not.toContain('nativeCliAgents');
   expect(swarmSectionIds).toContain('swarm');
   expect(swarmSectionIds).toContain('nativeCliAgents');
+  expect(swarmSectionIds).toContain('frameworkAgents');
   expect(swarmSectionIds).toContain('workplaceProjects');
   expect(swarmSectionIds).not.toContain('acpDelegates');
   expect(swarmSectionIds).not.toContain('projectMembers');
   expect(swarmSectionIds).not.toContain('swarmTasks');
   expect(STUDIO_SECTION_COMPONENTS.acpAgents).toBe(STUDIO_SECTION_COMPONENTS.acpDelegates);
   expect(STUDIO_SECTION_COMPONENTS.nativeCliAgents).not.toBe(STUDIO_SECTION_COMPONENTS.acpDelegates);
+  // Framework agents are their own provider-owned swarm section, distinct from the ACP delegates page.
+  expect(STUDIO_SECTION_COMPONENTS.frameworkAgents).toBeDefined();
+  expect(STUDIO_SECTION_COMPONENTS.frameworkAgents).not.toBe(STUDIO_SECTION_COMPONENTS.acpDelegates);
   expect(STUDIO_SECTION_COMPONENTS.projectMembers).toBeDefined();
   expect(STUDIO_SECTION_COMPONENTS.swarmTasks).toBeDefined();
 });
@@ -45,6 +49,17 @@ test('native CLI connected presets open their settings in a dialog', () => {
   expect(source).toContain('Settings');
   expect(source).toContain('AgentForm');
   expect(source).toContain('setEditingAgent(null)');
+});
+
+test('framework agents settings surfaces the sandbox opt-in and provider/transport controls', () => {
+  const source = readSource('features/studio/third-party-agents/FrameworkAgentsSettings.tsx');
+
+  expect(source).toContain('web.framework.osSandbox');
+  expect(source).toContain('onCheckedChange={setOsSandbox}');
+  expect(source).toContain('web.framework.provider');
+  expect(source).toContain('web.framework.transport');
+  expect(source).toContain('web.framework.forwardMcp');
+  expect(source).toContain('useFrameworkAgentSettings');
 });
 
 test('studio registry does not import Studio panels from settings', () => {

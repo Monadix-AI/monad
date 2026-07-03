@@ -153,6 +153,14 @@ import {
 } from './endpoints/settings/channels/index.ts';
 import { useGetComputerPresetQuery, useSetComputerPresetMutation } from './endpoints/settings/computer-preset/index.ts';
 import { useGetDeveloperQuery, useSetDeveloperMutation } from './endpoints/settings/developer/index.ts';
+import {
+  frameworkAgentAdapter,
+  frameworkAgentSelectors,
+  useListFrameworkAgentsQuery,
+  useRemoveFrameworkAgentMutation,
+  useSetFrameworkAgentEnabledMutation,
+  useUpsertFrameworkAgentMutation
+} from './endpoints/settings/framework-agents/index.ts';
 import { useGetHooksQuery, useSetHooksMutation } from './endpoints/settings/hooks/index.ts';
 import { useApplySettingsImportMutation, usePreviewSettingsImportMutation } from './endpoints/settings/import/index.ts';
 import {
@@ -253,6 +261,8 @@ export {
   credentialAdapter,
   credentialSelectors,
   factSelectors,
+  frameworkAgentAdapter,
+  frameworkAgentSelectors,
   graphApi,
   indexerApi,
   lawsApi,
@@ -375,6 +385,7 @@ export {
   useListChannelsQuery,
   useListCommandsQuery,
   useListCredentialsQuery,
+  useListFrameworkAgentsQuery,
   useListInstalledMcpQuery,
   useListInstalledSkillsQuery,
   useListLicensesQuery,
@@ -401,6 +412,7 @@ export {
   useReconnectMcpServerMutation,
   useReindexEmbeddingsMutation,
   useRemoveAtomPackMutation,
+  useRemoveFrameworkAgentMutation,
   useRemoveMcpAtomMutation,
   useRemoveSkillMutation,
   useRenameProfileMutation,
@@ -426,6 +438,7 @@ export {
   useSetDefaultAgentMutation,
   useSetDefaultMutation,
   useSetDeveloperMutation,
+  useSetFrameworkAgentEnabledMutation,
   useSetHooksMutation,
   useSetInitHomeMutation,
   useSetLocaleMutation,
@@ -463,6 +476,7 @@ export {
   useUploadSkillMutation,
   useUpsertAcpAgentMutation,
   useUpsertChannelMutation,
+  useUpsertFrameworkAgentMutation,
   useUpsertMcpServerMutation,
   useUpsertNativeCliAgentMutation,
   useWorkspaceActionMutation,
