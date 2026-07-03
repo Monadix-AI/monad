@@ -1,6 +1,7 @@
 'use client';
 
 import type { CSSProperties } from 'react';
+import type { NativeCliUsageLimitMeter } from '../native-cli-observation';
 import type { NativeCliStreamView, Participant } from '../types';
 
 import {
@@ -16,7 +17,6 @@ import { useEffect, useRef, useState } from 'react';
 
 import { useT } from '@/components/I18nProvider';
 import { AgentIdentity, AgentInstanceAvatar, resolveProductIcon } from '../Bits';
-import { type NativeCliUsageLimitMeter, nativeCliUsageLimitMeter } from '../native-cli-observation';
 import { mono, presenceColor, sans } from '../styles';
 import { ObservationTimelineCard, observationTimelineEntries } from './observation-cards';
 
@@ -76,7 +76,8 @@ export function NativeCliObservationPanel({
   onBack,
   onClose,
   onStop,
-  stream
+  stream,
+  usageMeter
 }: {
   agent?: Participant;
   agentName?: string;
@@ -86,6 +87,7 @@ export function NativeCliObservationPanel({
   onClose?: () => void;
   onStop: (id: string) => void;
   stream?: NativeCliStreamView;
+  usageMeter?: NativeCliUsageLimitMeter | null;
 }): React.ReactElement {
   const t = useT();
   const displayAgent = agent ?? {
@@ -106,7 +108,6 @@ export function NativeCliObservationPanel({
   const streamStatus = stream?.status;
   const latestItem = stream?.items.at(-1);
   const latestObservationKey = `${streamId ?? ''}:${streamStatus ?? ''}:${stream?.items.length ?? 0}:${latestItem?.id ?? ''}:${latestItem?.text.length ?? 0}`;
-  const usageMeter = nativeCliUsageLimitMeter({ output: stream?.output, provider: stream?.provider });
   const [usageOpen, setUsageOpen] = useState(false);
 
   useEffect(() => {

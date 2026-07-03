@@ -1,6 +1,5 @@
-import type { ContextUsagePayload, ProfileView } from '@monad/protocol';
-import type { ProjectMentionTarget } from './experiences/contracts';
-import type { ApprovalView, Participant, QuestionView, TypingIndicator } from './types';
+import type { ProjectComposerSurface } from './experiences/shared/composer';
+import type { QuestionView } from './types';
 
 import {
   profileSelectors,
@@ -29,21 +28,7 @@ import {
 import { QuestionStack } from './QuestionStack';
 import { mono, sans } from './styles';
 
-type ComposerRoom = {
-  answerQuestion: (requestId: string, answer: string) => void;
-  approvals: ApprovalView[];
-  contextUsage?: ContextUsagePayload | null;
-  mentionTargets: ProjectMentionTarget[];
-  modelProfiles: ProfileView[];
-  participants: Participant[];
-  pauseAll: () => void;
-  questions: QuestionView[];
-  resolveApproval: (requestId: string, action: 'approve' | 'reject') => void;
-  sendDirective: (text: string) => Promise<void> | void;
-  typing: TypingIndicator | null;
-};
-
-export function Composer({ room }: { room: ComposerRoom }): React.ReactElement {
+export function Composer({ room }: { room: ProjectComposerSurface }): React.ReactElement {
   const t = useT();
   const router = useRouter();
   const searchParams = useSearchParams();

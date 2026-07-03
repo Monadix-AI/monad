@@ -1,4 +1,10 @@
-import type { Event, MessageAttachmentRef, MessageId, TranscriptTargetId } from '@monad/protocol';
+import type {
+  Event,
+  MessageAttachmentRef,
+  MessageId,
+  NativeAgentDeliveryId,
+  TranscriptTargetId
+} from '@monad/protocol';
 import type { SessionContext } from '@/handlers/session/context.ts';
 
 import { newId } from '@monad/protocol';
@@ -10,25 +16,50 @@ export function createManagedNativeCliMessages(ctx: SessionContext) {
     persistAndRetire
   } = ctx;
 
-  const pendingManagedNativeCliWakeMessages = new Map<string, MessageId>();
+  const pendingManagedNativeCliWakeMessages = new Map<
+    string,
+    { messageId: MessageId; deliveryId?: NativeAgentDeliveryId }
+  >();
+
+  function deliveryIdFromMessageData(
+    sessionId: TranscriptTargetId,
+    messageId: MessageId
+  ): NativeAgentDeliveryId | undefined {
+    const data = store.getMessage(sessionId, messageId)?.data;
+    if (!data || typeof data !== 'object') return undefined;
+    const deliveryId = (data as { deliveryId?: unknown }).deliveryId;
+    return typeof deliveryId === 'string' && deliveryId.startsWith('deliv_')
+      ? (deliveryId as NativeAgentDeliveryId)
+      : undefined;
+  }
 
   function emitManagedNativeCliThinking(
     sessionId: TranscriptTargetId,
     nativeCliSessionId: string,
-    agentName: string
+    agentName: string,
+    deliveryId?: NativeAgentDeliveryId
   ): MessageId {
+    const pending = pendingManagedNativeCliWakeMessages.get(nativeCliSessionId);
     const existing =
-      pendingManagedNativeCliWakeMessages.get(nativeCliSessionId) ??
-      store.findManagedNativeCliStreamingMessage(sessionId, nativeCliSessionId, agentName);
+      pending?.messageId ?? store.findManagedNativeCliStreamingMessage(sessionId, nativeCliSessionId, agentName);
     if (existing) return existing as MessageId;
     const messageId = newId('msg');
     if (pendingManagedNativeCliWakeMessages.size >= 256) {
       const oldest = pendingManagedNativeCliWakeMessages.keys().next().value;
       if (oldest !== undefined) pendingManagedNativeCliWakeMessages.delete(oldest);
     }
-    pendingManagedNativeCliWakeMessages.set(nativeCliSessionId, messageId);
+    pendingManagedNativeCliWakeMessages.set(nativeCliSessionId, {
+      messageId,
+      ...(deliveryId ? { deliveryId } : {})
+    });
     store.insertMessage(messageId, sessionId, '', new Date().toISOString(), 'assistant', {
-      data: { agentName, nativeCliSessionId, reasoning: 'Thinking', source: 'managed-native-cli' },
+      data: {
+        agentName,
+        nativeCliSessionId,
+        ...(deliveryId ? { deliveryId } : {}),
+        reasoning: 'Thinking',
+        source: 'managed-native-cli'
+      },
       includeInContext: false,
       streamStatus: 'streaming'
     });
@@ -39,7 +70,15 @@ export function createManagedNativeCliMessages(ctx: SessionContext) {
       transcriptTargetId: sessionId,
       type: 'agent.token',
       actorAgentId: null,
-      payload: { messageId, agentName, delta: '', index: 0, source: 'managed-native-cli' },
+      payload: {
+        messageId,
+        agentName,
+        nativeCliSessionId,
+        ...(deliveryId ? { deliveryId } : {}),
+        delta: '',
+        index: 0,
+        source: 'managed-native-cli'
+      },
       at: new Date().toISOString()
     });
     emit({
@@ -47,7 +86,14 @@ export function createManagedNativeCliMessages(ctx: SessionContext) {
       transcriptTargetId: sessionId,
       type: 'agent.reasoning',
       actorAgentId: null,
-      payload: { messageId, delta: 'Thinking', index: 0, source: 'managed-native-cli' },
+      payload: {
+        messageId,
+        nativeCliSessionId,
+        ...(deliveryId ? { deliveryId } : {}),
+        delta: 'Thinking',
+        index: 0,
+        source: 'managed-native-cli'
+      },
       at: new Date().toISOString()
     });
     persistAndRetire(sessionId, round);
@@ -73,14 +119,16 @@ export function createManagedNativeCliMessages(ctx: SessionContext) {
     source?: 'managed-native-cli' | 'native-cli-provider';
     error?: boolean;
   }): { messageId: MessageId } {
+    const pending = pendingManagedNativeCliWakeMessages.get(nativeCliSessionId);
     const pendingMessageId =
-      pendingManagedNativeCliWakeMessages.get(nativeCliSessionId) ??
-      store.findManagedNativeCliStreamingMessage(sessionId, nativeCliSessionId, agentName);
+      pending?.messageId ?? store.findManagedNativeCliStreamingMessage(sessionId, nativeCliSessionId, agentName);
     pendingManagedNativeCliWakeMessages.delete(nativeCliSessionId);
     const messageId = (pendingMessageId ?? newId('msg')) as MessageId;
+    const deliveryId = pending?.deliveryId ?? deliveryIdFromMessageData(sessionId, messageId);
     const data = {
       agentName,
       nativeCliSessionId,
+      ...(deliveryId ? { deliveryId } : {}),
       source,
       ...(threadId ? { threadId } : {}),
       ...(attachments?.length ? { attachments } : {})
@@ -107,7 +155,15 @@ export function createManagedNativeCliMessages(ctx: SessionContext) {
       transcriptTargetId: sessionId,
       type: 'agent.message',
       actorAgentId: null,
-      payload: { messageId, agentName, text, source, ...(attachments?.length ? { attachments } : {}) },
+      payload: {
+        messageId,
+        agentName,
+        nativeCliSessionId,
+        ...(deliveryId ? { deliveryId } : {}),
+        text,
+        source,
+        ...(attachments?.length ? { attachments } : {})
+      },
       at: new Date().toISOString()
     });
     persistAndRetire(sessionId, round);
@@ -119,9 +175,9 @@ export function createManagedNativeCliMessages(ctx: SessionContext) {
     nativeCliSessionId: string,
     agentName: string
   ): MessageId | null {
+    const pending = pendingManagedNativeCliWakeMessages.get(nativeCliSessionId);
     const pendingMessageId =
-      pendingManagedNativeCliWakeMessages.get(nativeCliSessionId) ??
-      store.findManagedNativeCliStreamingMessage(sessionId, nativeCliSessionId, agentName);
+      pending?.messageId ?? store.findManagedNativeCliStreamingMessage(sessionId, nativeCliSessionId, agentName);
     pendingManagedNativeCliWakeMessages.delete(nativeCliSessionId);
     if (!pendingMessageId) return null;
     const retired = store.retireManagedNativeCliStreamingMessage(

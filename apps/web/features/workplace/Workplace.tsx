@@ -1,5 +1,6 @@
 'use client';
 
+import type { NativeAgentDeliveryId } from '@monad/protocol';
 import type { CSSProperties } from 'react';
 import type { ProjectExperienceDefinition } from './experiences/types';
 import type { ProjectController } from './use-project';
@@ -72,8 +73,8 @@ export function Workplace({
     [openProjectMemberSettings, projectId]
   );
   const followNativeCliSession = useCallback(
-    (id: string) => {
-      openNativeCliObservation(projectId, id);
+    (id: string, deliveryId?: NativeAgentDeliveryId) => {
+      openNativeCliObservation(projectId, id, undefined, deliveryId);
     },
     [openNativeCliObservation, projectId]
   );

@@ -1,4 +1,4 @@
-import type { NativeCliObservationEvent, NativeCliProvider } from '@monad/protocol';
+import type { NativeCliObservationEvent, NativeCliProvider, NativeCliUsageResponse } from '@monad/protocol';
 
 import { claudeRecordEvents, isClaudeObservationMessage } from './native-cli-observation-claude.ts';
 import {
@@ -16,7 +16,6 @@ import {
   textValue
 } from './native-cli-observation-shared.ts';
 
-type NativeCliObservationStreamItem = NativeCliObservationEvent;
 type JsonRecordEntry = {
   record: Record<string, unknown>;
   raw: string;
@@ -301,7 +300,7 @@ export function nativeCliStreamItems(args: {
   provider?: NativeCliProvider | string;
   output?: string;
   observedAt?: string;
-}): NativeCliObservationStreamItem[] {
+}): NativeCliObservationEvent[] {
   const text = args.output?.trim();
   if (!text) return [];
   const structured = nativeCliObservationEvents(args);
@@ -329,6 +328,13 @@ function numberValue(...values: unknown[]): number | undefined {
 function resetLabel(value: unknown): string | undefined {
   const ms = numberValue(value);
   if (ms === undefined) return undefined;
+  return new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(ms));
+}
+
+function resetIsoLabel(value: string | null | undefined): string | undefined {
+  if (!value) return undefined;
+  const ms = Date.parse(value);
+  if (!Number.isFinite(ms)) return undefined;
   return new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(ms));
 }
 
@@ -395,5 +401,23 @@ export function nativeCliUsageLimitMeter(args: {
     const next = usageRowsFromRecord(entry.record);
     return next.length > 0 ? mergeUsageRows(acc, next) : acc;
   }, []);
+  return rows.length > 0 ? { title: 'Usage remaining', rows } : null;
+}
+
+export function nativeCliUsageLimitMeterFromResponse(
+  usage: NativeCliUsageResponse | undefined
+): NativeCliUsageLimitMeter | null {
+  const rows = (usage?.records ?? []).flatMap((record) => {
+    if (record.current === null || record.max === null || record.max <= 0) return [];
+    const percent = Math.max(0, Math.min(100, Math.round(((record.max - record.current) / record.max) * 100)));
+    return [
+      {
+        id: record.category,
+        label: record.category.replace(/_/g, ' '),
+        percent,
+        resetLabel: resetIsoLabel(record.resetAt)
+      }
+    ];
+  });
   return rows.length > 0 ? { title: 'Usage remaining', rows } : null;
 }

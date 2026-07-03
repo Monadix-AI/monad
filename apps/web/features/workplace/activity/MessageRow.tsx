@@ -1,3 +1,4 @@
+import type { NativeAgentDeliveryId } from '@monad/protocol';
 import type { Message } from '../types';
 
 import { TerminalIcon } from '@hugeicons/core-free-icons';
@@ -155,7 +156,7 @@ function MessageHeader({
 }: {
   align: 'left' | 'right';
   msg: Message;
-  onFollowNativeCliSession?: (id: string) => void;
+  onFollowNativeCliSession?: (id: string, deliveryId?: NativeAgentDeliveryId) => void;
 }): React.ReactElement {
   const showTag = msg.kind === 'agent' || msg.tag !== 'User';
   return (
@@ -177,6 +178,7 @@ function MessageHeader({
       />
       {msg.time ? <span style={TIME_STYLE}>{msg.time}</span> : null}
       <FollowButton
+        deliveryId={msg.deliveryId}
         nativeCliSessionId={msg.nativeCliSessionId}
         onFollowNativeCliSession={onFollowNativeCliSession}
       />
@@ -257,7 +259,7 @@ export const MessageRow = memo(function MessageRow({
 }: {
   msg: Message;
   onAgentClick?: (id: string) => void;
-  onFollowNativeCliSession?: (id: string) => void;
+  onFollowNativeCliSession?: (id: string, deliveryId?: NativeAgentDeliveryId) => void;
 }): React.ReactElement {
   if (msg.kind === 'system' || msg.kind === 'developer') {
     return (

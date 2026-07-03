@@ -1,10 +1,135 @@
+import type { NativeCliStreamView } from '../../features/workplace/types.ts';
+
 import { expect, test } from 'bun:test';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 
+import {
+  observationProjectionFromAccess,
+  streamWithObservationProjection,
+  usageMeterFromObservationAccess
+} from '../../features/workplace/activity/AgentTasksRail.tsx';
 import { NativeCliObservationPanel } from '../../features/workplace/cli/NativeCliStreamModal.tsx';
 import { observationTimelineEntries } from '../../features/workplace/cli/observation-cards.tsx';
-import { nativeCliStreamItems, nativeCliUsageLimitMeter } from '../../features/workplace/native-cli-observation.ts';
+import {
+  nativeCliStreamItems,
+  nativeCliUsageLimitMeter,
+  nativeCliUsageLimitMeterFromResponse
+} from '../../features/workplace/native-cli-observation.ts';
+
+test('observation access is adapted to projection events without carrying raw output forward', () => {
+  const raw = JSON.stringify({ method: 'item/agentMessage/delta', params: { delta: 'Projected update' } });
+  const stream = {
+    id: 'ncli_codex',
+    agentName: 'codex',
+    provider: 'codex',
+    tag: 'Codex',
+    status: 'running',
+    output: '',
+    items: []
+  } satisfies NativeCliStreamView;
+
+  const projection = observationProjectionFromAccess(stream, {
+    state: 'live',
+    nativeCliSessionId: 'ncli_codex',
+    provider: 'codex',
+    output: raw,
+    observedAt: '2026-06-28T00:00:00.000Z'
+  });
+  const projectedStream = streamWithObservationProjection(stream, projection);
+
+  expect(projection?.state).toBe('live');
+  expect(projectedStream?.items.map((item) => item.text)).toEqual(['Projected update']);
+  expect(projectedStream?.output).toBe('Projected update');
+  expect(projectedStream?.output).not.toBe(raw);
+});
+
+test('delivery observation access keeps the delivery pointer on the projection', () => {
+  const stream = {
+    id: 'ncli_codex',
+    agentName: 'codex',
+    provider: 'codex',
+    tag: 'Codex',
+    status: 'running',
+    output: '',
+    items: []
+  } satisfies NativeCliStreamView;
+
+  expect(
+    observationProjectionFromAccess(
+      stream,
+      {
+        state: 'live',
+        nativeCliSessionId: 'ncli_codex',
+        provider: 'codex',
+        deliveryId: 'deliv_01KWEBDELIVERYOBSERVE000',
+        turn: { providerSessionRef: 'provider-session-1', providerTurnId: 'turn-1' },
+        output: '',
+        observedAt: '2026-06-28T00:00:00.000Z'
+      },
+      undefined
+    )
+  ).toMatchObject({
+    nativeCliSessionId: 'ncli_codex',
+    deliveryId: 'deliv_01KWEBDELIVERYOBSERVE000',
+    turn: { providerTurnId: 'turn-1' }
+  });
+});
+
+test('host native CLI usage records project to a usage limits meter', () => {
+  const meter = nativeCliUsageLimitMeterFromResponse({
+    agentName: 'codex',
+    provider: 'codex',
+    checkedAt: '2026-07-03T00:00:00.000Z',
+    records: [
+      {
+        category: 'daily',
+        resetAt: '2026-07-03T12:00:00.000Z',
+        max: 100,
+        current: 12
+      }
+    ]
+  });
+
+  expect(meter).toMatchObject({
+    title: 'Usage remaining',
+    rows: [{ id: 'daily', label: 'daily', percent: 88 }]
+  });
+});
+
+test('observation rail usage fallback reads raw access output before projected display text', () => {
+  const raw = JSON.stringify({
+    method: 'account/rateLimits/updated',
+    params: {
+      rateLimits: {
+        primary: { usedPercent: 30, windowDurationMins: 300, resetsAt: 1_782_935_600_000 }
+      }
+    }
+  });
+  const stream = {
+    id: 'ncli_codex',
+    agentName: 'codex',
+    provider: 'codex',
+    tag: 'Codex',
+    status: 'running',
+    output: 'Readable agent output only',
+    items: []
+  } satisfies NativeCliStreamView;
+
+  const meter = usageMeterFromObservationAccess({
+    access: {
+      state: 'live',
+      nativeCliSessionId: 'ncli_codex',
+      provider: 'codex',
+      output: raw,
+      observedAt: '2026-06-28T00:00:00.000Z'
+    },
+    provider: 'codex',
+    stream
+  });
+
+  expect(meter?.rows).toMatchObject([{ id: 'primary', percent: 70 }]);
+});
 
 test('Claude Code observation keeps a result marker without repeating assistant text', () => {
   const output = [
@@ -435,6 +560,7 @@ test('observation panel shows a usage limits entry when the stream has limit dat
     method: 'account/rateLimits/updated',
     params: { rateLimits: { primary: { usedPercent: 6, windowDurationMins: 300, resetsAt: 1_782_935_600_000 } } }
   });
+  const usageMeter = nativeCliUsageLimitMeter({ provider: 'codex', output });
   const html = renderToStaticMarkup(
     React.createElement(NativeCliObservationPanel, {
       onStop: () => {},
@@ -446,7 +572,8 @@ test('observation panel shows a usage limits entry when the stream has limit dat
         status: 'running',
         output,
         items: nativeCliStreamItems({ id: 'ncli_codex', provider: 'codex', output })
-      }
+      },
+      usageMeter
     })
   );
 

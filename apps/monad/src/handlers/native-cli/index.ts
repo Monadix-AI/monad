@@ -12,6 +12,7 @@ import type {
   NativeCliInputRequest,
   NativeCliObservationAccessResponse,
   NativeCliResizeRequest,
+  NativeCliUsageResponse,
   OkResponse,
   SessionId,
   StartNativeCliAgentRequest,
@@ -165,6 +166,26 @@ export function createNativeCliModule({ paths, host, store }: NativeCliDeps) {
       return getNativeAgentDeliveryResponseSchema.parse({ delivery });
     },
 
+    observeDelivery({
+      id,
+      transcriptTargetId
+    }: {
+      id: `deliv_${string}`;
+      transcriptTargetId: TranscriptTargetId;
+    }): NativeCliObservationAccessResponse {
+      const delivery = store.getNativeAgentDelivery(id);
+      if (!delivery) throw new HandlerError('not_found', `native agent delivery not found: ${id}`);
+      if (delivery.projectId !== transcriptTargetId) {
+        throw new HandlerError('not_found', `native agent delivery not found for transcript target: ${id}`);
+      }
+      requireNativeCliSessionScope(delivery.nativeCliSessionId, transcriptTargetId);
+      return nativeCliObservationAccessResponseSchema.parse({
+        ...host.observe(delivery.nativeCliSessionId),
+        deliveryId: id,
+        turn: delivery.turn
+      });
+    },
+
     resize({
       id,
       cols,
@@ -288,6 +309,15 @@ export function createNativeCliModule({ paths, host, store }: NativeCliDeps) {
       await requireConfig();
       try {
         return await host.authStatus(agentName);
+      } catch (error) {
+        mapNativeCliError(error);
+      }
+    },
+
+    async usage({ agentName }: { agentName: string }): Promise<NativeCliUsageResponse> {
+      await requireConfig();
+      try {
+        return await host.usage(agentName);
       } catch (error) {
         mapNativeCliError(error);
       }

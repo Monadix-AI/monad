@@ -477,6 +477,35 @@ test('managed native CLI finished replies render without a thinking placeholder'
   expect(messages.map((message) => message.id)).toEqual(['msg_user', 'msg_codex_reply']);
 });
 
+test('managed native CLI finished replies retain delivery observation pointers', () => {
+  const messages = __workplaceProjectMessageTest.buildProjectMessages({
+    persistedMessages: [],
+    nativeCliSessions: [],
+    liveItems: [
+      {
+        kind: 'message',
+        id: 'msg_codex_reply',
+        role: 'assistant',
+        agentName: 'pmem_codex_abcd1234',
+        source: 'managed-native-cli',
+        nativeCliSessionId: 'ncli_codex_delivery',
+        deliveryId: 'deliv_01KWEBDELIVERYOBSERVE000',
+        parts: [{ type: 'text', text: 'Done.' }],
+        status: 'done',
+        seq: '2026-06-29T10:00:01.000Z'
+      }
+    ],
+    liveTools: [],
+    nativeCliDisplayNames: new Map([['pmem_codex_abcd1234', 'codex-reviewer']])
+  });
+
+  expect(messages[0]).toMatchObject({
+    id: 'msg_codex_reply',
+    nativeCliSessionId: 'ncli_codex_delivery',
+    deliveryId: 'deliv_01KWEBDELIVERYOBSERVE000'
+  });
+});
+
 test('managed native CLI spawn projects joined without a thinking placeholder', () => {
   const messages = __workplaceProjectMessageTest.buildProjectMessages({
     persistedMessages: [],
@@ -610,6 +639,27 @@ test('native CLI live activity streams keep the managed agent identity', () => {
     agentName: 'codex',
     status: 'running',
     items: [{ id: 'ncli_live_codex:0', role: 'agent', text: 'thinking about the project message' }]
+  });
+});
+
+test('managed native CLI streams retain template agent names for host usage queries', () => {
+  const [stream] = __workplaceProjectMessageTest.buildNativeCliStreams(
+    [
+      nativeCliSession({
+        id: 'ncli_codex_reviewer',
+        agentName: 'pmem_codex_reviewer',
+        provider: 'codex',
+        productIcon: 'codex'
+      })
+    ],
+    [],
+    new Map([['pmem_codex_reviewer', 'codex']])
+  );
+
+  expect(stream).toMatchObject({
+    id: 'ncli_codex_reviewer',
+    agentName: 'pmem_codex_reviewer',
+    templateAgentName: 'codex'
   });
 });
 

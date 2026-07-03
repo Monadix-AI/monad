@@ -103,18 +103,20 @@ export function createManagedNativeCliDelivery(ctx: SessionContext) {
         const deliveredSeq = store.maxMessageSeq(session.id);
         const triggerMessageId =
           deliveredSeq > 0 ? (store.messageIdForSeq(session.id, deliveredSeq) ?? undefined) : undefined;
+        const deliveryId = deliveredSeq > 0 ? newId('deliv') : undefined;
         const managedSessions = managedNativeCliSessionsForAgent(session.id, runtimeAgentName);
         const existing = managedSessions.find((candidate) => candidate.state === 'running');
         if (existing) {
           if (deliveredSeq > 0) {
             store.enqueueNativeCliInboxItem(existing.id, deliveredSeq, {
+              deliveryId,
               projectId: session.id as ProjectId,
               memberInstanceId: runtimeAgentName,
               triggerMessageId,
               providerSessionRef: existing.providerSessionRef ?? null
             });
           }
-          emitManagedNativeCliThinking(session.id, existing.id, runtimeAgentName);
+          emitManagedNativeCliThinking(session.id, existing.id, runtimeAgentName, deliveryId);
           if (existing.lastDeliveredSeq === 0) {
             nativeCliHost.input(existing.id, { input: nativeCliInputText(notice) });
             if (deliveredSeq > 0) store.markNativeCliInboxVisible(existing.id, deliveredSeq);
@@ -166,6 +168,7 @@ export function createManagedNativeCliDelivery(ctx: SessionContext) {
         });
         if (deliveredSeq > 0) {
           store.enqueueNativeCliInboxItem(nativeSession.id, deliveredSeq, {
+            deliveryId,
             projectId: session.id as ProjectId,
             memberInstanceId: runtimeAgentName,
             triggerMessageId,
@@ -174,7 +177,7 @@ export function createManagedNativeCliDelivery(ctx: SessionContext) {
         }
         store.markNativeCliInboxDelivered(nativeSession.id, deliveredSeq);
         store.markNativeCliInboxVisible(nativeSession.id, deliveredSeq);
-        emitManagedNativeCliThinking(session.id, nativeSession.id, runtimeAgentName);
+        emitManagedNativeCliThinking(session.id, nativeSession.id, runtimeAgentName, deliveryId);
       } catch (err) {
         const { code, message } = extractError(err);
         recordManagedNativeCliProjectDeliveryError(session.id, runtimeAgentName, code, message);

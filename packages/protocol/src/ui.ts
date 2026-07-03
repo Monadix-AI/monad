@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { clarifyAskerSchema, clarifyChoiceModeSchema } from './clarify.ts';
 import { listMessagesQuerySchema } from './control.ts';
 import { contextUsagePayloadSchema } from './event-table.ts';
-import { eventIdSchema, messageIdSchema } from './ids.ts';
+import { eventIdSchema, messageIdSchema, nativeAgentDeliveryIdSchema } from './ids.ts';
 
 export const uiMessageRoleSchema = z.enum(['user', 'assistant']);
 export type UIMessageRole = z.infer<typeof uiMessageRoleSchema>;
@@ -52,6 +52,11 @@ export const uiMessageItemSchema = z.object({
   role: uiMessageRoleSchema,
   agentName: z.string().optional(),
   source: z.enum(['managed-native-cli']).optional(),
+  nativeCliSessionId: z
+    .string()
+    .regex(/^ncli_/)
+    .optional(),
+  deliveryId: nativeAgentDeliveryIdSchema.optional(),
   parts: z.array(uiPartSchema),
   status: uiItemStatusSchema.optional(),
   seq: z.string()

@@ -1,13 +1,15 @@
+import type { NativeAgentDeliveryId } from '@monad/protocol';
 import type { ProjectController } from '../use-project';
 import type { ProjectExperienceRuntime } from './types';
 
 import { toChatRoomCanvas } from './chat-room/canvas';
 import { toGraphicViewCanvas } from './graphic-view/canvas';
+import { toProjectComposerSurface } from './shared/composer';
 
 export function toExperienceRuntime(
   c: ProjectController,
   opts: {
-    followNativeCliSession?: (id: string) => void;
+    followNativeCliSession?: (id: string, deliveryId?: NativeAgentDeliveryId) => void;
     openAgentCard?: (id: string) => void;
     switchExperience: (id: string) => void;
   }
@@ -17,6 +19,7 @@ export function toExperienceRuntime(
     openAgentCard: opts.openAgentCard
   });
   const graphicViewCanvas = toGraphicViewCanvas(c);
+  const composer = toProjectComposerSurface(c, chatRoomCanvas.typing);
   const host = {
     projectId: c.projectId,
     activeProjectId: c.activeProjectId,
@@ -33,6 +36,7 @@ export function toExperienceRuntime(
   };
   return {
     chatRoom: { canvas: chatRoomCanvas },
+    composer,
     graphicView: { canvas: graphicViewCanvas },
     host,
     snapshot: host,

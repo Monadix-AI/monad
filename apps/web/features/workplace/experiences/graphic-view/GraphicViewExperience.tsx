@@ -32,7 +32,7 @@ export function GraphicViewExperienceView({ runtime }: ProjectExperienceView): R
           </ReactFlowProvider>
         </div>
       </div>
-      <Composer room={runtime.chatRoom.canvas} />
+      <Composer room={runtime.composer} />
     </div>
   );
 }

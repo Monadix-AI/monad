@@ -6,6 +6,8 @@ import type {
 } from '@monad/protocol';
 import type { ObservationSource } from './native-cli-observation-shared.ts';
 
+import { isCodexAppServerObservationMethod } from '@monad/protocol';
+
 import {
   commandText,
   compactJson,
@@ -19,41 +21,6 @@ import {
 type CodexObservationResponseItem = Partial<CodexAppServerResponseItem> & Record<string, unknown> & { type: string };
 export type CodexObservationNotification = Partial<CodexAppServerNotification | CodexAppServerServerRequest> &
   Record<string, unknown> & { method: string };
-
-const CODEX_APP_SERVER_METHODS = new Set([
-  'thread/started',
-  'thread/status/changed',
-  'turn/started',
-  'turn/completed',
-  'turn/failed',
-  'turn/diff/updated',
-  'turn/plan/updated',
-  'item/started',
-  'item/completed',
-  'item/agentMessage/delta',
-  'item/plan/delta',
-  'item/reasoning/textDelta',
-  'item/reasoning/summaryTextDelta',
-  'item/reasoning/summaryPartAdded',
-  'rawResponseItem/completed',
-  'command/exec/outputDelta',
-  'process/outputDelta',
-  'process/exited',
-  'item/commandExecution/outputDelta',
-  'item/commandExecution/terminalInteraction',
-  'item/fileChange/outputDelta',
-  'item/fileChange/patchUpdated',
-  'serverRequest/resolved',
-  'item/mcpToolCall/progress',
-  'mcpServer/oauthLogin/completed',
-  'mcpServer/startupStatus/updated',
-  'account/rateLimits/updated',
-  'error',
-  'warning',
-  'guardianWarning',
-  'configWarning',
-  'deprecationNotice'
-]);
 
 function isCodexObservationResponseItem(item: unknown): item is CodexObservationResponseItem {
   return (
@@ -259,7 +226,7 @@ export function codexAppServerRecordEvents(
   recordIndex: number
 ): NativeCliObservationEvent[] {
   const method = record.method;
-  if (!method || !CODEX_APP_SERVER_METHODS.has(method)) return [];
+  if (!method || !isCodexAppServerObservationMethod(method)) return [];
   const params =
     record.params && typeof record.params === 'object' && !Array.isArray(record.params) ? record.params : {};
   const p = params as Record<string, unknown>;

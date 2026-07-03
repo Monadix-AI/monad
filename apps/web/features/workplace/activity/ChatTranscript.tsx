@@ -1,3 +1,4 @@
+import type { NativeAgentDeliveryId } from '@monad/protocol';
 import type { Message, TypingIndicator } from '../types';
 
 import { ArrowDown01Icon, TerminalIcon } from '@hugeicons/core-free-icons';
@@ -19,7 +20,7 @@ const HEADER_SPACER = <div style={{ height: 24 }} />;
 const messageId = (m: Message): string => m.id;
 
 type ChatTranscriptRoom = {
-  followNativeCliSession?: (id: string) => void;
+  followNativeCliSession?: (id: string, deliveryId?: NativeAgentDeliveryId) => void;
   loadOlder: () => void;
   messages: Message[];
   openAgentCard?: (id: string) => void;

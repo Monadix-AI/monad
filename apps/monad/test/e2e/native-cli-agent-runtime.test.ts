@@ -999,6 +999,14 @@ async function runAuthRelayRuntime(
   expect(res.status).toBe(200);
   expect(((await res.json()) as { state: string }).state).toBe('authenticated');
 
+  res = await call('GET', '/v1/native-cli-agents/mock-native-auth/usage');
+  expect(res.status).toBe(200);
+  expect(await res.json()).toMatchObject({
+    agentName: 'mock-native-auth',
+    provider: 'claude-code',
+    records: []
+  });
+
   expect(handlers.store.listNativeCliSessionsForTranscriptTarget('ses_UNKNOWN')).toHaveLength(0);
 
   res = await call(

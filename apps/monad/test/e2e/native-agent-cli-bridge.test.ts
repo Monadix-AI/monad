@@ -3,7 +3,13 @@ import { createHash } from 'node:crypto';
 import { mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { type Event, type ProjectId, type SessionUiEvent, workplaceProjectMembersExtKey } from '@monad/protocol';
+import {
+  type Event,
+  nativeAgentRuntimeInfoResponseSchema,
+  type ProjectId,
+  type SessionUiEvent,
+  workplaceProjectMembersExtKey
+} from '@monad/protocol';
 
 import { createHttpTransport } from '@/transports/http.ts';
 import { buildHandlers, mockModel, serveTransport, TRANSPORTS, type TransportHandle } from '../helpers.ts';
@@ -774,6 +780,18 @@ for (const kind of TRANSPORTS) {
       });
       expect(deliveryBody.delivery.outputSnapshot).toBeUndefined();
       expect(deliveryBody.delivery.output).toBeUndefined();
+      const observationRes = await t.fetch(
+        `/v1/native-agent-deliveries/${deliveryId}/observation?transcriptTargetId=${sessionId}`
+      );
+      expect(observationRes.status).toBe(200);
+      expect(await observationRes.json()).toMatchObject({
+        state: 'unavailable',
+        nativeCliSessionId: 'ncli_inbox',
+        deliveryId,
+        turn: { providerSessionRef: null, providerTurnId: null },
+        provider: 'codex',
+        reason: 'provider history unavailable'
+      });
 
       const second = await t.fetch(
         '/v1/internal/native-agent/project/inbox',
@@ -821,7 +839,8 @@ for (const kind of TRANSPORTS) {
       });
 
       expect(res.status).toBe(200);
-      expect(await res.json()).toMatchObject({
+      const body = nativeAgentRuntimeInfoResponseSchema.parse(await res.json());
+      expect(body).toMatchObject({
         agentId: 'codex',
         projectId: sessionId,
         nativeCliSessionId: 'ncli_runtime_info',
@@ -829,6 +848,25 @@ for (const kind of TRANSPORTS) {
         lastVisibleSeq: 0,
         pendingInboxCount: 2
       });
+      expect(body.runtime).toMatchObject({
+        id: 'ncli_runtime_info',
+        transcriptTargetId: sessionId,
+        agentName: 'codex',
+        provider: 'codex',
+        workingPath: '/tmp/project',
+        launchMode: 'app-server',
+        runtimeRole: 'managed-project-agent',
+        agentRuntimeId: 'ncli_runtime_info',
+        state: 'running',
+        session: { providerSessionRef: null },
+        lastDeliveredSeq: 2,
+        lastVisibleSeq: 0,
+        pendingApprovalCount: 0
+      });
+      expect(body.runtime && 'pid' in body.runtime).toBe(false);
+      expect(body.runtime && 'outputSnapshot' in body.runtime).toBe(false);
+      expect(body.runtime && 'output' in body.runtime).toBe(false);
+      expect(body.runtime && 'exitCode' in body.runtime).toBe(false);
     });
 
     test('native CLI observation endpoint reports unavailable for persisted managed sessions without history', async () => {

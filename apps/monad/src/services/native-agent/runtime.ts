@@ -1,7 +1,9 @@
-import type { NativeAgentRuntimeInfoResponse, ProjectId } from '@monad/protocol';
+import type { NativeAgentRuntime, NativeAgentRuntimeInfoResponse, ProjectId } from '@monad/protocol';
 import type { createDaemonHandlers } from '@/handlers/handlers.ts';
+import type { NativeCliSessionRow } from '@/store/db/index.ts';
 
 import { createHash, timingSafeEqual } from 'node:crypto';
+import { nativeAgentRuntimeSchema } from '@monad/protocol';
 
 import { HandlerError } from '@/handlers/handler-error.ts';
 
@@ -21,12 +23,33 @@ function tokenMatchesHash(providedToken: string, expectedHash: string): boolean 
   return provided.length === expected.length && timingSafeEqual(provided, expected);
 }
 
+function runtimeSummary(nativeSession: NativeCliSessionRow): NativeAgentRuntime {
+  return nativeAgentRuntimeSchema.parse({
+    id: nativeSession.id,
+    transcriptTargetId: nativeSession.transcriptTargetId,
+    agentName: nativeSession.agentName,
+    provider: nativeSession.provider,
+    workingPath: nativeSession.workingPath,
+    launchMode: nativeSession.launchMode,
+    runtimeRole: nativeSession.runtimeRole,
+    agentRuntimeId: nativeSession.agentRuntimeId,
+    state: nativeSession.state,
+    session: { providerSessionRef: nativeSession.providerSessionRef },
+    lastDeliveredSeq: nativeSession.lastDeliveredSeq,
+    lastVisibleSeq: nativeSession.lastVisibleSeq,
+    pendingApprovalCount: 0,
+    startedAt: nativeSession.startedAt,
+    updatedAt: nativeSession.updatedAt,
+    exitedAt: nativeSession.exitedAt
+  });
+}
+
 export function createNativeAgentRuntimeService(handlers: ReturnType<typeof createDaemonHandlers>) {
   const store = handlers._nativeAgentStore;
   return {
     requireManagedBinding(headers: Headers): {
       binding: NativeAgentRuntimeBinding;
-      nativeSession: NonNullable<ReturnType<typeof store.getNativeCliSession>>;
+      nativeSession: NativeCliSessionRow;
     } {
       const nativeCliSessionId = headers.get('x-monad-native-cli-session-id');
       if (!nativeCliSessionId) {
@@ -81,11 +104,12 @@ export function createNativeAgentRuntimeService(handlers: ReturnType<typeof crea
 
     info(args: {
       binding: NativeAgentRuntimeBinding;
-      nativeSession: NonNullable<ReturnType<typeof store.getNativeCliSession>>;
+      nativeSession: NativeCliSessionRow;
       serverUrl: string;
     }): NativeAgentRuntimeInfoResponse {
       return {
         ...args.binding,
+        runtime: runtimeSummary(args.nativeSession),
         serverUrl: args.serverUrl,
         workdir: args.nativeSession.workingPath,
         providerSessionRef: args.nativeSession.providerSessionRef,

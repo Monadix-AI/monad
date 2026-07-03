@@ -1,4 +1,4 @@
-import type { MessageAttachmentRef, NativeCliObservationEvent } from '@monad/protocol';
+import type { MessageAttachmentRef, NativeAgentDeliveryId, NativeCliObservationEvent } from '@monad/protocol';
 import type { ProductIconId } from '@monad/ui';
 
 // UI view-model types for the workplace surface. These are render shapes the components
@@ -71,6 +71,7 @@ export interface Message {
     tag: string;
   }>;
   nativeCliSessionId?: string;
+  deliveryId?: NativeAgentDeliveryId;
   developerOnly?: boolean;
   systemTone?: 'error';
   systemDetail?: string;
@@ -120,6 +121,7 @@ export interface AgentTask {
 export interface NativeCliStreamView {
   id: string;
   agentName: string;
+  templateAgentName?: string;
   provider: string;
   tag: string;
   icon?: Participant['icon'];

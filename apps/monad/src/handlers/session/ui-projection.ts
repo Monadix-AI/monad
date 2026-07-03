@@ -8,12 +8,14 @@ import {
   appendBoundedText,
   CHANNEL_REPARSE_MIN_DELTA,
   channelPartialDisplayText,
+  deliveryIdFromData,
   displayFromToolResultData,
   isEvictable,
   isSilentChannelMessage,
   isUnknownToolResult,
   itemKey,
   MAX_NATIVE_CLI_UI_OUTPUT,
+  nativeCliSessionIdFromData,
   nativeCliToolItem,
   partsFromMessage,
   sourceFromData,
@@ -99,6 +101,24 @@ export class SessionUiProjector {
   private findMessage(id: string): UIMessageItem | undefined {
     const item = this.items.get(itemKey('message', id));
     return item?.kind === 'message' ? item : undefined;
+  }
+
+  private messageObservationPointers(
+    payload: { nativeCliSessionId?: string; deliveryId?: `deliv_${string}` },
+    existing?: UIMessageItem
+  ): Pick<UIMessageItem, 'nativeCliSessionId' | 'deliveryId'> {
+    return {
+      ...(payload.nativeCliSessionId
+        ? { nativeCliSessionId: payload.nativeCliSessionId }
+        : existing?.nativeCliSessionId
+          ? { nativeCliSessionId: existing.nativeCliSessionId }
+          : {}),
+      ...(payload.deliveryId
+        ? { deliveryId: payload.deliveryId }
+        : existing?.deliveryId
+          ? { deliveryId: existing.deliveryId }
+          : {})
+    };
   }
 
   private setMessage(item: UIMessageItem): SessionUiEvent {
@@ -221,6 +241,12 @@ export class SessionUiProjector {
         ...(message.role === 'assistant' && sourceFromData(message.data)
           ? { source: sourceFromData(message.data) }
           : {}),
+        ...(message.role === 'assistant' && nativeCliSessionIdFromData(message.data)
+          ? { nativeCliSessionId: nativeCliSessionIdFromData(message.data) }
+          : {}),
+        ...(message.role === 'assistant' && deliveryIdFromData(message.data)
+          ? { deliveryId: deliveryIdFromData(message.data) }
+          : {}),
         parts: partsFromMessage(message, this.opts),
         status: statusFromMessage(message),
         seq: message.createdAt
@@ -311,6 +337,7 @@ export class SessionUiProjector {
                 ? { agentName: existing.agentName }
                 : {}),
             ...(p.source ? { source: p.source } : existing?.source ? { source: existing.source } : {}),
+            ...this.messageObservationPointers(p, existing),
             parts,
             status: 'streaming',
             seq: existing?.seq ?? event.at
@@ -331,6 +358,7 @@ export class SessionUiProjector {
             role: 'assistant',
             ...(existing?.agentName ? { agentName: existing.agentName } : {}),
             ...(p.source ? { source: p.source } : existing?.source ? { source: existing.source } : {}),
+            ...this.messageObservationPointers(p, existing),
             parts,
             status: 'streaming',
             seq: existing?.seq ?? event.at
@@ -366,6 +394,7 @@ export class SessionUiProjector {
                 ? { agentName: existing.agentName }
                 : {}),
             ...(p.source ? { source: p.source } : existing?.source ? { source: existing.source } : {}),
+            ...this.messageObservationPointers(p, existing),
             parts,
             status: 'done',
             seq: p.source === 'managed-native-cli' ? event.at : (existing?.seq ?? event.at)

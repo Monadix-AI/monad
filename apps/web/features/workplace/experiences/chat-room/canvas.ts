@@ -1,4 +1,11 @@
 import type {
+  ContextUsagePayload,
+  NativeAgentDeliveryId,
+  NativeCliSessionView,
+  ProfileView,
+  UIItem
+} from '@monad/protocol';
+import type {
   ActivityRow,
   AgentTask,
   ApprovalView,
@@ -8,12 +15,19 @@ import type {
   QuestionView,
   TypingIndicator
 } from '../../types';
-import type { ProjectController } from '../../use-project';
 import type { ProjectExperienceActions, ProjectExperienceSnapshot, ProjectMentionTarget } from '../contracts';
 
 import { entityAvatarUrl } from '@monad/protocol';
 
-import { avatarForAgent, fmtTime, iconForAgent, summarizeTool, toolItems } from '../../project-projection';
+import {
+  avatarForAgent,
+  fmtTime,
+  iconForAgent,
+  type ProjectMember,
+  projectMemberStableId,
+  summarizeTool,
+  toolItems
+} from '../../project-projection';
 import { activityRowsFromTools } from '../shared/activity';
 import {
   buildNativeCliStreams,
@@ -39,7 +53,38 @@ export interface ChatRoomCanvas {
   mentionTargets: ProjectMentionTarget[];
   loadOlder: () => void;
   openAgentCard?: (id: string) => void;
-  followNativeCliSession?: (id: string) => void;
+  followNativeCliSession?: (id: string, deliveryId?: NativeAgentDeliveryId) => void;
+  sendDirective: ProjectExperienceActions['sendDirective'];
+  resolveApproval: ProjectExperienceActions['resolveApproval'];
+  answerQuestion: (requestId: string, answer: string) => void;
+  pauseAll: ProjectExperienceActions['pauseAll'];
+  sendNativeCliInput: ProjectExperienceActions['sendNativeCliInput'];
+  stopNativeCli: ProjectExperienceActions['stopNativeCli'];
+}
+
+interface ChatRoomCanvasSource {
+  projectId: string;
+  ready: boolean;
+  participants: Participant[];
+  railAgents: Participant[];
+  projectMembers: ProjectMember[];
+  source: {
+    transcriptItems: UIItem[];
+    liveItems: UIItem[];
+    liveTools?: Extract<UIItem, { kind: 'tool' }>[];
+    nativeCliSessions: NativeCliSessionView[];
+    human: Participant;
+    nativeCliAvatarSeeds: Map<string, string>;
+    nativeCliTags: Map<string, string>;
+    nativeCliDisplayNames: Map<string, string>;
+    showDeveloperOnlyMessages: boolean;
+  };
+  contextUsage?: ContextUsagePayload;
+  modelProfiles: ProfileView[];
+  approvals: ApprovalView[];
+  questions: QuestionView[];
+  mentionTargets: ProjectMentionTarget[];
+  loadOlder: () => void;
   sendDirective: ProjectExperienceActions['sendDirective'];
   resolveApproval: ProjectExperienceActions['resolveApproval'];
   answerQuestion: (requestId: string, answer: string) => void;
@@ -49,7 +94,7 @@ export interface ChatRoomCanvas {
 }
 
 export function toChatRoomCanvas(
-  c: ProjectController,
+  c: ChatRoomCanvasSource,
   actions?: Pick<ChatRoomCanvas, 'followNativeCliSession' | 'openAgentCard'>
 ): ChatRoomCanvas {
   const source = c.source;
@@ -80,7 +125,12 @@ export function toChatRoomCanvas(
     showDeveloperOnlyMessages: source.showDeveloperOnlyMessages
   });
   const activity = activityRowsFromTools(liveTools);
-  const nativeCliStreams = buildNativeCliStreams(source.nativeCliSessions, activity);
+  const nativeCliTemplateAgentNames = new Map(
+    (c.projectMembers ?? [])
+      .filter((member) => member.type === 'native-cli')
+      .map((member) => [projectMemberStableId(member), member.templateName ?? member.name])
+  );
+  const nativeCliStreams = buildNativeCliStreams(source.nativeCliSessions, activity, nativeCliTemplateAgentNames);
   const tasks: AgentTask[] = liveTools.slice(-6).map((s) => ({
     id: s.id,
     av:

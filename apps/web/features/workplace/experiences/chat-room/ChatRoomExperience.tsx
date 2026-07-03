@@ -12,7 +12,7 @@ export function ChatRoomExperienceView({ runtime }: ProjectExperienceView): Reac
         <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
           <ChatTranscript room={room} />
         </div>
-        <Composer room={room} />
+        <Composer room={runtime.composer} />
       </div>
 
       <AgentTasksRail room={room} />

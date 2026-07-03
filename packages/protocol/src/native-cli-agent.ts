@@ -139,6 +139,22 @@ export type NativeCliSessionState = z.infer<typeof nativeCliSessionStateSchema>;
 export const nativeCliAuthStateSchema = z.enum(['authenticated', 'unauthenticated', 'unknown']);
 export type NativeCliAuthState = z.infer<typeof nativeCliAuthStateSchema>;
 
+export const nativeCliUsageRecordSchema = z.object({
+  category: z.string().min(1),
+  resetAt: z.string().nullable(),
+  max: z.number().finite().nullable(),
+  current: z.number().finite().nullable()
+});
+export type NativeCliUsageRecord = z.infer<typeof nativeCliUsageRecordSchema>;
+
+export const nativeCliUsageResponseSchema = z.object({
+  agentName: z.string(),
+  provider: nativeCliProviderSchema,
+  checkedAt: z.string(),
+  records: z.array(nativeCliUsageRecordSchema)
+});
+export type NativeCliUsageResponse = z.infer<typeof nativeCliUsageResponseSchema>;
+
 export const nativeCliAuthSessionViewSchema = z.object({
   id: z.string().regex(/^ncliauth_/),
   controlToken: z.string().min(32),
@@ -181,6 +197,36 @@ export const nativeCliSessionViewSchema = z.object({
   exitedAt: z.string().nullable()
 });
 export type NativeCliSessionView = z.infer<typeof nativeCliSessionViewSchema>;
+
+export const nativeAgentRuntimeStateSchema = nativeCliSessionStateSchema;
+export type NativeAgentRuntimeState = z.infer<typeof nativeAgentRuntimeStateSchema>;
+
+export const nativeAgentSessionPointerSchema = z.object({
+  providerSessionRef: z.string().nullable().optional()
+});
+export type NativeAgentSessionPointer = z.infer<typeof nativeAgentSessionPointerSchema>;
+
+export const nativeAgentRuntimeSchema = z.object({
+  id: z.string().regex(/^ncli_/),
+  transcriptTargetId: transcriptTargetIdSchema,
+  agentName: z.string(),
+  provider: nativeCliProviderSchema,
+  productIcon: nativeCliProductIconSchema.optional(),
+  workingPath: z.string(),
+  launchMode: nativeCliLaunchModeSchema,
+  approvalOwnership: nativeCliApprovalOwnershipSchema.default('provider-owned'),
+  runtimeRole: nativeCliRuntimeRoleSchema.default('interactive'),
+  agentRuntimeId: z.string().nullable().optional(),
+  state: nativeAgentRuntimeStateSchema,
+  session: nativeAgentSessionPointerSchema.default({}),
+  lastDeliveredSeq: z.number().int().nonnegative().default(0),
+  lastVisibleSeq: z.number().int().nonnegative().default(0),
+  pendingApprovalCount: z.number().int().nonnegative().default(0),
+  startedAt: z.string(),
+  updatedAt: z.string(),
+  exitedAt: z.string().nullable()
+});
+export type NativeAgentRuntime = z.infer<typeof nativeAgentRuntimeSchema>;
 
 // Accept POSIX (`/abs`) and Windows (`C:\abs`, `C:/abs`, `\\server\share`) absolute paths. This is a
 // wire/browser-shared schema, so it can't import node:path — the daemon re-checks with path.isAbsolute.
@@ -289,10 +335,64 @@ export const nativeCliObservationEventSchema = z.object({
 });
 export type NativeCliObservationEvent = z.infer<typeof nativeCliObservationEventSchema>;
 
+export const nativeAgentTurnPointerSchema = z.object({
+  providerSessionRef: z.string().nullable().optional(),
+  providerTurnId: z.string().nullable().optional()
+});
+export type NativeAgentTurnPointer = z.infer<typeof nativeAgentTurnPointerSchema>;
+
+export const nativeAgentObservationRequestSchema = z
+  .object({
+    deliveryId: nativeAgentDeliveryIdSchema.optional(),
+    nativeCliSessionId: z
+      .string()
+      .regex(/^ncli_/)
+      .optional()
+  })
+  .refine((request) => request.deliveryId !== undefined || request.nativeCliSessionId !== undefined, {
+    message: 'deliveryId or nativeCliSessionId is required'
+  });
+export type NativeAgentObservationRequest = z.infer<typeof nativeAgentObservationRequestSchema>;
+
+export const nativeAgentObservationProjectionSchema = z.discriminatedUnion('state', [
+  z.object({
+    state: z.literal('live'),
+    nativeCliSessionId: z.string().regex(/^ncli_/),
+    deliveryId: nativeAgentDeliveryIdSchema.optional(),
+    turn: nativeAgentTurnPointerSchema.optional(),
+    provider: nativeCliProviderSchema,
+    events: z.array(nativeCliObservationEventSchema),
+    observedAt: z.string()
+  }),
+  z.object({
+    state: z.literal('history'),
+    nativeCliSessionId: z.string().regex(/^ncli_/),
+    deliveryId: nativeAgentDeliveryIdSchema.optional(),
+    turn: nativeAgentTurnPointerSchema.optional(),
+    provider: nativeCliProviderSchema,
+    events: z.array(nativeCliObservationEventSchema),
+    observedAt: z.string()
+  }),
+  z.object({
+    state: z.literal('unavailable'),
+    nativeCliSessionId: z
+      .string()
+      .regex(/^ncli_/)
+      .optional(),
+    deliveryId: nativeAgentDeliveryIdSchema.optional(),
+    turn: nativeAgentTurnPointerSchema.optional(),
+    provider: nativeCliProviderSchema.optional(),
+    reason: z.string()
+  })
+]);
+export type NativeAgentObservationProjection = z.infer<typeof nativeAgentObservationProjectionSchema>;
+
 export const nativeCliObservationAccessResponseSchema = z.discriminatedUnion('state', [
   z.object({
     state: z.literal('live'),
     nativeCliSessionId: z.string().regex(/^ncli_/),
+    deliveryId: nativeAgentDeliveryIdSchema.optional(),
+    turn: nativeAgentTurnPointerSchema.optional(),
     provider: nativeCliProviderSchema,
     output: z.string(),
     observedAt: z.string()
@@ -300,6 +400,8 @@ export const nativeCliObservationAccessResponseSchema = z.discriminatedUnion('st
   z.object({
     state: z.literal('history'),
     nativeCliSessionId: z.string().regex(/^ncli_/),
+    deliveryId: nativeAgentDeliveryIdSchema.optional(),
+    turn: nativeAgentTurnPointerSchema.optional(),
     provider: nativeCliProviderSchema,
     output: z.string(),
     observedAt: z.string()
@@ -307,6 +409,8 @@ export const nativeCliObservationAccessResponseSchema = z.discriminatedUnion('st
   z.object({
     state: z.literal('unavailable'),
     nativeCliSessionId: z.string().regex(/^ncli_/),
+    deliveryId: nativeAgentDeliveryIdSchema.optional(),
+    turn: nativeAgentTurnPointerSchema.optional(),
     provider: nativeCliProviderSchema.optional(),
     reason: z.string()
   })
@@ -321,7 +425,7 @@ export const managedNativeCliLifecycleLogEventSchema = z.enum([
 ]);
 export type ManagedNativeCliLifecycleLogEvent = z.infer<typeof managedNativeCliLifecycleLogEventSchema>;
 
-export const managedProjectRuntimePromptInputSchema = z.object({
+export const nativeAgentRuntimePromptInputSchema = z.object({
   agentName: nativeCliAgentNameSchema,
   displayName: nativeCliAgentNameSchema.optional(),
   projectId: projectIdSchema,
@@ -334,9 +438,12 @@ export const managedProjectRuntimePromptInputSchema = z.object({
   speed: z.enum(['standard', 'fast']).optional(),
   customPrompt: z.string().optional()
 });
-export type ManagedProjectRuntimePromptInput = z.infer<typeof managedProjectRuntimePromptInputSchema>;
+export type NativeAgentRuntimePromptInput = z.infer<typeof nativeAgentRuntimePromptInputSchema>;
 
-export const managedProjectRuntimeSpecSchema = z.object({
+export const managedProjectRuntimePromptInputSchema = nativeAgentRuntimePromptInputSchema;
+export type ManagedProjectRuntimePromptInput = NativeAgentRuntimePromptInput;
+
+export const nativeAgentRuntimeSpecSchema = z.object({
   workspace: z.string(),
   promptFile: z.string(),
   tokenFile: z.string(),
@@ -345,7 +452,10 @@ export const managedProjectRuntimeSpecSchema = z.object({
   env: z.record(z.string(), z.string()),
   prompt: z.string()
 });
-export type ManagedProjectRuntimeSpec = z.infer<typeof managedProjectRuntimeSpecSchema>;
+export type NativeAgentRuntimeSpec = z.infer<typeof nativeAgentRuntimeSpecSchema>;
+
+export const managedProjectRuntimeSpecSchema = nativeAgentRuntimeSpecSchema;
+export type ManagedProjectRuntimeSpec = NativeAgentRuntimeSpec;
 
 // Inline request-body cap (DoS guard). Longer content is spilled to a file and referenced as an
 // attachment: the message/notice/inbox copies carry only a bounded preview + the file reference.
@@ -474,12 +584,6 @@ export type NativeCliInboxDeliveryState = z.infer<typeof nativeCliInboxDeliveryS
 export const nativeAgentDeliveryStateSchema = z.enum(['queued', 'delivered', 'visible', 'consumed', 'failed']);
 export type NativeAgentDeliveryState = z.infer<typeof nativeAgentDeliveryStateSchema>;
 
-export const nativeAgentTurnPointerSchema = z.object({
-  providerSessionRef: z.string().nullable().optional(),
-  providerTurnId: z.string().nullable().optional()
-});
-export type NativeAgentTurnPointer = z.infer<typeof nativeAgentTurnPointerSchema>;
-
 export const nativeAgentDeliverySchema = z.object({
   id: nativeAgentDeliveryIdSchema,
   projectId: projectIdSchema,
@@ -579,6 +683,7 @@ export const nativeAgentRuntimeInfoResponseSchema = z.object({
   agentId: z.string(),
   projectId: projectIdSchema,
   nativeCliSessionId: z.string(),
+  runtime: nativeAgentRuntimeSchema.optional(),
   serverUrl: z.string(),
   workdir: z.string(),
   providerSessionRef: z.string().nullable().optional(),

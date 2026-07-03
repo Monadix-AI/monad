@@ -13,6 +13,7 @@ import type {
   NativeCliObservationAccessResponse,
   NativeCliResizeRequest,
   NativeCliSessionView,
+  NativeCliUsageResponse,
   ProjectId,
   TranscriptTargetId
 } from '@monad/protocol';
@@ -215,6 +216,33 @@ async function collectText(stream: ReadableStream<Uint8Array> | undefined): Prom
     output = appendBounded(output, decoder.decode(data), MAX_OUTPUT_SNAPSHOT);
   }
   return appendBounded(output, decoder.flush(), MAX_OUTPUT_SNAPSHOT);
+}
+
+async function collectProbeResult(
+  proc: {
+    pid: number;
+    stdout: ReadableStream<Uint8Array> | undefined;
+    stderr: ReadableStream<Uint8Array> | undefined;
+    exited: Promise<number>;
+  },
+  timeoutMs: number
+): Promise<{ timedOut: boolean; code: number | null; output: string }> {
+  const outputPromise = Promise.all([collectText(proc.stdout), collectText(proc.stderr)]).then(([stdout, stderr]) =>
+    appendBounded(stdout, stderr, MAX_OUTPUT_SNAPSHOT)
+  );
+  let done = false;
+  const exited = proc.exited.then((code) => {
+    done = true;
+    return { timedOut: false as const, code };
+  });
+  const timeout = Bun.sleep(timeoutMs).then(() => {
+    if (done) return { timedOut: false as const, code: null };
+    done = true;
+    killNativeCliProcess(proc.pid, 'SIGTERM');
+    return { timedOut: true as const, code: null };
+  });
+  const result = await Promise.race([exited, timeout]);
+  return { ...result, output: await outputPromise.catch(() => '') };
 }
 
 function readProcessRegistry(path: string | undefined): number[] {
@@ -1073,15 +1101,7 @@ export class NativeCliHost {
       stdout: 'pipe',
       stderr: 'pipe'
     });
-    const outputPromise = Promise.all([collectText(proc.stdout), collectText(proc.stderr)]).then(([stdout, stderr]) =>
-      appendBounded(stdout, stderr, MAX_OUTPUT_SNAPSHOT)
-    );
-    const timeout = Bun.sleep(AUTH_STATUS_TIMEOUT_MS).then(() => {
-      killNativeCliProcess(proc.pid, 'SIGTERM');
-      return { timedOut: true as const, code: null };
-    });
-    const result = await Promise.race([proc.exited.then((code) => ({ timedOut: false as const, code })), timeout]);
-    const output = await outputPromise.catch(() => '');
+    const result = await collectProbeResult(proc, AUTH_STATUS_TIMEOUT_MS);
     if (result.timedOut) {
       this.log.warn(
         {
@@ -1091,13 +1111,13 @@ export class NativeCliHost {
           argv: launch.argv,
           cwd: launch.cwd,
           timeoutMs: AUTH_STATUS_TIMEOUT_MS,
-          output
+          output: result.output
         },
         'native cli auth status probe timed out'
       );
       throw new NativeCliError('provider_timeout', `timed out checking native CLI auth status: ${agent.name}`);
     }
-    const state = statusProbe.parse(output, result.code);
+    const state = statusProbe.parse(result.output, result.code);
     this.log.debug(
       {
         event: 'native_cli.auth_status_result',
@@ -1105,7 +1125,7 @@ export class NativeCliHost {
         provider: agent.provider,
         exitCode: result.code,
         state,
-        output
+        output: result.output
       },
       'native cli auth status probe result'
     );
@@ -1113,8 +1133,75 @@ export class NativeCliHost {
       agentName: agent.name,
       provider: agent.provider,
       state,
-      output,
+      output: result.output,
       checkedAt: new Date().toISOString()
+    };
+  }
+
+  async usage(agentName: string): Promise<NativeCliUsageResponse> {
+    const agent = await this.requireAgent(agentName);
+    const adapter = getNativeCliProviderAdapter(agent.provider);
+    const checkedAt = new Date().toISOString();
+    const usageProbe = adapter.usage?.(agent);
+    if (!usageProbe) {
+      return {
+        agentName: agent.name,
+        provider: agent.provider,
+        checkedAt,
+        records: []
+      };
+    }
+    const launch = resolveNativeCliLaunchCommand(adapter, usageProbe.launch);
+    this.log.debug(
+      {
+        event: 'native_cli.usage',
+        agentName: agent.name,
+        provider: agent.provider,
+        argv: launch.argv,
+        cwd: launch.cwd
+      },
+      'native cli usage probe'
+    );
+    const proc = Bun.spawn(launch.argv, {
+      cwd: launch.cwd,
+      env: await this.buildSpawnEnv(launch.env),
+      detached: true,
+      stdin: 'ignore',
+      stdout: 'pipe',
+      stderr: 'pipe'
+    });
+    const result = await collectProbeResult(proc, AUTH_STATUS_TIMEOUT_MS);
+    if (result.timedOut) {
+      this.log.warn(
+        {
+          event: 'native_cli.usage_timeout',
+          agentName: agent.name,
+          provider: agent.provider,
+          argv: launch.argv,
+          cwd: launch.cwd,
+          timeoutMs: AUTH_STATUS_TIMEOUT_MS,
+          output: result.output
+        },
+        'native cli usage probe timed out'
+      );
+      throw new NativeCliError('provider_timeout', `timed out checking native CLI usage: ${agent.name}`);
+    }
+    const records = usageProbe.parse(result.output, result.code);
+    this.log.debug(
+      {
+        event: 'native_cli.usage_result',
+        agentName: agent.name,
+        provider: agent.provider,
+        exitCode: result.code,
+        recordCount: records.length
+      },
+      'native cli usage probe result'
+    );
+    return {
+      agentName: agent.name,
+      provider: agent.provider,
+      checkedAt: new Date().toISOString(),
+      records
     };
   }
 

@@ -1,3 +1,4 @@
+import type { NativeAgentDeliveryId } from '@monad/protocol';
 import type { Message } from '../types';
 
 import { EyeIcon } from '@hugeicons/core-free-icons';
@@ -49,11 +50,13 @@ const SYSTEM_EVENT_CSS = `
 `;
 
 export function FollowButton({
+  deliveryId,
   nativeCliSessionId,
   onFollowNativeCliSession
 }: {
+  deliveryId?: NativeAgentDeliveryId;
   nativeCliSessionId?: string;
-  onFollowNativeCliSession?: (id: string) => void;
+  onFollowNativeCliSession?: (id: string, deliveryId?: NativeAgentDeliveryId) => void;
 }): React.ReactElement | null {
   const t = useT();
   if (!nativeCliSessionId || !onFollowNativeCliSession) return null;
@@ -61,7 +64,7 @@ export function FollowButton({
     <button
       aria-label={t('web.workplace.observe')}
       className="workplace-action"
-      onClick={() => onFollowNativeCliSession(nativeCliSessionId)}
+      onClick={() => onFollowNativeCliSession(nativeCliSessionId, deliveryId)}
       style={{
         width: 24,
         height: 24,
@@ -97,7 +100,7 @@ export function SystemMessageRow({
 }: {
   msg: Message;
   onAgentClick?: (id: string) => void;
-  onFollowNativeCliSession?: (id: string) => void;
+  onFollowNativeCliSession?: (id: string, deliveryId?: NativeAgentDeliveryId) => void;
 }): React.ReactElement {
   const developer = msg.kind === 'developer' || msg.developerOnly === true;
   const agentProductIcon = msg.agentChip ? resolveProductIcon(msg.agentChip) : null;
@@ -156,6 +159,7 @@ export function SystemMessageRow({
         {msg.time ? <span style={TIME_STYLE}>{msg.time}</span> : null}
         <span className="workplace-system-follow">
           <FollowButton
+            deliveryId={msg.deliveryId}
             nativeCliSessionId={msg.nativeCliSessionId}
             onFollowNativeCliSession={onFollowNativeCliSession}
           />

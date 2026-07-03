@@ -112,6 +112,22 @@ export function sourceFromData(data: unknown): UIMessageItem['source'] | undefin
   return source === 'managed-native-cli' ? source : undefined;
 }
 
+export function nativeCliSessionIdFromData(data: unknown): string | undefined {
+  if (!data || typeof data !== 'object') return undefined;
+  const nativeCliSessionId = (data as { nativeCliSessionId?: unknown }).nativeCliSessionId;
+  return typeof nativeCliSessionId === 'string' && nativeCliSessionId.startsWith('ncli_')
+    ? nativeCliSessionId
+    : undefined;
+}
+
+export function deliveryIdFromData(data: unknown): `deliv_${string}` | undefined {
+  if (!data || typeof data !== 'object') return undefined;
+  const deliveryId = (data as { deliveryId?: unknown }).deliveryId;
+  return typeof deliveryId === 'string' && deliveryId.startsWith('deliv_')
+    ? (deliveryId as `deliv_${string}`)
+    : undefined;
+}
+
 export function isUnknownToolResult(tool: string | undefined, output: string | undefined): boolean {
   if (!tool || !output) return false;
   return output === `unknown tool "${tool}"` || output === `Error: unknown tool "${tool}"`;

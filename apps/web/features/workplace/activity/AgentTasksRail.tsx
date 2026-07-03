@@ -1,22 +1,39 @@
-import type { TranscriptTargetId } from '@monad/protocol';
+import type {
+  NativeAgentDeliveryId,
+  NativeAgentObservationProjection,
+  NativeCliObservationAccessResponse,
+  NativeCliUsageResponse,
+  TranscriptTargetId
+} from '@monad/protocol';
 import type {
   CSSProperties,
   KeyboardEvent as ReactKeyboardEvent,
   MouseEvent as ReactMouseEvent,
   PointerEvent as ReactPointerEvent
 } from 'react';
+import type { NativeCliUsageLimitMeter } from '../native-cli-observation';
 import type { NativeCliStreamView, Participant } from '../types';
 
 import { BrainIcon, EyeIcon, MegaphoneIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { skipToken, useGetNativeCliObservationQuery } from '@monad/client-rtk';
+import {
+  skipToken,
+  useGetNativeAgentDeliveryObservationQuery,
+  useGetNativeCliObservationQuery,
+  useGetNativeCliUsageQuery
+} from '@monad/client-rtk';
+import { nativeAgentObservationProjectionSchema } from '@monad/protocol';
 import { ProductIcon } from '@monad/ui';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { useT } from '@/components/I18nProvider';
 import { AgentIdentity, AgentInstanceAvatar, resolveProductIcon } from '../Bits';
 import { NativeCliObservationPanel } from '../cli/NativeCliStreamModal';
-import { nativeCliStreamItems } from '../native-cli-observation';
+import {
+  nativeCliStreamItems,
+  nativeCliUsageLimitMeter,
+  nativeCliUsageLimitMeterFromResponse
+} from '../native-cli-observation';
 import { presenceColor, sans, sectionLabel } from '../styles';
 import { useWorkplaceUiStore } from '../workplace-ui-store';
 
@@ -34,6 +51,7 @@ export function agentObservationStream(
     | {
         agentId?: string;
         agentName?: string;
+        deliveryId?: NativeAgentDeliveryId;
         nativeCliSessionId?: string;
       }
     | null
@@ -58,6 +76,7 @@ export function observedRailAgent(
     | {
         agentId?: string;
         agentName?: string;
+        deliveryId?: NativeAgentDeliveryId;
         nativeCliSessionId?: string;
       }
     | null
@@ -88,31 +107,63 @@ function agentActivityPhaseMeta(agent: Participant): {
   return { label: 'Thinking', icon: BrainIcon };
 }
 
-function streamWithObservationAccess(
+export function observationProjectionFromAccess(
   stream: NativeCliStreamView | undefined,
-  access:
-    | {
-        state: 'live' | 'history';
-        output: string;
-        observedAt: string;
-      }
-    | {
-        state: 'unavailable';
-      }
-    | undefined
-): NativeCliStreamView | undefined {
-  if (!stream || !access) return stream;
-  if (access.state === 'unavailable') return { ...stream, output: '', items: [] };
-  return {
-    ...stream,
-    output: access.output,
-    items: nativeCliStreamItems({
+  access: NativeCliObservationAccessResponse | undefined,
+  deliveryId?: NativeAgentDeliveryId
+): NativeAgentObservationProjection | undefined {
+  if (!stream || !access) return undefined;
+  const projectedDeliveryId = access.deliveryId ?? deliveryId;
+  if (access.state === 'unavailable') {
+    return nativeAgentObservationProjectionSchema.parse({
+      state: 'unavailable',
+      nativeCliSessionId: stream.id,
+      ...(projectedDeliveryId ? { deliveryId: projectedDeliveryId } : {}),
+      ...(access.turn ? { turn: access.turn } : {}),
+      provider: access.provider,
+      reason: access.reason
+    });
+  }
+  return nativeAgentObservationProjectionSchema.parse({
+    state: access.state,
+    nativeCliSessionId: stream.id,
+    ...(projectedDeliveryId ? { deliveryId: projectedDeliveryId } : {}),
+    ...(access.turn ? { turn: access.turn } : {}),
+    provider: access.provider,
+    observedAt: access.observedAt,
+    events: nativeCliStreamItems({
       id: stream.id,
-      provider: stream.provider,
+      provider: access.provider,
       output: access.output,
       observedAt: access.observedAt
     })
+  });
+}
+
+export function streamWithObservationProjection(
+  stream: NativeCliStreamView | undefined,
+  projection: NativeAgentObservationProjection | undefined
+): NativeCliStreamView | undefined {
+  if (!stream || !projection) return stream;
+  if (projection.state === 'unavailable') return { ...stream, output: '', items: [] };
+  return {
+    ...stream,
+    output: projection.events.map((event) => event.text).join('\n\n'),
+    items: projection.events
   };
+}
+
+export function usageMeterFromObservationAccess(args: {
+  access?: NativeCliObservationAccessResponse;
+  provider?: NativeCliStreamView['provider'];
+  stream?: NativeCliStreamView;
+  usage?: NativeCliUsageResponse;
+}): NativeCliUsageLimitMeter | null {
+  const sourceOutput = args.access && args.access.state !== 'unavailable' ? args.access.output : args.stream?.output;
+  return (
+    nativeCliUsageLimitMeterFromResponse(args.usage) ??
+    nativeCliUsageLimitMeter({ output: sourceOutput, provider: args.provider ?? args.stream?.provider })
+  );
 }
 
 const agentStatusRingCss = `
@@ -286,13 +337,37 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
   const groups = groupProjectRailAgents(room.railAgents);
   const observedStream = agentObservationStream(observation, room.nativeCliStreams);
   const observedStreamId = observedStream?.id;
-  const observationAccessQuery = useGetNativeCliObservationQuery(
-    observedStreamId ? { id: observedStreamId, transcriptTargetId: room.projectId as TranscriptTargetId } : skipToken,
+  const observedDeliveryId = observation?.deliveryId;
+  const observationPollMs = observedStream?.status === 'running' ? 900 : 0;
+  const deliveryObservationAccessQuery = useGetNativeAgentDeliveryObservationQuery(
+    observedDeliveryId
+      ? { id: observedDeliveryId, transcriptTargetId: room.projectId as TranscriptTargetId }
+      : skipToken,
     {
-      pollingInterval: observedStream?.status === 'running' ? 900 : 0
+      pollingInterval: observationPollMs
     }
   );
-  const observedAccessStream = streamWithObservationAccess(observedStream, observationAccessQuery.data);
+  const observationAccessQuery = useGetNativeCliObservationQuery(
+    observedStreamId && !observedDeliveryId
+      ? { id: observedStreamId, transcriptTargetId: room.projectId as TranscriptTargetId }
+      : skipToken,
+    {
+      pollingInterval: observationPollMs
+    }
+  );
+  const observationAccess = deliveryObservationAccessQuery.data ?? observationAccessQuery.data;
+  const observationProjection = observationProjectionFromAccess(observedStream, observationAccess, observedDeliveryId);
+  const observedAccessStream = streamWithObservationProjection(observedStream, observationProjection);
+  const observedUsageAgentName = observedAccessStream?.templateAgentName;
+  const usageQuery = useGetNativeCliUsageQuery(observedUsageAgentName ?? skipToken, {
+    pollingInterval: observedAccessStream?.status === 'running' ? 15_000 : 0
+  });
+  const usageMeter = usageMeterFromObservationAccess({
+    access: observationAccess,
+    provider: observedAccessStream?.provider,
+    stream: observedStream,
+    usage: usageQuery.data
+  });
   const observedAgent = observedRailAgent(observation, observedStream, room.railAgents);
 
   useEffect(() => {
@@ -490,6 +565,7 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
           onBack={closeRailObservation}
           onStop={(id) => void room.stopNativeCli(id)}
           stream={observedAccessStream}
+          usageMeter={usageMeter}
         />
       ) : (
         <>

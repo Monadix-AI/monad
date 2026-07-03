@@ -4,7 +4,7 @@ import { z } from 'zod';
 
 import { offsetPaginationQuerySchema, offsetPaginationResponseSchema, SESSION_TITLE_MAX } from './control.ts';
 import { sessionOriginExtSchema, sessionOriginSchema, sessionStateSchema, sessionSurfaceSchema } from './domain.ts';
-import { principalIdSchema, projectIdSchema } from './ids.ts';
+import { messageIdSchema, nativeAgentDeliveryIdSchema, principalIdSchema, projectIdSchema } from './ids.ts';
 
 export const workplaceProjectSchema = z.object({
   id: projectIdSchema,
@@ -67,3 +67,37 @@ export type UpdateWorkplaceProjectResponse = z.infer<typeof updateWorkplaceProje
 
 export const deleteWorkplaceProjectResponseSchema = z.object({ deleted: z.literal(true) });
 export type DeleteWorkplaceProjectResponse = z.infer<typeof deleteWorkplaceProjectResponseSchema>;
+
+export const experienceParticipantTransportSchema = z.enum(['monad', 'acp', 'native-cli', 'custom']);
+export type ExperienceParticipantTransport = z.infer<typeof experienceParticipantTransportSchema>;
+
+export const experienceFanoutRecipientSchema = z.object({
+  participantId: z.string().min(1),
+  displayName: z.string().min(1).optional(),
+  transport: experienceParticipantTransportSchema,
+  runtimeId: z.string().min(1).optional()
+});
+export type ExperienceFanoutRecipient = z.infer<typeof experienceFanoutRecipientSchema>;
+
+export const experienceFanoutRequestSchema = z.object({
+  projectId: projectIdSchema,
+  experienceId: z.string().min(1),
+  triggerMessageId: messageIdSchema.optional(),
+  triggerMessageSeq: z.number().int().nonnegative().optional(),
+  recipients: z.array(experienceFanoutRecipientSchema).min(1),
+  createdAt: z.string().optional()
+});
+export type ExperienceFanoutRequest = z.infer<typeof experienceFanoutRequestSchema>;
+
+export const experienceProjectionEventSchema = z.object({
+  id: z.string().min(1),
+  projectId: projectIdSchema,
+  experienceId: z.string().min(1),
+  kind: z.enum(['system', 'message', 'thinking', 'ask', 'join', 'observation']),
+  orderKey: z.union([z.string(), z.number()]),
+  participantId: z.string().min(1).optional(),
+  sourceDeliveryId: nativeAgentDeliveryIdSchema.optional(),
+  payload: z.record(z.string(), z.unknown()),
+  createdAt: z.string()
+});
+export type ExperienceProjectionEvent = z.infer<typeof experienceProjectionEventSchema>;

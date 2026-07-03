@@ -102,6 +102,8 @@ export function messageToView(
     time,
     text: displayTextFromMessage(item),
     orderKey: item.seq,
+    ...(item.nativeCliSessionId ? { nativeCliSessionId: item.nativeCliSessionId } : {}),
+    ...(item.deliveryId ? { deliveryId: item.deliveryId } : {}),
     ...(reasoning ? { reasoning } : {}),
     ...(attachments.length ? { attachments } : {}),
     streaming: item.status === 'streaming'
@@ -254,7 +256,10 @@ function firstNativeCliSessionsByAgent(sessions: NativeCliSessionView[]): Native
   return [...first.values()];
 }
 
-function nativeCliStreamFromSession(session: NativeCliSessionView): NativeCliStreamView {
+function nativeCliStreamFromSession(
+  session: NativeCliSessionView,
+  templateAgentNames = new Map<string, string>()
+): NativeCliStreamView {
   const items = nativeCliStreamItems({
     id: session.id,
     provider: session.provider,
@@ -264,6 +269,9 @@ function nativeCliStreamFromSession(session: NativeCliSessionView): NativeCliStr
   return {
     id: session.id,
     agentName: session.agentName,
+    ...(templateAgentNames.get(session.agentName)
+      ? { templateAgentName: templateAgentNames.get(session.agentName) }
+      : {}),
     provider: session.provider,
     tag: nativeCliTag(session.provider),
     icon: productIcon(session.productIcon),
@@ -274,13 +282,18 @@ function nativeCliStreamFromSession(session: NativeCliSessionView): NativeCliStr
   };
 }
 
-function nativeCliStreamFromActivity(row: ActivityRow): NativeCliStreamView | undefined {
+function nativeCliStreamFromActivity(
+  row: ActivityRow,
+  templateAgentNames = new Map<string, string>()
+): NativeCliStreamView | undefined {
   if (!row.tool.startsWith('native-cli:')) return undefined;
   const provider = row.tool.slice('native-cli:'.length) || 'native-cli';
+  const agentName = row.agentName ?? row.detail ?? provider;
   const items = nativeCliStreamItems({ id: row.id, provider, output: row.output });
   return {
     id: row.id,
-    agentName: row.agentName ?? row.detail ?? provider,
+    agentName,
+    ...(templateAgentNames.get(agentName) ? { templateAgentName: templateAgentNames.get(agentName) } : {}),
     provider,
     tag: nativeCliTag(provider),
     status: row.status,
@@ -291,18 +304,21 @@ function nativeCliStreamFromActivity(row: ActivityRow): NativeCliStreamView | un
 
 export function buildNativeCliStreams(
   nativeCliSessions: NativeCliSessionView[],
-  activity: ActivityRow[]
+  activity: ActivityRow[],
+  templateAgentNames = new Map<string, string>()
 ): NativeCliStreamView[] {
   const byId = new Map<string, NativeCliStreamView>();
-  for (const session of nativeCliSessions) byId.set(session.id, nativeCliStreamFromSession(session));
+  for (const session of nativeCliSessions)
+    byId.set(session.id, nativeCliStreamFromSession(session, templateAgentNames));
   for (const row of activity) {
-    const stream = nativeCliStreamFromActivity(row);
+    const stream = nativeCliStreamFromActivity(row, templateAgentNames);
     if (!stream) continue;
     const existing = byId.get(stream.id);
     byId.set(stream.id, {
       ...existing,
       ...stream,
       agentName: existing?.agentName ?? stream.agentName,
+      templateAgentName: existing?.templateAgentName ?? stream.templateAgentName,
       workingPath: existing?.workingPath,
       output: stream.output || existing?.output || '',
       items: stream.items.length > 0 ? stream.items : (existing?.items ?? [])

@@ -14,7 +14,7 @@ import { z } from 'zod';
 
 import { clarifyAskerSchema, clarifyChoiceModeSchema } from './clarify.ts';
 import { costSchema, type EventType, finishReasonSchema, messageTypeSchema, tokenUsageSchema } from './domain.ts';
-import { agentIdSchema, messageIdSchema, sessionIdSchema } from './ids.ts';
+import { agentIdSchema, messageIdSchema, nativeAgentDeliveryIdSchema, sessionIdSchema } from './ids.ts';
 import {
   messageAttachmentRefSchema,
   nativeCliLaunchModeSchema,
@@ -97,6 +97,11 @@ export const agentErrorPayloadSchema = z.object({
 export const agentTokenPayloadSchema = z.object({
   messageId: messageIdSchema,
   agentName: z.string().optional(),
+  nativeCliSessionId: z
+    .string()
+    .regex(/^ncli_/)
+    .optional(),
+  deliveryId: nativeAgentDeliveryIdSchema.optional(),
   delta: z.string(),
   index: z.number().int().nonnegative(),
   source: z.enum(['managed-native-cli']).optional()
@@ -104,6 +109,11 @@ export const agentTokenPayloadSchema = z.object({
 
 export const agentReasoningPayloadSchema = z.object({
   messageId: messageIdSchema,
+  nativeCliSessionId: z
+    .string()
+    .regex(/^ncli_/)
+    .optional(),
+  deliveryId: nativeAgentDeliveryIdSchema.optional(),
   delta: z.string(),
   index: z.number().int().nonnegative(),
   source: z.enum(['managed-native-cli']).optional()
@@ -112,6 +122,11 @@ export const agentReasoningPayloadSchema = z.object({
 export const agentMessagePayloadSchema = z.object({
   messageId: messageIdSchema,
   agentName: z.string().optional(),
+  nativeCliSessionId: z
+    .string()
+    .regex(/^ncli_/)
+    .optional(),
+  deliveryId: nativeAgentDeliveryIdSchema.optional(),
   text: z.string(),
   data: z.unknown().optional(),
   // File references shared with the message — lets live UI projections render the attachment

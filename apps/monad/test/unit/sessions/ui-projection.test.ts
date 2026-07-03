@@ -407,6 +407,64 @@ test('managed native CLI completion moves live order to completion time', () => 
   ]);
 });
 
+test('managed native CLI message projections retain delivery observation pointers', () => {
+  const deliveryId = newId('deliv');
+  const live = new SessionUiProjector();
+  live.applyEvent(
+    event('agent.token', {
+      messageId: 'msg_CLI',
+      agentName: 'codex',
+      nativeCliSessionId: 'ncli_codex',
+      deliveryId,
+      delta: '',
+      index: 0,
+      source: 'managed-native-cli'
+    })
+  );
+  const [settled] = live.applyEvent(
+    event('agent.message', {
+      messageId: 'msg_CLI',
+      agentName: 'codex',
+      nativeCliSessionId: 'ncli_codex',
+      deliveryId,
+      text: 'done',
+      source: 'managed-native-cli'
+    })
+  );
+
+  expect(settled?.kind === 'upsert' && settled.item.kind === 'message' ? settled.item : undefined).toMatchObject({
+    nativeCliSessionId: 'ncli_codex',
+    deliveryId
+  });
+
+  const hydrated = new SessionUiProjector();
+  hydrated.hydrateMessages([
+    {
+      id: 'msg_CLI',
+      transcriptTargetId: sessionId,
+      role: 'assistant',
+      text: 'done',
+      type: 'text',
+      data: {
+        agentName: 'codex',
+        nativeCliSessionId: 'ncli_codex',
+        deliveryId,
+        source: 'managed-native-cli'
+      },
+      stream: { status: 'complete' },
+      active: true,
+      createdAt: '2026-06-24T00:00:00.000Z'
+    }
+  ]);
+  const snapshot = hydrated.snapshot();
+  if (snapshot.kind !== 'snapshot') throw new Error('expected snapshot');
+  expect(snapshot.items[0]).toMatchObject({
+    kind: 'message',
+    nativeCliSessionId: 'ncli_codex',
+    deliveryId
+  });
+});
+
 test('live user messages keep chronological order before later managed native CLI replies', () => {
   const projector = new SessionUiProjector();
   projector.applyEvent(event('user.message', { messageId: 'msg_USER', text: 'hi all' }, '2026-06-24T10:00:00.000Z'));

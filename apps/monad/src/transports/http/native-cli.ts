@@ -14,6 +14,7 @@ import {
   nativeCliInputRequestSchema,
   nativeCliObservationAccessResponseSchema,
   nativeCliResizeRequestSchema,
+  nativeCliUsageResponseSchema,
   okResponseSchema,
   startNativeCliAgentRequestSchema,
   startNativeCliAgentResponseSchema,
@@ -124,6 +125,16 @@ export function createNativeCliController(handlers: ReturnType<typeof createDaem
         detail: { summary: 'Read managed native CLI delivery pointer state', tags: ['http-only'] }
       }
     )
+    .get(
+      '/native-agent-deliveries/:id/observation',
+      ({ params, query }) => handlers.nativeCli.observeDelivery({ id: params.id, ...query }),
+      {
+        params: nativeAgentDeliveryParams,
+        query: nativeCliScopeQuery,
+        response: { 200: nativeCliObservationAccessResponseSchema },
+        detail: { summary: 'Read native CLI observation through a delivery pointer', tags: ['http-only'] }
+      }
+    )
     .post(
       '/native-cli-sessions/:id/input',
       ({ params, query, body }) => handlers.nativeCli.input({ id: params.id, ...query, ...body }),
@@ -196,6 +207,11 @@ export function createNativeCliController(handlers: ReturnType<typeof createDaem
         detail: { summary: 'Check provider-owned native CLI login status' }
       }
     )
+    .get('/native-cli-agents/:name/usage', ({ params }) => handlers.nativeCli.usage({ agentName: params.name }), {
+      params: nativeCliAgentParams,
+      response: { 200: nativeCliUsageResponseSchema },
+      detail: { summary: 'Read provider-owned native CLI usage records' }
+    })
     .get(
       '/native-cli-auth-sessions/:id',
       ({ params, query }) => handlers.nativeCli.getAuth({ id: params.id, ...query }),

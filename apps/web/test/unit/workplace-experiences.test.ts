@@ -190,6 +190,7 @@ test('toExperienceRuntime: exposes project data and controlled communication act
     mentionTargets: [],
     sendDirective: async (text: string) => calls.push(`send:${text}`),
     resolveApproval: (id: string, decision: 'approve' | 'reject') => calls.push(`approval:${id}:${decision}`),
+    answerQuestion: (id: string, answer: string) => calls.push(`answer:${id}:${answer}`),
     pauseAll: () => calls.push('pauseAll'),
     switchProject: () => calls.push('switchProject'),
     addProjectMember: async () => {},
@@ -205,8 +206,12 @@ test('toExperienceRuntime: exposes project data and controlled communication act
   expect(runtime.host).toBe(runtime.snapshot);
   expect('participants' in runtime.snapshot).toBe(false);
   expect(runtime.chatRoom.canvas.participants).toHaveLength(1);
+  expect(runtime.composer).not.toBe(runtime.chatRoom.canvas);
+  expect(runtime.composer.participants).toHaveLength(1);
   expect(runtime.graphicView.canvas.participants).toHaveLength(1);
   expect('messages' in runtime.graphicView.canvas).toBe(false);
+  expect('composer' in runtime.graphicView.canvas).toBe(false);
+  expect('chatRoom' in runtime.graphicView.canvas).toBe(false);
   expect('nativeCliStreams' in runtime.graphicView.canvas).toBe(false);
   expect('sendNativeCliInput' in runtime.graphicView.canvas).toBe(false);
   expect(typeof runtime.actions.sendDirective).toBe('function');
@@ -219,6 +224,13 @@ test('toExperienceRuntime: exposes project data and controlled communication act
   void runtime.actions.sendDirective('hello');
   runtime.actions.resolveApproval('approval-1', 'approve');
   runtime.actions.switchExperience('graphic-view');
+  runtime.composer.answerQuestion('question-1', 'answer');
 
-  expect(calls).toEqual(['loadOlder', 'send:hello', 'approval:approval-1:approve', 'experience:graphic-view']);
+  expect(calls).toEqual([
+    'loadOlder',
+    'send:hello',
+    'approval:approval-1:approve',
+    'experience:graphic-view',
+    'answer:question-1:answer'
+  ]);
 });

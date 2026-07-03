@@ -5,6 +5,7 @@ import type { TFn } from '@/components/I18nProvider';
 import type { ChatRoomCanvas } from './chat-room/canvas';
 import type { ProjectExperienceActions, ProjectExperienceSnapshot } from './contracts';
 import type { GraphicViewCanvas } from './graphic-view/canvas';
+import type { ProjectComposerSurface } from './shared/composer';
 
 interface ChatRoomExperienceRuntime {
   canvas: ChatRoomCanvas;
@@ -16,6 +17,7 @@ interface GraphicViewExperienceRuntime {
 
 export interface ProjectExperienceRuntime {
   chatRoom: ChatRoomExperienceRuntime;
+  composer: ProjectComposerSurface;
   graphicView: GraphicViewExperienceRuntime;
   host: ProjectExperienceSnapshot;
   snapshot: ProjectExperienceSnapshot;

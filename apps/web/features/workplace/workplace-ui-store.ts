@@ -1,5 +1,7 @@
 'use client';
 
+import type { NativeAgentDeliveryId } from '@monad/protocol';
+
 import { create } from 'zustand';
 
 interface RailObservation {
@@ -7,6 +9,7 @@ interface RailObservation {
   agentId?: string;
   agentName?: string;
   nativeCliSessionId?: string;
+  deliveryId?: NativeAgentDeliveryId;
   turnId?: string;
 }
 
@@ -42,7 +45,12 @@ interface WorkplaceUiState {
   nativeCliAuthSession: NativeCliAuthSessionState | null;
   startingNativeCliAuthAgent: string | null;
   showDevSystemMessagesInStream: boolean;
-  followNativeCliSession: (projectId: string, sessionId: string, turnId?: string) => void;
+  followNativeCliSession: (
+    projectId: string,
+    sessionId: string,
+    turnId?: string,
+    deliveryId?: NativeAgentDeliveryId
+  ) => void;
   observeProjectAgent: (projectId: string, agent: { agentId: string; agentName: string }) => void;
   closeRailObservation: () => void;
   openProjectSettings: (projectId: string, intent?: ProjectSettingsState['intent']) => void;
@@ -62,8 +70,15 @@ export const useWorkplaceUiStore = create<WorkplaceUiState>((set) => ({
   nativeCliAuthSession: null,
   startingNativeCliAuthAgent: null,
   showDevSystemMessagesInStream: readShowDevSystemMessagesInStream(),
-  followNativeCliSession: (projectId, sessionId, turnId) =>
-    set({ railObservation: { projectId, nativeCliSessionId: sessionId, ...(turnId ? { turnId } : {}) } }),
+  followNativeCliSession: (projectId, sessionId, turnId, deliveryId) =>
+    set({
+      railObservation: {
+        projectId,
+        nativeCliSessionId: sessionId,
+        ...(turnId ? { turnId } : {}),
+        ...(deliveryId ? { deliveryId } : {})
+      }
+    }),
   observeProjectAgent: (projectId, agent) =>
     set({ railObservation: { projectId, agentId: agent.agentId, agentName: agent.agentName } }),
   closeRailObservation: () => set({ railObservation: null }),

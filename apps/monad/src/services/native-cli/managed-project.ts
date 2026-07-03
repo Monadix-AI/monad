@@ -1,4 +1,4 @@
-import type { ManagedProjectRuntimePromptInput, ManagedProjectRuntimeSpec, NativeCliLaunchMode } from '@monad/protocol';
+import type { NativeAgentRuntimePromptInput, NativeAgentRuntimeSpec, NativeCliLaunchMode } from '@monad/protocol';
 
 import { createHash, randomBytes } from 'node:crypto';
 import { existsSync, lstatSync, mkdirSync, readdirSync, unlinkSync, writeFileSync } from 'node:fs';
@@ -8,7 +8,7 @@ import managedProjectRuntimePromptPath from './prompts/managed-project-runtime-p
 
 const MANAGED_PROJECT_RUNTIME_PROMPT = (await Bun.file(managedProjectRuntimePromptPath).text()).trim();
 
-function buildManagedProjectPrompt(args: ManagedProjectRuntimePromptInput): string {
+function buildManagedProjectPrompt(args: NativeAgentRuntimePromptInput): string {
   const runtimeMetadata = [
     `Agent name: ${args.agentName}`,
     ...(args.displayName ? [`Display name: ${args.displayName}`] : []),
@@ -53,7 +53,7 @@ export function managedProjectCliWrapperName(platform: NodeJS.Platform = process
 }
 
 export function managedProjectLaunchMode(
-  agent: Pick<ManagedProjectRuntimePromptInput, 'provider'> & { defaultLaunchMode: NativeCliLaunchMode },
+  agent: Pick<NativeAgentRuntimePromptInput, 'provider'> & { defaultLaunchMode: NativeCliLaunchMode },
   requested?: NativeCliLaunchMode
 ): NativeCliLaunchMode {
   if (requested && requested !== 'pty') return requested;
@@ -123,8 +123,8 @@ export function prepareManagedProjectRuntime(
     serverUrl: string;
     baseEnvPath?: string;
     platform?: NodeJS.Platform;
-  } & Omit<ManagedProjectRuntimePromptInput, 'workspace'>
-): ManagedProjectRuntimeSpec {
+  } & Omit<NativeAgentRuntimePromptInput, 'workspace'>
+): NativeAgentRuntimeSpec {
   const platform = args.platform ?? process.platform;
   const workspace = managedProjectRuntimeWorkspace(args);
   const binDir = join(workspace, 'bin');

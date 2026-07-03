@@ -1,5 +1,4 @@
 import type { ActivityRow, Participant } from '../../types';
-import type { ProjectController } from '../../use-project';
 
 import { activityRowsFromTools } from '../shared/activity';
 
@@ -8,7 +7,14 @@ export interface GraphicViewCanvas {
   activity: ActivityRow[];
 }
 
-export function toGraphicViewCanvas(c: ProjectController): GraphicViewCanvas {
+interface GraphicViewCanvasSource {
+  participants: Participant[];
+  source: {
+    liveTools: Parameters<typeof activityRowsFromTools>[0];
+  };
+}
+
+export function toGraphicViewCanvas(c: GraphicViewCanvasSource): GraphicViewCanvas {
   return {
     participants: c.participants,
     activity: activityRowsFromTools(c.source.liveTools)

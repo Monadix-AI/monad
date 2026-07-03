@@ -41,6 +41,7 @@ export function WebComponentExperience({
   const [loadError, setLoadError] = useState<string | null>(null);
   const hostApi = useMemo(
     () => ({
+      // TODO: add per-atom API permission controls before third-party workspace experiences ship.
       actions: view.runtime.actions,
       embedded: view.embedded,
       host: view.runtime.host,

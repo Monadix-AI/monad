@@ -231,3 +231,30 @@ test('managed native CLI observation reports unavailable when only persisted poi
     reason: 'provider history unavailable'
   });
 });
+
+test('native CLI usage returns empty records when the adapter has no usage probe', async () => {
+  const host = new NativeCliHost({
+    store: createStore(),
+    bus: new EventBus(),
+    agents: async () => [
+      {
+        name: 'codex',
+        provider: 'codex',
+        command: 'codex',
+        enabled: true,
+        defaultLaunchMode: 'app-server',
+        allowDangerousMode: false,
+        approvalOwnership: 'provider-owned'
+      }
+    ]
+  });
+
+  const usage = await host.usage('codex');
+
+  expect(usage).toMatchObject({
+    agentName: 'codex',
+    provider: 'codex',
+    records: []
+  });
+  expect(typeof usage.checkedAt).toBe('string');
+});

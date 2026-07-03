@@ -5,7 +5,8 @@ import type {
   NativeCliHistoryPageRequest,
   NativeCliLaunchMode,
   NativeCliProductIcon,
-  NativeCliProvider
+  NativeCliProvider,
+  NativeCliUsageRecord
 } from '@monad/protocol';
 import type { BinProbes } from '@/infra/resolve-binary.ts';
 
@@ -205,6 +206,11 @@ interface NativeCliModelOptionsProbe {
   parse(output: string, exitCode: number | null): string[];
 }
 
+interface NativeCliUsageProbe {
+  launch: NativeCliLaunchSpec;
+  parse(output: string, exitCode: number | null): NativeCliUsageRecord[];
+}
+
 export interface NativeCliArgumentSupport {
   flags: string[];
   reasoningEfforts: string[];
@@ -228,6 +234,7 @@ export interface NativeCliProviderAdapter {
   buildAuthStatusLaunch(agent: NativeCliAgentView): NativeCliLaunchSpec;
   authStatus(agent: NativeCliAgentView): NativeCliAuthStatusProbe;
   argumentSupport?(agent: NativeCliAgentView): NativeCliArgumentSupportProbe;
+  usage?(agent: NativeCliAgentView): NativeCliUsageProbe;
   parseAuthStatus(output: string, exitCode: number | null): NativeCliAuthState;
   requestHistoryPage?(handle: NativeCliRuntimeHandle, request: NativeCliHistoryPageRequest): string | number;
   initialize?(handle: NativeCliRuntimeHandle, context: NativeCliInitializeContext): void;

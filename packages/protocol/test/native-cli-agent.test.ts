@@ -14,6 +14,8 @@ import {
   NATIVE_AGENT_INLINE_TEXT_MAX,
   nativeAgentAttachmentInputSchema,
   nativeAgentDirectMessageSchema,
+  nativeAgentObservationProjectionSchema,
+  nativeAgentObservationRequestSchema,
   nativeAgentProjectInboxAckRequestSchema,
   nativeAgentProjectInboxAckResponseSchema,
   nativeAgentProjectInboxResponseSchema,
@@ -24,6 +26,9 @@ import {
   nativeAgentReadRequestSchema,
   nativeAgentReadResponseSchema,
   nativeAgentRuntimeInfoResponseSchema,
+  nativeAgentRuntimePromptInputSchema,
+  nativeAgentRuntimeSchema,
+  nativeAgentRuntimeSpecSchema,
   nativeAgentSendRequestSchema,
   nativeAgentSendResponseSchema,
   nativeCliAgentPresetSchema,
@@ -31,7 +36,9 @@ import {
   nativeCliApprovalResolutionRequestSchema,
   nativeCliAuthSessionViewSchema,
   nativeCliAuthStatusResponseSchema,
+  nativeCliObservationAccessResponseSchema,
   nativeCliSessionViewSchema,
+  nativeCliUsageResponseSchema,
   startNativeCliAgentRequestSchema,
   workplaceProjectMembersExtKey,
   workplaceProjectMembersExtSchema
@@ -202,6 +209,114 @@ test('native CLI session view carries managed project runtime fields', () => {
   expect(parsed.lastVisibleSeq).toBe(40);
 });
 
+test('native CLI usage response carries optional quota-style records', () => {
+  const parsed = nativeCliUsageResponseSchema.parse({
+    agentName: 'codex',
+    provider: 'codex',
+    checkedAt: '2026-07-03T00:00:00.000Z',
+    records: [
+      {
+        category: 'five_hour',
+        resetAt: '2026-07-03T05:00:00.000Z',
+        max: 100,
+        current: 42
+      },
+      {
+        category: 'weekly',
+        resetAt: null,
+        max: null,
+        current: null
+      }
+    ]
+  });
+
+  expect(parsed.records[0]?.category).toBe('five_hour');
+  expect(parsed.records[0]?.resetAt).toBe('2026-07-03T05:00:00.000Z');
+  expect(parsed.records[1]?.max).toBeNull();
+  expect(nativeCliUsageResponseSchema.safeParse({ ...parsed, records: [{ category: '' }] }).success).toBe(false);
+});
+
+test('native agent runtime contract is a raw-output-free host summary', () => {
+  const parsed = nativeAgentRuntimeSchema.parse({
+    id: 'ncli_1',
+    transcriptTargetId: 'prj_PROJECT',
+    agentName: 'codex',
+    provider: 'codex',
+    workingPath: '/tmp/project',
+    launchMode: 'app-server',
+    runtimeRole: 'managed-project-agent',
+    agentRuntimeId: 'nclirt_codex_project',
+    state: 'running',
+    session: { providerSessionRef: 'provider-thread' },
+    lastDeliveredSeq: 42,
+    lastVisibleSeq: 40,
+    pendingApprovalCount: 0,
+    outputSnapshot: '{"raw":"provider event"}',
+    pid: 123,
+    exitCode: null,
+    startedAt: '2026-06-28T00:00:00.000Z',
+    updatedAt: '2026-06-28T00:00:01.000Z',
+    exitedAt: null
+  });
+
+  expect(parsed.session.providerSessionRef).toBe('provider-thread');
+  expect(parsed.runtimeRole).toBe('managed-project-agent');
+  expect('outputSnapshot' in parsed).toBe(false);
+  expect('pid' in parsed).toBe(false);
+  expect('exitCode' in parsed).toBe(false);
+});
+
+test('native agent observation projection is addressed by pointers and excludes raw output', () => {
+  expect(nativeAgentObservationRequestSchema.safeParse({}).success).toBe(false);
+  expect(nativeAgentObservationRequestSchema.parse({ deliveryId: 'deliv_ABC123' }).deliveryId).toBe('deliv_ABC123');
+  expect(nativeAgentObservationRequestSchema.parse({ nativeCliSessionId: 'ncli_1' }).nativeCliSessionId).toBe('ncli_1');
+
+  const live = nativeAgentObservationProjectionSchema.parse({
+    state: 'live',
+    nativeCliSessionId: 'ncli_1',
+    deliveryId: 'deliv_ABC123',
+    turn: { providerSessionRef: 'provider-session', providerTurnId: 'turn-1' },
+    provider: 'codex',
+    output: '{"raw":"provider frame"}',
+    observedAt: '2026-06-28T00:00:01.000Z',
+    events: [
+      {
+        id: 'obs_1',
+        role: 'agent',
+        text: 'Working on it.',
+        source: 'codex-app-server'
+      }
+    ]
+  });
+
+  expect(live.state).toBe('live');
+  if (live.state !== 'live') throw new Error('expected live projection');
+  expect(live.events).toHaveLength(1);
+  expect(live.turn?.providerTurnId).toBe('turn-1');
+  expect('output' in live).toBe(false);
+  const access = nativeCliObservationAccessResponseSchema.parse({
+    state: 'history',
+    nativeCliSessionId: 'ncli_1',
+    deliveryId: 'deliv_ABC123',
+    turn: { providerSessionRef: 'provider-session', providerTurnId: 'turn-1' },
+    provider: 'codex',
+    output: '{"raw":"provider frame"}',
+    observedAt: '2026-06-28T00:00:01.000Z'
+  });
+  expect(access.state).toBe('history');
+  if (access.state !== 'history') throw new Error('expected history access');
+  expect(access.output).toContain('provider frame');
+  expect(access.turn?.providerTurnId).toBe('turn-1');
+  const unavailable = nativeAgentObservationProjectionSchema.parse({
+    state: 'unavailable',
+    nativeCliSessionId: 'ncli_1',
+    reason: 'Provider history unavailable'
+  });
+  expect(unavailable.state).toBe('unavailable');
+  if (unavailable.state !== 'unavailable') throw new Error('expected unavailable projection');
+  expect(unavailable.reason).toBe('Provider history unavailable');
+});
+
 test('workplace project members ext schema is shared by web and daemon', () => {
   const parsed = workplaceProjectMembersExtSchema.parse([
     { type: 'acp', name: 'reviewer', settings: { cwd: '/tmp/project', forwardMcp: true } },
@@ -278,8 +393,11 @@ test('native CLI auth views model provider-owned login relay without project ses
   ).toBe('unauthenticated');
 });
 
-test('managed project runtime prompt and prepared spec are protocol contracts', () => {
-  const promptInput = managedProjectRuntimePromptInputSchema.parse({
+test('native agent runtime prompt and prepared spec are protocol contracts', () => {
+  expect(managedProjectRuntimePromptInputSchema).toBe(nativeAgentRuntimePromptInputSchema);
+  expect(managedProjectRuntimeSpecSchema).toBe(nativeAgentRuntimeSpecSchema);
+
+  const promptInput = nativeAgentRuntimePromptInputSchema.parse({
     agentName: 'codex',
     projectId: 'prj_PROJECT',
     nativeCliSessionId: 'ncli_1',
@@ -297,7 +415,7 @@ test('managed project runtime prompt and prepared spec are protocol contracts', 
   expect(promptInput.reasoningEffort).toBe('high');
   expect(promptInput.speed).toBe('fast');
 
-  const spec = managedProjectRuntimeSpecSchema.parse({
+  const spec = nativeAgentRuntimeSpecSchema.parse({
     workspace: '/tmp/monad/workplace-agents/prj_PROJECT/codex',
     promptFile: '/tmp/monad/workplace-agents/prj_PROJECT/codex/managed-prompt.md',
     tokenFile: '/tmp/monad/workplace-agents/prj_PROJECT/codex/.monad-agent-token',
@@ -310,7 +428,7 @@ test('managed project runtime prompt and prepared spec are protocol contracts', 
   });
 
   expect(spec.env.MONAD_NATIVE_CLI_SESSION_ID).toBe('ncli_1');
-  expect(managedProjectRuntimeSpecSchema.safeParse({ ...spec, env: undefined }).success).toBe(false);
+  expect(nativeAgentRuntimeSpecSchema.safeParse({ ...spec, env: undefined }).success).toBe(false);
 });
 
 test('native agent project command schemas allow runtime-bound project defaults and require non-empty text', () => {
