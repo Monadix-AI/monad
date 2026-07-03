@@ -29,6 +29,7 @@ type SpeechWindow = Window &
   };
 
 type ComposerVoiceOptions = {
+  cancelSignal?: number;
   onVoiceText?: (text: string) => void;
   voice?: {
     modelConfigured?: boolean;
@@ -41,7 +42,7 @@ const VOICE_NO_SPEECH_CANCEL_MS = 8000;
 const VOICE_HARD_STOP_MS = 60_000;
 const VOICE_RMS_THRESHOLD = 0.035;
 
-export function useComposerVoice({ onVoiceText, voice }: ComposerVoiceOptions): {
+export function useComposerVoice({ cancelSignal, onVoiceText, voice }: ComposerVoiceOptions): {
   listening: boolean;
   toggleVoice: () => Promise<void>;
   voiceActive: boolean;
@@ -59,6 +60,8 @@ export function useComposerVoice({ onVoiceText, voice }: ComposerVoiceOptions): 
   const voiceHardStopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const voiceNoSpeechTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const voiceDetectedRef = useRef(false);
+  const voiceDiscardingRef = useRef(false);
+  const voiceEpochRef = useRef(0);
   const voiceStoppedForNoSpeechRef = useRef(false);
   const [listening, setListening] = useState(false);
   const [voiceBusy, setVoiceBusy] = useState(false);
@@ -190,6 +193,7 @@ export function useComposerVoice({ onVoiceText, voice }: ComposerVoiceOptions): 
       mediaRecorderStreamRef.current = stream;
       mediaRecorderChunksRef.current = [];
       recorder.ondataavailable = (event) => {
+        if (voiceDiscardingRef.current) return;
         if (event.data.size > 0) mediaRecorderChunksRef.current.push(event.data);
       };
       recorder.onerror = () => {
@@ -199,6 +203,8 @@ export function useComposerVoice({ onVoiceText, voice }: ComposerVoiceOptions): 
         stopMediaRecorderStream();
       };
       recorder.onstop = () => {
+        const discarded = voiceDiscardingRef.current;
+        voiceDiscardingRef.current = false;
         const chunks = mediaRecorderChunksRef.current;
         const mediaType = recorder.mimeType || chunks[0]?.type || 'audio/webm';
         const audio = new Blob(chunks, { type: mediaType });
@@ -207,20 +213,25 @@ export function useComposerVoice({ onVoiceText, voice }: ComposerVoiceOptions): 
         stopVoiceDetection();
         stopMediaRecorderStream();
         setListening(false);
+        if (discarded) return;
         if (voiceStoppedForNoSpeechRef.current && !voiceDetectedRef.current) {
           voiceStoppedForNoSpeechRef.current = false;
           return;
         }
         if (audio.size === 0) return;
         setVoiceBusy(true);
+        const epoch = voiceEpochRef.current;
         voice
           .transcribeAudio?.(audio)
           .then((text) => {
+            if (voiceEpochRef.current !== epoch) return;
             const trimmed = text.trim();
             if (trimmed) onVoiceText(trimmed);
           })
           .catch(() => {})
-          .finally(() => setVoiceBusy(false));
+          .finally(() => {
+            if (voiceEpochRef.current === epoch) setVoiceBusy(false);
+          });
       };
       setListening(true);
       startVoiceDetection(stream);
@@ -265,6 +276,21 @@ export function useComposerVoice({ onVoiceText, voice }: ComposerVoiceOptions): 
     voiceAvailable,
     voiceDisabledReason
   ]);
+
+  useEffect(() => {
+    if (!cancelSignal) return;
+    voiceEpochRef.current += 1;
+    voiceDiscardingRef.current = true;
+    recognitionRef.current?.stop();
+    recognitionRef.current = null;
+    mediaRecorderChunksRef.current = [];
+    const recorder = mediaRecorderRef.current;
+    if (recorder && recorder.state !== 'inactive') recorder.stop();
+    stopVoiceDetection();
+    stopMediaRecorderStream();
+    setListening(false);
+    setVoiceBusy(false);
+  }, [cancelSignal, stopMediaRecorderStream, stopVoiceDetection]);
 
   useEffect(() => {
     return () => {

@@ -1,7 +1,11 @@
 import type { NativeCliSessionRow } from '@/store/db/index.ts';
 
 import { afterEach, beforeEach, expect, test } from 'bun:test';
+import { mkdir, mkdtemp, rm, symlink, unlink, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
+import { createNativeAgentAttachmentReader } from '@/services/native-agent/attachments.ts';
 import { createStore } from '@/store/db/index.ts';
 
 let store: ReturnType<typeof createStore>;
@@ -194,6 +198,47 @@ test('message attachments register a file reference snapshot, not content', () =
   expect(store.getMessageAttachment('att_missing')).toBeNull();
 });
 
+test('message attachment reader rejects paths that changed after registration', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'monad-attachment-toctou-'));
+  try {
+    const workspace = join(dir, 'workspace');
+    const outside = join(dir, 'outside.txt');
+    const file = join(workspace, 'report.md');
+    await mkdir(workspace, { recursive: true });
+    await writeFile(outside, 'outside secret');
+    await writeFile(file, 'inside report');
+    store.insertWorkplaceProject({
+      id: 'prj_project',
+      title: 'project',
+      ownerPrincipalId: 'prn_test',
+      cwd: workspace,
+      state: 'active',
+      archived: false,
+      createdAt: '2026-06-28T00:00:00.000Z',
+      updatedAt: '2026-06-28T00:00:00.000Z'
+    });
+    store.registerMessageAttachment({
+      id: 'att_1',
+      projectId: 'prj_project',
+      path: file,
+      name: 'report.md',
+      mime: 'text/markdown',
+      bytes: 13,
+      preview: 'inside report',
+      createdBy: 'codex',
+      createdAt: '2026-06-28T00:00:01.000Z'
+    });
+    await unlink(file);
+    await symlink(outside, file);
+
+    await expect(createNativeAgentAttachmentReader(store).read('att_1', false)).rejects.toThrow(
+      'attachment path changed after registration'
+    );
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test('native agent direct messages round-trip an attachment reference', () => {
   store.upsertNativeCliSession({ ...row, id: 'ncli_direct' });
   const ref = store.registerMessageAttachment({
@@ -269,6 +314,61 @@ test('clearing a terminal native CLI provider session ref allows a managed resum
 
   expect(store.getNativeCliSession('ncli_old')?.providerSessionRef).toBeNull();
   expect(store.getNativeCliSession('ncli_new')?.providerSessionRef).toBe('provider-thread-1');
+});
+
+test('native CLI inbox items expose delivery pointers without raw provider output', () => {
+  store.insertWorkplaceProject({
+    id: 'prj_01KPROJECTDELIVERY000000000',
+    title: 'project',
+    ownerPrincipalId: 'prn_test',
+    state: 'active',
+    archived: false,
+    createdAt: '2026-06-28T00:00:00.000Z',
+    updatedAt: '2026-06-28T00:00:00.000Z'
+  });
+  store.upsertNativeCliSession({
+    ...row,
+    transcriptTargetId: 'prj_01KPROJECTDELIVERY000000000',
+    runtimeRole: 'managed-project-agent',
+    agentRuntimeId: 'ncli_1',
+    providerSessionRef: 'provider-session-1',
+    outputSnapshot: '{"raw":"provider output"}'
+  });
+  store.insertMessage(
+    'msg_01KDELIVERYTRIGGER00000000',
+    'prj_01KPROJECTDELIVERY000000000',
+    'hi',
+    '2026-06-28T00:00:01.000Z',
+    'user'
+  );
+
+  expect(
+    store.enqueueNativeCliInboxItem('ncli_1', 1, {
+      deliveryId: 'deliv_01KDELIVERYTEST0000000000',
+      projectId: 'prj_01KPROJECTDELIVERY000000000',
+      memberInstanceId: 'pmem_codex_1',
+      triggerMessageId: 'msg_01KDELIVERYTRIGGER00000000',
+      providerSessionRef: 'provider-session-1',
+      providerTurnId: 'turn-1',
+      createdAt: '2026-06-28T00:00:02.000Z'
+    })
+  ).toBe(true);
+
+  const [item] = store.listNativeCliInbox('ncli_1');
+  const delivery = store.getNativeAgentDelivery('deliv_01KDELIVERYTEST0000000000');
+
+  expect(item?.deliveryId).toBe('deliv_01KDELIVERYTEST0000000000');
+  expect(delivery).toMatchObject({
+    id: 'deliv_01KDELIVERYTEST0000000000',
+    projectId: 'prj_01KPROJECTDELIVERY000000000',
+    memberInstanceId: 'pmem_codex_1',
+    nativeCliSessionId: 'ncli_1',
+    triggerMessageId: 'msg_01KDELIVERYTRIGGER00000000',
+    triggerMessageSeq: 1,
+    state: 'queued',
+    turn: { providerSessionRef: 'provider-session-1', providerTurnId: 'turn-1' }
+  });
+  expect(JSON.stringify(delivery)).not.toContain('provider output');
 });
 
 test('deleteSession cleans up native CLI session rows', () => {

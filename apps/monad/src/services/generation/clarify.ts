@@ -14,6 +14,7 @@ import { newId } from '@monad/protocol';
 interface Pending {
   resolve: (answer: string) => void;
   timer?: ReturnType<typeof setTimeout>;
+  cleanup?: () => void;
   sessionId: TranscriptTargetId;
 }
 
@@ -60,7 +61,7 @@ export class ClarifyService {
   readonly askStructured = (
     sessionId: string,
     request: ClarifyAskRequest,
-    opts?: { waitForever?: boolean }
+    opts?: { signal?: AbortSignal; waitForever?: boolean }
   ): Promise<ClarifyAskResult> =>
     new Promise<ClarifyAskResult>((resolve) => {
       // Bound the pending registry — a flood of questions must not accumulate unbounded
@@ -71,15 +72,32 @@ export class ClarifyService {
       }
       const requestId = newId('clarify');
       const sid = sessionId as TranscriptTargetId;
+      if (opts?.signal?.aborted) {
+        resolve({ requestId, answer: '' });
+        return;
+      }
+      const settle = (answer: string, reason?: string) => {
+        const pending = this.pending.get(requestId);
+        if (!pending) return;
+        if (pending.timer) clearTimeout(pending.timer);
+        pending.cleanup?.();
+        this.pending.delete(requestId);
+        this.emit(sid, 'clarify.resolved', { requestId, answer, ...(reason ? { reason } : {}) });
+        resolve({ requestId, answer });
+      };
       const timer = opts?.waitForever
         ? undefined
         : setTimeout(() => {
-            if (this.pending.delete(requestId)) {
-              this.emit(sid, 'clarify.resolved', { requestId, answer: '', reason: 'timeout' });
-              resolve({ requestId, answer: '' });
-            }
+            settle('', 'timeout');
           }, this.timeoutMs);
-      this.pending.set(requestId, { resolve: (answer) => resolve({ requestId, answer }), timer, sessionId: sid });
+      const onAbort = () => settle('', 'aborted');
+      opts?.signal?.addEventListener('abort', onAbort, { once: true });
+      this.pending.set(requestId, {
+        resolve: (answer) => settle(answer),
+        timer,
+        cleanup: opts?.signal ? () => opts.signal?.removeEventListener('abort', onAbort) : undefined,
+        sessionId: sid
+      });
       this.emit(sid, 'clarify.requested', {
         requestId,
         question: request.question,
@@ -94,9 +112,6 @@ export class ClarifyService {
   respond(requestId: string, answer: string): boolean {
     const p = this.pending.get(requestId);
     if (!p) return false;
-    if (p.timer) clearTimeout(p.timer);
-    this.pending.delete(requestId);
-    this.emit(p.sessionId, 'clarify.resolved', { requestId, answer });
     p.resolve(answer);
     return true;
   }

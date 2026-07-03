@@ -2,7 +2,13 @@ import { z } from 'zod';
 
 import { clarifyChoiceModeSchema } from './clarify.ts';
 import { chatMessageSchema } from './domain.ts';
-import { attachmentIdSchema, messageIdSchema, projectIdSchema, transcriptTargetIdSchema } from './ids.ts';
+import {
+  attachmentIdSchema,
+  messageIdSchema,
+  nativeAgentDeliveryIdSchema,
+  projectIdSchema,
+  transcriptTargetIdSchema
+} from './ids.ts';
 
 export const nativeCliProviderSchema = z.enum(['codex', 'claude-code', 'gemini', 'qwen']);
 export type NativeCliProvider = z.infer<typeof nativeCliProviderSchema>;
@@ -135,6 +141,7 @@ export type NativeCliAuthState = z.infer<typeof nativeCliAuthStateSchema>;
 
 export const nativeCliAuthSessionViewSchema = z.object({
   id: z.string().regex(/^ncliauth_/),
+  controlToken: z.string().min(32),
   agentName: z.string(),
   provider: nativeCliProviderSchema,
   productIcon: nativeCliProductIconSchema.optional(),
@@ -267,11 +274,44 @@ export const nativeCliObservationEventSchema = z.object({
   id: z.string().min(1),
   role: nativeCliObservationRoleSchema,
   text: z.string().min(1),
-  source: z.enum(['codex-exec', 'codex-app-server', 'claude-code-sdk', 'gemini-cli', 'plain-text', 'unknown']),
+  source: z.enum([
+    'codex-exec',
+    'codex-app-server',
+    'claude-code-sdk',
+    'qwen-code-sdk',
+    'gemini-cli',
+    'plain-text',
+    'unknown'
+  ]),
   providerEventType: z.string().optional(),
+  createdAt: z.string().optional(),
   raw: z.unknown().optional()
 });
 export type NativeCliObservationEvent = z.infer<typeof nativeCliObservationEventSchema>;
+
+export const nativeCliObservationAccessResponseSchema = z.discriminatedUnion('state', [
+  z.object({
+    state: z.literal('live'),
+    nativeCliSessionId: z.string().regex(/^ncli_/),
+    provider: nativeCliProviderSchema,
+    output: z.string(),
+    observedAt: z.string()
+  }),
+  z.object({
+    state: z.literal('history'),
+    nativeCliSessionId: z.string().regex(/^ncli_/),
+    provider: nativeCliProviderSchema,
+    output: z.string(),
+    observedAt: z.string()
+  }),
+  z.object({
+    state: z.literal('unavailable'),
+    nativeCliSessionId: z.string().regex(/^ncli_/),
+    provider: nativeCliProviderSchema.optional(),
+    reason: z.string()
+  })
+]);
+export type NativeCliObservationAccessResponse = z.infer<typeof nativeCliObservationAccessResponseSchema>;
 
 export const managedNativeCliLifecycleLogEventSchema = z.enum([
   'project.managed_native_cli.member_start_error',
@@ -431,8 +471,38 @@ export type NativeAgentProjectReadResponse = z.infer<typeof nativeAgentProjectRe
 export const nativeCliInboxDeliveryStateSchema = z.enum(['queued', 'delivered', 'visible', 'consumed']);
 export type NativeCliInboxDeliveryState = z.infer<typeof nativeCliInboxDeliveryStateSchema>;
 
+export const nativeAgentDeliveryStateSchema = z.enum(['queued', 'delivered', 'visible', 'consumed', 'failed']);
+export type NativeAgentDeliveryState = z.infer<typeof nativeAgentDeliveryStateSchema>;
+
+export const nativeAgentTurnPointerSchema = z.object({
+  providerSessionRef: z.string().nullable().optional(),
+  providerTurnId: z.string().nullable().optional()
+});
+export type NativeAgentTurnPointer = z.infer<typeof nativeAgentTurnPointerSchema>;
+
+export const nativeAgentDeliverySchema = z.object({
+  id: nativeAgentDeliveryIdSchema,
+  projectId: projectIdSchema,
+  memberInstanceId: z.string().min(1),
+  nativeCliSessionId: z.string().regex(/^ncli_/),
+  triggerMessageId: messageIdSchema.optional(),
+  triggerMessageSeq: z.number().int().nonnegative(),
+  state: nativeAgentDeliveryStateSchema,
+  turn: nativeAgentTurnPointerSchema.default({}),
+  errorSummary: z.string().nullable().optional(),
+  createdAt: z.string(),
+  updatedAt: z.string().optional()
+});
+export type NativeAgentDelivery = z.infer<typeof nativeAgentDeliverySchema>;
+
+export const getNativeAgentDeliveryResponseSchema = z.object({
+  delivery: nativeAgentDeliverySchema
+});
+export type GetNativeAgentDeliveryResponse = z.infer<typeof getNativeAgentDeliveryResponseSchema>;
+
 export const nativeCliInboxItemSchema = z.object({
   seq: z.number().int().nonnegative(),
+  deliveryId: nativeAgentDeliveryIdSchema.optional(),
   deliveryState: nativeCliInboxDeliveryStateSchema.default('queued'),
   message: chatMessageSchema
 });

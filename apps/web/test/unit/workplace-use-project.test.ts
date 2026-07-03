@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 
-import { acpProgressText } from '../../features/workplace/use-project.ts';
+import { acpProgressText } from '../../features/workplace/experiences/chat-room/projection.ts';
 
 test('ACP progress hides empty waiting state', () => {
   expect(acpProgressText(undefined)).toBe('');

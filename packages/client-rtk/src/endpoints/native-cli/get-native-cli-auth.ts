@@ -6,17 +6,17 @@ import { sessionsApi } from '../sessions/index.ts';
 const getNativeCliAuthApi = sessionsApi.injectEndpoints({
   overrideExisting: true,
   endpoints: (builder) => ({
-    getNativeCliAuth: builder.query<NativeCliAuthSessionView, string>({
-      queryFn: (id, api: { extra: unknown }) =>
+    getNativeCliAuth: builder.query<NativeCliAuthSessionView, { id: string; controlToken: string }>({
+      queryFn: ({ id, controlToken }, api: { extra: unknown }) =>
         runTreaty(
-          () => clientOf(api).treaty.v1['native-cli-auth-sessions']({ id }).get(),
+          () => clientOf(api).treaty.v1['native-cli-auth-sessions']({ id }).get({ query: { controlToken } }),
           (raw) => raw.session
         ),
-      async onCacheEntryAdded(id, { cacheDataLoaded, cacheEntryRemoved, extra, updateCachedData }) {
+      async onCacheEntryAdded({ id, controlToken }, { cacheDataLoaded, cacheEntryRemoved, extra, updateCachedData }) {
         let dispose: (() => void) | undefined;
         try {
           await cacheDataLoaded;
-          dispose = clientOf({ extra }).streamNativeCliAuth(id, (session) => {
+          dispose = clientOf({ extra }).streamNativeCliAuth(id, controlToken, (session) => {
             updateCachedData(() => session);
           });
         } catch {

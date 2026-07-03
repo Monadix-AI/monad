@@ -80,6 +80,38 @@ test('Codex adapter launches an interactive CLI rooted at the requested working 
   expect(launch.approvalOwnership).toBe('provider-owned');
 });
 
+test('native CLI adapters pass managed agent workspace as an additional accessible directory', () => {
+  const codex = buildNativeCliLaunch(codexAgent, {
+    workingPath: '/tmp/project',
+    extraWorkingPaths: ['/tmp/agent-workspace'],
+    launchMode: 'pty'
+  });
+  const claude = buildNativeCliLaunch(claudeAgent, {
+    workingPath: '/tmp/project',
+    extraWorkingPaths: ['/tmp/agent-workspace'],
+    launchMode: 'json-stream'
+  });
+  const gemini = buildNativeCliLaunch(geminiAgent, {
+    workingPath: '/tmp/project',
+    extraWorkingPaths: ['/tmp/agent-workspace'],
+    launchMode: 'json-stream'
+  });
+  const qwen = buildNativeCliLaunch(qwenAgent, {
+    workingPath: '/tmp/project',
+    extraWorkingPaths: ['/tmp/agent-workspace'],
+    launchMode: 'json-stream'
+  });
+
+  expect(codex.argv).toContain('--add-dir');
+  expect(codex.argv).toContain('/tmp/agent-workspace');
+  expect(claude.argv).toContain('--add-dir');
+  expect(claude.argv).toContain('/tmp/agent-workspace');
+  expect(gemini.argv).toContain('--include-directories');
+  expect(gemini.argv).toContain('/tmp/agent-workspace');
+  expect(qwen.argv).toContain('--include-directories');
+  expect(qwen.argv).toContain('/tmp/agent-workspace');
+});
+
 test('Codex adapter passes requested model id and reasoning effort to provider launch', () => {
   const pty = buildNativeCliLaunch(codexAgent, {
     workingPath: '/tmp/project',

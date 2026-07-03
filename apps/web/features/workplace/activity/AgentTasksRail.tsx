@@ -1,20 +1,23 @@
+import type { TranscriptTargetId } from '@monad/protocol';
 import type {
   CSSProperties,
   KeyboardEvent as ReactKeyboardEvent,
   MouseEvent as ReactMouseEvent,
   PointerEvent as ReactPointerEvent
 } from 'react';
+import type { ChatRoomCanvas } from '../experiences/chat-room/canvas';
 import type { NativeCliStreamView, Participant } from '../types';
-import type { ProjectController } from '../use-project';
 
 import { BrainIcon, EyeIcon, MegaphoneIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
+import { skipToken, useGetNativeCliObservationQuery } from '@monad/client-rtk';
 import { ProductIcon } from '@monad/ui';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { useT } from '@/components/I18nProvider';
 import { AgentIdentity, AgentInstanceAvatar, resolveProductIcon } from '../Bits';
 import { NativeCliObservationPanel } from '../cli/NativeCliStreamModal';
+import { nativeCliStreamItems } from '../native-cli-observation';
 import { presenceColor, sans, sectionLabel } from '../styles';
 import { useWorkplaceUiStore } from '../workplace-ui-store';
 
@@ -84,6 +87,33 @@ function agentActivityPhaseMeta(agent: Participant): {
   if (agent.activityPhase === 'reading') return { label: 'Reading', icon: EyeIcon };
   if (agent.activityPhase === 'speaking') return { label: 'Speaking', icon: MegaphoneIcon };
   return { label: 'Thinking', icon: BrainIcon };
+}
+
+function streamWithObservationAccess(
+  stream: NativeCliStreamView | undefined,
+  access:
+    | {
+        state: 'live' | 'history';
+        output: string;
+        observedAt: string;
+      }
+    | {
+        state: 'unavailable';
+      }
+    | undefined
+): NativeCliStreamView | undefined {
+  if (!stream || !access) return stream;
+  if (access.state === 'unavailable') return { ...stream, output: '', items: [] };
+  return {
+    ...stream,
+    output: access.output,
+    items: nativeCliStreamItems({
+      id: stream.id,
+      provider: stream.provider,
+      output: access.output,
+      observedAt: access.observedAt
+    })
+  };
 }
 
 const agentStatusRingCss = `
@@ -235,7 +265,7 @@ export function groupProjectRailAgents(agents: readonly Participant[]): {
   return { active, standBy };
 }
 
-export function AgentTasksRail({ room }: { room: ProjectController }): React.ReactElement {
+export function AgentTasksRail({ room }: { room: ChatRoomCanvas }): React.ReactElement {
   const t = useT();
   const [railWidth, setRailWidth] = useState(DEFAULT_RAIL_WIDTH);
   const [resizing, setResizing] = useState(false);
@@ -249,6 +279,14 @@ export function AgentTasksRail({ room }: { room: ProjectController }): React.Rea
   const closeRailObservation = useWorkplaceUiStore((state) => state.closeRailObservation);
   const groups = groupProjectRailAgents(room.railAgents);
   const observedStream = agentObservationStream(observation, room.nativeCliStreams);
+  const observedStreamId = observedStream?.id;
+  const observationAccessQuery = useGetNativeCliObservationQuery(
+    observedStreamId ? { id: observedStreamId, transcriptTargetId: room.projectId as TranscriptTargetId } : skipToken,
+    {
+      pollingInterval: observedStream?.status === 'running' ? 900 : 0
+    }
+  );
+  const observedAccessStream = streamWithObservationAccess(observedStream, observationAccessQuery.data);
   const observedAgent = observedRailAgent(observation, observedStream, room.railAgents);
 
   useEffect(() => {
@@ -442,10 +480,10 @@ export function AgentTasksRail({ room }: { room: ProjectController }): React.Rea
           agent={observedAgent}
           agentName={observedAgent?.name ?? observation.agentName}
           focusTurnId={observation.turnId}
-          icon={observedAgent?.icon ?? observedStream?.icon}
+          icon={observedAgent?.icon ?? observedAccessStream?.icon}
           onBack={closeRailObservation}
           onStop={(id) => void room.stopNativeCli(id)}
-          stream={observedStream}
+          stream={observedAccessStream}
         />
       ) : (
         <>

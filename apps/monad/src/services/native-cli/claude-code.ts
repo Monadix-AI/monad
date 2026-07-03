@@ -92,6 +92,10 @@ function allowManagedBridgeTools(args: string[], managed: boolean): string[] {
   return [...args, '--allowedTools', 'Bash(monad project *)', 'Bash(monad agent *)', 'Bash(monad runtime info)'];
 }
 
+function claudeExtraWorkingPathArgs(paths: string[] | undefined): string[] {
+  return (paths ?? []).flatMap((path) => ['--add-dir', path]);
+}
+
 function withClaudeSkipApprovalArgs(args: string[], skipProviderApprovals: boolean): string[] {
   if (!skipProviderApprovals || hasFlag(args, '--dangerously-skip-permissions')) return args;
   return [...args, '--dangerously-skip-permissions'];
@@ -117,6 +121,7 @@ function buildClaudeLaunch(agent: NativeCliAgentView, opts: BuildNativeCliLaunch
   }
   args = allowManagedBridgeTools(args, !!opts.systemPromptFile);
   args = withClaudeSkipApprovalArgs(args, !!opts.skipProviderApprovals);
+  args = [...args, ...claudeExtraWorkingPathArgs(opts.extraWorkingPaths)];
   const launchArgs = launchMode === 'json-stream' ? withClaudeStreamJsonArgs(args) : args;
   return {
     argv: [agent.command, ...launchArgs],

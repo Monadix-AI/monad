@@ -56,13 +56,14 @@ export function claudeRecordEvents(
 ): NativeCliObservationEvent[] {
   const base = recordIndex === 0 ? id : `${id}:json:${recordIndex}`;
   if (isClaudeResultMessage(record)) {
+    const subtype = textValue(record.subtype);
     return [
       ...observation({
         id: `${base}:result`,
         role: record.is_error ? 'system' : 'agent',
         text: claudeResultText(record),
         source: 'claude-code-sdk',
-        providerEventType: 'result',
+        providerEventType: record.is_error && subtype ? subtype : 'result',
         raw: record
       }),
       ...permissionDenialEvents(

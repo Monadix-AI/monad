@@ -3,14 +3,14 @@ import type { ProjectController } from '../../features/workplace/use-project.ts'
 
 import { expect, test } from 'bun:test';
 
+import { toChatRoomCanvas } from '../../features/workplace/experiences/chat-room/canvas.ts';
+import { canvasToGraph, HUB_ID } from '../../features/workplace/experiences/graphic-view/graph-model.ts';
 import {
   getProjectExperience,
   listProjectExperiences,
   toProjectExperienceDefinitions
 } from '../../features/workplace/experiences/registry.ts';
 import { toExperienceRuntime } from '../../features/workplace/experiences/to-runtime.ts';
-import { canvasToGraph, HUB_ID } from '../../features/workplace/presets/graph/graph-model.ts';
-import { toCanvas } from '../../features/workplace/presets/to-canvas.ts';
 import { projectMemberParticipants } from '../../features/workplace/use-project.ts';
 
 const participant = (
@@ -65,48 +65,54 @@ test('canvasToGraph: only the most recent activity steps are projected', () => {
   expect(nodes.some((n) => n.id === 'a:a0')).toBe(false);
 });
 
-test('toCanvas: exposes display data but drops every management/communication action', () => {
+test('toChatRoomCanvas: exposes the chatroom surface without project management actions', () => {
   const controller = {
+    projectId: 'project-1',
     ready: true,
     projectTab: 'chat',
-    messages: [],
     participants: [participant('monad', 'agent')],
-    activity: [],
-    nativeCliStreams: [],
-    tasks: [],
-    typing: null,
-    firstItemIndex: 0,
+    railAgents: [participant('monad', 'agent')],
+    contextUsage: undefined,
+    modelProfiles: [],
+    approvals: [],
+    questions: [],
+    mentionTargets: [],
+    source: {
+      project: null,
+      transcriptItems: [],
+      liveItems: [],
+      liveTools: [],
+      nativeCliSessions: [],
+      human: participant('you', 'human'),
+      nativeCliAvatarSeeds: new Map(),
+      nativeCliTags: new Map(),
+      nativeCliDisplayNames: new Map(),
+      showDeveloperOnlyMessages: false
+    },
     loadOlder: () => {},
     sendNativeCliInput: async () => {},
     stopNativeCli: async () => {},
-    // management/communication actions that MUST NOT cross the seam
     sendDirective: async () => {},
     setWorkdir: async () => {},
     resolveApproval: () => {},
-    approveAll: () => {},
     pauseAll: () => {},
     switchProject: () => {},
-    preset: { id: 'chat', set: async () => {} }
+    answerQuestion: () => {},
+    experience: { id: 'chat-room', set: async () => {} }
   } as unknown as ProjectController;
 
-  const canvas = toCanvas(controller);
+  const canvas = toChatRoomCanvas(controller);
 
   expect(canvas.ready).toBe(true);
   expect(canvas.participants).toHaveLength(1);
+  expect(canvas.railAgents).toHaveLength(1);
   expect(canvas.nativeCliStreams).toEqual([]);
-  // the passthrough live-agent controls are present (host-provided, surfaced inline)
+  expect(typeof canvas.sendDirective).toBe('function');
+  expect(typeof canvas.resolveApproval).toBe('function');
+  expect(typeof canvas.answerQuestion).toBe('function');
   expect(typeof canvas.sendNativeCliInput).toBe('function');
   expect(typeof canvas.stopNativeCli).toBe('function');
-  // no management/communication action leaked onto the canvas
-  for (const leaked of [
-    'sendDirective',
-    'setWorkdir',
-    'resolveApproval',
-    'approveAll',
-    'pauseAll',
-    'switchProject',
-    'preset'
-  ]) {
+  for (const leaked of ['setWorkdir', 'switchProject', 'experience']) {
     expect(leaked in canvas).toBe(false);
   }
 });
@@ -164,6 +170,18 @@ test('toExperienceRuntime: exposes project data and controlled communication act
     activity: [],
     nativeCliStreams: [],
     tasks: [],
+    source: {
+      project: null,
+      transcriptItems: [],
+      liveItems: [],
+      liveTools: [],
+      nativeCliSessions: [],
+      human: participant('you', 'human'),
+      nativeCliAvatarSeeds: new Map(),
+      nativeCliTags: new Map(),
+      nativeCliDisplayNames: new Map(),
+      showDeveloperOnlyMessages: false
+    },
     contextUsage: undefined,
     modelProfiles: [],
     approvals: [],
@@ -172,7 +190,6 @@ test('toExperienceRuntime: exposes project data and controlled communication act
     mentionTargets: [],
     sendDirective: async (text: string) => calls.push(`send:${text}`),
     resolveApproval: (id: string, decision: 'approve' | 'reject') => calls.push(`approval:${id}:${decision}`),
-    approveAll: () => calls.push('approveAll'),
     pauseAll: () => calls.push('pauseAll'),
     switchProject: () => calls.push('switchProject'),
     addProjectMember: async () => {},
@@ -185,7 +202,13 @@ test('toExperienceRuntime: exposes project data and controlled communication act
   const runtime = toExperienceRuntime(controller, { switchExperience: (id) => calls.push(`experience:${id}`) });
 
   expect(runtime.snapshot.projectId).toBe('project-1');
-  expect(runtime.snapshot.participants).toHaveLength(1);
+  expect(runtime.host).toBe(runtime.snapshot);
+  expect('participants' in runtime.snapshot).toBe(false);
+  expect(runtime.chatRoom.canvas.participants).toHaveLength(1);
+  expect(runtime.graphicView.canvas.participants).toHaveLength(1);
+  expect('messages' in runtime.graphicView.canvas).toBe(false);
+  expect('nativeCliStreams' in runtime.graphicView.canvas).toBe(false);
+  expect('sendNativeCliInput' in runtime.graphicView.canvas).toBe(false);
   expect(typeof runtime.actions.sendDirective).toBe('function');
   expect(typeof runtime.actions.resolveApproval).toBe('function');
   expect(typeof runtime.actions.switchExperience).toBe('function');

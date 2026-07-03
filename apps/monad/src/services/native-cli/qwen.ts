@@ -65,6 +65,10 @@ function withQwenSkipApprovalArgs(args: string[], skipProviderApprovals: boolean
   return [...args, '--approval-mode=yolo'];
 }
 
+function qwenExtraWorkingPathArgs(paths: string[] | undefined): string[] {
+  return (paths ?? []).flatMap((path) => ['--include-directories', path]);
+}
+
 function buildQwenLaunch(agent: NativeCliAgentView, opts: BuildNativeCliLaunchOptions): NativeCliLaunchSpec {
   const launchMode = opts.launchMode ?? agent.defaultLaunchMode;
   let args = [...(agent.args ?? [])];
@@ -76,6 +80,7 @@ function buildQwenLaunch(agent: NativeCliAgentView, opts: BuildNativeCliLaunchOp
     args.push('--model', modelId);
   }
   args = withQwenSkipApprovalArgs(args, !!opts.skipProviderApprovals);
+  args = [...args, ...qwenExtraWorkingPathArgs(opts.extraWorkingPaths)];
   const launchArgs = launchMode === 'json-stream' ? withQwenStreamJsonArgs(args) : args;
   return {
     argv: [agent.command, ...launchArgs],

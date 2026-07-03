@@ -6,7 +6,10 @@ import type {
   GetStatsResponse,
   LedgerCategory,
   MessageAttachmentRef,
+  MessageId,
   MessageType,
+  NativeAgentDelivery,
+  NativeAgentDeliveryId,
   NativeAgentDirectMessage,
   NativeCliInboxDeliveryState,
   NativeCliInboxItem,
@@ -14,6 +17,7 @@ import type {
   NativeCliProvider,
   NativeCliRuntimeRole,
   NativeCliSessionState,
+  ProjectId,
   SearchHit,
   SearchMode,
   Session,
@@ -28,7 +32,7 @@ import type {
 } from '@monad/protocol';
 
 import { Database } from 'bun:sqlite';
-import { persistedIncludeInContext } from '@monad/protocol';
+import { nativeAgentDeliverySchema, newId, persistedIncludeInContext } from '@monad/protocol';
 import { and, count, desc, eq, inArray } from 'drizzle-orm';
 import { type BunSQLiteDatabase, drizzle } from 'drizzle-orm/bun-sqlite';
 
@@ -95,6 +99,17 @@ export interface NativeCliSessionRow {
   startedAt: string;
   updatedAt: string;
   exitedAt: string | null;
+}
+
+export interface EnqueueNativeCliInboxOptions {
+  deliveryId?: NativeAgentDeliveryId;
+  projectId?: ProjectId;
+  memberInstanceId?: string;
+  triggerMessageId?: MessageId;
+  providerSessionRef?: string | null;
+  providerTurnId?: string | null;
+  errorSummary?: string | null;
+  createdAt?: string;
 }
 
 export interface ChannelModeratorRoundTask {
@@ -1750,15 +1765,30 @@ export class Store {
   enqueueNativeCliInboxItem(
     nativeCliSessionId: string,
     messageSeq: number,
-    createdAt = new Date().toISOString()
+    createdAtOrOptions: string | EnqueueNativeCliInboxOptions = new Date().toISOString()
   ): boolean {
+    const options = typeof createdAtOrOptions === 'string' ? { createdAt: createdAtOrOptions } : createdAtOrOptions;
+    const createdAt = options.createdAt ?? new Date().toISOString();
     const result = this.sqlite
       .query(
         `INSERT OR IGNORE INTO native_cli_inbox_items
-           (native_cli_session_id, message_seq, state, created_at)
-         VALUES (?, ?, 'queued', ?)`
+           (native_cli_session_id, message_seq, delivery_id, project_id, member_instance_id, trigger_message_id,
+            provider_session_ref, provider_turn_id, error_summary, state, created_at, updated_at)
+         VALUES ($nativeCliSessionId, $messageSeq, $deliveryId, $projectId, $memberInstanceId, $triggerMessageId,
+            $providerSessionRef, $providerTurnId, $errorSummary, 'queued', $createdAt, $createdAt)`
       )
-      .run(nativeCliSessionId, messageSeq, createdAt);
+      .run({
+        $nativeCliSessionId: nativeCliSessionId,
+        $messageSeq: messageSeq,
+        $deliveryId: options.deliveryId ?? newId('deliv'),
+        $projectId: options.projectId ?? null,
+        $memberInstanceId: options.memberInstanceId ?? null,
+        $triggerMessageId: options.triggerMessageId ?? null,
+        $providerSessionRef: options.providerSessionRef ?? null,
+        $providerTurnId: options.providerTurnId ?? null,
+        $errorSummary: options.errorSummary ?? null,
+        $createdAt: createdAt
+      });
     return result.changes > 0;
   }
 
@@ -1767,12 +1797,13 @@ export class Store {
       .query(
         `UPDATE native_cli_inbox_items
          SET state = CASE WHEN state = 'queued' THEN 'delivered' ELSE state END,
-             delivered_at = COALESCE(delivered_at, ?)
+             delivered_at = COALESCE(delivered_at, ?),
+             updated_at = ?
          WHERE native_cli_session_id = ?
            AND message_seq <= ?
            AND state IN ('queued', 'delivered', 'visible')`
       )
-      .run(at, nativeCliSessionId, cursor);
+      .run(at, at, nativeCliSessionId, cursor);
     const cursorUpdated = this.setNativeCliDeliveredCursor(nativeCliSessionId, cursor);
     return update.changes > 0 || cursorUpdated;
   }
@@ -1782,12 +1813,13 @@ export class Store {
       .query(
         `UPDATE native_cli_inbox_items
          SET state = CASE WHEN state IN ('queued', 'delivered') THEN 'visible' ELSE state END,
-             visible_at = COALESCE(visible_at, ?)
+             visible_at = COALESCE(visible_at, ?),
+             updated_at = ?
          WHERE native_cli_session_id = ?
            AND message_seq <= ?
            AND state IN ('queued', 'delivered', 'visible')`
       )
-      .run(at, nativeCliSessionId, cursor);
+      .run(at, at, nativeCliSessionId, cursor);
     const cursorUpdated = this.setNativeCliVisibleCursor(nativeCliSessionId, cursor);
     return update.changes > 0 || cursorUpdated;
   }
@@ -1797,12 +1829,13 @@ export class Store {
       .query(
         `UPDATE native_cli_inbox_items
          SET state = 'consumed',
-             consumed_at = COALESCE(consumed_at, ?)
+             consumed_at = COALESCE(consumed_at, ?),
+             updated_at = ?
          WHERE native_cli_session_id = ?
            AND message_seq <= ?
            AND state IN ('queued', 'delivered', 'visible')`
       )
-      .run(at, nativeCliSessionId, cursor);
+      .run(at, at, nativeCliSessionId, cursor);
     const visibleUpdated = this.setNativeCliVisibleCursor(nativeCliSessionId, cursor);
     return update.changes > 0 || visibleUpdated;
   }
@@ -1839,12 +1872,20 @@ export class Store {
     return row?.created_at ?? null;
   }
 
+  messageIdForSeq(transcriptTargetId: TranscriptTargetId, seq: number): MessageId | null {
+    const row = this.sqlite
+      .query('SELECT id FROM messages WHERE transcript_target_id = ? AND rowid = ?')
+      .get(transcriptTargetId, seq) as { id: MessageId } | null;
+    return row?.id ?? null;
+  }
+
   listNativeCliInbox(nativeCliSessionId: string, limit = 50): NativeCliInboxItem[] {
     const session = this.getNativeCliSession(nativeCliSessionId);
     if (!session) return [];
     const rows = this.sqlite
       .query(
-        `SELECT m.*, i.message_seq AS _native_cli_seq, i.state AS _native_cli_state
+        `SELECT m.*, i.message_seq AS _native_cli_seq, i.delivery_id AS _native_cli_delivery_id,
+                i.state AS _native_cli_state
          FROM native_cli_inbox_items i
          JOIN messages m ON m.rowid = i.message_seq
          WHERE i.native_cli_session_id = ?
@@ -1857,6 +1898,7 @@ export class Store {
       .all(nativeCliSessionId, session.lastVisibleSeq, limit) as Array<Record<string, unknown>>;
     return rows.map((row) => ({
       seq: row._native_cli_seq as number,
+      deliveryId: (row._native_cli_delivery_id ?? undefined) as NativeAgentDeliveryId | undefined,
       deliveryState: row._native_cli_state as NativeCliInboxDeliveryState,
       message: rowToMessage({
         id: row.id as string,
@@ -1889,6 +1931,36 @@ export class Store {
       )
       .get(nativeCliSessionId, session.lastVisibleSeq) as { count: number } | null;
     return row?.count ?? 0;
+  }
+
+  getNativeAgentDelivery(deliveryId: NativeAgentDeliveryId): NativeAgentDelivery | null {
+    const row = this.sqlite
+      .query(
+        `SELECT i.*, s.transcript_target_id, s.agent_name, s.provider_session_ref AS session_provider_session_ref
+         FROM native_cli_inbox_items i
+         JOIN native_cli_sessions s ON s.id = i.native_cli_session_id
+         WHERE i.delivery_id = ?`
+      )
+      .get(deliveryId) as Record<string, unknown> | null;
+    if (!row) return null;
+    const projectId = (row.project_id ?? row.transcript_target_id) as string;
+    if (!projectId.startsWith('prj_')) return null;
+    return nativeAgentDeliverySchema.parse({
+      id: row.delivery_id,
+      projectId,
+      memberInstanceId: row.member_instance_id ?? row.agent_name,
+      nativeCliSessionId: row.native_cli_session_id,
+      triggerMessageId: row.trigger_message_id ?? undefined,
+      triggerMessageSeq: row.message_seq,
+      state: row.error_summary ? 'failed' : row.state,
+      turn: {
+        providerSessionRef: row.provider_session_ref ?? row.session_provider_session_ref ?? null,
+        providerTurnId: row.provider_turn_id ?? null
+      },
+      errorSummary: row.error_summary ?? null,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at ?? row.consumed_at ?? row.visible_at ?? row.delivered_at ?? row.created_at
+    });
   }
 
   insertNativeAgentDirectMessage(row: NativeAgentDirectMessage): void {

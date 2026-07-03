@@ -57,6 +57,7 @@ import { createSandboxModule } from '@/handlers/settings/sandbox/index.ts';
 import { createSkillsSettingsModule } from '@/handlers/settings/skills/index.ts';
 import { createStartupSettingsModule } from '@/handlers/settings/startup/index.ts';
 import { createToolBackendsModule } from '@/handlers/settings/tool-backends/index.ts';
+import { createTranscriptProjector } from '@/handlers/transcript/projector.ts';
 import { resolveNativeCliAgentEnv } from '@/services/native-cli/env.ts';
 import { NativeCliHost } from '@/services/native-cli/host.ts';
 import licensesData from '../generated/licenses.json';
@@ -249,6 +250,11 @@ export function createDaemonHandlers(deps: DaemonHandlerDeps) {
     }
   };
   const session = createSessionModule({ ...deps, nativeCliHost });
+  const transcriptProjector = createTranscriptProjector({
+    store: deps.store,
+    bus: deps.bus,
+    cache: deps.cache
+  });
   nativeCliHost.setManagedProjectOutputHandler(async (output) => {
     await session.completeManagedNativeCliProviderMessage(output);
   });
@@ -316,6 +322,7 @@ export function createDaemonHandlers(deps: DaemonHandlerDeps) {
     session,
     nativeCli: createNativeCliModule({ paths, host: nativeCliHost, store: deps.store }),
     _nativeAgentStore: deps.store,
+    _transcriptProjector: transcriptProjector,
     memory: createMemoryModule(
       deps.memoryService,
       deps.memorySetBackend,

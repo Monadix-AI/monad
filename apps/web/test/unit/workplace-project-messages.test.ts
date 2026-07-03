@@ -3,7 +3,8 @@ import type { Message } from '../../features/workplace/types.ts';
 
 import { expect, test } from 'bun:test';
 
-import { __workplaceProjectMessageTest, projectMemberParticipants } from '../../features/workplace/use-project.ts';
+import { __workplaceProjectMessageTest } from '../../features/workplace/experiences/chat-room/projection.ts';
+import { projectMemberParticipants } from '../../features/workplace/use-project.ts';
 
 const nativeCliSession = (overrides: Partial<NativeCliSessionView> = {}): NativeCliSessionView => ({
   id: 'ncli_01KWGEMINI000000000000000',
@@ -141,6 +142,52 @@ test('native CLI durable sessions keep timeline populated after live tool settle
     agentChip: { id: 'gemini', name: 'gemini' }
   });
   expect(messages.find((message) => message.kind === 'developer')).toBeUndefined();
+});
+
+test('Claude server errors project as agent-scoped system messages', () => {
+  const messages = __workplaceProjectMessageTest.buildProjectMessages({
+    persistedMessages: [],
+    nativeCliSessions: [
+      nativeCliSession({
+        id: 'ncli_claude_error',
+        agentName: 'pmem_claude_1234',
+        provider: 'claude-code',
+        productIcon: 'claude-code',
+        startedAt: '2026-06-29T10:00:00.000Z',
+        updatedAt: '2026-06-29T10:00:05.000Z',
+        outputSnapshot: JSON.stringify({
+          type: 'result',
+          subtype: 'server_error',
+          is_error: true,
+          result: 'API Error: overloaded_error. Claude Code is currently overloaded.',
+          session_id: 'claude-session'
+        })
+      })
+    ],
+    liveItems: [],
+    liveTools: [],
+    nativeCliDisplayNames: new Map([['pmem_claude_1234', 'Steve']])
+  });
+
+  expect(messages.map((message) => [message.id, message.text])).toEqual([
+    ['native-cli-session:ncli_claude_error', 'joined the project'],
+    ['native-cli-session-error:ncli_claude_error:ncli_claude_error:result', 'encountered an error']
+  ]);
+  expect(messages[1]).toMatchObject({
+    authorId: 'pmem_claude_1234',
+    authorName: 'Steve',
+    kind: 'system',
+    tag: 'Claude',
+    nativeCliSessionId: 'ncli_claude_error',
+    systemTone: 'error',
+    systemDetail: 'API Error: overloaded_error. Claude Code is currently overloaded.',
+    agentChip: {
+      id: 'pmem_claude_1234',
+      name: 'Steve',
+      icon: 'claude-code',
+      tag: 'Claude'
+    }
+  });
 });
 
 test('native CLI developer messages are projected only when explicitly enabled', () => {

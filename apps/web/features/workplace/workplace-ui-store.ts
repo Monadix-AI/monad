@@ -22,6 +22,7 @@ interface ProjectMemberSettingsState {
 
 interface NativeCliAuthSessionState {
   id: string;
+  controlToken: string;
   agentName: string;
 }
 

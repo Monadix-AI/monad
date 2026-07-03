@@ -747,9 +747,33 @@ for (const kind of TRANSPORTS) {
         json({ projectId: sessionId }, bindingHeaders(sessionId, 'ncli_inbox'))
       );
       expect(first.status).toBe(200);
-      expect(
-        ((await first.json()) as { items: Array<{ message: { text: string } }> }).items.map((item) => item.message.text)
-      ).toEqual(['please review this']);
+      const firstBody = (await first.json()) as { items: Array<{ deliveryId?: string; message: { text: string } }> };
+      expect(firstBody.items.map((item) => item.message.text)).toEqual(['please review this']);
+      expect(firstBody.items[0]?.deliveryId?.startsWith('deliv_')).toBe(true);
+      const deliveryId = firstBody.items[0]?.deliveryId;
+      if (!deliveryId) throw new Error('expected delivery id');
+      const deliveryRes = await t.fetch(`/v1/native-agent-deliveries/${deliveryId}?transcriptTargetId=${sessionId}`);
+      expect(deliveryRes.status).toBe(200);
+      const deliveryBody = (await deliveryRes.json()) as {
+        delivery: {
+          id: string;
+          projectId: string;
+          nativeCliSessionId: string;
+          triggerMessageSeq: number;
+          state: string;
+          outputSnapshot?: string;
+          output?: string;
+        };
+      };
+      expect(deliveryBody.delivery).toMatchObject({
+        id: deliveryId,
+        projectId: sessionId,
+        nativeCliSessionId: 'ncli_inbox',
+        triggerMessageSeq: 1,
+        state: 'visible'
+      });
+      expect(deliveryBody.delivery.outputSnapshot).toBeUndefined();
+      expect(deliveryBody.delivery.output).toBeUndefined();
 
       const second = await t.fetch(
         '/v1/internal/native-agent/project/inbox',
@@ -804,6 +828,25 @@ for (const kind of TRANSPORTS) {
         lastDeliveredSeq: 2,
         lastVisibleSeq: 0,
         pendingInboxCount: 2
+      });
+    });
+
+    test('native CLI observation endpoint reports unavailable for persisted managed sessions without history', async () => {
+      const handlers = buildHandlers(mockModel());
+      t = serveTransport(kind, createHttpTransport(handlers));
+      const sessionId = await createSession(t);
+      createManagedNativeSession(handlers, sessionId, 'ncli_observe_unavailable', 'codex', 'stopped');
+
+      const res = await t.fetch(
+        `/v1/native-cli-sessions/ncli_observe_unavailable/observation?transcriptTargetId=${sessionId}`
+      );
+
+      expect(res.status).toBe(200);
+      expect(await res.json()).toMatchObject({
+        state: 'unavailable',
+        nativeCliSessionId: 'ncli_observe_unavailable',
+        provider: 'codex',
+        reason: 'provider history unavailable'
       });
     });
   });

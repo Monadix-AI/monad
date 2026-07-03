@@ -1,20 +1,21 @@
 import type { ProjectExperienceView } from '../types';
 
 import { AgentTasksRail } from '../../activity/AgentTasksRail';
+import { ChatTranscript } from '../../activity/ChatTranscript';
 import { Composer } from '../../Composer';
-import { chatPreset } from '../../presets/chat/ChatPreset';
 
-export function ChatRoomExperienceView({ embedded, project, runtime, t }: ProjectExperienceView): React.ReactElement {
+export function ChatRoomExperienceView({ runtime }: ProjectExperienceView): React.ReactElement {
+  const room = runtime.chatRoom.canvas;
   return (
     <>
       <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
         <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-          {chatPreset.render({ canvas: runtime.snapshot, embedded, t })}
+          <ChatTranscript room={room} />
         </div>
-        <Composer room={project} />
+        <Composer room={room} />
       </div>
 
-      <AgentTasksRail room={project} />
+      <AgentTasksRail room={room} />
     </>
   );
 }

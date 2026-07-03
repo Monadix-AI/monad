@@ -22,15 +22,17 @@ export function nativeCliAuthSessionForView(
 
 export function NativeCliAuthModal({
   sessionId,
+  controlToken,
   agentName,
   onClose
 }: {
   sessionId: string;
+  controlToken: string;
   agentName: string;
   onClose: () => void;
 }): React.ReactElement {
   const t = useT();
-  const { data } = useGetNativeCliAuthQuery(sessionId);
+  const { data } = useGetNativeCliAuthQuery({ id: sessionId, controlToken });
   const [heartbeatAuth] = useHeartbeatNativeCliAuthMutation();
   const [inputAuth] = useInputNativeCliAuthMutation();
   const [stopAuth] = useStopNativeCliAuthMutation();
@@ -41,16 +43,16 @@ export function NativeCliAuthModal({
 
   useEffect(() => {
     if (!isLive) return;
-    void heartbeatAuth(sessionId)
+    void heartbeatAuth({ id: sessionId, controlToken })
       .unwrap()
       .catch(() => {});
     const timer = window.setInterval(() => {
-      void heartbeatAuth(sessionId)
+      void heartbeatAuth({ id: sessionId, controlToken })
         .unwrap()
         .catch(() => {});
     }, 5_000);
     return () => window.clearInterval(timer);
-  }, [heartbeatAuth, isLive, sessionId]);
+  }, [controlToken, heartbeatAuth, isLive, sessionId]);
 
   return (
     <CliTerminalModal
@@ -60,10 +62,10 @@ export function NativeCliAuthModal({
       id={sessionId}
       onClose={onClose}
       onInput={(input) => {
-        if (isLive) void inputAuth({ id: sessionId, input }).unwrap();
+        if (isLive) void inputAuth({ id: sessionId, controlToken, input }).unwrap();
       }}
       onStop={() => {
-        void stopAuth(sessionId).unwrap();
+        void stopAuth({ id: sessionId, controlToken }).unwrap();
         onClose();
       }}
       output={output}

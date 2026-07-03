@@ -22,10 +22,10 @@
     "@evilmartians/lefthook": "^2.1.9",
     "@inlang/paraglide-js": "^2.20.2",
     "@types/bun": "^1.3.14",
-    "@typescript/native-preview": "7.0.0-dev.20260702.3",
+    "@typescript/native-preview": "7.0.0-dev.20260703.1",
     "commitizen": "^4.3.2",
     "knip": "^6.24.0",
-    "rulesync": "^9.1.0",
+    "rulesync": "^9.1.1",
     "syncpack": "15.3.2",
     "turbo": "^2.10.2",
     "typescript": "6.0.3"

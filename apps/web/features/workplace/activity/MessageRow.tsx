@@ -72,7 +72,42 @@ const MESSAGE_MARKDOWN_CSS = `
 .workplace-message-markdown p:last-child {
   margin-bottom: 0;
 }
+
+.workplace-message-markdown a[href^="#monad-mention-"] {
+  border-radius: 4px;
+  background: var(--accent-blue);
+  color: white;
+  cursor: default;
+  display: inline-flex;
+  max-width: 100%;
+  padding: 0 4px;
+  pointer-events: none;
+  text-decoration: none;
+  vertical-align: baseline;
+}
+
+.workplace-message-markdown a[href^="#monad-mention-"]:hover {
+  text-decoration: none;
+}
 `;
+
+function escapeMarkdownLinkText(value: string): string {
+  return value.replace(/([\\[\]])/g, '\\$1');
+}
+
+function markdownTextWithMentionCapsules(text: string): string {
+  const tokens = parseMentionTokens(text);
+  if (tokens.length === 0) return text;
+  let cursor = 0;
+  const parts: string[] = [];
+  for (const token of tokens) {
+    parts.push(text.slice(cursor, token.start));
+    parts.push(`[@${escapeMarkdownLinkText(token.name)}](#monad-mention-${encodeURIComponent(token.id)})`);
+    cursor = token.end;
+  }
+  parts.push(text.slice(cursor));
+  return parts.join('');
+}
 
 function messageAgentBadge(msg: Message): React.ReactNode {
   if (msg.tag === 'AI') return <TagChip tag={msg.tag} />;
@@ -150,19 +185,14 @@ function MessageHeader({
 }
 
 function MarkdownWithMentions({ text, streaming }: { text: string; streaming?: boolean }): React.ReactElement {
-  const tokens = parseMentionTokens(text);
   return (
     <>
       <style>{MESSAGE_MARKDOWN_CSS}</style>
-      {tokens.length > 0 ? (
-        <MentionText text={text} />
-      ) : (
-        <Markdown
-          className="workplace-message-markdown !text-current"
-          streaming={streaming}
-          text={text}
-        />
-      )}
+      <Markdown
+        className="workplace-message-markdown !text-current"
+        streaming={streaming}
+        text={markdownTextWithMentionCapsules(text)}
+      />
     </>
   );
 }

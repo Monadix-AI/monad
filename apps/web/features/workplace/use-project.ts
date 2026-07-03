@@ -12,16 +12,7 @@
 //   - projects   = your Workplace Projects (useListWorkplaceProjectsQuery).
 
 import type { NativeCliSessionView, ProfileView, ProjectId, UIItem, WorkplaceProject } from '@monad/protocol';
-import type {
-  ActivityRow,
-  AgentTask,
-  ApprovalView,
-  Message,
-  Participant,
-  Project,
-  QuestionView,
-  TypingIndicator
-} from './types';
+import type { ApprovalView, Participant, Project, QuestionView } from './types';
 
 import {
   nativeCliSessionSelectors,
@@ -38,22 +29,12 @@ import { entityAvatarUrl, workplaceProjectMembersExtKey } from '@monad/protocol'
 import { useEffect, useMemo, useState } from 'react';
 
 import { useAcpAgentSettings } from '@/hooks/use-acp-agent-settings';
-import { useFirstItemIndex } from '@/hooks/use-first-item-index';
 import { useNativeCliAgentSettings } from '@/hooks/use-native-cli-agent-settings';
 import { useTranscriptHistory } from '@/hooks/use-transcript-history';
 import { getWorkplaceProjectName } from '@/lib/workspace-sessions';
 import {
-  __workplaceProjectMessageTest,
-  acpProgressText,
-  avatarForAgent,
-  buildNativeCliStreams,
-  buildProjectMessages,
-  fmtTime,
   HUMAN,
-  iconForAgent,
   initials,
-  isManagedNativeCliReasoningOnlyMessage,
-  messageToView,
   nativeCliApprovalName,
   nativeCliAvatarSeed,
   nativeCliMemberActivityPhase,
@@ -76,13 +57,11 @@ import { DEV_SYSTEM_MESSAGES_IN_STREAM_ENABLED, useWorkplaceUiStore } from './wo
 
 export type { ApprovalDecision } from './use-project-actions';
 
-export { __workplaceProjectMessageTest, acpProgressText, nativeCliAvatarSeed, projectMemberParticipants };
+export { nativeCliAvatarSeed, projectMemberParticipants };
 
 const EMPTY_PROFILES: ProfileView[] = [];
 const EMPTY_ITEMS: UIItem[] = [];
 const EMPTY_NATIVE_CLI_SESSIONS: NativeCliSessionView[] = [];
-
-const messageId = (m: Message): string => m.id;
 
 export function useProject(projectId: string) {
   const [resolvedProjectId, setResolvedProjectId] = useState<ProjectId | null>(null);
@@ -312,104 +291,7 @@ export function useProject(projectId: string) {
   const railAgents = useMemo(() => projectMemberParticipants(participants), [participants]);
   const showDevSystemMessagesInStream = useWorkplaceUiStore((state) => state.showDevSystemMessagesInStream);
 
-  // --- messages (history ⊕ live) ---
-  // Persisted history only changes when a page loads, NOT per streamed token. Build its view objects
-  // in a memo keyed on history.data so their references stay stable across token updates — that lets
-  // React.memo(MessageRow) skip re-rendering every settled message (and re-parsing its markdown) on
-  // each token; only the in-flight live message below gets a fresh object.
-  const persistedMessages: Message[] = useMemo(() => {
-    const out: Message[] = [];
-    for (const item of transcript.items) {
-      if (item.kind !== 'message') continue;
-      if (isManagedNativeCliReasoningOnlyMessage(item)) continue;
-      out.push(
-        messageToView(item, fmtTime(item.seq), nativeCliAvatarSeeds, nativeCliTags, nativeCliDisplayNames, human)
-      );
-    }
-    return out;
-  }, [human, nativeCliAvatarSeeds, nativeCliDisplayNames, nativeCliTags, transcript.items]);
-
-  const messages: Message[] = useMemo(() => {
-    return buildProjectMessages({
-      persistedMessages,
-      nativeCliSessions,
-      liveItems,
-      liveTools,
-      nativeCliAvatarSeeds,
-      nativeCliTags,
-      nativeCliDisplayNames,
-      human,
-      showDeveloperOnlyMessages: DEV_SYSTEM_MESSAGES_IN_STREAM_ENABLED && showDevSystemMessagesInStream
-    });
-  }, [
-    persistedMessages,
-    liveItems,
-    liveTools,
-    nativeCliSessions,
-    nativeCliAvatarSeeds,
-    nativeCliTags,
-    nativeCliDisplayNames,
-    human,
-    showDevSystemMessagesInStream
-  ]);
-
-  const firstItemIndex = useFirstItemIndex(messages, messageId);
   const loadOlder = transcript.loadOlder;
-
-  const typingAgentName = [...runningDelegations][0] ?? 'monad';
-  const hasStreamingMessage = messages.some((message) => message.streaming && (message.text || message.reasoning));
-  const typing: TypingIndicator | null =
-    monadStreaming && !hasStreamingMessage
-      ? {
-          av: avatarForAgent(typingAgentName),
-          icon: iconForAgent(typingAgentName),
-          avatarUrl: nativeCliAvatarSeeds.has(typingAgentName)
-            ? entityAvatarUrl(nativeCliAvatarSeeds.get(typingAgentName) as string)
-            : undefined,
-          name: typingAgentName,
-          detail: 'is working…'
-        }
-      : null;
-
-  // --- activity (real tool steps) ---
-  const activity: ActivityRow[] = useMemo(
-    () =>
-      liveTools.map((s) => ({
-        id: s.id,
-        av:
-          typeof (s.input as { agent?: unknown } | undefined)?.agent === 'string'
-            ? avatarForAgent((s.input as { agent: string }).agent)
-            : 'MO',
-        ...(typeof (s.input as { agent?: unknown } | undefined)?.agent === 'string'
-          ? { agentName: (s.input as { agent: string }).agent }
-          : {}),
-        tool: s.tool,
-        detail: summarizeTool(s.tool, s.input),
-        ...(s.output ? { output: s.output } : {}),
-        status: s.status
-      })),
-    [liveTools]
-  );
-  const nativeCliStreams = useMemo(
-    () => buildNativeCliStreams(nativeCliSessions, activity),
-    [nativeCliSessions, activity]
-  );
-
-  // --- agent tasks (running tool steps) ---
-  const tasks: AgentTask[] = useMemo(
-    () =>
-      liveTools.slice(-6).map((s) => ({
-        id: s.id,
-        av:
-          typeof (s.input as { agent?: unknown } | undefined)?.agent === 'string'
-            ? avatarForAgent((s.input as { agent: string }).agent)
-            : 'MO',
-        title: summarizeTool(s.tool, s.input),
-        ...(s.output ? { output: s.output } : {}),
-        status: s.status
-      })),
-    [liveTools]
-  );
 
   // --- approvals (real oversight gate) ---
   const approvals: ApprovalView[] = useMemo(
@@ -527,7 +409,6 @@ export function useProject(projectId: string) {
   const {
     sendDirective,
     resolveApproval,
-    approveAll,
     answerQuestion,
     pauseAll,
     deleteProject,
@@ -560,24 +441,29 @@ export function useProject(projectId: string) {
       railAgents,
       projectMembers,
       availableProjectMembers,
-      messages,
-      firstItemIndex,
       loadOlder,
-      typing,
-      activity,
-      nativeCliStreams,
-      tasks,
       contextUsage,
       modelProfiles,
       approvals,
       questions,
+      source: {
+        project: currentProject,
+        transcriptItems: transcript.items,
+        liveItems,
+        liveTools,
+        nativeCliSessions,
+        human,
+        nativeCliAvatarSeeds,
+        nativeCliTags,
+        nativeCliDisplayNames,
+        showDeveloperOnlyMessages: DEV_SYSTEM_MESSAGES_IN_STREAM_ENABLED && showDevSystemMessagesInStream
+      },
       workdir: { path: currentProject?.cwd, set: setWorkdir },
       paused: false,
       mentionTargets: railAgents.map((a) => ({ id: a.id, name: a.name })),
       // actions
       sendDirective,
       resolveApproval,
-      approveAll,
       answerQuestion,
       pauseAll,
       deleteProject,
@@ -597,22 +483,25 @@ export function useProject(projectId: string) {
       railAgents,
       projectMembers,
       availableProjectMembers,
-      messages,
-      firstItemIndex,
       loadOlder,
-      typing,
-      activity,
-      nativeCliStreams,
-      tasks,
       contextUsage,
       modelProfiles,
       approvals,
       questions,
+      currentProject,
+      transcript.items,
+      liveItems,
+      liveTools,
+      nativeCliSessions,
+      human,
+      nativeCliAvatarSeeds,
+      nativeCliTags,
+      nativeCliDisplayNames,
+      showDevSystemMessagesInStream,
       currentProject?.cwd,
       setWorkdir,
       sendDirective,
       resolveApproval,
-      approveAll,
       answerQuestion,
       pauseAll,
       deleteProject,

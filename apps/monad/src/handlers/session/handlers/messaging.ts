@@ -125,9 +125,7 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
     retireManagedNativeCliThinking,
     deliverProjectMessageToManagedNativeCliMembers,
     deliverDirectMessageToManagedNativeCliMember,
-    startManagedNativeCliRuntimeWithRecovery,
-    beginProjectQaWallMessage,
-    completeProjectQaWallMessage
+    startManagedNativeCliRuntimeWithRecovery
   } = managedNativeCliDelivery;
 
   const acpDelegation = createAcpChannelDelegation(ctx, sandboxRootsFor);
@@ -402,9 +400,6 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
     async sendChannelMessage({ sessionId, text }: { sessionId: TranscriptTargetId; text: string }) {
       return handlers.sendProjectMessage({ sessionId, text });
     },
-
-    beginProjectQaWallMessage,
-    completeProjectQaWallMessage,
 
     async notifyManagedNativeCliProjectMembers({
       sessionId,

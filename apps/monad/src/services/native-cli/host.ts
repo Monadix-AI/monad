@@ -10,6 +10,7 @@ import type {
   NativeCliHistoryPageResponse,
   NativeCliInputRequest,
   NativeCliLaunchMode,
+  NativeCliObservationAccessResponse,
   NativeCliResizeRequest,
   NativeCliSessionView,
   ProjectId,
@@ -25,6 +26,7 @@ import type {
 } from '@/services/native-cli/types.ts';
 import type { NativeCliSessionRow, Store } from '@/store/db/index.ts';
 
+import { randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, realpathSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute } from 'node:path';
 import { createLogger } from '@monad/logger';
@@ -41,6 +43,7 @@ import {
 import {
   cleanupManagedProjectOrphanTokens,
   cleanupManagedProjectRuntimeToken,
+  managedProjectRuntimeWorkspace,
   prepareManagedProjectRuntime
 } from '@/services/native-cli/managed-project.ts';
 import { killNativeCliProcess } from '@/services/native-cli/process.ts';
@@ -114,6 +117,7 @@ interface LiveNativeCliSession {
 
 interface LiveNativeCliAuthSession {
   id: string;
+  controlToken: string;
   agentName: string;
   provider: NativeCliAgentView['provider'];
   proc?: NativeCliProcess;
@@ -159,20 +163,26 @@ const DEFAULT_AUTH_HEARTBEAT_TIMEOUT_MS = 20_000;
 type NativeCliOutputStream = 'stdout' | 'stderr' | 'pty';
 type NativeCliAuthListener = (session: NativeCliAuthSessionView) => void;
 
-function toView(row: NativeCliSessionRow, pendingApprovalCount = 0): NativeCliSessionView {
+function isManagedProjectRuntime(runtime: Pick<NativeCliSessionRow | LiveNativeCliSession, 'runtimeRole'>): boolean {
+  return runtime.runtimeRole === 'managed-project-agent';
+}
+
+function toView(row: NativeCliSessionRow, pendingApprovalCount = 0, live?: LiveNativeCliSession): NativeCliSessionView {
   const { transcriptTargetId, ...view } = row;
   return {
     ...view,
     transcriptTargetId: transcriptTargetId,
     productIcon: getNativeCliProviderAdapter(row.provider).productIcon,
     pendingApprovalCount,
-    approvalOwnership: 'provider-owned'
+    approvalOwnership: 'provider-owned',
+    outputSnapshot: live ? live.outputBuffer : row.outputSnapshot
   };
 }
 
 function authToView(session: LiveNativeCliAuthSession): NativeCliAuthSessionView {
   return {
     id: session.id,
+    controlToken: session.controlToken,
     agentName: session.agentName,
     provider: session.provider,
     productIcon: getNativeCliProviderAdapter(session.provider).productIcon,
@@ -186,6 +196,10 @@ function authToView(session: LiveNativeCliAuthSession): NativeCliAuthSessionView
     updatedAt: session.updatedAt,
     exitedAt: session.exitedAt
   };
+}
+
+function newAuthControlToken(): string {
+  return randomBytes(32).toString('hex');
 }
 
 function appendBounded(existing: string, chunk: string, max: number): string {
@@ -265,6 +279,16 @@ export class NativeCliHost {
     const agent = (await this.deps.agents()).find((candidate) => candidate.name === name && candidate.enabled);
     if (!agent) throw new Error(`native CLI agent not found or disabled: ${name}`);
     return agent;
+  }
+
+  private managedRuntimeWorkspace(
+    row: Pick<NativeCliSessionRow, 'agentName' | 'transcriptTargetId' | 'workingPath'>
+  ): string {
+    return managedProjectRuntimeWorkspace({
+      monadHome: this.deps.monadHome ?? dirname(this.deps.nativeCliProcessRegistryPath ?? row.workingPath),
+      projectId: row.transcriptTargetId,
+      agentName: row.agentName
+    });
   }
 
   reconcileOrphanedSessions(): number {
@@ -361,7 +385,6 @@ export class NativeCliHost {
             baseEnvPath: Bun.env.PATH
           })
         : null;
-    if (managed) workingPath = realpathSync(managed.workspace);
 
     let pendingCR = false;
     const decoder = createStreamingTextDecoder();
@@ -372,6 +395,7 @@ export class NativeCliHost {
         adapter,
         buildNativeCliLaunch(agent, {
           workingPath,
+          extraWorkingPaths: managed ? [managed.workspace] : undefined,
           launchMode: args.launchMode,
           systemPromptFile: agent.provider === 'claude-code' ? (managed?.promptFile ?? undefined) : undefined,
           skipProviderApprovals: !!managed,
@@ -383,7 +407,7 @@ export class NativeCliHost {
         })
       );
     } catch (error) {
-      if (managed) cleanupManagedProjectRuntimeToken(workingPath);
+      if (managed) cleanupManagedProjectRuntimeToken(managed.workspace);
       const failedAt = new Date().toISOString();
       this.deps.store.upsertNativeCliSession({
         id,
@@ -438,7 +462,7 @@ export class NativeCliHost {
       },
       'native cli launch'
     );
-    launch = managed ? { ...launch, cwd: workingPath, env: { ...(launch.env ?? {}), ...managed.env } } : launch;
+    launch = managed ? { ...launch, env: { ...(launch.env ?? {}), ...managed.env } } : launch;
     const spawnEnv = await this.buildSpawnEnv(launch.env);
     try {
       proc =
@@ -472,7 +496,7 @@ export class NativeCliHost {
               stderr: 'pipe'
             }) as NativeCliProcess);
     } catch (error) {
-      if (managed) cleanupManagedProjectRuntimeToken(workingPath);
+      if (managed) cleanupManagedProjectRuntimeToken(managed.workspace);
       const failedAt = new Date().toISOString();
       this.deps.store.upsertNativeCliSession({
         id,
@@ -590,7 +614,7 @@ export class NativeCliHost {
       } catch (error) {
         if (live.startup) clearTimeout(live.startup.timeout);
         live.startup = undefined;
-        if (runtimeRole === 'managed-project-agent') cleanupManagedProjectRuntimeToken(workingPath);
+        if (runtimeRole === 'managed-project-agent' && managed) cleanupManagedProjectRuntimeToken(managed.workspace);
         this.live.delete(id);
         this.untrackNativeCliProcess(proc.pid);
         this.structuredOutputBuffers.delete(id);
@@ -652,7 +676,7 @@ export class NativeCliHost {
       if (pendingCR) this.output(args.transcriptTargetId, id, '\n', 'pty', adapter);
       this.flushSnapshot(id);
       this.live.delete(id);
-      if (runtimeRole === 'managed-project-agent') cleanupManagedProjectRuntimeToken(workingPath);
+      if (runtimeRole === 'managed-project-agent' && managed) cleanupManagedProjectRuntimeToken(managed.workspace);
       this.untrackNativeCliProcess(proc.pid);
       this.structuredOutputBuffers.delete(id);
       const exitedAt = new Date().toISOString();
@@ -687,14 +711,52 @@ export class NativeCliHost {
   get(id: string): NativeCliSessionView {
     const row = this.deps.store.getNativeCliSession(id);
     if (!row) throw new Error(`native CLI session not found: ${id}`);
-    return toView(row, this.live.get(id)?.pendingApprovals.size ?? 0);
+    const live = this.live.get(id);
+    return toView(row, live?.pendingApprovals.size ?? 0, live);
   }
 
   list(transcriptTargetId: TranscriptTargetId): ListNativeCliSessionsResponse {
     return {
-      sessions: this.deps.store
-        .listNativeCliSessionsForTranscriptTarget(transcriptTargetId)
-        .map((row) => toView(row, this.live.get(row.id)?.pendingApprovals.size ?? 0))
+      sessions: this.deps.store.listNativeCliSessionsForTranscriptTarget(transcriptTargetId).map((row) => {
+        const live = this.live.get(row.id);
+        return toView(row, live?.pendingApprovals.size ?? 0, live);
+      })
+    };
+  }
+
+  observe(id: string): NativeCliObservationAccessResponse {
+    const live = this.live.get(id);
+    if (live) {
+      return {
+        state: 'live',
+        nativeCliSessionId: id,
+        provider: live.provider,
+        output: live.outputBuffer,
+        observedAt: new Date().toISOString()
+      };
+    }
+    const row = this.deps.store.getNativeCliSession(id);
+    if (!row) {
+      return {
+        state: 'unavailable',
+        nativeCliSessionId: id,
+        reason: 'native CLI session not found'
+      };
+    }
+    if (!isManagedProjectRuntime(row) && row.outputSnapshot) {
+      return {
+        state: 'history',
+        nativeCliSessionId: id,
+        provider: row.provider,
+        output: row.outputSnapshot,
+        observedAt: row.updatedAt
+      };
+    }
+    return {
+      state: 'unavailable',
+      nativeCliSessionId: id,
+      provider: row.provider,
+      reason: 'provider history unavailable'
     };
   }
 
@@ -756,7 +818,8 @@ export class NativeCliHost {
     this.flushSnapshot(id);
     this.live.delete(id);
     const row = this.deps.store.getNativeCliSession(id);
-    if (row?.runtimeRole === 'managed-project-agent') cleanupManagedProjectRuntimeToken(row.workingPath);
+    if (row?.runtimeRole === 'managed-project-agent')
+      cleanupManagedProjectRuntimeToken(this.managedRuntimeWorkspace(row));
     this.untrackNativeCliProcess(live.proc.pid);
     this.structuredOutputBuffers.delete(id);
     const exitedAt = new Date().toISOString();
@@ -808,13 +871,14 @@ export class NativeCliHost {
     const adapter = getNativeCliProviderAdapter(agent.provider);
     const preflight = await this.authStatus(agent.name).catch(() => null);
     for (const live of [...this.liveAuth.values()]) {
-      if (live.agentName === agent.name && live.state === 'running') this.stopAuth(live.id);
+      if (live.agentName === agent.name && live.state === 'running') this.stopAuth(live.id, live.controlToken);
     }
     if (preflight?.state === 'authenticated') {
       const id = newId('ncliauth');
       const now = new Date().toISOString();
       const live: LiveNativeCliAuthSession = {
         id,
+        controlToken: newAuthControlToken(),
         agentName: agent.name,
         provider: agent.provider,
         adapter,
@@ -869,6 +933,7 @@ export class NativeCliHost {
 
     const live: LiveNativeCliAuthSession = {
       id,
+      controlToken: newAuthControlToken(),
       agentName: agent.name,
       provider: agent.provider,
       proc,
@@ -912,20 +977,25 @@ export class NativeCliHost {
     return authToView(live);
   }
 
-  getAuth(id: string): NativeCliAuthSessionView {
+  private requireAuthSession(id: string, controlToken: string): LiveNativeCliAuthSession {
     this.pruneAuthSessions();
     const live = this.liveAuth.get(id);
     if (!live) throw new Error(`native CLI auth session not found: ${id}`);
+    if (live.controlToken !== controlToken) throw new Error(`native CLI auth session not found: ${id}`);
+    return live;
+  }
+
+  getAuth(id: string, controlToken: string): NativeCliAuthSessionView {
+    const live = this.requireAuthSession(id, controlToken);
     return authToView(live);
   }
 
   subscribeAuth(
     id: string,
+    controlToken: string,
     listener: NativeCliAuthListener
   ): { session: NativeCliAuthSessionView; dispose: () => void } {
-    this.pruneAuthSessions();
-    const live = this.liveAuth.get(id);
-    if (!live) throw new Error(`native CLI auth session not found: ${id}`);
+    const live = this.requireAuthSession(id, controlToken);
     let listeners = this.authListeners.get(id);
     if (!listeners) {
       listeners = new Set();
@@ -941,34 +1011,28 @@ export class NativeCliHost {
     };
   }
 
-  inputAuth(id: string, req: NativeCliInputRequest): void {
-    this.pruneAuthSessions();
-    const live = this.liveAuth.get(id);
-    if (!live) throw new Error(`native CLI auth session is not running: ${id}`);
+  inputAuth(id: string, controlToken: string, req: NativeCliInputRequest): void {
+    const live = this.requireAuthSession(id, controlToken);
     if (live.state !== 'running') throw new Error(`native CLI auth session is not running: ${id}`);
     live.terminal?.write(req.input);
   }
 
-  resizeAuth(id: string, req: NativeCliResizeRequest): void {
-    this.pruneAuthSessions();
-    const live = this.liveAuth.get(id);
-    if (!live) throw new Error(`native CLI auth session is not running: ${id}`);
+  resizeAuth(id: string, controlToken: string, req: NativeCliResizeRequest): void {
+    const live = this.requireAuthSession(id, controlToken);
     if (live.state !== 'running') throw new Error(`native CLI auth session is not running: ${id}`);
     live.terminal?.resize(req.cols, req.rows);
   }
 
-  heartbeatAuth(id: string): void {
-    this.pruneAuthSessions();
-    const live = this.liveAuth.get(id);
-    if (!live) throw new Error(`native CLI auth session not found: ${id}`);
+  heartbeatAuth(id: string, controlToken: string): void {
+    const live = this.requireAuthSession(id, controlToken);
     if (live.state !== 'running') return;
     live.lastSeenAtMs = Date.now();
     live.updatedAt = new Date(live.lastSeenAtMs).toISOString();
     live.updatedAtMs = live.lastSeenAtMs;
   }
 
-  stopAuth(id: string): void {
-    const live = this.liveAuth.get(id);
+  stopAuth(id: string, controlToken: string): void {
+    const live = this.requireAuthSession(id, controlToken);
     if (!live) return;
     try {
       live.terminal?.close();
@@ -1161,9 +1225,10 @@ export class NativeCliHost {
       // Accumulate in memory and flush the bounded snapshot to SQLite on a timer — avoids a
       // per-chunk 256 KB read-modify-write under a chatty agent.
       live.outputBuffer = appendBounded(live.outputBuffer, chunk, MAX_OUTPUT_SNAPSHOT);
-      this.scheduleSnapshotFlush(id);
+      if (!isManagedProjectRuntime(live)) this.scheduleSnapshotFlush(id);
     } else {
-      this.deps.store.appendNativeCliOutput(id, chunk, MAX_OUTPUT_SNAPSHOT);
+      const row = this.deps.store.getNativeCliSession(id);
+      if (!row || !isManagedProjectRuntime(row)) this.deps.store.appendNativeCliOutput(id, chunk, MAX_OUTPUT_SNAPSHOT);
     }
     this.publishEphemeral(transcriptTargetId, 'native_cli.output', { nativeCliSessionId: id, stream, chunk });
     const structuredChunk = stream === 'pty' ? chunk : this.takeCompleteStructuredLines(id, stream, chunk);
@@ -1194,7 +1259,8 @@ export class NativeCliHost {
       clearTimeout(live.snapshotFlushTimer);
       live.snapshotFlushTimer = null;
     }
-    this.deps.store.setNativeCliOutputSnapshot(id, live.outputBuffer, MAX_OUTPUT_SNAPSHOT);
+    if (!isManagedProjectRuntime(live))
+      this.deps.store.setNativeCliOutputSnapshot(id, live.outputBuffer, MAX_OUTPUT_SNAPSHOT);
   }
 
   private takeCompleteStructuredLines(id: string, stream: 'stdout' | 'stderr', chunk: string): string {

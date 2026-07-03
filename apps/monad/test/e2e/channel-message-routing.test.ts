@@ -14,7 +14,7 @@ import type { ModelChunk, ModelRequest, ModelRouter } from '@/agent/model/index.
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { createHash } from 'node:crypto';
-import { chmod, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { initMonadHome, loadAuth, loadConfig } from '@monad/home';
@@ -653,9 +653,18 @@ for (const kind of TRANSPORTS) {
         'pmem_codex_reviewer',
         'pmem_codex_tester'
       ]);
-      expect(new Set(sessions.map((nativeSession) => nativeSession.workingPath)).size).toBe(2);
+      expect(new Set(sessions.map((nativeSession) => nativeSession.workingPath))).toEqual(
+        new Set([await realpath(projectDir)])
+      );
+      expect(
+        new Set(
+          sessions.map((nativeSession) =>
+            join(makePaths(dir).home, 'workplace-agents', sessionId, nativeSession.agentName)
+          )
+        ).size
+      ).toBe(2);
       for (const nativeSession of sessions) {
-        await t.fetch(`/v1/native-cli-sessions/${nativeSession.id}/stop`, json('POST'));
+        await t.fetch(`/v1/native-cli-sessions/${nativeSession.id}/stop?transcriptTargetId=${sessionId}`, json('POST'));
       }
     });
 
@@ -714,7 +723,7 @@ for (const kind of TRANSPORTS) {
         .filter((candidate) => candidate.runtimeRole === 'managed-project-agent');
       expect(sessions.map((nativeSession) => nativeSession.agentName)).toEqual(['pmem_codex_reviewer']);
       for (const nativeSession of sessions) {
-        await t.fetch(`/v1/native-cli-sessions/${nativeSession.id}/stop`, json('POST'));
+        await t.fetch(`/v1/native-cli-sessions/${nativeSession.id}/stop?transcriptTargetId=${sessionId}`, json('POST'));
       }
     });
 
@@ -780,6 +789,7 @@ for (const kind of TRANSPORTS) {
         (await listed.json()) as {
           sessions: Array<{
             id: string;
+            agentName: string;
             runtimeRole: string;
             lastDeliveredSeq: number;
             lastVisibleSeq: number;
@@ -792,12 +802,12 @@ for (const kind of TRANSPORTS) {
       expect(nativeSession?.lastVisibleSeq).toBe(nativeSession?.lastDeliveredSeq);
       if (!nativeSession) throw new Error('managed native CLI session was not started');
       expect(handlers.store.listNativeCliInbox(nativeSession.id)).toEqual([]);
-      expect(await readFile(join(nativeSession.workingPath, '.monad-agent-token'), 'utf8')).not.toBe('');
-      await t.fetch(`/v1/native-cli-sessions/${nativeSession.id}/stop`, json('POST'));
-      expect(
-        await readFile(join(nativeSession.workingPath, '.monad-agent-token'), 'utf8').catch(() => null)
-      ).toBeNull();
-      expect(await readFile(join(nativeSession.workingPath, 'MEMORY.md'), 'utf8')).toContain('managed project memory');
+      expect(nativeSession.workingPath).toBe(await realpath(projectDir));
+      const agentWorkspace = join(makePaths(dir).home, 'workplace-agents', sessionId, nativeSession.agentName);
+      expect(await readFile(join(agentWorkspace, '.monad-agent-token'), 'utf8')).not.toBe('');
+      await t.fetch(`/v1/native-cli-sessions/${nativeSession.id}/stop?transcriptTargetId=${sessionId}`, json('POST'));
+      expect(await readFile(join(agentWorkspace, '.monad-agent-token'), 'utf8').catch(() => null)).toBeNull();
+      expect(await readFile(join(agentWorkspace, 'MEMORY.md'), 'utf8')).toContain('managed project memory');
     });
 
     test('running managed native CLI member receives a busy inbox notice without the full project message body', async () => {
@@ -857,7 +867,8 @@ for (const kind of TRANSPORTS) {
           ['delivered', 'third secret busy task']
         ]);
       }
-      if (nativeSession) await t.fetch(`/v1/native-cli-sessions/${nativeSession.id}/stop`, json('POST'));
+      if (nativeSession)
+        await t.fetch(`/v1/native-cli-sessions/${nativeSession.id}/stop?transcriptTargetId=${sessionId}`, json('POST'));
     });
 
     test('managed native CLI project member resumes a stored provider session ref', async () => {
@@ -911,7 +922,8 @@ for (const kind of TRANSPORTS) {
         .listNativeCliSessionsForTranscriptTarget(sessionId)
         .find((candidate) => candidate.agentName === 'claude' && candidate.state === 'running');
       expect(resumed?.providerSessionRef).toBe('claude-session-resume');
-      if (resumed) await t.fetch(`/v1/native-cli-sessions/${resumed.id}/stop`, json('POST'));
+      if (resumed)
+        await t.fetch(`/v1/native-cli-sessions/${resumed.id}/stop?transcriptTargetId=${sessionId}`, json('POST'));
     });
 
     test('managed native CLI project member falls back to a cold start when provider resume fails', async () => {
@@ -979,7 +991,8 @@ for (const kind of TRANSPORTS) {
         .find((candidate) => candidate.agentName === 'codex-resume-failure' && candidate.state === 'running');
       expect(coldStarted?.providerSessionRef).toBe('codex-thread-fresh');
       expect(handlers.store.getNativeCliSession('ncli_old_codex')?.providerSessionRef).toBeNull();
-      if (coldStarted) await t.fetch(`/v1/native-cli-sessions/${coldStarted.id}/stop`, json('POST'));
+      if (coldStarted)
+        await t.fetch(`/v1/native-cli-sessions/${coldStarted.id}/stop?transcriptTargetId=${sessionId}`, json('POST'));
     });
 
     test('managed native CLI project member start failures are written to the project transcript', async () => {
@@ -1136,7 +1149,7 @@ for (const kind of TRANSPORTS) {
         2
       );
       for (const nativeSession of nativeSessions) {
-        await t.fetch(`/v1/native-cli-sessions/${nativeSession.id}/stop`, json('POST'));
+        await t.fetch(`/v1/native-cli-sessions/${nativeSession.id}/stop?transcriptTargetId=${sessionId}`, json('POST'));
       }
     });
 
@@ -1181,7 +1194,7 @@ for (const kind of TRANSPORTS) {
       expect(listed.status).toBe(200);
       const nativeSessionId = ((await listed.json()) as { sessions: Array<{ id: string }> }).sessions[0]?.id;
       expect(typeof nativeSessionId).toBe('string');
-      await t.fetch(`/v1/native-cli-sessions/${nativeSessionId}/stop`, json('POST'));
+      await t.fetch(`/v1/native-cli-sessions/${nativeSessionId}/stop?transcriptTargetId=${sessionId}`, json('POST'));
     });
 
     test('native CLI mention requires Studio reconnect when provider auth status is unauthenticated', async () => {

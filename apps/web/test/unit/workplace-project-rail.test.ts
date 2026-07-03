@@ -8,7 +8,8 @@ import {
   groupProjectRailAgents,
   observedRailAgent
 } from '../../features/workplace/activity/AgentTasksRail.tsx';
-import { __workplaceProjectMessageTest, projectMemberParticipants } from '../../features/workplace/use-project.ts';
+import { __workplaceProjectMessageTest } from '../../features/workplace/experiences/chat-room/projection.ts';
+import { projectMemberParticipants } from '../../features/workplace/use-project.ts';
 import { useWorkplaceUiStore } from '../../features/workplace/workplace-ui-store.ts';
 
 const agent = (name: string, presence: Participant['presence']): Participant => ({
@@ -345,8 +346,12 @@ test('workplace UI store owns native CLI auth session state', () => {
   useWorkplaceUiStore.getState().setStartingNativeCliAuthAgent('codex');
   expect(useWorkplaceUiStore.getState().startingNativeCliAuthAgent).toBe('codex');
 
-  useWorkplaceUiStore.getState().setNativeCliAuthSession({ id: 'auth-1', agentName: 'codex' });
-  expect(useWorkplaceUiStore.getState().nativeCliAuthSession).toEqual({ id: 'auth-1', agentName: 'codex' });
+  useWorkplaceUiStore.getState().setNativeCliAuthSession({ id: 'auth-1', controlToken: 'token-1', agentName: 'codex' });
+  expect(useWorkplaceUiStore.getState().nativeCliAuthSession).toEqual({
+    id: 'auth-1',
+    controlToken: 'token-1',
+    agentName: 'codex'
+  });
 
   useWorkplaceUiStore.getState().clearNativeCliAuthSession();
   expect(useWorkplaceUiStore.getState().nativeCliAuthSession).toBeNull();

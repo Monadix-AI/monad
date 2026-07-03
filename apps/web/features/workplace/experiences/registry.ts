@@ -15,7 +15,7 @@ const WebComponentExperience = lazy(() =>
 
 const chatRoomExperience: ProjectExperienceDefinition = {
   id: 'chat-room',
-  labelKey: 'web.workplace.preset.chat',
+  labelKey: 'web.workplace.experience.chat',
   icon: 'message-square',
   source: 'builtin',
   render: (view) => createElement(Suspense, { fallback: null }, createElement(ChatRoomExperienceView, view))
@@ -23,7 +23,7 @@ const chatRoomExperience: ProjectExperienceDefinition = {
 
 const graphicViewExperience: ProjectExperienceDefinition = {
   id: 'graphic-view',
-  labelKey: 'web.workplace.preset.graph',
+  labelKey: 'web.workplace.experience.graph',
   icon: 'git-fork',
   source: 'builtin',
   render: (view) => createElement(Suspense, { fallback: null }, createElement(GraphicViewExperienceView, view))

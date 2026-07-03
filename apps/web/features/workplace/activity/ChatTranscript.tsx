@@ -1,4 +1,4 @@
-import type { ProjectCanvas } from '../presets/types';
+import type { ChatRoomCanvas } from '../experiences/chat-room/canvas';
 
 import { ArrowDown01Icon, TerminalIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
@@ -7,6 +7,7 @@ import { useMemo, useRef, useState } from 'react';
 import { useT } from '@/components/I18nProvider';
 import { VirtualList, type VirtualListHandle } from '@/components/ui/VirtualList';
 import { studioPath } from '@/features/routes/route-paths';
+import { useFirstItemIndex } from '@/hooks/use-first-item-index';
 import { sans } from '../styles';
 import { useWorkplaceUiStore } from '../workplace-ui-store';
 import { MessageRow } from './MessageRow';
@@ -15,11 +16,13 @@ import { TranscriptSkeleton, TypingRow } from './TranscriptSkeleton';
 export { MessageBubbleContent } from './MessageRow';
 
 const HEADER_SPACER = <div style={{ height: 24 }} />;
+const messageId = (m: ChatRoomCanvas['messages'][number]): string => m.id;
 
-export function ChatTranscript({ room }: { room: ProjectCanvas }): React.ReactElement {
+export function ChatTranscript({ room }: { room: ChatRoomCanvas }): React.ReactElement {
   const t = useT();
   const listRef = useRef<VirtualListHandle>(null);
   const [atBottom, setAtBottom] = useState(true);
+  const firstItemIndex = useFirstItemIndex(room.messages, messageId);
   const openProjectSettings = useWorkplaceUiStore((state) => state.openProjectSettings);
   // Stable footer reference across streamed-token re-renders (only the typing indicator varies), so
   // VirtualList's header/footer context memo isn't invalidated every token.
@@ -196,7 +199,7 @@ export function ChatTranscript({ room }: { room: ProjectCanvas }): React.ReactEl
         bounce
         className="scwf-scroll"
         controlRef={listRef}
-        firstItemIndex={room.firstItemIndex}
+        firstItemIndex={firstItemIndex}
         footer={footer}
         getKey={(msg) => msg.id}
         header={HEADER_SPACER}

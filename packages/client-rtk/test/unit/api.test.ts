@@ -7,6 +7,8 @@ import type { Event } from '@monad/protocol';
 
 import { expect, test } from 'bun:test';
 
+import { getNativeAgentDeliveryApi } from '../../src/endpoints/native-cli/get-native-agent-delivery.ts';
+import { getNativeCliObservationApi } from '../../src/endpoints/native-cli/get-native-cli-observation.ts';
 import { listNativeCliSessionsApi } from '../../src/endpoints/native-cli/list-native-cli-sessions.ts';
 import {
   getMessagesApi,
@@ -21,7 +23,9 @@ import { channelsApi } from '../../src/endpoints/settings/channels/index.ts';
 import {
   createMonadStore,
   monadApi,
+  useGetNativeAgentDeliveryQuery,
   useGetNativeCliAuthQuery,
+  useGetNativeCliObservationQuery,
   useInputNativeCliAuthMutation,
   useLazyGetNativeCliAuthStatusQuery,
   useStartNativeCliAuthMutation,
@@ -99,6 +103,44 @@ function fakeClient(overrides: Record<string, unknown>): MonadClient {
                 | undefined;
               return ok({ sessions: fn ? await fn(id) : [] });
             }
+          }
+        }),
+        'native-cli-sessions': ({ id }: { id: string }) => ({
+          observation: {
+            get: async () => {
+              const fn = overrides.getNativeCliObservation as ((id: string) => Promise<unknown>) | undefined;
+              return ok(
+                fn
+                  ? await fn(id)
+                  : {
+                      state: 'unavailable',
+                      nativeCliSessionId: id,
+                      reason: 'provider history unavailable'
+                    }
+              );
+            }
+          }
+        }),
+        'native-agent-deliveries': ({ id }: { id: string }) => ({
+          get: async () => {
+            const fn = overrides.getNativeAgentDelivery as ((id: string) => Promise<unknown>) | undefined;
+            return ok(
+              fn
+                ? await fn(id)
+                : {
+                    delivery: {
+                      id,
+                      projectId: 'prj_01KDEFAULTDELIVERY0000000',
+                      memberInstanceId: 'pmem_codex',
+                      nativeCliSessionId: 'ncli_1',
+                      triggerMessageSeq: 1,
+                      state: 'queued',
+                      turn: {},
+                      errorSummary: null,
+                      createdAt: '2026-07-03T00:00:00.000Z'
+                    }
+                  }
+            );
           }
         }),
         settings: {
@@ -211,11 +253,85 @@ function fakeClient(overrides: Record<string, unknown>): MonadClient {
 }
 
 test('native CLI auth hooks are exported from the package API', () => {
+  expect(typeof useGetNativeAgentDeliveryQuery).toBe('function');
   expect(typeof useGetNativeCliAuthQuery).toBe('function');
+  expect(typeof useGetNativeCliObservationQuery).toBe('function');
   expect(typeof useInputNativeCliAuthMutation).toBe('function');
   expect(typeof useLazyGetNativeCliAuthStatusQuery).toBe('function');
   expect(typeof useStartNativeCliAuthMutation).toBe('function');
   expect(typeof useStopNativeCliAuthMutation).toBe('function');
+});
+
+test('getNativeAgentDelivery uses the typed native agent delivery treaty route', async () => {
+  const seen: string[] = [];
+  const client = fakeClient({
+    getNativeAgentDelivery: async (id: string) => {
+      seen.push(id);
+      return {
+        delivery: {
+          id,
+          projectId: 'prj_01KCLIENTDELIVERY00000000',
+          memberInstanceId: 'pmem_codex_1',
+          nativeCliSessionId: 'ncli_1',
+          triggerMessageSeq: 7,
+          state: 'delivered',
+          turn: { providerSessionRef: 'provider-session-1', providerTurnId: 'turn-1' },
+          errorSummary: null,
+          createdAt: '2026-07-03T00:00:00.000Z',
+          updatedAt: '2026-07-03T00:00:01.000Z'
+        }
+      };
+    }
+  });
+  const store = createMonadStore({ client });
+
+  const res = await store.dispatch(
+    (
+      getNativeAgentDeliveryApi.endpoints as typeof getNativeAgentDeliveryApi.endpoints & {
+        getNativeAgentDelivery: {
+          initiate: typeof getNativeAgentDeliveryApi.endpoints.getNativeAgentDelivery.initiate;
+        };
+      }
+    ).getNativeAgentDelivery.initiate({
+      id: 'deliv_01KCLIENTDELIVERY000000',
+      transcriptTargetId: 'prj_01KCLIENTDELIVERY00000000'
+    })
+  );
+
+  expect(seen).toEqual(['deliv_01KCLIENTDELIVERY000000']);
+  expect('data' in res && res.data?.delivery.state).toBe('delivered');
+  expect('data' in res && res.data?.delivery.turn.providerTurnId).toBe('turn-1');
+});
+
+test('getNativeCliObservation uses the typed native CLI observation treaty route', async () => {
+  const seen: string[] = [];
+  const client = fakeClient({
+    getNativeCliObservation: async (id: string) => {
+      seen.push(id);
+      return {
+        state: 'live',
+        nativeCliSessionId: id,
+        provider: 'codex',
+        output: '{"type":"agent_message","message":"ok"}',
+        observedAt: '2026-07-03T00:00:00.000Z'
+      };
+    }
+  });
+  const store = createMonadStore({ client });
+
+  const res = await store.dispatch(
+    (
+      getNativeCliObservationApi.endpoints as typeof getNativeCliObservationApi.endpoints & {
+        getNativeCliObservation: {
+          initiate: typeof getNativeCliObservationApi.endpoints.getNativeCliObservation.initiate;
+        };
+      }
+    ).getNativeCliObservation.initiate({ id: 'ncli_1', transcriptTargetId: 'prj_01KCLIENTOBSERVE0000000' })
+  );
+
+  expect(seen).toEqual(['ncli_1']);
+  expect('data' in res && res.data?.state).toBe('live');
+  if ('data' in res && res.data?.state === 'live') expect(res.data.output).toContain('agent_message');
 });
 
 test('a query delegates to the client and caches by tag', async () => {

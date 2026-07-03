@@ -132,6 +132,7 @@ function streamSessionLogs(
 function streamNativeCliAuth(
   fetchPath: FetchPath,
   id: string,
+  controlToken: string,
   until: (session: NativeCliAuthSessionView) => boolean,
   timeoutMs = 2_000
 ): NativeCliAuthStream {
@@ -145,7 +146,7 @@ function streamNativeCliAuth(
   const done = (async () => {
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      const res = await fetchPath(`/v1/native-cli-auth-sessions/${id}/events`, {
+      const res = await fetchPath(`/v1/native-cli-auth-sessions/${id}/events?controlToken=${controlToken}`, {
         headers: { accept: 'text/event-stream' },
         signal: controller.signal
       });
@@ -500,7 +501,7 @@ async function runRuntime(call: Call, projectDir: string, handlers: ReturnType<t
   expect(nativeSession.state).toBe('running');
   expect(await Bun.file(join(dirname(projectDir), 'native-cli-processes.json')).exists()).toBe(true);
 
-  res = await call('GET', `/v1/native-cli-sessions/${nativeSession.id}`);
+  res = await call('GET', `/v1/native-cli-sessions/${nativeSession.id}?transcriptTargetId=${sessionId}`);
   expect(res.status).toBe(200);
   expect(((await res.json()) as { session: NativeCliSessionView }).session.id).toBe(nativeSession.id);
 
@@ -515,17 +516,22 @@ async function runRuntime(call: Call, projectDir: string, handlers: ReturnType<t
     return row?.outputSnapshot.includes('ready') ? row : undefined;
   });
 
-  res = await call('POST', `/v1/native-cli-sessions/${nativeSession.id}/input`, { input: 'hello\n' });
+  res = await call('POST', `/v1/native-cli-sessions/${nativeSession.id}/input?transcriptTargetId=${sessionId}`, {
+    input: 'hello\n'
+  });
   expect(res.status).toBe(200);
   await waitFor(() => {
     const row = handlers.store.getNativeCliSession(nativeSession.id);
     return row?.outputSnapshot.includes('echo:hello') ? row : undefined;
   });
 
-  res = await call('POST', `/v1/native-cli-sessions/${nativeSession.id}/resize`, { cols: 120, rows: 40 });
+  res = await call('POST', `/v1/native-cli-sessions/${nativeSession.id}/resize?transcriptTargetId=${sessionId}`, {
+    cols: 120,
+    rows: 40
+  });
   expect(res.status).toBe(200);
 
-  res = await call('POST', `/v1/native-cli-sessions/${nativeSession.id}/stop`);
+  res = await call('POST', `/v1/native-cli-sessions/${nativeSession.id}/stop?transcriptTargetId=${sessionId}`);
   expect(res.status).toBe(200);
   const stopped = await waitFor(() => {
     const row = handlers.store.getNativeCliSession(nativeSession.id);
@@ -611,7 +617,7 @@ async function runWorkingPathRealpathRuntime(call: Call, dir: string, projectDir
   const nativeSession = ((await res.json()) as { session: NativeCliSessionView }).session;
   expect(nativeSession.workingPath).toBe(await realpath(projectDir));
 
-  await call('POST', `/v1/native-cli-sessions/${nativeSession.id}/stop`);
+  await call('POST', `/v1/native-cli-sessions/${nativeSession.id}/stop?transcriptTargetId=${sessionId}`);
 }
 
 async function runWorkingPathBoundaryRuntime(call: Call, dir: string, projectDir: string): Promise<void> {
@@ -685,7 +691,11 @@ async function runJsonStreamRuntime(
   expect(card.output).toContain('stderr-json');
   await waitFor(() => (logs.seen.some((record) => record.event === 'native_cli.launch') ? true : undefined));
 
-  const input = await call('POST', `/v1/native-cli-sessions/${nativeSession.id}/input`, { input: 'hello-json' });
+  const input = await call(
+    'POST',
+    `/v1/native-cli-sessions/${nativeSession.id}/input?transcriptTargetId=${sessionId}`,
+    { input: 'hello-json' }
+  );
   expect(input.status).toBe(200);
   await waitFor(() => {
     const row = handlers.store.getNativeCliSession(nativeSession.id);
@@ -693,13 +703,17 @@ async function runJsonStreamRuntime(
   });
   await waitFor(() => (logs.seen.some((record) => record.event === 'native_cli.input') ? true : undefined));
 
-  const unsupportedHistory = await call('POST', `/v1/native-cli-sessions/${nativeSession.id}/history-page`, {
-    limit: 1
-  });
+  const unsupportedHistory = await call(
+    'POST',
+    `/v1/native-cli-sessions/${nativeSession.id}/history-page?transcriptTargetId=${sessionId}`,
+    {
+      limit: 1
+    }
+  );
   expect(unsupportedHistory.status).toBe(400);
   expect(((await unsupportedHistory.json()) as { code: string }).code).toBe('unsupported_capability');
 
-  const stop = await call('POST', `/v1/native-cli-sessions/${nativeSession.id}/stop`);
+  const stop = await call('POST', `/v1/native-cli-sessions/${nativeSession.id}/stop?transcriptTargetId=${sessionId}`);
   expect(stop.status).toBe(200);
   events = handlers.store.listEvents(sessionId);
   expect(events.some((event) => event.type === 'native_cli.exited')).toBe(true);
@@ -733,7 +747,11 @@ async function runProviderApprovalRuntime(
       : undefined;
   });
 
-  const input = await call('POST', `/v1/native-cli-sessions/${nativeSession.id}/input`, { input: 'summarize' });
+  const input = await call(
+    'POST',
+    `/v1/native-cli-sessions/${nativeSession.id}/input?transcriptTargetId=${sessionId}`,
+    { input: 'summarize' }
+  );
   expect(input.status).toBe(200);
   await waitFor(() => {
     const text = Bun.file(join(dir, 'mock-codex-stdin.jsonl'))
@@ -766,11 +784,15 @@ async function runProviderApprovalRuntime(
   expect(String(requested?.payload.text)).toContain('curl https://example.com');
   expect(events.some((event) => event.type === 'tool.approval_requested')).toBe(false);
 
-  const approval = await call('POST', `/v1/native-cli-sessions/${nativeSession.id}/approval`, {
-    requestId: 'req_provider_1',
-    allow: true,
-    reason: 'approved in test'
-  });
+  const approval = await call(
+    'POST',
+    `/v1/native-cli-sessions/${nativeSession.id}/approval?transcriptTargetId=${sessionId}`,
+    {
+      requestId: 'req_provider_1',
+      allow: true,
+      reason: 'approved in test'
+    }
+  );
   expect(approval.status).toBe(200);
   await waitFor(() => {
     const events = handlers.store.listEvents(sessionId);
@@ -791,7 +813,7 @@ async function runProviderApprovalRuntime(
     true
   );
 
-  const stop = await call('POST', `/v1/native-cli-sessions/${nativeSession.id}/stop`);
+  const stop = await call('POST', `/v1/native-cli-sessions/${nativeSession.id}/stop?transcriptTargetId=${sessionId}`);
   expect(stop.status).toBe(200);
 }
 
@@ -826,7 +848,7 @@ async function runManagedProviderApprovalSuppressedRuntime(
   expect(events.some((event) => event.type === 'native_cli.approval_resolved')).toBe(false);
   expect(handlers.store.getNativeCliSession(nativeSession.id)?.runtimeRole).toBe('managed-project-agent');
 
-  const stop = await call('POST', `/v1/native-cli-sessions/${nativeSession.id}/stop`);
+  const stop = await call('POST', `/v1/native-cli-sessions/${nativeSession.id}/stop?transcriptTargetId=${sessionId}`);
   expect(stop.status).toBe(200);
 }
 
@@ -868,7 +890,7 @@ async function runCodexResumeRuntime(call: Call, dir: string, projectDir: string
     )
   ).toBe(true);
 
-  await call('POST', `/v1/native-cli-sessions/${nativeSession.id}/stop`);
+  await call('POST', `/v1/native-cli-sessions/${nativeSession.id}/stop?transcriptTargetId=${sessionId}`);
 }
 
 async function runSlowCodexAppServerStartupRuntime(call: Call, dir: string, projectDir: string): Promise<void> {
@@ -884,7 +906,7 @@ async function runSlowCodexAppServerStartupRuntime(call: Call, dir: string, proj
   const nativeSession = ((await res.json()) as { session: NativeCliSessionView }).session;
   expect(nativeSession.launchMode).toBe('app-server');
 
-  await call('POST', `/v1/native-cli-sessions/${nativeSession.id}/stop`);
+  await call('POST', `/v1/native-cli-sessions/${nativeSession.id}/stop?transcriptTargetId=${sessionId}`);
 }
 
 async function runCodexOversizedStructuredLineRuntime(
@@ -917,7 +939,7 @@ async function runCodexOversizedStructuredLineRuntime(
   const row = handlers.store.getNativeCliSession(nativeSession.id);
   expect(row?.outputSnapshot.length).toBeLessThanOrEqual(256 * 1024);
 
-  await call('POST', `/v1/native-cli-sessions/${nativeSession.id}/stop`);
+  await call('POST', `/v1/native-cli-sessions/${nativeSession.id}/stop?transcriptTargetId=${sessionId}`);
 }
 
 async function runAuthRelayRuntime(
@@ -936,21 +958,41 @@ async function runAuthRelayRuntime(
   expect(authSession.authState).toBe('unknown');
   expect(await Bun.file(join(dir, 'native-cli-auth-processes.json')).exists()).toBe(true);
 
-  let stream = streamNativeCliAuth(fetchPath, authSession.id, (session) =>
+  expect(authSession.controlToken.length).toBeGreaterThanOrEqual(32);
+  res = await call(
+    'GET',
+    `/v1/native-cli-auth-sessions/${authSession.id}?controlToken=wrong-token-wrong-token-wrong-token`
+  );
+  expect(res.status).toBe(404);
+
+  let stream = streamNativeCliAuth(fetchPath, authSession.id, authSession.controlToken, (session) =>
     session.outputSnapshot.includes('provider.example/login')
   );
   await stream.connected;
   expect((await stream.done).at(-1)?.outputSnapshot).toContain('provider.example/login');
 
-  res = await call('POST', `/v1/native-cli-auth-sessions/${authSession.id}/input`, { input: '1234\n' });
+  res = await call(
+    'POST',
+    `/v1/native-cli-auth-sessions/${authSession.id}/input?controlToken=${authSession.controlToken}`,
+    {
+      input: '1234\n'
+    }
+  );
   expect(res.status).toBe(200);
-  stream = streamNativeCliAuth(fetchPath, authSession.id, (session) =>
+  stream = streamNativeCliAuth(fetchPath, authSession.id, authSession.controlToken, (session) =>
     session.outputSnapshot.includes('auth-input:1234')
   );
   await stream.connected;
   expect((await stream.done).at(-1)?.outputSnapshot).toContain('auth-input:1234');
 
-  res = await call('POST', `/v1/native-cli-auth-sessions/${authSession.id}/resize`, { cols: 90, rows: 24 });
+  res = await call(
+    'POST',
+    `/v1/native-cli-auth-sessions/${authSession.id}/resize?controlToken=${authSession.controlToken}`,
+    {
+      cols: 90,
+      rows: 24
+    }
+  );
   expect(res.status).toBe(200);
 
   res = await call('GET', '/v1/native-cli-agents/mock-native-auth/auth/status');
@@ -959,9 +1001,15 @@ async function runAuthRelayRuntime(
 
   expect(handlers.store.listNativeCliSessionsForTranscriptTarget('ses_UNKNOWN')).toHaveLength(0);
 
-  res = await call('POST', `/v1/native-cli-auth-sessions/${authSession.id}/stop`);
+  res = await call(
+    'POST',
+    `/v1/native-cli-auth-sessions/${authSession.id}/stop?controlToken=${authSession.controlToken}`
+  );
   expect(res.status).toBe(200);
-  const stopped = await call('GET', `/v1/native-cli-auth-sessions/${authSession.id}`);
+  const stopped = await call(
+    'GET',
+    `/v1/native-cli-auth-sessions/${authSession.id}?controlToken=${authSession.controlToken}`
+  );
   expect(((await stopped.json()) as { session: NativeCliAuthSessionView }).session.state).toBe('stopped');
   await waitFor(async () =>
     (await Bun.file(join(dir, 'native-cli-auth-processes.json')).exists()) ? undefined : true
@@ -980,14 +1028,14 @@ async function runAuthStartReplacesPreviousRuntime(call: Call, dir: string): Pro
   const second = ((await res.json()) as { session: NativeCliAuthSessionView }).session;
 
   expect(second.id).not.toBe(first.id);
-  res = await call('GET', `/v1/native-cli-auth-sessions/${first.id}`);
+  res = await call('GET', `/v1/native-cli-auth-sessions/${first.id}?controlToken=${first.controlToken}`);
   expect(res.status).toBe(200);
   expect(((await res.json()) as { session: NativeCliAuthSessionView }).session.state).toBe('stopped');
 
-  res = await call('GET', `/v1/native-cli-auth-sessions/${second.id}`);
+  res = await call('GET', `/v1/native-cli-auth-sessions/${second.id}?controlToken=${second.controlToken}`);
   expect(res.status).toBe(200);
   expect(((await res.json()) as { session: NativeCliAuthSessionView }).session.state).toBe('running');
-  await call('POST', `/v1/native-cli-auth-sessions/${second.id}/stop`);
+  await call('POST', `/v1/native-cli-auth-sessions/${second.id}/stop?controlToken=${second.controlToken}`);
 }
 
 async function runAuthHeartbeatRuntime(call: Call, dir: string): Promise<void> {
@@ -997,16 +1045,19 @@ async function runAuthHeartbeatRuntime(call: Call, dir: string): Promise<void> {
   expect(res.status).toBe(200);
   const authSession = ((await res.json()) as { session: NativeCliAuthSessionView }).session;
 
-  res = await call('POST', `/v1/native-cli-auth-sessions/${authSession.id}/heartbeat`);
+  res = await call(
+    'POST',
+    `/v1/native-cli-auth-sessions/${authSession.id}/heartbeat?controlToken=${authSession.controlToken}`
+  );
   expect(res.status).toBe(200);
 
   await Bun.sleep(100);
-  res = await call('GET', `/v1/native-cli-auth-sessions/${authSession.id}`);
+  res = await call('GET', `/v1/native-cli-auth-sessions/${authSession.id}?controlToken=${authSession.controlToken}`);
   expect(res.status).toBe(200);
   expect(((await res.json()) as { session: NativeCliAuthSessionView }).session.state).toBe('running');
 
   await Bun.sleep(750);
-  res = await call('GET', `/v1/native-cli-auth-sessions/${authSession.id}`);
+  res = await call('GET', `/v1/native-cli-auth-sessions/${authSession.id}?controlToken=${authSession.controlToken}`);
   expect(res.status).toBe(200);
   expect(((await res.json()) as { session: NativeCliAuthSessionView }).session.state).toBe('stopped');
 }
@@ -1057,11 +1108,15 @@ async function runCodexHistoryPageRuntime(
     return row?.providerSessionRef === 'codex-thread-1' ? row : undefined;
   });
 
-  const page = await call('POST', `/v1/native-cli-sessions/${nativeSession.id}/history-page`, {
-    limit: 1,
-    itemsView: 'summary',
-    sortDirection: 'desc'
-  });
+  const page = await call(
+    'POST',
+    `/v1/native-cli-sessions/${nativeSession.id}/history-page?transcriptTargetId=${sessionId}`,
+    {
+      limit: 1,
+      itemsView: 'summary',
+      sortDirection: 'desc'
+    }
+  );
   expect(page.status).toBe(200);
   expect(await page.json()).toEqual({
     page: {
@@ -1071,7 +1126,7 @@ async function runCodexHistoryPageRuntime(
     }
   });
 
-  await call('POST', `/v1/native-cli-sessions/${nativeSession.id}/stop`);
+  await call('POST', `/v1/native-cli-sessions/${nativeSession.id}/stop?transcriptTargetId=${sessionId}`);
 }
 
 async function runSpawnFailureRuntime(

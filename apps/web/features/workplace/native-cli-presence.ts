@@ -70,14 +70,24 @@ export function nativeCliSessionIsGenerating(session: NativeCliSessionView): boo
 
 function computeNativeCliSessionIsGenerating(session: NativeCliSessionView): boolean {
   let active = false;
-  const items = nativeCliStreamItems({ id: session.id, provider: session.provider, output: session.outputSnapshot });
+  const items = nativeCliStreamItems({
+    id: session.id,
+    provider: session.provider,
+    output: session.outputSnapshot,
+    observedAt: session.updatedAt || session.startedAt
+  });
   for (const item of items) {
     const eventType = item.providerEventType;
     if (eventType === 'turn/started') {
       active = true;
       continue;
     }
-    if (eventType === 'turn/completed' || eventType === 'result' || eventType === 'error') {
+    if (
+      eventType === 'turn/completed' ||
+      eventType === 'result' ||
+      eventType === 'error' ||
+      eventType === 'server_error'
+    ) {
       active = false;
       continue;
     }

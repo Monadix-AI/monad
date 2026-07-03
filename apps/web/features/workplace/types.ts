@@ -72,6 +72,9 @@ export interface Message {
   }>;
   nativeCliSessionId?: string;
   developerOnly?: boolean;
+  systemTone?: 'error';
+  systemDetail?: string;
+  systemRaw?: unknown;
   reasoning?: string;
   streaming?: boolean;
   orderKey?: string;

@@ -1,4 +1,4 @@
-import type { ProjectCanvas } from '../presets/types';
+import type { ChatRoomCanvas } from '../experiences/chat-room/canvas';
 import type { ActivityRow, ActivityStatus } from '../types';
 
 import { useCallback, useState } from 'react';
@@ -188,7 +188,7 @@ function ActivityRowView({
   );
 }
 
-export function ActivityLog({ room }: { room: ProjectCanvas }): React.ReactElement {
+export function ActivityLog({ room }: { room: ChatRoomCanvas }): React.ReactElement {
   const t = useT();
   const [filter, setFilter] = useState<Filter>('all');
   // Lifted out of WorkOutput so an expanded row survives Virtuoso unmounting it on scroll.

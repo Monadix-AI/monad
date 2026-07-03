@@ -3,6 +3,8 @@ export * from './components/Button';
 export * from './components/ButtonGroup';
 export * from './components/Card';
 export * from './components/ChatInput';
+export * from './components/Composer';
+export * from './components/ComposerAskSheet';
 export * from './components/Input';
 export * from './components/InputGroup';
 export * from './components/Label';

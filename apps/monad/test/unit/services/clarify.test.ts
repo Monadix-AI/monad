@@ -79,6 +79,25 @@ test('times out to an empty answer with no response', async () => {
   expect(clarify.pendingCount).toBe(0);
 });
 
+test('aborts pending structured questions', async () => {
+  const events: Event[] = [];
+  const clarify = new ClarifyService({ publish: (e) => events.push(e), timeoutMs: 1000 });
+  const controller = new AbortController();
+  const p = clarify.askStructured(
+    'ses_TEST',
+    { question: 'Pick one?' },
+    { signal: controller.signal, waitForever: true }
+  );
+  const requestId = requested(events)[0]?.payload.requestId as string;
+
+  expect(clarify.pendingCount).toBe(1);
+  controller.abort();
+  await expect(p).resolves.toEqual({ requestId, answer: '' });
+  expect(resolved(events)[0]?.payload).toMatchObject({ requestId, answer: '', reason: 'aborted' });
+  expect(clarify.pendingCount).toBe(0);
+  expect(clarify.respond(requestId, 'late')).toBe(false);
+});
+
 // ── the clarify_ask tool wired to the service ────────────────────────────────────
 
 test('createClarifyTool routes through ask and returns the answer', async () => {

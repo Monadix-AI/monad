@@ -106,6 +106,17 @@ function assertManagedWorkspaceContained(root: string, workspace: string): void 
   }
 }
 
+export function managedProjectRuntimeWorkspace(args: {
+  monadHome: string;
+  projectId: string;
+  agentName: string;
+}): string {
+  const projectAgentRoot = resolve(args.monadHome, 'workplace-agents', args.projectId);
+  const workspace = resolve(projectAgentRoot, args.agentName);
+  assertManagedWorkspaceContained(projectAgentRoot, workspace);
+  return workspace;
+}
+
 export function prepareManagedProjectRuntime(
   args: {
     monadHome: string;
@@ -115,9 +126,7 @@ export function prepareManagedProjectRuntime(
   } & Omit<ManagedProjectRuntimePromptInput, 'workspace'>
 ): ManagedProjectRuntimeSpec {
   const platform = args.platform ?? process.platform;
-  const projectAgentRoot = resolve(args.monadHome, 'workplace-agents', args.projectId);
-  const workspace = resolve(projectAgentRoot, args.agentName);
-  assertManagedWorkspaceContained(projectAgentRoot, workspace);
+  const workspace = managedProjectRuntimeWorkspace(args);
   const binDir = join(workspace, 'bin');
   mkdirSync(binDir, { recursive: true });
   const prompt = buildManagedProjectPrompt({

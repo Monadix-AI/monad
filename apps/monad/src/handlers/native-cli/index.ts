@@ -1,5 +1,6 @@
 import type { MonadPaths } from '@monad/home';
 import type {
+  GetNativeAgentDeliveryResponse,
   GetNativeCliAuthSessionResponse,
   GetNativeCliSessionResponse,
   ListNativeCliSessionsResponse,
@@ -9,6 +10,7 @@ import type {
   NativeCliHistoryPageRequest,
   NativeCliHistoryPageResponse,
   NativeCliInputRequest,
+  NativeCliObservationAccessResponse,
   NativeCliResizeRequest,
   OkResponse,
   SessionId,
@@ -24,8 +26,10 @@ import { realpathSync } from 'node:fs';
 import { isAbsolute, relative, resolve } from 'node:path';
 import { loadAll } from '@monad/home';
 import {
+  getNativeAgentDeliveryResponseSchema,
   getNativeCliSessionResponseSchema,
   listNativeCliSessionsResponseSchema,
+  nativeCliObservationAccessResponseSchema,
   startNativeCliAgentResponseSchema
 } from '@monad/protocol';
 
@@ -69,6 +73,21 @@ export function createNativeCliModule({ paths, host, store }: NativeCliDeps) {
     throw error;
   }
 
+  function requireNativeCliSessionScope(id: string, transcriptTargetId: TranscriptTargetId) {
+    const session = host.get(id);
+    if (session.transcriptTargetId !== transcriptTargetId) {
+      throw new HandlerError('not_found', `native CLI session not found for transcript target: ${id}`);
+    }
+    return session;
+  }
+
+  function mapNativeCliAuthScopeError(id: string, error: unknown): never {
+    if (error instanceof Error && error.message.includes('native CLI auth session not found')) {
+      throw new HandlerError('not_found', `native CLI auth session not found: ${id}`);
+    }
+    throw error;
+  }
+
   return {
     async start({
       sessionId,
@@ -96,42 +115,96 @@ export function createNativeCliModule({ paths, host, store }: NativeCliDeps) {
       return startNativeCliAgentResponseSchema.parse({ session });
     },
 
-    input({ id, input }: { id: string } & NativeCliInputRequest): OkResponse {
+    input({
+      id,
+      input,
+      transcriptTargetId
+    }: { id: string; transcriptTargetId: TranscriptTargetId } & NativeCliInputRequest): OkResponse {
+      requireNativeCliSessionScope(id, transcriptTargetId);
       host.input(id, { input });
       return { ok: true };
     },
 
-    get({ id }: { id: string }): GetNativeCliSessionResponse {
-      return getNativeCliSessionResponseSchema.parse({ session: host.get(id) });
+    get({
+      id,
+      transcriptTargetId
+    }: {
+      id: string;
+      transcriptTargetId: TranscriptTargetId;
+    }): GetNativeCliSessionResponse {
+      return getNativeCliSessionResponseSchema.parse({ session: requireNativeCliSessionScope(id, transcriptTargetId) });
     },
 
     list({ sessionId }: { sessionId: TranscriptTargetId }): ListNativeCliSessionsResponse {
       return listNativeCliSessionsResponseSchema.parse(host.list(sessionId));
     },
 
-    resize({ id, cols, rows }: { id: string } & NativeCliResizeRequest): OkResponse {
+    observe({
+      id,
+      transcriptTargetId
+    }: {
+      id: string;
+      transcriptTargetId: TranscriptTargetId;
+    }): NativeCliObservationAccessResponse {
+      requireNativeCliSessionScope(id, transcriptTargetId);
+      return nativeCliObservationAccessResponseSchema.parse(host.observe(id));
+    },
+
+    delivery({
+      id,
+      transcriptTargetId
+    }: {
+      id: `deliv_${string}`;
+      transcriptTargetId: TranscriptTargetId;
+    }): GetNativeAgentDeliveryResponse {
+      const delivery = store.getNativeAgentDelivery(id);
+      if (!delivery) throw new HandlerError('not_found', `native agent delivery not found: ${id}`);
+      if (delivery.projectId !== transcriptTargetId) {
+        throw new HandlerError('not_found', `native agent delivery not found for transcript target: ${id}`);
+      }
+      return getNativeAgentDeliveryResponseSchema.parse({ delivery });
+    },
+
+    resize({
+      id,
+      cols,
+      rows,
+      transcriptTargetId
+    }: { id: string; transcriptTargetId: TranscriptTargetId } & NativeCliResizeRequest): OkResponse {
+      requireNativeCliSessionScope(id, transcriptTargetId);
       host.resize(id, { cols, rows });
       return { ok: true };
     },
 
-    approval({ id, requestId, allow, reason }: { id: string } & NativeCliApprovalResolutionRequest): OkResponse {
+    approval({
+      id,
+      requestId,
+      allow,
+      reason,
+      transcriptTargetId
+    }: { id: string; transcriptTargetId: TranscriptTargetId } & NativeCliApprovalResolutionRequest): OkResponse {
+      requireNativeCliSessionScope(id, transcriptTargetId);
       host.resolveApproval(id, { requestId, allow, reason });
       return { ok: true };
     },
 
-    stop({ id }: { id: string }): OkResponse {
+    stop({ id, transcriptTargetId }: { id: string; transcriptTargetId: TranscriptTargetId }): OkResponse {
+      requireNativeCliSessionScope(id, transcriptTargetId);
       host.stop(id);
       return { ok: true };
     },
 
     historyPage({
       id,
+      transcriptTargetId,
       request
     }: {
       id: string;
+      transcriptTargetId: TranscriptTargetId;
       request: NativeCliHistoryPageRequest;
     }): Promise<NativeCliHistoryPageResponse> {
       try {
+        requireNativeCliSessionScope(id, transcriptTargetId);
         return host.historyPage(id, request).catch(mapNativeCliError);
       } catch (error) {
         mapNativeCliError(error);
@@ -143,34 +216,71 @@ export function createNativeCliModule({ paths, host, store }: NativeCliDeps) {
       return { session: await host.startAuth(agentName) };
     },
 
-    getAuth({ id }: { id: string }): GetNativeCliAuthSessionResponse {
-      return { session: host.getAuth(id) };
+    getAuth({ id, controlToken }: { id: string; controlToken: string }): GetNativeCliAuthSessionResponse {
+      try {
+        return { session: host.getAuth(id, controlToken) };
+      } catch (error) {
+        mapNativeCliAuthScopeError(id, error);
+      }
     },
 
-    subscribeAuth({ id, onSession }: { id: string; onSession: (session: NativeCliAuthSessionView) => void }): {
+    subscribeAuth({
+      id,
+      controlToken,
+      onSession
+    }: {
+      id: string;
+      controlToken: string;
+      onSession: (session: NativeCliAuthSessionView) => void;
+    }): {
       session: NativeCliAuthSessionView;
       dispose: () => void;
     } {
-      return host.subscribeAuth(id, onSession);
+      try {
+        return host.subscribeAuth(id, controlToken, onSession);
+      } catch (error) {
+        mapNativeCliAuthScopeError(id, error);
+      }
     },
 
-    inputAuth({ id, input }: { id: string } & NativeCliInputRequest): OkResponse {
-      host.inputAuth(id, { input });
+    inputAuth({ id, controlToken, input }: { id: string; controlToken: string } & NativeCliInputRequest): OkResponse {
+      try {
+        host.inputAuth(id, controlToken, { input });
+      } catch (error) {
+        mapNativeCliAuthScopeError(id, error);
+      }
       return { ok: true };
     },
 
-    resizeAuth({ id, cols, rows }: { id: string } & NativeCliResizeRequest): OkResponse {
-      host.resizeAuth(id, { cols, rows });
+    resizeAuth({
+      id,
+      controlToken,
+      cols,
+      rows
+    }: { id: string; controlToken: string } & NativeCliResizeRequest): OkResponse {
+      try {
+        host.resizeAuth(id, controlToken, { cols, rows });
+      } catch (error) {
+        mapNativeCliAuthScopeError(id, error);
+      }
       return { ok: true };
     },
 
-    heartbeatAuth({ id }: { id: string }): OkResponse {
-      host.heartbeatAuth(id);
+    heartbeatAuth({ id, controlToken }: { id: string; controlToken: string }): OkResponse {
+      try {
+        host.heartbeatAuth(id, controlToken);
+      } catch (error) {
+        mapNativeCliAuthScopeError(id, error);
+      }
       return { ok: true };
     },
 
-    stopAuth({ id }: { id: string }): OkResponse {
-      host.stopAuth(id);
+    stopAuth({ id, controlToken }: { id: string; controlToken: string }): OkResponse {
+      try {
+        host.stopAuth(id, controlToken);
+      } catch (error) {
+        mapNativeCliAuthScopeError(id, error);
+      }
       return { ok: true };
     },
 

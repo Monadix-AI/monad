@@ -9,6 +9,7 @@ const readSource = (path: string) => readFileSync(new URL(`../../${path}`, impor
 
 const authSession = (overrides: Partial<NativeCliAuthSessionView> = {}): NativeCliAuthSessionView => ({
   id: 'ncliauth_01KWAUTH000000000000000',
+  controlToken: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
   agentName: 'codex',
   provider: 'codex',
   approvalOwnership: 'provider-owned',

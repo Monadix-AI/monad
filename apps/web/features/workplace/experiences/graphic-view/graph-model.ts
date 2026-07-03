@@ -1,19 +1,14 @@
 import type { Edge, Node } from '@xyflow/react';
 import type { ActivityStatus, Participant } from '../../types';
-import type { ProjectCanvas } from '../types';
+import type { GraphicViewCanvas } from './canvas';
 
-// Pure projection of the chatroom canvas → React Flow nodes/edges. Deterministic (circular layout,
-// no random/layout engine) so it is unit-testable and stable across renders. A central "monad" hub
-// with participants around it and the most recent activity steps as a column. Colors carry real
-// state: participants by presence (working/online/idle), activity steps by status (ok/error/running).
-type GraphInput = Pick<ProjectCanvas, 'participants' | 'activity'>;
+type GraphInput = GraphicViewCanvas;
 
 export const HUB_ID = 'hub:monad';
 const HUMAN_COLOR = '#0ea5e9';
 const HUB_COLOR = '#444441';
 const RECENT_ACTIVITY = 6;
 
-// Agent node tint by live presence; human participants keep a fixed color.
 const AGENT_PRESENCE_COLOR: Record<Participant['presence'], string> = {
   working: '#f59e0b',
   online: '#6366f1',

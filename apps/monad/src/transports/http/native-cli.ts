@@ -2,19 +2,23 @@ import type { NativeCliAuthSessionView } from '@monad/protocol';
 import type { createDaemonHandlers } from '@/handlers/handlers.ts';
 
 import {
+  getNativeAgentDeliveryResponseSchema,
   getNativeCliAuthSessionResponseSchema,
   getNativeCliSessionResponseSchema,
   listNativeCliSessionsResponseSchema,
+  nativeAgentDeliveryIdSchema,
   nativeCliApprovalResolutionRequestSchema,
   nativeCliAuthStatusResponseSchema,
   nativeCliHistoryPageRequestSchema,
   nativeCliHistoryPageResponseSchema,
   nativeCliInputRequestSchema,
+  nativeCliObservationAccessResponseSchema,
   nativeCliResizeRequestSchema,
   okResponseSchema,
   startNativeCliAgentRequestSchema,
   startNativeCliAgentResponseSchema,
-  startNativeCliAuthResponseSchema
+  startNativeCliAuthResponseSchema,
+  transcriptTargetIdSchema
 } from '@monad/protocol';
 import { Elysia } from 'elysia';
 import { z } from 'zod';
@@ -23,17 +27,22 @@ import { createBoundedSseEncoderSink, createSseResponse, encodeSseFrame } from '
 
 const sessionParams = z.object({ id: z.string() });
 const nativeCliParams = z.object({ id: z.string() });
+const nativeAgentDeliveryParams = z.object({ id: nativeAgentDeliveryIdSchema });
 const nativeCliAgentParams = z.object({ name: z.string().min(1) });
+const nativeCliScopeQuery = z.object({ transcriptTargetId: transcriptTargetIdSchema });
+const nativeCliAuthScopeQuery = z.object({ controlToken: z.string().min(32) });
 
 function createNativeCliAuthEventsSseResponse(
   handlers: ReturnType<typeof createDaemonHandlers>,
   id: string,
+  controlToken: string,
   encoder: TextEncoder
 ): Response {
   const pending: NativeCliAuthSessionView[] = [];
   let sink: ((session: NativeCliAuthSessionView) => void) | undefined;
   const subscription = handlers.nativeCli.subscribeAuth({
     id,
+    controlToken,
     onSession: (session) => {
       if (sink) sink(session);
       else pending.push(session);
@@ -89,16 +98,38 @@ export function createNativeCliController(handlers: ReturnType<typeof createDaem
         detail: { summary: 'List native CLI sessions for a Workplace Project', tags: ['http-only'] }
       }
     )
-    .get('/native-cli-sessions/:id', ({ params }) => handlers.nativeCli.get({ id: params.id }), {
+    .get('/native-cli-sessions/:id', ({ params, query }) => handlers.nativeCli.get({ id: params.id, ...query }), {
       params: nativeCliParams,
+      query: nativeCliScopeQuery,
       response: { 200: getNativeCliSessionResponseSchema },
       detail: { summary: 'Get a native CLI session snapshot' }
     })
-    .post(
-      '/native-cli-sessions/:id/input',
-      ({ params, body }) => handlers.nativeCli.input({ id: params.id, ...body }),
+    .get(
+      '/native-cli-sessions/:id/observation',
+      ({ params, query }) => handlers.nativeCli.observe({ id: params.id, ...query }),
       {
         params: nativeCliParams,
+        query: nativeCliScopeQuery,
+        response: { 200: nativeCliObservationAccessResponseSchema },
+        detail: { summary: 'Read live or backfilled native CLI observation access', tags: ['http-only'] }
+      }
+    )
+    .get(
+      '/native-agent-deliveries/:id',
+      ({ params, query }) => handlers.nativeCli.delivery({ id: params.id, ...query }),
+      {
+        params: nativeAgentDeliveryParams,
+        query: nativeCliScopeQuery,
+        response: { 200: getNativeAgentDeliveryResponseSchema },
+        detail: { summary: 'Read managed native CLI delivery pointer state', tags: ['http-only'] }
+      }
+    )
+    .post(
+      '/native-cli-sessions/:id/input',
+      ({ params, query, body }) => handlers.nativeCli.input({ id: params.id, ...query, ...body }),
+      {
+        params: nativeCliParams,
+        query: nativeCliScopeQuery,
         body: nativeCliInputRequestSchema,
         response: { 200: okResponseSchema },
         detail: { summary: 'Send input to a native CLI session' }
@@ -106,9 +137,10 @@ export function createNativeCliController(handlers: ReturnType<typeof createDaem
     )
     .post(
       '/native-cli-sessions/:id/approval',
-      ({ params, body }) => handlers.nativeCli.approval({ id: params.id, ...body }),
+      ({ params, query, body }) => handlers.nativeCli.approval({ id: params.id, ...query, ...body }),
       {
         params: nativeCliParams,
+        query: nativeCliScopeQuery,
         body: nativeCliApprovalResolutionRequestSchema,
         response: { 200: okResponseSchema },
         detail: { summary: 'Resolve a provider-owned native CLI approval request' }
@@ -116,24 +148,31 @@ export function createNativeCliController(handlers: ReturnType<typeof createDaem
     )
     .post(
       '/native-cli-sessions/:id/resize',
-      ({ params, body }) => handlers.nativeCli.resize({ id: params.id, ...body }),
+      ({ params, query, body }) => handlers.nativeCli.resize({ id: params.id, ...query, ...body }),
       {
         params: nativeCliParams,
+        query: nativeCliScopeQuery,
         body: nativeCliResizeRequestSchema,
         response: { 200: okResponseSchema },
         detail: { summary: 'Resize a native CLI PTY' }
       }
     )
-    .post('/native-cli-sessions/:id/stop', ({ params }) => handlers.nativeCli.stop({ id: params.id }), {
-      params: nativeCliParams,
-      response: { 200: okResponseSchema },
-      detail: { summary: 'Stop a native CLI session' }
-    })
     .post(
-      '/native-cli-sessions/:id/history-page',
-      ({ params, body }) => handlers.nativeCli.historyPage({ id: params.id, request: body }),
+      '/native-cli-sessions/:id/stop',
+      ({ params, query }) => handlers.nativeCli.stop({ id: params.id, ...query }),
       {
         params: nativeCliParams,
+        query: nativeCliScopeQuery,
+        response: { 200: okResponseSchema },
+        detail: { summary: 'Stop a native CLI session' }
+      }
+    )
+    .post(
+      '/native-cli-sessions/:id/history-page',
+      ({ params, query, body }) => handlers.nativeCli.historyPage({ id: params.id, ...query, request: body }),
+      {
+        params: nativeCliParams,
+        query: nativeCliScopeQuery,
         body: nativeCliHistoryPageRequestSchema,
         response: { 200: nativeCliHistoryPageResponseSchema },
         detail: { summary: 'Load a paged native CLI provider history page' }
@@ -157,24 +196,31 @@ export function createNativeCliController(handlers: ReturnType<typeof createDaem
         detail: { summary: 'Check provider-owned native CLI login status' }
       }
     )
-    .get('/native-cli-auth-sessions/:id', ({ params }) => handlers.nativeCli.getAuth({ id: params.id }), {
-      params: nativeCliParams,
-      response: { 200: getNativeCliAuthSessionResponseSchema },
-      detail: { summary: 'Get a native CLI auth session snapshot' }
-    })
     .get(
-      '/native-cli-auth-sessions/:id/events',
-      ({ params }) => createNativeCliAuthEventsSseResponse(handlers, params.id, encoder),
+      '/native-cli-auth-sessions/:id',
+      ({ params, query }) => handlers.nativeCli.getAuth({ id: params.id, ...query }),
       {
         params: nativeCliParams,
+        query: nativeCliAuthScopeQuery,
+        response: { 200: getNativeCliAuthSessionResponseSchema },
+        detail: { summary: 'Get a native CLI auth session snapshot' }
+      }
+    )
+    .get(
+      '/native-cli-auth-sessions/:id/events',
+      ({ params, query }) => createNativeCliAuthEventsSseResponse(handlers, params.id, query.controlToken, encoder),
+      {
+        params: nativeCliParams,
+        query: nativeCliAuthScopeQuery,
         detail: { summary: 'Stream native CLI auth session snapshots', tags: ['http-only'] }
       }
     )
     .post(
       '/native-cli-auth-sessions/:id/input',
-      ({ params, body }) => handlers.nativeCli.inputAuth({ id: params.id, ...body }),
+      ({ params, query, body }) => handlers.nativeCli.inputAuth({ id: params.id, ...query, ...body }),
       {
         params: nativeCliParams,
+        query: nativeCliAuthScopeQuery,
         body: nativeCliInputRequestSchema,
         response: { 200: okResponseSchema },
         detail: { summary: 'Send input to a native CLI auth session' }
@@ -182,9 +228,10 @@ export function createNativeCliController(handlers: ReturnType<typeof createDaem
     )
     .post(
       '/native-cli-auth-sessions/:id/resize',
-      ({ params, body }) => handlers.nativeCli.resizeAuth({ id: params.id, ...body }),
+      ({ params, query, body }) => handlers.nativeCli.resizeAuth({ id: params.id, ...query, ...body }),
       {
         params: nativeCliParams,
+        query: nativeCliAuthScopeQuery,
         body: nativeCliResizeRequestSchema,
         response: { 200: okResponseSchema },
         detail: { summary: 'Resize a native CLI auth PTY' }
@@ -192,16 +239,22 @@ export function createNativeCliController(handlers: ReturnType<typeof createDaem
     )
     .post(
       '/native-cli-auth-sessions/:id/heartbeat',
-      ({ params }) => handlers.nativeCli.heartbeatAuth({ id: params.id }),
+      ({ params, query }) => handlers.nativeCli.heartbeatAuth({ id: params.id, ...query }),
       {
         params: nativeCliParams,
+        query: nativeCliAuthScopeQuery,
         response: { 200: okResponseSchema },
         detail: { summary: 'Keep a native CLI auth PTY attached to a live browser surface', tags: ['http-only'] }
       }
     )
-    .post('/native-cli-auth-sessions/:id/stop', ({ params }) => handlers.nativeCli.stopAuth({ id: params.id }), {
-      params: nativeCliParams,
-      response: { 200: okResponseSchema },
-      detail: { summary: 'Stop a native CLI auth session' }
-    });
+    .post(
+      '/native-cli-auth-sessions/:id/stop',
+      ({ params, query }) => handlers.nativeCli.stopAuth({ id: params.id, ...query }),
+      {
+        params: nativeCliParams,
+        query: nativeCliAuthScopeQuery,
+        response: { 200: okResponseSchema },
+        detail: { summary: 'Stop a native CLI auth session' }
+      }
+    );
 }

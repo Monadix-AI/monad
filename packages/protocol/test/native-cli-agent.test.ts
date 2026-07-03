@@ -253,6 +253,7 @@ test('workplace native CLI members can be instantiated multiple times from one t
 test('native CLI auth views model provider-owned login relay without project session fields', () => {
   const session = nativeCliAuthSessionViewSchema.parse({
     id: 'ncliauth_1',
+    controlToken: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
     agentName: 'codex',
     provider: 'codex',
     state: 'running',

@@ -85,7 +85,11 @@ export function Workplace({
         .unwrap()
         .then((session) => {
           if (session.authState !== 'authenticated') {
-            setNativeCliAuthSession({ id: session.id, agentName: session.agentName });
+            setNativeCliAuthSession({
+              id: session.id,
+              controlToken: session.controlToken,
+              agentName: session.agentName
+            });
           }
         })
         .catch(() => {
@@ -213,7 +217,6 @@ export function Workplace({
           {experience.render({
             embedded,
             onProjectSettingsOpenChange: setProjectSettingsOpen,
-            project,
             projectSettingsOpen: settingsOpen,
             runtime,
             t
@@ -235,6 +238,7 @@ export function Workplace({
         {nativeCliAuthSession ? (
           <NativeCliAuthModal
             agentName={nativeCliAuthSession.agentName}
+            controlToken={nativeCliAuthSession.controlToken}
             onClose={clearNativeCliAuthSession}
             sessionId={nativeCliAuthSession.id}
           />

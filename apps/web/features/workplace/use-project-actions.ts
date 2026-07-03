@@ -84,7 +84,7 @@ export function useProjectActions(args: {
   const resolveApproval = useCallback(
     (requestId: string, decision: ApprovalDecision) => {
       const approval = approvals.find((candidate) => candidate.id === requestId);
-      if (approval?.approvalOwnership === 'provider-owned' && approval.nativeCliSessionId) {
+      if (activeProjectId && approval?.approvalOwnership === 'provider-owned' && approval.nativeCliSessionId) {
         void traceProjectDebugOperation(
           {
             layer: 'web',
@@ -95,6 +95,7 @@ export function useProjectActions(args: {
           () =>
             approveNativeCliSession({
               id: approval.nativeCliSessionId as string,
+              transcriptTargetId: activeProjectId,
               requestId,
               allow: decision === 'approve',
               ...(decision === 'reject' ? { reason: 'denied by operator' } : {})
@@ -120,16 +121,6 @@ export function useProjectActions(args: {
     },
     [activeProjectId, approveNativeCliSession, approveTool, approvals]
   );
-
-  const approveAll = useCallback(() => {
-    for (const a of approvals) {
-      if (a.approvalOwnership === 'provider-owned' && a.nativeCliSessionId) {
-        void approveNativeCliSession({ id: a.nativeCliSessionId, requestId: a.id, allow: true });
-        continue;
-      }
-      void approveTool({ requestId: a.id, allow: true, scope: 'once' });
-    }
-  }, [approveNativeCliSession, approveTool, approvals]);
 
   const answerQuestion = useCallback(
     (requestId: string, answer: string) => {
@@ -267,20 +258,22 @@ export function useProjectActions(args: {
 
   const sendNativeCliInput = useCallback(
     async (id: string, input: string) => {
+      if (!activeProjectId) return;
       await traceProjectDebugOperation(
         { layer: 'web', label: 'native-cli.input', sessionId: id, data: { id, input } },
-        () => inputNativeCliSession({ id, input }).unwrap()
+        () => inputNativeCliSession({ id, transcriptTargetId: activeProjectId, input }).unwrap()
       );
     },
-    [inputNativeCliSession]
+    [activeProjectId, inputNativeCliSession]
   );
   const stopNativeCli = useCallback(
     async (id: string) => {
+      if (!activeProjectId) return;
       await traceProjectDebugOperation({ layer: 'web', label: 'native-cli.stop', sessionId: id, data: { id } }, () =>
-        stopNativeCliSession(id).unwrap()
+        stopNativeCliSession({ id, transcriptTargetId: activeProjectId }).unwrap()
       );
     },
-    [stopNativeCliSession]
+    [activeProjectId, stopNativeCliSession]
   );
 
   const setWorkdir = useCallback(
@@ -294,7 +287,6 @@ export function useProjectActions(args: {
   return {
     sendDirective,
     resolveApproval,
-    approveAll,
     answerQuestion,
     pauseAll,
     deleteProject,

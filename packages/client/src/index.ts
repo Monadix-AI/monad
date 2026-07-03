@@ -413,6 +413,7 @@ export class MonadClient {
 
   streamNativeCliAuth(
     id: string,
+    controlToken: string,
     onSession: NativeCliAuthSessionHandler,
     opts?: { onError?: (err: StreamError) => void }
   ): () => void {
@@ -422,10 +423,13 @@ export class MonadClient {
       let delay = 1_000;
       while (!controller.signal.aborted) {
         try {
-          const response = await this.fetch(`/${CONTROL_API_VERSION}/native-cli-auth-sessions/${id}/events`, {
-            headers: { accept: 'text/event-stream' },
-            signal: controller.signal
-          });
+          const response = await this.fetch(
+            `/${CONTROL_API_VERSION}/native-cli-auth-sessions/${id}/events?controlToken=${encodeURIComponent(controlToken)}`,
+            {
+              headers: { accept: 'text/event-stream' },
+              signal: controller.signal
+            }
+          );
           if (response.status === 401 || response.status === 403 || response.status === 404) {
             opts?.onError?.({ kind: 'fatal', status: response.status });
             return;

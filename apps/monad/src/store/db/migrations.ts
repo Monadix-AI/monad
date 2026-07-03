@@ -1,8 +1,7 @@
 import type { Database } from 'bun:sqlite';
 
-// Pre-release: migrations are additive (new table = new version). Edit existing tables freely and
-// delete/recreate dev DBs as needed; never rename/drop columns in existing migrations.
-export const CURRENT_SCHEMA_VERSION = 2;
+// Pre-release: keep the dev schema flattened; delete/recreate dev DBs as needed.
+export const CURRENT_SCHEMA_VERSION = 1;
 
 const MIGRATIONS: { version: number; sql: string }[] = [
   {
@@ -226,6 +225,20 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_native_cli_sessions_provider_ref
   ON native_cli_sessions(transcript_target_id, provider, provider_session_ref)
   WHERE provider_session_ref IS NOT NULL;
 
+CREATE TABLE IF NOT EXISTS message_attachments (
+  id          TEXT PRIMARY KEY,
+  project_id  TEXT NOT NULL,
+  path        TEXT NOT NULL,
+  name        TEXT NOT NULL,
+  mime        TEXT NOT NULL,
+  bytes       INTEGER NOT NULL,
+  preview     TEXT NOT NULL,
+  created_by  TEXT,
+  created_at  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_message_attachments_project
+  ON message_attachments(project_id);
+
 CREATE TABLE IF NOT EXISTS native_agent_direct_messages (
   id                    TEXT PRIMARY KEY,
   project_id            TEXT NOT NULL,
@@ -233,6 +246,7 @@ CREATE TABLE IF NOT EXISTS native_agent_direct_messages (
   from_agent            TEXT,
   peer                  TEXT NOT NULL,
   text                  TEXT NOT NULL,
+  attachment_ids        TEXT,
   created_at            TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_native_agent_direct_messages_session_peer
@@ -260,51 +274,32 @@ CREATE INDEX IF NOT EXISTS idx_channel_moderator_rounds_open
 CREATE TABLE IF NOT EXISTS native_cli_inbox_items (
   native_cli_session_id TEXT NOT NULL,
   message_seq           INTEGER NOT NULL,
+  delivery_id           TEXT,
+  project_id            TEXT,
+  member_instance_id    TEXT,
+  trigger_message_id    TEXT,
+  provider_session_ref  TEXT,
+  provider_turn_id      TEXT,
+  error_summary         TEXT,
   state                 TEXT NOT NULL DEFAULT 'queued',
   created_at            TEXT NOT NULL,
   delivered_at          TEXT,
   visible_at            TEXT,
   consumed_at           TEXT,
+  updated_at            TEXT,
   PRIMARY KEY (native_cli_session_id, message_seq)
 );
 CREATE INDEX IF NOT EXISTS idx_native_cli_inbox_items_pending
   ON native_cli_inbox_items(native_cli_session_id, state, message_seq);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_native_cli_inbox_delivery_id
+  ON native_cli_inbox_items(delivery_id)
+  WHERE delivery_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_native_cli_inbox_project_trigger
+  ON native_cli_inbox_items(project_id, trigger_message_id);
+CREATE INDEX IF NOT EXISTS idx_native_cli_inbox_member_state
+  ON native_cli_inbox_items(project_id, member_instance_id, state);
 
 PRAGMA user_version = 1;
-    `.trim()
-  },
-  {
-    version: 2,
-    // Wrapped in a transaction because of the non-idempotent ALTER: either the whole block (incl.
-    // user_version = 2) lands or none of it does, so a crash can't leave a half-applied v2 that
-    // fails on re-run.
-    sql: `
-BEGIN;
-
--- Message attachment REGISTRY: a message can reference a local file (human-readable payload —
--- a report, a spilled long body). Only the reference + a metadata snapshot is stored; content
--- stays in the file and is read on demand by the wall preview/download endpoint. Registered ids
--- gate that endpoint: it serves only files an agent actually referenced from a message.
-CREATE TABLE IF NOT EXISTS message_attachments (
-  id          TEXT PRIMARY KEY,
-  project_id  TEXT NOT NULL,
-  path        TEXT NOT NULL,
-  name        TEXT NOT NULL,
-  mime        TEXT NOT NULL,
-  bytes       INTEGER NOT NULL,
-  preview     TEXT NOT NULL,
-  created_by  TEXT,
-  created_at  TEXT NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_message_attachments_project
-  ON message_attachments(project_id);
-
--- JSON array of message_attachments ids referenced by the direct message (NULL = none).
-ALTER TABLE native_agent_direct_messages ADD COLUMN attachment_ids TEXT;
-
-PRAGMA user_version = 2;
-
-COMMIT;
     `.trim()
   }
 ];

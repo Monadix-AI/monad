@@ -15,6 +15,7 @@ export function observation(args: {
   text?: string;
   source: ObservationSource;
   providerEventType?: string;
+  createdAt?: string;
   raw?: unknown;
   preserveWhitespace?: boolean;
 }): NativeCliObservationEvent[] {
@@ -26,6 +27,7 @@ export function observation(args: {
     text,
     source: args.source,
     providerEventType: args.providerEventType,
+    createdAt: args.createdAt,
     raw: args.raw
   });
   return parsed.success ? [parsed.data] : [];

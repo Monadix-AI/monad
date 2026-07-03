@@ -11,6 +11,7 @@ type WorkspaceExperienceElement = HTMLElement & {
   monadWorkspaceExperience?: {
     actions: ProjectExperienceView['runtime']['actions'];
     embedded: boolean;
+    host: ProjectExperienceView['runtime']['host'];
     requestProjectSettings(open: boolean): void;
     snapshot: ProjectExperienceView['runtime']['snapshot'];
   };
@@ -42,10 +43,11 @@ export function WebComponentExperience({
     () => ({
       actions: view.runtime.actions,
       embedded: view.embedded,
+      host: view.runtime.host,
       requestProjectSettings: (open: boolean) => view.onProjectSettingsOpenChange?.(open),
       snapshot: view.runtime.snapshot
     }),
-    [view.embedded, view.onProjectSettingsOpenChange, view.runtime.actions, view.runtime.snapshot]
+    [view.embedded, view.onProjectSettingsOpenChange, view.runtime.actions, view.runtime.host, view.runtime.snapshot]
   );
 
   useEffect(() => {

@@ -1,5 +1,11 @@
 import type { NativeCliAgentConfig } from '@monad/home';
-import type { Event, ManagedNativeCliLifecycleLogEvent, TranscriptTarget, TranscriptTargetId } from '@monad/protocol';
+import type {
+  Event,
+  ManagedNativeCliLifecycleLogEvent,
+  ProjectId,
+  TranscriptTarget,
+  TranscriptTargetId
+} from '@monad/protocol';
 import type { SessionContext } from '@/handlers/session/context.ts';
 import type { ManagedNativeCliProjectMessageSender } from '@/handlers/session/handlers/messaging-notices.ts';
 
@@ -23,9 +29,6 @@ const MANAGED_NATIVE_CLI_DELIVERY_ERROR_EVENT =
 const MANAGED_NATIVE_CLI_DIRECT_DELIVERY_ERROR_EVENT =
   'project.managed_native_cli.direct_delivery_error' satisfies ManagedNativeCliLifecycleLogEvent;
 
-/** Fan-out + direct delivery of Workplace Project messages to managed native-CLI project members.
- *  Thinking-placeholder/Q&A-wall message bookkeeping lives in managed-native-cli-messages.ts; process
- *  start/resume lives in managed-native-cli-runtime.ts. */
 export function createManagedNativeCliDelivery(ctx: SessionContext) {
   const {
     deps: { store, log, nativeCliHost },
@@ -35,13 +38,8 @@ export function createManagedNativeCliDelivery(ctx: SessionContext) {
 
   const { managedNativeCliSessionsForAgent, startManagedNativeCliRuntimeWithRecovery } =
     createManagedNativeCliRuntime(ctx);
-  const {
-    emitManagedNativeCliThinking,
-    completeManagedNativeCliThinking,
-    retireManagedNativeCliThinking,
-    beginProjectQaWallMessage,
-    completeProjectQaWallMessage
-  } = createManagedNativeCliMessages(ctx);
+  const { emitManagedNativeCliThinking, completeManagedNativeCliThinking, retireManagedNativeCliThinking } =
+    createManagedNativeCliMessages(ctx);
 
   function recordManagedNativeCliProjectDeliveryError(
     sessionId: TranscriptTargetId,
@@ -103,10 +101,19 @@ export function createManagedNativeCliDelivery(ctx: SessionContext) {
       try {
         const notice = managedNativeCliInboxNotice(member, text, resolvedSender);
         const deliveredSeq = store.maxMessageSeq(session.id);
+        const triggerMessageId =
+          deliveredSeq > 0 ? (store.messageIdForSeq(session.id, deliveredSeq) ?? undefined) : undefined;
         const managedSessions = managedNativeCliSessionsForAgent(session.id, runtimeAgentName);
         const existing = managedSessions.find((candidate) => candidate.state === 'running');
         if (existing) {
-          if (deliveredSeq > 0) store.enqueueNativeCliInboxItem(existing.id, deliveredSeq);
+          if (deliveredSeq > 0) {
+            store.enqueueNativeCliInboxItem(existing.id, deliveredSeq, {
+              projectId: session.id as ProjectId,
+              memberInstanceId: runtimeAgentName,
+              triggerMessageId,
+              providerSessionRef: existing.providerSessionRef ?? null
+            });
+          }
           emitManagedNativeCliThinking(session.id, existing.id, runtimeAgentName);
           if (existing.lastDeliveredSeq === 0) {
             nativeCliHost.input(existing.id, { input: nativeCliInputText(notice) });
@@ -157,7 +164,14 @@ export function createManagedNativeCliDelivery(ctx: SessionContext) {
           providerSessionRef: resumeFrom ?? undefined,
           input: notice
         });
-        if (deliveredSeq > 0) store.enqueueNativeCliInboxItem(nativeSession.id, deliveredSeq);
+        if (deliveredSeq > 0) {
+          store.enqueueNativeCliInboxItem(nativeSession.id, deliveredSeq, {
+            projectId: session.id as ProjectId,
+            memberInstanceId: runtimeAgentName,
+            triggerMessageId,
+            providerSessionRef: nativeSession.providerSessionRef ?? resumeFrom ?? null
+          });
+        }
         store.markNativeCliInboxDelivered(nativeSession.id, deliveredSeq);
         store.markNativeCliInboxVisible(nativeSession.id, deliveredSeq);
         emitManagedNativeCliThinking(session.id, nativeSession.id, runtimeAgentName);
@@ -268,9 +282,7 @@ export function createManagedNativeCliDelivery(ctx: SessionContext) {
     deliverProjectMessageToManagedNativeCliMembers,
     deliverDirectMessageToManagedNativeCliMember,
     managedNativeCliSessionsForAgent,
-    startManagedNativeCliRuntimeWithRecovery,
-    beginProjectQaWallMessage,
-    completeProjectQaWallMessage
+    startManagedNativeCliRuntimeWithRecovery
   };
 }
 

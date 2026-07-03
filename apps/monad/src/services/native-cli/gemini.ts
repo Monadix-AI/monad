@@ -31,6 +31,10 @@ function withGeminiSkipApprovalArgs(args: string[], skipProviderApprovals: boole
   return [...args, '--approval-mode=yolo'];
 }
 
+function geminiExtraWorkingPathArgs(paths: string[] | undefined): string[] {
+  return (paths ?? []).flatMap((path) => ['--include-directories', path]);
+}
+
 function buildGeminiLaunch(agent: NativeCliAgentView, opts: BuildNativeCliLaunchOptions): NativeCliLaunchSpec {
   const launchMode = opts.launchMode ?? agent.defaultLaunchMode;
   let args = [...(agent.args ?? [])];
@@ -42,6 +46,7 @@ function buildGeminiLaunch(agent: NativeCliAgentView, opts: BuildNativeCliLaunch
     args.push('--model', modelId);
   }
   args = withGeminiSkipApprovalArgs(args, !!opts.skipProviderApprovals);
+  args = [...args, ...geminiExtraWorkingPathArgs(opts.extraWorkingPaths)];
   const launchArgs = launchMode === 'json-stream' ? withGeminiStreamJsonArgs(args) : args;
   return {
     argv: [agent.command, ...launchArgs],

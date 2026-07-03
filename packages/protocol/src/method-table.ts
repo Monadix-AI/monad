@@ -148,6 +148,8 @@ const idPath = { id: sessionIdSchema };
 const transcriptTargetPath = { id: transcriptTargetIdSchema };
 const agentPath = { id: agentIdSchema };
 const nativeCliSessionPath = { id: z.string().min(1) };
+const nativeCliSessionScopeQuery = z.object({ transcriptTargetId: transcriptTargetIdSchema });
+const nativeCliAuthScopeQuery = z.object({ controlToken: z.string().min(32) });
 const nativeCliAgentNamePath = { name: z.string().min(1) };
 
 export const UNIVERSAL_METHODS = {
@@ -323,34 +325,40 @@ export const UNIVERSAL_METHODS = {
   'nativeCli.get': {
     http: { verb: 'GET', template: '/v1/native-cli-sessions/:id' },
     path: nativeCliSessionPath,
+    query: nativeCliSessionScopeQuery,
     result: getNativeCliSessionResponseSchema
   },
   'nativeCli.input': {
     http: { verb: 'POST', template: '/v1/native-cli-sessions/:id/input' },
     path: nativeCliSessionPath,
+    query: nativeCliSessionScopeQuery,
     body: nativeCliInputRequestSchema,
     result: okResponseSchema
   },
   'nativeCli.approval': {
     http: { verb: 'POST', template: '/v1/native-cli-sessions/:id/approval' },
     path: nativeCliSessionPath,
+    query: nativeCliSessionScopeQuery,
     body: nativeCliApprovalResolutionRequestSchema,
     result: okResponseSchema
   },
   'nativeCli.resize': {
     http: { verb: 'POST', template: '/v1/native-cli-sessions/:id/resize' },
     path: nativeCliSessionPath,
+    query: nativeCliSessionScopeQuery,
     body: nativeCliResizeRequestSchema,
     result: okResponseSchema
   },
   'nativeCli.stop': {
     http: { verb: 'POST', template: '/v1/native-cli-sessions/:id/stop' },
     path: nativeCliSessionPath,
+    query: nativeCliSessionScopeQuery,
     result: okResponseSchema
   },
   'nativeCli.historyPage': {
     http: { verb: 'POST', template: '/v1/native-cli-sessions/:id/history-page' },
     path: nativeCliSessionPath,
+    query: nativeCliSessionScopeQuery,
     body: nativeCliHistoryPageRequestSchema,
     result: nativeCliHistoryPageResponseSchema
   },
@@ -367,23 +375,27 @@ export const UNIVERSAL_METHODS = {
   'nativeCli.auth.get': {
     http: { verb: 'GET', template: '/v1/native-cli-auth-sessions/:id' },
     path: nativeCliSessionPath,
+    query: nativeCliAuthScopeQuery,
     result: getNativeCliAuthSessionResponseSchema
   },
   'nativeCli.auth.input': {
     http: { verb: 'POST', template: '/v1/native-cli-auth-sessions/:id/input' },
     path: nativeCliSessionPath,
+    query: nativeCliAuthScopeQuery,
     body: nativeCliInputRequestSchema,
     result: okResponseSchema
   },
   'nativeCli.auth.resize': {
     http: { verb: 'POST', template: '/v1/native-cli-auth-sessions/:id/resize' },
     path: nativeCliSessionPath,
+    query: nativeCliAuthScopeQuery,
     body: nativeCliResizeRequestSchema,
     result: okResponseSchema
   },
   'nativeCli.auth.stop': {
     http: { verb: 'POST', template: '/v1/native-cli-auth-sessions/:id/stop' },
     path: nativeCliSessionPath,
+    query: nativeCliAuthScopeQuery,
     result: okResponseSchema
   }
 

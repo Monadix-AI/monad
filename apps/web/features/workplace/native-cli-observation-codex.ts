@@ -16,8 +16,7 @@ import {
   textValue
 } from './native-cli-observation-shared.ts';
 
-type CodexObservationResponseItem = Partial<CodexAppServerResponseItem> &
-  Record<string, unknown> & { type: string };
+type CodexObservationResponseItem = Partial<CodexAppServerResponseItem> & Record<string, unknown> & { type: string };
 export type CodexObservationNotification = Partial<CodexAppServerNotification | CodexAppServerServerRequest> &
   Record<string, unknown> & { method: string };
 
@@ -48,6 +47,7 @@ const CODEX_APP_SERVER_METHODS = new Set([
   'item/mcpToolCall/progress',
   'mcpServer/oauthLogin/completed',
   'mcpServer/startupStatus/updated',
+  'account/rateLimits/updated',
   'error',
   'warning',
   'guardianWarning',
@@ -293,6 +293,16 @@ export function codexAppServerRecordEvents(
     return isCodexObservationResponseItem(item)
       ? codexResponseItem(id, item, recordIndex, 'codex-app-server', record)
       : [];
+  }
+  if (method === 'account/rateLimits/updated') {
+    return observation({
+      id: `${id}:json:${recordIndex}:rate-limits`,
+      role: 'system',
+      text: 'Usage limits updated',
+      source: 'codex-app-server',
+      providerEventType: method,
+      raw: record
+    });
   }
   if (method === 'item/started') {
     const item = codexAppServerItemRecord(p);

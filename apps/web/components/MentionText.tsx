@@ -7,7 +7,7 @@ export interface MentionToken {
   end: number;
 }
 
-type MentionSegment = { kind: 'text'; text: string } | { kind: 'mention'; name: string; id: string };
+export type MentionSegment = { kind: 'text'; text: string } | { kind: 'mention'; name: string; id: string };
 
 const MENTION_TOKEN_RE = /@\[name="((?:\\.|[^"\\])*)"\s+id="((?:\\.|[^"\\])*)"\]/g;
 
@@ -44,6 +44,17 @@ export function mentionSegments(text: string): MentionSegment[] {
   return segments;
 }
 
+function MentionCapsule({ id, name }: { id: string; name: string }) {
+  return (
+    <span
+      className="mx-0.5 inline-flex max-w-full items-center rounded bg-accent-blue px-1 align-baseline text-white"
+      title={id}
+    >
+      @{name}
+    </span>
+  );
+}
+
 export function MentionText({ text, className }: { text: string; className?: string }) {
   let offset = 0;
   return (
@@ -52,13 +63,11 @@ export function MentionText({ text, className }: { text: string; className?: str
         const key = `${segment.kind}:${offset}`;
         offset += segment.kind === 'mention' ? mentionToken(segment).length : segment.text.length;
         return segment.kind === 'mention' ? (
-          <span
-            className="mx-0.5 inline-flex max-w-full items-center rounded bg-accent-blue px-1 align-baseline text-white"
+          <MentionCapsule
+            id={segment.id}
             key={key}
-            title={segment.id}
-          >
-            @{segment.name}
-          </span>
+            name={segment.name}
+          />
         ) : (
           <span
             className="[overflow-wrap:anywhere]"

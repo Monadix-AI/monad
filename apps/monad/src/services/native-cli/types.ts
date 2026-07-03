@@ -57,6 +57,7 @@ export type NativeCliStartPreflight =
 
 export interface BuildNativeCliLaunchOptions {
   workingPath: string;
+  extraWorkingPaths?: string[];
   launchMode?: NativeCliLaunchMode;
   providerSessionRef?: string;
   systemPromptFile?: string;

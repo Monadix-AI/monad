@@ -86,7 +86,7 @@ export function NativeCliAgentsSettings({ embedded = false }: { onClose: () => v
   const { agents, presets, loading, saveAgent, removeAgent, setEnabled, refetch } = useNativeCliAgentSettings();
   const [draft, setDraft] = useState<NativeCliAgentView | null>(null);
   const [editingAgent, setEditingAgent] = useState<NativeCliAgentView | null>(null);
-  const [authSession, setAuthSession] = useState<{ id: string; agentName: string } | null>(null);
+  const [authSession, setAuthSession] = useState<{ id: string; controlToken: string; agentName: string } | null>(null);
   const [connectingAgentName, setConnectingAgentName] = useState<string | null>(null);
   const [startAuth] = useStartNativeCliAuthMutation();
   const { busy: connectBusy, error: connectError, run: runConnect } = useAsyncAction();
@@ -98,7 +98,9 @@ export function NativeCliAgentsSettings({ embedded = false }: { onClose: () => v
       try {
         await saveAgent(agent);
         const session = await startAuth(agent.name).unwrap();
-        if (session.authState !== 'authenticated') setAuthSession({ id: session.id, agentName: agent.name });
+        if (session.authState !== 'authenticated') {
+          setAuthSession({ id: session.id, controlToken: session.controlToken, agentName: agent.name });
+        }
       } finally {
         setConnectingAgentName(null);
       }
@@ -441,6 +443,7 @@ export function NativeCliAgentsSettings({ embedded = false }: { onClose: () => v
       {authSession ? (
         <NativeCliAuthModal
           agentName={authSession.agentName}
+          controlToken={authSession.controlToken}
           onClose={() => setAuthSession(null)}
           sessionId={authSession.id}
         />

@@ -62,6 +62,10 @@ function codexSkipApprovalArgs(args: string[], skipProviderApprovals: boolean): 
   return ['--ask-for-approval', 'never'];
 }
 
+function codexExtraWorkingPathArgs(paths: string[] | undefined): string[] {
+  return (paths ?? []).flatMap((path) => ['--add-dir', path]);
+}
+
 function codexNonInteractiveEnv(env?: Record<string, string>): Record<string, string> {
   return { ...(env ?? {}), ...CODEX_NON_INTERACTIVE_ENV };
 }
@@ -129,6 +133,7 @@ function buildCodexLaunch(agent: NativeCliAgentView, opts: BuildNativeCliLaunchO
     return {
       argv: [
         agent.command,
+        ...codexExtraWorkingPathArgs(opts.extraWorkingPaths),
         ...codexSkipApprovalArgs(args, !!opts.skipProviderApprovals),
         'app-server',
         '--stdio',
@@ -166,6 +171,7 @@ function buildCodexLaunch(agent: NativeCliAgentView, opts: BuildNativeCliLaunchO
     argv: [
       agent.command,
       ...(hasCd ? [] : ['--cd', opts.workingPath]),
+      ...codexExtraWorkingPathArgs(opts.extraWorkingPaths),
       ...(hasAltScreen ? [] : ['--no-alt-screen']),
       ...args
     ],

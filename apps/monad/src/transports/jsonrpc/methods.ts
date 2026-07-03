@@ -138,18 +138,24 @@ export const RPC_HANDLERS: RpcHandlerMap = {
 
   'nativeCli.start': async ({ id, ...request }, h: D) => h.nativeCli.start({ sessionId: id, request }),
   'nativeCli.list': async ({ id }, h: D) => h.nativeCli.list({ sessionId: id }),
-  'nativeCli.get': async ({ id }, h: D) => h.nativeCli.get({ id }),
-  'nativeCli.input': async ({ id, ...request }, h: D) => h.nativeCli.input({ id, ...request }),
-  'nativeCli.approval': async ({ id, ...request }, h: D) => h.nativeCli.approval({ id, ...request }),
-  'nativeCli.resize': async ({ id, ...request }, h: D) => h.nativeCli.resize({ id, ...request }),
-  'nativeCli.stop': async ({ id }, h: D) => h.nativeCli.stop({ id }),
-  'nativeCli.historyPage': async ({ id, ...request }, h: D) => h.nativeCli.historyPage({ id, request }),
+  'nativeCli.get': async ({ id, transcriptTargetId }, h: D) => h.nativeCli.get({ id, transcriptTargetId }),
+  'nativeCli.input': async ({ id, transcriptTargetId, ...request }, h: D) =>
+    h.nativeCli.input({ id, transcriptTargetId, ...request }),
+  'nativeCli.approval': async ({ id, transcriptTargetId, ...request }, h: D) =>
+    h.nativeCli.approval({ id, transcriptTargetId, ...request }),
+  'nativeCli.resize': async ({ id, transcriptTargetId, ...request }, h: D) =>
+    h.nativeCli.resize({ id, transcriptTargetId, ...request }),
+  'nativeCli.stop': async ({ id, transcriptTargetId }, h: D) => h.nativeCli.stop({ id, transcriptTargetId }),
+  'nativeCli.historyPage': async ({ id, transcriptTargetId, ...request }, h: D) =>
+    h.nativeCli.historyPage({ id, transcriptTargetId, request }),
   'nativeCli.auth.start': async ({ name }, h: D) => h.nativeCli.startAuth({ agentName: name }),
   'nativeCli.auth.status': async ({ name }, h: D) => h.nativeCli.authStatus({ agentName: name }),
-  'nativeCli.auth.get': async ({ id }, h: D) => h.nativeCli.getAuth({ id }),
-  'nativeCli.auth.input': async ({ id, ...request }, h: D) => h.nativeCli.inputAuth({ id, ...request }),
-  'nativeCli.auth.resize': async ({ id, ...request }, h: D) => h.nativeCli.resizeAuth({ id, ...request }),
-  'nativeCli.auth.stop': async ({ id }, h: D) => h.nativeCli.stopAuth({ id })
+  'nativeCli.auth.get': async ({ id, controlToken }, h: D) => h.nativeCli.getAuth({ id, controlToken }),
+  'nativeCli.auth.input': async ({ id, controlToken, ...request }, h: D) =>
+    h.nativeCli.inputAuth({ id, controlToken, ...request }),
+  'nativeCli.auth.resize': async ({ id, controlToken, ...request }, h: D) =>
+    h.nativeCli.resizeAuth({ id, controlToken, ...request }),
+  'nativeCli.auth.stop': async ({ id, controlToken }, h: D) => h.nativeCli.stopAuth({ id, controlToken })
 
   // model/* settings (and the rest of /v1/settings/*) are HTTP-only — no RPC binding by design.
 };

@@ -4,6 +4,7 @@ export type HandlerErrorKind =
   | 'not_found' // 404 HTTP / -32001 RPC
   | 'invalid' // 400 HTTP / -32602 RPC (INVALID_PARAMS)
   | 'conflict' // 409 HTTP / -32003 RPC
+  | 'gone' // 410 HTTP / -32006 RPC
   | 'forbidden' // 403 HTTP / -32004 RPC
   | 'bad_gateway' // 502 HTTP / -32005 RPC
   | 'internal'; // 500 HTTP / -32603 RPC
@@ -26,6 +27,7 @@ export const HANDLER_ERROR_MAP = {
   not_found: { httpStatus: 404, httpCode: 'NOT_FOUND', rpcCode: -32001 },
   invalid: { httpStatus: 400, httpCode: 'VALIDATION', rpcCode: RPC_ERRORS.INVALID_PARAMS.code },
   conflict: { httpStatus: 409, httpCode: 'CONFLICT', rpcCode: -32003 },
+  gone: { httpStatus: 410, httpCode: 'GONE', rpcCode: -32006 },
   forbidden: { httpStatus: 403, httpCode: 'FORBIDDEN', rpcCode: -32004 },
   bad_gateway: { httpStatus: 502, httpCode: 'BAD_GATEWAY', rpcCode: -32005 },
   internal: { httpStatus: 500, httpCode: 'INTERNAL', rpcCode: RPC_ERRORS.INTERNAL_ERROR.code }

@@ -1,9 +1,9 @@
-import type { ProjectController } from '../use-project';
+import type { ChatRoomCanvas } from '../experiences/chat-room/canvas';
 
 import { ghostButtonStyle, inkButtonStyle } from '../Bits';
 import { boxR, mono, sans, softShadow } from '../styles';
 
-export function ApprovalStack({ room }: { room: ProjectController }): React.ReactElement | null {
+export function ApprovalStack({ room }: { room: ChatRoomCanvas }): React.ReactElement | null {
   const { approvals } = room;
   if (approvals.length === 0) return null;
   const top = approvals[0];
@@ -28,16 +28,6 @@ export function ApprovalStack({ room }: { room: ProjectController }): React.Reac
         >
           ⚠ {approvals.length === 1 ? '1 action needs review' : `${approvals.length} actions need review`}
         </span>
-        {approvals.length > 1 ? (
-          <button
-            className="workplace-action"
-            onClick={room.approveAll}
-            style={ghostButtonStyle({ fontSize: 14, padding: '3px 12px' })}
-            type="button"
-          >
-            Allow all
-          </button>
-        ) : null}
       </div>
 
       <div style={{ position: 'relative', paddingTop: 18 }}>
