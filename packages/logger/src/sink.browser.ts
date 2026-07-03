@@ -3,10 +3,10 @@
 // tree-shaken out of the browser bundle. The pipe destination is fixed (the console); env only
 // tunes the level threshold, mirroring node's getLogLevel() override.
 
-import type { Logger, LogLevel } from './types.ts';
+import type { CustomLogDestination, LogDestination, Logger, LoggerRecord, LogLevel } from './types.ts';
 
 import { emitDeveloperRecord } from './developer.ts';
-import { getLogLevel } from './level.ts';
+import { getLoggerConfig, getLogLevel } from './level.ts';
 
 // (No on-disk descriptors here — those live in ./log-files.ts, a node-only module. The browser sink
 // has no filesystem, so it deliberately carries nothing about debug files or developer jsonl.)
@@ -37,6 +37,7 @@ function errorFields(v: unknown): { err: { type: string; message: string; stack?
 }
 
 function makeLogger(bindings: Record<string, unknown>, threshold: number): Logger {
+  const configuredDestinations = getLoggerConfig()?.destinations;
   // Broad params (`unknown`) so each method is assignable to the overloaded LogFn; a non-string
   // second arg is simply ignored as a message.
   const emit = (level: LogLevel, a: unknown, b?: unknown) => {
@@ -62,6 +63,10 @@ function makeLogger(bindings: Record<string, unknown>, threshold: number): Logge
     if (levelRank >= RANK.debug && (typeof record.channelId === 'string' || typeof record.sessionId === 'string')) {
       emitDeveloperRecord(record);
     }
+    if (configuredDestinations && configuredDestinations.length > 0) {
+      emitConfiguredDestinations(configuredDestinations, record as LoggerRecord);
+      return;
+    }
     if (levelRank < threshold) return;
     const name = typeof bindings.name === 'string' ? `[${bindings.name}] ` : '';
     // biome-ignore lint/suspicious/noConsole: the browser sink's whole purpose is to pipe to the console
@@ -81,7 +86,55 @@ function makeLogger(bindings: Record<string, unknown>, threshold: number): Logge
   };
 }
 
+function emitConfiguredDestinations(destinations: readonly LogDestination[], record: LoggerRecord): void {
+  for (const destination of destinations) {
+    if (record.level < rank(destination.level ?? 'info')) continue;
+    switch (destination.type) {
+      case 'console':
+        emitConsoleDestination(record);
+        break;
+      case 'custom':
+        emitCustomDestination(destination, record);
+        break;
+      case 'developer':
+        if (typeof record.channelId === 'string' || typeof record.sessionId === 'string') emitDeveloperRecord(record);
+        break;
+      case 'file':
+      case 'debug-file':
+        break;
+    }
+  }
+}
+
+function emitConsoleDestination(record: LoggerRecord): void {
+  const levelName = levelNameFromRank(record.level);
+  const name = typeof record.name === 'string' ? `[${record.name}] ` : '';
+  // biome-ignore lint/suspicious/noConsole: configured browser console destination
+  console[consoleMethod(levelName)](`${name}${record.msg ?? ''}`, record);
+}
+
+function emitCustomDestination(destination: CustomLogDestination, record: LoggerRecord): void {
+  void Promise.resolve(destination.write(record)).catch(() => {});
+}
+
+function levelNameFromRank(level: number): LogLevel {
+  if (level >= RANK.fatal) return 'fatal';
+  if (level >= RANK.error) return 'error';
+  if (level >= RANK.warn) return 'warn';
+  if (level >= RANK.info) return 'info';
+  if (level >= RANK.debug) return 'debug';
+  return 'trace';
+}
+
 export function createLogger(name?: string, context?: Record<string, unknown>): Logger {
   const bindings = { ...(name ? { name } : {}), ...context };
-  return makeLogger(bindings, rank(getLogLevel() ?? 'info'));
+  const configuredDestinations = getLoggerConfig()?.destinations;
+  const levelOverride = getLogLevel();
+  const threshold =
+    levelOverride !== undefined
+      ? rank(levelOverride)
+      : configuredDestinations && configuredDestinations.length > 0
+        ? Math.min(...configuredDestinations.map((destination) => rank(destination.level ?? 'info')))
+        : rank('info');
+  return makeLogger(bindings, threshold);
 }

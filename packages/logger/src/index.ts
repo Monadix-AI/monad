@@ -10,12 +10,23 @@
 
 import { createLogger } from '#platform-sink';
 
-export type { DeveloperLogSubscriber, Logger, LogLevel, RawDeveloperLogRecord } from './types.ts';
+export type {
+  CustomLogDestination,
+  DeveloperLogDestination,
+  DeveloperLogSubscriber,
+  FileLogDestination,
+  LogDestination,
+  Logger,
+  LoggerConfig,
+  LoggerRecord,
+  LogLevel,
+  RawDeveloperLogRecord
+} from './types.ts';
 
 export { createLogger, setDeveloperLogTransport } from '#platform-sink';
 export { subscribeDeveloperLogRecords } from './developer.ts';
 export { formatPrettyMessage, formatTransportCall } from './format.ts';
-export { type LogLevelOverride, setLogFile, setLogLevel, setLogStderr } from './level.ts';
+export { configureLogger, type LogLevelOverride, setLogFile, setLogLevel, setLogStderr } from './level.ts';
 
 export const logger = createLogger('monad');
 

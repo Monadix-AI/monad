@@ -1,8 +1,13 @@
-import { describe, expect, test } from 'bun:test';
+import { afterEach, describe, expect, test } from 'bun:test';
 import { developerLogRecordSchema } from '@monad/protocol';
 
 import { subscribeDeveloperLogRecords } from '../../src/developer.ts';
+import { configureLogger } from '../../src/level.ts';
 import { createLogger } from '../../src/sink.browser.ts';
+
+afterEach(() => {
+  configureLogger();
+});
 
 // Assertions read the fanned-out developer records, not the console — so the sink's own console
 // output is harmless test noise and needs no silencing.
@@ -61,5 +66,40 @@ describe('browser sink developer records', () => {
     const log = createLogger('web');
     const records = capture(() => log.info('no ids here'));
     expect(records).toHaveLength(0);
+  });
+
+  test('custom destinations use the same config contract as node destinations', () => {
+    const sentryRecords: Record<string, unknown>[] = [];
+    const otelRecords: Record<string, unknown>[] = [];
+    configureLogger({
+      destinations: [
+        {
+          type: 'custom',
+          name: 'otel',
+          level: 'info',
+          write: (record) => {
+            otelRecords.push(record);
+          }
+        },
+        {
+          type: 'custom',
+          name: 'sentry',
+          level: 'error',
+          write: (record) => {
+            sentryRecords.push(record);
+          }
+        }
+      ]
+    });
+
+    const log = createLogger('web', { surface: 'browser' });
+    log.debug('debug event');
+    log.info({ requestId: 'req_1' }, 'info event');
+    log.error({ requestId: 'req_2' }, 'error event');
+
+    expect(otelRecords.map((record) => record.msg)).toEqual(['info event', 'error event']);
+    expect(sentryRecords.map((record) => record.msg)).toEqual(['error event']);
+    expect(otelRecords[0]).toMatchObject({ name: 'web', surface: 'browser', requestId: 'req_1' });
+    expect(sentryRecords[0]).toMatchObject({ name: 'web', surface: 'browser', requestId: 'req_2' });
   });
 });
