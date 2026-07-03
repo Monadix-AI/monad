@@ -46,6 +46,71 @@ function managedNativeCliSenderMentionToken(sender?: ManagedNativeCliProjectMess
   return `@[name="${mentionTokenValue(sender.name)}" id="${mentionTokenValue(id)}"]`;
 }
 
+function providerUsesMcpProjectBridge(provider: string): boolean {
+  return provider === 'codex';
+}
+
+function usesMcpProjectBridge(member: ManagedNativeCliProjectMember): boolean {
+  return providerUsesMcpProjectBridge(member.spec.provider);
+}
+
+function managedNativeCliProjectCommunicationInstructions(member: ManagedNativeCliProjectMember): string[] {
+  if (usesMcpProjectBridge(member)) {
+    return [
+      'Call the `project_inbox_check` or `project_read` tools from the `monad` MCP server before answering if you need more context.',
+      'If a public response is appropriate, post it with the `project_post` tool from the `monad` MCP server.',
+      'Every `project_post`, `project_ask`, or `agent_send` call must include a stable `requestId`; reuse it only when retrying the same intended action.',
+      'To share local files for humans to read, pass `attachments` with local file paths. An `[Attachment ... - file at <path>]` marker in a message means the full content is in that file; read it directly if you need it.',
+      'Use the `agent_send` tool from the `monad` MCP server only for private/direct conversation.'
+    ];
+  }
+  return [
+    'Run `monad project inbox check` or `monad project read` before answering if you need more context.',
+    'If a public response is appropriate, post it with `monad project post -` and stdin.',
+    "Pass message text through a quoted heredoc, for example `monad project post - <<'MONAD_MESSAGE'`. Do not pass message text inline in a shell command because backticks, `$()`, and quotes will be interpreted by the shell before Monad receives them.",
+    'To share local files for humans to read, add `--file <path>` (repeatable). An `[Attachment ... - file at <path>]` marker in a message means the full content is in that file; read it directly if you need it.',
+    'Use `monad agent send --to <agent|human> -` with stdin only for private/direct conversation.'
+  ];
+}
+
+function managedNativeCliBusyCommunicationInstructions(member: ManagedNativeCliProjectMember): string[] {
+  if (usesMcpProjectBridge(member)) {
+    return [
+      'You are already running. Immediately call the `project_inbox_check` tool from the `monad` MCP server before deciding whether to reply. This notice does not include the message body; the inbox item is the source of truth.',
+      'If `project_inbox_check` from the `monad` MCP server returns no items, call the `project_read` tool from the same server before deciding whether to reply.',
+      'If a public response is appropriate, post it with the `project_post` tool from the `monad` MCP server.',
+      'Every `project_post`, `project_ask`, or `agent_send` call must include a stable `requestId`; reuse it only when retrying the same intended action.',
+      'To share local files for humans to read, pass `attachments` with local file paths. An `[Attachment ... - file at <path>]` marker in a message means the full content is in that file; read it directly if you need it.',
+      'Use the `agent_send` tool from the `monad` MCP server only for private/direct conversation.'
+    ];
+  }
+  return [
+    'You are already running. Immediately run `monad project inbox check` before deciding whether to reply. This notice does not include the message body; the inbox item is the source of truth.',
+    'If `monad project inbox check` returns no items, run `monad project read` before deciding whether to reply.',
+    'If a public response is appropriate, post it with `monad project post -` and stdin.',
+    "Pass message text through a quoted heredoc, for example `monad project post - <<'MONAD_MESSAGE'`. Do not pass message text inline in a shell command because backticks, `$()`, and quotes will be interpreted by the shell before Monad receives them.",
+    'To share local files for humans to read, add `--file <path>` (repeatable). An `[Attachment ... - file at <path>]` marker in a message means the full content is in that file; read it directly if you need it.',
+    'Use `monad agent send --to <agent|human> -` with stdin only for private/direct conversation.'
+  ];
+}
+
+function managedNativeCliSharedProjectInstructions(member: ManagedNativeCliProjectMember): string[] {
+  const syncInstruction = usesMcpProjectBridge(member)
+    ? 'During long-running work, periodically call the `project_inbox_check` or `project_read` tools from the `monad` MCP server before posting so you stay synchronized with other members.'
+    : 'During long-running work, periodically run `monad project inbox check` or `monad project read` before posting so you stay synchronized with other members.';
+  return [
+    'For any non-trivial task, first acknowledge ownership in the project room before doing longer work.',
+    'During long-running work, post brief progress updates at meaningful milestones, blockers, input needs, or direction changes.',
+    syncInstruction,
+    "Do not repeat another member's answer, status update, or plan. Add only new information, corrections, concrete progress, or a clearly useful next step.",
+    'To mention someone publicly, use the strict capsule token `@[name="display name" id="participant id"]`. Plain `@name` is ordinary text.',
+    'Treat human messages as high-priority project input: be more proactive and reply unless the message is clearly informational, already handled, or outside your role.',
+    'For agent/system messages, reply only when you can add concrete task value.',
+    'Do not make small talk. Only post when your response adds task-relevant value.',
+    'When posting to the project room, be vivid, friendly, helpful, and warm in tone while staying concise and avoiding filler.'
+  ];
+}
+
 export function managedNativeCliInboxNotice(
   member: ManagedNativeCliProjectMember,
   text: string,
@@ -70,20 +135,8 @@ export function managedNativeCliInboxNotice(
     'Project message body:',
     text,
     '',
-    'Run `monad project inbox check` or `monad project read` before answering if you need more context.',
-    'If a public response is appropriate, post it with `monad project post -` and stdin.',
-    "Pass message text through a quoted heredoc, for example `monad project post - <<'MONAD_MESSAGE'`. Do not pass message text inline in a shell command because backticks, `$()`, and quotes will be interpreted by the shell before Monad receives them.",
-    'To share local files for humans to read, add `--file <path>` (repeatable). An `[Attachment … — file at <path>]` marker in a message means the full content is in that file; read it directly if you need it.',
-    'Use `monad agent send --to <agent|human> -` with stdin only for private/direct conversation.',
-    'For any non-trivial task, first acknowledge ownership in the project room before doing longer work.',
-    'During long-running work, post brief progress updates at meaningful milestones, blockers, input needs, or direction changes.',
-    'During long-running work, periodically run `monad project inbox check` or `monad project read` before posting so you stay synchronized with other members.',
-    "Do not repeat another member's answer, status update, or plan. Add only new information, corrections, concrete progress, or a clearly useful next step.",
-    'To mention someone publicly, use the strict capsule token `@[name="display name" id="participant id"]`. Plain `@name` is ordinary text.',
-    'Treat human messages as high-priority project input: be more proactive and reply unless the message is clearly informational, already handled, or outside your role.',
-    'For agent/system messages, reply only when you can add concrete task value.',
-    'Do not make small talk. Only post when your response adds task-relevant value.',
-    'When posting to the project room, be vivid, friendly, helpful, and warm in tone while staying concise and avoiding filler.'
+    ...managedNativeCliProjectCommunicationInstructions(member),
+    ...managedNativeCliSharedProjectInstructions(member)
   ].join('\n');
 }
 
@@ -107,42 +160,50 @@ export function managedNativeCliBusyInboxNotice(
     ...(sender?.id ? [`Sender id: ${sender.id}`] : []),
     ...(senderMention ? [`Sender mention token: ${senderMention}`] : []),
     '',
-    'You are already running. Immediately run `monad project inbox check` before deciding whether to reply. This notice does not include the message body; the inbox item is the source of truth.',
-    'If `monad project inbox check` returns no items, run `monad project read` before deciding whether to reply.',
-    'If a public response is appropriate, post it with `monad project post -` and stdin.',
-    "Pass message text through a quoted heredoc, for example `monad project post - <<'MONAD_MESSAGE'`. Do not pass message text inline in a shell command because backticks, `$()`, and quotes will be interpreted by the shell before Monad receives them.",
-    'To share local files for humans to read, add `--file <path>` (repeatable). An `[Attachment … — file at <path>]` marker in a message means the full content is in that file; read it directly if you need it.',
-    'Use `monad agent send --to <agent|human> -` with stdin only for private/direct conversation.',
-    'For any non-trivial task, first acknowledge ownership in the project room before doing longer work.',
-    'During long-running work, post brief progress updates at meaningful milestones, blockers, input needs, or direction changes.',
-    'During long-running work, periodically run `monad project inbox check` or `monad project read` before posting so you stay synchronized with other members.',
-    "Do not repeat another member's answer, status update, or plan. Add only new information, corrections, concrete progress, or a clearly useful next step.",
-    'To mention someone publicly, use the strict capsule token `@[name="display name" id="participant id"]`. Plain `@name` is ordinary text.',
-    'Treat human messages as high-priority project input: be more proactive and reply unless the message is clearly informational, already handled, or outside your role.',
-    'For agent/system messages, reply only when you can add concrete task value.',
-    'Do not make small talk. Only post when your response adds task-relevant value.',
-    'When posting to the project room, be vivid, friendly, helpful, and warm in tone while staying concise and avoiding filler.'
+    ...managedNativeCliBusyCommunicationInstructions(member),
+    ...managedNativeCliSharedProjectInstructions(member)
   ].join('\n');
 }
 
-export function managedNativeCliDirectNotice({ fromAgentName, text }: { fromAgentName: string; text: string }): string {
+export function managedNativeCliDirectNotice({
+  member,
+  fromAgentName,
+  text
+}: {
+  member: ManagedNativeCliProjectMember;
+  fromAgentName: string;
+  text: string;
+}): string {
+  const instructions = usesMcpProjectBridge(member)
+    ? [
+        `Use the \`agent_read\` tool from the \`monad\` MCP server with \`with: "${fromAgentName}"\` to read the private conversation.`,
+        `Reply privately with the \`agent_send\` tool from the \`monad\` MCP server and \`to: "${fromAgentName}"\`.`,
+        'Every `agent_send` call must include a stable `requestId`; reuse it only when retrying the same intended direct message.',
+        'Use the `project_post` tool from the `monad` MCP server only when you want to speak publicly in the Workplace Project.'
+      ]
+    : [
+        `Use \`monad agent read --with ${fromAgentName}\` to read the private conversation.`,
+        `Reply privately with \`monad agent send --to ${fromAgentName} -\` and stdin.`,
+        'Use `monad project post` only when you want to speak publicly in the Workplace Project.'
+      ];
   return [
     `New direct/private message from ${fromAgentName} is available.`,
     '',
     text,
     '',
-    `Use \`monad agent read --with ${fromAgentName}\` to read the private conversation.`,
-    `Reply privately with \`monad agent send --to ${fromAgentName} -\` and stdin.`,
-    'An `[Attachment … — file at <path>]` marker in the message means the full content is in that file; read it directly if you need it.',
-    'Use `monad project post` only when you want to speak publicly in the Workplace Project.',
+    ...instructions,
+    'An `[Attachment ... - file at <path>]` marker in the message means the full content is in that file; read it directly if you need it.',
     'Terminal stdout/stderr is diagnostic output only. It is not a Workplace Project message.'
   ].join('\n');
 }
 
-export function managedNativeCliResumeRecoveryNotice(notice: string): string {
+export function managedNativeCliResumeRecoveryNotice(provider: string, notice: string): string {
+  const restoreInstruction = providerUsesMcpProjectBridge(provider)
+    ? 'Before replying, restore context from MEMORY.md and call the `project_read` tool from the `monad` MCP server.'
+    : 'Before replying, restore context from MEMORY.md and `monad project read`.';
   return [
     'Provider session resume failed. Monad started a fresh managed project runtime.',
-    'Before replying, restore context from MEMORY.md and `monad project read`.',
+    restoreInstruction,
     '',
     notice
   ].join('\n');

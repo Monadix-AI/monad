@@ -158,6 +158,7 @@ const SNAPSHOT_FLUSH_MS = 200;
 // observe() returns the whole output buffer, and a chatty CLI emits many chunks a second, so pushing
 // a fresh full snapshot per chunk is quadratic bandwidth. Coalesce non-terminal pushes to this cadence.
 const OBSERVATION_THROTTLE_MS = 200;
+const HISTORY_BACKFILL_TIMEOUT_MS = 5_000;
 const MAX_STRUCTURED_LINE = 2 * 1024 * 1024;
 const AUTH_RUNNING_TTL_MS = 30 * 60 * 1000;
 const AUTH_TERMINAL_TTL_MS = 10 * 60 * 1000;
@@ -280,6 +281,17 @@ function writeProcessRegistry(path: string | undefined, pids: number[]): void {
   if (existsSync(parent) && !statSync(parent).isDirectory()) return;
   mkdirSync(parent, { recursive: true });
   writeFileSync(path, JSON.stringify(pids.map((pid) => ({ pid }))));
+}
+
+function nativeAgentMcpToolError(line: string): Record<string, unknown> | null {
+  try {
+    const parsed = JSON.parse(line) as unknown;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
+    const record = parsed as Record<string, unknown>;
+    return record.event === 'native_agent_mcp_tool_error' ? record : null;
+  } catch {
+    return null;
+  }
 }
 
 export class NativeCliHost {
@@ -473,7 +485,8 @@ export class NativeCliHost {
           modelName: args.modelName,
           reasoningEffort: args.reasoningEffort,
           speed: args.speed,
-          modelId: args.modelId
+          modelId: args.modelId,
+          mcpConfigArgs: managed?.mcpConfigArgs
         })
       );
     } catch (error) {
@@ -796,6 +809,39 @@ export class NativeCliHost {
   }
 
   observe(id: string): NativeCliObservationAccessResponse {
+    return this.observeFromStore(id);
+  }
+
+  async observeWithProviderHistory(id: string): Promise<NativeCliObservationAccessResponse> {
+    const base = this.observeFromStore(id);
+    if (base.state !== 'unavailable') return base;
+    const row = this.deps.store.getNativeCliSession(id);
+    if (!row || !isManagedProjectRuntime(row) || !row.providerSessionRef) return base;
+    const adapter = getNativeCliProviderAdapter(row.provider);
+    const cliOutput = await this.providerHistoryOutputViaCli(row, adapter).catch(() => null);
+    if (cliOutput) {
+      return {
+        state: 'history',
+        nativeCliSessionId: id,
+        provider: row.provider,
+        output: cliOutput,
+        observedAt: row.updatedAt
+      };
+    }
+    const localOutput = await this.providerHistoryOutputFromLocal(row, adapter);
+    if (localOutput) {
+      return {
+        state: 'history',
+        nativeCliSessionId: id,
+        provider: row.provider,
+        output: localOutput,
+        observedAt: row.updatedAt
+      };
+    }
+    return base;
+  }
+
+  private observeFromStore(id: string): NativeCliObservationAccessResponse {
     const live = this.live.get(id);
     if (live) {
       return {
@@ -829,6 +875,129 @@ export class NativeCliHost {
       provider: row.provider,
       reason: 'provider history unavailable'
     };
+  }
+
+  private async providerHistoryOutputFromLocal(
+    row: NativeCliSessionRow,
+    adapter: NativeCliProviderAdapter
+  ): Promise<string | null> {
+    if (!row.providerSessionRef) return null;
+    return (
+      (await adapter.historyOutput?.({
+        providerSessionRef: row.providerSessionRef,
+        workingPath: row.workingPath,
+        limitBytes: MAX_OUTPUT_SNAPSHOT
+      })) ?? null
+    );
+  }
+
+  private async providerHistoryOutputViaCli(
+    row: NativeCliSessionRow,
+    adapter: NativeCliProviderAdapter
+  ): Promise<string | null> {
+    const providerSessionRef = row.providerSessionRef ?? undefined;
+    const historyPageOutput = adapter.historyPageOutput;
+    if (!providerSessionRef || !adapter.requestHistoryPage || !historyPageOutput) return null;
+    const agent = (await this.deps.agents()).find(
+      (candidate) => candidate.enabled && (candidate.name === row.agentName || candidate.provider === row.provider)
+    );
+    if (!agent) return null;
+    const launch = resolveNativeCliLaunchCommand(
+      adapter,
+      buildNativeCliLaunch(agent, {
+        workingPath: row.workingPath,
+        launchMode: 'app-server',
+        providerSessionRef
+      })
+    );
+    if (launch.launchMode !== 'app-server') return null;
+    const spawnEnv = await this.buildSpawnEnv(launch.env);
+    const proc = Bun.spawn(launch.argv, {
+      cwd: launch.cwd,
+      env: spawnEnv,
+      stdin: 'pipe',
+      stdout: 'pipe',
+      stderr: 'pipe'
+    }) as NativeCliProcess;
+    let requestSeq = 0;
+    let settled = false;
+    let expectedResponseId: string | null = null;
+    const historyId = `history:${row.id}:${Date.now()}`;
+    const decoder = createStreamingTextDecoder();
+    const handle = {
+      launchMode: 'app-server' as const,
+      stdin: proc.stdin,
+      providerSessionRef,
+      nextRequestId: () => requestSeq++,
+      kill: (signal?: NodeJS.Signals) => killNativeCliProcess(proc.pid, signal)
+    };
+    return await new Promise<string | null>((resolve) => {
+      const finish = (output: string | null): void => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeout);
+        this.structuredOutputBuffers.delete(historyId);
+        try {
+          void proc.stdin?.end?.();
+        } catch {}
+        killNativeCliProcess(proc.pid);
+        resolve(output);
+      };
+      const timeout = setTimeout(() => finish(null), HISTORY_BACKFILL_TIMEOUT_MS);
+      void (async () => {
+        try {
+          for await (const data of proc.stdout ?? []) {
+            const text = decoder.decode(data);
+            if (!text) continue;
+            const structured = this.takeCompleteStructuredLines(historyId, 'stdout', text);
+            if (!structured) continue;
+            for (const event of adapter.parseOutput(structured)) {
+              const parsed = nativeCliOutputEventSchema.safeParse(event);
+              if (!parsed.success || parsed.data.type !== 'history_page') continue;
+              if (expectedResponseId && String(parsed.data.payload.responseId) !== expectedResponseId) continue;
+              const output = historyPageOutput({
+                providerSessionRef,
+                workingPath: row.workingPath,
+                limitBytes: MAX_OUTPUT_SNAPSHOT,
+                page: {
+                  items: Array.isArray(parsed.data.payload.items) ? parsed.data.payload.items : [],
+                  nextCursor:
+                    typeof parsed.data.payload.nextCursor === 'string' ? parsed.data.payload.nextCursor : null,
+                  backwardsCursor:
+                    typeof parsed.data.payload.backwardsCursor === 'string' ? parsed.data.payload.backwardsCursor : null
+                }
+              });
+              finish(output ?? null);
+              return;
+            }
+          }
+          const remaining = decoder.flush();
+          if (remaining) this.takeCompleteStructuredLines(historyId, 'stdout', remaining);
+          finish(null);
+        } catch {
+          finish(null);
+        }
+      })();
+      void (async () => {
+        try {
+          for await (const _ of proc.stderr ?? []) {
+          }
+        } catch {}
+      })();
+      try {
+        adapter.initialize?.(handle, { workingPath: row.workingPath, providerSessionRef });
+        const requestHistoryPage = adapter.requestHistoryPage;
+        if (!requestHistoryPage) {
+          finish(null);
+          return;
+        }
+        expectedResponseId = String(
+          requestHistoryPage(handle, { limit: 20, sortDirection: 'desc', itemsView: 'full' })
+        );
+      } catch {
+        finish(null);
+      }
+    });
   }
 
   subscribeObservation(
@@ -1389,6 +1558,23 @@ export class NativeCliHost {
     this.publishEphemeral(transcriptTargetId, 'native_cli.output', { nativeCliSessionId: id, stream, chunk });
     const structuredChunk = stream === 'pty' ? chunk : this.takeCompleteStructuredLines(id, stream, chunk);
     if (!structuredChunk) return;
+    if (stream === 'stderr') {
+      for (const line of structuredChunk.split('\n')) {
+        const record = nativeAgentMcpToolError(line.trim());
+        if (!record) continue;
+        const liveSession = this.live.get(id);
+        this.log.error(
+          {
+            ...record,
+            transcriptTargetId,
+            nativeCliSessionId: id,
+            agentName: liveSession?.agentName,
+            provider: liveSession?.provider
+          },
+          'managed native cli agent-facing MCP tool failed'
+        );
+      }
+    }
     for (const event of adapter.parseOutput(structuredChunk)) {
       const parsed = nativeCliOutputEventSchema.safeParse(event);
       if (!parsed.success) continue;

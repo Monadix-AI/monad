@@ -175,7 +175,7 @@ export function createHttpTransport(
       const durationMs = t0 !== undefined ? Math.round(performance.now() - t0) : undefined;
       if (error instanceof HandlerError) {
         const { httpStatus, httpCode } = HANDLER_ERROR_MAP[error.kind];
-        logHttpCall(request.method, url.pathname, httpStatus, durationMs);
+        logHttpCall(request.method, url.pathname, httpStatus, durationMs, error);
         return jsonResponse(httpStatus, { error: error.message, code: error.code ?? httpCode }, request);
       }
       // Client-shaped errors: normalize to JSON so every failure has the same envelope.
@@ -185,7 +185,7 @@ export function createHttpTransport(
       }
       if (code === 'VALIDATION' || code === 'PARSE') {
         const msg = error instanceof Error ? error.message : 'validation error';
-        logHttpCall(request.method, url.pathname, 400, durationMs);
+        logHttpCall(request.method, url.pathname, 400, durationMs, error instanceof Error ? error : new Error(msg));
         return jsonResponse(400, { error: msg, code: 'VALIDATION' }, request);
       }
       // Unhandled server fault — log with stack so nothing is silently swallowed.

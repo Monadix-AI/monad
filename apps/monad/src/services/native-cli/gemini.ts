@@ -3,7 +3,8 @@ import type {
   BuildNativeCliLaunchOptions,
   NativeCliLaunchSpec,
   NativeCliOutputEvent,
-  NativeCliProviderAdapter
+  NativeCliProviderAdapter,
+  NativeCliProviderHistoryContext
 } from '@/services/native-cli/types.ts';
 
 import { homedir } from 'node:os';
@@ -11,6 +12,7 @@ import { join } from 'node:path';
 
 import { defaultBinProbes, resolveBinary } from '@/infra/resolve-binary.ts';
 import { parseNativeCliArgumentSupport } from '@/services/native-cli/argument-support.ts';
+import { readProviderHistoryFile } from '@/services/native-cli/history-files.ts';
 import { resizePty, sendPtyInput, stopPty } from '@/services/native-cli/pty.ts';
 
 const GEMINI_SUPPORTED_MODELS = ['gemini-2.5-pro', 'gemini-2.5-flash'];
@@ -218,6 +220,57 @@ function parseGeminiStreamJson(chunk: string): NativeCliOutputEvent[] {
   return events;
 }
 
+function geminiCheckpointText(content: unknown): string {
+  if (typeof content === 'string') return content;
+  if (!Array.isArray(content)) return '';
+  return content
+    .map((part) => {
+      if (!part || typeof part !== 'object' || Array.isArray(part)) return '';
+      const item = part as Record<string, unknown>;
+      return typeof item.text === 'string' ? item.text : '';
+    })
+    .join('');
+}
+
+function geminiCheckpointOutput(context: NativeCliProviderHistoryContext, raw: string): string | null {
+  const records: Record<string, unknown>[] = [];
+  for (const rawLine of raw.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line.startsWith('{')) continue;
+    const record = parseJsonObject(line);
+    if (!record) continue;
+    if (record.sessionId === context.providerSessionRef) {
+      records.push({ type: 'init', session_id: record.sessionId });
+      continue;
+    }
+    const set = record.$set;
+    if (!set || typeof set !== 'object' || Array.isArray(set)) continue;
+    const messages = (set as Record<string, unknown>).messages;
+    if (!Array.isArray(messages)) continue;
+    for (const message of messages) {
+      if (!message || typeof message !== 'object' || Array.isArray(message)) continue;
+      const item = message as Record<string, unknown>;
+      if (item.type !== 'model' && item.type !== 'assistant') continue;
+      const text = geminiCheckpointText(item.content);
+      if (text) records.push({ type: 'message', text });
+    }
+  }
+  return records.length > 0 ? records.map((record) => JSON.stringify(record)).join('\n') : null;
+}
+
+function readGeminiHistoryOutput(context: NativeCliProviderHistoryContext): string | null {
+  const raw = readProviderHistoryFile({
+    roots: [join(homedir(), '.gemini', 'tmp'), join(homedir(), '.gemini', 'history')],
+    providerSessionRef: context.providerSessionRef,
+    extensions: ['.jsonl', '.json'],
+    limitBytes: context.limitBytes,
+    maxDepth: 8
+  });
+  if (!raw) return null;
+  if (parseGeminiStreamJson(raw).length > 0) return raw;
+  return geminiCheckpointOutput(context, raw);
+}
+
 function sendGeminiInput(handle: Parameters<NativeCliProviderAdapter['sendInput']>[0], input: string): void {
   if (handle.launchMode !== 'json-stream') {
     sendPtyInput(handle, input);
@@ -311,6 +364,7 @@ export const geminiNativeCliAdapter: NativeCliProviderAdapter = {
     void exitCode;
     return 'unknown';
   },
+  historyOutput: readGeminiHistoryOutput,
   parseOutput: parseGeminiStreamJson,
   sendInput: sendGeminiInput,
   resolveApproval: resolveGeminiApproval,

@@ -15,10 +15,20 @@ import { managedProjectLaunchMode } from '@/services/native-cli/managed-project.
 import managedProjectJoinGreetingNoticePath from '@/services/native-cli/prompts/managed-project-join-greeting-notice.md' with {
   type: 'file'
 };
+import managedProjectJoinGreetingNoticeMcpPath from '@/services/native-cli/prompts/managed-project-join-greeting-notice-mcp.md' with {
+  type: 'file'
+};
 
 const MANAGED_NATIVE_CLI_MEMBER_START_ERROR_EVENT =
   'project.managed_native_cli.member_start_error' satisfies ManagedNativeCliLifecycleLogEvent;
 const MANAGED_NATIVE_CLI_JOIN_GREETING_NOTICE = (await Bun.file(managedProjectJoinGreetingNoticePath).text()).trim();
+const MANAGED_NATIVE_CLI_JOIN_GREETING_MCP_NOTICE = (
+  await Bun.file(managedProjectJoinGreetingNoticeMcpPath).text()
+).trim();
+
+function managedNativeCliJoinGreetingNotice(provider: string): string {
+  return provider === 'codex' ? MANAGED_NATIVE_CLI_JOIN_GREETING_MCP_NOTICE : MANAGED_NATIVE_CLI_JOIN_GREETING_NOTICE;
+}
 
 function managedNativeCliMemberRuntimeNames(target: TranscriptTarget): Set<string> {
   return new Set(
@@ -97,7 +107,7 @@ export function createManagedNativeCliJoin(ctx: SessionContext) {
           customPrompt: settings.customPrompt,
           launchMode: managedProjectLaunchMode(spec, settings.launchMode),
           providerSessionRef: resumeFrom ?? undefined,
-          input: MANAGED_NATIVE_CLI_JOIN_GREETING_NOTICE
+          input: managedNativeCliJoinGreetingNotice(spec.provider)
         });
         emitManagedNativeCliThinking(next.id, nativeSession.id, runtimeAgentName);
       } catch (err) {

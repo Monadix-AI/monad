@@ -7,13 +7,19 @@ export type { LogLevelOverride };
 
 let _override: LogLevelOverride | undefined;
 let _config: LoggerConfig | undefined;
+let _configVersion = 0;
 
 export function configureLogger(config?: LoggerConfig): void {
   _config = config;
+  _configVersion += 1;
 }
 
 export function getLoggerConfig(): LoggerConfig | undefined {
   return _config;
+}
+
+export function getLoggerConfigVersion(): number {
+  return _configVersion;
 }
 
 export function setLogLevel(level: LogLevelOverride): void {

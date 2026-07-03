@@ -1,6 +1,10 @@
+import type { NativeCliAgentView } from '@monad/protocol';
 import type { NativeCliProviderAdapter } from '@/services/native-cli/types.ts';
 
 import { expect, test } from 'bun:test';
+import { chmodSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 
 import { EventBus } from '@/services/event-bus.ts';
 import { NativeCliHost } from '@/services/native-cli/host.ts';
@@ -184,7 +188,7 @@ test('managed native CLI output stays live-only and is not persisted as a raw sn
   expect(store.getNativeCliSession(nativeCliSessionId)?.outputSnapshot).toBe('');
 });
 
-test('managed native CLI observation reports unavailable when only persisted pointers remain', () => {
+test('managed native CLI observation restores Codex provider history from persisted pointers', async () => {
   const store = createStore();
   const host = new NativeCliHost({
     store,
@@ -193,6 +197,16 @@ test('managed native CLI observation reports unavailable when only persisted poi
   });
   const projectId = 'prj_01KWHOSTTEST0000000000002';
   const nativeCliSessionId = 'ncli_host_unavailable_test';
+  const testRun = `monad-native-cli-host-${Date.now()}`;
+  const rolloutDir = join(homedir(), '.codex', 'sessions', '2099', '01', testRun);
+  mkdirSync(rolloutDir, { recursive: true });
+  writeFileSync(
+    join(rolloutDir, 'rollout-2099-01-01T00-00-00-provider-session-1.jsonl'),
+    `${JSON.stringify({ type: 'session_meta', payload: { id: 'provider-session-1' } })}\n${JSON.stringify({
+      type: 'event_msg',
+      payload: { type: 'agent_message', message: 'restored from provider history' }
+    })}\n`
+  );
   store.insertWorkplaceProject({
     id: projectId,
     title: 'Host unavailable test',
@@ -224,12 +238,300 @@ test('managed native CLI observation reports unavailable when only persisted poi
     exitedAt: '2026-07-02T00:00:01.000Z'
   });
 
-  expect(host.observe(nativeCliSessionId)).toEqual({
-    state: 'unavailable',
-    nativeCliSessionId,
+  try {
+    await expect(host.observeWithProviderHistory(nativeCliSessionId)).resolves.toMatchObject({
+      state: 'history',
+      nativeCliSessionId,
+      provider: 'codex',
+      output: expect.stringContaining('restored from provider history')
+    });
+  } finally {
+    rmSync(rolloutDir, { recursive: true, force: true });
+  }
+});
+
+test('managed native CLI observation prefers Codex CLI history over rollout fallback', async () => {
+  const root = join(homedir(), '.codex', 'sessions', '2099', '01', `monad-native-cli-host-cli-${Date.now()}`);
+  mkdirSync(root, { recursive: true });
+  const workdir = join(root, 'workdir');
+  mkdirSync(workdir, { recursive: true });
+  const script = join(root, 'mock-codex-history.js');
+  writeFileSync(
+    script,
+    [
+      '#!/usr/bin/env bun',
+      'process.stdin.on("data", (data) => {',
+      '  for (const line of data.toString().trim().split(/\\n+/)) {',
+      '    if (!line) continue;',
+      '    const msg = JSON.parse(line);',
+      '    if (msg.method === "thread/resume") {',
+      '      process.stdout.write(JSON.stringify({ id: msg.id, result: { thread: { id: msg.params.threadId } } }) + "\\n");',
+      '    }',
+      '    if (msg.method === "thread/turns/list") {',
+      '      process.stdout.write(JSON.stringify({ id: msg.id, result: { data: [{ id: "turn_1", status: { type: "completed" }, startedAt: 1782935000, completedAt: 1782935001, durationMs: 1000, items: [{ type: "agentMessage", id: "item_1", text: "restored through codex cli", phase: null, memoryCitation: null }] }], nextCursor: null, backwardsCursor: null } }) + "\\n");',
+      '    }',
+      '  }',
+      '});',
+      'setTimeout(() => {}, 30_000);'
+    ].join('\n')
+  );
+  chmodSync(script, 0o755);
+  writeFileSync(
+    join(root, 'rollout-2099-01-01T00-00-00-provider-session-cli.jsonl'),
+    `${JSON.stringify({ type: 'event_msg', payload: { type: 'agent_message', message: 'stale rollout fallback' } })}\n`
+  );
+
+  const store = createStore();
+  const projectId = 'prj_01KWHOSTTEST0000000000003';
+  const nativeCliSessionId = 'ncli_host_cli_history_test';
+  const agent: NativeCliAgentView = {
+    name: 'codex',
     provider: 'codex',
-    reason: 'provider history unavailable'
+    command: script,
+    enabled: true,
+    defaultLaunchMode: 'app-server',
+    allowDangerousMode: false,
+    approvalOwnership: 'provider-owned'
+  };
+  const host = new NativeCliHost({
+    store,
+    bus: new EventBus(),
+    agents: async () => [agent]
   });
+  store.insertWorkplaceProject({
+    id: projectId,
+    title: 'Host CLI history test',
+    ownerPrincipalId: 'prn_test',
+    state: 'active',
+    archived: false,
+    createdAt: '2026-07-02T00:00:00.000Z',
+    updatedAt: '2026-07-02T00:00:00.000Z'
+  });
+  store.upsertNativeCliSession({
+    id: nativeCliSessionId,
+    transcriptTargetId: projectId,
+    agentName: 'codex',
+    provider: 'codex',
+    workingPath: workdir,
+    launchMode: 'app-server',
+    runtimeRole: 'managed-project-agent',
+    agentRuntimeId: nativeCliSessionId,
+    agentRuntimeTokenHash: null,
+    lastDeliveredSeq: 0,
+    lastVisibleSeq: 0,
+    state: 'exited',
+    pid: null,
+    providerSessionRef: 'provider-session-cli',
+    outputSnapshot: '',
+    exitCode: 0,
+    startedAt: '2026-07-02T00:00:00.000Z',
+    updatedAt: '2026-07-02T00:00:01.000Z',
+    exitedAt: '2026-07-02T00:00:01.000Z'
+  });
+
+  try {
+    const observation = await host.observeWithProviderHistory(nativeCliSessionId);
+    expect(observation).toMatchObject({
+      state: 'history',
+      nativeCliSessionId,
+      provider: 'codex',
+      output: expect.stringContaining('restored through codex cli')
+    });
+    expect(observation).not.toMatchObject({ output: expect.stringContaining('stale rollout fallback') });
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('managed native CLI observation restores Claude Code provider history', async () => {
+  const root = join(homedir(), '.claude', 'projects', `monad-native-cli-host-claude-${Date.now()}`);
+  const providerSessionRef = '11111111-2222-4333-8444-555555555555';
+  mkdirSync(root, { recursive: true });
+  writeFileSync(
+    join(root, `${providerSessionRef}.jsonl`),
+    `${JSON.stringify({
+      type: 'system',
+      subtype: 'init',
+      session_id: providerSessionRef,
+      cwd: '/tmp/project'
+    })}\n${JSON.stringify({
+      type: 'assistant',
+      session_id: providerSessionRef,
+      message: { role: 'assistant', content: [{ type: 'text', text: 'restored claude history' }] },
+      parent_tool_use_id: null
+    })}\n`
+  );
+  const store = createStore();
+  const projectId = 'prj_01KWHOSTTEST0000000000004';
+  const nativeCliSessionId = 'ncli_host_claude_history_test';
+  const host = new NativeCliHost({ store, bus: new EventBus(), agents: async () => [] });
+  store.insertWorkplaceProject({
+    id: projectId,
+    title: 'Host Claude history test',
+    ownerPrincipalId: 'prn_test',
+    state: 'active',
+    archived: false,
+    createdAt: '2026-07-02T00:00:00.000Z',
+    updatedAt: '2026-07-02T00:00:00.000Z'
+  });
+  store.upsertNativeCliSession({
+    id: nativeCliSessionId,
+    transcriptTargetId: projectId,
+    agentName: 'claude',
+    provider: 'claude-code',
+    workingPath: '/tmp/project',
+    launchMode: 'json-stream',
+    runtimeRole: 'managed-project-agent',
+    agentRuntimeId: nativeCliSessionId,
+    agentRuntimeTokenHash: null,
+    lastDeliveredSeq: 0,
+    lastVisibleSeq: 0,
+    state: 'exited',
+    pid: null,
+    providerSessionRef,
+    outputSnapshot: '',
+    exitCode: 0,
+    startedAt: '2026-07-02T00:00:00.000Z',
+    updatedAt: '2026-07-02T00:00:01.000Z',
+    exitedAt: '2026-07-02T00:00:01.000Z'
+  });
+
+  try {
+    await expect(host.observeWithProviderHistory(nativeCliSessionId)).resolves.toMatchObject({
+      state: 'history',
+      nativeCliSessionId,
+      provider: 'claude-code',
+      output: expect.stringContaining('restored claude history')
+    });
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('managed native CLI observation restores Gemini checkpoint history', async () => {
+  const root = join(homedir(), '.gemini', 'tmp', `monad-native-cli-host-gemini-${Date.now()}`, 'chats');
+  const providerSessionRef = '8fcee1ae-8c2e-492c-9b94-2ee7325497c7';
+  mkdirSync(root, { recursive: true });
+  writeFileSync(
+    join(root, 'session-2099-01-01T00-00-8fcee1ae.jsonl'),
+    `${JSON.stringify({
+      sessionId: providerSessionRef,
+      projectHash: 'test',
+      startTime: '2099-01-01T00:00:00.000Z',
+      lastUpdated: '2099-01-01T00:00:00.000Z',
+      kind: 'main'
+    })}\n${JSON.stringify({
+      $set: {
+        messages: [
+          { id: 'u1', type: 'user', content: [{ text: 'ignored user text' }] },
+          { id: 'm1', type: 'model', content: [{ text: 'restored gemini history' }] }
+        ]
+      }
+    })}\n`
+  );
+  const store = createStore();
+  const projectId = 'prj_01KWHOSTTEST0000000000005';
+  const nativeCliSessionId = 'ncli_host_gemini_history_test';
+  const host = new NativeCliHost({ store, bus: new EventBus(), agents: async () => [] });
+  store.insertWorkplaceProject({
+    id: projectId,
+    title: 'Host Gemini history test',
+    ownerPrincipalId: 'prn_test',
+    state: 'active',
+    archived: false,
+    createdAt: '2026-07-02T00:00:00.000Z',
+    updatedAt: '2026-07-02T00:00:00.000Z'
+  });
+  store.upsertNativeCliSession({
+    id: nativeCliSessionId,
+    transcriptTargetId: projectId,
+    agentName: 'gemini',
+    provider: 'gemini',
+    workingPath: '/tmp/project',
+    launchMode: 'json-stream',
+    runtimeRole: 'managed-project-agent',
+    agentRuntimeId: nativeCliSessionId,
+    agentRuntimeTokenHash: null,
+    lastDeliveredSeq: 0,
+    lastVisibleSeq: 0,
+    state: 'exited',
+    pid: null,
+    providerSessionRef,
+    outputSnapshot: '',
+    exitCode: 0,
+    startedAt: '2026-07-02T00:00:00.000Z',
+    updatedAt: '2026-07-02T00:00:01.000Z',
+    exitedAt: '2026-07-02T00:00:01.000Z'
+  });
+
+  try {
+    await expect(host.observeWithProviderHistory(nativeCliSessionId)).resolves.toMatchObject({
+      state: 'history',
+      nativeCliSessionId,
+      provider: 'gemini',
+      output: expect.stringContaining('restored gemini history')
+    });
+  } finally {
+    rmSync(join(root, '..'), { recursive: true, force: true });
+  }
+});
+
+test('managed native CLI observation restores Qwen stream-json history', async () => {
+  const root = join(homedir(), '.qwen', 'monad-native-cli-host', String(Date.now()));
+  const providerSessionRef = 'qwen-provider-session-1';
+  mkdirSync(root, { recursive: true });
+  writeFileSync(
+    join(root, `${providerSessionRef}.jsonl`),
+    `${JSON.stringify({ type: 'init', session_id: providerSessionRef })}\n${JSON.stringify({
+      type: 'message',
+      text: 'restored qwen history'
+    })}\n`
+  );
+  const store = createStore();
+  const projectId = 'prj_01KWHOSTTEST0000000000006';
+  const nativeCliSessionId = 'ncli_host_qwen_history_test';
+  const host = new NativeCliHost({ store, bus: new EventBus(), agents: async () => [] });
+  store.insertWorkplaceProject({
+    id: projectId,
+    title: 'Host Qwen history test',
+    ownerPrincipalId: 'prn_test',
+    state: 'active',
+    archived: false,
+    createdAt: '2026-07-02T00:00:00.000Z',
+    updatedAt: '2026-07-02T00:00:00.000Z'
+  });
+  store.upsertNativeCliSession({
+    id: nativeCliSessionId,
+    transcriptTargetId: projectId,
+    agentName: 'qwen',
+    provider: 'qwen',
+    workingPath: '/tmp/project',
+    launchMode: 'json-stream',
+    runtimeRole: 'managed-project-agent',
+    agentRuntimeId: nativeCliSessionId,
+    agentRuntimeTokenHash: null,
+    lastDeliveredSeq: 0,
+    lastVisibleSeq: 0,
+    state: 'exited',
+    pid: null,
+    providerSessionRef,
+    outputSnapshot: '',
+    exitCode: 0,
+    startedAt: '2026-07-02T00:00:00.000Z',
+    updatedAt: '2026-07-02T00:00:01.000Z',
+    exitedAt: '2026-07-02T00:00:01.000Z'
+  });
+
+  try {
+    await expect(host.observeWithProviderHistory(nativeCliSessionId)).resolves.toMatchObject({
+      state: 'history',
+      nativeCliSessionId,
+      provider: 'qwen',
+      output: expect.stringContaining('restored qwen history')
+    });
+  } finally {
+    rmSync(join(root, '..'), { recursive: true, force: true });
+  }
 });
 
 test('native CLI usage returns empty records when the adapter has no usage probe', async () => {

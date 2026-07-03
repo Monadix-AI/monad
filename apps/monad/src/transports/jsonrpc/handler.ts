@@ -12,10 +12,13 @@ import { RPC_HANDLERS } from '@/transports/jsonrpc/methods.ts';
 const log = createLogger('transport:rpc');
 
 function logRpcCall(transport: string, id: unknown, method: string, durationMs: number, err?: unknown): void {
-  // trace is almost always disabled; skip the formatTransportCall allocation unless it's enabled.
-  if (!log.isLevelEnabled('trace')) return;
   const record = { transport, id, method, durationMs, ...(err ? { err } : {}) };
-  log.trace(record, formatTransportCall(record));
+  if (err) {
+    log.error(record, formatTransportCall(record));
+    return;
+  }
+  // trace is almost always disabled; skip the formatTransportCall allocation unless it's enabled.
+  if (log.isLevelEnabled('trace')) log.trace(record, formatTransportCall(record));
 }
 
 /**

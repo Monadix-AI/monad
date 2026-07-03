@@ -64,14 +64,35 @@ function createNativeCliObservationSseResponse(
     encoder,
     encode: (access) => encodeSseFrame({ event: 'native_cli.observation', data: access }, encoder),
     subscribe: (emit) => {
-      const subscription = handlers.nativeCli.subscribeObservation({
-        id,
-        transcriptTargetId,
-        onObservation: (access, done) => emit(access, done)
-      });
-      // A non-live initial snapshot is already terminal (the session isn't running) — emit it as done.
-      emit(subscription.access, !subscription.live);
-      return { dispose: subscription.dispose };
+      let disposed = false;
+      let disposeLive = (): void => {};
+      void handlers.nativeCli
+        .observe({ id, transcriptTargetId })
+        .then((initial) => {
+          if (disposed) return;
+          if (initial.state !== 'live') {
+            emit(initial, true);
+            return;
+          }
+          const subscription = handlers.nativeCli.subscribeObservation({
+            id,
+            transcriptTargetId,
+            onObservation: (access, done) => emit(access, done)
+          });
+          disposeLive = subscription.dispose;
+          emit(subscription.access, !subscription.live);
+        })
+        .catch(() => {
+          if (!disposed) {
+            emit({ state: 'unavailable', nativeCliSessionId: id, reason: 'provider history unavailable' }, true);
+          }
+        });
+      return {
+        dispose: () => {
+          disposed = true;
+          disposeLive();
+        }
+      };
     }
   });
 }
@@ -115,7 +136,7 @@ export function createNativeCliController(handlers: ReturnType<typeof createDaem
     })
     .get(
       '/native-cli-sessions/:id/observation',
-      ({ params, query }) => handlers.nativeCli.observe({ id: params.id, ...query }),
+      async ({ params, query }) => handlers.nativeCli.observe({ id: params.id, ...query }),
       {
         params: nativeCliParams,
         query: nativeCliScopeQuery,

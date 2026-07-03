@@ -10,7 +10,9 @@ import type {
   BuildNativeCliLaunchOptions,
   NativeCliLaunchSpec,
   NativeCliOutputEvent,
-  NativeCliProviderAdapter
+  NativeCliProviderAdapter,
+  NativeCliProviderHistoryContext,
+  NativeCliProviderHistoryPageContext
 } from '@/services/native-cli/types.ts';
 
 import { homedir } from 'node:os';
@@ -19,12 +21,12 @@ import { join } from 'node:path';
 import { defaultBinProbes, resolveBinary } from '@/infra/resolve-binary.ts';
 import { parseNativeCliArgumentSupport } from '@/services/native-cli/argument-support.ts';
 import { NativeCliError } from '@/services/native-cli/errors.ts';
+import { readProviderHistoryFile } from '@/services/native-cli/history-files.ts';
 import { resizePty, sendPtyInput, stopPty } from '@/services/native-cli/pty.ts';
 
 const CODEX_APP_BIN = '/Applications/Codex.app/Contents/Resources/codex';
 const CODEX_NON_INTERACTIVE_ENV = { CODEX_NON_INTERACTIVE: '1' };
 const CODEX_SUPPORTED_MODELS = ['gpt-5.5', 'gpt-5.4', 'gpt-5.4-mini', 'gpt-5.3-codex', 'gpt-5.2'];
-
 type CodexJsonRpcResponse = {
   id?: unknown;
   error?: Record<string, unknown>;
@@ -135,6 +137,7 @@ function buildCodexLaunch(agent: NativeCliAgentView, opts: BuildNativeCliLaunchO
         agent.command,
         ...codexExtraWorkingPathArgs(opts.extraWorkingPaths),
         ...codexSkipApprovalArgs(args, !!opts.skipProviderApprovals),
+        ...(opts.mcpConfigArgs ?? []),
         'app-server',
         '--stdio',
         ...args
@@ -528,6 +531,63 @@ function parseCodexSessionJsonl(chunk: string): NativeCliOutputEvent[] {
   return events;
 }
 
+function readCodexHistoryOutput(context: NativeCliProviderHistoryContext): string | null {
+  return readProviderHistoryFile({
+    roots: [join(homedir(), '.codex', 'sessions')],
+    providerSessionRef: context.providerSessionRef,
+    extensions: ['.jsonl'],
+    limitBytes: context.limitBytes
+  });
+}
+
+function recordValue(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : undefined;
+}
+
+function codexHistoryPageOutput(context: NativeCliProviderHistoryPageContext): string | null {
+  const records: Record<string, unknown>[] = [];
+  for (const item of context.page.items) {
+    const turn = recordValue(item);
+    if (!turn) continue;
+    const turnId = stringValue(turn.id);
+    if (!turnId) continue;
+    records.push({
+      method: 'turn/started',
+      params: {
+        threadId: context.providerSessionRef,
+        turnId,
+        status: turn.status,
+        startedAt: turn.startedAt
+      }
+    });
+    const items = Array.isArray(turn.items) ? turn.items : [];
+    for (const turnItem of items) {
+      const record = recordValue(turnItem);
+      if (!record) continue;
+      records.push({
+        method: 'item/completed',
+        params: {
+          threadId: context.providerSessionRef,
+          turnId,
+          item: record
+        }
+      });
+    }
+    records.push({
+      method: 'turn/completed',
+      params: {
+        threadId: context.providerSessionRef,
+        turnId,
+        status: turn.status,
+        completedAt: turn.completedAt,
+        durationMs: turn.durationMs
+      }
+    });
+  }
+  if (records.length === 0) return null;
+  return records.map((record) => JSON.stringify(record)).join('\n');
+}
+
 function buildCodexTurnStartRequest(id: number, threadId: string, input: string): Record<string, unknown> {
   return {
     method: 'turn/start',
@@ -756,6 +816,8 @@ export const codexNativeCliAdapter: NativeCliProviderAdapter = {
   initialize: initializeCodex,
   parseOutput: parseCodexSessionJsonl,
   requestHistoryPage: requestCodexHistoryPage,
+  historyPageOutput: codexHistoryPageOutput,
+  historyOutput: readCodexHistoryOutput,
   sendInput: sendCodexInput,
   resolveApproval: resolveCodexApproval,
   resize: resizeCodex,

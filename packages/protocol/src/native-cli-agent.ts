@@ -313,7 +313,7 @@ export const nativeCliApprovalResolutionRequestSchema = z.object({
 });
 export type NativeCliApprovalResolutionRequest = z.infer<typeof nativeCliApprovalResolutionRequestSchema>;
 
-export const nativeCliObservationRoleSchema = z.enum(['agent', 'system', 'tool']);
+export const nativeCliObservationRoleSchema = z.enum(['agent', 'system', 'tool', 'user']);
 export type NativeCliObservationRole = z.infer<typeof nativeCliObservationRoleSchema>;
 
 export const nativeCliObservationEventSchema = z.object({
@@ -449,6 +449,7 @@ export const nativeAgentRuntimeSpecSchema = z.object({
   tokenFile: z.string(),
   tokenHash: z.string(),
   wrapperBin: z.string(),
+  mcpConfigArgs: z.array(z.string()).default([]),
   env: z.record(z.string(), z.string()),
   prompt: z.string()
 });

@@ -1,7 +1,7 @@
 'use client';
 
 import type { CSSProperties } from 'react';
-import type { NativeCliUsageLimitMeter } from '../native-cli-observation';
+import { type NativeCliUsageLimitMeter, nativeCliUsageLimitMeter } from '../native-cli-observation';
 import type { NativeCliStreamView, Participant } from '../types';
 
 import {
@@ -77,7 +77,7 @@ export function NativeCliObservationPanel({
   onClose,
   onStop,
   stream,
-  usageMeter
+  usageMeter: usageMeterProp
 }: {
   agent?: Participant;
   agentName?: string;
@@ -102,6 +102,8 @@ export function NativeCliObservationPanel({
   const active = stream?.status === 'running';
   const hasItems = (stream?.items.length ?? 0) > 0;
   const providerHistoryUnavailable = !!stream && stream.status !== 'running' && !stream.output && !hasItems;
+  const usageMeter =
+    usageMeterProp ?? nativeCliUsageLimitMeter({ output: stream?.output, provider: stream?.provider });
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const [follow, setFollow] = useState(true);
   const streamId = stream?.id;
@@ -239,7 +241,7 @@ export function NativeCliObservationPanel({
         {usageMeter ? (
           <button
             aria-expanded={usageOpen}
-            aria-label="Show usage limits"
+            aria-label={`Show ${usageMeter.title.toLowerCase()}`}
             className="workplace-action"
             onClick={() => setUsageOpen((open) => !open)}
             style={{
@@ -255,7 +257,7 @@ export function NativeCliObservationPanel({
               flex: 'none',
               padding: 0
             }}
-            title="Usage limits"
+            title={usageMeter.title}
             type="button"
           >
             <HugeiconsIcon
@@ -525,6 +527,7 @@ function UsageLimitPopover({ meter }: { meter: NativeCliUsageLimitMeter }): Reac
                   fontVariantNumeric: 'tabular-nums'
                 }}
               >
+                {row.valueLabel ? `${row.valueLabel}  ` : ''}
                 {row.resetLabel ? `Resets ${row.resetLabel}  ` : ''}
                 {row.percent}%
               </span>
@@ -534,7 +537,7 @@ function UsageLimitPopover({ meter }: { meter: NativeCliUsageLimitMeter }): Reac
               max={100}
               min={0}
               style={{ height: 5, width: '100%', accentColor: 'var(--primary)' }}
-              value={row.percent}
+              value={row.meterPercent ?? row.percent}
             />
           </div>
         ))}

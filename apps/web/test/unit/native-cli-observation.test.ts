@@ -10,7 +10,11 @@ import {
   usageMeterFromObservationAccess
 } from '../../features/workplace/activity/AgentTasksRail.tsx';
 import { NativeCliObservationPanel } from '../../features/workplace/cli/NativeCliStreamModal.tsx';
-import { observationTimelineEntries } from '../../features/workplace/cli/observation-cards.tsx';
+import { rawJsonText } from '../../features/workplace/cli/observation-card-shell.tsx';
+import {
+  ObservationTimelineCard,
+  observationTimelineEntries
+} from '../../features/workplace/cli/observation-cards.tsx';
 import {
   nativeCliStreamItems,
   nativeCliUsageLimitMeter,
@@ -288,19 +292,21 @@ test('Codex app-server observation merges adjacent agent message chunks', () => 
   ]);
 });
 
-test('Codex app-server observation collects merged chunk raw records into a flat array', () => {
+test('Codex app-server observation collects merged chunk raw JSONL lines into a flat array', () => {
   const records = [
     { method: 'item/agentMessage/delta', params: { delta: 'a' } },
     { method: 'item/agentMessage/delta', params: { delta: 'b' } },
     { method: 'item/agentMessage/delta', params: { delta: 'c' } }
   ];
-  const output = records.map((record) => JSON.stringify(record)).join('\n');
+  const rawLines = records.map((record) => JSON.stringify(record));
+  const output = rawLines.join('\n');
 
   const items = nativeCliStreamItems({ id: 'ncli_codex', provider: 'codex', output });
 
   expect(items).toHaveLength(1);
   expect(items[0]?.text).toBe('abc');
-  expect(items[0]?.raw).toEqual(records);
+  expect(items[0]?.raw).toEqual(rawLines);
+  expect(rawJsonText(items[0]?.raw)).toBe(output);
 });
 
 test('Codex app-server observation groups one agent message item lifecycle into one card', () => {
@@ -338,7 +344,8 @@ test('Codex app-server observation groups one agent message item lifecycle into 
       }
     }
   ];
-  const output = records.map((record) => JSON.stringify(record)).join('\n');
+  const rawLines = records.map((record) => JSON.stringify(record));
+  const output = rawLines.join('\n');
 
   const items = nativeCliStreamItems({ id: 'ncli_codex', provider: 'codex', output });
 
@@ -349,7 +356,99 @@ test('Codex app-server observation groups one agent message item lifecycle into 
     providerEventType: 'item/agentMessage',
     text: "I'll fetch zeke's pending message now."
   });
-  expect(items[0]?.raw).toEqual(records);
+  expect(items[0]?.raw).toEqual(rawLines);
+  expect(rawJsonText(items[0]?.raw)).toBe(output);
+});
+
+test('Codex app-server observation groups one user message item lifecycle into one card', () => {
+  const records = [
+    {
+      method: 'item/started',
+      params: {
+        item: {
+          type: 'userMessage',
+          id: 'user_1',
+          content: [{ type: 'text', text: 'You have just joined this Workplace Project.' }]
+        },
+        threadId: 'thread_1',
+        turnId: 'turn_1',
+        startedAtMs: 1
+      }
+    },
+    {
+      method: 'item/completed',
+      params: {
+        item: {
+          type: 'userMessage',
+          id: 'user_1',
+          content: [
+            { type: 'text', text: 'You have just joined this Workplace Project.' },
+            { type: 'text', text: '\nUse project_post for the public status message.' }
+          ]
+        },
+        threadId: 'thread_1',
+        turnId: 'turn_1',
+        completedAtMs: 2
+      }
+    }
+  ];
+  const rawLines = records.map((record) => JSON.stringify(record));
+  const output = rawLines.join('\n');
+
+  const items = nativeCliStreamItems({ id: 'ncli_codex', provider: 'codex', output });
+
+  expect(items).toHaveLength(1);
+  expect(items[0]).toMatchObject({
+    role: 'user',
+    source: 'codex-app-server',
+    providerEventType: 'item/userMessage',
+    text: 'You have just joined this Workplace Project.\nUse project_post for the public status message.'
+  });
+  expect(items[0]?.raw).toEqual(rawLines);
+  expect(rawJsonText(items[0]?.raw)).toBe(output);
+});
+
+test('Codex app-server observation renders user message lifecycle as a shared message card', () => {
+  const output = [
+    JSON.stringify({
+      method: 'item/started',
+      params: {
+        item: {
+          type: 'userMessage',
+          id: 'user_1',
+          content: [{ type: 'text', text: 'You have just joined this Workplace Project.' }]
+        },
+        threadId: 'thread_1',
+        turnId: 'turn_1',
+        startedAtMs: 1
+      }
+    }),
+    JSON.stringify({
+      method: 'item/completed',
+      params: {
+        item: {
+          type: 'userMessage',
+          id: 'user_1',
+          content: [
+            { type: 'text', text: 'You have just joined this Workplace Project.' },
+            { type: 'text', text: '\nUse project_post for the public status message.' }
+          ]
+        },
+        threadId: 'thread_1',
+        turnId: 'turn_1',
+        completedAtMs: 2
+      }
+    })
+  ].join('\n');
+  const entries = observationTimelineEntries(nativeCliStreamItems({ id: 'ncli_codex', provider: 'codex', output }));
+  const html = renderToStaticMarkup(React.createElement(ObservationTimelineCard, { entry: entries[0]! }));
+
+  expect(entries).toHaveLength(1);
+  expect(html).toContain('user');
+  expect(html).toContain('item/userMessage');
+  expect(html).toContain('You have just joined this Workplace Project.');
+  expect(html).toContain('Use project_post for the public status message.');
+  expect(html).not.toContain('RAW_JSON');
 });
 
 test('Codex app-server observation keeps a lone chunk raw record unwrapped', () => {
@@ -534,6 +633,44 @@ test('Codex app-server usage meter reads rate limit updates', () => {
   ]);
 });
 
+test('Codex app-server usage meter reads token usage updates', () => {
+  const output = JSON.stringify({
+    method: 'thread/tokenUsage/updated',
+    params: {
+      threadId: '019f2764-c789-7953-a385-b5c788908861',
+      turnId: '019f2810-2ef8-7170-8188-414204408604',
+      tokenUsage: {
+        total: {
+          totalTokens: 1_029_307,
+          inputTokens: 1_024_270,
+          cachedInputTokens: 835_968,
+          outputTokens: 5_037,
+          reasoningOutputTokens: 1_205
+        },
+        last: {
+          totalTokens: 68_235,
+          inputTokens: 68_141,
+          cachedInputTokens: 67_456,
+          outputTokens: 94,
+          reasoningOutputTokens: 0
+        },
+        modelContextWindow: 258_400
+      }
+    }
+  });
+
+  expect(nativeCliUsageLimitMeter({ provider: 'codex', output })).toMatchObject({
+    title: 'Token usage',
+    rows: [
+      { id: 'last_turn', label: 'Last turn', percent: 26, meterPercent: 26 },
+      { id: 'thread_total', label: 'Thread total', percent: 398, meterPercent: 100 }
+    ]
+  });
+  expect(nativeCliStreamItems({ id: 'ncli_codex', provider: 'codex', output }).map((item) => item.text)).toEqual([
+    'Token usage updated'
+  ]);
+});
+
 test('Claude Code usage meter reads rate limit events', () => {
   const output = [
     JSON.stringify({
@@ -553,6 +690,35 @@ test('Claude Code usage meter reads rate limit events', () => {
       { id: 'seven_day', label: 'Weekly', percent: 69 }
     ]
   });
+});
+
+test('observation panel shows a token usage meter entry when Codex reports token usage', () => {
+  const output = JSON.stringify({
+    method: 'thread/tokenUsage/updated',
+    params: {
+      tokenUsage: {
+        total: { totalTokens: 1_029_307 },
+        last: { totalTokens: 68_235 },
+        modelContextWindow: 258_400
+      }
+    }
+  });
+  const html = renderToStaticMarkup(
+    React.createElement(NativeCliObservationPanel, {
+      onStop: () => {},
+      stream: {
+        id: 'ncli_codex',
+        agentName: 'codex',
+        provider: 'codex',
+        tag: 'Codex',
+        status: 'running',
+        output,
+        items: nativeCliStreamItems({ id: 'ncli_codex', provider: 'codex', output })
+      }
+    })
+  );
+
+  expect(html).toContain('aria-label="Show token usage"');
 });
 
 test('observation panel shows a usage limits entry when the stream has limit data', () => {
@@ -577,7 +743,7 @@ test('observation panel shows a usage limits entry when the stream has limit dat
     })
   );
 
-  expect(html).toContain('aria-label="Show usage limits"');
+  expect(html).toContain('aria-label="Show usage remaining"');
 });
 
 test('observation panel distinguishes unavailable provider history from empty live activity', () => {

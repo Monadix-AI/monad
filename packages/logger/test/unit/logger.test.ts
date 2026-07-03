@@ -59,7 +59,7 @@ describe('createLogger', () => {
     const log = createLogger('subscriber-test');
 
     log.debug({ sessionId: 'ses_LOGTEST', event: 'test.event' }, 'subscriber event');
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await Bun.sleep(20);
     dispose();
 
     expect(records.some((record) => record.sessionId === 'ses_LOGTEST' && record.event === 'test.event')).toBe(true);
@@ -94,12 +94,52 @@ describe('createLogger', () => {
     log.debug({ ignored: true }, 'debug event');
     log.info({ requestId: 'req_1' }, 'info event');
     log.error({ requestId: 'req_2' }, 'error event');
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await Bun.sleep(20);
 
     expect(otelRecords.map((record) => record.msg)).toEqual(['info event', 'error event']);
     expect(sentryRecords.map((record) => record.msg)).toEqual(['error event']);
     expect(otelRecords[0]).toMatchObject({ name: 'multi-dest', service: 'logger-test', requestId: 'req_1' });
     expect(sentryRecords[0]).toMatchObject({ name: 'multi-dest', service: 'logger-test', requestId: 'req_2' });
+  });
+
+  test('configureLogger reconfigures already-created lazy loggers', async () => {
+    const { configureLogger, createLogger } = await import('../../src/index.ts');
+    const firstRecords: Record<string, unknown>[] = [];
+    const secondRecords: Record<string, unknown>[] = [];
+    const log = createLogger('reconfigured');
+
+    configureLogger({
+      destinations: [
+        {
+          type: 'custom',
+          name: 'first',
+          level: 'error',
+          write: (record) => {
+            firstRecords.push(record);
+          }
+        }
+      ]
+    });
+    log.error('first error');
+    await Bun.sleep(20);
+
+    configureLogger({
+      destinations: [
+        {
+          type: 'custom',
+          name: 'second',
+          level: 'error',
+          write: (record) => {
+            secondRecords.push(record);
+          }
+        }
+      ]
+    });
+    log.error('second error');
+    await Bun.sleep(20);
+
+    expect(firstRecords.map((record) => record.msg)).toEqual(['first error']);
+    expect(secondRecords.map((record) => record.msg)).toEqual(['second error']);
   });
 
   test('file destinations keep independent levels', async () => {

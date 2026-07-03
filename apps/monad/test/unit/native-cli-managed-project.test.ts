@@ -69,6 +69,47 @@ test('managed project runtime uses non-interactive Codex launches', () => {
   expect(prepared.env.CODEX_NON_INTERACTIVE).toBe('1');
 });
 
+test('managed project runtime uses MCP communication prompt for Codex only', () => {
+  const monadHome = join(tmpdir(), `monad-managed-runtime-${Date.now()}-${process.hrtime.bigint()}`);
+  const codex = prepareManagedProjectRuntime({
+    monadHome,
+    serverUrl: 'http://127.0.0.1:1234',
+    agentName: 'codex',
+    projectId: 'prj_PROJECT',
+    nativeCliSessionId: 'ncli_codex',
+    provider: 'codex'
+  });
+  const claude = prepareManagedProjectRuntime({
+    monadHome,
+    serverUrl: 'http://127.0.0.1:1234',
+    agentName: 'claude',
+    projectId: 'prj_PROJECT',
+    nativeCliSessionId: 'ncli_claude',
+    provider: 'claude-code'
+  });
+
+  expect(codex.prompt).toContain('MCP server named `monad`');
+  expect(codex.prompt).toContain('Every side-effect MCP call must include a stable `requestId`');
+  expect(codex.prompt).toContain('`project_post`');
+  expect(codex.prompt).toContain('`project_post` tool from the `monad` MCP server');
+  expect(codex.prompt).not.toContain('`monad project post -`');
+  expect(codex.mcpConfigArgs).toContain('-c');
+  expect(codex.mcpConfigArgs).toContain(`mcp_servers.monad.command=${JSON.stringify(codex.wrapperBin)}`);
+  expect(codex.mcpConfigArgs).toContain('mcp_servers.monad.args=["native-agent","mcp-server"]');
+  expect(codex.mcpConfigArgs).toContain(`mcp_servers.monad.env.MONAD_HOME=${JSON.stringify(monadHome)}`);
+  expect(codex.mcpConfigArgs).toContain('mcp_servers.monad.env.MONAD_SERVER_URL="http://127.0.0.1:1234"');
+  expect(codex.mcpConfigArgs).toContain('mcp_servers.monad.env.MONAD_NATIVE_CLI_SESSION_ID="ncli_codex"');
+  expect(codex.mcpConfigArgs).toContain(
+    `mcp_servers.monad.env.MONAD_AGENT_TOKEN_FILE=${JSON.stringify(codex.tokenFile)}`
+  );
+  expect(codex.mcpConfigArgs).toContain(`mcp_servers.monad.env.PATH=${JSON.stringify(codex.env.PATH)}`);
+  expect(codex.mcpConfigArgs).toContain('mcp_servers.monad.tools.project_inbox_check.approval_mode="approve"');
+  expect(codex.mcpConfigArgs).toContain('mcp_servers.monad.tools.project_post.approval_mode="approve"');
+  expect(claude.prompt).toContain('`monad project post -`');
+  expect(claude.prompt).not.toContain('MCP server named `monad`');
+  expect(claude.mcpConfigArgs).toEqual([]);
+});
+
 test('managed project runtime prefers structured launch modes over interactive PTY', () => {
   expect(managedProjectLaunchMode({ provider: 'codex', defaultLaunchMode: 'pty' }, 'pty')).toBe('app-server');
   expect(managedProjectLaunchMode({ provider: 'claude-code', defaultLaunchMode: 'pty' }, 'pty')).toBe('json-stream');

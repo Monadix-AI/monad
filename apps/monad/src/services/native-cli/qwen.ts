@@ -3,7 +3,8 @@ import type {
   BuildNativeCliLaunchOptions,
   NativeCliLaunchSpec,
   NativeCliOutputEvent,
-  NativeCliProviderAdapter
+  NativeCliProviderAdapter,
+  NativeCliProviderHistoryContext
 } from '@/services/native-cli/types.ts';
 
 import { readFileSync } from 'node:fs';
@@ -12,6 +13,7 @@ import { join } from 'node:path';
 
 import { defaultBinProbes, resolveBinary } from '@/infra/resolve-binary.ts';
 import { parseNativeCliArgumentSupport } from '@/services/native-cli/argument-support.ts';
+import { readProviderHistoryFile } from '@/services/native-cli/history-files.ts';
 import { resizePty, sendPtyInput, stopPty } from '@/services/native-cli/pty.ts';
 
 const QWEN_SUPPORTED_MODELS = ['qwen3-coder-plus', 'qwen3-coder-flash'];
@@ -203,6 +205,17 @@ function parseQwenStreamJson(chunk: string): NativeCliOutputEvent[] {
   return events;
 }
 
+function readQwenHistoryOutput(context: NativeCliProviderHistoryContext): string | null {
+  const raw = readProviderHistoryFile({
+    roots: [join(homedir(), '.qwen')],
+    providerSessionRef: context.providerSessionRef,
+    extensions: ['.jsonl', '.json'],
+    limitBytes: context.limitBytes,
+    maxDepth: 8
+  });
+  return raw && parseQwenStreamJson(raw).length > 0 ? raw : null;
+}
+
 function sendQwenInput(handle: Parameters<NativeCliProviderAdapter['sendInput']>[0], input: string): void {
   if (handle.launchMode !== 'json-stream') {
     sendPtyInput(handle, input);
@@ -298,6 +311,7 @@ export const qwenNativeCliAdapter: NativeCliProviderAdapter = {
     void exitCode;
     return 'unknown';
   },
+  historyOutput: readQwenHistoryOutput,
   parseOutput: parseQwenStreamJson,
   sendInput: sendQwenInput,
   resolveApproval: resolveQwenApproval,

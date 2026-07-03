@@ -606,7 +606,7 @@ for (const kind of TRANSPORTS) {
       expect(send.status).toBe(200);
       expect(await send.json()).toEqual({ accepted: true });
       const codexInput = await waitForFile(codex.stdinLog, 'roster scoped task');
-      expect(codexInput).toContain('monad project post');
+      expect(codexInput).toContain('project_post');
       await Bun.sleep(100);
       expect(await readLogIfExists(claude.argsLog)).toBe('');
       expect(await readLogIfExists(claude.stdinLog)).toBe('');
@@ -764,14 +764,14 @@ for (const kind of TRANSPORTS) {
           : 0
       ).toBe(1);
 
-      const input = await waitForFile(stdinLog, 'monad project inbox check');
+      const input = await waitForFile(stdinLog, 'project_inbox_check');
       expect(input).toContain('Process this project message now.');
       expect(input).toContain('Sender kind: human');
       expect(input).toContain('Sender name:');
       expect(input).toContain('Sender mention token:');
       expect(input).toContain('human');
       expect(input).toContain('please review this');
-      expect(input).toContain('monad project post');
+      expect(input).toContain('project_post');
       expect(input).toContain('first acknowledge ownership');
       expect(input).toContain('strict capsule token');
       expect(input).toContain('display name');
@@ -845,8 +845,12 @@ for (const kind of TRANSPORTS) {
       expect(input).not.toContain('second secret busy task');
       expect(input).toContain('New Workplace Project message is available.');
       expect(input).toContain('You are being woken to process the pending project inbox now.');
-      expect(input).toContain('If a public response is appropriate, post it with `monad project post -` and stdin.');
-      expect(input).toContain('Do not pass message text inline in a shell command');
+      expect(input).toContain(
+        'If a public response is appropriate, post it with the `project_post` tool from the `monad` MCP server.'
+      );
+      expect(input).toContain(
+        'Every `project_post`, `project_ask`, or `agent_send` call must include a stable `requestId`'
+      );
 
       const third = await t.fetch(
         `/v1/projects/${sessionId}/messages`,

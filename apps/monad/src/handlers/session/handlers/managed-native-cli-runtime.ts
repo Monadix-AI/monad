@@ -131,7 +131,9 @@ export function createManagedNativeCliRuntime(ctx: SessionContext) {
       });
       persistAndRetire(session.id, round);
       const nativeSession = await nativeCliHost.start(startArgs);
-      nativeCliHost.input(nativeSession.id, { input: nativeCliInputText(managedNativeCliResumeRecoveryNotice(input)) });
+      nativeCliHost.input(nativeSession.id, {
+        input: nativeCliInputText(managedNativeCliResumeRecoveryNotice(spec.provider, input))
+      });
       return nativeSession;
     }
   }

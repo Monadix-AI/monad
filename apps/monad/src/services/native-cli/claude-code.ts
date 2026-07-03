@@ -2,22 +2,27 @@ import type {
   SDKAssistantMessage,
   SDKMessage,
   SDKResultMessage,
+  SDKSessionInfo,
   SDKSystemMessage,
-  SDKUserMessage
+  SDKUserMessage,
+  SessionMessage
 } from '@anthropic-ai/claude-agent-sdk';
 import type { NativeCliAgentView } from '@monad/protocol';
 import type {
   BuildNativeCliLaunchOptions,
   NativeCliLaunchSpec,
   NativeCliOutputEvent,
-  NativeCliProviderAdapter
+  NativeCliProviderAdapter,
+  NativeCliProviderHistoryContext
 } from '@/services/native-cli/types.ts';
 
 import { homedir } from 'node:os';
 import { join } from 'node:path';
+import { getSessionInfo, getSessionMessages } from '@anthropic-ai/claude-agent-sdk';
 
 import { defaultBinProbes, resolveBinary } from '@/infra/resolve-binary.ts';
 import { parseNativeCliArgumentSupport } from '@/services/native-cli/argument-support.ts';
+import { readProviderHistoryFile } from '@/services/native-cli/history-files.ts';
 import { resizePty, sendPtyInput, stopPty } from '@/services/native-cli/pty.ts';
 
 const CLAUDE_CODE_SUPPORTED_MODELS = [
@@ -299,6 +304,56 @@ function parseClaudeStreamJson(chunk: string): NativeCliOutputEvent[] {
   return events;
 }
 
+function claudeTranscriptFallback(context: NativeCliProviderHistoryContext): string | null {
+  return readProviderHistoryFile({
+    roots: [join(homedir(), '.claude', 'projects')],
+    providerSessionRef: context.providerSessionRef,
+    extensions: ['.jsonl'],
+    limitBytes: context.limitBytes
+  });
+}
+
+function claudeSdkMessageToJsonLine(message: SessionMessage): string {
+  return JSON.stringify({
+    type: message.type,
+    uuid: message.uuid,
+    session_id: message.session_id,
+    message: message.message,
+    parent_tool_use_id: message.parent_tool_use_id
+  });
+}
+
+function claudeSdkMessagesOutput(messages: SessionMessage[], info: SDKSessionInfo | undefined): string | null {
+  const records = messages.map(claudeSdkMessageToJsonLine);
+  if (records.length === 0) return null;
+  if (info?.cwd) {
+    records.unshift(
+      JSON.stringify({
+        type: 'system',
+        subtype: 'init',
+        session_id: info.sessionId,
+        cwd: info.cwd
+      })
+    );
+  }
+  return records.join('\n');
+}
+
+async function readClaudeHistoryOutput(context: NativeCliProviderHistoryContext): Promise<string | null> {
+  try {
+    const info = await getSessionInfo(context.providerSessionRef, { dir: context.workingPath });
+    if ((info?.fileSize ?? 0) > context.limitBytes) return claudeTranscriptFallback(context);
+    const messages = await getSessionMessages(context.providerSessionRef, {
+      dir: context.workingPath,
+      limit: 200,
+      includeSystemMessages: true
+    });
+    return claudeSdkMessagesOutput(messages, info) ?? claudeTranscriptFallback(context);
+  } catch {
+    return claudeTranscriptFallback(context);
+  }
+}
+
 function buildClaudeStreamJsonUserMessage(input: string): Record<string, unknown> {
   return {
     type: 'user',
@@ -397,6 +452,7 @@ export const claudeCodeNativeCliAdapter: NativeCliProviderAdapter = {
     if (exitCode === 1) return 'unauthenticated';
     return 'unknown';
   },
+  historyOutput: readClaudeHistoryOutput,
   parseOutput: parseClaudeStreamJson,
   sendInput: sendClaudeInput,
   resolveApproval: resolveClaudeApproval,

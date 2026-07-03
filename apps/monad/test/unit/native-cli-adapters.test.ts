@@ -155,6 +155,32 @@ test('managed native CLI launches force provider approvals to be skipped', () =>
   expect(qwen.argv).toContain('--approval-mode=yolo');
 });
 
+test('Codex app-server launch accepts managed MCP config overrides', () => {
+  const codex = buildNativeCliLaunch(codexAgent, {
+    workingPath: '/tmp/project',
+    launchMode: 'app-server',
+    skipProviderApprovals: true,
+    mcpConfigArgs: [
+      '-c',
+      'mcp_servers.monad.command="/tmp/agent/bin/monad"',
+      '-c',
+      'mcp_servers.monad.args=["native-agent","mcp-server"]'
+    ]
+  });
+
+  expect(codex.argv).toEqual([
+    'codex',
+    '--ask-for-approval',
+    'never',
+    '-c',
+    'mcp_servers.monad.command="/tmp/agent/bin/monad"',
+    '-c',
+    'mcp_servers.monad.args=["native-agent","mcp-server"]',
+    'app-server',
+    '--stdio'
+  ]);
+});
+
 test('Claude adapter passes requested model id and reasoning effort to the provider', () => {
   const launch = buildNativeCliLaunch(claudeAgent, {
     workingPath: '/tmp/project',

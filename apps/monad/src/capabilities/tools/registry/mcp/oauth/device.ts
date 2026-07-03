@@ -67,7 +67,7 @@ export async function pollDeviceToken(
   fetchImpl: FetchImpl = fetch,
   opts?: { sleep?: (ms: number) => Promise<void>; now?: () => number }
 ): Promise<OAuthTokens> {
-  const sleep = opts?.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
+  const sleep = opts?.sleep ?? Bun.sleep;
   const now = opts?.now ?? (() => Date.now());
   let interval = params.interval;
 

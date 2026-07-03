@@ -742,7 +742,7 @@ test('workplace projects: list/create/update/delete use the typed treaty project
   await dispatchEndpoint(store, 'createWorkplaceProject', { title: project.title, origin: { surface: 'web' } });
   await dispatchEndpoint(store, 'updateWorkplaceProject', { id: project.id, title: 'Workplace: beta' });
   await dispatchEndpoint(store, 'deleteWorkplaceProject', project.id);
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  await Bun.sleep(0);
   const cached = store.getState().monadApi.queries;
   const projectLists = Object.values(cached).filter((entry) => entry?.endpointName === 'listWorkplaceProjects');
   expect(

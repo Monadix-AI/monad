@@ -12,7 +12,7 @@ import { dirname, join } from 'node:path';
 import pino from 'pino';
 
 import { emitDeveloperRecord, hasDeveloperRecordSubscribers } from './developer.ts';
-import { getLogFile, getLoggerConfig, getLogLevel, getLogStderr } from './level.ts';
+import { getLogFile, getLoggerConfig, getLoggerConfigVersion, getLogLevel, getLogStderr } from './level.ts';
 import { debugLogPath, developerLogFileName } from './log-files.ts';
 
 type PinoLevel = pino.Level | 'silent';
@@ -290,7 +290,15 @@ function lowestDestinationLevel(destinations: readonly LogDestination[]): PinoLe
 // leaving daemon.log empty. Deferring to first log call reads the flags after they are set.
 export function createLogger(name?: string, context?: Record<string, unknown>): Logger {
   let real: Logger | undefined;
-  const resolve = (): Logger => (real ??= buildLogger(name, context));
+  let configVersion = -1;
+  const resolve = (): Logger => {
+    const currentConfigVersion = getLoggerConfigVersion();
+    if (!real || configVersion !== currentConfigVersion) {
+      real = buildLogger(name, context);
+      configVersion = currentConfigVersion;
+    }
+    return real;
+  };
   return new Proxy({} as Logger, {
     get(_target, prop) {
       const value = Reflect.get(resolve(), prop, resolve());

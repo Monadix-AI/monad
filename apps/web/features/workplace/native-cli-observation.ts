@@ -20,20 +20,25 @@ type JsonRecordEntry = {
   record: Record<string, unknown>;
   raw: string;
 };
-type CodexAgentMessageGroup = {
+type CodexMessageGroup = {
   key: string;
+  kind: 'agent' | 'user';
   raw: Record<string, unknown>[];
+  rawLines: string[];
   fragments: string[];
+  startedText?: string;
   completedText?: string;
 };
 type ParsedTimelineEntry =
   | { kind: 'events'; events: NativeCliObservationEvent[] }
-  | { kind: 'codex-agent-message'; key: string };
+  | { kind: 'codex-message'; key: string };
 type NativeCliUsageLimitRow = {
   id: string;
   label: string;
   percent: number;
+  meterPercent?: number;
   resetLabel?: string;
+  valueLabel?: string;
 };
 export type NativeCliUsageLimitMeter = {
   title: string;
@@ -80,49 +85,75 @@ function recordValue(value: unknown): Record<string, unknown> | undefined {
   return value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : undefined;
 }
 
-function codexAgentMessageGroupKey(record: Record<string, unknown>): string | undefined {
+function codexItemText(item: Record<string, unknown> | undefined): string | undefined {
+  if (!item) return undefined;
+  const direct = rawTextValue(item.text);
+  if (direct !== undefined) return direct;
+  const content = item.content;
+  if (typeof content === 'string') return content;
+  if (!Array.isArray(content)) return undefined;
+  const parts = content.flatMap((part) => {
+    if (!part || typeof part !== 'object' || Array.isArray(part)) return [];
+    const text = rawTextValue((part as Record<string, unknown>).text, (part as Record<string, unknown>).content);
+    return text === undefined ? [] : [text];
+  });
+  return parts.length > 0 ? parts.join('') : undefined;
+}
+
+function codexMessageGroup(
+  record: Record<string, unknown>
+): { key: string; kind: CodexMessageGroup['kind'] } | undefined {
   const method = textValue(record.method);
   if (!method) return undefined;
   const params = recordValue(record.params);
   if (!params) return undefined;
   const item = recordValue(params.item);
   if (method === 'item/started' || method === 'item/completed') {
-    if (textValue(item?.type) !== 'agentMessage') return undefined;
+    const itemType = textValue(item?.type);
+    const kind = itemType === 'agentMessage' ? 'agent' : itemType === 'userMessage' ? 'user' : undefined;
+    if (!kind) return undefined;
     const itemId = textValue(item?.id);
     if (!itemId) return undefined;
-    return [textValue(params.threadId), textValue(params.turnId), itemId].filter(Boolean).join(':');
+    return { key: [textValue(params.threadId), textValue(params.turnId), itemId].filter(Boolean).join(':'), kind };
   }
   if (method === 'item/agentMessage/delta') {
     const itemId = textValue(params.itemId);
     if (!itemId) return undefined;
-    return [textValue(params.threadId), textValue(params.turnId), itemId].filter(Boolean).join(':');
+    return {
+      key: [textValue(params.threadId), textValue(params.turnId), itemId].filter(Boolean).join(':'),
+      kind: 'agent'
+    };
   }
   return undefined;
 }
 
-function codexAgentMessageLifecycleText(record: Record<string, unknown>): {
+function codexMessageLifecycleText(record: Record<string, unknown>): {
   fragment?: string;
+  startedText?: string;
   completedText?: string;
 } {
   const method = textValue(record.method);
   const params = recordValue(record.params);
   if (!method || !params) return {};
   if (method === 'item/agentMessage/delta') return { fragment: rawTextValue(params.delta, params.text) };
-  if (method !== 'item/completed') return {};
   const item = recordValue(params.item);
-  if (textValue(item?.type) !== 'agentMessage') return {};
-  return { completedText: rawTextValue(item?.text) };
+  const itemType = textValue(item?.type);
+  if (itemType !== 'agentMessage' && itemType !== 'userMessage') return {};
+  const text = codexItemText(item);
+  if (method === 'item/started') return { startedText: text };
+  if (method === 'item/completed') return { completedText: text };
+  return {};
 }
 
-function codexAgentMessageGroupEvent(id: string, group: CodexAgentMessageGroup): NativeCliObservationEvent[] {
-  const text = group.completedText ?? group.fragments.join('');
+function codexMessageGroupEvent(id: string, group: CodexMessageGroup): NativeCliObservationEvent[] {
+  const text = group.completedText ?? group.startedText ?? group.fragments.join('');
   return observation({
-    id: `${id}:json:${group.key}:agent-message`,
-    role: 'agent',
+    id: `${id}:json:${group.key}:${group.kind}-message`,
+    role: group.kind,
     text,
     source: 'codex-app-server',
-    providerEventType: 'item/agentMessage',
-    raw: group.raw
+    providerEventType: group.kind === 'agent' ? 'item/agentMessage' : 'item/userMessage',
+    raw: group.rawLines.length > 1 ? group.rawLines : (group.raw[0] ?? group.rawLines[0])
   });
 }
 
@@ -167,19 +198,21 @@ function parsedJsonEvents(args: {
   entries: JsonRecordEntry[];
 }): NativeCliObservationEvent[] {
   const timeline: ParsedTimelineEntry[] = [];
-  const codexAgentMessageGroups = new Map<string, CodexAgentMessageGroup>();
+  const codexMessageGroups = new Map<string, CodexMessageGroup>();
   args.entries.forEach((entry, index) => {
-    const groupKey = codexAgentMessageGroupKey(entry.record);
-    if (groupKey) {
-      let group = codexAgentMessageGroups.get(groupKey);
+    const messageGroup = codexMessageGroup(entry.record);
+    if (messageGroup) {
+      let group = codexMessageGroups.get(messageGroup.key);
       if (!group) {
-        group = { key: groupKey, raw: [], fragments: [] };
-        codexAgentMessageGroups.set(groupKey, group);
-        timeline.push({ kind: 'codex-agent-message', key: groupKey });
+        group = { key: messageGroup.key, kind: messageGroup.kind, raw: [], rawLines: [], fragments: [] };
+        codexMessageGroups.set(messageGroup.key, group);
+        timeline.push({ kind: 'codex-message', key: messageGroup.key });
       }
       group.raw.push(entry.record);
-      const text = codexAgentMessageLifecycleText(entry.record);
+      group.rawLines.push(entry.raw);
+      const text = codexMessageLifecycleText(entry.record);
       if (text.fragment !== undefined) group.fragments.push(text.fragment);
+      if (text.startedText !== undefined) group.startedText = text.startedText;
       if (text.completedText !== undefined) group.completedText = text.completedText;
       return;
     }
@@ -191,8 +224,8 @@ function parsedJsonEvents(args: {
   });
   return timeline.flatMap((entry) => {
     if (entry.kind === 'events') return entry.events;
-    const group = codexAgentMessageGroups.get(entry.key);
-    return group ? codexAgentMessageGroupEvent(args.id, group) : [];
+    const group = codexMessageGroups.get(entry.key);
+    return group ? codexMessageGroupEvent(args.id, group) : [];
   });
 }
 
@@ -231,6 +264,15 @@ function isChunkObservation(event: NativeCliObservationEvent): boolean {
   );
 }
 
+function rawObservationLine(raw: unknown): string {
+  if (typeof raw === 'string') return raw;
+  try {
+    return JSON.stringify(raw);
+  } catch {
+    return String(raw);
+  }
+}
+
 // Streaming deltas are emitted to be concatenated verbatim: each already carries its own
 // boundary whitespace (codex sends " the", " CLI"; a mid-word split sends "impl" then
 // "ementation"). Guessing a space between two alphanumeric edges corrupts both cases —
@@ -244,7 +286,7 @@ function mergeAdjacentChunkObservations(events: NativeCliObservationEvent[]): Na
   const settleRun = () => {
     if (runTexts.length < 2) return;
     const previous = out.at(-1);
-    if (previous) out[out.length - 1] = { ...previous, text: runTexts.join(''), raw: runRaws };
+    if (previous) out[out.length - 1] = { ...previous, text: runTexts.join(''), raw: runRaws.map(rawObservationLine) };
   };
   for (const event of events) {
     const previous = out.at(-1);
@@ -338,6 +380,29 @@ function resetIsoLabel(value: string | null | undefined): string | undefined {
   return new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(ms));
 }
 
+function compactNumber(value: number): string {
+  return new Intl.NumberFormat(undefined, { maximumFractionDigits: 1, notation: 'compact' }).format(value);
+}
+
+function tokenUsageRow(
+  id: string,
+  label: string,
+  tokens: unknown,
+  contextWindow: unknown
+): NativeCliUsageLimitRow | undefined {
+  const totalTokens = numberValue(tokens);
+  const window = numberValue(contextWindow);
+  if (totalTokens === undefined || window === undefined || window <= 0) return undefined;
+  const percent = Math.max(0, Math.round((totalTokens / window) * 100));
+  return {
+    id,
+    label,
+    percent,
+    meterPercent: Math.min(100, percent),
+    valueLabel: `${compactNumber(totalTokens)} / ${compactNumber(window)}`
+  };
+}
+
 function limitLabel(id: string, source: Record<string, unknown>): string {
   const windowMins = numberValue(source.windowDurationMins, source.window_minutes);
   if (id === 'primary' && windowMins === 300) return '5-hour limit';
@@ -362,6 +427,17 @@ function usageRow(id: string, value: unknown): NativeCliUsageLimitRow | undefine
 }
 
 function usageRowsFromRecord(record: Record<string, unknown>): NativeCliUsageLimitRow[] {
+  if (record.method === 'thread/tokenUsage/updated') {
+    const params = recordValue(record.params);
+    const tokenUsage = recordValue(params?.tokenUsage);
+    const last = recordValue(tokenUsage?.last);
+    const total = recordValue(tokenUsage?.total);
+    const contextWindow = tokenUsage?.modelContextWindow;
+    return [
+      tokenUsageRow('last_turn', 'Last turn', last?.totalTokens, contextWindow),
+      tokenUsageRow('thread_total', 'Thread total', total?.totalTokens, contextWindow)
+    ].filter((row): row is NativeCliUsageLimitRow => !!row);
+  }
   if (record.method === 'account/rateLimits/updated') {
     const params = recordValue(record.params);
     const limits = recordValue(params?.rateLimits ?? params?.rate_limits);
@@ -401,7 +477,9 @@ export function nativeCliUsageLimitMeter(args: {
     const next = usageRowsFromRecord(entry.record);
     return next.length > 0 ? mergeUsageRows(acc, next) : acc;
   }, []);
-  return rows.length > 0 ? { title: 'Usage remaining', rows } : null;
+  if (rows.length === 0) return null;
+  const tokenRows = rows.filter((row) => row.id === 'last_turn' || row.id === 'thread_total');
+  return { title: tokenRows.length === rows.length ? 'Token usage' : 'Usage remaining', rows };
 }
 
 export function nativeCliUsageLimitMeterFromResponse(

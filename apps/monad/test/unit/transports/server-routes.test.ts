@@ -145,7 +145,7 @@ test('POST /v1/sessions/:id/messages with generate:false records only the user m
   expect(res.status).toBe(200);
   expect(await res.json()).toEqual({ accepted: true });
 
-  await new Promise((resolve) => setTimeout(resolve, 50));
+  await Bun.sleep(50);
   const listed = await app.handle(new Request(`http://localhost/v1/sessions/${sessionId}/messages`));
   expect(listed.status).toBe(200);
   const body = (await listed.json()) as { messages: Array<{ role: string; text: string }> };

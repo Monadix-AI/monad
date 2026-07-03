@@ -49,6 +49,7 @@ export const codexAppServerObservationMethods = [
   'mcpServer/oauthLogin/completed',
   'mcpServer/startupStatus/updated',
   'account/rateLimits/updated',
+  'thread/tokenUsage/updated',
   'error',
   'warning',
   'guardianWarning',

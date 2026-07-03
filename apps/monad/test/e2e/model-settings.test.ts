@@ -314,7 +314,7 @@ for (const kind of TRANSPORTS) {
       for (let i = 0; i < 20; i += 1) {
         const cached = (await readProviderModelCache(paths)).providers.oai?.models.map((model) => model.id);
         if (cached?.[0] === 'remote-fresh') break;
-        await new Promise((resolve) => setTimeout(resolve, 10));
+        await Bun.sleep(10);
       }
       expect((await readProviderModelCache(paths)).providers.oai?.models.map((model) => model.id)).toEqual([
         'remote-fresh'

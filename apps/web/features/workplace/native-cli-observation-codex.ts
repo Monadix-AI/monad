@@ -271,6 +271,16 @@ export function codexAppServerRecordEvents(
       raw: record
     });
   }
+  if (method === 'thread/tokenUsage/updated') {
+    return observation({
+      id: `${id}:json:${recordIndex}:token-usage`,
+      role: 'system',
+      text: 'Token usage updated',
+      source: 'codex-app-server',
+      providerEventType: method,
+      raw: record
+    });
+  }
   if (method === 'item/started') {
     const item = codexAppServerItemRecord(p);
     if (!item) return [];

@@ -3,6 +3,7 @@ import type {
   NativeCliAgentView,
   NativeCliAuthState,
   NativeCliHistoryPageRequest,
+  NativeCliHistoryPageResponse,
   NativeCliLaunchMode,
   NativeCliProductIcon,
   NativeCliProvider,
@@ -67,6 +68,7 @@ export interface BuildNativeCliLaunchOptions {
   modelId?: string;
   reasoningEffort?: string;
   speed?: 'standard' | 'fast';
+  mcpConfigArgs?: string[];
 }
 
 export interface NativeCliOutputEvent {
@@ -179,6 +181,16 @@ export interface NativeCliRuntimeHandle {
   kill(signal?: NodeJS.Signals): void;
 }
 
+export interface NativeCliProviderHistoryContext {
+  providerSessionRef: string;
+  workingPath: string;
+  limitBytes: number;
+}
+
+export interface NativeCliProviderHistoryPageContext extends NativeCliProviderHistoryContext {
+  page: NativeCliHistoryPageResponse['page'];
+}
+
 interface NativeCliApprovalResolution {
   requestId: string;
   allow: boolean;
@@ -237,6 +249,8 @@ export interface NativeCliProviderAdapter {
   usage?(agent: NativeCliAgentView): NativeCliUsageProbe;
   parseAuthStatus(output: string, exitCode: number | null): NativeCliAuthState;
   requestHistoryPage?(handle: NativeCliRuntimeHandle, request: NativeCliHistoryPageRequest): string | number;
+  historyPageOutput?(context: NativeCliProviderHistoryPageContext): string | null;
+  historyOutput?(context: NativeCliProviderHistoryContext): string | null | Promise<string | null>;
   initialize?(handle: NativeCliRuntimeHandle, context: NativeCliInitializeContext): void;
   parseOutput(chunk: string): NativeCliOutputEvent[];
   sendInput(handle: NativeCliRuntimeHandle, input: string): void;

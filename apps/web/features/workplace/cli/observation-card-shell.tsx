@@ -141,8 +141,20 @@ function ObservationTimestamp({ value }: { value?: string }): React.ReactElement
   );
 }
 
-function rawJsonText(raw: unknown): string {
+export function rawJsonText(raw: unknown): string {
   if (raw === undefined) return 'null';
+  if (Array.isArray(raw)) {
+    return raw
+      .map((item) => {
+        if (typeof item === 'string') return item;
+        try {
+          return JSON.stringify(item);
+        } catch {
+          return String(item);
+        }
+      })
+      .join('\n');
+  }
   try {
     return JSON.stringify(raw, null, 2);
   } catch {

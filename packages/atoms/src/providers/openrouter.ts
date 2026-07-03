@@ -465,7 +465,7 @@ async function pollOpenRouterVideo(call: OpenRouterProviderCall, id: string): Pr
     const json = (await res.json()) as OpenRouterVideoResponse;
     if (json.error?.message) throw new Error(String(json.error.message));
     if (json.status === 'completed' || json.status === 'succeeded') return json;
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    await Bun.sleep(1000);
   }
   throw new Error(`OpenRouter video "${id}" did not complete before timeout`);
 }

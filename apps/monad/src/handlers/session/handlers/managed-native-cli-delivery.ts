@@ -217,7 +217,7 @@ export function createManagedNativeCliDelivery(ctx: SessionContext) {
     const { spec, runtimeAgentName, templateAgentName, displayName, settings } = member;
     if (!nativeCliHost || !session.cwd) return;
     try {
-      const notice = managedNativeCliDirectNotice({ fromAgentName, text });
+      const notice = managedNativeCliDirectNotice({ member, fromAgentName, text });
       const managedSessions = managedNativeCliSessionsForAgent(session.id, runtimeAgentName);
       const existing = managedSessions.find((candidate) => candidate.state === 'running');
       if (existing) {
