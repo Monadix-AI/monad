@@ -287,6 +287,12 @@ export const streamSessionApi = sendMessageApi.injectEndpoints({
               });
             },
             {
+              // Clear the "reconnecting…" banner the moment the socket is back, even between turns
+              // when no event flows to trigger the in-handler clear above.
+              onOpen: () =>
+                updateCachedData((draft) => {
+                  if (draft.streamError) draft.streamError = undefined;
+                }),
               onError: (err) =>
                 updateCachedData((draft) => {
                   draft.streamError = { kind: err.kind, status: err.status };

@@ -92,10 +92,10 @@ test('unixSocket: a dead socket falls back to TCP and sticks for later requests'
   expect(attempts.filter((u) => !u).length).toBe(2); // both requests ultimately over TCP
 });
 
-test('streamEvents delivers live SSE events (Eden parses the body into an async-iterable, not a Response)', async () => {
-  // Regression: Eden Treaty v1 hands an `text/event-stream` body back as an async-iterable of
-  // parsed frames, NOT a `Response`. The old `instanceof Response` guard bailed instantly, so the
-  // web/CLI received zero live tokens and streaming silently degraded to block-style.
+test('streamEvents delivers live SSE events by draining the raw fetch Response body', async () => {
+  // streamEvents now runs on the generic stream<T> engine over a raw fetch (no Eden Treaty for the
+  // SSE routes), so the body is a real `Response` whose reader we drain frame by frame. Guards the
+  // live-token path that once silently degraded to block-style.
   const sessionId = 'ses_STREAMTEST' as const;
   const mkEvent = (i: number, delta: string) => ({
     id: `evt_TOK${i}`,

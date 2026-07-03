@@ -1,4 +1,4 @@
-import type { NativeCliAuthSessionView } from '@monad/protocol';
+import type { NativeCliAuthSessionView, NativeCliObservationAccessResponse } from '@monad/protocol';
 import type { createDaemonHandlers } from '@/handlers/handlers.ts';
 
 import {
@@ -24,7 +24,7 @@ import {
 import { Elysia } from 'elysia';
 import { z } from 'zod';
 
-import { createBoundedSseEncoderSink, createSseResponse, encodeSseFrame } from '@/transports/http/sessions/sse.ts';
+import { createPushSseResponse, encodeSseFrame } from '@/transports/http/sessions/sse.ts';
 
 const sessionParams = z.object({ id: z.string() });
 const nativeCliParams = z.object({ id: z.string() });
@@ -39,33 +39,41 @@ function createNativeCliAuthEventsSseResponse(
   controlToken: string,
   encoder: TextEncoder
 ): Response {
-  const pending: NativeCliAuthSessionView[] = [];
-  let sink: ((session: NativeCliAuthSessionView) => void) | undefined;
-  const subscription = handlers.nativeCli.subscribeAuth({
-    id,
-    controlToken,
-    onSession: (session) => {
-      if (sink) sink(session);
-      else pending.push(session);
+  return createPushSseResponse<NativeCliAuthSessionView>({
+    encoder,
+    encode: (session) => encodeSseFrame({ event: 'native_cli.auth', data: session }, encoder),
+    subscribe: (emit) => {
+      const subscription = handlers.nativeCli.subscribeAuth({
+        id,
+        controlToken,
+        onSession: (session) => emit(session)
+      });
+      emit(subscription.session);
+      return { dispose: subscription.dispose };
     }
   });
-  pending.push(subscription.session);
+}
 
-  const stream = new ReadableStream<Uint8Array>({
-    start(ctrl) {
-      sink = createBoundedSseEncoderSink<NativeCliAuthSessionView>(
-        ctrl,
-        (session) => encodeSseFrame({ event: 'native_cli.auth', data: session }, encoder),
-        subscription.dispose
-      );
-      for (const session of pending.splice(0)) sink(session);
-    },
-    cancel() {
-      sink = undefined;
-      subscription.dispose();
+function createNativeCliObservationSseResponse(
+  handlers: ReturnType<typeof createDaemonHandlers>,
+  id: string,
+  transcriptTargetId: `ses_${string}` | `prj_${string}`,
+  encoder: TextEncoder
+): Response {
+  return createPushSseResponse<NativeCliObservationAccessResponse>({
+    encoder,
+    encode: (access) => encodeSseFrame({ event: 'native_cli.observation', data: access }, encoder),
+    subscribe: (emit) => {
+      const subscription = handlers.nativeCli.subscribeObservation({
+        id,
+        transcriptTargetId,
+        onObservation: (access, done) => emit(access, done)
+      });
+      // A non-live initial snapshot is already terminal (the session isn't running) — emit it as done.
+      emit(subscription.access, !subscription.live);
+      return { dispose: subscription.dispose };
     }
   });
-  return createSseResponse(stream);
 }
 
 export function createNativeCliController(handlers: ReturnType<typeof createDaemonHandlers>) {
@@ -113,6 +121,16 @@ export function createNativeCliController(handlers: ReturnType<typeof createDaem
         query: nativeCliScopeQuery,
         response: { 200: nativeCliObservationAccessResponseSchema },
         detail: { summary: 'Read live or backfilled native CLI observation access', tags: ['http-only'] }
+      }
+    )
+    .get(
+      '/native-cli-sessions/:id/observation-stream',
+      ({ params, query }) =>
+        createNativeCliObservationSseResponse(handlers, params.id, query.transcriptTargetId, encoder),
+      {
+        params: nativeCliParams,
+        query: nativeCliScopeQuery,
+        detail: { summary: 'Stream live or backfilled native CLI observation access', tags: ['http-only'] }
       }
     )
     .get(

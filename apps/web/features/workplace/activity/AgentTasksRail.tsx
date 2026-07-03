@@ -19,8 +19,8 @@ import { HugeiconsIcon } from '@hugeicons/react';
 import {
   skipToken,
   useGetNativeAgentDeliveryObservationQuery,
-  useGetNativeCliObservationQuery,
-  useGetNativeCliUsageQuery
+  useGetNativeCliUsageQuery,
+  useStreamNativeCliObservationQuery
 } from '@monad/client-rtk';
 import { nativeAgentObservationProjectionSchema } from '@monad/protocol';
 import { ProductIcon } from '@monad/ui';
@@ -347,15 +347,12 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
       pollingInterval: observationPollMs
     }
   );
-  const observationAccessQuery = useGetNativeCliObservationQuery(
+  const observationAccessQuery = useStreamNativeCliObservationQuery(
     observedStreamId && !observedDeliveryId
       ? { id: observedStreamId, transcriptTargetId: room.projectId as TranscriptTargetId }
-      : skipToken,
-    {
-      pollingInterval: observationPollMs
-    }
+      : skipToken
   );
-  const observationAccess = deliveryObservationAccessQuery.data ?? observationAccessQuery.data;
+  const observationAccess = deliveryObservationAccessQuery.data ?? observationAccessQuery.data ?? undefined;
   const observationProjection = observationProjectionFromAccess(observedStream, observationAccess, observedDeliveryId);
   const observedAccessStream = streamWithObservationProjection(observedStream, observationProjection);
   const observedUsageAgentName = observedAccessStream?.templateAgentName;

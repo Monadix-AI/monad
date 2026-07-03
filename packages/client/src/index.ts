@@ -3,6 +3,7 @@ import type {
   Event,
   EventId,
   NativeCliAuthSessionView,
+  NativeCliObservationAccessResponse,
   SendMessageResponse,
   SessionId,
   SessionUiEvent,
@@ -15,6 +16,9 @@ import {
   developerLogRecordSchema,
   eventSchema,
   nativeCliAuthSessionViewSchema,
+  nativeCliObservationAccessResponseSchema,
+  readTypedSseStream,
+  SSE_IDLE_TIMEOUT_MS,
   sessionUiEventSchema
 } from '@monad/protocol';
 
@@ -46,10 +50,26 @@ export type EventHandler = (event: Event) => void;
 export type UiEventHandler = (event: SessionUiEvent) => void;
 export type LogRecordHandler = (record: DeveloperLogRecord) => void;
 export type NativeCliAuthSessionHandler = (session: NativeCliAuthSessionView) => void;
+export type NativeCliObservationHandler = (access: NativeCliObservationAccessResponse) => void;
 
 interface SsePayloadSchema<T> {
   parse(value: unknown): T;
   safeParse(value: unknown): { success: true; data: T } | { success: false };
+}
+
+/** HTTP statuses that mean "stop reconnecting" (session gone / auth failure), not "retry". */
+const FATAL_SSE_STATUS: ReadonlySet<number> = new Set([401, 403, 404]);
+
+/** Build the SSE path for a session's or Workplace Project's generation/UI stream. Sessions and
+ *  projects share the same leaf routes under different scopes; the id prefix picks which. */
+function transcriptStreamPath(id: TranscriptTargetId, leaf: 'events' | 'ui-stream'): string {
+  const scope = id.startsWith('prj_') ? 'projects' : 'sessions';
+  return `/${CONTROL_API_VERSION}/${scope}/${encodeURIComponent(id)}/${leaf}`;
+}
+
+/** Append a query param, choosing `?` or `&` based on whether the path already has a query string. */
+function appendQuery(path: string, key: string, value: string): string {
+  return `${path}${path.includes('?') ? '&' : '?'}${key}=${encodeURIComponent(value)}`;
 }
 
 /**
@@ -95,53 +115,6 @@ export class MonadClient {
     return this.socket;
   }
 
-  private parseSseFrame<T>(frame: string, onEvent: (event: T) => void, schema: SsePayloadSchema<T>): string | null {
-    const dataParts: string[] = [];
-    let eventId: string | null = null;
-    for (const line of frame.split('\n')) {
-      if (line.startsWith(':')) continue; // SSE comment/heartbeat
-      if (line.startsWith('id:')) {
-        const raw = line.slice(3);
-        eventId = raw.startsWith(' ') ? raw.slice(1) : raw;
-        continue;
-      }
-      if (!line.startsWith('data:')) continue;
-      const value = line.slice(5);
-      dataParts.push(value.startsWith(' ') ? value.slice(1) : value);
-    }
-    if (dataParts.length === 0) return eventId;
-    const data = dataParts.join('\n');
-    if (!data || data === '[DONE]') return eventId;
-    onEvent(schema.parse(JSON.parse(data)));
-    return eventId;
-  }
-
-  private async readSseEvents<T>(
-    reader: ReadableStreamDefaultReader<Uint8Array>,
-    onEvent: (event: T) => void,
-    schema: SsePayloadSchema<T>,
-    signal?: AbortSignal
-  ): Promise<string | null> {
-    const decoder = new TextDecoder();
-    let buf = '';
-    let lastEventId: string | null = null;
-    for (;;) {
-      if (signal?.aborted) return lastEventId;
-      const { done, value } = await reader.read();
-      if (done) break;
-      buf += decoder.decode(value, { stream: true }).replace(/\r\n/g, '\n'); // normalize to \n\n frame delimiter
-      let sep = buf.indexOf('\n\n');
-      while (sep !== -1) {
-        const frame = buf.slice(0, sep);
-        buf = buf.slice(sep + 2);
-        const id = this.parseSseFrame(frame, onEvent, schema);
-        if (id !== null) lastEventId = id;
-        sep = buf.indexOf('\n\n');
-      }
-    }
-    return lastEventId;
-  }
-
   /**
    * Consume an SSE response from Eden Treaty. Eden v1 parses an `text/event-stream` body into an
    * async-iterable of frames (`{ id, event, data }`, where `data` is our serialized Event) rather
@@ -160,7 +133,7 @@ export class MonadClient {
     if (data == null) return null;
     if (data instanceof Response) {
       const reader = data.body?.getReader();
-      if (reader) return this.readSseEvents(reader, onEvent, schema);
+      if (reader) return readTypedSseStream(reader, schema, onEvent, { signal });
       return null;
     }
     const iterable = data as AsyncIterable<unknown>;
@@ -298,73 +271,20 @@ export class MonadClient {
   streamEvents(
     sessionId: TranscriptTargetId,
     onEvent: EventHandler,
-    opts?: { afterEventId?: EventId; onError?: (err: StreamError) => void }
+    opts?: { afterEventId?: EventId; onOpen?: () => void; onError?: (err: StreamError) => void }
   ): () => void {
-    const controller = new AbortController();
+    return this.stream(transcriptStreamPath(sessionId, 'events'), eventSchema, onEvent, { ...opts, resume: true });
+  }
 
-    void (async () => {
-      let afterEventId: EventId | undefined = opts?.afterEventId;
-      let delay = 1_000;
-      while (!controller.signal.aborted) {
-        try {
-          if (sessionId.startsWith('prj_')) {
-            const query = afterEventId ? `?after=${encodeURIComponent(afterEventId)}` : '';
-            const res = await this.fetch(`/v1/projects/${encodeURIComponent(sessionId)}/events${query}`, {
-              headers: afterEventId ? { 'last-event-id': afterEventId } : undefined,
-              signal: controller.signal
-            });
-            if (!res.ok) {
-              if (res.status === 401 || res.status === 403 || res.status === 404) {
-                opts?.onError?.({ kind: 'fatal', status: res.status });
-                return;
-              }
-              opts?.onError?.({ kind: 'transient', status: res.status });
-            } else {
-              const lastId = await this.consumeSseStream(res, onEvent, eventSchema, controller.signal);
-              if (lastId) afterEventId = lastId as EventId;
-            }
-            delay = 1_000;
-            continue;
-          }
-
-          const result = await this.treaty.v1.sessions({ id: sessionId }).events.get({
-            headers: afterEventId ? { 'last-event-id': afterEventId } : undefined,
-            fetch: { signal: controller.signal }
-          });
-
-          // Non-retriable errors (session gone, auth failure) — stop reconnecting.
-          if (result.error) {
-            const status = (result.error as { status?: number }).status;
-            if (status === 401 || status === 403 || status === 404) {
-              opts?.onError?.({ kind: 'fatal', status });
-              return;
-            }
-            // Other errors fall through to the backoff-and-retry path below.
-            opts?.onError?.({ kind: 'transient', status });
-          } else {
-            const lastId = await this.consumeSseStream(result.data, onEvent, eventSchema, controller.signal);
-            if (lastId) afterEventId = lastId as EventId;
-            delay = 1_000; // reset backoff after a successful connection
-          }
-        } catch (err) {
-          // AbortError from the disposer — exit immediately.
-          if (controller.signal.aborted) return;
-          // A genuine network/read failure: surface it, then fall through to backoff-and-retry.
-          opts?.onError?.({ kind: 'transient', cause: err });
-        }
-        // Wait before reconnecting; cap at 30s.
-        await new Promise<void>((resolve) => {
-          const t = setTimeout(resolve, delay);
-          controller.signal.addEventListener('abort', () => {
-            clearTimeout(t);
-            resolve();
-          });
-        });
-        delay = Math.min(delay * 2, 30_000);
-      }
-    })();
-
-    return () => controller.abort();
+  streamUiEvents(
+    sessionId: TranscriptTargetId,
+    onEvent: UiEventHandler,
+    opts?: { afterEventId?: EventId; onOpen?: () => void; onError?: (err: StreamError) => void }
+  ): () => void {
+    return this.stream(transcriptStreamPath(sessionId, 'ui-stream'), sessionUiEventSchema, onEvent, {
+      ...opts,
+      resume: true
+    });
   }
 
   streamSessionLogs(
@@ -372,43 +292,7 @@ export class MonadClient {
     onRecord: LogRecordHandler,
     opts?: { onError?: (err: StreamError) => void }
   ): () => void {
-    const controller = new AbortController();
-
-    void (async () => {
-      let delay = 1_000;
-      while (!controller.signal.aborted) {
-        try {
-          const response = await this.fetch(`/${CONTROL_API_VERSION}/sessions/${sessionId}/logs`, {
-            headers: { accept: 'text/event-stream' },
-            signal: controller.signal
-          });
-          if (response.status === 401 || response.status === 403 || response.status === 404) {
-            opts?.onError?.({ kind: 'fatal', status: response.status });
-            return;
-          }
-          if (!response.ok) {
-            opts?.onError?.({ kind: 'transient', status: response.status });
-          } else {
-            const reader = response.body?.getReader();
-            if (reader) await this.readSseEvents(reader, onRecord, developerLogRecordSchema, controller.signal);
-            delay = 1_000;
-          }
-        } catch (err) {
-          if (controller.signal.aborted) return;
-          opts?.onError?.({ kind: 'transient', cause: err });
-        }
-        await new Promise<void>((resolve) => {
-          const t = setTimeout(resolve, delay);
-          controller.signal.addEventListener('abort', () => {
-            clearTimeout(t);
-            resolve();
-          });
-        });
-        delay = Math.min(delay * 2, 30_000);
-      }
-    })();
-
-    return () => controller.abort();
+    return this.stream(`/${CONTROL_API_VERSION}/sessions/${sessionId}/logs`, developerLogRecordSchema, onRecord, opts);
   }
 
   streamNativeCliAuth(
@@ -417,115 +301,145 @@ export class MonadClient {
     onSession: NativeCliAuthSessionHandler,
     opts?: { onError?: (err: StreamError) => void }
   ): () => void {
+    return this.stream(
+      `/${CONTROL_API_VERSION}/native-cli-auth-sessions/${id}/events?controlToken=${encodeURIComponent(controlToken)}`,
+      nativeCliAuthSessionViewSchema,
+      onSession,
+      opts
+    );
+  }
+
+  streamNativeCliObservation(
+    id: string,
+    transcriptTargetId: TranscriptTargetId,
+    onObservation: NativeCliObservationHandler,
+    opts?: { onError?: (err: StreamError) => void }
+  ): () => void {
+    // A non-'live' access snapshot is terminal (the CLI process exited): stop instead of reconnecting.
+    // Any other close is a dropped connection, so `stream` reconnects — restoring the self-healing the
+    // 900ms poll this replaced used to give.
+    return this.stream(
+      `/${CONTROL_API_VERSION}/native-cli-sessions/${id}/observation-stream?transcriptTargetId=${encodeURIComponent(transcriptTargetId)}`,
+      nativeCliObservationAccessResponseSchema,
+      onObservation,
+      { ...opts, isTerminal: (access) => access.state !== 'live' }
+    );
+  }
+
+  /**
+   * The single, business-agnostic SSE consumer behind every `stream*` method. Everything
+   * stream-specific arrives as arguments — the `path`, the frame `schema`, whether to `resume` via
+   * `last-event-id`, and what counts as a terminal frame (`isTerminal`) — so this method encodes no
+   * product concept and any new SSE endpoint can reuse it directly.
+   *
+   * It opens `path` as an event stream and drains it, reconnecting on a dropped connection with
+   * equal-jitter exponential backoff (base 1s→30s, reset after a clean read) so many client instances
+   * that dropped together don't stampede the daemon. A connected stream that goes silent for
+   * `idleTimeoutMs` (no bytes, not even a `:` heartbeat) is treated as half-open and reconnected. With
+   * `resume`, the last seen event id is threaded back (as both the `last-event-id` header and an
+   * `?after=` query) so a mid-turn reconnect backfills instead of losing events — required for
+   * generation streams (docs/realtime-channels.md). A frame for which `isTerminal` returns true ends
+   * the stream for good (no reconnect). Fatal statuses (401/403/404) stop; a genuine network/read
+   * error is transient and retried. The returned disposer aborts the in-flight read and stops
+   * reconnecting.
+   */
+  stream<T>(
+    path: string,
+    schema: SsePayloadSchema<T>,
+    onEvent: (value: T) => void,
+    opts?: {
+      afterEventId?: EventId;
+      resume?: boolean;
+      isTerminal?: (value: T) => boolean;
+      onOpen?: () => void;
+      onError?: (err: StreamError) => void;
+      /** Override the no-bytes idle timeout (default SSE_IDLE_TIMEOUT_MS); mainly a test seam. */
+      idleTimeoutMs?: number;
+    }
+  ): () => void {
     const controller = new AbortController();
+    const resume = opts?.resume ?? false;
+    const idleMs = opts?.idleTimeoutMs ?? SSE_IDLE_TIMEOUT_MS;
 
     void (async () => {
+      let afterEventId = opts?.afterEventId;
       let delay = 1_000;
       while (!controller.signal.aborted) {
+        // Per-attempt controller so the idle watchdog can abort THIS connection (→ reconnect) without
+        // tearing down the stream. A real dispose aborts the parent, which we forward to the attempt.
+        const attempt = new AbortController();
+        const onParentAbort = (): void => attempt.abort();
+        controller.signal.addEventListener('abort', onParentAbort, { once: true });
+        let idle: ReturnType<typeof setTimeout> | undefined;
+        let idleAborted = false;
+        const armIdle = (): void => {
+          if (idle) clearTimeout(idle);
+          idle = setTimeout(() => {
+            idleAborted = true;
+            attempt.abort();
+          }, idleMs);
+        };
         try {
-          const response = await this.fetch(
-            `/${CONTROL_API_VERSION}/native-cli-auth-sessions/${id}/events?controlToken=${encodeURIComponent(controlToken)}`,
-            {
-              headers: { accept: 'text/event-stream' },
-              signal: controller.signal
-            }
-          );
-          if (response.status === 401 || response.status === 403 || response.status === 404) {
+          const headers: Record<string, string> = { accept: 'text/event-stream' };
+          if (resume && afterEventId) headers['last-event-id'] = afterEventId;
+          const url = resume && afterEventId ? appendQuery(path, 'after', afterEventId) : path;
+          const response = await this.fetch(url, { headers, signal: attempt.signal });
+
+          // Non-retriable (session gone / auth failure) — stop reconnecting.
+          if (FATAL_SSE_STATUS.has(response.status)) {
             opts?.onError?.({ kind: 'fatal', status: response.status });
             return;
           }
           if (!response.ok) {
             opts?.onError?.({ kind: 'transient', status: response.status });
           } else {
+            opts?.onOpen?.(); // connected — lets a UI clear a "reconnecting…" state deterministically
             const reader = response.body?.getReader();
             if (reader) {
-              await this.readSseEvents(reader, onSession, nativeCliAuthSessionViewSchema, controller.signal);
+              armIdle();
+              let terminal = false;
+              const lastId = await readTypedSseStream(
+                reader,
+                schema,
+                (value: T) => {
+                  onEvent(value);
+                  if (opts?.isTerminal?.(value)) terminal = true;
+                },
+                { signal: attempt.signal, onActivity: armIdle } // any bytes (incl. `:` heartbeats) re-arm it
+              );
+              if (terminal) return; // the source signalled completion
+              if (resume && lastId) afterEventId = lastId as EventId;
             }
-            delay = 1_000;
+            delay = 1_000; // reset backoff after a clean read
           }
         } catch (err) {
+          // A real dispose exits the loop. An idle-driven abort is proactive maintenance, not a
+          // failure, so it reconnects silently; only a genuine network/read error surfaces onError.
           if (controller.signal.aborted) return;
-          opts?.onError?.({ kind: 'transient', cause: err });
+          if (!idleAborted) opts?.onError?.({ kind: 'transient', cause: err });
+        } finally {
+          if (idle) clearTimeout(idle);
+          controller.signal.removeEventListener('abort', onParentAbort);
         }
-        await new Promise<void>((resolve) => {
-          const t = setTimeout(resolve, delay);
-          controller.signal.addEventListener('abort', () => {
-            clearTimeout(t);
-            resolve();
-          });
-        });
-        delay = Math.min(delay * 2, 30_000);
+        // Equal jitter: half fixed + half random, so instances that dropped at once desynchronize.
+        await this.sleep(delay / 2 + Math.random() * (delay / 2), controller.signal);
+        delay = Math.min(delay * 2, 30_000); // cap at 30s
       }
     })();
 
     return () => controller.abort();
   }
 
-  streamUiEvents(
-    sessionId: TranscriptTargetId,
-    onEvent: UiEventHandler,
-    opts?: { afterEventId?: EventId; onError?: (err: StreamError) => void }
-  ): () => void {
-    const controller = new AbortController();
-
-    void (async () => {
-      let afterEventId: EventId | undefined = opts?.afterEventId;
-      let delay = 1_000;
-      while (!controller.signal.aborted) {
-        try {
-          if (sessionId.startsWith('prj_')) {
-            const query = afterEventId ? `?after=${encodeURIComponent(afterEventId)}` : '';
-            const res = await this.fetch(`/v1/projects/${encodeURIComponent(sessionId)}/ui-stream${query}`, {
-              headers: afterEventId ? { 'last-event-id': afterEventId } : undefined,
-              signal: controller.signal
-            });
-            if (!res.ok) {
-              if (res.status === 401 || res.status === 403 || res.status === 404) {
-                opts?.onError?.({ kind: 'fatal', status: res.status });
-                return;
-              }
-              opts?.onError?.({ kind: 'transient', status: res.status });
-            } else {
-              const lastId = await this.consumeSseStream(res, onEvent, sessionUiEventSchema, controller.signal);
-              if (lastId) afterEventId = lastId as EventId;
-            }
-            delay = 1_000;
-            continue;
-          }
-
-          const result = await this.treaty.v1.sessions({ id: sessionId })['ui-stream'].get({
-            headers: afterEventId ? { 'last-event-id': afterEventId } : undefined,
-            fetch: { signal: controller.signal }
-          });
-
-          if (result.error) {
-            const status = (result.error as { status?: number }).status;
-            if (status === 401 || status === 403 || status === 404) {
-              opts?.onError?.({ kind: 'fatal', status });
-              return;
-            }
-            opts?.onError?.({ kind: 'transient', status });
-          } else {
-            const lastId = await this.consumeSseStream(result.data, onEvent, sessionUiEventSchema, controller.signal);
-            if (lastId) afterEventId = lastId as EventId;
-            delay = 1_000;
-          }
-        } catch (err) {
-          if (controller.signal.aborted) return;
-          opts?.onError?.({ kind: 'transient', cause: err });
-        }
-        await new Promise<void>((resolve) => {
-          const t = setTimeout(resolve, delay);
-          controller.signal.addEventListener('abort', () => {
-            clearTimeout(t);
-            resolve();
-          });
-        });
-        delay = Math.min(delay * 2, 30_000);
-      }
-    })();
-
-    return () => controller.abort();
+  private sleep(ms: number, signal: AbortSignal): Promise<void> {
+    // setTimeout (not Bun.sleep) — this client also runs in the browser via @monad/client-rtk.
+    return new Promise<void>((resolve) => {
+      if (signal.aborted) return resolve();
+      const t = setTimeout(resolve, ms);
+      signal.addEventListener('abort', () => {
+        clearTimeout(t);
+        resolve();
+      });
+    });
   }
 }
 

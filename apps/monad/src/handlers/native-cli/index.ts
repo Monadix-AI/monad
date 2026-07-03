@@ -151,6 +151,25 @@ export function createNativeCliModule({ paths, host, store }: NativeCliDeps) {
       return nativeCliObservationAccessResponseSchema.parse(host.observe(id));
     },
 
+    subscribeObservation({
+      id,
+      transcriptTargetId,
+      onObservation
+    }: {
+      id: string;
+      transcriptTargetId: TranscriptTargetId;
+      onObservation: (access: NativeCliObservationAccessResponse, done: boolean) => void;
+    }): {
+      access: NativeCliObservationAccessResponse;
+      live: boolean;
+      dispose: () => void;
+    } {
+      requireNativeCliSessionScope(id, transcriptTargetId);
+      return host.subscribeObservation(id, (access, done) =>
+        onObservation(nativeCliObservationAccessResponseSchema.parse(access), done)
+      );
+    },
+
     delivery({
       id,
       transcriptTargetId

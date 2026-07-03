@@ -20,3 +20,4 @@ export { useStartNativeCliAgentMutation } from './start-native-cli-agent.ts';
 export { useStartNativeCliAuthMutation } from './start-native-cli-auth.ts';
 export { useStopNativeCliAuthMutation } from './stop-native-cli-auth.ts';
 export { useStopNativeCliSessionMutation } from './stop-native-cli-session.ts';
+export { useStreamNativeCliObservationQuery } from './stream-native-cli-observation.ts';

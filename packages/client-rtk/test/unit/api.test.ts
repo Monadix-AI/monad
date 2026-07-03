@@ -12,6 +12,7 @@ import { getNativeAgentDeliveryObservationApi } from '../../src/endpoints/native
 import { getNativeCliObservationApi } from '../../src/endpoints/native-cli/get-native-cli-observation.ts';
 import { getNativeCliUsageApi } from '../../src/endpoints/native-cli/get-native-cli-usage.ts';
 import { listNativeCliSessionsApi } from '../../src/endpoints/native-cli/list-native-cli-sessions.ts';
+import { streamNativeCliObservationApi } from '../../src/endpoints/native-cli/stream-native-cli-observation.ts';
 import {
   getMessagesApi,
   listSessionsApi,
@@ -43,6 +44,17 @@ function ok<T>(data: T): { data: T; status: number } {
 
 function fakeClient(overrides: Record<string, unknown>): MonadClient {
   const client = {
+    streamNativeCliObservation: (
+      id: string,
+      transcriptTargetId: string,
+      onObservation: (access: unknown) => void
+    ): (() => void) => {
+      const fn = overrides.streamNativeCliObservation as
+        | ((id: string, transcriptTargetId: string, onObservation: (access: unknown) => void) => void)
+        | undefined;
+      fn?.(id, transcriptTargetId, onObservation);
+      return () => {};
+    },
     treaty: {
       v1: {
         sessions: Object.assign(
@@ -440,6 +452,38 @@ test('getNativeCliObservation uses the typed native CLI observation treaty route
   expect(seen).toEqual(['ncli_1']);
   expect('data' in res && res.data?.state).toBe('live');
   if ('data' in res && res.data?.state === 'live') expect(res.data.output).toContain('agent_message');
+});
+
+test('streamNativeCliObservation pushes live access snapshots into the query cache', async () => {
+  let seen: { id: string; transcriptTargetId: string } | undefined;
+  let push: ((access: unknown) => void) | undefined;
+  const client = fakeClient({
+    streamNativeCliObservation: (id: string, transcriptTargetId: string, onObservation: (access: unknown) => void) => {
+      seen = { id, transcriptTargetId };
+      push = onObservation;
+    }
+  });
+  const store = createMonadStore({ client });
+  const arg = { id: 'ncli_1', transcriptTargetId: 'prj_01KCLIENTOBSERVE0000000' as const };
+
+  store.dispatch(streamNativeCliObservationApi.endpoints.streamNativeCliObservation.initiate(arg));
+  await new Promise((r) => setTimeout(r, 0));
+  expect(seen).toEqual({ id: 'ncli_1', transcriptTargetId: 'prj_01KCLIENTOBSERVE0000000' });
+
+  // The client pushes a live snapshot; onCacheEntryAdded writes it straight into the cache.
+  push?.({
+    state: 'live',
+    nativeCliSessionId: 'ncli_1',
+    provider: 'codex',
+    output: '{"type":"agent_message"}',
+    observedAt: '2026-07-03T00:00:00.000Z'
+  });
+  await new Promise((r) => setTimeout(r, 0));
+
+  const cached = streamNativeCliObservationApi.endpoints.streamNativeCliObservation.select(arg)(
+    store.getState() as never
+  );
+  expect(cached.data?.state).toBe('live');
 });
 
 test('a query delegates to the client and caches by tag', async () => {

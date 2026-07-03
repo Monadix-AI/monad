@@ -8,7 +8,8 @@ import {
   createBoundedSseEncoderSink,
   createBoundedSseSink,
   createSseResponse,
-  encodeSseFrame
+  encodeSseFrame,
+  startSseHeartbeat
 } from '@/transports/http/sessions/sse.ts';
 
 export function wantsInlineSessionStream(acceptHeader: string | undefined): boolean {
@@ -26,10 +27,12 @@ export function createSessionMessageSseResponse(params: {
 
   const stream = new ReadableStream<Uint8Array>({
     async start(ctrl) {
+      const stopHeartbeat = startSseHeartbeat(ctrl, encoder);
       const sink = createBoundedSseSink(ctrl, encoder, () => void handlers.session.abort({ id: sessionId }));
       try {
         await handlers.session.sendInline({ sessionId, text }, sink, { transport: 'http', ambientContext });
       } finally {
+        stopHeartbeat();
         try {
           ctrl.close();
         } catch {
@@ -53,17 +56,23 @@ export async function createSessionEventsSseResponse(params: {
 }): Promise<Response> {
   const { handlers, sessionId, afterEventId, encoder } = params;
   let disposeRef: (() => void) | undefined;
+  let stopHeartbeat: (() => void) | undefined;
   let cancelled = false;
 
   const stream = new ReadableStream<Uint8Array>({
     async start(ctrl) {
+      stopHeartbeat = startSseHeartbeat(ctrl, encoder);
       // onDrop fires only after a backlog builds, by which point subscribe() has returned and
       // disposeRef is set; releasing the subscription stops the push so the queue can't regrow.
-      const sink = createBoundedSseSink(ctrl, encoder, () => disposeRef?.());
+      const sink = createBoundedSseSink(ctrl, encoder, () => {
+        stopHeartbeat?.();
+        disposeRef?.();
+      });
       const { dispose } = await handlers.session.subscribe({ sessionId, afterEventId }, sink);
       // Guard against cancel() firing before subscribe() resolved (client disconnected during
       // event replay) — the subscription was created but cancel() missed it, so dispose now.
       if (cancelled) {
+        stopHeartbeat();
         dispose();
         return;
       }
@@ -71,6 +80,7 @@ export async function createSessionEventsSseResponse(params: {
     },
     cancel() {
       cancelled = true;
+      stopHeartbeat?.();
       disposeRef?.();
     }
   });
@@ -86,6 +96,7 @@ export async function createSessionUiEventsSseResponse(params: {
 }): Promise<Response> {
   const { handlers, sessionId, afterEventId, encoder } = params;
   let disposeRef: (() => void) | undefined;
+  let stopHeartbeat: (() => void) | undefined;
   let cancelled = false;
   let sinkRef: ((event: SessionUiEvent) => void) | undefined;
   const pending: SessionUiEvent[] = [];
@@ -111,15 +122,20 @@ export async function createSessionUiEventsSseResponse(params: {
         } catch {}
         return;
       }
+      stopHeartbeat = startSseHeartbeat(ctrl, encoder);
       sinkRef = createBoundedSseEncoderSink<SessionUiEvent>(
         ctrl,
         (event) => encodeSseFrame({ id: event.cursor, event: event.kind, data: event }, encoder),
-        () => disposeRef?.()
+        () => {
+          stopHeartbeat?.();
+          disposeRef?.();
+        }
       );
       for (const event of pending.splice(0)) sinkRef(event);
     },
     cancel() {
       cancelled = true;
+      stopHeartbeat?.();
       sinkRef = undefined;
       disposeRef?.();
       disposeRef = undefined;
@@ -132,14 +148,19 @@ export async function createSessionUiEventsSseResponse(params: {
 export function createSessionLogsSseResponse(params: { sessionId: SessionId; encoder: TextEncoder }): Response {
   const { sessionId, encoder } = params;
   let disposeRef: (() => void) | undefined;
+  let stopHeartbeat: (() => void) | undefined;
 
   const stream = new ReadableStream<Uint8Array>({
     start(ctrl) {
       ctrl.enqueue(encoder.encode(': connected\n\n'));
+      stopHeartbeat = startSseHeartbeat(ctrl, encoder);
       const sink = createBoundedSseEncoderSink<DeveloperLogRecord>(
         ctrl,
         (record) => encodeSseFrame({ event: 'log', data: record }, encoder),
-        () => disposeRef?.()
+        () => {
+          stopHeartbeat?.();
+          disposeRef?.();
+        }
       );
       disposeRef = subscribeDeveloperLogRecords((record) => {
         if (record.sessionId !== sessionId || typeof record.level !== 'number') return;
@@ -149,6 +170,7 @@ export function createSessionLogsSseResponse(params: { sessionId: SessionId; enc
       });
     },
     cancel() {
+      stopHeartbeat?.();
       disposeRef?.();
       disposeRef = undefined;
     }

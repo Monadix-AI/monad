@@ -6,8 +6,10 @@ streamed over WebSocket on some clients.
 This records *which* realtime channel carries *which* events, and why. For the
 physical transport (tcp/uds) and the REST/RPC split, see
 [runtime.md](runtime.md). For the client-side code that implements this, see
-[`@monad/client`](../packages/client) (`EventSocket`, `streamEvents`) and
-[`@monad/client-rtk`](../packages/client-rtk) (`stream-control`, `stream-session`).
+[`@monad/client`](../packages/client) (`EventSocket` for the WS, `MonadClient.stream`
+for every SSE consumer) and [`@monad/client-rtk`](../packages/client-rtk)
+(`stream-control`, `stream-session`). The SSE frame decoder itself is shared once in
+[`@monad/protocol`](../packages/protocol) (`readTypedSseStream`).
 
 ## Decision
 
@@ -78,6 +80,52 @@ compliant replacement for the deprecated per-session WS `subscribe`. Because the
 and SSE planes overlap on a few session-scoped lifecycle events, it de-dupes by
 `event.id` (events are idempotent by id) so the consumer sees each event once.
 
+## The SSE transport engine (`MonadClient.stream`)
+
+Every standing SSE consumer — session events, projected UI events, developer logs,
+native-CLI auth/observation snapshots — runs on one generic engine,
+`MonadClient.stream<T>(path, schema, onEvent, opts)`. The named `stream*` methods are
+thin presets over it that bake in each stream's URL, schema, and whether it resumes, so
+a caller can't forget a correctness-critical option. The engine is business-agnostic;
+the frame decode is shared once more in `@monad/protocol` (`readTypedSseStream`), used
+by both the web client and the Bun-side ACP bridge.
+
+What the engine guarantees:
+
+- **Reconnect with equal-jitter backoff.** A dropped connection retries with
+  `delay/2 + random(0, delay/2)`, base doubling 1s→30s, reset after a clean read. The
+  jitter is load-bearing: several client instances (browser tabs, CLI, TUI) that drop
+  together on a daemon restart must not reconnect in lockstep and stampede it.
+- **Resume across reconnects (backfill).** When resumable, the last seen event id is
+  threaded back as both the `last-event-id` header and an `?after=` query, so a mid-turn
+  reconnect continues rather than losing events — this is how hard constraint 1 is met
+  in practice.
+- **Idle watchdog + heartbeat (liveness).** A silently half-open socket emits no
+  `close`, so a connected stream delivering no bytes for `SSE_IDLE_TIMEOUT_MS` is
+  force-reconnected. To keep a genuinely-idle-but-healthy stream (a quiet session
+  between turns) from tripping it, the server writes a `:` comment every
+  `SSE_HEARTBEAT_MS`; any byte, heartbeat included, re-arms the watchdog. An idle-driven
+  reconnect is proactive maintenance, not a failure — it is silent, never surfaced as an
+  error. See hard constraint 5 for the `idle ≥ 2×heartbeat` contract.
+- **Terminal frames.** A stream may declare a frame that ends it for good (`isTerminal`);
+  the engine then stops instead of reconnecting. Used by the native-CLI observation
+  stream, whose non-`live` snapshot means the process exited.
+- **`onOpen` recovery signal.** Fires on each successful (re)connect so a UI can clear a
+  "reconnecting…" state deterministically, without waiting for the next event.
+- **Version-skew and consumer-bug resilience** (in `readTypedSseStream`): an unparseable
+  or schema-invalid frame is skipped — a newer daemon's unknown event type can't wedge
+  the stream — and a throwing `onEvent` callback is isolated, so a consumer bug can't
+  become an infinite reconnect loop re-poisoning every retry.
+
+The one SSE consumer **not** on this engine is the request-scoped inline turn stream
+(`sendStreamable` over a POST): a single turn with no resume semantics, it drains the
+Eden Treaty async-iterable directly.
+
+Server side, the same machinery is generalized by `createPushSseResponse` (in
+`apps/monad`), which turns any live push source — e.g. native-CLI observation snapshots,
+the coalesced replacement for what used to be a 900 ms poll — into a heartbeat-bearing,
+backpressure-bounded SSE `Response`.
+
 ## Why this split
 
 1. **SSE is the canonical LLM token transport.** Unidirectional server→client,
@@ -125,6 +173,13 @@ These are requirements, not nice-to-haves. Violating them produces user-visible 
    generation over WS — that path is now disallowed. Mobile must adopt a maintained
    RN SSE library (e.g. `react-native-sse`) and the shared RTK
    `useStreamSessionQuery`, rather than a hand-rolled WS reducer.
+5. **Server heartbeat interval < client idle timeout.** Every standing SSE response
+   writes a `:` keepalive every `SSE_HEARTBEAT_MS` (`startSseHeartbeat`); clients
+   reconnect after `SSE_IDLE_TIMEOUT_MS` of total silence. These two constants are a
+   cross-tier contract in `@monad/protocol` and MUST keep `idle ≥ 2×heartbeat`, or a
+   healthy idle stream false-reconnects every cycle. Any new SSE-emitting endpoint must
+   send the heartbeat — an endpoint that streams without it will be reaped by the
+   client's watchdog whenever it goes quiet.
 
 ## Consequences / migration
 
@@ -156,3 +211,8 @@ When adding a realtime feature:
 - [ ] Does the UI treat history as canonical rather than assuming cross-channel
       order? (constraint 2)
 - [ ] On RN, does generation go through an SSE client (never WS)? (constraint 4)
+- [ ] Does a new SSE-emitting endpoint send the `:` heartbeat (`startSseHeartbeat`), so
+      the client's idle watchdog doesn't false-reconnect it when it goes quiet?
+      (constraint 5)
+- [ ] Does a new client-side SSE consumer run on `MonadClient.stream` (reconnect,
+      resume, idle watchdog) rather than a hand-rolled fetch loop?

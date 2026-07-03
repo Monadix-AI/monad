@@ -91,7 +91,8 @@ import {
   useStartNativeCliAgentMutation,
   useStartNativeCliAuthMutation,
   useStopNativeCliAuthMutation,
-  useStopNativeCliSessionMutation
+  useStopNativeCliSessionMutation,
+  useStreamNativeCliObservationQuery
 } from './endpoints/native-cli/index.ts';
 import {
   useCreateWorkplaceProjectMutation,
@@ -445,6 +446,7 @@ export {
   useStopNativeCliAuthMutation,
   useStopNativeCliSessionMutation,
   useStreamControlQuery,
+  useStreamNativeCliObservationQuery,
   useStreamSessionQuery,
   useStreamUiItemsQuery,
   useTestConnectionMutation,

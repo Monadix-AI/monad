@@ -74,6 +74,7 @@ interface ManagedProjectOutput {
 }
 
 type ManagedProjectOutputHandler = (output: ManagedProjectOutput) => void | Promise<void>;
+type NativeCliObservationListener = (access: NativeCliObservationAccessResponse, done: boolean) => void;
 
 type NativeCliProcess = ReturnType<typeof Bun.spawn> & {
   terminal?: NativeCliTerminal;
@@ -154,6 +155,9 @@ export interface NativeCliHostDeps {
 
 const MAX_OUTPUT_SNAPSHOT = 256 * 1024;
 const SNAPSHOT_FLUSH_MS = 200;
+// observe() returns the whole output buffer, and a chatty CLI emits many chunks a second, so pushing
+// a fresh full snapshot per chunk is quadratic bandwidth. Coalesce non-terminal pushes to this cadence.
+const OBSERVATION_THROTTLE_MS = 200;
 const MAX_STRUCTURED_LINE = 2 * 1024 * 1024;
 const AUTH_RUNNING_TTL_MS = 30 * 60 * 1000;
 const AUTH_TERMINAL_TTL_MS = 10 * 60 * 1000;
@@ -284,6 +288,8 @@ export class NativeCliHost {
   private readonly live = new Map<string, LiveNativeCliSession>();
   private readonly liveAuth = new Map<string, LiveNativeCliAuthSession>();
   private readonly authListeners = new Map<string, Set<NativeCliAuthListener>>();
+  private readonly observationListeners = new Map<string, Set<NativeCliObservationListener>>();
+  private readonly observationFlush = new Map<string, ReturnType<typeof setTimeout>>();
   private readonly structuredOutputBuffers = new Map<
     string,
     Partial<Record<NativeCliOutputStream, StructuredLineBufferState>>
@@ -362,6 +368,42 @@ export class NativeCliHost {
     if (!listeners?.size) return;
     const session = authToView(live);
     for (const listener of listeners) listener(session);
+  }
+
+  /** Notify live observers of the current output snapshot. Non-terminal pushes are coalesced to one
+   *  per OBSERVATION_THROTTLE_MS (the trailing fire reads the latest full buffer, so no update is
+   *  lost); a `done` push fires immediately and cancels any pending timer. */
+  private publishObservation(id: string, done = false): void {
+    if (done) {
+      this.clearObservationFlush(id);
+      this.emitObservation(id, true);
+      return;
+    }
+    if (!this.observationListeners.get(id)?.size) return;
+    if (this.observationFlush.has(id)) return; // an update is already scheduled; it reads the latest buffer
+    this.observationFlush.set(
+      id,
+      setTimeout(() => {
+        this.observationFlush.delete(id);
+        this.emitObservation(id, false);
+      }, OBSERVATION_THROTTLE_MS)
+    );
+  }
+
+  private emitObservation(id: string, done: boolean): void {
+    const listeners = this.observationListeners.get(id);
+    if (!listeners?.size) return;
+    const access = this.observe(id);
+    for (const listener of listeners) listener(access, done);
+    if (done) this.observationListeners.delete(id);
+  }
+
+  private clearObservationFlush(id: string): void {
+    const timer = this.observationFlush.get(id);
+    if (timer) {
+      clearTimeout(timer);
+      this.observationFlush.delete(id);
+    }
   }
 
   async start(args: {
@@ -711,6 +753,7 @@ export class NativeCliHost {
       const state = code === 0 ? 'exited' : 'failed';
       this.deps.store.closeNativeCliSession(id, exitedAt, code, state);
       this.emit(args.transcriptTargetId, 'native_cli.exited', { nativeCliSessionId: id, exitCode: code, state });
+      this.publishObservation(id, true);
       this.log[state === 'failed' ? 'error' : 'debug'](
         {
           sessionId: args.transcriptTargetId,
@@ -785,6 +828,31 @@ export class NativeCliHost {
       nativeCliSessionId: id,
       provider: row.provider,
       reason: 'provider history unavailable'
+    };
+  }
+
+  subscribeObservation(
+    id: string,
+    listener: NativeCliObservationListener
+  ): { access: NativeCliObservationAccessResponse; live: boolean; dispose: () => void } {
+    const access = this.observe(id);
+    if (access.state !== 'live') return { access, live: false, dispose: () => {} };
+    let listeners = this.observationListeners.get(id);
+    if (!listeners) {
+      listeners = new Set();
+      this.observationListeners.set(id, listeners);
+    }
+    listeners.add(listener);
+    return {
+      access,
+      live: true,
+      dispose: () => {
+        listeners.delete(listener);
+        if (listeners.size === 0) {
+          this.observationListeners.delete(id);
+          this.clearObservationFlush(id);
+        }
+      }
     };
   }
 
@@ -1313,6 +1381,7 @@ export class NativeCliHost {
       // per-chunk 256 KB read-modify-write under a chatty agent.
       live.outputBuffer = appendBounded(live.outputBuffer, chunk, MAX_OUTPUT_SNAPSHOT);
       if (!isManagedProjectRuntime(live)) this.scheduleSnapshotFlush(id);
+      this.publishObservation(id);
     } else {
       const row = this.deps.store.getNativeCliSession(id);
       if (!row || !isManagedProjectRuntime(row)) this.deps.store.appendNativeCliOutput(id, chunk, MAX_OUTPUT_SNAPSHOT);

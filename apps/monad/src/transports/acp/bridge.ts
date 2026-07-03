@@ -19,7 +19,7 @@ import type { EventSink } from '@/handlers/session/index.ts';
 import type { AcpHandlers } from '@/transports/acp/connection.ts';
 
 import { createLogger } from '@monad/logger';
-import { readSseStream } from '@monad/protocol';
+import { eventSchema, readTypedSseStream } from '@monad/protocol';
 
 const log = createLogger('transport:acp:bridge');
 
@@ -121,7 +121,7 @@ export function createBridgeHandlers(opts: BridgeOptions): { handlers: AcpHandle
     if (!res.ok || !res.body) {
       throw new Error(`daemon turn failed (${res.status})`);
     }
-    await readSseStream(res.body.getReader(), sink, {
+    await readTypedSseStream(res.body.getReader(), eventSchema, sink, {
       onInvalid: (err) => log.warn({ err }, 'dropping unparseable session event')
     });
   }
