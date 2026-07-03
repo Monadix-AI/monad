@@ -68,7 +68,7 @@ export function buildDevEnv(
 
 export function devCommand(): string[] {
   return [
-    'bunx',
+    'bun',
     'turbo',
     'run',
     'start:dev',
