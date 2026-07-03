@@ -11,7 +11,7 @@ export function isStudioPath(pathname: string): boolean {
   return pathname.startsWith('/studio/');
 }
 
-export function studioPath(section: StudioSectionId = 'agents'): string {
+export function studioPath(section: StudioSectionId = 'runtime'): string {
   return `/studio/${encodeURIComponent(section)}`;
 }
 
@@ -24,7 +24,12 @@ export function studioSectionFromPathname(pathname: string): StudioSectionId | n
   const raw = pathname.match(/^\/studio\/([^/?#]+)/)?.[1];
   if (!raw) return null;
   const section = safeDecode(raw);
-  if (section === 'acpAgents' || section === 'nativeCliAgents') return 'thirdPartyAgents';
+  if (section === 'acpAgents') return 'acpDelegates';
+  if (section === 'thirdPartyAgents') {
+    const mode = studioSubpathFromPathname(pathname)[0];
+    if (mode === 'cli') return 'nativeCliAgents';
+    return 'acpDelegates';
+  }
   return isStudioSectionId(section) ? section : null;
 }
 

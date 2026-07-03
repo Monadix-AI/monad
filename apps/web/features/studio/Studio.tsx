@@ -8,12 +8,12 @@ import { studioSectionFromPathname, studioSubpathFromPathname } from '@/features
 import { STUDIO_SECTION_COMPONENTS } from './section-registry';
 
 /**
- * Studio: the two-layer model/agent workbench. Capabilities (system-level atomic config, reusing
- * the existing settings panels) + Agents (compose those capabilities into a named persona).
+ * Studio: the two-plane workbench. Agent Runtime contains Monad-owned runtime policy and
+ * capabilities; Agent Swarm coordinates provider-owned agents and Workplace projects.
  */
 export function Studio({ onClose }: { onClose: () => void }) {
   const pathname = usePathname();
-  const section: StudioSectionId = studioSectionFromPathname(pathname) ?? 'agents';
+  const section: StudioSectionId = studioSectionFromPathname(pathname) ?? 'runtime';
   const subpath = studioSubpathFromPathname(pathname);
   const SectionComponent = STUDIO_SECTION_COMPONENTS[section];
 

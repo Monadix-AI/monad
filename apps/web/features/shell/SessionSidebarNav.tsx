@@ -9,9 +9,8 @@ import { Button, cn, Tooltip, TooltipContent, TooltipTrigger } from '@monad/ui';
 
 import { MonadLogo } from '@/components/MonadLogo';
 import {
-  STUDIO_AGENT_SECTIONS,
-  STUDIO_CAPABILITY_SECTIONS,
   STUDIO_RUNTIME_SECTIONS,
+  STUDIO_SWARM_SECTIONS,
   STUDIO_USAGE_SECTION,
   type StudioSectionId,
   type StudioSectionItem
@@ -24,12 +23,7 @@ export interface ProjectItem {
 
 type TFunction = ReturnType<typeof useT>;
 
-const STUDIO_SHORTCUT_ITEMS = [
-  ...STUDIO_AGENT_SECTIONS,
-  ...STUDIO_CAPABILITY_SECTIONS,
-  ...STUDIO_RUNTIME_SECTIONS,
-  STUDIO_USAGE_SECTION
-];
+const STUDIO_SHORTCUT_ITEMS = [...STUDIO_RUNTIME_SECTIONS, ...STUDIO_SWARM_SECTIONS, STUDIO_USAGE_SECTION];
 
 function ShortcutBadge({ modifierLabel, number }: { modifierLabel: string; number: number }) {
   return (
@@ -46,6 +40,10 @@ function SidebarNavSection({ children }: { children: ReactNode }) {
       <div className="flex flex-col gap-0.5">{children}</div>
     </div>
   );
+}
+
+function SidebarNavSectionLabel({ children }: { children: ReactNode }) {
+  return <div className="px-2.5 pb-1 font-medium text-[11px] text-sidebar-foreground/55">{children}</div>;
 }
 
 function SidebarNavItem({
@@ -168,9 +166,14 @@ export function StudioSidebarItems({
   return (
     <>
       <div className="sidebar-scroll-area min-h-0 flex-1 overflow-y-auto">
-        <SidebarNavSection>{STUDIO_AGENT_SECTIONS.map(renderItem)}</SidebarNavSection>
-        <SidebarNavSection>{STUDIO_CAPABILITY_SECTIONS.map(renderItem)}</SidebarNavSection>
-        <SidebarNavSection>{STUDIO_RUNTIME_SECTIONS.map(renderItem)}</SidebarNavSection>
+        <SidebarNavSection>
+          <SidebarNavSectionLabel>{t('web.studio.agentRuntime')}</SidebarNavSectionLabel>
+          {STUDIO_RUNTIME_SECTIONS.map(renderItem)}
+        </SidebarNavSection>
+        <SidebarNavSection>
+          <SidebarNavSectionLabel>{t('web.studio.agentSwarm')}</SidebarNavSectionLabel>
+          {STUDIO_SWARM_SECTIONS.map(renderItem)}
+        </SidebarNavSection>
       </div>
       <SidebarNavSection>{renderItem(STUDIO_USAGE_SECTION)}</SidebarNavSection>
     </>
