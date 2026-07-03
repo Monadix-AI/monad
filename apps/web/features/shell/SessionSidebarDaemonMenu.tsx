@@ -231,7 +231,7 @@ export function DaemonMenu({
                 <span className="block truncate text-muted-foreground text-xs">{activeConnectionMeta}</span>
               </span>
             ) : (
-              <span className="min-w-0 flex-1 font-normal text-ui leading-control">Daemon</span>
+              <span className="min-w-0 flex-1 font-normal text-ui leading-control">{t('web.daemon.label')}</span>
             )}
             {hasUpgrade ? <span className="ml-auto size-2 shrink-0 rounded-full bg-accent-blue" /> : null}
           </button>
@@ -244,11 +244,11 @@ export function DaemonMenu({
         >
           <DropdownMenuGroup>
             <DropdownMenuLabel className="flex items-center gap-2 font-normal text-base leading-control">
-              <span className="text-foreground">Daemon</span>
+              <span className="text-foreground">{t('web.daemon.label')}</span>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
-                    aria-label="Connect remote Monad Daemon"
+                    aria-label={t('web.daemon.connectRemote')}
                     className="ml-auto size-7 shrink-0"
                     onClick={(event) => {
                       event.preventDefault();
@@ -261,7 +261,7 @@ export function DaemonMenu({
                     <HugeiconsIcon icon={PlusSignIcon} />
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent>Connect remote Monad Daemon</TooltipContent>
+                <TooltipContent>{t('web.daemon.connectRemote')}</TooltipContent>
               </Tooltip>
             </DropdownMenuLabel>
           </DropdownMenuGroup>
@@ -269,7 +269,7 @@ export function DaemonMenu({
           <DropdownMenuGroup>
             <DaemonConnectionItem
               active={activeConnection.id === LOCAL_DAEMON_ID}
-              label="Local"
+              label={t('web.daemon.local')}
               meta={daemonDisplayHost(daemonBaseUrl)}
               onSelect={onSelectLocalDaemon}
               statusClass={activeConnection.id === LOCAL_DAEMON_ID ? daemonStatusClass : undefined}

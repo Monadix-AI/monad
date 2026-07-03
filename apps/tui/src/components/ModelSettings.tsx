@@ -210,7 +210,7 @@ function RowView({ row, selected, defaultAlias }: { row: Row; selected: boolean;
           bold
           color={TUI_THEME.glow}
         >
-          provider:{row.providerId}
+          {t('cli.tui.model.providerPrefix', { id: row.providerId })}
         </Text>
       </Box>
     );
@@ -225,7 +225,7 @@ function RowView({ row, selected, defaultAlias }: { row: Row; selected: boolean;
         <Text color={selected ? TUI_THEME.accent : undefined}>{c.label}</Text>
         <Text color={TUI_THEME.dim}>
           {'  '}
-          {c.accessTokenPreview ?? ''} · {c.requestCount} reqs
+          {c.accessTokenPreview ?? ''} · {t('cli.tui.model.requestCount', { count: c.requestCount })}
         </Text>
       </Box>
     );
@@ -235,7 +235,7 @@ function RowView({ row, selected, defaultAlias }: { row: Row; selected: boolean;
     return (
       <Box>
         {caret}
-        <Text color={selected ? TUI_THEME.accent : TUI_THEME.glow}>+ add credential</Text>
+        <Text color={selected ? TUI_THEME.accent : TUI_THEME.glow}>{t('cli.tui.model.addCredential')}</Text>
       </Box>
     );
   }
@@ -250,7 +250,12 @@ function RowView({ row, selected, defaultAlias }: { row: Row; selected: boolean;
         {'  '}
         {p.routes.chat.provider}:{p.routes.chat.modelId}
       </Text>
-      {isDefault && <Text color={TUI_THEME.glow}>{'  '}[default]</Text>}
+      {isDefault && (
+        <Text color={TUI_THEME.glow}>
+          {'  '}
+          {t('cli.tui.model.defaultBadge')}
+        </Text>
+      )}
     </Box>
   );
 }

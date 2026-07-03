@@ -42,10 +42,9 @@ export function OpenaiCompatSettings({ embedded = false }: { onClose: () => void
   const body = (
     <>
       <p className="text-muted-foreground text-xs">
-        Exposes your agents as models via an OpenAI-compatible HTTP API (
-        <code className="font-mono">/openai/v1/models</code> and{' '}
-        <code className="font-mono">/openai/v1/chat/completions</code>). Any OpenAI SDK or client can connect by
-        pointing <code className="font-mono">base_url</code> at your daemon.
+        {t('web.api.descPrefix')} <code className="font-mono">/openai/v1/models</code> and{' '}
+        <code className="font-mono">/openai/v1/chat/completions</code>). {t('web.api.descSuffix')}{' '}
+        <code className="font-mono">base_url</code> {t('web.api.descTail')}
       </p>
 
       {loading ? (
@@ -277,11 +276,11 @@ function TestPanel({ baseUrl, token, t }: { baseUrl: string; token: string; t: T
       {result && (
         <div className="flex flex-col gap-2">
           <div className="rounded bg-muted px-3 py-2">
-            <p className="mb-1 text-[10px] text-muted-foreground uppercase tracking-wide">Input</p>
+            <p className="mb-1 text-[10px] text-muted-foreground uppercase tracking-wide">{t('web.common.input')}</p>
             <p className="whitespace-pre-wrap font-mono text-xs">{result.input}</p>
           </div>
           <div className="rounded bg-muted px-3 py-2">
-            <p className="mb-1 text-[10px] text-muted-foreground uppercase tracking-wide">Output</p>
+            <p className="mb-1 text-[10px] text-muted-foreground uppercase tracking-wide">{t('web.common.output')}</p>
             <p className="whitespace-pre-wrap font-mono text-xs">{result.output}</p>
           </div>
         </div>

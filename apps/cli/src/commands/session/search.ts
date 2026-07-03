@@ -32,7 +32,7 @@ export const command: SessionCommandDef = {
     );
     json(hits);
     if (hits.length === 0) {
-      out(dim('no matches'));
+      out(dim(t('cli.session.search.noMatches')));
       return;
     }
     for (const h of hits) {

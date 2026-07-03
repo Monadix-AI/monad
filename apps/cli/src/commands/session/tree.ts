@@ -1,6 +1,7 @@
 import type { SessionId } from '@monad/protocol';
 import type { SessionCommandDef } from './types.ts';
 
+import { t } from '../../lib/i18n.ts';
 import { cyan, dim, json, out } from '../../lib/output.ts';
 import { requireTreatyData } from '../../lib/treaty.ts';
 import { usageError } from '../types.ts';
@@ -17,8 +18,8 @@ export const command: SessionCommandDef = {
     const result = requireTreatyData(await client.treaty.v1.sessions({ id: id as SessionId }).provenance.get());
     json(result);
     const { ancestors, self, descendants } = result;
-    out(dim('ancestors   ') + (ancestors.map((s) => s.id).join(' → ') || dim('none')));
-    out(`${cyan('self        ')}${self.id}  ${self.title}`);
-    out(dim('descendants ') + (descendants.map((s) => s.id).join(', ') || dim('none')));
+    out(dim(t('cli.session.tree.ancestors')) + (ancestors.map((s) => s.id).join(' → ') || dim(t('cli.none'))));
+    out(`${cyan(t('cli.session.tree.self'))}${self.id}  ${self.title}`);
+    out(dim(t('cli.session.tree.descendants')) + (descendants.map((s) => s.id).join(', ') || dim(t('cli.none'))));
   }
 };

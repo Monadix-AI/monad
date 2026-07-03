@@ -8,6 +8,7 @@ import { HugeiconsIcon } from '@hugeicons/react';
 import { ProductIcon } from '@monad/ui';
 import { useEffect, useRef, useState } from 'react';
 
+import { useT } from '@/components/I18nProvider';
 import { AgentIdentity, AgentInstanceAvatar, resolveProductIcon } from '../Bits';
 import { mono, presenceColor, sans } from '../styles';
 
@@ -78,6 +79,7 @@ export function NativeCliObservationPanel({
   onStop: (id: string) => void;
   stream?: NativeCliStreamView;
 }): React.ReactElement {
+  const t = useT();
   const displayAgent = agent ?? {
     av: (stream?.agentName ?? agentName ?? 'Agent').slice(0, 2).toUpperCase(),
     icon: stream?.icon ?? icon,
@@ -126,7 +128,7 @@ export function NativeCliObservationPanel({
       >
         {onBack ? (
           <button
-            aria-label="Back to agents"
+            aria-label={t('web.workplace.backToAgents')}
             className="workplace-action"
             onClick={onBack}
             style={{
@@ -214,7 +216,7 @@ export function NativeCliObservationPanel({
         ) : null}
         {onClose ? (
           <button
-            aria-label="Close observation"
+            aria-label={t('web.workplace.closeObservation')}
             className="workplace-action"
             onClick={onClose}
             style={{

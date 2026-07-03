@@ -31,6 +31,7 @@ export interface InspectorNodeData extends Record<string, unknown> {
 
 export type InspectorNode = Node<InspectorNodeData, 'inspector'>;
 type InspectorEdge = Edge<Record<string, unknown>>;
+type InspectorT = (key: string, params?: Record<string, string | number>) => string;
 
 export interface InspectorTimelineEntry {
   detail?: string;
@@ -143,7 +144,38 @@ function summarize(nodes: InspectorNode[]): Record<InspectorStatus, number> {
   );
 }
 
-export function buildInspectorFlow(items: UIItem[]): InspectorFlow {
+const EN_INSPECTOR: Record<string, string> = {
+  'web.inspector.node.approval': 'Approval',
+  'web.inspector.node.clarification': 'Clarification',
+  'web.inspector.node.compact': 'Compact',
+  'web.inspector.node.context': 'Context',
+  'web.inspector.node.contextEmpty': 'Prompt, memory, tools, and history are assembled before the model call.',
+  'web.inspector.node.contextMeta': '{{count}} buckets',
+  'web.inspector.node.model': 'Model',
+  'web.inspector.node.modelEmpty': 'Reasoning loop and model response.',
+  'web.inspector.node.modelTools': '{{count}} tool step(s) requested',
+  'web.inspector.node.output': 'Output',
+  'web.inspector.node.outputEmpty': 'Final assistant output appears here.',
+  'web.inspector.node.reasoningEmpty': 'No reasoning stream observed for this turn.',
+  'web.inspector.node.reasoningSeen': 'Reasoning deltas are grouped separately from the answer.',
+  'web.inspector.node.skill': 'Skill',
+  'web.inspector.node.subagent': 'Subagent',
+  'web.inspector.node.system': 'System',
+  'web.inspector.node.thinking': 'Thinking',
+  'web.inspector.node.tool': 'Tool',
+  'web.inspector.node.turn': 'User turn',
+  'web.inspector.node.turnEmpty': 'Waiting for a prompt.',
+  'web.inspector.segmentMeta': '{{count}} segment(s)',
+  'web.inspector.optionsMeta': '{{count}} options'
+};
+
+const defaultInspectorT: InspectorT = (key, params) => {
+  let value = EN_INSPECTOR[key] ?? key;
+  for (const [name, param] of Object.entries(params ?? {})) value = value.replaceAll(`{{${name}}}`, String(param));
+  return value;
+};
+
+export function buildInspectorFlow(items: UIItem[], t: InspectorT = defaultInspectorT): InspectorFlow {
   const all = dedupeItems(items);
   const messages = all.filter((item): item is Extract<UIItem, { kind: 'message' }> => item.kind === 'message');
   const tools = all.filter((item): item is Extract<UIItem, { kind: 'tool' }> => item.kind === 'tool');
@@ -172,13 +204,13 @@ export function buildInspectorFlow(items: UIItem[]): InspectorFlow {
       'turn',
       { x: 0, y: 80 },
       {
-        detail: user ? textFromMessage(user).slice(0, 88) : 'Waiting for a prompt.',
+        detail: user ? textFromMessage(user).slice(0, 88) : t('web.inspector.node.turnEmpty'),
         eventKind: user?.kind,
         item: user,
         meta: user ? 'accepted' : undefined,
         seq: user?.seq,
         status: user ? messageStatus(user) : 'pending',
-        title: 'User turn',
+        title: t('web.inspector.node.turn'),
         tone: 'turn'
       }
     ),
@@ -188,13 +220,13 @@ export function buildInspectorFlow(items: UIItem[]): InspectorFlow {
       {
         detail: context
           ? `${context.usage.used.toLocaleString()} / ${context.usage.contextLimit.toLocaleString()} tokens`
-          : 'Prompt, memory, tools, and history are assembled before the model call.',
+          : t('web.inspector.node.contextEmpty'),
         eventKind: context?.kind,
         item: context,
-        meta: context ? `${context.usage.segments.length} buckets` : undefined,
+        meta: context ? t('web.inspector.node.contextMeta', { count: context.usage.segments.length }) : undefined,
         seq: context?.seq,
         status: context ? 'done' : user ? 'active' : 'pending',
-        title: 'Context',
+        title: t('web.inspector.node.context'),
         tone: 'context'
       }
     ),
@@ -204,9 +236,9 @@ export function buildInspectorFlow(items: UIItem[]): InspectorFlow {
       {
         detail:
           tools.length > 0
-            ? `${tools.length} tool step${tools.length === 1 ? '' : 's'} requested`
-            : 'Reasoning loop and model response.',
-        meta: assistant.length > 0 ? `${assistant.length} segment${assistant.length === 1 ? '' : 's'}` : undefined,
+            ? t('web.inspector.node.modelTools', { count: tools.length })
+            : t('web.inspector.node.modelEmpty'),
+        meta: assistant.length > 0 ? t('web.inspector.segmentMeta', { count: assistant.length }) : undefined,
         seq: assistant.at(-1)?.seq ?? tools.at(-1)?.seq,
         status: outputErrored
           ? 'error'
@@ -217,7 +249,7 @@ export function buildInspectorFlow(items: UIItem[]): InspectorFlow {
               : user
                 ? 'active'
                 : 'pending',
-        title: 'Model',
+        title: t('web.inspector.node.model'),
         tone: 'model'
       }
     ),
@@ -225,12 +257,10 @@ export function buildInspectorFlow(items: UIItem[]): InspectorFlow {
       'thinking',
       { x: 810, y: -20 },
       {
-        detail: reasoningSeen
-          ? 'Reasoning deltas are grouped separately from the answer.'
-          : 'No reasoning stream observed for this turn.',
+        detail: reasoningSeen ? t('web.inspector.node.reasoningSeen') : t('web.inspector.node.reasoningEmpty'),
         seq: assistant.find(hasReasoning)?.seq,
         status: reasoningActive ? 'active' : reasoningSeen ? 'done' : 'pending',
-        title: 'Thinking',
+        title: t('web.inspector.node.thinking'),
         tone: 'thinking'
       }
     ),
@@ -238,12 +268,12 @@ export function buildInspectorFlow(items: UIItem[]): InspectorFlow {
       'output',
       { x: 1080, y: 80 },
       {
-        detail: lastAssistant ? textFromMessage(lastAssistant).slice(0, 88) : 'Final assistant output appears here.',
+        detail: lastAssistant ? textFromMessage(lastAssistant).slice(0, 88) : t('web.inspector.node.outputEmpty'),
         eventKind: lastAssistant?.kind,
         item: lastAssistant,
         seq: lastAssistant?.seq,
         status: outputErrored ? 'error' : assistantStreaming ? 'active' : assistant.length > 0 ? 'done' : 'pending',
-        title: 'Output',
+        title: t('web.inspector.node.output'),
         tone: 'output'
       }
     )
@@ -262,7 +292,7 @@ export function buildInspectorFlow(items: UIItem[]): InspectorFlow {
           meta: compact.uptoMessageId,
           seq: compact.seq,
           status: 'done',
-          title: 'Compact',
+          title: t('web.inspector.node.compact'),
           tone: 'compact'
         }
       )
@@ -280,7 +310,7 @@ export function buildInspectorFlow(items: UIItem[]): InspectorFlow {
           meta: approval.key,
           seq: approval.seq,
           status: 'blocked',
-          title: `Approval · ${approval.tool}`,
+          title: `${t('web.inspector.node.approval')} · ${approval.tool}`,
           tone: 'approval'
         }
       )
@@ -295,10 +325,12 @@ export function buildInspectorFlow(items: UIItem[]): InspectorFlow {
           detail: clarification.question,
           eventKind: clarification.kind,
           item: clarification,
-          meta: clarification.options ? `${clarification.options.length} options` : undefined,
+          meta: clarification.options
+            ? t('web.inspector.optionsMeta', { count: clarification.options.length })
+            : undefined,
           seq: clarification.seq,
           status: 'blocked',
-          title: 'Clarification',
+          title: t('web.inspector.node.clarification'),
           tone: 'clarification'
         }
       )
@@ -317,7 +349,7 @@ export function buildInspectorFlow(items: UIItem[]): InspectorFlow {
           meta: toolItem.status === 'running' ? undefined : toolItem.status,
           seq: toolItem.seq,
           status: toolItem.status === 'running' ? 'active' : toolItem.status === 'error' ? 'error' : 'done',
-          title: `${tone === 'subagent' ? 'Subagent' : tone === 'skill' ? 'Skill' : tone === 'mcp' ? 'MCP' : 'Tool'} · ${toolItem.tool}`,
+          title: `${tone === 'subagent' ? t('web.inspector.node.subagent') : tone === 'skill' ? t('web.inspector.node.skill') : tone === 'mcp' ? 'MCP' : t('web.inspector.node.tool')} · ${toolItem.tool}`,
           tone
         }
       )
@@ -335,7 +367,7 @@ export function buildInspectorFlow(items: UIItem[]): InspectorFlow {
           meta: system.level,
           seq: system.seq,
           status: system.level === 'error' ? 'error' : 'done',
-          title: 'System',
+          title: t('web.inspector.node.system'),
           tone: 'system'
         }
       )

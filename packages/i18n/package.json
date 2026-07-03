@@ -14,7 +14,7 @@
   "imports": {
     "#catalog-types": {
       "monad-typecheck": "./src/catalog-types.typecheck.ts",
-      "default": "./src/generated/catalog-types.ts"
+      "default": "./src/catalog-types.ts"
     }
   },
   "module": "src/index.ts",

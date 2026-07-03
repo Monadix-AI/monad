@@ -42,7 +42,9 @@ packages/home/config.init.json
 config.schema.json
 next-env.d.ts
 apps/monad/src/generated/licenses.json
-packages/i18n/src/generated/
+packages/i18n/src/catalog-types.ts
+packages/i18n/src/paraglide/
+packages/i18n/src/paraglide-input/
 packages/protocol/vendor/codex-app-server/
 .next
 

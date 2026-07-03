@@ -141,10 +141,11 @@ function FollowButton({
   nativeCliSessionId?: string;
   onFollowNativeCliSession?: (id: string) => void;
 }): React.ReactElement | null {
+  const t = useT();
   if (!nativeCliSessionId || !onFollowNativeCliSession) return null;
   return (
     <button
-      aria-label="Observe"
+      aria-label={t('web.workplace.observe')}
       className="workplace-action"
       onClick={() => onFollowNativeCliSession(nativeCliSessionId)}
       style={{
@@ -162,7 +163,7 @@ function FollowButton({
         fontWeight: 600,
         padding: 0
       }}
-      title="Observe"
+      title={t('web.workplace.observe')}
       type="button"
     >
       <HugeiconsIcon
@@ -334,6 +335,7 @@ export function MessageBubbleContent({
   hasText: boolean;
   msg: Message;
 }): React.ReactElement | null {
+  const t = useT();
   const agentContent = agent ? (
     <MarkdownWithMentions
       streaming={msg.streaming}
@@ -363,7 +365,9 @@ export function MessageBubbleContent({
           ) : null}
         </span>
       ) : msg.streaming ? (
-        <span style={{ color: 'var(--muted-foreground)', fontFamily: mono, fontSize: 13 }}>working...</span>
+        <span style={{ color: 'var(--muted-foreground)', fontFamily: mono, fontSize: 13 }}>
+          {t('web.workplace.working')}
+        </span>
       ) : null}
     </>
   );
@@ -766,7 +770,7 @@ export function ChatTranscript({ room }: { room: ProjectCanvas }): React.ReactEl
       />
       {atBottom ? null : (
         <button
-          aria-label="Jump to latest messages"
+          aria-label={t('web.workplace.jumpLatest')}
           className="workplace-action"
           onClick={() => listRef.current?.scrollToBottom('smooth')}
           style={{
@@ -786,7 +790,7 @@ export function ChatTranscript({ room }: { room: ProjectCanvas }): React.ReactEl
             boxShadow: '0 10px 28px -18px rgb(0 0 0 / 0.45), var(--shadow-sm)',
             color: 'var(--foreground)'
           }}
-          title="Jump to latest messages"
+          title={t('web.workplace.jumpLatest')}
           type="button"
         >
           <HugeiconsIcon

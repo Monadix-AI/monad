@@ -5,6 +5,7 @@ import { ProductIcon } from '@monad/ui';
 import { useHotkeys } from '@tanstack/react-hotkeys';
 import { useEffect, useRef, useState } from 'react';
 
+import { useT } from '@/components/I18nProvider';
 import { AgentIdentity, AgentInstanceAvatar, ghostButtonStyle, inkButtonStyle, resolveProductIcon } from './Bits';
 import { buildClarifyAnswer } from './clarify-answer';
 import { boxR, mono, sans } from './styles';
@@ -18,6 +19,7 @@ export function QuestionStack({
   onAnswer: (requestId: string, answer: string) => void;
   question: QuestionView;
 }): React.ReactElement {
+  const t = useT();
   const [selected, setSelected] = useState<string[]>([]);
   const [other, setOther] = useState('');
   const panelRef = useRef<HTMLDivElement>(null);
@@ -127,7 +129,7 @@ export function QuestionStack({
               name={displayAgent.name}
               nameStyle={{ fontSize: 14, fontWeight: 700 }}
             />
-            <span style={{ color: 'var(--muted-foreground)', fontSize: 13 }}>asked you a question</span>
+            <span style={{ color: 'var(--muted-foreground)', fontSize: 13 }}>{t('web.workplace.askedQuestion')}</span>
           </div>
         </div>
         <div style={{ fontFamily: sans, fontSize: 14, lineHeight: 1.45, whiteSpace: 'pre-wrap', paddingLeft: 35 }}>
@@ -237,7 +239,7 @@ export function QuestionStack({
                 {question.options.length + 1}
               </span>
               <textarea
-                aria-label="Other answer"
+                aria-label={t('web.workplace.otherAnswer')}
                 onChange={(event) => setOther(event.target.value)}
                 onKeyDown={(event) => {
                   if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
@@ -245,7 +247,7 @@ export function QuestionStack({
                     submit();
                   }
                 }}
-                placeholder="Other…"
+                placeholder={t('web.workplace.otherPlaceholder')}
                 ref={otherRef}
                 rows={1}
                 style={{

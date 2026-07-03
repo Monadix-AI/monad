@@ -286,7 +286,7 @@ export function SessionSidebar({
         </div>
       </div>
       <hr
-        aria-label="Resize sidebar"
+        aria-label={t('web.shell.resizeSidebar')}
         aria-orientation="vertical"
         aria-valuemax={MAX_SIDEBAR_WIDTH}
         aria-valuemin={MIN_SIDEBAR_WIDTH}

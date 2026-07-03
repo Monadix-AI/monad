@@ -14,6 +14,7 @@ import { checkDaemonVersion } from '@monad/client';
 import { Button, cn, Input, Label } from '@monad/ui';
 import { useState } from 'react';
 
+import { useT } from '@/components/I18nProvider';
 import {
   Dialog,
   DialogContent,
@@ -33,6 +34,7 @@ export function RemoteDaemonDialog({
   onOpenChange: (open: boolean) => void;
   open: boolean;
 }) {
+  const t = useT();
   const [url, setUrl] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [check, setCheck] = useState<
@@ -40,7 +42,14 @@ export function RemoteDaemonDialog({
   >({ status: 'idle' });
   const checking = check.status === 'checking';
   const trimmedUrl = url.trim();
-  const normalizedPreview = trimmedUrl ? normalizeDaemonUrl(trimmedUrl) : null;
+  const daemonUrlMessages = {
+    clean: t('web.remoteDaemon.urlErrorClean'),
+    empty: t('web.remoteDaemon.urlErrorEmpty'),
+    host: t('web.remoteDaemon.urlErrorHost'),
+    invalid: t('web.remoteDaemon.urlErrorInvalid'),
+    protocol: t('web.remoteDaemon.urlErrorProtocol')
+  };
+  const normalizedPreview = trimmedUrl ? normalizeDaemonUrl(trimmedUrl, daemonUrlMessages) : null;
   const previewUrl = normalizedPreview && !normalizedPreview.error ? normalizedPreview.url : null;
 
   const reset = () => {
@@ -49,7 +58,7 @@ export function RemoteDaemonDialog({
   };
 
   async function handleConnect() {
-    const normalized = normalizeDaemonUrl(url);
+    const normalized = normalizeDaemonUrl(url, daemonUrlMessages);
     if (normalized.error) {
       setError(normalized.error);
       return;
@@ -64,13 +73,13 @@ export function RemoteDaemonDialog({
       result = await checkDaemonVersion(normalizedUrl);
     } catch {
       setCheck({ status: 'idle' });
-      setError('Cannot connect. Check that the URL is reachable and the remote Daemon allows browser access.');
+      setError(t('web.remoteDaemon.connectError'));
       return;
     }
     setCheck({ status: 'done', result });
 
     if (!result.compatible) {
-      setError(result.reason || 'Cannot connect to a compatible Monad Daemon.');
+      setError(result.reason || t('web.remoteDaemon.compatError'));
       return;
     }
 
@@ -99,16 +108,14 @@ export function RemoteDaemonDialog({
               icon={ServerStack01Icon}
             />
           </div>
-          <DialogTitle>Connect remote Daemon</DialogTitle>
-          <DialogDescription className="max-w-[32rem]">
-            Add a Monad Daemon running on another machine. Monad verifies the URL before saving it to the Daemon menu.
-          </DialogDescription>
+          <DialogTitle>{t('web.remoteDaemon.title')}</DialogTitle>
+          <DialogDescription className="max-w-[32rem]">{t('web.remoteDaemon.desc')}</DialogDescription>
         </DialogHeader>
 
         <div className="flex flex-col gap-3">
           <div className="flex items-center justify-between gap-3">
-            <Label htmlFor="remote-daemon-url">Daemon URL</Label>
-            <span className="text-muted-foreground text-xs">HTTP or HTTPS</span>
+            <Label htmlFor="remote-daemon-url">{t('web.remoteDaemon.urlLabel')}</Label>
+            <span className="text-muted-foreground text-xs">{t('web.remoteDaemon.urlProtocol')}</span>
           </div>
           <Input
             aria-describedby="remote-daemon-url-help remote-daemon-status"
@@ -130,7 +137,7 @@ export function RemoteDaemonDialog({
             className="text-muted-foreground text-xs"
             id="remote-daemon-url-help"
           >
-            Include the protocol, host, and optional port or path. Do not include credentials or query parameters.
+            {t('web.remoteDaemon.urlHelp')}
           </p>
 
           <div
@@ -165,37 +172,35 @@ export function RemoteDaemonDialog({
             <div className="min-w-0 space-y-0.5">
               <p className={cn('font-medium', !error && 'text-foreground')}>
                 {checking
-                  ? 'Checking Daemon compatibility'
+                  ? t('web.remoteDaemon.checking')
                   : error
                     ? error
                     : previewUrl
-                      ? 'Ready to connect'
-                      : 'Enter a remote Daemon URL'}
+                      ? t('web.remoteDaemon.ready')
+                      : t('web.remoteDaemon.enterUrl')}
               </p>
               <p className={cn('break-all text-xs', error ? 'text-destructive/80' : 'text-muted-foreground')}>
                 {checking
-                  ? 'Monad is calling the remote health endpoint.'
+                  ? t('web.remoteDaemon.checkingHint')
                   : error
-                    ? 'Fix the URL or remote Daemon access settings, then try again.'
+                    ? t('web.remoteDaemon.fixHint')
                     : previewUrl
                       ? previewUrl
-                      : 'A successful connection is saved locally for future sessions.'}
+                      : t('web.remoteDaemon.savedHint')}
               </p>
             </div>
           </div>
         </div>
 
         <DialogFooter className="items-center gap-2 sm:justify-between">
-          <p className="text-muted-foreground text-xs sm:max-w-[16rem]">
-            You can switch back to the local Daemon from this menu.
-          </p>
+          <p className="text-muted-foreground text-xs sm:max-w-[16rem]">{t('web.remoteDaemon.localHint')}</p>
           <div className="flex w-full flex-col-reverse gap-2 sm:w-auto sm:flex-row">
             <Button
               disabled={checking}
               onClick={() => onOpenChange(false)}
               variant="outline"
             >
-              Cancel
+              {t('web.cancel')}
             </Button>
             <Button
               disabled={checking || !trimmedUrl}
@@ -207,10 +212,10 @@ export function RemoteDaemonDialog({
                     className="animate-spin"
                     icon={LoaderPinwheelIcon}
                   />
-                  Connecting
+                  {t('web.remoteDaemon.connecting')}
                 </>
               ) : (
-                'Connect'
+                t('web.remoteDaemon.connect')
               )}
             </Button>
           </div>

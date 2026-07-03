@@ -4,21 +4,21 @@ import { changedParaglideScopes, generatedFilesMatch } from '../../i18n.ts';
 
 test('generatedFilesMatch requires exact path and content matches', () => {
   const expected = new Map([
-    ['/repo/generated/catalog-types.ts', 'types'],
-    ['/repo/generated/paraglide-input/en.json', '{"hello":"Hello"}\n']
+    ['/repo/src/catalog-types.ts', 'types'],
+    ['/repo/src/paraglide-input/en.json', '{"hello":"Hello"}\n']
   ]);
 
   expect(generatedFilesMatch(expected, new Map(expected))).toBe(true);
-  expect(generatedFilesMatch(expected, new Map([['/repo/generated/catalog-types.ts', 'types']]))).toBe(false);
-  expect(
-    generatedFilesMatch(expected, new Map([...expected, ['/repo/generated/paraglide-input/extra.json', '{}\n']]))
-  ).toBe(false);
+  expect(generatedFilesMatch(expected, new Map([['/repo/src/catalog-types.ts', 'types']]))).toBe(false);
+  expect(generatedFilesMatch(expected, new Map([...expected, ['/repo/src/paraglide-input/extra.json', '{}\n']]))).toBe(
+    false
+  );
   expect(
     generatedFilesMatch(
       expected,
       new Map([
-        ['/repo/generated/catalog-types.ts', 'types'],
-        ['/repo/generated/paraglide-input/en.json', '{"hello":"Hi"}\n']
+        ['/repo/src/catalog-types.ts', 'types'],
+        ['/repo/src/paraglide-input/en.json', '{"hello":"Hi"}\n']
       ])
     )
   ).toBe(false);
@@ -31,7 +31,7 @@ test('changedParaglideScopes maps locale JSON edits to the owning Paraglide scop
   expect(
     changedParaglideScopes(['packages/i18n/src/locales/en/web.json', 'packages/i18n/src/locales/en/cli.json'])
   ).toEqual(['cli', 'web']);
-  expect(changedParaglideScopes(['packages/i18n/src/generated/catalog-types.ts'])).toEqual([]);
+  expect(changedParaglideScopes(['packages/i18n/src/catalog-types.ts'])).toEqual([]);
 });
 
 test('i18n package exposes a start:dev watcher script', async () => {

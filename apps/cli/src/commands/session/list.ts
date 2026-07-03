@@ -1,6 +1,7 @@
 import type { SessionState } from '@monad/protocol';
 import type { SessionCommandDef } from './types.ts';
 
+import { t } from '../../lib/i18n.ts';
 import { dim, json, out } from '../../lib/output.ts';
 import { renderTable } from '../../lib/table.ts';
 import { requireTreatyData } from '../../lib/treaty.ts';
@@ -20,7 +21,7 @@ export const command: SessionCommandDef = {
     );
     json(sessions);
     if (sessions.length === 0) {
-      out(dim('no sessions'));
+      out(dim(t('cli.session.list.empty')));
       return;
     }
     const rows = sessions.map((s) => [
@@ -28,6 +29,11 @@ export const command: SessionCommandDef = {
       s.title,
       [s.state, s.archived ? 'archived' : null].filter(Boolean).join(' ')
     ]);
-    out(renderTable(['SESSION', 'TITLE', 'STATE'], rows));
+    out(
+      renderTable(
+        [t('cli.session.list.headerSession'), t('cli.session.list.headerTitle'), t('cli.session.list.headerState')],
+        rows
+      )
+    );
   }
 };

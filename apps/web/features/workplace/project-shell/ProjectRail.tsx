@@ -3,11 +3,9 @@ import type { ProjectController } from '../use-project';
 import { Key01Icon, LoaderPinwheelIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 
+import { useT } from '@/components/I18nProvider';
 import { MiniTag, PresenceDot } from '../Bits';
 import { mono, sans, sectionLabel } from '../styles';
-
-const presenceLabel = (presence: ProjectController['railAgents'][number]['presence']): string =>
-  presence === 'needs-login' ? 'needs login' : presence;
 
 export function ProjectRail({
   project,
@@ -18,6 +16,7 @@ export function ProjectRail({
   onStartNativeCliAuth?: (agentName: string) => void;
   startingNativeCliAuthAgent?: string | null;
 }): React.ReactElement {
+  const t = useT();
   const room = project;
   return (
     <div
@@ -40,12 +39,12 @@ export function ProjectRail({
           justifyContent: 'space-between'
         }}
       >
-        <span style={{ fontFamily: sans, fontSize: 15, fontWeight: 650 }}>Workspace</span>
+        <span style={{ fontFamily: sans, fontSize: 15, fontWeight: 650 }}>{t('web.workplace.workspace')}</span>
         <span style={{ fontFamily: mono, fontSize: 12, color: 'var(--muted-foreground)' }}>▾</span>
       </div>
 
       <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-        <div style={{ ...sectionLabel, padding: '18px 12px 7px' }}>PROJECTS</div>
+        <div style={{ ...sectionLabel, padding: '18px 12px 7px' }}>{t('web.workplace.projects')}</div>
         <ul
           style={{
             flex: 1,
@@ -111,7 +110,7 @@ export function ProjectRail({
         </ul>
       </div>
 
-      <div style={{ ...sectionLabel, padding: '20px 12px 7px' }}>AGENTS</div>
+      <div style={{ ...sectionLabel, padding: '20px 12px 7px' }}>{t('web.workplace.agents')}</div>
       <div style={{ padding: '0 8px 12px', display: 'flex', flexDirection: 'column', gap: 1 }}>
         {room.railAgents.map((a) => {
           const canStartAuth = a.presence === 'needs-login' && a.id.startsWith('native-cli:') && onStartNativeCliAuth;
@@ -139,7 +138,7 @@ export function ProjectRail({
               <MiniTag tag={a.tag} />
               {canStartAuth ? (
                 <button
-                  aria-label={`Connect ${a.name}`}
+                  aria-label={t('web.workplace.connectAgent', { name: a.name })}
                   className="workplace-action"
                   disabled={startingAuth}
                   onClick={() => onStartNativeCliAuth?.(a.name)}
@@ -156,7 +155,7 @@ export function ProjectRail({
                     color: 'var(--foreground)',
                     flex: 'none'
                   }}
-                  title="Open provider login"
+                  title={t('web.workplace.openProviderLogin')}
                   type="button"
                 >
                   {startingAuth ? (
@@ -173,7 +172,7 @@ export function ProjectRail({
                 </button>
               ) : (
                 <span style={{ marginLeft: 'auto', fontFamily: mono, fontSize: 10, textTransform: 'uppercase' }}>
-                  {presenceLabel(a.presence)}
+                  {a.presence === 'needs-login' ? t('web.workplace.presenceNeedsLogin') : a.presence}
                 </span>
               )}
             </div>

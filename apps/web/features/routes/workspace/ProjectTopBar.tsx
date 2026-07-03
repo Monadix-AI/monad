@@ -219,7 +219,7 @@ function ProjectTopBarExperienceSwitch({
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button
-          aria-label="Project view mode"
+          aria-label={t('web.project.viewMode')}
           className="project-topbar-view"
           type="button"
         >
@@ -269,6 +269,7 @@ export function ProjectTopBar({
   onModeChange,
   onOpenSettings
 }: ProjectTopBarProps) {
+  const t = useT();
   const activeExperience = getProjectExperience(mode, experiences);
 
   return (
@@ -464,10 +465,10 @@ export function ProjectTopBar({
           onModeChange={onModeChange}
         />
         <button
-          aria-label="Open project settings"
+          aria-label={t('web.project.openSettings')}
           className="project-topbar-settings"
           onClick={onOpenSettings}
-          title="Project settings"
+          title={t('web.project.settings')}
           type="button"
         >
           <HugeiconsIcon

@@ -13,6 +13,8 @@ import { mermaid } from '@streamdown/mermaid';
 import { createContext, memo, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { Streamdown } from 'streamdown';
 
+import { useT } from '@/components/I18nProvider';
+
 export type MessageProps = HTMLAttributes<HTMLDivElement> & {
   from: UIMessage['role'];
 };
@@ -210,11 +212,12 @@ const _MessageBranchSelector = ({ className, ...props }: MessageBranchSelectorPr
 type MessageBranchPreviousProps = ComponentProps<typeof Button>;
 
 const _MessageBranchPrevious = ({ children, ...props }: MessageBranchPreviousProps) => {
+  const t = useT();
   const { goToPrevious, totalBranches } = useMessageBranch();
 
   return (
     <Button
-      aria-label="Previous branch"
+      aria-label={t('web.message.previousBranch')}
       disabled={totalBranches <= 1}
       onClick={goToPrevious}
       size="icon-sm"
@@ -235,11 +238,12 @@ const _MessageBranchPrevious = ({ children, ...props }: MessageBranchPreviousPro
 type MessageBranchNextProps = ComponentProps<typeof Button>;
 
 const _MessageBranchNext = ({ children, ...props }: MessageBranchNextProps) => {
+  const t = useT();
   const { goToNext, totalBranches } = useMessageBranch();
 
   return (
     <Button
-      aria-label="Next branch"
+      aria-label={t('web.message.nextBranch')}
       disabled={totalBranches <= 1}
       onClick={goToNext}
       size="icon-sm"

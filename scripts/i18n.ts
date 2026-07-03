@@ -9,9 +9,10 @@ const ROOT = join(import.meta.dir, '..');
 const LOCALES_DIR = join(import.meta.dir, '..', 'packages', 'i18n', 'src', 'locales');
 const EN_DIR = join(LOCALES_DIR, 'en');
 const ZH_DIR = join(LOCALES_DIR, 'zh');
-const GENERATED_PATH = join(import.meta.dir, '..', 'packages', 'i18n', 'src', 'generated', 'catalog-types.ts');
-const PARAGLIDE_INPUT_DIR = join(import.meta.dir, '..', 'packages', 'i18n', 'src', 'generated', 'paraglide-input');
-const PARAGLIDE_OUTPUT_DIR = join(import.meta.dir, '..', 'packages', 'i18n', 'src', 'generated', 'paraglide');
+const I18N_SRC_DIR = join(import.meta.dir, '..', 'packages', 'i18n', 'src');
+const GENERATED_PATH = join(I18N_SRC_DIR, 'catalog-types.ts');
+const PARAGLIDE_INPUT_DIR = join(I18N_SRC_DIR, 'paraglide-input');
+const PARAGLIDE_OUTPUT_DIR = join(I18N_SRC_DIR, 'paraglide');
 const PLURAL_SUFFIXES = new Set(['zero', 'one', 'two', 'few', 'many', 'other']);
 const PARAM_RE = /{{\s*([A-Za-z_$][\w$]*)\s*}}/g;
 const PARAGLIDE_SCOPES = {
@@ -499,7 +500,7 @@ async function runParaglideCompileInDir(
 async function checkParaglideCompiles(inputFiles: Map<string, string>, diagnostics: Diagnostic[]): Promise<void> {
   const tmp = await mkdtemp(join(tmpdir(), 'monad-paraglide-'));
   try {
-    const tmpInputDir = join(tmp, 'packages', 'i18n', 'src', 'generated', 'paraglide-input');
+    const tmpInputDir = join(tmp, 'packages', 'i18n', 'src', 'paraglide-input');
     const tmpOutDir = join(tmp, 'paraglide');
     const tmpInputFiles = new Map(
       [...inputFiles].map(([path, contents]) => [join(tmpInputDir, relative(PARAGLIDE_INPUT_DIR, path)), contents])

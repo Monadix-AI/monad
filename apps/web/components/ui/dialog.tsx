@@ -6,6 +6,8 @@ import { Button, cn } from '@monad/ui';
 import { Dialog as DialogPrimitive } from 'radix-ui';
 import * as React from 'react';
 
+import { useT } from '@/components/I18nProvider';
+
 function Dialog({ ...props }: React.ComponentProps<typeof DialogPrimitive.Root>) {
   return (
     <DialogPrimitive.Root
@@ -63,6 +65,7 @@ function DialogContent({
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean;
 }) {
+  const t = useT();
   return (
     <DialogPortal data-slot="dialog-portal">
       <DialogOverlay />
@@ -81,7 +84,7 @@ function DialogContent({
             data-slot="dialog-close"
           >
             <HugeiconsIcon icon={Cancel01Icon} />
-            <span className="sr-only">Close</span>
+            <span className="sr-only">{t('web.close')}</span>
           </DialogPrimitive.Close>
         )}
       </DialogPrimitive.Content>
@@ -107,6 +110,7 @@ function DialogFooter({
 }: React.ComponentProps<'div'> & {
   showCloseButton?: boolean;
 }) {
+  const t = useT();
   return (
     <div
       className={cn('flex flex-col-reverse gap-2 sm:flex-row sm:justify-end', className)}
@@ -116,7 +120,7 @@ function DialogFooter({
       {children}
       {showCloseButton && (
         <DialogPrimitive.Close asChild>
-          <Button variant="outline">Close</Button>
+          <Button variant="outline">{t('web.close')}</Button>
         </DialogPrimitive.Close>
       )}
     </div>

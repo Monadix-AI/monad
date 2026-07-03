@@ -5,6 +5,8 @@ import type { CSSProperties } from 'react';
 
 import { useEffect, useRef } from 'react';
 
+import { useT } from '@/components/I18nProvider';
+
 const TERMINAL_THEME: ITheme = {
   background: '#0b0f14',
   foreground: '#d7dde8',
@@ -45,6 +47,7 @@ export function CliTerminalOutput({
   resetKey,
   style
 }: CliTerminalOutputProps): React.ReactElement {
+  const t = useT();
   const hostRef = useRef<HTMLDivElement | null>(null);
   const terminalRef = useRef<import('ghostty-web').Terminal | null>(null);
   const fitRef = useRef<import('ghostty-web').FitAddon | null>(null);
@@ -157,7 +160,7 @@ export function CliTerminalOutput({
       }}
     >
       <div
-        aria-label="CLI output"
+        aria-label={t('web.workplace.cliOutput')}
         ref={hostRef}
         role="log"
         style={{ height: '100%', minHeight }}

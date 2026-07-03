@@ -3,17 +3,19 @@ import type { ActivityRow, ActivityStatus } from '../types';
 
 import { useCallback, useState } from 'react';
 
+import { useT } from '@/components/I18nProvider';
 import { VirtualList } from '@/components/ui/VirtualList';
 import { mono, sans } from '../styles';
 import { WorkOutput } from './WorkOutput';
 
 type Filter = 'all' | 'tools' | 'delegations';
 
-const FILTERS: { key: Filter; label: string }[] = [
-  { key: 'all', label: 'All' },
-  { key: 'tools', label: 'Tool calls' },
-  { key: 'delegations', label: 'Delegations' }
-];
+const FILTERS: { key: Filter; labelKey: 'web.activity.all' | 'web.activity.toolCalls' | 'web.activity.delegations' }[] =
+  [
+    { key: 'all', labelKey: 'web.activity.all' },
+    { key: 'tools', labelKey: 'web.activity.toolCalls' },
+    { key: 'delegations', labelKey: 'web.activity.delegations' }
+  ];
 
 const statusColor = (s: ActivityStatus): string =>
   s === 'ok' ? 'var(--success)' : s === 'error' ? 'var(--destructive)' : 'var(--accent-blue)';
@@ -23,8 +25,10 @@ const statusBg = (s: ActivityStatus): string =>
     : s === 'error'
       ? 'color-mix(in srgb, var(--destructive) 14%, transparent)'
       : 'color-mix(in srgb, var(--accent-blue) 16%, transparent)';
-const statusLabel = (s: ActivityStatus): string =>
-  s === 'ok' ? 'Done' : s === 'error' ? 'Needs attention' : 'Running';
+const statusLabelKey = (
+  s: ActivityStatus
+): 'web.activity.done' | 'web.activity.needsAttention' | 'web.activity.running' =>
+  s === 'ok' ? 'web.activity.done' : s === 'error' ? 'web.activity.needsAttention' : 'web.activity.running';
 
 function matches(row: ActivityRow, f: Filter): boolean {
   if (f === 'all') return true;
@@ -70,6 +74,7 @@ function ActivityRowView({
   onNativeInput: (id: string, input: string) => void;
   onNativeStop: (id: string) => void;
 }): React.ReactElement {
+  const t = useT();
   const [input, setInput] = useState('');
   const nativeCli = row.tool.startsWith('native-cli:');
   const send = (): void => {
@@ -111,7 +116,7 @@ function ActivityRowView({
                   send();
                 }
               }}
-              placeholder="Send input to CLI"
+              placeholder={t('web.activity.sendInput')}
               style={{
                 flex: 1,
                 minWidth: 0,
@@ -142,7 +147,7 @@ function ActivityRowView({
               }}
               type="button"
             >
-              Send
+              {t('web.api.send')}
             </button>
             <button
               className="workplace-action"
@@ -159,7 +164,7 @@ function ActivityRowView({
               }}
               type="button"
             >
-              Stop
+              {t('web.activity.stop')}
             </button>
           </div>
         ) : null}
@@ -177,13 +182,14 @@ function ActivityRowView({
           marginTop: -1
         }}
       >
-        {statusLabel(row.status)}
+        {t(statusLabelKey(row.status))}
       </span>
     </div>
   );
 }
 
 export function ActivityLog({ room }: { room: ProjectCanvas }): React.ReactElement {
+  const t = useT();
   const [filter, setFilter] = useState<Filter>('all');
   // Lifted out of WorkOutput so an expanded row survives Virtuoso unmounting it on scroll.
   const [expandedIds, setExpandedIds] = useState<ReadonlySet<string>>(() => new Set());
@@ -213,7 +219,7 @@ export function ActivityLog({ room }: { room: ProjectCanvas }): React.ReactEleme
         }}
       >
         <span style={{ fontFamily: sans, fontSize: 13, fontWeight: 600, color: 'var(--foreground)', marginRight: 4 }}>
-          Activity
+          {t('web.activity.title')}
         </span>
         {FILTERS.map((f) => {
           const active = filter === f.key;
@@ -234,12 +240,12 @@ export function ActivityLog({ room }: { room: ProjectCanvas }): React.ReactEleme
               }}
               type="button"
             >
-              {f.label}
+              {t(f.labelKey)}
             </button>
           );
         })}
         <span style={{ marginLeft: 'auto', fontFamily: mono, fontSize: 11, color: 'var(--muted-foreground)' }}>
-          Live updates
+          {t('web.activity.liveUpdates')}
         </span>
       </div>
 
@@ -264,7 +270,7 @@ export function ActivityLog({ room }: { room: ProjectCanvas }): React.ReactEleme
               background: 'var(--muted)'
             }}
           >
-            No activity yet. Tool calls, approvals, and delegated work will appear here after an agent starts working.
+            {t('web.activity.empty')}
           </div>
         </div>
       ) : (

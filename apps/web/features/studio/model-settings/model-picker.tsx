@@ -8,6 +8,7 @@ import { ModelProviderType } from '@monad/protocol';
 import { cn } from '@monad/ui';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
+import { useT } from '@/components/I18nProvider';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useProviderMeta } from '@/lib/ProviderMeta';
 import { ContextLimitTag, ModelOptionPriceTag } from './model-picker-metadata';
@@ -193,6 +194,7 @@ function ProviderModelSelect({
   providers: ProviderView[];
   value: string;
 }) {
+  const t = useT();
   const { metaFor } = useProviderMeta();
   const isNoneValue = value === ROLE_NONE || !value;
   const parsed = isNoneValue ? null : splitModelSpec(value);
@@ -262,10 +264,10 @@ function ProviderModelSelect({
   if (view === 'provider') {
     return (
       <div className="flex flex-col gap-1.5">
-        <div className="px-1 pb-1 font-medium text-muted-foreground text-xs">Provider</div>
+        <div className="px-1 pb-1 font-medium text-muted-foreground text-xs">{t('web.modelPicker.provider')}</div>
         <div className="max-h-72 overflow-y-auto">
           {providers.length === 0 ? (
-            <p className="px-2 py-1.5 text-muted-foreground text-xs">No providers</p>
+            <p className="px-2 py-1.5 text-muted-foreground text-xs">{t('web.modelPicker.noProviders')}</p>
           ) : (
             providers.map((provider) => {
               const meta = metaFor(provider.type);
@@ -312,7 +314,7 @@ function ProviderModelSelect({
     <div className="flex flex-col gap-2">
       <div className="flex items-center gap-2 border-border/50 border-b px-1 pb-2">
         <button
-          aria-label="Back to providers"
+          aria-label={t('web.modelPicker.backProviders')}
           className="flex size-7 shrink-0 items-center justify-center rounded-(--radius-sm) text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
           onClick={() => setView('provider')}
           type="button"

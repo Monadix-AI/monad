@@ -270,7 +270,9 @@ export function ProfileCard({
             type="button"
           >
             <span className="truncate font-semibold text-sm hover:underline">
-              {profile.alias || <span className="font-normal text-muted-foreground italic">Untitled</span>}
+              {profile.alias || (
+                <span className="font-normal text-muted-foreground italic">{t('web.model.untitled')}</span>
+              )}
             </span>
             {isDefault && (
               <span className="shrink-0 rounded bg-primary/12 px-1.5 py-0.5 font-medium text-[10px] text-primary">
@@ -438,7 +440,7 @@ export function ProfileCard({
                   <div className="flex h-6 min-w-[4.75rem] shrink-0 items-center justify-end">
                     {!row.modelId && !HIDE_EFFORT_ROLES.has(row.key) ? (
                       <span className="inline-flex rounded-full bg-background px-2 py-0.5 text-[11px] text-muted-foreground ring-1 ring-border/70">
-                        Inherited default model
+                        {t('web.model.inheritedDefault')}
                       </span>
                     ) : efforts.length > 0 ? (
                       <Popover
@@ -450,7 +452,7 @@ export function ProfileCard({
                             className="inline-flex h-6 items-center gap-1 rounded-(--radius-sm) px-1.5 text-[11px] transition-colors hover:bg-muted/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                             type="button"
                           >
-                            <span className="text-muted-foreground">Effort</span>
+                            <span className="text-muted-foreground">{t('web.reasoning.effort')}</span>
                             <span className="font-medium text-primary">{formatEffortLabel(value)}</span>
                           </button>
                         </PopoverTrigger>

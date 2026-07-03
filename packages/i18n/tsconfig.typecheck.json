@@ -5,5 +5,5 @@
       "#catalog-types": ["./src/catalog-types.typecheck.ts"]
     }
   },
-  "exclude": ["src/generated/paraglide", "src/generated/catalog-types.ts"]
+  "exclude": ["src/paraglide", "src/catalog-types.ts"]
 }

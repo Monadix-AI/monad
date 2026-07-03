@@ -2,6 +2,7 @@ import type { CommandDef } from './types.ts';
 
 import { enableRemoteAccess, getLanIp, getPaths, getTailscaleIp, loadConfig } from '@monad/home';
 
+import { t } from '../lib/i18n.ts';
 import { bold, cyan, dim, green, out, red, yellow } from '../lib/output.ts';
 
 // qrcode-terminal has no @types package; the API is stable and narrow.
@@ -56,28 +57,28 @@ export const command: CommandDef = {
     }
 
     const baseUrl = ip ? `http://${ip}:${port}` : null;
-    const masked = showToken ? token : `${token.slice(0, 6)}…${dim('(--show-token to reveal)')}`;
+    const masked = showToken ? token : `${token.slice(0, 6)}…${dim(t('cli.pair.showTokenHint'))}`;
 
     out('');
-    out(`${green('●')} Remote access ${changed ? 'enabled' : 'already active'}`);
+    out(`${green('●')} ${changed ? t('cli.pair.enabled') : t('cli.pair.alreadyActive')}`);
     out('');
-    out(`  ${bold('URL')}   ${baseUrl ? cyan(baseUrl) : red('(address unavailable)')}`);
-    out(`  ${bold('Token')} ${masked}`);
+    out(`  ${bold(t('cli.pair.urlLabel'))}   ${baseUrl ? cyan(baseUrl) : red(t('cli.pair.addressUnavailable'))}`);
+    out(`  ${bold(t('cli.pair.tokenLabel'))} ${masked}`);
     out('');
 
     if (baseUrl) {
       const payload = JSON.stringify({ url: baseUrl, token });
-      out(dim('  Scan with the monad mobile app:'));
+      out(dim(t('cli.pair.scanHint')));
       out('');
       qr.generate(payload, { small: true }, (qrStr: string) => {
         for (const line of qrStr.split('\n')) out(`  ${line}`);
       });
       out('');
-      out(dim('  Or run: monad pair --rotate  to refresh the token'));
+      out(dim(t('cli.pair.rotateHint')));
     }
 
-    out(`${yellow('!')} Restart the daemon to apply: ${bold('monad restart')}`);
-    out(dim('  (needed so it binds 0.0.0.0 instead of 127.0.0.1)'));
+    out(`${yellow('!')} ${t('cli.pair.restartApply', { cmd: bold('monad restart') })}`);
+    out(dim(t('cli.pair.restartReason')));
     out('');
   }
 };

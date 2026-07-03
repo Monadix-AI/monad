@@ -3,7 +3,7 @@
   "include": ["src", "test"],
   "compilerOptions": {
     "paths": {
-      "#catalog-types": ["./src/generated/catalog-types.ts"]
+      "#catalog-types": ["./src/catalog-types.ts"]
     }
   }
 }

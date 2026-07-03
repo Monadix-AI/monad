@@ -514,7 +514,7 @@ function NativeCliSettingsDialogBody({
             <DialogTitle className={cn('truncate', variant === 'compact' ? 'text-sm' : 'text-base')}>
               {agent.name}
             </DialogTitle>
-            <DialogDescription className="mt-1 text-xs">Configure this native CLI provider.</DialogDescription>
+            <DialogDescription className="mt-1 text-xs">{t('web.nativeCli.configureProvider')}</DialogDescription>
           </span>
         </div>
       </DialogHeader>

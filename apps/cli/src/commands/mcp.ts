@@ -44,7 +44,7 @@ export const command: CommandDef = {
       );
       json(servers);
       if (servers.length === 0) {
-        out(dim('no MCP servers connected'));
+        out(dim(t('cli.mcp.noneConnected')));
         return;
       }
       for (const s of servers) {
@@ -52,10 +52,10 @@ export const command: CommandDef = {
         const meta = dim(`  ${s.source}${s.transport ? `/${s.transport}` : ''}`);
         const tail =
           s.state === 'connected'
-            ? dim(`  ${s.toolCount} tool${s.toolCount === 1 ? '' : 's'}`)
+            ? dim(`  ${t('cli.mcp.toolCount', { count: s.toolCount })}`)
             : s.state === 'disabled'
-              ? dim('  disabled')
-              : red('  failed');
+              ? dim(`  ${t('cli.disabled')}`)
+              : red(`  ${t('cli.failed')}`);
         out(`${dot} ${cyan(s.name)}${meta}${tail}`);
       }
       return;
@@ -131,7 +131,7 @@ export const command: CommandDef = {
         return;
       }
       requireTreatyData(await mcp({ name })[sub].post());
-      out(`${green('✓')} ${cyan(name)} ${dim(sub === 'enable' ? 'enabled' : 'disabled')}`);
+      out(`${green('✓')} ${cyan(name)} ${dim(sub === 'enable' ? t('cli.enabled') : t('cli.disabled'))}`);
       return;
     }
 
@@ -145,7 +145,7 @@ export const command: CommandDef = {
         await client.treaty.v1.settings['mcp-servers'].registry.search.get({ query: { q: query } })
       );
       if (entries.length === 0) {
-        out(dim(`No MCP servers found for "${query}"`));
+        out(dim(t('cli.mcp.noneFound', { query })));
         return;
       }
       for (const e of entries) {
@@ -168,7 +168,7 @@ export const command: CommandDef = {
     const { servers } = requireTreatyData(await mcp.get());
     json(servers);
     if (servers.length === 0) {
-      out(dim('no MCP servers installed — add one with: monad mcp add <name> <command…>'));
+      out(dim(t('cli.mcp.noneInstalled')));
       return;
     }
     for (const s of servers) {

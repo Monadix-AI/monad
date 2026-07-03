@@ -2,6 +2,7 @@ import type { SessionId } from '@monad/protocol';
 import type { SessionCommandDef } from './types.ts';
 
 import { resolveText, streamReply } from '../../lib/chat.ts';
+import { t } from '../../lib/i18n.ts';
 import { cyan, dim, green, out } from '../../lib/output.ts';
 import { requireTreatyData } from '../../lib/treaty.ts';
 import { usageError } from '../types.ts';
@@ -25,7 +26,7 @@ export const command: SessionCommandDef = {
 
     if (flags.detach === true) {
       await client.treaty.v1.sessions({ id: sessionId as SessionId }).messages.post({ text });
-      out(green('sent') + dim(`  → ${sessionId}`));
+      out(green(t('cli.session.send.sent')) + dim(`  → ${sessionId}`));
       return;
     }
 
@@ -48,6 +49,6 @@ export const command: SessionCommandDef = {
     } finally {
       process.off('SIGINT', onSigint);
     }
-    out(dim('done'));
+    out(dim(t('cli.session.send.done')));
   }
 };

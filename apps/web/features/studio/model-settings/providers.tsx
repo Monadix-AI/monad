@@ -110,6 +110,7 @@ export function ProviderCard({
   onEdit: () => void;
   provider: ProviderView;
 }) {
+  const t = useT();
   const { metaFor } = useProviderMeta();
   const meta = metaFor(p.type);
   const Logo = meta.logo;
@@ -137,11 +138,15 @@ export function ProviderCard({
           <span className="min-w-0 truncate font-medium text-sm">{p.label}</span>
           <span className="flex shrink-0 items-center gap-1 text-muted-foreground text-xs">
             <span className={cn('inline-block size-1.5 shrink-0 rounded-full', credDotColor)} />
-            {credCount === 0 ? 'No keys' : `${credCount} key${credCount > 1 ? 's' : ''}`}
-            {okCount > 0 && errCount > 0 && <span className="text-destructive">({errCount} err)</span>}
+            {credCount === 0 ? t('web.model.noKeys') : t('web.model.keyCount', { count: credCount })}
+            {okCount > 0 && errCount > 0 && (
+              <span className="text-destructive">({t('web.model.errorCount', { count: errCount })})</span>
+            )}
           </span>
           {modelCount > 0 && (
-            <span className="shrink-0 text-muted-foreground text-xs">{modelCount.toLocaleString()} models</span>
+            <span className="shrink-0 text-muted-foreground text-xs">
+              {t('web.model.modelCount', { count: modelCount.toLocaleString() })}
+            </span>
           )}
           {detail.isLoadingModels && modelCount === 0 && (
             <HugeiconsIcon
@@ -153,7 +158,7 @@ export function ProviderCard({
         </div>
         <HoverActions>
           <Button
-            aria-label="Edit provider"
+            aria-label={t('web.model.editProvider')}
             className="size-7 text-muted-foreground hover:text-foreground"
             onClick={onEdit}
             size="icon"
@@ -165,7 +170,7 @@ export function ProviderCard({
             <TooltipTrigger asChild>
               <span className="inline-flex">
                 <Button
-                  aria-label="Delete provider"
+                  aria-label={t('web.model.deleteProvider')}
                   className="size-7 text-muted-foreground hover:text-destructive disabled:hover:text-muted-foreground"
                   disabled={!!deleteDisabledReason}
                   onClick={deleteDisabledReason ? undefined : onDelete}
@@ -694,7 +699,7 @@ export function ProviderDialog({
                     {configuredModels.length > 0 && (
                       <div className="-mx-1 overflow-x-auto px-1 pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                         <div
-                          aria-label="Model category"
+                          aria-label={t('web.model.category')}
                           className="flex w-max min-w-full items-center gap-3"
                           role="tablist"
                         >

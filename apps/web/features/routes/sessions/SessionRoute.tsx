@@ -225,7 +225,7 @@ export function SessionRoute({
               viewMessages.length === 0 ? (
                 <div className="mx-auto w-full max-w-4xl px-6 pt-5">
                   <div className="gradient-spotlight-card flex flex-col items-start gap-2.5 px-5 py-5">
-                    <span className="label-mono">Session ready</span>
+                    <span className="label-mono">{t('web.chat.sessionReady')}</span>
                     <p className="poster-heading text-foreground text-xl">{t('web.chat.start')}</p>
                     <p className="max-w-xl text-muted-foreground text-sm">{t('web.chat.hint')}</p>
                   </div>

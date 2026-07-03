@@ -1,6 +1,7 @@
 import type { SessionId } from '@monad/protocol';
 import type { SessionCommandDef } from './types.ts';
 
+import { t } from '../../lib/i18n.ts';
 import { dim, green, json, out } from '../../lib/output.ts';
 import { requireTreatyData } from '../../lib/treaty.ts';
 import { usageError } from '../types.ts';
@@ -15,6 +16,8 @@ export const command: SessionCommandDef = {
     if (!id) throw usageError('usage: monad session reset <sessionId>');
     const { clearedCount } = requireTreatyData(await client.treaty.v1.sessions({ id: id as SessionId }).reset.post());
     json({ clearedCount, sessionId: id });
-    out(green('reset') + dim(`  cleared ${clearedCount} message${clearedCount === 1 ? '' : 's'}  ${id}`));
+    out(
+      green(t('cli.session.reset.reset')) + dim(`  ${t('cli.session.reset.cleared', { count: clearedCount })}  ${id}`)
+    );
   }
 };

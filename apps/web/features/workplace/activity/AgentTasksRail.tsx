@@ -12,6 +12,7 @@ import { HugeiconsIcon } from '@hugeicons/react';
 import { ProductIcon } from '@monad/ui';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { useT } from '@/components/I18nProvider';
 import { AgentIdentity, AgentInstanceAvatar, resolveProductIcon } from '../Bits';
 import { NativeCliObservationPanel } from '../cli/NativeCliStreamModal';
 import { presenceColor, sans, sectionLabel } from '../styles';
@@ -235,6 +236,7 @@ export function groupProjectRailAgents(agents: readonly Participant[]): {
 }
 
 export function AgentTasksRail({ room }: { room: ProjectController }): React.ReactElement {
+  const t = useT();
   const [railWidth, setRailWidth] = useState(DEFAULT_RAIL_WIDTH);
   const [resizing, setResizing] = useState(false);
   const dragStartRef = useRef({ pointerX: 0, width: DEFAULT_RAIL_WIDTH });
@@ -423,7 +425,7 @@ export function AgentTasksRail({ room }: { room: ProjectController }): React.Rea
     >
       <style>{agentStatusRingCss}</style>
       <hr
-        aria-label="Resize project sidebar"
+        aria-label={t('web.workplace.resizeProjectSidebar')}
         aria-orientation="vertical"
         aria-valuemax={MAX_RAIL_WIDTH}
         aria-valuemin={MIN_RAIL_WIDTH}
@@ -447,7 +449,7 @@ export function AgentTasksRail({ room }: { room: ProjectController }): React.Rea
         />
       ) : (
         <>
-          <div style={{ ...sectionLabel, padding: '13px 15px 8px' }}>ACTIVE</div>
+          <div style={{ ...sectionLabel, padding: '13px 15px 8px' }}>{t('web.workplace.active')}</div>
           <div
             className="scwf-scroll"
             style={{
@@ -472,13 +474,13 @@ export function AgentTasksRail({ room }: { room: ProjectController }): React.Rea
                   opacity: 0.6
                 }}
               >
-                No active agents.
+                {t('web.workplace.noActiveAgents')}
               </div>
             ) : null}
             {groups.active.map(renderAgent)}
           </div>
 
-          <div style={{ ...sectionLabel, padding: '13px 15px 8px' }}>STAND-BY</div>
+          <div style={{ ...sectionLabel, padding: '13px 15px 8px' }}>{t('web.workplace.standBy')}</div>
           <div
             className="scwf-scroll"
             style={{
@@ -502,7 +504,7 @@ export function AgentTasksRail({ room }: { room: ProjectController }): React.Rea
                   opacity: 0.6
                 }}
               >
-                No stand-by agents.
+                {t('web.workplace.noStandByAgents')}
               </div>
             ) : null}
             {groups.standBy.map(renderAgent)}

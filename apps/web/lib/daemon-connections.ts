@@ -25,23 +25,42 @@ function storage(): Storage | null {
   return typeof window === 'undefined' ? null : window.localStorage;
 }
 
-export function normalizeDaemonUrl(input: string): { error: string; url?: never } | { error?: never; url: string } {
+export interface DaemonUrlMessages {
+  empty: string;
+  invalid: string;
+  protocol: string;
+  host: string;
+  clean: string;
+}
+
+const DEFAULT_DAEMON_URL_MESSAGES: DaemonUrlMessages = {
+  clean: 'Use only the protocol, host, port, and optional path.',
+  empty: 'Enter the Monad Daemon URL.',
+  host: 'Include a hostname or IP address.',
+  invalid: 'Enter a valid URL.',
+  protocol: 'Use a URL that starts with http:// or https://.'
+};
+
+export function normalizeDaemonUrl(
+  input: string,
+  messages: DaemonUrlMessages = DEFAULT_DAEMON_URL_MESSAGES
+): { error: string; url?: never } | { error?: never; url: string } {
   const trimmed = input.trim();
-  if (!trimmed) return { error: 'Enter the Monad Daemon URL.' };
+  if (!trimmed) return { error: messages.empty };
 
   let parsed: URL;
   try {
     parsed = new URL(trimmed);
   } catch {
-    return { error: 'Enter a valid URL.' };
+    return { error: messages.invalid };
   }
 
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-    return { error: 'Use a URL that starts with http:// or https://.' };
+    return { error: messages.protocol };
   }
-  if (!parsed.hostname) return { error: 'Include a hostname or IP address.' };
+  if (!parsed.hostname) return { error: messages.host };
   if (parsed.username || parsed.password || parsed.search || parsed.hash) {
-    return { error: 'Use only the protocol, host, port, and optional path.' };
+    return { error: messages.clean };
   }
 
   const pathname = parsed.pathname === '/' ? '' : parsed.pathname.replace(/\/+$/, '');

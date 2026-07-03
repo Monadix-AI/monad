@@ -10,6 +10,7 @@ import {
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useMemo, useRef, useState } from 'react';
 
+import { useT } from '@/components/I18nProvider';
 import { studioPath } from '@/features/routes/route-paths';
 import { ComposerShell } from '@/features/session/ComposerShell';
 import { audioBlobToBase64 } from '@/features/session/voice-transcription';
@@ -27,6 +28,7 @@ import { QuestionStack } from './QuestionStack';
 import { mono, sans } from './styles';
 
 export function Composer({ room }: { room: ProjectController }): React.ReactElement {
+  const t = useT();
   const router = useRouter();
   const searchParams = useSearchParams();
   const { data: modelRoles } = useGetRolesQuery(undefined);
@@ -189,11 +191,11 @@ export function Composer({ room }: { room: ProjectController }): React.ReactElem
           editorSlot={
             // biome-ignore lint/a11y/useSemanticElements: contenteditable is required for inline atomic mention chips.
             <div
-              aria-label="Message agents"
+              aria-label={t('web.workplace.messageAgents')}
               aria-multiline
               className="max-h-40 min-h-16 overflow-y-auto px-4 pt-3.5 pb-2 text-[15px] leading-relaxed outline-none empty:before:text-muted-foreground empty:before:content-[attr(data-placeholder)]"
               contentEditable={!submitting}
-              data-placeholder="Ask for follow-up changes"
+              data-placeholder={t('web.workplace.composerPlaceholder')}
               onBlur={() => setMention(null)}
               onDrop={(e) => {
                 e.preventDefault();
@@ -267,7 +269,7 @@ export function Composer({ room }: { room: ProjectController }): React.ReactElem
                     padding: '6px 10px 2px'
                   }}
                 >
-                  Choose an agent
+                  {t('web.workplace.chooseAgent')}
                 </div>
                 {options.map((target, i) => (
                   <button
@@ -317,7 +319,7 @@ export function Composer({ room }: { room: ProjectController }): React.ReactElem
             }
             setMention(null);
           }}
-          placeholder="Ask for follow-up changes"
+          placeholder={t('web.workplace.composerPlaceholder')}
           value={draft}
           voice={{
             modelConfigured: Boolean(

@@ -5,6 +5,8 @@ import type { ProjectExperienceView } from '../types';
 
 import { createElement, useEffect, useMemo, useRef, useState } from 'react';
 
+import { useT } from '@/components/I18nProvider';
+
 type WorkspaceExperienceElement = HTMLElement & {
   monadWorkspaceExperience?: {
     actions: ProjectExperienceView['runtime']['actions'];
@@ -33,6 +35,7 @@ export function WebComponentExperience({
   atom: WorkspaceExperienceDefinition;
   view: ProjectExperienceView;
 }) {
+  const t = useT();
   const ref = useRef<WorkspaceExperienceElement | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const hostApi = useMemo(
@@ -98,7 +101,7 @@ export function WebComponentExperience({
           font-size: 12px;
         }
       `}</style>
-      {loadError ? <div className="workspace-experience-error">Workspace experience failed to load.</div> : null}
+      {loadError ? <div className="workspace-experience-error">{t('web.workplace.experienceLoadFailed')}</div> : null}
       {createElement(atom.entry.tagName, {
         ref,
         'data-experience-id': atom.id,

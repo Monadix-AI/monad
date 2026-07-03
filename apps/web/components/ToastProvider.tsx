@@ -164,6 +164,7 @@ function JsonHighlight({ value }: { value: unknown }) {
 // --- Copy button with flash ---
 
 function CopyButton({ text }: { text: string }) {
+  const t = useT();
   const [copied, setCopied] = useState(false);
 
   const handleCopy = () => {
@@ -177,7 +178,7 @@ function CopyButton({ text }: { text: string }) {
     <button
       className="absolute top-2 right-2 rounded p-1 text-zinc-400 transition-colors hover:bg-white/10 hover:text-zinc-200"
       onClick={handleCopy}
-      title="Copy"
+      title={t('web.copy')}
       type="button"
     >
       {copied ? (
@@ -295,6 +296,7 @@ function ToastCard({
   onClose: (id: string) => void;
   onMeasure: (id: string, height: number) => void;
 }) {
+  const t = useT();
   const [entered, setEntered] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
@@ -402,7 +404,7 @@ function ToastCard({
       </div>
 
       <Button
-        aria-label="Dismiss notification"
+        aria-label={t('web.toast.dismiss')}
         className="absolute top-2 right-2 size-7"
         onClick={() => onClose(item.id)}
         size="icon"
@@ -420,6 +422,7 @@ function ToastCard({
 // --- Provider ---
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {
+  const t = useT();
   const [toasts, setToasts] = useState<ToastRecord[]>([]);
   const [hovered, setHovered] = useState(false);
   const [heights, setHeights] = useState<Record<string, number>>({});
@@ -484,7 +487,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     <>
       {children}
       <section
-        aria-label="Notifications"
+        aria-label={t('web.toast.notifications')}
         aria-live="polite"
         aria-relevant="additions text"
         className="fixed top-4 left-1/2 z-50 w-[min(390px,calc(100vw-2rem))] -translate-x-1/2"

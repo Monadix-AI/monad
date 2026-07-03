@@ -5,6 +5,7 @@ import type { ComponentProps } from 'react';
 import { Button, cn, Progress } from '@monad/ui';
 import { createContext, useContext, useMemo } from 'react';
 
+import { useT } from '@/components/I18nProvider';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 
 const PERCENT_MAX = 100;
@@ -47,6 +48,7 @@ export const Context = ({ usedTokens, maxTokens, ...props }: ContextProps) => {
 };
 
 const ContextIcon = () => {
+  const t = useT();
   const { usedTokens, maxTokens } = useContextValue();
   const circumference = 2 * Math.PI * ICON_RADIUS;
   const usedPercent = usedTokens / maxTokens;
@@ -54,7 +56,7 @@ const ContextIcon = () => {
 
   return (
     <svg
-      aria-label="Model context usage"
+      aria-label={t('web.chat.contextUsage')}
       height="20"
       role="img"
       style={{ color: 'currentcolor' }}

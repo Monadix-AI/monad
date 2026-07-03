@@ -14,6 +14,7 @@ import { HugeiconsIcon } from '@hugeicons/react';
 import { ChatInputChrome } from '@monad/ui';
 import { forwardRef } from 'react';
 
+import { useT } from '@/components/I18nProvider';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { LexicalComposerInput } from './ComposerLexicalInput';
 import { useComposerVoice } from './use-composer-voice';
@@ -92,6 +93,7 @@ export function ComposerShell({
   model,
   textareaRef
 }: ComposerShellProps): React.ReactElement {
+  const t = useT();
   const { listening, toggleVoice, voiceActive, voiceBusy, voiceDisabledReason, voiceModelConfigured } =
     useComposerVoice({
       onVoiceText,
@@ -227,8 +229,8 @@ export function ComposerShell({
                     tone="ink"
                     value={access.mode}
                   >
-                    <option value="auto">Auto</option>
-                    <option value="ask">Ask for approval</option>
+                    <option value="auto">{t('web.chat.accessAuto')}</option>
+                    <option value="ask">{t('web.chat.accessAsk')}</option>
                   </ComposerSelect>
                 ) : null}
               </div>
@@ -397,7 +399,7 @@ function ContextUsageButton({
     >
       <HoverCardTrigger asChild>
         <button
-          aria-label="Context usage"
+          aria-label={t('web.chat.contextUsage')}
           className="workplace-action"
           style={{
             flex: 'none',
@@ -420,7 +422,7 @@ function ContextUsageButton({
             viewBox="0 0 24 24"
             width="18"
           >
-            <title>Context usage</title>
+            <title>{t('web.chat.contextUsage')}</title>
             <circle
               cx="12"
               cy="12"

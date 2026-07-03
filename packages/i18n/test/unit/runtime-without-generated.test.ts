@@ -9,7 +9,7 @@ const runtimePath = join(import.meta.dir, '..', '..', 'src', 'runtime.ts');
 
 test('runtime built-ins do not statically import Paraglide generated modules', async () => {
   const runtimeSource = await readFile(runtimePath, 'utf8');
-  expect(runtimeSource).not.toContain('generated/paraglide');
+  expect(runtimeSource).not.toContain('./paraglide');
 
   const { t } = createI18n({ locale: 'zh', packs: [] });
   expect(t('cmd.new.started')).toBe(zhMessages['cmd.new.started'] ?? '');

@@ -17,6 +17,7 @@ import { HugeiconsIcon } from '@hugeicons/react';
 import { cn, InputGroup, InputGroupTextarea } from '@monad/ui';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { useT } from '@/components/I18nProvider';
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu';
 import {
   type AttachmentsContext,
@@ -233,6 +234,7 @@ export const PromptInput = ({
   children,
   ...props
 }: PromptInputProps) => {
+  const t = useT();
   // Try to use a provider controller if present
   const controller = useOptionalPromptInputController();
   const usingProvider = !!controller;
@@ -289,7 +291,7 @@ export const PromptInput = ({
       if (incoming.length && accepted.length === 0) {
         onError?.({
           code: 'accept',
-          message: 'No files match the accepted types.'
+          message: t('web.upload.noAcceptedFiles')
         });
         return;
       }
@@ -298,7 +300,7 @@ export const PromptInput = ({
       if (accepted.length > 0 && sized.length === 0) {
         onError?.({
           code: 'max_file_size',
-          message: 'All files exceed the maximum size.'
+          message: t('web.upload.allFilesTooLarge')
         });
         return;
       }
@@ -309,7 +311,7 @@ export const PromptInput = ({
         if (typeof capacity === 'number' && sized.length > capacity) {
           onError?.({
             code: 'max_files',
-            message: 'Too many files. Some were not added.'
+            message: t('web.upload.tooManyFiles')
           });
         }
         const next: (FileUIPart & { id: string })[] = [];
@@ -325,7 +327,7 @@ export const PromptInput = ({
         return [...prev, ...next];
       });
     },
-    [matchesAccept, maxFiles, maxFileSize, onError]
+    [matchesAccept, maxFiles, maxFileSize, onError, t]
   );
 
   const removeLocal = useCallback(
@@ -348,7 +350,7 @@ export const PromptInput = ({
       if (incoming.length && accepted.length === 0) {
         onError?.({
           code: 'accept',
-          message: 'No files match the accepted types.'
+          message: t('web.upload.noAcceptedFiles')
         });
         return;
       }
@@ -357,7 +359,7 @@ export const PromptInput = ({
       if (accepted.length > 0 && sized.length === 0) {
         onError?.({
           code: 'max_file_size',
-          message: 'All files exceed the maximum size.'
+          message: t('web.upload.allFilesTooLarge')
         });
         return;
       }
@@ -368,7 +370,7 @@ export const PromptInput = ({
       if (typeof capacity === 'number' && sized.length > capacity) {
         onError?.({
           code: 'max_files',
-          message: 'Too many files. Some were not added.'
+          message: t('web.upload.tooManyFiles')
         });
       }
 
@@ -376,7 +378,7 @@ export const PromptInput = ({
         controller?.attachments.add(capped);
       }
     },
-    [matchesAccept, maxFileSize, maxFiles, onError, files.length, controller]
+    [matchesAccept, maxFileSize, maxFiles, onError, files.length, controller, t]
   );
 
   const clearAttachments = useCallback(
@@ -596,12 +598,12 @@ export const PromptInput = ({
     <>
       <input
         accept={accept}
-        aria-label="Upload files"
+        aria-label={t('web.upload.files')}
         className="hidden"
         multiple={multiple}
         onChange={handleChange}
         ref={inputRef}
-        title="Upload files"
+        title={t('web.upload.files')}
         type="file"
       />
       <form

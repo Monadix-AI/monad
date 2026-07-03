@@ -76,7 +76,7 @@ export function Settings({ onClose }: { onClose: () => void }) {
               >
                 {t('web.settings.title')}
               </DialogTitle>
-              <p className="settings-polish-a-kicker">Local daemon</p>
+              <p className="settings-polish-a-kicker">{t('web.settings.localDaemon')}</p>
             </div>
           </div>
           <div className="settings-polish-a-divider" />

@@ -2,11 +2,12 @@ import type { Message } from '../store/server.ts';
 
 import { Box, Text } from 'ink';
 
+import { t } from '../lib/i18n.ts';
 import { TUI_GLYPHS, TUI_THEME } from './theme.ts';
 
 export function MessageRow({ message }: { message: Message }) {
   const isUser = message.role === 'user';
-  const speaker = isUser ? 'operator' : 'monad';
+  const speaker = isUser ? t('cli.tui.speaker.operator') : t('cli.tui.speaker.monad');
   return (
     <Box
       flexDirection="column"
@@ -36,7 +37,9 @@ export function MessageRow({ message }: { message: Message }) {
           paddingLeft={11}
         >
           <Text color={TUI_THEME.warning}>{`tool:${tc.name}`}</Text>
-          <Text color={tc.failed ? TUI_THEME.danger : TUI_THEME.dim}>{tc.failed ? ' [fail]' : ' [ok]'}</Text>
+          <Text color={tc.failed ? TUI_THEME.danger : TUI_THEME.dim}>
+            {tc.failed ? t('cli.tui.tool.failed') : t('cli.tui.tool.ok')}
+          </Text>
         </Box>
       ))}
     </Box>

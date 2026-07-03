@@ -15,6 +15,7 @@ import { HugeiconsIcon } from '@hugeicons/react';
 import { Badge, cn } from '@monad/ui';
 import { isValidElement } from 'react';
 
+import { useT } from '@/components/I18nProvider';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { CodeBlock } from './code-block';
 
@@ -40,16 +41,6 @@ export type ToolHeaderProps = {
       toolName: string;
     }
 );
-
-const statusLabels: Record<ToolPart['state'], string> = {
-  'approval-requested': 'Awaiting Approval',
-  'approval-responded': 'Responded',
-  'input-available': 'Running',
-  'input-streaming': 'Pending',
-  'output-available': 'Completed',
-  'output-denied': 'Denied',
-  'output-error': 'Error'
-};
 
 const statusIcons: Record<ToolPart['state'], ReactNode> = {
   'approval-requested': (
@@ -96,17 +87,18 @@ const statusIcons: Record<ToolPart['state'], ReactNode> = {
   )
 };
 
-const getStatusBadge = (status: ToolPart['state']) => (
+const getStatusBadge = (status: ToolPart['state'], t: ReturnType<typeof useT>) => (
   <Badge
     className="gap-1.5 rounded-full text-xs"
     variant="secondary"
   >
     {statusIcons[status]}
-    {statusLabels[status]}
+    {t(`web.tool.status.${status}`)}
   </Badge>
 );
 
 export const ToolHeader = ({ className, title, type, state, toolName, ...props }: ToolHeaderProps) => {
+  const t = useT();
   const derivedName = type === 'dynamic-tool' ? toolName : type.split('-').slice(1).join('-');
 
   return (
@@ -120,7 +112,7 @@ export const ToolHeader = ({ className, title, type, state, toolName, ...props }
           icon={Wrench01Icon}
         />
         <span className="font-medium text-sm">{title ?? derivedName}</span>
-        {getStatusBadge(state)}
+        {getStatusBadge(state, t)}
       </div>
       <HugeiconsIcon
         className="size-4 text-muted-foreground transition-transform group-data-[state=open]/tool:rotate-180"
@@ -146,20 +138,23 @@ export type ToolInputProps = ComponentProps<'div'> & {
   input: ToolPart['input'];
 };
 
-export const ToolInput = ({ className, input, ...props }: ToolInputProps) => (
-  <div
-    className={cn('flex flex-col gap-2 overflow-hidden', className)}
-    {...props}
-  >
-    <h4 className="font-medium text-muted-foreground text-xs uppercase tracking-wide">Parameters</h4>
-    <div className="rounded-md bg-muted/50">
-      <CodeBlock
-        code={JSON.stringify(input, null, 2)}
-        language="json"
-      />
+export const ToolInput = ({ className, input, ...props }: ToolInputProps) => {
+  const t = useT();
+  return (
+    <div
+      className={cn('flex flex-col gap-2 overflow-hidden', className)}
+      {...props}
+    >
+      <h4 className="font-medium text-muted-foreground text-xs uppercase tracking-wide">{t('web.tool.parameters')}</h4>
+      <div className="rounded-md bg-muted/50">
+        <CodeBlock
+          code={JSON.stringify(input, null, 2)}
+          language="json"
+        />
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 export type ToolOutputProps = ComponentProps<'div'> & {
   output: ToolPart['output'];

@@ -8,6 +8,8 @@ import { cn } from '@monad/ui';
 import { AnimatePresence, motion } from 'motion/react';
 import { useEffect, useRef, useState } from 'react';
 
+import { useT } from '@/components/I18nProvider';
+
 export interface ReasoningEffortOption {
   value?: string;
   label?: ReactNode;
@@ -92,7 +94,7 @@ export function ReasoningEffortControl({
   options,
   value,
   onChange,
-  defaultLabel = 'Default',
+  defaultLabel,
   allowDefault = false,
   className,
   compact = false
@@ -105,8 +107,9 @@ export function ReasoningEffortControl({
   className?: string;
   compact?: boolean;
 }) {
+  const t = useT();
   const sliderOptions: ReasoningEffortOption[] = allowDefault
-    ? [{ value: undefined, label: defaultLabel }, ...options]
+    ? [{ value: undefined, label: defaultLabel ?? t('web.common.default') }, ...options]
     : options;
   const activeIndex = sliderOptions.findIndex((option) => option.value === value);
   const sliderIndex = activeIndex >= 0 ? activeIndex : 0;
@@ -174,7 +177,7 @@ export function ReasoningEffortControl({
     >
       <div className="flex items-center justify-between gap-3">
         <div className="inline-flex min-w-0 items-center gap-1 text-sm">
-          <span className="text-muted-foreground">Effort</span>
+          <span className="text-muted-foreground">{t('web.reasoning.effort')}</span>
           <EffortValueText
             direction={titleDirection}
             title={title}
@@ -184,7 +187,7 @@ export function ReasoningEffortControl({
       </div>
       <div className="relative mt-2">
         <div
-          aria-label="Reasoning effort"
+          aria-label={t('web.reasoning.effort')}
           aria-orientation="horizontal"
           aria-valuemax={maxIndex}
           aria-valuemin={0}

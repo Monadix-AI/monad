@@ -372,7 +372,7 @@ function InspectorDetails({ data, t }: { data: InspectorNodeData | null; t: TFn 
 
 export function AgentLoopInspector({ items }: { items: UIItem[] }) {
   const t = useT();
-  const { currentNodeId, edges, nodes, summary, timeline } = useMemo(() => buildInspectorFlow(items), [items]);
+  const { currentNodeId, edges, nodes, summary, timeline } = useMemo(() => buildInspectorFlow(items, t), [items, t]);
   const [followCurrent, setFollowCurrent] = useState(true);
   const [mode, setMode] = useState<InspectorViewMode>('all');
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);

@@ -20,6 +20,8 @@ import {
 import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react';
 import { cn, Tooltip, TooltipContent, TooltipTrigger } from '@monad/ui';
 
+import { useT } from '@/components/I18nProvider';
+
 function formatContextLimit(limit: number): string {
   return `${Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(limit)}`;
 }
@@ -270,7 +272,8 @@ function ModalityGroup({ label, names }: { label: 'Input' | 'Output'; names: str
 }
 
 export function ModelHoverCardBody({ model }: { model: ModelInfo | undefined }) {
-  if (!model) return <p className="text-muted-foreground text-xs">Model details not loaded</p>;
+  const t = useT();
+  if (!model) return <p className="text-muted-foreground text-xs">{t('web.modelPicker.detailsMissing')}</p>;
   const label = model.label && model.label !== model.id ? model.label : undefined;
   const inputMods = model.modalities?.input ?? [];
   const outputMods =
@@ -293,7 +296,7 @@ export function ModelHoverCardBody({ model }: { model: ModelInfo | undefined }) 
     <Tooltip>
       <TooltipTrigger asChild>
         <a
-          aria-label="See detail"
+          aria-label={t('web.modelPicker.seeDetail')}
           className="inline-flex size-5 shrink-0 select-none items-center justify-center rounded-(--radius-sm) text-muted-foreground transition-colors hover:text-foreground"
           draggable={false}
           href={detailUrl}
@@ -308,7 +311,7 @@ export function ModelHoverCardBody({ model }: { model: ModelInfo | undefined }) 
           />
         </a>
       </TooltipTrigger>
-      <TooltipContent>See detail</TooltipContent>
+      <TooltipContent>{t('web.modelPicker.seeDetail')}</TooltipContent>
     </Tooltip>
   ) : null;
   return (
@@ -380,7 +383,7 @@ export function ModelHoverCardBody({ model }: { model: ModelInfo | undefined }) 
         <div className="flex select-none flex-wrap items-center gap-1.5 border-border/60 border-t pt-2.5">
           <div className="flex flex-wrap items-center gap-1">
             <ModalityGroup
-              label="Input"
+              label={t('web.common.input')}
               names={inputMods}
             />
             {inputMods.length > 0 && outputMods.length > 0 && (
@@ -390,7 +393,7 @@ export function ModelHoverCardBody({ model }: { model: ModelInfo | undefined }) 
               />
             )}
             <ModalityGroup
-              label="Output"
+              label={t('web.common.output')}
               names={outputMods}
             />
           </div>
