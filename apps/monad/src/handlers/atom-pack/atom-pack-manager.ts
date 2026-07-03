@@ -24,8 +24,7 @@ import type {
   SkillUpdate,
   UpdateSkillContentRequest,
   ValidateSkillsRequest,
-  ValidateSkillsResponse,
-  WorkspaceExperienceDefinition
+  ValidateSkillsResponse
 } from '@monad/protocol';
 import type { WorkspaceExperienceApiHandler } from '@monad/sdk-atom';
 import type { AtomConflict } from '@/atoms/resolve.ts';
@@ -34,8 +33,8 @@ import type { ConfigBus } from '@/services/config-bus.ts';
 import type { ModelService } from '@/services/model.ts';
 
 import { Buffer } from 'node:buffer';
-import { lstat, mkdir, readdir, realpath, rm, stat } from 'node:fs/promises';
-import { basename, isAbsolute, join, normalize, relative, sep } from 'node:path';
+import { mkdir, readdir, rm, stat } from 'node:fs/promises';
+import { basename, join } from 'node:path';
 import { DEFAULT_SAMPLE_PROVIDER_ID, loadAll, loadAuth, saveProfile } from '@monad/home';
 import { DEFAULT_SKILL_MARKETPLACE_SOURCE, parseAtomPackManifest, skillMarketplaceSourceMeta } from '@monad/protocol';
 
@@ -69,6 +68,15 @@ import { reviewSkillInstall } from '@/capabilities/skills/install/review.ts';
 import { scanSkillDir, scanSkillFiles } from '@/capabilities/skills/install/scan.ts';
 import { installHttpSkill } from '@/capabilities/skills/install/tarball.ts';
 import { resolveSecretRef } from '@/config/secrets.ts';
+import {
+  contentTypeForSkillFile,
+  listSkillContentFiles,
+  previewForSkillFile,
+  resolveAtomPackAssetPath,
+  resolveSkillResourcePath,
+  SAFE_NAME,
+  toPublicWorkspaceExperience
+} from '@/handlers/atom-pack/atom-pack-content.ts';
 import { HandlerError } from '@/handlers/handler-error.ts';
 import { type DecodedUpload, decodeRawUpload, unpackZipUpload } from '@/services/upload.ts';
 import { findSkillDirs, installSkillFromDir, parseSkillMd, writeSkill } from '@/store/home/skills.ts';
@@ -92,7 +100,6 @@ export interface AtomPacksDeps {
   modelService?: ModelService;
 }
 
-const SAFE_NAME = /^[a-z0-9][a-z0-9._-]*$/i;
 const SKILL_UPLOAD_MAX_BYTES = 5 * 1024 * 1024;
 const DEFAULT_SKILL_INSTALL_SOURCE_PREFIX = skillMarketplaceSourceMeta(
   DEFAULT_SKILL_MARKETPLACE_SOURCE
@@ -173,216 +180,6 @@ export function createAtomPacksModule(deps: AtomPacksDeps) {
     } catch (err) {
       throw new HandlerError('invalid', err instanceof Error ? err.message : String(err));
     }
-  }
-
-  function languageForSkillFile(path: string): string | undefined {
-    const lower = path.toLowerCase();
-    const ext = lower.includes('.') ? lower.slice(lower.lastIndexOf('.') + 1) : '';
-    const byExt: Record<string, string> = {
-      bash: 'bash',
-      css: 'css',
-      html: 'html',
-      js: 'javascript',
-      json: 'json',
-      jsx: 'jsx',
-      md: 'markdown',
-      mjs: 'javascript',
-      py: 'python',
-      sh: 'bash',
-      ts: 'typescript',
-      tsx: 'tsx',
-      txt: 'text',
-      yaml: 'yaml',
-      yml: 'yaml'
-    };
-    return byExt[ext];
-  }
-
-  function contentTypeForSkillFile(path: string): string | undefined {
-    const lower = path.toLowerCase();
-    const ext = lower.includes('.') ? lower.slice(lower.lastIndexOf('.') + 1) : '';
-    const byExt: Record<string, string> = {
-      avif: 'image/avif',
-      bash: 'text/x-shellscript',
-      css: 'text/css',
-      gif: 'image/gif',
-      html: 'text/html',
-      jpeg: 'image/jpeg',
-      jpg: 'image/jpeg',
-      js: 'text/javascript',
-      json: 'application/json',
-      jsx: 'text/jsx',
-      md: 'text/markdown',
-      mjs: 'text/javascript',
-      png: 'image/png',
-      py: 'text/x-python',
-      sh: 'text/x-shellscript',
-      svg: 'image/svg+xml',
-      ts: 'text/typescript',
-      tsx: 'text/tsx',
-      txt: 'text/plain',
-      webp: 'image/webp',
-      yaml: 'application/yaml',
-      yml: 'application/yaml'
-    };
-    return byExt[ext];
-  }
-
-  function previewForSkillFile(path: string): 'image' | 'text' | 'unsupported' {
-    const contentType = contentTypeForSkillFile(path);
-    if (contentType?.startsWith('image/')) return 'image';
-    if (contentType?.startsWith('text/') || contentType === 'application/json' || contentType === 'application/yaml') {
-      return 'text';
-    }
-    return languageForSkillFile(path) ? 'text' : 'unsupported';
-  }
-
-  function resolveSkillResourcePath(dir: string, file: string): string {
-    const normalized = normalize(file);
-    if (
-      !normalized ||
-      normalized === '.' ||
-      normalized === 'SKILL.md' ||
-      normalized.startsWith('..') ||
-      normalized.startsWith('/') ||
-      /^[a-z]:[\\/]/i.test(normalized) ||
-      file.split(/[\\/]/).includes('..') ||
-      normalized.split(/[\\/]/).includes('..')
-    ) {
-      throw new HandlerError('invalid', `invalid skill file path: ${file}`);
-    }
-    const fullPath = join(dir, normalized);
-    const rel = relative(dir, fullPath);
-    if (!rel || rel.startsWith('..') || rel.includes(`..${sep}`)) {
-      throw new HandlerError('invalid', `invalid skill file path: ${file}`);
-    }
-    return fullPath;
-  }
-
-  async function resolveAtomPackAssetPath(name: string, file: string): Promise<string> {
-    if (!SAFE_NAME.test(name)) throw new HandlerError('invalid', `invalid atom pack name: ${name}`);
-    const normalized = normalize(file);
-    if (
-      !normalized ||
-      normalized === '.' ||
-      normalized.startsWith('..') ||
-      normalized.startsWith('/') ||
-      /^[a-z]:[\\/]/i.test(normalized) ||
-      file.split(/[\\/]/).includes('..') ||
-      normalized.split(/[\\/]/).includes('..')
-    ) {
-      throw new HandlerError('invalid', `invalid atom pack asset path: ${file}`);
-    }
-    const packDir = join(dir, name);
-    const fullPath = join(packDir, normalized);
-    const rel = relative(packDir, fullPath);
-    if (!rel || rel.startsWith('..') || rel.includes(`..${sep}`) || isAbsolute(rel)) {
-      throw new HandlerError('invalid', `invalid atom pack asset path: ${file}`);
-    }
-    let realPackDir: string;
-    let realAssetPath: string;
-    let linkInfo: Awaited<ReturnType<typeof lstat>>;
-    try {
-      [realPackDir, realAssetPath, linkInfo] = await Promise.all([
-        realpath(packDir),
-        realpath(fullPath),
-        lstat(fullPath)
-      ]);
-    } catch {
-      throw new HandlerError('not_found', `atom pack asset not found: ${name}/${file}`);
-    }
-    if (linkInfo.isSymbolicLink()) throw new HandlerError('not_found', `atom pack asset not found: ${name}/${file}`);
-    const realRel = relative(realPackDir, realAssetPath);
-    if (!realRel || realRel.startsWith('..') || realRel.includes(`..${sep}`) || isAbsolute(realRel)) {
-      throw new HandlerError('invalid', `invalid atom pack asset path: ${file}`);
-    }
-    return realAssetPath;
-  }
-
-  function isPackRelativeModule(module: string): boolean {
-    try {
-      const url = new URL(module);
-      return url.protocol !== 'http:' && url.protocol !== 'https:';
-    } catch {
-      return !module.startsWith('/');
-    }
-  }
-
-  function normalizePackRelativeModule(module: string): string | null {
-    const normalized = normalize(module);
-    if (
-      !normalized ||
-      normalized === '.' ||
-      normalized.startsWith('..') ||
-      normalized.startsWith('/') ||
-      /^[a-z]:[\\/]/i.test(normalized) ||
-      module.split(/[\\/]/).includes('..') ||
-      normalized.split(/[\\/]/).includes('..')
-    ) {
-      return null;
-    }
-    return normalized.replaceAll('\\', '/');
-  }
-
-  function atomPackAssetUrl(atomPackId: string, module: string): string | null {
-    const normalized = normalizePackRelativeModule(module);
-    if (!normalized) return null;
-    return `/v1/atoms/${encodeURIComponent(atomPackId)}/assets/${normalized
-      .split('/')
-      .filter(Boolean)
-      .map(encodeURIComponent)
-      .join('/')}`;
-  }
-
-  function toPublicWorkspaceExperience(
-    experience: RegisteredWorkspaceExperience
-  ): WorkspaceExperienceDefinition | null {
-    const { atomPackId: _atomPackId, ...publicExperience } = experience;
-    if (!experience.atomPackId || !isPackRelativeModule(experience.entry.module)) return publicExperience;
-    const module = atomPackAssetUrl(experience.atomPackId, experience.entry.module);
-    if (!module) return null;
-    return {
-      ...publicExperience,
-      entry: {
-        ...publicExperience.entry,
-        module
-      }
-    };
-  }
-
-  async function listSkillContentFiles(dir: string): Promise<GetSkillContentResponse['files']> {
-    const files: GetSkillContentResponse['files'] = [];
-    async function walk(currentDir: string, prefix = ''): Promise<void> {
-      let entries: Dirent[];
-      try {
-        entries = await readdir(currentDir, { withFileTypes: true });
-      } catch {
-        return;
-      }
-      for (const entry of entries) {
-        if (entry.name.startsWith('.')) continue;
-        const relPath = prefix ? `${prefix}/${entry.name}` : entry.name;
-        const fullPath = join(currentDir, entry.name);
-        if (entry.isDirectory()) {
-          await walk(fullPath, relPath);
-          continue;
-        }
-        if (!entry.isFile() || relPath === 'SKILL.md') continue;
-        const info = await stat(fullPath).catch(() => null);
-        if (!info?.isFile()) continue;
-        const language = languageForSkillFile(relPath);
-        const contentType = contentTypeForSkillFile(relPath);
-        files.push({
-          ...(contentType ? { contentType } : {}),
-          path: relPath,
-          preview: previewForSkillFile(relPath),
-          size: info.size,
-          ...(language ? { language } : {})
-        });
-      }
-    }
-    await walk(dir);
-    return files.sort((a, b) => a.path.localeCompare(b.path));
   }
 
   function resolveSkillContentTarget({ name, id }: { name: string; id?: string }): {
@@ -560,7 +357,7 @@ export function createAtomPacksModule(deps: AtomPacksDeps) {
       bytes: Uint8Array;
       contentType?: string;
     }> {
-      const fullPath = await resolveAtomPackAssetPath(name, path);
+      const fullPath = await resolveAtomPackAssetPath(dir, name, path);
       const info = await stat(fullPath).catch(() => null);
       if (!info?.isFile()) throw new HandlerError('not_found', `atom pack asset not found: ${name}/${path}`);
       return {
