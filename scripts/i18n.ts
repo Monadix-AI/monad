@@ -10,9 +10,10 @@ const LOCALES_DIR = join(import.meta.dir, '..', 'packages', 'i18n', 'src', 'loca
 const EN_DIR = join(LOCALES_DIR, 'en');
 const ZH_DIR = join(LOCALES_DIR, 'zh');
 const I18N_SRC_DIR = join(import.meta.dir, '..', 'packages', 'i18n', 'src');
+const I18N_GENERATED_DIR = join(import.meta.dir, '..', 'packages', 'i18n', 'generated');
 const GENERATED_PATH = join(I18N_SRC_DIR, 'catalog-types.ts');
-const PARAGLIDE_INPUT_DIR = join(I18N_SRC_DIR, 'paraglide-input');
-const PARAGLIDE_OUTPUT_DIR = join(I18N_SRC_DIR, 'paraglide');
+const PARAGLIDE_INPUT_DIR = join(I18N_GENERATED_DIR, 'paraglide-input');
+const PARAGLIDE_OUTPUT_DIR = join(I18N_GENERATED_DIR, 'paraglide');
 const PLURAL_SUFFIXES = new Set(['zero', 'one', 'two', 'few', 'many', 'other']);
 const PARAM_RE = /{{\s*([A-Za-z_$][\w$]*)\s*}}/g;
 const PARAGLIDE_SCOPES = {
@@ -500,7 +501,7 @@ async function runParaglideCompileInDir(
 async function checkParaglideCompiles(inputFiles: Map<string, string>, diagnostics: Diagnostic[]): Promise<void> {
   const tmp = await mkdtemp(join(tmpdir(), 'monad-paraglide-'));
   try {
-    const tmpInputDir = join(tmp, 'packages', 'i18n', 'src', 'paraglide-input');
+    const tmpInputDir = join(tmp, 'packages', 'i18n', 'generated', 'paraglide-input');
     const tmpOutDir = join(tmp, 'paraglide');
     const tmpInputFiles = new Map(
       [...inputFiles].map(([path, contents]) => [join(tmpInputDir, relative(PARAGLIDE_INPUT_DIR, path)), contents])

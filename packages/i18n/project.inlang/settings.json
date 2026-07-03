@@ -4,6 +4,6 @@
   "locales": ["en", "zh"],
   "modules": ["https://cdn.jsdelivr.net/npm/@inlang/plugin-message-format@4.4.0/dist/index.js"],
   "plugin.inlang.messageFormat": {
-    "pathPattern": "./src/paraglide-input/common/{locale}.json"
+    "pathPattern": "./generated/paraglide-input/common/{locale}.json"
   }
 }

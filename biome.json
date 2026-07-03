@@ -14,7 +14,7 @@
       "!.agent",
       "!.claude",
       "!.superpowers",
-      "!packages/i18n/src/paraglide",
+      "!packages/i18n/generated/paraglide",
       "!packages/home/config.schema.json",
       "!packages/home/profile.schema.json"
     ]

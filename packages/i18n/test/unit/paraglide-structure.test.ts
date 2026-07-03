@@ -3,9 +3,9 @@ import { existsSync } from 'node:fs';
 import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-const srcDir = join(import.meta.dir, '..', '..', 'src');
-const inputDir = join(srcDir, 'paraglide-input');
-const outputDir = join(srcDir, 'paraglide');
+const generatedDir = join(import.meta.dir, '..', '..', 'generated');
+const inputDir = join(generatedDir, 'paraglide-input');
+const outputDir = join(generatedDir, 'paraglide');
 
 describe('Paraglide generated layout', () => {
   test('splits messages into common and client scopes', async () => {
