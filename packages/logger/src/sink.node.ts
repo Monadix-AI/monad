@@ -4,7 +4,7 @@
 // `@monad/logger/log-files` subpath for the maintenance layer) so the writer here and the pruner
 // there share one naming source.
 
-import type { Logger } from './types.ts';
+import type { CustomLogDestination, LogDestination, Logger, LoggerRecord } from './types.ts';
 
 import { appendFileSync, mkdirSync } from 'node:fs';
 import { appendFile } from 'node:fs/promises';
@@ -12,10 +12,21 @@ import { dirname, join } from 'node:path';
 import pino from 'pino';
 
 import { emitDeveloperRecord, hasDeveloperRecordSubscribers } from './developer.ts';
-import { getLogFile, getLogLevel, getLogStderr } from './level.ts';
+import { getLogFile, getLoggerConfig, getLogLevel, getLogStderr } from './level.ts';
 import { debugLogPath, developerLogFileName } from './log-files.ts';
 
 type PinoLevel = pino.Level | 'silent';
+type StreamEntry = { level: pino.Level; stream: pino.DestinationStream };
+
+const LEVEL_RANK: Record<PinoLevel, number> = {
+  trace: 10,
+  debug: 20,
+  info: 30,
+  warn: 40,
+  error: 50,
+  fatal: 60,
+  silent: 100
+};
 
 // Defense-in-depth secret scrub: even though call sites are expected to scrub, redact common
 // credential-bearing keys at any depth so a stray `log.info({ headers })` or error object can't
@@ -103,6 +114,11 @@ const primaryProductionStream: pino.DestinationStream = {
 function buildLogger(name?: string, context?: Record<string, unknown>): Logger {
   const bindings = { ...(name ? { name } : {}), ...context };
   const LOG_LEVEL_OVERRIDE = getLogLevel() as PinoLevel | undefined;
+  const configuredDestinations = getLoggerConfig()?.destinations;
+
+  if (configuredDestinations && configuredDestinations.length > 0) {
+    return buildConfiguredLogger(bindings, configuredDestinations, LOG_LEVEL_OVERRIDE);
+  }
 
   // stderr=2 when stdout is a protocol channel (stdio/ACP), else stdout=1.
   const dest = getLogStderr() ? 2 : 1;
@@ -174,6 +190,96 @@ function buildLogger(name?: string, context?: Record<string, unknown>): Logger {
 
   const base = pino({ level: effectiveLevel === 'silent' ? 'silent' : 'debug', redact }, streams);
   return asLogger(Object.keys(bindings).length > 0 ? base.child(bindings) : base);
+}
+
+function buildConfiguredLogger(
+  bindings: Record<string, unknown>,
+  destinations: readonly LogDestination[],
+  override: PinoLevel | undefined
+): Logger {
+  const streams = destinations.flatMap((destination) => streamEntriesForDestination(destination));
+  const effectiveLevel = override ?? lowestDestinationLevel(destinations);
+  const base =
+    streams.length === 0 || effectiveLevel === 'silent'
+      ? pino({ level: effectiveLevel, redact })
+      : pino(
+          { level: effectiveLevel, redact },
+          pino.multistream(streams, {
+            dedupe: false
+          })
+        );
+  return asLogger(Object.keys(bindings).length > 0 ? base.child(bindings) : base);
+}
+
+function streamEntriesForDestination(destination: LogDestination): StreamEntry[] {
+  const level = destination.level ?? 'info';
+  if (level === 'silent') return [];
+  switch (destination.type) {
+    case 'console':
+      return [
+        {
+          level,
+          stream:
+            destination.pretty && Bun.env.NODE_ENV !== 'production'
+              ? pino.transport({
+                  target: 'pino-pretty',
+                  options: {
+                    colorize: true,
+                    destination: destination.stream === 'stderr' ? 2 : 1,
+                    translateTime: 'SYS:HH:MM:ss',
+                    ignore: 'pid,hostname,name,method,path,status,durationMs,transport,transportCall',
+                    messageFormat: '{if name}\x1B[2m[{name}]\x1B[0m {end}{msg}',
+                    errorLikeObjectKeys: ['err', 'error'],
+                    levelFirst: false,
+                    singleLine: false
+                  }
+                })
+              : pino.destination({ dest: destination.stream === 'stderr' ? 2 : 1, sync: true })
+        }
+      ];
+    case 'file':
+      mkdirSync(dirname(destination.path), { recursive: true });
+      return [
+        {
+          level,
+          stream: pino.destination({ dest: destination.path, sync: destination.sync ?? false, append: true })
+        }
+      ];
+    case 'custom':
+      return [{ level, stream: customDestinationStream(destination) }];
+    case 'developer':
+      return [{ level, stream: developerStream }];
+    case 'debug-file':
+      return [
+        {
+          level,
+          stream: pino.destination({ dest: destination.path ?? debugLogPath, sync: false, append: true })
+        }
+      ];
+  }
+}
+
+function customDestinationStream(destination: CustomLogDestination): pino.DestinationStream {
+  return {
+    write(line: string) {
+      let record: LoggerRecord;
+      try {
+        record = JSON.parse(line) as LoggerRecord;
+      } catch {
+        return;
+      }
+      void Promise.resolve(destination.write(record)).catch(() => {});
+    }
+  };
+}
+
+function lowestDestinationLevel(destinations: readonly LogDestination[]): PinoLevel {
+  let lowest: PinoLevel = 'silent';
+  for (const destination of destinations) {
+    const level = destination.level ?? 'info';
+    if (LEVEL_RANK[level] < LEVEL_RANK[lowest]) lowest = level;
+  }
+  return lowest;
 }
 
 // createLogger returns a LAZY logger: the underlying pino instance (and therefore its stdout / stderr

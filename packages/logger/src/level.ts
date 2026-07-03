@@ -1,9 +1,20 @@
 // Must be imported before pino loads — zero dependencies, so it's safe to call
 // setLogLevel() at process startup before any dynamic import triggers logger init.
 
-export type LogLevelOverride = 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal' | 'silent';
+import type { LoggerConfig, LogLevelOverride } from './types.ts';
+
+export type { LogLevelOverride };
 
 let _override: LogLevelOverride | undefined;
+let _config: LoggerConfig | undefined;
+
+export function configureLogger(config?: LoggerConfig): void {
+  _config = config;
+}
+
+export function getLoggerConfig(): LoggerConfig | undefined {
+  return _config;
+}
 
 export function setLogLevel(level: LogLevelOverride): void {
   _override = level;

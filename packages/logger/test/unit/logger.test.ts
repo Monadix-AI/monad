@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -7,8 +8,10 @@ const originalEnv = { ...Bun.env };
 const ansiCodes = ['\x1B[0m', '\x1B[1m', '\x1B[2m', '\x1B[31m', '\x1B[32m', '\x1B[35m', '\x1B[36m'];
 const stripAnsi = (value: string) => ansiCodes.reduce((out, code) => out.replaceAll(code, ''), value);
 
-afterEach(() => {
+afterEach(async () => {
   process.env = { ...originalEnv };
+  const { configureLogger } = await import('../../src/index.ts');
+  configureLogger();
 });
 
 describe('createLogger', () => {
@@ -60,6 +63,71 @@ describe('createLogger', () => {
     dispose();
 
     expect(records.some((record) => record.sessionId === 'ses_LOGTEST' && record.event === 'test.event')).toBe(true);
+  });
+
+  test('custom destinations receive records at their own level', async () => {
+    const { configureLogger, createLogger } = await import('../../src/index.ts');
+    const sentryRecords: Record<string, unknown>[] = [];
+    const otelRecords: Record<string, unknown>[] = [];
+    configureLogger({
+      destinations: [
+        {
+          type: 'custom',
+          name: 'otel',
+          level: 'info',
+          write: (record) => {
+            otelRecords.push(record);
+          }
+        },
+        {
+          type: 'custom',
+          name: 'sentry',
+          level: 'error',
+          write: (record) => {
+            sentryRecords.push(record);
+          }
+        }
+      ]
+    });
+
+    const log = createLogger('multi-dest', { service: 'logger-test' });
+    log.debug({ ignored: true }, 'debug event');
+    log.info({ requestId: 'req_1' }, 'info event');
+    log.error({ requestId: 'req_2' }, 'error event');
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    expect(otelRecords.map((record) => record.msg)).toEqual(['info event', 'error event']);
+    expect(sentryRecords.map((record) => record.msg)).toEqual(['error event']);
+    expect(otelRecords[0]).toMatchObject({ name: 'multi-dest', service: 'logger-test', requestId: 'req_1' });
+    expect(sentryRecords[0]).toMatchObject({ name: 'multi-dest', service: 'logger-test', requestId: 'req_2' });
+  });
+
+  test('file destinations keep independent levels', async () => {
+    const { configureLogger, createLogger } = await import('../../src/index.ts');
+    const dir = mkdtempSync(join(tmpdir(), 'monad-logger-dest-'));
+    const infoFile = join(dir, 'info.log');
+    const errorFile = join(dir, 'error.log');
+    try {
+      configureLogger({
+        destinations: [
+          { type: 'file', path: infoFile, level: 'info', sync: true },
+          { type: 'file', path: errorFile, level: 'error', sync: true }
+        ]
+      });
+
+      const log = createLogger('file-dest');
+      log.info('info event');
+      log.error('error event');
+
+      const infoLog = readFileSync(infoFile, 'utf8');
+      const errorLog = readFileSync(errorFile, 'utf8');
+      expect(infoLog).toContain('info event');
+      expect(infoLog).toContain('error event');
+      expect(errorLog).not.toContain('info event');
+      expect(errorLog).toContain('error event');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 
