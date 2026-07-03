@@ -6,7 +6,6 @@ import type {
   SendMessageRequest,
   SessionId,
   SessionTransport,
-  SessionUiEvent,
   TranscriptTarget,
   TranscriptTargetId
 } from '@monad/protocol';
@@ -19,7 +18,6 @@ import type { ManagedNativeCliProjectMessageSender } from '@/handlers/session/ha
 import { loadAll } from '@monad/home';
 import { newId } from '@monad/protocol';
 
-import { parseDurableSummary } from '@/agent/history.ts';
 import { extractError } from '@/agent/index.ts';
 import { buildChannelTurnContext, type ChannelParticipant } from '@/agent/prompts/channel.ts';
 import { emitCommandTurn, executeSessionCommand, tryRunSessionCommand } from '@/handlers/commands/index.ts';
@@ -35,14 +33,13 @@ import { createForwardNativeCliHandler } from '@/handlers/session/handlers/forwa
 import { createManagedNativeCliDelivery } from '@/handlers/session/handlers/managed-native-cli-delivery.ts';
 import {
   channelDelegateMcpServers,
-  isChannelStructuredSession,
   isWorkplaceProjectTarget,
   nativeCliProjectMemberDisplayName,
   nativeCliProjectMemberRuntimeName,
   nativeCliProjectMemberTemplateName,
   workplaceProjectMembers
 } from '@/handlers/session/handlers/messaging-members.ts';
-import { SessionUiProjector } from '@/handlers/session/ui-projection.ts';
+import { createSubscribeHandlers } from '@/handlers/session/handlers/messaging-subscribe.ts';
 
 export type { ManagedNativeCliProjectMessageSender } from '@/handlers/session/handlers/messaging-notices.ts';
 
@@ -73,7 +70,7 @@ type ToolFilter = (toolName: string) => boolean;
 
 // Size of the live UI snapshot window. Older history is paged lazily over GET /ui-items.
 // Keep ≥ a realistic single agent round so a tool call+result pair never straddles the window.
-const LIVE_SNAPSHOT_LIMIT = 80;
+const _LIVE_SNAPSHOT_LIMIT = 80;
 
 /** AND two optional tool filters: a tool passes only if every present filter admits it. Undefined-safe;
  *  returns undefined when neither is set so the loop keeps its no-filter fast path. */
@@ -138,6 +135,7 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
 
   const forwardToAcp = createForwardAcpHandler(ctx, sandboxRootsFor);
   const forwardToNativeCli = createForwardNativeCliHandler(ctx, startManagedNativeCliRuntimeWithRecovery);
+  const { subscribe, subscribeUi, subscribeControl } = createSubscribeHandlers(ctx);
 
   const runtimeForTranscriptTarget = (sessionId: TranscriptTargetId) => runtime.get(sessionId);
   const agentToolFilterForTranscriptTarget = (sessionId: TranscriptTargetId) =>
@@ -631,87 +629,9 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
       }
     },
 
-    async subscribe(
-      { sessionId, afterEventId }: { sessionId: TranscriptTargetId; afterEventId?: string },
-      sink: EventSink
-    ) {
-      const buffered = cache.since(sessionId, afterEventId);
-      let replay: Event[];
-      if (afterEventId !== undefined && store.hasEvent(afterEventId)) {
-        // Reconnect from a persisted cursor: durable events after it cover COMPLETED rounds the client
-        // missed while disconnected, while `buffered` holds only the in-flight (un-persisted) round.
-        // Using `buffered` alone would drop every finished round between the cursor and the active one.
-        // Merge, de-duped by id (the two sets are normally disjoint — tokens are never persisted).
-        const durable = store.listEvents(sessionId, afterEventId);
-        const seen = new Set(durable.map((e) => e.id));
-        replay = [...durable, ...buffered.filter((e) => !seen.has(e.id))];
-      } else {
-        // Fresh subscribe, or a cursor that is an un-persisted live event (client resuming within the
-        // active round): `buffered` is the correct tail; fall back to durable only when idle. Passing
-        // an un-persisted cursor to listEvents would replay the whole session (missing-cursor fallback).
-        replay = buffered.length > 0 ? buffered : store.listEvents(sessionId, afterEventId);
-      }
-      for (const event of replay) sink(event);
-      const dispose = bus.subscribe(sessionId, sink);
-      return { subscribed: true as const, dispose };
-    },
-
-    async subscribeUi(
-      { sessionId, afterEventId }: { sessionId: TranscriptTargetId; afterEventId?: string },
-      sink: (event: SessionUiEvent) => void
-    ) {
-      const session = requireTranscriptTarget(sessionId);
-      const projector = new SessionUiProjector({ channelStructured: isChannelStructuredSession(session) });
-      // Bound the initial snapshot to the most-recent window; older history is loaded lazily by
-      // the client over GET /ui-items. A full window implies there may be older messages.
-      const recent = store.listMessages(sessionId, {
-        includeInactive: false,
-        latest: true,
-        limit: LIVE_SNAPSHOT_LIMIT
-      });
-      const hasMore = recent.length === LIVE_SNAPSHOT_LIMIT;
-      projector.hydrateMessages(recent, parseDurableSummary(store.getMemory(sessionId, 'ctx:summary')));
-      // Rebuild native CLI tool cards from their durable output snapshots (native_cli.output chunks are
-      // not persisted as events). Scope to this window: runs that started within it, plus any still
-      // active, so an in-flight or recent CLI run survives a refresh/reconnect without dragging every
-      // historical run into the bounded snapshot.
-      const oldestTs = recent[0]?.createdAt;
-      projector.hydrateNativeCliSessions(
-        store
-          .listNativeCliSessionsForTranscriptTarget(sessionId)
-          .filter(
-            (s) =>
-              s.runtimeRole === 'managed-project-agent' ||
-              s.state === 'running' ||
-              s.state === 'starting' ||
-              oldestTs === undefined ||
-              s.startedAt >= oldestTs
-          )
-      );
-      // Replay only the in-flight (un-persisted) round on top of the hydrated window. This is a
-      // snapshot endpoint (the client replaces its view wholesale), so hydration IS the reconnect
-      // baseline — every settled round is already in the bounded message window. We must NOT replay
-      // the durable event log here: a reconnect cursor is usually an `agent.token` id that isn't in
-      // the log, so listEvents would fall back to a full-session replay and scramble the bounded
-      // snapshot (breaking oldestCursor/hasMore pagination). The active round lives only in `buffered`.
-      const buffered = cache.since(sessionId, afterEventId);
-      for (const event of buffered) projector.applyEvent(event);
-      sink(projector.snapshot({ hasMore }));
-      const dispose = bus.subscribe(sessionId, (event) => {
-        for (const uiEvent of projector.applyEvent(event)) sink(uiEvent);
-      });
-      return { subscribed: true as const, dispose };
-    },
-
-    /**
-     * Subscribe to the cross-session control stream (session-list-level changes
-     * across all sessions). No replay: a (re)connecting client should re-fetch the
-     * list via `sessions.list`, then apply live deltas from here.
-     */
-    subscribeControl(sink: EventSink) {
-      const dispose = bus.subscribeControl(sink);
-      return { subscribed: true as const, dispose };
-    },
+    subscribe,
+    subscribeUi,
+    subscribeControl,
 
     forwardToAcp,
     forwardToNativeCli
