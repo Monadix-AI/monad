@@ -14,12 +14,12 @@
     "@monad/protocol": "workspace:*",
     "@monad/sdk-atom": "workspace:*",
     "@opentelemetry/api": "^1.9.1",
-    "@opentelemetry/context-async-hooks": "^2.8.0",
-    "@opentelemetry/exporter-metrics-otlp-proto": "^0.219.0",
-    "@opentelemetry/exporter-trace-otlp-proto": "^0.219.0",
-    "@opentelemetry/resources": "^2.8.0",
-    "@opentelemetry/sdk-metrics": "^2.8.0",
-    "@opentelemetry/sdk-trace-base": "^2.8.0",
+    "@opentelemetry/context-async-hooks": "^2.9.0",
+    "@opentelemetry/exporter-metrics-otlp-proto": "^0.220.0",
+    "@opentelemetry/exporter-trace-otlp-proto": "^0.220.0",
+    "@opentelemetry/resources": "^2.9.0",
+    "@opentelemetry/sdk-metrics": "^2.9.0",
+    "@opentelemetry/sdk-trace-base": "^2.9.0",
     "@opentelemetry/semantic-conventions": "^1.41.1",
     "drizzle-orm": "^0.45.2",
     "elysia": "^1.4.29",
@@ -28,7 +28,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@anthropic-ai/claude-agent-sdk": "0.3.198",
+    "@anthropic-ai/claude-agent-sdk": "0.3.199",
     "@monad/config": "workspace:*",
     "openai": "^6.45.0"
   },

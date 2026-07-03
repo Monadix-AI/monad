@@ -21,7 +21,7 @@
     "@tanstack/hotkeys": "0.8.0",
     "@tanstack/react-hotkeys": "^0.10.0",
     "@xyflow/react": "^12.11.1",
-    "ai": "^7.0.11",
+    "ai": "^7.0.14",
     "cmdk": "^1.1.1",
     "ghostty-web": "^0.4.0",
     "lexical": "^0.46.0",
@@ -41,7 +41,7 @@
     "zustand": "^5.0.14"
   },
   "devDependencies": {
-    "@anthropic-ai/claude-agent-sdk": "0.3.198",
+    "@anthropic-ai/claude-agent-sdk": "0.3.199",
     "@monad/monad": "workspace:*",
     "@playwright/test": "^1.61.1",
     "@tailwindcss/postcss": "^4.3.2",
