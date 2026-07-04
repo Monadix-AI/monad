@@ -1,6 +1,7 @@
 import type {
   AvatarStyle,
   NativeCliAppServerTransport,
+  NativeCliProjectTemplate,
   NativeCliProvider,
   WorkplaceProjectMemberSettings,
   WorkplaceProjectMemberType,
@@ -15,6 +16,7 @@ export type ProjectMemberSettings = WorkplaceProjectMemberSettings;
 export type ProjectMember = WorkplaceProjectMemberView;
 export type AddProjectMemberOptions = {
   displayName?: string;
+  projectTemplateId?: string;
   modelId?: string;
   reasoningEffort?: string;
   speed?: 'standard' | 'fast';
@@ -33,6 +35,7 @@ export interface ProjectMemberCandidate {
   icon?: Participant['icon'];
   provider?: NativeCliProvider;
   supportedAppServerTransports?: NativeCliAppServerTransport[];
+  template?: NativeCliProjectTemplate;
 }
 
 export function parseProjectMembers(value: unknown): ProjectMember[] {

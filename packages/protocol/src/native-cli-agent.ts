@@ -67,6 +67,7 @@ export const workplaceProjectMemberSchema = z.object({
   type: workplaceProjectMemberTypeSchema,
   name: nativeCliAgentNameSchema,
   templateName: nativeCliAgentNameSchema.optional(),
+  projectTemplateId: nativeCliAgentNameSchema.optional(),
   displayName: nativeCliAgentNameSchema.optional(),
   instanceId: nativeCliAgentNameSchema.optional(),
   settings: workplaceProjectMemberSettingsSchema.optional()
@@ -204,6 +205,16 @@ export const nativeCliAgentCapabilitiesSchema = z.object({
 });
 export type NativeCliAgentCapabilities = z.infer<typeof nativeCliAgentCapabilitiesSchema>;
 
+export const nativeCliProjectTemplateSchema = z.object({
+  id: nativeCliAgentNameSchema,
+  displayName: nativeCliAgentNameSchema,
+  modelId: z.string().min(1).optional(),
+  reasoningEffort: z.string().min(1).optional(),
+  speed: z.enum(['standard', 'fast']).optional(),
+  customPrompt: z.string().optional()
+});
+export type NativeCliProjectTemplate = z.infer<typeof nativeCliProjectTemplateSchema>;
+
 // Enforced at every parse (config load + wire), not just the HTTP upsert handler, so a hand-edited
 // config.json can't smuggle a malformed command/env past the spawn path. Spawn is argv-based (no
 // shell) so this is defense-in-depth, but it keeps the contract in one place.
@@ -223,9 +234,21 @@ export const nativeCliAgentViewSchema = z
     appServerTransport: nativeCliAppServerTransportSchema.optional(),
     allowDangerousMode: z.boolean().default(false),
     approvalOwnership: nativeCliApprovalOwnershipSchema.default('provider-owned'),
-    capabilities: nativeCliAgentCapabilitiesSchema.optional()
+    capabilities: nativeCliAgentCapabilitiesSchema.optional(),
+    projectTemplates: z.array(nativeCliProjectTemplateSchema).optional()
   })
   .superRefine((agent, ctx) => {
+    const projectTemplateIds = new Set<string>();
+    for (const [index, template] of (agent.projectTemplates ?? []).entries()) {
+      if (projectTemplateIds.has(template.id)) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['projectTemplates', index, 'id'],
+          message: `project template id "${template.id}" must be unique`
+        });
+      }
+      projectTemplateIds.add(template.id);
+    }
     if (/\s/.test(agent.command)) {
       ctx.addIssue({
         code: 'custom',

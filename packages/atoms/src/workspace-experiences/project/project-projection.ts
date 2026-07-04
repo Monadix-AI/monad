@@ -228,6 +228,40 @@ export function projectMemberCandidates(args: {
 }): ProjectMemberCandidate[] {
   const current = new Set(args.projectMembers.map((member) => member.id));
   const emptyTransports: NativeCliAppServerTransport[] = [];
+  const nativeCliCandidates = args.nativeCliAgents.flatMap((agent) => {
+    const templates = agent.projectTemplates ?? [];
+    if (templates.length > 0) {
+      return templates.map((template) => ({
+        id: `native-cli-template:${agent.name}:${template.id}`,
+        type: 'native-cli' as const,
+        name: agent.name,
+        label: template.displayName,
+        tag: nativeCliTag(agent.provider),
+        enabled: agent.enabled,
+        provider: agent.provider,
+        modelOptions: agent.modelOptions ?? [],
+        reasoningEfforts: agent.reasoningEfforts ?? [],
+        supportedAppServerTransports: emptyTransports,
+        icon: productIcon(agent.productIcon),
+        template
+      }));
+    }
+    return [
+      {
+        id: `native-cli-template:${agent.name}`,
+        type: 'native-cli' as const,
+        name: agent.name,
+        label: nativeCliProductDisplayName(productIcon(agent.productIcon), agent.provider, agent.name),
+        tag: nativeCliTag(agent.provider),
+        enabled: agent.enabled,
+        provider: agent.provider,
+        modelOptions: agent.modelOptions ?? [],
+        reasoningEfforts: agent.reasoningEfforts ?? [],
+        supportedAppServerTransports: emptyTransports,
+        icon: productIcon(agent.productIcon)
+      }
+    ];
+  });
   return [
     ...(current.has('monad')
       ? []
@@ -259,19 +293,7 @@ export function projectMemberCandidates(args: {
         supportedAppServerTransports: emptyTransports,
         icon: productIcon(agent.productIcon)
       })),
-    ...args.nativeCliAgents.map((agent) => ({
-      id: `native-cli-template:${agent.name}`,
-      type: 'native-cli' as const,
-      name: agent.name,
-      label: nativeCliProductDisplayName(productIcon(agent.productIcon), agent.provider, agent.name),
-      tag: nativeCliTag(agent.provider),
-      enabled: agent.enabled,
-      provider: agent.provider,
-      modelOptions: agent.modelOptions ?? [],
-      reasoningEfforts: agent.reasoningEfforts ?? [],
-      supportedAppServerTransports: emptyTransports,
-      icon: productIcon(agent.productIcon)
-    }))
+    ...nativeCliCandidates
   ];
 }
 

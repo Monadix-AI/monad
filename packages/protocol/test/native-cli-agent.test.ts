@@ -87,6 +87,51 @@ test('native CLI agent view accepts Qwen as a provider-owned native CLI provider
   expect(parsed.approvalOwnership).toBe('provider-owned');
 });
 
+test('native CLI agent view carries project member templates defined on the CLI agent page', () => {
+  const parsed = nativeCliAgentViewSchema.parse({
+    name: 'codex',
+    provider: 'codex',
+    command: 'codex',
+    enabled: true,
+    projectTemplates: [
+      {
+        id: 'reviewer',
+        displayName: 'Reviewer',
+        modelId: 'gpt-5.5',
+        reasoningEffort: 'high',
+        speed: 'fast',
+        customPrompt: 'Review changes only.'
+      }
+    ]
+  });
+
+  expect(parsed.projectTemplates).toEqual([
+    {
+      id: 'reviewer',
+      displayName: 'Reviewer',
+      modelId: 'gpt-5.5',
+      reasoningEffort: 'high',
+      speed: 'fast',
+      customPrompt: 'Review changes only.'
+    }
+  ]);
+});
+
+test('native CLI agent view rejects duplicate project member template ids', () => {
+  expect(
+    nativeCliAgentViewSchema.safeParse({
+      name: 'codex',
+      provider: 'codex',
+      command: 'codex',
+      enabled: true,
+      projectTemplates: [
+        { id: 'reviewer', displayName: 'Reviewer' },
+        { id: 'reviewer', displayName: 'Second reviewer' }
+      ]
+    }).success
+  ).toBe(false);
+});
+
 test('native CLI agent names are safe single path segments', () => {
   const validAgent = {
     name: 'Claude Code',
@@ -342,6 +387,7 @@ test('workplace native CLI members can be instantiated multiple times from one t
       type: 'native-cli',
       name: 'codex-reviewer',
       templateName: 'codex',
+      projectTemplateId: 'reviewer',
       displayName: 'codex-reviewer',
       instanceId: 'pmem_codex_reviewer',
       settings: { modelName: 'gpt-5.5', reasoningEffort: 'high', speed: 'fast', customPrompt: 'Review changes only.' }
@@ -350,14 +396,23 @@ test('workplace native CLI members can be instantiated multiple times from one t
       type: 'native-cli',
       name: 'codex-tester',
       templateName: 'codex',
+      projectTemplateId: 'tester',
       displayName: 'codex-tester',
       instanceId: 'pmem_codex_tester'
     }
   ]);
 
-  expect(parsed.map((member) => [member.name, member.templateName, member.displayName, member.instanceId])).toEqual([
-    ['codex-reviewer', 'codex', 'codex-reviewer', 'pmem_codex_reviewer'],
-    ['codex-tester', 'codex', 'codex-tester', 'pmem_codex_tester']
+  expect(
+    parsed.map((member) => [
+      member.name,
+      member.templateName,
+      member.projectTemplateId,
+      member.displayName,
+      member.instanceId
+    ])
+  ).toEqual([
+    ['codex-reviewer', 'codex', 'reviewer', 'codex-reviewer', 'pmem_codex_reviewer'],
+    ['codex-tester', 'codex', 'tester', 'codex-tester', 'pmem_codex_tester']
   ]);
   expect(parsed[0]?.settings?.customPrompt).toBe('Review changes only.');
   expect(parsed[0]?.settings?.modelName).toBe('gpt-5.5');

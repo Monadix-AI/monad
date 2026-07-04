@@ -6,6 +6,7 @@ type ProjectMember = ProjectController['projectMembers'][number];
 
 export type NativeCliDraft = {
   displayName?: string;
+  projectTemplateId?: string;
   modelId?: string;
   reasoningEffort?: string;
   speed?: 'standard' | 'fast';
@@ -26,7 +27,10 @@ export function nativeCliMemberDialogStateForMember(
   if (member.type !== 'native-cli') return null;
   const templateName = member.templateName ?? member.name;
   const candidate = room.availableProjectMembers.find(
-    (option) => option.type === 'native-cli' && option.name === templateName
+    (option) =>
+      option.type === 'native-cli' &&
+      option.name === templateName &&
+      (!member.projectTemplateId || option.template?.id === member.projectTemplateId)
   );
   if (!candidate) return null;
   const settings = member.settings ?? {};
@@ -35,6 +39,7 @@ export function nativeCliMemberDialogStateForMember(
     editingMemberId: member.id,
     draft: {
       displayName: member.displayName ?? member.name,
+      projectTemplateId: member.projectTemplateId,
       modelId: settings.modelId,
       reasoningEffort: settings.reasoningEffort,
       speed: settings.speed,

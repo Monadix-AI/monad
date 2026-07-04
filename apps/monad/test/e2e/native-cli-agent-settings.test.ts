@@ -27,6 +27,16 @@ const agentView = () => ({
   command: 'codex',
   args: ['--ask-for-approval', 'on-request'],
   modelOptions: ['gpt-5.5', 'custom-codex'],
+  projectTemplates: [
+    {
+      id: 'reviewer',
+      displayName: 'Reviewer',
+      modelId: 'gpt-5.5',
+      reasoningEffort: 'high',
+      speed: 'fast' as const,
+      customPrompt: 'Review changes only.'
+    }
+  ],
   enabled: true,
   defaultLaunchMode: 'pty',
   allowDangerousMode: false,
@@ -69,10 +79,23 @@ async function runCrud(call: Call, paths: MonadPaths): Promise<void> {
   expect(agents[0]?.approvalOwnership).toBe('provider-owned');
   expect(agents[0]?.provider).toBe('codex');
   expect(agents[0]?.modelOptions).toEqual(['gpt-5.5', 'custom-codex']);
+  expect(agents[0]?.projectTemplates).toEqual([
+    {
+      id: 'reviewer',
+      displayName: 'Reviewer',
+      modelId: 'gpt-5.5',
+      reasoningEffort: 'high',
+      speed: 'fast',
+      customPrompt: 'Review changes only.'
+    }
+  ]);
 
   expect((await loadConfig(paths.config))?.nativeCliAgents).toHaveLength(1);
   expect((await loadConfig(paths.config))?.nativeCliAgents[0]?.modelOptions).toEqual(['gpt-5.5', 'custom-codex']);
-  expect((await loadAll(paths.config, paths.profile))?.nativeCliAgents).toHaveLength(1);
+  expect((await loadConfig(paths.config))?.nativeCliAgents[0]?.projectTemplates?.[0]?.displayName).toBe('Reviewer');
+  const loaded = await loadAll(paths.config, paths.profile);
+  expect(loaded?.nativeCliAgents).toHaveLength(1);
+  expect(loaded?.nativeCliAgents[0]?.projectTemplates?.[0]?.customPrompt).toBe('Review changes only.');
 
   res = await call('POST', '/v1/settings/native-cli-agents/codex/disable');
   expect(res.status).toBe(200);

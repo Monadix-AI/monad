@@ -64,7 +64,8 @@ const toView = (a: NativeCliAgentConfig): NativeCliAgentView => ({
   defaultLaunchMode: a.defaultLaunchMode,
   appServerTransport: a.appServerTransport,
   allowDangerousMode: a.allowDangerousMode,
-  approvalOwnership: 'provider-owned'
+  approvalOwnership: 'provider-owned',
+  projectTemplates: a.projectTemplates
 });
 
 const fromView = (v: NativeCliAgentView, stored?: NativeCliAgentConfig): NativeCliAgentConfig => ({
@@ -78,7 +79,8 @@ const fromView = (v: NativeCliAgentView, stored?: NativeCliAgentConfig): NativeC
   defaultLaunchMode: v.defaultLaunchMode,
   appServerTransport: v.appServerTransport,
   allowDangerousMode: v.allowDangerousMode,
-  approvalOwnership: 'provider-owned'
+  approvalOwnership: 'provider-owned',
+  projectTemplates: v.projectTemplates
 });
 
 export function createNativeCliAgentModule({ paths }: NativeCliAgentDeps) {

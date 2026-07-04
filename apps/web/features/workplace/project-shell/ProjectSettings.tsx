@@ -247,7 +247,15 @@ export function ProjectSettings({
                 onAdd={(candidate) =>
                   setNativeCliInvite({
                     candidate,
-                    draft: { reasoningEffort: defaultReasoningEffort(candidate.reasoningEfforts) }
+                    draft: {
+                      displayName: candidate.template?.displayName,
+                      projectTemplateId: candidate.template?.id,
+                      modelId: candidate.template?.modelId,
+                      reasoningEffort:
+                        candidate.template?.reasoningEffort ?? defaultReasoningEffort(candidate.reasoningEfforts),
+                      speed: candidate.template?.speed,
+                      customPrompt: candidate.template?.customPrompt
+                    }
                   })
                 }
                 promoted={initialIntent === 'spawn-agent'}
