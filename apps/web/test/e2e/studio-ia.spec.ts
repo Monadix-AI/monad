@@ -133,7 +133,7 @@ test.describe('Studio IA', () => {
 
     await expect(page.getByRole('heading', { name: 'Runtime overview' })).toBeVisible();
     await expect(page.getByText('Agent Runtime', { exact: true })).toBeVisible();
-    await expect(page.getByText('Agent Swarm', { exact: true })).toBeVisible();
+    await expect(page.getByText('Agent Mesh', { exact: true })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Set up Monad runtime' })).toBeVisible();
     await expect(page.getByTestId('studio-runtime-illustration')).toBeVisible();
 
@@ -146,17 +146,17 @@ test.describe('Studio IA', () => {
     await expect(advanced.getByRole('link', { name: 'ACP delegates' })).toBeVisible();
   });
 
-  test('moves Swarm-owned work out of Runtime into its own overview', async ({ page }) => {
+  test('moves Mesh-owned work out of Runtime into its own overview', async ({ page }) => {
     await installStudioIaApiMock(page);
 
     await page.goto('/studio/runtime');
-    await page.getByRole('link', { name: 'Open Swarm overview' }).first().click();
+    await page.getByRole('link', { name: 'Open Mesh overview' }).first().click();
 
-    await expect(page).toHaveURL(/\/studio\/swarm$/);
-    await expect(page.getByRole('heading', { name: 'Swarm overview' })).toBeVisible();
+    await expect(page).toHaveURL(/\/studio\/mesh$/);
+    await expect(page.getByRole('heading', { name: 'Mesh overview' })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Connect Native CLI' })).toBeVisible();
-    await expect(page.getByText('Agent Swarm', { exact: true })).toBeVisible();
-    await expect(page.getByTestId('studio-swarm-illustration')).toBeVisible();
+    await expect(page.getByText('Agent Mesh', { exact: true })).toBeVisible();
+    await expect(page.getByTestId('studio-mesh-illustration')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Project members' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Tasks and sessions' })).toHaveCount(0);
   });

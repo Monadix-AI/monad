@@ -1,9 +1,9 @@
 import type { ProjectController } from '../use-project';
 
+import { Dialog, DialogContent, DialogTitle } from '@monad/ui';
 import { workspaceMono as mono, workspaceSans as sans } from '@monad/ui/components/AgentAvatar';
 
 import { useT } from '@/components/I18nProvider';
-import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 
 type ProjectMember = ProjectController['projectMembers'][number];
 
@@ -89,7 +89,7 @@ export function ProjectMemberSettingsDialog({
   if (!member) return null;
   return (
     <Dialog
-      onOpenChange={(open) => {
+      onOpenChange={(open: boolean) => {
         if (!open) onClose();
       }}
       open

@@ -226,14 +226,14 @@ test('bindWorkspaceExperience receives the current host api, update events, and 
     snapshot: { id: string };
     actions: Record<string, never>;
     embedded: boolean;
-    requestProjectSettings(open: boolean): void;
+    requestProjectDialog(): void;
   };
   const listeners = new Set<(event: { type: typeof WORKSPACE_EXPERIENCE_UPDATE_EVENT; detail: Api }) => void>();
   const target = {
     monadWorkspaceExperience: {
       actions: {},
       embedded: true,
-      requestProjectSettings: () => {},
+      requestProjectDialog: () => {},
       snapshot: { id: 'initial' }
     },
     addEventListener: (
@@ -255,14 +255,24 @@ test('bindWorkspaceExperience receives the current host api, update events, and 
   for (const listener of listeners) {
     listener({
       type: WORKSPACE_EXPERIENCE_UPDATE_EVENT,
-      detail: { actions: {}, embedded: false, requestProjectSettings: () => {}, snapshot: { id: 'next' } }
+      detail: {
+        actions: {},
+        embedded: false,
+        requestProjectDialog: () => {},
+        snapshot: { id: 'next' }
+      }
     });
   }
   unbind();
   for (const listener of listeners) {
     listener({
       type: WORKSPACE_EXPERIENCE_UPDATE_EVENT,
-      detail: { actions: {}, embedded: false, requestProjectSettings: () => {}, snapshot: { id: 'after-unbind' } }
+      detail: {
+        actions: {},
+        embedded: false,
+        requestProjectDialog: () => {},
+        snapshot: { id: 'after-unbind' }
+      }
     });
   }
 

@@ -7,12 +7,17 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { useT } from '@/components/I18nProvider';
 import { useAsyncAction } from '@/hooks/use-async-action';
-import { MO_ATLAS } from '@/lib/mo-atlas';
 import { useMonadRuntime } from '@/lib/monad-runtime-provider';
+import moAtlasManifest from '../../../../apps/mo/assets/atlas.json' with { type: 'json' };
 
-// Atlas layout comes from the generated single source (apps/mo/assets/atlas.json → @/lib/mo-atlas),
-// shared with the native shells. The /v1/mo/* endpoints are deliberately outside the Eden treaty,
-// so this talks to them via plain fetch against the daemon base URL.
+const MO_ATLAS = {
+  cols: moAtlasManifest.columns,
+  rows: moAtlasManifest.rows,
+  cellW: moAtlasManifest.cell_width,
+  cellH: moAtlasManifest.cell_height,
+  states: moAtlasManifest.states
+};
+
 const TILE_W = 96; // displayed cell width (px)
 const SCALE = TILE_W / MO_ATLAS.cellW;
 const TILE_H = MO_ATLAS.cellH * SCALE;

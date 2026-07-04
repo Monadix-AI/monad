@@ -10,39 +10,19 @@ import {
 } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { useWorkspaceActionMutation, useWorkspaceMetaQuery } from '@monad/client-rtk';
-import { workspaceMono as mono } from '@monad/ui/components/AgentAvatar';
-import { useState } from 'react';
-
-import { useT } from '@/components/I18nProvider';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu';
+} from '@monad/ui';
+import { workspaceMono as mono } from '@monad/ui/components/AgentAvatar';
+import { useState } from 'react';
 
-function workdirLabel(path: string | undefined, fallback: string): string {
-  if (!path) return fallback;
-  const trimmed = path.replace(/[\\/]+$/, '');
-  return trimmed.split(/[\\/]/).at(-1) || trimmed || fallback;
-}
+import { useT } from '@/components/I18nProvider';
+import { fileManagerLabel, terminalLabel, workdirLabel } from './project-header-utils';
 
-function fileManagerLabel(): string {
-  if (typeof navigator === 'undefined') return 'Show in file manager';
-  const platform = navigator.platform.toLowerCase();
-  if (platform.includes('mac')) return 'Show in Finder';
-  if (platform.includes('win')) return 'Show in Explorer';
-  return 'Show in file manager';
-}
-
-function terminalLabel(): string {
-  if (typeof navigator === 'undefined') return 'Open in terminal';
-  return navigator.platform.toLowerCase().includes('mac') ? 'Open in Terminal' : 'Open in terminal';
-}
-
-/** Shared working folder for the project — set it once and every project agent resolves fs/shell paths
- *  against it. Empty input clears it back to the default workspace. */
 function WorkdirControl({
   gitRemoteUrl,
   projectId,
@@ -144,14 +124,14 @@ function WorkdirControl({
           onSelect={() => performWorkspaceAction('show-in-file-manager')}
         >
           <HugeiconsIcon icon={FolderOpenIcon} />
-          {fileManagerLabel()}
+          {fileManagerLabel(typeof navigator === 'undefined' ? undefined : navigator.platform)}
         </DropdownMenuItem>
         <DropdownMenuItem
           disabled={!path}
           onSelect={() => void copyPath()}
         >
           <HugeiconsIcon icon={Copy01Icon} />
-          Copy01Icon path
+          Copy path
         </DropdownMenuItem>
         {gitRemoteUrl ? (
           <DropdownMenuItem onSelect={openGitHub}>
@@ -165,7 +145,7 @@ function WorkdirControl({
           onSelect={() => performWorkspaceAction('open-terminal')}
         >
           <HugeiconsIcon icon={ComputerTerminal01Icon} />
-          {terminalLabel()}
+          {terminalLabel(typeof navigator === 'undefined' ? undefined : navigator.platform)}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem

@@ -1,10 +1,11 @@
+import type { NativeCliAppServerTransport } from '@monad/protocol';
 import type { ProjectController } from '../use-project';
+import type { NativeCliDraft, NativeCliMemberDialogState } from './native-cli-member-dialog-model';
 
 import { ChevronDownIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { nativeCliAvatarSeed } from '@monad/atoms/workspace-experiences/project/project-members';
-import { entityAvatarUrl, type NativeCliAppServerTransport } from '@monad/protocol';
-import { Button, Switch } from '@monad/ui';
+import { entityAvatarUrl, nativeCliProjectMemberAvatarSeed } from '@monad/protocol';
+import { Button, Dialog, DialogContent, DialogTitle, Popover, PopoverContent, PopoverTrigger, Switch } from '@monad/ui';
 import {
   AgentInstanceAvatar,
   workspaceMono as mono,
@@ -19,69 +20,7 @@ import {
   ReasoningEffortControl,
   reasoningEffortOption
 } from '@/components/ReasoningEffortControl';
-import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-
-type AvailableProjectMember = ProjectController['availableProjectMembers'][number];
-type ProjectMember = ProjectController['projectMembers'][number];
-
-type NativeCliDraft = {
-  displayName?: string;
-  modelId?: string;
-  reasoningEffort?: string;
-  speed?: 'standard' | 'fast';
-  appServerTransport?: NativeCliAppServerTransport;
-  customPrompt?: string;
-};
-
-export type NativeCliMemberDialogState = {
-  candidate: AvailableProjectMember;
-  draft: NativeCliDraft;
-  editingMemberId?: string;
-};
-
-export function nativeCliMemberDialogStateForMember(
-  room: ProjectController,
-  member: ProjectMember
-): NativeCliMemberDialogState | null {
-  if (member.type !== 'native-cli') return null;
-  const templateName = member.templateName ?? member.name;
-  const candidate = room.availableProjectMembers.find(
-    (option) => option.type === 'native-cli' && option.name === templateName
-  );
-  if (!candidate) return null;
-  const settings = member.settings ?? {};
-  return {
-    candidate,
-    editingMemberId: member.id,
-    draft: {
-      displayName: member.displayName ?? member.name,
-      modelId: settings.modelId,
-      reasoningEffort: settings.reasoningEffort,
-      speed: settings.speed,
-      appServerTransport: settings.appServerTransport,
-      customPrompt: settings.customPrompt
-    }
-  };
-}
-
-function modelDisplayName(modelName: string): string {
-  if (modelName.startsWith('gpt-')) {
-    return modelName
-      .split('-')
-      .map((part, index) => (index === 0 ? part.toUpperCase() : part.charAt(0).toUpperCase() + part.slice(1)))
-      .join('-');
-  }
-  if (modelName.startsWith('claude-')) {
-    return modelName
-      .replace(/^claude-/, '')
-      .replace(/-(\d)-(\d)$/, ' $1.$2')
-      .split('-')
-      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-      .join(' ');
-  }
-  return modelName;
-}
+import { nativeCliModelDisplayName } from './native-cli-member-dialog-model';
 
 export function NativeCliMemberDialog({
   invite,
@@ -144,7 +83,7 @@ export function NativeCliMemberDialog({
 
   return (
     <Dialog
-      onOpenChange={(open) => {
+      onOpenChange={(open: boolean) => {
         if (!open) onClose();
       }}
       open
@@ -159,7 +98,7 @@ export function NativeCliMemberDialog({
               agent={{
                 ...invite.candidate,
                 avatarUrl: entityAvatarUrl(
-                  nativeCliAvatarSeed(
+                  nativeCliProjectMemberAvatarSeed(
                     room.activeProjectId ?? room.projectId,
                     invite.draft.displayName?.trim() || invite.candidate.label
                   ),
@@ -235,7 +174,7 @@ export function NativeCliMemberDialog({
                     key={modelName}
                     value={modelName}
                   >
-                    {modelDisplayName(modelName)}
+                    {nativeCliModelDisplayName(modelName)}
                   </option>
                 ))}
               </select>

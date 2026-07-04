@@ -11,9 +11,12 @@ import type { ActivityRow, Message, MessageAttachment, NativeCliStreamView, Part
 import {
   avatarCacheKey,
   channelDisplayText,
+  defaultWorkplaceProjectMemberSettings,
   entityAvatarUrl,
   entityAvatarWriteUrl,
-  messageAttachmentRefSchema
+  messageAttachmentRefSchema,
+  nativeCliProductDisplayName,
+  renameNativeCliProjectMemberDisplayName
 } from '@monad/protocol';
 
 import { nativeCliStreamItems } from '../../project/native-cli-observation/native-cli-observation.ts';
@@ -23,13 +26,7 @@ import {
   nativeCliMemberPresence,
   nativeCliSessionIsGenerating
 } from '../../project/native-cli-presence.ts';
-import {
-  defaultProjectMemberSettings,
-  nativeCliProductDisplayName,
-  parseProjectMembers,
-  productIcon,
-  renameNativeCliProjectMemberDisplayName
-} from '../../project/project-members.ts';
+import { parseProjectMembers, productIcon } from '../../project/project-members.ts';
 import { avatarForAgent, fmtTime, HUMAN, iconForAgent, nativeCliTag } from '../../project/project-projection.ts';
 
 const NATIVE_CLI_FOLLOW_TEXT = 'CLI stream available';
@@ -533,7 +530,7 @@ export const __workplaceProjectMessageTest = {
   buildProjectMessages,
   buildNativeCliStreams,
   avatarCacheKey,
-  defaultProjectMemberSettings,
+  defaultProjectMemberSettings: defaultWorkplaceProjectMemberSettings,
   entityAvatarUrl,
   entityAvatarWriteUrl,
   nativeCliMemberPresence,

@@ -1,5 +1,6 @@
 'use client';
 
+import type { WorkspaceExperienceProjectDialogRequest } from '@monad/protocol';
 import type { CSSProperties } from 'react';
 import type { ProjectExperienceDefinition } from './experiences/types';
 import type { ProjectController } from './use-project';
@@ -23,7 +24,7 @@ const noopSwitchExperience = () => {};
 export function Workplace({
   projectId,
   embedded = false,
-  mode = 'chat-room',
+  mode,
   experiences,
   onModeChange,
   onProjectControllerChange,
@@ -53,18 +54,32 @@ export function Workplace({
   const closeProjectSettings = useCallback(() => {
     closeProjectSettingsInStore();
   }, [closeProjectSettingsInStore]);
-  const setProjectSettingsOpen = useCallback(
-    (open: boolean) => {
-      if (open) openProjectSettingsInStore(projectId);
-      else closeProjectSettingsInStore();
-    },
-    [closeProjectSettingsInStore, openProjectSettingsInStore, projectId]
-  );
   const openAgentCard = useCallback(
     (memberId: string) => {
       openProjectMemberSettings(projectId, memberId);
     },
     [openProjectMemberSettings, projectId]
+  );
+  const requestProjectDialog = useCallback(
+    (request: WorkspaceExperienceProjectDialogRequest) => {
+      if (request.type === 'project-settings') {
+        if (request.open) openProjectSettingsInStore(projectId, request.intent);
+        else closeProjectSettingsInStore();
+        return;
+      }
+      if (!request.open) {
+        closeProjectMemberSettings();
+        return;
+      }
+      if (request.memberId) openProjectMemberSettings(projectId, request.memberId);
+    },
+    [
+      closeProjectMemberSettings,
+      closeProjectSettingsInStore,
+      openProjectMemberSettings,
+      openProjectSettingsInStore,
+      projectId
+    ]
   );
   const project = useProject(projectId, {
     openAgentCard,
@@ -173,8 +188,7 @@ export function Workplace({
           {experience
             ? experience.render({
                 embedded,
-                onProjectSettingsOpenChange: setProjectSettingsOpen,
-                projectSettingsOpen: settingsOpen,
+                onProjectDialogRequest: requestProjectDialog,
                 runtime: project.experienceRuntime,
                 voiceModelState
               })

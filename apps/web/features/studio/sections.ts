@@ -28,11 +28,11 @@ export type StudioSectionId =
   | 'thirdPartyAgents'
   | 'acpDelegates'
   | 'acpAgents'
-  | 'swarm'
+  | 'mesh'
   | 'nativeCliAgents'
   | 'workplaceProjects'
   | 'projectMembers'
-  | 'swarmTasks'
+  | 'meshTasks'
   | 'capabilities'
   | 'tools'
   | 'approvals'
@@ -57,11 +57,11 @@ export const STUDIO_SECTION_IDS = [
   'thirdPartyAgents',
   'acpDelegates',
   'acpAgents',
-  'swarm',
+  'mesh',
   'nativeCliAgents',
   'workplaceProjects',
   'projectMembers',
-  'swarmTasks',
+  'meshTasks',
   'capabilities',
   'tools',
   'approvals',
@@ -97,13 +97,13 @@ export const STUDIO_RUNTIME_SECTIONS: StudioSectionItem[] = [
   { id: 'safety', icon: ShieldHalfIcon, i18nKey: 'web.studio.safetyAndHooks' }
 ];
 
-export const STUDIO_SWARM_SECTIONS: StudioSectionItem[] = [
-  { id: 'swarm', icon: NeuralNetworkIcon, i18nKey: 'web.studio.swarmOverview' },
+export const STUDIO_MESH_SECTIONS: StudioSectionItem[] = [
+  { id: 'mesh', icon: NeuralNetworkIcon, i18nKey: 'web.studio.meshOverview' },
   { id: 'nativeCliAgents', icon: TerminalIcon, i18nKey: 'web.studio.nativeCliAgents' },
   { id: 'workplaceProjects', icon: MessageSquareCodeIcon, i18nKey: 'web.studio.workplaceProjects' }
 ];
 
-// System: host-level facilities that belong to neither the runtime nor the swarm — atom packs
+// System: host-level facilities that belong to neither the runtime nor the mesh — atom packs
 // (installed capability bundles) and usage/telemetry. Kept as its own group so it reads as
 // "about the installation" rather than "about the agents".
 export const STUDIO_SYSTEM_SECTIONS: StudioSectionItem[] = [
@@ -112,4 +112,4 @@ export const STUDIO_SYSTEM_SECTIONS: StudioSectionItem[] = [
 ];
 
 const _STUDIO_AGENT_SECTIONS = STUDIO_RUNTIME_SECTIONS;
-const _STUDIO_CAPABILITY_SECTIONS = STUDIO_SWARM_SECTIONS;
+const _STUDIO_CAPABILITY_SECTIONS = STUDIO_MESH_SECTIONS;

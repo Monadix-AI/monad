@@ -148,7 +148,7 @@ export function RuntimeOverview() {
                     size="sm"
                     variant="ghost"
                   >
-                    <Link href={studioPath('swarm')}>{t('web.studio.openSwarmOverview')}</Link>
+                    <Link href={studioPath('mesh')}>{t('web.studio.openMeshOverview')}</Link>
                   </Button>
                 </div>
               </div>
@@ -239,14 +239,14 @@ export function RuntimeOverview() {
           <aside className="hidden min-w-0 flex-col gap-4 lg:flex">
             <section className="rounded-xl border border-[color-mix(in_srgb,var(--info)_22%,var(--border))] bg-[color-mix(in_srgb,var(--info)_7%,var(--card))] px-4 py-4">
               <h2 className="font-medium text-sm">{t('web.studio.whenYouNeedTeam')}</h2>
-              <p className="mt-2 text-muted-foreground text-sm">{t('web.studio.swarmBridgeDesc')}</p>
+              <p className="mt-2 text-muted-foreground text-sm">{t('web.studio.meshBridgeDesc')}</p>
               <Button
                 asChild
                 className="mt-4"
                 size="sm"
                 variant="secondary"
               >
-                <Link href={studioPath('swarm')}>{t('web.studio.openSwarmOverview')}</Link>
+                <Link href={studioPath('mesh')}>{t('web.studio.openMeshOverview')}</Link>
               </Button>
             </section>
             <section className="rounded-xl border bg-card px-4 py-4">

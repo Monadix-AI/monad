@@ -1,3 +1,4 @@
+/// <reference types="bun" />
 // biome-ignore-all lint/suspicious/noConsole: standalone smoke CLI — console is the report
 // Windows AppContainer launcher smoke test — drives monad-sandbox-appcontainer.exe directly
 // (no daemon) to validate confinement, orphan-profile sweep, and ACE lifecycle on a real

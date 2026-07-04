@@ -2,7 +2,7 @@ import type { ProjectController } from '../use-project';
 
 import { ChevronRightIcon, Delete02Icon, MinusSignIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { ProductIcon } from '@monad/ui';
+import { Dialog, DialogContent, DialogTitle, ProductIcon } from '@monad/ui';
 import {
   AgentIdentity,
   AgentInstanceAvatar,
@@ -17,12 +17,8 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { useT } from '@/components/I18nProvider';
 import { defaultReasoningEffort } from '@/components/ReasoningEffortControl';
-import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
-import {
-  NativeCliMemberDialog,
-  type NativeCliMemberDialogState,
-  nativeCliMemberDialogStateForMember
-} from './NativeCliMemberDialog';
+import { NativeCliMemberDialog } from './NativeCliMemberDialog';
+import { type NativeCliMemberDialogState, nativeCliMemberDialogStateForMember } from './native-cli-member-dialog-model';
 import { ProjectAddMemberSection } from './ProjectAddMemberSection';
 import { ProjectMemberSettingsDialog } from './ProjectMemberSettingsDialog';
 
@@ -94,7 +90,7 @@ export function ProjectSettings({
   return (
     <>
       <Dialog
-        onOpenChange={(open) => {
+        onOpenChange={(open: boolean) => {
           if (!open) onClose();
         }}
         open

@@ -98,8 +98,7 @@ log(`Building monad ${VERSION} for: ${TARGETS.map((t) => `${t.os}-${t.arch}`).jo
 log('Installing workspace dependencies…');
 await $`bun install`.cwd(ROOT);
 await $`bun run ${join(ROOT, 'packages/home/scripts/gen-config-schema.ts')}`;
-// Regenerate the Mo atlas tables (native atlas.h + web mo-atlas.ts) from the manifest before any
-// shell build, so they never drift from apps/mo/assets/atlas.json.
+// Regenerate the native Mo atlas header from the manifest before any shell build.
 await $`bun run ${join(ROOT, 'scripts/gen-mo-atlas.ts')}`;
 await $`bun run ${join(ROOT, 'scripts/generate-licenses.ts')}`;
 

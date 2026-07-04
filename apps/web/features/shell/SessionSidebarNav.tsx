@@ -9,8 +9,8 @@ import { Button, cn, Tooltip, TooltipContent, TooltipTrigger } from '@monad/ui';
 
 import { MonadLogo } from '@/components/MonadLogo';
 import {
+  STUDIO_MESH_SECTIONS,
   STUDIO_RUNTIME_SECTIONS,
-  STUDIO_SWARM_SECTIONS,
   STUDIO_SYSTEM_SECTIONS,
   type StudioSectionId,
   type StudioSectionItem
@@ -23,7 +23,7 @@ export interface ProjectItem {
 
 type TFunction = ReturnType<typeof useT>;
 
-const STUDIO_SHORTCUT_ITEMS = [...STUDIO_RUNTIME_SECTIONS, ...STUDIO_SWARM_SECTIONS, ...STUDIO_SYSTEM_SECTIONS];
+const STUDIO_SHORTCUT_ITEMS = [...STUDIO_RUNTIME_SECTIONS, ...STUDIO_MESH_SECTIONS, ...STUDIO_SYSTEM_SECTIONS];
 
 function ShortcutBadge({ modifierLabel, number }: { modifierLabel: string; number: number }) {
   return (
@@ -171,8 +171,8 @@ export function StudioSidebarItems({
           {STUDIO_RUNTIME_SECTIONS.map(renderItem)}
         </SidebarNavSection>
         <SidebarNavSection>
-          <SidebarNavSectionLabel>{t('web.studio.agentSwarm')}</SidebarNavSectionLabel>
-          {STUDIO_SWARM_SECTIONS.map(renderItem)}
+          <SidebarNavSectionLabel>{t('web.studio.agentMesh')}</SidebarNavSectionLabel>
+          {STUDIO_MESH_SECTIONS.map(renderItem)}
         </SidebarNavSection>
       </div>
       <SidebarNavSection>

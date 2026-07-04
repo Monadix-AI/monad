@@ -140,14 +140,14 @@ export const workspaceExperienceWebComponentEntrySchema = z.object({
   tagName: z.string().min(1)
 });
 
-export const workspaceExperienceBuiltinEntrySchema = z.object({
-  type: z.literal('builtin'),
+export const workspaceExperienceHostComponentEntrySchema = z.object({
+  type: z.literal('host-component'),
   component: z.string().min(1)
 });
 
 export const workspaceExperienceEntrySchema = z.discriminatedUnion('type', [
   workspaceExperienceWebComponentEntrySchema,
-  workspaceExperienceBuiltinEntrySchema
+  workspaceExperienceHostComponentEntrySchema
 ]);
 export type WorkspaceExperienceEntry = z.infer<typeof workspaceExperienceEntrySchema>;
 
@@ -174,12 +174,26 @@ export const workspaceExperienceDefinitionSchema = z.object({
 });
 export type WorkspaceExperienceDefinition = z.infer<typeof workspaceExperienceDefinitionSchema>;
 
+export const workspaceExperienceProjectDialogRequestSchema = z.discriminatedUnion('type', [
+  z.object({
+    type: z.literal('project-settings'),
+    open: z.boolean(),
+    intent: z.enum(['connect-agent', 'spawn-agent']).optional()
+  }),
+  z.object({
+    type: z.literal('project-member-settings'),
+    open: z.boolean(),
+    memberId: z.string().min(1).optional()
+  })
+]);
+export type WorkspaceExperienceProjectDialogRequest = z.infer<typeof workspaceExperienceProjectDialogRequestSchema>;
+
 export interface WorkspaceExperienceHostApi<Snapshot = unknown, Actions = unknown> {
   snapshot: Snapshot;
   actions: Actions;
   embedded: boolean;
   apiBaseUrl?: string;
-  requestProjectSettings(open: boolean): void;
+  requestProjectDialog(request: WorkspaceExperienceProjectDialogRequest): void;
 }
 
 export const listWorkspaceExperiencesResponseSchema = z.object({

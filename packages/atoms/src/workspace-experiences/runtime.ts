@@ -1,7 +1,6 @@
 import type { ProfileView, ProjectId } from '@monad/protocol';
-import type { ChatRoomCanvas, ChatRoomCanvasSource } from './chat-room/utils/canvas.ts';
-import type { ProjectComposerSurface } from './chat-room/utils/composer.ts';
-import type { WorkspaceExperienceGraphCanvas } from './graph-view/utils/graph-model.ts';
+import type { ChatRoomExperienceRuntime } from './chat-room/runtime.ts';
+import type { GraphicViewExperienceRuntime } from './graph-view/runtime.ts';
 import type {
   AddProjectMemberOptions,
   ProjectMember,
@@ -9,11 +8,11 @@ import type {
   ProjectMemberSettings,
   ProjectMemberType
 } from './project/project-members.ts';
+import type { ProjectExperienceCanvasSource } from './project/source.ts';
 import type { Project } from './project/types.ts';
 
-import { toChatRoomCanvas } from './chat-room/utils/canvas.ts';
-import { toProjectComposerSurface } from './chat-room/utils/composer.ts';
-import { toGraphicViewCanvas } from './graph-view/utils/canvas.ts';
+import { createChatRoomExperienceRuntime } from './chat-room/runtime.ts';
+import { createGraphicViewExperienceRuntime } from './graph-view/runtime.ts';
 
 export interface ProjectWorkdirController {
   path?: string;
@@ -44,22 +43,14 @@ export interface ProjectExperienceActions {
   switchExperience: (id: string) => void;
 }
 
-export interface ProjectExperienceRuntimeSource extends ProjectExperienceSnapshot, ChatRoomCanvasSource {
+export interface ProjectExperienceRuntimeSource extends ProjectExperienceSnapshot, ProjectExperienceCanvasSource {
   addProjectMember: (type: ProjectMemberType, name: string, options?: AddProjectMemberOptions) => Promise<void>;
   removeProjectMember: (id: string) => Promise<void>;
   updateProjectMemberSettings: (id: string, patch: ProjectMemberSettings) => Promise<void>;
 }
 
-export interface ChatRoomExperienceRuntime {
-  canvas: ChatRoomCanvas;
-}
-
-export interface GraphicViewExperienceRuntime {
-  canvas: WorkspaceExperienceGraphCanvas;
-}
-
 export interface WorkspaceExperienceRuntimeViews {
-  'chat-room': ChatRoomExperienceRuntime & { composer: ProjectComposerSurface };
+  'chat-room': ChatRoomExperienceRuntime;
   'graphic-view': GraphicViewExperienceRuntime;
 }
 
@@ -76,14 +67,10 @@ export function createProjectExperienceRuntime(
     switchExperience: (id: string) => void;
   }
 ): ProjectExperienceRuntime {
-  const chatRoomCanvas = toChatRoomCanvas(source, {
+  const chatRoom = createChatRoomExperienceRuntime(source, {
     openAgentCard: opts.openAgentCard
   });
-  const graphicViewCanvas = toGraphicViewCanvas({
-    participants: source.participants,
-    liveTools: source.source.liveTools ?? []
-  });
-  const composer = toProjectComposerSurface(chatRoomCanvas, chatRoomCanvas.typing);
+  const graphicView = createGraphicViewExperienceRuntime(source);
   const snapshot: ProjectExperienceSnapshot = {
     projectId: source.projectId,
     activeProjectId: source.activeProjectId,
@@ -96,8 +83,8 @@ export function createProjectExperienceRuntime(
   };
   return {
     views: {
-      'chat-room': { canvas: chatRoomCanvas, composer },
-      'graphic-view': { canvas: graphicViewCanvas }
+      'chat-room': chatRoom,
+      'graphic-view': graphicView
     },
     snapshot,
     actions: {

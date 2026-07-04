@@ -15,7 +15,7 @@ import {
   projectDebugTraceSnapshot,
   subscribeProjectDebugTrace
 } from '@/lib/project-debug-trace';
-import { DEV_SYSTEM_MESSAGES_IN_STREAM_ENABLED, useWorkplaceUiStore } from '../workplace-ui-store';
+import { DEV_SYSTEM_MESSAGES_IN_STREAM_ENABLED, useProjectDebugStore } from './project-debug-store';
 
 type DebugFilter = 'all' | 'http' | 'sse' | 'native-cli' | 'approval' | 'log' | 'error';
 
@@ -99,8 +99,8 @@ export function ProjectDebugConsole({
   );
   const [filter, setFilter] = useState<DebugFilter>('all');
   const [paused, setPaused] = useState(false);
-  const showDevSystemMessagesInStream = useWorkplaceUiStore((state) => state.showDevSystemMessagesInStream);
-  const setShowDevSystemMessagesInStream = useWorkplaceUiStore((state) => state.setShowDevSystemMessagesInStream);
+  const showDevSystemMessagesInStream = useProjectDebugStore((state) => state.showDevSystemMessagesInStream);
+  const setShowDevSystemMessagesInStream = useProjectDebugStore((state) => state.setShowDevSystemMessagesInStream);
   const pausedRef = useRef(paused);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const visibleEntries = useMemo(() => filterDebugTraceEntries(entries, filter), [entries, filter]);

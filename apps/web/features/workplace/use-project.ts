@@ -6,8 +6,7 @@
 import type { NativeCliSessionView, ProfileView, ProjectId, UIItem, WorkplaceProject } from '@monad/protocol';
 import type { ApprovalDecision } from './use-project-actions';
 
-import { createProjectExperienceRuntime } from '@monad/atoms/workspace-experiences';
-import { useWorkspaceProjectProjection } from '@monad/atoms/workspace-experiences/project/use-workspace-project-projection';
+import { useProjectExperienceProjection } from '@monad/atoms/workspace-experiences';
 import {
   nativeCliSessionSelectors,
   profileSelectors,
@@ -26,8 +25,9 @@ import { useAcpAgentSettings } from '@/hooks/use-acp-agent-settings';
 import { useNativeCliAgentSettings } from '@/hooks/use-native-cli-agent-settings';
 import { useTranscriptHistory } from '@/hooks/use-transcript-history';
 import { getWorkplaceProjectName } from '@/lib/workspace-sessions';
+import { DEV_SYSTEM_MESSAGES_IN_STREAM_ENABLED, useProjectDebugStore } from './debug/project-debug-store';
+import { useWorkspaceProjectExperienceRuntime } from './experiences/project-experience-adapter';
 import { useProjectActions } from './use-project-actions';
-import { DEV_SYSTEM_MESSAGES_IN_STREAM_ENABLED, useWorkplaceUiStore } from './workplace-ui-store';
 
 export type { ApprovalDecision };
 
@@ -94,7 +94,7 @@ export function useProject(
         : EMPTY_NATIVE_CLI_SESSIONS,
     [nativeCliSessionsQ.data]
   );
-  const projection = useWorkspaceProjectProjection({
+  const projection = useProjectExperienceProjection({
     acpAgents: acp.agents,
     activeProjectId,
     appearanceAvatarStyle: appearance?.avatarStyle,
@@ -123,7 +123,7 @@ export function useProject(
     projectMembers,
     projects
   } = projection;
-  const showDevSystemMessagesInStream = useWorkplaceUiStore((state) => state.showDevSystemMessagesInStream);
+  const showDevSystemMessagesInStream = useProjectDebugStore((state) => state.showDevSystemMessagesInStream);
 
   const loadOlder = transcript.loadOlder;
 
@@ -152,8 +152,8 @@ export function useProject(
     setResolvedProjectId
   });
 
-  return useMemo(() => {
-    const controller = {
+  const controller = useMemo(
+    () => ({
       projectId,
       activeProjectId,
       ready: activeProjectId !== null,
@@ -195,54 +195,54 @@ export function useProject(
       updateProjectMemberIdentity,
       sendNativeCliInput,
       stopNativeCli
-    };
+    }),
+    [
+      activeProjectId,
+      projectId,
+      projects,
+      participants,
+      projectParticipants,
+      projectMembers,
+      availableProjectMembers,
+      approvals,
+      loadOlder,
+      modelProfiles,
+      currentProject,
+      transcript.items,
+      liveItems,
+      liveTools,
+      nativeCliSessions,
+      human,
+      appearance?.avatarStyle,
+      nativeCliAvatarSeeds,
+      nativeCliTags,
+      nativeCliDisplayNames,
+      nativeCliIcons,
+      showDevSystemMessagesInStream,
+      currentProject?.cwd,
+      setWorkdir,
+      sendDirective,
+      resolveApproval,
+      answerQuestion,
+      pauseAll,
+      deleteProject,
+      switchProject,
+      addProjectMember,
+      removeProjectMember,
+      updateProjectMemberSettings,
+      updateProjectMemberIdentity,
+      sendNativeCliInput,
+      stopNativeCli
+    ]
+  );
+  const experienceRuntime = useWorkspaceProjectExperienceRuntime(controller, opts);
+
+  return useMemo(() => {
     return {
       ...controller,
-      experienceRuntime: createProjectExperienceRuntime(controller, {
-        openAgentCard: opts.openAgentCard,
-        switchExperience: opts.switchExperience ?? (() => {})
-      })
+      experienceRuntime
     };
-  }, [
-    activeProjectId,
-    projectId,
-    projects,
-    participants,
-    projectParticipants,
-    projectMembers,
-    availableProjectMembers,
-    approvals,
-    loadOlder,
-    modelProfiles,
-    currentProject,
-    transcript.items,
-    liveItems,
-    liveTools,
-    nativeCliSessions,
-    human,
-    appearance?.avatarStyle,
-    nativeCliAvatarSeeds,
-    nativeCliTags,
-    nativeCliDisplayNames,
-    nativeCliIcons,
-    showDevSystemMessagesInStream,
-    currentProject?.cwd,
-    setWorkdir,
-    sendDirective,
-    resolveApproval,
-    answerQuestion,
-    pauseAll,
-    deleteProject,
-    switchProject,
-    addProjectMember,
-    removeProjectMember,
-    updateProjectMemberSettings,
-    updateProjectMemberIdentity,
-    sendNativeCliInput,
-    stopNativeCli,
-    opts.openAgentCard,
-    opts.switchExperience
-  ]);
+  }, [controller, experienceRuntime]);
 }
 
 export type ProjectController = ReturnType<typeof useProject>;

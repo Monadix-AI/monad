@@ -1,8 +1,8 @@
 'use client';
 
-import type { Participant } from '@monad/atoms/workspace-experiences/project/types';
 import type { ProjectId, WorkspaceAction } from '@monad/protocol';
 import type { ProjectExperienceDefinition } from '@/features/workplace/experiences/types';
+import type { ProjectController } from '@/features/workplace/use-project';
 
 import {
   ChevronDownIcon,
@@ -21,22 +21,23 @@ import {
   useWorkspaceActionMutation,
   useWorkspaceMetaQuery
 } from '@monad/client-rtk';
-import { Avatar, PresenceBadge } from '@monad/ui/components/AgentAvatar';
-import { useState } from 'react';
-
-import { useT } from '@/components/I18nProvider';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu';
+} from '@monad/ui';
+import { Avatar, PresenceBadge } from '@monad/ui/components/AgentAvatar';
+import { useState } from 'react';
+
+import { useT } from '@/components/I18nProvider';
 import { getProjectExperience } from '@/features/workplace/experiences/registry';
+import { fileManagerLabel, terminalLabel, workdirLabel } from '@/features/workplace/project-shell/project-header-utils';
 
 interface ProjectTopBarProps {
   mode: string;
-  participants: Participant[];
+  participants: ProjectController['participants'];
   projectName: string;
   projectWorkdir?: string;
   projectId: ProjectId | null;
@@ -52,25 +53,6 @@ const experienceIcon: Record<string, typeof MessageSquareCodeIcon> = {
 
 function iconForExperience(experience: ProjectExperienceDefinition): typeof MessageSquareCodeIcon {
   return experienceIcon[experience.icon ?? ''] ?? MessageSquareCodeIcon;
-}
-
-function workdirLabel(path: string | undefined, fallback: string): string {
-  if (!path) return fallback;
-  const trimmed = path.replace(/[\\/]+$/, '');
-  return trimmed.split(/[\\/]/).at(-1) || trimmed || fallback;
-}
-
-function fileManagerLabel(): string {
-  if (typeof navigator === 'undefined') return 'Show in file manager';
-  const platform = navigator.platform.toLowerCase();
-  if (platform.includes('mac')) return 'Show in Finder';
-  if (platform.includes('win')) return 'Show in Explorer';
-  return 'Show in file manager';
-}
-
-function terminalLabel(): string {
-  if (typeof navigator === 'undefined') return 'Open in terminal';
-  return navigator.platform.toLowerCase().includes('mac') ? 'Open in Terminal' : 'Open in terminal';
 }
 
 function ProjectTopBarWorkdir({ path, projectId }: { path?: string; projectId: ProjectId | null }): React.ReactElement {
@@ -140,7 +122,7 @@ function ProjectTopBarWorkdir({ path, projectId }: { path?: string; projectId: P
           onSelect={() => performWorkspaceAction('show-in-file-manager')}
         >
           <HugeiconsIcon icon={FolderOpenIcon} />
-          {fileManagerLabel()}
+          {fileManagerLabel(typeof navigator === 'undefined' ? undefined : navigator.platform)}
         </DropdownMenuItem>
         <DropdownMenuItem
           disabled={!path}
@@ -161,7 +143,7 @@ function ProjectTopBarWorkdir({ path, projectId }: { path?: string; projectId: P
           onSelect={() => performWorkspaceAction('open-terminal')}
         >
           <HugeiconsIcon icon={ComputerTerminal01Icon} />
-          {terminalLabel()}
+          {terminalLabel(typeof navigator === 'undefined' ? undefined : navigator.platform)}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem
@@ -178,7 +160,11 @@ function ProjectTopBarWorkdir({ path, projectId }: { path?: string; projectId: P
   );
 }
 
-function ProjectTopBarParticipants({ participants }: { participants: Participant[] }): React.ReactElement | null {
+function ProjectTopBarParticipants({
+  participants
+}: {
+  participants: ProjectController['participants'];
+}): React.ReactElement | null {
   const agents = participants.filter((participant) => participant.kind === 'agent' && participant.id !== 'monad');
   if (agents.length === 0) return null;
 

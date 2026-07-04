@@ -1,3 +1,4 @@
+/// <reference types="bun" />
 // biome-ignore-all lint/suspicious/noConsole: standalone smoke CLI — console is the report
 // Smoke test: drive a real `codex app-server --listen ws://…` through the actual launch builder,
 // ws transport helper, and codex adapter, asserting the initialize→thread handshake yields a

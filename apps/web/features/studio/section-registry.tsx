@@ -6,11 +6,11 @@ import type { StudioSectionId } from './sections';
 import dynamic from 'next/dynamic';
 
 import { AgentsPanel } from './AgentsPanel';
+import { MeshOverview, MeshPlaceholder } from './MeshOverview';
 import { Orchestration } from './Orchestration';
 import { RuntimeOverview } from './RuntimeOverview';
 import { SafetyAndHooks } from './SafetyAndHooks';
 import { SandboxDefaults } from './SandboxDefaults';
-import { SwarmOverview, SwarmPlaceholder } from './SwarmOverview';
 import { Usage } from './Usage';
 
 export interface StudioSectionProps {
@@ -108,8 +108,8 @@ export const STUDIO_SECTION_COMPONENTS: Record<StudioSectionId, StudioSectionCom
   sandbox: SandboxSection,
   safety: SafetyAndHooks,
   skills: SkillsSettings,
-  swarm: SwarmOverview,
-  swarmTasks: SwarmTasksSection,
+  mesh: MeshOverview,
+  meshTasks: MeshTasksSection,
   thirdPartyAgents: ThirdPartyAgentsSettings,
   tools: CapabilitiesSettings,
   usage: UsageSection,
@@ -136,13 +136,13 @@ const ThirdPartyNativeCliAgents = dynamic(
 );
 
 function WorkplaceProjectsSection() {
-  return <SwarmPlaceholder kind="projects" />;
+  return <MeshPlaceholder kind="projects" />;
 }
 
 function ProjectMembersSection() {
-  return <SwarmPlaceholder kind="members" />;
+  return <MeshPlaceholder kind="members" />;
 }
 
-function SwarmTasksSection() {
-  return <SwarmPlaceholder kind="tasks" />;
+function MeshTasksSection() {
+  return <MeshPlaceholder kind="tasks" />;
 }

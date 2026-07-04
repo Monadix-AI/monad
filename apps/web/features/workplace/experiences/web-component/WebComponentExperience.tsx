@@ -47,10 +47,10 @@ export function WebComponentExperience({
       actions: view.runtime.actions,
       apiBaseUrl: `/api/v1/atoms/workspace-experiences/${encodeURIComponent(atom.id)}/api`,
       embedded: view.embedded,
-      requestProjectSettings: (open: boolean) => view.onProjectSettingsOpenChange?.(open),
+      requestProjectDialog: view.onProjectDialogRequest ?? (() => {}),
       snapshot: view.runtime.snapshot
     }),
-    [atom.id, view.embedded, view.onProjectSettingsOpenChange, view.runtime.actions, view.runtime.snapshot]
+    [atom.id, view.embedded, view.onProjectDialogRequest, view.runtime.actions, view.runtime.snapshot]
   );
 
   useEffect(() => {

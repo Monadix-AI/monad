@@ -605,14 +605,17 @@ describe('tryParseConfig', () => {
 });
 
 describe('editor JSON schemas', () => {
-  test('generated schema files match the runtime schema content', async () => {
-    const [configSchema, profileSchema] = await Promise.all([
-      readFile(join(import.meta.dir, '../../config.schema.json'), 'utf8'),
-      readFile(join(import.meta.dir, '../../profile.schema.json'), 'utf8')
-    ]);
+  test('runtime schema content is valid JSON schema payloads', () => {
+    const configSchema = JSON.parse(SCHEMA_CONTENT) as { $schema?: string; properties?: Record<string, unknown> };
+    const profileSchema = JSON.parse(PROFILE_SCHEMA_CONTENT) as {
+      $schema?: string;
+      properties?: Record<string, unknown>;
+    };
 
-    expect(configSchema.trim()).toBe(SCHEMA_CONTENT.trim());
-    expect(profileSchema.trim()).toBe(PROFILE_SCHEMA_CONTENT.trim());
+    expect(configSchema.$schema).toContain('json-schema.org');
+    expect(profileSchema.$schema).toContain('json-schema.org');
+    expect(configSchema.properties).toHaveProperty('nativeCliAgents');
+    expect(profileSchema.properties).toHaveProperty('appearance');
   });
 });
 

@@ -2,11 +2,8 @@ import type { ProjectController } from '../use-project';
 
 import { useEffect, useState } from 'react';
 
-import {
-  NativeCliMemberDialog,
-  type NativeCliMemberDialogState,
-  nativeCliMemberDialogStateForMember
-} from './NativeCliMemberDialog';
+import { NativeCliMemberDialog } from './NativeCliMemberDialog';
+import { type NativeCliMemberDialogState, nativeCliMemberDialogStateForMember } from './native-cli-member-dialog-model';
 import { ProjectMemberSettingsDialog } from './ProjectMemberSettingsDialog';
 
 type ProjectMember = ProjectController['projectMembers'][number];

@@ -517,7 +517,7 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
             {groups.active.map(renderAgent)}
           </div>
 
-          <div style={{ ...sectionLabel, padding: '13px 15px 8px' }}>Monad Swarm</div>
+          <div style={{ ...sectionLabel, padding: '13px 15px 8px' }}>Monad Mesh</div>
           <div
             className="scwf-scroll"
             style={{

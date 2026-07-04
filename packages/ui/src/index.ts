@@ -31,6 +31,35 @@ import {
   ComposerVoiceUnavailableContent
 } from './components/Composer';
 import { ComposerAskSheet } from './components/ComposerAskSheet';
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogOverlay,
+  DialogPortal,
+  DialogTitle,
+  DialogTrigger
+} from './components/Dialog';
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuPortal,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuShortcut,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger
+} from './components/DropdownMenu';
 import { Input } from './components/Input';
 import {
   InputGroup,
@@ -41,6 +70,7 @@ import {
   InputGroupTextarea
 } from './components/InputGroup';
 import { Label } from './components/Label';
+import { Popover, PopoverContent, PopoverTrigger } from './components/Popover';
 import { isProductIconId, ProductIcon } from './components/ProductIcon';
 import { Progress } from './components/Progress';
 import { ScrollArea, ScrollBar } from './components/ScrollArea';
@@ -107,6 +137,31 @@ export {
   ComposerVoiceButton,
   ComposerVoiceUnavailableContent,
   cn,
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogOverlay,
+  DialogPortal,
+  DialogTitle,
+  DialogTrigger,
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuPortal,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuShortcut,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
   Input,
   InputGroup,
   InputGroupAddon,
@@ -116,6 +171,9 @@ export {
   InputGroupTextarea,
   isProductIconId,
   Label,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
   ProductIcon,
   Progress,
   ScrollArea,

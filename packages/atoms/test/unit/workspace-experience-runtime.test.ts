@@ -3,6 +3,10 @@ import type { ProjectExperienceRuntimeSource } from '../../src/workspace-experie
 
 import { expect, test } from 'bun:test';
 
+import {
+  requestSpawnAgentMemberDialog,
+  spawnAgentMemberDialogRequest
+} from '../../src/workspace-experiences/chat-room/components/view.tsx';
 import { toChatRoomCanvas } from '../../src/workspace-experiences/chat-room/utils/canvas.ts';
 import { canvasToGraph, HUB_ID } from '../../src/workspace-experiences/graph-view/utils/graph-model.ts';
 import { createProjectExperienceRuntime } from '../../src/workspace-experiences/runtime.ts';
@@ -110,6 +114,19 @@ test('toChatRoomCanvas: exposes the chatroom surface without project management 
   }
 });
 
+test('ChatRoomExperienceView: spawn member asks the host through the project dialog protocol', () => {
+  const requests: unknown[] = [];
+
+  requestSpawnAgentMemberDialog((request) => requests.push(request));
+
+  expect(requests).toEqual([spawnAgentMemberDialogRequest]);
+  expect(spawnAgentMemberDialogRequest).toEqual({
+    intent: 'spawn-agent',
+    open: true,
+    type: 'project-settings'
+  });
+});
+
 test('createProjectExperienceRuntime: exposes project data and controlled communication actions', () => {
   const calls: string[] = [];
   const source = runtimeSource({
@@ -132,7 +149,7 @@ test('createProjectExperienceRuntime: exposes project data and controlled commun
   const atomHostApi = {
     actions: runtime.actions,
     embedded: true,
-    requestProjectSettings: () => {},
+    requestProjectDialog: () => {},
     snapshot: runtime.snapshot
   };
 

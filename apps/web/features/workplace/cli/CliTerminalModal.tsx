@@ -1,6 +1,6 @@
 'use client';
 
-import type { Participant } from '@monad/atoms/workspace-experiences/project/types';
+import type { ComponentProps } from 'react';
 
 import { Avatar, workspaceMono as mono, workspaceSans as sans } from '@monad/ui/components/AgentAvatar';
 
@@ -80,7 +80,7 @@ export function CliTerminalModal({
   subtitle?: string;
   eyebrow?: string;
   tag?: string;
-  icon?: Participant['icon'];
+  icon?: ComponentProps<typeof Avatar>['icon'];
   avatarText?: string;
   status: CliTerminalModalStatus;
   output: string;

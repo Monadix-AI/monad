@@ -96,9 +96,9 @@ export class AtomPackRegistry {
   }
 
   registerWorkspaceExperience(experience: WorkspaceExperienceDefinition, atomPackId?: string): void {
-    if (experience.entry.type === 'builtin' && atomPackId !== 'monad-builtins') {
+    if (experience.entry.type === 'host-component' && atomPackId !== 'monad-builtins') {
       const next = atomPackId ?? 'builtin';
-      throw new Error(`workspace experience "${experience.id}" from "${next}" uses host-only builtin entry`);
+      throw new Error(`workspace experience "${experience.id}" from "${next}" uses host-only component entry`);
     }
     const existing = this.workspaceExperiences.get(experience.id);
     if (existing) {

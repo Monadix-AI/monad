@@ -1,12 +1,5 @@
-import type {
-  AvatarStyle,
-  ContextUsagePayload,
-  NativeAgentDeliveryId,
-  NativeCliSessionView,
-  ProfileView,
-  UIItem
-} from '@monad/protocol';
-import type { ProjectMember } from '../../project/project-members.ts';
+import type { ContextUsagePayload, NativeAgentDeliveryId, ProfileView } from '@monad/protocol';
+import type { ProjectExperienceCanvasSource } from '../../project/source.ts';
 import type {
   ActivityRow,
   AgentTask,
@@ -19,9 +12,9 @@ import type {
   TypingIndicator
 } from '../../project/types.ts';
 
-import { entityAvatarUrl } from '@monad/protocol';
+import { entityAvatarUrl, workplaceProjectMemberStableId } from '@monad/protocol';
 
-import { productIcon, projectMemberStableId } from '../../project/project-members.ts';
+import { productIcon } from '../../project/project-members.ts';
 import {
   avatarForAgent,
   contextUsageFromItems,
@@ -67,33 +60,7 @@ export interface ChatRoomCanvas {
   stopNativeCli: (id: string) => Promise<void>;
 }
 
-export interface ChatRoomCanvasSource {
-  projectId: string;
-  ready: boolean;
-  participants: Participant[];
-  projectMembers: ProjectMember[];
-  source: {
-    transcriptItems: readonly UIItem[];
-    liveItems: readonly UIItem[];
-    liveTools?: readonly Extract<UIItem, { kind: 'tool' }>[];
-    nativeCliSessions: NativeCliSessionView[];
-    human: Participant;
-    nativeCliAvatarSeeds: Map<string, string>;
-    nativeCliTags: Map<string, string>;
-    nativeCliDisplayNames: Map<string, string>;
-    nativeCliIcons?: Map<string, Message['icon']>;
-    avatarStyle?: AvatarStyle;
-    showDeveloperOnlyMessages: boolean;
-  };
-  modelProfiles: ProfileView[];
-  loadOlder: () => void;
-  sendDirective: (text: string) => Promise<void> | void;
-  resolveApproval: (requestId: string, decision: 'approve' | 'reject') => void;
-  answerQuestion: (requestId: string, answer: string) => void;
-  pauseAll: () => void;
-  sendNativeCliInput: (id: string, input: string) => Promise<void>;
-  stopNativeCli: (id: string) => Promise<void>;
-}
+export type ChatRoomCanvasSource = ProjectExperienceCanvasSource;
 
 export function toChatRoomCanvas(
   c: ChatRoomCanvasSource,
@@ -138,7 +105,7 @@ export function toChatRoomCanvas(
   const nativeCliTemplateAgentNames = new Map(
     (c.projectMembers ?? [])
       .filter((member) => member.type === 'native-cli')
-      .map((member) => [projectMemberStableId(member), member.templateName ?? member.name])
+      .map((member) => [workplaceProjectMemberStableId(member), member.templateName ?? member.name])
   );
   const nativeCliStreams = buildNativeCliStreams(source.nativeCliSessions, activity, nativeCliTemplateAgentNames);
   const tasks: AgentTask[] = liveTools.slice(-6).map((s) => ({

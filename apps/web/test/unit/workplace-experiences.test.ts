@@ -1,5 +1,4 @@
 import { expect, test } from 'bun:test';
-import { builtinWorkspaceExperiences } from '@monad/atoms/workspace-experiences';
 
 import {
   getProjectExperience,
@@ -11,45 +10,38 @@ test('project experiences: built-in atom descriptors expose full runtime-switcha
   const experiences = listProjectExperiences(
     toProjectExperienceDefinitions([
       {
-        id: 'chat-room',
-        title: 'Chat',
+        id: 'primary-view',
+        title: 'Primary',
         icon: 'message-square',
-        entry: { type: 'builtin', component: 'chat-room' }
+        entry: { type: 'host-component', component: 'primary-view' }
       },
       {
-        id: 'graphic-view',
-        title: 'Activity',
+        id: 'secondary-view',
+        title: 'Secondary',
         icon: 'git-fork',
-        entry: { type: 'builtin', component: 'graphic-view' }
+        entry: { type: 'host-component', component: 'secondary-view' }
       }
     ])
   );
 
-  expect(experiences.map((experience) => experience.id)).toEqual(['chat-room', 'graphic-view']);
-  expect(getProjectExperience('graphic-view', experiences)?.id).toBe('graphic-view');
-  expect(getProjectExperience('missing', experiences)?.id).toBe('chat-room');
-});
-
-test('project experiences: built-ins are available before daemon registry data returns', () => {
-  const experiences = listProjectExperiences(toProjectExperienceDefinitions([...builtinWorkspaceExperiences]));
-
-  expect(experiences.map((experience) => experience.id)).toEqual(['chat-room', 'graphic-view']);
-  expect(getProjectExperience('chat-room', experiences)?.id).toBe('chat-room');
+  expect(experiences.map((experience) => experience.id)).toEqual(['primary-view', 'secondary-view']);
+  expect(getProjectExperience('secondary-view', experiences)?.id).toBe('secondary-view');
+  expect(getProjectExperience('missing', experiences)?.id).toBe('primary-view');
 });
 
 test('project experiences: workspace-experience atoms join the runtime-switchable registry', () => {
   const atoms = toProjectExperienceDefinitions([
     {
-      id: 'chat-room',
-      title: 'Chat',
+      id: 'primary-view',
+      title: 'Primary',
       icon: 'message-square',
-      entry: { type: 'builtin', component: 'chat-room' }
+      entry: { type: 'host-component', component: 'primary-view' }
     },
     {
-      id: 'graphic-view',
-      title: 'Activity',
+      id: 'secondary-view',
+      title: 'Secondary',
       icon: 'git-fork',
-      entry: { type: 'builtin', component: 'graphic-view' }
+      entry: { type: 'host-component', component: 'secondary-view' }
     },
     {
       id: 'custom-canvas',
@@ -59,11 +51,11 @@ test('project experiences: workspace-experience atoms join the runtime-switchabl
   ]);
   const experiences = listProjectExperiences(atoms);
 
-  expect(experiences.map((experience) => experience.id)).toEqual(['chat-room', 'graphic-view', 'custom-canvas']);
+  expect(experiences.map((experience) => experience.id)).toEqual(['primary-view', 'secondary-view', 'custom-canvas']);
   expect(getProjectExperience('custom-canvas', experiences)).toMatchObject({
     id: 'custom-canvas',
     label: 'Custom Canvas'
   });
-  expect(getProjectExperience('graphic-view', experiences)?.id).toBe('graphic-view');
-  expect(getProjectExperience('missing', experiences)?.id).toBe('chat-room');
+  expect(getProjectExperience('secondary-view', experiences)?.id).toBe('secondary-view');
+  expect(getProjectExperience('missing', experiences)?.id).toBe('primary-view');
 });

@@ -3,19 +3,16 @@
 import { useCallback, useEffect } from 'react';
 import { create } from 'zustand';
 
-// The project's view mode — a project experience id (e.g. 'chat-room', 'graphic-view', or a future atom id).
-// Shared across components — the top-bar toggle and the in-project chrome both read and switch the
-// SAME mode, so e.g. the header's "jump to chat" works and every subscriber re-renders. Persisted
-// per project in localStorage, so a reload keeps the last choice (a per-device view preference, not
-// shared project state). Unknown ids resolve to the default project experience via the registry.
+// The project's view mode is an experience id from the daemon registry. Persisted per project in
+// localStorage as a per-device preference; callers choose the runtime fallback from the current
+// registry instead of baking a built-in id into the host.
 export type ProjectViewMode = string;
 
-const DEFAULT_VIEW_MODE = 'chat-room';
 const storageKey = (projectId: string): string => `monad.projectViewMode:${projectId}`;
 
-function loadMode(projectId: string): ProjectViewMode {
-  if (typeof window === 'undefined') return DEFAULT_VIEW_MODE;
-  return window.localStorage.getItem(storageKey(projectId)) ?? DEFAULT_VIEW_MODE;
+function loadMode(projectId: string): ProjectViewMode | null {
+  if (typeof window === 'undefined') return null;
+  return window.localStorage.getItem(storageKey(projectId));
 }
 
 interface ViewModeStore {
@@ -31,14 +28,17 @@ const useViewModeStore = create<ViewModeStore>((set) => ({
   }
 }));
 
-export function useProjectViewMode(projectId: string | null): [ProjectViewMode, (mode: ProjectViewMode) => void] {
+export function useProjectViewMode(
+  projectId: string | null
+): [ProjectViewMode | null, (mode: ProjectViewMode) => void] {
   const stored = useViewModeStore((state) => (projectId ? state.modes[projectId] : undefined));
   const setInStore = useViewModeStore((state) => state.set);
 
   // Hydrate from localStorage after mount (kept out of render to avoid an SSR/client mismatch).
   useEffect(() => {
     if (projectId && useViewModeStore.getState().modes[projectId] === undefined) {
-      setInStore(projectId, loadMode(projectId));
+      const savedMode = loadMode(projectId);
+      if (savedMode) setInStore(projectId, savedMode);
     }
   }, [projectId, setInStore]);
 
@@ -49,5 +49,5 @@ export function useProjectViewMode(projectId: string | null): [ProjectViewMode, 
     [projectId, setInStore]
   );
 
-  return [stored ?? DEFAULT_VIEW_MODE, setMode];
+  return [stored ?? null, setMode];
 }

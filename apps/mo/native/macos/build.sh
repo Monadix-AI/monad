@@ -3,6 +3,7 @@
 # the macOS SDK, which ships Cocoa and libcurl). Run on macOS.
 set -euo pipefail
 cd "$(dirname "$0")"
+bash ../common/ensure-atlas.sh
 
 if [[ "$(uname)" != "Darwin" ]]; then
   echo "mo: the macOS shell builds on macOS only (got $(uname))" >&2

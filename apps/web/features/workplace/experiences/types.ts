@@ -1,4 +1,5 @@
 import type { WebMessageIdWithoutParams } from '@monad/i18n';
+import type { WorkspaceExperienceProjectDialogRequest } from '@monad/protocol';
 import type { ReactElement } from 'react';
 
 interface ProjectExperienceHostRuntime {
@@ -8,8 +9,7 @@ interface ProjectExperienceHostRuntime {
 
 export interface ProjectExperienceView {
   embedded: boolean;
-  onProjectSettingsOpenChange?: (open: boolean) => void;
-  projectSettingsOpen: boolean;
+  onProjectDialogRequest?: (request: WorkspaceExperienceProjectDialogRequest) => void;
   runtime: ProjectExperienceHostRuntime;
   voiceModelState?: 'checking' | 'configured' | 'missing' | 'failed';
 }

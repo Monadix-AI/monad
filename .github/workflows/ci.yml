@@ -147,7 +147,9 @@ jobs:
         run: |
           bun test/smoke/codex-appserver-ws.ts
           bun test/smoke/codex-appserver-unix.ts
-      # Turn lifecycle + interrupt against the real binary. Skips when codex is not signed in
+      # Turn lifecycle + interrupt/steer against the real binary. Skips when codex is not signed in
       # (the turn errors before going in-flight), so it is safe on an unauthenticated runner.
       - name: Codex app-server turn + interrupt smoke
         run: bun test/smoke/codex-appserver-turn.ts
+      - name: Codex app-server turn + steer smoke
+        run: bun test/smoke/codex-appserver-steer.ts

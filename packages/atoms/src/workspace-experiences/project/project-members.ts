@@ -2,22 +2,23 @@ import type {
   AvatarStyle,
   NativeCliAppServerTransport,
   NativeCliProvider,
-  WorkplaceProjectMember,
   WorkplaceProjectMemberSettings,
-  WorkplaceProjectMemberType
+  WorkplaceProjectMemberType,
+  WorkplaceProjectMemberView
 } from '@monad/protocol';
 import type { Participant } from './types.ts';
 
-import { entityAvatarWriteUrl, workplaceProjectMembersExtSchema } from '@monad/protocol';
+import { entityAvatarWriteUrl, parseWorkplaceProjectMembers } from '@monad/protocol';
 
 export type ProjectMemberType = WorkplaceProjectMemberType;
 export type ProjectMemberSettings = WorkplaceProjectMemberSettings;
-export type ProjectMember = WorkplaceProjectMember & { id: string };
+export type ProjectMember = WorkplaceProjectMemberView;
 export type AddProjectMemberOptions = {
   displayName?: string;
   modelId?: string;
   reasoningEffort?: string;
   speed?: 'standard' | 'fast';
+  appServerTransport?: NativeCliAppServerTransport;
   customPrompt?: string;
 };
 export interface ProjectMemberCandidate {
@@ -34,21 +35,8 @@ export interface ProjectMemberCandidate {
   supportedAppServerTransports?: NativeCliAppServerTransport[];
 }
 
-export function projectMemberId(type: ProjectMemberType, name: string): string {
-  if (type === 'monad') return 'monad';
-  return `${type}:${name}`;
-}
-
-export function projectMemberStableId(member: WorkplaceProjectMember): string {
-  return member.type === 'native-cli' && member.instanceId
-    ? member.instanceId
-    : projectMemberId(member.type, member.name);
-}
-
 export function parseProjectMembers(value: unknown): ProjectMember[] {
-  const parsed = workplaceProjectMembersExtSchema.safeParse(value);
-  if (!parsed.success) return [];
-  return parsed.data.map((member) => ({ ...member, id: projectMemberStableId(member) }));
+  return parseWorkplaceProjectMembers(value);
 }
 
 function safeNativeCliInstanceSegment(value: string): string {

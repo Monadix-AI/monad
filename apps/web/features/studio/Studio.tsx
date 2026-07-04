@@ -9,7 +9,7 @@ import { STUDIO_SECTION_COMPONENTS } from './section-registry';
 
 /**
  * Studio: the two-plane workbench. Agent Runtime contains Monad-owned runtime policy and
- * capabilities; Agent Swarm coordinates provider-owned agents and Workplace projects.
+ * capabilities; Agent Mesh coordinates provider-owned agents and Workplace projects.
  */
 export function Studio({ onClose }: { onClose: () => void }) {
   const pathname = usePathname();

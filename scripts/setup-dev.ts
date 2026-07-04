@@ -427,7 +427,7 @@ async function main(): Promise<void> {
   }
 
   // ── 4b. Mo desktop sprite (macOS) ────────────────────────────────────────────
-  // Regenerate the atlas tables (native atlas.h + web mo-atlas.ts) from the manifest, then build the
+  // Regenerate the native atlas header from the manifest, then build the
   // native Mo.app once so `bun dev` can Launch it — MoService probes the repo build in dev. macOS-only
   // for now; non-fatal (skipped without clang/Xcode CLT), and only built when missing so repeat
   // `bun dev` runs stay fast.
@@ -443,8 +443,8 @@ async function main(): Promise<void> {
       'apps/mo/native/common/behavior.h',
       'apps/mo/native/common/daemon.c',
       'apps/mo/native/common/daemon.h',
-      'apps/mo/native/common/atlas.h',
-      'apps/mo/assets/atlas.json'
+      'apps/mo/assets/atlas.json',
+      'scripts/gen-mo-atlas.ts'
     ].map((p) => join(root, p));
     const binMtime = (await Bun.file(moBin).exists()) ? Bun.file(moBin).lastModified : 0;
     const newestSrc = Math.max(...sources.map((p) => Bun.file(p).lastModified));

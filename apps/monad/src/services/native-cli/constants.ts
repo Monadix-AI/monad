@@ -1,5 +1,7 @@
+import { NATIVE_CLI_OUTPUT_SNAPSHOT_MAX } from '@monad/protocol';
+
 /** Bytes retained from a session's output snapshot (the SQLite column + in-memory buffer bound). */
-export const MAX_OUTPUT_SNAPSHOT = 256 * 1024;
+export const MAX_OUTPUT_SNAPSHOT = NATIVE_CLI_OUTPUT_SNAPSHOT_MAX;
 
 /** A running auth session is force-stopped after this long regardless of heartbeats. */
 export const AUTH_RUNNING_TTL_MS = 30 * 60 * 1000;

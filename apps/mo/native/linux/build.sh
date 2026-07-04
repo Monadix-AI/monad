@@ -4,6 +4,7 @@
 #   Fedora:        sudo dnf install gtk3-devel libcurl-devel
 set -euo pipefail
 cd "$(dirname "$0")"
+bash ../common/ensure-atlas.sh
 
 out="${1:-mo}"
 pkgs="gtk+-3.0 libcurl"

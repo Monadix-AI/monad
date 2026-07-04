@@ -2,10 +2,9 @@
 /**
  * Generate the Mo atlas tables from the single source of truth apps/mo/assets/atlas.json:
  *   - apps/mo/native/common/atlas.h      (compiled into both native shells — no C JSON dependency)
- *   - apps/web/lib/mo-atlas.ts            (the web preview's layout constants)
  *
  * Run by postinstall (scripts/setup-dev.ts) and build-release.ts before building Mo, so the C header and
- * the web constants never drift from the manifest. Do not hand-edit the generated files.
+ * the manifest never drift from the native constants. Do not hand-edit the generated file.
  */
 
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
@@ -71,30 +70,4 @@ ${headerRows}
 `;
 writeIfChanged(join(ROOT, 'apps/mo/native/common/atlas.h'), headerOut);
 
-const tsStates = atlas.states
-  .map((s) => `    { state: '${s.state}', row: ${s.row}, frames: ${s.frames}, fps: ${s.fps} }`)
-  .join(',\n');
-
-const tsOut = `// GENERATED from apps/mo/assets/atlas.json by scripts/gen-mo-atlas.ts — DO NOT EDIT.
-// Regenerate with \`bun run scripts/gen-mo-atlas.ts\`. Shares the manifest the native shells compile in.
-
-export interface MoAtlasState {
-  state: string;
-  row: number;
-  frames: number;
-  fps: number;
-}
-
-export const MO_ATLAS = {
-  cols: ${atlas.columns},
-  rows: ${atlas.rows},
-  cellW: ${atlas.cell_width},
-  cellH: ${atlas.cell_height},
-  states: [
-${tsStates}
-  ] as MoAtlasState[]
-};
-`;
-writeIfChanged(join(ROOT, 'apps/web/lib/mo-atlas.ts'), tsOut);
-
-process.stdout.write('[gen-mo-atlas] wrote apps/mo/native/common/atlas.h + apps/web/lib/mo-atlas.ts\n');
+process.stdout.write('[gen-mo-atlas] wrote apps/mo/native/common/atlas.h\n');

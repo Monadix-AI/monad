@@ -2,7 +2,7 @@
 
 import { cn } from '@monad/ui';
 
-type OverviewIllustrationVariant = 'runtime' | 'swarm';
+type OverviewIllustrationVariant = 'runtime' | 'mesh';
 
 function RuntimeIllustration() {
   return (
@@ -128,7 +128,7 @@ function RuntimeIllustration() {
   );
 }
 
-function SwarmIllustration() {
+function MeshIllustration() {
   return (
     <svg
       aria-hidden="true"
@@ -136,7 +136,7 @@ function SwarmIllustration() {
       viewBox="0 0 240 156"
     >
       <rect
-        className="studio-swarm-room"
+        className="studio-mesh-room"
         height="100"
         rx="24"
         width="140"
@@ -144,16 +144,16 @@ function SwarmIllustration() {
         y="28"
       />
       <path
-        className="studio-swarm-room-line"
+        className="studio-mesh-room-line"
         d="M97 108h94"
       />
-      <g className="studio-swarm-entry-paths">
+      <g className="studio-mesh-entry-paths">
         <path d="M75 41C91 39 97 47 111 59" />
         <path d="M187 38C170 40 164 49 157 61" />
         <path d="M78 117C92 111 98 102 112 92" />
         <path d="M189 120C174 113 165 102 156 92" />
       </g>
-      <g className="studio-swarm-agent studio-swarm-agent--one">
+      <g className="studio-mesh-agent studio-mesh-agent--one">
         <rect
           height="34"
           rx="11"
@@ -168,7 +168,7 @@ function SwarmIllustration() {
         />
         <path d="M52 41h12" />
       </g>
-      <g className="studio-swarm-agent studio-swarm-agent--two">
+      <g className="studio-mesh-agent studio-mesh-agent--two">
         <rect
           height="34"
           rx="11"
@@ -183,7 +183,7 @@ function SwarmIllustration() {
         />
         <path d="M190 37h12" />
       </g>
-      <g className="studio-swarm-agent studio-swarm-agent--three">
+      <g className="studio-mesh-agent studio-mesh-agent--three">
         <rect
           height="34"
           rx="11"
@@ -198,7 +198,7 @@ function SwarmIllustration() {
         />
         <path d="M55 117h12" />
       </g>
-      <g className="studio-swarm-agent studio-swarm-agent--four">
+      <g className="studio-mesh-agent studio-mesh-agent--four">
         <rect
           height="34"
           rx="11"
@@ -213,7 +213,7 @@ function SwarmIllustration() {
         />
         <path d="M192 120h12" />
       </g>
-      <g className="studio-swarm-space-mark">
+      <g className="studio-mesh-space-mark">
         <rect
           height="34"
           rx="12"
@@ -239,7 +239,7 @@ export function OverviewIllustration({
       className={cn('studio-overview-illustration', className)}
       data-testid={`studio-${variant}-illustration`}
     >
-      {variant === 'runtime' ? <RuntimeIllustration /> : <SwarmIllustration />}
+      {variant === 'runtime' ? <RuntimeIllustration /> : <MeshIllustration />}
       <style>{`
         .studio-overview-illustration {
           min-height: 10.75rem;
@@ -260,7 +260,7 @@ export function OverviewIllustration({
         }
 
         .studio-assembly-agent rect,
-        .studio-swarm-space-mark rect {
+        .studio-mesh-space-mark rect {
           fill: color-mix(in srgb, var(--info) 16%, var(--background));
           stroke: color-mix(in srgb, var(--info) 44%, var(--border));
           stroke-width: 1.2;
@@ -268,7 +268,7 @@ export function OverviewIllustration({
 
         .studio-assembly-agent path,
         .studio-assembly-agent circle,
-        .studio-swarm-space-mark path {
+        .studio-mesh-space-mark path {
           fill: none;
           stroke: color-mix(in srgb, var(--foreground) 70%, var(--info));
           stroke-linecap: round;
@@ -293,7 +293,7 @@ export function OverviewIllustration({
 
         .studio-assembly-part rect,
         .studio-assembly-dock rect,
-        .studio-swarm-agent rect {
+        .studio-mesh-agent rect {
           fill: color-mix(in srgb, var(--background) 82%, var(--info));
           stroke: color-mix(in srgb, var(--border) 82%, var(--info));
           stroke-width: 1;
@@ -301,15 +301,15 @@ export function OverviewIllustration({
 
         .studio-assembly-part path,
         .studio-assembly-dock path,
-        .studio-swarm-agent path,
-        .studio-swarm-agent circle {
+        .studio-mesh-agent path,
+        .studio-mesh-agent circle {
           fill: none;
           stroke: color-mix(in srgb, var(--foreground) 62%, var(--info));
           stroke-linecap: round;
           stroke-width: 1.65;
         }
 
-        .studio-swarm-agent circle {
+        .studio-mesh-agent circle {
           fill: color-mix(in srgb, var(--info) 26%, var(--background));
         }
 
@@ -343,43 +343,43 @@ export function OverviewIllustration({
           animation: studio-assembly-guide 5s ease-out infinite;
         }
 
-        .studio-swarm-room {
+        .studio-mesh-room {
           fill: color-mix(in srgb, var(--info) 9%, var(--background));
           stroke: color-mix(in srgb, var(--info) 44%, var(--border));
           stroke-width: 1.2;
           transform-origin: 144px 78px;
-          animation: studio-swarm-room 5.4s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+          animation: studio-mesh-room 5.4s cubic-bezier(0.22, 1, 0.36, 1) infinite;
         }
 
-        .studio-swarm-room-line {
+        .studio-mesh-room-line {
           fill: none;
           stroke: color-mix(in srgb, var(--info) 34%, var(--border));
           stroke-linecap: round;
           stroke-width: 1.4;
         }
 
-        .studio-swarm-entry-paths path {
+        .studio-mesh-entry-paths path {
           fill: none;
           stroke: color-mix(in srgb, var(--info) 28%, var(--border));
           stroke-dasharray: 4 7;
           stroke-linecap: round;
           stroke-width: 1.2;
-          animation: studio-swarm-entry-path 5.4s ease-out infinite;
+          animation: studio-mesh-entry-path 5.4s ease-out infinite;
         }
 
-        .studio-swarm-agent {
+        .studio-mesh-agent {
           transform-origin: center;
-          animation: studio-swarm-agent 5.4s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+          animation: studio-mesh-agent 5.4s cubic-bezier(0.22, 1, 0.36, 1) infinite;
         }
 
-        .studio-swarm-agent--one { --swarm-x: 63px; --swarm-y: 24px; }
-        .studio-swarm-agent--two { --swarm-x: -15px; --swarm-y: 28px; animation-delay: -0.25s; }
-        .studio-swarm-agent--three { --swarm-x: 60px; --swarm-y: -14px; animation-delay: -0.5s; }
-        .studio-swarm-agent--four { --swarm-x: -17px; --swarm-y: -17px; animation-delay: -0.75s; }
+        .studio-mesh-agent--one { --mesh-x: 63px; --mesh-y: 24px; }
+        .studio-mesh-agent--two { --mesh-x: -15px; --mesh-y: 28px; animation-delay: -0.25s; }
+        .studio-mesh-agent--three { --mesh-x: 60px; --mesh-y: -14px; animation-delay: -0.5s; }
+        .studio-mesh-agent--four { --mesh-x: -17px; --mesh-y: -17px; animation-delay: -0.75s; }
 
-        .studio-swarm-space-mark {
+        .studio-mesh-space-mark {
           transform-origin: 144px 78px;
-          animation: studio-swarm-space-mark 5.4s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+          animation: studio-mesh-space-mark 5.4s cubic-bezier(0.22, 1, 0.36, 1) infinite;
         }
 
         @keyframes studio-assembly-part {
@@ -408,28 +408,28 @@ export function OverviewIllustration({
           44%, 66% { opacity: 0; stroke-dashoffset: -18; }
         }
 
-        @keyframes studio-swarm-agent {
+        @keyframes studio-mesh-agent {
           0%, 100% {
             opacity: 0.92;
             transform: translate(0, 0) scale(1);
           }
           44%, 68% {
             opacity: 1;
-            transform: translate(var(--swarm-x), var(--swarm-y)) scale(0.88);
+            transform: translate(var(--mesh-x), var(--mesh-y)) scale(0.88);
           }
         }
 
-        @keyframes studio-swarm-entry-path {
+        @keyframes studio-mesh-entry-path {
           0%, 100% { opacity: 0.5; stroke-dashoffset: 0; }
           44%, 68% { opacity: 0.12; stroke-dashoffset: -18; }
         }
 
-        @keyframes studio-swarm-room {
+        @keyframes studio-mesh-room {
           0%, 100% { transform: scale(0.98); }
           44%, 68% { transform: scale(1.02); }
         }
 
-        @keyframes studio-swarm-space-mark {
+        @keyframes studio-mesh-space-mark {
           0%, 100% { opacity: 0.68; transform: scale(0.96); }
           44%, 68% { opacity: 1; transform: scale(1.02); }
         }
@@ -439,10 +439,10 @@ export function OverviewIllustration({
           .studio-assembly-dock,
           .studio-assembly-part,
           .studio-assembly-guide,
-          .studio-swarm-room,
-          .studio-swarm-entry-paths path,
-          .studio-swarm-agent,
-          .studio-swarm-space-mark {
+          .studio-mesh-room,
+          .studio-mesh-entry-paths path,
+          .studio-mesh-agent,
+          .studio-mesh-space-mark {
             animation: none;
           }
 
@@ -454,8 +454,8 @@ export function OverviewIllustration({
             opacity: 0.95;
           }
 
-          .studio-swarm-agent {
-            transform: translate(var(--swarm-x), var(--swarm-y)) scale(0.88);
+          .studio-mesh-agent {
+            transform: translate(var(--mesh-x), var(--mesh-y)) scale(0.88);
           }
         }
       `}</style>

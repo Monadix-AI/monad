@@ -8,7 +8,6 @@ import { useRouter } from 'next/navigation';
 
 import { studioPath } from '@/features/routes/route-paths';
 import { useMonadRuntime } from '@/lib/monad-runtime-provider';
-import { useWorkplaceUiStore } from '../../workplace-ui-store';
 
 export function BuiltinWorkspaceExperienceHost({
   component,
@@ -19,7 +18,6 @@ export function BuiltinWorkspaceExperienceHost({
 }): React.ReactElement {
   const { client } = useMonadRuntime();
   const router = useRouter();
-  const openProjectSettings = useWorkplaceUiStore((state) => state.openProjectSettings);
   configureBuiltinWorkspaceExperienceClients({
     fetch: client.fetch,
     openModelSettings: () => router.push(studioPath('models'))
@@ -28,7 +26,7 @@ export function BuiltinWorkspaceExperienceHost({
     component,
     host: {
       nativeCliAgentsHref: studioPath('nativeCliAgents'),
-      openSpawnAgentMember: (projectId) => openProjectSettings(projectId, 'spawn-agent'),
+      requestProjectDialog: view.onProjectDialogRequest ?? (() => {}),
       voiceModelState: view.voiceModelState
     },
     view: { runtime: view.runtime }

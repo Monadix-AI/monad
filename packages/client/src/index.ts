@@ -23,6 +23,7 @@ import {
 } from '@monad/protocol';
 
 import { EventSocket } from './event-socket.ts';
+import { createNativeCliObservationFolder } from './native-cli-observation-fold.ts';
 import { createMonadTreaty, makeLoopbackHttpsFetcher, makeUnixFetcher } from './treaty.ts';
 
 export interface MonadClientOptions {
@@ -315,14 +316,17 @@ export class MonadClient {
     onObservation: NativeCliObservationHandler,
     opts?: { onError?: (err: StreamError) => void }
   ): () => void {
-    // A non-'live' access snapshot is terminal (the CLI process exited): stop instead of reconnecting.
-    // Any other close is a dropped connection, so `stream` reconnects — restoring the self-healing the
-    // 900ms poll this replaced used to give.
+    // The daemon pushes per-token `append` deltas (not the whole buffer) in steady state and a full
+    // `output` snapshot only on first connect / resync; fold them so every consumer reads a full
+    // `output`. A non-'live' access snapshot is terminal (the CLI process exited): stop instead of
+    // reconnecting. Any other close is a dropped connection, so `stream` reconnects — restoring the
+    // self-healing the 900ms poll this replaced used to give — and `resume` threads the last seq as
+    // last-event-id so the daemon backfills the gap as a delta rather than resending the whole snapshot.
     return this.stream(
       `/${CONTROL_API_VERSION}/native-cli-sessions/${id}/observation-stream?transcriptTargetId=${encodeURIComponent(transcriptTargetId)}`,
       nativeCliObservationAccessResponseSchema,
-      onObservation,
-      { ...opts, isTerminal: (access) => access.state !== 'live' }
+      createNativeCliObservationFolder(onObservation),
+      { ...opts, resume: true, isTerminal: (access) => access.state !== 'live' }
     );
   }
 

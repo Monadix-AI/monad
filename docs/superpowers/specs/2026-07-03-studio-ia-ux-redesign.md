@@ -4,7 +4,7 @@
 
 Approved direction: use the Studio wireframe v1 direction from the visual companion session.
 
-Primary goal: make ownership boundaries obvious. Studio must clearly separate Monad-owned runtime configuration from provider-owned swarm participation, while keeping common setup and operations efficient.
+Primary goal: make ownership boundaries obvious. Studio must clearly separate Monad-owned runtime configuration from provider-owned mesh participation, while keeping common setup and operations efficient.
 
 ## Problem
 
@@ -19,7 +19,7 @@ The result is that users cannot quickly answer:
 
 - Is Monad running and governing this capability?
 - Is a provider-owned native client running its own runtime?
-- Is this setting global runtime setup or project swarm setup?
+- Is this setting global runtime setup or project mesh setup?
 - Where should I start if I want to build an agent, invite a provider CLI, or configure runtime policy?
 
 ## Design principle
@@ -27,7 +27,7 @@ The result is that users cannot quickly answer:
 Use runtime ownership as the top-level IA rule.
 
 - Agent Runtime: Monad owns model routing, agent profiles, tools, MCP, ACP delegation, memory, approvals, hooks, sandbox policy, and usage visibility.
-- Agent Swarm: Monad coordinates Workplace projects and provider-owned agents. Provider CLIs own their own runtime, tools, authentication, and approval lifecycle; Monad relays content, session state, and user decisions.
+- Agent Mesh: Monad coordinates Workplace projects and provider-owned agents. Provider CLIs own their own runtime, tools, authentication, and approval lifecycle; Monad relays content, session state, and user decisions.
 
 Do not use "third-party agents" as a top-level product concept. It hides the important difference between ACP delegates and Native CLI agents.
 
@@ -60,13 +60,13 @@ Mapping from current routes:
 - `/studio/memory`, `/studio/graph`, `/studio/mem0` -> Memory
 - `/studio/approvals`, `/studio/hooks`, `/studio/sandbox` -> Safety and hooks
 
-### Agent Swarm
+### Agent Mesh
 
-Default section: `Swarm overview`.
+Default section: `Mesh overview`.
 
 Items:
 
-- Swarm overview
+- Mesh overview
 - Native CLI agents
 - Workplace projects
 - Project members
@@ -75,8 +75,8 @@ Items:
 Mapping from current routes:
 
 - `/studio/thirdPartyAgents/cli` and legacy `/studio/nativeCliAgents` -> Native CLI agents
-- Workplace project routes remain under `/workplace/projects/:id`, but Studio should link to them from Swarm overview and project-related cards.
-- Project member configuration remains project-scoped, but Studio should expose a Swarm entry that routes users to the correct project settings flow.
+- Workplace project routes remain under `/workplace/projects/:id`, but Studio should link to them from Mesh overview and project-related cards.
+- Project member configuration remains project-scoped, but Studio should expose a Mesh entry that routes users to the correct project settings flow.
 
 ### Operations
 
@@ -88,13 +88,13 @@ Items:
 Mapping from current routes:
 
 - `/studio/usage` -> Usage
-- System is a landing area for app or daemon-level settings that are not specifically agent runtime or swarm configuration. First implementation may keep only Usage visible until there is a concrete System page.
+- System is a landing area for app or daemon-level settings that are not specifically agent runtime or mesh configuration. First implementation may keep only Usage visible until there is a concrete System page.
 
 ## Page model
 
 ### Overview hub pattern
 
-Runtime overview and Swarm overview should be real work surfaces, not marketing landing pages.
+Runtime overview and Mesh overview should be real work surfaces, not marketing landing pages.
 
 Each overview uses:
 
@@ -108,7 +108,7 @@ Runtime overview copy:
 
 > Configure the Monad-owned runtime: model routing, agents, tools, memory, approval policy, and ACP delegation.
 
-Swarm overview copy:
+Mesh overview copy:
 
 > Coordinate provider-owned agents and Workplace projects. Monad relays content, sessions, and member state.
 
@@ -159,7 +159,7 @@ This page should make policy order and effect visible:
 - Runtime approvals apply to Monad-owned capabilities.
 - Sandbox defaults govern Monad-run tools and sessions.
 - Hooks observe or gate runtime lifecycle events.
-- Provider-owned Native CLI approvals are relayed under Agent Swarm and are not re-decided by Monad runtime policy.
+- Provider-owned Native CLI approvals are relayed under Agent Mesh and are not re-decided by Monad runtime policy.
 
 ### ACP delegates page
 
@@ -173,7 +173,7 @@ The page should say:
 
 ### Native CLI agents page
 
-Native CLI agents should live under Agent Swarm.
+Native CLI agents should live under Agent Mesh.
 
 The page should say:
 
@@ -234,8 +234,8 @@ Preferred labels:
 - ACP delegates
 - Memory
 - Safety and hooks
-- Agent Swarm
-- Swarm overview
+- Agent Mesh
+- Mesh overview
 - Native CLI agents
 - Workplace projects
 - Project members
@@ -280,7 +280,7 @@ Add or update browser-level tests for:
 
 - Studio default route opens Runtime overview.
 - Runtime navigation opens Models and providers, Capabilities, ACP delegates, Memory, and Safety and hooks.
-- Swarm navigation opens Swarm overview and Native CLI agents.
+- Mesh navigation opens Mesh overview and Native CLI agents.
 - Legacy `/studio/acpAgents` opens ACP delegates.
 - Legacy `/studio/nativeCliAgents` opens Native CLI agents.
 - Legacy `/studio/tools`, `/studio/mcpServers`, and `/studio/mcpAtoms` open Capabilities with the intended subsection.
@@ -290,7 +290,7 @@ Add unit coverage where useful for route-path mapping.
 
 ## Acceptance criteria
 
-- Users can identify whether a feature is Monad-owned runtime configuration or provider-owned swarm coordination from its navigation location and page description.
+- Users can identify whether a feature is Monad-owned runtime configuration or provider-owned mesh coordination from its navigation location and page description.
 - ACP delegates and Native CLI agents are no longer visually grouped as the same kind of third-party agent.
 - The global sidebar has fewer top-level settings entries than the current Studio sidebar.
 - Overview hubs provide actionable status and next steps without becoming marketing pages.

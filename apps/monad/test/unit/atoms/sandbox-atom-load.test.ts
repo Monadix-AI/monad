@@ -45,7 +45,7 @@ test('built-in pack registers workspace experiences through the gated loader', a
   });
 
   expect(experiences.map((experience) => experience.id)).toEqual(['chat-room', 'graphic-view']);
-  expect(experiences.map((experience) => experience.entry.type)).toEqual(['builtin', 'builtin']);
+  expect(experiences.map((experience) => experience.entry.type)).toEqual(['host-component', 'host-component']);
 });
 
 test('a discovered sandbox atom pack is preferred over the built-in launcher', async () => {

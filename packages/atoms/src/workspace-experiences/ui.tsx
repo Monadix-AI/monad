@@ -1,21 +1,28 @@
+import type { WorkspaceExperienceProjectDialogRequest } from '@monad/protocol';
 import type { ReactElement } from 'react';
-import type { ProjectExperienceRuntime } from './runtime.ts';
+import type { ProjectExperienceRuntime, ProjectExperienceRuntimeSource } from './runtime.ts';
 
-import { createElement } from 'react';
+import { useMemo } from 'react';
 
-import { configureWorkspaceAttachmentClient } from './chat-room/components/attachment-chip.tsx';
-import { type ChatRoomExperienceHostActions, ChatRoomExperienceView } from './chat-room/components/view.tsx';
-import { configureChatRoomComposerClient } from './chat-room/composer-client.ts';
-import { configureChatRoomNativeCliClient } from './chat-room/native-cli-observation-client.ts';
-import { GraphViewExperienceView } from './graph-view/components/view.tsx';
-import { builtinWorkspaceExperiences } from './registry.ts';
-import { createProjectExperienceRuntime } from './runtime.ts';
+import { configureChatRoomExperienceClients, renderChatRoomWorkspaceExperience } from './chat-room/ui.tsx';
+import { renderGraphViewWorkspaceExperience } from './graph-view/ui.tsx';
+import {
+  useWorkspaceProjectProjection as useProjection,
+  type WorkspaceProjectProjection
+} from './project/use-workspace-project-projection.ts';
+import { createProjectExperienceRuntime as createRuntime } from './runtime.ts';
+
+export type { ProjectExperienceRuntimeSource } from './runtime.ts';
 
 type ProjectExperienceViewLike = {
   runtime: unknown;
 };
 
-export type BuiltinWorkspaceExperienceHostActions = ChatRoomExperienceHostActions;
+export interface BuiltinWorkspaceExperienceHostActions {
+  nativeCliAgentsHref: string;
+  requestProjectDialog: (request: WorkspaceExperienceProjectDialogRequest) => void;
+  voiceModelState?: 'checking' | 'configured' | 'missing' | 'failed';
+}
 
 export type BuiltinWorkspaceExperienceClient = {
   fetch(path: string, init?: RequestInit): Promise<Response>;
@@ -23,10 +30,21 @@ export type BuiltinWorkspaceExperienceClient = {
 };
 
 export function configureBuiltinWorkspaceExperienceClients(client: BuiltinWorkspaceExperienceClient): void {
-  configureWorkspaceAttachmentClient(client);
-  configureChatRoomComposerClient(client);
-  configureChatRoomNativeCliClient(client);
+  configureChatRoomExperienceClients(client);
 }
+
+const builtinWorkspaceExperienceRenderers = {
+  'chat-room': (runtime: ProjectExperienceRuntime, host: BuiltinWorkspaceExperienceHostActions) =>
+    renderChatRoomWorkspaceExperience({
+      host,
+      runtime: runtime.views['chat-room']
+    }),
+  'graphic-view': (runtime: ProjectExperienceRuntime) =>
+    renderGraphViewWorkspaceExperience(runtime.views['graphic-view'])
+} satisfies Record<
+  string,
+  (runtime: ProjectExperienceRuntime, host: BuiltinWorkspaceExperienceHostActions) => ReactElement
+>;
 
 export function renderBuiltinWorkspaceExperience(args: {
   component: string;
@@ -34,20 +52,31 @@ export function renderBuiltinWorkspaceExperience(args: {
   view: ProjectExperienceViewLike;
 }): ReactElement | null {
   const runtime = args.view.runtime as ProjectExperienceRuntime;
-  if (args.component === 'chat-room') {
-    const view = runtime.views['chat-room'];
-    return createElement(ChatRoomExperienceView, {
-      host: args.host,
-      runtime: {
-        canvas: view.canvas,
-        composer: view.composer
-      }
-    });
-  }
-  if (args.component === 'graphic-view') {
-    return createElement(GraphViewExperienceView, { canvas: runtime.views['graphic-view'].canvas });
-  }
-  return null;
+  const renderer =
+    builtinWorkspaceExperienceRenderers[args.component as keyof typeof builtinWorkspaceExperienceRenderers];
+  return renderer?.(runtime, args.host) ?? null;
 }
 
-export { builtinWorkspaceExperiences, createProjectExperienceRuntime };
+function buildProjectExperienceRuntime(
+  source: ProjectExperienceRuntimeSource,
+  opts: {
+    openAgentCard?: (id: string) => void;
+    switchExperience: (id: string) => void;
+  }
+): ProjectExperienceRuntime {
+  return createRuntime(source, opts);
+}
+
+export function useProjectExperienceProjection(args: Parameters<typeof useProjection>[0]): WorkspaceProjectProjection {
+  return useProjection(args);
+}
+
+export function useProjectExperienceRuntime(
+  source: ProjectExperienceRuntimeSource,
+  opts: {
+    openAgentCard?: (id: string) => void;
+    switchExperience: (id: string) => void;
+  }
+): ProjectExperienceRuntime {
+  return useMemo(() => buildProjectExperienceRuntime(source, opts), [source, opts]);
+}

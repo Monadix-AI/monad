@@ -1,4 +1,4 @@
-import type { NativeAgentDeliveryId } from '@monad/protocol';
+import type { NativeAgentDeliveryId, WorkspaceExperienceProjectDialogRequest } from '@monad/protocol';
 import type { ReactElement } from 'react';
 import type { ChatRoomCanvas } from '../utils/canvas.ts';
 import type { ProjectComposerSurface } from '../utils/composer.ts';
@@ -14,7 +14,7 @@ import { Composer } from './composer/composer.tsx';
 
 export type ChatRoomExperienceHostActions = {
   nativeCliAgentsHref: string;
-  openSpawnAgentMember?: (projectId: string) => void;
+  requestProjectDialog?: (request: WorkspaceExperienceProjectDialogRequest) => void;
   voiceModelState?: 'checking' | 'configured' | 'missing' | 'failed';
 };
 
@@ -22,6 +22,18 @@ export type ChatRoomExperienceRuntime = {
   canvas: ChatRoomCanvas;
   composer: ProjectComposerSurface;
 };
+
+export const spawnAgentMemberDialogRequest = {
+  intent: 'spawn-agent',
+  open: true,
+  type: 'project-settings'
+} satisfies WorkspaceExperienceProjectDialogRequest;
+
+export function requestSpawnAgentMemberDialog(
+  requestProjectDialog: ChatRoomExperienceHostActions['requestProjectDialog']
+): void {
+  requestProjectDialog?.(spawnAgentMemberDialogRequest);
+}
 
 export function ChatRoomExperienceView({
   host,
@@ -61,7 +73,7 @@ export function ChatRoomExperienceView({
             working: t('web.workplace.working')
           },
           nativeCliAgentsHref: host.nativeCliAgentsHref,
-          onSpawnAgentMember: host.openSpawnAgentMember,
+          onSpawnAgentMember: () => requestSpawnAgentMemberDialog(host.requestProjectDialog),
           room: chatRoom
         })
       ),

@@ -1,24 +1,15 @@
-import type { ApprovalView } from '@monad/atoms/workspace-experiences/project/types';
-import type { AvatarStyle, ProjectId, WorkplaceProject } from '@monad/protocol';
+import type {
+  AvatarStyle,
+  NativeCliAppServerTransport,
+  ProjectId,
+  WorkplaceProject,
+  WorkplaceProjectMemberSettings,
+  WorkplaceProjectMemberType,
+  WorkplaceProjectMemberView
+} from '@monad/protocol';
 import type { useAcpAgentSettings } from '@/hooks/use-acp-agent-settings';
 import type { useNativeCliAgentSettings } from '@/hooks/use-native-cli-agent-settings';
 
-import {
-  type AddProjectMemberOptions,
-  defaultProjectMemberSettings,
-  nativeCliProductDisplayName,
-  newNativeCliInstanceId,
-  type ProjectMember,
-  type ProjectMemberSettings,
-  type ProjectMemberType,
-  productIcon,
-  projectMemberAvatarSeeds,
-  projectMemberId,
-  renameNativeCliProjectMemberDisplayName,
-  safeNativeCliDisplayName,
-  uniqueNativeCliDisplayName,
-  warmEntityAvatar
-} from '@monad/atoms/workspace-experiences/project/project-members';
 import {
   useAbortSessionMutation,
   useApproveNativeCliSessionMutation,
@@ -30,12 +21,42 @@ import {
   useStopNativeCliSessionMutation,
   useUpdateWorkplaceProjectMutation
 } from '@monad/client-rtk';
-import { workplaceProjectMembersExtKey } from '@monad/protocol';
+import {
+  defaultWorkplaceProjectMemberSettings,
+  entityAvatarWriteUrl,
+  nativeCliProductDisplayName,
+  newNativeCliInstanceId,
+  renameNativeCliProjectMemberDisplayName,
+  safeNativeCliDisplayName,
+  uniqueNativeCliDisplayName,
+  workplaceProjectMemberAvatarSeeds,
+  workplaceProjectMemberId,
+  workplaceProjectMembersExtKey
+} from '@monad/protocol';
 import { useCallback } from 'react';
 
 import { traceProjectDebugOperation } from '@/lib/project-debug-trace';
 
 export type ApprovalDecision = 'approve' | 'reject';
+
+type ProjectApprovalActionView = {
+  id: string;
+  approvalOwnership?: 'provider-owned';
+  nativeCliSessionId?: string;
+};
+
+type AddProjectMemberOptions = {
+  displayName?: string;
+  modelId?: string;
+  reasoningEffort?: string;
+  speed?: 'standard' | 'fast';
+  appServerTransport?: NativeCliAppServerTransport;
+  customPrompt?: string;
+};
+
+function warmEntityAvatar(seed: string, avatarStyle?: AvatarStyle): void {
+  void fetch(entityAvatarWriteUrl(seed, avatarStyle)).catch(() => {});
+}
 
 /** Every mutating action `useProject` exposes: message send, approval/clarify resolution, session
  *  lifecycle, and project-member CRUD. Extracted from useProject because these are a cohesive,
@@ -43,9 +64,9 @@ export type ApprovalDecision = 'approve' | 'reject';
  *  of computed values passed in, none of the surrounding view-building state. */
 export function useProjectActions(args: {
   activeProjectId: ProjectId | null;
-  approvals: ApprovalView[];
+  approvals: ProjectApprovalActionView[];
   currentProject: WorkplaceProject | null;
-  projectMembers: ProjectMember[];
+  projectMembers: WorkplaceProjectMemberView[];
   acpAgents: ReturnType<typeof useAcpAgentSettings>['agents'];
   nativeCliAgents: ReturnType<typeof useNativeCliAgentSettings>['agents'];
   avatarStyle?: AvatarStyle;
@@ -160,7 +181,7 @@ export function useProjectActions(args: {
   const switchProject = useCallback((id: string) => setResolvedProjectId(id as ProjectId), [setResolvedProjectId]);
 
   const updateProjectMembers = useCallback(
-    async (nextMembers: ProjectMember[]) => {
+    async (nextMembers: WorkplaceProjectMemberView[]) => {
       if (!currentProject?.origin) return;
       await updateWorkplaceProject({
         id: currentProject.id,
@@ -181,30 +202,29 @@ export function useProjectActions(args: {
           }
         }
       }).unwrap();
-      for (const seed of projectMemberAvatarSeeds(currentProject.id, nextMembers)) warmEntityAvatar(seed, avatarStyle);
+      for (const seed of workplaceProjectMemberAvatarSeeds(currentProject.id, nextMembers)) {
+        warmEntityAvatar(seed, avatarStyle);
+      }
     },
     [currentProject, updateWorkplaceProject, avatarStyle]
   );
 
   const addProjectMember = useCallback(
-    async (type: ProjectMemberType, name: string, options: AddProjectMemberOptions = {}) => {
+    async (type: WorkplaceProjectMemberType, name: string, options: AddProjectMemberOptions = {}) => {
       if (type !== 'native-cli' && projectMembers.some((member) => member.type === type && member.name === name))
         return;
       const acpAgent = type === 'acp' ? acpAgents.find((agent) => agent.name === name) : undefined;
       const nativeAgent = type === 'native-cli' ? nativeCliAgents.find((agent) => agent.name === name) : undefined;
       const settings = {
-        ...defaultProjectMemberSettings(type, type === 'acp' ? acpAgent : nativeAgent),
+        ...defaultWorkplaceProjectMemberSettings(type, type === 'acp' ? acpAgent : nativeAgent),
         ...(options.modelId ? { modelId: options.modelId } : {}),
         ...(options.reasoningEffort ? { reasoningEffort: options.reasoningEffort } : {}),
         ...(options.speed ? { speed: options.speed } : {}),
+        ...(options.appServerTransport ? { appServerTransport: options.appServerTransport } : {}),
         ...(options.customPrompt ? { customPrompt: options.customPrompt } : {})
       };
       if (type === 'native-cli') {
-        const defaultDisplayName = nativeCliProductDisplayName(
-          productIcon(nativeAgent?.productIcon),
-          nativeAgent?.provider,
-          name
-        );
+        const defaultDisplayName = nativeCliProductDisplayName(nativeAgent?.productIcon, nativeAgent?.provider, name);
         const displayName = safeNativeCliDisplayName(
           uniqueNativeCliDisplayName(options.displayName?.trim() || defaultDisplayName, projectMembers)
         );
@@ -223,7 +243,10 @@ export function useProjectActions(args: {
         ]);
         return;
       }
-      await updateProjectMembers([...projectMembers, { id: projectMemberId(type, name), type, name, settings }]);
+      await updateProjectMembers([
+        ...projectMembers,
+        { id: workplaceProjectMemberId(type, name), type, name, settings }
+      ]);
     },
     [acpAgents, nativeCliAgents, projectMembers, updateProjectMembers]
   );
@@ -236,7 +259,7 @@ export function useProjectActions(args: {
   );
 
   const updateProjectMemberSettings = useCallback(
-    async (id: string, patch: ProjectMemberSettings) => {
+    async (id: string, patch: WorkplaceProjectMemberSettings) => {
       await updateProjectMembers(
         projectMembers.map((member) =>
           member.id === id ? { ...member, settings: { ...(member.settings ?? {}), ...patch } } : member

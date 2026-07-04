@@ -11,20 +11,20 @@ import type {
 import type { ProjectMember, ProjectMemberCandidate } from './project-members.ts';
 import type { AgentActivityOverride, ApprovalView, Participant, Project, QuestionView } from './types.ts';
 
-import { entityAvatarUrl } from '@monad/protocol';
+import {
+  entityAvatarUrl,
+  nativeCliProductDisplayName,
+  workplaceProjectMemberAvatarSeed,
+  workplaceProjectMemberId,
+  workplaceProjectMemberStableId
+} from '@monad/protocol';
 
 import {
   nativeCliMemberActivityPhase,
   nativeCliMemberPresence,
   nativeCliSessionIsGenerating
 } from './native-cli-presence.ts';
-import {
-  nativeCliProductDisplayName,
-  nativeCliProjectMemberAvatarSeed,
-  productIcon,
-  projectMemberId,
-  projectMemberStableId
-} from './project-members.ts';
+import { productIcon } from './project-members.ts';
 
 export const HUMAN: Participant = {
   id: 'me',
@@ -170,7 +170,7 @@ export function projectParticipants(args: {
       const templateName = member.templateName ?? member.name;
       const displayName = member.displayName ?? member.name;
       const agent = args.nativeCliAgents.find((candidate) => candidate.name === templateName);
-      const stableAgentName = projectMemberStableId(member);
+      const stableAgentName = workplaceProjectMemberStableId(member);
       const presence = nativeCliMemberPresence({
         activeAgentNames: activeNativeCliAgentNames,
         agentName: stableAgentName,
@@ -246,9 +246,9 @@ export function projectMemberCandidates(args: {
           }
         ]),
     ...args.acpAgents
-      .filter((agent) => !current.has(projectMemberId('acp', agent.name)))
+      .filter((agent) => !current.has(workplaceProjectMemberId('acp', agent.name)))
       .map((agent) => ({
-        id: projectMemberId('acp', agent.name),
+        id: workplaceProjectMemberId('acp', agent.name),
         type: 'acp' as const,
         name: agent.name,
         label: agent.name,
@@ -344,10 +344,10 @@ export function projectNativeCliMetadataMaps(args: {
     const templateName = member.templateName ?? member.name;
     const displayName = member.displayName ?? member.name;
     const agent = args.nativeCliAgents.find((candidate) => candidate.name === templateName);
-    const stableId = projectMemberStableId(member);
+    const stableId = workplaceProjectMemberStableId(member);
     const icon = productIcon(agent?.productIcon);
     const tag = nativeCliTag(agent?.provider);
-    avatarSeeds.set(displayName, nativeCliProjectMemberAvatarSeed(args.projectId, member));
+    avatarSeeds.set(displayName, workplaceProjectMemberAvatarSeed(args.projectId, member));
     displayNames.set(stableId, displayName);
     displayNames.set(member.name, displayName);
     icons.set(stableId, icon);

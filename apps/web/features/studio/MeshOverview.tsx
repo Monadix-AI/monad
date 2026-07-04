@@ -29,10 +29,6 @@ import { useNativeCliAgentSettings } from '@/hooks/use-native-cli-agent-settings
 import { OverviewIllustration } from './OverviewIllustration';
 import { StudioBreadcrumbHeader } from './StudioBreadcrumbHeader';
 
-// Live agent-adapter runtimes are polled (P0). Provider-owned CLI and framework adapters (Codex,
-// Claude Code, Gemini, Qwen, OpenClaw, Hermes, …) all run as native-CLI-style sessions, so ONE
-// daemon-wide query surfaces every live runtime across all projects — polled once here rather than a
-// per-project subscription each. A short interval keeps the state honest without an SSE subscription.
 const AGENT_RUNTIME_POLL_MS = 5000;
 
 const AGENT_STATE_STYLE: Record<NativeCliSessionState, string> = {
@@ -70,8 +66,6 @@ function AgentRuntimeRow({ session }: { session: NativeCliSessionView }) {
   );
 }
 
-// Group live runtimes by their transcript target (project/session), preserving encounter order so the
-// daemon's newest-first ordering carries through to the UI.
 function groupByTarget(sessions: NativeCliSessionView[]): [string, NativeCliSessionView[]][] {
   const groups = new Map<string, NativeCliSessionView[]>();
   for (const session of sessions) {
@@ -123,7 +117,7 @@ function AgentRuntimesSection({ projects }: { projects: WorkplaceProject[] }) {
   );
 }
 
-function SwarmAction({
+function MeshAction({
   body,
   href,
   icon,
@@ -156,7 +150,7 @@ function SwarmAction({
   );
 }
 
-export function SwarmOverview() {
+export function MeshOverview() {
   const t = useT();
   const nativeCli = useNativeCliAgentSettings();
   const projects = useListWorkplaceProjectsQuery(undefined);
@@ -170,14 +164,14 @@ export function SwarmOverview() {
     <PanelShell>
       <StudioBreadcrumbHeader
         showSubtitle={false}
-        title={t('web.studio.swarmOverview')}
+        title={t('web.studio.meshOverview')}
       />
       <ScrollArea className="min-h-0 flex-1">
         <div className="mx-auto grid max-w-6xl gap-5 p-4 pb-24 lg:grid-cols-[minmax(0,1fr)_19rem] lg:p-6 lg:pb-24">
           <main className="flex min-w-0 flex-col gap-5">
             <section className="grid gap-5 rounded-xl border border-[color-mix(in_srgb,var(--info)_20%,var(--border))] bg-[color-mix(in_srgb,var(--info)_5%,var(--card))] px-5 py-5 shadow-xs md:grid-cols-[minmax(0,1fr)_17rem] md:items-center">
               <div className="min-w-0">
-                <p className="max-w-[72ch] text-muted-foreground text-sm">{t('web.studio.swarmOverviewDesc')}</p>
+                <p className="max-w-[72ch] text-muted-foreground text-sm">{t('web.studio.meshOverviewDesc')}</p>
                 <div className="mt-5 flex flex-wrap gap-2">
                   <Button
                     asChild
@@ -196,17 +190,17 @@ export function SwarmOverview() {
               </div>
               <OverviewIllustration
                 className="hidden md:block"
-                variant="swarm"
+                variant="mesh"
               />
             </section>
 
             <section className="rounded-xl border bg-card">
               <div className="border-b px-4 py-3">
-                <h2 className="font-medium text-base">{t('web.studio.swarmSetupTitle')}</h2>
-                <p className="mt-1 text-muted-foreground text-sm">{t('web.studio.swarmSetupDesc')}</p>
+                <h2 className="font-medium text-base">{t('web.studio.meshSetupTitle')}</h2>
+                <p className="mt-1 text-muted-foreground text-sm">{t('web.studio.meshSetupDesc')}</p>
               </div>
               <div className="grid gap-1 p-2">
-                <SwarmAction
+                <MeshAction
                   body={
                     nativeCliCount > 0
                       ? t('web.studio.nativeCliReady', { count: nativeCliCount })
@@ -216,7 +210,7 @@ export function SwarmOverview() {
                   icon={TerminalIcon}
                   title={t('web.studio.nativeCliAgents')}
                 />
-                <SwarmAction
+                <MeshAction
                   body={
                     projectCount > 0
                       ? t('web.studio.projectReady', { count: projectCount })
@@ -253,8 +247,8 @@ export function SwarmOverview() {
 
           <aside className="hidden min-w-0 flex-col gap-4 lg:flex">
             <section className="rounded-xl border bg-card px-4 py-4">
-              <h2 className="font-medium text-sm">{t('web.studio.swarmBoundaryTitle')}</h2>
-              <p className="mt-2 text-muted-foreground text-sm">{t('web.studio.swarmBoundaryDesc')}</p>
+              <h2 className="font-medium text-sm">{t('web.studio.meshBoundaryTitle')}</h2>
+              <p className="mt-2 text-muted-foreground text-sm">{t('web.studio.meshBoundaryDesc')}</p>
             </section>
             <section className="rounded-xl border bg-card px-4 py-4">
               <h2 className="font-medium text-sm">{t('web.studio.runtimeBridgeTitle')}</h2>
@@ -278,7 +272,7 @@ export function SwarmOverview() {
   );
 }
 
-export function SwarmPlaceholder({ kind }: { kind: 'projects' | 'members' | 'tasks' }) {
+export function MeshPlaceholder({ kind }: { kind: 'projects' | 'members' | 'tasks' }) {
   const t = useT();
   const copy = {
     members: {
@@ -291,7 +285,7 @@ export function SwarmPlaceholder({ kind }: { kind: 'projects' | 'members' | 'tas
     },
     tasks: {
       title: t('web.studio.tasksAndSessions'),
-      body: t('web.studio.swarmTasksPlaceholder')
+      body: t('web.studio.meshTasksPlaceholder')
     }
   }[kind];
 
@@ -326,7 +320,7 @@ export function SwarmPlaceholder({ kind }: { kind: 'projects' | 'members' | 'tas
                     size="sm"
                     variant="ghost"
                   >
-                    <Link href={studioPath('swarm')}>{t('web.studio.openSwarmOverview')}</Link>
+                    <Link href={studioPath('mesh')}>{t('web.studio.openMeshOverview')}</Link>
                   </Button>
                 </div>
               </div>

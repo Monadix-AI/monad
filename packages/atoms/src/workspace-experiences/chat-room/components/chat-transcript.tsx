@@ -43,7 +43,7 @@ export function ChatTranscript({
   room: ChatTranscriptRoom;
   labels: ChatTranscriptLabels;
   nativeCliAgentsHref: string;
-  onSpawnAgentMember?: (projectId: string) => void;
+  onSpawnAgentMember?: () => void;
 }): React.ReactElement {
   const listRef = useRef<VirtualListHandle>(null);
   const [atBottom, setAtBottom] = useState(true);
@@ -181,7 +181,7 @@ export function ChatTranscript({
             </a>
             <button
               className="workplace-action"
-              onClick={() => onSpawnAgentMember?.(room.projectId)}
+              onClick={onSpawnAgentMember}
               style={{
                 minHeight: 38,
                 display: 'inline-flex',

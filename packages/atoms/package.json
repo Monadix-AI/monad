@@ -48,9 +48,6 @@
     "./sandbox/bwrap": "./src/sandbox/bwrap.ts",
     "./sandbox/landlock": "./src/sandbox/landlock.ts",
     "./sandbox/seatbelt": "./src/sandbox/seatbelt.ts",
-    "./workspace-experiences/project/project-members": "./src/workspace-experiences/project/project-members.ts",
-    "./workspace-experiences/project/types": "./src/workspace-experiences/project/types.ts",
-    "./workspace-experiences/project/use-workspace-project-projection": "./src/workspace-experiences/project/use-workspace-project-projection.ts",
     "./workspace-experiences": "./src/workspace-experiences/ui.tsx"
   },
   "module": "src/index.ts",

@@ -3,7 +3,6 @@
 import type { ProjectId, Session } from '@monad/protocol';
 import type { ProjectController } from '@/features/workplace/use-project';
 
-import { builtinWorkspaceExperiences } from '@monad/atoms/workspace-experiences';
 import { useListWorkspaceExperiencesQuery } from '@monad/client-rtk';
 import { useCallback, useState } from 'react';
 
@@ -41,13 +40,14 @@ export function WorkspaceRoute({
   onOpenStudio,
   voiceModelState = 'checking'
 }: WorkspaceRouteProps) {
-  const [mode, setMode] = useProjectViewMode(activeProjectId);
+  const [preferredMode, setMode] = useProjectViewMode(activeProjectId);
   const [activeProjectController, setActiveProjectController] = useState<ProjectController | null>(null);
   const openProjectSettingsInStore = useWorkplaceUiStore((state) => state.openProjectSettings);
   const { data: workspaceExperiences } = useListWorkspaceExperiencesQuery(undefined, { skip: !activeProjectId });
-  const experiences = listProjectExperiences(
-    toProjectExperienceDefinitions([...builtinWorkspaceExperiences, ...(workspaceExperiences?.experiences ?? [])])
-  );
+  const experiences = listProjectExperiences(toProjectExperienceDefinitions(workspaceExperiences?.experiences ?? []));
+  const mode = experiences.some((experience) => experience.id === preferredMode)
+    ? (preferredMode as string)
+    : (experiences[0]?.id ?? '');
   const activeProject = projects.find((p) => p.id === activeProjectId);
   const projectName = activeProject?.name ?? activeProjectId ?? 'Project';
   const openProjectSettings = useCallback(() => {
