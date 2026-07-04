@@ -16,6 +16,7 @@ export const importSettingsSourceSchema = z.enum([
 export type ImportSettingsSource = z.infer<typeof importSettingsSourceSchema>;
 
 export const importSettingsCategorySchema = z.enum([
+  'nativeCliAgents',
   'skills',
   'mcpServers',
   'modelProviders',
@@ -26,6 +27,7 @@ export const importSettingsCategorySchema = z.enum([
   'sandbox',
   'approvals',
   'tools',
+  'channels',
   'agents',
   'plugins'
 ]);

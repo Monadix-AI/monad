@@ -1,10 +1,10 @@
-import type { WorkspaceExperienceProjectDialogRequest } from '@monad/protocol';
+import type { WorkspaceExperienceProjectDialogRequest, WorkspaceExperienceStudioSection } from '@monad/protocol';
 import type { ReactNode } from 'react';
 
 import { createContext, useContext } from 'react';
 
+export type { WorkspaceExperienceStudioSection };
 export type VoiceModelState = 'checking' | 'configured' | 'missing' | 'failed';
-export type WorkspaceExperienceStudioSection = 'models' | 'nativeCliAgents';
 
 /** Ambient host capabilities a built-in workspace experience reads from context instead of receiving as
  *  renderer props or reaching for a module-global client. The React counterpart of the third-party

@@ -1,39 +1,22 @@
+import type { AvatarStyle, NativeCliProvider } from '@monad/protocol';
 import type {
-  AvatarStyle,
-  NativeCliAppServerTransport,
-  NativeCliProvider,
-  WorkplaceProjectMemberSettings,
-  WorkplaceProjectMemberType,
-  WorkplaceProjectMemberView
-} from '@monad/protocol';
+  WorkspaceExperienceAddMemberOptions,
+  WorkspaceExperienceMember,
+  WorkspaceExperienceMemberCandidate,
+  WorkspaceExperienceMemberSettings,
+  WorkspaceExperienceMemberType
+} from '@monad/sdk-atom';
 import type { Participant } from './types.ts';
 
 import { entityAvatarWriteUrl, parseWorkplaceProjectMembers } from '@monad/protocol';
 
-export type ProjectMemberType = WorkplaceProjectMemberType;
-export type ProjectMemberSettings = WorkplaceProjectMemberSettings;
-export type ProjectMember = WorkplaceProjectMemberView;
-export type AddProjectMemberOptions = {
-  displayName?: string;
-  modelId?: string;
-  reasoningEffort?: string;
-  speed?: 'standard' | 'fast';
-  appServerTransport?: NativeCliAppServerTransport;
-  customPrompt?: string;
-};
-export interface ProjectMemberCandidate {
-  id: string;
-  type: ProjectMemberType;
-  name: string;
-  label: string;
-  tag: string;
-  enabled: boolean;
-  modelOptions: string[];
-  reasoningEfforts: string[];
-  icon?: Participant['icon'];
-  provider?: NativeCliProvider;
-  supportedAppServerTransports?: NativeCliAppServerTransport[];
-}
+// The member types are the published third-party contract (in @monad/sdk-atom); these aliases keep the
+// atoms-internal names while sdk-atom owns the shape. The functions below stay here.
+export type ProjectMemberType = WorkspaceExperienceMemberType;
+export type ProjectMemberSettings = WorkspaceExperienceMemberSettings;
+export type ProjectMember = WorkspaceExperienceMember;
+export type AddProjectMemberOptions = WorkspaceExperienceAddMemberOptions;
+export type ProjectMemberCandidate = WorkspaceExperienceMemberCandidate;
 
 export function parseProjectMembers(value: unknown): ProjectMember[] {
   return parseWorkplaceProjectMembers(value);

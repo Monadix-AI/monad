@@ -57,6 +57,30 @@ test('native CLI settings clears the previous connect window before starting ano
   expect(settings).toContain('setAuthSession(null);');
 });
 
+test('native CLI preset connect button loading state is scoped to the row agent', () => {
+  const settings = readSource('features/studio/third-party-agents/NativeCliAgentsSettings.tsx');
+  const detectedBranchStart = settings.indexOf(") : status === 'detected' ? (");
+  const detectedBranchEnd = settings.indexOf(') : (', detectedBranchStart + 1);
+  const detectedRow = settings.slice(detectedBranchStart, detectedBranchEnd);
+
+  expect(detectedRow).toContain('isConnecting');
+  expect(detectedRow).not.toContain('connectBusy');
+});
+
+test('native CLI preset connected state requires an installed authenticated auth probe', () => {
+  const settings = readSource('features/studio/third-party-agents/NativeCliAgentsSettings.tsx');
+  const statusBlock = settings.slice(
+    settings.indexOf('const connectedAgent ='),
+    settings.indexOf('return (', settings.indexOf('const connectedAgent ='))
+  );
+  const hook = readSource('hooks/use-native-cli-agent-settings.ts');
+
+  expect(statusBlock).toContain("p.installed && authStates[agent.name] === 'authenticated'");
+  expect(statusBlock).toContain('connectedAgent');
+  expect(hook).toContain('useLazyGetNativeCliAuthStatusQuery');
+  expect(hook).toContain('setAuthStates');
+});
+
 test('native CLI auth modal can persist the agent after terminal login succeeds', () => {
   const modal = readSource('features/workplace/cli/NativeCliAuthModal.tsx');
   const settings = readSource('features/studio/third-party-agents/NativeCliAgentsSettings.tsx');

@@ -366,6 +366,7 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
       onProvider: (p) => modelService.registry.register(p),
       onHook: (h) => registry.registerHook(h),
       onWorkspaceExperienceApi: (api, atomPackId) => registry.registerWorkspaceExperienceApi(api, atomPackId),
+      onWorkspaceExperience: (experience, atomPackId) => registry.registerWorkspaceExperience(experience, atomPackId),
       // Built-in agent-adapter atoms (Codex/Claude Code/Gemini/Qwen) register into the native-CLI
       // registry keyed by provider — the same gated path a third-party adapter pack would take.
       onAgentAdapter: (a) => registerAgentAdapterImpl(a),
@@ -392,6 +393,7 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
       // which the HookRunner reads alongside config.json command hooks.
       onHook: (h) => registry.registerHook(h),
       onWorkspaceExperienceApi: (api, atomPackId) => registry.registerWorkspaceExperienceApi(api, atomPackId),
+      onWorkspaceExperience: (experience, atomPackId) => registry.registerWorkspaceExperience(experience, atomPackId),
       // A discovered pack declaring the `agent-adapter` capability registers native-CLI adapters into
       // the same registry as built-ins; last registration wins, so a third-party pack can override.
       onAgentAdapter: (a) => registerAgentAdapterImpl(a),

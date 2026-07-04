@@ -2,13 +2,22 @@ import type { MonadConfig, MonadPaths, NativeCliAgentConfig } from '@monad/home'
 import type {
   ListNativeCliAgentPresetsResponse,
   ListNativeCliAgentsResponse,
+  ListNativeCliSettingsImportCandidatesResponse,
   NativeCliAgentView,
+  NativeCliSettingsImportApplyRequest,
+  NativeCliSettingsImportApplyResult,
+  NativeCliSettingsImportItem,
+  NativeCliSettingsImportPreview,
+  NativeCliSettingsImportPreviewRequest,
   OkResponse,
   UpsertNativeCliAgentRequest
 } from '@monad/protocol';
 
+import { createHash } from 'node:crypto';
 import { loadAll, saveSystemConfig } from '@monad/home';
 
+import { HandlerError } from '@/handlers/handler-error.ts';
+import { defaultBinProbes } from '@/infra/resolve-binary.ts';
 import {
   getNativeCliProviderAdapter,
   listNativeCliAgentModelOptions,
@@ -81,6 +90,45 @@ const fromView = (v: NativeCliAgentView, stored?: NativeCliAgentConfig): NativeC
   approvalOwnership: 'provider-owned'
 });
 
+function stableJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
+  if (value && typeof value === 'object') {
+    return `{${Object.entries(value as Record<string, unknown>)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([key, child]) => `${JSON.stringify(key)}:${stableJson(child)}`)
+      .join(',')}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function itemHash(item: Omit<NativeCliSettingsImportItem, 'hash'>): string {
+  return createHash('sha256').update(stableJson(item)).digest('hex');
+}
+
+function rehashItem(item: NativeCliSettingsImportItem): NativeCliSettingsImportItem {
+  const { hash: _hash, ...rest } = item;
+  return { ...rest, hash: itemHash(rest) };
+}
+
+function planNativeCliSettingsImport(
+  preview: NativeCliSettingsImportPreview,
+  cfg: MonadConfig,
+  replace: boolean
+): NativeCliSettingsImportPreview {
+  const existing = new Set(cfg.nativeCliAgents.map((agent) => agent.name));
+  return {
+    ...preview,
+    items: preview.items.map((item) => {
+      if (item.category !== 'nativeCliAgents' || item.action !== 'add' || !existing.has(item.target)) return item;
+      return rehashItem({
+        ...item,
+        action: replace ? 'update' : 'conflict',
+        reason: replace ? `${item.target} exists and replace allows update` : `${item.target} already exists`
+      });
+    })
+  };
+}
+
 export function createNativeCliAgentModule({ paths }: NativeCliAgentDeps) {
   async function read(): Promise<MonadConfig> {
     const cfg = await loadAll(paths.config, paths.profile);
@@ -97,6 +145,70 @@ export function createNativeCliAgentModule({ paths }: NativeCliAgentDeps) {
 
     listNativeCliAgentPresets(): ListNativeCliAgentPresetsResponse {
       return { presets: listNativeCliAgentPresets() };
+    },
+
+    listNativeCliSettingsImportCandidates({ name }: { name: string }): ListNativeCliSettingsImportCandidatesResponse {
+      const adapter = getNativeCliProviderAdapter(name);
+      return { candidates: adapter.settingsImport?.detect(defaultBinProbes) ?? [] };
+    },
+
+    async previewNativeCliSettingsImport({
+      name,
+      request
+    }: {
+      name: string;
+      request: NativeCliSettingsImportPreviewRequest;
+    }): Promise<NativeCliSettingsImportPreview> {
+      const cfg = await read();
+      const adapter = getNativeCliProviderAdapter(name);
+      if (!adapter.settingsImport) {
+        throw new HandlerError('invalid', `native CLI provider "${name}" does not support settings import`);
+      }
+      return planNativeCliSettingsImport(await adapter.settingsImport.preview(request), cfg, request.replace);
+    },
+
+    async applyNativeCliSettingsImport({
+      name,
+      request
+    }: {
+      name: string;
+      request: NativeCliSettingsImportApplyRequest;
+    }): Promise<NativeCliSettingsImportApplyResult> {
+      const cfg = await read();
+      const adapter = getNativeCliProviderAdapter(name);
+      if (!adapter.settingsImport) {
+        throw new HandlerError('invalid', `native CLI provider "${name}" does not support settings import`);
+      }
+      const preview = planNativeCliSettingsImport(await adapter.settingsImport.preview(request), cfg, request.replace);
+      const selected = new Set(request.select);
+      const applied: string[] = [];
+      const skipped: Array<{ id: string; reason: string }> = [];
+      let wrote = false;
+
+      for (const item of preview.items.filter((entry) => selected.has(entry.id))) {
+        if (request.hashes[item.id] !== item.hash) {
+          skipped.push({ id: item.id, reason: 'preview item changed since selection' });
+          continue;
+        }
+        if (item.category !== 'nativeCliAgents' || !item.agent) {
+          skipped.push({ id: item.id, reason: 'item is not a native CLI agent setting' });
+          continue;
+        }
+        if (item.action !== 'add' && item.action !== 'update') {
+          skipped.push({ id: item.id, reason: `item action is ${item.action}` });
+          continue;
+        }
+        const stored = cfg.nativeCliAgents.find((agent) => agent.name === item.agent?.name);
+        cfg.nativeCliAgents = [
+          ...cfg.nativeCliAgents.filter((agent) => agent.name !== item.agent?.name),
+          fromView(item.agent, stored)
+        ];
+        applied.push(item.id);
+        wrote = true;
+      }
+
+      if (wrote) await commit(cfg);
+      return { preview, applied, skipped };
     },
 
     async upsertNativeCliAgent({ agent }: UpsertNativeCliAgentRequest): Promise<OkResponse> {

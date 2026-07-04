@@ -1,10 +1,9 @@
 import type { ReactElement } from 'react';
 import type { ProjectExperienceRuntime, ProjectExperienceRuntimeSource } from './runtime.ts';
 
-import { useMemo } from 'react';
+import { createElement, lazy, useMemo } from 'react';
 
 import { renderChatRoomWorkspaceExperience } from './chat-room/ui.tsx';
-import { renderGraphViewWorkspaceExperience } from './graph-view/ui.tsx';
 import {
   useWorkspaceProjectProjection as useProjection,
   type WorkspaceProjectProjection
@@ -17,11 +16,15 @@ type ProjectExperienceViewLike = {
   runtime: unknown;
 };
 
+const GraphViewWorkspaceExperience = lazy(() =>
+  import('./graph-view/ui.tsx').then((module) => ({ default: module.GraphViewWorkspaceExperience }))
+);
+
 const builtinWorkspaceExperienceRenderers = {
   'chat-room': (runtime: ProjectExperienceRuntime) =>
     renderChatRoomWorkspaceExperience({ runtime: runtime.views['chat-room'] }),
   'graphic-view': (runtime: ProjectExperienceRuntime) =>
-    renderGraphViewWorkspaceExperience(runtime.views['graphic-view'])
+    createElement(GraphViewWorkspaceExperience, { runtime: runtime.views['graphic-view'] })
 } satisfies Record<string, (runtime: ProjectExperienceRuntime) => ReactElement>;
 
 export function renderBuiltinWorkspaceExperience(args: {

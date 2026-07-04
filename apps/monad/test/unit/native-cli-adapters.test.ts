@@ -1,8 +1,8 @@
-import type { NativeCliAgentView } from '@monad/protocol';
+import type { ImportSettingsCategory, NativeCliAgentView } from '@monad/protocol';
 
 import { expect, test } from 'bun:test';
-import { chmodSync, mkdtempSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   builtinAgentAdapters,
@@ -108,6 +108,180 @@ test('Codex adapter launches an interactive CLI rooted at the requested working 
   expect(launch.capabilities).toContain('session-resume');
   expect(launch.capabilities).toContain('rollout-json-fallback');
   expect(launch.approvalOwnership).toBe('provider-owned');
+});
+
+test('Codex adapter exposes native CLI settings import candidates and preview', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'monad-native-cli-codex-import-'));
+  const codexHome = join(dir, '.codex');
+  const workspaceCodex = join(dir, 'project', '.codex');
+  mkdirSync(codexHome, { recursive: true });
+  mkdirSync(workspaceCodex, { recursive: true });
+  writeFileSync(join(codexHome, 'config.toml'), ['model = "gpt-5.5"', 'model_reasoning_effort = "high"'].join('\n'));
+  writeFileSync(join(workspaceCodex, 'config.toml'), 'model = "gpt-5.6-workspace"\n');
+
+  const candidates = codexNativeCliAdapter.settingsImport?.detect({
+    which: () => undefined,
+    exists: (path) => path === join(homedir(), '.codex')
+  });
+  expect(candidates?.map((candidate) => candidate.path)).toContain(join(homedir(), '.codex'));
+
+  const preview = await codexNativeCliAdapter.settingsImport?.preview({ path: codexHome, replace: false });
+  expect(preview?.items.map((item) => [item.category, item.target, item.action])).toContainEqual([
+    'nativeCliAgents',
+    'codex',
+    'add'
+  ]);
+  expect(preview?.items.find((item) => item.target === 'codex')?.summary).toContain('gpt-5.5');
+
+  const mergedPreview = await codexNativeCliAdapter.settingsImport?.preview({
+    sources: [
+      { path: codexHome, scope: 'global' },
+      { path: workspaceCodex, scope: 'workspace' }
+    ],
+    replace: false
+  });
+  expect(mergedPreview?.items.map((item) => item.target).sort()).toEqual(['codex', 'codex-workspace']);
+  expect(mergedPreview?.items.find((item) => item.target === 'codex-workspace')?.summary).toContain(
+    'gpt-5.6-workspace'
+  );
+});
+
+test('Claude Code adapter exposes native CLI settings import preview without raw secret values', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'monad-native-cli-claude-import-'));
+  const claudeHome = join(dir, '.claude');
+  mkdirSync(claudeHome, { recursive: true });
+  writeFileSync(
+    join(claudeHome, 'settings.json'),
+    JSON.stringify({
+      env: { ANTHROPIC_API_KEY: 'SECRET_VALUE' },
+      model: 'opus'
+    })
+  );
+
+  const preview = await claudeCodeNativeCliAdapter.settingsImport?.preview({ path: claudeHome, replace: false });
+  const item = preview?.items.find((entry) => entry.target === 'claude-code');
+  expect(item?.category).toBe('nativeCliAgents');
+  expect(item?.action).toBe('add');
+  expect(JSON.stringify(preview)).not.toContain('SECRET_VALUE');
+});
+
+test('adapter migration previews skills and MCP for all supported provider settings', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'monad-native-cli-adapter-migration-'));
+  const codexHome = join(dir, '.codex');
+  const claudeHome = join(dir, '.claude');
+  const geminiHome = join(dir, '.gemini');
+  const qwenHome = join(dir, '.qwen');
+  mkdirSync(join(codexHome, 'skills', 'planner'), { recursive: true });
+  mkdirSync(claudeHome, { recursive: true });
+  mkdirSync(geminiHome, { recursive: true });
+  mkdirSync(qwenHome, { recursive: true });
+  writeFileSync(
+    join(codexHome, 'config.toml'),
+    ['[mcp_servers.filesystem]', 'command = "npx"', 'args = ["@modelcontextprotocol/server-filesystem"]'].join('\n')
+  );
+  writeFileSync(join(codexHome, 'skills', 'planner', 'SKILL.md'), '# Planner\n');
+  writeFileSync(
+    join(claudeHome, 'settings.json'),
+    JSON.stringify({
+      mcpServers: {
+        memory: { command: 'npx', args: ['@modelcontextprotocol/server-memory'] }
+      }
+    })
+  );
+  writeFileSync(
+    join(geminiHome, 'settings.json'),
+    JSON.stringify({ mcpServers: { search: { command: 'npx', args: ['gemini-mcp-search'] } } })
+  );
+  writeFileSync(
+    join(qwenHome, 'settings.json'),
+    JSON.stringify({ mcpServers: { docs: { command: 'npx', args: ['qwen-mcp-docs'] } } })
+  );
+
+  const codexPreview = await codexNativeCliAdapter.settingsImport?.preview({ path: codexHome, replace: false });
+  const claudePreview = await claudeCodeNativeCliAdapter.settingsImport?.preview({ path: claudeHome, replace: false });
+  const geminiPreview = await geminiNativeCliAdapter.settingsImport?.preview({ path: geminiHome, replace: false });
+  const qwenPreview = await qwenNativeCliAdapter.settingsImport?.preview({ path: qwenHome, replace: false });
+
+  expect(codexPreview?.items.map((item) => [item.category, item.target, item.action])).toContainEqual([
+    'mcpServers',
+    'filesystem',
+    'add'
+  ]);
+  expect(codexPreview?.items.map((item) => [item.category, item.target, item.action])).toContainEqual([
+    'skills',
+    'planner',
+    'add'
+  ]);
+  expect(claudePreview?.items.map((item) => [item.category, item.target, item.action])).toContainEqual([
+    'mcpServers',
+    'memory',
+    'add'
+  ]);
+  expect(geminiPreview?.items.map((item) => [item.category, item.target, item.action])).toContainEqual([
+    'mcpServers',
+    'search',
+    'add'
+  ]);
+  expect(qwenPreview?.items.map((item) => [item.category, item.target, item.action])).toContainEqual([
+    'mcpServers',
+    'docs',
+    'add'
+  ]);
+});
+
+test('Hermes and OpenClaw adapter migration previews provider, channel, and mapped Monad agent settings', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'monad-native-cli-framework-migration-'));
+  const hermesHome = join(dir, '.hermes');
+  const openClawHome = join(dir, '.openclaw');
+  mkdirSync(hermesHome, { recursive: true });
+  mkdirSync(openClawHome, { recursive: true });
+  writeFileSync(
+    join(hermesHome, 'config.yaml'),
+    [
+      'model:',
+      '  provider: anthropic',
+      '  default: anthropic/claude-sonnet-4-5',
+      'mcp_servers:',
+      '  filesystem:',
+      '    command: npx',
+      '    args:',
+      '      - "@modelcontextprotocol/server-filesystem"',
+      'channels:',
+      '  telegram:',
+      '    token_env: TELEGRAM_BOT_TOKEN',
+      'agent:',
+      '  name: hermes-researcher',
+      '  prompt: Research with Hermes.'
+    ].join('\n')
+  );
+  writeFileSync(
+    join(openClawHome, 'openclaw.json'),
+    JSON.stringify({
+      model: { provider: 'openai', default: 'gpt-4.1' },
+      mcp: { servers: { browser: { command: 'npx', args: ['@playwright/mcp'] } } },
+      channels: { slack: { token_env: 'SLACK_BOT_TOKEN' } },
+      agent: { name: 'openclaw-operator', prompt: 'Operate with OpenClaw.' }
+    })
+  );
+
+  const hermesPreview = await hermesNativeCliAdapter.settingsImport?.preview({ path: hermesHome, replace: false });
+  const openClawPreview = await openClawNativeCliAdapter.settingsImport?.preview({
+    path: openClawHome,
+    replace: false
+  });
+  const categories = (preview: typeof hermesPreview): ImportSettingsCategory[] =>
+    preview?.items.map((item) => item.category) ?? [];
+
+  expect(categories(hermesPreview)).toContain('mcpServers');
+  expect(categories(hermesPreview)).toContain('modelProviders');
+  expect(categories(hermesPreview)).toContain('channels');
+  expect(categories(hermesPreview)).toContain('agents');
+  expect(hermesPreview?.items.find((item) => item.category === 'agents')?.target).toBe('hermes-researcher');
+  expect(categories(openClawPreview)).toContain('mcpServers');
+  expect(categories(openClawPreview)).toContain('modelProviders');
+  expect(categories(openClawPreview)).toContain('channels');
+  expect(categories(openClawPreview)).toContain('agents');
+  expect(openClawPreview?.items.find((item) => item.category === 'agents')?.target).toBe('openclaw-operator');
 });
 
 test('native CLI adapters require their binary before marking the preset installed', () => {
@@ -229,6 +403,29 @@ test('Codex app-server launch accepts managed MCP config overrides', () => {
     'mcp_servers.monad.args=["native-agent","mcp-server"]',
     'app-server',
     '--stdio'
+  ]);
+});
+
+test('Claude json-stream launch accepts managed MCP config overrides', () => {
+  const claude = buildNativeCliLaunch(claudeAgent, {
+    workingPath: '/tmp/project',
+    launchMode: 'json-stream',
+    mcpConfigArgs: [
+      '--mcp-config',
+      '{"mcpServers":{"monad":{"type":"stdio","command":"/tmp/agent/bin/monad","args":["native-agent","mcp-server"]}}}'
+    ]
+  });
+
+  expect(claude.argv).toEqual([
+    'claude',
+    '-p',
+    '--mcp-config',
+    '{"mcpServers":{"monad":{"type":"stdio","command":"/tmp/agent/bin/monad","args":["native-agent","mcp-server"]}}}',
+    '--input-format',
+    'stream-json',
+    '--output-format',
+    'stream-json',
+    '--verbose'
   ]);
 });
 
@@ -423,25 +620,29 @@ test('native CLI auth launches provider-owned login and status commands', () => 
     auth: 'pty',
     history: 'paged',
     resume: 'structured',
-    approval: 'provider-owned'
+    approval: 'provider-owned',
+    settingsImport: true
   });
   expect(claudeCodeNativeCliAdapter.detect({ which: () => undefined, exists: () => true }).capabilities).toEqual({
     auth: 'pty',
     history: 'provider-owned',
     resume: 'pty',
-    approval: 'provider-owned'
+    approval: 'provider-owned',
+    settingsImport: true
   });
   expect(geminiNativeCliAdapter.detect({ which: () => undefined, exists: () => true }).capabilities).toEqual({
     auth: 'pty',
     history: 'provider-owned',
     resume: 'pty',
-    approval: 'provider-owned'
+    approval: 'provider-owned',
+    settingsImport: true
   });
   expect(qwenNativeCliAdapter.detect({ which: () => undefined, exists: () => true }).capabilities).toEqual({
     auth: 'pty',
     history: 'provider-owned',
     resume: 'pty',
-    approval: 'provider-owned'
+    approval: 'provider-owned',
+    settingsImport: true
   });
 });
 
@@ -810,7 +1011,7 @@ test('Claude Code adapter launches structured stream-json mode with print protoc
   expect(launch.launchMode).toBe('json-stream');
 });
 
-test('Claude Code managed project launches allow Monad bridge commands', () => {
+test('Claude Code managed project launches allow Monad MCP bridge tools', () => {
   const launch = buildNativeCliLaunch(claudeAgent, {
     workingPath: '/tmp/project',
     launchMode: 'json-stream',
@@ -820,9 +1021,8 @@ test('Claude Code managed project launches allow Monad bridge commands', () => {
   expect(launch.argv).toContain('--append-system-prompt-file');
   expect(launch.argv).toContain('/tmp/project/managed-prompt.md');
   expect(launch.argv).toContain('--allowedTools');
-  expect(launch.argv).toContain('Bash(monad project *)');
-  expect(launch.argv).toContain('Bash(monad agent *)');
-  expect(launch.argv).toContain('Bash(monad runtime info)');
+  expect(launch.argv).toContain('mcp__monad__*');
+  expect(launch.argv).not.toContain('Bash(monad project *)');
 });
 
 test('Claude Code adapter resumes with the provider session ref in PTY and stream-json modes', () => {
@@ -2288,8 +2488,8 @@ test('OpenClaw adapter routes a failed session start to a reconnect prompt', () 
 });
 
 test('OpenClaw and Hermes auth launches use provider-owned login and status commands', () => {
-  expect(buildNativeCliAuthLaunch(openClawAgent).argv).toEqual(['openclaw', 'auth']);
-  expect(buildNativeCliAuthStatusLaunch(openClawAgent).argv).toEqual(['openclaw', 'auth', 'status', '--json']);
+  expect(buildNativeCliAuthLaunch(openClawAgent).argv).toEqual(['openclaw', 'models', 'auth', 'login']);
+  expect(buildNativeCliAuthStatusLaunch(openClawAgent).argv).toEqual(['openclaw', 'models', 'status', '--check']);
   expect(buildNativeCliAuthLaunch(hermesAgent).argv).toEqual(['hermes', 'auth']);
   // Hermes's `auth list` rejects `--json`, so its status probe is plain-text (exit 0 = authenticated) —
   // appending `--json` would error and misreport a signed-in Hermes as unauthenticated.
@@ -2300,9 +2500,12 @@ test('OpenClaw and Hermes auth status parsers use structured output or status ex
   expect(openClawNativeCliAdapter.parseAuthStatus(JSON.stringify({ authenticated: true }), 0)).toBe('authenticated');
   expect(openClawNativeCliAdapter.parseAuthStatus('logged in', 0)).toBe('authenticated');
   expect(openClawNativeCliAdapter.parseAuthStatus('not signed in', 1)).toBe('unauthenticated');
+  expect(openClawNativeCliAdapter.parseAuthStatus('auth expiring soon', 2)).toBe('authenticated');
   expect(openClawNativeCliAdapter.parseAuthStatus('', null)).toBe('unknown');
   expect(hermesNativeCliAdapter.parseAuthStatus(JSON.stringify({ state: 'authenticated' }), 0)).toBe('authenticated');
   expect(hermesNativeCliAdapter.parseAuthStatus('signed in as zeke', 0)).toBe('authenticated');
+  expect(hermesNativeCliAdapter.parseAuthStatus('', 0)).toBe('unknown');
+  expect(hermesNativeCliAdapter.parseAuthStatus('no accounts', 0)).toBe('unauthenticated');
   expect(hermesNativeCliAdapter.parseAuthStatus('no accounts', 1)).toBe('unauthenticated');
 });
 

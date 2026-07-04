@@ -43,7 +43,10 @@ export function WorkspaceRoute({
   const [preferredMode, setMode] = useProjectViewMode(activeProjectId);
   const [activeProjectController, setActiveProjectController] = useState<ProjectController | null>(null);
   const openProjectSettingsInStore = useWorkplaceUiStore((state) => state.openProjectSettings);
-  const { data: workspaceExperiences } = useListWorkspaceExperiencesQuery(undefined, { skip: !activeProjectId });
+  const { data: workspaceExperiences, isLoading: workspaceExperiencesLoading } = useListWorkspaceExperiencesQuery(
+    undefined,
+    { skip: !activeProjectId }
+  );
   const experiences = listProjectExperiences(toProjectExperienceDefinitions(workspaceExperiences?.experiences ?? []));
   const mode = experiences.some((experience) => experience.id === preferredMode)
     ? (preferredMode as string)
@@ -81,6 +84,7 @@ export function WorkspaceRoute({
             <Workplace
               embedded
               experiences={experiences}
+              experiencesLoading={workspaceExperiencesLoading}
               key={activeProjectId}
               mode={mode}
               onModeChange={setMode}

@@ -56,6 +56,8 @@
   "web.nativeCli.invite": "Add native CLI client",
   "web.nativeCli.inviteHint": "Choose a provider preset, review the command, then register it for project invites.",
   "web.nativeCli.install": "Install",
+  "web.nativeCli.importNoCandidates": "No default settings location was detected. Enter a local config file or directory.",
+  "web.nativeCli.importSettings": "Import settings",
   "web.nativeCli.namePlaceholder": "codex",
   "web.nativeCli.notDetected": "Not detected",
   "web.nativeCli.modelOptions": "Model options",

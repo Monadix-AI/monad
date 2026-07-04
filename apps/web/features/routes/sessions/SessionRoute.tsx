@@ -64,7 +64,7 @@ interface PendingClarification {
 
 type ComposerProps = ComponentProps<typeof ComposerShell>;
 
-interface SessionRouteProps {
+export interface SessionRouteProps {
   accessMode: 'auto' | 'ask';
   activeInputSkillToken?: ComposerProps['skillToken'];
   activeSkill: number;

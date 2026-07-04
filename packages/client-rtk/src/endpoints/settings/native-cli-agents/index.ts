@@ -5,4 +5,9 @@ export {
   nativeCliAgentSelectors,
   useListNativeCliAgentsQuery
 } from './list-native-cli-agents.ts';
+export {
+  useApplyNativeCliSettingsImportMutation,
+  useListNativeCliSettingsImportCandidatesQuery,
+  usePreviewNativeCliSettingsImportMutation
+} from './native-cli-settings-import.ts';
 export { useUpsertNativeCliAgentMutation } from './upsert-native-cli-agent.ts';

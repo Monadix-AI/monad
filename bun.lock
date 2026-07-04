@@ -120,6 +120,7 @@
         "@monad/i18n": "workspace:*",
         "@monad/logger": "workspace:*",
         "@monad/protocol": "workspace:*",
+        "@monad/sdk-atom": "workspace:*",
         "@monad/ui": "workspace:*",
         "@radix-ui/react-use-controllable-state": "^1.2.3",
         "@streamdown/cjk": "^1.0.3",

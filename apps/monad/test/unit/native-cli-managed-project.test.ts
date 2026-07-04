@@ -75,7 +75,7 @@ test('managed project runtime uses non-interactive Codex launches', () => {
   expect(prepared.env.CODEX_NON_INTERACTIVE).toBe('1');
 });
 
-test('managed project runtime uses MCP communication prompt for Codex only', () => {
+test('managed project runtime uses MCP communication prompt for managed MCP bridge providers', () => {
   const monadHome = join(tmpdir(), `monad-managed-runtime-${Date.now()}-${process.hrtime.bigint()}`);
   const codex = prepareManagedProjectRuntime({
     monadHome,
@@ -111,9 +111,22 @@ test('managed project runtime uses MCP communication prompt for Codex only', () 
   expect(codex.mcpConfigArgs).toContain(`mcp_servers.monad.env.PATH=${JSON.stringify(codex.env.PATH)}`);
   expect(codex.mcpConfigArgs).toContain('mcp_servers.monad.tools.project_inbox_check.approval_mode="approve"');
   expect(codex.mcpConfigArgs).toContain('mcp_servers.monad.tools.project_post.approval_mode="approve"');
-  expect(claude.prompt).toContain('`monad project post -`');
-  expect(claude.prompt).not.toContain('MCP server named `monad`');
-  expect(claude.mcpConfigArgs).toEqual([]);
+  expect(claude.prompt).toContain('MCP server named `monad`');
+  expect(claude.prompt).toContain('`project_post` tool from the `monad` MCP server');
+  expect(claude.prompt).not.toContain('`monad project post -`');
+  expect(claude.mcpConfigArgs).toContain('--mcp-config');
+  expect(claude.mcpConfigArgs).toContain(
+    JSON.stringify({
+      mcpServers: {
+        monad: {
+          type: 'stdio',
+          command: claude.wrapperBin,
+          args: ['native-agent', 'mcp-server'],
+          env: claude.env
+        }
+      }
+    })
+  );
 });
 
 test('managed project runtime prefers structured launch modes over interactive PTY', () => {

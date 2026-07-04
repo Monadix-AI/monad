@@ -1,18 +1,18 @@
 'use client';
 
-import type {
-  WorkspaceExperienceDefinition,
-  WorkspaceExperienceEntry,
-  WorkspaceExperienceHostApi
-} from '@monad/protocol';
+import type { WorkspaceExperienceDefinition, WorkspaceExperienceEntry } from '@monad/protocol';
+import type { WorkspaceExperienceHostApiV1 } from '@monad/sdk-atom';
 import type { ProjectExperienceView } from '../types';
 
+import { WORKSPACE_EXPERIENCE_API_VERSION } from '@monad/sdk-atom';
+import { useRouter } from 'next/navigation';
 import { createElement, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useT } from '@/components/I18nProvider';
+import { studioPath } from '@/features/routes/route-paths';
 
 type WorkspaceExperienceElement = HTMLElement & {
-  monadWorkspaceExperience?: WorkspaceExperienceHostApi;
+  monadWorkspaceExperience?: WorkspaceExperienceHostApiV1;
 };
 
 type WebComponentWorkspaceExperienceDefinition = WorkspaceExperienceDefinition & {
@@ -39,18 +39,30 @@ export function WebComponentExperience({
   view: ProjectExperienceView;
 }) {
   const t = useT();
+  const router = useRouter();
   const ref = useRef<WorkspaceExperienceElement | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const hostApi = useMemo(
+  const hostApi = useMemo<WorkspaceExperienceHostApiV1>(
     () => ({
       // TODO: add per-atom API permission controls before third-party workspace experiences ship.
+      version: WORKSPACE_EXPERIENCE_API_VERSION,
       actions: view.runtime.actions,
       apiBaseUrl: `/api/v1/atoms/workspace-experiences/${encodeURIComponent(atom.id)}/api`,
       embedded: view.embedded,
+      voiceModelState: view.voiceModelState,
       requestProjectDialog: view.onProjectDialogRequest ?? (() => {}),
+      openStudio: (section = 'models') => router.push(studioPath(section)),
       snapshot: view.runtime.snapshot
     }),
-    [atom.id, view.embedded, view.onProjectDialogRequest, view.runtime.actions, view.runtime.snapshot]
+    [
+      atom.id,
+      router,
+      view.embedded,
+      view.onProjectDialogRequest,
+      view.runtime.actions,
+      view.runtime.snapshot,
+      view.voiceModelState
+    ]
   );
 
   useEffect(() => {

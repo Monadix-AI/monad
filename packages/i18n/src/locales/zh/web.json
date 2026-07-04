@@ -687,6 +687,8 @@
   "web.nativeCli.invite": "添加 native CLI 客户端",
   "web.nativeCli.inviteHint": "选择 provider 预设，检查命令，然后注册为项目可邀请客户端。",
   "web.nativeCli.install": "安装",
+  "web.nativeCli.importNoCandidates": "没有检测到默认设置位置。请输入本地配置文件或目录。",
+  "web.nativeCli.importSettings": "导入设置",
   "web.nativeCli.namePlaceholder": "codex",
   "web.nativeCli.notDetected": "未检测到",
   "web.nativeCli.modelOptions": "model 备选",

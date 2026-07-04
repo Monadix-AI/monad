@@ -188,12 +188,23 @@ export const workspaceExperienceProjectDialogRequestSchema = z.discriminatedUnio
 ]);
 export type WorkspaceExperienceProjectDialogRequest = z.infer<typeof workspaceExperienceProjectDialogRequestSchema>;
 
+/** A Studio settings section a workspace experience can navigate the host to. */
+export type WorkspaceExperienceStudioSection = 'models' | 'nativeCliAgents';
+
 export interface WorkspaceExperienceHostApi<Snapshot = unknown, Actions = unknown> {
+  /** Contract version the host emitted this payload against; a component reads it to refuse/degrade
+   *  against an older major. Concrete Snapshot/Actions types live in @monad/sdk-atom
+   *  (WorkspaceExperienceHostApiV1) — they are UI view-models and cannot live in this wire layer. */
+  version: number;
   snapshot: Snapshot;
   actions: Actions;
   embedded: boolean;
   apiBaseUrl?: string;
+  /** Current voice-model configuration state, for experiences that surface voice input. */
+  voiceModelState?: 'checking' | 'configured' | 'missing' | 'failed';
   requestProjectDialog(request: WorkspaceExperienceProjectDialogRequest): void;
+  /** Navigate the host to a Studio settings section. */
+  openStudio(section?: WorkspaceExperienceStudioSection): void;
 }
 
 export const listWorkspaceExperiencesResponseSchema = z.object({

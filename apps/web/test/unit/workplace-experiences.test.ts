@@ -59,3 +59,64 @@ test('project experiences: workspace-experience atoms join the runtime-switchabl
   expect(getProjectExperience('secondary-view', experiences)?.id).toBe('secondary-view');
   expect(getProjectExperience('missing', experiences)?.id).toBe('primary-view');
 });
+
+test('built-in workspace experience host supplies the ambient host context', async () => {
+  const source = await Bun.file(
+    'apps/web/features/workplace/experiences/builtin/BuiltinWorkspaceExperience.tsx'
+  ).text();
+
+  expect(source).toContain("from '@monad/atoms/workspace-experiences/host-context'");
+  expect(source).toContain('<WorkspaceExperienceHostProvider');
+  expect(source).toContain('</WorkspaceExperienceHostProvider>');
+  expect(source).toContain('openStudio:');
+  expect(source).toContain('requestProjectDialog:');
+});
+
+test('workspace experience canvas shows monad loading while experiences are pending', async () => {
+  const routeSource = await Bun.file('apps/web/features/routes/workspace/WorkspaceRoute.tsx').text();
+  const workplaceSource = await Bun.file('apps/web/features/workplace/Workplace.tsx').text();
+  const rendererSource = await Bun.file(
+    'apps/web/features/workplace/experiences/WorkspaceExperienceRenderer.tsx'
+  ).text();
+
+  expect(routeSource).toContain('isLoading: workspaceExperiencesLoading');
+  expect(routeSource).toContain('experiencesLoading={workspaceExperiencesLoading}');
+  expect(workplaceSource).toContain("import { MonadLoading } from '@/features/init/MonadLoading'");
+  expect(workplaceSource).toContain('experiencesLoading?: boolean');
+  expect(workplaceSource).toContain('<MonadLoading');
+  expect(rendererSource).toContain("import { MonadLoading } from '@/features/init/MonadLoading'");
+  expect(rendererSource).toContain('fallback={<WorkspaceExperienceLoading />}');
+});
+
+test('project workspace route keeps session-only chat dependencies out of the initial shell', async () => {
+  const source = await Bun.file('apps/web/features/shell/AppShellRoutes.tsx').text();
+
+  expect(source).not.toContain('import { SessionRoute }');
+  expect(source).toContain("dynamic(() => import('@/features/routes/sessions/SessionRoute')");
+});
+
+test('chat workspace experience does not statically load graph view dependencies', async () => {
+  const source = await Bun.file('packages/atoms/src/workspace-experiences/ui.tsx').text();
+
+  expect(source).not.toContain('import { renderGraphViewWorkspaceExperience }');
+  expect(source).toContain("import('./graph-view/ui.tsx')");
+});
+
+test('empty chat workspace experience avoids loading message rendering stack', async () => {
+  const source = await Bun.file(
+    'packages/atoms/src/workspace-experiences/chat-room/components/chat-transcript.tsx'
+  ).text();
+
+  expect(source).not.toContain('import { VirtualList');
+  expect(source).not.toContain('import { MessageRow }');
+  expect(source).toContain("import('./message-list.tsx')");
+  expect(source).toContain('fallback={<MessageListSkeleton />}');
+});
+
+test('markdown entrypoint defers streamdown parser dependencies', async () => {
+  const source = await Bun.file('packages/ui/src/components/Markdown.tsx').text();
+
+  expect(source).not.toContain("import { type Components, Streamdown } from 'streamdown'");
+  expect(source).not.toContain("from '@streamdown/mermaid'");
+  expect(source).toContain("import('./MarkdownRenderer.tsx')");
+});

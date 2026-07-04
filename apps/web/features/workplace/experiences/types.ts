@@ -1,10 +1,11 @@
 import type { WebMessageIdWithoutParams } from '@monad/i18n';
 import type { WorkspaceExperienceProjectDialogRequest } from '@monad/protocol';
+import type { WorkspaceExperienceActions, WorkspaceExperienceSnapshot } from '@monad/sdk-atom';
 import type { ReactElement } from 'react';
 
 interface ProjectExperienceHostRuntime {
-  actions: unknown;
-  snapshot: unknown;
+  actions: WorkspaceExperienceActions;
+  snapshot: WorkspaceExperienceSnapshot;
 }
 
 export interface ProjectExperienceView {

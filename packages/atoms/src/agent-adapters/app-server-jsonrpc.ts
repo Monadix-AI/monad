@@ -1,4 +1,4 @@
-import type { NativeCliAgentView, NativeCliProductIcon, NativeCliProvider } from '@monad/protocol';
+import type { NativeCliAgentView, NativeCliAuthState, NativeCliProductIcon, NativeCliProvider } from '@monad/protocol';
 import type {
   BuildNativeCliLaunchOptions,
   NativeCliLaunchSpec,
@@ -333,12 +333,17 @@ export interface MakeAppServerCliAdapterOptions {
   models: string[];
   installHint: string;
   installUrl: string;
+  /** Args used to launch an interactive provider-owned auth/setup flow. Defaults to `['auth']`. */
+  authLaunchArgs?: string[];
   /** Args after `auth` for the auth-status probe (e.g. `['status']` vs `['list']`). */
   authStatusArgs: string[];
+  /** Full args used for auth status when the provider does not expose status under `auth ...`. */
+  authStatusLaunchArgs?: string[];
   /** Whether the auth-status probe appends `--json`. Default true; set FALSE for a provider whose
    *  `auth` subcommand rejects `--json` (Hermes) — else the probe errors and a signed-in agent is
    *  misreported as unauthenticated. The plain-text exit code (0 = authenticated) is used instead. */
   authStatusJson?: boolean;
+  parseAuthStatus?(output: string, exitCode: number | null): NativeCliAuthState;
   /** Managed project-agent runtime behavior; omit for a non-managed adapter. */
   managedRuntime?: NativeCliManagedRuntime;
   /** Opt-in `cli-oneshot` launch mode for a provider with no persistent app-server backend (Hermes):
@@ -483,15 +488,16 @@ export function makeAppServerCliAdapter(options: MakeAppServerCliAdapterOptions)
     },
     buildLaunch,
     buildAuthLaunch(agent) {
-      return buildAuthLaunch(agent, ['auth']);
+      return buildAuthLaunch(agent, options.authLaunchArgs ?? ['auth']);
     },
     buildAuthStatusLaunch(agent) {
-      return buildAuthLaunch(agent, ['auth', ...options.authStatusArgs]);
+      return buildAuthLaunch(agent, options.authStatusLaunchArgs ?? ['auth', ...options.authStatusArgs]);
     },
     authStatus(agent) {
       const jsonArg = options.authStatusJson === false ? [] : ['--json'];
+      const args = options.authStatusLaunchArgs ?? ['auth', ...options.authStatusArgs, ...jsonArg];
       return {
-        launch: buildAuthLaunch(agent, ['auth', ...options.authStatusArgs, ...jsonArg]),
+        launch: buildAuthLaunch(agent, args),
         parse: (output, exitCode) => adapter.parseAuthStatus(output, exitCode)
       };
     },
@@ -502,6 +508,7 @@ export function makeAppServerCliAdapter(options: MakeAppServerCliAdapterOptions)
       };
     },
     parseAuthStatus(output, exitCode) {
+      if (options.parseAuthStatus) return options.parseAuthStatus(output, exitCode);
       const structured = parseStructuredAuthState(output);
       if (structured) return structured;
       if (exitCode === 0) return 'authenticated';

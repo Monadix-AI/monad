@@ -3,6 +3,7 @@ import type { NativeCliProviderAdapter } from '@monad/sdk-atom';
 import { defaultBinProbes, resolveBinary } from '@monad/sdk-atom';
 
 import { parseStructuredAuthState } from '../adapter-shared.ts';
+import { createCodexSettingsImport } from '../settings-import.ts';
 import { parseCodexSessionJsonl } from './events.ts';
 import { codexHistoryPageOutput, readCodexHistoryOutput } from './history.ts';
 import {
@@ -31,6 +32,7 @@ export const codexNativeCliAdapter: NativeCliProviderAdapter = {
   provider: 'codex',
   productIcon: 'codex',
   label: 'Codex',
+  settingsImport: createCodexSettingsImport(),
   // ACP delivery variant: same Codex agent, launched as an external ACP sub-agent via the codex-acp
   // wrapper. Version-pinned so `npx -y <pkg>@<ver>` resolves a known build, not a silent `latest`.
   acp: {
@@ -67,7 +69,8 @@ export const codexNativeCliAdapter: NativeCliProviderAdapter = {
         auth: 'pty',
         history: 'paged',
         resume: 'structured',
-        approval: 'provider-owned'
+        approval: 'provider-owned',
+        settingsImport: true
       }
     };
   },

@@ -116,3 +116,22 @@ export function TranscriptSkeleton(): React.ReactElement {
     </div>
   );
 }
+
+export function MessageListSkeleton(): React.ReactElement {
+  return (
+    <div style={{ position: 'relative', flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+      <div
+        className="scwf-scroll"
+        style={{
+          boxSizing: 'border-box',
+          flex: 1,
+          overflowX: 'hidden',
+          overflowY: 'auto',
+          padding: '24px 16px 108px'
+        }}
+      >
+        <TranscriptSkeleton />
+      </div>
+    </div>
+  );
+}

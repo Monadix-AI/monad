@@ -1,4 +1,9 @@
 import type {
+  AdapterMigrationApplyRequest,
+  AdapterMigrationApplyResult,
+  AdapterMigrationCandidate,
+  AdapterMigrationPreview,
+  AdapterMigrationPreviewRequest,
   NativeCliAgentPresetView,
   NativeCliAgentView,
   NativeCliAppServerTransport,
@@ -333,6 +338,17 @@ export interface NativeCliAcpDelivery {
   env?: Record<string, string>;
 }
 
+export interface AdapterMigration {
+  /** Probe adapter-owned default migration sources, returning only paths that currently exist. */
+  detect(probes?: BinProbes): AdapterMigrationCandidate[];
+  /** Parse provider-specific settings into Monad's shared preview contract. */
+  preview(request: AdapterMigrationPreviewRequest): AdapterMigrationPreview | Promise<AdapterMigrationPreview>;
+  /** Optional adapter-side apply hook for out-of-process adapters. The daemon still owns Monad config
+   *  writes for built-in migrations and uses this hook only when an adapter needs provider-owned apply. */
+  apply?(request: AdapterMigrationApplyRequest): AdapterMigrationApplyResult | Promise<AdapterMigrationApplyResult>;
+}
+export type NativeCliSettingsImport = AdapterMigration;
+
 /** The authoring contract for an agent-adapter atom: a native coding-CLI (Codex, Claude Code, …)
  *  wrapped as a monad agent. The daemon owns the process/pty/socket lifecycle and calls these hooks;
  *  the adapter only builds launch specs and translates the provider's wire format to/from
@@ -342,6 +358,9 @@ export interface NativeCliProviderAdapter {
   managedRuntime?: NativeCliManagedRuntime;
   /** ACP delivery variant; absent → this agent has no ACP wrapper (native-CLI delivery only). */
   acp?: NativeCliAcpDelivery;
+  /** Optional provider-specific migration surface. Current UI entry points may apply only a subset of
+   *  categories (for example native CLI agents) even when the adapter previews broader settings. */
+  settingsImport?: AdapterMigration;
   provider: NativeCliProvider;
   productIcon: NativeCliProductIcon;
   /** Human display name (e.g. "Claude Code", "Codex") — the single source the daemon/UI reads instead

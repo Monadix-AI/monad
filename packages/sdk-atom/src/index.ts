@@ -28,6 +28,7 @@ import type {
   WorkspaceExperienceHostApi
 } from '@monad/protocol';
 import type {
+  AdapterMigration,
   BuildNativeCliLaunchOptions,
   NativeCliAcpDelivery,
   NativeCliApprovalResolution,
@@ -46,6 +47,7 @@ import type {
   NativeCliProviderHistoryContext,
   NativeCliProviderHistoryPageContext,
   NativeCliRuntimeHandle,
+  NativeCliSettingsImport,
   NativeCliStartPreflight,
   NativeCliUsageProbe
 } from './agent-adapter.ts';
@@ -135,7 +137,23 @@ import {
   WORKSPACE_EXPERIENCE_UPDATE_EVENT
 } from './workspace-experience.ts';
 
+export type { WorkspaceExperienceHostApiV1 } from './workspace-experience.ts';
 export type {
+  WorkspaceExperienceActions,
+  WorkspaceExperienceAddMemberOptions,
+  WorkspaceExperienceApiVersion,
+  WorkspaceExperienceIcon,
+  WorkspaceExperienceMember,
+  WorkspaceExperienceMemberCandidate,
+  WorkspaceExperienceMemberSettings,
+  WorkspaceExperienceMemberType,
+  WorkspaceExperienceProductIconId,
+  WorkspaceExperienceProject,
+  WorkspaceExperienceSnapshot,
+  WorkspaceExperienceWorkdir
+} from './workspace-experience-runtime.ts';
+export type {
+  AdapterMigration,
   BeliefExplanation,
   BeliefMatch,
   BinProbes,
@@ -211,6 +229,7 @@ export type {
   NativeCliProviderHistoryContext,
   NativeCliProviderHistoryPageContext,
   NativeCliRuntimeHandle,
+  NativeCliSettingsImport,
   NativeCliStartPreflight,
   NativeCliUsageProbe,
   ProviderCredential,
@@ -244,6 +263,9 @@ export type {
   WorkspaceExperienceHostApi,
   WorkspaceExperienceUpdateEvent
 };
+
+export { isWorkspaceExperienceApiCompatible } from './workspace-experience.ts';
+export { WORKSPACE_EXPERIENCE_API_VERSION } from './workspace-experience-runtime.ts';
 
 export {
   assertChannelInbound,

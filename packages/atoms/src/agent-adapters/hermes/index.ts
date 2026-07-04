@@ -1,6 +1,8 @@
 import type { NativeCliProviderAdapter } from '@monad/sdk-atom';
 
+import { parseStructuredAuthState } from '../adapter-shared.ts';
 import { makeAppServerCliAdapter } from '../app-server-jsonrpc.ts';
+import { createFrameworkSettingsImport } from '../settings-import.ts';
 
 // Hermes ships no models-list command; this fallback is the model its docs advertise for `--model`.
 // An operator can override via the agent's modelOptions.
@@ -12,7 +14,7 @@ const HERMES_SUPPORTED_MODELS = ['hermes-4'];
 // spawns `hermes --yolo -z <directive>` per turn (`--yolo` = run its terminal toolset autonomously so it
 // can invoke the `monad project post/ask/read` wrapper on PATH). The managed prompt is prepended to each
 // directive by the host (cli-oneshot has no session.start to carry developer instructions).
-export const hermesNativeCliAdapter: NativeCliProviderAdapter = makeAppServerCliAdapter({
+const baseHermesNativeCliAdapter = makeAppServerCliAdapter({
   provider: 'hermes',
   productIcon: 'hermes',
   label: 'Hermes',
@@ -24,6 +26,15 @@ export const hermesNativeCliAdapter: NativeCliProviderAdapter = makeAppServerCli
   // `hermes auth list` rejects `--json`, so probe plain-text (exit 0 = authenticated) — else a signed-in
   // Hermes would be misreported as unauthenticated and its managed members would falsely require reconnect.
   authStatusJson: false,
+  parseAuthStatus(output, exitCode) {
+    const structured = parseStructuredAuthState(output);
+    if (structured) return structured;
+    const normalized = output.trim().toLowerCase();
+    if (/no accounts|no credentials|not signed in|not authenticated/.test(normalized)) return 'unauthenticated';
+    if (exitCode !== 0) return exitCode === null ? 'unknown' : 'unauthenticated';
+    if (!normalized) return 'unknown';
+    return 'authenticated';
+  },
   managedRuntime: {
     launchMode: () => 'cli-oneshot'
   },
@@ -31,3 +42,21 @@ export const hermesNativeCliAdapter: NativeCliProviderAdapter = makeAppServerCli
     turnArgs: (input) => ['--yolo', '-z', input]
   }
 });
+
+export const hermesNativeCliAdapter: NativeCliProviderAdapter = {
+  ...baseHermesNativeCliAdapter,
+  settingsImport: createFrameworkSettingsImport('hermes', 'Hermes'),
+  detect(probes) {
+    const preset = baseHermesNativeCliAdapter.detect(probes);
+    return {
+      ...preset,
+      capabilities: {
+        auth: preset.capabilities?.auth ?? 'pty',
+        history: preset.capabilities?.history ?? 'none',
+        resume: preset.capabilities?.resume ?? 'pty',
+        approval: preset.capabilities?.approval ?? 'provider-owned',
+        settingsImport: true
+      }
+    };
+  }
+};

@@ -12,6 +12,7 @@ import {
 } from '@monad/ui/components/AgentAvatar';
 import { useCallback, useEffect } from 'react';
 
+import { MonadLoading } from '@/features/init/MonadLoading';
 import { getProjectExperience } from './experiences/registry';
 import { ProjectHeader } from './project-shell/ProjectHeader';
 import { ProjectMemberDialog } from './project-shell/ProjectMemberDialog';
@@ -26,6 +27,7 @@ export function Workplace({
   embedded = false,
   mode,
   experiences,
+  experiencesLoading = false,
   onModeChange,
   onProjectControllerChange,
   onProjectDeleted,
@@ -35,6 +37,7 @@ export function Workplace({
   embedded?: boolean;
   mode?: string;
   experiences?: ProjectExperienceDefinition[];
+  experiencesLoading?: boolean;
   onModeChange?: (mode: string) => void;
   onProjectControllerChange?: (project: ProjectController) => void;
   onProjectDeleted?: () => void;
@@ -185,14 +188,16 @@ export function Workplace({
           }}
         >
           {!embedded ? <ProjectHeader project={project} /> : null}
-          {experience
-            ? experience.render({
-                embedded,
-                onProjectDialogRequest: requestProjectDialog,
-                runtime: project.experienceRuntime,
-                voiceModelState
-              })
-            : null}
+          {experience ? (
+            experience.render({
+              embedded,
+              onProjectDialogRequest: requestProjectDialog,
+              runtime: project.experienceRuntime,
+              voiceModelState
+            })
+          ) : experiencesLoading ? (
+            <MonadLoading className="min-h-0 flex-1" />
+          ) : null}
         </div>
         {settingsOpen ? (
           <ProjectSettings

@@ -15,6 +15,7 @@ import { hasFlag, parseStructuredAuthState, uniqueModelNames } from '../adapter-
 import { parseNativeCliArgumentSupport } from '../argument-support.ts';
 import { readProviderHistoryFile } from '../history-files.ts';
 import { resizePty, sendPtyInput, stopPty } from '../pty.ts';
+import { createBasicSettingsImport } from '../settings-import.ts';
 import {
   hasQwenStreamJsonMessages,
   initializeQwenStreamJson,
@@ -162,6 +163,7 @@ export const qwenNativeCliAdapter: NativeCliProviderAdapter = {
   provider: 'qwen',
   productIcon: 'qwen',
   label: 'Qwen Code',
+  settingsImport: createBasicSettingsImport('qwen', 'Qwen Code', 'qwen', '.qwen'),
   managedRuntime: {
     launchMode: () => 'json-stream'
   },
@@ -186,7 +188,8 @@ export const qwenNativeCliAdapter: NativeCliProviderAdapter = {
         auth: 'pty',
         history: 'provider-owned',
         resume: 'pty',
-        approval: 'provider-owned'
+        approval: 'provider-owned',
+        settingsImport: true
       }
     };
   },

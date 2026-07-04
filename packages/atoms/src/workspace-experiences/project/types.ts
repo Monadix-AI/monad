@@ -1,13 +1,7 @@
 import type { MessageAttachmentRef, NativeAgentDeliveryId, NativeCliObservationEvent } from '@monad/protocol';
+import type { WorkspaceExperienceIcon, WorkspaceExperienceProject } from '@monad/sdk-atom';
 
-export type WorkspaceExperienceProductIconId =
-  | 'codex'
-  | 'claude-code'
-  | 'gemini'
-  | 'gemini-cli'
-  | 'qwen'
-  | 'openclaw'
-  | 'hermes';
+export type { WorkspaceExperienceProductIconId } from '@monad/sdk-atom';
 export type ParticipantKind = 'human' | 'agent';
 type MessageKind = ParticipantKind | 'system' | 'developer';
 export type Presence = 'online' | 'working' | 'needs-login' | 'failed' | 'stopped' | 'idle';
@@ -21,7 +15,7 @@ export interface AgentActivityOverride {
 export interface Participant {
   id: string;
   av: string;
-  icon?: 'monad' | WorkspaceExperienceProductIconId | 'openai' | 'anthropic' | 'google';
+  icon?: WorkspaceExperienceIcon;
   avatarUrl?: string;
   name: string;
   kind: ParticipantKind;
@@ -31,12 +25,7 @@ export interface Participant {
   activityPhase?: AgentActivityPhase;
 }
 
-export interface Project {
-  id: string;
-  name: string;
-  unread?: number;
-  active?: boolean;
-}
+export type Project = WorkspaceExperienceProject;
 
 interface ToolChip {
   label: string;

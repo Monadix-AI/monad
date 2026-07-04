@@ -11,6 +11,7 @@ import type { NativeCliAgentView } from '@monad/protocol';
 import type {
   BuildNativeCliLaunchOptions,
   NativeCliLaunchSpec,
+  NativeCliManagedRuntimeContext,
   NativeCliOutputEvent,
   NativeCliProviderAdapter,
   NativeCliProviderHistoryContext
@@ -31,6 +32,7 @@ import {
 import { parseNativeCliArgumentSupport } from '../argument-support.ts';
 import { readProviderHistoryFile } from '../history-files.ts';
 import { resizePty, sendPtyInput, stopPty } from '../pty.ts';
+import { createClaudeCodeSettingsImport } from '../settings-import.ts';
 
 // `claude --help` documents `--model` as accepting either a tier alias ("fable", "opus", "sonnet",
 // "haiku" — each resolves to that tier's latest release) or a pinned full model name. There is no
@@ -73,7 +75,7 @@ function applyClaudeUltracodeSetting(args: string[]): string[] {
 
 function allowManagedBridgeTools(args: string[], managed: boolean): string[] {
   if (!managed || hasFlag(args, '--allowedTools') || hasFlag(args, '--allowed-tools')) return args;
-  return [...args, '--allowedTools', 'Bash(monad project *)', 'Bash(monad agent *)', 'Bash(monad runtime info)'];
+  return [...args, '--allowedTools', 'mcp__monad__*'];
 }
 
 function claudeExtraWorkingPathArgs(paths: string[] | undefined): string[] {
@@ -83,6 +85,22 @@ function claudeExtraWorkingPathArgs(paths: string[] | undefined): string[] {
 function withClaudeSkipApprovalArgs(args: string[], skipProviderApprovals: boolean): string[] {
   if (!skipProviderApprovals || hasFlag(args, '--dangerously-skip-permissions')) return args;
   return [...args, '--dangerously-skip-permissions'];
+}
+
+function claudeManagedMcpConfigArgs(context: NativeCliManagedRuntimeContext): string[] {
+  return [
+    '--mcp-config',
+    JSON.stringify({
+      mcpServers: {
+        monad: {
+          type: 'stdio',
+          command: context.wrapperBin,
+          args: ['native-agent', 'mcp-server'],
+          env: context.env
+        }
+      }
+    })
+  ];
 }
 
 function buildClaudeLaunch(agent: NativeCliAgentView, opts: BuildNativeCliLaunchOptions): NativeCliLaunchSpec {
@@ -106,6 +124,7 @@ function buildClaudeLaunch(agent: NativeCliAgentView, opts: BuildNativeCliLaunch
   args = allowManagedBridgeTools(args, !!opts.systemPromptFile);
   args = withClaudeSkipApprovalArgs(args, !!opts.skipProviderApprovals);
   args = [...args, ...claudeExtraWorkingPathArgs(opts.extraWorkingPaths)];
+  args = [...args, ...(opts.mcpConfigArgs ?? [])];
   const launchArgs = launchMode === 'json-stream' ? withClaudeStreamJsonArgs(args) : args;
   return {
     argv: [agent.command, ...launchArgs],
@@ -331,6 +350,7 @@ export const claudeCodeNativeCliAdapter: NativeCliProviderAdapter = {
   provider: 'claude-code',
   productIcon: 'claude-code',
   label: 'Claude Code',
+  settingsImport: createClaudeCodeSettingsImport(),
   // ACP delivery variant: same Claude Code agent, launched as an external ACP sub-agent via the
   // claude-agent-acp wrapper. Version-pinned so `npx -y <pkg>@<ver>` resolves a known build.
   acp: {
@@ -340,6 +360,8 @@ export const claudeCodeNativeCliAdapter: NativeCliProviderAdapter = {
   },
   managedRuntime: {
     launchMode: () => 'json-stream',
+    mcpConfigArgs: claudeManagedMcpConfigArgs,
+    usesManagedMcpBridge: true,
     usesSystemPromptFile: true
   },
   detect(probes = defaultBinProbes) {
@@ -363,7 +385,8 @@ export const claudeCodeNativeCliAdapter: NativeCliProviderAdapter = {
         auth: 'pty',
         history: 'provider-owned',
         resume: 'pty',
-        approval: 'provider-owned'
+        approval: 'provider-owned',
+        settingsImport: true
       }
     };
   },

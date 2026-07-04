@@ -14,6 +14,7 @@ import { hasFlag, parseJsonObject, parseStructuredAuthState } from '../adapter-s
 import { parseNativeCliArgumentSupport } from '../argument-support.ts';
 import { readProviderHistoryFile } from '../history-files.ts';
 import { resizePty, sendPtyInput, stopPty } from '../pty.ts';
+import { createBasicSettingsImport } from '../settings-import.ts';
 import { hasGeminiStreamJsonEvents, parseGeminiStreamJson } from './stream-json.ts';
 
 // Unlike codex (`debug models --bundled` prints a JSON catalog) and qwen (models are readable from
@@ -215,6 +216,7 @@ export const geminiNativeCliAdapter: NativeCliProviderAdapter = {
   provider: 'gemini',
   productIcon: 'gemini',
   label: 'Gemini CLI',
+  settingsImport: createBasicSettingsImport('gemini', 'Gemini CLI', 'gemini', '.gemini'),
   managedRuntime: {
     launchMode: () => 'json-stream'
   },
@@ -239,7 +241,8 @@ export const geminiNativeCliAdapter: NativeCliProviderAdapter = {
         auth: 'pty',
         history: 'provider-owned',
         resume: 'pty',
-        approval: 'provider-owned'
+        approval: 'provider-owned',
+        settingsImport: true
       }
     };
   },

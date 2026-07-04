@@ -1,20 +1,22 @@
 'use client';
 
-import type { NativeCliAgentPresetView, NativeCliAgentView } from '@monad/protocol';
+import type { NativeCliAgentPresetView, NativeCliAgentView, NativeCliAuthState } from '@monad/protocol';
 
 import {
   nativeCliAgentAdapter,
   nativeCliAgentSelectors,
   useDeleteNativeCliAgentMutation,
+  useLazyGetNativeCliAuthStatusQuery,
   useListNativeCliAgentPresetsQuery,
   useListNativeCliAgentsQuery,
   useUpsertNativeCliAgentMutation
 } from '@monad/client-rtk';
-import { useCallback } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 export interface NativeCliAgentSettingsStore {
   agents: NativeCliAgentView[];
   presets: NativeCliAgentPresetView[];
+  authStates: Record<string, NativeCliAuthState>;
   loading: boolean;
   error?: string;
   saveAgent: (a: NativeCliAgentView) => Promise<void>;
@@ -28,10 +30,53 @@ export function useNativeCliAgentSettings(): NativeCliAgentSettingsStore {
   const presetsQ = useListNativeCliAgentPresetsQuery(undefined);
   const [upsert] = useUpsertNativeCliAgentMutation();
   const [del] = useDeleteNativeCliAgentMutation();
+  const [getAuthStatus] = useLazyGetNativeCliAuthStatusQuery();
+  const [authStates, setAuthStates] = useState<Record<string, NativeCliAuthState>>({});
+  const [_authRefreshSeq, setAuthRefreshSeq] = useState(0);
+  const agents = useMemo(
+    () => nativeCliAgentSelectors.selectAll(agentsQ.data ?? nativeCliAgentAdapter.getInitialState()),
+    [agentsQ.data]
+  );
+  const presets = useMemo(() => presetsQ.data ?? [], [presetsQ.data]);
+  const authProbeNames = useMemo(() => {
+    const installedPresetNames = new Set(presets.filter((preset) => preset.installed).map((preset) => preset.id));
+    return agents
+      .filter((agent) => installedPresetNames.has(agent.name))
+      .map((agent) => agent.name)
+      .sort();
+  }, [agents, presets]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const names = authProbeNames;
+    if (names.length === 0) {
+      setAuthStates({});
+      return;
+    }
+
+    void (async () => {
+      const entries = await Promise.all(
+        names.map(async (name) => {
+          try {
+            const status = await getAuthStatus(name).unwrap();
+            return [name, status.state] as const;
+          } catch {
+            return [name, 'unknown'] as const;
+          }
+        })
+      );
+      if (!cancelled) setAuthStates(Object.fromEntries(entries));
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authProbeNames, getAuthStatus]);
 
   const saveAgent = useCallback(
     async (a: NativeCliAgentView) => {
       await upsert(a).unwrap();
+      setAuthRefreshSeq((seq) => seq + 1);
     },
     [upsert]
   );
@@ -49,8 +94,9 @@ export function useNativeCliAgentSettings(): NativeCliAgentSettingsStore {
   );
 
   return {
-    agents: nativeCliAgentSelectors.selectAll(agentsQ.data ?? nativeCliAgentAdapter.getInitialState()),
-    presets: presetsQ.data ?? [],
+    agents,
+    presets,
+    authStates,
     loading: agentsQ.isLoading,
     error: agentsQ.error ? ((agentsQ.error as { message?: string }).message ?? 'failed to load') : undefined,
     saveAgent,
@@ -59,6 +105,7 @@ export function useNativeCliAgentSettings(): NativeCliAgentSettingsStore {
     refetch: () => {
       void agentsQ.refetch();
       void presetsQ.refetch();
+      setAuthRefreshSeq((seq) => seq + 1);
     }
   };
 }

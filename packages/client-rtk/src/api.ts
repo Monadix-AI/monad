@@ -212,9 +212,12 @@ import {
 import {
   nativeCliAgentAdapter,
   nativeCliAgentSelectors,
+  useApplyNativeCliSettingsImportMutation,
   useDeleteNativeCliAgentMutation,
   useListNativeCliAgentPresetsQuery,
   useListNativeCliAgentsQuery,
+  useListNativeCliSettingsImportCandidatesQuery,
+  usePreviewNativeCliSettingsImportMutation,
   useUpsertNativeCliAgentMutation
 } from './endpoints/settings/native-cli-agents/index.ts';
 import { useGetNetworkQuery, useSetNetworkMutation } from './endpoints/settings/network/index.ts';
@@ -281,6 +284,7 @@ export {
   useAbortSessionMutation,
   useAddCredentialMutation,
   useAddMemoryFactMutation,
+  useApplyNativeCliSettingsImportMutation,
   useApplySettingsImportMutation,
   useApproveChannelPairingMutation,
   useApproveNativeCliSessionMutation,
@@ -389,6 +393,7 @@ export {
   useListNativeCliAgentPresetsQuery,
   useListNativeCliAgentsQuery,
   useListNativeCliSessionsQuery,
+  useListNativeCliSettingsImportCandidatesQuery,
   useListProfilesQuery,
   useListProvidersQuery,
   useListSessionsQuery,
@@ -396,6 +401,7 @@ export {
   useListWorkplaceProjectsQuery,
   useListWorkspaceExperiencesQuery,
   usePickDirectoryMutation,
+  usePreviewNativeCliSettingsImportMutation,
   usePreviewSettingsImportMutation,
   useProvenanceQuery,
   useProviderCatalogQuery,

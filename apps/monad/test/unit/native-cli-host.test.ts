@@ -9,6 +9,7 @@ import { builtinAgentAdapters } from '@monad/atoms/agent-adapters';
 
 import { EventBus } from '@/services/event-bus.ts';
 import { BoundedOutputBuffer } from '@/services/native-cli/bounded-output-buffer.ts';
+import { AUTH_STATUS_TIMEOUT_MS } from '@/services/native-cli/constants.ts';
 import { NativeCliHost } from '@/services/native-cli/host.ts';
 import { registerAgentAdapterImpl } from '@/services/native-cli/index.ts';
 import { createStore } from '@/store/db/index.ts';
@@ -16,6 +17,10 @@ import { createStore } from '@/store/db/index.ts';
 // Adapters are agent-adapter atoms registered at daemon boot; tests drive the host directly, so they
 // register the built-ins up front (mirrors the daemon's registration path).
 for (const adapter of builtinAgentAdapters) registerAgentAdapterImpl(adapter);
+
+test('native CLI auth status probes use a global 20 second timeout', () => {
+  expect(AUTH_STATUS_TIMEOUT_MS).toBe(20_000);
+});
 
 test('managed provider final can retire a consumed inbox turn without auto-posting', async () => {
   const store = createStore();

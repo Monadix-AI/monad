@@ -223,17 +223,21 @@ test('defineWorkspaceExperience preserves the descriptor and exposes the update 
 
 test('bindWorkspaceExperience receives the current host api, update events, and unsubscribes', () => {
   type Api = {
+    version: number;
     snapshot: { id: string };
     actions: Record<string, never>;
     embedded: boolean;
     requestProjectDialog(): void;
+    openStudio(): void;
   };
   const listeners = new Set<(event: { type: typeof WORKSPACE_EXPERIENCE_UPDATE_EVENT; detail: Api }) => void>();
   const target = {
     monadWorkspaceExperience: {
+      version: 1,
       actions: {},
       embedded: true,
       requestProjectDialog: () => {},
+      openStudio: () => {},
       snapshot: { id: 'initial' }
     },
     addEventListener: (
@@ -256,9 +260,11 @@ test('bindWorkspaceExperience receives the current host api, update events, and 
     listener({
       type: WORKSPACE_EXPERIENCE_UPDATE_EVENT,
       detail: {
+        version: 1,
         actions: {},
         embedded: false,
         requestProjectDialog: () => {},
+        openStudio: () => {},
         snapshot: { id: 'next' }
       }
     });
@@ -268,9 +274,11 @@ test('bindWorkspaceExperience receives the current host api, update events, and 
     listener({
       type: WORKSPACE_EXPERIENCE_UPDATE_EVENT,
       detail: {
+        version: 1,
         actions: {},
         embedded: false,
         requestProjectDialog: () => {},
+        openStudio: () => {},
         snapshot: { id: 'after-unbind' }
       }
     });
