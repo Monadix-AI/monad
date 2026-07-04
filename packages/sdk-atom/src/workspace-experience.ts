@@ -7,7 +7,23 @@ import type { WorkspaceExperienceActions, WorkspaceExperienceSnapshot } from './
 
 import { WORKSPACE_EXPERIENCE_API_VERSION } from './workspace-experience-runtime.ts';
 
+export type {
+  WorkspaceExperienceActions,
+  WorkspaceExperienceAddMemberOptions,
+  WorkspaceExperienceApiVersion,
+  WorkspaceExperienceIcon,
+  WorkspaceExperienceMember,
+  WorkspaceExperienceMemberCandidate,
+  WorkspaceExperienceMemberSettings,
+  WorkspaceExperienceMemberType,
+  WorkspaceExperienceProductIconId,
+  WorkspaceExperienceProject,
+  WorkspaceExperienceSnapshot,
+  WorkspaceExperienceWorkdir
+} from './workspace-experience-runtime.ts';
 export type { WorkspaceExperienceDefinition, WorkspaceExperienceEntry, WorkspaceExperienceHostApi };
+
+export { WORKSPACE_EXPERIENCE_API_VERSION };
 
 /** Concrete first-party binding of the event-bridge host API: snapshot/actions resolved to the
  *  published WorkspaceExperienceSnapshot/Actions. Third-party experiences type their host against this
