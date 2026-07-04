@@ -200,7 +200,8 @@ export const nativeCliAgentCapabilitiesSchema = z.object({
   auth: z.enum(['pty', 'status-probe', 'none']).default('none'),
   history: z.enum(['paged', 'provider-owned', 'none']).default('none'),
   resume: z.enum(['pty', 'structured', 'none']).default('pty'),
-  approval: nativeCliApprovalOwnershipSchema.default('provider-owned')
+  approval: nativeCliApprovalOwnershipSchema.default('provider-owned'),
+  approvalProxy: z.boolean().optional()
 });
 export type NativeCliAgentCapabilities = z.infer<typeof nativeCliAgentCapabilitiesSchema>;
 

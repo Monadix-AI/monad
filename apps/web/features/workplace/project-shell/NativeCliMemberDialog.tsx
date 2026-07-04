@@ -179,32 +179,6 @@ export function NativeCliMemberDialog({
                 ))}
               </select>
             </label>
-            {(invite.candidate.supportedAppServerTransports ?? []).length > 1 ? (
-              <label style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-                <span style={{ fontFamily: mono, fontSize: 10, color: 'var(--muted-foreground)' }}>
-                  {t('web.workplace.appServerTransport')}
-                </span>
-                <select
-                  onChange={(event) =>
-                    updateDraft({
-                      appServerTransport: (event.target.value || undefined) as NativeCliAppServerTransport | undefined
-                    })
-                  }
-                  style={field}
-                  value={invite.draft.appServerTransport ?? ''}
-                >
-                  <option value="">{t('web.workplace.appServerTransportDefault')}</option>
-                  {(invite.candidate.supportedAppServerTransports ?? []).map((transport) => (
-                    <option
-                      key={transport}
-                      value={transport}
-                    >
-                      {transport}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            ) : null}
             <div
               style={{
                 display: 'flex',
@@ -268,17 +242,70 @@ export function NativeCliMemberDialog({
                 </Popover>
               </div>
             ) : null}
-            <label style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-              <span style={{ fontFamily: mono, fontSize: 10, color: 'var(--muted-foreground)' }}>
-                {t('web.workplace.customPrompt')}
-              </span>
-              <textarea
-                onChange={(event) => updateDraft({ customPrompt: event.target.value })}
-                rows={4}
-                style={{ ...field, resize: 'vertical' }}
-                value={invite.draft.customPrompt ?? ''}
-              />
-            </label>
+            <details
+              style={{ border: `1px solid ${'var(--border)'}`, borderRadius: 8, background: 'var(--background)' }}
+            >
+              <summary
+                style={{
+                  cursor: 'pointer',
+                  fontFamily: mono,
+                  fontSize: 11,
+                  fontWeight: 650,
+                  padding: '8px 10px'
+                }}
+              >
+                {t('web.nativeCli.advanced')}
+              </summary>
+              <div
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 10,
+                  borderTop: `1px solid ${'var(--border)'}`,
+                  padding: 10
+                }}
+              >
+                {(invite.candidate.supportedAppServerTransports ?? []).length > 1 ? (
+                  <label style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                    <span style={{ fontFamily: mono, fontSize: 10, color: 'var(--muted-foreground)' }}>
+                      {t('web.workplace.appServerTransport')}
+                    </span>
+                    <select
+                      onChange={(event) =>
+                        updateDraft({
+                          appServerTransport: (event.target.value || undefined) as
+                            | NativeCliAppServerTransport
+                            | undefined
+                        })
+                      }
+                      style={field}
+                      value={invite.draft.appServerTransport ?? ''}
+                    >
+                      <option value="">{t('web.workplace.appServerTransportDefault')}</option>
+                      {(invite.candidate.supportedAppServerTransports ?? []).map((transport) => (
+                        <option
+                          key={transport}
+                          value={transport}
+                        >
+                          {transport}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ) : null}
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                  <span style={{ fontFamily: mono, fontSize: 10, color: 'var(--muted-foreground)' }}>
+                    {t('web.workplace.customPrompt')}
+                  </span>
+                  <textarea
+                    onChange={(event) => updateDraft({ customPrompt: event.target.value })}
+                    rows={4}
+                    style={{ ...field, resize: 'vertical' }}
+                    value={invite.draft.customPrompt ?? ''}
+                  />
+                </label>
+              </div>
+            </details>
           </div>
           <button
             className="workplace-action"
