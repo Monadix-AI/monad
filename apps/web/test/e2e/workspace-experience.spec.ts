@@ -59,7 +59,34 @@ class MockCanvas extends HTMLElement {
 customElements.define('mock-canvas', MockCanvas);
 `;
 
-async function mockWorkplaceApi(page: Page) {
+const mockCanvasExperience = {
+  api: { routes: [{ method: 'POST', path: '/search' }] },
+  entry: {
+    module: '/v1/atoms/mock-experience/assets/dist/mock-canvas.js',
+    tagName: 'mock-canvas',
+    type: 'web-component'
+  },
+  id: 'mock-canvas',
+  title: 'Mock Canvas'
+};
+
+// The real first-party graph-view: shipped as a web-component whose module is served same-origin by
+// the web app itself (public/experiences/graph-view.js) — NOT mocked here, so the test exercises the
+// actual shipping module. chat-room stays a host-component, mirroring production.
+const graphViewExperience = {
+  entry: { module: '/experiences/graph-view.js', tagName: 'monad-graph-view', type: 'web-component' },
+  icon: 'git-fork',
+  id: 'graphic-view',
+  title: 'Activity'
+};
+const chatRoomExperience = {
+  entry: { component: 'chat-room', type: 'host-component' },
+  icon: 'message-square',
+  id: 'chat-room',
+  title: 'Chat'
+};
+
+async function mockWorkplaceApi(page: Page, experiences: unknown[] = [mockCanvasExperience]) {
   await page.route('**/v1/atoms/mock-experience/assets/dist/mock-canvas.js', (route) =>
     route.fulfill({
       body: mockExperienceModule,
@@ -137,22 +164,7 @@ async function mockWorkplaceApi(page: Page) {
       return route.fulfill(sse({ kind: 'snapshot', items: [], hasMore: false }));
     }
     if (method === 'GET' && path === '/v1/atoms/workspace-experiences') {
-      return route.fulfill(
-        json({
-          experiences: [
-            {
-              api: { routes: [{ method: 'POST', path: '/search' }] },
-              entry: {
-                module: '/v1/atoms/mock-experience/assets/dist/mock-canvas.js',
-                tagName: 'mock-canvas',
-                type: 'web-component'
-              },
-              id: 'mock-canvas',
-              title: 'Mock Canvas'
-            }
-          ]
-        })
-      );
+      return route.fulfill(json({ experiences }));
     }
     if (method === 'POST' && path === '/v1/atoms/workspace-experiences/mock-canvas/api/search') {
       const body = request.postDataJSON() as { query?: string };
@@ -181,5 +193,36 @@ test.describe('workspace experience atoms', () => {
     await expect(canvas).toHaveAttribute('data-api-base-url', '/api/v1/atoms/workspace-experiences/mock-canvas/api');
     await expect(canvas).toHaveAttribute('data-api-result', `api:${projectId}`);
     await expect(canvas).toContainText(`mock canvas mounted for ${projectId} via api:${projectId}`);
+  });
+
+  test('ships the first-party graph-view over the web-component path and dogfoods its host actions', async ({
+    page
+  }) => {
+    // graph-view is first in the list, so it is the default view — its real shipping module
+    // (public/experiences/graph-view.js) mounts on load, no mock module involved.
+    await mockWorkplaceApi(page, [graphViewExperience, chatRoomExperience]);
+
+    await page.goto(`/workplace/projects/${projectId}`);
+    await expect(page.locator('.project-topbar-name', { hasText: 'Mock Project' })).toBeVisible({ timeout: 20_000 });
+
+    const graph = page.locator('monad-graph-view');
+    await expect(graph).toBeVisible();
+    await expect(graph).toHaveAttribute('data-experience-id', 'graphic-view');
+    // Rendered from the published host snapshot delivered over the event bridge.
+    await expect(graph).toHaveAttribute('data-ready', 'true');
+    await expect(graph).toHaveAttribute('data-project-id', projectId);
+    // The hub node always renders; participant/activity counts come off snapshot.graphCanvas.
+    await expect(graph).toContainText('monad');
+    await expect(graph).toHaveAttribute('data-participant-count', /\d+/);
+
+    // Clicking the hub dogfoods api.actions.switchExperience — a real switch to the chat-room
+    // experience, which unmounts the graph.
+    await graph.locator('[data-node-id="hub:monad"]').click();
+    await expect(graph).toBeHidden();
+
+    // And the host menu can switch back to Activity, re-mounting the same web-component.
+    await page.getByRole('button', { name: 'Project view mode' }).click();
+    await page.getByRole('menuitem', { name: 'Activity' }).click();
+    await expect(page.locator('monad-graph-view')).toBeVisible();
   });
 });

@@ -45,9 +45,11 @@
     // `bin`; declaring it lets Knip see its dynamic @monad/web + @monad/monad imports.
     "apps/cli": { "entry": ["test/**/*.{ts,tsx}", "**/*.test.{ts,tsx}", "src/bin.ts"] },
     // The React Compiler runtime is injected by next.config's reactCompiler flag;
-    // cmdk/nanoid are pulled in dynamically.
+    // cmdk/nanoid are pulled in dynamically. public/experiences/*.js are workspace-experience
+    // web-component modules loaded by the browser via a runtime URL string (the atom-pack
+    // registry), never a static import — same rationale as packages/atoms below.
     "apps/web": {
-      "entry": ["test/**/*.{ts,tsx}", "**/*.test.{ts,tsx}"],
+      "entry": ["test/**/*.{ts,tsx}", "**/*.test.{ts,tsx}", "public/experiences/*.js"],
       "ignoreDependencies": ["cmdk", "react-compiler-runtime"]
     },
     "apps/mo": {},

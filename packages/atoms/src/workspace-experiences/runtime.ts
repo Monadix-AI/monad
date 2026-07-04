@@ -53,7 +53,11 @@ export function createProjectExperienceRuntime(
     availableProjectMembers: source.availableProjectMembers,
     modelProfiles: source.modelProfiles,
     workdir: source.workdir,
-    paused: source.paused
+    paused: source.paused,
+    // Stamp the activity-graph projection onto the published snapshot so a web-component experience
+    // (the first-party graph-view) can render presence + activity from the host API alone — the
+    // host-component path read it straight off `views['graphic-view']`, the web-component path can't.
+    graphCanvas: graphicView.canvas
   };
   return {
     views: {

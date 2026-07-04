@@ -74,6 +74,33 @@ export interface WorkspaceExperienceMemberCandidate {
   template?: NativeCliProjectTemplate;
 }
 
+/** A live participant node in the activity graph (the human + each project agent), with presence so a
+ *  consumer can colour it. Kept as plain data (no React, no graph-layout library) so a same-origin
+ *  web-component experience can render it however it likes. */
+export interface WorkspaceExperienceGraphParticipant {
+  id: string;
+  kind: 'human' | 'agent';
+  name: string;
+  presence: 'online' | 'working' | 'needs-login' | 'failed' | 'stopped' | 'idle';
+}
+
+/** A recent tool invocation surfaced on the activity graph. */
+export interface WorkspaceExperienceGraphActivityRow {
+  id: string;
+  status: 'running' | 'ok' | 'error';
+  tool: string;
+}
+
+/** The activity-graph projection: participants (with live presence) plus recent tool activity. The
+ *  host computes it from its live stream and stamps it onto every snapshot so a web-component
+ *  experience (e.g. the first-party graph-view) can render presence + activity without a private data
+ *  channel. Optional so third-party experiences that don't need it — and snapshot producers that don't
+ *  compute it — aren't forced to. */
+export interface WorkspaceExperienceGraphCanvas {
+  participants: WorkspaceExperienceGraphParticipant[];
+  activity: WorkspaceExperienceGraphActivityRow[];
+}
+
 export interface WorkspaceExperienceSnapshot {
   projectId: string;
   activeProjectId: ProjectId | null;
@@ -83,6 +110,7 @@ export interface WorkspaceExperienceSnapshot {
   modelProfiles: ProfileView[];
   workdir: WorkspaceExperienceWorkdir;
   paused: boolean;
+  graphCanvas?: WorkspaceExperienceGraphCanvas;
 }
 
 export interface WorkspaceExperienceActions {
