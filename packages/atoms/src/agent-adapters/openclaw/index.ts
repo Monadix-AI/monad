@@ -12,7 +12,6 @@ export const openClawNativeCliAdapter: NativeCliProviderAdapter = makeAppServerC
   productIcon: 'openclaw',
   label: 'OpenClaw',
   bin: 'openclaw',
-  homeConfigDir: '.openclaw',
   appServerSubcommand: 'gateway',
   models: OPENCLAW_SUPPORTED_MODELS,
   installHint: 'Install OpenClaw, then sign in with openclaw auth.',

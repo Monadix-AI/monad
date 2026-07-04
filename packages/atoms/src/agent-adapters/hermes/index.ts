@@ -17,7 +17,6 @@ export const hermesNativeCliAdapter: NativeCliProviderAdapter = makeAppServerCli
   productIcon: 'hermes',
   label: 'Hermes',
   bin: 'hermes',
-  homeConfigDir: '.hermes',
   models: HERMES_SUPPORTED_MODELS,
   installHint: 'Install Hermes, then sign in with hermes auth.',
   installUrl: 'https://hermes-agent.nousresearch.com',

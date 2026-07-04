@@ -9,7 +9,6 @@ import type {
 } from '@monad/sdk-atom';
 
 import { homedir } from 'node:os';
-import { join } from 'node:path';
 import { defaultBinProbes, NativeCliError, resolveBinary } from '@monad/sdk-atom';
 
 import { compactObject, hasFlag, parseJsonObject, parseStructuredAuthState } from './adapter-shared.ts';
@@ -326,8 +325,6 @@ export interface MakeAppServerCliAdapterOptions {
   label: string;
   /** Binary name probed on PATH and used as the default command. */
   bin: string;
-  /** Home-dir config folder whose presence also counts as "installed" (e.g. `.openclaw`). */
-  homeConfigDir: string;
   /** Subcommand that launches the persistent app-server gateway (`gateway` / `serve`). OMIT for a
    *  provider with no real app-server backend (Hermes) — app-server is then not an offered launch mode
    *  and `protocol` must also be omitted. */
@@ -446,7 +443,7 @@ export function makeAppServerCliAdapter(options: MakeAppServerCliAdapterOptions)
     ...(options.oneshot ? { oneshotTurnArgs: options.oneshot.turnArgs } : {}),
     detect(probes = defaultBinProbes) {
       const bin = resolveBinary(options.bin, [], probes);
-      const installed = bin !== undefined || probes.exists(join(homedir(), options.homeConfigDir));
+      const installed = bin !== undefined;
       return {
         id: options.provider,
         label: options.label,

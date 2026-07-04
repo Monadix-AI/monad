@@ -167,7 +167,7 @@ export const qwenNativeCliAdapter: NativeCliProviderAdapter = {
   },
   detect(probes = defaultBinProbes) {
     const qwenBin = resolveBinary('qwen', [], probes);
-    const installed = qwenBin !== undefined || probes.exists(join(homedir(), '.qwen'));
+    const installed = qwenBin !== undefined;
     return {
       id: 'qwen',
       label: qwenNativeCliAdapter.label,

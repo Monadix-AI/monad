@@ -56,3 +56,17 @@ test('native CLI settings clears the previous connect window before starting ano
 
   expect(settings).toContain('setAuthSession(null);');
 });
+
+test('native CLI auth modal can persist the agent after terminal login succeeds', () => {
+  const modal = readSource('features/workplace/cli/NativeCliAuthModal.tsx');
+  const settings = readSource('features/studio/third-party-agents/NativeCliAgentsSettings.tsx');
+
+  expect(modal).toContain('onAuthenticated');
+  expect(modal).toContain("session?.authState !== 'authenticated'");
+  expect(modal).toContain('persistingAuthenticated');
+  expect(modal).toContain('await onAuthenticated?.();');
+  expect(modal).toContain('authPersistenceError');
+  expect(modal).toContain('Monad failed to save connection');
+  expect(settings).toContain('onAuthenticated');
+  expect(settings).toContain('saveAgent(authSession.agent)');
+});

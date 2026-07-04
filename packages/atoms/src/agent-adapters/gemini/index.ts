@@ -220,7 +220,7 @@ export const geminiNativeCliAdapter: NativeCliProviderAdapter = {
   },
   detect(probes = defaultBinProbes) {
     const geminiBin = resolveBinary('gemini', [], probes);
-    const installed = geminiBin !== undefined || probes.exists(join(homedir(), '.gemini'));
+    const installed = geminiBin !== undefined;
     return {
       id: 'gemini',
       label: geminiNativeCliAdapter.label,

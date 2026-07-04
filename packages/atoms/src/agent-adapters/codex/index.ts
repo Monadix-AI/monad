@@ -1,7 +1,5 @@
 import type { NativeCliProviderAdapter } from '@monad/sdk-atom';
 
-import { homedir } from 'node:os';
-import { join } from 'node:path';
 import { defaultBinProbes, resolveBinary } from '@monad/sdk-atom';
 
 import { parseStructuredAuthState } from '../adapter-shared.ts';
@@ -49,7 +47,7 @@ export const codexNativeCliAdapter: NativeCliProviderAdapter = {
   },
   detect(probes = defaultBinProbes) {
     const codexBin = resolveBinary('codex', [CODEX_APP_BIN], probes);
-    const installed = codexBin !== undefined || probes.exists(join(homedir(), '.codex'));
+    const installed = codexBin !== undefined;
     return {
       id: 'codex',
       label: codexNativeCliAdapter.label,

@@ -27,6 +27,7 @@ import { PanelShell, PanelShellHeader } from '@/components/ui/panel-shell';
 import { NativeCliAuthModal } from '@/features/workplace/cli/NativeCliAuthModal';
 import { useAsyncAction } from '@/hooks/use-async-action';
 import { useNativeCliAgentSettings } from '@/hooks/use-native-cli-agent-settings';
+import { connectNativeCliAgent } from './native-cli-connect-agent';
 
 const argsToStr = (args?: string[]): string => (args ?? []).join(' ');
 const strToArgs = (s: string): string[] => s.split(/\s+/).filter(Boolean);
@@ -86,7 +87,12 @@ export function NativeCliAgentsSettings({ embedded = false }: { onClose: () => v
   const { agents, presets, loading, saveAgent, removeAgent, setEnabled, refetch } = useNativeCliAgentSettings();
   const [draft, setDraft] = useState<NativeCliAgentView | null>(null);
   const [editingAgent, setEditingAgent] = useState<NativeCliAgentView | null>(null);
-  const [authSession, setAuthSession] = useState<{ id: string; controlToken: string; agentName: string } | null>(null);
+  const [authSession, setAuthSession] = useState<{
+    id: string;
+    controlToken: string;
+    agentName: string;
+    agent: NativeCliAgentView;
+  } | null>(null);
   const [connectingAgentName, setConnectingAgentName] = useState<string | null>(null);
   const [startAuth] = useStartNativeCliAuthMutation();
   const { busy: connectBusy, error: connectError, run: runConnect } = useAsyncAction();
@@ -96,10 +102,13 @@ export function NativeCliAgentsSettings({ embedded = false }: { onClose: () => v
       setAuthSession(null);
       setConnectingAgentName(agent.name);
       try {
-        await saveAgent(agent);
-        const session = await startAuth(agent.name).unwrap();
-        if (session.authState !== 'authenticated') {
-          setAuthSession({ id: session.id, controlToken: session.controlToken, agentName: agent.name });
+        const { session, persisted } = await connectNativeCliAgent(agent, {
+          saveAgent,
+          removeAgent,
+          startAuth: (agentName) => startAuth(agentName).unwrap()
+        });
+        if (!persisted) {
+          setAuthSession({ id: session.id, controlToken: session.controlToken, agentName: agent.name, agent });
         }
       } finally {
         setConnectingAgentName(null);
@@ -446,6 +455,10 @@ export function NativeCliAgentsSettings({ embedded = false }: { onClose: () => v
         <NativeCliAuthModal
           agentName={authSession.agentName}
           controlToken={authSession.controlToken}
+          onAuthenticated={async () => {
+            await saveAgent(authSession.agent);
+            setAuthSession(null);
+          }}
           onClose={() => setAuthSession(null)}
           sessionId={authSession.id}
         />

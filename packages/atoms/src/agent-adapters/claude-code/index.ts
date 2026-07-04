@@ -344,7 +344,7 @@ export const claudeCodeNativeCliAdapter: NativeCliProviderAdapter = {
   },
   detect(probes = defaultBinProbes) {
     const claudeBin = resolveBinary('claude', [], probes);
-    const installed = claudeBin !== undefined || probes.exists(join(homedir(), '.claude'));
+    const installed = claudeBin !== undefined;
     return {
       id: 'claude-code',
       label: claudeCodeNativeCliAdapter.label,

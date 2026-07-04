@@ -110,6 +110,27 @@ test('Codex adapter launches an interactive CLI rooted at the requested working 
   expect(launch.approvalOwnership).toBe('provider-owned');
 });
 
+test('native CLI adapters require their binary before marking the preset installed', () => {
+  const cases = [
+    { adapter: codexNativeCliAdapter, homeDir: '/.codex' },
+    { adapter: claudeCodeNativeCliAdapter, homeDir: '/.claude' },
+    { adapter: geminiNativeCliAdapter, homeDir: '/.gemini' },
+    { adapter: qwenNativeCliAdapter, homeDir: '/.qwen' },
+    { adapter: openClawNativeCliAdapter, homeDir: '/.openclaw' },
+    { adapter: hermesNativeCliAdapter, homeDir: '/.hermes' }
+  ];
+
+  for (const { adapter, homeDir } of cases) {
+    const preset = adapter.detect({
+      which: () => undefined,
+      exists: (path) => path.endsWith(homeDir)
+    });
+
+    expect(preset.installed).toBe(false);
+    expect(preset.resolvedBinPath).toBeUndefined();
+  }
+});
+
 test('native CLI adapters pass managed agent workspace as an additional accessible directory', () => {
   const codex = buildNativeCliLaunch(codexAgent, {
     workingPath: '/tmp/project',
