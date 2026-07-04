@@ -4,6 +4,7 @@ import type { WebMessageIdWithoutParams } from '@monad/i18n';
 import type {
   NativeCliAgentPresetView,
   NativeCliAgentView,
+  NativeCliLaunchMode,
   NativeCliProvider,
   NativeCliSettingsImportItem,
   NativeCliSettingsImportPreview
@@ -39,6 +40,11 @@ import { PanelShell, PanelShellHeader } from '@/components/ui/panel-shell';
 import { NativeCliAuthModal } from '@/features/workplace/cli/NativeCliAuthModal';
 import { useAsyncAction } from '@/hooks/use-async-action';
 import { useNativeCliAgentSettings } from '@/hooks/use-native-cli-agent-settings';
+import {
+  canDisableDangerousMode,
+  nativeCliAppServerTransportOptions,
+  nativeCliLaunchModeOptions
+} from './native-cli-agent-settings-model';
 import { connectNativeCliAgent } from './native-cli-connect-agent';
 
 const argsToStr = (args?: string[]): string => (args ?? []).join(' ');
@@ -96,11 +102,19 @@ const presetToView = (p: NativeCliAgentPresetView): NativeCliAgentView => ({
   command: p.command,
   args: p.args,
   modelOptions: p.modelOptions,
+  reasoningEfforts: p.reasoningEfforts,
   enabled: true,
   defaultLaunchMode: p.defaultLaunchMode,
   allowDangerousMode: false,
-  approvalOwnership: 'provider-owned'
+  approvalOwnership: 'provider-owned',
+  capabilities: p.capabilities
 });
+
+const presetForAgent = (
+  agent: NativeCliAgentView,
+  presets: readonly NativeCliAgentPresetView[]
+): NativeCliAgentPresetView | undefined =>
+  presets.find((preset) => preset.id === agent.name || preset.provider === agent.provider);
 
 function presetHintKey(id: string): WebMessageIdWithoutParams {
   return `web.nativeCli.presetHint.${id}` as WebMessageIdWithoutParams;
@@ -490,6 +504,7 @@ export function NativeCliAgentsSettings({ embedded = false }: { onClose: () => v
             <AgentForm
               agent={draft}
               key={draft.name || 'blank'}
+              mode="create"
               onCancel={() => setDraft(null)}
               onSubmit={async (a) => {
                 await saveAgent(a);
@@ -541,6 +556,7 @@ export function NativeCliAgentsSettings({ embedded = false }: { onClose: () => v
                 await saveAgent(agent);
                 setEditingAgent(null);
               }}
+              preset={presetForAgent(editingAgent, presets)}
               submitLabel={t('web.save')}
               variant="framed"
             />
@@ -814,11 +830,13 @@ function NativeCliSettingsImportDialog({
 
 function NativeCliSettingsDialogBody({
   agent,
+  preset,
   submitLabel,
   variant = 'base',
   onSave
 }: {
   agent: NativeCliAgentView;
+  preset?: NativeCliAgentPresetView;
   submitLabel: string;
   variant?: 'base' | 'framed' | 'compact' | 'quiet';
   onSave: (agent: NativeCliAgentView) => Promise<void>;
@@ -866,8 +884,9 @@ function NativeCliSettingsDialogBody({
         <div className={formWrapClass}>
           <AgentForm
             agent={agent}
-            nameLocked
+            mode="settings"
             onSubmit={onSave}
+            preset={preset}
             submitLabel={submitLabel}
           />
         </div>
@@ -889,14 +908,16 @@ function AgentForm({
   agent,
   title,
   submitLabel,
-  nameLocked,
+  mode,
+  preset,
   onSubmit,
   onCancel
 }: {
   agent?: NativeCliAgentView;
   title?: string;
   submitLabel: string;
-  nameLocked?: boolean;
+  mode: 'create' | 'settings';
+  preset?: NativeCliAgentPresetView;
   onSubmit: (a: NativeCliAgentView) => Promise<void>;
   onCancel?: () => void;
 }) {
@@ -907,8 +928,21 @@ function AgentForm({
   const [args, setArgs] = useState(argsToStr(agent?.args));
   const [modelOptions, setModelOptions] = useState(modelOptionsToStr(agent?.modelOptions));
   const [env, setEnv] = useState(envToStr(agent?.env));
-  const [allowDangerousMode, setAllowDangerousMode] = useState(agent?.allowDangerousMode ?? false);
+  const canProxyApprovals = agent ? canDisableDangerousMode(agent, preset) : false;
+  const [defaultLaunchMode, setDefaultLaunchMode] = useState<NativeCliLaunchMode>(agent?.defaultLaunchMode ?? 'pty');
+  const [appServerTransport, setAppServerTransport] = useState(agent?.appServerTransport ?? '');
+  const [allowDangerousMode, setAllowDangerousMode] = useState(
+    mode === 'settings' && !canProxyApprovals ? true : (agent?.allowDangerousMode ?? true)
+  );
   const [busy, setBusy] = useState(false);
+  const launchModeOptions = agent
+    ? nativeCliLaunchModeOptions({ ...agent, defaultLaunchMode }, preset)
+    : [defaultLaunchMode];
+  const appServerTransportOptions = nativeCliAppServerTransportOptions(preset);
+  const showIdentityFields = mode === 'create';
+  const showAdvanced = mode === 'settings';
+  const canToggleDangerousMode = mode === 'create' || canProxyApprovals;
+  const effectiveAllowDangerousMode = mode === 'settings' && !canProxyApprovals ? true : allowDangerousMode;
 
   const submit = async () => {
     if (!name.trim() || !command.trim()) return;
@@ -921,12 +955,18 @@ function AgentForm({
         productIcon: agent?.productIcon,
         command: command.trim(),
         args: strToArgs(args),
-        modelOptions: strToModelOptions(modelOptions),
+        modelOptions: showIdentityFields ? strToModelOptions(modelOptions) : agent?.modelOptions,
+        reasoningEfforts: agent?.reasoningEfforts,
+        reasoningEffortsByModel: agent?.reasoningEffortsByModel,
         env: Object.keys(envRec).length ? envRec : undefined,
         enabled: agent?.enabled ?? true,
-        defaultLaunchMode: agent?.defaultLaunchMode ?? 'pty',
-        allowDangerousMode,
-        approvalOwnership: 'provider-owned'
+        defaultLaunchMode,
+        appServerTransport: appServerTransport
+          ? (appServerTransport as NativeCliAgentView['appServerTransport'])
+          : undefined,
+        allowDangerousMode: effectiveAllowDangerousMode,
+        approvalOwnership: 'provider-owned',
+        capabilities: agent?.capabilities
       });
     } finally {
       setBusy(false);
@@ -955,76 +995,150 @@ function AgentForm({
         </div>
       ) : null}
 
+      {showIdentityFields ? (
+        <>
+          <div className="flex flex-col gap-1">
+            <Label className="text-xs">{t('web.acp.name')}</Label>
+            <Input
+              onChange={(e) => setName(e.target.value)}
+              placeholder={t('web.nativeCli.namePlaceholder')}
+              value={name}
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <Label className="text-xs">{t('web.nativeCli.provider')}</Label>
+            <select
+              className="rounded-md border bg-transparent px-2 py-2 text-sm"
+              onChange={(e) => setProvider(e.target.value as NativeCliProvider)}
+              value={provider}
+            >
+              <option value="codex">Codex</option>
+              <option value="claude-code">Claude Code</option>
+              <option value="gemini">Gemini</option>
+              <option value="qwen">Qwen Code</option>
+            </select>
+          </div>
+          <div className="flex flex-col gap-1">
+            <Label className="text-xs">{t('web.acp.command')}</Label>
+            <Input
+              onChange={(e) => setCommand(e.target.value)}
+              placeholder={t('web.nativeCli.commandPlaceholder')}
+              value={command}
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <Label className="text-xs">{t('web.nativeCli.modelOptions')}</Label>
+            <textarea
+              className="min-h-16 rounded-md border bg-transparent px-2 py-1 font-mono text-xs"
+              onChange={(e) => setModelOptions(e.target.value)}
+              placeholder={t('web.nativeCli.modelOptionsPlaceholder')}
+              value={modelOptions}
+            />
+          </div>
+        </>
+      ) : null}
       <div className="flex flex-col gap-1">
-        <Label className="text-xs">{t('web.acp.name')}</Label>
-        <Input
-          disabled={nameLocked}
-          onChange={(e) => setName(e.target.value)}
-          placeholder={t('web.nativeCli.namePlaceholder')}
-          value={name}
-        />
-      </div>
-      <div className="flex flex-col gap-1">
-        <Label className="text-xs">{t('web.nativeCli.provider')}</Label>
+        <Label className="text-xs">{t('web.nativeCli.launchMode')}</Label>
         <select
           className="rounded-md border bg-transparent px-2 py-2 text-sm"
-          onChange={(e) => setProvider(e.target.value as NativeCliProvider)}
-          value={provider}
+          onChange={(e) => setDefaultLaunchMode(e.target.value as NativeCliLaunchMode)}
+          value={defaultLaunchMode}
         >
-          <option value="codex">Codex</option>
-          <option value="claude-code">Claude Code</option>
-          <option value="gemini">Gemini</option>
-          <option value="qwen">Qwen Code</option>
+          {launchModeOptions.map((launchMode) => (
+            <option
+              key={launchMode}
+              value={launchMode}
+            >
+              {launchMode}
+            </option>
+          ))}
         </select>
-      </div>
-      <div className="flex flex-col gap-1">
-        <Label className="text-xs">{t('web.acp.command')}</Label>
-        <Input
-          onChange={(e) => setCommand(e.target.value)}
-          placeholder={t('web.nativeCli.commandPlaceholder')}
-          value={command}
-        />
-      </div>
-      <div className="flex flex-col gap-1">
-        <Label className="text-xs">{t('web.acp.args')}</Label>
-        <Input
-          onChange={(e) => setArgs(e.target.value)}
-          placeholder={t('web.nativeCli.argsPlaceholder')}
-          value={args}
-        />
-      </div>
-      <div className="flex flex-col gap-1">
-        <Label className="text-xs">{t('web.nativeCli.modelOptions')}</Label>
-        <textarea
-          className="min-h-16 rounded-md border bg-transparent px-2 py-1 font-mono text-xs"
-          onChange={(e) => setModelOptions(e.target.value)}
-          placeholder={t('web.nativeCli.modelOptionsPlaceholder')}
-          value={modelOptions}
-        />
-      </div>
-      <div className="flex flex-col gap-1">
-        <Label className="text-xs">{t('web.acp.env')}</Label>
-        <textarea
-          className="min-h-16 rounded-md border bg-transparent px-2 py-1 font-mono text-xs"
-          onChange={(e) => setEnv(e.target.value)}
-          placeholder={t('web.acp.envPlaceholder')}
-          value={env}
-        />
       </div>
       <div className="flex flex-col gap-1">
         <Label className="text-xs">{t('web.nativeCli.dangerousMode')}</Label>
         <Button
           className="self-start"
+          disabled={!canToggleDangerousMode}
           onClick={() => setAllowDangerousMode((v) => !v)}
           size="sm"
           type="button"
-          variant={allowDangerousMode ? 'secondary' : 'outline'}
+          variant={effectiveAllowDangerousMode ? 'secondary' : 'outline'}
         >
           <HugeiconsIcon icon={ShieldQuestionMarkIcon} />{' '}
-          {allowDangerousMode ? t('web.acp.osSandboxOn') : t('web.acp.osSandboxOff')}
+          {effectiveAllowDangerousMode ? t('web.acp.osSandboxOn') : t('web.acp.osSandboxOff')}
         </Button>
-        <p className="text-[11px] text-muted-foreground">{t('web.nativeCli.dangerousModeHint')}</p>
+        <p className="text-[11px] text-muted-foreground">
+          {mode === 'settings' && !canProxyApprovals
+            ? t('web.nativeCli.approvalProxyUnavailable')
+            : t('web.nativeCli.dangerousModeHint')}
+        </p>
       </div>
+      {showAdvanced ? (
+        <details className="group rounded-md border bg-muted/20">
+          <summary className="flex cursor-pointer list-none items-center justify-between px-3 py-2 font-medium text-xs">
+            {t('web.nativeCli.advanced')}
+          </summary>
+          <div className="flex flex-col gap-3 border-t p-3">
+            <div className="flex flex-col gap-1">
+              <Label className="text-xs">{t('web.acp.args')}</Label>
+              <Input
+                onChange={(e) => setArgs(e.target.value)}
+                placeholder={t('web.nativeCli.argsPlaceholder')}
+                value={args}
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <Label className="text-xs">{t('web.acp.env')}</Label>
+              <textarea
+                className="min-h-16 rounded-md border bg-transparent px-2 py-1 font-mono text-xs"
+                onChange={(e) => setEnv(e.target.value)}
+                placeholder={t('web.acp.envPlaceholder')}
+                value={env}
+              />
+            </div>
+            {defaultLaunchMode === 'app-server' && appServerTransportOptions.length > 0 ? (
+              <div className="flex flex-col gap-1">
+                <Label className="text-xs">{t('web.workplace.appServerTransport')}</Label>
+                <select
+                  className="rounded-md border bg-transparent px-2 py-2 text-sm"
+                  onChange={(e) => setAppServerTransport(e.target.value)}
+                  value={appServerTransport}
+                >
+                  <option value="">{t('web.workplace.appServerTransportDefault')}</option>
+                  {appServerTransportOptions.map((transport) => (
+                    <option
+                      key={transport}
+                      value={transport}
+                    >
+                      {transport}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
+          </div>
+        </details>
+      ) : (
+        <>
+          <div className="flex flex-col gap-1">
+            <Label className="text-xs">{t('web.acp.args')}</Label>
+            <Input
+              onChange={(e) => setArgs(e.target.value)}
+              placeholder={t('web.nativeCli.argsPlaceholder')}
+              value={args}
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <Label className="text-xs">{t('web.acp.env')}</Label>
+            <textarea
+              className="min-h-16 rounded-md border bg-transparent px-2 py-1 font-mono text-xs"
+              onChange={(e) => setEnv(e.target.value)}
+              placeholder={t('web.acp.envPlaceholder')}
+              value={env}
+            />
+          </div>
+        </>
+      )}
 
       <Button
         className="self-start"
