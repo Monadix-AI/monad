@@ -328,8 +328,10 @@ export interface MakeAppServerCliAdapterOptions {
   bin: string;
   /** Home-dir config folder whose presence also counts as "installed" (e.g. `.openclaw`). */
   homeConfigDir: string;
-  /** Subcommand that launches the persistent app-server gateway (`gateway` / `serve`). */
-  appServerSubcommand: string;
+  /** Subcommand that launches the persistent app-server gateway (`gateway` / `serve`). OMIT for a
+   *  provider with no real app-server backend (Hermes) — app-server is then not an offered launch mode
+   *  and `protocol` must also be omitted. */
+  appServerSubcommand?: string;
   /** Fallback model ids advertised for `--model` (no models-list command). */
   models: string[];
   installHint: string;
@@ -343,7 +345,8 @@ export interface MakeAppServerCliAdapterOptions {
   oneshot?: {
     turnArgs(input: string, opts: { providerSessionRef?: string | null }): string[];
   };
-  protocol: AppServerProtocol;
+  /** JSON-RPC dialect for the app-server backend. Required IFF `appServerSubcommand` is set. */
+  protocol?: AppServerProtocol;
 }
 
 /** Build a full `NativeCliProviderAdapter` for a coding CLI whose local gateway speaks the shared
@@ -367,6 +370,9 @@ export function makeAppServerCliAdapter(options: MakeAppServerCliAdapterOptions)
     args = skipApprovalArgs(args, !!opts.skipProviderApprovals);
 
     if (launchMode === 'app-server') {
+      if (!options.appServerSubcommand) {
+        throw new NativeCliError('unsupported_capability', `${options.label} has no app-server backend`);
+      }
       const transport = opts.appServerTransport ?? agent.appServerTransport ?? 'ws';
       if (!(appServerTransports as readonly string[]).includes(transport)) {
         throw new NativeCliError(
@@ -410,7 +416,9 @@ export function makeAppServerCliAdapter(options: MakeAppServerCliAdapterOptions)
       launchMode,
       provider: options.provider,
       approvalOwnership: 'provider-owned',
-      capabilities: ['pty', 'app-server', 'provider-approval', 'session-resume']
+      capabilities: options.appServerSubcommand
+        ? ['pty', 'app-server', 'provider-approval', 'session-resume']
+        : ['pty', 'provider-approval']
     };
   }
 
@@ -448,8 +456,12 @@ export function makeAppServerCliAdapter(options: MakeAppServerCliAdapterOptions)
         args: [],
         modelOptions: adapter.listSupportedModels(),
         defaultLaunchMode: 'pty',
-        supportedLaunchModes: options.oneshot ? ['pty', 'app-server', 'cli-oneshot'] : ['pty', 'app-server'],
-        supportedAppServerTransports: [...appServerTransports],
+        supportedLaunchModes: [
+          'pty',
+          ...(options.appServerSubcommand ? (['app-server'] as const) : []),
+          ...(options.oneshot ? (['cli-oneshot'] as const) : [])
+        ],
+        ...(options.appServerSubcommand ? { supportedAppServerTransports: [...appServerTransports] } : {}),
         installHint: options.installHint,
         installUrl: options.installUrl,
         installed,
@@ -495,15 +507,15 @@ export function makeAppServerCliAdapter(options: MakeAppServerCliAdapterOptions)
       return 'unknown';
     },
     initialize(handle, context) {
-      initializeAppServer(options.protocol, handle, context);
+      if (options.protocol) initializeAppServer(options.protocol, handle, context);
     },
     parseOutput(chunk, handle) {
-      return handle?.launchMode === 'app-server'
+      return handle?.launchMode === 'app-server' && options.protocol
         ? parseAppServerOutput(options.protocol, chunk, handle)
         : parseTerminalOutput(chunk);
     },
     sendInput(handle, input) {
-      if (handle.launchMode === 'app-server') {
+      if (handle.launchMode === 'app-server' && options.protocol) {
         sendAppServerInput(options.protocol, handle, input);
         return;
       }

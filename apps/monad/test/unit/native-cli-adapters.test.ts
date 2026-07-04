@@ -2283,27 +2283,27 @@ test('OpenClaw and Hermes auth status parsers use structured output or status ex
   expect(hermesNativeCliAdapter.parseAuthStatus('no accounts', 1)).toBe('unauthenticated');
 });
 
-test('Hermes adapter launches interactive pty and the serve backend over ws', () => {
+test('Hermes adapter launches interactive pty; app-server is not a supported backend', () => {
   const pty = buildNativeCliLaunch(hermesAgent, { workingPath: '/tmp/project', launchMode: 'pty' });
-  const serve = buildNativeCliLaunch(hermesAgent, { workingPath: '/tmp/project', launchMode: 'app-server' });
-
   expect(pty.argv).toEqual(['hermes']);
   expect(pty.launchMode).toBe('pty');
-  expect(serve.argv).toEqual(['hermes', 'serve']);
-  expect(serve.appServerTransport).toBe('ws');
-  expect(serve.capabilities).toContain('app-server');
+  // Hermes has NO app-server backend (`hermes serve` is not a real command) — requesting it is
+  // rejected up front, not dialed into a nonexistent gateway that would hang until timeout.
+  expect(() => buildNativeCliLaunch(hermesAgent, { workingPath: '/tmp/project', launchMode: 'app-server' })).toThrow(
+    /no app-server backend/i
+  );
 });
 
-test('Hermes preset advertises pty + app-server + cli-oneshot and a ws transport', () => {
+test('Hermes preset advertises pty + cli-oneshot only (no fictional app-server)', () => {
   const preset = hermesNativeCliAdapter.detect({ which: () => '/bin/hermes', exists: () => false });
 
   expect(preset.id).toBe('hermes');
   expect(preset.productIcon).toBe('hermes');
   expect(preset.command).toBe('hermes');
   expect(preset.installUrl).toBe('https://hermes-agent.nousresearch.com');
-  // cli-oneshot is Hermes-only (it has no persistent app-server backend, unlike OpenClaw's gateway).
-  expect(preset.supportedLaunchModes).toEqual(['pty', 'app-server', 'cli-oneshot']);
-  expect(preset.supportedAppServerTransports).toEqual(['ws']);
+  // No app-server backend → pty (interactive) + cli-oneshot (managed) only, and no ws transport.
+  expect(preset.supportedLaunchModes).toEqual(['pty', 'cli-oneshot']);
+  expect(preset.supportedAppServerTransports).toBeUndefined();
 });
 
 test('Hermes adapter surfaces pty plain-text output as agent messages', () => {
@@ -2312,53 +2312,10 @@ test('Hermes adapter surfaces pty plain-text output as agent messages', () => {
   expect(events).toEqual([{ type: 'agent_message', payload: { text: 'the answer is 42' } }]);
 });
 
-test('Hermes adapter maps app-server ws JSON-RPC frames and frames a turn as agent.chat', () => {
-  const parsed = hermesNativeCliAdapter.parseOutput(
-    [
-      JSON.stringify({ method: 'agent.token', params: { token: 'Thinking' } }),
-      JSON.stringify({ method: 'agent.final', params: { reply: 'Final answer.' } })
-    ].join('\n'),
-    { launchMode: 'app-server', kill() {} }
-  );
-  expectNativeCliOutputContract(parsed);
-  expect(parsed).toEqual([
-    { type: 'agent_message', payload: { text: 'Thinking' } },
-    { type: 'agent_message', payload: { text: 'Final answer.', final: true } }
-  ]);
-
-  const writes: string[] = [];
-  const handle = {
-    launchMode: 'app-server' as const,
-    providerSessionRef: 'hermes-1',
-    appServer: {
-      send(input: string) {
-        writes.push(input);
-      },
-      close() {}
-    },
-    pendingRequests: new Map<string | number, string>(),
-    nextRequestId: () => 4,
-    kill() {}
-  };
-  hermesNativeCliAdapter.sendInput(handle, 'what changed?');
-  expect(JSON.parse(writes[0] ?? '')).toEqual({
-    method: 'agent.chat',
-    id: 4,
-    params: { sessionId: 'hermes-1', prompt: 'what changed?' }
-  });
-});
-
-test('OpenClaw and Hermes adapters ignore malformed output and unknown notifications', () => {
+test('OpenClaw adapter ignores malformed output and unknown notifications', () => {
   const appServer = { send() {}, close() {} };
   expect(
     openClawNativeCliAdapter.parseOutput('not-json\n{"method":"unknown/event","params":{}}\n', {
-      launchMode: 'app-server',
-      appServer,
-      kill() {}
-    })
-  ).toEqual([]);
-  expect(
-    hermesNativeCliAdapter.parseOutput('not-json\n{"method":"unknown/event","params":{}}\n', {
       launchMode: 'app-server',
       appServer,
       kill() {}
@@ -2423,15 +2380,6 @@ test('OpenClaw agent.final without a text field still yields a final agent_messa
     launchMode: 'app-server',
     kill() {}
   });
-  expectNativeCliOutputContract(events);
-  expect(events).toEqual([{ type: 'agent_message', payload: { text: '', final: true } }]);
-});
-
-test('Hermes agent.final without a text field still yields a final agent_message', () => {
-  const events = hermesNativeCliAdapter.parseOutput(
-    JSON.stringify({ method: 'agent.final', params: { final: true } }),
-    { launchMode: 'app-server', kill() {} }
-  );
   expectNativeCliOutputContract(events);
   expect(events).toEqual([{ type: 'agent_message', payload: { text: '', final: true } }]);
 });
