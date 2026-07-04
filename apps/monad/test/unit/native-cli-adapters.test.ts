@@ -26,7 +26,7 @@ import {
   registerAgentAdapterImpl,
   resolveNativeCliLaunchCommand
 } from '@/services/native-cli/index.ts';
-import { killNativeCliProcess } from '@/services/native-cli/process.ts';
+import { killNativeCliProcess, pickPtyFallbackLaunchMode } from '@/services/native-cli/process.ts';
 import { nativeCliOutputEventSchema } from '@/services/native-cli/types.ts';
 
 // The native-CLI registry is populated at daemon boot via the gated atom-pack path; unit tests drive
@@ -2315,6 +2315,42 @@ test('native CLI process killer ignores already-dead direct fallback pids', () =
     [-123, 'SIGTERM'],
     [123, 'SIGTERM']
   ]);
+});
+
+test('pty fallback picks json-stream for adapters that support it', () => {
+  for (const adapter of [claudeCodeNativeCliAdapter, geminiNativeCliAdapter, qwenNativeCliAdapter]) {
+    const preset = adapter.detect({ which: () => undefined, exists: () => false });
+    expect(pickPtyFallbackLaunchMode(preset.supportedLaunchModes, preset.supportedAppServerTransports)).toBe(
+      'json-stream'
+    );
+  }
+});
+
+test('pty fallback picks app-server for codex, which has no json-stream mode but does support stdio', () => {
+  const preset = codexNativeCliAdapter.detect({ which: () => undefined, exists: () => false });
+  expect(preset.supportedLaunchModes).not.toContain('json-stream');
+  expect(preset.supportedAppServerTransports).toContain('stdio');
+  expect(pickPtyFallbackLaunchMode(preset.supportedLaunchModes, preset.supportedAppServerTransports)).toBe(
+    'app-server'
+  );
+});
+
+test('pty fallback is undefined for OpenClaw/Hermes: app-server-only but ws-only transport (no stdio)', () => {
+  // Regression guard: falling back to `app-server`/`stdio` for a ws-only provider would just replace
+  // the real pty error with a confusing `unsupported_capability` throw from buildLaunch one step later
+  // (see packages/atoms/src/agent-adapters/app-server-jsonrpc.ts's `appServerTransports = ['ws']`).
+  for (const adapter of [openClawNativeCliAdapter, hermesNativeCliAdapter]) {
+    const preset = adapter.detect({ which: () => undefined, exists: () => false });
+    expect(preset.supportedLaunchModes).not.toContain('json-stream');
+    expect(preset.supportedAppServerTransports).toEqual(['ws']);
+    expect(pickPtyFallbackLaunchMode(preset.supportedLaunchModes, preset.supportedAppServerTransports)).toBeUndefined();
+  }
+});
+
+test('pty fallback is undefined when a provider supports no non-pty mode', () => {
+  expect(pickPtyFallbackLaunchMode(['pty', 'remote-control'])).toBeUndefined();
+  expect(pickPtyFallbackLaunchMode(['pty'])).toBeUndefined();
+  expect(pickPtyFallbackLaunchMode(['pty', 'app-server'])).toBeUndefined(); // app-server with no transport info
 });
 
 test('OpenClaw adapter launches the interactive CLI in pty mode rooted at the working path', () => {

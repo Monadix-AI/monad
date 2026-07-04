@@ -55,7 +55,12 @@ import {
   managedProjectRuntimeWorkspace,
   prepareManagedProjectRuntime
 } from '@/services/native-cli/managed-project.ts';
-import { killNativeCliProcess, readProcessRegistry, writeProcessRegistry } from '@/services/native-cli/process.ts';
+import {
+  killNativeCliProcess,
+  pickPtyFallbackLaunchMode,
+  readProcessRegistry,
+  writeProcessRegistry
+} from '@/services/native-cli/process.ts';
 import { buildNativeCliSpawnEnv, requireNativeCliAgent } from '@/services/native-cli/spawn-support.ts';
 import { createStreamingTextDecoder } from '@/services/native-cli/stream-decoder.ts';
 import { takeCompleteStructuredLines } from '@/services/native-cli/structured-lines.ts';
@@ -427,28 +432,29 @@ export class NativeCliHost {
       (args.appServerTransport ?? agent.appServerTransport ?? 'ws') === 'ws' &&
       !!adapter.usesDaemonAssignedAppServerPort;
     const appServerPort = wantsWsAppServer ? await this.allocateAppServerPort() : undefined;
+    // Reusable so a pty-spawn failure (e.g. Bun's ConPTY support unavailable on the host) can rebuild
+    // the launch spec for a fallback launchMode without duplicating every option.
+    const buildLaunchOpts = (overrides?: {
+      launchMode?: NativeCliLaunchMode;
+      appServerTransport?: NativeCliAppServerTransport;
+    }) => ({
+      workingPath,
+      extraWorkingPaths: managed ? [managed.workspace] : undefined,
+      launchMode: overrides?.launchMode ?? args.launchMode,
+      appServerTransport: overrides?.appServerTransport ?? args.appServerTransport,
+      appServerSocketPath,
+      appServerPort,
+      systemPromptFile: adapter.managedRuntime?.usesSystemPromptFile ? (managed?.promptFile ?? undefined) : undefined,
+      skipProviderApprovals: !!managed,
+      providerSessionRef: args.providerSessionRef,
+      modelName: args.modelName,
+      reasoningEffort: args.reasoningEffort,
+      speed: args.speed,
+      modelId: args.modelId,
+      mcpConfigArgs: managed?.mcpConfigArgs
+    });
     try {
-      launch = resolveNativeCliLaunchCommand(
-        adapter,
-        buildNativeCliLaunch(agent, {
-          workingPath,
-          extraWorkingPaths: managed ? [managed.workspace] : undefined,
-          launchMode: args.launchMode,
-          appServerTransport: args.appServerTransport,
-          appServerSocketPath,
-          appServerPort,
-          systemPromptFile: adapter.managedRuntime?.usesSystemPromptFile
-            ? (managed?.promptFile ?? undefined)
-            : undefined,
-          skipProviderApprovals: !!managed,
-          providerSessionRef: args.providerSessionRef,
-          modelName: args.modelName,
-          reasoningEffort: args.reasoningEffort,
-          speed: args.speed,
-          modelId: args.modelId,
-          mcpConfigArgs: managed?.mcpConfigArgs
-        })
-      );
+      launch = resolveNativeCliLaunchCommand(adapter, buildNativeCliLaunch(agent, buildLaunchOpts()));
     } catch (error) {
       if (managed) cleanupManagedProjectRuntimeToken(managed.workspace);
       const failedAt = new Date().toISOString();
@@ -523,43 +529,85 @@ export class NativeCliHost {
         startedAt: now
       });
     }
-    const spawnEnv = await this.buildSpawnEnv(launch.env);
+    let spawnEnv = await this.buildSpawnEnv(launch.env);
     // ws/unix app-server: codex listens on a socket and speaks the protocol over it, so the daemon
     // ignores stdin and treats stdout/stderr as logs (for ws, stderr also carries the listen port).
-    const isAppServerWs = launch.launchMode === 'app-server' && launch.appServerTransport === 'ws';
-    const isAppServerUnix = launch.launchMode === 'app-server' && launch.appServerTransport === 'unix';
-    const isAppServerSocket = isAppServerWs || isAppServerUnix;
+    let isAppServerWs = launch.launchMode === 'app-server' && launch.appServerTransport === 'ws';
+    let isAppServerUnix = launch.launchMode === 'app-server' && launch.appServerTransport === 'unix';
+    let isAppServerSocket = isAppServerWs || isAppServerUnix;
+    const spawnPipeMode = (): NativeCliProcess =>
+      Bun.spawn(launch.argv, {
+        cwd: launch.cwd,
+        env: spawnEnv,
+        detached: true,
+        stdin: isAppServerSocket ? 'ignore' : 'pipe',
+        stdout: 'pipe',
+        stderr: 'pipe'
+      }) as NativeCliProcess;
     try {
-      proc =
-        launch.launchMode === 'pty'
-          ? (Bun.spawn(launch.argv, {
-              cwd: launch.cwd,
-              env: spawnEnv,
-              detached: true,
-              stdout: 'ignore',
-              stderr: 'ignore',
-              stdin: 'ignore',
-              terminal: {
-                cols: 100,
-                rows: 30,
-                data: (_terminal: NativeCliTerminal, data: Uint8Array) => {
-                  let text = decoder.decode(data);
-                  if (pendingCR) text = `\r${text}`;
-                  pendingCR = text.endsWith('\r');
-                  if (pendingCR) text = text.slice(0, -1);
-                  text = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-                  if (text) this.output(args.transcriptTargetId, id, text, 'pty', adapter);
-                }
+      if (launch.launchMode === 'pty') {
+        try {
+          proc = Bun.spawn(launch.argv, {
+            cwd: launch.cwd,
+            env: spawnEnv,
+            detached: true,
+            stdout: 'ignore',
+            stderr: 'ignore',
+            stdin: 'ignore',
+            terminal: {
+              cols: 100,
+              rows: 30,
+              data: (_terminal: NativeCliTerminal, data: Uint8Array) => {
+                let text = decoder.decode(data);
+                if (pendingCR) text = `\r${text}`;
+                pendingCR = text.endsWith('\r');
+                if (pendingCR) text = text.slice(0, -1);
+                text = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+                if (text) this.output(args.transcriptTargetId, id, text, 'pty', adapter);
               }
-            } as Bun.SpawnOptions.OptionsObject<'ignore', 'ignore', 'ignore'>) as NativeCliProcess)
-          : (Bun.spawn(launch.argv, {
-              cwd: launch.cwd,
-              env: spawnEnv,
-              detached: true,
-              stdin: isAppServerSocket ? 'ignore' : 'pipe',
-              stdout: 'pipe',
-              stderr: 'pipe'
-            }) as NativeCliProcess);
+            }
+          } as Bun.SpawnOptions.OptionsObject<'ignore', 'ignore', 'ignore'>) as NativeCliProcess;
+        } catch (ptyError) {
+          // Bun's pty (`terminal:`) needs a working POSIX pty or ConPTY; hosts where that's
+          // unavailable (older Windows, some sandboxes) throw here. Degrade to a non-interactive
+          // launch mode instead of failing the whole session, mirroring the sandboxed process
+          // tool's own pty→pipe fallback (apps/monad/src/capabilities/tools/registry/process.ts).
+          const preset = adapter.detect();
+          const fallbackMode = pickPtyFallbackLaunchMode(
+            preset.supportedLaunchModes,
+            preset.supportedAppServerTransports
+          );
+          if (!fallbackMode) throw ptyError;
+          this.log.warn(
+            {
+              sessionId: args.transcriptTargetId,
+              nativeCliSessionId: id,
+              provider: agent.provider,
+              fallbackMode,
+              err: ptyError instanceof Error ? ptyError.message : String(ptyError)
+            },
+            'native cli pty spawn failed — falling back to non-pty launch mode'
+          );
+          launch = resolveNativeCliLaunchCommand(
+            adapter,
+            buildNativeCliLaunch(
+              agent,
+              buildLaunchOpts({
+                launchMode: fallbackMode,
+                appServerTransport: fallbackMode === 'app-server' ? 'stdio' : undefined
+              })
+            )
+          );
+          launch = managed ? { ...launch, env: { ...(launch.env ?? {}), ...managed.env } } : launch;
+          spawnEnv = await this.buildSpawnEnv(launch.env);
+          isAppServerWs = launch.launchMode === 'app-server' && launch.appServerTransport === 'ws';
+          isAppServerUnix = launch.launchMode === 'app-server' && launch.appServerTransport === 'unix';
+          isAppServerSocket = isAppServerWs || isAppServerUnix;
+          proc = spawnPipeMode();
+        }
+      } else {
+        proc = spawnPipeMode();
+      }
     } catch (error) {
       if (managed) cleanupManagedProjectRuntimeToken(managed.workspace);
       const failedAt = new Date().toISOString();

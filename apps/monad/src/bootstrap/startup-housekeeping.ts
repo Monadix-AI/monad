@@ -4,6 +4,7 @@ import type { Store } from '@/store/db/index.ts';
 
 import { existsSync } from 'node:fs';
 
+import { pathDelimiterFor } from '@/infra/platform-path.ts';
 import { developerLogsDir } from '@/services/developer-log.ts';
 import { sweepStaleLogs } from '@/services/log-maintenance.ts';
 import { ensureDevProvider } from '@/store/home/dev-init.ts';
@@ -12,8 +13,7 @@ type StartupLogger = Pick<ReturnType<typeof createLogger>, 'info' | 'warn'>;
 
 export function prependMonadBinToPath(paths: MonadPaths): void {
   if (!existsSync(paths.bin)) return;
-  const pathSep = process.platform === 'win32' ? ';' : ':';
-  Bun.env.PATH = `${paths.bin}${pathSep}${Bun.env.PATH ?? ''}`;
+  Bun.env.PATH = `${paths.bin}${pathDelimiterFor()}${Bun.env.PATH ?? ''}`;
 }
 
 export async function seedDevProviderIfNeeded(deps: {

@@ -4,6 +4,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { existsSync, lstatSync, mkdirSync, readdirSync, unlinkSync, writeFileSync } from 'node:fs';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 
+import { pathDelimiterFor } from '@/infra/platform-path.ts';
 import { getNativeCliProviderAdapter } from '@/services/native-cli/index.ts';
 import managedProjectRuntimeMcpPromptPath from './prompts/managed-project-runtime-mcp-prompt.md' with { type: 'file' };
 import managedProjectRuntimePromptPath from './prompts/managed-project-runtime-prompt.md' with { type: 'file' };
@@ -172,7 +173,7 @@ export function prepareManagedProjectRuntime(
     MONAD_NATIVE_CLI_SESSION_ID: args.nativeCliSessionId,
     MONAD_AGENT_TOKEN_FILE: tokenFile,
     MONAD_SERVER_URL: args.serverUrl,
-    PATH: `${binDir}${args.baseEnvPath ? `:${args.baseEnvPath}` : ''}`
+    PATH: `${binDir}${args.baseEnvPath ? `${pathDelimiterFor(platform)}${args.baseEnvPath}` : ''}`
   };
   return {
     workspace,
