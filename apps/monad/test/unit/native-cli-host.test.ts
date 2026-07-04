@@ -1,4 +1,4 @@
-import type { NativeCliAgentView } from '@monad/protocol';
+import type { NativeCliAgentView, NativeCliSessionState } from '@monad/protocol';
 import type { NativeCliProviderAdapter } from '@/services/native-cli/types.ts';
 
 import { expect, test } from 'bun:test';
@@ -757,4 +757,72 @@ test('native CLI usage returns empty records when the adapter has no usage probe
     records: []
   });
   expect(typeof usage.checkedAt).toBe('string');
+});
+
+test('listLive returns only starting/running runtimes across all projects', () => {
+  const store = createStore();
+  const host = new NativeCliHost({ store, bus: new EventBus(), agents: async () => [] });
+  const insertProject = (id: `prj_${string}`, title: string): void =>
+    store.insertWorkplaceProject({
+      id,
+      title,
+      ownerPrincipalId: 'prn_test',
+      state: 'active',
+      archived: false,
+      createdAt: '2026-07-02T00:00:00.000Z',
+      updatedAt: '2026-07-02T00:00:00.000Z'
+    });
+  insertProject('prj_01KWLIVE0000000000000001', 'Alpha');
+  insertProject('prj_01KWLIVE0000000000000002', 'Beta');
+  const insertSession = (
+    id: string,
+    transcriptTargetId: `prj_${string}`,
+    provider: string,
+    state: NativeCliSessionState,
+    startedAt: string,
+    outputSnapshot = ''
+  ): void =>
+    store.upsertNativeCliSession({
+      id,
+      transcriptTargetId,
+      agentName: provider,
+      provider,
+      workingPath: '/tmp/p',
+      launchMode: 'app-server',
+      runtimeRole: 'managed-project-agent',
+      agentRuntimeId: id,
+      agentRuntimeTokenHash: null,
+      lastDeliveredSeq: 0,
+      lastVisibleSeq: 0,
+      state,
+      pid: null,
+      providerSessionRef: null,
+      outputSnapshot,
+      exitCode: null,
+      startedAt,
+      updatedAt: startedAt,
+      exitedAt: null
+    });
+  // Two live (running/starting) runtimes in different projects, incl. framework adapters, plus two
+  // dead ones that must be excluded.
+  insertSession(
+    'ncli_run_a',
+    'prj_01KWLIVE0000000000000001',
+    'openclaw',
+    'running',
+    '2026-07-02T00:00:01.000Z',
+    'noisy output'
+  );
+  insertSession('ncli_start_b', 'prj_01KWLIVE0000000000000002', 'hermes', 'starting', '2026-07-02T00:00:02.000Z');
+  insertSession('ncli_stop_a', 'prj_01KWLIVE0000000000000001', 'codex', 'stopped', '2026-07-02T00:00:03.000Z');
+  insertSession('ncli_exit_b', 'prj_01KWLIVE0000000000000002', 'qwen', 'exited', '2026-07-02T00:00:04.000Z');
+
+  const live = host.listLive().sessions;
+  expect(live.map((s) => s.id)).toEqual(['ncli_run_a', 'ncli_start_b']);
+  expect(live.every((s) => s.state === 'running' || s.state === 'starting')).toBe(true);
+  // spans multiple projects and surfaces framework (openclaw/hermes) providers, not just native CLIs
+  expect(new Set(live.map((s) => s.transcriptTargetId)).size).toBe(2);
+  expect(live.map((s) => s.provider).sort()).toEqual(['hermes', 'openclaw']);
+  // status-only list: output snapshots are stripped so the poll ships no output buffers
+  expect(live.every((s) => s.outputSnapshot === '')).toBe(true);
 });

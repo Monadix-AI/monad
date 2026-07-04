@@ -9,6 +9,7 @@ export { useGetNativeCliUsageQuery, useLazyGetNativeCliUsageQuery } from './get-
 export { useHeartbeatNativeCliAuthMutation } from './heartbeat-native-cli-auth.ts';
 export { useInputNativeCliAuthMutation } from './input-native-cli-auth.ts';
 export { useInputNativeCliSessionMutation } from './input-native-cli-session.ts';
+export { useListLiveNativeCliSessionsQuery } from './list-live-native-cli-sessions.ts';
 export {
   nativeCliSessionAdapter,
   nativeCliSessionSelectors,

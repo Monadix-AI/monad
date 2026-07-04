@@ -156,6 +156,10 @@ export function createNativeCliModule({ paths, host, store }: NativeCliDeps) {
       return listNativeCliSessionsResponseSchema.parse(host.list(sessionId));
     },
 
+    listLive(): ListNativeCliSessionsResponse {
+      return listNativeCliSessionsResponseSchema.parse(host.listLive());
+    },
+
     observe({
       id,
       transcriptTargetId

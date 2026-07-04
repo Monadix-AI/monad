@@ -830,6 +830,19 @@ export class NativeCliHost {
     };
   }
 
+  /** Every live (starting/running) runtime across the daemon, all projects — for the daemon-wide
+   *  runtime overview, so the web polls once instead of once per project. Output snapshots are
+   *  dropped: this is a status list (state/provider/name), and shipping every live session's
+   *  (up to 256 KB) buffer on each poll is bandwidth no overview consumer reads. */
+  listLive(): ListNativeCliSessionsResponse {
+    return {
+      sessions: this.deps.store.listLiveNativeCliSessions().map((row) => {
+        const live = this.live.get(row.id);
+        return { ...toView(row, live?.pendingApprovals.size ?? 0, live), outputSnapshot: '' };
+      })
+    };
+  }
+
   observe(id: string, afterSeq?: number): NativeCliObservationAccessResponse {
     return this.observeFromStore(id, afterSeq);
   }

@@ -1,16 +1,25 @@
 'use client';
 
+import type { NativeCliSessionState, NativeCliSessionView, WorkplaceProject } from '@monad/protocol';
+
 import {
   ArrowRight01Icon,
   BotIcon,
   Folder01Icon,
   MessageMultiple01Icon,
+  PuzzleIcon,
   TerminalIcon,
   UserMultiple02Icon
 } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { useListWorkplaceProjectsQuery } from '@monad/client-rtk';
-import { Button, ScrollArea } from '@monad/ui';
+import {
+  nativeCliSessionSelectors,
+  useListLiveNativeCliSessionsQuery,
+  useListWorkplaceProjectsQuery,
+  workplaceProjectAdapter,
+  workplaceProjectSelectors
+} from '@monad/client-rtk';
+import { Button, ProductIcon, ScrollArea } from '@monad/ui';
 import Link from 'next/link';
 
 import { useT } from '@/components/I18nProvider';
@@ -19,6 +28,100 @@ import { studioPath } from '@/features/routes/route-paths';
 import { useNativeCliAgentSettings } from '@/hooks/use-native-cli-agent-settings';
 import { OverviewIllustration } from './OverviewIllustration';
 import { StudioBreadcrumbHeader } from './StudioBreadcrumbHeader';
+
+// Live agent-adapter runtimes are polled (P0). Provider-owned CLI and framework adapters (Codex,
+// Claude Code, Gemini, Qwen, OpenClaw, Hermes, …) all run as native-CLI-style sessions, so ONE
+// daemon-wide query surfaces every live runtime across all projects — polled once here rather than a
+// per-project subscription each. A short interval keeps the state honest without an SSE subscription.
+const AGENT_RUNTIME_POLL_MS = 5000;
+
+const AGENT_STATE_STYLE: Record<NativeCliSessionState, string> = {
+  running:
+    'bg-[color-mix(in_srgb,var(--success,var(--accent-green))_16%,transparent)] text-[color-mix(in_srgb,var(--success,var(--accent-green))_72%,var(--foreground))]',
+  starting:
+    'bg-[color-mix(in_srgb,var(--accent-blue)_14%,transparent)] text-[color-mix(in_srgb,var(--accent-blue)_70%,var(--foreground))]',
+  exited: 'bg-muted text-muted-foreground',
+  stopped: 'bg-muted text-muted-foreground',
+  failed: 'bg-destructive/12 text-destructive'
+};
+
+function agentStateLabel(t: ReturnType<typeof useT>, state: NativeCliSessionState): string {
+  return t(`web.studio.agentState.${state}` as const);
+}
+
+function AgentRuntimeRow({ session }: { session: NativeCliSessionView }) {
+  const t = useT();
+  return (
+    <div className="flex items-center gap-2.5 rounded-lg border bg-background px-3 py-2">
+      <span className="flex size-7 shrink-0 items-center justify-center rounded-md border bg-card">
+        <ProductIcon
+          className="size-3.5"
+          product={session.productIcon ?? session.provider}
+        />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate font-medium text-sm">{session.agentName}</span>
+        <span className="block truncate text-muted-foreground text-xs">{session.provider}</span>
+      </span>
+      <span className={`shrink-0 rounded-full px-2 py-0.5 font-medium text-[11px] ${AGENT_STATE_STYLE[session.state]}`}>
+        {agentStateLabel(t, session.state)}
+      </span>
+    </div>
+  );
+}
+
+// Group live runtimes by their transcript target (project/session), preserving encounter order so the
+// daemon's newest-first ordering carries through to the UI.
+function groupByTarget(sessions: NativeCliSessionView[]): [string, NativeCliSessionView[]][] {
+  const groups = new Map<string, NativeCliSessionView[]>();
+  for (const session of sessions) {
+    const list = groups.get(session.transcriptTargetId);
+    if (list) list.push(session);
+    else groups.set(session.transcriptTargetId, [session]);
+  }
+  return [...groups.entries()];
+}
+
+function AgentRuntimesSection({ projects }: { projects: WorkplaceProject[] }) {
+  const t = useT();
+  const { data } = useListLiveNativeCliSessionsQuery(undefined, { pollingInterval: AGENT_RUNTIME_POLL_MS });
+  const sessions = data ? nativeCliSessionSelectors.selectAll(data) : [];
+  const titleFor = (targetId: string): string => projects.find((p) => p.id === targetId)?.title ?? targetId;
+  return (
+    <section className="rounded-xl border bg-card">
+      <div className="flex items-center gap-2 border-b px-4 py-3">
+        <HugeiconsIcon
+          className="size-4 text-muted-foreground"
+          icon={PuzzleIcon}
+        />
+        <div className="min-w-0">
+          <h2 className="font-medium text-base">{t('web.studio.liveRuntimesTitle')}</h2>
+          <p className="mt-1 text-muted-foreground text-sm">{t('web.studio.liveRuntimesDesc')}</p>
+        </div>
+      </div>
+      <div className="flex flex-col gap-3 p-3">
+        {sessions.length === 0 ? (
+          <p className="px-1 py-2 text-muted-foreground text-sm">{t('web.studio.liveRuntimesEmpty')}</p>
+        ) : (
+          groupByTarget(sessions).map(([targetId, rows]) => (
+            <div
+              className="flex flex-col gap-1.5"
+              key={targetId}
+            >
+              <p className="truncate px-1 text-muted-foreground text-xs">{titleFor(targetId)}</p>
+              {rows.map((session) => (
+                <AgentRuntimeRow
+                  key={session.id}
+                  session={session}
+                />
+              ))}
+            </div>
+          ))
+        )}
+      </div>
+    </section>
+  );
+}
 
 function SwarmAction({
   body,
@@ -58,7 +161,10 @@ export function SwarmOverview() {
   const nativeCli = useNativeCliAgentSettings();
   const projects = useListWorkplaceProjectsQuery(undefined);
   const nativeCliCount = nativeCli.agents.length;
-  const projectCount = projects.data?.projects.ids.length ?? 0;
+  const projectList = workplaceProjectSelectors.selectAll(
+    projects.data?.projects ?? workplaceProjectAdapter.getInitialState()
+  );
+  const projectCount = projectList.length;
 
   return (
     <PanelShell>
@@ -141,6 +247,8 @@ export function SwarmOverview() {
                 </div>
               </div>
             </section>
+
+            <AgentRuntimesSection projects={projectList} />
           </main>
 
           <aside className="hidden min-w-0 flex-col gap-4 lg:flex">
