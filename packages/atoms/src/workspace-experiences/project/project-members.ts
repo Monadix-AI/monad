@@ -69,10 +69,12 @@ export function nativeCliProductDisplayName(
   if (product === 'claude-code') return 'Claude Code';
   if (product === 'gemini') return 'Gemini CLI';
   if (product === 'qwen') return 'Qwen Code';
+  if (product === 'openclaw') return 'OpenClaw';
+  if (product === 'hermes') return 'Hermes';
   return fallback;
 }
 
-const PRODUCT_ICON_IDS = new Set(['codex', 'claude-code', 'gemini', 'gemini-cli', 'qwen']);
+const PRODUCT_ICON_IDS = new Set(['codex', 'claude-code', 'gemini', 'gemini-cli', 'qwen', 'openclaw', 'hermes']);
 
 export function productIcon(value: unknown): Participant['icon'] | undefined {
   return typeof value === 'string' && PRODUCT_ICON_IDS.has(value) ? (value as Participant['icon']) : undefined;

@@ -38,7 +38,6 @@ import '../../src/endpoints/atoms/get-skill-content.ts';
 import '../../src/endpoints/atoms/update-skill-content.ts';
 import '../../src/endpoints/settings/model/profiles/rename-profile.ts';
 import '../../src/endpoints/settings/model/transcription/transcribe-audio.ts';
-import '../../src/endpoints/settings/framework-agents/index.ts';
 import '../../src/endpoints/projects/create-project.ts';
 import '../../src/endpoints/projects/delete-project.ts';
 import '../../src/endpoints/projects/list-projects.ts';
@@ -111,16 +110,6 @@ function fakeClient(handlers: Record<string, Handler> = {}): MonadClient {
   Object.assign(profilesRoute, {
     get: () => resolve('listProfiles', '$raw', { profiles: [], defaultAlias: 'default' })
   });
-  const frameworkAgentsRoute = (params: { name: string }) => ({
-    enable: { post: () => resolve('setFrameworkAgentEnabled', '$raw', { ok: true }, params, { enabled: true }) },
-    disable: { post: () => resolve('setFrameworkAgentEnabled', '$raw', { ok: true }, params, { enabled: false }) },
-    delete: () => resolve('removeFrameworkAgent', '$raw', { ok: true }, params)
-  });
-  Object.assign(frameworkAgentsRoute, {
-    get: () => resolve('listFrameworkAgents', '$raw', { agents: [] }),
-    put: (body: unknown) => resolve('upsertFrameworkAgent', '$raw', { ok: true }, body)
-  });
-
   return {
     treaty: {
       v1: {
@@ -178,8 +167,7 @@ function fakeClient(handlers: Record<string, Handler> = {}): MonadClient {
               get: () => resolve('getRoles', '$raw', { roles: {} }),
               put: (body: unknown) => resolveMut('setRoles', body)
             }
-          },
-          'framework-agents': frameworkAgentsRoute
+          }
         },
         commands: {
           get: () => resolve('listCommands', 'commands', [])
@@ -770,50 +758,6 @@ test('workplace projects: list/create/update/delete use the typed treaty project
   expect(calls).toContainEqual(['create', { title: project.title, origin: { surface: 'web' } }]);
   expect(calls).toContainEqual(['update', { id: project.id }, { title: 'Workplace: beta' }]);
   expect(calls).toContainEqual(['delete', { id: project.id }]);
-});
-
-test('framework agents: list/upsert/toggle/delete use the typed treaty settings routes', async () => {
-  const calls: unknown[] = [];
-  const agent = {
-    name: 'openclaw-local',
-    provider: 'openclaw',
-    transport: 'cli-oneshot',
-    command: 'openclaw',
-    args: ['run'],
-    enabled: true,
-    osSandbox: false,
-    forwardMcp: false
-  };
-  const client = fakeClient({
-    listFrameworkAgents: handler('$raw', async () => {
-      calls.push(['list']);
-      return { agents: [agent] };
-    }),
-    upsertFrameworkAgent: handler('$raw', async (body) => {
-      calls.push(['upsert', body]);
-      return { ok: true };
-    }),
-    setFrameworkAgentEnabled: handler('$raw', async (params, body) => {
-      calls.push(['toggle', params, body]);
-      return { ok: true };
-    }),
-    removeFrameworkAgent: handler('$raw', async (params) => {
-      calls.push(['remove', params]);
-      return { ok: true };
-    })
-  });
-  const store = createMonadStore({ client });
-
-  const list = await dispatchEndpoint(store, 'listFrameworkAgents');
-  expect((list.data as { ids?: string[] } | undefined)?.ids ?? []).toContain(agent.name);
-  await dispatchEndpoint(store, 'upsertFrameworkAgent', agent);
-  await dispatchEndpoint(store, 'setFrameworkAgentEnabled', { name: agent.name, enabled: false });
-  await dispatchEndpoint(store, 'removeFrameworkAgent', agent.name);
-
-  expect(calls).toContainEqual(['list']);
-  expect(calls).toContainEqual(['upsert', { agent }]);
-  expect(calls).toContainEqual(['toggle', { name: agent.name }, { enabled: false }]);
-  expect(calls).toContainEqual(['remove', { name: agent.name }]);
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════

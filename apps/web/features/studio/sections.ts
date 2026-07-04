@@ -11,7 +11,6 @@ import {
   MessageSquareCodeIcon,
   NeuralNetworkIcon,
   PackageIcon,
-  Plug01Icon,
   ShieldHalfIcon,
   TerminalIcon,
   UserGroupIcon
@@ -31,7 +30,6 @@ export type StudioSectionId =
   | 'acpAgents'
   | 'swarm'
   | 'nativeCliAgents'
-  | 'frameworkAgents'
   | 'workplaceProjects'
   | 'projectMembers'
   | 'swarmTasks'
@@ -61,7 +59,6 @@ export const STUDIO_SECTION_IDS = [
   'acpAgents',
   'swarm',
   'nativeCliAgents',
-  'frameworkAgents',
   'workplaceProjects',
   'projectMembers',
   'swarmTasks',
@@ -103,7 +100,6 @@ export const STUDIO_RUNTIME_SECTIONS: StudioSectionItem[] = [
 export const STUDIO_SWARM_SECTIONS: StudioSectionItem[] = [
   { id: 'swarm', icon: NeuralNetworkIcon, i18nKey: 'web.studio.swarmOverview' },
   { id: 'nativeCliAgents', icon: TerminalIcon, i18nKey: 'web.studio.nativeCliAgents' },
-  { id: 'frameworkAgents', icon: Plug01Icon, i18nKey: 'web.studio.frameworkAgents' },
   { id: 'workplaceProjects', icon: MessageSquareCodeIcon, i18nKey: 'web.studio.workplaceProjects' }
 ];
 

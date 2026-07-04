@@ -37,7 +37,6 @@ export const apiSlice = createApi({
     'AcpAgents',
     'NativeCliAgents',
     'NativeCliSessions',
-    'FrameworkAgents',
     'McpServers',
     'Locale',
     'Catalog',

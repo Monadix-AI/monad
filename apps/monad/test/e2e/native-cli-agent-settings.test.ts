@@ -94,11 +94,13 @@ async function runPresets(call: Call): Promise<void> {
   const res = await call('GET', '/v1/settings/native-cli-agents/presets');
   expect(res.status).toBe(200);
   const { presets } = (await res.json()) as { presets: { id: string; command: string; defaultLaunchMode: string }[] };
-  expect(presets.map((p) => p.id).sort()).toEqual(['claude-code', 'codex', 'gemini', 'qwen']);
+  expect(presets.map((p) => p.id).sort()).toEqual(['claude-code', 'codex', 'gemini', 'hermes', 'openclaw', 'qwen']);
   expect(presets.every((p) => p.defaultLaunchMode === 'pty')).toBe(true);
   expect(presets.find((p) => p.id === 'codex')?.command).toBe('codex');
   expect(presets.find((p) => p.id === 'gemini')?.command).toBe('gemini');
   expect(presets.find((p) => p.id === 'qwen')?.command).toBe('qwen');
+  expect(presets.find((p) => p.id === 'openclaw')?.command).toBe('openclaw');
+  expect(presets.find((p) => p.id === 'hermes')?.command).toBe('hermes');
 }
 
 async function runValidation(call: Call, paths: MonadPaths): Promise<void> {

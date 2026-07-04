@@ -5,7 +5,6 @@ import {
   BotIcon,
   Folder01Icon,
   MessageMultiple01Icon,
-  Plug01Icon,
   TerminalIcon,
   UserMultiple02Icon
 } from '@hugeicons/core-free-icons';
@@ -17,7 +16,6 @@ import Link from 'next/link';
 import { useT } from '@/components/I18nProvider';
 import { PanelShell } from '@/components/ui/panel-shell';
 import { studioPath } from '@/features/routes/route-paths';
-import { useFrameworkAgentSettings } from '@/hooks/use-framework-agent-settings';
 import { useNativeCliAgentSettings } from '@/hooks/use-native-cli-agent-settings';
 import { OverviewIllustration } from './OverviewIllustration';
 import { StudioBreadcrumbHeader } from './StudioBreadcrumbHeader';
@@ -58,10 +56,8 @@ function SwarmAction({
 export function SwarmOverview() {
   const t = useT();
   const nativeCli = useNativeCliAgentSettings();
-  const framework = useFrameworkAgentSettings();
   const projects = useListWorkplaceProjectsQuery(undefined);
   const nativeCliCount = nativeCli.agents.length;
-  const frameworkCount = framework.agents.length;
   const projectCount = projects.data?.projects.ids.length ?? 0;
 
   return (
@@ -113,16 +109,6 @@ export function SwarmOverview() {
                   href={studioPath('nativeCliAgents')}
                   icon={TerminalIcon}
                   title={t('web.studio.nativeCliAgents')}
-                />
-                <SwarmAction
-                  body={
-                    frameworkCount > 0
-                      ? t('web.studio.frameworkReady', { count: frameworkCount })
-                      : t('web.studio.frameworkNeeded')
-                  }
-                  href={studioPath('frameworkAgents')}
-                  icon={Plug01Icon}
-                  title={t('web.studio.frameworkAgents')}
                 />
                 <SwarmAction
                   body={

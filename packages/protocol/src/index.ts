@@ -19,7 +19,6 @@ export * from './developer-log.ts';
 export * from './developer-settings.ts';
 export * from './domain.ts';
 export * from './event-table.ts';
-export * from './framework-agent.ts';
 export * from './graph.ts';
 export * from './hooks.ts';
 export * from './hooks-settings.ts';

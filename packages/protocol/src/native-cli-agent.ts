@@ -14,11 +14,11 @@ import {
 // autocomplete + exhaustiveness hints, but a third-party `agent-adapter` atom pack may introduce a new
 // provider id, so the wire schema is `z.string()` and consumers must default-handle unknown ids
 // (icon/label fall back). The `KNOWN_*` tuples are the built-in set for seeding/tests.
-export const KNOWN_NATIVE_CLI_PROVIDERS = ['codex', 'claude-code', 'gemini', 'qwen'] as const;
+export const KNOWN_NATIVE_CLI_PROVIDERS = ['codex', 'claude-code', 'gemini', 'qwen', 'openclaw', 'hermes'] as const;
 export type NativeCliProvider = (typeof KNOWN_NATIVE_CLI_PROVIDERS)[number] | (string & {});
 export const nativeCliProviderSchema: z.ZodType<NativeCliProvider> = z.string().min(1);
 
-export const KNOWN_NATIVE_CLI_PRODUCT_ICONS = ['codex', 'claude-code', 'gemini', 'qwen'] as const;
+export const KNOWN_NATIVE_CLI_PRODUCT_ICONS = ['codex', 'claude-code', 'gemini', 'qwen', 'openclaw', 'hermes'] as const;
 export type NativeCliProductIcon = (typeof KNOWN_NATIVE_CLI_PRODUCT_ICONS)[number] | (string & {});
 export const nativeCliProductIconSchema: z.ZodType<NativeCliProductIcon> = z.string().min(1);
 

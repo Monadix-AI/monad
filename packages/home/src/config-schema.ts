@@ -6,7 +6,6 @@ import {
   channelGroupPolicySchema,
   channelTypeSchema,
   fallbackTargetViewSchema,
-  frameworkAgentViewSchema,
   hookMatcherSettingSchema,
   httpOriginSchema,
   httpUrlSchema,
@@ -297,9 +296,6 @@ export type AcpAgentConfig = z.infer<typeof acpAgentSchema>;
 
 export const nativeCliAgentSchema = nativeCliAgentViewSchema;
 export type NativeCliAgentConfig = z.infer<typeof nativeCliAgentSchema>;
-
-export const frameworkAgentSchema = frameworkAgentViewSchema;
-export type FrameworkAgentConfig = z.infer<typeof frameworkAgentSchema>;
 
 // Browser automation preset. When enabled, the daemon auto-connects the official
 // Playwright MCP server named "browser" — no manual mcpServers entry needed.

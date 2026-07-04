@@ -3,7 +3,7 @@ import type { CSSProperties } from 'react';
 
 import { useId } from 'react';
 
-export type ProductIconId = 'codex' | 'claude-code' | 'gemini' | 'gemini-cli' | 'qwen';
+export type ProductIconId = 'codex' | 'claude-code' | 'gemini' | 'gemini-cli' | 'qwen' | 'openclaw' | 'hermes';
 
 export interface ProductIconColors {
   background?: string;
@@ -31,10 +31,20 @@ const PRODUCT_TITLES: Record<ProductIconId, string> = {
   'claude-code': 'Claude Code',
   gemini: 'Gemini CLI',
   'gemini-cli': 'Gemini CLI',
-  qwen: 'Qwen Code'
+  qwen: 'Qwen Code',
+  openclaw: 'OpenClaw',
+  hermes: 'Hermes'
 };
 
-const PRODUCT_IDS = new Set<ProductIconId>(['codex', 'claude-code', 'gemini', 'gemini-cli', 'qwen']);
+const PRODUCT_IDS = new Set<ProductIconId>([
+  'codex',
+  'claude-code',
+  'gemini',
+  'gemini-cli',
+  'qwen',
+  'openclaw',
+  'hermes'
+]);
 
 function vars(colors?: ProductIconColors): CSSProperties {
   return {
@@ -138,11 +148,47 @@ function ProductIconSvg({
     );
   }
   if (product === 'qwen') return <QwenCodeIcon title={title} />;
+  if (product === 'openclaw') return <OpenClawIcon title={title} />;
+  if (product === 'hermes') return <HermesIcon title={title} />;
   return (
     <CodexIcon
       gradientId={gradientId}
       title={title}
     />
+  );
+}
+
+function OpenClawIcon({ title }: { title: string }): React.ReactElement {
+  return (
+    <svg
+      height="100%"
+      viewBox="0 0 24 24"
+      width="100%"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <title>{title}</title>
+      <path
+        d="M5 3c0 4 1.5 6.5 4 8-1 .8-1.6 2-1.6 3.4A3.6 3.6 0 0 0 11 18a3.5 3.5 0 0 0 2.2-.8l4.3 3.6a1 1 0 0 0 1.4-1.4l-3.7-4.3c.5-.7.8-1.5.8-2.4 0-1.4-.6-2.6-1.6-3.4 2.5-1.5 4-4 4-8a1 1 0 0 0-2 0c0 3.6-1.5 5.6-4 6.9V4a1 1 0 1 0-2 0v4.6h-.8V4a1 1 0 1 0-2 0v4.6H9C6.5 7.3 5 5.3 5 1.9A1 1 0 0 0 5 3Zm6 7.4a2.6 2.6 0 1 1 0 5.2 2.6 2.6 0 0 1 0-5.2Z"
+        fill="var(--product-icon-accent, #E8792B)"
+      />
+    </svg>
+  );
+}
+
+function HermesIcon({ title }: { title: string }): React.ReactElement {
+  return (
+    <svg
+      height="100%"
+      viewBox="0 0 24 24"
+      width="100%"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <title>{title}</title>
+      <path
+        d="M12 2 3 6v5c0 5 3.8 8.6 9 11 5.2-2.4 9-6 9-11V6l-9-4Zm0 2.2 7 3.1V11c0 3.9-2.8 6.9-7 9-4.2-2.1-7-5.1-7-9V7.3l7-3.1Zm-3.2 4.3a1 1 0 0 0-1 1v5a1 1 0 1 0 2 0v-2.3l1.4 1.7a1 1 0 0 0 1.6 0l1.4-1.7V15a1 1 0 1 0 2 0v-5a1 1 0 0 0-1.8-.6L12 12l-2.4-2.6a1 1 0 0 0-.8-.4Z"
+        fill="var(--product-icon-accent, #5B6CFF)"
+      />
+    </svg>
   );
 }
 

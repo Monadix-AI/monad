@@ -1,6 +1,13 @@
 import type { MessageAttachmentRef, NativeAgentDeliveryId, NativeCliObservationEvent } from '@monad/protocol';
 
-export type WorkspaceExperienceProductIconId = 'codex' | 'claude-code' | 'gemini' | 'gemini-cli' | 'qwen';
+export type WorkspaceExperienceProductIconId =
+  | 'codex'
+  | 'claude-code'
+  | 'gemini'
+  | 'gemini-cli'
+  | 'qwen'
+  | 'openclaw'
+  | 'hermes';
 export type ParticipantKind = 'human' | 'agent';
 type MessageKind = ParticipantKind | 'system' | 'developer';
 export type Presence = 'online' | 'working' | 'needs-login' | 'failed' | 'stopped' | 'idle';

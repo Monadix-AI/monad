@@ -67,7 +67,6 @@ function mergeConfigs(system: MonadSystemConfig, profile: MonadProfile): MonadCo
     },
     mcpServers: system.mcpServers,
     acpAgents: system.acpAgents,
-    frameworkAgents: system.frameworkAgents,
     nativeCliAgents: system.nativeCliAgents,
     peers: system.peers,
     model: profile.model,
@@ -103,7 +102,6 @@ function extractSystemConfig(cfg: MonadConfig): MonadSystemConfig {
     },
     mcpServers: cfg.mcpServers,
     acpAgents: cfg.acpAgents,
-    frameworkAgents: cfg.frameworkAgents,
     nativeCliAgents: cfg.nativeCliAgents,
     peers: cfg.peers,
     observability: cfg.observability
