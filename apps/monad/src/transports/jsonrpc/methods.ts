@@ -141,6 +141,9 @@ export const RPC_HANDLERS: RpcHandlerMap = {
   'nativeCli.get': async ({ id, transcriptTargetId }, h: D) => h.nativeCli.get({ id, transcriptTargetId }),
   'nativeCli.input': async ({ id, transcriptTargetId, ...request }, h: D) =>
     h.nativeCli.input({ id, transcriptTargetId, ...request }),
+  'nativeCli.interrupt': async ({ id, transcriptTargetId }, h: D) => h.nativeCli.interrupt({ id, transcriptTargetId }),
+  'nativeCli.steer': async ({ id, transcriptTargetId, ...request }, h: D) =>
+    h.nativeCli.steer({ id, transcriptTargetId, ...request }),
   'nativeCli.approval': async ({ id, transcriptTargetId, ...request }, h: D) =>
     h.nativeCli.approval({ id, transcriptTargetId, ...request }),
   'nativeCli.resize': async ({ id, transcriptTargetId, ...request }, h: D) =>
@@ -148,6 +151,7 @@ export const RPC_HANDLERS: RpcHandlerMap = {
   'nativeCli.stop': async ({ id, transcriptTargetId }, h: D) => h.nativeCli.stop({ id, transcriptTargetId }),
   'nativeCli.historyPage': async ({ id, transcriptTargetId, ...request }, h: D) =>
     h.nativeCli.historyPage({ id, transcriptTargetId, request }),
+  'nativeCli.usage': async ({ name }, h: D) => h.nativeCli.usage({ agentName: name }),
   'nativeCli.auth.start': async ({ name }, h: D) => h.nativeCli.startAuth({ agentName: name }),
   'nativeCli.auth.status': async ({ name }, h: D) => h.nativeCli.authStatus({ agentName: name }),
   'nativeCli.auth.get': async ({ id, controlToken }, h: D) => h.nativeCli.getAuth({ id, controlToken }),

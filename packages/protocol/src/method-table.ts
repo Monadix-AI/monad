@@ -91,6 +91,7 @@ import {
   nativeCliHistoryPageResponseSchema,
   nativeCliInputRequestSchema,
   nativeCliResizeRequestSchema,
+  nativeCliUsageResponseSchema,
   startNativeCliAgentRequestSchema,
   startNativeCliAgentResponseSchema,
   startNativeCliAuthResponseSchema
@@ -335,6 +336,19 @@ export const UNIVERSAL_METHODS = {
     body: nativeCliInputRequestSchema,
     result: okResponseSchema
   },
+  'nativeCli.interrupt': {
+    http: { verb: 'POST', template: '/v1/native-cli-sessions/:id/interrupt' },
+    path: nativeCliSessionPath,
+    query: nativeCliSessionScopeQuery,
+    result: okResponseSchema
+  },
+  'nativeCli.steer': {
+    http: { verb: 'POST', template: '/v1/native-cli-sessions/:id/steer' },
+    path: nativeCliSessionPath,
+    query: nativeCliSessionScopeQuery,
+    body: nativeCliInputRequestSchema,
+    result: okResponseSchema
+  },
   'nativeCli.approval': {
     http: { verb: 'POST', template: '/v1/native-cli-sessions/:id/approval' },
     path: nativeCliSessionPath,
@@ -371,6 +385,11 @@ export const UNIVERSAL_METHODS = {
     http: { verb: 'GET', template: '/v1/native-cli-agents/:name/auth/status' },
     path: nativeCliAgentNamePath,
     result: nativeCliAuthStatusResponseSchema
+  },
+  'nativeCli.usage': {
+    http: { verb: 'GET', template: '/v1/native-cli-agents/:name/usage' },
+    path: nativeCliAgentNamePath,
+    result: nativeCliUsageResponseSchema
   },
   'nativeCli.auth.get': {
     http: { verb: 'GET', template: '/v1/native-cli-auth-sessions/:id' },

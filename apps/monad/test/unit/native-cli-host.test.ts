@@ -680,9 +680,10 @@ test('managed native CLI observation restores Qwen stream-json history', async (
   mkdirSync(root, { recursive: true });
   writeFileSync(
     join(root, `${providerSessionRef}.jsonl`),
-    `${JSON.stringify({ type: 'init', session_id: providerSessionRef })}\n${JSON.stringify({
-      type: 'message',
-      text: 'restored qwen history'
+    `${JSON.stringify({ type: 'system', subtype: 'init', session_id: providerSessionRef })}\n${JSON.stringify({
+      type: 'assistant',
+      session_id: providerSessionRef,
+      message: { role: 'assistant', content: 'restored qwen history' }
     })}\n`
   );
   const store = createStore();
