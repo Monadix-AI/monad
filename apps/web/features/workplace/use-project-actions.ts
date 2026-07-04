@@ -47,6 +47,7 @@ type ProjectApprovalActionView = {
 
 type AddProjectMemberOptions = {
   displayName?: string;
+  projectTemplateId?: string;
   modelId?: string;
   reasoningEffort?: string;
   speed?: 'standard' | 'fast';
@@ -190,10 +191,11 @@ export function useProjectActions(args: {
           ext: {
             ...(currentProject.origin.ext ?? {}),
             [workplaceProjectMembersExtKey]: nextMembers.map(
-              ({ type, name, templateName, displayName, instanceId, settings }) => ({
+              ({ type, name, templateName, projectTemplateId, displayName, instanceId, settings }) => ({
                 type,
                 name,
                 ...(templateName ? { templateName } : {}),
+                ...(projectTemplateId ? { projectTemplateId } : {}),
                 ...(displayName ? { displayName } : {}),
                 ...(instanceId ? { instanceId } : {}),
                 ...(settings && Object.keys(settings).length > 0 ? { settings } : {})
@@ -236,6 +238,7 @@ export function useProjectActions(args: {
             type,
             name: displayName,
             templateName: name,
+            ...(options.projectTemplateId ? { projectTemplateId: options.projectTemplateId } : {}),
             displayName,
             instanceId,
             settings

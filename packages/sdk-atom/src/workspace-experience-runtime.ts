@@ -1,5 +1,6 @@
 import type {
   NativeCliAppServerTransport,
+  NativeCliProjectTemplate,
   NativeCliProvider,
   ProfileView,
   ProjectId,
@@ -50,6 +51,7 @@ export type WorkspaceExperienceMemberSettings = WorkplaceProjectMemberSettings;
 
 export interface WorkspaceExperienceAddMemberOptions {
   displayName?: string;
+  projectTemplateId?: string;
   modelId?: string;
   reasoningEffort?: string;
   speed?: 'standard' | 'fast';
@@ -69,6 +71,7 @@ export interface WorkspaceExperienceMemberCandidate {
   icon?: WorkspaceExperienceIcon;
   provider?: NativeCliProvider;
   supportedAppServerTransports?: NativeCliAppServerTransport[];
+  template?: NativeCliProjectTemplate;
 }
 
 export interface WorkspaceExperienceSnapshot {
