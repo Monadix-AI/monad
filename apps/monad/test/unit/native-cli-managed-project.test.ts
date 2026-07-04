@@ -61,6 +61,38 @@ test('managed project runtime uses the platform wrapper filename', async () => {
   expect(await readFile(prepared.wrapperBin, 'utf8')).toStartWith('@echo off\r\n');
 });
 
+test('managed project runtime joins the wrapper bin dir onto baseEnvPath with the platform PATH separator', () => {
+  const monadHomeWin = join(tmpdir(), `monad-managed-runtime-${Date.now()}-${process.hrtime.bigint()}-win`);
+  const preparedWin = prepareManagedProjectRuntime({
+    monadHome: monadHomeWin,
+    serverUrl: 'http://127.0.0.1:1234',
+    agentName: 'codex',
+    projectId: 'prj_PROJECT',
+    nativeCliSessionId: 'ncli_windows_path',
+    provider: 'codex',
+    platform: 'win32',
+    baseEnvPath: 'C:\\Windows\\system32'
+  });
+  expect(preparedWin.env.PATH).toBe(
+    `${join(monadHomeWin, 'workplace-agents', 'prj_PROJECT', 'codex', 'bin')};C:\\Windows\\system32`
+  );
+
+  const monadHomePosix = join(tmpdir(), `monad-managed-runtime-${Date.now()}-${process.hrtime.bigint()}-posix`);
+  const preparedPosix = prepareManagedProjectRuntime({
+    monadHome: monadHomePosix,
+    serverUrl: 'http://127.0.0.1:1234',
+    agentName: 'codex',
+    projectId: 'prj_PROJECT',
+    nativeCliSessionId: 'ncli_posix_path',
+    provider: 'codex',
+    platform: 'darwin',
+    baseEnvPath: '/usr/bin:/bin'
+  });
+  expect(preparedPosix.env.PATH).toBe(
+    `${join(monadHomePosix, 'workplace-agents', 'prj_PROJECT', 'codex', 'bin')}:/usr/bin:/bin`
+  );
+});
+
 test('managed project runtime uses non-interactive Codex launches', () => {
   const monadHome = join(tmpdir(), `monad-managed-runtime-${Date.now()}-${process.hrtime.bigint()}`);
   const prepared = prepareManagedProjectRuntime({
