@@ -94,11 +94,13 @@ async function runTurn(args: {
 }
 
 describe.skipIf(!LIVE)('real agent-adapter binaries: detect', () => {
-  test('Hermes binary is installed and offers pty + cli-oneshot (no app-server)', () => {
+  test('Hermes binary is installed and offers pty + app-server + cli-oneshot', () => {
     const preset = hermesNativeCliAdapter.detect();
     expect(preset.installed).toBe(true);
-    expect(preset.supportedLaunchModes).toEqual(['pty', 'cli-oneshot']);
-    expect(preset.supportedAppServerTransports).toBeUndefined();
+    // `hermes serve` became a real WS gateway in v0.18.0 (was absent in v0.14.0), so app-server is back
+    // alongside the cli-oneshot managed default.
+    expect(preset.supportedLaunchModes).toEqual(['pty', 'app-server', 'cli-oneshot']);
+    expect(preset.supportedAppServerTransports).toEqual(['ws']);
   });
 
   test('OpenClaw binary is installed and offers pty + app-server', () => {
@@ -158,12 +160,11 @@ describe.skipIf(!LIVE)('real Hermes cli-oneshot turn', () => {
   }, 190_000);
 });
 
-// OpenClaw's app-server path is NOT yet functional end-to-end (this probe surfaced it): the adapter
-// launches `openclaw gateway` but the real foreground server is `openclaw gateway run`, and even that
-// needs `--allow-unconfigured` + an auth token + a parseable listen-port announcement the host reads
-// from stderr — none of which the current adapter/host wiring supplies. So this is an OPT-IN probe
-// (MONAD_LIVE_OPENCLAW=1) that asserts a reply IF a configured gateway is reachable, and otherwise logs
-// the known gap without hard-failing (mirrors how Hermes's fictional app-server was found + removed).
+// OpenClaw's app-server gateway is real as of the daemon-assigned-port work — this probe originally
+// surfaced that `openclaw gateway` didn't announce a port, which is now fixed (daemon-assigned port +
+// non-root ws path). A live turn still needs a configured/authed gateway (ws-auth token), which may not
+// be present in a bare checkout, so this stays an OPT-IN probe (MONAD_LIVE_OPENCLAW=1): it asserts a
+// reply if the gateway is reachable, and otherwise logs the setup requirement without hard-failing.
 describe.skipIf(!(LIVE && LIVE_OPENCLAW))('real OpenClaw app-server turn', () => {
   test('a turn through the real openclaw gateway produces a reply the host captures', async () => {
     let run: Awaited<ReturnType<typeof runTurn>>;
@@ -176,10 +177,10 @@ describe.skipIf(!(LIVE && LIVE_OPENCLAW))('real OpenClaw app-server turn', () =>
         timeoutMs: 180_000
       });
     } catch (err) {
-      // biome-ignore lint/suspicious/noConsole: a live opt-in probe reports the known OpenClaw gap
+      // biome-ignore lint/suspicious/noConsole: a live opt-in probe reports the OpenClaw setup requirement
       console.warn(
-        '[live openclaw] gateway did not start — known gap: the adapter launches `openclaw gateway` ' +
-          `(should be \`gateway run --allow-unconfigured\`) and lacks auth-token/port-announcement handling. ${String(err)}`
+        '[live openclaw] gateway unreachable — the gateway is real (daemon-assigned port) but a live turn ' +
+          `needs a configured/authed OpenClaw gateway (ws-auth token) not present in a bare checkout. ${String(err)}`
       );
       return;
     }
