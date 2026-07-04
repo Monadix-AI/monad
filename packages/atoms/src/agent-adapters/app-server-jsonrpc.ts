@@ -335,6 +335,10 @@ export interface MakeAppServerCliAdapterOptions {
   installUrl: string;
   /** Args after `auth` for the auth-status probe (e.g. `['status']` vs `['list']`). */
   authStatusArgs: string[];
+  /** Whether the auth-status probe appends `--json`. Default true; set FALSE for a provider whose
+   *  `auth` subcommand rejects `--json` (Hermes) — else the probe errors and a signed-in agent is
+   *  misreported as unauthenticated. The plain-text exit code (0 = authenticated) is used instead. */
+  authStatusJson?: boolean;
   /** Managed project-agent runtime behavior; omit for a non-managed adapter. */
   managedRuntime?: NativeCliManagedRuntime;
   /** Opt-in `cli-oneshot` launch mode for a provider with no persistent app-server backend (Hermes):
@@ -485,8 +489,9 @@ export function makeAppServerCliAdapter(options: MakeAppServerCliAdapterOptions)
       return buildAuthLaunch(agent, ['auth', ...options.authStatusArgs]);
     },
     authStatus(agent) {
+      const jsonArg = options.authStatusJson === false ? [] : ['--json'];
       return {
-        launch: buildAuthLaunch(agent, ['auth', ...options.authStatusArgs, '--json']),
+        launch: buildAuthLaunch(agent, ['auth', ...options.authStatusArgs, ...jsonArg]),
         parse: (output, exitCode) => adapter.parseAuthStatus(output, exitCode)
       };
     },

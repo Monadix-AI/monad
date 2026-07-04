@@ -106,6 +106,34 @@ describe.skipIf(!LIVE)('real agent-adapter binaries: detect', () => {
     expect(preset.installed).toBe(true);
     expect(preset.supportedLaunchModes).toContain('app-server');
   });
+
+  test('Hermes auth-status probe reports the real signed-in state (plain-text, no --json error)', async () => {
+    const probe = hermesNativeCliAdapter.authStatus({
+      name: 'hermes',
+      provider: 'hermes',
+      command: 'hermes',
+      enabled: true,
+      defaultLaunchMode: 'cli-oneshot',
+      allowDangerousMode: false,
+      approvalOwnership: 'provider-owned'
+    });
+    // No --json (Hermes rejects it) — the fix that stops a signed-in Hermes being misreported.
+    expect(probe.launch.argv).toEqual(['hermes', 'auth', 'list']);
+    const proc = Bun.spawn(probe.launch.argv, {
+      cwd: probe.launch.cwd,
+      stdout: 'pipe',
+      stderr: 'pipe',
+      stdin: 'ignore'
+    });
+    const [out, err, code] = await Promise.all([
+      new Response(proc.stdout).text(),
+      new Response(proc.stderr).text(),
+      proc.exited
+    ]);
+    // On this signed-in machine the probe must resolve authenticated — NOT 'unauthenticated' from a
+    // `--json` argparse error (which is exactly the bug this test guards).
+    expect(probe.parse(`${out}${err}`, code)).toBe('authenticated');
+  }, 20_000);
 });
 
 describe.skipIf(!LIVE)('real Hermes cli-oneshot turn', () => {

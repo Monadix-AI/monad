@@ -2291,7 +2291,9 @@ test('OpenClaw and Hermes auth launches use provider-owned login and status comm
   expect(buildNativeCliAuthLaunch(openClawAgent).argv).toEqual(['openclaw', 'auth']);
   expect(buildNativeCliAuthStatusLaunch(openClawAgent).argv).toEqual(['openclaw', 'auth', 'status', '--json']);
   expect(buildNativeCliAuthLaunch(hermesAgent).argv).toEqual(['hermes', 'auth']);
-  expect(buildNativeCliAuthStatusLaunch(hermesAgent).argv).toEqual(['hermes', 'auth', 'list', '--json']);
+  // Hermes's `auth list` rejects `--json`, so its status probe is plain-text (exit 0 = authenticated) —
+  // appending `--json` would error and misreport a signed-in Hermes as unauthenticated.
+  expect(buildNativeCliAuthStatusLaunch(hermesAgent).argv).toEqual(['hermes', 'auth', 'list']);
 });
 
 test('OpenClaw and Hermes auth status parsers use structured output or status exit codes', () => {

@@ -21,6 +21,9 @@ export const hermesNativeCliAdapter: NativeCliProviderAdapter = makeAppServerCli
   installHint: 'Install Hermes, then sign in with hermes auth.',
   installUrl: 'https://hermes-agent.nousresearch.com',
   authStatusArgs: ['list'],
+  // `hermes auth list` rejects `--json`, so probe plain-text (exit 0 = authenticated) — else a signed-in
+  // Hermes would be misreported as unauthenticated and its managed members would falsely require reconnect.
+  authStatusJson: false,
   managedRuntime: {
     launchMode: () => 'cli-oneshot'
   },
