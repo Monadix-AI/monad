@@ -2,8 +2,8 @@ import type { NativeCliAgentView, NativeCliSessionState } from '@monad/protocol'
 import type { NativeCliProviderAdapter } from '@/services/native-cli/types.ts';
 
 import { expect, test } from 'bun:test';
-import { chmodSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
-import { homedir } from 'node:os';
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { builtinAgentAdapters } from '@monad/atoms/agent-adapters';
 
@@ -826,4 +826,60 @@ test('listLive returns only starting/running runtimes across all projects', () =
   expect(live.map((s) => s.provider).sort()).toEqual(['hermes', 'openclaw']);
   // status-only list: output snapshots are stripped so the poll ships no output buffers
   expect(live.every((s) => s.outputSnapshot === '')).toBe(true);
+});
+
+// cli-oneshot launch mode: the session has NO persistent process; each turn spawns a fresh CLI with
+// the directive baked into argv (`<cmd> --yolo -z <directive>`) and streams its stdout into the
+// transcript. Proves Hermes-style providers (no app-server backend) run as managed members.
+test('cli-oneshot session has no persistent process and runs a fresh CLI per turn', async () => {
+  const store = createStore();
+  const mockCli = new URL('../fixtures/mock-oneshot-cli.ts', import.meta.url).pathname;
+  const workdir = mkdtempSync(join(tmpdir(), 'cli-oneshot-'));
+  const agent: NativeCliAgentView = {
+    name: 'hermes',
+    provider: 'hermes',
+    command: process.execPath,
+    args: [mockCli],
+    enabled: true,
+    defaultLaunchMode: 'cli-oneshot',
+    allowDangerousMode: false,
+    approvalOwnership: 'provider-owned'
+  };
+  const host = new NativeCliHost({ store, bus: new EventBus(), agents: async () => [agent] });
+  const projectId = 'prj_01KWHOSTTEST0000000000009';
+  store.insertWorkplaceProject({
+    id: projectId,
+    title: 'cli-oneshot test',
+    ownerPrincipalId: 'prn_test',
+    state: 'active',
+    archived: false,
+    createdAt: '2026-07-02T00:00:00.000Z',
+    updatedAt: '2026-07-02T00:00:00.000Z'
+  });
+  try {
+    const view = await host.start({
+      transcriptTargetId: projectId,
+      agentName: 'hermes',
+      workingPath: workdir,
+      launchMode: 'cli-oneshot'
+    });
+    // A logical session — running, but with no persistent process/pid.
+    expect(view.state).toBe('running');
+    expect(view.pid).toBeNull();
+
+    const observedOutput = (): string => {
+      const obs = host.observe(view.id);
+      return obs && 'output' in obs ? (obs.output ?? '') : '';
+    };
+    host.input(view.id, { input: 'ping' });
+    // Wait for the per-turn process to spawn, echo, and exit.
+    for (let i = 0; i < 40 && !observedOutput().includes('oneshot-reply'); i++) {
+      await Bun.sleep(50);
+    }
+    expect(observedOutput()).toContain('oneshot-reply: ping');
+    host.stop(view.id);
+    expect(host.list(projectId).sessions[0]?.state).toBe('stopped');
+  } finally {
+    rmSync(workdir, { recursive: true, force: true });
+  }
 });

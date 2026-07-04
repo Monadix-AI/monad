@@ -117,7 +117,13 @@ export function createManagedNativeCliDelivery(ctx: SessionContext) {
             });
           }
           emitManagedNativeCliThinking(session.id, existing.id, runtimeAgentName, deliveryId);
-          if (existing.lastDeliveredSeq === 0) {
+          if (existing.launchMode === 'cli-oneshot') {
+            // cli-oneshot has no persistent process polling the inbox between turns, so every project
+            // message must spawn a fresh turn carrying the message itself — the inbox-poll nudge path
+            // (used by persistent members) would silently drop it.
+            nativeCliHost.input(existing.id, { input: nativeCliInputText(notice) });
+            if (deliveredSeq > 0) store.markNativeCliInboxVisible(existing.id, deliveredSeq);
+          } else if (existing.lastDeliveredSeq === 0) {
             nativeCliHost.input(existing.id, { input: nativeCliInputText(notice) });
             if (deliveredSeq > 0) store.markNativeCliInboxVisible(existing.id, deliveredSeq);
           } else if (existing.lastDeliveredSeq <= existing.lastVisibleSeq) {

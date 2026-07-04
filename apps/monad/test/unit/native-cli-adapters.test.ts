@@ -2294,14 +2294,15 @@ test('Hermes adapter launches interactive pty and the serve backend over ws', ()
   expect(serve.capabilities).toContain('app-server');
 });
 
-test('Hermes preset advertises pty + app-server and a ws transport', () => {
+test('Hermes preset advertises pty + app-server + cli-oneshot and a ws transport', () => {
   const preset = hermesNativeCliAdapter.detect({ which: () => '/bin/hermes', exists: () => false });
 
   expect(preset.id).toBe('hermes');
   expect(preset.productIcon).toBe('hermes');
   expect(preset.command).toBe('hermes');
   expect(preset.installUrl).toBe('https://hermes-agent.nousresearch.com');
-  expect(preset.supportedLaunchModes).toEqual(['pty', 'app-server']);
+  // cli-oneshot is Hermes-only (it has no persistent app-server backend, unlike OpenClaw's gateway).
+  expect(preset.supportedLaunchModes).toEqual(['pty', 'app-server', 'cli-oneshot']);
   expect(preset.supportedAppServerTransports).toEqual(['ws']);
 });
 
@@ -2396,14 +2397,16 @@ test('OpenClaw and Hermes adapters auto-decline an unknown server-initiated requ
 // their launch mode + prompt-delivery intent from the adapter (no provider branching), and they use
 // the shared `monad` wrapper callback — NOT the managed MCP bridge (codex-only) — riding the existing
 // native-cli managed-project auth.
-test('hermes managedRuntime enables the project callback via app-server + developer instructions', () => {
+test('hermes managedRuntime runs the project callback via cli-oneshot (no persistent backend)', () => {
   const managed = hermesNativeCliAdapter.managedRuntime;
   expect(managed).toBeDefined();
-  expect(managed?.launchMode?.('pty')).toBe('app-server');
-  expect(managed?.usesDeveloperInstructions).toBe(true);
+  // Hermes has no app-server backend, so a managed member runs per-turn one-shot.
+  expect(managed?.launchMode?.('pty')).toBe('cli-oneshot');
   // Wrapper callback, not the managed MCP bridge → no mcp config args injected.
   expect(managed?.usesManagedMcpBridge ?? false).toBe(false);
   expect(managed?.mcpConfigArgs).toBeUndefined();
+  // The per-turn argv carries the directive to `hermes -z` and runs autonomously via --yolo.
+  expect(hermesNativeCliAdapter.oneshotTurnArgs?.('do the thing', {})).toEqual(['--yolo', '-z', 'do the thing']);
 });
 
 test('openclaw managedRuntime enables the project callback via app-server + developer instructions', () => {

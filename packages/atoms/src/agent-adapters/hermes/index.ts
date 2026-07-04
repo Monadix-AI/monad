@@ -18,9 +18,16 @@ export const hermesNativeCliAdapter: NativeCliProviderAdapter = makeAppServerCli
   installHint: 'Install Hermes, then sign in with hermes auth.',
   installUrl: 'https://hermes-agent.nousresearch.com',
   authStatusArgs: ['list'],
+  // Hermes has NO persistent app-server backend (`hermes serve` is not a real command), so a managed
+  // project member runs as `cli-oneshot`: the daemon spawns `hermes --yolo -z <directive>` per turn.
+  // `--yolo` lets it run its terminal toolset autonomously (needed to invoke the `monad project
+  // post/ask/read` wrapper on PATH). The managed prompt is prepended to each directive by the host
+  // (cli-oneshot has no session.start to carry developer instructions).
   managedRuntime: {
-    launchMode: () => 'app-server',
-    usesDeveloperInstructions: true
+    launchMode: () => 'cli-oneshot'
+  },
+  oneshot: {
+    turnArgs: (input) => ['--yolo', '-z', input]
   },
   protocol: hermesAppServerProtocol
 });

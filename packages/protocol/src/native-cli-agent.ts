@@ -22,7 +22,11 @@ export const KNOWN_NATIVE_CLI_PRODUCT_ICONS = ['codex', 'claude-code', 'gemini',
 export type NativeCliProductIcon = (typeof KNOWN_NATIVE_CLI_PRODUCT_ICONS)[number] | (string & {});
 export const nativeCliProductIconSchema: z.ZodType<NativeCliProductIcon> = z.string().min(1);
 
-export const nativeCliLaunchModeSchema = z.enum(['pty', 'json-stream', 'app-server', 'remote-control']);
+// `cli-oneshot`: the daemon spawns a fresh CLI process PER TURN with the directive baked into argv
+// (e.g. `hermes -z <prompt>`), captures its stdout as the reply, and the process exits — for providers
+// that have no persistent session/app-server backend. Multi-turn context is kept via the provider's
+// own `--resume`/session selector. All other modes drive ONE long-lived process per session.
+export const nativeCliLaunchModeSchema = z.enum(['pty', 'json-stream', 'app-server', 'remote-control', 'cli-oneshot']);
 export type NativeCliLaunchMode = z.infer<typeof nativeCliLaunchModeSchema>;
 
 // Byte channel between the daemon and a provider's app-server. `stdio` (newline-delimited JSON over

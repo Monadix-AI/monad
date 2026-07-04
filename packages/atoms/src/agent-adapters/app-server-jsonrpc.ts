@@ -338,6 +338,11 @@ export interface MakeAppServerCliAdapterOptions {
   authStatusArgs: string[];
   /** Managed project-agent runtime behavior; omit for a non-managed adapter. */
   managedRuntime?: NativeCliManagedRuntime;
+  /** Opt-in `cli-oneshot` launch mode for a provider with no persistent app-server backend (Hermes):
+   *  the daemon spawns a fresh process per turn with `turnArgs(input)` appended to the base argv. */
+  oneshot?: {
+    turnArgs(input: string, opts: { providerSessionRef?: string | null }): string[];
+  };
   protocol: AppServerProtocol;
 }
 
@@ -381,6 +386,23 @@ export function makeAppServerCliAdapter(options: MakeAppServerCliAdapterOptions)
       };
     }
 
+    if (launchMode === 'cli-oneshot') {
+      if (!options.oneshot) {
+        throw new NativeCliError('unsupported_capability', `${options.label} has no cli-oneshot launch mode`);
+      }
+      // Base argv only — the per-turn directive is appended by the daemon via `oneshotTurnArgs`. Each
+      // turn is a stateless fresh process (no --resume selector), so no `session-resume` capability.
+      return {
+        argv: [agent.command, ...args],
+        cwd: opts.workingPath,
+        env: agent.env,
+        launchMode,
+        provider: options.provider,
+        approvalOwnership: 'provider-owned',
+        capabilities: ['cli-oneshot']
+      };
+    }
+
     return {
       argv: [agent.command, ...args],
       cwd: opts.workingPath,
@@ -413,6 +435,7 @@ export function makeAppServerCliAdapter(options: MakeAppServerCliAdapterOptions)
     productIcon: options.productIcon,
     label: options.label,
     ...(options.managedRuntime ? { managedRuntime: options.managedRuntime } : {}),
+    ...(options.oneshot ? { oneshotTurnArgs: options.oneshot.turnArgs } : {}),
     detect(probes = defaultBinProbes) {
       const bin = resolveBinary(options.bin, [], probes);
       const installed = bin !== undefined || probes.exists(join(homedir(), options.homeConfigDir));
@@ -425,7 +448,7 @@ export function makeAppServerCliAdapter(options: MakeAppServerCliAdapterOptions)
         args: [],
         modelOptions: adapter.listSupportedModels(),
         defaultLaunchMode: 'pty',
-        supportedLaunchModes: ['pty', 'app-server'],
+        supportedLaunchModes: options.oneshot ? ['pty', 'app-server', 'cli-oneshot'] : ['pty', 'app-server'],
         supportedAppServerTransports: [...appServerTransports],
         installHint: options.installHint,
         installUrl: options.installUrl,

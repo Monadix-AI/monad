@@ -78,11 +78,24 @@ interface LiveNativeCliSession {
   agentName: string;
   provider: NativeCliAgentView['provider'];
   runtimeRole: NativeCliSessionView['runtimeRole'];
-  proc: NativeCliProcess;
+  /** The long-lived child process. Absent for `cli-oneshot`, which spawns a fresh process per turn
+   *  (see `oneshotTurnProc`) rather than keeping one alive for the session. */
+  proc?: NativeCliProcess;
   adapter: NativeCliProviderAdapter;
   launchMode: NativeCliLaunchMode;
   terminal?: NativeCliTerminal;
   stdin?: NativeCliStdin;
+  /** cli-oneshot only: the base launch spec (argv/env/cwd) reused for every per-turn spawn. */
+  oneshotSpec?: NativeCliLaunchSpec;
+  /** cli-oneshot only: the managed-project prompt, prepended to EVERY turn's directive (there is no
+   *  session.start to carry it as developer instructions, and each turn is a stateless fresh process). */
+  managedPrompt?: string | null;
+  /** cli-oneshot only: the in-flight turn's process, so interrupt/stop can kill it. */
+  oneshotTurnProc?: NativeCliProcess;
+  /** cli-oneshot only: serializes turns so two concurrent deliveries (moderator fan-out + a user
+   *  message) run one process at a time instead of racing/clobbering `oneshotTurnProc` + interleaving
+   *  output into the shared buffer. */
+  oneshotQueue?: Promise<void>;
   /** app-server frame channel, transport-neutral (stdio pipe or ws socket). Set once the chosen
    *  transport is connected; the adapter sends JSON-RPC frames through it. */
   appServer?: NativeCliAppServerConnection;
@@ -481,6 +494,23 @@ export class NativeCliHost {
       'native cli launch'
     );
     launch = managed ? { ...launch, env: { ...(launch.env ?? {}), ...managed.env } } : launch;
+    // cli-oneshot spawns a fresh process PER TURN (no persistent child), so it forks off the shared
+    // spawn path here — the session is a logical entity and each `input()` runs one process.
+    if (launch.launchMode === 'cli-oneshot') {
+      return this.startCliOneshot({
+        id,
+        transcriptTargetId: args.transcriptTargetId,
+        agentName: runtimeAgentName,
+        provider: agent.provider,
+        workingPath,
+        runtimeRole,
+        launch,
+        adapter,
+        managed,
+        providerSessionRef: args.providerSessionRef ?? null,
+        startedAt: now
+      });
+    }
     const spawnEnv = await this.buildSpawnEnv(launch.env);
     // ws/unix app-server: codex listens on a socket and speaks the protocol over it, so the daemon
     // ignores stdin and treats stdout/stderr as logs (for ws, stderr also carries the listen port).
@@ -779,6 +809,149 @@ export class NativeCliHost {
     return toView(row);
   }
 
+  /** Register a `cli-oneshot` session: a logical session with NO persistent process. Each turn spawns a
+   *  fresh CLI (see runCliOneshotTurn). Mirrors the persistent path's row/live/started bookkeeping. */
+  private startCliOneshot(args: {
+    id: string;
+    transcriptTargetId: TranscriptTargetId;
+    agentName: string;
+    provider: NativeCliSessionRow['provider'];
+    workingPath: string;
+    runtimeRole: NativeCliSessionView['runtimeRole'];
+    launch: NativeCliLaunchSpec;
+    adapter: NativeCliProviderAdapter;
+    managed: ReturnType<typeof prepareManagedProjectRuntime> | null;
+    providerSessionRef: string | null;
+    startedAt: string;
+  }): NativeCliSessionView {
+    const { id, transcriptTargetId, agentName, provider, workingPath, runtimeRole, launch, adapter, managed } = args;
+    const row: NativeCliSessionRow = {
+      id,
+      transcriptTargetId,
+      agentName,
+      provider,
+      workingPath,
+      launchMode: 'cli-oneshot',
+      runtimeRole,
+      agentRuntimeId: runtimeRole === 'managed-project-agent' ? id : null,
+      agentRuntimeTokenHash: managed?.tokenHash ?? null,
+      lastDeliveredSeq: 0,
+      lastVisibleSeq: 0,
+      state: 'running',
+      pid: null,
+      providerSessionRef: args.providerSessionRef,
+      outputSnapshot: '',
+      exitCode: null,
+      startedAt: args.startedAt,
+      updatedAt: args.startedAt,
+      exitedAt: null
+    };
+    this.deps.store.upsertNativeCliSession(row);
+    const live: LiveNativeCliSession = {
+      id,
+      transcriptTargetId,
+      agentName,
+      provider,
+      runtimeRole,
+      adapter,
+      launchMode: 'cli-oneshot',
+      oneshotSpec: launch,
+      managedPrompt: managed?.prompt ?? null,
+      providerSessionRef: args.providerSessionRef,
+      pendingApprovals: new Map(),
+      pendingHistoryPages: new Map(),
+      pendingRequests: new Map(),
+      startup: undefined,
+      outputBuffer: new BoundedOutputBuffer(MAX_OUTPUT_SNAPSHOT),
+      outputSeq: 0,
+      snapshotFlushTimer: null,
+      nextRequestId: () => 0,
+      kill: (signal) => {
+        const l = this.live.get(id);
+        if (l?.oneshotTurnProc) killNativeCliProcess(l.oneshotTurnProc.pid, signal);
+      }
+    };
+    this.live.set(id, live);
+    this.emit(transcriptTargetId, 'native_cli.started', {
+      nativeCliSessionId: id,
+      agentName,
+      provider,
+      productIcon: adapter.productIcon,
+      launchMode: 'cli-oneshot',
+      workingPath,
+      pid: null
+    });
+    return toView(row);
+  }
+
+  /** Run one `cli-oneshot` turn: spawn a fresh CLI with the directive baked into argv, stream its stdout
+   *  into the transcript, and let it exit. The member's actual reply reaches the project via its
+   *  `monad project post` callback (managed runtime), so we only need to run the process to completion. */
+  private async runCliOneshotTurn(live: LiveNativeCliSession, input: string): Promise<void> {
+    const spec = live.oneshotSpec;
+    const turnArgsFn = live.adapter.oneshotTurnArgs;
+    if (!spec || !turnArgsFn) return;
+    // cli-oneshot is STATELESS per turn (a fresh process, no --resume selector), so the managed
+    // collaboration prompt must ride EVERY turn's directive — not just the first — or turns 2+ forget
+    // the `monad project post/ask/read` contract and their reply never reaches the project.
+    const directive = live.managedPrompt ? `${live.managedPrompt}\n\n---\n\n${input}` : input;
+    const turnArgs = turnArgsFn(directive, { providerSessionRef: live.providerSessionRef });
+    const spawnEnv = await this.buildSpawnEnv(spec.env);
+    let proc: NativeCliProcess;
+    try {
+      proc = Bun.spawn([...spec.argv, ...turnArgs], {
+        cwd: spec.cwd,
+        env: spawnEnv,
+        stdin: 'ignore',
+        stdout: 'pipe',
+        stderr: 'pipe'
+      }) as NativeCliProcess;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.output(live.transcriptTargetId, live.id, message, 'stderr', live.adapter);
+      this.flushSnapshot(live.id);
+      return;
+    }
+    live.oneshotTurnProc = proc;
+    this.trackNativeCliProcess(proc.pid);
+    // Surface BOTH streams into the transcript (stderr carries a provider's real errors), and await both
+    // drains so all output is emitted before the turn is considered done.
+    const pump = (stream: ReadableStream<Uint8Array> | undefined, name: 'stdout' | 'stderr'): Promise<void> => {
+      if (!stream) return Promise.resolve();
+      const decoder = createStreamingTextDecoder();
+      return (async () => {
+        for await (const data of stream) {
+          const text = decoder.decode(data);
+          if (text) this.output(live.transcriptTargetId, live.id, text, name, live.adapter);
+        }
+        const rest = decoder.flush();
+        if (rest) this.output(live.transcriptTargetId, live.id, rest, name, live.adapter);
+      })();
+    };
+    const drains = Promise.all([pump(proc.stdout, 'stdout'), pump(proc.stderr, 'stderr')]);
+    const code = await proc.exited;
+    await drains;
+    this.untrackNativeCliProcess(proc.pid);
+    if (live.oneshotTurnProc === proc) live.oneshotTurnProc = undefined;
+    this.flushSnapshot(live.id);
+    if (code !== 0) {
+      this.output(
+        live.transcriptTargetId,
+        live.id,
+        `\n[${live.provider} turn exited with code ${code}]\n`,
+        'stderr',
+        live.adapter
+      );
+    }
+    // The turn's process has exited. For a managed member the real reply arrives via its
+    // `monad project post` callback (which already completed the thinking indicator); but if the CLI
+    // finished WITHOUT posting, retire the dangling spinner so the member doesn't look stuck forever.
+    // No-op when a post already settled it (nothing pending) — process exit is the definitive turn end.
+    if (live.runtimeRole === 'managed-project-agent') {
+      this.emitManagedProjectOutput(live.transcriptTargetId, live.id, '', false, false);
+    }
+  }
+
   input(id: string, req: NativeCliInputRequest): void {
     const live = this.live.get(id);
     if (!live) throw new Error(`native CLI session is not running: ${id}`);
@@ -786,6 +959,15 @@ export class NativeCliHost {
       { sessionId: live.transcriptTargetId, event: 'native_cli.input', nativeCliSessionId: id, input: req.input },
       'native cli input'
     );
+    // cli-oneshot has no persistent process to write to — spawn a fresh process for this turn instead.
+    // Turns are chained on a per-session queue so concurrent deliveries run sequentially (one process
+    // at a time), never clobbering the in-flight turn or interleaving output.
+    if (live.launchMode === 'cli-oneshot') {
+      live.oneshotQueue = (live.oneshotQueue ?? Promise.resolve())
+        .then(() => this.runCliOneshotTurn(live, req.input))
+        .catch(() => undefined);
+      return;
+    }
     live.adapter.sendInput(live, req.input);
   }
 
@@ -1253,12 +1435,18 @@ export class NativeCliHost {
       live.startup = undefined;
     }
     live.adapter.stop(live);
+    // cli-oneshot has no persistent proc; kill any in-flight per-turn process instead.
+    if (live.oneshotTurnProc) {
+      killNativeCliProcess(live.oneshotTurnProc.pid);
+      this.untrackNativeCliProcess(live.oneshotTurnProc.pid);
+      live.oneshotTurnProc = undefined;
+    }
     this.flushSnapshot(id);
     this.live.delete(id);
     const row = this.deps.store.getNativeCliSession(id);
     if (row?.runtimeRole === 'managed-project-agent')
       cleanupManagedProjectRuntimeToken(this.managedRuntimeWorkspace(row));
-    this.untrackNativeCliProcess(live.proc.pid);
+    if (live.proc) this.untrackNativeCliProcess(live.proc.pid);
     this.structuredOutputBuffers.delete(id);
     this.unlinkAppServerSocket(live.appServerSocketPath);
     const exitedAt = new Date().toISOString();

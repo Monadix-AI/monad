@@ -352,6 +352,10 @@ export interface NativeCliProviderAdapter {
   modelOptions?(agent: NativeCliAgentView): NativeCliModelOptionsProbe;
   resolveCommand?(command: string, probes?: BinProbes): string | undefined;
   buildLaunch(agent: NativeCliAgentView, opts: BuildNativeCliLaunchOptions): NativeCliLaunchSpec;
+  /** `cli-oneshot` launch mode only: build the per-turn argv SUFFIX (the directive + any resume
+   *  selector) appended to the launch spec's base argv each time the daemon spawns a fresh process for
+   *  a turn. Absent → the adapter has no one-shot mode. */
+  oneshotTurnArgs?(input: string, opts: { providerSessionRef?: string | null }): string[];
   buildAuthLaunch(agent: NativeCliAgentView): NativeCliLaunchSpec;
   buildAuthStatusLaunch(agent: NativeCliAgentView): NativeCliLaunchSpec;
   authStatus(agent: NativeCliAgentView): NativeCliAuthStatusProbe;
