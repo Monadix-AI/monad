@@ -8,8 +8,9 @@ import { ComposerSubmitButton, ComposerSurface, ComposerSwap, ComposerVoiceButto
 import { workspaceMono as mono, workspaceSans as sans } from '@monad/ui/components/AgentAvatar';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
+import { useWorkspaceExperienceHost } from '../../../host-context.tsx';
 import { workspaceExperienceT } from '../../../i18n.ts';
-import { openChatRoomModelSettings, transcribeChatRoomAudio } from '../../composer-client.ts';
+import { transcribeChatRoomAudio } from '../../composer-client.ts';
 import {
   activeMention,
   createMentionChip,
@@ -24,15 +25,8 @@ import { audioBlobToBase64 } from './audio.ts';
 import { QuestionStack } from './question-stack.tsx';
 import { useComposerVoice } from './use-composer-voice.ts';
 
-type VoiceModelState = 'checking' | 'configured' | 'missing' | 'failed';
-
-export function Composer({
-  room,
-  voiceModelState
-}: {
-  room: ProjectComposerSurface;
-  voiceModelState: VoiceModelState;
-}): ReactElement {
+export function Composer({ room }: { room: ProjectComposerSurface }): ReactElement {
+  const host = useWorkspaceExperienceHost();
   const t = workspaceExperienceT();
   const [draft, setDraft] = useState('');
   const [mention, setMention] = useState<{ query: string; start: number } | null>(null);
@@ -312,13 +306,13 @@ export function Composer({
             placeholder={t('web.workplace.composerPlaceholder')}
             value={draft}
             voice={{
-              modelCheckPending: voiceModelState === 'checking',
-              modelConfigured: voiceModelState === 'configured',
-              modelCheckFailed: voiceModelState === 'failed',
-              onSettingsClick: openChatRoomModelSettings,
+              modelCheckPending: host.voiceModelState === 'checking',
+              modelConfigured: host.voiceModelState === 'configured',
+              modelCheckFailed: host.voiceModelState === 'failed',
+              onSettingsClick: () => host.openStudio('models'),
               transcribeAudio: async (audio) => {
                 const body = await audioBlobToBase64(audio);
-                return (await transcribeChatRoomAudio(body)).text;
+                return (await transcribeChatRoomAudio(host.fetch, body)).text;
               }
             }}
             voiceCancelSignal={voiceCancelSignal}

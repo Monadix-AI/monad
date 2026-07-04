@@ -1,10 +1,12 @@
 import type { ProjectExperienceView } from '../types';
 
+import { renderBuiltinWorkspaceExperience } from '@monad/atoms/workspace-experiences';
 import {
-  configureBuiltinWorkspaceExperienceClients,
-  renderBuiltinWorkspaceExperience
-} from '@monad/atoms/workspace-experiences';
+  type WorkspaceExperienceHost,
+  WorkspaceExperienceHostProvider
+} from '@monad/atoms/workspace-experiences/host-context';
 import { useRouter } from 'next/navigation';
+import { useMemo } from 'react';
 
 import { studioPath } from '@/features/routes/route-paths';
 import { useMonadRuntime } from '@/lib/monad-runtime-provider';
@@ -18,21 +20,18 @@ export function BuiltinWorkspaceExperienceHost({
 }): React.ReactElement {
   const { client } = useMonadRuntime();
   const router = useRouter();
-  configureBuiltinWorkspaceExperienceClients({
-    fetch: client.fetch,
-    openModelSettings: () => router.push(studioPath('models'))
-  });
-  const rendered = renderBuiltinWorkspaceExperience({
-    component,
-    host: {
-      nativeCliAgentsHref: studioPath('nativeCliAgents'),
-      requestProjectDialog: view.onProjectDialogRequest ?? (() => {}),
-      voiceModelState: view.voiceModelState
-    },
-    view: { runtime: view.runtime }
-  });
+  const host = useMemo<WorkspaceExperienceHost>(
+    () => ({
+      fetch: client.fetch,
+      voiceModelState: view.voiceModelState,
+      openStudio: (section = 'models') => router.push(studioPath(section)),
+      requestProjectDialog: view.onProjectDialogRequest ?? (() => {})
+    }),
+    [client.fetch, router, view.voiceModelState, view.onProjectDialogRequest]
+  );
+  const rendered = renderBuiltinWorkspaceExperience({ component, view: { runtime: view.runtime } });
   if (!rendered) {
     return <div className="workspace-experience-error">Unknown built-in workspace experience: {component}</div>;
   }
-  return rendered;
+  return <WorkspaceExperienceHostProvider value={host}>{rendered}</WorkspaceExperienceHostProvider>;
 }

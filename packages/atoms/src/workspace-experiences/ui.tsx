@@ -1,10 +1,9 @@
-import type { WorkspaceExperienceProjectDialogRequest } from '@monad/protocol';
 import type { ReactElement } from 'react';
 import type { ProjectExperienceRuntime, ProjectExperienceRuntimeSource } from './runtime.ts';
 
 import { useMemo } from 'react';
 
-import { configureChatRoomExperienceClients, renderChatRoomWorkspaceExperience } from './chat-room/ui.tsx';
+import { renderChatRoomWorkspaceExperience } from './chat-room/ui.tsx';
 import { renderGraphViewWorkspaceExperience } from './graph-view/ui.tsx';
 import {
   useWorkspaceProjectProjection as useProjection,
@@ -18,43 +17,21 @@ type ProjectExperienceViewLike = {
   runtime: unknown;
 };
 
-export interface BuiltinWorkspaceExperienceHostActions {
-  nativeCliAgentsHref: string;
-  requestProjectDialog: (request: WorkspaceExperienceProjectDialogRequest) => void;
-  voiceModelState?: 'checking' | 'configured' | 'missing' | 'failed';
-}
-
-export type BuiltinWorkspaceExperienceClient = {
-  fetch(path: string, init?: RequestInit): Promise<Response>;
-  openModelSettings?: () => void;
-};
-
-export function configureBuiltinWorkspaceExperienceClients(client: BuiltinWorkspaceExperienceClient): void {
-  configureChatRoomExperienceClients(client);
-}
-
 const builtinWorkspaceExperienceRenderers = {
-  'chat-room': (runtime: ProjectExperienceRuntime, host: BuiltinWorkspaceExperienceHostActions) =>
-    renderChatRoomWorkspaceExperience({
-      host,
-      runtime: runtime.views['chat-room']
-    }),
+  'chat-room': (runtime: ProjectExperienceRuntime) =>
+    renderChatRoomWorkspaceExperience({ runtime: runtime.views['chat-room'] }),
   'graphic-view': (runtime: ProjectExperienceRuntime) =>
     renderGraphViewWorkspaceExperience(runtime.views['graphic-view'])
-} satisfies Record<
-  string,
-  (runtime: ProjectExperienceRuntime, host: BuiltinWorkspaceExperienceHostActions) => ReactElement
->;
+} satisfies Record<string, (runtime: ProjectExperienceRuntime) => ReactElement>;
 
 export function renderBuiltinWorkspaceExperience(args: {
   component: string;
-  host: BuiltinWorkspaceExperienceHostActions;
   view: ProjectExperienceViewLike;
 }): ReactElement | null {
   const runtime = args.view.runtime as ProjectExperienceRuntime;
   const renderer =
     builtinWorkspaceExperienceRenderers[args.component as keyof typeof builtinWorkspaceExperienceRenderers];
-  return renderer?.(runtime, args.host) ?? null;
+  return renderer?.(runtime) ?? null;
 }
 
 function buildProjectExperienceRuntime(

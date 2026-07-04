@@ -48,7 +48,8 @@
     "./sandbox/bwrap": "./src/sandbox/bwrap.ts",
     "./sandbox/landlock": "./src/sandbox/landlock.ts",
     "./sandbox/seatbelt": "./src/sandbox/seatbelt.ts",
-    "./workspace-experiences": "./src/workspace-experiences/ui.tsx"
+    "./workspace-experiences": "./src/workspace-experiences/ui.tsx",
+    "./workspace-experiences/host-context": "./src/workspace-experiences/host-context.tsx"
   },
   "module": "src/index.ts",
   "private": true,

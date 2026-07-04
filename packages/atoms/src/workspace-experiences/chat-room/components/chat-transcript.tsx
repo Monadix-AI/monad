@@ -9,6 +9,7 @@ import { VirtualList, type VirtualListHandle } from '@monad/ui/components/Virtua
 import { useFirstItemIndex } from '@monad/ui/hooks/use-first-item-index';
 import { useMemo, useRef, useState } from 'react';
 
+import { requestSpawnAgentMemberDialog, useWorkspaceExperienceHost } from '../../host-context.tsx';
 import { AttachmentChip } from './attachment-chip.tsx';
 import { MessageRow } from './message-row.tsx';
 import { TranscriptSkeleton, TypingRow } from './transcript-skeleton.tsx';
@@ -36,15 +37,12 @@ export type ChatTranscriptLabels = MessageRowLabels & {
 
 export function ChatTranscript({
   room,
-  labels,
-  nativeCliAgentsHref,
-  onSpawnAgentMember
+  labels
 }: {
   room: ChatTranscriptRoom;
   labels: ChatTranscriptLabels;
-  nativeCliAgentsHref: string;
-  onSpawnAgentMember?: () => void;
 }): React.ReactElement {
+  const host = useWorkspaceExperienceHost();
   const listRef = useRef<VirtualListHandle>(null);
   const [atBottom, setAtBottom] = useState(true);
   const firstItemIndex = useFirstItemIndex(room.messages, messageId);
@@ -158,9 +156,9 @@ export function ChatTranscript({
               marginTop: 20
             }}
           >
-            <a
+            <button
               className="workplace-action"
-              href={nativeCliAgentsHref}
+              onClick={() => host.openStudio('nativeCliAgents')}
               style={{
                 minHeight: 38,
                 display: 'inline-flex',
@@ -174,14 +172,15 @@ export function ChatTranscript({
                 fontSize: 14,
                 fontWeight: 650,
                 padding: '0 14px',
-                textDecoration: 'none'
+                cursor: 'pointer'
               }}
+              type="button"
             >
               {labels.connectInStudio}
-            </a>
+            </button>
             <button
               className="workplace-action"
-              onClick={onSpawnAgentMember}
+              onClick={() => requestSpawnAgentMemberDialog(host.requestProjectDialog)}
               style={{
                 minHeight: 38,
                 display: 'inline-flex',

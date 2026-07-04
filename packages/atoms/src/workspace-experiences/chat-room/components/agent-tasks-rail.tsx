@@ -20,6 +20,7 @@ import {
 } from '@monad/ui/components/AgentAvatar';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { useWorkspaceExperienceHost } from '../../host-context.tsx';
 import { workspaceExperienceT } from '../../i18n.ts';
 import {
   readNativeAgentDeliveryObservation,
@@ -240,6 +241,7 @@ type AgentTasksRailRoom = {
 
 export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.ReactElement {
   const t = workspaceExperienceT();
+  const host = useWorkspaceExperienceHost();
   const [railWidth, setRailWidth] = useState(DEFAULT_RAIL_WIDTH);
   const [resizing, setResizing] = useState(false);
   const dragStartRef = useRef({ pointerX: 0, width: DEFAULT_RAIL_WIDTH });
@@ -260,11 +262,11 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
     intervalMs: observationPollMs,
     load: () =>
       observedDeliveryId
-        ? readNativeAgentDeliveryObservation({
+        ? readNativeAgentDeliveryObservation(host.fetch, {
             id: observedDeliveryId,
             transcriptTargetId: room.projectId as TranscriptTargetId
           })
-        : readNativeCliObservation({
+        : readNativeCliObservation(host.fetch, {
             id: observedStreamId as string,
             transcriptTargetId: room.projectId as TranscriptTargetId
           }),
@@ -276,7 +278,7 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
   const usage = usePolledValue<NativeCliUsageResponse>({
     enabled: Boolean(observedUsageAgentName),
     intervalMs: observedAccessStream?.status === 'running' ? 15_000 : 0,
-    load: () => readNativeCliUsage(observedUsageAgentName as string),
+    load: () => readNativeCliUsage(host.fetch, observedUsageAgentName as string),
     resetKey: observedUsageAgentName ?? ''
   });
   const usageMeter = usageMeterFromObservationAccess({

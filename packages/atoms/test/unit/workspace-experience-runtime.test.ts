@@ -3,12 +3,12 @@ import type { ProjectExperienceRuntimeSource } from '../../src/workspace-experie
 
 import { expect, test } from 'bun:test';
 
+import { toChatRoomCanvas } from '../../src/workspace-experiences/chat-room/utils/canvas.ts';
+import { canvasToGraph, HUB_ID } from '../../src/workspace-experiences/graph-view/utils/graph-model.ts';
 import {
   requestSpawnAgentMemberDialog,
   spawnAgentMemberDialogRequest
-} from '../../src/workspace-experiences/chat-room/components/view.tsx';
-import { toChatRoomCanvas } from '../../src/workspace-experiences/chat-room/utils/canvas.ts';
-import { canvasToGraph, HUB_ID } from '../../src/workspace-experiences/graph-view/utils/graph-model.ts';
+} from '../../src/workspace-experiences/host-context.tsx';
 import { createProjectExperienceRuntime } from '../../src/workspace-experiences/runtime.ts';
 
 const participant = (

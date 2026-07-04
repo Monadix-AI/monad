@@ -8,17 +8,8 @@ import { isPreviewableAttachmentMime } from '@monad/protocol';
 import { workspaceMono as mono, workspaceSans as sans } from '@monad/ui/components/AgentAvatar';
 import { useState } from 'react';
 
+import { useWorkspaceExperienceHost } from '../../host-context.tsx';
 import { workspaceExperienceT } from '../../i18n.ts';
-
-export type AttachmentClient = {
-  fetch(path: string): Promise<Response>;
-};
-
-let attachmentClient: AttachmentClient | undefined;
-
-export function configureWorkspaceAttachmentClient(client: AttachmentClient): void {
-  attachmentClient = client;
-}
 
 function formatAttachmentSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -35,7 +26,7 @@ export function AttachmentChip({ attachment }: { attachment: MessageAttachment }
   const [error, setError] = useState(false);
   const [loading, setLoading] = useState(false);
   const previewable = isPreviewableAttachmentMime(attachment.mime);
-  const client = attachmentClient;
+  const host = useWorkspaceExperienceHost();
   const togglePreview = async () => {
     if (expanded) {
       setExpanded(false);
@@ -43,14 +34,10 @@ export function AttachmentChip({ attachment }: { attachment: MessageAttachment }
     }
     setExpanded(true);
     if (content !== null || loading) return;
-    if (!client) {
-      setError(true);
-      return;
-    }
     setLoading(true);
     setError(false);
     try {
-      const res = await client.fetch(`/v1/attachments/${attachment.id}`);
+      const res = await host.fetch(`/v1/attachments/${attachment.id}`);
       if (!res.ok) throw new Error(`attachment fetch failed: ${res.status}`);
       const body = (await res.json()) as { text?: string; truncated?: boolean };
       const text = typeof body.text === 'string' ? body.text : '';
@@ -62,13 +49,8 @@ export function AttachmentChip({ attachment }: { attachment: MessageAttachment }
     }
   };
   const download = async () => {
-    if (!client) {
-      setError(true);
-      setExpanded(true);
-      return;
-    }
     try {
-      const res = await client.fetch(`/v1/attachments/${attachment.id}?download=1`);
+      const res = await host.fetch(`/v1/attachments/${attachment.id}?download=1`);
       if (!res.ok) throw new Error(`attachment download failed: ${res.status}`);
       const blobUrl = URL.createObjectURL(await res.blob());
       const anchor = document.createElement('a');
