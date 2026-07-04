@@ -1,14 +1,276 @@
-import type { AppServerProtocol } from '../app-server-jsonrpc.ts';
+import type { NativeCliOutputEvent, NativeCliProviderAdapter, NativeCliRuntimeHandle } from '@monad/sdk-atom';
+import type { AppServerCliHooks } from '../app-server-jsonrpc.ts';
 
-import { makeAppServerProtocol } from '../app-server-jsonrpc.ts';
+import { compactObject, parseJsonObject } from '../adapter-shared.ts';
+import { recordValue } from '../app-server-jsonrpc.ts';
 
-// OpenClaw's local gateway (`openclaw gateway`) speaks JSON-RPC over WebSocket. It shares the
-// `session.*` / `agent.*` / `approval.*` vocabulary with Hermes; only the turn method + its text
-// field and the reconnect/error prose differ, so it is built from the shared factory.
-export const openClawAppServerProtocol: AppServerProtocol = makeAppServerProtocol({
-  provider: 'openclaw',
-  messageMethod: 'agent.message',
-  messageField: 'text',
-  reconnectReason: 'OpenClaw requires reconnect',
-  errorReason: 'OpenClaw provider error'
-});
+// OpenClaw's gateway (`openclaw gateway`, default ws://127.0.0.1:18789) does NOT speak generic
+// JSON-RPC 2.0 — every frame is wrapped in a `{type: "req"|"res"|"event", ...}` envelope with `ok`/
+// `payload` instead of `result`/`error`, and every `id` is a STRING (a numeric id is rejected as
+// "invalid request frame"). This file is NOT speculative: it was verified 2026-07-04 against a locally
+// running `openclaw gateway run --dev` (v2026.6.11) two ways —
+//   1. Reading the real TypeBox schema OpenClaw ships at
+//      node_modules/openclaw/dist/plugin-sdk/src/gateway/protocol/schema/{frames,sessions,exec-approvals}.d.ts
+//      (RequestFrameSchema/ResponseFrameSchema/EventFrameSchema, ConnectParamsSchema,
+//      SessionsCreateParamsSchema, SessionsSendParamsSchema, ExecApprovalResolveParamsSchema).
+//   2. Driving that schema live with the exported `GatewayClient` (openclaw/plugin-sdk/gateway-runtime)
+//      and a raw WebSocket, observing real `sessions.create`/`sessions.send` results and `chat` events.
+// Only `exec.approval.requested`'s exact payload shape is NOT live-observed (no live tool-approval was
+// triggered) — it's inferred from `ExecApprovalRequestParamsSchema` + the confirmed `id` field name.
+
+interface OpenClawEnvelope extends Record<string, unknown> {
+  type?: string;
+  id?: unknown;
+  method?: string;
+  event?: string;
+  ok?: boolean;
+  payload?: unknown;
+}
+
+/** `ConnectParamsSchema.client.id`: a closed enum — OpenClaw's gateway rejects any id outside this set
+ *  (verified live: an arbitrary string 400s with "must be equal to one of the allowed values"). `'cli'`
+ *  is the closest fit for a headless external orchestrator; there is no "third-party integration" id. */
+const CONNECT_CLIENT_ID = 'cli';
+/** `ConnectParamsSchema.client.mode`: same closed-enum story as `client.id`. */
+const CONNECT_CLIENT_MODE = 'cli';
+
+let nextFrameSeq = 0;
+/** Frame ids must be strings (`RequestFrameSchema.id: TString`); `handle.nextRequestId()` returns a
+ *  number, so every id that crosses the wire is stringified here rather than at each call site. */
+function frameId(handle: NativeCliRuntimeHandle): string {
+  return String(handle.nextRequestId?.() ?? nextFrameSeq++);
+}
+
+function req(method: string, id: string, params: Record<string, unknown>): string {
+  return `${JSON.stringify({ type: 'req', id, method, params })}\n`;
+}
+
+export function openClawInitialize(
+  handle: NativeCliRuntimeHandle,
+  context: Parameters<NonNullable<NativeCliProviderAdapter['initialize']>>[1]
+): void {
+  if (handle.launchMode !== 'app-server' || !handle.appServer) return;
+  const connectId = frameId(handle);
+  const sessionId = frameId(handle);
+  handle.pendingRequests?.set(connectId, 'initialize');
+  handle.pendingRequests?.set(sessionId, context.providerSessionRef ? 'sessionResume' : 'sessionStart');
+
+  // Shared-secret auth (`connect.params.auth.token`) is the only auth path this adapter implements —
+  // OpenClaw's normal device-signature handshake (v2/v3 payload, undocumented curve/hash) isn't
+  // reimplemented here. The token is explicit per-agent config (`context.env`, the same map
+  // `buildLaunch` forwards to the spawned `openclaw gateway` process — see openclaw/index.ts), never a
+  // Monad-invented ambient env var.
+  //
+  // CORRECTION (live-verified 2026-07-04, superseding an earlier doc-based assumption in this comment):
+  // a real gateway with NO token/env configured rejects a device-less connect with
+  // `NOT_PAIRED`/`DEVICE_IDENTITY_REQUIRED` even on loopback — there is no auth-free default. Passing
+  // `--token <value>` (or setting `OPENCLAW_GATEWAY_TOKEN`, its documented env fallback) on the
+  // GATEWAY'S OWN command line is what switches it into token mode; no separate `--auth token` flag is
+  // needed. So this only works end-to-end when the operator sets `agent.env.OPENCLAW_GATEWAY_TOKEN` —
+  // the daemon forwards that same env to the spawned `openclaw gateway run` process (which then
+  // self-selects token mode) AND this file reads it back for the connect frame. Until an operator does
+  // that, app-server mode fails fast with a `connection_required` event rather than hanging.
+  const token = context.env?.OPENCLAW_GATEWAY_TOKEN;
+  const connectFrame = req(
+    'connect',
+    connectId,
+    compactObject({
+      minProtocol: 3,
+      maxProtocol: 4,
+      client: {
+        id: CONNECT_CLIENT_ID,
+        displayName: 'monad',
+        version: '0.1.0',
+        platform: process.platform,
+        mode: CONNECT_CLIENT_MODE
+      },
+      role: 'operator',
+      scopes: ['operator.read', 'operator.write'],
+      caps: [],
+      auth: token ? { token } : undefined
+    })
+  );
+
+  // `sessions.create` params (SessionsCreateParamsSchema): key/agentId/label/model/parentSessionKey/
+  // emitCommandHooks/task/message, all optional. There is no dedicated "resume" method; `sessions.resolve`
+  // ("resolves or canonicalizes a session target") takes the same optional `key`, so passing the
+  // persisted key there is the closest documented resume path.
+  const modelParam = context.modelId ?? context.modelName;
+  const sessionParams = compactObject({ model: modelParam });
+  const sessionMethod = context.providerSessionRef ? 'sessions.resolve' : 'sessions.create';
+  const sessionFrame = req(
+    sessionMethod,
+    sessionId,
+    context.providerSessionRef ? { key: context.providerSessionRef, ...sessionParams } : sessionParams
+  );
+
+  handle.deferredThreadFrame = sessionFrame;
+  handle.appServer.send(connectFrame);
+}
+
+function responseEvents(frame: OpenClawEnvelope, handle?: NativeCliRuntimeHandle): NativeCliOutputEvent[] {
+  const idKey = typeof frame.id === 'string' ? frame.id : undefined;
+  const kind = idKey !== undefined ? handle?.pendingRequests?.get(idKey) : undefined;
+  if (idKey !== undefined && kind !== undefined) handle?.pendingRequests?.delete(idKey);
+
+  const payload = recordValue(frame.payload);
+  if (frame.ok === false) {
+    // A rejected `connect` (kind 'initialize') is an auth failure — live-verified: a gateway with no
+    // token configured 400s connect with `NOT_PAIRED`/`DEVICE_IDENTITY_REQUIRED`. That must surface the
+    // same reconnect/auth-required signal as a rejected session start, not a generic provider_error.
+    if (kind === 'initialize' || kind === 'sessionStart' || kind === 'sessionResume') {
+      return [
+        {
+          type: 'connection_required',
+          payload: compactObject({
+            // `connection_required`'s schema requires `code` to be a non-empty string (stricter than
+            // `provider_error`'s `string | number`) — guard it like `message` below, or a numeric/empty
+            // real-world code would fail the whole event's zod validation and get silently dropped.
+            code: typeof payload?.code === 'string' && payload.code.length > 0 ? payload.code : undefined,
+            reason:
+              typeof payload?.message === 'string' && payload.message.length > 0
+                ? payload.message
+                : 'OpenClaw requires reconnect'
+          })
+        }
+      ];
+    }
+    return [
+      {
+        type: 'provider_error',
+        payload: compactObject({
+          responseId: idKey,
+          code: payload?.code,
+          message: typeof payload?.message === 'string' ? payload.message : JSON.stringify(payload ?? {})
+        })
+      }
+    ];
+  }
+
+  if (kind === 'initialize') {
+    if (handle?.deferredThreadFrame && handle.appServer) {
+      handle.appServer.send(handle.deferredThreadFrame);
+      handle.deferredThreadFrame = undefined;
+    }
+    return [];
+  }
+
+  // Live-confirmed `sessions.create` result: `{ok, key, sessionId, entry:{...}, runStarted}` — `key` is
+  // the routable session-target string every other method takes; `sessionId` is a separate internal id.
+  if (kind === 'sessionStart' || kind === 'sessionResume') {
+    const key = payload?.key;
+    return typeof key === 'string' && key.length > 0
+      ? [{ type: 'session_ref', payload: compactObject({ providerSessionRef: key, responseId: idKey }) }]
+      : [];
+  }
+  return [];
+}
+
+function approvalRequestedEvent(payload: Record<string, unknown>): NativeCliOutputEvent[] {
+  // Not live-observed — inferred from ExecApprovalRequestParamsSchema (id/command/systemRunPlan) plus
+  // the confirmed `id` field name from ExecApprovalResolveParamsSchema.
+  const requestId = payload.id;
+  if (typeof requestId !== 'string') return [];
+  const plan = recordValue(payload.systemRunPlan);
+  return [
+    {
+      type: 'approval_requested',
+      payload: compactObject({
+        requestId,
+        kind: 'exec',
+        tool: typeof payload.command === 'string' ? payload.command : plan?.commandText,
+        command: payload.command ?? plan?.commandText,
+        cwd: payload.cwd ?? plan?.cwd
+      })
+    }
+  ];
+}
+
+function eventFrameEvents(eventName: string, payload: Record<string, unknown>): NativeCliOutputEvent[] {
+  switch (eventName) {
+    case 'exec.approval.requested':
+      return approvalRequestedEvent(payload);
+    case 'exec.approval.resolved': {
+      const requestId = payload.id;
+      return typeof requestId === 'string'
+        ? [{ type: 'approval_resolved', payload: compactObject({ requestId }) }]
+        : [];
+    }
+    // Live-confirmed: `sessions.send` drives the SAME `chat` event stream as the higher-level
+    // `chat.send` method (ChatEventSchema), discriminated by `state`. `deltaText` carries incremental
+    // text; final/aborted/error carry `message.content` (Anthropic-style content-block array).
+    case 'chat': {
+      const state = payload.state;
+      if (state === 'delta') {
+        const deltaText = payload.deltaText;
+        return typeof deltaText === 'string' && deltaText.length > 0
+          ? [{ type: 'agent_message', payload: { text: deltaText } }]
+          : [];
+      }
+      if (state === 'final' || state === 'aborted' || state === 'error') {
+        const message = recordValue(payload.message);
+        const content = Array.isArray(message?.content) ? message.content : [];
+        const text = content
+          .map((part) => (part && typeof part === 'object' && (part as { text?: unknown }).text) || '')
+          .filter((part): part is string => typeof part === 'string')
+          .join('');
+        const errorMessage = typeof payload.errorMessage === 'string' ? payload.errorMessage : undefined;
+        return [{ type: 'agent_message', payload: compactObject({ text: text || errorMessage || '', final: true }) }];
+      }
+      return [];
+    }
+    default:
+      return [];
+  }
+}
+
+export function parseOpenClawFrame(frame: OpenClawEnvelope, handle?: NativeCliRuntimeHandle): NativeCliOutputEvent[] {
+  if (frame.type === 'res') return responseEvents(frame, handle);
+  if (frame.type === 'event' && typeof frame.event === 'string') {
+    return eventFrameEvents(frame.event, recordValue(frame.payload) ?? {});
+  }
+  return [];
+}
+
+export function parseOpenClawOutput(chunk: string, handle?: NativeCliRuntimeHandle): NativeCliOutputEvent[] {
+  const events: NativeCliOutputEvent[] = [];
+  for (const rawLine of chunk.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line.startsWith('{')) continue;
+    const record = parseJsonObject(line);
+    if (!record) continue;
+    events.push(...parseOpenClawFrame(record as OpenClawEnvelope, handle));
+  }
+  return events;
+}
+
+export function sendOpenClawInput(handle: NativeCliRuntimeHandle, input: string): void {
+  if (!handle.appServer) throw new Error('native CLI session has no app-server input bridge');
+  if (!handle.providerSessionRef) throw new Error('native CLI app-server session is not ready');
+  const id = frameId(handle);
+  handle.pendingRequests?.set(id, 'turn');
+  // Live-confirmed params (SessionsSendParamsSchema): {key, message, ...}. An earlier draft of this
+  // adapter guessed `text` — the real gateway 400s with "must have required property 'message'".
+  handle.appServer.send(req('sessions.send', id, { key: handle.providerSessionRef, message: input }));
+}
+
+export function resolveOpenClawApproval(
+  handle: NativeCliRuntimeHandle,
+  resolution: Parameters<NativeCliProviderAdapter['resolveApproval']>[1]
+): void {
+  if (!handle.appServer) throw new Error('native CLI session has no app-server approval bridge');
+  const id = frameId(handle);
+  // ExecApprovalResolveParamsSchema: {id, decision}. ExecApprovalDecision (openclaw's own exported
+  // type) is `"allow-once" | "allow-always" | "deny"` — a 3-way choice our binary `allow` maps onto the
+  // non-persistent grant, never the persistent "always" one.
+  handle.appServer.send(
+    req('exec.approval.resolve', id, { id: resolution.requestId, decision: resolution.allow ? 'allow-once' : 'deny' })
+  );
+}
+
+export const openClawAppServerHooks: AppServerCliHooks = {
+  initialize: openClawInitialize,
+  parseAppServerOutput: parseOpenClawOutput,
+  sendAppServerInput: sendOpenClawInput,
+  resolveAppServerApproval: resolveOpenClawApproval
+};

@@ -7,6 +7,10 @@ interface DialAppServerWsOptions {
   onMessage: (text: string) => void;
   onClose: () => void;
   timeoutMs: number;
+  /** URL path appended after `ws://host:port` (e.g. `/api/ws`). Root by default. */
+  path?: string;
+  /** Query-string params merged into the dial URL (e.g. a shared-secret token). */
+  query?: Record<string, string>;
 }
 
 interface ConnectAppServerWsOptions extends DialAppServerWsOptions {
@@ -74,7 +78,8 @@ export async function dialAppServerWs(
   port: number,
   opts: DialAppServerWsOptions
 ): Promise<NativeCliAppServerConnection> {
-  const ws = new WebSocket(`ws://127.0.0.1:${port}`);
+  const search = opts.query && Object.keys(opts.query).length > 0 ? `?${new URLSearchParams(opts.query)}` : '';
+  const ws = new WebSocket(`ws://127.0.0.1:${port}${opts.path ?? ''}${search}`);
   await new Promise<void>((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error('app-server ws transport: connection timed out')), opts.timeoutMs);
     ws.onopen = () => {
@@ -104,4 +109,32 @@ export async function dialAppServerWs(
       }
     }
   };
+}
+
+/** Dial a daemon-assigned port the daemon itself picked and passed to the child as `--port` (see
+ *  `NativeCliLaunchSpec.appServerWs.port`), retrying until the gateway's HTTP/WS listener comes up or
+ *  `timeoutMs` elapses. Skips announce-stream scanning entirely — there's nothing to parse since the
+ *  daemon already knows the port. */
+export async function dialAppServerWsWithRetry(
+  port: number,
+  opts: DialAppServerWsOptions,
+  retryIntervalMs = 200
+): Promise<NativeCliAppServerConnection> {
+  const deadline = Date.now() + opts.timeoutMs;
+  let lastError: unknown;
+  for (;;) {
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) {
+      throw new Error(`app-server ws transport: gave up dialing daemon-assigned port ${port}: ${String(lastError)}`);
+    }
+    try {
+      return await dialAppServerWs(port, { ...opts, timeoutMs: Math.min(2000, remaining) });
+    } catch (error) {
+      lastError = error;
+      // Cap the inter-attempt sleep to what's left of the budget too, so the loop can't overrun
+      // `opts.timeoutMs` by a full `retryIntervalMs` on its last iteration.
+      const sleepMs = Math.max(0, Math.min(retryIntervalMs, deadline - Date.now()));
+      if (sleepMs > 0) await new Promise((resolve) => setTimeout(resolve, sleepMs));
+    }
+  }
 }

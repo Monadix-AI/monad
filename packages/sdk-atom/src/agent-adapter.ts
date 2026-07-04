@@ -44,6 +44,22 @@ type NativeCliCapability =
   | 'session-resume'
   | 'rollout-json-fallback';
 
+/** `ws`-transport dial hints a `buildLaunch` can attach to its `NativeCliLaunchSpec` when the default
+ *  "scan the child's stderr for a self-announced `ws://host:port` line" dial strategy doesn't fit the
+ *  provider's real gateway (e.g. it prints a differently-shaped announce line, announces on stdout
+ *  instead of stderr, serves at a non-root path, or needs query-string auth). */
+interface NativeCliAppServerWsHints {
+  /** URL path appended after `ws://host:port` (e.g. `/api/ws`). Root (`''`) by default. */
+  path?: string;
+  /** Query-string params merged into the dial URL (e.g. a shared-secret token). */
+  query?: Record<string, string>;
+  /** When set, the daemon dials this EXACT port directly (retrying until the child accepts, or the
+   *  launch timeout elapses) instead of scanning stdout/stderr for a self-announced port — for a
+   *  gateway the daemon itself launched with an explicit `--port` flag (see
+   *  `BuildNativeCliLaunchOptions.appServerPort`). */
+  port?: number;
+}
+
 export interface NativeCliLaunchSpec {
   argv: string[];
   cwd: string;
@@ -52,6 +68,8 @@ export interface NativeCliLaunchSpec {
   /** Byte channel for `app-server` launches. Absent (or `stdio`) means the daemon owns the child's
    *  stdin/stdout; `ws`/`unix` mean the child listens and the daemon dials the socket. */
   appServerTransport?: NativeCliAppServerTransport;
+  /** `ws`-transport dial hints; absent → the daemon's default self-announced-port scan. */
+  appServerWs?: NativeCliAppServerWsHints;
   provider: NativeCliProvider;
   approvalOwnership: 'provider-owned';
   capabilities: NativeCliCapability[];
@@ -91,6 +109,10 @@ export interface BuildNativeCliLaunchOptions {
   /** For `appServerTransport: 'unix'`, the AF_UNIX socket path the daemon allocated for the child to
    *  listen on (`--listen unix://<path>`). Ignored by other transports. */
   appServerSocketPath?: string;
+  /** For `appServerTransport: 'ws'` when the daemon pre-allocates the loopback port (rather than
+   *  parsing it from the child's announce output) — a `buildLaunch` that uses this must echo it back
+   *  as `NativeCliLaunchSpec.appServerWs.port` so the daemon knows to skip announce-scanning. */
+  appServerPort?: number;
   providerSessionRef?: string;
   systemPromptFile?: string;
   skipProviderApprovals?: boolean;
@@ -268,6 +290,11 @@ export interface NativeCliInitializeContext {
   modelId?: string;
   reasoningEffort?: string;
   speed?: 'standard' | 'fast';
+  /** The agent's operator-configured env map (same one `buildLaunch` passes to the child process).
+   *  An app-server adapter whose gateway takes a shared-secret credential (e.g. a token env var the
+   *  gateway process itself reads) uses this to send the matching credential over the wire — the
+   *  credential is explicit per-agent config, not a Monad-invented ambient env var. */
+  env?: Record<string, string>;
 }
 
 export interface NativeCliAuthStatusProbe {
@@ -371,6 +398,11 @@ export interface NativeCliProviderAdapter {
   modelOptions?(agent: NativeCliAgentView): NativeCliModelOptionsProbe;
   resolveCommand?(command: string, probes?: BinProbes): string | undefined;
   buildLaunch(agent: NativeCliAgentView, opts: BuildNativeCliLaunchOptions): NativeCliLaunchSpec;
+  /** True when this provider's `ws` app-server launches want a daemon-assigned port (see
+   *  `NativeCliAppServerWsHints.port`) rather than a self-announced one. The daemon uses this to decide
+   *  whether pre-allocating a port before `buildLaunch` runs is worth the syscall — a self-announcing ws
+   *  provider that doesn't set this never reads the allocated port at all. */
+  usesDaemonAssignedAppServerPort?: boolean;
   /** `cli-oneshot` launch mode only: build the per-turn argv SUFFIX (the directive + any resume
    *  selector) appended to the launch spec's base argv each time the daemon spawns a fresh process for
    *  a turn. Absent → the adapter has no one-shot mode. */

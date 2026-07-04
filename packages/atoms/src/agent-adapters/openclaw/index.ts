@@ -2,18 +2,23 @@ import type { NativeCliProviderAdapter } from '@monad/sdk-atom';
 
 import { makeAppServerCliAdapter } from '../app-server-jsonrpc.ts';
 import { createFrameworkSettingsImport } from '../settings-import.ts';
-import { openClawAppServerProtocol } from './app-server.ts';
+import { openClawAppServerHooks } from './app-server.ts';
 
 // OpenClaw ships no models-list command; these are the models its docs advertise for `--model`.
 // Kept as a small fallback list (an operator can override via the agent's modelOptions).
 const OPENCLAW_SUPPORTED_MODELS = ['openclaw-default'];
 
+// Real `gateway` app-server backend (verified live, see openclaw/app-server.ts) — uses `appServerHooks`
+// rather than `protocol` because OpenClaw's wire envelope isn't generic JSON-RPC.
 const baseOpenClawNativeCliAdapter = makeAppServerCliAdapter({
   provider: 'openclaw',
   productIcon: 'openclaw',
   label: 'OpenClaw',
   bin: 'openclaw',
-  appServerSubcommand: 'gateway',
+  // `openclaw gateway` alone only prints the subcommand's usage and exits — the real foreground-run
+  // command is `gateway run`. `--allow-unconfigured` lets it start without a prior `openclaw onboard`
+  // (verified against `openclaw gateway --help`; the daemon otherwise refuses to start a fresh config).
+  appServerSubcommand: ['gateway', 'run', '--allow-unconfigured'],
   models: OPENCLAW_SUPPORTED_MODELS,
   installHint: 'Install OpenClaw, then sign in with openclaw models auth login.',
   installUrl: 'https://docs.openclaw.ai',
@@ -32,7 +37,15 @@ const baseOpenClawNativeCliAdapter = makeAppServerCliAdapter({
     launchMode: () => 'app-server',
     usesDeveloperInstructions: true
   },
-  protocol: openClawAppServerProtocol
+  appServerHooks: openClawAppServerHooks,
+  // OpenClaw's real startup line is `listening on port ${port} 🚀` (confirmed from the shipped
+  // package's compiled source) — it never matches the daemon's generic `ws://host:port` announce scan,
+  // so a launch would hang until the app-server startup timeout even with a correct wire protocol.
+  // `--port` is a real, documented flag (`openclaw gateway --help`), so the daemon just assigns the
+  // port itself and dials it directly instead of parsing for one.
+  appServerWs: {
+    usesDaemonAssignedPort: true
+  }
 });
 
 export const openClawNativeCliAdapter: NativeCliProviderAdapter = {

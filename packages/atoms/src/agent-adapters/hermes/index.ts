@@ -1,24 +1,33 @@
 import type { NativeCliProviderAdapter } from '@monad/sdk-atom';
 
+import { NativeCliError } from '@monad/sdk-atom';
+
 import { parseStructuredAuthState } from '../adapter-shared.ts';
 import { makeAppServerCliAdapter } from '../app-server-jsonrpc.ts';
 import { createFrameworkSettingsImport } from '../settings-import.ts';
+import { hermesAppServerHooks } from './app-server.ts';
 
 // Hermes ships no models-list command; this fallback is the model its docs advertise for `--model`.
 // An operator can override via the agent's modelOptions.
 const HERMES_SUPPORTED_MODELS = ['hermes-4'];
 
-// Hermes has NO persistent app-server / JSON-RPC backend (`hermes serve` is not a real command; only
-// interactive `pty` and one-shot `-z`), so it deliberately omits `appServerSubcommand`/`protocol` — its
-// launch modes are pty + cli-oneshot only. A managed project member runs as `cli-oneshot`: the daemon
-// spawns `hermes --yolo -z <directive>` per turn (`--yolo` = run its terminal toolset autonomously so it
-// can invoke the `monad project post/ask/read` wrapper on PATH). The managed prompt is prepended to each
-// directive by the host (cli-oneshot has no session.start to carry developer instructions).
+// `hermes serve` was NOT a real command in the previously-installed v0.14.0 (hence the earlier
+// pty+cli-oneshot-only cut) but IS real as of v0.18.0 — a genuine JSON-RPC/WebSocket gateway at
+// `/api/ws` (see hermes/app-server.ts for the full verification trail). It's wired here as a real,
+// working `app-server` launch mode via `appServerHooks` (its event-wrapping quirk doesn't fit a generic
+// JSON-RPC dispatcher) + `appServerWs` (non-root path, daemon-assigned port — Hermes's
+// `HERMES_DASHBOARD_READY port=N` announce line doesn't match the generic `ws://host:port` scan, and
+// its WS auth is a URL query param, not a JSON handshake field).
+//
+// `managedRuntime` stays on `cli-oneshot` — proven end-to-end with a real LLM turn
+// (apps/monad/test/e2e/agent-adapters-real.local.test.ts) — rather than switching the managed-member
+// default to the newly-real app-server path untested in that role.
 const baseHermesNativeCliAdapter = makeAppServerCliAdapter({
   provider: 'hermes',
   productIcon: 'hermes',
   label: 'Hermes',
   bin: 'hermes',
+  appServerSubcommand: ['serve', '--skip-build'],
   models: HERMES_SUPPORTED_MODELS,
   installHint: 'Install Hermes, then sign in with hermes auth.',
   installUrl: 'https://hermes-agent.nousresearch.com',
@@ -40,6 +49,25 @@ const baseHermesNativeCliAdapter = makeAppServerCliAdapter({
   },
   oneshot: {
     turnArgs: (input) => ['--yolo', '-z', input]
+  },
+  appServerHooks: hermesAppServerHooks,
+  appServerWs: {
+    path: '/api/ws',
+    usesDaemonAssignedPort: true,
+    // Hermes's gateway enforces its ws-upgrade token even on loopback (unlike OpenClaw) — a connect with
+    // no token is GUARANTEED to be rejected, and a WS-upgrade rejection is indistinguishable from
+    // "not listening yet" at the transport layer, so it would otherwise retry for the full app-server
+    // startup timeout before surfacing an opaque error. Fail fast here instead, before ever dialing.
+    query: (agent) => {
+      const token = agent.env?.HERMES_DASHBOARD_SESSION_TOKEN;
+      if (!token) {
+        throw new NativeCliError(
+          'provider_not_logged_in',
+          'Hermes app-server requires agent.env.HERMES_DASHBOARD_SESSION_TOKEN to be configured'
+        );
+      }
+      return { token };
+    }
   }
 });
 

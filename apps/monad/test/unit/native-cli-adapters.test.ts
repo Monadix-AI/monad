@@ -2334,10 +2334,24 @@ test('OpenClaw adapter launches the gateway over a ws app-server transport', () 
     launchMode: 'app-server'
   });
 
-  expect(launch.argv).toEqual(['openclaw', 'gateway']);
+  expect(launch.argv).toEqual(['openclaw', 'gateway', 'run', '--allow-unconfigured']);
   expect(launch.appServerTransport).toBe('ws');
   expect(launch.capabilities).toContain('app-server');
   expect(launch.capabilities).toContain('approval-resolution');
+});
+
+test('OpenClaw adapter puts a daemon-assigned port in argv (real startup line never matches the announce scan)', () => {
+  // OpenClaw's real `listening on port ${port} 🚀` startup line never matches the daemon's generic
+  // `ws://host:port` announce scan, so without this the launch would hang until the app-server startup
+  // timeout even with a fully correct wire protocol.
+  const launch = buildNativeCliLaunch(openClawAgent, {
+    workingPath: '/tmp/project',
+    launchMode: 'app-server',
+    appServerPort: 18790
+  });
+
+  expect(launch.argv).toEqual(['openclaw', 'gateway', 'run', '--allow-unconfigured', '--port', '18790']);
+  expect(launch.appServerWs).toEqual({ port: 18790 });
 });
 
 test('OpenClaw adapter passes model, session ref, and dangerous-mode approval skip to launch', () => {
@@ -2383,16 +2397,22 @@ test('OpenClaw adapter surfaces pty terminal output as plain agent messages', ()
   expect(openClawNativeCliAdapter.parseOutput('', { launchMode: 'pty', kill() {} })).toEqual([]);
 });
 
-test('OpenClaw adapter maps app-server ws JSON-RPC frames to the native CLI contract', () => {
+test('OpenClaw adapter maps the real gateway envelope to the native CLI contract', () => {
+  // OpenClaw's gateway wraps every notification as `{type:'event', event, payload}` (verified live
+  // against `openclaw gateway run`, see openclaw/app-server.ts) — NOT a bare `{method, params}` frame.
   const chunk = [
-    JSON.stringify({ method: 'agent.token', params: { text: 'Hello' } }),
-    JSON.stringify({ method: 'agent.token', params: { delta: ' world' } }),
+    JSON.stringify({ type: 'event', event: 'chat', payload: { state: 'delta', deltaText: 'Hello' } }),
+    JSON.stringify({ type: 'event', event: 'chat', payload: { state: 'delta', deltaText: ' world' } }),
     JSON.stringify({
-      method: 'approval.request',
-      id: 'req-1',
-      params: { kind: 'command', command: 'ls', cwd: '/tmp/project' }
+      type: 'event',
+      event: 'exec.approval.requested',
+      payload: { id: 'req-1', command: 'ls', cwd: '/tmp/project' }
     }),
-    JSON.stringify({ method: 'agent.final', params: { text: 'Done.' } })
+    JSON.stringify({
+      type: 'event',
+      event: 'chat',
+      payload: { state: 'final', message: { content: [{ type: 'text', text: 'Done.' }] } }
+    })
   ].join('\n');
 
   const events = openClawNativeCliAdapter.parseOutput(chunk, { launchMode: 'app-server', kill() {} });
@@ -2402,13 +2422,13 @@ test('OpenClaw adapter maps app-server ws JSON-RPC frames to the native CLI cont
     { type: 'agent_message', payload: { text: ' world' } },
     {
       type: 'approval_requested',
-      payload: { requestId: 'req-1', kind: 'command', command: 'ls', cwd: '/tmp/project' }
+      payload: { requestId: 'req-1', kind: 'exec', tool: 'ls', command: 'ls', cwd: '/tmp/project' }
     },
     { type: 'agent_message', payload: { text: 'Done.', final: true } }
   ]);
 });
 
-test('OpenClaw adapter defers session start until the initialize response and resolves the session ref', () => {
+test('OpenClaw adapter defers session start until the connect response and resolves the session ref', () => {
   const writes: string[] = [];
   let seq = 0;
   const handle = {
@@ -2427,28 +2447,32 @@ test('OpenClaw adapter defers session start until the initialize response and re
   };
 
   openClawNativeCliAdapter.initialize?.(handle, { workingPath: '/tmp/project', modelId: 'openclaw-default' });
-  expect(writes.map((line) => (JSON.parse(line) as { method: string }).method)).toEqual(['initialize', 'initialized']);
+  expect(writes.map((line) => (JSON.parse(line) as { method: string }).method)).toEqual(['connect']);
   expect(handle.deferredThreadFrame).toBeTruthy();
 
-  // The initialize response (id 0) releases the parked session.start frame.
-  openClawNativeCliAdapter.parseOutput(JSON.stringify({ id: 0, result: {} }), handle);
+  // The connect response (id "0") releases the parked sessions.create frame. Ids are strings —
+  // OpenClaw's RequestFrameSchema rejects a numeric id as "invalid request frame".
+  openClawNativeCliAdapter.parseOutput(JSON.stringify({ type: 'res', id: '0', ok: true, payload: {} }), handle);
   const methods = writes.map((line) => (JSON.parse(line) as { method?: string }).method).filter(Boolean);
-  expect(methods).toEqual(['initialize', 'initialized', 'session.start']);
+  expect(methods).toEqual(['connect', 'sessions.create']);
   expect(handle.deferredThreadFrame).toBeUndefined();
 
-  // The session.start response (id 1) resolves the provider session ref.
+  // The sessions.create response (id "1") resolves the provider session ref from `payload.key` (the
+  // routable session target — distinct from the internal `sessionId` also in the real result).
   const refEvents = openClawNativeCliAdapter.parseOutput(
-    JSON.stringify({ id: 1, result: { sessionId: 'oc-session-9' } }),
+    JSON.stringify({ type: 'res', id: '1', ok: true, payload: { key: 'agent:dev:oc-9', sessionId: 'uuid-1' } }),
     handle
   );
-  expect(refEvents).toEqual([{ type: 'session_ref', payload: { providerSessionRef: 'oc-session-9', responseId: 1 } }]);
+  expect(refEvents).toEqual([
+    { type: 'session_ref', payload: { providerSessionRef: 'agent:dev:oc-9', responseId: '1' } }
+  ]);
 });
 
 test('OpenClaw adapter sends a turn and resolves an approval over the app-server bridge', () => {
   const writes: string[] = [];
   const handle = {
     launchMode: 'app-server' as const,
-    providerSessionRef: 'oc-session-9',
+    providerSessionRef: 'agent:dev:oc-9',
     appServer: {
       send(input: string) {
         writes.push(input);
@@ -2462,29 +2486,65 @@ test('OpenClaw adapter sends a turn and resolves an approval over the app-server
 
   openClawNativeCliAdapter.sendInput(handle, 'summarize the repo');
   expect(JSON.parse(writes[0] ?? '')).toEqual({
-    method: 'agent.message',
-    id: 7,
-    params: { sessionId: 'oc-session-9', text: 'summarize the repo' }
+    type: 'req',
+    method: 'sessions.send',
+    id: '7',
+    params: { key: 'agent:dev:oc-9', message: 'summarize the repo' }
   });
 
   openClawNativeCliAdapter.resolveApproval(handle, { requestId: 'req-1', allow: true });
-  expect(JSON.parse(writes[1] ?? '')).toEqual({ id: 'req-1', result: { decision: 'approve' } });
+  // ExecApprovalDecision is `"allow-once" | "allow-always" | "deny"` — our binary `allow` maps to the
+  // non-persistent grant, never the persistent "always" one.
+  expect(JSON.parse(writes[1] ?? '')).toEqual({
+    type: 'req',
+    method: 'exec.approval.resolve',
+    id: '7',
+    params: { id: 'req-1', decision: 'allow-once' }
+  });
 });
 
 test('OpenClaw adapter routes a failed session start to a reconnect prompt', () => {
   const handle = {
     launchMode: 'app-server' as const,
-    pendingRequests: new Map<string | number, string>([[2, 'sessionStart']]),
+    pendingRequests: new Map<string | number, string>([['2', 'sessionStart']]),
     appServer: { send() {}, close() {} },
     nextRequestId: () => 3,
     kill() {}
   };
   expect(
     openClawNativeCliAdapter.parseOutput(
-      JSON.stringify({ id: 2, error: { code: 'NoAuth', message: 'sign in first' } }),
+      JSON.stringify({ type: 'res', id: '2', ok: false, payload: { code: 'NoAuth', message: 'sign in first' } }),
       handle
     )
   ).toEqual([{ type: 'connection_required', payload: { code: 'NoAuth', reason: 'sign in first' } }]);
+});
+
+test('OpenClaw adapter routes a rejected connect (no token configured) to a reconnect prompt, not a generic error', () => {
+  // Live-verified against a real gateway with no `OPENCLAW_GATEWAY_TOKEN` configured: `connect` itself
+  // is rejected (device pairing required) with exactly this code/message shape — this must surface the
+  // same reconnect signal as a rejected session start, not fall through to `provider_error`.
+  const handle = {
+    launchMode: 'app-server' as const,
+    pendingRequests: new Map<string | number, string>([['0', 'initialize']]),
+    appServer: { send() {}, close() {} },
+    nextRequestId: () => 1,
+    kill() {}
+  };
+  expect(
+    openClawNativeCliAdapter.parseOutput(
+      JSON.stringify({
+        type: 'res',
+        id: '0',
+        ok: false,
+        payload: {
+          code: 'NOT_PAIRED',
+          message: 'device identity required',
+          details: { code: 'DEVICE_IDENTITY_REQUIRED' }
+        }
+      }),
+      handle
+    )
+  ).toEqual([{ type: 'connection_required', payload: { code: 'NOT_PAIRED', reason: 'device identity required' } }]);
 });
 
 test('OpenClaw and Hermes auth launches use provider-owned login and status commands', () => {
@@ -2509,33 +2569,220 @@ test('OpenClaw and Hermes auth status parsers use structured output or status ex
   expect(hermesNativeCliAdapter.parseAuthStatus('no accounts', 1)).toBe('unauthenticated');
 });
 
-test('Hermes adapter launches interactive pty; app-server is not a supported backend', () => {
+test('Hermes adapter launches interactive pty, and a real app-server gateway with its ws hints', () => {
   const pty = buildNativeCliLaunch(hermesAgent, { workingPath: '/tmp/project', launchMode: 'pty' });
   expect(pty.argv).toEqual(['hermes']);
   expect(pty.launchMode).toBe('pty');
-  // Hermes has NO app-server backend (`hermes serve` is not a real command) — requesting it is
-  // rejected up front, not dialed into a nonexistent gateway that would hang until timeout.
+
+  // `hermes serve` IS a real command as of v0.18.0 (the earlier "no app-server backend" rejection was
+  // correct for the older v0.14.0 previously installed — see hermes/app-server.ts). Its non-root path
+  // and daemon-assigned-port opt-in surface as `appServerWs` on the launch spec; the `--port` argv only
+  // appears once the daemon actually allocates a port (via `appServerPort`), not on a bare buildLaunch.
+  // A token is required (see the no-token test below) — set one here to exercise the happy path.
+  const hermesAgentWithToken = { ...hermesAgent, env: { HERMES_DASHBOARD_SESSION_TOKEN: 'test-token' } };
+  const appServer = buildNativeCliLaunch(hermesAgentWithToken, {
+    workingPath: '/tmp/project',
+    launchMode: 'app-server'
+  });
+  expect(appServer.argv).toEqual(['hermes', 'serve', '--skip-build']);
+  expect(appServer.appServerTransport).toBe('ws');
+  expect(appServer.appServerWs).toEqual({ path: '/api/ws', query: { token: 'test-token' } });
+
+  const withPort = buildNativeCliLaunch(hermesAgentWithToken, {
+    workingPath: '/tmp/project',
+    launchMode: 'app-server',
+    appServerPort: 19124
+  });
+  expect(withPort.argv).toEqual(['hermes', 'serve', '--skip-build', '--port', '19124']);
+  expect(withPort.appServerWs).toEqual({ path: '/api/ws', query: { token: 'test-token' }, port: 19124 });
+});
+
+test('Hermes app-server launch fails fast without a configured token instead of hanging on a doomed dial', () => {
+  // Hermes's gateway enforces its ws-upgrade token even on loopback, and a rejected upgrade is
+  // indistinguishable from "not listening yet" at the transport layer — so this must fail immediately
+  // at buildLaunch time, not after retrying the (certain to be rejected) dial for the full startup timeout.
   expect(() => buildNativeCliLaunch(hermesAgent, { workingPath: '/tmp/project', launchMode: 'app-server' })).toThrow(
-    /no app-server backend/i
+    /HERMES_DASHBOARD_SESSION_TOKEN/
   );
 });
 
-test('Hermes preset advertises pty + cli-oneshot only (no fictional app-server)', () => {
+test('Hermes preset advertises pty + app-server + cli-oneshot (real gateway as of v0.18.0)', () => {
   const preset = hermesNativeCliAdapter.detect({ which: () => '/bin/hermes', exists: () => false });
 
   expect(preset.id).toBe('hermes');
   expect(preset.productIcon).toBe('hermes');
   expect(preset.command).toBe('hermes');
   expect(preset.installUrl).toBe('https://hermes-agent.nousresearch.com');
-  // No app-server backend → pty (interactive) + cli-oneshot (managed) only, and no ws transport.
-  expect(preset.supportedLaunchModes).toEqual(['pty', 'cli-oneshot']);
-  expect(preset.supportedAppServerTransports).toBeUndefined();
+  expect(preset.supportedLaunchModes).toEqual(['pty', 'app-server', 'cli-oneshot']);
+  expect(preset.supportedAppServerTransports).toEqual(['ws']);
 });
 
 test('Hermes adapter surfaces pty plain-text output as agent messages', () => {
   const events = hermesNativeCliAdapter.parseOutput('the answer is 42', { launchMode: 'pty', kill() {} });
   expectNativeCliOutputContract(events);
   expect(events).toEqual([{ type: 'agent_message', payload: { text: 'the answer is 42' } }]);
+});
+
+test('Hermes adapter opens a session and resolves the session ref from real session.create result fields', () => {
+  const writes: string[] = [];
+  const handle = {
+    launchMode: 'app-server' as const,
+    appServer: {
+      send(input: string) {
+        writes.push(input);
+      },
+      close() {}
+    },
+    pendingRequests: new Map<string | number, string>(),
+    nextRequestId: () => 0,
+    kill() {}
+  };
+
+  hermesNativeCliAdapter.initialize?.(handle, { workingPath: '/tmp/project', modelId: 'hermes-4' });
+  // No separate handshake — session.create goes straight out (Hermes auths at the WS-upgrade query
+  // string, not a JSON connect step).
+  expect(JSON.parse(writes[0] ?? '')).toEqual({
+    method: 'session.create',
+    id: 0,
+    params: { cwd: '/tmp/project', model: 'hermes-4', source: 'monad' }
+  });
+
+  // Real result shape (tui_gateway/server.py session.create): `session_id` is the ephemeral in-process
+  // id (used to address prompt.submit/approval.respond); `stored_session_id` is the persistent one.
+  const refEvents = hermesNativeCliAdapter.parseOutput(
+    JSON.stringify({ id: 0, result: { session_id: 'a1b2c3d4', stored_session_id: 'agent:dev:main:key-1' } }),
+    handle
+  );
+  expect(refEvents).toEqual([
+    { type: 'session_ref', payload: { providerSessionRef: 'agent:dev:main:key-1', responseId: 0 } }
+  ]);
+});
+
+test('Hermes adapter resumes with the persistent key and sends a turn keyed on the ephemeral session_id', () => {
+  const writes: string[] = [];
+  const handle = {
+    launchMode: 'app-server' as const,
+    appServer: {
+      send(input: string) {
+        writes.push(input);
+      },
+      close() {}
+    },
+    pendingRequests: new Map<string | number, string>(),
+    nextRequestId: () => 3,
+    kill() {}
+  };
+
+  hermesNativeCliAdapter.initialize?.(handle, {
+    workingPath: '/tmp/project',
+    providerSessionRef: 'agent:dev:main:key-1'
+  });
+  expect(JSON.parse(writes[0] ?? '')).toEqual({
+    method: 'session.resume',
+    id: 3,
+    params: { session_id: 'agent:dev:main:key-1' }
+  });
+
+  // session.resume's real result nests the persistent id under `session_key` (not `stored_session_id`
+  // — the two methods use different field names for it, confirmed from `_live_session_payload`).
+  hermesNativeCliAdapter.parseOutput(
+    JSON.stringify({ id: 3, result: { session_id: 'e5f6a7b8', session_key: 'agent:dev:main:key-1' } }),
+    handle
+  );
+
+  hermesNativeCliAdapter.sendInput(handle, 'hi');
+  expect(JSON.parse(writes[1] ?? '')).toEqual({
+    method: 'prompt.submit',
+    id: 3,
+    params: { session_id: 'e5f6a7b8', text: 'hi' }
+  });
+});
+
+test('Hermes adapter unwraps the event-wrapper envelope and resolves an approval by session id', () => {
+  const writes: string[] = [];
+  const handle = {
+    launchMode: 'app-server' as const,
+    appServer: {
+      send(input: string) {
+        writes.push(input);
+      },
+      close() {}
+    },
+    pendingRequests: new Map<string | number, string>(),
+    nextRequestId: () => 5,
+    kill() {}
+  };
+  hermesNativeCliAdapter.initialize?.(handle, { workingPath: '/tmp/project' });
+  hermesNativeCliAdapter.parseOutput(JSON.stringify({ id: 5, result: { session_id: 'sid-1' } }), handle);
+
+  // Real notifications are ALWAYS `method:"event"` with the actual type nested in `params.type` — not
+  // a bare `{method: 'message.delta', ...}` frame the generic AppServerProtocol dispatcher assumes.
+  const chunk = [
+    JSON.stringify({
+      method: 'event',
+      params: { type: 'message.delta', session_id: 'sid-1', payload: { text: 'Hel' } }
+    }),
+    JSON.stringify({
+      method: 'event',
+      params: { type: 'approval.request', session_id: 'sid-1', payload: { kind: 'command', command: 'ls' } }
+    }),
+    JSON.stringify({
+      method: 'event',
+      params: { type: 'message.complete', session_id: 'sid-1', payload: { text: 'Hello.' } }
+    })
+  ].join('\n');
+  const events = hermesNativeCliAdapter.parseOutput(chunk, handle);
+  expectNativeCliOutputContract(events);
+  expect(events).toEqual([
+    { type: 'agent_message', payload: { text: 'Hel' } },
+    // Suffixed with a per-handle sequence number (not the bare session id) so a second overlapping
+    // approval in the same session doesn't collide with — and get silently dropped alongside — this one.
+    { type: 'approval_requested', payload: { requestId: 'sid-1:1', kind: 'command', command: 'ls' } },
+    { type: 'agent_message', payload: { text: 'Hello.', final: true } }
+  ]);
+
+  // approval.respond has no separate id — Hermes resolves per-SESSION (`{session_id, choice}`), and
+  // the RPC's own success response is the resolution signal (no `approval.resolved` event exists).
+  hermesNativeCliAdapter.resolveApproval(handle, { requestId: 'sid-1:1', allow: true });
+  expect(JSON.parse(writes[1] ?? '')).toEqual({
+    method: 'approval.respond',
+    id: 5,
+    params: { session_id: 'sid-1', choice: 'once' }
+  });
+  const resolvedEvents = hermesNativeCliAdapter.parseOutput(
+    JSON.stringify({ id: 5, result: { resolved: true } }),
+    handle
+  );
+  expect(resolvedEvents).toEqual([{ type: 'approval_resolved', payload: { requestId: 'sid-1:1' } }]);
+});
+
+test('Hermes adapter assigns distinct requestIds to overlapping approval requests in the same session', () => {
+  const handle = {
+    launchMode: 'app-server' as const,
+    appServer: { send() {}, close() {} },
+    pendingRequests: new Map<string | number, string>(),
+    nextRequestId: () => 9,
+    kill() {}
+  };
+  hermesNativeCliAdapter.initialize?.(handle, { workingPath: '/tmp/project' });
+  hermesNativeCliAdapter.parseOutput(JSON.stringify({ id: 9, result: { session_id: 'sid-9' } }), handle);
+
+  const chunk = [
+    JSON.stringify({
+      method: 'event',
+      params: { type: 'approval.request', session_id: 'sid-9', payload: { kind: 'command' } }
+    }),
+    JSON.stringify({
+      method: 'event',
+      params: { type: 'approval.request', session_id: 'sid-9', payload: { kind: 'command' } }
+    })
+  ].join('\n');
+  const events = hermesNativeCliAdapter.parseOutput(chunk, handle);
+  expectNativeCliOutputContract(events);
+  const requestIds = events.map((event) => event.payload.requestId as string);
+  // Distinct ids: the host dedupes pending approvals by requestId, so a second overlapping request that
+  // collided with the first's id would be silently dropped instead of surfaced to the operator.
+  expect(new Set(requestIds).size).toBe(2);
 });
 
 test('OpenClaw adapter ignores malformed output and unknown notifications', () => {
@@ -2549,7 +2796,10 @@ test('OpenClaw adapter ignores malformed output and unknown notifications', () =
   ).toEqual([]);
 });
 
-test('OpenClaw and Hermes adapters auto-decline an unknown server-initiated request', () => {
+test('OpenClaw adapter ignores an unrecognized frame envelope without replying', () => {
+  // Only `res` and `event` frame types are handled — there is no evidence the real gateway sends
+  // unsolicited `req` frames to a client, so an unrecognized/bare frame is dropped silently rather than
+  // guessed at with a fabricated JSON-RPC error reply.
   const writes: string[] = [];
   const handle = {
     launchMode: 'app-server' as const,
@@ -2565,14 +2815,11 @@ test('OpenClaw and Hermes adapters auto-decline an unknown server-initiated requ
   };
 
   const events = openClawNativeCliAdapter.parseOutput(
-    JSON.stringify({ method: 'tool/requestUserInput', id: 42, params: {} }),
+    JSON.stringify({ type: 'req', id: '42', method: 'server.ping', params: {} }),
     handle
   );
   expect(events).toEqual([]);
-  expect(JSON.parse(writes[0] ?? '')).toEqual({
-    id: 42,
-    error: { code: -32601, message: 'Unsupported method: tool/requestUserInput' }
-  });
+  expect(writes).toEqual([]);
 });
 
 // Managed project-agent runtime: OpenClaw & Hermes join Workplace projects as supervised members and
@@ -2601,61 +2848,53 @@ test('openclaw managedRuntime enables the project callback via app-server + deve
   expect(managed?.mcpConfigArgs).toBeUndefined();
 });
 
-test('OpenClaw agent.final without a text field still yields a final agent_message', () => {
-  const events = openClawNativeCliAdapter.parseOutput(JSON.stringify({ method: 'agent.final', params: {} }), {
-    launchMode: 'app-server',
-    kill() {}
-  });
+test('OpenClaw chat final event without message content still yields a final agent_message', () => {
+  const events = openClawNativeCliAdapter.parseOutput(
+    JSON.stringify({ type: 'event', event: 'chat', payload: { state: 'final' } }),
+    { launchMode: 'app-server', kill() {} }
+  );
   expectNativeCliOutputContract(events);
   expect(events).toEqual([{ type: 'agent_message', payload: { text: '', final: true } }]);
 });
 
-test('OpenClaw session.updated with an empty-string sessionId emits nothing (no invalid session_ref)', () => {
+test('OpenClaw sessions.create response with an empty key emits nothing (no invalid session_ref)', () => {
+  const handle = {
+    launchMode: 'app-server' as const,
+    pendingRequests: new Map<string | number, string>([['5', 'sessionStart']]),
+    appServer: { send() {}, close() {} },
+    kill() {}
+  };
   const empty = openClawNativeCliAdapter.parseOutput(
-    JSON.stringify({ method: 'session.updated', params: { sessionId: '' } }),
-    { launchMode: 'app-server', kill() {} }
+    JSON.stringify({ type: 'res', id: '5', ok: true, payload: { key: '' } }),
+    handle
   );
   expect(empty).toEqual([]);
-
-  const valid = openClawNativeCliAdapter.parseOutput(
-    JSON.stringify({ method: 'session.updated', params: { sessionId: 'oc-2' } }),
-    { launchMode: 'app-server', kill() {} }
-  );
-  expectNativeCliOutputContract(valid);
-  expect(valid).toEqual([{ type: 'session_ref', payload: { providerSessionRef: 'oc-2' } }]);
 });
 
-test('OpenClaw approval.resolved falls back to params.id and drops an id-less resolution', () => {
+test('OpenClaw exec.approval.resolved requires an id or is dropped', () => {
   const viaId = openClawNativeCliAdapter.parseOutput(
-    JSON.stringify({ method: 'approval.resolved', params: { id: 'req-9' } }),
+    JSON.stringify({ type: 'event', event: 'exec.approval.resolved', payload: { id: 'req-9' } }),
     { launchMode: 'app-server', kill() {} }
   );
   expectNativeCliOutputContract(viaId);
   expect(viaId).toEqual([{ type: 'approval_resolved', payload: { requestId: 'req-9' } }]);
 
-  const idLess = openClawNativeCliAdapter.parseOutput(JSON.stringify({ method: 'approval.resolved', params: {} }), {
-    launchMode: 'app-server',
-    kill() {}
-  });
+  const idLess = openClawNativeCliAdapter.parseOutput(
+    JSON.stringify({ type: 'event', event: 'exec.approval.resolved', payload: {} }),
+    { launchMode: 'app-server', kill() {} }
+  );
   expect(idLess).toEqual([]);
 });
 
-test('OpenClaw approval.request with no frame id falls back to a routable params id', () => {
+test('OpenClaw exec.approval.requested with no id is dropped (unroutable)', () => {
   const events = openClawNativeCliAdapter.parseOutput(
-    JSON.stringify({ method: 'approval.request', params: { requestId: 'ar-1', kind: 'command' } }),
+    JSON.stringify({ type: 'event', event: 'exec.approval.requested', payload: { command: 'ls' } }),
     { launchMode: 'app-server', kill() {} }
   );
-  expectNativeCliOutputContract(events);
-  expect(events).toEqual([{ type: 'approval_requested', payload: { requestId: 'ar-1', kind: 'command' } }]);
-
-  const unroutable = openClawNativeCliAdapter.parseOutput(
-    JSON.stringify({ method: 'approval.request', params: { kind: 'command' } }),
-    { launchMode: 'app-server', kill() {} }
-  );
-  expect(unroutable).toEqual([]);
+  expect(events).toEqual([]);
 });
 
-test('OpenClaw does NOT auto-decline a known notification that carries an id but yields no events', () => {
+test('OpenClaw chat delta with empty deltaText yields nothing and never replies', () => {
   const writes: string[] = [];
   const handle = {
     launchMode: 'app-server' as const,
@@ -2670,10 +2909,8 @@ test('OpenClaw does NOT auto-decline a known notification that carries an id but
     kill() {}
   };
 
-  // session.updated is a KNOWN notification; an empty sessionId legitimately yields zero events. A
-  // classifier keyed on "produced events" would wrongly reply -32601 just because it carries an id.
   const events = openClawNativeCliAdapter.parseOutput(
-    JSON.stringify({ method: 'session.updated', id: 5, params: { sessionId: '' } }),
+    JSON.stringify({ type: 'event', event: 'chat', payload: { state: 'delta', deltaText: '' } }),
     handle
   );
   expect(events).toEqual([]);

@@ -31,6 +31,7 @@ import type {
 import type { NativeCliSessionRow, Store } from '@/store/db/index.ts';
 
 import { chmodSync, mkdirSync, realpathSync, rmSync, statSync } from 'node:fs';
+import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { dirname, isAbsolute, join } from 'node:path';
 import { createLogger } from '@monad/logger';
@@ -38,7 +39,7 @@ import { newId } from '@monad/protocol';
 
 import { connectAppServerStdio } from '@/services/native-cli/app-server-stdio.ts';
 import { connectAppServerUnix } from '@/services/native-cli/app-server-unix.ts';
-import { connectAppServerWs, dialAppServerWs } from '@/services/native-cli/app-server-ws.ts';
+import { connectAppServerWs, dialAppServerWs, dialAppServerWsWithRetry } from '@/services/native-cli/app-server-ws.ts';
 import { NativeCliAuthHost, type NativeCliAuthListener } from '@/services/native-cli/auth-host.ts';
 import { BoundedOutputBuffer } from '@/services/native-cli/bounded-output-buffer.ts';
 import { MAX_OUTPUT_SNAPSHOT } from '@/services/native-cli/constants.ts';
@@ -416,6 +417,16 @@ export class NativeCliHost {
       (args.launchMode ?? agent.defaultLaunchMode) === 'app-server' &&
       (args.appServerTransport ?? agent.appServerTransport) === 'unix';
     const appServerSocketPath = wantsUnixAppServer ? this.allocateAppServerSocketPath(id) : undefined;
+    // A `ws` app-server MAY prefer a daemon-assigned port over self-announcing one (see
+    // `NativeCliAppServerWsHints.port`) — allocate a candidate up front so `buildLaunch` can put it in
+    // argv if it wants to. Gated on the adapter's own opt-in (not just transport === 'ws'), since a
+    // self-announcing ws provider (e.g. codex) never reads the allocated port and the bind+release
+    // syscall would otherwise run on every one of its app-server launches for nothing.
+    const wantsWsAppServer =
+      (args.launchMode ?? agent.defaultLaunchMode) === 'app-server' &&
+      (args.appServerTransport ?? agent.appServerTransport ?? 'ws') === 'ws' &&
+      !!adapter.usesDaemonAssignedAppServerPort;
+    const appServerPort = wantsWsAppServer ? await this.allocateAppServerPort() : undefined;
     try {
       launch = resolveNativeCliLaunchCommand(
         adapter,
@@ -425,6 +436,7 @@ export class NativeCliHost {
           launchMode: args.launchMode,
           appServerTransport: args.appServerTransport,
           appServerSocketPath,
+          appServerPort,
           systemPromptFile: adapter.managedRuntime?.usesSystemPromptFile
             ? (managed?.promptFile ?? undefined)
             : undefined,
@@ -660,41 +672,62 @@ export class NativeCliHost {
       modelName: args.modelName,
       reasoningEffort: args.reasoningEffort,
       speed: args.speed,
-      modelId: args.modelId
+      modelId: args.modelId,
+      env: agent.env
     };
     live.initializeContext = initializeContext;
     if (isAppServerSocket) {
-      // Protocol travels over a socket (ws: an announced loopback port; unix: the path we allocated),
-      // exposed as `live.appServer` so initialize/turn/approval frames go over it. The child's
-      // stdout/stderr are only logs here — drained so their pipe buffers can't fill and stall codex,
-      // but stderr only AFTER the ws leg parses the announced port from it.
+      // Protocol travels over a socket (ws: an announced loopback port, or a daemon-assigned one; unix:
+      // the path we allocated), exposed as `live.appServer` so initialize/turn/approval frames go over
+      // it. The child's stdout/stderr are only logs here — drained so their pipe buffers can't fill and
+      // stall the child. stderr drains immediately EXCEPT for the self-announcing ws path below, where
+      // reading stderr for the announced port IS the connect step; delaying the drain there is
+      // deliberate, not incidental.
       this.drainStream(proc.stdout);
+      const isSelfAnnouncingWs = !isAppServerUnix && launch.appServerWs?.port === undefined;
+      if (!isSelfAnnouncingWs) this.drainStream(proc.stderr);
       const onMessage = (text: string): void => this.output(args.transcriptTargetId, id, text, 'app-server', adapter);
       const onClose = (): void => this.handleAppServerDisconnect(id);
       try {
         if (isAppServerUnix) {
           const socketPath = appServerSocketPath ?? '';
-          live.appServer = await connectAppServerUnix({
-            socketPath,
-            onMessage,
-            onClose,
-            timeoutMs: APP_SERVER_STARTUP_TIMEOUT_MS
-          });
+          live.appServer = await this.raceAgainstExit(
+            connectAppServerUnix({ socketPath, onMessage, onClose, timeoutMs: APP_SERVER_STARTUP_TIMEOUT_MS }),
+            proc.exited
+          );
           live.appServerRedial = () =>
             connectAppServerUnix({ socketPath, onMessage, onClose, timeoutMs: APP_SERVER_STARTUP_TIMEOUT_MS });
-        } else {
-          live.appServer = await connectAppServerWs({
-            stderr: proc.stderr,
+        } else if (launch.appServerWs?.port !== undefined) {
+          // Daemon-assigned port (see NativeCliAppServerWsHints.port): dial it directly with retries —
+          // there's nothing to parse, the daemon already chose the port before spawning the child.
+          const wsPort = launch.appServerWs.port;
+          const dialOpts = {
             onMessage,
             onClose,
             timeoutMs: APP_SERVER_STARTUP_TIMEOUT_MS,
-            onPort: (port) => {
-              live.appServerRedial = () =>
-                dialAppServerWs(port, { onMessage, onClose, timeoutMs: APP_SERVER_STARTUP_TIMEOUT_MS });
-            }
-          });
+            path: launch.appServerWs.path,
+            query: launch.appServerWs.query
+          };
+          live.appServer = await this.raceAgainstExit(dialAppServerWsWithRetry(wsPort, dialOpts), proc.exited);
+          live.appServerRedial = () => dialAppServerWsWithRetry(wsPort, dialOpts);
+        } else {
+          live.appServer = await this.raceAgainstExit(
+            connectAppServerWs({
+              stderr: proc.stderr,
+              onMessage,
+              onClose,
+              timeoutMs: APP_SERVER_STARTUP_TIMEOUT_MS,
+              path: launch.appServerWs?.path,
+              query: launch.appServerWs?.query,
+              onPort: (port) => {
+                live.appServerRedial = () =>
+                  dialAppServerWs(port, { onMessage, onClose, timeoutMs: APP_SERVER_STARTUP_TIMEOUT_MS });
+              }
+            }),
+            proc.exited
+          );
+          this.drainStream(proc.stderr);
         }
-        this.drainStream(proc.stderr);
         // The socket dir is already 0700; lock the socket itself to owner-only as defense in depth.
         if (appServerSocketPath) {
           try {
@@ -1318,6 +1351,24 @@ export class NativeCliHost {
     return path;
   }
 
+  /** Pick a free loopback TCP port for a `ws` app-server the daemon wants to assign an explicit
+   *  `--port` to (see `NativeCliAppServerWsHints.port`) rather than parsing a self-announced one. Binds
+   *  to port 0 and immediately releases it — a standard, small-window TOCTOU (acceptable for a
+   *  same-process child the daemon spawns milliseconds later) rather than a hard guarantee. */
+  private allocateAppServerPort(): Promise<number> {
+    return new Promise((resolve, reject) => {
+      const server = createServer();
+      server.once('error', reject);
+      server.listen(0, '127.0.0.1', () => {
+        const address = server.address();
+        server.close(() => {
+          if (address && typeof address === 'object') resolve(address.port);
+          else reject(new Error('app-server ws transport: could not allocate a loopback port'));
+        });
+      });
+    });
+  }
+
   private unlinkAppServerSocket(socketPath: string | undefined): void {
     if (!socketPath) return;
     try {
@@ -1571,6 +1622,23 @@ export class NativeCliHost {
         /* stream closed */
       }
     })();
+  }
+
+  /** Race an app-server connect attempt against the child exiting. Without this, a child that crashes
+   *  immediately after spawn (missing dependency, port stolen between allocation and bind, etc.) is only
+   *  noticed once the connect's own timeout elapses — the daemon keeps retrying against a port that will
+   *  never open for the full app-server startup timeout instead of failing within milliseconds. */
+  private async raceAgainstExit<T>(connect: Promise<T>, exited: Promise<number>): Promise<T> {
+    let settled = false;
+    const exitGuard = exited.then((code) => {
+      if (settled) return undefined as T;
+      throw new Error(`native CLI process exited (code ${code}) before the app-server became ready`);
+    });
+    try {
+      return await Promise.race([connect, exitGuard]);
+    } finally {
+      settled = true;
+    }
   }
 
   private output(
