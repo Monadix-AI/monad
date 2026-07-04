@@ -1,8 +1,7 @@
 // Pure arg-generation tests — run on any platform (no kernel required).
 
 import { expect, test } from 'bun:test';
-
-import { buildBwrapArgs } from '../../../../../packages/atoms/src/sandbox/bwrap.ts';
+import { buildBwrapArgs } from '@monad/atoms/sandbox/bwrap';
 
 const isLinux = process.platform === 'linux';
 
@@ -85,12 +84,12 @@ test('special filesystems are overlaid after the writable root bind (order matte
 });
 
 test('bwrapLauncher kind is bwrap', async () => {
-  const { bwrapLauncher } = await import('../../../../../packages/atoms/src/sandbox/bwrap.ts');
+  const { bwrapLauncher } = await import('@monad/atoms/sandbox/bwrap');
   expect(bwrapLauncher.kind).toBe('bwrap');
 });
 
 test.skipIf(!isLinux)('bwrapLauncher.wrap prepends bwrap binary and appends -- before argv', async () => {
-  const { bwrapLauncher } = await import('../../../../../packages/atoms/src/sandbox/bwrap.ts');
+  const { bwrapLauncher } = await import('@monad/atoms/sandbox/bwrap');
   const result = bwrapLauncher.wrap?.(['echo', 'hi'], { writableRoots: ['/work'], net: 'none' }) ?? [];
   // First element is the bwrap binary path
   expect(result[0]).toMatch(/bwrap/);

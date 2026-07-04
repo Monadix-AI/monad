@@ -16,7 +16,7 @@ import {
   SaveIcon
 } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { Badge, Button, cn, Input, Label, ProductIcon, ScrollArea, Switch } from '@monad/ui';
+import { Badge, Button, cn, Input, isProductIconId, Label, ProductIcon, ScrollArea, Switch } from '@monad/ui';
 import { useId, useState } from 'react';
 
 import { I18nTrans, useT } from '@/components/I18nProvider';
@@ -136,10 +136,12 @@ export function AcpAgentsSettings({ embedded = false }: { onClose: () => void; e
                       type="button"
                     >
                       <span className="grid size-12 shrink-0 place-items-center rounded-md border bg-background shadow-xs">
-                        <ProductIcon
-                          className="size-7"
-                          product={p.productIcon}
-                        />
+                        {isProductIconId(p.productIcon) ? (
+                          <ProductIcon
+                            className="size-7"
+                            product={p.productIcon}
+                          />
+                        ) : null}
                       </span>
                       <span className="flex min-w-0 flex-1 flex-col gap-2">
                         <span className="truncate font-medium text-sm">{p.label}</span>

@@ -8,7 +8,7 @@
 // skill/mcp/locale are file-based and do NOT flow through this host — they are installed at the
 // atom-pack-manager level and discovered from disk at daemon startup.
 
-import type { AtomKind, ChannelType } from '@monad/protocol';
+import type { AtomDescriptor, AtomKind, ChannelType } from '@monad/protocol';
 import type {
   AtomPackLog,
   ChannelAdapterFactory,
@@ -18,6 +18,7 @@ import type {
   ManifestAtomPack,
   ManifestAtomPackHost,
   ModelProvider,
+  NativeCliProviderAdapter,
   SandboxLauncher,
   WorkspaceExperienceApi,
   WorkspaceExperienceDefinition
@@ -27,6 +28,7 @@ import { registerMessageType } from '@monad/protocol';
 import { loadManifestAtomPack, SDK_VERSION } from '@monad/sdk-atom';
 
 import { assertAtomPackMonadCompatibility } from '@/atoms/compat.ts';
+import { describeAtomPack } from '@/atoms/describe.ts';
 import { type AtomConflict, qualifiedAtomName, resolveAtomPins } from '@/atoms/resolve.ts';
 
 interface ChannelAtomPackHostOptions {
@@ -37,6 +39,8 @@ interface ChannelAtomPackHostOptions {
   onProvider?: (provider: ModelProvider) => void;
   /** Receives each lifecycle hook an atom pack registers (atom-kind-gated like the others). */
   onHook?: (hook: HookDefinition) => void;
+  /** Receives each native CLI provider adapter an atom pack registers. */
+  onAgentAdapter?: (adapter: NativeCliProviderAdapter) => void;
   /** Receives each sandbox launcher an atom pack registers (atom-kind-gated like the others). The
    *  daemon collects them into a registry and selects one per platform — no namespace/first-wins
    *  here (selection is by platform + availability, third-party preferred over built-in). */
@@ -119,6 +123,7 @@ function createChannelAtomPackHost(opts: ChannelAtomPackHostOptions = {}): {
       opts.onProvider?.(p);
     },
     registerHook: (h) => opts.onHook?.(h),
+    registerAgentAdapter: (a) => opts.onAgentAdapter?.(a),
     registerSandbox: (s) => opts.onSandbox?.(s),
     registerWorkspaceExperienceApi: (api) => opts.onWorkspaceExperienceApi?.(api, pack()),
     registerWorkspaceExperience: (experience) => opts.onWorkspaceExperience?.(experience, pack()),
@@ -193,6 +198,9 @@ export type LoadChannelAtomPacksOptions = Omit<ChannelAtomPackHostOptions, 'onCo
   /** The pack's stable identity (its install-dir/folder name) for qualified names + pins + conflict
    *  reporting. Unique even when two packs share a manifest name. Falls back to manifest.name. */
   packIdFor?: (atomPack: ManifestAtomPack) => string | undefined;
+  /** Receives each successfully-loaded pack's individual atoms (id/name/description per kind) so the
+   *  atom-pack manager can surface a per-atom detail view, not just the manifest's kind list. */
+  onAtoms?: (atomPackName: string, atoms: AtomDescriptor[]) => void;
 };
 
 /** Load each atom pack through the atom-kind-gated loader, collecting their channels. Per-atom-pack
@@ -206,6 +214,7 @@ export async function loadChannelAtomPacks(
     onConnector: opts.onConnector,
     onProvider: opts.onProvider,
     onHook: opts.onHook,
+    onAgentAdapter: opts.onAgentAdapter,
     onSandbox: opts.onSandbox,
     onWorkspaceExperience: opts.onWorkspaceExperience,
     onWorkspaceExperienceApi: opts.onWorkspaceExperienceApi,
@@ -229,6 +238,7 @@ export async function loadChannelAtomPacks(
     try {
       assertAtomPackMonadCompatibility(atomPack.manifest.name, atomPack.manifest.monadVersion);
       await loadManifestAtomPack(atomPack, host, { grantedAtoms: opts.grantedAtomsFor?.(atomPack) });
+      if (opts.onAtoms) opts.onAtoms(currentAtomPack, await describeAtomPack(atomPack));
     } catch (err) {
       opts.onError?.(atomPack.manifest.name, err);
     }

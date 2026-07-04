@@ -2,6 +2,20 @@
 import { mkdir } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 
+// The style SET is enumerated from @dicebear/styles in exactly one place — the generated protocol
+// file (run `bun run protocol:avatar-styles`); this script derives its credits from that list.
+import { AVATAR_STYLE_SLUGS } from '../packages/protocol/generated/avatar-styles.ts';
+
+// Mirror of @monad/protocol's `avatarStyleLabel` (kept local because this build script isn't a
+// workspace package and can't resolve the workspace import). A style's display name is exactly its
+// slug in title case — @dicebear/styles ships no label.
+function avatarStyleLabel(slug: string): string {
+  return slug
+    .split('-')
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
 const ROOT = resolve(import.meta.dir, '..');
 
 type PkgMeta = { dependencies?: Record<string, string>; peerDependencies?: Record<string, string> };
@@ -70,48 +84,6 @@ async function readPkgJson(pkgName: string): Promise<Record<string, unknown> | n
   return null;
 }
 
-// DiceBear avatar styles offered as a profile picture choice — must match AVATAR_STYLES in
-// packages/protocol/src/avatar.ts (which derives its display list from this generated file).
-const AVATAR_STYLES: ReadonlyArray<readonly [string, string]> = [
-  ['adventurer', 'Adventurer'],
-  ['adventurer-neutral', 'Adventurer Neutral'],
-  ['avataaars', 'Avataaars'],
-  ['avataaars-neutral', 'Avataaars Neutral'],
-  ['big-ears', 'Big Ears'],
-  ['big-ears-neutral', 'Big Ears Neutral'],
-  ['big-smile', 'Big Smile'],
-  ['bottts', 'Bottts'],
-  ['bottts-neutral', 'Bottts Neutral'],
-  ['croodles', 'Croodles'],
-  ['croodles-neutral', 'Croodles Neutral'],
-  ['disco', 'Disco'],
-  ['dylan', 'Dylan'],
-  ['fun-emoji', 'Fun Emoji'],
-  ['glass', 'Glass'],
-  ['glyphs', 'Glyphs'],
-  ['icons', 'Icons'],
-  ['identicon', 'Identicon'],
-  ['initial-face', 'Initial Face'],
-  ['initials', 'Initials'],
-  ['lorelei', 'Lorelei'],
-  ['lorelei-neutral', 'Lorelei Neutral'],
-  ['micah', 'Micah'],
-  ['miniavs', 'Miniavs'],
-  ['notionists', 'Notionists'],
-  ['notionists-neutral', 'Notionists Neutral'],
-  ['open-peeps', 'Open Peeps'],
-  ['personas', 'Personas'],
-  ['pixel-art', 'Pixel Art'],
-  ['pixel-art-neutral', 'Pixel Art Neutral'],
-  ['rings', 'Rings'],
-  ['shape-grid', 'Shape Grid'],
-  ['shapes', 'Shapes'],
-  ['stripes', 'Stripes'],
-  ['thumbs', 'Thumbs'],
-  ['toon-head', 'Toon Head'],
-  ['triangles', 'Triangles']
-];
-
 interface DicebearStyleMeta {
   license?: { name?: string; url?: string };
   creator?: { name?: string; url?: string };
@@ -131,8 +103,9 @@ async function readStyleMeta(slug: string): Promise<DicebearStyleMeta | null> {
 }
 
 const avatarStyles = await Promise.all(
-  AVATAR_STYLES.map(async ([slug, label]) => {
+  AVATAR_STYLE_SLUGS.map(async (slug) => {
     const meta = (await readStyleMeta(slug)) ?? {};
+    const label = avatarStyleLabel(slug);
     return {
       slug,
       label,

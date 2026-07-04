@@ -235,6 +235,7 @@ export function createForwardNativeCliHandler(
               templateAgentName,
               workingPath: session.cwd,
               launchMode: memberSettings.launchMode ?? spec.defaultLaunchMode,
+              appServerTransport: memberSettings.appServerTransport,
               runtimeRole
             });
       if (runtimeRole !== 'managed-project-agent') {

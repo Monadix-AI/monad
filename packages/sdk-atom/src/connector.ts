@@ -2,7 +2,7 @@
 
 import type { Scope } from '@monad/protocol';
 
-export type { Scope } from '@monad/protocol';
+export type { Scope };
 
 export interface ConnectorHost {
   ingest(input: { sessionId?: string; text: string }): Promise<{ sessionId: string }>;

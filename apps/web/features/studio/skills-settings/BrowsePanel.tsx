@@ -25,12 +25,12 @@ import {
   skillMarketplaceSourceMeta
 } from '@monad/protocol';
 import { Badge, Button, cn, Input, ScrollArea } from '@monad/ui';
+import { Markdown } from '@monad/ui/components/Markdown';
 import { usePathname, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { hoverActionsClassName, hoverActionsVisibleClassName } from '@/components/HoverActions';
 import { useT } from '@/components/I18nProvider';
-import { Markdown } from '@/components/Markdown';
 import { toast } from '@/components/ToastProvider';
 import { skillMarketplacePath, skillMarketplaceSourceFromPathname } from '@/features/routes/route-paths';
 import { ConsentPopover } from './ConsentPopover';

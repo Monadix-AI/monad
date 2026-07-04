@@ -6,11 +6,11 @@ import { ArrowLeft01Icon, LoaderPinwheelIcon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react';
 import { useUpdateSkillContentMutation, useUploadSkillMutation } from '@monad/client-rtk';
 import { Badge, Button, ScrollArea, Textarea } from '@monad/ui';
+import { CodeBlock } from '@monad/ui/components/CodeBlock';
+import { Markdown } from '@monad/ui/components/Markdown';
 import { useMemo, useState } from 'react';
 
-import { CodeBlock } from '@/components/ai-elements/code-block';
 import { useT } from '@/components/I18nProvider';
-import { Markdown } from '@/components/Markdown';
 import {
   Dialog,
   DialogContent,

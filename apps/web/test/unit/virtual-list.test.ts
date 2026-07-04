@@ -1,6 +1,5 @@
 import { expect, test } from 'bun:test';
-
-import { indexOfKey, isAtBottom, reducePinnedOnScroll } from '../../components/ui/VirtualList.tsx';
+import { indexOfKey, isAtBottom, reducePinnedOnScroll } from '@monad/ui/components/VirtualList';
 
 test('isAtBottom: at the exact bottom', () => {
   expect(isAtBottom({ scrollHeight: 1000, scrollTop: 500, clientHeight: 500 })).toBe(true);

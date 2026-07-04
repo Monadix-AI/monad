@@ -1,7 +1,7 @@
 'use client';
 
 import type { MessageId, ProfileView, SessionId, UIItem, UIMessageItem } from '@monad/protocol';
-import type { VirtualListHandle } from '@/components/ui/VirtualList';
+import type { VirtualListHandle } from '@monad/ui/components/VirtualList';
 import type { SessionCommandMenuItem } from '@/features/routes/sessions/SessionRoute';
 import type { StudioSectionId } from '@/features/studio/sections';
 
@@ -26,6 +26,7 @@ import {
   workplaceProjectSelectors
 } from '@monad/client-rtk';
 import { cn } from '@monad/ui';
+import { useFirstItemIndex } from '@monad/ui/hooks/use-first-item-index';
 import dynamic from 'next/dynamic';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -57,7 +58,6 @@ import { audioBlobToBase64 } from '@/features/session/voice-transcription';
 import { SkillEditorDialog } from '@/features/studio/skills-settings/SkillEditorDialog';
 import { loadSkillContent } from '@/features/studio/skills-settings/utils';
 import { useChatComposer } from '@/hooks/use-chat-composer';
-import { useFirstItemIndex } from '@/hooks/use-first-item-index';
 import { useNavigableModal } from '@/hooks/use-navigable-modal';
 import { useSidebarShortcuts } from '@/hooks/use-sidebar-shortcuts';
 import { useTranscriptHistory } from '@/hooks/use-transcript-history';
@@ -121,13 +121,25 @@ export function AppShell() {
   const { data: commandsData } = useListCommandsQuery(undefined);
   const commands = commandsData?.commands ?? [];
   // Model profiles drive `/model <alias>` argument autocomplete.
-  const { data: profileData } = useListProfilesQuery(undefined);
+  const {
+    data: profileData,
+    isError: profileDataError,
+    isLoading: profileDataLoading
+  } = useListProfilesQuery(undefined);
   const profiles = profileData ? profileSelectors.selectAll(profileData.profiles) : EMPTY_PROFILES;
   const defaultProfile = profiles.find((profile) => profile.alias === profileData?.defaultAlias);
-  const { data: modelRoles } = useGetRolesQuery(undefined);
+  const { data: modelRoles, isError: modelRolesError, isLoading: modelRolesLoading } = useGetRolesQuery(undefined);
   const voiceModelConfigured = Boolean(
     modelRoles?.transcription && defaultProfile?.routes.chat.provider && defaultProfile.routes.chat.modelId
   );
+  const voiceModelState =
+    profileDataLoading || modelRolesLoading
+      ? 'checking'
+      : profileDataError || modelRolesError
+        ? 'failed'
+        : voiceModelConfigured
+          ? 'configured'
+          : 'missing';
   const [transcribeAudio] = useTranscribeAudioMutation();
   const [createSession] = useCreateSessionMutation();
   const [createWorkplaceProject] = useCreateWorkplaceProjectMutation();
@@ -748,7 +760,8 @@ export function AppShell() {
                 setStudioUrl();
               },
               onProjectDeleted: setWorkspaceUrl,
-              projects: workspaceProjects
+              projects: workspaceProjects,
+              voiceModelState
             }}
           />
         </div>

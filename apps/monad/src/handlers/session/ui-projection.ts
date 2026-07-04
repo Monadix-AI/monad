@@ -3,6 +3,7 @@ import type { NativeCliSessionSnapshot } from './ui-projection-helpers.ts';
 
 import { channelDisplayText, channelStructuredVisibility, parseEventPayload } from '@monad/protocol';
 
+import { findNativeCliProviderAdapter } from '@/services/native-cli/index.ts';
 import {
   agentNameFromData,
   appendBoundedText,
@@ -613,14 +614,7 @@ export class SessionUiProjector {
       }
       case 'native_cli.resume_failed': {
         const p = parseEventPayload('native_cli.resume_failed', event.payload);
-        const label =
-          p.provider === 'claude-code'
-            ? 'Claude Code'
-            : p.provider === 'gemini'
-              ? 'Gemini'
-              : p.provider === 'qwen'
-                ? 'Qwen'
-                : 'Codex';
+        const label = findNativeCliProviderAdapter(p.provider)?.label ?? p.provider;
         return [
           {
             kind: 'upsert',

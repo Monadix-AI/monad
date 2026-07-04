@@ -10,6 +10,9 @@ test('composer voice input records audio for backend transcription when a transc
   const composerUi = readWorkspaceSource('packages/ui/src/components/Composer.tsx');
 
   expect(hook).toContain('voice?.transcribeAudio && modelTranscriptionAvailable');
+  expect(hook).toContain(
+    'const voiceAvailable = voice?.transcribeAudio ? modelTranscriptionAvailable : speechRecognitionAvailable;'
+  );
   expect(hook).toContain('Voice input requires default and transcription models.');
   expect(hook).toContain('new MediaRecorder(stream)');
   expect(hook).toContain('.transcribeAudio?.(audio)');
@@ -34,10 +37,7 @@ test('composer voice input records audio for backend transcription when a transc
 
 test('voice input requires both a default model and transcription model role', () => {
   const appShell = readSource('features/shell/AppShell.tsx');
-  const workplaceComposer = readSource('features/workplace/Composer.tsx');
 
   expect(appShell).toContain('modelRoles?.transcription && defaultProfile?.routes.chat.provider');
-  expect(workplaceComposer).toContain('modelRoles?.transcription && defaultProfile?.routes.chat.provider');
   expect(appShell).not.toContain('modelRoles?.transcription && modelRoles.fast');
-  expect(workplaceComposer).not.toContain('modelRoles?.transcription && modelRoles.fast');
 });

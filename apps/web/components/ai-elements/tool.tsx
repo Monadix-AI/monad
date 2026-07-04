@@ -13,11 +13,11 @@ import {
 } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Badge, cn } from '@monad/ui';
+import { CodeBlock } from '@monad/ui/components/CodeBlock';
 import { isValidElement } from 'react';
 
 import { useT } from '@/components/I18nProvider';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { CodeBlock } from './code-block';
 
 export type ToolProps = ComponentProps<typeof Collapsible>;
 

@@ -1,24 +1,272 @@
 // Deferred: the gate() hook that routes high-risk tool calls through human approval
 // arrives with the oversight phase.
 
-import type { AtomKind, AtomPackManifestWire, MessageTypeDescriptor } from '@monad/protocol';
-import type { ChannelDefinition } from './channel.ts';
-import type { Connector } from './connector.ts';
-import type { HookDefinition } from './hook.ts';
-import type { ModelProvider } from './model.ts';
-import type { SandboxLauncher } from './sandbox.ts';
-import type { WorkspaceExperienceDefinition } from './workspace-experience.ts';
+import type { LocalePack, Translate } from '@monad/i18n';
+import type {
+  AtomKind,
+  AtomPackManifestWire,
+  ChannelCapabilities,
+  ChannelEnvVar,
+  ChannelInbound,
+  ChannelManifest,
+  ChannelType,
+  CommandKind,
+  CommandSource,
+  CommandSpec,
+  GenerationParams,
+  HookEvent,
+  HookInput,
+  HookOutput,
+  MessageTypeDescriptor,
+  ModelInfo,
+  ModelKind,
+  ModelModalities,
+  ModelPrice,
+  ModelProviderDescriptor,
+  Scope,
+  WorkspaceExperienceEntry,
+  WorkspaceExperienceHostApi
+} from '@monad/protocol';
+import type {
+  BuildNativeCliLaunchOptions,
+  NativeCliAcpDelivery,
+  NativeCliApprovalResolution,
+  NativeCliAppServerConnection,
+  NativeCliArgumentSupport,
+  NativeCliArgumentSupportProbe,
+  NativeCliAuthStatusProbe,
+  NativeCliErrorCode,
+  NativeCliInitializeContext,
+  NativeCliLaunchSpec,
+  NativeCliManagedRuntime,
+  NativeCliManagedRuntimeContext,
+  NativeCliModelOptionsProbe,
+  NativeCliOutputEvent,
+  NativeCliProviderAdapter,
+  NativeCliProviderHistoryContext,
+  NativeCliProviderHistoryPageContext,
+  NativeCliRuntimeHandle,
+  NativeCliStartPreflight,
+  NativeCliUsageProbe
+} from './agent-adapter.ts';
+import type { BinProbes } from './bin-probes.ts';
+import type {
+  ChannelAdapter,
+  ChannelAdapterFactory,
+  ChannelAtomConfig,
+  ChannelContext,
+  ChannelDefinition,
+  ChannelHarnessOptions,
+  ChannelLog,
+  ChannelTestHarness,
+  SendOptions,
+  SentMessage
+} from './channel.ts';
+import type {
+  BeliefExplanation,
+  BeliefMatch,
+  CommandAccess,
+  CommandDefinition,
+  CommandEffect,
+  CommandLog,
+  CommandModelInfo,
+  CommandResult,
+  CommandRunContext,
+  CommandSessionInfo,
+  CompactSummary,
+  ConsolidateMemorySummary,
+  ConsolidateSummary,
+  ContradictionCheckSummary
+} from './command.ts';
+import type { Connector, ConnectorHost } from './connector.ts';
+import type { HookDefinition, HookHandler } from './hook.ts';
+import type {
+  EmbedCall,
+  EmbedResult,
+  ImageCall,
+  ImageResult,
+  ModelCall,
+  ModelChunk,
+  ModelContentPart,
+  ModelMessage,
+  ModelProvider,
+  ModelResult,
+  ModelUsage,
+  ProviderCredential,
+  ProviderToolHint,
+  RerankCall,
+  RerankResult,
+  ResolvedProviderConfig,
+  SpeechCall,
+  SpeechResult,
+  ToolCall,
+  ToolSpec,
+  TranscriptionCall,
+  TranscriptionResult,
+  UsageLimits,
+  UsageSnapshot,
+  VideoCall,
+  VideoResult
+} from './model.ts';
+import type {
+  SandboxEnforcement,
+  SandboxLauncher,
+  SandboxPolicy,
+  SandboxProcess,
+  SandboxSpawnOptions
+} from './sandbox.ts';
+import type {
+  WorkspaceExperienceDefinition,
+  WorkspaceExperienceElement,
+  WorkspaceExperienceEventTarget,
+  WorkspaceExperienceUpdateEvent
+} from './workspace-experience.ts';
 
-export * from './channel.ts';
-export * from './command.ts';
-export * from './connector.ts';
-export * from './hook.ts';
-export * from './locale.ts';
-export * from './message-type.ts';
-export * from './model.ts';
-export * from './provider-usage.ts';
-export * from './sandbox.ts';
-export * from './workspace-experience.ts';
+import { NativeCliError, nativeCliOutputEventSchema } from './agent-adapter.ts';
+import { defaultBinProbes, resolveBinary } from './bin-probes.ts';
+import { assertChannelInbound, createChannelTestHarness, defineChannel, parseChannelManifest } from './channel.ts';
+import { defineCommand } from './command.ts';
+import { defineProvider } from './model.ts';
+import { extractCacheWrite, extractProviderCost, usageFromProviderMetadataJson } from './provider-usage.ts';
+import { configureSandboxCredential, defineLocalLauncher, noneLauncher, sandboxCredential } from './sandbox.ts';
+import {
+  bindWorkspaceExperience,
+  defineWorkspaceExperience,
+  WORKSPACE_EXPERIENCE_UPDATE_EVENT
+} from './workspace-experience.ts';
+
+export type {
+  BeliefExplanation,
+  BeliefMatch,
+  BinProbes,
+  BuildNativeCliLaunchOptions,
+  ChannelAdapter,
+  ChannelAdapterFactory,
+  ChannelAtomConfig,
+  ChannelCapabilities,
+  ChannelContext,
+  ChannelDefinition,
+  ChannelEnvVar,
+  ChannelHarnessOptions,
+  ChannelInbound,
+  ChannelLog,
+  ChannelManifest,
+  ChannelTestHarness,
+  ChannelType,
+  CommandAccess,
+  CommandDefinition,
+  CommandEffect,
+  CommandKind,
+  CommandLog,
+  CommandModelInfo,
+  CommandResult,
+  CommandRunContext,
+  CommandSessionInfo,
+  CommandSource,
+  CommandSpec,
+  CompactSummary,
+  Connector,
+  ConnectorHost,
+  ConsolidateMemorySummary,
+  ConsolidateSummary,
+  ContradictionCheckSummary,
+  EmbedCall,
+  EmbedResult,
+  GenerationParams,
+  HookDefinition,
+  HookEvent,
+  HookHandler,
+  HookInput,
+  HookOutput,
+  ImageCall,
+  ImageResult,
+  LocalePack,
+  MessageTypeDescriptor,
+  ModelCall,
+  ModelChunk,
+  ModelContentPart,
+  ModelInfo,
+  ModelKind,
+  ModelMessage,
+  ModelModalities,
+  ModelPrice,
+  ModelProvider,
+  ModelProviderDescriptor,
+  ModelResult,
+  ModelUsage,
+  NativeCliAcpDelivery,
+  NativeCliApprovalResolution,
+  NativeCliAppServerConnection,
+  NativeCliArgumentSupport,
+  NativeCliArgumentSupportProbe,
+  NativeCliAuthStatusProbe,
+  NativeCliErrorCode,
+  NativeCliInitializeContext,
+  NativeCliLaunchSpec,
+  NativeCliManagedRuntime,
+  NativeCliManagedRuntimeContext,
+  NativeCliModelOptionsProbe,
+  NativeCliOutputEvent,
+  NativeCliProviderAdapter,
+  NativeCliProviderHistoryContext,
+  NativeCliProviderHistoryPageContext,
+  NativeCliRuntimeHandle,
+  NativeCliStartPreflight,
+  NativeCliUsageProbe,
+  ProviderCredential,
+  ProviderToolHint,
+  RerankCall,
+  RerankResult,
+  ResolvedProviderConfig,
+  SandboxEnforcement,
+  SandboxLauncher,
+  SandboxPolicy,
+  SandboxProcess,
+  SandboxSpawnOptions,
+  Scope,
+  SendOptions,
+  SentMessage,
+  SpeechCall,
+  SpeechResult,
+  ToolCall,
+  ToolSpec,
+  TranscriptionCall,
+  TranscriptionResult,
+  Translate,
+  UsageLimits,
+  UsageSnapshot,
+  VideoCall,
+  VideoResult,
+  WorkspaceExperienceDefinition,
+  WorkspaceExperienceElement,
+  WorkspaceExperienceEntry,
+  WorkspaceExperienceEventTarget,
+  WorkspaceExperienceHostApi,
+  WorkspaceExperienceUpdateEvent
+};
+
+export {
+  assertChannelInbound,
+  bindWorkspaceExperience,
+  configureSandboxCredential,
+  createChannelTestHarness,
+  defaultBinProbes,
+  defineChannel,
+  defineCommand,
+  defineLocalLauncher,
+  defineProvider,
+  defineWorkspaceExperience,
+  extractCacheWrite,
+  extractProviderCost,
+  NativeCliError,
+  nativeCliOutputEventSchema,
+  noneLauncher,
+  parseChannelManifest,
+  resolveBinary,
+  sandboxCredential,
+  usageFromProviderMetadataJson,
+  WORKSPACE_EXPERIENCE_UPDATE_EVENT
+};
 
 /** The SDK contract version. Atom packs are built against it; the host checks compatibility at load.
  *  Single source of truth — bump when the atom pack/channel contract changes incompatibly. */
@@ -71,6 +319,9 @@ export interface AtomPackContext {
   registerMessageType(descriptor: MessageTypeDescriptor): void;
   registerProvider(provider: ModelProvider): void;
   registerHook(hook: HookDefinition): void;
+  /** Register a native coding-CLI agent adapter (Codex, Claude Code, …). The daemon collects them
+   *  into the native-CLI registry keyed by provider and owns the process/pty/socket lifecycle. */
+  registerAgentAdapter(adapter: NativeCliProviderAdapter): void;
   /** Register an OS/remote sandbox launcher. The daemon collects launchers into a registry and
    *  selects one per platform at boot — the LLM-facing tools (code_execute/…) are unchanged. */
   registerSandbox(launcher: SandboxLauncher): void;
@@ -96,6 +347,8 @@ export interface ManifestAtomPackHost {
   registerProvider?(provider: ModelProvider): void;
   /** Optional: hosts that don't support lifecycle hooks omit it; a hook registration then throws. */
   registerHook?(hook: HookDefinition): void;
+  /** Optional: hosts that don't support agent adapters omit it; registration then throws. */
+  registerAgentAdapter?(adapter: NativeCliProviderAdapter): void;
   /** Optional: hosts that don't support sandbox launchers omit it; a sandbox registration then throws. */
   registerSandbox?(launcher: SandboxLauncher): void;
   /** Optional: hosts that don't support workspace experiences omit it; registration then throws. */
@@ -115,6 +368,7 @@ export function defineAtomPack(spec: {
   messageTypes?: MessageTypeDescriptor[];
   providers?: ModelProvider[];
   hooks?: HookDefinition[];
+  agentAdapters?: NativeCliProviderAdapter[];
   sandboxes?: SandboxLauncher[];
   workspaceExperienceApis?: WorkspaceExperienceApi[];
   workspaceExperiences?: WorkspaceExperienceDefinition[];
@@ -128,6 +382,7 @@ export function defineAtomPack(spec: {
       for (const mt of spec.messageTypes ?? []) ctx.registerMessageType(mt);
       for (const provider of spec.providers ?? []) ctx.registerProvider(provider);
       for (const hook of spec.hooks ?? []) ctx.registerHook(hook);
+      for (const adapter of spec.agentAdapters ?? []) ctx.registerAgentAdapter(adapter);
       for (const sandbox of spec.sandboxes ?? []) ctx.registerSandbox(sandbox);
       for (const experience of spec.workspaceExperiences ?? []) ctx.registerWorkspaceExperience(experience);
       for (const api of spec.workspaceExperienceApis ?? []) ctx.registerWorkspaceExperienceApi(api);
@@ -180,6 +435,11 @@ export async function loadManifestAtomPack(
       gate('hook');
       if (!host.registerHook) throw new Error(`host does not accept lifecycle hooks (atom pack "${name}")`);
       host.registerHook(h);
+    },
+    registerAgentAdapter: (a) => {
+      gate('agent-adapter');
+      if (!host.registerAgentAdapter) throw new Error(`host does not accept agent adapters (atom pack "${name}")`);
+      host.registerAgentAdapter(a);
     },
     registerSandbox: (s) => {
       gate('sandbox');

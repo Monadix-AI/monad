@@ -51,10 +51,8 @@ test('native CLI auth terminal remounts when the connect session changes', () =>
   expect(source).toContain('key={id}');
 });
 
-test('native CLI auth callers clear the previous connect window before starting another provider', () => {
-  const workplace = readSource('features/workplace/Workplace.tsx');
+test('native CLI settings clears the previous connect window before starting another provider', () => {
   const settings = readSource('features/studio/third-party-agents/NativeCliAgentsSettings.tsx');
 
-  expect(workplace).toContain('clearNativeCliAuthSession();');
   expect(settings).toContain('setAuthSession(null);');
 });

@@ -10,9 +10,9 @@ import { existsSync } from 'node:fs';
 import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { buildBwrapArgs, bwrapLauncher } from '@monad/atoms/sandbox/bwrap';
 
 import { configureSandboxLauncher, noneLauncher, sandboxedSpawn } from '@/capabilities/tools';
-import { buildBwrapArgs, bwrapLauncher } from '../../../../../packages/atoms/src/sandbox/bwrap.ts';
 
 afterEach(() => configureSandboxLauncher(noneLauncher));
 

@@ -58,11 +58,22 @@ function createNativeCliObservationSseResponse(
   handlers: ReturnType<typeof createDaemonHandlers>,
   id: string,
   transcriptTargetId: `ses_${string}` | `prj_${string}`,
-  encoder: TextEncoder
+  encoder: TextEncoder,
+  afterSeq?: number
 ): Response {
   return createPushSseResponse<NativeCliObservationAccessResponse>({
     encoder,
-    encode: (access) => encodeSseFrame({ event: 'native_cli.observation', data: access }, encoder),
+    // Tag each frame with the output cursor so the client's SSE engine sends it back as
+    // last-event-id on reconnect, letting the server resume from a delta instead of a full snapshot.
+    encode: (access) =>
+      encodeSseFrame(
+        {
+          id: access.state === 'live' && access.seq !== undefined ? String(access.seq) : undefined,
+          event: 'native_cli.observation',
+          data: access
+        },
+        encoder
+      ),
     subscribe: (emit) => {
       let disposed = false;
       let disposeLive = (): void => {};
@@ -77,7 +88,8 @@ function createNativeCliObservationSseResponse(
           const subscription = handlers.nativeCli.subscribeObservation({
             id,
             transcriptTargetId,
-            onObservation: (access, done) => emit(access, done)
+            onObservation: (access, done) => emit(access, done),
+            afterSeq
           });
           disposeLive = subscription.dispose;
           emit(subscription.access, !subscription.live);
@@ -146,8 +158,13 @@ export function createNativeCliController(handlers: ReturnType<typeof createDaem
     )
     .get(
       '/native-cli-sessions/:id/observation-stream',
-      ({ params, query }) =>
-        createNativeCliObservationSseResponse(handlers, params.id, query.transcriptTargetId, encoder),
+      ({ params, query, headers }) => {
+        // Standard SSE resume: the client re-sends its last frame id (the output cursor) on reconnect,
+        // so the server can backfill just the delta instead of the whole snapshot.
+        const lastEventId = Number(headers['last-event-id']);
+        const afterSeq = Number.isSafeInteger(lastEventId) && lastEventId >= 0 ? lastEventId : undefined;
+        return createNativeCliObservationSseResponse(handlers, params.id, query.transcriptTargetId, encoder, afterSeq);
+      },
       {
         params: nativeCliParams,
         query: nativeCliScopeQuery,
@@ -183,6 +200,27 @@ export function createNativeCliController(handlers: ReturnType<typeof createDaem
         body: nativeCliInputRequestSchema,
         response: { 200: okResponseSchema },
         detail: { summary: 'Send input to a native CLI session' }
+      }
+    )
+    .post(
+      '/native-cli-sessions/:id/interrupt',
+      ({ params, query }) => handlers.nativeCli.interrupt({ id: params.id, ...query }),
+      {
+        params: nativeCliParams,
+        query: nativeCliScopeQuery,
+        response: { 200: okResponseSchema },
+        detail: { summary: 'Cancel the in-flight turn of a native CLI session' }
+      }
+    )
+    .post(
+      '/native-cli-sessions/:id/steer',
+      ({ params, query, body }) => handlers.nativeCli.steer({ id: params.id, ...query, ...body }),
+      {
+        params: nativeCliParams,
+        query: nativeCliScopeQuery,
+        body: nativeCliInputRequestSchema,
+        response: { 200: okResponseSchema },
+        detail: { summary: 'Inject input into the in-flight turn of a native CLI session' }
       }
     )
     .post(

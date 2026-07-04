@@ -5,9 +5,8 @@ import { BoxIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { isHttpUrl, pickRepresentation } from '@monad/protocol';
 import { Button, cn } from '@monad/ui';
-
-import { Markdown } from '@/components/Markdown';
-import { MentionText } from '@/components/MentionText';
+import { Markdown } from '@monad/ui/components/Markdown';
+import { MentionText } from '@monad/ui/components/MentionText';
 
 // Tool calls/results are NOT here — they are paired into inline ToolStepView items upstream in
 // chat.tsx's viewMessages and never reach MessageBody. This client owns the `card` renderer;

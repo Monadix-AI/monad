@@ -67,6 +67,8 @@ export interface DaemonHandlerDeps extends SessionDeps, ModelDeps {
   rediscoverAtomPacks?: () => Promise<void>;
   /** Bare-name collisions surfaced from the last load sweep (for the conflict UI). */
   getAtomConflicts?: () => AtomConflict[];
+  /** Per-pack individual atoms (by pack folder name) from the last load sweep, for the detail view. */
+  getAtomDetails?: (packName: string) => import('@monad/protocol').AtomDescriptor[] | undefined;
   /** Workspace experiences registered by atom packs during the last load sweep. */
   getWorkspaceExperiences?: () => import('@monad/protocol').WorkspaceExperienceDefinition[];
   /** Workspace experience API routes registered by atom packs during the last load sweep. */

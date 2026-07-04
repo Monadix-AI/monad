@@ -1,0 +1,38 @@
+#!/usr/bin/env bun
+import { readdir } from 'node:fs/promises';
+import { dirname, join, resolve } from 'node:path';
+
+// Enumerate the avatar styles shipped by the installed @dicebear/styles package (one
+// `dist/<slug>.min.json` per style) and emit the slug union as a local generated artifact, so the
+// wire enum in packages/protocol/src/avatar.ts is derived from the package rather than
+// hand-maintained. Generated artifacts are reproducible and not committed.
+// Re-run after bumping @dicebear/styles: `bun run protocol:avatar-styles`.
+// apps/monad owns the @dicebear/styles dependency, so resolve from there (bun does not hoist).
+
+const ROOT = resolve(import.meta.dir, '..');
+const OUT = join(ROOT, 'packages/protocol/generated/avatar-styles.ts');
+
+const stylesEntry = Bun.resolveSync('@dicebear/styles/adventurer.json', join(ROOT, 'apps/monad'));
+const distDir = dirname(stylesEntry);
+
+const slugs = (await readdir(distDir))
+  .filter((file) => file.endsWith('.min.json'))
+  .map((file) => file.slice(0, -'.min.json'.length))
+  .sort();
+
+if (slugs.length === 0) throw new Error('generate-avatar-styles: no styles found in @dicebear/styles');
+
+const body = `// GENERATED CODE — DO NOT EDIT. Run \`bun run protocol:avatar-styles\` to regenerate.
+// The full set of avatar styles shipped by @dicebear/styles, enumerated from the installed package
+// so the wire enum in avatar.ts never has to be hand-maintained. avatar-styles.test.ts asserts this
+// still matches the package, so a @dicebear/styles upgrade that adds/removes a style fails a test.
+
+export const AVATAR_STYLE_SLUGS = [
+${slugs.map((slug) => `  '${slug}'`).join(',\n')}
+] as const;
+`;
+
+await Bun.write(OUT, body);
+process.stdout.write(
+  `[generate-avatar-styles] ${slugs.length} styles → packages/protocol/generated/avatar-styles.ts\n`
+);

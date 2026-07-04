@@ -1,9 +1,8 @@
 import type { NativeCliOutputEvent } from '@/services/native-cli/types.ts';
 
 import { describe, expect, test } from 'bun:test';
+import { claudeCodeNativeCliAdapter, codexNativeCliAdapter } from '@monad/atoms/agent-adapters';
 
-import { claudeCodeNativeCliAdapter } from '@/services/native-cli/claude-code.ts';
-import { codexNativeCliAdapter } from '@/services/native-cli/codex.ts';
 import { nativeCliOutputEventSchema } from '@/services/native-cli/types.ts';
 
 const CODEX_SESSION = process.env.MONAD_NATIVE_CLI_REAL_CODEX_SESSION;

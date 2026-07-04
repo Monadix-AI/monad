@@ -50,6 +50,7 @@ import { createBrowserPresetSettingsController } from '@/transports/http/setting
 import { createChannelSettingsController } from '@/transports/http/settings/channel.ts';
 import { createComputerPresetSettingsController } from '@/transports/http/settings/computer-preset.ts';
 import { createDeveloperSettingsController } from '@/transports/http/settings/developer.ts';
+import { createFrameworkAgentSettingsController } from '@/transports/http/settings/framework-agent.ts';
 import { createHooksSettingsController } from '@/transports/http/settings/hooks.ts';
 import { createSettingsImportController } from '@/transports/http/settings/import.ts';
 import { createMcpServerSettingsController } from '@/transports/http/settings/mcp-server.ts';
@@ -331,6 +332,7 @@ export function createHttpTransport(
             .use(createChannelSettingsController(handlers))
             .use(createPeerSettingsController(handlers))
             .use(createAcpAgentSettingsController(handlers))
+            .use(createFrameworkAgentSettingsController(handlers))
             .use(createNativeCliAgentSettingsController(handlers))
             .use(createMcpServerSettingsController(handlers))
             .use(createObscuraSettingsController(handlers))

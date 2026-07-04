@@ -172,13 +172,14 @@ export function toPublicWorkspaceExperience(
   experience: RegisteredWorkspaceExperience
 ): WorkspaceExperienceDefinition | null {
   const { atomPackId: _atomPackId, ...publicExperience } = experience;
+  if (experience.entry.type !== 'web-component') return publicExperience;
   if (!experience.atomPackId || !isPackRelativeModule(experience.entry.module)) return publicExperience;
   const module = atomPackAssetUrl(experience.atomPackId, experience.entry.module);
   if (!module) return null;
   return {
     ...publicExperience,
     entry: {
-      ...publicExperience.entry,
+      ...experience.entry,
       module
     }
   };

@@ -1,60 +1,27 @@
 import { z } from 'zod';
 
-// All avatar styles bundled by @dicebear/styles (https://www.dicebear.com/licenses/), offered as a
-// profile picture style choice. This must match the full style set: the server only bundles (and
-// can only render) the styles imported below. Adding/removing a slug here also requires updating
-// the AVATAR_STYLES list in scripts/generate-licenses.ts and the static imports in avatar-cache.ts.
-export const AVATAR_STYLES = [
-  { slug: 'adventurer', label: 'Adventurer' },
-  { slug: 'adventurer-neutral', label: 'Adventurer Neutral' },
-  { slug: 'avataaars', label: 'Avataaars' },
-  { slug: 'avataaars-neutral', label: 'Avataaars Neutral' },
-  { slug: 'big-ears', label: 'Big Ears' },
-  { slug: 'big-ears-neutral', label: 'Big Ears Neutral' },
-  { slug: 'big-smile', label: 'Big Smile' },
-  { slug: 'bottts', label: 'Bottts' },
-  { slug: 'bottts-neutral', label: 'Bottts Neutral' },
-  { slug: 'croodles', label: 'Croodles' },
-  { slug: 'croodles-neutral', label: 'Croodles Neutral' },
-  { slug: 'disco', label: 'Disco' },
-  { slug: 'dylan', label: 'Dylan' },
-  { slug: 'fun-emoji', label: 'Fun Emoji' },
-  { slug: 'glass', label: 'Glass' },
-  { slug: 'glyphs', label: 'Glyphs' },
-  { slug: 'icons', label: 'Icons' },
-  { slug: 'identicon', label: 'Identicon' },
-  { slug: 'initial-face', label: 'Initial Face' },
-  { slug: 'initials', label: 'Initials' },
-  { slug: 'lorelei', label: 'Lorelei' },
-  { slug: 'lorelei-neutral', label: 'Lorelei Neutral' },
-  { slug: 'micah', label: 'Micah' },
-  { slug: 'miniavs', label: 'Miniavs' },
-  { slug: 'notionists', label: 'Notionists' },
-  { slug: 'notionists-neutral', label: 'Notionists Neutral' },
-  { slug: 'open-peeps', label: 'Open Peeps' },
-  { slug: 'personas', label: 'Personas' },
-  { slug: 'pixel-art', label: 'Pixel Art' },
-  { slug: 'pixel-art-neutral', label: 'Pixel Art Neutral' },
-  { slug: 'rings', label: 'Rings' },
-  { slug: 'shape-grid', label: 'Shape Grid' },
-  { slug: 'shapes', label: 'Shapes' },
-  { slug: 'stripes', label: 'Stripes' },
-  { slug: 'thumbs', label: 'Thumbs' },
-  { slug: 'toon-head', label: 'Toon Head' },
-  { slug: 'triangles', label: 'Triangles' }
-] as const;
+// The full set of avatar styles bundled by @dicebear/styles (https://www.dicebear.com/licenses/),
+// offered as a profile-picture choice. AVATAR_STYLE_SLUGS is GENERATED from the installed package
+// (`bun run protocol:avatar-styles`) — not hand-maintained — and is the one source of truth for the
+// style SET: the wire enum below and the static imports in avatar-cache.ts both derive from it
+// (avatar-cache's `Record<AvatarStyle, …>` is compile-time-locked to this union, so a missing/extra
+// style is a type error). `apps/monad/test/unit/avatar-styles.test.ts` asserts the generated list
+// still equals the installed package, so a @dicebear/styles upgrade that adds/drops a style fails a
+// test until the file is regenerated.
+import { AVATAR_STYLE_SLUGS } from '../generated/avatar-styles.ts';
 
-export type AvatarStyle = (typeof AVATAR_STYLES)[number]['slug'];
+export { AVATAR_STYLE_SLUGS };
+
+export type AvatarStyle = (typeof AVATAR_STYLE_SLUGS)[number];
 
 export const DEFAULT_AVATAR_STYLE: AvatarStyle = 'notionists';
 
-const avatarStyleValues = AVATAR_STYLES.map((style) => style.slug) as [AvatarStyle, ...AvatarStyle[]];
-export const avatarStyleSchema = z.enum(avatarStyleValues);
+export const avatarStyleSchema = z.enum(AVATAR_STYLE_SLUGS);
 
-const AVATAR_STYLE_SLUGS: ReadonlySet<string> = new Set(AVATAR_STYLES.map((style) => style.slug));
+const AVATAR_STYLE_SLUG_SET: ReadonlySet<string> = new Set(AVATAR_STYLE_SLUGS);
 
 export function isAvatarStyle(value: string): value is AvatarStyle {
-  return AVATAR_STYLE_SLUGS.has(value);
+  return AVATAR_STYLE_SLUG_SET.has(value);
 }
 
 // Attribution required by each style's license (served via GET /api/v1/licenses alongside npm

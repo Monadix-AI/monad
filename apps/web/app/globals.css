@@ -357,6 +357,65 @@
 }
 
 @layer components {
+  /* Provider atom table (studio/atoms): logo · name · id · strategy · endpoint, aligned via
+     subgrid so every row's columns line up. Only the `provider` kind uses it; other detail kinds
+     keep the plain id/name/description list. */
+  .pv-table {
+    display: grid;
+    grid-template-columns: min-content minmax(110px, 1.1fr) minmax(70px, 0.8fr) min-content minmax(0, 1.4fr);
+    row-gap: 2px;
+    column-gap: 14px;
+    align-items: center;
+  }
+
+  .pv-table > .pv-trow {
+    display: grid;
+    grid-template-columns: subgrid;
+    grid-column: 1 / -1;
+    align-items: center;
+    padding-block: 3px;
+    padding-inline: 6px;
+    border-radius: 6px;
+  }
+
+  .pv-table .pv-mark {
+    width: 22px;
+    height: 22px;
+  }
+
+  .pv-table .pv-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--foreground);
+    white-space: nowrap;
+  }
+
+  .pv-table .pv-id {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 11px;
+    color: var(--muted-foreground);
+  }
+
+  .pv-table .pv-strategy {
+    font-size: 10.5px;
+    font-weight: 500;
+    color: color-mix(in srgb, var(--link) 90%, transparent);
+    white-space: nowrap;
+  }
+
+  .pv-table .pv-host {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 10.5px;
+    color: color-mix(in srgb, var(--muted-foreground) 78%, transparent);
+    white-space: nowrap;
+  }
+
   .panel-nav {
     position: relative;
     background: var(--sidebar);

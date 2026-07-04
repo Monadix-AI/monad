@@ -29,9 +29,9 @@ import {
   Switch,
   Textarea
 } from '@monad/ui';
+import { Markdown } from '@monad/ui/components/Markdown';
 
 import { useT } from '@/components/I18nProvider';
-import { Markdown } from '@/components/Markdown';
 import { type CapabilityItem, INHERIT, MODEL_ROLES, SANDBOX_MODES, type WorkshopPart } from './AgentWorkshopPrimitives';
 
 interface AgentWorkshopInspectorProps {

@@ -6,7 +6,7 @@ export { isHttpUrl } from './url.ts';
 
 // The message-type registry: the single shared source describing how each `type` renders, degrades,
 // and participates in the LLM context. Read by the daemon (enforcement), the store (defaults), and
-// every UI client / channel adaptor (degradation). Holds descriptor DATA only — never render
+// every UI client / channel adapter (degradation). Holds descriptor DATA only — never render
 // components, which live in the UI packages keyed by `type`.
 
 /** A representation a renderer can target, in degradation order. `text` is always the terminal step. */
@@ -124,7 +124,7 @@ export function validateMessageData(
   return r.success ? { ok: true, data: r.data } : { ok: false, error: r.error.message };
 }
 
-/** What a renderer can do. Used by both our own UI clients (client-side) and a channel adaptor
+/** What a renderer can do. Used by both our own UI clients (client-side) and a channel adapter
  * (server-side) to pick a representation — the single shared degradation computation. */
 export interface ClientRenderCaps {
   /** Types this client owns a rich `data` renderer for. */

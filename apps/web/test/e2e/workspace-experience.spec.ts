@@ -37,6 +37,7 @@ class MockCanvas extends HTMLElement {
     }
     this.dataset.hostProjectId = host.snapshot.projectId;
     this.dataset.embedded = String(host.embedded);
+    this.dataset.apiBaseUrl = host.apiBaseUrl || '';
     if (this.dataset.apiResult) {
       this.textContent = 'mock canvas mounted for ' + host.snapshot.projectId + ' via ' + this.dataset.apiResult;
       return;
@@ -44,7 +45,7 @@ class MockCanvas extends HTMLElement {
     this.textContent = 'mock canvas mounted for ' + host.snapshot.projectId;
     if (this.dataset.calledApi) return;
     this.dataset.calledApi = 'true';
-    const response = await fetch('/api/v1/atoms/workspace-experiences/mock-canvas/api/search', {
+    const response = await fetch(host.apiBaseUrl + '/search', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ query: host.snapshot.projectId })
@@ -177,6 +178,7 @@ test.describe('workspace experience atoms', () => {
     await expect(canvas).toHaveAttribute('data-experience-id', 'mock-canvas');
     await expect(canvas).toHaveAttribute('data-host-project-id', projectId);
     await expect(canvas).toHaveAttribute('data-embedded', 'true');
+    await expect(canvas).toHaveAttribute('data-api-base-url', '/api/v1/atoms/workspace-experiences/mock-canvas/api');
     await expect(canvas).toHaveAttribute('data-api-result', `api:${projectId}`);
     await expect(canvas).toContainText(`mock canvas mounted for ${projectId} via api:${projectId}`);
   });

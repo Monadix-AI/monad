@@ -10,6 +10,7 @@ import {
 } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { useWorkspaceActionMutation, useWorkspaceMetaQuery } from '@monad/client-rtk';
+import { workspaceMono as mono } from '@monad/ui/components/AgentAvatar';
 import { useState } from 'react';
 
 import { useT } from '@/components/I18nProvider';
@@ -20,7 +21,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
-import { mono } from '../styles';
 
 function workdirLabel(path: string | undefined, fallback: string): string {
   if (!path) return fallback;

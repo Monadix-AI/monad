@@ -30,6 +30,11 @@ const lastFingerprint = new WeakMap<AtomPackRegistry, string>();
 export interface ApplyAcpDelegateDeps {
   registry: AtomPackRegistry;
   agents: AcpAgentConfig[];
+  /** ACP-capable installed agent-adapters offered as delegable without hand-config (the caller resolves
+   *  these from the adapter registry via acpAgentCandidatesFromAdapters). Merged with `agents`; a config
+   *  entry of the same name wins. Defaults to none, so tests/callers that don't want them stay hermetic
+   *  (no dependency on the machine's installed tools). */
+  adapterCandidates?: AcpAgentConfig[];
   /** Oversight gate the sub-agent's permission requests route through (stable across reloads). */
   gate?: ToolGate;
   /** monad's configured MCP servers — forwarded so the delegated sub-agent shares the same tools. */
@@ -46,8 +51,21 @@ export interface ApplyAcpDelegateDeps {
  * nothing); otherwise it is (re)registered, overwriting any prior build so the description reflects the
  * current roster — and so the forwarded MCP server set reflects the current config.
  */
-export function applyAcpDelegateTool({ registry, agents, gate, mcpServers, auth, store }: ApplyAcpDelegateDeps): void {
-  const enabled = agents.filter((a) => a.enabled);
+export function applyAcpDelegateTool({
+  registry,
+  agents,
+  adapterCandidates,
+  gate,
+  mcpServers,
+  auth,
+  store
+}: ApplyAcpDelegateDeps): void {
+  // Roster = operator-configured agents ∪ ACP-capable, installed agent-adapters (first-party agents that
+  // ship a pinned ACP wrapper are delegable without hand-config). A config entry overrides an adapter
+  // candidate of the same name, so the operator can still customize (env/sandbox/disable) a built-in.
+  const configuredNames = new Set(agents.map((a) => a.name));
+  const merged = [...agents, ...(adapterCandidates ?? []).filter((c) => !configuredNames.has(c.name))];
+  const enabled = merged.filter((a) => a.enabled);
   if (enabled.length === 0) {
     const fp = 'cleared';
     if (lastFingerprint.get(registry) === fp) return; // already cleared — nothing to do
@@ -64,7 +82,10 @@ export function applyAcpDelegateTool({ registry, agents, gate, mcpServers, auth,
   // Skip the re-register when nothing the tool depends on changed (see lastFingerprint).
   const fp = JSON.stringify({ agents: enabled, forwarded });
   if (lastFingerprint.get(registry) === fp) return;
-  registry.registerTool(createAcpDelegateTool({ agents, gate, mcpServers: forwarded, store }), ACP_DELEGATE_SOURCE);
+  registry.registerTool(
+    createAcpDelegateTool({ agents: merged, gate, mcpServers: forwarded, store }),
+    ACP_DELEGATE_SOURCE
+  );
   lastFingerprint.set(registry, fp);
   log.info(
     { agents: enabled.map((a) => a.name), mcpServers: forwarded.map((s) => s.name) },

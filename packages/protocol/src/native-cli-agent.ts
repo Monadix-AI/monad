@@ -10,14 +10,26 @@ import {
   transcriptTargetIdSchema
 } from './ids.ts';
 
-export const nativeCliProviderSchema = z.enum(['codex', 'claude-code', 'gemini', 'qwen']);
-export type NativeCliProvider = z.infer<typeof nativeCliProviderSchema>;
+// Provider / product-icon are OPEN string unions (conventions.md §6): the known first-party ids give
+// autocomplete + exhaustiveness hints, but a third-party `agent-adapter` atom pack may introduce a new
+// provider id, so the wire schema is `z.string()` and consumers must default-handle unknown ids
+// (icon/label fall back). The `KNOWN_*` tuples are the built-in set for seeding/tests.
+export const KNOWN_NATIVE_CLI_PROVIDERS = ['codex', 'claude-code', 'gemini', 'qwen'] as const;
+export type NativeCliProvider = (typeof KNOWN_NATIVE_CLI_PROVIDERS)[number] | (string & {});
+export const nativeCliProviderSchema: z.ZodType<NativeCliProvider> = z.string().min(1);
 
-export const nativeCliProductIconSchema = z.enum(['codex', 'claude-code', 'gemini', 'qwen']);
-export type NativeCliProductIcon = z.infer<typeof nativeCliProductIconSchema>;
+export const KNOWN_NATIVE_CLI_PRODUCT_ICONS = ['codex', 'claude-code', 'gemini', 'qwen'] as const;
+export type NativeCliProductIcon = (typeof KNOWN_NATIVE_CLI_PRODUCT_ICONS)[number] | (string & {});
+export const nativeCliProductIconSchema: z.ZodType<NativeCliProductIcon> = z.string().min(1);
 
 export const nativeCliLaunchModeSchema = z.enum(['pty', 'json-stream', 'app-server', 'remote-control']);
 export type NativeCliLaunchMode = z.infer<typeof nativeCliLaunchModeSchema>;
+
+// Byte channel between the daemon and a provider's app-server. `stdio` (newline-delimited JSON over
+// the child's stdin/stdout) is the canonical embedded transport; `ws`/`unix` have the provider listen
+// on a WebSocket / Unix-domain socket the daemon then dials. Only meaningful for `app-server` launches.
+export const nativeCliAppServerTransportSchema = z.enum(['stdio', 'ws', 'unix']);
+export type NativeCliAppServerTransport = z.infer<typeof nativeCliAppServerTransportSchema>;
 
 export const nativeCliAgentNameSchema = z
   .string()
@@ -37,6 +49,7 @@ export const workplaceProjectMemberSettingsSchema = z.object({
   osSandbox: z.boolean().optional(),
   forwardMcp: z.boolean().optional(),
   launchMode: nativeCliLaunchModeSchema.optional(),
+  appServerTransport: nativeCliAppServerTransportSchema.optional(),
   managedProjectAgent: z.boolean().optional(),
   modelName: z.string().min(1).optional(),
   modelId: z.string().min(1).optional(),
@@ -86,8 +99,10 @@ export const nativeCliAgentViewSchema = z
     env: z.record(z.string(), z.string()).optional(),
     modelOptions: z.array(z.string().min(1)).optional(),
     reasoningEfforts: z.array(z.string().min(1)).optional(),
+    reasoningEffortsByModel: z.record(z.string(), z.array(z.string().min(1))).optional(),
     enabled: z.boolean(),
     defaultLaunchMode: nativeCliLaunchModeSchema.default('pty'),
+    appServerTransport: nativeCliAppServerTransportSchema.optional(),
     allowDangerousMode: z.boolean().default(false),
     approvalOwnership: nativeCliApprovalOwnershipSchema.default('provider-owned'),
     capabilities: nativeCliAgentCapabilitiesSchema.optional()
@@ -125,6 +140,7 @@ export const nativeCliAgentPresetSchema = z.object({
   reasoningEfforts: z.array(z.string().min(1)).optional(),
   defaultLaunchMode: nativeCliLaunchModeSchema,
   supportedLaunchModes: z.array(nativeCliLaunchModeSchema),
+  supportedAppServerTransports: z.array(nativeCliAppServerTransportSchema).optional(),
   installHint: z.string(),
   installUrl: z.string().url(),
   installed: z.boolean(),
@@ -388,13 +404,20 @@ export const nativeAgentObservationProjectionSchema = z.discriminatedUnion('stat
 export type NativeAgentObservationProjection = z.infer<typeof nativeAgentObservationProjectionSchema>;
 
 export const nativeCliObservationAccessResponseSchema = z.discriminatedUnion('state', [
+  // A live observation frame is either a full snapshot (`output`, sent first and on resync) or an
+  // incremental delta (`append`, the text produced since `seq - append.length`). `seq` is the
+  // cumulative output length after this frame — the consumer's cursor: it replaces on `output`, and
+  // on `append` applies only the tail past its current cursor (deltas may overlap a just-taken
+  // snapshot). This lets the stream push per-token deltas instead of the whole 256 KB buffer each tick.
   z.object({
     state: z.literal('live'),
     nativeCliSessionId: z.string().regex(/^ncli_/),
     deliveryId: nativeAgentDeliveryIdSchema.optional(),
     turn: nativeAgentTurnPointerSchema.optional(),
     provider: nativeCliProviderSchema,
-    output: z.string(),
+    output: z.string().optional(),
+    append: z.string().optional(),
+    seq: z.number().int().nonnegative().optional(),
     observedAt: z.string()
   }),
   z.object({

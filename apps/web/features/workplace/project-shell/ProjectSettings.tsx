@@ -1,14 +1,23 @@
+import type { ProjectController } from '../use-project';
+
 import { ChevronRightIcon, Delete02Icon, MinusSignIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { ProductIcon } from '@monad/ui';
+import {
+  AgentIdentity,
+  AgentInstanceAvatar,
+  workspaceBoxRadius as boxR,
+  workspaceMono as mono,
+  PresenceBadge,
+  resolveProductIcon,
+  workspaceSans as sans,
+  workspaceSectionLabelStyle as sectionLabel
+} from '@monad/ui/components/AgentAvatar';
 import { useCallback, useEffect, useState } from 'react';
 
 import { useT } from '@/components/I18nProvider';
 import { defaultReasoningEffort } from '@/components/ReasoningEffortControl';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
-import { AgentIdentity, AgentInstanceAvatar, PresenceBadge, resolveProductIcon } from '../Bits';
-import { boxR, mono, sans, sectionLabel } from '../styles';
-import { type ProjectController, projectMemberParticipants } from '../use-project';
 import {
   NativeCliMemberDialog,
   type NativeCliMemberDialogState,
@@ -45,7 +54,7 @@ export function ProjectSettings({
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [nativeCliInvite, setNativeCliInvite] = useState<NativeCliMemberDialogState | null>(null);
-  const projectParticipants = projectMemberParticipants(room.participants);
+  const projectParticipants = room.projectParticipants;
   const regularCandidates = room.availableProjectMembers.filter((candidate) => candidate.type !== 'native-cli');
   const nativeCliCandidates = room.availableProjectMembers.filter((candidate) => candidate.type === 'native-cli');
 

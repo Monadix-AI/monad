@@ -1,16 +1,4 @@
-export type NativeCliErrorCode =
-  | 'provider_not_installed'
-  | 'provider_not_logged_in'
-  | 'unsupported_capability'
-  | 'provider_timeout'
-  | 'provider_protocol_error';
+// Moved to @monad/sdk-atom (shared by the agent-adapter atoms and the daemon). Re-exported here so
+// existing daemon imports keep resolving.
 
-export class NativeCliError extends Error {
-  constructor(
-    readonly code: NativeCliErrorCode,
-    message: string
-  ) {
-    super(message);
-    this.name = 'NativeCliError';
-  }
-}
+export { NativeCliError } from '@monad/sdk-atom';

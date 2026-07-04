@@ -2,10 +2,16 @@ import type { ProjectController } from '../use-project';
 
 import { PlusSignIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
+import {
+  AgentIdentity,
+  AgentInstanceAvatar,
+  workspaceBoxRadius as boxR,
+  workspaceMono as mono,
+  workspaceSans as sans,
+  workspaceSectionLabelStyle as sectionLabel
+} from '@monad/ui/components/AgentAvatar';
 
 import { useT } from '@/components/I18nProvider';
-import { AgentIdentity, AgentInstanceAvatar } from '../Bits';
-import { boxR, mono, sans, sectionLabel } from '../styles';
 
 type AvailableProjectMember = ProjectController['availableProjectMembers'][number];
 

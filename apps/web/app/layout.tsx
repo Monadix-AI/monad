@@ -12,6 +12,11 @@ export const metadata: Metadata = {
   description: 'monad agent interface'
 };
 
+const launchEditorPathFix =
+  process.env.NODE_ENV === 'production'
+    ? null
+    : `(()=>{const originalFetch=window.fetch.bind(window);function normalize(file){if(!file)return file;for(const prefix of ['./apps/web/','apps/web/','/apps/web/']){if(file.startsWith(prefix))return './'+file.slice(prefix.length)}return file}function rewrite(input){try{const url=new URL(input,location.origin);if(url.origin!==location.origin||url.pathname!=='/__nextjs_launch-editor')return null;const file=url.searchParams.get('file');const normalized=normalize(file);if(!normalized||normalized===file)return null;url.searchParams.set('file',normalized);return url.pathname+url.search}catch{return null}}window.fetch=(input,init)=>{const url=typeof input==='string'?input:input instanceof URL?input.href:input instanceof Request?input.url:null;const rewritten=url?rewrite(url):null;if(!rewritten)return originalFetch(input,init);if(input instanceof Request)return originalFetch(new Request(rewritten,input),init);return originalFetch(rewritten,init)}})()`;
+
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   let devToolsWidget: React.ReactNode = null;
   if (process.env.NODE_ENV !== 'production') {
@@ -51,6 +56,14 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           id="input-modality-init"
           strategy="beforeInteractive"
         />
+        {launchEditorPathFix ? (
+          <Script
+            // biome-ignore lint/security/noDangerouslySetInnerHtml: static dev-only Next overlay path normalization
+            dangerouslySetInnerHTML={{ __html: launchEditorPathFix }}
+            id="next-launch-editor-path-fix"
+            strategy="beforeInteractive"
+          />
+        ) : null}
       </head>
       <body className="h-full overflow-hidden">
         <AppProviders>

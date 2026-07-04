@@ -12,20 +12,8 @@ import { spawnSync } from 'node:child_process';
 import { isAbsolute } from 'node:path';
 
 import { defaultBinProbes } from '@/infra/resolve-binary.ts';
-import { claudeCodeNativeCliAdapter } from '@/services/native-cli/claude-code.ts';
-import { codexNativeCliAdapter } from '@/services/native-cli/codex.ts';
-import { geminiNativeCliAdapter } from '@/services/native-cli/gemini.ts';
-import { qwenNativeCliAdapter } from '@/services/native-cli/qwen.ts';
 
-export type {
-  NativeCliLaunchSpec,
-  NativeCliProviderAdapter
-} from '@/services/native-cli/types.ts';
-
-export { claudeCodeNativeCliAdapter } from '@/services/native-cli/claude-code.ts';
-export { codexNativeCliAdapter } from '@/services/native-cli/codex.ts';
-export { geminiNativeCliAdapter } from '@/services/native-cli/gemini.ts';
-export { qwenNativeCliAdapter } from '@/services/native-cli/qwen.ts';
+export type { NativeCliLaunchSpec, NativeCliProviderAdapter } from '@/services/native-cli/types.ts';
 
 const DANGEROUS_ARGS = new Set([
   '--dangerously-bypass-approvals-and-sandbox',
@@ -40,12 +28,21 @@ function isDangerousArg(arg: string, next: string | undefined): boolean {
   return arg === '--approval-mode=yolo';
 }
 
-const ADAPTERS: Record<NativeCliProvider, NativeCliProviderAdapter> = {
-  codex: codexNativeCliAdapter,
-  'claude-code': claudeCodeNativeCliAdapter,
-  gemini: geminiNativeCliAdapter,
-  qwen: qwenNativeCliAdapter
-};
+// Populated at daemon boot when @monad/atoms registers its `agent-adapter` atoms through the gated
+// atom-pack path (ManifestAtomPackHost.registerAgentAdapter → registerAgentAdapterImpl). Nothing
+// first-party bypasses the gate — the "core is all atoms" invariant. Insertion order is the pack's
+// declaration order, which listNativeCliAgentPresets preserves.
+const ADAPTERS = new Map<NativeCliProvider, NativeCliProviderAdapter>();
+
+export function registerAgentAdapterImpl(adapter: NativeCliProviderAdapter): void {
+  ADAPTERS.set(adapter.provider, adapter);
+}
+
+function adapterFor(provider: NativeCliProvider): NativeCliProviderAdapter {
+  const adapter = ADAPTERS.get(provider);
+  if (!adapter) throw new Error(`no agent-adapter atom registered for provider "${provider}"`);
+  return adapter;
+}
 
 function assertSafeArgs(agent: NativeCliAgentView): void {
   if (agent.allowDangerousMode) return;
@@ -73,7 +70,7 @@ export function buildNativeCliLaunch(
   assertSafeArgs(agent);
   if (!isAbsolute(opts.workingPath)) throw new Error('workingPath must be absolute');
   assertCommandShape(agent);
-  return ADAPTERS[agent.provider].buildLaunch(agent, opts);
+  return adapterFor(agent.provider).buildLaunch(agent, opts);
 }
 
 export function resolveNativeCliLaunchCommand(
@@ -94,13 +91,13 @@ export function resolveNativeCliLaunchCommand(
 export function buildNativeCliAuthLaunch(agent: NativeCliAgentView): NativeCliLaunchSpec {
   assertSafeArgs(agent);
   assertCommandShape(agent);
-  return ADAPTERS[agent.provider].buildAuthLaunch(agent);
+  return adapterFor(agent.provider).buildAuthLaunch(agent);
 }
 
 export function buildNativeCliAuthStatusLaunch(agent: NativeCliAgentView): NativeCliLaunchSpec {
   assertSafeArgs(agent);
   assertCommandShape(agent);
-  return ADAPTERS[agent.provider].authStatus(agent).launch;
+  return adapterFor(agent.provider).authStatus(agent).launch;
 }
 
 export function buildNativeCliArgumentSupportProbe(
@@ -108,14 +105,14 @@ export function buildNativeCliArgumentSupportProbe(
 ): NativeCliArgumentSupportProbe | undefined {
   assertSafeArgs(agent);
   assertCommandShape(agent);
-  return ADAPTERS[agent.provider].argumentSupport?.(agent);
+  return adapterFor(agent.provider).argumentSupport?.(agent);
 }
 
 export function listNativeCliAgentModelOptions(
   agent: NativeCliAgentView,
   probes: BinProbes = defaultBinProbes
 ): string[] {
-  const adapter = ADAPTERS[agent.provider];
+  const adapter = adapterFor(agent.provider);
   if (agent.modelOptions?.length) return agent.modelOptions;
   const fallback = adapter.listSupportedModels(agent);
   const probe = adapter.modelOptions?.(agent);
@@ -141,7 +138,7 @@ function probeNativeCliArgumentSupport(
   agent: NativeCliAgentView,
   probes: BinProbes = defaultBinProbes
 ): NativeCliArgumentSupport | undefined {
-  const adapter = ADAPTERS[agent.provider];
+  const adapter = adapterFor(agent.provider);
   const probe = adapter.argumentSupport?.(agent);
   if (!probe) return undefined;
   let launch: NativeCliLaunchSpec;
@@ -168,45 +165,52 @@ export function listNativeCliAgentReasoningEfforts(
   return support?.reasoningEfforts ?? [];
 }
 
+/** Reasoning efforts split by model slug (the union is `listNativeCliAgentReasoningEfforts`). Shares
+ *  the single argument-support probe, so it adds no extra provider spawn. */
+export function listNativeCliAgentReasoningEffortsByModel(
+  agent: NativeCliAgentView,
+  probes: BinProbes = defaultBinProbes
+): Record<string, string[]> | undefined {
+  return probeNativeCliArgumentSupport(agent, probes)?.reasoningEffortsByModel;
+}
+
 export function getNativeCliProviderAdapter(provider: NativeCliProvider): NativeCliProviderAdapter {
-  return ADAPTERS[provider];
+  return adapterFor(provider);
+}
+
+/** Non-throwing registry lookup for display/notice code that must degrade gracefully when a provider
+ *  has no registered adapter (never throws, unlike getNativeCliProviderAdapter). */
+export function findNativeCliProviderAdapter(provider: NativeCliProvider): NativeCliProviderAdapter | undefined {
+  return ADAPTERS.get(provider);
+}
+
+/** All registered agent adapters, in pack-declaration order. Lets cross-cutting features (e.g. the ACP
+ *  delegation invite list) derive from the single adapter registry instead of a parallel static list. */
+export function listNativeCliProviderAdapters(): NativeCliProviderAdapter[] {
+  return [...ADAPTERS.values()];
+}
+
+function presetAgentView(preset: NativeCliAgentPresetView): NativeCliAgentView {
+  return {
+    name: preset.id,
+    provider: preset.provider,
+    productIcon: preset.productIcon,
+    command: preset.command,
+    args: preset.args,
+    enabled: preset.installed,
+    defaultLaunchMode: preset.defaultLaunchMode,
+    allowDangerousMode: false,
+    approvalOwnership: 'provider-owned'
+  };
 }
 
 export function listNativeCliAgentPresets(probes: BinProbes = defaultBinProbes): NativeCliAgentPresetView[] {
-  return [
-    codexNativeCliAdapter.detect(probes),
-    claudeCodeNativeCliAdapter.detect(probes),
-    geminiNativeCliAdapter.detect(probes),
-    qwenNativeCliAdapter.detect(probes)
-  ].map((preset) => ({
-    ...preset,
-    modelOptions: listNativeCliAgentModelOptions(
-      {
-        name: preset.id,
-        provider: preset.provider,
-        productIcon: preset.productIcon,
-        command: preset.command,
-        args: preset.args,
-        enabled: preset.installed,
-        defaultLaunchMode: preset.defaultLaunchMode,
-        allowDangerousMode: false,
-        approvalOwnership: 'provider-owned'
-      },
-      probes
-    ),
-    reasoningEfforts: listNativeCliAgentReasoningEfforts(
-      {
-        name: preset.id,
-        provider: preset.provider,
-        productIcon: preset.productIcon,
-        command: preset.command,
-        args: preset.args,
-        enabled: preset.installed,
-        defaultLaunchMode: preset.defaultLaunchMode,
-        allowDangerousMode: false,
-        approvalOwnership: 'provider-owned'
-      },
-      probes
-    )
-  }));
+  return [...ADAPTERS.values()]
+    .map((adapter) => adapter.detect(probes))
+    .map((preset) => ({
+      ...preset,
+      modelOptions: listNativeCliAgentModelOptions(presetAgentView(preset), probes),
+      reasoningEfforts: listNativeCliAgentReasoningEfforts(presetAgentView(preset), probes),
+      reasoningEffortsByModel: listNativeCliAgentReasoningEffortsByModel(presetAgentView(preset), probes)
+    }));
 }

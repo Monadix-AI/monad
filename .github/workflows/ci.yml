@@ -10,6 +10,9 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 env:
   # turbo.jsonc sets ui:"tui"; force the stream renderer in non-interactive CI.
   TURBO_UI: "false"
@@ -116,3 +119,35 @@ jobs:
             packages/*/coverage/lcov.info
           if-no-files-found: ignore
 
+  # Real-CLI transport smokes. The unit/e2e suites drive a *mock* provider; this job installs the
+  # actual provider CLIs so the codex app-server ws/unix handshake (which needs no model auth — only
+  # initialize → thread/start) is exercised against the real binaries. Each smoke self-skips when its
+  # CLI is absent, so a temporarily-unpublished package can't red the build. If a provider ever
+  # requires auth to start its app-server, add a login/secret step before the smoke.
+  native-cli-smoke:
+    name: native-cli smoke
+    runs-on: ubuntu-latest
+    if: "!startsWith(github.event.head_commit.message, 'chore(main): release')"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+      - uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: ${{ runner.os }}-bun-
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+      # GitHub runners ship Node/npm; install the provider CLIs onto PATH so detect() finds them.
+      - name: Install provider CLIs
+        run: npm install -g @openai/codex@0.142.5 @anthropic-ai/claude-code@2.1.201 @google/gemini-cli@0.49.0 @qwen-code/qwen-code@0.19.6
+      - name: Codex app-server transport smokes (ws + unix)
+        run: |
+          bun test/smoke/codex-appserver-ws.ts
+          bun test/smoke/codex-appserver-unix.ts
+      # Turn lifecycle + interrupt against the real binary. Skips when codex is not signed in
+      # (the turn errors before going in-flight), so it is safe on an unauthenticated runner.
+      - name: Codex app-server turn + interrupt smoke
+        run: bun test/smoke/codex-appserver-turn.ts

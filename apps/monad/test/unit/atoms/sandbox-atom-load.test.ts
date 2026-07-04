@@ -3,7 +3,7 @@
 // onSandbox sink (the gate would throw if the manifest didn't declare 'sandbox'), and the registry
 // must then select the right launcher per platform. Also proves a third-party launcher wins.
 
-import type { SandboxLauncher } from '@monad/sdk-atom';
+import type { SandboxLauncher, WorkspaceExperienceDefinition } from '@monad/sdk-atom';
 
 import { afterEach, expect, test } from 'bun:test';
 import builtinAtomPack from '@monad/atoms';
@@ -36,6 +36,16 @@ test('built-in pack registers sandbox launchers through the gated loader', async
   ]);
   // macOS always resolves to Seatbelt (sandbox-exec ships with the OS).
   expect(selectSandboxLauncher('darwin').kind).toBe('seatbelt');
+});
+
+test('built-in pack registers workspace experiences through the gated loader', async () => {
+  const experiences: WorkspaceExperienceDefinition[] = [];
+  await loadChannelAtomPacks([builtinAtomPack], {
+    onWorkspaceExperience: (experience) => experiences.push(experience)
+  });
+
+  expect(experiences.map((experience) => experience.id)).toEqual(['chat-room', 'graphic-view']);
+  expect(experiences.map((experience) => experience.entry.type)).toEqual(['builtin', 'builtin']);
 });
 
 test('a discovered sandbox atom pack is preferred over the built-in launcher', async () => {

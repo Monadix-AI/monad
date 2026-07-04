@@ -3,12 +3,13 @@
 import { Cancel01Icon, ColorsIcon, HandIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { useGetAppearanceQuery, useGetProfileSettingsQuery, useSetAppearanceMutation } from '@monad/client-rtk';
-import { AVATAR_STYLES, entityAvatarUrl } from '@monad/protocol';
+import { entityAvatarUrl } from '@monad/protocol';
 import { Button, ScrollArea, Separator, Switch } from '@monad/ui';
 import Image from 'next/image';
 import { useEffect, useState } from 'react';
 
 import { useT } from '@/components/I18nProvider';
+import { AVATAR_STYLES } from '@/lib/avatar-styles';
 import { isInteractiveCursorEnabled, setInteractiveCursorEnabled } from '@/lib/interactive-cursor';
 
 interface Props {

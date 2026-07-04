@@ -1,15 +1,12 @@
-export type { WorkspaceExperienceDefinition, WorkspaceExperienceEntry } from '@monad/protocol';
+import type {
+  WorkspaceExperienceDefinition,
+  WorkspaceExperienceEntry,
+  WorkspaceExperienceHostApi
+} from '@monad/protocol';
 
-import type { WorkspaceExperienceDefinition } from '@monad/protocol';
+export type { WorkspaceExperienceDefinition, WorkspaceExperienceEntry, WorkspaceExperienceHostApi };
 
 export const WORKSPACE_EXPERIENCE_UPDATE_EVENT = 'monad-workspace-experience:update';
-
-export interface WorkspaceExperienceHostApi<Snapshot = unknown, Actions = unknown> {
-  snapshot: Snapshot;
-  actions: Actions;
-  embedded: boolean;
-  requestProjectSettings(open: boolean): void;
-}
 
 export interface WorkspaceExperienceElement<Api extends WorkspaceExperienceHostApi = WorkspaceExperienceHostApi> {
   monadWorkspaceExperience?: Api;

@@ -11,7 +11,7 @@ import { MonadLogo } from '@/components/MonadLogo';
 import {
   STUDIO_RUNTIME_SECTIONS,
   STUDIO_SWARM_SECTIONS,
-  STUDIO_USAGE_SECTION,
+  STUDIO_SYSTEM_SECTIONS,
   type StudioSectionId,
   type StudioSectionItem
 } from '@/features/studio/sections';
@@ -23,7 +23,7 @@ export interface ProjectItem {
 
 type TFunction = ReturnType<typeof useT>;
 
-const STUDIO_SHORTCUT_ITEMS = [...STUDIO_RUNTIME_SECTIONS, ...STUDIO_SWARM_SECTIONS, STUDIO_USAGE_SECTION];
+const STUDIO_SHORTCUT_ITEMS = [...STUDIO_RUNTIME_SECTIONS, ...STUDIO_SWARM_SECTIONS, ...STUDIO_SYSTEM_SECTIONS];
 
 function ShortcutBadge({ modifierLabel, number }: { modifierLabel: string; number: number }) {
   return (
@@ -175,7 +175,10 @@ export function StudioSidebarItems({
           {STUDIO_SWARM_SECTIONS.map(renderItem)}
         </SidebarNavSection>
       </div>
-      <SidebarNavSection>{renderItem(STUDIO_USAGE_SECTION)}</SidebarNavSection>
+      <SidebarNavSection>
+        <SidebarNavSectionLabel>{t('web.studio.system')}</SidebarNavSectionLabel>
+        {STUDIO_SYSTEM_SECTIONS.map(renderItem)}
+      </SidebarNavSection>
     </>
   );
 }

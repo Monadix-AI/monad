@@ -1,5 +1,7 @@
-import type { ChannelResponseNextTarget } from '@monad/protocol';
+import type { ChannelResponseNextTarget, NativeCliProvider } from '@monad/protocol';
 import type { ManagedNativeCliProjectMember } from '@/handlers/session/handlers/messaging-members.ts';
+
+import { findNativeCliProviderAdapter } from '@/services/native-cli/index.ts';
 
 export interface ManagedNativeCliProjectMessageSender {
   kind: 'human' | 'native-cli-agent' | 'agent' | 'system';
@@ -47,7 +49,7 @@ function managedNativeCliSenderMentionToken(sender?: ManagedNativeCliProjectMess
 }
 
 function providerUsesMcpProjectBridge(provider: string): boolean {
-  return provider === 'codex';
+  return findNativeCliProviderAdapter(provider as NativeCliProvider)?.managedRuntime?.usesManagedMcpBridge ?? false;
 }
 
 function usesMcpProjectBridge(member: ManagedNativeCliProjectMember): boolean {

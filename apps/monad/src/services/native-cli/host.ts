@@ -3,8 +3,8 @@ import type {
   ListNativeCliSessionsResponse,
   NativeCliAgentView,
   NativeCliApprovalResolutionRequest,
+  NativeCliAppServerTransport,
   NativeCliAuthSessionView,
-  NativeCliAuthState,
   NativeCliAuthStatusResponse,
   NativeCliHistoryPageRequest,
   NativeCliHistoryPageResponse,
@@ -18,8 +18,11 @@ import type {
   TranscriptTargetId
 } from '@monad/protocol';
 import type { EventBus } from '@/services/event-bus.ts';
+import type { NativeCliProcess, NativeCliStdin, NativeCliTerminal } from '@/services/native-cli/runtime-types.ts';
 import type { StructuredLineBufferState } from '@/services/native-cli/structured-lines.ts';
 import type {
+  NativeCliAppServerConnection,
+  NativeCliInitializeContext,
   NativeCliLaunchSpec,
   NativeCliOutputEvent,
   NativeCliProviderAdapter,
@@ -27,16 +30,20 @@ import type {
 } from '@/services/native-cli/types.ts';
 import type { NativeCliSessionRow, Store } from '@/store/db/index.ts';
 
-import { randomBytes } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, realpathSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
-import { dirname, isAbsolute } from 'node:path';
+import { chmodSync, mkdirSync, realpathSync, rmSync, statSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, isAbsolute, join } from 'node:path';
 import { createLogger } from '@monad/logger';
 import { newId } from '@monad/protocol';
 
-import { mergeNativeCliChildEnv } from '@/services/native-cli/env.ts';
+import { connectAppServerStdio } from '@/services/native-cli/app-server-stdio.ts';
+import { connectAppServerUnix } from '@/services/native-cli/app-server-unix.ts';
+import { connectAppServerWs, dialAppServerWs } from '@/services/native-cli/app-server-ws.ts';
+import { NativeCliAuthHost, type NativeCliAuthListener } from '@/services/native-cli/auth-host.ts';
+import { BoundedOutputBuffer } from '@/services/native-cli/bounded-output-buffer.ts';
+import { MAX_OUTPUT_SNAPSHOT } from '@/services/native-cli/constants.ts';
 import { NativeCliError } from '@/services/native-cli/errors.ts';
 import {
-  buildNativeCliAuthLaunch,
   buildNativeCliLaunch,
   getNativeCliProviderAdapter,
   resolveNativeCliLaunchCommand
@@ -47,22 +54,11 @@ import {
   managedProjectRuntimeWorkspace,
   prepareManagedProjectRuntime
 } from '@/services/native-cli/managed-project.ts';
-import { killNativeCliProcess } from '@/services/native-cli/process.ts';
+import { killNativeCliProcess, readProcessRegistry, writeProcessRegistry } from '@/services/native-cli/process.ts';
+import { buildNativeCliSpawnEnv, requireNativeCliAgent } from '@/services/native-cli/spawn-support.ts';
 import { createStreamingTextDecoder } from '@/services/native-cli/stream-decoder.ts';
 import { takeCompleteStructuredLines } from '@/services/native-cli/structured-lines.ts';
 import { nativeCliOutputEventSchema } from '@/services/native-cli/types.ts';
-
-interface NativeCliTerminal {
-  write(input: string): void;
-  resize(cols: number, rows: number): void;
-  close(): void;
-}
-
-interface NativeCliStdin {
-  write(input: string): void;
-  flush?(): void | Promise<void>;
-  end?(): void | Promise<void>;
-}
 
 interface ManagedProjectOutput {
   sessionId: TranscriptTargetId;
@@ -76,13 +72,6 @@ interface ManagedProjectOutput {
 type ManagedProjectOutputHandler = (output: ManagedProjectOutput) => void | Promise<void>;
 type NativeCliObservationListener = (access: NativeCliObservationAccessResponse, done: boolean) => void;
 
-type NativeCliProcess = ReturnType<typeof Bun.spawn> & {
-  terminal?: NativeCliTerminal;
-  stdin?: NativeCliStdin;
-  stdout?: ReadableStream<Uint8Array>;
-  stderr?: ReadableStream<Uint8Array>;
-};
-
 interface LiveNativeCliSession {
   id: string;
   transcriptTargetId: TranscriptTargetId;
@@ -94,6 +83,19 @@ interface LiveNativeCliSession {
   launchMode: NativeCliLaunchMode;
   terminal?: NativeCliTerminal;
   stdin?: NativeCliStdin;
+  /** app-server frame channel, transport-neutral (stdio pipe or ws socket). Set once the chosen
+   *  transport is connected; the adapter sends JSON-RPC frames through it. */
+  appServer?: NativeCliAppServerConnection;
+  /** Filesystem path of a `unix` app-server socket the daemon allocated, so it can be unlinked on
+   *  teardown. Absent for stdio/ws. */
+  appServerSocketPath?: string;
+  /** Re-dial the app-server socket (ws port / unix path) after an unexpected drop. Absent for stdio
+   *  (no socket) — a stdio drop means the child died, handled by `proc.exited`. */
+  appServerRedial?: () => Promise<NativeCliAppServerConnection>;
+  /** Guards against overlapping reconnect attempts. */
+  appServerReconnecting?: boolean;
+  /** The initialize context, retained so a reconnect can re-establish the thread via `thread/resume`. */
+  initializeContext?: NativeCliInitializeContext;
   providerSessionRef?: string | null;
   pendingApprovals: Map<string, Record<string, unknown>>;
   pendingHistoryPages: Map<
@@ -109,33 +111,18 @@ interface LiveNativeCliSession {
     reject(error: Error): void;
     timeout: Timer;
   };
-  /** In-memory bounded output snapshot, flushed to SQLite on a timer (see scheduleSnapshotFlush)
-   *  instead of read-modify-writing the 256 KB column on every output chunk. */
-  outputBuffer: string;
+  /** In-memory tail-bounded output snapshot, flushed to SQLite on a timer (see scheduleSnapshotFlush)
+   *  instead of read-modify-writing the 256 KB column on every output chunk. Chunk-list backed so a
+   *  per-token append stays O(chunk), not O(buffer). */
+  outputBuffer: BoundedOutputBuffer;
+  /** Cumulative length of all output ever appended (monotonic, unbounded — unlike `outputBuffer`,
+   *  which keeps only the tail). Serves as the observation cursor so the stream can push deltas. */
+  outputSeq: number;
   snapshotFlushTimer: Timer | null;
+  /** JSON-RPC request→kind ledger for app-server sessions: the adapter records what each outbound
+   *  request id was for so a response can be dispatched by id rather than by guessing its shape. */
+  pendingRequests: Map<string | number, string>;
   nextRequestId(): number;
-  kill(signal?: NodeJS.Signals): void;
-}
-
-interface LiveNativeCliAuthSession {
-  id: string;
-  controlToken: string;
-  agentName: string;
-  provider: NativeCliAgentView['provider'];
-  proc?: NativeCliProcess;
-  terminal?: NativeCliTerminal;
-  adapter: NativeCliProviderAdapter;
-  authState: NativeCliAuthState;
-  outputSnapshot: string;
-  state: NativeCliSessionView['state'];
-  pid: number;
-  startedAtMs: number;
-  updatedAtMs: number;
-  lastSeenAtMs: number;
-  exitCode: number | null;
-  startedAt: string;
-  updatedAt: string;
-  exitedAt: string | null;
   kill(signal?: NodeJS.Signals): void;
 }
 
@@ -153,21 +140,21 @@ export interface NativeCliHostDeps {
   authHeartbeatTimeoutMs?: number;
 }
 
-const MAX_OUTPUT_SNAPSHOT = 256 * 1024;
 const SNAPSHOT_FLUSH_MS = 200;
 // observe() returns the whole output buffer, and a chatty CLI emits many chunks a second, so pushing
 // a fresh full snapshot per chunk is quadratic bandwidth. Coalesce non-terminal pushes to this cadence.
 const OBSERVATION_THROTTLE_MS = 200;
 const HISTORY_BACKFILL_TIMEOUT_MS = 5_000;
 const MAX_STRUCTURED_LINE = 2 * 1024 * 1024;
-const AUTH_RUNNING_TTL_MS = 30 * 60 * 1000;
-const AUTH_TERMINAL_TTL_MS = 10 * 60 * 1000;
 const HISTORY_PAGE_TIMEOUT_MS = 5_000;
-const AUTH_STATUS_TIMEOUT_MS = 2_000;
 const APP_SERVER_STARTUP_TIMEOUT_MS = 15_000;
-const DEFAULT_AUTH_HEARTBEAT_TIMEOUT_MS = 20_000;
+// Grace after an app-server socket drops before we treat it as a real disconnect. Process death is
+// handled by `proc.exited` (which fires within this window and cleans up with the right exit state);
+// if the session is still live afterward the child is alive but the socket dropped — a genuine hang.
+const APP_SERVER_DISCONNECT_GRACE_MS = 500;
+const APP_SERVER_RECONNECT_ATTEMPTS = 3;
+const APP_SERVER_RECONNECT_BASE_MS = 400;
 type NativeCliOutputStream = 'stdout' | 'stderr' | 'pty';
-type NativeCliAuthListener = (session: NativeCliAuthSessionView) => void;
 
 function isManagedProjectRuntime(runtime: Pick<NativeCliSessionRow | LiveNativeCliSession, 'runtimeRole'>): boolean {
   return runtime.runtimeRole === 'managed-project-agent';
@@ -181,106 +168,8 @@ function toView(row: NativeCliSessionRow, pendingApprovalCount = 0, live?: LiveN
     productIcon: getNativeCliProviderAdapter(row.provider).productIcon,
     pendingApprovalCount,
     approvalOwnership: 'provider-owned',
-    outputSnapshot: live ? live.outputBuffer : row.outputSnapshot
+    outputSnapshot: live ? live.outputBuffer.snapshot() : row.outputSnapshot
   };
-}
-
-function authToView(session: LiveNativeCliAuthSession): NativeCliAuthSessionView {
-  return {
-    id: session.id,
-    controlToken: session.controlToken,
-    agentName: session.agentName,
-    provider: session.provider,
-    productIcon: getNativeCliProviderAdapter(session.provider).productIcon,
-    approvalOwnership: 'provider-owned',
-    authState: session.authState,
-    state: session.state,
-    pid: session.pid,
-    outputSnapshot: session.outputSnapshot,
-    exitCode: session.exitCode,
-    startedAt: session.startedAt,
-    updatedAt: session.updatedAt,
-    exitedAt: session.exitedAt
-  };
-}
-
-function newAuthControlToken(): string {
-  return randomBytes(32).toString('hex');
-}
-
-function appendBounded(existing: string, chunk: string, max: number): string {
-  const next = `${existing}${chunk}`;
-  return next.length <= max ? next : next.slice(next.length - max);
-}
-
-async function collectText(stream: ReadableStream<Uint8Array> | undefined): Promise<string> {
-  if (!stream) return '';
-  const decoder = createStreamingTextDecoder();
-  let output = '';
-  for await (const data of stream) {
-    output = appendBounded(output, decoder.decode(data), MAX_OUTPUT_SNAPSHOT);
-  }
-  return appendBounded(output, decoder.flush(), MAX_OUTPUT_SNAPSHOT);
-}
-
-async function collectProbeResult(
-  proc: {
-    pid: number;
-    stdout: ReadableStream<Uint8Array> | undefined;
-    stderr: ReadableStream<Uint8Array> | undefined;
-    exited: Promise<number>;
-  },
-  timeoutMs: number
-): Promise<{ timedOut: boolean; code: number | null; output: string }> {
-  const outputPromise = Promise.all([collectText(proc.stdout), collectText(proc.stderr)]).then(([stdout, stderr]) =>
-    appendBounded(stdout, stderr, MAX_OUTPUT_SNAPSHOT)
-  );
-  let done = false;
-  const exited = proc.exited.then((code) => {
-    done = true;
-    return { timedOut: false as const, code };
-  });
-  const timeout = Bun.sleep(timeoutMs).then(() => {
-    if (done) return { timedOut: false as const, code: null };
-    done = true;
-    killNativeCliProcess(proc.pid, 'SIGTERM');
-    return { timedOut: true as const, code: null };
-  });
-  const result = await Promise.race([exited, timeout]);
-  return { ...result, output: await outputPromise.catch(() => '') };
-}
-
-function readProcessRegistry(path: string | undefined): number[] {
-  if (!path || !existsSync(path)) return [];
-  try {
-    const parsed = JSON.parse(readFileSync(path, 'utf8')) as unknown;
-    if (!Array.isArray(parsed)) return [];
-    return parsed
-      .map((entry) =>
-        entry && typeof entry === 'object' && typeof (entry as { pid?: unknown }).pid === 'number'
-          ? (entry as { pid: number }).pid
-          : undefined
-      )
-      .filter((pid): pid is number => typeof pid === 'number');
-  } catch {
-    return [];
-  }
-}
-
-function writeProcessRegistry(path: string | undefined, pids: number[]): void {
-  if (!path) return;
-  if (pids.length === 0) {
-    try {
-      unlinkSync(path);
-    } catch {
-      /* registry already absent */
-    }
-    return;
-  }
-  const parent = dirname(path);
-  if (existsSync(parent) && !statSync(parent).isDirectory()) return;
-  mkdirSync(parent, { recursive: true });
-  writeFileSync(path, JSON.stringify(pids.map((pid) => ({ pid }))));
 }
 
 function nativeAgentMcpToolError(line: string): Record<string, unknown> | null {
@@ -298,33 +187,38 @@ export class NativeCliHost {
   private readonly log = createLogger('native-cli');
 
   private readonly live = new Map<string, LiveNativeCliSession>();
-  private readonly liveAuth = new Map<string, LiveNativeCliAuthSession>();
-  private readonly authListeners = new Map<string, Set<NativeCliAuthListener>>();
   private readonly observationListeners = new Map<string, Set<NativeCliObservationListener>>();
   private readonly observationFlush = new Map<string, ReturnType<typeof setTimeout>>();
+  /** Per-session `outputSeq` already delivered to the observation stream, so the next tick emits only
+   *  the delta beyond it. Seeded to the buffer position when the first listener subscribes. */
+  private readonly observationEmitted = new Map<string, number>();
   private readonly structuredOutputBuffers = new Map<
     string,
     Partial<Record<NativeCliOutputStream, StructuredLineBufferState>>
   >();
   private managedProjectOutputHandler: ManagedProjectOutputHandler | null = null;
+  /** Provider-login (auth) sessions and one-shot auth/usage probes live in their own host; they share
+   *  no state with interactive sessions. Public auth methods below delegate straight through. */
+  private readonly authHost: NativeCliAuthHost;
+  /** Serializes read-modify-write access to the native-CLI process registry file: the reads/writes
+   *  are async (never block the event loop), so overlapping track/untrack calls are chained onto
+   *  this promise instead of racing each other and losing an update. */
+  private registryQueue: Promise<void> = Promise.resolve();
 
-  constructor(private readonly deps: NativeCliHostDeps) {}
+  constructor(private readonly deps: NativeCliHostDeps) {
+    this.authHost = new NativeCliAuthHost(deps);
+  }
 
   setManagedProjectOutputHandler(handler: ManagedProjectOutputHandler): void {
     this.managedProjectOutputHandler = handler;
   }
 
-  /** Resolve secret refs in the launch env, then merge with the daemon env (minus nested-session
-   *  markers and injection vectors) to form the child CLI's environment. */
-  private async buildSpawnEnv(launchEnv?: Record<string, string>): Promise<Record<string, string>> {
-    const resolved = this.deps.resolveAgentEnv ? await this.deps.resolveAgentEnv(launchEnv) : launchEnv;
-    return mergeNativeCliChildEnv(resolved);
+  private buildSpawnEnv(launchEnv?: Record<string, string>): Promise<Record<string, string>> {
+    return buildNativeCliSpawnEnv(this.deps.resolveAgentEnv, launchEnv);
   }
 
-  private async requireAgent(name: string): Promise<NativeCliAgentView> {
-    const agent = (await this.deps.agents()).find((candidate) => candidate.name === name && candidate.enabled);
-    if (!agent) throw new Error(`native CLI agent not found or disabled: ${name}`);
-    return agent;
+  private requireAgent(name: string): Promise<NativeCliAgentView> {
+    return requireNativeCliAgent(this.deps.agents, name);
   }
 
   private managedRuntimeWorkspace(
@@ -337,49 +231,39 @@ export class NativeCliHost {
     });
   }
 
-  reconcileOrphanedSessions(): number {
+  async reconcileOrphanedSessions(): Promise<number> {
     const native = this.deps.store.reconcileOrphanedNativeCliSessions((pid) => killNativeCliProcess(pid));
     const orphanedTokens = this.deps.monadHome ? cleanupManagedProjectOrphanTokens(this.deps.monadHome) : 0;
-    const orphanedNative = readProcessRegistry(this.deps.nativeCliProcessRegistryPath);
+    const orphanedNative = await readProcessRegistry(this.deps.nativeCliProcessRegistryPath);
     for (const pid of orphanedNative) killNativeCliProcess(pid);
-    writeProcessRegistry(this.deps.nativeCliProcessRegistryPath, []);
-    const auth = readProcessRegistry(this.deps.authProcessRegistryPath);
+    await writeProcessRegistry(this.deps.nativeCliProcessRegistryPath, []);
+    const auth = await readProcessRegistry(this.deps.authProcessRegistryPath);
     for (const pid of auth) killNativeCliProcess(pid);
-    writeProcessRegistry(this.deps.authProcessRegistryPath, []);
+    await writeProcessRegistry(this.deps.authProcessRegistryPath, []);
     return native + orphanedTokens + orphanedNative.length + auth.length;
   }
 
   private trackNativeCliProcess(pid: number): void {
-    writeProcessRegistry(this.deps.nativeCliProcessRegistryPath, [
-      ...new Set([...readProcessRegistry(this.deps.nativeCliProcessRegistryPath), pid])
-    ]);
+    this.registryQueue = this.registryQueue
+      .then(() => readProcessRegistry(this.deps.nativeCliProcessRegistryPath))
+      .then((pids) => writeProcessRegistry(this.deps.nativeCliProcessRegistryPath, [...new Set([...pids, pid])]))
+      .catch(() => {
+        /* best-effort registry write — never blocks or breaks the queue for later calls */
+      });
   }
 
   private untrackNativeCliProcess(pid: number): void {
-    writeProcessRegistry(
-      this.deps.nativeCliProcessRegistryPath,
-      readProcessRegistry(this.deps.nativeCliProcessRegistryPath).filter((candidate) => candidate !== pid)
-    );
-  }
-
-  private trackAuthProcess(pid: number): void {
-    writeProcessRegistry(this.deps.authProcessRegistryPath, [
-      ...new Set([...readProcessRegistry(this.deps.authProcessRegistryPath), pid])
-    ]);
-  }
-
-  private untrackAuthProcess(pid: number): void {
-    writeProcessRegistry(
-      this.deps.authProcessRegistryPath,
-      readProcessRegistry(this.deps.authProcessRegistryPath).filter((candidate) => candidate !== pid)
-    );
-  }
-
-  private publishAuth(live: LiveNativeCliAuthSession): void {
-    const listeners = this.authListeners.get(live.id);
-    if (!listeners?.size) return;
-    const session = authToView(live);
-    for (const listener of listeners) listener(session);
+    this.registryQueue = this.registryQueue
+      .then(() => readProcessRegistry(this.deps.nativeCliProcessRegistryPath))
+      .then((pids) =>
+        writeProcessRegistry(
+          this.deps.nativeCliProcessRegistryPath,
+          pids.filter((candidate) => candidate !== pid)
+        )
+      )
+      .catch(() => {
+        /* best-effort registry write — never blocks or breaks the queue for later calls */
+      });
   }
 
   /** Notify live observers of the current output snapshot. Non-terminal pushes are coalesced to one
@@ -402,12 +286,51 @@ export class NativeCliHost {
     );
   }
 
+  /** Push an observation update to live listeners. Between snapshots this sends only the delta since
+   *  the last tick (`append` + cursor `seq`), not the whole 256 KB buffer — the consumer accumulates.
+   *  If a listener fell so far behind that the delta is no longer wholly in the bounded tail, it falls
+   *  back to a full snapshot (resync). The terminal `done` push always fires so the stream can close. */
   private emitObservation(id: string, done: boolean): void {
     const listeners = this.observationListeners.get(id);
     if (!listeners?.size) return;
-    const access = this.observe(id);
+    const live = this.live.get(id);
+    if (!live) {
+      const access = this.observe(id);
+      for (const listener of listeners) listener(access, done);
+      if (done) {
+        this.observationListeners.delete(id);
+        this.observationEmitted.delete(id);
+      }
+      return;
+    }
+    const emitted = this.observationEmitted.get(id) ?? live.outputSeq;
+    const deltaLen = live.outputSeq - emitted;
+    if (deltaLen <= 0 && !done) return; // nothing new since the last tick
+    const snapshot = live.outputBuffer.snapshot();
+    const access: NativeCliObservationAccessResponse =
+      deltaLen > 0 && deltaLen <= snapshot.length
+        ? {
+            state: 'live',
+            nativeCliSessionId: id,
+            provider: live.provider,
+            append: snapshot.slice(snapshot.length - deltaLen),
+            seq: live.outputSeq,
+            observedAt: new Date().toISOString()
+          }
+        : {
+            state: 'live',
+            nativeCliSessionId: id,
+            provider: live.provider,
+            output: snapshot,
+            seq: live.outputSeq,
+            observedAt: new Date().toISOString()
+          };
+    this.observationEmitted.set(id, live.outputSeq);
     for (const listener of listeners) listener(access, done);
-    if (done) this.observationListeners.delete(id);
+    if (done) {
+      this.observationListeners.delete(id);
+      this.observationEmitted.delete(id);
+    }
   }
 
   private clearObservationFlush(id: string): void {
@@ -425,6 +348,7 @@ export class NativeCliHost {
     templateAgentName?: string;
     workingPath: string;
     launchMode?: NativeCliLaunchMode;
+    appServerTransport?: NativeCliAppServerTransport;
     runtimeRole?: NativeCliSessionView['runtimeRole'];
     providerSessionRef?: string;
     modelName?: string;
@@ -472,6 +396,13 @@ export class NativeCliHost {
     const decoder = createStreamingTextDecoder();
     let launch: NativeCliLaunchSpec;
     let proc: NativeCliProcess;
+    // A `unix` app-server transport needs the daemon to pick the socket path the child listens on
+    // (browser-unreachable channel). Allocate it before the launch so it lands in both the argv and
+    // the dial target.
+    const wantsUnixAppServer =
+      (args.launchMode ?? agent.defaultLaunchMode) === 'app-server' &&
+      (args.appServerTransport ?? agent.appServerTransport) === 'unix';
+    const appServerSocketPath = wantsUnixAppServer ? this.allocateAppServerSocketPath(id) : undefined;
     try {
       launch = resolveNativeCliLaunchCommand(
         adapter,
@@ -479,7 +410,11 @@ export class NativeCliHost {
           workingPath,
           extraWorkingPaths: managed ? [managed.workspace] : undefined,
           launchMode: args.launchMode,
-          systemPromptFile: agent.provider === 'claude-code' ? (managed?.promptFile ?? undefined) : undefined,
+          appServerTransport: args.appServerTransport,
+          appServerSocketPath,
+          systemPromptFile: adapter.managedRuntime?.usesSystemPromptFile
+            ? (managed?.promptFile ?? undefined)
+            : undefined,
           skipProviderApprovals: !!managed,
           providerSessionRef: args.providerSessionRef,
           modelName: args.modelName,
@@ -547,6 +482,11 @@ export class NativeCliHost {
     );
     launch = managed ? { ...launch, env: { ...(launch.env ?? {}), ...managed.env } } : launch;
     const spawnEnv = await this.buildSpawnEnv(launch.env);
+    // ws/unix app-server: codex listens on a socket and speaks the protocol over it, so the daemon
+    // ignores stdin and treats stdout/stderr as logs (for ws, stderr also carries the listen port).
+    const isAppServerWs = launch.launchMode === 'app-server' && launch.appServerTransport === 'ws';
+    const isAppServerUnix = launch.launchMode === 'app-server' && launch.appServerTransport === 'unix';
+    const isAppServerSocket = isAppServerWs || isAppServerUnix;
     try {
       proc =
         launch.launchMode === 'pty'
@@ -574,7 +514,7 @@ export class NativeCliHost {
               cwd: launch.cwd,
               env: spawnEnv,
               detached: true,
-              stdin: 'pipe',
+              stdin: isAppServerSocket ? 'ignore' : 'pipe',
               stdout: 'pipe',
               stderr: 'pipe'
             }) as NativeCliProcess);
@@ -655,10 +595,13 @@ export class NativeCliHost {
       terminal: proc.terminal,
       stdin: proc.stdin,
       providerSessionRef: args.providerSessionRef ?? null,
+      appServerSocketPath,
       pendingApprovals: new Map(),
       pendingHistoryPages: new Map(),
+      pendingRequests: new Map(),
       startup: undefined,
-      outputBuffer: '',
+      outputBuffer: new BoundedOutputBuffer(MAX_OUTPUT_SNAPSHOT),
+      outputSeq: 0,
       snapshotFlushTimer: null,
       nextRequestId: () => requestSeq++,
       kill: (signal) => killNativeCliProcess(proc.pid, signal)
@@ -678,18 +621,70 @@ export class NativeCliHost {
             };
           })
         : null;
-    if (launch.launchMode !== 'pty') {
+    const initializeContext = {
+      workingPath,
+      providerSessionRef: args.providerSessionRef,
+      developerInstructions: adapter.managedRuntime?.usesDeveloperInstructions
+        ? (managed?.prompt ?? undefined)
+        : undefined,
+      modelName: args.modelName,
+      reasoningEffort: args.reasoningEffort,
+      speed: args.speed,
+      modelId: args.modelId
+    };
+    live.initializeContext = initializeContext;
+    if (isAppServerSocket) {
+      // Protocol travels over a socket (ws: an announced loopback port; unix: the path we allocated),
+      // exposed as `live.appServer` so initialize/turn/approval frames go over it. The child's
+      // stdout/stderr are only logs here — drained so their pipe buffers can't fill and stall codex,
+      // but stderr only AFTER the ws leg parses the announced port from it.
+      this.drainStream(proc.stdout);
+      const onMessage = (text: string): void => this.output(args.transcriptTargetId, id, text, 'app-server', adapter);
+      const onClose = (): void => this.handleAppServerDisconnect(id);
+      try {
+        if (isAppServerUnix) {
+          const socketPath = appServerSocketPath ?? '';
+          live.appServer = await connectAppServerUnix({
+            socketPath,
+            onMessage,
+            onClose,
+            timeoutMs: APP_SERVER_STARTUP_TIMEOUT_MS
+          });
+          live.appServerRedial = () =>
+            connectAppServerUnix({ socketPath, onMessage, onClose, timeoutMs: APP_SERVER_STARTUP_TIMEOUT_MS });
+        } else {
+          live.appServer = await connectAppServerWs({
+            stderr: proc.stderr,
+            onMessage,
+            onClose,
+            timeoutMs: APP_SERVER_STARTUP_TIMEOUT_MS,
+            onPort: (port) => {
+              live.appServerRedial = () =>
+                dialAppServerWs(port, { onMessage, onClose, timeoutMs: APP_SERVER_STARTUP_TIMEOUT_MS });
+            }
+          });
+        }
+        this.drainStream(proc.stderr);
+        // The socket dir is already 0700; lock the socket itself to owner-only as defense in depth.
+        if (appServerSocketPath) {
+          try {
+            chmodSync(appServerSocketPath, 0o600);
+          } catch {
+            /* socket already gone / not chmod-able */
+          }
+        }
+        adapter.initialize?.(live, initializeContext);
+      } catch (error) {
+        live.startup?.reject(error instanceof Error ? error : new Error(String(error)));
+      }
+    } else if (launch.launchMode !== 'pty') {
       this.readPipe(args.transcriptTargetId, id, proc.stdout, 'stdout', adapter);
       this.readPipe(args.transcriptTargetId, id, proc.stderr, 'stderr', adapter);
-      adapter.initialize?.(live, {
-        workingPath,
-        providerSessionRef: args.providerSessionRef,
-        developerInstructions: agent.provider === 'codex' ? (managed?.prompt ?? undefined) : undefined,
-        modelName: args.modelName,
-        reasoningEffort: args.reasoningEffort,
-        speed: args.speed,
-        modelId: args.modelId
-      });
+      // stdio app-server: frames travel over the child's stdin pipe, wrapped as the same
+      // transport-neutral connection the ws leg produces. json-stream adapters keep writing to
+      // `live.stdin` directly and never touch `appServer`.
+      if (launch.launchMode === 'app-server') live.appServer = connectAppServerStdio(proc.stdin);
+      adapter.initialize?.(live, initializeContext);
     }
     if (waitForAppServerStartup) {
       try {
@@ -701,6 +696,7 @@ export class NativeCliHost {
         this.live.delete(id);
         this.untrackNativeCliProcess(proc.pid);
         this.structuredOutputBuffers.delete(id);
+        this.unlinkAppServerSocket(appServerSocketPath);
         killNativeCliProcess(proc.pid);
         const failedAt = new Date().toISOString();
         this.deps.store.upsertNativeCliSession({
@@ -762,6 +758,7 @@ export class NativeCliHost {
       if (runtimeRole === 'managed-project-agent' && managed) cleanupManagedProjectRuntimeToken(managed.workspace);
       this.untrackNativeCliProcess(proc.pid);
       this.structuredOutputBuffers.delete(id);
+      this.unlinkAppServerSocket(appServerSocketPath);
       const exitedAt = new Date().toISOString();
       const state = code === 0 ? 'exited' : 'failed';
       this.deps.store.closeNativeCliSession(id, exitedAt, code, state);
@@ -792,6 +789,31 @@ export class NativeCliHost {
     live.adapter.sendInput(live, req.input);
   }
 
+  /** Cancel the in-flight turn while keeping the session/thread alive. If the provider adapter offers
+   *  no graceful interrupt, fall back to stopping the session so the request is never a no-op. */
+  interrupt(id: string): void {
+    const live = this.live.get(id);
+    if (!live) throw new Error(`native CLI session is not running: ${id}`);
+    this.log.debug(
+      { sessionId: live.transcriptTargetId, event: 'native_cli.interrupt', nativeCliSessionId: id },
+      'native cli interrupt'
+    );
+    if (live.adapter.interrupt) live.adapter.interrupt(live);
+    else this.stop(id);
+  }
+
+  steer(id: string, req: NativeCliInputRequest): void {
+    const live = this.live.get(id);
+    if (!live) throw new Error(`native CLI session is not running: ${id}`);
+    if (!live.adapter.steer)
+      throw new NativeCliError('unsupported_capability', `native CLI provider does not support steering: ${id}`);
+    this.log.debug(
+      { sessionId: live.transcriptTargetId, event: 'native_cli.steer', nativeCliSessionId: id },
+      'native cli steer'
+    );
+    live.adapter.steer(live, req.input);
+  }
+
   get(id: string): NativeCliSessionView {
     const row = this.deps.store.getNativeCliSession(id);
     if (!row) throw new Error(`native CLI session not found: ${id}`);
@@ -808,8 +830,8 @@ export class NativeCliHost {
     };
   }
 
-  observe(id: string): NativeCliObservationAccessResponse {
-    return this.observeFromStore(id);
+  observe(id: string, afterSeq?: number): NativeCliObservationAccessResponse {
+    return this.observeFromStore(id, afterSeq);
   }
 
   async observeWithProviderHistory(id: string): Promise<NativeCliObservationAccessResponse> {
@@ -841,14 +863,28 @@ export class NativeCliHost {
     return base;
   }
 
-  private observeFromStore(id: string): NativeCliObservationAccessResponse {
+  private observeFromStore(id: string, afterSeq?: number): NativeCliObservationAccessResponse {
     const live = this.live.get(id);
     if (live) {
+      const snapshot = live.outputBuffer.snapshot();
+      // Resume: if the caller's cursor is still within the bounded tail, hand back only the delta
+      // beyond it instead of the whole snapshot (a reconnecting client backfills from last-event-id).
+      if (afterSeq !== undefined && live.outputSeq > afterSeq && live.outputSeq - afterSeq <= snapshot.length) {
+        return {
+          state: 'live',
+          nativeCliSessionId: id,
+          provider: live.provider,
+          append: snapshot.slice(snapshot.length - (live.outputSeq - afterSeq)),
+          seq: live.outputSeq,
+          observedAt: new Date().toISOString()
+        };
+      }
       return {
         state: 'live',
         nativeCliSessionId: id,
         provider: live.provider,
-        output: live.outputBuffer,
+        output: snapshot,
+        seq: live.outputSeq,
         observedAt: new Date().toISOString()
       };
     }
@@ -926,8 +962,9 @@ export class NativeCliHost {
     const decoder = createStreamingTextDecoder();
     const handle = {
       launchMode: 'app-server' as const,
-      stdin: proc.stdin,
+      appServer: connectAppServerStdio(proc.stdin),
       providerSessionRef,
+      pendingRequests: new Map<string | number, string>(),
       nextRequestId: () => requestSeq++,
       kill: (signal?: NodeJS.Signals) => killNativeCliProcess(proc.pid, signal)
     };
@@ -951,7 +988,7 @@ export class NativeCliHost {
             if (!text) continue;
             const structured = this.takeCompleteStructuredLines(historyId, 'stdout', text);
             if (!structured) continue;
-            for (const event of adapter.parseOutput(structured)) {
+            for (const event of adapter.parseOutput(structured, handle)) {
               const parsed = nativeCliOutputEventSchema.safeParse(event);
               if (!parsed.success || parsed.data.type !== 'history_page') continue;
               if (expectedResponseId && String(parsed.data.payload.responseId) !== expectedResponseId) continue;
@@ -1002,14 +1039,18 @@ export class NativeCliHost {
 
   subscribeObservation(
     id: string,
-    listener: NativeCliObservationListener
+    listener: NativeCliObservationListener,
+    afterSeq?: number
   ): { access: NativeCliObservationAccessResponse; live: boolean; dispose: () => void } {
-    const access = this.observe(id);
+    const access = this.observe(id, afterSeq);
     if (access.state !== 'live') return { access, live: false, dispose: () => {} };
     let listeners = this.observationListeners.get(id);
     if (!listeners) {
       listeners = new Set();
       this.observationListeners.set(id, listeners);
+      // Seed the delta cursor at this subscriber's snapshot position; a later subscriber gets a fresh
+      // full snapshot and its client trims any overlap with the shared delta stream.
+      this.observationEmitted.set(id, this.live.get(id)?.outputSeq ?? 0);
     }
     listeners.add(listener);
     return {
@@ -1019,6 +1060,7 @@ export class NativeCliHost {
         listeners.delete(listener);
         if (listeners.size === 0) {
           this.observationListeners.delete(id);
+          this.observationEmitted.delete(id);
           this.clearObservationFlush(id);
         }
       }
@@ -1056,6 +1098,123 @@ export class NativeCliHost {
     });
   }
 
+  /** Allocate the AF_UNIX socket path a `unix` app-server child will listen on. The path must stay
+   *  under the OS SUN_LEN limit and sit in a real (non-symlink) directory codex is willing to bind in
+   *  — a private, owner-only subdir of the resolved temp dir satisfies both (macOS `/tmp` is a symlink
+   *  and codex refuses to bind directly in the sticky temp root). */
+  private allocateAppServerSocketPath(id: string): string {
+    const dir = join(realpathSync(tmpdir()), 'monad-appserver');
+    mkdirSync(dir, { recursive: true, mode: 0o700 });
+    // mkdir's mode is a no-op if the dir already exists (e.g. a looser dir pre-created by another
+    // local user in a shared tmp), so tighten it explicitly to owner-only.
+    try {
+      chmodSync(dir, 0o700);
+    } catch {
+      /* not chmod-able (e.g. Windows) */
+    }
+    const path = join(dir, `${id.replace(/[^a-zA-Z0-9]/g, '').slice(-12)}.sock`);
+    if (Buffer.byteLength(path) > 100) {
+      throw new NativeCliError(
+        'unsupported_capability',
+        'app-server unix socket path exceeds the OS limit; use the stdio or ws transport'
+      );
+    }
+    rmSync(path, { force: true });
+    return path;
+  }
+
+  private unlinkAppServerSocket(socketPath: string | undefined): void {
+    if (!socketPath) return;
+    try {
+      rmSync(socketPath, { force: true });
+    } catch {
+      /* already gone */
+    }
+  }
+
+  /** An app-server byte channel closed on its own. On loopback this is almost always the child
+   *  exiting — `proc.exited` handles that within the grace window and records the real exit state. If
+   *  the session is still live after the grace the child is alive but the socket dropped: re-dial the
+   *  same socket and re-establish the thread via `thread/resume`. Only if reconnect fails do we tear
+   *  the session down and prompt a manual reconnect. A drop during startup (no thread yet) fails fast. */
+  private handleAppServerDisconnect(id: string): void {
+    if (!this.live.has(id)) return;
+    setTimeout(() => {
+      const current = this.live.get(id);
+      if (!current || current.appServerReconnecting) return;
+      this.log.warn(
+        {
+          sessionId: current.transcriptTargetId,
+          event: 'native_cli.app_server_disconnected',
+          nativeCliSessionId: id,
+          provider: current.provider
+        },
+        'native cli app-server socket dropped while the process is still alive'
+      );
+      if (current.startup) {
+        clearTimeout(current.startup.timeout);
+        current.startup.reject(new Error(`native CLI app-server socket dropped before ready: ${id}`));
+        current.startup = undefined;
+        this.stop(id);
+        return;
+      }
+      if (current.appServerRedial) {
+        void this.reconnectAppServer(id);
+        return;
+      }
+      this.emitAppServerReconnectRequired(id, current);
+      this.stop(id);
+    }, APP_SERVER_DISCONNECT_GRACE_MS);
+  }
+
+  private emitAppServerReconnectRequired(id: string, live: LiveNativeCliSession): void {
+    this.emit(live.transcriptTargetId, 'native_cli.connection_required', {
+      nativeCliSessionId: id,
+      agentName: live.agentName,
+      provider: live.provider,
+      reason: `${live.provider} app-server connection dropped`,
+      reconnectIn: 'studio'
+    });
+  }
+
+  /** Re-dial the app-server socket and resume the thread, with a few backoff attempts. On success the
+   *  session keeps running on the fresh connection; on exhaustion it is torn down with a reconnect
+   *  prompt. Stale request ids from the dropped socket are cleared — their responses will never come. */
+  private async reconnectAppServer(id: string): Promise<void> {
+    const live = this.live.get(id);
+    if (!live?.appServerRedial || live.appServerReconnecting) return;
+    live.appServerReconnecting = true;
+    for (let attempt = 1; attempt <= APP_SERVER_RECONNECT_ATTEMPTS; attempt++) {
+      if (!this.live.has(id)) return; // torn down meanwhile
+      await Bun.sleep(APP_SERVER_RECONNECT_BASE_MS * attempt);
+      const current = this.live.get(id);
+      if (!current?.appServerRedial) return;
+      try {
+        const connection = await current.appServerRedial();
+        current.appServer = connection;
+        current.pendingRequests.clear();
+        current.appServerReconnecting = false;
+        current.adapter.initialize?.(current, {
+          ...(current.initializeContext ?? { workingPath: '' }),
+          providerSessionRef: current.providerSessionRef ?? undefined
+        });
+        this.log.debug(
+          { sessionId: current.transcriptTargetId, event: 'native_cli.app_server_reconnected', nativeCliSessionId: id },
+          'native cli app-server reconnected'
+        );
+        return;
+      } catch {
+        /* retry */
+      }
+    }
+    const current = this.live.get(id);
+    if (current) {
+      current.appServerReconnecting = false;
+      this.emitAppServerReconnectRequired(id, current);
+      this.stop(id);
+    }
+  }
+
   stop(id: string): void {
     const live = this.live.get(id);
     if (!live) return;
@@ -1066,6 +1225,7 @@ export class NativeCliHost {
     try {
       live.terminal?.close();
       void live.stdin?.end?.();
+      live.appServer?.close();
     } catch {
       /* already closed */
     }
@@ -1087,6 +1247,7 @@ export class NativeCliHost {
       cleanupManagedProjectRuntimeToken(this.managedRuntimeWorkspace(row));
     this.untrackNativeCliProcess(live.proc.pid);
     this.structuredOutputBuffers.delete(id);
+    this.unlinkAppServerSocket(live.appServerSocketPath);
     const exitedAt = new Date().toISOString();
     this.deps.store.closeNativeCliSession(id, exitedAt, null, 'stopped');
     this.emit(live.transcriptTargetId, 'native_cli.exited', {
@@ -1130,129 +1291,12 @@ export class NativeCliHost {
     });
   }
 
-  async startAuth(agentName: string): Promise<NativeCliAuthSessionView> {
-    this.pruneAuthSessions();
-    const agent = await this.requireAgent(agentName);
-    const adapter = getNativeCliProviderAdapter(agent.provider);
-    const preflight = await this.authStatus(agent.name).catch(() => null);
-    for (const live of [...this.liveAuth.values()]) {
-      if (live.agentName === agent.name && live.state === 'running') this.stopAuth(live.id, live.controlToken);
-    }
-    if (preflight?.state === 'authenticated') {
-      const id = newId('ncliauth');
-      const now = new Date().toISOString();
-      const live: LiveNativeCliAuthSession = {
-        id,
-        controlToken: newAuthControlToken(),
-        agentName: agent.name,
-        provider: agent.provider,
-        adapter,
-        authState: 'authenticated',
-        outputSnapshot: preflight.output,
-        state: 'exited',
-        pid: 0,
-        startedAtMs: Date.now(),
-        updatedAtMs: Date.now(),
-        lastSeenAtMs: Date.now(),
-        exitCode: 0,
-        startedAt: now,
-        updatedAt: now,
-        exitedAt: now,
-        kill: () => {}
-      };
-      this.liveAuth.set(id, live);
-      return authToView(live);
-    }
-    const launch = resolveNativeCliLaunchCommand(adapter, buildNativeCliAuthLaunch(agent));
-    const id = newId('ncliauth');
-    const now = new Date().toISOString();
-    const decoder = createStreamingTextDecoder();
-    let pendingCR = false;
-    let proc: NativeCliProcess;
-    proc = Bun.spawn(launch.argv, {
-      cwd: launch.cwd,
-      env: await this.buildSpawnEnv(launch.env),
-      detached: true,
-      stdout: 'ignore',
-      stderr: 'ignore',
-      stdin: 'ignore',
-      terminal: {
-        cols: 100,
-        rows: 30,
-        data: (_terminal: NativeCliTerminal, data: Uint8Array) => {
-          const live = this.liveAuth.get(id);
-          if (!live) return;
-          let text = decoder.decode(data);
-          if (pendingCR) text = `\r${text}`;
-          pendingCR = text.endsWith('\r');
-          if (pendingCR) text = text.slice(0, -1);
-          text = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-          if (!text) return;
-          live.outputSnapshot = appendBounded(live.outputSnapshot, text, MAX_OUTPUT_SNAPSHOT);
-          live.updatedAt = new Date().toISOString();
-          live.updatedAtMs = Date.now();
-          this.publishAuth(live);
-        }
-      }
-    } as Bun.SpawnOptions.OptionsObject<'ignore', 'ignore', 'ignore'>) as NativeCliProcess;
-
-    const live: LiveNativeCliAuthSession = {
-      id,
-      controlToken: newAuthControlToken(),
-      agentName: agent.name,
-      provider: agent.provider,
-      proc,
-      terminal: proc.terminal,
-      adapter,
-      authState: 'unknown',
-      outputSnapshot: '',
-      state: 'running',
-      pid: proc.pid,
-      startedAtMs: Date.now(),
-      updatedAtMs: Date.now(),
-      lastSeenAtMs: Date.now(),
-      exitCode: null,
-      startedAt: now,
-      updatedAt: now,
-      exitedAt: null,
-      kill: (signal) => killNativeCliProcess(proc.pid, signal)
-    };
-    this.liveAuth.set(id, live);
-    this.trackAuthProcess(proc.pid);
-    void proc.exited.then((code) => {
-      const current = this.liveAuth.get(id);
-      if (!current) return;
-      let remainingText = decoder.flush();
-      if (pendingCR) remainingText = `\r${remainingText}`;
-      pendingCR = remainingText.endsWith('\r');
-      if (pendingCR) remainingText = remainingText.slice(0, -1);
-      remainingText = remainingText.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-      if (remainingText)
-        current.outputSnapshot = appendBounded(current.outputSnapshot, remainingText, MAX_OUTPUT_SNAPSHOT);
-      if (pendingCR) current.outputSnapshot = appendBounded(current.outputSnapshot, '\n', MAX_OUTPUT_SNAPSHOT);
-      if (current.state !== 'stopped') current.state = code === 0 ? 'exited' : 'failed';
-      current.authState = current.adapter.parseAuthStatus(current.outputSnapshot, code);
-      current.exitCode = code;
-      current.updatedAt = new Date().toISOString();
-      current.updatedAtMs = Date.now();
-      current.exitedAt = current.updatedAt;
-      this.untrackAuthProcess(current.pid);
-      this.publishAuth(current);
-    });
-    return authToView(live);
-  }
-
-  private requireAuthSession(id: string, controlToken: string): LiveNativeCliAuthSession {
-    this.pruneAuthSessions();
-    const live = this.liveAuth.get(id);
-    if (!live) throw new Error(`native CLI auth session not found: ${id}`);
-    if (live.controlToken !== controlToken) throw new Error(`native CLI auth session not found: ${id}`);
-    return live;
+  startAuth(agentName: string): Promise<NativeCliAuthSessionView> {
+    return this.authHost.startAuth(agentName);
   }
 
   getAuth(id: string, controlToken: string): NativeCliAuthSessionView {
-    const live = this.requireAuthSession(id, controlToken);
-    return authToView(live);
+    return this.authHost.getAuth(id, controlToken);
   }
 
   subscribeAuth(
@@ -1260,262 +1304,35 @@ export class NativeCliHost {
     controlToken: string,
     listener: NativeCliAuthListener
   ): { session: NativeCliAuthSessionView; dispose: () => void } {
-    const live = this.requireAuthSession(id, controlToken);
-    let listeners = this.authListeners.get(id);
-    if (!listeners) {
-      listeners = new Set();
-      this.authListeners.set(id, listeners);
-    }
-    listeners.add(listener);
-    return {
-      session: authToView(live),
-      dispose: () => {
-        listeners.delete(listener);
-        if (listeners.size === 0) this.authListeners.delete(id);
-      }
-    };
+    return this.authHost.subscribeAuth(id, controlToken, listener);
   }
 
   inputAuth(id: string, controlToken: string, req: NativeCliInputRequest): void {
-    const live = this.requireAuthSession(id, controlToken);
-    if (live.state !== 'running') throw new Error(`native CLI auth session is not running: ${id}`);
-    live.terminal?.write(req.input);
+    this.authHost.inputAuth(id, controlToken, req);
   }
 
   resizeAuth(id: string, controlToken: string, req: NativeCliResizeRequest): void {
-    const live = this.requireAuthSession(id, controlToken);
-    if (live.state !== 'running') throw new Error(`native CLI auth session is not running: ${id}`);
-    live.terminal?.resize(req.cols, req.rows);
+    this.authHost.resizeAuth(id, controlToken, req);
   }
 
   heartbeatAuth(id: string, controlToken: string): void {
-    const live = this.requireAuthSession(id, controlToken);
-    if (live.state !== 'running') return;
-    live.lastSeenAtMs = Date.now();
-    live.updatedAt = new Date(live.lastSeenAtMs).toISOString();
-    live.updatedAtMs = live.lastSeenAtMs;
+    this.authHost.heartbeatAuth(id, controlToken);
   }
 
   stopAuth(id: string, controlToken: string): void {
-    const live = this.requireAuthSession(id, controlToken);
-    if (!live) return;
-    try {
-      live.terminal?.close();
-    } catch {
-      /* already closed */
-    }
-    live.kill('SIGTERM');
-    live.state = 'stopped';
-    live.exitCode = null;
-    live.updatedAt = new Date().toISOString();
-    live.updatedAtMs = Date.now();
-    live.exitedAt = live.updatedAt;
-    this.untrackAuthProcess(live.pid);
-    this.publishAuth(live);
+    this.authHost.stopAuth(id, controlToken);
   }
 
-  async authStatus(agentName: string): Promise<NativeCliAuthStatusResponse> {
-    this.pruneAuthSessions();
-    const agent = await this.requireAgent(agentName);
-    const adapter = getNativeCliProviderAdapter(agent.provider);
-    const statusProbe = adapter.authStatus(agent);
-    const launch = resolveNativeCliLaunchCommand(adapter, statusProbe.launch);
-    this.log.debug(
-      {
-        event: 'native_cli.auth_status',
-        agentName: agent.name,
-        provider: agent.provider,
-        argv: launch.argv,
-        cwd: launch.cwd
-      },
-      'native cli auth status probe'
-    );
-    const proc = Bun.spawn(launch.argv, {
-      cwd: launch.cwd,
-      env: await this.buildSpawnEnv(launch.env),
-      detached: true,
-      stdin: 'ignore',
-      stdout: 'pipe',
-      stderr: 'pipe'
-    });
-    const result = await collectProbeResult(proc, AUTH_STATUS_TIMEOUT_MS);
-    if (result.timedOut) {
-      this.log.warn(
-        {
-          event: 'native_cli.auth_status_timeout',
-          agentName: agent.name,
-          provider: agent.provider,
-          argv: launch.argv,
-          cwd: launch.cwd,
-          timeoutMs: AUTH_STATUS_TIMEOUT_MS,
-          output: result.output
-        },
-        'native cli auth status probe timed out'
-      );
-      throw new NativeCliError('provider_timeout', `timed out checking native CLI auth status: ${agent.name}`);
-    }
-    const state = statusProbe.parse(result.output, result.code);
-    this.log.debug(
-      {
-        event: 'native_cli.auth_status_result',
-        agentName: agent.name,
-        provider: agent.provider,
-        exitCode: result.code,
-        state,
-        output: result.output
-      },
-      'native cli auth status probe result'
-    );
-    return {
-      agentName: agent.name,
-      provider: agent.provider,
-      state,
-      output: result.output,
-      checkedAt: new Date().toISOString()
-    };
+  authStatus(agentName: string): Promise<NativeCliAuthStatusResponse> {
+    return this.authHost.authStatus(agentName);
   }
 
-  async usage(agentName: string): Promise<NativeCliUsageResponse> {
-    const agent = await this.requireAgent(agentName);
-    const adapter = getNativeCliProviderAdapter(agent.provider);
-    const checkedAt = new Date().toISOString();
-    const usageProbe = adapter.usage?.(agent);
-    if (!usageProbe) {
-      return {
-        agentName: agent.name,
-        provider: agent.provider,
-        checkedAt,
-        records: []
-      };
-    }
-    const launch = resolveNativeCliLaunchCommand(adapter, usageProbe.launch);
-    this.log.debug(
-      {
-        event: 'native_cli.usage',
-        agentName: agent.name,
-        provider: agent.provider,
-        argv: launch.argv,
-        cwd: launch.cwd
-      },
-      'native cli usage probe'
-    );
-    const proc = Bun.spawn(launch.argv, {
-      cwd: launch.cwd,
-      env: await this.buildSpawnEnv(launch.env),
-      detached: true,
-      stdin: 'ignore',
-      stdout: 'pipe',
-      stderr: 'pipe'
-    });
-    const result = await collectProbeResult(proc, AUTH_STATUS_TIMEOUT_MS);
-    if (result.timedOut) {
-      this.log.warn(
-        {
-          event: 'native_cli.usage_timeout',
-          agentName: agent.name,
-          provider: agent.provider,
-          argv: launch.argv,
-          cwd: launch.cwd,
-          timeoutMs: AUTH_STATUS_TIMEOUT_MS,
-          output: result.output
-        },
-        'native cli usage probe timed out'
-      );
-      throw new NativeCliError('provider_timeout', `timed out checking native CLI usage: ${agent.name}`);
-    }
-    const records = usageProbe.parse(result.output, result.code);
-    this.log.debug(
-      {
-        event: 'native_cli.usage_result',
-        agentName: agent.name,
-        provider: agent.provider,
-        exitCode: result.code,
-        recordCount: records.length
-      },
-      'native cli usage probe result'
-    );
-    return {
-      agentName: agent.name,
-      provider: agent.provider,
-      checkedAt: new Date().toISOString(),
-      records
-    };
+  usage(agentName: string): Promise<NativeCliUsageResponse> {
+    return this.authHost.usage(agentName);
   }
 
-  async preflight(agentName: string): Promise<NativeCliStartPreflight> {
-    const checkedAt = new Date().toISOString();
-    const agent = await this.requireAgent(agentName);
-    try {
-      const auth = await this.authStatus(agentName);
-      if (auth.state === 'authenticated') {
-        return { state: 'ready', agentName: agent.name, provider: agent.provider, checkedAt: auth.checkedAt };
-      }
-      if (auth.state === 'unauthenticated') {
-        return {
-          state: 'not_authenticated',
-          agentName: agent.name,
-          provider: agent.provider,
-          checkedAt: auth.checkedAt,
-          action: 'reconnect_in_studio',
-          reason: `Reconnect ${agent.name} in Studio before using it in this project.`
-        };
-      }
-      return {
-        state: 'unknown',
-        agentName: agent.name,
-        provider: agent.provider,
-        checkedAt: auth.checkedAt,
-        action: 'manual_check_in_studio',
-        reason: `Check ${agent.name} connection in Studio before using it in this project.`
-      };
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      if (/Executable not found|ENOENT/i.test(message)) {
-        return {
-          state: 'unavailable',
-          agentName: agent.name,
-          provider: agent.provider,
-          checkedAt,
-          reason: message
-        };
-      }
-      return {
-        state: 'unknown',
-        agentName: agent.name,
-        provider: agent.provider,
-        checkedAt,
-        action: 'manual_check_in_studio',
-        reason: `Check ${agent.name} connection in Studio before using it in this project.`
-      };
-    }
-  }
-
-  private pruneAuthSessions(nowMs = Date.now()): void {
-    const heartbeatTimeoutMs = this.deps.authHeartbeatTimeoutMs ?? DEFAULT_AUTH_HEARTBEAT_TIMEOUT_MS;
-    for (const [id, live] of this.liveAuth) {
-      if (
-        live.state === 'running' &&
-        (nowMs - live.lastSeenAtMs > heartbeatTimeoutMs || nowMs - live.startedAtMs > AUTH_RUNNING_TTL_MS)
-      ) {
-        try {
-          live.terminal?.close();
-        } catch {
-          /* already closed */
-        }
-        live.kill('SIGTERM');
-        live.state = 'stopped';
-        live.exitCode = null;
-        live.updatedAt = new Date(nowMs).toISOString();
-        live.updatedAtMs = nowMs;
-        live.exitedAt = live.updatedAt;
-        this.untrackAuthProcess(live.pid);
-        this.publishAuth(live);
-      }
-      if (live.state !== 'running' && nowMs - live.updatedAtMs > AUTH_TERMINAL_TTL_MS) {
-        this.liveAuth.delete(id);
-        this.authListeners.delete(id);
-      }
-    }
+  preflight(agentName: string): Promise<NativeCliStartPreflight> {
+    return this.authHost.preflight(agentName);
   }
 
   private readPipe(
@@ -1537,26 +1354,56 @@ export class NativeCliHost {
     })();
   }
 
+  /** Consume-and-discard a child stream. For ws app-server sessions the protocol arrives over the
+   *  WebSocket, so stdout/stderr are only logs — but they must still be drained or a full pipe buffer
+   *  will stall the child. */
+  private drainStream(stream: ReadableStream<Uint8Array> | undefined): void {
+    if (!stream) return;
+    void (async () => {
+      try {
+        const reader = stream.getReader();
+        for (;;) {
+          const { done } = await reader.read();
+          if (done) return;
+        }
+      } catch {
+        /* stream closed */
+      }
+    })();
+  }
+
   private output(
     transcriptTargetId: TranscriptTargetId,
     id: string,
     chunk: string,
-    stream: 'stdout' | 'stderr' | 'pty',
+    // 'app-server' is a single pre-framed JSON-RPC message (one ws text frame) — already a complete
+    // line, so it skips the newline-reassembly buffer that stdout/stderr byte chunks need.
+    stream: 'stdout' | 'stderr' | 'pty' | 'app-server',
     adapter: NativeCliProviderAdapter
   ): void {
+    // Keep the observation snapshot newline-delimited so the web parser can split records; a ws frame
+    // carries no trailing newline of its own.
+    const buffered = stream === 'app-server' ? `${chunk}\n` : chunk;
     const live = this.live.get(id);
     if (live) {
       // Accumulate in memory and flush the bounded snapshot to SQLite on a timer — avoids a
       // per-chunk 256 KB read-modify-write under a chatty agent.
-      live.outputBuffer = appendBounded(live.outputBuffer, chunk, MAX_OUTPUT_SNAPSHOT);
+      live.outputBuffer.append(buffered);
+      live.outputSeq += buffered.length;
       if (!isManagedProjectRuntime(live)) this.scheduleSnapshotFlush(id);
       this.publishObservation(id);
     } else {
       const row = this.deps.store.getNativeCliSession(id);
-      if (!row || !isManagedProjectRuntime(row)) this.deps.store.appendNativeCliOutput(id, chunk, MAX_OUTPUT_SNAPSHOT);
+      if (!row || !isManagedProjectRuntime(row))
+        this.deps.store.appendNativeCliOutput(id, buffered, MAX_OUTPUT_SNAPSHOT);
     }
-    this.publishEphemeral(transcriptTargetId, 'native_cli.output', { nativeCliSessionId: id, stream, chunk });
-    const structuredChunk = stream === 'pty' ? chunk : this.takeCompleteStructuredLines(id, stream, chunk);
+    this.publishEphemeral(transcriptTargetId, 'native_cli.output', {
+      nativeCliSessionId: id,
+      stream: stream === 'app-server' ? 'stdout' : stream,
+      chunk: buffered
+    });
+    const structuredChunk =
+      stream === 'pty' || stream === 'app-server' ? chunk : this.takeCompleteStructuredLines(id, stream, chunk);
     if (!structuredChunk) return;
     if (stream === 'stderr') {
       for (const line of structuredChunk.split('\n')) {
@@ -1575,7 +1422,7 @@ export class NativeCliHost {
         );
       }
     }
-    for (const event of adapter.parseOutput(structuredChunk)) {
+    for (const event of adapter.parseOutput(structuredChunk, this.live.get(id))) {
       const parsed = nativeCliOutputEventSchema.safeParse(event);
       if (!parsed.success) continue;
       this.emitStructuredOutputEvent(transcriptTargetId, id, adapter, parsed.data);
@@ -1602,7 +1449,7 @@ export class NativeCliHost {
       live.snapshotFlushTimer = null;
     }
     if (!isManagedProjectRuntime(live))
-      this.deps.store.setNativeCliOutputSnapshot(id, live.outputBuffer, MAX_OUTPUT_SNAPSHOT);
+      this.deps.store.setNativeCliOutputSnapshot(id, live.outputBuffer.snapshot(), MAX_OUTPUT_SNAPSHOT);
   }
 
   private takeCompleteStructuredLines(id: string, stream: 'stdout' | 'stderr', chunk: string): string {

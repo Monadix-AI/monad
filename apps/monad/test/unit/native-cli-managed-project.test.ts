@@ -2,7 +2,9 @@ import { expect, test } from 'bun:test';
 import { chmod, mkdir, readFile, stat, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { builtinAgentAdapters } from '@monad/atoms/agent-adapters';
 
+import { registerAgentAdapterImpl } from '@/services/native-cli/index.ts';
 import {
   buildManagedProjectCliWrapperScript,
   cleanupManagedProjectOrphanTokens,
@@ -10,6 +12,10 @@ import {
   managedProjectLaunchMode,
   prepareManagedProjectRuntime
 } from '@/services/native-cli/managed-project.ts';
+
+// managed-project now reads launch mode / env / mcp config / prompt style from the adapter contract,
+// which the daemon populates at boot; register the built-ins so the direct-call unit tests resolve.
+for (const adapter of builtinAgentAdapters) registerAgentAdapterImpl(adapter);
 
 test('managed project CLI wrapper uses source entry in development', () => {
   expect(buildManagedProjectCliWrapperScript('/repo/apps/cli/src/main.ts', '/Applications/Monad.app/monad')).toBe(

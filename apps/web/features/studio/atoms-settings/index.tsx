@@ -1,18 +1,30 @@
 'use client';
 
-import type { AtomConflict, InstalledAtomPack } from '@monad/protocol';
+import type { AtomConflict, AtomDescriptor, AtomKind, InstalledAtomPack } from '@monad/protocol';
 
 import {
   Alert01Icon,
+  BotIcon,
+  BrainIcon,
   Cancel01Icon,
   Delete02Icon,
+  LanguageSquareIcon,
   LoaderPinwheelIcon,
+  MessageMultiple01Icon,
+  MessageSquareCodeIcon,
   PackageIcon,
   PinIcon,
+  Plug01Icon,
   PlusSignIcon,
   PowerIcon,
+  PuzzleIcon,
   Refresh01Icon,
-  ScanIcon
+  ScanIcon,
+  ServerStack01Icon,
+  ShieldIcon,
+  SparklesIcon,
+  TerminalIcon,
+  WorkflowSquare01Icon
 } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import {
@@ -25,10 +37,11 @@ import {
   useSetAtomPinMutation
 } from '@monad/client-rtk';
 import { Badge, Button, cn, Input, Label, ScrollArea } from '@monad/ui';
-import { useState } from 'react';
+import { Fragment, type ReactNode, useState } from 'react';
 
 import { useT } from '@/components/I18nProvider';
 import { PanelShell, PanelShellHeader } from '@/components/ui/panel-shell';
+import { providerLogo, useProviderMeta } from '@/lib/ProviderMeta';
 
 export function AtomsSettings(_props: { onClose: () => void }) {
   const t = useT();
@@ -130,7 +143,7 @@ export function AtomsSettings(_props: { onClose: () => void }) {
         </div>
       ) : null}
 
-      <ScrollArea className="flex-1">
+      <ScrollArea className="min-h-0 flex-1">
         <div className="flex flex-col gap-2 p-4">
           {adding ? (
             <InstallForm
@@ -232,85 +245,378 @@ function AtomPackCard({ pack }: { pack: InstalledAtomPack }) {
         >
           v{pack.version}
         </Badge>
-        {!pack.enabled && <span className="text-muted-foreground text-xs">{t('web.atoms.disabled')}</span>}
-        <div className="ml-auto flex items-center gap-1">
-          <Button
-            className="gap-1.5"
-            disabled={toggling}
-            onClick={() => void setEnabled({ name: pack.name, enabled: !pack.enabled })}
-            size="sm"
-            variant={pack.enabled ? 'secondary' : 'outline'}
+        {!pack.builtin && !pack.enabled && (
+          <span className="text-muted-foreground text-xs">{t('web.atoms.disabled')}</span>
+        )}
+        {pack.builtin ? (
+          <Badge
+            className="ml-auto text-[10px]"
+            variant="outline"
           >
-            <HugeiconsIcon
-              className="size-3.5"
-              icon={PowerIcon}
-            />
-            {pack.enabled ? t('web.atoms.enabled') : t('web.atoms.disabled')}
-          </Button>
-          {confirmRemove ? (
-            <>
-              <span className="text-muted-foreground text-xs">{t('web.atoms.confirmRemove')}</span>
-              <Button
-                disabled={removing}
-                onClick={async () => {
-                  await remove(pack.name)
-                    .unwrap()
-                    .catch(() => {});
-                  setConfirmRemove(false);
-                }}
-                size="sm"
-                variant="destructive"
-              >
-                {removing ? (
-                  <HugeiconsIcon
-                    className="size-3.5 animate-spin"
-                    icon={LoaderPinwheelIcon}
-                  />
-                ) : (
-                  <HugeiconsIcon
-                    className="size-3.5"
-                    icon={Delete02Icon}
-                  />
-                )}
-              </Button>
-              <Button
-                onClick={() => setConfirmRemove(false)}
-                size="sm"
-                variant="ghost"
-              >
-                {t('web.cancel')}
-              </Button>
-            </>
-          ) : (
+            {t('web.atoms.builtin')}
+          </Badge>
+        ) : (
+          <div className="ml-auto flex items-center gap-1">
             <Button
-              aria-label={t('web.atoms.remove')}
-              className="size-7"
-              onClick={() => setConfirmRemove(true)}
-              size="icon"
-              variant="ghost"
+              className="gap-1.5"
+              disabled={toggling}
+              onClick={() => void setEnabled({ name: pack.name, enabled: !pack.enabled })}
+              size="sm"
+              variant={pack.enabled ? 'secondary' : 'outline'}
             >
               <HugeiconsIcon
                 className="size-3.5"
-                icon={Delete02Icon}
+                icon={PowerIcon}
               />
+              {pack.enabled ? t('web.atoms.enabled') : t('web.atoms.disabled')}
             </Button>
-          )}
-        </div>
+            {confirmRemove ? (
+              <>
+                <span className="text-muted-foreground text-xs">{t('web.atoms.confirmRemove')}</span>
+                <Button
+                  disabled={removing}
+                  onClick={async () => {
+                    await remove(pack.name)
+                      .unwrap()
+                      .catch(() => {});
+                    setConfirmRemove(false);
+                  }}
+                  size="sm"
+                  variant="destructive"
+                >
+                  {removing ? (
+                    <HugeiconsIcon
+                      className="size-3.5 animate-spin"
+                      icon={LoaderPinwheelIcon}
+                    />
+                  ) : (
+                    <HugeiconsIcon
+                      className="size-3.5"
+                      icon={Delete02Icon}
+                    />
+                  )}
+                </Button>
+                <Button
+                  onClick={() => setConfirmRemove(false)}
+                  size="sm"
+                  variant="ghost"
+                >
+                  {t('web.cancel')}
+                </Button>
+              </>
+            ) : (
+              <Button
+                aria-label={t('web.atoms.remove')}
+                className="size-7"
+                onClick={() => setConfirmRemove(true)}
+                size="icon"
+                variant="ghost"
+              >
+                <HugeiconsIcon
+                  className="size-3.5"
+                  icon={Delete02Icon}
+                />
+              </Button>
+            )}
+          </div>
+        )}
       </div>
-      <div className="flex flex-wrap items-center gap-1.5 border-t px-3 py-2 text-muted-foreground text-xs">
-        <span>{t('web.atoms.provides')}:</span>
-        {pack.atoms.map((a) => (
+      {pack.description ? (
+        <p className="border-t px-3 py-2 text-muted-foreground text-xs leading-relaxed">{pack.description}</p>
+      ) : null}
+      <AtomPackMeta pack={pack} />
+      {pack.atomDetails.length > 0 ? (
+        <AtomPackAtoms atoms={pack.atomDetails} />
+      ) : (
+        <div className="flex flex-wrap items-center gap-1.5 border-t px-3 py-2 text-muted-foreground text-xs">
+          <span>{t('web.atoms.provides')}:</span>
+          {pack.atoms.map((a) => (
+            <Badge
+              className="text-[10px]"
+              key={a}
+              variant="outline"
+            >
+              {a}
+            </Badge>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Each atom kind gets its own identity (icon + label + one-line definition) and the layout `form`
+// that best fits the metadata that kind actually carries: bare identifiers → code chips, invocable
+// slash commands → a two-column palette, everything descriptive → info-rich identity rows.
+type AtomForm = 'chips' | 'command' | 'detail';
+type KindMeta = { label: string; icon: typeof PackageIcon; blurb: string; form: AtomForm };
+
+const KIND_META: Record<AtomKind, KindMeta> = {
+  skill: {
+    label: 'Skills',
+    icon: SparklesIcon,
+    blurb: 'Portable capability packets the agent loads on demand.',
+    form: 'detail'
+  },
+  command: {
+    label: 'Commands',
+    icon: TerminalIcon,
+    blurb: 'Slash commands available across every client.',
+    form: 'command'
+  },
+  mcp: {
+    label: 'MCP servers',
+    icon: ServerStack01Icon,
+    blurb: 'Model Context Protocol servers exposing external tools.',
+    form: 'detail'
+  },
+  provider: {
+    label: 'Model providers',
+    icon: BrainIcon,
+    blurb: 'Upstream gateways the model router can send requests to.',
+    form: 'detail'
+  },
+  channel: {
+    label: 'Channels',
+    icon: MessageMultiple01Icon,
+    blurb: 'Inbound chat gateways that route messages into sessions.',
+    form: 'detail'
+  },
+  connector: {
+    label: 'Connectors',
+    icon: Plug01Icon,
+    blurb: 'Webhook and integration endpoints.',
+    form: 'detail'
+  },
+  'agent-adapter': {
+    label: 'Agent adapters',
+    icon: BotIcon,
+    blurb: 'Native CLI agents managed as workplace members.',
+    form: 'detail'
+  },
+  hook: {
+    label: 'Hooks',
+    icon: WorkflowSquare01Icon,
+    blurb: 'Lifecycle handlers that run on daemon events.',
+    form: 'detail'
+  },
+  sandbox: {
+    label: 'Sandboxes',
+    icon: ShieldIcon,
+    blurb: 'OS-level confinement backends for tool execution.',
+    form: 'detail'
+  },
+  'message-type': {
+    label: 'Message types',
+    icon: MessageSquareCodeIcon,
+    blurb: 'Custom transcript payload renderers.',
+    form: 'detail'
+  },
+  'workspace-experience': {
+    label: 'Workspace experiences',
+    icon: PuzzleIcon,
+    blurb: 'Embedded UI surfaces mounted inside the workspace.',
+    form: 'detail'
+  },
+  locale: {
+    label: 'Locales',
+    icon: LanguageSquareIcon,
+    blurb: 'Language packs for the CLI, TUI, and web UI.',
+    form: 'chips'
+  }
+};
+
+const KIND_ORDER = Object.keys(KIND_META) as AtomKind[];
+
+function AtomPackAtoms({ atoms }: { atoms: AtomDescriptor[] }) {
+  const byKind = new Map<AtomKind, AtomDescriptor[]>();
+  for (const atom of atoms) {
+    const list = byKind.get(atom.kind) ?? [];
+    list.push(atom);
+    byKind.set(atom.kind, list);
+  }
+  const groups = [...byKind.entries()].sort(([a], [b]) => KIND_ORDER.indexOf(a) - KIND_ORDER.indexOf(b));
+
+  return (
+    <div className="flex flex-col gap-3.5 border-t px-3 py-3">
+      {groups.map(([kind, list]) => {
+        const meta = KIND_META[kind];
+        return (
+          <section
+            className="flex flex-col gap-2"
+            key={kind}
+          >
+            <header className="flex items-start gap-2.5">
+              <div className="mt-px grid size-6 shrink-0 place-items-center rounded-md bg-muted text-muted-foreground">
+                <HugeiconsIcon
+                  className="size-3.5"
+                  icon={meta?.icon ?? PackageIcon}
+                />
+              </div>
+              <div className="flex min-w-0 flex-1 flex-col">
+                <div className="flex items-baseline gap-1.5">
+                  <h4 className="font-medium text-foreground text-xs">{meta?.label ?? kind}</h4>
+                  <span className="text-[10px] text-muted-foreground/50 tabular-nums">{list.length}</span>
+                </div>
+                {meta?.blurb ? (
+                  <p className="text-[10.5px] text-muted-foreground/60 leading-snug">{meta.blurb}</p>
+                ) : null}
+              </div>
+            </header>
+            <div className="pl-[34px]">
+              <AtomKindBody
+                atoms={list}
+                form={meta?.form ?? 'detail'}
+              />
+            </div>
+          </section>
+        );
+      })}
+    </div>
+  );
+}
+
+function providerHost(url: string | undefined): string | null {
+  if (!url) return null;
+  try {
+    return new URL(url).host;
+  } catch {
+    return null;
+  }
+}
+
+// The provider's own brand logo (local, no network), rendered in a small tile.
+function ProviderMark({ id, className }: { id: string; className?: string }) {
+  const { logo: Logo, color } = providerLogo(id);
+  return (
+    <span className={cn('grid shrink-0 place-items-center rounded-md border bg-card', className)}>
+      <Logo className={cn('size-4', color)} />
+    </span>
+  );
+}
+
+function AtomKindBody({ atoms, form }: { atoms: AtomDescriptor[]; form: AtomForm }) {
+  const { metaFor } = useProviderMeta();
+  const isProvider = atoms[0]?.kind === 'provider';
+
+  if (form === 'chips') {
+    return (
+      <div className="flex flex-wrap gap-1">
+        {atoms.map((atom) => (
           <Badge
-            className="text-[10px]"
-            key={a}
+            className="font-mono text-[10px]"
+            key={atom.id}
+            title={atom.name ?? atom.description}
             variant="outline"
           >
-            {a}
+            {atom.id}
           </Badge>
         ))}
-        {pack.source ? <span className="ml-auto truncate font-mono text-[10px]">{pack.source}</span> : null}
       </div>
-    </div>
+    );
+  }
+
+  if (form === 'command') {
+    return (
+      <dl className="grid grid-cols-[auto_minmax(0,1fr)] items-baseline gap-x-3 gap-y-1.5">
+        {atoms.map((atom) => (
+          <Fragment key={atom.id}>
+            <dt className="whitespace-nowrap font-mono text-[color:var(--link)] text-xs">/{atom.id}</dt>
+            <dd className="min-w-0 truncate text-[11px] text-muted-foreground/80">
+              {atom.description ?? atom.name ?? ''}
+            </dd>
+          </Fragment>
+        ))}
+      </dl>
+    );
+  }
+
+  if (isProvider) {
+    return (
+      <ul className="pv-table">
+        {atoms.map((atom) => {
+          const meta = metaFor(atom.id);
+          const host = providerHost(meta.defaultBaseUrl);
+          return (
+            <li
+              className="pv-trow"
+              key={atom.id}
+            >
+              <span className="pv-cell">
+                <ProviderMark
+                  className="pv-mark"
+                  id={atom.id}
+                />
+              </span>
+              <span className="pv-name">{atom.name ?? atom.id}</span>
+              <code className="pv-id">{atom.id}</code>
+              <span className="pv-strategy">{meta.strategy === 'native' ? 'Native' : 'OpenAI-compat'}</span>
+              <span className="pv-host">{host ?? ''}</span>
+            </li>
+          );
+        })}
+      </ul>
+    );
+  }
+
+  return (
+    <ul className="flex flex-col gap-2">
+      {atoms.map((atom) => (
+        <li
+          className="flex flex-col gap-0.5"
+          key={atom.id}
+        >
+          <div className="flex min-w-0 items-baseline gap-2">
+            <span className="truncate font-mono text-foreground/90 text-xs">{atom.id}</span>
+            {atom.name ? <span className="truncate text-[11px] text-muted-foreground">{atom.name}</span> : null}
+          </div>
+          {atom.description ? (
+            <span className="text-[11px] text-muted-foreground/70 leading-snug">{atom.description}</span>
+          ) : null}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function formatInstalledAt(iso: string): string {
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime()) ? iso : date.toLocaleDateString();
+}
+
+function AtomPackMeta({ pack }: { pack: InstalledAtomPack }) {
+  const t = useT();
+  const mono = (value: string) => <span className="font-mono">{value}</span>;
+  const items: { key: string; label: string; value: ReactNode }[] = [];
+  if (pack.displayName && pack.name !== pack.displayName)
+    items.push({ key: 'id', label: t('web.atoms.packId'), value: mono(pack.name) });
+  if (pack.author) items.push({ key: 'author', label: t('web.atoms.author'), value: pack.author });
+  if (pack.monadVersion)
+    items.push({ key: 'compat', label: t('web.atoms.compatibility'), value: mono(pack.monadVersion) });
+  if (pack.sdkVersion) items.push({ key: 'sdk', label: t('web.atoms.sdkVersion'), value: mono(pack.sdkVersion) });
+  if (pack.repository)
+    items.push({
+      key: 'repo',
+      label: t('web.atoms.repository'),
+      value: mono(`${pack.repository.repo}@${pack.repository.commit.slice(0, 7)}`)
+    });
+  if (pack.source) items.push({ key: 'source', label: t('web.atoms.source'), value: mono(pack.source) });
+  if (pack.installedAt)
+    items.push({ key: 'installed', label: t('web.atoms.installedAt'), value: formatInstalledAt(pack.installedAt) });
+  if (items.length === 0) return null;
+
+  return (
+    <dl className="flex flex-wrap items-baseline gap-x-4 gap-y-1 border-t bg-muted/30 px-3 py-2 text-[11px]">
+      {items.map((item) => (
+        <div
+          className="flex min-w-0 items-baseline gap-1.5"
+          key={item.key}
+        >
+          <dt className="whitespace-nowrap text-muted-foreground/60">{item.label}</dt>
+          <dd className="min-w-0 truncate text-foreground/80">{item.value}</dd>
+        </div>
+      ))}
+    </dl>
   );
 }
 

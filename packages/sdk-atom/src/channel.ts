@@ -10,7 +10,7 @@ import type { ChannelCapabilities, ChannelEnvVar, ChannelInbound, ChannelManifes
 
 import { channelInboundSchema, channelManifestSchema } from '@monad/protocol';
 
-export type { ChannelCapabilities, ChannelEnvVar, ChannelInbound, ChannelManifest, ChannelType } from '@monad/protocol';
+export type { ChannelCapabilities, ChannelEnvVar, ChannelInbound, ChannelManifest, ChannelType };
 
 /** The slice of channel config the atom pack may see — only what it needs to run. Host-only
  *  concerns (allowlist, conversation mapping, token reference) are deliberately withheld. */

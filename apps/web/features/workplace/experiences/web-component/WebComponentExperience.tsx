@@ -1,6 +1,10 @@
 'use client';
 
-import type { WorkspaceExperienceDefinition } from '@monad/protocol';
+import type {
+  WorkspaceExperienceDefinition,
+  WorkspaceExperienceEntry,
+  WorkspaceExperienceHostApi
+} from '@monad/protocol';
 import type { ProjectExperienceView } from '../types';
 
 import { createElement, useEffect, useMemo, useRef, useState } from 'react';
@@ -8,13 +12,11 @@ import { createElement, useEffect, useMemo, useRef, useState } from 'react';
 import { useT } from '@/components/I18nProvider';
 
 type WorkspaceExperienceElement = HTMLElement & {
-  monadWorkspaceExperience?: {
-    actions: ProjectExperienceView['runtime']['actions'];
-    embedded: boolean;
-    host: ProjectExperienceView['runtime']['host'];
-    requestProjectSettings(open: boolean): void;
-    snapshot: ProjectExperienceView['runtime']['snapshot'];
-  };
+  monadWorkspaceExperience?: WorkspaceExperienceHostApi;
+};
+
+type WebComponentWorkspaceExperienceDefinition = WorkspaceExperienceDefinition & {
+  entry: Extract<WorkspaceExperienceEntry, { type: 'web-component' }>;
 };
 
 function isValidCustomElementName(name: string): boolean {
@@ -33,7 +35,7 @@ export function WebComponentExperience({
   atom,
   view
 }: {
-  atom: WorkspaceExperienceDefinition;
+  atom: WebComponentWorkspaceExperienceDefinition;
   view: ProjectExperienceView;
 }) {
   const t = useT();
@@ -43,12 +45,12 @@ export function WebComponentExperience({
     () => ({
       // TODO: add per-atom API permission controls before third-party workspace experiences ship.
       actions: view.runtime.actions,
+      apiBaseUrl: `/api/v1/atoms/workspace-experiences/${encodeURIComponent(atom.id)}/api`,
       embedded: view.embedded,
-      host: view.runtime.host,
       requestProjectSettings: (open: boolean) => view.onProjectSettingsOpenChange?.(open),
       snapshot: view.runtime.snapshot
     }),
-    [view.embedded, view.onProjectSettingsOpenChange, view.runtime.actions, view.runtime.host, view.runtime.snapshot]
+    [atom.id, view.embedded, view.onProjectSettingsOpenChange, view.runtime.actions, view.runtime.snapshot]
   );
 
   useEffect(() => {

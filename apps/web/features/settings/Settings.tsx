@@ -4,7 +4,7 @@ import type { WebMessageIdWithoutParams } from '@monad/i18n';
 
 import {
   CatIcon,
-  ColorsIcon,
+  EyeIcon,
   FileInputIcon,
   GlobeIcon,
   JusticeScaleIcon,
@@ -39,7 +39,7 @@ type SectionId = 'connection' | 'profile' | 'appearance' | 'import' | 'language'
 const SECTIONS: { id: SectionId; labelKey: WebMessageIdWithoutParams; icon: typeof SlidersHorizontalIcon }[] = [
   { id: 'connection', labelKey: 'web.settings.connection', icon: GlobeIcon },
   { id: 'profile', labelKey: 'web.settings.profile', icon: UserGroupIcon },
-  { id: 'appearance', labelKey: 'web.settings.appearance', icon: ColorsIcon },
+  { id: 'appearance', labelKey: 'web.settings.appearance', icon: EyeIcon },
   { id: 'import', labelKey: 'web.settings.import', icon: FileInputIcon },
   { id: 'language', labelKey: 'web.settings.language', icon: LanguageSquareIcon },
   { id: 'mo', labelKey: 'web.settings.mo', icon: CatIcon },

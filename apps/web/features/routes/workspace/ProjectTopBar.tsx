@@ -1,8 +1,8 @@
 'use client';
 
+import type { Participant } from '@monad/atoms/workspace-experiences/project/types';
 import type { ProjectId, WorkspaceAction } from '@monad/protocol';
 import type { ProjectExperienceDefinition } from '@/features/workplace/experiences/types';
-import type { Participant } from '@/features/workplace/types';
 
 import {
   ChevronDownIcon,
@@ -21,6 +21,7 @@ import {
   useWorkspaceActionMutation,
   useWorkspaceMetaQuery
 } from '@monad/client-rtk';
+import { Avatar, PresenceBadge } from '@monad/ui/components/AgentAvatar';
 import { useState } from 'react';
 
 import { useT } from '@/components/I18nProvider';
@@ -31,7 +32,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
-import { Avatar, PresenceBadge } from '@/features/workplace/Bits';
 import { getProjectExperience } from '@/features/workplace/experiences/registry';
 
 interface ProjectTopBarProps {
@@ -45,10 +45,14 @@ interface ProjectTopBarProps {
   onOpenSettings: () => void;
 }
 
-const modeIcon: Record<string, typeof MessageSquareCodeIcon> = {
-  'chat-room': MessageSquareCodeIcon,
-  'graphic-view': NeuralNetworkIcon
+const experienceIcon: Record<string, typeof MessageSquareCodeIcon> = {
+  'git-fork': NeuralNetworkIcon,
+  'message-square': MessageSquareCodeIcon
 };
+
+function iconForExperience(experience: ProjectExperienceDefinition): typeof MessageSquareCodeIcon {
+  return experienceIcon[experience.icon ?? ''] ?? MessageSquareCodeIcon;
+}
 
 function workdirLabel(path: string | undefined, fallback: string): string {
   if (!path) return fallback;
@@ -206,14 +210,17 @@ function ProjectTopBarExperienceSwitch({
   experiences,
   onModeChange
 }: {
-  activeExperience: ProjectExperienceDefinition;
+  activeExperience: ProjectExperienceDefinition | null;
   experiences: ProjectExperienceDefinition[];
   onModeChange: (mode: string) => void;
 }): React.ReactElement {
   const t = useT();
-  const ModeIcon = modeIcon[activeExperience.id] ?? MessageSquareCodeIcon;
+  const ModeIcon = activeExperience ? iconForExperience(activeExperience) : MessageSquareCodeIcon;
   const activeLabel =
-    activeExperience.label ?? (activeExperience.labelKey ? t(activeExperience.labelKey) : activeExperience.id);
+    activeExperience?.label ??
+    (activeExperience?.labelKey
+      ? t(activeExperience.labelKey)
+      : (activeExperience?.id ?? t('web.workplace.experience.chat')));
 
   return (
     <DropdownMenu>
@@ -240,9 +247,9 @@ function ProjectTopBarExperienceSwitch({
         className="min-w-44"
       >
         {experiences.map((experience) => {
-          const ExperienceIcon = modeIcon[experience.id] ?? MessageSquareCodeIcon;
+          const ExperienceIcon = iconForExperience(experience);
           const label = experience.label ?? (experience.labelKey ? t(experience.labelKey) : experience.id);
-          const active = experience.id === activeExperience.id;
+          const active = experience.id === activeExperience?.id;
           return (
             <DropdownMenuItem
               aria-current={active ? 'true' : undefined}

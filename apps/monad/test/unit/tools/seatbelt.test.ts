@@ -1,6 +1,5 @@
 import { expect, test } from 'bun:test';
-
-import { buildSeatbeltProfile } from '../../../../../packages/atoms/src/sandbox/seatbelt.ts';
+import { buildSeatbeltProfile } from '@monad/atoms/sandbox/seatbelt';
 
 // Pure profile generation — runs on any platform.
 

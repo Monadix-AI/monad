@@ -1,67 +1,70 @@
-import type { WorkspaceExperienceDefinition } from '@monad/protocol';
+import type { WorkspaceExperienceDefinition, WorkspaceExperienceEntry } from '@monad/protocol';
 import type { ProjectExperienceDefinition } from './types';
 
 import { createElement, lazy, Suspense } from 'react';
 
-const ChatRoomExperienceView = lazy(() =>
-  import('./chat-room/ChatRoomExperience').then((module) => ({ default: module.ChatRoomExperienceView }))
-);
-const GraphicViewExperienceView = lazy(() =>
-  import('./graphic-view/GraphicViewExperience').then((module) => ({ default: module.GraphicViewExperienceView }))
-);
 const WebComponentExperience = lazy(() =>
   import('./web-component/WebComponentExperience').then((module) => ({ default: module.WebComponentExperience }))
 );
+const BuiltinWorkspaceExperienceHost = lazy(() =>
+  import('./builtin/BuiltinWorkspaceExperience').then((module) => ({ default: module.BuiltinWorkspaceExperienceHost }))
+);
 
-const chatRoomExperience: ProjectExperienceDefinition = {
-  id: 'chat-room',
-  labelKey: 'web.workplace.experience.chat',
-  icon: 'message-square',
-  source: 'builtin',
-  render: (view) => createElement(Suspense, { fallback: null }, createElement(ChatRoomExperienceView, view))
+type BuiltinWorkspaceExperienceDefinition = WorkspaceExperienceDefinition & {
+  entry: Extract<WorkspaceExperienceEntry, { type: 'builtin' }>;
 };
 
-const graphicViewExperience: ProjectExperienceDefinition = {
-  id: 'graphic-view',
-  labelKey: 'web.workplace.experience.graph',
-  icon: 'git-fork',
-  source: 'builtin',
-  render: (view) => createElement(Suspense, { fallback: null }, createElement(GraphicViewExperienceView, view))
+type WebComponentWorkspaceExperienceDefinition = WorkspaceExperienceDefinition & {
+  entry: Extract<WorkspaceExperienceEntry, { type: 'web-component' }>;
 };
 
-const BUILTINS: ProjectExperienceDefinition[] = [chatRoomExperience, graphicViewExperience];
+function toBuiltinExperience(atom: BuiltinWorkspaceExperienceDefinition): ProjectExperienceDefinition {
+  return {
+    id: atom.id,
+    label: atom.title,
+    icon: atom.icon,
+    render: (view) =>
+      createElement(
+        Suspense,
+        { fallback: null },
+        createElement(BuiltinWorkspaceExperienceHost, { component: atom.entry.component, view })
+      )
+  };
+}
 
 export function toProjectExperienceDefinitions(
   atoms: WorkspaceExperienceDefinition[] = []
 ): ProjectExperienceDefinition[] {
-  return atoms.map((atom) => ({
-    id: atom.id,
-    label: atom.title,
-    icon: atom.icon,
-    source: 'atom',
-    atomName: atom.id,
-    atom,
-    render: (view) => createElement(Suspense, { fallback: null }, createElement(WebComponentExperience, { atom, view }))
-  }));
+  return atoms.map((atom) => {
+    if (atom.entry.type === 'builtin') return toBuiltinExperience(atom as BuiltinWorkspaceExperienceDefinition);
+    const webComponentAtom = atom as WebComponentWorkspaceExperienceDefinition;
+    return {
+      id: atom.id,
+      label: atom.title,
+      icon: atom.icon,
+      render: (view) =>
+        createElement(
+          Suspense,
+          { fallback: null },
+          createElement(WebComponentExperience, { atom: webComponentAtom, view })
+        )
+    };
+  });
 }
 
 export function listProjectExperiences(atoms: ProjectExperienceDefinition[] = []): ProjectExperienceDefinition[] {
-  const seen = new Set(BUILTINS.map((experience) => experience.id));
-  return [
-    ...BUILTINS,
-    ...atoms.filter((experience) => {
-      if (seen.has(experience.id)) return false;
-      seen.add(experience.id);
-      return true;
-    })
-  ];
+  const seen = new Set<string>();
+  return atoms.filter((experience) => {
+    if (seen.has(experience.id)) return false;
+    seen.add(experience.id);
+    return true;
+  });
 }
 
 export function getProjectExperience(
   id: string | undefined,
-  experiences: ProjectExperienceDefinition[] = BUILTINS
-): ProjectExperienceDefinition {
-  if (id === 'chat') return chatRoomExperience;
-  if (id === 'graph') return graphicViewExperience;
-  return experiences.find((experience) => experience.id === id) ?? chatRoomExperience;
+  experiences: ProjectExperienceDefinition[] = []
+): ProjectExperienceDefinition | null {
+  if (!id) return experiences[0] ?? null;
+  return experiences.find((experience) => experience.id === id) ?? experiences[0] ?? null;
 }

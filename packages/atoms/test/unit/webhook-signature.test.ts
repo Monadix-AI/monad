@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
 import { createHmac } from 'node:crypto';
 
-import { verifyWebhookSignature } from '../../src/connectors/index.ts';
+import { verifyWebhookSignature } from '../../src/connectors/security.ts';
 
 const secret = 'shhh-secret';
 const body = '{"event":"ping","id":42}';

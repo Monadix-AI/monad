@@ -1,6 +1,7 @@
 import type { Dirent } from 'node:fs';
 import type { MonadAuth, MonadConfig, MonadPaths } from '@monad/home';
 import type {
+  AtomDescriptor,
   CheckSkillUpdatesResponse,
   CreateSkillRequest,
   CreateSkillResponse,
@@ -35,9 +36,11 @@ import type { ModelService } from '@/services/model.ts';
 import { Buffer } from 'node:buffer';
 import { mkdir, readdir, rm, stat } from 'node:fs/promises';
 import { basename, join } from 'node:path';
+import builtinAtomPack from '@monad/atoms';
 import { DEFAULT_SAMPLE_PROVIDER_ID, loadAll, loadAuth, saveProfile } from '@monad/home';
 import { DEFAULT_SKILL_MARKETPLACE_SOURCE, parseAtomPackManifest, skillMarketplaceSourceMeta } from '@monad/protocol';
 
+import { describeAtomPack } from '@/atoms/describe.ts';
 import { createAtomFetcher } from '@/atoms/install/fetch.ts';
 import { type AtomPackInstallRecord, atomPackInstallRecordSchema, installAtomPack } from '@/atoms/install/index.ts';
 import {
@@ -88,6 +91,8 @@ export interface AtomPacksDeps {
   onChanged?: () => Promise<void>;
   /** Bare-name collisions from the last load sweep — surfaced read-only for the conflict UI. */
   getConflicts?: () => AtomConflict[];
+  /** Per-pack individual atoms (by pack folder name) from the last load sweep, for the detail view. */
+  getAtomDetails?: (packName: string) => AtomDescriptor[] | undefined;
   /** Runtime-registered workspace experiences from loaded atom packs. */
   getWorkspaceExperiences?: () => RegisteredWorkspaceExperience[];
   /** Runtime-registered workspace experience API route resolver from loaded atom packs. */
@@ -303,7 +308,24 @@ export function createAtomPacksModule(deps: AtomPacksDeps) {
   return {
     async listAtomPacks(): Promise<ListAtomPacksResponse> {
       const conflicts = deps.getConflicts?.() ?? [];
-      const atomPacks: InstalledAtomPack[] = [];
+      // The first-party pack is bundled, not on disk under the install dir, so it is synthesized from
+      // its manifest and listed first — read-only (always enabled, not removable).
+      const atomPacks: InstalledAtomPack[] = [
+        {
+          name: builtinAtomPack.manifest.name,
+          displayName: builtinAtomPack.manifest.name,
+          version: builtinAtomPack.manifest.version,
+          monadVersion: builtinAtomPack.manifest.monadVersion,
+          atoms: builtinAtomPack.manifest.atoms,
+          enabled: true,
+          installedAt: undefined,
+          description: builtinAtomPack.manifest.description,
+          author: builtinAtomPack.manifest.author,
+          sdkVersion: builtinAtomPack.manifest.sdkVersion,
+          builtin: true,
+          atomDetails: await describeAtomPack(builtinAtomPack)
+        }
+      ];
       let entries: Dirent[];
       try {
         entries = await readdir(dir, { withFileTypes: true });
@@ -327,7 +349,14 @@ export function createAtomPacksModule(deps: AtomPacksDeps) {
             atoms: manifest.atoms,
             enabled: record.enabled !== false, // drop-in (no record) → enabled
             source: record.source,
-            installedAt: record.installedAt
+            installedAt: record.installedAt,
+            description: manifest.description,
+            author: manifest.author,
+            sdkVersion: manifest.sdkVersion,
+            repository: manifest.source,
+            // Individual atoms captured by the last discovery sweep (keyed by folder name); empty
+            // until the pack has loaded, in which case the UI falls back to the kind summary.
+            atomDetails: deps.getAtomDetails?.(e.name) ?? []
           });
         } catch {
           /* skip malformed atom pack dirs */

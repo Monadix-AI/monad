@@ -4,8 +4,14 @@
 import type { BinProbes } from '@/infra/resolve-binary.ts';
 
 import { expect, test } from 'bun:test';
+import { builtinAgentAdapters } from '@monad/atoms/agent-adapters';
 
 import { listAcpAgentPresets } from '@/services/delegation/presets.ts';
+import { registerAgentAdapterImpl } from '@/services/native-cli/index.ts';
+
+// ACP invite presets now derive from the agent-adapter registry (adapters that declare an `acp`
+// delivery variant); the daemon populates it at boot, so register the built-ins for this unit test.
+for (const adapter of builtinAgentAdapters) registerAgentAdapterImpl(adapter);
 
 const CODEX_APP_BIN = '/Applications/Codex.app/Contents/Resources/codex';
 

@@ -7,9 +7,9 @@ import { existsSync } from 'node:fs';
 import { mkdtemp, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { seatbeltLauncher } from '@monad/atoms/sandbox/seatbelt';
 
 import { configureSandboxLauncher, noneLauncher, sandboxedSpawn } from '@/capabilities/tools';
-import { seatbeltLauncher } from '../../../../../packages/atoms/src/sandbox/seatbelt.ts';
 
 // Real Seatbelt enforcement — requires the macOS kernel.
 

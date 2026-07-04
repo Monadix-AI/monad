@@ -2,7 +2,7 @@
 
 import type { HookEvent, HookInput, HookOutput } from '@monad/protocol';
 
-export type { HookEvent, HookInput, HookOutput } from '@monad/protocol';
+export type { HookEvent, HookInput, HookOutput };
 
 /** An in-process typed lifecycle hook. Returning nothing is "proceed"; see HookOutput for the
  * deny/ask/mutate/inject vocabulary. `matcher` (a regex string) filters tool events by tool name. */

@@ -14,11 +14,12 @@
 // daemon's builtin load branch. The built-in UI locales are NOT here — they live in @monad/i18n
 // (the i18n engine owns them); the daemon loads them from @monad/i18n/locale-dir at startup.
 //
-// Tests that need channel adapters, providers, or commands import directly from the source files
-// under packages/atoms/src/ (relative paths from apps/monad/test/).
+// Tests that need specific channel adapters, providers, commands, or launchers use explicit
+// package subpaths instead of reaching through the source tree.
 
 import { defineAtomPack, SDK_VERSION } from '@monad/sdk-atom';
 
+import { builtinAgentAdapters } from './agent-adapters/index.ts';
 import { discordChannelAtom } from './channels/discord.ts';
 import { emailChannelAtom } from './channels/email.ts';
 import { feishuChannelAtom } from './channels/feishu.ts';
@@ -36,29 +37,38 @@ import { webhookChannelAtom } from './channels/webhook.ts';
 import { wecomChannelAtom } from './channels/wecom.ts';
 import { whatsappChannelAtom } from './channels/whatsapp.ts';
 import { BUILTIN_COMMANDS } from './commands/builtins.ts';
-import { builtinConnectors } from './connectors/index.ts';
-import { builtinModelProviders } from './providers/index.ts';
+import { builtinConnectors } from './connectors/registry.ts';
+import { builtinModelProviders } from './providers/registry.ts';
 import { bwrapLauncher } from './sandbox/bwrap.ts';
-import { dockerLauncher } from './sandbox/docker.ts';
-import { e2bLauncher } from './sandbox/e2b.ts';
+import { configureDockerImage, detectDockerRuntime, dockerLauncher, dockerRuntimeAvailable } from './sandbox/docker.ts';
+import { __setE2bLoaderForTest, configureE2bApiKey, e2bLauncher } from './sandbox/e2b.ts';
 import { landlockLauncher } from './sandbox/landlock.ts';
+import { configureNativeLauncherPath } from './sandbox/native-path.ts';
 import { seatbeltLauncher } from './sandbox/seatbelt.ts';
 import { win32Launcher } from './sandbox/win32.ts';
-import { win32AppContainerLauncher } from './sandbox/win32-appcontainer.ts';
+import { sweepOrphanAppContainerProfiles, win32AppContainerLauncher } from './sandbox/win32-appcontainer.ts';
+import { builtinWorkspaceExperiences } from './workspace-experiences/registry.ts';
 
-export { configureDockerImage, detectDockerRuntime, dockerLauncher, dockerRuntimeAvailable } from './sandbox/docker.ts';
-export { __setE2bLoaderForTest, configureE2bApiKey, e2bLauncher } from './sandbox/e2b.ts';
 // The one named export: the daemon pushes config.agent.sandbox.launcherPath here before launcher
 // selection so the native landlock/win32 launchers can find their helper binary.
-export { configureNativeLauncherPath } from './sandbox/native-path.ts';
-export { sweepOrphanAppContainerProfiles } from './sandbox/win32-appcontainer.ts';
+export {
+  __setE2bLoaderForTest,
+  configureDockerImage,
+  configureE2bApiKey,
+  configureNativeLauncherPath,
+  detectDockerRuntime,
+  dockerLauncher,
+  dockerRuntimeAvailable,
+  e2bLauncher,
+  sweepOrphanAppContainerProfiles
+};
 
 export default defineAtomPack({
   manifest: {
     name: 'monad-builtins',
     version: '1.0.0',
     sdkVersion: SDK_VERSION,
-    atoms: ['connector', 'channel', 'command', 'provider', 'sandbox'],
+    atoms: ['connector', 'channel', 'command', 'provider', 'sandbox', 'workspace-experience', 'agent-adapter'],
     description: 'First-party atoms bundled with monad',
     author: 'monad'
   },
@@ -83,6 +93,8 @@ export default defineAtomPack({
   ],
   commands: BUILTIN_COMMANDS,
   providers: builtinModelProviders,
+  agentAdapters: builtinAgentAdapters,
+  workspaceExperiences: builtinWorkspaceExperiences,
   // Launcher priority (first-match-wins within the builtin tier):
   //   macOS  → Seatbelt (system sandbox-exec, enforces write+readDeny+net)
   //   Linux  → bwrap when installed (enforces write+readDeny+net) → Landlock (write+net only)

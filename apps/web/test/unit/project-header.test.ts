@@ -35,12 +35,3 @@ test('project top bar experience switch does not use a native select', async () 
   expect(topBarSource).not.toContain('project-topbar-select');
   expect(topBarSource).toContain('DropdownMenuItem');
 });
-
-test('graphic view does not render the right-side agent tasks rail', async () => {
-  const webRoot = join(import.meta.dir, '../..');
-  const graphicViewSource = await Bun.file(
-    join(webRoot, 'features/workplace/experiences/graphic-view/GraphicViewExperience.tsx')
-  ).text();
-
-  expect(graphicViewSource).not.toContain('AgentTasksRail');
-});

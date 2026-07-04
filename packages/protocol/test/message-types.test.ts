@@ -81,7 +81,7 @@ test('pickRepresentation walks the degradation chain by capability', () => {
   expect(pickRepresentation(type, { richTypes: new Set([type]), markdown: true, interactions: new Set() })).toBe(
     'markdown'
   );
-  // Markdown-only client (e.g. a thin channel adaptor) → markdown.
+  // Markdown-only client (e.g. a thin channel adapter) → markdown.
   expect(pickRepresentation(type, { markdown: true })).toBe('markdown');
   // No capabilities at all → guaranteed text fallback.
   expect(pickRepresentation(type, {})).toBe('text');

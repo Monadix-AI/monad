@@ -1,19 +1,13 @@
 'use client';
 
-// Single chokepoint between the workplace UI and the REAL monad backend.
-//
-// A project is a Workplace Project resource. Everything below is live:
-//   - messages   ← useGetUiItemsInfiniteQuery (persisted) merged with the live
-//                  useStreamUiItemsQuery feed (in-flight tokens / streaming).
-//   - sendDirective → daemon-side project message routing.
-//   - approvals  ← projected UI approval items (oversight gate) → useApproveToolMutation.
-//   - activity   ← projected UI tool items (real tool calls).
-//   - participants = you + invited Monad/ACP/native CLI agents.
-//   - projects   = your Workplace Projects (useListWorkplaceProjectsQuery).
+// Single chokepoint between the workspace shell and the live monad backend.
+// Experience-specific transcript, rail, and composer projections live in atoms.
 
 import type { NativeCliSessionView, ProfileView, ProjectId, UIItem, WorkplaceProject } from '@monad/protocol';
-import type { ApprovalView, Participant, Project, QuestionView } from './types';
+import type { ApprovalDecision } from './use-project-actions';
 
+import { createProjectExperienceRuntime } from '@monad/atoms/workspace-experiences';
+import { useWorkspaceProjectProjection } from '@monad/atoms/workspace-experiences/project/use-workspace-project-projection';
 import {
   nativeCliSessionSelectors,
   profileSelectors,
@@ -26,45 +20,25 @@ import {
   workplaceProjectAdapter,
   workplaceProjectSelectors
 } from '@monad/client-rtk';
-import { entityAvatarUrl, workplaceProjectMembersExtKey } from '@monad/protocol';
 import { useEffect, useMemo, useState } from 'react';
 
 import { useAcpAgentSettings } from '@/hooks/use-acp-agent-settings';
 import { useNativeCliAgentSettings } from '@/hooks/use-native-cli-agent-settings';
 import { useTranscriptHistory } from '@/hooks/use-transcript-history';
 import { getWorkplaceProjectName } from '@/lib/workspace-sessions';
-import {
-  HUMAN,
-  initials,
-  nativeCliApprovalName,
-  nativeCliAvatarSeed,
-  nativeCliMemberActivityPhase,
-  nativeCliMemberPresence,
-  nativeCliProductDisplayName,
-  nativeCliProjectMemberAvatarSeed,
-  nativeCliSessionIsGenerating,
-  nativeCliTag,
-  parseProjectMembers,
-  productIcon,
-  projectMemberId,
-  projectMemberParticipants,
-  projectMemberStableId,
-  summarizeTool,
-  toolItems
-} from './project-projection';
-import { useNativeCliActivityOverrides } from './use-native-cli-activity-overrides';
 import { useProjectActions } from './use-project-actions';
 import { DEV_SYSTEM_MESSAGES_IN_STREAM_ENABLED, useWorkplaceUiStore } from './workplace-ui-store';
 
-export type { ApprovalDecision } from './use-project-actions';
-
-export { nativeCliAvatarSeed, projectMemberParticipants };
+export type { ApprovalDecision };
 
 const EMPTY_PROFILES: ProfileView[] = [];
 const EMPTY_ITEMS: UIItem[] = [];
 const EMPTY_NATIVE_CLI_SESSIONS: NativeCliSessionView[] = [];
 
-export function useProject(projectId: string) {
+export function useProject(
+  projectId: string,
+  opts: { openAgentCard?: (memberId: string) => void; switchExperience?: (id: string) => void } = {}
+) {
   const [resolvedProjectId, setResolvedProjectId] = useState<ProjectId | null>(null);
 
   // --- projects ---
@@ -111,55 +85,8 @@ export function useProject(projectId: string) {
     streamHasMore: stream.data?.hasMore ?? false
   });
 
-  // --- invite backend (real) ---
   const acp = useAcpAgentSettings();
   const nativeCli = useNativeCliAgentSettings();
-  const projectMembers = useMemo(
-    () => parseProjectMembers(currentProject?.origin?.ext?.[workplaceProjectMembersExtKey]),
-    [currentProject?.origin?.ext]
-  );
-  const human = useMemo((): Participant => {
-    const name = userProfile?.displayName ?? HUMAN.name;
-    return {
-      ...HUMAN,
-      av: initials(name),
-      name,
-      avatarUrl: userProfile?.avatarDataUrl ?? entityAvatarUrl(`user:${name}`, appearance?.avatarStyle)
-    };
-  }, [userProfile?.avatarDataUrl, appearance?.avatarStyle, userProfile?.displayName]);
-  const nativeCliAvatarSeeds = useMemo(() => {
-    const seeds = new Map<string, string>();
-    for (const member of projectMembers) {
-      if (member.type !== 'native-cli') continue;
-      const displayName = member.displayName ?? member.name;
-      seeds.set(displayName, nativeCliProjectMemberAvatarSeed(currentProject?.id ?? projectId, member));
-    }
-    return seeds;
-  }, [currentProject?.id, projectId, projectMembers]);
-  const nativeCliTags = useMemo(() => {
-    const tags = new Map<string, string>();
-    for (const member of projectMembers) {
-      if (member.type !== 'native-cli') continue;
-      const templateName = member.templateName ?? member.name;
-      const displayName = member.displayName ?? member.name;
-      const agent = nativeCli.agents.find((candidate) => candidate.name === templateName);
-      tags.set(displayName, nativeCliTag(agent?.provider));
-    }
-    return tags;
-  }, [nativeCli.agents, projectMembers]);
-  const nativeCliDisplayNames = useMemo(() => {
-    const names = new Map<string, string>();
-    for (const member of projectMembers) {
-      if (member.type !== 'native-cli') continue;
-      const displayName = member.displayName ?? member.name;
-      names.set(projectMemberStableId(member), displayName);
-      names.set(member.name, displayName);
-    }
-    return names;
-  }, [projectMembers]);
-
-  // --- participants ---
-  const liveItems = stream.data?.items ?? EMPTY_ITEMS;
   const nativeCliSessions = useMemo(
     () =>
       nativeCliSessionsQ.data
@@ -167,250 +94,38 @@ export function useProject(projectId: string) {
         : EMPTY_NATIVE_CLI_SESSIONS,
     [nativeCliSessionsQ.data]
   );
-  const contextUsage = liveItems.find(
-    (item): item is Extract<UIItem, { kind: 'context' }> => item.kind === 'context'
-  )?.usage;
-  const liveTools = useMemo(() => toolItems(liveItems), [liveItems]);
-  const nativeCliActivityOverrides = useNativeCliActivityOverrides(liveTools);
-  const nativeCliStreamingAgentNames = useMemo(() => {
-    const names = new Set<string>();
-    for (const item of liveItems) {
-      if (item.kind !== 'message') continue;
-      if (item.source !== 'managed-native-cli' || item.status !== 'streaming') continue;
-      if (item.agentName) names.add(item.agentName);
-    }
-    return names;
-  }, [liveItems]);
-  const nativeCliActiveAgentNames = useMemo(() => {
-    const names = new Set(nativeCliStreamingAgentNames);
-    for (const agentName of Object.keys(nativeCliActivityOverrides)) names.add(agentName);
-    for (const session of nativeCliSessions) {
-      if (nativeCliSessionIsGenerating(session)) names.add(session.agentName);
-    }
-    return names;
-  }, [nativeCliActivityOverrides, nativeCliSessions, nativeCliStreamingAgentNames]);
-  const monadStreaming = liveItems.some(
-    (item) =>
-      item.kind === 'message' &&
-      item.status === 'streaming' &&
-      item.role === 'assistant' &&
-      (item.agentName === undefined || item.agentName === 'monad') &&
-      item.source !== 'managed-native-cli'
-  );
-  const runningDelegations = useMemo(() => {
-    const names = new Set<string>();
-    for (const s of liveTools) {
-      if (s.status === 'running' && s.tool === 'agent_acp_delegate') {
-        const agent = (s.input as Record<string, unknown> | undefined)?.agent;
-        if (typeof agent === 'string') names.add(agent);
-      }
-      if (s.status === 'running' && s.tool.startsWith('acp:')) {
-        const agent = (s.input as Record<string, unknown> | undefined)?.agent;
-        if (typeof agent === 'string') names.add(agent);
-      }
-    }
-    return names;
-  }, [liveTools]);
-  const participants: Participant[] = useMemo(() => {
-    const members: Participant[] = projectMembers.map((member) => {
-      if (member.type === 'monad') {
-        return {
-          id: member.id,
-          av: 'MO',
-          icon: 'monad',
-          name: member.name,
-          kind: 'agent',
-          tag: 'AI',
-          role: 'agent',
-          presence: monadStreaming ? 'working' : 'online',
-          activityPhase: monadStreaming ? 'thinking' : undefined
-        };
-      }
-      if (member.type === 'native-cli') {
-        const templateName = member.templateName ?? member.name;
-        const displayName = member.displayName ?? member.name;
-        const agent = nativeCli.agents.find((candidate) => candidate.name === templateName);
-        const provider = agent?.provider;
-        const stableAgentName = projectMemberStableId(member);
-        const presence = nativeCliMemberPresence({
-          activeAgentNames: nativeCliActiveAgentNames,
-          agentName: stableAgentName,
-          enabled: agent?.enabled ?? false,
-          nativeCliSessions,
-          liveTools
-        });
-        const activityOverride = nativeCliActivityOverrides[stableAgentName];
-        return {
-          id: member.id,
-          av: initials(displayName),
-          icon: productIcon(agent?.productIcon),
-          avatarUrl: entityAvatarUrl(
-            nativeCliAvatarSeeds.get(displayName) ?? `native-cli:${displayName}`,
-            appearance?.avatarStyle
-          ),
-          name: displayName,
-          kind: 'agent',
-          tag: nativeCliTag(provider),
-          role: 'CLI',
-          presence,
-          activityPhase:
-            presence === 'working'
-              ? (activityOverride?.phase ??
-                nativeCliMemberActivityPhase({
-                  agentName: stableAgentName,
-                  liveTools,
-                  nativeCliSessions
-                }) ??
-                'thinking')
-              : undefined
-        };
-      }
-      const agent = acp.agents.find((candidate) => candidate.name === member.name);
-      const icon = productIcon(agent?.productIcon);
-      return {
-        id: member.id,
-        av: initials(member.name),
-        icon,
-        avatarUrl: icon ? undefined : entityAvatarUrl(`acp:${member.name}`, appearance?.avatarStyle),
-        name: member.name,
-        kind: 'agent',
-        tag: 'ACP',
-        role: 'delegate',
-        presence: runningDelegations.has(member.name) ? 'working' : agent?.enabled ? 'online' : 'idle',
-        activityPhase: runningDelegations.has(member.name) ? 'thinking' : undefined
-      };
-    });
-    return members;
-  }, [
-    acp.agents,
-    nativeCli.agents,
-    projectMembers,
-    monadStreaming,
-    runningDelegations,
+  const projection = useWorkspaceProjectProjection({
+    acpAgents: acp.agents,
+    activeProjectId,
+    appearanceAvatarStyle: appearance?.avatarStyle,
+    currentProject,
+    liveItems: stream.data?.items ?? EMPTY_ITEMS,
+    nativeCliAgents: nativeCli.agents,
     nativeCliSessions,
+    projectId,
+    projectName: getWorkplaceProjectName,
+    userAvatarDataUrl: userProfile?.avatarDataUrl ?? undefined,
+    userDisplayName: userProfile?.displayName,
+    workplaceProjects
+  });
+  const {
+    approvals,
+    availableProjectMembers,
+    human,
+    liveItems,
     liveTools,
-    nativeCliActiveAgentNames,
-    nativeCliActivityOverrides,
     nativeCliAvatarSeeds,
-    appearance?.avatarStyle
-  ]);
-  const railAgents = useMemo(() => projectMemberParticipants(participants), [participants]);
+    nativeCliDisplayNames,
+    nativeCliIcons,
+    nativeCliTags,
+    participants,
+    projectParticipants,
+    projectMembers,
+    projects
+  } = projection;
   const showDevSystemMessagesInStream = useWorkplaceUiStore((state) => state.showDevSystemMessagesInStream);
 
   const loadOlder = transcript.loadOlder;
-
-  // --- approvals (real oversight gate) ---
-  const approvals: ApprovalView[] = useMemo(
-    () =>
-      liveItems
-        .filter((item): item is Extract<UIItem, { kind: 'approval' }> => item.kind === 'approval')
-        .map((a) => ({
-          id: a.id,
-          nativeCliSessionId:
-            (a.input as { approvalOwnership?: unknown; nativeCliSessionId?: unknown } | undefined)
-              ?.approvalOwnership === 'provider-owned' &&
-            typeof (a.input as { nativeCliSessionId?: unknown } | undefined)?.nativeCliSessionId === 'string'
-              ? (a.input as { nativeCliSessionId: string }).nativeCliSessionId
-              : undefined,
-          approvalOwnership:
-            (a.input as { approvalOwnership?: unknown } | undefined)?.approvalOwnership === 'provider-owned'
-              ? 'provider-owned'
-              : undefined,
-          av:
-            (a.input as { approvalOwnership?: unknown; provider?: unknown } | undefined)?.approvalOwnership ===
-              'provider-owned' && typeof (a.input as { provider?: unknown } | undefined)?.provider === 'string'
-              ? initials((a.input as { provider: string }).provider)
-              : 'MO',
-          name:
-            (a.input as { approvalOwnership?: unknown; provider?: unknown } | undefined)?.approvalOwnership ===
-              'provider-owned' && typeof (a.input as { provider?: unknown } | undefined)?.provider === 'string'
-              ? nativeCliApprovalName((a.input as { provider: string }).provider)
-              : 'monad',
-          tag:
-            (a.input as { approvalOwnership?: unknown } | undefined)?.approvalOwnership === 'provider-owned'
-              ? 'CLI'
-              : 'AI',
-          tool: a.tool,
-          text:
-            (a.input as { approvalOwnership?: unknown; text?: unknown } | undefined)?.approvalOwnership ===
-              'provider-owned' && typeof (a.input as { text?: unknown }).text === 'string'
-              ? ((a.input as { text: string }).text as string)
-              : summarizeTool(a.tool, a.input),
-          meta: a.key ? `gate: ${a.key}` : a.tool
-        })),
-    [liveItems]
-  );
-
-  const questions: QuestionView[] = useMemo(
-    () =>
-      liveItems
-        .filter((item): item is Extract<UIItem, { kind: 'clarification' }> => item.kind === 'clarification')
-        .map((item) => ({
-          id: item.id,
-          askerName: item.asker?.name ?? 'Agent',
-          question: item.question,
-          options: item.options ?? [],
-          mode: item.mode ?? 'single',
-          allowOther: item.allowOther !== false
-        })),
-    [liveItems]
-  );
-
-  // --- projects ---
-  const projects: Project[] = useMemo(
-    () =>
-      workplaceProjects.map((project) => ({
-        id: project.id,
-        name: getWorkplaceProjectName(project),
-        active: project.id === activeProjectId
-      })),
-    [activeProjectId, workplaceProjects]
-  );
-  const availableProjectMembers = useMemo(() => {
-    const current = new Set(projectMembers.map((member) => member.id));
-    return [
-      ...(current.has('monad')
-        ? []
-        : [
-            {
-              id: 'monad',
-              type: 'monad' as const,
-              name: 'monad',
-              label: 'monad',
-              tag: 'AI',
-              enabled: true,
-              modelOptions: [] as string[],
-              reasoningEfforts: [] as string[],
-              icon: 'monad' as const
-            }
-          ]),
-      ...acp.agents
-        .filter((agent) => !current.has(projectMemberId('acp', agent.name)))
-        .map((agent) => ({
-          id: projectMemberId('acp', agent.name),
-          type: 'acp' as const,
-          name: agent.name,
-          label: agent.name,
-          tag: 'ACP',
-          enabled: agent.enabled,
-          modelOptions: [] as string[],
-          reasoningEfforts: [] as string[],
-          icon: productIcon(agent.productIcon)
-        })),
-      ...nativeCli.agents.map((agent) => ({
-        id: `native-cli-template:${agent.name}`,
-        type: 'native-cli' as const,
-        name: agent.name,
-        label: nativeCliProductDisplayName(productIcon(agent.productIcon), agent.provider, agent.name),
-        tag: nativeCliTag(agent.provider),
-        enabled: agent.enabled,
-        provider: agent.provider,
-        modelOptions: agent.modelOptions ?? [],
-        reasoningEfforts: agent.reasoningEfforts ?? [],
-        icon: productIcon(agent.productIcon)
-      }))
-    ];
-  }, [acp.agents, nativeCli.agents, projectMembers]);
 
   const {
     sendDirective,
@@ -437,22 +152,20 @@ export function useProject(projectId: string) {
     setResolvedProjectId
   });
 
-  return useMemo(
-    () => ({
+  return useMemo(() => {
+    const controller = {
       projectId,
       activeProjectId,
       ready: activeProjectId !== null,
       // live collections
       projects,
       participants,
-      railAgents,
+      projectParticipants,
       projectMembers,
       availableProjectMembers,
-      loadOlder,
-      contextUsage,
-      modelProfiles,
       approvals,
-      questions,
+      loadOlder,
+      modelProfiles,
       source: {
         project: currentProject,
         transcriptItems: transcript.items,
@@ -464,11 +177,11 @@ export function useProject(projectId: string) {
         nativeCliAvatarSeeds,
         nativeCliTags,
         nativeCliDisplayNames,
+        nativeCliIcons,
         showDeveloperOnlyMessages: DEV_SYSTEM_MESSAGES_IN_STREAM_ENABLED && showDevSystemMessagesInStream
       },
       workdir: { path: currentProject?.cwd, set: setWorkdir },
       paused: false,
-      mentionTargets: railAgents.map((a) => ({ id: a.id, name: a.name })),
       // actions
       sendDirective,
       resolveApproval,
@@ -482,47 +195,54 @@ export function useProject(projectId: string) {
       updateProjectMemberIdentity,
       sendNativeCliInput,
       stopNativeCli
-    }),
-    [
-      activeProjectId,
-      projectId,
-      projects,
-      participants,
-      railAgents,
-      projectMembers,
-      availableProjectMembers,
-      loadOlder,
-      contextUsage,
-      modelProfiles,
-      approvals,
-      questions,
-      currentProject,
-      transcript.items,
-      liveItems,
-      liveTools,
-      nativeCliSessions,
-      human,
-      appearance?.avatarStyle,
-      nativeCliAvatarSeeds,
-      nativeCliTags,
-      nativeCliDisplayNames,
-      showDevSystemMessagesInStream,
-      currentProject?.cwd,
-      setWorkdir,
-      sendDirective,
-      resolveApproval,
-      answerQuestion,
-      pauseAll,
-      deleteProject,
-      switchProject,
-      addProjectMember,
-      removeProjectMember,
-      updateProjectMemberSettings,
-      updateProjectMemberIdentity,
-      sendNativeCliInput,
-      stopNativeCli
-    ]
-  );
+    };
+    return {
+      ...controller,
+      experienceRuntime: createProjectExperienceRuntime(controller, {
+        openAgentCard: opts.openAgentCard,
+        switchExperience: opts.switchExperience ?? (() => {})
+      })
+    };
+  }, [
+    activeProjectId,
+    projectId,
+    projects,
+    participants,
+    projectParticipants,
+    projectMembers,
+    availableProjectMembers,
+    approvals,
+    loadOlder,
+    modelProfiles,
+    currentProject,
+    transcript.items,
+    liveItems,
+    liveTools,
+    nativeCliSessions,
+    human,
+    appearance?.avatarStyle,
+    nativeCliAvatarSeeds,
+    nativeCliTags,
+    nativeCliDisplayNames,
+    nativeCliIcons,
+    showDevSystemMessagesInStream,
+    currentProject?.cwd,
+    setWorkdir,
+    sendDirective,
+    resolveApproval,
+    answerQuestion,
+    pauseAll,
+    deleteProject,
+    switchProject,
+    addProjectMember,
+    removeProjectMember,
+    updateProjectMemberSettings,
+    updateProjectMemberIdentity,
+    sendNativeCliInput,
+    stopNativeCli,
+    opts.openAgentCard,
+    opts.switchExperience
+  ]);
 }
 
 export type ProjectController = ReturnType<typeof useProject>;

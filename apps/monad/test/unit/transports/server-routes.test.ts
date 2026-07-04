@@ -1,7 +1,11 @@
 import { expect, test } from 'bun:test';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { createDefaultConfig, saveAll } from '@monad/home';
 
 import { createHttpTransport } from '@/transports/http.ts';
-import { buildHandlers, mockModel } from '../../helpers.ts';
+import { buildHandlers, makeTestPaths, mockModel, stubModelDeps } from '../../helpers.ts';
 
 // Unit-level: drive the Elysia app via app.handle() — no network socket.
 function buildApp(opts?: Parameters<typeof buildHandlers>[2]) {
@@ -105,6 +109,61 @@ test('GET /v1/skills?scope=global,atom-pack filters by-agent skill instances ser
   expect(
     ((await onlyGlobal.json()) as { skillInstances: Array<{ id: string }> }).skillInstances.map((s) => s.id)
   ).toEqual(['global:summarize-changes']);
+});
+
+test('framework agent settings routes persist the typed config contract', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'monad-framework-agent-routes-'));
+  const paths = makeTestPaths(root);
+  await saveAll(paths.config, paths.profile, createDefaultConfig('prn_test', 'Test'));
+  const app = createHttpTransport(buildHandlers(mockModel(['hello']), { ...stubModelDeps(), paths }));
+  const agent = {
+    name: 'openclaw-local',
+    provider: 'openclaw',
+    transport: 'cli-oneshot',
+    command: 'openclaw',
+    args: ['run'],
+    enabled: true,
+    osSandbox: false,
+    forwardMcp: false
+  };
+
+  try {
+    const put = await app.handle(
+      new Request('http://localhost/v1/settings/framework-agents', {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ agent })
+      })
+    );
+    expect(put.status).toBe(200);
+    expect(await put.json()).toEqual({ ok: true });
+
+    const listed = await app.handle(new Request('http://localhost/v1/settings/framework-agents'));
+    expect(listed.status).toBe(200);
+    expect(await listed.json()).toEqual({ agents: [agent] });
+
+    const disabled = await app.handle(
+      new Request(`http://localhost/v1/settings/framework-agents/${agent.name}/disable`, { method: 'POST' })
+    );
+    expect(disabled.status).toBe(200);
+    expect(await disabled.json()).toEqual({ ok: true });
+
+    const afterDisable = (await (
+      await app.handle(new Request('http://localhost/v1/settings/framework-agents'))
+    ).json()) as { agents: Array<typeof agent> };
+    expect(afterDisable.agents).toEqual([{ ...agent, enabled: false }]);
+
+    const removed = await app.handle(
+      new Request(`http://localhost/v1/settings/framework-agents/${agent.name}`, { method: 'DELETE' })
+    );
+    expect(removed.status).toBe(200);
+    expect(await removed.json()).toEqual({ ok: true });
+
+    const afterRemove = await app.handle(new Request('http://localhost/v1/settings/framework-agents'));
+    expect(await afterRemove.json()).toEqual({ agents: [] });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 async function createSession(app: ReturnType<typeof buildApp>, title: string): Promise<string> {

@@ -11,10 +11,12 @@ import { describe, expect, test } from 'bun:test';
 import { chmod, mkdir, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
+import { builtinAgentAdapters } from '@monad/atoms/agent-adapters';
 import { initMonadHome, loadAuth, loadConfig } from '@monad/home';
 import { setLogLevel } from '@monad/logger';
 
 import { ModelService } from '@/handlers/settings/model/index.ts';
+import { registerAgentAdapterImpl } from '@/services/native-cli/index.ts';
 import { createHttpTransport } from '@/transports/http.ts';
 import {
   buildHandlers,
@@ -24,6 +26,11 @@ import {
   serveTransport,
   TRANSPORTS
 } from '../helpers.ts';
+
+// Production populates the native-CLI registry at boot via the gated atom-pack path
+// (onAgentAdapter → registerAgentAdapterImpl); this harness builds handlers directly, so register the
+// built-in adapters up front.
+for (const adapter of builtinAgentAdapters) registerAgentAdapterImpl(adapter);
 
 type Call = (method: string, path: string, body?: unknown) => Promise<Response>;
 type FetchPath = (path: string, init?: RequestInit) => Promise<Response>;
@@ -287,6 +294,8 @@ async function configureMockCodexApprovalAgent(call: Call, dir: string): Promise
       '  for (const line of d.toString().trim().split(/\\n+/)) {',
       '    if (!line) continue;',
       '    const msg = JSON.parse(line);',
+      '    if (msg.method === "initialize") { process.stdout.write(JSON.stringify({id:msg.id, result:{userAgent:"mock"}}) + "\\n"); continue; }',
+      '    if (msg.method === "initialized") continue;',
       '    if (msg.method === "thread/start" || msg.method === "thread/resume") {',
       '      process.stdout.write(JSON.stringify({id:msg.id, result:{thread:{id:"codex-thread-1"}}}) + "\\n");',
       '      const request = JSON.stringify({method:"item/commandExecution/requestApproval", id:"req_provider_1", params:{threadId:"thr_1", turnId:"turn_1", itemId:"item_1", startedAtMs:1790610000000, environmentId:"env_1", reason:"network access", command:"curl https://example.com", cwd:process.cwd()}}) + "\\n";',
@@ -333,6 +342,8 @@ async function configureMockSlowCodexAppServerAgent(call: Call, dir: string): Pr
       '  for (const line of d.toString().trim().split(/\\n+/)) {',
       '    if (!line) continue;',
       '    const msg = JSON.parse(line);',
+      '    if (msg.method === "initialize") { process.stdout.write(JSON.stringify({id:msg.id, result:{userAgent:"mock"}}) + "\\n"); continue; }',
+      '    if (msg.method === "initialized") continue;',
       '    if (msg.method !== "thread/start" && msg.method !== "thread/resume") continue;',
       '    setTimeout(() => {',
       '      process.stdout.write(JSON.stringify({id:msg.id, result:{thread:{id:"codex-thread-slow"}}}) + "\\n");',
@@ -368,6 +379,8 @@ async function configureMockCodexOversizedLineAgent(call: Call, dir: string): Pr
       '  for (const line of d.toString().trim().split(/\\n+/)) {',
       '    if (!line) continue;',
       '    const msg = JSON.parse(line);',
+      '    if (msg.method === "initialize") { process.stdout.write(JSON.stringify({id:msg.id, result:{userAgent:"mock"}}) + "\\n"); continue; }',
+      '    if (msg.method === "initialized") continue;',
       '    if (msg.method !== "thread/start" && msg.method !== "thread/resume") continue;',
       '    process.stdout.write(JSON.stringify({method:"thread/status/changed", params:{threadId:"codex-thread-light", status:{type:"idle"}}}) + "\\n");',
       '    process.stdout.write("{\\"huge\\":\\"" + "x".repeat(3 * 1024 * 1024));',
@@ -556,6 +569,41 @@ async function startMockNativeCliSession(
   });
   expect(res.status).toBe(200);
   return { sessionId, nativeSession: ((await res.json()) as { session: NativeCliSessionView }).session };
+}
+
+async function runInterruptSteerRuntime(
+  call: Call,
+  projectDir: string,
+  handlers: ReturnType<typeof buildHandlers>
+): Promise<void> {
+  const { sessionId, nativeSession } = await startMockNativeCliSession(call, projectDir);
+  await waitFor(() => {
+    const row = handlers.store.getNativeCliSession(nativeSession.id);
+    return row?.outputSnapshot.includes('ready') ? row : undefined;
+  });
+
+  // steer is app-server-only; a pty/json-stream provider has no steer hook, so the route exists
+  // (not 404) but rejects the request rather than silently succeeding.
+  const steer = await call(
+    'POST',
+    `/v1/native-cli-sessions/${nativeSession.id}/steer?transcriptTargetId=${sessionId}`,
+    {
+      input: 'and also run the tests'
+    }
+  );
+  expect(steer.status).not.toBe(404);
+  expect(steer.status).not.toBe(200);
+
+  // interrupt has no provider hook here either, so it falls back to stopping the session.
+  const interrupt = await call(
+    'POST',
+    `/v1/native-cli-sessions/${nativeSession.id}/interrupt?transcriptTargetId=${sessionId}`
+  );
+  expect(interrupt.status).toBe(200);
+  await waitFor(() => {
+    const row = handlers.store.getNativeCliSession(nativeSession.id);
+    return row?.state === 'stopped' ? row : undefined;
+  });
 }
 
 async function runSessionResetStopsNativeCliRuntime(
@@ -876,7 +924,8 @@ async function runCodexResumeRuntime(call: Call, dir: string, projectDir: string
     .map((line) => JSON.parse(line) as { method?: string; params?: Record<string, unknown> });
   expect(stdinLines.some((line) => line.method === 'thread/start')).toBe(false);
   expect(stdinLines.find((line) => line.method === 'initialize')?.params?.capabilities).toEqual({
-    experimentalApi: true
+    experimentalApi: true,
+    requestAttestation: false
   });
   expect(
     stdinLines.some(
@@ -1179,6 +1228,17 @@ for (const kind of TRANSPORTS) {
         for (const row of handlers.store.listNativeCliSessionsForTranscriptTarget('ses_UNKNOWN')) {
           handlers.store.closeNativeCliSession(row.id, new Date().toISOString(), null, 'stopped');
         }
+        await rm(dir, { recursive: true, force: true });
+      }
+    });
+
+    test('routes turn interrupt and steer requests', async () => {
+      const { dir, projectDir, app, handlers } = await setup();
+      const t = serveTransport(kind, app);
+      try {
+        await runInterruptSteerRuntime((m, p, b) => t.fetch(p, jsonInit(m, b)), projectDir, handlers);
+      } finally {
+        await t.stop();
         await rm(dir, { recursive: true, force: true });
       }
     });

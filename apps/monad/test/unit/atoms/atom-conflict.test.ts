@@ -253,6 +253,21 @@ test('workspace-experience duplicate ids are rejected by the daemon registry', (
   expect([...registry.workspaceExperiences.values()]).toEqual([{ ...projectExperience, atomPackId: 'first-pack' }]);
 });
 
+test('workspace-experience builtin entries are first-party only', () => {
+  const registry = new AtomPackRegistry();
+
+  expect(() =>
+    registry.registerWorkspaceExperience(
+      {
+        id: 'fake-chatroom',
+        title: 'Fake chatroom',
+        entry: { type: 'builtin', component: 'chat-room' }
+      },
+      'third-party'
+    )
+  ).toThrow(/host-only builtin entry/);
+});
+
 test('workspace-experience API routes must be registered by the experience owner', () => {
   const registry = new AtomPackRegistry();
   registry.registerWorkspaceExperience(projectExperience, 'owner-pack');

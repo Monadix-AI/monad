@@ -1,8 +1,8 @@
 'use client';
 
 import type { Session, SessionId, UIItem } from '@monad/protocol';
+import type { VirtualListHandle } from '@monad/ui/components/VirtualList';
 import type { ComponentProps, KeyboardEventHandler, Ref } from 'react';
-import type { VirtualListHandle } from '@/components/ui/VirtualList';
 
 import {
   Activity01Icon,
@@ -18,10 +18,10 @@ import {
 import { HugeiconsIcon } from '@hugeicons/react';
 import { useProvenanceQuery } from '@monad/client-rtk';
 import { Button, cn, ScrollArea, Textarea } from '@monad/ui';
+import { VirtualList } from '@monad/ui/components/VirtualList';
 import { memo, useState } from 'react';
 
 import { useT } from '@/components/I18nProvider';
-import { VirtualList } from '@/components/ui/VirtualList';
 import { AgentLoopInspector } from '@/features/session/AgentLoopInspector';
 import { Message } from '@/features/session/ChatMessage';
 import { ComposerShell } from '@/features/session/ComposerShell';

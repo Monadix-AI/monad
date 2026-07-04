@@ -4,24 +4,32 @@ import { expect, test } from 'bun:test';
 import { chmodSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import {
+  builtinAgentAdapters,
+  claudeCodeNativeCliAdapter,
+  codexNativeCliAdapter,
+  geminiNativeCliAdapter,
+  qwenNativeCliAdapter
+} from '@monad/atoms/agent-adapters';
+import { parseNativeCliArgumentSupport } from '@monad/atoms/agent-adapters/argument-support';
+import { normalizePtyInput } from '@monad/atoms/agent-adapters/pty';
 
-import { parseNativeCliArgumentSupport } from '@/services/native-cli/argument-support.ts';
 import {
   buildNativeCliArgumentSupportProbe,
   buildNativeCliAuthLaunch,
   buildNativeCliAuthStatusLaunch,
   buildNativeCliLaunch,
-  claudeCodeNativeCliAdapter,
-  codexNativeCliAdapter,
-  geminiNativeCliAdapter,
   listNativeCliAgentModelOptions,
   listNativeCliAgentPresets,
-  qwenNativeCliAdapter,
+  registerAgentAdapterImpl,
   resolveNativeCliLaunchCommand
 } from '@/services/native-cli/index.ts';
 import { killNativeCliProcess } from '@/services/native-cli/process.ts';
-import { normalizePtyInput } from '@/services/native-cli/pty.ts';
 import { nativeCliOutputEventSchema } from '@/services/native-cli/types.ts';
+
+// The native-CLI registry is populated at daemon boot via the gated atom-pack path; unit tests drive
+// the builder/preset functions directly, so register the built-in adapters up front.
+for (const adapter of builtinAgentAdapters) registerAgentAdapterImpl(adapter);
 
 const codexAgent: NativeCliAgentView = {
   name: 'codex',
@@ -264,6 +272,29 @@ test('Codex argument support probe extracts reasoning efforts from model catalog
 
   expect(support?.reasoningEfforts).toEqual(['low', 'medium', 'high', 'xhigh']);
   expect(support?.speeds).toEqual(['fast']);
+  // Per-model efforts are preserved (the union above flattens them).
+  expect(support?.reasoningEffortsByModel).toEqual({
+    'gpt-5.5': ['low', 'medium', 'high', 'xhigh'],
+    'gpt-5.4-mini': ['low', 'medium']
+  });
+});
+
+test('Codex adapter surfaces a reconnect prompt when a thread start/resume fails', () => {
+  const handle = {
+    launchMode: 'app-server' as const,
+    pendingRequests: new Map<string | number, string>([[5, 'threadResume']]),
+    appServer: { send() {}, close() {} },
+    nextRequestId: () => 6,
+    kill() {}
+  };
+  // An error response to the resume request means the thread is gone (e.g. codex dropped it after a
+  // reconnect) → reconnect prompt, not a provider_error that leaves a dead session "running".
+  expect(
+    codexNativeCliAdapter.parseOutput(
+      JSON.stringify({ id: 5, error: { code: 'ThreadNotFound', message: 'thread not found' } }),
+      handle
+    )
+  ).toEqual([{ type: 'connection_required', payload: { code: 'ThreadNotFound', reason: 'thread not found' } }]);
 });
 
 test('native CLI adapters expose provider argument support probes', () => {
@@ -283,7 +314,47 @@ test('Codex adapter launches app-server stdio with initialization messages', () 
 
   expect(launch.argv).toEqual(['codex', 'app-server', '--stdio']);
   expect(launch.cwd).toBe('/tmp/project');
+  expect(launch.appServerTransport).toBe('stdio');
   expect('initialMessages' in launch).toBe(false);
+});
+
+test('Codex adapter launches app-server over a ws listener when transport is ws', () => {
+  const launch = buildNativeCliLaunch(codexAgent, {
+    workingPath: '/tmp/project',
+    launchMode: 'app-server',
+    appServerTransport: 'ws'
+  });
+
+  expect(launch.argv).toEqual(['codex', 'app-server', '--listen', 'ws://127.0.0.1:0']);
+  expect(launch.appServerTransport).toBe('ws');
+});
+
+test('Codex adapter launches app-server over a unix listener at the allocated socket path', () => {
+  const launch = buildNativeCliLaunch(codexAgent, {
+    workingPath: '/tmp/project',
+    launchMode: 'app-server',
+    appServerTransport: 'unix',
+    appServerSocketPath: '/tmp/monad-appserver/x.sock'
+  });
+
+  expect(launch.argv).toEqual(['codex', 'app-server', '--listen', 'unix:///tmp/monad-appserver/x.sock']);
+  expect(launch.appServerTransport).toBe('unix');
+});
+
+test('Codex adapter requires a socket path for the unix transport', () => {
+  expect(() =>
+    buildNativeCliLaunch(codexAgent, {
+      workingPath: '/tmp/project',
+      launchMode: 'app-server',
+      appServerTransport: 'unix'
+    })
+  ).toThrow(/socket path/);
+});
+
+test('Codex preset advertises stdio, ws, and unix app-server transports', () => {
+  expect(
+    codexNativeCliAdapter.detect({ which: () => undefined, exists: () => true }).supportedAppServerTransports
+  ).toEqual(['stdio', 'ws', 'unix']);
 });
 
 test('native CLI auth launches provider-owned login and status commands', () => {
@@ -359,10 +430,11 @@ test('Codex adapter initializes app-server sessions through the adapter hook', (
   const writes: string[] = [];
   const handle = {
     launchMode: 'app-server' as const,
-    stdin: {
-      write(input: string) {
+    appServer: {
+      send(input: string) {
         writes.push(input);
-      }
+      },
+      close() {}
     },
     nextRequestId: () => 2,
     kill() {}
@@ -379,7 +451,7 @@ test('Codex adapter initializes app-server sessions through the adapter hook', (
   const messages = writes.map(
     (line) => JSON.parse(line) as { id?: number; method: string; params?: Record<string, unknown> }
   );
-  expect(messages[0]?.params?.capabilities).toEqual({ experimentalApi: true });
+  expect(messages[0]?.params?.capabilities).toEqual({ experimentalApi: true, requestAttestation: false });
   expect(messages[2]).toEqual({
     method: 'thread/start',
     id: 2,
@@ -391,10 +463,11 @@ test('Codex adapter resumes app-server sessions through the adapter hook', () =>
   const writes: string[] = [];
   const handle = {
     launchMode: 'app-server' as const,
-    stdin: {
-      write(input: string) {
+    appServer: {
+      send(input: string) {
         writes.push(input);
-      }
+      },
+      close() {}
     },
     nextRequestId: () => 2,
     kill() {}
@@ -410,7 +483,7 @@ test('Codex adapter resumes app-server sessions through the adapter hook', () =>
   const messages = writes.map(
     (line) => JSON.parse(line) as { id?: number; method: string; params?: Record<string, unknown> }
   );
-  expect(messages[0]?.params?.capabilities).toEqual({ experimentalApi: true });
+  expect(messages[0]?.params?.capabilities).toEqual({ experimentalApi: true, requestAttestation: false });
   expect(messages[2]).toEqual({
     method: 'thread/resume',
     id: 2,
@@ -425,6 +498,211 @@ test('Codex adapter resumes app-server sessions through the adapter hook', () =>
       }
     }
   });
+});
+
+test('Codex adapter defers thread/start until the initialize response when a request ledger is present', () => {
+  const writes: string[] = [];
+  let seq = 0;
+  const handle = {
+    launchMode: 'app-server' as const,
+    appServer: {
+      send(input: string) {
+        writes.push(input);
+      },
+      close() {}
+    },
+    pendingRequests: new Map<string | number, string>(),
+    deferredThreadFrame: undefined as string | undefined,
+    nextRequestId: () => seq++,
+    kill() {}
+  };
+
+  codexNativeCliAdapter.initialize?.(handle, { workingPath: '/tmp/project' });
+  // Only the handshake goes out up front; thread/start is parked until the server is initialized.
+  expect(writes.map((line) => (JSON.parse(line) as { method: string }).method)).toEqual(['initialize', 'initialized']);
+  expect(handle.deferredThreadFrame).toBeTruthy();
+
+  // The initialize response (id 0) releases the parked thread/start.
+  codexNativeCliAdapter.parseOutput(JSON.stringify({ id: 0, result: { userAgent: 'codex' } }), handle);
+  expect(writes.map((line) => (JSON.parse(line) as { method: string }).method)).toEqual([
+    'initialize',
+    'initialized',
+    'thread/start'
+  ]);
+  expect(handle.deferredThreadFrame).toBeUndefined();
+});
+
+test('Codex adapter tracks the in-flight turn and addresses interrupt/steer at it', () => {
+  const writes: string[] = [];
+  const handle = {
+    launchMode: 'app-server' as const,
+    providerSessionRef: 'codex-thread-1',
+    appServer: {
+      send(input: string) {
+        writes.push(input);
+      },
+      close() {}
+    },
+    currentTurnId: undefined as string | undefined,
+    nextRequestId: () => 99,
+    kill() {}
+  };
+
+  // No turn in flight yet → interrupt/steer are no-ops.
+  codexNativeCliAdapter.interrupt?.(handle);
+  expect(writes).toHaveLength(0);
+
+  // A turn/started notification opens the turn.
+  codexNativeCliAdapter.parseOutput(
+    JSON.stringify({
+      method: 'turn/started',
+      params: { threadId: 'codex-thread-1', turn: { id: 'turn_7', status: 'inProgress', items: [] } }
+    }),
+    handle
+  );
+  expect(handle.currentTurnId).toBe('turn_7');
+
+  codexNativeCliAdapter.interrupt?.(handle);
+  codexNativeCliAdapter.steer?.(handle, 'also check the tests');
+  expect(JSON.parse(writes[0] ?? '')).toEqual({
+    method: 'turn/interrupt',
+    id: 99,
+    params: { threadId: 'codex-thread-1', turnId: 'turn_7' }
+  });
+  expect(JSON.parse(writes[1] ?? '')).toEqual({
+    method: 'turn/steer',
+    id: 99,
+    params: {
+      threadId: 'codex-thread-1',
+      expectedTurnId: 'turn_7',
+      input: [{ type: 'text', text: 'also check the tests' }]
+    }
+  });
+
+  // turn/completed closes the turn → interrupt becomes a no-op again.
+  codexNativeCliAdapter.parseOutput(
+    JSON.stringify({
+      method: 'turn/completed',
+      params: { threadId: 'codex-thread-1', turn: { id: 'turn_7', status: 'completed', items: [] } }
+    }),
+    handle
+  );
+  expect(handle.currentTurnId).toBeUndefined();
+  writes.length = 0;
+  codexNativeCliAdapter.interrupt?.(handle);
+  expect(writes).toHaveLength(0);
+});
+
+test('Codex adapter triages turn error notifications by codex error code', () => {
+  expect(
+    codexNativeCliAdapter.parseOutput(
+      JSON.stringify({
+        method: 'error',
+        params: {
+          threadId: 't',
+          turnId: 'u',
+          willRetry: false,
+          error: { message: 'quota', codexErrorInfo: 'usageLimitExceeded', additionalDetails: null }
+        }
+      })
+    )
+  ).toEqual([{ type: 'provider_error', payload: { code: 'usageLimitExceeded', message: 'quota' } }]);
+
+  expect(
+    codexNativeCliAdapter.parseOutput(
+      JSON.stringify({
+        method: 'error',
+        params: {
+          willRetry: false,
+          error: { message: 'expired', codexErrorInfo: 'unauthorized', additionalDetails: null }
+        }
+      })
+    )
+  ).toEqual([{ type: 'connection_required', payload: { code: 'unauthorized', reason: 'expired' } }]);
+
+  expect(
+    codexNativeCliAdapter.parseOutput(
+      JSON.stringify({
+        method: 'error',
+        params: {
+          willRetry: false,
+          error: {
+            message: 'boom',
+            codexErrorInfo: { httpConnectionFailed: { httpStatusCode: 502 } },
+            additionalDetails: null
+          }
+        }
+      })
+    )
+  ).toEqual([{ type: 'provider_error', payload: { code: 'httpConnectionFailed', message: 'boom' } }]);
+
+  // codex will retry transient failures itself → suppressed (no event).
+  expect(
+    codexNativeCliAdapter.parseOutput(
+      JSON.stringify({
+        method: 'error',
+        params: {
+          willRetry: true,
+          error: {
+            message: 'blip',
+            codexErrorInfo: { responseStreamDisconnected: { httpStatusCode: null } },
+            additionalDetails: null
+          }
+        }
+      })
+    )
+  ).toEqual([]);
+});
+
+test('Codex adapter auto-compacts and re-runs the turn on context overflow', () => {
+  const writes: string[] = [];
+  let seq = 10;
+  const handle = {
+    launchMode: 'app-server' as const,
+    providerSessionRef: 'codex-thread-1',
+    appServer: {
+      send(input: string) {
+        writes.push(input);
+      },
+      close() {}
+    },
+    pendingRequests: new Map<string | number, string>(),
+    lastTurnInput: undefined as string | undefined,
+    turnRecoveries: undefined as number | undefined,
+    nextRequestId: () => seq++,
+    kill() {}
+  };
+
+  codexNativeCliAdapter.sendInput(handle, 'summarize the repo');
+  writes.length = 0;
+
+  const overflow = JSON.stringify({
+    method: 'error',
+    params: {
+      threadId: 'codex-thread-1',
+      turnId: 'u1',
+      willRetry: false,
+      error: { message: 'too long', codexErrorInfo: 'contextWindowExceeded', additionalDetails: null }
+    }
+  });
+
+  // First overflow → silently compact + re-run (no surfaced error).
+  expect(codexNativeCliAdapter.parseOutput(overflow, handle)).toEqual([]);
+  expect(writes.map((w) => (JSON.parse(w) as { method: string }).method)).toEqual([
+    'thread/compact/start',
+    'turn/start'
+  ]);
+  expect((JSON.parse(writes[1] ?? '') as { params: { input: unknown } }).params.input).toEqual([
+    { type: 'text', text: 'summarize the repo' }
+  ]);
+  expect(handle.turnRecoveries).toBe(1);
+
+  // Second overflow in the same turn → recovery budget spent, surface the error.
+  writes.length = 0;
+  expect(codexNativeCliAdapter.parseOutput(overflow, handle)).toEqual([
+    { type: 'provider_error', payload: { code: 'contextWindowExceeded', message: 'too long' } }
+  ]);
+  expect(writes).toHaveLength(0);
 });
 
 test('Codex adapter rejects dangerous bypass args unless enabled in config', () => {
@@ -568,12 +846,13 @@ test('Qwen adapter launches in the requested cwd and advertises stream-json capa
   expect(launch.approvalOwnership).toBe('provider-owned');
 });
 
-test('Qwen adapter launches structured stream-json mode with official output-format flag', () => {
+test('Qwen adapter launches the SDK bidirectional stream-json session (input + output)', () => {
   const launch = buildNativeCliLaunch(qwenAgent, { workingPath: '/tmp/project', launchMode: 'json-stream' });
 
-  expect(launch.argv).toEqual(['qwen', '-p', '', '--output-format', 'stream-json']);
+  expect(launch.argv).toEqual(['qwen', '--input-format', 'stream-json', '--output-format', 'stream-json']);
   expect(launch.cwd).toBe('/tmp/project');
   expect(launch.launchMode).toBe('json-stream');
+  expect(launch.capabilities).toContain('approval-resolution');
 });
 
 test('Qwen adapter resumes with the provider session ref in PTY and stream-json modes', () => {
@@ -642,13 +921,10 @@ test('native CLI presets detect Codex, Claude Code, Gemini, and Qwen as direct c
     'gpt-5.2'
   ]);
   expect(presets.find((preset) => preset.id === 'claude-code')?.modelOptions).toEqual([
-    'claude-fable-5',
-    'claude-opus-4-8',
-    'claude-sonnet-5',
-    'claude-haiku-4-5',
-    'claude-opus-4-7',
-    'claude-opus-4-6',
-    'claude-sonnet-4-6'
+    'fable',
+    'opus',
+    'sonnet',
+    'haiku'
   ]);
   expect(presets.find((preset) => preset.id === 'gemini')?.modelOptions).toEqual([
     'gemini-2.5-pro',
@@ -668,15 +944,7 @@ test('native CLI adapters expose supported model options with agent override', (
     'gpt-5.3-codex',
     'gpt-5.2'
   ]);
-  expect(claudeCodeNativeCliAdapter.listSupportedModels()).toEqual([
-    'claude-fable-5',
-    'claude-opus-4-8',
-    'claude-sonnet-5',
-    'claude-haiku-4-5',
-    'claude-opus-4-7',
-    'claude-opus-4-6',
-    'claude-sonnet-4-6'
-  ]);
+  expect(claudeCodeNativeCliAdapter.listSupportedModels()).toEqual(['fable', 'opus', 'sonnet', 'haiku']);
   expect(geminiNativeCliAdapter.listSupportedModels()).toEqual(['gemini-2.5-pro', 'gemini-2.5-flash']);
   expect(qwenNativeCliAdapter.listSupportedModels()).toEqual(['qwen3-coder-plus', 'qwen3-coder-flash']);
   expect(codexNativeCliAdapter.listSupportedModels({ ...codexAgent, modelOptions: ['custom-codex'] })).toEqual([
@@ -893,14 +1161,20 @@ test('native CLI adapters ignore malformed and unknown provider output outside t
   expect(qwenNativeCliAdapter.parseOutput('not-json\n{"type":"unknown","session_id":"s"}\n')).toEqual([]);
 });
 
-test('Codex app-server turn completion is a final diagnostic event', () => {
+test('Codex app-server turn completion extracts the final agent message from turn items', () => {
   const events = codexNativeCliAdapter.parseOutput(
     JSON.stringify({
       method: 'turn/completed',
       params: {
         threadId: 'thr_123',
-        turnId: 'turn_456',
-        result: 'No action needed.'
+        turn: {
+          id: 'turn_456',
+          status: 'completed',
+          items: [
+            { type: 'reasoning', id: 'r1', summary: 'thinking' },
+            { type: 'agentMessage', id: 'm1', text: 'No action needed.' }
+          ]
+        }
       }
     })
   );
@@ -909,13 +1183,115 @@ test('Codex app-server turn completion is a final diagnostic event', () => {
   expect(events).toEqual([{ type: 'agent_message', payload: { text: 'No action needed.', final: true } }]);
 });
 
+test('Codex app-server turn completion with no message is still a final turn-boundary event', () => {
+  const events = codexNativeCliAdapter.parseOutput(
+    JSON.stringify({
+      method: 'turn/completed',
+      params: { threadId: 'thr_123', turn: { id: 't', status: 'completed', items: [] } }
+    })
+  );
+  expect(events).toEqual([{ type: 'agent_message', payload: { final: true } }]);
+});
+
+test('Codex adapter auto-declines an unhandled server-initiated request so the turn cannot hang', () => {
+  const writes: string[] = [];
+  const handle = {
+    launchMode: 'app-server' as const,
+    appServer: {
+      send(input: string) {
+        writes.push(input);
+      },
+      close() {}
+    },
+    pendingRequests: new Map<string | number, string>(),
+    nextRequestId: () => 1,
+    kill() {}
+  };
+
+  const events = codexNativeCliAdapter.parseOutput(
+    JSON.stringify({ method: 'tool/requestUserInput', id: 42, params: { questions: [] } }),
+    handle
+  );
+
+  expect(events).toEqual([]);
+  expect(JSON.parse(writes[0] ?? '')).toEqual({
+    id: 42,
+    error: { code: -32601, message: 'Unsupported method: tool/requestUserInput' }
+  });
+});
+
+test('Codex adapter ignores an unhandled server notification (no id) without replying', () => {
+  const writes: string[] = [];
+  const handle = {
+    launchMode: 'app-server' as const,
+    appServer: {
+      send(input: string) {
+        writes.push(input);
+      },
+      close() {}
+    },
+    pendingRequests: new Map<string | number, string>(),
+    nextRequestId: () => 1,
+    kill() {}
+  };
+  const events = codexNativeCliAdapter.parseOutput(
+    JSON.stringify({ method: 'fuzzyFileSearch/sessionUpdated', params: {} }),
+    handle
+  );
+  expect(events).toEqual([]);
+  expect(writes).toHaveLength(0);
+});
+
+test('Codex adapter dispatches app-server responses by request id, not result shape', () => {
+  const handle = {
+    launchMode: 'app-server' as const,
+    appServer: { send() {}, close() {} },
+    pendingRequests: new Map<string | number, string>([
+      [3, 'thread'],
+      [4, 'historyPage']
+    ]),
+    nextRequestId: () => 5,
+    kill() {}
+  };
+
+  // A thread response whose result also happens to carry a `data` array must still resolve as a
+  // session ref because id 3 was recorded as a `thread` request.
+  const threadEvents = codexNativeCliAdapter.parseOutput(
+    JSON.stringify({
+      id: 3,
+      result: { thread: { id: 'codex-thread-9' }, data: [], nextCursor: null, backwardsCursor: null }
+    }),
+    handle
+  );
+  expect(threadEvents).toEqual([
+    { type: 'session_ref', payload: { providerSessionRef: 'codex-thread-9', responseId: 3 } }
+  ]);
+
+  const historyEvents = codexNativeCliAdapter.parseOutput(
+    JSON.stringify({ id: 4, result: { data: [{ id: 'turn-1', items: [] }], nextCursor: 'n1', backwardsCursor: null } }),
+    handle
+  );
+  expect(historyEvents).toEqual([
+    {
+      type: 'history_page',
+      payload: { responseId: 4, items: [{ id: 'turn-1', items: [] }], nextCursor: 'n1', backwardsCursor: null }
+    }
+  ]);
+});
+
+// Fixtures use the real gemini-cli `--output-format stream-json` schema (verified against
+// gemini-cli v0.49.0's StreamJsonFormatter): `content` on message, `tool_name`/`tool_id`/
+// `parameters` on tool_use, `tool_id`/`status`/`output` on tool_result, and a `result` event that
+// carries stats — not text. The assistant reply is reconstructed from the streamed `message`
+// deltas and flushed as the turn-final `agent_message`.
 test('Gemini adapter translates stream-json events into the Monad native CLI contract', () => {
   const chunk = [
     JSON.stringify({ type: 'init', session_id: 'gemini-session-1', model: 'gemini-2.5-pro' }),
-    JSON.stringify({ type: 'message', role: 'assistant', text: 'I will inspect the project.' }),
-    JSON.stringify({ type: 'tool_use', id: 'tool-1', name: 'read_file', args: { path: 'README.md' } }),
-    JSON.stringify({ type: 'tool_result', id: 'tool-1', output: 'README contents' }),
-    JSON.stringify({ type: 'result', response: 'Done.' })
+    JSON.stringify({ type: 'message', role: 'user', content: 'inspect the project' }),
+    JSON.stringify({ type: 'message', role: 'assistant', content: 'I will inspect the project.', delta: true }),
+    JSON.stringify({ type: 'tool_use', tool_name: 'read_file', tool_id: 'tool-1', parameters: { path: 'README.md' } }),
+    JSON.stringify({ type: 'tool_result', tool_id: 'tool-1', status: 'success', output: 'README contents' }),
+    JSON.stringify({ type: 'result', status: 'success', stats: { total_tokens: 42 } })
   ].join('\n');
 
   const events = geminiNativeCliAdapter.parseOutput(chunk);
@@ -925,28 +1301,215 @@ test('Gemini adapter translates stream-json events into the Monad native CLI con
     { type: 'agent_message', payload: { text: 'I will inspect the project.' } },
     { type: 'tool_call', payload: { callId: 'tool-1', tool: 'read_file', input: { path: 'README.md' } } },
     { type: 'tool_result', payload: { callId: 'tool-1', output: 'README contents' } },
-    { type: 'agent_message', payload: { text: 'Done.', final: true } }
+    { type: 'agent_message', payload: { text: 'I will inspect the project.', final: true } }
   ]);
 });
 
-test('Qwen adapter translates stream-json events into the Monad native CLI contract', () => {
+test('Gemini adapter surfaces error results and drops non-fatal warnings', () => {
+  const warned = geminiNativeCliAdapter.parseOutput(
+    [
+      JSON.stringify({ type: 'error', severity: 'warning', message: 'Loop detected, stopping execution' }),
+      JSON.stringify({ type: 'result', status: 'success', stats: {} })
+    ].join('\n')
+  );
+  // A `warning` is already visible in the raw output card, so it is not escalated; the successful
+  // result with no accumulated text is a bare final marker.
+  expect(warned).toEqual([{ type: 'agent_message', payload: { final: true } }]);
+
+  const failed = geminiNativeCliAdapter.parseOutput(
+    JSON.stringify({
+      type: 'result',
+      status: 'error',
+      error: { type: 'INVALID_STREAM', message: 'Model returned an empty response' }
+    })
+  );
+  expectNativeCliOutputContract(failed);
+  expect(failed).toEqual([
+    { type: 'provider_error', payload: { message: 'Model returned an empty response', code: 'INVALID_STREAM' } }
+  ]);
+});
+
+// Qwen Code diverged from gemini-cli's flat stream-json: `--output-format stream-json` emits the
+// Claude-Code-compatible `SDKMessage` protocol (system/assistant/user/result with Anthropic content
+// blocks), verified against the official `@qwen-code/sdk` `types/protocol.ts` and the qwen-code
+// headless docs — not the `{type:'message', tool_name, ...}` shape the `gemini` adapter parses.
+test('Qwen adapter translates SDK stream-json messages into the Monad native CLI contract', () => {
   const chunk = [
-    JSON.stringify({ type: 'init', session_id: 'qwen-session-1', model: 'qwen3-coder' }),
-    JSON.stringify({ type: 'message', role: 'assistant', text: 'I will inspect the project.' }),
-    JSON.stringify({ type: 'tool_use', id: 'tool-1', name: 'read_file', args: { path: 'README.md' } }),
-    JSON.stringify({ type: 'tool_result', id: 'tool-1', output: 'README contents' }),
-    JSON.stringify({ type: 'result', response: 'Done.' })
+    JSON.stringify({
+      type: 'system',
+      subtype: 'session_start',
+      session_id: 'qwen-session-1',
+      model: 'qwen3-coder',
+      cwd: '/tmp/project'
+    }),
+    JSON.stringify({
+      type: 'assistant',
+      session_id: 'qwen-session-1',
+      message: {
+        role: 'assistant',
+        content: [
+          { type: 'text', text: 'I will inspect the project.' },
+          { type: 'tool_use', id: 'tool-1', name: 'read_file', input: { path: 'README.md' } }
+        ]
+      }
+    }),
+    JSON.stringify({
+      type: 'user',
+      session_id: 'qwen-session-1',
+      message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'tool-1', content: 'README contents' }] }
+    }),
+    JSON.stringify({ type: 'result', subtype: 'success', session_id: 'qwen-session-1', result: 'Inspection complete.' })
   ].join('\n');
 
   const events = qwenNativeCliAdapter.parseOutput(chunk);
   expectNativeCliOutputContract(events);
   expect(events).toEqual([
-    { type: 'session_ref', payload: { providerSessionRef: 'qwen-session-1', model: 'qwen3-coder' } },
+    {
+      type: 'session_ref',
+      payload: { providerSessionRef: 'qwen-session-1', model: 'qwen3-coder', cwd: '/tmp/project' }
+    },
     { type: 'agent_message', payload: { text: 'I will inspect the project.' } },
     { type: 'tool_call', payload: { callId: 'tool-1', tool: 'read_file', input: { path: 'README.md' } } },
     { type: 'tool_result', payload: { callId: 'tool-1', output: 'README contents' } },
-    { type: 'agent_message', payload: { text: 'Done.', final: true } }
+    { type: 'agent_message', payload: { text: 'Inspection complete.', final: true } }
   ]);
+});
+
+test('Qwen adapter surfaces error results as provider errors', () => {
+  const events = qwenNativeCliAdapter.parseOutput(
+    JSON.stringify({
+      type: 'result',
+      subtype: 'error_during_execution',
+      session_id: 'qwen-session-1',
+      is_error: true,
+      error: { type: 'INVALID_STREAM', message: 'Model returned an empty response' }
+    })
+  );
+  expectNativeCliOutputContract(events);
+  expect(events).toEqual([
+    { type: 'provider_error', payload: { message: 'Model returned an empty response', code: 'INVALID_STREAM' } }
+  ]);
+});
+
+test('Qwen adapter surfaces can_use_tool control requests and resolves them over the control plane', () => {
+  const writes: string[] = [];
+  const handle = {
+    launchMode: 'json-stream' as const,
+    providerSessionRef: 'qwen-session-1',
+    stdin: {
+      write(input: string) {
+        writes.push(input);
+      }
+    },
+    nextRequestId: () => 1,
+    kill() {}
+  };
+
+  const events = qwenNativeCliAdapter.parseOutput(
+    JSON.stringify({
+      type: 'control_request',
+      request_id: 'req-1',
+      request: {
+        subtype: 'can_use_tool',
+        tool_name: 'run_shell_command',
+        tool_use_id: 'call-1',
+        input: { command: 'ls' },
+        permission_suggestions: null,
+        blocked_path: null
+      }
+    }),
+    handle
+  );
+  expectNativeCliOutputContract(events);
+  expect(events).toEqual([
+    {
+      type: 'approval_requested',
+      payload: {
+        requestId: 'req-1',
+        kind: 'can_use_tool',
+        tool: 'run_shell_command',
+        callId: 'call-1',
+        input: { command: 'ls' },
+        permissionSuggestions: null,
+        blockedPath: null
+      }
+    }
+  ]);
+  expect(writes).toHaveLength(0);
+
+  qwenNativeCliAdapter.resolveApproval(handle, {
+    requestId: 'req-1',
+    allow: true,
+    request: { input: { command: 'ls' } }
+  });
+  expect(JSON.parse(writes[0] ?? '')).toEqual({
+    type: 'control_response',
+    response: {
+      subtype: 'success',
+      request_id: 'req-1',
+      response: { behavior: 'allow', updatedInput: { command: 'ls' } }
+    }
+  });
+});
+
+test('Qwen adapter auto-declines unsupported control requests so the turn cannot hang', () => {
+  const writes: string[] = [];
+  const handle = {
+    launchMode: 'json-stream' as const,
+    stdin: {
+      write(input: string) {
+        writes.push(input);
+      }
+    },
+    nextRequestId: () => 1,
+    kill() {}
+  };
+
+  const events = qwenNativeCliAdapter.parseOutput(
+    JSON.stringify({
+      type: 'control_request',
+      request_id: 'req-2',
+      request: { subtype: 'mcp_message', server_name: 'x', message: { method: 'y' } }
+    }),
+    handle
+  );
+  expect(events).toEqual([]);
+  expect(JSON.parse(writes[0] ?? '')).toEqual({
+    type: 'control_response',
+    response: { subtype: 'error', request_id: 'req-2', error: 'Unsupported control request: mcp_message' }
+  });
+});
+
+test('Qwen adapter initializes and frames turns through the SDK stream-json bridge', () => {
+  const writes: string[] = [];
+  const handle = {
+    launchMode: 'json-stream' as const,
+    providerSessionRef: 'qwen-session-1',
+    stdin: {
+      write(input: string) {
+        writes.push(input);
+      }
+    },
+    nextRequestId: () => 5,
+    kill() {}
+  };
+
+  qwenNativeCliAdapter.initialize?.(handle, { workingPath: '/tmp/project' });
+  qwenNativeCliAdapter.sendInput(handle, 'summarize');
+
+  expect(writes).toHaveLength(2);
+  expect(writes.every((line) => line.endsWith('\n'))).toBe(true);
+  expect(JSON.parse(writes[0] ?? '')).toEqual({
+    type: 'control_request',
+    request_id: 'init-5',
+    request: { subtype: 'initialize', hooks: null }
+  });
+  expect(JSON.parse(writes[1] ?? '')).toEqual({
+    type: 'user',
+    session_id: 'qwen-session-1',
+    parent_tool_use_id: null,
+    message: { role: 'user', content: [{ type: 'text', text: 'summarize' }] }
+  });
 });
 
 test('Gemini adapter does not infer semantics from PTY prompt text', () => {
@@ -1029,15 +1592,68 @@ test('Codex adapter parses app-server JSON-RPC errors as provider errors', () =>
   ]);
 });
 
+test('Codex adapter routes Unauthorized app-server errors to a reconnect prompt', () => {
+  const events = codexNativeCliAdapter.parseOutput(
+    JSON.stringify({
+      id: 2,
+      error: { code: 'Unauthorized', message: 'Your session has expired', codexErrorInfo: 'Unauthorized' }
+    })
+  );
+  expectNativeCliOutputContract(events);
+  expect(events).toEqual([
+    {
+      type: 'connection_required',
+      payload: { code: 'Unauthorized', reason: 'Your session has expired' }
+    }
+  ]);
+});
+
+test('Codex adapter keeps non-auth app-server errors as provider errors', () => {
+  const events = codexNativeCliAdapter.parseOutput(
+    JSON.stringify({ id: 3, error: { code: -32000, message: 'resume missing' } })
+  );
+  expectNativeCliOutputContract(events);
+  expect(events).toEqual([
+    { type: 'provider_error', payload: { responseId: 3, code: -32000, message: 'resume missing' } }
+  ]);
+});
+
+test('Codex adapter echoes a numeric approval request id back to the app server', () => {
+  const writes: string[] = [];
+  const handle = {
+    launchMode: 'app-server' as const,
+    providerSessionRef: 'codex-thread-1',
+    nextRequestId: () => 7,
+    appServer: {
+      send(input: string) {
+        writes.push(input);
+      },
+      close() {}
+    },
+    kill() {}
+  };
+
+  // The host stringifies the numeric server-request id for transport but preserves the original on
+  // the stored request payload; the response must carry the numeric id so codex can correlate it.
+  codexNativeCliAdapter.resolveApproval(handle, {
+    requestId: '17',
+    allow: true,
+    request: { kind: 'commandExecution', requestId: 17 }
+  });
+
+  expect(JSON.parse(writes[0] ?? '')).toEqual({ id: 17, result: { decision: 'accept' } });
+});
+
 test('Codex adapter requests and parses paged app-server history without rollout files', () => {
   const writes: string[] = [];
   const handle = {
     launchMode: 'app-server' as const,
     providerSessionRef: 'codex-thread-1',
-    stdin: {
-      write(input: string) {
+    appServer: {
+      send(input: string) {
         writes.push(input);
-      }
+      },
+      close() {}
     },
     nextRequestId: () => 9,
     kill() {}
@@ -1246,10 +1862,11 @@ test('Codex adapter accepts Monad input and approval decisions through its app-s
     launchMode: 'app-server' as const,
     providerSessionRef: 'codex-thread-1',
     nextRequestId: () => 7,
-    stdin: {
-      write(input: string) {
+    appServer: {
+      send(input: string) {
         writes.push(input);
-      }
+      },
+      close() {}
     },
     kill() {}
   };

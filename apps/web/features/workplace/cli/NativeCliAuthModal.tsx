@@ -8,6 +8,7 @@ import {
   useInputNativeCliAuthMutation,
   useStopNativeCliAuthMutation
 } from '@monad/client-rtk';
+import { isProductIconId } from '@monad/ui';
 import { useEffect } from 'react';
 
 import { useT } from '@/components/I18nProvider';
@@ -58,7 +59,7 @@ export function NativeCliAuthModal({
     <CliTerminalModal
       eyebrow={t('web.nativeCli.connectTitle')}
       footerLabel={t('web.nativeCli.connectTerminalHint')}
-      icon={session?.productIcon}
+      icon={isProductIconId(session?.productIcon) ? session.productIcon : undefined}
       id={sessionId}
       onClose={onClose}
       onInput={(input) => {

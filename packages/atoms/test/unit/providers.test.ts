@@ -3,8 +3,10 @@ import type { ModelCall, ModelChunk, ResolvedProviderConfig } from '@monad/sdk-a
 import { expect, test } from 'bun:test';
 import { KNOWN_PROVIDER_TYPES } from '@monad/protocol';
 
+import { splitSystem } from '../../src/providers/ai-sdk-adapter.ts';
 import { PROVIDER_DESCRIPTORS } from '../../src/providers/catalog.ts';
-import { builtinModelProviders, makeOpenAICompatibleProvider, splitSystem } from '../../src/providers/index.ts';
+import { makeOpenAICompatibleProvider } from '../../src/providers/openai-compatible.ts';
+import { builtinModelProviders } from '../../src/providers/registry.ts';
 
 const CRED = { id: 'c1', accessToken: 'key-1', authType: 'api_key' as const, priority: 0 };
 const userMsg = [{ role: 'user' as const, content: 'hi' }];

@@ -1,4 +1,9 @@
-import type { ManagedNativeCliLifecycleLogEvent, TranscriptTarget, TranscriptTargetId } from '@monad/protocol';
+import type {
+  ManagedNativeCliLifecycleLogEvent,
+  NativeCliProvider,
+  TranscriptTarget,
+  TranscriptTargetId
+} from '@monad/protocol';
 import type { SessionContext } from '@/handlers/session/context.ts';
 
 import { loadAll } from '@monad/home';
@@ -11,6 +16,7 @@ import {
   nativeCliProjectMemberRuntimeName,
   workplaceProjectMembers
 } from '@/handlers/session/handlers/messaging-members.ts';
+import { findNativeCliProviderAdapter } from '@/services/native-cli/index.ts';
 import { managedProjectLaunchMode } from '@/services/native-cli/managed-project.ts';
 import managedProjectJoinGreetingNoticePath from '@/services/native-cli/prompts/managed-project-join-greeting-notice.md' with {
   type: 'file'
@@ -27,7 +33,9 @@ const MANAGED_NATIVE_CLI_JOIN_GREETING_MCP_NOTICE = (
 ).trim();
 
 function managedNativeCliJoinGreetingNotice(provider: string): string {
-  return provider === 'codex' ? MANAGED_NATIVE_CLI_JOIN_GREETING_MCP_NOTICE : MANAGED_NATIVE_CLI_JOIN_GREETING_NOTICE;
+  return findNativeCliProviderAdapter(provider as NativeCliProvider)?.managedRuntime?.usesManagedMcpBridge
+    ? MANAGED_NATIVE_CLI_JOIN_GREETING_MCP_NOTICE
+    : MANAGED_NATIVE_CLI_JOIN_GREETING_NOTICE;
 }
 
 function managedNativeCliMemberRuntimeNames(target: TranscriptTarget): Set<string> {

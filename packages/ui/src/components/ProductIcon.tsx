@@ -15,7 +15,9 @@ export interface ProductIconColors {
 }
 
 export interface ProductIconProps {
-  product: ProductIconId;
+  // Open: product ids are extensible (a third-party agent-adapter atom can add one). Known ids keep
+  // autocomplete; an unknown id renders the neutral default glyph + uses the id as its label.
+  product: ProductIconId | (string & {});
   className?: string;
   size?: number | string;
   title?: string;
@@ -77,7 +79,7 @@ export function ProductIcon({
     ...vars(darkColors),
     ...vars(colors)
   } as CSSProperties;
-  const label = title ?? PRODUCT_TITLES[product];
+  const label = title ?? PRODUCT_TITLES[product as ProductIconId] ?? product;
   const renderIcon = (id: string) => (
     <ProductIconSvg
       gradientId={id}
@@ -122,7 +124,7 @@ function ProductIconSvg({
   title,
   gradientId
 }: {
-  product: ProductIconId;
+  product: ProductIconId | (string & {});
   title: string;
   gradientId: string;
 }): React.ReactElement {

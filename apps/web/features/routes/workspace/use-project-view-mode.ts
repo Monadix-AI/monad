@@ -10,18 +10,12 @@ import { create } from 'zustand';
 // shared project state). Unknown ids resolve to the default project experience via the registry.
 export type ProjectViewMode = string;
 
-const DEFAULT_VIEW_MODE = 'graphic-view';
+const DEFAULT_VIEW_MODE = 'chat-room';
 const storageKey = (projectId: string): string => `monad.projectViewMode:${projectId}`;
-
-function normalizeMode(mode: string): ProjectViewMode {
-  if (mode === 'chat') return 'chat-room';
-  if (mode === 'graph') return 'graphic-view';
-  return mode;
-}
 
 function loadMode(projectId: string): ProjectViewMode {
   if (typeof window === 'undefined') return DEFAULT_VIEW_MODE;
-  return normalizeMode(window.localStorage.getItem(storageKey(projectId)) ?? DEFAULT_VIEW_MODE);
+  return window.localStorage.getItem(storageKey(projectId)) ?? DEFAULT_VIEW_MODE;
 }
 
 interface ViewModeStore {
@@ -50,7 +44,7 @@ export function useProjectViewMode(projectId: string | null): [ProjectViewMode, 
 
   const setMode = useCallback(
     (next: ProjectViewMode) => {
-      if (projectId) setInStore(projectId, normalizeMode(next));
+      if (projectId) setInStore(projectId, next);
     },
     [projectId, setInStore]
   );

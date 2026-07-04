@@ -487,6 +487,12 @@ async function main(): Promise<void> {
   }).exited;
   log('codex app-server      protocol generated');
 
+  await Bun.spawn(['bun', 'run', join(root, 'scripts/generate-avatar-styles.ts')], {
+    stdout: 'inherit',
+    stderr: 'inherit'
+  }).exited;
+  log('avatar styles         generated');
+
   await Bun.spawn(['bun', 'run', join(root, 'packages/home/scripts/gen-config-schema.ts')], {
     stdout: 'inherit',
     stderr: 'inherit'

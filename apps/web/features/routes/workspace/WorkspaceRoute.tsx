@@ -3,6 +3,7 @@
 import type { ProjectId, Session } from '@monad/protocol';
 import type { ProjectController } from '@/features/workplace/use-project';
 
+import { builtinWorkspaceExperiences } from '@monad/atoms/workspace-experiences';
 import { useListWorkspaceExperiencesQuery } from '@monad/client-rtk';
 import { useCallback, useState } from 'react';
 
@@ -24,6 +25,7 @@ interface WorkspaceRouteProps {
   onProjectDeleted: () => void;
   onOpenSettings: () => void;
   onOpenStudio: () => void;
+  voiceModelState?: 'checking' | 'configured' | 'missing' | 'failed';
 }
 
 export function WorkspaceRoute({
@@ -36,13 +38,16 @@ export function WorkspaceRoute({
   onOpenProject,
   onProjectDeleted,
   onOpenSettings,
-  onOpenStudio
+  onOpenStudio,
+  voiceModelState = 'checking'
 }: WorkspaceRouteProps) {
   const [mode, setMode] = useProjectViewMode(activeProjectId);
   const [activeProjectController, setActiveProjectController] = useState<ProjectController | null>(null);
   const openProjectSettingsInStore = useWorkplaceUiStore((state) => state.openProjectSettings);
   const { data: workspaceExperiences } = useListWorkspaceExperiencesQuery(undefined, { skip: !activeProjectId });
-  const experiences = listProjectExperiences(toProjectExperienceDefinitions(workspaceExperiences?.experiences ?? []));
+  const experiences = listProjectExperiences(
+    toProjectExperienceDefinitions([...builtinWorkspaceExperiences, ...(workspaceExperiences?.experiences ?? [])])
+  );
   const activeProject = projects.find((p) => p.id === activeProjectId);
   const projectName = activeProject?.name ?? activeProjectId ?? 'Project';
   const openProjectSettings = useCallback(() => {
@@ -58,10 +63,10 @@ export function WorkspaceRoute({
     return (
       <>
         <style>{`
-          .g1-chatroom { display: flex; flex-direction: column; flex: 1; min-height: 0; min-width: 0; }
-          .g1-chatroom-body { flex: 1; min-height: 0; display: flex; overflow: hidden; }
+          .g1-workspace { display: flex; flex-direction: column; flex: 1; min-height: 0; min-width: 0; }
+          .g1-workspace-canvas { flex: 1; min-height: 0; display: flex; overflow: hidden; }
         `}</style>
-        <div className="g1-chatroom">
+        <div className="g1-workspace">
           <ProjectTopBar
             experiences={experiences}
             mode={mode}
@@ -72,7 +77,7 @@ export function WorkspaceRoute({
             projectName={projectName}
             projectWorkdir={activeProject?.cwd}
           />
-          <div className="g1-chatroom-body">
+          <div className="g1-workspace-canvas">
             <Workplace
               embedded
               experiences={experiences}
@@ -82,6 +87,7 @@ export function WorkspaceRoute({
               onProjectControllerChange={updateProjectController}
               onProjectDeleted={onProjectDeleted}
               projectId={activeProjectId}
+              voiceModelState={voiceModelState}
             />
           </div>
         </div>

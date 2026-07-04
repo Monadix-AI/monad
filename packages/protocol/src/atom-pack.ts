@@ -30,6 +30,7 @@ export const atomKindSchema = z.enum([
   'hook',
   'sandbox',
   'workspace-experience',
+  'agent-adapter',
   'mcp',
   'skill'
 ]);
@@ -64,6 +65,16 @@ export function parseAtomPackManifest(raw: unknown): AtomPackManifestWire {
   return atomPackManifestSchema.parse(raw);
 }
 
+/** One concrete atom inside a pack (a single channel, command, provider, …), for the detail view.
+ *  `manifest.atoms` lists the pack's *kinds*; this lists the individual atoms of each kind. */
+export const atomDescriptorSchema = z.object({
+  kind: atomKindSchema,
+  id: z.string(),
+  name: z.string().optional(),
+  description: z.string().optional()
+});
+export type AtomDescriptor = z.infer<typeof atomDescriptorSchema>;
+
 export const installedAtomPackSchema = z.object({
   /** The operable identity = install dir (folder) name. Unique across packs (a same-named pack from
    *  a different source installs under a disambiguating suffix). Use this for enable/remove/pin. */
@@ -75,7 +86,20 @@ export const installedAtomPackSchema = z.object({
   atoms: z.array(atomKindSchema),
   enabled: z.boolean(),
   source: z.string().optional(), // the install spec, e.g. "github:owner/repo@sha"
-  installedAt: z.string().optional()
+  installedAt: z.string().optional(),
+  /** Manifest metadata surfaced in the atom-pack detail view. All optional — a drop-in pack may
+   *  declare none. `repository` is the manifest's `source` (repo + commit), distinct from the
+   *  install-spec `source` above. */
+  description: z.string().optional(),
+  author: z.string().optional(),
+  sdkVersion: z.string().optional(),
+  repository: z.object({ repo: z.string(), commit: z.string() }).optional(),
+  /** First-party pack bundled with monad (`monad-builtins`). Always enabled and not removable — the
+   *  UI surfaces it read-only, distinct from installed/drop-in packs. */
+  builtin: z.boolean().optional(),
+  /** The pack's individual atoms (empty when the daemon can't enumerate them, e.g. a drop-in pack
+   *  whose module isn't introspected — the UI then falls back to the kind summary). */
+  atomDetails: z.array(atomDescriptorSchema).default([])
 });
 export type InstalledAtomPack = z.infer<typeof installedAtomPackSchema>;
 
@@ -110,11 +134,21 @@ export const listAtomPacksResponseSchema = z.object({
 });
 export type ListAtomPacksResponse = z.infer<typeof listAtomPacksResponseSchema>;
 
-export const workspaceExperienceEntrySchema = z.object({
+export const workspaceExperienceWebComponentEntrySchema = z.object({
   type: z.literal('web-component'),
   module: z.string().min(1),
   tagName: z.string().min(1)
 });
+
+export const workspaceExperienceBuiltinEntrySchema = z.object({
+  type: z.literal('builtin'),
+  component: z.string().min(1)
+});
+
+export const workspaceExperienceEntrySchema = z.discriminatedUnion('type', [
+  workspaceExperienceWebComponentEntrySchema,
+  workspaceExperienceBuiltinEntrySchema
+]);
 export type WorkspaceExperienceEntry = z.infer<typeof workspaceExperienceEntrySchema>;
 
 export const workspaceExperienceApiMethodSchema = z.enum(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']);
@@ -139,6 +173,14 @@ export const workspaceExperienceDefinitionSchema = z.object({
   entry: workspaceExperienceEntrySchema
 });
 export type WorkspaceExperienceDefinition = z.infer<typeof workspaceExperienceDefinitionSchema>;
+
+export interface WorkspaceExperienceHostApi<Snapshot = unknown, Actions = unknown> {
+  snapshot: Snapshot;
+  actions: Actions;
+  embedded: boolean;
+  apiBaseUrl?: string;
+  requestProjectSettings(open: boolean): void;
+}
 
 export const listWorkspaceExperiencesResponseSchema = z.object({
   experiences: z.array(workspaceExperienceDefinitionSchema)

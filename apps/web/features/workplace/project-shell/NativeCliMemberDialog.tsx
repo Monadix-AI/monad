@@ -1,7 +1,16 @@
+import type { ProjectController } from '../use-project';
+
 import { ChevronDownIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { entityAvatarUrl } from '@monad/protocol';
+import { nativeCliAvatarSeed } from '@monad/atoms/workspace-experiences/project/project-members';
+import { entityAvatarUrl, type NativeCliAppServerTransport } from '@monad/protocol';
 import { Button, Switch } from '@monad/ui';
+import {
+  AgentInstanceAvatar,
+  workspaceMono as mono,
+  workspaceSans as sans,
+  workspaceSectionLabelStyle as sectionLabel
+} from '@monad/ui/components/AgentAvatar';
 import { useEffect, useState } from 'react';
 
 import { useT } from '@/components/I18nProvider';
@@ -12,9 +21,6 @@ import {
 } from '@/components/ReasoningEffortControl';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { AgentInstanceAvatar } from '../Bits';
-import { mono, sans, sectionLabel } from '../styles';
-import { nativeCliAvatarSeed, type ProjectController } from '../use-project';
 
 type AvailableProjectMember = ProjectController['availableProjectMembers'][number];
 type ProjectMember = ProjectController['projectMembers'][number];
@@ -24,6 +30,7 @@ type NativeCliDraft = {
   modelId?: string;
   reasoningEffort?: string;
   speed?: 'standard' | 'fast';
+  appServerTransport?: NativeCliAppServerTransport;
   customPrompt?: string;
 };
 
@@ -52,6 +59,7 @@ export function nativeCliMemberDialogStateForMember(
       modelId: settings.modelId,
       reasoningEffort: settings.reasoningEffort,
       speed: settings.speed,
+      appServerTransport: settings.appServerTransport,
       customPrompt: settings.customPrompt
     }
   };
@@ -120,6 +128,7 @@ export function NativeCliMemberDialog({
           modelId: invite.draft.modelId,
           reasoningEffort: invite.draft.reasoningEffort,
           speed: invite.draft.speed,
+          appServerTransport: invite.draft.appServerTransport,
           customPrompt: invite.draft.customPrompt
         })
       ])
@@ -231,6 +240,32 @@ export function NativeCliMemberDialog({
                 ))}
               </select>
             </label>
+            {(invite.candidate.supportedAppServerTransports ?? []).length > 1 ? (
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                <span style={{ fontFamily: mono, fontSize: 10, color: 'var(--muted-foreground)' }}>
+                  {t('web.workplace.appServerTransport')}
+                </span>
+                <select
+                  onChange={(event) =>
+                    updateDraft({
+                      appServerTransport: (event.target.value || undefined) as NativeCliAppServerTransport | undefined
+                    })
+                  }
+                  style={field}
+                  value={invite.draft.appServerTransport ?? ''}
+                >
+                  <option value="">{t('web.workplace.appServerTransportDefault')}</option>
+                  {(invite.candidate.supportedAppServerTransports ?? []).map((transport) => (
+                    <option
+                      key={transport}
+                      value={transport}
+                    >
+                      {transport}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
             <div
               style={{
                 display: 'flex',

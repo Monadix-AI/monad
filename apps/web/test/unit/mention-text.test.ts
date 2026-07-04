@@ -1,6 +1,5 @@
 import { expect, test } from 'bun:test';
-
-import { mentionSegments, mentionToken, parseMentionTokens } from '../../components/MentionText.tsx';
+import { mentionSegments, mentionToken, parseMentionTokens } from '@monad/ui/components/MentionText';
 
 test('mentionSegments extracts strict agent mention tokens', () => {
   expect(mentionSegments('ask @[name="planner" id="acp:planner"] then @[name="reviewer" id="acp:reviewer"]')).toEqual([

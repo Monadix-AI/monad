@@ -5,6 +5,7 @@ import type {
   HookDefinition,
   ManifestAtomPack,
   ModelProvider,
+  NativeCliProviderAdapter,
   SandboxLauncher,
   WorkspaceExperienceApi,
   WorkspaceExperienceDefinition
@@ -29,6 +30,7 @@ export function builtinChannelAdapters(
     onCommand?: (atomPackName: string, command: unknown) => void;
     onProvider?: (provider: ModelProvider) => void;
     onHook?: (hook: HookDefinition) => void;
+    onAgentAdapter?: (adapter: NativeCliProviderAdapter) => void;
     onSandbox?: (launcher: SandboxLauncher) => void;
     onWorkspaceExperience?: (experience: WorkspaceExperienceDefinition, atomPackName: string) => void;
     onWorkspaceExperienceApi?: (api: WorkspaceExperienceApi, atomPackName: string) => void;

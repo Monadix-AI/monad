@@ -1,3 +1,6 @@
+import { mkdir, readFile, stat, unlink, writeFile } from 'node:fs/promises';
+import { dirname } from 'node:path';
+
 export type NativeCliKillFn = (pid: number, signal: NodeJS.Signals) => void;
 export type NativeCliTreeKillFn = (pid: number) => void;
 
@@ -47,4 +50,45 @@ export function killNativeCliProcess(
     // fall through to direct pid kill
   }
   killIfPresent(pid, signal, kill);
+}
+
+/** Reconciliation registry of detached native-CLI pids, persisted so a crashed daemon can reap the
+ *  children it orphaned. Missing/corrupt file → empty list (best-effort cleanup, never throws).
+ *  Async (not sync fs) since this runs on every session spawn/exit and must not block the daemon's
+ *  event loop for the duration of every other in-flight session's request handling. */
+export async function readProcessRegistry(path: string | undefined): Promise<number[]> {
+  if (!path) return [];
+  try {
+    const parsed = JSON.parse(await readFile(path, 'utf8')) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .map((entry) =>
+        entry && typeof entry === 'object' && typeof (entry as { pid?: unknown }).pid === 'number'
+          ? (entry as { pid: number }).pid
+          : undefined
+      )
+      .filter((pid): pid is number => typeof pid === 'number');
+  } catch {
+    return [];
+  }
+}
+
+export async function writeProcessRegistry(path: string | undefined, pids: number[]): Promise<void> {
+  if (!path) return;
+  if (pids.length === 0) {
+    try {
+      await unlink(path);
+    } catch {
+      /* registry already absent */
+    }
+    return;
+  }
+  const parent = dirname(path);
+  try {
+    if (!(await stat(parent)).isDirectory()) return;
+  } catch {
+    // parent doesn't exist yet — created below
+  }
+  await mkdir(parent, { recursive: true });
+  await writeFile(path, JSON.stringify(pids.map((pid) => ({ pid }))));
 }

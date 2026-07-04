@@ -126,6 +126,22 @@ export function createNativeCliModule({ paths, host, store }: NativeCliDeps) {
       return { ok: true };
     },
 
+    interrupt({ id, transcriptTargetId }: { id: string; transcriptTargetId: TranscriptTargetId }): OkResponse {
+      requireNativeCliSessionScope(id, transcriptTargetId);
+      host.interrupt(id);
+      return { ok: true };
+    },
+
+    steer({
+      id,
+      input,
+      transcriptTargetId
+    }: { id: string; transcriptTargetId: TranscriptTargetId } & NativeCliInputRequest): OkResponse {
+      requireNativeCliSessionScope(id, transcriptTargetId);
+      host.steer(id, { input });
+      return { ok: true };
+    },
+
     get({
       id,
       transcriptTargetId
@@ -156,19 +172,23 @@ export function createNativeCliModule({ paths, host, store }: NativeCliDeps) {
     subscribeObservation({
       id,
       transcriptTargetId,
-      onObservation
+      onObservation,
+      afterSeq
     }: {
       id: string;
       transcriptTargetId: TranscriptTargetId;
       onObservation: (access: NativeCliObservationAccessResponse, done: boolean) => void;
+      afterSeq?: number;
     }): {
       access: NativeCliObservationAccessResponse;
       live: boolean;
       dispose: () => void;
     } {
       requireNativeCliSessionScope(id, transcriptTargetId);
-      return host.subscribeObservation(id, (access, done) =>
-        onObservation(nativeCliObservationAccessResponseSchema.parse(access), done)
+      return host.subscribeObservation(
+        id,
+        (access, done) => onObservation(nativeCliObservationAccessResponseSchema.parse(access), done),
+        afterSeq
       );
     },
 

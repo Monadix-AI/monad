@@ -34,14 +34,6 @@ test('project member settings use dialogs instead of inline expansion panels', (
   expect(source).not.toContain('isExpanded');
 });
 
-test('system message observation action uses observe semantics', () => {
-  const followButtonSource = readSource('features/workplace/activity/SystemMessageRow.tsx');
-
-  expect(followButtonSource).toContain("aria-label={t('web.workplace.observe')}");
-  expect(followButtonSource).toContain("title={t('web.workplace.observe')}");
-  expect(followButtonSource).not.toContain('<span>Follow</span>');
-});
-
 test('agent card opens member settings without opening project settings', () => {
   const source = readSource('features/workplace/Workplace.tsx');
 

@@ -13,7 +13,8 @@ import {
   getNativeCliProviderAdapter,
   listNativeCliAgentModelOptions,
   listNativeCliAgentPresets,
-  listNativeCliAgentReasoningEfforts
+  listNativeCliAgentReasoningEfforts,
+  listNativeCliAgentReasoningEffortsByModel
 } from '@/services/native-cli/index.ts';
 
 export interface NativeCliAgentDeps {
@@ -58,8 +59,10 @@ const toView = (a: NativeCliAgentConfig): NativeCliAgentView => ({
   env: redactEnvForView(a.env),
   modelOptions: listNativeCliAgentModelOptions(a),
   reasoningEfforts: listNativeCliAgentReasoningEfforts(a),
+  reasoningEffortsByModel: listNativeCliAgentReasoningEffortsByModel(a),
   enabled: a.enabled,
   defaultLaunchMode: a.defaultLaunchMode,
+  appServerTransport: a.appServerTransport,
   allowDangerousMode: a.allowDangerousMode,
   approvalOwnership: 'provider-owned'
 });
@@ -73,6 +76,7 @@ const fromView = (v: NativeCliAgentView, stored?: NativeCliAgentConfig): NativeC
   env: restoreRedactedEnv(v.env, stored?.env),
   enabled: v.enabled,
   defaultLaunchMode: v.defaultLaunchMode,
+  appServerTransport: v.appServerTransport,
   allowDangerousMode: v.allowDangerousMode,
   approvalOwnership: 'provider-owned'
 });

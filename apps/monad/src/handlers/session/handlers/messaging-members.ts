@@ -24,7 +24,14 @@ export interface ManagedNativeCliProjectMember {
   displayName: string;
   settings: Pick<
     WorkplaceProjectMemberSettings,
-    'managedProjectAgent' | 'launchMode' | 'modelName' | 'modelId' | 'reasoningEffort' | 'speed' | 'customPrompt'
+    | 'managedProjectAgent'
+    | 'launchMode'
+    | 'appServerTransport'
+    | 'modelName'
+    | 'modelId'
+    | 'reasoningEffort'
+    | 'speed'
+    | 'customPrompt'
   >;
 }
 
@@ -70,7 +77,14 @@ export function nativeCliProjectMemberSettings(
   agentName: string
 ): Pick<
   WorkplaceProjectMemberSettings,
-  'managedProjectAgent' | 'launchMode' | 'modelName' | 'modelId' | 'reasoningEffort' | 'speed' | 'customPrompt'
+  | 'managedProjectAgent'
+  | 'launchMode'
+  | 'appServerTransport'
+  | 'modelName'
+  | 'modelId'
+  | 'reasoningEffort'
+  | 'speed'
+  | 'customPrompt'
 > {
   const parsed = workplaceProjectMembersExtSchema.safeParse(session.origin?.ext?.[workplaceProjectMembersExtKey]);
   if (!parsed.success) return {};
@@ -84,6 +98,7 @@ export function nativeCliProjectMemberSettings(
     return {
       managedProjectAgent: member.settings.managedProjectAgent !== false,
       ...(member.settings.launchMode ? { launchMode: member.settings.launchMode } : {}),
+      ...(member.settings.appServerTransport ? { appServerTransport: member.settings.appServerTransport } : {}),
       ...(member.settings.modelName ? { modelName: member.settings.modelName } : {}),
       ...(member.settings.modelId ? { modelId: member.settings.modelId } : {}),
       ...(member.settings.reasoningEffort ? { reasoningEffort: member.settings.reasoningEffort } : {}),
@@ -127,6 +142,7 @@ export function managedNativeCliProjectMembers(
           settings: {
             managedProjectAgent: true,
             ...(member.settings?.launchMode ? { launchMode: member.settings.launchMode } : {}),
+            ...(member.settings?.appServerTransport ? { appServerTransport: member.settings.appServerTransport } : {}),
             ...(member.settings?.modelName ? { modelName: member.settings.modelName } : {}),
             ...(member.settings?.modelId ? { modelId: member.settings.modelId } : {}),
             ...(member.settings?.reasoningEffort ? { reasoningEffort: member.settings.reasoningEffort } : {}),

@@ -4,6 +4,7 @@ import type { DeveloperLogRecord, Event, ProjectId } from '@monad/protocol';
 
 import { BugIcon, Cancel01Icon, ClipboardIcon, Delete02Icon, PauseIcon, PlayIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
+import { workspaceMono as mono } from '@monad/ui/components/AgentAvatar';
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 
 import { useMonadRuntime } from '@/lib/monad-runtime-provider';
@@ -14,7 +15,6 @@ import {
   projectDebugTraceSnapshot,
   subscribeProjectDebugTrace
 } from '@/lib/project-debug-trace';
-import { mono } from '../styles';
 import { DEV_SYSTEM_MESSAGES_IN_STREAM_ENABLED, useWorkplaceUiStore } from '../workplace-ui-store';
 
 type DebugFilter = 'all' | 'http' | 'sse' | 'native-cli' | 'approval' | 'log' | 'error';

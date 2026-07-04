@@ -9,9 +9,9 @@
 // of the SDK.
 
 import type { Translate } from '@monad/i18n';
-import type { CommandSpec } from '@monad/protocol';
+import type { CommandKind, CommandSource, CommandSpec } from '@monad/protocol';
 
-export type { CommandKind, CommandSource, CommandSpec } from '@monad/protocol';
+export type { CommandKind, CommandSource, CommandSpec };
 
 export type CommandLog = (level: 'info' | 'warn' | 'error', msg: string, fields?: Record<string, unknown>) => void;
 

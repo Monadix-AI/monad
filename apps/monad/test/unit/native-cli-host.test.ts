@@ -5,10 +5,17 @@ import { expect, test } from 'bun:test';
 import { chmodSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
+import { builtinAgentAdapters } from '@monad/atoms/agent-adapters';
 
 import { EventBus } from '@/services/event-bus.ts';
+import { BoundedOutputBuffer } from '@/services/native-cli/bounded-output-buffer.ts';
 import { NativeCliHost } from '@/services/native-cli/host.ts';
+import { registerAgentAdapterImpl } from '@/services/native-cli/index.ts';
 import { createStore } from '@/store/db/index.ts';
+
+// Adapters are agent-adapter atoms registered at daemon boot; tests drive the host directly, so they
+// register the built-ins up front (mirrors the daemon's registration path).
+for (const adapter of builtinAgentAdapters) registerAgentAdapterImpl(adapter);
 
 test('managed provider final can retire a consumed inbox turn without auto-posting', async () => {
   const store = createStore();
@@ -147,7 +154,7 @@ test('managed native CLI output stays live-only and is not persisted as a raw sn
     providerSessionRef: null,
     pendingApprovals: new Map(),
     pendingHistoryPages: new Map(),
-    outputBuffer: '',
+    outputBuffer: new BoundedOutputBuffer(256 * 1024),
     snapshotFlushTimer: null,
     nextRequestId: () => 0,
     kill: () => {}
@@ -186,6 +193,197 @@ test('managed native CLI output stays live-only and is not persisted as a raw sn
     output: expect.stringContaining('secret')
   });
   expect(store.getNativeCliSession(nativeCliSessionId)?.outputSnapshot).toBe('');
+});
+
+test('native CLI observation stream pushes incremental deltas the client can reconstruct', async () => {
+  const store = createStore();
+  const host = new NativeCliHost({ store, bus: new EventBus(), agents: async () => [] });
+  const projectId = 'prj_01KWHOSTTEST0000000000009';
+  const nativeCliSessionId = 'ncli_host_delta_test';
+  store.insertWorkplaceProject({
+    id: projectId,
+    title: 'Delta',
+    ownerPrincipalId: 'prn_test',
+    state: 'active',
+    archived: false,
+    createdAt: '2026-07-02T00:00:00.000Z',
+    updatedAt: '2026-07-02T00:00:00.000Z'
+  });
+  store.upsertNativeCliSession({
+    id: nativeCliSessionId,
+    transcriptTargetId: projectId,
+    agentName: 'codex',
+    provider: 'codex',
+    workingPath: '/tmp/project',
+    launchMode: 'app-server',
+    runtimeRole: 'interactive',
+    agentRuntimeId: null,
+    agentRuntimeTokenHash: null,
+    lastDeliveredSeq: 0,
+    lastVisibleSeq: 0,
+    state: 'running',
+    pid: 123,
+    providerSessionRef: null,
+    outputSnapshot: '',
+    exitCode: null,
+    startedAt: '2026-07-02T00:00:00.000Z',
+    updatedAt: '2026-07-02T00:00:00.000Z',
+    exitedAt: null
+  });
+  const adapter = {
+    provider: 'codex',
+    productIcon: 'openai',
+    parseOutput: () => []
+  } as unknown as NativeCliProviderAdapter;
+  const live = {
+    id: nativeCliSessionId,
+    transcriptTargetId: projectId,
+    agentName: 'codex',
+    provider: 'codex',
+    runtimeRole: 'interactive',
+    proc: { pid: 123 },
+    adapter,
+    launchMode: 'app-server',
+    providerSessionRef: null,
+    pendingApprovals: new Map(),
+    pendingHistoryPages: new Map(),
+    outputBuffer: new BoundedOutputBuffer(256 * 1024),
+    outputSeq: 0,
+    snapshotFlushTimer: null,
+    nextRequestId: () => 0,
+    kill: () => {}
+  };
+  const internal = host as unknown as {
+    live: Map<string, unknown>;
+    output(t: string, id: string, chunk: string, stream: string, adapter: NativeCliProviderAdapter): void;
+  };
+  internal.live.set(nativeCliSessionId, live);
+
+  const frames: { output?: string; append?: string; seq?: number }[] = [];
+  const sub = host.subscribeObservation(nativeCliSessionId, (access) => {
+    if (access.state === 'live') frames.push({ output: access.output, append: access.append, seq: access.seq });
+  });
+  // The initial access is a full snapshot (empty output so far).
+  expect(sub.access.state).toBe('live');
+
+  internal.output(projectId, nativeCliSessionId, 'Hello, ', 'stdout', adapter);
+  await Bun.sleep(250);
+  internal.output(projectId, nativeCliSessionId, 'world!', 'stdout', adapter);
+  await Bun.sleep(250);
+
+  // Streamed frames are deltas (append, not full output).
+  expect(frames.length).toBeGreaterThanOrEqual(2);
+  expect(frames.every((f) => f.append !== undefined && f.output === undefined)).toBe(true);
+
+  // A client reconstructs by applying each append past its cursor onto the initial snapshot.
+  let text = sub.access.state === 'live' ? (sub.access.output ?? '') : '';
+  let cursor = sub.access.state === 'live' ? (sub.access.seq ?? 0) : 0;
+  for (const f of frames) {
+    const seq = f.seq ?? 0;
+    const append = f.append ?? '';
+    if (seq <= cursor) continue;
+    text += append.slice(Math.max(0, append.length - (seq - cursor)));
+    cursor = seq;
+  }
+  expect(text).toBe('Hello, world!');
+  sub.dispose();
+});
+
+test('native CLI observation resume returns only the delta past the client cursor', async () => {
+  const host = new NativeCliHost({ store: createStore(), bus: new EventBus(), agents: async () => [] });
+  const id = 'ncli_resume_seq_test';
+  const adapter = {
+    provider: 'codex',
+    productIcon: 'openai',
+    parseOutput: () => []
+  } as unknown as NativeCliProviderAdapter;
+  const live = {
+    id,
+    transcriptTargetId: 'prj_01KWHOSTTEST000000000000S',
+    agentName: 'codex',
+    provider: 'codex',
+    runtimeRole: 'managed-project-agent',
+    proc: { pid: 123 },
+    adapter,
+    launchMode: 'app-server',
+    providerSessionRef: null,
+    pendingApprovals: new Map(),
+    pendingHistoryPages: new Map(),
+    pendingRequests: new Map(),
+    outputBuffer: new BoundedOutputBuffer(256 * 1024),
+    outputSeq: 0,
+    snapshotFlushTimer: null,
+    nextRequestId: () => 0,
+    kill: () => {}
+  };
+  const internal = host as unknown as {
+    live: Map<string, unknown>;
+    output(t: string, id: string, chunk: string, stream: string, adapter: NativeCliProviderAdapter): void;
+  };
+  internal.live.set(id, live);
+  internal.output(live.transcriptTargetId, id, 'Hello, ', 'stdout', adapter);
+  internal.output(live.transcriptTargetId, id, 'world!', 'stdout', adapter);
+
+  // No cursor → full snapshot.
+  expect(host.observe(id)).toMatchObject({ state: 'live', output: 'Hello, world!', seq: 13 });
+  // Cursor mid-stream → only the delta beyond it, no full output.
+  const resume = host.observe(id, 7);
+  expect(resume).toMatchObject({ state: 'live', append: 'world!', seq: 13 });
+  expect(resume.state === 'live' && resume.output).toBeUndefined();
+  // Cursor at head → nothing new, full snapshot.
+  expect(host.observe(id, 13)).toMatchObject({ state: 'live', output: 'Hello, world!', seq: 13 });
+});
+
+test('native CLI app-server reconnect re-dials the socket and resumes the thread', async () => {
+  const host = new NativeCliHost({ store: createStore(), bus: new EventBus(), agents: async () => [] });
+  const nativeCliSessionId = 'ncli_reconnect_test';
+  const initCalls: { providerSessionRef?: string }[] = [];
+  const adapter = {
+    provider: 'codex',
+    productIcon: 'openai',
+    parseOutput: () => [],
+    initialize: (_h: unknown, ctx: { providerSessionRef?: string }) =>
+      initCalls.push({ providerSessionRef: ctx.providerSessionRef })
+  } as unknown as NativeCliProviderAdapter;
+  const freshConnection = { send: () => {}, close: () => {} };
+  let redials = 0;
+  const live = {
+    id: nativeCliSessionId,
+    transcriptTargetId: 'prj_01KWHOSTTEST000000000000R',
+    agentName: 'codex',
+    provider: 'codex',
+    runtimeRole: 'interactive',
+    proc: { pid: 123 },
+    adapter,
+    launchMode: 'app-server',
+    providerSessionRef: 'codex-thread-resume',
+    appServer: { send: () => {}, close: () => {} },
+    appServerRedial: async () => {
+      redials++;
+      return freshConnection;
+    },
+    initializeContext: { workingPath: '/tmp/project' },
+    pendingApprovals: new Map(),
+    pendingHistoryPages: new Map(),
+    pendingRequests: new Map([[1, 'turn']]),
+    outputBuffer: new BoundedOutputBuffer(256 * 1024),
+    outputSeq: 0,
+    snapshotFlushTimer: null,
+    nextRequestId: () => 0,
+    kill: () => {}
+  };
+  const internal = host as unknown as {
+    live: Map<string, unknown>;
+    reconnectAppServer(id: string): Promise<void>;
+  };
+  internal.live.set(nativeCliSessionId, live);
+
+  await internal.reconnectAppServer(nativeCliSessionId);
+
+  expect(redials).toBe(1);
+  expect(live.appServer).toBe(freshConnection); // swapped to the fresh connection
+  expect(live.pendingRequests.size).toBe(0); // stale request ids from the dropped socket cleared
+  expect(initCalls).toEqual([{ providerSessionRef: 'codex-thread-resume' }]); // re-init resumes the thread
 });
 
 test('managed native CLI observation restores Codex provider history from persisted pointers', async () => {

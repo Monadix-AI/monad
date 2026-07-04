@@ -36,6 +36,7 @@ import {
   contextSettingsSchema,
   DEFAULT_SAMPLE_PROFILE_ALIAS,
   DEFAULT_SAMPLE_PROVIDER_ID,
+  frameworkAgentSchema,
   hooksConfigSchema,
   mcpServerSchema,
   memorySettingsSchema,
@@ -293,6 +294,7 @@ const monadConfigSchema = z.object({
     })),
   mcpServers: z.array(mcpServerSchema).default([]),
   acpAgents: z.array(acpAgentSchema).default([]), // external ACP agents monad can delegate to
+  frameworkAgents: z.array(frameworkAgentSchema).default([]),
   nativeCliAgents: z.array(nativeCliAgentSchema).default([]),
   peers: z.array(peerSchema).default([]), // peer daemons this one can delegate tasks to
   browser: browserConfigSchema, // additive so older configs still parse
@@ -398,6 +400,7 @@ export const monadSystemConfigSchema = z.object({
   mcpServers: z.array(mcpServerSchema).default([]),
   // External ACP agents are an operator/infra concern (spawn allowlist) → system config, like mcpServers.
   acpAgents: z.array(acpAgentSchema).default([]),
+  frameworkAgents: z.array(frameworkAgentSchema).default([]),
   nativeCliAgents: z.array(nativeCliAgentSchema).default([]),
   // Peer daemons (delegation targets + their credentials) → system config, like acpAgents.
   peers: z.array(peerSchema).default([]),
@@ -555,6 +558,7 @@ export function createDefaultConfig(principalId: string, displayName: string): M
     },
     mcpServers: [],
     acpAgents: [],
+    frameworkAgents: [],
     nativeCliAgents: [],
     peers: [],
     browser: { enabled: false, vision: false, headless: true },

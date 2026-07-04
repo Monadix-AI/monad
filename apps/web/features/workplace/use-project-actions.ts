@@ -1,23 +1,8 @@
+import type { ApprovalView } from '@monad/atoms/workspace-experiences/project/types';
 import type { AvatarStyle, ProjectId, WorkplaceProject } from '@monad/protocol';
 import type { useAcpAgentSettings } from '@/hooks/use-acp-agent-settings';
 import type { useNativeCliAgentSettings } from '@/hooks/use-native-cli-agent-settings';
-import type { ApprovalView } from './types';
 
-import {
-  useAbortSessionMutation,
-  useApproveNativeCliSessionMutation,
-  useApproveToolMutation,
-  useClarifyRespondMutation,
-  useDeleteWorkplaceProjectMutation,
-  useInputNativeCliSessionMutation,
-  useSendProjectMessageMutation,
-  useStopNativeCliSessionMutation,
-  useUpdateWorkplaceProjectMutation
-} from '@monad/client-rtk';
-import { workplaceProjectMembersExtKey } from '@monad/protocol';
-import { useCallback } from 'react';
-
-import { traceProjectDebugOperation } from '@/lib/project-debug-trace';
 import {
   type AddProjectMemberOptions,
   defaultProjectMemberSettings,
@@ -33,7 +18,22 @@ import {
   safeNativeCliDisplayName,
   uniqueNativeCliDisplayName,
   warmEntityAvatar
-} from './project-projection';
+} from '@monad/atoms/workspace-experiences/project/project-members';
+import {
+  useAbortSessionMutation,
+  useApproveNativeCliSessionMutation,
+  useApproveToolMutation,
+  useClarifyRespondMutation,
+  useDeleteWorkplaceProjectMutation,
+  useInputNativeCliSessionMutation,
+  useSendProjectMessageMutation,
+  useStopNativeCliSessionMutation,
+  useUpdateWorkplaceProjectMutation
+} from '@monad/client-rtk';
+import { workplaceProjectMembersExtKey } from '@monad/protocol';
+import { useCallback } from 'react';
+
+import { traceProjectDebugOperation } from '@/lib/project-debug-trace';
 
 export type ApprovalDecision = 'approve' | 'reject';
 
@@ -43,9 +43,9 @@ export type ApprovalDecision = 'approve' | 'reject';
  *  of computed values passed in, none of the surrounding view-building state. */
 export function useProjectActions(args: {
   activeProjectId: ProjectId | null;
+  approvals: ApprovalView[];
   currentProject: WorkplaceProject | null;
   projectMembers: ProjectMember[];
-  approvals: ApprovalView[];
   acpAgents: ReturnType<typeof useAcpAgentSettings>['agents'];
   nativeCliAgents: ReturnType<typeof useNativeCliAgentSettings>['agents'];
   avatarStyle?: AvatarStyle;
@@ -53,9 +53,9 @@ export function useProjectActions(args: {
 }) {
   const {
     activeProjectId,
+    approvals,
     currentProject,
     projectMembers,
-    approvals,
     acpAgents,
     nativeCliAgents,
     avatarStyle,

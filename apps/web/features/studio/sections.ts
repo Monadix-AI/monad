@@ -10,6 +10,7 @@ import {
   Home01Icon,
   MessageSquareCodeIcon,
   NeuralNetworkIcon,
+  PackageIcon,
   Plug01Icon,
   ShieldHalfIcon,
   TerminalIcon,
@@ -106,11 +107,13 @@ export const STUDIO_SWARM_SECTIONS: StudioSectionItem[] = [
   { id: 'workplaceProjects', icon: MessageSquareCodeIcon, i18nKey: 'web.studio.workplaceProjects' }
 ];
 
-export const STUDIO_USAGE_SECTION: StudioSectionItem = {
-  id: 'usage',
-  icon: Activity01Icon,
-  i18nKey: 'web.studio.usage'
-};
+// System: host-level facilities that belong to neither the runtime nor the swarm — atom packs
+// (installed capability bundles) and usage/telemetry. Kept as its own group so it reads as
+// "about the installation" rather than "about the agents".
+export const STUDIO_SYSTEM_SECTIONS: StudioSectionItem[] = [
+  { id: 'atoms', icon: PackageIcon, i18nKey: 'web.studio.atoms' },
+  { id: 'usage', icon: Activity01Icon, i18nKey: 'web.studio.usage' }
+];
 
 const _STUDIO_AGENT_SECTIONS = STUDIO_RUNTIME_SECTIONS;
 const _STUDIO_CAPABILITY_SECTIONS = STUDIO_SWARM_SECTIONS;

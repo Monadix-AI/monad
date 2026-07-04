@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test';
 
-import { builtinConnectors, webhookConnector } from '../../src/connectors/index.ts';
+import { builtinConnectors } from '../../src/connectors/registry.ts';
+import { webhookConnector } from '../../src/connectors/webhook.ts';
 
 test('webhook connector is registered', () => {
   expect(builtinConnectors).toContain(webhookConnector);

@@ -12,10 +12,7 @@
     "apps/web/components/ui/command.tsx",
     "apps/web/components/ui/dialog.tsx",
     "apps/web/components/ui/dropdown-menu.tsx",
-    "apps/web/components/ui/slider.tsx",
-    "apps/web/features/workplace/activity/ActivityLog.tsx",
-    "apps/web/features/workplace/activity/WorkOutput.tsx",
-    "apps/web/features/workplace/project-shell/ProjectHeader.tsx"
+    "apps/web/components/ui/slider.tsx"
   ],
   // Both "duplicates" are intentional schema aliases in @monad/protocol
   // (a request schema deliberately mirrors its response schema).

@@ -4,6 +4,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { existsSync, lstatSync, mkdirSync, readdirSync, unlinkSync, writeFileSync } from 'node:fs';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 
+import { getNativeCliProviderAdapter } from '@/services/native-cli/index.ts';
 import managedProjectRuntimeMcpPromptPath from './prompts/managed-project-runtime-mcp-prompt.md' with { type: 'file' };
 import managedProjectRuntimePromptPath from './prompts/managed-project-runtime-prompt.md' with { type: 'file' };
 
@@ -27,7 +28,8 @@ function buildManagedProjectPrompt(args: NativeAgentRuntimePromptInput): string 
   const customPromptBlock = args.customPrompt
     ? ['Project instance custom prompt:', args.customPrompt, ''].join('\n')
     : '';
-  const template = args.provider === 'codex' ? MANAGED_PROJECT_RUNTIME_MCP_PROMPT : MANAGED_PROJECT_RUNTIME_PROMPT;
+  const usesMcpBridge = getNativeCliProviderAdapter(args.provider).managedRuntime?.usesManagedMcpBridge ?? false;
+  const template = usesMcpBridge ? MANAGED_PROJECT_RUNTIME_MCP_PROMPT : MANAGED_PROJECT_RUNTIME_PROMPT;
   return template.replace('{{runtimeMetadata}}', runtimeMetadata).replace('{{customPromptBlock}}', customPromptBlock);
 }
 
@@ -57,10 +59,8 @@ export function managedProjectLaunchMode(
   requested?: NativeCliLaunchMode
 ): NativeCliLaunchMode {
   if (requested && requested !== 'pty') return requested;
-  if (agent.provider === 'codex') return 'app-server';
-  if (agent.provider === 'claude-code' || agent.provider === 'gemini' || agent.provider === 'qwen')
-    return 'json-stream';
-  return requested ?? agent.defaultLaunchMode;
+  const managed = getNativeCliProviderAdapter(agent.provider).managedRuntime;
+  return managed?.launchMode?.(agent.defaultLaunchMode) ?? requested ?? agent.defaultLaunchMode;
 }
 
 export function cleanupManagedProjectRuntimeToken(workspace: string): void {
@@ -117,39 +117,6 @@ export function managedProjectRuntimeWorkspace(args: {
   return workspace;
 }
 
-const CODEX_MANAGED_MCP_APPROVED_TOOLS = [
-  'project_post',
-  'project_ask',
-  'project_read',
-  'project_inbox_check',
-  'project_inbox_ack',
-  'agent_send',
-  'agent_read',
-  'runtime_info'
-] as const;
-
-function codexManagedMcpApprovalConfigArgs(): string[] {
-  return CODEX_MANAGED_MCP_APPROVED_TOOLS.flatMap((tool) => [
-    '-c',
-    `mcp_servers.monad.tools.${tool}.approval_mode="approve"`
-  ]);
-}
-
-function codexManagedMcpEnvConfigArgs(env: Record<string, string>): string[] {
-  return Object.entries(env).flatMap(([key, value]) => ['-c', `mcp_servers.monad.env.${key}=${JSON.stringify(value)}`]);
-}
-
-function codexManagedMcpConfigArgs(wrapperBin: string, env: Record<string, string>): string[] {
-  return [
-    '-c',
-    `mcp_servers.monad.command=${JSON.stringify(wrapperBin)}`,
-    '-c',
-    'mcp_servers.monad.args=["native-agent","mcp-server"]',
-    ...codexManagedMcpEnvConfigArgs(env),
-    ...codexManagedMcpApprovalConfigArgs()
-  ];
-}
-
 export function prepareManagedProjectRuntime(
   args: {
     monadHome: string;
@@ -198,8 +165,9 @@ export function prepareManagedProjectRuntime(
       mode: 0o755
     }
   );
+  const managed = getNativeCliProviderAdapter(args.provider).managedRuntime;
   const env = {
-    ...(args.provider === 'codex' ? { CODEX_NON_INTERACTIVE: '1' } : {}),
+    ...(managed?.env?.() ?? {}),
     MONAD_HOME: args.monadHome,
     MONAD_NATIVE_CLI_SESSION_ID: args.nativeCliSessionId,
     MONAD_AGENT_TOKEN_FILE: tokenFile,
@@ -212,7 +180,7 @@ export function prepareManagedProjectRuntime(
     tokenFile,
     tokenHash: hashManagedAgentToken(token),
     wrapperBin,
-    mcpConfigArgs: args.provider === 'codex' ? codexManagedMcpConfigArgs(wrapperBin, env) : [],
+    mcpConfigArgs: managed?.mcpConfigArgs?.({ wrapperBin, env }) ?? [],
     prompt,
     env
   };

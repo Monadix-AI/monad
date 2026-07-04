@@ -3,9 +3,9 @@
 import { ComputerTerminal01Icon, ExternalLinkIcon, TextIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { cn } from '@monad/ui';
+import { CodeInline } from '@monad/ui/components/CodeBlock';
 import { memo } from 'react';
 
-import { CodeInline } from '@/components/ai-elements/code-block';
 import { Tool, ToolContent, ToolHeader, ToolInput, ToolOutput, type ToolPart } from '@/components/ai-elements/tool';
 import { useT } from '@/components/I18nProvider';
 import { useToolBackendsSettings } from '@/hooks/use-tool-backends-settings';

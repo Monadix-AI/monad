@@ -16,7 +16,7 @@
  */
 
 import type { MonadAuth } from '@monad/home';
-import type { McpServerStatus, PrincipalId, SessionId } from '@monad/protocol';
+import type { AtomDescriptor, McpServerStatus, PrincipalId, SessionId } from '@monad/protocol';
 import type { AtomConflict } from '@/atoms/resolve.ts';
 import type { Tool } from '@/capabilities/tools/types.ts';
 
@@ -49,12 +49,14 @@ import { ReloadService } from '@/reload/index.ts';
 import { ConfigBus } from '@/services/config-bus.ts';
 import { DelegationService } from '@/services/delegation/delegation.ts';
 import { createPeerDelegateTool, type PeerDelegateTarget } from '@/services/delegation/peer-delegate.ts';
+import { acpAgentCandidatesFromAdapters } from '@/services/delegation/presets.ts';
 import { configureDeveloperLogTransport } from '@/services/developer-log.ts';
 import { EventBus } from '@/services/event-bus.ts';
 import { AgentPersonaService, isToolExposed } from '@/services/generation/agent-persona.ts';
 import { I18nService, loadInstalledLocalePacks } from '@/services/i18n.ts';
 import { createGraphQueryTools } from '@/services/memory/graph/query-tools.ts';
 import { createMemoryAgentTools } from '@/services/memory/tools.ts';
+import { registerAgentAdapterImpl } from '@/services/native-cli/index.ts';
 import { RoundCache } from '@/services/round-cache.ts';
 import { ScheduleService } from '@/services/scheduling/schedule.ts';
 import { resolveSkillState } from '@/store/home/skills.ts';
@@ -352,6 +354,9 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
   // Bare-name collisions surfaced from the latest load sweep (channel/connector/command),
   // mutated in place so the read accessor handed to the atoms module stays valid across re-discovery.
   const atomConflicts: AtomConflict[] = [];
+  // Per-pack individual atoms from the latest sweep (packId → its atoms), read by the atom-pack
+  // manager for the detail view. Mutated in place so the accessor stays valid across re-discovery.
+  const atomDetailsByPack = new Map<string, AtomDescriptor[]>();
   const channelRegistry = await createChannelRegistry(paths, {
     builtin: {
       onConnector: (c) => registry.registerConnector(c),
@@ -361,6 +366,9 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
       onProvider: (p) => modelService.registry.register(p),
       onHook: (h) => registry.registerHook(h),
       onWorkspaceExperienceApi: (api, atomPackId) => registry.registerWorkspaceExperienceApi(api, atomPackId),
+      // Built-in agent-adapter atoms (Codex/Claude Code/Gemini/Qwen) register into the native-CLI
+      // registry keyed by provider — the same gated path a third-party adapter pack would take.
+      onAgentAdapter: (a) => registerAgentAdapterImpl(a),
       // Built-in sandbox launchers (Seatbelt/Landlock/Low-Integrity) register into the launcher
       // registry; finalizeSandboxLauncher() below picks one per platform. Boot-only: not wired into
       // the rediscovery sweep, so a hot-installed launcher takes effect on the next daemon start.
@@ -384,9 +392,13 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
       // which the HookRunner reads alongside config.json command hooks.
       onHook: (h) => registry.registerHook(h),
       onWorkspaceExperienceApi: (api, atomPackId) => registry.registerWorkspaceExperienceApi(api, atomPackId),
+      // A discovered pack declaring the `agent-adapter` capability registers native-CLI adapters into
+      // the same registry as built-ins; last registration wins, so a third-party pack can override.
+      onAgentAdapter: (a) => registerAgentAdapterImpl(a),
       // A discovered pack declaring the `sandbox` capability (e.g. a cloud e2b/Vercel launcher)
       // registers into the launcher registry, preferred over built-ins on select.
-      onSandbox: (l) => registerSandboxLauncher(l, 'atom')
+      onSandbox: (l) => registerSandboxLauncher(l, 'atom'),
+      onAtoms: (packName, atoms) => atomDetailsByPack.set(packName, atoms)
     }
   });
   // Resolve bare atom-command names to one winner (pin ?? first-wins); each is always reachable as
@@ -500,6 +512,7 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
   applyAcpDelegateTool({
     registry,
     agents: cfg.acpAgents,
+    adapterCandidates: acpAgentCandidatesFromAdapters(),
     gate: oversight.gate,
     mcpServers: cfg.mcpServers,
     auth: startupAuth,
@@ -670,6 +683,7 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
       applyAcpDelegateTool({
         registry,
         agents: freshCfg.acpAgents,
+        adapterCandidates: acpAgentCandidatesFromAdapters(),
         gate: oversight.gate,
         mcpServers: freshCfg.mcpServers,
         auth: freshAuth ?? undefined,
@@ -704,6 +718,7 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
     paths,
     fallbackAtomPins: cfg.atomPins,
     atomConflicts,
+    atomDetailsByPack,
     commandRegistry,
     toolRegistry: registry,
     modelProviderRegistry: modelService.registry,
@@ -807,6 +822,7 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
     mcpReconnect,
     rediscoverAtomPacks: () => Promise.all([rediscoverAtomPacks(), reloadSkills()]).then(() => {}),
     getAtomConflicts: () => atomConflicts,
+    getAtomDetails: (packName: string) => atomDetailsByPack.get(packName),
     getWorkspaceExperienceApiHandler: (experienceId, method, path) =>
       registry.getWorkspaceExperienceApiHandler(experienceId, method, path),
     getWorkspaceExperiences: () => [...registry.workspaceExperiences.values()],

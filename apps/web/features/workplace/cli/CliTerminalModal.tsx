@@ -1,9 +1,9 @@
 'use client';
 
-import type { Participant } from '../types';
+import type { Participant } from '@monad/atoms/workspace-experiences/project/types';
 
-import { Avatar } from '../Bits';
-import { mono, sans } from '../styles';
+import { Avatar, workspaceMono as mono, workspaceSans as sans } from '@monad/ui/components/AgentAvatar';
+
 import { CliTerminalOutput } from './CliTerminalOutput';
 
 export type CliTerminalModalStatus = 'running' | 'ok' | 'error';

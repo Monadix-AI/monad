@@ -2,13 +2,11 @@ import type { ModelCall, ResolvedProviderConfig } from '@monad/sdk-atom';
 
 import { expect, test } from 'bun:test';
 
+import { anthropicProviderAtom } from '../../src/providers/anthropic.ts';
 import { PROVIDER_DESCRIPTORS } from '../../src/providers/catalog.ts';
-import {
-  anthropicProviderAtom,
-  googleProviderAtom,
-  makeOpenAICompatibleProvider,
-  openaiProviderAtom
-} from '../../src/providers/index.ts';
+import { googleProviderAtom } from '../../src/providers/google.ts';
+import { openaiProviderAtom } from '../../src/providers/openai.ts';
+import { makeOpenAICompatibleProvider } from '../../src/providers/openai-compatible.ts';
 
 // Each vendor's native count-tokens route, exercised against a fake fetch — no network. We assert
 // the URL, auth header, and that the right response field is read back as the token count.

@@ -4,6 +4,7 @@
 // Tools are first-party only (wired once at startup) and never part of a rediscovery sweep.
 
 import type { MonadConfig, MonadPaths } from '@monad/home';
+import type { AtomDescriptor } from '@monad/protocol';
 import type { ModelProvider } from '@monad/sdk-atom';
 import type { AtomConflict } from '@/atoms/resolve.ts';
 
@@ -22,6 +23,8 @@ export type AtomPackRediscovererDeps = {
   fallbackAtomPins: MonadConfig['atomPins'];
   /** Mutated in place: cleared at the start of each sweep, then re-populated. */
   atomConflicts: AtomConflict[];
+  /** Per-pack individual atoms (packId → atoms). Mutated in place: cleared then re-populated each sweep. */
+  atomDetailsByPack: Map<string, AtomDescriptor[]>;
   commandRegistry: CommandRegistry;
   toolRegistry: AtomPackRegistry;
   /** modelService.registry — accepts any object with a register method to avoid coupling to ModelService. */
@@ -41,6 +44,7 @@ export function createAtomPackRediscoverer(deps: AtomPackRediscovererDeps): () =
         paths,
         fallbackAtomPins,
         atomConflicts,
+        atomDetailsByPack,
         commandRegistry,
         toolRegistry,
         modelProviderRegistry,
@@ -50,6 +54,7 @@ export function createAtomPackRediscoverer(deps: AtomPackRediscovererDeps): () =
       } = deps;
 
       atomConflicts.length = 0;
+      atomDetailsByPack.clear();
       // Re-read pins so a just-saved pin (setAtomPin → onChanged) takes effect this sweep.
       const pins = (await loadAll(paths.config, paths.profile))?.atomPins ?? fallbackAtomPins;
       // Drop the previous sweep's third-party commands + all atom hooks so a removed/changed pack
@@ -74,7 +79,8 @@ export function createAtomPackRediscoverer(deps: AtomPackRediscovererDeps): () =
         onHook: (h) => toolRegistry.registerHook(h),
         onWorkspaceExperienceApi: (api, atomPackId) => toolRegistry.registerWorkspaceExperienceApi(api, atomPackId),
         onWorkspaceExperience: (experience, atomPackId) =>
-          toolRegistry.registerWorkspaceExperience(experience, atomPackId)
+          toolRegistry.registerWorkspaceExperience(experience, atomPackId),
+        onAtoms: (packName, atoms) => atomDetailsByPack.set(packName, atoms)
       };
       const reg = await createChannelRegistry(paths, { builtin, discovered });
       commandRegistry.resolvePins(pins.command, (c) => atomConflicts.push(c));

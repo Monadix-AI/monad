@@ -35,6 +35,7 @@ export type StartManagedNativeCliRuntimeArgs = {
   speed?: 'standard' | 'fast';
   customPrompt?: string;
   launchMode: NativeCliAgentConfig['defaultLaunchMode'];
+  appServerTransport?: NativeCliAgentConfig['appServerTransport'];
   providerSessionRef?: string;
   input: string;
 };
@@ -72,6 +73,7 @@ export function createManagedNativeCliRuntime(ctx: SessionContext) {
     speed,
     customPrompt,
     launchMode,
+    appServerTransport,
     providerSessionRef,
     input
   }: StartManagedNativeCliRuntimeArgs): Promise<NativeCliSessionView> {
@@ -85,6 +87,7 @@ export function createManagedNativeCliRuntime(ctx: SessionContext) {
       templateAgentName,
       workingPath: session.cwd,
       launchMode,
+      appServerTransport,
       runtimeRole: 'managed-project-agent' as const,
       modelName,
       modelId,

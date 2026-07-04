@@ -18,6 +18,9 @@ import type { Tool } from '@/capabilities/tools/types.ts';
 import { unlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { builtinAgentAdapters } from '@monad/atoms/agent-adapters';
+import { BUILTIN_COMMANDS } from '@monad/atoms/commands/builtins';
+import { builtinModelProviders } from '@monad/atoms/providers/registry';
 import { createDefaultConfig } from '@monad/home';
 import { enMessages as i18nMessages } from '@monad/i18n/messages';
 import { ModelProviderType, newId } from '@monad/protocol';
@@ -38,12 +41,16 @@ import { I18nService } from '@/services/i18n.ts';
 import { GraphStore } from '@/services/memory/graph/store.ts';
 import { createMemoryService, type MemoryService } from '@/services/memory/index.ts';
 import { ModelCatalogService } from '@/services/model-catalog.ts';
+import { registerAgentAdapterImpl } from '@/services/native-cli/index.ts';
 import { OversightService } from '@/services/oversight.ts';
 import { RoundCache } from '@/services/round-cache.ts';
 import { createStore } from '@/store/db/index.ts';
 import { createHttpTransport } from '@/transports/http.ts';
-import { BUILTIN_COMMANDS } from '../../../packages/atoms/src/commands/builtins.ts';
-import { builtinModelProviders } from '../../../packages/atoms/src/providers/index.ts';
+
+// Production populates the native-CLI adapter registry at boot via the gated atom-pack path
+// (onAgentAdapter → registerAgentAdapterImpl); this harness builds handlers directly, so register the
+// built-in agent-adapter atoms once for every daemon e2e that drives native-CLI runtimes.
+for (const adapter of builtinAgentAdapters) registerAgentAdapterImpl(adapter);
 
 export { mockModel };
 

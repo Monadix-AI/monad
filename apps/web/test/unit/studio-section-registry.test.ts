@@ -2,7 +2,12 @@ import { expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 
 import { STUDIO_SECTION_COMPONENTS } from '../../features/studio/section-registry';
-import { STUDIO_RUNTIME_SECTIONS, STUDIO_SECTION_IDS, STUDIO_SWARM_SECTIONS } from '../../features/studio/sections';
+import {
+  STUDIO_RUNTIME_SECTIONS,
+  STUDIO_SECTION_IDS,
+  STUDIO_SWARM_SECTIONS,
+  STUDIO_SYSTEM_SECTIONS
+} from '../../features/studio/sections';
 
 const readSource = (path: string) => readFileSync(new URL(`../../${path}`, import.meta.url), 'utf8');
 
@@ -31,6 +36,18 @@ test('Studio sidebar separates runtime delegates from provider-owned swarm agent
   expect(STUDIO_SECTION_COMPONENTS.frameworkAgents).not.toBe(STUDIO_SECTION_COMPONENTS.acpDelegates);
   expect(STUDIO_SECTION_COMPONENTS.projectMembers).toBeDefined();
   expect(STUDIO_SECTION_COMPONENTS.swarmTasks).toBeDefined();
+});
+
+test('Studio System group holds atom packs and usage, separate from the swarm', () => {
+  const systemSectionIds = STUDIO_SYSTEM_SECTIONS.map((item) => item.id);
+  const swarmSectionIds = STUDIO_SWARM_SECTIONS.map((item) => item.id);
+  const runtimeSectionIds = STUDIO_RUNTIME_SECTIONS.map((item) => item.id);
+
+  expect(systemSectionIds).toEqual(['atoms', 'usage']);
+  expect(swarmSectionIds).not.toContain('atoms');
+  expect(swarmSectionIds).not.toContain('usage');
+  expect(runtimeSectionIds).not.toContain('atoms');
+  expect(runtimeSectionIds).not.toContain('usage');
 });
 
 test('ACP delegates page only manages ACP agents', () => {

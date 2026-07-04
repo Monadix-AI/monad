@@ -44,6 +44,7 @@ import { createBrowserPresetModule } from '@/handlers/settings/browser-preset/in
 import { createChannelModule } from '@/handlers/settings/channel/index.ts';
 import { createComputerPresetModule } from '@/handlers/settings/computer-preset/index.ts';
 import { createDeveloperModule } from '@/handlers/settings/developer/index.ts';
+import { createFrameworkAgentModule } from '@/handlers/settings/framework-agent/index.ts';
 import { createHooksModule } from '@/handlers/settings/hooks/index.ts';
 import { createSettingsImportModule } from '@/handlers/settings/import/index.ts';
 import { createMcpServerModule } from '@/handlers/settings/mcp-server/index.ts';
@@ -85,7 +86,7 @@ export function createDaemonHandlers(deps: DaemonHandlerDeps) {
     authProcessRegistryPath: `${paths.runtime}/native-cli-auth-processes.json`,
     authHeartbeatTimeoutMs: deps.nativeCliAuthHeartbeatTimeoutMs
   });
-  nativeCliHost.reconcileOrphanedSessions();
+  void nativeCliHost.reconcileOrphanedSessions();
 
   const init = createInitHandlers(paths, mockMode, deps.log);
 
@@ -280,6 +281,7 @@ export function createDaemonHandlers(deps: DaemonHandlerDeps) {
     channel: createChannelModule({ paths, channelService: deps.channelService, configBus: deps.configBus }),
     peer: createPeerModule({ paths, configBus: deps.configBus }),
     acpAgent: createAcpAgentModule({ paths }),
+    frameworkAgent: createFrameworkAgentModule({ paths }),
     nativeCliAgent: createNativeCliAgentModule({ paths }),
     mcpServer: createMcpServerModule({
       paths,
@@ -316,6 +318,7 @@ export function createDaemonHandlers(deps: DaemonHandlerDeps) {
       paths,
       onChanged: deps.rediscoverAtomPacks,
       getConflicts: deps.getAtomConflicts,
+      getAtomDetails: deps.getAtomDetails,
       getWorkspaceExperienceApiHandler: deps.getWorkspaceExperienceApiHandler,
       getWorkspaceExperiences: deps.getWorkspaceExperiences,
       configBus: deps.configBus,

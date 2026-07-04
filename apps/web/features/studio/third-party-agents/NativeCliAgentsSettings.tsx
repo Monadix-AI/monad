@@ -18,7 +18,7 @@ import {
 } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { useStartNativeCliAuthMutation } from '@monad/client-rtk';
-import { Button, cn, Input, Label, ProductIcon, ScrollArea } from '@monad/ui';
+import { Button, cn, Input, isProductIconId, Label, ProductIcon, ScrollArea } from '@monad/ui';
 import { useState } from 'react';
 
 import { useT } from '@/components/I18nProvider';
@@ -305,10 +305,12 @@ export function NativeCliAgentsSettings({ embedded = false }: { onClose: () => v
                       title={status === 'missing' ? t(presetHintKey(p.id)) : undefined}
                     >
                       <span className="native-cli-live-v2__logo">
-                        <ProductIcon
-                          className="size-6"
-                          product={p.productIcon}
-                        />
+                        {isProductIconId(p.productIcon) ? (
+                          <ProductIcon
+                            className="size-6"
+                            product={p.productIcon}
+                          />
+                        ) : null}
                       </span>
                       <span className="native-cli-live-v2__main">
                         <span className="native-cli-live-v2__name">{p.label}</span>
@@ -507,7 +509,7 @@ function NativeCliSettingsDialogBody({
       <DialogHeader className={headerClass}>
         <div className="flex min-w-0 items-center gap-3">
           <span className={iconClass}>
-            {agent.productIcon ? (
+            {isProductIconId(agent.productIcon) ? (
               <ProductIcon
                 className={variant === 'compact' ? 'size-5' : 'size-6'}
                 product={agent.productIcon}

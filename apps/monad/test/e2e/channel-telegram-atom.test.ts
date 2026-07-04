@@ -4,6 +4,7 @@
 // atom-pack-sourced adapter runs end-to-end against a mock Bot API.
 
 import { expect, test } from 'bun:test';
+import { telegramChannelAtom } from '@monad/atoms/channels/telegram';
 import { createI18n } from '@monad/i18n';
 import { enMessages as i18nMessages } from '@monad/i18n/messages';
 import { createChannelTestHarness, defineAtomPack, SDK_VERSION } from '@monad/sdk-atom';
@@ -14,7 +15,6 @@ import { builtinChannelAdapters } from '@/channels/registry.ts';
 import { MOCK_REPLY } from '@/infra/mock-model.ts';
 import { EventBus } from '@/services/event-bus.ts';
 import { createStore } from '@/store/db/index.ts';
-import { telegramChannelAtom } from '../../../../packages/atoms/src/channels/telegram.ts';
 import { buildHandlers, mockModel } from '../helpers.ts';
 
 test('builtin loader yields the telegram channel through the atom pack path', async () => {

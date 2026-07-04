@@ -1,8 +1,9 @@
 import type { ProjectController } from '../use-project';
 
+import { workspaceMono as mono, workspaceSans as sans } from '@monad/ui/components/AgentAvatar';
+
 import { useT } from '@/components/I18nProvider';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
-import { mono, sans } from '../styles';
 
 type ProjectMember = ProjectController['projectMembers'][number];
 
