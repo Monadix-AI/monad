@@ -125,6 +125,12 @@ export function listNativeCliSessionsForTranscriptTarget(
   ).map(rowToNativeCliSession);
 }
 
+export function listNativeCliSessions(sqlite: Database): NativeCliSessionRow[] {
+  return (
+    sqlite.query('SELECT * FROM native_cli_sessions ORDER BY started_at DESC').all() as Array<Record<string, unknown>>
+  ).map(rowToNativeCliSession);
+}
+
 export function listLiveNativeCliSessions(sqlite: Database): NativeCliSessionRow[] {
   return (
     sqlite

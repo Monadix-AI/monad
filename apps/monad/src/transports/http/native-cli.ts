@@ -144,6 +144,10 @@ export function createNativeCliController(handlers: ReturnType<typeof createDaem
       response: { 200: listNativeCliSessionsResponseSchema },
       detail: { summary: 'List all live native-CLI/agent-adapter runtimes daemon-wide', tags: ['http-only'] }
     })
+    .get('/native-cli-session-summaries', () => handlers.nativeCli.listAllSummaries(), {
+      response: { 200: listNativeCliSessionsResponseSchema },
+      detail: { summary: 'List native CLI session summaries daemon-wide', tags: ['http-only'] }
+    })
     .get('/native-cli-sessions/:id', ({ params, query }) => handlers.nativeCli.get({ id: params.id, ...query }), {
       params: nativeCliParams,
       query: nativeCliScopeQuery,

@@ -6,6 +6,7 @@ import type { SessionCommandMenuItem } from '@/features/routes/sessions/SessionR
 import type { StudioSectionId } from '@/features/studio/sections';
 
 import {
+  nativeCliSessionSelectors,
   profileSelectors,
   sessionAdapter,
   sessionSelectors,
@@ -16,6 +17,8 @@ import {
   useGetHealthQuery,
   useGetRolesQuery,
   useListCommandsQuery,
+  useListLiveNativeCliSessionsQuery,
+  useListNativeCliSessionSummariesQuery,
   useListProfilesQuery,
   useListSessionsQuery,
   useListWorkplaceProjectsQuery,
@@ -74,6 +77,7 @@ const Settings = dynamic(() => import('@/features/settings/Settings').then((m) =
 // Stable empty references so query fallbacks don't change identity each render
 // (a fresh `[]` default would retrigger effects that depend on the data).
 const EMPTY_UI_ITEMS: UIItem[] = [];
+const AGENT_RUNTIME_POLL_MS = 5000;
 
 const viewMessageId = (item: ViewItem): string => item.id;
 const EMPTY_PROFILES: ProfileView[] = [];
@@ -106,13 +110,37 @@ export function AppShell() {
 
   const { data: sessionData, isLoading: sessionsLoading } = useListSessionsQuery(undefined);
   const { data: projectData, isLoading: projectsLoading } = useListWorkplaceProjectsQuery(undefined);
+  const { data: liveNativeCliSessionData } = useListLiveNativeCliSessionsQuery(undefined, {
+    pollingInterval: AGENT_RUNTIME_POLL_MS
+  });
+  const { data: nativeCliSessionSummaryData } = useListNativeCliSessionSummariesQuery(undefined, {
+    pollingInterval: AGENT_RUNTIME_POLL_MS
+  });
   const sessions = sessionSelectors.selectAll(sessionData?.sessions ?? sessionAdapter.getInitialState());
   const projectRows = useMemo(
     () => workplaceProjectSelectors.selectAll(projectData?.projects ?? workplaceProjectAdapter.getInitialState()),
     [projectData]
   );
+  const liveNativeCliSessions = useMemo(
+    () => (liveNativeCliSessionData ? nativeCliSessionSelectors.selectAll(liveNativeCliSessionData) : []),
+    [liveNativeCliSessionData]
+  );
+  const nativeCliSessionSummaries = useMemo(
+    () => (nativeCliSessionSummaryData ? nativeCliSessionSelectors.selectAll(nativeCliSessionSummaryData) : []),
+    [nativeCliSessionSummaryData]
+  );
   const directSessions = sessions;
-  const workspaceProjects = useMemo(() => buildWorkspaceProjects(projectRows), [projectRows]);
+  const pinnedProjectIds = useWorkspaceShellStore((state: WorkspaceShellState) => state.pinnedProjectIds);
+  const pinnedProjectIdSet = useMemo(() => new Set(pinnedProjectIds), [pinnedProjectIds]);
+  const workspaceProjects = useMemo(
+    () =>
+      buildWorkspaceProjects(projectRows, {
+        liveNativeCliSessions,
+        nativeCliSessions: nativeCliSessionSummaries,
+        pinnedProjectIds: pinnedProjectIdSet
+      }),
+    [liveNativeCliSessions, nativeCliSessionSummaries, pinnedProjectIdSet, projectRows]
+  );
   // Keep the session list live: re-fetch (and re-sort by last activity) when any session changes
   // anywhere — another tab, or a turn started from a third-party channel.
   useStreamControlQuery(undefined);
@@ -166,6 +194,7 @@ export function AppShell() {
   const autoRevealSidebar = useWorkspaceShellStore((state: WorkspaceShellState) => state.autoRevealSidebar);
   const collapseSidebar = useWorkspaceShellStore((state: WorkspaceShellState) => state.collapseSidebar);
   const toggleSidebarCollapsed = useWorkspaceShellStore((state: WorkspaceShellState) => state.toggleSidebarCollapsed);
+  const toggleProjectPinned = useWorkspaceShellStore((state: WorkspaceShellState) => state.toggleProjectPinned);
   const setNewProjectOpen = useWorkspaceShellStore((state: WorkspaceShellState) => state.setNewProjectOpen);
   const toggleSessionInspector = useWorkspaceShellStore((state: WorkspaceShellState) => state.toggleSessionInspector);
 
@@ -654,6 +683,7 @@ export function AppShell() {
           onRequestPersistentExpand={revealSidebar}
           onSwitchDaemonConnection={switchDaemonConnection}
           onToggleCollapsed={toggleSidebarCollapsed}
+          onToggleProjectPinned={toggleProjectPinned}
           onToggleSettings={toggleSettings}
           onToggleStudio={() => {
             setStudioUrl();

@@ -939,6 +939,17 @@ export class NativeCliHost {
     };
   }
 
+  /** Every native CLI runtime across the daemon without output buffers. Used by overview surfaces
+   *  that need durable counters such as unread messages even after a runtime exits. */
+  listAllSummaries(): ListNativeCliSessionsResponse {
+    return {
+      sessions: this.deps.store.listNativeCliSessions().map((row) => {
+        const live = this.live.get(row.id);
+        return { ...toView(row, live?.pendingApprovals.size ?? 0, live), outputSnapshot: '' };
+      })
+    };
+  }
+
   /** Every live (starting/running) runtime across the daemon, all projects — for the daemon-wide
    *  runtime overview, so the web polls once instead of once per project. Output snapshots are
    *  dropped: this is a status list (state/provider/name), and shipping every live session's

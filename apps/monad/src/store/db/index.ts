@@ -99,6 +99,7 @@ import {
   closeNativeCliSession,
   getNativeCliSession,
   listLiveNativeCliSessions,
+  listNativeCliSessions,
   listNativeCliSessionsForTranscriptTarget,
   type NativeCliSessionRow,
   pruneExitedNativeCliSessions,
@@ -643,6 +644,10 @@ export class Store {
 
   listNativeCliSessionsForTranscriptTarget(transcriptTargetId: string): NativeCliSessionRow[] {
     return listNativeCliSessionsForTranscriptTarget(this.sqlite, transcriptTargetId);
+  }
+
+  listNativeCliSessions(): NativeCliSessionRow[] {
+    return listNativeCliSessions(this.sqlite);
   }
 
   listLiveNativeCliSessions(): NativeCliSessionRow[] {

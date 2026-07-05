@@ -10,6 +10,7 @@ export { useHeartbeatNativeCliAuthMutation } from './heartbeat-native-cli-auth.t
 export { useInputNativeCliAuthMutation } from './input-native-cli-auth.ts';
 export { useInputNativeCliSessionMutation } from './input-native-cli-session.ts';
 export { useListLiveNativeCliSessionsQuery } from './list-live-native-cli-sessions.ts';
+export { useListNativeCliSessionSummariesQuery } from './list-native-cli-session-summaries.ts';
 export {
   nativeCliSessionAdapter,
   nativeCliSessionSelectors,

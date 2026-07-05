@@ -41,6 +41,7 @@ interface Props {
   onOpenWorkspace: () => void;
   onOpenMonadChat: () => void;
   onOpenProject: (id: string) => void;
+  onToggleProjectPinned: (id: string) => void;
   onOpenStudioSection: (section: StudioSectionId) => void;
   onRequestCollapse?: () => void;
   onRequestPersistentExpand?: () => void;
@@ -82,6 +83,7 @@ export function SessionSidebar({
   onOpenWorkspace,
   onOpenMonadChat,
   onOpenProject,
+  onToggleProjectPinned,
   onOpenStudioSection,
   onRequestCollapse,
   onRequestPersistentExpand,
@@ -256,6 +258,7 @@ export function SessionSidebar({
               monadChatActive={monadChatActive}
               onOpenMonadChat={onOpenMonadChat}
               onOpenProject={onOpenProject}
+              onToggleProjectPinned={onToggleProjectPinned}
               projects={projects}
               t={t}
             />
