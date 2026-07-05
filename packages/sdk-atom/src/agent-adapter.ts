@@ -331,6 +331,17 @@ export interface NativeCliManagedRuntimeContext {
   env: Record<string, string>;
 }
 
+export interface NativeCliManagedEnvContext {
+  /** The managed agent's private workspace directory (already created on disk). A provider whose
+   *  autopilot toggle has no CLI-flag equivalent (e.g. OpenClaw — see its adapter) writes its own
+   *  config/state files here and points the child at them via env vars, rather than an argv flag. */
+  workspace: string;
+  /** The resolved `allowAutopilot` outcome for this launch: true → the provider should run unattended
+   *  (skip its own approval prompts); false → it should prompt as normal so the daemon's approval
+   *  channel (where supported) can project and resolve those requests. */
+  skipProviderApprovals: boolean;
+}
+
 /** Provider-specific behavior for a *managed* project-agent runtime — a native CLI that monad spawns
  *  and supervises as a Workplace project member. Absent → the generic defaults apply, so the daemon's
  *  managed-runtime code stays provider-agnostic and reads intent from the adapter instead of branching
@@ -339,7 +350,7 @@ export interface NativeCliManagedRuntime {
   /** Launch-mode override for the managed runtime (e.g. codex → 'app-server', others → 'json-stream'). */
   launchMode?(defaultMode: NativeCliLaunchMode): NativeCliLaunchMode;
   /** Env additions for the managed child (e.g. codex → `CODEX_NON_INTERACTIVE=1`). */
-  env?(): Record<string, string>;
+  env?(context: NativeCliManagedEnvContext): Record<string, string>;
   /** CLI args wiring monad's managed MCP server into the provider (codex → `-c mcp_servers.monad…`). */
   mcpConfigArgs?(context: NativeCliManagedRuntimeContext): string[];
   /** The provider mounts monad's managed MCP server as its project bridge — drives the MCP prompt
@@ -422,6 +433,12 @@ export interface NativeCliProviderAdapter {
    *  that don't need it (single-shot stdout parsers) ignore it. */
   parseOutput(chunk: string, handle?: NativeCliRuntimeHandle): NativeCliOutputEvent[];
   sendInput(handle: NativeCliRuntimeHandle, input: string): void;
+  /** True when the given launch mode can both project provider approval requests as
+   *  `approval_requested` events AND resolve them via `resolveApproval` (a two-way channel exists).
+   *  The daemon consults this before dropping the skip-approval flag for a managed agent: only a
+   *  resolvable mode may delegate approvals to the human; otherwise it stays full-auto. Absent → the
+   *  adapter has no resolvable approval channel in any mode. */
+  supportsApprovalResolution?(launchMode: NativeCliLaunchMode): boolean;
   resolveApproval(handle: NativeCliRuntimeHandle, resolution: NativeCliApprovalResolution): void;
   /** Cancel the in-flight turn without tearing down the session/thread (app-server only). Absent →
    *  the provider offers no graceful interrupt; the host falls back to stopping the session. */

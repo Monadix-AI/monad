@@ -14,7 +14,7 @@ test('project member candidates include project templates defined on native CLI 
         command: 'codex',
         enabled: true,
         defaultLaunchMode: 'app-server',
-        allowDangerousMode: false,
+        allowAutopilot: false,
         approvalOwnership: 'provider-owned',
         modelOptions: ['gpt-5.5'],
         reasoningEfforts: ['medium', 'high'],

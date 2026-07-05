@@ -84,6 +84,9 @@ interface LiveNativeCliSession {
   agentName: string;
   provider: NativeCliAgentView['provider'];
   runtimeRole: NativeCliSessionView['runtimeRole'];
+  /** True when this managed session delegates provider approvals to the human (autopilot off + adapter
+   *  can resolve). When false, leaked managed approvals are auto-denied (autopilot). */
+  proxyApprovals: boolean;
   /** The long-lived child process. Absent for `cli-oneshot`, which spawns a fresh process per turn
    *  (see `oneshotTurnProc`) rather than keeping one alive for the session. */
   proc?: NativeCliProcess;
@@ -395,9 +398,13 @@ export class NativeCliHost {
     reasoningEffort?: string;
     speed?: 'standard' | 'fast';
     customPrompt?: string;
+    /** Per-member override of the agent template's `allowAutopilot`. When OFF and the adapter can
+     *  proxy approvals in the effective launch mode, a managed agent delegates its provider approvals
+     *  to the human instead of running unattended. */
+    allowAutopilot?: boolean;
   }): Promise<NativeCliSessionView> {
     const runtimeAgentName = args.agentName;
-    const agent = await this.requireAgent(args.templateAgentName ?? args.agentName);
+    let agent = await this.requireAgent(args.templateAgentName ?? args.agentName);
     if (!isAbsolute(args.workingPath)) throw new Error('workingPath must be absolute');
     let workingPath: string;
     try {
@@ -412,24 +419,43 @@ export class NativeCliHost {
     const now = new Date().toISOString();
     let requestSeq = 0;
     const runtimeRole = args.runtimeRole ?? 'interactive';
-    const managed =
-      runtimeRole === 'managed-project-agent'
-        ? prepareManagedProjectRuntime({
-            monadHome: this.deps.monadHome ?? dirname(this.deps.nativeCliProcessRegistryPath ?? workingPath),
-            serverUrl: this.deps.serverUrl ?? `http://127.0.0.1:${Bun.env.MONAD_PORT || '52749'}`,
-            agentName: runtimeAgentName,
-            displayName: args.displayName,
-            projectId: args.transcriptTargetId as ProjectId,
-            nativeCliSessionId: id,
-            provider: agent.provider,
-            modelName: args.modelName,
-            modelId: args.modelId,
-            reasoningEffort: args.reasoningEffort,
-            speed: args.speed,
-            customPrompt: args.customPrompt,
-            baseEnvPath: Bun.env.PATH
-          })
-        : null;
+    const willBeManaged = runtimeRole === 'managed-project-agent';
+
+    // A managed agent runs autopilot unless the operator turned it OFF *and* the adapter can actually
+    // project + resolve approvals in this launch mode. When it can't, the skip flag stays on —
+    // dropping it would leave the CLI blocked on an approval it has no channel to resolve. The member
+    // setting overrides the agent template's `allowAutopilot`. Computed before `prepareManagedProjectRuntime`
+    // so `skipProviderApprovals` can reach `managedRuntime.env` for a provider whose autopilot toggle has
+    // no CLI-flag equivalent (OpenClaw) and must instead write its own config into the managed workspace.
+    const effectiveLaunchMode = args.launchMode ?? agent.defaultLaunchMode;
+    const allowAutopilot = args.allowAutopilot ?? agent.allowAutopilot;
+    const proxyApprovals =
+      willBeManaged && allowAutopilot === false && (adapter.supportsApprovalResolution?.(effectiveLaunchMode) ?? false);
+    const skipProviderApprovals = willBeManaged && !proxyApprovals;
+    // Reflect the resolved (member-override-aware) value back onto `agent` before it reaches
+    // `buildNativeCliLaunch` — that call's `assertSafeArgs` gates dangerous static argv on
+    // `agent.allowAutopilot` too, and it must see the same resolved value this session actually runs
+    // with, not the template's raw default.
+    if (allowAutopilot !== agent.allowAutopilot) agent = { ...agent, allowAutopilot };
+
+    const managed = willBeManaged
+      ? prepareManagedProjectRuntime({
+          monadHome: this.deps.monadHome ?? dirname(this.deps.nativeCliProcessRegistryPath ?? workingPath),
+          serverUrl: this.deps.serverUrl ?? `http://127.0.0.1:${Bun.env.MONAD_PORT || '52749'}`,
+          agentName: runtimeAgentName,
+          displayName: args.displayName,
+          projectId: args.transcriptTargetId as ProjectId,
+          nativeCliSessionId: id,
+          provider: agent.provider,
+          modelName: args.modelName,
+          modelId: args.modelId,
+          reasoningEffort: args.reasoningEffort,
+          speed: args.speed,
+          customPrompt: args.customPrompt,
+          baseEnvPath: Bun.env.PATH,
+          skipProviderApprovals
+        })
+      : null;
 
     let pendingCR = false;
     const decoder = createStreamingTextDecoder();
@@ -439,8 +465,7 @@ export class NativeCliHost {
     // (browser-unreachable channel). Allocate it before the launch so it lands in both the argv and
     // the dial target.
     const wantsUnixAppServer =
-      (args.launchMode ?? agent.defaultLaunchMode) === 'app-server' &&
-      (args.appServerTransport ?? agent.appServerTransport) === 'unix';
+      effectiveLaunchMode === 'app-server' && (args.appServerTransport ?? agent.appServerTransport) === 'unix';
     const appServerSocketPath = wantsUnixAppServer ? this.allocateAppServerSocketPath(id) : undefined;
     // A `ws` app-server MAY prefer a daemon-assigned port over self-announcing one (see
     // `NativeCliAppServerWsHints.port`) — allocate a candidate up front so `buildLaunch` can put it in
@@ -448,7 +473,7 @@ export class NativeCliHost {
     // self-announcing ws provider (e.g. codex) never reads the allocated port and the bind+release
     // syscall would otherwise run on every one of its app-server launches for nothing.
     const wantsWsAppServer =
-      (args.launchMode ?? agent.defaultLaunchMode) === 'app-server' &&
+      effectiveLaunchMode === 'app-server' &&
       (args.appServerTransport ?? agent.appServerTransport ?? 'ws') === 'ws' &&
       !!adapter.usesDaemonAssignedAppServerPort;
     const appServerPort = wantsWsAppServer ? await this.allocateAppServerPort() : undefined;
@@ -465,7 +490,7 @@ export class NativeCliHost {
       appServerSocketPath,
       appServerPort,
       systemPromptFile: adapter.managedRuntime?.usesSystemPromptFile ? (managed?.promptFile ?? undefined) : undefined,
-      skipProviderApprovals: !!managed,
+      skipProviderApprovals,
       providerSessionRef: args.providerSessionRef,
       modelName: args.modelName,
       reasoningEffort: args.reasoningEffort,
@@ -484,7 +509,7 @@ export class NativeCliHost {
         agentName: runtimeAgentName,
         provider: agent.provider,
         workingPath,
-        launchMode: args.launchMode ?? agent.defaultLaunchMode,
+        launchMode: effectiveLaunchMode,
         runtimeRole,
         agentRuntimeId: runtimeRole === 'managed-project-agent' ? id : null,
         agentRuntimeTokenHash: managed?.tokenHash ?? null,
@@ -699,6 +724,7 @@ export class NativeCliHost {
       agentName: runtimeAgentName,
       provider: agent.provider,
       runtimeRole,
+      proxyApprovals,
       proc,
       adapter,
       launchMode: launch.launchMode,
@@ -954,6 +980,9 @@ export class NativeCliHost {
       agentName,
       provider,
       runtimeRole,
+      // cli-oneshot spawns a fresh stateless process per turn — no persistent channel to resolve an
+      // approval through, so it never delegates (autopilot only).
+      proxyApprovals: false,
       adapter,
       launchMode: 'cli-oneshot',
       oneshotSpec: launch,
@@ -1951,7 +1980,10 @@ export class NativeCliHost {
       const requestId =
         typeof event.payload.requestId === 'string' ? event.payload.requestId : String(event.payload.requestId);
       const live = this.live.get(id);
-      if (live?.runtimeRole === 'managed-project-agent') {
+      // Autopilot managed sessions auto-deny any approval that leaks past the skip flag. A managed
+      // session that delegates approvals (autopilot off + resolvable adapter) instead falls through
+      // to the same projection path interactive sessions use — monad is only the UI proxy.
+      if (live?.runtimeRole === 'managed-project-agent' && !live.proxyApprovals) {
         const text = nativeCliApprovalText(event);
         try {
           live.adapter.resolveApproval(live, {

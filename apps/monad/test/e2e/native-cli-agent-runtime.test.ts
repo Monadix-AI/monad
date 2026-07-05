@@ -237,7 +237,7 @@ async function configureMockAgent(call: Call): Promise<void> {
       ],
       enabled: true,
       defaultLaunchMode: 'pty',
-      allowDangerousMode: false,
+      allowAutopilot: false,
       approvalOwnership: 'provider-owned'
     }
   });
@@ -273,7 +273,7 @@ async function configureMockJsonStreamAgent(call: Call, dir: string): Promise<vo
       args: [],
       enabled: true,
       defaultLaunchMode: 'json-stream',
-      allowDangerousMode: false,
+      allowAutopilot: false,
       approvalOwnership: 'provider-owned'
     }
   });
@@ -324,7 +324,7 @@ async function configureMockCodexApprovalAgent(call: Call, dir: string): Promise
       args: [],
       enabled: true,
       defaultLaunchMode: 'app-server',
-      allowDangerousMode: false,
+      allowAutopilot: false,
       approvalOwnership: 'provider-owned'
     }
   });
@@ -362,7 +362,7 @@ async function configureMockSlowCodexAppServerAgent(call: Call, dir: string): Pr
       args: [],
       enabled: true,
       defaultLaunchMode: 'app-server',
-      allowDangerousMode: false,
+      allowAutopilot: false,
       approvalOwnership: 'provider-owned'
     }
   });
@@ -402,7 +402,7 @@ async function configureMockCodexOversizedLineAgent(call: Call, dir: string): Pr
       args: [],
       enabled: true,
       defaultLaunchMode: 'app-server',
-      allowDangerousMode: false,
+      allowAutopilot: false,
       approvalOwnership: 'provider-owned'
     }
   });
@@ -449,7 +449,7 @@ async function configureMockAuthAgent(
       args: [],
       enabled: true,
       defaultLaunchMode: 'pty',
-      allowDangerousMode: false,
+      allowAutopilot: false,
       approvalOwnership: 'provider-owned'
     }
   });
@@ -475,7 +475,7 @@ async function configureHangingAuthStatusAgent(call: Call, dir: string): Promise
       args: [],
       enabled: true,
       defaultLaunchMode: 'pty',
-      allowDangerousMode: false,
+      allowAutopilot: false,
       approvalOwnership: 'provider-owned'
     }
   });
@@ -491,7 +491,7 @@ async function configureMissingBinaryAgent(call: Call): Promise<void> {
       args: [],
       enabled: true,
       defaultLaunchMode: 'json-stream',
-      allowDangerousMode: false,
+      allowAutopilot: false,
       approvalOwnership: 'provider-owned'
     }
   });

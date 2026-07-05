@@ -66,6 +66,8 @@ function withQwenStreamJsonArgs(args: string[]): string[] {
   return next;
 }
 
+// `--approval-mode=yolo` — confirmed against qwenlm.github.io/qwen-code-docs (Qwen Code shares Gemini
+// CLI's approval-mode vocabulary: default/auto_edit/yolo, settable via CLI flag or config).
 function withQwenSkipApprovalArgs(args: string[], skipProviderApprovals: boolean): string[] {
   if (!skipProviderApprovals || hasFlag(args, '--approval-mode') || hasFlag(args, '--yolo')) return args;
   return [...args, '--approval-mode=yolo'];
@@ -189,6 +191,7 @@ export const qwenNativeCliAdapter: NativeCliProviderAdapter = {
         history: 'provider-owned',
         resume: 'pty',
         approval: 'provider-owned',
+        approvalProxy: true,
         settingsImport: true
       }
     };
@@ -230,6 +233,7 @@ export const qwenNativeCliAdapter: NativeCliProviderAdapter = {
   initialize: initializeQwenStreamJson,
   parseOutput: parseQwenStreamJson,
   sendInput: sendQwenInput,
+  supportsApprovalResolution: (launchMode) => launchMode === 'json-stream',
   resolveApproval: resolveQwenApproval,
   resize: resizeQwen,
   stop: stopQwen

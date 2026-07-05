@@ -4,11 +4,14 @@ import { Dialog, DialogContent, DialogTitle } from '@monad/ui';
 import { workspaceMono as mono, workspaceSans as sans } from '@monad/ui/components/AgentAvatar';
 
 import { useT } from '@/components/I18nProvider';
+import { useNativeCliAgentSettings } from '@/hooks/use-native-cli-agent-settings';
+import { canDisableAutopilot } from '../../studio/third-party-agents/native-cli-agent-settings-model';
 
 type ProjectMember = ProjectController['projectMembers'][number];
 
 function MemberSettings({ member, room }: { member: ProjectMember; room: ProjectController }): React.ReactElement {
   const t = useT();
+  const { agents, presets } = useNativeCliAgentSettings();
   const settings = member.settings ?? {};
   const field: React.CSSProperties = {
     width: '100%',
@@ -72,7 +75,62 @@ function MemberSettings({ member, room }: { member: ProjectMember; room: Project
           {t('web.workplace.mcpSharing')} {settings.forwardMcp ? t('web.acp.osSandboxOn') : t('web.acp.osSandboxOff')}
         </button>
       </div>
+      {member.type === 'native-cli' ? (
+        <NativeCliApprovalSetting
+          agents={agents}
+          label={label}
+          member={member}
+          presets={presets}
+          room={room}
+          toggleStyle={toggleStyle}
+        />
+      ) : null}
     </div>
+  );
+}
+
+/** Per-member approval mode for a managed native CLI agent. Dangerous mode ON = autopilot (the agent
+ *  runs its provider's dangerous/full-auto flags). Dangerous mode OFF = delegate provider approvals to
+ *  the human — only offered when the provider's adapter can actually proxy approvals, mirroring the
+ *  agent-template editor's gate. */
+function NativeCliApprovalSetting({
+  agents,
+  presets,
+  member,
+  room,
+  label,
+  toggleStyle
+}: {
+  agents: ReturnType<typeof useNativeCliAgentSettings>['agents'];
+  presets: ReturnType<typeof useNativeCliAgentSettings>['presets'];
+  member: ProjectMember;
+  room: ProjectController;
+  label: React.CSSProperties;
+  toggleStyle: (active: boolean) => React.CSSProperties;
+}): React.ReactElement {
+  const t = useT();
+  const templateName = member.templateName ?? member.name;
+  const agent = agents.find((candidate) => candidate.name === templateName);
+  const preset = agent ? presets.find((candidate) => candidate.provider === agent.provider) : undefined;
+  const canProxy = agent ? canDisableAutopilot(agent, preset) : false;
+  const templateDangerous = agent?.allowAutopilot ?? true;
+  const dangerous = canProxy ? (member.settings?.allowAutopilot ?? templateDangerous) : true;
+  return (
+    <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <span style={label}>{t('web.nativeCli.autopilot')}</span>
+      <button
+        className="workplace-action"
+        disabled={!canProxy}
+        onClick={() => void room.updateProjectMemberSettings(member.id, { allowAutopilot: !dangerous })}
+        style={{ ...toggleStyle(dangerous), alignSelf: 'flex-start', opacity: canProxy ? 1 : 0.6 }}
+        type="button"
+      >
+        {dangerous ? t('web.acp.osSandboxOn') : t('web.acp.osSandboxOff')}
+      </button>
+      <span style={{ ...label, opacity: 0.85 }}>
+        {canProxy ? t('web.nativeCli.autopilotHint') : t('web.nativeCli.approvalProxyUnavailable')}
+      </span>
+    </label>
   );
 }
 

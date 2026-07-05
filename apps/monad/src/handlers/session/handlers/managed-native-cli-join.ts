@@ -114,6 +114,7 @@ export function createManagedNativeCliJoin(ctx: SessionContext) {
           speed: settings.speed,
           customPrompt: settings.customPrompt,
           launchMode: managedProjectLaunchMode(spec, settings.launchMode),
+          allowAutopilot: settings.allowAutopilot,
           providerSessionRef: resumeFrom ?? undefined,
           input: managedNativeCliJoinGreetingNotice(spec.provider)
         });

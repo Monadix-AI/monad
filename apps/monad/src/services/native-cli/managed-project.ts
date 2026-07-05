@@ -124,6 +124,10 @@ export function prepareManagedProjectRuntime(
     serverUrl: string;
     baseEnvPath?: string;
     platform?: NodeJS.Platform;
+    /** The resolved autopilot outcome for this launch — threaded to `managedRuntime.env` so a provider
+     *  whose autopilot toggle has no CLI-flag equivalent (OpenClaw) can write its own config instead.
+     *  Defaults to false (don't silently disable a provider's own approval prompts) when omitted. */
+    skipProviderApprovals?: boolean;
   } & Omit<NativeAgentRuntimePromptInput, 'workspace'>
 ): NativeAgentRuntimeSpec {
   const platform = args.platform ?? process.platform;
@@ -168,7 +172,7 @@ export function prepareManagedProjectRuntime(
   );
   const managed = getNativeCliProviderAdapter(args.provider).managedRuntime;
   const env = {
-    ...(managed?.env?.() ?? {}),
+    ...(managed?.env?.({ workspace, skipProviderApprovals: args.skipProviderApprovals ?? false }) ?? {}),
     MONAD_HOME: args.monadHome,
     MONAD_NATIVE_CLI_SESSION_ID: args.nativeCliSessionId,
     MONAD_AGENT_TOKEN_FILE: tokenFile,

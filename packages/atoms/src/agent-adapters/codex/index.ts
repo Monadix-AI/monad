@@ -70,6 +70,7 @@ export const codexNativeCliAdapter: NativeCliProviderAdapter = {
         history: 'paged',
         resume: 'structured',
         approval: 'provider-owned',
+        approvalProxy: true,
         settingsImport: true
       }
     };
@@ -118,6 +119,7 @@ export const codexNativeCliAdapter: NativeCliProviderAdapter = {
   historyPageOutput: codexHistoryPageOutput,
   historyOutput: readCodexHistoryOutput,
   sendInput: sendCodexInput,
+  supportsApprovalResolution: (launchMode) => launchMode === 'app-server',
   resolveApproval: resolveCodexApproval,
   interrupt: interruptCodex,
   steer: steerCodex,

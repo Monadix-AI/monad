@@ -12,7 +12,7 @@ const agent: NativeCliAgentView = {
   modelOptions: [],
   enabled: true,
   defaultLaunchMode: 'pty',
-  allowDangerousMode: false,
+  allowAutopilot: false,
   approvalOwnership: 'provider-owned'
 };
 

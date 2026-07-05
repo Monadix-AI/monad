@@ -26,6 +26,7 @@ type StartManagedNativeCliRuntimeWithRecovery = (args: {
   speed?: 'standard' | 'fast';
   customPrompt?: string;
   launchMode: NativeCliAgentConfig['defaultLaunchMode'];
+  allowAutopilot?: boolean;
   providerSessionRef?: string;
   input: string;
 }) => Promise<NativeCliSessionView>;
@@ -226,6 +227,7 @@ export function createForwardNativeCliHandler(
               speed: memberSettings.speed,
               customPrompt: memberSettings.customPrompt,
               launchMode: managedProjectLaunchMode(spec, memberSettings.launchMode),
+              allowAutopilot: memberSettings.allowAutopilot,
               providerSessionRef: resumeFrom ?? undefined,
               input: text
             })
@@ -236,6 +238,7 @@ export function createForwardNativeCliHandler(
               workingPath: session.cwd,
               launchMode: memberSettings.launchMode ?? spec.defaultLaunchMode,
               appServerTransport: memberSettings.appServerTransport,
+              allowAutopilot: memberSettings.allowAutopilot,
               runtimeRole
             });
       if (runtimeRole !== 'managed-project-agent') {

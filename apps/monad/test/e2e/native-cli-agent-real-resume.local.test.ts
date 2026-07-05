@@ -189,7 +189,7 @@ describe.skipIf(!AUTH_STATUS_SMOKE)('native CLI real provider auth status smoke'
       command: 'codex',
       enabled: true,
       defaultLaunchMode: 'pty',
-      allowDangerousMode: false,
+      allowAutopilot: false,
       approvalOwnership: 'provider-owned'
     });
     const proc = Bun.spawn(launch.argv, { cwd: launch.cwd, stdout: 'pipe', stderr: 'pipe', stdin: 'ignore' });
@@ -206,7 +206,7 @@ describe.skipIf(!AUTH_STATUS_SMOKE)('native CLI real provider auth status smoke'
       command: 'claude',
       enabled: true,
       defaultLaunchMode: 'pty',
-      allowDangerousMode: false,
+      allowAutopilot: false,
       approvalOwnership: 'provider-owned'
     });
     const proc = Bun.spawn(launch.argv, { cwd: launch.cwd, stdout: 'pipe', stderr: 'pipe', stdin: 'ignore' });

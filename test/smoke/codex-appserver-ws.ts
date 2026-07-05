@@ -36,7 +36,7 @@ const agent = {
   command: 'codex',
   enabled: true,
   defaultLaunchMode: 'app-server' as const,
-  allowDangerousMode: false,
+  allowAutopilot: false,
   approvalOwnership: 'provider-owned' as const
 };
 

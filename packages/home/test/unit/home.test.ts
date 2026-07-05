@@ -119,7 +119,7 @@ describe('initMonadHome', () => {
           command: 'codex',
           enabled: true,
           defaultLaunchMode: 'pty',
-          allowDangerousMode: false,
+          allowAutopilot: false,
           approvalOwnership: 'provider-owned'
         }
       ]

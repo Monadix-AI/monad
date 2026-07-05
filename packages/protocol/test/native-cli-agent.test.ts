@@ -52,7 +52,7 @@ test('native CLI agent view requires provider-owned full-capability defaults', (
     reasoningEfforts: ['low', 'medium', 'high'],
     enabled: true,
     defaultLaunchMode: 'pty',
-    allowDangerousMode: false
+    allowAutopilot: false
   });
 
   expect(parsed.provider).toBe('codex');

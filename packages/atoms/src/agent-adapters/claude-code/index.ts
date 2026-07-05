@@ -42,6 +42,9 @@ import { createClaudeCodeSettingsImport } from '../settings-import.ts';
 // used here instead of a version-pinned enum.
 const CLAUDE_CODE_SUPPORTED_MODELS = ['fable', 'opus', 'sonnet', 'haiku'];
 
+// `-p`/`--print` (non-interactive/headless mode) + `--input-format`/`--output-format stream-json` —
+// confirmed against code.claude.com/docs/en/permission-modes and Anthropic's documented headless
+// recipe: `claude -p "..." --output-format stream-json` for automated pipelines.
 function withClaudeStreamJsonArgs(args: string[]): string[] {
   const next = [...args];
   if (!next.includes('-p') && !next.includes('--print')) next.unshift('-p');
@@ -82,6 +85,8 @@ function claudeExtraWorkingPathArgs(paths: string[] | undefined): string[] {
   return (paths ?? []).flatMap((path) => ['--add-dir', path]);
 }
 
+// `--dangerously-skip-permissions` ("Safe YOLO mode") — confirmed against
+// code.claude.com/docs/en/permission-modes; Anthropic's docs note it refuses to start under root/sudo.
 function withClaudeSkipApprovalArgs(args: string[], skipProviderApprovals: boolean): string[] {
   if (!skipProviderApprovals || hasFlag(args, '--dangerously-skip-permissions')) return args;
   return [...args, '--dangerously-skip-permissions'];

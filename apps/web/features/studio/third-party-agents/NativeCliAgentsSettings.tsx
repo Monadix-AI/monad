@@ -42,7 +42,7 @@ import { NativeCliAuthModal } from '@/features/workplace/cli/NativeCliAuthModal'
 import { useAsyncAction } from '@/hooks/use-async-action';
 import { useNativeCliAgentSettings } from '@/hooks/use-native-cli-agent-settings';
 import {
-  canDisableDangerousMode,
+  canDisableAutopilot,
   nativeCliAppServerTransportOptions,
   nativeCliLaunchModeOptions
 } from './native-cli-agent-settings-model';
@@ -120,7 +120,7 @@ const BLANK_AGENT: NativeCliAgentView = {
   modelOptions: [],
   enabled: true,
   defaultLaunchMode: 'pty',
-  allowDangerousMode: false,
+  allowAutopilot: true,
   approvalOwnership: 'provider-owned'
 };
 
@@ -134,7 +134,7 @@ const presetToView = (p: NativeCliAgentPresetView): NativeCliAgentView => ({
   reasoningEfforts: p.reasoningEfforts,
   enabled: true,
   defaultLaunchMode: p.defaultLaunchMode,
-  allowDangerousMode: false,
+  allowAutopilot: true,
   approvalOwnership: 'provider-owned',
   capabilities: p.capabilities
 });
@@ -962,11 +962,11 @@ function AgentForm({
       newProjectTemplateEditorRow(template, `${template.id}:${index}`)
     )
   );
-  const canProxyApprovals = agent ? canDisableDangerousMode(agent, preset) : false;
+  const canProxyApprovals = agent ? canDisableAutopilot(agent, preset) : false;
   const [defaultLaunchMode, setDefaultLaunchMode] = useState<NativeCliLaunchMode>(agent?.defaultLaunchMode ?? 'pty');
   const [appServerTransport, setAppServerTransport] = useState(agent?.appServerTransport ?? '');
-  const [allowDangerousMode, setAllowDangerousMode] = useState(
-    mode === 'settings' && !canProxyApprovals ? true : (agent?.allowDangerousMode ?? true)
+  const [allowAutopilot, setAllowAutopilot] = useState(
+    mode === 'settings' && !canProxyApprovals ? true : (agent?.allowAutopilot ?? true)
   );
   const [busy, setBusy] = useState(false);
   const launchModeOptions = agent
@@ -975,8 +975,8 @@ function AgentForm({
   const appServerTransportOptions = nativeCliAppServerTransportOptions(preset);
   const showIdentityFields = mode === 'create';
   const showAdvanced = mode === 'settings';
-  const canToggleDangerousMode = mode === 'create' || canProxyApprovals;
-  const effectiveAllowDangerousMode = mode === 'settings' && !canProxyApprovals ? true : allowDangerousMode;
+  const canToggleAutopilot = mode === 'create' || canProxyApprovals;
+  const effectiveAllowAutopilot = mode === 'settings' && !canProxyApprovals ? true : allowAutopilot;
 
   const submit = async () => {
     if (!name.trim() || !command.trim()) return;
@@ -999,7 +999,7 @@ function AgentForm({
         appServerTransport: appServerTransport
           ? (appServerTransport as NativeCliAgentView['appServerTransport'])
           : undefined,
-        allowDangerousMode: effectiveAllowDangerousMode,
+        allowAutopilot: effectiveAllowAutopilot,
         approvalOwnership: 'provider-owned',
         capabilities: agent?.capabilities
       });
@@ -1095,22 +1095,22 @@ function AgentForm({
         templates={projectTemplates}
       />
       <div className="flex flex-col gap-1">
-        <Label className="text-xs">{t('web.nativeCli.dangerousMode')}</Label>
+        <Label className="text-xs">{t('web.nativeCli.autopilot')}</Label>
         <Button
           className="self-start"
-          disabled={!canToggleDangerousMode}
-          onClick={() => setAllowDangerousMode((v) => !v)}
+          disabled={!canToggleAutopilot}
+          onClick={() => setAllowAutopilot((v) => !v)}
           size="sm"
           type="button"
-          variant={effectiveAllowDangerousMode ? 'secondary' : 'outline'}
+          variant={effectiveAllowAutopilot ? 'secondary' : 'outline'}
         >
           <HugeiconsIcon icon={ShieldQuestionMarkIcon} />{' '}
-          {effectiveAllowDangerousMode ? t('web.acp.osSandboxOn') : t('web.acp.osSandboxOff')}
+          {effectiveAllowAutopilot ? t('web.acp.osSandboxOn') : t('web.acp.osSandboxOff')}
         </Button>
         <p className="text-[11px] text-muted-foreground">
           {mode === 'settings' && !canProxyApprovals
             ? t('web.nativeCli.approvalProxyUnavailable')
-            : t('web.nativeCli.dangerousModeHint')}
+            : t('web.nativeCli.autopilotHint')}
         </p>
       </div>
       {showAdvanced ? (

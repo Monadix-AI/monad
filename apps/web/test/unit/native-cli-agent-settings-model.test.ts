@@ -3,7 +3,7 @@ import type { NativeCliAgentPresetView, NativeCliAgentView } from '@monad/protoc
 import { expect, test } from 'bun:test';
 
 import {
-  canDisableDangerousMode,
+  canDisableAutopilot,
   nativeCliAppServerTransportOptions,
   nativeCliLaunchModeOptions
 } from '../../features/studio/third-party-agents/native-cli-agent-settings-model';
@@ -15,7 +15,7 @@ const agent: NativeCliAgentView = {
   args: [],
   enabled: true,
   defaultLaunchMode: 'app-server',
-  allowDangerousMode: true,
+  allowAutopilot: true,
   approvalOwnership: 'provider-owned'
 };
 
@@ -47,9 +47,9 @@ test('native CLI settings app-server transports come from the agent preset capab
 });
 
 test('native CLI settings cannot disable dangerous mode without an available approval proxy', () => {
-  expect(canDisableDangerousMode(agent)).toBe(false);
+  expect(canDisableAutopilot(agent)).toBe(false);
   expect(
-    canDisableDangerousMode({
+    canDisableAutopilot({
       ...agent,
       capabilities: {
         auth: 'pty',
@@ -64,7 +64,7 @@ test('native CLI settings cannot disable dangerous mode without an available app
 
 test('native CLI settings use preset approval proxy capabilities for existing agents', () => {
   expect(
-    canDisableDangerousMode(agent, {
+    canDisableAutopilot(agent, {
       ...preset,
       capabilities: {
         auth: 'pty',

@@ -72,7 +72,7 @@ const toView = (a: NativeCliAgentConfig): NativeCliAgentView => ({
   enabled: a.enabled,
   defaultLaunchMode: a.defaultLaunchMode,
   appServerTransport: a.appServerTransport,
-  allowDangerousMode: a.allowDangerousMode,
+  allowAutopilot: a.allowAutopilot,
   approvalOwnership: 'provider-owned',
   projectTemplates: a.projectTemplates
 });
@@ -87,7 +87,7 @@ const fromView = (v: NativeCliAgentView, stored?: NativeCliAgentConfig): NativeC
   enabled: v.enabled,
   defaultLaunchMode: v.defaultLaunchMode,
   appServerTransport: v.appServerTransport,
-  allowDangerousMode: v.allowDangerousMode,
+  allowAutopilot: v.allowAutopilot,
   approvalOwnership: 'provider-owned',
   projectTemplates: v.projectTemplates
 });

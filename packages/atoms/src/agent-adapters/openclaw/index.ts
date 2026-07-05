@@ -8,6 +8,29 @@ import { openClawAppServerHooks } from './app-server.ts';
 // Kept as a small fallback list (an operator can override via the agent's modelOptions).
 const OPENCLAW_SUPPORTED_MODELS = ['openclaw-default'];
 
+// OpenClaw has NO CLI flag or env var that bypasses exec approvals (previously this adapter appended
+// a nonexistent `--auto-approve` — removed via the shared factory's `skipApprovalFlag` opt-in, which
+// OpenClaw deliberately omits). Its docs (docs.openclaw.ai/tools/exec-approvals) say the only way is
+// its own config (`tools.exec.security`/`ask`) plus a host-local approvals file
+// (`defaults.askFallback` — docs.openclaw.ai/gateway/configuration), and `OPENCLAW_HOME`/
+// `OPENCLAW_STATE_DIR` are the documented per-instance overrides for where those live.
+//
+// This is DELIBERATELY not wired up: OpenClaw's own credential store — `auth-profiles.json` under
+// `~/.openclaw/agents/<agentId>/agent/` — "also respects `$OPENCLAW_STATE_DIR`" per its auth docs, so
+// redirecting either var to give this agent a private exec-approvals override would silently strand
+// the managed session with NO stored auth (it would look for auth-profiles.json in the fresh,
+// credential-less directory instead of the operator's real one). A correct fix needs either a
+// verified credential-preserving injection (e.g. seeding just the relevant auth-profiles.json into the
+// override dir) or hands-on verification against the real binary — not something to guess from docs
+// alone given the blast radius (silently broken auth) of getting it wrong.
+//
+// Net effect: OpenClaw managed agents do NOT currently support autopilot — `allowAutopilot: true` no
+// longer sends a broken flag (previously could error/no-op unpredictably), but OpenClaw still prompts
+// for approvals it has no channel to resolve while unmanaged. Delegated mode (`allowAutopilot: false`)
+// is unaffected and works today via the real `approval.request`/`approval.respond` app-server channel
+// (see ./app-server.ts) — this gap is specifically the *autopilot* path. No `managedRuntime.env` hook is
+// wired below for this reason — leaving it unset is the correct, safe state until that's resolved.
+
 // Real `gateway` app-server backend (verified live, see openclaw/app-server.ts) — uses `appServerHooks`
 // rather than `protocol` because OpenClaw's wire envelope isn't generic JSON-RPC.
 const baseOpenClawNativeCliAdapter = makeAppServerCliAdapter({
@@ -51,6 +74,10 @@ const baseOpenClawNativeCliAdapter = makeAppServerCliAdapter({
 export const openClawNativeCliAdapter: NativeCliProviderAdapter = {
   ...baseOpenClawNativeCliAdapter,
   settingsImport: createFrameworkSettingsImport('openclaw', 'OpenClaw'),
+  // OpenClaw's managed runtime is app-server, whose JSON-RPC channel projects + resolves approvals —
+  // so it can delegate provider approvals to the human. (Hermes shares the factory but has no
+  // app-server backend, so it deliberately doesn't opt in.)
+  supportsApprovalResolution: (launchMode) => launchMode === 'app-server',
   detect(probes) {
     const preset = baseOpenClawNativeCliAdapter.detect(probes);
     return {
@@ -60,6 +87,7 @@ export const openClawNativeCliAdapter: NativeCliProviderAdapter = {
         history: preset.capabilities?.history ?? 'none',
         resume: preset.capabilities?.resume ?? 'pty',
         approval: preset.capabilities?.approval ?? 'provider-owned',
+        approvalProxy: true,
         settingsImport: true
       }
     };

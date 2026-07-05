@@ -27,6 +27,7 @@ export interface ManagedNativeCliProjectMember {
     | 'managedProjectAgent'
     | 'launchMode'
     | 'appServerTransport'
+    | 'allowAutopilot'
     | 'modelName'
     | 'modelId'
     | 'reasoningEffort'
@@ -80,6 +81,7 @@ export function nativeCliProjectMemberSettings(
   | 'managedProjectAgent'
   | 'launchMode'
   | 'appServerTransport'
+  | 'allowAutopilot'
   | 'modelName'
   | 'modelId'
   | 'reasoningEffort'
@@ -99,6 +101,7 @@ export function nativeCliProjectMemberSettings(
       managedProjectAgent: member.settings.managedProjectAgent !== false,
       ...(member.settings.launchMode ? { launchMode: member.settings.launchMode } : {}),
       ...(member.settings.appServerTransport ? { appServerTransport: member.settings.appServerTransport } : {}),
+      ...(member.settings.allowAutopilot !== undefined ? { allowAutopilot: member.settings.allowAutopilot } : {}),
       ...(member.settings.modelName ? { modelName: member.settings.modelName } : {}),
       ...(member.settings.modelId ? { modelId: member.settings.modelId } : {}),
       ...(member.settings.reasoningEffort ? { reasoningEffort: member.settings.reasoningEffort } : {}),
@@ -143,6 +146,9 @@ export function managedNativeCliProjectMembers(
             managedProjectAgent: true,
             ...(member.settings?.launchMode ? { launchMode: member.settings.launchMode } : {}),
             ...(member.settings?.appServerTransport ? { appServerTransport: member.settings.appServerTransport } : {}),
+            ...(member.settings?.allowAutopilot !== undefined
+              ? { allowAutopilot: member.settings.allowAutopilot }
+              : {}),
             ...(member.settings?.modelName ? { modelName: member.settings.modelName } : {}),
             ...(member.settings?.modelId ? { modelId: member.settings.modelId } : {}),
             ...(member.settings?.reasoningEffort ? { reasoningEffort: member.settings.reasoningEffort } : {}),

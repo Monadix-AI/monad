@@ -677,7 +677,7 @@ test('managed native CLI observation prefers Codex CLI history over rollout fall
     command: script,
     enabled: true,
     defaultLaunchMode: 'app-server',
-    allowDangerousMode: false,
+    allowAutopilot: false,
     approvalOwnership: 'provider-owned'
   };
   const host = new NativeCliHost({
@@ -933,7 +933,7 @@ test('native CLI usage returns empty records when the adapter has no usage probe
         command: 'codex',
         enabled: true,
         defaultLaunchMode: 'app-server',
-        allowDangerousMode: false,
+        allowAutopilot: false,
         approvalOwnership: 'provider-owned'
       }
     ]
@@ -1031,7 +1031,7 @@ test('cli-oneshot session has no persistent process and runs a fresh CLI per tur
     args: [mockCli],
     enabled: true,
     defaultLaunchMode: 'cli-oneshot',
-    allowDangerousMode: false,
+    allowAutopilot: false,
     approvalOwnership: 'provider-owned'
   };
   const host = new NativeCliHost({ store, bus: new EventBus(), agents: async () => [agent] });
@@ -1072,3 +1072,360 @@ test('cli-oneshot session has no persistent process and runs a fresh CLI per tur
     rmSync(workdir, { recursive: true, force: true });
   }
 });
+
+function seedApprovalLiveSession(
+  host: NativeCliHost,
+  store: ReturnType<typeof createStore>,
+  { projectId, id, proxyApprovals }: { projectId: `prj_${string}`; id: string; proxyApprovals: boolean }
+): { resolveCalls: { allow: boolean; reason?: string }[]; live: { pendingApprovals: Map<string, unknown> } } {
+  store.insertWorkplaceProject({
+    id: projectId,
+    title: 'Approval test',
+    ownerPrincipalId: 'prn_test',
+    state: 'active',
+    archived: false,
+    createdAt: '2026-07-02T00:00:00.000Z',
+    updatedAt: '2026-07-02T00:00:00.000Z'
+  });
+  store.upsertNativeCliSession({
+    id,
+    transcriptTargetId: projectId,
+    agentName: 'codex',
+    provider: 'codex',
+    workingPath: '/tmp/project',
+    launchMode: 'app-server',
+    runtimeRole: 'managed-project-agent',
+    agentRuntimeId: id,
+    agentRuntimeTokenHash: null,
+    lastDeliveredSeq: 0,
+    lastVisibleSeq: 0,
+    state: 'running',
+    pid: 321,
+    providerSessionRef: null,
+    outputSnapshot: '',
+    exitCode: null,
+    startedAt: '2026-07-02T00:00:00.000Z',
+    updatedAt: '2026-07-02T00:00:00.000Z',
+    exitedAt: null
+  });
+  const resolveCalls: { allow: boolean; reason?: string }[] = [];
+  const adapter = {
+    provider: 'codex',
+    productIcon: 'codex',
+    parseOutput: (): unknown[] => [
+      { type: 'approval_requested', payload: { requestId: 'req-1', kind: 'execCommand', command: 'rm -rf /tmp/x' } }
+    ],
+    resolveApproval: (_handle: unknown, resolution: { allow: boolean; reason?: string }) => {
+      resolveCalls.push({ allow: resolution.allow, reason: resolution.reason });
+    }
+  } as unknown as NativeCliProviderAdapter;
+  const live = {
+    id,
+    transcriptTargetId: projectId,
+    agentName: 'codex',
+    provider: 'codex',
+    runtimeRole: 'managed-project-agent',
+    proxyApprovals,
+    proc: { pid: 321 },
+    adapter,
+    launchMode: 'app-server',
+    providerSessionRef: null,
+    pendingApprovals: new Map<string, unknown>(),
+    pendingHistoryPages: new Map(),
+    pendingRequests: new Map(),
+    outputBuffer: new BoundedOutputBuffer(256 * 1024),
+    outputSeq: 0,
+    snapshotFlushTimer: null,
+    nextRequestId: () => 0,
+    kill: () => {}
+  };
+  (host as unknown as { live: Map<string, unknown> }).live.set(id, live);
+  (
+    host as unknown as {
+      output(
+        t: string,
+        id: string,
+        chunk: string,
+        stream: 'stdout' | 'stderr' | 'pty',
+        a: NativeCliProviderAdapter
+      ): void;
+    }
+  ).output(projectId, id, '{"approval":1}\n', 'stdout', adapter);
+  return { resolveCalls, live };
+}
+
+test('a delegated managed session projects the provider approval and relays the human decision', () => {
+  const store = createStore();
+  const host = new NativeCliHost({ store, bus: new EventBus(), agents: async () => [] });
+  const id = 'ncli_approval_delegate';
+  const { resolveCalls, live } = seedApprovalLiveSession(host, store, {
+    projectId: 'prj_01KWHOSTAPPROVE000000000A',
+    id,
+    proxyApprovals: true
+  });
+
+  // Projected, not auto-denied: it is registered as pending and the provider was not resolved yet.
+  expect(live.pendingApprovals.has('req-1')).toBe(true);
+  expect(resolveCalls).toHaveLength(0);
+
+  host.resolveApproval(id, { requestId: 'req-1', allow: true });
+  expect(resolveCalls).toEqual([{ allow: true, reason: undefined }]);
+  expect(live.pendingApprovals.has('req-1')).toBe(false);
+});
+
+test('an autopilot managed session auto-denies a leaked provider approval', () => {
+  const store = createStore();
+  const host = new NativeCliHost({ store, bus: new EventBus(), agents: async () => [] });
+  const { resolveCalls, live } = seedApprovalLiveSession(host, store, {
+    projectId: 'prj_01KWHOSTAPPROVE000000000B',
+    id: 'ncli_approval_autopilot',
+    proxyApprovals: false
+  });
+
+  expect(resolveCalls).toEqual([
+    { allow: false, reason: 'managed project native CLI provider approvals are disabled' }
+  ]);
+  expect(live.pendingApprovals.has('req-1')).toBe(false);
+});
+
+test('a real spawned managed process actually receives the autopilot skip flag on its argv', async () => {
+  const store = createStore();
+  const workdir = mkdtempSync(join(tmpdir(), 'argv-capture-'));
+  const monadHome = mkdtempSync(join(tmpdir(), 'argv-capture-home-'));
+  const mockCli = new URL('../fixtures/mock-argv-capture-cli.ts', import.meta.url).pathname;
+  const autopilotArgvFile = join(workdir, 'argv-autopilot.txt');
+  const delegatedArgvFile = join(workdir, 'argv-delegated.txt');
+
+  // Temporarily swap the registered `hermes` adapter for one whose buildLaunch appends a marker
+  // flag only when `skipProviderApprovals` is set — proving the REAL spawned process's argv (not
+  // just the adapter unit test) reflects `host.start`'s allowAutopilot -> skip-flag threading.
+  // Restored in `finally` so the shared provider registry is unaffected for other test files.
+  const originalHermesAdapter = builtinAgentAdapters.find((a) => a.provider === 'hermes');
+  if (!originalHermesAdapter) throw new Error('hermes adapter not found among builtins');
+  const testAdapter: NativeCliProviderAdapter = {
+    ...originalHermesAdapter,
+    buildLaunch: (agent, opts) => ({
+      argv: [agent.command, ...(agent.args ?? []), ...(opts.skipProviderApprovals ? ['--test-autopilot-flag'] : [])],
+      cwd: opts.workingPath,
+      env: agent.env,
+      launchMode: opts.launchMode ?? agent.defaultLaunchMode,
+      provider: 'hermes',
+      approvalOwnership: 'provider-owned',
+      capabilities: []
+    }),
+    // Always resolvable: this override exists only to prove the host's allowAutopilot -> argv
+    // threading, not to exercise the capability lock (covered by the adapter capability-matrix test).
+    supportsApprovalResolution: () => true,
+    resolveApproval: () => {},
+    parseOutput: () => [],
+    sendInput: () => {},
+    stop: (handle) => handle.kill('SIGTERM')
+  };
+  registerAgentAdapterImpl(testAdapter);
+
+  // Two agent templates sharing the swapped adapter, differing only in which file their child
+  // records its argv to — `host.start`'s `allowAutopilot` override (per session) is what varies.
+  const agents: NativeCliAgentView[] = [
+    {
+      name: 'argv-capture-autopilot',
+      provider: 'hermes',
+      command: process.execPath,
+      args: [mockCli, autopilotArgvFile],
+      enabled: true,
+      defaultLaunchMode: 'pty',
+      allowAutopilot: true,
+      approvalOwnership: 'provider-owned'
+    },
+    {
+      name: 'argv-capture-delegated',
+      provider: 'hermes',
+      command: process.execPath,
+      args: [mockCli, delegatedArgvFile],
+      enabled: true,
+      defaultLaunchMode: 'pty',
+      allowAutopilot: true,
+      approvalOwnership: 'provider-owned'
+    }
+  ];
+  const host = new NativeCliHost({ store, bus: new EventBus(), agents: async () => agents, monadHome });
+  const projectId = 'prj_01KWHOSTTEST00000ARGVCAP1';
+  store.insertWorkplaceProject({
+    id: projectId,
+    title: 'argv capture test',
+    ownerPrincipalId: 'prn_test',
+    state: 'active',
+    archived: false,
+    createdAt: '2026-07-05T00:00:00.000Z',
+    updatedAt: '2026-07-05T00:00:00.000Z'
+  });
+
+  const readArgvOnceReady = async (argvFile: string): Promise<string> => {
+    for (let i = 0; i < 60; i++) {
+      if (await Bun.file(argvFile).exists()) return await Bun.file(argvFile).text();
+      await Bun.sleep(50);
+    }
+    throw new Error(`argv capture file never appeared: ${argvFile}`);
+  };
+
+  try {
+    const autopilotView = await host.start({
+      transcriptTargetId: projectId,
+      agentName: 'argv-capture-autopilot',
+      workingPath: workdir,
+      launchMode: 'pty',
+      runtimeRole: 'managed-project-agent',
+      allowAutopilot: true
+    });
+    const delegatedView = await host.start({
+      transcriptTargetId: projectId,
+      agentName: 'argv-capture-delegated',
+      workingPath: workdir,
+      launchMode: 'pty',
+      runtimeRole: 'managed-project-agent',
+      allowAutopilot: false
+    });
+
+    const autopilotArgv = await readArgvOnceReady(autopilotArgvFile);
+    const delegatedArgv = await readArgvOnceReady(delegatedArgvFile);
+
+    // This is the process's OWN argv, read back from the file IT wrote after spawning — proof the
+    // flag actually reached the real OS process, not just the in-memory launch spec.
+    expect(autopilotArgv).toContain('--test-autopilot-flag');
+    expect(delegatedArgv).not.toContain('--test-autopilot-flag');
+
+    host.stop(autopilotView.id);
+    host.stop(delegatedView.id);
+  } finally {
+    registerAgentAdapterImpl(originalHermesAdapter);
+    rmSync(workdir, { recursive: true, force: true });
+    rmSync(monadHome, { recursive: true, force: true });
+  }
+});
+
+// Per-provider real-adapter argv proof: unlike the generic test above (a swapped-in fake adapter with
+// a made-up flag), these run the REAL codex/qwen/claude-code adapters' own `buildLaunch`. Each
+// provider names its skip-approval flag differently, so this proves — per adapter, using that
+// adapter's actual implementation — that the real spawned process's own argv reflects it.
+async function runRealAdapterArgvCapture(opts: {
+  provider: 'codex' | 'qwen' | 'claude-code';
+  launchMode: 'app-server' | 'json-stream';
+  allowAutopilot: boolean;
+}): Promise<string> {
+  const script = new URL('../fixtures/mock-real-adapter-argv-capture.ts', import.meta.url).pathname;
+  chmodSync(script, 0o755);
+  const store = createStore();
+  const workdir = mkdtempSync(join(tmpdir(), `argv-real-${opts.provider}-`));
+  const monadHome = mkdtempSync(join(tmpdir(), `argv-real-${opts.provider}-home-`));
+  const outFile = join(workdir, 'argv.txt');
+  // POSIX execs the fixture directly via its shebang. Windows can't do that, so it must run through
+  // `bun <script>` instead. This only matters for Qwen (its json-stream buildLaunch only ever PUSHES
+  // flags after `agent.args`, so the script path stays argv[1] and bun never sees a foreign token
+  // before it) — the Codex and Claude Code tests below are skipped on Windows instead, because their
+  // adapters insert tokens BEFORE `agent.args` (codex: 'app-server'/'--stdio'; claude: an unshifted
+  // `-p`), which would land between `bun` and the script path and break this fallback.
+  const command = process.platform === 'win32' ? process.execPath : script;
+  const scriptArgs = process.platform === 'win32' ? [script] : [];
+  const agent: NativeCliAgentView = {
+    name: opts.provider,
+    provider: opts.provider,
+    command,
+    args: [...scriptArgs, `--argv-out=${outFile}`],
+    enabled: true,
+    defaultLaunchMode: opts.launchMode,
+    allowAutopilot: true,
+    approvalOwnership: 'provider-owned'
+  };
+  const host = new NativeCliHost({ store, bus: new EventBus(), agents: async () => [agent], monadHome });
+  const projectId: `prj_${string}` = `prj_01KWHOSTTEST0000${opts.provider.slice(0, 6).toUpperCase().padEnd(6, '0')}01`;
+  store.insertWorkplaceProject({
+    id: projectId,
+    title: `real adapter argv capture: ${opts.provider}`,
+    ownerPrincipalId: 'prn_test',
+    state: 'active',
+    archived: false,
+    createdAt: '2026-07-05T00:00:00.000Z',
+    updatedAt: '2026-07-05T00:00:00.000Z'
+  });
+  try {
+    const view = await host.start({
+      transcriptTargetId: projectId,
+      agentName: opts.provider,
+      workingPath: workdir,
+      launchMode: opts.launchMode,
+      runtimeRole: 'managed-project-agent',
+      allowAutopilot: opts.allowAutopilot
+    });
+    for (let i = 0; i < 60; i++) {
+      if (await Bun.file(outFile).exists()) break;
+      await Bun.sleep(50);
+    }
+    if (!(await Bun.file(outFile).exists())) throw new Error(`argv capture file never appeared for ${opts.provider}`);
+    const argv = await Bun.file(outFile).text();
+    host.stop(view.id);
+    return argv;
+  } finally {
+    rmSync(workdir, { recursive: true, force: true });
+    rmSync(monadHome, { recursive: true, force: true });
+  }
+}
+
+// Skipped on Windows: codex's app-server buildLaunch inserts 'app-server'/'--stdio' before
+// `agent.args`, so the win32 `bun <script>` fallback in `runRealAdapterArgvCapture` would put those
+// tokens between `bun` and the script path, which bun would try (and fail) to interpret as its own
+// CLI arguments rather than passing them through to the script.
+test.skipIf(process.platform === 'win32')(
+  'the real Codex adapter spawns app-server with --ask-for-approval never only in autopilot',
+  async () => {
+    const autopilotArgv = await runRealAdapterArgvCapture({
+      provider: 'codex',
+      launchMode: 'app-server',
+      allowAutopilot: true
+    });
+    const delegatedArgv = await runRealAdapterArgvCapture({
+      provider: 'codex',
+      launchMode: 'app-server',
+      allowAutopilot: false
+    });
+    expect(autopilotArgv).toContain('--ask-for-approval never');
+    expect(delegatedArgv).not.toContain('--ask-for-approval');
+  }
+);
+
+test('the real Qwen adapter spawns json-stream with --approval-mode=yolo only in autopilot', async () => {
+  const autopilotArgv = await runRealAdapterArgvCapture({
+    provider: 'qwen',
+    launchMode: 'json-stream',
+    allowAutopilot: true
+  });
+  const delegatedArgv = await runRealAdapterArgvCapture({
+    provider: 'qwen',
+    launchMode: 'json-stream',
+    allowAutopilot: false
+  });
+  expect(autopilotArgv).toContain('--approval-mode=yolo');
+  expect(delegatedArgv).not.toContain('--approval-mode=yolo');
+});
+
+// Skipped on Windows: claude's stream-json buildLaunch unshifts `-p` before `agent.args`, so the
+// win32 `bun <script>` fallback would put `-p` between `bun` and the script path, which bun would
+// try (and fail) to interpret as its own CLI flag rather than passing it through to the script.
+test.skipIf(process.platform === 'win32')(
+  'the real Claude Code adapter cannot delegate: --dangerously-skip-permissions is always present',
+  async () => {
+    const autopilotArgv = await runRealAdapterArgvCapture({
+      provider: 'claude-code',
+      launchMode: 'json-stream',
+      allowAutopilot: true
+    });
+    const delegatedArgv = await runRealAdapterArgvCapture({
+      provider: 'claude-code',
+      launchMode: 'json-stream',
+      allowAutopilot: false
+    });
+    // Claude Code's adapter has no resolvable approval channel over json-stream, so the capability
+    // lock keeps it on autopilot regardless of the requested setting — proven here at the real-process
+    // level, not just via the adapter capability-matrix unit test.
+    expect(autopilotArgv).toContain('--dangerously-skip-permissions');
+    expect(delegatedArgv).toContain('--dangerously-skip-permissions');
+  }
+);

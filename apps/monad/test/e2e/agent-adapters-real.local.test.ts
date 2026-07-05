@@ -53,7 +53,7 @@ async function runTurn(args: {
         command: args.command,
         enabled: true,
         defaultLaunchMode: args.launchMode,
-        allowDangerousMode: false,
+        allowAutopilot: false,
         approvalOwnership: 'provider-owned',
         ...(args.env ? { env: args.env } : {})
       }
@@ -122,7 +122,7 @@ describe.skipIf(!LIVE)('real agent-adapter binaries: detect', () => {
       command: 'hermes',
       enabled: true,
       defaultLaunchMode: 'cli-oneshot',
-      allowDangerousMode: false,
+      allowAutopilot: false,
       approvalOwnership: 'provider-owned'
     });
     // No --json (Hermes rejects it) — the fix that stops a signed-in Hermes being misreported.

@@ -59,6 +59,10 @@ export const workplaceProjectMemberSettingsSchema = z.object({
   forwardMcp: z.boolean().optional(),
   launchMode: nativeCliLaunchModeSchema.optional(),
   appServerTransport: nativeCliAppServerTransportSchema.optional(),
+  // Per-member override of the agent template's autopilot setting. Off (false) + a proxy-capable
+  // adapter makes this managed member delegate its provider approvals to the human instead of
+  // running unattended.
+  allowAutopilot: z.boolean().optional(),
   managedProjectAgent: z.boolean().optional(),
   modelName: z.string().min(1).optional(),
   modelId: z.string().min(1).optional(),
@@ -239,7 +243,7 @@ export const nativeCliAgentViewSchema = z
     enabled: z.boolean(),
     defaultLaunchMode: nativeCliLaunchModeSchema.default('pty'),
     appServerTransport: nativeCliAppServerTransportSchema.optional(),
-    allowDangerousMode: z.boolean().default(false),
+    allowAutopilot: z.boolean().default(true),
     approvalOwnership: nativeCliApprovalOwnershipSchema.default('provider-owned'),
     capabilities: nativeCliAgentCapabilitiesSchema.optional(),
     projectTemplates: z.array(nativeCliProjectTemplateSchema).optional()

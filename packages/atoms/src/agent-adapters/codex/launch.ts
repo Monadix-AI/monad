@@ -12,9 +12,13 @@ export const CODEX_NON_INTERACTIVE_ENV = { CODEX_NON_INTERACTIVE: '1' };
 export const CODEX_SUPPORTED_MODELS = ['gpt-5.5', 'gpt-5.4', 'gpt-5.4-mini', 'gpt-5.3-codex', 'gpt-5.2'];
 // The app-server transports codex actually supports, declared once: `detect()` surfaces this to the
 // UI and `buildCodexLaunch` gates on it, so adding a transport is a single edit here rather than two
-// lists that can drift. All three are verified against the real codex binary (see test/smoke).
+// lists that can drift. All three are verified against the real codex binary (see test/smoke) and
+// against developers.openai.com/codex/app-server: `--stdio`|`--listen stdio://` (default daemon-owned
+// pipe), `--listen ws://IP:PORT`, `--listen unix://[PATH]`.
 export const CODEX_APP_SERVER_TRANSPORTS = ['stdio', 'ws', 'unix'] as const;
 
+// `--ask-for-approval never|on-request` — confirmed against developers.openai.com/codex/cli/reference;
+// `untrusted` is documented as deprecated in favor of these two, so it's never produced here.
 function withCodexSkipApprovalArgs(args: string[], skipProviderApprovals: boolean): string[] {
   if (!skipProviderApprovals || hasFlag(args, '--ask-for-approval')) return args;
   return [...args, '--ask-for-approval', 'never'];
@@ -121,6 +125,11 @@ export function buildCodexLaunch(agent: NativeCliAgentView, opts: BuildNativeCli
     // stdio: the daemon owns the child's stdin/stdout. ws: codex binds an ephemeral loopback port
     // (`:0`) and prints it; the daemon parses it from stderr, then dials the WebSocket. unix: the
     // daemon allocates an AF_UNIX socket path and dials it (browser-unreachable channel).
+    //
+    // No `--ws-auth` is passed: codex's docs (developers.openai.com — WebSocket App Server PRs
+    // #14847/#14853) document it as opt-in hardening (`capability-token`/`signed-bearer-token`) for
+    // non-loopback deployments; the daemon only ever dials `ws://127.0.0.1:<port>`, and codex's own
+    // guidance is that plain (unauthenticated) `ws://` is fine on loopback.
     if (transport === 'unix' && !opts.appServerSocketPath) {
       throw new NativeCliError('provider_protocol_error', 'codex app-server unix transport requires a socket path');
     }
@@ -159,6 +168,8 @@ export function buildCodexLaunch(agent: NativeCliAgentView, opts: BuildNativeCli
     };
   }
 
+  // --cd/-C, --no-alt-screen, --model/-m, -c key=value — all confirmed against
+  // developers.openai.com/codex/cli/reference.
   const hasCd = args.includes('--cd') || args.includes('-C');
   const hasAltScreen = args.includes('--no-alt-screen');
   args = withCodexSkipApprovalArgs(args, !!opts.skipProviderApprovals);

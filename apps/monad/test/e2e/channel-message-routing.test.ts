@@ -223,7 +223,7 @@ async function configureMockNativeCliAgent(
         args,
         enabled: true,
         defaultLaunchMode: 'pty',
-        allowDangerousMode: false,
+        allowAutopilot: false,
         approvalOwnership: 'provider-owned'
       }
     })
@@ -280,7 +280,7 @@ async function configureMockCodexResumeFailureAgent(t: TransportHandle, root: st
         args: [],
         enabled: true,
         defaultLaunchMode: 'app-server',
-        allowDangerousMode: false,
+        allowAutopilot: false,
         approvalOwnership: 'provider-owned'
       }
     })
@@ -323,7 +323,7 @@ async function configureMockCodexStartFailureAgent(t: TransportHandle, root: str
         args: [],
         enabled: true,
         defaultLaunchMode: 'app-server',
-        allowDangerousMode: false,
+        allowAutopilot: false,
         approvalOwnership: 'provider-owned'
       }
     })

@@ -33,6 +33,9 @@ function withGeminiStreamJsonArgs(args: string[]): string[] {
   return next;
 }
 
+// `--approval-mode=yolo` — confirmed against geminicli.com/docs/reference/configuration/ (equivalent
+// to the older `--yolo`; both bypass all tool-call confirmation prompts). Google's docs also note
+// gemini-cli's own sandbox is auto-enabled alongside yolo mode as an additional safety layer.
 function withGeminiSkipApprovalArgs(args: string[], skipProviderApprovals: boolean): string[] {
   if (!skipProviderApprovals || hasFlag(args, '--approval-mode') || hasFlag(args, '--yolo')) return args;
   return [...args, '--approval-mode=yolo'];

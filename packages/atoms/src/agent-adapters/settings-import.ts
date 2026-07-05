@@ -459,7 +459,7 @@ export function createCodexSettingsImport(): NativeCliSettingsImport {
           ...(model ? { modelOptions: [model] } : {}),
           enabled: true,
           defaultLaunchMode: 'pty',
-          allowDangerousMode: false,
+          allowAutopilot: false,
           approvalOwnership: 'provider-owned'
         };
         items.push(agentItem(cfg?.path ?? root, target, agent, model ? `model=${model}` : undefined));
@@ -513,7 +513,7 @@ export function createClaudeCodeSettingsImport(): NativeCliSettingsImport {
           ...(modelOptions ? { modelOptions } : {}),
           enabled: true,
           defaultLaunchMode: 'pty',
-          allowDangerousMode: false,
+          allowAutopilot: false,
           approvalOwnership: 'provider-owned'
         };
         items.push(
@@ -564,7 +564,7 @@ export function createFrameworkSettingsImport(provider: 'hermes' | 'openclaw', l
           args: [],
           enabled: true,
           defaultLaunchMode: 'pty',
-          allowDangerousMode: false,
+          allowAutopilot: false,
           approvalOwnership: 'provider-owned'
         };
         items.push(agentItem(cfg?.path ?? root, target, agent));
@@ -606,7 +606,7 @@ export function createBasicSettingsImport(
           args: [],
           enabled: true,
           defaultLaunchMode: 'pty',
-          allowDangerousMode: false,
+          allowAutopilot: false,
           approvalOwnership: 'provider-owned'
         };
         items.push(agentItem(cfg?.path ?? root, target, agent));

@@ -45,13 +45,13 @@ function adapterFor(provider: NativeCliProvider): NativeCliProviderAdapter {
 }
 
 function assertSafeArgs(agent: NativeCliAgentView): void {
-  if (agent.allowDangerousMode) return;
+  if (agent.allowAutopilot) return;
   const args = agent.args ?? [];
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
     if (arg === undefined) continue;
     if (isDangerousArg(arg, args[index + 1])) {
-      throw new Error(`dangerous native CLI arg "${arg}" requires allowDangerousMode`);
+      throw new Error(`dangerous native CLI arg "${arg}" requires allowAutopilot`);
     }
   }
 }
@@ -199,7 +199,7 @@ function presetAgentView(preset: NativeCliAgentPresetView): NativeCliAgentView {
     args: preset.args,
     enabled: preset.installed,
     defaultLaunchMode: preset.defaultLaunchMode,
-    allowDangerousMode: false,
+    allowAutopilot: false,
     approvalOwnership: 'provider-owned'
   };
 }

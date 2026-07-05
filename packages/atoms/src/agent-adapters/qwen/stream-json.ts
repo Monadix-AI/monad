@@ -121,6 +121,14 @@ export const qwenStreamJsonPartialSchema = z
 // permission prompts) that the client answers with a `control_response`; the client also drives
 // `initialize` / `interrupt` the same way. Payloads stay loose (`subtype` + catchall) so every
 // controller subtype validates and the adapter extracts only the fields it acts on.
+//
+// Caveat: Qwen Code's own docs (qwenlm.github.io/qwen-code-docs/en/users/features/headless/) label
+// stream-json input mode "currently under construction and intended for SDK integration" and don't
+// fully spell out this envelope. The shape here matches the Qwen Code SDK's documented `can_use_tool`
+// control-request flow (its TS/Python/Java SDKs route a CLI `control_request` through a
+// `canUseTool(tool_name, tool_input, context)` callback) — a Claude-Agent-SDK-compatible protocol by
+// design, not a guess — but since upstream calls the raw CLI wire format unstable, it's the one part
+// of this adapter most likely to need a follow-up if a future Qwen Code release changes it.
 export const qwenControlRequestSchema = z
   .object({
     type: z.literal('control_request'),

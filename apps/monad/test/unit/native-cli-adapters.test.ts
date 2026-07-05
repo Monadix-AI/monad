@@ -41,7 +41,7 @@ const codexAgent: NativeCliAgentView = {
   command: 'codex',
   enabled: true,
   defaultLaunchMode: 'pty',
-  allowDangerousMode: false,
+  allowAutopilot: false,
   approvalOwnership: 'provider-owned'
 };
 
@@ -51,7 +51,7 @@ const claudeAgent: NativeCliAgentView = {
   command: 'claude',
   enabled: true,
   defaultLaunchMode: 'pty',
-  allowDangerousMode: false,
+  allowAutopilot: false,
   approvalOwnership: 'provider-owned'
 };
 
@@ -61,7 +61,7 @@ const geminiAgent: NativeCliAgentView = {
   command: 'gemini',
   enabled: true,
   defaultLaunchMode: 'pty',
-  allowDangerousMode: false,
+  allowAutopilot: false,
   approvalOwnership: 'provider-owned'
 };
 
@@ -71,7 +71,7 @@ const qwenAgent: NativeCliAgentView = {
   command: 'qwen',
   enabled: true,
   defaultLaunchMode: 'pty',
-  allowDangerousMode: false,
+  allowAutopilot: false,
   approvalOwnership: 'provider-owned'
 };
 
@@ -81,7 +81,7 @@ const openClawAgent: NativeCliAgentView = {
   command: 'openclaw',
   enabled: true,
   defaultLaunchMode: 'pty',
-  allowDangerousMode: false,
+  allowAutopilot: false,
   approvalOwnership: 'provider-owned'
 };
 
@@ -91,7 +91,7 @@ const hermesAgent: NativeCliAgentView = {
   command: 'hermes',
   enabled: true,
   defaultLaunchMode: 'pty',
-  allowDangerousMode: false,
+  allowAutopilot: false,
   approvalOwnership: 'provider-owned'
 };
 
@@ -382,6 +382,54 @@ test('managed native CLI launches force provider approvals to be skipped', () =>
   expect(qwen.argv).toContain('--approval-mode=yolo');
 });
 
+test('delegated managed launches omit the skip-approval flag so the provider projects approvals', () => {
+  const codex = buildNativeCliLaunch(codexAgent, {
+    workingPath: '/tmp/project',
+    launchMode: 'app-server',
+    skipProviderApprovals: false
+  });
+  const qwen = buildNativeCliLaunch(qwenAgent, {
+    workingPath: '/tmp/project',
+    launchMode: 'json-stream',
+    skipProviderApprovals: false
+  });
+  const openclaw = buildNativeCliLaunch(openClawAgent, {
+    workingPath: '/tmp/project',
+    launchMode: 'app-server',
+    skipProviderApprovals: false
+  });
+
+  expect(codex.argv).not.toContain('never');
+  expect(qwen.argv).not.toContain('--approval-mode=yolo');
+  expect(openclaw.argv).not.toContain('--auto-approve');
+});
+
+test('adapters advertise which launch modes can proxy provider approvals to the human', () => {
+  expect(codexNativeCliAdapter.supportsApprovalResolution?.('app-server')).toBe(true);
+  expect(codexNativeCliAdapter.supportsApprovalResolution?.('pty')).toBe(false);
+  expect(qwenNativeCliAdapter.supportsApprovalResolution?.('json-stream')).toBe(true);
+  expect(qwenNativeCliAdapter.supportsApprovalResolution?.('pty')).toBe(false);
+  expect(openClawNativeCliAdapter.supportsApprovalResolution?.('app-server')).toBe(true);
+  expect(claudeCodeNativeCliAdapter.supportsApprovalResolution?.('json-stream') ?? false).toBe(false);
+  expect(geminiNativeCliAdapter.supportsApprovalResolution?.('json-stream') ?? false).toBe(false);
+  // Hermes's app-server gateway has a real, working approval.request/approval.respond channel
+  // (transport-agnostic — ws vs stdio doesn't matter) — but its MANAGED launch mode defaults to
+  // cli-oneshot (untested in the app-server role), which has no channel at all. So it's capable in
+  // app-server yet still locked to autopilot by default; delegation only activates if a member's
+  // launchMode is explicitly overridden to app-server (managedProjectLaunchMode respects that).
+  expect(hermesNativeCliAdapter.supportsApprovalResolution?.('app-server')).toBe(true);
+  expect(hermesNativeCliAdapter.supportsApprovalResolution?.('cli-oneshot') ?? false).toBe(false);
+});
+
+test('only proxy-capable adapters advertise the approvalProxy capability', () => {
+  expect(codexNativeCliAdapter.detect().capabilities?.approvalProxy).toBe(true);
+  expect(qwenNativeCliAdapter.detect().capabilities?.approvalProxy).toBe(true);
+  expect(openClawNativeCliAdapter.detect().capabilities?.approvalProxy).toBe(true);
+  expect(claudeCodeNativeCliAdapter.detect().capabilities?.approvalProxy ?? false).toBe(false);
+  expect(geminiNativeCliAdapter.detect().capabilities?.approvalProxy ?? false).toBe(false);
+  expect(hermesNativeCliAdapter.detect().capabilities?.approvalProxy ?? false).toBe(false);
+});
+
 test('Codex app-server launch accepts managed MCP config overrides', () => {
   const codex = buildNativeCliLaunch(codexAgent, {
     workingPath: '/tmp/project',
@@ -623,6 +671,7 @@ test('native CLI auth launches provider-owned login and status commands', () => 
     history: 'paged',
     resume: 'structured',
     approval: 'provider-owned',
+    approvalProxy: true,
     settingsImport: true
   });
   expect(claudeCodeNativeCliAdapter.detect({ which: () => undefined, exists: () => true }).capabilities).toEqual({
@@ -644,6 +693,7 @@ test('native CLI auth launches provider-owned login and status commands', () => 
     history: 'provider-owned',
     resume: 'pty',
     approval: 'provider-owned',
+    approvalProxy: true,
     settingsImport: true
   });
 });
@@ -962,7 +1012,7 @@ test('Codex adapter rejects dangerous bypass args unless enabled in config', () 
 
 test('Codex adapter allows dangerous bypass args only when explicitly enabled', () => {
   const launch = buildNativeCliLaunch(
-    { ...codexAgent, args: ['--dangerously-bypass-approvals-and-sandbox'], allowDangerousMode: true },
+    { ...codexAgent, args: ['--dangerously-bypass-approvals-and-sandbox'], allowAutopilot: true },
     { workingPath: '/tmp/project', launchMode: 'pty' }
   );
 
@@ -1130,7 +1180,7 @@ test('Gemini adapter keeps yolo approval mode behind dangerous mode opt-in', () 
 
   expect(
     buildNativeCliLaunch(
-      { ...geminiAgent, args: ['--approval-mode=yolo'], allowDangerousMode: true },
+      { ...geminiAgent, args: ['--approval-mode=yolo'], allowAutopilot: true },
       { workingPath: '/tmp/project' }
     ).argv
   ).toContain('--approval-mode=yolo');
@@ -2392,7 +2442,10 @@ test('OpenClaw adapter puts a daemon-assigned port in argv (real startup line ne
   expect(launch.appServerWs).toEqual({ port: 18790 });
 });
 
-test('OpenClaw adapter passes model, session ref, and dangerous-mode approval skip to launch', () => {
+test('OpenClaw adapter passes model and session ref to launch, and never sends a skip-approval flag', () => {
+  // OpenClaw has no CLI flag that bypasses exec approvals (docs.openclaw.ai/tools/exec-approvals says
+  // so explicitly) — the shared factory's `skipApprovalFlag` opt-in is deliberately omitted for it, so
+  // `skipProviderApprovals` must never append anything (a nonexistent `--auto-approve` was the bug).
   const launch = buildNativeCliLaunch(openClawAgent, {
     workingPath: '/tmp/project',
     launchMode: 'pty',
@@ -2401,7 +2454,7 @@ test('OpenClaw adapter passes model, session ref, and dangerous-mode approval sk
     skipProviderApprovals: true
   });
 
-  expect(launch.argv).toEqual(['openclaw', '--session-id', 'oc-1', '--model', 'openclaw-default', '--auto-approve']);
+  expect(launch.argv).toEqual(['openclaw', '--session-id', 'oc-1', '--model', 'openclaw-default']);
 });
 
 test('OpenClaw adapter rejects an unsupported app-server transport', () => {
@@ -2792,6 +2845,25 @@ test('Hermes adapter launches interactive pty, and a real app-server gateway wit
   });
   expect(withPort.argv).toEqual(['hermes', 'serve', '--skip-build', '--port', '19124']);
   expect(withPort.appServerWs).toEqual({ path: '/api/ws', query: { token: 'test-token' }, port: 19124 });
+});
+
+test('Hermes adapter appends --yolo (not the wrong generic --auto-approve) when skipping approvals', () => {
+  // Confirmed against Hermes's own CLI reference: "--yolo bypasses dangerous-command approval prompts"
+  // across commands — the shared factory's `skipApprovalFlag: '--yolo'` opt-in exercises this same
+  // real flag for pty/app-server, not just the `-z` one-shot path `oneshotTurnArgs` already covers.
+  const pty = buildNativeCliLaunch(hermesAgent, {
+    workingPath: '/tmp/project',
+    launchMode: 'pty',
+    skipProviderApprovals: true
+  });
+  expect(pty.argv).toEqual(['hermes', '--yolo']);
+
+  const noSkip = buildNativeCliLaunch(hermesAgent, {
+    workingPath: '/tmp/project',
+    launchMode: 'pty',
+    skipProviderApprovals: false
+  });
+  expect(noSkip.argv).toEqual(['hermes']);
 });
 
 test('Hermes app-server launch fails fast without a configured token instead of hanging on a doomed dial', () => {

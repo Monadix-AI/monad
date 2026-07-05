@@ -36,6 +36,7 @@ export type StartManagedNativeCliRuntimeArgs = {
   customPrompt?: string;
   launchMode: NativeCliAgentConfig['defaultLaunchMode'];
   appServerTransport?: NativeCliAgentConfig['appServerTransport'];
+  allowAutopilot?: boolean;
   providerSessionRef?: string;
   input: string;
 };
@@ -74,6 +75,7 @@ export function createManagedNativeCliRuntime(ctx: SessionContext) {
     customPrompt,
     launchMode,
     appServerTransport,
+    allowAutopilot,
     providerSessionRef,
     input
   }: StartManagedNativeCliRuntimeArgs): Promise<NativeCliSessionView> {
@@ -88,6 +90,7 @@ export function createManagedNativeCliRuntime(ctx: SessionContext) {
       workingPath: session.cwd,
       launchMode,
       appServerTransport,
+      allowAutopilot,
       runtimeRole: 'managed-project-agent' as const,
       modelName,
       modelId,

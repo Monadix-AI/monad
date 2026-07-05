@@ -46,7 +46,7 @@ const launch = resolveNativeCliLaunchCommand(
       command: 'codex',
       enabled: true,
       defaultLaunchMode: 'app-server',
-      allowDangerousMode: false,
+      allowAutopilot: false,
       approvalOwnership: 'provider-owned'
     },
     { workingPath: process.cwd(), launchMode: 'app-server', appServerTransport: 'ws' }

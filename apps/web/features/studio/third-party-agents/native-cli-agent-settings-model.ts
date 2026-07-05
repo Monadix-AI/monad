@@ -19,6 +19,6 @@ export function nativeCliAppServerTransportOptions(
   return preset?.supportedAppServerTransports ?? [];
 }
 
-export function canDisableDangerousMode(agent: NativeCliAgentView, preset?: NativeCliAgentPresetView): boolean {
+export function canDisableAutopilot(agent: NativeCliAgentView, preset?: NativeCliAgentPresetView): boolean {
   return preset?.capabilities?.approvalProxy === true || agent.capabilities?.approvalProxy === true;
 }

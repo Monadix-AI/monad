@@ -170,6 +170,7 @@ export function createManagedNativeCliDelivery(ctx: SessionContext) {
           customPrompt: settings.customPrompt,
           launchMode: managedProjectLaunchMode(spec, settings.launchMode),
           appServerTransport: settings.appServerTransport,
+          allowAutopilot: settings.allowAutopilot,
           providerSessionRef: resumeFrom ?? undefined,
           input: notice
         });
@@ -267,6 +268,7 @@ export function createManagedNativeCliDelivery(ctx: SessionContext) {
         customPrompt: settings.customPrompt,
         launchMode: managedProjectLaunchMode(spec, settings.launchMode),
         appServerTransport: settings.appServerTransport,
+        allowAutopilot: settings.allowAutopilot,
         providerSessionRef: resumeFrom ?? undefined,
         input: notice
       });

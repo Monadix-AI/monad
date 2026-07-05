@@ -95,6 +95,14 @@ export interface MakeAppServerCliAdapterOptions {
      *  read from `agent.env`). */
     query?(agent: NativeCliAgentView): Record<string, string> | undefined;
   };
+  /** The real CLI flag this provider accepts to bypass its own approval prompts (e.g. Hermes's
+   *  `--yolo` — confirmed against its CLI reference: nousresearch/hermes-agent/website/docs/reference/
+   *  cli-commands.md). OMIT for a provider with no such flag (OpenClaw — its own docs
+   *  (docs.openclaw.ai/tools/exec-approvals) say explicitly "no single CLI flag or env var" bypasses
+   *  approvals; it must be configured instead, via that adapter's `managedRuntime.env` writing
+   *  `tools.exec.security`/`ask` into its own config + host-local approvals file). Omitting this never
+   *  appends a flag — silently guessing a nonexistent one is worse than doing nothing. */
+  skipApprovalFlag?: string;
 }
 
 /** Build a full `NativeCliProviderAdapter` for a coding CLI whose app-server launch mode is a
@@ -104,8 +112,8 @@ export function makeAppServerCliAdapter(options: MakeAppServerCliAdapterOptions)
   const appServerTransports = ['ws'] as const;
 
   function skipApprovalArgs(args: string[], skipProviderApprovals: boolean): string[] {
-    if (!skipProviderApprovals || hasFlag(args, '--yolo') || hasFlag(args, '--auto-approve')) return args;
-    return [...args, '--auto-approve'];
+    if (!skipProviderApprovals || !options.skipApprovalFlag || hasFlag(args, options.skipApprovalFlag)) return args;
+    return [...args, options.skipApprovalFlag];
   }
 
   function buildLaunch(agent: NativeCliAgentView, opts: BuildNativeCliLaunchOptions): NativeCliLaunchSpec {

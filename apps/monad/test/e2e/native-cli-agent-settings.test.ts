@@ -41,7 +41,7 @@ const agentView = () => ({
   ],
   enabled: true,
   defaultLaunchMode: 'pty',
-  allowDangerousMode: false,
+  allowAutopilot: false,
   approvalOwnership: 'provider-owned'
 });
 
@@ -149,7 +149,7 @@ const thirdPartyMigrationAdapter: NativeCliProviderAdapter = {
             args: ['--profile', 'default'],
             enabled: true,
             defaultLaunchMode: 'pty',
-            allowDangerousMode: false,
+            allowAutopilot: false,
             approvalOwnership: 'provider-owned'
           }
         }

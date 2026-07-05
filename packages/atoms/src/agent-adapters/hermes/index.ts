@@ -28,6 +28,10 @@ const baseHermesNativeCliAdapter = makeAppServerCliAdapter({
   label: 'Hermes',
   bin: 'hermes',
   appServerSubcommand: ['serve', '--skip-build'],
+  // Confirmed against the official CLI reference (nousresearch/hermes-agent/website/docs/reference/
+  // cli-commands.md): "--yolo bypasses dangerous-command approval prompts" across commands, including
+  // `serve`/pty — not just the `-z` one-shot mode `oneshotTurnArgs` already uses it for below.
+  skipApprovalFlag: '--yolo',
   models: HERMES_SUPPORTED_MODELS,
   installHint: 'Install Hermes, then sign in with hermes auth.',
   installUrl: 'https://hermes-agent.nousresearch.com',
@@ -74,6 +78,15 @@ const baseHermesNativeCliAdapter = makeAppServerCliAdapter({
 export const hermesNativeCliAdapter: NativeCliProviderAdapter = {
   ...baseHermesNativeCliAdapter,
   settingsImport: createFrameworkSettingsImport('hermes', 'Hermes'),
+  // Hermes's app-server gateway has a real, working `approval.request`/`approval.respond` channel
+  // (see hermes/app-server.ts's `resolveHermesApproval`) — transport-agnostic, so ws vs stdio doesn't
+  // matter here, only launch mode does. But `managedRuntime.launchMode` above pins managed members to
+  // `cli-oneshot` (untested in the app-server role for that role), which has no channel at all. So
+  // `capabilities.approvalProxy` deliberately stays unset below — the simple per-template UI toggle
+  // would be misleading for the common case — while this still lets a member whose `launchMode` is
+  // explicitly overridden to `app-server` (managedProjectLaunchMode respects that override) correctly
+  // delegate its approvals instead of silently staying full-auto.
+  supportsApprovalResolution: (launchMode) => launchMode === 'app-server',
   detect(probes) {
     const preset = baseHermesNativeCliAdapter.detect(probes);
     return {
