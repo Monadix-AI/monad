@@ -391,6 +391,190 @@ test('native CLI app-server reconnect re-dials the socket and resumes the thread
   expect(initCalls).toEqual([{ providerSessionRef: 'codex-thread-resume' }]); // re-init resumes the thread
 });
 
+test('native CLI app-server gives up instead of reconnecting forever when the transport keeps reopening but the handshake keeps failing', async () => {
+  // `reconnectAppServer` declares success (and resets its own bounded attempt counter) the moment the
+  // socket TRANSPORT reopens, before any app-level handshake completes — so a gateway that keeps
+  // reopening the socket and then failing the handshake (e.g. a `retryable:true` connect rejection an
+  // adapter swallows, expecting the resulting close to trigger redial) would restart that counter every
+  // cycle and never hit a per-invocation exhaustion path. This drives that exact scenario past any
+  // reasonable churn budget and asserts the session eventually gives up instead of looping silently.
+  const transcriptTargetId = 'prj_01KWHOSTTEST0000000000CH';
+  const bus = new EventBus();
+  const events: string[] = [];
+  bus.subscribe(transcriptTargetId, (e) => events.push(e.type));
+  const host = new NativeCliHost({ store: createStore(), bus, agents: async () => [] });
+  const nativeCliSessionId = 'ncli_reconnect_churn_test';
+  const adapter = {
+    provider: 'openclaw',
+    productIcon: 'openclaw',
+    parseOutput: () => [],
+    initialize: () => {},
+    stop: () => {}
+  } as unknown as NativeCliProviderAdapter;
+
+  let redials = 0;
+  // Comfortably past any reasonable churn cap — if the host's own cap doesn't fire, this backstop keeps
+  // the test from looping forever, and the assertions below fail loudly instead.
+  const MAX_DRIVER_ITERATIONS = 30;
+  const internal = host as unknown as {
+    live: Map<string, unknown>;
+    handleAppServerDisconnect(id: string): void;
+  };
+  const live = {
+    id: nativeCliSessionId,
+    transcriptTargetId,
+    agentName: 'openclaw',
+    provider: 'openclaw',
+    runtimeRole: 'interactive',
+    proc: { pid: 123 },
+    adapter,
+    launchMode: 'app-server',
+    // Already past initial startup (no `startup` field) — the scenario this guards is a session that
+    // succeeded once and then hit a persistently-flapping-at-the-app-level gateway later.
+    providerSessionRef: 'oc-session',
+    appServer: { send: () => {}, close: () => {} },
+    appServerRedial: async () => {
+      redials++;
+      if (redials <= MAX_DRIVER_ITERATIONS) {
+        setTimeout(() => internal.handleAppServerDisconnect(nativeCliSessionId), 20);
+      }
+      return { send: () => {}, close: () => {} };
+    },
+    initializeContext: { workingPath: '/tmp/project' },
+    pendingApprovals: new Map(),
+    pendingHistoryPages: new Map(),
+    pendingRequests: new Map(),
+    outputBuffer: new BoundedOutputBuffer(256 * 1024),
+    outputSeq: 0,
+    snapshotFlushTimer: null,
+    nextRequestId: () => 0,
+    kill: () => {}
+  };
+  internal.live.set(nativeCliSessionId, live);
+
+  internal.handleAppServerDisconnect(nativeCliSessionId);
+
+  const deadline = Date.now() + 15_000;
+  while (Date.now() < deadline && internal.live.has(nativeCliSessionId)) {
+    await Bun.sleep(100);
+  }
+
+  expect(internal.live.has(nativeCliSessionId)).toBe(false); // gave up — not stuck reconnecting forever
+  expect(redials).toBeGreaterThan(1); // retried more than once (not just fast-failed on the first drop)
+  expect(redials).toBeLessThan(MAX_DRIVER_ITERATIONS); // the HOST's own cap fired, not the driver's backstop
+  expect(events).toContain('native_cli.connection_required'); // user-visible signal, not a silent hang
+}, 20_000);
+
+test('native CLI app-server disconnect during initial startup redials before failing, and exhaustion still rejects the pending startup', async () => {
+  // Locks in the `handleAppServerDisconnect` reorder's intent: a drop while `live.startup` is still
+  // pending gets a few redial attempts (a slow-starting gateway shouldn't fail on its very first
+  // handshake attempt), but if the handshake never succeeds, the session still fails — not hangs.
+  const host = new NativeCliHost({ store: createStore(), bus: new EventBus(), agents: async () => [] });
+  const id = 'ncli_pending_startup_churn_test';
+  const adapter = {
+    provider: 'openclaw',
+    productIcon: 'openclaw',
+    parseOutput: () => [],
+    initialize: () => {},
+    stop: () => {}
+  } as unknown as NativeCliProviderAdapter;
+  let redials = 0;
+  let startupRejected: Error | undefined;
+  const internal = host as unknown as {
+    live: Map<string, unknown>;
+    handleAppServerDisconnect(id: string): void;
+  };
+  const live = {
+    id,
+    transcriptTargetId: 'prj_01KWHOSTTEST0000000000PS',
+    agentName: 'openclaw',
+    provider: 'openclaw',
+    runtimeRole: 'interactive',
+    proc: { pid: 123 },
+    adapter,
+    launchMode: 'app-server',
+    providerSessionRef: null,
+    appServer: { send: () => {}, close: () => {} },
+    appServerRedial: async () => {
+      redials++;
+      // Every redial's transport reopens fine, but the handshake keeps failing — always re-trigger a drop.
+      setTimeout(() => internal.handleAppServerDisconnect(id), 20);
+      return { send: () => {}, close: () => {} };
+    },
+    initializeContext: { workingPath: '/tmp/project' },
+    startup: {
+      resolve: () => {},
+      reject: (err: Error) => {
+        startupRejected = err;
+      },
+      timeout: setTimeout(() => {}, 60_000) // cleared by the exhaustion path; never fires in this test
+    },
+    pendingApprovals: new Map(),
+    pendingHistoryPages: new Map(),
+    pendingRequests: new Map(),
+    outputBuffer: new BoundedOutputBuffer(256 * 1024),
+    outputSeq: 0,
+    snapshotFlushTimer: null,
+    nextRequestId: () => 0,
+    kill: () => {}
+  };
+  internal.live.set(id, live);
+
+  internal.handleAppServerDisconnect(id);
+
+  const deadline = Date.now() + 15_000;
+  while (Date.now() < deadline && internal.live.has(id)) {
+    await Bun.sleep(100);
+  }
+
+  expect(redials).toBeGreaterThan(1); // redialed rather than failing on the very first drop
+  expect(internal.live.has(id)).toBe(false);
+  expect(startupRejected).toBeInstanceOf(Error); // exhaustion still rejects a still-pending startup
+}, 20_000);
+
+test('native CLI input throws instead of silently vanishing into a stale connection while the app-server is reconnecting', () => {
+  // Between a socket drop and a completed redial, `live.appServer` still references the dead connection
+  // (`reconnectAppServer` only reassigns it on success) — it stays truthy, so a naive `!appServer` guard
+  // wouldn't catch this window. `input()` must fail loudly instead of silently sending into the void.
+  const host = new NativeCliHost({ store: createStore(), bus: new EventBus(), agents: async () => [] });
+  const id = 'ncli_reconnect_input_test';
+  let sent = 0;
+  const adapter = {
+    provider: 'openclaw',
+    productIcon: 'openclaw',
+    parseOutput: () => [],
+    sendInput: () => {
+      sent++;
+    }
+  } as unknown as NativeCliProviderAdapter;
+  const live = {
+    id,
+    transcriptTargetId: 'prj_01KWHOSTTEST0000000000IN',
+    agentName: 'openclaw',
+    provider: 'openclaw',
+    runtimeRole: 'interactive',
+    proc: { pid: 123 },
+    adapter,
+    launchMode: 'app-server',
+    providerSessionRef: 'oc-session',
+    appServer: { send: () => {}, close: () => {} }, // stale reference — still truthy, per the comment above
+    appServerReconnecting: true,
+    pendingApprovals: new Map(),
+    pendingHistoryPages: new Map(),
+    pendingRequests: new Map(),
+    outputBuffer: new BoundedOutputBuffer(256 * 1024),
+    outputSeq: 0,
+    snapshotFlushTimer: null,
+    nextRequestId: () => 0,
+    kill: () => {}
+  };
+  const internal = host as unknown as { live: Map<string, unknown> };
+  internal.live.set(id, live);
+
+  expect(() => host.input(id, { input: 'hello' })).toThrow(/reconnecting/i);
+  expect(sent).toBe(0); // never reached the stale connection
+});
+
 test('managed native CLI observation restores Codex provider history from persisted pointers', async () => {
   const store = createStore();
   const host = new NativeCliHost({

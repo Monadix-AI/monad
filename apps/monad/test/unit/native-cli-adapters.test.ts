@@ -1,6 +1,7 @@
 import type { ImportSettingsCategory, NativeCliAgentView } from '@monad/protocol';
 
 import { expect, test } from 'bun:test';
+import crypto from 'node:crypto';
 import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -14,6 +15,7 @@ import {
   qwenNativeCliAdapter
 } from '@monad/atoms/agent-adapters';
 import { parseNativeCliArgumentSupport } from '@monad/atoms/agent-adapters/argument-support';
+import { publicKeyFromRawBase64Url } from '@monad/atoms/agent-adapters/openclaw/device-identity';
 import { normalizePtyInput } from '@monad/atoms/agent-adapters/pty';
 
 import {
@@ -2464,7 +2466,39 @@ test('OpenClaw adapter maps the real gateway envelope to the native CLI contract
   ]);
 });
 
-test('OpenClaw adapter defers session start until the connect response and resolves the session ref', () => {
+/** Reconstruct OpenClaw's v3 signed payload independently of the adapter's own builder and verify the
+ *  connect frame's Ed25519 signature + deviceId against its advertised public key. */
+function verifyOpenClawConnectSignature(
+  device: { id?: string; publicKey?: string; signature?: string; signedAt?: number } | undefined,
+  expected: { token: string; nonce: string }
+): boolean {
+  const rawPub = Buffer.from((device?.publicKey ?? '').replaceAll('-', '+').replaceAll('_', '/'), 'base64');
+  const platform = process.platform.replace(/[A-Z]/g, (c) => String.fromCharCode(c.charCodeAt(0) + 32));
+  const payload = [
+    'v3',
+    device?.id,
+    'cli',
+    'cli',
+    'operator',
+    'operator.read,operator.write',
+    String(device?.signedAt),
+    expected.token,
+    expected.nonce,
+    platform,
+    ''
+  ].join('|');
+  const sig = Buffer.from((device?.signature ?? '').replaceAll('-', '+').replaceAll('_', '/'), 'base64');
+  const signatureVerifies = crypto.verify(
+    null,
+    Buffer.from(payload, 'utf8'),
+    publicKeyFromRawBase64Url(device?.publicKey ?? ''),
+    sig
+  );
+  const deviceIdMatches = device?.id === crypto.createHash('sha256').update(rawPub).digest('hex');
+  return signatureVerifies && deviceIdMatches;
+}
+
+test('OpenClaw adapter signs the connect challenge, defers session start, and resolves the session ref', () => {
   const writes: string[] = [];
   let seq = 0;
   const handle = {
@@ -2482,12 +2516,48 @@ test('OpenClaw adapter defers session start until the connect response and resol
     kill() {}
   };
 
-  openClawNativeCliAdapter.initialize?.(handle, { workingPath: '/tmp/project', modelId: 'openclaw-default' });
-  expect(writes.map((line) => (JSON.parse(line) as { method: string }).method)).toEqual(['connect']);
+  // initialize parks state + the sessions.create frame but sends NOTHING — the signed `connect` needs the
+  // gateway's challenge nonce, so it can't be built until the `connect.challenge` event arrives.
+  openClawNativeCliAdapter.initialize?.(handle, {
+    workingPath: '/tmp/project',
+    modelId: 'openclaw-default',
+    env: { OPENCLAW_GATEWAY_TOKEN: 'tok-1' }
+  });
+  expect(writes).toEqual([]);
   expect(handle.deferredThreadFrame).toBeTruthy();
 
-  // The connect response (id "0") releases the parked sessions.create frame. Ids are strings —
-  // OpenClaw's RequestFrameSchema rejects a numeric id as "invalid request frame".
+  // The gateway's challenge triggers the signed connect (id "0" — ids are strings; a numeric id is
+  // rejected as "invalid request frame").
+  openClawNativeCliAdapter.parseOutput(
+    JSON.stringify({ type: 'event', event: 'connect.challenge', payload: { nonce: 'nonce-abc', ts: 123 } }),
+    handle
+  );
+  const connect = JSON.parse(writes[0] ?? '{}') as {
+    type: string;
+    method: string;
+    id: string;
+    params: {
+      role: string;
+      scopes: string[];
+      auth?: { token?: string };
+      device?: { id: string; publicKey: string; signature: string; signedAt: number; nonce: string };
+    };
+  };
+  expect(connect.type).toBe('req');
+  expect(connect.method).toBe('connect');
+  expect(connect.id).toBe('0');
+  expect(connect.params.role).toBe('operator');
+  expect(connect.params.scopes).toEqual(['operator.read', 'operator.write']);
+  expect(connect.params.auth?.token).toBe('tok-1');
+  const device = connect.params.device;
+  expect(device?.nonce).toBe('nonce-abc');
+
+  // Cryptographic cross-check: the Ed25519 signature must verify against the advertised public key over
+  // OpenClaw's exact v3 payload (reconstructed independently of the adapter, not via its own builder),
+  // and deviceId must be the sha256 of that same raw public key (OpenClaw's derivation).
+  expect(verifyOpenClawConnectSignature(device, { token: 'tok-1', nonce: 'nonce-abc' })).toBe(true);
+
+  // The connect response (id "0") releases the parked sessions.create frame.
   openClawNativeCliAdapter.parseOutput(JSON.stringify({ type: 'res', id: '0', ok: true, payload: {} }), handle);
   const methods = writes.map((line) => (JSON.parse(line) as { method?: string }).method).filter(Boolean);
   expect(methods).toEqual(['connect', 'sessions.create']);
@@ -2502,6 +2572,37 @@ test('OpenClaw adapter defers session start until the connect response and resol
   expect(refEvents).toEqual([
     { type: 'session_ref', payload: { providerSessionRef: 'agent:dev:oc-9', responseId: '1' } }
   ]);
+});
+
+test('OpenClaw connect omits auth and signs an empty token when no gateway token is configured', () => {
+  const writes: string[] = [];
+  let seq = 0;
+  const handle = {
+    launchMode: 'app-server' as const,
+    appServer: {
+      send(input: string) {
+        writes.push(input);
+      },
+      close() {}
+    },
+    pendingRequests: new Map<string | number, string>(),
+    deferredThreadFrame: undefined as string | undefined,
+    providerSessionRef: undefined as string | undefined,
+    nextRequestId: () => seq++,
+    kill() {}
+  };
+  openClawNativeCliAdapter.initialize?.(handle, { workingPath: '/tmp/project' });
+  openClawNativeCliAdapter.parseOutput(
+    JSON.stringify({ type: 'event', event: 'connect.challenge', payload: { nonce: 'n2' } }),
+    handle
+  );
+  const connect = JSON.parse(writes[0] ?? '{}') as {
+    params: { auth?: unknown; device?: { signature: string; publicKey: string; signedAt: number } };
+  };
+  // No token → no `auth` block, and the signature is computed over an empty token field.
+  expect(connect.params.auth).toBeUndefined();
+  const device = connect.params.device;
+  expect(verifyOpenClawConnectSignature(device, { token: '', nonce: 'n2' })).toBe(true);
 });
 
 test('OpenClaw adapter sends a turn and resolves an approval over the app-server bridge', () => {
@@ -2547,9 +2648,13 @@ test('OpenClaw adapter routes a failed session start to a reconnect prompt', () 
     nextRequestId: () => 3,
     kill() {}
   };
+  // `ResponseFrameSchema` puts rejection details in `error`, not `payload` (`payload` is absent/empty on
+  // a rejected response) — live-confirmed shape. Using the real shape here means reverting the
+  // `recordValue(frame.error) ?? recordValue(frame.payload)` read back to `payload`-only would break
+  // this test, not silently keep passing.
   expect(
     openClawNativeCliAdapter.parseOutput(
-      JSON.stringify({ type: 'res', id: '2', ok: false, payload: { code: 'NoAuth', message: 'sign in first' } }),
+      JSON.stringify({ type: 'res', id: '2', ok: false, error: { code: 'NoAuth', message: 'sign in first' } }),
       handle
     )
   ).toEqual([{ type: 'connection_required', payload: { code: 'NoAuth', reason: 'sign in first' } }]);
@@ -2572,7 +2677,7 @@ test('OpenClaw adapter routes a rejected connect (no token configured) to a reco
         type: 'res',
         id: '0',
         ok: false,
-        payload: {
+        error: {
           code: 'NOT_PAIRED',
           message: 'device identity required',
           details: { code: 'DEVICE_IDENTITY_REQUIRED' }
@@ -2581,6 +2686,62 @@ test('OpenClaw adapter routes a rejected connect (no token configured) to a reco
       handle
     )
   ).toEqual([{ type: 'connection_required', payload: { code: 'NOT_PAIRED', reason: 'device identity required' } }]);
+});
+
+test('OpenClaw adapter swallows a retryable connect rejection instead of surfacing connection_required', () => {
+  // `UNAVAILABLE: gateway starting; retry shortly` (live-observed while sidecar plugins are still
+  // loading) is transient, not an auth failure. OpenClaw closes the socket as part of this rejection, so
+  // the daemon's own app-server reconnect handles recovery — the adapter must emit NOTHING here, or the
+  // host would tear the session down immediately instead of letting the redial happen.
+  const handle = {
+    launchMode: 'app-server' as const,
+    pendingRequests: new Map<string | number, string>([['0', 'initialize']]),
+    appServer: { send() {}, close() {} },
+    nextRequestId: () => 1,
+    kill() {}
+  };
+  expect(
+    openClawNativeCliAdapter.parseOutput(
+      JSON.stringify({
+        type: 'res',
+        id: '0',
+        ok: false,
+        error: {
+          code: 'UNAVAILABLE',
+          message: 'gateway starting; retry shortly',
+          retryable: true,
+          retryAfterMs: 500,
+          details: { reason: 'startup-sidecars' }
+        }
+      }),
+      handle
+    )
+  ).toEqual([]);
+});
+
+test('OpenClaw adapter does NOT swallow a retryable rejection for a non-initialize kind', () => {
+  // `retryable` is only special-cased for the connect handshake (`kind === 'initialize'`) — a rejected
+  // `sessions.create`/`sessions.resolve` that happens to carry `retryable:true` still surfaces
+  // `connection_required` as before, since there's no equivalent "the socket will close and redial will
+  // retry" recovery path for a mid-session request.
+  const handle = {
+    launchMode: 'app-server' as const,
+    pendingRequests: new Map<string | number, string>([['1', 'sessionStart']]),
+    appServer: { send() {}, close() {} },
+    nextRequestId: () => 2,
+    kill() {}
+  };
+  expect(
+    openClawNativeCliAdapter.parseOutput(
+      JSON.stringify({
+        type: 'res',
+        id: '1',
+        ok: false,
+        error: { code: 'UNAVAILABLE', message: 'try again', retryable: true }
+      }),
+      handle
+    )
+  ).toEqual([{ type: 'connection_required', payload: { code: 'UNAVAILABLE', reason: 'try again' } }]);
 });
 
 test('OpenClaw and Hermes auth launches use provider-owned login and status commands', () => {

@@ -41,6 +41,7 @@
     "./agent-adapters": "./src/agent-adapters/index.ts",
     "./agent-adapters/argument-support": "./src/agent-adapters/argument-support.ts",
     "./agent-adapters/jsonrpc": "./src/agent-adapters/jsonrpc.ts",
+    "./agent-adapters/openclaw/device-identity": "./src/agent-adapters/openclaw/device-identity.ts",
     "./agent-adapters/pty": "./src/agent-adapters/pty.ts",
     "./channels/telegram": "./src/channels/telegram.ts",
     "./commands/builtins": "./src/commands/builtins.ts",

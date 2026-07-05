@@ -10,6 +10,7 @@
 import type { NativeCliSessionView } from '@monad/protocol';
 
 import { describe, expect, test } from 'bun:test';
+import crypto from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -35,6 +36,10 @@ async function runTurn(args: {
   launchMode: NativeCliSessionView['launchMode'];
   prompt: string;
   timeoutMs: number;
+  /** Operator-configured agent env — forwarded to both the spawned child and the adapter's initialize
+   *  (e.g. OpenClaw's `OPENCLAW_GATEWAY_TOKEN`, which puts the spawned gateway in token mode AND is read
+   *  back for the signed connect frame). */
+  env?: Record<string, string>;
 }): Promise<{ view: NativeCliSessionView; output: string; host: NativeCliHost; cleanup: () => void }> {
   const store = createStore();
   const workdir = mkdtempSync(join(tmpdir(), `live-${args.provider}-`));
@@ -49,7 +54,8 @@ async function runTurn(args: {
         enabled: true,
         defaultLaunchMode: args.launchMode,
         allowDangerousMode: false,
-        approvalOwnership: 'provider-owned'
+        approvalOwnership: 'provider-owned',
+        ...(args.env ? { env: args.env } : {})
       }
     ]
   });
@@ -160,34 +166,30 @@ describe.skipIf(!LIVE)('real Hermes cli-oneshot turn', () => {
   }, 190_000);
 });
 
-// OpenClaw's app-server gateway is real as of the daemon-assigned-port work — this probe originally
-// surfaced that `openclaw gateway` didn't announce a port, which is now fixed (daemon-assigned port +
-// non-root ws path). A live turn still needs a configured/authed gateway (ws-auth token), which may not
-// be present in a bare checkout, so this stays an OPT-IN probe (MONAD_LIVE_OPENCLAW=1): it asserts a
-// reply if the gateway is reachable, and otherwise logs the setup requirement without hard-failing.
+// The OpenClaw app-server gateway path is now functional end-to-end: the daemon spawns `openclaw gateway
+// run --allow-unconfigured` on a daemon-assigned port, and the adapter answers the gateway's
+// `connect.challenge` with an Ed25519 device signature — which is what grants `operator.write` (a
+// token-only connect is scoped empty, so `sessions.create` would fail `missing scope`). A random
+// per-run `OPENCLAW_GATEWAY_TOKEN` is supplied as agent env: the daemon forwards it to the spawned
+// gateway (→ token mode) and the adapter reads it back for the signed connect. This is a HARD assertion
+// gated behind MONAD_LIVE_OPENCLAW=1 — it requires a valid `~/.openclaw/openclaw.json` (run
+// `openclaw doctor --fix` if the gateway refuses to start on invalid config) and a model configured in
+// that gateway, since the turn runs a real OpenClaw agent.
 describe.skipIf(!(LIVE && LIVE_OPENCLAW))('real OpenClaw app-server turn', () => {
-  test('a turn through the real openclaw gateway produces a reply the host captures', async () => {
-    let run: Awaited<ReturnType<typeof runTurn>>;
-    try {
-      run = await runTurn({
-        provider: 'openclaw',
-        command: 'openclaw',
-        launchMode: 'app-server',
-        prompt: PING_PROMPT,
-        timeoutMs: 180_000
-      });
-    } catch (err) {
-      // biome-ignore lint/suspicious/noConsole: a live opt-in probe reports the OpenClaw setup requirement
-      console.warn(
-        '[live openclaw] gateway unreachable — the gateway is real (daemon-assigned port) but a live turn ' +
-          `needs a configured/authed OpenClaw gateway (ws-auth token) not present in a bare checkout. ${String(err)}`
-      );
-      return;
-    }
+  test('a signed device connect drives a real openclaw gateway turn the host captures', async () => {
+    const run = await runTurn({
+      provider: 'openclaw',
+      command: 'openclaw',
+      launchMode: 'app-server',
+      prompt: PING_PROMPT,
+      timeoutMs: 180_000,
+      env: { OPENCLAW_GATEWAY_TOKEN: crypto.randomUUID() }
+    });
     try {
       // biome-ignore lint/suspicious/noConsole: a live opt-in probe surfaces the real model reply
       console.log(`[live openclaw reply] ${run.output.trim().slice(0, 400)}`);
       expect(run.output.trim().length).toBeGreaterThan(0);
+      expect(run.output.toUpperCase()).toContain('PONG');
     } finally {
       run.cleanup();
     }

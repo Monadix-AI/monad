@@ -3,6 +3,12 @@ import type { AppServerCliHooks } from '../app-server-jsonrpc.ts';
 
 import { compactObject, parseJsonObject } from '../adapter-shared.ts';
 import { recordValue } from '../app-server-jsonrpc.ts';
+import {
+  buildDeviceAuthPayloadV3,
+  createOpenClawDeviceIdentity,
+  type OpenClawDeviceIdentity,
+  signDevicePayload
+} from './device-identity.ts';
 
 // OpenClaw's gateway (`openclaw gateway`, default ws://127.0.0.1:18789) does NOT speak generic
 // JSON-RPC 2.0 — every frame is wrapped in a `{type: "req"|"res"|"event", ...}` envelope with `ok`/
@@ -17,6 +23,11 @@ import { recordValue } from '../app-server-jsonrpc.ts';
 //      and a raw WebSocket, observing real `sessions.create`/`sessions.send` results and `chat` events.
 // Only `exec.approval.requested`'s exact payload shape is NOT live-observed (no live tool-approval was
 // triggered) — it's inferred from `ExecApprovalRequestParamsSchema` + the confirmed `id` field name.
+//
+// The connect handshake carries an Ed25519 device signature (see device-identity.ts + the connect flow
+// below) — verified live 2026-07-05 to be what grants `operator.write`: a token-only connect is accepted
+// but scoped empty, so `sessions.create` fails `missing scope: operator.write`; a signed connect is
+// granted the requested scopes directly (no interactive `devices approve` step).
 
 interface OpenClawEnvelope extends Record<string, unknown> {
   type?: string;
@@ -25,6 +36,10 @@ interface OpenClawEnvelope extends Record<string, unknown> {
   event?: string;
   ok?: boolean;
   payload?: unknown;
+  /** ResponseFrameSchema puts rejection details HERE, not in `payload` (which is absent/empty on a
+   *  rejected response) — live-confirmed: `{type:"res",ok:false,error:{code,message,retryable,
+   *  retryAfterMs,details}}`. */
+  error?: unknown;
 }
 
 /** `ConnectParamsSchema.client.id`: a closed enum — OpenClaw's gateway rejects any id outside this set
@@ -33,6 +48,24 @@ interface OpenClawEnvelope extends Record<string, unknown> {
 const CONNECT_CLIENT_ID = 'cli';
 /** `ConnectParamsSchema.client.mode`: same closed-enum story as `client.id`. */
 const CONNECT_CLIENT_MODE = 'cli';
+const CONNECT_ROLE = 'operator';
+/** `operator.write` is what `sessions.create`/`sessions.send` require; the gateway only grants it to a
+ *  connection carrying a valid device signature (a token-only connect is granted an empty scope set). */
+const CONNECT_SCOPES = ['operator.read', 'operator.write'];
+
+interface OpenClawConnectState {
+  identity: OpenClawDeviceIdentity;
+  /** Frame id reserved for the `connect` request, sent once the gateway's challenge nonce arrives. */
+  connectId: string;
+  /** Shared gateway token (or `''`); part of both `auth` and the signed payload — see device-identity. */
+  token: string;
+}
+
+// Per-session signing state, populated by `openClawInitialize` and consumed when the gateway's
+// `connect.challenge` frame arrives (the nonce is required in the signed payload, so the `connect`
+// request can't be sent until then). Keyed by handle so a reconnect — which re-invokes `initialize`
+// with a fresh identity — is naturally independent. A WeakMap avoids widening the runtime-handle type.
+const connectStates = new WeakMap<NativeCliRuntimeHandle, OpenClawConnectState>();
 
 let nextFrameSeq = 0;
 /** Frame ids must be strings (`RequestFrameSchema.id: TString`); `handle.nextRequestId()` returns a
@@ -55,42 +88,6 @@ export function openClawInitialize(
   handle.pendingRequests?.set(connectId, 'initialize');
   handle.pendingRequests?.set(sessionId, context.providerSessionRef ? 'sessionResume' : 'sessionStart');
 
-  // Shared-secret auth (`connect.params.auth.token`) is the only auth path this adapter implements —
-  // OpenClaw's normal device-signature handshake (v2/v3 payload, undocumented curve/hash) isn't
-  // reimplemented here. The token is explicit per-agent config (`context.env`, the same map
-  // `buildLaunch` forwards to the spawned `openclaw gateway` process — see openclaw/index.ts), never a
-  // Monad-invented ambient env var.
-  //
-  // CORRECTION (live-verified 2026-07-04, superseding an earlier doc-based assumption in this comment):
-  // a real gateway with NO token/env configured rejects a device-less connect with
-  // `NOT_PAIRED`/`DEVICE_IDENTITY_REQUIRED` even on loopback — there is no auth-free default. Passing
-  // `--token <value>` (or setting `OPENCLAW_GATEWAY_TOKEN`, its documented env fallback) on the
-  // GATEWAY'S OWN command line is what switches it into token mode; no separate `--auth token` flag is
-  // needed. So this only works end-to-end when the operator sets `agent.env.OPENCLAW_GATEWAY_TOKEN` —
-  // the daemon forwards that same env to the spawned `openclaw gateway run` process (which then
-  // self-selects token mode) AND this file reads it back for the connect frame. Until an operator does
-  // that, app-server mode fails fast with a `connection_required` event rather than hanging.
-  const token = context.env?.OPENCLAW_GATEWAY_TOKEN;
-  const connectFrame = req(
-    'connect',
-    connectId,
-    compactObject({
-      minProtocol: 3,
-      maxProtocol: 4,
-      client: {
-        id: CONNECT_CLIENT_ID,
-        displayName: 'monad',
-        version: '0.1.0',
-        platform: process.platform,
-        mode: CONNECT_CLIENT_MODE
-      },
-      role: 'operator',
-      scopes: ['operator.read', 'operator.write'],
-      caps: [],
-      auth: token ? { token } : undefined
-    })
-  );
-
   // `sessions.create` params (SessionsCreateParamsSchema): key/agentId/label/model/parentSessionKey/
   // emitCommandHooks/task/message, all optional. There is no dedicated "resume" method; `sessions.resolve`
   // ("resolves or canonicalizes a session target") takes the same optional `key`, so passing the
@@ -103,9 +100,80 @@ export function openClawInitialize(
     sessionId,
     context.providerSessionRef ? { key: context.providerSessionRef, ...sessionParams } : sessionParams
   );
-
   handle.deferredThreadFrame = sessionFrame;
-  handle.appServer.send(connectFrame);
+
+  // The `connect` request carries an Ed25519 device signature over a nonce the gateway issues in a
+  // `connect.challenge` event on socket open — so it can't be built here; `handleConnectChallenge`
+  // sends it when that nonce arrives. Two credentials combine:
+  //   - The shared token (`connect.params.auth.token`) — explicit per-agent config via
+  //     `agent.env.OPENCLAW_GATEWAY_TOKEN`, the same map the daemon forwards to the spawned
+  //     `openclaw gateway run` process so it self-selects token mode. Never a Monad-invented ambient var.
+  //     A token-mode gateway rejects a connect with no token (`AUTH_TOKEN_MISSING`), so without it
+  //     app-server mode fails fast with a `connection_required` event rather than hanging.
+  //   - The device signature — what actually authorizes `operator.write` (a token-only connect is
+  //     accepted but granted an empty scope set, so `sessions.create` would fail `missing scope`). This
+  //     replaces OpenClaw's interactive `devices approve` pairing: a valid signature grants the
+  //     requested scopes directly.
+  connectStates.set(handle, {
+    identity: createOpenClawDeviceIdentity(),
+    connectId,
+    token: context.env?.OPENCLAW_GATEWAY_TOKEN ?? ''
+  });
+}
+
+/** Answer the gateway's `connect.challenge` by sending the signed `connect` request. The nonce is part
+ *  of the signed v3 payload, so this is the earliest point the request can be built. Fires once per
+ *  (re)connect — `initialize` repopulates the state with a fresh identity each time.
+ *
+ *  A rejected connect (e.g. `retryable:true` while sidecar plugins are still loading) is NOT retried
+ *  here: OpenClaw closes the socket as part of rejecting a connect (WS close code 1013, live-confirmed
+ *  against its source — `closeCause: "startup-sidecars-pending"`), so there is no live connection left to
+ *  resend on. The daemon's own app-server reconnect (`handleAppServerDisconnect` in host.ts) redials a
+ *  fresh socket and re-invokes `initialize` in that case — see its comment for the transient-vs-fatal
+ *  distinction. */
+function handleConnectChallenge(
+  payload: Record<string, unknown>,
+  handle: NativeCliRuntimeHandle | undefined
+): NativeCliOutputEvent[] {
+  const state = handle ? connectStates.get(handle) : undefined;
+  const nonce = typeof payload.nonce === 'string' ? payload.nonce : undefined;
+  if (!handle?.appServer || !state || !nonce) return [];
+  const signedAtMs = Date.now();
+  const platform = process.platform;
+  const authPayload = buildDeviceAuthPayloadV3({
+    deviceId: state.identity.deviceId,
+    clientId: CONNECT_CLIENT_ID,
+    clientMode: CONNECT_CLIENT_MODE,
+    role: CONNECT_ROLE,
+    scopes: CONNECT_SCOPES,
+    signedAtMs,
+    token: state.token,
+    nonce,
+    platform
+  });
+  handle.appServer.send(
+    req(
+      'connect',
+      state.connectId,
+      compactObject({
+        minProtocol: 3,
+        maxProtocol: 4,
+        client: { id: CONNECT_CLIENT_ID, displayName: 'monad', version: '0.1.0', platform, mode: CONNECT_CLIENT_MODE },
+        role: CONNECT_ROLE,
+        scopes: CONNECT_SCOPES,
+        caps: [],
+        auth: state.token ? { token: state.token } : undefined,
+        device: {
+          id: state.identity.deviceId,
+          publicKey: state.identity.publicKeyRawBase64Url,
+          signature: signDevicePayload(state.identity.privateKeyPem, authPayload),
+          signedAt: signedAtMs,
+          nonce
+        }
+      })
+    )
+  );
+  return [];
 }
 
 function responseEvents(frame: OpenClawEnvelope, handle?: NativeCliRuntimeHandle): NativeCliOutputEvent[] {
@@ -113,12 +181,22 @@ function responseEvents(frame: OpenClawEnvelope, handle?: NativeCliRuntimeHandle
   const kind = idKey !== undefined ? handle?.pendingRequests?.get(idKey) : undefined;
   if (idKey !== undefined && kind !== undefined) handle?.pendingRequests?.delete(idKey);
 
-  const payload = recordValue(frame.payload);
   if (frame.ok === false) {
+    // ResponseFrameSchema puts rejection details in `error`, not `payload` (`payload` is absent/empty on
+    // a rejected response) — live-confirmed shape: `{code,message,retryable,retryAfterMs,details}`.
+    const errorInfo = recordValue(frame.error) ?? recordValue(frame.payload);
+    // A `connect` rejected `retryable:true` (e.g. `UNAVAILABLE: gateway starting; retry shortly` while
+    // sidecar plugins are still loading — live-confirmed) is transient, not an auth failure — surfacing
+    // `connection_required` here would tear the session down immediately. OpenClaw closes the socket as
+    // part of this rejection (WS close code 1013, live-confirmed against its source), so the daemon's own
+    // app-server reconnect (`handleAppServerDisconnect` in host.ts) will redial a fresh socket and
+    // re-invoke `initialize`; emit nothing and let that happen instead of failing fast.
+    if (kind === 'initialize' && errorInfo?.retryable === true) return [];
     // A rejected `connect` (kind 'initialize') is an auth failure — live-verified: a gateway with no
     // token configured 400s connect with `NOT_PAIRED`/`DEVICE_IDENTITY_REQUIRED`. That must surface the
     // same reconnect/auth-required signal as a rejected session start, not a generic provider_error.
     if (kind === 'initialize' || kind === 'sessionStart' || kind === 'sessionResume') {
+      if (kind === 'initialize' && handle) connectStates.delete(handle);
       return [
         {
           type: 'connection_required',
@@ -126,10 +204,10 @@ function responseEvents(frame: OpenClawEnvelope, handle?: NativeCliRuntimeHandle
             // `connection_required`'s schema requires `code` to be a non-empty string (stricter than
             // `provider_error`'s `string | number`) — guard it like `message` below, or a numeric/empty
             // real-world code would fail the whole event's zod validation and get silently dropped.
-            code: typeof payload?.code === 'string' && payload.code.length > 0 ? payload.code : undefined,
+            code: typeof errorInfo?.code === 'string' && errorInfo.code.length > 0 ? errorInfo.code : undefined,
             reason:
-              typeof payload?.message === 'string' && payload.message.length > 0
-                ? payload.message
+              typeof errorInfo?.message === 'string' && errorInfo.message.length > 0
+                ? errorInfo.message
                 : 'OpenClaw requires reconnect'
           })
         }
@@ -140,14 +218,17 @@ function responseEvents(frame: OpenClawEnvelope, handle?: NativeCliRuntimeHandle
         type: 'provider_error',
         payload: compactObject({
           responseId: idKey,
-          code: payload?.code,
-          message: typeof payload?.message === 'string' ? payload.message : JSON.stringify(payload ?? {})
+          code: errorInfo?.code,
+          message: typeof errorInfo?.message === 'string' ? errorInfo.message : JSON.stringify(errorInfo ?? {})
         })
       }
     ];
   }
 
+  const payload = recordValue(frame.payload);
+
   if (kind === 'initialize') {
+    if (handle) connectStates.delete(handle); // connect succeeded — no more retries needed
     if (handle?.deferredThreadFrame && handle.appServer) {
       handle.appServer.send(handle.deferredThreadFrame);
       handle.deferredThreadFrame = undefined;
@@ -227,6 +308,9 @@ function eventFrameEvents(eventName: string, payload: Record<string, unknown>): 
 export function parseOpenClawFrame(frame: OpenClawEnvelope, handle?: NativeCliRuntimeHandle): NativeCliOutputEvent[] {
   if (frame.type === 'res') return responseEvents(frame, handle);
   if (frame.type === 'event' && typeof frame.event === 'string') {
+    // `connect.challenge` is answered by sending the signed `connect` request (needs the handle to
+    // reach the socket + signing state), so it's handled here rather than in the payload-only translator.
+    if (frame.event === 'connect.challenge') return handleConnectChallenge(recordValue(frame.payload) ?? {}, handle);
     return eventFrameEvents(frame.event, recordValue(frame.payload) ?? {});
   }
   return [];

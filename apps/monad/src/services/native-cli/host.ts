@@ -113,6 +113,17 @@ interface LiveNativeCliSession {
   appServerRedial?: () => Promise<NativeCliAppServerConnection>;
   /** Guards against overlapping reconnect attempts. */
   appServerReconnecting?: boolean;
+  /** Cumulative app-server disconnect→redial cycles in the current unstable streak. `reconnectAppServer`
+   *  declares success (and resets its own bounded attempt counter) the moment the socket TRANSPORT
+   *  reopens — before the app-level handshake completes — so a gateway that keeps reopening the socket
+   *  and then rejecting the handshake would otherwise reconnect forever with no per-invocation counter
+   *  ever exhausting. This field is the cross-invocation cap that closes that gap; see
+   *  `APP_SERVER_MAX_DISCONNECT_CYCLES`. */
+  appServerDisconnectCycles?: number;
+  /** Clears `appServerDisconnectCycles` once a reconnected socket survives `APP_SERVER_RECONNECT_STREAK_RESET_MS`
+   *  without dropping again — a fresh disconnect cancels this timer so a genuinely unstable gateway can't
+   *  reset its own cycle count by surviving just long enough between drops. */
+  appServerStreakResetTimer?: Timer;
   /** The initialize context, retained so a reconnect can re-establish the thread via `thread/resume`. */
   initializeContext?: NativeCliInitializeContext;
   providerSessionRef?: string | null;
@@ -173,6 +184,15 @@ const APP_SERVER_STARTUP_TIMEOUT_MS = 15_000;
 const APP_SERVER_DISCONNECT_GRACE_MS = 500;
 const APP_SERVER_RECONNECT_ATTEMPTS = 3;
 const APP_SERVER_RECONNECT_BASE_MS = 400;
+// Cross-invocation cap on disconnect→redial cycles (see `appServerDisconnectCycles`): each
+// `reconnectAppServer` call's own 3-attempt counter only bounds TRANSPORT-dial failures within that one
+// call, not "transport reopens fine, app-level handshake keeps failing" — which restarts a fresh
+// 3-attempt counter every cycle. This is the real ceiling for that case.
+const APP_SERVER_MAX_DISCONNECT_CYCLES = 6;
+// A reconnected socket that stays up this long without dropping again is considered stable; the streak
+// counter resets so a transient rough patch early in a long session doesn't count against a later,
+// unrelated one.
+const APP_SERVER_RECONNECT_STREAK_RESET_MS = 10_000;
 type NativeCliOutputStream = 'stdout' | 'stderr' | 'pty';
 
 function isManagedProjectRuntime(runtime: Pick<NativeCliSessionRow | LiveNativeCliSession, 'runtimeRole'>): boolean {
@@ -1049,6 +1069,13 @@ export class NativeCliHost {
         .catch(() => undefined);
       return;
     }
+    // Between a socket drop and a completed redial, `live.appServer` still references the dead
+    // connection (`reconnectAppServer` only reassigns it on success) — it stays truthy, so an adapter's
+    // own `!handle.appServer` guard doesn't catch this window. Sending into it would silently vanish
+    // (a closed socket's `send` typically no-ops rather than throwing), so fail loudly here instead.
+    if (live.appServerReconnecting) {
+      throw new NativeCliError('provider_timeout', `native CLI app-server is reconnecting, cannot send input: ${id}`);
+    }
     live.adapter.sendInput(live, req.input);
   }
 
@@ -1445,15 +1472,45 @@ export class NativeCliHost {
         },
         'native cli app-server socket dropped while the process is still alive'
       );
+      // A gateway can close the socket on its very first handshake attempt (e.g. OpenClaw rejects
+      // `connect` with `retryable:true` while its sidecar plugins are still loading, then drops the
+      // connection) — redial first if the launch mode supports it, even while `live.startup` is still
+      // pending. `reconnectAppServer`'s own bounded attempts keep this fast, and its failure path already
+      // calls `stop()`, which rejects a still-pending `startup` with a clear message — so this doesn't
+      // weaken the original guarantee, it just gives a slow-starting gateway a few quick retries first.
+      //
+      // `reconnectAppServer` declares success as soon as the socket TRANSPORT reopens, before the
+      // app-level handshake completes — so its own attempt counter only bounds transport-dial failures
+      // within ONE call. A gateway whose socket keeps reopening but whose handshake keeps failing (e.g.
+      // an adapter that swallows a transient handshake rejection expecting the resulting socket-close to
+      // trigger redial) would restart that counter every cycle and never reach an exhaustion path.
+      // `appServerDisconnectCycles` is the cross-invocation ceiling that closes that gap.
+      if (current.appServerStreakResetTimer) {
+        clearTimeout(current.appServerStreakResetTimer);
+        current.appServerStreakResetTimer = undefined;
+      }
+      if (current.appServerRedial) {
+        current.appServerDisconnectCycles = (current.appServerDisconnectCycles ?? 0) + 1;
+        if (current.appServerDisconnectCycles <= APP_SERVER_MAX_DISCONNECT_CYCLES) {
+          void this.reconnectAppServer(id);
+          return;
+        }
+        this.log.warn(
+          {
+            sessionId: current.transcriptTargetId,
+            event: 'native_cli.app_server_reconnect_churn_exceeded',
+            nativeCliSessionId: id,
+            provider: current.provider,
+            cycles: current.appServerDisconnectCycles
+          },
+          'native cli app-server exceeded its reconnect churn budget — giving up'
+        );
+      }
       if (current.startup) {
         clearTimeout(current.startup.timeout);
         current.startup.reject(new Error(`native CLI app-server socket dropped before ready: ${id}`));
         current.startup = undefined;
         this.stop(id);
-        return;
-      }
-      if (current.appServerRedial) {
-        void this.reconnectAppServer(id);
         return;
       }
       this.emitAppServerReconnectRequired(id, current);
@@ -1492,6 +1549,18 @@ export class NativeCliHost {
           ...(current.initializeContext ?? { workingPath: '' }),
           providerSessionRef: current.providerSessionRef ?? undefined
         });
+        // This call only proves the socket TRANSPORT reopened, not that the app-level handshake will
+        // succeed — so don't reset the churn counter yet. Reset it once this connection survives a
+        // stretch without dropping again; a fresh disconnect cancels this timer (see
+        // `handleAppServerDisconnect`), so a persistently-flapping gateway can't reset its own count by
+        // surviving just long enough between drops.
+        current.appServerStreakResetTimer = setTimeout(() => {
+          const stillLive = this.live.get(id);
+          if (stillLive) {
+            stillLive.appServerDisconnectCycles = 0;
+            stillLive.appServerStreakResetTimer = undefined;
+          }
+        }, APP_SERVER_RECONNECT_STREAK_RESET_MS);
         this.log.debug(
           { sessionId: current.transcriptTargetId, event: 'native_cli.app_server_reconnected', nativeCliSessionId: id },
           'native cli app-server reconnected'
@@ -1522,6 +1591,10 @@ export class NativeCliHost {
       live.appServer?.close();
     } catch {
       /* already closed */
+    }
+    if (live.appServerStreakResetTimer) {
+      clearTimeout(live.appServerStreakResetTimer);
+      live.appServerStreakResetTimer = undefined;
     }
     for (const pending of live.pendingHistoryPages.values()) {
       clearTimeout(pending.timeout);
