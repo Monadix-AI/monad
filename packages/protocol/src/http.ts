@@ -4,6 +4,7 @@
 
 import { z } from 'zod';
 
+import { getA2aAgentStatusResponseSchema } from './a2a.ts';
 import {
   approvalMutationResponseSchema,
   clearApprovalsRequestSchema,
@@ -319,6 +320,10 @@ export const daemonHttpContract = {
       params: agentParamsSchema,
       body: setAgentPromptRequestSchema,
       response: { 200: getAgentPromptResponseSchema }
+    }),
+    a2aStatus: defineHttpEndpoint({
+      params: agentParamsSchema,
+      response: { 200: getA2aAgentStatusResponseSchema }
     }),
     defaultGet: defineHttpEndpoint({
       response: { 200: getDefaultAgentResponseSchema }

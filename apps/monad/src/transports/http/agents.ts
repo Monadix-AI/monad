@@ -1,6 +1,6 @@
 import type { createDaemonHandlers } from '@/handlers/handlers.ts';
 
-import { daemonHttpContract, getA2aAgentStatusResponseSchema } from '@monad/protocol';
+import { daemonHttpContract } from '@monad/protocol';
 import { Elysia } from 'elysia';
 
 import { baseUrlOf, buildA2aStatus } from '@/transports/a2a/index.ts';
@@ -79,8 +79,8 @@ export function createAgentsController(handlers: ReturnType<typeof createDaemonH
           return { status: buildA2aStatus(agent, baseUrlOf(request)) };
         },
         {
-          params: contracts.get.params,
-          response: getA2aAgentStatusResponseSchema,
+          params: contracts.a2aStatus.params,
+          response: contracts.a2aStatus.response,
           detail: {
             tags: ['http-only'],
             summary: 'A2A status',
