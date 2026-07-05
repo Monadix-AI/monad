@@ -3,6 +3,8 @@ import type { LiveDelegate } from './acp-delegate-types.ts';
 
 import { createLogger } from '@monad/logger';
 
+import { daemonChildProcesses, killDaemonProcessTree } from '@/infra/daemon-child-processes.ts';
+
 const log = createLogger('acp-delegate');
 
 // NUL separator (created at runtime — never a literal NUL byte in source) so neither the session id
@@ -34,7 +36,7 @@ export class DelegateEvictedError extends Error {}
 // (tools/process.ts). The reuse model keeps adapters — and any MCP servers they spawned — alive between
 // turns, so without this a daemon stop/crash would orphan them. Sync handler: proc.kill() is the reap.
 process.on('exit', () => {
-  for (const d of liveDelegates.values()) d.proc.kill();
+  for (const d of liveDelegates.values()) killDaemonProcessTree(d.proc.pid);
 });
 
 // Tear a delegate down: drop it from the registry, cancel its idle timer, abort lingering terminals,
@@ -51,7 +53,8 @@ export function evictDelegate(key: string, reason: string): void {
   } catch {
     // already closed — fine
   }
-  d.proc.kill();
+  killDaemonProcessTree(d.proc.pid);
+  daemonChildProcesses.untrack(d.proc.pid);
   try {
     delegateStore?.closeAcpDelegate(key, new Date().toISOString(), reason);
   } catch (err) {

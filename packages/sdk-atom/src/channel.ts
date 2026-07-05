@@ -37,6 +37,12 @@ export interface SendOptions {
 
 export type ChannelLog = (level: 'info' | 'warn' | 'error', msg: string, fields?: Record<string, unknown>) => void;
 
+export interface ChannelProcessHandle {
+  readonly pid?: number;
+  readonly exited?: Promise<unknown>;
+  kill?(signal?: number | string): void;
+}
+
 /** Injected once at construction. The narrow capability surface IS the security boundary. */
 export interface ChannelContext {
   /** The adapter calls this for every inbound native event it normalizes. */
@@ -49,6 +55,8 @@ export interface ChannelContext {
   secrets: Record<string, string>;
   /** Cooperative shutdown signal. */
   signal: AbortSignal;
+  /** Host-owned process tracker for adapter child processes. Optional so older hosts stay compatible. */
+  trackProcess?: (process: ChannelProcessHandle, label?: string) => void;
 }
 
 export interface ChannelAdapter {

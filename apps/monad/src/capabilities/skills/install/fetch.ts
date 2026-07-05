@@ -14,6 +14,7 @@ import { join, relative, sep } from 'node:path';
 
 import { untar } from '@/atoms/install/untar.ts';
 import { SkillInstallError } from '@/capabilities/skills/install/index.ts';
+import { daemonChildProcesses } from '@/infra/daemon-child-processes.ts';
 import { downloadBytes } from '@/services/download.ts';
 
 type SkillFetcherOptions = {
@@ -35,12 +36,15 @@ function isAuthOrPermissionError(err: unknown): boolean {
 }
 
 async function runGit(args: string[]): Promise<string> {
-  const proc = Bun.spawn(args, { stdout: 'pipe', stderr: 'pipe', env: process.env });
+  const proc = Bun.spawn(args, { stdout: 'pipe', stderr: 'pipe', env: process.env, detached: true });
+  daemonChildProcesses.track(proc.pid, 'skill-install:git');
+  void proc.exited.then(() => daemonChildProcesses.untrack(proc.pid));
   const [stdout, stderr, code] = await Promise.all([
     new Response(proc.stdout).text(),
     new Response(proc.stderr).text(),
     proc.exited
   ]);
+  daemonChildProcesses.untrack(proc.pid);
   if (code !== 0) throw new SkillInstallError(stderr.trim() || `git ${args[1] ?? ''} failed`);
   return stdout.trim();
 }

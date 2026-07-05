@@ -122,6 +122,7 @@ export function createSignalAdapter(ctx: ChannelContext): ChannelAdapter {
       if (!account) throw new Error('signal: options.account (registered number) is required');
       try {
         proc = Bun.spawn([cliPath, '-a', account, 'jsonRpc'], { stdin: 'pipe', stdout: 'pipe', stderr: 'inherit' });
+        ctx.trackProcess?.(proc, 'channel:signal');
       } catch {
         throw new Error(
           `signal: could not start signal-cli at "${cliPath}" — install it and register your number first`

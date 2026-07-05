@@ -17,6 +17,7 @@ import { join } from 'node:path';
 import { untar } from '@/atoms/install/untar.ts';
 import { createReleaseAssetFetcher, type ReleaseAssetFetcher } from '@/capabilities/mcp/install/binary.ts';
 import { unzip } from '@/capabilities/mcp/install/unzip.ts';
+import { daemonChildProcesses, killDaemonProcessTree } from '@/infra/daemon-child-processes.ts';
 
 const REPO = { owner: 'qdrant', repo: 'qdrant' };
 // Pinned default; overridable via memory.mem0.qdrant.version. Bump deliberately (the release's
@@ -70,10 +71,19 @@ const realSpawn: QdrantSpawn = (binPath, args, env, cwd) => {
   const proc = Bun.spawn([binPath, ...args], {
     cwd, // qdrant writes ./.qdrant-initialized + ./snapshots relative to cwd — keep them in dataDir, not the daemon's cwd
     env: { ...Bun.env, ...env },
+    detached: true,
     stdout: 'pipe',
     stderr: 'pipe'
   });
-  return { kill: () => proc.kill(), exited: proc.exited };
+  daemonChildProcesses.track(proc.pid, 'qdrant', () => killDaemonProcessTree(proc.pid));
+  void proc.exited.then(() => daemonChildProcesses.untrack(proc.pid));
+  return {
+    kill: () => {
+      killDaemonProcessTree(proc.pid);
+      daemonChildProcesses.untrack(proc.pid);
+    },
+    exited: proc.exited
+  };
 };
 
 const realProbe: QdrantProbe = async (url) => {

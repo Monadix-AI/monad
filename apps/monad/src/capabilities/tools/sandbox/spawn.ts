@@ -14,6 +14,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { noneLauncher, sandboxCredential } from '@monad/sdk-atom';
 
+import { daemonChildProcesses, killDaemonProcessTree } from '@/infra/daemon-child-processes.ts';
+
 // The launcher contract (SandboxLauncher / SandboxPolicy) and the passthrough noneLauncher live in
 // @monad/sdk-atom — the `sandbox` atom kind — so launchers in @monad/atoms and third-party packs
 // share one definition. Re-exported here so the daemon's many sandbox consumers keep importing from
@@ -50,6 +52,20 @@ export function configureSandboxLauncher(launcher: SandboxLauncher): void {
 
 export function sandboxLauncher(): SandboxLauncher {
   return activeLauncher;
+}
+
+interface TrackableSandboxProcess {
+  readonly pid?: number;
+  readonly exited: Promise<unknown>;
+  kill(signal?: number | string): void;
+}
+
+function trackSandboxProcess(process: TrackableSandboxProcess, label = 'sandboxed-spawn'): void {
+  daemonChildProcesses.track(process.pid, label, () => {
+    if (process.pid) killDaemonProcessTree(process.pid);
+    else process.kill('SIGTERM');
+  });
+  void process.exited.then(() => daemonChildProcesses.untrack(process.pid));
 }
 
 // Network policy is daemon-wide config; writable roots are per-call. buildSandboxPolicy() unifies
@@ -146,7 +162,11 @@ export function sandboxedSpawn<
   // sessionId lets a remote launcher reuse ONE off-box instance per session across calls.
   opts: { confine?: boolean; sessionId?: string } = {}
 ): Bun.Subprocess<In, Out, Err> {
-  if (opts.confine === false) return Bun.spawn<In, Out, Err>(argv, options);
+  if (opts.confine === false) {
+    const proc = Bun.spawn<In, Out, Err>(argv, { ...options, detached: true });
+    trackSandboxProcess(proc, 'sandboxed-spawn');
+    return proc;
+  }
 
   // Build the env overlay for a confined child: proxy vars (network routed through the filter) plus
   // a writable HOME/cache redirect — but only when a launcher actually confines, so an inactive
@@ -160,8 +180,8 @@ export function sandboxedSpawn<
   };
   const finalOptions =
     Object.keys(overlay).length > 0
-      ? ({ ...options, env: { ...(options?.env ?? Bun.env), ...overlay } } as typeof options)
-      : options;
+      ? ({ ...options, detached: true, env: { ...(options?.env ?? Bun.env), ...overlay } } as typeof options)
+      : ({ ...options, detached: true } as typeof options);
   // A REMOTE launcher (cloud sandbox: e2b/Vercel) exposes spawn() instead of wrap() — it runs the
   // process off-box and returns a SandboxProcess. The three call sites consume only that subset
   // (stdout/stderr/stdin/exited/exitCode/kill/pid), so the handle bridges onto Bun.Subprocess's
@@ -187,7 +207,9 @@ export function sandboxedSpawn<
       `Sandbox launcher (${activeLauncher.kind}) failed to build argv: ${err instanceof Error ? err.message : String(err)}`
     );
   }
-  return Bun.spawn<In, Out, Err>(wrapped, finalOptions);
+  const proc = Bun.spawn<In, Out, Err>(wrapped, finalOptions);
+  trackSandboxProcess(proc, 'sandboxed-spawn');
+  return proc;
 }
 
 export function sandboxedPtySpawn(

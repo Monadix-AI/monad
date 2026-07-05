@@ -40,6 +40,7 @@ import { dirname, isAbsolute, join } from 'node:path';
 import { createLogger } from '@monad/logger';
 import { newId } from '@monad/protocol';
 
+import { daemonChildProcesses } from '@/infra/daemon-child-processes.ts';
 import { connectAppServerStdio } from '@/services/native-cli/app-server-stdio.ts';
 import { connectAppServerUnix } from '@/services/native-cli/app-server-unix.ts';
 import { connectAppServerWs, dialAppServerWs, dialAppServerWsWithRetry } from '@/services/native-cli/app-server-ws.ts';
@@ -151,6 +152,7 @@ export class NativeCliHost {
   }
 
   private trackNativeCliProcess(pid: number): void {
+    daemonChildProcesses.track(pid, 'native-cli', () => killNativeCliProcess(pid));
     this.registryQueue = this.registryQueue
       .then(() => readProcessRegistry(this.deps.nativeCliProcessRegistryPath))
       .then((pids) => writeProcessRegistry(this.deps.nativeCliProcessRegistryPath, [...new Set([...pids, pid])]))
@@ -160,6 +162,7 @@ export class NativeCliHost {
   }
 
   private untrackNativeCliProcess(pid: number): void {
+    daemonChildProcesses.untrack(pid);
     this.registryQueue = this.registryQueue
       .then(() => readProcessRegistry(this.deps.nativeCliProcessRegistryPath))
       .then((pids) =>
@@ -822,6 +825,7 @@ export class NativeCliHost {
       proc = Bun.spawn([...spec.argv, ...turnArgs], {
         cwd: spec.cwd,
         env: spawnEnv,
+        detached: true,
         stdin: 'ignore',
         stdout: 'pipe',
         stderr: 'pipe'
@@ -1323,6 +1327,23 @@ export class NativeCliHost {
   stopTranscriptTarget(transcriptTargetId: TranscriptTargetId): void {
     for (const live of [...this.live.values()]) {
       if (live.transcriptTargetId === transcriptTargetId) this.stop(live.id);
+    }
+  }
+
+  stopAll(): void {
+    for (const id of [...this.live.keys()]) {
+      try {
+        this.stop(id);
+      } catch (error) {
+        this.log.error(
+          {
+            event: 'native_cli.stop_all_failed',
+            nativeCliSessionId: id,
+            err: error instanceof Error ? { message: error.message, stack: error.stack } : String(error)
+          },
+          'native cli stop-all failed'
+        );
+      }
     }
   }
 

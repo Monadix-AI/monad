@@ -1,5 +1,6 @@
 import type { ToolContext } from '../types.ts';
 
+import { daemonChildProcesses } from '@/infra/daemon-child-processes.ts';
 import { signalProcessTree } from '../backends.ts';
 import { buildSandboxPolicy, sandboxedPtySpawn, sandboxedSpawn } from '../sandbox/spawn.ts';
 import { ToolSecurityError } from '../security.ts';
@@ -245,6 +246,8 @@ export function startPipeProcess(command: string, dir: string, ctx: ToolContext)
     buildSandboxPolicy(ctx.sandboxRoots, [], ctx.sessionId),
     { sessionId: ctx.sessionId }
   );
+  daemonChildProcesses.track(proc.pid, 'tool:process_start', () => killTree(proc));
+  void proc.exited.then(() => daemonChildProcesses.untrack(proc.pid));
   return pipeHandle(proc);
 }
 
@@ -278,6 +281,8 @@ export function startPtyProcess(
     buildSandboxPolicy(ctx.sandboxRoots, [], ctx.sessionId),
     { sessionId: ctx.sessionId }
   );
+  daemonChildProcesses.track(proc.pid, 'tool:process_start', () => killTree(proc));
+  void proc.exited.then(() => daemonChildProcesses.untrack(proc.pid));
   if (!proc.terminal) throw new ToolSecurityError('failed to start pty terminal');
   void proc.exited.then(() => {
     if (pendingCR) onData('\n');

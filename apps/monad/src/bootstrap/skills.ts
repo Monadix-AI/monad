@@ -15,6 +15,7 @@ import { logger } from '@monad/logger';
 
 import { renderShellInjections } from '@/agent/index.ts';
 import { shellArgv } from '@/capabilities/tools';
+import { daemonChildProcesses, killDaemonProcessTree } from '@/infra/daemon-child-processes.ts';
 import { checkSkillCompatibility, SkillRegistry, skillEligibility, skillPathsMatch } from '@/store/home/skills.ts';
 
 /** Conventional project-local monad directory (analogous to `.git`). */
@@ -141,14 +142,25 @@ export async function createSkillSubsystem(deps: {
   if (SKILLS_SHELL_EXEC) logger.warn('monad: --skills-shell-exec — skills may run shell commands at load time');
   const skillShellRunner = async (cmd: string): Promise<string> => {
     let timer: ReturnType<typeof setTimeout> | undefined;
+    let proc: ReturnType<typeof Bun.spawn> | undefined;
+    let exited = false;
     const timeout = new Promise<never>((_, reject) => {
       timer = setTimeout(() => reject(new Error('timeout')), 5000);
     });
     try {
-      const proc = Bun.spawn(shellArgv(cmd), { stdout: 'pipe', stderr: 'pipe' });
-      return await Promise.race([new Response(proc.stdout).text(), timeout]);
+      proc = Bun.spawn(shellArgv(cmd), { stdout: 'pipe', stderr: 'pipe', detached: true });
+      daemonChildProcesses.track(proc.pid, 'skills-shell-exec');
+      void proc.exited.then(() => {
+        exited = true;
+        daemonChildProcesses.untrack(proc?.pid);
+      });
+      return await Promise.race([new Response(proc.stdout as ReadableStream<Uint8Array>).text(), timeout]);
     } finally {
       clearTimeout(timer); // whichever branch wins, don't leave the timeout armed
+      if (proc && !exited) {
+        killDaemonProcessTree(proc.pid);
+        daemonChildProcesses.untrack(proc.pid);
+      }
     }
   };
   const buildSkillViews = async (

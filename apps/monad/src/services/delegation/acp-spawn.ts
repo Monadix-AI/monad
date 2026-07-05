@@ -8,6 +8,7 @@ import { createLogger } from '@monad/logger';
 
 import { buildSandboxPolicy, createSandboxBackends, sandboxedSpawn, sandboxLauncher } from '@/capabilities/tools';
 import { tryResolveSecretMap } from '@/config/secrets.ts';
+import { daemonChildProcesses, killDaemonProcessTree } from '@/infra/daemon-child-processes.ts';
 import { buildDelegateApp } from './acp-delegate-app.ts';
 import { adapterSpawnEnv } from './acp-env.ts';
 import { adapterFailureError } from './acp-errors.ts';
@@ -66,6 +67,7 @@ async function spawnDelegate(
         {
           cwd: spec.cwd ?? ctx.sandboxRoots?.[0],
           env,
+          detached: true,
           stdin: 'pipe',
           stdout: 'pipe',
           stderr: 'inherit' // the sub-agent's logs pass through to the daemon's stderr
@@ -79,6 +81,8 @@ async function spawnDelegate(
       );
     }
   })();
+  daemonChildProcesses.track(proc.pid, `acp-delegate:${spec.name}`);
+  void proc.exited.then(() => daemonChildProcesses.untrack(proc.pid));
 
   const output = new WritableStream<Uint8Array>({
     write(chunk) {
@@ -118,7 +122,7 @@ async function spawnDelegate(
   let handshakeTimedOut = false;
   const handshakeTimer = setTimeout(() => {
     handshakeTimedOut = true;
-    proc.kill();
+    killDaemonProcessTree(proc.pid);
   }, HANDSHAKE_TIMEOUT_MS);
   try {
     // Advertise fs + terminal so the sub-agent routes file ops AND shell through monad (served above).
@@ -160,7 +164,7 @@ async function spawnDelegate(
     } catch {
       // not yet open
     }
-    proc.kill();
+    killDaemonProcessTree(proc.pid);
     if (handshakeTimedOut) {
       throw new Error(
         `external agent "${spec.name}" did not complete the ACP handshake within ${HANDSHAKE_TIMEOUT_MS / 1000}s — check it is installed and speaks ACP`

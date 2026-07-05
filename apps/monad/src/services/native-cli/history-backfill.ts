@@ -3,6 +3,7 @@ import type { NativeCliProcess } from '@/services/native-cli/runtime-types.ts';
 import type { NativeCliProviderAdapter } from '@/services/native-cli/types.ts';
 import type { NativeCliSessionRow } from '@/store/db/index.ts';
 
+import { daemonChildProcesses } from '@/infra/daemon-child-processes.ts';
 import { connectAppServerStdio } from '@/services/native-cli/app-server-stdio.ts';
 import { MAX_OUTPUT_SNAPSHOT } from '@/services/native-cli/constants.ts';
 import { HISTORY_BACKFILL_TIMEOUT_MS } from '@/services/native-cli/host-constants.ts';
@@ -57,10 +58,13 @@ export async function providerHistoryOutputViaCli(
   const proc = Bun.spawn(launch.argv, {
     cwd: launch.cwd,
     env: spawnEnv,
+    detached: true,
     stdin: 'pipe',
     stdout: 'pipe',
     stderr: 'pipe'
   }) as NativeCliProcess;
+  daemonChildProcesses.track(proc.pid, 'native-cli-history', () => killNativeCliProcess(proc.pid));
+  void proc.exited.then(() => daemonChildProcesses.untrack(proc.pid));
   let requestSeq = 0;
   let settled = false;
   let expectedResponseId: string | null = null;
@@ -84,6 +88,7 @@ export async function providerHistoryOutputViaCli(
         void proc.stdin?.end?.();
       } catch {}
       killNativeCliProcess(proc.pid);
+      daemonChildProcesses.untrack(proc.pid);
       resolve(output);
     };
     const timeout = setTimeout(() => finish(null), HISTORY_BACKFILL_TIMEOUT_MS);
