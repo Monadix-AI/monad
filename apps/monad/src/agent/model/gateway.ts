@@ -3,23 +3,10 @@
 // the filesystem. Also free of ai-sdk: the gateway resolves a profile → provider + credential and
 // drives the provider through the ai-sdk-free ModelProvider contract; ai-sdk lives in @monad/atoms.
 
-import type { FallbackTargetView, ModelRole } from '@monad/protocol';
-import type {
-  ImageCall,
-  ModelCall,
-  ModelChunk,
-  ModelInfo,
-  ProviderCredential,
-  RerankCall,
-  ResolvedProviderConfig,
-  SpeechCall,
-  TranscriptionCall,
-  UsageLimits,
-  VideoCall
-} from '@monad/sdk-atom';
+import type { ModelChunk, ProviderCredential, ResolvedProviderConfig, UsageLimits } from '@monad/sdk-atom';
+import type { ResolvedProfile } from './gateway-routing.ts';
 import type {
   EmbedResult,
-  GenerationParams,
   ImageRequest,
   ImageResult,
   ModelRequest,
@@ -34,25 +21,23 @@ import type {
   VideoRequest,
   VideoResult
 } from './index.ts';
-import type { ModelProvider } from './provider.ts';
 
 import { createLogger } from '@monad/logger';
-import { openAiPrice } from '@monad/protocol';
 
+import {
+  generateImage as generateImageAttempt,
+  generateSpeech as generateSpeechAttempt,
+  generateVideo as generateVideoAttempt,
+  rerank as rerankAttempt,
+  transcribe as transcribeAttempt
+} from './gateway-media.ts';
+import { buildCall, buildChain, errInfo, modelCreds, resolveProvider } from './gateway-routing.ts';
 import { withResolvedModel } from './index.ts';
 import { ModelProviderRegistry } from './provider.ts';
 
 export type { ProviderCredential, ResolvedProviderConfig } from '@monad/sdk-atom';
 
-interface ResolvedProfile {
-  alias: string;
-  routes: Partial<Record<ModelRole, { provider: string; modelId: string }>> & {
-    chat: { provider: string; modelId: string };
-  };
-  params: GenerationParams;
-  routeParams?: Partial<Record<ModelRole, GenerationParams>>;
-  fallbacks: FallbackTargetView[];
-}
+export { fetchProviderModels, listProviderModels } from './gateway-models.ts';
 
 export interface GatewayDeps {
   providers: ResolvedProviderConfig[];
@@ -72,13 +57,6 @@ export interface GatewayDeps {
   fetch?: typeof fetch;
 }
 
-// A single concrete attempt: a fully-resolved provider + model + params.
-interface Attempt {
-  provider: string;
-  modelId: string;
-  params: GenerationParams;
-}
-
 const log = createLogger('model:gateway');
 
 export class GatewayModelRouter implements ModelRouter {
@@ -86,12 +64,6 @@ export class GatewayModelRouter implements ModelRouter {
     private readonly deps: GatewayDeps,
     private readonly registry: ModelProviderRegistry
   ) {}
-
-  /** Credentials eligible for model inference — excludes admin keys, which can't make inference
-   *  requests and are reserved for admin-level APIs (rate limits, usage reports). */
-  private modelCreds(providerId: string): ProviderCredential[] {
-    return this.deps.credentialsFor(providerId).filter((c) => c.authType !== 'admin_api_key');
-  }
 
   async *stream(req: ModelRequest): AsyncIterable<ModelChunk> {
     const errors: unknown[] = [];
@@ -105,13 +77,13 @@ export class GatewayModelRouter implements ModelRouter {
       },
       'llm stream start'
     );
-    for (const attempt of this.buildChain(req)) {
-      const creds = this.modelCreds(attempt.provider);
+    for (const attempt of buildChain(this.deps, req)) {
+      const creds = modelCreds(this.deps, attempt.provider);
       if (creds.length === 0) {
         errors.push(new Error(`no credentials configured for provider "${attempt.provider}"`));
         continue;
       }
-      const { provider, impl } = this.resolve(attempt.provider);
+      const { provider, impl } = resolveProvider(this.deps, this.registry, attempt.provider);
       if (!impl.stream) {
         errors.push(new Error(`provider "${attempt.provider}" does not support text generation`));
         continue;
@@ -129,7 +101,7 @@ export class GatewayModelRouter implements ModelRouter {
             },
             'llm stream attempt'
           );
-          for await (const chunk of impl.stream(this.call(req, attempt, provider, cred))) {
+          for await (const chunk of impl.stream(buildCall(this.deps, req, attempt, provider, cred))) {
             emitted = true;
             log.debug({ sessionId: req.sessionId, event: 'llm.stream.chunk', chunk }, 'llm stream chunk');
             // Stamp the resolved provider+model onto the usage so cost/ledger attribution lands on
@@ -188,13 +160,13 @@ export class GatewayModelRouter implements ModelRouter {
       },
       'llm complete start'
     );
-    for (const attempt of this.buildChain(req)) {
-      const creds = this.modelCreds(attempt.provider);
+    for (const attempt of buildChain(this.deps, req)) {
+      const creds = modelCreds(this.deps, attempt.provider);
       if (creds.length === 0) {
         errors.push(new Error(`no credentials configured for provider "${attempt.provider}"`));
         continue;
       }
-      const { provider, impl } = this.resolve(attempt.provider);
+      const { provider, impl } = resolveProvider(this.deps, this.registry, attempt.provider);
       const complete = impl.complete;
       const stream = impl.stream;
       if (!complete && !stream) {
@@ -203,7 +175,7 @@ export class GatewayModelRouter implements ModelRouter {
       }
       for (const cred of creds) {
         try {
-          const call = this.call(req, attempt, provider, cred);
+          const call = buildCall(this.deps, req, attempt, provider, cred);
           let result: ModelResult;
           if (complete) {
             result = await complete(call);
@@ -244,198 +216,34 @@ export class GatewayModelRouter implements ModelRouter {
   }
 
   async generateImage(req: ImageRequest): Promise<ImageResult> {
-    const errors: unknown[] = [];
-    for (const attempt of this.buildChain({ model: req.model, messages: [] })) {
-      const creds = this.modelCreds(attempt.provider);
-      if (creds.length === 0) {
-        errors.push(new Error(`no credentials configured for provider "${attempt.provider}"`));
-        continue;
-      }
-      const { provider, impl } = this.resolve(attempt.provider);
-      if (!impl.generateImage) {
-        errors.push(new Error(`provider "${attempt.provider}" does not support image generation`));
-        continue;
-      }
-      for (const cred of creds) {
-        try {
-          const call: ImageCall = {
-            modelId: attempt.modelId,
-            prompt: req.prompt,
-            ...(req.size ? { size: req.size } : {}),
-            ...(req.n ? { n: req.n } : {}),
-            provider,
-            credential: cred,
-            fetch: this.deps.fetch
-          };
-          const result = await impl.generateImage(call);
-          this.deps.reportCredential?.(attempt.provider, cred.id, true);
-          return result;
-        } catch (err) {
-          this.deps.reportCredential?.(attempt.provider, cred.id, false, errInfo(err));
-          errors.push(err);
-        }
-      }
-    }
-    throw new AggregateError(errors, 'gateway: image generation failed');
+    return generateImageAttempt(this.deps, this.registry, req);
   }
 
   async generateSpeech(req: SpeechRequest): Promise<SpeechResult> {
-    const errors: unknown[] = [];
-    for (const attempt of this.buildChain({ model: req.model, messages: [] })) {
-      const creds = this.modelCreds(attempt.provider);
-      if (creds.length === 0) {
-        errors.push(new Error(`no credentials configured for provider "${attempt.provider}"`));
-        continue;
-      }
-      const { provider, impl } = this.resolve(attempt.provider);
-      if (!impl.generateSpeech) {
-        errors.push(new Error(`provider "${attempt.provider}" does not support text-to-speech`));
-        continue;
-      }
-      for (const cred of creds) {
-        try {
-          const call: SpeechCall = {
-            modelId: attempt.modelId,
-            text: req.text,
-            ...(req.voice ? { voice: req.voice } : {}),
-            provider,
-            credential: cred,
-            fetch: this.deps.fetch
-          };
-          const result = await impl.generateSpeech(call);
-          this.deps.reportCredential?.(attempt.provider, cred.id, true);
-          return result;
-        } catch (err) {
-          this.deps.reportCredential?.(attempt.provider, cred.id, false, errInfo(err));
-          errors.push(err);
-        }
-      }
-    }
-    throw new AggregateError(errors, 'gateway: speech generation failed');
+    return generateSpeechAttempt(this.deps, this.registry, req);
   }
 
   async generateVideo(req: VideoRequest): Promise<VideoResult> {
-    const errors: unknown[] = [];
-    for (const attempt of this.buildChain({ model: req.model, messages: [] })) {
-      const creds = this.modelCreds(attempt.provider);
-      if (creds.length === 0) {
-        errors.push(new Error(`no credentials configured for provider "${attempt.provider}"`));
-        continue;
-      }
-      const { provider, impl } = this.resolve(attempt.provider);
-      if (!impl.generateVideo) {
-        errors.push(new Error(`provider "${attempt.provider}" does not support video generation`));
-        continue;
-      }
-      for (const cred of creds) {
-        try {
-          const call: VideoCall = {
-            modelId: attempt.modelId,
-            prompt: req.prompt,
-            ...(req.image ? { image: req.image } : {}),
-            ...(req.mediaType ? { mediaType: req.mediaType } : {}),
-            ...(req.aspectRatio ? { aspectRatio: req.aspectRatio } : {}),
-            ...(req.resolution ? { resolution: req.resolution } : {}),
-            ...(req.duration ? { duration: req.duration } : {}),
-            ...(req.fps ? { fps: req.fps } : {}),
-            ...(req.n ? { n: req.n } : {}),
-            provider,
-            credential: cred,
-            fetch: this.deps.fetch
-          };
-          const result = await impl.generateVideo(call);
-          this.deps.reportCredential?.(attempt.provider, cred.id, true);
-          return result;
-        } catch (err) {
-          this.deps.reportCredential?.(attempt.provider, cred.id, false, errInfo(err));
-          errors.push(err);
-        }
-      }
-    }
-    throw new AggregateError(errors, 'gateway: video generation failed');
+    return generateVideoAttempt(this.deps, this.registry, req);
   }
 
   async transcribe(req: TranscriptionRequest): Promise<TranscriptionResult> {
-    const errors: unknown[] = [];
-    for (const attempt of this.buildChain({ model: req.model, messages: [] })) {
-      const creds = this.modelCreds(attempt.provider);
-      if (creds.length === 0) {
-        errors.push(new Error(`no credentials configured for provider "${attempt.provider}"`));
-        continue;
-      }
-      const { provider, impl } = this.resolve(attempt.provider);
-      if (!impl.transcribe) {
-        errors.push(new Error(`provider "${attempt.provider}" does not support audio transcription`));
-        continue;
-      }
-      for (const cred of creds) {
-        try {
-          const call: TranscriptionCall = {
-            modelId: attempt.modelId,
-            audio: req.audio,
-            ...(req.mediaType ? { mediaType: req.mediaType } : {}),
-            ...(req.language ? { language: req.language } : {}),
-            provider,
-            credential: cred,
-            fetch: this.deps.fetch
-          };
-          const result = await impl.transcribe(call);
-          this.deps.reportCredential?.(attempt.provider, cred.id, true);
-          return result;
-        } catch (err) {
-          this.deps.reportCredential?.(attempt.provider, cred.id, false, errInfo(err));
-          errors.push(err);
-        }
-      }
-    }
-    throw new AggregateError(errors, 'gateway: audio transcription failed');
+    return transcribeAttempt(this.deps, this.registry, req);
   }
 
   async rerank(req: RerankRequest): Promise<RerankResult> {
-    const errors: unknown[] = [];
-    for (const attempt of this.buildChain({ model: req.model, messages: [] })) {
-      const creds = this.modelCreds(attempt.provider);
-      if (creds.length === 0) {
-        errors.push(new Error(`no credentials configured for provider "${attempt.provider}"`));
-        continue;
-      }
-      const { provider, impl } = this.resolve(attempt.provider);
-      if (!impl.rerank) {
-        errors.push(new Error(`provider "${attempt.provider}" does not support reranking`));
-        continue;
-      }
-      for (const cred of creds) {
-        try {
-          const call: RerankCall = {
-            modelId: attempt.modelId,
-            query: req.query,
-            documents: req.documents,
-            ...(req.topN ? { topN: req.topN } : {}),
-            provider,
-            credential: cred,
-            fetch: this.deps.fetch
-          };
-          const result = await impl.rerank(call);
-          this.deps.reportCredential?.(attempt.provider, cred.id, true);
-          return result;
-        } catch (err) {
-          this.deps.reportCredential?.(attempt.provider, cred.id, false, errInfo(err));
-          errors.push(err);
-        }
-      }
-    }
-    throw new AggregateError(errors, 'gateway: reranking failed');
+    return rerankAttempt(this.deps, this.registry, req);
   }
 
   async countTokens(req: ModelRequest): Promise<number | undefined> {
-    for (const attempt of this.buildChain(req)) {
+    for (const attempt of buildChain(this.deps, req)) {
       const provider = this.deps.providers.find((u) => u.id === attempt.provider);
       if (!provider) continue;
       const impl = this.registry.get(provider.type);
       if (!impl?.countTokens) continue;
-      const [cred] = this.modelCreds(attempt.provider);
+      const [cred] = modelCreds(this.deps, attempt.provider);
       if (!cred) continue;
-      const count = await impl.countTokens(this.call(req, attempt, provider, cred));
+      const count = await impl.countTokens(buildCall(this.deps, req, attempt, provider, cred));
       if (count !== undefined) return count;
     }
     return undefined;
@@ -464,13 +272,13 @@ export class GatewayModelRouter implements ModelRouter {
     if (!spec) throw new Error('gateway: no embedding model configured (set the embedding model role)');
     if (texts.length === 0) return { embeddings: [] };
     const errors: unknown[] = [];
-    for (const attempt of this.buildChain({ model: spec, messages: [] })) {
-      const { provider, impl } = this.resolve(attempt.provider);
+    for (const attempt of buildChain(this.deps, { model: spec, messages: [] })) {
+      const { provider, impl } = resolveProvider(this.deps, this.registry, attempt.provider);
       if (!impl.embed) {
         errors.push(new Error(`provider "${attempt.provider}" does not support embeddings`));
         continue;
       }
-      for (const cred of this.modelCreds(attempt.provider)) {
+      for (const cred of modelCreds(this.deps, attempt.provider)) {
         try {
           const result = await impl.embed({
             modelId: attempt.modelId,
@@ -493,97 +301,6 @@ export class GatewayModelRouter implements ModelRouter {
       }
     }
     throw new AggregateError(errors, `gateway: embedding failed for "${spec}"`);
-  }
-
-  // ── resolution helpers ──────────────────────────────────────────────────────
-
-  private resolve(providerId: string): { provider: ResolvedProviderConfig; impl: ModelProvider } {
-    const provider = this.deps.providers.find((u) => u.id === providerId);
-    if (!provider) throw new Error(`gateway: unknown provider "${providerId}"`);
-    const impl = this.registry.get(provider.type);
-    if (!impl) throw new Error(`gateway: no provider registered for provider type "${provider.type}"`);
-    return { provider, impl };
-  }
-
-  private call(
-    req: ModelRequest,
-    attempt: Attempt,
-    provider: ResolvedProviderConfig,
-    cred: ProviderCredential
-  ): ModelCall {
-    return {
-      modelId: attempt.modelId,
-      messages: req.messages,
-      ...(req.tools ? { tools: req.tools } : {}),
-      ...(this.deps.searchToolProvider ? { searchToolProvider: this.deps.searchToolProvider } : {}),
-      params: attempt.params,
-      provider,
-      credential: cred,
-      fetch: this.deps.fetch,
-      ...(req.sessionId ? { sessionId: req.sessionId } : {}),
-      ...(req.userId ? { userId: req.userId } : {}),
-      ...(req.maxThinkingTokens ? { maxThinkingTokens: req.maxThinkingTokens } : {})
-    };
-  }
-
-  private buildChain(req: ModelRequest): Attempt[] {
-    const spec = req.model || this.deps.defaultProfile;
-    if (!spec) throw new Error('gateway: no model specified and no default profile configured');
-
-    // Raw "providerId:modelId" spec — bypasses profiles, no fallbacks.
-    const rawSep = spec.indexOf(':');
-    if (rawSep > 0) {
-      const provider = spec.slice(0, rawSep);
-      const modelId = spec.slice(rawSep + 1);
-      const routeParams = this.paramsForRoute(provider, modelId);
-      return [{ provider, modelId, params: mergeParams(routeParams ?? {}, req.params) }];
-    }
-
-    const chain: Attempt[] = [];
-    this.expandProfile(spec, req.params, new Set(), chain, true);
-    return chain;
-  }
-
-  private expandProfile(
-    alias: string,
-    overrideParams: GenerationParams | undefined,
-    visited: Set<string>,
-    out: Attempt[],
-    isPrimary: boolean
-  ): void {
-    if (visited.has(alias)) return; // guard against fallback cycles
-    visited.add(alias);
-
-    const profile = this.deps.profiles.find((p) => p.alias === alias);
-    if (!profile) {
-      // A missing primary profile is a hard error; a missing fallback is skipped.
-      if (isPrimary) throw new Error(`gateway: unknown model profile "${alias}"`);
-      return;
-    }
-
-    out.push({
-      provider: profile.routes.chat.provider,
-      modelId: profile.routes.chat.modelId,
-      params: isPrimary
-        ? mergeParams(mergeParams(profile.params, profile.routeParams?.chat), overrideParams)
-        : mergeParams(profile.params, profile.routeParams?.chat)
-    });
-
-    for (const fb of profile.fallbacks) {
-      if ('profile' in fb) this.expandProfile(fb.profile, undefined, visited, out, false);
-      else out.push({ provider: fb.provider, modelId: fb.modelId, params: {} });
-    }
-  }
-
-  private paramsForRoute(provider: string, modelId: string): GenerationParams | undefined {
-    for (const profile of this.deps.profiles) {
-      for (const role of Object.keys(profile.routes) as ModelRole[]) {
-        if (role === 'chat') continue;
-        const route = profile.routes[role];
-        if (route?.provider === provider && route.modelId === modelId) return profile.routeParams?.[role];
-      }
-    }
-    return undefined;
   }
 }
 
@@ -609,74 +326,8 @@ async function aggregate(stream: AsyncIterable<ModelChunk>): Promise<ModelResult
   };
 }
 
-// A successful authenticated list proves the credential works without spending any generation
-// tokens — the preferred connection test. Delegates to the provider's own listModels; providers
-// without one fall back to the generic OpenAI-style /models route using their descriptor base URL.
-export async function fetchProviderModels(
-  provider: ResolvedProviderConfig,
-  cred: ProviderCredential,
-  registry: ModelProviderRegistry,
-  fetchImpl: typeof globalThis.fetch = globalThis.fetch
-): Promise<ModelInfo[]> {
-  const impl = registry.get(provider.type);
-  if (impl?.listModels) return impl.listModels(provider, cred, fetchImpl);
-
-  const base = (cred.baseUrl ?? provider.baseUrl ?? impl?.descriptor.defaultBaseUrl)?.replace(/\/$/, '');
-  if (!base) throw new Error(`cannot list models: provider "${provider.id}" (${provider.type}) has no base url`);
-  const res = await fetchImpl(`${base}/models`, { headers: { authorization: `Bearer ${cred.accessToken}` } });
-  if (!res.ok) throw new Error(await modelsHttpError(res));
-  const json = (await res.json()) as {
-    data?: Array<{ id: string; name?: string; pricing?: Parameters<typeof openAiPrice>[0] }>;
-  };
-  return (json.data ?? []).map((m) => {
-    const price = openAiPrice(m.pricing);
-    return price ? { id: m.id, label: m.name, price } : { id: m.id, label: m.name };
-  });
-}
-
-export async function listProviderModels(
-  provider: ResolvedProviderConfig,
-  cred: ProviderCredential,
-  registry: ModelProviderRegistry,
-  fetchImpl: typeof globalThis.fetch = globalThis.fetch
-): Promise<ModelInfo[]> {
-  try {
-    return await fetchProviderModels(provider, cred, registry, fetchImpl);
-  } catch {
-    return [];
-  }
-}
-
-async function modelsHttpError(res: Response): Promise<string> {
-  let body = '';
-  try {
-    body = (await res.text()).slice(0, 200);
-  } catch {
-    // ignore — the status alone is enough
-  }
-  return `models request failed: ${res.status}${body ? ` — ${body}` : ''}`;
-}
-
-function mergeParams(base: GenerationParams, over: GenerationParams | undefined): GenerationParams {
-  if (!over) return base;
-  const merged: GenerationParams = { ...base };
-  if (over.temperature !== undefined) merged.temperature = over.temperature;
-  if (over.maxTokens !== undefined) merged.maxTokens = over.maxTokens;
-  if (over.topP !== undefined) merged.topP = over.topP;
-  if (over.reasoningEffort !== undefined) merged.reasoningEffort = over.reasoningEffort;
-  return merged;
-}
-
 function textGenerationErrorMessage(errors: unknown[]): string {
   return errors.some((err) => err instanceof Error && /text generation/i.test(err.message))
     ? 'gateway: text generation failed'
     : 'gateway: all model attempts failed';
-}
-
-function errInfo(err: unknown): { code?: string; message?: string } {
-  const e = err as { statusCode?: number; code?: string; message?: string } | undefined;
-  return {
-    code: e?.code ?? (e?.statusCode !== undefined ? String(e.statusCode) : undefined),
-    message: e?.message
-  };
 }

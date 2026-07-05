@@ -1,5 +1,4 @@
 import type {
-  Event,
   ListNativeCliSessionsResponse,
   NativeCliAgentView,
   NativeCliApprovalResolutionRequest,
@@ -24,48 +23,27 @@ import type {
   NativeCliObservationListener
 } from '@/services/native-cli/host-types.ts';
 import type { NativeCliProcess, NativeCliTerminal } from '@/services/native-cli/runtime-types.ts';
-import type { StructuredLineBufferState } from '@/services/native-cli/structured-lines.ts';
-import type {
-  NativeCliLaunchSpec,
-  NativeCliOutputEvent,
-  NativeCliProviderAdapter,
-  NativeCliStartPreflight
-} from '@/services/native-cli/types.ts';
+import type { NativeCliLaunchSpec, NativeCliStartPreflight } from '@/services/native-cli/types.ts';
 import type { NativeCliSessionRow } from '@/store/db/index.ts';
 
-import { chmodSync, mkdirSync, realpathSync, rmSync, statSync } from 'node:fs';
-import { createServer } from 'node:net';
-import { tmpdir } from 'node:os';
-import { dirname, isAbsolute, join } from 'node:path';
+import { chmodSync, realpathSync, statSync } from 'node:fs';
+import { dirname, isAbsolute } from 'node:path';
 import { createLogger } from '@monad/logger';
 import { newId } from '@monad/protocol';
 
+import { NativeCliAppServerConnectionManager } from '@/services/native-cli/app-server-connection.ts';
 import { connectAppServerStdio } from '@/services/native-cli/app-server-stdio.ts';
 import { connectAppServerUnix } from '@/services/native-cli/app-server-unix.ts';
 import { connectAppServerWs, dialAppServerWs, dialAppServerWsWithRetry } from '@/services/native-cli/app-server-ws.ts';
 import { NativeCliAuthHost, type NativeCliAuthListener } from '@/services/native-cli/auth-host.ts';
 import { BoundedOutputBuffer } from '@/services/native-cli/bounded-output-buffer.ts';
+import { NativeCliOneshotRunner } from '@/services/native-cli/cli-oneshot.ts';
 import { MAX_OUTPUT_SNAPSHOT } from '@/services/native-cli/constants.ts';
 import { NativeCliError } from '@/services/native-cli/errors.ts';
+import { NativeCliEventLog } from '@/services/native-cli/event-log.ts';
 import { providerHistoryOutputFromLocal, providerHistoryOutputViaCli } from '@/services/native-cli/history-backfill.ts';
-import {
-  APP_SERVER_DISCONNECT_GRACE_MS,
-  APP_SERVER_MAX_DISCONNECT_CYCLES,
-  APP_SERVER_RECONNECT_ATTEMPTS,
-  APP_SERVER_RECONNECT_BASE_MS,
-  APP_SERVER_RECONNECT_STREAK_RESET_MS,
-  APP_SERVER_STARTUP_TIMEOUT_MS,
-  HISTORY_PAGE_TIMEOUT_MS,
-  MAX_STRUCTURED_LINE,
-  type NativeCliOutputStream,
-  SNAPSHOT_FLUSH_MS
-} from '@/services/native-cli/host-constants.ts';
-import {
-  isManagedProjectRuntime,
-  nativeAgentMcpToolError,
-  nativeCliApprovalText,
-  toView
-} from '@/services/native-cli/host-helpers.ts';
+import { APP_SERVER_STARTUP_TIMEOUT_MS, HISTORY_PAGE_TIMEOUT_MS } from '@/services/native-cli/host-constants.ts';
+import { isManagedProjectRuntime, toView } from '@/services/native-cli/host-helpers.ts';
 import {
   buildNativeCliLaunch,
   getNativeCliProviderAdapter,
@@ -78,6 +56,7 @@ import {
   prepareManagedProjectRuntime
 } from '@/services/native-cli/managed-project.ts';
 import { NativeCliObservationHub } from '@/services/native-cli/observation-hub.ts';
+import { NativeCliOutputPipeline } from '@/services/native-cli/output-pipeline.ts';
 import {
   killNativeCliProcess,
   pickPtyFallbackLaunchMode,
@@ -86,8 +65,6 @@ import {
 } from '@/services/native-cli/process.ts';
 import { buildNativeCliSpawnEnv, requireNativeCliAgent } from '@/services/native-cli/spawn-support.ts';
 import { createStreamingTextDecoder } from '@/services/native-cli/stream-decoder.ts';
-import { takeCompleteStructuredLines } from '@/services/native-cli/structured-lines.ts';
-import { nativeCliOutputEventSchema } from '@/services/native-cli/types.ts';
 
 export type { NativeCliHostDeps };
 
@@ -99,14 +76,18 @@ export class NativeCliHost {
     getLive: (id) => this.live.get(id),
     observe: (id, afterSeq) => this.observe(id, afterSeq)
   });
-  private readonly structuredOutputBuffers = new Map<
-    string,
-    Partial<Record<NativeCliOutputStream, StructuredLineBufferState>>
-  >();
   private managedProjectOutputHandler: ManagedProjectOutputHandler | null = null;
   /** Provider-login (auth) sessions and one-shot auth/usage probes live in their own host; they share
    *  no state with interactive sessions. Public auth methods below delegate straight through. */
   private readonly authHost: NativeCliAuthHost;
+  /** Builds and dispatches durable/ephemeral native-CLI session events. */
+  private readonly events: NativeCliEventLog;
+  /** Owns app-server socket/port allocation and the disconnect→redial→give-up flow. */
+  private readonly appServerConnections: NativeCliAppServerConnectionManager;
+  /** Owns the child-process output path: buffering, snapshot flush, and structured-event decoding. */
+  private readonly outputPipeline: NativeCliOutputPipeline;
+  /** Runs `cli-oneshot` sessions: a logical session with no persistent process. */
+  private readonly oneshotRunner: NativeCliOneshotRunner;
   /** Serializes read-modify-write access to the native-CLI process registry file: the reads/writes
    *  are async (never block the event loop), so overlapping track/untrack calls are chained onto
    *  this promise instead of racing each other and losing an update. */
@@ -114,6 +95,31 @@ export class NativeCliHost {
 
   constructor(private readonly deps: NativeCliHostDeps) {
     this.authHost = new NativeCliAuthHost(deps);
+    this.events = new NativeCliEventLog({ store: deps.store, bus: deps.bus });
+    this.appServerConnections = new NativeCliAppServerConnectionManager({
+      live: this.live,
+      emit: (sessionId, type, payload) => this.events.emit(sessionId, type, payload),
+      stop: (id) => this.stop(id),
+      log: this.log
+    });
+    this.outputPipeline = new NativeCliOutputPipeline({
+      live: this.live,
+      store: deps.store,
+      events: this.events,
+      observation: this.observation,
+      stop: (id) => this.stop(id),
+      getManagedProjectOutputHandler: () => this.managedProjectOutputHandler,
+      log: this.log
+    });
+    this.oneshotRunner = new NativeCliOneshotRunner({
+      live: this.live,
+      store: deps.store,
+      events: this.events,
+      outputPipeline: this.outputPipeline,
+      buildSpawnEnv: (env) => this.buildSpawnEnv(env),
+      trackProcess: (pid) => this.trackNativeCliProcess(pid),
+      untrackProcess: (pid) => this.untrackNativeCliProcess(pid)
+    });
   }
 
   setManagedProjectOutputHandler(handler: ManagedProjectOutputHandler): void {
@@ -256,7 +262,7 @@ export class NativeCliHost {
     // the dial target.
     const wantsUnixAppServer =
       effectiveLaunchMode === 'app-server' && (args.appServerTransport ?? agent.appServerTransport) === 'unix';
-    const appServerSocketPath = wantsUnixAppServer ? this.allocateAppServerSocketPath(id) : undefined;
+    const appServerSocketPath = wantsUnixAppServer ? this.appServerConnections.allocateSocketPath(id) : undefined;
     // A `ws` app-server MAY prefer a daemon-assigned port over self-announcing one (see
     // `NativeCliAppServerWsHints.port`) — allocate a candidate up front so `buildLaunch` can put it in
     // argv if it wants to. Gated on the adapter's own opt-in (not just transport === 'ws'), since a
@@ -266,7 +272,7 @@ export class NativeCliHost {
       effectiveLaunchMode === 'app-server' &&
       (args.appServerTransport ?? agent.appServerTransport ?? 'ws') === 'ws' &&
       !!adapter.usesDaemonAssignedAppServerPort;
-    const appServerPort = wantsWsAppServer ? await this.allocateAppServerPort() : undefined;
+    const appServerPort = wantsWsAppServer ? await this.appServerConnections.allocatePort() : undefined;
     // Reusable so a pty-spawn failure (e.g. Bun's ConPTY support unavailable on the host) can rebuild
     // the launch spec for a fallback launchMode without duplicating every option.
     const buildLaunchOpts = (overrides?: {
@@ -314,7 +320,7 @@ export class NativeCliHost {
         updatedAt: failedAt,
         exitedAt: failedAt
       });
-      this.emit(args.transcriptTargetId, 'native_cli.exited', {
+      this.events.emit(args.transcriptTargetId, 'native_cli.exited', {
         nativeCliSessionId: id,
         exitCode: null,
         state: 'failed'
@@ -350,7 +356,7 @@ export class NativeCliHost {
     // cli-oneshot spawns a fresh process PER TURN (no persistent child), so it forks off the shared
     // spawn path here — the session is a logical entity and each `input()` runs one process.
     if (launch.launchMode === 'cli-oneshot') {
-      return this.startCliOneshot({
+      return this.oneshotRunner.start({
         id,
         transcriptTargetId: args.transcriptTargetId,
         agentName: runtimeAgentName,
@@ -398,7 +404,7 @@ export class NativeCliHost {
                 pendingCR = text.endsWith('\r');
                 if (pendingCR) text = text.slice(0, -1);
                 text = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-                if (text) this.output(args.transcriptTargetId, id, text, 'pty', adapter);
+                if (text) this.outputPipeline.output(args.transcriptTargetId, id, text, 'pty', adapter);
               }
             }
           } as Bun.SpawnOptions.OptionsObject<'ignore', 'ignore', 'ignore'>) as NativeCliProcess;
@@ -467,7 +473,7 @@ export class NativeCliHost {
         updatedAt: failedAt,
         exitedAt: failedAt
       });
-      this.emit(args.transcriptTargetId, 'native_cli.exited', {
+      this.events.emit(args.transcriptTargetId, 'native_cli.exited', {
         nativeCliSessionId: id,
         exitCode: null,
         state: 'failed'
@@ -567,15 +573,16 @@ export class NativeCliHost {
       // stall the child. stderr drains immediately EXCEPT for the self-announcing ws path below, where
       // reading stderr for the announced port IS the connect step; delaying the drain there is
       // deliberate, not incidental.
-      this.drainStream(proc.stdout);
+      this.appServerConnections.drainStream(proc.stdout);
       const isSelfAnnouncingWs = !isAppServerUnix && launch.appServerWs?.port === undefined;
-      if (!isSelfAnnouncingWs) this.drainStream(proc.stderr);
-      const onMessage = (text: string): void => this.output(args.transcriptTargetId, id, text, 'app-server', adapter);
-      const onClose = (): void => this.handleAppServerDisconnect(id);
+      if (!isSelfAnnouncingWs) this.appServerConnections.drainStream(proc.stderr);
+      const onMessage = (text: string): void =>
+        this.outputPipeline.output(args.transcriptTargetId, id, text, 'app-server', adapter);
+      const onClose = (): void => this.appServerConnections.handleDisconnect(id);
       try {
         if (isAppServerUnix) {
           const socketPath = appServerSocketPath ?? '';
-          live.appServer = await this.raceAgainstExit(
+          live.appServer = await this.appServerConnections.raceAgainstExit(
             connectAppServerUnix({ socketPath, onMessage, onClose, timeoutMs: APP_SERVER_STARTUP_TIMEOUT_MS }),
             proc.exited
           );
@@ -592,10 +599,13 @@ export class NativeCliHost {
             path: launch.appServerWs.path,
             query: launch.appServerWs.query
           };
-          live.appServer = await this.raceAgainstExit(dialAppServerWsWithRetry(wsPort, dialOpts), proc.exited);
+          live.appServer = await this.appServerConnections.raceAgainstExit(
+            dialAppServerWsWithRetry(wsPort, dialOpts),
+            proc.exited
+          );
           live.appServerRedial = () => dialAppServerWsWithRetry(wsPort, dialOpts);
         } else {
-          live.appServer = await this.raceAgainstExit(
+          live.appServer = await this.appServerConnections.raceAgainstExit(
             connectAppServerWs({
               stderr: proc.stderr,
               onMessage,
@@ -610,7 +620,7 @@ export class NativeCliHost {
             }),
             proc.exited
           );
-          this.drainStream(proc.stderr);
+          this.appServerConnections.drainStream(proc.stderr);
         }
         // The socket dir is already 0700; lock the socket itself to owner-only as defense in depth.
         if (appServerSocketPath) {
@@ -625,8 +635,8 @@ export class NativeCliHost {
         live.startup?.reject(error instanceof Error ? error : new Error(String(error)));
       }
     } else if (launch.launchMode !== 'pty') {
-      this.readPipe(args.transcriptTargetId, id, proc.stdout, 'stdout', adapter);
-      this.readPipe(args.transcriptTargetId, id, proc.stderr, 'stderr', adapter);
+      this.outputPipeline.readPipe(args.transcriptTargetId, id, proc.stdout, 'stdout', adapter);
+      this.outputPipeline.readPipe(args.transcriptTargetId, id, proc.stderr, 'stderr', adapter);
       // stdio app-server: frames travel over the child's stdin pipe, wrapped as the same
       // transport-neutral connection the ws leg produces. json-stream adapters keep writing to
       // `live.stdin` directly and never touch `appServer`.
@@ -642,8 +652,8 @@ export class NativeCliHost {
         if (runtimeRole === 'managed-project-agent' && managed) cleanupManagedProjectRuntimeToken(managed.workspace);
         this.live.delete(id);
         this.untrackNativeCliProcess(proc.pid);
-        this.structuredOutputBuffers.delete(id);
-        this.unlinkAppServerSocket(appServerSocketPath);
+        this.outputPipeline.dropStructuredBuffer(id);
+        this.appServerConnections.unlinkSocket(appServerSocketPath);
         killNativeCliProcess(proc.pid);
         const failedAt = new Date().toISOString();
         this.deps.store.upsertNativeCliSession({
@@ -658,7 +668,7 @@ export class NativeCliHost {
         throw error;
       }
     }
-    this.emit(args.transcriptTargetId, 'native_cli.started', {
+    this.events.emit(args.transcriptTargetId, 'native_cli.started', {
       nativeCliSessionId: id,
       agentName: runtimeAgentName,
       provider: agent.provider,
@@ -698,18 +708,18 @@ export class NativeCliHost {
       pendingCR = remainingText.endsWith('\r');
       if (pendingCR) remainingText = remainingText.slice(0, -1);
       remainingText = remainingText.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-      if (remainingText) this.output(args.transcriptTargetId, id, remainingText, 'pty', adapter);
-      if (pendingCR) this.output(args.transcriptTargetId, id, '\n', 'pty', adapter);
-      this.flushSnapshot(id);
+      if (remainingText) this.outputPipeline.output(args.transcriptTargetId, id, remainingText, 'pty', adapter);
+      if (pendingCR) this.outputPipeline.output(args.transcriptTargetId, id, '\n', 'pty', adapter);
+      this.outputPipeline.flushSnapshot(id);
       this.live.delete(id);
       if (runtimeRole === 'managed-project-agent' && managed) cleanupManagedProjectRuntimeToken(managed.workspace);
       this.untrackNativeCliProcess(proc.pid);
-      this.structuredOutputBuffers.delete(id);
-      this.unlinkAppServerSocket(appServerSocketPath);
+      this.outputPipeline.dropStructuredBuffer(id);
+      this.appServerConnections.unlinkSocket(appServerSocketPath);
       const exitedAt = new Date().toISOString();
       const state = code === 0 ? 'exited' : 'failed';
       this.deps.store.closeNativeCliSession(id, exitedAt, code, state);
-      this.emit(args.transcriptTargetId, 'native_cli.exited', { nativeCliSessionId: id, exitCode: code, state });
+      this.events.emit(args.transcriptTargetId, 'native_cli.exited', { nativeCliSessionId: id, exitCode: code, state });
       this.observation.publish(id, true);
       this.log[state === 'failed' ? 'error' : 'debug'](
         {
@@ -726,152 +736,6 @@ export class NativeCliHost {
     return toView(row);
   }
 
-  /** Register a `cli-oneshot` session: a logical session with NO persistent process. Each turn spawns a
-   *  fresh CLI (see runCliOneshotTurn). Mirrors the persistent path's row/live/started bookkeeping. */
-  private startCliOneshot(args: {
-    id: string;
-    transcriptTargetId: TranscriptTargetId;
-    agentName: string;
-    provider: NativeCliSessionRow['provider'];
-    workingPath: string;
-    runtimeRole: NativeCliSessionView['runtimeRole'];
-    launch: NativeCliLaunchSpec;
-    adapter: NativeCliProviderAdapter;
-    managed: ReturnType<typeof prepareManagedProjectRuntime> | null;
-    providerSessionRef: string | null;
-    startedAt: string;
-  }): NativeCliSessionView {
-    const { id, transcriptTargetId, agentName, provider, workingPath, runtimeRole, launch, adapter, managed } = args;
-    const row: NativeCliSessionRow = {
-      id,
-      transcriptTargetId,
-      agentName,
-      provider,
-      workingPath,
-      launchMode: 'cli-oneshot',
-      runtimeRole,
-      agentRuntimeId: runtimeRole === 'managed-project-agent' ? id : null,
-      agentRuntimeTokenHash: managed?.tokenHash ?? null,
-      lastDeliveredSeq: 0,
-      lastVisibleSeq: 0,
-      state: 'running',
-      pid: null,
-      providerSessionRef: args.providerSessionRef,
-      outputSnapshot: '',
-      exitCode: null,
-      startedAt: args.startedAt,
-      updatedAt: args.startedAt,
-      exitedAt: null
-    };
-    this.deps.store.upsertNativeCliSession(row);
-    const live: LiveNativeCliSession = {
-      id,
-      transcriptTargetId,
-      agentName,
-      provider,
-      runtimeRole,
-      // cli-oneshot spawns a fresh stateless process per turn — no persistent channel to resolve an
-      // approval through, so it never delegates (autopilot only).
-      proxyApprovals: false,
-      adapter,
-      launchMode: 'cli-oneshot',
-      oneshotSpec: launch,
-      managedPrompt: managed?.prompt ?? null,
-      providerSessionRef: args.providerSessionRef,
-      pendingApprovals: new Map(),
-      pendingHistoryPages: new Map(),
-      pendingRequests: new Map(),
-      startup: undefined,
-      outputBuffer: new BoundedOutputBuffer(MAX_OUTPUT_SNAPSHOT),
-      outputSeq: 0,
-      snapshotFlushTimer: null,
-      nextRequestId: () => 0,
-      kill: (signal) => {
-        const l = this.live.get(id);
-        if (l?.oneshotTurnProc) killNativeCliProcess(l.oneshotTurnProc.pid, signal);
-      }
-    };
-    this.live.set(id, live);
-    this.emit(transcriptTargetId, 'native_cli.started', {
-      nativeCliSessionId: id,
-      agentName,
-      provider,
-      productIcon: adapter.productIcon,
-      launchMode: 'cli-oneshot',
-      workingPath,
-      pid: null
-    });
-    return toView(row);
-  }
-
-  /** Run one `cli-oneshot` turn: spawn a fresh CLI with the directive baked into argv, stream its stdout
-   *  into the transcript, and let it exit. The member's actual reply reaches the project via its
-   *  `monad project post` callback (managed runtime), so we only need to run the process to completion. */
-  private async runCliOneshotTurn(live: LiveNativeCliSession, input: string): Promise<void> {
-    const spec = live.oneshotSpec;
-    const turnArgsFn = live.adapter.oneshotTurnArgs;
-    if (!spec || !turnArgsFn) return;
-    // cli-oneshot is STATELESS per turn (a fresh process, no --resume selector), so the managed
-    // collaboration prompt must ride EVERY turn's directive — not just the first — or turns 2+ forget
-    // the `monad project post/ask/read` contract and their reply never reaches the project.
-    const directive = live.managedPrompt ? `${live.managedPrompt}\n\n---\n\n${input}` : input;
-    const turnArgs = turnArgsFn(directive, { providerSessionRef: live.providerSessionRef });
-    const spawnEnv = await this.buildSpawnEnv(spec.env);
-    let proc: NativeCliProcess;
-    try {
-      proc = Bun.spawn([...spec.argv, ...turnArgs], {
-        cwd: spec.cwd,
-        env: spawnEnv,
-        stdin: 'ignore',
-        stdout: 'pipe',
-        stderr: 'pipe'
-      }) as NativeCliProcess;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      this.output(live.transcriptTargetId, live.id, message, 'stderr', live.adapter);
-      this.flushSnapshot(live.id);
-      return;
-    }
-    live.oneshotTurnProc = proc;
-    this.trackNativeCliProcess(proc.pid);
-    // Surface BOTH streams into the transcript (stderr carries a provider's real errors), and await both
-    // drains so all output is emitted before the turn is considered done.
-    const pump = (stream: ReadableStream<Uint8Array> | undefined, name: 'stdout' | 'stderr'): Promise<void> => {
-      if (!stream) return Promise.resolve();
-      const decoder = createStreamingTextDecoder();
-      return (async () => {
-        for await (const data of stream) {
-          const text = decoder.decode(data);
-          if (text) this.output(live.transcriptTargetId, live.id, text, name, live.adapter);
-        }
-        const rest = decoder.flush();
-        if (rest) this.output(live.transcriptTargetId, live.id, rest, name, live.adapter);
-      })();
-    };
-    const drains = Promise.all([pump(proc.stdout, 'stdout'), pump(proc.stderr, 'stderr')]);
-    const code = await proc.exited;
-    await drains;
-    this.untrackNativeCliProcess(proc.pid);
-    if (live.oneshotTurnProc === proc) live.oneshotTurnProc = undefined;
-    this.flushSnapshot(live.id);
-    if (code !== 0) {
-      this.output(
-        live.transcriptTargetId,
-        live.id,
-        `\n[${live.provider} turn exited with code ${code}]\n`,
-        'stderr',
-        live.adapter
-      );
-    }
-    // The turn's process has exited. For a managed member the real reply arrives via its
-    // `monad project post` callback (which already completed the thinking indicator); but if the CLI
-    // finished WITHOUT posting, retire the dangling spinner so the member doesn't look stuck forever.
-    // No-op when a post already settled it (nothing pending) — process exit is the definitive turn end.
-    if (live.runtimeRole === 'managed-project-agent') {
-      this.emitManagedProjectOutput(live.transcriptTargetId, live.id, '', false, false);
-    }
-  }
-
   input(id: string, req: NativeCliInputRequest): void {
     const live = this.live.get(id);
     if (!live) throw new Error(`native CLI session is not running: ${id}`);
@@ -884,7 +748,7 @@ export class NativeCliHost {
     // at a time), never clobbering the in-flight turn or interleaving output.
     if (live.launchMode === 'cli-oneshot') {
       live.oneshotQueue = (live.oneshotQueue ?? Promise.resolve())
-        .then(() => this.runCliOneshotTurn(live, req.input))
+        .then(() => this.oneshotRunner.runTurn(live, req.input))
         .catch(() => undefined);
       return;
     }
@@ -977,8 +841,8 @@ export class NativeCliHost {
       agents: this.deps.agents,
       buildSpawnEnv: (env) => this.buildSpawnEnv(env),
       takeStructuredLines: (structuredId, stream, chunk) =>
-        this.takeCompleteStructuredLines(structuredId, stream, chunk),
-      dropStructuredBuffer: (structuredId) => this.structuredOutputBuffers.delete(structuredId)
+        this.outputPipeline.takeCompleteStructuredLines(structuredId, stream, chunk),
+      dropStructuredBuffer: (structuredId) => this.outputPipeline.dropStructuredBuffer(structuredId)
     }).catch(() => null);
     if (cliOutput) {
       return {
@@ -1082,190 +946,13 @@ export class NativeCliHost {
     const request = live.pendingApprovals.get(req.requestId);
     live.adapter.resolveApproval(live, { ...req, request });
     live.pendingApprovals.delete(req.requestId);
-    this.emit(live.transcriptTargetId, 'native_cli.approval_resolved', {
+    this.events.emit(live.transcriptTargetId, 'native_cli.approval_resolved', {
       nativeCliSessionId: id,
       provider: live.adapter.provider,
       requestId: req.requestId,
       allow: req.allow,
       ...(req.reason ? { reason: req.reason } : {})
     });
-  }
-
-  /** Allocate the AF_UNIX socket path a `unix` app-server child will listen on. The path must stay
-   *  under the OS SUN_LEN limit and sit in a real (non-symlink) directory codex is willing to bind in
-   *  — a private, owner-only subdir of the resolved temp dir satisfies both (macOS `/tmp` is a symlink
-   *  and codex refuses to bind directly in the sticky temp root). */
-  private allocateAppServerSocketPath(id: string): string {
-    const dir = join(realpathSync(tmpdir()), 'monad-appserver');
-    mkdirSync(dir, { recursive: true, mode: 0o700 });
-    // mkdir's mode is a no-op if the dir already exists (e.g. a looser dir pre-created by another
-    // local user in a shared tmp), so tighten it explicitly to owner-only.
-    try {
-      chmodSync(dir, 0o700);
-    } catch {
-      /* not chmod-able (e.g. Windows) */
-    }
-    const path = join(dir, `${id.replace(/[^a-zA-Z0-9]/g, '').slice(-12)}.sock`);
-    if (Buffer.byteLength(path) > 100) {
-      throw new NativeCliError(
-        'unsupported_capability',
-        'app-server unix socket path exceeds the OS limit; use the stdio or ws transport'
-      );
-    }
-    rmSync(path, { force: true });
-    return path;
-  }
-
-  /** Pick a free loopback TCP port for a `ws` app-server the daemon wants to assign an explicit
-   *  `--port` to (see `NativeCliAppServerWsHints.port`) rather than parsing a self-announced one. Binds
-   *  to port 0 and immediately releases it — a standard, small-window TOCTOU (acceptable for a
-   *  same-process child the daemon spawns milliseconds later) rather than a hard guarantee. */
-  private allocateAppServerPort(): Promise<number> {
-    return new Promise((resolve, reject) => {
-      const server = createServer();
-      server.once('error', reject);
-      server.listen(0, '127.0.0.1', () => {
-        const address = server.address();
-        server.close(() => {
-          if (address && typeof address === 'object') resolve(address.port);
-          else reject(new Error('app-server ws transport: could not allocate a loopback port'));
-        });
-      });
-    });
-  }
-
-  private unlinkAppServerSocket(socketPath: string | undefined): void {
-    if (!socketPath) return;
-    try {
-      rmSync(socketPath, { force: true });
-    } catch {
-      /* already gone */
-    }
-  }
-
-  /** An app-server byte channel closed on its own. On loopback this is almost always the child
-   *  exiting — `proc.exited` handles that within the grace window and records the real exit state. If
-   *  the session is still live after the grace the child is alive but the socket dropped: re-dial the
-   *  same socket and re-establish the thread via `thread/resume`. Only if reconnect fails do we tear
-   *  the session down and prompt a manual reconnect. A drop during startup (no thread yet) fails fast. */
-  private handleAppServerDisconnect(id: string): void {
-    if (!this.live.has(id)) return;
-    setTimeout(() => {
-      const current = this.live.get(id);
-      if (!current || current.appServerReconnecting) return;
-      this.log.warn(
-        {
-          sessionId: current.transcriptTargetId,
-          event: 'native_cli.app_server_disconnected',
-          nativeCliSessionId: id,
-          provider: current.provider
-        },
-        'native cli app-server socket dropped while the process is still alive'
-      );
-      // A gateway can close the socket on its very first handshake attempt (e.g. OpenClaw rejects
-      // `connect` with `retryable:true` while its sidecar plugins are still loading, then drops the
-      // connection) — redial first if the launch mode supports it, even while `live.startup` is still
-      // pending. `reconnectAppServer`'s own bounded attempts keep this fast, and its failure path already
-      // calls `stop()`, which rejects a still-pending `startup` with a clear message — so this doesn't
-      // weaken the original guarantee, it just gives a slow-starting gateway a few quick retries first.
-      //
-      // `reconnectAppServer` declares success as soon as the socket TRANSPORT reopens, before the
-      // app-level handshake completes — so its own attempt counter only bounds transport-dial failures
-      // within ONE call. A gateway whose socket keeps reopening but whose handshake keeps failing (e.g.
-      // an adapter that swallows a transient handshake rejection expecting the resulting socket-close to
-      // trigger redial) would restart that counter every cycle and never reach an exhaustion path.
-      // `appServerDisconnectCycles` is the cross-invocation ceiling that closes that gap.
-      if (current.appServerStreakResetTimer) {
-        clearTimeout(current.appServerStreakResetTimer);
-        current.appServerStreakResetTimer = undefined;
-      }
-      if (current.appServerRedial) {
-        current.appServerDisconnectCycles = (current.appServerDisconnectCycles ?? 0) + 1;
-        if (current.appServerDisconnectCycles <= APP_SERVER_MAX_DISCONNECT_CYCLES) {
-          void this.reconnectAppServer(id);
-          return;
-        }
-        this.log.warn(
-          {
-            sessionId: current.transcriptTargetId,
-            event: 'native_cli.app_server_reconnect_churn_exceeded',
-            nativeCliSessionId: id,
-            provider: current.provider,
-            cycles: current.appServerDisconnectCycles
-          },
-          'native cli app-server exceeded its reconnect churn budget — giving up'
-        );
-      }
-      if (current.startup) {
-        clearTimeout(current.startup.timeout);
-        current.startup.reject(new Error(`native CLI app-server socket dropped before ready: ${id}`));
-        current.startup = undefined;
-        this.stop(id);
-        return;
-      }
-      this.emitAppServerReconnectRequired(id, current);
-      this.stop(id);
-    }, APP_SERVER_DISCONNECT_GRACE_MS);
-  }
-
-  private emitAppServerReconnectRequired(id: string, live: LiveNativeCliSession): void {
-    this.emit(live.transcriptTargetId, 'native_cli.connection_required', {
-      nativeCliSessionId: id,
-      agentName: live.agentName,
-      provider: live.provider,
-      reason: `${live.provider} app-server connection dropped`,
-      reconnectIn: 'studio'
-    });
-  }
-
-  /** Re-dial the app-server socket and resume the thread, with a few backoff attempts. On success the
-   *  session keeps running on the fresh connection; on exhaustion it is torn down with a reconnect
-   *  prompt. Stale request ids from the dropped socket are cleared — their responses will never come. */
-  private async reconnectAppServer(id: string): Promise<void> {
-    const live = this.live.get(id);
-    if (!live?.appServerRedial || live.appServerReconnecting) return;
-    live.appServerReconnecting = true;
-    for (let attempt = 1; attempt <= APP_SERVER_RECONNECT_ATTEMPTS; attempt++) {
-      if (!this.live.has(id)) return; // torn down meanwhile
-      await Bun.sleep(APP_SERVER_RECONNECT_BASE_MS * attempt);
-      const current = this.live.get(id);
-      if (!current?.appServerRedial) return;
-      try {
-        const connection = await current.appServerRedial();
-        current.appServer = connection;
-        current.pendingRequests.clear();
-        current.appServerReconnecting = false;
-        current.adapter.initialize?.(current, {
-          ...(current.initializeContext ?? { workingPath: '' }),
-          providerSessionRef: current.providerSessionRef ?? undefined
-        });
-        // This call only proves the socket TRANSPORT reopened, not that the app-level handshake will
-        // succeed — so don't reset the churn counter yet. Reset it once this connection survives a
-        // stretch without dropping again; a fresh disconnect cancels this timer (see
-        // `handleAppServerDisconnect`), so a persistently-flapping gateway can't reset its own count by
-        // surviving just long enough between drops.
-        current.appServerStreakResetTimer = setTimeout(() => {
-          const stillLive = this.live.get(id);
-          if (stillLive) {
-            stillLive.appServerDisconnectCycles = 0;
-            stillLive.appServerStreakResetTimer = undefined;
-          }
-        }, APP_SERVER_RECONNECT_STREAK_RESET_MS);
-        this.log.debug(
-          { sessionId: current.transcriptTargetId, event: 'native_cli.app_server_reconnected', nativeCliSessionId: id },
-          'native cli app-server reconnected'
-        );
-        return;
-      } catch {
-        /* retry */
-      }
-    }
-    const current = this.live.get(id);
-    if (current) {
-      current.appServerReconnecting = false;
-      this.emitAppServerReconnectRequired(id, current);
-      this.stop(id);
-    }
   }
 
   stop(id: string): void {
@@ -1303,17 +990,17 @@ export class NativeCliHost {
       this.untrackNativeCliProcess(live.oneshotTurnProc.pid);
       live.oneshotTurnProc = undefined;
     }
-    this.flushSnapshot(id);
+    this.outputPipeline.flushSnapshot(id);
     this.live.delete(id);
     const row = this.deps.store.getNativeCliSession(id);
     if (row?.runtimeRole === 'managed-project-agent')
       cleanupManagedProjectRuntimeToken(this.managedRuntimeWorkspace(row));
     if (live.proc) this.untrackNativeCliProcess(live.proc.pid);
-    this.structuredOutputBuffers.delete(id);
-    this.unlinkAppServerSocket(live.appServerSocketPath);
+    this.outputPipeline.dropStructuredBuffer(id);
+    this.appServerConnections.unlinkSocket(live.appServerSocketPath);
     const exitedAt = new Date().toISOString();
     this.deps.store.closeNativeCliSession(id, exitedAt, null, 'stopped');
-    this.emit(live.transcriptTargetId, 'native_cli.exited', {
+    this.events.emit(live.transcriptTargetId, 'native_cli.exited', {
       nativeCliSessionId: id,
       exitCode: null,
       state: 'stopped'
@@ -1396,383 +1083,5 @@ export class NativeCliHost {
 
   preflight(agentName: string): Promise<NativeCliStartPreflight> {
     return this.authHost.preflight(agentName);
-  }
-
-  private readPipe(
-    transcriptTargetId: TranscriptTargetId,
-    id: string,
-    stream: ReadableStream<Uint8Array> | undefined,
-    name: 'stdout' | 'stderr',
-    adapter: NativeCliProviderAdapter
-  ): void {
-    if (!stream) return;
-    const decoder = createStreamingTextDecoder();
-    void (async () => {
-      for await (const data of stream) {
-        const text = decoder.decode(data);
-        if (text) this.output(transcriptTargetId, id, text, name, adapter);
-      }
-      const remainingText = decoder.flush();
-      if (remainingText) this.output(transcriptTargetId, id, remainingText, name, adapter);
-    })();
-  }
-
-  /** Consume-and-discard a child stream. For ws app-server sessions the protocol arrives over the
-   *  WebSocket, so stdout/stderr are only logs — but they must still be drained or a full pipe buffer
-   *  will stall the child. */
-  private drainStream(stream: ReadableStream<Uint8Array> | undefined): void {
-    if (!stream) return;
-    void (async () => {
-      try {
-        const reader = stream.getReader();
-        for (;;) {
-          const { done } = await reader.read();
-          if (done) return;
-        }
-      } catch {
-        /* stream closed */
-      }
-    })();
-  }
-
-  /** Race an app-server connect attempt against the child exiting. Without this, a child that crashes
-   *  immediately after spawn (missing dependency, port stolen between allocation and bind, etc.) is only
-   *  noticed once the connect's own timeout elapses — the daemon keeps retrying against a port that will
-   *  never open for the full app-server startup timeout instead of failing within milliseconds. */
-  private async raceAgainstExit<T>(connect: Promise<T>, exited: Promise<number>): Promise<T> {
-    let settled = false;
-    const exitGuard = exited.then((code) => {
-      if (settled) return undefined as T;
-      throw new Error(`native CLI process exited (code ${code}) before the app-server became ready`);
-    });
-    try {
-      return await Promise.race([connect, exitGuard]);
-    } finally {
-      settled = true;
-    }
-  }
-
-  private output(
-    transcriptTargetId: TranscriptTargetId,
-    id: string,
-    chunk: string,
-    // 'app-server' is a single pre-framed JSON-RPC message (one ws text frame) — already a complete
-    // line, so it skips the newline-reassembly buffer that stdout/stderr byte chunks need.
-    stream: 'stdout' | 'stderr' | 'pty' | 'app-server',
-    adapter: NativeCliProviderAdapter
-  ): void {
-    // Keep the observation snapshot newline-delimited so the web parser can split records; a ws frame
-    // carries no trailing newline of its own.
-    const buffered = stream === 'app-server' ? `${chunk}\n` : chunk;
-    const live = this.live.get(id);
-    if (live) {
-      // Accumulate in memory and flush the bounded snapshot to SQLite on a timer — avoids a
-      // per-chunk 256 KB read-modify-write under a chatty agent.
-      live.outputBuffer.append(buffered);
-      live.outputSeq += buffered.length;
-      if (!isManagedProjectRuntime(live)) this.scheduleSnapshotFlush(id);
-      this.observation.publish(id);
-    } else {
-      const row = this.deps.store.getNativeCliSession(id);
-      if (!row || !isManagedProjectRuntime(row))
-        this.deps.store.appendNativeCliOutput(id, buffered, MAX_OUTPUT_SNAPSHOT);
-    }
-    this.publishEphemeral(transcriptTargetId, 'native_cli.output', {
-      nativeCliSessionId: id,
-      stream: stream === 'app-server' ? 'stdout' : stream,
-      chunk: buffered
-    });
-    const structuredChunk =
-      stream === 'pty' || stream === 'app-server' ? chunk : this.takeCompleteStructuredLines(id, stream, chunk);
-    if (!structuredChunk) return;
-    if (stream === 'stderr') {
-      for (const line of structuredChunk.split('\n')) {
-        const record = nativeAgentMcpToolError(line.trim());
-        if (!record) continue;
-        const liveSession = this.live.get(id);
-        this.log.error(
-          {
-            ...record,
-            transcriptTargetId,
-            nativeCliSessionId: id,
-            agentName: liveSession?.agentName,
-            provider: liveSession?.provider
-          },
-          'managed native cli agent-facing MCP tool failed'
-        );
-      }
-    }
-    for (const event of adapter.parseOutput(structuredChunk, this.live.get(id))) {
-      const parsed = nativeCliOutputEventSchema.safeParse(event);
-      if (!parsed.success) continue;
-      this.emitStructuredOutputEvent(transcriptTargetId, id, adapter, parsed.data);
-    }
-  }
-
-  private scheduleSnapshotFlush(id: string): void {
-    const live = this.live.get(id);
-    if (!live || live.snapshotFlushTimer) return;
-    live.snapshotFlushTimer = setTimeout(() => {
-      const current = this.live.get(id);
-      if (current) current.snapshotFlushTimer = null;
-      this.flushSnapshot(id);
-    }, SNAPSHOT_FLUSH_MS);
-  }
-
-  /** Persist the in-memory snapshot now and cancel any pending flush. Called on the timer and once
-   *  more on exit/stop so the final output isn't lost. */
-  private flushSnapshot(id: string): void {
-    const live = this.live.get(id);
-    if (!live) return;
-    if (live.snapshotFlushTimer) {
-      clearTimeout(live.snapshotFlushTimer);
-      live.snapshotFlushTimer = null;
-    }
-    if (!isManagedProjectRuntime(live))
-      this.deps.store.setNativeCliOutputSnapshot(id, live.outputBuffer.snapshot(), MAX_OUTPUT_SNAPSHOT);
-  }
-
-  private takeCompleteStructuredLines(id: string, stream: 'stdout' | 'stderr', chunk: string): string {
-    const buffers = this.structuredOutputBuffers.get(id) ?? {};
-    const state = buffers[stream] ?? { text: '', discarding: false };
-    const completeLines = takeCompleteStructuredLines(state, chunk, MAX_STRUCTURED_LINE);
-    buffers[stream] = state;
-    this.structuredOutputBuffers.set(id, buffers);
-    return completeLines;
-  }
-
-  private emitStructuredOutputEvent(
-    transcriptTargetId: TranscriptTargetId,
-    id: string,
-    adapter: NativeCliProviderAdapter,
-    event: NativeCliOutputEvent
-  ): void {
-    if (event.type === 'agent_message') {
-      // A managed provider's own message is diagnostic output — observable through the native_cli
-      // output card, never auto-posted to the Workplace Project wall. A reply reaches the room only
-      // when the agent explicitly posts via the bridge (`monad project post`), which the wake notice
-      // instructs it to do. This keeps every provider consistent (codex never carried a terminal
-      // `final` marker) and avoids double-posting the same text via both paths. Errors still surface
-      // below via the provider_error branch.
-      if (event.payload.final === true) {
-        this.emitManagedProjectOutput(
-          transcriptTargetId,
-          id,
-          typeof event.payload.text === 'string' ? event.payload.text : '',
-          false,
-          false
-        );
-      }
-      return;
-    }
-
-    if (event.type === 'session_ref') {
-      const providerSessionRef =
-        typeof event.payload.providerSessionRef === 'string' ? event.payload.providerSessionRef : undefined;
-      if (providerSessionRef) {
-        const live = this.live.get(id);
-        if (live) {
-          live.providerSessionRef = providerSessionRef;
-          if (live.startup) {
-            clearTimeout(live.startup.timeout);
-            live.startup.resolve(providerSessionRef);
-            live.startup = undefined;
-          }
-        }
-        this.deps.store.updateNativeCliSessionRef(id, providerSessionRef);
-      }
-      return;
-    }
-
-    if (event.type === 'history_page') {
-      const responseId =
-        typeof event.payload.responseId === 'string' ? event.payload.responseId : String(event.payload.responseId);
-      const live = this.live.get(id);
-      const pending = live?.pendingHistoryPages.get(responseId);
-      if (!pending) return;
-      clearTimeout(pending.timeout);
-      live?.pendingHistoryPages.delete(responseId);
-      pending.resolve({
-        items: Array.isArray(event.payload.items) ? event.payload.items : [],
-        nextCursor: typeof event.payload.nextCursor === 'string' ? event.payload.nextCursor : null,
-        backwardsCursor: typeof event.payload.backwardsCursor === 'string' ? event.payload.backwardsCursor : null
-      });
-      return;
-    }
-
-    if (event.type === 'connection_required') {
-      const live = this.live.get(id);
-      this.emit(transcriptTargetId, 'native_cli.connection_required', {
-        nativeCliSessionId: id,
-        agentName: live?.agentName ?? adapter.provider,
-        provider: adapter.provider,
-        reason:
-          typeof event.payload.reason === 'string'
-            ? event.payload.reason
-            : `${adapter.provider} requires reconnect in Studio`,
-        reconnectIn: 'studio'
-      });
-      this.stop(id);
-      return;
-    }
-
-    if (event.type === 'provider_error') {
-      const live = this.live.get(id);
-      const message =
-        typeof event.payload.message === 'string' ? event.payload.message : `${adapter.provider} provider error`;
-      if (live?.startup) {
-        clearTimeout(live.startup.timeout);
-        live.startup.reject(new NativeCliError('provider_protocol_error', message));
-        live.startup = undefined;
-      }
-      this.emit(transcriptTargetId, 'native_cli.output', {
-        nativeCliSessionId: id,
-        stream: 'stderr',
-        chunk: message,
-        provider: adapter.provider,
-        code: event.payload.code,
-        responseId: event.payload.responseId
-      });
-      this.emitManagedProjectOutput(transcriptTargetId, id, message, true);
-      return;
-    }
-
-    if (event.type === 'approval_requested') {
-      const requestId =
-        typeof event.payload.requestId === 'string' ? event.payload.requestId : String(event.payload.requestId);
-      const live = this.live.get(id);
-      // Autopilot managed sessions auto-deny any approval that leaks past the skip flag. A managed
-      // session that delegates approvals (autopilot off + resolvable adapter) instead falls through
-      // to the same projection path interactive sessions use — monad is only the UI proxy.
-      if (live?.runtimeRole === 'managed-project-agent' && !live.proxyApprovals) {
-        const text = nativeCliApprovalText(event);
-        try {
-          live.adapter.resolveApproval(live, {
-            requestId,
-            allow: false,
-            reason: 'managed project native CLI provider approvals are disabled',
-            request: event.payload
-          });
-        } catch (err) {
-          this.log.debug(
-            {
-              sessionId: transcriptTargetId,
-              event: 'native_cli.managed_project_provider_approval_suppress_error',
-              nativeCliSessionId: id,
-              provider: adapter.provider,
-              requestId,
-              text,
-              err: err instanceof Error ? { message: err.message, stack: err.stack } : String(err)
-            },
-            'managed native cli provider approval suppress failed'
-          );
-        }
-        this.log.debug(
-          {
-            sessionId: transcriptTargetId,
-            event: 'native_cli.managed_project_provider_approval_suppressed',
-            nativeCliSessionId: id,
-            provider: adapter.provider,
-            requestId,
-            text
-          },
-          'managed native cli provider approval suppressed'
-        );
-        return;
-      }
-      if (live?.pendingApprovals.has(requestId)) return;
-      live?.pendingApprovals.set(requestId, event.payload);
-      this.emit(transcriptTargetId, 'native_cli.approval_requested', {
-        nativeCliSessionId: id,
-        provider: adapter.provider,
-        requestId,
-        text: nativeCliApprovalText(event),
-        data: event.payload
-      });
-      return;
-    }
-
-    if (event.type === 'approval_resolved') {
-      const requestId =
-        typeof event.payload.requestId === 'string' ? event.payload.requestId : String(event.payload.requestId);
-      const live = this.live.get(id);
-      if (!live?.pendingApprovals.has(requestId)) return;
-      live.pendingApprovals.delete(requestId);
-      this.emit(transcriptTargetId, 'native_cli.approval_resolved', {
-        nativeCliSessionId: id,
-        provider: adapter.provider,
-        requestId,
-        allow: event.payload.allow !== false,
-        ...(typeof event.payload.reason === 'string' ? { reason: event.payload.reason } : {})
-      });
-    }
-  }
-
-  private emitManagedProjectOutput(
-    transcriptTargetId: TranscriptTargetId,
-    id: string,
-    text: string,
-    error = false,
-    post = true
-  ): void {
-    const live = this.live.get(id);
-    const row = this.deps.store.getNativeCliSession(id);
-    const runtimeRole = live?.runtimeRole ?? row?.runtimeRole;
-    if (runtimeRole !== 'managed-project-agent') return;
-    if (post && !this.deps.store.hasUnconsumedNativeCliInbox(id)) return;
-    const agentName = live?.agentName ?? row?.agentName;
-    if (!agentName || !this.managedProjectOutputHandler) return;
-    // Consume only what the agent actually saw in its input (visible), never items merely
-    // delivered mid-turn (busy notice sent without the message body) — those must survive
-    // this turn's settle so a later wake or `monad project inbox` can still surface them.
-    const cursor = row?.lastVisibleSeq ?? 0;
-    if (cursor > 0) this.deps.store.markNativeCliInboxConsumed(id, cursor);
-    void Promise.resolve(
-      this.managedProjectOutputHandler({
-        sessionId: transcriptTargetId,
-        nativeCliSessionId: id,
-        agentName,
-        text,
-        error,
-        post
-      })
-    ).catch((err: unknown) => {
-      this.log.debug(
-        {
-          sessionId: transcriptTargetId,
-          event: 'native_cli.managed_project_output_error',
-          nativeCliSessionId: id,
-          agentName,
-          err: err instanceof Error ? { message: err.message, stack: err.stack } : String(err)
-        },
-        'managed native cli provider output failed to project'
-      );
-    });
-  }
-
-  private buildEvent(sessionId: TranscriptTargetId, type: Event['type'], payload: Record<string, unknown>): Event {
-    return {
-      id: newId('evt'),
-      transcriptTargetId: sessionId,
-      type,
-      actorAgentId: null,
-      payload,
-      at: new Date().toISOString()
-    };
-  }
-
-  /** Durable milestone event (started/exited/approval/…): persisted to the event log and published. */
-  private emit(sessionId: TranscriptTargetId, type: Event['type'], payload: Record<string, unknown>): void {
-    const event = this.buildEvent(sessionId, type, payload);
-    this.deps.store.appendEvents([event]);
-    this.deps.bus.publish(event);
-  }
-
-  /** Publish-only (never persisted). For high-frequency `native_cli.output` chunks: delivered live over
-   *  the bus and captured in the bounded per-session output snapshot, so one durable row per chunk would
-   *  grow the event log without bound. Hydration rebuilds the tool card from that snapshot instead
-   *  (see SessionUiProjector.hydrateNativeCliSessions), so no durable output rows are needed. */
-  private publishEphemeral(sessionId: TranscriptTargetId, type: Event['type'], payload: Record<string, unknown>): void {
-    this.deps.bus.publish(this.buildEvent(sessionId, type, payload));
   }
 }

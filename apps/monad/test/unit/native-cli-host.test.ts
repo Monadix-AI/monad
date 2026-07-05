@@ -80,15 +80,23 @@ test('managed provider final can retire a consumed inbox turn without auto-posti
   });
   (
     host as unknown as {
-      emitManagedProjectOutput(
-        transcriptTargetId: string,
-        id: string,
-        text: string,
-        error?: boolean,
-        post?: boolean
-      ): void;
+      outputPipeline: {
+        emitManagedProjectOutput(
+          transcriptTargetId: string,
+          id: string,
+          text: string,
+          error?: boolean,
+          post?: boolean
+        ): void;
+      };
     }
-  ).emitManagedProjectOutput('prj_01KWHOSTTEST0000000000000', 'ncli_host_test', 'No action needed.', false, false);
+  ).outputPipeline.emitManagedProjectOutput(
+    'prj_01KWHOSTTEST0000000000000',
+    'ncli_host_test',
+    'No action needed.',
+    false,
+    false
+  );
   await Bun.sleep(0);
 
   expect(calls).toEqual([
@@ -168,26 +176,30 @@ test('managed native CLI output stays live-only and is not persisted as a raw sn
   (
     host as unknown as {
       live: Map<string, unknown>;
-      output(
-        transcriptTargetId: string,
-        id: string,
-        chunk: string,
-        stream: 'stdout' | 'stderr' | 'pty',
-        adapter: NativeCliProviderAdapter
-      ): void;
+      outputPipeline: {
+        output(
+          transcriptTargetId: string,
+          id: string,
+          chunk: string,
+          stream: 'stdout' | 'stderr' | 'pty',
+          adapter: NativeCliProviderAdapter
+        ): void;
+      };
     }
   ).live.set(nativeCliSessionId, live);
   (
     host as unknown as {
-      output(
-        transcriptTargetId: string,
-        id: string,
-        chunk: string,
-        stream: 'stdout' | 'stderr' | 'pty',
-        adapter: NativeCliProviderAdapter
-      ): void;
+      outputPipeline: {
+        output(
+          transcriptTargetId: string,
+          id: string,
+          chunk: string,
+          stream: 'stdout' | 'stderr' | 'pty',
+          adapter: NativeCliProviderAdapter
+        ): void;
+      };
     }
-  ).output(projectId, nativeCliSessionId, '{"type":"result","result":"secret"}\n', 'stdout', adapter);
+  ).outputPipeline.output(projectId, nativeCliSessionId, '{"type":"result","result":"secret"}\n', 'stdout', adapter);
   await Bun.sleep(250);
 
   expect(host.list(projectId).sessions[0]?.outputSnapshot).toContain('secret');
@@ -260,7 +272,9 @@ test('native CLI observation stream pushes incremental deltas the client can rec
   };
   const internal = host as unknown as {
     live: Map<string, unknown>;
-    output(t: string, id: string, chunk: string, stream: string, adapter: NativeCliProviderAdapter): void;
+    outputPipeline: {
+      output(t: string, id: string, chunk: string, stream: string, adapter: NativeCliProviderAdapter): void;
+    };
   };
   internal.live.set(nativeCliSessionId, live);
 
@@ -271,9 +285,9 @@ test('native CLI observation stream pushes incremental deltas the client can rec
   // The initial access is a full snapshot (empty output so far).
   expect(sub.access.state).toBe('live');
 
-  internal.output(projectId, nativeCliSessionId, 'Hello, ', 'stdout', adapter);
+  internal.outputPipeline.output(projectId, nativeCliSessionId, 'Hello, ', 'stdout', adapter);
   await Bun.sleep(250);
-  internal.output(projectId, nativeCliSessionId, 'world!', 'stdout', adapter);
+  internal.outputPipeline.output(projectId, nativeCliSessionId, 'world!', 'stdout', adapter);
   await Bun.sleep(250);
 
   // Streamed frames are deltas (append, not full output).
@@ -323,11 +337,13 @@ test('native CLI observation resume returns only the delta past the client curso
   };
   const internal = host as unknown as {
     live: Map<string, unknown>;
-    output(t: string, id: string, chunk: string, stream: string, adapter: NativeCliProviderAdapter): void;
+    outputPipeline: {
+      output(t: string, id: string, chunk: string, stream: string, adapter: NativeCliProviderAdapter): void;
+    };
   };
   internal.live.set(id, live);
-  internal.output(live.transcriptTargetId, id, 'Hello, ', 'stdout', adapter);
-  internal.output(live.transcriptTargetId, id, 'world!', 'stdout', adapter);
+  internal.outputPipeline.output(live.transcriptTargetId, id, 'Hello, ', 'stdout', adapter);
+  internal.outputPipeline.output(live.transcriptTargetId, id, 'world!', 'stdout', adapter);
 
   // No cursor → full snapshot.
   expect(host.observe(id)).toMatchObject({ state: 'live', output: 'Hello, world!', seq: 13 });
@@ -379,11 +395,11 @@ test('native CLI app-server reconnect re-dials the socket and resumes the thread
   };
   const internal = host as unknown as {
     live: Map<string, unknown>;
-    reconnectAppServer(id: string): Promise<void>;
+    appServerConnections: { reconnect(id: string): Promise<void> };
   };
   internal.live.set(nativeCliSessionId, live);
 
-  await internal.reconnectAppServer(nativeCliSessionId);
+  await internal.appServerConnections.reconnect(nativeCliSessionId);
 
   expect(redials).toBe(1);
   expect(live.appServer).toBe(freshConnection); // swapped to the fresh connection
@@ -418,7 +434,7 @@ test('native CLI app-server gives up instead of reconnecting forever when the tr
   const MAX_DRIVER_ITERATIONS = 30;
   const internal = host as unknown as {
     live: Map<string, unknown>;
-    handleAppServerDisconnect(id: string): void;
+    appServerConnections: { handleDisconnect(id: string): void };
   };
   const live = {
     id: nativeCliSessionId,
@@ -436,7 +452,7 @@ test('native CLI app-server gives up instead of reconnecting forever when the tr
     appServerRedial: async () => {
       redials++;
       if (redials <= MAX_DRIVER_ITERATIONS) {
-        setTimeout(() => internal.handleAppServerDisconnect(nativeCliSessionId), 20);
+        setTimeout(() => internal.appServerConnections.handleDisconnect(nativeCliSessionId), 20);
       }
       return { send: () => {}, close: () => {} };
     },
@@ -452,7 +468,7 @@ test('native CLI app-server gives up instead of reconnecting forever when the tr
   };
   internal.live.set(nativeCliSessionId, live);
 
-  internal.handleAppServerDisconnect(nativeCliSessionId);
+  internal.appServerConnections.handleDisconnect(nativeCliSessionId);
 
   const deadline = Date.now() + 15_000;
   while (Date.now() < deadline && internal.live.has(nativeCliSessionId)) {
@@ -482,7 +498,7 @@ test('native CLI app-server disconnect during initial startup redials before fai
   let startupRejected: Error | undefined;
   const internal = host as unknown as {
     live: Map<string, unknown>;
-    handleAppServerDisconnect(id: string): void;
+    appServerConnections: { handleDisconnect(id: string): void };
   };
   const live = {
     id,
@@ -498,7 +514,7 @@ test('native CLI app-server disconnect during initial startup redials before fai
     appServerRedial: async () => {
       redials++;
       // Every redial's transport reopens fine, but the handshake keeps failing — always re-trigger a drop.
-      setTimeout(() => internal.handleAppServerDisconnect(id), 20);
+      setTimeout(() => internal.appServerConnections.handleDisconnect(id), 20);
       return { send: () => {}, close: () => {} };
     },
     initializeContext: { workingPath: '/tmp/project' },
@@ -520,7 +536,7 @@ test('native CLI app-server disconnect during initial startup redials before fai
   };
   internal.live.set(id, live);
 
-  internal.handleAppServerDisconnect(id);
+  internal.appServerConnections.handleDisconnect(id);
 
   const deadline = Date.now() + 15_000;
   while (Date.now() < deadline && internal.live.has(id)) {
@@ -1142,15 +1158,17 @@ function seedApprovalLiveSession(
   (host as unknown as { live: Map<string, unknown> }).live.set(id, live);
   (
     host as unknown as {
-      output(
-        t: string,
-        id: string,
-        chunk: string,
-        stream: 'stdout' | 'stderr' | 'pty',
-        a: NativeCliProviderAdapter
-      ): void;
+      outputPipeline: {
+        output(
+          t: string,
+          id: string,
+          chunk: string,
+          stream: 'stdout' | 'stderr' | 'pty',
+          a: NativeCliProviderAdapter
+        ): void;
+      };
     }
-  ).output(projectId, id, '{"approval":1}\n', 'stdout', adapter);
+  ).outputPipeline.output(projectId, id, '{"approval":1}\n', 'stdout', adapter);
   return { resolveCalls, live };
 }
 
