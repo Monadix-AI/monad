@@ -16,6 +16,7 @@ import { randomBytes } from 'node:crypto';
 import { createLogger } from '@monad/logger';
 import { newId } from '@monad/protocol';
 
+import { daemonChildProcesses } from '@/infra/daemon-child-processes.ts';
 import {
   AUTH_RUNNING_TTL_MS,
   AUTH_STATUS_TIMEOUT_MS,
@@ -114,6 +115,7 @@ export class NativeCliAuthHost {
   }
 
   private trackAuthProcess(pid: number): void {
+    daemonChildProcesses.track(pid, 'native-cli-auth', () => killNativeCliProcess(pid));
     this.registryQueue = this.registryQueue
       .then(() => readProcessRegistry(this.deps.authProcessRegistryPath))
       .then((pids) => writeProcessRegistry(this.deps.authProcessRegistryPath, [...new Set([...pids, pid])]))
@@ -123,6 +125,7 @@ export class NativeCliAuthHost {
   }
 
   private untrackAuthProcess(pid: number): void {
+    daemonChildProcesses.untrack(pid);
     this.registryQueue = this.registryQueue
       .then(() => readProcessRegistry(this.deps.authProcessRegistryPath))
       .then((pids) =>

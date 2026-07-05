@@ -10,6 +10,7 @@ import type { Tool, ToolInputSchema, ToolResultPart } from '../../types.ts';
 import { createLogger } from '@monad/logger';
 import { z } from 'zod';
 
+import { daemonChildProcesses, killDaemonProcessTree } from '@/infra/daemon-child-processes.ts';
 import { toolResult } from '../../types.ts';
 
 const log = createLogger('mcp');
@@ -214,10 +215,13 @@ function createStdioChannel(spec: McpStdioSpec): RpcChannel {
     // Inherit the daemon env and layer spec.env on top — a trimmed env breaks node/npx
     // resolution and Windows processes that need SystemRoot/PATHEXT.
     env: { ...Bun.env, ...spec.env },
+    detached: true,
     stdin: 'pipe',
     stdout: 'pipe',
     stderr: 'pipe'
   });
+  daemonChildProcesses.track(proc.pid, 'mcp:stdio');
+  void proc.exited.then(() => daemonChildProcesses.untrack(proc.pid));
 
   let nextId = 1;
   const pending = new Map<
@@ -291,8 +295,9 @@ function createStdioChannel(spec: McpStdioSpec): RpcChannel {
         w.reject(new McpError('connection closed'));
       }
       pending.clear();
-      proc.kill();
+      killDaemonProcessTree(proc.pid);
       await proc.exited;
+      daemonChildProcesses.untrack(proc.pid);
     }
   };
 }

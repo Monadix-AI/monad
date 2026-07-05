@@ -1,6 +1,8 @@
 import { existsSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
+import { daemonChildProcesses, killDaemonProcessTree } from '@/infra/daemon-child-processes.ts';
+
 export class MoService {
   private proc: ReturnType<typeof Bun.spawn> | null = null;
 
@@ -71,8 +73,12 @@ export class MoService {
     try {
       this.proc = Bun.spawn([this.binaryPath], {
         stdio: ['ignore', 'ignore', 'ignore'],
+        detached: true,
         env: { ...process.env, MO_DAEMON_SOCK: this.socketPath, MO_DAEMON_PORT: String(this.tcpPort) }
       });
+      const pid = this.proc.pid;
+      daemonChildProcesses.track(pid, 'mo', () => killDaemonProcessTree(pid));
+      void this.proc.exited.then(() => daemonChildProcesses.untrack(pid));
       try {
         writeFileSync(this.pidFile(), String(this.proc.pid));
       } catch {
@@ -86,7 +92,8 @@ export class MoService {
 
   quit(): void {
     const pid = this.trackedPid(); // capture before clearing the handle (covers re-adopted orphans)
-    this.proc?.kill();
+    if (this.proc?.pid) killDaemonProcessTree(this.proc.pid);
+    daemonChildProcesses.untrack(this.proc?.pid);
     this.proc = null;
     if (pid != null) {
       try {

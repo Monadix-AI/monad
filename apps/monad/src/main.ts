@@ -33,6 +33,7 @@ import { AtomPackRegistry } from '@/handlers/atom-pack/index.ts';
 import { type CommandBundle, createCommandRegistry } from '@/handlers/commands/index.ts';
 import { createDaemonHandlers } from '@/handlers/handlers.ts';
 import { createHookRunner, type HookConfig } from '@/hooks/runner.ts';
+import { daemonChildProcesses, runDaemonChildSupervisorFromArgv } from '@/infra/daemon-child-processes.ts';
 import { initObservability } from '@/infra/observability.ts';
 import { ReloadService } from '@/reload/index.ts';
 import { ConfigBus } from '@/services/config-bus.ts';
@@ -91,6 +92,8 @@ configureDaemonLogging();
 const logger = createLogger('monad-daemon');
 
 export async function startDaemon(opts?: { beforeListen?: (app: App) => void }): Promise<void> {
+  if (await runDaemonChildSupervisorFromArgv()) return;
+
   const paths = getPaths();
 
   // ACP mode is a thin BRIDGE: it discovers (or auto-spawns) a shared daemon and proxies the
@@ -112,6 +115,9 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
   } = readDaemonRuntimeFlags();
 
   await initMonadHome(paths);
+  daemonChildProcesses.configure(join(paths.runtime, 'daemon-child-processes.json'), {
+    supervisorEntryPath: import.meta.path
+  });
 
   prependMonadBinToPath(paths);
   await seedDevProviderIfNeeded({

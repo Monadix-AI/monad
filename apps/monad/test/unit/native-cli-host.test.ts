@@ -22,6 +22,73 @@ test('native CLI auth status probes use a global 20 second timeout', () => {
   expect(AUTH_STATUS_TIMEOUT_MS).toBe(20_000);
 });
 
+test('native CLI host can stop every live session during daemon shutdown', () => {
+  const store = createStore();
+  const host = new NativeCliHost({
+    store,
+    bus: new EventBus(),
+    agents: async () => []
+  });
+  const killed: string[] = [];
+  const adapter = {
+    stop(handle: { id: string; kill(signal?: NodeJS.Signals): void }) {
+      handle.kill('SIGTERM');
+    }
+  };
+
+  for (const id of ['ncli_shutdown_one', 'ncli_shutdown_two']) {
+    store.upsertNativeCliSession({
+      id,
+      transcriptTargetId: 'ses_shutdown',
+      agentName: 'codex',
+      provider: 'codex',
+      workingPath: '/tmp/project',
+      launchMode: 'app-server',
+      runtimeRole: 'interactive',
+      agentRuntimeId: null,
+      agentRuntimeTokenHash: null,
+      lastDeliveredSeq: 0,
+      lastVisibleSeq: 0,
+      state: 'running',
+      pid: id === 'ncli_shutdown_one' ? 111 : 222,
+      providerSessionRef: null,
+      outputSnapshot: '',
+      exitCode: null,
+      startedAt: '2026-07-06T00:00:00.000Z',
+      updatedAt: '2026-07-06T00:00:00.000Z',
+      exitedAt: null
+    });
+    (
+      host as unknown as {
+        live: Map<string, unknown>;
+      }
+    ).live.set(id, {
+      id,
+      transcriptTargetId: 'ses_shutdown',
+      agentName: 'codex',
+      provider: 'codex',
+      runtimeRole: 'interactive',
+      proxyApprovals: false,
+      adapter,
+      launchMode: 'app-server',
+      pendingApprovals: new Map(),
+      pendingHistoryPages: new Map(),
+      pendingRequests: new Map(),
+      nextRequestId: () => 0,
+      outputBuffer: new BoundedOutputBuffer(1024),
+      outputSeq: 0,
+      snapshotFlushTimer: null,
+      kill: (signal?: NodeJS.Signals) => killed.push(`${id}:${signal ?? 'SIGTERM'}`)
+    });
+  }
+
+  (host as unknown as { stopAll(): void }).stopAll();
+
+  expect(killed).toEqual(['ncli_shutdown_one:SIGTERM', 'ncli_shutdown_two:SIGTERM']);
+  expect(store.getNativeCliSession('ncli_shutdown_one')?.state).toBe('stopped');
+  expect(store.getNativeCliSession('ncli_shutdown_two')?.state).toBe('stopped');
+});
+
 test('managed provider final can retire a consumed inbox turn without auto-posting', async () => {
   const store = createStore();
   const host = new NativeCliHost({

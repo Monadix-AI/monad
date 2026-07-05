@@ -86,6 +86,7 @@ export function createDaemonHandlers(deps: DaemonHandlerDeps) {
     authHeartbeatTimeoutMs: deps.nativeCliAuthHeartbeatTimeoutMs
   });
   void nativeCliHost.reconcileOrphanedSessions();
+  process.on('exit', () => nativeCliHost.stopAll());
 
   const init = createInitHandlers(paths, mockMode, deps.log);
 

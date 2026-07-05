@@ -39,6 +39,7 @@ import {
 } from '@/channels/routing.ts';
 import { resolveChannelSecretRef } from '@/config/secrets.ts';
 import { buildSessionOrigin } from '@/handlers/session/origin.ts';
+import { daemonChildProcesses, killDaemonProcessTree } from '@/infra/daemon-child-processes.ts';
 
 export type { ChannelLogger, ChannelRoute, ChannelServiceDeps, Instance, SessionGateway } from '@/channels/types.ts';
 
@@ -185,6 +186,14 @@ export class ChannelService {
       secrets,
       signal: abort.signal,
       log,
+      trackProcess: (proc, label) => {
+        const trackedLabel = label ?? `channel:${c.type}`;
+        daemonChildProcesses.track(proc.pid, trackedLabel, () => {
+          if (proc.pid) killDaemonProcessTree(proc.pid);
+          else proc.kill?.('SIGTERM');
+        });
+        if (proc.exited) void proc.exited.then(() => daemonChildProcesses.untrack(proc.pid));
+      },
       onMessage: (m) => void this.onInbound(inst, m).catch((e) => log('error', errMsg(e)))
     });
     inst.adapter = adapter;

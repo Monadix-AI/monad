@@ -1,3 +1,4 @@
+import { daemonChildProcesses } from '@/infra/daemon-child-processes.ts';
 import { killNativeCliProcess } from '@/services/native-cli/process.ts';
 import { createStreamingTextDecoder } from '@/services/native-cli/stream-decoder.ts';
 
@@ -31,6 +32,7 @@ export async function collectProbeResult(
   timeoutMs: number,
   maxBytes: number
 ): Promise<{ timedOut: boolean; code: number | null; output: string }> {
+  daemonChildProcesses.track(proc.pid, 'native-cli-probe', () => killNativeCliProcess(proc.pid));
   const outputPromise = Promise.all([collectText(proc.stdout, maxBytes), collectText(proc.stderr, maxBytes)]).then(
     ([stdout, stderr]) => appendBounded(stdout, stderr, maxBytes)
   );
@@ -46,5 +48,6 @@ export async function collectProbeResult(
     return { timedOut: true as const, code: null };
   });
   const result = await Promise.race([exited, timeout]);
+  daemonChildProcesses.untrack(proc.pid);
   return { ...result, output: await outputPromise.catch(() => '') };
 }

@@ -124,6 +124,7 @@ export class NativeCliOneshotRunner {
       proc = Bun.spawn([...spec.argv, ...turnArgs], {
         cwd: spec.cwd,
         env: spawnEnv,
+        detached: true,
         stdin: 'ignore',
         stdout: 'pipe',
         stderr: 'pipe'
