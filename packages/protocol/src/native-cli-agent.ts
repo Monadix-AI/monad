@@ -226,6 +226,40 @@ export const nativeCliProjectTemplateSchema = z.object({
 });
 export type NativeCliProjectTemplate = z.infer<typeof nativeCliProjectTemplateSchema>;
 
+const nativeCliAgentSettingBaseSchema = z.object({
+  key: z.string().min(1),
+  label: z.string().min(1),
+  description: z.string().min(1).optional()
+});
+
+export const nativeCliAgentSettingOptionSchema = z.object({
+  value: z.string().min(1),
+  label: z.string().min(1).optional()
+});
+export type NativeCliAgentSettingOption = z.infer<typeof nativeCliAgentSettingOptionSchema>;
+
+export const nativeCliAgentSettingSchema = z.discriminatedUnion('kind', [
+  nativeCliAgentSettingBaseSchema.extend({
+    kind: z.literal('text'),
+    placeholder: z.string().optional(),
+    multiline: z.boolean().optional()
+  }),
+  nativeCliAgentSettingBaseSchema.extend({
+    kind: z.literal('switch')
+  }),
+  nativeCliAgentSettingBaseSchema.extend({
+    kind: z.literal('select'),
+    options: z.array(nativeCliAgentSettingOptionSchema).min(1),
+    placeholder: z.string().optional()
+  })
+]);
+export type NativeCliAgentSetting = z.infer<typeof nativeCliAgentSettingSchema>;
+
+export const nativeCliAgentAdapterSettingValueSchema = z.union([z.string(), z.boolean()]);
+export type NativeCliAgentAdapterSettingValue = z.infer<typeof nativeCliAgentAdapterSettingValueSchema>;
+export const nativeCliAgentAdapterSettingsSchema = z.record(z.string(), nativeCliAgentAdapterSettingValueSchema);
+export type NativeCliAgentAdapterSettings = z.infer<typeof nativeCliAgentAdapterSettingsSchema>;
+
 // Enforced at every parse (config load + wire), not just the HTTP upsert handler, so a hand-edited
 // config.json can't smuggle a malformed command/env past the spawn path. Spawn is argv-based (no
 // shell) so this is defense-in-depth, but it keeps the contract in one place.
@@ -246,7 +280,9 @@ export const nativeCliAgentViewSchema = z
     allowAutopilot: z.boolean().default(true),
     approvalOwnership: nativeCliApprovalOwnershipSchema.default('provider-owned'),
     capabilities: nativeCliAgentCapabilitiesSchema.optional(),
-    projectTemplates: z.array(nativeCliProjectTemplateSchema).optional()
+    projectTemplates: z.array(nativeCliProjectTemplateSchema).optional(),
+    adapterSettings: nativeCliAgentAdapterSettingsSchema.optional(),
+    settings: z.array(nativeCliAgentSettingSchema).optional()
   })
   .superRefine((agent, ctx) => {
     const projectTemplateIds = new Set<string>();
@@ -297,7 +333,8 @@ export const nativeCliAgentPresetSchema = z.object({
   installUrl: z.string().url(),
   installed: z.boolean(),
   resolvedBinPath: z.string().optional(),
-  capabilities: nativeCliAgentCapabilitiesSchema.optional()
+  capabilities: nativeCliAgentCapabilitiesSchema.optional(),
+  settings: z.array(nativeCliAgentSettingSchema).optional()
 });
 export type NativeCliAgentPresetView = z.infer<typeof nativeCliAgentPresetSchema>;
 

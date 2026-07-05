@@ -4,8 +4,10 @@ import { expect, test } from 'bun:test';
 
 import {
   canDisableAutopilot,
+  nativeCliAgentSettings,
   nativeCliAppServerTransportOptions,
-  nativeCliLaunchModeOptions
+  nativeCliLaunchModeOptions,
+  nativeCliSettingDescription
 } from '../../features/studio/third-party-agents/native-cli-agent-settings-model';
 
 const agent: NativeCliAgentView = {
@@ -75,4 +77,49 @@ test('native CLI settings use preset approval proxy capabilities for existing ag
       }
     })
   ).toBe(true);
+});
+
+test('native CLI settings prefer adapter-declared controls from the preset', () => {
+  expect(
+    nativeCliAgentSettings(agent, {
+      ...preset,
+      settings: [
+        {
+          key: 'defaultLaunchMode',
+          label: 'Launch mode',
+          kind: 'select',
+          options: [
+            { value: 'pty', label: 'PTY' },
+            { value: 'app-server', label: 'App server' }
+          ]
+        },
+        { key: 'allowAutopilot', label: 'Autopilot', kind: 'switch' }
+      ]
+    })
+  ).toEqual([
+    {
+      key: 'defaultLaunchMode',
+      label: 'Launch mode',
+      kind: 'select',
+      options: [
+        { value: 'pty', label: 'PTY' },
+        { value: 'app-server', label: 'App server' }
+      ]
+    },
+    { key: 'allowAutopilot', label: 'Autopilot', kind: 'switch' }
+  ]);
+});
+
+test('native CLI autopilot description explains unavailable approval proxy before generic adapter copy', () => {
+  expect(
+    nativeCliSettingDescription(
+      {
+        key: 'allowAutopilot',
+        label: 'Autopilot',
+        description: 'Let the provider run unattended when supported.',
+        kind: 'switch'
+      },
+      { canToggleAutopilot: false }
+    )
+  ).toBe('approvalProxyUnavailable');
 });

@@ -59,23 +59,28 @@ function restoreRedactedEnv(
   return out;
 }
 
-const toView = (a: NativeCliAgentConfig): NativeCliAgentView => ({
-  name: a.name,
-  provider: a.provider,
-  productIcon: getNativeCliProviderAdapter(a.provider).productIcon,
-  command: a.command,
-  args: a.args,
-  env: redactEnvForView(a.env),
-  modelOptions: listNativeCliAgentModelOptions(a),
-  reasoningEfforts: listNativeCliAgentReasoningEfforts(a),
-  reasoningEffortsByModel: listNativeCliAgentReasoningEffortsByModel(a),
-  enabled: a.enabled,
-  defaultLaunchMode: a.defaultLaunchMode,
-  appServerTransport: a.appServerTransport,
-  allowAutopilot: a.allowAutopilot,
-  approvalOwnership: 'provider-owned',
-  projectTemplates: a.projectTemplates
-});
+const toView = (a: NativeCliAgentConfig): NativeCliAgentView => {
+  const adapter = getNativeCliProviderAdapter(a.provider);
+  const view: NativeCliAgentView = {
+    name: a.name,
+    provider: a.provider,
+    productIcon: adapter.productIcon,
+    command: a.command,
+    args: a.args,
+    env: redactEnvForView(a.env),
+    modelOptions: listNativeCliAgentModelOptions(a),
+    reasoningEfforts: listNativeCliAgentReasoningEfforts(a),
+    reasoningEffortsByModel: listNativeCliAgentReasoningEffortsByModel(a),
+    enabled: a.enabled,
+    defaultLaunchMode: a.defaultLaunchMode,
+    appServerTransport: a.appServerTransport,
+    allowAutopilot: a.allowAutopilot,
+    approvalOwnership: 'provider-owned',
+    projectTemplates: a.projectTemplates,
+    adapterSettings: a.adapterSettings
+  };
+  return { ...view, settings: adapter.settings?.(view) };
+};
 
 const fromView = (v: NativeCliAgentView, stored?: NativeCliAgentConfig): NativeCliAgentConfig => ({
   name: v.name,
@@ -89,7 +94,8 @@ const fromView = (v: NativeCliAgentView, stored?: NativeCliAgentConfig): NativeC
   appServerTransport: v.appServerTransport,
   allowAutopilot: v.allowAutopilot,
   approvalOwnership: 'provider-owned',
-  projectTemplates: v.projectTemplates
+  projectTemplates: v.projectTemplates,
+  adapterSettings: v.adapterSettings
 });
 
 function stableJson(value: unknown): string {

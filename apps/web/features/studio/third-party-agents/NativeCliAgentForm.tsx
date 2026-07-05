@@ -1,10 +1,13 @@
 import type {
+  NativeCliAgentAdapterSettings,
   NativeCliAgentPresetView,
+  NativeCliAgentSetting,
   NativeCliAgentView,
   NativeCliLaunchMode,
   NativeCliProjectTemplate,
   NativeCliProvider
 } from '@monad/protocol';
+import type { Dispatch, SetStateAction } from 'react';
 
 import {
   Cancel01Icon,
@@ -20,8 +23,9 @@ import { useState } from 'react';
 import { useT } from '@/components/I18nProvider';
 import {
   canDisableAutopilot,
-  nativeCliAppServerTransportOptions,
-  nativeCliLaunchModeOptions
+  nativeCliAgentSettings,
+  nativeCliLaunchModeOptions,
+  nativeCliSettingDescription
 } from './native-cli-agent-settings-model';
 import {
   argsToStr,
@@ -68,6 +72,9 @@ export function AgentForm({
   const canProxyApprovals = agent ? canDisableAutopilot(agent, preset) : false;
   const [defaultLaunchMode, setDefaultLaunchMode] = useState<NativeCliLaunchMode>(agent?.defaultLaunchMode ?? 'pty');
   const [appServerTransport, setAppServerTransport] = useState(agent?.appServerTransport ?? '');
+  const [adapterSettingsValues, setAdapterSettingsValues] = useState<NativeCliAgentAdapterSettings>(
+    agent?.adapterSettings ?? {}
+  );
   const [allowAutopilot, setAllowAutopilot] = useState(
     mode === 'settings' && !canProxyApprovals ? true : (agent?.allowAutopilot ?? true)
   );
@@ -75,11 +82,11 @@ export function AgentForm({
   const launchModeOptions = agent
     ? nativeCliLaunchModeOptions({ ...agent, defaultLaunchMode }, preset)
     : [defaultLaunchMode];
-  const appServerTransportOptions = nativeCliAppServerTransportOptions(preset);
   const showIdentityFields = mode === 'create';
   const showAdvanced = mode === 'settings';
   const canToggleAutopilot = mode === 'create' || canProxyApprovals;
   const effectiveAllowAutopilot = mode === 'settings' && !canProxyApprovals ? true : allowAutopilot;
+  const adapterSettings = agent ? nativeCliAgentSettings({ ...agent, defaultLaunchMode }, preset) : [];
 
   const submit = async () => {
     if (!name.trim() || !command.trim()) return;
@@ -104,7 +111,8 @@ export function AgentForm({
           : undefined,
         allowAutopilot: effectiveAllowAutopilot,
         approvalOwnership: 'provider-owned',
-        capabilities: agent?.capabilities
+        capabilities: agent?.capabilities,
+        adapterSettings: Object.keys(adapterSettingsValues).length ? adapterSettingsValues : undefined
       });
     } finally {
       setBusy(false);
@@ -175,47 +183,62 @@ export function AgentForm({
           </div>
         </>
       ) : null}
-      <div className="flex flex-col gap-1">
-        <Label className="text-xs">{t('web.nativeCli.launchMode')}</Label>
-        <select
-          className="rounded-md border bg-transparent px-2 py-2 text-sm"
-          onChange={(e) => setDefaultLaunchMode(e.target.value as NativeCliLaunchMode)}
-          value={defaultLaunchMode}
-        >
-          {launchModeOptions.map((launchMode) => (
-            <option
-              key={launchMode}
-              value={launchMode}
-            >
-              {launchMode}
-            </option>
-          ))}
-        </select>
-      </div>
+      {mode === 'settings' ? (
+        <AdapterSettingsFields
+          adapterSettings={adapterSettingsValues}
+          appServerTransport={appServerTransport}
+          canToggleAutopilot={canToggleAutopilot}
+          command={command}
+          defaultLaunchMode={defaultLaunchMode}
+          effectiveAllowAutopilot={effectiveAllowAutopilot}
+          setAdapterSettings={setAdapterSettingsValues}
+          setAllowAutopilot={setAllowAutopilot}
+          setAppServerTransport={setAppServerTransport}
+          setCommand={setCommand}
+          setDefaultLaunchMode={setDefaultLaunchMode}
+          settings={adapterSettings}
+        />
+      ) : (
+        <div className="flex flex-col gap-1">
+          <Label className="text-xs">{t('web.nativeCli.launchMode')}</Label>
+          <select
+            className="rounded-md border bg-transparent px-2 py-2 text-sm"
+            onChange={(e) => setDefaultLaunchMode(e.target.value as NativeCliLaunchMode)}
+            value={defaultLaunchMode}
+          >
+            {launchModeOptions.map((launchMode) => (
+              <option
+                key={launchMode}
+                value={launchMode}
+              >
+                {launchMode}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
       <ProjectTemplatesEditor
         modelOptions={strToModelOptions(modelOptions)}
         onChange={setProjectTemplates}
         templates={projectTemplates}
       />
-      <div className="flex flex-col gap-1">
-        <Label className="text-xs">{t('web.nativeCli.autopilot')}</Label>
-        <Button
-          className="self-start"
-          disabled={!canToggleAutopilot}
-          onClick={() => setAllowAutopilot((v) => !v)}
-          size="sm"
-          type="button"
-          variant={effectiveAllowAutopilot ? 'secondary' : 'outline'}
-        >
-          <HugeiconsIcon icon={ShieldQuestionMarkIcon} />{' '}
-          {effectiveAllowAutopilot ? t('web.acp.osSandboxOn') : t('web.acp.osSandboxOff')}
-        </Button>
-        <p className="text-[11px] text-muted-foreground">
-          {mode === 'settings' && !canProxyApprovals
-            ? t('web.nativeCli.approvalProxyUnavailable')
-            : t('web.nativeCli.autopilotHint')}
-        </p>
-      </div>
+      {mode === 'create' ? (
+        <div className="flex flex-col gap-1">
+          <Label className="text-xs">{t('web.nativeCli.autopilot')}</Label>
+          <Button
+            className="self-start"
+            disabled={!canToggleAutopilot}
+            onClick={() => setAllowAutopilot((v) => !v)}
+            size="sm"
+            type="button"
+            variant={effectiveAllowAutopilot ? 'secondary' : 'outline'}
+          >
+            <HugeiconsIcon icon={ShieldQuestionMarkIcon} />{' '}
+            {effectiveAllowAutopilot ? t('web.acp.osSandboxOn') : t('web.acp.osSandboxOff')}
+          </Button>
+          <p className="text-[11px] text-muted-foreground">{t('web.nativeCli.autopilotHint')}</p>
+        </div>
+      ) : null}
       {showAdvanced ? (
         <details className="group rounded-md border bg-muted/20">
           <summary className="flex cursor-pointer list-none items-center justify-between px-3 py-2 font-medium text-xs">
@@ -228,26 +251,6 @@ export function AgentForm({
               setArgs={setArgs}
               setEnv={setEnv}
             />
-            {defaultLaunchMode === 'app-server' && appServerTransportOptions.length > 0 ? (
-              <div className="flex flex-col gap-1">
-                <Label className="text-xs">{t('web.workplace.appServerTransport')}</Label>
-                <select
-                  className="rounded-md border bg-transparent px-2 py-2 text-sm"
-                  onChange={(e) => setAppServerTransport(e.target.value)}
-                  value={appServerTransport}
-                >
-                  <option value="">{t('web.workplace.appServerTransportDefault')}</option>
-                  {appServerTransportOptions.map((transport) => (
-                    <option
-                      key={transport}
-                      value={transport}
-                    >
-                      {transport}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            ) : null}
           </div>
         </details>
       ) : (
@@ -278,6 +281,154 @@ export function AgentForm({
         {submitLabel}
       </Button>
     </div>
+  );
+}
+
+function AdapterSettingsFields({
+  settings,
+  defaultLaunchMode,
+  appServerTransport,
+  adapterSettings,
+  command,
+  effectiveAllowAutopilot,
+  canToggleAutopilot,
+  setDefaultLaunchMode,
+  setAppServerTransport,
+  setAdapterSettings,
+  setAllowAutopilot,
+  setCommand
+}: {
+  settings: NativeCliAgentSetting[];
+  defaultLaunchMode: NativeCliLaunchMode;
+  appServerTransport: string;
+  adapterSettings: NativeCliAgentAdapterSettings;
+  command: string;
+  effectiveAllowAutopilot: boolean;
+  canToggleAutopilot: boolean;
+  setDefaultLaunchMode: (value: NativeCliLaunchMode) => void;
+  setAppServerTransport: (value: string) => void;
+  setAdapterSettings: Dispatch<SetStateAction<NativeCliAgentAdapterSettings>>;
+  setAllowAutopilot: Dispatch<SetStateAction<boolean>>;
+  setCommand: (value: string) => void;
+}) {
+  const t = useT();
+
+  const visibleSettings = settings.filter(
+    (setting) => setting.key !== 'appServerTransport' || defaultLaunchMode === 'app-server'
+  );
+  const stringValue = (key: string): string => {
+    if (key === 'defaultLaunchMode') return defaultLaunchMode;
+    if (key === 'appServerTransport') return appServerTransport;
+    if (key === 'command') return command;
+    const value = adapterSettings[key];
+    if (typeof value === 'string') return value;
+    return '';
+  };
+  const setStringValue = (key: string, value: string) => {
+    if (key === 'defaultLaunchMode') setDefaultLaunchMode(value as NativeCliLaunchMode);
+    if (key === 'appServerTransport') setAppServerTransport(value);
+    if (key === 'command') setCommand(value);
+    if (key !== 'defaultLaunchMode' && key !== 'appServerTransport' && key !== 'command') {
+      setAdapterSettings((current) => {
+        const next = { ...current };
+        if (value) next[key] = value;
+        else delete next[key];
+        return next;
+      });
+    }
+  };
+
+  return (
+    <>
+      {visibleSettings.map((setting) => {
+        if (setting.kind === 'switch') {
+          const checked =
+            setting.key === 'allowAutopilot' ? effectiveAllowAutopilot : adapterSettings[setting.key] === true;
+          const description = nativeCliSettingDescription(setting, { canToggleAutopilot });
+          return (
+            <div
+              className="flex flex-col gap-1"
+              key={setting.key}
+            >
+              <Label className="text-xs">{setting.label}</Label>
+              <Button
+                className="self-start"
+                disabled={setting.key === 'allowAutopilot' && !canToggleAutopilot}
+                onClick={() => {
+                  if (setting.key === 'allowAutopilot') {
+                    setAllowAutopilot((v) => !v);
+                    return;
+                  }
+                  setAdapterSettings((current) => ({ ...current, [setting.key]: !checked }));
+                }}
+                size="sm"
+                type="button"
+                variant={checked ? 'secondary' : 'outline'}
+              >
+                <HugeiconsIcon icon={ShieldQuestionMarkIcon} />{' '}
+                {checked ? t('web.acp.osSandboxOn') : t('web.acp.osSandboxOff')}
+              </Button>
+              <p className="text-[11px] text-muted-foreground">
+                {description === 'approvalProxyUnavailable'
+                  ? t('web.nativeCli.approvalProxyUnavailable')
+                  : (description ?? t('web.nativeCli.autopilotHint'))}
+              </p>
+            </div>
+          );
+        }
+
+        if (setting.kind === 'select') {
+          return (
+            <div
+              className="flex flex-col gap-1"
+              key={setting.key}
+            >
+              <Label className="text-xs">{setting.label}</Label>
+              <select
+                className="rounded-md border bg-transparent px-2 py-2 text-sm"
+                onChange={(e) => setStringValue(setting.key, e.target.value)}
+                value={stringValue(setting.key)}
+              >
+                {setting.placeholder ? <option value="">{setting.placeholder}</option> : null}
+                {setting.options.map((option) => (
+                  <option
+                    key={option.value}
+                    value={option.value}
+                  >
+                    {option.label ?? option.value}
+                  </option>
+                ))}
+              </select>
+              {setting.description ? <p className="text-[11px] text-muted-foreground">{setting.description}</p> : null}
+            </div>
+          );
+        }
+
+        return (
+          <div
+            className="flex flex-col gap-1"
+            key={setting.key}
+          >
+            <Label className="text-xs">{setting.label}</Label>
+            {setting.multiline ? (
+              <textarea
+                className="min-h-16 rounded-md border bg-transparent px-2 py-1 font-mono text-xs"
+                onChange={(e) => setStringValue(setting.key, e.target.value)}
+                placeholder={setting.placeholder}
+                value={stringValue(setting.key)}
+              />
+            ) : (
+              <Input
+                onChange={(e) => setStringValue(setting.key, e.target.value)}
+                placeholder={setting.placeholder}
+                value={stringValue(setting.key)}
+              />
+            )}
+            {setting.description ? <p className="text-[11px] text-muted-foreground">{setting.description}</p> : null}
+          </div>
+        );
+      })}
+    </>
   );
 }
 

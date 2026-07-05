@@ -32,6 +32,7 @@ import {
   nativeAgentSendRequestSchema,
   nativeAgentSendResponseSchema,
   nativeCliAgentPresetSchema,
+  nativeCliAgentSettingSchema,
   nativeCliAgentViewSchema,
   nativeCliApprovalResolutionRequestSchema,
   nativeCliAuthSessionViewSchema,
@@ -173,6 +174,91 @@ test('native CLI preset view includes a provider install page', () => {
 
   expect(parsed.installUrl).toBe('https://developers.openai.com/codex/cli');
   expect(parsed.reasoningEfforts).toEqual(['low', 'medium', 'high']);
+});
+
+test('native CLI adapter settings are declared as text, switch, or closed select controls', () => {
+  expect(
+    nativeCliAgentSettingSchema.parse({
+      key: 'command',
+      label: 'Command',
+      kind: 'text',
+      placeholder: 'codex'
+    }).kind
+  ).toBe('text');
+
+  expect(
+    nativeCliAgentSettingSchema.parse({
+      key: 'allowAutopilot',
+      label: 'Autopilot',
+      kind: 'switch'
+    }).kind
+  ).toBe('switch');
+
+  const preset = nativeCliAgentPresetSchema.parse({
+    id: 'codex',
+    label: 'Codex',
+    provider: 'codex',
+    productIcon: 'codex',
+    command: 'codex',
+    args: [],
+    defaultLaunchMode: 'pty',
+    supportedLaunchModes: ['pty', 'app-server'],
+    installHint: 'Install Codex.',
+    installUrl: 'https://developers.openai.com/codex/cli',
+    installed: false,
+    settings: [
+      {
+        key: 'defaultLaunchMode',
+        label: 'Launch mode',
+        kind: 'select',
+        options: [
+          { value: 'pty', label: 'PTY' },
+          { value: 'app-server', label: 'App server' }
+        ]
+      }
+    ]
+  });
+
+  expect(preset.settings?.[0]).toEqual({
+    key: 'defaultLaunchMode',
+    label: 'Launch mode',
+    kind: 'select',
+    options: [
+      { value: 'pty', label: 'PTY' },
+      { value: 'app-server', label: 'App server' }
+    ]
+  });
+  expect(
+    nativeCliAgentSettingSchema.safeParse({
+      key: 'defaultLaunchMode',
+      label: 'Launch mode',
+      kind: 'select',
+      options: []
+    }).success
+  ).toBe(false);
+});
+
+test('native CLI agent view carries adapter setting values separately from declarations', () => {
+  const parsed = nativeCliAgentViewSchema.parse({
+    name: 'codex',
+    provider: 'codex',
+    command: 'codex',
+    enabled: true,
+    adapterSettings: {
+      configProfile: 'work',
+      useExperimentalGateway: true
+    },
+    settings: [
+      { key: 'configProfile', label: 'Config profile', kind: 'text' },
+      { key: 'useExperimentalGateway', label: 'Experimental gateway', kind: 'switch' }
+    ]
+  });
+
+  expect(parsed.adapterSettings).toEqual({
+    configProfile: 'work',
+    useExperimentalGateway: true
+  });
+  expect(parsed.settings?.map((setting) => setting.key)).toEqual(['configProfile', 'useExperimentalGateway']);
 });
 
 test('native CLI approval resolution request carries provider request id and decision', () => {

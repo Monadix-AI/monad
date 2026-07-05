@@ -39,6 +39,10 @@ const agentView = () => ({
       customPrompt: 'Review changes only.'
     }
   ],
+  adapterSettings: {
+    configProfile: 'work',
+    useExperimentalGateway: true
+  },
   enabled: true,
   defaultLaunchMode: 'pty',
   allowAutopilot: false,
@@ -206,9 +210,17 @@ async function runCrud(call: Call, paths: MonadPaths): Promise<void> {
       customPrompt: 'Review changes only.'
     }
   ]);
+  expect(agents[0]?.adapterSettings).toEqual({
+    configProfile: 'work',
+    useExperimentalGateway: true
+  });
 
   expect((await loadConfig(paths.config))?.nativeCliAgents).toHaveLength(1);
   expect((await loadConfig(paths.config))?.nativeCliAgents[0]?.modelOptions).toEqual(['gpt-5.5', 'custom-codex']);
+  expect((await loadConfig(paths.config))?.nativeCliAgents[0]?.adapterSettings).toEqual({
+    configProfile: 'work',
+    useExperimentalGateway: true
+  });
   expect((await loadConfig(paths.config))?.nativeCliAgents[0]?.projectTemplates?.[0]?.displayName).toBe('Reviewer');
   const loaded = await loadAll(paths.config, paths.profile);
   expect(loaded?.nativeCliAgents).toHaveLength(1);
@@ -233,7 +245,14 @@ async function runCrud(call: Call, paths: MonadPaths): Promise<void> {
 async function runPresets(call: Call): Promise<void> {
   const res = await call('GET', '/v1/settings/native-cli-agents/presets');
   expect(res.status).toBe(200);
-  const { presets } = (await res.json()) as { presets: { id: string; command: string; defaultLaunchMode: string }[] };
+  const { presets } = (await res.json()) as {
+    presets: {
+      id: string;
+      command: string;
+      defaultLaunchMode: string;
+      settings?: Array<{ key: string; kind: string }>;
+    }[];
+  };
   const presetIds = presets.map((p) => p.id);
   for (const id of ['claude-code', 'codex', 'gemini', 'hermes', 'openclaw', 'qwen']) {
     expect(presetIds).toContain(id);
@@ -244,6 +263,12 @@ async function runPresets(call: Call): Promise<void> {
   expect(presets.find((p) => p.id === 'qwen')?.command).toBe('qwen');
   expect(presets.find((p) => p.id === 'openclaw')?.command).toBe('openclaw');
   expect(presets.find((p) => p.id === 'hermes')?.command).toBe('hermes');
+  expect(presets.find((p) => p.id === 'codex')?.settings?.map((setting) => [setting.key, setting.kind])).toContainEqual(
+    ['defaultLaunchMode', 'select']
+  );
+  expect(presets.find((p) => p.id === 'codex')?.settings?.map((setting) => [setting.key, setting.kind])).toContainEqual(
+    ['allowAutopilot', 'switch']
+  );
 }
 
 async function runValidation(call: Call, paths: MonadPaths): Promise<void> {

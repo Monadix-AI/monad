@@ -5,6 +5,7 @@ import type {
   AdapterMigrationPreview,
   AdapterMigrationPreviewRequest,
   NativeCliAgentPresetView,
+  NativeCliAgentSetting,
   NativeCliAgentView,
   NativeCliAppServerTransport,
   NativeCliAuthState,
@@ -402,6 +403,9 @@ export interface NativeCliProviderAdapter {
   /** Optional provider-specific migration surface. Current UI entry points may apply only a subset of
    *  categories (for example native CLI agents) even when the adapter previews broader settings. */
   settingsImport?: AdapterMigration;
+  /** Declarative operator settings for this adapter. The UI renders these controls dynamically; keys
+   *  address fields on `NativeCliAgentView` so daemon launch behavior still reads the shared contract. */
+  settings?(agent?: NativeCliAgentView): NativeCliAgentSetting[];
   provider: NativeCliProvider;
   productIcon: NativeCliProductIcon;
   /** Human display name (e.g. "Claude Code", "Codex") — the single source the daemon/UI reads instead

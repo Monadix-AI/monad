@@ -200,13 +200,20 @@ function presetAgentView(preset: NativeCliAgentPresetView): NativeCliAgentView {
     enabled: preset.installed,
     defaultLaunchMode: preset.defaultLaunchMode,
     allowAutopilot: false,
-    approvalOwnership: 'provider-owned'
+    approvalOwnership: 'provider-owned',
+    settings: preset.settings
   };
 }
 
 export function listNativeCliAgentPresets(probes: BinProbes = defaultBinProbes): NativeCliAgentPresetView[] {
   return [...ADAPTERS.values()]
-    .map((adapter) => adapter.detect(probes))
+    .map((adapter) => {
+      const preset = adapter.detect(probes);
+      return {
+        ...preset,
+        settings: preset.settings ?? adapter.settings?.(presetAgentView(preset))
+      };
+    })
     .map((preset) => ({
       ...preset,
       modelOptions: listNativeCliAgentModelOptions(presetAgentView(preset), probes),

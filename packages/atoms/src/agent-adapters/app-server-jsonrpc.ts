@@ -14,6 +14,7 @@ import { defaultBinProbes, NativeCliError, resolveBinary } from '@monad/sdk-atom
 import { compactObject, hasFlag, parseStructuredAuthState } from './adapter-shared.ts';
 import { parseNativeCliArgumentSupport } from './argument-support.ts';
 import { resizePty, sendPtyInput, stopPty } from './pty.ts';
+import { nativeCliAdapterSettings } from './settings.ts';
 
 // CLI-adapter boilerplate (detect/launch-args/auth-probes/pty+oneshot fallback) shared by every
 // native-CLI provider built from `makeAppServerCliAdapter`. Each provider's real app-server wire
@@ -208,6 +209,15 @@ export function makeAppServerCliAdapter(options: MakeAppServerCliAdapterOptions)
     provider: options.provider,
     productIcon: options.productIcon,
     label: options.label,
+    settings: () =>
+      nativeCliAdapterSettings({
+        launchModes: [
+          'pty',
+          ...(options.appServerSubcommand ? (['app-server'] as const) : []),
+          ...(options.oneshot ? (['cli-oneshot'] as const) : [])
+        ],
+        ...(options.appServerSubcommand ? { appServerTransports: [...appServerTransports] } : {})
+      }),
     ...(options.managedRuntime ? { managedRuntime: options.managedRuntime } : {}),
     ...(options.oneshot ? { oneshotTurnArgs: options.oneshot.turnArgs } : {}),
     ...(options.appServerWs?.usesDaemonAssignedPort ? { usesDaemonAssignedAppServerPort: true } : {}),
@@ -229,6 +239,7 @@ export function makeAppServerCliAdapter(options: MakeAppServerCliAdapterOptions)
           ...(options.oneshot ? (['cli-oneshot'] as const) : [])
         ],
         ...(options.appServerSubcommand ? { supportedAppServerTransports: [...appServerTransports] } : {}),
+        settings: adapter.settings?.(),
         installHint: options.installHint,
         installUrl: options.installUrl,
         installed,

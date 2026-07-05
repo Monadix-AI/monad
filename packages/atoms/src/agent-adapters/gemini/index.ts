@@ -14,6 +14,7 @@ import { hasFlag, parseJsonObject, parseStructuredAuthState } from '../adapter-s
 import { parseNativeCliArgumentSupport } from '../argument-support.ts';
 import { readProviderHistoryFile } from '../history-files.ts';
 import { resizePty, sendPtyInput, stopPty } from '../pty.ts';
+import { nativeCliAdapterSettings } from '../settings.ts';
 import { createBasicSettingsImport } from '../settings-import.ts';
 import { hasGeminiStreamJsonEvents, parseGeminiStreamJson } from './stream-json.ts';
 
@@ -219,6 +220,7 @@ export const geminiNativeCliAdapter: NativeCliProviderAdapter = {
   provider: 'gemini',
   productIcon: 'gemini',
   label: 'Gemini CLI',
+  settings: () => nativeCliAdapterSettings({ launchModes: ['pty', 'json-stream'] }),
   settingsImport: createBasicSettingsImport('gemini', 'Gemini CLI', 'gemini', '.gemini'),
   managedRuntime: {
     launchMode: () => 'json-stream'

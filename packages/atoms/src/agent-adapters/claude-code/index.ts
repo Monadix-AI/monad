@@ -32,6 +32,7 @@ import {
 import { parseNativeCliArgumentSupport } from '../argument-support.ts';
 import { readProviderHistoryFile } from '../history-files.ts';
 import { resizePty, sendPtyInput, stopPty } from '../pty.ts';
+import { nativeCliAdapterSettings } from '../settings.ts';
 import { createClaudeCodeSettingsImport } from '../settings-import.ts';
 
 // `claude --help` documents `--model` as accepting either a tier alias ("fable", "opus", "sonnet",
@@ -355,6 +356,7 @@ export const claudeCodeNativeCliAdapter: NativeCliProviderAdapter = {
   provider: 'claude-code',
   productIcon: 'claude-code',
   label: 'Claude Code',
+  settings: () => nativeCliAdapterSettings({ launchModes: ['pty', 'json-stream', 'remote-control'] }),
   settingsImport: createClaudeCodeSettingsImport(),
   // ACP delivery variant: same Claude Code agent, launched as an external ACP sub-agent via the
   // claude-agent-acp wrapper. Version-pinned so `npx -y <pkg>@<ver>` resolves a known build.
