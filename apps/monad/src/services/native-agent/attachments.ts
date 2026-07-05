@@ -7,15 +7,17 @@ import type {
 import type { createDaemonHandlers } from '@/handlers/handlers.ts';
 
 import { realpath, stat } from 'node:fs/promises';
-import { basename, sep } from 'node:path';
+import { basename, isAbsolute, resolve, sep } from 'node:path';
 import {
   attachmentPreviewText,
   isPreviewableAttachmentMime,
   NATIVE_AGENT_ATTACHMENT_PREVIEW_MAX,
+  NATIVE_AGENT_ATTACHMENTS_MAX,
   newId
 } from '@monad/protocol';
 
 import { HandlerError } from '@/handlers/handler-error.ts';
+import { parseNativeAgentFileReferences } from './file-refs.ts';
 
 const ATTACHMENT_PREVIEW_READ_BYTES = NATIVE_AGENT_ATTACHMENT_PREVIEW_MAX * 4;
 const ATTACHMENT_INLINE_READ_MAX = 1_000_000;
@@ -83,8 +85,20 @@ export function createNativeAgentAttachmentResolver(
     binding: { projectId: ProjectId; agentId: string },
     workingPath: string
   ): Promise<{ text: string; noticeText: string; attachments: MessageAttachmentRef[] }> {
-    if (!body.attachments?.length) {
-      const text = body.text ?? '';
+    const parsed = body.text ? parseNativeAgentFileReferences(body.text) : { text: body.text ?? '', paths: [] };
+    const markerAttachments = parsed.paths.map((path) => ({
+      path: isAbsolute(path) ? path : resolve(workingPath, path)
+    }));
+    const attachmentInputs = [...markerAttachments, ...(body.attachments ?? [])];
+    if (attachmentInputs.length > NATIVE_AGENT_ATTACHMENTS_MAX) {
+      throw new HandlerError(
+        'invalid',
+        `at most ${NATIVE_AGENT_ATTACHMENTS_MAX} file attachments per message`,
+        'ATTACHMENT_LIMIT_EXCEEDED'
+      );
+    }
+    if (!attachmentInputs.length) {
+      const text = parsed.text;
       return { text, noticeText: text, attachments: [] };
     }
     const workspaceRealpath = await realpath(workingPath).catch(() => {
@@ -95,7 +109,7 @@ export function createNativeAgentAttachmentResolver(
       );
     });
     const snapshots = await Promise.all(
-      body.attachments.map((input) => snapshotAttachmentInput(input, workspaceRealpath))
+      attachmentInputs.map((input) => snapshotAttachmentInput(input, workspaceRealpath))
     );
     const createdAt = new Date().toISOString();
     const attachments = store.registerMessageAttachments(
@@ -108,7 +122,7 @@ export function createNativeAgentAttachmentResolver(
         createdAt
       }))
     );
-    const text = body.text ?? snapshots.find((snapshot) => snapshot.preview)?.preview ?? '';
+    const text = parsed.text || snapshots.find((snapshot) => snapshot.preview)?.preview || '';
     return { text, noticeText: attachmentNoticeText(text, attachments), attachments };
   };
 }
