@@ -19,6 +19,7 @@ function logHttpCall(method: string, path: string, status: number, durationMs?: 
   else if (log.isLevelEnabled('debug')) log.debug(record, formatTransportCall(record));
 }
 
+import { createA2aController } from '@/transports/a2a/index.ts';
 import { createAgentsController } from '@/transports/http/agents.ts';
 import { createApprovalsController } from '@/transports/http/approvals.ts';
 import { createAtomsController } from '@/transports/http/atoms.ts';
@@ -294,6 +295,7 @@ export function createHttpTransport(
   return app
     .use(createHealthController(handlers))
     .use(createAvatarCacheController(handlers))
+    .use(createA2aController(handlers))
     .group('/openai', (g) => {
       const compatConfig = openaiCompatConfig ?? (() => Promise.resolve({ enabled: false }));
       return g

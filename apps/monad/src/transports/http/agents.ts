@@ -1,7 +1,9 @@
 import type { createDaemonHandlers } from '@/handlers/handlers.ts';
 
-import { daemonHttpContract } from '@monad/protocol';
+import { daemonHttpContract, getA2aAgentStatusResponseSchema } from '@monad/protocol';
 import { Elysia } from 'elysia';
+
+import { baseUrlOf, buildA2aStatus } from '@/transports/a2a/index.ts';
 
 export function createAgentsController(handlers: ReturnType<typeof createDaemonHandlers>) {
   const contracts = daemonHttpContract.agents;
@@ -68,6 +70,22 @@ export function createAgentsController(handlers: ReturnType<typeof createDaemonH
           body: contracts.promptSet.body,
           response: contracts.promptSet.response,
           detail: { summary: 'Set agent prompt', description: "Writes the agent's AGENT.md system-prompt body." }
+        }
+      )
+      .get(
+        '/agents/:id/a2a',
+        async ({ params, request }) => {
+          const { agent } = await handlers.agent.getAgent({ agentId: params.id });
+          return { status: buildA2aStatus(agent, baseUrlOf(request)) };
+        },
+        {
+          params: contracts.get.params,
+          response: getA2aAgentStatusResponseSchema,
+          detail: {
+            tags: ['http-only'],
+            summary: 'A2A status',
+            description: 'A2A exposure status and endpoint URLs for one agent.'
+          }
         }
       )
   );

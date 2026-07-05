@@ -2,6 +2,7 @@
   "name": "@monad/monad",
   "version": "0.0.0",
   "dependencies": {
+    "@a2a-js/sdk": "^0.3.13",
     "@agentclientprotocol/sdk": "^1.1.0",
     "@arizeai/openinference-semantic-conventions": "^2.5.0",
     "@arizeai/openinference-vercel": "^3.1.0",
