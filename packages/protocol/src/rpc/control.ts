@@ -5,6 +5,7 @@ import { z } from 'zod';
 
 import { approvalScopeSchema } from '../approvals.ts';
 import {
+  a2aAgentSettingsSchema,
   agentAtomsSchema,
   agentSchema,
   agentVisibilitySchema,
@@ -70,6 +71,7 @@ export const createAgentRequestSchema = z.object({
   maxThinkingTokens: z.number().int().positive().optional(),
   maxBudgetUsd: z.number().positive().optional(),
   visibility: agentVisibilitySchema.optional(),
+  a2a: a2aAgentSettingsSchema.optional(),
   /** Initial AGENT.md system-prompt body. Absent → no .md written (valid empty-prompt agent). */
   prompt: z.string().optional()
 });
@@ -89,7 +91,8 @@ export const updateAgentRequestSchema = z.object({
   maxTurns: z.number().int().positive().optional(),
   maxThinkingTokens: z.number().int().positive().optional(),
   maxBudgetUsd: z.number().positive().optional(),
-  visibility: agentVisibilitySchema.optional()
+  visibility: agentVisibilitySchema.optional(),
+  a2a: a2aAgentSettingsSchema.optional()
 });
 export type UpdateAgentRequest = z.infer<typeof updateAgentRequestSchema>;
 

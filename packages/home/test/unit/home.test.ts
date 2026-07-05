@@ -323,7 +323,8 @@ describe('computeInitStatus', () => {
         capabilities: [],
         declaredScopes: [],
         atoms: { mode: 'inherit', allow: [], deny: [] },
-        visibility: { subagentCallable: false, public: false }
+        visibility: { subagentCallable: false, public: false },
+        a2a: { enabled: false }
       }
     ];
     cfg.agent.defaultAgentId = 'agt_writer';

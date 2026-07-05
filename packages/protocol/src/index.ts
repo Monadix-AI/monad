@@ -4,6 +4,7 @@
 // Deferred (A2A collaboration + oversight): Gate, Contract, SignedLogEntry, and the
 // gate.*/contract.*/action.* event taxonomy land here when that phase begins.
 
+export * from './a2a.ts';
 export * from './acp-agent.ts';
 export * from './approvals.ts';
 export * from './atom-pack.ts';

@@ -48,6 +48,15 @@ export const agentVisibilitySchema = z.object({
 });
 export type AgentVisibility = z.infer<typeof agentVisibilitySchema>;
 
+/** Per-agent A2A (Agent2Agent) exposure. When `enabled`, the daemon serves a standard A2A
+ *  surface for this agent — an AgentCard plus JSON-RPC `message/send`, `message/stream`, and
+ *  `tasks/*` — scoped to its id. Off by default: exposing an agent to external A2A clients is
+ *  an opt-in per agent. */
+export const a2aAgentSettingsSchema = z.object({
+  enabled: z.boolean().default(false)
+});
+export type A2aAgentSettings = z.infer<typeof a2aAgentSettingsSchema>;
+
 /** Per-agent tool/atom exposure — a *filter* over the daemon-registered tools, never an installer.
  *  `allow` narrows to a subset; `deny` removes from the inherited/allowed set (Claude Code
  *  `disallowedTools`). Exposure ⊆ registration. */
@@ -124,6 +133,7 @@ export const agentSchema = z.object({
   maxThinkingTokens: z.number().int().positive().optional(),
   maxBudgetUsd: z.number().positive().optional(),
   visibility: agentVisibilitySchema.default({ subagentCallable: false, public: false }),
+  a2a: a2aAgentSettingsSchema.default({ enabled: false }),
   /** True when an AGENT.md body exists on disk — UI hint without shipping the prompt over the wire. */
   hasPrompt: z.boolean().optional()
 });

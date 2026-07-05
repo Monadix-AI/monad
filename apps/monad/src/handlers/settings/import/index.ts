@@ -358,7 +358,8 @@ export function createSettingsImportModule({ paths, configBus, mcpReconnect }: S
               capabilities: [],
               declaredScopes: [],
               atoms: { mode: 'inherit', allow: [], deny: [] },
-              visibility: { subagentCallable: false, public: false }
+              visibility: { subagentCallable: false, public: false },
+              a2a: { enabled: false }
             };
             if (existingIndex === -1) {
               cfg.agent.agents.push(agent);

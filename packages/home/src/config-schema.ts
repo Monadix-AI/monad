@@ -1,4 +1,5 @@
 import {
+  a2aAgentSettingsSchema,
   absoluteUriSchema,
   agentAtomsSchema,
   agentVisibilitySchema,
@@ -182,6 +183,9 @@ export const agentConfigSchema = z.object({
   maxThinkingTokens: z.number().int().positive().optional(),
   maxBudgetUsd: z.number().positive().optional(),
   visibility: agentVisibilitySchema.default({ subagentCallable: false, public: false }),
+  /** Per-agent A2A (Agent2Agent) exposure. Off by default; when enabled the daemon serves a
+   *  standard A2A surface scoped to this agent's id. */
+  a2a: a2aAgentSettingsSchema.default({ enabled: false }),
   /** P3 — populated when published to Monadix; absent until then. */
   published: z
     .object({

@@ -82,7 +82,8 @@ test('POST /v1/sessions without agentId when agents exist but no default: 400 er
       capabilities: [],
       declaredScopes: [],
       atoms: { mode: 'inherit', allow: [], deny: [] },
-      visibility: { subagentCallable: false, public: false }
+      visibility: { subagentCallable: false, public: false },
+      a2a: { enabled: false }
     });
     await saveAll(paths.config, paths.profile, cfg);
     const modelService = new ModelService(paths.auth, cfg, null, seededProviderRegistry());
@@ -110,7 +111,8 @@ test('POST /v1/sessions without agentId when default is set: resolves agent, age
       capabilities: [],
       declaredScopes: [],
       atoms: { mode: 'inherit', allow: [], deny: [] },
-      visibility: { subagentCallable: false, public: false }
+      visibility: { subagentCallable: false, public: false },
+      a2a: { enabled: false }
     });
     cfg.agent.defaultAgentId = 'agt_DEFAULT01';
     await saveAll(paths.config, paths.profile, cfg);
@@ -141,7 +143,8 @@ test('POST /v1/sessions with explicit agentId: resolves correctly', async () => 
       capabilities: [],
       declaredScopes: [],
       atoms: { mode: 'inherit', allow: [], deny: [] },
-      visibility: { subagentCallable: false, public: false }
+      visibility: { subagentCallable: false, public: false },
+      a2a: { enabled: false }
     });
     await saveAll(paths.config, paths.profile, cfg);
     const modelService = new ModelService(paths.auth, cfg, null, seededProviderRegistry());
@@ -169,7 +172,8 @@ test('POST /v1/sessions with unknown explicit agentId: 400 error', async () => {
       capabilities: [],
       declaredScopes: [],
       atoms: { mode: 'inherit', allow: [], deny: [] },
-      visibility: { subagentCallable: false, public: false }
+      visibility: { subagentCallable: false, public: false },
+      a2a: { enabled: false }
     });
     await saveAll(paths.config, paths.profile, cfg);
     const modelService = new ModelService(paths.auth, cfg, null, seededProviderRegistry());

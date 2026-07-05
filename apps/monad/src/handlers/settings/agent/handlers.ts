@@ -25,6 +25,7 @@ function toWireAgent(a: AgentConfig, principalId: PrincipalId, hasPrompt: boolea
     maxThinkingTokens: a.maxThinkingTokens,
     maxBudgetUsd: a.maxBudgetUsd,
     visibility: a.visibility,
+    a2a: a.a2a,
     hasPrompt
   };
 }
@@ -82,7 +83,8 @@ export function createAgentHandlers(ctx: AgentContext, ownerPrincipalId: Princip
         maxTurns: req.maxTurns,
         maxThinkingTokens: req.maxThinkingTokens,
         maxBudgetUsd: req.maxBudgetUsd,
-        visibility: req.visibility ?? { subagentCallable: false, public: false }
+        visibility: req.visibility ?? { subagentCallable: false, public: false },
+        a2a: req.a2a ?? { enabled: false }
       };
       let hasPrompt = false;
       if (req.prompt?.trim()) {
@@ -111,6 +113,7 @@ export function createAgentHandlers(ctx: AgentContext, ownerPrincipalId: Princip
       if (patch.maxThinkingTokens !== undefined) a.maxThinkingTokens = patch.maxThinkingTokens;
       if (patch.maxBudgetUsd !== undefined) a.maxBudgetUsd = patch.maxBudgetUsd;
       if (patch.visibility !== undefined) a.visibility = patch.visibility;
+      if (patch.a2a !== undefined) a.a2a = patch.a2a;
       await ctx.commit(cfg);
       return { agent: await wire(a) };
     },
