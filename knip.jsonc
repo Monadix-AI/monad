@@ -5,9 +5,12 @@
   "ignore": [
     "apps/monad/src/handlers/settings/mcp-server/catalog.ts",
     "apps/web/components/ai-elements/context.tsx",
+    "apps/web/components/ai-elements/prompt-input-actions.tsx",
     "apps/web/components/ai-elements/prompt-input.tsx",
     "apps/web/components/ai-elements/prompt-input-context.tsx",
     "apps/web/components/ai-elements/prompt-input-controls.tsx",
+    "apps/web/components/ai-elements/prompt-input-textarea.tsx",
+    "apps/web/components/ai-elements/prompt-input-utils.ts",
     "apps/web/components/shadcn-space/slider/slider-04.tsx",
     "apps/web/components/ui/command.tsx",
     "apps/web/components/ui/dialog.tsx",
