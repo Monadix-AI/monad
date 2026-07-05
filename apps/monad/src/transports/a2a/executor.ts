@@ -1,4 +1,4 @@
-import type { Message, TaskState, TaskStatusUpdateEvent } from '@a2a-js/sdk';
+import type { Message, Task, TaskState, TaskStatusUpdateEvent } from '@a2a-js/sdk';
 import type { AgentExecutor, ExecutionEventBus, RequestContext } from '@a2a-js/sdk/server';
 import type { AgentId, Event, SessionId } from '@monad/protocol';
 import type { createDaemonHandlers } from '@/handlers/handlers.ts';
@@ -65,6 +65,17 @@ export function createA2aExecutor(agentId: AgentId, handlers: Handlers): AgentEx
       const text = messageText(reqCtx.userMessage);
       const sessionId = await resolveSession(reqCtx.contextId);
       taskSessions.set(reqCtx.taskId, sessionId);
+
+      // Register the task with the SDK's event bus before any status-update references its id, so
+      // both message/send (aggregate → Task result) and message/stream (incremental) have a context.
+      const initialTask: Task = {
+        kind: 'task',
+        id: reqCtx.taskId,
+        contextId: reqCtx.contextId,
+        status: { state: 'working', timestamp: new Date().toISOString() },
+        history: [reqCtx.userMessage]
+      };
+      eventBus.publish(initialTask);
 
       let streamed = '';
       let finalText = '';
