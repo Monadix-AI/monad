@@ -1,11 +1,13 @@
 'use client';
 
-import type { SandboxMode } from '@monad/protocol';
+import type { A2aAgentStatus, SandboxMode } from '@monad/protocol';
 
 import {
+  ApiIcon,
   BrainIcon,
   CheckIcon,
   CircleDashedIcon,
+  Copy01Icon,
   EyeIcon,
   GlobeIcon,
   PackageIcon,
@@ -30,11 +32,14 @@ import {
   Textarea
 } from '@monad/ui';
 import { Markdown } from '@monad/ui/components/Markdown';
+import { useState } from 'react';
 
 import { useT } from '@/components/I18nProvider';
 import { type CapabilityItem, INHERIT, MODEL_ROLES, SANDBOX_MODES, type WorkshopPart } from './AgentWorkshopPrimitives';
 
 interface AgentWorkshopInspectorProps {
+  a2aEnabled: boolean;
+  a2aStatus?: A2aAgentStatus;
   atomsAllow: string[];
   atomsMode: 'inherit' | 'allowlist';
   capabilityCatalog: CapabilityItem[];
@@ -50,6 +55,7 @@ interface AgentWorkshopInspectorProps {
   roles: Record<string, string>;
   sandboxMode: SandboxMode | '';
   selectedPart: WorkshopPart;
+  setA2aEnabled: (value: boolean) => void;
   setAtomsAllow: (value: string[] | ((prev: string[]) => string[])) => void;
   setAtomsMode: (mode: 'inherit' | 'allowlist') => void;
   setIsPublic: (value: boolean) => void;
@@ -66,6 +72,8 @@ interface AgentWorkshopInspectorProps {
 }
 
 export function AgentWorkshopInspector({
+  a2aEnabled,
+  a2aStatus,
   atomsAllow,
   atomsMode,
   capabilityCatalog,
@@ -81,6 +89,7 @@ export function AgentWorkshopInspector({
   roles,
   sandboxMode,
   selectedPart,
+  setA2aEnabled,
   setAtomsAllow,
   setAtomsMode,
   setIsPublic,
@@ -96,6 +105,14 @@ export function AgentWorkshopInspector({
   subagentCallable
 }: AgentWorkshopInspectorProps) {
   const t = useT();
+  const [copiedUrl, setCopiedUrl] = useState<string | null>(null);
+
+  const copyUrl = (url: string) => {
+    void navigator.clipboard?.writeText(url).then(() => {
+      setCopiedUrl(url);
+      setTimeout(() => setCopiedUrl(null), 1200);
+    });
+  };
 
   return (
     <div className="flex flex-col gap-4 p-5">
@@ -390,6 +407,40 @@ export function AgentWorkshopInspector({
               onCheckedChange={setIsPublic}
             />
           </div>
+          <div className="flex flex-col gap-3 rounded-2xl border bg-background/80 px-4 py-3">
+            <div className="flex items-center gap-3">
+              <HugeiconsIcon
+                className="size-4 text-primary"
+                icon={ApiIcon}
+              />
+              <div className="flex-1">
+                <div className="font-medium text-sm">{t('web.studio.visA2a')}</div>
+                <div className="text-muted-foreground text-xs">{t('web.studio.visA2aDesc')}</div>
+              </div>
+              <Switch
+                checked={a2aEnabled}
+                onCheckedChange={setA2aEnabled}
+              />
+            </div>
+            {a2aStatus?.enabled ? (
+              <div className="grid gap-2 border-t pt-3">
+                <A2aUrlRow
+                  copied={copiedUrl === a2aStatus.agentCardUrl}
+                  label={t('web.studio.a2aAgentCardUrl')}
+                  onCopy={copyUrl}
+                  url={a2aStatus.agentCardUrl}
+                />
+                <A2aUrlRow
+                  copied={copiedUrl === a2aStatus.jsonRpcUrl}
+                  label={t('web.studio.a2aJsonRpcUrl')}
+                  onCopy={copyUrl}
+                  url={a2aStatus.jsonRpcUrl}
+                />
+              </div>
+            ) : a2aEnabled ? (
+              <div className="border-t pt-3 text-muted-foreground text-xs">{t('web.studio.a2aUrlsSaveHint')}</div>
+            ) : null}
+          </div>
           {exposed && (
             <div className="rounded-2xl border border-warning/40 bg-warning/10 px-4 py-3 text-xs leading-relaxed">
               {t('web.studio.exposeWarning')}
@@ -406,6 +457,40 @@ export function AgentWorkshopInspector({
           />
           {t('web.studio.exposeSubset')}
         </div>
+      </div>
+    </div>
+  );
+}
+
+function A2aUrlRow({
+  copied,
+  label,
+  onCopy,
+  url
+}: {
+  copied: boolean;
+  label: string;
+  onCopy: (url: string) => void;
+  url: string;
+}) {
+  return (
+    <div className="grid gap-1">
+      <div className="font-medium text-[11px] text-muted-foreground uppercase tracking-wide">{label}</div>
+      <div className="flex min-w-0 items-center gap-2 rounded-md border bg-card px-2 py-1.5">
+        <code className="min-w-0 flex-1 truncate font-mono text-[11px]">{url}</code>
+        <Button
+          aria-label={label}
+          className="size-6"
+          onClick={() => onCopy(url)}
+          size="icon"
+          type="button"
+          variant="ghost"
+        >
+          <HugeiconsIcon
+            className={copied ? 'text-success' : undefined}
+            icon={copied ? CheckIcon : Copy01Icon}
+          />
+        </Button>
       </div>
     </div>
   );

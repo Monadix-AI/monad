@@ -10,6 +10,7 @@ import { useT } from '@/components/I18nProvider';
 import { type WorkshopPart, WorkshopSlot } from './AgentWorkshopPrimitives';
 
 interface AgentWorkshopWorkbenchProps {
+  a2aEnabled: boolean;
   atomsAllow: string[];
   atomsMode: 'inherit' | 'allowlist';
   draggingPart: WorkshopPart | null;
@@ -31,6 +32,7 @@ interface AgentWorkshopWorkbenchProps {
 }
 
 export function AgentWorkshopWorkbench({
+  a2aEnabled,
   atomsAllow,
   atomsMode,
   draggingPart,
@@ -169,6 +171,7 @@ export function AgentWorkshopWorkbench({
               <Badge variant="outline">{t('web.studio.visStandalone')}</Badge>
               {subagentCallable && <Badge variant="secondary">{t('web.studio.badgeSubagent')}</Badge>}
               {isPublic && <Badge variant="secondary">{t('web.studio.badgePublic')}</Badge>}
+              {a2aEnabled && <Badge variant="secondary">{t('web.studio.badgeA2a')}</Badge>}
             </div>
           }
           dragging={draggingPart === 'visibility'}

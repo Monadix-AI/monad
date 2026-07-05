@@ -11,6 +11,7 @@ import { Badge, Button, cn, Input, Label } from '@monad/ui';
 import { useT } from '@/components/I18nProvider';
 
 interface AgentWorkshopHeaderProps {
+  a2aEnabled: boolean;
   allowCount: number;
   atomsMode: 'inherit' | 'allowlist';
   description: string;
@@ -31,6 +32,7 @@ interface AgentWorkshopHeaderProps {
 }
 
 export function AgentWorkshopHeader({
+  a2aEnabled,
   allowCount,
   atomsMode,
   description,
@@ -167,7 +169,8 @@ export function AgentWorkshopHeader({
                 {exposed
                   ? [
                       subagentCallable ? t('web.studio.badgeSubagent') : null,
-                      isPublic ? t('web.studio.badgePublic') : null
+                      isPublic ? t('web.studio.badgePublic') : null,
+                      a2aEnabled ? t('web.studio.badgeA2a') : null
                     ]
                       .filter(Boolean)
                       .join(' + ')

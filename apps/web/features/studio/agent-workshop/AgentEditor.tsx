@@ -5,6 +5,7 @@ import type { AgentId } from '@monad/protocol';
 import { CheckIcon, LoaderPinwheelIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import {
+  useGetA2aStatusQuery,
   useGetAgentPromptQuery,
   useGetAgentQuery,
   useSetAgentPromptMutation,
@@ -17,11 +18,13 @@ import { useT } from '@/components/I18nProvider';
 import { studioPath } from '@/features/routes/route-paths';
 import { StudioBreadcrumbHeader } from '../StudioBreadcrumbHeader';
 import { AgentWorkshop } from './AgentWorkshop';
+import { buildAgentEditorUpdate } from './agent-editor-update';
 
 export function AgentEditor({ agentId }: { agentId: AgentId; onClose: () => void }) {
   const t = useT();
   const { data: agentData, isLoading } = useGetAgentQuery(agentId);
   const { data: promptData } = useGetAgentPromptQuery(agentId);
+  const { data: a2aStatusData } = useGetA2aStatusQuery(agentId);
   const [updateAgent, { isLoading: saving }] = useUpdateAgentMutation();
   const [setAgentPrompt, { isLoading: savingPrompt }] = useSetAgentPromptMutation();
 
@@ -31,6 +34,7 @@ export function AgentEditor({ agentId }: { agentId: AgentId; onClose: () => void
   const [sandboxMode, setSandboxMode] = useState<'' | 'workspace' | 'home' | 'unrestricted' | 'ephemeral'>('');
   const [subagentCallable, setSubagentCallable] = useState(false);
   const [isPublic, setIsPublic] = useState(false);
+  const [a2aEnabled, setA2aEnabled] = useState(false);
   const [prompt, setPrompt] = useState('');
   const [atomsMode, setAtomsMode] = useState<'inherit' | 'allowlist'>('inherit');
   const [atomsAllow, setAtomsAllow] = useState<string[]>([]);
@@ -49,6 +53,7 @@ export function AgentEditor({ agentId }: { agentId: AgentId; onClose: () => void
     setSandboxMode(agent.sandboxMode ?? '');
     setSubagentCallable(agent.visibility?.subagentCallable ?? false);
     setIsPublic(agent.visibility?.public ?? false);
+    setA2aEnabled(agent.a2a?.enabled ?? false);
     setAtomsMode(agent.atoms?.mode ?? 'inherit');
     setAtomsAllow(agent.atoms?.allow ?? []);
     setRoles((agent.roles as Record<string, string>) ?? {});
@@ -62,19 +67,26 @@ export function AgentEditor({ agentId }: { agentId: AgentId; onClose: () => void
   }, [promptData]);
 
   const handleSave = async () => {
-    await updateAgent({
-      agentId,
-      name: name.trim() || undefined,
-      description: description.trim() || undefined,
-      model: model.trim() || undefined,
-      sandboxMode: sandboxMode || undefined,
-      maxTurns: maxTurns.trim() ? parseInt(maxTurns, 10) : undefined,
-      maxThinkingTokens: maxThinkingTokens.trim() ? parseInt(maxThinkingTokens, 10) : undefined,
-      maxBudgetUsd: maxBudgetUsd.trim() ? parseFloat(maxBudgetUsd) : undefined,
-      roles,
-      atoms: { mode: atomsMode, allow: atomsAllow, deny: agent?.atoms?.deny ?? [] },
-      visibility: { subagentCallable, public: isPublic }
-    }).unwrap();
+    if (!agent) return;
+    await updateAgent(
+      buildAgentEditorUpdate({
+        agent,
+        agentId,
+        atomsAllow,
+        atomsMode,
+        description,
+        isPublic,
+        maxBudgetUsd,
+        maxThinkingTokens,
+        maxTurns,
+        model,
+        name,
+        roles,
+        sandboxMode,
+        subagentCallable,
+        a2aEnabled
+      })
+    ).unwrap();
     if (promptData && prompt !== promptData.prompt) {
       await setAgentPrompt({ agentId, prompt }).unwrap();
     }
@@ -91,7 +103,7 @@ export function AgentEditor({ agentId }: { agentId: AgentId; onClose: () => void
     );
   }
 
-  const exposed = subagentCallable || isPublic;
+  const exposed = subagentCallable || isPublic || a2aEnabled;
 
   return (
     <section className="flex min-w-0 flex-1 flex-col">
@@ -126,6 +138,8 @@ export function AgentEditor({ agentId }: { agentId: AgentId; onClose: () => void
       />
 
       <AgentWorkshop
+        a2aEnabled={a2aEnabled}
+        a2aStatus={a2aStatusData?.status}
         atomsAllow={atomsAllow}
         atomsMode={atomsMode}
         description={description}
@@ -138,6 +152,7 @@ export function AgentEditor({ agentId }: { agentId: AgentId; onClose: () => void
         prompt={prompt}
         roles={roles}
         sandboxMode={sandboxMode}
+        setA2aEnabled={setA2aEnabled}
         setAtomsAllow={setAtomsAllow}
         setAtomsMode={setAtomsMode}
         setDescription={setDescription}

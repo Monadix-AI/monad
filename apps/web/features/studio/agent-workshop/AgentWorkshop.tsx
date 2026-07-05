@@ -1,7 +1,7 @@
 'use client';
 
 import type { WebMessageIdWithoutParams } from '@monad/i18n';
-import type { SandboxMode } from '@monad/protocol';
+import type { A2aAgentStatus, SandboxMode } from '@monad/protocol';
 import type { DragEvent } from 'react';
 
 import { mcpServerAdapter, mcpServerSelectors, useListAtomPacksQuery, useListMcpServersQuery } from '@monad/client-rtk';
@@ -17,6 +17,8 @@ import { type CapabilityItem, parsePayload, type WorkshopPart } from './AgentWor
 import { AgentWorkshopWorkbench } from './AgentWorkshopWorkbench';
 
 interface AgentWorkshopProps {
+  a2aEnabled: boolean;
+  a2aStatus?: A2aAgentStatus;
   atomsAllow: string[];
   atomsMode: 'inherit' | 'allowlist';
   description: string;
@@ -29,6 +31,7 @@ interface AgentWorkshopProps {
   prompt: string;
   roles: Record<string, string>;
   sandboxMode: SandboxMode | '';
+  setA2aEnabled: (value: boolean) => void;
   setAtomsAllow: (value: string[] | ((prev: string[]) => string[])) => void;
   setAtomsMode: (mode: 'inherit' | 'allowlist') => void;
   setDescription: (value: string) => void;
@@ -46,6 +49,8 @@ interface AgentWorkshopProps {
 }
 
 export function AgentWorkshop({
+  a2aEnabled,
+  a2aStatus,
   atomsAllow,
   atomsMode,
   description,
@@ -58,6 +63,7 @@ export function AgentWorkshop({
   prompt,
   roles,
   sandboxMode,
+  setA2aEnabled,
   setAtomsAllow,
   setAtomsMode,
   setDescription,
@@ -96,7 +102,7 @@ export function AgentWorkshop({
 
   const roleCount = Object.keys(roles).length;
   const allowCount = atomsMode === 'allowlist' ? atomsAllow.length : packs.length + servers.length;
-  const exposed = subagentCallable || isPublic;
+  const exposed = subagentCallable || isPublic || a2aEnabled;
   const safetyConfigured = Boolean(sandboxMode || maxTurns || maxThinkingTokens || maxBudgetUsd);
   const toolsConfigured = atomsMode === 'allowlist' || atomsAllow.length > 0;
   const partsInstalled = [
@@ -147,6 +153,7 @@ export function AgentWorkshop({
       data-testid="agent-workshop"
     >
       <AgentWorkshopHeader
+        a2aEnabled={a2aEnabled}
         allowCount={allowCount}
         atomsMode={atomsMode}
         description={description}
@@ -176,6 +183,7 @@ export function AgentWorkshop({
         />
 
         <AgentWorkshopWorkbench
+          a2aEnabled={a2aEnabled}
           atomsAllow={atomsAllow}
           atomsMode={atomsMode}
           draggingPart={draggingPart}
@@ -198,6 +206,8 @@ export function AgentWorkshop({
 
         <ScrollArea className="border-t lg:col-span-2 min-[1500px]:col-span-1 min-[1500px]:border-t-0 min-[1500px]:border-l">
           <AgentWorkshopInspector
+            a2aEnabled={a2aEnabled}
+            a2aStatus={a2aStatus}
             atomsAllow={atomsAllow}
             atomsMode={atomsMode}
             capabilityCatalog={capabilityCatalog}
@@ -213,6 +223,7 @@ export function AgentWorkshop({
             roles={roles}
             sandboxMode={sandboxMode}
             selectedPart={selectedPart}
+            setA2aEnabled={setA2aEnabled}
             setAtomsAllow={setAtomsAllow}
             setAtomsMode={setAtomsMode}
             setIsPublic={setIsPublic}

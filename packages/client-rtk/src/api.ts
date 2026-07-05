@@ -1,6 +1,7 @@
 import {
   useCreateAgentMutation,
   useDeleteAgentMutation,
+  useGetA2aStatusQuery,
   useGetAgentPromptQuery,
   useGetAgentQuery,
   useGetDefaultAgentQuery,
@@ -316,6 +317,7 @@ export {
   useForgetMemoryFactMutation,
   useForwardToAcpMutation,
   useGenerateMutation,
+  useGetA2aStatusQuery,
   useGetAgentPromptQuery,
   useGetAgentQuery,
   useGetAppearanceQuery,
