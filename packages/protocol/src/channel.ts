@@ -5,8 +5,8 @@
 
 import { z } from 'zod';
 
-import { okResponseSchema } from './control.ts';
 import { channelIdSchema } from './ids.ts';
+import { okResponseSchema } from './rpc/control.ts';
 import { httpUrlSchema } from './url.ts';
 
 // First-party channel types bundled with the daemon. The schema is OPEN (any string) so a

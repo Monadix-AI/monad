@@ -10,8 +10,8 @@ import {
   SESSION_TITLE_MAX,
   sendMessageRequestSchema,
   updateSessionRequestSchema
-} from '../src/control.ts';
-import { RPC_METHOD_PARAMS } from '../src/rpc-methods.ts';
+} from '../src/rpc/control.ts';
+import { RPC_METHOD_PARAMS } from '../src/rpc/rpc-methods.ts';
 
 // The built-in provider catalog now lives in @monad/atoms (the first-party providers own their
 // descriptors); its coverage/invariants are tested there — see packages/atoms/test/providers.test.ts.

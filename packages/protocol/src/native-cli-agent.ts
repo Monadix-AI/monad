@@ -13,7 +13,7 @@ import {
   importSettingsActionSchema,
   importSettingsCategorySchema,
   importSettingsRiskSchema
-} from './settings-import.ts';
+} from './settings/settings-import.ts';
 
 // Provider / product-icon are OPEN string unions (conventions.md §6): the known first-party ids give
 // autocomplete + exhaustiveness hints, but a third-party `agent-adapter` atom pack may introduce a new

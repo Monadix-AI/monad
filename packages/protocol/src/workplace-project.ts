@@ -2,9 +2,9 @@ import type { Session } from './domain.ts';
 
 import { z } from 'zod';
 
-import { offsetPaginationQuerySchema, offsetPaginationResponseSchema, SESSION_TITLE_MAX } from './control.ts';
 import { sessionOriginExtSchema, sessionOriginSchema, sessionStateSchema, sessionSurfaceSchema } from './domain.ts';
 import { messageIdSchema, nativeAgentDeliveryIdSchema, principalIdSchema, projectIdSchema } from './ids.ts';
+import { offsetPaginationQuerySchema, offsetPaginationResponseSchema, SESSION_TITLE_MAX } from './rpc/control.ts';
 
 export const workplaceProjectSchema = z.object({
   id: projectIdSchema,

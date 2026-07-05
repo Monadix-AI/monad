@@ -27,7 +27,7 @@
 // `agentId`→`id`, `providerId`→`id`, `credentialId`→`credId`); the daemon-side
 // dispatcher and HTTP controllers absorb the rename to their internal handler params.
 
-import type { EventType } from './domain.ts';
+import type { EventType } from '../domain.ts';
 
 import { z } from 'zod';
 
@@ -37,8 +37,25 @@ import {
   listApprovalsQuerySchema,
   listApprovalsResponseSchema,
   revokeApprovalRequestSchema
-} from './approvals.ts';
-import { commandsListResponseSchema } from './command.ts';
+} from '../approvals.ts';
+import { commandsListResponseSchema } from '../command.ts';
+import { agentIdSchema, sessionIdSchema, transcriptTargetIdSchema } from '../ids.ts';
+import {
+  getNativeCliAuthSessionResponseSchema,
+  getNativeCliSessionResponseSchema,
+  listNativeCliSessionsResponseSchema,
+  nativeCliApprovalResolutionRequestSchema,
+  nativeCliAuthStatusResponseSchema,
+  nativeCliHistoryPageRequestSchema,
+  nativeCliHistoryPageResponseSchema,
+  nativeCliInputRequestSchema,
+  nativeCliResizeRequestSchema,
+  nativeCliUsageResponseSchema,
+  startNativeCliAgentRequestSchema,
+  startNativeCliAgentResponseSchema,
+  startNativeCliAuthResponseSchema
+} from '../native-cli-agent.ts';
+import { setSkillsSettingsRequestSchema, skillsSettingsResponseSchema } from '../settings/skills-settings.ts';
 import {
   abortSessionResponseSchema,
   branchSessionRequestSchema,
@@ -80,23 +97,6 @@ import {
   updateSessionRequestSchema,
   updateSessionResponseSchema
 } from './control.ts';
-import { agentIdSchema, sessionIdSchema, transcriptTargetIdSchema } from './ids.ts';
-import {
-  getNativeCliAuthSessionResponseSchema,
-  getNativeCliSessionResponseSchema,
-  listNativeCliSessionsResponseSchema,
-  nativeCliApprovalResolutionRequestSchema,
-  nativeCliAuthStatusResponseSchema,
-  nativeCliHistoryPageRequestSchema,
-  nativeCliHistoryPageResponseSchema,
-  nativeCliInputRequestSchema,
-  nativeCliResizeRequestSchema,
-  nativeCliUsageResponseSchema,
-  startNativeCliAgentRequestSchema,
-  startNativeCliAgentResponseSchema,
-  startNativeCliAuthResponseSchema
-} from './native-cli-agent.ts';
-import { setSkillsSettingsRequestSchema, skillsSettingsResponseSchema } from './skills-settings.ts';
 
 export type HttpVerb = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 

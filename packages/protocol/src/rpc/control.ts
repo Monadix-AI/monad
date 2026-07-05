@@ -3,7 +3,7 @@
 
 import { z } from 'zod';
 
-import { approvalScopeSchema } from './approvals.ts';
+import { approvalScopeSchema } from '../approvals.ts';
 import {
   agentAtomsSchema,
   agentSchema,
@@ -19,9 +19,9 @@ import {
   sessionStateSchema,
   sessionSurfaceSchema,
   sessionTransportSchema
-} from './domain.ts';
-import { agentIdSchema, messageIdSchema, sessionIdSchema, transcriptTargetIdSchema } from './ids.ts';
-import { httpUrlSchema } from './url.ts';
+} from '../domain.ts';
+import { agentIdSchema, messageIdSchema, sessionIdSchema, transcriptTargetIdSchema } from '../ids.ts';
+import { httpUrlSchema } from '../url.ts';
 
 export const CONTROL_API_VERSION = 'v1' as const;
 

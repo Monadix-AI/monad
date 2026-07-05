@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 
-import { modelProviderDescriptorSchema } from '../src/control.ts';
+import { modelProviderDescriptorSchema } from '../src/rpc/control.ts';
 import {
   absoluteUriSchema,
   blankableHttpUrlSchema,

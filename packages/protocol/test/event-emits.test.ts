@@ -12,7 +12,7 @@ import type { EventType } from '../src/domain.ts';
 import { expect, test } from 'bun:test';
 
 import { eventTypeSchema } from '../src/domain.ts';
-import { METHOD_TABLE } from '../src/method-table.ts';
+import { METHOD_TABLE } from '../src/rpc/method-table.ts';
 
 const ALL_EVENT_TYPES = new Set(eventTypeSchema.options);
 

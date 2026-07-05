@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
 
-import { METHOD_TABLE } from '../src/method-table.ts';
-import { RPC_METHOD_PARAMS } from '../src/rpc-methods.ts';
+import { METHOD_TABLE } from '../src/rpc/method-table.ts';
+import { RPC_METHOD_PARAMS } from '../src/rpc/rpc-methods.ts';
 
 test('every method declares a result schema', () => {
   for (const [method, def] of Object.entries(METHOD_TABLE)) {

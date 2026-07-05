@@ -4,7 +4,6 @@
 
 import { z } from 'zod';
 
-import { appearanceSettingsSchema, setAppearanceSettingsRequestSchema } from './appearance-settings.ts';
 import {
   approvalMutationResponseSchema,
   clearApprovalsRequestSchema,
@@ -15,6 +14,31 @@ import {
 import { browserPresetResponseSchema, setBrowserPresetRequestSchema } from './browser-preset.ts';
 import { commandsListResponseSchema } from './command.ts';
 import { computerPresetResponseSchema, setComputerPresetRequestSchema } from './computer-preset.ts';
+import { getGraphResponseSchema } from './graph.ts';
+import { agentIdSchema, projectIdSchema, sessionIdSchema } from './ids.ts';
+import { getLicensesResponseSchema } from './licenses.ts';
+import { getMem0DataResponseSchema } from './mem0-data.ts';
+import { getLawsResponseSchema } from './memory.ts';
+import {
+  attachmentReadResponseSchema,
+  nativeAgentProjectAskRequestSchema,
+  nativeAgentProjectAskResponseSchema,
+  nativeAgentProjectInboxAckRequestSchema,
+  nativeAgentProjectInboxAckResponseSchema,
+  nativeAgentProjectInboxRequestSchema,
+  nativeAgentProjectInboxResponseSchema,
+  nativeAgentProjectPostRequestSchema,
+  nativeAgentProjectPostResponseSchema,
+  nativeAgentProjectReadRequestSchema,
+  nativeAgentProjectReadResponseSchema,
+  nativeAgentReadRequestSchema,
+  nativeAgentReadResponseSchema,
+  nativeAgentRuntimeInfoResponseSchema,
+  nativeAgentSendRequestSchema,
+  nativeAgentSendResponseSchema
+} from './native-cli-agent.ts';
+import { obscuraStatusResponseSchema, setObscuraRequestSchema } from './obscura.ts';
+import { pickDirectoryRequestSchema, pickDirectoryResponseSchema } from './pick-directory.ts';
 import {
   abortSessionResponseSchema,
   branchSessionRequestSchema,
@@ -57,47 +81,23 @@ import {
   updateAgentRequestSchema,
   updateSessionRequestSchema,
   updateSessionResponseSchema
-} from './control.ts';
-import { developerSettingsSchema, setDeveloperSettingsRequestSchema } from './developer-settings.ts';
-import { getGraphResponseSchema } from './graph.ts';
-import { hooksSettingsResponseSchema, setHooksSettingsRequestSchema } from './hooks-settings.ts';
-import { agentIdSchema, projectIdSchema, sessionIdSchema } from './ids.ts';
-import { getLicensesResponseSchema } from './licenses.ts';
-import { getMem0DataResponseSchema } from './mem0-data.ts';
-import { getLawsResponseSchema } from './memory.ts';
-import {
-  attachmentReadResponseSchema,
-  nativeAgentProjectAskRequestSchema,
-  nativeAgentProjectAskResponseSchema,
-  nativeAgentProjectInboxAckRequestSchema,
-  nativeAgentProjectInboxAckResponseSchema,
-  nativeAgentProjectInboxRequestSchema,
-  nativeAgentProjectInboxResponseSchema,
-  nativeAgentProjectPostRequestSchema,
-  nativeAgentProjectPostResponseSchema,
-  nativeAgentProjectReadRequestSchema,
-  nativeAgentProjectReadResponseSchema,
-  nativeAgentReadRequestSchema,
-  nativeAgentReadResponseSchema,
-  nativeAgentRuntimeInfoResponseSchema,
-  nativeAgentSendRequestSchema,
-  nativeAgentSendResponseSchema
-} from './native-cli-agent.ts';
-import { networkSettingsSchema, setNetworkSettingsRequestSchema } from './network-settings.ts';
-import { obscuraStatusResponseSchema, setObscuraRequestSchema } from './obscura.ts';
-import { openaiCompatSettingsSchema, setOpenaiCompatRequestSchema } from './openai-compat-settings.ts';
-import { pickDirectoryRequestSchema, pickDirectoryResponseSchema } from './pick-directory.ts';
-import { sandboxSettingsResponseSchema, setSandboxSettingsRequestSchema } from './sandbox-settings.ts';
+} from './rpc/control.ts';
+import { appearanceSettingsSchema, setAppearanceSettingsRequestSchema } from './settings/appearance-settings.ts';
+import { developerSettingsSchema, setDeveloperSettingsRequestSchema } from './settings/developer-settings.ts';
+import { hooksSettingsResponseSchema, setHooksSettingsRequestSchema } from './settings/hooks-settings.ts';
+import { networkSettingsSchema, setNetworkSettingsRequestSchema } from './settings/network-settings.ts';
+import { openaiCompatSettingsSchema, setOpenaiCompatRequestSchema } from './settings/openai-compat-settings.ts';
+import { sandboxSettingsResponseSchema, setSandboxSettingsRequestSchema } from './settings/sandbox-settings.ts';
 import {
   importSettingsApplyRequestSchema,
   importSettingsApplyResultSchema,
   importSettingsPreviewSchema,
   importSettingsRequestSchema
-} from './settings-import.ts';
-import { setSkillsSettingsRequestSchema, skillsSettingsResponseSchema } from './skills-settings.ts';
-import { setStartupSettingsRequestSchema, startupSettingsSchema } from './startup-settings.ts';
+} from './settings/settings-import.ts';
+import { setSkillsSettingsRequestSchema, skillsSettingsResponseSchema } from './settings/skills-settings.ts';
+import { setStartupSettingsRequestSchema, startupSettingsSchema } from './settings/startup-settings.ts';
+import { setUserProfileSettingsRequestSchema, userProfileSettingsSchema } from './settings/user-profile-settings.ts';
 import { initDockerResponseSchema, setToolBackendsRequestSchema, toolBackendsResponseSchema } from './tool-backends.ts';
-import { setUserProfileSettingsRequestSchema, userProfileSettingsSchema } from './user-profile-settings.ts';
 import {
   createWorkplaceProjectRequestSchema,
   createWorkplaceProjectResponseSchema,

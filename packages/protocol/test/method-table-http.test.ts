@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 
-import { HTTP_ROUTES, METHOD_TABLE, type MethodName } from '../src/method-table.ts';
+import { HTTP_ROUTES, METHOD_TABLE, type MethodName } from '../src/rpc/method-table.ts';
 
 const entries = Object.entries(METHOD_TABLE) as [MethodName, (typeof METHOD_TABLE)[MethodName]][];
 

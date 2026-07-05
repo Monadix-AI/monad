@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
-import { modelProfileRoutesSchema, modelRoleSchema, modelRolesSchema } from './domain.ts';
-import { httpsUrlSchema, httpUrlSchema } from './url.ts';
+import { modelProfileRoutesSchema, modelRoleSchema, modelRolesSchema } from '../domain.ts';
+import { httpsUrlSchema, httpUrlSchema } from '../url.ts';
 
 // Self-contained view shapes for model settings (gateway), no dependency on @monad/home. Secrets
 // never cross this boundary: a CredentialView carries only a short `accessTokenPreview`.

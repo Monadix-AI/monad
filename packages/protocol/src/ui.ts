@@ -1,9 +1,9 @@
 import { z } from 'zod';
 
 import { clarifyAskerSchema, clarifyChoiceModeSchema } from './clarify.ts';
-import { listMessagesQuerySchema } from './control.ts';
 import { contextUsagePayloadSchema } from './event-table.ts';
 import { eventIdSchema, messageIdSchema, nativeAgentDeliveryIdSchema } from './ids.ts';
+import { listMessagesQuerySchema } from './rpc/control.ts';
 
 export const uiMessageRoleSchema = z.enum(['user', 'assistant']);
 export type UIMessageRole = z.infer<typeof uiMessageRoleSchema>;

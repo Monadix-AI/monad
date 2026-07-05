@@ -1,5 +1,5 @@
-import type { Event } from './domain.ts';
-import type { TranscriptTargetId } from './ids.ts';
+import type { Event } from '../domain.ts';
+import type { TranscriptTargetId } from '../ids.ts';
 
 export interface JsonRpcRequest {
   jsonrpc: '2.0';

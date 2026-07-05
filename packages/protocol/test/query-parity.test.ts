@@ -5,15 +5,15 @@
 
 import { expect, test } from 'bun:test';
 
+import { daemonHttpContract } from '../src/http.ts';
 import {
   listMessagesQuerySchema,
   listSessionsQuerySchema,
   listSkillsQuerySchema,
   SEARCH_QUERY_MAX,
   searchSessionsRequestSchema
-} from '../src/control.ts';
-import { daemonHttpContract } from '../src/http.ts';
-import { METHOD_TABLE } from '../src/method-table.ts';
+} from '../src/rpc/control.ts';
+import { METHOD_TABLE } from '../src/rpc/method-table.ts';
 
 test('RPC query schemas ARE the canonical control.ts schemas (no inline copy)', () => {
   expect((METHOD_TABLE['sessions.search'] as { query: unknown }).query).toBe(searchSessionsRequestSchema);

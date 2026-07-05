@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { sandboxModeSchema } from './domain.ts';
+import { sandboxModeSchema } from '../domain.ts';
 
 const sandboxNetSchema = z.enum(['none', 'unrestricted', 'filtered']);
 const hostExecSchema = z.enum(['deny', 'ask', 'allow']);
