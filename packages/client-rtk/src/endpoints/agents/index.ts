@@ -1,6 +1,6 @@
 export { createAgentApi, useCreateAgentMutation } from './create-agent.ts';
 export { deleteAgentApi, useDeleteAgentMutation } from './delete-agent.ts';
-export { getA2aStatusApi, useGetA2aStatusQuery } from './get-a2a-status.ts';
+export { useGetA2aStatusQuery } from './get-a2a-status.ts';
 export { useGetAgentQuery } from './get-agent.ts';
 export { useGetAgentPromptQuery } from './get-agent-prompt.ts';
 export { useGetDefaultAgentQuery } from './get-default-agent.ts';

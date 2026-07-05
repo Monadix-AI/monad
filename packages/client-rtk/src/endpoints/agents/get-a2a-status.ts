@@ -3,7 +3,7 @@ import type { AgentId, GetA2aAgentStatusResponse } from '@monad/protocol';
 import { apiSlice } from '../../api-slice.ts';
 import { clientOf, runTreaty } from '../../endpoint-helpers.ts';
 
-export const getA2aStatusApi = apiSlice.injectEndpoints({
+const getA2aStatusApi = apiSlice.injectEndpoints({
   overrideExisting: true,
   endpoints: (builder) => ({
     getA2aStatus: builder.query<GetA2aAgentStatusResponse, AgentId>({
