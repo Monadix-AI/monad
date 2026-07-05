@@ -7,6 +7,8 @@ import { dirname, join, relative, resolve } from 'node:path';
  * Platform-aware test runner. Passes through all arguments to `bun test` and
  * appends --path-ignore-patterns for suffixes that don't apply to the current OS,
  * so non-matching platform files are never loaded (no runtime skip needed).
+ * Files named *.container.test.ts or *.container.<platform>.test.ts require
+ * preinstalled third-party binaries and only run when MONAD_TEST_CONTAINER_DEPS=1.
  *
  * Suffix → platforms where the file SHOULD run:
  *   .unix.test.ts    → darwin + linux
@@ -59,9 +61,22 @@ const SUFFIX_PLATFORMS: Record<string, NodeJS.Platform[]> = {
 const ignore = Object.entries(SUFFIX_PLATFORMS)
   .filter(([, platforms]) => !platforms.includes(process.platform))
   .flatMap(([suffix]) => ['--path-ignore-patterns', `**/*.${suffix}.test.ts`]);
+if (process.env.MONAD_TEST_CONTAINER_DEPS !== '1') {
+  ignore.push('--path-ignore-patterns', '**/*.container.test.ts');
+  ignore.push('--path-ignore-patterns', '**/*.container.*.test.ts');
+}
 
 const coverage = process.env.CI ? ['--coverage'] : [];
 const rawArgs = process.argv.slice(2);
+if (
+  process.env.MONAD_TEST_CONTAINER_DEPS !== '1' &&
+  rawArgs.some((arg) => /\.container(?:\.[^.]+)?\.test\.[cm]?[tj]sx?$/.test(arg))
+) {
+  process.stderr.write(
+    '[monad-test] container dependency tests require MONAD_TEST_CONTAINER_DEPS=1 and the deps container image.\n'
+  );
+  process.exit(1);
+}
 const loud = rawArgs.includes('--loud');
 const env = loud ? { ...Bun.env } : { ...Bun.env, AGENT: '1' };
 const args = rawArgs.filter((arg) => arg !== '--loud');

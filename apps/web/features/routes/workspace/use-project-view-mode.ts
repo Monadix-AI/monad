@@ -34,7 +34,7 @@ export function useProjectViewMode(
   const stored = useViewModeStore((state) => (projectId ? state.modes[projectId] : undefined));
   const setInStore = useViewModeStore((state) => state.set);
 
-  // Hydrate from localStorage after mount (kept out of render to avoid an SSR/client mismatch).
+  // Hydrate from localStorage after mount because the value belongs to the browser runtime.
   useEffect(() => {
     if (projectId && useViewModeStore.getState().modes[projectId] === undefined) {
       const savedMode = loadMode(projectId);

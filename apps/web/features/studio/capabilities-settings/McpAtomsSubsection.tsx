@@ -25,6 +25,7 @@ import {
   useSetMcpAtomEnabledMutation
 } from '@monad/client-rtk';
 import { Badge, Button, cn, Input, Label } from '@monad/ui';
+import { parseGithubReleaseSource } from '@monad/utils';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 
@@ -490,13 +491,17 @@ function InstallForm({ onDone }: { onDone: () => void }) {
     try {
       if (mode === 'binary') {
         if (!name.trim()) return;
-        const m = release.trim().match(/^([^/]+)\/([^@]+)@(.+)$/);
-        if (!m) return setError(t('web.mcpAtom.releaseInvalid'));
+        let source: ReturnType<typeof parseGithubReleaseSource>;
+        try {
+          source = parseGithubReleaseSource(release);
+        } catch {
+          return setError(t('web.mcpAtom.releaseInvalid'));
+        }
         const res = await installBinary({
           name: name.trim(),
-          owner: m[1] as string,
-          repo: m[2] as string,
-          tag: m[3] as string,
+          owner: source.owner,
+          repo: source.repo,
+          tag: source.tag,
           sha256: sha256.trim(),
           consent
         }).unwrap();

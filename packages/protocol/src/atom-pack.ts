@@ -322,6 +322,12 @@ export const uploadSkillQuerySchema = z.object({
 });
 export type UploadSkillQuery = z.infer<typeof uploadSkillQuerySchema>;
 
+export const uploadAtomPackQuerySchema = z.object({
+  filename: z.string().min(1),
+  consent: z.string().optional()
+});
+export type UploadAtomPackQuery = z.infer<typeof uploadAtomPackQuerySchema>;
+
 // Install every skill found under a LOCAL filesystem path the daemon can read (the CLI resolves the
 // path, and clones git sources to a tmp dir first). Reuses the install response. Trusted operator
 // channel only (loopback + auth) — the daemon reads the caller-supplied path directly.

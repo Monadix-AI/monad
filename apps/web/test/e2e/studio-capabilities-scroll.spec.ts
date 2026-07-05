@@ -28,6 +28,7 @@ async function installCapabilitiesApiMock(page: Page) {
     if (method === 'GET' && path === '/v1/settings/model/profiles') {
       return json({ profiles: [], defaultAlias: '' });
     }
+    if (method === 'GET' && path === '/v1/settings/model/roles') return json({ roles: {} });
     if (method === 'GET' && path === '/v1/settings/locale') return json({ locale: 'en' });
     if (method === 'GET' && path === '/v1/settings/locales') {
       return json({ locales: [{ locale: 'en', label: 'English', source: 'built-in' }] });
@@ -49,6 +50,38 @@ async function installCapabilitiesApiMock(page: Page) {
     }
     if (method === 'GET' && path === '/v1/settings/obscura') {
       return json({ enabled: false, stealth: false, installed: false, connected: false, tools: [] });
+    }
+    if (method === 'GET' && path === '/v1/atoms/skills') {
+      return json({ skills: [] });
+    }
+    if (method === 'GET' && path === '/v1/skills') {
+      return json({
+        skills: [],
+        skillInstances: [
+          {
+            id: 'global:research',
+            name: 'Research',
+            description: 'Research workflow helper',
+            version: '0.1.0',
+            icon: 'RS',
+            userInvocable: true,
+            available: true,
+            sourceKind: 'global',
+            sourceId: 'global',
+            source: 'User install',
+            active: true
+          }
+        ]
+      });
+    }
+    if (method === 'GET' && path === '/v1/settings/skills') {
+      return json({
+        autoload: true,
+        installReview: false,
+        installReviewAvailable: true,
+        disabled: [],
+        autoloadDisabled: []
+      });
     }
     if (method === 'GET' && path === '/v1/settings/mcp-servers') {
       return json({
@@ -136,7 +169,7 @@ test('settings modal opens from canonical Studio routes', async ({ page }) => {
 
   await page.goto('/studio/capabilities?settings=language');
   await expect(page).toHaveURL(/\/studio\/capabilities\?settings=language$/);
-  await expect(page.locator('[role="dialog"]')).toBeVisible();
+  await expect(page.getByRole('dialog').filter({ has: page.getByRole('heading', { name: 'Settings' }) })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Language' })).toHaveAttribute('data-active', 'true');
 
   await page.getByRole('button', { name: 'Connection' }).click();

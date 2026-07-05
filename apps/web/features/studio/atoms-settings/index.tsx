@@ -34,7 +34,8 @@ import {
   useListAtomPacksQuery,
   useRemoveAtomPackMutation,
   useSetAtomPackEnabledMutation,
-  useSetAtomPinMutation
+  useSetAtomPinMutation,
+  useUploadAtomPackMutation
 } from '@monad/client-rtk';
 import { Badge, Button, cn, Input, Label, ScrollArea } from '@monad/ui';
 import { Fragment, type ReactNode, useState } from 'react';
@@ -622,28 +623,54 @@ function AtomPackMeta({ pack }: { pack: InstalledAtomPack }) {
 
 function InstallForm({ onCancel, onInstalled }: { onCancel: () => void; onInstalled: () => void }) {
   const t = useT();
-  const [install, { isLoading }] = useInstallAtomPackMutation();
+  const [install, { isLoading: installingSource }] = useInstallAtomPackMutation();
+  const [upload, { isLoading: uploadingPack }] = useUploadAtomPackMutation();
   const [source, setSource] = useState('');
+  const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
   // After a default-deny install, hold the declared atoms/warnings for the consent confirmation.
-  const [consent, setConsent] = useState<{ atoms: string[]; warnings: string[] } | null>(null);
+  const [consent, setConsent] = useState<{ atoms: string[]; warnings: string[]; mode: 'source' | 'upload' } | null>(
+    null
+  );
+  const isLoading = installingSource || uploadingPack;
 
-  const submit = async (withConsent: boolean) => {
+  const handleResult = (
+    res: { needsConsent?: boolean; atoms: string[]; warnings: string[] } | null,
+    mode: 'source' | 'upload'
+  ) => {
+    if (!res) {
+      setError(t('web.atoms.installFailed'));
+      return;
+    }
+    if (res.needsConsent) {
+      setConsent({ atoms: res.atoms, warnings: res.warnings, mode });
+      return;
+    }
+    onInstalled();
+  };
+
+  const submitSource = async (withConsent: boolean) => {
     const src = source.trim();
     if (!src) return;
     setError(null);
     const res = await install({ source: src, consent: withConsent })
       .unwrap()
       .catch(() => null);
-    if (!res) {
-      setError(t('web.atoms.installFailed'));
-      return;
-    }
-    if (res.needsConsent) {
-      setConsent({ atoms: res.atoms, warnings: res.warnings });
-      return;
-    }
-    onInstalled();
+    handleResult(res, 'source');
+  };
+
+  const submitUpload = async (withConsent: boolean) => {
+    if (!file) return;
+    setError(null);
+    const res = await upload({
+      filename: file.name,
+      body: file,
+      contentType: file.type || 'application/zip',
+      consent: withConsent
+    })
+      .unwrap()
+      .catch(() => null);
+    handleResult(res, 'upload');
   };
 
   return (
@@ -669,6 +696,54 @@ function InstallForm({ onCancel, onInstalled }: { onCancel: () => void; onInstal
           placeholder={t('web.atoms.sourcePlaceholder')}
           value={source}
         />
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          className="gap-1.5"
+          onClick={() => {
+            setSource('debug:monad-power-pack');
+            setConsent(null);
+          }}
+          size="sm"
+          type="button"
+          variant="outline"
+        >
+          <HugeiconsIcon
+            className="size-3.5"
+            icon={PackageIcon}
+          />
+          {t('web.atoms.debugPowerPack')}
+        </Button>
+        <Input
+          accept=".zip,application/zip"
+          className="max-w-64 text-xs"
+          onChange={(e) => {
+            setFile(e.target.files?.[0] ?? null);
+            setConsent(null);
+          }}
+          type="file"
+        />
+        <Button
+          className="gap-1.5"
+          disabled={isLoading || !file}
+          onClick={() => void submitUpload(false)}
+          size="sm"
+          type="button"
+          variant="outline"
+        >
+          {uploadingPack ? (
+            <HugeiconsIcon
+              className="size-3.5 animate-spin"
+              icon={LoaderPinwheelIcon}
+            />
+          ) : (
+            <HugeiconsIcon
+              className="size-3.5"
+              icon={PlusSignIcon}
+            />
+          )}
+          {t('web.atoms.uploadZip')}
+        </Button>
       </div>
       <p className="text-muted-foreground text-xs">{t('web.atoms.addHint')}</p>
 
@@ -708,7 +783,7 @@ function InstallForm({ onCancel, onInstalled }: { onCancel: () => void; onInstal
           <Button
             className="self-start"
             disabled={isLoading}
-            onClick={() => void submit(true)}
+            onClick={() => void (consent.mode === 'upload' ? submitUpload(true) : submitSource(true))}
             size="sm"
           >
             {isLoading ? (
@@ -724,7 +799,7 @@ function InstallForm({ onCancel, onInstalled }: { onCancel: () => void; onInstal
         <Button
           className="self-start"
           disabled={isLoading || !source.trim()}
-          onClick={() => void submit(false)}
+          onClick={() => void submitSource(false)}
           size="sm"
         >
           {isLoading ? (

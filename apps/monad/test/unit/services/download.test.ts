@@ -85,3 +85,22 @@ test('downloadBytes rejects unexpected content types', async () => {
     })
   ).rejects.toThrow('unexpected content type');
 });
+
+test('downloadBytes rejects responses that exceed maxBytes while streaming', async () => {
+  const progress: DownloadProgress[] = [];
+  const fetchImpl: DownloadFetch = async () =>
+    new Response(streamChunks(['abcd', 'efgh']), {
+      headers: { 'content-type': 'application/octet-stream' }
+    });
+
+  await expect(
+    downloadBytes('https://example.test/large.bin', {
+      allowedContentTypes: ['application/octet-stream'],
+      fetch: fetchImpl,
+      maxBytes: 6,
+      onProgress: (event) => progress.push(event)
+    })
+  ).rejects.toThrow('exceeds 6 bytes');
+
+  expect(progress).toEqual([{ loadedBytes: 4, totalBytes: undefined, percent: undefined }]);
+});

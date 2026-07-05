@@ -405,9 +405,9 @@ test('runTreaty: thrown error path', async () => {
   expect(result).toEqual({ error: { message: 'network down' } });
 });
 
-test('runTreaty: null data is passed through (not treated as error)', async () => {
+test('runTreaty: null data is treated as an empty response error', async () => {
   const result = await runTreaty<null>(() => Promise.resolve(ok(null)));
-  expect(result).toEqual({ data: null });
+  expect(result).toEqual({ error: { message: 'request returned no data' } });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════

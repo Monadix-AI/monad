@@ -4,7 +4,7 @@
 // back to git credentials via a shallow checkout. The injected-fetch seam lives in index.ts so
 // installs are testable offline.
 
-import type { AtomPackSource } from '@/atoms/install/source.ts';
+import type { GithubSource } from '@monad/utils';
 import type { SkillFetcher, StagedSkillRepo } from '@/capabilities/skills/install/index.ts';
 import type { DownloadProgress } from '@/services/download.ts';
 
@@ -16,7 +16,6 @@ import { untar } from '@/atoms/install/untar.ts';
 import { SkillInstallError } from '@/capabilities/skills/install/index.ts';
 import { downloadBytes } from '@/services/download.ts';
 
-type GithubSource = Extract<AtomPackSource, { kind: 'github' }>;
 type SkillFetcherOptions = {
   githubToken?: string;
   onDownloadProgress?: (progress: DownloadProgress & { source: string }) => void;

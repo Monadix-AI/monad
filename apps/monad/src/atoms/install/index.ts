@@ -7,7 +7,7 @@ import type { AtomKind, AtomPackManifestWire } from '@monad/protocol';
 import type { AtomPackSource } from '@/atoms/install/source.ts';
 
 import { mkdir, readdir, rm } from 'node:fs/promises';
-import { basename, dirname, join } from 'node:path';
+import { basename, dirname, join, posix } from 'node:path';
 import { parseAtomPackManifest } from '@monad/protocol';
 import { SDK_VERSION } from '@monad/sdk-atom';
 import { z } from 'zod';
@@ -94,6 +94,8 @@ export interface StagedAtomPack {
   bundle: Uint8Array;
   /** File-based atoms discovered at fetch time (skill dirs, MCP server names, locale tags). */
   fileAtoms?: FileAtoms;
+  /** Package files to preserve for file-based atoms, keyed by package-relative POSIX path. */
+  files?: Map<string, Uint8Array>;
 }
 
 export type AtomPackFetcher = (source: AtomPackSource) => Promise<StagedAtomPack>;
@@ -130,6 +132,24 @@ export interface InstallOutcome {
 
 function sha256Hex(bytes: Uint8Array): string {
   return new Bun.CryptoHasher('sha256').update(bytes).digest('hex');
+}
+
+function safePackagePath(path: string): string | null {
+  if (!path || path.includes('\\') || path.includes('\0')) return null;
+  const normalized = posix.normalize(path);
+  if (normalized === '.' || posix.isAbsolute(normalized) || normalized.startsWith('../') || normalized === '..') {
+    return null;
+  }
+  return normalized;
+}
+
+async function writeStagedFiles(dir: string, files: Map<string, Uint8Array>, reserved: Set<string>): Promise<void> {
+  for (const [rawPath, bytes] of files) {
+    const path = safePackagePath(rawPath);
+    if (!path || reserved.has(path)) continue;
+    await mkdir(join(dir, dirname(path)), { recursive: true });
+    await Bun.write(join(dir, path), bytes);
+  }
 }
 
 export async function installAtomPack(spec: string, deps: InstallAtomPackDeps): Promise<InstallOutcome> {
@@ -185,6 +205,7 @@ export async function installAtomPack(spec: string, deps: InstallAtomPackDeps): 
   await mkdir(join(dir, dirname(entry)), { recursive: true });
   await Bun.write(join(dir, entry), staged.bundle);
   await Bun.write(join(dir, 'atom-pack.json'), `${JSON.stringify(manifest, null, 2)}\n`);
+  if (staged.files) await writeStagedFiles(dir, staged.files, new Set(['atom-pack.json', entry]));
   await Bun.write(
     join(dir, '.install.json'),
     `${JSON.stringify(

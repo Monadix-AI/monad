@@ -28,6 +28,7 @@ import type {
   ValidateSkillsResponse
 } from '@monad/protocol';
 import type { WorkspaceExperienceApiHandler } from '@monad/sdk-atom';
+import type { AtomPackSource } from '@/atoms/install/source.ts';
 import type { AtomConflict } from '@/atoms/resolve.ts';
 import type { RegisteredWorkspaceExperience } from '@/handlers/atom-pack/atom-pack-registry.ts';
 import type { ConfigBus } from '@/services/config-bus.ts';
@@ -42,7 +43,12 @@ import { DEFAULT_SKILL_MARKETPLACE_SOURCE, parseAtomPackManifest, skillMarketpla
 
 import { describeAtomPack } from '@/atoms/describe.ts';
 import { createAtomFetcher } from '@/atoms/install/fetch.ts';
-import { type AtomPackInstallRecord, atomPackInstallRecordSchema, installAtomPack } from '@/atoms/install/index.ts';
+import {
+  type AtomPackInstallRecord,
+  atomPackInstallRecordSchema,
+  installAtomPack,
+  type StagedAtomPack
+} from '@/atoms/install/index.ts';
 import {
   createReleaseAssetFetcher,
   installMcpBinary as installMcpBinaryService
@@ -106,9 +112,30 @@ export interface AtomPacksDeps {
 }
 
 const SKILL_UPLOAD_MAX_BYTES = 5 * 1024 * 1024;
+const ATOM_PACK_UPLOAD_MAX_BYTES = 25 * 1024 * 1024;
+const MONAD_POWER_PACK_DEBUG_SOURCE = 'debug:monad-power-pack';
+const MONAD_POWER_PACK_GITHUB_SOURCE = 'github:monadix-labs/monad-power-pack@debug';
 const DEFAULT_SKILL_INSTALL_SOURCE_PREFIX = skillMarketplaceSourceMeta(
   DEFAULT_SKILL_MARKETPLACE_SOURCE
 ).installSourcePrefix;
+
+async function loadDebugMonadPowerPack(source: AtomPackSource): Promise<StagedAtomPack | null> {
+  if (Bun.env.NODE_ENV === 'production') return null;
+  if (
+    source.kind !== 'github' ||
+    source.owner !== 'monadix-labs' ||
+    source.repo !== 'monad-power-pack' ||
+    source.ref !== 'debug'
+  ) {
+    return null;
+  }
+
+  const powerPackPackage = ['@monad', 'monad-power-pack'].join('/');
+  const { stagedMonadPowerPack } = (await import(powerPackPackage)) as {
+    stagedMonadPowerPack: () => StagedAtomPack | Promise<StagedAtomPack>;
+  };
+  return stagedMonadPowerPack();
+}
 
 function resolveToken(ref: string | undefined): string | undefined {
   if (!ref) return undefined;
@@ -153,6 +180,10 @@ function resolveUsableInstallReviewModel(cfg: MonadConfig, auth: MonadAuth | nul
 
 export function createAtomPacksModule(deps: AtomPacksDeps) {
   const dir = deps.paths.packs;
+
+  function normalizeAtomPackSource(source: string): string {
+    return source.trim() === MONAD_POWER_PACK_DEBUG_SOURCE ? MONAD_POWER_PACK_GITHUB_SOURCE : source;
+  }
 
   const reviewInstall: SkillInstallReviewer = async ({ files, skills, source }) => {
     const cfg = await loadAll(deps.paths.config, deps.paths.profile);
@@ -268,6 +299,18 @@ export function createAtomPacksModule(deps: AtomPacksDeps) {
     }
   }
 
+  async function installAtomPackUpload(upload: DecodedUpload, consent: boolean): Promise<InstallAtomPackResponse> {
+    if (upload.extension !== '.zip') {
+      throw new Error('atom pack upload must be a .zip file');
+    }
+    const unpacked = await unpackZipUpload(upload, { prefix: 'monad-atom-pack-upload-' });
+    try {
+      return await module.installAtomPack({ source: `local:${unpacked.dir}`, consent });
+    } finally {
+      await unpacked.cleanup();
+    }
+  }
+
   async function atomPackSkillIds(name: string): Promise<string[]> {
     const skillsDir = join(dir, name, 'skills');
     let entries: Dirent[];
@@ -305,7 +348,7 @@ export function createAtomPacksModule(deps: AtomPacksDeps) {
     await deps.configBus?.publish({ cfg, auth: await loadAuth(deps.paths.auth) });
   }
 
-  return {
+  const module = {
     async listAtomPacks(): Promise<ListAtomPacksResponse> {
       const conflicts = deps.getConflicts?.() ?? [];
       // The first-party pack is bundled, not on disk under the install dir, so it is synthesized from
@@ -318,6 +361,7 @@ export function createAtomPacksModule(deps: AtomPacksDeps) {
           monadVersion: builtinAtomPack.manifest.monadVersion,
           atoms: builtinAtomPack.manifest.atoms,
           enabled: true,
+          source: 'builtin',
           installedAt: undefined,
           description: builtinAtomPack.manifest.description,
           author: builtinAtomPack.manifest.author,
@@ -397,13 +441,19 @@ export function createAtomPacksModule(deps: AtomPacksDeps) {
 
     async installAtomPack({ source, consent }: InstallAtomPackRequest): Promise<InstallAtomPackResponse> {
       const auth = await loadAuth(deps.paths.auth);
-      const out = await installAtomPack(source, {
+      const normalizedSource = normalizeAtomPackSource(source);
+      const fetch = createAtomFetcher({
+        githubToken: resolveToken(auth?.atomRegistries?.github?.token),
+        npmToken: resolveToken(auth?.atomRegistries?.npm?.token),
+        npmRegistry: auth?.atomRegistries?.npm?.registry
+      });
+      const out = await installAtomPack(normalizedSource, {
         atomPacksDir: dir,
-        fetch: createAtomFetcher({
-          githubToken: resolveToken(auth?.atomRegistries?.github?.token),
-          npmToken: resolveToken(auth?.atomRegistries?.npm?.token),
-          npmRegistry: auth?.atomRegistries?.npm?.registry
-        }),
+        fetch: async (parsedSource) => {
+          const debugPowerPack = await loadDebugMonadPowerPack(parsedSource);
+          if (debugPowerPack) return debugPowerPack;
+          return fetch(parsedSource);
+        },
         // Default-deny: only proceed when the caller explicitly asserts consent (after seeing
         // the declared atom kinds — the UI/CLI re-calls with consent:true).
         consent: () => consent === true
@@ -415,6 +465,25 @@ export function createAtomPacksModule(deps: AtomPacksDeps) {
         warnings: out.warnings,
         ...(out.needsConsent ? { needsConsent: true } : {})
       };
+    },
+
+    async uploadAtomPack({
+      filename,
+      bytes,
+      consent
+    }: {
+      filename: string;
+      bytes: Uint8Array;
+      consent?: boolean;
+    }): Promise<InstallAtomPackResponse> {
+      if (bytes.byteLength > ATOM_PACK_UPLOAD_MAX_BYTES) {
+        throw new HandlerError('invalid', `atom pack upload exceeds ${ATOM_PACK_UPLOAD_MAX_BYTES} bytes`);
+      }
+      try {
+        return await installAtomPackUpload(decodeRawUpload({ filename, bytes }), consent === true);
+      } catch (err) {
+        throw new HandlerError('invalid', err instanceof Error ? err.message : String(err));
+      }
     },
 
     async setAtomPackEnabled({ name, enabled }: { name: string; enabled: boolean }): Promise<OkResponse> {
@@ -818,6 +887,8 @@ export function createAtomPacksModule(deps: AtomPacksDeps) {
       return { ok: true };
     }
   };
+
+  return module;
 }
 
 async function readSkillRecord(skillsDir: string, name: string): Promise<SkillInstallRecord | undefined> {

@@ -21,18 +21,14 @@ import { useT } from '@/components/I18nProvider';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { useNavigableModal } from '@/hooks/use-navigable-modal';
 
-const ConnectionSettings = dynamic(() => import('./ConnectionSettings').then((m) => m.ConnectionSettings), {
-  ssr: false
-});
-const LanguageSettings = dynamic(() => import('./LanguageSettings').then((m) => m.LanguageSettings), { ssr: false });
-const ProfileSettings = dynamic(() => import('./ProfileSettings').then((m) => m.ProfileSettings), { ssr: false });
-const AppearanceSettings = dynamic(() => import('./AppearanceSettings').then((m) => m.AppearanceSettings), {
-  ssr: false
-});
-const MoSettings = dynamic(() => import('./MoSettings').then((m) => m.MoSettings), { ssr: false });
-const LicensesSettings = dynamic(() => import('./Licenses').then((m) => m.LicensesSettings), { ssr: false });
-const SystemSettings = dynamic(() => import('./SystemSettings').then((m) => m.SystemSettings), { ssr: false });
-const SettingsImport = dynamic(() => import('./SettingsImport').then((m) => m.SettingsImport), { ssr: false });
+const ConnectionSettings = dynamic(() => import('./ConnectionSettings').then((m) => m.ConnectionSettings));
+const LanguageSettings = dynamic(() => import('./LanguageSettings').then((m) => m.LanguageSettings));
+const ProfileSettings = dynamic(() => import('./ProfileSettings').then((m) => m.ProfileSettings));
+const AppearanceSettings = dynamic(() => import('./AppearanceSettings').then((m) => m.AppearanceSettings));
+const MoSettings = dynamic(() => import('./MoSettings').then((m) => m.MoSettings));
+const LicensesSettings = dynamic(() => import('./Licenses').then((m) => m.LicensesSettings));
+const SystemSettings = dynamic(() => import('./SystemSettings').then((m) => m.SystemSettings));
+const SettingsImport = dynamic(() => import('./SettingsImport').then((m) => m.SettingsImport));
 
 type SectionId = 'connection' | 'profile' | 'appearance' | 'import' | 'language' | 'mo' | 'licenses' | 'system';
 

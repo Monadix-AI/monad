@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { decodeRawUpload, decodeRawUploads } from '@/services/upload.ts';
+import { decodeRawUpload, decodeRawUploads, readRequestBytes } from '@/services/upload.ts';
 
 const bytes = (value: string) => new TextEncoder().encode(value);
 
@@ -38,5 +38,19 @@ describe('upload service utilities', () => {
     ]);
 
     expect(uploads.map((upload) => upload.text())).toEqual(['one', 'two']);
+  });
+
+  test('readRequestBytes rejects bodies that exceed maxBytes while streaming', async () => {
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(bytes('abcd'));
+        controller.enqueue(bytes('efgh'));
+        controller.close();
+      }
+    });
+
+    await expect(
+      readRequestBytes(new Request('https://example.test/upload', { method: 'POST', body }), 6)
+    ).rejects.toThrow('upload exceeds 6 bytes');
   });
 });

@@ -33,6 +33,10 @@ export interface MonadPaths {
   pid: string;
 }
 
+function currentHomeDir(): string {
+  return Bun.env.HOME || Bun.env.USERPROFILE || homedir();
+}
+
 /** The classic single-tree layout under one root. Used for explicit homes (MONAD_HOME / dev /
  *  custom root), on macOS/Windows, and for existing Linux ~/.monad installs. */
 export function pathsForHome(home: string): MonadPaths {
@@ -79,7 +83,7 @@ export function pathsForHome(home: string): MonadPaths {
  *  split across the standard roots; sockets fall back to $XDG_STATE_HOME when $XDG_RUNTIME_DIR is
  *  unset (common outside a systemd login session). */
 export function xdgPaths(): MonadPaths {
-  const h = homedir();
+  const h = currentHomeDir();
   const configRoot = join(Bun.env.XDG_CONFIG_HOME || join(h, '.config'), 'monad');
   const dataRoot = join(Bun.env.XDG_DATA_HOME || join(h, '.local', 'share'), 'monad');
   const cacheRoot = join(Bun.env.XDG_CACHE_HOME || join(h, '.cache'), 'monad');
@@ -137,10 +141,10 @@ export function getPaths(): MonadPaths {
 
 export function getRootPointerPath(): string {
   if (process.platform === 'win32') {
-    const appData = Bun.env.APPDATA ?? join(homedir(), 'AppData', 'Roaming');
+    const appData = Bun.env.APPDATA ?? join(currentHomeDir(), 'AppData', 'Roaming');
     return join(appData, 'monad', 'root');
   }
-  return join(homedir(), '.monad', 'root');
+  return join(currentHomeDir(), '.monad', 'root');
 }
 
 export async function setMonadRoot(customHome: string): Promise<void> {
@@ -175,10 +179,10 @@ function explicitHome(): string | null {
 
 function defaultHome(): string {
   if (process.platform === 'win32') {
-    const appData = Bun.env.APPDATA ?? join(homedir(), 'AppData', 'Roaming');
+    const appData = Bun.env.APPDATA ?? join(currentHomeDir(), 'AppData', 'Roaming');
     return join(appData, 'monad');
   }
-  return join(homedir(), '.monad');
+  return join(currentHomeDir(), '.monad');
 }
 
 function getRepoDevHome(): string | null {

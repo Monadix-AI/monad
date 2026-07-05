@@ -19,6 +19,8 @@
     // Live model e2e (opt-in): provider key + model id. Read only by the live test suite.
     "OPENROUTER_API_KEY",
     "MONAD_LIVE_MODEL",
+    "MONAD_LIVE_AGENTS",
+    "MONAD_LIVE_OPENCLAW",
 
     // Live qdrant integration test (opt-in).
     "MONAD_QDRANT_LIVE",
@@ -30,6 +32,7 @@
     "MONAD_NATIVE_CLI_REAL_CLAUDE_SESSION",
     "MONAD_NATIVE_CLI_REAL_CLAUDE_CWD",
     "MONAD_NATIVE_CLI_REAL_AUTH_STATUS",
+    "MONAD_TEST_CONTAINER_DEPS",
 
     // Web/dev server host and port wiring.
     "MONAD_URL",
@@ -46,8 +49,10 @@
     "CLAUDE_CODE_GIT_BASH_PATH",
 
     // User identity hints.
+    "HOME",
     "USER",
     "USERNAME",
+    "USERPROFILE",
 
     // Windows shell and filesystem conventions.
     "APPDATA",

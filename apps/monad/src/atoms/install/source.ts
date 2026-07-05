@@ -4,58 +4,15 @@
 //   npm:<name>@<version>           (name may be @scope/name)
 //   local:/abs/path  | /abs/path | ./rel/path | C:\abs\path   (a staged atom pack dir, for dev/offline)
 
-import { isAbsolute, posix } from 'node:path';
+import { isAbsolute } from 'node:path';
+import { type GithubSource, githubSourceIdentity, parseGithubSource, parseGithubSourceOrNull } from '@monad/utils';
 
 export type AtomPackSource =
-  | { kind: 'github'; owner: string; repo: string; ref: string; path?: string; skill?: string; spec: string }
+  | GithubSource
   | { kind: 'npm'; name: string; version: string; spec: string }
   | { kind: 'local'; path: string; spec: string };
 
 class AtomPackSourceError extends Error {}
-
-function normalizeGithubPath(path: string): string | undefined {
-  if (!path) return undefined;
-  const normalized = posix.normalize(path);
-  if (posix.isAbsolute(normalized) || normalized === '..' || normalized.startsWith('../')) {
-    throw new AtomPackSourceError(`github path escapes repo: ${path}`);
-  }
-  return normalized === '.' ? undefined : normalized;
-}
-
-function parseGithubUrl(spec: string): Extract<AtomPackSource, { kind: 'github' }> | null {
-  let url: URL;
-  try {
-    url = new URL(spec);
-  } catch {
-    return null;
-  }
-  if (url.protocol !== 'https:' && url.protocol !== 'http:') return null;
-  if (url.hostname !== 'github.com') return null;
-
-  let parts: string[];
-  try {
-    parts = url.pathname.split('/').filter(Boolean).map(decodeURIComponent);
-  } catch {
-    return null;
-  }
-  const owner = parts[0];
-  const repoPart = parts[1];
-  if (!owner || !repoPart) return null;
-
-  const repo = repoPart.replace(/\.git$/, '');
-  if (!repo) return null;
-  const skill = url.searchParams.get('skill')?.trim() || undefined;
-
-  const marker = parts[2];
-  if ((marker === 'blob' || marker === 'tree') && parts[3]) {
-    const filePath = parts.slice(4).join('/');
-    const path = normalizeGithubPath(
-      marker === 'blob' && posix.basename(filePath) === 'SKILL.md' ? posix.dirname(filePath) : filePath
-    );
-    return { kind: 'github', owner, repo, ref: parts[3], ...(path ? { path } : {}), ...(skill ? { skill } : {}), spec };
-  }
-  return { kind: 'github', owner, repo, ref: 'main', ...(skill ? { skill } : {}), spec };
-}
 
 /** A VERSION-INDEPENDENT identity for a source, so re-installing the same logical pack (a new commit
  *  SHA, a new npm version) updates in place rather than creating a duplicate. github drops the ref,
@@ -64,7 +21,7 @@ function parseGithubUrl(spec: string): Extract<AtomPackSource, { kind: 'github' 
 export function sourceIdentity(source: AtomPackSource): string {
   switch (source.kind) {
     case 'github':
-      return `github:${source.owner}/${source.repo}${source.path ? `/${source.path}` : ''}${source.skill ? `?skill=${source.skill}` : ''}`.toLowerCase();
+      return githubSourceIdentity(source);
     case 'npm':
       return `npm:${source.name}`.toLowerCase();
     case 'local':
@@ -76,22 +33,10 @@ export function parseAtomPackSource(spec: string): AtomPackSource {
   const trimmed = spec.trim();
 
   if (trimmed.startsWith('github:')) {
-    const m = trimmed.slice('github:'.length).match(/^([^/]+)\/([^@]+?)(?:@(.+))?$/);
-    if (!m) throw new AtomPackSourceError(`invalid github source: ${spec} (want github:owner/repo[@<ref>])`);
-    const refAndPath = (m[3] as string | undefined) ?? 'main';
-    const [ref = 'main', ...pathParts] = refAndPath.split('/');
-    const path = normalizeGithubPath(pathParts.join('/'));
-    return {
-      kind: 'github',
-      owner: m[1] as string,
-      repo: m[2] as string,
-      ref,
-      ...(path ? { path } : {}),
-      spec
-    };
+    return parseGithubSource(trimmed);
   }
 
-  const githubUrl = parseGithubUrl(trimmed);
+  const githubUrl = parseGithubSourceOrNull(trimmed);
   if (githubUrl) return githubUrl;
 
   if (trimmed.startsWith('npm:')) {

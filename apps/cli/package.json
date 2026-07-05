@@ -12,6 +12,7 @@
     "@monad/monad": "workspace:*",
     "@monad/protocol": "workspace:*",
     "@monad/tui": "workspace:*",
+    "@monad/utils": "workspace:*",
     "@monad/web": "workspace:*",
     "cac": "^7.0.0",
     "qrcode-terminal": "^0.12.0"

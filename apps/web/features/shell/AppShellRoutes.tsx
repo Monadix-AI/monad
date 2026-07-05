@@ -9,9 +9,7 @@ import dynamic from 'next/dynamic';
 import { StudioRoute } from '@/features/routes/studio/StudioRoute';
 import { WorkspaceRoute } from '@/features/routes/workspace/WorkspaceRoute';
 
-const SessionRoute = dynamic(() => import('@/features/routes/sessions/SessionRoute').then((m) => m.SessionRoute), {
-  ssr: false
-});
+const SessionRoute = dynamic(() => import('@/features/routes/sessions/SessionRoute').then((m) => m.SessionRoute));
 
 export function AppShellRoutes({
   currentSessionId,

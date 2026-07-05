@@ -18,6 +18,7 @@ export interface DownloadBytesOptions {
   headers?: DownloadHeaders;
   accept?: string;
   allowedContentTypes?: string[];
+  maxBytes?: number;
   signal?: AbortSignal;
   timeoutMs?: number;
   onProgress?: (progress: DownloadProgress) => void;
@@ -62,8 +63,10 @@ function mergeHeaders(headers: DownloadHeaders | undefined, accept: string | und
 }
 
 async function readWithProgress(
+  url: string,
   body: ReadableStream<Uint8Array>,
   totalBytes: number | undefined,
+  maxBytes: number | undefined,
   onProgress: ((progress: DownloadProgress) => void) | undefined
 ): Promise<Uint8Array> {
   const reader = body.getReader();
@@ -75,8 +78,12 @@ async function readWithProgress(
       const { done, value } = await reader.read();
       if (done) break;
       if (!value) continue;
-      chunks.push(value);
+      if (maxBytes !== undefined && loadedBytes + value.byteLength > maxBytes) {
+        await reader.cancel();
+        throw new DownloadError(`download ${url} exceeds ${maxBytes} bytes`);
+      }
       loadedBytes += value.byteLength;
+      chunks.push(value);
       onProgress?.({
         loadedBytes,
         totalBytes,
@@ -108,10 +115,14 @@ export async function downloadBytes(url: string, options: DownloadBytesOptions =
   if (!contentTypeMatches(contentType, options.allowedContentTypes ?? [])) {
     throw new DownloadError(`download ${url} returned unexpected content type: ${contentType ?? 'missing'}`);
   }
+  const totalBytes = totalBytesFrom(response.headers);
+  if (options.maxBytes !== undefined && totalBytes !== undefined && totalBytes > options.maxBytes) {
+    throw new DownloadError(`download ${url} exceeds ${options.maxBytes} bytes`);
+  }
   if (!response.body) throw new DownloadError(`download ${url} returned an empty response body`);
 
   return {
-    bytes: await readWithProgress(response.body, totalBytesFrom(response.headers), options.onProgress),
+    bytes: await readWithProgress(url, response.body, totalBytes, options.maxBytes, options.onProgress),
     contentType
   };
 }

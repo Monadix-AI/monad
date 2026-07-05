@@ -8,6 +8,7 @@ import { mkdir, readdir, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import { createAtomFetcher } from '@/atoms/install/fetch.ts';
 import { installAtomPack, parseAtomPackSource } from '@/atoms/install/index.ts';
 import { sourceIdentity } from '@/atoms/install/source.ts';
 import { discoverChannelAdapters } from '@/channels/discover.ts';
@@ -173,6 +174,108 @@ test('install writes the atom pack and discovery loads it', async () => {
   const { factories, errors } = await discoverChannelAdapters(atomsDir);
   expect(errors).toEqual([]);
   expect(factories.has('whatsapp')).toBe(true);
+});
+
+test('install writes file-based atoms from the staged pack', async () => {
+  const s = staged({ name: 'power', type: 'unused', atoms: ['skill'] });
+  const skill = new TextEncoder().encode(`---
+name: power-placeholder
+description: Placeholder skill from a staged atom pack
+---
+
+# Power Placeholder
+`);
+  const out = await installAtomPack('local:/x', {
+    atomPacksDir: atomsDir,
+    fetch: async () => ({
+      ...s,
+      files: new Map([['skills/power-placeholder/SKILL.md', skill]])
+    }),
+    consent: () => true
+  });
+
+  expect(out.installed).toBe(true);
+  expect(await readFile(join(atomsDir, 'power', 'skills', 'power-placeholder', 'SKILL.md'), 'utf8')).toContain(
+    'Power Placeholder'
+  );
+});
+
+test('github fetch rejects repositories without atom-pack.json as non-installable atom packs', async () => {
+  const fetcher = createAtomFetcher({
+    fetch: async (_url) =>
+      new Response('not found', {
+        status: 404,
+        headers: { 'content-type': 'text/plain' }
+      })
+  });
+
+  await expect(fetcher(parseAtomPackSource('github:owner/not-a-pack@main'))).rejects.toThrow(/atom-pack\.json/i);
+});
+
+test('github fetch reads atom-pack.json from the parsed repository subdirectory', async () => {
+  const seen: string[] = [];
+  const fetcher = createAtomFetcher({
+    fetch: async (url) => {
+      seen.push(url);
+      if (url.includes('/contents/packs/power/atom-pack.json')) {
+        return Response.json({
+          name: 'power',
+          version: '1.0.0',
+          sdkVersion: '0',
+          atoms: ['skill'],
+          entry: 'dist/atom-pack.js'
+        });
+      }
+      if (url.includes('/contents/packs/power/dist/atom-pack.js')) {
+        return new Response(
+          'export default {manifest:{name:"power",version:"1.0.0",sdkVersion:"0",atoms:["skill"]},register(){}};',
+          {
+            headers: { 'content-type': 'text/plain' }
+          }
+        );
+      }
+      return new Response('not found', { status: 404 });
+    }
+  });
+
+  const stagedPack = await fetcher(parseAtomPackSource('https://github.com/owner/repo/tree/main/packs/power'));
+  expect(stagedPack.manifestRaw).toMatchObject({ name: 'power' });
+  expect(seen.some((url) => url.includes('/contents/atom-pack.json'))).toBe(false);
+});
+
+test('github fetch rejects oversized file-based atom blobs before staging', async () => {
+  const fetcher = createAtomFetcher({
+    fetch: async (url) => {
+      if (url.includes('/contents/atom-pack.json')) {
+        return Response.json({
+          name: 'power',
+          version: '1.0.0',
+          sdkVersion: '0',
+          atoms: ['skill'],
+          entry: 'dist/atom-pack.js'
+        });
+      }
+      if (url.includes('/contents/dist/atom-pack.js')) {
+        return new Response(
+          'export default {manifest:{name:"power",version:"1.0.0",sdkVersion:"0",atoms:["skill"]},register(){}};',
+          { headers: { 'content-type': 'text/plain' } }
+        );
+      }
+      if (url.includes('/git/trees/')) {
+        return Response.json({
+          tree: [{ path: 'skills/huge/SKILL.md', type: 'blob' }]
+        });
+      }
+      if (url.includes('/contents/skills/huge/SKILL.md')) {
+        return new Response('x'.repeat(6 * 1024 * 1024), {
+          headers: { 'content-type': 'text/plain' }
+        });
+      }
+      return new Response('not found', { status: 404 });
+    }
+  });
+
+  await expect(fetcher(parseAtomPackSource('github:owner/repo@main'))).rejects.toThrow('exceeds');
 });
 
 test('consent is default-deny — declining installs nothing', async () => {

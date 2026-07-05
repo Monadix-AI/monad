@@ -4,7 +4,7 @@
 import type { MonadPaths } from '@monad/home';
 
 import { afterEach, beforeEach, expect, test } from 'bun:test';
-import { chmod, mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createDefaultConfig, loadAll, saveAll } from '@monad/home';
@@ -163,63 +163,6 @@ test('getAtomPackAsset serves pack files without allowing path traversal', async
 test('removeAtomPack rejects path-traversal names', async () => {
   await expect(mod.removeAtomPack({ name: '../evil' })).rejects.toThrow();
 });
-
-// Skipped on Windows: the fixture mocks `git` as a `#!/bin/sh` script on a `:`-joined PATH, which
-// Windows cannot execute (no shebang) or parse (drive letters use `:`). The GitHub-URL routing under
-// test is platform-agnostic; only the binary-mock harness is unix-only.
-test.skipIf(process.platform === 'win32')(
-  'installSkill routes GitHub page URLs through the GitHub installer',
-  async () => {
-    const binDir = await mkdtemp(join(tmpdir(), 'monad-git-bin-'));
-    const fakeGit = join(binDir, 'git');
-    const sha = 'd'.repeat(40);
-    await writeFile(
-      fakeGit,
-      `#!/bin/sh
-set -eu
-if [ "$1" = "clone" ]; then
-  dest=""
-  for arg in "$@"; do dest="$arg"; done
-  mkdir -p "$dest/pixel2motion"
-  cat > "$dest/pixel2motion/SKILL.md" <<'EOF'
----
-name: pixel2motion
-description: Pixel to motion.
----
-Body.
-EOF
-  exit 0
-fi
-if [ "$1" = "-C" ] && [ "$3" = "rev-parse" ]; then
-  echo "${sha}"
-  exit 0
-fi
-exit 0
-`
-    );
-    await chmod(fakeGit, 0o755);
-    process.env.PATH = `${binDir}:${realPath ?? ''}`;
-    globalThis.fetch = Object.assign(async () => new Response('not found', { status: 404 }), {
-      preconnect: realFetch.preconnect
-    });
-
-    const source = 'https://github.com/acme/skills/blob/main/pixel2motion/SKILL.md';
-    const res = await mod.installSkill({ source, consent: true, overwrite: false });
-
-    expect(res.skills).toEqual(['pixel2motion']);
-    expect(res.commit).toBe(sha);
-    expect(await Bun.file(join(base, 'pixel2motion', 'SKILL.md')).exists()).toBe(true);
-    const record = JSON.parse(await Bun.file(join(base, 'pixel2motion', '.install.json')).text());
-    expect(record).toMatchObject({
-      source,
-      sourceKind: 'github',
-      sourceId: 'github:acme/skills/pixel2motion',
-      ref: 'main',
-      commit: sha
-    });
-    await rm(binDir, { recursive: true, force: true });
-  }
-);
 
 test('disable hides an atom pack from discovery; enable restores it', async () => {
   const { discoverChannelAdapters } = await import('@/channels/discover.ts');

@@ -69,7 +69,7 @@ import { AppShellSidebarReveal } from './AppShellSidebarReveal';
 import { NewProjectDialog } from './NewProjectDialog';
 import { SessionSidebar } from './SessionSidebar';
 
-const Settings = dynamic(() => import('@/features/settings/Settings').then((m) => m.Settings), { ssr: false });
+const Settings = dynamic(() => import('@/features/settings/Settings').then((m) => m.Settings));
 
 // Stable empty references so query fallbacks don't change identity each render
 // (a fresh `[]` default would retrigger effects that depend on the data).

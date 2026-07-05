@@ -59,19 +59,20 @@ export function toError(e: unknown): MonadApiError {
  */
 export async function runTreaty<T>(
   call: () => Promise<{ data: T | null | undefined; error: unknown }>
+): Promise<{ data: NonNullable<T> } | { error: MonadApiError }>;
+export async function runTreaty<R, T>(
+  call: () => Promise<{ data: R | null | undefined; error: unknown }>,
+  map: (raw: NonNullable<R>) => T
 ): Promise<{ data: T } | { error: MonadApiError }>;
 export async function runTreaty<R, T>(
   call: () => Promise<{ data: R | null | undefined; error: unknown }>,
-  map: (raw: R) => T
-): Promise<{ data: T } | { error: MonadApiError }>;
-export async function runTreaty<R, T>(
-  call: () => Promise<{ data: R | null | undefined; error: unknown }>,
-  map?: (raw: R) => T
+  map?: (raw: NonNullable<R>) => T
 ): Promise<{ data: T } | { error: MonadApiError }> {
   try {
     const { data, error } = await call();
     if (error) return { error: toError(error) };
-    const raw = data as R;
+    if (data == null) return { error: { message: 'request returned no data' } };
+    const raw = data as NonNullable<R>;
     return { data: (map ? map(raw) : raw) as T };
   } catch (err) {
     return { error: toError(err) };

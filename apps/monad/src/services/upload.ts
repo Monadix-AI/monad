@@ -33,6 +33,42 @@ export function decodeRawUploads(uploads: Array<{ filename: string; bytes: Uint8
   });
 }
 
+export async function readRequestBytes(request: Request, maxBytes: number): Promise<Uint8Array> {
+  const contentLength = request.headers.get('content-length');
+  if (contentLength) {
+    const parsed = Number(contentLength);
+    if (Number.isFinite(parsed) && parsed > maxBytes) throw new Error(`upload exceeds ${maxBytes} bytes`);
+  }
+  if (!request.body) return new Uint8Array();
+
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let loadedBytes = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+      if (loadedBytes + value.byteLength > maxBytes) {
+        await reader.cancel();
+        throw new Error(`upload exceeds ${maxBytes} bytes`);
+      }
+      loadedBytes += value.byteLength;
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  const bytes = new Uint8Array(loadedBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return bytes;
+}
+
 export async function unpackZipUpload(
   upload: Pick<DecodedUpload, 'bytes'>,
   { prefix = 'monad-upload-' }: { prefix?: string } = {}

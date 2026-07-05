@@ -6,6 +6,8 @@ import type {
 } from '@monad/protocol';
 import type { CommandDef } from './types.ts';
 
+import { parseGithubReleaseSource } from '@monad/utils';
+
 import { t } from '../lib/i18n.ts';
 import { bold, cyan, dim, green, json, out, red, yellow } from '../lib/output.ts';
 import { requireTreatyData } from '../lib/treaty.ts';
@@ -67,20 +69,27 @@ export const command: CommandDef = {
         // monad mcp add <name> --release owner/repo@tag [--sha256 <hex>] [--bin <exe>]
         // --sha256 is optional: omitted → verify against the release's SHA256SUMS asset.
         const name = rest.find((a) => !a.startsWith('-'));
-        const m = (rest[relIdx + 1] ?? '').match(/^([^/]+)\/([^@]+)@(.+)$/);
+        const release = rest[relIdx + 1];
         const shaIdx = rest.indexOf('--sha256');
         const sha256 = shaIdx !== -1 ? rest[shaIdx + 1] : undefined;
         const binIdx = rest.indexOf('--bin');
-        if (!name || !m) {
+        if (!name || !release) {
+          out(dim('usage: monad mcp add <name> --release owner/repo@tag [--sha256 <hex>] [--bin <exe>]'));
+          return;
+        }
+        let source: ReturnType<typeof parseGithubReleaseSource>;
+        try {
+          source = parseGithubReleaseSource(release);
+        } catch {
           out(dim('usage: monad mcp add <name> --release owner/repo@tag [--sha256 <hex>] [--bin <exe>]'));
           return;
         }
         const res = requireTreatyData<InstallMcpAtomResponse>(
           await mcp['install-binary'].post({
             name,
-            owner: m[1] as string,
-            repo: m[2] as string,
-            tag: m[3] as string,
+            owner: source.owner,
+            repo: source.repo,
+            tag: source.tag,
             sha256,
             binName: binIdx !== -1 ? rest[binIdx + 1] : undefined,
             autoApproveTools: [],

@@ -46,6 +46,7 @@ import {
   useSetMcpAtomEnabledMutation,
   useUpdateSkillContentMutation,
   useUpdateSkillMutation,
+  useUploadAtomPackMutation,
   useUploadSkillMutation
 } from './endpoints/atoms/index.ts';
 import { useSendChannelMessageMutation } from './endpoints/channels/index.ts';
@@ -468,6 +469,7 @@ export {
   useUpdateSkillContentMutation,
   useUpdateSkillMutation,
   useUpdateWorkplaceProjectMutation,
+  useUploadAtomPackMutation,
   useUploadSkillMutation,
   useUpsertAcpAgentMutation,
   useUpsertChannelMutation,

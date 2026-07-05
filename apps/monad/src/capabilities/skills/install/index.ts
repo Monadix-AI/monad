@@ -6,14 +6,14 @@
 // so the orchestrator is fully testable offline; the real fetcher lives in fetch.ts.
 
 import type { Dirent } from 'node:fs';
-import type { AtomPackSource } from '@/atoms/install/source.ts';
+import type { GithubSource } from '@monad/utils';
 
 import { mkdir, mkdtemp, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
+import { githubSourceIdentity, parseGithubSource } from '@monad/utils';
 import { z } from 'zod';
 
-import { parseAtomPackSource, sourceIdentity } from '@/atoms/install/source.ts';
 import {
   type SkillInstallReviewWarning,
   warningModelRequestFailed,
@@ -31,7 +31,7 @@ export interface StagedSkillRepo {
   commit: string;
 }
 
-export type SkillFetcher = (source: Extract<AtomPackSource, { kind: 'github' }>) => Promise<StagedSkillRepo>;
+export type SkillFetcher = (source: GithubSource) => Promise<StagedSkillRepo>;
 
 interface SkillConsentInfo {
   skills: string[];
@@ -102,10 +102,7 @@ async function findSkillDirsRecursive(root: string): Promise<string[]> {
   return dirs;
 }
 
-async function selectSkillDirs(
-  source: Extract<AtomPackSource, { kind: 'github' }>,
-  dirs: string[]
-): Promise<{ dirs: string[]; names: string[] }> {
+async function selectSkillDirs(source: GithubSource, dirs: string[]): Promise<{ dirs: string[]; names: string[] }> {
   const names = await skillNamesIn(dirs);
   if (!source.skill) return { dirs, names };
   const selected = dirs
@@ -117,10 +114,7 @@ async function selectSkillDirs(
   return { dirs: selected.map((entry) => entry.dir), names: selected.map((entry) => entry.name) };
 }
 
-function filesForInstall(
-  source: Extract<AtomPackSource, { kind: 'github' }>,
-  files: Map<string, Uint8Array>
-): Map<string, Uint8Array> {
+function filesForInstall(source: GithubSource, files: Map<string, Uint8Array>): Map<string, Uint8Array> {
   if (!source.path) return files;
   const prefix = `${source.path.replace(/\/+$/, '')}/`;
   const scoped = new Map<string, Uint8Array>();
@@ -131,10 +125,7 @@ function filesForInstall(
 }
 
 export async function installSkill(spec: string, deps: InstallSkillDeps): Promise<InstallSkillOutcome> {
-  const source = parseAtomPackSource(spec);
-  if (source.kind !== 'github') {
-    throw new SkillInstallError(`skill install supports github: sources (got "${source.kind}")`);
-  }
+  const source = parseGithubSource(spec);
 
   const staged = await deps.fetch(source);
   const files = filesForInstall(source, staged.files);
@@ -179,7 +170,7 @@ export async function installSkill(spec: string, deps: InstallSkillDeps): Promis
 
     const record: Omit<SkillInstallRecord, 'installedAt'> & { installedAt: string } = {
       source: spec,
-      sourceId: sourceIdentity(source),
+      sourceId: githubSourceIdentity(source),
       sourceKind: 'github',
       ref: source.ref,
       commit: staged.commit,
@@ -222,7 +213,7 @@ export interface SkillUpdateStatus {
 export async function checkSkillUpdate(
   skillsDir: string,
   name: string,
-  resolveLatest: (source: Extract<AtomPackSource, { kind: 'github' }>) => Promise<string>
+  resolveLatest: (source: GithubSource) => Promise<string>
 ): Promise<SkillUpdateStatus | null> {
   let rec: SkillInstallRecord;
   try {
@@ -231,8 +222,7 @@ export async function checkSkillUpdate(
     return null;
   }
   if (rec.sourceKind !== 'github') return null;
-  const source = parseAtomPackSource(rec.source);
-  if (source.kind !== 'github') return null;
+  const source = parseGithubSource(rec.source);
   const latest = await resolveLatest(source);
   return { name, ref: rec.ref, current: rec.commit, latest, hasUpdate: latest !== rec.commit };
 }

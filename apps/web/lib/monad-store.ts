@@ -96,7 +96,7 @@ function toastDetailForApiError(err: MonadApiError): unknown {
 }
 
 export function resolveConnection(): MonadConnectionConfig {
-  if (typeof window === 'undefined') return { baseUrl: 'http://127.0.0.1:52749' };
+  if (typeof window === 'undefined') throw new Error('resolveConnection requires a browser runtime');
 
   const remoteUrl = localStorage.getItem(REMOTE_URL_KEY)?.trim();
   if (remoteUrl) {
@@ -118,7 +118,7 @@ export function resolveConnection(): MonadConnectionConfig {
   return { baseUrl: `http://127.0.0.1:${port}` };
 }
 
-export function createMonadRuntime(conn: MonadConnectionConfig = resolveConnection()) {
+export function createMonadRuntime(conn: MonadConnectionConfig) {
   const client = createMonadTreatyClient({
     baseUrl: conn.baseUrl,
     wsBaseUrl: conn.wsBaseUrl,

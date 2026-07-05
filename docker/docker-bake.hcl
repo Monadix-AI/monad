@@ -31,6 +31,12 @@ target "test-e2e-live" {
   platforms  = local.platforms
 }
 
+target "test-e2e-deps" {
+  dockerfile = "docker/Dockerfile.e2e-deps"
+  context    = "."
+  platforms  = local.platforms
+}
+
 target "test-install" {
   dockerfile = "docker/Dockerfile.test"
   context    = "."

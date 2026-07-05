@@ -35,4 +35,5 @@ export { useSetAtomPinMutation } from './set-atom-pin.ts';
 export { useSetMcpAtomEnabledMutation } from './set-mcp-atom-enabled.ts';
 export { useUpdateSkillMutation } from './update-skill.ts';
 export { useUpdateSkillContentMutation } from './update-skill-content.ts';
+export { useUploadAtomPackMutation } from './upload-atom-pack.ts';
 export { useUploadSkillMutation } from './upload-skill.ts';

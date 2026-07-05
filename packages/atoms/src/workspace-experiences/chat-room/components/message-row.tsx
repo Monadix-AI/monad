@@ -112,7 +112,7 @@ function escapeMarkdownLinkText(value: string): string {
 
 const MENTION_HREF_PREFIX = '#monad-mention-';
 
-function markdownTextWithMentionCapsules(text: string): string {
+export function markdownTextWithMentionCapsules(text: string): string {
   const tokens = parseMentionTokens(text);
   if (tokens.length === 0) return text;
   let cursor = 0;
@@ -245,7 +245,7 @@ function MarkdownWithMentions({ text, streaming }: { text: string; streaming?: b
   );
 }
 
-export function MessageBubbleContent({
+function MessageBubbleContent({
   agent,
   Attachment,
   hasText,

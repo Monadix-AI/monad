@@ -22,6 +22,7 @@ import {
   skillContentQuerySchema,
   updateSkillContentRequestSchema,
   updateSkillRequestSchema,
+  uploadAtomPackQuerySchema,
   uploadSkillQuerySchema,
   validateSkillsRequestSchema,
   validateSkillsResponseSchema
@@ -30,11 +31,14 @@ import { Elysia } from 'elysia';
 import { z } from 'zod';
 
 import { HandlerError } from '@/handlers/handler-error.ts';
+import { readRequestBytes } from '@/services/upload.ts';
 
 // HTTP-only surface: contract declared inline; reusable wire schemas come from @monad/protocol.
 const packParams = z.object({ name: z.string() });
 const assetParams = z.object({ name: z.string(), '*': z.string() });
 const workspaceExperienceApiParams = z.object({ experienceId: z.string(), '*': z.string() });
+const SKILL_UPLOAD_MAX_BYTES = 5 * 1024 * 1024;
+const ATOM_PACK_UPLOAD_MAX_BYTES = 25 * 1024 * 1024;
 
 export function createAtomsController(handlers: ReturnType<typeof createDaemonHandlers>) {
   return new Elysia({ tags: ['http-only'] })
@@ -102,6 +106,24 @@ export function createAtomsController(handlers: ReturnType<typeof createDaemonHa
       }
     })
     .post(
+      '/atoms/install/upload',
+      async ({ query, request }) =>
+        handlers.atoms.uploadAtomPack({
+          filename: query.filename,
+          bytes: await readRequestBytes(request, ATOM_PACK_UPLOAD_MAX_BYTES),
+          consent: query.consent === 'true'
+        }),
+      {
+        query: uploadAtomPackQuerySchema,
+        response: { 200: installAtomPackResponseSchema },
+        detail: {
+          summary: 'Upload an atom pack zip',
+          description:
+            'Install a selected atom pack zip payload from an application/octet-stream body. Default-deny: re-call with consent:true.'
+        }
+      }
+    )
+    .post(
       '/atoms/:name/enable',
       async ({ params }) => handlers.atoms.setAtomPackEnabled({ name: params.name, enabled: true }),
       {
@@ -152,7 +174,7 @@ export function createAtomsController(handlers: ReturnType<typeof createDaemonHa
       async ({ query, request }) =>
         handlers.atoms.uploadSkill({
           filename: query.filename,
-          bytes: new Uint8Array(await request.arrayBuffer()),
+          bytes: await readRequestBytes(request, SKILL_UPLOAD_MAX_BYTES),
           overwrite: query.overwrite === 'true'
         }),
       {

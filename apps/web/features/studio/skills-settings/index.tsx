@@ -40,6 +40,7 @@ import { PanelShell } from '@/components/ui/panel-shell';
 import { isSkillMarketplacePath, skillMarketplacePath, studioPath } from '@/features/routes/route-paths';
 import { StudioBreadcrumbHeader } from '@/features/studio/StudioBreadcrumbHeader';
 import { useMonadRuntime } from '@/lib/monad-runtime-provider';
+import { CapabilitySection } from '../capabilities-settings/CapabilitySection';
 import { BrowsePanel } from './BrowsePanel';
 import { GitHubMark } from './GitHubMark';
 import { GithubInstallDialog } from './GithubInstallDialog';
@@ -51,6 +52,14 @@ import { UploadSkillDialog } from './UploadSkillDialog';
 import { loadSkillContent, sortSkillInstancesByName } from './utils';
 
 export function SkillsSettings({ onClose: _onClose }: { onClose: () => void }) {
+  return <SkillsSettingsContent />;
+}
+
+export function SkillsCapabilitiesSection() {
+  return <SkillsSettingsContent embedded />;
+}
+
+function SkillsSettingsContent({ embedded = false }: { embedded?: boolean }) {
   const t = useT();
   const pathname = usePathname();
   const router = useRouter();
@@ -423,128 +432,108 @@ export function SkillsSettings({ onClose: _onClose }: { onClose: () => void }) {
     );
   };
 
-  return (
-    <PanelShell>
-      <StudioBreadcrumbHeader
-        actions={
-          <>
-            {panel === 'installed' ? (
-              <>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span className="inline-flex">
-                      <Button
-                        aria-label={t('web.skills.checkUpdates')}
-                        className="size-7"
-                        disabled={checking}
-                        onClick={() => void handleCheckUpdates()}
-                        size="icon"
-                        variant="ghost"
-                      >
-                        <HugeiconsIcon
-                          className={cn(checking && 'animate-pulse text-foreground')}
-                          icon={SquareArrowUp01Icon}
-                        />
-                      </Button>
-                    </span>
-                  </TooltipTrigger>
-                  <TooltipContent>{t('web.skills.checkUpdates')}</TooltipContent>
-                </Tooltip>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      aria-label={t('web.skills.add')}
-                      className="size-7"
-                      disabled={uploading}
-                      size="icon"
-                      variant="ghost"
-                    >
-                      {uploading ? (
-                        <HugeiconsIcon
-                          className="animate-spin"
-                          icon={LoaderPinwheelIcon}
-                        />
-                      ) : (
-                        <HugeiconsIcon icon={PlusSignIcon} />
-                      )}
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onSelect={() => setAdding(true)}>
-                      <GitHubMark className="size-4" />
-                      {t('web.skills.addGithub')}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onSelect={() => setUploadDialogOpen(true)}>
-                      <HugeiconsIcon
-                        className="size-4"
-                        icon={Upload01Icon}
-                      />
-                      {t('web.skills.addUpload')}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onSelect={() => setEditor({ content: '' })}>
-                      <HugeiconsIcon
-                        className="size-4"
-                        icon={PencilEdit01Icon}
-                      />
-                      {t('web.skills.addEditor')}
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </>
-            ) : null}
-            {panel === 'installed' ? (
+  const actions = (
+    <>
+      {panel === 'installed' ? (
+        <>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="inline-flex">
+                <Button
+                  aria-label={t('web.skills.checkUpdates')}
+                  className="size-7"
+                  disabled={checking}
+                  onClick={() => void handleCheckUpdates()}
+                  size="icon"
+                  variant="ghost"
+                >
+                  <HugeiconsIcon
+                    className={cn(checking && 'animate-pulse text-foreground')}
+                    icon={SquareArrowUp01Icon}
+                  />
+                </Button>
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>{t('web.skills.checkUpdates')}</TooltipContent>
+          </Tooltip>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
               <Button
-                className="h-7 gap-1 px-2 text-xs"
-                onClick={() => {
-                  setAdding(false);
-                  router.replace(skillMarketplacePath());
-                }}
-                size="sm"
+                aria-label={t('web.skills.add')}
+                className="size-7"
+                disabled={uploading}
+                size="icon"
                 variant="ghost"
               >
-                <HugeiconsIcon
-                  className="size-3.5"
-                  icon={Store01Icon}
-                />
-                {t('web.skills.marketplace')}
+                {uploading ? (
+                  <HugeiconsIcon
+                    className="animate-spin"
+                    icon={LoaderPinwheelIcon}
+                  />
+                ) : (
+                  <HugeiconsIcon icon={PlusSignIcon} />
+                )}
               </Button>
-            ) : null}
-          </>
-        }
-        backHref={panel === 'browse' ? studioPath('skills') : undefined}
-        icon={
-          <HugeiconsIcon
-            className="size-4"
-            icon={PuzzleIcon}
-          />
-        }
-        parentTitle={panel === 'browse' ? t('web.skills.title') : undefined}
-        showSubtitle={false}
-        title={panel === 'browse' ? t('web.skills.marketplace') : t('web.skills.title')}
-      />
-
-      <input
-        accept=".md,.zip,.skill,text/markdown,application/zip"
-        className="hidden"
-        onChange={(event) => {
-          const file = event.target.files?.[0];
-          event.currentTarget.value = '';
-          void handleUploadFile(file);
-        }}
-        ref={fileInputRef}
-        type="file"
-      />
-
-      {panel === 'browse' ? (
-        <BrowsePanel
-          onInstalled={async () => {
-            await refreshSkills();
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onSelect={() => setAdding(true)}>
+                <GitHubMark className="size-4" />
+                {t('web.skills.addGithub')}
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => setUploadDialogOpen(true)}>
+                <HugeiconsIcon
+                  className="size-4"
+                  icon={Upload01Icon}
+                />
+                {t('web.skills.addUpload')}
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => setEditor({ content: '' })}>
+                <HugeiconsIcon
+                  className="size-4"
+                  icon={PencilEdit01Icon}
+                />
+                {t('web.skills.addEditor')}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </>
+      ) : null}
+      {panel === 'installed' ? (
+        <Button
+          className="h-7 gap-1 px-2 text-xs"
+          onClick={() => {
+            setAdding(false);
+            router.replace(skillMarketplacePath());
           }}
-          onInstallFailed={() => toast.error(t('web.skills.installFailed'))}
-        />
-      ) : (
-        <ScrollArea className="min-h-0 flex-1">{renderInstalledPanelVariant('rail')}</ScrollArea>
-      )}
+          size="sm"
+          variant="ghost"
+        >
+          <HugeiconsIcon
+            className="size-3.5"
+            icon={Store01Icon}
+          />
+          {t('web.skills.marketplace')}
+        </Button>
+      ) : null}
+    </>
+  );
+
+  const hiddenUploadInput = (
+    <input
+      accept=".md,.zip,.skill,text/markdown,application/zip"
+      className="hidden"
+      onChange={(event) => {
+        const file = event.target.files?.[0];
+        event.currentTarget.value = '';
+        void handleUploadFile(file);
+      }}
+      ref={fileInputRef}
+      type="file"
+    />
+  );
+
+  const dialogs = (
+    <>
       <SkillEditorDialog
         editor={editor}
         onClose={() => setEditor(null)}
@@ -560,6 +549,56 @@ export function SkillsSettings({ onClose: _onClose }: { onClose: () => void }) {
         onFile={(file) => void handleUploadFile(file)}
         open={uploadDialogOpen}
       />
+    </>
+  );
+
+  const content =
+    panel === 'browse' ? (
+      <BrowsePanel
+        onInstalled={async () => {
+          await refreshSkills();
+        }}
+        onInstallFailed={() => toast.error(t('web.skills.installFailed'))}
+      />
+    ) : (
+      renderInstalledPanelVariant('rail')
+    );
+
+  if (embedded) {
+    return (
+      <>
+        <CapabilitySection
+          actions={actions}
+          title={panel === 'browse' ? t('web.skills.marketplace') : t('web.skills.title')}
+        >
+          {hiddenUploadInput}
+          {content}
+        </CapabilitySection>
+        {dialogs}
+      </>
+    );
+  }
+
+  return (
+    <PanelShell>
+      <StudioBreadcrumbHeader
+        actions={actions}
+        backHref={panel === 'browse' ? studioPath('skills') : undefined}
+        icon={
+          <HugeiconsIcon
+            className="size-4"
+            icon={PuzzleIcon}
+          />
+        }
+        parentTitle={panel === 'browse' ? t('web.skills.title') : undefined}
+        showSubtitle={false}
+        title={panel === 'browse' ? t('web.skills.marketplace') : t('web.skills.title')}
+      />
+
+      {hiddenUploadInput}
+
+      {panel === 'browse' ? content : <ScrollArea className="min-h-0 flex-1">{content}</ScrollArea>}
+      {dialogs}
     </PanelShell>
   );
 }

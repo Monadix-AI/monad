@@ -22,9 +22,14 @@ interface MonadRuntimeContextValue {
 }
 
 const MonadRuntimeContext = createContext<MonadRuntimeContextValue | null>(null);
+const SERVER_PRERENDER_CONNECTION = { baseUrl: 'http://127.0.0.1:0' };
+
+function initialRuntime() {
+  return createMonadRuntime(typeof window === 'undefined' ? SERVER_PRERENDER_CONNECTION : resolveConnection());
+}
 
 export function MonadStoreProvider({ children }: { children: ReactNode }) {
-  const [runtime, setRuntime] = useState(() => createMonadRuntime());
+  const [runtime, setRuntime] = useState(initialRuntime);
 
   const switchDaemonConnection = useCallback((request: DaemonSwitchRequest) => {
     if (request.type === 'local') activateLocalDaemonConnection();

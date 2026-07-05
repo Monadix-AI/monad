@@ -132,8 +132,8 @@ test.describe('Studio IA', () => {
     await page.goto('/studio/runtime');
 
     await expect(page.getByRole('heading', { name: 'Runtime overview' })).toBeVisible();
-    await expect(page.getByText('Agent Runtime', { exact: true })).toBeVisible();
-    await expect(page.getByText('Agent Mesh', { exact: true })).toBeVisible();
+    await expect(page.getByText('Monad Runtime', { exact: true })).toBeVisible();
+    await expect(page.getByText('Monad Mesh', { exact: true })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Set up Monad runtime' })).toBeVisible();
     await expect(page.getByTestId('studio-runtime-illustration')).toBeVisible();
 
@@ -154,8 +154,8 @@ test.describe('Studio IA', () => {
 
     await expect(page).toHaveURL(/\/studio\/mesh$/);
     await expect(page.getByRole('heading', { name: 'Mesh overview' })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Connect Native CLI' })).toBeVisible();
-    await expect(page.getByText('Agent Mesh', { exact: true })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Connect External Agents' })).toBeVisible();
+    await expect(page.getByText('Monad Mesh', { exact: true })).toBeVisible();
     await expect(page.getByTestId('studio-mesh-illustration')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Project members' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Tasks and sessions' })).toHaveCount(0);

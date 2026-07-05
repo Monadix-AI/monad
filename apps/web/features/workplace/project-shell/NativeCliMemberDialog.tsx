@@ -247,7 +247,6 @@ export function NativeCliMemberDialog({
             >
               <summary
                 style={{
-                  cursor: 'pointer',
                   fontFamily: mono,
                   fontSize: 11,
                   fontWeight: 650,

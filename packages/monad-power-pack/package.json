@@ -1,0 +1,14 @@
+{
+  "name": "@monad/monad-power-pack",
+  "version": "0.0.0",
+  "devDependencies": {},
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "module": "src/index.ts",
+  "private": true,
+  "scripts": {
+    "typecheck": "tsgo --noEmit"
+  },
+  "type": "module"
+}

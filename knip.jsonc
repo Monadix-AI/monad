@@ -20,7 +20,7 @@
   // Root-level devDependency used via git hooks (lefthook.yml), not imported.
   "ignoreDependencies": ["@evilmartians/lefthook", "@inlang/paraglide-js"],
   // System binaries invoked from scripts; not npm-installed.
-  "ignoreBinaries": ["codex", "powershell", "shasum", "sha256sum"],
+  "ignoreBinaries": ["codex", "icacls", "powershell", "shasum", "sha256sum"],
   // Workspaces are auto-discovered from package.json "workspaces"; production
   // entries (main/module/bin/exports) and the Next.js app are inferred per
   // package.json. The only thing Knip can't infer is Bun's test layer: the bun
@@ -37,7 +37,7 @@
   // ConfigurationChief#getConfigKeyForWorkspace), so the few workspaces with a
   // genuine special case must restate the universal entries alongside it.
   "workspaces": {
-    ".": { "entry": ["scripts/**/*.ts"], "project": ["scripts/**/*.ts"] },
+    ".": { "entry": ["scripts/**/*.ts", "test/**/*.ts"], "project": ["scripts/**/*.ts", "test/**/*.ts"] },
     "apps/*": { "entry": ["test/**/*.{ts,tsx}", "**/*.test.{ts,tsx}"] },
     "packages/*": { "entry": ["test/**/*.{ts,tsx}", "**/*.test.{ts,tsx}"] },
 

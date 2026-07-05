@@ -38,8 +38,13 @@ describe('getRootPointerPath', () => {
 describe('getPaths pointer file', () => {
   const env = { ...Bun.env };
   let originalPointer: string | null = null;
+  let fakeHome: string;
 
   beforeEach(async () => {
+    fakeHome = join(tmpdir(), `monad-home-ptr-${process.pid}-${Date.now()}-${process.hrtime.bigint()}`);
+    Bun.env.HOME = fakeHome;
+    Bun.env.USERPROFILE = fakeHome;
+    Bun.env.APPDATA = join(fakeHome, 'AppData', 'Roaming');
     try {
       originalPointer = await Bun.file(getRootPointerPath()).text();
     } catch {
@@ -48,6 +53,13 @@ describe('getPaths pointer file', () => {
   });
 
   afterEach(async () => {
+    const ptr = getRootPointerPath();
+    if (originalPointer === null) {
+      await rm(ptr, { force: true });
+    } else {
+      await writeFile(ptr, originalPointer);
+    }
+    await rm(fakeHome, { recursive: true, force: true });
     Object.assign(Bun.env, env);
     for (const key of [
       'MONAD_HOME',
@@ -56,15 +68,12 @@ describe('getPaths pointer file', () => {
       'XDG_CONFIG_HOME',
       'XDG_CACHE_HOME',
       'XDG_STATE_HOME',
-      'XDG_RUNTIME_DIR'
+      'XDG_RUNTIME_DIR',
+      'HOME',
+      'USERPROFILE',
+      'APPDATA'
     ]) {
       if (!(key in env)) delete Bun.env[key];
-    }
-    const ptr = getRootPointerPath();
-    if (originalPointer === null) {
-      await rm(ptr, { force: true });
-    } else {
-      await writeFile(ptr, originalPointer);
     }
   });
 
@@ -137,7 +146,7 @@ describe('getPaths pointer file', () => {
     delete Bun.env.MONAD_HOME;
     writePointer('relative/bad');
 
-    expect(getPaths().home).toBe(join(homedir(), '.monad'));
+    expect(getPaths().home).toBe(join(fakeHome, '.monad'));
   });
 
   test('on Windows, corrupt pointer falls back to APPDATA/monad', () => {

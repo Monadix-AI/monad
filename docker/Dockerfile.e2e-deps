@@ -1,0 +1,41 @@
+# syntax=docker/dockerfile:1
+
+FROM oven/bun:1 AS test
+
+WORKDIR /workspace
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends ca-certificates git unzip zip \
+  && rm -rf /var/lib/apt/lists/*
+
+ENV PATH="/root/.bun/bin:${PATH}"
+
+RUN bun install --global \
+  @openai/codex@0.142.5 \
+  @anthropic-ai/claude-code@2.1.201 \
+  @google/gemini-cli@0.49.0 \
+  @qwen-code/qwen-code@0.19.6
+
+COPY bun.lock package.json turbo.jsonc ./
+COPY --parents apps/*/package.json clients/*/package.json packages/*/package.json ./
+
+RUN BUN_RETRY=3 bun install
+
+COPY . .
+
+ENV NODE_ENV=test \
+    MONAD_TEST_CONTAINER_DEPS=1 \
+    NO_PROXY=* \
+    HTTP_PROXY="" HTTPS_PROXY="" ALL_PROXY="" \
+    http_proxy="" https_proxy="" all_proxy=""
+
+WORKDIR /workspace/apps/monad
+
+RUN bun ../../scripts/bun-test.ts test/e2e/atom-module.container.linux.test.ts --only-failures
+
+WORKDIR /workspace
+
+RUN bun test/smoke/codex-appserver-ws.ts \
+  && bun test/smoke/codex-appserver-unix.ts \
+  && bun test/smoke/codex-appserver-turn.ts \
+  && bun test/smoke/codex-appserver-steer.ts
