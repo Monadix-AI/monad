@@ -5,7 +5,6 @@ import type { SetToolBackendsRequest, SmtpSettings } from '@monad/protocol';
 import {
   BrainIcon,
   CalendarClockIcon,
-  CheckIcon,
   CircleCheckBigIcon,
   ComputerTerminal01Icon,
   CpuIcon,
@@ -16,18 +15,25 @@ import {
   LoaderPinwheelIcon,
   Mail01Icon,
   NeuralNetworkIcon,
-  Refresh01Icon,
-  Settings02Icon
+  Refresh01Icon
 } from '@hugeicons/core-free-icons';
-import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react';
+import { HugeiconsIcon } from '@hugeicons/react';
 import { useInitDockerBackendMutation } from '@monad/client-rtk';
-import { Button, Card, Input, Label, Switch } from '@monad/ui';
+import { Button } from '@monad/ui';
 import { useCallback, useEffect, useState } from 'react';
 
 import { useT } from '@/components/I18nProvider';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToolBackendsSettings } from '@/hooks/use-tool-backends-settings';
 import { CapabilitySection } from './CapabilitySection';
+import { ToolCard } from './ToolCard';
+import {
+  type CodeExecBackend,
+  CodeExecSettingsDialog,
+  type EmailBackend,
+  EmailSettingsDialog,
+  type WebSearchProvider,
+  WebSearchSettingsDialog
+} from './ToolSettingsDialogs';
 
 // The Tools half of the Capabilities panel: native built-in tool cards. MCP-backed presets live in
 // the MCP section so the two capability surfaces stay visually separate.
@@ -39,17 +45,16 @@ export function ToolsSection() {
   const [saveError, setSaveError] = useState<string>();
   const [dockerInitResult, setDockerInitResult] = useState<{ ok: boolean; error?: string } | null>(null);
 
-  const [wsProvider, setWsProvider] = useState<'auto' | 'native' | 'brave' | 'ddgs'>('auto');
+  const [wsProvider, setWsProvider] = useState<WebSearchProvider>('auto');
   const [braveApiKey, setBraveApiKey] = useState('');
 
-  type CodeExecBackend = 'follow-system' | 'docker' | 'e2b';
   const [codeExecBackend, setCodeExecBackend] = useState<CodeExecBackend>('follow-system');
   const [availableCodeExecBackends, setAvailableCodeExecBackends] = useState<string[]>(['follow-system']);
   const [e2bApiKey, setE2bApiKey] = useState('');
   const [dockerImage, setDockerImage] = useState('');
 
   const [emailEnabled, setEmailEnabled] = useState(false);
-  const [emailBackend, setEmailBackend] = useState<'auto' | 'smtp' | 'resend'>('auto');
+  const [emailBackend, setEmailBackend] = useState<EmailBackend>('auto');
   const [emailFrom, setEmailFrom] = useState('');
   const [resendApiKey, setResendApiKey] = useState('');
   const [smtpEnabled, setSmtpEnabled] = useState(false);
@@ -173,6 +178,26 @@ export function ToolsSection() {
           ? 'Resend'
           : t('web.tools.searchProviderAuto');
 
+  const closeTool = (tool: 'webSearch' | 'codeExec' | 'email') => {
+    resetFromConfig(tool);
+    setOpenTool(null);
+    setSaveError(undefined);
+    if (tool === 'codeExec') setDockerInitResult(null);
+  };
+
+  const handleInitDocker = () => {
+    setDockerInitResult(null);
+    void initDocker().then((res) => {
+      if ('data' in res && res.data) {
+        setDockerInitResult({ ok: res.data.ok, error: res.data.error });
+      } else {
+        const e = 'error' in res ? res.error : undefined;
+        const msg = e && 'message' in e ? e.message : e ? JSON.stringify(e) : 'Request failed';
+        setDockerInitResult({ ok: false, error: msg });
+      }
+    });
+  };
+
   return (
     <>
       <CapabilitySection
@@ -282,486 +307,65 @@ export function ToolsSection() {
         )}
       </CapabilitySection>
 
-      {/* Web Search dialog */}
-      <Dialog
-        onOpenChange={(o) => {
-          if (!o) {
-            resetFromConfig('webSearch');
-            setOpenTool(null);
-            setSaveError(undefined);
-          }
-        }}
+      <WebSearchSettingsDialog
+        braveApiKey={braveApiKey}
+        onCancel={() => closeTool('webSearch')}
+        onSave={() => void handleSave()}
         open={openTool === 'webSearch'}
-      >
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <HugeiconsIcon
-                className="size-4"
-                icon={GlobeIcon}
-              />{' '}
-              {t('web.tools.searchTool')}
-            </DialogTitle>
-          </DialogHeader>
-          <div className="flex flex-col gap-4">
-            <div className="flex flex-col gap-1.5">
-              <Label>{t('web.tools.searchProviderLabel')}</Label>
-              <div className="flex flex-wrap gap-2">
-                {(['auto', 'native', 'ddgs', 'brave'] as const).map((p) => (
-                  <button
-                    className={`rounded-md border px-3 py-1.5 text-sm ${wsProvider === p ? 'border-ring bg-primary-subtle text-primary' : ''}`}
-                    key={p}
-                    onClick={() => setWsProvider(p)}
-                    type="button"
-                  >
-                    {p === 'auto'
-                      ? t('web.tools.searchProviderAuto')
-                      : p === 'native'
-                        ? t('web.tools.searchProviderNative')
-                        : p === 'ddgs'
-                          ? 'DuckDuckGo'
-                          : 'Brave'}
-                  </button>
-                ))}
-              </div>
-              <p className="text-muted-foreground text-xs">
-                {wsProvider === 'native'
-                  ? t('web.tools.wsNative')
-                  : wsProvider === 'brave'
-                    ? t('web.tools.wsBrave')
-                    : wsProvider === 'ddgs'
-                      ? t('web.tools.wsDdgs')
-                      : t('web.tools.wsAuto')}
-              </p>
-            </div>
-            {wsProvider === 'brave' && (
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="brave-api-key">{t('web.tools.braveApiKey')}</Label>
-                <Input
-                  id="brave-api-key"
-                  onChange={(e) => setBraveApiKey(e.target.value)}
-                  placeholder="BSA… or ${env:BRAVE_API_KEY}"
-                  value={braveApiKey}
-                />
-              </div>
-            )}
-            {saveError && <p className="text-destructive text-xs">{saveError}</p>}
-            <div className="flex gap-2">
-              <Button
-                className="flex-1"
-                disabled={saving}
-                onClick={() => void handleSave()}
-                size="sm"
-              >
-                {saving ? (
-                  <HugeiconsIcon
-                    className="animate-spin"
-                    icon={LoaderPinwheelIcon}
-                  />
-                ) : (
-                  <HugeiconsIcon icon={CheckIcon} />
-                )}
-                {saving ? t('web.common.saving') : t('web.common.save')}
-              </Button>
-              <Button
-                onClick={() => {
-                  resetFromConfig('webSearch');
-                  setOpenTool(null);
-                  setSaveError(undefined);
-                }}
-                size="sm"
-                variant="ghost"
-              >
-                {t('web.model.cancel')}
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Code Execution dialog */}
-      <Dialog
-        onOpenChange={(o) => {
-          if (o) {
-            refetch();
-            setDockerInitResult(null);
-          } else {
-            resetFromConfig('codeExec');
-            setOpenTool(null);
-            setSaveError(undefined);
-            setDockerInitResult(null);
-          }
+        saveError={saveError}
+        saving={saving}
+        setBraveApiKey={setBraveApiKey}
+        setWsProvider={setWsProvider}
+        wsProvider={wsProvider}
+      />
+      <CodeExecSettingsDialog
+        availableCodeExecBackends={availableCodeExecBackends}
+        codeExecBackend={codeExecBackend}
+        dockerImage={dockerImage}
+        dockerInitializing={dockerInitializing}
+        dockerInitResult={dockerInitResult}
+        e2bApiKey={e2bApiKey}
+        onCancel={() => closeTool('codeExec')}
+        onInitDocker={handleInitDocker}
+        onOpen={() => {
+          refetch();
+          setDockerInitResult(null);
         }}
+        onSave={() => void handleSave()}
         open={openTool === 'codeExec'}
-      >
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <HugeiconsIcon
-                className="size-4"
-                icon={FileCodeIcon}
-              />{' '}
-              {t('web.tools.codeExec')}
-            </DialogTitle>
-          </DialogHeader>
-          <div className="flex flex-col gap-4">
-            <div className="flex flex-col gap-1.5">
-              <Label>{t('web.tools.sandboxLabel')}</Label>
-              <div className="flex flex-wrap gap-2">
-                {(
-                  [
-                    { id: 'follow-system', label: t('web.tools.followSystemBackend') },
-                    { id: 'docker', label: t('web.tools.dockerBackend') },
-                    { id: 'e2b', label: t('web.tools.e2bBackend') }
-                  ] as const
-                ).map(({ id, label }) => {
-                  const available = availableCodeExecBackends.includes(id);
-                  const unavailableHint =
-                    id === 'docker'
-                      ? t('web.tools.dockerInstallHint')
-                      : id === 'e2b'
-                        ? t('web.tools.e2bNotAvailable')
-                        : undefined;
-                  return (
-                    <button
-                      className={`rounded-md border px-3 py-1.5 text-sm transition-opacity ${codeExecBackend === id ? 'border-ring bg-primary-subtle text-primary' : ''} ${!available ? 'cursor-not-allowed opacity-40' : ''}`}
-                      disabled={!available}
-                      key={id}
-                      onClick={() => available && setCodeExecBackend(id)}
-                      title={!available ? unavailableHint : undefined}
-                      type="button"
-                    >
-                      {label}
-                    </button>
-                  );
-                })}
-              </div>
-              <p className="text-muted-foreground text-xs">
-                {codeExecBackend === 'docker'
-                  ? t('web.tools.dockerDesc')
-                  : codeExecBackend === 'e2b'
-                    ? t('web.tools.e2bDesc')
-                    : t('web.tools.followSystemDesc')}
-              </p>
-            </div>
-
-            {codeExecBackend === 'e2b' && (
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="e2b-api-key">{t('web.tools.e2bApiKey')}</Label>
-                <Input
-                  id="e2b-api-key"
-                  onChange={(e) => setE2bApiKey(e.target.value)}
-                  placeholder={t('web.tools.e2bApiKeyPlaceholder')}
-                  value={e2bApiKey}
-                />
-              </div>
-            )}
-
-            {codeExecBackend === 'docker' && (
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="docker-image">{t('web.tools.dockerImageLabel')}</Label>
-                <Input
-                  id="docker-image"
-                  onChange={(e) => setDockerImage(e.target.value)}
-                  placeholder={t('web.tools.dockerImagePlaceholder')}
-                  value={dockerImage}
-                />
-                <div className="flex items-center gap-2">
-                  <Button
-                    disabled={dockerInitializing}
-                    onClick={() => {
-                      setDockerInitResult(null);
-                      void initDocker().then((res) => {
-                        if ('data' in res && res.data) {
-                          setDockerInitResult({ ok: res.data.ok, error: res.data.error });
-                        } else {
-                          const e = 'error' in res ? res.error : undefined;
-                          const msg = e && 'message' in e ? e.message : e ? JSON.stringify(e) : 'Request failed';
-                          setDockerInitResult({ ok: false, error: msg });
-                        }
-                      });
-                    }}
-                    size="sm"
-                    variant="outline"
-                  >
-                    {dockerInitializing ? (
-                      <HugeiconsIcon
-                        className="animate-spin"
-                        icon={LoaderPinwheelIcon}
-                      />
-                    ) : null}
-                    {dockerInitializing ? t('web.tools.dockerInitializing') : t('web.tools.dockerInitBtn')}
-                  </Button>
-                  {dockerInitResult && (
-                    <span
-                      className={`text-xs ${dockerInitResult.ok ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive'}`}
-                    >
-                      {dockerInitResult.ok ? t('web.tools.dockerInitSuccess') : (dockerInitResult.error ?? 'Failed')}
-                    </span>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {saveError && <p className="text-destructive text-xs">{saveError}</p>}
-            <div className="flex gap-2">
-              <Button
-                className="flex-1"
-                disabled={saving}
-                onClick={() => void handleSave()}
-                size="sm"
-              >
-                {saving ? (
-                  <HugeiconsIcon
-                    className="animate-spin"
-                    icon={LoaderPinwheelIcon}
-                  />
-                ) : (
-                  <HugeiconsIcon icon={CheckIcon} />
-                )}
-                {saving ? t('web.common.saving') : t('web.common.save')}
-              </Button>
-              <Button
-                onClick={() => {
-                  resetFromConfig('codeExec');
-                  setOpenTool(null);
-                  setSaveError(undefined);
-                }}
-                size="sm"
-                variant="ghost"
-              >
-                {t('web.model.cancel')}
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Email dialog */}
-      <Dialog
-        onOpenChange={(o) => {
-          if (!o) {
-            resetFromConfig('email');
-            setOpenTool(null);
-            setSaveError(undefined);
-          }
-        }}
+        saveError={saveError}
+        saving={saving}
+        setCodeExecBackend={setCodeExecBackend}
+        setDockerImage={setDockerImage}
+        setE2bApiKey={setE2bApiKey}
+      />
+      <EmailSettingsDialog
+        emailBackend={emailBackend}
+        emailFrom={emailFrom}
+        onCancel={() => closeTool('email')}
+        onSave={() => void handleSave()}
         open={openTool === 'email'}
-      >
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <HugeiconsIcon
-                className="size-4"
-                icon={Mail01Icon}
-              />{' '}
-              {t('web.tools.email')}
-            </DialogTitle>
-          </DialogHeader>
-          <div className="flex flex-col gap-4">
-            <div className="flex flex-col gap-1.5">
-              <Label>{t('web.tools.emailBackend')}</Label>
-              <div className="flex gap-2">
-                {(['auto', 'smtp', 'resend'] as const).map((b) => (
-                  <button
-                    className={`rounded-md border px-3 py-1.5 text-sm ${emailBackend === b ? 'border-ring bg-primary-subtle text-primary' : ''}`}
-                    key={b}
-                    onClick={() => setEmailBackend(b)}
-                    type="button"
-                  >
-                    {b === 'auto' ? t('web.tools.searchProviderAuto') : b === 'smtp' ? 'SMTP' : 'Resend'}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="email-from">{t('web.tools.emailFromLabel')}</Label>
-              <Input
-                id="email-from"
-                onChange={(e) => setEmailFrom(e.target.value)}
-                placeholder="sender@example.com"
-                type="email"
-                value={emailFrom}
-              />
-            </div>
-            {(emailBackend === 'resend' || emailBackend === 'auto') && (
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="resend-api-key">{t('web.tools.resendApiKey')}</Label>
-                <Input
-                  id="resend-api-key"
-                  onChange={(e) => setResendApiKey(e.target.value)}
-                  placeholder="re_… or ${env:RESEND_API_KEY}"
-                  value={resendApiKey}
-                />
-              </div>
-            )}
-            <label className="flex cursor-pointer items-center gap-2">
-              <input
-                checked={smtpEnabled}
-                className="size-4"
-                onChange={(e) => setSmtpEnabled(e.target.checked)}
-                type="checkbox"
-              />
-              <span className="text-sm">{t('web.tools.configureSMTP')}</span>
-            </label>
-            {smtpEnabled && (
-              <div className="flex flex-col gap-3 rounded-md border p-3">
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="flex flex-col gap-1.5">
-                    <Label htmlFor="smtp-host">{t('web.tools.smtpHost')}</Label>
-                    <Input
-                      id="smtp-host"
-                      onChange={(e) => setSmtpHost(e.target.value)}
-                      placeholder="smtp.example.com"
-                      value={smtpHost}
-                    />
-                  </div>
-                  <div className="flex flex-col gap-1.5">
-                    <Label htmlFor="smtp-port">{t('web.tools.smtpPort')}</Label>
-                    <Input
-                      id="smtp-port"
-                      onChange={(e) => setSmtpPort(e.target.value)}
-                      placeholder="465 or 587"
-                      type="number"
-                      value={smtpPort}
-                    />
-                  </div>
-                  <div className="flex flex-col gap-1.5">
-                    <Label htmlFor="smtp-user">{t('web.tools.smtpUser')}</Label>
-                    <Input
-                      id="smtp-user"
-                      onChange={(e) => setSmtpUser(e.target.value)}
-                      placeholder="user@example.com"
-                      value={smtpUser}
-                    />
-                  </div>
-                  <div className="flex flex-col gap-1.5">
-                    <Label htmlFor="smtp-pass">{t('web.tools.smtpPass')}</Label>
-                    <Input
-                      id="smtp-pass"
-                      onChange={(e) => setSmtpPass(e.target.value)}
-                      placeholder="password or ${env:SMTP_PASS}"
-                      type="text"
-                      value={smtpPass}
-                    />
-                  </div>
-                  <div className="flex flex-col gap-1.5">
-                    <Label htmlFor="smtp-client">{t('web.tools.smtpClientName')}</Label>
-                    <Input
-                      id="smtp-client"
-                      onChange={(e) => setSmtpClientName(e.target.value)}
-                      placeholder="monad"
-                      value={smtpClientName}
-                    />
-                  </div>
-                </div>
-                <label className="flex cursor-pointer items-center gap-2">
-                  <input
-                    checked={smtpSecure}
-                    className="size-4"
-                    id="smtp-secure"
-                    onChange={(e) => setSmtpSecure(e.target.checked)}
-                    type="checkbox"
-                  />
-                  <span className="text-sm">{t('web.tools.smtpSecure')}</span>
-                </label>
-              </div>
-            )}
-            {saveError && <p className="text-destructive text-xs">{saveError}</p>}
-            <div className="flex gap-2">
-              <Button
-                className="flex-1"
-                disabled={saving}
-                onClick={() => void handleSave()}
-                size="sm"
-              >
-                {saving ? (
-                  <HugeiconsIcon
-                    className="animate-spin"
-                    icon={LoaderPinwheelIcon}
-                  />
-                ) : (
-                  <HugeiconsIcon icon={CheckIcon} />
-                )}
-                {saving ? t('web.common.saving') : t('web.common.save')}
-              </Button>
-              <Button
-                onClick={() => {
-                  resetFromConfig('email');
-                  setOpenTool(null);
-                  setSaveError(undefined);
-                }}
-                size="sm"
-                variant="ghost"
-              >
-                {t('web.model.cancel')}
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+        resendApiKey={resendApiKey}
+        saveError={saveError}
+        saving={saving}
+        setEmailBackend={setEmailBackend}
+        setEmailFrom={setEmailFrom}
+        setResendApiKey={setResendApiKey}
+        setSmtpClientName={setSmtpClientName}
+        setSmtpEnabled={setSmtpEnabled}
+        setSmtpHost={setSmtpHost}
+        setSmtpPass={setSmtpPass}
+        setSmtpPort={setSmtpPort}
+        setSmtpSecure={setSmtpSecure}
+        setSmtpUser={setSmtpUser}
+        smtpClientName={smtpClientName}
+        smtpEnabled={smtpEnabled}
+        smtpHost={smtpHost}
+        smtpPass={smtpPass}
+        smtpPort={smtpPort}
+        smtpSecure={smtpSecure}
+        smtpUser={smtpUser}
+      />
     </>
-  );
-}
-
-function ToolCard({
-  description,
-  enabled,
-  icon: Icon,
-  name,
-  onConfigure,
-  onToggle,
-  optional,
-  summary
-}: {
-  description: string;
-  enabled?: boolean;
-  icon: IconSvgElement;
-  name: string;
-  onConfigure?: () => void;
-  onToggle?: (v: boolean) => void;
-  optional?: boolean;
-  summary: string;
-}) {
-  return (
-    <Card
-      className={`flex flex-col gap-3 p-4 transition-colors${onConfigure ? 'cursor-pointer hover:bg-muted/20' : ''}`}
-      onClick={onConfigure}
-    >
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <div className="rounded-md bg-muted/50 p-1.5">
-            <HugeiconsIcon
-              className="size-4 text-foreground/70"
-              icon={Icon}
-            />
-          </div>
-          <span className="font-medium text-sm">{name}</span>
-        </div>
-        {optional && onToggle && (
-          // biome-ignore lint/a11y/noStaticElementInteractions: prevents the switch click from opening the config card.
-          <div
-            onClick={(e) => e.stopPropagation()}
-            onKeyDown={(e) => e.stopPropagation()}
-            role="presentation"
-          >
-            <Switch
-              checked={enabled ?? false}
-              onCheckedChange={onToggle}
-            />
-          </div>
-        )}
-      </div>
-      <p className="text-muted-foreground text-xs leading-relaxed">{description}</p>
-      <div className="mt-auto flex items-center justify-between gap-2">
-        <span className="truncate font-mono text-[11px] text-muted-foreground/60">{summary}</span>
-        {onConfigure && (
-          <HugeiconsIcon
-            className="size-3.5 shrink-0 text-muted-foreground/40"
-            icon={Settings02Icon}
-          />
-        )}
-      </div>
-    </Card>
   );
 }
