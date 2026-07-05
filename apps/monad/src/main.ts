@@ -16,39 +16,27 @@
  */
 
 import type { MonadAuth } from '@monad/home';
-import type { AtomDescriptor, McpServerStatus, PrincipalId, SessionId } from '@monad/protocol';
+import type { AtomDescriptor, PrincipalId, SessionId } from '@monad/protocol';
 import type { AtomConflict } from '@/atoms/resolve.ts';
 import type { Tool } from '@/capabilities/tools/types.ts';
+import type { SessionGateway } from '@/channels/channel.ts';
 
 import { join } from 'node:path';
-import {
-  computeInitStatus,
-  emptyAuth,
-  getPaths,
-  initMonadHome,
-  loadAll,
-  loadAuth,
-  resolvePeerSecretRef,
-  saveProfile
-} from '@monad/home';
-import { createI18n, defaultLocaleName, loadLocalePacksFromDir } from '@monad/i18n';
+import { computeInitStatus, getPaths, initMonadHome, loadAll, loadAuth, saveProfile } from '@monad/home';
+import { defaultLocaleName, loadLocalePacksFromDir } from '@monad/i18n';
 import { BUILTIN_LOCALES_DIR } from '@monad/i18n/locale-dir';
 import { createLogger } from '@monad/logger';
 
 import { applyAcpDelegateTool } from '@/bootstrap/acp-delegate.ts';
-import { authorizeMcpOAuth } from '@/capabilities/mcp/oauth.ts';
 import { buildServiceTools, builtinTools, registerSandboxLauncher } from '@/capabilities/tools';
-import { ChannelService, type SessionGateway } from '@/channels/channel.ts';
 import { AtomPackRegistry } from '@/handlers/atom-pack/index.ts';
 import { type CommandBundle, createCommandRegistry } from '@/handlers/commands/index.ts';
 import { createDaemonHandlers } from '@/handlers/handlers.ts';
 import { createHookRunner, type HookConfig } from '@/hooks/runner.ts';
 import { initObservability } from '@/infra/observability.ts';
-import { acquireSingletonLock } from '@/infra/singleton-lock.ts';
 import { ReloadService } from '@/reload/index.ts';
 import { ConfigBus } from '@/services/config-bus.ts';
 import { DelegationService } from '@/services/delegation/delegation.ts';
-import { createPeerDelegateTool, type PeerDelegateTarget } from '@/services/delegation/peer-delegate.ts';
 import { acpAgentCandidatesFromAdapters } from '@/services/delegation/presets.ts';
 import { configureDeveloperLogTransport } from '@/services/developer-log.ts';
 import { EventBus } from '@/services/event-bus.ts';
@@ -64,23 +52,22 @@ import { loadWorkspacePromptSlots, WORKSPACE_CONTEXT_FILES } from '@/store/home/
 import { runAcpBridge } from '@/transports/acp/launch.ts';
 import { createDaemonAgent } from './bootstrap/agent.ts';
 import { createAtomPackRediscoverer } from './bootstrap/atoms.ts';
+import { createChannelGateway } from './bootstrap/channel-gateway.ts';
 import { createChannelRegistry } from './bootstrap/channels.ts';
 import { createCommandBundle } from './bootstrap/commands.ts';
 import { createDataLayer } from './bootstrap/data-layer.ts';
+import { registerHotReload } from './bootstrap/hot-reload.ts';
 import { createInterruptServices } from './bootstrap/interrupts.ts';
-import {
-  collectMcpStatus,
-  connectFileMcpServers,
-  connectMcpServers,
-  reconnectOneMcpServer,
-  reloadConfigMcpServers
-} from './bootstrap/mcp.ts';
+import { connectFileMcpServers, connectMcpServers } from './bootstrap/mcp.ts';
+import { createMcpControls } from './bootstrap/mcp-controls.ts';
 import { createMemorySubsystem } from './bootstrap/memory.ts';
 import { createModelSubsystem } from './bootstrap/model.ts';
 import { createObscuraController } from './bootstrap/obscura.ts';
+import { createPeerDelegateTools } from './bootstrap/peers.ts';
 import { configureDaemonLogging, readDaemonRuntimeFlags } from './bootstrap/runtime-flags.ts';
 import { createSandbox, finalizeSandboxLauncher } from './bootstrap/sandbox.ts';
 import { serveDaemon } from './bootstrap/serve.ts';
+import { acquireDaemonSingletonLock } from './bootstrap/singleton.ts';
 import { createSkillSubsystem } from './bootstrap/skills.ts';
 import {
   prependMonadBinToPath,
@@ -114,15 +101,7 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
     return;
   }
 
-  // Bootstrap a minimal i18n instance just for the singleton lock error — locale comes from a
-  // fast config peek so the error message is localized even before full config loading.
-  const earlyLocale = await Bun.file(paths.config)
-    .json()
-    .then((c: { locale?: string }) => c?.locale ?? 'en')
-    .catch(() => 'en');
-  const earlyPacks = await loadLocalePacksFromDir(BUILTIN_LOCALES_DIR, defaultLocaleName);
-  const earlyI18n = createI18n({ locale: earlyLocale, packs: earlyPacks });
-  await acquireSingletonLock(earlyI18n.t, paths.pid);
+  await acquireDaemonSingletonLock(paths);
 
   const {
     stdioMode: STDIO_MODE,
@@ -521,20 +500,12 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
     store
   });
 
-  // monad-as-peer-client: expose `agent_peer_delegate` only for enabled peers whose token resolves
-  // (a peer configured but missing its auth.json credential is skipped, not fatal). The peer runs the
-  // subtask self-contained over its OpenAI-compat API; see ./services/peer-delegate.ts.
-  const peerTargets: PeerDelegateTarget[] = [];
-  for (const p of cfg.peers.filter((x) => x.enabled)) {
-    try {
-      const token = resolvePeerSecretRef(p.tokenRef, startupAuth ?? emptyAuth());
-      peerTargets.push({ id: p.id, label: p.label, baseUrl: p.baseUrl, defaultAgent: p.defaultAgent, token });
-    } catch (err) {
-      logger.warn({ peer: p.id, err: String(err) }, 'skipping peer with unresolved token');
-    }
-  }
-  const peerDelegateTools =
-    peerTargets.length > 0 ? [createPeerDelegateTool({ peers: peerTargets, gate: oversight.gate })] : [];
+  const peerDelegateTools = createPeerDelegateTools({
+    peers: cfg.peers,
+    auth: startupAuth,
+    gate: oversight.gate,
+    logger
+  });
 
   // Inbound (peer-delegation) approval policy — read live by the agent's gate; hot-reloaded below.
   let inboundApprovalMode = cfg.openaiCompat.approval;
@@ -594,113 +565,52 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
     logger
   });
 
-  // Channel gateway: external IM platforms (Telegram, …) as an inbound transport. It CALLS the
-  // session handlers (createForPrincipal + sendInline), wired via the late-bound sessionGateway ref
-  // (declared above with the early atom pack discovery). The atom pack contract is narrow by design —
-  // adapters never see a sessionId; the core owns conversation→session.
-  const channelService = new ChannelService(
-    {
-      session: {
-        // Guard-narrows sessionGateway to non-null (it is wired before start() runs). A throw
-        // also resists a linter "fix" that would rewrite a `!` assertion into an unsafe `?.`.
-        createForPrincipal: (a) => {
-          if (!sessionGateway) throw new Error('channel gateway used before session wiring');
-          return sessionGateway.createForPrincipal(a);
-        },
-        sendInline: (a, sink) => {
-          if (!sessionGateway) throw new Error('channel gateway used before session wiring');
-          return sessionGateway.sendInline(a, sink);
-        },
-        reset: (a) => {
-          if (!sessionGateway?.reset) throw new Error('channel gateway used before session wiring');
-          return sessionGateway.reset(a);
-        },
-        setWorkspace: (a) => {
-          if (!sessionGateway?.setWorkspace) throw new Error('channel gateway used before session wiring');
-          return sessionGateway.setWorkspace(a);
-        }
-      },
-      store,
-      registry: channelRegistry,
-      bus,
-      t: i18nService.t,
-      commands: commandBundle,
-      log: { info: (m) => logger.info(m), warn: (m) => logger.warn(m), error: (m) => logger.error(m) }
-    },
+  const channelService = await createChannelGateway({
+    sessionGateway: () => sessionGateway,
+    store,
+    registry: channelRegistry,
+    bus,
+    i18n: i18nService,
+    commands: commandBundle,
+    logger,
     cfg,
-    (await loadAuth(paths.auth)) ?? emptyAuth()
-  );
+    paths
+  });
 
-  // Wire configBus subscribers now that all services are in scope. The bus fires on both
-  // file-watcher events (disk edits) and in-process commit() calls (settings API).
-  configBus.subscribe(async ({ cfg: freshCfg, auth: freshAuth }) => {
-    const prevEmbedding = modelService.embeddingModel;
-    configureDeveloperLogTransport(paths, freshCfg.observability.developerMode === true);
-    // Hot-apply the inbound-delegation approval policy (the agent gate reads this live).
-    inboundApprovalMode = freshCfg.openaiCompat.approval;
-    modelService.reload(freshCfg, freshAuth);
-    // Agents may have been created/renamed/deleted — re-read their personas against the fresh config.
-    await agentPersona.reload(freshCfg);
-    // A newly-configured (or changed) embedding role should backfill existing messages.
-    embeddingIndexer.kick();
-    // The web UI offers a keep/re-index choice when switching embedding models, but a direct
-    // config.json/CLI edit bypasses it — warn so stale vectors (built with the old model) don't
-    // silently degrade semantic recall. The user can POST …/embeddings/reindex to rebuild.
-    const nextEmbedding = modelService.embeddingModel;
-    if (prevEmbedding && nextEmbedding && prevEmbedding !== nextEmbedding) {
-      const stale = store.staleEmbeddingCount(nextEmbedding.split(':').slice(1).join(':') || nextEmbedding);
-      if (stale > 0) {
-        logger.warn(
-          `monad: embedding model changed (${prevEmbedding} → ${nextEmbedding}); ${stale} existing ` +
-            'embedding(s) are stale. Re-index from model settings (or POST /v1/settings/model/embeddings/reindex).'
-        );
-      }
+  registerHotReload({
+    configBus,
+    paths,
+    store,
+    modelService,
+    agentPersona,
+    embeddingIndexer,
+    channelService,
+    registry,
+    i18nService,
+    logger,
+    gate: oversight.gate,
+    computeSkillState,
+    reloadSkills,
+    reloadApprovalPolicy,
+    setInboundApprovalMode: (mode) => {
+      inboundApprovalMode = mode;
+    },
+    setSkillState: (state) => {
+      skillState = state;
+    },
+    setHooksConfig: (config) => {
+      hooksConfig = config;
+    },
+    setPolicyHooksConfig: (config) => {
+      policyHooksConfig = config;
+    },
+    getConfigMcp: () => configMcp,
+    setConfigMcp: (v) => {
+      configMcp = v;
+    },
+    setConfigMcpHttp: (v) => {
+      configMcpHttp = v;
     }
-    // Hot-apply skill auto-load switches: recompute the predicate and re-map skills in place.
-    skillState = computeSkillState(freshCfg);
-    await reloadSkills();
-    // Hot-reload the channel gateway (connect added, disconnect removed, reconnect changed).
-    await channelService
-      .reload(freshCfg, freshAuth ?? emptyAuth())
-      .catch((err: unknown) => logger.warn(`monad: channel reload failed: ${err}`));
-    // Diff-reconnect config.json + preset MCP servers (connect added, disconnect removed, reconnect
-    // changed) so a settings edit applies without a restart. Unchanged servers keep their live
-    // subprocess/session — a model-only edit (which also fires this) bounces nothing.
-    try {
-      configMcp = await reloadConfigMcpServers(
-        configMcp.connections,
-        freshCfg,
-        paths,
-        registry,
-        freshAuth ?? undefined
-      );
-      configMcpHttp = configMcp.seenHttp;
-    } catch (err) {
-      logger.warn(`monad: MCP reload failed: ${err}`);
-    }
-    // Re-apply the acp-delegate tool from the fresh roster so an invite/edit/enable/disable/remove of
-    // an external ACP agent takes effect live — same registry-revision bump as the MCP reload above.
-    // Guarded so an unexpected failure here can't abort the remaining hot-reload steps below.
-    try {
-      applyAcpDelegateTool({
-        registry,
-        agents: freshCfg.acpAgents,
-        adapterCandidates: acpAgentCandidatesFromAdapters(),
-        gate: oversight.gate,
-        mcpServers: freshCfg.mcpServers,
-        auth: freshAuth ?? undefined,
-        store
-      });
-    } catch (err) {
-      logger.warn(`monad: acp-delegate reload failed: ${err}`);
-    }
-    // Hot-swap operator approval policy — the engine reads operatorRules via a getter each decision.
-    reloadApprovalPolicy(freshCfg.agent.approvals);
-    // Swap the command-hook config in place — the HookRunner reads it via a getter each call.
-    hooksConfig = freshCfg.hooks ?? {};
-    policyHooksConfig = freshCfg.policyHooks ?? {};
-    i18nService.reload(freshCfg);
-    await configureToolBackends(freshCfg, freshAuth ?? undefined);
   });
 
   // Auto-generated self-signed TLS for remote access; best-effort with HTTP fallback (see
@@ -733,53 +643,18 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
   // hash + per-tool auto-approve), one live connection (see ./bootstrap/obscura.ts).
   const { connectObscura, disconnectObscura, getObscuraStatus } = createObscuraController({ registry, log: logger });
 
-  // Live MCP connection health (config + presets + file/pack + obscura), for the status endpoint.
-  // Re-reads config off disk so a just-disabled/added server shows even before the next status poll;
-  // falls back to the boot config mid-write.
-  const getMcpStatus = async (): Promise<McpServerStatus[]> => {
-    const live = (await loadAll(paths.config, paths.profile)) ?? cfg;
-    return collectMcpStatus({
-      cfg: live,
-      config: configMcp.connections,
-      file: fileMcpConnections,
-      obscura: getObscuraStatus()
-    });
-  };
-
-  // Interactive OAuth for a config http oauth server (loopback opens the daemon-host browser; device
-  // logs a code+URL), then force-reconnect it so the freshly-stored token takes effect — no restart.
-  const mcpAuthorize = async (name: string): Promise<void> => {
-    const live = (await loadAll(paths.config, paths.profile)) ?? cfg;
-    const spec = live.mcpServers.find((s) => s.name === name);
-    if (spec?.transport !== 'http') {
-      throw new Error(`MCP server "${name}" is not an http server`);
-    }
-    await authorizeMcpOAuth({
-      serverName: spec.name,
-      serverUrl: spec.url,
-      authPath: paths.auth,
-      ...(spec.auth.mode === 'oauth'
-        ? { clientId: spec.auth.clientId, scopes: spec.auth.scopes, flow: spec.auth.flow }
-        : {}),
-      log: (m) => logger.info(m)
-    });
-    const freshAuth = (await loadAuth(paths.auth)) ?? undefined;
-    configMcp = {
-      ...configMcp,
-      connections: await reconnectOneMcpServer(name, configMcp.connections, live, paths, registry, freshAuth)
-    };
-  };
-
-  // Manually (re)connect a single config server — retry a server that was down at boot, without a
-  // restart or bouncing the others.
-  const mcpReconnect = async (name: string): Promise<void> => {
-    const live = (await loadAll(paths.config, paths.profile)) ?? cfg;
-    const freshAuth = (await loadAuth(paths.auth)) ?? undefined;
-    configMcp = {
-      ...configMcp,
-      connections: await reconnectOneMcpServer(name, configMcp.connections, live, paths, registry, freshAuth)
-    };
-  };
+  const { getMcpStatus, mcpAuthorize, mcpReconnect } = createMcpControls({
+    paths,
+    cfg,
+    registry,
+    logger,
+    getConfigMcp: () => configMcp,
+    setConfigMcp: (v) => {
+      configMcp = v;
+    },
+    fileMcpConnections: () => fileMcpConnections,
+    obscuraStatus: () => getObscuraStatus()
+  });
 
   const upgradeInfo = await createUpgradeInfoMonitor(paths);
 

@@ -1,27 +1,24 @@
-import type { ChatMessage, Event, SessionUiEvent, UIItem, UIMessageItem, UIPart } from '@monad/protocol';
+import type { ChatMessage, Event, SessionUiEvent, UIItem, UIMessageItem } from '@monad/protocol';
 import type { NativeCliSessionSnapshot } from './ui-projection-helpers.ts';
+import type { ProjectionMutations } from './ui-projection-state.ts';
 
-import { channelDisplayText, channelStructuredVisibility, parseEventPayload } from '@monad/protocol';
-
-import { findNativeCliProviderAdapter } from '@/services/native-cli/index.ts';
 import {
   agentNameFromData,
-  appendBoundedText,
-  CHANNEL_REPARSE_MIN_DELTA,
-  channelPartialDisplayText,
   deliveryIdFromData,
   displayFromToolResultData,
   isEvictable,
   isSilentChannelMessage,
   isUnknownToolResult,
   itemKey,
-  MAX_NATIVE_CLI_UI_OUTPUT,
   nativeCliSessionIdFromData,
   nativeCliToolItem,
   partsFromMessage,
   sourceFromData,
   statusFromMessage
 } from './ui-projection-helpers.ts';
+import { applyInteractionEvent } from './ui-projection-interaction-events.ts';
+import { applyMessageEvent } from './ui-projection-message-events.ts';
+import { applyToolEvent } from './ui-projection-tool-events.ts';
 
 export type { NativeCliSessionSnapshot } from './ui-projection-helpers.ts';
 
@@ -52,7 +49,23 @@ export class SessionUiProjector {
   // subscription is.
   private snapshotted = false;
 
-  constructor(private readonly opts: { channelStructured?: boolean } = {}) {}
+  private readonly mutations: ProjectionMutations;
+
+  constructor(private readonly opts: { channelStructured?: boolean } = {}) {
+    this.mutations = {
+      opts: this.opts,
+      items: this.items,
+      rawStreamingText: this.rawStreamingText,
+      channelDisplayCache: this.channelDisplayCache,
+      upsert: (item) => this.upsert(item),
+      remove: (kind, id) => this.remove(kind, id),
+      setMessage: (item) => this.setMessage(item),
+      setCustom: (args) => this.setCustom(args),
+      findMessage: (id) => this.findMessage(id),
+      messageObservationPointers: (payload, existing) => this.messageObservationPointers(payload, existing),
+      clearItems: () => this.clearItems()
+    };
+  }
 
   private clearItems(): SessionUiEvent {
     this.items.clear();
@@ -288,431 +301,12 @@ export class SessionUiProjector {
 
   applyEvent(event: Event): SessionUiEvent[] {
     this.lastCursor = event.id;
-    switch (event.type) {
-      case 'user.message': {
-        const p = parseEventPayload('user.message', event.payload);
-        return [
-          this.setMessage({
-            kind: 'message',
-            id: p.messageId,
-            role: 'user',
-            parts: [{ type: 'text', text: p.text }],
-            status: 'done',
-            seq: event.at
-          })
-        ];
-      }
-      case 'agent.token': {
-        const p = parseEventPayload('agent.token', event.payload);
-        const existing = this.findMessage(p.messageId);
-        const text = existing?.parts.find((part) => part.type === 'text');
-        const parts = existing ? existing.parts.slice() : [];
-        // Accumulate the full streamed text for every session, not just channel-structured ones: each
-        // `agent.token` carries only its own delta, so the running text is reassembled here. The
-        // existing text part holds *display* text (for a channel session, a filtered projection of the
-        // raw JSON) and can't be appended to directly. Cleared on agent.message / agent.error.
-        const rawText = `${this.rawStreamingText.get(p.messageId) ?? ''}${p.delta}`;
-        this.rawStreamingText.set(p.messageId, rawText);
-        let visibleText: string;
-        if (this.opts.channelStructured) {
-          const cached = this.channelDisplayCache.get(p.messageId);
-          if (cached && rawText.length - cached.len < CHANNEL_REPARSE_MIN_DELTA && !p.delta.includes('}')) {
-            visibleText = cached.text;
-          } else {
-            visibleText = channelPartialDisplayText(rawText);
-            this.channelDisplayCache.set(p.messageId, { len: rawText.length, text: visibleText });
-          }
-        } else {
-          visibleText = rawText;
-        }
-        if (text?.type === 'text') text.text = visibleText;
-        else parts.push({ type: 'text', text: visibleText });
-        return [
-          this.setMessage({
-            kind: 'message',
-            id: p.messageId,
-            role: 'assistant',
-            ...(p.agentName
-              ? { agentName: p.agentName }
-              : existing?.agentName
-                ? { agentName: existing.agentName }
-                : {}),
-            ...(p.source ? { source: p.source } : existing?.source ? { source: existing.source } : {}),
-            ...this.messageObservationPointers(p, existing),
-            parts,
-            status: 'streaming',
-            seq: existing?.seq ?? event.at
-          })
-        ];
-      }
-      case 'agent.reasoning': {
-        const p = parseEventPayload('agent.reasoning', event.payload);
-        const existing = this.findMessage(p.messageId);
-        const reasoning = existing?.parts.find((part) => part.type === 'reasoning');
-        const parts = existing ? existing.parts.slice() : [];
-        if (reasoning?.type === 'reasoning') reasoning.text += p.delta;
-        else parts.unshift({ type: 'reasoning', text: p.delta });
-        return [
-          this.setMessage({
-            kind: 'message',
-            id: p.messageId,
-            role: 'assistant',
-            ...(existing?.agentName ? { agentName: existing.agentName } : {}),
-            ...(p.source ? { source: p.source } : existing?.source ? { source: existing.source } : {}),
-            ...this.messageObservationPointers(p, existing),
-            parts,
-            status: 'streaming',
-            seq: existing?.seq ?? event.at
-          })
-        ];
-      }
-      case 'agent.message': {
-        const p = parseEventPayload('agent.message', event.payload);
-        const existing = this.findMessage(p.messageId);
-        this.rawStreamingText.delete(p.messageId);
-        this.channelDisplayCache.delete(p.messageId);
-        if (this.opts.channelStructured && channelStructuredVisibility(p.text) === 'silent') {
-          return existing ? [this.remove('message', p.messageId)] : [];
-        }
-        const parts: UIPart[] = existing?.parts.filter((part) => part.type !== 'text') ?? [];
-        const text = this.opts.channelStructured ? channelDisplayText(p.text) : p.text;
-        parts.push(
-          p.data !== undefined
-            ? { type: 'artifact', messageType: 'directive', text, data: p.data }
-            : { type: 'text', text }
-        );
-        if (p.attachments?.length && !parts.some((part) => part.type === 'custom' && part.name === 'attachment')) {
-          for (const attachment of p.attachments) parts.push({ type: 'custom', name: 'attachment', data: attachment });
-        }
-        return [
-          this.setMessage({
-            kind: 'message',
-            id: p.messageId,
-            role: 'assistant',
-            ...(p.agentName
-              ? { agentName: p.agentName }
-              : existing?.agentName
-                ? { agentName: existing.agentName }
-                : {}),
-            ...(p.source ? { source: p.source } : existing?.source ? { source: existing.source } : {}),
-            ...this.messageObservationPointers(p, existing),
-            parts,
-            status: 'done',
-            seq: p.source === 'managed-native-cli' ? event.at : (existing?.seq ?? event.at)
-          })
-        ];
-      }
-      case 'agent.error': {
-        const p = parseEventPayload('agent.error', event.payload);
-        const id = p.messageId ?? `err-${event.id}`;
-        if (p.messageId) {
-          this.rawStreamingText.delete(p.messageId);
-          this.channelDisplayCache.delete(p.messageId);
-        }
-        return [
-          this.setMessage({
-            kind: 'message',
-            id,
-            role: 'assistant',
-            parts: [{ type: 'text', text: p.code ? `[${p.code}] ${p.message}` : p.message }],
-            status: 'error',
-            seq: (p.messageId ? this.findMessage(p.messageId)?.seq : undefined) ?? event.at
-          })
-        ];
-      }
-      case 'tool.called': {
-        const p = parseEventPayload('tool.called', event.payload);
-        return [
-          {
-            kind: 'upsert',
-            cursor: event.id,
-            item: this.upsert({
-              kind: 'tool',
-              id: p.toolCallId,
-              tool: p.tool,
-              ...(p.input !== undefined ? { input: p.input } : {}),
-              status: 'running',
-              seq: event.id
-            })
-          }
-        ];
-      }
-      case 'tool.result': {
-        const p = parseEventPayload('tool.result', event.payload);
-        if (!p.ok && isUnknownToolResult(p.tool, p.result)) return [this.remove('tool', p.toolCallId)];
-        const existing = this.items.get(itemKey('tool', p.toolCallId));
-        const next: Extract<UIItem, { kind: 'tool' }> = {
-          kind: 'tool',
-          id: p.toolCallId,
-          tool: existing?.kind === 'tool' ? existing.tool : 'tool',
-          ...(existing?.kind === 'tool' && existing.input !== undefined ? { input: existing.input } : {}),
-          ...((p.displayResult ?? p.result) ? { output: p.displayResult ?? p.result } : {}),
-          ...('display' in p ? { display: p.display } : {}),
-          status: p.ok ? 'ok' : 'error',
-          seq: existing?.kind === 'tool' ? existing.seq : event.id
-        };
-        return [{ kind: 'upsert', cursor: event.id, item: this.upsert(next) }];
-      }
-      case 'tool.progress': {
-        const p = parseEventPayload('tool.progress', event.payload);
-        const existing = this.items.get(itemKey('tool', p.toolCallId));
-        const next: Extract<UIItem, { kind: 'tool' }> = {
-          kind: 'tool',
-          id: p.toolCallId,
-          tool: existing?.kind === 'tool' ? existing.tool : p.tool,
-          ...(existing?.kind === 'tool' && existing.input !== undefined ? { input: existing.input } : {}),
-          output: `${existing?.kind === 'tool' && existing.output ? `${existing.output}\n` : ''}${p.output}`,
-          status: 'running',
-          seq: existing?.kind === 'tool' ? existing.seq : event.id
-        };
-        return [{ kind: 'upsert', cursor: event.id, item: this.upsert(next) }];
-      }
-      case 'message.delta': {
-        const p = parseEventPayload('message.delta', event.payload);
-        const existing = this.findMessage(p.messageId);
-        const artifact = existing?.parts.find((part) => part.type === 'artifact' && part.messageType === p.type);
-        const parts = existing ? existing.parts.slice() : [];
-        if (artifact?.type === 'artifact') artifact.text = `${artifact.text ?? ''}${p.delta}`;
-        else parts.push({ type: 'artifact', messageType: p.type, text: p.delta });
-        return [
-          this.setMessage({
-            kind: 'message',
-            id: p.messageId,
-            role: 'assistant',
-            parts,
-            status: 'streaming',
-            seq: existing?.seq ?? event.at
-          })
-        ];
-      }
-      case 'message.complete': {
-        const p = parseEventPayload('message.complete', event.payload);
-        return [
-          this.setMessage({
-            kind: 'message',
-            id: p.messageId,
-            role: 'assistant',
-            parts: [
-              {
-                type: 'artifact',
-                messageType: p.type,
-                ...(p.text ? { text: p.text } : {}),
-                ...(p.data !== undefined ? { data: p.data } : {})
-              }
-            ],
-            status: p.ok ? 'done' : 'error',
-            seq: this.findMessage(p.messageId)?.seq ?? event.at
-          })
-        ];
-      }
-      case 'tool.approval_requested': {
-        const p = parseEventPayload('tool.approval_requested', event.payload);
-        return [
-          {
-            kind: 'upsert',
-            cursor: event.id,
-            item: this.upsert({
-              kind: 'approval',
-              id: p.requestId,
-              tool: p.tool,
-              ...(p.input !== undefined ? { input: p.input } : {}),
-              ...(p.key ? { key: p.key } : {}),
-              seq: event.id
-            })
-          }
-        ];
-      }
-      case 'tool.approval_resolved': {
-        const p = parseEventPayload('tool.approval_resolved', event.payload);
-        return [this.remove('approval', p.requestId)];
-      }
-      case 'native_cli.started': {
-        const p = parseEventPayload('native_cli.started', event.payload);
-        return [
-          {
-            kind: 'upsert',
-            cursor: event.id,
-            item: this.upsert({
-              kind: 'tool',
-              id: p.nativeCliSessionId,
-              tool: `native-cli:${p.provider}`,
-              input: {
-                agent: p.agentName,
-                provider: p.provider,
-                productIcon: p.productIcon,
-                workingPath: p.workingPath,
-                launchMode: p.launchMode,
-                approvalOwnership: 'provider-owned'
-              },
-              status: 'running',
-              seq: event.id
-            })
-          }
-        ];
-      }
-      case 'native_cli.output': {
-        const p = parseEventPayload('native_cli.output', event.payload);
-        const existing = this.items.get(itemKey('tool', p.nativeCliSessionId));
-        const output =
-          existing?.kind === 'tool'
-            ? appendBoundedText(existing.output ?? '', p.chunk, MAX_NATIVE_CLI_UI_OUTPUT)
-            : p.chunk;
-        const next: Extract<UIItem, { kind: 'tool' }> = {
-          kind: 'tool',
-          id: p.nativeCliSessionId,
-          tool: existing?.kind === 'tool' ? existing.tool : 'native-cli',
-          ...(existing?.kind === 'tool' && existing.input !== undefined ? { input: existing.input } : {}),
-          output,
-          status: existing?.kind === 'tool' ? existing.status : 'running',
-          seq: existing?.kind === 'tool' ? existing.seq : event.id
-        };
-        return [{ kind: 'upsert', cursor: event.id, item: this.upsert(next) }];
-      }
-      case 'native_cli.connection_required': {
-        const p = parseEventPayload('native_cli.connection_required', event.payload);
-        return [
-          {
-            kind: 'upsert',
-            cursor: event.id,
-            item: this.upsert({
-              kind: 'custom',
-              id: `native-cli-connection-required:${p.nativeCliSessionId ?? p.agentName}`,
-              name: 'native_cli.connection_required',
-              status: 'error',
-              data: p,
-              seq: event.id
-            })
-          }
-        ];
-      }
-      case 'native_cli.approval_requested': {
-        const p = parseEventPayload('native_cli.approval_requested', event.payload);
-        return [
-          {
-            kind: 'upsert',
-            cursor: event.id,
-            item: this.upsert({
-              kind: 'approval',
-              id: p.requestId,
-              tool: `${p.provider} approval`,
-              input: {
-                nativeCliSessionId: p.nativeCliSessionId,
-                provider: p.provider,
-                text: p.text,
-                data: p.data,
-                approvalOwnership: 'provider-owned'
-              },
-              key: `provider-owned:${p.provider}`,
-              seq: event.id
-            })
-          }
-        ];
-      }
-      case 'native_cli.approval_resolved': {
-        const p = parseEventPayload('native_cli.approval_resolved', event.payload);
-        return [this.remove('approval', p.requestId)];
-      }
-      case 'native_cli.resume_failed': {
-        const p = parseEventPayload('native_cli.resume_failed', event.payload);
-        const label = findNativeCliProviderAdapter(p.provider)?.label ?? p.provider;
-        return [
-          {
-            kind: 'upsert',
-            cursor: event.id,
-            item: this.upsert({
-              kind: 'system',
-              id: `native-cli-resume-failed:${p.agentName}:${p.providerSessionRef}`,
-              text: `${label} resume failed for provider session ${p.providerSessionRef}; cold started a new runtime.`,
-              level: 'warn',
-              seq: event.id
-            })
-          }
-        ];
-      }
-      case 'native_cli.exited': {
-        const p = parseEventPayload('native_cli.exited', event.payload);
-        const existing = this.items.get(itemKey('tool', p.nativeCliSessionId));
-        const exitText = p.exitCode === null ? `\n${p.state}` : `\n${p.state} (${p.exitCode})`;
-        const next: Extract<UIItem, { kind: 'tool' }> = {
-          kind: 'tool',
-          id: p.nativeCliSessionId,
-          tool: existing?.kind === 'tool' ? existing.tool : 'native-cli',
-          ...(existing?.kind === 'tool' && existing.input !== undefined ? { input: existing.input } : {}),
-          output: `${existing?.kind === 'tool' && existing.output ? existing.output : ''}${exitText}`,
-          status: p.state === 'failed' ? 'error' : 'ok',
-          seq: existing?.kind === 'tool' ? existing.seq : event.id
-        };
-        return [{ kind: 'upsert', cursor: event.id, item: this.upsert(next) }];
-      }
-      case 'clarify.requested': {
-        const p = parseEventPayload('clarify.requested', event.payload);
-        return [
-          {
-            kind: 'upsert',
-            cursor: event.id,
-            item: this.upsert({
-              kind: 'clarification',
-              id: p.requestId,
-              question: p.question,
-              ...(p.options ? { options: p.options } : {}),
-              ...(p.mode ? { mode: p.mode } : {}),
-              ...(p.allowOther !== undefined ? { allowOther: p.allowOther } : {}),
-              ...(p.asker ? { asker: p.asker } : {}),
-              seq: event.id
-            })
-          }
-        ];
-      }
-      case 'clarify.resolved': {
-        const p = parseEventPayload('clarify.resolved', event.payload);
-        return [this.remove('clarification', p.requestId)];
-      }
-      case 'context.usage': {
-        const p = parseEventPayload('context.usage', event.payload);
-        return [
-          {
-            kind: 'upsert',
-            cursor: event.id,
-            item: this.upsert({
-              kind: 'context',
-              id: 'context',
-              usage: p,
-              seq: event.id
-            })
-          }
-        ];
-      }
-      case 'session.updated': {
-        const p = parseEventPayload('session.updated', event.payload);
-        return p.reset ? [this.clearItems()] : [];
-      }
-      case 'task.created': {
-        const p = parseEventPayload('task.created', event.payload);
-        return [this.setCustom({ id: p.taskId, name: event.type, data: p, status: 'streaming', seq: event.id })];
-      }
-      case 'task.progress': {
-        const p = parseEventPayload('task.progress', event.payload);
-        return [this.setCustom({ id: p.taskId, name: event.type, data: p, status: 'streaming', seq: event.id })];
-      }
-      case 'task.completed': {
-        const p = parseEventPayload('task.completed', event.payload);
-        return [this.setCustom({ id: p.taskId, name: event.type, data: p, status: 'done', seq: event.id })];
-      }
-      case 'task.failed': {
-        const p = parseEventPayload('task.failed', event.payload);
-        return [this.setCustom({ id: p.taskId, name: event.type, data: p, status: 'error', seq: event.id })];
-      }
-      case 'delegation.fs_request': {
-        const p = parseEventPayload('delegation.fs_request', event.payload);
-        return [this.setCustom({ id: p.requestId, name: event.type, data: p, status: 'streaming', seq: event.id })];
-      }
-      case 'delegation.terminal_request': {
-        const p = parseEventPayload('delegation.terminal_request', event.payload);
-        return [this.setCustom({ id: p.requestId, name: event.type, data: p, status: 'streaming', seq: event.id })];
-      }
-      default:
-        return [];
-    }
+    return (
+      applyMessageEvent(this.mutations, event) ??
+      applyToolEvent(this.mutations, event) ??
+      applyInteractionEvent(this.mutations, event) ??
+      []
+    );
   }
 
   snapshot(opts: { hasMore?: boolean } = {}): SessionUiEvent {
