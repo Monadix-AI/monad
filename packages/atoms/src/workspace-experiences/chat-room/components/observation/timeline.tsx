@@ -1,6 +1,6 @@
 'use client';
 
-import type { NativeCliStreamView } from '../../../project/types.ts';
+import type { NativeCliStreamView } from '../../../experience/types.ts';
 import type { ObservationItem, ObservationTimelineEntry } from './types.ts';
 
 import {

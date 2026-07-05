@@ -1,5 +1,5 @@
 import type { NativeAgentDeliveryId } from '@monad/protocol';
-import type { Message } from '../../project/types.ts';
+import type { Message } from '../../experience/types.ts';
 
 import { EyeIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';

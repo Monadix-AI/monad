@@ -1,5 +1,5 @@
 import type React from 'react';
-import type { NativeCliStreamView } from '../../../project/types.ts';
+import type { NativeCliStreamView } from '../../../experience/types.ts';
 
 export type ObservationItem = NativeCliStreamView['items'][number];
 

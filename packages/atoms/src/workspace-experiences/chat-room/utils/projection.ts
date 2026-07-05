@@ -6,7 +6,13 @@ import type {
   UIMessageItem,
   UIPart
 } from '@monad/protocol';
-import type { ActivityRow, Message, MessageAttachment, NativeCliStreamView, Participant } from '../../project/types.ts';
+import type {
+  ActivityRow,
+  Message,
+  MessageAttachment,
+  NativeCliStreamView,
+  Participant
+} from '../../experience/types.ts';
 
 import {
   avatarCacheKey,
@@ -19,15 +25,15 @@ import {
   renameNativeCliProjectMemberDisplayName
 } from '@monad/protocol';
 
-import { nativeCliStreamItems } from '../../project/native-cli-observation/native-cli-observation.ts';
+import { nativeCliStreamItems } from '../../experience/native-cli-observation/native-cli-observation.ts';
 import {
   nativeCliAgentFacingCommandPhase,
   nativeCliMemberActivityPhase,
   nativeCliMemberPresence,
   nativeCliSessionIsGenerating
-} from '../../project/native-cli-presence.ts';
-import { parseProjectMembers, productIcon } from '../../project/project-members.ts';
-import { avatarForAgent, fmtTime, HUMAN, iconForAgent, nativeCliTag } from '../../project/project-projection.ts';
+} from '../../experience/native-cli-presence.ts';
+import { parseProjectMembers, productIcon } from '../../experience/project-members.ts';
+import { avatarForAgent, fmtTime, HUMAN, iconForAgent, nativeCliTag } from '../../experience/project-projection.ts';
 
 const NATIVE_CLI_FOLLOW_TEXT = 'CLI stream available';
 

@@ -1,5 +1,5 @@
 import type { ContextUsagePayload, NativeAgentDeliveryId, ProfileView } from '@monad/protocol';
-import type { ProjectExperienceCanvasSource } from '../../project/source.ts';
+import type { ProjectExperienceCanvasSource } from '../../experience/source.ts';
 import type {
   ActivityRow,
   AgentTask,
@@ -10,11 +10,11 @@ import type {
   ProjectMentionTarget,
   QuestionView,
   TypingIndicator
-} from '../../project/types.ts';
+} from '../../experience/types.ts';
 
 import { entityAvatarUrl, workplaceProjectMemberStableId } from '@monad/protocol';
 
-import { productIcon } from '../../project/project-members.ts';
+import { productIcon } from '../../experience/project-members.ts';
 import {
   avatarForAgent,
   contextUsageFromItems,
@@ -25,7 +25,7 @@ import {
   projectQuestionViews,
   summarizeTool,
   toolItems
-} from '../../project/project-projection.ts';
+} from '../../experience/project-projection.ts';
 import { activityRowsFromTools } from '../../shared/utils/activity.ts';
 import {
   buildNativeCliStreams,

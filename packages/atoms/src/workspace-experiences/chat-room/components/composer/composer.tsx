@@ -1,7 +1,7 @@
 'use client';
 
 import type { ReactElement, ReactNode } from 'react';
-import type { QuestionView } from '../../../project/types.ts';
+import type { QuestionView } from '../../../experience/types.ts';
 import type { ProjectComposerSurface } from '../../utils/composer.ts';
 
 import { ComposerSubmitButton, ComposerSurface, ComposerSwap, ComposerVoiceButton } from '@monad/ui';

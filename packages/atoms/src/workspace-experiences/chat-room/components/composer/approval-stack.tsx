@@ -1,4 +1,4 @@
-import type { ApprovalView } from '../../../project/types.ts';
+import type { ApprovalView } from '../../../experience/types.ts';
 
 import {
   workspaceBoxRadius as boxR,

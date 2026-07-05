@@ -1,4 +1,4 @@
-import type { TypingIndicator } from '../../project/types.ts';
+import type { TypingIndicator } from '../../experience/types.ts';
 
 import {
   AgentInstanceAvatar,

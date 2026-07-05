@@ -7,7 +7,7 @@ import { renderChatRoomWorkspaceExperience } from './chat-room/ui.tsx';
 import {
   useWorkspaceProjectProjection as useProjection,
   type WorkspaceProjectProjection
-} from './project/use-workspace-project-projection.ts';
+} from './experience/use-workspace-project-projection.ts';
 import { createProjectExperienceRuntime as createRuntime } from './runtime.ts';
 
 export type { ProjectExperienceRuntimeSource } from './runtime.ts';

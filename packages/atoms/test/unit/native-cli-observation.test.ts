@@ -1,4 +1,4 @@
-import type { NativeCliStreamView } from '../../src/workspace-experiences/project/types.ts';
+import type { NativeCliStreamView } from '../../src/workspace-experiences/experience/types.ts';
 
 import { expect, test } from 'bun:test';
 import React from 'react';
@@ -19,7 +19,7 @@ import {
   nativeCliStreamItems,
   nativeCliUsageLimitMeter,
   nativeCliUsageLimitMeterFromResponse
-} from '../../src/workspace-experiences/project/native-cli-observation/native-cli-observation.ts';
+} from '../../src/workspace-experiences/experience/native-cli-observation/native-cli-observation.ts';
 
 test('observation access is adapted to projection events without carrying raw output forward', () => {
   const raw = JSON.stringify({ method: 'item/agentMessage/delta', params: { delta: 'Projected update' } });

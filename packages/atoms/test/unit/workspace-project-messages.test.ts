@@ -1,10 +1,10 @@
 import type { NativeCliSessionView } from '@monad/protocol';
-import type { Message } from '../../src/workspace-experiences/project/types.ts';
+import type { Message } from '../../src/workspace-experiences/experience/types.ts';
 
 import { expect, test } from 'bun:test';
 
 import { __workplaceProjectMessageTest } from '../../src/workspace-experiences/chat-room/utils/projection.ts';
-import { projectMemberParticipants } from '../../src/workspace-experiences/project/project-projection.ts';
+import { projectMemberParticipants } from '../../src/workspace-experiences/experience/project-projection.ts';
 
 const nativeCliSession = (overrides: Partial<NativeCliSessionView> = {}): NativeCliSessionView => ({
   id: 'ncli_01KWGEMINI000000000000000',

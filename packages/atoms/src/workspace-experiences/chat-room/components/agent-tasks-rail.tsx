@@ -5,7 +5,7 @@ import type {
   MouseEvent as ReactMouseEvent,
   PointerEvent as ReactPointerEvent
 } from 'react';
-import type { NativeCliStreamView, Participant } from '../../project/types.ts';
+import type { NativeCliStreamView, Participant } from '../../experience/types.ts';
 
 import { BrainIcon, EyeIcon, MegaphoneIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';

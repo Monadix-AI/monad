@@ -1,7 +1,7 @@
 import type { UIItem } from '@monad/protocol';
-import type { ActivityRow } from '../../project/types.ts';
+import type { ActivityRow } from '../../experience/types.ts';
 
-import { avatarForAgent, summarizeTool } from '../../project/project-projection.ts';
+import { avatarForAgent, summarizeTool } from '../../experience/project-projection.ts';
 
 export function activityRowsFromTools(liveTools: readonly Extract<UIItem, { kind: 'tool' }>[]): ActivityRow[] {
   return liveTools.map((s) => ({

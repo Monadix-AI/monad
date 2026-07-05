@@ -1,4 +1,4 @@
-import type { Message, TypingIndicator } from '../../project/types.ts';
+import type { Message, TypingIndicator } from '../../experience/types.ts';
 import type { ChatMessageListRoom } from './message-list.tsx';
 import type { MessageRowLabels } from './message-row.tsx';
 

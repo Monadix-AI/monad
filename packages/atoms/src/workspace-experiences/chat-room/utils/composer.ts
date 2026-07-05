@@ -5,7 +5,7 @@ import type {
   ProjectMentionTarget,
   QuestionView,
   TypingIndicator
-} from '../../project/types.ts';
+} from '../../experience/types.ts';
 
 export type ProjectComposerSurface = {
   answerQuestion: (requestId: string, answer: string) => void;

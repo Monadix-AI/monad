@@ -1,5 +1,5 @@
 import type { NativeAgentDeliveryId } from '@monad/protocol';
-import type { Message, TypingIndicator } from '../../project/types.ts';
+import type { Message, TypingIndicator } from '../../experience/types.ts';
 import type { MessageRowLabels } from './message-row.tsx';
 
 import { ArrowDown01Icon } from '@hugeicons/core-free-icons';

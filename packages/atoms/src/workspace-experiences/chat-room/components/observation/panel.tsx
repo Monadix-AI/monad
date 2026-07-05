@@ -1,7 +1,7 @@
 'use client';
 
 import type { CSSProperties } from 'react';
-import type { NativeCliStreamView, Participant } from '../../../project/types.ts';
+import type { NativeCliStreamView, Participant } from '../../../experience/types.ts';
 
 import {
   ArrowDown01Icon,
@@ -22,11 +22,11 @@ import {
 } from '@monad/ui/components/AgentAvatar';
 import { useEffect, useRef, useState } from 'react';
 
-import { workspaceExperienceT } from '../../../i18n.ts';
 import {
   type NativeCliUsageLimitMeter,
   nativeCliUsageLimitMeter
-} from '../../../project/native-cli-observation/native-cli-observation.ts';
+} from '../../../experience/native-cli-observation/native-cli-observation.ts';
+import { workspaceExperienceT } from '../../../i18n.ts';
 import { ObservationTimelineCard, observationTimelineEntries } from './timeline.tsx';
 
 const observationAvatarRingCss = `

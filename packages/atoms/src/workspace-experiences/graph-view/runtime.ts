@@ -1,4 +1,4 @@
-import type { ProjectExperienceCanvasSource } from '../project/source.ts';
+import type { ProjectExperienceCanvasSource } from '../experience/source.ts';
 import type { WorkspaceExperienceGraphCanvas } from './utils/graph-model.ts';
 
 import { toGraphicViewCanvas } from './utils/canvas.ts';

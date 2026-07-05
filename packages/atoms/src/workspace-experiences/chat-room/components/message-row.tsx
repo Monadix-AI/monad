@@ -1,6 +1,6 @@
 import type { NativeAgentDeliveryId } from '@monad/protocol';
 import type { ComponentType } from 'react';
-import type { Message, MessageAttachment } from '../../project/types.ts';
+import type { Message, MessageAttachment } from '../../experience/types.ts';
 
 import { TerminalIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';

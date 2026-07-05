@@ -1,4 +1,4 @@
-import type { Participant, QuestionView } from '../../../project/types.ts';
+import type { Participant, QuestionView } from '../../../experience/types.ts';
 
 import { ComposerAskSheet, ProductIcon } from '@monad/ui';
 import { AgentIdentity, AgentInstanceAvatar, resolveProductIcon } from '@monad/ui/components/AgentAvatar';

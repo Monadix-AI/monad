@@ -1,4 +1,4 @@
-import type { ActivityRow, Participant } from '../../src/workspace-experiences/project/types.ts';
+import type { ActivityRow, Participant } from '../../src/workspace-experiences/experience/types.ts';
 import type { ProjectExperienceRuntimeSource } from '../../src/workspace-experiences/runtime.ts';
 
 import { expect, test } from 'bun:test';

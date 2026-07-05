@@ -1,8 +1,11 @@
-import type { Participant } from '../../src/workspace-experiences/project/types.ts';
+import type { Participant } from '../../src/workspace-experiences/experience/types.ts';
 
 import { expect, test } from 'bun:test';
 
-import { nativeCliProductDisplayName, productIcon } from '../../src/workspace-experiences/project/project-members.ts';
+import {
+  nativeCliProductDisplayName,
+  productIcon
+} from '../../src/workspace-experiences/experience/project-members.ts';
 
 test('productIcon resolves every branded native-CLI product id including openclaw and hermes', () => {
   const ids: Participant['icon'][] = ['codex', 'claude-code', 'gemini', 'gemini-cli', 'qwen', 'openclaw', 'hermes'];

@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 
-import { projectMemberCandidates } from '../../src/workspace-experiences/project/project-projection.ts';
+import { projectMemberCandidates } from '../../src/workspace-experiences/experience/project-projection.ts';
 
 test('project member candidates include project templates defined on native CLI agents', () => {
   const candidates = projectMemberCandidates({

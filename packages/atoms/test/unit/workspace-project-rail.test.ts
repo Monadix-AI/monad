@@ -1,5 +1,5 @@
 import type { NativeCliSessionView } from '@monad/protocol';
-import type { Participant } from '../../src/workspace-experiences/project/types.ts';
+import type { Participant } from '../../src/workspace-experiences/experience/types.ts';
 
 import { expect, test } from 'bun:test';
 
@@ -10,7 +10,7 @@ import {
   observedRailAgent
 } from '../../src/workspace-experiences/chat-room/utils/agent-rail-model.ts';
 import { __workplaceProjectMessageTest } from '../../src/workspace-experiences/chat-room/utils/projection.ts';
-import { projectMemberParticipants } from '../../src/workspace-experiences/project/project-projection.ts';
+import { projectMemberParticipants } from '../../src/workspace-experiences/experience/project-projection.ts';
 
 const agent = (name: string, presence: Participant['presence']): Participant => ({
   id: `native-cli:${name}`,

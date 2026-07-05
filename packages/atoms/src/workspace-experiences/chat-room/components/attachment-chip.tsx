@@ -1,6 +1,6 @@
 'use client';
 
-import type { MessageAttachment } from '../../project/types.ts';
+import type { MessageAttachment } from '../../experience/types.ts';
 
 import { Attachment01Icon, Download04Icon, EyeIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';

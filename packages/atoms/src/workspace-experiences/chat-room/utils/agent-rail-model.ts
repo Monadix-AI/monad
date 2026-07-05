@@ -4,8 +4,8 @@ import type {
   NativeCliObservationAccessResponse,
   NativeCliUsageResponse
 } from '@monad/protocol';
-import type { NativeCliUsageLimitMeter } from '../../project/native-cli-observation/native-cli-observation.ts';
-import type { NativeCliStreamView, Participant } from '../../project/types.ts';
+import type { NativeCliUsageLimitMeter } from '../../experience/native-cli-observation/native-cli-observation.ts';
+import type { NativeCliStreamView, Participant } from '../../experience/types.ts';
 
 import { nativeAgentObservationProjectionSchema } from '@monad/protocol';
 
@@ -13,7 +13,7 @@ import {
   nativeCliStreamItems,
   nativeCliUsageLimitMeter,
   nativeCliUsageLimitMeterFromResponse
-} from '../../project/native-cli-observation/native-cli-observation.ts';
+} from '../../experience/native-cli-observation/native-cli-observation.ts';
 
 export function agentObservationStream(
   observation:

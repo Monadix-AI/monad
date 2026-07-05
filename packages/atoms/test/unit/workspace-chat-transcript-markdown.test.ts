@@ -1,4 +1,4 @@
-import type { Message } from '../../src/workspace-experiences/project/types.ts';
+import type { Message } from '../../src/workspace-experiences/experience/types.ts';
 
 import { expect, test } from 'bun:test';
 
