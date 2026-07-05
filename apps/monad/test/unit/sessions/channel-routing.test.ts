@@ -195,6 +195,7 @@ test('channel context describes moderator duties and structured response contrac
   expect(context).toContain('they must be independent and must not depend on each other');
   expect(context).toContain('Return exactly one JSON object and no surrounding prose.');
   expect(context).toContain('"visibility":"visible"');
+  expect(context).toContain("[report.md](./report.md 'monad:file')");
   expect(context).toContain('- reviewer (acp:reviewer; acp)');
   expect(context).toContain('@[name="reviewer" id="acp:reviewer"]');
 });
@@ -215,6 +216,7 @@ test('channel context gives worker agents a plain response mode under a moderato
   expect(context).toContain('response_mode: worker_plain');
   expect(context).toContain('Complete the assigned task from the moderator only.');
   expect(context).toContain('Return plain markdown only.');
+  expect(context).toContain("[report.md](./report.md 'monad:file')");
   expect(context).not.toContain('You are the moderator for this channel');
 });
 

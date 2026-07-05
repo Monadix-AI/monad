@@ -60,6 +60,7 @@ export function channelStructuredResponseHint(): string {
     'visibility defaults to "visible"; use "silent" only for moderator routing replies that should not render as a channel message.',
     'display.content is the only user-visible text rendered by the channel client when visibility is "visible".',
     'attachments is optional metadata for channel-visible files or references; do not include private tool traces.',
+    "When visible text references a local file that should render as an attachment, use a Markdown link with title 'monad:file', for example [report.md](./report.md 'monad:file').",
     'next is optional and contains task assignments as {"agentId":"agt_...","title":"short label","prompt":"task prompt","context":"channel-visible context"}.',
     'Non-moderator agents should usually return next: []; moderators may fill next when assigning work.'
   ].join('\n');

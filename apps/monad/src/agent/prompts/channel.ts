@@ -87,6 +87,7 @@ export function buildChannelTurnContext({
           'Return plain markdown only.',
           'Do not return JSON.',
           'Do not include a next field or assign work to other agents.',
+          "When your reply references a local file that should render as an attachment, use a Markdown link with title 'monad:file', for example [report.md](./report.md 'monad:file').",
           '</response_format>'
         ]
       : [
@@ -96,6 +97,7 @@ export function buildChannelTurnContext({
           'visibility is "visible" by default. Use "silent" only when routing work without a user-visible moderator reply.',
           'display.content is the only user-visible content rendered by the client when visibility is "visible".',
           'attachments is optional channel-visible metadata for files or references.',
+          "When display.content references a local file that should render as an attachment, use a Markdown link with title 'monad:file', for example [report.md](./report.md 'monad:file').",
           'next is optional and contains task assignments as {"agentId":"agent id or acp:name","title":"short label","prompt":"task prompt","context":"channel-visible context"}.',
           'Use next: [] when no further task assignment is needed.',
           '</response_format>'
