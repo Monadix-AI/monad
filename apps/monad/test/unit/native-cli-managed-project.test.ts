@@ -6,9 +6,7 @@ import { builtinAgentAdapters } from '@monad/atoms/agent-adapters';
 
 import { registerAgentAdapterImpl } from '@/services/native-cli/index.ts';
 import {
-  buildManagedProjectCliWrapperScript,
   cleanupManagedProjectOrphanTokens,
-  managedProjectCliWrapperName,
   managedProjectLaunchMode,
   prepareManagedProjectRuntime
 } from '@/services/native-cli/managed-project.ts';
@@ -17,35 +15,7 @@ import {
 // which the daemon populates at boot; register the built-ins so the direct-call unit tests resolve.
 for (const adapter of builtinAgentAdapters) registerAgentAdapterImpl(adapter);
 
-test('managed project CLI wrapper uses source entry in development', () => {
-  expect(buildManagedProjectCliWrapperScript('/repo/apps/cli/src/main.ts', '/Applications/Monad.app/monad')).toBe(
-    '#!/usr/bin/env sh\nexec bun "/repo/apps/cli/src/main.ts" "$@"\n'
-  );
-});
-
-test('managed project CLI wrapper falls back to the current executable in packaged builds', () => {
-  expect(buildManagedProjectCliWrapperScript(null, '/Applications/Monad.app/Contents/MacOS/Monad')).toBe(
-    '#!/usr/bin/env sh\nexec "/Applications/Monad.app/Contents/MacOS/Monad" "$@"\n'
-  );
-});
-
-test('managed project CLI wrapper creates a Windows cmd shim in development', () => {
-  expect(
-    buildManagedProjectCliWrapperScript(
-      'C:\\repo\\apps\\cli\\src\\main.ts',
-      'C:\\Program Files\\Monad\\Monad.exe',
-      'win32'
-    )
-  ).toBe('@echo off\r\nbun "C:\\repo\\apps\\cli\\src\\main.ts" %*\r\n');
-});
-
-test('managed project CLI wrapper creates a Windows cmd shim in packaged builds', () => {
-  expect(buildManagedProjectCliWrapperScript(null, 'C:\\Program Files\\Monad\\Monad.exe', 'win32')).toBe(
-    '@echo off\r\n"C:\\Program Files\\Monad\\Monad.exe" %*\r\n'
-  );
-});
-
-test('managed project runtime uses the platform wrapper filename', async () => {
+test('managed project runtime uses the current CLI entry without writing a wrapper bin', async () => {
   const monadHome = join(tmpdir(), `monad-managed-runtime-${Date.now()}-${process.hrtime.bigint()}`);
   const prepared = prepareManagedProjectRuntime({
     monadHome,
@@ -57,11 +27,13 @@ test('managed project runtime uses the platform wrapper filename', async () => {
     platform: 'win32'
   });
 
-  expect(prepared.wrapperBin.endsWith(`${managedProjectCliWrapperName('win32')}`)).toBe(true);
-  expect(await readFile(prepared.wrapperBin, 'utf8')).toStartWith('@echo off\r\n');
+  expect(prepared.monadCliEntry.command).toBe('bun');
+  expect(prepared.monadCliEntry.args).toHaveLength(1);
+  expect(prepared.monadCliEntry.args[0]).toEndWith('/apps/cli/src/main.ts');
+  expect(await stat(join(monadHome, 'workplace-agents', '.bin')).catch(() => null)).toBeNull();
 });
 
-test('managed project runtime joins the wrapper bin dir onto baseEnvPath with the platform PATH separator', () => {
+test('managed project runtime keeps base PATH when no wrapper bin is needed', () => {
   const monadHomeWin = join(tmpdir(), `monad-managed-runtime-${Date.now()}-${process.hrtime.bigint()}-win`);
   const preparedWin = prepareManagedProjectRuntime({
     monadHome: monadHomeWin,
@@ -73,9 +45,7 @@ test('managed project runtime joins the wrapper bin dir onto baseEnvPath with th
     platform: 'win32',
     baseEnvPath: 'C:\\Windows\\system32'
   });
-  expect(preparedWin.env.PATH).toBe(
-    `${join(monadHomeWin, 'workplace-agents', 'prj_PROJECT', 'codex', 'bin')};C:\\Windows\\system32`
-  );
+  expect(preparedWin.env.PATH).toBe('C:\\Windows\\system32');
 
   const monadHomePosix = join(tmpdir(), `monad-managed-runtime-${Date.now()}-${process.hrtime.bigint()}-posix`);
   const preparedPosix = prepareManagedProjectRuntime({
@@ -88,9 +58,47 @@ test('managed project runtime joins the wrapper bin dir onto baseEnvPath with th
     platform: 'darwin',
     baseEnvPath: '/usr/bin:/bin'
   });
-  expect(preparedPosix.env.PATH).toBe(
-    `${join(monadHomePosix, 'workplace-agents', 'prj_PROJECT', 'codex', 'bin')}:/usr/bin:/bin`
-  );
+  expect(preparedPosix.env.PATH).toBe('/usr/bin:/bin');
+});
+
+test('managed project runtime does not blank PATH when no base PATH is supplied', () => {
+  const monadHome = join(tmpdir(), `monad-managed-runtime-${Date.now()}-${process.hrtime.bigint()}`);
+  const prepared = prepareManagedProjectRuntime({
+    monadHome,
+    serverUrl: 'http://127.0.0.1:1234',
+    agentName: 'codex',
+    projectId: 'prj_PROJECT',
+    nativeCliSessionId: 'ncli_no_path',
+    provider: 'codex'
+  });
+
+  expect(prepared.env.PATH).toBeUndefined();
+  expect(prepared.mcpConfigArgs).not.toContain('mcp_servers.monad.env.PATH=""');
+});
+
+test('managed project runtimes share the same current CLI entry per process', async () => {
+  const monadHome = join(tmpdir(), `monad-managed-runtime-${Date.now()}-${process.hrtime.bigint()}`);
+  const first = prepareManagedProjectRuntime({
+    monadHome,
+    serverUrl: 'http://127.0.0.1:1234',
+    agentName: 'codex',
+    projectId: 'prj_PROJECT',
+    nativeCliSessionId: 'ncli_codex',
+    provider: 'codex'
+  });
+  const second = prepareManagedProjectRuntime({
+    monadHome,
+    serverUrl: 'http://127.0.0.1:1234',
+    agentName: 'claude',
+    projectId: 'prj_PROJECT',
+    nativeCliSessionId: 'ncli_claude',
+    provider: 'claude-code'
+  });
+
+  expect(second.monadCliEntry).toEqual(first.monadCliEntry);
+  expect(await stat(join(monadHome, 'workplace-agents', '.bin')).catch(() => null)).toBeNull();
+  expect(await stat(join(monadHome, 'workplace-agents', 'prj_PROJECT', 'codex', 'bin')).catch(() => null)).toBeNull();
+  expect(await stat(join(monadHome, 'workplace-agents', 'prj_PROJECT', 'claude', 'bin')).catch(() => null)).toBeNull();
 });
 
 test('managed project runtime uses non-interactive Codex launches', () => {
@@ -115,7 +123,8 @@ test('managed project runtime uses MCP communication prompt for managed MCP brid
     agentName: 'codex',
     projectId: 'prj_PROJECT',
     nativeCliSessionId: 'ncli_codex',
-    provider: 'codex'
+    provider: 'codex',
+    baseEnvPath: '/usr/bin:/bin'
   });
   const claude = prepareManagedProjectRuntime({
     monadHome,
@@ -132,15 +141,18 @@ test('managed project runtime uses MCP communication prompt for managed MCP brid
   expect(codex.prompt).toContain('`project_post` tool from the `monad` MCP server');
   expect(codex.prompt).not.toContain('`monad project post -`');
   expect(codex.mcpConfigArgs).toContain('-c');
-  expect(codex.mcpConfigArgs).toContain(`mcp_servers.monad.command=${JSON.stringify(codex.wrapperBin)}`);
-  expect(codex.mcpConfigArgs).toContain('mcp_servers.monad.args=["native-agent","mcp-server"]');
+  expect(codex.mcpConfigArgs).toContain(`mcp_servers.monad.command=${JSON.stringify(codex.monadCliEntry.command)}`);
+  expect(codex.mcpConfigArgs).toContain(
+    `mcp_servers.monad.args=${JSON.stringify([...codex.monadCliEntry.args, 'native-agent', 'mcp-server'])}`
+  );
   expect(codex.mcpConfigArgs).toContain(`mcp_servers.monad.env.MONAD_HOME=${JSON.stringify(monadHome)}`);
   expect(codex.mcpConfigArgs).toContain('mcp_servers.monad.env.MONAD_SERVER_URL="http://127.0.0.1:1234"');
   expect(codex.mcpConfigArgs).toContain('mcp_servers.monad.env.MONAD_NATIVE_CLI_SESSION_ID="ncli_codex"');
   expect(codex.mcpConfigArgs).toContain(
     `mcp_servers.monad.env.MONAD_AGENT_TOKEN_FILE=${JSON.stringify(codex.tokenFile)}`
   );
-  expect(codex.mcpConfigArgs).toContain(`mcp_servers.monad.env.PATH=${JSON.stringify(codex.env.PATH)}`);
+  expect(codex.env.PATH).toBe('/usr/bin:/bin');
+  expect(codex.mcpConfigArgs).toContain('mcp_servers.monad.env.PATH="/usr/bin:/bin"');
   expect(codex.mcpConfigArgs).toContain('mcp_servers.monad.tools.project_inbox_check.approval_mode="approve"');
   expect(codex.mcpConfigArgs).toContain('mcp_servers.monad.tools.project_post.approval_mode="approve"');
   expect(claude.prompt).toContain('MCP server named `monad`');
@@ -152,13 +164,30 @@ test('managed project runtime uses MCP communication prompt for managed MCP brid
       mcpServers: {
         monad: {
           type: 'stdio',
-          command: claude.wrapperBin,
-          args: ['native-agent', 'mcp-server'],
+          command: claude.monadCliEntry.command,
+          args: [...claude.monadCliEntry.args, 'native-agent', 'mcp-server'],
           env: claude.env
         }
       }
     })
   );
+});
+
+test('managed project runtime renders the current CLI entry in non-MCP communication prompts', () => {
+  const monadHome = join(tmpdir(), `monad-managed-runtime-${Date.now()}-${process.hrtime.bigint()}`);
+  const prepared = prepareManagedProjectRuntime({
+    monadHome,
+    serverUrl: 'http://127.0.0.1:1234',
+    agentName: 'gemini',
+    projectId: 'prj_PROJECT',
+    nativeCliSessionId: 'ncli_gemini',
+    provider: 'gemini'
+  });
+  const command = [prepared.monadCliEntry.command, ...prepared.monadCliEntry.args].join(' ');
+
+  expect(prepared.prompt).toContain(`${command} project post -`);
+  expect(prepared.prompt).toContain(`${command} project inbox check`);
+  expect(prepared.prompt).not.toContain('{{monadCliCommand}}');
 });
 
 test('managed project runtime prefers structured launch modes over interactive PTY', () => {

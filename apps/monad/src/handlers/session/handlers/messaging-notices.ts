@@ -2,6 +2,7 @@ import type { ChannelResponseNextTarget, NativeCliProvider } from '@monad/protoc
 import type { ManagedNativeCliProjectMember } from '@/handlers/session/handlers/messaging-members.ts';
 
 import { findNativeCliProviderAdapter } from '@/services/native-cli/index.ts';
+import { managedProjectMonadCliCommand } from '@/services/native-cli/managed-project.ts';
 
 export interface ManagedNativeCliProjectMessageSender {
   kind: 'human' | 'native-cli-agent' | 'agent' | 'system';
@@ -57,6 +58,7 @@ function usesMcpProjectBridge(member: ManagedNativeCliProjectMember): boolean {
 }
 
 function managedNativeCliProjectCommunicationInstructions(member: ManagedNativeCliProjectMember): string[] {
+  const monadCliCommand = managedProjectMonadCliCommand();
   if (usesMcpProjectBridge(member)) {
     return [
       'Call the `project_inbox_check` or `project_read` tools from the `monad` MCP server before answering if you need more context.',
@@ -67,15 +69,16 @@ function managedNativeCliProjectCommunicationInstructions(member: ManagedNativeC
     ];
   }
   return [
-    'Run `monad project inbox check` or `monad project read` before answering if you need more context.',
-    'If a public response is appropriate, post it with `monad project post -` and stdin.',
-    "Pass message text through a quoted heredoc, for example `monad project post - <<'MONAD_MESSAGE'`. Do not pass message text inline in a shell command because backticks, `$()`, and quotes will be interpreted by the shell before Monad receives them.",
+    `Run \`${monadCliCommand} project inbox check\` or \`${monadCliCommand} project read\` before answering if you need more context.`,
+    `If a public response is appropriate, post it with \`${monadCliCommand} project post -\` and stdin.`,
+    `Pass message text through a quoted heredoc, for example \`${monadCliCommand} project post - <<'MONAD_MESSAGE'\`. Do not pass message text inline in a shell command because backticks, $(), and quotes will be interpreted by the shell before Monad receives them.`,
     'To share local files for humans to read, add `--file <path>` (repeatable). An `[Attachment ... - file at <path>]` marker in a message means the full content is in that file; read it directly if you need it.',
-    'Use `monad agent send --to <agent|human> -` with stdin only for private/direct conversation.'
+    `Use \`${monadCliCommand} agent send --to <agent|human> -\` with stdin only for private/direct conversation.`
   ];
 }
 
 function managedNativeCliBusyCommunicationInstructions(member: ManagedNativeCliProjectMember): string[] {
+  const monadCliCommand = managedProjectMonadCliCommand();
   if (usesMcpProjectBridge(member)) {
     return [
       'You are already running. Immediately call the `project_inbox_check` tool from the `monad` MCP server before deciding whether to reply. This notice does not include the message body; the inbox item is the source of truth.',
@@ -87,19 +90,20 @@ function managedNativeCliBusyCommunicationInstructions(member: ManagedNativeCliP
     ];
   }
   return [
-    'You are already running. Immediately run `monad project inbox check` before deciding whether to reply. This notice does not include the message body; the inbox item is the source of truth.',
-    'If `monad project inbox check` returns no items, run `monad project read` before deciding whether to reply.',
-    'If a public response is appropriate, post it with `monad project post -` and stdin.',
-    "Pass message text through a quoted heredoc, for example `monad project post - <<'MONAD_MESSAGE'`. Do not pass message text inline in a shell command because backticks, `$()`, and quotes will be interpreted by the shell before Monad receives them.",
+    `You are already running. Immediately run \`${monadCliCommand} project inbox check\` before deciding whether to reply. This notice does not include the message body; the inbox item is the source of truth.`,
+    `If \`${monadCliCommand} project inbox check\` returns no items, run \`${monadCliCommand} project read\` before deciding whether to reply.`,
+    `If a public response is appropriate, post it with \`${monadCliCommand} project post -\` and stdin.`,
+    `Pass message text through a quoted heredoc, for example \`${monadCliCommand} project post - <<'MONAD_MESSAGE'\`. Do not pass message text inline in a shell command because backticks, $(), and quotes will be interpreted by the shell before Monad receives them.`,
     'To share local files for humans to read, add `--file <path>` (repeatable). An `[Attachment ... - file at <path>]` marker in a message means the full content is in that file; read it directly if you need it.',
-    'Use `monad agent send --to <agent|human> -` with stdin only for private/direct conversation.'
+    `Use \`${monadCliCommand} agent send --to <agent|human> -\` with stdin only for private/direct conversation.`
   ];
 }
 
 function managedNativeCliSharedProjectInstructions(member: ManagedNativeCliProjectMember): string[] {
+  const monadCliCommand = managedProjectMonadCliCommand();
   const syncInstruction = usesMcpProjectBridge(member)
     ? 'During long-running work, periodically call the `project_inbox_check` or `project_read` tools from the `monad` MCP server before posting so you stay synchronized with other members.'
-    : 'During long-running work, periodically run `monad project inbox check` or `monad project read` before posting so you stay synchronized with other members.';
+    : `During long-running work, periodically run \`${monadCliCommand} project inbox check\` or \`${monadCliCommand} project read\` before posting so you stay synchronized with other members.`;
   return [
     'For any non-trivial task, first acknowledge ownership in the project room before doing longer work.',
     'During long-running work, post brief progress updates at meaningful milestones, blockers, input needs, or direction changes.',
@@ -176,6 +180,7 @@ export function managedNativeCliDirectNotice({
   fromAgentName: string;
   text: string;
 }): string {
+  const monadCliCommand = managedProjectMonadCliCommand();
   const instructions = usesMcpProjectBridge(member)
     ? [
         `Use the \`agent_read\` tool from the \`monad\` MCP server with \`with: "${fromAgentName}"\` to read the private conversation.`,
@@ -184,9 +189,9 @@ export function managedNativeCliDirectNotice({
         'Use the `project_post` tool from the `monad` MCP server only when you want to speak publicly in the Workplace Project.'
       ]
     : [
-        `Use \`monad agent read --with ${fromAgentName}\` to read the private conversation.`,
-        `Reply privately with \`monad agent send --to ${fromAgentName} -\` and stdin.`,
-        'Use `monad project post` only when you want to speak publicly in the Workplace Project.'
+        `Use \`${monadCliCommand} agent read --with ${fromAgentName}\` to read the private conversation.`,
+        `Reply privately with \`${monadCliCommand} agent send --to ${fromAgentName} -\` and stdin.`,
+        `Use \`${monadCliCommand} project post\` only when you want to speak publicly in the Workplace Project.`
       ];
   return [
     `New direct/private message from ${fromAgentName} is available.`,
@@ -200,9 +205,10 @@ export function managedNativeCliDirectNotice({
 }
 
 export function managedNativeCliResumeRecoveryNotice(provider: string, notice: string): string {
+  const monadCliCommand = managedProjectMonadCliCommand();
   const restoreInstruction = providerUsesMcpProjectBridge(provider)
     ? 'Before replying, restore context from MEMORY.md and call the `project_read` tool from the `monad` MCP server.'
-    : 'Before replying, restore context from MEMORY.md and `monad project read`.';
+    : `Before replying, restore context from MEMORY.md and \`${monadCliCommand} project read\`.`;
   return [
     'Provider session resume failed. Monad started a fresh managed project runtime.',
     restoreInstruction,

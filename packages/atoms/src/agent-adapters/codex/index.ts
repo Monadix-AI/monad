@@ -43,7 +43,7 @@ export const codexNativeCliAdapter: NativeCliProviderAdapter = {
   managedRuntime: {
     launchMode: () => 'app-server',
     env: () => ({ ...CODEX_NON_INTERACTIVE_ENV }),
-    mcpConfigArgs: (ctx) => codexManagedMcpConfigArgs(ctx.wrapperBin, ctx.env),
+    mcpConfigArgs: (ctx) => codexManagedMcpConfigArgs(ctx.monadCliEntry, ctx.env),
     usesManagedMcpBridge: true,
     usesDeveloperInstructions: true
   },

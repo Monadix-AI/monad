@@ -707,12 +707,18 @@ export type NativeAgentRuntimePromptInput = z.infer<typeof nativeAgentRuntimePro
 export const managedProjectRuntimePromptInputSchema = nativeAgentRuntimePromptInputSchema;
 export type ManagedProjectRuntimePromptInput = NativeAgentRuntimePromptInput;
 
+export const nativeAgentMonadCliEntrySchema = z.object({
+  command: z.string().min(1),
+  args: z.array(z.string())
+});
+export type NativeAgentMonadCliEntry = z.infer<typeof nativeAgentMonadCliEntrySchema>;
+
 export const nativeAgentRuntimeSpecSchema = z.object({
   workspace: z.string(),
   promptFile: z.string(),
   tokenFile: z.string(),
   tokenHash: z.string(),
-  wrapperBin: z.string(),
+  monadCliEntry: nativeAgentMonadCliEntrySchema,
   mcpConfigArgs: z.array(z.string()).default([]),
   env: z.record(z.string(), z.string()),
   prompt: z.string()

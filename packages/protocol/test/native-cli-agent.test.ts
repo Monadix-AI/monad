@@ -475,7 +475,10 @@ test('native agent runtime prompt and prepared spec are protocol contracts', () 
     promptFile: '/tmp/monad/workplace-agents/prj_PROJECT/codex/managed-prompt.md',
     tokenFile: '/tmp/monad/workplace-agents/prj_PROJECT/codex/.monad-agent-token',
     tokenHash: 'abc123',
-    wrapperBin: '/tmp/monad/workplace-agents/prj_PROJECT/codex/bin/monad',
+    monadCliEntry: {
+      command: '/Applications/Monad.app/Contents/MacOS/Monad',
+      args: []
+    },
     env: {
       MONAD_NATIVE_CLI_SESSION_ID: 'ncli_1'
     },

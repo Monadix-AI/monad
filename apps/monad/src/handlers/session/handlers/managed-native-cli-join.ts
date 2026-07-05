@@ -17,7 +17,7 @@ import {
   workplaceProjectMembers
 } from '@/handlers/session/handlers/messaging-members.ts';
 import { findNativeCliProviderAdapter } from '@/services/native-cli/index.ts';
-import { managedProjectLaunchMode } from '@/services/native-cli/managed-project.ts';
+import { managedProjectLaunchMode, managedProjectMonadCliCommand } from '@/services/native-cli/managed-project.ts';
 import managedProjectJoinGreetingNoticePath from '@/services/native-cli/prompts/managed-project-join-greeting-notice.md' with {
   type: 'file'
 };
@@ -35,7 +35,7 @@ const MANAGED_NATIVE_CLI_JOIN_GREETING_MCP_NOTICE = (
 function managedNativeCliJoinGreetingNotice(provider: string): string {
   return findNativeCliProviderAdapter(provider as NativeCliProvider)?.managedRuntime?.usesManagedMcpBridge
     ? MANAGED_NATIVE_CLI_JOIN_GREETING_MCP_NOTICE
-    : MANAGED_NATIVE_CLI_JOIN_GREETING_NOTICE;
+    : MANAGED_NATIVE_CLI_JOIN_GREETING_NOTICE.replaceAll('{{monadCliCommand}}', managedProjectMonadCliCommand());
 }
 
 function managedNativeCliMemberRuntimeNames(target: TranscriptTarget): Set<string> {

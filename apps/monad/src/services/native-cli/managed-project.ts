@@ -1,10 +1,14 @@
-import type { NativeAgentRuntimePromptInput, NativeAgentRuntimeSpec, NativeCliLaunchMode } from '@monad/protocol';
+import type {
+  NativeAgentMonadCliEntry,
+  NativeAgentRuntimePromptInput,
+  NativeAgentRuntimeSpec,
+  NativeCliLaunchMode
+} from '@monad/protocol';
 
 import { createHash, randomBytes } from 'node:crypto';
 import { existsSync, lstatSync, mkdirSync, readdirSync, unlinkSync, writeFileSync } from 'node:fs';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 
-import { pathDelimiterFor } from '@/infra/platform-path.ts';
 import { getNativeCliProviderAdapter } from '@/services/native-cli/index.ts';
 import managedProjectRuntimeMcpPromptPath from './prompts/managed-project-runtime-mcp-prompt.md' with { type: 'file' };
 import managedProjectRuntimePromptPath from './prompts/managed-project-runtime-prompt.md' with { type: 'file' };
@@ -12,7 +16,9 @@ import managedProjectRuntimePromptPath from './prompts/managed-project-runtime-p
 const MANAGED_PROJECT_RUNTIME_PROMPT = (await Bun.file(managedProjectRuntimePromptPath).text()).trim();
 const MANAGED_PROJECT_RUNTIME_MCP_PROMPT = (await Bun.file(managedProjectRuntimeMcpPromptPath).text()).trim();
 
-function buildManagedProjectPrompt(args: NativeAgentRuntimePromptInput): string {
+type ManagedProjectPromptInput = NativeAgentRuntimePromptInput & { monadCliCommand: string };
+
+function buildManagedProjectPrompt(args: ManagedProjectPromptInput): string {
   const runtimeMetadata = [
     `Agent name: ${args.agentName}`,
     ...(args.displayName ? [`Display name: ${args.displayName}`] : []),
@@ -31,28 +37,33 @@ function buildManagedProjectPrompt(args: NativeAgentRuntimePromptInput): string 
     : '';
   const usesMcpBridge = getNativeCliProviderAdapter(args.provider).managedRuntime?.usesManagedMcpBridge ?? false;
   const template = usesMcpBridge ? MANAGED_PROJECT_RUNTIME_MCP_PROMPT : MANAGED_PROJECT_RUNTIME_PROMPT;
-  return template.replace('{{runtimeMetadata}}', runtimeMetadata).replace('{{customPromptBlock}}', customPromptBlock);
+  return template
+    .replace('{{runtimeMetadata}}', runtimeMetadata)
+    .replace('{{customPromptBlock}}', customPromptBlock)
+    .replaceAll('{{monadCliCommand}}', args.monadCliCommand);
 }
 
 function hashManagedAgentToken(token: string): string {
   return createHash('sha256').update(token).digest('hex');
 }
 
-export function buildManagedProjectCliWrapperScript(
-  cliSourceEntry: string | null,
-  executablePath = process.execPath,
-  platform: NodeJS.Platform = process.platform
-): string {
-  if (platform === 'win32') {
-    return cliSourceEntry ? `@echo off\r\nbun "${cliSourceEntry}" %*\r\n` : `@echo off\r\n"${executablePath}" %*\r\n`;
-  }
-  return cliSourceEntry
-    ? `#!/usr/bin/env sh\nexec bun "${cliSourceEntry}" "$@"\n`
-    : `#!/usr/bin/env sh\nexec "${executablePath}" "$@"\n`;
+function shellQuote(value: string): string {
+  if (/^[A-Za-z0-9_./:=+-]+$/.test(value)) return value;
+  return `'${value.replaceAll("'", "'\\''")}'`;
 }
 
-export function managedProjectCliWrapperName(platform: NodeJS.Platform = process.platform): string {
-  return platform === 'win32' ? 'monad.cmd' : 'monad';
+function monadCliCommand(entry: NativeAgentMonadCliEntry): string {
+  return [entry.command, ...entry.args].map(shellQuote).join(' ');
+}
+
+function managedProjectMonadCliEntry(): NativeAgentMonadCliEntry {
+  const cliSourceEntry = join(import.meta.dir, '../../../../cli/src/main.ts');
+  if (existsSync(cliSourceEntry)) return { command: 'bun', args: [cliSourceEntry] };
+  return { command: process.execPath, args: [] };
+}
+
+export function managedProjectMonadCliCommand(): string {
+  return monadCliCommand(managedProjectMonadCliEntry());
 }
 
 export function managedProjectLaunchMode(
@@ -130,10 +141,9 @@ export function prepareManagedProjectRuntime(
     skipProviderApprovals?: boolean;
   } & Omit<NativeAgentRuntimePromptInput, 'workspace'>
 ): NativeAgentRuntimeSpec {
-  const platform = args.platform ?? process.platform;
   const workspace = managedProjectRuntimeWorkspace(args);
-  const binDir = join(workspace, 'bin');
-  mkdirSync(binDir, { recursive: true });
+  mkdirSync(workspace, { recursive: true });
+  const monadCliEntry = managedProjectMonadCliEntry();
   const prompt = buildManagedProjectPrompt({
     agentName: args.agentName,
     ...(args.displayName ? { displayName: args.displayName } : {}),
@@ -145,14 +155,13 @@ export function prepareManagedProjectRuntime(
     ...(args.modelId ? { modelId: args.modelId } : {}),
     ...(args.reasoningEffort ? { reasoningEffort: args.reasoningEffort } : {}),
     ...(args.speed ? { speed: args.speed } : {}),
-    ...(args.customPrompt ? { customPrompt: args.customPrompt } : {})
+    ...(args.customPrompt ? { customPrompt: args.customPrompt } : {}),
+    monadCliCommand: monadCliCommand(monadCliEntry)
   });
   const promptFile = join(workspace, 'managed-prompt.md');
   const memoryFile = join(workspace, 'MEMORY.md');
   const tokenFile = join(workspace, '.monad-agent-token');
   const token = randomBytes(32).toString('hex');
-  const wrapperBin = join(binDir, managedProjectCliWrapperName(platform));
-  const cliSourceEntry = join(import.meta.dir, '../../../../cli/src/main.ts');
   writeFileSync(promptFile, prompt, { mode: 0o600 });
   cleanupManagedProjectRuntimeToken(workspace);
   writeFileSync(tokenFile, token, { mode: 0o600 });
@@ -163,13 +172,6 @@ export function prepareManagedProjectRuntime(
       { mode: 0o600 }
     );
   }
-  writeFileSync(
-    wrapperBin,
-    buildManagedProjectCliWrapperScript(existsSync(cliSourceEntry) ? cliSourceEntry : null, process.execPath, platform),
-    {
-      mode: 0o755
-    }
-  );
   const managed = getNativeCliProviderAdapter(args.provider).managedRuntime;
   const env = {
     ...(managed?.env?.({ workspace, skipProviderApprovals: args.skipProviderApprovals ?? false }) ?? {}),
@@ -177,15 +179,15 @@ export function prepareManagedProjectRuntime(
     MONAD_NATIVE_CLI_SESSION_ID: args.nativeCliSessionId,
     MONAD_AGENT_TOKEN_FILE: tokenFile,
     MONAD_SERVER_URL: args.serverUrl,
-    PATH: `${binDir}${args.baseEnvPath ? `${pathDelimiterFor(platform)}${args.baseEnvPath}` : ''}`
+    ...(args.baseEnvPath ? { PATH: args.baseEnvPath } : {})
   };
   return {
     workspace,
     promptFile,
     tokenFile,
     tokenHash: hashManagedAgentToken(token),
-    wrapperBin,
-    mcpConfigArgs: managed?.mcpConfigArgs?.({ wrapperBin, env }) ?? [],
+    monadCliEntry,
+    mcpConfigArgs: managed?.mcpConfigArgs?.({ monadCliEntry, env }) ?? [],
     prompt,
     env
   };

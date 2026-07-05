@@ -232,12 +232,15 @@ function codexManagedMcpEnvConfigArgs(env: Record<string, string>): string[] {
   return Object.entries(env).flatMap(([key, value]) => ['-c', `mcp_servers.monad.env.${key}=${JSON.stringify(value)}`]);
 }
 
-export function codexManagedMcpConfigArgs(wrapperBin: string, env: Record<string, string>): string[] {
+export function codexManagedMcpConfigArgs(
+  monadCliEntry: { command: string; args: string[] },
+  env: Record<string, string>
+): string[] {
   return [
     '-c',
-    `mcp_servers.monad.command=${JSON.stringify(wrapperBin)}`,
+    `mcp_servers.monad.command=${JSON.stringify(monadCliEntry.command)}`,
     '-c',
-    'mcp_servers.monad.args=["native-agent","mcp-server"]',
+    `mcp_servers.monad.args=${JSON.stringify([...monadCliEntry.args, 'native-agent', 'mcp-server'])}`,
     ...codexManagedMcpEnvConfigArgs(env),
     ...codexManagedMcpApprovalConfigArgs()
   ];

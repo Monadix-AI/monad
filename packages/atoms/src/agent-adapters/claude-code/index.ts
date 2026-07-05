@@ -99,8 +99,8 @@ function claudeManagedMcpConfigArgs(context: NativeCliManagedRuntimeContext): st
       mcpServers: {
         monad: {
           type: 'stdio',
-          command: context.wrapperBin,
-          args: ['native-agent', 'mcp-server'],
+          command: context.monadCliEntry.command,
+          args: [...context.monadCliEntry.args, 'native-agent', 'mcp-server'],
           env: context.env
         }
       }

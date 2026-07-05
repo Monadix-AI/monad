@@ -327,7 +327,10 @@ export interface NativeCliArgumentSupportProbe {
 }
 
 export interface NativeCliManagedRuntimeContext {
-  wrapperBin: string;
+  monadCliEntry: {
+    command: string;
+    args: string[];
+  };
   env: Record<string, string>;
 }
 
