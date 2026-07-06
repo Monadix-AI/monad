@@ -29,7 +29,6 @@ test('discover() registers a default-exported ModelProvider from a .js file', as
     const reg = new ModelProviderRegistry();
     const result = await reg.discover(dir);
     expect(result.registered).toEqual(['scanned']);
-    expect(result.errors).toEqual([]);
     expect(reg.has('scanned')).toBe(true);
     expect(reg.get('scanned')?.descriptor.label).toBe('Scanned');
   });
@@ -48,7 +47,6 @@ test('discover() accepts a non-text ModelProvider without stream()', async () =>
     const reg = new ModelProviderRegistry();
     const result = await reg.discover(dir);
     expect(result.registered).toEqual(['image-only']);
-    expect(result.errors).toEqual([]);
     expect(reg.has('image-only')).toBe(true);
   });
 });

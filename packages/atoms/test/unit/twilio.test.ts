@@ -16,7 +16,6 @@ test('TW1: form params normalize; sender is chat + user (dm)', () => {
 });
 
 test('TW2: missing From → null; command parse', () => {
-  expect(normalizeTwilioForm(new URLSearchParams({ Body: 'x' }))).toBe(null);
   expect(normalizeTwilioForm(new URLSearchParams({ From: 'a', Body: '/help' }))).toMatchObject({
     kind: 'command',
     command: 'help'

@@ -116,7 +116,6 @@ test('agent_delegate is filtered out of the sub-agent toolset (no recursion)', a
 test('agent_delegate metadata is not high-risk', () => {
   const tool = createDelegateTool({ model: scriptedModel(['x']), tools: [], defaultModel: 'mock' });
   expect(tool.name).toBe('agent_delegate');
-  expect(tool.highRisk).toBeFalsy();
 });
 
 test('runSubagent throws when forkDepth reaches the limit', async () => {

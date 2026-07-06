@@ -98,6 +98,7 @@ import {
 import { setSkillsSettingsRequestSchema, skillsSettingsResponseSchema } from './settings/skills-settings.ts';
 import { setStartupSettingsRequestSchema, startupSettingsSchema } from './settings/startup-settings.ts';
 import { setUserProfileSettingsRequestSchema, userProfileSettingsSchema } from './settings/user-profile-settings.ts';
+import { systemUpgradeStatusSchema } from './system-upgrade.ts';
 import { initDockerResponseSchema, setToolBackendsRequestSchema, toolBackendsResponseSchema } from './tool-backends.ts';
 import {
   createWorkplaceProjectRequestSchema,
@@ -438,6 +439,12 @@ export const daemonHttpContract = {
     pickDirectory: defineHttpEndpoint({
       body: pickDirectoryRequestSchema,
       response: { 200: pickDirectoryResponseSchema, 403: httpErrorSchema }
+    }),
+    upgradeGet: defineHttpEndpoint({
+      response: { 200: systemUpgradeStatusSchema }
+    }),
+    upgradeStart: defineHttpEndpoint({
+      response: { 202: systemUpgradeStatusSchema }
     })
   },
   skills: {

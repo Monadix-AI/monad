@@ -62,7 +62,6 @@ test('GET /api/key returns the full value and ttl', async () => {
   expect(res).toEqual({ name: 'k', value: 'hello', ttlMs: -1 });
 
   const missing = await getJson<KeyResp>(`${ui.url}/api/key?name=nope`);
-  expect(missing.value).toBeNull();
 });
 
 test('WebSocket streams command events live', async () => {

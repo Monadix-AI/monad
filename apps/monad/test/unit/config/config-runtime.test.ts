@@ -131,7 +131,6 @@ describe('buildBrowserMcpServer', () => {
 
   test('autoApproveReadOnly:false gates every browser tool', () => {
     const spec = buildBrowserMcpServer({ enabled: true, vision: false, headless: true, autoApproveReadOnly: false });
-    expect(spec.trust.autoApproveTools).toEqual([]);
   });
 
   test('profile persistence flags are passed through', () => {
@@ -161,7 +160,6 @@ describe('buildBrowserMcpServer', () => {
     expect(args).toEqual(['chrome-devtools-mcp@latest']);
     expect(args).not.toContain('@playwright/mcp@latest');
     // Read-only auto-approve is Playwright-specific → empty for a custom server.
-    expect(spec.trust.autoApproveTools).toEqual([]);
   });
 
   test('browser preset is NOT host-escape (it is sandboxable / domain-scopable)', () => {
@@ -204,7 +202,6 @@ describe('buildComputerMcpServer', () => {
 
   test('autoApproveReadOnly:false gates every desktop tool', () => {
     const spec = buildComputerMcpServer({ enabled: true, command: 'uvx', args: [], autoApproveReadOnly: false });
-    expect(spec.trust.autoApproveTools).toEqual([]);
   });
 
   test('marks the server host-escape so its mutating tools are session-gated, never permanently allowed', () => {

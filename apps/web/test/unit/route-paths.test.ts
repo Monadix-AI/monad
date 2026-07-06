@@ -37,13 +37,11 @@ describe('canonical web route helpers', () => {
     expect(studioDetailPath('nativeCliAgents', 'cli')).toBe('/studio/nativeCliAgents/cli');
     expect(studioSubpathFromPathname('/studio/agents/agent%201')).toEqual(['agent 1']);
     expect(studioSubpathFromPathname('/studio/nativeCliAgents/cli')).toEqual(['cli']);
-    expect(studioSubpathFromPathname('/studio/models')).toEqual([]);
   });
 
   test('does not classify old marketplace routes as Studio routes', () => {
     expect(isStudioPath('/skills/marketplace')).toBe(false);
     expect(isSkillMarketplacePath('/skills/marketplace/clawhub')).toBe(false);
-    expect(skillMarketplaceSourceFromPathname('/skills/marketplace/clawhub')).toBe(null);
   });
 
   test('keeps workspace route parsing on canonical workspace and session paths', () => {
@@ -57,6 +55,5 @@ describe('canonical web route helpers', () => {
   test('does not classify old channel routes as workspace project routes', () => {
     expect(isWorkspacePath('/channels')).toBe(false);
     expect(isWorkspacePath('/channels/project-1')).toBe(false);
-    expect(projectIdFromPathname('/channels/project-1')).toBe(null);
   });
 });

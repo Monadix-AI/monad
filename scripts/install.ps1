@@ -19,7 +19,6 @@
     MONAD_NO_PATH_MODIFY  set to 1 to never touch the user PATH
     MONAD_TARBALL         path to a local .tar.gz, skips download
     MONAD_SKIP_VERIFY     set to 1 to skip SHA256 verification
-    MONAD_GITHUB_REPO     GitHub owner/repo (default: monadix-labs/monad)
     MONAD_START_MENU_DIR  Start Menu shortcut directory override
     MONAD_DESKTOP_DIR     Desktop shortcut directory override
 #>
@@ -31,7 +30,7 @@ $ErrorActionPreference = 'Stop'
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 
-$GithubRepo  = if ($env:MONAD_GITHUB_REPO)  { $env:MONAD_GITHUB_REPO }  else { 'monadix-labs/monad' }
+$ReleaseRepository = 'monadix-labs/monad'
 $InstallDir  = if ($env:MONAD_INSTALL_DIR)  { $env:MONAD_INSTALL_DIR }  else { Join-Path $HOME '.monad' }
 $Channel     = if ($env:MONAD_CHANNEL)      { $env:MONAD_CHANNEL }      else { 'stable' }
 $SkipVerify  = $env:MONAD_SKIP_VERIFY -eq '1'
@@ -66,15 +65,15 @@ function Get-Platform {
 function Get-LatestVersion {
   $headers = @{ 'User-Agent' = 'monad-installer' }
   if ($Channel -eq 'stable') {
-    $api = "https://api.github.com/repos/$GithubRepo/releases/latest"
+    $api = "https://api.github.com/repos/$ReleaseRepository/releases/latest"
     return (Invoke-RestMethod -Uri $api -UseBasicParsing -Headers $headers).tag_name
   }
   # beta/nightly: fetch the releases list and return the first tag that matches the channel.
-  $api = "https://api.github.com/repos/$GithubRepo/releases?per_page=50"
+  $api = "https://api.github.com/repos/$ReleaseRepository/releases?per_page=50"
   $releases = Invoke-RestMethod -Uri $api -UseBasicParsing -Headers $headers
   $tag = ($releases | Where-Object { $_.tag_name -match "-$Channel\." } | Select-Object -First 1).tag_name
   if (-not $tag) {
-    Fatal "No $Channel release found. Check https://github.com/$GithubRepo/releases or set MONAD_VERSION."
+    Fatal "No $Channel release found. Check https://github.com/$ReleaseRepository/releases or set MONAD_VERSION."
   }
   return $tag
 }
@@ -151,8 +150,10 @@ try {
     $version  = if ($env:MONAD_VERSION) { $env:MONAD_VERSION } else { Info "Fetching latest $Channel release version…"; Get-LatestVersion }
     if (-not $version) { Fatal 'Could not determine release version.' }
 
-    $artifact   = "monad-$version-$platform"
-    $releaseUrl = "https://github.com/$GithubRepo/releases/download/$version/$artifact.tar.gz"
+    $releaseTag = if ($version.StartsWith('v')) { $version } else { "v$version" }
+    $artifactVersion = if ($version.StartsWith('v')) { $version.Substring(1) } else { $version }
+    $artifact   = "monad-$artifactVersion-$platform"
+    $releaseUrl = "https://github.com/$ReleaseRepository/releases/download/$releaseTag/$artifact.tar.gz"
     $tarball    = Join-Path $tmp "$artifact.tar.gz"
 
     Info "Downloading $artifact…"

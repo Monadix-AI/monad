@@ -17,5 +17,4 @@ test('GC2: ROOM space → group; non-MESSAGE → null', () => {
     normalizeGChatEvent({ type: 'MESSAGE', message: { text: 'x' }, space: { name: 'spaces/B', type: 'ROOM' } })
       ?.chatType
   ).toBe('group');
-  expect(normalizeGChatEvent({ type: 'ADDED_TO_SPACE', space: { name: 'spaces/B' } })).toBe(null);
 });

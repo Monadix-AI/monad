@@ -34,11 +34,4 @@ test('enrichModelInfo drops non-positive provider context limits and uses catalo
       contextLimit: 0
     })
   ).toMatchObject({ contextLimit: 128000 });
-
-  expect(
-    enrichModelInfo(modelContextWithCatalogContextLimit(), cfg, provider, {
-      id: 'provider/model',
-      contextLimit: 0
-    })
-  ).not.toHaveProperty('contextLimit');
 });

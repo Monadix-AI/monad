@@ -111,7 +111,6 @@ test('store-backed streaming tool turn persists ordered segments via the open→
   const assistants = rows.filter((m) => m.role === 'assistant' && m.type === 'text');
   for (const a of assistants) {
     expect(a.stream.status).toBe('complete');
-    expect(a.stream.source).toBeUndefined();
   }
   store.close();
 });

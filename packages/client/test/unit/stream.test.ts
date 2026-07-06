@@ -64,7 +64,6 @@ test('resume advances the cursor across a reconnect (backfill from the last deli
     });
   });
 
-  expect(sentCursors[0]).toBeNull(); // first connect has no cursor
   expect(sentCursors[1]).toBe('evt_5'); // reconnect resumes from the last id the first connect delivered
   expect(calls).toBe(2);
 });

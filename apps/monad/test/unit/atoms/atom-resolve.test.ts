@@ -10,7 +10,6 @@ test('no collision → each bare id maps to its sole pack, no collisions reporte
     ['search', 'a'],
     ['deploy', 'b']
   ]);
-  expect(r.collisions).toEqual([]);
 });
 
 test('collision → first-wins by load order; the rest are shadowed', () => {

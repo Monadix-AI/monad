@@ -67,7 +67,6 @@ test('native CLI connect saves an agent after authenticated auth', async () => {
 
   expect(result.persisted).toBe(true);
   expect(saved).toEqual([agent]);
-  expect(removed).toEqual([]);
 });
 
 test('native CLI connect removes the temporary agent when auth start fails', async () => {

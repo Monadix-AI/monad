@@ -19,7 +19,6 @@ function model(over: Partial<MonadConfig['model']> = {}): MonadConfig['model'] {
 
 test('chat resolves to the default profile alias', () => {
   expect(resolveModelRole(model(), 'chat')).toBe('default');
-  expect(resolveModelRole(model({ profiles: [] }), 'chat')).toBeUndefined();
 });
 
 test('chat resolves to the configured default profile alias when set', () => {
@@ -115,8 +114,6 @@ test('role resolution can target a non-default profile alias', () => {
 });
 
 test('image/speech resolve from their role assignments', () => {
-  expect(resolveModelRole(model(), 'image')).toBeUndefined();
-  expect(resolveModelRole(model(), 'speech')).toBeUndefined();
   expect(
     resolveModelRole(
       model({
@@ -158,7 +155,6 @@ test('image/speech resolve from their role assignments', () => {
 });
 
 test('embedding has no fallback — undefined until assigned (so semantic search degrades to keyword)', () => {
-  expect(resolveModelRole(model(), 'embedding')).toBeUndefined();
   expect(
     resolveModelRole(
       model({

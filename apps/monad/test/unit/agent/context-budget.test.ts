@@ -66,7 +66,6 @@ test('the loop emits a context.usage breakdown when contextLimit is set', async 
   await loop.runBlock(newId('ses') as SessionId, 'hello');
 
   const usage = events.find((e) => e.type === 'context.usage');
-  expect(usage).toBeDefined();
   expect(usage?.payload.contextLimit).toBe(200_000);
   expect((usage?.payload.segments as unknown[]).length).toBeGreaterThan(0);
 });

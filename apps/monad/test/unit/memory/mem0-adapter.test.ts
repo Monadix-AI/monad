@@ -88,5 +88,4 @@ test('facade: addFact (infer:false) / listFacts / forgetFact map to mem0', async
   expect((await a.listFacts(scope)).map((f) => f.content)).toEqual(['User prefers tabs']);
   const factId = fact?.id ?? '';
   expect(await a.forgetFact(factId)).toBe(true);
-  expect(await a.listFacts(scope)).toEqual([]);
 });

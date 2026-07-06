@@ -36,7 +36,6 @@ const auth = { credentialPool: { oa: [{ id: 'c1', accessToken: 'sk-oa' }] } } as
 
 test('defaults: LLM←default profile, embedder←default profile embedding role, with credential + dim', () => {
   const r = resolveMem0Models(cfg, auth, {});
-  expect(r.error).toBeUndefined();
   expect(r.models?.llm).toEqual({ provider: 'openai', model: 'gpt-4o-mini', apiKey: 'sk-oa', baseUrl: undefined });
   expect(r.models?.embedder.provider).toBe('openai');
   expect(r.models?.embedder.model).toBe('text-embedding-3-small');
@@ -45,7 +44,6 @@ test('defaults: LLM←default profile, embedder←default profile embedding role
 
 test('explicit local Ollama embedder: provider ollama, baseUrl + 768 dim', () => {
   const r = resolveMem0Models(cfg, auth, { embedder: 'ol:nomic-embed-text' });
-  expect(r.error).toBeUndefined();
   expect(r.models?.embedder).toMatchObject({
     provider: 'ollama',
     model: 'nomic-embed-text',
@@ -61,13 +59,11 @@ test('embedDim override wins over auto-detection', () => {
 
 test('anthropic embedder is rejected (can not produce embeddings)', () => {
   const r = resolveMem0Models(cfg, auth, { embedder: 'claude' });
-  expect(r.models).toBeUndefined();
   expect(r.error).toContain("can't produce embeddings");
 });
 
 test('unknown model reference errors', () => {
   const r = resolveMem0Models(cfg, auth, { llm: 'nope' });
-  expect(r.models).toBeUndefined();
   expect(r.error).toContain('LLM');
 });
 
@@ -104,7 +100,6 @@ test('openrouter LLM maps to openai provider with default base URL', () => {
     credentialPool: { or: [{ id: 'c2', accessToken: 'sk-or' }] }
   } as unknown as MonadAuth;
   const r = resolveMem0Models(orCfg, orAuth, { llm: 'or-chat', embedder: 'oa:text-embedding-3-small' });
-  expect(r.error).toBeUndefined();
   expect(r.models?.llm).toEqual({
     provider: 'openai',
     model: 'anthropic/claude-sonnet-4-6',

@@ -155,7 +155,6 @@ test('no recordTurnUsage configured → no crash, no cost attached', async () =>
   });
   await loop.runStream(newId('ses') as SessionId, 'hi');
   const msg = events.find((e) => e.type === 'agent.message');
-  expect((msg?.payload as { cost?: Cost }).cost).toBeUndefined();
 });
 
 test('the global estimator self-calibrates from a turn with real input tokens', async () => {

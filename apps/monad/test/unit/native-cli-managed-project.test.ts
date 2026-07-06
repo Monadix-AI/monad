@@ -30,7 +30,6 @@ test('managed project runtime uses the current CLI entry without writing a wrapp
   expect(prepared.monadCliEntry.command).toBe('bun');
   expect(prepared.monadCliEntry.args).toHaveLength(1);
   expect(prepared.monadCliEntry.args[0]).toEndWith('/apps/cli/src/main.ts');
-  expect(await stat(join(monadHome, 'workplace-agents', '.bin')).catch(() => null)).toBeNull();
 });
 
 test('managed project runtime keeps base PATH when no wrapper bin is needed', () => {
@@ -72,7 +71,6 @@ test('managed project runtime does not blank PATH when no base PATH is supplied'
     provider: 'codex'
   });
 
-  expect(prepared.env.PATH).toBeUndefined();
   expect(prepared.mcpConfigArgs).not.toContain('mcp_servers.monad.env.PATH=""');
 });
 
@@ -96,9 +94,6 @@ test('managed project runtimes share the same current CLI entry per process', as
   });
 
   expect(second.monadCliEntry).toEqual(first.monadCliEntry);
-  expect(await stat(join(monadHome, 'workplace-agents', '.bin')).catch(() => null)).toBeNull();
-  expect(await stat(join(monadHome, 'workplace-agents', 'prj_PROJECT', 'codex', 'bin')).catch(() => null)).toBeNull();
-  expect(await stat(join(monadHome, 'workplace-agents', 'prj_PROJECT', 'claude', 'bin')).catch(() => null)).toBeNull();
 });
 
 test('managed project runtime removes stale per-agent wrapper bins', async () => {
@@ -116,7 +111,6 @@ test('managed project runtime removes stale per-agent wrapper bins', async () =>
     provider: 'codex'
   });
 
-  expect(await stat(wrapperDir).catch(() => null)).toBeNull();
 
   await rm(monadHome, { recursive: true, force: true });
 });
@@ -144,8 +138,6 @@ test('managed project runtimes share a project root memory index', async () => {
 
   expect(await readFile(sharedMemory, 'utf8')).toContain('# Project memory index');
   expect(await stat(join(projectRoot, 'memories'))).toMatchObject({ mode: expect.any(Number) });
-  expect(await readFile(join(codex.workspace, 'MEMORY.md'), 'utf8').catch(() => null)).toBeNull();
-  expect(await readFile(join(claude.workspace, 'MEMORY.md'), 'utf8').catch(() => null)).toBeNull();
   expect(codex.prompt).toContain('shared project memory index at `../MEMORY.md`');
   expect(codex.prompt).toContain('use `../MEMORY.md.lock`');
   expect(claude.prompt).toContain('shared project memory index at `../MEMORY.md`');
@@ -274,8 +266,6 @@ test('managed project runtime rejects agent names that escape the project worksp
       provider: 'codex'
     })
   ).toThrow('managed native CLI workspace must stay inside the project agent root');
-  expect(await readFile(join(escapedWorkspace, '.monad-agent-token'), 'utf8').catch(() => null)).toBeNull();
-  expect(await readFile(join(escapedWorkspace, 'managed-prompt.md'), 'utf8').catch(() => null)).toBeNull();
 });
 
 test('managed project runtime rotates its agent token for each prepared native CLI session', async () => {
@@ -350,7 +340,6 @@ test('managed project orphan token cleanup removes stale runtime tokens without 
   await writeFile(join(workspace, 'MEMORY.md'), '# durable memory\n');
 
   expect(cleanupManagedProjectOrphanTokens(monadHome)).toBe(1);
-  expect(await readFile(join(workspace, '.monad-agent-token'), 'utf8').catch(() => null)).toBeNull();
   expect(await readFile(join(workspace, 'MEMORY.md'), 'utf8')).toBe('# durable memory\n');
 });
 

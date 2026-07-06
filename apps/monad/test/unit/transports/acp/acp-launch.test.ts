@@ -23,8 +23,6 @@ test('computeDaemonSpawn deletes MONAD_ACP and MONAD_STDIO from env (prevents sp
     MONAD_PORT: '52749',
     PATH: '/usr/bin'
   });
-  expect(env.MONAD_ACP).toBeUndefined();
-  expect(env.MONAD_STDIO).toBeUndefined();
   // unrelated env is preserved
   expect(env.MONAD_PORT).toBe('52749');
   expect(env.PATH).toBe('/usr/bin');

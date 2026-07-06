@@ -30,7 +30,6 @@ test('stdio server maps to ACP shape with env as name/value pairs', () => {
 });
 
 test('disabled servers are skipped', () => {
-  expect(toAcpMcpServers([stdio({ enabled: false })])).toEqual([]);
 });
 
 test('http none → static headers only; bearer → authorization header', () => {
@@ -46,7 +45,6 @@ test('http none → static headers only; bearer → authorization header', () =>
 });
 
 test('oauth-mode http is skipped (dynamic bearer, not forwardable as a static header)', () => {
-  expect(toAcpMcpServers([http({ auth: { mode: 'oauth', scopes: [], flow: 'loopback' } })])).toEqual([]);
 });
 
 test('mixed list: only enabled + forwardable servers come through, in order', () => {

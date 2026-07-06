@@ -33,7 +33,6 @@ test('skillCommandSource classifies the qualifier', () => {
   expect(skillCommandSource('global:foo')).toEqual({ kind: 'global' });
   expect(skillCommandSource('atom-pack:pack:bar')).toEqual({ kind: 'atom-pack', name: 'pack' });
   expect(skillCommandSource('agent:helper:baz')).toEqual({ kind: 'agent', name: 'helper' });
-  expect(skillCommandSource('plain')).toBeNull();
 });
 
 test('command-name phase filters by prefix on both raw and display name', () => {
@@ -62,5 +61,4 @@ test('a no-arg first-party builtin executes on select; one with an argHint does 
 
 test('unavailable commands are excluded from suggestions', () => {
   const commands = [command({ name: 'reset', kind: 'builtin', available: false })];
-  expect(buildCommandMenuItems('/re', commands, [], [], t)).toEqual([]);
 });

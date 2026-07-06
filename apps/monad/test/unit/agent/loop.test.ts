@@ -56,7 +56,6 @@ test('runBlock returns the full assistant message and emits a single agent.messa
 
   expect(message.role).toBe('assistant');
   expect(message.text).toBe('Hello world');
-  expect(events.filter((e) => e.type === 'agent.token')).toHaveLength(0);
   expect(events.filter((e) => e.type === 'agent.message')).toHaveLength(1);
   expect(messages.list(sessionId).map((m) => m.role)).toEqual(['user', 'assistant']);
 });

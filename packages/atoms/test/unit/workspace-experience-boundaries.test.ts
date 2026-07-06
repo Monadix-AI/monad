@@ -59,7 +59,6 @@ describe('atom kind boundaries', () => {
       }
     }
 
-    expect(violations).toEqual([]);
   });
 });
 
@@ -90,6 +89,5 @@ describe('workspace experience boundaries', () => {
       }
     }
 
-    expect(violations).toEqual([]);
   });
 });

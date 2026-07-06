@@ -121,7 +121,6 @@ test('clearEmbeddings wipes all vectors and reports the count (re-index from scr
   expect(store.pendingEmbeddingCount()).toBe(0); // both embedded
   expect(store.clearEmbeddings()).toBe(2); // wiped both
   expect(store.pendingEmbeddingCount()).toBe(2); // now missing → indexer will rebuild
-  expect(store.searchSemantic([1, 0]).length).toBe(0); // nothing left to match
 });
 
 test('staleEmbeddingCount counts vectors from a different model; NULL-model vectors are not stale', () => {

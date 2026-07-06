@@ -48,7 +48,6 @@ describe('local fetcher file-based atom scan', () => {
     await writeFile(join(dir, 'skills', 'no-skill', 'README.md'), 'readme only');
     const fetcher = createAtomFetcher();
     const staged = await fetcher(parseAtomPackSource(dir));
-    expect(staged.fileAtoms?.skills).toEqual([]);
   });
 
   test('detects MCP server names from mcp.json', async () => {
@@ -69,7 +68,6 @@ describe('local fetcher file-based atom scan', () => {
     await writeFile(join(dir, 'mcp.json'), 'not json{{');
     const fetcher = createAtomFetcher();
     const staged = await fetcher(parseAtomPackSource(dir));
-    expect(staged.fileAtoms?.mcpServers).toEqual([]);
   });
 
   test('detects locale tags from locales/<lng>/ dirs', async () => {

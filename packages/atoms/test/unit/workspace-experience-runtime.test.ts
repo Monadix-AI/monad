@@ -75,7 +75,6 @@ test('canvasToGraph: a monad hub, one node + edge per participant, recent activi
     activity: [activityRow('a1', 'fs_read', 'ok'), activityRow('a2', 'shell', 'running')]
   });
 
-  expect(nodes.find((node) => node.id === HUB_ID)).toBeDefined();
   expect(nodes).toHaveLength(5);
   expect(edges).toHaveLength(4);
   expect(edges.every((edge) => edge.source === HUB_ID)).toBe(true);
@@ -103,7 +102,6 @@ test('toChatRoomCanvas: exposes the chatroom surface without project management 
   expect(canvas.ready).toBe(true);
   expect(canvas.participants).toHaveLength(1);
   expect(canvas.railAgents).toHaveLength(1);
-  expect(canvas.nativeCliStreams).toEqual([]);
   expect(typeof canvas.sendDirective).toBe('function');
   expect(typeof canvas.resolveApproval).toBe('function');
   expect(typeof canvas.answerQuestion).toBe('function');

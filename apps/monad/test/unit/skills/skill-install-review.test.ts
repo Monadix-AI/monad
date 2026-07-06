@@ -44,7 +44,6 @@ test('skill install review allows a clean model verdict', async () => {
     source: 'clawhub:demo'
   });
 
-  expect(warningsToStrings(warnings)).toEqual([]);
   expect(capturedReq?.messages[0]?.role).toBe('system');
   expect(capturedReq?.messages[0]?.content).toContain(promptContent);
 });

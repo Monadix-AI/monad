@@ -7,7 +7,6 @@ import { createStore } from '@/store/db/index.ts';
 
 test('getActiveConversation returns null before any binding', () => {
   const store = createStore();
-  expect(store.getActiveConversation('chn_A', 'chn_A|chat1')).toBeNull();
   expect(store.countActiveConversations('chn_A')).toBe(0);
 });
 

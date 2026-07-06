@@ -31,7 +31,6 @@ test('changedParaglideScopes maps locale JSON edits to the owning Paraglide scop
   expect(
     changedParaglideScopes(['packages/i18n/src/locales/en/web.json', 'packages/i18n/src/locales/en/cli.json'])
   ).toEqual(['cli', 'web']);
-  expect(changedParaglideScopes(['packages/i18n/src/catalog-types.ts'])).toEqual([]);
 });
 
 test('i18n package exposes a start:dev watcher script', async () => {

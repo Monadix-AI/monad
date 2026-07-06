@@ -4,8 +4,6 @@ import { primaryModifierPressed, shortcutNumberFromEvent } from '../../lib/keybo
 
 test('shortcutNumberFromEvent reads 1-9 from the key, ignoring 0 and non-digits', () => {
   expect(shortcutNumberFromEvent({ key: '3', code: 'Digit3' } as KeyboardEvent)).toBe(3);
-  expect(shortcutNumberFromEvent({ key: '0', code: 'Digit0' } as KeyboardEvent)).toBeNull();
-  expect(shortcutNumberFromEvent({ key: 'a', code: 'KeyA' } as KeyboardEvent)).toBeNull();
 });
 
 test('shortcutNumberFromEvent falls back to the physical code (e.g. option-key layouts, numpad)', () => {

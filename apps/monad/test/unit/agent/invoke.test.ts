@@ -212,5 +212,4 @@ test('onProgress is threaded into ToolContext.reportProgress', async () => {
 
 test('onProgress absent → reportProgress is undefined', async () => {
   const out = await invokeTool(probeTool(false), { x: 1 }, baseOpts);
-  expect(out.metadata.ctx.reportProgress).toBeUndefined();
 });

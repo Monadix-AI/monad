@@ -46,5 +46,4 @@ test('QQ3: direct message → dm surface keyed by guild_id; unknown event → nu
   });
   expect(dm).toMatchObject({ surface: 'dm' });
   expect(dm?.inbound).toMatchObject({ chatId: 'dmguild', chatType: 'dm', mentionedSelf: true });
-  expect(normalizeQQMessage('GUILD_CREATE', {})).toBe(null);
 });

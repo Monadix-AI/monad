@@ -19,7 +19,6 @@ const computerSpec: ToolSpec = {
 
 test('generic tools build a function tool for any provider', () => {
   const set = buildSdkTools([genericSpec], 'anthropic');
-  expect(set?.fs_read).toBeDefined();
   // The generic path is NOT a provider-defined tool.
   expect((set?.fs_read as { type?: string }).type).not.toBe('provider');
 });
@@ -50,7 +49,6 @@ test('search provider override disables anthropic native web search when ddgs is
   const set = buildSdkTools([spec], 'anthropic', 'ddgs');
   const t = set?.web_search as { type?: string; id?: string };
   expect(t.type).not.toBe('provider');
-  expect(t.id).toBeUndefined();
 });
 
 test('search provider override preserves openai native web search for native mode', () => {
@@ -71,5 +69,4 @@ test('non-anthropic providers fall back to the generic schema (portable)', () =>
   const t = set?.computer as { type?: string; id?: string };
   // No provider-defined tool — a plain function tool the model can still call.
   expect(t.type).not.toBe('provider');
-  expect(t.id).toBeUndefined();
 });

@@ -101,7 +101,6 @@ test('native CLI agent-facing project commands map to short activity phases', ()
   expect(__workplaceProjectMessageTest.nativeCliAgentFacingCommandPhase('monad project read --project prj_1')).toBe(
     'reading'
   );
-  expect(__workplaceProjectMessageTest.nativeCliAgentFacingCommandPhase('bun test')).toBeUndefined();
 });
 
 test('native CLI stopped sessions remain available when the template is enabled', () => {

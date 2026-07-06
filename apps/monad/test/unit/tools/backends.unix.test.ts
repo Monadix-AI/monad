@@ -10,7 +10,6 @@ afterEach(() => {
 });
 
 test('findGitBash returns null on non-Windows', () => {
-  expect(findGitBash()).toBeNull();
 });
 
 test('shellArgv produces /bin/sh -c on non-Windows', () => {

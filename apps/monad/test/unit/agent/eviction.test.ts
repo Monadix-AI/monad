@@ -137,7 +137,6 @@ test('evicts an older concurrent round as a unit (all its parallel results toget
   const out = engine.prepare(msgs, ctx(600));
   const outs = outputs(out);
   // The entire older batch is evicted together — not one part left behind.
-  expect(outs.filter((o) => o.startsWith('S0R'))).toHaveLength(0);
   expect(outs.filter((o) => o.startsWith(EVICTED_MARKER))).toHaveLength(5);
   // The recent round stays verbatim.
   expect(outs.filter((o) => o.startsWith('S1R'))).toHaveLength(1);

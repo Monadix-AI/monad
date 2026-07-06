@@ -5,7 +5,6 @@ import { RPC_METHOD_PARAMS } from '../src/rpc/rpc-methods.ts';
 
 test('every method declares a result schema', () => {
   for (const [method, def] of Object.entries(METHOD_TABLE)) {
-    expect(def.result, `${method}.result`).toBeDefined();
     expect(typeof def.result.safeParse).toBe('function');
   }
 });

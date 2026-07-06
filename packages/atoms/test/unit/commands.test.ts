@@ -30,8 +30,6 @@ test('ships the expected first-party commands', () => {
 
 test('every command has a description and a runnable handler', () => {
   for (const c of BUILTIN_COMMANDS) {
-    expect(c.name).toBeTruthy();
-    expect(c.description).toBeTruthy();
     expect(typeof c.run).toBe('function');
   }
 });

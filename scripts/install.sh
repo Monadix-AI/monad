@@ -25,7 +25,6 @@
 #   MONAD_TARBALL         — path to a local tarball, skips download
 #   MONAD_SKIP_VERIFY     — set to 1 to skip SHA256 verification
 #   MONAD_NO_DAEMON       — set to 1 to skip auto-starting the daemon after install
-#   MONAD_GITHUB_REPO     — GitHub owner/repo (default: OWNER/monad)
 #   MONAD_APPLICATIONS_DIR — macOS app launcher directory override (default: ~/Applications)
 #   MONAD_DESKTOP_DIR     — Linux desktop launcher directory override (default: ~/Desktop)
 #   XDG_DATA_HOME         — Linux app-menu launcher root override (default: ~/.local/share)
@@ -34,7 +33,7 @@ set -euo pipefail
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 
-GITHUB_REPO="${MONAD_GITHUB_REPO:-monadix-labs/monad}"
+RELEASE_REPOSITORY="monadix-labs/monad"
 INSTALL_DIR="${MONAD_INSTALL_DIR:-$HOME/.monad}"
 CHANNEL="stable"
 SKIP_VERIFY="${MONAD_SKIP_VERIFY:-0}"
@@ -427,8 +426,14 @@ main() {
       info "Replacing installed ${existing_version} → ${version}"
     fi
 
-    artifact_name="monad-${version}-${platform}"
-    local release_url="https://github.com/${GITHUB_REPO}/releases/download/${version}/${artifact_name}.tar.gz"
+    local release_tag="$version"
+    case "$release_tag" in
+      v*) ;;
+      *) release_tag="v${release_tag}" ;;
+    esac
+    local artifact_version="${version#v}"
+    artifact_name="monad-${artifact_version}-${platform}"
+    local release_url="https://github.com/${RELEASE_REPOSITORY}/releases/download/${release_tag}/${artifact_name}.tar.gz"
     local checksum_url="${release_url}.sha256"
 
     step "Downloading Monad CLI"
@@ -535,7 +540,7 @@ download_latest_version() {
   # stable → /releases/latest (pre-releases excluded by GitHub).
   # beta/nightly → /releases list, filter by tag pattern, take the first hit.
   if [ "$CHANNEL" = "stable" ]; then
-    local api_url="https://api.github.com/repos/${GITHUB_REPO}/releases/latest"
+    local api_url="https://api.github.com/repos/${RELEASE_REPOSITORY}/releases/latest"
     if command -v curl &>/dev/null; then
       response=$(curl --proto '=https' --tlsv1.2 -fsSL "$api_url")
     else
@@ -543,7 +548,7 @@ download_latest_version() {
     fi
     echo "$response" | grep '"tag_name"' | sed -E 's/.*"tag_name": *"([^"]+)".*/\1/'
   else
-    local api_url="https://api.github.com/repos/${GITHUB_REPO}/releases?per_page=50"
+    local api_url="https://api.github.com/repos/${RELEASE_REPOSITORY}/releases?per_page=50"
     if command -v curl &>/dev/null; then
       response=$(curl --proto '=https' --tlsv1.2 -fsSL "$api_url")
     else
@@ -553,7 +558,7 @@ download_latest_version() {
     tag=$(echo "$response" | grep '"tag_name"' | grep -- "-${CHANNEL}\." | head -1 \
           | sed -E 's/.*"tag_name": *"([^"]+)".*/\1/')
     if [ -z "$tag" ]; then
-      fatal "No ${CHANNEL} release found. Check https://github.com/${GITHUB_REPO}/releases or use MONAD_VERSION."
+      fatal "No ${CHANNEL} release found. Check https://github.com/${RELEASE_REPOSITORY}/releases or use MONAD_VERSION."
     fi
     echo "$tag"
   fi

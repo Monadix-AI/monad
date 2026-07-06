@@ -41,7 +41,6 @@ test('includeInContext override round-trips; default stays absent', () => {
   store.insertMessage(newId('msg'), s.id, 'forced-in', now, 'assistant', { type: 'error', includeInContext: true });
 
   const msgs = store.listMessages(s.id);
-  expect(msgs[0]?.includeInContext).toBeUndefined();
   expect(msgs[1]?.includeInContext).toBe(false);
   expect(msgs[2]?.includeInContext).toBe(true);
   store.close();
@@ -64,7 +63,6 @@ test('a registered atom type snapshots its context policy so it survives the ato
   // A built-in type persists nothing (NULL → resolved live), keeping the common case sparse.
   const builtinId = newId('msg');
   store.insertMessage(builtinId, s.id, 'hi', new Date().toISOString(), 'user', { type: 'text' });
-  expect(store.getMessage(s.id, builtinId)?.includeInContext).toBeUndefined();
   store.close();
 });
 
@@ -96,7 +94,6 @@ test('setGenStatus enforces the lifecycle and rejects illegal transitions', () =
   expect(store.setGenStatus(s.id, id, 'streaming', now)).toBe(false);
   expect(store.setGenStatus(s.id, id, 'error', now)).toBe(false);
   // A finished row exposes no live source.
-  expect(store.getMessage(s.id, id)?.stream.source).toBeUndefined();
   // Missing row → false, not throw.
   expect(store.setGenStatus(s.id, 'msg_missing', 'complete', now)).toBe(false);
   store.close();

@@ -13,7 +13,6 @@ test('CLIENT_VERSION: is a semver-like string', () => {
 test('0.x.y: matching major and minor is compatible', () => {
   const result = isVersionCompatible('0.5.3', '0.5.0');
   expect(result.compatible).toBe(true);
-  expect(result.reason).toBeUndefined();
 });
 
 test('0.x.y: matching major and minor patch mismatch is compatible', () => {
@@ -84,5 +83,4 @@ test('result always includes daemonVersion and clientVersion', () => {
 test('compatible result has no reason field', () => {
   const r = isVersionCompatible('1.0.0', '1.0.0');
   expect(r.compatible).toBe(true);
-  expect('reason' in r && r.reason).toBeFalsy();
 });

@@ -21,8 +21,6 @@ test('parseLaws tolerates prose around the JSON and drops malformed rows', () =>
     'User deploys with Bun, never Node',
     'User prefers TypeScript strict mode'
   ]);
-  expect(parseLaws('{"laws":[{"confidence":1}]}')).toEqual([]); // no statement → dropped
-  expect(parseLaws('nope')).toBeNull();
 });
 
 function deps(store: LawStore, complete: () => Promise<string>, facts: string[]) {

@@ -56,7 +56,6 @@ test('createSessionUiEventsSseResponse buffers early UI events until the stream 
   });
 
   const reader = response.body?.getReader();
-  expect(reader).toBeDefined();
   if (!reader) throw new Error('response body reader missing');
   const firstChunk = await reader.read();
   expect(firstChunk.done).toBe(false);

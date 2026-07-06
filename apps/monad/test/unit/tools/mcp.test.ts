@@ -54,10 +54,8 @@ test('image content blocks stay off metadata but reach modelContent', async () =
 
   // Vision channel: modelContent surfaces the decoded image bytes for the model.
   const parts = output.modelContent;
-  expect(parts).toBeDefined();
   if (!Array.isArray(parts)) throw new Error('expected multimodal model content');
   const image = parts.find((p) => p.type === 'image');
-  expect(image).toBeDefined();
   if (image?.type !== 'image') throw new Error('expected an image part');
   expect(image.mediaType).toBe('image/png');
   expect(image.image).toBeInstanceOf(Uint8Array);

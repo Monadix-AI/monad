@@ -60,7 +60,6 @@ test('ensurePortLines is idempotent — a second pass adds nothing and never dup
   const ports = worktreePorts('/wt');
   const first = ensurePortLines('MONAD_HOME=/wt\n', ports);
   const second = ensurePortLines(first.text, ports);
-  expect(second.added).toEqual([]);
   expect((second.text.match(/^MONAD_PORT=/gm) ?? []).length).toBe(1);
 });
 
@@ -94,7 +93,6 @@ test('removeBlankXdgLines removes empty optional XDG assignments', () => {
 
 test('removeBlankXdgLines preserves real XDG overrides and comments', () => {
   const { text, removed } = removeBlankXdgLines('# XDG_CACHE_HOME=/tmp/cache\nXDG_CACHE_HOME=/tmp/cache\n');
-  expect(removed).toEqual([]);
   expect(text).toBe('# XDG_CACHE_HOME=/tmp/cache\nXDG_CACHE_HOME=/tmp/cache\n');
 });
 

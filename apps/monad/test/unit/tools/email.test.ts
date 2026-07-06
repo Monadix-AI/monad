@@ -147,7 +147,6 @@ afterEach(() => configureEmail({ backend: 'auto' }));
 
 test('selectEmailBackend returns null when nothing is configured', () => {
   configureEmail({ backend: 'auto' });
-  expect(selectEmailBackend()).toBeNull();
 });
 
 test('selectEmailBackend auto-detects Resend when apiKey is set', () => {

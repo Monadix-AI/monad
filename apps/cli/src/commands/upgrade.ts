@@ -9,7 +9,7 @@ import { MONAD_VERSION } from '@monad/protocol';
 import { t } from '../lib/i18n.ts';
 import { bold, dim, green, json, out, yellow } from '../lib/output.ts';
 
-const GITHUB_REPO = 'monadix-labs/monad';
+const RELEASE_REPOSITORY = 'Monadix-AI/monad';
 
 interface ReleaseInfo {
   tag_name: string;
@@ -51,10 +51,11 @@ function resolveDeps(deps: UpgradeCommandDeps = {}): ResolvedUpgradeCommandDeps 
     binaryPath: typeof binaryPath === 'function' ? binaryPath : () => binaryPath ?? process.execPath,
     platform,
     installScriptName,
-    releaseApiBaseUrl: deps.releaseApiBaseUrl ?? `https://api.github.com/repos/${GITHUB_REPO}`,
+    releaseApiBaseUrl: deps.releaseApiBaseUrl ?? `https://api.github.com/repos/${RELEASE_REPOSITORY}`,
     releaseDownloadBaseUrl: deps.releaseDownloadBaseUrl ?? 'https://github.com',
     installScriptUrl:
-      deps.installScriptUrl ?? `https://raw.githubusercontent.com/${GITHUB_REPO}/main/scripts/${installScriptName}`,
+      deps.installScriptUrl ??
+      `https://raw.githubusercontent.com/${RELEASE_REPOSITORY}/main/scripts/${installScriptName}`,
     installerEnv: deps.installerEnv ?? {},
     fetch: deps.fetch ?? ((...args) => globalThis.fetch(...args))
   };
@@ -93,7 +94,7 @@ async function fetchLatestRelease(channel: string, deps: ResolvedUpgradeCommandD
 async function fetchInstallScriptHash(tag: string, deps: ResolvedUpgradeCommandDeps): Promise<string> {
   try {
     const res = await deps.fetch(
-      `${deps.releaseDownloadBaseUrl}/${GITHUB_REPO}/releases/download/${tag}/${deps.installScriptName}.sha256`,
+      `${deps.releaseDownloadBaseUrl}/${RELEASE_REPOSITORY}/releases/download/${tag}/${deps.installScriptName}.sha256`,
       {
         headers: { 'User-Agent': 'monad-cli' }
       }

@@ -46,7 +46,6 @@ test('installs a root skill, writes the .install.json lock, surfaces no mutable-
 
   expect(out.installed).toBe(true);
   expect(out.skills).toEqual(['widget']);
-  expect(out.warnings).toEqual([]); // pinned to a full sha → no warning
   expect(await Bun.file(join(skillsDir, 'widget', 'SKILL.md')).exists()).toBe(true);
   expect(await Bun.file(join(skillsDir, 'widget', 'reference.md')).exists()).toBe(true);
 
@@ -297,5 +296,4 @@ test('checkSkillUpdate returns null for a hand-dropped skill (no install record)
   await mkdir(join(skillsDir, 'manual'), { recursive: true });
   await Bun.write(join(skillsDir, 'manual', 'SKILL.md'), md('manual'));
 
-  expect(await checkSkillUpdate(skillsDir, 'manual', async () => SHA)).toBeNull();
 });

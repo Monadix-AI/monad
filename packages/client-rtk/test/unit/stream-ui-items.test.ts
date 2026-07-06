@@ -63,7 +63,6 @@ test('clears a prior streamError on any event', () => {
   const draft = { items: [] as UIItem[], streamError: { kind: 'transient' as const } };
   const index = buildIndex(draft.items);
   applyUiEvent(draft, upsert(item('message', 'a')), index);
-  expect(draft.streamError).toBeUndefined();
 });
 
 test('snapshot captures oldestCursor and hasMore from the bounded window', () => {

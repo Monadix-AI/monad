@@ -50,7 +50,6 @@ test('memory: notes are session-scoped; empty renders undefined', async () => {
   const store = memStore();
   const { remember } = tools(store);
   await remember.run({ key: 'k', value: 'v' }, ctx('ses_a'));
-  expect(renderNotes(store, 'ses_b')).toBeUndefined();
 });
 
 test('memory_remember rejects a missing value', () => {

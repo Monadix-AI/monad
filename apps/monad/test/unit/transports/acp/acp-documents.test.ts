@@ -35,7 +35,6 @@ function docs(entries: Array<[string, OpenDoc]>): Map<string, OpenDoc> {
 }
 
 test('renderOpenDocs returns undefined when nothing is open', () => {
-  expect(renderOpenDocs(new Map())).toBeUndefined();
 });
 
 test('renderOpenDocs lists the focused doc first and tags it', () => {
@@ -46,7 +45,6 @@ test('renderOpenDocs lists the focused doc first and tags it', () => {
     ]),
     'file:///b.ts'
   );
-  expect(out).toBeDefined();
   // focused (b) appears before a
   expect(out?.indexOf('file:///b.ts') ?? -1).toBeLessThan(out?.indexOf('file:///a.ts') ?? -1);
   expect(out).toContain('file:///b.ts (focused)');

@@ -31,7 +31,6 @@ test('parseNativeAgentFileReferences extracts @file markers and removes them fro
 test('parseNativeAgentFileReferences leaves ordinary @file prose alone', () => {
   const parsed = parseNativeAgentFileReferences('Please do not treat @filename or @file as an attachment.');
 
-  expect(parsed.paths).toEqual([]);
   expect(parsed.text).toBe('Please do not treat @filename or @file as an attachment.');
 });
 

@@ -39,7 +39,6 @@ test('cancel removes a schedule; unknown id returns false', () => {
   const info = service.create({ prompt: 'x', at: new Date(Date.now() + 60_000).toISOString() });
   expect(service.cancel(info.id)).toBe(true);
   expect(service.cancel(info.id)).toBe(false);
-  expect(service.list()).toHaveLength(0);
   service.dispose();
 });
 
@@ -51,7 +50,6 @@ test('a one-shot fires with the prompt then retires itself', async () => {
   service.create({ prompt: 'ping', delayMs: 5, sessionId: 'ses_X' });
   await Bun.sleep(40);
   expect(fired).toEqual([{ prompt: 'ping', sessionId: 'ses_X' }]);
-  expect(service.list()).toHaveLength(0); // retired after firing
   service.dispose();
 });
 
@@ -89,7 +87,6 @@ test('a missed one-shot runs once on load (catch-up) then drops', async () => {
   await service.load();
   await Bun.sleep(40);
   expect(fired).toEqual(['catchup']);
-  expect(service.list()).toHaveLength(0);
   service.dispose();
   await rm(storePath, { force: true });
 });

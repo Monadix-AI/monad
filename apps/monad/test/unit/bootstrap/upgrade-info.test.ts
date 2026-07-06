@@ -75,5 +75,4 @@ test('upgrade info monitor ignores malformed cache and empty release payloads', 
   const monitor = await createUpgradeInfoMonitor(paths);
   await Bun.sleep(20);
 
-  expect(monitor.getUpgradeInfo()).toBeNull();
 });

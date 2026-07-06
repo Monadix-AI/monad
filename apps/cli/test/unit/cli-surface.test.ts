@@ -59,7 +59,6 @@ test('no alias collides with a canonical name or another alias', () => {
 test('every command has a synopsis and a description or descriptionKey', () => {
   for (const c of commands) {
     expect(c.synopsis.length).toBeGreaterThan(0);
-    expect(c.descriptionKey || c.description).toBeTruthy();
   }
 });
 

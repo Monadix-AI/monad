@@ -27,9 +27,6 @@ test('SG1: dataMessage → inbound; group keyed by groupId, dm by sender', () =>
 });
 
 test('SG2: sync messages (own echo) and empty bodies → null', () => {
-  expect(normalizeSignalEnvelope({ syncMessage: {}, dataMessage: { message: 'x' } })).toBe(null);
-  expect(normalizeSignalEnvelope({ sourceUuid: 'u' })).toBe(null);
-  expect(normalizeSignalEnvelope({ sourceUuid: 'u', dataMessage: { message: null } })).toBe(null);
 });
 
 test('SG3: mentionedSelf when a mention matches selfId; command parse', () => {

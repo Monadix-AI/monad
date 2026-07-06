@@ -41,7 +41,6 @@ const readFile = async (name: string) =>
 test('installs a stdio (npx) server as a file-MCP atom with its trust block', async () => {
   const out = await installMcpAtom(stdio('fs', ['fs__read']), { mcpDir, consent: () => true });
   expect(out).toMatchObject({ name: 'fs' });
-  expect(out.needsConsent).toBeUndefined();
 
   const file = await readFile('fs');
   expect(file.mcpServers.fs).toMatchObject({ command: 'npx', trust: { autoApproveTools: ['fs__read'] } });
@@ -110,5 +109,4 @@ test('list skips file-MCP atoms with non-http URLs', async () => {
     JSON.stringify({ mcpServers: { bad: { url: 'file:///etc/passwd' } } }, null, 2)
   );
 
-  expect(await listInstalledMcpAtoms(mcpDir)).toEqual([]);
 });

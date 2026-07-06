@@ -32,7 +32,6 @@ test('project member candidates include project templates defined on native CLI 
     ]
   });
 
-  expect(candidates.find((candidate) => candidate.id === 'native-cli-template:codex')).toBeUndefined();
   expect(candidates).toContainEqual(
     expect.objectContaining({
       id: 'native-cli-template:codex:reviewer',

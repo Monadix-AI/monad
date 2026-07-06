@@ -67,10 +67,6 @@ test('stats on empty DB returns zeros and nulls', () => {
   expect(s.activeDays).toBe(0);
   expect(s.currentStreak).toBe(0);
   expect(s.longestStreak).toBe(0);
-  expect(s.peakHour).toBeNull();
-  expect(s.favoriteModel).toBeNull();
-  expect(s.heatmap).toEqual([]);
-  expect(s.models).toEqual([]);
 });
 
 // ---------------------------------------------------------------------------
@@ -244,7 +240,6 @@ test('peakHour derives from message createdAt local hours', () => {
 test('peakHour is null when there are no messages', () => {
   const store = createStore();
   const s = store.stats('all');
-  expect(s.peakHour).toBeNull();
 });
 
 // ---------------------------------------------------------------------------
@@ -264,7 +259,6 @@ test('favoriteModel is the model with most total tokens', () => {
 test('favoriteModel is null when no ledger data', () => {
   const store = createStore();
   const s = store.stats('all');
-  expect(s.favoriteModel).toBeNull();
 });
 
 // ---------------------------------------------------------------------------

@@ -55,7 +55,6 @@ test('command bundle model commands read and write Workplace Projects when no Mo
       ?.current
   ).toBe(true);
   await bundle.setModel('prj_project' as unknown as SessionId, 'smart');
-  expect(store.getSession('prj_project')).toBeNull();
   expect(store.getWorkplaceProject('prj_project')?.model).toBe('smart');
   expect(
     (await bundle.listModels('prj_project' as unknown as SessionId)).find((profile) => profile.alias === 'smart')

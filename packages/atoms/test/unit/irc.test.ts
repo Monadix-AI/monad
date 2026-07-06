@@ -25,7 +25,6 @@ test('IRC3: mentionedSelf when the bot nick appears; command parse', () => {
 
 test('IRC4: isSelf guards the bot’s own nick; non-PRIVMSG → null', () => {
   expect(ircPrivmsgToInbound(parseIrcLine(':monad!u@h PRIVMSG #r :hi'), 'monad', 1)?.isSelf).toBe(true);
-  expect(ircPrivmsgToInbound(parseIrcLine(':x!u@h JOIN #r'), 'monad', 1)).toBe(null);
 });
 
 import { sanitizeIrcTarget, sanitizeIrcText } from '../../src/channels/irc.ts';

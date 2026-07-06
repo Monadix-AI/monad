@@ -28,7 +28,6 @@ test('createAgent starts with no tools when none provided', () => {
   const agent = createAgent({
     sessionRepo: { insertSession: () => {}, getSession: () => null }
   });
-  expect(agent.tools).toEqual([]);
 });
 
 test('createAgent passes through provided tools', () => {

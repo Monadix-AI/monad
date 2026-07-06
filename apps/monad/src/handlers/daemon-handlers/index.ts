@@ -52,6 +52,7 @@ import { createSandboxModule } from '@/handlers/settings/sandbox/index.ts';
 import { createSkillsSettingsModule } from '@/handlers/settings/skills/index.ts';
 import { createStartupSettingsModule } from '@/handlers/settings/startup/index.ts';
 import { createToolBackendsModule } from '@/handlers/settings/tool-backends/index.ts';
+import { createSystemUpgradeModule } from '@/handlers/system-upgrade.ts';
 import { createTranscriptProjector } from '@/handlers/transcript/projector.ts';
 import { resolveNativeCliAgentEnv } from '@/services/native-cli/env.ts';
 import { NativeCliHost } from '@/services/native-cli/host/index.ts';
@@ -94,7 +95,8 @@ export function createDaemonHandlers(deps: DaemonHandlerDeps) {
 
   const oversight = createOversightHandlers(deps.oversight);
   const clarify = createClarifyHandlers(deps.clarify);
-  const system = createSystemHandlers();
+  const systemUpgrade = createSystemUpgradeModule({ getUpgradeInfo: deps.getUpgradeInfo });
+  const system = createSystemHandlers(systemUpgrade);
   const delegation = createDelegationHandlers(deps.delegation);
 
   const skillCatalogs = createSkillCatalogs();

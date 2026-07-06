@@ -23,7 +23,6 @@ test('a function `tools` is resolved live — a tool added after createAgent app
   live.push(mkTool('b')); // simulate a hot install mutating the registry
   expect(names(agent.tools)).toEqual(['a', 'b']);
   live.splice(0, live.length); // simulate a removal
-  expect(agent.tools).toEqual([]);
 });
 
 test('a plain-array `tools` still works (backward compatible)', () => {

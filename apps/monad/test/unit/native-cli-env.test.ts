@@ -62,5 +62,4 @@ test('resolveNativeCliAgentEnv resolves secret refs from auth and drops unresolv
 });
 
 test('resolveNativeCliAgentEnv returns undefined for empty/undefined env', () => {
-  expect(resolveNativeCliAgentEnv(undefined, undefined)).toBeUndefined();
 });

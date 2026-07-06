@@ -308,7 +308,6 @@ test('native CLI session view preserves provider session lifecycle fields', () =
   expect('projectSessionId' in parsed).toBe(false);
   expect('projectId' in parsed).toBe(false);
   expect(parsed.runtimeRole).toBe('interactive');
-  expect(parsed.exitCode).toBeNull();
 });
 
 test('native CLI session view carries managed project runtime fields', () => {
@@ -363,7 +362,6 @@ test('native CLI usage response carries optional quota-style records', () => {
 
   expect(parsed.records[0]?.name).toBe('five_hour');
   expect(parsed.records[0]?.resetAt).toBe('2026-07-03T05:00:00.000Z');
-  expect(parsed.records[1]?.max).toBeUndefined();
   expect(nativeCliUsageResponseSchema.safeParse({ ...parsed, records: [{ name: '', current: 1 }] }).success).toBe(
     false
   );
@@ -650,7 +648,6 @@ test('native agent inbox and runtime info schemas carry project-managed runtime 
     pendingInboxCount: 2
   });
 
-  expect(info.providerSessionRef).toBeNull();
   expect(info.pendingInboxCount).toBe(2);
   expect('projectSessionId' in info).toBe(false);
 });

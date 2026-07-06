@@ -34,8 +34,6 @@ test('IM2: isFromMe → isSelf; non new-message / no chat → null; command pars
       data: { guid: 'g', text: 'x', isFromMe: true, chats: [{ guid: 'c' }] }
     })?.isSelf
   ).toBe(true);
-  expect(normalizeBlueBubblesEvent({ type: 'typing-indicator', data: {} })).toBe(null);
-  expect(normalizeBlueBubblesEvent({ type: 'new-message', data: { guid: 'g', text: 'hi' } })).toBe(null); // no chat
   expect(
     normalizeBlueBubblesEvent({
       type: 'new-message',

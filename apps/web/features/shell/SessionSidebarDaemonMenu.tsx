@@ -1,18 +1,27 @@
 'use client';
 
+import type { SystemUpgradeStatus } from '@monad/protocol';
 import type { useT } from '@/components/I18nProvider';
 
 import {
   CircleCheckIcon,
   HouseIcon,
+  LoaderPinwheelIcon,
   PlusSignIcon,
   ServerStack01Icon,
   Settings02Icon,
   SlidersHorizontalIcon
 } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react';
+import { useGetSystemUpgradeQuery, useStartSystemUpgradeMutation } from '@monad/client-rtk';
 import { Button, cn, Tooltip, TooltipContent, TooltipTrigger } from '@monad/ui';
-import { type KeyboardEvent as ReactKeyboardEvent, useEffect, useState } from 'react';
+import {
+  type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
+  useEffect,
+  useRef,
+  useState
+} from 'react';
 
 import {
   DropdownMenu,
@@ -163,9 +172,18 @@ export function DaemonMenu({
   const [remoteConnections, setRemoteConnections] = useState<RemoteDaemonConnection[]>([]);
   const [activeConnection, setActiveConnection] = useState(() => getActiveDaemonConnection(daemonBaseUrl));
   const [showConnectionLabel, setShowConnectionLabel] = useState(false);
+  const reloadScheduledRef = useRef(false);
+  const { data: upgradeStatus } = useGetSystemUpgradeQuery(undefined, {
+    pollingInterval: hasUpgrade ? 1000 : 0,
+    skip: !hasUpgrade
+  });
+  const [startSystemUpgrade, { isLoading: isStartingUpgrade }] = useStartSystemUpgradeMutation();
   const hasConnectionChoices = remoteConnections.length > 0;
   const activeConnectionMeta = daemonStatus === 'online' ? 'Connected' : daemonStatusText;
   const activeConnectionVersion = daemonStatus === 'online' ? daemonVersion : undefined;
+  const upgradeStage = upgradeStatus?.stage ?? 'idle';
+  const upgradeActive = upgradeStatusIsActive(upgradeStage) || isStartingUpgrade;
+  const upgradeLabel = upgradeActive ? upgradeDisplayLabel(upgradeStage) : 'Update';
 
   useEffect(() => {
     setRemoteConnections(readRemoteDaemonConnections());
@@ -184,6 +202,15 @@ export function DaemonMenu({
     }, 3200);
     return () => window.clearInterval(interval);
   }, [hasConnectionChoices]);
+
+  useEffect(() => {
+    if ((upgradeStatus?.stage !== 'restarting' && upgradeStatus?.stage !== 'complete') || reloadScheduledRef.current) {
+      return;
+    }
+    reloadScheduledRef.current = true;
+    const timeout = window.setTimeout(() => window.location.reload(), 2000);
+    return () => window.clearTimeout(timeout);
+  }, [upgradeStatus?.stage]);
 
   const onSelectLocalDaemon = () => {
     if (activeConnection.id === LOCAL_DAEMON_ID) return;
@@ -205,37 +232,70 @@ export function DaemonMenu({
     onToggleSettings();
   };
 
+  const startUpgrade = async () => {
+    if (upgradeActive) return;
+    await startSystemUpgrade().unwrap();
+  };
+
+  const onUpgradeClick = async (event: ReactMouseEvent<HTMLElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    await startUpgrade();
+  };
+
   return (
     <>
       <DropdownMenu
         onOpenChange={onOpenChange}
         open={menuOpen}
       >
-        <DropdownMenuTrigger asChild>
-          <button
-            className={cn(
-              'flex min-w-0 flex-1 items-center gap-2.5 rounded-(--radius-md) px-2.5 py-2 text-left transition hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
-              (showSettings || menuOpen) && 'bg-sidebar-accent text-sidebar-accent-foreground'
-            )}
-            type="button"
-          >
-            <div className="rounded-full border border-border/80 bg-background/60 p-1.5">
-              <HugeiconsIcon
-                className="size-4"
-                icon={ServerStack01Icon}
-              />
-            </div>
-            {showConnectionLabel ? (
-              <span className="min-w-0 flex-1 font-normal leading-tight">
-                <span className="block truncate text-ui">{activeConnection.label}</span>
-                <span className="block truncate text-muted-foreground text-xs">{activeConnectionMeta}</span>
-              </span>
-            ) : (
-              <span className="min-w-0 flex-1 font-normal text-ui leading-control">{t('web.daemon.label')}</span>
-            )}
-            {hasUpgrade ? <span className="ml-auto size-2 shrink-0 rounded-full bg-accent-blue" /> : null}
-          </button>
-        </DropdownMenuTrigger>
+        <div className="relative flex min-w-0 flex-1">
+          <DropdownMenuTrigger asChild>
+            <button
+              className={cn(
+                'flex min-w-0 flex-1 items-center gap-2.5 rounded-(--radius-md) px-2.5 py-2 text-left transition hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
+                hasUpgrade && 'pr-24',
+                (showSettings || menuOpen) && 'bg-sidebar-accent text-sidebar-accent-foreground'
+              )}
+              type="button"
+            >
+              <div className="rounded-full border border-border/80 bg-background/60 p-1.5">
+                <HugeiconsIcon
+                  className="size-4"
+                  icon={ServerStack01Icon}
+                />
+              </div>
+              {showConnectionLabel ? (
+                <span className="min-w-0 flex-1 font-normal leading-tight">
+                  <span className="block truncate text-ui">{activeConnection.label}</span>
+                  <span className="block truncate text-muted-foreground text-xs">{activeConnectionMeta}</span>
+                </span>
+              ) : (
+                <span className="min-w-0 flex-1 font-normal text-ui leading-control">{t('web.daemon.label')}</span>
+              )}
+            </button>
+          </DropdownMenuTrigger>
+          {hasUpgrade ? (
+            <button
+              aria-label={upgradeLabel}
+              className={cn(
+                'absolute top-1/2 right-2 inline-flex shrink-0 -translate-y-1/2 items-center gap-1 rounded-full border border-accent-blue/30 bg-accent-blue/10 px-2 py-0.5 font-medium text-[10px] text-accent-blue leading-none',
+                !upgradeActive && 'hover:bg-accent-blue/15'
+              )}
+              disabled={upgradeActive}
+              onClick={onUpgradeClick}
+              type="button"
+            >
+              {upgradeActive ? (
+                <HugeiconsIcon
+                  className="size-3 animate-spin"
+                  icon={LoaderPinwheelIcon}
+                />
+              ) : null}
+              {upgradeLabel}
+            </button>
+          ) : null}
+        </div>
         <DropdownMenuContent
           align="start"
           className="w-[min(20rem,calc(100vw-1rem))]"
@@ -315,7 +375,11 @@ export function DaemonMenu({
                 icon={Settings02Icon}
               />
               <span>{t('web.sidebar.settings')}</span>
-              {hasUpgrade ? <span className="size-2 shrink-0 rounded-full bg-accent-blue" /> : null}
+              {hasUpgrade ? (
+                <span className="ml-auto rounded-full border border-accent-blue/30 bg-accent-blue/10 px-2 py-0.5 font-medium text-[10px] text-accent-blue leading-none">
+                  Update
+                </span>
+              ) : null}
               <DropdownMenuShortcut>
                 {shortcutModifierLabel}
                 {','}
@@ -344,4 +408,20 @@ export function DaemonMenu({
       />
     </>
   );
+}
+
+function upgradeStatusIsActive(stage: SystemUpgradeStatus['stage']): boolean {
+  return (
+    stage === 'checking' ||
+    stage === 'downloading' ||
+    stage === 'verifying' ||
+    stage === 'installing' ||
+    stage === 'restarting'
+  );
+}
+
+function upgradeDisplayLabel(stage: SystemUpgradeStatus['stage']): string {
+  if (stage === 'installing') return 'Installing';
+  if (stage === 'restarting' || stage === 'complete') return 'Restart';
+  return 'Downloading';
 }

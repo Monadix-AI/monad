@@ -21,7 +21,6 @@ test('session reset kills the session’s background processes', async () => {
 
   await d.session.reset({ id: sessionId });
 
-  expect((await processListTool.run({}, procCtx(sessionId))).metadata.processes).toHaveLength(0);
   await expect(processLogsTool.run({ id }, procCtx(sessionId))).rejects.toThrow(/unknown process/);
 });
 

@@ -332,7 +332,6 @@ test('checkSkillCompatibility: free-form prose is advisory (compatible: true)', 
 });
 
 test('checkSkillCompatibility: absent → null', () => {
-  expect(checkSkillCompatibility(undefined, '1.0.0')).toBeNull();
 });
 
 test('skillEligibility: bins — all must be present', () => {

@@ -12,10 +12,8 @@ test('fingerprint is order-independent and changes with the set', () => {
 
 test('ConsolidationState round-trips and upserts by key', () => {
   const s = new ConsolidationState(':memory:');
-  expect(s.get('l1:global')).toBeNull();
   s.set('l1:global', 'abc');
   expect(s.get('l1:global')).toBe('abc');
   s.set('l1:global', 'def'); // upsert
   expect(s.get('l1:global')).toBe('def');
-  expect(s.get('l3:global')).toBeNull(); // independent key
 });

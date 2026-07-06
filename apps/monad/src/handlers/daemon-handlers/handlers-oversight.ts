@@ -2,13 +2,16 @@ import type {
   ApprovalMutationResponse,
   ApprovalScope,
   ListApprovalsResponse,
-  PickDirectoryResponse
+  PickDirectoryResponse,
+  SystemUpgradeStatus
 } from '@monad/protocol';
 import type { DelegationService } from '@/services/delegation/delegation.ts';
 import type { ClarifyService } from '@/services/generation/clarify.ts';
 import type { OversightService } from '@/services/oversight.ts';
 
 import { pickDirectory } from '@monad/home';
+
+import { createSystemUpgradeModule } from '@/handlers/system-upgrade.ts';
 
 /** Human-in-the-loop control surfaces with no dependency on the rest of the daemon composition
  *  root: tool-approval gate CRUD, the clarify_ask response channel, the native directory picker,
@@ -72,7 +75,7 @@ export function createClarifyHandlers(clarify: ClarifyService) {
   };
 }
 
-export function createSystemHandlers() {
+export function createSystemHandlers(upgrade: ReturnType<typeof createSystemUpgradeModule>) {
   return {
     async pickDirectory({
       prompt,
@@ -82,6 +85,12 @@ export function createSystemHandlers() {
       defaultPath?: string;
     }): Promise<PickDirectoryResponse> {
       return { path: await pickDirectory({ prompt, defaultPath }) };
+    },
+    async getUpgradeStatus(): Promise<SystemUpgradeStatus> {
+      return upgrade.getStatus();
+    },
+    async startUpgrade(): Promise<SystemUpgradeStatus> {
+      return upgrade.start();
     }
   };
 }

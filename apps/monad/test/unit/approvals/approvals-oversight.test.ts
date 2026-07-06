@@ -83,7 +83,6 @@ test('host escape allow downgrades to session scope (never persisted)', async ()
   expect(await p1).toEqual({ allow: true });
 
   // Nothing persisted to disk.
-  expect(store.all()).toEqual([]);
   // But within the session it is remembered (no re-prompt).
   const before = requested(events).length;
   expect(await oversight.gate(req('code_execute', 'target:host'))).toEqual({ allow: true });

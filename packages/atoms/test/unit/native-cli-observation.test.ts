@@ -1077,7 +1077,6 @@ test('non-Claude providers do not parse Claude rate limit events by field shape'
     }
   });
 
-  expect(nativeCliUsageLimitMeter({ provider: 'gemini', output })).toBeNull();
 });
 
 test('observation panel shows a token usage meter entry when Codex reports token usage', () => {

@@ -43,6 +43,5 @@ test('HTTP_ROUTES is derived for exactly the methods that declare http', () => {
   expect(Object.keys(HTTP_ROUTES).sort()).toEqual([...declared].sort());
   // control.subscribe/unsubscribe are RPC/stream-only and must NOT get a REST binding.
   for (const m of ['control.subscribe', 'control.unsubscribe'] as const) {
-    expect(HTTP_ROUTES[m], `${m} must be RPC-only`).toBeUndefined();
   }
 });

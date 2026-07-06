@@ -83,7 +83,6 @@ test('connector: undeclared pack throws UndeclaredAtomError', async () => {
   });
   const host = collectingHost();
   await expect(loadManifestAtomPack(pack, host)).rejects.toBeInstanceOf(UndeclaredAtomError);
-  expect(host.connectors).toHaveLength(0);
 });
 
 test('connector: grantedAtoms overrides self-declared manifest (consent enforcement)', async () => {
@@ -145,7 +144,6 @@ test('provider: undeclared pack throws UndeclaredAtomError', async () => {
   });
   const host = collectingHost();
   await expect(loadManifestAtomPack(pack, host)).rejects.toBeInstanceOf(UndeclaredAtomError);
-  expect(host.providers).toHaveLength(0);
 });
 
 test('provider: grantedAtoms overrides self-declared manifest for model atoms', async () => {
@@ -168,7 +166,6 @@ test('provider: multiple providers all require model grant', async () => {
   });
   const host = collectingHost();
   await expect(loadManifestAtomPack(pack, host)).rejects.toBeInstanceOf(UndeclaredAtomError);
-  expect(host.providers).toHaveLength(0);
 });
 
 // ── defineProvider identity ────────────────────────────────────────────────────

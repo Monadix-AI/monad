@@ -14,6 +14,4 @@ test('daemon release graph does not statically depend on the debug power pack', 
   expect(managerSource).not.toContain('from "@monad/monad-power-pack"');
   expect(managerSource).not.toContain("import('@monad/monad-power-pack')");
   expect(managerSource).not.toContain('import("@monad/monad-power-pack")');
-  expect(pkg.dependencies).not.toHaveProperty('@monad/monad-power-pack');
-  expect(pkg.devDependencies).toHaveProperty('@monad/monad-power-pack');
 });

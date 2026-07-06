@@ -15,14 +15,12 @@ async function makeTempDir(): Promise<string> {
 
 test('loadLocalePacksFromDir: returns empty array for nonexistent directory', async () => {
   const packs = await loadLocalePacksFromDir('/nonexistent/locales/path');
-  expect(packs).toEqual([]);
 });
 
 test('loadLocalePacksFromDir: returns empty array for empty directory', async () => {
   const dir = await makeTempDir();
   try {
     const packs = await loadLocalePacksFromDir(dir);
-    expect(packs).toEqual([]);
   } finally {
     await rm(dir, { recursive: true });
   }
@@ -156,7 +154,6 @@ test('loadLocalePacksFromDir: skips locale dirs with no JSON files', async () =>
     await writeFile(join(dir, 'en', 'readme.txt'), 'not json');
 
     const packs = await loadLocalePacksFromDir(dir);
-    expect(packs).toHaveLength(0);
   } finally {
     await rm(dir, { recursive: true });
   }

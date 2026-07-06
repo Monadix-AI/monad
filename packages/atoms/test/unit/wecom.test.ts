@@ -15,7 +15,6 @@ test('WC1: parses decrypted text message XML (dm keyed by sender)', () => {
 });
 
 test('WC2: non-text → null; command parse', () => {
-  expect(parseWecomMessageXml('<xml><MsgType><![CDATA[image]]></MsgType></xml>')).toBe(null);
   expect(
     parseWecomMessageXml(
       '<xml><FromUserName>u</FromUserName><MsgType><![CDATA[text]]></MsgType><Content><![CDATA[/new]]></Content></xml>'

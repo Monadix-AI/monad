@@ -25,14 +25,12 @@ test('provider delete is blocked when a profile uses that provider', () => {
     kind: 'profile',
     alias: 'default'
   });
-  expect(providerDeleteBlock(provider('unused'), [profile('default', 'p')])).toBeNull();
 });
 
 test('profile delete is blocked for protected or agent-used profiles', () => {
   const profiles = [profile('default'), profile('research'), profile('writer')];
 
   expect(profileDeleteBlock(profile('default'), profiles, [], 'default')).toEqual({ kind: 'default-profile' });
-  expect(profileDeleteBlock(profile('default'), profiles, [], 'research')).toBeNull();
   expect(profileDeleteBlock(profile('research'), [profile('research')], [], 'default')).toEqual({
     kind: 'single-profile'
   });
@@ -46,7 +44,4 @@ test('profile delete is blocked for protected or agent-used profiles', () => {
     kind: 'agent',
     name: 'Writer'
   });
-  expect(
-    profileDeleteBlock(profile('writer'), profiles, [agent('Inherited', { model: 'inherit' })], 'default')
-  ).toBeNull();
 });

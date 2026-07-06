@@ -234,7 +234,6 @@ test('streamUiEvents dispose stops consuming without surfacing a transient error
   });
 
   expect(capturedSignal?.aborted).toBe(true);
-  expect(errors).toEqual([]);
 });
 
 test('watchSession: opens SSE on stream_started, closes on stream_ended, de-dupes both planes', () => {

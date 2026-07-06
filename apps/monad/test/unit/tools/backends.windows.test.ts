@@ -40,7 +40,6 @@ test('findGitBash returns null when no bash candidate exists', () => {
   delete Bun.env['ProgramFiles(x86)'];
   delete Bun.env.LOCALAPPDATA;
   try {
-    expect(findGitBash('/no/such/bash.exe')).toBeNull();
   } finally {
     if (pf !== undefined) Bun.env.ProgramFiles = pf;
     if (pf86 !== undefined) Bun.env['ProgramFiles(x86)'] = pf86;

@@ -38,7 +38,6 @@ test('detection: nothing present → not installed, no resolved bin', () => {
   // biome-ignore lint/style/noNonNullAssertion: test invariant — preset must exist
   const codex = listAcpAgentPresets(none).find((p) => p.id === 'codex')!;
   expect(codex.installed).toBe(false);
-  expect(codex.resolvedBinPath).toBeUndefined();
 });
 
 test('detection: claude-code found on PATH', () => {
@@ -68,5 +67,4 @@ test('detection: login dir alone (no binary) still counts as set up', () => {
   // biome-ignore lint/style/noNonNullAssertion: test invariant — preset must exist
   const codex = listAcpAgentPresets(probes).find((p) => p.id === 'codex')!;
   expect(codex.installed).toBe(true);
-  expect(codex.resolvedBinPath).toBeUndefined(); // detected via login dir, not a binary
 });

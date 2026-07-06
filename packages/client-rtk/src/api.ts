@@ -262,7 +262,9 @@ import {
 } from './endpoints/settings/tool-backends/index.ts';
 import { skillsApi, useListSkillsQuery } from './endpoints/skills/index.ts';
 import { useGetHealthQuery } from './endpoints/system/get-health.ts';
+import { useGetSystemUpgradeQuery } from './endpoints/system/get-system-upgrade.ts';
 import { usePickDirectoryMutation } from './endpoints/system/pick-directory.ts';
+import { useStartSystemUpgradeMutation } from './endpoints/system/start-system-upgrade.ts';
 import { useApproveToolMutation } from './endpoints/tools/approve-tool.ts';
 import { useClarifyRespondMutation } from './endpoints/tools/clarify-respond.ts';
 import { useGetStatsQuery } from './endpoints/usage/get-stats.ts';
@@ -389,6 +391,7 @@ export {
   useGetSkillsSettingsQuery,
   useGetStartupQuery,
   useGetStatsQuery,
+  useGetSystemUpgradeQuery,
   useGetToolBackendsQuery,
   useGetUsageQuery,
   useGetWorkplaceProjectQuery,
@@ -503,6 +506,7 @@ export {
   useSetToolBackendsMutation,
   useStartNativeCliAgentMutation,
   useStartNativeCliAuthMutation,
+  useStartSystemUpgradeMutation,
   useStopNativeCliAuthMutation,
   useStopNativeCliSessionMutation,
   useStreamControlQuery,

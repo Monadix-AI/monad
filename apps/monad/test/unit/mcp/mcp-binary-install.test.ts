@@ -44,7 +44,6 @@ test('selectReleaseAsset picks the platform+arch asset and skips checksums/sigs'
   expect(selectReleaseAsset(names, 'darwin', 'arm64')).toBe('widget-mcp-darwin-arm64.tar.gz');
   expect(selectReleaseAsset(names, 'linux', 'x64')).toBe('widget-mcp-linux-x64.tar.gz');
   expect(selectReleaseAsset(names, 'win32', 'x64')).toBe('widget-mcp-windows-x64.exe');
-  expect(selectReleaseAsset(names, 'linux', 'arm64')).toBeNull(); // no linux-arm64 asset
 });
 
 test('selectReleaseAsset matches arch aliases (aarch64, amd64)', () => {

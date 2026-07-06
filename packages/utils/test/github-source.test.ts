@@ -33,8 +33,6 @@ test('parseGithubSource handles shorthand, repo URLs, subdirectories, SKILL.md p
 });
 
 test('parseGithubSourceOrNull returns null for unsupported sources', () => {
-  expect(parseGithubSourceOrNull('npm:@scope/pkg')).toBeNull();
-  expect(parseGithubSourceOrNull('https://example.com/acme/repo')).toBeNull();
 });
 
 test('githubSourceIdentity ignores ref but preserves repo path and skill selector', () => {

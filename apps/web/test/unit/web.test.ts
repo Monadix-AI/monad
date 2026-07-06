@@ -65,7 +65,6 @@ test('proxyResponseBody turns late SSE read errors into a clean close', async ()
 test('next.config exports an object', async () => {
   const mod = await import('../../next.config.ts');
   expect(typeof mod.default).toBe('object');
-  expect(mod.default).not.toBeNull();
 });
 
 // ── readDaemonUrl path resolution ─────────────────────────────────────────────

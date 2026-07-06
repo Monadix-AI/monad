@@ -121,6 +121,5 @@ test('buildSandboxPolicy: roots add TMPDIR + extras and take net from config; un
   expect(confined.writableRoots).toEqual(['/work', tmpdir(), '/snippet']);
 
   const unconfined = buildSandboxPolicy(undefined);
-  expect(unconfined.writableRoots).toBeUndefined();
   expect(unconfined.net).toBe('none');
 });

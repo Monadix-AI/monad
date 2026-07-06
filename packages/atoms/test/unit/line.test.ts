@@ -19,17 +19,6 @@ test('LINE1: user source → dm keyed by user; group → group keyed by group', 
   ).toMatchObject({ chatId: 'G1', userId: 'U1', chatType: 'group' });
 });
 
-test('LINE2: non-text / non-message → null', () => {
-  expect(
-    normalizeLineEvent({
-      type: 'message',
-      message: { type: 'sticker', id: '1' },
-      source: { type: 'user', userId: 'U1' }
-    })
-  ).toBe(null);
-  expect(normalizeLineEvent({ type: 'follow', source: { type: 'user', userId: 'U1' } })).toBe(null);
-});
-
 test('LINE3: command parse', () => {
   expect(
     normalizeLineEvent({

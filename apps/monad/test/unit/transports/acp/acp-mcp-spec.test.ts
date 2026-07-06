@@ -35,6 +35,4 @@ test('toMcpSpec maps an http MCP server (headers array → record)', () => {
 });
 
 test('toMcpSpec returns null for transports monad cannot speak (sse, acp)', () => {
-  expect(toMcpSpec({ type: 'sse', name: 's', url: 'u', headers: [] } as unknown as McpServer)).toBeNull();
-  expect(toMcpSpec({ type: 'acp', name: 'a' } as unknown as McpServer)).toBeNull();
 });

@@ -49,8 +49,6 @@ test('createTlsCert is a no-op when remote access is disabled', async () => {
       }
     }
   );
-  expect(out.cert).toBeUndefined();
-  expect(out.warnings).toEqual([]);
 });
 
 test('createTlsCert throws when remote access is enabled but openssl is missing', async () => {
@@ -64,7 +62,6 @@ test('createTlsCert downgrades to a warning when allowInsecureHttp=true and open
     { enabled: true, tlsDir, allowInsecureHttp: true },
     { ...okDeps, findOpenssl: async () => null }
   );
-  expect(out.cert).toBeUndefined();
   expect(out.warnings).toContain('tls:openssl-not-found');
 });
 

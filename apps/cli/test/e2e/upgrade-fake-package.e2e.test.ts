@@ -77,10 +77,10 @@ bun -e 'const [url,target]=process.argv.slice(-2); const res=await fetch(url); i
     port: 0,
     fetch(req) {
       const url = new URL(req.url);
-      if (url.pathname === '/repos/monadix-labs/monad/releases/latest') {
+      if (url.pathname === '/repos/Monadix-AI/monad/releases/latest') {
         return Response.json({ tag_name: 'v9.9.9' });
       }
-      if (url.pathname === `/monadix-labs/monad/releases/download/v9.9.9/${installScriptName}.sha256`) {
+      if (url.pathname === `/Monadix-AI/monad/releases/download/v9.9.9/${installScriptName}.sha256`) {
         return new Response(`${installHash}  ${installScriptName}\n`);
       }
       if (url.pathname === `/scripts/${installScriptName}`) {
@@ -96,7 +96,7 @@ bun -e 'const [url,target]=process.argv.slice(-2); const res=await fetch(url); i
 
   const command = createUpgradeCommand({
     binaryPath: targetBinary,
-    releaseApiBaseUrl: `${baseUrl}/repos/monadix-labs/monad`,
+    releaseApiBaseUrl: `${baseUrl}/repos/Monadix-AI/monad`,
     releaseDownloadBaseUrl: baseUrl,
     installScriptUrl: `${baseUrl}/scripts/${installScriptName}`,
     installerEnv: {

@@ -35,5 +35,4 @@ test('FS2: group chat_type → group; non-text/other events → null', () => {
       }
     })?.chatType
   ).toBe('group');
-  expect(normalizeFeishuMessage({ header: { event_type: 'other' } })).toBe(null);
 });

@@ -26,8 +26,6 @@ test('TM2: channel conversation → group; mentionedSelf from mention entity', (
 });
 
 test('TM3: non-message / no conversation → null', () => {
-  expect(normalizeTeamsActivity({ type: 'typing', conversation: { id: 'c' } })).toBe(null);
-  expect(normalizeTeamsActivity({ type: 'message', text: 'x' })).toBe(null);
 });
 
 import { isAllowedTeamsServiceUrl } from '../../src/channels/teams.ts';

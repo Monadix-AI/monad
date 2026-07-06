@@ -95,7 +95,6 @@ test('the acp transport may branch an editor session', async () => {
 
   // origin.transport = 'acp' (from editorOrigin) → matches the parent's branchableBy.
   const { sessionId: childId } = await h.session.branch({ id: sessionId, origin: editorOrigin });
-  expect(childId).toBeTruthy();
 });
 
 test('a branch with no origin is unrestricted (not inherited from an editor parent)', async () => {

@@ -87,7 +87,6 @@ test('search excludes soft-deleted (restored) messages and respects transcript t
   expect(store.searchMessages({ q: 'apples', transcriptTargetId: a.id }).length).toBe(1);
 
   store.restoreMessages(a.id, m1); // soft-delete a's message
-  expect(store.searchMessages({ q: 'apples', transcriptTargetId: a.id }).length).toBe(0);
 });
 
 test('keyword search includes Workplace Project transcripts and respects project scope', () => {

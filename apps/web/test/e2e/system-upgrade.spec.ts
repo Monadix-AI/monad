@@ -12,6 +12,16 @@ async function installSystemSettingsApiMock(
   page: Page,
   health: { version: string; latestVersion?: string; latestVersionCheckedAt?: string }
 ) {
+  let upgradeStarts = 0;
+  let upgradeState = {
+    available: Boolean(health.latestVersion && health.latestVersion !== health.version),
+    currentVersion: health.version,
+    error: null,
+    latestVersion: health.latestVersion ?? null,
+    progress: 0,
+    stage: 'idle'
+  };
+
   await page.route('**/*', async (route) => {
     const request = route.request();
     const url = new URL(request.url());
@@ -23,6 +33,16 @@ async function installSystemSettingsApiMock(
     const method = request.method();
 
     if (method === 'GET' && path === '/health') return route.fulfill(json({ status: 'ok', ...health }));
+    if (method === 'GET' && path === '/v1/system/upgrade') return route.fulfill(json(upgradeState));
+    if (method === 'POST' && path === '/v1/system/upgrade') {
+      upgradeStarts += 1;
+      upgradeState = {
+        ...upgradeState,
+        progress: 25,
+        stage: 'downloading'
+      };
+      return route.fulfill(json(upgradeState));
+    }
     if (method === 'GET' && path === '/v1/init/status') {
       return route.fulfill(json({ initialized: true, missing: [], homePath: '/tmp/monad-e2e-home' }));
     }
@@ -80,6 +100,8 @@ async function installSystemSettingsApiMock(
 
     return route.fulfill(json({}));
   });
+
+  return { upgradeStarts: () => upgradeStarts };
 }
 
 test.describe('System upgrade settings', () => {
@@ -94,17 +116,32 @@ test.describe('System upgrade settings', () => {
     await expect(page.getByText('monad upgrade')).toHaveCount(0);
   });
 
-  test('shows upgrade command when health reports a newer version', async ({ page }) => {
-    await installSystemSettingsApiMock(page, {
+  test('shows update affordances and progress when health reports a newer version', async ({ page }) => {
+    const api = await installSystemSettingsApiMock(page, {
       version: '0.1.1',
       latestVersion: '0.2.0',
       latestVersionCheckedAt: '2026-07-01T00:00:00.000Z'
     });
 
+    await page.goto('/');
+
+    await expect(page.getByText('Update')).toBeVisible();
+    await page.getByText('Update').click();
+
+    await expect.poll(api.upgradeStarts).toBe(1);
+    await expect(page.getByText('Downloading')).toBeVisible();
+
     await page.goto('/studio/capabilities?settings=system');
 
     await expect(page.getByRole('dialog')).toBeVisible();
     await expect(page.getByText('0.2.0 available')).toBeVisible();
-    await expect(page.getByText('monad upgrade')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Update' })).toBeVisible();
+
+    const dialog = page.getByRole('dialog');
+    await expect(dialog.getByText('Downloading')).toBeVisible();
+    await expect(page.getByText('25%')).toBeVisible();
+    await expect(page.getByText('Checking')).toHaveCount(0);
+    await expect(page.getByText('Verifying')).toHaveCount(0);
+    await expect(page.getByText('Restarting')).toHaveCount(0);
   });
 });

@@ -17,10 +17,12 @@ import {
   useGetDeveloperQuery,
   useGetHealthQuery,
   useGetStartupQuery,
+  useGetSystemUpgradeQuery,
   useListSessionsQuery,
   useResetUsageMutation,
   useSetDeveloperMutation,
-  useSetStartupMutation
+  useSetStartupMutation,
+  useStartSystemUpgradeMutation
 } from '@monad/client-rtk';
 import { Badge, Button, ScrollArea, Separator, Switch } from '@monad/ui';
 import { useState } from 'react';
@@ -50,6 +52,20 @@ export function SystemSettings({ onClose }: Props) {
   const version = health?.version ?? '—';
   const latestVersion = (health as { latestVersion?: string } | undefined)?.latestVersion;
   const hasUpgrade = latestVersion && latestVersion !== version;
+  const { data: upgradeStatus } = useGetSystemUpgradeQuery(undefined, {
+    pollingInterval: upgradeStatusIsActive((health as { latestVersion?: string } | undefined)?.latestVersion, version)
+      ? 1000
+      : 0
+  });
+  const [startSystemUpgrade, { isLoading: isStartingUpgrade }] = useStartSystemUpgradeMutation();
+  const upgradeStage = upgradeStatus?.stage ?? 'idle';
+  const upgradeActive =
+    upgradeStage === 'checking' ||
+    upgradeStage === 'downloading' ||
+    upgradeStage === 'verifying' ||
+    upgradeStage === 'installing' ||
+    upgradeStage === 'restarting';
+  const upgradeProgress = upgradeStatus?.progress ?? 0;
 
   async function handleClearAllSessions() {
     if (sessionIds.length === 0) return;
@@ -75,6 +91,10 @@ export function SystemSettings({ onClose }: Props) {
 
   async function handleStartup(enabled: boolean) {
     await setStartup({ enabled }).unwrap();
+  }
+
+  async function handleUpgrade() {
+    await startSystemUpgrade().unwrap();
   }
 
   return (
@@ -139,10 +159,44 @@ export function SystemSettings({ onClose }: Props) {
               )}
             </div>
             {hasUpgrade && (
-              <p className="text-muted-foreground text-xs">
-                {t('web.settings.system.upgradeHint')}
-                <code className="ml-1 rounded bg-muted px-1 py-0.5 font-mono text-xs">monad upgrade</code>
-              </p>
+              <div className="flex flex-col gap-2 rounded-md border px-3 py-2.5">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex min-w-0 flex-col gap-0.5">
+                    <span className="text-sm">{t('web.settings.system.updateTitle')}</span>
+                    <span className="text-muted-foreground text-xs">
+                      {t('web.settings.system.updateDesc', { version: latestVersion })}
+                    </span>
+                  </div>
+                  <Button
+                    className="gap-1.5"
+                    disabled={isStartingUpgrade || upgradeActive}
+                    onClick={handleUpgrade}
+                    size="sm"
+                    variant="default"
+                  >
+                    {isStartingUpgrade || upgradeActive ? (
+                      <HugeiconsIcon
+                        className="size-3.5 animate-spin"
+                        icon={LoaderPinwheelIcon}
+                      />
+                    ) : (
+                      <HugeiconsIcon
+                        className="size-3.5"
+                        icon={SquareArrowUp01Icon}
+                      />
+                    )}
+                    {t('web.settings.system.updateButton')}
+                  </Button>
+                </div>
+                {upgradeStage !== 'idle' ? (
+                  <div className="flex items-center justify-between gap-3 text-xs">
+                    <span className={upgradeStage === 'failed' ? 'text-destructive' : 'text-muted-foreground'}>
+                      {upgradeStatus?.error ?? upgradeStageLabel(t, upgradeStage)}
+                    </span>
+                    <span className="font-mono text-muted-foreground">{Math.round(upgradeProgress)}%</span>
+                  </div>
+                ) : null}
+              </div>
             )}
           </section>
 
@@ -303,4 +357,26 @@ export function SystemSettings({ onClose }: Props) {
       </div>
     </ScrollArea>
   );
+}
+
+function upgradeStatusIsActive(latestVersion: string | undefined, version: string): boolean {
+  return Boolean(latestVersion && latestVersion !== version);
+}
+
+function upgradeStageLabel(t: ReturnType<typeof useT>, stage: string): string {
+  switch (stage) {
+    case 'checking':
+    case 'downloading':
+    case 'verifying':
+      return t('web.settings.system.upgradeStage.downloading');
+    case 'installing':
+      return t('web.settings.system.upgradeStage.installing');
+    case 'restarting':
+    case 'complete':
+      return t('web.settings.system.upgradeStage.restart');
+    case 'failed':
+      return t('web.settings.system.upgradeStage.failed');
+    default:
+      return t('web.settings.system.upgradeStage.idle');
+  }
 }
