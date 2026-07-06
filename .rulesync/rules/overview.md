@@ -55,7 +55,8 @@ Full rules: `docs/conventions.md` / @docs/conventions.md.
 
 - Write no comments by default. Add one only for a non-obvious invariant,
   hidden constraint, or counter-intuitive decision.
-- Split files past roughly 300-400 lines along responsibility boundaries.
+- Split touched files past roughly 300-400 lines along responsibility boundaries;
+  use self-descriptive folders and filenames instead of oversized catch-all files.
 - Extract shared logic when the second copy appears; name it for behavior, not origin.
 - Use `Promise.all` when awaits have no data dependency.
 - No new feature env vars: user settings belong in `config.json`, daemon modes in argv.
@@ -225,6 +226,10 @@ are printed. Full testing conventions and patterns: `docs/enginerring/testing.md
   failure-collection pass that exposes all current errors before fixing them. Do not
   bounce between a single failing command and a single fix when the broader failure
   surface is available.
+- In unit and integration tests, avoid assertions whose only claim is that a value
+  exists, does not exist, or that static copy contains or omits fixed text. Prefer
+  behavior, structure, state transitions, and exact machine contracts. E2E tests may
+  assert visible copy.
 - Every `apps/monad` feature must be exercised over **all transports** (TCP
   loopback and the Unix socket) — behaviour must match on both. See
   `docs/runtime.md` / @docs/runtime.md.

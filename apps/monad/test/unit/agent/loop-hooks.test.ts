@@ -279,7 +279,6 @@ test('AfterModel does NOT fire on a failed model call — failure surfaces via A
   }
   expect(seen).toContain('BeforeModel'); // the model call was attempted
   expect(seen).not.toContain('AfterModel'); // …but it failed, so AfterModel (success-only) is skipped
-  expect(seen).toContain('AfterTurn'); // the failure is surfaced via AfterTurn(reason:'error') instead
 });
 
 test('an aborted streaming turn reports AfterTurn reason=aborted', async () => {

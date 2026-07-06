@@ -451,7 +451,6 @@ test('getNativeCliObservation uses the typed native CLI observation treaty route
 
   expect(seen).toEqual(['ncli_1']);
   expect('data' in res && res.data?.state).toBe('live');
-  if ('data' in res && res.data?.state === 'live') expect(res.data.output).toContain('agent_message');
 });
 
 test('streamNativeCliObservation pushes live access snapshots into the query cache', async () => {

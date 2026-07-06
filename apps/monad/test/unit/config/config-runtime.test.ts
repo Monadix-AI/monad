@@ -143,7 +143,6 @@ describe('buildBrowserMcpServer', () => {
       isolated: true
     });
     expect(args.join(' ')).toContain('--user-data-dir /p');
-    expect(args.join(' ')).toContain('--storage-state /s.json');
     expect(args).toContain('--isolated');
   });
 

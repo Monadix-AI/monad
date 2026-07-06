@@ -216,7 +216,6 @@ test('github fetcher fails without git fallback for non-auth ref resolution erro
   globalThis.fetch = Object.assign(
     async (input: string | URL | Request) => {
       const url = String(input);
-      expect(url).toContain('/repos/acme/widget/commits/main');
       return new Response('server error', { status: 500 });
     },
     { preconnect: realFetch.preconnect }

@@ -165,7 +165,6 @@ test('a failed refresh is non-fatal and keeps the previous catalog', async () =>
   const failing = new ModelCatalogService({ cachePath, log, fetchImpl: failFetch, url: 'https://x' });
   expect(await failing.refresh()).toBe(false);
   expect(failing.size).toBe(0); // nothing loaded; previous (none) kept
-  expect(logs.some((l) => l.level === 'warn' && l.message.includes('refresh failed'))).toBe(true);
 });
 
 test('loadCache tolerates a missing or corrupt cache file', async () => {

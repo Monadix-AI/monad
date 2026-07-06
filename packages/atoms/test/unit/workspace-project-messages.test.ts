@@ -74,7 +74,6 @@ test('native CLI sessions project to durable chat messages', () => {
     streaming: false,
     orderKey: '2026-06-29T10:00:00.000Z'
   });
-  expect(message.text).not.toContain('/Users/zeke/Projects/monad');
 });
 
 test('project rail only includes Monad when explicitly invited', () => {
@@ -121,7 +120,6 @@ test('native CLI developer messages expose only a follow entry', () => {
     developerOnly: true,
     orderKey: '2026-06-29T10:00:00.000Z:developer'
   });
-  expect(message.text).not.toContain('/Users/zeke/Projects/monad');
 });
 
 test('native CLI durable sessions keep timeline populated after live tool settles', () => {
@@ -264,7 +262,6 @@ test('native CLI runtime lifecycle projects the current join per project member'
     authorName: 'codex',
     text: 'joined the project'
   });
-  expect(messages[0]?.text).not.toContain('left');
 });
 
 test('managed native CLI timeline messages use display names instead of runtime ids', () => {
@@ -374,13 +371,11 @@ test('native CLI live start projects joined without raw terminal output', () => 
     text: 'joined the project',
     nativeCliSessionId: 'ncli_live'
   });
-  expect(joined?.text).not.toContain('raw terminal output');
   expect(developer).toMatchObject({
     id: 'native-cli-session-developer:ncli_live',
     text: 'CLI stream available',
     nativeCliSessionId: 'ncli_live'
   });
-  expect(developer?.text).not.toContain('raw terminal output');
 });
 
 test('managed native CLI reasoning-only fanout does not project a system divider', () => {

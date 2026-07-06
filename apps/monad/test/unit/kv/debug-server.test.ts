@@ -35,7 +35,6 @@ test('GET / serves the HTML page', async () => {
   const res = await fetch(`${ui.url}/`);
   expect(res.headers.get('content-type')).toContain('text/html');
   const body = await res.text();
-  expect(body).toContain('monad kv — debug');
 });
 
 test('GET /api/dump returns the store snapshot', async () => {

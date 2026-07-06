@@ -6,8 +6,6 @@ import { main, USAGE_TEXT } from '../../src/main.ts';
 test('cli module exports a main entry and usage text', () => {
   expect(typeof main).toBe('function');
   // Check for a command that's always present (not an i18n string that requires runtime init)
-  expect(USAGE_TEXT).toContain('start');
-  expect(USAGE_TEXT).toContain('monad <command>');
 });
 
 test('dev entry returns success code for one-shot command paths', async () => {

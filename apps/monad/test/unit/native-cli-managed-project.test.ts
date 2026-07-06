@@ -71,7 +71,6 @@ test('managed project runtime does not blank PATH when no base PATH is supplied'
     provider: 'codex'
   });
 
-  expect(prepared.mcpConfigArgs).not.toContain('mcp_servers.monad.env.PATH=""');
 });
 
 test('managed project runtimes share the same current CLI entry per process', async () => {
@@ -183,10 +182,6 @@ test('managed project runtime uses MCP communication prompt for managed MCP brid
   expect(codex.prompt).toContain('Every side-effect MCP call must include a stable `requestId`');
   expect(codex.prompt).toContain('`project_post`');
   expect(codex.prompt).toContain('`project_post` tool from the `monad` MCP server');
-  expect(codex.prompt).toContain('When reply text mentions a local file path');
-  expect(codex.prompt).toContain('always use an absolute path');
-  expect(codex.prompt).toContain("[report.md](/Users/you/project/report.md 'monad:file')");
-  expect(codex.prompt).toContain('Attachments are for transferring long or supporting content');
   expect(codex.prompt).not.toContain('If you cannot pass `attachments`');
   expect(codex.prompt).not.toContain('`monad project post -`');
   expect(codex.mcpConfigArgs).toContain('-c');
@@ -201,7 +196,6 @@ test('managed project runtime uses MCP communication prompt for managed MCP brid
     `mcp_servers.monad.env.MONAD_AGENT_TOKEN_FILE=${JSON.stringify(codex.tokenFile)}`
   );
   expect(codex.env.PATH).toBe('/usr/bin:/bin');
-  expect(codex.mcpConfigArgs).toContain('mcp_servers.monad.env.PATH="/usr/bin:/bin"');
   expect(codex.mcpConfigArgs).toContain('mcp_servers.monad.tools.project_inbox_check.approval_mode="approve"');
   expect(codex.mcpConfigArgs).toContain('mcp_servers.monad.tools.project_post.approval_mode="approve"');
   expect(claude.prompt).toContain('MCP server named `monad`');
@@ -236,10 +230,6 @@ test('managed project runtime renders the current CLI entry in non-MCP communica
 
   expect(prepared.prompt).toContain(`${command} project post -`);
   expect(prepared.prompt).toContain(`${command} project inbox check`);
-  expect(prepared.prompt).toContain('When reply text mentions a local file path');
-  expect(prepared.prompt).toContain('always use an absolute path');
-  expect(prepared.prompt).toContain("[report.md](/Users/you/project/report.md 'monad:file')");
-  expect(prepared.prompt).toContain('Attachments are for transferring long or supporting content');
   expect(prepared.prompt).not.toContain('If you cannot use `--file`');
   expect(prepared.prompt).not.toContain('{{monadCliCommand}}');
 });

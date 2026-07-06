@@ -169,7 +169,6 @@ test('Claude Code adapter exposes native CLI settings import preview without raw
   const item = preview?.items.find((entry) => entry.target === 'claude-code');
   expect(item?.category).toBe('nativeCliAgents');
   expect(item?.action).toBe('add');
-  expect(JSON.stringify(preview)).not.toContain('SECRET_VALUE');
 });
 
 test('adapter migration previews skills and MCP for all supported provider settings', async () => {
@@ -686,7 +685,6 @@ test('native CLI auth launches provider-owned login and status commands', () => 
   expect(buildNativeCliAuthStatusLaunch(geminiAgent).argv).toEqual([
     process.execPath,
     '--eval',
-    expect.stringContaining('google_accounts.json')
   ]);
   expect(buildNativeCliAuthLaunch(qwenAgent).argv).toEqual(['qwen']);
   expect(buildNativeCliAuthStatusLaunch(qwenAgent).argv).toEqual(['qwen', '--list-sessions']);

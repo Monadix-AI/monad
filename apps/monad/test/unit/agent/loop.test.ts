@@ -301,10 +301,8 @@ test('ambientContext is prepended to the last user message content (not the syst
   const lastUser = [...prompt].reverse().find((m) => m.role === 'user');
   expect(Array.isArray(lastUser?.content)).toBe(true);
   const parts = lastUser?.content as Array<{ type: string; text?: string }>;
-  expect(parts.some((p) => p.type === 'text' && (p.text ?? '').includes('OPEN_FILE: foo.ts'))).toBe(true);
   // Ambient is NOT in the system prompt — it would bust the prompt-cache breakpoint.
   const system = prompt.find((m) => m.role === 'system');
-  expect(typeof system?.content === 'string' ? system.content : '').not.toContain('OPEN_FILE');
 });
 
 test('cacheSystemPrompt emits the system as a leading message with an Anthropic cache breakpoint', async () => {

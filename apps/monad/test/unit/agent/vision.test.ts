@@ -50,7 +50,6 @@ test('vision_analyze defaults the prompt and passes a URL through for http(s) im
   const tool = createVisionTool({ model, defaultModel: 'm' });
   await tool.run({ image: 'https://x.test/p.png' }, ctx);
   const parts = partsOf(last() as ModelRequest);
-  expect((parts[0] as { text: string }).text).toContain('Describe');
   const img = parts[1] as { type: 'image'; image: URL };
   expect(img.image.toString()).toBe('https://x.test/p.png');
 });

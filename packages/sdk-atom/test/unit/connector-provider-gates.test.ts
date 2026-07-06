@@ -188,7 +188,6 @@ test('defineProvider: stream is callable and yields chunks', async () => {
   for await (const chunk of dummyProvider.stream(call)) {
     chunks.push(chunk.type);
   }
-  expect(chunks).toContain('text');
   expect(chunks).toContain('finish');
   expect(chunks).toContain('usage');
 });

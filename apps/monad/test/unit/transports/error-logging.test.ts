@@ -56,5 +56,4 @@ test('JSON-RPC transport logs handler exceptions with exception stacks', async (
   expect(replies).toHaveLength(1);
   expect(records).toHaveLength(1);
   expect(records[0]).toMatchObject({ transport: 'unit-rpc', method: 'sessions.get' });
-  expect((records[0]?.err as { stack?: string } | undefined)?.stack).toContain('HandlerError');
 });

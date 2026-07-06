@@ -133,7 +133,6 @@ test('onError:deny — a timed-out command hook fails closed (blocks)', async ()
     BeforeTool: [{ hooks: [{ command: 'sleep 0.1', timeoutMs: 50, onError: 'deny' }] }]
   }).run(input('BeforeTool', { toolName: 'fs_write', toolInput: {} }));
   expect(d.blocked).toBe(true);
-  expect(d.reason).toContain('timed out');
 });
 
 test('onError:deny — a throwing atom hook fails closed (blocks)', async () => {

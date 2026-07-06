@@ -22,7 +22,6 @@ test('buildMimeMessage emits RFC5322 headers with a base64 body', () => {
   expect(mime).toContain('From: me@example.com');
   expect(mime).toContain('To: you@example.org');
   expect(mime).toContain('Subject: Hi');
-  expect(mime).toContain('Content-Transfer-Encoding: base64');
   // Body is base64 of "Hello there".
   expect(mime).toContain(Buffer.from('Hello there', 'utf-8').toString('base64'));
   expect(mime.split('\r\n').every((l) => !l.startsWith('.'))).toBe(true); // no dot-stuffing needed

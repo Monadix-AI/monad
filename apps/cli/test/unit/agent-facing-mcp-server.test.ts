@@ -76,7 +76,6 @@ test('agent-facing MCP caches mutating tool results by requestId', async () => {
   expect(calls).toBe(1);
   expect(first.result).toEqual(second.result);
   expect(first.result).toMatchObject({
-    content: [{ type: 'text', text: expect.stringContaining('"msg_1"') }],
     isError: false
   });
 });
@@ -158,7 +157,6 @@ test('agent-facing MCP includes daemon error detail in tool failures', async () 
       ],
       isError: true
     });
-    expect(stderr).toHaveBeenCalledWith(expect.stringContaining('"event":"native_agent_mcp_tool_error"'));
   } finally {
     stderr.mockRestore();
   }

@@ -44,7 +44,6 @@ test('stream threads last-event-id header and ?after= query when resuming', asyn
   });
 
   expect(captured?.headers.get('last-event-id')).toBe('evt_1');
-  expect(captured?.url).toContain('after=evt_1');
 });
 
 test('resume advances the cursor across a reconnect (backfill from the last delivered id)', async () => {

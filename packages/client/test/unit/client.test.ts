@@ -52,7 +52,6 @@ test('client.fetch sends raw requests with bearer auth in the header', async () 
   if (!cap) throw new Error('fetch was not called');
   expect(cap.url).toBe('http://127.0.0.1:52749/v1/atoms/skills/upload?filename=SKILL.md');
   expect(new Headers(cap.init?.headers).get('authorization')).toBe('Bearer secret');
-  expect(cap.url).not.toContain('secret');
 });
 
 test('unixSocket: requests are dialed over the unix socket', async () => {

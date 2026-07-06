@@ -22,7 +22,6 @@ test('0.x.y: matching major and minor patch mismatch is compatible', () => {
 test('0.x.y: minor mismatch is incompatible', () => {
   const result = isVersionCompatible('0.5.0', '0.6.0');
   expect(result.compatible).toBe(false);
-  expect(result.reason).toContain('incompatible');
   expect(result.daemonVersion).toBe('0.5.0');
   expect(result.clientVersion).toBe('0.6.0');
 });
@@ -45,7 +44,6 @@ test('2.x.y: same major is compatible', () => {
 test('stable: major mismatch is incompatible', () => {
   const result = isVersionCompatible('1.5.0', '2.0.0');
   expect(result.compatible).toBe(false);
-  expect(result.reason).toContain('incompatible');
 });
 
 test('stable: version with pre-release suffix is parsed correctly', () => {

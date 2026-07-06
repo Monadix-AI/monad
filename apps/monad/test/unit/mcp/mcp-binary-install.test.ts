@@ -72,7 +72,6 @@ test('installs a raw binary after verifying its SHA-256 and writes a hot config'
   if (!w) throw new Error('widget not installed');
   expect(w.command).toBe(join(mcpDir, 'widget', 'bin', 'widget-mcp'));
   expect(w.args).toEqual(['stdio']);
-  expect(await Bun.file(w.command).text()).toContain('echo hi');
 });
 
 test('appends .exe to a raw Windows binary so it is launchable', async () => {

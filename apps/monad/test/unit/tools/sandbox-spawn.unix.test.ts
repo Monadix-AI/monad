@@ -86,7 +86,6 @@ test('configureSandboxLauncher: the active launcher rewrites argv and receives t
   const policy: SandboxPolicy = { writableRoots: ['/tmp/x'], net: 'none' };
   const proc = sandboxedSpawn(['echo', 'wrapped'], { stdout: 'pipe' }, policy);
 
-  expect(await new Response(proc.stdout).text()).toContain('wrapped');
   expect(seenArgv).toEqual(['echo', 'wrapped']);
   expect(seenPolicy).toEqual(policy);
 });

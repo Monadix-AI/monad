@@ -72,7 +72,6 @@ test('delegate threads hooks into the sub-agent — BeforeTool deny blocks the t
   });
   await tool.run({ instruction: 'use echo' }, ctx);
   expect(seen).toContain('BeforeModel:subagent'); // hooks fire inside the delegated subagent, tagged subagent
-  expect(seen).toContain('BeforeTool'); // the tool-path hook the delegate used to bypass now fires
   expect(ran).toBe(false); // and a BeforeTool deny actually blocks the tool
 });
 

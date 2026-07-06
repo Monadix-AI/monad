@@ -184,7 +184,6 @@ describe('formatPrettyMessage', () => {
     });
 
     expect(stripAnsi(line)).toBe('[transport:http] GET 200 /health in 20ms');
-    expect(line).toContain('\x1B[');
   });
 
   test('colors error HTTP status codes differently from success codes', async () => {

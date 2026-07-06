@@ -130,7 +130,6 @@ test('same-pack duplicate id aborts that pack (authoring bug), others unaffected
   );
 
   expect(errors[0]?.atomPack).toBe('dup');
-  expect(String((errors[0]?.error as Error).message)).toContain('duplicate channel type');
   // The clean pack is unaffected; both bare types resolve ('x' from dup's first registration, 'y').
   expect(channels.has('x')).toBe(true);
   expect(channels.has('y')).toBe(true);
@@ -225,7 +224,6 @@ test('message-type same-pack duplicate aborts that pack; cross-pack same name is
   });
 
   expect(errors[0]?.atomPack).toBe('dup-msg');
-  expect(String((errors[0]?.error as Error).message)).toContain('message type already registered');
   expect(errors.length).toBe(1); // other-msg loaded fine
   expect(channelMap.has('dup-ch')).toBe(true); // dup-ch registered before the throw, survives
 });

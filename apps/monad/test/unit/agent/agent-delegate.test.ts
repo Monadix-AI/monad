@@ -63,8 +63,6 @@ function makeTool(model: ModelRouter, parentTools: Tool[], source: Record<string
 test('description enumerates the delegatable roster with when-to-use', () => {
   const tool = makeTool(scriptedModel(['x']), []);
   expect(tool.name).toBe('agent_delegate_to');
-  expect(tool.description).toContain('researcher — use for deep research');
-  expect(tool.description).toContain('narrow — restricted helper');
 });
 
 test('unknown agent throws and lists the valid targets', async () => {

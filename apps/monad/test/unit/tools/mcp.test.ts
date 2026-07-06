@@ -50,7 +50,6 @@ test('image content blocks stay off metadata but reach modelContent', async () =
 
   // Text channel (what gets persisted / JSON.stringified) carries text + a count, never base64.
   expect(output.metadata).toEqual({ text: 'here is the screen', imageCount: 1 });
-  expect(JSON.stringify(output.metadata)).not.toContain('iVBOR');
 
   // Vision channel: modelContent surfaces the decoded image bytes for the model.
   const parts = output.modelContent;

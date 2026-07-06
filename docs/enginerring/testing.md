@@ -331,3 +331,10 @@ test('renders label', () => {
 - Pure type definitions (`type`, `interface`).
 - Framework glue that directly calls `Bun.serve()` or `bun:sqlite` with no logic of its own.
 - Internal implementation details already covered by an outer e2e test.
+- In unit and integration tests, avoid assertions whose only claim is that a value
+  exists, does not exist, or that static copy contains or omits fixed text. Prefer
+  behavior, structure, state transitions, and exact machine contracts. E2E tests may
+  assert visible copy because user-facing affordances are part of the behavior.
+- Content assertions are useful only when the expected content is derived from a
+  dynamic value under test, such as a generated id, computed path, selected model, or
+  sanitized secret.

@@ -62,7 +62,6 @@ test('createTlsCert downgrades to a warning when allowInsecureHttp=true and open
     { enabled: true, tlsDir, allowInsecureHttp: true },
     { ...okDeps, findOpenssl: async () => null }
   );
-  expect(out.warnings).toContain('tls:openssl-not-found');
 });
 
 test('createTlsCert throws when cert generation fails (fail-closed)', async () => {
@@ -89,7 +88,6 @@ test('createTlsCert warns instead of throwing on cert failure when allowInsecure
       }
     }
   );
-  expect(out.warnings).toContain('tls:cert-error');
 });
 
 // ── sandbox fail-closed ──────────────────────────────────────────────────────────

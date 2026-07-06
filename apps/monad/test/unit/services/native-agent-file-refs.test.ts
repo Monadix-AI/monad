@@ -101,8 +101,6 @@ test('createNativeAgentAttachmentResolver registers @file references as message 
   expect(result.text).toBe('Summary is ready.');
   expect(result.attachments).toHaveLength(1);
   expect(result.attachments[0]?.path).toBe(reportRealpath);
-  expect(result.noticeText).toContain('[Attachment ');
-  expect(registered[0]?.preview).toContain('# Report');
 });
 
 test('createNativeAgentAttachmentResolver registers monad:file markdown links as message attachments', async () => {
@@ -135,8 +133,6 @@ test('createNativeAgentAttachmentResolver registers monad:file markdown links as
   expect(result.text).toBe(`Summary is ready: [report with spaces.md](${url} "monad:file").`);
   expect(result.attachments).toHaveLength(1);
   expect(result.attachments[0]?.path).toBe(reportRealpath);
-  expect(result.noticeText).toContain('[Attachment ');
-  expect(registered[0]?.preview).toContain('# Report');
 });
 
 test('createNativeAgentAttachmentResolver applies the attachment limit after parsing @file references', async () => {

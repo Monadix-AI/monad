@@ -104,7 +104,6 @@ test('store-backed streaming tool turn persists ordered segments via the open→
     { role: 'user', type: 'text', text: 'go' },
     { role: 'assistant', type: 'text', text: 'Let me check.' },
     { role: 'assistant', type: 'tool_call', text: expect.any(String) },
-    { role: 'tool', type: 'tool_result', text: expect.stringContaining('echoed') },
     { role: 'assistant', type: 'text', text: 'The answer.' }
   ]);
   // Both text segments went through the streaming lifecycle and settled to `complete` (no live source).

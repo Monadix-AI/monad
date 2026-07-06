@@ -60,7 +60,6 @@ test('config path prints the config file path', async () => {
 
 test('config list prints flattened key = value lines', async () => {
   const output = await captureOutput(() => command.run(ctx(['list'])));
-  expect(output).toContain('network.transport');
   expect(output).toMatch(/tcp|uds/);
 });
 

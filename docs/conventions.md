@@ -47,12 +47,16 @@ if (Bun.env.NODE_ENV === "development") {
 }
 ```
 
-## File length
+## File length and names
 
-No hard line limit, but a file that grows past ~300–400 lines is a signal to split.
-Split along natural seams: one concept, one abstraction, one layer per file. A long
-`main.ts` that boots everything is a smell — extract named initialisation functions
-into focused modules.
+No hard line limit, but a file that grows past ~300-400 lines is a signal to split.
+Do not wait for a separate cleanup task: when a touched file is already too long,
+split it as part of the change if the split can preserve behavior.
+
+Split along natural seams: one concept, one abstraction, one layer per file. Prefer
+small folders that name the domain, with files named for their responsibility rather
+than the source file they came from. A long `main.ts` that boots everything is a
+smell: extract named initialization functions into focused modules.
 
 ## Abstraction and reuse
 

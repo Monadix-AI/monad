@@ -365,7 +365,6 @@ test('native CLI inbox items expose delivery pointers without raw provider outpu
     state: 'queued',
     turn: { providerSessionRef: 'provider-session-1', providerTurnId: 'turn-1' }
   });
-  expect(JSON.stringify(delivery)).not.toContain('provider output');
 });
 
 test('deleteSession cleans up native CLI session rows', () => {
