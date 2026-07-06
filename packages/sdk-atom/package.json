@@ -1,6 +1,6 @@
 {
   "name": "@monad/sdk-atom",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "dependencies": {
     "@monad/protocol": "workspace:*",
     "zod": "^4.4.3"
