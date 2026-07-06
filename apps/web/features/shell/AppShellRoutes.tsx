@@ -15,7 +15,7 @@ const SessionRoute = dynamic(() => import('@/features/routes/sessions/SessionRou
   loading: PanelLoading
 });
 
-type AppShellRoutesProps = {
+export type AppShellRoutesProps = {
   currentSessionId: SessionId | null;
   onCloseStudio: () => void;
   sessionRouteProps: Omit<SessionRouteProps, 'currentSessionId'>;

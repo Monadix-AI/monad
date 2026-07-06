@@ -34,6 +34,7 @@ import { providerFormSchema } from '@/lib/form-validation';
 import { useMonadRuntime } from '@/lib/monad-runtime-provider';
 import { useProviderMeta } from '@/lib/ProviderMeta';
 import { SECRET_INPUT_PASSWORD_MANAGER_PROPS } from '@/lib/secret-input-props';
+import { InitAgentStep } from './InitAgentStep';
 import { InitModelStep } from './InitModelStep';
 import { InitProviderListStep, InitProviderTypePickerStep } from './InitProviderSteps';
 import { InitDoneView, InitRestartingView, InitWizardFrame, InitWizardHeader } from './InitWizardLayout';
@@ -373,6 +374,34 @@ export function InitWizard({ homePath }: { homePath?: string }) {
     }
   }
 
+  async function handleAgentSave() {
+    setAgentError('');
+    setAgentSaving(true);
+    try {
+      if (existingDefaultAgentId) {
+        await setDefaultAgent({ agentId: existingDefaultAgentId }).unwrap();
+      } else {
+        const result = await createAgent({
+          name: agentName.trim(),
+          capabilities: agentCapabilities
+            .split(',')
+            .map((capability) => capability.trim())
+            .filter(Boolean),
+          ...(savedModelAlias ? { modelAlias: savedModelAlias } : {})
+        });
+        if ('error' in result) throw new Error(String(result.error));
+        if (result.data?.agent?.id) {
+          await setDefaultAgent({ agentId: result.data.agent.id }).unwrap();
+        }
+      }
+      setDone(true);
+    } catch (error) {
+      setAgentError(error instanceof Error ? error.message : t('web.init.agentError'));
+    } finally {
+      setAgentSaving(false);
+    }
+  }
+
   if (restarting) {
     return <InitRestartingView t={t} />;
   }
@@ -618,97 +647,17 @@ export function InitWizard({ homePath }: { homePath?: string }) {
         )}
 
         {step === 'agent' && (
-          <div className="flex flex-col gap-4">
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="agent-name">{t('web.init.agentName')}</Label>
-              <Input
-                id="agent-name"
-                onChange={(e) => setAgentName(e.target.value)}
-                placeholder={t('web.init.agentNamePlaceholder')}
-                value={agentName}
-              />
-            </div>
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="agent-capabilities">
-                {t('web.init.capabilities')}{' '}
-                <span className="text-muted-foreground">{t('web.init.capabilitiesHint')}</span>
-              </Label>
-              <Input
-                id="agent-capabilities"
-                onChange={(e) => setAgentCapabilities(e.target.value)}
-                placeholder={t('web.init.capabilitiesPlaceholder')}
-                value={agentCapabilities}
-              />
-            </div>
-            {savedModelAlias && (
-              <p className="text-muted-foreground text-xs">
-                {t('web.init.usingProfile')} <span className="font-mono">{savedModelAlias}</span>
-              </p>
-            )}
-
-            {agentError && (
-              <p className="rounded-md border border-destructive/20 bg-destructive/5 px-3 py-2 text-destructive text-xs">
-                {agentError}
-              </p>
-            )}
-
-            <div className="flex items-center justify-between">
-              <button
-                className="text-muted-foreground text-xs hover:text-foreground"
-                onClick={() => setStep('model')}
-                type="button"
-              >
-                {t('web.init.back')}
-              </button>
-              <Button
-                disabled={!agentName.trim() || agentSaving}
-                onClick={async () => {
-                  setAgentError('');
-                  setAgentSaving(true);
-                  try {
-                    if (existingDefaultAgentId) {
-                      // Agent already exists — re-affirm the default and finish.
-                      await setDefaultAgent({ agentId: existingDefaultAgentId }).unwrap();
-                    } else {
-                      const result = await createAgent({
-                        name: agentName.trim(),
-                        capabilities: agentCapabilities
-                          .split(',')
-                          .map((c) => c.trim())
-                          .filter(Boolean),
-                        ...(savedModelAlias ? { modelAlias: savedModelAlias } : {})
-                      });
-                      if ('error' in result) throw new Error(String(result.error));
-                      if (result.data?.agent?.id) {
-                        await setDefaultAgent({ agentId: result.data.agent.id }).unwrap();
-                      }
-                    }
-                    setDone(true);
-                  } catch (e) {
-                    setAgentError(e instanceof Error ? e.message : t('web.init.agentError'));
-                  } finally {
-                    setAgentSaving(false);
-                  }
-                }}
-                size="sm"
-              >
-                {agentSaving ? (
-                  <span className="flex items-center gap-2">
-                    <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                    {t('web.init.creating')}
-                  </span>
-                ) : (
-                  <span className="flex items-center gap-1.5">
-                    <HugeiconsIcon
-                      className="h-3.5 w-3.5"
-                      icon={CheckIcon}
-                    />
-                    {t('web.init.complete')}
-                  </span>
-                )}
-              </Button>
-            </div>
-          </div>
+          <InitAgentStep
+            agentCapabilities={agentCapabilities}
+            agentError={agentError}
+            agentName={agentName}
+            agentSaving={agentSaving}
+            onBack={() => setStep('model')}
+            onSave={() => void handleAgentSave()}
+            savedModelAlias={savedModelAlias}
+            setAgentCapabilities={setAgentCapabilities}
+            setAgentName={setAgentName}
+          />
         )}
       </div>
     </>

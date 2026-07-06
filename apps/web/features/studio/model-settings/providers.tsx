@@ -1,6 +1,6 @@
 'use client';
 
-import type { ModelInfo, ModelProviderType, ProviderView } from '@monad/protocol';
+import type { ModelProviderType, ProviderView } from '@monad/protocol';
 
 import {
   Alert01Icon,
@@ -25,79 +25,21 @@ import { useModelSettings, useProviderDetail } from '@/hooks/use-model-settings'
 import { providerFormSchema } from '@/lib/form-validation';
 import { providerLogo, useProviderMeta } from '@/lib/ProviderMeta';
 import { SECRET_INPUT_PASSWORD_MANAGER_PROPS } from '@/lib/secret-input-props';
-import { ModelHoverCardBody, modelMatchesQuery, sortModelsForProvider } from './model-picker';
+import { modelMatchesQuery, sortModelsForProvider } from './model-picker';
 import {
   initialProviderDialogStep,
   providerDialogCanGoBack,
   providerDialogNextStep,
   providerDialogPreviousStep
 } from './provider-dialog-flow';
+import {
+  categoryCounts,
+  MODEL_CATEGORY_TABS,
+  type ModelCategoryTabId,
+  modelMatchesCategory,
+  ProviderModelGrid
+} from './providers/model-grid';
 import { type AddForm, emptyAddForm, FormMsg, StatusDot, toErrorMessage } from './shared';
-
-const MODEL_CATEGORY_TABS = [
-  { id: 'all', label: 'All' },
-  { id: 'text', label: 'Text' },
-  { id: 'image', label: 'Image' },
-  { id: 'embeddings', label: 'Embeddings' },
-  { id: 'audio', label: 'Audio' },
-  { id: 'video', label: 'Video' },
-  { id: 'rerank', label: 'Rerank' },
-  { id: 'speech', label: 'Speech' },
-  { id: 'transcription', label: 'Transcription' }
-] as const;
-type ModelCategoryTabId = (typeof MODEL_CATEGORY_TABS)[number]['id'];
-
-function modelOutputs(model: ModelInfo): string[] {
-  const output = model.modalities?.output?.filter((item) => item.length > 0) ?? [];
-  if (output.length > 0) return output;
-  switch (model.modalities?.kind) {
-    case 'embedding':
-      return ['embeddings'];
-    case 'image':
-    case 'video':
-    case 'speech':
-    case 'audio':
-    case 'rerank':
-    case 'transcription':
-      return [model.modalities.kind];
-    default:
-      return ['text'];
-  }
-}
-
-function modelMatchesCategory(model: ModelInfo, category: ModelCategoryTabId): boolean {
-  if (category === 'all') return true;
-  const output = modelOutputs(model);
-  if (category === 'embeddings') return output.includes('embeddings') || output.includes('embedding');
-  return output.includes(category);
-}
-
-function categoryCounts(models: ModelInfo[]): Record<ModelCategoryTabId, number> {
-  return Object.fromEntries(
-    MODEL_CATEGORY_TABS.map((tab) => [tab.id, models.filter((model) => modelMatchesCategory(model, tab.id)).length])
-  ) as Record<ModelCategoryTabId, number>;
-}
-
-function ProviderModelCard({ model }: { model: ModelInfo }) {
-  return (
-    <div className="glass-foreground min-w-0 rounded-(--radius-sm) border border-border/60 p-3">
-      <ModelHoverCardBody model={model} />
-    </div>
-  );
-}
-
-function ProviderModelGrid({ models }: { models: ModelInfo[] }) {
-  return (
-    <div className="grid gap-2 sm:grid-cols-2">
-      {models.map((model) => (
-        <ProviderModelCard
-          key={model.id}
-          model={model}
-        />
-      ))}
-    </div>
-  );
-}
 
 export function ProviderCard({
   deleteDisabledReason,

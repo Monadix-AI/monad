@@ -1,6 +1,6 @@
 'use client';
 
-import type { MessageId, ProjectId, SessionId, UIItem, UIMessageItem } from '@monad/protocol';
+import type { MessageId, ProjectId, SessionId, UIItem } from '@monad/protocol';
 import type { VirtualListHandle } from '@monad/ui/components/VirtualList';
 import type { SessionCommandMenuItem } from '@/features/routes/sessions/SessionRoute';
 import type { WorkspaceRouteProps } from '@/features/routes/workspace/WorkspaceRoute';
@@ -15,12 +15,10 @@ import {
   useStreamUiItemsQuery,
   useTranscribeAudioMutation
 } from '@monad/client-rtk';
-import { cn } from '@monad/ui';
 import { useFirstItemIndex } from '@monad/ui/hooks/use-first-item-index';
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useT } from '@/components/I18nProvider';
-import { PanelLoading } from '@/components/PanelLoading';
 import {
   isStudioPath,
   isWorkspacePath,
@@ -35,20 +33,12 @@ import {
   skillCommandDisplayName,
   skillCommandMeta
 } from '@/features/routes/sessions/command-menu';
-import {
-  compactDividerItems,
-  groupToolCalls,
-  textFromParts,
-  type ViewItem,
-  viewItemFromUi,
-  viewItemKey
-} from '@/features/session/chat-view-items';
+import { type ViewItem, viewItemKey } from '@/features/session/chat-view-items';
 import { audioBlobToBase64 } from '@/features/session/voice-transcription';
-import { Settings } from '@/features/settings/Settings';
 import { SkillEditorDialog } from '@/features/studio/skills-settings/SkillEditorDialog';
 import { loadSkillContent } from '@/features/studio/skills-settings/utils';
 import { useChatComposer } from '@/hooks/use-chat-composer';
-import { buildNavigableModalUrl, useNavigableModal } from '@/hooks/use-navigable-modal';
+import { buildNavigableModalUrl } from '@/hooks/use-navigable-modal';
 import {
   pushShellUrl,
   replaceShellUrl,
@@ -60,27 +50,18 @@ import { useSidebarShortcuts } from '@/hooks/use-sidebar-shortcuts';
 import { useTranscriptHistory } from '@/hooks/use-transcript-history';
 import { useMonadRuntime } from '@/lib/monad-runtime-provider';
 import { useWorkspaceShellStore, type WorkspaceShellState } from '@/lib/workspace-shell-store';
-import { AppShellRoutes } from './AppShellRoutes';
-import { AppShellSidebarReveal } from './AppShellSidebarReveal';
+import { AppShellRoutesHost } from './app-shell/routes-host';
+import {
+  buildSessionContextUsage,
+  buildViewMessages,
+  createTextareaKeyDownHandler,
+  EMPTY_UI_ITEMS,
+  viewMessageId
+} from './app-shell/session-view';
+import { SettingsModalHost } from './app-shell/settings-modal-host';
+import { AppShellSidebarHost } from './app-shell/sidebar-host';
 import { NewProjectDialog } from './NewProjectDialog';
-import { SessionSidebar } from './SessionSidebar';
 import { useAppShellData } from './useAppShellData';
-
-// Stable empty references so query fallbacks don't change identity each render
-// (a fresh `[]` default would retrigger effects that depend on the data).
-const EMPTY_UI_ITEMS: UIItem[] = [];
-
-const viewMessageId = (item: ViewItem): string => item.id;
-
-const SEGMENT_COLORS: Record<string, string> = {
-  customAgents: 'var(--success)',
-  mcpTools: 'var(--info)',
-  memory: 'var(--warning)',
-  messages: 'var(--primary)',
-  skills: 'var(--destructive)',
-  systemPrompt: 'var(--accent-blue)',
-  systemTools: 'var(--warning)'
-};
 
 export function AppShell() {
   const pathname = useShellPathname();
@@ -232,16 +213,6 @@ export function AppShell() {
   const usage = visibleLiveItems.find(
     (item): item is Extract<UIItem, { kind: 'context' }> => item.kind === 'context'
   )?.usage;
-  const groupedSegments = useMemo(() => {
-    if (!usage) return [];
-    const map = new Map<string, { category: string; label: string; tokens: number }>();
-    for (const seg of usage.segments) {
-      const existing = map.get(seg.category);
-      if (existing) existing.tokens += seg.tokens;
-      else map.set(seg.category, { ...seg });
-    }
-    return Array.from(map.values());
-  }, [usage]);
   const modelOptions = useMemo(
     () => profiles.map((profile) => ({ label: profile.alias, value: profile.alias })),
     [profiles]
@@ -296,39 +267,17 @@ export function AppShell() {
     setHiddenViewItemKeysBySession
   });
 
-  const viewMessages = useMemo<ViewItem[]>(() => {
-    const items = new Map<string, ViewItem>();
-    // History mode renders the detached window alone; live mode merges the live tail (which wins
-    // on key collisions at the boundary). No `.slice` cap — virtualization keeps the DOM bounded.
-    const sources = transcript.mode === 'history' ? [visibleHistory] : [visibleHistory, visibleLiveItems];
-    for (const source of sources) {
-      for (const item of source) {
-        const key = viewItemKey(item);
-        const viewItem = viewItemFromUi(item);
-        if (!key || !viewItem) continue;
-        items.set(key, viewItem);
-      }
-    }
-    const out = [...items.values()];
-    if (transcript.mode === 'live') {
-      const streamedUserText = new Set(
+  const viewMessages = useMemo<ViewItem[]>(
+    () =>
+      buildViewMessages({
+        commandPending,
+        optimistic,
+        transcriptMode: transcript.mode,
+        visibleHistory,
         visibleLiveItems
-          .filter((item): item is UIMessageItem => item.kind === 'message' && item.role === 'user')
-          .map((item) => textFromParts(item.parts))
-      );
-      const historyUserTexts = new Set(
-        visibleHistory
-          .filter((item): item is UIMessageItem => item.kind === 'message' && item.role === 'user')
-          .map((item) => textFromParts(item.parts))
-      );
-      for (const m of optimistic) {
-        if (items.has(`message:${m.id}`)) continue;
-        if (m.role === 'user' && (streamedUserText.has(m.text) || historyUserTexts.has(m.text))) continue;
-        out.push(m);
-      }
-    }
-    return groupToolCalls(compactDividerItems(out, commandPending));
-  }, [visibleHistory, visibleLiveItems, optimistic, commandPending, transcript.mode]);
+      }),
+    [visibleHistory, visibleLiveItems, optimistic, commandPending, transcript.mode]
+  );
 
   const isWorkspaceHome = currentId === null && activeProjectId === null && !showSettings && !showStudio;
   const shouldShowSidebar = true;
@@ -548,58 +497,18 @@ export function AppShell() {
     [handleSend]
   );
 
-  const handleTextareaKeyDown = (e: React.KeyboardEvent<HTMLElement>) => {
-    // While an IME is composing (e.g. pinyin → Chinese), Enter confirms the candidate and must NOT
-    // submit. Some browsers also fire a duplicate Enter keydown around composition end; both are
-    // tagged `isComposing` (keyCode 229), so guarding here also prevents the double-send.
-    if (e.nativeEvent.isComposing || e.keyCode === 229) return;
-    if (skillMenuOpen) {
-      if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        setActiveSkill((i) => (i + 1) % menuItems.length);
-        return;
-      }
-      if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        setActiveSkill((i) => (i - 1 + menuItems.length) % menuItems.length);
-        return;
-      }
-      if (e.key === 'Enter' || e.key === 'Tab') {
-        e.preventDefault();
-        const picked = menuItems[Math.min(activeSkill, menuItems.length - 1)];
-        if (picked) applyItem(picked);
-        return;
-      }
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        setSkillMenuDismissed(true);
-        return;
-      }
-    }
-    if (e.key === 'Enter' && e.metaKey && e.altKey) {
-      e.preventDefault();
-      void handleForceSteer();
-      return;
-    }
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      void handleSubmit();
-    }
-  };
+  const handleTextareaKeyDown = createTextareaKeyDownHandler({
+    activeSkill,
+    applyItem,
+    handleForceSteer,
+    handleSubmit,
+    menuItems,
+    setActiveSkill,
+    setSkillMenuDismissed,
+    skillMenuOpen
+  });
 
-  const sessionContextUsage = usage
-    ? {
-        approximate: usage.approximate,
-        limit: usage.contextLimit,
-        segments: groupedSegments.map((segment) => ({
-          category: segment.category,
-          color: SEGMENT_COLORS[segment.category],
-          label: segment.label,
-          tokens: segment.tokens
-        })),
-        used: usage.used
-      }
-    : undefined;
+  const sessionContextUsage = useMemo(() => buildSessionContextUsage(usage), [usage]);
   const sessionModel = {
     current: modelOptions[0]?.value,
     onChange: (alias: string) => {
@@ -651,127 +560,116 @@ export function AppShell() {
 
   return (
     <div className="app-shell relative flex h-screen overflow-hidden bg-background text-foreground">
-      {shouldShowSidebar ? (
-        <AppShellSidebarReveal
-          autoMode={sidebarAutoMode}
-          autoRevealSidebar={autoRevealSidebar}
-          onOpenWorkspace={setWorkspaceUrl}
-          onToggleAutoMode={toggleSidebarAutoMode}
-        />
-      ) : null}
-      {shouldShowSidebar ? (
-        <SessionSidebar
-          activeProjectId={activeProjectId}
-          autoCollapseOnPointerLeave={sidebarAutoReveal}
-          collapsed={sidebarCollapsed}
-          daemonBaseUrl={daemonBaseUrl}
-          daemonStatus={daemonStatus}
-          daemonVersion={daemonVersion}
-          hasUpgrade={hasUpgrade}
-          monadChatActive={currentId !== null || shellSurface === 'monadChat'}
-          onOpenMonadChat={() => void handleOpenMonadChat()}
-          onOpenProject={openProject}
-          onOpenStudioSection={(section) => {
+      <AppShellSidebarHost
+        reveal={{
+          autoMode: sidebarAutoMode,
+          autoRevealSidebar,
+          onOpenWorkspace: setWorkspaceUrl,
+          onToggleAutoMode: toggleSidebarAutoMode
+        }}
+        show={shouldShowSidebar}
+        sidebar={{
+          activeProjectId,
+          autoCollapseOnPointerLeave: sidebarAutoReveal,
+          collapsed: sidebarCollapsed,
+          daemonBaseUrl,
+          daemonStatus,
+          daemonVersion,
+          hasUpgrade,
+          monadChatActive: currentId !== null || shellSurface === 'monadChat',
+          onOpenMonadChat: () => void handleOpenMonadChat(),
+          onOpenProject: openProject,
+          onOpenStudioSection: (section) => {
             setStudioUrl(section);
-          }}
-          onOpenWorkspace={setWorkspaceUrl}
-          onRequestCollapse={collapseSidebar}
-          onRequestPersistentExpand={revealSidebar}
-          onSwitchDaemonConnection={switchDaemonConnection}
-          onToggleCollapsed={toggleSidebarCollapsed}
-          onToggleProjectPinned={toggleProjectPinned}
-          onToggleSettings={toggleSettings}
-          onToggleStudio={() => {
+          },
+          onOpenWorkspace: setWorkspaceUrl,
+          onRequestCollapse: collapseSidebar,
+          onRequestPersistentExpand: revealSidebar,
+          onSwitchDaemonConnection: switchDaemonConnection,
+          onToggleCollapsed: toggleSidebarCollapsed,
+          onToggleProjectPinned: toggleProjectPinned,
+          onToggleSettings: toggleSettings,
+          onToggleStudio: () => {
             setStudioUrl();
-          }}
-          overlay={sidebarAutoReveal}
-          projects={workspaceProjects}
-          shortcutModifierLabel={shortcutModifierLabel}
-          showSettings={showSettings}
-          showShortcutBadges={showSidebarShortcutBadges}
-          showStudio={showStudio}
-          studioPileActive={studioPileActive}
-          studioSection={studioSection}
-          workspacePileActive={workspacePileActive}
-        />
-      ) : null}
+          },
+          overlay: sidebarAutoReveal,
+          projects: workspaceProjects,
+          shortcutModifierLabel,
+          showSettings,
+          showShortcutBadges: showSidebarShortcutBadges,
+          showStudio,
+          studioPileActive,
+          studioSection,
+          workspacePileActive
+        }}
+      />
 
-      <main className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden">
-        <div
-          className={cn(
-            'flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden',
-            isWorkspaceHome ? 'bg-background' : 'app-main-frame',
-            reserveHeaderLeading && 'app-main-sidebar-collapsed'
-          )}
-        >
-          <Suspense fallback={<PanelLoading />}>
-            <AppShellRoutes
-              currentSessionId={currentId}
-              onCloseStudio={setWorkspaceUrl}
-              sessionRouteProps={{
-                accessMode,
-                activeInputSkillToken,
-                activeSkill,
-                atBottom,
-                contextUsage: sessionContextUsage,
-                currentSession,
-                disabled: isReadOnly,
-                firstItemIndex,
-                inspectorItems,
-                isBusy,
-                isReadOnly,
-                menuItems,
-                messageQueue,
-                model: sessionModel,
-                onAccessModeChange: setAccessMode,
-                onApproval: (approval, allow, scope, reason) => {
-                  void approveTool({ requestId: approval.requestId, allow, scope, reason });
-                },
-                onAtBottomChange: setAtBottom,
-                onBranch: handleBranch,
-                onClarifyAnswer: (requestId, answer) => void clarifyRespond({ requestId, answer }),
-                onClearQueue: () => setMessageQueue([]),
-                onCommandItemApply: applyItem,
-                onCommandItemHover: setActiveSkill,
-                onEndReached: transcript.loadNewer,
-                onInputChange: (value) => {
-                  setInput(value);
-                  setActiveSkill(0);
-                  setSkillMenuDismissed(false);
-                },
-                onKeyDown: handleTextareaKeyDown,
-                onRestore: handleRestore,
-                onScrollToBottom: scrollToBottom,
-                onSelectSession: selectSession,
-                onSkillPreview: openSkillPreview,
-                onStartReached: transcript.loadOlder,
-                onStop: handleStop,
-                onSubmit: () => void handleSubmit(),
-                onToggleInspector: toggleSessionInspector,
-                onVoiceSettingsClick: () => pushShellUrl(studioPath('models')),
-                onVoiceText: (text) => {
-                  setInput((current) => (current.trim() ? `${current.trimEnd()} ${text}` : text));
-                  setSkillMenuDismissed(false);
-                },
-                onVoiceTranscribe: async (audio) => {
-                  const body = await audioBlobToBase64(audio);
-                  return (await transcribeAudio(body).unwrap()).text;
-                },
-                pendingApprovals,
-                pendingClarifications,
-                showInspector,
-                skillMenuOpen,
-                transcriptRef,
-                value: input,
-                viewMessages,
-                voiceModelConfigured
-              }}
-              showStudio={showStudio}
-              workspaceRouteProps={workspaceRouteProps}
-            />
-          </Suspense>
-        </div>
-      </main>
+      <AppShellRoutesHost
+        currentSessionId={currentId}
+        isWorkspaceHome={isWorkspaceHome}
+        onCloseStudio={setWorkspaceUrl}
+        reserveHeaderLeading={reserveHeaderLeading}
+        sessionRouteProps={{
+          accessMode,
+          activeInputSkillToken,
+          activeSkill,
+          atBottom,
+          contextUsage: sessionContextUsage,
+          currentSession,
+          disabled: isReadOnly,
+          firstItemIndex,
+          inspectorItems,
+          isBusy,
+          isReadOnly,
+          menuItems,
+          messageQueue,
+          model: sessionModel,
+          onAccessModeChange: setAccessMode,
+          onApproval: (approval, allow, scope, reason) => {
+            void approveTool({ requestId: approval.requestId, allow, scope, reason });
+          },
+          onAtBottomChange: setAtBottom,
+          onBranch: handleBranch,
+          onClarifyAnswer: (requestId, answer) => void clarifyRespond({ requestId, answer }),
+          onClearQueue: () => setMessageQueue([]),
+          onCommandItemApply: applyItem,
+          onCommandItemHover: setActiveSkill,
+          onEndReached: transcript.loadNewer,
+          onInputChange: (value) => {
+            setInput(value);
+            setActiveSkill(0);
+            setSkillMenuDismissed(false);
+          },
+          onKeyDown: handleTextareaKeyDown,
+          onRestore: handleRestore,
+          onScrollToBottom: scrollToBottom,
+          onSelectSession: selectSession,
+          onSkillPreview: openSkillPreview,
+          onStartReached: transcript.loadOlder,
+          onStop: handleStop,
+          onSubmit: () => void handleSubmit(),
+          onToggleInspector: toggleSessionInspector,
+          onVoiceSettingsClick: () => pushShellUrl(studioPath('models')),
+          onVoiceText: (text) => {
+            setInput((current) => (current.trim() ? `${current.trimEnd()} ${text}` : text));
+            setSkillMenuDismissed(false);
+          },
+          onVoiceTranscribe: async (audio) => {
+            const body = await audioBlobToBase64(audio);
+            return (await transcribeAudio(body).unwrap()).text;
+          },
+          pendingApprovals,
+          pendingClarifications,
+          showInspector,
+          skillMenuOpen,
+          transcriptRef,
+          value: input,
+          viewMessages,
+          voiceModelConfigured
+        }}
+        showStudio={showStudio}
+        workspaceRouteProps={workspaceRouteProps}
+      />
 
       <SettingsModalHost />
       <NewProjectDialog
@@ -787,16 +685,5 @@ export function AppShell() {
         onSaved={() => setSkillPreview(null)}
       />
     </div>
-  );
-}
-
-function SettingsModalHost() {
-  const [settingsTab, setSettingsTab] = useNavigableModal('settings');
-  if (settingsTab === null) return null;
-  return (
-    <Settings
-      initialSection={settingsTab}
-      onClose={() => setSettingsTab(null)}
-    />
   );
 }
