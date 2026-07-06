@@ -14,7 +14,7 @@ import crypto from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { builtinAgentAdapters, hermesNativeCliAdapter, openClawNativeCliAdapter } from '@monad/atoms/agent-adapters';
+import { builtinAgentAdapters } from '@monad/atoms/agent-adapters';
 
 import { EventBus } from '@/services/event-bus.ts';
 import { NativeCliHost } from '@/services/native-cli/host.ts';
@@ -22,6 +22,15 @@ import { registerAgentAdapterImpl } from '@/services/native-cli/index.ts';
 import { createStore } from '@/store/db/index.ts';
 
 for (const adapter of builtinAgentAdapters) registerAgentAdapterImpl(adapter);
+
+function builtinAdapter(provider: 'hermes' | 'openclaw') {
+  const adapter = builtinAgentAdapters.find((candidate) => candidate.provider === provider);
+  if (!adapter) throw new Error(`missing built-in native CLI adapter: ${provider}`);
+  return adapter;
+}
+
+const hermesNativeCliAdapter = builtinAdapter('hermes');
+const openClawNativeCliAdapter = builtinAdapter('openclaw');
 
 const LIVE = process.env.MONAD_LIVE_AGENTS === '1';
 const LIVE_OPENCLAW = process.env.MONAD_LIVE_OPENCLAW === '1';

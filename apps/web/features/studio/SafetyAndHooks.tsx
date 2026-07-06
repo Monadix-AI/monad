@@ -3,9 +3,9 @@
 import { ShieldHalfIcon, WorkflowSquare01Icon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Button, ScrollArea } from '@monad/ui';
-import Link from 'next/link';
 
 import { useT } from '@/components/I18nProvider';
+import { ShellLink } from '@/components/ShellLink';
 import { PanelShell } from '@/components/ui/panel-shell';
 import { studioPath } from '@/features/routes/route-paths';
 import { StudioBreadcrumbHeader } from './StudioBreadcrumbHeader';
@@ -17,7 +17,7 @@ function SafetyLink({ href, title, body }: { href: string; title: string; body: 
       className="h-auto justify-start px-3 py-3 text-left"
       variant="ghost"
     >
-      <Link href={href}>
+      <ShellLink href={href}>
         <span className="flex size-9 shrink-0 items-center justify-center rounded-md border bg-background text-muted-foreground">
           <HugeiconsIcon
             className="size-4"
@@ -28,7 +28,7 @@ function SafetyLink({ href, title, body }: { href: string; title: string; body: 
           <span className="block font-medium text-sm">{title}</span>
           <span className="mt-1 block max-w-[56ch] text-muted-foreground text-xs">{body}</span>
         </span>
-      </Link>
+      </ShellLink>
     </Button>
   );
 }

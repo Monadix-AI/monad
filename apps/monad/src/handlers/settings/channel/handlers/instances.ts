@@ -1,6 +1,14 @@
 import type { ChannelInstanceConfig } from '@monad/home';
-import type { ChannelInstanceView, ListChannelsResponse, OkResponse, UpsertChannelRequest } from '@monad/protocol';
+import type {
+  ChannelInstanceView,
+  GetChannelResponse,
+  ListChannelsResponse,
+  OkResponse,
+  UpsertChannelRequest
+} from '@monad/protocol';
 import type { ChannelSettingsContext } from '@/handlers/settings/channel/context.ts';
+
+import { HandlerError } from '@/handlers/handler-error.ts';
 
 function toView(c: ChannelInstanceConfig): ChannelInstanceView {
   // tokenRef is intentionally dropped — secret material never crosses the wire.
@@ -26,6 +34,13 @@ export function createInstancesHandlers(ctx: ChannelSettingsContext) {
       return { channels: cfg.channels.map(toView) };
     },
 
+    async getChannel({ id }: { id: string }): Promise<GetChannelResponse> {
+      const { cfg } = await ctx.read();
+      const found = cfg.channels.find((c) => c.id === id);
+      if (!found) throw new HandlerError('not_found', `channel not found: ${id}`);
+      return { channel: toView(found) };
+    },
+
     async upsertChannel({ channel }: UpsertChannelRequest): Promise<OkResponse> {
       const { cfg } = await ctx.read();
       const existing = cfg.channels.find((c) => c.id === channel.id);
@@ -44,6 +59,7 @@ export function createInstancesHandlers(ctx: ChannelSettingsContext) {
 
     async setChannelEnabled({ id, enabled }: { id: string; enabled: boolean }): Promise<OkResponse> {
       const { cfg } = await ctx.read();
+      if (!cfg.channels.some((c) => c.id === id)) throw new HandlerError('not_found', `channel not found: ${id}`);
       const channels = cfg.channels.map((c) => (c.id === id ? { ...c, enabled } : c));
       await ctx.commit({ ...cfg, channels });
       return { ok: true };
@@ -51,6 +67,7 @@ export function createInstancesHandlers(ctx: ChannelSettingsContext) {
 
     async removeChannel({ id }: { id: string }): Promise<OkResponse> {
       const { cfg, auth } = await ctx.read();
+      if (!cfg.channels.some((c) => c.id === id)) throw new HandlerError('not_found', `channel not found: ${id}`);
       const channels = cfg.channels.filter((c) => c.id !== id);
       if (auth.channelCredentials?.[id]) {
         delete auth.channelCredentials[id];

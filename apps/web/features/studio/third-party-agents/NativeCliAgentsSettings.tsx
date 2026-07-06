@@ -20,6 +20,87 @@ import { NativeCliSettingsImportDialog } from './NativeCliSettingsImportDialog';
 import { BLANK_AGENT, presetForAgent } from './native-cli-agent-settings-utils';
 import { connectNativeCliAgent } from './native-cli-connect-agent';
 
+const DETECTING_NATIVE_CLI_PRESETS: NativeCliAgentPresetView[] = [
+  {
+    id: 'codex',
+    label: 'Codex',
+    provider: 'codex',
+    productIcon: 'codex',
+    command: 'codex',
+    args: [],
+    defaultLaunchMode: 'pty',
+    supportedLaunchModes: ['pty'],
+    installHint: '',
+    installUrl: 'https://developers.openai.com/codex/cli',
+    installed: false
+  },
+  {
+    id: 'claude-code',
+    label: 'Claude Code',
+    provider: 'claude-code',
+    productIcon: 'claude-code',
+    command: 'claude',
+    args: [],
+    defaultLaunchMode: 'pty',
+    supportedLaunchModes: ['pty'],
+    installHint: '',
+    installUrl: 'https://docs.anthropic.com/en/docs/claude-code/overview',
+    installed: false
+  },
+  {
+    id: 'gemini',
+    label: 'Gemini CLI',
+    provider: 'gemini',
+    productIcon: 'gemini',
+    command: 'gemini',
+    args: [],
+    defaultLaunchMode: 'pty',
+    supportedLaunchModes: ['pty'],
+    installHint: '',
+    installUrl: 'https://github.com/google-gemini/gemini-cli',
+    installed: false
+  },
+  {
+    id: 'qwen',
+    label: 'Qwen Code',
+    provider: 'qwen',
+    productIcon: 'qwen',
+    command: 'qwen',
+    args: [],
+    defaultLaunchMode: 'pty',
+    supportedLaunchModes: ['pty'],
+    installHint: '',
+    installUrl: 'https://github.com/QwenLM/qwen-code',
+    installed: false
+  },
+  {
+    id: 'openclaw',
+    label: 'OpenClaw',
+    provider: 'openclaw',
+    productIcon: 'openclaw',
+    command: 'openclaw',
+    args: [],
+    defaultLaunchMode: 'pty',
+    supportedLaunchModes: ['pty'],
+    installHint: '',
+    installUrl: 'https://github.com/Monadical-SAS/OpenClaw',
+    installed: false
+  },
+  {
+    id: 'hermes',
+    label: 'Hermes',
+    provider: 'hermes',
+    productIcon: 'hermes',
+    command: 'hermes',
+    args: [],
+    defaultLaunchMode: 'pty',
+    supportedLaunchModes: ['pty'],
+    installHint: '',
+    installUrl: 'https://github.com/monadix/hermes',
+    installed: false
+  }
+];
+
 export function NativeCliAgentsSettings({ embedded = false }: { onClose: () => void; embedded?: boolean }) {
   const t = useT();
   const { agents, presets, authStates, loading, saveAgent, removeAgent, setEnabled, refetch } =
@@ -57,6 +138,8 @@ export function NativeCliAgentsSettings({ embedded = false }: { onClose: () => v
   const openInstallPage = (preset: NativeCliAgentPresetView) => {
     window.open(preset.installUrl, '_blank', 'noopener,noreferrer');
   };
+  const visiblePresets = presets.length > 0 ? presets : loading ? DETECTING_NATIVE_CLI_PRESETS : [];
+  const detectingPresets = loading && presets.length === 0;
 
   return (
     <PanelShell>
@@ -99,15 +182,16 @@ export function NativeCliAgentsSettings({ embedded = false }: { onClose: () => v
             </p>
           ) : null}
 
-          {presets.length > 0 && !draft ? (
+          {visiblePresets.length > 0 && !draft ? (
             <NativeCliPresetPanel
               agents={agents}
               authSessionAgentName={authSession?.agentName}
               authStates={authStates}
               connectAgent={connectAgent}
               connectingAgentName={connectingAgentName}
+              detecting={detectingPresets}
               openInstallPage={openInstallPage}
-              presets={presets}
+              presets={visiblePresets}
               removeAgent={removeAgent}
               setEditingAgent={setEditingAgent}
               setImportPreset={setImportPreset}

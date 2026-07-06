@@ -54,7 +54,7 @@ export function createProjectLifecycleHandlers(
 
   function requireProject(id: ProjectId): WorkplaceProject {
     const project = store.getWorkplaceProject(id);
-    if (!project) throw new HandlerError('invalid', `workplace project not found: ${id}`);
+    if (!project) throw new HandlerError('not_found', `workplace project not found: ${id}`);
     return project;
   }
 

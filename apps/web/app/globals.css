@@ -422,6 +422,10 @@
     border-right: 1px solid var(--sidebar-border);
   }
 
+  .app-main-sidebar-collapsed .panel-shell-header {
+    padding-left: 8.5rem;
+  }
+
   .scwf-scroll {
     overscroll-behavior-y: contain;
     scrollbar-color: transparent transparent;
@@ -810,12 +814,12 @@
     transition: opacity 160ms ease;
   }
 
-  .composer-lexical-input {
+  .composer-editor-input {
     display: block;
     width: 100%;
     min-height: 62px;
     max-height: 180px;
-    padding: 14px 20px 6px;
+    padding: 0;
     overflow-y: auto;
     font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
     font-size: 14px;
@@ -830,7 +834,7 @@
     border: 0;
   }
 
-  .composer-lexical-input[contenteditable="false"] {
+  .composer-editor-input[contenteditable="false"] {
     color: var(--muted-foreground);
     cursor: not-allowed;
     background: color-mix(in srgb, var(--chat-input-surface) 92%, var(--muted));
@@ -841,9 +845,18 @@
     --shared-composer-font-size: 13px;
     --shared-composer-pill-x: 8px;
     position: relative;
-    overflow: visible;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: min(42vh, 260px);
+    padding: 8px;
+    overflow: hidden;
     color: var(--foreground);
-    background: var(--chat-input-surface);
+    background: color-mix(
+      in srgb,
+      rgb(var(--backgroundColor-surface-container)) 62%,
+      rgb(var(--backgroundColor-primary))
+    );
     border: 1px solid var(--chat-input-border);
     border-radius: 18px;
     box-shadow: 0 10px 24px rgb(0 0 0 / 0.14);
@@ -865,23 +878,27 @@
   .composer-live-dense .chat-input-content {
     position: relative;
     z-index: 2;
-    min-height: 68px;
-    overflow: visible;
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
   }
 
-  .composer-live-dense .composer-lexical-input {
-    min-height: 68px;
-    max-height: 148px;
-    padding: 15px 18px 7px;
+  .composer-live-dense .composer-editor-input {
+    flex: 1 1 auto;
+    min-height: 56px;
+    max-height: none;
+    padding: 0;
     font-size: 13.5px;
     line-height: 1.52;
   }
 
-  .composer-lexical-placeholder {
+  .composer-editor-placeholder {
     position: absolute;
-    top: 15px;
-    left: 18px;
-    max-width: calc(100% - 36px);
+    top: 0;
+    left: 0;
+    max-width: 100%;
     overflow: hidden;
     text-overflow: ellipsis;
     font-size: 13.5px;
@@ -916,7 +933,7 @@
   }
 
   .composer-live-dense :where(.shared-composer-toolbar) {
-    padding: 0 5px 5px;
+    padding: 0;
   }
 
   .composer-live-dense :where(.shared-composer-tools),

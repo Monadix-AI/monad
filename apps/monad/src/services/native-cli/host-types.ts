@@ -1,5 +1,6 @@
 import type {
   NativeCliAgentView,
+  NativeCliHistoryPageRequest,
   NativeCliHistoryPageResponse,
   NativeCliLaunchMode,
   NativeCliObservationAccessResponse,
@@ -52,7 +53,7 @@ export interface LiveNativeCliSession {
   managedPrompt?: string | null;
   /** cli-oneshot only: the in-flight turn's process, so interrupt/stop can kill it. */
   oneshotTurnProc?: NativeCliProcess;
-  /** cli-oneshot only: serializes turns so two concurrent deliveries (moderator fan-out + a user
+  /** cli-oneshot only: serializes turns so two concurrent deliveries (project fan-out + a user
    *  message) run one process at a time instead of racing/clobbering `oneshotTurnProc` + interleaving
    *  output into the shared buffer. */
   oneshotQueue?: Promise<void>;
@@ -85,8 +86,9 @@ export interface LiveNativeCliSession {
   pendingHistoryPages: Map<
     string,
     {
-      resolve(page: NativeCliHistoryPageResponse['page']): void;
+      resolve(page: NativeCliHistoryPageResponse): void;
       reject(error: Error): void;
+      request: NativeCliHistoryPageRequest;
       timeout: Timer;
     }
   >;
@@ -107,6 +109,12 @@ export interface LiveNativeCliSession {
    *  request id was for so a response can be dispatched by id rather than by guessing its shape. */
   pendingRequests: Map<string | number, string>;
   nextRequestId(): number;
+  /** Non-PTY resumable sessions can release their child process while idle and restore it on input. */
+  idleTimer?: Timer;
+  idleTimeoutMs?: number;
+  suspended?: boolean;
+  restartRuntime?: () => Promise<void>;
+  resumeQueue?: Promise<void>;
   kill(signal?: NodeJS.Signals): void;
 }
 
@@ -122,4 +130,6 @@ export interface NativeCliHostDeps {
   nativeCliProcessRegistryPath?: string;
   authProcessRegistryPath?: string;
   authHeartbeatTimeoutMs?: number;
+  /** Milliseconds before a resumable native CLI child is released while idle. <=0 disables it. */
+  nativeCliIdleTimeoutMs?: number;
 }

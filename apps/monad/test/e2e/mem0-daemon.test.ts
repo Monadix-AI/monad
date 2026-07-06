@@ -107,10 +107,10 @@ for (const kind of TRANSPORTS) {
         expect(core.core).toBe('');
 
         // forget routes to mem0.delete
-        const forget = await t.fetch('/v1/memory/facts', {
+        const forget = await t.fetch('/v1/memory/facts/m0', {
           method: 'DELETE',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ scopeKind: 'agent', scopeId: 'agt_1', id: 'm0' })
+          body: JSON.stringify({ scopeKind: 'agent', scopeId: 'agt_1' })
         });
         expect(forget.status).toBe(200);
         expect(fake.mem).toHaveLength(0);

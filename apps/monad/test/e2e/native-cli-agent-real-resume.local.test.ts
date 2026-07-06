@@ -1,9 +1,18 @@
 import type { NativeCliOutputEvent } from '@/services/native-cli/types.ts';
 
 import { describe, expect, test } from 'bun:test';
-import { claudeCodeNativeCliAdapter, codexNativeCliAdapter } from '@monad/atoms/agent-adapters';
+import { builtinAgentAdapters } from '@monad/atoms/agent-adapters';
 
 import { nativeCliOutputEventSchema } from '@/services/native-cli/types.ts';
+
+function builtinAdapter(provider: 'claude-code' | 'codex') {
+  const adapter = builtinAgentAdapters.find((candidate) => candidate.provider === provider);
+  if (!adapter) throw new Error(`missing built-in native CLI adapter: ${provider}`);
+  return adapter;
+}
+
+const codexNativeCliAdapter = builtinAdapter('codex');
+const claudeCodeNativeCliAdapter = builtinAdapter('claude-code');
 
 const CODEX_SESSION = process.env.MONAD_NATIVE_CLI_REAL_CODEX_SESSION;
 const CODEX_CWD = process.env.MONAD_NATIVE_CLI_REAL_CODEX_CWD ?? process.cwd();

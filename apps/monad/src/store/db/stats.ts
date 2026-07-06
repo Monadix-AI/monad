@@ -123,6 +123,10 @@ export function clearLedger(sqlite: Database): void {
   sqlite.query('DELETE FROM usage_ledger').run();
 }
 
+// range=all has no natural upper bound on daemon lifetime; without this cap the heatmap/day-row
+// queries scan and return one row per active day since first install, growing unbounded forever.
+const ALL_RANGE_MAX_DAYS = 400;
+
 /** Pre-aggregated stats for the dashboard (Overview + Models tabs). */
 export function computeStats(sqlite: Database, range: StatsRange = 'all'): GetStatsResponse {
   const sinceDay =
@@ -130,7 +134,7 @@ export function computeStats(sqlite: Database, range: StatsRange = 'all'): GetSt
       ? localDay(new Date(Date.now() - 6 * 86400_000))
       : range === '30d'
         ? localDay(new Date(Date.now() - 29 * 86400_000))
-        : null;
+        : localDay(new Date(Date.now() - (ALL_RANGE_MAX_DAYS - 1) * 86400_000));
 
   // sessions.created_at and messages.created_at are UTC ISO-8601 strings.
   // sinceDay is a local YYYY-MM-DD; convert to local-midnight UTC for correct string comparison.

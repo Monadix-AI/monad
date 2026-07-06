@@ -103,7 +103,7 @@ export function createManagedNativeCliRuntime(ctx: SessionContext) {
         ...startArgs,
         providerSessionRef
       });
-      nativeCliHost.input(nativeSession.id, { input: nativeCliInputText(input) });
+      await nativeCliHost.input(nativeSession.id, { input: nativeCliInputText(input) });
       return nativeSession;
     } catch (err) {
       if (!providerSessionRef) throw err;
@@ -137,7 +137,7 @@ export function createManagedNativeCliRuntime(ctx: SessionContext) {
       });
       persistAndRetire(session.id, round);
       const nativeSession = await nativeCliHost.start(startArgs);
-      nativeCliHost.input(nativeSession.id, {
+      await nativeCliHost.input(nativeSession.id, {
         input: nativeCliInputText(managedNativeCliResumeRecoveryNotice(spec.provider, input))
       });
       return nativeSession;
@@ -154,7 +154,7 @@ export function createManagedNativeCliRuntime(ctx: SessionContext) {
       const nativeSession = await inflight.promise;
       if (!inflight.inputs.has(args.input)) {
         inflight.inputs.add(args.input);
-        nativeCliHost.input(nativeSession.id, { input: nativeCliInputText(args.input) });
+        await nativeCliHost.input(nativeSession.id, { input: nativeCliInputText(args.input) });
       }
       return nativeSession;
     }

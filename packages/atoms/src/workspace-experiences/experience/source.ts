@@ -22,7 +22,7 @@ export interface ProjectExperienceCanvasSource {
   };
   modelProfiles: ProfileView[];
   loadOlder: () => void;
-  sendDirective: (text: string) => Promise<void> | void;
+  sendDirective: import('../chat-room/utils/composer.ts').ProjectComposerSurface['sendDirective'];
   resolveApproval: (requestId: string, decision: 'approve' | 'reject') => void;
   answerQuestion: (requestId: string, answer: string) => void;
   pauseAll: () => void;

@@ -1,7 +1,5 @@
 import type { MonadPaths } from '@monad/home';
 import type {
-  Agent,
-  Event,
   ProjectId,
   Session,
   SessionId,
@@ -16,11 +14,10 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { createHash } from 'node:crypto';
 import { chmod, mkdir, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { join } from 'node:path';
 import { initMonadHome, loadAuth, loadConfig } from '@monad/home';
 
 import { ModelService } from '@/handlers/settings/model/index.ts';
-import { clearAcpDelegatesForSession } from '@/services/delegation/acp-delegate.ts';
 import { createHttpTransport } from '@/transports/http.ts';
 import {
   buildHandlers,
@@ -31,11 +28,9 @@ import {
   type TransportHandle
 } from '../helpers.ts';
 
-const CHANNEL_HOST_EXT_KEY = 'controlRoomModeratorAgentId';
 const WORKPLACE_PROJECT_MEMBERS_EXT_KEY = 'workplaceProjectMembers';
 const MANAGED_AGENT_TOKEN = 'managed-agent-token';
 const TEST_NATIVE_CLI_SERVER_URL = 'http://127.0.0.1:61234';
-const acpFixture = resolve(import.meta.dir, '../fixtures/mock-acp-agent.ts');
 
 function makePaths(base: string): MonadPaths {
   return makeTestPaths(base);
@@ -47,7 +42,7 @@ const json = (method: string, body?: unknown, headers?: Record<string, string>):
   body: body === undefined ? undefined : JSON.stringify(body)
 });
 
-async function createSession(t: TransportHandle, cwd?: string): Promise<SessionId> {
+async function _createSession(t: TransportHandle, cwd?: string): Promise<SessionId> {
   const res = await t.fetch(
     '/v1/sessions',
     json('POST', {
@@ -60,7 +55,7 @@ async function createSession(t: TransportHandle, cwd?: string): Promise<SessionI
   return ((await res.json()) as { sessionId: SessionId }).sessionId;
 }
 
-async function getSession(t: TransportHandle, sessionId: string): Promise<Session> {
+async function _getSession(t: TransportHandle, sessionId: string): Promise<Session> {
   const res = await t.fetch(`/v1/sessions/${sessionId}`);
   expect(res.status).toBe(200);
   return ((await res.json()) as { session: Session }).session;
@@ -96,12 +91,6 @@ async function updateWorkplaceProjectOrigin(
   return ((await res.json()) as { project: WorkplaceProject }).project;
 }
 
-async function createAgent(t: TransportHandle): Promise<Agent> {
-  const res = await t.fetch('/v1/agents', json('POST', { name: 'Channel Host', prompt: 'Route channel messages.' }));
-  expect(res.status).toBe(201);
-  return ((await res.json()) as { agent: Agent }).agent;
-}
-
 async function listMessages(t: TransportHandle, sessionId: string): Promise<Array<{ role: string; text: string }>> {
   const route = sessionId.startsWith('prj_') ? 'projects' : 'sessions';
   const listed = await t.fetch(`/v1/${route}/${sessionId}/messages`);
@@ -133,19 +122,6 @@ function captureModel(requests: ModelRequest[], replies: string[]): ModelRouter 
       return { text: replies.shift() ?? 'unexpected assistant', finishReason: 'stop' };
     }
   };
-}
-
-function requestText(req: ModelRequest): string {
-  return req.messages
-    .map((message) =>
-      typeof message.content === 'string'
-        ? message.content
-        : message.content
-            .filter((part): part is Extract<(typeof message.content)[number], { type: 'text' }> => part.type === 'text')
-            .map((part) => part.text)
-            .join('\n')
-    )
-    .join('\n');
 }
 
 const tokenHash = (token = MANAGED_AGENT_TOKEN): string => createHash('sha256').update(token).digest('hex');
@@ -214,7 +190,7 @@ async function configureMockNativeCliAgent(
   );
   await chmod(script, 0o755);
   const res = await t.fetch(
-    '/v1/settings/native-cli-agents',
+    `/v1/settings/native-cli-agents/${agentName}`,
     json('PUT', {
       agent: {
         name: agentName,
@@ -271,7 +247,7 @@ async function configureMockCodexResumeFailureAgent(t: TransportHandle, root: st
   );
   await chmod(script, 0o755);
   const res = await t.fetch(
-    '/v1/settings/native-cli-agents',
+    '/v1/settings/native-cli-agents/codex-resume-failure',
     json('PUT', {
       agent: {
         name: 'codex-resume-failure',
@@ -314,7 +290,7 @@ async function configureMockCodexStartFailureAgent(t: TransportHandle, root: str
   );
   await chmod(script, 0o755);
   const res = await t.fetch(
-    '/v1/settings/native-cli-agents',
+    '/v1/settings/native-cli-agents/codex-start-failure',
     json('PUT', {
       agent: {
         name: 'codex-start-failure',
@@ -340,7 +316,7 @@ async function waitForFile(path: string, expected: string): Promise<string> {
   return readFile(path, 'utf8');
 }
 
-function uiMessageText(item: UIMessageItem): string {
+function _uiMessageText(item: UIMessageItem): string {
   return item.parts
     .filter((part): part is Extract<UIPart, { type: 'text' }> => part.type === 'text')
     .map((part) => part.text)
@@ -379,90 +355,6 @@ for (const kind of TRANSPORTS) {
       await rm(dir, { recursive: true, force: true });
     });
 
-    test('Studio host is stored as channel host metadata and binds the session agent', async () => {
-      const sessionId = await createSession(t);
-      const agent = await createAgent(t);
-      const session = await getSession(t, sessionId);
-      const origin = {
-        ...session.origin,
-        ext: { ...(session.origin?.ext ?? {}), [CHANNEL_HOST_EXT_KEY]: `agent:${agent.id}` }
-      };
-
-      const res = await t.fetch(`/v1/sessions/${sessionId}`, json('PATCH', { agentId: agent.id, origin }));
-      expect(res.status).toBe(200);
-      const updated = ((await res.json()) as { session: Session }).session;
-      expect(updated.agentIds).toEqual([agent.id]);
-      expect(updated.origin?.ext?.[CHANNEL_HOST_EXT_KEY]).toBe(`agent:${agent.id}`);
-    });
-
-    test('Studio host receives bare channel messages through the channel route', async () => {
-      const sessionId = await createSession(t);
-      const agent = await createAgent(t);
-      const session = await getSession(t, sessionId);
-      const origin = {
-        ...session.origin,
-        ext: { ...(session.origin?.ext ?? {}), [CHANNEL_HOST_EXT_KEY]: `agent:${agent.id}` }
-      };
-      const hostRes = await t.fetch(`/v1/sessions/${sessionId}`, json('PATCH', { agentId: agent.id, origin }));
-      expect(hostRes.status).toBe(200);
-
-      const send = await t.fetch(`/v1/channels/${sessionId}/messages`, json('POST', { text: 'route this' }));
-      expect(send.status).toBe(200);
-      expect(await send.json()).toEqual({ accepted: true });
-
-      const messages = await waitForMessages(t, sessionId, 2);
-      expect(messages.map((message) => [message.role, message.text])).toEqual([
-        ['user', 'route this'],
-        ['assistant', 'unexpected assistant']
-      ]);
-      expect(modelRequests).toHaveLength(1);
-      const prompt = requestText(modelRequests[0] as ModelRequest);
-      expect(prompt).toContain('<channel_context>');
-      expect(prompt).toContain('target_role: moderator');
-      expect(prompt).toContain('You are the moderator for this channel');
-      expect(prompt).toContain('Return exactly one JSON object and no surrounding prose.');
-      expect(prompt).toContain(
-        'Shape: {"visibility":"visible","display":{"kind":"markdown","content":"text shown to the user"}'
-      );
-    });
-
-    test('ACP host is stored as channel host metadata without binding a Studio agent', async () => {
-      const sessionId = await createSession(t);
-      const session = await getSession(t, sessionId);
-      const origin = {
-        ...session.origin,
-        ext: { ...(session.origin?.ext ?? {}), [CHANNEL_HOST_EXT_KEY]: 'acp:reviewer' }
-      };
-
-      const res = await t.fetch(`/v1/sessions/${sessionId}`, json('PATCH', { agentId: null, origin }));
-      expect(res.status).toBe(200);
-      const updated = ((await res.json()) as { session: Session }).session;
-      expect(updated.agentIds).toEqual([]);
-      expect(updated.origin?.ext?.[CHANNEL_HOST_EXT_KEY]).toBe('acp:reviewer');
-    });
-
-    test('clearing host removes channel host metadata and keeps the channel unbound', async () => {
-      const sessionId = await createSession(t);
-      const session = await getSession(t, sessionId);
-      const ext = { ...(session.origin?.ext ?? {}), [CHANNEL_HOST_EXT_KEY]: 'acp:reviewer' };
-      const withHost = { ...session.origin, ext };
-      const setRes = await t.fetch(`/v1/sessions/${sessionId}`, json('PATCH', { agentId: null, origin: withHost }));
-      expect(setRes.status).toBe(200);
-
-      const next = ((await setRes.json()) as { session: Session }).session;
-      const nextExt = { ...(next.origin?.ext ?? {}) };
-      delete nextExt[CHANNEL_HOST_EXT_KEY];
-      const clearedOrigin = { ...next.origin, ext: nextExt };
-      const clearRes = await t.fetch(
-        `/v1/sessions/${sessionId}`,
-        json('PATCH', { agentId: null, origin: clearedOrigin })
-      );
-      expect(clearRes.status).toBe(200);
-      const cleared = ((await clearRes.json()) as { session: Session }).session;
-      expect(cleared.agentIds).toEqual([]);
-      expect(cleared.origin?.ext?.[CHANNEL_HOST_EXT_KEY]).toBeUndefined();
-    });
-
     test('no-host project message records timeline only through the project route', async () => {
       const sessionId = await createWorkplaceProject(t);
       const oldRoute = await t.fetch(
@@ -494,6 +386,7 @@ for (const kind of TRANSPORTS) {
       expect(workdir.status).toBe(200);
       expect(handlers.store.getSession(sessionId)).toBeNull();
       expect(handlers.store.getWorkplaceProject(sessionId)?.cwd).toBe(projectDir);
+      expect(modelRequests).toEqual([]);
     });
 
     test('Monad only generates for project messages when invited as a project member', async () => {
@@ -1296,319 +1189,6 @@ for (const kind of TRANSPORTS) {
       expect(messages.map((message) => message.role)).toEqual(['user', 'assistant']);
       expect(messages[0]?.text).toBe('@[name="codex" id="native-cli:codex"] inspect repo');
       expect(messages[1]?.text).toContain('requires a project working path');
-    });
-
-    test('ACP host receives channel protocol and user message through the channel route', async () => {
-      const sessionId = await createSession(t);
-      const register = await t.fetch(
-        '/v1/settings/acp-agents',
-        json('PUT', {
-          agent: {
-            name: 'reviewer',
-            command: 'bun',
-            args: [acpFixture],
-            enabled: true,
-            osSandbox: false,
-            forwardMcp: false
-          }
-        })
-      );
-      expect(register.status).toBe(200);
-
-      const session = await getSession(t, sessionId);
-      const origin = {
-        ...session.origin,
-        ext: { ...(session.origin?.ext ?? {}), [CHANNEL_HOST_EXT_KEY]: 'acp:reviewer' }
-      };
-      const hostRes = await t.fetch(`/v1/sessions/${sessionId}`, json('PATCH', { agentId: null, origin }));
-      expect(hostRes.status).toBe(200);
-
-      const send = await t.fetch(`/v1/channels/${sessionId}/messages`, json('POST', { text: 'review this' }));
-      expect(send.status).toBe(200);
-      expect(await send.json()).toEqual({ accepted: true });
-
-      const messages = await waitForMessages(t, sessionId, 2);
-      const assistant = messages.find((message) => message.role === 'assistant')?.text ?? '';
-      expect(assistant).toContain('mock-acp handled: <channel_context>');
-      expect(assistant).toContain('target: reviewer');
-      expect(assistant).toContain('target_role: moderator');
-      expect(assistant).toContain('Return exactly one JSON object and no surrounding prose.');
-      expect(assistant).toContain('<channel_user_message>\nreview this\n</channel_user_message>');
-      clearAcpDelegatesForSession(sessionId as SessionId);
-    });
-
-    test('ACP moderator structured next dispatches an ACP task', async () => {
-      const sessionId = await createSession(t);
-      for (const name of ['host', 'codex']) {
-        const register = await t.fetch(
-          '/v1/settings/acp-agents',
-          json('PUT', {
-            agent: {
-              name,
-              command: 'bun',
-              args: [acpFixture],
-              enabled: true,
-              osSandbox: false,
-              forwardMcp: false
-            }
-          })
-        );
-        expect(register.status).toBe(200);
-      }
-
-      const session = await getSession(t, sessionId);
-      const origin = {
-        ...session.origin,
-        ext: { ...(session.origin?.ext ?? {}), [CHANNEL_HOST_EXT_KEY]: 'acp:host' }
-      };
-      const hostRes = await t.fetch(`/v1/sessions/${sessionId}`, json('PATCH', { agentId: null, origin }));
-      expect(hostRes.status).toBe(200);
-
-      const eventsP = t.sse(`/v1/sessions/${sessionId}/events`, {
-        until: (event) =>
-          event.type === 'agent.message' && (event.payload as { agentName?: unknown }).agentName === 'codex',
-        timeoutMs: 3000
-      });
-      await Bun.sleep(50);
-      const send = await t.fetch(`/v1/channels/${sessionId}/messages`, json('POST', { text: 'structured-next' }));
-      expect(send.status).toBe(200);
-
-      const events = await eventsP;
-      expect(
-        events.some(
-          (event: Event) =>
-            event.type === 'tool.called' &&
-            (event.payload as { tool?: unknown; input?: { agent?: unknown } }).tool === 'acp:codex' &&
-            (event.payload as { input?: { agent?: unknown } }).input?.agent === 'codex'
-        )
-      ).toBe(true);
-      expect(
-        events.some(
-          (event: Event) =>
-            event.type === 'agent.message' && (event.payload as { agentName?: unknown }).agentName === 'codex'
-        )
-      ).toBe(true);
-      clearAcpDelegatesForSession(sessionId as SessionId);
-    });
-
-    test('ACP moderator receives single explicit mentions as routing constraints', async () => {
-      const sessionId = await createSession(t);
-      for (const name of ['host', 'codex']) {
-        const register = await t.fetch(
-          '/v1/settings/acp-agents',
-          json('PUT', {
-            agent: {
-              name,
-              command: 'bun',
-              args: [acpFixture],
-              enabled: true,
-              osSandbox: false,
-              forwardMcp: false
-            }
-          })
-        );
-        expect(register.status).toBe(200);
-      }
-
-      const session = await getSession(t, sessionId);
-      const origin = {
-        ...session.origin,
-        ext: { ...(session.origin?.ext ?? {}), [CHANNEL_HOST_EXT_KEY]: 'acp:host' }
-      };
-      const hostRes = await t.fetch(`/v1/sessions/${sessionId}`, json('PATCH', { agentId: null, origin }));
-      expect(hostRes.status).toBe(200);
-
-      const eventsP = t.sse(`/v1/sessions/${sessionId}/events`, {
-        until: (event) => event.type === 'agent.message',
-        timeoutMs: 3000
-      });
-      await Bun.sleep(50);
-      const mention = '@[name="codex" id="acp:codex"]';
-      const send = await t.fetch(`/v1/channels/${sessionId}/messages`, json('POST', { text: `${mention} inspect` }));
-      expect(send.status).toBe(200);
-
-      const events = await eventsP;
-      const toolCalls = events.filter((event: Event) => event.type === 'tool.called');
-      expect(toolCalls[0]?.payload).toMatchObject({ tool: 'acp:host', input: { agent: 'host' } });
-      expect(toolCalls[0]?.payload).not.toMatchObject({ tool: 'acp:codex' });
-      const assistant = events.find((event: Event) => event.type === 'agent.message')?.payload as
-        | { text?: string; agentName?: string }
-        | undefined;
-      expect(assistant?.agentName).toBe('host');
-      expect(assistant?.text).toContain('target_constraint: codex (acp:codex)');
-      expect(assistant?.text).toContain('set visibility to "silent"');
-      clearAcpDelegatesForSession(sessionId as SessionId);
-    });
-
-    test('moderator structured next dispatches parallel ACP tasks and transcript renders display content', async () => {
-      const sessionId = await createSession(t);
-      const agent = await createAgent(t);
-      for (const name of ['codex', 'claude-code']) {
-        const register = await t.fetch(
-          '/v1/settings/acp-agents',
-          json('PUT', {
-            agent: {
-              name,
-              command: 'bun',
-              args: [acpFixture],
-              enabled: true,
-              osSandbox: false,
-              forwardMcp: false
-            }
-          })
-        );
-        expect(register.status).toBe(200);
-      }
-
-      const session = await getSession(t, sessionId);
-      const origin = {
-        ...session.origin,
-        ext: { ...(session.origin?.ext ?? {}), [CHANNEL_HOST_EXT_KEY]: `agent:${agent.id}` }
-      };
-      const hostRes = await t.fetch(`/v1/sessions/${sessionId}`, json('PATCH', { agentId: agent.id, origin }));
-      expect(hostRes.status).toBe(200);
-      modelReplies.push(
-        JSON.stringify({
-          display: { kind: 'markdown', content: "I'll ask the codex agent to check the current time." },
-          attachments: [],
-          next: [
-            {
-              agentId: 'acp:codex',
-              title: 'Check current time',
-              prompt: 'What time is it right now?',
-              context: 'User asked to check what time it is'
-            },
-            {
-              agentId: 'acp:claude-code',
-              title: 'Check current time',
-              prompt: 'What time is it right now?',
-              context: 'User asked to check what time it is'
-            }
-          ]
-        })
-      );
-
-      const eventsP = t.sse(`/v1/sessions/${sessionId}/events`, {
-        until: (event) =>
-          event.type === 'tool.called' &&
-          (event.payload as { tool?: unknown; input?: { agent?: unknown } }).tool === 'acp:claude-code',
-        timeoutMs: 3000
-      });
-      const uiEventsP = t.sse(`/v1/sessions/${sessionId}/ui-stream`, {
-        until: (event) => {
-          const uiEvent = event as unknown as SessionUiEvent;
-          return (
-            uiEvent.kind === 'upsert' &&
-            uiEvent.item.kind === 'message' &&
-            uiEvent.item.role === 'assistant' &&
-            uiEvent.item.status === 'done' &&
-            uiMessageText(uiEvent.item) === "I'll ask the codex agent to check the current time."
-          );
-        },
-        timeoutMs: 3000
-      });
-      await Bun.sleep(50);
-      const send = await t.fetch(`/v1/channels/${sessionId}/messages`, json('POST', { text: 'what time is it?' }));
-      expect(send.status).toBe(200);
-      expect(await send.json()).toEqual({ accepted: true });
-
-      const events = await eventsP;
-      for (const name of ['codex', 'claude-code']) {
-        expect(
-          events.some(
-            (event: Event) =>
-              event.type === 'tool.called' &&
-              (event.payload as { tool?: unknown; input?: { agent?: unknown } }).tool === `acp:${name}` &&
-              (event.payload as { input?: { agent?: unknown } }).input?.agent === name
-          )
-        ).toBe(true);
-      }
-      const uiEvents = (await uiEventsP) as unknown as SessionUiEvent[];
-      const hostUiMessage = uiEvents
-        .filter((event) => event.kind === 'upsert' && event.item.kind === 'message' && event.item.role === 'assistant')
-        .map((event) => (event.kind === 'upsert' && event.item.kind === 'message' ? event.item : null))
-        .find((item) => item && uiMessageText(item) === "I'll ask the codex agent to check the current time.");
-      expect(hostUiMessage ? uiMessageText(hostUiMessage) : '').not.toContain('"display"');
-
-      const messages = await waitForMessages(t, sessionId, 4);
-      expect(messages[1]?.text).toContain('"display"');
-      const delegated = messages.filter(
-        (message) => message.role === 'assistant' && message.text.includes('Task: Check current time')
-      );
-      expect(delegated).toHaveLength(2);
-      for (const message of delegated) expect(message.text).toContain('What time is it right now?');
-      clearAcpDelegatesForSession(sessionId as SessionId);
-    });
-
-    test('moderator structured next forwards session runtime MCP servers to ACP workers', async () => {
-      const sessionId = await createSession(t);
-      const agent = await createAgent(t);
-      const runtimeRes = await t.fetch(
-        `/v1/sessions/${sessionId}/runtime`,
-        json('PUT', {
-          sandboxRoots: [dir],
-          mcpServers: [
-            {
-              name: 'session-mcp',
-              command: 'bun',
-              args: [resolve(import.meta.dir, '../unit/tools/fixtures/mock-mcp-server.ts')]
-            }
-          ]
-        })
-      );
-      expect(runtimeRes.status).toBe(200);
-      const register = await t.fetch(
-        '/v1/settings/acp-agents',
-        json('PUT', {
-          agent: {
-            name: 'codex',
-            command: 'bun',
-            args: [acpFixture],
-            enabled: true,
-            osSandbox: false,
-            forwardMcp: true
-          }
-        })
-      );
-      expect(register.status).toBe(200);
-
-      const session = await getSession(t, sessionId);
-      const origin = {
-        ...session.origin,
-        ext: { ...(session.origin?.ext ?? {}), [CHANNEL_HOST_EXT_KEY]: `agent:${agent.id}` }
-      };
-      const hostRes = await t.fetch(`/v1/sessions/${sessionId}`, json('PATCH', { agentId: agent.id, origin }));
-      expect(hostRes.status).toBe(200);
-      modelReplies.push(
-        JSON.stringify({
-          display: { kind: 'markdown', content: 'Delegating MCP check.' },
-          attachments: [],
-          next: [{ agentId: 'acp:codex', prompt: 'mcp' }]
-        })
-      );
-
-      const eventsP = t.sse(`/v1/sessions/${sessionId}/events`, {
-        until: (event) =>
-          event.type === 'agent.message' &&
-          (event.payload as { agentName?: unknown; text?: unknown }).agentName === 'codex' &&
-          typeof (event.payload as { text?: unknown }).text === 'string' &&
-          (event.payload as { text: string }).text.includes('mcp: session-mcp'),
-        timeoutMs: 3000
-      });
-      const send = await t.fetch(`/v1/channels/${sessionId}/messages`, json('POST', { text: 'check mcp forwarding' }));
-      expect(send.status).toBe(200);
-
-      const events = await eventsP;
-      expect(
-        events.some(
-          (event: Event) =>
-            event.type === 'agent.message' &&
-            (event.payload as { agentName?: unknown; text?: unknown }).agentName === 'codex' &&
-            typeof (event.payload as { text?: unknown }).text === 'string' &&
-            (event.payload as { text: string }).text.includes('mcp: session-mcp')
-        )
-      ).toBe(true);
-      clearAcpDelegatesForSession(sessionId as SessionId);
     });
   });
 }

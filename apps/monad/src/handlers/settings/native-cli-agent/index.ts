@@ -1,5 +1,6 @@
 import type { MonadConfig, MonadPaths, NativeCliAgentConfig } from '@monad/home';
 import type {
+  GetNativeCliAgentResponse,
   ListNativeCliAgentPresetsResponse,
   ListNativeCliAgentsResponse,
   ListNativeCliSettingsImportCandidatesResponse,
@@ -28,6 +29,9 @@ import {
 
 export interface NativeCliAgentDeps {
   paths: MonadPaths;
+  nativeCliSessions?: {
+    stopAgentProvider(provider: NativeCliAgentView['provider']): void;
+  };
 }
 
 // Sentinel returned in place of raw env values so secrets (API keys) never reach the web client /
@@ -137,7 +141,7 @@ function planNativeCliSettingsImport(
   };
 }
 
-export function createNativeCliAgentModule({ paths }: NativeCliAgentDeps) {
+export function createNativeCliAgentModule({ paths, nativeCliSessions }: NativeCliAgentDeps) {
   async function read(): Promise<MonadConfig> {
     const cfg = await loadAll(paths.config, paths.profile);
     if (!cfg) throw new Error('native-cli-agent settings: config.json missing');
@@ -149,6 +153,13 @@ export function createNativeCliAgentModule({ paths }: NativeCliAgentDeps) {
     async listNativeCliAgents(): Promise<ListNativeCliAgentsResponse> {
       const cfg = await read();
       return { agents: cfg.nativeCliAgents.map(toView) };
+    },
+
+    async getNativeCliAgent({ name }: { name: string }): Promise<GetNativeCliAgentResponse> {
+      const cfg = await read();
+      const found = cfg.nativeCliAgents.find((a) => a.name === name);
+      if (!found) throw new HandlerError('not_found', `native CLI agent not found: ${name}`);
+      return { agent: toView(found) };
     },
 
     listNativeCliAgentPresets(): ListNativeCliAgentPresetsResponse {
@@ -227,20 +238,27 @@ export function createNativeCliAgentModule({ paths }: NativeCliAgentDeps) {
       const stored = cfg.nativeCliAgents.find((a) => a.name === agent.name);
       cfg.nativeCliAgents = [...cfg.nativeCliAgents.filter((a) => a.name !== agent.name), fromView(agent, stored)];
       await commit(cfg);
+      if (!agent.enabled) nativeCliSessions?.stopAgentProvider(agent.provider);
       return { ok: true };
     },
 
     async setNativeCliAgentEnabled({ name, enabled }: { name: string; enabled: boolean }): Promise<OkResponse> {
       const cfg = await read();
+      const target = cfg.nativeCliAgents.find((a) => a.name === name);
+      if (!target) throw new HandlerError('not_found', `native CLI agent not found: ${name}`);
       cfg.nativeCliAgents = cfg.nativeCliAgents.map((a) => (a.name === name ? { ...a, enabled } : a));
       await commit(cfg);
+      if (!enabled) nativeCliSessions?.stopAgentProvider(target.provider);
       return { ok: true };
     },
 
     async removeNativeCliAgent({ name }: { name: string }): Promise<OkResponse> {
       const cfg = await read();
+      const target = cfg.nativeCliAgents.find((a) => a.name === name);
+      if (!target) throw new HandlerError('not_found', `native CLI agent not found: ${name}`);
       cfg.nativeCliAgents = cfg.nativeCliAgents.filter((a) => a.name !== name);
       await commit(cfg);
+      nativeCliSessions?.stopAgentProvider(target.provider);
       return { ok: true };
     }
   };

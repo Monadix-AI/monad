@@ -202,6 +202,7 @@ function fakeClient(handlers: Record<string, Handler> = {}): MonadClient {
         workplace: {
           projects: Object.assign(
             (params: { id: string }) => ({
+              get: () => resolve('getWorkplaceProject', '$raw', { project: { id: params.id } }, params),
               patch: (body: unknown) =>
                 resolve(
                   'updateWorkplaceProject',
@@ -716,6 +717,10 @@ test('workplace projects: list/create/update/delete use the typed treaty project
   };
   let deleted = false;
   const client = fakeClient({
+    getWorkplaceProject: handler('$raw', async (params) => {
+      calls.push(['get', params]);
+      return { project };
+    }),
     listWorkplaceProjects: handler('$raw', async (arg) => {
       calls.push(['list', arg]);
       return { projects: deleted ? [] : [project], total: deleted ? 0 : 1, limit: 50, offset: 0 };
@@ -738,6 +743,8 @@ test('workplace projects: list/create/update/delete use the typed treaty project
 
   const list = await dispatchEndpoint(store, 'listWorkplaceProjects', { archived: false });
   expect((list.data as { total?: number } | undefined)?.total).toBe(1);
+  const fetched = await dispatchEndpoint(store, 'getWorkplaceProject', project.id);
+  expect((fetched.data as { id?: string } | undefined)?.id).toBe(project.id);
   await dispatchEndpoint(store, 'createWorkplaceProject', { title: project.title, origin: { surface: 'web' } });
   await dispatchEndpoint(store, 'updateWorkplaceProject', { id: project.id, title: 'Workplace: beta' });
   await dispatchEndpoint(store, 'deleteWorkplaceProject', project.id);
@@ -755,6 +762,7 @@ test('workplace projects: list/create/update/delete use the typed treaty project
     'list',
     { query: { archived: false, state: undefined, limit: undefined, offset: undefined } }
   ]);
+  expect(calls).toContainEqual(['get', { id: project.id }]);
   expect(calls).toContainEqual(['create', { title: project.title, origin: { surface: 'web' } }]);
   expect(calls).toContainEqual(['update', { id: project.id }, { title: 'Workplace: beta' }]);
   expect(calls).toContainEqual(['delete', { id: project.id }]);

@@ -38,6 +38,24 @@ const ROW_STYLE: React.CSSProperties = {
   width: '100%'
 };
 const NAME_STYLE: React.CSSProperties = { fontFamily: sans, fontSize: 14, fontWeight: 600 };
+const RETRY_BUTTON_STYLE: React.CSSProperties = {
+  alignItems: 'center',
+  background: 'var(--destructive)',
+  border: 0,
+  borderRadius: 999,
+  color: 'var(--destructive-foreground)',
+  cursor: 'pointer',
+  display: 'inline-flex',
+  flex: 'none',
+  fontFamily: mono,
+  fontSize: 12,
+  fontWeight: 800,
+  height: 22,
+  justifyContent: 'center',
+  lineHeight: 1,
+  marginRight: 8,
+  width: 22
+};
 const MESSAGE_MARKDOWN_CSS = `
   .workplace-message-markdown {
     color: inherit;
@@ -231,7 +249,7 @@ function MessageHeader({
   );
 }
 
-function MarkdownWithMentions({ text, streaming }: { text: string; streaming?: boolean }): React.ReactElement {
+export function MarkdownWithMentions({ text, streaming }: { text: string; streaming?: boolean }): React.ReactElement {
   return (
     <>
       <style>{MESSAGE_MARKDOWN_CSS}</style>
@@ -328,6 +346,8 @@ export const MessageRow = memo(function MessageRow({
   }
   const agent = msg.kind === 'agent';
   const hasText = msg.text.trim().length > 0;
+  const failed = msg.localStatus === 'failed';
+  const sending = msg.localStatus === 'sending';
   const avatar = agent ? (
     <AgentInstanceAvatar
       agent={{ av: msg.av, avatarUrl: msg.avatarUrl, icon: msg.icon, name: msg.authorName }}
@@ -370,6 +390,7 @@ export const MessageRow = memo(function MessageRow({
           maxWidth: '100%',
           overflowWrap: 'anywhere',
           padding: '10px 14px',
+          opacity: sending ? 0.72 : 1,
           wordBreak: 'break-word'
         }}
       >
@@ -387,10 +408,22 @@ export const MessageRow = memo(function MessageRow({
     <div
       style={{
         ...ROW_STYLE,
+        alignItems: failed && !agent ? 'center' : undefined,
         flexDirection: 'row',
         justifyContent: agent ? 'flex-start' : 'flex-end'
       }}
     >
+      {failed && !agent ? (
+        <button
+          aria-label="Retry message"
+          onClick={msg.retrySend}
+          style={RETRY_BUTTON_STYLE}
+          title="Retry message"
+          type="button"
+        >
+          !
+        </button>
+      ) : null}
       {agent ? avatar : messageStack}
       {agent ? messageStack : avatar}
     </div>

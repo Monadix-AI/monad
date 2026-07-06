@@ -113,24 +113,6 @@ test('migrate() builds the current schema and stamps user_version', () => {
   expect(nativeDirectIndexes).toContainEqual(
     expect.objectContaining({ name: 'idx_native_agent_direct_messages_project_pair' })
   );
-
-  const roundCols = (db.prepare('PRAGMA table_info(channel_moderator_rounds)').all() as { name: string }[]).map(
-    (c) => c.name
-  );
-  for (const col of [
-    'id',
-    'channel_id',
-    'moderator_key',
-    'moderator_agent_id',
-    'original_inbound',
-    'depth',
-    'tasks',
-    'results',
-    'status',
-    'deadline_at'
-  ]) {
-    expect(roundCols).toContain(col);
-  }
 });
 
 test('migrate() is idempotent — running again is a no-op', () => {

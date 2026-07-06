@@ -35,8 +35,6 @@ import { buildCall, buildChain, errInfo, modelCreds, resolveProvider } from './g
 import { withResolvedModel } from './index.ts';
 import { ModelProviderRegistry } from './provider.ts';
 
-export type { ProviderCredential, ResolvedProviderConfig } from '@monad/sdk-atom';
-
 export { fetchProviderModels, listProviderModels } from './gateway-models.ts';
 
 export interface GatewayDeps {

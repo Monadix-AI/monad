@@ -116,7 +116,7 @@ export function requestCodexHistoryPage(
       id,
       compactObject({
         threadId: handle.providerSessionRef,
-        cursor: request.cursor,
+        cursor: request.before,
         limit: request.limit,
         sortDirection: request.sortDirection,
         itemsView: request.itemsView

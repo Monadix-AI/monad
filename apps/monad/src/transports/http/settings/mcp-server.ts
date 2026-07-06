@@ -1,6 +1,8 @@
 import type { createDaemonHandlers } from '@/handlers/handlers.ts';
 
 import {
+  getMcpServerResponseSchema,
+  httpErrorSchema,
   listMcpCatalogResponseSchema,
   listMcpServerStatusResponseSchema,
   listMcpServersResponseSchema,
@@ -42,7 +44,13 @@ export function createMcpServerSettingsController(handlers: ReturnType<typeof cr
         description: 'Search across Official MCP Registry, Glama, Smithery, and built-in catalog.'
       }
     })
-    .put('/mcp-servers', async ({ body }) => handlers.mcpServer.upsertMcpServer(body), {
+    .get('/mcp-servers/:name', async ({ params }) => handlers.mcpServer.getMcpServer({ name: params.name }), {
+      params: serverParams,
+      response: { 200: getMcpServerResponseSchema, 404: httpErrorSchema },
+      detail: { summary: 'Get MCP server', description: 'Returns one configured mcpServers entry by name.' }
+    })
+    .put('/mcp-servers/:name', async ({ body }) => handlers.mcpServer.upsertMcpServer(body), {
+      params: serverParams,
       body: upsertMcpServerRequestSchema,
       response: { 200: okResponseSchema },
       detail: { summary: 'Upsert MCP server', description: 'Creates or replaces a server by name.' }
@@ -50,19 +58,27 @@ export function createMcpServerSettingsController(handlers: ReturnType<typeof cr
     .post(
       '/mcp-servers/:name/enable',
       async ({ params }) => handlers.mcpServer.setMcpServerEnabled({ name: params.name, enabled: true }),
-      { params: serverParams, response: { 200: okResponseSchema }, detail: { summary: 'Enable server' } }
+      {
+        params: serverParams,
+        response: { 200: okResponseSchema, 404: httpErrorSchema },
+        detail: { summary: 'Enable server' }
+      }
     )
     .post(
       '/mcp-servers/:name/disable',
       async ({ params }) => handlers.mcpServer.setMcpServerEnabled({ name: params.name, enabled: false }),
-      { params: serverParams, response: { 200: okResponseSchema }, detail: { summary: 'Disable server' } }
+      {
+        params: serverParams,
+        response: { 200: okResponseSchema, 404: httpErrorSchema },
+        detail: { summary: 'Disable server' }
+      }
     )
     .post(
       '/mcp-servers/:name/authorize',
       async ({ params }) => handlers.mcpServer.authorizeMcpServer({ name: params.name }),
       {
         params: serverParams,
-        response: { 200: okResponseSchema },
+        response: { 200: okResponseSchema, 404: httpErrorSchema },
         detail: {
           summary: 'Authorize (OAuth)',
           description:
@@ -75,13 +91,13 @@ export function createMcpServerSettingsController(handlers: ReturnType<typeof cr
       async ({ params }) => handlers.mcpServer.reconnectMcpServer({ name: params.name }),
       {
         params: serverParams,
-        response: { 200: okResponseSchema },
+        response: { 200: okResponseSchema, 404: httpErrorSchema },
         detail: { summary: 'Reconnect server', description: 'Force one server to (re)connect — retry a boot failure.' }
       }
     )
     .delete('/mcp-servers/:name', async ({ params }) => handlers.mcpServer.removeMcpServer({ name: params.name }), {
       params: serverParams,
-      response: { 200: okResponseSchema },
+      response: { 200: okResponseSchema, 404: httpErrorSchema },
       detail: { summary: 'Remove MCP server', description: 'Deletes a server from the registry.' }
     });
 }

@@ -42,14 +42,18 @@ export function createTranscriptionHandlers(ctx: ModelContext, deps: Pick<ModelD
 
       const cleanupModel = resolveModelRole(cfg.model, 'fast', cfg.model.default || 'default', ctx.lookupCapabilities);
       if (!cleanupModel) throw new HandlerError('invalid', 'model: no fast model configured for transcription cleanup');
-      const cleaned = await deps.modelService.router.complete({
-        model: cleanupModel,
-        messages: [
-          { role: 'system', content: TRANSCRIPTION_CLEANUP_PROMPT, cache: true },
-          { role: 'user', content: `<raw_text>${rawText}</raw_text>` }
-        ]
-      });
-      return { text: cleaned.text.trim() || result.text };
+      try {
+        const cleaned = await deps.modelService.router.complete({
+          model: cleanupModel,
+          messages: [
+            { role: 'system', content: TRANSCRIPTION_CLEANUP_PROMPT, cache: true },
+            { role: 'user', content: `<raw_text>${rawText}</raw_text>` }
+          ]
+        });
+        return { text: cleaned.text.trim() || rawText };
+      } catch {
+        return { text: rawText };
+      }
     }
   };
 }

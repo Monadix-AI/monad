@@ -3,38 +3,96 @@
 import type { CSSProperties } from 'react';
 import type { ObservationItem } from './types.ts';
 
-import { SourceCodeIcon } from '@hugeicons/core-free-icons';
+import { CheckIcon, ChevronDownIcon, Copy01Icon, SourceCodeIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { workspaceMono as mono, workspaceSans as sans } from '@monad/ui/components/AgentAvatar';
-import { useState } from 'react';
+import { CodeBlock } from '@monad/ui/components/CodeBlock';
+import { useEffect, useState } from 'react';
+
+export type ObservationCollapseCommand = {
+  collapsed: boolean;
+};
 
 export function ObservationCardShell({
   children,
+  defaultCollapsed = false,
+  header,
   raw,
   timestamp,
-  visualRole
+  visualRole,
+  collapseCommand
 }: {
   children: React.ReactNode;
+  collapseCommand?: ObservationCollapseCommand;
+  defaultCollapsed?: boolean;
+  header?: React.ReactNode;
   raw: unknown;
   timestamp?: string;
   visualRole: ObservationItem['role'];
 }): React.ReactElement {
+  const [collapsed, setCollapsed] = useState(collapseCommand?.collapsed ?? defaultCollapsed);
+  const [rawOpen, setRawOpen] = useState(false);
+  const commandCollapsed = collapseCommand?.collapsed;
+
+  useEffect(() => {
+    if (commandCollapsed === undefined) return;
+    setCollapsed(commandCollapsed);
+    if (commandCollapsed) setRawOpen(false);
+  }, [commandCollapsed]);
+
+  const toggleCollapsed = () => {
+    setCollapsed((value) => {
+      if (!value) setRawOpen(false);
+      return !value;
+    });
+  };
   return (
     <article style={cardStyle(visualRole)}>
-      <RawJsonToggle raw={raw} />
-      <ObservationTimestamp value={timestamp} />
-      {children}
+      <div style={headerRowStyle}>
+        <button
+          aria-expanded={!collapsed}
+          className="workplace-action"
+          onClick={toggleCollapsed}
+          style={headerToggleStyle}
+          type="button"
+        >
+          <span style={collapseIndicatorStyle(collapsed)}>
+            <HugeiconsIcon
+              aria-hidden="true"
+              icon={ChevronDownIcon}
+              size={13}
+              strokeWidth={2}
+            />
+          </span>
+          {header ? <div style={headerSlotStyle}>{header}</div> : null}
+          <ObservationTimestamp value={timestamp} />
+        </button>
+        <ObservationHeaderActions
+          onToggleRaw={() => setRawOpen((value) => !value)}
+          rawOpen={rawOpen}
+        />
+      </div>
+      {!collapsed && rawOpen ? <RawJsonPanel raw={raw} /> : null}
+      {!collapsed ? <div style={bodySlotStyle(rawOpen)}>{children}</div> : null}
     </article>
   );
 }
 
 export function ObservationMeta({
+  children,
+  compact = false,
   label,
+  showSource = false,
   source,
+  title,
   type
 }: {
-  label: string;
+  children?: React.ReactNode;
+  compact?: boolean;
+  label?: string;
+  showSource?: boolean;
   source: ObservationItem['source'];
+  title?: string;
   type?: string;
 }): React.ReactElement {
   return (
@@ -44,16 +102,18 @@ export function ObservationMeta({
         flexWrap: 'wrap',
         alignItems: 'center',
         gap: 6,
-        marginBottom: 7,
+        marginBottom: compact ? 0 : 7,
         fontFamily: mono,
         fontSize: 10,
         lineHeight: 1.2,
         textTransform: 'uppercase'
       }}
     >
-      <span style={metaPillStyle(label)}>{label}</span>
-      <span style={metaTextStyle}>{source}</span>
+      {label ? <span style={metaPillStyle(label)}>{label}</span> : null}
+      {title ? <span style={metaTitleStyle}>{title}</span> : null}
+      {showSource ? <span style={metaTextStyle}>{source}</span> : null}
       {type ? <span style={metaTextStyle}>{type}</span> : null}
+      {children}
     </div>
   );
 }
@@ -161,31 +221,25 @@ export function rawJsonText(raw: unknown): string {
   }
 }
 
-function RawJsonToggle({ raw }: { raw: unknown }): React.ReactElement {
-  const [open, setOpen] = useState(false);
+function ObservationHeaderActions({
+  onToggleRaw,
+  rawOpen
+}: {
+  onToggleRaw: () => void;
+  rawOpen: boolean;
+}): React.ReactElement {
   return (
-    <>
+    <div style={headerActionsStyle}>
       <button
-        aria-expanded={open}
-        aria-label={open ? 'Hide raw JSONL' : 'Show raw JSONL'}
+        aria-expanded={rawOpen}
+        aria-label={rawOpen ? 'Hide raw JSONL' : 'Show raw JSONL'}
         className="workplace-action"
-        onClick={() => setOpen((value) => !value)}
-        style={{
-          position: 'absolute',
-          top: 8,
-          right: 8,
-          width: 24,
-          height: 24,
-          display: 'inline-flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          border: '1px solid color-mix(in srgb, var(--border) 78%, transparent)',
-          borderRadius: 7,
-          background: open ? 'var(--secondary)' : 'color-mix(in srgb, var(--background) 74%, transparent)',
-          color: 'var(--muted-foreground)',
-          padding: 0
+        onClick={(event) => {
+          event.stopPropagation();
+          onToggleRaw();
         }}
-        title={open ? 'Hide raw JSONL' : 'Show raw JSONL'}
+        style={rawToggleButtonStyle(rawOpen)}
+        title={rawOpen ? 'Hide raw JSONL' : 'Show raw JSONL'}
         type="button"
       >
         <HugeiconsIcon
@@ -195,29 +249,45 @@ function RawJsonToggle({ raw }: { raw: unknown }): React.ReactElement {
           strokeWidth={2}
         />
       </button>
-      {open ? (
-        <pre
-          style={{
-            boxSizing: 'border-box',
-            maxHeight: 260,
-            overflow: 'auto',
-            margin: '10px 0 0',
-            border: '1px solid color-mix(in srgb, var(--border) 80%, transparent)',
-            borderRadius: 8,
-            background: 'color-mix(in srgb, var(--background) 82%, black)',
-            color: 'var(--foreground)',
-            fontFamily: mono,
-            fontSize: 10.5,
-            lineHeight: 1.45,
-            padding: '9px 10px',
-            whiteSpace: 'pre-wrap',
-            overflowWrap: 'anywhere'
+    </div>
+  );
+}
+
+function RawJsonPanel({ raw }: { raw: unknown }): React.ReactElement {
+  const [copied, setCopied] = useState(false);
+  const code = rawJsonText(raw);
+  return (
+    <section style={rawPanelStyle}>
+      <div style={rawPanelHeaderStyle}>
+        <span>raw json</span>
+        <button
+          aria-label="Copy raw JSON"
+          className="workplace-action"
+          onClick={async (event) => {
+            event.stopPropagation();
+            if (typeof window === 'undefined' || !navigator?.clipboard?.writeText) return;
+            await navigator.clipboard.writeText(code);
+            setCopied(true);
+            window.setTimeout(() => setCopied(false), 1500);
           }}
+          style={rawCopyButtonStyle}
+          title="Copy raw JSON"
+          type="button"
         >
-          {rawJsonText(raw)}
-        </pre>
-      ) : null}
-    </>
+          <HugeiconsIcon
+            aria-hidden="true"
+            icon={copied ? CheckIcon : Copy01Icon}
+            size={13}
+            strokeWidth={2}
+          />
+        </button>
+      </div>
+      <CodeBlock
+        className="[&>div]:scrollbar-none rounded-md border-0 bg-transparent text-[10.5px] [&>div::-webkit-scrollbar]:hidden [&>div]:max-h-64 [&>div]:overflow-auto [&_pre]:p-0 [&_pre]:text-[10.5px] [&_pre]:leading-[1.45]"
+        code={code}
+        language="json"
+      />
+    </section>
   );
 }
 
@@ -269,7 +339,7 @@ function cardStyle(role: ObservationItem['role']): CSSProperties {
     border: `1px solid ${borderColor}`,
     borderRadius: 10,
     background,
-    padding: '10px 76px 10px 12px',
+    padding: '10px 12px',
     overflow: 'visible'
   };
 }
@@ -313,16 +383,137 @@ const metaTextStyle: CSSProperties = {
   whiteSpace: 'nowrap'
 };
 
+const metaTitleStyle: CSSProperties = {
+  maxWidth: '100%',
+  minWidth: 0,
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
+  color: 'var(--foreground)',
+  fontFamily: mono,
+  fontSize: 11,
+  fontWeight: 650,
+  lineHeight: 1.2,
+  textTransform: 'none'
+};
+
+const headerRowStyle: CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 8,
+  minWidth: 0,
+  width: '100%'
+};
+
+const headerToggleStyle: CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  flex: 1,
+  gap: 8,
+  minWidth: 0,
+  border: 0,
+  background: 'transparent',
+  color: 'inherit',
+  cursor: 'var(--workplace-cursor-pointer, pointer)',
+  padding: 0,
+  textAlign: 'left'
+};
+
+const headerSlotStyle: CSSProperties = {
+  flex: 1,
+  minWidth: 0
+};
+
+function bodySlotStyle(rawOpen: boolean): CSSProperties {
+  return {
+    marginTop: rawOpen ? 10 : 9
+  };
+}
+
+function collapseIndicatorStyle(collapsed: boolean): CSSProperties {
+  return {
+    width: 22,
+    height: 22,
+    flex: 'none',
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 7,
+    color: 'var(--muted-foreground)',
+    transform: collapsed ? 'rotate(-90deg)' : 'rotate(0deg)',
+    transition: 'transform 150ms ease'
+  };
+}
+
+const rawPanelStyle: CSSProperties = {
+  boxSizing: 'border-box',
+  maxWidth: '100%',
+  minWidth: 0,
+  overflow: 'hidden',
+  marginTop: 10,
+  marginBottom: 11,
+  border: '1px solid color-mix(in srgb, var(--border) 80%, transparent)',
+  borderRadius: 8,
+  background: 'color-mix(in srgb, var(--background) 82%, black)'
+};
+
+const rawPanelHeaderStyle: CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  gap: 8,
+  borderBottom: '1px solid color-mix(in srgb, var(--border) 72%, transparent)',
+  color: 'var(--muted-foreground)',
+  fontFamily: mono,
+  fontSize: 10,
+  lineHeight: 1,
+  padding: '6px 7px 6px 9px',
+  textTransform: 'uppercase'
+};
+
 const timestampStyle: CSSProperties = {
-  position: 'absolute',
-  top: 36,
-  right: 8,
   color: 'var(--muted-foreground)',
   fontFamily: mono,
   fontSize: 10,
   fontVariantNumeric: 'tabular-nums',
   lineHeight: 1,
   whiteSpace: 'nowrap'
+};
+
+const headerActionsStyle: CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  flex: 'none',
+  gap: 7,
+  maxWidth: '40%'
+};
+
+function rawToggleButtonStyle(open: boolean): CSSProperties {
+  return {
+    width: 24,
+    height: 24,
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    border: '1px solid color-mix(in srgb, var(--border) 78%, transparent)',
+    borderRadius: 7,
+    background: open ? 'var(--secondary)' : 'color-mix(in srgb, var(--background) 74%, transparent)',
+    color: 'var(--muted-foreground)',
+    padding: 0
+  };
+}
+
+const rawCopyButtonStyle: CSSProperties = {
+  width: 22,
+  height: 22,
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  border: '1px solid color-mix(in srgb, var(--border) 78%, transparent)',
+  borderRadius: 7,
+  background: 'color-mix(in srgb, var(--background) 74%, transparent)',
+  color: 'var(--muted-foreground)',
+  padding: 0
 };
 
 const containedTextStyle: CSSProperties = {

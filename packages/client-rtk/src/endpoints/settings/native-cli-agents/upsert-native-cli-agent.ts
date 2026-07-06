@@ -8,7 +8,7 @@ export const upsertNativeCliAgentApi = listNativeCliAgentsApi.injectEndpoints({
   endpoints: (builder) => ({
     upsertNativeCliAgent: builder.mutation<OkResponse, NativeCliAgentView>({
       queryFn: (agent: NativeCliAgentView, api: { extra: unknown }) =>
-        runTreaty(() => clientOf(api).treaty.v1.settings['native-cli-agents'].put({ agent })),
+        runTreaty(() => clientOf(api).treaty.v1.settings['native-cli-agents']({ name: agent.name }).put({ agent })),
       async onQueryStarted(agent, { dispatch, queryFulfilled }) {
         const patch = dispatch(
           listNativeCliAgentsApi.util.updateQueryData('listNativeCliAgents', undefined, (draft) => {

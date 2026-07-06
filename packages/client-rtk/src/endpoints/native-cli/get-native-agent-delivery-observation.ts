@@ -24,4 +24,5 @@ export const getNativeAgentDeliveryObservationApi = sessionsApi.injectEndpoints(
   })
 });
 
-export const { useGetNativeAgentDeliveryObservationQuery } = getNativeAgentDeliveryObservationApi;
+export const { useGetNativeAgentDeliveryObservationQuery, useLazyGetNativeAgentDeliveryObservationQuery } =
+  getNativeAgentDeliveryObservationApi;

@@ -2,9 +2,8 @@
 
 import type { StudioSectionId } from './sections';
 
-import { usePathname } from 'next/navigation';
-
 import { studioSectionFromPathname, studioSubpathFromPathname } from '@/features/routes/route-paths';
+import { useShellPathname } from '@/hooks/use-shell-location';
 import { STUDIO_SECTION_COMPONENTS } from './section-registry';
 
 /**
@@ -12,7 +11,7 @@ import { STUDIO_SECTION_COMPONENTS } from './section-registry';
  * capabilities; Agent Mesh coordinates provider-owned agents and Workplace projects.
  */
 export function Studio({ onClose }: { onClose: () => void }) {
-  const pathname = usePathname();
+  const pathname = useShellPathname();
   const section: StudioSectionId = studioSectionFromPathname(pathname) ?? 'runtime';
   const subpath = studioSubpathFromPathname(pathname);
   const SectionComponent = STUDIO_SECTION_COMPONENTS[section];

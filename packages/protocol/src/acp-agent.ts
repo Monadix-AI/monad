@@ -24,6 +24,9 @@ export type AcpAgentView = z.infer<typeof acpAgentViewSchema>;
 export const listAcpAgentsResponseSchema = z.object({ agents: z.array(acpAgentViewSchema) });
 export type ListAcpAgentsResponse = z.infer<typeof listAcpAgentsResponseSchema>;
 
+export const getAcpAgentResponseSchema = z.object({ agent: acpAgentViewSchema });
+export type GetAcpAgentResponse = z.infer<typeof getAcpAgentResponseSchema>;
+
 export const upsertAcpAgentRequestSchema = z.object({ agent: acpAgentViewSchema });
 export type UpsertAcpAgentRequest = z.infer<typeof upsertAcpAgentRequestSchema>;
 

@@ -14,7 +14,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useT } from '@/components/I18nProvider';
 import { CliTerminalModal } from './CliTerminalModal';
 
-export function nativeCliAuthSessionForView(
+function nativeCliAuthSessionForView(
   sessionId: string,
   session: NativeCliAuthSessionView | undefined
 ): NativeCliAuthSessionView | undefined {

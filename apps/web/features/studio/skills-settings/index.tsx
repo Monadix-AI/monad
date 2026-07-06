@@ -25,7 +25,6 @@ import {
   useUploadSkillMutation
 } from '@monad/client-rtk';
 import { Button, cn, ScrollArea, Switch, Tooltip, TooltipContent, TooltipTrigger } from '@monad/ui';
-import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { useT } from '@/components/I18nProvider';
@@ -39,6 +38,7 @@ import {
 import { PanelShell } from '@/components/ui/panel-shell';
 import { isSkillMarketplacePath, skillMarketplacePath, studioPath } from '@/features/routes/route-paths';
 import { StudioBreadcrumbHeader } from '@/features/studio/StudioBreadcrumbHeader';
+import { replaceShellUrl, useShellPathname } from '@/hooks/use-shell-location';
 import { useMonadRuntime } from '@/lib/monad-runtime-provider';
 import { CapabilitySection } from '../capabilities-settings/CapabilitySection';
 import { BrowsePanel } from './BrowsePanel';
@@ -61,8 +61,7 @@ export function SkillsCapabilitiesSection() {
 
 function SkillsSettingsContent({ embedded = false }: { embedded?: boolean }) {
   const t = useT();
-  const pathname = usePathname();
-  const router = useRouter();
+  const pathname = useShellPathname();
   const { client: monadClient } = useMonadRuntime();
   const { data, isFetching, refetch } = useListInstalledSkillsQuery();
   const { data: liveSkillsData, refetch: refetchLiveSkills } = useListSkillsQuery({ scope: ['global', 'atom-pack'] });
@@ -503,7 +502,7 @@ function SkillsSettingsContent({ embedded = false }: { embedded?: boolean }) {
           className="h-7 gap-1 px-2 text-xs"
           onClick={() => {
             setAdding(false);
-            router.replace(skillMarketplacePath());
+            replaceShellUrl(skillMarketplacePath());
           }}
           size="sm"
           variant="ghost"

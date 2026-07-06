@@ -1,10 +1,13 @@
 import type { createDaemonHandlers } from '@/handlers/handlers.ts';
 
 import {
+  getPeerResponseSchema,
+  httpErrorSchema,
   listPeersResponseSchema,
   okResponseSchema,
   peerIdSchema,
   setPeerCredentialRequestSchema,
+  testPeerConnectionResponseSchema,
   upsertPeerRequestSchema
 } from '@monad/protocol';
 import { Elysia } from 'elysia';
@@ -25,19 +28,24 @@ export function createPeerSettingsController(handlers: ReturnType<typeof createD
       response: { 200: okResponseSchema },
       detail: { summary: 'Upsert peer', description: 'Creates or updates a peer daemon entry.' }
     })
+    .get('/peers/:id', async ({ params }) => handlers.peer.getPeer({ id: params.id }), {
+      params: peerParams,
+      response: { 200: getPeerResponseSchema, 404: httpErrorSchema },
+      detail: { summary: 'Get peer', description: 'Returns one configured peer daemon by id (no secrets).' }
+    })
     .post('/peers/:id/enable', async ({ params }) => handlers.peer.setPeerEnabled({ id: params.id, enabled: true }), {
       params: peerParams,
-      response: { 200: okResponseSchema },
+      response: { 200: okResponseSchema, 404: httpErrorSchema },
       detail: { summary: 'Enable peer', description: 'Enables a peer daemon entry.' }
     })
     .post('/peers/:id/disable', async ({ params }) => handlers.peer.setPeerEnabled({ id: params.id, enabled: false }), {
       params: peerParams,
-      response: { 200: okResponseSchema },
+      response: { 200: okResponseSchema, 404: httpErrorSchema },
       detail: { summary: 'Disable peer', description: 'Disables a peer daemon entry.' }
     })
     .delete('/peers/:id', async ({ params }) => handlers.peer.removePeer({ id: params.id }), {
       params: peerParams,
-      response: { 200: okResponseSchema },
+      response: { 200: okResponseSchema, 404: httpErrorSchema },
       detail: { summary: 'Remove peer', description: 'Deletes a peer daemon entry and its credential.' }
     })
     .put(
@@ -46,8 +54,16 @@ export function createPeerSettingsController(handlers: ReturnType<typeof createD
       {
         params: peerParams,
         body: setPeerCredentialRequestSchema,
-        response: { 200: okResponseSchema },
+        response: { 200: okResponseSchema, 404: httpErrorSchema },
         detail: { summary: 'Set peer credential', description: "Stores the peer's bearer token in auth.json." }
       }
-    );
+    )
+    .post('/peers/:id/test-connection', async ({ params }) => handlers.peer.testPeerConnection({ id: params.id }), {
+      params: peerParams,
+      response: { 200: testPeerConnectionResponseSchema, 404: httpErrorSchema },
+      detail: {
+        summary: 'Test peer connection',
+        description: "Probes the peer daemon's health endpoint and reports reachability."
+      }
+    });
 }

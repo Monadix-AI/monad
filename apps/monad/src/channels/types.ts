@@ -57,8 +57,6 @@ export interface ChannelServiceDeps {
   /** Unified slash-command backend. When present, ALL in-band commands (/new, /reset, /model, /help,
    *  atom pack commands…) are dispatched through the shared registry. */
   commands?: CommandBundle;
-  /** Moderator fanout waits for all assigned agents, then times out to avoid wedging the channel. */
-  moderatorTaskTimeoutMs?: number;
 }
 
 export interface Instance {
@@ -77,6 +75,4 @@ export interface Instance {
 
 export type ChannelRoute =
   | { kind: 'default'; agentId?: undefined }
-  | { kind: 'moderator'; agentId: string }
-  | { kind: 'agent_direct'; agentId: string; agentName: string }
-  | { kind: 'agent'; agentId: string; agentName: string; moderatorAgentId: string };
+  | { kind: 'agent_direct'; agentId: string; agentName: string };

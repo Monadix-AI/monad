@@ -20,8 +20,21 @@ export type PeerView = z.infer<typeof peerViewSchema>;
 export const listPeersResponseSchema = z.object({ peers: z.array(peerViewSchema) });
 export type ListPeersResponse = z.infer<typeof listPeersResponseSchema>;
 
+export const getPeerResponseSchema = z.object({ peer: peerViewSchema });
+export type GetPeerResponse = z.infer<typeof getPeerResponseSchema>;
+
 export const upsertPeerRequestSchema = z.object({ peer: peerViewSchema });
 export type UpsertPeerRequest = z.infer<typeof upsertPeerRequestSchema>;
 
 export const setPeerCredentialRequestSchema = z.object({ token: z.string().min(1) });
 export type SetPeerCredentialRequest = z.infer<typeof setPeerCredentialRequestSchema>;
+
+// Reachability probe: hits the peer's own /health alongside its configured OpenAI-compat base.
+// Mirrors the model provider `test-connection` shape (ok + latency + optional error), scoped down
+// to a single boolean since a peer has no model catalog to enumerate.
+export const testPeerConnectionResponseSchema = z.object({
+  ok: z.boolean(),
+  latencyMs: z.number().nonnegative(),
+  error: z.string().optional()
+});
+export type TestPeerConnectionResponse = z.infer<typeof testPeerConnectionResponseSchema>;

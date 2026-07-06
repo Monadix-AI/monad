@@ -47,6 +47,7 @@ import { configureNativeLauncherPath } from './sandbox/native-path.ts';
 import { seatbeltLauncher } from './sandbox/seatbelt.ts';
 import { win32Launcher } from './sandbox/win32.ts';
 import { sweepOrphanAppContainerProfiles, win32AppContainerLauncher } from './sandbox/win32-appcontainer.ts';
+import { configureNativeCliObservationAdapterResolver } from './workspace-experiences/experience/native-cli-observation/native-cli-observation.ts';
 import { builtinWorkspaceExperiences } from './workspace-experiences/registry.ts';
 
 // The one named export: the daemon pushes config.agent.sandbox.launcherPath here before launcher
@@ -62,6 +63,10 @@ export {
   e2bLauncher,
   sweepOrphanAppContainerProfiles
 };
+
+configureNativeCliObservationAdapterResolver((provider) =>
+  builtinAgentAdapters.find((adapter) => adapter.provider === provider)
+);
 
 export default defineAtomPack({
   manifest: {

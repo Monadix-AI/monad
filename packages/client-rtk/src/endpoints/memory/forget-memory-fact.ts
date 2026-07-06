@@ -7,7 +7,8 @@ export const memoryApi = editMemoryFactApi.injectEndpoints({
   overrideExisting: true,
   endpoints: (builder) => ({
     forgetMemoryFact: builder.mutation<OkResponse, ForgetMemoryFactRequest>({
-      queryFn: (body, api: { extra: unknown }) => runTreaty(() => clientOf(api).treaty.v1.memory.facts.delete(body)),
+      queryFn: ({ id, ...body }, api: { extra: unknown }) =>
+        runTreaty(() => clientOf(api).treaty.v1.memory.facts({ id }).delete(body)),
       invalidatesTags: ['Memory']
     })
   })

@@ -10,9 +10,11 @@ export type VoiceModelState = 'checking' | 'configured' | 'missing' | 'failed';
  *  renderer props or reaching for a module-global client. The React counterpart of the third-party
  *  event-bridge `WorkspaceExperienceHostApi` (@monad/protocol) — `requestProjectDialog` reuses the same
  *  protocol type so the two host contracts stay aligned. The web app supplies the value; atoms never
- *  imports the web layer. */
+ *  imports the web layer.
+ *
+ *  Daemon reads/writes go through `@monad/sdk-atom-client-rtk` hooks (host-component experiences already
+ *  render inside the web app's Redux `<Provider>`), not a `fetch` escape hatch on this object. */
 export interface WorkspaceExperienceHost {
-  fetch: (path: string, init?: RequestInit) => Promise<Response>;
   voiceModelState?: VoiceModelState;
   /** Imperative Studio navigation (replaces the old nativeCliAgentsHref link + openModelSettings). */
   openStudio: (section?: WorkspaceExperienceStudioSection) => void;

@@ -30,6 +30,7 @@ export * from './memory.ts';
 export * from './message-types.ts';
 export * from './native-cli-agent.ts';
 export * from './obscura.ts';
+export * from './pagination.ts';
 export * from './peer.ts';
 export * from './pick-directory.ts';
 export * from './rpc/control.ts';

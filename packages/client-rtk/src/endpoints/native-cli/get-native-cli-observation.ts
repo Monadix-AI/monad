@@ -22,4 +22,4 @@ export const getNativeCliObservationApi = sessionsApi.injectEndpoints({
   })
 });
 
-export const { useGetNativeCliObservationQuery } = getNativeCliObservationApi;
+export const { useGetNativeCliObservationQuery, useLazyGetNativeCliObservationQuery } = getNativeCliObservationApi;

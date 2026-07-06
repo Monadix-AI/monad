@@ -120,7 +120,10 @@ export const providerSchema = z.object({
   label: z.string(),
   type: providerTypeSchema,
   baseUrl: httpUrlSchema.optional(), // required for openai-compatible & cloudflare-gateway; optional override elsewhere
-  extra: z.record(z.string(), z.string()).optional() // free-form provider knobs (e.g. cloudflare account id / gateway slug)
+  extra: z.record(z.string(), z.string()).optional(), // free-form provider knobs (e.g. cloudflare account id / gateway slug)
+  // Absent/true = enabled, for stored providers predating this field. Not yet enforced by the
+  // model-routing/dispatch layer — see docs on POST /model/providers/:id/enable|disable.
+  enabled: z.boolean().optional()
 });
 
 export type Provider = z.infer<typeof providerSchema>;

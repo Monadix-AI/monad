@@ -18,6 +18,7 @@ export interface ProductIconProps {
   // Open: product ids are extensible (a third-party agent-adapter atom can add one). Known ids keep
   // autocomplete; an unknown id renders the neutral default glyph + uses the id as its label.
   product: ProductIconId | (string & {});
+  background?: 'default' | 'none';
   className?: string;
   size?: number | string;
   title?: string;
@@ -63,6 +64,7 @@ export function isProductIconId(value: string | undefined): value is ProductIcon
 
 export function ProductIcon({
   product,
+  background = 'default',
   className,
   size,
   title,
@@ -92,6 +94,7 @@ export function ProductIcon({
   const label = title ?? PRODUCT_TITLES[product as ProductIconId] ?? product;
   const renderIcon = (id: string) => (
     <ProductIconSvg
+      background={background}
       gradientId={id}
       product={product}
       title={label}
@@ -131,10 +134,12 @@ export function ProductIcon({
 
 function ProductIconSvg({
   product,
+  background,
   title,
   gradientId
 }: {
   product: ProductIconId | (string & {});
+  background: ProductIconProps['background'];
   title: string;
   gradientId: string;
 }): React.ReactElement {
@@ -142,6 +147,7 @@ function ProductIconSvg({
   if (product === 'gemini' || product === 'gemini-cli') {
     return (
       <GeminiCliIcon
+        background={background}
         gradientId={gradientId}
         title={title}
       />
@@ -152,6 +158,7 @@ function ProductIconSvg({
   if (product === 'hermes') return <HermesIcon title={title} />;
   return (
     <CodexIcon
+      background={background}
       gradientId={gradientId}
       title={title}
     />
@@ -192,7 +199,15 @@ function HermesIcon({ title }: { title: string }): React.ReactElement {
   );
 }
 
-function CodexIcon({ gradientId, title }: { gradientId: string; title: string }): React.ReactElement {
+function CodexIcon({
+  background,
+  gradientId,
+  title
+}: {
+  background: ProductIconProps['background'];
+  gradientId: string;
+  title: string;
+}): React.ReactElement {
   return (
     <svg
       height="100%"
@@ -220,10 +235,12 @@ function CodexIcon({ gradientId, title }: { gradientId: string; title: string })
           />
         </linearGradient>
       </defs>
-      <path
-        d="M19.503 0H4.496A4.496 4.496 0 0 0 0 4.496v15.007A4.496 4.496 0 0 0 4.496 24h15.007A4.496 4.496 0 0 0 24 19.503V4.496A4.496 4.496 0 0 0 19.503 0z"
-        fill="var(--product-icon-bg, #fff)"
-      />
+      {background !== 'none' ? (
+        <path
+          d="M19.503 0H4.496A4.496 4.496 0 0 0 0 4.496v15.007A4.496 4.496 0 0 0 4.496 24h15.007A4.496 4.496 0 0 0 24 19.503V4.496A4.496 4.496 0 0 0 19.503 0z"
+          fill="var(--product-icon-bg, #fff)"
+        />
+      ) : null}
       <path
         d="M9.064 3.344a4.578 4.578 0 0 1 2.285-.312c1 .115 1.891.54 2.673 1.275.01.01.024.017.037.021a.09.09 0 0 0 .043 0 4.55 4.55 0 0 1 3.046.275l.047.022.116.057a4.581 4.581 0 0 1 2.188 2.399c.209.51.313 1.041.315 1.595a4.24 4.24 0 0 1-.134 1.223.123.123 0 0 0 .03.115c.594.607.988 1.33 1.183 2.17.289 1.425-.007 2.71-.887 3.854l-.136.166a4.548 4.548 0 0 1-2.201 1.388.123.123 0 0 0-.081.076c-.191.551-.383 1.023-.74 1.494-.9 1.187-2.222 1.846-3.711 1.838-1.187-.006-2.239-.44-3.157-1.302a.107.107 0 0 0-.105-.024c-.388.125-.78.143-1.204.138a4.441 4.441 0 0 1-1.945-.466 4.544 4.544 0 0 1-1.61-1.335c-.152-.202-.303-.392-.414-.617a5.81 5.81 0 0 1-.37-.961 4.582 4.582 0 0 1-.014-2.298.124.124 0 0 0 .006-.056.085.085 0 0 0-.027-.048 4.467 4.467 0 0 1-1.034-1.651 3.896 3.896 0 0 1-.251-1.192 5.189 5.189 0 0 1 .141-1.6c.337-1.112.982-1.985 1.933-2.618.212-.141.413-.251.601-.33.215-.089.43-.164.646-.227a.098.098 0 0 0 .065-.066 4.51 4.51 0 0 1 .829-1.615 4.535 4.535 0 0 1 1.837-1.388zm3.482 10.565a.637.637 0 0 0 0 1.272h3.636a.637.637 0 1 0 0-1.272h-3.636zM8.462 9.23a.637.637 0 0 0-1.106.631l1.272 2.224-1.266 2.136a.636.636 0 1 0 1.095.649l1.454-2.455a.636.636 0 0 0 .005-.64L8.462 9.23z"
         fill={`url(#${gradientId})`}
@@ -251,7 +268,15 @@ function ClaudeCodeIcon({ title }: { title: string }): React.ReactElement {
   );
 }
 
-function GeminiCliIcon({ gradientId, title }: { gradientId: string; title: string }): React.ReactElement {
+function GeminiCliIcon({
+  background,
+  gradientId,
+  title
+}: {
+  background: ProductIconProps['background'];
+  gradientId: string;
+  title: string;
+}): React.ReactElement {
   return (
     <svg
       height="100%"
@@ -284,10 +309,12 @@ function GeminiCliIcon({ gradientId, title }: { gradientId: string; title: strin
           />
         </linearGradient>
       </defs>
-      <path
-        d="M418.569 0H93.4308C41.8304 0 0 41.8304 0 93.4308V418.569C0 470.17 41.8304 512 93.4308 512H418.569C470.17 512 512 470.17 512 418.569V93.4308C512 41.8304 470.17 0 418.569 0Z"
-        fill="var(--product-icon-bg, #1E1E2E)"
-      />
+      {background !== 'none' ? (
+        <path
+          d="M418.569 0H93.4308C41.8304 0 0 41.8304 0 93.4308V418.569C0 470.17 41.8304 512 93.4308 512H418.569C470.17 512 512 470.17 512 418.569V93.4308C512 41.8304 470.17 0 418.569 0Z"
+          fill="var(--product-icon-bg, #1E1E2E)"
+        />
+      ) : null}
       <path
         d="M419.776.008C470.82.655 512 42.233 512 93.43v325.142l-.008 1.204C511.344 470.82 469.768 512 418.572 512H93.43C41.83 512 .001 470.168 0 418.572V93.43C.001 42.233 41.179.655 92.223.008L93.43 0h325.142l1.204.008zM93.43 29.898c-35.087.001-63.531 28.444-63.532 63.532v325.142c.001 35.084 28.444 63.528 63.532 63.528h325.142c35.084 0 63.528-28.444 63.528-63.528V93.43c0-35.087-28.444-63.531-63.528-63.532H93.43zm264.496 193.231v78.145l-203.172 97.675v-56.652l166.445-80.098-166.445-80.093v-56.653l203.172 97.676z"
         fill={`url(#${gradientId})`}

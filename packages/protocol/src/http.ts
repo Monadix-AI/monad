@@ -278,16 +278,16 @@ export const daemonHttpContract = {
       }),
       get: defineHttpEndpoint({
         params: projectParamsSchema,
-        response: { 200: getWorkplaceProjectResponseSchema }
+        response: { 200: getWorkplaceProjectResponseSchema, 404: httpErrorSchema }
       }),
       update: defineHttpEndpoint({
         params: projectParamsSchema,
         body: updateWorkplaceProjectRequestSchema,
-        response: { 200: updateWorkplaceProjectResponseSchema, 412: httpErrorSchema }
+        response: { 200: updateWorkplaceProjectResponseSchema, 404: httpErrorSchema, 412: httpErrorSchema }
       }),
       delete: defineHttpEndpoint({
         params: projectParamsSchema,
-        response: { 200: deleteWorkplaceProjectResponseSchema }
+        response: { 200: deleteWorkplaceProjectResponseSchema, 404: httpErrorSchema }
       })
     }
   },

@@ -12,9 +12,7 @@ export interface BuildChannelContextInput {
   sessionId: string;
   routeKind: Exclude<ChannelRouteAction['kind'], 'none'>;
   targetName: string;
-  targetRole: 'moderator' | 'agent';
-  responseMode: 'moderator_structured' | 'direct_structured' | 'worker_plain';
-  moderatorAgentId?: string;
+  responseMode: 'direct_structured' | 'worker_plain';
   participants: readonly ChannelParticipant[];
   targetMention?: {
     id: string;
@@ -29,9 +27,7 @@ export function buildChannelTurnContext({
   sessionId,
   routeKind,
   targetName,
-  targetRole,
   responseMode,
-  moderatorAgentId,
   participants,
   targetMention
 }: BuildChannelContextInput): string {
@@ -45,40 +41,20 @@ export function buildChannelTurnContext({
     : '- No other participants are registered.';
 
   const behavior =
-    responseMode === 'moderator_structured'
+    responseMode === 'direct_structured'
       ? [
-          'You are the moderator for this channel, not a normal participant.',
-          'Your job is to decide whether the latest channel-visible context needs task assignment.',
+          'You are a directly addressed participant agent in a channel.',
+          'Complete the user request using only channel-visible context.',
           targetMention
             ? `The user explicitly targeted ${targetMention.name} (${targetMention.id}). Treat this as a strong routing constraint.`
             : '',
-          targetMention
-            ? 'If the requested target is available and the task is coherent, route the work to that target instead of answering as yourself.'
-            : '',
-          targetMention
-            ? 'When you only route the targeted work and have no user-facing content, set visibility to "silent" and leave display.content empty.'
-            : '',
-          targetMention
-            ? 'If you cannot route the request, make a visible reply that explains the problem without sounding like an unrelated self-response.'
-            : '',
-          'You may answer directly when no other agent is needed.',
-          'Each turn may produce zero or more task assignments.',
-          'If you assign multiple tasks in one round, they must be independent and must not depend on each other.',
-          'If work has dependencies, assign only the currently executable task and wait for returned results before deciding the next task.',
-          'Do not continue assigning new work until all currently assigned parallel agents have returned.'
+          'You may create follow-up task assignments only through the structured next field.'
         ].filter(Boolean)
-      : responseMode === 'direct_structured'
-        ? [
-            'You are a directly addressed participant agent in a channel with no moderator.',
-            'Complete the user request using only channel-visible context.',
-            'You may create follow-up task assignments only through the structured next field.'
-          ]
-        : [
-            'You are a participant agent in this channel.',
-            'Complete the assigned task from the moderator only.',
-            'Return ordinary user-facing content only; do not create follow-up task assignments.',
-            'Use only the channel-visible context and the task text provided in this turn.'
-          ];
+      : [
+          'You are a participant agent in this channel.',
+          'Return ordinary user-facing content only; do not create follow-up task assignments.',
+          'Use only the channel-visible context and the task text provided in this turn.'
+        ];
 
   const responseFormat =
     responseMode === 'worker_plain'
@@ -94,7 +70,7 @@ export function buildChannelTurnContext({
           '<response_format>',
           'Return exactly one JSON object and no surrounding prose.',
           'Shape: {"visibility":"visible","display":{"kind":"markdown","content":"text shown to the user"},"attachments":[],"next":[]}.',
-          'visibility is "visible" by default. Use "silent" only when routing work without a user-visible moderator reply.',
+          'visibility is "visible" by default.',
           'display.content is the only user-visible content rendered by the client when visibility is "visible".',
           'attachments is optional channel-visible metadata for files or references.',
           "When display.content references a local file that should render as an attachment, use a Markdown link with title 'monad:file', for example [report.md](./report.md 'monad:file').",
@@ -108,10 +84,8 @@ export function buildChannelTurnContext({
     `channel_id: ${channelId}`,
     `backing_session_id: ${sessionId}`,
     `target: ${targetName}`,
-    `target_role: ${targetRole}`,
     `response_mode: ${responseMode}`,
     `route: ${routeKind}`,
-    `moderator: ${moderatorAgentId ?? 'none'}`,
     targetMention ? `target_constraint: ${targetMention.name} (${targetMention.id})` : '',
     'participants:',
     roster,

@@ -14,7 +14,7 @@ loop degrades.
 1. **Zero manual setup.** `bun install && bun run dev` in a fresh worktree is the entire
    onboarding. Anything a developer must remember to do by hand (copy a file, pick a
    port, export a variable) is a DX bug — automate it in `postinstall`
-   (`scripts/setup-dev.ts`) or the dev launcher (`scripts/dev.ts`).
+   (`scripts/dev-init.ts`) or the dev prep launcher (`scripts/dev-prep.ts`).
 2. **Parallel by default.** Any number of worktrees run `bun run dev` at once without
    coordination: ports, `MONAD_HOME`, CLI shims, and caches are all per-worktree (or
    deliberately shared, like the Bun transpiler cache). A feature that only works in
@@ -65,11 +65,11 @@ hour-long one. (Same rule as [AGENTS.md](../../AGENTS.md) and
 
 So you know what you should *never* be doing by hand:
 
-- **`bun install` (postinstall → `scripts/setup-dev.ts`)** — creates/migrates
+- **`bun install` (postinstall → `scripts/dev-init.ts`)** — creates/migrates
   `.env.local`, assigns this worktree stable ports (`MONAD_PORT`, `WEB_PORT`,
   `MONAD_KV_UI_PORT`, derived from the checkout path), regenerates `.dev/bin` CLI shims
   with this worktree's absolute paths. Idempotent; never clobbers a value you set.
-- **`bun run dev` (`scripts/dev.ts`)** — mirrors `WEB_PORT` → `PORT` for Next.js,
+- **`bun run dev` (`scripts/dev-prep.ts`)** — mirrors `WEB_PORT` → `PORT` for Next.js,
   points Bun's transpiler cache at a shared `~/.cache/monad-bun`, then starts turbo's
   persistent daemon + web tasks.
 - **mise shell hook** — switches Bun to the version pinned in `package.json`
@@ -149,5 +149,5 @@ Current, verified traps — remove entries when the underlying cause is fixed:
 - **`bun` exiting 137** under sandboxed test runs is the sandbox OOM-killing the
   process, not a test failure — re-run with the sandbox disabled.
 - **Next.js only honors `PORT`**, not `WEB_PORT`; that bridging lives in
-  `scripts/dev.ts`. Don't start the web app directly with `next dev` and expect the
+  `scripts/dev-prep.ts`. Don't start the web app directly with `next dev` and expect the
   per-worktree port.

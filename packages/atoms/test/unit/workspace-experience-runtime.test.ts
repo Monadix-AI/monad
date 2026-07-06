@@ -131,8 +131,8 @@ test('createProjectExperienceRuntime: exposes project data and controlled commun
   const calls: string[] = [];
   const source = runtimeSource({
     loadOlder: () => calls.push('loadOlder'),
-    sendDirective: async (text: string) => {
-      calls.push(`send:${text}`);
+    sendDirective: async (directive) => {
+      calls.push(`send:${typeof directive === 'string' ? directive : directive.text}`);
     },
     resolveApproval: (id: string, decision: 'approve' | 'reject') => calls.push(`approval:${id}:${decision}`),
     answerQuestion: (id: string, answer: string) => calls.push(`answer:${id}:${answer}`),
@@ -174,7 +174,6 @@ test('createProjectExperienceRuntime: exposes project data and controlled commun
   expect(typeof runtime.actions.resolveApproval).toBe('function');
   expect(typeof runtime.actions.switchExperience).toBe('function');
   expect('switchProject' in runtime.actions).toBe(false);
-  expect('moderator' in runtime.snapshot).toBe(false);
 
   runtime.actions.loadOlder();
   void runtime.actions.sendDirective('hello');

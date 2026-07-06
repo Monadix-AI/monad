@@ -4,6 +4,7 @@ import type {
   NativeCliProvider,
   ProfileView,
   ProjectId,
+  SendMessageAttachment,
   WorkplaceProjectMemberSettings,
   WorkplaceProjectMemberType,
   WorkplaceProjectMemberView
@@ -115,7 +116,7 @@ export interface WorkspaceExperienceSnapshot {
 
 export interface WorkspaceExperienceActions {
   loadOlder: () => void;
-  sendDirective: (text: string) => Promise<void> | void;
+  sendDirective: (directive: string | { attachments?: SendMessageAttachment[]; text: string }) => Promise<void> | void;
   resolveApproval: (requestId: string, decision: 'approve' | 'reject') => void;
   pauseAll: () => void;
   addProjectMember: (

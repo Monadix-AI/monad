@@ -5,9 +5,9 @@ import type { ReactNode } from 'react';
 import { ArrowLeft01Icon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Button } from '@monad/ui';
-import Link from 'next/link';
 
 import { useT } from '@/components/I18nProvider';
+import { ShellLink } from '@/components/ShellLink';
 import { PanelShellHeader } from '@/components/ui/panel-shell';
 
 export function StudioBreadcrumbHeader({
@@ -36,9 +36,9 @@ export function StudioBreadcrumbHeader({
       size="icon"
       variant="ghost"
     >
-      <Link href={backHref}>
+      <ShellLink href={backHref}>
         <HugeiconsIcon icon={ArrowLeft01Icon} />
-      </Link>
+      </ShellLink>
     </Button>
   ) : icon ? (
     <span className="flex size-7 shrink-0 items-center justify-center text-muted-foreground">{icon}</span>

@@ -226,7 +226,7 @@ async function createSession(call: Call, cwd: string): Promise<SessionId> {
 }
 
 async function configureMockAgent(call: Call): Promise<void> {
-  const res = await call('PUT', '/v1/settings/native-cli-agents', {
+  const res = await call('PUT', '/v1/settings/native-cli-agents/mock-cli', {
     agent: {
       name: 'mock-cli',
       provider: 'claude-code',
@@ -265,7 +265,7 @@ async function configureMockJsonStreamAgent(call: Call, dir: string): Promise<vo
     ].join('\n')
   );
   await chmod(script, 0o755);
-  const res = await call('PUT', '/v1/settings/native-cli-agents', {
+  const res = await call('PUT', '/v1/settings/native-cli-agents/mock-claude-json', {
     agent: {
       name: 'mock-claude-json',
       provider: 'claude-code',
@@ -316,7 +316,7 @@ async function configureMockCodexApprovalAgent(call: Call, dir: string): Promise
     ].join('\n')
   );
   await chmod(script, 0o755);
-  const res = await call('PUT', '/v1/settings/native-cli-agents', {
+  const res = await call('PUT', '/v1/settings/native-cli-agents/mock-codex-approval', {
     agent: {
       name: 'mock-codex-approval',
       provider: 'codex',
@@ -354,7 +354,7 @@ async function configureMockSlowCodexAppServerAgent(call: Call, dir: string): Pr
     ].join('\n')
   );
   await chmod(script, 0o755);
-  const res = await call('PUT', '/v1/settings/native-cli-agents', {
+  const res = await call('PUT', '/v1/settings/native-cli-agents/mock-codex-slow-app-server', {
     agent: {
       name: 'mock-codex-slow-app-server',
       provider: 'codex',
@@ -394,7 +394,7 @@ async function configureMockCodexOversizedLineAgent(call: Call, dir: string): Pr
     ].join('\n')
   );
   await chmod(script, 0o755);
-  const res = await call('PUT', '/v1/settings/native-cli-agents', {
+  const res = await call('PUT', '/v1/settings/native-cli-agents/mock-codex-oversized-line', {
     agent: {
       name: 'mock-codex-oversized-line',
       provider: 'codex',
@@ -441,7 +441,7 @@ async function configureMockAuthAgent(
     ].join('\n')
   );
   await chmod(script, 0o755);
-  const res = await call('PUT', '/v1/settings/native-cli-agents', {
+  const res = await call('PUT', '/v1/settings/native-cli-agents/mock-native-auth', {
     agent: {
       name: 'mock-native-auth',
       provider: 'claude-code',
@@ -467,7 +467,7 @@ async function configureHangingAuthStatusAgent(call: Call, dir: string): Promise
     ].join('\n')
   );
   await chmod(script, 0o755);
-  const res = await call('PUT', '/v1/settings/native-cli-agents', {
+  const res = await call('PUT', '/v1/settings/native-cli-agents/mock-hanging-auth-status', {
     agent: {
       name: 'mock-hanging-auth-status',
       provider: 'claude-code',
@@ -483,7 +483,7 @@ async function configureHangingAuthStatusAgent(call: Call, dir: string): Promise
 }
 
 async function configureMissingBinaryAgent(call: Call): Promise<void> {
-  const res = await call('PUT', '/v1/settings/native-cli-agents', {
+  const res = await call('PUT', '/v1/settings/native-cli-agents/missing-cli', {
     agent: {
       name: 'missing-cli',
       provider: 'claude-code',
@@ -752,11 +752,8 @@ async function runJsonStreamRuntime(
   await waitFor(() => (logs.seen.some((record) => record.event === 'native_cli.input') ? true : undefined));
 
   const unsupportedHistory = await call(
-    'POST',
-    `/v1/native-cli-sessions/${nativeSession.id}/history-page?transcriptTargetId=${sessionId}`,
-    {
-      limit: 1
-    }
+    'GET',
+    `/v1/native-cli-sessions/${nativeSession.id}/history-page?transcriptTargetId=${sessionId}&limit=1`
   );
   expect(unsupportedHistory.status).toBe(400);
   expect(((await unsupportedHistory.json()) as { code: string }).code).toBe('unsupported_capability');
@@ -1166,22 +1163,42 @@ async function runCodexHistoryPageRuntime(
   });
 
   const page = await call(
-    'POST',
-    `/v1/native-cli-sessions/${nativeSession.id}/history-page?transcriptTargetId=${sessionId}`,
-    {
-      limit: 1,
-      itemsView: 'summary',
-      sortDirection: 'desc'
-    }
+    'GET',
+    `/v1/native-cli-sessions/${nativeSession.id}/history-page?transcriptTargetId=${sessionId}&limit=1&itemsView=summary&sortDirection=desc`
   );
   expect(page.status).toBe(200);
-  expect(await page.json()).toEqual({
-    page: {
-      items: [{ id: 'turn_1', items: [] }],
-      nextCursor: 'next_cursor',
-      backwardsCursor: null
+  const pageBody = (await page.json()) as {
+    events: Array<{ role: string; text: string; source: string; providerEventType: string; raw: unknown }>;
+    nextCursor: string;
+  };
+  expect(pageBody.nextCursor).toBe('next_cursor');
+  // Server-normalized cards: the daemon already knows this session's provider and normalizes with
+  // the same adapter used for parseOutput/historyPageOutput — see storedOutputHistoryPage. No
+  // separate raw-items array: each event's `raw` carries its source record.
+  expect(
+    pageBody.events.map(({ role, text, source, providerEventType, raw }) => ({
+      role,
+      text,
+      source,
+      providerEventType,
+      raw
+    }))
+  ).toEqual([
+    {
+      role: 'system',
+      text: 'turn/started',
+      source: 'codex-app-server',
+      providerEventType: 'turn/started',
+      raw: { method: 'turn/started', params: { threadId: 'codex-thread-1', turnId: 'turn_1' } }
+    },
+    {
+      role: 'system',
+      text: 'turn/completed',
+      source: 'codex-app-server',
+      providerEventType: 'turn/completed',
+      raw: { method: 'turn/completed', params: { threadId: 'codex-thread-1', turnId: 'turn_1' } }
     }
-  });
+  ]);
 
   await call('POST', `/v1/native-cli-sessions/${nativeSession.id}/stop?transcriptTargetId=${sessionId}`);
 }

@@ -6,12 +6,14 @@ export type ObservationItem = NativeCliStreamView['items'][number];
 export type CommandToolView = {
   type: string;
   source: ObservationItem['source'];
-  command: string;
+  command?: string;
+  commandLanguage?: string;
   cwd?: string;
   status?: string;
   exitCode?: number;
   durationMs?: number;
   output?: string;
+  outputLanguage?: string;
 };
 
 export type FileReadToolView = {
@@ -23,6 +25,7 @@ export type FileReadToolView = {
 
 export type PublicObservationCard =
   | { type: 'message'; role: ObservationItem['role']; item: ObservationItem }
+  | { type: 'thinking'; item: ObservationItem }
   | { type: 'tool-pair'; call: ObservationItem; result: ObservationItem }
   | { type: 'command-tool'; view: CommandToolView }
   | { type: 'file-read-tool'; view: FileReadToolView };

@@ -54,6 +54,9 @@ export type McpServerView = z.infer<typeof mcpServerViewSchema>;
 export const listMcpServersResponseSchema = z.object({ servers: z.array(mcpServerViewSchema) });
 export type ListMcpServersResponse = z.infer<typeof listMcpServersResponseSchema>;
 
+export const getMcpServerResponseSchema = z.object({ server: mcpServerViewSchema });
+export type GetMcpServerResponse = z.infer<typeof getMcpServerResponseSchema>;
+
 export const upsertMcpServerRequestSchema = z.object({ server: mcpServerViewSchema });
 export type UpsertMcpServerRequest = z.infer<typeof upsertMcpServerRequestSchema>;
 
@@ -112,6 +115,9 @@ export type InstalledMcpAtom = z.infer<typeof installedMcpAtomSchema>;
 
 export const listInstalledMcpAtomsResponseSchema = z.object({ servers: z.array(installedMcpAtomSchema) });
 export type ListInstalledMcpAtomsResponse = z.infer<typeof listInstalledMcpAtomsResponseSchema>;
+
+export const getInstalledMcpAtomResponseSchema = z.object({ server: installedMcpAtomSchema });
+export type GetInstalledMcpAtomResponse = z.infer<typeof getInstalledMcpAtomResponseSchema>;
 
 // Runtime connection health for every MCP server the daemon currently knows — config.json
 // servers + synthesized presets (browser/computer), file/pack atoms, and the obscura preset. Unlike

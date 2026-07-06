@@ -1,7 +1,8 @@
 'use client';
 
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback } from 'react';
+
+import { pushShellUrl, replaceShellUrl, useShellPathname, useShellSearchParam } from './use-shell-location';
 
 export function buildNavigableModalUrl(pathname: string, search: string, param: string, next: string | null): string {
   const params = new URLSearchParams(search);
@@ -21,26 +22,25 @@ export function buildNavigableModalUrl(pathname: string, search: string, param: 
  *   - closing replaces in place (no history entry for "closed" state)
  *
  * Returns [currentValue | null, setter].
- *   setter(null)    → close  (router.replace, remove param)
- *   setter('x')     → open   (router.push   if currently closed)
- *   setter('y')     → change (router.replace if already open)
+ *   setter(null)    → close  (history.replaceState, remove param)
+ *   setter('x')     → open   (history.pushState if currently closed)
+ *   setter('y')     → change (history.replaceState if already open)
  */
 export function useNavigableModal(param: string): [string | null, (value: string | null) => void] {
-  const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const current = searchParams.get(param);
+  const pathname = useShellPathname();
+  const current = useShellSearchParam(param);
 
   const set = useCallback(
     (next: string | null) => {
-      const url = buildNavigableModalUrl(pathname, searchParams.toString(), param, next);
+      const search = typeof window === 'undefined' ? '' : window.location.search;
+      const url = buildNavigableModalUrl(pathname, search, param, next);
       if (next !== null && current === null) {
-        router.push(url);
+        pushShellUrl(url);
       } else {
-        router.replace(url);
+        replaceShellUrl(url);
       }
     },
-    [router, pathname, searchParams, param, current]
+    [pathname, param, current]
   );
 
   return [current, set];

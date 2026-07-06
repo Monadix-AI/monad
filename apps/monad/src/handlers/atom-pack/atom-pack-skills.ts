@@ -3,6 +3,7 @@ import type {
   CheckSkillUpdatesResponse,
   CreateSkillRequest,
   CreateSkillResponse,
+  GetInstalledSkillResponse,
   GetSkillContentResponse,
   InstalledSkill,
   InstallLocalSkillRequest,
@@ -198,12 +199,22 @@ export function createSkillsModule(deps: AtomPacksDeps) {
       return { skills };
     },
 
+    async getInstalledSkill({ name }: { name: string }): Promise<GetInstalledSkillResponse> {
+      const { skills: installed } = await skills.listInstalledSkills();
+      const found = installed.find((s) => s.name === name);
+      if (!found) throw new HandlerError('not_found', `skill not found: ${name}`);
+      return { skill: found };
+    },
+
     installSkill,
 
     updateSkill,
 
     async removeSkill({ name }: { name: string }): Promise<OkResponse> {
       if (!SAFE_NAME.test(name)) throw new HandlerError('invalid', `invalid skill name: ${name}`);
+      if (!(await Bun.file(join(deps.paths.skills, name, 'SKILL.md')).exists())) {
+        throw new HandlerError('not_found', `skill not found: ${name}`);
+      }
       await Promise.all([
         rm(join(deps.paths.skills, name), { recursive: true, force: true }),
         removeFromSkillsLock(deps.paths.skillsLock, name)

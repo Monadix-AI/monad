@@ -2,8 +2,11 @@ import type { createDaemonHandlers } from '@/handlers/handlers.ts';
 
 import {
   addMemoryFactRequestSchema,
-  editMemoryFactRequestSchema,
-  forgetMemoryFactRequestSchema,
+  editMemoryFactBodySchema,
+  editMemoryFactParamsSchema,
+  forgetMemoryFactBodySchema,
+  forgetMemoryFactParamsSchema,
+  listMemoryFactsQuerySchema,
   listMemoryFactsResponseSchema,
   memoryCoreResponseSchema,
   memoryFactResponseSchema,
@@ -47,10 +50,13 @@ export function createMemoryController(handlers: ReturnType<typeof createDaemonH
       response: { 200: okResponseSchema },
       detail: { summary: 'Set graph settings', description: 'L2 knowledge-graph background consolidation.' }
     })
-    .get('/memory/facts', async ({ query }) => handlers.memory.listFacts(memoryScopeQuerySchema.parse(query)), {
-      query: memoryScopeQuerySchema,
+    .get('/memory/facts', async ({ query }) => handlers.memory.listFacts(listMemoryFactsQuerySchema.parse(query)), {
+      query: listMemoryFactsQuerySchema,
       response: { 200: listMemoryFactsResponseSchema },
-      detail: { summary: 'List memory facts', description: 'Facts recorded for a scope (global/agent/session).' }
+      detail: {
+        summary: 'List memory facts',
+        description: 'Facts recorded for a scope (global/agent/session). Cursor-paginated.'
+      }
     })
     .get('/memory/core', async ({ query }) => handlers.memory.getCore(memoryScopeQuerySchema.parse(query)), {
       query: memoryScopeQuerySchema,
@@ -67,16 +73,23 @@ export function createMemoryController(handlers: ReturnType<typeof createDaemonH
       response: { 200: memoryFactResponseSchema },
       detail: { summary: 'Add a memory fact', description: 'User-entered fact (sanitized before disk).' }
     })
-    .patch('/memory/facts', async ({ body }) => handlers.memory.editFact(editMemoryFactRequestSchema.parse(body)), {
-      body: editMemoryFactRequestSchema,
-      response: { 200: memoryFactResponseSchema },
-      detail: { summary: 'Edit a memory fact', description: 'Replace a fact by id.' }
-    })
-    .delete(
-      '/memory/facts',
-      async ({ body }) => handlers.memory.forgetFact(forgetMemoryFactRequestSchema.parse(body)),
+    .patch(
+      '/memory/facts/:id',
+      async ({ params, body }) => handlers.memory.editFact({ id: params.id, ...editMemoryFactBodySchema.parse(body) }),
       {
-        body: forgetMemoryFactRequestSchema,
+        params: editMemoryFactParamsSchema,
+        body: editMemoryFactBodySchema,
+        response: { 200: memoryFactResponseSchema },
+        detail: { summary: 'Edit a memory fact', description: 'Replace a fact by id.' }
+      }
+    )
+    .delete(
+      '/memory/facts/:id',
+      async ({ params, body }) =>
+        handlers.memory.forgetFact({ id: params.id, ...forgetMemoryFactBodySchema.parse(body) }),
+      {
+        params: forgetMemoryFactParamsSchema,
+        body: forgetMemoryFactBodySchema,
         response: { 200: okResponseSchema },
         detail: { summary: 'Forget a memory fact', description: 'Delete a fact by id.' }
       }

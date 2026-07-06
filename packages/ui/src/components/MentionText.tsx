@@ -47,10 +47,24 @@ export function mentionSegments(text: string): MentionSegment[] {
 export function MentionCapsule({ id, name }: { id: string; name: string }) {
   return (
     <span
-      className="mx-0.5 inline-flex max-w-full items-center rounded bg-accent-blue px-1 align-baseline text-white"
+      className="inline-flex items-baseline gap-[0.14em] align-baseline text-accent-blue leading-[inherit]"
       title={id}
     >
-      @{name}
+      <span
+        aria-hidden="true"
+        className="inline-block size-[0.94em] shrink-0 translate-y-[0.14em] bg-current"
+        style={{
+          WebkitMaskImage: 'url("/monad-icon-vector-solid.svg")',
+          WebkitMaskPosition: 'center',
+          WebkitMaskRepeat: 'no-repeat',
+          WebkitMaskSize: 'contain',
+          maskImage: 'url("/monad-icon-vector-solid.svg")',
+          maskPosition: 'center',
+          maskRepeat: 'no-repeat',
+          maskSize: 'contain'
+        }}
+      />
+      {name}
     </span>
   );
 }

@@ -1,9 +1,11 @@
 import type { Logger } from '@monad/logger';
-import type { TranscriptTargetId } from '@monad/protocol';
+import type { NativeCliHistoryPageRequest, TranscriptTargetId } from '@monad/protocol';
 import type { LiveNativeCliSession, ManagedProjectOutputHandler } from '@/services/native-cli/host-types.ts';
 import type { StructuredLineBufferState } from '@/services/native-cli/structured-lines.ts';
 import type { NativeCliOutputEvent, NativeCliProviderAdapter } from '@/services/native-cli/types.ts';
 import type { Store } from '@/store/db/index.ts';
+
+import { nativeCliStreamItems } from '@monad/atoms/native-cli-observation';
 
 import { MAX_OUTPUT_SNAPSHOT } from '@/services/native-cli/constants.ts';
 import { NativeCliError } from '@/services/native-cli/errors.ts';
@@ -39,6 +41,16 @@ export interface NativeCliOutputPipelineContext {
   stop(id: string): void;
   getManagedProjectOutputHandler(): ManagedProjectOutputHandler | null;
   log: Logger;
+  /** Reset the session's idle-suspend timer — output is activity, same as user input. */
+  armIdleSuspend(live: LiveNativeCliSession): void;
+  /** Reshape raw provider history-page items into the live-JSONL-mimicking output string the adapter's
+   *  `parseOutput`/`nativeCliStreamItems` normalize — same adapter the host already resolved for this
+   *  session. Returns undefined when the adapter/session don't support it (falls back to raw-line join). */
+  historyPageOutput(
+    live: LiveNativeCliSession,
+    request: NativeCliHistoryPageRequest,
+    items: unknown[]
+  ): string | undefined;
 }
 
 /** Owns the child-process output path end to end: draining stdio into text, buffering/flushing the
@@ -96,6 +108,7 @@ export class NativeCliOutputPipeline {
       live.outputSeq += buffered.length;
       if (!isManagedProjectRuntime(live)) this.scheduleSnapshotFlush(id);
       this.ctx.observation.publish(id);
+      this.ctx.armIdleSuspend(live);
     } else {
       const row = this.ctx.store.getNativeCliSession(id);
       if (!row || !isManagedProjectRuntime(row))
@@ -216,10 +229,18 @@ export class NativeCliOutputPipeline {
       if (!pending) return;
       clearTimeout(pending.timeout);
       live?.pendingHistoryPages.delete(responseId);
+      const items = Array.isArray(event.payload.items) ? event.payload.items : [];
+      const output = live ? this.ctx.historyPageOutput(live, pending.request, items) : undefined;
+      // The daemon already knows `live.provider`/`live.adapter`, so normalize here instead of shipping
+      // raw items for the client to guess a provider for. Raw JSONL isn't shipped separately: each
+      // event's `raw` already carries its source record(s).
+      const pageOutput =
+        output ?? items.map((item) => (typeof item === 'string' ? item : JSON.stringify(item))).join('\n');
       pending.resolve({
-        items: Array.isArray(event.payload.items) ? event.payload.items : [],
-        nextCursor: typeof event.payload.nextCursor === 'string' ? event.payload.nextCursor : null,
-        backwardsCursor: typeof event.payload.backwardsCursor === 'string' ? event.payload.backwardsCursor : null
+        events: live
+          ? nativeCliStreamItems({ id: `${id}:history:live`, adapter: live.adapter, output: pageOutput })
+          : [],
+        ...(typeof event.payload.nextCursor === 'string' ? { nextCursor: event.payload.nextCursor } : {})
       });
       return;
     }

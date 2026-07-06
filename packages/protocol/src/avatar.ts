@@ -59,6 +59,8 @@ export function entityAvatarUrl(seed: string, style: AvatarStyle = DEFAULT_AVATA
   return `/api/avatar-cache/${key}.svg?seed=${encodeURIComponent(seed)}&style=${encodeURIComponent(style)}`;
 }
 
+// Same URL as the read path — POST is what tells the daemon to persist the render to the on-disk
+// cache; GET on this path is read-only and never writes. See apps/monad/src/transports/http/avatar-cache.ts.
 export function entityAvatarWriteUrl(seed: string, style: AvatarStyle = DEFAULT_AVATAR_STYLE): string {
-  return `${entityAvatarUrl(seed, style)}&write=1`;
+  return entityAvatarUrl(seed, style);
 }

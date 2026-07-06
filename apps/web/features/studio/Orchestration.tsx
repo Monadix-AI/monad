@@ -10,7 +10,7 @@ import {
   UserGroupIcon
 } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { useListAgentsQuery } from '@monad/client-rtk';
+import { agentSelectors, useListAgentsQuery } from '@monad/client-rtk';
 import { Badge, ScrollArea } from '@monad/ui';
 
 import { useT } from '@/components/I18nProvider';
@@ -22,7 +22,7 @@ import { useT } from '@/components/I18nProvider';
 export function Orchestration() {
   const t = useT();
   const { data, isLoading } = useListAgentsQuery();
-  const targets = (data?.agents ?? []).filter((a) => a.visibility?.subagentCallable);
+  const targets = (data ? agentSelectors.selectAll(data) : []).filter((a) => a.visibility?.subagentCallable);
 
   const toolLabel = (a: Agent): string =>
     a.atoms?.mode === 'allowlist'

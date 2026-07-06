@@ -1,10 +1,10 @@
 'use client';
 
-import type { ComponentPropsWithoutRef, ReactElement, ReactNode } from 'react';
+import type { ComponentPropsWithoutRef, CSSProperties, ReactElement, ReactNode } from 'react';
 
 import {
-  ArrowUp01Icon,
   ChevronDownIcon,
+  CornerDownLeftIcon,
   MagicWand02Icon,
   Mic01Icon,
   ShieldQuestionMarkIcon,
@@ -18,27 +18,34 @@ import { ChatInputChrome } from './ChatInput';
 
 export type ComposerSurfaceProps = {
   ariaBusy?: boolean;
-  busyTitle?: string;
   children: ReactNode;
   className?: string;
   leftTools?: ReactNode;
   mentionMenu?: ReactNode;
   mentionPreview?: ReactNode;
   rightTools?: ReactNode;
+  voiceLevel?: number;
+  voiceSpectrum?: number[];
+  voiceState?: 'idle' | 'listening' | 'busy';
 };
 
 export function ComposerSurface({
   ariaBusy,
-  busyTitle,
   children,
   className,
   leftTools,
   mentionMenu,
   mentionPreview,
-  rightTools
+  rightTools,
+  voiceLevel = 0,
+  voiceSpectrum,
+  voiceState = 'idle'
 }: ComposerSurfaceProps): ReactElement {
+  const voiceActive = voiceState !== 'idle';
   return (
-    <ChatInputChrome className={cn('shared-composer-panel', className)}>
+    <ChatInputChrome
+      className={cn('shared-composer-panel', voiceActive && 'chat-input-chrome--voice-active', className)}
+    >
       <div className="chat-input-frame">
         <div
           aria-hidden="true"
@@ -84,19 +91,23 @@ export function ComposerSurface({
               opacity: ariaBusy ? 0.72 : 1,
               pointerEvents: ariaBusy ? 'none' : undefined
             }}
-            title={busyTitle}
           >
-            {ariaBusy ? null : mentionMenu}
             {children}
             {mentionPreview ? (
               <div
-                className="flex flex-wrap items-center gap-1.5 px-4 pb-1.5 text-[13px]"
+                className="flex flex-wrap items-center gap-1.5 text-[13px]"
                 style={{ color: 'var(--muted-foreground)' }}
               >
                 {mentionPreview}
               </div>
             ) : null}
           </div>
+
+          <ComposerVoiceSpectrum
+            level={voiceLevel}
+            spectrum={voiceSpectrum}
+            state={voiceState}
+          />
 
           <div
             className="shared-composer-toolbar"
@@ -105,7 +116,7 @@ export function ComposerSurface({
               alignItems: 'center',
               justifyContent: 'space-between',
               gap: 5,
-              padding: '0 5px 5px'
+              padding: 0
             }}
           >
             {leftTools ? (
@@ -126,8 +137,101 @@ export function ComposerSurface({
             ) : null}
           </div>
         </div>
+        {mentionMenu}
       </div>
     </ChatInputChrome>
+  );
+}
+
+function ComposerVoiceSpectrum({
+  level,
+  spectrum,
+  state
+}: {
+  level: number;
+  spectrum?: number[];
+  state: 'idle' | 'listening' | 'busy';
+}): ReactElement | null {
+  if (state === 'idle') return null;
+  const normalized = state === 'busy' ? 0.18 : Math.max(0.08, Math.min(1, level));
+  const rays = [
+    { id: 'a', weight: 0.46 },
+    { id: 'b', weight: 0.68 },
+    { id: 'c', weight: 0.52 },
+    { id: 'd', weight: 0.86 },
+    { id: 'e', weight: 0.58 },
+    { id: 'f', weight: 1 },
+    { id: 'g', weight: 0.64 },
+    { id: 'h', weight: 0.92 },
+    { id: 'i', weight: 0.5 },
+    { id: 'j', weight: 0.76 },
+    { id: 'k', weight: 0.56 },
+    { id: 'l', weight: 0.82 },
+    { id: 'm', weight: 0.44 },
+    { id: 'n', weight: 0.72 },
+    { id: 'o', weight: 0.54 },
+    { id: 'p', weight: 0.88 },
+    { id: 'q', weight: 0.62 },
+    { id: 'r', weight: 0.96 },
+    { id: 's', weight: 0.48 },
+    { id: 't', weight: 0.78 }
+  ];
+
+  return (
+    <div
+      aria-hidden="true"
+      className={cn('composer-voice-spectrum', state === 'busy' && 'composer-voice-spectrum--busy')}
+    >
+      <span className="composer-voice-spectrum__core">
+        {state === 'busy' ? (
+          <svg
+            aria-hidden="true"
+            className="composer-voice-spectrum__scribe"
+            viewBox="0 0 32 32"
+          >
+            <path
+              className="composer-voice-spectrum__scribe-line"
+              d="M7 23H19"
+            />
+            <path
+              className="composer-voice-spectrum__scribe-line composer-voice-spectrum__scribe-line--late"
+              d="M7 27H24"
+            />
+            <g className="composer-voice-spectrum__scribe-pen">
+              <path d="M12 20L22 10L26 14L16 24L11 25L12 20Z" />
+              <path d="M21 11L25 15" />
+            </g>
+          </svg>
+        ) : null}
+      </span>
+      {rays.map((ray, index) => {
+        const angle = (360 / rays.length) * index;
+        const band = spectrum && spectrum.length > 0 ? spectrum[index % spectrum.length] : undefined;
+        const energy = band == null ? normalized * ray.weight : Math.max(0.04, Math.min(1, band));
+        const length = state === 'busy' ? 7 + ((index + 1) % 4) * 2 : 5 + Math.round(energy * 15);
+        const opacity = state === 'busy' ? 0.16 : 0.52 + energy * 0.42;
+        return (
+          <span
+            className="composer-voice-spectrum__ray"
+            key={ray.id}
+            style={{
+              animationDelay: `${index * 24}ms`,
+              transform: `rotate(${angle}deg)`
+            }}
+          >
+            <span
+              className="composer-voice-spectrum__ray-core"
+              style={
+                {
+                  '--composer-voice-ray-length': `${length}px`,
+                  opacity
+                } as CSSProperties
+              }
+            />
+          </span>
+        );
+      })}
+    </div>
   );
 }
 
@@ -386,9 +490,6 @@ export const ComposerVoiceButton = forwardRef<HTMLButtonElement, ComposerVoiceBu
         />
       ) : (
         <span className="relative inline-flex items-center justify-center">
-          {state === 'listening' ? (
-            <span className="absolute inline-flex size-7 animate-ping rounded-full bg-destructive/30" />
-          ) : null}
           <HugeiconsIcon
             className={state === 'listening' ? 'text-destructive' : undefined}
             icon={Mic01Icon}
@@ -570,6 +671,7 @@ export const ComposerSubmitButton = forwardRef<HTMLButtonElement, ComposerSubmit
     ref
   ): ReactElement {
     const enabled = canSend || canStop;
+    const interactive = enabled && !disabled;
     return (
       <button
         {...props}
@@ -584,9 +686,9 @@ export const ComposerSubmitButton = forwardRef<HTMLButtonElement, ComposerSubmit
           height: 36,
           border: 'none',
           borderRadius: '50%',
-          background: enabled ? 'var(--foreground)' : 'var(--secondary)',
-          color: enabled ? 'var(--background)' : 'var(--muted-foreground)',
-          cursor: enabled ? 'pointer' : 'not-allowed',
+          background: interactive ? 'var(--primary)' : 'rgb(var(--backgroundColor-state-enabled) / 0.48)',
+          color: interactive ? 'var(--primary-foreground)' : 'var(--muted-foreground)',
+          cursor: interactive ? 'pointer' : 'not-allowed',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -602,8 +704,8 @@ export const ComposerSubmitButton = forwardRef<HTMLButtonElement, ComposerSubmit
           />
         ) : (
           <HugeiconsIcon
-            icon={ArrowUp01Icon}
-            size={18}
+            icon={CornerDownLeftIcon}
+            size={17}
           />
         )}
       </button>

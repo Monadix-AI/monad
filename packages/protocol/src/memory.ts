@@ -8,6 +8,7 @@ import type { AgentId, SessionId } from './ids.ts';
 import { z } from 'zod';
 
 import { agentIdSchema, iso8601Schema, sessionIdSchema } from './ids.ts';
+import { cursorPaginationQuerySchema, cursorPaginationResponseSchema } from './pagination.ts';
 
 export const scopeKindSchema = z.enum(['session', 'agent', 'project', 'global']); // 'org' reserved (future tier)
 export type ScopeKind = z.infer<typeof scopeKindSchema>;
@@ -99,7 +100,14 @@ export const memoryScopeQuerySchema = z.object({
 });
 export type MemoryScopeQuery = z.infer<typeof memoryScopeQuerySchema>;
 
-export const listMemoryFactsResponseSchema = z.object({ facts: z.array(factSchema) });
+// Cursor-paginated: facts can accumulate over the life of a long-running daemon. `before` is a
+// fact id (facts are listed in a stable, deterministic order — see the daemon handler).
+export const listMemoryFactsQuerySchema = memoryScopeQuerySchema.extend(cursorPaginationQuerySchema.shape);
+export type ListMemoryFactsQuery = z.infer<typeof listMemoryFactsQuerySchema>;
+
+export const listMemoryFactsResponseSchema = cursorPaginationResponseSchema.extend({
+  facts: z.array(factSchema)
+});
 export type ListMemoryFactsResponse = z.infer<typeof listMemoryFactsResponseSchema>;
 
 export const memoryCoreResponseSchema = z.object({
@@ -114,14 +122,31 @@ export type PutMemoryCoreRequest = z.infer<typeof putMemoryCoreRequestSchema>;
 export const addMemoryFactRequestSchema = memoryScopeQuerySchema.extend({ content: z.string().min(1) });
 export type AddMemoryFactRequest = z.infer<typeof addMemoryFactRequestSchema>;
 
+// `id` travels in the URL path (`PATCH /memory/facts/:id`); the body carries only the patch
+// fields. `editMemoryFactRequestSchema` is the full logical request (path + body) per
+// docs/conventions.md §5 — the HTTP body schema derives from it via `.omit()`.
 export const editMemoryFactRequestSchema = memoryScopeQuerySchema.extend({
   id: z.string(),
   content: z.string().min(1)
 });
 export type EditMemoryFactRequest = z.infer<typeof editMemoryFactRequestSchema>;
 
+export const editMemoryFactParamsSchema = z.object({ id: z.string() });
+export type EditMemoryFactParams = z.infer<typeof editMemoryFactParamsSchema>;
+
+export const editMemoryFactBodySchema = editMemoryFactRequestSchema.omit({ id: true });
+export type EditMemoryFactBody = z.infer<typeof editMemoryFactBodySchema>;
+
+// `id` travels in the URL path (`DELETE /memory/facts/:id`); the body carries the remaining scope
+// selector only.
 export const forgetMemoryFactRequestSchema = memoryScopeQuerySchema.extend({ id: z.string() });
 export type ForgetMemoryFactRequest = z.infer<typeof forgetMemoryFactRequestSchema>;
+
+export const forgetMemoryFactParamsSchema = z.object({ id: z.string() });
+export type ForgetMemoryFactParams = z.infer<typeof forgetMemoryFactParamsSchema>;
+
+export const forgetMemoryFactBodySchema = forgetMemoryFactRequestSchema.omit({ id: true });
+export type ForgetMemoryFactBody = z.infer<typeof forgetMemoryFactBodySchema>;
 
 export const memoryFactResponseSchema = z.object({ fact: factSchema });
 export type MemoryFactResponse = z.infer<typeof memoryFactResponseSchema>;

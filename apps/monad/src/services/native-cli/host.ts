@@ -1,4 +1,6 @@
 import type {
+  ListNativeCliRuntimesQuery,
+  ListNativeCliRuntimesResponse,
   ListNativeCliSessionsResponse,
   NativeCliAgentView,
   NativeCliApprovalResolutionRequest,
@@ -10,6 +12,7 @@ import type {
   NativeCliInputRequest,
   NativeCliLaunchMode,
   NativeCliObservationAccessResponse,
+  NativeCliProvider,
   NativeCliResizeRequest,
   NativeCliSessionView,
   NativeCliUsageResponse,
@@ -28,6 +31,7 @@ import type { NativeCliSessionRow } from '@/store/db/index.ts';
 
 import { chmodSync, realpathSync, statSync } from 'node:fs';
 import { dirname, isAbsolute } from 'node:path';
+import { nativeCliStreamItems, nativeCliUsageLimitMeter } from '@monad/atoms/native-cli-observation';
 import { createLogger } from '@monad/logger';
 import { newId } from '@monad/protocol';
 
@@ -43,7 +47,11 @@ import { MAX_OUTPUT_SNAPSHOT } from '@/services/native-cli/constants.ts';
 import { NativeCliError } from '@/services/native-cli/errors.ts';
 import { NativeCliEventLog } from '@/services/native-cli/event-log.ts';
 import { providerHistoryOutputFromLocal, providerHistoryOutputViaCli } from '@/services/native-cli/history-backfill.ts';
-import { APP_SERVER_STARTUP_TIMEOUT_MS, HISTORY_PAGE_TIMEOUT_MS } from '@/services/native-cli/host-constants.ts';
+import {
+  APP_SERVER_STARTUP_TIMEOUT_MS,
+  HISTORY_PAGE_TIMEOUT_MS,
+  NATIVE_CLI_IDLE_TIMEOUT_MS
+} from '@/services/native-cli/host-constants.ts';
 import { isManagedProjectRuntime, toView } from '@/services/native-cli/host-helpers.ts';
 import {
   buildNativeCliLaunch,
@@ -68,6 +76,51 @@ import { buildNativeCliSpawnEnv, requireNativeCliAgent } from '@/services/native
 import { createStreamingTextDecoder } from '@/services/native-cli/stream-decoder.ts';
 
 export type { NativeCliHostDeps };
+
+const STORED_HISTORY_CURSOR_PREFIX = 'snapshot:';
+
+function storedOutputHistoryPage(
+  output: string,
+  req: NativeCliHistoryPageRequest,
+  id: string,
+  provider: NativeCliProvider
+): NativeCliHistoryPageResponse {
+  const lines = output.split('\n').filter((line) => line.trim().length > 0);
+  const end = storedHistoryCursorEnd(req.before, lines.length);
+  const start = Math.max(0, end - req.limit);
+  const pageLines = lines.slice(start, end);
+  const pageOutput = pageLines.join('\n');
+  return {
+    // The daemon already knows `provider` unambiguously (the session row) — normalize with the same
+    // adapter used for parseOutput/historyPageOutput instead of making the client re-derive it. Raw
+    // JSONL isn't shipped separately: each event's `raw` already carries its source record(s).
+    events: nativeCliStreamItems({
+      id: `${id}:history:${start}`,
+      adapter: getNativeCliProviderAdapter(provider),
+      output: pageOutput
+    }),
+    ...(start > 0 ? { nextCursor: `${STORED_HISTORY_CURSOR_PREFIX}${start}` } : {})
+  };
+}
+
+function storedHistoryCursorEnd(cursor: string | undefined, fallback: number): number {
+  if (!cursor?.startsWith(STORED_HISTORY_CURSOR_PREFIX)) return fallback;
+  const value = Number.parseInt(cursor.slice(STORED_HISTORY_CURSOR_PREFIX.length), 10);
+  if (!Number.isFinite(value)) return fallback;
+  return Math.max(0, Math.min(fallback, value));
+}
+
+const RUNTIME_LIST_DEFAULT_LIMIT = 100;
+
+/** Slices an already-ordered array by an opaque position cursor (`before` = index to stop before).
+ *  Used by the daemon-wide runtime overview lists, which are in-memory/SQLite arrays, not a keyset
+ *  index — a numeric offset-as-cursor is sufficient since these lists are read-mostly per poll. */
+function sliceByCursor<T>(items: T[], query: ListNativeCliRuntimesQuery): { page: T[]; nextCursor?: string } {
+  const end = query.before ? Math.max(0, Math.min(items.length, Number.parseInt(query.before, 10) || 0)) : items.length;
+  const limit = query.limit ?? RUNTIME_LIST_DEFAULT_LIMIT;
+  const start = Math.max(0, end - limit);
+  return { page: items.slice(start, end), ...(start > 0 ? { nextCursor: String(start) } : {}) };
+}
 
 export class NativeCliHost {
   private readonly log = createLogger('native-cli');
@@ -110,7 +163,9 @@ export class NativeCliHost {
       observation: this.observation,
       stop: (id) => this.stop(id),
       getManagedProjectOutputHandler: () => this.managedProjectOutputHandler,
-      log: this.log
+      log: this.log,
+      armIdleSuspend: (live) => this.armIdleSuspend(live),
+      historyPageOutput: (live, request, items) => this.historyPageOutput(live, request, items)
     });
     this.oneshotRunner = new NativeCliOneshotRunner({
       live: this.live,
@@ -143,6 +198,104 @@ export class NativeCliHost {
       projectId: row.transcriptTargetId,
       agentName: row.agentName
     });
+  }
+
+  private idleTimeoutMs(): number {
+    return this.deps.nativeCliIdleTimeoutMs ?? NATIVE_CLI_IDLE_TIMEOUT_MS;
+  }
+
+  private canIdleSuspend(live: LiveNativeCliSession): boolean {
+    return Boolean(
+      live.restartRuntime &&
+        live.idleTimeoutMs &&
+        live.idleTimeoutMs > 0 &&
+        live.launchMode !== 'pty' &&
+        live.launchMode !== 'cli-oneshot' &&
+        live.pendingApprovals.size === 0 &&
+        live.pendingHistoryPages.size === 0 &&
+        live.pendingRequests.size === 0 &&
+        !live.startup &&
+        !live.appServerReconnecting &&
+        !live.suspended
+    );
+  }
+
+  private armIdleSuspend(live: LiveNativeCliSession): void {
+    if (live.idleTimer) {
+      clearTimeout(live.idleTimer);
+      live.idleTimer = undefined;
+    }
+    if (!this.canIdleSuspend(live)) return;
+    live.idleTimer = setTimeout(() => this.suspendIdleRuntime(live.id), live.idleTimeoutMs);
+  }
+
+  private updateNativeCliPid(id: string, pid: number | null): void {
+    const row = this.deps.store.getNativeCliSession(id);
+    if (row?.state !== 'running') return;
+    this.deps.store.upsertNativeCliSession({
+      ...row,
+      pid,
+      updatedAt: new Date().toISOString()
+    });
+  }
+
+  private suspendIdleRuntime(id: string): void {
+    const live = this.live.get(id);
+    if (!live || !this.canIdleSuspend(live)) return;
+    live.suspended = true;
+    if (live.idleTimer) {
+      clearTimeout(live.idleTimer);
+      live.idleTimer = undefined;
+    }
+    try {
+      live.terminal?.close();
+      void live.stdin?.end?.();
+      live.appServer?.close();
+    } catch {
+      /* already closed */
+    }
+    live.adapter.stop(live);
+    const pid = live.proc?.pid;
+    if (pid !== undefined) {
+      killNativeCliProcess(pid);
+      this.untrackNativeCliProcess(pid);
+    }
+    live.proc = undefined;
+    live.terminal = undefined;
+    live.stdin = undefined;
+    live.appServer = undefined;
+    live.appServerRedial = undefined;
+    live.appServerReconnecting = false;
+    live.pendingRequests.clear();
+    this.appServerConnections.unlinkSocket(live.appServerSocketPath);
+    this.outputPipeline.flushSnapshot(id);
+    this.updateNativeCliPid(id, null);
+    this.observation.publish(id);
+    this.log.debug(
+      { sessionId: live.transcriptTargetId, event: 'native_cli.idle_suspended', nativeCliSessionId: id },
+      'native cli idle suspended'
+    );
+  }
+
+  private async sendInputAfterResume(live: LiveNativeCliSession, input: string): Promise<void> {
+    const send = async (): Promise<void> => {
+      if (live.suspended) {
+        if (!live.restartRuntime)
+          throw new NativeCliError('unsupported_capability', `native CLI cannot resume: ${live.id}`);
+        await live.restartRuntime();
+      }
+      this.armIdleSuspend(live);
+      live.adapter.sendInput(live, input);
+    };
+    const run = (live.resumeQueue ?? Promise.resolve()).then(send);
+    live.resumeQueue = run.catch(() => undefined);
+    try {
+      await run;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.outputPipeline.output(live.transcriptTargetId, live.id, message, 'stderr', live.adapter);
+      throw error;
+    }
   }
 
   async reconcileOrphanedSessions(): Promise<number> {
@@ -281,6 +434,7 @@ export class NativeCliHost {
     const buildLaunchOpts = (overrides?: {
       launchMode?: NativeCliLaunchMode;
       appServerTransport?: NativeCliAppServerTransport;
+      providerSessionRef?: string;
     }) => ({
       workingPath,
       extraWorkingPaths: managed ? [managed.workspace] : undefined,
@@ -290,7 +444,7 @@ export class NativeCliHost {
       appServerPort,
       systemPromptFile: adapter.managedRuntime?.usesSystemPromptFile ? (managed?.promptFile ?? undefined) : undefined,
       skipProviderApprovals,
-      providerSessionRef: args.providerSessionRef,
+      providerSessionRef: overrides?.providerSessionRef ?? args.providerSessionRef,
       modelName: args.modelName,
       reasoningEffort: args.reasoningEffort,
       speed: args.speed,
@@ -539,7 +693,9 @@ export class NativeCliHost {
       outputSeq: 0,
       snapshotFlushTimer: null,
       nextRequestId: () => requestSeq++,
-      kill: (signal) => killNativeCliProcess(proc.pid, signal)
+      kill: (signal) => {
+        if (live.proc) killNativeCliProcess(live.proc.pid, signal);
+      }
     };
     this.live.set(id, live);
     this.trackNativeCliProcess(proc.pid);
@@ -556,38 +712,47 @@ export class NativeCliHost {
             };
           })
         : null;
-    const initializeContext = {
-      workingPath,
-      providerSessionRef: args.providerSessionRef,
-      developerInstructions: adapter.managedRuntime?.usesDeveloperInstructions
-        ? (managed?.prompt ?? undefined)
-        : undefined,
-      modelName: args.modelName,
-      reasoningEffort: args.reasoningEffort,
-      speed: args.speed,
-      modelId: args.modelId,
-      env: agent.env
+    const makeInitializeContext = () => {
+      const providerSessionRef = live.providerSessionRef ?? args.providerSessionRef;
+      return {
+        workingPath,
+        ...(providerSessionRef ? { providerSessionRef } : {}),
+        developerInstructions: adapter.managedRuntime?.usesDeveloperInstructions
+          ? (managed?.prompt ?? undefined)
+          : undefined,
+        modelName: args.modelName,
+        reasoningEffort: args.reasoningEffort,
+        speed: args.speed,
+        modelId: args.modelId,
+        env: agent.env
+      };
     };
-    live.initializeContext = initializeContext;
-    if (isAppServerSocket) {
-      // Protocol travels over a socket (ws: an announced loopback port, or a daemon-assigned one; unix:
-      // the path we allocated), exposed as `live.appServer` so initialize/turn/approval frames go over
-      // it. The child's stdout/stderr are only logs here — drained so their pipe buffers can't fill and
-      // stall the child. stderr drains immediately EXCEPT for the self-announcing ws path below, where
-      // reading stderr for the announced port IS the connect step; delaying the drain there is
-      // deliberate, not incidental.
-      this.appServerConnections.drainStream(proc.stdout);
-      const isSelfAnnouncingWs = !isAppServerUnix && launch.appServerWs?.port === undefined;
-      if (!isSelfAnnouncingWs) this.appServerConnections.drainStream(proc.stderr);
-      const onMessage = (text: string): void =>
-        this.outputPipeline.output(args.transcriptTargetId, id, text, 'app-server', adapter);
-      const onClose = (): void => this.appServerConnections.handleDisconnect(id);
-      try {
+    live.initializeContext = makeInitializeContext();
+    const attachRuntimeStreams = async (runtimeProc: NativeCliProcess): Promise<void> => {
+      live.proc = runtimeProc;
+      live.terminal = runtimeProc.terminal;
+      live.stdin = runtimeProc.stdin;
+      live.appServer = undefined;
+      live.appServerRedial = undefined;
+      live.appServerReconnecting = false;
+      if (isAppServerSocket) {
+        // Protocol travels over a socket (ws: an announced loopback port, or a daemon-assigned one; unix:
+        // the path we allocated), exposed as `live.appServer` so initialize/turn/approval frames go over
+        // it. The child's stdout/stderr are only logs here — drained so their pipe buffers can't fill and
+        // stall the child. stderr drains immediately EXCEPT for the self-announcing ws path below, where
+        // reading stderr for the announced port IS the connect step; delaying the drain there is
+        // deliberate, not incidental.
+        this.appServerConnections.drainStream(runtimeProc.stdout);
+        const isSelfAnnouncingWs = !isAppServerUnix && launch.appServerWs?.port === undefined;
+        if (!isSelfAnnouncingWs) this.appServerConnections.drainStream(runtimeProc.stderr);
+        const onMessage = (text: string): void =>
+          this.outputPipeline.output(args.transcriptTargetId, id, text, 'app-server', adapter);
+        const onClose = (): void => this.appServerConnections.handleDisconnect(id);
         if (isAppServerUnix) {
           const socketPath = appServerSocketPath ?? '';
           live.appServer = await this.appServerConnections.raceAgainstExit(
             connectAppServerUnix({ socketPath, onMessage, onClose, timeoutMs: APP_SERVER_STARTUP_TIMEOUT_MS }),
-            proc.exited
+            runtimeProc.exited
           );
           live.appServerRedial = () =>
             connectAppServerUnix({ socketPath, onMessage, onClose, timeoutMs: APP_SERVER_STARTUP_TIMEOUT_MS });
@@ -604,13 +769,13 @@ export class NativeCliHost {
           };
           live.appServer = await this.appServerConnections.raceAgainstExit(
             dialAppServerWsWithRetry(wsPort, dialOpts),
-            proc.exited
+            runtimeProc.exited
           );
           live.appServerRedial = () => dialAppServerWsWithRetry(wsPort, dialOpts);
         } else {
           live.appServer = await this.appServerConnections.raceAgainstExit(
             connectAppServerWs({
-              stderr: proc.stderr,
+              stderr: runtimeProc.stderr,
               onMessage,
               onClose,
               timeoutMs: APP_SERVER_STARTUP_TIMEOUT_MS,
@@ -621,9 +786,9 @@ export class NativeCliHost {
                   dialAppServerWs(port, { onMessage, onClose, timeoutMs: APP_SERVER_STARTUP_TIMEOUT_MS });
               }
             }),
-            proc.exited
+            runtimeProc.exited
           );
-          this.appServerConnections.drainStream(proc.stderr);
+          this.appServerConnections.drainStream(runtimeProc.stderr);
         }
         // The socket dir is already 0700; lock the socket itself to owner-only as defense in depth.
         if (appServerSocketPath) {
@@ -633,18 +798,116 @@ export class NativeCliHost {
             /* socket already gone / not chmod-able */
           }
         }
+        const initializeContext = makeInitializeContext();
+        live.initializeContext = initializeContext;
         adapter.initialize?.(live, initializeContext);
-      } catch (error) {
-        live.startup?.reject(error instanceof Error ? error : new Error(String(error)));
+      } else if (launch.launchMode !== 'pty') {
+        this.outputPipeline.readPipe(args.transcriptTargetId, id, runtimeProc.stdout, 'stdout', adapter);
+        this.outputPipeline.readPipe(args.transcriptTargetId, id, runtimeProc.stderr, 'stderr', adapter);
+        // stdio app-server: frames travel over the child's stdin pipe, wrapped as the same
+        // transport-neutral connection the ws leg produces. json-stream adapters keep writing to
+        // `live.stdin` directly and never touch `appServer`.
+        if (launch.launchMode === 'app-server') live.appServer = connectAppServerStdio(runtimeProc.stdin);
+        const initializeContext = makeInitializeContext();
+        live.initializeContext = initializeContext;
+        adapter.initialize?.(live, initializeContext);
       }
-    } else if (launch.launchMode !== 'pty') {
-      this.outputPipeline.readPipe(args.transcriptTargetId, id, proc.stdout, 'stdout', adapter);
-      this.outputPipeline.readPipe(args.transcriptTargetId, id, proc.stderr, 'stderr', adapter);
-      // stdio app-server: frames travel over the child's stdin pipe, wrapped as the same
-      // transport-neutral connection the ws leg produces. json-stream adapters keep writing to
-      // `live.stdin` directly and never touch `appServer`.
-      if (launch.launchMode === 'app-server') live.appServer = connectAppServerStdio(proc.stdin);
-      adapter.initialize?.(live, initializeContext);
+    };
+    const attachExitHandler = (runtimeProc: NativeCliProcess): void => {
+      void runtimeProc.exited.then((code) => {
+        const live = this.live.get(id);
+        if (!live || live.proc !== runtimeProc || live.suspended) return;
+        if (live.idleTimer) {
+          clearTimeout(live.idleTimer);
+          live.idleTimer = undefined;
+        }
+        if (live.startup) {
+          clearTimeout(live.startup.timeout);
+          live.startup.reject(new Error(`native CLI session exited before app-server thread was ready: ${id}`));
+          live.startup = undefined;
+        }
+        for (const pending of live.pendingHistoryPages.values()) {
+          clearTimeout(pending.timeout);
+          pending.reject(new Error(`native CLI session exited before history page response: ${id}`));
+        }
+        let remainingText = decoder.flush();
+        if (pendingCR) remainingText = `\r${remainingText}`;
+        pendingCR = remainingText.endsWith('\r');
+        if (pendingCR) remainingText = remainingText.slice(0, -1);
+        remainingText = remainingText.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+        if (remainingText) this.outputPipeline.output(args.transcriptTargetId, id, remainingText, 'pty', adapter);
+        if (pendingCR) this.outputPipeline.output(args.transcriptTargetId, id, '\n', 'pty', adapter);
+        this.outputPipeline.flushSnapshot(id);
+        this.live.delete(id);
+        if (runtimeRole === 'managed-project-agent' && managed) cleanupManagedProjectRuntimeToken(managed.workspace);
+        this.untrackNativeCliProcess(runtimeProc.pid);
+        this.outputPipeline.dropStructuredBuffer(id);
+        this.appServerConnections.unlinkSocket(appServerSocketPath);
+        const exitedAt = new Date().toISOString();
+        const state = code === 0 ? 'exited' : 'failed';
+        this.deps.store.closeNativeCliSession(id, exitedAt, code, state);
+        this.events.emit(args.transcriptTargetId, 'native_cli.exited', {
+          nativeCliSessionId: id,
+          exitCode: code,
+          state
+        });
+        this.observation.publish(id, true);
+        this.log[state === 'failed' ? 'error' : 'debug'](
+          {
+            sessionId: args.transcriptTargetId,
+            event: 'native_cli.exited',
+            nativeCliSessionId: id,
+            exitCode: code,
+            state
+          },
+          'native cli exited'
+        );
+      });
+    };
+    live.restartRuntime = launch.capabilities.includes('session-resume')
+      ? async () => {
+          if (!live.suspended) return;
+          if (this.live.get(id) !== live) return;
+          launch = resolveNativeCliLaunchCommand(
+            adapter,
+            buildNativeCliLaunch(
+              agent,
+              buildLaunchOpts({
+                launchMode: launch.launchMode,
+                appServerTransport: launch.appServerTransport,
+                providerSessionRef: live.providerSessionRef ?? undefined
+              })
+            )
+          );
+          launch = managed ? { ...launch, env: { ...(launch.env ?? {}), ...managed.env } } : launch;
+          spawnEnv = await this.buildSpawnEnv(launch.env);
+          isAppServerWs = launch.launchMode === 'app-server' && launch.appServerTransport === 'ws';
+          isAppServerUnix = launch.launchMode === 'app-server' && launch.appServerTransport === 'unix';
+          isAppServerSocket = isAppServerWs || isAppServerUnix;
+          const nextProc = spawnPipeMode();
+          this.trackNativeCliProcess(nextProc.pid);
+          attachExitHandler(nextProc);
+          try {
+            await attachRuntimeStreams(nextProc);
+          } catch (error) {
+            this.untrackNativeCliProcess(nextProc.pid);
+            killNativeCliProcess(nextProc.pid);
+            throw error;
+          }
+          live.suspended = false;
+          this.updateNativeCliPid(id, nextProc.pid);
+          this.observation.publish(id);
+          this.log.debug(
+            { sessionId: live.transcriptTargetId, event: 'native_cli.idle_resumed', nativeCliSessionId: id },
+            'native cli idle resumed'
+          );
+        }
+      : undefined;
+    live.idleTimeoutMs = live.restartRuntime ? this.idleTimeoutMs() : undefined;
+    try {
+      await attachRuntimeStreams(proc);
+    } catch (error) {
+      live.startup?.reject(error instanceof Error ? error : new Error(String(error)));
     }
     if (waitForAppServerStartup) {
       try {
@@ -671,6 +934,8 @@ export class NativeCliHost {
         throw error;
       }
     }
+    attachExitHandler(proc);
+    this.armIdleSuspend(live);
     this.events.emit(args.transcriptTargetId, 'native_cli.started', {
       nativeCliSessionId: id,
       agentName: runtimeAgentName,
@@ -694,52 +959,10 @@ export class NativeCliHost {
       'native cli started'
     );
 
-    void proc.exited.then((code) => {
-      if (!this.live.has(id)) return;
-      const live = this.live.get(id);
-      if (live?.startup) {
-        clearTimeout(live.startup.timeout);
-        live.startup.reject(new Error(`native CLI session exited before app-server thread was ready: ${id}`));
-        live.startup = undefined;
-      }
-      for (const pending of live?.pendingHistoryPages.values() ?? []) {
-        clearTimeout(pending.timeout);
-        pending.reject(new Error(`native CLI session exited before history page response: ${id}`));
-      }
-      let remainingText = decoder.flush();
-      if (pendingCR) remainingText = `\r${remainingText}`;
-      pendingCR = remainingText.endsWith('\r');
-      if (pendingCR) remainingText = remainingText.slice(0, -1);
-      remainingText = remainingText.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-      if (remainingText) this.outputPipeline.output(args.transcriptTargetId, id, remainingText, 'pty', adapter);
-      if (pendingCR) this.outputPipeline.output(args.transcriptTargetId, id, '\n', 'pty', adapter);
-      this.outputPipeline.flushSnapshot(id);
-      this.live.delete(id);
-      if (runtimeRole === 'managed-project-agent' && managed) cleanupManagedProjectRuntimeToken(managed.workspace);
-      this.untrackNativeCliProcess(proc.pid);
-      this.outputPipeline.dropStructuredBuffer(id);
-      this.appServerConnections.unlinkSocket(appServerSocketPath);
-      const exitedAt = new Date().toISOString();
-      const state = code === 0 ? 'exited' : 'failed';
-      this.deps.store.closeNativeCliSession(id, exitedAt, code, state);
-      this.events.emit(args.transcriptTargetId, 'native_cli.exited', { nativeCliSessionId: id, exitCode: code, state });
-      this.observation.publish(id, true);
-      this.log[state === 'failed' ? 'error' : 'debug'](
-        {
-          sessionId: args.transcriptTargetId,
-          event: 'native_cli.exited',
-          nativeCliSessionId: id,
-          exitCode: code,
-          state
-        },
-        'native cli exited'
-      );
-    });
-
     return toView(row);
   }
 
-  input(id: string, req: NativeCliInputRequest): void {
+  async input(id: string, req: NativeCliInputRequest): Promise<void> {
     const live = this.live.get(id);
     if (!live) throw new Error(`native CLI session is not running: ${id}`);
     this.log.debug(
@@ -755,6 +978,10 @@ export class NativeCliHost {
         .catch(() => undefined);
       return;
     }
+    if (live.suspended) {
+      await this.sendInputAfterResume(live, req.input);
+      return;
+    }
     // Between a socket drop and a completed redial, `live.appServer` still references the dead
     // connection (`reconnectAppServer` only reassigns it on success) — it stays truthy, so an adapter's
     // own `!handle.appServer` guard doesn't catch this window. Sending into it would silently vanish
@@ -762,6 +989,7 @@ export class NativeCliHost {
     if (live.appServerReconnecting) {
       throw new NativeCliError('provider_timeout', `native CLI app-server is reconnecting, cannot send input: ${id}`);
     }
+    this.armIdleSuspend(live);
     live.adapter.sendInput(live, req.input);
   }
 
@@ -808,26 +1036,26 @@ export class NativeCliHost {
 
   /** Every native CLI runtime across the daemon without output buffers. Used by overview surfaces
    *  that need durable counters such as unread messages even after a runtime exits. */
-  listAllSummaries(): ListNativeCliSessionsResponse {
-    return {
-      sessions: this.deps.store.listNativeCliSessions().map((row) => {
-        const live = this.live.get(row.id);
-        return { ...toView(row, live?.pendingApprovals.size ?? 0, live), outputSnapshot: '' };
-      })
-    };
+  listAllSummaries(query: ListNativeCliRuntimesQuery = {}): ListNativeCliRuntimesResponse {
+    const views = this.deps.store.listNativeCliSessions().map((row) => {
+      const live = this.live.get(row.id);
+      return { ...toView(row, live?.pendingApprovals.size ?? 0, live), outputSnapshot: '' };
+    });
+    const { page, nextCursor } = sliceByCursor(views, query);
+    return { sessions: page, ...(nextCursor ? { nextCursor } : {}) };
   }
 
   /** Every live (starting/running) runtime across the daemon, all projects — for the daemon-wide
    *  runtime overview, so the web polls once instead of once per project. Output snapshots are
    *  dropped: this is a status list (state/provider/name), and shipping every live session's
    *  (up to 256 KB) buffer on each poll is bandwidth no overview consumer reads. */
-  listLive(): ListNativeCliSessionsResponse {
-    return {
-      sessions: this.deps.store.listLiveNativeCliSessions().map((row) => {
-        const live = this.live.get(row.id);
-        return { ...toView(row, live?.pendingApprovals.size ?? 0, live), outputSnapshot: '' };
-      })
-    };
+  listLive(query: ListNativeCliRuntimesQuery = {}): ListNativeCliRuntimesResponse {
+    const views = this.deps.store.listLiveNativeCliSessions().map((row) => {
+      const live = this.live.get(row.id);
+      return { ...toView(row, live?.pendingApprovals.size ?? 0, live), outputSnapshot: '' };
+    });
+    const { page, nextCursor } = sliceByCursor(views, query);
+    return { sessions: page, ...(nextCursor ? { nextCursor } : {}) };
   }
 
   observe(id: string, afterSeq?: number): NativeCliObservationAccessResponse {
@@ -853,6 +1081,8 @@ export class NativeCliHost {
         nativeCliSessionId: id,
         provider: row.provider,
         output: cliOutput,
+        events: nativeCliStreamItems({ id, adapter, output: cliOutput }),
+        usageMeter: nativeCliUsageLimitMeter({ adapter, output: cliOutput }),
         observedAt: row.updatedAt
       };
     }
@@ -863,6 +1093,8 @@ export class NativeCliHost {
         nativeCliSessionId: id,
         provider: row.provider,
         output: localOutput,
+        events: nativeCliStreamItems({ id, adapter, output: localOutput }),
+        usageMeter: nativeCliUsageLimitMeter({ adapter, output: localOutput }),
         observedAt: row.updatedAt
       };
     }
@@ -890,6 +1122,8 @@ export class NativeCliHost {
         nativeCliSessionId: id,
         provider: live.provider,
         output: snapshot,
+        events: nativeCliStreamItems({ id, adapter: live.adapter, output: snapshot }),
+        usageMeter: nativeCliUsageLimitMeter({ adapter: live.adapter, output: snapshot }),
         seq: live.outputSeq,
         observedAt: new Date().toISOString()
       };
@@ -903,11 +1137,14 @@ export class NativeCliHost {
       };
     }
     if (!isManagedProjectRuntime(row) && row.outputSnapshot) {
+      const adapter = getNativeCliProviderAdapter(row.provider);
       return {
         state: 'history',
         nativeCliSessionId: id,
         provider: row.provider,
         output: row.outputSnapshot,
+        events: nativeCliStreamItems({ id, adapter, output: row.outputSnapshot }),
+        usageMeter: nativeCliUsageLimitMeter({ adapter, output: row.outputSnapshot }),
         observedAt: row.updatedAt
       };
     }
@@ -976,6 +1213,10 @@ export class NativeCliHost {
       clearTimeout(live.appServerStreakResetTimer);
       live.appServerStreakResetTimer = undefined;
     }
+    if (live.idleTimer) {
+      clearTimeout(live.idleTimer);
+      live.idleTimer = undefined;
+    }
     for (const pending of live.pendingHistoryPages.values()) {
       clearTimeout(pending.timeout);
       pending.reject(new Error(`native CLI session stopped before history page response: ${id}`));
@@ -1033,9 +1274,24 @@ export class NativeCliHost {
     }
   }
 
-  historyPage(id: string, req: NativeCliHistoryPageRequest): Promise<NativeCliHistoryPageResponse> {
+  stopAgentProvider(provider: NativeCliAgentView['provider']): void {
+    let stopped = 0;
+    for (const live of [...this.live.values()]) {
+      if (live.provider === provider) {
+        stopped++;
+        this.stop(live.id);
+      }
+    }
+    if (stopped > 0)
+      this.log.debug(
+        { event: 'native_cli.stop_agent_provider', provider, stopped },
+        'native cli stopped sessions for agent provider'
+      );
+  }
+
+  async historyPage(id: string, req: NativeCliHistoryPageRequest): Promise<NativeCliHistoryPageResponse> {
     const live = this.live.get(id);
-    if (!live) throw new Error(`native CLI session is not running: ${id}`);
+    if (!live) return this.storedHistoryPage(id, req);
     if (!live.adapter.requestHistoryPage) {
       throw new NativeCliError('unsupported_capability', `native CLI provider does not support paged history: ${id}`);
     }
@@ -1048,7 +1304,9 @@ export class NativeCliHost {
       }, HISTORY_PAGE_TIMEOUT_MS);
       live.pendingHistoryPages.set(responseId, {
         timeout,
-        resolve: (page) => resolve({ page }),
+        request: req,
+        resolve: (page) =>
+          resolve({ events: page.events, ...(page.nextCursor ? { nextCursor: page.nextCursor } : {}) }),
         reject
       });
       try {
@@ -1059,6 +1317,40 @@ export class NativeCliHost {
         reject(error instanceof Error ? error : new Error(String(error)));
       }
     });
+  }
+
+  private async storedHistoryPage(id: string, req: NativeCliHistoryPageRequest): Promise<NativeCliHistoryPageResponse> {
+    const access = await this.observeWithProviderHistory(id);
+    if (access.state === 'unavailable') {
+      throw new NativeCliError(
+        'unsupported_capability',
+        access.reason ?? `native CLI history unavailable for stopped session: ${id}`
+      );
+    }
+    return storedOutputHistoryPage(access.output ?? '', req, id, access.provider);
+  }
+
+  private historyPageOutput(
+    live: LiveNativeCliSession,
+    request: NativeCliHistoryPageRequest,
+    items: unknown[]
+  ): string | undefined {
+    const providerSessionRef = live.providerSessionRef ?? live.initializeContext?.providerSessionRef ?? undefined;
+    const workingPath = live.initializeContext?.workingPath;
+    const historyPageOutput = live.adapter.historyPageOutput;
+    if (!providerSessionRef || !workingPath || !historyPageOutput) return undefined;
+    const presentationItems = request.sortDirection === 'desc' ? [...items].reverse() : items;
+    return (
+      historyPageOutput({
+        providerSessionRef,
+        workingPath,
+        limitBytes: MAX_OUTPUT_SNAPSHOT,
+        page: {
+          items: presentationItems,
+          nextCursor: undefined
+        }
+      }) ?? undefined
+    );
   }
 
   startAuth(agentName: string): Promise<NativeCliAuthSessionView> {

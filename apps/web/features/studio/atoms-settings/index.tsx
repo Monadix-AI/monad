@@ -2,7 +2,12 @@
 
 import { Alert01Icon, PlusSignIcon, Refresh01Icon, ScanIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { useDiscoverAtomKindsMutation, useListAtomKindsQuery, useListAtomPacksQuery } from '@monad/client-rtk';
+import {
+  atomPackSelectors,
+  useDiscoverAtomKindsMutation,
+  useListAtomKindsQuery,
+  useListAtomPacksQuery
+} from '@monad/client-rtk';
 import { Badge, Button, cn, ScrollArea } from '@monad/ui';
 import { useState } from 'react';
 
@@ -18,7 +23,7 @@ export function AtomsSettings(_props: { onClose: () => void }) {
   const [discover, { isLoading: rescanning }] = useDiscoverAtomKindsMutation();
   const [adding, setAdding] = useState(false);
   const [rescanErrors, setRescanErrors] = useState<{ file: string; error: string }[]>([]);
-  const packs = data?.atomPacks ?? [];
+  const packs = data ? atomPackSelectors.selectAll(data.atomPacks) : [];
   const conflicts = data?.conflicts ?? [];
 
   const rescan = async () => {

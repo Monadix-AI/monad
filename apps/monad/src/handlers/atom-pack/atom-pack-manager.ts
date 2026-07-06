@@ -1,5 +1,5 @@
 import type { MonadPaths } from '@monad/home';
-import type { AtomDescriptor } from '@monad/protocol';
+import type { AtomDescriptor, WorkspaceExperienceDefinition } from '@monad/protocol';
 import type { WorkspaceExperienceApiHandler } from '@monad/sdk-atom';
 import type { AtomConflict } from '@/atoms/resolve.ts';
 import type { RegisteredWorkspaceExperience } from '@/handlers/atom-pack/atom-pack-registry.ts';
@@ -21,6 +21,8 @@ export interface AtomPacksDeps {
   getAtomDetails?: (packName: string) => AtomDescriptor[] | undefined;
   /** Runtime-registered workspace experiences from loaded atom packs. */
   getWorkspaceExperiences?: () => RegisteredWorkspaceExperience[];
+  /** Boot/rediscovery-built public workspace experience snapshot. */
+  getWorkspaceExperienceSnapshot?: () => WorkspaceExperienceDefinition[] | undefined;
   /** Runtime-registered workspace experience API route resolver from loaded atom packs. */
   getWorkspaceExperienceApiHandler?: (
     experienceId: string,

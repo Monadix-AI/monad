@@ -7,6 +7,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { CheckIcon, PlusSignIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import {
+  agentSelectors,
   profileSelectors,
   providerAdapter,
   providerSelectors,
@@ -83,7 +84,7 @@ export function InitWizard({ homePath }: { homePath?: string }) {
   const { data: existingProviders } = useListProvidersQuery();
   const { data: existingProfiles } = useListProfilesQuery();
   const { data: existingAgentsData } = useListAgentsQuery();
-  const existingAgents = existingAgentsData?.agents;
+  const existingAgents = existingAgentsData ? agentSelectors.selectAll(existingAgentsData) : undefined;
   const { data: loadedDefaultAgentData } = useGetDefaultAgentQuery();
   const loadedDefaultAgentId = loadedDefaultAgentData?.agentId;
   const [seeded, setSeeded] = useState(false);

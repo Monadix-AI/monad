@@ -322,7 +322,7 @@ test('getNativeCliUsage uses the typed native CLI usage treaty route', async () 
         agentName: name,
         provider: 'codex',
         checkedAt: '2026-07-03T00:00:00.000Z',
-        records: [{ category: 'daily', resetAt: null, max: 100, current: 12 }]
+        records: [{ name: 'daily', max: 100, current: 12 }]
       };
     }
   });
@@ -339,7 +339,7 @@ test('getNativeCliUsage uses the typed native CLI usage treaty route', async () 
   );
 
   expect(seen).toEqual(['codex']);
-  expect('data' in res && res.data?.records).toEqual([{ category: 'daily', resetAt: null, max: 100, current: 12 }]);
+  expect('data' in res && res.data?.records).toEqual([{ name: 'daily', max: 100, current: 12 }]);
 });
 
 test('getNativeAgentDelivery uses the typed native agent delivery treaty route', async () => {

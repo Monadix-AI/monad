@@ -1181,7 +1181,7 @@ test('generated avatars use local cache URLs keyed by stable seeds', () => {
   expect(url).toBe(
     `/api/avatar-cache/${__workplaceProjectMessageTest.avatarCacheKey('Felix754865')}.svg?seed=Felix754865&style=notionists`
   );
-  expect(__workplaceProjectMessageTest.entityAvatarWriteUrl('Felix754865')).toBe(`${url}&write=1`);
+  expect(__workplaceProjectMessageTest.entityAvatarWriteUrl('Felix754865')).toBe(url);
   expect(__workplaceProjectMessageTest.avatarCacheKey('user:Operator')).not.toBe(
     __workplaceProjectMessageTest.avatarCacheKey('user:Renamed')
   );

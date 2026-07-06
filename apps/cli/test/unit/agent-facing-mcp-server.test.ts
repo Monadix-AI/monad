@@ -163,3 +163,54 @@ test('agent-facing MCP includes daemon error detail in tool failures', async () 
     stderr.mockRestore();
   }
 });
+
+test('agent-facing MCP includes daemon error code from nested treaty error bodies', async () => {
+  const stderr = spyOn(process.stderr, 'write').mockImplementation(() => true);
+  try {
+    const client = {
+      treaty: {
+        v1: {
+          internal: {
+            'native-agent': {
+              project: {
+                post: {
+                  post: async () =>
+                    err(403, {
+                      value: {
+                        error: 'attachment path is outside the project working directory: /tmp/proposal.md',
+                        code: 'ATTACHMENT_PATH_OUTSIDE_WORKSPACE'
+                      }
+                    })
+                }
+              }
+            }
+          }
+        }
+      }
+    };
+    const handler = createAgentFacingMcpHandler(client as never);
+
+    const response = await handler.handle({
+      jsonrpc: '2.0',
+      id: 6,
+      method: 'tools/call',
+      params: {
+        name: 'project_post',
+        arguments: { requestId: 'nested-detail', text: 'hello' }
+      }
+    });
+    if (!response || !('result' in response)) throw new Error('expected tool error result');
+
+    expect(response.result).toEqual({
+      content: [
+        {
+          type: 'text',
+          text: 'project_post request failed: 403 ATTACHMENT_PATH_OUTSIDE_WORKSPACE: attachment path is outside the project working directory: /tmp/proposal.md'
+        }
+      ],
+      isError: true
+    });
+  } finally {
+    stderr.mockRestore();
+  }
+});

@@ -5,6 +5,7 @@ import type {
   AddMemoryFactRequest,
   EditMemoryFactRequest,
   ForgetMemoryFactRequest,
+  ListMemoryFactsQuery,
   ListMemoryFactsResponse,
   MemoryBackendId,
   MemoryCoreResponse,
@@ -43,8 +44,16 @@ export function createMemoryModule(
       await setGraph(req);
       return { ok: true };
     },
-    async listFacts(q: MemoryScopeQuery): Promise<ListMemoryFactsResponse> {
-      return { facts: await svc.listFacts(q.scopeKind, q.scopeId) };
+    async listFacts(q: ListMemoryFactsQuery): Promise<ListMemoryFactsResponse> {
+      const all = await svc.listFacts(q.scopeKind, q.scopeId);
+      // Stable, deterministic order so `before` cursors are consistent across calls.
+      const sorted = [...all].sort((a, b) => a.id.localeCompare(b.id));
+      const startIdx = q.before ? sorted.findIndex((f) => f.id === q.before) : -1;
+      const rest = startIdx >= 0 ? sorted.slice(startIdx + 1) : sorted;
+      const limit = q.limit ?? rest.length;
+      const page = rest.slice(0, limit);
+      const nextCursor = rest.length > limit ? page[page.length - 1]?.id : undefined;
+      return { facts: page, nextCursor };
     },
     async getCore(q: MemoryScopeQuery): Promise<MemoryCoreResponse> {
       return {

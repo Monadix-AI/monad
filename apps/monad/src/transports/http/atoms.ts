@@ -4,7 +4,11 @@ import {
   checkSkillUpdatesResponseSchema,
   createSkillRequestSchema,
   createSkillResponseSchema,
+  getAtomPackResponseSchema,
+  getInstalledMcpAtomResponseSchema,
+  getInstalledSkillResponseSchema,
   getSkillContentResponseSchema,
+  httpErrorSchema,
   installAtomPackRequestSchema,
   installAtomPackResponseSchema,
   installLocalSkillRequestSchema,
@@ -123,12 +127,17 @@ export function createAtomsController(handlers: ReturnType<typeof createDaemonHa
         }
       }
     )
+    .get('/atoms/:name', async ({ params }) => handlers.atoms.getAtomPack({ name: params.name }), {
+      params: packParams,
+      response: { 200: getAtomPackResponseSchema, 404: httpErrorSchema },
+      detail: { summary: 'Get an atom pack', description: 'Returns one installed atom pack by name.' }
+    })
     .post(
       '/atoms/:name/enable',
       async ({ params }) => handlers.atoms.setAtomPackEnabled({ name: params.name, enabled: true }),
       {
         params: packParams,
-        response: { 200: okResponseSchema },
+        response: { 200: okResponseSchema, 404: httpErrorSchema },
         detail: { summary: 'Enable an atom pack', description: 'Marks an installed atom pack enabled.' }
       }
     )
@@ -137,7 +146,7 @@ export function createAtomsController(handlers: ReturnType<typeof createDaemonHa
       async ({ params }) => handlers.atoms.setAtomPackEnabled({ name: params.name, enabled: false }),
       {
         params: packParams,
-        response: { 200: okResponseSchema },
+        response: { 200: okResponseSchema, 404: httpErrorSchema },
         detail: {
           summary: 'Disable an atom pack',
           description: 'Marks an installed atom pack disabled (skipped on discovery).'
@@ -146,7 +155,7 @@ export function createAtomsController(handlers: ReturnType<typeof createDaemonHa
     )
     .delete('/atoms/:name', async ({ params }) => handlers.atoms.removeAtomPack({ name: params.name }), {
       params: packParams,
-      response: { 200: okResponseSchema },
+      response: { 200: okResponseSchema, 404: httpErrorSchema },
       detail: { summary: 'Remove an atom pack', description: 'Deletes an installed atom pack directory.' }
     })
     .post('/atoms/pin', async ({ body }) => handlers.atoms.setAtomPin(body), {
@@ -219,9 +228,14 @@ export function createAtomsController(handlers: ReturnType<typeof createDaemonHa
         description: "Compares each github-installed skill's locked commit against its ref's current head."
       }
     })
+    .get('/atoms/skills/:name', async ({ params }) => handlers.atoms.getInstalledSkill({ name: params.name }), {
+      params: packParams,
+      response: { 200: getInstalledSkillResponseSchema, 404: httpErrorSchema },
+      detail: { summary: 'Get an installed skill', description: 'Returns one standalone skill atom by name.' }
+    })
     .delete('/atoms/skills/:name', async ({ params }) => handlers.atoms.removeSkill({ name: params.name }), {
       params: packParams,
-      response: { 200: okResponseSchema },
+      response: { 200: okResponseSchema, 404: httpErrorSchema },
       detail: { summary: 'Remove a skill', description: 'Deletes an installed skill directory (hot-reloads).' }
     })
     .get(
@@ -231,7 +245,7 @@ export function createAtomsController(handlers: ReturnType<typeof createDaemonHa
       {
         params: packParams,
         query: skillContentQuerySchema,
-        response: { 200: getSkillContentResponseSchema },
+        response: { 200: getSkillContentResponseSchema, 404: httpErrorSchema },
         detail: { summary: 'Read a skill file', description: 'Returns the installed SKILL.md content for editing.' }
       }
     )
@@ -243,7 +257,7 @@ export function createAtomsController(handlers: ReturnType<typeof createDaemonHa
         params: packParams,
         query: skillContentQuerySchema,
         body: updateSkillContentRequestSchema,
-        response: { 200: createSkillResponseSchema },
+        response: { 200: createSkillResponseSchema, 404: httpErrorSchema },
         detail: { summary: 'Edit a skill file', description: 'Replaces an installed SKILL.md after validation.' }
       }
     )
@@ -253,7 +267,7 @@ export function createAtomsController(handlers: ReturnType<typeof createDaemonHa
       {
         params: packParams,
         body: updateSkillRequestSchema,
-        response: { 200: installSkillResponseSchema },
+        response: { 200: installSkillResponseSchema, 404: httpErrorSchema },
         detail: { summary: 'Update a skill', description: "Re-install a github skill from its source's current head." }
       }
     )
@@ -278,12 +292,17 @@ export function createAtomsController(handlers: ReturnType<typeof createDaemonHa
           'Download a GitHub release asset (platform/arch) + verify SHA-256 → hot atoms/mcp atom. Default-deny: re-call with consent:true.'
       }
     })
+    .get('/atoms/mcp/:name', async ({ params }) => handlers.atoms.getMcpAtom({ name: params.name }), {
+      params: packParams,
+      response: { 200: getInstalledMcpAtomResponseSchema, 404: httpErrorSchema },
+      detail: { summary: 'Get an installed MCP atom', description: 'Returns one registry-style MCP atom by name.' }
+    })
     .post(
       '/atoms/mcp/:name/enable',
       async ({ params }) => handlers.atoms.setMcpAtomEnabled({ name: params.name, enabled: true }),
       {
         params: packParams,
-        response: { 200: okResponseSchema },
+        response: { 200: okResponseSchema, 404: httpErrorSchema },
         detail: { summary: 'Enable an MCP server', description: 'Connects the atoms/mcp atom (hot).' }
       }
     )
@@ -292,13 +311,13 @@ export function createAtomsController(handlers: ReturnType<typeof createDaemonHa
       async ({ params }) => handlers.atoms.setMcpAtomEnabled({ name: params.name, enabled: false }),
       {
         params: packParams,
-        response: { 200: okResponseSchema },
+        response: { 200: okResponseSchema, 404: httpErrorSchema },
         detail: { summary: 'Disable an MCP server', description: 'Disconnects the atoms/mcp atom (hot).' }
       }
     )
     .delete('/atoms/mcp/:name', async ({ params }) => handlers.atoms.removeMcpAtom({ name: params.name }), {
       params: packParams,
-      response: { 200: okResponseSchema },
+      response: { 200: okResponseSchema, 404: httpErrorSchema },
       detail: { summary: 'Remove an MCP server', description: 'Deletes the atoms/mcp/<name>.json (hot).' }
     });
 }

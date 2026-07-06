@@ -13,6 +13,18 @@ import {
 } from '@monad/client-rtk';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
+const AUTH_STATUS_CACHE_TTL_MS = 60_000;
+const nativeCliAuthStatusCache = new Map<string, { state: NativeCliAuthState; updatedAt: number }>();
+
+function cachedAuthStatesFor(names: string[]): Record<string, NativeCliAuthState> {
+  return Object.fromEntries(
+    names.flatMap((name) => {
+      const cached = nativeCliAuthStatusCache.get(name);
+      return cached ? ([[name, cached.state]] as const) : [];
+    })
+  );
+}
+
 export interface NativeCliAgentSettingsStore {
   agents: NativeCliAgentView[];
   presets: NativeCliAgentPresetView[];
@@ -31,8 +43,10 @@ export function useNativeCliAgentSettings(): NativeCliAgentSettingsStore {
   const [upsert] = useUpsertNativeCliAgentMutation();
   const [del] = useDeleteNativeCliAgentMutation();
   const [getAuthStatus] = useLazyGetNativeCliAuthStatusQuery();
-  const [authStates, setAuthStates] = useState<Record<string, NativeCliAuthState>>({});
-  const [_authRefreshSeq, setAuthRefreshSeq] = useState(0);
+  const [authStates, setAuthStates] = useState<Record<string, NativeCliAuthState>>(() =>
+    cachedAuthStatesFor([...nativeCliAuthStatusCache.keys()])
+  );
+  const [authRefreshSeq, setAuthRefreshSeq] = useState(0);
   const agents = useMemo(
     () => nativeCliAgentSelectors.selectAll(agentsQ.data ?? nativeCliAgentAdapter.getInitialState()),
     [agentsQ.data]
@@ -53,10 +67,21 @@ export function useNativeCliAgentSettings(): NativeCliAgentSettingsStore {
       setAuthStates({});
       return;
     }
+    const now = Date.now();
+    const cachedStates = cachedAuthStatesFor(names);
+    const namesToProbe =
+      authRefreshSeq > 0
+        ? names
+        : names.filter((name) => {
+            const cached = nativeCliAuthStatusCache.get(name);
+            return !cached || now - cached.updatedAt > AUTH_STATUS_CACHE_TTL_MS;
+          });
+    setAuthStates(cachedStates);
+    if (namesToProbe.length === 0) return;
 
     void (async () => {
       const entries = await Promise.all(
-        names.map(async (name) => {
+        namesToProbe.map(async (name) => {
           try {
             const status = await getAuthStatus(name).unwrap();
             return [name, status.state] as const;
@@ -65,13 +90,15 @@ export function useNativeCliAgentSettings(): NativeCliAgentSettingsStore {
           }
         })
       );
-      if (!cancelled) setAuthStates(Object.fromEntries(entries));
+      const updatedAt = Date.now();
+      for (const [name, state] of entries) nativeCliAuthStatusCache.set(name, { state, updatedAt });
+      if (!cancelled) setAuthStates({ ...cachedAuthStatesFor(names), ...Object.fromEntries(entries) });
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [authProbeNames, getAuthStatus]);
+  }, [authProbeNames, authRefreshSeq, getAuthStatus]);
 
   const saveAgent = useCallback(
     async (a: NativeCliAgentView) => {
@@ -97,7 +124,7 @@ export function useNativeCliAgentSettings(): NativeCliAgentSettingsStore {
     agents,
     presets,
     authStates,
-    loading: agentsQ.isLoading,
+    loading: agentsQ.isLoading || presetsQ.isLoading,
     error: agentsQ.error ? ((agentsQ.error as { message?: string }).message ?? 'failed to load') : undefined,
     saveAgent,
     removeAgent,

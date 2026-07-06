@@ -76,7 +76,8 @@ export function ProfileSettings({ onClose }: Props) {
     setError(null);
     try {
       await setProfile({ displayName: trimmedName, avatarDataUrl }).unwrap();
-      if (!avatarDataUrl) void fetch(entityAvatarWriteUrl(`user:${trimmedName}`, avatarStyle)).catch(() => {});
+      if (!avatarDataUrl)
+        void fetch(entityAvatarWriteUrl(`user:${trimmedName}`, avatarStyle), { method: 'POST' }).catch(() => {});
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }

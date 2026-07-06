@@ -1,8 +1,9 @@
 'use client';
 
-import type { MessageId, ProfileView, SessionId, UIItem, UIMessageItem } from '@monad/protocol';
+import type { MessageId, ProfileView, ProjectId, SessionId, UIItem, UIMessageItem } from '@monad/protocol';
 import type { VirtualListHandle } from '@monad/ui/components/VirtualList';
 import type { SessionCommandMenuItem } from '@/features/routes/sessions/SessionRoute';
+import type { WorkspaceRouteProps } from '@/features/routes/workspace/WorkspaceRoute';
 import type { StudioSectionId } from '@/features/studio/sections';
 
 import {
@@ -16,6 +17,7 @@ import {
   useCreateWorkplaceProjectMutation,
   useGetHealthQuery,
   useGetRolesQuery,
+  useGetWorkplaceProjectQuery,
   useListCommandsQuery,
   useListLiveNativeCliSessionsQuery,
   useListNativeCliSessionSummariesQuery,
@@ -30,11 +32,10 @@ import {
 } from '@monad/client-rtk';
 import { cn } from '@monad/ui';
 import { useFirstItemIndex } from '@monad/ui/hooks/use-first-item-index';
-import dynamic from 'next/dynamic';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useT } from '@/components/I18nProvider';
+import { PanelLoading } from '@/components/PanelLoading';
 import {
   isStudioPath,
   isWorkspacePath,
@@ -58,10 +59,18 @@ import {
   viewItemKey
 } from '@/features/session/chat-view-items';
 import { audioBlobToBase64 } from '@/features/session/voice-transcription';
+import { Settings } from '@/features/settings/Settings';
 import { SkillEditorDialog } from '@/features/studio/skills-settings/SkillEditorDialog';
 import { loadSkillContent } from '@/features/studio/skills-settings/utils';
 import { useChatComposer } from '@/hooks/use-chat-composer';
-import { useNavigableModal } from '@/hooks/use-navigable-modal';
+import { buildNavigableModalUrl, useNavigableModal } from '@/hooks/use-navigable-modal';
+import {
+  pushShellUrl,
+  replaceShellUrl,
+  useShellPathname,
+  useShellSearchParam,
+  useShellSearchParamPresent
+} from '@/hooks/use-shell-location';
 import { useSidebarShortcuts } from '@/hooks/use-sidebar-shortcuts';
 import { useTranscriptHistory } from '@/hooks/use-transcript-history';
 import { useMonadRuntime } from '@/lib/monad-runtime-provider';
@@ -72,12 +81,9 @@ import { AppShellSidebarReveal } from './AppShellSidebarReveal';
 import { NewProjectDialog } from './NewProjectDialog';
 import { SessionSidebar } from './SessionSidebar';
 
-const Settings = dynamic(() => import('@/features/settings/Settings').then((m) => m.Settings));
-
 // Stable empty references so query fallbacks don't change identity each render
 // (a fresh `[]` default would retrigger effects that depend on the data).
 const EMPTY_UI_ITEMS: UIItem[] = [];
-const AGENT_RUNTIME_POLL_MS = 5000;
 
 const viewMessageId = (item: ViewItem): string => item.id;
 const EMPTY_PROFILES: ProfileView[] = [];
@@ -93,9 +99,7 @@ const SEGMENT_COLORS: Record<string, string> = {
 };
 
 export function AppShell() {
-  const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
+  const pathname = useShellPathname();
   const t = useT();
   const { baseUrl: daemonBaseUrl, client: monadClient, switchDaemonConnection } = useMonadRuntime();
 
@@ -109,24 +113,21 @@ export function AppShell() {
   );
 
   const { data: sessionData, isLoading: sessionsLoading } = useListSessionsQuery(undefined);
-  const { data: projectData, isLoading: projectsLoading } = useListWorkplaceProjectsQuery(undefined);
-  const { data: liveNativeCliSessionData } = useListLiveNativeCliSessionsQuery(undefined, {
-    pollingInterval: AGENT_RUNTIME_POLL_MS
-  });
-  const { data: nativeCliSessionSummaryData } = useListNativeCliSessionSummariesQuery(undefined, {
-    pollingInterval: AGENT_RUNTIME_POLL_MS
-  });
+  const { data: projectData } = useListWorkplaceProjectsQuery(undefined);
+  const { data: liveNativeCliSessionData } = useListLiveNativeCliSessionsQuery(undefined);
+  const { data: nativeCliSessionSummaryData } = useListNativeCliSessionSummariesQuery(undefined);
   const sessions = sessionSelectors.selectAll(sessionData?.sessions ?? sessionAdapter.getInitialState());
   const projectRows = useMemo(
     () => workplaceProjectSelectors.selectAll(projectData?.projects ?? workplaceProjectAdapter.getInitialState()),
     [projectData]
   );
   const liveNativeCliSessions = useMemo(
-    () => (liveNativeCliSessionData ? nativeCliSessionSelectors.selectAll(liveNativeCliSessionData) : []),
+    () => (liveNativeCliSessionData ? nativeCliSessionSelectors.selectAll(liveNativeCliSessionData.sessions) : []),
     [liveNativeCliSessionData]
   );
   const nativeCliSessionSummaries = useMemo(
-    () => (nativeCliSessionSummaryData ? nativeCliSessionSelectors.selectAll(nativeCliSessionSummaryData) : []),
+    () =>
+      nativeCliSessionSummaryData ? nativeCliSessionSelectors.selectAll(nativeCliSessionSummaryData.sessions) : [],
     [nativeCliSessionSummaryData]
   );
   const directSessions = sessions;
@@ -176,12 +177,17 @@ export function AppShell() {
 
   const currentId = (sessionIdFromPathname(pathname) as SessionId | null) || null;
   const routedProjectId = projectIdFromPathname(pathname);
+  const routedProjectInList = Boolean(
+    routedProjectId && workspaceProjects.some((project) => project.id === routedProjectId)
+  );
+  const routedProject = useGetWorkplaceProjectQuery((routedProjectId ?? ('prj_' as ProjectId)) as ProjectId, {
+    skip: routedProjectId === null || routedProjectInList
+  });
   const currentSession = sessions.find((s) => s.id === currentId) ?? null;
   const primaryAgentSession = currentSession ?? directSessions[0] ?? null;
   const shellSurface = useWorkspaceShellStore((state: WorkspaceShellState) => state.surface);
   const lastMonadSessionId = useWorkspaceShellStore((state: WorkspaceShellState) => state.lastMonadSessionId);
-  const activeProjectId =
-    routedProjectId && workspaceProjects.some((project) => project.id === routedProjectId) ? routedProjectId : null;
+  const activeProjectId = routedProjectId;
   const rememberMonadSession = useWorkspaceShellStore((state: WorkspaceShellState) => state.rememberMonadSession);
   const openWorkspaceSurface = useWorkspaceShellStore((state: WorkspaceShellState) => state.openWorkspace);
   const openMonadChatSurface = useWorkspaceShellStore((state: WorkspaceShellState) => state.openMonadChat);
@@ -204,10 +210,11 @@ export function AppShell() {
   const [hiddenViewItemKeysBySession, setHiddenViewItemKeysBySession] = useState<Record<string, string[]>>({});
   const [input, setInput] = useState('');
   const [accessMode, setAccessMode] = useState<'auto' | 'ask'>('auto');
-  const [settingsTab, setSettingsTab] = useNavigableModal('settings');
-  const showSettings = settingsTab !== null;
+  const showSettings = useShellSearchParamPresent('settings');
   const isStudioRoute = isStudioPath(pathname);
   const isWorkspaceRoute = isWorkspacePath(pathname);
+  const sidebarAutoMode = sidebarCollapsed || sidebarAutoReveal;
+  const reserveHeaderLeading = sidebarAutoMode;
   const routedStudioSection = studioSectionFromPathname(pathname);
   const studioSection = routedStudioSection ?? 'runtime';
   const showStudio = isStudioRoute;
@@ -327,12 +334,9 @@ export function AppShell() {
     [transcriptMode, jumpToLive]
   );
 
-  const setSessionUrl = useCallback(
-    (id: SessionId | null) => {
-      router.replace(id === null ? '/' : `/sessions/${id}`);
-    },
-    [router]
-  );
+  const setSessionUrl = useCallback((id: SessionId | null) => {
+    replaceShellUrl(id === null ? '/' : `/sessions/${id}`);
+  }, []);
 
   const {
     isBusy,
@@ -404,7 +408,7 @@ export function AppShell() {
 
   // Deep-link / search-to-message: ?msg=<id> opens an inclusive window around that message and
   // scrolls it into view once it renders.
-  const deepLinkMsg = searchParams.get('msg');
+  const deepLinkMsg = useShellSearchParam('msg');
   const openAtMessage = transcript.openAtMessage;
   const pendingScrollKeyRef = useRef<string | null>(null);
   useEffect(() => {
@@ -423,22 +427,24 @@ export function AppShell() {
 
   const setWorkspaceUrl = useCallback(() => {
     openWorkspaceSurface();
-    router.replace('/');
-  }, [openWorkspaceSurface, router]);
+    replaceShellUrl('/');
+  }, [openWorkspaceSurface]);
 
-  const setStudioUrl = useCallback(
-    (section?: StudioSectionId) => {
-      router.replace(studioPath(section ?? 'agents'));
-    },
-    [router]
-  );
+  const setStudioUrl = useCallback((section?: StudioSectionId) => {
+    replaceShellUrl(studioPath(section ?? 'agents'));
+  }, []);
+
+  const toggleSidebarAutoMode = useCallback(() => {
+    if (sidebarAutoMode) revealSidebar();
+    else collapseSidebar();
+  }, [collapseSidebar, revealSidebar, sidebarAutoMode]);
 
   const openProject = useCallback(
     (projectId: string) => {
       openProjectSurface(projectId);
-      router.replace(`/workplace/projects/${encodeURIComponent(projectId)}`);
+      replaceShellUrl(`/workplace/projects/${encodeURIComponent(projectId)}`);
     },
-    [openProjectSurface, router]
+    [openProjectSurface]
   );
 
   // Navigate back to / when the active session is deleted elsewhere.
@@ -448,9 +454,19 @@ export function AppShell() {
   }, [sessions, sessionsLoading, currentId, setSessionUrl]);
 
   useEffect(() => {
-    if (projectsLoading || !routedProjectId) return;
-    if (!workspaceProjects.find((project) => project.id === routedProjectId)) setWorkspaceUrl();
-  }, [projectsLoading, routedProjectId, setWorkspaceUrl, workspaceProjects]);
+    if (!routedProjectId) return;
+    if (routedProjectInList) return;
+    if ((routedProject.isLoading || routedProject.isFetching) && !routedProject.isError) return;
+    if (routedProject.isError || routedProject.data?.id !== routedProjectId) setWorkspaceUrl();
+  }, [
+    routedProjectInList,
+    routedProject.data?.id,
+    routedProject.isError,
+    routedProject.isFetching,
+    routedProject.isLoading,
+    routedProjectId,
+    setWorkspaceUrl
+  ]);
 
   useEffect(() => {
     if (isStudioRoute) return;
@@ -459,8 +475,8 @@ export function AppShell() {
       rememberMonadSession(currentId);
       return;
     }
-    if (routedProjectId) {
-      openProjectSurface(routedProjectId);
+    if (activeProjectId) {
+      openProjectSurface(activeProjectId);
       return;
     }
     openWorkspaceSurface();
@@ -471,7 +487,7 @@ export function AppShell() {
     openWorkspaceSurface,
     rememberMonadSession,
     isStudioRoute,
-    routedProjectId
+    activeProjectId
   ]);
 
   const selectSession = useCallback(
@@ -515,6 +531,15 @@ export function AppShell() {
   ]);
 
   const handleNewProject = useCallback(() => setNewProjectOpen(true), [setNewProjectOpen]);
+  const handleNewAgentChat = useCallback(() => {
+    void handleNewSession();
+  }, [handleNewSession]);
+  const handleOpenAgentChatAction = useCallback(() => {
+    void handleOpenMonadChat();
+  }, [handleOpenMonadChat]);
+  const handleOpenStudioAction = useCallback(() => {
+    setStudioUrl();
+  }, [setStudioUrl]);
 
   const handleCreateProject = useCallback(
     ({ name, cwd }: { name: string; cwd?: string }) => {
@@ -531,14 +556,21 @@ export function AppShell() {
     [createWorkplaceProject, openProject, setNewProjectOpen]
   );
 
+  const setSettingsUrl = useCallback((tab: string | null, mode: 'push' | 'replace' = 'replace') => {
+    if (typeof window === 'undefined') return;
+    const url = buildNavigableModalUrl(window.location.pathname, window.location.search, 'settings', tab);
+    if (mode === 'push') pushShellUrl(url);
+    else replaceShellUrl(url);
+  }, []);
+
   const openSettings = useCallback(() => {
-    setSettingsTab('connection');
-  }, [setSettingsTab]);
+    setSettingsUrl('connection', showSettings ? 'replace' : 'push');
+  }, [setSettingsUrl, showSettings]);
 
   const toggleSettings = useCallback(() => {
-    if (showSettings) setSettingsTab(null);
+    if (showSettings) setSettingsUrl(null);
     else openSettings();
-  }, [openSettings, setSettingsTab, showSettings]);
+  }, [openSettings, setSettingsUrl, showSettings]);
 
   const sidebarShortcutActions = useMemo(() => {
     if (showStudio) {
@@ -555,14 +587,11 @@ export function AppShell() {
       ];
     }
 
-    return [
-      setWorkspaceUrl,
-      () => void handleOpenMonadChat(),
-      ...workspaceProjects.slice(0, 7).map((project) => () => openProject(project.id))
-    ];
-  }, [handleOpenMonadChat, openProject, setStudioUrl, setWorkspaceUrl, showStudio, workspaceProjects]);
+    return workspaceProjects.slice(0, 9).map((project) => () => openProject(project.id));
+  }, [openProject, setStudioUrl, showStudio, workspaceProjects]);
 
   const { shortcutModifierLabel, showSidebarShortcutBadges } = useSidebarShortcuts({
+    monadAgentShortcutAction: () => void handleOpenMonadChat(),
     sidebarShortcutActions,
     showSettings,
     toggleSettings
@@ -660,9 +689,45 @@ export function AppShell() {
         onClick: () => void openSkillPreview(activeInputSkill.id)
       }
     : undefined;
+  const workspaceRouteProps = useMemo<WorkspaceRouteProps>(
+    () => ({
+      activeProjectId,
+      agentSession: primaryAgentSession,
+      onNewAgentChat: handleNewAgentChat,
+      onNewProject: handleNewProject,
+      onOpenAgentChat: handleOpenAgentChatAction,
+      onOpenProject: openProject,
+      onOpenSettings: openSettings,
+      onOpenStudio: handleOpenStudioAction,
+      onProjectDeleted: setWorkspaceUrl,
+      projects: workspaceProjects,
+      voiceModelState
+    }),
+    [
+      activeProjectId,
+      handleNewAgentChat,
+      handleNewProject,
+      handleOpenAgentChatAction,
+      handleOpenStudioAction,
+      openProject,
+      openSettings,
+      primaryAgentSession,
+      setWorkspaceUrl,
+      voiceModelState,
+      workspaceProjects
+    ]
+  );
 
   return (
-    <div className="app-shell flex h-screen overflow-hidden bg-background text-foreground">
+    <div className="app-shell relative flex h-screen overflow-hidden bg-background text-foreground">
+      {shouldShowSidebar ? (
+        <AppShellSidebarReveal
+          autoMode={sidebarAutoMode}
+          autoRevealSidebar={autoRevealSidebar}
+          onOpenWorkspace={setWorkspaceUrl}
+          onToggleAutoMode={toggleSidebarAutoMode}
+        />
+      ) : null}
       {shouldShowSidebar ? (
         <SessionSidebar
           activeProjectId={activeProjectId}
@@ -701,103 +766,83 @@ export function AppShell() {
       ) : null}
 
       <main className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden">
-        {shouldShowSidebar && sidebarCollapsed ? (
-          <AppShellSidebarReveal
-            autoRevealSidebar={autoRevealSidebar}
-            revealSidebar={revealSidebar}
-            t={t}
-          />
-        ) : null}
         <div
           className={cn(
             'flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden',
-            isWorkspaceHome ? 'bg-background' : 'app-main-frame'
+            isWorkspaceHome ? 'bg-background' : 'app-main-frame',
+            reserveHeaderLeading && 'app-main-sidebar-collapsed'
           )}
         >
-          <AppShellRoutes
-            currentSessionId={currentId}
-            onCloseStudio={setWorkspaceUrl}
-            sessionRouteProps={{
-              accessMode,
-              activeInputSkillToken,
-              activeSkill,
-              atBottom,
-              contextUsage: sessionContextUsage,
-              currentSession,
-              disabled: isReadOnly,
-              firstItemIndex,
-              inspectorItems,
-              isBusy,
-              isReadOnly,
-              menuItems,
-              messageQueue,
-              model: sessionModel,
-              onAccessModeChange: setAccessMode,
-              onApproval: (approval, allow, scope, reason) => {
-                void approveTool({ requestId: approval.requestId, allow, scope, reason });
-              },
-              onAtBottomChange: setAtBottom,
-              onBranch: handleBranch,
-              onClarifyAnswer: (requestId, answer) => void clarifyRespond({ requestId, answer }),
-              onClearQueue: () => setMessageQueue([]),
-              onCommandItemApply: applyItem,
-              onCommandItemHover: setActiveSkill,
-              onEndReached: transcript.loadNewer,
-              onInputChange: (value) => {
-                setInput(value);
-                setActiveSkill(0);
-                setSkillMenuDismissed(false);
-              },
-              onKeyDown: handleTextareaKeyDown,
-              onRestore: handleRestore,
-              onScrollToBottom: scrollToBottom,
-              onSelectSession: selectSession,
-              onSkillPreview: openSkillPreview,
-              onStartReached: transcript.loadOlder,
-              onStop: handleStop,
-              onSubmit: () => void handleSubmit(),
-              onToggleInspector: toggleSessionInspector,
-              onVoiceSettingsClick: () => router.push(studioPath('models')),
-              onVoiceText: (text) => {
-                setInput((current) => (current.trim() ? `${current.trimEnd()} ${text}` : text));
-                setSkillMenuDismissed(false);
-              },
-              onVoiceTranscribe: async (audio) => {
-                const body = await audioBlobToBase64(audio);
-                return (await transcribeAudio(body).unwrap()).text;
-              },
-              pendingApprovals,
-              pendingClarifications,
-              showInspector,
-              skillMenuOpen,
-              transcriptRef,
-              value: input,
-              viewMessages,
-              voiceModelConfigured
-            }}
-            showStudio={showStudio}
-            workspaceRouteProps={{
-              activeProjectId,
-              agentSession: primaryAgentSession,
-              onNewAgentChat: () => void handleNewSession(),
-              onNewProject: handleNewProject,
-              onOpenAgentChat: () => void handleOpenMonadChat(),
-              onOpenProject: openProject,
-              onOpenSettings: () => {
-                openSettings();
-              },
-              onOpenStudio: () => {
-                setStudioUrl();
-              },
-              onProjectDeleted: setWorkspaceUrl,
-              projects: workspaceProjects,
-              voiceModelState
-            }}
-          />
+          <Suspense fallback={<PanelLoading />}>
+            <AppShellRoutes
+              currentSessionId={currentId}
+              onCloseStudio={setWorkspaceUrl}
+              sessionRouteProps={{
+                accessMode,
+                activeInputSkillToken,
+                activeSkill,
+                atBottom,
+                contextUsage: sessionContextUsage,
+                currentSession,
+                disabled: isReadOnly,
+                firstItemIndex,
+                inspectorItems,
+                isBusy,
+                isReadOnly,
+                menuItems,
+                messageQueue,
+                model: sessionModel,
+                onAccessModeChange: setAccessMode,
+                onApproval: (approval, allow, scope, reason) => {
+                  void approveTool({ requestId: approval.requestId, allow, scope, reason });
+                },
+                onAtBottomChange: setAtBottom,
+                onBranch: handleBranch,
+                onClarifyAnswer: (requestId, answer) => void clarifyRespond({ requestId, answer }),
+                onClearQueue: () => setMessageQueue([]),
+                onCommandItemApply: applyItem,
+                onCommandItemHover: setActiveSkill,
+                onEndReached: transcript.loadNewer,
+                onInputChange: (value) => {
+                  setInput(value);
+                  setActiveSkill(0);
+                  setSkillMenuDismissed(false);
+                },
+                onKeyDown: handleTextareaKeyDown,
+                onRestore: handleRestore,
+                onScrollToBottom: scrollToBottom,
+                onSelectSession: selectSession,
+                onSkillPreview: openSkillPreview,
+                onStartReached: transcript.loadOlder,
+                onStop: handleStop,
+                onSubmit: () => void handleSubmit(),
+                onToggleInspector: toggleSessionInspector,
+                onVoiceSettingsClick: () => pushShellUrl(studioPath('models')),
+                onVoiceText: (text) => {
+                  setInput((current) => (current.trim() ? `${current.trimEnd()} ${text}` : text));
+                  setSkillMenuDismissed(false);
+                },
+                onVoiceTranscribe: async (audio) => {
+                  const body = await audioBlobToBase64(audio);
+                  return (await transcribeAudio(body).unwrap()).text;
+                },
+                pendingApprovals,
+                pendingClarifications,
+                showInspector,
+                skillMenuOpen,
+                transcriptRef,
+                value: input,
+                viewMessages,
+                voiceModelConfigured
+              }}
+              showStudio={showStudio}
+              workspaceRouteProps={workspaceRouteProps}
+            />
+          </Suspense>
         </div>
       </main>
 
-      {showSettings ? <Settings onClose={() => setSettingsTab(null)} /> : null}
+      <SettingsModalHost />
       <NewProjectDialog
         onClose={() => setNewProjectOpen(false)}
         onCreate={handleCreateProject}
@@ -811,5 +856,16 @@ export function AppShell() {
         onSaved={() => setSkillPreview(null)}
       />
     </div>
+  );
+}
+
+function SettingsModalHost() {
+  const [settingsTab, setSettingsTab] = useNavigableModal('settings');
+  if (settingsTab === null) return null;
+  return (
+    <Settings
+      initialSection={settingsTab}
+      onClose={() => setSettingsTab(null)}
+    />
   );
 }

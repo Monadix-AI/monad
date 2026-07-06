@@ -1,5 +1,6 @@
 import type { Dirent } from 'node:fs';
 import type {
+  GetAtomPackResponse,
   InstallAtomPackRequest,
   InstallAtomPackResponse,
   InstalledAtomPack,
@@ -186,7 +187,16 @@ export function createPacksModule(deps: AtomPacksDeps) {
       return { atomPacks, conflicts };
     },
 
+    async getAtomPack({ name }: { name: string }): Promise<GetAtomPackResponse> {
+      const { atomPacks } = await packs.listAtomPacks();
+      const found = atomPacks.find((pack) => pack.name === name);
+      if (!found) throw new HandlerError('not_found', `atom pack not found: ${name}`);
+      return { atomPack: found };
+    },
+
     async listWorkspaceExperiences(): Promise<ListWorkspaceExperiencesResponse> {
+      const snapshot = deps.getWorkspaceExperienceSnapshot?.();
+      if (snapshot) return { experiences: snapshot };
       return {
         experiences: (deps.getWorkspaceExperiences?.() ?? []).flatMap((experience) => {
           const publicExperience = toPublicWorkspaceExperience(experience);
@@ -265,6 +275,9 @@ export function createPacksModule(deps: AtomPacksDeps) {
 
     async setAtomPackEnabled({ name, enabled }: { name: string; enabled: boolean }): Promise<OkResponse> {
       if (!SAFE_NAME.test(name)) throw new HandlerError('invalid', `invalid atom pack name: ${name}`);
+      if (!(await stat(join(dir, name)).catch(() => null))?.isDirectory()) {
+        throw new HandlerError('not_found', `atom pack not found: ${name}`);
+      }
       const recordPath = join(dir, name, '.install.json');
       const record = await readInstallRecord(dir, name);
       await Bun.write(recordPath, `${JSON.stringify({ ...record, enabled }, null, 2)}\n`);
@@ -275,6 +288,9 @@ export function createPacksModule(deps: AtomPacksDeps) {
 
     async removeAtomPack({ name }: { name: string }): Promise<OkResponse> {
       if (!SAFE_NAME.test(name)) throw new HandlerError('invalid', `invalid atom pack name: ${name}`);
+      if (!(await stat(join(dir, name)).catch(() => null))?.isDirectory()) {
+        throw new HandlerError('not_found', `atom pack not found: ${name}`);
+      }
       await rm(join(dir, name), { recursive: true, force: true });
       await deps.onChanged?.();
       return { ok: true };

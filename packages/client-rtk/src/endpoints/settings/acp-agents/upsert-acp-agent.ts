@@ -8,7 +8,7 @@ export const upsertAcpAgentApi = listAcpAgentsApi.injectEndpoints({
   endpoints: (builder) => ({
     upsertAcpAgent: builder.mutation<OkResponse, AcpAgentView>({
       queryFn: (agent: AcpAgentView, api: { extra: unknown }) =>
-        runTreaty(() => clientOf(api).treaty.v1.settings['acp-agents'].put({ agent })),
+        runTreaty(() => clientOf(api).treaty.v1.settings['acp-agents']({ name: agent.name }).put({ agent })),
       async onQueryStarted(agent, { dispatch, queryFulfilled }) {
         const patch = dispatch(
           listAcpAgentsApi.util.updateQueryData('listAcpAgents', undefined, (draft) => {

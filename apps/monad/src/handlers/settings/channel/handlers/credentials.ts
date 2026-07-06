@@ -1,6 +1,8 @@
 import type { OkResponse, SetChannelCredentialRequest } from '@monad/protocol';
 import type { ChannelSettingsContext } from '@/handlers/settings/channel/context.ts';
 
+import { HandlerError } from '@/handlers/handler-error.ts';
+
 export function createCredentialsHandlers(ctx: ChannelSettingsContext) {
   return {
     // Token lands in auth.json (owner-only, atomic write); config.json keeps only the
@@ -11,6 +13,7 @@ export function createCredentialsHandlers(ctx: ChannelSettingsContext) {
       extra
     }: { id: string } & SetChannelCredentialRequest): Promise<OkResponse> {
       const { cfg, auth } = await ctx.read();
+      if (!cfg.channels.some((c) => c.id === id)) throw new HandlerError('not_found', `channel not found: ${id}`);
       const channelCredentials = { ...(auth.channelCredentials ?? {}), [id]: { token, extra } };
       await ctx.commitAuth(cfg, { ...auth, channelCredentials });
       return { ok: true };

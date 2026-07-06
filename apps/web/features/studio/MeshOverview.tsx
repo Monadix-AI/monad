@@ -20,16 +20,14 @@ import {
   workplaceProjectSelectors
 } from '@monad/client-rtk';
 import { Button, ProductIcon, ScrollArea } from '@monad/ui';
-import Link from 'next/link';
 
 import { useT } from '@/components/I18nProvider';
+import { ShellLink } from '@/components/ShellLink';
 import { PanelShell } from '@/components/ui/panel-shell';
 import { studioPath } from '@/features/routes/route-paths';
 import { useNativeCliAgentSettings } from '@/hooks/use-native-cli-agent-settings';
 import { OverviewIllustration } from './OverviewIllustration';
 import { StudioBreadcrumbHeader } from './StudioBreadcrumbHeader';
-
-const AGENT_RUNTIME_POLL_MS = 5000;
 
 const AGENT_STATE_STYLE: Record<NativeCliSessionState, string> = {
   running:
@@ -78,8 +76,8 @@ function groupByTarget(sessions: NativeCliSessionView[]): [string, NativeCliSess
 
 function AgentRuntimesSection({ projects }: { projects: WorkplaceProject[] }) {
   const t = useT();
-  const { data } = useListLiveNativeCliSessionsQuery(undefined, { pollingInterval: AGENT_RUNTIME_POLL_MS });
-  const sessions = data ? nativeCliSessionSelectors.selectAll(data) : [];
+  const { data } = useListLiveNativeCliSessionsQuery(undefined);
+  const sessions = data ? nativeCliSessionSelectors.selectAll(data.sessions) : [];
   const titleFor = (targetId: string): string => projects.find((p) => p.id === targetId)?.title ?? targetId;
   return (
     <section className="rounded-xl border bg-card">
@@ -134,7 +132,7 @@ function MeshAction({
       className="h-auto justify-start px-3 py-3 text-left"
       variant="ghost"
     >
-      <Link href={href}>
+      <ShellLink href={href}>
         <span className="flex size-9 shrink-0 items-center justify-center rounded-md border bg-background text-[color-mix(in_srgb,var(--info)_70%,var(--foreground))]">
           <HugeiconsIcon
             className="size-4"
@@ -145,7 +143,7 @@ function MeshAction({
           <span className="block font-medium text-sm">{title}</span>
           <span className="mt-1 block max-w-[48ch] text-muted-foreground text-xs">{body}</span>
         </span>
-      </Link>
+      </ShellLink>
     </Button>
   );
 }
@@ -177,14 +175,14 @@ export function MeshOverview() {
                     asChild
                     size="sm"
                   >
-                    <Link href={studioPath('nativeCliAgents')}>{t('web.studio.connectNativeCli')}</Link>
+                    <ShellLink href={studioPath('nativeCliAgents')}>{t('web.studio.connectNativeCli')}</ShellLink>
                   </Button>
                   <Button
                     asChild
                     size="sm"
                     variant="ghost"
                   >
-                    <Link href="/">{t('web.studio.openWorkplace')}</Link>
+                    <ShellLink href="/">{t('web.studio.openWorkplace')}</ShellLink>
                   </Button>
                 </div>
               </div>
@@ -259,10 +257,10 @@ export function MeshOverview() {
                 size="sm"
                 variant="secondary"
               >
-                <Link href={studioPath('runtime')}>
+                <ShellLink href={studioPath('runtime')}>
                   {t('web.studio.openRuntimeOverview')}
                   <HugeiconsIcon icon={ArrowRight01Icon} />
-                </Link>
+                </ShellLink>
               </Button>
             </section>
           </aside>
@@ -313,14 +311,14 @@ export function MeshPlaceholder({ kind }: { kind: 'projects' | 'members' | 'task
                     asChild
                     size="sm"
                   >
-                    <Link href="/">{t('web.studio.openWorkplace')}</Link>
+                    <ShellLink href="/">{t('web.studio.openWorkplace')}</ShellLink>
                   </Button>
                   <Button
                     asChild
                     size="sm"
                     variant="ghost"
                   >
-                    <Link href={studioPath('mesh')}>{t('web.studio.openMeshOverview')}</Link>
+                    <ShellLink href={studioPath('mesh')}>{t('web.studio.openMeshOverview')}</ShellLink>
                   </Button>
                 </div>
               </div>

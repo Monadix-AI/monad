@@ -33,6 +33,3 @@ ${slugs.map((slug) => `  '${slug}'`).join(',\n')}
 `;
 
 await Bun.write(OUT, body);
-process.stdout.write(
-  `[generate-avatar-styles] ${slugs.length} styles → packages/protocol/generated/avatar-styles.ts\n`
-);

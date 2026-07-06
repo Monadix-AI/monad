@@ -21,11 +21,10 @@ import { createAcpChannelDelegation } from '@/handlers/session/handlers/acp-chan
 import { createForwardAcpHandler } from '@/handlers/session/handlers/forward-acp.ts';
 import { createForwardNativeCliHandler } from '@/handlers/session/handlers/forward-native-cli.ts';
 import { createManagedNativeCliDelivery } from '@/handlers/session/handlers/managed-native-cli-delivery.ts';
+import { imageAttachments, messageTextWithAttachments } from '@/handlers/session/handlers/messaging-attachments.ts';
 import { createMessagingNotifyHandlers } from '@/handlers/session/handlers/messaging-notify.ts';
 import { createSendProjectMessageHandler } from '@/handlers/session/handlers/messaging-project.ts';
 import { createSubscribeHandlers } from '@/handlers/session/handlers/messaging-subscribe.ts';
-
-export type { ManagedNativeCliProjectMessageSender } from '@/handlers/session/handlers/messaging-notices.ts';
 
 // Re-exported for existing import sites (tests import member/channel helpers from this module).
 export {
@@ -121,31 +120,40 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
   async function send({
     sessionId,
     text,
+    attachments,
     generate,
     ambientContext,
     onComplete
   }: { sessionId: TranscriptTargetId; onComplete?: (text: string) => void | Promise<void> } & SendMessageRequest) {
+    const effectiveText = messageTextWithAttachments(text, attachments);
+    const modelAttachments = imageAttachments(attachments);
     const session = requireTranscriptTarget(sessionId);
     assertWriteAllowed(session, 'http');
-    log?.debug({ sessionId, event: 'session.send.accept', text, generate, ambientContext }, 'session send accept');
+    log?.debug(
+      { sessionId, event: 'session.send.accept', text: effectiveText, generate, ambientContext },
+      'session send accept'
+    );
     // `busy` = a prior turn is still streaming for this session — the concurrency guard refuses a
     // command that would race it (the command check runs before beginRun, so aborts reflects prior).
-    if (runner && (await tryRunSessionCommand(runner, session, text, { busy: aborts.has(sessionId) })))
+    if (runner && (await tryRunSessionCommand(runner, session, effectiveText, { busy: aborts.has(sessionId) })))
       return { accepted: true as const };
     if (generate === false) {
       const messageId = newId('msg');
       const round: Event[] = [];
-      store.insertMessage(messageId, sessionId, text, new Date().toISOString(), 'user');
+      store.insertMessage(messageId, sessionId, effectiveText, new Date().toISOString(), 'user');
       makeEmit(round)({
         id: newId('evt'),
         transcriptTargetId: sessionId,
         type: 'user.message',
         actorAgentId: null,
-        payload: { messageId, text },
+        payload: { messageId, text: effectiveText },
         at: new Date().toISOString()
       });
       persistAndRetire(sessionId, round);
-      log?.debug({ sessionId, event: 'session.send.recorded', messageId, text }, 'session send recorded');
+      log?.debug(
+        { sessionId, event: 'session.send.recorded', messageId, text: effectiveText },
+        'session send recorded'
+      );
       return { accepted: true as const };
     }
     const { round, signal } = beginRun(sessionId);
@@ -160,7 +168,7 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
       toolFilter: composeFilter(rt?.toolFilter, agentToolFilterForTranscriptTarget(sessionId))
     });
     loop
-      .runStream(sessionId, text, signal)
+      .runStream(sessionId, effectiveText, signal, modelAttachments)
       .then(async () => {
         const finalText = lastAgentMessageText(round);
         persistAndRetire(sessionId, round);

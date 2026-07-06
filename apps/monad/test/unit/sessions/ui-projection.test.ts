@@ -613,7 +613,7 @@ test('channel projector hydrates persisted structured assistant content as displ
   });
 });
 
-test('channel projector hides silent structured moderator replies', () => {
+test('channel projector hides silent structured channel replies', () => {
   const projector = new SessionUiProjector({ channelStructured: true });
   const messages: ChatMessage[] = [
     {

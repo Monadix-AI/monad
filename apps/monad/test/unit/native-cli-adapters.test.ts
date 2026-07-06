@@ -5,15 +5,7 @@ import crypto from 'node:crypto';
 import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
-import {
-  builtinAgentAdapters,
-  claudeCodeNativeCliAdapter,
-  codexNativeCliAdapter,
-  geminiNativeCliAdapter,
-  hermesNativeCliAdapter,
-  openClawNativeCliAdapter,
-  qwenNativeCliAdapter
-} from '@monad/atoms/agent-adapters';
+import { builtinAgentAdapters } from '@monad/atoms/agent-adapters';
 import { parseNativeCliArgumentSupport } from '@monad/atoms/agent-adapters/argument-support';
 import { publicKeyFromRawBase64Url } from '@monad/atoms/agent-adapters/openclaw/device-identity';
 import { normalizePtyInput } from '@monad/atoms/agent-adapters/pty';
@@ -30,6 +22,19 @@ import {
 } from '@/services/native-cli/index.ts';
 import { killNativeCliProcess, pickPtyFallbackLaunchMode } from '@/services/native-cli/process.ts';
 import { nativeCliOutputEventSchema } from '@/services/native-cli/types.ts';
+
+function builtinAdapter(provider: NativeCliAgentView['provider']) {
+  const adapter = builtinAgentAdapters.find((candidate) => candidate.provider === provider);
+  if (!adapter) throw new Error(`missing built-in native CLI adapter: ${provider}`);
+  return adapter;
+}
+
+const codexNativeCliAdapter = builtinAdapter('codex');
+const claudeCodeNativeCliAdapter = builtinAdapter('claude-code');
+const geminiNativeCliAdapter = builtinAdapter('gemini');
+const qwenNativeCliAdapter = builtinAdapter('qwen');
+const openClawNativeCliAdapter = builtinAdapter('openclaw');
+const hermesNativeCliAdapter = builtinAdapter('hermes');
 
 // The native-CLI registry is populated at daemon boot via the gated atom-pack path; unit tests drive
 // the builder/preset functions directly, so register the built-in adapters up front.
@@ -469,6 +474,8 @@ test('Claude json-stream launch accepts managed MCP config overrides', () => {
   expect(claude.argv).toEqual([
     'claude',
     '-p',
+    '--thinking-display',
+    'summarized',
     '--mcp-config',
     '{"mcpServers":{"monad":{"type":"stdio","command":"/tmp/agent/bin/monad","args":["native-agent","mcp-server"]}}}',
     '--input-format',
@@ -493,6 +500,25 @@ test('Claude adapter passes requested model id and reasoning effort to the provi
   expect(launch.argv).toContain('--effort');
   expect(launch.argv).toContain('xhigh');
   expect(launch.argv).not.toContain('--speed');
+});
+
+test('Claude adapter maps the thinking summary setting to the provider display flag', () => {
+  const defaultLaunch = buildNativeCliLaunch(claudeAgent, {
+    workingPath: '/tmp/project',
+    launchMode: 'json-stream'
+  });
+  const omittedLaunch = buildNativeCliLaunch(
+    { ...claudeAgent, adapterSettings: { showThinkingSummary: false } },
+    {
+      workingPath: '/tmp/project',
+      launchMode: 'json-stream'
+    }
+  );
+
+  expect(defaultLaunch.argv).toContain('--thinking-display');
+  expect(defaultLaunch.argv).toContain('summarized');
+  expect(omittedLaunch.argv).toContain('--thinking-display');
+  expect(omittedLaunch.argv).toContain('omitted');
 });
 
 test('Claude adapter launches ultracode through session settings instead of --effort', () => {
@@ -1028,7 +1054,7 @@ test('native CLI launch rejects shell command strings in command fields', () => 
 test('Claude Code adapter launches in the requested cwd and advertises stream-json capability', () => {
   const launch = buildNativeCliLaunch(claudeAgent, { workingPath: '/tmp/project', launchMode: 'pty' });
 
-  expect(launch.argv).toEqual(['claude']);
+  expect(launch.argv).toEqual(['claude', '--thinking-display', 'summarized']);
   expect(launch.cwd).toBe('/tmp/project');
   expect(launch.capabilities).toContain('json-stream');
   expect(launch.capabilities).toContain('structured-output');
@@ -1044,7 +1070,7 @@ test('Claude Code adapter passes requested model id and reasoning effort to prov
     reasoningEffort: 'max'
   });
 
-  expect(launch.argv).toEqual(['claude', '--model', 'sonnet', '--effort', 'max']);
+  expect(launch.argv).toEqual(['claude', '--model', 'sonnet', '--effort', 'max', '--thinking-display', 'summarized']);
 });
 
 test('Claude Code adapter launches structured stream-json mode with print protocol flags', () => {
@@ -1053,6 +1079,8 @@ test('Claude Code adapter launches structured stream-json mode with print protoc
   expect(launch.argv).toEqual([
     'claude',
     '-p',
+    '--thinking-display',
+    'summarized',
     '--input-format',
     'stream-json',
     '--output-format',
@@ -1089,7 +1117,7 @@ test('Claude Code adapter resumes with the provider session ref in PTY and strea
     providerSessionRef: 'claude-session-1'
   });
 
-  expect(pty.argv).toEqual(['claude', '--resume', 'claude-session-1']);
+  expect(pty.argv).toEqual(['claude', '--resume', 'claude-session-1', '--thinking-display', 'summarized']);
   expect(stream.argv).toContain('--resume');
   expect(stream.argv).toContain('claude-session-1');
 });
@@ -1963,7 +1991,7 @@ test('Codex adapter requests and parses paged app-server history without rollout
 
   const responseId = codexNativeCliAdapter.requestHistoryPage?.(handle, {
     limit: 3,
-    cursor: 'cursor-1',
+    before: 'cursor-1',
     sortDirection: 'desc',
     itemsView: 'summary'
   });

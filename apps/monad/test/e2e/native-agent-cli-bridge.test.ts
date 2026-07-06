@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import { createHash } from 'node:crypto';
-import { mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -12,7 +12,15 @@ import {
 } from '@monad/protocol';
 
 import { createHttpTransport } from '@/transports/http.ts';
-import { buildHandlers, mockModel, serveTransport, TRANSPORTS, type TransportHandle } from '../helpers.ts';
+import {
+  buildHandlers,
+  makeTestPaths,
+  mockModel,
+  serveTransport,
+  stubModelDeps,
+  TRANSPORTS,
+  type TransportHandle
+} from '../helpers.ts';
 
 const AGENT_TOKEN = 'managed-agent-token';
 
@@ -230,6 +238,39 @@ for (const kind of TRANSPORTS) {
       } finally {
         await rm(dir, { recursive: true, force: true });
         await rm(outsideDir, { recursive: true, force: true });
+      }
+    });
+
+    test('managed project agents can attach files from their Monad-managed workspace', async () => {
+      const dir = await mkdtemp(join(tmpdir(), 'monad-native-agent-managed-'));
+      const modelDeps = { ...stubModelDeps(), paths: makeTestPaths(dir) };
+      const handlers = buildHandlers(mockModel(), modelDeps);
+      t = serveTransport(kind, createHttpTransport(handlers));
+      const sessionId = await createSession(t);
+      const projectDir = await realpath(await mkdtemp(join(tmpdir(), 'monad-project-')));
+      const agentName = 'pmem_claude-code_123';
+      const managedWorkspace = join(dir, 'workplace-agents', sessionId, agentName);
+      await mkdir(managedWorkspace, { recursive: true });
+      createManagedNativeSession(handlers, sessionId, 'ncli_test', agentName, 'running', projectDir);
+      try {
+        const filePath = join(managedWorkspace, 'proposal.md');
+        await writeFile(filePath, '# Proposal', 'utf8');
+        const posted = await t.fetch(
+          '/v1/internal/native-agent/project/post',
+          json({ attachments: [{ path: filePath, mime: 'text/markdown' }] }, bindingHeaders(sessionId))
+        );
+
+        expect(posted.status).toBe(200);
+        const { message } = (await posted.json()) as { message: { attachments?: Array<{ id: string }> } };
+        const id = message.attachments?.[0]?.id;
+        if (!id) throw new Error('expected attachment ref');
+        const read = await t.fetch(`/v1/attachments/${id}`);
+        const readBody = await read.text();
+        expect({ status: read.status, body: readBody }).toMatchObject({ status: 200 });
+        expect((JSON.parse(readBody) as { text: string }).text).toBe('# Proposal');
+      } finally {
+        await rm(projectDir, { recursive: true, force: true });
+        await rm(dir, { recursive: true, force: true });
       }
     });
 

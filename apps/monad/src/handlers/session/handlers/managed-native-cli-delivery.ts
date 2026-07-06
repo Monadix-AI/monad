@@ -121,13 +121,13 @@ export function createManagedNativeCliDelivery(ctx: SessionContext) {
             // cli-oneshot has no persistent process polling the inbox between turns, so every project
             // message must spawn a fresh turn carrying the message itself — the inbox-poll nudge path
             // (used by persistent members) would silently drop it.
-            nativeCliHost.input(existing.id, { input: nativeCliInputText(notice) });
+            await nativeCliHost.input(existing.id, { input: nativeCliInputText(notice) });
             if (deliveredSeq > 0) store.markNativeCliInboxVisible(existing.id, deliveredSeq);
           } else if (existing.lastDeliveredSeq === 0) {
-            nativeCliHost.input(existing.id, { input: nativeCliInputText(notice) });
+            await nativeCliHost.input(existing.id, { input: nativeCliInputText(notice) });
             if (deliveredSeq > 0) store.markNativeCliInboxVisible(existing.id, deliveredSeq);
           } else if (existing.lastDeliveredSeq <= existing.lastVisibleSeq) {
-            nativeCliHost.input(existing.id, {
+            await nativeCliHost.input(existing.id, {
               input: nativeCliInputText(managedNativeCliBusyInboxNotice(member, resolvedSender))
             });
           }
@@ -229,7 +229,7 @@ export function createManagedNativeCliDelivery(ctx: SessionContext) {
       const managedSessions = managedNativeCliSessionsForAgent(session.id, runtimeAgentName);
       const existing = managedSessions.find((candidate) => candidate.state === 'running');
       if (existing) {
-        nativeCliHost.input(existing.id, { input: nativeCliInputText(notice) });
+        await nativeCliHost.input(existing.id, { input: nativeCliInputText(notice) });
         return;
       }
       const resumeCandidate = managedSessions.find((candidate) => candidate.providerSessionRef);

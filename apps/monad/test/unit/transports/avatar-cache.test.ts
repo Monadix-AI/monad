@@ -21,7 +21,7 @@ afterEach(() => {
   rmSync(home, { recursive: true, force: true });
 });
 
-test('avatar cache only writes on explicit save warmup', async () => {
+test('GET never writes to the on-disk cache', async () => {
   const app = createAvatarCacheController({} as never);
   const seed = 'user:Operator';
   const key = avatarCacheKey(seed);
@@ -35,14 +35,37 @@ test('avatar cache only writes on explicit save warmup', async () => {
   expect(svg).toContain('<svg');
   expect(existsSync(cachePath)).toBe(false);
 
-  const warm = await app.handle(new Request(`${readUrl}&write=1`));
+  const again = await app.handle(new Request(readUrl));
+  expect(again.status).toBe(200);
+  expect(await again.text()).toBe(svg);
+  expect(existsSync(cachePath)).toBe(false);
+});
+
+test('POST warms the on-disk cache, then GET serves the cached copy', async () => {
+  const app = createAvatarCacheController({} as never);
+  const seed = 'user:Operator';
+  const key = avatarCacheKey(seed);
+  const cachePath = join(home, 'cache', 'avatars', `${key}.svg`);
+  const readUrl = `http://localhost/api/avatar-cache/${key}.svg?seed=${encodeURIComponent(seed)}`;
+
+  const warm = await app.handle(new Request(readUrl, { method: 'POST' }));
   expect(warm.status).toBe(200);
+  expect(warm.headers.get('cache-control')).toBe('public, max-age=31536000, immutable');
+  const svg = await warm.text();
   expect(await readFile(cachePath, 'utf8')).toBe(svg);
 
   const cached = await app.handle(new Request(readUrl));
   expect(cached.status).toBe(200);
   expect(cached.headers.get('cache-control')).toBe('public, max-age=31536000, immutable');
   expect(await cached.text()).toBe(svg);
+});
+
+test('POST rejects a key that does not match the seed/style hash', async () => {
+  const app = createAvatarCacheController({} as never);
+  const res = await app.handle(
+    new Request('http://localhost/api/avatar-cache/bogus.svg?seed=user:Operator', { method: 'POST' })
+  );
+  expect(res.status).toBe(400);
 });
 
 test('avatar rendering is deterministic per seed and style', async () => {

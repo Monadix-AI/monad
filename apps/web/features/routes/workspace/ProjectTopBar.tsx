@@ -28,7 +28,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@monad/ui';
-import { Avatar, PresenceBadge } from '@monad/ui/components/AgentAvatar';
+import { Avatar } from '@monad/ui/components/AgentAvatar';
 import { useState } from 'react';
 
 import { useT } from '@/components/I18nProvider';
@@ -59,10 +59,11 @@ function ProjectTopBarWorkdir({ path, projectId }: { path?: string; projectId: P
   const t = useT();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
+  const [menuOpen, setMenuOpen] = useState(false);
   const [updateWorkplaceProject, updateState] = useUpdateWorkplaceProjectMutation();
   const [runWorkspaceAction, actionState] = useWorkspaceActionMutation();
   const { data: workspaceMeta } = useWorkspaceMetaQuery(projectId ?? ('prj_' as ProjectId), {
-    skip: !projectId || !path
+    skip: !menuOpen || !projectId || !path
   });
   const gitRemoteUrl = workspaceMeta?.git.remoteUrl;
   const busy = updateState.isLoading;
@@ -99,7 +100,10 @@ function ProjectTopBarWorkdir({ path, projectId }: { path?: string; projectId: P
 
   const disabled = !projectId || !path || actionState.isLoading;
   return (
-    <DropdownMenu>
+    <DropdownMenu
+      onOpenChange={setMenuOpen}
+      open={menuOpen}
+    >
       <DropdownMenuTrigger asChild>
         <button
           className="project-topbar-workdir"
@@ -184,7 +188,6 @@ function ProjectTopBarParticipants({
             kind={participant.kind}
             size={26}
           />
-          <PresenceBadge presence={participant.presence === 'working' ? 'online' : participant.presence} />
         </div>
       ))}
     </div>
@@ -270,7 +273,7 @@ export function ProjectTopBar({
       <style>{`
         .project-topbar {
           flex-shrink: 0;
-          height: 44px;
+          height: 52px;
           display: flex;
           align-items: center;
           gap: 12px;
@@ -279,6 +282,9 @@ export function ProjectTopBar({
           background: rgb(var(--backgroundColor-surface-container) / .78);
           color: rgb(var(--textColor-primary));
           z-index: 20;
+        }
+        .app-main-sidebar-collapsed .project-topbar {
+          padding-left: 8.5rem;
         }
         .project-topbar-main {
           min-width: 0;
@@ -373,13 +379,7 @@ export function ProjectTopBar({
         }
         .project-topbar-participant > div:first-child {
           border-radius: 999px !important;
-          background: rgb(var(--backgroundColor-state-enabled) / .5) !important;
-        }
-        .project-topbar-participant > span {
-          position: absolute;
-          right: -2px;
-          bottom: -2px;
-          border: 2px solid rgb(var(--backgroundColor-surface-container));
+          background: color-mix(in srgb, var(--accent-blue) 24%, var(--background)) !important;
         }
         .project-topbar-participants:hover .project-topbar-participant,
         .project-topbar-participants:focus-within .project-topbar-participant {
@@ -442,7 +442,7 @@ export function ProjectTopBar({
           color: rgb(var(--textColor-primary));
         }
       `}</style>
-      <div className="project-topbar project-topbar-clean">
+      <div className="panel-shell-header project-topbar project-topbar-clean">
         <div className="project-topbar-main">
           <span className="project-topbar-name project-topbar-name-returned">{projectName}</span>
           <ProjectTopBarWorkdir

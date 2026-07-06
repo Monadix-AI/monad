@@ -9,7 +9,13 @@ import { AppProviders } from '@/app/Providers';
 
 export const metadata: Metadata = {
   title: 'monad',
-  description: 'monad agent interface'
+  description: 'monad agent interface',
+  icons: {
+    icon: [
+      { url: '/favicon.svg', type: 'image/svg+xml' },
+      { url: '/favicon.ico', sizes: 'any' }
+    ]
+  }
 };
 
 const launchEditorPathFix =

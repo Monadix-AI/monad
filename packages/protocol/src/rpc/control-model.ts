@@ -307,7 +307,11 @@ export const providerViewSchema = z.object({
   label: z.string(),
   type: z.enum(KNOWN_PROVIDER_TYPES),
   baseUrl: httpUrlSchema.optional(),
-  extra: z.record(z.string(), z.string()).optional()
+  extra: z.record(z.string(), z.string()).optional(),
+  // Absent/true = enabled, for backward compatibility with providers persisted before this field
+  // existed. Toggling this flag does not yet gate the model-routing/dispatch layer — see
+  // POST /model/providers/:id/enable|disable in apps/monad/src/transports/http/settings/model.ts.
+  enabled: z.boolean().optional()
 });
 export type ProviderView = z.infer<typeof providerViewSchema>;
 
@@ -356,6 +360,16 @@ export type ListProvidersResponse = z.infer<typeof listProvidersResponseSchema>;
 export const setProviderRequestSchema = z.object({ provider: providerViewSchema });
 export type SetProviderRequest = z.infer<typeof setProviderRequestSchema>;
 
+export const getProviderResponseSchema = z.object({ provider: providerViewSchema });
+export type GetProviderResponse = z.infer<typeof getProviderResponseSchema>;
+
+// Partial update for PATCH /model/providers/:id — every field optional; the handler merges
+// the patch onto the currently stored provider. `id`/`type` are intentionally omittable but,
+// if present, must still satisfy their full validation (they are not identity-changing in
+// practice since the route's :id param is authoritative).
+export const patchProviderRequestSchema = providerViewSchema.partial();
+export type PatchProviderRequest = z.infer<typeof patchProviderRequestSchema>;
+
 export const listProfilesResponseSchema = z.object({
   profiles: z.array(profileViewSchema),
   defaultAlias: z.string()
@@ -364,6 +378,9 @@ export type ListProfilesResponse = z.infer<typeof listProfilesResponseSchema>;
 
 export const setProfileRequestSchema = z.object({ profile: profileViewSchema });
 export type SetProfileRequest = z.infer<typeof setProfileRequestSchema>;
+
+export const getProfileResponseSchema = z.object({ profile: profileViewSchema });
+export type GetProfileResponse = z.infer<typeof getProfileResponseSchema>;
 
 export const renameProfileRequestSchema = z.object({ alias: z.string() });
 export type RenameProfileRequest = z.infer<typeof renameProfileRequestSchema>;

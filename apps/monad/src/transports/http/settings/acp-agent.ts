@@ -1,6 +1,8 @@
 import type { createDaemonHandlers } from '@/handlers/handlers.ts';
 
 import {
+  getAcpAgentResponseSchema,
+  httpErrorSchema,
   listAcpAgentPresetsResponseSchema,
   listAcpAgentsResponseSchema,
   okResponseSchema,
@@ -30,7 +32,13 @@ export function createAcpAgentSettingsController(handlers: ReturnType<typeof cre
         response: { 200: listAcpAgentPresetsResponseSchema },
         detail: { summary: 'List invite presets', description: 'Built-in third-party agent presets + local detection.' }
       })
-      .put('/acp-agents', async ({ body }) => handlers.acpAgent.upsertAcpAgent(body), {
+      .get('/acp-agents/:name', async ({ params }) => handlers.acpAgent.getAcpAgent({ name: params.name }), {
+        params: agentParams,
+        response: { 200: getAcpAgentResponseSchema, 404: httpErrorSchema },
+        detail: { summary: 'Get external ACP agent', description: 'Returns one configured agent by name.' }
+      })
+      .put('/acp-agents/:name', async ({ body }) => handlers.acpAgent.upsertAcpAgent(body), {
+        params: agentParams,
         body: upsertAcpAgentRequestSchema,
         response: { 200: okResponseSchema },
         detail: { summary: 'Upsert external ACP agent', description: 'Creates or replaces an agent by name.' }
@@ -38,16 +46,24 @@ export function createAcpAgentSettingsController(handlers: ReturnType<typeof cre
       .post(
         '/acp-agents/:name/enable',
         async ({ params }) => handlers.acpAgent.setAcpAgentEnabled({ name: params.name, enabled: true }),
-        { params: agentParams, response: { 200: okResponseSchema }, detail: { summary: 'Enable agent' } }
+        {
+          params: agentParams,
+          response: { 200: okResponseSchema, 404: httpErrorSchema },
+          detail: { summary: 'Enable agent' }
+        }
       )
       .post(
         '/acp-agents/:name/disable',
         async ({ params }) => handlers.acpAgent.setAcpAgentEnabled({ name: params.name, enabled: false }),
-        { params: agentParams, response: { 200: okResponseSchema }, detail: { summary: 'Disable agent' } }
+        {
+          params: agentParams,
+          response: { 200: okResponseSchema, 404: httpErrorSchema },
+          detail: { summary: 'Disable agent' }
+        }
       )
       .delete('/acp-agents/:name', async ({ params }) => handlers.acpAgent.removeAcpAgent({ name: params.name }), {
         params: agentParams,
-        response: { 200: okResponseSchema },
+        response: { 200: okResponseSchema, 404: httpErrorSchema },
         detail: { summary: 'Remove external ACP agent', description: 'Deletes an agent from the registry.' }
       })
   );

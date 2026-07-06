@@ -13,7 +13,12 @@ export { useInstallMcpAtomMutation } from './install-mcp-atom.ts';
 export { useInstallMcpBinaryMutation } from './install-mcp-binary.ts';
 export { useInstallSkillMutation } from './install-skill.ts';
 export { useListAtomKindsQuery } from './list-atom-kinds.ts';
-export { listAtomPacksApi, useListAtomPacksQuery } from './list-atom-packs.ts';
+export {
+  atomPackAdapter,
+  atomPackSelectors,
+  listAtomPacksApi,
+  useListAtomPacksQuery
+} from './list-atom-packs.ts';
 // Registry-style + prebuilt-binary MCP atoms (atoms/mcp/) — install, list, remove.
 export { useListInstalledMcpQuery } from './list-installed-mcp.ts';
 // Standalone skill atoms (atoms/skills/) — install from github, list, remove, check updates.

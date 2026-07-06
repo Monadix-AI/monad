@@ -22,6 +22,7 @@ export function NativeCliPresetPanel({
   connectingAgentName,
   authSessionAgentName,
   connectAgent,
+  detecting = false,
   openInstallPage,
   removeAgent,
   setEditingAgent,
@@ -33,6 +34,7 @@ export function NativeCliPresetPanel({
   connectingAgentName: string | null;
   authSessionAgentName?: string;
   connectAgent: (agent: NativeCliAgentView) => void;
+  detecting?: boolean;
   openInstallPage: (preset: NativeCliAgentPresetView) => void;
   removeAgent: (name: string) => Promise<void>;
   setEditingAgent: (agent: NativeCliAgentView) => void;
@@ -181,6 +183,7 @@ export function NativeCliPresetPanel({
             connectAgent={connectAgent}
             connectedAgent={agents.find((entry) => entry.name === preset.id)}
             connectingAgentName={connectingAgentName}
+            detecting={detecting}
             key={preset.id}
             openInstallPage={openInstallPage}
             preset={preset}
@@ -203,6 +206,7 @@ function NativeCliPresetRow({
   connectingAgentName,
   authSessionAgentName,
   connectAgent,
+  detecting,
   openInstallPage,
   removeAgent,
   setEditingAgent,
@@ -215,6 +219,7 @@ function NativeCliPresetRow({
   connectingAgentName: string | null;
   authSessionAgentName?: string;
   connectAgent: (agent: NativeCliAgentView) => void;
+  detecting: boolean;
   openInstallPage: (preset: NativeCliAgentPresetView) => void;
   removeAgent: (name: string) => Promise<void>;
   setEditingAgent: (agent: NativeCliAgentView) => void;
@@ -224,7 +229,15 @@ function NativeCliPresetRow({
   const isConnected = preset.installed && statusAuth === 'authenticated' && connectedAgent;
   const isConnecting = connectingAgentName === agent.name;
   const checkingAuth = isConnecting || authSessionAgentName === agent.name;
-  const status = checkingAuth ? 'checking' : isConnected ? 'connected' : preset.installed ? 'detected' : 'missing';
+  const status = detecting
+    ? 'detecting'
+    : checkingAuth
+      ? 'checking'
+      : isConnected
+        ? 'connected'
+        : preset.installed
+          ? 'detected'
+          : 'missing';
   const canImportSettings = preset.capabilities?.settingsImport === true;
 
   return (
@@ -244,7 +257,14 @@ function NativeCliPresetRow({
         <span className="native-cli-live-v2__name">{preset.label}</span>
       </span>
       <span className="native-cli-live-v2__actions">
-        {status === 'checking' ? (
+        {status === 'detecting' ? (
+          <StatusPill
+            icon={LoaderPinwheelIcon}
+            iconClassName="size-3.5 animate-spin"
+            label="Detecting..."
+            tone="detected"
+          />
+        ) : status === 'checking' ? (
           <StatusPill
             icon={LoaderPinwheelIcon}
             iconClassName="size-3.5 animate-spin"

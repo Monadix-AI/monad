@@ -160,4 +160,25 @@ test.describe('Studio IA', () => {
     await expect(page.getByRole('button', { name: 'Project members' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Tasks and sessions' })).toHaveCount(0);
   });
+
+  test('uses client-local shell navigation for Studio links', async ({ page }) => {
+    await installStudioIaApiMock(page);
+
+    await page.goto('/studio/runtime');
+    await expect(page.getByRole('heading', { name: 'Runtime overview' })).toBeVisible();
+
+    const routeTransitionRequests: string[] = [];
+    page.on('request', (request) => {
+      const url = new URL(request.url());
+      if (request.resourceType() === 'document' || url.searchParams.has('_rsc')) {
+        routeTransitionRequests.push(request.url());
+      }
+    });
+
+    await page.getByRole('link', { name: 'Open Mesh overview' }).first().click();
+
+    await expect(page).toHaveURL(/\/studio\/mesh$/);
+    await expect(page.getByRole('heading', { name: 'Mesh overview' })).toBeVisible();
+    expect(routeTransitionRequests).toEqual([]);
+  });
 });

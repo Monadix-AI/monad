@@ -1,27 +1,35 @@
-import type { NativeCliSessionView } from '@monad/protocol';
-import type { EntityState } from '@reduxjs/toolkit';
+import type { ListNativeCliRuntimesQuery, ListNativeCliRuntimesResponse, NativeCliSessionView } from '@monad/protocol';
 
 import { nativeCliSessionViewSchema } from '@monad/protocol';
 
+import { type NormalizedCursorPaginateResponse } from '../../api-slice.ts';
 import { clientOf, runTreaty } from '../../endpoint-helpers.ts';
 import { sessionsApi } from '../sessions/index.ts';
 import { nativeCliSessionAdapter } from './list-native-cli-sessions.ts';
 
+type ListLiveNativeCliSessionsResult = NormalizedCursorPaginateResponse<
+  NativeCliSessionView,
+  'sessions',
+  ListNativeCliRuntimesResponse
+>;
+
 // Daemon-wide list of every LIVE (starting/running) native-CLI/agent-adapter runtime across all
-// projects — one query the Studio Swarm overview polls once, instead of a per-project subscription
-// each. Reuses nativeCliSessionAdapter so both list endpoints normalize into the same shape.
+// projects. `streamControl` invalidates this cache from native_cli.started/exited notifications, so
+// callers do not need their own interval polling.
 const listLiveNativeCliSessionsApi = sessionsApi.injectEndpoints({
   overrideExisting: true,
   endpoints: (builder) => ({
-    listLiveNativeCliSessions: builder.query<EntityState<NativeCliSessionView, string>, void>({
-      queryFn: (_arg, api: { extra: unknown }) =>
+    listLiveNativeCliSessions: builder.query<ListLiveNativeCliSessionsResult, ListNativeCliRuntimesQuery | undefined>({
+      queryFn: (arg, api: { extra: unknown }) =>
         runTreaty(
-          () => clientOf(api).treaty.v1['native-cli-runtimes'].get(),
-          (raw) =>
-            nativeCliSessionAdapter.setAll(
+          () => clientOf(api).treaty.v1['native-cli-runtimes'].get({ query: arg ?? {} }),
+          (raw) => ({
+            ...raw,
+            sessions: nativeCliSessionAdapter.setAll(
               nativeCliSessionAdapter.getInitialState(),
               raw.sessions.map((session) => nativeCliSessionViewSchema.parse(session))
             )
+          })
         ),
       providesTags: ['NativeCliSessions']
     })

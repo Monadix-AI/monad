@@ -4,11 +4,12 @@ import { expect, test } from 'bun:test';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 
+import { builtinAgentAdapters } from '../../src/agent-adapters/index.ts';
 import { rawJsonText } from '../../src/workspace-experiences/chat-room/components/observation/card-shell.tsx';
 import { NativeCliObservationPanel } from '../../src/workspace-experiences/chat-room/components/observation/panel.tsx';
 import {
-  ObservationTimelineCard,
-  observationTimelineEntries
+  observationTimelineEntries,
+  observationTimelineRows
 } from '../../src/workspace-experiences/chat-room/components/observation/timeline.tsx';
 import {
   observationProjectionFromAccess,
@@ -16,10 +17,15 @@ import {
   usageMeterFromObservationAccess
 } from '../../src/workspace-experiences/chat-room/utils/agent-rail-model.ts';
 import {
+  configureNativeCliObservationAdapterResolver,
   nativeCliStreamItems,
   nativeCliUsageLimitMeter,
   nativeCliUsageLimitMeterFromResponse
 } from '../../src/workspace-experiences/experience/native-cli-observation/native-cli-observation.ts';
+
+configureNativeCliObservationAdapterResolver((provider) =>
+  builtinAgentAdapters.find((adapter) => adapter.provider === provider)
+);
 
 test('observation access is adapted to projection events without carrying raw output forward', () => {
   const raw = JSON.stringify({ method: 'item/agentMessage/delta', params: { delta: 'Projected update' } });
@@ -87,7 +93,7 @@ test('host native CLI usage records project to a usage limits meter', () => {
     checkedAt: '2026-07-03T00:00:00.000Z',
     records: [
       {
-        category: 'daily',
+        name: 'daily',
         resetAt: '2026-07-03T12:00:00.000Z',
         max: 100,
         current: 12
@@ -97,7 +103,7 @@ test('host native CLI usage records project to a usage limits meter', () => {
 
   expect(meter).toMatchObject({
     title: 'Usage remaining',
-    rows: [{ id: 'daily', label: 'daily', percent: 88 }]
+    rows: [{ id: 'daily', label: 'daily', percent: 12 }]
   });
 });
 
@@ -246,6 +252,100 @@ test('Codex app-server observation renders reasoning and diff streams', () => {
   ]);
 });
 
+test('native CLI observation projects thinking records from all adapters', () => {
+  const cases = [
+    {
+      provider: 'claude-code',
+      output: JSON.stringify({
+        type: 'assistant',
+        message: { content: [{ type: 'thinking', thinking: '' }] }
+      }),
+      source: 'claude-code-sdk',
+      type: 'thinking',
+      text: 'Thinking…'
+    },
+    {
+      provider: 'qwen',
+      output: JSON.stringify({
+        type: 'assistant',
+        message: { content: [{ type: 'thinking', thinking: 'checking files' }] }
+      }),
+      source: 'qwen-code-sdk',
+      type: 'thinking',
+      text: 'checking files'
+    },
+    {
+      provider: 'gemini',
+      output: JSON.stringify({ type: 'reasoning', reasoning: 'planning next step' }),
+      source: 'gemini-cli',
+      type: 'reasoning',
+      text: 'planning next step'
+    },
+    {
+      provider: 'codex',
+      output: JSON.stringify({ type: 'response_item', payload: { type: 'reasoning', text: 'considering patch' } }),
+      source: 'codex-exec',
+      type: 'reasoning',
+      text: 'considering patch'
+    }
+  ];
+
+  for (const expected of cases) {
+    const [item] = nativeCliStreamItems({
+      id: `ncli_${expected.provider}`,
+      provider: expected.provider,
+      output: expected.output
+    });
+    expect(item).toMatchObject({
+      role: 'agent',
+      source: expected.source,
+      providerEventType: expected.type,
+      text: expected.text
+    });
+    expect(observationTimelineEntries(item ? [item] : [])[0]?.card.type).toBe('thinking');
+  }
+});
+
+test('native CLI observation merges streaming thinking deltas', () => {
+  const claudeOutput = [
+    JSON.stringify({
+      type: 'stream_event',
+      event: { type: 'content_block_delta', delta: { type: 'thinking_delta', thinking: 'Analyzing ' } }
+    }),
+    JSON.stringify({
+      type: 'stream_event',
+      event: { type: 'content_block_delta', delta: { type: 'thinking_delta', thinking: 'context.' } }
+    })
+  ].join('\n');
+  const qwenOutput = [
+    JSON.stringify({
+      type: 'stream_event',
+      event: { type: 'content_block_delta', delta: { type: 'thinking_delta', thinking: 'Checking ' } }
+    }),
+    JSON.stringify({
+      type: 'stream_event',
+      event: { type: 'content_block_delta', delta: { type: 'thinking_delta', thinking: 'state.' } }
+    })
+  ].join('\n');
+
+  expect(nativeCliStreamItems({ id: 'ncli_claude', provider: 'claude-code', output: claudeOutput })).toMatchObject([
+    {
+      role: 'agent',
+      source: 'claude-code-sdk',
+      providerEventType: 'thinking_delta',
+      text: 'Analyzing context.'
+    }
+  ]);
+  expect(nativeCliStreamItems({ id: 'ncli_qwen', provider: 'qwen', output: qwenOutput })).toMatchObject([
+    {
+      role: 'agent',
+      source: 'qwen-code-sdk',
+      providerEventType: 'thinking_delta',
+      text: 'Checking state.'
+    }
+  ]);
+});
+
 test('Qwen Code observation merges partial stream-json deltas', () => {
   const output = [
     JSON.stringify({
@@ -285,6 +385,37 @@ test('observation preserves unparsed JSONL records verbatim', () => {
       source: 'unknown',
       providerEventType: 'raw_json',
       raw: { type: 'unexpected_event', payload: { value: 42 } }
+    }
+  ]);
+});
+
+test('observation does not promote embedded JSON fragments to raw cards', () => {
+  const output = [
+    'Codex app-server log:',
+    JSON.stringify({
+      jsonrpc: '2.0',
+      id: 12,
+      result: {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              method: 'project_read',
+              params: { file: 'packages/atoms/src/index.ts' }
+            })
+          }
+        ]
+      }
+    }),
+    'done'
+  ].join(' ');
+
+  expect(nativeCliStreamItems({ id: 'ncli_codex', provider: 'codex', output })).toEqual([
+    {
+      id: 'ncli_codex:0',
+      role: 'agent',
+      text: output,
+      source: 'plain-text'
     }
   ]);
 });
@@ -422,6 +553,39 @@ test('Codex app-server observation groups one user message item lifecycle into o
   expect(rawJsonText(items[0]?.raw)).toBe(output);
 });
 
+test('Codex app-server observation expands batch item envelopes', () => {
+  const output = JSON.stringify({
+    id: '019f310e-5620-7ca3-aa16-cbf41828fe60',
+    items: [
+      {
+        type: 'userMessage',
+        id: 'item-206',
+        content: [{ type: 'text', text: 'New Workplace Project message is available.' }]
+      },
+      {
+        type: 'agentMessage',
+        id: 'item-207',
+        text: 'I will check the project inbox now.'
+      }
+    ]
+  });
+
+  const items = nativeCliStreamItems({ id: 'ncli_codex', provider: 'codex', output });
+
+  expect(items.map((item) => ({ role: item.role, type: item.providerEventType, text: item.text }))).toEqual([
+    {
+      role: 'user',
+      type: 'item/userMessage',
+      text: 'New Workplace Project message is available.'
+    },
+    {
+      role: 'agent',
+      type: 'item/agentMessage',
+      text: 'I will check the project inbox now.'
+    }
+  ]);
+});
+
 test('Codex app-server observation renders user message lifecycle as a shared message card', () => {
   const output = [
     JSON.stringify({
@@ -455,16 +619,21 @@ test('Codex app-server observation renders user message lifecycle as a shared me
     })
   ].join('\n');
   const entries = observationTimelineEntries(nativeCliStreamItems({ id: 'ncli_codex', provider: 'codex', output }));
-  const [entry] = entries;
-  if (!entry) throw new Error('expected an observation timeline entry');
-  const html = renderToStaticMarkup(React.createElement(ObservationTimelineCard, { entry }));
 
-  expect(entries).toHaveLength(1);
-  expect(html).toContain('user');
-  expect(html).toContain('item/userMessage');
-  expect(html).toContain('You have just joined this Workplace Project.');
-  expect(html).toContain('Use project_post for the public status message.');
-  expect(html).not.toContain('RAW_JSON');
+  expect(entries).toMatchObject([
+    {
+      card: {
+        item: {
+          providerEventType: 'item/userMessage',
+          role: 'user',
+          text: 'You have just joined this Workplace Project.\nUse project_post for the public status message.'
+        },
+        role: 'user',
+        type: 'message'
+      },
+      kind: 'public'
+    }
+  ]);
 });
 
 test('Codex app-server observation keeps a lone chunk raw record unwrapped', () => {
@@ -626,6 +795,145 @@ test('Codex app-server observation projects item tool lifecycle and output delta
   ]);
 });
 
+test('Codex app-server observation projects completed MCP tool calls with arguments and result', () => {
+  const output = JSON.stringify({
+    method: 'item/completed',
+    params: {
+      item: {
+        type: 'mcpToolCall',
+        id: 'call_1',
+        server: 'codegraph',
+        tool: 'codegraph_explore',
+        status: 'completed',
+        arguments: {
+          projectPath: '/private/tmp/monad-a2a-agent',
+          query: 'apps/web native CLI agent settings',
+          maxFiles: 8
+        },
+        result: {
+          content: [{ type: 'text', text: 'Found 209 symbols across 91 files.' }],
+          structuredContent: null,
+          error: null,
+          durationMs: 232
+        }
+      }
+    }
+  });
+
+  const items = nativeCliStreamItems({ id: 'ncli_codex', provider: 'codex', output });
+
+  expect(items.map((item) => ({ role: item.role, type: item.providerEventType, text: item.text }))).toEqual([
+    {
+      role: 'tool',
+      type: 'function_call',
+      text: 'Tool call codegraph_explore {"projectPath":"/private/tmp/monad-a2a-agent","query":"apps/web native CLI agent settings","maxFiles":8}'
+    },
+    {
+      role: 'tool',
+      type: 'function_call_output',
+      text: 'Found 209 symbols across 91 files.'
+    }
+  ]);
+
+  expect(observationTimelineEntries(items).map((entry) => entry.card?.type)).toEqual(['command-tool']);
+});
+
+test('Codex app-server observation projects turns page responses', () => {
+  const output = JSON.stringify({
+    id: 17,
+    result: {
+      data: [
+        {
+          id: 'turn_1',
+          items: [
+            { type: 'userMessage', id: 'item_1', text: 'Inspect native CLI settings' },
+            {
+              type: 'mcpToolCall',
+              id: 'call_1',
+              server: 'codegraph',
+              tool: 'codegraph_explore',
+              status: 'completed',
+              arguments: { query: 'native CLI settings', maxFiles: 4 },
+              result: { content: [{ type: 'text', text: 'Found settings code.' }] }
+            },
+            { type: 'agentMessage', id: 'item_2', text: 'The settings form owns this surface.' }
+          ],
+          itemsView: 'full',
+          status: 'completed'
+        }
+      ],
+      nextCursor: null,
+      backwardsCursor: null
+    }
+  });
+
+  const items = nativeCliStreamItems({ id: 'ncli_codex', provider: 'codex', output });
+
+  expect(items.map((item) => ({ role: item.role, type: item.providerEventType, text: item.text }))).toEqual([
+    { role: 'user', type: 'item/userMessage', text: 'Inspect native CLI settings' },
+    {
+      role: 'tool',
+      type: 'function_call',
+      text: 'Tool call codegraph_explore {"query":"native CLI settings","maxFiles":4}'
+    },
+    {
+      role: 'tool',
+      type: 'function_call_output',
+      text: 'Found settings code.'
+    },
+    { role: 'agent', type: 'item/agentMessage', text: 'The settings form owns this surface.' }
+  ]);
+  expect(observationTimelineEntries(items).map((entry) => entry.card?.type)).toEqual([
+    'message',
+    'command-tool',
+    'message'
+  ]);
+});
+
+test('Codex app-server observation projects web search and compaction items', () => {
+  const output = [
+    JSON.stringify({
+      method: 'item/completed',
+      params: {
+        item: {
+          type: 'webSearch',
+          id: 'ws_1',
+          query: 'react-native-libsodium GitHub crypto_kx',
+          action: {
+            type: 'search',
+            query: 'react-native-libsodium GitHub crypto_kx',
+            queries: ['react-native-libsodium GitHub crypto_kx']
+          }
+        }
+      }
+    }),
+    JSON.stringify({
+      method: 'item/completed',
+      params: {
+        item: {
+          type: 'contextCompaction',
+          id: 'item-250'
+        }
+      }
+    })
+  ].join('\n');
+
+  expect(nativeCliStreamItems({ id: 'ncli_codex', provider: 'codex', output })).toMatchObject([
+    {
+      role: 'tool',
+      source: 'codex-app-server',
+      providerEventType: 'function_call',
+      text: 'Tool call webSearch {"type":"search","query":"react-native-libsodium GitHub crypto_kx","queries":["react-native-libsodium GitHub crypto_kx"]}'
+    },
+    {
+      role: 'system',
+      source: 'codex-app-server',
+      providerEventType: 'contextCompaction',
+      text: 'Context compacted'
+    }
+  ]);
+});
+
 test('Codex app-server usage meter reads rate limit updates', () => {
   const output = JSON.stringify({
     method: 'account/rateLimits/updated',
@@ -708,6 +1016,63 @@ test('Claude Code usage meter reads rate limit events', () => {
   });
 });
 
+test('Claude Code observation projects rate limit events without raw cards', () => {
+  const output = JSON.stringify({
+    type: 'rate_limit_event',
+    rate_limit_info: {
+      status: 'allowed',
+      resetsAt: 1_783_248_000,
+      rateLimitType: 'five_hour',
+      usedPercent: 42
+    },
+    uuid: 'rate_1',
+    session_id: 'claude-session'
+  });
+
+  expect(nativeCliStreamItems({ id: 'ncli_claude', provider: 'claude-code', output })).toMatchObject([
+    {
+      role: 'system',
+      source: 'claude-code-sdk',
+      providerEventType: 'rate_limit_event',
+      text: 'Usage limits updated'
+    }
+  ]);
+});
+
+test('Claude Code usage meter reads status-only rate limit events', () => {
+  const output = JSON.stringify({
+    type: 'rate_limit_event',
+    rate_limit_info: {
+      status: 'allowed',
+      resetsAt: 1_783_248_000,
+      rateLimitType: 'five_hour',
+      overageStatus: 'allowed',
+      overageResetsAt: 1_783_236_600,
+      isUsingOverage: false
+    },
+    uuid: '421238d3-0cab-4345-b147-27eb1bcf8f5d',
+    session_id: 'baa34689-e0c7-44a1-b60d-2afc2cc7a971'
+  });
+
+  expect(nativeCliUsageLimitMeter({ provider: 'claude-code', output })).toMatchObject({
+    title: 'Usage remaining',
+    rows: [{ id: 'five_hour', label: '5h', percent: 100 }]
+  });
+});
+
+test('non-Claude providers do not parse Claude rate limit events by field shape', () => {
+  const output = JSON.stringify({
+    type: 'rate_limit_event',
+    rate_limit_info: {
+      status: 'allowed',
+      resetsAt: 1_783_248_000,
+      rateLimitType: 'five_hour'
+    }
+  });
+
+  expect(nativeCliUsageLimitMeter({ provider: 'gemini', output })).toBeNull();
+});
+
 test('observation panel shows a token usage meter entry when Codex reports token usage', () => {
   const output = JSON.stringify({
     method: 'thread/tokenUsage/updated',
@@ -781,6 +1146,43 @@ test('observation panel distinguishes unavailable provider history from empty li
   expect(html).toContain('Provider history unavailable.');
 });
 
+test('Claude Code observation projects transcript user events as user message cards', () => {
+  const output = JSON.stringify({
+    parentUuid: '8c04922a-bbb2-4a25-a71c-8fdc0154f58e',
+    type: 'user',
+    message: {
+      role: 'user',
+      content: [
+        {
+          type: 'text',
+          text: 'New Workplace Project message is available.'
+        }
+      ]
+    },
+    uuid: '21dace30-5217-4a5c-a48c-7f4b86f4e85d',
+    timestamp: '2026-07-05T08:07:54.056Z'
+  });
+  const entries = observationTimelineEntries(
+    nativeCliStreamItems({ id: 'ncli_claude', provider: 'claude-code', output })
+  );
+
+  expect(entries).toMatchObject([
+    {
+      card: {
+        item: {
+          providerEventType: 'user',
+          role: 'user',
+          source: 'claude-code-sdk',
+          text: 'New Workplace Project message is available.'
+        },
+        role: 'user',
+        type: 'message'
+      },
+      kind: 'public'
+    }
+  ]);
+});
+
 test('Codex app-server observation renders a standalone commandExecution result as a command card', () => {
   const raw = {
     method: 'item/completed',
@@ -795,37 +1197,34 @@ test('Codex app-server observation renders a standalone commandExecution result 
       }
     }
   };
-  const html = renderToStaticMarkup(
-    React.createElement(NativeCliObservationPanel, {
-      onStop: () => {},
-      stream: {
-        id: 'ncli_codex',
-        agentName: 'codex',
-        provider: 'codex',
-        tag: 'Codex',
-        status: 'running',
-        output: '',
-        items: [
-          {
-            id: 'ncli_codex:json:0:tool-result',
-            role: 'tool',
-            text: JSON.stringify(raw.params.item),
-            source: 'codex-app-server',
-            providerEventType: 'function_call_output',
-            raw,
-            createdAt: '2026-07-03T06:28:03.751Z'
-          } as never
-        ]
-      }
-    })
-  );
+  const entries = observationTimelineEntries([
+    {
+      id: 'ncli_codex:json:0:tool-result',
+      role: 'tool',
+      text: JSON.stringify(raw.params.item),
+      source: 'codex-app-server',
+      providerEventType: 'function_call_output',
+      raw,
+      createdAt: '2026-07-03T06:28:03.751Z'
+    } as never
+  ]);
 
-  expect(html).toContain('commandExecution');
-  expect(html).toContain('input');
-  expect(html).toContain('monad project read | tail -100');
-  expect(html).toContain('output');
-  expect(html).toContain('&quot;messages&quot;');
-  expect(html).toContain('<time');
+  expect(entries).toMatchObject([
+    {
+      card: {
+        type: 'command-tool',
+        view: {
+          command: 'monad project read | tail -100',
+          cwd: '/tmp/project-agent',
+          output: '{"messages":[{"text":"ok"}]}',
+          status: 'completed',
+          type: 'commandExecution'
+        }
+      },
+      kind: 'public',
+      timestamp: '06:28:03'
+    }
+  ]);
 });
 
 test('observation card projection maps Codex and Claude command tools to the shared public card', () => {
@@ -876,12 +1275,12 @@ test('observation card projection maps Codex and Claude command tools to the sha
   expect(claudeEntries).toMatchObject([{ kind: 'public', card: { type: 'command-tool' } }]);
 });
 
-test('observation card projection keeps generic tool pairs on the default public card', () => {
+test('observation card projection maps generic tool pairs to the shared command card', () => {
   const entries = observationTimelineEntries([
     {
       id: 'call',
       role: 'tool',
-      text: 'Tool call Search',
+      text: 'Tool call Search {"query":"monad"}',
       source: 'unknown',
       providerEventType: 'tool_use',
       raw: { name: 'Search' }
@@ -896,7 +1295,143 @@ test('observation card projection keeps generic tool pairs on the default public
     }
   ]);
 
-  expect(entries).toMatchObject([{ kind: 'public', card: { type: 'tool-pair' } }]);
+  expect(entries).toMatchObject([{ kind: 'public', card: { type: 'command-tool' } }]);
+});
+
+test('observation timeline rows keep consecutive tool cards grouped for virtual rendering', () => {
+  const entries = observationTimelineEntries([
+    {
+      id: 'message-before',
+      role: 'agent',
+      text: 'Before tools',
+      source: 'codex-app-server'
+    },
+    {
+      id: 'call-one',
+      role: 'tool',
+      text: 'Tool call Search {"query":"monad"}',
+      source: 'unknown',
+      providerEventType: 'tool_use',
+      raw: { name: 'Search' }
+    },
+    {
+      id: 'result-one',
+      role: 'tool',
+      text: 'No results',
+      source: 'unknown',
+      providerEventType: 'tool_result',
+      raw: { output: 'No results' }
+    },
+    {
+      id: 'call-two',
+      role: 'tool',
+      text: 'Tool call Bash',
+      source: 'unknown',
+      providerEventType: 'tool_use',
+      raw: { name: 'Bash' }
+    },
+    {
+      id: 'result-two',
+      role: 'tool',
+      text: 'done',
+      source: 'unknown',
+      providerEventType: 'tool_result',
+      raw: { output: 'done' }
+    },
+    {
+      id: 'message-after',
+      role: 'agent',
+      text: 'After tools',
+      source: 'codex-app-server'
+    }
+  ]);
+
+  expect(observationTimelineRows(entries).map((row) => row.entries.length)).toEqual([1, 2, 1]);
+});
+
+test('observation card projection normalizes JSON-like generic tool output', () => {
+  const entries = observationTimelineEntries([
+    {
+      id: 'call',
+      role: 'tool',
+      text: 'Tool call Search {"query":"monad"}',
+      source: 'codex-app-server',
+      providerEventType: 'function_call',
+      raw: { name: 'Search' }
+    },
+    {
+      id: 'result',
+      role: 'tool',
+      text: '\n"{\\"ok\\":true}"\n',
+      source: 'codex-app-server',
+      providerEventType: 'function_call_output',
+      raw: { output: '\n"{\\"ok\\":true}"\n' }
+    }
+  ]);
+
+  expect(entries).toMatchObject([
+    {
+      kind: 'public',
+      card: {
+        type: 'command-tool',
+        view: {
+          commandLanguage: 'json',
+          output: '{\n  "ok": true\n}',
+          outputLanguage: 'json'
+        }
+      }
+    }
+  ]);
+});
+
+test('observation card projection maps standalone Codex function call output to the shared command card', () => {
+  const entries = observationTimelineEntries([
+    {
+      id: 'codex-output',
+      role: 'tool',
+      text: JSON.stringify({
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              items: [{ message: { role: 'assistant', text: 'ok' } }],
+              seq: 102
+            })
+          }
+        ]
+      }),
+      source: 'codex-app-server',
+      providerEventType: 'function_call_output',
+      raw: {
+        output: JSON.stringify({
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                items: [{ message: { role: 'assistant', text: 'ok' } }],
+                seq: 102
+              })
+            }
+          ]
+        })
+      }
+    }
+  ]);
+
+  expect(entries).toMatchObject([
+    {
+      kind: 'public',
+      card: {
+        type: 'command-tool',
+        view: {
+          output:
+            '{\n  "content": [\n    {\n      "type": "text",\n      "text": "{\\"items\\":[{\\"message\\":{\\"role\\":\\"assistant\\",\\"text\\":\\"ok\\"}}],\\"seq\\":102}"\n    }\n  ]\n}',
+          outputLanguage: 'json',
+          type: 'function_call_output'
+        }
+      }
+    }
+  ]);
 });
 
 test('Claude Code Read tool result renders as a file read card', () => {
@@ -923,25 +1458,20 @@ test('Claude Code Read tool result renders as a file read card', () => {
     }
   ] as const;
   const entries = observationTimelineEntries(items as never);
-  const html = renderToStaticMarkup(
-    React.createElement(NativeCliObservationPanel, {
-      onStop: () => {},
-      stream: {
-        id: 'ncli_claude',
-        agentName: 'claude',
-        provider: 'claude-code',
-        tag: 'Claude',
-        status: 'running',
-        output: '',
-        items: items as never
-      }
-    })
-  );
 
-  expect(entries).toMatchObject([{ kind: 'public', card: { type: 'file-read-tool' } }]);
-  expect(html).toContain('/tmp/example.tsx');
-  expect(html).toContain('export');
-  expect(html).toContain('Example');
+  expect(entries).toMatchObject([
+    {
+      kind: 'public',
+      card: {
+        type: 'file-read-tool',
+        view: {
+          content: 'export function Example() { return <div />; }',
+          path: '/tmp/example.tsx',
+          type: 'Read'
+        }
+      }
+    }
+  ]);
 });
 
 test('Claude Code observation keeps result-delimited SDK queries in timeline order', () => {

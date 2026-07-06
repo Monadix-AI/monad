@@ -8,14 +8,17 @@ const sendProjectMessageApi = createSessionApi.injectEndpoints({
   endpoints: (builder) => ({
     sendProjectMessage: builder.mutation<
       SendMessageResponse,
-      { projectId: ProjectId } & Pick<SendMessageRequest, 'text'>
+      { projectId: ProjectId } & Pick<SendMessageRequest, 'attachments' | 'text'>
     >({
       queryFn: (
-        { projectId, text }: { projectId: ProjectId } & Pick<SendMessageRequest, 'text'>,
+        { projectId, text, attachments }: { projectId: ProjectId } & Pick<SendMessageRequest, 'attachments' | 'text'>,
         api: { extra: unknown }
       ) =>
         runTreaty(
-          () => clientOf(api).treaty.v1.projects({ id: projectId }).messages.post({ text }),
+          () =>
+            clientOf(api)
+              .treaty.v1.projects({ id: projectId })
+              .messages.post({ text, attachments } as Pick<SendMessageRequest, 'attachments' | 'text'>),
           (raw) => raw as SendMessageResponse
         )
     })

@@ -241,12 +241,12 @@ Read this when `bun run dev` fails or you need to find/verify this worktree's po
 ## What `bun install` + `bun run dev` do for you
 
 1. **At install time**, `bun install` runs the root `postinstall` hook →
-   `scripts/setup-dev.ts`. It is idempotent (and a no-op in CI/production). It:
+   `scripts/dev-init.ts`. It is idempotent (and a no-op in CI/production). It:
    - creates/migrates `.env.local` (sets `MONAD_HOME=<worktree>/.dev/.monad`),
    - **assigns this worktree its own ports** (derived from the checkout path) and writes
      them into `.env.local` if absent — it never clobbers a value you set by hand,
    - regenerates the `./.dev/bin` CLI shims with this worktree's absolute paths.
-2. **At dev time**, `bun run dev` runs `scripts/dev.ts`, which reads `.env.local`, mirrors
+2. **At dev time**, `bun run dev` runs `scripts/dev-prep.ts`, which reads `.env.local`, mirrors
    `WEB_PORT` → `PORT` (Next.js only honors `PORT`/`-p`, not `WEB_PORT`), points Bun's
    runtime transpiler cache at a shared `~/.cache/monad-bun` (so `*.pile` files stop piling
    up in each worktree's `node_modules`), then starts `turbo`.
@@ -305,7 +305,7 @@ The daemon binds a TCP port **unconditionally** — the WebSocket push channel
 (`/v1/stream`) is TCP-only, so the Unix socket alone can't serve the web UI. Two worktrees
 on the same default port would mean the second daemon dies with `EADDRINUSE`. The Next dev
 server (`WEB_PORT`) and the KV debug UI (`MONAD_KV_UI_PORT`) are the same story. Per-worktree
-port assignment in `scripts/setup-dev.ts` is what makes concurrent worktrees work; the
+port assignment in `scripts/dev-init.ts` is what makes concurrent worktrees work; the
 single `MONAD_PORT` env var (honored by both the daemon and every client) is what keeps
 them pointed at each other without any manual bookkeeping.
 

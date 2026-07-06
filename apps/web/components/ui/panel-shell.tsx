@@ -17,10 +17,14 @@ interface PanelShellHeaderProps {
   className?: string;
 }
 
-export function PanelShellHeader({ title, subtitle, badge, icon, actions, className }: PanelShellHeaderProps) {
+export function PanelShellHeader({ title, subtitle, badge, actions, className }: PanelShellHeaderProps) {
   return (
-    <header className={cn('flex h-12 items-center gap-3 border-b bg-muted/20 px-4', className)}>
-      {icon}
+    <header
+      className={cn(
+        'panel-shell-header [.app-main-sidebar-collapsed_&]:!pl-[8.5rem] flex h-[52px] items-center gap-3 border-b bg-muted/20 px-4',
+        className
+      )}
+    >
       <div className="flex min-w-0 flex-1 items-center gap-2.5">
         <h2 className="shrink-0 font-medium text-sm">{title}</h2>
         {badge}

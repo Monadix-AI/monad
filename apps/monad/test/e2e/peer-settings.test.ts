@@ -111,3 +111,70 @@ test('a peer mutation preserves the operator agent.approvals policy', async () =
   const after = await loadAll(paths.config, paths.profile);
   expect(after?.agent.approvals).toEqual({ deny: ['shell_exec'], ask: ['fs_write'], allow: [] });
 });
+
+test('getPeer returns one peer without any secret material', async () => {
+  await handlers.peer.upsertPeer({ peer: view() });
+  const { peer } = await handlers.peer.getPeer({ id: 'peer_HOME' });
+  expect(peer).toMatchObject({ id: 'peer_HOME', label: 'home', enabled: false });
+  expect(JSON.stringify(peer)).not.toContain('token');
+});
+
+test('getPeer throws not_found for an unknown id', async () => {
+  await expect(handlers.peer.getPeer({ id: 'peer_UNKNOWN' })).rejects.toMatchObject({
+    kind: 'not_found'
+  });
+});
+
+test('setPeerEnabled throws not_found for an unknown id', async () => {
+  await expect(handlers.peer.setPeerEnabled({ id: 'peer_UNKNOWN', enabled: true })).rejects.toMatchObject({
+    kind: 'not_found'
+  });
+});
+
+test('removePeer throws not_found for an unknown id', async () => {
+  await expect(handlers.peer.removePeer({ id: 'peer_UNKNOWN' })).rejects.toMatchObject({
+    kind: 'not_found'
+  });
+});
+
+test('setPeerCredential throws not_found for an unknown id', async () => {
+  await expect(handlers.peer.setPeerCredential({ id: 'peer_UNKNOWN', token: 'x' })).rejects.toMatchObject({
+    kind: 'not_found'
+  });
+});
+
+test('testPeerConnection throws not_found for an unknown id', async () => {
+  await expect(handlers.peer.testPeerConnection({ id: 'peer_UNKNOWN' })).rejects.toMatchObject({
+    kind: 'not_found'
+  });
+});
+
+test('testPeerConnection reports ok against a reachable peer health endpoint', async () => {
+  const server = Bun.serve({
+    port: 0,
+    fetch(req) {
+      const url = new URL(req.url);
+      if (url.pathname === '/health') return new Response(JSON.stringify({ status: 'ok' }), { status: 200 });
+      return new Response('not found', { status: 404 });
+    }
+  });
+  try {
+    await handlers.peer.upsertPeer({
+      peer: view({ baseUrl: `http://127.0.0.1:${server.port}/openai` })
+    });
+    const result = await handlers.peer.testPeerConnection({ id: 'peer_HOME' });
+    expect(result.ok).toBe(true);
+    expect(result.latencyMs).toBeGreaterThanOrEqual(0);
+  } finally {
+    server.stop(true);
+  }
+});
+
+test('testPeerConnection reports not ok against an unreachable peer', async () => {
+  await handlers.peer.upsertPeer({
+    peer: view({ baseUrl: 'http://127.0.0.1:1/openai' })
+  });
+  const result = await handlers.peer.testPeerConnection({ id: 'peer_HOME' });
+  expect(result.ok).toBe(false);
+  expect(result.error).toBeDefined();
+});

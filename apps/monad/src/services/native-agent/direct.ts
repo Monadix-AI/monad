@@ -26,12 +26,12 @@ export function createNativeAgentDirectCapabilities(
     async send(args: {
       body: NativeAgentSendRequest;
       binding: NativeAgentDirectBinding;
-      workingPath: string;
+      attachmentRoots: readonly string[];
     }): Promise<NativeAgentSendResponse> {
       const { text, noticeText, attachments } = await resolveAttachmentPayload(
         args.body,
         args.binding,
-        args.workingPath
+        args.attachmentRoots
       );
       const message: NativeAgentDirectMessage = {
         id: newId('msg'),

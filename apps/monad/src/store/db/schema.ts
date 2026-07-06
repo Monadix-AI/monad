@@ -180,21 +180,6 @@ const _channelConversationSessions = sqliteTable('channel_conversation_sessions'
   createdAt: text('created_at').notNull()
 });
 
-const _channelModeratorRounds = sqliteTable('channel_moderator_rounds', {
-  id: text('id').primaryKey(),
-  channelId: text('channel_id').notNull(),
-  moderatorKey: text('moderator_key').notNull(),
-  moderatorAgentId: text('moderator_agent_id').notNull(),
-  originalInbound: text('original_inbound').notNull(),
-  depth: integer('depth').notNull(),
-  tasks: text('tasks').notNull(),
-  results: text('results').notNull().default('[]'),
-  status: text('status').notNull(),
-  deadlineAt: text('deadline_at').notNull(),
-  createdAt: text('created_at').notNull(),
-  updatedAt: text('updated_at').notNull()
-});
-
 // `id` is a sortable evt_ ULID so ordering/resume-after-cursor is a string compare.
 const _events = sqliteTable('events', {
   id: text('id').primaryKey(),

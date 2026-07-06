@@ -1,0 +1,24 @@
+{
+  "name": "@monad/sdk-atom-client-rtk",
+  "version": "0.0.0",
+  "dependencies": {
+    "@monad/client-rtk": "workspace:*"
+  },
+  "devDependencies": {
+    "@monad/config": "workspace:*"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "module": "src/index.ts",
+  "peerDependencies": {
+    "react": "^19.2.7",
+    "react-redux": "^9.3.0"
+  },
+  "private": true,
+  "scripts": {
+    "lint": "biome check .",
+    "typecheck": "tsgo --noEmit"
+  },
+  "type": "module"
+}

@@ -71,6 +71,8 @@ export interface DaemonHandlerDeps extends SessionDeps, ModelDeps {
   getAtomDetails?: (packName: string) => import('@monad/protocol').AtomDescriptor[] | undefined;
   /** Workspace experiences registered by atom packs during the last load sweep. */
   getWorkspaceExperiences?: () => import('@monad/protocol').WorkspaceExperienceDefinition[];
+  /** Boot/rediscovery-built public workspace experience snapshot. */
+  getWorkspaceExperienceSnapshot?: () => import('@monad/protocol').WorkspaceExperienceDefinition[] | undefined;
   /** Workspace experience API routes registered by atom packs during the last load sweep. */
   getWorkspaceExperienceApiHandler?: (
     experienceId: string,

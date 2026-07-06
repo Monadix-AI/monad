@@ -56,7 +56,7 @@ export function FactsView() {
   const query = ready ? { scopeKind, scopeId: effectiveId } : skipToken;
 
   const { data: factData } = useListMemoryFactsQuery(query);
-  const facts = factSelectors.selectAll(factData ?? { ids: [], entities: {} });
+  const facts = factSelectors.selectAll(factData?.facts ?? { ids: [], entities: {} });
   const { data: core } = useGetMemoryCoreQuery(
     rawOpen && ready && !isMem0 ? { scopeKind, scopeId: effectiveId } : skipToken
   );

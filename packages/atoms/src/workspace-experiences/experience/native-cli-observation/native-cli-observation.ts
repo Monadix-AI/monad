@@ -1,50 +1,104 @@
-import type { NativeCliObservationEvent, NativeCliProvider, NativeCliUsageResponse } from '@monad/protocol';
+import type {
+  NativeCliObservationEvent,
+  NativeCliProvider,
+  NativeCliUsageLimitMeter,
+  NativeCliUsageLimitMeterRow,
+  NativeCliUsageResponse
+} from '@monad/protocol';
+import type { NativeCliObservationJsonRecordEntry, NativeCliProviderAdapter } from '@monad/sdk-atom';
 
-import { claudeRecordEvents, isClaudeObservationMessage } from './native-cli-observation-claude.ts';
-import {
-  codexAppServerRecordEvents,
-  codexExecRecordEvents,
-  isCodexObservationNotification
-} from './native-cli-observation-codex.ts';
-import { geminiRecordEvents } from './native-cli-observation-gemini.ts';
-import { isQwenObservationMessage, qwenRecordEvents } from './native-cli-observation-qwen.ts';
-import {
-  jsonRecordEntries,
-  observation,
-  rawTextValue,
-  resultMarkerText,
-  textValue
-} from './native-cli-observation-shared.ts';
+export type { NativeCliUsageLimitMeter };
 
-type JsonRecordEntry = {
-  record: Record<string, unknown>;
-  raw: string;
-};
-type CodexMessageGroup = {
-  key: string;
-  kind: 'agent' | 'user';
-  raw: Record<string, unknown>[];
-  rawLines: string[];
-  fragments: string[];
-  startedText?: string;
-  completedText?: string;
-};
+type NativeCliObservationAdapter = Pick<NativeCliProviderAdapter, 'observation' | 'provider'>;
+type NativeCliObservationAdapterProjection = NonNullable<NativeCliProviderAdapter['observation']>;
+
 type ParsedTimelineEntry =
   | { kind: 'events'; events: NativeCliObservationEvent[] }
-  | { kind: 'codex-message'; key: string };
-type NativeCliUsageLimitRow = {
-  id: string;
-  label: string;
-  percent: number;
-  meterPercent?: number;
-  resetLabel?: string;
-  valueLabel?: string;
-};
-export type NativeCliUsageLimitMeter = {
-  title: string;
-  rows: NativeCliUsageLimitRow[];
-};
+  | { kind: 'message-group'; key: string };
 
+type NativeCliObservationAdapterResolver = (
+  provider: NativeCliProvider | string | undefined
+) => NativeCliObservationAdapter | undefined;
+
+let nativeCliObservationAdapterResolver: NativeCliObservationAdapterResolver = () => undefined;
+
+export function configureNativeCliObservationAdapterResolver(resolver: NativeCliObservationAdapterResolver): void {
+  nativeCliObservationAdapterResolver = resolver;
+}
+
+function observationAdapter(args: {
+  provider?: NativeCliProvider | string;
+  adapter?: NativeCliObservationAdapter;
+}): NativeCliObservationAdapter | undefined {
+  return args.adapter ?? nativeCliObservationAdapterResolver(args.provider);
+}
+
+function observation(args: {
+  id: string;
+  role: NativeCliObservationEvent['role'];
+  text?: string;
+  source: NativeCliObservationEvent['source'];
+  providerEventType?: string;
+  createdAt?: string;
+  raw?: unknown;
+  preserveWhitespace?: boolean;
+}): NativeCliObservationEvent[] {
+  const text = args.preserveWhitespace ? args.text : args.text?.trim();
+  if (!text) return [];
+  return [
+    {
+      id: args.id,
+      role: args.role,
+      text,
+      source: args.source,
+      ...(args.providerEventType ? { providerEventType: args.providerEventType } : {}),
+      ...(args.createdAt ? { createdAt: args.createdAt } : {}),
+      ...(args.raw !== undefined ? { raw: args.raw } : {})
+    }
+  ];
+}
+
+function parseJsonObject(value: string): Record<string, unknown> | undefined {
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function jsonRecordEntries(text: string): NativeCliObservationJsonRecordEntry[] {
+  if (!text.includes('{')) return [];
+  const trimmed = text.trim();
+  const whole = parseJsonObject(trimmed);
+  if (whole) return [{ record: whole, raw: trimmed }];
+  const lineRecords = text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith('{'))
+    .map((line) => {
+      const record = parseJsonObject(line);
+      return record ? { record, raw: line } : undefined;
+    })
+    .filter((entry): entry is NativeCliObservationJsonRecordEntry => !!entry);
+  if (lineRecords.length > 0) return lineRecords;
+  return [];
+}
+
+function textValue(...values: unknown[]): string | undefined {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim()) return value.trim();
+  }
+  return undefined;
+}
+
+function resultMarkerText(record: Record<string, unknown>): string {
+  const subtype = textValue(record.subtype) ?? (record.is_error ? 'error' : 'completed');
+  const stopReason = textValue(record.stop_reason);
+  return stopReason ? `Result: ${subtype} (${stopReason})` : `Result: ${subtype}`;
+}
 function rawJsonObservation(
   id: string,
   rawLine: string,
@@ -81,142 +135,46 @@ function unknownJsonRpcError(
   return [];
 }
 
-function recordValue(value: unknown): Record<string, unknown> | undefined {
-  return value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : undefined;
-}
-
-function codexItemText(item: Record<string, unknown> | undefined): string | undefined {
-  if (!item) return undefined;
-  const direct = rawTextValue(item.text);
-  if (direct !== undefined) return direct;
-  const content = item.content;
-  if (typeof content === 'string') return content;
-  if (!Array.isArray(content)) return undefined;
-  const parts = content.flatMap((part) => {
-    if (!part || typeof part !== 'object' || Array.isArray(part)) return [];
-    const text = rawTextValue((part as Record<string, unknown>).text, (part as Record<string, unknown>).content);
-    return text === undefined ? [] : [text];
-  });
-  return parts.length > 0 ? parts.join('') : undefined;
-}
-
-function codexMessageGroup(
-  record: Record<string, unknown>
-): { key: string; kind: CodexMessageGroup['kind'] } | undefined {
-  const method = textValue(record.method);
-  if (!method) return undefined;
-  const params = recordValue(record.params);
-  if (!params) return undefined;
-  const item = recordValue(params.item);
-  if (method === 'item/started' || method === 'item/completed') {
-    const itemType = textValue(item?.type);
-    const kind = itemType === 'agentMessage' ? 'agent' : itemType === 'userMessage' ? 'user' : undefined;
-    if (!kind) return undefined;
-    const itemId = textValue(item?.id);
-    if (!itemId) return undefined;
-    return { key: [textValue(params.threadId), textValue(params.turnId), itemId].filter(Boolean).join(':'), kind };
-  }
-  if (method === 'item/agentMessage/delta') {
-    const itemId = textValue(params.itemId);
-    if (!itemId) return undefined;
-    return {
-      key: [textValue(params.threadId), textValue(params.turnId), itemId].filter(Boolean).join(':'),
-      kind: 'agent'
-    };
-  }
-  return undefined;
-}
-
-function codexMessageLifecycleText(record: Record<string, unknown>): {
-  fragment?: string;
-  startedText?: string;
-  completedText?: string;
-} {
-  const method = textValue(record.method);
-  const params = recordValue(record.params);
-  if (!method || !params) return {};
-  if (method === 'item/agentMessage/delta') return { fragment: rawTextValue(params.delta, params.text) };
-  const item = recordValue(params.item);
-  const itemType = textValue(item?.type);
-  if (itemType !== 'agentMessage' && itemType !== 'userMessage') return {};
-  const text = codexItemText(item);
-  if (method === 'item/started') return { startedText: text };
-  if (method === 'item/completed') return { completedText: text };
-  return {};
-}
-
-function codexMessageGroupEvent(id: string, group: CodexMessageGroup): NativeCliObservationEvent[] {
-  const text = group.completedText ?? group.startedText ?? group.fragments.join('');
-  return observation({
-    id: `${id}:json:${group.key}:${group.kind}-message`,
-    role: group.kind,
-    text,
-    source: 'codex-app-server',
-    providerEventType: group.kind === 'agent' ? 'item/agentMessage' : 'item/userMessage',
-    raw: group.rawLines.length > 1 ? group.rawLines : (group.raw[0] ?? group.rawLines[0])
-  });
-}
-
 function recordEvents(
   id: string,
   provider: NativeCliProvider | string | undefined,
+  adapterObservation: NativeCliProviderAdapter['observation'] | undefined,
   record: Record<string, unknown>,
   recordIndex: number
 ): NativeCliObservationEvent[] {
-  if (isCodexObservationNotification(record)) {
-    const appServer = codexAppServerRecordEvents(id, record, recordIndex);
-    if (appServer.length > 0) return appServer;
-  }
-  if (provider === 'codex') {
-    const codex = codexExecRecordEvents(id, record, recordIndex);
-    if (codex.length > 0) return codex;
-  }
-  if (provider === 'claude-code' && isClaudeObservationMessage(record)) {
-    const claude = claudeRecordEvents(id, record, recordIndex);
-    if (claude.length > 0) return claude;
-  }
-  if (provider === 'gemini') {
-    const gemini = geminiRecordEvents(id, record, recordIndex);
-    if (gemini.length > 0) return gemini;
-  }
-  if (provider === 'qwen' && isQwenObservationMessage(record)) {
-    const qwen = qwenRecordEvents(id, record, recordIndex);
-    if (qwen.length > 0) return qwen;
-  }
-  return [
-    ...codexExecRecordEvents(id, record, recordIndex),
-    ...(isClaudeObservationMessage(record) ? claudeRecordEvents(id, record, recordIndex) : []),
-    ...(isQwenObservationMessage(record) ? qwenRecordEvents(id, record, recordIndex) : []),
-    ...geminiRecordEvents(id, record, recordIndex),
-    ...unknownJsonRpcError(id, record, recordIndex)
-  ];
+  const out =
+    adapterObservation?.recordProjectors.flatMap((recordProjector) => {
+      if (recordProjector.supports && !recordProjector.supports(record)) return [];
+      return recordProjector.parse({ id, provider, record, recordIndex });
+    }) ?? [];
+  return out.length > 0 ? out : unknownJsonRpcError(id, record, recordIndex);
 }
 
 function parsedJsonEvents(args: {
   id: string;
   provider?: NativeCliProvider | string;
-  entries: JsonRecordEntry[];
+  adapterObservation?: NativeCliProviderAdapter['observation'];
+  entries: NativeCliObservationJsonRecordEntry[];
 }): NativeCliObservationEvent[] {
   const timeline: ParsedTimelineEntry[] = [];
-  const codexMessageGroups = new Map<string, CodexMessageGroup>();
+  const messageGroupProjector = args.adapterObservation?.messageGroup;
+  const messageGroups = new Map<
+    string,
+    { projector: NonNullable<NativeCliObservationAdapterProjection['messageGroup']>; state: unknown }
+  >();
   args.entries.forEach((entry, index) => {
-    const messageGroup = codexMessageGroup(entry.record);
-    if (messageGroup) {
-      let group = codexMessageGroups.get(messageGroup.key);
+    const messageGroup = messageGroupProjector?.create(entry.record);
+    if (messageGroup && messageGroupProjector) {
+      let group = messageGroups.get(messageGroup.key);
       if (!group) {
-        group = { key: messageGroup.key, kind: messageGroup.kind, raw: [], rawLines: [], fragments: [] };
-        codexMessageGroups.set(messageGroup.key, group);
-        timeline.push({ kind: 'codex-message', key: messageGroup.key });
+        group = { projector: messageGroupProjector, state: messageGroup.state };
+        messageGroups.set(messageGroup.key, group);
+        timeline.push({ kind: 'message-group', key: messageGroup.key });
       }
-      group.raw.push(entry.record);
-      group.rawLines.push(entry.raw);
-      const text = codexMessageLifecycleText(entry.record);
-      if (text.fragment !== undefined) group.fragments.push(text.fragment);
-      if (text.startedText !== undefined) group.startedText = text.startedText;
-      if (text.completedText !== undefined) group.completedText = text.completedText;
+      group.projector.append(group.state, entry);
       return;
     }
-    const events = recordEvents(args.id, args.provider, entry.record, index);
+    const events = recordEvents(args.id, args.provider, args.adapterObservation, entry.record, index);
     timeline.push({
       kind: 'events',
       events: events.length > 0 ? events : rawJsonObservation(args.id, entry.raw, entry.record, index)
@@ -224,8 +182,8 @@ function parsedJsonEvents(args: {
   });
   return timeline.flatMap((entry) => {
     if (entry.kind === 'events') return entry.events;
-    const group = codexMessageGroups.get(entry.key);
-    return group ? codexMessageGroupEvent(args.id, group) : [];
+    const group = messageGroups.get(entry.key);
+    return group ? group.projector.render(args.id, group.state) : [];
   });
 }
 
@@ -320,19 +278,20 @@ function mergeAdjacentChunkObservations(events: NativeCliObservationEvent[]): Na
 function nativeCliObservationEvents(args: {
   id: string;
   provider?: NativeCliProvider | string;
+  adapter?: NativeCliObservationAdapter;
   output?: string;
   observedAt?: string;
 }): NativeCliObservationEvent[] | undefined {
   const text = args.output?.trim();
   if (!text) return [];
   const entries = jsonRecordEntries(text);
+  const adapterObservation = observationAdapter(args)?.observation;
   if (entries.length > 0) {
-    const events = removeAdjacentDuplicateObservations(
-      mergeAdjacentChunkObservations(parsedJsonEvents({ id: args.id, provider: args.provider, entries }))
+    return removeAdjacentDuplicateObservations(
+      mergeAdjacentChunkObservations(
+        parsedJsonEvents({ id: args.id, provider: args.provider, adapterObservation, entries })
+      )
     );
-    return args.observedAt
-      ? events.map((event) => ({ ...event, createdAt: event.createdAt ?? args.observedAt }))
-      : events;
   }
   return undefined;
 }
@@ -340,6 +299,7 @@ function nativeCliObservationEvents(args: {
 export function nativeCliStreamItems(args: {
   id: string;
   provider?: NativeCliProvider | string;
+  adapter?: NativeCliObservationAdapter;
   output?: string;
   observedAt?: string;
 }): NativeCliObservationEvent[] {
@@ -355,22 +315,8 @@ export function nativeCliStreamItems(args: {
       id: `${args.id}:${index}`,
       role: part.startsWith('tool:') ? ('tool' as const) : ('agent' as const),
       text: part,
-      source: 'plain-text' as const,
-      createdAt: args.observedAt
+      source: 'plain-text' as const
     }));
-}
-
-function numberValue(...values: unknown[]): number | undefined {
-  for (const value of values) {
-    if (typeof value === 'number' && Number.isFinite(value)) return value;
-  }
-  return undefined;
-}
-
-function resetLabel(value: unknown): string | undefined {
-  const ms = numberValue(value);
-  if (ms === undefined) return undefined;
-  return new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(ms));
 }
 
 function resetIsoLabel(value: string | null | undefined): string | undefined {
@@ -384,84 +330,45 @@ function compactNumber(value: number): string {
   return new Intl.NumberFormat(undefined, { maximumFractionDigits: 1, notation: 'compact' }).format(value);
 }
 
-function tokenUsageRow(
-  id: string,
-  label: string,
-  tokens: unknown,
-  contextWindow: unknown
-): NativeCliUsageLimitRow | undefined {
-  const totalTokens = numberValue(tokens);
-  const window = numberValue(contextWindow);
-  if (totalTokens === undefined || window === undefined || window <= 0) return undefined;
-  const percent = Math.max(0, Math.round((totalTokens / window) * 100));
-  return {
-    id,
-    label,
-    percent,
-    meterPercent: Math.min(100, percent),
-    valueLabel: `${compactNumber(totalTokens)} / ${compactNumber(window)}`
-  };
+function usageCategoryLabel(category: string): string {
+  if (category === 'primary') return '5-hour limit';
+  if (category === 'secondary') return 'Weekly · all models';
+  if (category === 'five_hour') return '5h';
+  if (category === 'seven_day') return 'Weekly';
+  if (category === 'last_turn') return 'Last turn';
+  if (category === 'thread_total') return 'Thread total';
+  return category.replace(/_/g, ' ');
 }
 
-function limitLabel(id: string, source: Record<string, unknown>): string {
-  const windowMins = numberValue(source.windowDurationMins, source.window_minutes);
-  if (id === 'primary' && windowMins === 300) return '5-hour limit';
-  if (id === 'secondary' && windowMins === 10_080) return 'Weekly · all models';
-  if (id === 'five_hour') return '5h';
-  if (id === 'seven_day') return 'Weekly';
-  return id.replace(/_/g, ' ');
+function usageValueLabel(category: string, current: number, max: number): string | undefined {
+  if (category !== 'last_turn' && category !== 'thread_total') return undefined;
+  return `${compactNumber(current)} / ${compactNumber(max)}`;
 }
 
-function usageRow(id: string, value: unknown): NativeCliUsageLimitRow | undefined {
-  const record = recordValue(value);
-  if (!record) return undefined;
-  const used = numberValue(record.usedPercent, record.utilization, record.used_percent);
-  if (used === undefined) return undefined;
-  const percent = Math.max(0, Math.min(100, Math.round(100 - used)));
-  return {
-    id,
-    label: limitLabel(id, record),
-    percent,
-    resetLabel: resetLabel(record.resetsAt ?? record.resets_at)
-  };
-}
-
-function usageRowsFromRecord(record: Record<string, unknown>): NativeCliUsageLimitRow[] {
-  if (record.method === 'thread/tokenUsage/updated') {
-    const params = recordValue(record.params);
-    const tokenUsage = recordValue(params?.tokenUsage);
-    const last = recordValue(tokenUsage?.last);
-    const total = recordValue(tokenUsage?.total);
-    const contextWindow = tokenUsage?.modelContextWindow;
+function usageRowsFromRecord(
+  adapterObservation: NativeCliProviderAdapter['observation'] | undefined,
+  record: Record<string, unknown>
+): NativeCliUsageLimitMeterRow[] {
+  return (adapterObservation?.usageRecords?.(record) ?? []).flatMap((usageRecord) => {
+    if (usageRecord.max === undefined || usageRecord.max <= 0) return [];
+    const rawPercent = Math.max(0, Math.round((usageRecord.current / usageRecord.max) * 100));
     return [
-      tokenUsageRow('last_turn', 'Last turn', last?.totalTokens, contextWindow),
-      tokenUsageRow('thread_total', 'Thread total', total?.totalTokens, contextWindow)
-    ].filter((row): row is NativeCliUsageLimitRow => !!row);
-  }
-  if (record.method === 'account/rateLimits/updated') {
-    const params = recordValue(record.params);
-    const limits = recordValue(params?.rateLimits ?? params?.rate_limits);
-    return limits
-      ? Object.entries(limits)
-          .map(([id, value]) => usageRow(id, value))
-          .filter((row): row is NativeCliUsageLimitRow => !!row)
-      : [];
-  }
-  if (record.type === 'rate_limit_event') {
-    const info = recordValue(record.rate_limit_info ?? record.rateLimitInfo);
-    const id = textValue(info?.rateLimitType, info?.rate_limit_type);
-    const row = id ? usageRow(id, info) : undefined;
-    return row ? [row] : [];
-  }
-  const limits = recordValue(record.rate_limits ?? record.rateLimits);
-  return limits
-    ? Object.entries(limits)
-        .map(([id, value]) => usageRow(id, value))
-        .filter((row): row is NativeCliUsageLimitRow => !!row)
-    : [];
+      {
+        id: usageRecord.name,
+        label: usageCategoryLabel(usageRecord.name),
+        percent: rawPercent,
+        meterPercent: Math.min(100, rawPercent),
+        resetLabel: resetIsoLabel(usageRecord.resetAt),
+        valueLabel: usageValueLabel(usageRecord.name, usageRecord.current, usageRecord.max)
+      }
+    ];
+  });
 }
 
-function mergeUsageRows(existing: NativeCliUsageLimitRow[], next: NativeCliUsageLimitRow[]): NativeCliUsageLimitRow[] {
+function mergeUsageRows(
+  existing: NativeCliUsageLimitMeterRow[],
+  next: NativeCliUsageLimitMeterRow[]
+): NativeCliUsageLimitMeterRow[] {
   const byId = new Map(existing.map((row) => [row.id, row]));
   for (const row of next) byId.set(row.id, row);
   return [...byId.values()];
@@ -470,11 +377,13 @@ function mergeUsageRows(existing: NativeCliUsageLimitRow[], next: NativeCliUsage
 export function nativeCliUsageLimitMeter(args: {
   output?: string;
   provider?: NativeCliProvider | string;
+  adapter?: NativeCliObservationAdapter;
 }): NativeCliUsageLimitMeter | null {
   const text = args.output?.trim();
   if (!text) return null;
-  const rows = jsonRecordEntries(text).reduce<NativeCliUsageLimitRow[]>((acc, entry) => {
-    const next = usageRowsFromRecord(entry.record);
+  const adapterObservation = observationAdapter(args)?.observation;
+  const rows = jsonRecordEntries(text).reduce<NativeCliUsageLimitMeterRow[]>((acc, entry) => {
+    const next = usageRowsFromRecord(adapterObservation, entry.record);
     return next.length > 0 ? mergeUsageRows(acc, next) : acc;
   }, []);
   if (rows.length === 0) return null;
@@ -486,13 +395,14 @@ export function nativeCliUsageLimitMeterFromResponse(
   usage: NativeCliUsageResponse | undefined
 ): NativeCliUsageLimitMeter | null {
   const rows = (usage?.records ?? []).flatMap((record) => {
-    if (record.current === null || record.max === null || record.max <= 0) return [];
-    const percent = Math.max(0, Math.min(100, Math.round(((record.max - record.current) / record.max) * 100)));
+    if (record.max === undefined || record.max <= 0) return [];
+    const percent = Math.max(0, Math.round((record.current / record.max) * 100));
     return [
       {
-        id: record.category,
-        label: record.category.replace(/_/g, ' '),
+        id: record.name,
+        label: usageCategoryLabel(record.name),
         percent,
+        meterPercent: Math.min(100, percent),
         resetLabel: resetIsoLabel(record.resetAt)
       }
     ];

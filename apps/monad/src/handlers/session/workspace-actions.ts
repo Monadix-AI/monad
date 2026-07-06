@@ -1,9 +1,16 @@
 import type { WorkspaceAction } from '@monad/protocol';
 
+import { randomUUID } from 'node:crypto';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
 export interface WorkspaceActionCommand {
   argv: string[];
   env?: Record<string, string>;
 }
+
+const DRAFT_ATTACHMENT_DIR = 'monad-draft-attachments';
 
 export function workspaceActionLabel(action: WorkspaceAction, platform: NodeJS.Platform = process.platform): string {
   if (action === 'open-terminal') return 'Open in terminal';
@@ -39,6 +46,43 @@ export function workspaceActionCommands(
     { argv: ['konsole', '--workdir', cwd] },
     { argv: ['xterm', '-e', 'sh', '-lc', 'cd "$1" && exec sh', 'sh', cwd] }
   ];
+}
+
+function openPathCommands(path: string, platform: NodeJS.Platform = process.platform): WorkspaceActionCommand[] {
+  if (platform === 'darwin') return [{ argv: ['open', path] }];
+  if (platform === 'win32') return [{ argv: ['cmd', '/c', 'start', '', path] }];
+  return [{ argv: ['xdg-open', path] }];
+}
+
+function safeAttachmentName(name: string): string {
+  const cleaned = Array.from(name)
+    .map((char) => (char.charCodeAt(0) < 32 || '\\/:*?"<>|'.includes(char) ? '_' : char))
+    .join('')
+    .replace(/^\.+$/, 'file');
+  return cleaned.slice(0, 180) || 'file';
+}
+
+export async function openDraftAttachment({ data, name }: { data: Uint8Array; name: string }): Promise<void> {
+  const dir = join(tmpdir(), DRAFT_ATTACHMENT_DIR);
+  await mkdir(dir, { recursive: true });
+  const path = join(dir, `${randomUUID()}-${safeAttachmentName(name)}`);
+  await writeFile(path, data);
+  let lastError: unknown;
+  for (const command of openPathCommands(path)) {
+    try {
+      const proc = Bun.spawn(command.argv, {
+        env: { ...Bun.env, ...(command.env ?? {}) },
+        stdout: 'ignore',
+        stderr: 'ignore',
+        stdin: 'ignore'
+      });
+      proc.unref();
+      return;
+    } catch (err) {
+      lastError = err;
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error('Open attachment failed');
 }
 
 export async function runWorkspaceAction(action: WorkspaceAction, cwd: string): Promise<void> {

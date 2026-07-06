@@ -14,5 +14,3 @@ mkdirSync(schemaDir, { recursive: true });
 
 await $`codex app-server generate-ts --out ${tsDir}`;
 await $`codex app-server generate-json-schema --out ${schemaDir}`;
-
-process.stdout.write(`Generated Codex app-server protocol artifacts in ${outDir}\n`);

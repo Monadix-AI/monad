@@ -10,7 +10,8 @@ export function providerToView(provider: Provider): ProviderView {
     label: provider.label,
     type: provider.type,
     baseUrl: provider.baseUrl,
-    extra: provider.extra
+    extra: provider.extra,
+    enabled: provider.enabled
   };
 }
 
@@ -18,7 +19,7 @@ export function viewToProvider(v: ProviderView): Provider {
   if (!isKnownProviderType(v.type)) {
     throw new Error(`unknown provider type "${v.type}"`);
   }
-  return { id: v.id, label: v.label, type: v.type, baseUrl: v.baseUrl, extra: v.extra };
+  return { id: v.id, label: v.label, type: v.type, baseUrl: v.baseUrl, extra: v.extra, enabled: v.enabled };
 }
 
 function isKnownProviderType(value: string): value is Provider['type'] {

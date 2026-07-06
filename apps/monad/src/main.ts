@@ -29,6 +29,7 @@ import { createLogger } from '@monad/logger';
 
 import { applyAcpDelegateTool } from '@/bootstrap/acp-delegate.ts';
 import { buildServiceTools, builtinTools, registerSandboxLauncher } from '@/capabilities/tools';
+import { createWorkspaceExperienceSnapshot } from '@/handlers/atom-pack/atom-pack-content.ts';
 import { AtomPackRegistry } from '@/handlers/atom-pack/index.ts';
 import { type CommandBundle, createCommandRegistry } from '@/handlers/commands/index.ts';
 import { createDaemonHandlers } from '@/handlers/handlers.ts';
@@ -149,7 +150,7 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
     return val;
   };
   // MONAD_PORT overrides the configured port (dev: one daemon per git worktree on its own port,
-  // assigned by scripts/setup-dev.ts). Clients honour the same var in resolveClientConn so they
+  // assigned by scripts/dev-init.ts). Clients honour the same var in resolveClientConn so they
   // dial the matching port. Unset in production → falls back to config.json.
   const PORT = Number(Bun.env.MONAD_PORT) || cfg.network.port;
   const HOST = remoteAccess.enabled ? '0.0.0.0' : '127.0.0.1';
@@ -342,6 +343,16 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
   // Per-pack individual atoms from the latest sweep (packId → its atoms), read by the atom-pack
   // manager for the detail view. Mutated in place so the accessor stays valid across re-discovery.
   const atomDetailsByPack = new Map<string, AtomDescriptor[]>();
+  let workspaceExperienceSnapshot:
+    | Awaited<ReturnType<typeof createWorkspaceExperienceSnapshot>>['experiences']
+    | undefined;
+  async function refreshWorkspaceExperienceSnapshot(): Promise<void> {
+    const snapshot = await createWorkspaceExperienceSnapshot(paths.packs, [...registry.workspaceExperiences.values()]);
+    workspaceExperienceSnapshot = snapshot.experiences;
+    for (const warning of snapshot.warnings) {
+      logger.warn(`monad: workspace experience "${warning.experienceId}" is not serviceable: ${warning.error}`);
+    }
+  }
   const channelRegistry = await createChannelRegistry(paths, {
     builtin: {
       onConnector: (c) => registry.registerConnector(c),
@@ -391,6 +402,9 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
   // Resolve bare atom-command names to one winner (pin ?? first-wins); each is always reachable as
   // /<packId>.<command> regardless. Built-in reserved names are untouched.
   commandRegistry.resolvePins(cfg.atomPins.command, (c) => atomConflicts.push(c));
+  void refreshWorkspaceExperienceSnapshot().catch((err) =>
+    logger.warn(`monad: workspace experience warmup failed: ${err instanceof Error ? err.message : String(err)}`)
+  );
   // The sandbox launcher atoms have now registered (built-in pack + any discovered pack) — select
   // the one that confines spawned children for this platform and wire it into the spawn seam.
   finalizeSandboxLauncher(cfg);
@@ -703,9 +717,13 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
     getMcpStatus,
     mcpAuthorize,
     mcpReconnect,
-    rediscoverAtomPacks: () => Promise.all([rediscoverAtomPacks(), reloadSkills()]).then(() => {}),
+    rediscoverAtomPacks: async () => {
+      await Promise.all([rediscoverAtomPacks(), reloadSkills()]);
+      await refreshWorkspaceExperienceSnapshot();
+    },
     getAtomConflicts: () => atomConflicts,
     getAtomDetails: (packName: string) => atomDetailsByPack.get(packName),
+    getWorkspaceExperienceSnapshot: () => workspaceExperienceSnapshot,
     getWorkspaceExperienceApiHandler: (experienceId, method, path) =>
       registry.getWorkspaceExperienceApiHandler(experienceId, method, path),
     getWorkspaceExperiences: () => [...registry.workspaceExperiences.values()],

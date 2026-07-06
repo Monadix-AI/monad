@@ -16,8 +16,8 @@ import { HugeiconsIcon } from '@hugeicons/react';
 import { Button } from '@monad/ui';
 
 import { useT } from '@/components/I18nProvider';
-import { MonadLogo } from '@/components/MonadLogo';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { PanelShellHeader } from '@/components/ui/panel-shell';
 
 interface WorkspaceHomeProps {
   agentSession: Session | null;
@@ -76,42 +76,38 @@ export function WorkspaceHome({
         aria-hidden="true"
         className="workspace-home-background"
       />
-      <header className="relative z-10 flex h-14 shrink-0 items-center justify-between border-border border-b px-5 sm:px-8">
-        <button
-          className="flex cursor-pointer items-center gap-2 text-left"
-          onClick={onOpenAgentChat}
-          type="button"
-        >
-          <MonadLogo className="h-5 w-[4.375rem] text-foreground" />
-        </button>
-        <div className="flex items-center gap-1">
-          <Button
-            className="hidden sm:inline-flex"
-            onClick={onOpenStudio}
-            size="sm"
-            variant="ghost"
-          >
-            <HugeiconsIcon
-              data-icon="inline-start"
-              icon={SlidersHorizontalIcon}
-            />
-            {t('web.studio.title')}
-          </Button>
-          <Button
-            className="hidden sm:inline-flex"
-            onClick={onOpenSettings}
-            size="sm"
-            variant="ghost"
-          >
-            <HugeiconsIcon
-              data-icon="inline-start"
-              icon={Settings02Icon}
-            />
-            {t('web.sidebar.settings')}
-          </Button>
-          <ThemeToggle />
-        </div>
-      </header>
+      <PanelShellHeader
+        actions={
+          <>
+            <Button
+              className="hidden sm:inline-flex"
+              onClick={onOpenStudio}
+              size="sm"
+              variant="ghost"
+            >
+              <HugeiconsIcon
+                data-icon="inline-start"
+                icon={SlidersHorizontalIcon}
+              />
+              {t('web.studio.title')}
+            </Button>
+            <Button
+              className="hidden sm:inline-flex"
+              onClick={onOpenSettings}
+              size="sm"
+              variant="ghost"
+            >
+              <HugeiconsIcon
+                data-icon="inline-start"
+                icon={Settings02Icon}
+              />
+              {t('web.sidebar.settings')}
+            </Button>
+            <ThemeToggle />
+          </>
+        }
+        title={t('web.workspace.title')}
+      />
 
       <div className="relative z-10 min-h-0 flex-1 overflow-auto">
         <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-5 py-8 sm:px-8 lg:py-10">
