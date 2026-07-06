@@ -130,7 +130,7 @@ test('system upgrade can detach the installer from the daemon process', async ()
   });
   expect(unrefCalled).toBe(true);
   expect(upgrade.getStatus()).toMatchObject({
-    stage: 'restarting',
-    progress: 90
+    stage: 'installing',
+    progress: 75
   });
 });

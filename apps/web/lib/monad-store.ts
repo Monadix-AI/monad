@@ -15,6 +15,7 @@ export interface MonadConnectionConfig {
 
 const ERROR_DETAIL_LIMIT = 3000;
 const UPGRADE_RESTART_SUPPRESS_UNTIL_KEY = 'monad:upgradeRestartSuppressUntil';
+let upgradeReloadWatcher: number | null = null;
 
 function truncate(value: string, limit = ERROR_DETAIL_LIMIT): string {
   return value.length > limit ? `${value.slice(0, limit)}\n… truncated` : value;
@@ -98,6 +99,39 @@ function toastDetailForApiError(err: MonadApiError): unknown {
 
 export function markUpgradeRestartWindow(durationMs = 120_000): void {
   localStorage.setItem(UPGRADE_RESTART_SUPPRESS_UNTIL_KEY, String(Date.now() + durationMs));
+}
+
+export function watchUpgradeRestartAndReload(args: {
+  baseUrl: string;
+  currentVersion?: string;
+  targetVersion?: string | null;
+}): void {
+  markUpgradeRestartWindow();
+  if (upgradeReloadWatcher !== null) window.clearInterval(upgradeReloadWatcher);
+
+  const targetVersion = args.targetVersion ?? undefined;
+  const currentVersion = args.currentVersion;
+  const deadline = Date.now() + 120_000;
+  upgradeReloadWatcher = window.setInterval(async () => {
+    if (Date.now() > deadline) {
+      if (upgradeReloadWatcher !== null) window.clearInterval(upgradeReloadWatcher);
+      upgradeReloadWatcher = null;
+      return;
+    }
+    try {
+      const res = await fetch(`${args.baseUrl}/health`, { cache: 'no-store' });
+      if (!res.ok) return;
+      const health = (await res.json()) as { version?: string };
+      const upgraded = targetVersion ? health.version === targetVersion : health.version && health.version !== currentVersion;
+      if (!upgraded) return;
+      if (upgradeReloadWatcher !== null) window.clearInterval(upgradeReloadWatcher);
+      upgradeReloadWatcher = null;
+      localStorage.removeItem(UPGRADE_RESTART_SUPPRESS_UNTIL_KEY);
+      window.location.reload();
+    } catch {
+      return;
+    }
+  }, 1000);
 }
 
 function shouldSuppressApiErrorDuringUpgrade(err: MonadApiError): boolean {

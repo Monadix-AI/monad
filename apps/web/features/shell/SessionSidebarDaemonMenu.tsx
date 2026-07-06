@@ -19,7 +19,6 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
   useEffect,
-  useRef,
   useState
 } from 'react';
 
@@ -41,7 +40,7 @@ import {
   readRemoteDaemonConnections,
   saveRemoteDaemonConnection
 } from '@/lib/daemon-connections';
-import { markUpgradeRestartWindow } from '@/lib/monad-store';
+import { watchUpgradeRestartAndReload } from '@/lib/monad-store';
 import { RemoteDaemonDialog } from './SessionSidebarRemoteDaemonDialog';
 
 type TFunction = ReturnType<typeof useT>;
@@ -173,7 +172,6 @@ export function DaemonMenu({
   const [remoteConnections, setRemoteConnections] = useState<RemoteDaemonConnection[]>([]);
   const [activeConnection, setActiveConnection] = useState(() => getActiveDaemonConnection(daemonBaseUrl));
   const [showConnectionLabel, setShowConnectionLabel] = useState(false);
-  const reloadScheduledRef = useRef(false);
   const { data: upgradeStatus } = useGetSystemUpgradeQuery(undefined, {
     pollingInterval: hasUpgrade ? 1000 : 0,
     skip: !hasUpgrade
@@ -204,15 +202,6 @@ export function DaemonMenu({
     return () => window.clearInterval(interval);
   }, [hasConnectionChoices]);
 
-  useEffect(() => {
-    if ((upgradeStatus?.stage !== 'restarting' && upgradeStatus?.stage !== 'complete') || reloadScheduledRef.current) {
-      return;
-    }
-    reloadScheduledRef.current = true;
-    const timeout = window.setTimeout(() => window.location.reload(), 2000);
-    return () => window.clearTimeout(timeout);
-  }, [upgradeStatus?.stage]);
-
   const onSelectLocalDaemon = () => {
     if (activeConnection.id === LOCAL_DAEMON_ID) return;
     onSwitchDaemonConnection({ type: 'local' });
@@ -235,7 +224,11 @@ export function DaemonMenu({
 
   const startUpgrade = async () => {
     if (upgradeActive) return;
-    markUpgradeRestartWindow();
+    watchUpgradeRestartAndReload({
+      baseUrl: daemonBaseUrl,
+      currentVersion: daemonVersion,
+      targetVersion: upgradeStatus?.latestVersion
+    });
     await startSystemUpgrade().unwrap();
   };
 

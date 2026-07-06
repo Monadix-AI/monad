@@ -57,7 +57,7 @@ export function createSystemUpgradeModule(options: SystemUpgradeOptions = {}) {
           stdout: 'ignore'
         });
         proc.unref?.();
-        setStage('restarting');
+        setStage('installing');
         return;
       }
       const proc = spawn([options.binaryPath ?? process.execPath, 'upgrade'], {
