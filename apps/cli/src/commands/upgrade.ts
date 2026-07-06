@@ -38,7 +38,7 @@ interface ResolvedUpgradeCommandDeps {
   installScriptName: string;
   releaseApiBaseUrl: string;
   releaseDownloadBaseUrl: string;
-  installScriptUrl: string;
+  installScriptUrl: string | null;
   installerEnv: Record<string, string>;
   fetch: FetchFn;
 }
@@ -53,9 +53,7 @@ function resolveDeps(deps: UpgradeCommandDeps = {}): ResolvedUpgradeCommandDeps 
     installScriptName,
     releaseApiBaseUrl: deps.releaseApiBaseUrl ?? `https://api.github.com/repos/${RELEASE_REPOSITORY}`,
     releaseDownloadBaseUrl: deps.releaseDownloadBaseUrl ?? 'https://github.com',
-    installScriptUrl:
-      deps.installScriptUrl ??
-      `https://raw.githubusercontent.com/${RELEASE_REPOSITORY}/main/scripts/${installScriptName}`,
+    installScriptUrl: deps.installScriptUrl ?? null,
     installerEnv: deps.installerEnv ?? {},
     fetch: deps.fetch ?? ((...args) => globalThis.fetch(...args))
   };
@@ -70,7 +68,7 @@ async function fetchLatestRelease(channel: string, deps: ResolvedUpgradeCommandD
     const headers = { 'User-Agent': 'monad-cli' };
     if (channel === 'stable') {
       const res = await deps.fetch(`${deps.releaseApiBaseUrl}/releases/latest`, { headers });
-      if (!res.ok) return null;
+      if (!res.ok) return fetchStableReleaseFromRedirect(deps);
       const data = (await res.json()) as ReleaseInfo;
       return data.tag_name ? { tag: data.tag_name, version: normalizeReleaseVersion(data.tag_name) } : null;
     }
@@ -86,6 +84,20 @@ async function fetchLatestRelease(channel: string, deps: ResolvedUpgradeCommandD
       }
     }
     return null;
+  } catch {
+    return null;
+  }
+}
+
+async function fetchStableReleaseFromRedirect(deps: ResolvedUpgradeCommandDeps): Promise<ResolvedRelease | null> {
+  try {
+    const res = await deps.fetch(`${deps.releaseDownloadBaseUrl}/${RELEASE_REPOSITORY}/releases/latest`, {
+      headers: { 'User-Agent': 'monad-cli' },
+      redirect: 'manual'
+    });
+    const location = res.headers.get('location') ?? res.url;
+    const tag = location.match(/\/releases\/tag\/([^/?#]+)/)?.[1];
+    return tag ? { tag, version: normalizeReleaseVersion(tag) } : null;
   } catch {
     return null;
   }
@@ -222,7 +234,10 @@ export function createUpgradeCommand(commandDeps: UpgradeCommandDeps = {}): Comm
 
       const scriptPath = join(tmpdir(), `monad-install-${Date.now()}-${deps.installScriptName}`);
       try {
-        const res = await deps.fetch(deps.installScriptUrl);
+        const scriptUrl =
+          deps.installScriptUrl ??
+          `${deps.releaseDownloadBaseUrl}/${RELEASE_REPOSITORY}/releases/download/${latestRelease.tag}/${deps.installScriptName}`;
+        const res = await deps.fetch(scriptUrl);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const script = await res.text();
         if (!isExpectedInstallScript(script, deps)) throw new Error(`unexpected ${deps.installScriptName} content`);

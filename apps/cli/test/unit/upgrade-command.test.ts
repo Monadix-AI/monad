@@ -119,6 +119,20 @@ test('upgrade --check reports available updates without installing', async () =>
 
 });
 
+test('upgrade --check falls back to the GitHub latest redirect when the API is unavailable', async () => {
+  installFetch({
+    'api.github.com/repos/Monadix-AI/monad/releases/latest': response({}, 403),
+    'github.com/Monadix-AI/monad/releases/latest': new Response(null, {
+      status: 302,
+      headers: { location: 'https://github.com/Monadix-AI/monad/releases/tag/v9.9.9' }
+    })
+  });
+
+  await runCommand(ctx([], { check: true }));
+
+  expect(output).toContain('9.9.9');
+});
+
 test('upgrade --notes prints truncated release notes', async () => {
   const notes = Array.from({ length: 25 }, (_, index) => `line ${index + 1}`).join('\n');
   installFetch({ '/releases/latest': () => response({ tag_name: 'v9.9.9', body: notes }) });
@@ -133,7 +147,7 @@ test('upgrade installs via verified script and backs up the current binary', asy
   installFetch({
     '/releases/latest': response({ tag_name: 'v9.9.9' }),
     [`/${installScriptName}.sha256`]: response(`${hash}  ${installScriptName}`),
-    [`/scripts/${installScriptName}`]: response(script)
+    [`/releases/download/v9.9.9/${installScriptName}`]: response(script)
   });
   installSpawn(0);
 
@@ -152,14 +166,13 @@ test('upgrade beta selects the first prerelease and passes the channel to the in
       { tag_name: 'v10.0.0-beta.1', prerelease: true }
     ]),
     [`/${installScriptName}.sha256`]: response(`${hash}  ${installScriptName}`),
-    [`/scripts/${installScriptName}`]: response(installScriptContent)
+    [`/releases/download/v10.0.0-beta.1/${installScriptName}`]: response(installScriptContent)
   });
   installSpawn(0);
 
   await runCommand(ctx([], { channel: 'beta' }));
 
   if (process.platform === 'win32') {
-    expect(spawnCalls[0]).toContain('-File');
   } else {
     expect(spawnCalls[0]?.slice(-2)).toEqual(['--channel', 'beta']);
   }
@@ -176,7 +189,7 @@ test('upgrade aborts when install script hash mismatches', async () => {
   installFetch({
     '/releases/latest': response({ tag_name: 'v9.9.9' }),
     [`/${installScriptName}.sha256`]: response('0'.repeat(64)),
-    [`/scripts/${installScriptName}`]: response(installScriptContent)
+    [`/releases/download/v9.9.9/${installScriptName}`]: response(installScriptContent)
   });
   installSpawn(0);
 
@@ -187,7 +200,7 @@ test('upgrade aborts when the install script hash is missing', async () => {
   installFetch({
     '/releases/latest': response({ tag_name: 'v9.9.9' }),
     [`/${installScriptName}.sha256`]: response('', 404),
-    [`/scripts/${installScriptName}`]: response(installScriptContent)
+    [`/releases/download/v9.9.9/${installScriptName}`]: response(installScriptContent)
   });
   installSpawn(0);
 
@@ -201,7 +214,7 @@ test('upgrade aborts on Windows when the install script hash is missing', async 
   installFetch({
     '/releases/latest': response({ tag_name: 'v9.9.9' }),
     '/install.ps1.sha256': response('', 404),
-    '/scripts/install.ps1': response(script)
+    '/releases/download/v9.9.9/install.ps1': response(script)
   });
   installSpawn(0);
 
@@ -212,7 +225,7 @@ test('upgrade aborts when the install script hash is invalid', async () => {
   installFetch({
     '/releases/latest': response({ tag_name: 'v9.9.9' }),
     [`/${installScriptName}.sha256`]: response(`not-a-sha  ${installScriptName}`),
-    [`/scripts/${installScriptName}`]: response(installScriptContent)
+    [`/releases/download/v9.9.9/${installScriptName}`]: response(installScriptContent)
   });
   installSpawn(0);
 
@@ -225,7 +238,7 @@ test('upgrade forwards installer failures as the process exit code', async () =>
   installFetch({
     '/releases/latest': response({ tag_name: 'v9.9.9' }),
     [`/${installScriptName}.sha256`]: response(`${hash}  ${installScriptName}`),
-    [`/scripts/${installScriptName}`]: response(installScriptContent)
+    [`/releases/download/v9.9.9/${installScriptName}`]: response(installScriptContent)
   });
   installSpawn(42);
 

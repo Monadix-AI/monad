@@ -1,6 +1,6 @@
 {
   "name": "@monad/sdk-atom-client-rtk",
-  "version": "0.0.2",
+  "version": "0.0.1",
   "dependencies": {
     "@monad/client-rtk": "workspace:*"
   },
