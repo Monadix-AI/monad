@@ -30,7 +30,10 @@ export function AppearanceSettings({ onClose }: Props) {
   }, []);
 
   async function handleAvatarStyle(avatarStyle: (typeof AVATAR_STYLES)[number]['slug']) {
-    await setAppearance({ avatarStyle }).unwrap();
+    await setAppearance({
+      avatarStyle,
+      composer: appearance?.composer ?? { followUpBehavior: 'queue', sendShortcut: 'enter' }
+    }).unwrap();
   }
 
   function handleInteractiveCursor(enabled: boolean) {

@@ -1,4 +1,4 @@
-import type { ContextUsagePayload, NativeAgentDeliveryId, ProfileView } from '@monad/protocol';
+import type { ContextUsagePayload, NativeAgentDeliveryId, ProfileView, UIItem } from '@monad/protocol';
 import type { ProjectExperienceCanvasSource } from '../../experience/source.ts';
 import type {
   ActivityRow,
@@ -42,6 +42,7 @@ export interface ChatRoomCanvas {
   participants: Participant[];
   railAgents: Participant[];
   activity: ActivityRow[];
+  busy: boolean;
   nativeCliStreams: NativeCliStreamView[];
   tasks: AgentTask[];
   typing: TypingIndicator | null;
@@ -70,6 +71,7 @@ export function toChatRoomCanvas(
   const source = c.source;
   const liveItems = source.liveItems;
   const liveTools = source.liveTools ?? toolItems(liveItems);
+  const busy = projectCanvasIsBusy(liveItems, liveTools);
   const nativeCliIcons = new Map(source.nativeCliIcons ?? []);
   for (const session of source.nativeCliSessions)
     nativeCliIcons.set(session.agentName, productIcon(session.productIcon));
@@ -156,6 +158,7 @@ export function toChatRoomCanvas(
     participants: c.participants,
     railAgents,
     activity,
+    busy,
     nativeCliStreams,
     tasks,
     typing,
@@ -174,4 +177,17 @@ export function toChatRoomCanvas(
     sendNativeCliInput: c.sendNativeCliInput,
     stopNativeCli: c.stopNativeCli
   };
+}
+
+export function projectCanvasIsBusy(
+  liveItems: readonly UIItem[],
+  liveTools: readonly Extract<UIItem, { kind: 'tool' }>[]
+): boolean {
+  return (
+    liveItems.some((item) => {
+      if (item.kind === 'message' || item.kind === 'custom') return item.status === 'streaming';
+      if (item.kind === 'tool') return item.status === 'running';
+      return item.kind === 'approval' || item.kind === 'clarification';
+    }) || liveTools.some((tool) => tool.status === 'running')
+  );
 }

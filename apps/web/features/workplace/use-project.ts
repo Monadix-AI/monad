@@ -23,6 +23,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useAcpAgentSettings } from '@/hooks/use-acp-agent-settings';
 import { useNativeCliAgentSettings } from '@/hooks/use-native-cli-agent-settings';
 import { useTranscriptHistory } from '@/hooks/use-transcript-history';
+import { normalizedComposerSettings } from '@/lib/composer-settings';
 import { getWorkplaceProjectName } from '@/lib/workspace-sessions';
 import { DEV_SYSTEM_MESSAGES_IN_STREAM_ENABLED, useProjectDebugStore } from './debug/project-debug-store';
 import { useWorkspaceProjectExperienceRuntime } from './experiences/project-experience-adapter';
@@ -42,6 +43,7 @@ export function useProject(
   const { data: projectData } = useListWorkplaceProjectsQuery(undefined);
   const { data: userProfile } = useGetProfileSettingsQuery();
   const { data: appearance } = useGetAppearanceQuery();
+  const composerSettings = normalizedComposerSettings(appearance?.composer);
   const { data: profileData } = useListProfilesQuery(undefined);
   const workplaceProjects: WorkplaceProject[] = useMemo(
     () => workplaceProjectSelectors.selectAll(projectData?.projects ?? workplaceProjectAdapter.getInitialState()),
@@ -163,6 +165,8 @@ export function useProject(
       approvals,
       loadOlder,
       modelProfiles,
+      sendShortcut: composerSettings.sendShortcut,
+      followUpBehavior: composerSettings.followUpBehavior,
       source: {
         project: currentProject,
         transcriptItems: transcript.items,
@@ -204,6 +208,8 @@ export function useProject(
       approvals,
       loadOlder,
       modelProfiles,
+      composerSettings.sendShortcut,
+      composerSettings.followUpBehavior,
       currentProject,
       transcript.items,
       liveItems,

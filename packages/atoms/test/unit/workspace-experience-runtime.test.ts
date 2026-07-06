@@ -1,3 +1,4 @@
+import type { UIItem } from '@monad/protocol';
 import type { ActivityRow, Participant } from '../../src/workspace-experiences/experience/types.ts';
 import type { ProjectExperienceRuntimeSource } from '../../src/workspace-experiences/runtime.ts';
 
@@ -20,7 +21,11 @@ const participant = (
 const activityRow = (id: string, tool: string, status: ActivityRow['status']): ActivityRow =>
   ({ id, av: 'MO', tool, detail: tool, status }) as ActivityRow;
 
-function runtimeSource(overrides: Partial<ProjectExperienceRuntimeSource> = {}): ProjectExperienceRuntimeSource {
+type RuntimeSourceOverrides = Partial<Omit<ProjectExperienceRuntimeSource, 'source'>> & {
+  source?: Partial<ProjectExperienceRuntimeSource['source']>;
+};
+
+function runtimeSource(overrides: RuntimeSourceOverrides = {}): ProjectExperienceRuntimeSource {
   const base: ProjectExperienceRuntimeSource = {
     activeProjectId: null,
     ready: true,
@@ -110,6 +115,46 @@ test('toChatRoomCanvas: exposes the chatroom surface without project management 
   for (const leaked of ['setWorkdir', 'switchProject', 'experience']) {
     expect(leaked in canvas).toBe(false);
   }
+});
+
+test('toChatRoomCanvas: keeps project composer busy until live work and gates settle', () => {
+  const streamingMessage: UIItem = {
+    id: 'msg-live',
+    kind: 'message',
+    parts: [{ text: 'still streaming', type: 'text' }],
+    role: 'assistant',
+    seq: '1',
+    status: 'streaming'
+  };
+  const runningTool: UIItem = {
+    id: 'tool-live',
+    kind: 'tool',
+    seq: '2',
+    status: 'running',
+    tool: 'agent_acp_delegate'
+  };
+  const pendingApproval: UIItem = {
+    id: 'approval-live',
+    input: {},
+    kind: 'approval',
+    seq: '3',
+    tool: 'shell'
+  };
+
+  expect(toChatRoomCanvas(runtimeSource()).busy).toBe(false);
+  expect(toChatRoomCanvas(runtimeSource({ source: { liveItems: [streamingMessage] } })).busy).toBe(true);
+  expect(toChatRoomCanvas(runtimeSource({ source: { liveItems: [runningTool] } })).busy).toBe(true);
+  expect(toChatRoomCanvas(runtimeSource({ source: { liveItems: [pendingApproval] } })).busy).toBe(true);
+  expect(
+    toChatRoomCanvas(
+      runtimeSource({
+        source: {
+          liveItems: [{ ...streamingMessage, status: 'done' }],
+          liveTools: [{ ...runningTool, status: 'ok' }]
+        }
+      })
+    ).busy
+  ).toBe(false);
 });
 
 test('ChatRoomExperienceView: spawn member asks the host through the project dialog protocol', () => {

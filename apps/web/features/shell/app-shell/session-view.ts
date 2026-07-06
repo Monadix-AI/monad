@@ -1,5 +1,5 @@
 import type { UIItem, UIMessageItem } from '@monad/protocol';
-import type { Dispatch, KeyboardEvent, SetStateAction } from 'react';
+import type { Dispatch, KeyboardEvent as ReactKeyboardEvent, SetStateAction } from 'react';
 import type { SessionCommandMenuItem } from '@/features/routes/sessions/SessionRoute';
 
 import {
@@ -24,6 +24,8 @@ const SEGMENT_COLORS: Record<string, string> = {
   systemPrompt: 'var(--accent-blue)',
   systemTools: 'var(--warning)'
 };
+
+type ComposerKeyDownEvent = KeyboardEvent | ReactKeyboardEvent<HTMLElement>;
 
 type ContextUsage = Extract<UIItem, { kind: 'context' }>['usage'];
 
@@ -101,8 +103,10 @@ export function buildViewMessages({
 export function createTextareaKeyDownHandler({
   activeSkill,
   applyItem,
+  followUpBehavior,
   handleForceSteer,
-  handleSubmit,
+  handleQueueSubmit,
+  isBusy,
   menuItems,
   setActiveSkill,
   setSkillMenuDismissed,
@@ -110,15 +114,17 @@ export function createTextareaKeyDownHandler({
 }: {
   activeSkill: number;
   applyItem: (item: SessionCommandMenuItem) => void;
+  followUpBehavior: 'queue' | 'steer';
   handleForceSteer: () => Promise<unknown>;
-  handleSubmit: () => Promise<unknown>;
+  handleQueueSubmit: () => Promise<unknown>;
+  isBusy: boolean;
   menuItems: SessionCommandMenuItem[];
   setActiveSkill: Dispatch<SetStateAction<number>>;
   setSkillMenuDismissed: Dispatch<SetStateAction<boolean>>;
   skillMenuOpen: boolean;
 }) {
-  return (event: KeyboardEvent<HTMLElement>) => {
-    if (event.nativeEvent.isComposing || event.keyCode === 229) return;
+  return (event: ComposerKeyDownEvent) => {
+    if (isComposingKeyEvent(event)) return;
     if (skillMenuOpen) {
       if (event.key === 'ArrowDown') {
         event.preventDefault();
@@ -142,14 +148,22 @@ export function createTextareaKeyDownHandler({
         return;
       }
     }
-    if (event.key === 'Enter' && event.metaKey && event.altKey) {
+    const primaryModifier = primaryModifierPressed(event);
+    if (isBusy && event.key === 'Enter' && primaryModifier && !event.shiftKey) {
       event.preventDefault();
-      void handleForceSteer();
+      if (followUpBehavior === 'queue') void handleForceSteer();
+      else void handleQueueSubmit();
       return;
     }
-    if (event.key === 'Enter' && !event.shiftKey) {
-      event.preventDefault();
-      void handleSubmit();
-    }
   };
+}
+
+function isComposingKeyEvent(event: ComposerKeyDownEvent): boolean {
+  const nativeEvent = 'nativeEvent' in event ? event.nativeEvent : event;
+  return Boolean(nativeEvent.isComposing || event.keyCode === 229);
+}
+
+function primaryModifierPressed(event: ComposerKeyDownEvent): boolean {
+  if (typeof navigator !== 'undefined' && /Mac|iPhone|iPad|iPod/.test(navigator.platform)) return event.metaKey;
+  return event.ctrlKey;
 }

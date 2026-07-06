@@ -1,5 +1,6 @@
 'use client';
 
+import type { ComposerSendShortcut } from '@monad/ui';
 import type React from 'react';
 import type { ReactNode } from 'react';
 
@@ -55,6 +56,7 @@ type ComposerShellProps = {
   onKeyUp?: React.KeyboardEventHandler<HTMLElement>;
   onStop?: () => void;
   onSubmit: () => void;
+  sendShortcut?: ComposerSendShortcut;
   voiceCancelSignal?: number;
   onVoiceText?: (text: string) => void;
   voice?: {
@@ -89,6 +91,7 @@ export function ComposerShell({
   onKeyUp,
   onStop,
   onSubmit,
+  sendShortcut,
   voiceCancelSignal,
   onVoiceText,
   voice,
@@ -241,6 +244,7 @@ export function ComposerShell({
           onKeyUp={onKeyUp}
           onSubmit={onSubmit}
           placeholder={placeholder}
+          sendShortcut={sendShortcut}
           skillToken={composerSkillToken}
           value={value}
         />

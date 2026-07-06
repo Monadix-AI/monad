@@ -1,0 +1,43 @@
+import { expect, test } from 'bun:test';
+
+import { createTextareaKeyDownHandler } from '../../features/shell/app-shell/session-view';
+
+function handler(overrides: Partial<Parameters<typeof createTextareaKeyDownHandler>[0]> = {}) {
+  return createTextareaKeyDownHandler({
+    activeSkill: 0,
+    applyItem: () => {},
+    followUpBehavior: 'queue',
+    handleForceSteer: async () => {},
+    handleQueueSubmit: async () => {},
+    isBusy: false,
+    menuItems: [],
+    setActiveSkill: () => {},
+    setSkillMenuDismissed: () => {},
+    skillMenuOpen: false,
+    ...overrides
+  });
+}
+
+test('createTextareaKeyDownHandler accepts DOM keyboard events from ComposerEditor', () => {
+  let prevented = false;
+  const onKeyDown = handler({
+    handleForceSteer: async () => {
+      prevented = true;
+    },
+    isBusy: true
+  });
+
+  expect(() =>
+    onKeyDown({
+      ctrlKey: true,
+      key: 'Enter',
+      keyCode: 13,
+      metaKey: true,
+      preventDefault: () => {
+        prevented = true;
+      },
+      shiftKey: false
+    } as KeyboardEvent)
+  ).not.toThrow();
+  expect(prevented).toBe(true);
+});

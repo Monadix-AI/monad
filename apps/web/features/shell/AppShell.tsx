@@ -11,6 +11,7 @@ import {
   useClarifyRespondMutation,
   useCreateSessionMutation,
   useCreateWorkplaceProjectMutation,
+  useGetAppearanceQuery,
   useGetWorkplaceProjectQuery,
   useInitStatusQuery,
   useStreamUiItemsQuery,
@@ -50,6 +51,7 @@ import {
 } from '@/hooks/use-shell-location';
 import { useSidebarShortcuts } from '@/hooks/use-sidebar-shortcuts';
 import { useTranscriptHistory } from '@/hooks/use-transcript-history';
+import { normalizedComposerSettings } from '@/lib/composer-settings';
 import { useMonadRuntime } from '@/lib/monad-runtime-provider';
 import { useWorkspaceShellStore, type WorkspaceShellState } from '@/lib/workspace-shell-store';
 import { AppShellRoutesHost } from './app-shell/routes-host';
@@ -99,6 +101,8 @@ export function AppShell() {
     skip: routedProjectId === null || routedProjectInList
   });
   const currentSession = sessions.find((s) => s.id === currentId) ?? null;
+  const { data: appearance } = useGetAppearanceQuery();
+  const composerSettings = normalizedComposerSettings(appearance?.composer);
   const primaryAgentSession = currentSession ?? directSessions[0] ?? null;
   const shellSurface = useWorkspaceShellStore((state: WorkspaceShellState) => state.surface);
   const lastMonadSessionId = useWorkspaceShellStore((state: WorkspaceShellState) => state.lastMonadSessionId);
@@ -249,14 +253,15 @@ export function AppShell() {
     optimistic,
     setOptimistic,
     messageQueue,
-    setMessageQueue,
     commandPending,
     handleSend,
     handleStop,
     handleBranch,
     handleRestore,
     handleSubmit,
-    handleForceSteer
+    handleQueueSubmit,
+    handleForceSteer,
+    removeQueuedMessage
   } = useChatComposer({
     currentId,
     liveStreaming,
@@ -268,7 +273,8 @@ export function AppShell() {
     scrollToBottom,
     jumpToLive,
     setSessionUrl,
-    setHiddenViewItemKeysBySession
+    setHiddenViewItemKeysBySession,
+    followUpBehavior: composerSettings.followUpBehavior
   });
 
   const viewMessages = useMemo<ViewItem[]>(
@@ -508,8 +514,10 @@ export function AppShell() {
   const handleTextareaKeyDown = createTextareaKeyDownHandler({
     activeSkill,
     applyItem,
+    followUpBehavior: composerSettings.followUpBehavior,
     handleForceSteer,
-    handleSubmit,
+    handleQueueSubmit,
+    isBusy,
     menuItems,
     setActiveSkill,
     setSkillMenuDismissed,
@@ -632,6 +640,7 @@ export function AppShell() {
           isReadOnly,
           menuItems,
           messageQueue,
+          composerSettings,
           model: sessionModel,
           onAccessModeChange: setAccessMode,
           onApproval: (approval, allow, scope, reason) => {
@@ -640,7 +649,7 @@ export function AppShell() {
           onAtBottomChange: setAtBottom,
           onBranch: handleBranch,
           onClarifyAnswer: (requestId, answer) => void clarifyRespond({ requestId, answer }),
-          onClearQueue: () => setMessageQueue([]),
+          onRemoveQueuedMessage: removeQueuedMessage,
           onCommandItemApply: applyItem,
           onCommandItemHover: setActiveSkill,
           onEndReached: transcript.loadNewer,

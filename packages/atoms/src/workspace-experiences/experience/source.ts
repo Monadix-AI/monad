@@ -1,4 +1,11 @@
-import type { AvatarStyle, NativeCliSessionView, ProfileView, UIItem } from '@monad/protocol';
+import type {
+  AvatarStyle,
+  ComposerFollowUpBehavior,
+  ComposerSendShortcut,
+  NativeCliSessionView,
+  ProfileView,
+  UIItem
+} from '@monad/protocol';
 import type { ProjectMember } from './project-members.ts';
 import type { Message, Participant } from './types.ts';
 
@@ -21,6 +28,8 @@ export interface ProjectExperienceCanvasSource {
     showDeveloperOnlyMessages: boolean;
   };
   modelProfiles: ProfileView[];
+  sendShortcut?: ComposerSendShortcut;
+  followUpBehavior?: ComposerFollowUpBehavior;
   loadOlder: () => void;
   sendDirective: import('../chat-room/utils/composer.ts').ProjectComposerSurface['sendDirective'];
   resolveApproval: (requestId: string, decision: 'approve' | 'reject') => void;

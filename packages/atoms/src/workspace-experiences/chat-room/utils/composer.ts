@@ -1,4 +1,10 @@
-import type { ContextUsagePayload, ProfileView, SendMessageAttachment } from '@monad/protocol';
+import type {
+  ComposerFollowUpBehavior,
+  ComposerSendShortcut,
+  ContextUsagePayload,
+  ProfileView,
+  SendMessageAttachment
+} from '@monad/protocol';
 import type {
   ApprovalView,
   Participant,
@@ -12,6 +18,7 @@ export type ProjectComposerDirective = string | { attachments?: SendMessageAttac
 export type ProjectComposerSurface = {
   answerQuestion: (requestId: string, answer: string) => void;
   approvals: ApprovalView[];
+  busy: boolean;
   contextUsage?: ContextUsagePayload | null;
   draftKey: string;
   mentionTargets: ProjectMentionTarget[];
@@ -21,6 +28,8 @@ export type ProjectComposerSurface = {
   questions: QuestionView[];
   resolveApproval: (requestId: string, action: 'approve' | 'reject') => void;
   sendDirective: (directive: ProjectComposerDirective) => Promise<void> | void;
+  sendShortcut?: ComposerSendShortcut;
+  followUpBehavior?: ComposerFollowUpBehavior;
   typing: TypingIndicator | null;
 };
 
@@ -33,6 +42,7 @@ export function toProjectComposerSurface(
   return {
     answerQuestion: c.answerQuestion,
     approvals: c.approvals,
+    busy: c.busy,
     contextUsage: c.contextUsage,
     draftKey: c.draftKey,
     mentionTargets: c.mentionTargets,
@@ -42,6 +52,8 @@ export function toProjectComposerSurface(
     questions: c.questions,
     resolveApproval: c.resolveApproval,
     sendDirective: c.sendDirective,
+    sendShortcut: c.sendShortcut,
+    followUpBehavior: c.followUpBehavior,
     typing
   };
 }
