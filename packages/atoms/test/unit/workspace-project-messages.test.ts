@@ -244,7 +244,7 @@ test('native CLI developer messages are projected only when explicitly enabled',
   });
 });
 
-test('native CLI runtime lifecycle only projects the first join per project member', () => {
+test('native CLI runtime lifecycle projects the current join per project member', () => {
   const messages = __workplaceProjectMessageTest.buildProjectMessages({
     persistedMessages: [],
     nativeCliSessions: [
@@ -275,7 +275,7 @@ test('native CLI runtime lifecycle only projects the first join per project memb
 
   expect(messages).toHaveLength(1);
   expect(messages[0]).toMatchObject({
-    id: 'native-cli-session:ncli_first',
+    id: 'native-cli-session:ncli_second',
     authorName: 'codex',
     text: 'joined the project'
   });

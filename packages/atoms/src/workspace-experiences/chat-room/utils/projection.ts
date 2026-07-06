@@ -268,13 +268,16 @@ function keepManagedNativeCliRepliesAfterJoin(messages: Map<string, Message>): v
   }
 }
 
-function firstNativeCliSessionsByAgent(sessions: NativeCliSessionView[]): NativeCliSessionView[] {
-  const first = new Map<string, NativeCliSessionView>();
-  for (const session of [...sessions].sort((a, b) => a.startedAt.localeCompare(b.startedAt))) {
-    if (first.has(session.agentName)) continue;
-    first.set(session.agentName, session);
+function currentNativeCliSessionsByAgent(sessions: NativeCliSessionView[]): NativeCliSessionView[] {
+  const current = new Map<string, NativeCliSessionView>();
+  for (const session of [...sessions].sort((a, b) => {
+    const byUpdatedAt = (b.updatedAt || b.startedAt).localeCompare(a.updatedAt || a.startedAt);
+    return byUpdatedAt === 0 ? b.id.localeCompare(a.id) : byUpdatedAt;
+  })) {
+    if (current.has(session.agentName)) continue;
+    current.set(session.agentName, session);
   }
-  return [...first.values()];
+  return [...current.values()];
 }
 
 function nativeCliStreamFromSession(
@@ -298,6 +301,7 @@ function nativeCliStreamFromSession(
     icon: productIcon(session.productIcon),
     status: session.state === 'failed' ? 'error' : 'ok',
     workingPath: session.workingPath,
+    observedAt: session.updatedAt || session.startedAt,
     output: session.outputSnapshot,
     items
   };
@@ -409,9 +413,9 @@ export function buildProjectMessages({
       avatarStyle
     );
   for (const view of persistedMessages) byId.set(view.id, view);
-  const firstNativeCliSessions = firstNativeCliSessionsByAgent(nativeCliSessions);
-  const firstNativeCliAgentNames = new Set(firstNativeCliSessions.map((session) => session.agentName));
-  for (const session of firstNativeCliSessions) {
+  const currentNativeCliSessions = currentNativeCliSessionsByAgent(nativeCliSessions);
+  const currentNativeCliAgentNames = new Set(currentNativeCliSessions.map((session) => session.agentName));
+  for (const session of currentNativeCliSessions) {
     const displayName = nativeCliDisplayNames.get(session.agentName) ?? session.agentName;
     byId.set(
       `native-cli-session:${session.id}`,
@@ -485,7 +489,7 @@ export function buildProjectMessages({
     if (typeof input?.agent !== 'string') continue;
     const displayName = nativeCliDisplayNames.get(input.agent) ?? input.agent;
     const icon = productIcon(input.productIcon);
-    if (!firstNativeCliAgentNames.has(input.agent)) {
+    if (!currentNativeCliAgentNames.has(input.agent)) {
       const provider = typeof input.provider === 'string' ? input.provider : item.tool.slice('native-cli:'.length);
       byId.set(`native-cli-session:${item.id}`, {
         id: `native-cli-session:${item.id}`,

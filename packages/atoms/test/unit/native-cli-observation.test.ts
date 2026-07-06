@@ -1156,6 +1156,28 @@ test('observation panel distinguishes unavailable provider history from empty li
   expect(html).toContain('Agent currently not running');
 });
 
+test('observation panel renders show history as the first list placeholder when activity exists', () => {
+  const html = renderToStaticMarkup(
+    React.createElement(NativeCliObservationPanel, {
+      onShowHistory: () => {},
+      onStop: () => {},
+      showHistoryButton: true,
+      stream: {
+        id: 'ncli_codex',
+        agentName: 'codex',
+        provider: 'codex',
+        tag: 'Codex',
+        status: 'ok',
+        output: 'Agent output',
+        items: [{ id: 'evt_1', role: 'agent', text: 'Agent output', source: 'codex-app-server' }]
+      }
+    })
+  );
+
+  expect(html).toContain('data-observation-list-placeholder="history"');
+  expect(html.indexOf('data-observation-list-placeholder="history"')).toBeGreaterThan(html.indexOf('role="log"'));
+});
+
 test('Claude Code observation projects transcript user events as user message cards', () => {
   const output = JSON.stringify({
     parentUuid: '8c04922a-bbb2-4a25-a71c-8fdc0154f58e',

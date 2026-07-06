@@ -115,6 +115,7 @@ export interface NativeCliStreamView {
   icon?: Participant['icon'];
   status: ActivityStatus;
   workingPath?: string;
+  observedAt?: string;
   output: string;
   items: NativeCliObservationEvent[];
 }

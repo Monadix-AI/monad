@@ -14,6 +14,13 @@ import {
   nativeCliUsageLimitMeterFromResponse
 } from '../../experience/native-cli-observation/native-cli-observation.ts';
 
+function newestStream(streams: NativeCliStreamView[]): NativeCliStreamView | undefined {
+  return [...streams].sort((a, b) => {
+    const byObservedAt = (b.observedAt ?? '').localeCompare(a.observedAt ?? '');
+    return byObservedAt === 0 ? b.id.localeCompare(a.id) : byObservedAt;
+  })[0];
+}
+
 export function agentObservationStream(
   observation:
     | {
@@ -33,10 +40,8 @@ export function agentObservationStream(
   const names = [observation.agentId, observation.agentName].filter((value): value is string => Boolean(value));
   if (names.length === 0) return undefined;
   const matchesAgent = (stream: NativeCliStreamView) => names.includes(stream.agentName);
-  return (
-    streams.find((stream) => matchesAgent(stream) && stream.status === 'running') ??
-    streams.find((stream) => matchesAgent(stream))
-  );
+  const matches = streams.filter(matchesAgent);
+  return newestStream(matches.filter((stream) => stream.status === 'running')) ?? newestStream(matches);
 }
 
 export function observedRailAgent(

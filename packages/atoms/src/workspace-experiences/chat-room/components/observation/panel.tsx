@@ -154,6 +154,7 @@ export function NativeCliObservationPanel({
   const showHistoryHeader = showHistoryButton || loadingOlderHistory;
   const historyHeader = showHistoryHeader ? (
     <div
+      data-observation-list-placeholder="history"
       style={{
         boxSizing: 'border-box',
         display: 'flex',
@@ -198,7 +199,12 @@ export function NativeCliObservationPanel({
       )}
     </div>
   ) : null;
-  const listHeader = <div style={{ boxSizing: 'border-box', height: 14 }} />;
+  const listHeader = (
+    <>
+      {historyHeader}
+      <div style={{ boxSizing: 'border-box', height: 14 }} />
+    </>
+  );
   const listFooter = <div style={{ height: 62 }} />;
 
   useEffect(() => {
@@ -423,7 +429,6 @@ export function NativeCliObservationPanel({
         ) : null}
       </header>
       {usageMeter && usageOpen ? <UsageLimitPopover meter={usageMeter} /> : null}
-      {historyHeader}
 
       <div
         style={{
@@ -477,16 +482,18 @@ export function NativeCliObservationPanel({
               boxSizing: 'border-box',
               color: 'var(--muted-foreground)',
               display: 'flex',
+              flexDirection: 'column',
               fontFamily: sans,
               fontSize: 13,
               height: '100%',
-              justifyContent: 'center',
+              justifyContent: historyHeader ? 'flex-start' : 'center',
               lineHeight: 1.5,
               padding: 14,
               textAlign: 'center',
               width: '100%'
             }}
           >
+            {historyHeader}
             <div style={{ maxWidth: 180 }}>
               {providerHistoryUnavailable ? 'Agent currently not running' : 'No activity yet.'}
             </div>

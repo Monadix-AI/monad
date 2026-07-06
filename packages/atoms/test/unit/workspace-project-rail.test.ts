@@ -296,6 +296,71 @@ test('agent observation selects the currently running native CLI stream by insta
   expect(agentObservationStream({ nativeCliSessionId: 'ncli_old' }, streams)?.id).toBe('ncli_old');
 });
 
+test('agent observation follows the newest native CLI stream when no runtime is running', () => {
+  const streams = [
+    {
+      id: 'ncli_old',
+      agentName: 'pmem_codex_one',
+      provider: 'codex',
+      tag: 'Codex',
+      status: 'ok' as const,
+      output: '',
+      items: []
+    },
+    {
+      id: 'ncli_new',
+      agentName: 'pmem_codex_one',
+      provider: 'codex',
+      tag: 'Codex',
+      status: 'ok' as const,
+      output: 'newer session',
+      items: [],
+      observedAt: '2026-07-06T10:00:00.000Z'
+    },
+    {
+      id: 'ncli_mid',
+      agentName: 'pmem_codex_one',
+      provider: 'codex',
+      tag: 'Codex',
+      status: 'ok' as const,
+      output: 'older session',
+      items: [],
+      observedAt: '2026-07-06T09:00:00.000Z'
+    }
+  ];
+
+  expect(agentObservationStream({ agentId: 'pmem_codex_one', agentName: 'Codex' }, streams)?.id).toBe('ncli_new');
+});
+
+test('project messages bind a native CLI member to the newest session for that project member', () => {
+  const messages = __workplaceProjectMessageTest.buildProjectMessages({
+    persistedMessages: [],
+    nativeCliSessions: [
+      nativeCliSession({
+        id: 'ncli_old',
+        agentName: 'pmem_codex_one',
+        state: 'stopped',
+        startedAt: '2026-07-06T08:00:00.000Z',
+        updatedAt: '2026-07-06T08:01:00.000Z',
+        exitedAt: '2026-07-06T08:01:00.000Z'
+      }),
+      nativeCliSession({
+        id: 'ncli_new',
+        agentName: 'pmem_codex_one',
+        state: 'running',
+        startedAt: '2026-07-06T09:00:00.000Z',
+        updatedAt: '2026-07-06T09:01:00.000Z'
+      })
+    ],
+    liveItems: [],
+    liveTools: [],
+    nativeCliDisplayNames: new Map([['pmem_codex_one', 'Codex']])
+  });
+
+  expect(messages.find((message) => message.id === 'native-cli-session:ncli_new')?.nativeCliSessionId).toBe('ncli_new');
+  expect(messages.some((message) => message.id === 'native-cli-session:ncli_old')).toBe(false);
+});
+
 test('native CLI session observation reuses the project member identity', () => {
   const railAgent = {
     ...agent('Lily', 'online'),
