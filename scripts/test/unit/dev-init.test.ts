@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test';
 
 import {
+  buildCodeGraphInitStep,
   buildDevInitSummary,
   buildDevStepProgressFrame,
   buildDevStepStatusFrame,
@@ -11,6 +12,7 @@ import {
   postCheckoutHookText,
   removeBlankXdgLines,
   shouldInitCodeGraph,
+  shouldRenderDevInitCommandSpinner,
   worktreePorts
 } from '../../dev-init.ts';
 
@@ -179,6 +181,23 @@ test('dev-init step frames support generic progress animation', () => {
       verb: 'ready'
     })
   ).toBe('[dev-init] ready Phoenix -> http://localhost:6006\n');
+});
+
+test('dev-init command steps only render Monad progress animation when output is piped', () => {
+  expect(shouldRenderDevInitCommandSpinner('pipe', true)).toBe(true);
+  expect(shouldRenderDevInitCommandSpinner('inherit', true)).toBe(false);
+  expect(shouldRenderDevInitCommandSpinner('pipe', false)).toBe(false);
+});
+
+test('CodeGraph init step inherits stdio so the CodeGraph animation is visible', () => {
+  expect(buildCodeGraphInitStep('/usr/local/bin/codegraph', '/repo')).toMatchObject({
+    command: ['/usr/local/bin/codegraph', 'init', '-i'],
+    cwd: '/repo',
+    label: 'CodeGraph',
+    stdio: 'inherit',
+    target: '.codegraph/codegraph.db',
+    verb: 'indexing'
+  });
 });
 
 test('generated artifact progress frame is an overwrite-only terminal animation frame', () => {

@@ -38,7 +38,8 @@ import { buildDevInitSummary, generatedArtifactsHeader, shouldColorOutput } from
 import { ensurePortLines, removeBlankXdgLines, type WorktreePorts, worktreePorts } from './dev-init/ports';
 import { scaffoldSeedConfig } from './dev-init/seed-config';
 
-export { shouldInitCodeGraph } from './dev-init/dev-services';
+export { shouldRenderDevInitCommandSpinner } from './dev-init/command-step';
+export { buildCodeGraphInitStep, shouldInitCodeGraph } from './dev-init/dev-services';
 export { postCheckoutHookText } from './dev-init/git-hooks';
 export {
   buildDevInitSummary,

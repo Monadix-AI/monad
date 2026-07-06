@@ -1,9 +1,22 @@
 import { join } from 'node:path';
 
-import { runDevInitCommandStep } from './command-step';
+import { type DevInitCommandStepOptions, runDevInitCommandStep } from './command-step';
 
 export function shouldInitCodeGraph(codeGraphAvailable: boolean, indexExists: boolean): boolean {
   return codeGraphAvailable && !indexExists;
+}
+
+export function buildCodeGraphInitStep(codeGraphBin: string, root: string): DevInitCommandStepOptions {
+  return {
+    color: false,
+    command: [codeGraphBin, 'init', '-i'],
+    cwd: root,
+    doneVerb: 'ready',
+    label: 'CodeGraph',
+    stdio: 'inherit',
+    target: '.codegraph/codegraph.db',
+    verb: 'indexing'
+  };
 }
 
 export async function initCodeGraph(
@@ -17,13 +30,8 @@ export async function initCodeGraph(
   const codeGraphIndexExists = await Bun.file(join(root, '.codegraph', 'codegraph.db')).exists();
   if (codeGraphBin && shouldInitCodeGraph(codeGraphAvailable, codeGraphIndexExists)) {
     const result = await runDevInitCommandStep({
-      color,
-      command: [codeGraphBin, 'init', '-i'],
-      cwd: root,
-      doneVerb: 'ready',
-      label: 'CodeGraph',
-      target: '.codegraph/codegraph.db',
-      verb: 'indexing'
+      ...buildCodeGraphInitStep(codeGraphBin, root),
+      color
     });
     if (result.exitCode !== 0) {
       warn(`CodeGraph             init failed with exit code ${result.exitCode}`);
