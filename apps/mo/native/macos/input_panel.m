@@ -1,4 +1,5 @@
 #import "input_panel.h"
+#import <QuartzCore/QuartzCore.h>
 
 // Layout constants shared across the panel's subviews.
 static const CGFloat kPanelW = 320;
@@ -16,6 +17,50 @@ static NSColor *AccentColor(void) {
 
 static NSColor *SurfaceBorderColor(void) {
   return [NSColor colorWithWhite:1 alpha:0.12];  // approximates --chat-input-border on a dark HUD
+}
+
+static const CGFloat kAuroraRingWidth = 1.6;
+static NSString *const kAuroraRotateKey = @"aurora-rotate";
+
+// A rotating conic-gradient ring, masked to the surface's rounded-rect border — the native
+// equivalent of the web composer's `.chat-input-aurora` focus glow (chat-input-aurora-gradient
+// rotating inside chat-input-aurora-edge-mask). Built once per panel; visibility/rotation are
+// toggled by focus (see textDidBeginEditing:/textDidEndEditing:).
+static CAGradientLayer *MakeAuroraLayer(NSRect bounds, CGFloat cornerRadius) {
+  CAGradientLayer *aurora = [CAGradientLayer layer];
+  aurora.frame = bounds;
+  aurora.type = kCAGradientLayerConic;
+  aurora.startPoint = CGPointMake(0.5, 0.5);
+  aurora.endPoint = CGPointMake(0.5, 1.0);  // sweep starts at 12 o'clock, matching conic-gradient(from 0deg)
+  aurora.opacity = 0;
+
+  NSColor *clear = [NSColor clearColor];
+  NSColor *c1 = [NSColor colorWithSRGBRed:0.569 green:0.329 blue:0.906 alpha:1];  // #9154e7
+  NSColor *c2 = [NSColor colorWithSRGBRed:0.376 green:0.337 blue:0.941 alpha:1];  // #6056f0
+  NSColor *c3 = [NSColor colorWithSRGBRed:0.251 green:0.851 blue:0.776 alpha:1];  // #40d9c6
+  NSColor *c4 = [NSColor colorWithSRGBRed:0.259 green:0.522 blue:0.957 alpha:1];  // #4285f4
+  aurora.colors = @[
+    (id)clear.CGColor, (id)c1.CGColor, (id)c2.CGColor, (id)c3.CGColor, (id)c4.CGColor, (id)c1.CGColor,
+    (id)clear.CGColor, (id)clear.CGColor
+  ];
+  aurora.locations = @[ @0.0, @0.10, @0.1625, @0.225, @0.2875, @0.35, @0.45, @1.0 ];
+
+  CAShapeLayer *ring = [CAShapeLayer layer];
+  ring.frame = bounds;
+  CGPathRef outer = CGPathCreateWithRoundedRect(bounds, cornerRadius, cornerRadius, NULL);
+  CGRect innerRect = CGRectInset(bounds, kAuroraRingWidth, kAuroraRingWidth);
+  CGFloat innerRadius = MAX(0, cornerRadius - kAuroraRingWidth);
+  CGPathRef inner = CGPathCreateWithRoundedRect(innerRect, innerRadius, innerRadius, NULL);
+  CGMutablePathRef path = CGPathCreateMutable();
+  CGPathAddPath(path, NULL, outer);
+  CGPathAddPath(path, NULL, inner);
+  ring.path = path;
+  CGPathRelease(path);
+  CGPathRelease(outer);
+  CGPathRelease(inner);
+  ring.fillRule = kCAFillRuleEvenOdd;
+  aurora.mask = ring;
+  return aurora;
 }
 
 // --- MoTextView: multi-line prompt with a drawn placeholder --------------------
@@ -279,6 +324,7 @@ static NSColor *SurfaceBorderColor(void) {
 @implementation MoInputPanel {
   NSPanel *_panel;
   NSVisualEffectView *_surface;
+  CAGradientLayer *_aurora;
   MoTextView *_text;
   MoAttachmentsView *_attach;
   NSTextField *_hint;
@@ -313,6 +359,10 @@ static NSColor *SurfaceBorderColor(void) {
   _panel.titleVisibility = NSWindowTitleHidden;
   _panel.movableByWindowBackground = YES;
   _panel.level = NSFloatingWindowLevel;
+  // NSPanel defaults hidesOnDeactivate to YES, which drops it behind other apps' windows the
+  // moment Mo isn't frontmost — this HUD must stay on top until the user sends or cancels.
+  _panel.hidesOnDeactivate = NO;
+  _panel.collectionBehavior = NSWindowCollectionBehaviorCanJoinAllSpaces;
   _panel.backgroundColor = [NSColor clearColor];
   _panel.opaque = NO;
   _panel.hasShadow = YES;
@@ -332,6 +382,11 @@ static NSColor *SurfaceBorderColor(void) {
   _surface.layer.borderWidth = 1;
   _surface.layer.borderColor = SurfaceBorderColor().CGColor;
   _panel.contentView = _surface;
+
+  // The rotating focus glow sits above everything else in the surface, masked to a thin ring
+  // just inside its rounded border; it's hidden (opacity 0) until the text view is focused.
+  _aurora = MakeAuroraLayer(frame, kSurfaceRadius);
+  [_surface.layer addSublayer:_aurora];
 
   CGFloat contentW = kPanelW - 2 * kPad;
 
@@ -432,16 +487,32 @@ static NSColor *SurfaceBorderColor(void) {
   [self submit];
 }
 
-// Mirrors the web composer's `:focus-within` aurora glow (simplified to a static accent ring —
-// an animated conic-gradient border isn't worth the native complexity for this small HUD).
+// Mirrors the web composer's `:focus-within` aurora glow: fade the ring in and spin it up while
+// typing, fade it out and let it settle when focus leaves.
 - (void)textDidBeginEditing:(NSNotification *)note {
   (void)note;
-  _surface.layer.borderColor = AccentColor().CGColor;
+  [CATransaction begin];
+  [CATransaction setAnimationDuration:0.3];
+  _aurora.opacity = 1;
+  [CATransaction commit];
+
+  if ([_aurora animationForKey:kAuroraRotateKey]) return;
+  CABasicAnimation *spin = [CABasicAnimation animationWithKeyPath:@"transform.rotation.z"];
+  spin.fromValue = @0;
+  spin.toValue = @(2 * M_PI);
+  spin.duration = 3.4;
+  spin.repeatCount = HUGE_VALF;
+  spin.timingFunction = [CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionLinear];
+  [_aurora addAnimation:spin forKey:kAuroraRotateKey];
 }
 
 - (void)textDidEndEditing:(NSNotification *)note {
   (void)note;
-  _surface.layer.borderColor = SurfaceBorderColor().CGColor;
+  [CATransaction begin];
+  [CATransaction setAnimationDuration:0.3];
+  _aurora.opacity = 0;
+  [CATransaction commit];
+  [_aurora removeAnimationForKey:kAuroraRotateKey];
 }
 
 - (BOOL)textView:(NSTextView *)textView doCommandBySelector:(SEL)selector {
@@ -485,6 +556,7 @@ static NSColor *SurfaceBorderColor(void) {
   [_panel close];
   _panel = nil;
   _surface = nil;
+  _aurora = nil;
   _text = nil;
   _attach = nil;
   _hint = nil;

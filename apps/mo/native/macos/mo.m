@@ -217,6 +217,7 @@ static NSString *const kMoFrameName = @"MoWindow";  // NSUserDefaults key for th
 
 - (void)applicationDidFinishLaunching:(NSNotification *)note {
   (void)note;
+  [self installEditMenu];
   mo_daemon_init();
 
   NSRect rect = NSMakeRect(0, 0, kMoW, kMoH);
@@ -468,6 +469,32 @@ static NSString *const kMoFrameName = @"MoWindow";  // NSUserDefaults key for th
       [self setBubble:ok ? @"Mo is on it \U0001F41F" : @"Mo couldn't reach the daemon"];
     });
   });
+}
+
+// Mo has no visible menu bar (LSUIElement/accessory policy), but without SOME menu assigned to
+// NSApp, Cmd+A/C/V/X/Z key equivalents never reach the input panel's NSTextView — AppKit's
+// command-key routing looks for a matching menu item before falling back to the responder chain.
+// A minimal, invisible-in-practice Edit menu with the standard selectors is enough to unblock them.
+- (void)installEditMenu {
+  NSMenu *mainMenu = [[NSMenu alloc] init];
+  NSMenuItem *appMenuItem = [[NSMenuItem alloc] init];
+  [mainMenu addItem:appMenuItem];
+  appMenuItem.submenu = [[NSMenu alloc] init];
+
+  NSMenuItem *editMenuItem = [[NSMenuItem alloc] init];
+  [mainMenu addItem:editMenuItem];
+  NSMenu *editMenu = [[NSMenu alloc] initWithTitle:@"Edit"];
+  editMenuItem.submenu = editMenu;
+  [editMenu addItemWithTitle:@"Undo" action:@selector(undo:) keyEquivalent:@"z"];
+  NSMenuItem *redo = [editMenu addItemWithTitle:@"Redo" action:@selector(redo:) keyEquivalent:@"z"];
+  redo.keyEquivalentModifierMask = NSEventModifierFlagCommand | NSEventModifierFlagShift;
+  [editMenu addItem:[NSMenuItem separatorItem]];
+  [editMenu addItemWithTitle:@"Cut" action:@selector(cut:) keyEquivalent:@"x"];
+  [editMenu addItemWithTitle:@"Copy" action:@selector(copy:) keyEquivalent:@"c"];
+  [editMenu addItemWithTitle:@"Paste" action:@selector(paste:) keyEquivalent:@"v"];
+  [editMenu addItemWithTitle:@"Select All" action:@selector(selectAll:) keyEquivalent:@"a"];
+
+  NSApp.mainMenu = mainMenu;
 }
 
 - (void)applicationWillTerminate:(NSNotification *)note {

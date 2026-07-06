@@ -27,7 +27,7 @@ if [[ -n "${MO_UNIVERSAL:-}" ]]; then archflags="-arch arm64 -arch x86_64"; fi
 # shellcheck disable=SC2086
 clang -fobjc-arc -O2 -Wall -Wextra -I../common $archflags \
   mo.m input_panel.m ../common/daemon.c ../common/behavior.c \
-  -framework Cocoa -lcurl \
+  -framework Cocoa -framework QuartzCore -lcurl \
   -o "$macos/mo"
 
 cp ../../assets/mochi.png "$app/Contents/Resources/" 2>/dev/null || true
