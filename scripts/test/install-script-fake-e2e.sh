@@ -61,6 +61,29 @@ run_installer() {
   bash "$INSTALLER" --no-daemon --no-verify --no-path-modify
 }
 
+assert_launcher() {
+  case "$(uname -s)" in
+    Darwin)
+      local app="${TEST_DIR}/fake-home/Applications/Monad.app"
+      [ -x "${app}/Contents/MacOS/monad" ] || fail "macOS app launcher was not created"
+      grep -q "${TEST_DIR}/bin/monad" "${app}/Contents/MacOS/monad" \
+        || fail "macOS app launcher does not target installed monad"
+      grep -q "Monad" "${app}/Contents/Info.plist" \
+        || fail "macOS app launcher Info.plist missing"
+      ;;
+    Linux)
+      local menu="${TEST_DIR}/fake-home/.local/share/applications/monad.desktop"
+      local desktop="${TEST_DIR}/fake-home/Desktop/Monad.desktop"
+      [ -f "$menu" ] || fail "Linux application-menu launcher was not created"
+      [ -f "$desktop" ] || fail "Linux desktop launcher was not created"
+      grep -q "Exec=${TEST_DIR}/bin/monad up" "$menu" \
+        || fail "Linux menu launcher does not target installed monad"
+      grep -q "Exec=${TEST_DIR}/bin/monad up" "$desktop" \
+        || fail "Linux desktop launcher does not target installed monad"
+      ;;
+  esac
+}
+
 assert_version() {
   local expected="$1"
   local actual
@@ -78,12 +101,14 @@ run_installer "${PKG_DIR}/monad-1.0.0.tar.gz"
 [ -L "${TEST_DIR}/bin/monad" ] || fail "monad link was not created in explicit bin dir"
 assert_version "1.0.0"
 [ -f "${TEST_DIR}/home/config.json" ] || fail "monad init did not seed explicit MONAD_HOME"
+assert_launcher
 ok "fresh install seeded explicit home and linked fake binary"
 
 step "Flow 2: upgrade replaces the linked binary and preserves home data"
 printf '\n{"_test":"sentinel"}\n' >>"${TEST_DIR}/home/config.json"
 run_installer "${PKG_DIR}/monad-1.1.0.tar.gz"
 assert_version "1.1.0"
+assert_launcher
 grep -q '"_test":"sentinel"' "${TEST_DIR}/home/config.json" \
   && ok "home data preserved across upgrade" \
   || fail "home data was wiped during upgrade"
