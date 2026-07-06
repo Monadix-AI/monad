@@ -33,6 +33,7 @@
   },
   "devDependencies": {
     "@monad/config": "workspace:*",
+    "@monad/monad-power-pack": "workspace:*",
     "openai": "^6.45.0"
   },
   "exports": {
