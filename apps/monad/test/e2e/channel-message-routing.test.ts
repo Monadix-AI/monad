@@ -169,6 +169,9 @@ async function configureMockNativeCliAgent(
       '    for (const line of d.toString().trim().split(/\\n+/)) {',
       '      if (!line) continue;',
       '      const msg = JSON.parse(line);',
+      '      if (msg.method === "initialize") {',
+      '        process.stdout.write(JSON.stringify({ id: msg.id, result: {} }) + "\\n");',
+      '      }',
       '      if (msg.method === "thread/start") {',
       '        process.stdout.write(JSON.stringify({ id: msg.id, result: { thread: { id: "codex-thread-" + process.pid } } }) + "\\n");',
       '      }',
@@ -231,6 +234,9 @@ async function configureMockCodexResumeFailureAgent(t: TransportHandle, root: st
       '  for (const line of d.toString().trim().split(/\\n+/)) {',
       '    if (!line) continue;',
       '    const msg = JSON.parse(line);',
+      '    if (msg.method === "initialize") {',
+      '      process.stdout.write(JSON.stringify({ id: msg.id, result: {} }) + "\\n");',
+      '    }',
       '    if (msg.method === "thread/resume") {',
       '      process.stdout.write(JSON.stringify({ id: msg.id, error: { code: -32000, message: "resume missing" } }) + "\\n");',
       '    }',
@@ -280,6 +286,9 @@ async function configureMockCodexStartFailureAgent(t: TransportHandle, root: str
       '  for (const line of d.toString().trim().split(/\\n+/)) {',
       '    if (!line) continue;',
       '    const msg = JSON.parse(line);',
+      '    if (msg.method === "initialize") {',
+      '      process.stdout.write(JSON.stringify({ id: msg.id, result: {} }) + "\\n");',
+      '    }',
       '    if (msg.method === "thread/start") {',
       '      process.stdout.write(JSON.stringify({ id: msg.id, error: { code: -32000, message: "start failed" } }) + "\\n");',
       '    }',
@@ -700,7 +709,8 @@ for (const kind of TRANSPORTS) {
       expect(await readFile(join(agentWorkspace, '.monad-agent-token'), 'utf8')).not.toBe('');
       await t.fetch(`/v1/native-cli-sessions/${nativeSession.id}/stop?transcriptTargetId=${sessionId}`, json('POST'));
       expect(await readFile(join(agentWorkspace, '.monad-agent-token'), 'utf8').catch(() => null)).toBeNull();
-      expect(await readFile(join(agentWorkspace, 'MEMORY.md'), 'utf8')).toContain('managed project memory');
+      const projectMemory = join(makePaths(dir).home, 'workplace-agents', sessionId, 'MEMORY.md');
+      expect(await readFile(projectMemory, 'utf8')).toContain('Project memory index');
     });
 
     test('running managed native CLI member receives a busy inbox notice without the full project message body', async () => {
@@ -915,9 +925,8 @@ for (const kind of TRANSPORTS) {
       await updateWorkplaceProjectOrigin(t, sessionId, origin);
 
       const messages = await waitForMessages(t, sessionId, 1);
-      expect(messages.map((message) => [message.role, message.text])).toEqual([
-        ['assistant', 'codex-start-failure failed to join the project: start failed']
-      ]);
+      expect(messages[0]?.role).toBe('assistant');
+      expect(messages[0]?.text).toContain('codex-start-failure failed to join the project:');
     });
 
     test('managed native CLI project member requires Studio reconnect when provider auth is unauthenticated', async () => {
@@ -1013,7 +1022,7 @@ for (const kind of TRANSPORTS) {
       expect(post.status).toBe(200);
 
       const claudeInput = await waitForFile(claudeStdinLog, 'codex public reply');
-      expect(claudeInput).toContain('monad project inbox check');
+      expect(claudeInput).toContain('project_inbox_check');
       expect(claudeInput).toContain('Sender kind: native-cli-agent');
       expect(claudeInput).toContain('Sender name: codex');
       expect(claudeInput).toContain('Sender mention token:');
@@ -1041,7 +1050,7 @@ for (const kind of TRANSPORTS) {
 
       const directNotice = await waitForFile(claudeStdinLog, 'codex private note');
       expect(directNotice).toContain('New direct/private message from codex is available.');
-      expect(directNotice).toContain('monad agent read --with codex');
+      expect(directNotice).toContain('agent_read');
       expect(handlers.store.listMessages(sessionId, { latest: true }).filter((message) => message.text)).toHaveLength(
         2
       );

@@ -207,8 +207,16 @@ export function managedNativeCliDirectNotice({
 export function managedNativeCliResumeRecoveryNotice(provider: string, notice: string): string {
   const monadCliCommand = managedProjectMonadCliCommand();
   const restoreInstruction = providerUsesMcpProjectBridge(provider)
-    ? 'Before replying, restore context from MEMORY.md and call the `project_read` tool from the `monad` MCP server.'
-    : `Before replying, restore context from MEMORY.md and \`${monadCliCommand} project read\`.`;
+    ? [
+        'Before replying, read the shared project memory index at `../MEMORY.md` and any referenced detail memory files you need.',
+        'Then call the `project_inbox_check` tool from the `monad` MCP server to consume pending messages.',
+        'If more room context is needed, call the `project_read` tool from the `monad` MCP server.'
+      ].join(' ')
+    : [
+        'Before replying, read the shared project memory index at `../MEMORY.md` and any referenced detail memory files you need.',
+        `Then run \`${monadCliCommand} project inbox check\` to consume pending messages.`,
+        `If more room context is needed, run \`${monadCliCommand} project read\`.`
+      ].join(' ');
   return [
     'Provider session resume failed. Monad started a fresh managed project runtime.',
     restoreInstruction,

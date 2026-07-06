@@ -104,7 +104,7 @@ export const agentTokenPayloadSchema = z.object({
   deliveryId: nativeAgentDeliveryIdSchema.optional(),
   delta: z.string(),
   index: z.number().int().nonnegative(),
-  source: z.enum(['managed-native-cli']).optional()
+  source: z.enum(['managed-native-cli', 'native-cli-provider']).optional()
 });
 
 export const agentReasoningPayloadSchema = z.object({
@@ -116,7 +116,7 @@ export const agentReasoningPayloadSchema = z.object({
   deliveryId: nativeAgentDeliveryIdSchema.optional(),
   delta: z.string(),
   index: z.number().int().nonnegative(),
-  source: z.enum(['managed-native-cli']).optional()
+  source: z.enum(['managed-native-cli', 'native-cli-provider']).optional()
 });
 
 export const agentMessagePayloadSchema = z.object({
@@ -132,7 +132,7 @@ export const agentMessagePayloadSchema = z.object({
   // File references shared with the message — lets live UI projections render the attachment
   // chips without reloading the persisted message row.
   attachments: z.array(messageAttachmentRefSchema).optional(),
-  source: z.enum(['managed-native-cli']).optional(),
+  source: z.enum(['managed-native-cli', 'native-cli-provider']).optional(),
   usage: tokenUsageSchema.optional(),
   cost: costSchema.optional(),
   finishReason: finishReasonSchema.optional()
@@ -260,6 +260,7 @@ export const nativeCliConnectionRequiredPayloadSchema = z.object({
   nativeCliSessionId: z.string().optional(),
   agentName: z.string(),
   provider: nativeCliProviderSchema,
+  code: z.string().optional(),
   reason: z.string(),
   reconnectIn: z.literal('studio')
 });

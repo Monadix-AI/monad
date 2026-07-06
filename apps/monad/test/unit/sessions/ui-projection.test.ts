@@ -376,6 +376,43 @@ test('hydrates a persisted managed native CLI thinking message after refresh', (
   ]);
 });
 
+test('hydrates native CLI provider errors without breaking the UI stream', () => {
+  const projector = new SessionUiProjector();
+  projector.hydrateMessages([
+    {
+      id: 'msg_provider_error',
+      transcriptTargetId: sessionId,
+      role: 'assistant',
+      text: 'thread not found: 019f30a7-ddaf-7062-9f89-f3fd90b5397c',
+      type: 'error',
+      data: {
+        agentName: 'pmem_codex_reviewer',
+        nativeCliSessionId: 'ncli_provider_error',
+        deliveryId: 'deliv_provider_error',
+        source: 'native-cli-provider'
+      },
+      stream: { status: 'settled' },
+      active: true,
+      createdAt: '2026-06-24T00:00:00.000Z'
+    }
+  ]);
+
+  const snapshot = projector.snapshot();
+  if (snapshot.kind !== 'snapshot') throw new Error('expected snapshot');
+  expect(snapshot.items).toEqual([
+    expect.objectContaining({
+      kind: 'message',
+      id: 'msg_provider_error',
+      agentName: 'pmem_codex_reviewer',
+      source: 'native-cli-provider',
+      nativeCliSessionId: 'ncli_provider_error',
+      deliveryId: 'deliv_provider_error',
+      status: 'error',
+      parts: [{ type: 'text', text: 'thread not found: 019f30a7-ddaf-7062-9f89-f3fd90b5397c' }]
+    })
+  ]);
+});
+
 test('managed native CLI completion moves live order to completion time', () => {
   const projector = new SessionUiProjector();
   const startedAt = '2026-06-24T00:00:01.000Z';
@@ -811,6 +848,7 @@ test('projects native CLI reconnect requirements as visible custom items', () =>
       nativeCliSessionId: 'ncli_gemini',
       agentName: 'gemini',
       provider: 'gemini',
+      code: 'provider_connection_required',
       reason: 'Gemini CLI is waiting for provider authentication to complete.',
       reconnectIn: 'studio'
     })
@@ -827,6 +865,7 @@ test('projects native CLI reconnect requirements as visible custom items', () =>
         nativeCliSessionId: 'ncli_gemini',
         agentName: 'gemini',
         provider: 'gemini',
+        code: 'provider_connection_required',
         reason: 'Gemini CLI is waiting for provider authentication to complete.',
         reconnectIn: 'studio'
       }

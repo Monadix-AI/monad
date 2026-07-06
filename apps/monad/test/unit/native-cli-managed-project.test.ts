@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { chmod, mkdir, readFile, stat, symlink, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { builtinAgentAdapters } from '@monad/atoms/agent-adapters';
@@ -101,6 +101,58 @@ test('managed project runtimes share the same current CLI entry per process', as
   expect(await stat(join(monadHome, 'workplace-agents', 'prj_PROJECT', 'claude', 'bin')).catch(() => null)).toBeNull();
 });
 
+test('managed project runtime removes stale per-agent wrapper bins', async () => {
+  const monadHome = join(tmpdir(), `monad-managed-runtime-${Date.now()}-${process.hrtime.bigint()}`);
+  const wrapperDir = join(monadHome, 'workplace-agents', 'prj_PROJECT', 'codex', 'bin');
+  await mkdir(wrapperDir, { recursive: true });
+  await writeFile(join(wrapperDir, 'monad'), '#!/bin/sh\necho stale\n');
+
+  prepareManagedProjectRuntime({
+    monadHome,
+    serverUrl: 'http://127.0.0.1:1234',
+    agentName: 'codex',
+    projectId: 'prj_PROJECT',
+    nativeCliSessionId: 'ncli_codex',
+    provider: 'codex'
+  });
+
+  expect(await stat(wrapperDir).catch(() => null)).toBeNull();
+
+  await rm(monadHome, { recursive: true, force: true });
+});
+
+test('managed project runtimes share a project root memory index', async () => {
+  const monadHome = join(tmpdir(), `monad-managed-runtime-${Date.now()}-${process.hrtime.bigint()}`);
+  const codex = prepareManagedProjectRuntime({
+    monadHome,
+    serverUrl: 'http://127.0.0.1:1234',
+    agentName: 'codex',
+    projectId: 'prj_PROJECT',
+    nativeCliSessionId: 'ncli_codex',
+    provider: 'codex'
+  });
+  const claude = prepareManagedProjectRuntime({
+    monadHome,
+    serverUrl: 'http://127.0.0.1:1234',
+    agentName: 'claude',
+    projectId: 'prj_PROJECT',
+    nativeCliSessionId: 'ncli_claude',
+    provider: 'claude-code'
+  });
+  const projectRoot = join(monadHome, 'workplace-agents', 'prj_PROJECT');
+  const sharedMemory = join(projectRoot, 'MEMORY.md');
+
+  expect(await readFile(sharedMemory, 'utf8')).toContain('# Project memory index');
+  expect(await stat(join(projectRoot, 'memories'))).toMatchObject({ mode: expect.any(Number) });
+  expect(await readFile(join(codex.workspace, 'MEMORY.md'), 'utf8').catch(() => null)).toBeNull();
+  expect(await readFile(join(claude.workspace, 'MEMORY.md'), 'utf8').catch(() => null)).toBeNull();
+  expect(codex.prompt).toContain('shared project memory index at `../MEMORY.md`');
+  expect(codex.prompt).toContain('use `../MEMORY.md.lock`');
+  expect(claude.prompt).toContain('shared project memory index at `../MEMORY.md`');
+
+  await rm(monadHome, { recursive: true, force: true });
+});
+
 test('managed project runtime uses non-interactive Codex launches', () => {
   const monadHome = join(tmpdir(), `monad-managed-runtime-${Date.now()}-${process.hrtime.bigint()}`);
   const prepared = prepareManagedProjectRuntime({
@@ -139,6 +191,11 @@ test('managed project runtime uses MCP communication prompt for managed MCP brid
   expect(codex.prompt).toContain('Every side-effect MCP call must include a stable `requestId`');
   expect(codex.prompt).toContain('`project_post`');
   expect(codex.prompt).toContain('`project_post` tool from the `monad` MCP server');
+  expect(codex.prompt).toContain('When reply text mentions a local file path');
+  expect(codex.prompt).toContain('always use an absolute path');
+  expect(codex.prompt).toContain("[report.md](/Users/you/project/report.md 'monad:file')");
+  expect(codex.prompt).toContain('Attachments are for transferring long or supporting content');
+  expect(codex.prompt).not.toContain('If you cannot pass `attachments`');
   expect(codex.prompt).not.toContain('`monad project post -`');
   expect(codex.mcpConfigArgs).toContain('-c');
   expect(codex.mcpConfigArgs).toContain(`mcp_servers.monad.command=${JSON.stringify(codex.monadCliEntry.command)}`);
@@ -187,6 +244,11 @@ test('managed project runtime renders the current CLI entry in non-MCP communica
 
   expect(prepared.prompt).toContain(`${command} project post -`);
   expect(prepared.prompt).toContain(`${command} project inbox check`);
+  expect(prepared.prompt).toContain('When reply text mentions a local file path');
+  expect(prepared.prompt).toContain('always use an absolute path');
+  expect(prepared.prompt).toContain("[report.md](/Users/you/project/report.md 'monad:file')");
+  expect(prepared.prompt).toContain('Attachments are for transferring long or supporting content');
+  expect(prepared.prompt).not.toContain('If you cannot use `--file`');
   expect(prepared.prompt).not.toContain('{{monadCliCommand}}');
 });
 

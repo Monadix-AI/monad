@@ -169,6 +169,7 @@ export function createForwardNativeCliHandler(
             payload: {
               agentName,
               provider: spec.provider,
+              code: 'provider_connection_required',
               reason,
               reconnectIn: 'studio'
             },
@@ -210,10 +211,12 @@ export function createForwardNativeCliHandler(
         );
         return { accepted: true as const };
       }
-      const resumeFrom =
+      const resumeCandidate =
         runtimeRole === 'managed-project-agent'
-          ? nativeSessions.find((candidate) => candidate.providerSessionRef)?.providerSessionRef
+          ? nativeSessions.find((candidate) => candidate.providerSessionRef)
           : undefined;
+      const resumeFrom = resumeCandidate?.providerSessionRef;
+      if (resumeCandidate && resumeFrom) store.clearNativeCliSessionRef(resumeCandidate.id);
       const nativeSession =
         runtimeRole === 'managed-project-agent'
           ? await startManagedNativeCliRuntimeWithRecovery({

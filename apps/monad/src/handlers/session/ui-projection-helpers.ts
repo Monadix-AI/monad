@@ -109,7 +109,7 @@ export function agentNameFromData(data: unknown): string | undefined {
 export function sourceFromData(data: unknown): UIMessageItem['source'] | undefined {
   if (!data || typeof data !== 'object') return undefined;
   const source = (data as { source?: unknown }).source;
-  return source === 'managed-native-cli' ? source : undefined;
+  return source === 'managed-native-cli' || source === 'native-cli-provider' ? source : undefined;
 }
 
 export function nativeCliSessionIdFromData(data: unknown): string | undefined {

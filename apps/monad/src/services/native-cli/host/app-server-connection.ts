@@ -120,6 +120,7 @@ export class NativeCliAppServerConnectionManager {
       nativeCliSessionId: id,
       agentName: live.agentName,
       provider: live.provider,
+      code: 'app_server_connection_dropped',
       reason: `${live.provider} app-server connection dropped`,
       reconnectIn: 'studio'
     });

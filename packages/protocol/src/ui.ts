@@ -51,7 +51,7 @@ export const uiMessageItemSchema = z.object({
   id: z.string(),
   role: uiMessageRoleSchema,
   agentName: z.string().optional(),
-  source: z.enum(['managed-native-cli']).optional(),
+  source: z.enum(['managed-native-cli', 'native-cli-provider']).optional(),
   nativeCliSessionId: z
     .string()
     .regex(/^ncli_/)

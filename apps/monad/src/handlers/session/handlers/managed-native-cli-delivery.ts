@@ -148,6 +148,7 @@ export function createManagedNativeCliDelivery(ctx: SessionContext) {
               payload: {
                 agentName: runtimeAgentName,
                 provider: spec.provider,
+                code: 'provider_connection_required',
                 reason: preflight.reason,
                 reconnectIn: 'studio'
               },
@@ -180,7 +181,7 @@ export function createManagedNativeCliDelivery(ctx: SessionContext) {
             projectId: session.id as ProjectId,
             memberInstanceId: runtimeAgentName,
             triggerMessageId,
-            providerSessionRef: nativeSession.providerSessionRef ?? resumeFrom ?? null
+            providerSessionRef: nativeSession.providerSessionRef ?? null
           });
         }
         store.markNativeCliInboxDelivered(nativeSession.id, deliveredSeq);
@@ -246,6 +247,7 @@ export function createManagedNativeCliDelivery(ctx: SessionContext) {
             payload: {
               agentName: runtimeAgentName,
               provider: spec.provider,
+              code: 'provider_connection_required',
               reason: preflight.reason,
               reconnectIn: 'studio'
             },

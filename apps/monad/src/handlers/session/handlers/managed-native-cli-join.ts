@@ -95,6 +95,7 @@ export function createManagedNativeCliJoin(ctx: SessionContext) {
             emitLifecycle(next.id, 'native_cli.connection_required', {
               agentName: runtimeAgentName,
               provider: spec.provider,
+              code: 'provider_connection_required',
               reason: preflight.reason,
               reconnectIn: 'studio'
             });

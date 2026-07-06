@@ -6,7 +6,7 @@ import type {
 } from '@monad/protocol';
 
 import { createHash, randomBytes } from 'node:crypto';
-import { existsSync, lstatSync, mkdirSync, readdirSync, unlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, lstatSync, mkdirSync, readdirSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 
 import { getNativeCliProviderAdapter } from '@/services/native-cli/index.ts';
@@ -15,6 +15,16 @@ import managedProjectRuntimePromptPath from './prompts/managed-project-runtime-p
 
 const MANAGED_PROJECT_RUNTIME_PROMPT = (await Bun.file(managedProjectRuntimePromptPath).text()).trim();
 const MANAGED_PROJECT_RUNTIME_MCP_PROMPT = (await Bun.file(managedProjectRuntimeMcpPromptPath).text()).trim();
+const PROJECT_MEMORY_INDEX = [
+  '# Project memory index',
+  '',
+  'This shared index is for durable Workplace Project context across managed agents.',
+  '',
+  '- Add detailed notes under `memories/`.',
+  '- Link detail memory files from this index.',
+  '- Before writing shared memory, acquire `MEMORY.md.lock`.',
+  ''
+].join('\n');
 
 type ManagedProjectPromptInput = NativeAgentRuntimePromptInput & { monadCliCommand: string };
 
@@ -83,6 +93,10 @@ export function cleanupManagedProjectRuntimeToken(workspace: string): void {
   }
 }
 
+function cleanupManagedProjectRuntimeBin(workspace: string): void {
+  rmSync(join(workspace, 'bin'), { recursive: true, force: true });
+}
+
 export function cleanupManagedProjectOrphanTokens(monadHome: string): number {
   const root = join(monadHome, 'workplace-agents');
   if (!existsSync(root)) return 0;
@@ -129,6 +143,16 @@ export function managedProjectRuntimeWorkspace(args: {
   return workspace;
 }
 
+function managedProjectRoot(args: { monadHome: string; projectId: string }): string {
+  return resolve(args.monadHome, 'workplace-agents', args.projectId);
+}
+
+function prepareManagedProjectSharedMemory(root: string): void {
+  mkdirSync(join(root, 'memories'), { recursive: true });
+  const memoryFile = join(root, 'MEMORY.md');
+  if (!existsSync(memoryFile)) writeFileSync(memoryFile, PROJECT_MEMORY_INDEX, { mode: 0o600 });
+}
+
 export function prepareManagedProjectRuntime(
   args: {
     monadHome: string;
@@ -142,6 +166,8 @@ export function prepareManagedProjectRuntime(
   } & Omit<NativeAgentRuntimePromptInput, 'workspace'>
 ): NativeAgentRuntimeSpec {
   const workspace = managedProjectRuntimeWorkspace(args);
+  const projectRoot = managedProjectRoot(args);
+  prepareManagedProjectSharedMemory(projectRoot);
   mkdirSync(workspace, { recursive: true });
   const monadCliEntry = managedProjectMonadCliEntry();
   const prompt = buildManagedProjectPrompt({
@@ -159,19 +185,12 @@ export function prepareManagedProjectRuntime(
     monadCliCommand: monadCliCommand(monadCliEntry)
   });
   const promptFile = join(workspace, 'managed-prompt.md');
-  const memoryFile = join(workspace, 'MEMORY.md');
   const tokenFile = join(workspace, '.monad-agent-token');
   const token = randomBytes(32).toString('hex');
   writeFileSync(promptFile, prompt, { mode: 0o600 });
   cleanupManagedProjectRuntimeToken(workspace);
+  cleanupManagedProjectRuntimeBin(workspace);
   writeFileSync(tokenFile, token, { mode: 0o600 });
-  if (!existsSync(memoryFile)) {
-    writeFileSync(
-      memoryFile,
-      `# ${args.agentName} managed project memory\n\nUse this file for durable notes that help restore project context.\n`,
-      { mode: 0o600 }
-    );
-  }
   const managed = getNativeCliProviderAdapter(args.provider).managedRuntime;
   const env = {
     ...(managed?.env?.({ workspace, skipProviderApprovals: args.skipProviderApprovals ?? false }) ?? {}),

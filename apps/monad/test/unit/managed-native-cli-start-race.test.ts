@@ -8,10 +8,12 @@ import { createManagedNativeCliDelivery } from '@/handlers/session/handlers/mana
 
 function buildHarness() {
   const starts: string[] = [];
+  const startRefs: (string | undefined)[] = [];
   const inputs: string[] = [];
   const nativeCliHost = {
-    start: async (args: { agentName: string }) => {
+    start: async (args: { agentName: string; providerSessionRef?: string }) => {
       starts.push(args.agentName);
+      startRefs.push(args.providerSessionRef);
       await Bun.sleep(20);
       return { id: `ncli_${args.agentName}_${starts.length}`, agentName: args.agentName } as NativeCliSessionView;
     },
@@ -24,7 +26,7 @@ function buildHarness() {
     makeEmit: () => () => {},
     persistAndRetire: () => {}
   } as unknown as SessionContext;
-  return { delivery: createManagedNativeCliDelivery(ctx), starts, inputs };
+  return { delivery: createManagedNativeCliDelivery(ctx), starts, startRefs, inputs, nativeCliHost };
 }
 
 const session = { id: 'prj_race', cwd: '/tmp/prj' } as unknown as TranscriptTarget;
@@ -66,4 +68,26 @@ test('different members start independently and a settled start does not dedupe 
   expect(starts.sort()).toEqual(['claude', 'codex', 'codex']);
   expect(inputs.filter((text) => text === 'hello')).toHaveLength(2);
   expect(inputs.filter((text) => text === 'hello again')).toHaveLength(1);
+});
+
+test('resume failure cold-start input restores from shared memory and project inbox', async () => {
+  const { delivery, starts, startRefs, inputs, nativeCliHost } = buildHarness();
+  nativeCliHost.start = async (args: { agentName: string; providerSessionRef?: string }) => {
+    starts.push(args.agentName);
+    startRefs.push(args.providerSessionRef);
+    if (args.providerSessionRef === 'archived-thread') throw new Error('session archived');
+    return { id: `ncli_${args.agentName}_${starts.length}`, agentName: args.agentName } as NativeCliSessionView;
+  };
+
+  await delivery.startManagedNativeCliRuntimeWithRecovery({
+    ...startArgs('recover this project message'),
+    providerSessionRef: 'archived-thread'
+  });
+
+  expect(startRefs).toEqual(['archived-thread', undefined]);
+  expect(inputs).toHaveLength(1);
+  expect(inputs[0]).toContain('../MEMORY.md');
+  expect(inputs[0]).toContain('project_inbox_check');
+  expect(inputs[0]).toContain('project_read');
+  expect(inputs[0]).toContain('recover this project message');
 });

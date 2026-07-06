@@ -251,6 +251,10 @@ export class NativeCliOutputPipeline {
         nativeCliSessionId: id,
         agentName: live?.agentName ?? adapter.provider,
         provider: adapter.provider,
+        code:
+          typeof event.payload.code === 'string' && event.payload.code.length > 0
+            ? event.payload.code
+            : 'provider_connection_required',
         reason:
           typeof event.payload.reason === 'string'
             ? event.payload.reason
