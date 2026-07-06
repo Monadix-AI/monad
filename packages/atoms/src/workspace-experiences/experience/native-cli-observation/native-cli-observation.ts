@@ -281,15 +281,20 @@ function nativeCliObservationEvents(args: {
   adapter?: NativeCliObservationAdapter;
   output?: string;
   observedAt?: string;
+  mode?: 'history' | 'live';
 }): NativeCliObservationEvent[] | undefined {
   const text = args.output?.trim();
   if (!text) return [];
   const entries = jsonRecordEntries(text);
   const adapterObservation = observationAdapter(args)?.observation;
   if (entries.length > 0) {
+    const projectionEntries =
+      args.mode === 'history' && adapterObservation?.historyEntries
+        ? adapterObservation.historyEntries(entries)
+        : entries;
     return removeAdjacentDuplicateObservations(
       mergeAdjacentChunkObservations(
-        parsedJsonEvents({ id: args.id, provider: args.provider, adapterObservation, entries })
+        parsedJsonEvents({ id: args.id, provider: args.provider, adapterObservation, entries: projectionEntries })
       )
     );
   }
@@ -302,6 +307,7 @@ export function nativeCliStreamItems(args: {
   adapter?: NativeCliObservationAdapter;
   output?: string;
   observedAt?: string;
+  mode?: 'history' | 'live';
 }): NativeCliObservationEvent[] {
   const text = args.output?.trim();
   if (!text) return [];

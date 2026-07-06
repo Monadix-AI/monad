@@ -486,6 +486,7 @@ export function buildProjectMessages({
     const displayName = nativeCliDisplayNames.get(input.agent) ?? input.agent;
     const icon = productIcon(input.productIcon);
     if (!firstNativeCliAgentNames.has(input.agent)) {
+      firstNativeCliAgentNames.add(input.agent);
       const provider = typeof input.provider === 'string' ? input.provider : item.tool.slice('native-cli:'.length);
       byId.set(`native-cli-session:${item.id}`, {
         id: `native-cli-session:${item.id}`,

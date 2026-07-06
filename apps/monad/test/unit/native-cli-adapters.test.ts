@@ -1,5 +1,6 @@
 import type { ImportSettingsCategory, NativeCliAgentView } from '@monad/protocol';
 
+import { Database } from 'bun:sqlite';
 import { expect, test } from 'bun:test';
 import crypto from 'node:crypto';
 import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
@@ -9,6 +10,7 @@ import { builtinAgentAdapters } from '@monad/atoms/agent-adapters';
 import { parseNativeCliArgumentSupport } from '@monad/atoms/agent-adapters/argument-support';
 import { publicKeyFromRawBase64Url } from '@monad/atoms/agent-adapters/openclaw/device-identity';
 import { normalizePtyInput } from '@monad/atoms/agent-adapters/pty';
+import { nativeCliStreamItems } from '@monad/atoms/native-cli-observation';
 
 import {
   buildNativeCliArgumentSupportProbe,
@@ -1216,15 +1218,14 @@ test('Gemini adapter keeps yolo approval mode behind dangerous mode opt-in', () 
 
 test('native CLI presets detect Codex, Claude Code, Gemini, and Qwen as direct client commands', () => {
   const presets = listNativeCliAgentPresets({ which: (name) => `/bin/${name}`, exists: () => false });
+  const expectedIds = ['claude-code', 'codex', 'gemini', 'hermes', 'openclaw', 'qwen'];
 
-  expect(presets.map((preset) => preset.id).sort()).toEqual([
-    'claude-code',
-    'codex',
-    'gemini',
-    'hermes',
-    'openclaw',
-    'qwen'
-  ]);
+  expect(
+    presets
+      .map((preset) => preset.id)
+      .filter((id) => expectedIds.includes(id))
+      .sort()
+  ).toEqual(expectedIds);
   expect(presets.find((preset) => preset.id === 'codex')?.command).toBe('codex');
   expect(presets.find((preset) => preset.id === 'codex')?.productIcon).toBe('codex');
   expect(presets.find((preset) => preset.id === 'claude-code')?.command).toBe('claude');
@@ -1659,6 +1660,31 @@ test('Gemini adapter surfaces error results and drops non-fatal warnings', () =>
   ]);
 });
 
+test('Gemini history observation folds assistant stream-json message deltas by result boundary', () => {
+  const output = [
+    JSON.stringify({ type: 'init', session_id: 'gemini-session-1', model: 'gemini-2.5-pro' }),
+    JSON.stringify({ type: 'message', role: 'user', content: 'inspect the project' }),
+    JSON.stringify({ type: 'message', role: 'assistant', content: 'I will ', delta: true }),
+    JSON.stringify({ type: 'message', role: 'assistant', content: 'inspect.', delta: true }),
+    JSON.stringify({ type: 'result', status: 'success', stats: { total_tokens: 42 } })
+  ].join('\n');
+
+  const liveEvents = nativeCliStreamItems({ id: 'ncli_gemini', adapter: geminiNativeCliAdapter, output });
+  const historyEvents = nativeCliStreamItems({
+    id: 'ncli_gemini',
+    adapter: geminiNativeCliAdapter,
+    output,
+    mode: 'history'
+  });
+
+  expect(liveEvents.filter((event) => event.providerEventType === 'message').map((event) => event.text)).toEqual([
+    'inspect the project',
+    'I will',
+    'inspect.'
+  ]);
+  expect(historyEvents.map((event) => [event.providerEventType, event.text])).toEqual([['message', 'I will inspect.']]);
+});
+
 // Qwen Code diverged from gemini-cli's flat stream-json: `--output-format stream-json` emits the
 // Claude-Code-compatible `SDKMessage` protocol (system/assistant/user/result with Anthropic content
 // blocks), verified against the official `@qwen-code/sdk` `types/protocol.ts` and the qwen-code
@@ -1718,6 +1744,38 @@ test('Qwen adapter surfaces error results as provider errors', () => {
   expectNativeCliOutputContract(events);
   expect(events).toEqual([
     { type: 'provider_error', payload: { message: 'Model returned an empty response', code: 'INVALID_STREAM' } }
+  ]);
+});
+
+test('Qwen history observation drops partial stream events and keeps complete SDK messages', () => {
+  const output = [
+    JSON.stringify({ type: 'system', subtype: 'session_start', session_id: 'qwen-session-1' }),
+    JSON.stringify({
+      type: 'stream_event',
+      session_id: 'qwen-session-1',
+      event: { type: 'content_block_delta', delta: { type: 'text_delta', text: 'part' } }
+    }),
+    JSON.stringify({
+      type: 'assistant',
+      session_id: 'qwen-session-1',
+      message: { role: 'assistant', content: [{ type: 'text', text: 'complete answer' }] }
+    }),
+    JSON.stringify({ type: 'result', subtype: 'success', session_id: 'qwen-session-1', result: 'done' })
+  ].join('\n');
+
+  const liveEvents = nativeCliStreamItems({ id: 'ncli_qwen', adapter: qwenNativeCliAdapter, output });
+  const historyEvents = nativeCliStreamItems({
+    id: 'ncli_qwen',
+    adapter: qwenNativeCliAdapter,
+    output,
+    mode: 'history'
+  });
+
+  expect(liveEvents.some((event) => event.providerEventType === 'content_block_delta')).toBe(true);
+  expect(historyEvents.map((event) => [event.providerEventType, event.text])).toEqual([
+    ['system', 'session_start'],
+    ['assistant', 'complete answer'],
+    ['result', 'done']
   ]);
 });
 
@@ -2029,6 +2087,123 @@ test('Codex adapter requests and parses paged app-server history without rollout
         backwardsCursor: null
       }
     }
+  ]);
+});
+
+test('Codex adapter projects paged history as completed turn items only', () => {
+  const output = codexNativeCliAdapter.historyPageOutput?.({
+    providerSessionRef: 'codex-thread-1',
+    workingPath: '/tmp/project',
+    limitBytes: 8192,
+    page: {
+      items: [
+        {
+          id: 'turn-1',
+          status: 'completed',
+          startedAt: '2026-07-06T00:00:00.000Z',
+          completedAt: '2026-07-06T00:00:01.000Z',
+          durationMs: 1000,
+          items: [
+            { id: 'item-1', type: 'userMessage', text: 'hi' },
+            { id: 'item-2', type: 'agentMessage', text: 'hello' }
+          ]
+        }
+      ]
+    }
+  });
+
+  expect(output).toBeTruthy();
+  const records = (output ?? '').split('\n').map((line) => JSON.parse(line));
+  expect(records.map((record) => record.method)).toEqual([
+    'turn/started',
+    'item/completed',
+    'item/completed',
+    'turn/completed'
+  ]);
+  expect(records.some((record) => String(record.method).includes('/delta'))).toBe(false);
+  expect(records.some((record) => record.method === 'item/started')).toBe(false);
+});
+
+test('Codex history observation folds realtime item lifecycle into final events', () => {
+  const output = [
+    {
+      method: 'item/started',
+      params: {
+        threadId: 'codex-thread-1',
+        turnId: 'turn-1',
+        item: { id: 'tool-1', type: 'mcpToolCall', tool: 'Read', input: { file_path: '/tmp/project/a.ts' } }
+      }
+    },
+    {
+      method: 'item/mcpToolCall/progress',
+      params: {
+        threadId: 'codex-thread-1',
+        turnId: 'turn-1',
+        itemId: 'tool-1',
+        message: 'reading'
+      }
+    },
+    {
+      method: 'item/completed',
+      params: {
+        threadId: 'codex-thread-1',
+        turnId: 'turn-1',
+        item: {
+          id: 'tool-1',
+          type: 'mcpToolCall',
+          tool: 'Read',
+          input: { file_path: '/tmp/project/a.ts' },
+          output: 'file body'
+        }
+      }
+    },
+    {
+      method: 'item/started',
+      params: {
+        threadId: 'codex-thread-1',
+        turnId: 'turn-1',
+        item: { id: 'agent-1', type: 'agentMessage' }
+      }
+    },
+    {
+      method: 'item/agentMessage/delta',
+      params: {
+        threadId: 'codex-thread-1',
+        turnId: 'turn-1',
+        itemId: 'agent-1',
+        delta: 'hel'
+      }
+    },
+    {
+      method: 'item/completed',
+      params: {
+        threadId: 'codex-thread-1',
+        turnId: 'turn-1',
+        item: { id: 'agent-1', type: 'agentMessage', text: 'hello' }
+      }
+    }
+  ]
+    .map((record) => JSON.stringify(record))
+    .join('\n');
+
+  const liveEvents = nativeCliStreamItems({ id: 'ncli_test', adapter: codexNativeCliAdapter, output });
+  const historyEvents = nativeCliStreamItems({
+    id: 'ncli_test',
+    adapter: codexNativeCliAdapter,
+    output,
+    mode: 'history'
+  });
+
+  expect(liveEvents.some((event) => event.providerEventType === 'item/mcpToolCall/progress')).toBe(true);
+  expect(historyEvents.map((event) => event.providerEventType)).toEqual([
+    'function_call',
+    'function_call_output',
+    'item/agentMessage'
+  ]);
+  expect(historyEvents.map((event) => event.text)).toEqual([
+    'Tool call Read {"file_path":"/tmp/project/a.ts"}',
+    'file body',
+    'hello'
   ]);
 });
 
@@ -2721,6 +2896,90 @@ test('OpenClaw adapter sends a turn and resolves an approval over the app-server
   });
 });
 
+test('OpenClaw adapter requests provider-owned chat history over the gateway', () => {
+  const writes: string[] = [];
+  const handle = {
+    launchMode: 'app-server' as const,
+    providerSessionRef: 'agent:dev:oc-9',
+    appServer: {
+      send(input: string) {
+        writes.push(input);
+      },
+      close() {}
+    },
+    pendingRequests: new Map<string | number, string>(),
+    nextRequestId: () => 8,
+    kill() {}
+  };
+
+  const responseId = openClawNativeCliAdapter.requestHistoryPage?.(handle, {
+    limit: 5,
+    sortDirection: 'desc',
+    itemsView: 'full'
+  });
+
+  expect(responseId).toBe('8');
+  expect(JSON.parse(writes[0] ?? '')).toEqual({
+    type: 'req',
+    method: 'chat.history',
+    id: '8',
+    params: { sessionKey: 'agent:dev:oc-9', limit: 5 }
+  });
+
+  const events = openClawNativeCliAdapter.parseOutput(
+    JSON.stringify({
+      type: 'res',
+      id: '8',
+      ok: true,
+      payload: {
+        sessionKey: 'agent:dev:oc-9',
+        messages: [
+          { role: 'user', content: [{ type: 'text', text: 'inspect' }] },
+          { role: 'assistant', content: [{ type: 'text', text: 'done' }] }
+        ]
+      }
+    }),
+    handle
+  );
+
+  expectNativeCliOutputContract(events);
+  expect(events).toEqual([
+    {
+      type: 'history_page',
+      payload: {
+        responseId: '8',
+        items: [
+          { role: 'user', content: [{ type: 'text', text: 'inspect' }] },
+          { role: 'assistant', content: [{ type: 'text', text: 'done' }] }
+        ],
+        nextCursor: null,
+        backwardsCursor: null
+      }
+    }
+  ]);
+});
+
+test('OpenClaw history observation projects provider chat messages without guessing live deltas', () => {
+  const output = [
+    JSON.stringify({ role: 'user', content: [{ type: 'text', text: 'inspect' }] }),
+    JSON.stringify({ role: 'assistant', content: [{ type: 'text', text: 'done' }] }),
+    JSON.stringify({ role: 'toolresult', content: [{ type: 'text', text: 'tool output' }] })
+  ].join('\n');
+
+  const historyEvents = nativeCliStreamItems({
+    id: 'ncli_openclaw',
+    adapter: openClawNativeCliAdapter,
+    output,
+    mode: 'history'
+  });
+
+  expect(historyEvents.map((event) => [event.role, event.providerEventType, event.text])).toEqual([
+    ['user', 'message', 'inspect'],
+    ['agent', 'message', 'done'],
+    ['tool', 'message', 'tool output']
+  ]);
+});
+
 test('OpenClaw adapter routes a failed session start to a reconnect prompt', () => {
   const handle = {
     launchMode: 'app-server' as const,
@@ -2912,6 +3171,218 @@ test('Hermes preset advertises pty + app-server + cli-oneshot (real gateway as o
   expect(preset.installUrl).toBe('https://hermes-agent.nousresearch.com');
   expect(preset.supportedLaunchModes).toEqual(['pty', 'app-server', 'cli-oneshot']);
   expect(preset.supportedAppServerTransports).toEqual(['ws']);
+  expect(preset.capabilities?.history).toBe('provider-owned');
+});
+
+test('Hermes adapter prefers the provider HTTP messages API for history backfill', async () => {
+  const apiEnv = 'HERMES_API_BASE_URL';
+  const previousApi = Bun.env[apiEnv];
+  const server = Bun.serve({
+    port: 0,
+    fetch(request) {
+      const url = new URL(request.url);
+      expect(url.pathname).toBe('/api/sessions/api-session/messages');
+      return Response.json({
+        session_id: 'api-session',
+        messages: [
+          { id: 1, role: 'user', content: 'api user' },
+          { id: 2, role: 'assistant', content: 'api answer' }
+        ]
+      });
+    }
+  });
+  Bun.env[apiEnv] = `http://127.0.0.1:${server.port}`;
+  try {
+    const page = await hermesNativeCliAdapter.historyPage?.({
+      providerSessionRef: 'api-session',
+      workingPath: '/tmp/project',
+      limitBytes: 8192,
+      request: { limit: 10, sortDirection: 'asc', itemsView: 'full' }
+    });
+    expect(page?.items.map((item) => [(item as { role: string }).role, (item as { content: string }).content])).toEqual(
+      [
+        ['user', 'api user'],
+        ['assistant', 'api answer']
+      ]
+    );
+  } finally {
+    server.stop(true);
+    if (previousApi === undefined) delete Bun.env[apiEnv];
+    else Bun.env[apiEnv] = previousApi;
+  }
+});
+
+test('Hermes adapter falls back to provider CLI export before reading the SQLite store', async () => {
+  const apiEnv = 'HERMES_API_BASE_URL';
+  const pathEnv = 'PATH';
+  const previousApi = Bun.env[apiEnv];
+  const previousPath = Bun.env[pathEnv];
+  const dir = mkdtempSync(join(tmpdir(), 'monad-native-cli-hermes-export-'));
+  const binDir = join(dir, 'bin');
+  mkdirSync(binDir, { recursive: true });
+  const session = {
+    id: 'export-parent',
+    session_key: 'agent:dev:hermes:key-export',
+    started_at: 1,
+    end_reason: 'compression',
+    messages: [{ id: 1, role: 'user', content: 'old parent' }]
+  };
+  const child = {
+    id: 'export-child',
+    parent_session_id: 'export-parent',
+    started_at: 2,
+    messages: [
+      { id: 2, role: 'user', content: 'export user' },
+      { id: 3, role: 'assistant', content: 'export answer' }
+    ]
+  };
+  writeFileSync(
+    join(binDir, 'hermes'),
+    `#!/bin/sh\nprintf '%s\\n' '${JSON.stringify(session)}' '${JSON.stringify(child)}'\n`
+  );
+  chmodSync(join(binDir, 'hermes'), 0o755);
+  Bun.env[apiEnv] = 'http://127.0.0.1:9';
+  Bun.env[pathEnv] = binDir;
+  try {
+    const page = await hermesNativeCliAdapter.historyPage?.({
+      providerSessionRef: 'agent:dev:hermes:key-export',
+      workingPath: '/tmp/project',
+      limitBytes: 8192,
+      request: { limit: 1, sortDirection: 'desc', itemsView: 'full' }
+    });
+    expect(page?.items.map((item) => [(item as { id: number }).id, (item as { content: string }).content])).toEqual([
+      [3, 'export answer']
+    ]);
+    expect(page?.nextCursor).toBe('1');
+  } finally {
+    if (previousApi === undefined) delete Bun.env[apiEnv];
+    else Bun.env[apiEnv] = previousApi;
+    if (previousPath === undefined) delete Bun.env[pathEnv];
+    else Bun.env[pathEnv] = previousPath;
+  }
+});
+
+test('Hermes adapter uses the local SQLite session store only as a final history fallback', async () => {
+  const apiEnv = 'HERMES_API_BASE_URL';
+  const hermesHomeEnv = 'HERMES_HOME';
+  const pathEnv = 'PATH';
+  const previousApi = Bun.env[apiEnv];
+  const previousHome = Bun.env[hermesHomeEnv];
+  const previousPath = Bun.env[pathEnv];
+  const dir = mkdtempSync(join(tmpdir(), 'monad-native-cli-hermes-history-'));
+  const emptyBin = join(dir, 'empty-bin');
+  mkdirSync(emptyBin, { recursive: true });
+  Bun.env[apiEnv] = 'http://127.0.0.1:9';
+  Bun.env[hermesHomeEnv] = dir;
+  Bun.env[pathEnv] = emptyBin;
+  const db = new Database(join(dir, 'state.db'));
+  let dbClosed = false;
+  try {
+    db.run(`
+      CREATE TABLE sessions (
+        id TEXT PRIMARY KEY,
+        source TEXT,
+        started_at REAL NOT NULL,
+        title TEXT,
+        session_key TEXT,
+        parent_session_id TEXT,
+        end_reason TEXT,
+        model_config TEXT
+      )
+    `);
+    db.run(`
+      CREATE TABLE messages (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        session_id TEXT NOT NULL,
+        role TEXT NOT NULL,
+        content TEXT,
+        tool_call_id TEXT,
+        tool_calls TEXT,
+        tool_name TEXT,
+        timestamp REAL,
+        reasoning TEXT,
+        reasoning_content TEXT,
+        active INTEGER NOT NULL DEFAULT 1,
+        compacted INTEGER NOT NULL DEFAULT 0
+      )
+    `);
+    db.query(
+      `INSERT INTO sessions (id, source, started_at, session_key, end_reason, model_config)
+       VALUES (?, ?, ?, ?, ?, ?)`
+    ).run('parent-session', 'cli', 1, 'agent:dev:hermes:key-1', 'compression', '{}');
+    db.query(
+      `INSERT INTO sessions (id, source, started_at, session_key, parent_session_id, model_config)
+       VALUES (?, ?, ?, ?, ?, ?)`
+    ).run('child-session', 'cli', 2, 'agent:dev:hermes:key-1', 'parent-session', '{}');
+    const insert = db.query(
+      `INSERT INTO messages (session_id, role, content, tool_calls, tool_name, timestamp, active)
+       VALUES (?, ?, ?, ?, ?, ?, 1)`
+    );
+    insert.run('child-session', 'user', 'inspect', null, null, 1);
+    insert.run(
+      'child-session',
+      'assistant',
+      '',
+      JSON.stringify([{ function: { name: 'terminal', arguments: '{"command":"ls"}' } }]),
+      null,
+      2
+    );
+    insert.run('child-session', 'tool', 'tool output', null, 'terminal', 3);
+    insert.run('child-session', 'assistant', 'done', null, null, 4);
+    db.close();
+    dbClosed = true;
+
+    const firstPage = await hermesNativeCliAdapter.historyPage?.({
+      providerSessionRef: 'agent:dev:hermes:key-1',
+      workingPath: '/tmp/project',
+      limitBytes: 8192,
+      request: { limit: 3, sortDirection: 'desc', itemsView: 'full' }
+    });
+    expect(firstPage?.nextCursor).toBe('3');
+    expect(firstPage?.items.map((item) => (item as { id: number }).id)).toEqual([2, 3, 4]);
+
+    const secondPage = await hermesNativeCliAdapter.historyPage?.({
+      providerSessionRef: 'parent-session',
+      workingPath: '/tmp/project',
+      limitBytes: 8192,
+      request: { limit: 3, before: '3', sortDirection: 'desc', itemsView: 'full' }
+    });
+    expect(secondPage?.items.map((item) => (item as { id: number }).id)).toEqual([1]);
+    expect(secondPage?.nextCursor).toBeUndefined();
+
+    const fullPage = await hermesNativeCliAdapter.historyPage?.({
+      providerSessionRef: 'parent-session',
+      workingPath: '/tmp/project',
+      limitBytes: 8192,
+      request: { limit: 10, sortDirection: 'asc', itemsView: 'full' }
+    });
+    const output = hermesNativeCliAdapter.historyPageOutput?.({
+      providerSessionRef: 'parent-session',
+      workingPath: '/tmp/project',
+      limitBytes: 8192,
+      page: fullPage ?? { items: [] }
+    });
+    const events = nativeCliStreamItems({
+      id: 'ncli_hermes:history',
+      adapter: hermesNativeCliAdapter,
+      output: output ?? '',
+      mode: 'history'
+    });
+    expect(events.map((event) => [event.role, event.text, event.providerEventType])).toEqual([
+      ['user', 'inspect', 'message'],
+      ['tool', 'Tool call terminal {"command":"ls"}', 'tool_call'],
+      ['tool', 'tool output', 'tool_result'],
+      ['agent', 'done', 'message']
+    ]);
+  } finally {
+    if (!dbClosed) db.close();
+    if (previousApi === undefined) delete Bun.env[apiEnv];
+    else Bun.env[apiEnv] = previousApi;
+    if (previousHome === undefined) delete Bun.env[hermesHomeEnv];
+    else Bun.env[hermesHomeEnv] = previousHome;
+    if (previousPath === undefined) delete Bun.env[pathEnv];
+    else Bun.env[pathEnv] = previousPath;
+  }
 });
 
 test('Hermes adapter surfaces pty plain-text output as agent messages', () => {

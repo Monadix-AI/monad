@@ -14,7 +14,9 @@ import type {
   NativeCliManagedRuntimeContext,
   NativeCliOutputEvent,
   NativeCliProviderAdapter,
-  NativeCliProviderHistoryContext
+  NativeCliProviderHistoryContext,
+  NativeCliProviderHistoryPageContext,
+  NativeCliProviderHistoryPageRequestContext
 } from '@monad/sdk-atom';
 
 import { homedir } from 'node:os';
@@ -289,6 +291,12 @@ function claudeSdkMessageToJsonLine(message: SessionMessage): string {
   });
 }
 
+function claudeHistoryItemToJsonLine(item: unknown): string | null {
+  if (typeof item === 'string') return item;
+  if (!item || typeof item !== 'object') return null;
+  return JSON.stringify(item);
+}
+
 function claudeSdkMessagesOutput(messages: SessionMessage[], info: SDKSessionInfo | undefined): string | null {
   const records = messages.map(claudeSdkMessageToJsonLine);
   if (records.length === 0) return null;
@@ -304,6 +312,71 @@ function claudeSdkMessagesOutput(messages: SessionMessage[], info: SDKSessionInf
   }
   return records.join('\n');
 }
+
+function claudeSdkHistoryPageOutput(context: NativeCliProviderHistoryPageContext): string | null {
+  const records = context.page.items.flatMap((item) => {
+    const line = claudeHistoryItemToJsonLine(item);
+    return line ? [line] : [];
+  });
+  return records.length > 0 ? records.join('\n') : null;
+}
+
+function claudeHistoryOffset(cursor: string | undefined): number {
+  if (!cursor) return 0;
+  const offset = Number.parseInt(cursor, 10);
+  return Number.isFinite(offset) && offset > 0 ? offset : 0;
+}
+
+interface ClaudeSdkHistoryPageDeps {
+  getSessionInfo: typeof getSessionInfo;
+  getSessionMessages: typeof getSessionMessages;
+}
+
+export function createClaudeSdkHistoryPageReader(deps: ClaudeSdkHistoryPageDeps) {
+  return async function readClaudeHistoryPage(
+    context: NativeCliProviderHistoryPageRequestContext
+  ): Promise<NativeCliProviderHistoryPageContext['page'] | null> {
+    try {
+      const offset = claudeHistoryOffset(context.request.before);
+      const [info, messages] = await Promise.all([
+        deps.getSessionInfo(context.providerSessionRef, { dir: context.workingPath }),
+        deps.getSessionMessages(context.providerSessionRef, {
+          dir: context.workingPath,
+          limit: context.request.limit,
+          offset,
+          includeSystemMessages: true
+        })
+      ]);
+      const items: unknown[] = [];
+      if (info?.cwd) {
+        items.push({
+          type: 'system',
+          subtype: 'init',
+          session_id: info.sessionId,
+          cwd: info.cwd
+        });
+      }
+      items.push(
+        ...messages.map((message) => ({
+          type: message.type,
+          uuid: message.uuid,
+          session_id: message.session_id,
+          message: message.message,
+          parent_tool_use_id: message.parent_tool_use_id
+        }))
+      );
+      if (items.length === 0) return null;
+      return {
+        items,
+        ...(messages.length >= context.request.limit ? { nextCursor: String(offset + messages.length) } : {})
+      };
+    } catch {
+      return null;
+    }
+  };
+}
+
+const readClaudeHistoryPage = createClaudeSdkHistoryPageReader({ getSessionInfo, getSessionMessages });
 
 async function readClaudeHistoryOutput(context: NativeCliProviderHistoryContext): Promise<string | null> {
   try {
@@ -446,6 +519,8 @@ export const claudeCodeNativeCliAdapter: NativeCliProviderAdapter = {
     if (exitCode === 1) return 'unauthenticated';
     return 'unknown';
   },
+  historyPage: readClaudeHistoryPage,
+  historyPageOutput: claudeSdkHistoryPageOutput,
   historyOutput: readClaudeHistoryOutput,
   parseOutput: parseClaudeStreamJson,
   sendInput: sendClaudeInput,

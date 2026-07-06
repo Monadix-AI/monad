@@ -2,7 +2,8 @@ import type { NativeCliProviderAdapter } from '@monad/sdk-atom';
 
 import { makeAppServerCliAdapter } from '../app-server-jsonrpc.ts';
 import { createFrameworkSettingsImport } from '../settings-import/index.ts';
-import { openClawAppServerHooks } from './app-server.ts';
+import { openClawAppServerHooks, requestOpenClawHistoryPage } from './app-server.ts';
+import { openClawObservationProjection } from './observation.ts';
 
 // OpenClaw ships no models-list command; these are the models its docs advertise for `--model`.
 // Kept as a small fallback list (an operator can override via the agent's modelOptions).
@@ -73,6 +74,7 @@ const baseOpenClawNativeCliAdapter = makeAppServerCliAdapter({
 
 export const openClawNativeCliAdapter: NativeCliProviderAdapter = {
   ...baseOpenClawNativeCliAdapter,
+  observation: openClawObservationProjection,
   settingsImport: createFrameworkSettingsImport('openclaw', 'OpenClaw'),
   // OpenClaw's managed runtime is app-server, whose JSON-RPC channel projects + resolves approvals —
   // so it can delegate provider approvals to the human. (Hermes shares the factory but has no
@@ -84,12 +86,13 @@ export const openClawNativeCliAdapter: NativeCliProviderAdapter = {
       ...preset,
       capabilities: {
         auth: preset.capabilities?.auth ?? 'pty',
-        history: preset.capabilities?.history ?? 'none',
+        history: 'provider-owned',
         resume: preset.capabilities?.resume ?? 'pty',
         approval: preset.capabilities?.approval ?? 'provider-owned',
         approvalProxy: true,
         settingsImport: true
       }
     };
-  }
+  },
+  requestHistoryPage: requestOpenClawHistoryPage
 };

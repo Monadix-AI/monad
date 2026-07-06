@@ -6,6 +6,8 @@ import { parseStructuredAuthState } from '../adapter-shared.ts';
 import { makeAppServerCliAdapter } from '../app-server-jsonrpc.ts';
 import { createFrameworkSettingsImport } from '../settings-import/index.ts';
 import { hermesAppServerHooks } from './app-server.ts';
+import { hermesHistoryPage, hermesHistoryPageOutput } from './history.ts';
+import { hermesObservationProjection } from './observation.ts';
 
 // Hermes ships no models-list command; this fallback is the model its docs advertise for `--model`.
 // An operator can override via the agent's modelOptions.
@@ -77,6 +79,9 @@ const baseHermesNativeCliAdapter = makeAppServerCliAdapter({
 
 export const hermesNativeCliAdapter: NativeCliProviderAdapter = {
   ...baseHermesNativeCliAdapter,
+  historyPage: hermesHistoryPage,
+  historyPageOutput: hermesHistoryPageOutput,
+  observation: hermesObservationProjection,
   settingsImport: createFrameworkSettingsImport('hermes', 'Hermes'),
   // Hermes's app-server gateway has a real, working `approval.request`/`approval.respond` channel
   // (see hermes/app-server.ts's `resolveHermesApproval`) — transport-agnostic, so ws vs stdio doesn't
@@ -93,7 +98,7 @@ export const hermesNativeCliAdapter: NativeCliProviderAdapter = {
       ...preset,
       capabilities: {
         auth: preset.capabilities?.auth ?? 'pty',
-        history: preset.capabilities?.history ?? 'none',
+        history: 'provider-owned',
         resume: preset.capabilities?.resume ?? 'pty',
         approval: preset.capabilities?.approval ?? 'provider-owned',
         settingsImport: true
