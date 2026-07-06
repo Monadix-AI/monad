@@ -44,6 +44,10 @@ test('observation access is adapted to projection events without carrying raw ou
     nativeCliSessionId: 'ncli_codex',
     provider: 'codex',
     output: raw,
+    // The daemon normalizes `output` into `events` with the same adapter before sending the access
+    // response — the client never re-derives this from raw output (see observeFromStore/
+    // observeWithProviderHistory in apps/monad/src/services/native-cli/host.ts).
+    events: nativeCliStreamItems({ id: 'ncli_codex', provider: 'codex', output: raw }),
     observedAt: '2026-06-28T00:00:00.000Z'
   });
   const projectedStream = streamWithObservationProjection(stream, projection);
@@ -132,6 +136,9 @@ test('observation rail usage fallback reads raw access output before projected d
       nativeCliSessionId: 'ncli_codex',
       provider: 'codex',
       output: raw,
+      // Server-normalized, same as `events` — the daemon computes this from `raw`, the client never
+      // re-derives it from `stream.output` when an access response is present.
+      usageMeter: nativeCliUsageLimitMeter({ provider: 'codex', output: raw }),
       observedAt: '2026-06-28T00:00:00.000Z'
     },
     provider: 'codex',
@@ -1095,7 +1102,10 @@ test('observation panel shows a token usage meter entry when Codex reports token
         status: 'running',
         output,
         items: nativeCliStreamItems({ id: 'ncli_codex', provider: 'codex', output })
-      }
+      },
+      // The panel renders whatever meter it's given (server-normalized in production); it no longer
+      // re-derives one from `stream.output` itself.
+      usageMeter: nativeCliUsageLimitMeter({ provider: 'codex', output })
     })
   );
 
@@ -1143,7 +1153,7 @@ test('observation panel distinguishes unavailable provider history from empty li
     })
   );
 
-  expect(html).toContain('Provider history unavailable.');
+  expect(html).toContain('Agent currently not running');
 });
 
 test('Claude Code observation projects transcript user events as user message cards', () => {

@@ -3,8 +3,14 @@ import type { Message } from '../../src/workspace-experiences/experience/types.t
 
 import { expect, test } from 'bun:test';
 
+import { builtinAgentAdapters } from '../../src/agent-adapters/index.ts';
 import { __workplaceProjectMessageTest } from '../../src/workspace-experiences/chat-room/utils/projection.ts';
+import { configureNativeCliObservationAdapterResolver } from '../../src/workspace-experiences/experience/native-cli-observation/native-cli-observation.ts';
 import { projectMemberParticipants } from '../../src/workspace-experiences/experience/project-projection.ts';
+
+configureNativeCliObservationAdapterResolver((provider) =>
+  builtinAgentAdapters.find((adapter) => adapter.provider === provider)
+);
 
 const nativeCliSession = (overrides: Partial<NativeCliSessionView> = {}): NativeCliSessionView => ({
   id: 'ncli_01KWGEMINI000000000000000',
@@ -806,7 +812,7 @@ test('native CLI projection ignores startup prose before stream-json objects', (
     'started claude-code in /Users/zeke/.monad/workplace-agents/project/claude-code',
     JSON.stringify({ type: 'system', subtype: 'init', session_id: 'claude-session' }),
     JSON.stringify({ type: 'result', result: 'Need approval before posting.' })
-  ].join('');
+  ].join('\n');
 
   const stream = firstNativeCliStream(
     __workplaceProjectMessageTest.buildNativeCliStreams(
