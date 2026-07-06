@@ -1,10 +1,13 @@
 'use client';
 
+import type { WheelEvent as ReactWheelEvent } from 'react';
+
 import { PanelLeftCloseIcon, PanelLeftOpenIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Button } from '@monad/ui';
 
 import { MonadLogo } from '@/components/MonadLogo';
+import { isSidebarHorizontalWheel } from './sidebar-trackpad-switch';
 
 export function AppShellSidebarReveal({
   autoRevealSidebar,
@@ -18,6 +21,11 @@ export function AppShellSidebarReveal({
   onToggleAutoMode: () => void;
 }) {
   const toggleLabel = autoMode ? 'Keep sidebar expanded' : 'Auto-hide sidebar';
+  const preventHorizontalHistorySwipe = (event: ReactWheelEvent<HTMLElement>) => {
+    if (!isSidebarHorizontalWheel(event)) return;
+    event.preventDefault();
+    if (autoMode) autoRevealSidebar();
+  };
 
   return (
     <>
@@ -27,11 +35,13 @@ export function AppShellSidebarReveal({
           className="absolute inset-y-0 left-0 z-20 w-3"
           onPointerDown={autoRevealSidebar}
           onPointerEnter={autoRevealSidebar}
+          onWheelCapture={preventHorizontalHistorySwipe}
         />
       ) : null}
       <div
         className="absolute top-0 left-0 z-40 flex h-[52px] items-center gap-2 px-3"
         data-sidebar-chrome="true"
+        onWheelCapture={preventHorizontalHistorySwipe}
       >
         <button
           aria-label="Monad"
