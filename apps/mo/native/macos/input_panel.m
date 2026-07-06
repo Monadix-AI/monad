@@ -22,28 +22,17 @@ static NSColor *SurfaceBorderColor(void) {
 static const CGFloat kAuroraRingWidth = 1.6;
 static NSString *const kAuroraRotateKey = @"aurora-rotate";
 
-// A rotating conic-gradient ring, masked to the surface's rounded-rect border — the native
-// equivalent of the web composer's `.chat-input-aurora` focus glow (chat-input-aurora-gradient
-// rotating inside chat-input-aurora-edge-mask). Built once per panel; visibility/rotation are
-// toggled by focus (see textDidBeginEditing:/textDidEndEditing:).
-static CAGradientLayer *MakeAuroraLayer(NSRect bounds, CGFloat cornerRadius) {
-  CAGradientLayer *aurora = [CAGradientLayer layer];
-  aurora.frame = bounds;
-  aurora.type = kCAGradientLayerConic;
-  aurora.startPoint = CGPointMake(0.5, 0.5);
-  aurora.endPoint = CGPointMake(0.5, 1.0);  // sweep starts at 12 o'clock, matching conic-gradient(from 0deg)
-  aurora.opacity = 0;
-
-  NSColor *clear = [NSColor clearColor];
-  NSColor *c1 = [NSColor colorWithSRGBRed:0.569 green:0.329 blue:0.906 alpha:1];  // #9154e7
-  NSColor *c2 = [NSColor colorWithSRGBRed:0.376 green:0.337 blue:0.941 alpha:1];  // #6056f0
-  NSColor *c3 = [NSColor colorWithSRGBRed:0.251 green:0.851 blue:0.776 alpha:1];  // #40d9c6
-  NSColor *c4 = [NSColor colorWithSRGBRed:0.259 green:0.522 blue:0.957 alpha:1];  // #4285f4
-  aurora.colors = @[
-    (id)clear.CGColor, (id)c1.CGColor, (id)c2.CGColor, (id)c3.CGColor, (id)c4.CGColor, (id)c1.CGColor,
-    (id)clear.CGColor, (id)clear.CGColor
-  ];
-  aurora.locations = @[ @0.0, @0.10, @0.1625, @0.225, @0.2875, @0.35, @0.45, @1.0 ];
+// The native equivalent of the web composer's `.chat-input-aurora` focus glow: a
+// chat-input-aurora-gradient (a giant square, so rotation never runs out of content) spinning
+// underneath a STATIC ring-shaped mask (the chat-input-aurora-border-mask "gradient border"
+// trick). The mask must stay static — rotating the gradient's own masked/clipped rect would rigidly
+// spin a non-square rectangle, exposing blank corners past the panel's own clip at odd angles.
+// Returns the container (fade this in/out) with the spinnable gradient as its one sublayer
+// (rotate this).
+static CALayer *MakeAuroraLayer(NSRect bounds, CGFloat cornerRadius, CAGradientLayer **outGradient) {
+  CALayer *container = [CALayer layer];
+  container.frame = bounds;
+  container.opacity = 0;
 
   CAShapeLayer *ring = [CAShapeLayer layer];
   ring.frame = bounds;
@@ -59,8 +48,31 @@ static CAGradientLayer *MakeAuroraLayer(NSRect bounds, CGFloat cornerRadius) {
   CGPathRelease(outer);
   CGPathRelease(inner);
   ring.fillRule = kCAFillRuleEvenOdd;
-  aurora.mask = ring;
-  return aurora;
+  container.mask = ring;
+
+  // Oversized relative to the panel (≥ its diagonal) so no corner ever clips as it spins.
+  CGFloat side = 2 * hypot(bounds.size.width, bounds.size.height);
+  CAGradientLayer *gradient = [CAGradientLayer layer];
+  gradient.bounds = CGRectMake(0, 0, side, side);
+  gradient.position = CGPointMake(NSMidX(bounds), NSMidY(bounds));
+  gradient.type = kCAGradientLayerConic;
+  gradient.startPoint = CGPointMake(0.5, 0.5);
+  gradient.endPoint = CGPointMake(0.5, 1.0);  // sweep starts at 12 o'clock, matching conic-gradient(from 0deg)
+
+  NSColor *clear = [NSColor clearColor];
+  NSColor *c1 = [NSColor colorWithSRGBRed:0.569 green:0.329 blue:0.906 alpha:1];  // #9154e7
+  NSColor *c2 = [NSColor colorWithSRGBRed:0.376 green:0.337 blue:0.941 alpha:1];  // #6056f0
+  NSColor *c3 = [NSColor colorWithSRGBRed:0.251 green:0.851 blue:0.776 alpha:1];  // #40d9c6
+  NSColor *c4 = [NSColor colorWithSRGBRed:0.259 green:0.522 blue:0.957 alpha:1];  // #4285f4
+  gradient.colors = @[
+    (id)clear.CGColor, (id)c1.CGColor, (id)c2.CGColor, (id)c3.CGColor, (id)c4.CGColor, (id)c1.CGColor,
+    (id)clear.CGColor, (id)clear.CGColor
+  ];
+  gradient.locations = @[ @0.0, @0.10, @0.1625, @0.225, @0.2875, @0.35, @0.45, @1.0 ];
+
+  [container addSublayer:gradient];
+  if (outGradient) *outGradient = gradient;
+  return container;
 }
 
 // --- MoTextView: multi-line prompt with a drawn placeholder --------------------
@@ -324,7 +336,8 @@ static CAGradientLayer *MakeAuroraLayer(NSRect bounds, CGFloat cornerRadius) {
 @implementation MoInputPanel {
   NSPanel *_panel;
   NSVisualEffectView *_surface;
-  CAGradientLayer *_aurora;
+  CALayer *_aurora;
+  CAGradientLayer *_auroraGradient;
   MoTextView *_text;
   MoAttachmentsView *_attach;
   NSTextField *_hint;
@@ -385,7 +398,9 @@ static CAGradientLayer *MakeAuroraLayer(NSRect bounds, CGFloat cornerRadius) {
 
   // The rotating focus glow sits above everything else in the surface, masked to a thin ring
   // just inside its rounded border; it's hidden (opacity 0) until the text view is focused.
-  _aurora = MakeAuroraLayer(frame, kSurfaceRadius);
+  CAGradientLayer *auroraGradient;
+  _aurora = MakeAuroraLayer(frame, kSurfaceRadius, &auroraGradient);
+  _auroraGradient = auroraGradient;
   [_surface.layer addSublayer:_aurora];
 
   CGFloat contentW = kPanelW - 2 * kPad;
@@ -496,14 +511,14 @@ static CAGradientLayer *MakeAuroraLayer(NSRect bounds, CGFloat cornerRadius) {
   _aurora.opacity = 1;
   [CATransaction commit];
 
-  if ([_aurora animationForKey:kAuroraRotateKey]) return;
+  if ([_auroraGradient animationForKey:kAuroraRotateKey]) return;
   CABasicAnimation *spin = [CABasicAnimation animationWithKeyPath:@"transform.rotation.z"];
   spin.fromValue = @0;
   spin.toValue = @(2 * M_PI);
   spin.duration = 3.4;
   spin.repeatCount = HUGE_VALF;
   spin.timingFunction = [CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionLinear];
-  [_aurora addAnimation:spin forKey:kAuroraRotateKey];
+  [_auroraGradient addAnimation:spin forKey:kAuroraRotateKey];
 }
 
 - (void)textDidEndEditing:(NSNotification *)note {
@@ -512,7 +527,7 @@ static CAGradientLayer *MakeAuroraLayer(NSRect bounds, CGFloat cornerRadius) {
   [CATransaction setAnimationDuration:0.3];
   _aurora.opacity = 0;
   [CATransaction commit];
-  [_aurora removeAnimationForKey:kAuroraRotateKey];
+  [_auroraGradient removeAnimationForKey:kAuroraRotateKey];
 }
 
 - (BOOL)textView:(NSTextView *)textView doCommandBySelector:(SEL)selector {
@@ -557,6 +572,7 @@ static CAGradientLayer *MakeAuroraLayer(NSRect bounds, CGFloat cornerRadius) {
   _panel = nil;
   _surface = nil;
   _aurora = nil;
+  _auroraGradient = nil;
   _text = nil;
   _attach = nil;
   _hint = nil;
