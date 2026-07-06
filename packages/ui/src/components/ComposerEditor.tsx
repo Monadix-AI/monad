@@ -36,6 +36,8 @@ export type ComposerSkillToken = {
   version?: string;
 };
 
+export type ComposerSendShortcut = 'enter' | 'mod-enter-for-multiline' | 'mod-enter-always';
+
 export type ComposerEditorHandle = {
   appendText: (text: string) => void;
   clear: () => void;
@@ -195,6 +197,7 @@ export const ComposerEditor = forwardRef(function ComposerEditor(
     onPasteText,
     onSubmit,
     placeholder,
+    sendShortcut = 'enter',
     skillToken,
     value
   }: {
@@ -211,6 +214,7 @@ export const ComposerEditor = forwardRef(function ComposerEditor(
     onPasteText?: (text: string) => boolean;
     onSubmit: () => void;
     placeholder?: string;
+    sendShortcut?: ComposerSendShortcut;
     skillToken?: ComposerSkillToken;
     value: string;
   },
@@ -259,7 +263,16 @@ export const ComposerEditor = forwardRef(function ComposerEditor(
       },
       handleKeyDown(_view, event) {
         if (onKeyDownRef.current?.(event)) return true;
-        if (event.key === 'Enter' && !event.shiftKey) {
+        if (
+          shouldSubmitComposerKey(
+            {
+              key: event.key,
+              primaryModifier: primaryModifierPressed(event),
+              shiftKey: event.shiftKey
+            },
+            sendShortcut
+          )
+        ) {
           event.preventDefault();
           onSubmit();
           return true;
@@ -391,6 +404,25 @@ export const ComposerEditor = forwardRef(function ComposerEditor(
     </div>
   );
 });
+
+type ComposerKeyIntent = {
+  key: string;
+  primaryModifier: boolean;
+  shiftKey: boolean;
+};
+
+export function shouldSubmitComposerKey(intent: ComposerKeyIntent, shortcut: ComposerSendShortcut): boolean {
+  if (intent.key !== 'Enter') return false;
+  if (intent.shiftKey) return false;
+  if (shortcut === 'enter') return !intent.primaryModifier;
+  if (shortcut === 'mod-enter-for-multiline') return !intent.primaryModifier;
+  return intent.primaryModifier;
+}
+
+function primaryModifierPressed(event: KeyboardEvent): boolean {
+  if (typeof navigator !== 'undefined' && /Mac|iPhone|iPad|iPod/.test(navigator.platform)) return event.metaKey;
+  return event.ctrlKey;
+}
 
 function syncMention(
   editor: Editor,

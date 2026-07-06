@@ -13,6 +13,7 @@ import type {
   ComposerMentionPosition,
   ComposerMentionState,
   ComposerMentionTarget,
+  ComposerSendShortcut,
   ComposerSkillToken
 } from './components/ComposerEditor';
 import type { ProductIconColors, ProductIconId, ProductIconProps } from './components/ProductIcon';
@@ -38,7 +39,7 @@ import {
   ComposerVoiceUnavailableContent
 } from './components/Composer';
 import { ComposerAskSheet } from './components/ComposerAskSheet';
-import { ComposerEditor } from './components/ComposerEditor';
+import { ComposerEditor, shouldSubmitComposerKey } from './components/ComposerEditor';
 import {
   Dialog,
   DialogClose,
@@ -110,6 +111,7 @@ export type {
   ComposerMentionPosition,
   ComposerMentionState,
   ComposerMentionTarget,
+  ComposerSendShortcut,
   ComposerSkillToken,
   ComposerSubmitButtonProps,
   ComposerSurfaceProps,
@@ -202,6 +204,7 @@ export {
   Separator,
   Spinner,
   Switch,
+  shouldSubmitComposerKey,
   Tabs,
   TabsContent,
   TabsList,

@@ -56,7 +56,7 @@ import { createTranscriptProjector } from '@/handlers/transcript/projector.ts';
 import { resolveNativeCliAgentEnv } from '@/services/native-cli/env.ts';
 import { NativeCliHost } from '@/services/native-cli/host/index.ts';
 import { managedProjectRuntimeWorkspace } from '@/services/native-cli/managed-project.ts';
-import licensesData from '../../generated/licenses.json';
+import licensesData from '../../../generated/licenses.json';
 import { createInitHandlers } from './handlers-init.ts';
 import {
   createClarifyHandlers,

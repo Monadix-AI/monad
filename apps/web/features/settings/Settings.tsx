@@ -32,6 +32,9 @@ const ProfileSettings = dynamic(() => import('./ProfileSettings').then((m) => m.
 const AppearanceSettings = dynamic(() => import('./AppearanceSettings').then((m) => m.AppearanceSettings), {
   loading: PanelLoading
 });
+const ComposerSettings = dynamic(() => import('./ComposerSettings').then((m) => m.ComposerSettings), {
+  loading: PanelLoading
+});
 const MoSettings = dynamic(() => import('./MoSettings').then((m) => m.MoSettings), { loading: PanelLoading });
 const LicensesSettings = dynamic(() => import('./Licenses').then((m) => m.LicensesSettings), {
   loading: PanelLoading
@@ -47,6 +50,7 @@ export type SettingsSectionId =
   | 'connection'
   | 'profile'
   | 'appearance'
+  | 'composer'
   | 'import'
   | 'language'
   | 'mo'
@@ -57,6 +61,7 @@ const SECTIONS: { id: SettingsSectionId; labelKey: WebMessageIdWithoutParams; ic
   { id: 'connection', labelKey: 'web.settings.connection', icon: GlobeIcon },
   { id: 'profile', labelKey: 'web.settings.profile', icon: UserGroupIcon },
   { id: 'appearance', labelKey: 'web.settings.appearance', icon: EyeIcon },
+  { id: 'composer', labelKey: 'web.settings.composer', icon: SlidersHorizontalIcon },
   { id: 'import', labelKey: 'web.settings.import', icon: FileInputIcon },
   { id: 'language', labelKey: 'web.settings.language', icon: LanguageSquareIcon },
   { id: 'mo', labelKey: 'web.settings.mo', icon: CatIcon },
@@ -184,6 +189,7 @@ const SettingsNavList = memo(function SettingsNavList() {
 
 const SECTION_PANELS: Record<SettingsSectionId, ComponentType<{ onClose: () => void }>> = {
   appearance: AppearanceSettings,
+  composer: ComposerSettings,
   connection: ConnectionSettings,
   import: SettingsImport,
   language: LanguageSettings,

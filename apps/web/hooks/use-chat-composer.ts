@@ -1,4 +1,11 @@
-import type { ChatMessage, MessageId, SessionId, UIItem, UIMessageItem } from '@monad/protocol';
+import type {
+  ChatMessage,
+  ComposerFollowUpBehavior,
+  MessageId,
+  SessionId,
+  UIItem,
+  UIMessageItem
+} from '@monad/protocol';
 
 import {
   useAbortSessionMutation,
@@ -28,6 +35,7 @@ interface UseChatComposerArgs {
   jumpToLive: () => void;
   setSessionUrl: (id: SessionId | null) => void;
   setHiddenViewItemKeysBySession: Dispatch<SetStateAction<Record<string, string[]>>>;
+  followUpBehavior: ComposerFollowUpBehavior;
 }
 
 // Owns the send pipeline: optimistic echo, slash-command dispatch + structured effects, the
@@ -43,7 +51,8 @@ export function useChatComposer({
   scrollToBottom,
   jumpToLive,
   setSessionUrl,
-  setHiddenViewItemKeysBySession
+  setHiddenViewItemKeysBySession,
+  followUpBehavior
 }: UseChatComposerArgs) {
   const [generate, { isLoading: generating }] = useGenerateMutation();
   const [sendMessage, { isLoading: sending }] = useSendMessageMutation();
@@ -210,6 +219,21 @@ export function useChatComposer({
     messageQueueRef.current = messageQueue;
   }, [messageQueue]);
 
+  const handleForceSteerText = useCallback(
+    async (text: string) => {
+      if (!currentId) return;
+      const merged = [...messageQueueRef.current, ...(text ? [text] : [])].join('\n\n');
+      if (!merged) return;
+      setMessageQueue([]);
+      messageQueueRef.current = [];
+      setInput('');
+      void abortSession(currentId);
+      await new Promise((r) => setTimeout(r, 100));
+      await handleSend(merged);
+    },
+    [currentId, abortSession, handleSend, setInput]
+  );
+
   // When generation ends (stream or block), drain the queue: merge all queued messages and send as one turn.
   useEffect(() => {
     const wasBusy = prevBusyRef.current;
@@ -227,7 +251,22 @@ export function useChatComposer({
     if (!text || !currentId) return;
     setInput('');
     if (isBusy) {
+      if (followUpBehavior === 'steer') {
+        await handleForceSteerText(text);
+        return;
+      }
       setMessageQueue((q) => [...q, text]);
+      return;
+    }
+    await handleSend(text);
+  }, [input, currentId, isBusy, followUpBehavior, handleSend, handleForceSteerText, setInput]);
+
+  const handleQueueSubmit = useCallback(async () => {
+    const text = input.trim();
+    if (!text || !currentId) return;
+    setInput('');
+    if (isBusy) {
+      setMessageQueue((queue) => [...queue, text]);
       return;
     }
     await handleSend(text);
@@ -236,15 +275,12 @@ export function useChatComposer({
   const handleForceSteer = useCallback(async () => {
     if (!currentId) return;
     const text = input.trim();
-    const merged = [...messageQueue, ...(text ? [text] : [])].join('\n\n');
-    if (!merged) return;
-    setMessageQueue([]);
-    messageQueueRef.current = [];
-    setInput('');
-    void abortSession(currentId);
-    await new Promise((r) => setTimeout(r, 100));
-    await handleSend(merged);
-  }, [currentId, input, messageQueue, abortSession, handleSend, setInput]);
+    await handleForceSteerText(text);
+  }, [currentId, input, handleForceSteerText]);
+
+  const removeQueuedMessage = useCallback((index: number) => {
+    setMessageQueue((queue) => queue.filter((_, itemIndex) => itemIndex !== index));
+  }, []);
 
   return {
     isBusy,
@@ -258,6 +294,8 @@ export function useChatComposer({
     handleBranch,
     handleRestore,
     handleSubmit,
-    handleForceSteer
+    handleQueueSubmit,
+    handleForceSteer,
+    removeQueuedMessage
   };
 }

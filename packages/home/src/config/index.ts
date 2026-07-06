@@ -3,7 +3,9 @@ import { pathToFileURL } from 'node:url';
 import {
   avatarStyleSchema,
   blankableHttpUrlSchema,
+  composerSettingsSchema,
   DEFAULT_AVATAR_STYLE,
+  DEFAULT_COMPOSER_SETTINGS,
   ModelProviderType,
   modelKindSchema,
   modelRolesSchema,
@@ -126,9 +128,10 @@ const monadConfigSchema = z.object({
   // split). Kept separate from `user` so the avatar style picker isn't bundled with profile identity.
   appearance: z
     .object({
-      avatarStyle: avatarStyleSchema.default(DEFAULT_AVATAR_STYLE)
+      avatarStyle: avatarStyleSchema.default(DEFAULT_AVATAR_STYLE),
+      composer: composerSettingsSchema
     })
-    .default({ avatarStyle: DEFAULT_AVATAR_STYLE }),
+    .default({ avatarStyle: DEFAULT_AVATAR_STYLE, composer: DEFAULT_COMPOSER_SETTINGS }),
   model: z.object({
     default: z.string(), // legacy; runtime defaults to the fixed "default" profile
     providers: z.array(providerSchema).default([]),
@@ -422,9 +425,10 @@ export const monadProfileSchema = z.object({
     .default({ avatarDataUrl: null }),
   appearance: z
     .object({
-      avatarStyle: avatarStyleSchema.default(DEFAULT_AVATAR_STYLE)
+      avatarStyle: avatarStyleSchema.default(DEFAULT_AVATAR_STYLE),
+      composer: composerSettingsSchema
     })
-    .default({ avatarStyle: DEFAULT_AVATAR_STYLE }),
+    .default({ avatarStyle: DEFAULT_AVATAR_STYLE, composer: DEFAULT_COMPOSER_SETTINGS }),
   model: z.object({
     default: z.string(),
     providers: z.array(providerSchema).default([]),
@@ -511,7 +515,7 @@ export function createDefaultConfig(principalId: string, displayName: string): M
     version: CURRENT_CONFIG_VERSION,
     principal: { id: principalId, displayName, verification: 'unverified' },
     user: { avatarDataUrl: null },
-    appearance: { avatarStyle: DEFAULT_AVATAR_STYLE },
+    appearance: { avatarStyle: DEFAULT_AVATAR_STYLE, composer: DEFAULT_COMPOSER_SETTINGS },
     model: {
       default: '',
       providers: [

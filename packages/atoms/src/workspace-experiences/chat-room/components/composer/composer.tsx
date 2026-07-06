@@ -5,7 +5,7 @@ import type { ReactElement, ReactNode } from 'react';
 import type { QuestionView } from '../../../experience/types.ts';
 import type { ProjectComposerSurface } from '../../utils/composer.ts';
 
-import { Attachment01Icon } from '@hugeicons/core-free-icons';
+import { Attachment01Icon, Cancel01Icon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { useOpenDraftAttachmentMutation, useTranscribeAudioMutation } from '@monad/sdk-atom-client-rtk';
 import { ComposerEditor, ComposerSubmitButton, ComposerSurface, ComposerSwap, ComposerVoiceButton } from '@monad/ui';
@@ -26,6 +26,7 @@ import {
   sendableAttachments
 } from './attachments.tsx';
 import { audioBlobToBase64 } from './audio.ts';
+import { drainProjectFollowUpQueue, type ProjectFollowUpQueueItem, submitProjectFollowUp } from './follow-up-queue.ts';
 import { QuestionStack } from './question-stack.tsx';
 import { useComposerVoice } from './use-composer-voice.ts';
 
@@ -77,6 +78,7 @@ export function Composer({
   const [mentionMenuPosition, setMentionMenuPosition] = useState<{ bottom: number; left: number } | null>(null);
   const [active, setActive] = useState(0);
   const [submitting, setSubmitting] = useState(false);
+  const [followUpQueue, setFollowUpQueue] = useState<ProjectFollowUpQueueItem[]>([]);
   const [askPanelTestAnswered, setAskPanelTestAnswered] = useState(false);
   const [voiceCancelSignal, setVoiceCancelSignal] = useState(0);
   const editorRef = useRef<ComposerEditorHandle>(null);
@@ -85,6 +87,8 @@ export function Composer({
   const sendingRef = useRef(false);
   const submittingTextRef = useRef<string | null>(null);
   const wasAskingRef = useRef(false);
+  const wasBusyRef = useRef(false);
+  const followUpQueueRef = useRef<ProjectFollowUpQueueItem[]>([]);
   const askPanelTest =
     typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('askPanelTest') === '1';
 
@@ -148,6 +152,10 @@ export function Composer({
     writeComposerDraft(draftKeyRef.current, nextDraft);
   };
 
+  useEffect(() => {
+    followUpQueueRef.current = followUpQueue;
+  }, [followUpQueue]);
+
   const addAttachments = useCallback(async (files: File[] | FileList): Promise<void> => {
     const next = await Promise.all([...files].map(fileToAttachment));
     if (next.length) setAttachments((current) => [...current, ...next]);
@@ -179,28 +187,69 @@ export function Composer({
     }).unwrap();
   };
 
+  const sendNow = useCallback(
+    async (item: ProjectFollowUpQueueItem): Promise<void> => {
+      const text = item.text.trim();
+      if (!text && item.attachments.length === 0) return;
+      if (sendingRef.current) return;
+      const sendKey = `${text}:${item.attachments.map((attachment) => `${attachment.kind}:${attachment.name}`).join('|')}`;
+      if (submittingTextRef.current === sendKey) return;
+      sendingRef.current = true;
+      submittingTextRef.current = sendKey;
+      setSubmitting(true);
+      try {
+        await room.sendDirective({ attachments: item.attachments, text });
+      } finally {
+        submittingTextRef.current = null;
+        sendingRef.current = false;
+        setSubmitting(false);
+        editorRef.current?.focus();
+      }
+    },
+    [room]
+  );
+
+  useEffect(() => {
+    const drained = drainProjectFollowUpQueue({
+      busy: room.busy,
+      queue: followUpQueueRef.current,
+      wasBusy: wasBusyRef.current
+    });
+    wasBusyRef.current = room.busy;
+    if (!drained.sendNow) return;
+    setFollowUpQueue(drained.nextQueue);
+    followUpQueueRef.current = drained.nextQueue;
+    void sendNow(drained.sendNow);
+  }, [room.busy, sendNow]);
+
   const submit = async (): Promise<void> => {
     const text = draft.trim();
-    if (!text && attachments.length === 0) return;
+    const nextAttachments = sendableAttachments(attachments);
+    if (!text && nextAttachments.length === 0) return;
     if (sendingRef.current) return;
-    const sendKey = `${text}:${attachments.map((attachment) => `${attachment.kind}:${attachment.name}:${attachment.size}`).join('|')}`;
-    if (submittingTextRef.current === sendKey) return;
-    sendingRef.current = true;
-    submittingTextRef.current = sendKey;
-    setSubmitting(true);
+    const decision = submitProjectFollowUp({
+      attachments: nextAttachments,
+      busy: room.busy,
+      queue: followUpQueueRef.current,
+      text
+    });
     updateDraft('');
     setMention(null);
     editorRef.current?.clear();
+    if (decision.nextQueue !== followUpQueueRef.current) {
+      setFollowUpQueue(decision.nextQueue);
+      followUpQueueRef.current = decision.nextQueue;
+      setAttachments([]);
+    }
+    if (!decision.sendNow) {
+      editorRef.current?.focus();
+      return;
+    }
     try {
-      await room.sendDirective({ attachments: sendableAttachments(attachments), text });
+      await sendNow(decision.sendNow);
       setAttachments([]);
     } catch {
       updateDraft(text);
-    } finally {
-      submittingTextRef.current = null;
-      sendingRef.current = false;
-      setSubmitting(false);
-      editorRef.current?.focus();
     }
   };
 
@@ -219,6 +268,16 @@ export function Composer({
       }}
     >
       <ApprovalStack room={room} />
+      <ProjectComposerQueueStack
+        items={followUpQueue.map((item) => item.text)}
+        onRemove={(index) => {
+          setFollowUpQueue((queue) => {
+            const next = queue.filter((_, itemIndex) => itemIndex !== index);
+            followUpQueueRef.current = next;
+            return next;
+          });
+        }}
+      />
 
       <ComposerSwap
         ask={
@@ -293,6 +352,7 @@ export function Composer({
                   }}
                   onSubmit={submit}
                   ref={editorRef}
+                  sendShortcut={room.sendShortcut}
                   value={draft}
                 />
                 <input
@@ -613,5 +673,100 @@ function VoiceDebugPanel({
         ))}
       </dl>
     </details>
+  );
+}
+
+function ProjectComposerQueueStack({
+  items,
+  onRemove
+}: {
+  items: string[];
+  onRemove: (index: number) => void;
+}): ReactElement | null {
+  const cards = items
+    .map((text, queueIndex) => ({ queueIndex, text }))
+    .slice(-2)
+    .reverse()
+    .map((card, displayIndex) => ({ ...card, displayIndex }));
+  if (!cards.length) return null;
+  return (
+    <div
+      style={{
+        bottom: 'calc(100% + 8px)',
+        height: 56,
+        pointerEvents: 'none',
+        position: 'absolute',
+        right: 12,
+        width: 288,
+        zIndex: 60
+      }}
+    >
+      {cards.map((card) => (
+        <div
+          key={`${card.queueIndex}:${card.text}`}
+          style={{
+            background: 'var(--popover, var(--card))',
+            border: '1px solid var(--border)',
+            borderRadius: 8,
+            boxShadow: '0 18px 44px color-mix(in srgb, var(--foreground) 14%, transparent)',
+            color: 'var(--popover-foreground, var(--foreground))',
+            fontFamily: sans,
+            fontSize: 12,
+            lineHeight: '18px',
+            opacity: card.displayIndex === 0 ? 1 : 0.86,
+            padding: '8px 20px 8px 12px',
+            pointerEvents: 'auto',
+            position: 'absolute',
+            right: 0,
+            top: card.displayIndex * -10,
+            transform: card.displayIndex === 0 ? 'none' : 'translateY(-2px) scale(0.94)',
+            transformOrigin: 'top right',
+            width: card.displayIndex === 0 ? 288 : 270,
+            zIndex: 20 - card.displayIndex
+          }}
+        >
+          <p
+            style={{
+              display: '-webkit-box',
+              margin: 0,
+              overflow: 'hidden',
+              overflowWrap: 'anywhere',
+              WebkitBoxOrient: 'vertical',
+              WebkitLineClamp: 2
+            }}
+          >
+            {card.text || 'Attachment follow-up'}
+          </p>
+          <button
+            aria-label="Remove queued follow-up"
+            onClick={() => onRemove(card.queueIndex)}
+            style={{
+              alignItems: 'center',
+              background: 'var(--background)',
+              border: '1px solid var(--border)',
+              borderRadius: 999,
+              boxShadow: '0 4px 12px color-mix(in srgb, var(--foreground) 14%, transparent)',
+              color: 'var(--muted-foreground)',
+              display: 'inline-flex',
+              height: 20,
+              justifyContent: 'center',
+              padding: 0,
+              position: 'absolute',
+              right: -8,
+              top: '50%',
+              transform: 'translateY(-50%)',
+              width: 20
+            }}
+            title="Remove queued follow-up"
+            type="button"
+          >
+            <HugeiconsIcon
+              icon={Cancel01Icon}
+              size={12}
+            />
+          </button>
+        </div>
+      ))}
+    </div>
   );
 }

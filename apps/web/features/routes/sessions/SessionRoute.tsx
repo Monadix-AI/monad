@@ -1,6 +1,6 @@
 'use client';
 
-import type { Session, SessionId, UIItem } from '@monad/protocol';
+import type { ComposerSettings, Session, SessionId, UIItem } from '@monad/protocol';
 import type { VirtualListHandle } from '@monad/ui/components/VirtualList';
 import type { ComponentProps, KeyboardEventHandler, Ref } from 'react';
 
@@ -24,6 +24,7 @@ import { memo, useState } from 'react';
 import { useT } from '@/components/I18nProvider';
 import { AgentLoopInspector } from '@/features/session/AgentLoopInspector';
 import { Message } from '@/features/session/ChatMessage';
+import { ComposerQueueStack } from '@/features/session/ComposerQueueStack';
 import { ComposerShell } from '@/features/session/ComposerShell';
 import {
   isCompactCommandItem,
@@ -79,6 +80,7 @@ export interface SessionRouteProps {
   isReadOnly: boolean;
   menuItems: SessionCommandMenuItem[];
   messageQueue: string[];
+  composerSettings: ComposerSettings;
   model: ComposerProps['model'];
   onAccessModeChange: (mode: 'auto' | 'ask') => void;
   onApproval: (
@@ -89,7 +91,7 @@ export interface SessionRouteProps {
   ) => void;
   onBranch: (messageId: string) => void;
   onClarifyAnswer: (requestId: string, answer: string) => void;
-  onClearQueue: () => void;
+  onRemoveQueuedMessage: (index: number) => void;
   onCommandItemApply: (item: SessionCommandMenuItem) => void;
   onCommandItemHover: (index: number) => void;
   onInputChange: (value: string) => void;
@@ -132,12 +134,13 @@ export function SessionRoute({
   isReadOnly,
   menuItems,
   messageQueue,
+  composerSettings,
   model,
   onAccessModeChange,
   onApproval,
   onBranch,
   onClarifyAnswer,
-  onClearQueue,
+  onRemoveQueuedMessage,
   onCommandItemApply,
   onCommandItemHover,
   onInputChange,
@@ -309,27 +312,14 @@ export function SessionRoute({
           </div>
         ) : null}
         <div className="mx-auto flex max-w-4xl flex-col gap-2">
-          {!isReadOnly && messageQueue.length > 0 ? (
-            <div className="panel-subtle flex items-center gap-1.5 border-dashed px-3 py-2 text-muted-foreground text-xs">
-              <span className="tabular-nums">{t('web.chat.queued', { count: messageQueue.length })}</span>
-              <span className="text-muted-foreground/40">·</span>
-              <kbd className="rounded border bg-background px-1 font-mono text-[10px]">⌥⌘↵</kbd>
-              <span>{t('web.chat.steer')}</span>
-              <button
-                className="ml-auto rounded p-0.5 hover:bg-accent hover:text-accent-foreground"
-                onClick={onClearQueue}
-                title={t('web.chat.clearQueue')}
-                type="button"
-              >
-                <HugeiconsIcon
-                  className="size-3"
-                  icon={Cancel01Icon}
-                />
-              </button>
-            </div>
-          ) : null}
           <div className="flex items-end gap-2.5">
             <div className="relative flex-1">
+              {!isReadOnly ? (
+                <ComposerQueueStack
+                  items={messageQueue}
+                  onRemove={onRemoveQueuedMessage}
+                />
+              ) : null}
               {skillMenuOpen && !isReadOnly ? (
                 <CommandMenu
                   activeSkill={activeSkill}
@@ -354,6 +344,7 @@ export function SessionRoute({
                 onSubmit={onSubmit}
                 onVoiceText={onVoiceText}
                 placeholder={t('web.chat.placeholder')}
+                sendShortcut={composerSettings.sendShortcut}
                 skillToken={activeInputSkillToken}
                 value={value}
                 voice={{
