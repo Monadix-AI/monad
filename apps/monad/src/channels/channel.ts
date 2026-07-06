@@ -21,12 +21,6 @@ import { type CommandHost, runCommand } from '@/channels/command-dispatch.ts';
 import { rateOk, serialize } from '@/channels/flow-control.ts';
 import { errMsg, redact, rememberSeen, resolveExtra } from '@/channels/helpers.ts';
 import { type MirrorContext, subscribeMirror } from '@/channels/mirror.ts';
-import {
-  dispatchAgentResultToModerator,
-  dispatchModeratorNextTargets,
-  type ModeratorRuntime,
-  recoverOpenModeratorRounds
-} from '@/channels/moderator.ts';
 import { ChannelPairings } from '@/channels/pairing.ts';
 import { createRenderer } from '@/channels/render.ts';
 import {
@@ -58,7 +52,6 @@ export class ChannelService {
   private controlUnsubscribe: (() => void) | undefined;
   private readonly pairings: ChannelPairings;
   private readonly channelT: ChannelTranslate;
-  private readonly moderatorRounds: ModeratorRuntime['rounds'] = new Map();
 
   constructor(
     private readonly deps: ChannelServiceDeps,
@@ -216,7 +209,6 @@ export class ChannelService {
     for (const conv of this.deps.store.listActiveConversations(c.id)) {
       this.registerMirror(c.id, conv.conversationKey, conv.activeSessionId as SessionId, adapter);
     }
-    await recoverOpenModeratorRounds(this.moderatorRuntime(), inst);
   }
 
   private mirrorContext(): MirrorContext {
@@ -286,7 +278,7 @@ export class ChannelService {
     // Serialize per conversation: beginRun overwrites a per-session single-slot AbortController,
     // so two concurrent runs on one chat would cross-wire streaming edits.
     await serialize(inst, key, async () => {
-      await this.dispatch(inst, m, key, route, 0);
+      await this.dispatch(inst, m, key, route);
     });
   }
 
@@ -294,8 +286,7 @@ export class ChannelService {
     inst: Instance,
     m: ChannelInbound,
     key: string,
-    route: ChannelRoute = { kind: 'default' },
-    moderatorDepth = 0
+    route: ChannelRoute = { kind: 'default' }
   ): Promise<string | undefined> {
     const c = inst.config;
     if (!inst.adapter) return;
@@ -342,34 +333,7 @@ export class ChannelService {
       this.activeDispatches.delete(sessionId);
     }
     const displayText = finalMessage?.text ? channelDisplayText(finalMessage.text) : undefined;
-    if (route.kind === 'agent' && route.moderatorAgentId && finalMessage?.text.trim()) {
-      await dispatchAgentResultToModerator(this.moderatorRuntime(), inst, m, key, route, displayText ?? '');
-    }
-    if (route.kind === 'moderator' && finalMessage?.text.trim()) {
-      await dispatchModeratorNextTargets(
-        this.moderatorRuntime(),
-        inst,
-        m,
-        key,
-        route,
-        finalMessage.text,
-        moderatorDepth
-      );
-    }
     return displayText;
-  }
-
-  private moderatorRuntime(): ModeratorRuntime {
-    return {
-      cfg: () => this.cfg,
-      store: this.deps.store,
-      log: this.deps.log,
-      moderatorTaskTimeoutMs: this.deps.moderatorTaskTimeoutMs,
-      rounds: this.moderatorRounds,
-      deriveKey: (c, m, agentId) => deriveKey(c, m, agentId),
-      serialize: (inst, key, fn) => serialize(inst, key, fn),
-      dispatch: (inst, m, key, route, depth) => this.dispatch(inst, m, key, route, depth)
-    };
   }
 
   private commandHost(): CommandHost {
@@ -404,7 +368,7 @@ export class ChannelService {
     key: string,
     label?: string,
     agentId?: string,
-    role?: ChannelRoute['kind']
+    _role?: ChannelRoute['kind']
   ): Promise<SessionId> {
     const principalId = principalFor(c.id);
     const agent = agentId ? this.cfg.agent.agents.find((a) => a.id === agentId) : undefined;
@@ -421,7 +385,7 @@ export class ChannelService {
         instanceId: c.id, // which configured channel instance
         // Per-channel system-prompt hint travels on the origin; sendInline reads it back as
         // ambientContext so it reaches the model on every turn (Hermes platform_hint).
-        ext: channelOriginExt(this.cfg, c, role)
+        ext: channelOriginExt(c)
       })
     });
     this.deps.store.setActiveSession({ channelId: c.id, conversationKey: key, sessionId, principalId, label: title });

@@ -24,7 +24,10 @@ interface Props {
 export function ApprovalsSettings(_props: Props) {
   const t = useT();
   const { data: ruleData } = useListApprovalsQuery(undefined);
-  const rules = useMemo(() => approvalRuleSelectors.selectAll(ruleData ?? { ids: [], entities: {} }), [ruleData]);
+  const rules = useMemo(
+    () => approvalRuleSelectors.selectAll(ruleData?.rules ?? { ids: [], entities: {} }),
+    [ruleData]
+  );
   const [revoke, { isLoading: revoking }] = useRevokeApprovalMutation();
   const [clearAll, { isLoading: clearing }] = useClearApprovalsMutation();
 

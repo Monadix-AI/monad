@@ -3,6 +3,8 @@ import type {
   GetNativeAgentDeliveryResponse,
   GetNativeCliAuthSessionResponse,
   GetNativeCliSessionResponse,
+  ListNativeCliRuntimesQuery,
+  ListNativeCliRuntimesResponse,
   ListNativeCliSessionsResponse,
   NativeCliApprovalResolutionRequest,
   NativeCliAuthSessionView,
@@ -29,6 +31,7 @@ import { loadAll } from '@monad/home';
 import {
   getNativeAgentDeliveryResponseSchema,
   getNativeCliSessionResponseSchema,
+  listNativeCliRuntimesResponseSchema,
   listNativeCliSessionsResponseSchema,
   nativeCliObservationAccessResponseSchema,
   startNativeCliAgentResponseSchema
@@ -70,6 +73,12 @@ export function createNativeCliModule({ paths, host, store }: NativeCliDeps) {
       const kind =
         error.code === 'unsupported_capability' || error.code === 'provider_not_logged_in' ? 'invalid' : 'bad_gateway';
       throw new HandlerError(kind, error.message, error.code);
+    }
+    if (error instanceof Error && error.message.includes('native CLI session not found')) {
+      throw new HandlerError('not_found', error.message, 'NATIVE_CLI_SESSION_NOT_FOUND');
+    }
+    if (error instanceof Error && error.message.includes('native CLI session is not running')) {
+      throw new HandlerError('conflict', error.message, 'NATIVE_CLI_SESSION_NOT_RUNNING');
     }
     throw error;
   }
@@ -116,13 +125,13 @@ export function createNativeCliModule({ paths, host, store }: NativeCliDeps) {
       return startNativeCliAgentResponseSchema.parse({ session });
     },
 
-    input({
+    async input({
       id,
       input,
       transcriptTargetId
-    }: { id: string; transcriptTargetId: TranscriptTargetId } & NativeCliInputRequest): OkResponse {
+    }: { id: string; transcriptTargetId: TranscriptTargetId } & NativeCliInputRequest): Promise<OkResponse> {
       requireNativeCliSessionScope(id, transcriptTargetId);
-      host.input(id, { input });
+      await host.input(id, { input });
       return { ok: true };
     },
 
@@ -156,12 +165,12 @@ export function createNativeCliModule({ paths, host, store }: NativeCliDeps) {
       return listNativeCliSessionsResponseSchema.parse(host.list(sessionId));
     },
 
-    listAllSummaries(): ListNativeCliSessionsResponse {
-      return listNativeCliSessionsResponseSchema.parse(host.listAllSummaries());
+    listAllSummaries(query: ListNativeCliRuntimesQuery = {}): ListNativeCliRuntimesResponse {
+      return listNativeCliRuntimesResponseSchema.parse(host.listAllSummaries(query));
     },
 
-    listLive(): ListNativeCliSessionsResponse {
-      return listNativeCliSessionsResponseSchema.parse(host.listLive());
+    listLive(query: ListNativeCliRuntimesQuery = {}): ListNativeCliRuntimesResponse {
+      return listNativeCliRuntimesResponseSchema.parse(host.listLive(query));
     },
 
     observe({
@@ -172,9 +181,7 @@ export function createNativeCliModule({ paths, host, store }: NativeCliDeps) {
       transcriptTargetId: TranscriptTargetId;
     }): Promise<NativeCliObservationAccessResponse> {
       requireNativeCliSessionScope(id, transcriptTargetId);
-      return host
-        .observeWithProviderHistory(id)
-        .then((access) => nativeCliObservationAccessResponseSchema.parse(access));
+      return Promise.resolve(nativeCliObservationAccessResponseSchema.parse(host.observe(id)));
     },
 
     subscribeObservation({

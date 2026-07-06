@@ -1,11 +1,13 @@
 'use client';
 
+import type React from 'react';
 import type { ReactNode } from 'react';
 
 import {
   ComposerAccessSelect,
   ComposerContextUsageButton,
   ComposerContextUsagePanel,
+  ComposerEditor,
   ComposerModelSelect,
   ComposerSubmitButton,
   ComposerSurface,
@@ -15,7 +17,6 @@ import {
 
 import { useT } from '@/components/I18nProvider';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
-import { LexicalComposerInput } from './ComposerLexicalInput';
 import { useComposerVoice } from './use-composer-voice';
 
 type ComposerShellProps = {
@@ -95,12 +96,21 @@ export function ComposerShell({
   textareaRef
 }: ComposerShellProps): React.ReactElement {
   const t = useT();
-  const { listening, toggleVoice, voiceActive, voiceBusy, voiceDisabledReason, voiceModelConfigured } =
-    useComposerVoice({
-      cancelSignal: voiceCancelSignal,
-      onVoiceText,
-      voice
-    });
+  const {
+    listening,
+    toggleVoice,
+    voiceActive,
+    voiceBusy,
+    voiceDebug,
+    voiceDisabledReason,
+    voiceLevel,
+    voiceModelConfigured,
+    voiceSpectrum
+  } = useComposerVoice({
+    cancelSignal: voiceCancelSignal,
+    onVoiceText,
+    voice
+  });
   const canSend = value.trim().length > 0 && !disabled && !voiceActive;
   const canStop = busy && onStop;
   const submitDisabled = !canSend && !canStop;
@@ -131,8 +141,7 @@ export function ComposerShell({
 
   return (
     <ComposerSurface
-      ariaBusy={voiceActive}
-      busyTitle={voiceBusy ? 'Cleaning up transcript' : listening ? 'Recording voice input' : undefined}
+      ariaBusy={voiceBusy}
       leftTools={
         showLeftTools && enabledControls.access ? (
           <ComposerAccessSelect
@@ -175,7 +184,7 @@ export function ComposerShell({
                       listening
                         ? 'Recording voice input'
                         : voiceBusy
-                          ? 'Cleaning up transcript'
+                          ? 'Transcribing audio'
                           : voiceDisabledReason
                             ? voiceDisabledReason
                             : 'Voice input'
@@ -214,22 +223,72 @@ export function ComposerShell({
           </>
         ) : null
       }
+      voiceLevel={voiceLevel}
+      voiceSpectrum={voiceSpectrum}
+      voiceState={voiceBusy ? 'busy' : listening ? 'listening' : 'idle'}
     >
       {editorSlot ?? (
-        <LexicalComposerInput
+        <ComposerEditor
           ariaLabel={ariaLabel}
           disabled={disabled || voiceActive}
           editorRef={textareaRef}
           onBlur={onBlur}
           onChange={(nextValue) => onChange?.(nextValue)}
-          onKeyDown={onKeyDown}
+          onKeyDown={(event) => {
+            onKeyDown?.(event as unknown as React.KeyboardEvent<HTMLElement>);
+            return event.defaultPrevented;
+          }}
           onKeyUp={onKeyUp}
+          onSubmit={onSubmit}
           placeholder={placeholder}
           skillToken={composerSkillToken}
           value={value}
         />
       )}
+      {voiceDebug ? <VoiceDebugPanel debug={voiceDebug} /> : null}
     </ComposerSurface>
+  );
+}
+
+function VoiceDebugPanel({
+  debug
+}: {
+  debug: NonNullable<ReturnType<typeof useComposerVoice>['voiceDebug']>;
+}): React.ReactElement {
+  const rows = [
+    ['event', debug.event],
+    ['time', debug.timestamp],
+    ['mode', debug.mode],
+    ['recorder', debug.recorderState ?? 'n/a'],
+    ['chunks', String(debug.chunkCount)],
+    ['last chunk', debug.lastChunkSize == null ? 'n/a' : `${debug.lastChunkSize} B`],
+    ['audio', debug.audioSize == null ? 'n/a' : `${debug.audioSize} B`],
+    ['media', debug.mediaType ?? 'n/a'],
+    ['transcribe', debug.transcribeStatus],
+    ['requestData', debug.requestDataCalled ? 'yes' : 'no'],
+    ['discarded', debug.discarded ? 'yes' : 'no'],
+    ['detected', debug.voiceDetected ? 'yes' : 'no'],
+    ['available', debug.voiceAvailable ? 'yes' : 'no'],
+    ['model', debug.voiceModelConfigured ? 'configured' : 'missing'],
+    ['reason', debug.voiceDisabledReason ?? 'none'],
+    ['error', debug.lastError ?? 'none']
+  ];
+
+  return (
+    <details className="mx-3 mb-3 rounded-md border border-border/70 bg-muted/30 px-3 py-2 text-[11px] text-muted-foreground">
+      <summary className="cursor-pointer font-medium text-foreground text-xs">Voice debug</summary>
+      <dl className="mt-2 grid grid-cols-[88px_1fr] gap-x-3 gap-y-1 font-mono">
+        {rows.map(([label, value]) => (
+          <div
+            className="contents"
+            key={label}
+          >
+            <dt className="text-muted-foreground/70">{label}</dt>
+            <dd className="min-w-0 break-all text-foreground/80">{value}</dd>
+          </div>
+        ))}
+      </dl>
+    </details>
   );
 }
 

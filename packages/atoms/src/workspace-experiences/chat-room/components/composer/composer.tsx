@@ -1,40 +1,453 @@
 'use client';
 
+import type { SendMessageAttachment } from '@monad/protocol';
+import type { ComposerEditorHandle } from '@monad/ui';
 import type { ReactElement, ReactNode } from 'react';
 import type { QuestionView } from '../../../experience/types.ts';
 import type { ProjectComposerSurface } from '../../utils/composer.ts';
 
-import { ComposerSubmitButton, ComposerSurface, ComposerSwap, ComposerVoiceButton } from '@monad/ui';
+import {
+  Attachment01Icon,
+  Cancel01Icon,
+  File01Icon,
+  FileArchiveIcon,
+  FileAudioIcon,
+  FileBracesIcon,
+  FileCodeIcon,
+  FileImageIcon,
+  FileSpreadsheetIcon,
+  FileTypeIcon,
+  FileVideoIcon,
+  TextIcon
+} from '@hugeicons/core-free-icons';
+import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react';
+import { useOpenDraftAttachmentMutation, useTranscribeAudioMutation } from '@monad/sdk-atom-client-rtk';
+import { ComposerEditor, ComposerSubmitButton, ComposerSurface, ComposerSwap, ComposerVoiceButton } from '@monad/ui';
 import { workspaceMono as mono, workspaceSans as sans } from '@monad/ui/components/AgentAvatar';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useWorkspaceExperienceHost } from '../../../host-context.tsx';
 import { workspaceExperienceT } from '../../../i18n.ts';
-import { transcribeChatRoomAudio } from '../../composer-client.ts';
-import {
-  activeMention,
-  createMentionChip,
-  domPointAt,
-  insertPlainText,
-  renderSerializedEditor,
-  serializeEditor,
-  textBeforeCaret
-} from '../../utils/composer-editor.ts';
 import { ApprovalStack } from './approval-stack.tsx';
 import { audioBlobToBase64 } from './audio.ts';
 import { QuestionStack } from './question-stack.tsx';
 import { useComposerVoice } from './use-composer-voice.ts';
 
-export function Composer({ room }: { room: ProjectComposerSurface }): ReactElement {
+const COMPOSER_DRAFT_STORAGE_PREFIX = 'monad:chat-room-composer-draft:';
+const LONG_PASTE_TEXT_THRESHOLD = 1000;
+const TEXT_ATTACHMENT_MAX_BYTES = 512_000;
+
+type DraftAttachment = SendMessageAttachment & { localFile?: File; localId: string; virtualKind?: 'pasted-text' };
+export type ComposerDroppedFiles = { files: File[]; nonce: number };
+type AttachmentVisual = {
+  accent: string;
+  icon: IconSvgElement;
+  label: string;
+};
+
+const archiveExtensions = new Set(['7z', 'bz2', 'gz', 'rar', 'tar', 'tgz', 'zip']);
+const audioExtensions = new Set(['aac', 'aiff', 'flac', 'm4a', 'mp3', 'ogg', 'wav']);
+const codeExtensions = new Set([
+  'c',
+  'cpp',
+  'css',
+  'go',
+  'html',
+  'java',
+  'js',
+  'jsx',
+  'kt',
+  'mdx',
+  'php',
+  'py',
+  'rb',
+  'rs',
+  'sh',
+  'sql',
+  'swift',
+  'ts',
+  'tsx',
+  'vue'
+]);
+const spreadsheetExtensions = new Set(['csv', 'numbers', 'ods', 'tsv', 'xls', 'xlsx']);
+const textExtensions = new Set(['log', 'md', 'rst', 'txt', 'xml', 'yaml', 'yml']);
+const videoExtensions = new Set(['avi', 'm4v', 'mov', 'mp4', 'mpeg', 'webm']);
+
+function newAttachmentId(): string {
+  return typeof crypto !== 'undefined' && 'randomUUID' in crypto
+    ? crypto.randomUUID()
+    : `att:${Date.now()}:${Math.random().toString(36).slice(2)}`;
+}
+
+function sendableAttachments(attachments: DraftAttachment[]): SendMessageAttachment[] {
+  return attachments.map(
+    ({ localFile: _localFile, localId: _localId, virtualKind: _virtualKind, ...attachment }) => attachment
+  );
+}
+
+function fileTextLike(file: File): boolean {
+  return (
+    file.type.startsWith('text/') ||
+    ['application/json', 'application/xml', 'application/javascript', 'application/typescript'].includes(file.type) ||
+    /\.(csv|json|log|md|txt|xml|yaml|yml)$/i.test(file.name)
+  );
+}
+
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(reader.error ?? new Error('Failed to read file'));
+    reader.onload = () => {
+      const result = String(reader.result ?? '');
+      resolve(result.includes(',') ? result.slice(result.indexOf(',') + 1) : result);
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+async function fileToAttachment(file: File): Promise<DraftAttachment> {
+  if (file.type.startsWith('image/')) {
+    return {
+      kind: 'image',
+      localFile: file,
+      localId: newAttachmentId(),
+      name: file.name || 'pasted-image',
+      mediaType: file.type,
+      size: file.size,
+      dataBase64: await fileToBase64(file)
+    };
+  }
+  if (fileTextLike(file) && file.size <= TEXT_ATTACHMENT_MAX_BYTES) {
+    return {
+      kind: 'text',
+      localFile: file,
+      localId: newAttachmentId(),
+      name: file.name || 'pasted-text.txt',
+      mediaType: file.type || 'text/plain',
+      size: file.size,
+      text: await file.text()
+    };
+  }
+  return {
+    kind: 'file-meta',
+    localFile: file,
+    localId: newAttachmentId(),
+    name: file.name || 'file',
+    ...(file.type ? { mediaType: file.type } : {}),
+    size: file.size
+  };
+}
+
+function pastedTextAttachment(text: string): DraftAttachment {
+  const encoded = new TextEncoder().encode(text);
+  const truncationNote = `\n\n[truncated: pasted text exceeded ${TEXT_ATTACHMENT_MAX_BYTES} bytes]`;
+  let cappedText = text;
+  if (encoded.byteLength > TEXT_ATTACHMENT_MAX_BYTES) {
+    const budget = TEXT_ATTACHMENT_MAX_BYTES - new TextEncoder().encode(truncationNote).byteLength;
+    cappedText = `${new TextDecoder().decode(encoded.slice(0, Math.max(0, budget)))}${truncationNote}`;
+  }
+  const file = new File([cappedText], 'pasted-text.txt', { type: 'text/plain' });
+  return {
+    kind: 'text',
+    localFile: file,
+    localId: newAttachmentId(),
+    name: 'Pasted',
+    mediaType: 'text/plain',
+    size: new Blob([cappedText]).size,
+    text: cappedText,
+    virtualKind: 'pasted-text'
+  };
+}
+
+function attachmentSummary(attachment: DraftAttachment): string {
+  if (attachment.virtualKind === 'pasted-text') return 'Pasted text';
+  if (attachment.kind === 'image') return `${attachment.name} image`;
+  if (attachment.kind === 'text') return `${attachment.name} text`;
+  return `${attachment.name} file`;
+}
+
+function attachmentDisplayName(attachment: DraftAttachment): string {
+  return attachment.virtualKind === 'pasted-text' ? 'Pasted' : attachment.name;
+}
+
+function attachmentExtension(name: string): string {
+  const extension = name.split('.').pop()?.toLowerCase() ?? '';
+  return extension === name.toLowerCase() ? '' : extension;
+}
+
+function attachmentMediaType(attachment: DraftAttachment): string {
+  return attachment.kind === 'file-meta' ? (attachment.mediaType ?? '') : attachment.mediaType;
+}
+
+function formatAttachmentSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  const kb = bytes / 1024;
+  if (kb < 1024) return `${kb.toFixed(kb < 10 ? 1 : 0)} KB`;
+  const mb = kb / 1024;
+  return `${mb.toFixed(mb < 10 ? 1 : 0)} MB`;
+}
+
+function attachmentVisual(attachment: DraftAttachment): AttachmentVisual {
+  const mediaType = attachmentMediaType(attachment).toLowerCase();
+  const extension = attachmentExtension(attachment.name);
+  if (attachment.kind === 'image' || mediaType.startsWith('image/')) {
+    return { accent: 'rgb(64 217 198)', icon: FileImageIcon, label: 'Image' };
+  }
+  if (mediaType.startsWith('audio/') || audioExtensions.has(extension)) {
+    return { accent: 'rgb(66 133 244)', icon: FileAudioIcon, label: 'Audio' };
+  }
+  if (mediaType.startsWith('video/') || videoExtensions.has(extension)) {
+    return { accent: 'rgb(145 84 231)', icon: FileVideoIcon, label: 'Video' };
+  }
+  if (spreadsheetExtensions.has(extension)) {
+    return {
+      accent: 'rgb(52 168 83)',
+      icon: FileSpreadsheetIcon,
+      label: extension ? extension.toUpperCase() : 'Sheet'
+    };
+  }
+  if (archiveExtensions.has(extension)) {
+    return { accent: 'rgb(251 188 4)', icon: FileArchiveIcon, label: extension ? extension.toUpperCase() : 'Archive' };
+  }
+  if (extension === 'json' || extension === 'jsonc' || extension === 'jsonl') {
+    return { accent: 'rgb(64 217 198)', icon: FileBracesIcon, label: extension.toUpperCase() };
+  }
+  if (codeExtensions.has(extension)) {
+    return { accent: 'rgb(113 104 246)', icon: FileCodeIcon, label: extension.toUpperCase() };
+  }
+  if (attachment.kind === 'text' || mediaType.startsWith('text/') || textExtensions.has(extension)) {
+    return { accent: 'rgb(66 133 244)', icon: TextIcon, label: extension ? extension.toUpperCase() : 'Text' };
+  }
+  if (extension === 'otf' || extension === 'ttf' || extension === 'woff' || extension === 'woff2') {
+    return { accent: 'rgb(189 193 198)', icon: FileTypeIcon, label: extension.toUpperCase() };
+  }
+  return { accent: 'rgb(189 193 198)', icon: File01Icon, label: extension ? extension.toUpperCase() : 'File' };
+}
+
+function AttachmentPreviewStrip({
+  attachments,
+  onOpen,
+  onRemove
+}: {
+  attachments: DraftAttachment[];
+  onOpen: (attachment: DraftAttachment) => void;
+  onRemove: (index: number) => void;
+}): ReactElement {
+  return (
+    <ul
+      aria-label="Attachments"
+      className="[&::-webkit-scrollbar]:hidden"
+      style={{
+        display: 'flex',
+        gap: 8,
+        listStyle: 'none',
+        margin: 0,
+        overflowX: 'auto',
+        overscrollBehaviorX: 'contain',
+        padding: 0,
+        scrollbarWidth: 'none'
+      }}
+    >
+      {attachments.map((attachment, index) => (
+        <AttachmentPreviewCard
+          attachment={attachment}
+          key={attachment.localId}
+          onOpen={() => onOpen(attachment)}
+          onRemove={() => onRemove(index)}
+        />
+      ))}
+    </ul>
+  );
+}
+
+function AttachmentPreviewCard({
+  attachment,
+  onOpen,
+  onRemove
+}: {
+  attachment: DraftAttachment;
+  onOpen: () => void;
+  onRemove: () => void;
+}): ReactElement {
+  const visual = attachmentVisual(attachment);
+  const displayName = attachmentDisplayName(attachment);
+  const imageSrc = attachment.kind === 'image' ? `data:${attachment.mediaType};base64,${attachment.dataBase64}` : null;
+  return (
+    <li
+      style={{
+        background: 'color-mix(in srgb, var(--card) 76%, var(--background) 24%)',
+        border: '1px solid var(--border)',
+        borderRadius: 10,
+        color: 'var(--foreground)',
+        flex: '0 0 168px',
+        height: 56,
+        overflow: 'hidden',
+        position: 'relative',
+        userSelect: 'none'
+      }}
+      title={attachmentSummary(attachment)}
+    >
+      <button
+        aria-label={`Open ${displayName}`}
+        onClick={onOpen}
+        style={{
+          alignItems: 'center',
+          background: 'transparent',
+          border: 'none',
+          color: 'inherit',
+          display: 'flex',
+          gap: 8,
+          height: '100%',
+          minWidth: 0,
+          padding: '7px 32px 7px 8px',
+          textAlign: 'left',
+          width: '100%'
+        }}
+        type="button"
+      >
+        <div
+          style={{
+            alignItems: 'center',
+            background: imageSrc ? 'var(--secondary)' : `color-mix(in srgb, ${visual.accent} 18%, transparent)`,
+            border: '1px solid color-mix(in srgb, var(--border) 70%, transparent)',
+            borderRadius: 8,
+            color: visual.accent,
+            display: 'flex',
+            flex: '0 0 38px',
+            height: 38,
+            justifyContent: 'center',
+            overflow: 'hidden',
+            width: 38
+          }}
+        >
+          {imageSrc ? (
+            <div
+              aria-hidden="true"
+              style={{
+                backgroundImage: `url("${imageSrc}")`,
+                backgroundPosition: 'center',
+                backgroundSize: 'cover',
+                height: '100%',
+                width: '100%'
+              }}
+            />
+          ) : (
+            <HugeiconsIcon
+              icon={visual.icon}
+              size={18}
+            />
+          )}
+        </div>
+        <div style={{ minWidth: 0 }}>
+          <div
+            style={{
+              color: 'var(--foreground)',
+              fontFamily: sans,
+              fontSize: 12,
+              fontWeight: 600,
+              lineHeight: '16px',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap'
+            }}
+          >
+            {displayName}
+          </div>
+          <div
+            style={{
+              color: 'var(--muted-foreground)',
+              display: 'flex',
+              fontFamily: mono,
+              fontSize: 10,
+              gap: 5,
+              lineHeight: '14px',
+              minWidth: 0,
+              whiteSpace: 'nowrap'
+            }}
+          >
+            <span style={{ color: visual.accent, overflow: 'hidden', textOverflow: 'ellipsis' }}>{visual.label}</span>
+            <span>{formatAttachmentSize(attachment.size)}</span>
+          </div>
+        </div>
+      </button>
+      <button
+        aria-label={`Remove ${displayName}`}
+        className="workplace-action"
+        onClick={onRemove}
+        style={{
+          alignItems: 'center',
+          border: 'none',
+          borderRadius: 999,
+          color: 'var(--muted-foreground)',
+          display: 'inline-flex',
+          height: 22,
+          justifyContent: 'center',
+          padding: 0,
+          position: 'absolute',
+          right: 6,
+          top: 6,
+          width: 22
+        }}
+        title="Remove attachment"
+        type="button"
+      >
+        <HugeiconsIcon
+          icon={Cancel01Icon}
+          size={13}
+        />
+      </button>
+    </li>
+  );
+}
+
+function readComposerDraft(key: string): string {
+  if (typeof window === 'undefined') return '';
+  try {
+    return window.localStorage.getItem(`${COMPOSER_DRAFT_STORAGE_PREFIX}${key}`) ?? '';
+  } catch {
+    return '';
+  }
+}
+
+function writeComposerDraft(key: string, draft: string): void {
+  const storageKey = `${COMPOSER_DRAFT_STORAGE_PREFIX}${key}`;
+  if (draft.trim()) {
+    try {
+      window.localStorage.setItem(storageKey, draft);
+    } catch {
+      // Draft cache is best-effort; typing must keep working if storage is unavailable.
+    }
+    return;
+  }
+  try {
+    window.localStorage.removeItem(storageKey);
+  } catch {
+    // Ignore storage cleanup failures.
+  }
+}
+
+export function Composer({
+  droppedFiles,
+  room
+}: {
+  droppedFiles?: ComposerDroppedFiles;
+  room: ProjectComposerSurface;
+}): ReactElement {
   const host = useWorkspaceExperienceHost();
   const t = workspaceExperienceT();
-  const [draft, setDraft] = useState('');
+  const [openDraftAttachment] = useOpenDraftAttachmentMutation();
+  const [transcribeAudio] = useTranscribeAudioMutation();
+  const [draft, setDraft] = useState(() => readComposerDraft(room.draftKey));
+  const [attachments, setAttachments] = useState<DraftAttachment[]>([]);
   const [mention, setMention] = useState<{ query: string; start: number } | null>(null);
+  const [mentionMenuPosition, setMentionMenuPosition] = useState<{ bottom: number; left: number } | null>(null);
   const [active, setActive] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [askPanelTestAnswered, setAskPanelTestAnswered] = useState(false);
   const [voiceCancelSignal, setVoiceCancelSignal] = useState(0);
-  const editorRef = useRef<HTMLDivElement>(null);
+  const editorRef = useRef<ComposerEditorHandle>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const draftKeyRef = useRef(room.draftKey);
   const sendingRef = useRef(false);
   const submittingTextRef = useRef<string | null>(null);
   const wasAskingRef = useRef(false);
@@ -88,35 +501,67 @@ export function Composer({ room }: { room: ProjectComposerSurface }): ReactEleme
     wasAskingRef.current = asking;
   }, [asking]);
 
-  const syncMention = (value: string, caret: number): void => {
-    const m = activeMention(value, caret);
-    if (!mention || !m || mention.start !== m.start) setActive(0);
-    setMention(m);
+  useEffect(() => {
+    draftKeyRef.current = room.draftKey;
+    const nextDraft = readComposerDraft(room.draftKey);
+    setDraft(nextDraft);
+    setMention(null);
+    setMentionMenuPosition(null);
+  }, [room.draftKey]);
+
+  const updateDraft = (nextDraft: string): void => {
+    setDraft(nextDraft);
+    writeComposerDraft(draftKeyRef.current, nextDraft);
   };
 
-  const syncFromEditor = (): void => {
-    const editor = editorRef.current;
-    if (!editor) return;
-    setDraft(serializeEditor(editor));
-    syncMention(textBeforeCaret(editor), textBeforeCaret(editor).length);
+  const addAttachments = useCallback(async (files: File[] | FileList): Promise<void> => {
+    const next = await Promise.all([...files].map(fileToAttachment));
+    if (next.length) setAttachments((current) => [...current, ...next]);
+  }, []);
+
+  useEffect(() => {
+    if (!droppedFiles?.files.length) return;
+    void addAttachments(droppedFiles.files);
+  }, [addAttachments, droppedFiles]);
+
+  const removeAttachment = (index: number): void => {
+    setAttachments((current) => current.filter((_, i) => i !== index));
+  };
+
+  const openAttachment = async (attachment: DraftAttachment): Promise<void> => {
+    const dataBase64 =
+      attachment.localFile !== undefined
+        ? await fileToBase64(attachment.localFile)
+        : attachment.kind === 'image'
+          ? attachment.dataBase64
+          : attachment.kind === 'text'
+            ? await fileToBase64(new File([attachment.text], attachment.name, { type: attachment.mediaType }))
+            : null;
+    if (!dataBase64) return;
+    await openDraftAttachment({
+      dataBase64,
+      mediaType: attachmentMediaType(attachment) || undefined,
+      name: attachment.localFile?.name ?? attachment.name
+    }).unwrap();
   };
 
   const submit = async (): Promise<void> => {
     const text = draft.trim();
-    if (!text) return;
+    if (!text && attachments.length === 0) return;
     if (sendingRef.current) return;
-    if (submittingTextRef.current === text) return;
+    const sendKey = `${text}:${attachments.map((attachment) => `${attachment.kind}:${attachment.name}:${attachment.size}`).join('|')}`;
+    if (submittingTextRef.current === sendKey) return;
     sendingRef.current = true;
-    submittingTextRef.current = text;
+    submittingTextRef.current = sendKey;
     setSubmitting(true);
-    setDraft('');
+    updateDraft('');
     setMention(null);
-    if (editorRef.current) editorRef.current.textContent = '';
+    editorRef.current?.clear();
     try {
-      await room.sendDirective(text);
+      await room.sendDirective({ attachments: sendableAttachments(attachments), text });
+      setAttachments([]);
     } catch {
-      setDraft((current) => (current ? current : text));
-      if (editorRef.current) renderSerializedEditor(editorRef.current, text);
+      updateDraft(text);
     } finally {
       submittingTextRef.current = null;
       sendingRef.current = false;
@@ -127,28 +572,9 @@ export function Composer({ room }: { room: ProjectComposerSurface }): ReactEleme
 
   const acceptMention = (target: { id: string; name: string }): void => {
     if (!mention) return;
-    const editor = editorRef.current;
-    if (!editor) return;
-    const before = textBeforeCaret(editor);
-    const start = mention.start;
-    const end = before.length;
-    const range = document.createRange();
-    const from = domPointAt(editor, start);
-    const to = domPointAt(editor, end);
-    range.setStart(from.node, from.offset);
-    range.setEnd(to.node, to.offset);
-    range.deleteContents();
-    const space = document.createTextNode(' ');
-    range.insertNode(space);
-    range.insertNode(createMentionChip(target));
-    const selection = window.getSelection();
-    selection?.removeAllRanges();
-    const caret = document.createRange();
-    caret.setStartAfter(space);
-    caret.collapse(true);
-    selection?.addRange(caret);
-    setDraft(serializeEditor(editor));
+    editorRef.current?.insertMention(target);
     setMention(null);
+    setMentionMenuPosition(null);
   };
 
   return (
@@ -181,88 +607,89 @@ export function Composer({ room }: { room: ProjectComposerSurface }): ReactEleme
             busy={Boolean(room.typing)}
             disabled={submitting}
             editorSlot={
-              // biome-ignore lint/a11y/useSemanticElements: contenteditable is required for inline atomic mention chips.
-              <div
-                aria-label={t('web.workplace.messageAgents')}
-                aria-multiline
-                className="max-h-40 min-h-16 overflow-y-auto px-4 pt-3.5 pb-2 text-[15px] leading-relaxed outline-none empty:before:text-muted-foreground empty:before:content-[attr(data-placeholder)]"
-                contentEditable={!submitting}
-                data-placeholder={t('web.workplace.composerPlaceholder')}
-                onBlur={() => setMention(null)}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  const text = e.dataTransfer.getData('text/plain');
-                  if (text) insertPlainText(text);
-                  syncFromEditor();
-                }}
-                onInput={syncFromEditor}
-                onKeyDown={(e) => {
-                  if (e.nativeEvent.isComposing || e.keyCode === 229) return;
-                  if (menuOpen) {
-                    if (e.key === 'ArrowDown') {
-                      e.preventDefault();
+              <>
+                {attachments.length ? (
+                  <AttachmentPreviewStrip
+                    attachments={attachments}
+                    onOpen={(attachment) => void openAttachment(attachment)}
+                    onRemove={removeAttachment}
+                  />
+                ) : null}
+                <ComposerEditor
+                  ariaLabel={t('web.workplace.messageAgents')}
+                  disabled={submitting}
+                  mention
+                  onChange={updateDraft}
+                  onFiles={(files) => void addAttachments(files)}
+                  onKeyDown={(event) => {
+                    if (event.isComposing || event.keyCode === 229) return false;
+                    if (!menuOpen) return false;
+                    if (event.key === 'ArrowDown') {
+                      event.preventDefault();
                       setActive((i) => (i + 1) % options.length);
-                      return;
+                      return true;
                     }
-                    if (e.key === 'ArrowUp') {
-                      e.preventDefault();
+                    if (event.key === 'ArrowUp') {
+                      event.preventDefault();
                       setActive((i) => (i - 1 + options.length) % options.length);
-                      return;
+                      return true;
                     }
-                    if (e.key === 'Enter' || e.key === 'Tab') {
-                      e.preventDefault();
+                    if (event.key === 'Enter' || event.key === 'Tab') {
+                      event.preventDefault();
                       const target = options[active];
                       if (target) acceptMention(target);
-                      return;
+                      return true;
                     }
-                    if (e.key === 'Escape') {
-                      e.preventDefault();
+                    if (event.key === 'Escape') {
+                      event.preventDefault();
                       setMention(null);
-                      return;
+                      return true;
                     }
-                  }
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    void submit();
-                  }
-                }}
-                onKeyUp={() => syncFromEditor()}
-                onPaste={(e) => {
-                  e.preventDefault();
-                  insertPlainText(e.clipboardData.getData('text/plain'));
-                  syncFromEditor();
-                }}
-                ref={editorRef}
-                role="textbox"
-                suppressContentEditableWarning
-                tabIndex={0}
-              />
+                    return false;
+                  }}
+                  onMentionChange={(nextMention, position) => {
+                    if (!mention || !nextMention || mention.start !== nextMention.start) setActive(0);
+                    setMention(nextMention);
+                    setMentionMenuPosition(position);
+                  }}
+                  onPasteText={(text) => {
+                    if (text.length <= LONG_PASTE_TEXT_THRESHOLD) return false;
+                    setAttachments((current) => [...current, pastedTextAttachment(text)]);
+                    return true;
+                  }}
+                  onSubmit={submit}
+                  ref={editorRef}
+                  value={draft}
+                />
+                <input
+                  multiple
+                  onChange={(event) => {
+                    if (event.currentTarget.files) void addAttachments(event.currentTarget.files);
+                    event.currentTarget.value = '';
+                  }}
+                  ref={fileInputRef}
+                  style={{ display: 'none' }}
+                  type="file"
+                />
+              </>
             }
+            hasSendableContent={draft.trim().length > 0 || attachments.length > 0}
             mentionMenu={
               menuOpen ? (
                 <div
                   className="glass-surface"
                   style={{
                     position: 'absolute',
-                    left: 18,
-                    bottom: 10,
+                    left: mentionMenuPosition?.left ?? 18,
+                    bottom: mentionMenuPosition?.bottom ?? 88,
                     minWidth: 180,
                     overflow: 'hidden',
-                    zIndex: 60
+                    background: 'var(--popover, var(--card))',
+                    border: '1px solid var(--border)',
+                    boxShadow: '0 18px 48px color-mix(in srgb, var(--foreground) 14%, transparent)',
+                    zIndex: 80
                   }}
                 >
-                  <div
-                    style={{
-                      fontFamily: mono,
-                      fontSize: 10,
-                      fontWeight: 600,
-                      letterSpacing: 1,
-                      color: 'var(--muted-foreground)',
-                      padding: '6px 10px 2px'
-                    }}
-                  >
-                    {t('web.workplace.chooseAgent')}
-                  </div>
                   {options.map((target, i) => (
                     <button
                       className="workplace-action"
@@ -287,23 +714,40 @@ export function Composer({ room }: { room: ProjectComposerSurface }): ReactEleme
                       }}
                       type="button"
                     >
-                      @{target.name}
+                      <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 5 }}>
+                        <span
+                          aria-hidden="true"
+                          style={{
+                            WebkitMaskImage: 'url("/monad-icon-vector-solid.svg")',
+                            WebkitMaskPosition: 'center',
+                            WebkitMaskRepeat: 'no-repeat',
+                            WebkitMaskSize: 'contain',
+                            background: 'currentColor',
+                            display: 'inline-block',
+                            flex: 'none',
+                            height: 13,
+                            maskImage: 'url("/monad-icon-vector-solid.svg")',
+                            maskPosition: 'center',
+                            maskRepeat: 'no-repeat',
+                            maskSize: 'contain',
+                            transform: 'translateY(1px)',
+                            width: 13
+                          }}
+                        />
+                        {target.name}
+                      </span>
                     </button>
                   ))}
                 </div>
               ) : null
             }
+            onAttachFile={() => fileInputRef.current?.click()}
             onStop={room.pauseAll}
             onSubmit={submit}
             onVoiceText={(text) => {
-              const editor = editorRef.current;
-              if (editor) {
-                editor.append(document.createTextNode(`${editor.textContent?.trim() ? ' ' : ''}${text}`));
-                setDraft(serializeEditor(editor));
-              }
+              editorRef.current?.appendText(text);
               setMention(null);
             }}
-            placeholder={t('web.workplace.composerPlaceholder')}
             value={draft}
             voice={{
               modelCheckPending: host.voiceModelState === 'checking',
@@ -312,7 +756,7 @@ export function Composer({ room }: { room: ProjectComposerSurface }): ReactEleme
               onSettingsClick: () => host.openStudio('models'),
               transcribeAudio: async (audio) => {
                 const body = await audioBlobToBase64(audio);
-                return (await transcribeChatRoomAudio(host.fetch, body)).text;
+                return (await transcribeAudio(body).unwrap()).text;
               }
             }}
             voiceCancelSignal={voiceCancelSignal}
@@ -328,11 +772,12 @@ function ChatRoomComposerShell({
   busy = false,
   disabled = false,
   editorSlot,
+  hasSendableContent,
   mentionMenu,
+  onAttachFile,
   onStop,
   onSubmit,
   onVoiceText,
-  placeholder,
   value,
   voice,
   voiceCancelSignal
@@ -341,11 +786,12 @@ function ChatRoomComposerShell({
   busy?: boolean;
   disabled?: boolean;
   editorSlot: ReactNode;
+  hasSendableContent?: boolean;
   mentionMenu?: ReactNode;
+  onAttachFile?: () => void;
   onStop?: () => void;
   onSubmit: () => void;
   onVoiceText?: (text: string) => void;
-  placeholder: string;
   value: string;
   voice?: {
     modelCheckFailed?: boolean;
@@ -356,13 +802,22 @@ function ChatRoomComposerShell({
   };
   voiceCancelSignal?: number;
 }): ReactElement {
-  const { listening, toggleVoice, voiceActive, voiceBusy, voiceDisabledReason, voiceModelConfigured } =
-    useComposerVoice({
-      cancelSignal: voiceCancelSignal,
-      onVoiceText,
-      voice
-    });
-  const canSend = value.trim().length > 0 && !disabled && !voiceActive;
+  const {
+    listening,
+    toggleVoice,
+    voiceActive,
+    voiceBusy,
+    voiceDebug,
+    voiceDisabledReason,
+    voiceLevel,
+    voiceModelConfigured,
+    voiceSpectrum
+  } = useComposerVoice({
+    cancelSignal: voiceCancelSignal,
+    onVoiceText,
+    voice
+  });
+  const canSend = Boolean(hasSendableContent ?? value.trim().length > 0) && !disabled && !voiceActive;
   const canStop = busy && onStop;
   const submitDisabled = !canSend && !canStop;
   const voiceChecking = Boolean(voice?.modelCheckPending && !listening);
@@ -378,208 +833,151 @@ function ChatRoomComposerShell({
     : voiceCheckFailed
       ? 'Could not check voice model settings'
       : voiceBusy
-        ? 'Cleaning up transcript'
+        ? 'Transcribing audio'
         : listening
           ? 'Recording voice input'
           : effectiveVoiceDisabledReason
             ? effectiveVoiceDisabledReason
             : 'Voice input';
-
   return (
-    <ComposerSurface
-      ariaBusy={voiceActive}
-      busyTitle={voiceTitle}
-      mentionMenu={mentionMenu}
-      rightTools={
-        <>
-          <span
-            aria-live="polite"
-            className="sr-only"
-          >
-            {placeholder}
-          </span>
-          <ComposerVoiceButton
-            ariaDisabled={voiceUnavailable}
-            ariaLabel={voiceTitle}
-            disabled={!onVoiceText}
-            onClick={() => {
-              if (voiceUnavailable && !voiceModelConfigured && !voiceChecking && !voiceCheckFailed) {
-                voice?.onSettingsClick?.();
-                return;
-              }
-              void toggleVoice();
-            }}
-            state={voiceBusy || voiceChecking ? 'busy' : listening ? 'listening' : 'idle'}
-            title={voiceTitle}
-          />
-          <ComposerSubmitButton
-            ariaLabel={canStop ? 'Stop' : ariaLabel}
-            canSend={canSend}
-            canStop={Boolean(canStop)}
-            disabled={submitDisabled}
-            onClick={canStop ? onStop : onSubmit}
-          />
-        </>
-      }
+    <fieldset
+      aria-label="Message composer"
+      style={{
+        border: 0,
+        margin: 0,
+        minInlineSize: 0,
+        padding: 0
+      }}
     >
-      {editorSlot}
-      {listening ? <VoiceRecordingStatus /> : voiceBusy ? <VoiceTranscriptStatus /> : null}
-    </ComposerSurface>
+      <ComposerSurface
+        ariaBusy={voiceBusy}
+        leftTools={
+          <button
+            aria-label="Attach file"
+            className="workplace-action"
+            disabled={disabled}
+            onClick={onAttachFile}
+            style={{
+              alignItems: 'center',
+              background: 'transparent',
+              border: 'none',
+              borderRadius: 999,
+              color: 'var(--muted-foreground)',
+              display: 'inline-flex',
+              height: 32,
+              justifyContent: 'center',
+              opacity: disabled ? 0.48 : 1,
+              padding: 0,
+              width: 32
+            }}
+            title="Attach file"
+            type="button"
+          >
+            <HugeiconsIcon
+              icon={Attachment01Icon}
+              size={17}
+            />
+          </button>
+        }
+        mentionMenu={mentionMenu}
+        rightTools={
+          <>
+            <ComposerVoiceButton
+              ariaDisabled={voiceUnavailable}
+              ariaLabel={voiceTitle}
+              disabled={!onVoiceText}
+              onClick={() => {
+                if (voiceUnavailable && !voiceModelConfigured && !voiceChecking && !voiceCheckFailed) {
+                  voice?.onSettingsClick?.();
+                  return;
+                }
+                void toggleVoice();
+              }}
+              state={voiceBusy || voiceChecking ? 'busy' : listening ? 'listening' : 'idle'}
+              style={{ background: 'transparent' }}
+            />
+            <ComposerSubmitButton
+              ariaLabel={canStop ? 'Stop' : ariaLabel}
+              canSend={canSend}
+              canStop={Boolean(canStop)}
+              disabled={submitDisabled}
+              onClick={canStop ? onStop : onSubmit}
+            />
+          </>
+        }
+        voiceLevel={voiceLevel}
+        voiceSpectrum={voiceSpectrum}
+        voiceState={voiceBusy || voiceChecking ? 'busy' : listening ? 'listening' : 'idle'}
+      >
+        {editorSlot}
+        {voiceDebug ? <VoiceDebugPanel debug={voiceDebug} /> : null}
+      </ComposerSurface>
+    </fieldset>
   );
 }
 
-function VoiceStatusShell({ children }: { children: ReactNode }): ReactElement {
+function VoiceDebugPanel({
+  debug
+}: {
+  debug: NonNullable<ReturnType<typeof useComposerVoice>['voiceDebug']>;
+}): ReactElement {
+  const rows = [
+    ['event', debug.event],
+    ['time', debug.timestamp],
+    ['mode', debug.mode],
+    ['recorder', debug.recorderState ?? 'n/a'],
+    ['chunks', String(debug.chunkCount)],
+    ['last chunk', debug.lastChunkSize == null ? 'n/a' : `${debug.lastChunkSize} B`],
+    ['audio', debug.audioSize == null ? 'n/a' : `${debug.audioSize} B`],
+    ['media', debug.mediaType ?? 'n/a'],
+    ['transcribe', debug.transcribeStatus],
+    ['requestData', debug.requestDataCalled ? 'yes' : 'no'],
+    ['discarded', debug.discarded ? 'yes' : 'no'],
+    ['detected', debug.voiceDetected ? 'yes' : 'no'],
+    ['available', debug.voiceAvailable ? 'yes' : 'no'],
+    ['model', debug.voiceModelConfigured ? 'configured' : 'missing'],
+    ['reason', debug.voiceDisabledReason ?? 'none'],
+    ['error', debug.lastError ?? 'none']
+  ];
+
   return (
-    <div
-      aria-live="polite"
-      className="px-4 pb-2"
-      style={{ color: 'var(--muted-foreground)' }}
+    <details
+      style={{
+        background: 'color-mix(in srgb, var(--muted) 48%, transparent)',
+        border: '1px solid var(--border)',
+        borderRadius: 8,
+        color: 'var(--muted-foreground)',
+        fontFamily: sans,
+        fontSize: 11,
+        margin: '0 12px 12px',
+        padding: '8px 10px'
+      }}
     >
-      <div
+      <summary style={{ color: 'var(--foreground)', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
+        Voice debug
+      </summary>
+      <dl
         style={{
-          alignItems: 'center',
-          display: 'inline-flex',
-          gap: 8,
-          fontSize: 12,
-          lineHeight: 1.2
+          display: 'grid',
+          gap: '3px 12px',
+          gridTemplateColumns: '88px minmax(0, 1fr)',
+          margin: '8px 0 0'
         }}
       >
-        {children}
-      </div>
-    </div>
-  );
-}
-
-function VoiceRecordingStatus(): ReactElement {
-  return (
-    <VoiceStatusShell>
-      <style>{`
-        @keyframes monadChatroomRecordingWave {
-          0%, 100% { transform: scaleY(.38); opacity: .45; }
-          45% { transform: scaleY(1); opacity: 1; }
-        }
-        @keyframes monadChatroomRecordingRing {
-          0% { opacity: .38; transform: scale(.78); }
-          70%, 100% { opacity: 0; transform: scale(1.34); }
-        }
-      `}</style>
-      <svg
-        aria-hidden="true"
-        height="32"
-        viewBox="0 0 72 36"
-        width="64"
-      >
-        <g
-          fill="none"
-          stroke="currentColor"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth="1.8"
-        >
-          <circle
-            cx="17"
-            cy="18"
-            r="8"
-            style={{ animation: 'monadChatroomRecordingRing 1.4s ease-out infinite', transformOrigin: '17px 18px' }}
-          />
-          <path d="M17 10v11" />
-          <path d="M12.5 21a4.5 4.5 0 0 0 9 0" />
-          <path d="M17 25v4" />
-          <path d="M13 29h8" />
-          {[34, 42, 50, 58].map((x, index) => (
-            <path
-              d={`M${x} 13v10`}
-              key={x}
-              style={{
-                animation: 'monadChatroomRecordingWave .86s ease-in-out infinite',
-                animationDelay: `${index * 110}ms`,
-                transformBox: 'fill-box',
-                transformOrigin: 'center'
-              }}
-            />
-          ))}
-        </g>
-      </svg>
-      <span>Recording audio...</span>
-    </VoiceStatusShell>
-  );
-}
-
-function VoiceTranscriptStatus(): ReactElement {
-  return (
-    <VoiceStatusShell>
-      <style>{`
-        @keyframes monadChatroomScribeHand {
-          0%, 100% { transform: rotate(-7deg) translateX(0); }
-          50% { transform: rotate(3deg) translateX(4px); }
-        }
-        @keyframes monadChatroomScribeLine {
-          0% { stroke-dashoffset: 42; opacity: .28; }
-          45%, 100% { stroke-dashoffset: 0; opacity: .9; }
-        }
-        @keyframes monadChatroomScribeHead {
-          0%, 100% { transform: translateY(0); }
-          50% { transform: translateY(1px); }
-        }
-      `}</style>
-      <svg
-        aria-hidden="true"
-        height="32"
-        viewBox="0 0 72 36"
-        width="64"
-      >
-        <g
-          fill="none"
-          stroke="currentColor"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth="1.8"
-        >
-          <g style={{ animation: 'monadChatroomScribeHead 1.4s ease-in-out infinite' }}>
-            <circle
-              cx="17"
-              cy="9"
-              r="5"
-            />
-            <path d="M10.5 22c1.3-6.6 11.7-6.6 13 0" />
-          </g>
-          <path
-            d="M35 11h25"
-            opacity=".28"
-          />
-          <path
-            d="M35 18h29"
-            opacity=".28"
-          />
-          <path
-            d="M35 25h22"
-            opacity=".28"
-          />
-          {[11, 18, 25].map((y, index) => (
-            <path
-              d={index === 2 ? 'M35 25h22' : index === 1 ? 'M35 18h29' : 'M35 11h25'}
-              key={y}
-              style={{
-                animation: 'monadChatroomScribeLine 1.8s ease-in-out infinite',
-                animationDelay: `${index * 220}ms`,
-                strokeDasharray: 42,
-                strokeDashoffset: 42
-              }}
-            />
-          ))}
-          <g
-            style={{
-              animation: 'monadChatroomScribeHand .72s ease-in-out infinite',
-              transformBox: 'fill-box',
-              transformOrigin: '18px 22px'
-            }}
+        {rows.map(([label, value]) => (
+          <div
+            key={label}
+            style={{ display: 'contents' }}
           >
-            <path d="M20 20l9 5" />
-            <path d="M28 25l4 1.8" />
-          </g>
-        </g>
-      </svg>
-      <span>Generating transcript...</span>
-    </VoiceStatusShell>
+            <dt style={{ color: 'color-mix(in srgb, var(--muted-foreground) 74%, transparent)', fontFamily: mono }}>
+              {label}
+            </dt>
+            <dd style={{ color: 'var(--foreground)', fontFamily: mono, margin: 0, overflowWrap: 'anywhere' }}>
+              {value}
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </details>
   );
 }

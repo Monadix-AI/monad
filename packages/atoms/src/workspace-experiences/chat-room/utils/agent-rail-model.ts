@@ -10,7 +10,6 @@ import type { NativeCliStreamView, Participant } from '../../experience/types.ts
 import { nativeAgentObservationProjectionSchema } from '@monad/protocol';
 
 import {
-  nativeCliStreamItems,
   nativeCliUsageLimitMeter,
   nativeCliUsageLimitMeterFromResponse
 } from '../../experience/native-cli-observation/native-cli-observation.ts';
@@ -97,6 +96,10 @@ export function observationProjectionFromAccess(
       reason: access.reason
     });
   }
+  // The daemon already normalizes with the same adapter it uses for parseOutput — see
+  // observeFromStore/observeWithProviderHistory in apps/monad/src/services/native-cli/host.ts.
+  // `events` is only absent on an `append`-only delta frame (no self-contained context to normalize);
+  // that case degrades to an empty batch rather than re-deriving normalization on the client.
   return nativeAgentObservationProjectionSchema.parse({
     state: access.state,
     nativeCliSessionId: stream.id,
@@ -104,12 +107,7 @@ export function observationProjectionFromAccess(
     ...(access.turn ? { turn: access.turn } : {}),
     provider: access.provider,
     observedAt: access.observedAt,
-    events: nativeCliStreamItems({
-      id: stream.id,
-      provider: access.provider,
-      output: access.output,
-      observedAt: access.observedAt
-    })
+    events: access.events ?? []
   });
 }
 
@@ -132,9 +130,12 @@ export function usageMeterFromObservationAccess(args: {
   stream?: NativeCliStreamView;
   usage?: NativeCliUsageResponse;
 }): NativeCliUsageLimitMeter | null {
-  const sourceOutput = args.access && args.access.state !== 'unavailable' ? args.access.output : args.stream?.output;
-  return (
-    nativeCliUsageLimitMeterFromResponse(args.usage) ??
-    nativeCliUsageLimitMeter({ output: sourceOutput, provider: args.provider ?? args.stream?.provider })
-  );
+  const fromUsageEndpoint = nativeCliUsageLimitMeterFromResponse(args.usage);
+  if (fromUsageEndpoint) return fromUsageEndpoint;
+  // The daemon already normalizes the usage/rate-limit meter with the same adapter it uses for
+  // parseOutput (see observeFromStore/observeWithProviderHistory) — no client-side re-derivation
+  // when an access response is present. `stream`-only callers (no polled access response yet, e.g.
+  // a session-list-built NativeCliStreamView) still parse client-side as a fallback.
+  if (args.access && args.access.state !== 'unavailable') return args.access.usageMeter ?? null;
+  return nativeCliUsageLimitMeter({ output: args.stream?.output, provider: args.provider ?? args.stream?.provider });
 }

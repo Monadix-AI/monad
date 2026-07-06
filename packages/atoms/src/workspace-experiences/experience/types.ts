@@ -67,6 +67,8 @@ export interface Message {
   orderKey?: string;
   internals?: ToolChip[];
   attachments?: MessageAttachment[];
+  localStatus?: 'sending' | 'sent' | 'failed';
+  retrySend?: () => void;
 }
 
 export type MessageAttachment = MessageAttachmentRef;

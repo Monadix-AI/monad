@@ -4,7 +4,6 @@
 // Experience-specific transcript, rail, and composer projections live in atoms.
 
 import type { NativeCliSessionView, ProfileView, ProjectId, UIItem, WorkplaceProject } from '@monad/protocol';
-import type { ApprovalDecision } from './use-project-actions';
 
 import { useProjectExperienceProjection } from '@monad/atoms/workspace-experiences';
 import {
@@ -28,8 +27,6 @@ import { getWorkplaceProjectName } from '@/lib/workspace-sessions';
 import { DEV_SYSTEM_MESSAGES_IN_STREAM_ENABLED, useProjectDebugStore } from './debug/project-debug-store';
 import { useWorkspaceProjectExperienceRuntime } from './experiences/project-experience-adapter';
 import { useProjectActions } from './use-project-actions';
-
-export type { ApprovalDecision };
 
 const EMPTY_PROFILES: ProfileView[] = [];
 const EMPTY_ITEMS: UIItem[] = [];

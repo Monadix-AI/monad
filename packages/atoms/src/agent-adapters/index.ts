@@ -7,15 +7,6 @@ import { hermesNativeCliAdapter } from './hermes/index.ts';
 import { openClawNativeCliAdapter } from './openclaw/index.ts';
 import { qwenNativeCliAdapter } from './qwen/index.ts';
 
-export {
-  claudeCodeNativeCliAdapter,
-  codexNativeCliAdapter,
-  geminiNativeCliAdapter,
-  hermesNativeCliAdapter,
-  openClawNativeCliAdapter,
-  qwenNativeCliAdapter
-};
-
 /** The built-in native coding-CLI agent adapters, registered as `agent-adapter` atoms. */
 export const builtinAgentAdapters: NativeCliProviderAdapter[] = [
   codexNativeCliAdapter,

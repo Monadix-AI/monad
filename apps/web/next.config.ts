@@ -53,10 +53,24 @@ const DEV_TOOL_PORTS = isExport
       NEXT_PUBLIC_MONAD_OTEL_UI_PORT: '6006'
     };
 
+const SHIKI_TRANSPILE_PACKAGES = [
+  'shiki',
+  '@shikijs/core',
+  '@shikijs/engine-javascript',
+  '@shikijs/engine-oniguruma',
+  '@shikijs/langs',
+  '@shikijs/themes',
+  '@shikijs/types',
+  '@shikijs/vscode-textmate'
+];
+
 const nextConfig: NextConfig = {
   turbopack: {
     root: REPO_ROOT
   },
+  // Bun + Turbopack can externalize Shiki to a hashed runtime package name such as
+  // `shiki-afa34b21c51ee374`. Bundle it instead so cold dev-server starts can resolve it.
+  transpilePackages: SHIKI_TRANSPILE_PACKAGES,
   reactCompiler: true,
   // Type checking is run in the dedicated CI `checks` job; skip it here to avoid
   // Next.js failing on @/ path aliases from workspace packages it doesn't own.

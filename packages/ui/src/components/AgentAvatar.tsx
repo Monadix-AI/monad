@@ -49,13 +49,16 @@ export function Avatar({
   bordered?: boolean;
 }): React.ReactElement {
   const agent = kind === 'agent';
+  const avatarBackground = agent
+    ? 'color-mix(in srgb, var(--accent-blue) 24%, var(--background))'
+    : 'color-mix(in srgb, var(--accent-blue) 18%, var(--secondary))';
   const style: CSSProperties = {
     flex: 'none',
     width: size,
     height: size,
     border: bordered && !bare ? `1.5px solid ${agent ? 'var(--accent-blue)' : 'var(--border)'}` : 'none',
     borderRadius: '50%',
-    background: bare ? 'transparent' : agent ? 'var(--accent-blue-soft)' : 'var(--secondary)',
+    background: bare ? 'transparent' : avatarBackground,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',

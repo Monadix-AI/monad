@@ -17,6 +17,7 @@
     "@monad/i18n": "workspace:*",
     "@monad/protocol": "workspace:*",
     "@monad/sdk-atom": "workspace:*",
+    "@monad/sdk-atom-client-rtk": "workspace:*",
     "@monad/ui": "workspace:*",
     "@xyflow/react": "^12.11.1",
     "ai": "^7.0.15",
@@ -34,7 +35,8 @@
     "@types/react-dom": "^19.2.3",
     "botframework-schema": "^4.23.3",
     "discord-api-types": "^0.38.49",
-    "react-dom": "^19.2.7"
+    "react-dom": "^19.2.7",
+    "react-redux": "^9.3.0"
   },
   "exports": {
     ".": "./src/index.ts",
@@ -43,6 +45,7 @@
     "./agent-adapters/jsonrpc": "./src/agent-adapters/jsonrpc.ts",
     "./agent-adapters/openclaw/device-identity": "./src/agent-adapters/openclaw/device-identity.ts",
     "./agent-adapters/pty": "./src/agent-adapters/pty.ts",
+    "./native-cli-observation": "./src/workspace-experiences/experience/native-cli-observation/native-cli-observation.ts",
     "./channels/telegram": "./src/channels/telegram.ts",
     "./commands/builtins": "./src/commands/builtins.ts",
     "./providers/registry": "./src/providers/registry.ts",
@@ -53,6 +56,9 @@
     "./workspace-experiences/host-context": "./src/workspace-experiences/host-context.tsx"
   },
   "module": "src/index.ts",
+  "peerDependencies": {
+    "react-redux": "^9.3.0"
+  },
   "private": true,
   "scripts": {
     "lint": "biome check .",

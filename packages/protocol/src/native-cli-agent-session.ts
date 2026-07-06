@@ -11,7 +11,9 @@ import {
   nativeCliProviderSchema,
   nativeCliRuntimeRoleSchema
 } from './native-cli-agent-config.ts';
+import { nativeCliObservationEventSchema } from './native-cli-agent-observation.ts';
 import { absolutePathSchema } from './native-cli-agent-paths.ts';
+import { cursorPaginationQuerySchema, cursorPaginationResponseSchema } from './pagination.ts';
 
 export const nativeCliSessionStateSchema = z.enum(['starting', 'running', 'exited', 'failed', 'stopped']);
 export type NativeCliSessionState = z.infer<typeof nativeCliSessionStateSchema>;
@@ -20,10 +22,10 @@ export const nativeCliAuthStateSchema = z.enum(['authenticated', 'unauthenticate
 export type NativeCliAuthState = z.infer<typeof nativeCliAuthStateSchema>;
 
 export const nativeCliUsageRecordSchema = z.object({
-  category: z.string().min(1),
-  resetAt: z.string().nullable(),
-  max: z.number().finite().nullable(),
-  current: z.number().finite().nullable()
+  name: z.string().min(1),
+  resetAt: z.string().optional(),
+  max: z.number().finite().optional(),
+  current: z.number().finite()
 });
 export type NativeCliUsageRecord = z.infer<typeof nativeCliUsageRecordSchema>;
 
@@ -111,6 +113,9 @@ export type NativeAgentRuntime = z.infer<typeof nativeAgentRuntimeSchema>;
 export const listNativeCliAgentsResponseSchema = z.object({ agents: z.array(nativeCliAgentViewSchema) });
 export type ListNativeCliAgentsResponse = z.infer<typeof listNativeCliAgentsResponseSchema>;
 
+export const getNativeCliAgentResponseSchema = z.object({ agent: nativeCliAgentViewSchema });
+export type GetNativeCliAgentResponse = z.infer<typeof getNativeCliAgentResponseSchema>;
+
 export const listNativeCliAgentPresetsResponseSchema = z.object({ presets: z.array(nativeCliAgentPresetSchema) });
 export type ListNativeCliAgentPresetsResponse = z.infer<typeof listNativeCliAgentPresetsResponseSchema>;
 
@@ -135,6 +140,14 @@ export type GetNativeCliSessionResponse = z.infer<typeof getNativeCliSessionResp
 export const listNativeCliSessionsResponseSchema = z.object({ sessions: z.array(nativeCliSessionViewSchema) });
 export type ListNativeCliSessionsResponse = z.infer<typeof listNativeCliSessionsResponseSchema>;
 
+export const listNativeCliRuntimesQuerySchema = cursorPaginationQuerySchema;
+export type ListNativeCliRuntimesQuery = z.infer<typeof listNativeCliRuntimesQuerySchema>;
+
+export const listNativeCliRuntimesResponseSchema = cursorPaginationResponseSchema.extend({
+  sessions: z.array(nativeCliSessionViewSchema)
+});
+export type ListNativeCliRuntimesResponse = z.infer<typeof listNativeCliRuntimesResponseSchema>;
+
 export const startNativeCliAuthResponseSchema = z.object({ session: nativeCliAuthSessionViewSchema });
 export type StartNativeCliAuthResponse = z.infer<typeof startNativeCliAuthResponseSchema>;
 
@@ -150,20 +163,19 @@ export const nativeCliAuthStatusResponseSchema = z.object({
 });
 export type NativeCliAuthStatusResponse = z.infer<typeof nativeCliAuthStatusResponseSchema>;
 
-export const nativeCliHistoryPageRequestSchema = z.object({
-  cursor: z.string().min(1).optional(),
-  limit: z.number().int().positive().max(100).default(20),
+export const nativeCliHistoryPageRequestSchema = cursorPaginationQuerySchema.extend({
+  limit: z.coerce.number().int().positive().max(100).default(20),
   sortDirection: z.enum(['asc', 'desc']).default('desc'),
   itemsView: z.enum(['summary', 'full']).default('summary')
 });
 export type NativeCliHistoryPageRequest = z.infer<typeof nativeCliHistoryPageRequestSchema>;
 
-export const nativeCliHistoryPageResponseSchema = z.object({
-  page: z.object({
-    items: z.array(z.unknown()),
-    nextCursor: z.string().nullable(),
-    backwardsCursor: z.string().nullable()
-  })
+export const nativeCliHistoryPageResponseSchema = cursorPaginationResponseSchema.extend({
+  // Server-normalized cards, produced by the same provider adapter the daemon already uses for
+  // parseOutput/historyPageOutput (the daemon knows the session's provider unambiguously — the client
+  // must not re-derive it). No separate raw-items array: each event's `raw` already carries its
+  // source record(s) (a single record, or an array when several records merged into one card).
+  events: z.array(nativeCliObservationEventSchema)
 });
 export type NativeCliHistoryPageResponse = z.infer<typeof nativeCliHistoryPageResponseSchema>;
 

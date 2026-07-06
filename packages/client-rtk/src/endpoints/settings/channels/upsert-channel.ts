@@ -9,7 +9,7 @@ export const upsertChannelApi = channelStatusApi.injectEndpoints({
   endpoints: (builder) => ({
     upsertChannel: builder.mutation<OkResponse, ChannelInstanceView>({
       queryFn: (channel: ChannelInstanceView, api: { extra: unknown }) =>
-        runTreaty(() => clientOf(api).treaty.v1.settings.channels.put({ channel })),
+        runTreaty(() => clientOf(api).treaty.v1.settings.channels({ id: channel.id }).put({ channel })),
       async onQueryStarted(channel, { dispatch, queryFulfilled }) {
         const patch = dispatch(
           listChannelsApi.util.updateQueryData('listChannels', undefined, (draft) => {

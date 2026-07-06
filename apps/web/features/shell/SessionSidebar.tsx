@@ -57,6 +57,7 @@ const DEFAULT_SIDEBAR_WIDTH = 288;
 const MIN_SIDEBAR_WIDTH = 240;
 const MAX_SIDEBAR_WIDTH = 420;
 const SIDEBAR_WIDTH_STORAGE_KEY = 'monad:web:sidebar-width';
+const AUTO_REVEAL_CLOSE_ANIMATION_MS = 200;
 
 function clampSidebarWidth(width: number): number {
   return Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, width));
@@ -96,6 +97,8 @@ export function SessionSidebar({
   const [menuOpen, setMenuOpen] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR_WIDTH);
   const [resizing, setResizing] = useState(false);
+  const [autoRevealClosing, setAutoRevealClosing] = useState(false);
+  const previousShowStudioRef = useRef(showStudio);
   const dragStartRef = useRef({ pointerX: 0, width: DEFAULT_SIDEBAR_WIDTH });
   const suppressMouseResizeRef = useRef(false);
 
@@ -105,6 +108,16 @@ export function SessionSidebar({
     const nextWidth = Number.parseInt(storedWidth, 10);
     if (Number.isFinite(nextWidth)) setSidebarWidth(clampSidebarWidth(nextWidth));
   }, []);
+
+  useEffect(() => {
+    if (overlay) setAutoRevealClosing(false);
+  }, [overlay]);
+
+  const animateModeSwitch = !collapsed && !overlay && previousShowStudioRef.current !== showStudio;
+
+  useEffect(() => {
+    if (!collapsed && !overlay) previousShowStudioRef.current = showStudio;
+  }, [collapsed, overlay, showStudio]);
 
   const openMenuAction = (action: () => void) => {
     setMenuOpen(false);
@@ -204,7 +217,9 @@ export function SessionSidebar({
     [setMeasuredSidebarWidth, sidebarWidth]
   );
 
-  const expandedStyle = { width: sidebarWidth } satisfies CSSProperties;
+  const activeSidebarWidth = collapsed || overlay ? DEFAULT_SIDEBAR_WIDTH : sidebarWidth;
+  const expandedStyle = { width: activeSidebarWidth } satisfies CSSProperties;
+  const animateSidebar = overlay || autoRevealClosing;
   const daemonStatusText =
     daemonStatus === 'online'
       ? t('web.sidebar.daemonOnline')
@@ -219,13 +234,22 @@ export function SessionSidebar({
       className={cn(
         'panel-nav group/sidebar hidden h-full min-h-0 flex-col overflow-hidden text-sidebar-foreground md:flex',
         (collapsed || overlay) && 'panel-nav-overlay',
-        resizing ? 'transition-none' : 'transition-[width,opacity,transform] duration-200 ease-out',
+        resizing
+          ? 'transition-none'
+          : animateSidebar
+            ? 'transition-[width,opacity,transform] duration-200 ease-out will-change-transform'
+            : 'transition-none',
         overlay && !collapsed && 'translate-x-0 opacity-100',
-        collapsed && 'pointer-events-none -translate-x-[calc(100%-12px)] opacity-0'
+        collapsed && 'pointer-events-none -translate-x-6 opacity-0'
       )}
       data-resizing={resizing}
-      onPointerLeave={() => {
-        if (autoCollapseOnPointerLeave && !menuOpen) onRequestCollapse?.();
+      onPointerLeave={(event) => {
+        if (!autoCollapseOnPointerLeave || menuOpen) return;
+        const nextTarget = event.relatedTarget;
+        if (nextTarget instanceof Element && nextTarget.closest('[data-sidebar-chrome="true"]')) return;
+        setAutoRevealClosing(true);
+        window.setTimeout(() => setAutoRevealClosing(false), AUTO_REVEAL_CLOSE_ANIMATION_MS);
+        onRequestCollapse?.();
       }}
       style={expandedStyle}
     >
@@ -234,73 +258,83 @@ export function SessionSidebar({
         style={expandedStyle}
       >
         <SidebarHeader
+          collapsed={collapsed}
           onOpenWorkspace={onOpenWorkspace}
           onToggleCollapsed={onToggleCollapsed}
           t={t}
         />
 
-        <div
-          className="panel-nav-mode flex min-h-0 flex-1 flex-col"
-          data-mode={showStudio ? 'studio' : 'workspace'}
-          key={showStudio ? 'studio' : 'workspace'}
-        >
-          {showStudio ? (
-            <StudioSidebarItems
-              activeSection={studioSection}
-              onSelect={onOpenStudioSection}
-              shortcutModifierLabel={shortcutModifierLabel}
-              showShortcutBadges={showShortcutBadges}
-              t={t}
-            />
-          ) : (
-            <WorkspaceSidebarItems
-              activeProjectId={activeProjectId}
-              monadChatActive={monadChatActive}
-              onOpenMonadChat={onOpenMonadChat}
-              onOpenProject={onOpenProject}
-              onToggleProjectPinned={onToggleProjectPinned}
-              projects={projects}
-              t={t}
-            />
-          )}
-        </div>
+        {!collapsed ? (
+          <div
+            className="panel-nav-mode flex min-h-0 flex-1 flex-col"
+            data-animate={animateModeSwitch ? 'true' : undefined}
+            data-mode={showStudio ? 'studio' : 'workspace'}
+            key={showStudio ? 'studio' : 'workspace'}
+          >
+            {showStudio ? (
+              <StudioSidebarItems
+                activeSection={studioSection}
+                onSelect={onOpenStudioSection}
+                shortcutModifierLabel={shortcutModifierLabel}
+                showShortcutBadges={showShortcutBadges}
+                t={t}
+              />
+            ) : (
+              <WorkspaceSidebarItems
+                activeProjectId={activeProjectId}
+                monadChatActive={monadChatActive}
+                onOpenMonadChat={onOpenMonadChat}
+                onOpenProject={onOpenProject}
+                onToggleProjectPinned={onToggleProjectPinned}
+                projects={projects}
+                shortcutModifierLabel={shortcutModifierLabel}
+                showShortcutBadges={showShortcutBadges}
+                t={t}
+              />
+            )}
+          </div>
+        ) : null}
 
-        <div className="relative flex items-center gap-1 px-2.5 py-2">
-          <DaemonMenu
-            daemonBaseUrl={daemonBaseUrl}
-            daemonStatus={daemonStatus}
-            daemonStatusClass={daemonStatusClass}
-            daemonStatusText={daemonStatusText}
-            daemonVersion={daemonStatus === 'online' ? daemonVersion : undefined}
-            hasUpgrade={hasUpgrade}
-            menuOpen={menuOpen}
-            onOpenChange={onDaemonMenuOpenChange}
-            onOpenWorkspace={() => openMenuAction(onOpenWorkspace)}
-            onSwitchDaemonConnection={onSwitchDaemonConnection}
-            onToggleSettings={() => openMenuAction(onToggleSettings)}
-            onToggleStudio={() => openMenuAction(onToggleStudio)}
-            shortcutModifierLabel={shortcutModifierLabel}
-            showSettings={showSettings}
-            studioPileActive={studioPileActive}
-            t={t}
-            workspacePileActive={workspacePileActive}
-          />
-          <ThemeToggle />
-        </div>
+        {!collapsed ? (
+          <div className="relative flex items-center gap-1 px-2.5 py-2">
+            <DaemonMenu
+              daemonBaseUrl={daemonBaseUrl}
+              daemonStatus={daemonStatus}
+              daemonStatusClass={daemonStatusClass}
+              daemonStatusText={daemonStatusText}
+              daemonVersion={daemonStatus === 'online' ? daemonVersion : undefined}
+              hasUpgrade={hasUpgrade}
+              menuOpen={menuOpen}
+              onOpenChange={onDaemonMenuOpenChange}
+              onOpenWorkspace={() => openMenuAction(onOpenWorkspace)}
+              onSwitchDaemonConnection={onSwitchDaemonConnection}
+              onToggleSettings={() => openMenuAction(onToggleSettings)}
+              onToggleStudio={() => openMenuAction(onToggleStudio)}
+              shortcutModifierLabel={shortcutModifierLabel}
+              showSettings={showSettings}
+              studioPileActive={studioPileActive}
+              t={t}
+              workspacePileActive={workspacePileActive}
+            />
+            <ThemeToggle />
+          </div>
+        ) : null}
       </div>
-      <hr
-        aria-label={t('web.shell.resizeSidebar')}
-        aria-orientation="vertical"
-        aria-valuemax={MAX_SIDEBAR_WIDTH}
-        aria-valuemin={MIN_SIDEBAR_WIDTH}
-        aria-valuenow={sidebarWidth}
-        className="panel-nav-resize-handle"
-        data-preserve-cursor="true"
-        onKeyDown={onResizeKeyDown}
-        onMouseDown={onResizeMouseDown}
-        onPointerDown={onResizePointerDown}
-        tabIndex={0}
-      />
+      {!collapsed && !overlay ? (
+        <hr
+          aria-label={t('web.shell.resizeSidebar')}
+          aria-orientation="vertical"
+          aria-valuemax={MAX_SIDEBAR_WIDTH}
+          aria-valuemin={MIN_SIDEBAR_WIDTH}
+          aria-valuenow={sidebarWidth}
+          className="panel-nav-resize-handle"
+          data-preserve-cursor="true"
+          onKeyDown={onResizeKeyDown}
+          onMouseDown={onResizeMouseDown}
+          onPointerDown={onResizePointerDown}
+          tabIndex={0}
+        />
+      ) : null}
     </aside>
   );
 }

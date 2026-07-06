@@ -9,46 +9,67 @@ import { ObservationMeta } from './card-shell.tsx';
 
 export function CommandToolCard({ view }: { view: CommandToolView }): React.ReactElement {
   return (
-    <>
-      <ObservationMeta
-        label="tool"
-        source={view.source}
-        type={view.type}
-      />
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0 }}>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, paddingRight: 26 }}>
-          <span style={commandStatusStyle(view.status, view.exitCode)}>{commandStatusLabel(view)}</span>
-          {view.durationMs !== undefined ? (
-            <span style={commandMetaChipStyle}>{formatDurationMs(view.durationMs)}</span>
-          ) : null}
-          {view.cwd ? <span style={commandMetaChipStyle}>{view.cwd}</span> : null}
-        </div>
-        <CommandIoCard
-          input={view.command}
-          output={view.output}
-        />
-      </div>
-    </>
+    <CommandIoCard
+      input={view.command}
+      inputLanguage={view.commandLanguage}
+      output={view.output}
+      outputLanguage={view.outputLanguage}
+    />
+  );
+}
+
+export function CommandToolHeader({ view }: { view: CommandToolView }): React.ReactElement {
+  return (
+    <ObservationMeta
+      compact
+      label="tool call"
+      showSource={false}
+      source={view.source}
+      title={view.type}
+    >
+      <span style={commandStatusStyle(view.status, view.exitCode)}>{commandStatusLabel(view)}</span>
+      {view.durationMs !== undefined ? (
+        <span style={commandMetaChipStyle}>{formatDurationMs(view.durationMs)}</span>
+      ) : null}
+      {view.cwd ? <span style={commandMetaChipStyle}>{view.cwd}</span> : null}
+    </ObservationMeta>
   );
 }
 
 export function commandToolView(call: ObservationItem, result: ObservationItem): CommandToolView | null {
-  return codexCommandExecutionView(call, result) ?? claudeBashToolView(call, result);
+  return (
+    codexCommandExecutionView(call, result) ??
+    claudeBashToolView(call, result) ??
+    genericToolCallView(call, result) ??
+    standaloneToolResultView(call)
+  );
 }
 
-function CommandIoCard({ input, output }: { input: string; output?: string }): React.ReactElement {
+function CommandIoCard({
+  input,
+  inputLanguage,
+  output,
+  outputLanguage
+}: {
+  input?: string;
+  inputLanguage?: string;
+  output?: string;
+  outputLanguage?: string;
+}): React.ReactElement {
   return (
     <div style={commandIoCardStyle}>
-      <CommandCodeSection
-        code={input}
-        label="input"
-        language="bash"
-      />
+      {input ? (
+        <CommandCodeSection
+          code={input}
+          label="input"
+          language={bundledLanguage(inputLanguage, 'bash')}
+        />
+      ) : null}
       {output ? (
         <CommandCodeSection
           code={output}
           label="output"
-          language={commandOutputLanguage(output)}
+          language={bundledLanguage(outputLanguage, commandOutputLanguage(output))}
         />
       ) : null}
     </div>
@@ -77,11 +98,41 @@ function CommandCodeSection({
 }
 
 function commandOutputLanguage(text: string): BundledLanguage {
+  if (jsonCodeText(text)) return 'json';
+  return 'bash';
+}
+
+function jsonCodeText(text: string): string | null {
+  const trimmed = text.trim();
+  if (!trimmed) return null;
   try {
-    JSON.parse(text);
-    return 'json';
+    const parsed = JSON.parse(trimmed) as unknown;
+    if (typeof parsed === 'string') return jsonCodeText(parsed);
+    return JSON.stringify(parsed, null, 2);
   } catch {
-    return 'bash';
+    return null;
+  }
+}
+
+function bundledLanguage(value: string | undefined, fallback: BundledLanguage): BundledLanguage {
+  switch (value) {
+    case 'bash':
+    case 'css':
+    case 'go':
+    case 'html':
+    case 'java':
+    case 'javascript':
+    case 'json':
+    case 'markdown':
+    case 'python':
+    case 'ruby':
+    case 'rust':
+    case 'sql':
+    case 'typescript':
+    case 'yaml':
+      return value;
+    default:
+      return fallback;
   }
 }
 
@@ -113,6 +164,70 @@ function claudeBashToolView(call: ObservationItem, result: ObservationItem): Com
     status: statusFromResultText(result.text),
     output
   };
+}
+
+function genericToolCallView(call: ObservationItem, result: ObservationItem): CommandToolView | null {
+  const parsed = parseToolCallText(call.text);
+  if (!parsed) return null;
+  const output = toolResultOutput(result);
+  const jsonOutput = output ? jsonCodeText(output) : null;
+  return {
+    type: parsed.tool,
+    source: result.source,
+    command: parsed.input,
+    commandLanguage: parsed.language,
+    status: output ? statusFromResultText(output) : statusFromResultText(result.text),
+    output: jsonOutput ?? output ?? result.text,
+    outputLanguage: jsonOutput ? 'json' : commandOutputLanguage(output ?? result.text)
+  };
+}
+
+function standaloneToolResultView(item: ObservationItem): CommandToolView | null {
+  if (item.providerEventType !== 'function_call_output') return null;
+  const output = toolResultOutput(item);
+  if (!output) return null;
+  const jsonOutput = jsonCodeText(output);
+  return {
+    type: item.providerEventType,
+    source: item.source,
+    status: statusFromResultText(output),
+    output: jsonOutput ?? output,
+    outputLanguage: jsonOutput ? 'json' : commandOutputLanguage(output)
+  };
+}
+
+function parseToolCallText(text: string): { input: string; language: BundledLanguage; tool: string } | null {
+  const match = /^Tool call\s+([^\s]+)\s+(.+)$/s.exec(text.trim());
+  if (!match) return null;
+  const [, tool, rawInput] = match;
+  if (!tool || rawInput === undefined) return null;
+  try {
+    return { tool, input: JSON.stringify(JSON.parse(rawInput) as unknown, null, 2), language: 'json' };
+  } catch {
+    return { tool, input: rawInput, language: 'markdown' };
+  }
+}
+
+function toolResultOutput(result: ObservationItem): string | undefined {
+  const direct = outputFromRaw(result.raw);
+  return direct ?? stringFrom(result.text);
+}
+
+function outputFromRaw(raw: unknown): string | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+  const record = raw as Record<string, unknown>;
+  const params = nestedRecord(record.params);
+  const item = nestedRecord(params?.item) ?? nestedRecord(record.item);
+  return stringFrom(
+    item?.output,
+    item?.result,
+    item?.content,
+    item?.message,
+    item?.error,
+    record.output,
+    record.result,
+    record.content
+  );
 }
 
 function rawCommandExecutionItem(raw: unknown): Record<string, unknown> | null {

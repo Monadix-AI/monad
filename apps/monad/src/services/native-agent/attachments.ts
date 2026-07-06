@@ -22,10 +22,18 @@ import { parseNativeAgentFileReferences } from './file-refs.ts';
 const ATTACHMENT_PREVIEW_READ_BYTES = NATIVE_AGENT_ATTACHMENT_PREVIEW_MAX * 4;
 const ATTACHMENT_INLINE_READ_MAX = 1_000_000;
 
+interface NativeAgentAttachmentRootRequest {
+  projectId: ProjectId;
+  agentId: string;
+  workingPath?: string | null;
+}
+
+export type NativeAgentAttachmentRoots = (request: NativeAgentAttachmentRootRequest) => string[];
+
 export type NativeAgentAttachmentResolver = (
   body: { text?: string; attachments?: NativeAgentAttachmentInput[] },
   binding: { projectId: ProjectId; agentId: string },
-  workingPath: string
+  attachmentRoots: readonly string[]
 ) => Promise<{ text: string; noticeText: string; attachments: MessageAttachmentRef[] }>;
 
 function attachmentNoticeText(text: string, refs: readonly MessageAttachmentRef[]): string {
@@ -40,7 +48,7 @@ function attachmentContentDisposition(name: string): string {
 
 async function snapshotAttachmentInput(
   input: NativeAgentAttachmentInput,
-  workspaceRealpath: string
+  allowedRootRealpaths: readonly string[]
 ): Promise<{ ref: Omit<MessageAttachmentRef, 'id' | 'createdAt'>; preview: string }> {
   let resolved: string;
   let size: number;
@@ -56,10 +64,10 @@ async function snapshotAttachmentInput(
       'ATTACHMENT_FILE_MISSING'
     );
   }
-  if (resolved !== workspaceRealpath && !resolved.startsWith(workspaceRealpath + sep)) {
+  if (!allowedRootRealpaths.some((root) => resolved === root || resolved.startsWith(root + sep))) {
     throw new HandlerError(
       'forbidden',
-      `attachment path is outside the project working directory: ${input.path}`,
+      `attachment path is outside the allowed native agent attachment roots: ${input.path}`,
       'ATTACHMENT_PATH_OUTSIDE_WORKSPACE'
     );
   }
@@ -77,18 +85,43 @@ async function snapshotAttachmentInput(
   };
 }
 
+async function resolveAllowedRootRealpaths(roots: readonly string[]): Promise<string[]> {
+  const seen = new Set<string>();
+  for (const root of roots) {
+    const resolved = await realpath(root).catch(() => null);
+    if (resolved) seen.add(resolved);
+  }
+  if (seen.size === 0) {
+    throw new HandlerError(
+      'invalid',
+      'native agent attachment roots are not accessible',
+      'ATTACHMENT_WORKSPACE_MISSING'
+    );
+  }
+  return [...seen];
+}
+
 export function createNativeAgentAttachmentResolver(
   store: ReturnType<typeof createDaemonHandlers>['_nativeAgentStore']
 ): NativeAgentAttachmentResolver {
   return async function resolveAttachmentPayload(
     body: { text?: string; attachments?: NativeAgentAttachmentInput[] },
     binding: { projectId: ProjectId; agentId: string },
-    workingPath: string
+    attachmentRoots: readonly string[]
   ): Promise<{ text: string; noticeText: string; attachments: MessageAttachmentRef[] }> {
     const parsed = body.text ? parseNativeAgentFileReferences(body.text) : { text: body.text ?? '', paths: [] };
-    const markerAttachments = parsed.paths.map((path) => ({
-      path: isAbsolute(path) ? path : resolve(workingPath, path)
-    }));
+    const baseAttachmentRoot = attachmentRoots[0];
+    const markerAttachments = parsed.paths.map((path) => {
+      if (isAbsolute(path)) return { path };
+      if (!baseAttachmentRoot) {
+        throw new HandlerError(
+          'invalid',
+          'native agent attachment roots are not accessible',
+          'ATTACHMENT_WORKSPACE_MISSING'
+        );
+      }
+      return { path: resolve(baseAttachmentRoot, path) };
+    });
     const attachmentInputs = [...markerAttachments, ...(body.attachments ?? [])];
     if (attachmentInputs.length > NATIVE_AGENT_ATTACHMENTS_MAX) {
       throw new HandlerError(
@@ -101,15 +134,9 @@ export function createNativeAgentAttachmentResolver(
       const text = parsed.text;
       return { text, noticeText: text, attachments: [] };
     }
-    const workspaceRealpath = await realpath(workingPath).catch(() => {
-      throw new HandlerError(
-        'invalid',
-        `project working directory is not accessible: ${workingPath}`,
-        'ATTACHMENT_WORKSPACE_MISSING'
-      );
-    });
+    const allowedRootRealpaths = await resolveAllowedRootRealpaths(attachmentRoots);
     const snapshots = await Promise.all(
-      attachmentInputs.map((input) => snapshotAttachmentInput(input, workspaceRealpath))
+      attachmentInputs.map((input) => snapshotAttachmentInput(input, allowedRootRealpaths))
     );
     const createdAt = new Date().toISOString();
     const attachments = store.registerMessageAttachments(
@@ -127,8 +154,13 @@ export function createNativeAgentAttachmentResolver(
   };
 }
 
-export function createNativeAgentAttachmentReader(store: ReturnType<typeof createDaemonHandlers>['_nativeAgentStore']) {
-  async function currentAttachmentPath(attachment: MessageAttachmentRef & { projectId: string }): Promise<string> {
+export function createNativeAgentAttachmentReader(
+  store: ReturnType<typeof createDaemonHandlers>['_nativeAgentStore'],
+  attachmentRoots: NativeAgentAttachmentRoots
+) {
+  async function currentAttachmentPath(
+    attachment: MessageAttachmentRef & { projectId: string; createdBy: string | null }
+  ): Promise<string> {
     let resolved: string;
     try {
       resolved = await realpath(attachment.path);
@@ -145,15 +177,19 @@ export function createNativeAgentAttachmentReader(store: ReturnType<typeof creat
       );
     }
     const project = store.getSession(attachment.projectId) ?? store.getWorkplaceProject(attachment.projectId);
-    if (project?.cwd) {
-      const workspaceRealpath = await realpath(project.cwd).catch(() => null);
-      if (!workspaceRealpath || (resolved !== workspaceRealpath && !resolved.startsWith(workspaceRealpath + sep))) {
-        throw new HandlerError(
-          'forbidden',
-          `attachment path is outside the project working directory: ${attachment.path}`,
-          'ATTACHMENT_PATH_OUTSIDE_WORKSPACE'
-        );
-      }
+    const allowedRootRealpaths = await resolveAllowedRootRealpaths(
+      attachmentRoots({
+        projectId: attachment.projectId as ProjectId,
+        agentId: attachment.createdBy ?? '',
+        workingPath: project?.cwd
+      })
+    );
+    if (!allowedRootRealpaths.some((root) => resolved === root || resolved.startsWith(root + sep))) {
+      throw new HandlerError(
+        'forbidden',
+        `attachment path is outside the allowed native agent attachment roots: ${attachment.path}`,
+        'ATTACHMENT_PATH_OUTSIDE_WORKSPACE'
+      );
     }
     return resolved;
   }
@@ -162,7 +198,7 @@ export function createNativeAgentAttachmentReader(store: ReturnType<typeof creat
     async read(id: string, download: boolean): Promise<Response | AttachmentReadResponse> {
       const attachment = store.getMessageAttachment(id);
       if (!attachment) throw new HandlerError('not_found', `attachment not found: ${id}`);
-      const { projectId: _projectId, preview: _preview, ...ref } = attachment;
+      const { projectId: _projectId, preview: _preview, createdBy: _createdBy, ...ref } = attachment;
       const path = await currentAttachmentPath(attachment);
       const file = Bun.file(path);
       if (download) {

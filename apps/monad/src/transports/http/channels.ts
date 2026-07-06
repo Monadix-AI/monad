@@ -4,6 +4,7 @@ import {
   abortSessionResponseSchema,
   daemonHttpContract,
   eventIdSchema,
+  httpErrorSchema,
   listMessagesQuerySchema,
   listMessagesResponseSchema,
   listUiItemsQuerySchema,
@@ -119,7 +120,7 @@ export function createChannelsController(handlers: ReturnType<typeof createDaemo
       {
         params: projectParams,
         query: listMessagesQuerySchema,
-        response: { 200: listMessagesResponseSchema },
+        response: { 200: listMessagesResponseSchema, 404: httpErrorSchema },
         detail: {
           summary: 'List project messages',
           description: 'Returns Workplace Project transcript messages.'
@@ -141,7 +142,7 @@ export function createChannelsController(handlers: ReturnType<typeof createDaemo
       {
         params: projectParams,
         query: listUiItemsQuerySchema,
-        response: { 200: listUiItemsResponseSchema },
+        response: { 200: listUiItemsResponseSchema, 404: httpErrorSchema },
         detail: {
           summary: 'List projected project UI items',
           description: 'Returns server-projected transcript and tool timeline items for the Workplace Project.'
@@ -150,11 +151,12 @@ export function createChannelsController(handlers: ReturnType<typeof createDaemo
     )
     .post(
       '/projects/:id/messages',
-      async ({ params, body }) => handlers.session.sendProjectMessage({ sessionId: params.id, text: body.text }),
+      async ({ params, body }) =>
+        handlers.session.sendProjectMessage({ sessionId: params.id, text: body.text, attachments: body.attachments }),
       {
         params: projectParams,
-        body: sendMessageRequestSchema.pick({ text: true }),
-        response: { 200: sendMessageResponseSchema },
+        body: sendMessageRequestSchema.pick({ attachments: true, text: true }),
+        response: { 200: sendMessageResponseSchema, 404: httpErrorSchema },
         detail: {
           summary: 'Send project message',
           description: 'Routes a workplace project message according to the project host and mention rules.'
@@ -163,7 +165,7 @@ export function createChannelsController(handlers: ReturnType<typeof createDaemo
     )
     .post('/projects/:id/reset', async ({ params }) => handlers.session.reset({ id: params.id }), {
       params: projectParams,
-      response: { 200: resetSessionResponseSchema },
+      response: { 200: resetSessionResponseSchema, 404: httpErrorSchema },
       detail: {
         summary: 'Reset project transcript',
         description: 'Clears all messages and events from a Workplace Project, keeping the project itself.'
@@ -171,7 +173,7 @@ export function createChannelsController(handlers: ReturnType<typeof createDaemo
     })
     .post('/projects/:id/abort', async ({ params }) => handlers.session.abort({ id: params.id }), {
       params: projectParams,
-      response: { 200: abortSessionResponseSchema },
+      response: { 200: abortSessionResponseSchema, 404: httpErrorSchema },
       detail: {
         summary: 'Abort project generation',
         description: 'Aborts the active turn for a Workplace Project.'
@@ -179,7 +181,7 @@ export function createChannelsController(handlers: ReturnType<typeof createDaemo
     })
     .get('/projects/:id/workspace-meta', async ({ params }) => handlers.session.workspaceMeta({ id: params.id }), {
       params: projectParams,
-      response: { 200: workspaceMetaSchema },
+      response: { 200: workspaceMetaSchema, 404: httpErrorSchema },
       detail: {
         summary: 'Workspace metadata for the project working folder',
         description: 'Returns best-effort metadata slices for the Workplace Project working folder.'
@@ -191,7 +193,7 @@ export function createChannelsController(handlers: ReturnType<typeof createDaemo
       {
         params: projectParams,
         body: workspaceActionRequestSchema,
-        response: { 200: workspaceActionResponseSchema },
+        response: { 200: workspaceActionResponseSchema, 404: httpErrorSchema },
         detail: {
           summary: 'Open the project working folder on the daemon host',
           description: 'Runs a platform-native file manager or terminal action for the project working folder.'
@@ -240,11 +242,12 @@ export function createChannelsController(handlers: ReturnType<typeof createDaemo
     )
     .post(
       '/channels/:id/messages',
-      async ({ params, body }) => handlers.session.sendChannelMessage({ sessionId: params.id, text: body.text }),
+      async ({ params, body }) =>
+        handlers.session.sendChannelMessage({ sessionId: params.id, text: body.text, attachments: body.attachments }),
       {
         params: channelParams,
-        body: sendMessageRequestSchema.pick({ text: true }),
-        response: { 200: sendMessageResponseSchema },
+        body: sendMessageRequestSchema.pick({ attachments: true, text: true }),
+        response: { 200: sendMessageResponseSchema, 404: httpErrorSchema },
         detail: {
           summary: 'Send legacy channel message',
           description: 'Compatibility alias for project message routing.'

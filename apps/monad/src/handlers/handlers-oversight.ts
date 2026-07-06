@@ -29,8 +29,23 @@ export function createOversightHandlers(oversight: OversightService) {
     }): Promise<{ ok: boolean }> {
       return { ok: await oversight.respond(requestId, allow, reason, scope) };
     },
-    async list({ sessionId }: { sessionId?: string } = {}): Promise<ListApprovalsResponse> {
-      return { rules: oversight.listApprovals(sessionId) };
+    async list({
+      sessionId,
+      limit,
+      before
+    }: {
+      sessionId?: string;
+      limit?: number;
+      before?: string;
+    } = {}): Promise<ListApprovalsResponse> {
+      const all = oversight.listApprovals(sessionId);
+      const sorted = [...all].sort((a, b) => a.id.localeCompare(b.id));
+      const startIdx = before ? sorted.findIndex((r) => r.id === before) : -1;
+      const rest = startIdx >= 0 ? sorted.slice(startIdx + 1) : sorted;
+      const pageLimit = limit ?? rest.length;
+      const page = rest.slice(0, pageLimit);
+      const nextCursor = rest.length > pageLimit ? page[page.length - 1]?.id : undefined;
+      return { rules: page, nextCursor };
     },
     async revoke({ id }: { id: string }): Promise<ApprovalMutationResponse> {
       return { ok: await oversight.revokeApproval(id) };

@@ -1,5 +1,6 @@
 export { useCreateWorkplaceProjectMutation } from './create-project.ts';
 export { useDeleteWorkplaceProjectMutation } from './delete-project.ts';
+export { useGetWorkplaceProjectQuery } from './get-project.ts';
 export {
   useListWorkplaceProjectsQuery,
   workplaceProjectAdapter,

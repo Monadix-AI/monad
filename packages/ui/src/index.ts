@@ -8,6 +8,13 @@ import type {
   ComposerVoiceButtonProps
 } from './components/Composer';
 import type { ComposerAskSheetProps, ComposerAskSheetQuestion } from './components/ComposerAskSheet';
+import type {
+  ComposerEditorHandle,
+  ComposerMentionPosition,
+  ComposerMentionState,
+  ComposerMentionTarget,
+  ComposerSkillToken
+} from './components/ComposerEditor';
 import type { ProductIconColors, ProductIconId, ProductIconProps } from './components/ProductIcon';
 import type { SwitchProps } from './components/Switch';
 
@@ -31,6 +38,7 @@ import {
   ComposerVoiceUnavailableContent
 } from './components/Composer';
 import { ComposerAskSheet } from './components/ComposerAskSheet';
+import { ComposerEditor } from './components/ComposerEditor';
 import {
   Dialog,
   DialogClose,
@@ -97,7 +105,12 @@ export type {
   ComposerAskSheetQuestion,
   ComposerContextUsageButtonProps,
   ComposerContextUsagePanelProps,
+  ComposerEditorHandle,
   ComposerIconButtonProps,
+  ComposerMentionPosition,
+  ComposerMentionState,
+  ComposerMentionTarget,
+  ComposerSkillToken,
   ComposerSubmitButtonProps,
   ComposerSurfaceProps,
   ComposerVoiceButtonProps,
@@ -128,6 +141,7 @@ export {
   ComposerAskSheet,
   ComposerContextUsageButton,
   ComposerContextUsagePanel,
+  ComposerEditor,
   ComposerIconButton,
   ComposerModelSelect,
   ComposerSelect,

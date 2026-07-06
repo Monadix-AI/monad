@@ -1,8 +1,8 @@
-import type { AgentId, ListAgentsResponse, OkResponse } from '@monad/protocol';
+import type { AgentId, OkResponse } from '@monad/protocol';
 
 import { apiSlice } from '../../api-slice.ts';
 import { clientOf, runTreaty } from '../../endpoint-helpers.ts';
-import { listAgentsApi } from './list-agents.ts';
+import { agentAdapter, listAgentsApi } from './list-agents.ts';
 
 export const deleteAgentApi = apiSlice.injectEndpoints({
   overrideExisting: true,
@@ -12,8 +12,8 @@ export const deleteAgentApi = apiSlice.injectEndpoints({
         runTreaty(() => clientOf(api).treaty.v1.agents({ id: agentId }).delete()),
       async onQueryStarted(agentId, { dispatch, queryFulfilled }) {
         const patch = dispatch(
-          listAgentsApi.util.updateQueryData('listAgents', undefined, (draft: ListAgentsResponse) => {
-            draft.agents = draft.agents.filter((a) => a.id !== agentId);
+          listAgentsApi.util.updateQueryData('listAgents', undefined, (draft) => {
+            agentAdapter.removeOne(draft, agentId);
           })
         );
         try {

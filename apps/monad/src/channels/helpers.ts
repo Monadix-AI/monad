@@ -1,4 +1,4 @@
-import type { MonadAuth, MonadConfig } from '@monad/home';
+import type { MonadAuth } from '@monad/home';
 import type { ChannelInbound } from '@monad/protocol';
 
 const DEDUPE_CAP = 1000;
@@ -14,7 +14,10 @@ export function addressedToBot(m: ChannelInbound): boolean {
   return m.mentionedSelf === true;
 }
 
-export function mentionedAgents(text: string, agents: MonadConfig['agent']['agents']): { id: string; name: string }[] {
+export function mentionedAgents(
+  text: string,
+  agents: Array<{ id: string; name: string; dir?: string }>
+): { id: string; name: string }[] {
   const handles = new Set((text.match(/@([A-Za-z0-9_-]+)/g) ?? []).map((s) => s.slice(1).toLowerCase()));
   if (!handles.size) return [];
   return agents.filter((agent) => {
@@ -35,34 +38,14 @@ function mentionHandle(value: string): string {
     .replace(/[^a-z0-9_-]/g, '');
 }
 
-export function moderatorAgentHint(cfg: MonadConfig): string {
-  const roster = cfg.agent.agents.map(
-    (a) => `- @${mentionHandle(a.name)} (${a.id}): ${a.description ?? 'No description'}`
-  );
-  return [
-    'You are the moderator for this channel, not a normal participant.',
-    'Your job is to decide whether the latest channel-visible context needs task assignment.',
-    'You may answer directly when no other agent is needed.',
-    'When assigning work, give each task a clear goal, input scope, and completion criterion.',
-    'If you assign multiple tasks in one round, they must be independent and must not depend on each other.',
-    'If work has a dependency, assign only the currently executable task and wait for results before deciding the next task.',
-    'Use only channel-visible user messages and agent replies as context. Do not assume access to any agent private session, tool trace, scratchpad, or unrouted attachment.',
-    'Do not route by writing @mentions in prose; route only through the structured channel response next array.',
-    'You may return an empty next array when no task assignment is needed.',
-    roster.length ? `Available agents:\n${roster.join('\n')}` : 'No configured agents are currently available.'
-  ].join('\n');
-}
-
 export function channelStructuredResponseHint(): string {
   return [
     'For channel replies, return exactly one JSON object and no surrounding prose.',
-    'Shape: {"visibility":"visible","display":{"kind":"markdown","content":"text shown to the user"},"attachments":[],"next":[]}.',
-    'visibility defaults to "visible"; use "silent" only for moderator routing replies that should not render as a channel message.',
+    'Shape: {"visibility":"visible","display":{"kind":"markdown","content":"text shown to the user"},"attachments":[]}.',
+    'visibility defaults to "visible".',
     'display.content is the only user-visible text rendered by the channel client when visibility is "visible".',
     'attachments is optional metadata for channel-visible files or references; do not include private tool traces.',
-    "When visible text references a local file that should render as an attachment, use a Markdown link with title 'monad:file', for example [report.md](./report.md 'monad:file').",
-    'next is optional and contains task assignments as {"agentId":"agt_...","title":"short label","prompt":"task prompt","context":"channel-visible context"}.',
-    'Non-moderator agents should usually return next: []; moderators may fill next when assigning work.'
+    "When visible text references a local file that should render as an attachment, use a Markdown link with title 'monad:file', for example [report.md](./report.md 'monad:file')."
   ].join('\n');
 }
 

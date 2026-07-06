@@ -3,11 +3,10 @@
 import type { ReactNode } from 'react';
 import type { useT } from '@/components/I18nProvider';
 
-import { MessageSquareCodeIcon, PanelLeftCloseIcon, StarIcon } from '@hugeicons/core-free-icons';
+import { MessageSquareCodeIcon, StarIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react';
-import { Button, cn, Tooltip, TooltipContent, TooltipTrigger } from '@monad/ui';
+import { cn, Tooltip, TooltipContent, TooltipTrigger } from '@monad/ui';
 
-import { MonadLogo } from '@/components/MonadLogo';
 import {
   STUDIO_MESH_SECTIONS,
   STUDIO_RUNTIME_SECTIONS,
@@ -27,12 +26,14 @@ export interface ProjectItem {
 type TFunction = ReturnType<typeof useT>;
 
 const STUDIO_SHORTCUT_ITEMS = [...STUDIO_RUNTIME_SECTIONS, ...STUDIO_MESH_SECTIONS, ...STUDIO_SYSTEM_SECTIONS];
+const SHELL_HEADER_HEIGHT = 52;
+const SHORTCUT_BADGE_OVERLAY_CLASS = 'pointer-events-none absolute top-1/2 right-1.5 -mt-px -translate-y-1/2';
 
-function ShortcutBadge({ modifierLabel, number }: { modifierLabel: string; number: number }) {
+function ShortcutBadge({ modifierLabel, value }: { modifierLabel: string; value: number | string }) {
   return (
-    <span className="mt-0.5 inline-flex h-6 min-w-11 shrink-0 items-center justify-center gap-0.5 rounded-full bg-sidebar-accent/80 px-2 font-medium text-[13px] text-sidebar-foreground/70 tabular-nums shadow-[inset_0_1px_0_rgb(255_255_255/0.08)] backdrop-blur">
+    <span className="inline-flex h-4 min-w-7 items-center justify-center gap-px rounded-full bg-sidebar-accent/85 px-1.5 font-medium text-[10px] text-sidebar-foreground/65 tabular-nums shadow-[inset_0_1px_0_rgb(255_255_255/0.08)] backdrop-blur">
       {modifierLabel}
-      {number}
+      {value}
     </span>
   );
 }
@@ -56,7 +57,7 @@ function SidebarNavItem({
   label,
   onClick,
   shortcutModifierLabel,
-  shortcutNumber
+  shortcutValue
 }: {
   active?: boolean;
   children?: ReactNode;
@@ -64,13 +65,13 @@ function SidebarNavItem({
   label: string;
   onClick: () => void;
   shortcutModifierLabel?: string;
-  shortcutNumber?: number;
+  shortcutValue?: number | string;
 }) {
   return (
     <button
       aria-current={active ? 'page' : undefined}
       className={cn(
-        'group/item flex min-h-9 w-full cursor-pointer items-center gap-2.5 rounded-(--radius-md) px-2.5 py-2 text-left transition hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
+        'group/item relative flex min-h-9 w-full cursor-pointer items-center gap-2.5 rounded-(--radius-md) px-2.5 py-2 text-left transition hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
         active && 'bg-sidebar-accent text-sidebar-accent-foreground'
       )}
       onClick={onClick}
@@ -86,11 +87,11 @@ function SidebarNavItem({
         <div className="font-normal text-ui leading-control">{label}</div>
         {children}
       </div>
-      {shortcutNumber && shortcutModifierLabel ? (
-        <span className="opacity-0 transition-opacity duration-150 group-hover/item:opacity-100 group-hover/item:delay-500">
+      {shortcutValue && shortcutModifierLabel ? (
+        <span className={SHORTCUT_BADGE_OVERLAY_CLASS}>
           <ShortcutBadge
             modifierLabel={shortcutModifierLabel}
-            number={shortcutNumber}
+            value={shortcutValue}
           />
         </span>
       ) : null}
@@ -99,43 +100,19 @@ function SidebarNavItem({
 }
 
 export function SidebarHeader({
-  onOpenWorkspace,
-  onToggleCollapsed,
-  t
+  collapsed
 }: {
+  collapsed: boolean;
   onOpenWorkspace: () => void;
   onToggleCollapsed: () => void;
   t: TFunction;
 }) {
   return (
-    <div className="px-4 pt-3.5 pb-3">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex min-w-0 items-center">
-          <button
-            className="poster-heading cursor-pointer text-sidebar-primary transition hover:text-sidebar-foreground"
-            onClick={onOpenWorkspace}
-            type="button"
-          >
-            <MonadLogo className="h-6 w-[4.75rem]" />
-          </button>
-        </div>
-        <div className="flex items-center">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                aria-label={t('web.sidebar.collapse')}
-                className="size-7"
-                onClick={onToggleCollapsed}
-                size="icon"
-                variant="ghost"
-              >
-                <HugeiconsIcon icon={PanelLeftCloseIcon} />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>{t('web.sidebar.collapse')}</TooltipContent>
-          </Tooltip>
-        </div>
-      </div>
+    <div
+      className="flex shrink-0 items-center px-3"
+      style={{ height: SHELL_HEADER_HEIGHT }}
+    >
+      {collapsed ? null : <div className="min-w-0 flex-1" />}
     </div>
   );
 }
@@ -162,7 +139,7 @@ export function StudioSidebarItems({
       label={t(i18nKey)}
       onClick={() => onSelect(id)}
       shortcutModifierLabel={shortcutModifierLabel}
-      shortcutNumber={showShortcutBadges ? shortcutNumbers.get(id) : undefined}
+      shortcutValue={showShortcutBadges ? shortcutNumbers.get(id) : undefined}
     />
   );
 
@@ -191,18 +168,22 @@ function ProjectList({
   projects,
   onOpenProject,
   onToggleProjectPinned,
+  shortcutModifierLabel,
+  showShortcutBadges,
   t
 }: {
   activeProjectId: string | null;
   projects: ProjectItem[];
   onOpenProject: (id: string) => void;
   onToggleProjectPinned: (id: string) => void;
+  shortcutModifierLabel?: string;
+  showShortcutBadges?: boolean;
   t: TFunction;
 }) {
   return (
     <div className="sidebar-scroll-area min-h-0 flex-1 overflow-y-auto">
       <div className="flex flex-col gap-1 px-2.5 pb-3">
-        {projects.map((project) => {
+        {projects.map((project, index) => {
           const active = activeProjectId === project.id;
           const unreadLabel = project.unreadCount > 99 ? '99+' : String(project.unreadCount);
           const runningLabel = t('web.workplace.projectRuntimeRunning');
@@ -214,7 +195,7 @@ function ProjectList({
           return (
             <div
               className={cn(
-                'group/project flex items-center gap-1 rounded-(--radius-md) transition hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
+                'group/project relative flex items-center gap-1 rounded-(--radius-md) transition hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
                 active && 'bg-sidebar-accent text-sidebar-accent-foreground'
               )}
               key={project.id}
@@ -250,6 +231,14 @@ function ProjectList({
                   ) : null}
                 </span>
               </button>
+              {showShortcutBadges && shortcutModifierLabel && index < 9 ? (
+                <span className={SHORTCUT_BADGE_OVERLAY_CLASS}>
+                  <ShortcutBadge
+                    modifierLabel={shortcutModifierLabel}
+                    value={index + 1}
+                  />
+                </span>
+              ) : null}
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
@@ -287,6 +276,8 @@ export function WorkspaceSidebarItems({
   onOpenMonadChat,
   projects,
   onToggleProjectPinned,
+  shortcutModifierLabel,
+  showShortcutBadges,
   t
 }: {
   activeProjectId: string | null;
@@ -295,6 +286,8 @@ export function WorkspaceSidebarItems({
   onOpenMonadChat: () => void;
   onToggleProjectPinned: (id: string) => void;
   projects: ProjectItem[];
+  shortcutModifierLabel?: string;
+  showShortcutBadges?: boolean;
   t: TFunction;
 }) {
   return (
@@ -305,6 +298,8 @@ export function WorkspaceSidebarItems({
           icon={MessageSquareCodeIcon}
           label={t('web.sidebar.monadAgent')}
           onClick={onOpenMonadChat}
+          shortcutModifierLabel={shortcutModifierLabel}
+          shortcutValue={showShortcutBadges ? '`' : undefined}
         >
           <div className="mt-1 text-muted-foreground text-sm">{t('web.sidebar.monadAgentHint')}</div>
         </SidebarNavItem>
@@ -314,6 +309,8 @@ export function WorkspaceSidebarItems({
         onOpenProject={onOpenProject}
         onToggleProjectPinned={onToggleProjectPinned}
         projects={projects}
+        shortcutModifierLabel={shortcutModifierLabel}
+        showShortcutBadges={showShortcutBadges}
         t={t}
       />
     </>

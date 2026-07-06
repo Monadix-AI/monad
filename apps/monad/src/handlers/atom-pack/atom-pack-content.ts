@@ -185,6 +185,36 @@ export function toPublicWorkspaceExperience(
   };
 }
 
+export interface WorkspaceExperienceSnapshot {
+  experiences: WorkspaceExperienceDefinition[];
+  warnings: Array<{ experienceId: string; error: string }>;
+}
+
+export async function createWorkspaceExperienceSnapshot(
+  dir: string,
+  experiences: readonly RegisteredWorkspaceExperience[]
+): Promise<WorkspaceExperienceSnapshot> {
+  const snapshot: WorkspaceExperienceSnapshot = { experiences: [], warnings: [] };
+  for (const experience of experiences) {
+    try {
+      const publicExperience = toPublicWorkspaceExperience(experience);
+      if (!publicExperience) throw new Error('invalid web-component module path');
+      if (experience.entry.type === 'web-component' && experience.atomPackId) {
+        const module = experience.entry.module;
+        const publicModule = publicExperience.entry.type === 'web-component' ? publicExperience.entry.module : module;
+        if (publicModule !== module) await resolveAtomPackAssetPath(dir, experience.atomPackId, module);
+      }
+      snapshot.experiences.push(publicExperience);
+    } catch (err) {
+      snapshot.warnings.push({
+        experienceId: experience.id,
+        error: err instanceof Error ? err.message : String(err)
+      });
+    }
+  }
+  return snapshot;
+}
+
 export async function listSkillContentFiles(dir: string): Promise<GetSkillContentResponse['files']> {
   const files: GetSkillContentResponse['files'] = [];
   async function walk(currentDir: string, prefix = ''): Promise<void> {

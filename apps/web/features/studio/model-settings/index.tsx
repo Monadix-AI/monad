@@ -4,7 +4,7 @@ import type { GenerationParamsView, ModelInfo, ProfileView } from '@monad/protoc
 
 import { CpuIcon, PlusSignIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { useListAgentsQuery } from '@monad/client-rtk';
+import { agentSelectors, useListAgentsQuery } from '@monad/client-rtk';
 import { ModelProviderType } from '@monad/protocol';
 import { Button, ScrollArea } from '@monad/ui';
 import { useCallback, useEffect, useState } from 'react';
@@ -60,7 +60,7 @@ export function ModelSettings(_props: { onClose: () => void }) {
   const settingsQuery = useModelSettingsQueryState();
   const agentsQuery = useListAgentsQuery();
   const { providers, profiles, defaultAlias } = settings;
-  const agents = agentsQuery.data?.agents ?? [];
+  const agents = agentsQuery.data ? agentSelectors.selectAll(agentsQuery.data) : [];
 
   const { metaFor, catalog } = useProviderMeta();
   const PROVIDER_TYPES = catalog.map((e) => ({

@@ -8,7 +8,7 @@ export const upsertMcpServerApi = listMcpServersApi.injectEndpoints({
   endpoints: (builder) => ({
     upsertMcpServer: builder.mutation<OkResponse, McpServerView>({
       queryFn: (server: McpServerView, api: { extra: unknown }) =>
-        runTreaty(() => clientOf(api).treaty.v1.settings['mcp-servers'].put({ server })),
+        runTreaty(() => clientOf(api).treaty.v1.settings['mcp-servers']({ name: server.name }).put({ server })),
       async onQueryStarted(server, { dispatch, queryFulfilled }) {
         const patch = dispatch(
           listMcpServersApi.util.updateQueryData('listMcpServers', undefined, (draft) => {

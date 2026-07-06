@@ -1,8 +1,8 @@
-import type { CreateAgentRequest, CreateAgentResponse, ListAgentsResponse } from '@monad/protocol';
+import type { CreateAgentRequest, CreateAgentResponse } from '@monad/protocol';
 
 import { apiSlice } from '../../api-slice.ts';
 import { clientOf, runTreaty } from '../../endpoint-helpers.ts';
-import { listAgentsApi } from './list-agents.ts';
+import { agentAdapter, listAgentsApi } from './list-agents.ts';
 
 export const createAgentApi = apiSlice.injectEndpoints({
   overrideExisting: true,
@@ -14,8 +14,8 @@ export const createAgentApi = apiSlice.injectEndpoints({
         try {
           const { data } = await queryFulfilled;
           dispatch(
-            listAgentsApi.util.updateQueryData('listAgents', undefined, (draft: ListAgentsResponse) => {
-              draft.agents.push(data.agent);
+            listAgentsApi.util.updateQueryData('listAgents', undefined, (draft) => {
+              agentAdapter.addOne(draft, data.agent);
             })
           );
         } catch {

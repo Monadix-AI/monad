@@ -370,10 +370,9 @@ export const UNIVERSAL_METHODS = {
     result: okResponseSchema
   },
   'nativeCli.historyPage': {
-    http: { verb: 'POST', template: '/v1/native-cli-sessions/:id/history-page' },
+    http: { verb: 'GET', template: '/v1/native-cli-sessions/:id/history-page' },
     path: nativeCliSessionPath,
-    query: nativeCliSessionScopeQuery,
-    body: nativeCliHistoryPageRequestSchema,
+    query: nativeCliSessionScopeQuery.merge(nativeCliHistoryPageRequestSchema),
     result: nativeCliHistoryPageResponseSchema
   },
   'nativeCli.auth.start': {

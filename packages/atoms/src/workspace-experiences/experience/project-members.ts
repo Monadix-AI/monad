@@ -1,4 +1,4 @@
-import type { AvatarStyle, NativeCliProvider } from '@monad/protocol';
+import type { NativeCliProvider } from '@monad/protocol';
 import type {
   WorkspaceExperienceAddMemberOptions,
   WorkspaceExperienceMember,
@@ -8,7 +8,7 @@ import type {
 } from '@monad/sdk-atom';
 import type { Participant } from './types.ts';
 
-import { entityAvatarWriteUrl, parseWorkplaceProjectMembers } from '@monad/protocol';
+import { parseWorkplaceProjectMembers } from '@monad/protocol';
 
 // The member types are the published third-party contract (in @monad/sdk-atom); these aliases keep the
 // atoms-internal names while sdk-atom owns the shape. The functions below stay here.
@@ -88,10 +88,6 @@ export function projectMemberAvatarSeeds(projectId: string, members: readonly Pr
     if (member.type === 'acp') return [`acp:${member.name}`];
     return [];
   });
-}
-
-export function warmEntityAvatar(seed: string, avatarStyle?: AvatarStyle): void {
-  void fetch(entityAvatarWriteUrl(seed, avatarStyle)).catch(() => {});
 }
 
 export function defaultProjectMemberSettings(

@@ -3,7 +3,7 @@
  * Generate the Mo atlas tables from the single source of truth apps/mo/assets/atlas.json:
  *   - apps/mo/native/common/atlas.h      (compiled into both native shells — no C JSON dependency)
  *
- * Run by postinstall (scripts/setup-dev.ts) and build-release.ts before building Mo, so the C header and
+ * Run by postinstall (scripts/dev-init.ts) and build-release.ts before building Mo, so the C header and
  * the manifest never drift from the native constants. Do not hand-edit the generated file.
  */
 

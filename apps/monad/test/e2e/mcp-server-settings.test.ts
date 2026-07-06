@@ -69,8 +69,8 @@ async function runMcpServerCrud(call: Call, paths: MonadPaths): Promise<void> {
   expect(((await res.json()) as ServersBody).servers).toEqual([]);
 
   // 2. upsert a stdio server + an http server
-  expect((await call('PUT', '/v1/settings/mcp-servers', { server: stdioView() })).status).toBe(200);
-  expect((await call('PUT', '/v1/settings/mcp-servers', { server: httpView() })).status).toBe(200);
+  expect((await call('PUT', '/v1/settings/mcp-servers/fs', { server: stdioView() })).status).toBe(200);
+  expect((await call('PUT', '/v1/settings/mcp-servers/remote', { server: httpView() })).status).toBe(200);
 
   // 3. both list back with their full spec (the discriminated union round-trips)
   res = await call('GET', '/v1/settings/mcp-servers');
@@ -89,10 +89,24 @@ async function runMcpServerCrud(call: Call, paths: MonadPaths): Promise<void> {
   expect((await loadConfig(paths.config))?.mcpServers.find((s) => s.name === 'fs')).toBeDefined();
   expect((await loadAll(paths.config, paths.profile))?.mcpServers.length).toBe(2);
 
+  // 4b. GET single server round-trips its full spec
+  res = await call('GET', '/v1/settings/mcp-servers/fs');
+  const { server } = (await res.json()) as { server: ServersBody['servers'][number] };
+  expect(server).toMatchObject({ name: 'fs', transport: 'stdio', command: 'npx' });
+
+  // 4c. GET an unknown server 404s
+  expect((await call('GET', '/v1/settings/mcp-servers/does-not-exist')).status).toBe(404);
+
   // 5. disable → reflected
   expect((await call('POST', '/v1/settings/mcp-servers/fs/disable')).status).toBe(200);
   res = await call('GET', '/v1/settings/mcp-servers');
   expect(((await res.json()) as ServersBody).servers.find((s) => s.name === 'fs')?.enabled).toBe(false);
+
+  // 5b. enable/disable/reconnect/authorize 404 for an unknown server
+  expect((await call('POST', '/v1/settings/mcp-servers/does-not-exist/enable')).status).toBe(404);
+  expect((await call('POST', '/v1/settings/mcp-servers/does-not-exist/disable')).status).toBe(404);
+  expect((await call('POST', '/v1/settings/mcp-servers/does-not-exist/reconnect')).status).toBe(404);
+  expect((await call('POST', '/v1/settings/mcp-servers/does-not-exist/authorize')).status).toBe(404);
 
   // 6. remove both → gone from list AND config.json
   expect((await call('DELETE', '/v1/settings/mcp-servers/fs')).status).toBe(200);
@@ -100,6 +114,9 @@ async function runMcpServerCrud(call: Call, paths: MonadPaths): Promise<void> {
   res = await call('GET', '/v1/settings/mcp-servers');
   expect(((await res.json()) as ServersBody).servers).toEqual([]);
   expect((await loadConfig(paths.config))?.mcpServers).toEqual([]);
+
+  // 6b. DELETE an unknown (already-removed) server 404s
+  expect((await call('DELETE', '/v1/settings/mcp-servers/fs')).status).toBe(404);
 }
 
 async function setup(): Promise<{ dir: string; paths: MonadPaths; app: ReturnType<typeof createHttpTransport> }> {

@@ -308,7 +308,7 @@ function nativeCliStreamFromActivity(
   templateAgentNames = new Map<string, string>()
 ): NativeCliStreamView | undefined {
   if (!row.tool.startsWith('native-cli:')) return undefined;
-  const provider = row.tool.slice('native-cli:'.length) || 'native-cli';
+  const provider = row.tool.slice('native-cli:'.length);
   const agentName = row.agentName ?? row.detail ?? provider;
   const items = nativeCliStreamItems({ id: row.id, provider, output: row.output });
   return {

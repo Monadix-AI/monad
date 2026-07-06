@@ -27,6 +27,13 @@ export function createProfilesHandlers(ctx: ModelContext) {
       };
     },
 
+    async getProfile({ alias }: { alias: string }) {
+      const { cfg } = await ctx.read();
+      const profile = cfg.model.profiles.find((p) => p.alias === alias);
+      if (!profile) throw new HandlerError('not_found', `model: unknown profile "${alias}"`);
+      return { profile: profileToView(profile) };
+    },
+
     async setProfile({ profile }: SetProfileRequest) {
       const { cfg, auth } = await ctx.read();
 

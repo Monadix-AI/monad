@@ -129,7 +129,7 @@ test('resetUsage invalidates Usage, forcing the ledger to refetch', async () => 
   const calls: Calls = { usageGet: 0, atomsList: 0, workspaceExperiencesList: 0 };
   const store = createMonadStore({ client: fakeClient({}, calls) });
 
-  await store.dispatch(getUsageApi.endpoints.getUsage.initiate());
+  await store.dispatch(getUsageApi.endpoints.getUsage.initiate(undefined));
   expect(calls.usageGet).toBe(1);
 
   await store.dispatch(resetUsageApi.endpoints.resetUsage.initiate());

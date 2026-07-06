@@ -98,7 +98,7 @@ These are bootstrap-only. Everything else is in `config.json`.
 | `MONAD_PORT` | _unset_ | Overrides `config.json`'s `network.port` for the daemon's listener **and** its clients (they read the same var to stay in sync). Unset → the configured port is used. E.g. `MONAD_PORT=8000 monad`. |
 | `MONAD_STDIO` | _unset_ | When `true` (or `--stdio`), the daemon speaks JSON-RPC over stdin/stdout and binds **no** TCP port or socket (embedded/single-client use) |
 
-> In the repo's dev setup, `scripts/setup-dev.ts` auto-assigns a per-worktree `MONAD_PORT`
+> In the repo's dev setup, `scripts/dev-init.ts` auto-assigns a per-worktree `MONAD_PORT`
 > (and `WEB_PORT`) into `.env.local` so multiple git worktrees can run `bun dev` at once
 > without port clashes. That auto-assignment is dev-only tooling — it is never part of a
 > release build; the daemon's `MONAD_PORT` read is, so release users can set it by hand.

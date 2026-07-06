@@ -16,14 +16,23 @@ export function createNativeAgentController(handlers: ReturnType<typeof createDa
   const runtime = createNativeAgentRuntimeService(handlers);
   const requireManagedBinding = (request: Request) => runtime.requireManagedBinding(request.headers);
   const resolveAttachmentPayload = createNativeAgentAttachmentResolver(store);
-  const attachmentReader = createNativeAgentAttachmentReader(store);
+  const attachmentRoots = handlers._nativeAgentAttachmentRoots;
+  const attachmentReader = createNativeAgentAttachmentReader(store, attachmentRoots);
   const capabilities = createDefaultNativeAgentCapabilities(handlers, resolveAttachmentPayload);
+  const rootsForManagedBinding = (
+    binding: ReturnType<typeof requireManagedBinding>['binding'],
+    workingPath: string
+  ): string[] => attachmentRoots({ projectId: binding.projectId, agentId: binding.agentId, workingPath });
   return new Elysia({ tags: ['http-only'] })
     .post(
       '/internal/native-agent/project/post',
       async ({ body, request }) => {
         const { binding, nativeSession } = requireManagedBinding(request);
-        return capabilities.project.post({ body, binding, workingPath: nativeSession.workingPath });
+        return capabilities.project.post({
+          body,
+          binding,
+          attachmentRoots: rootsForManagedBinding(binding, nativeSession.workingPath)
+        });
       },
       { body: contracts.projectPost.body, response: contracts.projectPost.response }
     )
@@ -64,7 +73,11 @@ export function createNativeAgentController(handlers: ReturnType<typeof createDa
       '/internal/native-agent/agent/send',
       async ({ body, request }) => {
         const { binding, nativeSession } = requireManagedBinding(request);
-        return capabilities.direct.send({ body, binding, workingPath: nativeSession.workingPath });
+        return capabilities.direct.send({
+          body,
+          binding,
+          attachmentRoots: rootsForManagedBinding(binding, nativeSession.workingPath)
+        });
       },
       { body: contracts.agentSend.body, response: contracts.agentSend.response }
     )

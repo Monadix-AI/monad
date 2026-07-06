@@ -110,24 +110,45 @@ function svgResponse(body: string): Response {
   });
 }
 
-export function createAvatarCacheController(_handlers: ReturnType<typeof createDaemonHandlers>) {
-  const handle = async ({ params, request }: { params: { hash: string }; request: Request }) => {
-    const key = params.hash.replace(/\.svg$/, '');
-    const url = new URL(request.url);
-    const seed = url.searchParams.get('seed') ?? '';
-    const styleParam = url.searchParams.get('style') ?? '';
-    const style: AvatarStyle = isAvatarStyle(styleParam) ? styleParam : DEFAULT_AVATAR_STYLE;
-    const shouldWrite = url.searchParams.get('write') === '1';
-    if (!seed || avatarCacheKey(seed, style) !== key) return new Response('Bad Request', { status: 400 });
+function parseAvatarRequest(
+  params: { hash: string },
+  request: Request
+): { key: string; seed: string; style: AvatarStyle } | null {
+  const key = params.hash.replace(/\.svg$/, '');
+  const url = new URL(request.url);
+  const seed = url.searchParams.get('seed') ?? '';
+  const styleParam = url.searchParams.get('style') ?? '';
+  const style: AvatarStyle = isAvatarStyle(styleParam) ? styleParam : DEFAULT_AVATAR_STYLE;
+  if (!seed || avatarCacheKey(seed, style) !== key) return null;
+  return { key, seed, style };
+}
 
-    const cacheDir = join(getPaths().cache, 'avatars');
-    const cachePath = join(cacheDir, `${key}.svg`);
+function avatarCachePaths(key: string): { cacheDir: string; cachePath: string } {
+  const cacheDir = join(getPaths().cache, 'avatars');
+  return { cacheDir, cachePath: join(cacheDir, `${key}.svg`) };
+}
+
+export function createAvatarCacheController(_handlers: ReturnType<typeof createDaemonHandlers>) {
+  const handleRead = async ({ params, request }: { params: { hash: string }; request: Request }) => {
+    const parsed = parseAvatarRequest(params, request);
+    if (!parsed) return new Response('Bad Request', { status: 400 });
+    const { cachePath } = avatarCachePaths(parsed.key);
+
     const cached = await readFile(cachePath, 'utf8').catch(() => null);
     if (cached) return svgResponse(cached);
 
-    const svg = renderAvatarSvg(seed, style);
-    if (!shouldWrite) return svgResponse(svg);
+    return svgResponse(renderAvatarSvg(parsed.seed, parsed.style));
+  };
 
+  const handleWrite = async ({ params, request }: { params: { hash: string }; request: Request }) => {
+    const parsed = parseAvatarRequest(params, request);
+    if (!parsed) return new Response('Bad Request', { status: 400 });
+    const { cacheDir, cachePath } = avatarCachePaths(parsed.key);
+
+    const cached = await readFile(cachePath, 'utf8').catch(() => null);
+    if (cached) return svgResponse(cached);
+
+    const svg = renderAvatarSvg(parsed.seed, parsed.style);
     await mkdir(cacheDir, { recursive: true });
     const tmp = `${cachePath}.${process.pid}.${Date.now()}.tmp`;
     await writeFile(tmp, svg, 'utf8');
@@ -136,5 +157,10 @@ export function createAvatarCacheController(_handlers: ReturnType<typeof createD
     });
     return svgResponse(svg);
   };
-  return new Elysia({ tags: ['http-only'] }).get('/avatar-cache/:hash', handle).get('/api/avatar-cache/:hash', handle);
+
+  return new Elysia({ tags: ['http-only'] })
+    .get('/avatar-cache/:hash', handleRead)
+    .get('/api/avatar-cache/:hash', handleRead)
+    .post('/avatar-cache/:hash', handleWrite)
+    .post('/api/avatar-cache/:hash', handleWrite);
 }

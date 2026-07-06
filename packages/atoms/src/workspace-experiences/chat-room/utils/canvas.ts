@@ -35,6 +35,7 @@ import {
 } from './projection.ts';
 
 export interface ChatRoomCanvas {
+  draftKey: string;
   projectId: string;
   ready: boolean;
   messages: Message[];
@@ -52,7 +53,7 @@ export interface ChatRoomCanvas {
   loadOlder: () => void;
   openAgentCard?: (id: string) => void;
   followNativeCliSession?: (id: string, deliveryId?: NativeAgentDeliveryId) => void;
-  sendDirective: (text: string) => Promise<void> | void;
+  sendDirective: import('./composer.ts').ProjectComposerSurface['sendDirective'];
   resolveApproval: (requestId: string, decision: 'approve' | 'reject') => void;
   answerQuestion: (requestId: string, answer: string) => void;
   pauseAll: () => void;
@@ -148,6 +149,7 @@ export function toChatRoomCanvas(
         }
       : null;
   return {
+    draftKey: `chat-room:${c.projectId}`,
     projectId: c.projectId,
     ready: c.ready,
     messages,

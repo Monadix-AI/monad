@@ -47,7 +47,7 @@ export const command: CommandDef = {
           mapping: { granularity: 'per-conversation' as const },
           rateLimitPerMin: 20
         };
-        requireTreatyData(await channels.put({ channel }));
+        requireTreatyData(await channels({ id }).put({ channel }));
         out(green(t('cli.channel.added')) + dim(`  ${id}  (${type}, ${policy})`));
         out(dim(t('cli.channel.addNext', { id })));
         return;

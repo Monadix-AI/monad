@@ -9,15 +9,9 @@ import type {
 } from '@monad/protocol';
 import type { Dispatch, SetStateAction } from 'react';
 
-import {
-  Cancel01Icon,
-  LoaderPinwheelIcon,
-  PlusSignIcon,
-  SaveIcon,
-  ShieldQuestionMarkIcon
-} from '@hugeicons/core-free-icons';
+import { Cancel01Icon, LoaderPinwheelIcon, PlusSignIcon, SaveIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { Button, Input, Label } from '@monad/ui';
+import { Button, Input, Label, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Switch } from '@monad/ui';
 import { useState } from 'react';
 
 import { useT } from '@/components/I18nProvider';
@@ -39,6 +33,8 @@ import {
   strToEnv,
   strToModelOptions
 } from './native-cli-agent-settings-utils';
+
+const SELECT_EMPTY_VALUE = '__monad_empty__';
 
 export function AgentForm({
   agent,
@@ -153,16 +149,20 @@ export function AgentForm({
           </div>
           <div className="flex flex-col gap-1">
             <Label className="text-xs">{t('web.nativeCli.provider')}</Label>
-            <select
-              className="rounded-md border bg-transparent px-2 py-2 text-sm"
-              onChange={(e) => setProvider(e.target.value as NativeCliProvider)}
+            <Select
+              onValueChange={(value) => setProvider(value as NativeCliProvider)}
               value={provider}
             >
-              <option value="codex">Codex</option>
-              <option value="claude-code">Claude Code</option>
-              <option value="gemini">Gemini</option>
-              <option value="qwen">Qwen Code</option>
-            </select>
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="codex">Codex</SelectItem>
+                <SelectItem value="claude-code">Claude Code</SelectItem>
+                <SelectItem value="gemini">Gemini</SelectItem>
+                <SelectItem value="qwen">Qwen Code</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           <div className="flex flex-col gap-1">
             <Label className="text-xs">{t('web.acp.command')}</Label>
@@ -201,20 +201,24 @@ export function AgentForm({
       ) : (
         <div className="flex flex-col gap-1">
           <Label className="text-xs">{t('web.nativeCli.launchMode')}</Label>
-          <select
-            className="rounded-md border bg-transparent px-2 py-2 text-sm"
-            onChange={(e) => setDefaultLaunchMode(e.target.value as NativeCliLaunchMode)}
+          <Select
+            onValueChange={(value) => setDefaultLaunchMode(value as NativeCliLaunchMode)}
             value={defaultLaunchMode}
           >
-            {launchModeOptions.map((launchMode) => (
-              <option
-                key={launchMode}
-                value={launchMode}
-              >
-                {launchMode}
-              </option>
-            ))}
-          </select>
+            <SelectTrigger className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {launchModeOptions.map((launchMode) => (
+                <SelectItem
+                  key={launchMode}
+                  value={launchMode}
+                >
+                  {launchMode}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       )}
       <ProjectTemplatesEditor
@@ -225,17 +229,17 @@ export function AgentForm({
       {mode === 'create' ? (
         <div className="flex flex-col gap-1">
           <Label className="text-xs">{t('web.nativeCli.autopilot')}</Label>
-          <Button
-            className="self-start"
-            disabled={!canToggleAutopilot}
-            onClick={() => setAllowAutopilot((v) => !v)}
-            size="sm"
-            type="button"
-            variant={effectiveAllowAutopilot ? 'secondary' : 'outline'}
-          >
-            <HugeiconsIcon icon={ShieldQuestionMarkIcon} />{' '}
-            {effectiveAllowAutopilot ? t('web.acp.osSandboxOn') : t('web.acp.osSandboxOff')}
-          </Button>
+          <div className="flex items-center gap-2">
+            <Switch
+              aria-label={t('web.nativeCli.autopilot')}
+              checked={effectiveAllowAutopilot}
+              disabled={!canToggleAutopilot}
+              onCheckedChange={() => setAllowAutopilot((v) => !v)}
+            />
+            <span className="text-sm">
+              {effectiveAllowAutopilot ? t('web.acp.osSandboxOn') : t('web.acp.osSandboxOff')}
+            </span>
+          </div>
           <p className="text-[11px] text-muted-foreground">{t('web.nativeCli.autopilotHint')}</p>
         </div>
       ) : null}
@@ -351,23 +355,21 @@ function AdapterSettingsFields({
               key={setting.key}
             >
               <Label className="text-xs">{setting.label}</Label>
-              <Button
-                className="self-start"
-                disabled={setting.key === 'allowAutopilot' && !canToggleAutopilot}
-                onClick={() => {
-                  if (setting.key === 'allowAutopilot') {
-                    setAllowAutopilot((v) => !v);
-                    return;
-                  }
-                  setAdapterSettings((current) => ({ ...current, [setting.key]: !checked }));
-                }}
-                size="sm"
-                type="button"
-                variant={checked ? 'secondary' : 'outline'}
-              >
-                <HugeiconsIcon icon={ShieldQuestionMarkIcon} />{' '}
-                {checked ? t('web.acp.osSandboxOn') : t('web.acp.osSandboxOff')}
-              </Button>
+              <div className="flex items-center gap-2">
+                <Switch
+                  aria-label={setting.label}
+                  checked={checked}
+                  disabled={setting.key === 'allowAutopilot' && !canToggleAutopilot}
+                  onCheckedChange={() => {
+                    if (setting.key === 'allowAutopilot') {
+                      setAllowAutopilot((v) => !v);
+                      return;
+                    }
+                    setAdapterSettings((current) => ({ ...current, [setting.key]: !checked }));
+                  }}
+                />
+                <span className="text-sm">{checked ? t('web.acp.osSandboxOn') : t('web.acp.osSandboxOff')}</span>
+              </div>
               <p className="text-[11px] text-muted-foreground">
                 {description === 'approvalProxyUnavailable'
                   ? t('web.nativeCli.approvalProxyUnavailable')
@@ -384,21 +386,27 @@ function AdapterSettingsFields({
               key={setting.key}
             >
               <Label className="text-xs">{setting.label}</Label>
-              <select
-                className="rounded-md border bg-transparent px-2 py-2 text-sm"
-                onChange={(e) => setStringValue(setting.key, e.target.value)}
-                value={stringValue(setting.key)}
+              <Select
+                onValueChange={(value) => setStringValue(setting.key, value === SELECT_EMPTY_VALUE ? '' : value)}
+                value={stringValue(setting.key) || SELECT_EMPTY_VALUE}
               >
-                {setting.placeholder ? <option value="">{setting.placeholder}</option> : null}
-                {setting.options.map((option) => (
-                  <option
-                    key={option.value}
-                    value={option.value}
-                  >
-                    {option.label ?? option.value}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {setting.placeholder ? (
+                    <SelectItem value={SELECT_EMPTY_VALUE}>{setting.placeholder}</SelectItem>
+                  ) : null}
+                  {setting.options.map((option) => (
+                    <SelectItem
+                      key={option.value}
+                      value={option.value}
+                    >
+                      {option.label ?? option.value}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               {setting.description ? <p className="text-[11px] text-muted-foreground">{setting.description}</p> : null}
             </div>
           );
@@ -538,21 +546,27 @@ function ProjectTemplatesEditor({
             <div className="flex flex-col gap-1">
               <Label className="text-xs">{t('web.workplace.model')}</Label>
               {modelOptions.length > 0 ? (
-                <select
-                  className="rounded-md border bg-transparent px-2 py-2 text-sm"
-                  onChange={(e) => updateTemplate(index, { modelId: e.target.value || undefined })}
-                  value={template.modelId ?? ''}
+                <Select
+                  onValueChange={(value) =>
+                    updateTemplate(index, { modelId: value === SELECT_EMPTY_VALUE ? undefined : value })
+                  }
+                  value={template.modelId ?? SELECT_EMPTY_VALUE}
                 >
-                  <option value="">{t('web.workplace.defaultModel')}</option>
-                  {modelOptions.map((model) => (
-                    <option
-                      key={model}
-                      value={model}
-                    >
-                      {model}
-                    </option>
-                  ))}
-                </select>
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={SELECT_EMPTY_VALUE}>{t('web.workplace.defaultModel')}</SelectItem>
+                    {modelOptions.map((model) => (
+                      <SelectItem
+                        key={model}
+                        value={model}
+                      >
+                        {model}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               ) : (
                 <Input
                   onChange={(e) => updateTemplate(index, { modelId: e.target.value || undefined })}
@@ -571,18 +585,22 @@ function ProjectTemplatesEditor({
             </div>
             <div className="flex flex-col gap-1">
               <Label className="text-xs">{t('web.workplace.enableFastMode')}</Label>
-              <select
-                className="rounded-md border bg-transparent px-2 py-2 text-sm"
-                onChange={(e) =>
+              <Select
+                onValueChange={(value) =>
                   updateTemplate(index, {
-                    speed: (e.target.value || undefined) as NativeCliProjectTemplate['speed']
+                    speed: (value === SELECT_EMPTY_VALUE ? undefined : value) as NativeCliProjectTemplate['speed']
                   })
                 }
-                value={template.speed ?? ''}
+                value={template.speed ?? SELECT_EMPTY_VALUE}
               >
-                <option value="">{t('web.nativeCli.projectTemplateStandardSpeed')}</option>
-                <option value="fast">{t('web.nativeCli.projectTemplateFastSpeed')}</option>
-              </select>
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={SELECT_EMPTY_VALUE}>{t('web.nativeCli.projectTemplateStandardSpeed')}</SelectItem>
+                  <SelectItem value="fast">{t('web.nativeCli.projectTemplateFastSpeed')}</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
           <div className="flex flex-col gap-1">

@@ -8,11 +8,19 @@ export const sendMessageApi = generateApi.injectEndpoints({
   endpoints: (builder) => ({
     sendMessage: builder.mutation<SendMessageResponse, { sessionId: SessionId } & SendMessageRequest>({
       queryFn: (
-        { sessionId, text, generate, ambientContext }: { sessionId: SessionId } & SendMessageRequest,
+        { sessionId, text, attachments, generate, ambientContext }: { sessionId: SessionId } & SendMessageRequest,
         api: { extra: unknown }
       ) =>
         runTreaty(
-          () => clientOf(api).treaty.v1.sessions({ id: sessionId }).messages.post({ text, generate, ambientContext }),
+          () =>
+            clientOf(api)
+              .treaty.v1.sessions({ id: sessionId })
+              .messages.post({
+                text,
+                attachments,
+                generate,
+                ambientContext
+              } as SendMessageRequest),
           (raw) => raw as SendMessageResponse
         )
     })

@@ -1,5 +1,3 @@
-export const CHANNEL_HOST_EXT_KEY = 'controlRoomModeratorAgentId';
-
 interface ChannelTargetMention {
   id: string;
   name: string;
@@ -36,12 +34,10 @@ export type ChannelRouteAction =
 
 export function routeChannelMessage({
   text,
-  moderatorAgentId,
   acpAgentNames,
   nativeCliAgentNames = []
 }: {
   text: string;
-  moderatorAgentId?: string;
   acpAgentNames: readonly string[];
   nativeCliAgentNames?: readonly string[];
 }): ChannelRouteAction {
@@ -51,7 +47,6 @@ export function routeChannelMessage({
   const mentions = channelMentions(trimmed);
   const singleMention = mentions.length === 1 ? mentions[0] : undefined;
   const singleTarget = singleMention ? targetMention(singleMention, acpAgentNames, nativeCliAgentNames) : undefined;
-  if (moderatorAgentId) return routeToModerator(moderatorAgentId, trimmed, singleTarget);
 
   if (singleTarget) {
     const rest = singleMention ? withoutMention(trimmed, singleMention).trim() : '';
@@ -77,19 +72,6 @@ export function routeChannelMessage({
   }
 
   return { kind: 'send', text: trimmed, generate: trimmed.startsWith('/') };
-}
-
-function routeToModerator(
-  moderatorAgentId: string,
-  text: string,
-  targetMention?: ChannelTargetMention
-): ChannelRouteAction {
-  if (moderatorAgentId.startsWith('acp:')) {
-    const agentName = moderatorAgentId.slice(4);
-    return agentName ? { kind: 'forward-acp', agentName, text, targetMention } : { kind: 'none' };
-  }
-
-  return { kind: 'send', text, targetMention };
 }
 
 function targetMention(
@@ -127,9 +109,4 @@ function withoutMention(text: string, mention: { start: number; end: number }): 
 
 function unescapeMentionValue(value: string): string {
   return value.replace(/\\(["\\])/g, '$1');
-}
-
-export function normalizeChannelModeratorId(value: unknown): string | undefined {
-  if (typeof value !== 'string') return undefined;
-  return value.startsWith('agt_') ? `agent:${value}` : value;
 }

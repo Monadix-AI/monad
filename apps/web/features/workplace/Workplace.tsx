@@ -10,8 +10,9 @@ import {
   workspaceMono as mono,
   workspaceSans as sans
 } from '@monad/ui/components/AgentAvatar';
-import { useCallback, useEffect } from 'react';
+import { memo, useCallback, useEffect } from 'react';
 
+import { ShellLink } from '@/components/ShellLink';
 import { MonadLoading } from '@/features/init/MonadLoading';
 import { getProjectExperience } from './experiences/registry';
 import { ProjectHeader } from './project-shell/ProjectHeader';
@@ -22,7 +23,7 @@ import { useWorkplaceUiStore } from './workplace-ui-store';
 
 const noopSwitchExperience = () => {};
 
-export function Workplace({
+export const Workplace = memo(function Workplace({
   projectId,
   embedded = false,
   mode,
@@ -142,7 +143,7 @@ export function Workplace({
               Agent project <span style={{ color: 'var(--muted-foreground)', fontWeight: 400 }}>workplace</span>
             </div>
           </div>
-          <a
+          <ShellLink
             href="/"
             style={{
               fontFamily: mono,
@@ -157,7 +158,7 @@ export function Workplace({
             }}
           >
             ← back to workspace
-          </a>
+          </ShellLink>
         </div>
       ) : null}
 
@@ -215,4 +216,4 @@ export function Workplace({
       </div>
     </div>
   );
-}
+});

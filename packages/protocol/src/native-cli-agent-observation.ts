@@ -25,6 +25,22 @@ export const nativeCliObservationEventSchema = z.object({
 });
 export type NativeCliObservationEvent = z.infer<typeof nativeCliObservationEventSchema>;
 
+export const nativeCliUsageLimitMeterRowSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  percent: z.number(),
+  meterPercent: z.number().optional(),
+  resetLabel: z.string().optional(),
+  valueLabel: z.string().optional()
+});
+export type NativeCliUsageLimitMeterRow = z.infer<typeof nativeCliUsageLimitMeterRowSchema>;
+
+export const nativeCliUsageLimitMeterSchema = z.object({
+  title: z.string(),
+  rows: z.array(nativeCliUsageLimitMeterRowSchema)
+});
+export type NativeCliUsageLimitMeter = z.infer<typeof nativeCliUsageLimitMeterSchema>;
+
 export const nativeAgentTurnPointerSchema = z.object({
   providerSessionRef: z.string().nullable().optional(),
   providerTurnId: z.string().nullable().optional()
@@ -97,6 +113,12 @@ export const nativeCliObservationAccessResponseSchema = z.discriminatedUnion('st
     output: z.string().optional(),
     append: z.string().optional(),
     seq: z.number().int().nonnegative().optional(),
+    // Server-normalized cards for the `output` full-snapshot case (same adapter as parseOutput) — the
+    // daemon knows the provider unambiguously, so the client renders these instead of re-deriving
+    // them. Omitted on `append`-only delta frames: a delta has no self-contained context to normalize.
+    events: z.array(nativeCliObservationEventSchema).optional(),
+    // Same reasoning as `events`, for the provider's usage/rate-limit hints embedded in `output`.
+    usageMeter: nativeCliUsageLimitMeterSchema.nullable().optional(),
     observedAt: z.string()
   }),
   z.object({
@@ -106,6 +128,8 @@ export const nativeCliObservationAccessResponseSchema = z.discriminatedUnion('st
     turn: nativeAgentTurnPointerSchema.optional(),
     provider: nativeCliProviderSchema,
     output: z.string(),
+    events: z.array(nativeCliObservationEventSchema).optional(),
+    usageMeter: nativeCliUsageLimitMeterSchema.nullable().optional(),
     observedAt: z.string()
   }),
   z.object({

@@ -1,8 +1,8 @@
-import type { ListAtomPacksResponse, OkResponse } from '@monad/protocol';
+import type { OkResponse } from '@monad/protocol';
 
 import { clientOf, runTreaty } from '../../endpoint-helpers.ts';
 import { installAtomPackApi } from './install-atom-pack.ts';
-import { listAtomPacksApi } from './list-atom-packs.ts';
+import { atomPackAdapter, listAtomPacksApi } from './list-atom-packs.ts';
 
 export interface SetAtomPackEnabledArgs {
   name: string;
@@ -20,9 +20,8 @@ export const setAtomPackEnabledApi = installAtomPackApi.injectEndpoints({
         }),
       async onQueryStarted({ name, enabled }, { dispatch, queryFulfilled }) {
         const patch = dispatch(
-          listAtomPacksApi.util.updateQueryData('listAtomPacks', undefined, (draft: ListAtomPacksResponse) => {
-            const pack = draft.atomPacks.find((p) => p.name === name);
-            if (pack) pack.enabled = enabled;
+          listAtomPacksApi.util.updateQueryData('listAtomPacks', undefined, (draft) => {
+            atomPackAdapter.updateOne(draft.atomPacks, { id: name, changes: { enabled } });
           })
         );
         try {

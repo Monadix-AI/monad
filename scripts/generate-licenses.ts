@@ -144,6 +144,3 @@ entries.sort((a, b) => a.name.localeCompare(b.name));
 const outDir = join(ROOT, 'apps/monad/generated');
 await mkdir(outDir, { recursive: true });
 await Bun.write(join(outDir, 'licenses.json'), `${JSON.stringify({ packages: entries, avatarStyles }, null, 2)}\n`);
-process.stdout.write(
-  `[generate-licenses] ${entries.length} production packages, ${avatarStyles.length} avatar styles → apps/monad/generated/licenses.json\n`
-);

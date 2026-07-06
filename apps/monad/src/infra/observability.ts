@@ -3,7 +3,7 @@
  *
  * Disabled when config.observability.endpoint is empty (the default).
  * In dev mode the endpoint auto-defaults to http://localhost:6006 and Arize Phoenix
- * is started automatically by the postinstall hook (scripts/setup-dev.ts).
+ * is started automatically by the postinstall hook (scripts/dev-init.ts).
  *
  * To start Phoenix manually:
  *   docker run -d -p 6006:6006 -p 4317:4317 -p 4318:4318 --name phoenix arizephoenix/phoenix

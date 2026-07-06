@@ -18,6 +18,7 @@ import {
   parseCodexArgumentSupport,
   parseCodexModelOptions
 } from './launch.ts';
+import { codexObservationProjection } from './observation.ts';
 import {
   initializeCodex,
   interruptCodex,
@@ -33,6 +34,7 @@ export const codexNativeCliAdapter: NativeCliProviderAdapter = {
   provider: 'codex',
   productIcon: 'codex',
   label: 'Codex',
+  observation: codexObservationProjection,
   settings: () =>
     nativeCliAdapterSettings({
       launchModes: ['pty', 'app-server', 'remote-control'],

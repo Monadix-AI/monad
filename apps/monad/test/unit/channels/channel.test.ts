@@ -264,9 +264,7 @@ async function makeHarness(
   agents: MonadConfig['agent']['agents'] = [],
   sendInline: HarnessSendInline = async ({ text }, sink) => {
     sink(messageEvent(`reply: ${text}`));
-  },
-  moderatorTaskTimeoutMs?: number,
-  setupStore?: (store: ReturnType<typeof createStore>) => void
+  }
 ): Promise<Harness> {
   const store = createStore();
   const sends: Harness['sends'] = [];
@@ -300,7 +298,6 @@ async function makeHarness(
 
   const cfg: MonadConfig = { ...createDefaultConfig('prn_OWNER', 'owner'), channels: [channel] };
   cfg.agent.agents = agents;
-  setupStore?.(store);
   const service = new ChannelService(
     {
       session: {
@@ -322,7 +319,6 @@ async function makeHarness(
         ]
       ]),
       commands,
-      moderatorTaskTimeoutMs,
       t,
       log: {
         info: (message) => logs.push({ level: 'info', message }),
@@ -904,7 +900,7 @@ test('group gate: DMs are always answered regardless of mention', async () => {
   expect(h.creates.length).toBe(1);
 });
 
-test('group gate: without moderator, configured agent channels require an agent mention', async () => {
+test('group gate: configured agent channels require an agent mention', async () => {
   const coder = testAgent('agt_CODER', 'Coder');
   const h = await makeHarness(
     channelConfig({
@@ -924,263 +920,22 @@ test('group gate: without moderator, configured agent channels require an agent 
   expect(h.creates[0]?.agentId).toBe(coder.id);
 });
 
-test('moderator gate: an unaddressed group message routes to the moderator', async () => {
-  const moderator = testAgent('agt_MODERATOR', 'Moderator');
-  const coder = testAgent('agt_CODER', 'Coder');
-  const h = await makeHarness(
-    channelConfig({
-      allowlist: { policy: 'open', allowAllUsers: false, allowedUsers: [] },
-      groupPolicy: { requireMention: true, moderatorAgentId: moderator.id }
-    }),
-    testCommandBundle(),
-    [moderator, coder]
-  );
-  h.ctx.onMessage(inbound({ chatId: 'g', userId: 'u', text: 'please coordinate this', chatType: 'group' }));
-  await h.flush();
-  expect(h.creates).toHaveLength(1);
-  expect(h.creates[0]?.agentId).toBe(moderator.id);
-  expect(h.sends.map((s) => s.content)).toEqual(['reply: please coordinate this']);
-});
-
-test('moderator gate: one agent mention runs that agent then returns the result to moderator', async () => {
-  const moderator = testAgent('agt_MODERATOR', 'Moderator');
-  const coder = testAgent('agt_CODER', 'Code Agent');
-  const h = await makeHarness(
-    channelConfig({
-      allowlist: { policy: 'open', allowAllUsers: false, allowedUsers: [] },
-      groupPolicy: { requireMention: true, moderatorAgentId: moderator.id }
-    }),
-    testCommandBundle(),
-    [moderator, coder]
-  );
-  h.ctx.onMessage(inbound({ chatId: 'g', userId: 'u', text: '@code-agent fix login', chatType: 'group' }));
-  await h.flush();
-  expect(h.creates.map((c) => c.agentId)).toEqual([coder.id, moderator.id]);
-  expect(h.sends[0]?.content).toBe('reply: @code-agent fix login');
-  expect(h.sends[1]?.content).toContain('Agent Code Agent returned a channel-visible result.');
-  expect(h.sends[1]?.content).toContain('Agent result: reply: @code-agent fix login');
-});
-
-test('moderator gate: multiple agent mentions route directly to moderator', async () => {
-  const moderator = testAgent('agt_MODERATOR', 'Moderator');
+test('group gate: multiple agent mentions route to the first mentioned agent', async () => {
   const coder = testAgent('agt_CODER', 'Coder');
   const reviewer = testAgent('agt_REVIEWER', 'Reviewer');
   const h = await makeHarness(
     channelConfig({
       allowlist: { policy: 'open', allowAllUsers: false, allowedUsers: [] },
-      groupPolicy: { requireMention: true, moderatorAgentId: moderator.id }
+      groupPolicy: { requireMention: true }
     }),
     testCommandBundle(),
-    [moderator, coder, reviewer]
+    [coder, reviewer]
   );
   h.ctx.onMessage(inbound({ chatId: 'g', userId: 'u', text: '@coder @reviewer split this', chatType: 'group' }));
   await h.flush();
   expect(h.creates).toHaveLength(1);
-  expect(h.creates[0]?.agentId).toBe(moderator.id);
+  expect(h.creates[0]?.agentId).toBe(coder.id);
   expect(h.sends.map((s) => s.content)).toEqual(['reply: @coder @reviewer split this']);
-});
-
-test('moderator next: fanout tasks display immediately, then all results return to moderator', async () => {
-  const moderator = testAgent('agt_MODERATOR', 'Moderator');
-  const coder = testAgent('agt_CODER', 'Coder');
-  const reviewer = testAgent('agt_REVIEWER', 'Reviewer');
-  const h = await makeHarness(
-    channelConfig({
-      allowlist: { policy: 'open', allowAllUsers: false, allowedUsers: [] },
-      groupPolicy: { requireMention: true, moderatorAgentId: moderator.id }
-    }),
-    testCommandBundle(),
-    [moderator, coder, reviewer],
-    async ({ text }, sink) => {
-      if (text === 'coordinate release') {
-        sink(
-          messageEvent(
-            JSON.stringify({
-              display: { content: 'starting tasks' },
-              next: [
-                { agentId: coder.id, title: 'code', prompt: 'inspect code' },
-                { agentId: reviewer.id, title: 'review', prompt: 'review risk' }
-              ]
-            })
-          )
-        );
-        return;
-      }
-      if (text.includes('Title: code')) {
-        sink(messageEvent(JSON.stringify({ display: { content: 'code done' }, next: [] })));
-        return;
-      }
-      if (text.includes('Title: review')) {
-        sink(messageEvent(JSON.stringify({ display: { content: 'review done' }, next: [] })));
-        return;
-      }
-      if (text.startsWith('A batch of moderator-assigned tasks returned')) {
-        expect(text).toContain('Agent result: code done');
-        expect(text).toContain('Agent result: review done');
-        sink(messageEvent(JSON.stringify({ display: { content: 'all done' }, next: [] })));
-      }
-    }
-  );
-
-  h.ctx.onMessage(inbound({ chatId: 'g', userId: 'u', text: 'coordinate release', chatType: 'group' }));
-  await h.flush();
-
-  expect(h.creates.map((c) => c.agentId)).toEqual([moderator.id, coder.id, reviewer.id]);
-  expect(h.sends.map((s) => s.content)).toEqual(['starting tasks', 'code done', 'review done', 'all done']);
-});
-
-test('moderator next: timed-out task does not block continuation', async () => {
-  const moderator = testAgent('agt_MODERATOR', 'Moderator');
-  const coder = testAgent('agt_CODER', 'Coder');
-  const reviewer = testAgent('agt_REVIEWER', 'Reviewer');
-  const h = await makeHarness(
-    channelConfig({
-      allowlist: { policy: 'open', allowAllUsers: false, allowedUsers: [] },
-      groupPolicy: { requireMention: true, moderatorAgentId: moderator.id }
-    }),
-    testCommandBundle(),
-    [moderator, coder, reviewer],
-    async ({ text }, sink) => {
-      if (text === 'coordinate with timeout') {
-        sink(
-          messageEvent(
-            JSON.stringify({
-              display: { content: 'starting timeout tasks' },
-              next: [
-                { agentId: coder.id, title: 'code', prompt: 'inspect code' },
-                { agentId: reviewer.id, title: 'review', prompt: 'hang forever' }
-              ]
-            })
-          )
-        );
-        return;
-      }
-      if (text.includes('Title: code')) {
-        sink(messageEvent(JSON.stringify({ display: { content: 'code done before timeout' }, next: [] })));
-        return;
-      }
-      if (text.includes('Title: review')) {
-        await new Promise(() => {});
-        return;
-      }
-      if (text.startsWith('A batch of moderator-assigned tasks returned')) {
-        expect(text).toContain('Agent result: code done before timeout');
-        expect(text).toContain('Agent result: (timed out waiting for agent result)');
-        sink(messageEvent(JSON.stringify({ display: { content: 'continued after timeout' }, next: [] })));
-      }
-    },
-    10
-  );
-
-  h.ctx.onMessage(inbound({ chatId: 'g', userId: 'u', text: 'coordinate with timeout', chatType: 'group' }));
-  await new Promise((r) => setTimeout(r, 60));
-
-  expect(h.sends.map((s) => s.content)).toEqual([
-    'starting timeout tasks',
-    'code done before timeout',
-    'continued after timeout'
-  ]);
-});
-
-test('moderator next: invalid and self targets are not executed', async () => {
-  const moderator = testAgent('agt_MODERATOR', 'Moderator');
-  const coder = testAgent('agt_CODER', 'Coder');
-  const h = await makeHarness(
-    channelConfig({
-      allowlist: { policy: 'open', allowAllUsers: false, allowedUsers: [] },
-      groupPolicy: { requireMention: true, moderatorAgentId: moderator.id }
-    }),
-    testCommandBundle(),
-    [moderator, coder],
-    async ({ text }, sink) => {
-      if (text === 'filter targets') {
-        sink(
-          messageEvent(
-            JSON.stringify({
-              display: { content: 'filtering' },
-              next: [
-                { agentId: moderator.id, title: 'self', prompt: 'do not run' },
-                { agentId: 'agt_MISSING', title: 'missing', prompt: 'do not run' },
-                { agentId: coder.id, title: 'code', prompt: 'run' }
-              ]
-            })
-          )
-        );
-        return;
-      }
-      if (text.includes('Title: code')) {
-        sink(messageEvent(JSON.stringify({ display: { content: 'code ran' }, next: [] })));
-        return;
-      }
-      if (text.startsWith('A batch of moderator-assigned tasks returned')) {
-        sink(messageEvent(JSON.stringify({ display: { content: 'filtered done' }, next: [] })));
-      }
-    }
-  );
-
-  h.ctx.onMessage(inbound({ chatId: 'g', userId: 'u', text: 'filter targets', chatType: 'group' }));
-  await h.flush();
-
-  expect(h.creates.map((c) => c.agentId)).toEqual([moderator.id, coder.id]);
-  expect(h.sends.map((s) => s.content)).toEqual(['filtering', 'code ran', 'filtered done']);
-  expect(h.logs.some((l) => l.message.includes('cannot be the moderator itself'))).toBe(true);
-  expect(h.logs.some((l) => l.message.includes('agt_MISSING is not configured'))).toBe(true);
-});
-
-test('moderator recovery: open round is summarized to moderator on restart', async () => {
-  const moderator = testAgent('agt_MODERATOR', 'Moderator');
-  const coder = testAgent('agt_CODER', 'Coder');
-  const original = inbound({ chatId: 'g', userId: 'u', text: 'recover release', chatType: 'group' });
-  const h = await makeHarness(
-    channelConfig({
-      allowlist: { policy: 'open', allowAllUsers: false, allowedUsers: [] },
-      groupPolicy: { requireMention: true, moderatorAgentId: moderator.id }
-    }),
-    testCommandBundle(),
-    [moderator, coder],
-    async ({ text }, sink) => {
-      if (text.startsWith('A previously open moderator task batch was recovered')) {
-        expect(text).toContain('Agent result: code result before restart');
-        expect(text).toContain('daemon restarted before agent result was observed');
-        sink(messageEvent(JSON.stringify({ display: { content: 'recovered summary handled' }, next: [] })));
-      }
-    },
-    undefined,
-    (store) => {
-      store.createChannelModeratorRound({
-        id: 'rnd_recover',
-        channelId: 'chn_TESTCHANNEL',
-        moderatorKey: 'chn_TESTCHANNEL|g|a:agt_MODERATOR',
-        moderatorAgentId: moderator.id,
-        originalInbound: original,
-        depth: 0,
-        deadlineAt: '2026-06-25T00:02:00.000Z',
-        tasks: [
-          {
-            index: 0,
-            agentId: coder.id,
-            agentName: coder.name,
-            title: 'code',
-            task: { agentId: coder.id, title: 'code', prompt: 'inspect' }
-          },
-          {
-            index: 1,
-            agentId: 'agt_MISSING',
-            agentName: 'Missing',
-            title: 'missing',
-            task: { agentId: 'agt_MISSING', title: 'missing', prompt: 'lost' }
-          }
-        ]
-      });
-      store.updateChannelModeratorRoundResults('rnd_recover', [
-        { index: 0, agentId: coder.id, agentName: coder.name, title: 'code', result: 'code result before restart' }
-      ]);
-    }
-  );
-  await h.flush();
-
-  expect(h.sends.map((s) => s.content)).toEqual(['recovered summary handled']);
-  expect(h.store.listOpenChannelModeratorRounds('chn_TESTCHANNEL')).toEqual([]);
 });
 
 // ---------- agent hint ----------

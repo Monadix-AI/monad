@@ -6,6 +6,7 @@ import type {
   GetLicensesResponse,
   GetMem0DataResponse,
   GetStatsResponse,
+  GetUsageQuery,
   GetUsageResponse,
   IndexerStatus,
   ListSkillsQuery,
@@ -61,6 +62,7 @@ import { createToolBackendsModule } from '@/handlers/settings/tool-backends/inde
 import { createTranscriptProjector } from '@/handlers/transcript/projector.ts';
 import { resolveNativeCliAgentEnv } from '@/services/native-cli/env.ts';
 import { NativeCliHost } from '@/services/native-cli/host.ts';
+import { managedProjectRuntimeWorkspace } from '@/services/native-cli/managed-project.ts';
 import licensesData from '../../generated/licenses.json';
 
 export { HandlerError } from '@/handlers/handler-error.ts';
@@ -204,14 +206,21 @@ export function createDaemonHandlers(deps: DaemonHandlerDeps) {
   // The global usage ledger ("账本"): cumulative real token/cost per provider+model. `reset` is the
   // only way to wipe it (manual billing restart); per-session usage lives on each session row.
   const usage = {
-    async get(): Promise<GetUsageResponse> {
+    async get(query: GetUsageQuery = {}): Promise<GetUsageResponse> {
       const entries = deps.store.ledger();
+      const fullBreakdown = deps.store.ledgerBreakdown();
+      const offset = query.offset ?? 0;
+      const limit = query.limit ?? Math.max(1, fullBreakdown.length);
+      const breakdown = fullBreakdown.slice(offset, offset + limit);
       return {
         totalCostUsd: entries.reduce((sum, e) => sum + e.costUsd, 0),
         totalInputTokens: entries.reduce((sum, e) => sum + e.inputTokens, 0),
         totalOutputTokens: entries.reduce((sum, e) => sum + e.outputTokens, 0),
         entries,
-        breakdown: deps.store.ledgerBreakdown()
+        breakdown,
+        total: fullBreakdown.length,
+        limit,
+        offset
       };
     },
     async reset(): Promise<OkResponse> {
@@ -280,7 +289,7 @@ export function createDaemonHandlers(deps: DaemonHandlerDeps) {
     channel: createChannelModule({ paths, channelService: deps.channelService, configBus: deps.configBus }),
     peer: createPeerModule({ paths, configBus: deps.configBus }),
     acpAgent: createAcpAgentModule({ paths }),
-    nativeCliAgent: createNativeCliAgentModule({ paths }),
+    nativeCliAgent: createNativeCliAgentModule({ paths, nativeCliSessions: nativeCliHost }),
     mcpServer: createMcpServerModule({
       paths,
       getMcpStatus: deps.getMcpStatus,
@@ -318,6 +327,7 @@ export function createDaemonHandlers(deps: DaemonHandlerDeps) {
       getConflicts: deps.getAtomConflicts,
       getAtomDetails: deps.getAtomDetails,
       getWorkspaceExperienceApiHandler: deps.getWorkspaceExperienceApiHandler,
+      getWorkspaceExperienceSnapshot: deps.getWorkspaceExperienceSnapshot,
       getWorkspaceExperiences: deps.getWorkspaceExperiences,
       configBus: deps.configBus,
       modelService: deps.modelService
@@ -325,6 +335,26 @@ export function createDaemonHandlers(deps: DaemonHandlerDeps) {
     session,
     nativeCli: createNativeCliModule({ paths, host: nativeCliHost, store: deps.store }),
     _nativeAgentStore: deps.store,
+    _nativeAgentAttachmentRoots: (args: { projectId: string; agentId: string; workingPath?: string | null }) => {
+      const nativeSession = args.agentId
+        ? deps.store
+            .listNativeCliSessionsForTranscriptTarget(args.projectId)
+            .find((session) => session.agentName === args.agentId)
+        : null;
+      const workingPath = args.workingPath ?? nativeSession?.workingPath;
+      return [
+        ...(workingPath ? [workingPath] : []),
+        ...(args.agentId
+          ? [
+              managedProjectRuntimeWorkspace({
+                monadHome: paths.home,
+                projectId: args.projectId,
+                agentName: args.agentId
+              })
+            ]
+          : [])
+      ];
+    },
     _transcriptProjector: transcriptProjector,
     memory: createMemoryModule(
       deps.memoryService,

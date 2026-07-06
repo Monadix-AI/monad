@@ -1,6 +1,7 @@
 import type { AcpAgentConfig, MonadConfig, MonadPaths } from '@monad/home';
 import type {
   AcpAgentView,
+  GetAcpAgentResponse,
   ListAcpAgentPresetsResponse,
   ListAcpAgentsResponse,
   OkResponse,
@@ -10,6 +11,7 @@ import type {
 
 import { loadAll, saveSystemConfig } from '@monad/home';
 
+import { HandlerError } from '@/handlers/handler-error.ts';
 import { listAcpAgentPresets, productIconForAcpAgent } from '@/services/delegation/presets.ts';
 
 export interface AcpAgentDeps {
@@ -57,6 +59,13 @@ export function createAcpAgentModule({ paths }: AcpAgentDeps) {
       return { agents: cfg.acpAgents.map(toView) };
     },
 
+    async getAcpAgent({ name }: { name: string }): Promise<GetAcpAgentResponse> {
+      const cfg = await read();
+      const found = cfg.acpAgents.find((a) => a.name === name);
+      if (!found) throw new HandlerError('not_found', `ACP agent not found: ${name}`);
+      return { agent: toView(found) };
+    },
+
     // Turnkey invite presets (Codex / Claude Code) + same-machine detection. Read-only, no config
     // touch — the UI prefills an upsert from a chosen preset. (See services/delegation/presets.ts.)
     listAcpAgentPresets(): ListAcpAgentPresetsResponse {
@@ -78,6 +87,9 @@ export function createAcpAgentModule({ paths }: AcpAgentDeps) {
 
     async setAcpAgentEnabled({ name, enabled }: { name: string } & SetAcpAgentEnabledRequest): Promise<OkResponse> {
       const cfg = await read();
+      if (!cfg.acpAgents.some((a) => a.name === name)) {
+        throw new HandlerError('not_found', `ACP agent not found: ${name}`);
+      }
       cfg.acpAgents = cfg.acpAgents.map((a) => (a.name === name ? { ...a, enabled } : a));
       await commit(cfg);
       return { ok: true };
@@ -85,6 +97,9 @@ export function createAcpAgentModule({ paths }: AcpAgentDeps) {
 
     async removeAcpAgent({ name }: { name: string }): Promise<OkResponse> {
       const cfg = await read();
+      if (!cfg.acpAgents.some((a) => a.name === name)) {
+        throw new HandlerError('not_found', `ACP agent not found: ${name}`);
+      }
       cfg.acpAgents = cfg.acpAgents.filter((a) => a.name !== name);
       await commit(cfg);
       return { ok: true };

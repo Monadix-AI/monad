@@ -38,6 +38,8 @@ export interface VirtualListProps<T> {
   onStartReached?: () => void;
   /** Fired when the user scrolls near the bottom — load newer rows here (history-mode paging). */
   onEndReached?: () => void;
+  /** Fired when the virtualized viewport range changes. */
+  onRangeChange?: (range: { endIndex: number; startIndex: number }) => void;
   /** Restore a position captured earlier via the handle's `getState` (e.g. across route changes). */
   restoreStateFrom?: StateSnapshot;
   /** ARIA role for the scroll region (e.g. "log" for a chat transcript). */
@@ -117,6 +119,7 @@ export function VirtualList<T>({
   firstItemIndex,
   onStartReached,
   onEndReached,
+  onRangeChange,
   restoreStateFrom,
   role,
   ariaLive,
@@ -277,6 +280,12 @@ export function VirtualList<T>({
   // Only forward firstItemIndex when paginating: Virtuoso computes `data-item-index` as
   // firstItemIndex + offset, so an explicit `undefined` yields NaN attributes.
   const paginationProps = firstItemIndex === undefined ? {} : { firstItemIndex };
+  const initialTopMostItemIndex =
+    restoreStateFrom || items.length === 0
+      ? undefined
+      : stickToBottom
+        ? { index: 'LAST' as const, align: 'end' as const }
+        : 0;
 
   return (
     <Virtuoso<T, SlotContext>
@@ -290,11 +299,10 @@ export function VirtualList<T>({
       increaseViewportBy={overscan}
       {...paginationProps}
       endReached={onEndReached}
-      initialTopMostItemIndex={
-        restoreStateFrom ? undefined : stickToBottom && items.length > 0 ? { index: items.length - 1, align: 'end' } : 0
-      }
+      initialTopMostItemIndex={initialTopMostItemIndex}
       itemContent={(_index, item) => renderItem(item)}
       onScroll={measurePinned}
+      rangeChanged={onRangeChange}
       ref={handleRef}
       restoreStateFrom={restoreStateFrom}
       scrollerRef={setScroller}

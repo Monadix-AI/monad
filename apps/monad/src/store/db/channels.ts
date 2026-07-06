@@ -1,59 +1,9 @@
-// Channel conversations (per-conversation active-session index) + moderator rounds. Split out of
-// index.ts — every function takes the raw bun:sqlite handle.
+// Channel conversations (per-conversation active-session index). Split out of index.ts — every
+// function takes the raw bun:sqlite handle.
 
 import type { Database } from 'bun:sqlite';
-import type { ChannelInbound, ChannelResponseNextTarget } from '@monad/protocol';
 
 import { type ChannelConversation, type ChannelConversationSession, rowToConversation } from './row-mappers.ts';
-
-export interface ChannelModeratorRoundTask {
-  index: number;
-  agentId: string;
-  agentName: string;
-  title?: string;
-  task: ChannelResponseNextTarget;
-}
-
-export interface ChannelModeratorRoundResult {
-  index: number;
-  agentId: string;
-  agentName: string;
-  title?: string;
-  result: string;
-  timedOut?: boolean;
-}
-
-export interface ChannelModeratorRoundRow {
-  id: string;
-  channelId: string;
-  moderatorKey: string;
-  moderatorAgentId: string;
-  originalInbound: ChannelInbound;
-  depth: number;
-  tasks: ChannelModeratorRoundTask[];
-  results: ChannelModeratorRoundResult[];
-  status: 'open' | 'settled';
-  deadlineAt: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-function rowToChannelModeratorRound(r: Record<string, unknown>): ChannelModeratorRoundRow {
-  return {
-    id: r.id as string,
-    channelId: r.channel_id as string,
-    moderatorKey: r.moderator_key as string,
-    moderatorAgentId: r.moderator_agent_id as string,
-    originalInbound: JSON.parse(r.original_inbound as string) as ChannelInbound,
-    depth: r.depth as number,
-    tasks: JSON.parse(r.tasks as string) as ChannelModeratorRoundTask[],
-    results: JSON.parse(r.results as string) as ChannelModeratorRoundResult[],
-    status: r.status as 'open' | 'settled',
-    deadlineAt: r.deadline_at as string,
-    createdAt: r.created_at as string,
-    updatedAt: r.updated_at as string
-  };
-}
 
 export function getActiveConversation(
   sqlite: Database,
@@ -140,74 +90,4 @@ export function listActiveConversations(
     .query('SELECT conversation_key, active_session_id FROM channel_conversations WHERE channel_id = ?')
     .all(channelId) as Array<{ conversation_key: string; active_session_id: string }>;
   return rows.map((r) => ({ conversationKey: r.conversation_key, activeSessionId: r.active_session_id }));
-}
-
-export function createChannelModeratorRound(
-  sqlite: Database,
-  args: {
-    id: string;
-    channelId: string;
-    moderatorKey: string;
-    moderatorAgentId: string;
-    originalInbound: ChannelInbound;
-    depth: number;
-    tasks: ChannelModeratorRoundTask[];
-    deadlineAt: string;
-  }
-): void {
-  const now = new Date().toISOString();
-  sqlite
-    .query(
-      `INSERT INTO channel_moderator_rounds
-         (id, channel_id, moderator_key, moderator_agent_id, original_inbound, depth,
-          tasks, results, status, deadline_at, created_at, updated_at)
-       VALUES ($id, $channelId, $moderatorKey, $moderatorAgentId, $originalInbound, $depth,
-               $tasks, '[]', 'open', $deadlineAt, $now, $now)`
-    )
-    .run({
-      $id: args.id,
-      $channelId: args.channelId,
-      $moderatorKey: args.moderatorKey,
-      $moderatorAgentId: args.moderatorAgentId,
-      $originalInbound: JSON.stringify(args.originalInbound),
-      $depth: args.depth,
-      $tasks: JSON.stringify(args.tasks),
-      $deadlineAt: args.deadlineAt,
-      $now: now
-    });
-}
-
-export function updateChannelModeratorRoundResults(
-  sqlite: Database,
-  id: string,
-  results: ChannelModeratorRoundResult[]
-): void {
-  sqlite
-    .query('UPDATE channel_moderator_rounds SET results = ?, updated_at = ? WHERE id = ? AND status = ?')
-    .run(JSON.stringify(results), new Date().toISOString(), id, 'open');
-}
-
-export function settleChannelModeratorRound(
-  sqlite: Database,
-  id: string,
-  results: ChannelModeratorRoundResult[]
-): void {
-  sqlite
-    .query(
-      `UPDATE channel_moderator_rounds
-       SET results = ?, status = 'settled', updated_at = ?
-       WHERE id = ?`
-    )
-    .run(JSON.stringify(results), new Date().toISOString(), id);
-}
-
-export function listOpenChannelModeratorRounds(sqlite: Database, channelId?: string): ChannelModeratorRoundRow[] {
-  const rows = channelId
-    ? (sqlite
-        .query('SELECT * FROM channel_moderator_rounds WHERE status = ? AND channel_id = ? ORDER BY created_at ASC')
-        .all('open', channelId) as Array<Record<string, unknown>>)
-    : (sqlite
-        .query('SELECT * FROM channel_moderator_rounds WHERE status = ? ORDER BY created_at ASC')
-        .all('open') as Array<Record<string, unknown>>);
-  return rows.map(rowToChannelModeratorRound);
 }

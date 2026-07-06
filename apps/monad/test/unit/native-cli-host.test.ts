@@ -22,6 +22,79 @@ test('native CLI auth status probes use a global 20 second timeout', () => {
   expect(AUTH_STATUS_TIMEOUT_MS).toBe(20_000);
 });
 
+test('native CLI host stops live sessions for a disconnected provider adapter', () => {
+  const store = createStore();
+  const bus = new EventBus();
+  const projectId = 'prj_01KWHOSTPROVIDER000000000';
+  const nativeCliSessionId = 'ncli_provider_stop_test';
+  const runtimeAgentName = 'pmem_codex_abc123';
+  store.insertWorkplaceProject({
+    id: projectId,
+    title: 'Provider stop',
+    ownerPrincipalId: 'prn_test',
+    state: 'active',
+    archived: false,
+    createdAt: '2026-07-02T00:00:00.000Z',
+    updatedAt: '2026-07-02T00:00:00.000Z'
+  });
+  store.upsertNativeCliSession({
+    id: nativeCliSessionId,
+    transcriptTargetId: projectId,
+    agentName: runtimeAgentName,
+    provider: 'codex',
+    workingPath: '/tmp/project',
+    launchMode: 'app-server',
+    runtimeRole: 'managed-project-agent',
+    agentRuntimeId: nativeCliSessionId,
+    agentRuntimeTokenHash: null,
+    lastDeliveredSeq: 0,
+    lastVisibleSeq: 0,
+    state: 'running',
+    pid: 123,
+    providerSessionRef: null,
+    outputSnapshot: '',
+    exitCode: null,
+    startedAt: '2026-07-02T00:00:00.000Z',
+    updatedAt: '2026-07-02T00:00:00.000Z',
+    exitedAt: null
+  });
+  const host = new NativeCliHost({ store, bus, agents: async () => [] });
+  const adapter = {
+    provider: 'codex',
+    productIcon: 'openai',
+    parseOutput: () => [],
+    stop: () => {}
+  } as unknown as NativeCliProviderAdapter;
+  (
+    host as unknown as {
+      live: Map<string, unknown>;
+    }
+  ).live.set(nativeCliSessionId, {
+    id: nativeCliSessionId,
+    transcriptTargetId: projectId,
+    agentName: runtimeAgentName,
+    provider: 'codex',
+    runtimeRole: 'managed-project-agent',
+    proxyApprovals: false,
+    proc: { pid: 123 },
+    adapter,
+    launchMode: 'app-server',
+    providerSessionRef: null,
+    pendingApprovals: new Map(),
+    pendingHistoryPages: new Map(),
+    pendingRequests: new Map(),
+    outputBuffer: new BoundedOutputBuffer(256 * 1024),
+    outputSeq: 0,
+    snapshotFlushTimer: null,
+    nextRequestId: () => 0,
+    kill: () => {}
+  });
+
+  host.stopAgentProvider('codex');
+
+  expect(store.getNativeCliSession(nativeCliSessionId)?.state).toBe('stopped');
+});
+
 test('managed provider final can retire a consumed inbox turn without auto-posting', async () => {
   const store = createStore();
   const host = new NativeCliHost({
@@ -548,11 +621,17 @@ test('native CLI app-server disconnect during initial startup redials before fai
   expect(startupRejected).toBeInstanceOf(Error); // exhaustion still rejects a still-pending startup
 }, 20_000);
 
-test('native CLI input throws instead of silently vanishing into a stale connection while the app-server is reconnecting', () => {
+test('native CLI input throws instead of silently vanishing into a stale connection while the app-server is reconnecting', async () => {
   // Between a socket drop and a completed redial, `live.appServer` still references the dead connection
   // (`reconnectAppServer` only reassigns it on success) — it stays truthy, so a naive `!appServer` guard
   // wouldn't catch this window. `input()` must fail loudly instead of silently sending into the void.
-  const host = new NativeCliHost({ store: createStore(), bus: new EventBus(), agents: async () => [] });
+  const host = new NativeCliHost({
+    store: createStore(),
+    bus: new EventBus(),
+    agents: async () => {
+      throw new Error('native CLI input should not read agent config');
+    }
+  });
   const id = 'ncli_reconnect_input_test';
   let sent = 0;
   const adapter = {
@@ -587,8 +666,456 @@ test('native CLI input throws instead of silently vanishing into a stale connect
   const internal = host as unknown as { live: Map<string, unknown> };
   internal.live.set(id, live);
 
-  expect(() => host.input(id, { input: 'hello' })).toThrow(/reconnecting/i);
+  await expect(host.input(id, { input: 'hello' })).rejects.toThrow(/reconnecting/i);
   expect(sent).toBe(0); // never reached the stale connection
+});
+
+test('native CLI idle suspend releases a resumable json-stream process and reconnects on input', async () => {
+  const store = createStore();
+  const workdir = mkdtempSync(join(tmpdir(), 'monad-native-cli-idle-'));
+  const logPath = join(workdir, 'runtime.log');
+  const mockCli = join(workdir, 'mock-json-stream.js');
+  writeFileSync(
+    mockCli,
+    `
+const fs = require('node:fs');
+const logPath = process.argv[2];
+fs.appendFileSync(logPath, 'spawn:' + process.pid + '\\n');
+fs.appendFileSync(logPath, 'argv:' + process.argv.slice(3).join('|') + '\\n');
+console.log('SESSION_REF:thread-1');
+process.stdin.setEncoding('utf8');
+process.stdin.on('data', (chunk) => {
+  fs.appendFileSync(logPath, 'input:' + chunk.trim() + '\\n');
+});
+setInterval(() => {}, 1000);
+`
+  );
+  chmodSync(mockCli, 0o755);
+  const provider = `idle-json-${Date.now()}`;
+  const adapter = {
+    provider,
+    productIcon: 'codex',
+    label: 'Idle JSON',
+    detect: () => ({
+      id: provider,
+      provider,
+      productIcon: 'codex',
+      label: 'Idle JSON',
+      command: process.execPath,
+      args: [mockCli, logPath],
+      installed: true,
+      supportedLaunchModes: ['json-stream']
+    }),
+    listSupportedModels: () => [],
+    resolveCommand: (command: string) => command,
+    buildLaunch: (agent: NativeCliAgentView, opts: { providerSessionRef?: string }) => ({
+      argv: [
+        agent.command,
+        ...(agent.args ?? []),
+        ...(opts.providerSessionRef ? ['--resume', opts.providerSessionRef] : [])
+      ],
+      cwd: workdir,
+      launchMode: 'json-stream',
+      provider,
+      approvalOwnership: 'provider-owned',
+      capabilities: ['json-stream', 'session-resume']
+    }),
+    buildAuthLaunch: () => {
+      throw new Error('not used');
+    },
+    buildAuthStatusLaunch: () => {
+      throw new Error('not used');
+    },
+    authStatus: () => {
+      throw new Error('not used');
+    },
+    parseAuthStatus: () => 'unknown',
+    parseOutput: (chunk: string) =>
+      chunk.includes('SESSION_REF:thread-1')
+        ? [{ type: 'session_ref', payload: { providerSessionRef: 'thread-1' } }]
+        : [],
+    sendInput: (handle: { stdin?: { write(input: string): void } }, input: string) => {
+      handle.stdin?.write(`${input}\n`);
+    },
+    resolveApproval: () => {},
+    resize: () => {},
+    stop: () => {}
+  } as unknown as NativeCliProviderAdapter;
+  registerAgentAdapterImpl(adapter);
+  const agent: NativeCliAgentView = {
+    name: provider,
+    provider,
+    productIcon: 'codex',
+    command: process.execPath,
+    args: [mockCli, logPath],
+    enabled: true,
+    defaultLaunchMode: 'json-stream',
+    allowAutopilot: false,
+    approvalOwnership: 'provider-owned'
+  };
+  const host = new NativeCliHost({
+    store,
+    bus: new EventBus(),
+    agents: async () => [agent],
+    nativeCliIdleTimeoutMs: 300
+  });
+  const projectId = 'prj_01KWHOSTIDLE000000000000';
+  store.insertWorkplaceProject({
+    id: projectId,
+    title: 'idle test',
+    ownerPrincipalId: 'prn_test',
+    state: 'active',
+    archived: false,
+    createdAt: '2026-07-02T00:00:00.000Z',
+    updatedAt: '2026-07-02T00:00:00.000Z'
+  });
+
+  try {
+    const view = await host.start({
+      transcriptTargetId: projectId,
+      agentName: provider,
+      workingPath: workdir,
+      launchMode: 'json-stream'
+    });
+    for (let i = 0; i < 40 && !Bun.file(logPath).exists(); i++) {
+      await Bun.sleep(25);
+    }
+    for (let i = 0; i < 40 && store.getNativeCliSession(view.id)?.providerSessionRef !== 'thread-1'; i++) {
+      await Bun.sleep(25);
+    }
+    for (let i = 0; i < 40 && store.getNativeCliSession(view.id)?.pid !== null; i++) {
+      await Bun.sleep(25);
+    }
+    expect(store.getNativeCliSession(view.id)?.state).toBe('running');
+    expect(store.getNativeCliSession(view.id)?.pid).toBeNull();
+    expect(store.getNativeCliSession(view.id)?.providerSessionRef).toBe('thread-1');
+
+    await host.input(view.id, { input: 'wake-up' });
+    for (let i = 0; i < 40; i++) {
+      const log = await Bun.file(logPath).text();
+      if ((log.match(/^spawn:/gm) ?? []).length >= 2 && log.includes('input:wake-up')) break;
+      await Bun.sleep(25);
+    }
+    const log = await Bun.file(logPath).text();
+    expect((log.match(/^spawn:/gm) ?? []).length).toBeGreaterThanOrEqual(2);
+    expect(log).toContain('argv:--resume|thread-1');
+    expect(log).toContain('input:wake-up');
+    expect(store.getNativeCliSession(view.id)?.state).toBe('running');
+    expect(store.getNativeCliSession(view.id)?.pid).toBeNumber();
+  } finally {
+    host.stop(host.list(projectId).sessions[0]?.id ?? '');
+    rmSync(workdir, { recursive: true, force: true });
+  }
+});
+
+test('native CLI idle resume passes the latest provider session ref to app-server initialize', async () => {
+  const store = createStore();
+  const workdir = mkdtempSync(join(tmpdir(), 'monad-native-cli-app-server-idle-'));
+  const logPath = join(workdir, 'runtime.log');
+  const mockCli = join(workdir, 'mock-app-server.js');
+  writeFileSync(
+    mockCli,
+    `
+const fs = require('node:fs');
+const logPath = process.argv[2];
+fs.appendFileSync(logPath, 'spawn:' + process.pid + '\\n');
+console.log('SESSION_REF:thread-stdio');
+process.stdin.setEncoding('utf8');
+process.stdin.on('data', (chunk) => {
+  fs.appendFileSync(logPath, 'input:' + chunk.trim() + '\\n');
+});
+setInterval(() => {}, 1000);
+`
+  );
+  chmodSync(mockCli, 0o755);
+  const provider = `idle-app-server-${Date.now()}`;
+  const initRefs: Array<string | undefined> = [];
+  const adapter = {
+    provider,
+    productIcon: 'codex',
+    label: 'Idle App Server',
+    detect: () => ({
+      id: provider,
+      provider,
+      productIcon: 'codex',
+      label: 'Idle App Server',
+      command: process.execPath,
+      args: [mockCli, logPath],
+      installed: true,
+      supportedLaunchModes: ['app-server']
+    }),
+    listSupportedModels: () => [],
+    resolveCommand: (command: string) => command,
+    buildLaunch: (agent: NativeCliAgentView) => ({
+      argv: [agent.command, ...(agent.args ?? [])],
+      cwd: workdir,
+      launchMode: 'app-server',
+      appServerTransport: 'stdio',
+      provider,
+      approvalOwnership: 'provider-owned',
+      capabilities: ['app-server', 'session-resume']
+    }),
+    buildAuthLaunch: () => {
+      throw new Error('not used');
+    },
+    buildAuthStatusLaunch: () => {
+      throw new Error('not used');
+    },
+    authStatus: () => {
+      throw new Error('not used');
+    },
+    parseAuthStatus: () => 'unknown',
+    initialize: (_handle: unknown, ctx: { providerSessionRef?: string }) => {
+      initRefs.push(ctx.providerSessionRef);
+    },
+    parseOutput: (chunk: string) =>
+      chunk.includes('SESSION_REF:thread-stdio')
+        ? [{ type: 'session_ref', payload: { providerSessionRef: 'thread-stdio' } }]
+        : [],
+    sendInput: (handle: { stdin?: { write(input: string): void } }, input: string) => {
+      handle.stdin?.write(`${input}\n`);
+    },
+    resolveApproval: () => {},
+    resize: () => {},
+    stop: () => {}
+  } as unknown as NativeCliProviderAdapter;
+  registerAgentAdapterImpl(adapter);
+  const agent: NativeCliAgentView = {
+    name: provider,
+    provider,
+    productIcon: 'codex',
+    command: process.execPath,
+    args: [mockCli, logPath],
+    enabled: true,
+    defaultLaunchMode: 'app-server',
+    appServerTransport: 'stdio',
+    allowAutopilot: false,
+    approvalOwnership: 'provider-owned'
+  };
+  const host = new NativeCliHost({
+    store,
+    bus: new EventBus(),
+    agents: async () => [agent],
+    nativeCliIdleTimeoutMs: 300
+  });
+  const projectId = 'prj_01KWHOSTIDLEAPP000000000';
+  store.insertWorkplaceProject({
+    id: projectId,
+    title: 'idle app-server test',
+    ownerPrincipalId: 'prn_test',
+    state: 'active',
+    archived: false,
+    createdAt: '2026-07-02T00:00:00.000Z',
+    updatedAt: '2026-07-02T00:00:00.000Z'
+  });
+
+  try {
+    const view = await host.start({
+      transcriptTargetId: projectId,
+      agentName: provider,
+      workingPath: workdir,
+      launchMode: 'app-server',
+      appServerTransport: 'stdio'
+    });
+    for (let i = 0; i < 40 && store.getNativeCliSession(view.id)?.pid !== null; i++) {
+      await Bun.sleep(25);
+    }
+    await host.input(view.id, { input: 'wake-app-server' });
+    for (let i = 0; i < 40 && initRefs.length < 2; i++) {
+      await Bun.sleep(25);
+    }
+    expect(initRefs).toEqual([undefined, 'thread-stdio']);
+  } finally {
+    host.stop(host.list(projectId).sessions[0]?.id ?? '');
+    rmSync(workdir, { recursive: true, force: true });
+  }
+});
+
+test('native CLI idle suspend unlinks an app-server unix socket before later resume', async () => {
+  const host = new NativeCliHost({ store: createStore(), bus: new EventBus(), agents: async () => [] });
+  const workdir = mkdtempSync(join(tmpdir(), 'monad-native-cli-socket-idle-'));
+  const socketPath = join(workdir, 'provider.sock');
+  writeFileSync(socketPath, '');
+  const id = 'ncli_idle_socket_cleanup';
+  const adapter = {
+    provider: 'codex',
+    productIcon: 'codex',
+    parseOutput: () => [],
+    stop: () => {}
+  } as unknown as NativeCliProviderAdapter;
+  const live = {
+    id,
+    transcriptTargetId: 'prj_01KWHOSTIDLESOCKET00000',
+    agentName: 'codex',
+    provider: 'codex',
+    runtimeRole: 'interactive',
+    proxyApprovals: false,
+    proc: { pid: -1 },
+    adapter,
+    launchMode: 'app-server',
+    providerSessionRef: 'thread-unix',
+    appServerSocketPath: socketPath,
+    pendingApprovals: new Map(),
+    pendingHistoryPages: new Map(),
+    pendingRequests: new Map(),
+    outputBuffer: new BoundedOutputBuffer(256 * 1024),
+    outputSeq: 0,
+    snapshotFlushTimer: null,
+    nextRequestId: () => 0,
+    idleTimeoutMs: 1,
+    restartRuntime: async () => {},
+    kill: () => {}
+  };
+  const internal = host as unknown as {
+    live: Map<string, unknown>;
+    appServerConnections: { handleDisconnect(id: string): void };
+    suspendIdleRuntime(id: string): void;
+  };
+  internal.live.set(id, live);
+
+  try {
+    internal.suspendIdleRuntime(id);
+    expect(await Bun.file(socketPath).exists()).toBe(false);
+    internal.appServerConnections.handleDisconnect(id);
+    await Bun.sleep(650);
+    expect(internal.live.has(id)).toBe(true);
+  } finally {
+    rmSync(workdir, { recursive: true, force: true });
+  }
+});
+
+test('native CLI idle resume keeps the pty fallback launch mode instead of rebuilding the original pty mode', async () => {
+  const store = createStore();
+  const workdir = mkdtempSync(join(tmpdir(), 'monad-native-cli-pty-fallback-idle-'));
+  const logPath = join(workdir, 'runtime.log');
+  const mockCli = join(workdir, 'mock-fallback-json-stream.js');
+  writeFileSync(
+    mockCli,
+    `
+const fs = require('node:fs');
+const logPath = process.argv[2];
+fs.appendFileSync(logPath, 'argv:' + process.argv.slice(3).join('|') + '\\n');
+console.log('SESSION_REF:thread-fallback');
+process.stdin.setEncoding('utf8');
+process.stdin.on('data', (chunk) => {
+  fs.appendFileSync(logPath, 'input:' + chunk.trim() + '\\n');
+});
+setInterval(() => {}, 1000);
+`
+  );
+  chmodSync(mockCli, 0o755);
+  const provider = `idle-fallback-${Date.now()}`;
+  const adapter = {
+    provider,
+    productIcon: 'codex',
+    label: 'Idle Fallback',
+    detect: () => ({
+      id: provider,
+      provider,
+      productIcon: 'codex',
+      label: 'Idle Fallback',
+      command: process.execPath,
+      args: [mockCli, logPath],
+      installed: true,
+      supportedLaunchModes: ['pty', 'json-stream']
+    }),
+    listSupportedModels: () => [],
+    resolveCommand: (command: string) => command,
+    buildLaunch: (agent: NativeCliAgentView, opts: { launchMode?: string; providerSessionRef?: string }) => ({
+      argv: [
+        agent.command,
+        ...(agent.args ?? []),
+        `--mode=${opts.launchMode ?? 'default'}`,
+        ...(opts.providerSessionRef ? ['--resume', opts.providerSessionRef] : [])
+      ],
+      cwd: workdir,
+      launchMode: (opts.launchMode ?? 'pty') as 'pty' | 'json-stream',
+      provider,
+      approvalOwnership: 'provider-owned',
+      capabilities: opts.launchMode === 'json-stream' ? ['json-stream', 'session-resume'] : ['pty', 'provider-approval']
+    }),
+    buildAuthLaunch: () => {
+      throw new Error('not used');
+    },
+    buildAuthStatusLaunch: () => {
+      throw new Error('not used');
+    },
+    authStatus: () => {
+      throw new Error('not used');
+    },
+    parseAuthStatus: () => 'unknown',
+    parseOutput: (chunk: string) =>
+      chunk.includes('SESSION_REF:thread-fallback')
+        ? [{ type: 'session_ref', payload: { providerSessionRef: 'thread-fallback' } }]
+        : [],
+    sendInput: (handle: { stdin?: { write(input: string): void } }, input: string) => {
+      handle.stdin?.write(`${input}\n`);
+    },
+    resolveApproval: () => {},
+    resize: () => {},
+    stop: () => {}
+  } as unknown as NativeCliProviderAdapter;
+  registerAgentAdapterImpl(adapter);
+  const agent: NativeCliAgentView = {
+    name: provider,
+    provider,
+    productIcon: 'codex',
+    command: process.execPath,
+    args: [mockCli, logPath],
+    enabled: true,
+    defaultLaunchMode: 'pty',
+    allowAutopilot: false,
+    approvalOwnership: 'provider-owned'
+  };
+  const host = new NativeCliHost({
+    store,
+    bus: new EventBus(),
+    agents: async () => [agent],
+    nativeCliIdleTimeoutMs: 300
+  });
+  const projectId = 'prj_01KWHOSTIDLEFALLBACK0000';
+  store.insertWorkplaceProject({
+    id: projectId,
+    title: 'idle fallback test',
+    ownerPrincipalId: 'prn_test',
+    state: 'active',
+    archived: false,
+    createdAt: '2026-07-02T00:00:00.000Z',
+    updatedAt: '2026-07-02T00:00:00.000Z'
+  });
+  const originalSpawn = Bun.spawn;
+  (Bun as unknown as { spawn: typeof Bun.spawn }).spawn = ((argv, options) => {
+    if (options && typeof options === 'object' && 'terminal' in options) throw new Error('pty unavailable');
+    return originalSpawn(argv, options);
+  }) as typeof Bun.spawn;
+
+  try {
+    const view = await host.start({
+      transcriptTargetId: projectId,
+      agentName: provider,
+      workingPath: workdir,
+      launchMode: 'pty'
+    });
+    for (let i = 0; i < 40 && store.getNativeCliSession(view.id)?.providerSessionRef !== 'thread-fallback'; i++) {
+      await Bun.sleep(25);
+    }
+    for (let i = 0; i < 40 && store.getNativeCliSession(view.id)?.pid !== null; i++) {
+      await Bun.sleep(25);
+    }
+    await host.input(view.id, { input: 'wake-fallback' });
+    for (let i = 0; i < 40; i++) {
+      const log = await Bun.file(logPath).text();
+      if (log.includes('input:wake-fallback')) break;
+      await Bun.sleep(25);
+    }
+    const log = await Bun.file(logPath).text();
+    expect(log).toContain('argv:--mode=json-stream|--resume|thread-fallback');
+    expect(log).not.toContain('argv:--mode=pty|--resume|thread-fallback');
+  } finally {
+    (Bun as unknown as { spawn: typeof Bun.spawn }).spawn = originalSpawn;
+    host.stop(host.list(projectId).sessions[0]?.id ?? '');
+    rmSync(workdir, { recursive: true, force: true });
+  }
 });
 
 test('managed native CLI observation restores Codex provider history from persisted pointers', async () => {
@@ -1033,6 +1560,59 @@ test('listLive returns only starting/running runtimes across all projects', () =
   expect(live.every((s) => s.outputSnapshot === '')).toBe(true);
 });
 
+test('listLive/listAllSummaries paginate with a cursor and expose nextCursor', () => {
+  const store = createStore();
+  const host = new NativeCliHost({ store, bus: new EventBus(), agents: async () => [] });
+  store.insertWorkplaceProject({
+    id: 'prj_01KWLIVE0000000000000003',
+    title: 'Gamma',
+    ownerPrincipalId: 'prn_test',
+    state: 'active',
+    archived: false,
+    createdAt: '2026-07-02T00:00:00.000Z',
+    updatedAt: '2026-07-02T00:00:00.000Z'
+  });
+  for (let i = 0; i < 5; i++) {
+    store.upsertNativeCliSession({
+      id: `ncli_page_${i}`,
+      transcriptTargetId: 'prj_01KWLIVE0000000000000003',
+      agentName: 'codex',
+      provider: 'codex',
+      workingPath: '/tmp/p',
+      launchMode: 'app-server',
+      runtimeRole: 'managed-project-agent',
+      agentRuntimeId: `ncli_page_${i}`,
+      agentRuntimeTokenHash: null,
+      lastDeliveredSeq: 0,
+      lastVisibleSeq: 0,
+      state: 'running',
+      pid: null,
+      providerSessionRef: null,
+      outputSnapshot: '',
+      exitCode: null,
+      startedAt: `2026-07-02T00:00:0${i}.000Z`,
+      updatedAt: `2026-07-02T00:00:0${i}.000Z`,
+      exitedAt: null
+    });
+  }
+
+  const firstPage = host.listLive({ limit: 2 });
+  expect(firstPage.sessions.map((s) => s.id)).toEqual(['ncli_page_3', 'ncli_page_4']);
+  expect(firstPage.nextCursor).toBeDefined();
+
+  const secondPage = host.listLive({ limit: 2, before: firstPage.nextCursor });
+  expect(secondPage.sessions.map((s) => s.id)).toEqual(['ncli_page_1', 'ncli_page_2']);
+  expect(secondPage.nextCursor).toBeDefined();
+
+  const lastPage = host.listLive({ limit: 2, before: secondPage.nextCursor });
+  expect(lastPage.sessions.map((s) => s.id)).toEqual(['ncli_page_0']);
+  expect(lastPage.nextCursor).toBeUndefined();
+
+  const summaries = host.listAllSummaries({ limit: 3 });
+  expect(summaries.sessions.length).toBe(3);
+  expect(summaries.nextCursor).toBeDefined();
+});
+
 // cli-oneshot launch mode: the session has NO persistent process; each turn spawns a fresh CLI with
 // the directive baked into argv (`<cmd> --yolo -z <directive>`) and streams its stdout into the
 // transcript. Proves Hermes-style providers (no app-server backend) run as managed members.
@@ -1076,7 +1656,7 @@ test('cli-oneshot session has no persistent process and runs a fresh CLI per tur
       const obs = host.observe(view.id);
       return obs && 'output' in obs ? (obs.output ?? '') : '';
     };
-    host.input(view.id, { input: 'ping' });
+    await host.input(view.id, { input: 'ping' });
     // Wait for the per-turn process to spawn, echo, and exit.
     for (let i = 0; i < 40 && !observedOutput().includes('oneshot-reply'); i++) {
       await Bun.sleep(50);

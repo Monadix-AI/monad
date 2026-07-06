@@ -134,7 +134,10 @@ export class NativeCliAppServerConnectionManager {
     if (!this.ctx.live.has(id)) return;
     setTimeout(() => {
       const current = this.ctx.live.get(id);
-      if (!current || current.appServerReconnecting) return;
+      // A suspended (idle) session has already torn down its connection on purpose — a disconnect
+      // notice racing that teardown must not re-trigger reconnect/give-up and stop() the session out
+      // from under a pending resume.
+      if (!current || current.appServerReconnecting || current.suspended) return;
       this.ctx.log.warn(
         {
           sessionId: current.transcriptTargetId,

@@ -5,14 +5,18 @@ import {
   addCredentialResponseSchema,
   discoverAtomKindsResponseSchema,
   getDefaultProfileResponseSchema,
+  getProfileResponseSchema,
   getProviderCatalogResponseSchema,
+  getProviderResponseSchema,
   getRolesResponseSchema,
+  httpErrorSchema,
   listAtomKindsResponseSchema,
   listCredentialsResponseSchema,
   listModelsResponseSchema,
   listProfilesResponseSchema,
   listProvidersResponseSchema,
   okResponseSchema,
+  patchProviderRequestSchema,
   renameProfileRequestSchema,
   setDefaultProfileRequestSchema,
   setProfileRequestSchema,
@@ -44,9 +48,22 @@ export function createModelSettingsController(handlers: ReturnType<typeof create
     .put('/model/providers/:id', async ({ body }) => handlers.model.setProvider(body), {
       params: providerParams,
       body: setProviderRequestSchema,
-      response: { 200: okResponseSchema },
+      response: { 200: okResponseSchema, 404: httpErrorSchema },
       detail: { summary: 'Set model provider', description: 'Upserts a provider configuration.' }
     })
+    .patch(
+      '/model/providers/:id',
+      async ({ params, body }) => handlers.model.patchProvider({ id: params.id, patch: body }),
+      {
+        params: providerParams,
+        body: patchProviderRequestSchema,
+        response: { 200: okResponseSchema, 404: httpErrorSchema },
+        detail: {
+          summary: 'Update model provider',
+          description: 'Partially updates a provider configuration (merges the patch onto the stored provider).'
+        }
+      }
+    )
     .get('/model/providers/catalog', async () => handlers.model.providerCatalog(), {
       response: { 200: getProviderCatalogResponseSchema },
       detail: {
@@ -54,11 +71,37 @@ export function createModelSettingsController(handlers: ReturnType<typeof create
         description: 'Self-describing metadata for every registered provider (first- and third-party).'
       }
     })
+    .get('/model/providers/:id', async ({ params }) => handlers.model.getProvider({ id: params.id }), {
+      params: providerParams,
+      response: { 200: getProviderResponseSchema, 404: httpErrorSchema },
+      detail: { summary: 'Get model provider', description: 'Returns one provider by id.' }
+    })
     .delete('/model/providers/:id', async ({ params }) => handlers.model.deleteProvider({ id: params.id }), {
       params: providerParams,
-      response: { 200: okResponseSchema },
+      response: { 200: okResponseSchema, 404: httpErrorSchema },
       detail: { summary: 'Delete model provider', description: 'Deletes one provider by id.' }
     })
+    .post(
+      '/model/providers/:id/enable',
+      async ({ params }) => handlers.model.setProviderEnabled({ id: params.id, enabled: true }),
+      {
+        params: providerParams,
+        response: { 200: okResponseSchema, 404: httpErrorSchema },
+        detail: { summary: 'Enable model provider', description: 'Marks a provider enabled.' }
+      }
+    )
+    .post(
+      '/model/providers/:id/disable',
+      async ({ params }) => handlers.model.setProviderEnabled({ id: params.id, enabled: false }),
+      {
+        params: providerParams,
+        response: { 200: okResponseSchema, 404: httpErrorSchema },
+        detail: {
+          summary: 'Disable model provider',
+          description: 'Marks a provider disabled. Not yet enforced by the model-routing/dispatch layer (follow-up).'
+        }
+      }
+    )
     .get('/model/profiles', async () => handlers.model.listProfiles(), {
       response: { 200: listProfilesResponseSchema },
       detail: { summary: 'List model profiles', description: 'Returns configured model profiles and default alias.' }
@@ -66,8 +109,13 @@ export function createModelSettingsController(handlers: ReturnType<typeof create
     .put('/model/profiles/:alias', async ({ body }) => handlers.model.setProfile(body), {
       params: profileParams,
       body: setProfileRequestSchema,
-      response: { 200: okResponseSchema },
+      response: { 200: okResponseSchema, 404: httpErrorSchema },
       detail: { summary: 'Set model profile', description: 'Upserts a model profile configuration.' }
+    })
+    .get('/model/profiles/:alias', async ({ params }) => handlers.model.getProfile({ alias: params.alias }), {
+      params: profileParams,
+      response: { 200: getProfileResponseSchema, 404: httpErrorSchema },
+      detail: { summary: 'Get model profile', description: 'Returns one model profile by alias.' }
     })
     .patch(
       '/model/profiles/:alias/alias',
@@ -75,7 +123,7 @@ export function createModelSettingsController(handlers: ReturnType<typeof create
       {
         params: profileParams,
         body: renameProfileRequestSchema,
-        response: { 200: okResponseSchema },
+        response: { 200: okResponseSchema, 404: httpErrorSchema },
         detail: {
           summary: 'Rename model profile',
           description: 'Renames a profile and rewrites default/agent references in one config commit.'
@@ -84,7 +132,7 @@ export function createModelSettingsController(handlers: ReturnType<typeof create
     )
     .delete('/model/profiles/:alias', async ({ params }) => handlers.model.deleteProfile({ alias: params.alias }), {
       params: profileParams,
-      response: { 200: okResponseSchema },
+      response: { 200: okResponseSchema, 404: httpErrorSchema },
       detail: { summary: 'Delete model profile', description: 'Deletes one model profile by alias.' }
     })
     .get('/model/default', async () => handlers.model.getDefaultProfile(), {

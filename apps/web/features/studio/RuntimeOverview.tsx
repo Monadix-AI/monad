@@ -12,9 +12,9 @@ import {
 import { HugeiconsIcon } from '@hugeicons/react';
 import { useListAgentsQuery, useListWorkplaceProjectsQuery } from '@monad/client-rtk';
 import { Button, ScrollArea } from '@monad/ui';
-import Link from 'next/link';
 
 import { useT } from '@/components/I18nProvider';
+import { ShellLink } from '@/components/ShellLink';
 import { PanelShell } from '@/components/ui/panel-shell';
 import { studioPath } from '@/features/routes/route-paths';
 import { useModelSettings, useModelSettingsQueryState } from '@/hooks/use-model-settings';
@@ -72,7 +72,7 @@ function ReadinessRow({
         size="sm"
         variant={ready ? 'ghost' : 'secondary'}
       >
-        <Link href={actionHref}>{actionLabel}</Link>
+        <ShellLink href={actionHref}>{actionLabel}</ShellLink>
       </Button>
     </div>
   );
@@ -95,7 +95,7 @@ function AdvancedLink({
       className="h-auto justify-start border-transparent px-2 py-2 text-left"
       variant="ghost"
     >
-      <Link href={href}>
+      <ShellLink href={href}>
         <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
           <HugeiconsIcon
             className="size-4"
@@ -106,7 +106,7 @@ function AdvancedLink({
           <span className="block font-medium text-sm">{title}</span>
           <span className="block truncate text-muted-foreground text-xs">{body}</span>
         </span>
-      </Link>
+      </ShellLink>
     </Button>
   );
 }
@@ -119,7 +119,7 @@ export function RuntimeOverview() {
   const projectsQuery = useListWorkplaceProjectsQuery(undefined);
   const providerCount = modelSettings.providers.length;
   const profileCount = modelSettings.profiles.length;
-  const agentCount = agentsQuery.data?.agents.length ?? 0;
+  const agentCount = agentsQuery.data?.ids.length ?? 0;
   const hasModels = providerCount > 0 && profileCount > 0;
   const hasAgents = agentCount > 0;
   const projectCount = projectsQuery.data?.projects.ids.length ?? 0;
@@ -141,14 +141,16 @@ export function RuntimeOverview() {
                     asChild
                     size="sm"
                   >
-                    <Link href={studioPath(hasModels ? 'agents' : 'models')}>{t('web.studio.continueSetup')}</Link>
+                    <ShellLink href={studioPath(hasModels ? 'agents' : 'models')}>
+                      {t('web.studio.continueSetup')}
+                    </ShellLink>
                   </Button>
                   <Button
                     asChild
                     size="sm"
                     variant="ghost"
                   >
-                    <Link href={studioPath('mesh')}>{t('web.studio.openMeshOverview')}</Link>
+                    <ShellLink href={studioPath('mesh')}>{t('web.studio.openMeshOverview')}</ShellLink>
                   </Button>
                 </div>
               </div>
@@ -246,7 +248,7 @@ export function RuntimeOverview() {
                 size="sm"
                 variant="secondary"
               >
-                <Link href={studioPath('mesh')}>{t('web.studio.openMeshOverview')}</Link>
+                <ShellLink href={studioPath('mesh')}>{t('web.studio.openMeshOverview')}</ShellLink>
               </Button>
             </section>
             <section className="rounded-xl border bg-card px-4 py-4">

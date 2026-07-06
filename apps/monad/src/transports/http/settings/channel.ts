@@ -4,6 +4,8 @@ import {
   approveChannelPairingRequestSchema,
   channelIdSchema,
   channelStatusResponseSchema,
+  getChannelResponseSchema,
+  httpErrorSchema,
   listChannelPairingsResponseSchema,
   listChannelsResponseSchema,
   okResponseSchema,
@@ -23,7 +25,13 @@ export function createChannelSettingsController(handlers: ReturnType<typeof crea
       response: { 200: listChannelsResponseSchema },
       detail: { summary: 'List channels', description: 'Returns configured channel instances (no secrets).' }
     })
-    .put('/channels', async ({ body }) => handlers.channel.upsertChannel(body), {
+    .get('/channels/:id', async ({ params }) => handlers.channel.getChannel({ id: params.id }), {
+      params: channelParams,
+      response: { 200: getChannelResponseSchema, 404: httpErrorSchema },
+      detail: { summary: 'Get channel', description: 'Returns one channel instance by id (no secrets).' }
+    })
+    .put('/channels/:id', async ({ body }) => handlers.channel.upsertChannel(body), {
+      params: channelParams,
       body: upsertChannelRequestSchema,
       response: { 200: okResponseSchema },
       detail: { summary: 'Upsert channel', description: 'Creates or updates a channel instance.' }
@@ -33,7 +41,7 @@ export function createChannelSettingsController(handlers: ReturnType<typeof crea
       async ({ params }) => handlers.channel.setChannelEnabled({ id: params.id, enabled: true }),
       {
         params: channelParams,
-        response: { 200: okResponseSchema },
+        response: { 200: okResponseSchema, 404: httpErrorSchema },
         detail: { summary: 'Enable channel', description: 'Enables a channel instance.' }
       }
     )
@@ -42,13 +50,13 @@ export function createChannelSettingsController(handlers: ReturnType<typeof crea
       async ({ params }) => handlers.channel.setChannelEnabled({ id: params.id, enabled: false }),
       {
         params: channelParams,
-        response: { 200: okResponseSchema },
+        response: { 200: okResponseSchema, 404: httpErrorSchema },
         detail: { summary: 'Disable channel', description: 'Disables a channel instance.' }
       }
     )
     .delete('/channels/:id', async ({ params }) => handlers.channel.removeChannel({ id: params.id }), {
       params: channelParams,
-      response: { 200: okResponseSchema },
+      response: { 200: okResponseSchema, 404: httpErrorSchema },
       detail: { summary: 'Remove channel', description: 'Deletes a channel instance and its credential.' }
     })
     .put(
@@ -57,13 +65,13 @@ export function createChannelSettingsController(handlers: ReturnType<typeof crea
       {
         params: channelParams,
         body: setChannelCredentialRequestSchema,
-        response: { 200: okResponseSchema },
+        response: { 200: okResponseSchema, 404: httpErrorSchema },
         detail: { summary: 'Set channel credential', description: 'Stores the channel bot token in auth.json.' }
       }
     )
     .get('/channels/:id/pairings', async ({ params }) => handlers.channel.listChannelPairings({ id: params.id }), {
       params: channelParams,
-      response: { 200: listChannelPairingsResponseSchema },
+      response: { 200: listChannelPairingsResponseSchema, 404: httpErrorSchema },
       detail: { summary: 'List channel pairings', description: 'Pending pairing requests awaiting approval.' }
     })
     .post(
@@ -72,7 +80,7 @@ export function createChannelSettingsController(handlers: ReturnType<typeof crea
       {
         params: channelParams,
         body: approveChannelPairingRequestSchema,
-        response: { 200: okResponseSchema },
+        response: { 200: okResponseSchema, 404: httpErrorSchema },
         detail: { summary: 'Approve channel pairing', description: 'Allowlists the sender behind a pairing code.' }
       }
     )

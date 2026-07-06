@@ -58,7 +58,7 @@ async function runChannelCrud(call: Call, paths: MonadPaths): Promise<void> {
   expect(((await res.json()) as ChannelsBody).channels).toEqual([]);
 
   // 2. upsert a channel
-  res = await call('PUT', '/v1/settings/channels', { channel: channelView() });
+  res = await call('PUT', `/v1/settings/channels/${CHANNEL_ID}`, { channel: channelView() });
   expect(res.status).toBe(200);
 
   // 3. it lists back without any token/tokenRef field
@@ -67,6 +67,15 @@ async function runChannelCrud(call: Call, paths: MonadPaths): Promise<void> {
   expect(channels.length).toBe(1);
   expect(channels[0]?.id).toBe(CHANNEL_ID);
   expect(JSON.stringify(channels[0])).not.toContain('token'); // no tokenRef / token leaked
+
+  // 3b. get by id returns the same channel; unknown id 404s
+  res = await call('GET', `/v1/settings/channels/${CHANNEL_ID}`);
+  expect(res.status).toBe(200);
+  const single = (await res.json()) as { channel: { id: string } };
+  expect(single.channel.id).toBe(CHANNEL_ID);
+
+  res = await call('GET', '/v1/settings/channels/chn_DOESNOTEXIST');
+  expect(res.status).toBe(404);
 
   // 4. set the credential → persisted to auth.json, not echoed
   res = await call('PUT', `/v1/settings/channels/${CHANNEL_ID}/credential`, { token: SECRET });

@@ -6,6 +6,8 @@
 
 import { z } from 'zod';
 
+import { cursorPaginationQuerySchema, cursorPaginationResponseSchema } from './pagination.ts';
+
 /** A rule decides allow or deny. `ask` is not a rule — it's the default when nothing matches. */
 export const approvalDecisionSchema = z.enum(['allow', 'deny']);
 export type ApprovalDecision = z.infer<typeof approvalDecisionSchema>;
@@ -44,11 +46,16 @@ export const approvalsFileSchema = z.object({
 });
 export type ApprovalsFile = z.infer<typeof approvalsFileSchema>;
 
-/** Optional session filter so a client can also see the current session's in-memory rules. */
-export const listApprovalsQuerySchema = z.object({ sessionId: z.string().optional() });
+/** Optional session filter so a client can also see the current session's in-memory rules.
+ *  Cursor-paginated: persisted + session rules can accumulate over the daemon's lifetime. */
+export const listApprovalsQuerySchema = cursorPaginationQuerySchema.extend({
+  sessionId: z.string().optional()
+});
 export type ListApprovalsQuery = z.infer<typeof listApprovalsQuerySchema>;
 
-export const listApprovalsResponseSchema = z.object({ rules: z.array(approvalRuleSchema) });
+export const listApprovalsResponseSchema = cursorPaginationResponseSchema.extend({
+  rules: z.array(approvalRuleSchema)
+});
 export type ListApprovalsResponse = z.infer<typeof listApprovalsResponseSchema>;
 
 export const revokeApprovalRequestSchema = z.object({ id: z.string() });

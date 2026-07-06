@@ -104,9 +104,9 @@ export async function providerHistoryOutputViaCli(
               limitBytes: MAX_OUTPUT_SNAPSHOT,
               page: {
                 items: Array.isArray(parsed.data.payload.items) ? parsed.data.payload.items : [],
-                nextCursor: typeof parsed.data.payload.nextCursor === 'string' ? parsed.data.payload.nextCursor : null,
-                backwardsCursor:
-                  typeof parsed.data.payload.backwardsCursor === 'string' ? parsed.data.payload.backwardsCursor : null
+                ...(typeof parsed.data.payload.nextCursor === 'string'
+                  ? { nextCursor: parsed.data.payload.nextCursor }
+                  : {})
               }
             });
             finish(output ?? null);

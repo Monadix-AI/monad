@@ -20,7 +20,7 @@ export interface NativeAgentProjectCapabilities {
   post(args: {
     body: NativeAgentProjectPostRequest;
     binding: NativeAgentRuntimeBinding;
-    workingPath: string;
+    attachmentRoots: readonly string[];
   }): Promise<NativeAgentProjectPostResponse>;
   ask(args: {
     body: NativeAgentProjectAskRequest;
@@ -46,7 +46,7 @@ export interface NativeAgentDirectCapabilities {
   send(args: {
     body: NativeAgentSendRequest;
     binding: NativeAgentRuntimeBinding;
-    workingPath: string;
+    attachmentRoots: readonly string[];
   }): Promise<NativeAgentSendResponse>;
   read(args: { body: NativeAgentReadRequest; binding: NativeAgentRuntimeBinding }): NativeAgentReadResponse;
 }

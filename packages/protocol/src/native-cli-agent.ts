@@ -52,7 +52,9 @@ export type {
   NativeAgentTurnPointer,
   NativeCliObservationAccessResponse,
   NativeCliObservationEvent,
-  NativeCliObservationRole
+  NativeCliObservationRole,
+  NativeCliUsageLimitMeter,
+  NativeCliUsageLimitMeterRow
 } from './native-cli-agent-observation.ts';
 export type {
   GetNativeAgentDeliveryResponse,
@@ -80,10 +82,13 @@ export type {
   NativeAgentRuntimeSpec
 } from './native-cli-agent-runtime-spec.ts';
 export type {
+  GetNativeCliAgentResponse,
   GetNativeCliAuthSessionResponse,
   GetNativeCliSessionResponse,
   ListNativeCliAgentPresetsResponse,
   ListNativeCliAgentsResponse,
+  ListNativeCliRuntimesQuery,
+  ListNativeCliRuntimesResponse,
   ListNativeCliSessionsResponse,
   NativeAgentRuntime,
   NativeAgentRuntimeState,
@@ -175,7 +180,9 @@ export {
   nativeAgentTurnPointerSchema,
   nativeCliObservationAccessResponseSchema,
   nativeCliObservationEventSchema,
-  nativeCliObservationRoleSchema
+  nativeCliObservationRoleSchema,
+  nativeCliUsageLimitMeterRowSchema,
+  nativeCliUsageLimitMeterSchema
 } from './native-cli-agent-observation.ts';
 export {
   getNativeAgentDeliveryResponseSchema,
@@ -203,10 +210,13 @@ export {
   nativeAgentRuntimeSpecSchema
 } from './native-cli-agent-runtime-spec.ts';
 export {
+  getNativeCliAgentResponseSchema,
   getNativeCliAuthSessionResponseSchema,
   getNativeCliSessionResponseSchema,
   listNativeCliAgentPresetsResponseSchema,
   listNativeCliAgentsResponseSchema,
+  listNativeCliRuntimesQuerySchema,
+  listNativeCliRuntimesResponseSchema,
   listNativeCliSessionsResponseSchema,
   nativeAgentRuntimeSchema,
   nativeAgentRuntimeStateSchema,

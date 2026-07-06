@@ -158,7 +158,7 @@ export function ConnectionSettings({ onClose }: Props) {
   }
 
   async function copyRemoteToken() {
-    const remoteToken = network.settings?.remoteAccess.token;
+    const remoteToken = network.settings?.remoteAccess?.token;
     if (!remoteToken) return;
     await navigator.clipboard.writeText(remoteToken);
     setNetworkCopied(true);

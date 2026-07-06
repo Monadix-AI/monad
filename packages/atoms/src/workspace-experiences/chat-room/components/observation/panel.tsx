@@ -1,13 +1,17 @@
 'use client';
 
 import type { CSSProperties } from 'react';
+import type { NativeCliUsageLimitMeter } from '../../../experience/native-cli-observation/native-cli-observation.ts';
 import type { NativeCliStreamView, Participant } from '../../../experience/types.ts';
+import type { ObservationCollapseCommand } from './card-shell.tsx';
 
 import {
   ArrowDown01Icon,
   ArrowUp01Icon,
   Cancel01Icon,
   CircleGaugeIcon,
+  ExpandParagraphIcon,
+  ReduceParagraphIcon,
   Target01Icon
 } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
@@ -20,14 +24,19 @@ import {
   resolveProductIcon,
   workspaceSans as sans
 } from '@monad/ui/components/AgentAvatar';
-import { useEffect, useRef, useState } from 'react';
+import { VirtualList, type VirtualListHandle } from '@monad/ui/components/VirtualList';
+import { useFirstItemIndex } from '@monad/ui/hooks/use-first-item-index';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
-import {
-  type NativeCliUsageLimitMeter,
-  nativeCliUsageLimitMeter
-} from '../../../experience/native-cli-observation/native-cli-observation.ts';
 import { workspaceExperienceT } from '../../../i18n.ts';
-import { ObservationTimelineCard, observationTimelineEntries } from './timeline.tsx';
+import {
+  type ObservationTimelineRow,
+  ObservationTimelineRowView,
+  observationTimelineEntries,
+  observationTimelineRows
+} from './timeline.tsx';
+
+const observationRowId = (row: ObservationTimelineRow): string => row.id;
 
 const observationAvatarRingCss = `
 @keyframes workplace-observation-avatar-breathe {
@@ -84,17 +93,27 @@ export function NativeCliObservationPanel({
   icon,
   onBack,
   onClose,
+  onLoadOlderHistory,
+  onShowHistory,
   onStop,
+  canLoadOlderHistory,
+  loadingOlderHistory,
+  showHistoryButton,
   stream,
   usageMeter: usageMeterProp
 }: {
   agent?: Participant;
   agentName?: string;
+  canLoadOlderHistory?: boolean;
   focusTurnId?: string;
   icon?: NativeCliStreamView['icon'];
+  loadingOlderHistory?: boolean;
   onBack?: () => void;
   onClose?: () => void;
+  onLoadOlderHistory?: () => void;
+  onShowHistory?: () => void;
   onStop: (id: string) => void;
+  showHistoryButton?: boolean;
   stream?: NativeCliStreamView;
   usageMeter?: NativeCliUsageLimitMeter | null;
 }): React.ReactElement {
@@ -111,43 +130,105 @@ export function NativeCliObservationPanel({
   const active = stream?.status === 'running';
   const hasItems = (stream?.items.length ?? 0) > 0;
   const providerHistoryUnavailable = !!stream && stream.status !== 'running' && !stream.output && !hasItems;
-  const usageMeter = usageMeterProp ?? nativeCliUsageLimitMeter({ output: stream?.output, provider: stream?.provider });
-  const scrollRef = useRef<HTMLDivElement | null>(null);
+  // The daemon already normalizes the usage meter with the same adapter it uses for parseOutput (see
+  // observeFromStore/observeWithProviderHistory) — the caller passes it via `usageMeter`; this
+  // component never falls back to client-side re-derivation.
+  const usageMeter = usageMeterProp ?? null;
+  const listRef = useRef<VirtualListHandle>(null);
   const [follow, setFollow] = useState(true);
+  const [allExpanded, setAllExpanded] = useState(true);
+  const [collapseCommand, setCollapseCommand] = useState<ObservationCollapseCommand>({ collapsed: false });
   const streamId = stream?.id;
   const streamStatus = stream?.status;
   const latestItem = stream?.items.at(-1);
   const latestObservationKey = `${streamId ?? ''}:${streamStatus ?? ''}:${stream?.items.length ?? 0}:${latestItem?.id ?? ''}:${latestItem?.text.length ?? 0}`;
   const [usageOpen, setUsageOpen] = useState(false);
+  const timelineRows = useMemo(
+    () => observationTimelineRows(observationTimelineEntries(stream?.items ?? [])),
+    [stream?.items]
+  );
+  const firstItemIndex = useFirstItemIndex(timelineRows, observationRowId);
+  const showHistoryHeader = showHistoryButton || loadingOlderHistory;
+  const historyHeader = showHistoryHeader ? (
+    <div
+      style={{
+        boxSizing: 'border-box',
+        display: 'flex',
+        justifyContent: 'center',
+        padding: '10px 14px 0'
+      }}
+    >
+      {showHistoryButton ? (
+        <button
+          className="workplace-action"
+          disabled={loadingOlderHistory}
+          onClick={onShowHistory}
+          style={{
+            border: '1px solid var(--border)',
+            borderRadius: 999,
+            background: 'var(--secondary)',
+            color: 'var(--foreground)',
+            fontFamily: sans,
+            fontSize: 12,
+            fontWeight: 650,
+            lineHeight: 1,
+            minHeight: 30,
+            opacity: loadingOlderHistory ? 0.62 : 1,
+            padding: '0 12px'
+          }}
+          type="button"
+        >
+          {loadingOlderHistory ? 'Loading history…' : 'Show history'}
+        </button>
+      ) : (
+        <div
+          style={{
+            color: 'var(--muted-foreground)',
+            fontFamily: sans,
+            fontSize: 11,
+            lineHeight: '30px',
+            textAlign: 'center'
+          }}
+        >
+          Loading history…
+        </div>
+      )}
+    </div>
+  ) : null;
+  const listHeader = <div style={{ boxSizing: 'border-box', height: 14 }} />;
+  const listFooter = <div style={{ height: 62 }} />;
 
   useEffect(() => {
     if (!streamId) return;
     setFollow(true);
     setUsageOpen(false);
+    setAllExpanded(true);
+    setCollapseCommand({ collapsed: false });
   }, [streamId]);
 
   useEffect(() => {
     if (!latestObservationKey) return;
-    const scroller = scrollRef.current;
-    if (!scroller || !follow || streamStatus !== 'running') return;
-    scroller.scrollTop = scroller.scrollHeight;
+    if (!follow || streamStatus !== 'running') return;
+    listRef.current?.scrollToBottom('auto');
   }, [follow, latestObservationKey, streamStatus]);
 
   const scrollToTop = () => {
     setFollow(false);
-    scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+    const firstRow = timelineRows[0];
+    if (firstRow) listRef.current?.scrollToKey(firstRow.id, { align: 'start', behavior: 'smooth' });
   };
   const scrollToBottom = () => {
     setFollow(false);
-    const scroller = scrollRef.current;
-    if (!scroller) return;
-    scroller.scrollTo({ top: scroller.scrollHeight, behavior: 'smooth' });
+    listRef.current?.scrollToBottom('smooth');
   };
   const followLatest = () => {
     setFollow(true);
-    const scroller = scrollRef.current;
-    if (!scroller) return;
-    scroller.scrollTo({ top: scroller.scrollHeight, behavior: 'smooth' });
+    listRef.current?.scrollToBottom('smooth');
+  };
+  const toggleAllRows = () => {
+    const nextCollapsed = allExpanded;
+    setCollapseCommand({ collapsed: nextCollapsed });
+    setAllExpanded(!nextCollapsed);
   };
 
   return (
@@ -246,6 +327,22 @@ export function NativeCliObservationPanel({
             />
           </div>
         </div>
+        <button
+          aria-label={allExpanded ? 'Collapse all observations' : 'Expand all observations'}
+          className="workplace-action"
+          disabled={!hasItems}
+          onClick={toggleAllRows}
+          style={headerIconButtonStyle(allExpanded, !hasItems)}
+          title={allExpanded ? 'Collapse all observations' : 'Expand all observations'}
+          type="button"
+        >
+          <HugeiconsIcon
+            aria-hidden="true"
+            icon={allExpanded ? ReduceParagraphIcon : ExpandParagraphIcon}
+            size={15}
+            strokeWidth={2}
+          />
+        </button>
         {usageMeter ? (
           <button
             aria-expanded={usageOpen}
@@ -323,6 +420,7 @@ export function NativeCliObservationPanel({
         ) : null}
       </header>
       {usageMeter && usageOpen ? <UsageLimitPopover meter={usageMeter} /> : null}
+      {historyHeader}
 
       <div
         style={{
@@ -336,53 +434,61 @@ export function NativeCliObservationPanel({
           overflow: 'hidden'
         }}
       >
-        <div
-          onScroll={() => {
-            const scroller = scrollRef.current;
-            if (!scroller || !follow) return;
-            const distanceFromBottom = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight;
-            if (distanceFromBottom > 28) setFollow(false);
-          }}
-          ref={scrollRef}
-          style={{
-            minWidth: 0,
-            minHeight: 0,
-            boxSizing: 'border-box',
-            width: '100%',
-            maxWidth: '100%',
-            height: '100%',
-            overflowX: 'hidden',
-            overflowY: 'auto',
-            overscrollBehavior: 'contain',
-            padding: '14px 14px 62px',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 10
-          }}
-        >
-          {hasItems ? (
-            observationTimelineEntries(stream?.items ?? []).map((entry) => (
-              <ObservationTimelineCard
-                entry={entry}
-                key={entry.id}
-              />
-            ))
-          ) : (
-            <div
-              style={{
-                margin: 'auto',
-                maxWidth: 180,
-                textAlign: 'center',
-                color: 'var(--muted-foreground)',
-                fontFamily: sans,
-                fontSize: 13,
-                lineHeight: 1.5
-              }}
-            >
-              {providerHistoryUnavailable ? 'Provider history unavailable.' : 'No activity yet.'}
+        {hasItems ? (
+          <VirtualList
+            ariaLive="polite"
+            className="scwf-scroll"
+            controlRef={listRef}
+            firstItemIndex={firstItemIndex}
+            footer={listFooter}
+            getKey={observationRowId}
+            header={listHeader}
+            items={timelineRows}
+            onAtBottomChange={setFollow}
+            onStartReached={() => {
+              if (canLoadOlderHistory && !loadingOlderHistory) onLoadOlderHistory?.();
+            }}
+            overscan={600}
+            renderItem={(row) => (
+              <div style={{ boxSizing: 'border-box', padding: '0 14px 10px', width: '100%' }}>
+                <ObservationTimelineRowView
+                  collapseCommand={collapseCommand}
+                  row={row}
+                />
+              </div>
+            )}
+            role="log"
+            stickToBottom
+            style={{
+              boxSizing: 'border-box',
+              height: '100%',
+              width: '100%',
+              overflowX: 'hidden',
+              overscrollBehavior: 'contain'
+            }}
+          />
+        ) : (
+          <div
+            style={{
+              alignItems: 'center',
+              boxSizing: 'border-box',
+              color: 'var(--muted-foreground)',
+              display: 'flex',
+              fontFamily: sans,
+              fontSize: 13,
+              height: '100%',
+              justifyContent: 'center',
+              lineHeight: 1.5,
+              padding: 14,
+              textAlign: 'center',
+              width: '100%'
+            }}
+          >
+            <div style={{ maxWidth: 180 }}>
+              {providerHistoryUnavailable ? 'Agent currently not running' : 'No activity yet.'}
             </div>
-          )}
-        </div>
+          </div>
+        )}
         <div
           style={{
             position: 'absolute',
@@ -468,6 +574,23 @@ function ObservationScrollButton({
       />
     </button>
   );
+}
+
+function headerIconButtonStyle(active: boolean, disabled = false): CSSProperties {
+  return {
+    width: 30,
+    height: 30,
+    border: `1px solid ${active ? 'var(--primary)' : 'var(--border)'}`,
+    borderRadius: 999,
+    background: active ? 'color-mix(in srgb, var(--primary) 14%, var(--background))' : 'var(--secondary)',
+    color: active ? 'var(--primary)' : 'var(--foreground)',
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flex: 'none',
+    opacity: disabled ? 0.45 : 1,
+    padding: 0
+  };
 }
 
 function UsageLimitPopover({ meter }: { meter: NativeCliUsageLimitMeter }): React.ReactElement {

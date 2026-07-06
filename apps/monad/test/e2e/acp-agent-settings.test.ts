@@ -41,7 +41,7 @@ async function runAcpAgentCrud(call: Call, paths: MonadPaths): Promise<void> {
   expect(((await res.json()) as AgentsBody).agents).toEqual([]);
 
   // 2. upsert
-  res = await call('PUT', '/v1/settings/acp-agents', { agent: agentView() });
+  res = await call('PUT', '/v1/settings/acp-agents/codex', { agent: agentView() });
   expect(res.status).toBe(200);
 
   // 3. lists back with the full spec (env refs included)
@@ -78,11 +78,26 @@ async function runAcpAgentCrud(call: Call, paths: MonadPaths): Promise<void> {
   expect((await loadConfig(paths.config))?.acpAgents).toEqual([]);
 }
 
+async function runAcpAgentGetSingle(call: Call): Promise<void> {
+  await call('PUT', '/v1/settings/acp-agents/codex', { agent: agentView() });
+
+  let res = await call('GET', '/v1/settings/acp-agents/codex');
+  expect(res.status).toBe(200);
+  const { agent } = (await res.json()) as { agent: AgentsBody['agents'][number] };
+  expect(agent.name).toBe('codex');
+  expect(agent.args).toEqual(['acp']);
+
+  res = await call('GET', '/v1/settings/acp-agents/does-not-exist');
+  expect(res.status).toBe(404);
+
+  await call('DELETE', '/v1/settings/acp-agents/codex');
+}
+
 async function runAcpAgentOverwrite(call: Call): Promise<void> {
   // upsert the same name twice with different config → second wins
-  await call('PUT', '/v1/settings/acp-agents', { agent: agentView() });
+  await call('PUT', '/v1/settings/acp-agents/codex', { agent: agentView() });
   const updated = { ...agentView(), args: ['acp', '--verbose'], env: {} };
-  const res = await call('PUT', '/v1/settings/acp-agents', { agent: updated });
+  const res = await call('PUT', '/v1/settings/acp-agents/codex', { agent: updated });
   expect(res.status).toBe(200);
 
   const { agents } = (await (await call('GET', '/v1/settings/acp-agents')).json()) as AgentsBody;
@@ -96,8 +111,8 @@ async function runAcpAgentOverwrite(call: Call): Promise<void> {
 async function runAcpAgentMulti(call: Call, paths: MonadPaths): Promise<void> {
   const second = { name: 'claude-code', command: 'claude', args: [], env: {}, enabled: true };
 
-  await call('PUT', '/v1/settings/acp-agents', { agent: agentView() });
-  await call('PUT', '/v1/settings/acp-agents', { agent: second });
+  await call('PUT', '/v1/settings/acp-agents/codex', { agent: agentView() });
+  await call('PUT', '/v1/settings/acp-agents/claude-code', { agent: second });
 
   let res = await call('GET', '/v1/settings/acp-agents');
   let { agents } = (await res.json()) as AgentsBody;
@@ -141,9 +156,20 @@ async function runAcpAgentPresets(call: Call): Promise<void> {
   }
 }
 
+async function runAcpAgentNotFound(call: Call): Promise<void> {
+  let res = await call('POST', '/v1/settings/acp-agents/does-not-exist/enable');
+  expect(res.status).toBe(404);
+
+  res = await call('POST', '/v1/settings/acp-agents/does-not-exist/disable');
+  expect(res.status).toBe(404);
+
+  res = await call('DELETE', '/v1/settings/acp-agents/does-not-exist');
+  expect(res.status).toBe(404);
+}
+
 async function runAcpAgentValidation(call: Call, paths: MonadPaths): Promise<void> {
   // A whitespace-only command passes the wire schema's min(1) but must be rejected by the handler.
-  const res = await call('PUT', '/v1/settings/acp-agents', {
+  const res = await call('PUT', '/v1/settings/acp-agents/blank', {
     agent: { name: 'blank', command: '   ', args: [], enabled: true }
   });
   expect(res.status).not.toBe(200);
@@ -175,6 +201,17 @@ for (const kind of TRANSPORTS) {
       const t = serveTransport(kind, app);
       try {
         await runAcpAgentCrud((m, p, b) => t.fetch(p, jsonInit(m, b)), paths);
+      } finally {
+        await t.stop();
+        await rm(dir, { recursive: true, force: true });
+      }
+    });
+
+    test('get single agent by name, 404 for unknown name', async () => {
+      const { dir, app } = await setup();
+      const t = serveTransport(kind, app);
+      try {
+        await runAcpAgentGetSingle((m, p, b) => t.fetch(p, jsonInit(m, b)));
       } finally {
         await t.stop();
         await rm(dir, { recursive: true, force: true });
@@ -219,6 +256,17 @@ for (const kind of TRANSPORTS) {
       const t = serveTransport(kind, app);
       try {
         await runAcpAgentValidation((m, p, b) => t.fetch(p, jsonInit(m, b)), paths);
+      } finally {
+        await t.stop();
+        await rm(dir, { recursive: true, force: true });
+      }
+    });
+
+    test('enable/disable/remove 404 for an unknown agent name', async () => {
+      const { dir, app } = await setup();
+      const t = serveTransport(kind, app);
+      try {
+        await runAcpAgentNotFound((m, p, b) => t.fetch(p, jsonInit(m, b)));
       } finally {
         await t.stop();
         await rm(dir, { recursive: true, force: true });

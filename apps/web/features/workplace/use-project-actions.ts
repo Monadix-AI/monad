@@ -2,6 +2,7 @@ import type {
   AvatarStyle,
   NativeCliAppServerTransport,
   ProjectId,
+  SendMessageAttachment,
   WorkplaceProject,
   WorkplaceProjectMemberSettings,
   WorkplaceProjectMemberType,
@@ -56,7 +57,7 @@ type AddProjectMemberOptions = {
 };
 
 function warmEntityAvatar(seed: string, avatarStyle?: AvatarStyle): void {
-  void fetch(entityAvatarWriteUrl(seed, avatarStyle)).catch(() => {});
+  void fetch(entityAvatarWriteUrl(seed, avatarStyle), { method: 'POST' }).catch(() => {});
 }
 
 /** Every mutating action `useProject` exposes: message send, approval/clarify resolution, session
@@ -95,11 +96,13 @@ export function useProjectActions(args: {
   const [stopNativeCliSession] = useStopNativeCliSessionMutation();
 
   const sendDirective = useCallback(
-    async (text: string) => {
+    async (directive: string | { attachments?: SendMessageAttachment[]; text: string }) => {
       if (!activeProjectId) return;
+      const text = typeof directive === 'string' ? directive : directive.text;
+      const attachments = typeof directive === 'string' ? undefined : directive.attachments;
       await traceProjectDebugOperation(
-        { layer: 'web', label: 'project.message.send', sessionId: activeProjectId, data: { text } },
-        () => sendProjectMessage({ projectId: activeProjectId, text }).unwrap()
+        { layer: 'web', label: 'project.message.send', sessionId: activeProjectId, data: { attachments, text } },
+        () => sendProjectMessage({ projectId: activeProjectId, text, attachments }).unwrap()
       );
     },
     [activeProjectId, sendProjectMessage]

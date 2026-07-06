@@ -22,13 +22,36 @@ import {
   sessionTransportSchema
 } from '../domain.ts';
 import { agentIdSchema, messageIdSchema, sessionIdSchema, transcriptTargetIdSchema } from '../ids.ts';
+import {
+  cursorPaginationQuerySchema,
+  cursorPaginationResponseSchema,
+  offsetPaginationQuerySchema,
+  offsetPaginationResponseSchema
+} from '../pagination.ts';
 import { httpUrlSchema } from '../url.ts';
+
+export type {
+  CursorPaginationQuery,
+  CursorPaginationResponse,
+  OffsetPaginationQuery,
+  OffsetPaginationResponse
+} from '../pagination.ts';
+
+export {
+  cursorPaginationQuerySchema,
+  cursorPaginationResponseSchema,
+  offsetPaginationQuerySchema,
+  offsetPaginationResponseSchema
+} from '../pagination.ts';
 
 export const CONTROL_API_VERSION = 'v1' as const;
 
 // DoS guard: unbounded strings let a caller exhaust memory with a single request.
 export const SESSION_TITLE_MAX = 1_000;
 export const MESSAGE_TEXT_MAX = 1_000_000;
+export const MESSAGE_ATTACHMENT_MAX = 20;
+export const MESSAGE_ATTACHMENT_TEXT_MAX = 512_000;
+export const MESSAGE_ATTACHMENT_DATA_MAX = 10_000_000;
 export const SEARCH_QUERY_MAX = 1_000;
 
 /**
@@ -120,8 +143,33 @@ export type GetDefaultAgentResponse = z.infer<typeof getDefaultAgentResponseSche
 export const createSessionResponseSchema = z.object({ sessionId: sessionIdSchema });
 export type CreateSessionResponse = z.infer<typeof createSessionResponseSchema>;
 
+export const sendMessageAttachmentSchema = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.literal('image'),
+    name: z.string().min(1).max(500),
+    mediaType: z.string().min(1).max(100),
+    size: z.number().int().nonnegative(),
+    dataBase64: z.string().max(MESSAGE_ATTACHMENT_DATA_MAX)
+  }),
+  z.object({
+    kind: z.literal('text'),
+    name: z.string().min(1).max(500),
+    mediaType: z.string().min(1).max(100),
+    size: z.number().int().nonnegative(),
+    text: z.string().max(MESSAGE_ATTACHMENT_TEXT_MAX)
+  }),
+  z.object({
+    kind: z.literal('file-meta'),
+    name: z.string().min(1).max(500),
+    mediaType: z.string().max(100).optional(),
+    size: z.number().int().nonnegative()
+  })
+]);
+export type SendMessageAttachment = z.infer<typeof sendMessageAttachmentSchema>;
+
 export const sendMessageRequestSchema = z.object({
   text: z.string().max(MESSAGE_TEXT_MAX),
+  attachments: z.array(sendMessageAttachmentSchema).max(MESSAGE_ATTACHMENT_MAX).optional(),
   generate: z.boolean().optional(),
   // Optional ambient context for THIS turn (the ACP bridge forwards the editor's open-document
   // snapshot here, since it can't ride in-process runOpts over the wire). Inline-SSE send only.
@@ -168,38 +216,6 @@ export type ForwardToAcpResponse = z.infer<typeof forwardToAcpResponseSchema>;
 
 export const generateMessageResponseSchema = z.object({ message: chatMessageSchema });
 export type GenerateMessageResponse = z.infer<typeof generateMessageResponseSchema>;
-
-/** Shared query fields for offset-based (page-number) pagination. */
-export const offsetPaginationQuerySchema = z.object({
-  limit: z.number().int().positive().optional(),
-  offset: z.number().int().nonnegative().optional()
-});
-export type OffsetPaginationQuery = z.infer<typeof offsetPaginationQuerySchema>;
-
-/** Shared response envelope fields for offset-based pagination. */
-export const offsetPaginationResponseSchema = z.object({
-  total: z.number().int().nonnegative(),
-  limit: z.number().int().positive(),
-  offset: z.number().int().nonnegative(),
-  next: httpUrlSchema.optional(),
-  previous: httpUrlSchema.optional()
-});
-export type OffsetPaginationResponse = z.infer<typeof offsetPaginationResponseSchema>;
-
-/** Shared query fields for cursor-based (infinite-load) pagination. */
-export const cursorPaginationQuerySchema = z.object({
-  limit: z.coerce.number().int().positive().optional(),
-  before: z.string().optional()
-});
-export type CursorPaginationQuery = z.infer<typeof cursorPaginationQuerySchema>;
-
-/** Shared response envelope fields for cursor-based pagination. */
-export const cursorPaginationResponseSchema = z.object({
-  nextCursor: z.string().optional(),
-  next: httpUrlSchema.optional(),
-  previous: httpUrlSchema.optional()
-});
-export type CursorPaginationResponse = z.infer<typeof cursorPaginationResponseSchema>;
 
 export const listSessionsQuerySchema = offsetPaginationQuerySchema.extend({
   archived: z.boolean().optional(),
@@ -249,9 +265,12 @@ export const ledgerBreakdownEntrySchema = ledgerEntrySchema.extend({
 });
 export type LedgerBreakdownEntry = z.infer<typeof ledgerBreakdownEntrySchema>;
 
-/** The global usage "账本": cumulative totals + a per-provider/model rollup + the full
+export const getUsageQuerySchema = offsetPaginationQuerySchema;
+export type GetUsageQuery = z.infer<typeof getUsageQuerySchema>;
+
+/** The global usage "账本": cumulative totals + a per-provider/model rollup + the paginated
  *  day/provider/model/category breakdown for multi-dimensional drill-down. */
-export const getUsageResponseSchema = z.object({
+export const getUsageResponseSchema = offsetPaginationResponseSchema.extend({
   totalCostUsd: z.number(),
   totalInputTokens: z.number(),
   totalOutputTokens: z.number(),
@@ -331,6 +350,18 @@ export const workspaceActionResponseSchema = z.object({
   action: workspaceActionSchema
 });
 export type WorkspaceActionResponse = z.infer<typeof workspaceActionResponseSchema>;
+
+export const openDraftAttachmentRequestSchema = z.object({
+  dataBase64: z.string().max(MESSAGE_ATTACHMENT_DATA_MAX),
+  mediaType: z.string().max(200).optional(),
+  name: z.string().min(1).max(255)
+});
+export type OpenDraftAttachmentRequest = z.infer<typeof openDraftAttachmentRequestSchema>;
+
+export const openDraftAttachmentResponseSchema = z.object({
+  ok: z.literal(true)
+});
+export type OpenDraftAttachmentResponse = z.infer<typeof openDraftAttachmentResponseSchema>;
 
 export const updateSessionRequestSchema = z.object({
   title: z.string().max(SESSION_TITLE_MAX).optional(),

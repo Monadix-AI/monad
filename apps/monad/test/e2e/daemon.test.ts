@@ -228,5 +228,12 @@ for (const kind of TRANSPORTS) {
       const project = await t.fetch(`/v1/workplace/projects/${projectId}`);
       expect(project.status).toBe(200);
     });
+
+    test('GET /workplace/projects/:id returns 404 for an unknown project', async () => {
+      const res = await t.fetch('/v1/workplace/projects/prj_00000000000000000000000000');
+      expect(res.status).toBe(404);
+      const body = (await res.json()) as { error: string; code: string };
+      expect(body.code).toBe('NOT_FOUND');
+    });
   });
 }

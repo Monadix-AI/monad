@@ -9,6 +9,26 @@ import type {
 import { commandToolView } from './command-card.tsx';
 import { fileReadToolView } from './file-read-card.tsx';
 
+function isThinkingObservation(item: ObservationItem): boolean {
+  const type = item.providerEventType?.toLowerCase() ?? '';
+  return (
+    item.role === 'agent' &&
+    (type === 'thinking' ||
+      type === 'reasoning' ||
+      type === 'thinking_delta' ||
+      type.includes('/reasoning/') ||
+      type.includes('reasoning') ||
+      type.includes('thinking') ||
+      type === 'item/plan/delta')
+  );
+}
+
+const thinkingCardAdapter: PublicObservationCardAdapter = {
+  projectItem(item) {
+    return isThinkingObservation(item) ? { type: 'thinking', item } : null;
+  }
+};
+
 const commandToolCardAdapter: PublicObservationCardAdapter = {
   projectItem(item) {
     const view = commandToolView(item, item);
@@ -27,7 +47,11 @@ const fileReadToolCardAdapter: PublicObservationCardAdapter = {
   }
 };
 
-const publicObservationCardAdapters: PublicObservationCardAdapter[] = [commandToolCardAdapter, fileReadToolCardAdapter];
+const publicObservationCardAdapters: PublicObservationCardAdapter[] = [
+  thinkingCardAdapter,
+  commandToolCardAdapter,
+  fileReadToolCardAdapter
+];
 const privateObservationCardAdapters: PrivateObservationCardAdapter[] = [];
 
 export function projectPublicObservationItem(item: ObservationItem): PublicObservationCard | null {

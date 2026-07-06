@@ -27,18 +27,18 @@ for (const kind of TRANSPORTS) {
         const { facts } = (await list.json()) as { facts: Fact[] };
         expect(facts.map((f) => f.content)).toEqual(['User deploys with Bun, not Node']);
 
-        const edit = await t.fetch('/v1/memory/facts', {
+        const edit = await t.fetch(`/v1/memory/facts/${fact.id}`, {
           method: 'PATCH',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ scopeKind: 'global', scopeId: '*', id: fact.id, content: 'User deploys with Bun' })
+          body: JSON.stringify({ scopeKind: 'global', scopeId: '*', content: 'User deploys with Bun' })
         });
         expect(edit.status).toBe(200);
         const edited = (await edit.json()) as { fact: Fact };
 
-        const forget = await t.fetch('/v1/memory/facts', {
+        const forget = await t.fetch(`/v1/memory/facts/${edited.fact.id}`, {
           method: 'DELETE',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ scopeKind: 'global', scopeId: '*', id: edited.fact.id })
+          body: JSON.stringify({ scopeKind: 'global', scopeId: '*' })
         });
         expect(forget.status).toBe(200);
 

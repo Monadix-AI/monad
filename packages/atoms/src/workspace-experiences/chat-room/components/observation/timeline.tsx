@@ -1,7 +1,12 @@
 'use client';
 
 import type { NativeCliStreamView } from '../../../experience/types.ts';
-import type { ObservationItem, ObservationTimelineEntry } from './types.ts';
+import type { ObservationItem, ObservationTimelineEntry, PublicObservationCard } from './types.ts';
+
+import { ChevronDownIcon } from '@hugeicons/core-free-icons';
+import { HugeiconsIcon } from '@hugeicons/react';
+import { workspaceMono as mono } from '@monad/ui/components/AgentAvatar';
+import { useEffect, useState } from 'react';
 
 import {
   privateObservationCard,
@@ -9,9 +14,20 @@ import {
   projectPublicObservationPair,
   renderPrivateObservationCard
 } from './adapters.ts';
-import { DefaultToolPairContent, ObservationCardShell, ObservationMeta, ObservationText } from './card-shell.tsx';
-import { CommandToolCard } from './command-card.tsx';
-import { FileReadToolCard } from './file-read-card.tsx';
+import {
+  DefaultToolPairContent,
+  ObservationCardShell,
+  type ObservationCollapseCommand,
+  ObservationMeta,
+  ObservationText
+} from './card-shell.tsx';
+import { CommandToolCard, CommandToolHeader } from './command-card.tsx';
+import { FileReadToolCard, FileReadToolHeader } from './file-read-card.tsx';
+
+export type ObservationTimelineRow = {
+  id: string;
+  entries: ObservationTimelineEntry[];
+};
 
 export function observationTimelineEntries(items: NativeCliStreamView['items']): ObservationTimelineEntry[] {
   const entries: ObservationTimelineEntry[] = [];
@@ -63,12 +79,27 @@ export function observationTimelineEntries(items: NativeCliStreamView['items']):
   return entries;
 }
 
-export function ObservationTimelineCard({ entry }: { entry: ObservationTimelineEntry }): React.ReactElement {
+function ObservationTimelineCard({
+  collapseCommand,
+  entry
+}: {
+  collapseCommand?: ObservationCollapseCommand;
+  entry: ObservationTimelineEntry;
+}): React.ReactElement {
   if (entry.kind === 'private') {
     const rendered = renderPrivateObservationCard(entry.card);
     if (rendered) {
       return (
         <ObservationCardShell
+          collapseCommand={collapseCommand}
+          header={
+            <ObservationMeta
+              compact
+              label="tool"
+              source={entry.card.source}
+              type={entry.card.type}
+            />
+          }
           raw={entry.raw}
           timestamp={entry.timestamp}
           visualRole="tool"
@@ -81,6 +112,17 @@ export function ObservationTimelineCard({ entry }: { entry: ObservationTimelineE
   if (entry.kind === 'public' && entry.card.type === 'tool-pair') {
     return (
       <ObservationCardShell
+        collapseCommand={collapseCommand}
+        defaultCollapsed
+        header={
+          <ObservationMeta
+            compact
+            label="tool call"
+            showSource={false}
+            source={entry.card.call.source}
+            title={toolPairName(entry.card.call)}
+          />
+        }
         raw={entry.raw}
         timestamp={entry.timestamp}
         visualRole="tool"
@@ -95,6 +137,9 @@ export function ObservationTimelineCard({ entry }: { entry: ObservationTimelineE
   if (entry.kind === 'public' && entry.card.type === 'command-tool') {
     return (
       <ObservationCardShell
+        collapseCommand={collapseCommand}
+        defaultCollapsed
+        header={<CommandToolHeader view={entry.card.view} />}
         raw={entry.raw}
         timestamp={entry.timestamp}
         visualRole="tool"
@@ -106,6 +151,9 @@ export function ObservationTimelineCard({ entry }: { entry: ObservationTimelineE
   if (entry.kind === 'public' && entry.card.type === 'file-read-tool') {
     return (
       <ObservationCardShell
+        collapseCommand={collapseCommand}
+        defaultCollapsed
+        header={<FileReadToolHeader view={entry.card.view} />}
         raw={entry.raw}
         timestamp={entry.timestamp}
         visualRole="tool"
@@ -114,9 +162,36 @@ export function ObservationTimelineCard({ entry }: { entry: ObservationTimelineE
       </ObservationCardShell>
     );
   }
+  if (entry.kind === 'public' && entry.card.type === 'thinking') {
+    return (
+      <ObservationCardShell
+        collapseCommand={collapseCommand}
+        header={
+          <ObservationMeta
+            compact
+            label="thinking"
+            source={entry.card.item.source}
+            type={entry.card.item.providerEventType}
+          >
+            <span style={thinkingPulseStyle} />
+          </ObservationMeta>
+        }
+        raw={entry.raw}
+        timestamp={entry.timestamp}
+        visualRole="agent"
+      >
+        <ObservationText
+          contained
+          observationRole="agent"
+          text={entry.card.item.text}
+        />
+      </ObservationCardShell>
+    );
+  }
   if (entry.kind === 'private') {
     return (
       <GenericObservationCard
+        collapseCommand={collapseCommand}
         entry={entry}
         item={entry.card.item}
       />
@@ -125,6 +200,7 @@ export function ObservationTimelineCard({ entry }: { entry: ObservationTimelineE
   if (entry.card.type === 'message') {
     return (
       <GenericObservationCard
+        collapseCommand={collapseCommand}
         entry={entry}
         item={entry.card.item}
       />
@@ -132,6 +208,15 @@ export function ObservationTimelineCard({ entry }: { entry: ObservationTimelineE
   }
   return (
     <ObservationCardShell
+      collapseCommand={collapseCommand}
+      header={
+        <ObservationMeta
+          compact
+          label="system"
+          source="unknown"
+          type="unsupported"
+        />
+      }
       raw={entry.raw}
       timestamp={entry.timestamp}
       visualRole="system"
@@ -145,29 +230,184 @@ export function ObservationTimelineCard({ entry }: { entry: ObservationTimelineE
 }
 
 function GenericObservationCard({
+  collapseCommand,
   entry,
   item
 }: {
+  collapseCommand?: ObservationCollapseCommand;
   entry: ObservationTimelineEntry;
   item: ObservationItem;
 }): React.ReactElement {
-  return (
-    <ObservationCardShell
-      raw={entry.raw}
-      timestamp={entry.timestamp}
-      visualRole={item.role}
-    >
+  const header =
+    item.role === 'user' || item.role === 'system' ? null : (
       <ObservationMeta
+        compact
         label={item.role}
         source={item.source}
         type={item.providerEventType}
       />
+    );
+  return (
+    <ObservationCardShell
+      collapseCommand={collapseCommand}
+      header={header}
+      raw={entry.raw}
+      timestamp={entry.timestamp}
+      visualRole={item.role}
+    >
       <ObservationText
         observationRole={item.role}
         text={item.text}
       />
     </ObservationCardShell>
   );
+}
+
+export function observationTimelineRows(entries: ObservationTimelineEntry[]): ObservationTimelineRow[] {
+  const rows: ObservationTimelineRow[] = [];
+  for (let index = 0; index < entries.length; index += 1) {
+    const entry = entries[index];
+    if (!entry) continue;
+    if (!isToolEntry(entry)) {
+      rows.push({ id: entry.id, entries: [entry] });
+      continue;
+    }
+    const toolEntries = [entry];
+    while (true) {
+      const next = entries[index + 1];
+      if (!isToolEntry(next)) break;
+      toolEntries.push(next);
+      index += 1;
+    }
+    if (toolEntries.length === 1) {
+      rows.push({ id: entry.id, entries: [entry] });
+    } else {
+      rows.push({ id: `tool-group:${toolEntries[0]?.id}`, entries: toolEntries });
+    }
+  }
+  return rows;
+}
+
+export function ObservationTimelineRowView({
+  collapseCommand,
+  row
+}: {
+  collapseCommand?: ObservationCollapseCommand;
+  row: ObservationTimelineRow;
+}): React.ReactElement | null {
+  const first = row.entries[0];
+  if (row.entries.length > 1 && isToolEntry(first))
+    return (
+      <ToolCallGroup
+        collapseCommand={collapseCommand}
+        entries={row.entries as ToolTimelineEntry[]}
+      />
+    );
+  return first ? (
+    <ObservationTimelineCard
+      collapseCommand={collapseCommand}
+      entry={first}
+    />
+  ) : null;
+}
+
+function _ObservationTimelineCards({
+  collapseCommand,
+  entries
+}: {
+  collapseCommand?: ObservationCollapseCommand;
+  entries: ObservationTimelineEntry[];
+}): React.ReactElement {
+  return (
+    <>
+      {observationTimelineRows(entries).map((row) => (
+        <ObservationTimelineRowView
+          collapseCommand={collapseCommand}
+          key={row.id}
+          row={row}
+        />
+      ))}
+    </>
+  );
+}
+
+type ToolObservationCard = Extract<PublicObservationCard, { type: 'command-tool' | 'file-read-tool' | 'tool-pair' }>;
+type ToolTimelineEntry = ObservationTimelineEntry & { kind: 'public'; card: ToolObservationCard };
+
+function ToolCallGroup({
+  collapseCommand,
+  entries
+}: {
+  collapseCommand?: ObservationCollapseCommand;
+  entries: ToolTimelineEntry[];
+}): React.ReactElement {
+  const [collapsed, setCollapsed] = useState(collapseCommand?.collapsed ?? true);
+  const commandCollapsed = collapseCommand?.collapsed;
+  useEffect(() => {
+    if (commandCollapsed === undefined) return;
+    setCollapsed(commandCollapsed);
+  }, [commandCollapsed]);
+  return (
+    <section style={toolGroupStyle}>
+      <button
+        className="workplace-action"
+        onClick={() => setCollapsed((value) => !value)}
+        style={toolGroupHeaderStyle}
+        type="button"
+      >
+        <HugeiconsIcon
+          aria-hidden="true"
+          icon={ChevronDownIcon}
+          size={13}
+          strokeWidth={2}
+          style={{ transform: collapsed ? 'rotate(-90deg)' : 'rotate(0deg)', transition: 'transform 150ms ease' }}
+        />
+        <span>{entries.length} tool calls</span>
+      </button>
+      {!collapsed ? (
+        <div style={toolGroupBodyStyle}>
+          {entries.map((entry) => (
+            <ObservationTimelineCard
+              collapseCommand={collapseCommand}
+              entry={entry}
+              key={entry.id}
+            />
+          ))}
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function isToolEntry(entry: ObservationTimelineEntry | undefined): entry is ToolTimelineEntry {
+  return (
+    !!entry &&
+    entry.kind === 'public' &&
+    (entry.card.type === 'command-tool' || entry.card.type === 'file-read-tool' || entry.card.type === 'tool-pair')
+  );
+}
+
+function toolPairName(item: ObservationItem): string {
+  const textName = /^Tool call\s+([^\s]+)/.exec(item.text.trim())?.[1];
+  if (textName) return textName;
+  const rawName = toolNameFromRaw(item.raw);
+  return rawName ?? 'tool';
+}
+
+function toolNameFromRaw(raw: unknown): string | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+  const record = raw as Record<string, unknown>;
+  const direct = record.name ?? record.tool ?? record.type;
+  if (typeof direct === 'string' && direct.trim()) return direct.trim();
+  const params = record.params;
+  if (!params || typeof params !== 'object' || Array.isArray(params)) return undefined;
+  const item = (params as Record<string, unknown>).item;
+  if (!item || typeof item !== 'object' || Array.isArray(item)) return undefined;
+  const nested =
+    (item as Record<string, unknown>).name ??
+    (item as Record<string, unknown>).tool ??
+    (item as Record<string, unknown>).type;
+  return typeof nested === 'string' && nested.trim() ? nested.trim() : undefined;
 }
 
 function isToolCallEvent(item: ObservationItem): boolean {
@@ -192,8 +432,7 @@ function isToolResultEvent(item: ObservationItem): boolean {
 }
 
 function observationTimestampLabel(item: ObservationItem): string | undefined {
-  const timestamp =
-    timestampMsFromUnknown(item.raw) ?? timestampMsFromUnknown(item.createdAt) ?? timestampMsFromUnknown(item.text);
+  const timestamp = timestampMsFromIso(item.createdAt);
   return timestamp === undefined ? undefined : formatObservationTime(timestamp);
 }
 
@@ -206,44 +445,44 @@ function formatObservationTime(timestamp: number): string {
   }).format(new Date(timestamp));
 }
 
-function timestampMsFromUnknown(value: unknown, depth = 0): number | undefined {
-  if (depth > 5 || value === undefined || value === null) return undefined;
-  if (typeof value === 'number') {
-    if (!Number.isFinite(value) || value <= 0) return undefined;
-    return value < 10_000_000_000 ? value * 1000 : value;
-  }
-  if (typeof value === 'string') {
-    const trimmed = value.trim();
-    if (!trimmed) return undefined;
-    if (/^\d+(\.\d+)?$/.test(trimmed)) return timestampMsFromUnknown(Number(trimmed), depth + 1);
-    if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
-      try {
-        return timestampMsFromUnknown(JSON.parse(trimmed) as unknown, depth + 1);
-      } catch {}
-    }
-    const parsed = Date.parse(trimmed);
-    return Number.isNaN(parsed) ? undefined : parsed;
-  }
-  if (Array.isArray(value)) {
-    return latestTimestamp(value.map((item) => timestampMsFromUnknown(item, depth + 1)));
-  }
-  if (typeof value !== 'object') return undefined;
-  const record = value as Record<string, unknown>;
-  const direct = latestTimestamp([
-    timestampMsFromUnknown(record.createdAt, depth + 1),
-    timestampMsFromUnknown(record.updatedAt, depth + 1),
-    timestampMsFromUnknown(record.timestamp, depth + 1),
-    timestampMsFromUnknown(record.time, depth + 1)
-  ]);
-  if (direct !== undefined) return direct;
-  return latestTimestamp(
-    ['params', 'item', 'message', 'thread', 'turn', 'output', 'result', 'content', 'aggregatedOutput'].map((key) =>
-      timestampMsFromUnknown(record[key], depth + 1)
-    )
-  );
+function timestampMsFromIso(value: string | undefined): number | undefined {
+  if (!value) return undefined;
+  const timestamp = Date.parse(value);
+  return Number.isNaN(timestamp) ? undefined : timestamp;
 }
 
-function latestTimestamp(values: Array<number | undefined>): number | undefined {
-  const timestamps = values.filter((value): value is number => value !== undefined);
-  return timestamps.length === 0 ? undefined : Math.max(...timestamps);
-}
+const toolGroupStyle: React.CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 8,
+  minWidth: 0
+};
+
+const toolGroupHeaderStyle: React.CSSProperties = {
+  alignSelf: 'flex-start',
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 6,
+  border: '1px solid color-mix(in srgb, #f59e0b 34%, var(--border))',
+  borderRadius: 999,
+  background: 'color-mix(in srgb, #f59e0b 8%, transparent)',
+  color: 'var(--muted-foreground)',
+  fontFamily: mono,
+  fontSize: 11,
+  padding: '3px 8px'
+};
+
+const toolGroupBodyStyle: React.CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 8,
+  minWidth: 0
+};
+
+const thinkingPulseStyle: React.CSSProperties = {
+  width: 6,
+  height: 6,
+  borderRadius: 999,
+  background: 'color-mix(in srgb, #8b5cf6 78%, var(--foreground))',
+  boxShadow: '0 0 0 3px color-mix(in srgb, #8b5cf6 18%, transparent)'
+};

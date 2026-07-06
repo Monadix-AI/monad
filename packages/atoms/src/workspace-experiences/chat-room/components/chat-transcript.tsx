@@ -13,6 +13,7 @@ import { MessageListSkeleton, TranscriptSkeleton, TypingRow } from './transcript
 const ChatMessageList = lazy(() =>
   import('./message-list.tsx').then((module) => ({ default: module.ChatMessageList }))
 );
+const COMPOSER_CLEARANCE = 'calc(var(--chat-room-composer-clearance, 132px) + 24px)';
 
 type ChatTranscriptRoom = ChatMessageListRoom & {
   messages: Message[];
@@ -48,7 +49,7 @@ export function ChatTranscript({
             flex: 1,
             overflowX: 'hidden',
             overflowY: 'auto',
-            padding: '24px 16px 108px'
+            padding: `24px 16px ${COMPOSER_CLEARANCE}`
           }}
         >
           <TranscriptSkeleton />
@@ -58,16 +59,23 @@ export function ChatTranscript({
     return (
       <div
         className="scwf-scroll"
-        style={{ boxSizing: 'border-box', flex: 1, overflowX: 'hidden', overflowY: 'auto', padding: '24px 16px 108px' }}
+        style={{
+          boxSizing: 'border-box',
+          flex: 1,
+          overflowX: 'hidden',
+          overflowY: 'auto',
+          padding: `24px 16px ${COMPOSER_CLEARANCE}`
+        }}
       >
         <div
+          className="chat-room-empty-state"
           style={{
             margin: '52px auto 0',
-            maxWidth: 470,
-            padding: '24px 26px',
-            border: `1px solid ${'var(--border)'}`,
+            maxWidth: 560,
+            padding: '22px 24px',
+            border: `1px solid ${'color-mix(in srgb, var(--accent-blue) 24%, var(--border))'}`,
             borderRadius: 14,
-            background: 'color-mix(in srgb, var(--card) 88%, var(--muted))',
+            background: 'color-mix(in srgb, var(--card) 92%, var(--accent-blue-soft))',
             textAlign: 'left'
           }}
         >
@@ -79,7 +87,6 @@ export function ChatTranscript({
                 height: 42,
                 borderRadius: 12,
                 background: 'var(--accent-blue)',
-                boxShadow: '0 8px 18px -12px color-mix(in srgb, var(--accent-blue) 80%, transparent)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center'
@@ -105,7 +112,7 @@ export function ChatTranscript({
             </div>
             <div style={{ minWidth: 0 }}>
               <div style={{ fontFamily: sans, fontSize: 18, fontWeight: 700, lineHeight: 1.3, marginBottom: 7 }}>
-                {labels.emptyTitle}
+                Set up Codex, Claude, or another agent.
               </div>
               <div
                 style={{
@@ -113,23 +120,35 @@ export function ChatTranscript({
                   fontSize: 14,
                   lineHeight: 1.55,
                   color: 'var(--muted-foreground)',
-                  maxWidth: 390
+                  maxWidth: 440
                 }}
               >
-                {labels.emptyDescription}
+                Connect an external agent in Studio, then bring it into this room. You can also spawn a project-local
+                member when you want monad to manage the session.
               </div>
             </div>
           </div>
-
-          <div
-            style={{
-              display: 'flex',
-              flexWrap: 'wrap',
-              alignItems: 'center',
-              gap: 10,
-              marginTop: 20
-            }}
-          >
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 16 }}>
+            {['Codex', 'Claude', 'More providers'].map((provider) => (
+              <span
+                key={provider}
+                style={{
+                  border: `1px solid ${'var(--border)'}`,
+                  borderRadius: 999,
+                  background: 'var(--card)',
+                  color: provider === 'More providers' ? 'var(--muted-foreground)' : 'var(--foreground)',
+                  fontFamily: sans,
+                  fontSize: 12,
+                  fontWeight: 650,
+                  lineHeight: 1,
+                  padding: '7px 10px'
+                }}
+              >
+                {provider}
+              </span>
+            ))}
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10, marginTop: 20 }}>
             <button
               className="workplace-action"
               onClick={() => host.openStudio('nativeCliAgents')}
@@ -138,10 +157,10 @@ export function ChatTranscript({
                 display: 'inline-flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                border: `1px solid ${'var(--border)'}`,
+                border: `1px solid ${'var(--accent-blue)'}`,
                 borderRadius: 10,
-                background: 'var(--card)',
-                color: 'var(--foreground)',
+                background: 'var(--accent-blue)',
+                color: 'var(--primary-foreground)',
                 fontFamily: sans,
                 fontSize: 14,
                 fontWeight: 650,
@@ -150,7 +169,7 @@ export function ChatTranscript({
               }}
               type="button"
             >
-              {labels.connectInStudio}
+              Set up external agents
             </button>
             <button
               className="workplace-action"
@@ -161,10 +180,10 @@ export function ChatTranscript({
                 alignItems: 'center',
                 justifyContent: 'center',
                 gap: 7,
-                border: `1px solid ${'var(--accent-blue)'}`,
+                border: `1px solid ${'var(--border)'}`,
                 borderRadius: 10,
-                background: 'var(--accent-blue)',
-                color: 'var(--primary-foreground)',
+                background: 'var(--card)',
+                color: 'var(--foreground)',
                 fontFamily: sans,
                 fontSize: 14,
                 fontWeight: 650,
@@ -176,7 +195,7 @@ export function ChatTranscript({
                 icon={TerminalIcon}
                 size={15}
               />
-              {labels.spawnAgentMember}
+              Spawn project member
             </button>
           </div>
         </div>

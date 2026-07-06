@@ -200,8 +200,7 @@ export const channelAllowlistSchema = z.object({
 // Group/channel behaviour. requireMention (default true) keeps the bot quiet in a group unless it
 // is @mentioned or replied-to — so it doesn't answer every line of unrelated chatter.
 export const channelGroupPolicySchema = z.object({
-  requireMention: z.boolean().default(true),
-  moderatorAgentId: z.string().regex(/^agt_/, 'moderator agent id must start with agt_').optional()
+  requireMention: z.boolean().default(true)
 });
 export type ChannelGroupPolicy = z.infer<typeof channelGroupPolicySchema>;
 
@@ -242,6 +241,9 @@ export type ChannelStatus = z.infer<typeof channelStatusSchema>;
 
 export const listChannelsResponseSchema = z.object({ channels: z.array(channelInstanceViewSchema) });
 export type ListChannelsResponse = z.infer<typeof listChannelsResponseSchema>;
+
+export const getChannelResponseSchema = z.object({ channel: channelInstanceViewSchema });
+export type GetChannelResponse = z.infer<typeof getChannelResponseSchema>;
 
 export const channelStatusResponseSchema = z.object({ statuses: z.array(channelStatusSchema) });
 export type ChannelStatusResponse = z.infer<typeof channelStatusResponseSchema>;

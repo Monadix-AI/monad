@@ -1,4 +1,6 @@
 import {
+  agentAdapter,
+  agentSelectors,
   useCreateAgentMutation,
   useDeleteAgentMutation,
   useGetA2aStatusQuery,
@@ -18,6 +20,8 @@ import {
   useRevokeApprovalMutation
 } from './endpoints/approvals/index.ts';
 import {
+  atomPackAdapter,
+  atomPackSelectors,
   atomsApi,
   useBrowseSkillsQuery,
   useCheckSkillUpdatesQuery,
@@ -50,8 +54,14 @@ import {
   useUploadAtomPackMutation,
   useUploadSkillMutation
 } from './endpoints/atoms/index.ts';
+import {
+  useDownloadAttachmentMutation,
+  useGetAttachmentQuery,
+  useLazyGetAttachmentQuery
+} from './endpoints/attachments/index.ts';
 import { useSendChannelMessageMutation } from './endpoints/channels/index.ts';
 import { commandsApi, useListCommandsQuery } from './endpoints/commands/index.ts';
+import { useOpenDraftAttachmentMutation } from './endpoints/draft-attachments/index.ts';
 import { graphApi, useGetGraphQuery } from './endpoints/graph/index.ts';
 import { indexerApi, useGetIndexerStatusQuery } from './endpoints/indexer/get-indexer-status.ts';
 import { useInitStatusQuery, useSetInitHomeMutation } from './endpoints/init/index.ts';
@@ -85,7 +95,10 @@ import {
   useHeartbeatNativeCliAuthMutation,
   useInputNativeCliAuthMutation,
   useInputNativeCliSessionMutation,
+  useLazyGetNativeAgentDeliveryObservationQuery,
   useLazyGetNativeCliAuthStatusQuery,
+  useLazyGetNativeCliHistoryPageQuery,
+  useLazyGetNativeCliObservationQuery,
   useLazyGetNativeCliUsageQuery,
   useListLiveNativeCliSessionsQuery,
   useListNativeCliSessionSummariesQuery,
@@ -101,6 +114,7 @@ import {
 import {
   useCreateWorkplaceProjectMutation,
   useDeleteWorkplaceProjectMutation,
+  useGetWorkplaceProjectQuery,
   useListWorkplaceProjectsQuery,
   useSendProjectMessageMutation,
   useUpdateWorkplaceProjectMutation,
@@ -226,6 +240,17 @@ import {
 import { useGetNetworkQuery, useSetNetworkMutation } from './endpoints/settings/network/index.ts';
 import { useGetObscuraQuery, useSetObscuraMutation } from './endpoints/settings/obscura/index.ts';
 import { useGetOpenaiCompatQuery, useSetOpenaiCompatMutation } from './endpoints/settings/openai-compat/index.ts';
+import {
+  peerAdapter,
+  peerSelectors,
+  useDeletePeerMutation,
+  useGetPeerQuery,
+  useListPeersQuery,
+  useSetPeerCredentialMutation,
+  useSetPeerEnabledMutation,
+  useTestPeerConnectionMutation,
+  useUpsertPeerMutation
+} from './endpoints/settings/peers/index.ts';
 import { useGetProfileSettingsQuery, useSetProfileSettingsMutation } from './endpoints/settings/profile/index.ts';
 import { useGetSandboxQuery, useSetSandboxMutation } from './endpoints/settings/sandbox/index.ts';
 import { useGetSkillsSettingsQuery, useSetSkillsSettingsMutation } from './endpoints/settings/skills/index.ts';
@@ -249,8 +274,12 @@ export const monadApi = modelApi;
 export {
   acpAgentAdapter,
   acpAgentSelectors,
+  agentAdapter,
+  agentSelectors,
   approvalRuleSelectors,
   approvalsApi,
+  atomPackAdapter,
+  atomPackSelectors,
   atomsApi,
   channelAdapter,
   channelPairingSelectors,
@@ -277,6 +306,8 @@ export {
   nativeCliAgentSelectors,
   nativeCliSessionAdapter,
   nativeCliSessionSelectors,
+  peerAdapter,
+  peerSelectors,
   profileAdapter,
   profileSelectors,
   providerAdapter,
@@ -308,11 +339,13 @@ export {
   useDeleteCredentialMutation,
   useDeleteMcpServerMutation,
   useDeleteNativeCliAgentMutation,
+  useDeletePeerMutation,
   useDeleteProfileMutation,
   useDeleteProviderMutation,
   useDeleteSessionMutation,
   useDeleteWorkplaceProjectMutation,
   useDiscoverAtomKindsMutation,
+  useDownloadAttachmentMutation,
   useEditMemoryFactMutation,
   useFetchSkillDetailQuery,
   useForgetMemoryFactMutation,
@@ -322,6 +355,7 @@ export {
   useGetAgentPromptQuery,
   useGetAgentQuery,
   useGetAppearanceQuery,
+  useGetAttachmentQuery,
   useGetBrowserPresetQuery,
   useGetCatalogQuery,
   useGetComputerPresetQuery,
@@ -347,6 +381,7 @@ export {
   useGetNetworkQuery,
   useGetObscuraQuery,
   useGetOpenaiCompatQuery,
+  useGetPeerQuery,
   useGetProfileSettingsQuery,
   useGetRolesQuery,
   useGetSandboxQuery,
@@ -356,6 +391,7 @@ export {
   useGetStatsQuery,
   useGetToolBackendsQuery,
   useGetUsageQuery,
+  useGetWorkplaceProjectQuery,
   useHeartbeatNativeCliAuthMutation,
   useInitDockerBackendMutation,
   useInitStatusQuery,
@@ -368,7 +404,11 @@ export {
   useLazyBrowseSkillsQuery,
   useLazyCheckSkillUpdatesQuery,
   useLazyFetchSkillDetailQuery,
+  useLazyGetAttachmentQuery,
+  useLazyGetNativeAgentDeliveryObservationQuery,
   useLazyGetNativeCliAuthStatusQuery,
+  useLazyGetNativeCliHistoryPageQuery,
+  useLazyGetNativeCliObservationQuery,
   useLazyGetNativeCliUsageQuery,
   useLazyGetSkillContentQuery,
   useLazyGetUiItemsWindowQuery,
@@ -399,12 +439,14 @@ export {
   useListNativeCliSessionSummariesQuery,
   useListNativeCliSessionsQuery,
   useListNativeCliSettingsImportCandidatesQuery,
+  useListPeersQuery,
   useListProfilesQuery,
   useListProvidersQuery,
   useListSessionsQuery,
   useListSkillsQuery,
   useListWorkplaceProjectsQuery,
   useListWorkspaceExperiencesQuery,
+  useOpenDraftAttachmentMutation,
   usePickDirectoryMutation,
   usePreviewNativeCliSettingsImportMutation,
   usePreviewSettingsImportMutation,
@@ -449,6 +491,8 @@ export {
   useSetNetworkMutation,
   useSetObscuraMutation,
   useSetOpenaiCompatMutation,
+  useSetPeerCredentialMutation,
+  useSetPeerEnabledMutation,
   useSetProfileMutation,
   useSetProfileSettingsMutation,
   useSetProviderMutation,
@@ -467,6 +511,7 @@ export {
   useStreamUiItemsQuery,
   useTestConnectionMutation,
   useTestCredentialMutation,
+  useTestPeerConnectionMutation,
   useTranscribeAudioMutation,
   useUpdateAgentMutation,
   useUpdateSessionMutation,
@@ -479,6 +524,7 @@ export {
   useUpsertChannelMutation,
   useUpsertMcpServerMutation,
   useUpsertNativeCliAgentMutation,
+  useUpsertPeerMutation,
   useWorkspaceActionMutation,
   useWorkspaceGitQuery,
   useWorkspaceMetaQuery,

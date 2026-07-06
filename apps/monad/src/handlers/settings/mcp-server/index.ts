@@ -1,5 +1,6 @@
 import type { McpServerConfig, MonadConfig, MonadPaths } from '@monad/home';
 import type {
+  GetMcpServerResponse,
   ListMcpCatalogResponse,
   ListMcpServerStatusResponse,
   ListMcpServersResponse,
@@ -21,6 +22,7 @@ import {
   searchMcpRegistry,
   toCatalogEntry
 } from '@/capabilities/mcp/index.ts';
+import { HandlerError } from '@/handlers/handler-error.ts';
 
 const REGISTRY_ADAPTERS = [
   new BuiltInMcpAdapter(),
@@ -61,6 +63,13 @@ export function createMcpServerModule({ paths, getMcpStatus, mcpAuthorize, mcpRe
       return { servers: cfg.mcpServers.map(toView) };
     },
 
+    async getMcpServer({ name }: { name: string }): Promise<GetMcpServerResponse> {
+      const cfg = await read();
+      const found = cfg.mcpServers.find((s) => s.name === name);
+      if (!found) throw new HandlerError('not_found', `MCP server not found: ${name}`);
+      return { server: toView(found) };
+    },
+
     // Curated directory of popular MCP servers for one-click add. Falls back to built-in list when
     // all remote registries fail.
     async listMcpCatalog(): Promise<ListMcpCatalogResponse> {
@@ -82,6 +91,10 @@ export function createMcpServerModule({ paths, getMcpStatus, mcpAuthorize, mcpRe
     // Trigger the interactive OAuth flow for a config http oauth server (blocks until the browser/
     // device flow completes or times out), then reconnect it so the token takes effect.
     async authorizeMcpServer({ name }: { name: string }): Promise<OkResponse> {
+      const cfg = await read();
+      if (!cfg.mcpServers.some((s) => s.name === name)) {
+        throw new HandlerError('not_found', `MCP server not found: ${name}`);
+      }
       if (!mcpAuthorize) throw new Error('OAuth authorize is unavailable in this context');
       await mcpAuthorize(name);
       return { ok: true };
@@ -89,6 +102,10 @@ export function createMcpServerModule({ paths, getMcpStatus, mcpAuthorize, mcpRe
 
     // Force a single server to (re)connect — retry a boot-time failure without a restart.
     async reconnectMcpServer({ name }: { name: string }): Promise<OkResponse> {
+      const cfg = await read();
+      if (!cfg.mcpServers.some((s) => s.name === name)) {
+        throw new HandlerError('not_found', `MCP server not found: ${name}`);
+      }
       if (!mcpReconnect) throw new Error('reconnect is unavailable in this context');
       await mcpReconnect(name);
       return { ok: true };
@@ -105,6 +122,9 @@ export function createMcpServerModule({ paths, getMcpStatus, mcpAuthorize, mcpRe
 
     async setMcpServerEnabled({ name, enabled }: { name: string } & SetMcpServerEnabledRequest): Promise<OkResponse> {
       const cfg = await read();
+      if (!cfg.mcpServers.some((s) => s.name === name)) {
+        throw new HandlerError('not_found', `MCP server not found: ${name}`);
+      }
       cfg.mcpServers = cfg.mcpServers.map((s) => (s.name === name ? { ...s, enabled } : s));
       await commit(cfg);
       await applyLive(name);
@@ -113,6 +133,9 @@ export function createMcpServerModule({ paths, getMcpStatus, mcpAuthorize, mcpRe
 
     async removeMcpServer({ name }: { name: string }): Promise<OkResponse> {
       const cfg = await read();
+      if (!cfg.mcpServers.some((s) => s.name === name)) {
+        throw new HandlerError('not_found', `MCP server not found: ${name}`);
+      }
       cfg.mcpServers = cfg.mcpServers.filter((s) => s.name !== name);
       await commit(cfg);
       await applyLive(name);

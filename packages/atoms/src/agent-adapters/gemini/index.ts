@@ -16,6 +16,7 @@ import { readProviderHistoryFile } from '../history-files.ts';
 import { resizePty, sendPtyInput, stopPty } from '../pty.ts';
 import { nativeCliAdapterSettings } from '../settings.ts';
 import { createBasicSettingsImport } from '../settings-import.ts';
+import { geminiObservationProjection } from './observation.ts';
 import { hasGeminiStreamJsonEvents, parseGeminiStreamJson } from './stream-json.ts';
 
 // Unlike codex (`debug models --bundled` prints a JSON catalog) and qwen (models are readable from
@@ -220,6 +221,7 @@ export const geminiNativeCliAdapter: NativeCliProviderAdapter = {
   provider: 'gemini',
   productIcon: 'gemini',
   label: 'Gemini CLI',
+  observation: geminiObservationProjection,
   settings: () => nativeCliAdapterSettings({ launchModes: ['pty', 'json-stream'] }),
   settingsImport: createBasicSettingsImport('gemini', 'Gemini CLI', 'gemini', '.gemini'),
   managedRuntime: {

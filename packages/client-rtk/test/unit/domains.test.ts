@@ -102,7 +102,7 @@ test('listAgents: fetches and caches the agent list', async () => {
 
   const res = await store.dispatch(listAgentsApi.endpoints.listAgents.initiate(undefined));
   expect(calls).toBe(1);
-  expect(res.data?.agents).toHaveLength(1);
+  expect(res.data?.ids).toHaveLength(1);
 
   // Cache hit — no second call.
   await store.dispatch(listAgentsApi.endpoints.listAgents.initiate(undefined));
@@ -154,7 +154,7 @@ test('deleteAgent: optimistically removes agent and confirms on success', async 
 
   // Seed the list.
   const listRes = await store.dispatch(listAgentsApi.endpoints.listAgents.initiate(undefined));
-  expect(listRes.data?.agents).toHaveLength(1);
+  expect(listRes.data?.ids).toHaveLength(1);
 
   await store.dispatch(deleteAgentApi.endpoints.deleteAgent.initiate('agent_del' as never));
 
@@ -214,7 +214,8 @@ function fakeAtomsClient(overrides: {
             }
           }),
           {
-            get: async () => ok({ atomPacks: overrides.listAtomPacks ? await overrides.listAtomPacks() : [] }),
+            get: async () =>
+              ok({ atomPacks: overrides.listAtomPacks ? await overrides.listAtomPacks() : [], conflicts: [] }),
             install: {
               post: async (body: unknown) =>
                 ok(
@@ -242,7 +243,7 @@ test('listAtomPacks: fetches and caches atom pack list', async () => {
 
   const res = await store.dispatch(listAtomPacksApi.endpoints.listAtomPacks.initiate(undefined));
   expect(calls).toBe(1);
-  expect(res.data?.atomPacks).toHaveLength(1);
+  expect(res.data?.atomPacks.ids).toHaveLength(1);
 
   await store.dispatch(listAtomPacksApi.endpoints.listAtomPacks.initiate(undefined));
   expect(calls).toBe(1); // cache hit
@@ -297,7 +298,7 @@ test('removeAtomPack: optimistically removes from list then refetches', async ()
   const store = createMonadStore({ client });
 
   const seeded = await store.dispatch(listAtomPacksApi.endpoints.listAtomPacks.initiate(undefined));
-  expect(seeded.data?.atomPacks).toHaveLength(1);
+  expect(seeded.data?.atomPacks.ids).toHaveLength(1);
 
   await store.dispatch(atomsApi.endpoints.removeAtomPack.initiate('to-remove'));
   await new Promise((r) => setTimeout(r, 0));
@@ -343,8 +344,8 @@ test('listApprovals: fetches approval rules', async () => {
   const store = createMonadStore({ client });
 
   const res = await store.dispatch(approvalsApi.endpoints.listApprovals.initiate(undefined));
-  expect(res.data?.ids).toEqual(['rule_1']);
-  expect(res.data?.entities.rule_1?.tool).toBe('bash');
+  expect(res.data?.rules.ids).toEqual(['rule_1']);
+  expect(res.data?.rules.entities.rule_1?.tool).toBe('bash');
 });
 
 test('revokeApproval: invalidates Approvals cache', async () => {
@@ -414,19 +415,23 @@ function fakeMemoryClient(overrides: {
             }
           },
           mem0: { models: { put: async () => ok({ ok: true }) } },
-          facts: {
-            get: async () => ok({ facts: overrides.listFacts ? await overrides.listFacts() : [] }),
-            post: async (body: unknown) =>
-              ok(overrides.addFact ? await overrides.addFact(body) : { factId: 'fact_new' }),
-            put: async (body: unknown) => {
-              if (overrides.editFact) await overrides.editFact(body);
-              return ok({ ok: true });
-            },
-            delete: async (body: unknown) => {
-              if (overrides.forgetFact) await overrides.forgetFact(body);
-              return ok({ ok: true });
+          facts: Object.assign(
+            ({ id }: { id: string }) => ({
+              patch: async (body: unknown) => {
+                if (overrides.editFact) await overrides.editFact({ id, ...(body as object) });
+                return ok({ ok: true });
+              },
+              delete: async (body: unknown) => {
+                if (overrides.forgetFact) await overrides.forgetFact({ id, ...(body as object) });
+                return ok({ ok: true });
+              }
+            }),
+            {
+              get: async () => ok({ facts: overrides.listFacts ? await overrides.listFacts() : [] }),
+              post: async (body: unknown) =>
+                ok(overrides.addFact ? await overrides.addFact(body) : { factId: 'fact_new' })
             }
-          },
+          ),
           core: {
             get: async () => ok({ scope: 'global', content: '', updatedAt: null }),
             put: async () => ok({ ok: true })
@@ -462,8 +467,8 @@ test('listMemoryFacts: fetches facts and caches by Memory tag', async () => {
 
   const res = await store.dispatch(memoryApi.endpoints.listMemoryFacts.initiate({ scopeKind: 'global', scopeId: '*' }));
   expect(calls).toBe(1);
-  expect(res.data?.ids).toEqual(['fact_1']);
-  expect(res.data?.entities.fact_1?.content).toBe('user likes cats');
+  expect(res.data?.facts.ids).toEqual(['fact_1']);
+  expect(res.data?.facts.entities.fact_1?.content).toBe('user likes cats');
 
   await store.dispatch(memoryApi.endpoints.listMemoryFacts.initiate({ scopeKind: 'global', scopeId: '*' }));
   expect(calls).toBe(1); // cache hit

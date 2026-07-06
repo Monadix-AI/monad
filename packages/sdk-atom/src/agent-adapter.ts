@@ -10,8 +10,8 @@ import type {
   NativeCliAppServerTransport,
   NativeCliAuthState,
   NativeCliHistoryPageRequest,
-  NativeCliHistoryPageResponse,
   NativeCliLaunchMode,
+  NativeCliObservationEvent,
   NativeCliProductIcon,
   NativeCliProvider,
   NativeCliUsageRecord
@@ -273,7 +273,9 @@ export interface NativeCliProviderHistoryContext {
 }
 
 export interface NativeCliProviderHistoryPageContext extends NativeCliProviderHistoryContext {
-  page: NativeCliHistoryPageResponse['page'];
+  /** Raw provider records to reshape into the live-JSONL-mimicking output string — not the daemon's
+   *  wire response shape (that carries normalized `events`, not raw items). */
+  page: { items: unknown[]; nextCursor?: string };
 }
 
 export interface NativeCliApprovalResolution {
@@ -312,6 +314,36 @@ export interface NativeCliUsageProbe {
   launch: NativeCliLaunchSpec;
   parse(output: string, exitCode: number | null): NativeCliUsageRecord[];
 }
+
+export type NativeCliObservationJsonRecordEntry = {
+  record: Record<string, unknown>;
+  raw: string;
+};
+
+export type NativeCliObservationMessageGroupProjector = {
+  append(group: unknown, entry: NativeCliObservationJsonRecordEntry): void;
+  create(record: Record<string, unknown>): { key: string; state: unknown } | undefined;
+  render(id: string, group: unknown): NativeCliObservationEvent[];
+};
+
+export type NativeCliObservationRecordProjector = {
+  parse(args: {
+    id: string;
+    provider?: string;
+    record: Record<string, unknown>;
+    recordIndex: number;
+  }): NativeCliObservationEvent[];
+  supports?(record: Record<string, unknown>): boolean;
+};
+
+export type NativeCliObservationUsageProjector = {
+  usageRecords?(record: Record<string, unknown>): NativeCliUsageRecord[];
+};
+
+export type NativeCliObservationProjector = NativeCliObservationUsageProjector & {
+  messageGroup?: NativeCliObservationMessageGroupProjector;
+  recordProjectors: NativeCliObservationRecordProjector[];
+};
 
 export interface NativeCliArgumentSupport {
   flags: string[];
@@ -403,6 +435,10 @@ export interface NativeCliProviderAdapter {
   /** Optional provider-specific migration surface. Current UI entry points may apply only a subset of
    *  categories (for example native CLI agents) even when the adapter previews broader settings. */
   settingsImport?: AdapterMigration;
+  /** Optional provider-wire transcript projection into Monad protocol events. This is data-only:
+   *  adapters may decode their own JSONL/history format, but must not return UI components, labels,
+   *  cards, or view state. Experience surfaces consume only the resulting protocol events. */
+  observation?: NativeCliObservationProjector;
   /** Declarative operator settings for this adapter. The UI renders these controls dynamically; keys
    *  address fields on `NativeCliAgentView` so daemon launch behavior still reads the shared contract. */
   settings?(agent?: NativeCliAgentView): NativeCliAgentSetting[];

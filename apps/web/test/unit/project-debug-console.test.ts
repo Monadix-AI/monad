@@ -77,19 +77,3 @@ test('project debug console maps logger records to log trace entries', () => {
     }
   });
 });
-
-test('project debug console owns the dev stream message toggle', async () => {
-  const [consoleSource, debugStoreSource, workplaceStoreSource, projectSource] = await Promise.all([
-    Bun.file(new URL('../../features/workplace/debug/ProjectDebugConsole.tsx', import.meta.url)).text(),
-    Bun.file(new URL('../../features/workplace/debug/project-debug-store.ts', import.meta.url)).text(),
-    Bun.file(new URL('../../features/workplace/workplace-ui-store.ts', import.meta.url)).text(),
-    Bun.file(new URL('../../features/workplace/use-project.ts', import.meta.url)).text()
-  ]);
-
-  expect(consoleSource).toContain('show dev system messages in stream');
-  expect(consoleSource).toContain('setShowDevSystemMessagesInStream');
-  expect(debugStoreSource).toContain('monad.workplace.showDevSystemMessagesInStream');
-  expect(debugStoreSource).toContain("process.env.NODE_ENV !== 'production'");
-  expect(workplaceStoreSource).not.toContain('showDevSystemMessagesInStream');
-  expect(projectSource).toContain('showDeveloperOnlyMessages: DEV_SYSTEM_MESSAGES_IN_STREAM_ENABLED &&');
-});

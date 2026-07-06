@@ -2,12 +2,7 @@ import type { ChannelInstanceConfig, MonadConfig } from '@monad/home';
 import type { ChannelInbound, PrincipalId } from '@monad/protocol';
 import type { ChannelRoute } from '@/channels/types.ts';
 
-import {
-  addressedToBot,
-  channelStructuredResponseHint,
-  mentionedAgents,
-  moderatorAgentHint
-} from '@/channels/helpers.ts';
+import { addressedToBot, channelStructuredResponseHint, mentionedAgents } from '@/channels/helpers.ts';
 
 export function deriveKey(c: ChannelInstanceConfig, m: ChannelInbound, agentId?: string): string {
   const parts = [c.id, m.chatId];
@@ -29,13 +24,8 @@ export function principalFor(channelId: string): PrincipalId {
   return `prn_${suffix}` as PrincipalId;
 }
 
-export function channelOriginExt(
-  cfg: MonadConfig,
-  c: ChannelInstanceConfig,
-  role?: ChannelRoute['kind']
-): { agentHint?: string } | undefined {
+export function channelOriginExt(c: ChannelInstanceConfig): { agentHint?: string } | undefined {
   const hints = [c.agentHint?.trim(), channelStructuredResponseHint()].filter((s): s is string => Boolean(s));
-  if (role === 'moderator') hints.push(moderatorAgentHint(cfg));
   if (!hints.length) return undefined;
   return { agentHint: hints.join('\n\n') };
 }
@@ -43,30 +33,14 @@ export function channelOriginExt(
 export function routeInbound(cfg: MonadConfig, c: ChannelInstanceConfig, m: ChannelInbound): ChannelRoute | null {
   if (m.kind === 'command') return { kind: 'default' };
   const chatType = m.chatType ?? 'dm';
-  const moderatorAgentId = c.groupPolicy?.moderatorAgentId;
-  if (!moderatorAgentId) {
-    const mentions = mentionedAgents(m.text, cfg.agent.agents);
-    if ((chatType === 'group' || chatType === 'channel') && cfg.agent.agents.length > 0) {
-      if (mentions.length === 0) return null;
-      const [agent] = mentions;
-      return agent ? { kind: 'agent_direct', agentId: agent.id, agentName: agent.name } : null;
-    }
-    if ((c.groupPolicy?.requireMention ?? true) && !addressedToBot(m)) return null;
-    return { kind: 'default' };
-  }
-
   const mentions = mentionedAgents(m.text, cfg.agent.agents);
-  if (mentions.length === 1) {
+  if ((chatType === 'group' || chatType === 'channel') && cfg.agent.agents.length > 0) {
+    if (mentions.length === 0) return null;
     const [agent] = mentions;
-    if (!agent) return null;
-    return agent.id === moderatorAgentId
-      ? { kind: 'moderator', agentId: moderatorAgentId }
-      : { kind: 'agent', agentId: agent.id, agentName: agent.name, moderatorAgentId };
+    return agent ? { kind: 'agent_direct', agentId: agent.id, agentName: agent.name } : null;
   }
-  if (chatType === 'group' || chatType === 'channel' || chatType === 'dm') {
-    return { kind: 'moderator', agentId: moderatorAgentId };
-  }
-  return null;
+  if ((c.groupPolicy?.requireMention ?? true) && !addressedToBot(m)) return null;
+  return { kind: 'default' };
 }
 
 export function needsReset(c: ChannelInstanceConfig, conv: { lastSeenAt: string; createdAt: string }): boolean {

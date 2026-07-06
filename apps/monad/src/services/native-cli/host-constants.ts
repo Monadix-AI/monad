@@ -21,5 +21,6 @@ export const APP_SERVER_MAX_DISCONNECT_CYCLES = 6;
 // counter resets so a transient rough patch early in a long session doesn't count against a later,
 // unrelated one.
 export const APP_SERVER_RECONNECT_STREAK_RESET_MS = 10_000;
+export const NATIVE_CLI_IDLE_TIMEOUT_MS = 10 * 60_000;
 
 export type NativeCliOutputStream = 'stdout' | 'stderr' | 'pty';

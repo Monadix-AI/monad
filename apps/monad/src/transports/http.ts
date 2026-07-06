@@ -30,6 +30,7 @@ import { createClarifyController } from '@/transports/http/clarify.ts';
 import { createCommandsController } from '@/transports/http/commands.ts';
 import { createDaemonCtlController } from '@/transports/http/daemon-ctl.ts';
 import { createDelegationController } from '@/transports/http/delegation.ts';
+import { createDraftAttachmentsController } from '@/transports/http/draft-attachments.ts';
 import { createGraphController } from '@/transports/http/graph/controller.ts';
 import { createHealthController } from '@/transports/http/health.ts';
 import { createIndexerController } from '@/transports/http/indexer.ts';
@@ -315,6 +316,7 @@ export function createHttpTransport(
         .use(createApprovalsController(handlers))
         .use(createClarifyController(handlers))
         .use(createDelegationController(handlers))
+        .use(createDraftAttachmentsController(handlers))
         .use(createSkillsController(handlers))
         .use(createCommandsController(handlers))
         .use(createLicensesController(handlers))

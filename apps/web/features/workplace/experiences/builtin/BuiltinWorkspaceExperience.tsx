@@ -5,11 +5,10 @@ import {
   type WorkspaceExperienceHost,
   WorkspaceExperienceHostProvider
 } from '@monad/atoms/workspace-experiences/host-context';
-import { useRouter } from 'next/navigation';
 import { useMemo } from 'react';
 
 import { studioPath } from '@/features/routes/route-paths';
-import { useMonadRuntime } from '@/lib/monad-runtime-provider';
+import { pushShellUrl } from '@/hooks/use-shell-location';
 
 export function BuiltinWorkspaceExperienceHost({
   component,
@@ -18,16 +17,13 @@ export function BuiltinWorkspaceExperienceHost({
   component: string;
   view: ProjectExperienceView;
 }): React.ReactElement {
-  const { client } = useMonadRuntime();
-  const router = useRouter();
   const host = useMemo<WorkspaceExperienceHost>(
     () => ({
-      fetch: client.fetch,
       voiceModelState: view.voiceModelState,
-      openStudio: (section = 'models') => router.push(studioPath(section)),
+      openStudio: (section = 'models') => pushShellUrl(studioPath(section)),
       requestProjectDialog: view.onProjectDialogRequest ?? (() => {})
     }),
-    [client.fetch, router, view.voiceModelState, view.onProjectDialogRequest]
+    [view.voiceModelState, view.onProjectDialogRequest]
   );
   const rendered = renderBuiltinWorkspaceExperience({ component, view: { runtime: view.runtime } });
   if (!rendered) {

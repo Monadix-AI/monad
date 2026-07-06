@@ -5,10 +5,10 @@ import type { MessageAttachment } from '../../experience/types.ts';
 import { Attachment01Icon, Download04Icon, EyeIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { isPreviewableAttachmentMime } from '@monad/protocol';
+import { useDownloadAttachmentMutation, useLazyGetAttachmentQuery } from '@monad/sdk-atom-client-rtk';
 import { workspaceMono as mono, workspaceSans as sans } from '@monad/ui/components/AgentAvatar';
 import { useState } from 'react';
 
-import { useWorkspaceExperienceHost } from '../../host-context.tsx';
 import { workspaceExperienceT } from '../../i18n.ts';
 
 function formatAttachmentSize(bytes: number): string {
@@ -26,7 +26,8 @@ export function AttachmentChip({ attachment }: { attachment: MessageAttachment }
   const [error, setError] = useState(false);
   const [loading, setLoading] = useState(false);
   const previewable = isPreviewableAttachmentMime(attachment.mime);
-  const host = useWorkspaceExperienceHost();
+  const [triggerGetAttachment] = useLazyGetAttachmentQuery();
+  const [downloadAttachment] = useDownloadAttachmentMutation();
   const togglePreview = async () => {
     if (expanded) {
       setExpanded(false);
@@ -37,9 +38,7 @@ export function AttachmentChip({ attachment }: { attachment: MessageAttachment }
     setLoading(true);
     setError(false);
     try {
-      const res = await host.fetch(`/v1/attachments/${attachment.id}`);
-      if (!res.ok) throw new Error(`attachment fetch failed: ${res.status}`);
-      const body = (await res.json()) as { text?: string; truncated?: boolean };
+      const body = await triggerGetAttachment({ id: attachment.id }).unwrap();
       const text = typeof body.text === 'string' ? body.text : '';
       setContent(body.truncated ? `${text}...` : text);
     } catch {
@@ -50,9 +49,8 @@ export function AttachmentChip({ attachment }: { attachment: MessageAttachment }
   };
   const download = async () => {
     try {
-      const res = await host.fetch(`/v1/attachments/${attachment.id}?download=1`);
-      if (!res.ok) throw new Error(`attachment download failed: ${res.status}`);
-      const blobUrl = URL.createObjectURL(await res.blob());
+      const { blob } = await downloadAttachment({ id: attachment.id }).unwrap();
+      const blobUrl = URL.createObjectURL(blob);
       const anchor = document.createElement('a');
       anchor.href = blobUrl;
       anchor.download = attachment.name;

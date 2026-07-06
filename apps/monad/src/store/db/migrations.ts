@@ -254,23 +254,6 @@ CREATE INDEX IF NOT EXISTS idx_native_agent_direct_messages_session_peer
 CREATE INDEX IF NOT EXISTS idx_native_agent_direct_messages_project_pair
   ON native_agent_direct_messages(project_id, from_agent, peer, created_at);
 
-CREATE TABLE IF NOT EXISTS channel_moderator_rounds (
-  id                 TEXT PRIMARY KEY,
-  channel_id         TEXT NOT NULL,
-  moderator_key      TEXT NOT NULL,
-  moderator_agent_id TEXT NOT NULL,
-  original_inbound   TEXT NOT NULL,
-  depth              INTEGER NOT NULL,
-  tasks              TEXT NOT NULL,
-  results            TEXT NOT NULL DEFAULT '[]',
-  status             TEXT NOT NULL,
-  deadline_at        TEXT NOT NULL,
-  created_at         TEXT NOT NULL,
-  updated_at         TEXT NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_channel_moderator_rounds_open
-  ON channel_moderator_rounds(channel_id, status, deadline_at);
-
 CREATE TABLE IF NOT EXISTS native_cli_inbox_items (
   native_cli_session_id TEXT NOT NULL,
   message_seq           INTEGER NOT NULL,

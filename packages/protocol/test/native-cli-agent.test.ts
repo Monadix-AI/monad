@@ -37,6 +37,7 @@ import {
   nativeCliApprovalResolutionRequestSchema,
   nativeCliAuthSessionViewSchema,
   nativeCliAuthStatusResponseSchema,
+  nativeCliHistoryPageResponseSchema,
   nativeCliObservationAccessResponseSchema,
   nativeCliSessionViewSchema,
   nativeCliUsageResponseSchema,
@@ -190,7 +191,8 @@ test('native CLI adapter settings are declared as text, switch, or closed select
     nativeCliAgentSettingSchema.parse({
       key: 'allowAutopilot',
       label: 'Autopilot',
-      kind: 'switch'
+      kind: 'switch',
+      defaultValue: true
     }).kind
   ).toBe('switch');
 
@@ -347,24 +349,24 @@ test('native CLI usage response carries optional quota-style records', () => {
     checkedAt: '2026-07-03T00:00:00.000Z',
     records: [
       {
-        category: 'five_hour',
+        name: 'five_hour',
         resetAt: '2026-07-03T05:00:00.000Z',
         max: 100,
         current: 42
       },
       {
-        category: 'weekly',
-        resetAt: null,
-        max: null,
-        current: null
+        name: 'credits',
+        current: 12
       }
     ]
   });
 
-  expect(parsed.records[0]?.category).toBe('five_hour');
+  expect(parsed.records[0]?.name).toBe('five_hour');
   expect(parsed.records[0]?.resetAt).toBe('2026-07-03T05:00:00.000Z');
-  expect(parsed.records[1]?.max).toBeNull();
-  expect(nativeCliUsageResponseSchema.safeParse({ ...parsed, records: [{ category: '' }] }).success).toBe(false);
+  expect(parsed.records[1]?.max).toBeUndefined();
+  expect(nativeCliUsageResponseSchema.safeParse({ ...parsed, records: [{ name: '', current: 1 }] }).success).toBe(
+    false
+  );
 });
 
 test('native agent runtime contract is a raw-output-free host summary', () => {
@@ -446,6 +448,21 @@ test('native agent observation projection is addressed by pointers and excludes 
   expect(unavailable.state).toBe('unavailable');
   if (unavailable.state !== 'unavailable') throw new Error('expected unavailable projection');
   expect(unavailable.reason).toBe('Provider history unavailable');
+});
+
+test('native CLI history page response carries server-normalized events, not raw items', () => {
+  const event = {
+    id: 'ncli_1:json:0:status',
+    role: 'system' as const,
+    text: 'turn/started',
+    source: 'codex-app-server' as const,
+    providerEventType: 'turn/started',
+    raw: { method: 'turn/started', params: { turnId: 'turn-1' } }
+  };
+  const parsed = nativeCliHistoryPageResponseSchema.parse({ events: [event], nextCursor: 'older-1' });
+
+  expect(parsed.events).toEqual([event]);
+  expect(parsed.nextCursor).toBe('older-1');
 });
 
 test('workplace project members ext schema is shared by web and daemon', () => {

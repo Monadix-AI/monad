@@ -1,10 +1,11 @@
 'use client';
 
 import type { ProjectId, Session } from '@monad/protocol';
+import type { ProjectExperienceDefinition } from '@/features/workplace/experiences/types';
 import type { ProjectController } from '@/features/workplace/use-project';
 
 import { useListWorkspaceExperiencesQuery } from '@monad/client-rtk';
-import { useCallback, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 
 import { listProjectExperiences, toProjectExperienceDefinitions } from '@/features/workplace/experiences/registry';
 import { Workplace } from '@/features/workplace/Workplace';
@@ -13,7 +14,35 @@ import { ProjectTopBar } from './ProjectTopBar';
 import { useProjectViewMode } from './use-project-view-mode';
 import { WorkspaceHome } from './WorkspaceHome';
 
-interface WorkspaceRouteProps {
+const PROJECT_KEEP_ALIVE_LIMIT = 3;
+const PROJECT_KEEP_ALIVE_TTL_MS = 2 * 60 * 1000;
+const PROJECT_KEEP_ALIVE_SWEEP_MS = 30 * 1000;
+const EMPTY_PROJECT_PARTICIPANTS: ProjectController['participants'] = [];
+const PARTICIPANT_FIELD_SEPARATOR = '\u0000';
+const PARTICIPANT_ROW_SEPARATOR = '\u0001';
+
+interface CachedProjectEntry {
+  lastActiveAt: number;
+  projectId: string;
+}
+
+interface ActiveProjectParticipants {
+  participants: ProjectController['participants'];
+  signature: string;
+}
+
+interface CachedProjectWorkplaceProps {
+  active: boolean;
+  experiences: ProjectExperienceDefinition[];
+  experiencesLoading: boolean;
+  onModeChange: (mode: string) => void;
+  onProjectControllerChange?: (project: ProjectController) => void;
+  onProjectDeleted: () => void;
+  projectId: string;
+  voiceModelState: 'checking' | 'configured' | 'missing' | 'failed';
+}
+
+export interface WorkspaceRouteProps {
   activeProjectId: string | null;
   agentSession: Session | null;
   projects: { id: string; name: string; cwd?: string }[];
@@ -25,6 +54,21 @@ interface WorkspaceRouteProps {
   onOpenSettings: () => void;
   onOpenStudio: () => void;
   voiceModelState?: 'checking' | 'configured' | 'missing' | 'failed';
+}
+
+function participantsSignature(participants: ProjectController['participants']): string {
+  return participants
+    .map((participant) =>
+      [
+        participant.id,
+        participant.kind,
+        participant.name,
+        participant.avatarUrl ?? '',
+        participant.icon ?? '',
+        JSON.stringify(participant.av ?? null)
+      ].join(PARTICIPANT_FIELD_SEPARATOR)
+    )
+    .join(PARTICIPANT_ROW_SEPARATOR);
 }
 
 export function WorkspaceRoute({
@@ -41,13 +85,20 @@ export function WorkspaceRoute({
   voiceModelState = 'checking'
 }: WorkspaceRouteProps) {
   const [preferredMode, setMode] = useProjectViewMode(activeProjectId);
-  const [activeProjectController, setActiveProjectController] = useState<ProjectController | null>(null);
+  const [activeProjectParticipants, setActiveProjectParticipants] = useState<ActiveProjectParticipants>({
+    participants: EMPTY_PROJECT_PARTICIPANTS,
+    signature: ''
+  });
+  const [cachedProjectEntries, setCachedProjectEntries] = useState<CachedProjectEntry[]>([]);
   const openProjectSettingsInStore = useWorkplaceUiStore((state) => state.openProjectSettings);
   const { data: workspaceExperiences, isLoading: workspaceExperiencesLoading } = useListWorkspaceExperiencesQuery(
     undefined,
     { skip: !activeProjectId }
   );
-  const experiences = listProjectExperiences(toProjectExperienceDefinitions(workspaceExperiences?.experiences ?? []));
+  const experiences = useMemo(
+    () => listProjectExperiences(toProjectExperienceDefinitions(workspaceExperiences?.experiences ?? [])),
+    [workspaceExperiences?.experiences]
+  );
   const mode = experiences.some((experience) => experience.id === preferredMode)
     ? (preferredMode as string)
     : (experiences[0]?.id ?? '');
@@ -56,9 +107,42 @@ export function WorkspaceRoute({
   const openProjectSettings = useCallback(() => {
     if (activeProjectId) openProjectSettingsInStore(activeProjectId);
   }, [activeProjectId, openProjectSettingsInStore]);
-  const updateProjectController = useCallback((project: ProjectController) => {
-    setActiveProjectController(project);
+  const updateActiveProjectParticipants = useCallback((project: ProjectController) => {
+    const signature = participantsSignature(project.participants);
+    setActiveProjectParticipants((current) =>
+      current.signature === signature ? current : { participants: project.participants, signature }
+    );
   }, []);
+
+  useEffect(() => {
+    if (!activeProjectId) {
+      setActiveProjectParticipants({ participants: EMPTY_PROJECT_PARTICIPANTS, signature: '' });
+      return;
+    }
+    setActiveProjectParticipants({ participants: EMPTY_PROJECT_PARTICIPANTS, signature: '' });
+    const projectIds = new Set(projects.map((project) => project.id));
+    const now = Date.now();
+    setCachedProjectEntries((entries) => {
+      const previousActiveProjectId = entries[0]?.projectId;
+      const existing = entries
+        .filter((entry) => entry.projectId !== activeProjectId && projectIds.has(entry.projectId))
+        .map((entry) => (entry.projectId === previousActiveProjectId ? { ...entry, lastActiveAt: now } : entry));
+      return [{ projectId: activeProjectId, lastActiveAt: now }, ...existing].slice(0, PROJECT_KEEP_ALIVE_LIMIT);
+    });
+  }, [activeProjectId, projects]);
+
+  useEffect(() => {
+    if (!activeProjectId) return;
+    const interval = window.setInterval(() => {
+      const now = Date.now();
+      setCachedProjectEntries((entries) =>
+        entries.filter(
+          (entry) => entry.projectId === activeProjectId || now - entry.lastActiveAt <= PROJECT_KEEP_ALIVE_TTL_MS
+        )
+      );
+    }, PROJECT_KEEP_ALIVE_SWEEP_MS);
+    return () => window.clearInterval(interval);
+  }, [activeProjectId]);
 
   if (activeProjectId) {
     // The active project experience owns the whole workplace region below the top bar, including its
@@ -68,6 +152,8 @@ export function WorkspaceRoute({
         <style>{`
           .g1-workspace { display: flex; flex-direction: column; flex: 1; min-height: 0; min-width: 0; }
           .g1-workspace-canvas { flex: 1; min-height: 0; display: flex; overflow: hidden; }
+          .g1-workspace-project-pane { flex: 1; min-height: 0; min-width: 0; display: none; }
+          .g1-workspace-project-pane[data-active="true"] { display: flex; }
         `}</style>
         <div className="g1-workspace">
           <ProjectTopBar
@@ -75,24 +161,34 @@ export function WorkspaceRoute({
             mode={mode}
             onModeChange={setMode}
             onOpenSettings={openProjectSettings}
-            participants={activeProjectController?.participants ?? []}
+            participants={activeProjectParticipants.participants}
             projectId={activeProjectId as ProjectId}
             projectName={projectName}
             projectWorkdir={activeProject?.cwd}
           />
           <div className="g1-workspace-canvas">
-            <Workplace
-              embedded
-              experiences={experiences}
-              experiencesLoading={workspaceExperiencesLoading}
-              key={activeProjectId}
-              mode={mode}
-              onModeChange={setMode}
-              onProjectControllerChange={updateProjectController}
-              onProjectDeleted={onProjectDeleted}
-              projectId={activeProjectId}
-              voiceModelState={voiceModelState}
-            />
+            {cachedProjectEntries.map((entry) => {
+              const active = entry.projectId === activeProjectId;
+              return (
+                <div
+                  aria-hidden={!active}
+                  className="g1-workspace-project-pane"
+                  data-active={active ? 'true' : 'false'}
+                  key={entry.projectId}
+                >
+                  <CachedProjectWorkplace
+                    active={active}
+                    experiences={experiences}
+                    experiencesLoading={workspaceExperiencesLoading}
+                    onModeChange={setMode}
+                    onProjectControllerChange={active ? updateActiveProjectParticipants : undefined}
+                    onProjectDeleted={onProjectDeleted}
+                    projectId={entry.projectId}
+                    voiceModelState={voiceModelState}
+                  />
+                </div>
+              );
+            })}
           </div>
         </div>
       </>
@@ -111,5 +207,58 @@ export function WorkspaceRoute({
       onOpenStudio={onOpenStudio}
       projects={projects}
     />
+  );
+}
+
+const CachedProjectWorkplace = memo(function CachedProjectWorkplace({
+  active,
+  experiences,
+  experiencesLoading,
+  onModeChange,
+  onProjectControllerChange,
+  onProjectDeleted,
+  projectId,
+  voiceModelState
+}: CachedProjectWorkplaceProps) {
+  const [preferredMode, setProjectMode] = useProjectViewMode(projectId);
+  const mode = experiences.some((experience) => experience.id === preferredMode)
+    ? (preferredMode as string)
+    : (experiences[0]?.id ?? '');
+  const setMode = useCallback(
+    (nextMode: string) => {
+      setProjectMode(nextMode);
+      if (active) onModeChange(nextMode);
+    },
+    [active, onModeChange, setProjectMode]
+  );
+
+  return (
+    <Workplace
+      embedded
+      experiences={experiences}
+      experiencesLoading={experiencesLoading}
+      mode={mode}
+      onModeChange={setMode}
+      onProjectControllerChange={onProjectControllerChange}
+      onProjectDeleted={onProjectDeleted}
+      projectId={projectId}
+      voiceModelState={voiceModelState}
+    />
+  );
+}, areCachedProjectWorkplacePropsEqual);
+
+function areCachedProjectWorkplacePropsEqual(
+  prev: CachedProjectWorkplaceProps,
+  next: CachedProjectWorkplaceProps
+): boolean {
+  return (
+    prev.active === next.active &&
+    prev.experiences === next.experiences &&
+    prev.experiencesLoading === next.experiencesLoading &&
+    prev.onModeChange === next.onModeChange &&
+    prev.onProjectControllerChange === next.onProjectControllerChange &&
+    prev.onProjectDeleted === next.onProjectDeleted &&
+    prev.projectId === next.projectId &&
+    prev.voiceModelState === next.voiceModelState
   );
 }

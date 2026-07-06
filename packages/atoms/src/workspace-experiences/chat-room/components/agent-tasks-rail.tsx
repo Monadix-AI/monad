@@ -9,6 +9,12 @@ import type { NativeCliStreamView, Participant } from '../../experience/types.ts
 
 import { BrainIcon, EyeIcon, MegaphoneIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
+import {
+  useLazyGetNativeAgentDeliveryObservationQuery,
+  useLazyGetNativeCliHistoryPageQuery,
+  useLazyGetNativeCliObservationQuery,
+  useLazyGetNativeCliUsageQuery
+} from '@monad/sdk-atom-client-rtk';
 import { ProductIcon } from '@monad/ui';
 import {
   AgentIdentity,
@@ -20,13 +26,7 @@ import {
 } from '@monad/ui/components/AgentAvatar';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { useWorkspaceExperienceHost } from '../../host-context.tsx';
 import { workspaceExperienceT } from '../../i18n.ts';
-import {
-  readNativeAgentDeliveryObservation,
-  readNativeCliObservation,
-  readNativeCliUsage
-} from '../native-cli-observation-client.ts';
 import { useChatRoomExperienceStore } from '../store.ts';
 import {
   agentObservationStream,
@@ -81,6 +81,50 @@ function usePolledValue<T>(args: {
     };
   }, [args.enabled, args.intervalMs]);
   return value;
+}
+
+type ObservationHistoryPageState = {
+  items: NativeCliStreamView['items'];
+  nextCursor: string | null;
+  loading: boolean;
+  exhausted: boolean;
+};
+
+function observationItemSignature(item: NativeCliStreamView['items'][number]): string {
+  return JSON.stringify({
+    role: item.role,
+    source: item.source,
+    providerEventType: item.providerEventType,
+    text: item.text,
+    raw: item.raw
+  });
+}
+
+function mergeObservationItems(
+  historyItems: NativeCliStreamView['items'],
+  liveItems: NativeCliStreamView['items']
+): NativeCliStreamView['items'] {
+  const seen = new Set<string>();
+  const merged: NativeCliStreamView['items'] = [];
+  for (const item of [...historyItems, ...liveItems]) {
+    const signature = observationItemSignature(item);
+    if (seen.has(signature)) continue;
+    seen.add(signature);
+    merged.push(item);
+  }
+  return merged;
+}
+
+function streamWithHistoryPages(
+  stream: NativeCliStreamView | undefined,
+  history: ObservationHistoryPageState | undefined
+): NativeCliStreamView | undefined {
+  if (!stream || !history || history.items.length === 0) return stream;
+  return {
+    ...stream,
+    items: mergeObservationItems(history.items, stream.items),
+    output: stream.output
+  };
 }
 
 function clampRailWidth(width: number): number {
@@ -241,7 +285,10 @@ type AgentTasksRailRoom = {
 
 export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.ReactElement {
   const t = workspaceExperienceT();
-  const host = useWorkspaceExperienceHost();
+  const [triggerNativeAgentDeliveryObservation] = useLazyGetNativeAgentDeliveryObservationQuery();
+  const [triggerNativeCliHistoryPage] = useLazyGetNativeCliHistoryPageQuery();
+  const [triggerNativeCliObservation] = useLazyGetNativeCliObservationQuery();
+  const [triggerNativeCliUsage] = useLazyGetNativeCliUsageQuery();
   const [railWidth, setRailWidth] = useState(DEFAULT_RAIL_WIDTH);
   const [resizing, setResizing] = useState(false);
   const dragStartRef = useRef({ pointerX: 0, width: DEFAULT_RAIL_WIDTH });
@@ -254,31 +301,52 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
   const closeRailObservation = useChatRoomExperienceStore((state) => state.closeRailObservation);
   const groups = groupProjectRailAgents(room.railAgents);
   const observedStream = agentObservationStream(observation, room.nativeCliStreams);
-  const observedStreamId = observedStream?.id;
+  const observedNativeCliSessionId = observation?.nativeCliSessionId ?? observedStream?.id;
   const observedDeliveryId = observation?.deliveryId;
+  const observationHistoryResetKey = [observedDeliveryId, observedNativeCliSessionId].filter(Boolean).join(':');
+  const [historyPages, setHistoryPages] = useState<ObservationHistoryPageState | undefined>(undefined);
+  const [historyRequested, setHistoryRequested] = useState(false);
   const observationPollMs = observedStream?.status === 'running' ? 900 : 0;
   const observationAccess = usePolledValue<NativeCliObservationAccessResponse>({
-    enabled: Boolean((observedDeliveryId || observedStreamId) && observation),
+    enabled: Boolean((observedDeliveryId || observedNativeCliSessionId) && observation),
     intervalMs: observationPollMs,
     load: () =>
       observedDeliveryId
-        ? readNativeAgentDeliveryObservation(host.fetch, {
+        ? triggerNativeAgentDeliveryObservation({
             id: observedDeliveryId,
             transcriptTargetId: room.projectId as TranscriptTargetId
-          })
-        : readNativeCliObservation(host.fetch, {
-            id: observedStreamId as string,
+          }).unwrap()
+        : triggerNativeCliObservation({
+            id: observedNativeCliSessionId as string,
             transcriptTargetId: room.projectId as TranscriptTargetId
-          }),
-    resetKey: `${room.projectId}:${observedDeliveryId ?? observedStreamId ?? ''}`
+          }).unwrap(),
+    resetKey: `${room.projectId}:${observedDeliveryId ?? observedNativeCliSessionId ?? ''}`
   });
-  const observationProjection = observationProjectionFromAccess(observedStream, observationAccess, observedDeliveryId);
-  const observedAccessStream = streamWithObservationProjection(observedStream, observationProjection);
+  const observedBaseStream: NativeCliStreamView | undefined =
+    observedStream ??
+    (observation && observedNativeCliSessionId
+      ? {
+          id: observedNativeCliSessionId,
+          agentName: observation.agentName ?? observationAccess?.nativeCliSessionId ?? 'Agent',
+          provider: observationAccess?.provider ?? 'native-cli',
+          tag: 'Agent',
+          status: 'ok',
+          output: '',
+          items: []
+        }
+      : undefined);
+  const shouldProjectObservationAccess =
+    Boolean(observedDeliveryId) || observationAccess?.state !== 'history' || historyRequested;
+  const observationProjection = shouldProjectObservationAccess
+    ? observationProjectionFromAccess(observedBaseStream, observationAccess, observedDeliveryId)
+    : undefined;
+  const observedAccessStream = streamWithObservationProjection(observedBaseStream, observationProjection);
+  const observedHistoryStream = streamWithHistoryPages(observedAccessStream, historyPages);
   const observedUsageAgentName = observedAccessStream?.templateAgentName;
   const usage = usePolledValue<NativeCliUsageResponse>({
     enabled: Boolean(observedUsageAgentName),
     intervalMs: observedAccessStream?.status === 'running' ? 15_000 : 0,
-    load: () => readNativeCliUsage(host.fetch, observedUsageAgentName as string),
+    load: () => triggerNativeCliUsage(observedUsageAgentName as string).unwrap(),
     resetKey: observedUsageAgentName ?? ''
   });
   const usageMeter = usageMeterFromObservationAccess({
@@ -288,6 +356,65 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
     usage
   });
   const observedAgent = observedRailAgent(observation, observedStream, room.railAgents);
+
+  const loadHistoryPage = useCallback(
+    (before?: string | null) => {
+      if (!observedNativeCliSessionId) return;
+      setHistoryPages((current) => {
+        if (current?.loading) return current;
+        return current
+          ? { ...current, loading: true }
+          : { items: [], nextCursor: null, loading: true, exhausted: false };
+      });
+      void triggerNativeCliHistoryPage({
+        id: observedNativeCliSessionId,
+        transcriptTargetId: room.projectId as TranscriptTargetId,
+        before: before ?? undefined,
+        limit: 20
+      })
+        .unwrap()
+        .then(
+          (response) => {
+            // The daemon already knows this session's provider unambiguously and normalizes with the
+            // same adapter it uses for parseOutput/historyPageOutput — no client-side re-derivation.
+            const pageItems = response.events;
+            setHistoryPages((current) => {
+              const existing = current?.items ?? [];
+              const nextItems = before
+                ? mergeObservationItems(pageItems, existing)
+                : mergeObservationItems(pageItems, []);
+              return {
+                items: nextItems,
+                nextCursor: response.nextCursor ?? null,
+                loading: false,
+                exhausted: !response.nextCursor || pageItems.length === 0
+              };
+            });
+          },
+          () => {
+            setHistoryPages((current) => ({
+              items: current?.items ?? [],
+              nextCursor: current?.nextCursor ?? null,
+              loading: false,
+              exhausted: true
+            }));
+          }
+        );
+    },
+    [observedNativeCliSessionId, room.projectId, triggerNativeCliHistoryPage]
+  );
+
+  const showHistory = useCallback(() => {
+    if (historyRequested || !observedNativeCliSessionId) return;
+    setHistoryRequested(true);
+    loadHistoryPage(null);
+  }, [historyRequested, loadHistoryPage, observedNativeCliSessionId]);
+
+  useEffect(() => {
+    void observationHistoryResetKey;
+    setHistoryPages(undefined);
+    setHistoryRequested(false);
+  }, [observationHistoryResetKey]);
 
   useEffect(() => {
     const storedWidth = window.localStorage.getItem(RAIL_WIDTH_STORAGE_KEY);
@@ -479,11 +606,18 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
         <NativeCliObservationPanel
           agent={observedAgent}
           agentName={observedAgent?.name ?? observation.agentName}
+          canLoadOlderHistory={
+            historyRequested && Boolean(historyPages?.nextCursor) && !historyPages?.loading && !historyPages?.exhausted
+          }
           focusTurnId={observation.turnId}
-          icon={observedAgent?.icon ?? observedAccessStream?.icon}
+          icon={observedAgent?.icon ?? observedHistoryStream?.icon}
+          loadingOlderHistory={historyPages?.loading}
           onBack={closeRailObservation}
+          onLoadOlderHistory={() => loadHistoryPage(historyPages?.nextCursor)}
+          onShowHistory={showHistory}
           onStop={(id) => void room.stopNativeCli(id)}
-          stream={observedAccessStream}
+          showHistoryButton={!historyRequested && Boolean(observedNativeCliSessionId)}
+          stream={observedHistoryStream}
           usageMeter={usageMeter}
         />
       ) : (

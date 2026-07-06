@@ -3,7 +3,7 @@ import type { AgentId, GetAgentResponse, UpdateAgentRequest } from '@monad/proto
 import { apiSlice } from '../../api-slice.ts';
 import { clientOf, runTreaty } from '../../endpoint-helpers.ts';
 import { getAgentApi } from './get-agent.ts';
-import { listAgentsApi } from './list-agents.ts';
+import { agentAdapter, listAgentsApi } from './list-agents.ts';
 
 export type UpdateAgentArg = { agentId: AgentId } & UpdateAgentRequest;
 
@@ -16,8 +16,7 @@ export const updateAgentApi = apiSlice.injectEndpoints({
       async onQueryStarted({ agentId, ...patch }, { dispatch, queryFulfilled }) {
         const listPatch = dispatch(
           listAgentsApi.util.updateQueryData('listAgents', undefined, (draft) => {
-            const agent = draft.agents.find((a) => a.id === agentId);
-            if (agent) Object.assign(agent, patch);
+            agentAdapter.updateOne(draft, { id: agentId, changes: patch });
           })
         );
         const agentPatch = dispatch(

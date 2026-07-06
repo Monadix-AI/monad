@@ -172,6 +172,19 @@ test('install with consent → list → remove over HTTP', async () => {
   expect(afterDelete.some((pack) => pack.name === 'wa')).toBe(false);
 });
 
+test('GET /v1/atoms/:name returns the installed atom pack', async () => {
+  await post('/v1/atoms/install', { source: `local:${stagedDir}`, consent: true });
+  const res = await fetch(`${base}/v1/atoms/wa`);
+  expect(res.status).toBe(200);
+  const { atomPack } = (await res.json()) as { atomPack: { name: string; atoms: string[] } };
+  expect(atomPack).toMatchObject({ name: 'wa', atoms: ['channel'] });
+});
+
+test('GET /v1/atoms/:name 404s for an unknown atom pack', async () => {
+  const res = await fetch(`${base}/v1/atoms/does-not-exist`);
+  expect(res.status).toBe(404);
+});
+
 test('GET /v1/atoms/:name/assets/* serves installed pack assets and rejects traversal', async () => {
   await post('/v1/atoms/install', { source: `local:${stagedDir}`, consent: true });
 
@@ -222,12 +235,30 @@ test('GET /v1/atoms/skills lists installed skill atoms; a dropped-in one has no 
   expect(demo?.source).toBeUndefined(); // hand-dropped → no install record
 });
 
+test('GET /v1/atoms/skills/:name returns the installed skill', async () => {
+  await dropSkill('demo');
+  const res = await fetch(`${base}/v1/atoms/skills/demo`);
+  expect(res.status).toBe(200);
+  const { skill } = (await res.json()) as { skill: { name: string } };
+  expect(skill.name).toBe('demo');
+});
+
+test('GET /v1/atoms/skills/:name 404s for an unknown skill', async () => {
+  const res = await fetch(`${base}/v1/atoms/skills/does-not-exist`);
+  expect(res.status).toBe(404);
+});
+
 test('DELETE /v1/atoms/skills/:name removes the skill', async () => {
   await dropSkill('demo');
   const del = await fetch(`${base}/v1/atoms/skills/demo`, { method: 'DELETE' });
   expect(del.status).toBe(200);
   const listed = (await (await fetch(`${base}/v1/atoms/skills`)).json()) as SkillList;
   expect(listed.skills.some((s) => s.name === 'demo')).toBe(false);
+});
+
+test('DELETE /v1/atoms/skills/:name 404s for an unknown skill', async () => {
+  const res = await fetch(`${base}/v1/atoms/skills/does-not-exist`, { method: 'DELETE' });
+  expect(res.status).toBe(404);
 });
 
 test('POST /v1/atoms/skills creates a skill from raw content and it lists', async () => {
@@ -496,6 +527,24 @@ test('install with consent → list → remove an MCP atom over HTTP', async () 
   expect(((await (await fetch(`${base}/v1/atoms/mcp`)).json()) as McpList).servers).toEqual([]);
 });
 
+test('GET /v1/atoms/mcp/:name returns the installed MCP atom', async () => {
+  await post('/v1/atoms/mcp/install', { ...npxServer('fs'), consent: true });
+  const res = await fetch(`${base}/v1/atoms/mcp/fs`);
+  expect(res.status).toBe(200);
+  const { server } = (await res.json()) as { server: { name: string; transport: string; command?: string } };
+  expect(server).toMatchObject({ name: 'fs', transport: 'stdio', command: 'npx' });
+});
+
+test('GET /v1/atoms/mcp/:name 404s for an unknown MCP atom', async () => {
+  const res = await fetch(`${base}/v1/atoms/mcp/does-not-exist`);
+  expect(res.status).toBe(404);
+});
+
+test('DELETE /v1/atoms/mcp/:name 404s for an unknown MCP atom', async () => {
+  const res = await fetch(`${base}/v1/atoms/mcp/does-not-exist`, { method: 'DELETE' });
+  expect(res.status).toBe(404);
+});
+
 type EnabledList = { servers: { name: string; enabled: boolean }[] };
 test('disable then enable an MCP atom over HTTP', async () => {
   await post('/v1/atoms/mcp/install', { ...npxServer('fs'), consent: true });
@@ -507,6 +556,21 @@ test('disable then enable an MCP atom over HTTP', async () => {
   await post('/v1/atoms/mcp/fs/enable');
   const on = (await (await fetch(`${base}/v1/atoms/mcp`)).json()) as EnabledList;
   expect(on.servers.find((s) => s.name === 'fs')?.enabled).toBe(true);
+});
+
+test('POST /v1/atoms/mcp/:name/enable and /disable 404 for an unknown MCP atom', async () => {
+  expect((await post('/v1/atoms/mcp/does-not-exist/enable')).status).toBe(404);
+  expect((await post('/v1/atoms/mcp/does-not-exist/disable')).status).toBe(404);
+});
+
+test('POST /v1/atoms/:name/enable and /disable 404 for an unknown atom pack', async () => {
+  expect((await post('/v1/atoms/does-not-exist/enable')).status).toBe(404);
+  expect((await post('/v1/atoms/does-not-exist/disable')).status).toBe(404);
+});
+
+test('DELETE /v1/atoms/:name 404s for an unknown atom pack', async () => {
+  const res = await fetch(`${base}/v1/atoms/does-not-exist`, { method: 'DELETE' });
+  expect(res.status).toBe(404);
 });
 
 test('updating a hand-dropped skill (no recorded source) errors', async () => {

@@ -9,21 +9,26 @@ import { ObservationMeta } from './card-shell.tsx';
 
 export function FileReadToolCard({ view }: { view: FileReadToolView }): React.ReactElement {
   return (
-    <>
-      <ObservationMeta
-        label="tool"
-        source={view.source}
-        type={view.type}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0 }}>
+      <div style={filePathStyle}>{view.path}</div>
+      <CodeBlock
+        className="rounded-md border border-[color-mix(in_srgb,var(--border)_78%,transparent)] bg-[color-mix(in_srgb,var(--background)_82%,black)] text-[11px] [&>div::-webkit-scrollbar]:hidden [&>div]:max-h-72 [&>div]:overflow-auto [&>div]:[scrollbar-width:none] [&_pre]:p-0"
+        code={view.content}
+        language={languageFromPath(view.path)}
       />
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0 }}>
-        <div style={filePathStyle}>{view.path}</div>
-        <CodeBlock
-          className="rounded-md border border-[color-mix(in_srgb,var(--border)_78%,transparent)] bg-[color-mix(in_srgb,var(--background)_82%,black)] text-[11px] [&>div::-webkit-scrollbar]:hidden [&>div]:max-h-72 [&>div]:overflow-auto [&>div]:[scrollbar-width:none] [&_pre]:p-0"
-          code={view.content}
-          language={languageFromPath(view.path)}
-        />
-      </div>
-    </>
+    </div>
+  );
+}
+
+export function FileReadToolHeader({ view }: { view: FileReadToolView }): React.ReactElement {
+  return (
+    <ObservationMeta
+      compact
+      label="tool call"
+      showSource={false}
+      source={view.source}
+      title={view.type}
+    />
   );
 }
 

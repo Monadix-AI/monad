@@ -4,7 +4,14 @@ import type { WebMessageIdWithoutParams } from '@monad/i18n';
 import type { A2aAgentStatus, SandboxMode } from '@monad/protocol';
 import type { DragEvent } from 'react';
 
-import { mcpServerAdapter, mcpServerSelectors, useListAtomPacksQuery, useListMcpServersQuery } from '@monad/client-rtk';
+import {
+  atomPackAdapter,
+  atomPackSelectors,
+  mcpServerAdapter,
+  mcpServerSelectors,
+  useListAtomPacksQuery,
+  useListMcpServersQuery
+} from '@monad/client-rtk';
 import { ScrollArea } from '@monad/ui';
 import { useMemo, useState } from 'react';
 
@@ -87,7 +94,13 @@ export function AgentWorkshop({
   const { data: atomData } = useListAtomPacksQuery();
   const mcpQuery = useListMcpServersQuery();
 
-  const packs = useMemo(() => (atomData?.atomPacks ?? []).filter((pack) => pack.enabled), [atomData?.atomPacks]);
+  const packs = useMemo(
+    () =>
+      atomPackSelectors
+        .selectAll(atomData?.atomPacks ?? atomPackAdapter.getInitialState())
+        .filter((pack) => pack.enabled),
+    [atomData?.atomPacks]
+  );
   const servers = useMemo(
     () => mcpServerSelectors.selectAll(mcpQuery.data ?? mcpServerAdapter.getInitialState()),
     [mcpQuery.data]

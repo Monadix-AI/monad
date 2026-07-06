@@ -15,7 +15,20 @@
     "apps/web/components/ui/command.tsx",
     "apps/web/components/ui/dialog.tsx",
     "apps/web/components/ui/dropdown-menu.tsx",
-    "apps/web/components/ui/slider.tsx"
+    "apps/web/components/ui/slider.tsx",
+    // @monad/sdk-atom-client-rtk re-exports these client-rtk detail endpoints for atom authors;
+    // no atom consumes them yet, but they're real API surface, not dead code.
+    "packages/client-rtk/src/endpoints/atoms/get-atom-pack.ts",
+    "packages/client-rtk/src/endpoints/atoms/get-installed-mcp.ts",
+    "packages/client-rtk/src/endpoints/atoms/get-installed-skill.ts",
+    "packages/client-rtk/src/endpoints/settings/acp-agents/get-acp-agent.ts",
+    "packages/client-rtk/src/endpoints/settings/channels/get-channel.ts",
+    "packages/client-rtk/src/endpoints/settings/mcp-servers/get-mcp-server.ts",
+    "packages/client-rtk/src/endpoints/settings/model/profiles/get-profile.ts",
+    "packages/client-rtk/src/endpoints/settings/model/providers/get-provider.ts",
+    "packages/client-rtk/src/endpoints/settings/model/providers/patch-provider.ts",
+    "packages/client-rtk/src/endpoints/settings/model/providers/set-provider-enabled.ts",
+    "packages/client-rtk/src/endpoints/settings/native-cli-agents/get-native-cli-agent.ts"
   ],
   // Both "duplicates" are intentional schema aliases in @monad/protocol
   // (a request schema deliberately mirrors its response schema).

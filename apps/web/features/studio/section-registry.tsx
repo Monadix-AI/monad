@@ -5,6 +5,7 @@ import type { StudioSectionId } from './sections';
 
 import dynamic from 'next/dynamic';
 
+import { PanelLoading } from '@/components/PanelLoading';
 import { AgentsPanel } from './AgentsPanel';
 import { MeshOverview, MeshPlaceholder } from './MeshOverview';
 import { Orchestration } from './Orchestration';
@@ -20,26 +21,36 @@ export interface StudioSectionProps {
 
 export type StudioSectionComponent = ComponentType<StudioSectionProps>;
 
-const ModelSettings = dynamic(() => import('./model-settings').then((m) => m.ModelSettings), { ssr: false });
+const ModelSettings = dynamic(() => import('./model-settings').then((m) => m.ModelSettings), {
+  loading: PanelLoading,
+  ssr: false
+});
 const ChannelsSettings = dynamic(() => import('./channels-settings').then((m) => m.ChannelsSettings), {
+  loading: PanelLoading,
   ssr: false
 });
 const AtomsSettings = dynamic(() => import('./atoms-settings').then((m) => m.AtomsSettings), {
+  loading: PanelLoading,
   ssr: false
 });
 const ThirdPartyAgentsSettings = dynamic(() => import('./third-party-agents').then((m) => m.ThirdPartyAgentsSettings), {
+  loading: PanelLoading,
   ssr: false
 });
 const SkillsSettings = dynamic(() => import('./skills-settings').then((m) => m.SkillsSettings), {
+  loading: PanelLoading,
   ssr: false
 });
 const CapabilitiesSettings = dynamic(() => import('./capabilities-settings').then((m) => m.CapabilitiesSettings), {
+  loading: PanelLoading,
   ssr: false
 });
 const ApprovalsSettings = dynamic(() => import('./approvals-settings').then((m) => m.ApprovalsSettings), {
+  loading: PanelLoading,
   ssr: false
 });
 const MemorySettings = dynamic(() => import('./memory-settings/MemorySettings').then((m) => m.MemorySettings), {
+  loading: PanelLoading,
   ssr: false
 });
 const GraphMemorySettings = dynamic(
@@ -54,7 +65,7 @@ const GraphMemorySettings = dynamic(
         );
       };
     }),
-  { ssr: false }
+  { loading: PanelLoading, ssr: false }
 );
 const Mem0MemorySettings = dynamic(
   () =>
@@ -68,9 +79,10 @@ const Mem0MemorySettings = dynamic(
         );
       };
     }),
-  { ssr: false }
+  { loading: PanelLoading, ssr: false }
 );
 const HooksSettings = dynamic(() => import('./hooks-settings/HooksSettings').then((m) => m.HooksSettings), {
+  loading: PanelLoading,
   ssr: false
 });
 
@@ -132,7 +144,7 @@ const ThirdPartyNativeCliAgents = dynamic(
         );
       };
     }),
-  { ssr: false }
+  { loading: PanelLoading, ssr: false }
 );
 
 function WorkplaceProjectsSection() {

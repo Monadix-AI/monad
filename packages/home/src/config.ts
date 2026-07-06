@@ -317,7 +317,7 @@ const monadConfigSchema = z.object({
   observability: z
     .object({
       // OTLP HTTP endpoint for traces + metrics. Leave empty to disable.
-      // Dev auto-starts Arize Phoenix on http://localhost:6006 (see scripts/setup-dev.ts) and
+      // Dev auto-starts Arize Phoenix on http://localhost:6006 (see scripts/dev-init.ts) and
       // defaults the endpoint there; set this to "http://localhost:6006" to use it explicitly, or
       // point at any other OTLP/HTTP-protobuf collector.
       endpoint: blankableHttpUrlSchema.default(''),

@@ -13,14 +13,14 @@ import {
   Upload01Icon
 } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { useCreateAgentMutation, useDeleteAgentMutation, useListAgentsQuery } from '@monad/client-rtk';
+import { agentSelectors, useCreateAgentMutation, useDeleteAgentMutation, useListAgentsQuery } from '@monad/client-rtk';
 import { Badge, Button, ScrollArea, Textarea } from '@monad/ui';
-import { useRouter } from 'next/navigation';
 import { useMemo, useState } from 'react';
 
 import { useT } from '@/components/I18nProvider';
 import { PanelShell } from '@/components/ui/panel-shell';
 import { studioDetailPath } from '@/features/routes/route-paths';
+import { replaceShellUrl } from '@/hooks/use-shell-location';
 import { parseClaudeSubagent } from '@/lib/parse-agent-import';
 import { AgentEditor } from './agent-workshop/AgentEditor';
 import { OpenaiCompatSettings } from './api-settings';
@@ -29,7 +29,6 @@ import { StudioBreadcrumbHeader } from './StudioBreadcrumbHeader';
 /** Agents area of Studio: a master list of agents ↔ a single-agent editor. */
 export function AgentsPanel({ onClose, subpath = [] }: StudioSectionProps) {
   const t = useT();
-  const router = useRouter();
   const { data, isLoading } = useListAgentsQuery();
   const [createAgent, { isLoading: creating }] = useCreateAgentMutation();
   const [deleteAgent] = useDeleteAgentMutation();
@@ -38,7 +37,7 @@ export function AgentsPanel({ onClose, subpath = [] }: StudioSectionProps) {
   const [importText, setImportText] = useState('');
   const [importError, setImportError] = useState<string>();
 
-  const agents = data?.agents ?? [];
+  const agents = data ? agentSelectors.selectAll(data) : [];
   const editing = (subpath[0] as AgentId | undefined) ?? null;
 
   // Surface duplicate names so the user resolves them (we never silently shadow).
@@ -59,7 +58,7 @@ export function AgentsPanel({ onClose, subpath = [] }: StudioSectionProps) {
 
   const handleCreate = async () => {
     const res = await createAgent({ name: t('web.studio.newAgentName'), capabilities: [] }).unwrap();
-    router.replace(studioDetailPath('agents', res.agent.id));
+    replaceShellUrl(studioDetailPath('agents', res.agent.id));
   };
 
   const handleImport = async () => {
@@ -81,7 +80,7 @@ export function AgentsPanel({ onClose, subpath = [] }: StudioSectionProps) {
       }).unwrap();
       setImporting(false);
       setImportText('');
-      router.replace(studioDetailPath('agents', res.agent.id));
+      replaceShellUrl(studioDetailPath('agents', res.agent.id));
     } catch (e) {
       setImportError((e as { message?: string }).message ?? 'Failed to create agent');
     }
@@ -200,7 +199,7 @@ export function AgentsPanel({ onClose, subpath = [] }: StudioSectionProps) {
             >
               <button
                 className="flex min-w-0 flex-1 flex-col items-stretch gap-1.5 text-left"
-                onClick={() => router.replace(studioDetailPath('agents', a.id))}
+                onClick={() => replaceShellUrl(studioDetailPath('agents', a.id))}
                 type="button"
               >
                 <span className="flex items-center gap-2">

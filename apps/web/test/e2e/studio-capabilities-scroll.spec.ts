@@ -51,6 +51,13 @@ async function installCapabilitiesApiMock(page: Page) {
     if (method === 'GET' && path === '/v1/settings/obscura') {
       return json({ enabled: false, stealth: false, installed: false, connected: false, tools: [] });
     }
+    if (method === 'GET' && path === '/v1/settings/network') {
+      return json({
+        port: 52749,
+        transport: 'tcp',
+        remoteAccess: { enabled: false, allowInsecureHttp: false, token: '' }
+      });
+    }
     if (method === 'GET' && path === '/v1/atoms/skills') {
       return json({ skills: [] });
     }
@@ -168,10 +175,18 @@ test('settings modal opens from canonical Studio routes', async ({ page }) => {
   await installCapabilitiesApiMock(page);
 
   await page.goto('/studio/capabilities?settings=language');
+  const settingsDialog = page.getByRole('dialog').filter({ has: page.getByRole('heading', { name: 'Settings' }) });
   await expect(page).toHaveURL(/\/studio\/capabilities\?settings=language$/);
-  await expect(page.getByRole('dialog').filter({ has: page.getByRole('heading', { name: 'Settings' }) })).toBeVisible();
+  await expect(settingsDialog).toBeVisible();
   await expect(page.getByRole('button', { name: 'Language' })).toHaveAttribute('data-active', 'true');
 
   await page.getByRole('button', { name: 'Connection' }).click();
   await expect(page).toHaveURL(/\/studio\/capabilities\?settings=connection$/);
+  await expect(page.getByRole('button', { name: 'Connection' })).toHaveAttribute('data-active', 'true');
+
+  const closeButton = settingsDialog.getByRole('button', { name: 'Close' });
+  await expect(closeButton).toBeVisible();
+  await closeButton.click();
+  await expect(page).toHaveURL(/\/studio\/capabilities$/);
+  await expect(settingsDialog).toBeHidden();
 });

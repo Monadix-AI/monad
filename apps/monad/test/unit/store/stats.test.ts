@@ -331,12 +331,15 @@ test('models pct sums to approximately 100', () => {
 test('models pct is 0 when grandTotal is 0 (all zero-token rows)', () => {
   const store = createStore();
 
+  // range=all is capped to a rolling window (see ALL_RANGE_MAX_DAYS in stats.ts), so the fixture
+  // day must be "recent" rather than a fixed historical date or it falls outside the window.
+  const day = dayOffset(0);
   rawSqlite(store)
     .query(
       `INSERT INTO usage_ledger (day, provider, model, category, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, reasoning_tokens, cost_usd, updated_at)
-       VALUES ('2020-01-01', 'test', 'zero-model', 'chat', 0, 0, 0, 0, 0, 0, '2020-01-01T00:00:00Z')`
+       VALUES ($day, 'test', 'zero-model', 'chat', 0, 0, 0, 0, 0, 0, $updatedAt)`
     )
-    .run();
+    .run({ $day: day, $updatedAt: `${day}T00:00:00Z` });
 
   const s = store.stats('all');
   expect(s.models.length).toBe(1);

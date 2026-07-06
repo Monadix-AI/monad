@@ -2,6 +2,7 @@ import { expect, test } from 'bun:test';
 
 import {
   createSidebarShortcutHandler,
+  monadAgentHotkey,
   settingsHotkey,
   sidebarNumberHotkeys,
   sidebarShortcutListenerOptions
@@ -43,6 +44,7 @@ function shortcutEvent(init: {
 
 test('sidebar hotkey map reserves Mod comma for settings and Mod 1-9 for piles', () => {
   expect(settingsHotkey).toBe('Mod+,');
+  expect(monadAgentHotkey).toBe('Mod+`');
   expect(sidebarNumberHotkeys).toEqual([
     'Mod+1',
     'Mod+2',
@@ -76,6 +78,25 @@ test('settings shortcut prevents browser default without stopping propagation', 
   handler(shortcut.event);
 
   expect(toggled).toBe(1);
+  expect(shortcut.prevented()).toBe(1);
+  expect(shortcut.stopped()).toBe(0);
+});
+
+test('monad agent shortcut reveal the sidebar and runs the dedicated action', () => {
+  const calls: string[] = [];
+  const shortcut = shortcutEvent({ key: '`', code: 'Backquote', metaKey: true });
+  const handler = createSidebarShortcutHandler({
+    applePlatform: true,
+    monadAgentShortcutAction: () => calls.push('monad'),
+    revealSidebar: () => calls.push('reveal'),
+    showSettings: false,
+    sidebarShortcutActions: [() => calls.push('one')],
+    toggleSettings: () => calls.push('settings')
+  });
+
+  handler(shortcut.event);
+
+  expect(calls).toEqual(['reveal', 'monad']);
   expect(shortcut.prevented()).toBe(1);
   expect(shortcut.stopped()).toBe(0);
 });

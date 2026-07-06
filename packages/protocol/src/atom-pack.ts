@@ -134,6 +134,9 @@ export const listAtomPacksResponseSchema = z.object({
 });
 export type ListAtomPacksResponse = z.infer<typeof listAtomPacksResponseSchema>;
 
+export const getAtomPackResponseSchema = z.object({ atomPack: installedAtomPackSchema });
+export type GetAtomPackResponse = z.infer<typeof getAtomPackResponseSchema>;
+
 export const workspaceExperienceWebComponentEntrySchema = z.object({
   type: z.literal('web-component'),
   module: z.string().min(1),
@@ -246,6 +249,9 @@ export type InstalledSkill = z.infer<typeof installedSkillSchema>;
 
 export const listInstalledSkillsResponseSchema = z.object({ skills: z.array(installedSkillSchema) });
 export type ListInstalledSkillsResponse = z.infer<typeof listInstalledSkillsResponseSchema>;
+
+export const getInstalledSkillResponseSchema = z.object({ skill: installedSkillSchema });
+export type GetInstalledSkillResponse = z.infer<typeof getInstalledSkillResponseSchema>;
 
 export const installSkillRequestSchema = z.object({
   source: z.string().min(1), // "github:owner/repo@<ref>"

@@ -102,8 +102,14 @@ function treatyErrorMessage(error: unknown): string {
   if (error instanceof Error) return error.message;
   if (typeof error === 'object') {
     const record = error as Record<string, unknown>;
+    for (const key of ['value', 'body', 'response']) {
+      const nested = treatyErrorMessage(record[key]);
+      if (nested) return nested;
+    }
     if (typeof record.message === 'string') return record.message;
-    if (typeof record.error === 'string') return record.error;
+    if (typeof record.error === 'string') {
+      return typeof record.code === 'string' ? `${record.code}: ${record.error}` : record.error;
+    }
   }
   try {
     return JSON.stringify(error);

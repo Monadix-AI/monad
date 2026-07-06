@@ -147,7 +147,7 @@ export function createForwardNativeCliHandler(
         );
       const existing = nativeSessions.find((candidate) => candidate.state === 'running');
       if (existing) {
-        nativeCliHost.input(existing.id, { input: text.endsWith('\n') ? text : `${text}\n` });
+        await nativeCliHost.input(existing.id, { input: text.endsWith('\n') ? text : `${text}\n` });
         log?.debug(
           { sessionId, event: 'session.forward_native_cli.accepted', agentName, nativeCliSessionId: existing.id },
           'forward native cli accepted'
@@ -242,7 +242,7 @@ export function createForwardNativeCliHandler(
               runtimeRole
             });
       if (runtimeRole !== 'managed-project-agent') {
-        nativeCliHost.input(nativeSession.id, { input: text.endsWith('\n') ? text : `${text}\n` });
+        await nativeCliHost.input(nativeSession.id, { input: text.endsWith('\n') ? text : `${text}\n` });
       }
       log?.debug(
         { sessionId, event: 'session.forward_native_cli.accepted', agentName, nativeCliSessionId: nativeSession.id },

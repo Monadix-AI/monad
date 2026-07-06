@@ -5,11 +5,11 @@ import type { WorkspaceExperienceHostApiV1 } from '@monad/sdk-atom/workspace-exp
 import type { ProjectExperienceView } from '../types';
 
 import { WORKSPACE_EXPERIENCE_API_VERSION } from '@monad/sdk-atom/workspace-experience';
-import { useRouter } from 'next/navigation';
 import { createElement, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useT } from '@/components/I18nProvider';
 import { studioPath } from '@/features/routes/route-paths';
+import { pushShellUrl } from '@/hooks/use-shell-location';
 
 type WorkspaceExperienceElement = HTMLElement & {
   monadWorkspaceExperience?: WorkspaceExperienceHostApiV1;
@@ -39,7 +39,6 @@ export function WebComponentExperience({
   view: ProjectExperienceView;
 }) {
   const t = useT();
-  const router = useRouter();
   const ref = useRef<WorkspaceExperienceElement | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const hostApi = useMemo<WorkspaceExperienceHostApiV1>(
@@ -51,12 +50,11 @@ export function WebComponentExperience({
       embedded: view.embedded,
       voiceModelState: view.voiceModelState,
       requestProjectDialog: view.onProjectDialogRequest ?? (() => {}),
-      openStudio: (section = 'models') => router.push(studioPath(section)),
+      openStudio: (section = 'models') => pushShellUrl(studioPath(section)),
       snapshot: view.runtime.snapshot
     }),
     [
       atom.id,
-      router,
       view.embedded,
       view.onProjectDialogRequest,
       view.runtime.actions,

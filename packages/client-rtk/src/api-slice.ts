@@ -15,6 +15,14 @@ export type NormalizedPaginateResponse<T, K extends string, R extends { [P in K]
   [P in K]: EntityState<T, string>;
 };
 
+/**
+ * Same normalization for cursor-paginated responses (`nextCursor`, not `limit`/`offset`/`total`).
+ * `R` is the full response shape (e.g. `ListMemoryFactsResponse`); `K` is its array field name.
+ */
+export type NormalizedCursorPaginateResponse<T, K extends string, R extends { [P in K]: T[] }> = Omit<R, K> & {
+  [P in K]: EntityState<T, string>;
+};
+
 export const apiSlice = createApi({
   reducerPath: 'monadApi',
   baseQuery: fakeBaseQuery<MonadApiError>(),
@@ -38,6 +46,7 @@ export const apiSlice = createApi({
     'NativeCliAgents',
     'NativeCliSessions',
     'McpServers',
+    'Peers',
     'Locale',
     'Catalog',
     'Usage',

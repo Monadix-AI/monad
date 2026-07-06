@@ -103,13 +103,13 @@ export function createNativeAgentProjectCapabilities(
     async post(args: {
       body: NativeAgentProjectPostRequest;
       binding: NativeAgentProjectBinding;
-      workingPath: string;
+      attachmentRoots: readonly string[];
     }): Promise<NativeAgentProjectPostResponse> {
       const projectId = assertProjectBinding(args.binding, args.body.projectId);
       const { text, noticeText, attachments } = await resolveAttachmentPayload(
         args.body,
         args.binding,
-        args.workingPath
+        args.attachmentRoots
       );
       let messageId: `msg_${string}`;
       try {

@@ -191,7 +191,7 @@ async function runCrud(call: Call, paths: MonadPaths): Promise<void> {
   expect(res.status).toBe(200);
   expect(((await res.json()) as AgentsBody).agents).toEqual([]);
 
-  res = await call('PUT', '/v1/settings/native-cli-agents', { agent: agentView() });
+  res = await call('PUT', '/v1/settings/native-cli-agents/codex', { agent: agentView() });
   expect(res.status).toBe(200);
 
   res = await call('GET', '/v1/settings/native-cli-agents');
@@ -242,6 +242,32 @@ async function runCrud(call: Call, paths: MonadPaths): Promise<void> {
   expect(((await res.json()) as AgentsBody).agents).toEqual([]);
 }
 
+async function runGetSingle(call: Call): Promise<void> {
+  await call('PUT', '/v1/settings/native-cli-agents/codex', { agent: agentView() });
+
+  let res = await call('GET', '/v1/settings/native-cli-agents/codex');
+  expect(res.status).toBe(200);
+  const { agent } = (await res.json()) as { agent: ReturnType<typeof agentView> };
+  expect(agent.name).toBe('codex');
+  expect(agent.provider).toBe('codex');
+
+  res = await call('GET', '/v1/settings/native-cli-agents/does-not-exist');
+  expect(res.status).toBe(404);
+
+  await call('DELETE', '/v1/settings/native-cli-agents/codex');
+}
+
+async function runNotFound(call: Call): Promise<void> {
+  let res = await call('POST', '/v1/settings/native-cli-agents/does-not-exist/enable');
+  expect(res.status).toBe(404);
+
+  res = await call('POST', '/v1/settings/native-cli-agents/does-not-exist/disable');
+  expect(res.status).toBe(404);
+
+  res = await call('DELETE', '/v1/settings/native-cli-agents/does-not-exist');
+  expect(res.status).toBe(404);
+}
+
 async function runPresets(call: Call): Promise<void> {
   const res = await call('GET', '/v1/settings/native-cli-agents/presets');
   expect(res.status).toBe(200);
@@ -272,22 +298,22 @@ async function runPresets(call: Call): Promise<void> {
 }
 
 async function runValidation(call: Call, paths: MonadPaths): Promise<void> {
-  let res = await call('PUT', '/v1/settings/native-cli-agents', {
+  let res = await call('PUT', '/v1/settings/native-cli-agents/codex', {
     agent: { ...agentView(), command: '   ' }
   });
   expect(res.status).not.toBe(200);
 
-  res = await call('PUT', '/v1/settings/native-cli-agents', {
+  res = await call('PUT', '/v1/settings/native-cli-agents/codex', {
     agent: { ...agentView(), command: 'codex;rm' }
   });
   expect(res.status).not.toBe(200);
 
-  res = await call('PUT', '/v1/settings/native-cli-agents', {
+  res = await call('PUT', '/v1/settings/native-cli-agents/codex', {
     agent: { ...agentView(), env: { 'BAD KEY': 'value' } }
   });
   expect(res.status).not.toBe(200);
 
-  res = await call('PUT', '/v1/settings/native-cli-agents', {
+  res = await call('PUT', '/v1/settings/native-cli-agents/codex', {
     agent: { ...agentView(), env: { GOOD_KEY: 'bad\u0000value' } }
   });
   expect(res.status).not.toBe(200);
@@ -428,6 +454,28 @@ for (const kind of TRANSPORTS) {
       const t = serveTransport(kind, app);
       try {
         await runCrud((m, p, b) => t.fetch(p, jsonInit(m, b)), paths);
+      } finally {
+        await t.stop();
+        await rm(dir, { recursive: true, force: true });
+      }
+    });
+
+    test('get single agent by name, 404 for unknown name', async () => {
+      const { dir, app } = await setup();
+      const t = serveTransport(kind, app);
+      try {
+        await runGetSingle((m, p, b) => t.fetch(p, jsonInit(m, b)));
+      } finally {
+        await t.stop();
+        await rm(dir, { recursive: true, force: true });
+      }
+    });
+
+    test('enable/disable/remove 404 for an unknown agent name', async () => {
+      const { dir, app } = await setup();
+      const t = serveTransport(kind, app);
+      try {
+        await runNotFound((m, p, b) => t.fetch(p, jsonInit(m, b)));
       } finally {
         await t.stop();
         await rm(dir, { recursive: true, force: true });

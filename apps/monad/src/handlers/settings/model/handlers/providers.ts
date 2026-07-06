@@ -1,5 +1,5 @@
 import type { Credential, Provider } from '@monad/home';
-import type { ModelInfo, SetProviderRequest } from '@monad/protocol';
+import type { ModelInfo, PatchProviderRequest, ProviderView, SetProviderRequest } from '@monad/protocol';
 import type { ModelContext } from '@/handlers/settings/model/context.ts';
 
 import { mkdir, rename } from 'node:fs/promises';
@@ -64,6 +64,13 @@ export function createProvidersHandlers(ctx: ModelContext) {
       return { providers: cfg.model.providers.map(providerToView) };
     },
 
+    async getProvider({ id }: { id: string }) {
+      const { cfg } = await ctx.read();
+      const provider = cfg.model.providers.find((p) => p.id === id);
+      if (!provider) throw new HandlerError('not_found', `model: unknown provider "${id}"`);
+      return { provider: providerToView(provider) };
+    },
+
     async setProvider({ provider }: SetProviderRequest) {
       const { cfg, auth } = await ctx.read();
       const next = viewToProvider(provider);
@@ -74,6 +81,33 @@ export function createProvidersHandlers(ctx: ModelContext) {
       if (previous && !sameProviderCacheScope(previous, next)) {
         await deleteProviderModelCacheEntry(ctx.providerModelCachePath, next.id);
       }
+      await ctx.commit(cfg, auth);
+      return { ok: true as const };
+    },
+
+    // Partial update: merges the patch onto the currently stored provider, then reuses the same
+    // persistence + cache-invalidation path as setProvider (full replace).
+    async patchProvider({ id, patch }: { id: string; patch: PatchProviderRequest }) {
+      const { cfg, auth } = await ctx.read();
+      const i = cfg.model.providers.findIndex((provider) => provider.id === id);
+      const previous = i >= 0 ? cfg.model.providers[i] : undefined;
+      if (i < 0 || !previous) throw new HandlerError('not_found', `model: unknown provider "${id}"`);
+      const mergedView: ProviderView = { ...providerToView(previous), ...patch, id };
+      const next = viewToProvider(mergedView);
+      cfg.model.providers[i] = next;
+      if (!sameProviderCacheScope(previous, next)) {
+        await deleteProviderModelCacheEntry(ctx.providerModelCachePath, next.id);
+      }
+      await ctx.commit(cfg, auth);
+      return { ok: true as const };
+    },
+
+    async setProviderEnabled({ id, enabled }: { id: string; enabled: boolean }) {
+      const { cfg, auth } = await ctx.read();
+      const i = cfg.model.providers.findIndex((provider) => provider.id === id);
+      const previous = i >= 0 ? cfg.model.providers[i] : undefined;
+      if (i < 0 || !previous) throw new HandlerError('not_found', `model: unknown provider "${id}"`);
+      cfg.model.providers[i] = { ...previous, enabled };
       await ctx.commit(cfg, auth);
       return { ok: true as const };
     },

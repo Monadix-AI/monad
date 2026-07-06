@@ -3,8 +3,10 @@ import type { createDaemonHandlers } from '@/handlers/handlers.ts';
 import {
   envDepsStatusResponseSchema,
   getInitStatusResponseSchema,
+  httpErrorSchema,
   installEnvDepsRequestSchema,
   installEnvDepsResponseSchema,
+  okResponseSchema,
   setInitHomeRequestSchema
 } from '@monad/protocol';
 import { Elysia } from 'elysia';
@@ -32,6 +34,7 @@ export function createInitController(handlers: ReturnType<typeof createDaemonHan
       },
       {
         body: setInitHomeRequestSchema,
+        response: { 200: okResponseSchema, 409: httpErrorSchema },
         detail: { summary: 'Set home directory', description: 'Change monad home and trigger daemon restart.' }
       }
     )

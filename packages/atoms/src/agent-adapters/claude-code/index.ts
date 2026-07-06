@@ -34,6 +34,7 @@ import { readProviderHistoryFile } from '../history-files.ts';
 import { resizePty, sendPtyInput, stopPty } from '../pty.ts';
 import { nativeCliAdapterSettings } from '../settings.ts';
 import { createClaudeCodeSettingsImport } from '../settings-import.ts';
+import { claudeCodeObservationProjection } from './observation.ts';
 
 // `claude --help` documents `--model` as accepting either a tier alias ("fable", "opus", "sonnet",
 // "haiku" — each resolves to that tier's latest release) or a pinned full model name. There is no
@@ -93,6 +94,11 @@ function withClaudeSkipApprovalArgs(args: string[], skipProviderApprovals: boole
   return [...args, '--dangerously-skip-permissions'];
 }
 
+function withClaudeThinkingDisplayArgs(args: string[], showThinkingSummary: boolean): string[] {
+  if (hasFlag(args, '--thinking-display')) return args;
+  return [...args, '--thinking-display', showThinkingSummary ? 'summarized' : 'omitted'];
+}
+
 function claudeManagedMcpConfigArgs(context: NativeCliManagedRuntimeContext): string[] {
   return [
     '--mcp-config',
@@ -129,6 +135,7 @@ function buildClaudeLaunch(agent: NativeCliAgentView, opts: BuildNativeCliLaunch
   }
   args = allowManagedBridgeTools(args, !!opts.systemPromptFile);
   args = withClaudeSkipApprovalArgs(args, !!opts.skipProviderApprovals);
+  args = withClaudeThinkingDisplayArgs(args, agent.adapterSettings?.showThinkingSummary !== false);
   args = [...args, ...claudeExtraWorkingPathArgs(opts.extraWorkingPaths)];
   args = [...args, ...(opts.mcpConfigArgs ?? [])];
   const launchArgs = launchMode === 'json-stream' ? withClaudeStreamJsonArgs(args) : args;
@@ -356,7 +363,17 @@ export const claudeCodeNativeCliAdapter: NativeCliProviderAdapter = {
   provider: 'claude-code',
   productIcon: 'claude-code',
   label: 'Claude Code',
-  settings: () => nativeCliAdapterSettings({ launchModes: ['pty', 'json-stream', 'remote-control'] }),
+  observation: claudeCodeObservationProjection,
+  settings: () => [
+    ...nativeCliAdapterSettings({ launchModes: ['pty', 'json-stream', 'remote-control'] }),
+    {
+      key: 'showThinkingSummary',
+      label: 'Show thinking summary',
+      description: 'Pass --thinking-display summarized when enabled; omitted when disabled.',
+      kind: 'switch',
+      defaultValue: true
+    }
+  ],
   settingsImport: createClaudeCodeSettingsImport(),
   // ACP delivery variant: same Claude Code agent, launched as an external ACP sub-agent via the
   // claude-agent-acp wrapper. Version-pinned so `npx -y <pkg>@<ver>` resolves a known build.

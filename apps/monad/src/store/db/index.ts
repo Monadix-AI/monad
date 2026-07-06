@@ -1,5 +1,4 @@
 import type {
-  ChannelInbound,
   ChatMessage,
   Event,
   GetStatsResponse,
@@ -46,19 +45,12 @@ import {
   registerMessageAttachments
 } from './attachments.ts';
 import {
-  type ChannelModeratorRoundResult,
-  type ChannelModeratorRoundRow,
-  type ChannelModeratorRoundTask,
   countActiveConversations,
-  createChannelModeratorRound,
   getActiveConversation,
   listActiveConversations,
   listConversationSessions,
-  listOpenChannelModeratorRounds,
   setActiveSession,
-  settleChannelModeratorRound,
-  touchConversation,
-  updateChannelModeratorRoundResults
+  touchConversation
 } from './channels.ts';
 import { appendEvents, findDanglingInterrupts, hasEvent, listEvents } from './events.ts';
 import {
@@ -151,11 +143,6 @@ import {
 
 export type { ChatMessage } from '@monad/protocol';
 export type { AcpDelegateRow } from './acp-delegates.ts';
-export type {
-  ChannelModeratorRoundResult,
-  ChannelModeratorRoundRow,
-  ChannelModeratorRoundTask
-} from './channels.ts';
 export type { ListMessagesOptions } from './messages.ts';
 export type { EnqueueNativeCliInboxOptions } from './native-cli-inbox.ts';
 export type { NativeCliSessionRow } from './native-cli-sessions.ts';
@@ -562,31 +549,6 @@ export class Store {
     return listActiveConversations(this.sqlite, channelId);
   }
 
-  createChannelModeratorRound(args: {
-    id: string;
-    channelId: string;
-    moderatorKey: string;
-    moderatorAgentId: string;
-    originalInbound: ChannelInbound;
-    depth: number;
-    tasks: ChannelModeratorRoundTask[];
-    deadlineAt: string;
-  }): void {
-    createChannelModeratorRound(this.sqlite, args);
-  }
-
-  updateChannelModeratorRoundResults(id: string, results: ChannelModeratorRoundResult[]): void {
-    updateChannelModeratorRoundResults(this.sqlite, id, results);
-  }
-
-  settleChannelModeratorRound(id: string, results: ChannelModeratorRoundResult[]): void {
-    settleChannelModeratorRound(this.sqlite, id, results);
-  }
-
-  listOpenChannelModeratorRounds(channelId?: string): ChannelModeratorRoundRow[] {
-    return listOpenChannelModeratorRounds(this.sqlite, channelId);
-  }
-
   // ── ACP Delegate Ledger ────────────────────────────────────────────────────────────────────────
 
   /** Insert a new live-delegate row on spawn. Upsert-safe: a re-spawn after eviction gets a fresh row. */
@@ -755,7 +717,9 @@ export class Store {
     deleteMessageAttachments(this.sqlite, ids);
   }
 
-  getMessageAttachment(id: string): (MessageAttachmentRef & { projectId: string; preview: string }) | null {
+  getMessageAttachment(
+    id: string
+  ): (MessageAttachmentRef & { projectId: string; preview: string; createdBy: string | null }) | null {
     return getMessageAttachment(this.sqlite, id);
   }
 

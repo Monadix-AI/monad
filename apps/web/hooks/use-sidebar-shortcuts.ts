@@ -6,6 +6,7 @@ import { isApplePlatform } from '@/lib/keyboard';
 import { useWorkspaceShellStore } from '@/lib/workspace-shell-store';
 
 interface UseSidebarShortcutsArgs {
+  monadAgentShortcutAction?: () => void;
   sidebarShortcutActions: (() => void)[];
   showSettings: boolean;
   toggleSettings: () => void;
@@ -13,6 +14,7 @@ interface UseSidebarShortcutsArgs {
 }
 
 export const settingsHotkey = 'Mod+,' as const;
+export const monadAgentHotkey = 'Mod+`' as const;
 export const sidebarNumberHotkeys = [
   'Mod+1',
   'Mod+2',
@@ -27,7 +29,13 @@ export const sidebarNumberHotkeys = [
 
 export const sidebarShortcutListenerOptions = { capture: true } as const;
 
+function matchesMonadAgentHotkey(event: KeyboardEvent, applePlatform: boolean) {
+  const hasModifier = applePlatform ? event.metaKey : event.ctrlKey;
+  return hasModifier && !event.altKey && !event.shiftKey && (event.key === '`' || event.code === 'Backquote');
+}
+
 export function createSidebarShortcutHandler({
+  monadAgentShortcutAction,
   sidebarShortcutActions,
   showSettings,
   toggleSettings,
@@ -45,6 +53,13 @@ export function createSidebarShortcutHandler({
     }
 
     if (showSettings) return;
+    if (monadAgentShortcutAction && matchesMonadAgentHotkey(event, applePlatform)) {
+      event.preventDefault();
+      revealSidebar?.();
+      monadAgentShortcutAction();
+      return;
+    }
+
     const shortcutIndex = sidebarNumberHotkeys.findIndex((hotkey) => matchesKeyboardEvent(event, hotkey, platform));
     if (shortcutIndex < 0) return;
     const action = sidebarShortcutActions[shortcutIndex];
@@ -56,9 +71,14 @@ export function createSidebarShortcutHandler({
   };
 }
 
-// Global primary-modifier shortcuts: `⌘,` toggles settings, `⌘1..9` jumps to a sidebar pile.
+// Global primary-modifier shortcuts: comma toggles settings, backquote opens Monad Agent, 1..9 jumps to a sidebar pile.
 // Holding the modifier reveals the numbered badges so the bindings are discoverable.
-export function useSidebarShortcuts({ sidebarShortcutActions, showSettings, toggleSettings }: UseSidebarShortcutsArgs) {
+export function useSidebarShortcuts({
+  monadAgentShortcutAction,
+  sidebarShortcutActions,
+  showSettings,
+  toggleSettings
+}: UseSidebarShortcutsArgs) {
   const applePlatform = useMemo(() => isApplePlatform(), []);
   const shortcutModifierLabel = applePlatform ? '⌘' : 'Ctrl';
   const showSidebarShortcutBadges = useKeyHold(applePlatform ? 'Meta' : 'Control');
@@ -68,12 +88,13 @@ export function useSidebarShortcuts({ sidebarShortcutActions, showSettings, togg
     () =>
       createSidebarShortcutHandler({
         sidebarShortcutActions,
+        monadAgentShortcutAction,
         showSettings,
         toggleSettings,
         revealSidebar,
         applePlatform
       }),
-    [sidebarShortcutActions, showSettings, toggleSettings, revealSidebar, applePlatform]
+    [sidebarShortcutActions, monadAgentShortcutAction, showSettings, toggleSettings, revealSidebar, applePlatform]
   );
 
   useEffect(() => {

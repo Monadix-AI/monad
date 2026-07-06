@@ -1,24 +1,35 @@
-import type { NativeCliSessionView } from '@monad/protocol';
-import type { EntityState } from '@reduxjs/toolkit';
+import type { ListNativeCliRuntimesQuery, ListNativeCliRuntimesResponse, NativeCliSessionView } from '@monad/protocol';
 
-import { listNativeCliSessionsResponseSchema } from '@monad/protocol';
+import { listNativeCliRuntimesResponseSchema } from '@monad/protocol';
 
+import { type NormalizedCursorPaginateResponse } from '../../api-slice.ts';
 import { clientOf, runTreaty } from '../../endpoint-helpers.ts';
 import { sessionsApi } from '../sessions/index.ts';
 import { nativeCliSessionAdapter } from './list-native-cli-sessions.ts';
 
+type ListNativeCliSessionSummariesResult = NormalizedCursorPaginateResponse<
+  NativeCliSessionView,
+  'sessions',
+  ListNativeCliRuntimesResponse
+>;
+
 const listNativeCliSessionSummariesApi = sessionsApi.injectEndpoints({
   overrideExisting: true,
   endpoints: (builder) => ({
-    listNativeCliSessionSummaries: builder.query<EntityState<NativeCliSessionView, string>, void>({
-      queryFn: (_arg, api: { extra: unknown }) =>
+    listNativeCliSessionSummaries: builder.query<
+      ListNativeCliSessionSummariesResult,
+      ListNativeCliRuntimesQuery | undefined
+    >({
+      queryFn: (arg, api: { extra: unknown }) =>
         runTreaty(
-          () => clientOf(api).treaty.v1['native-cli-session-summaries'].get(),
-          (raw) =>
-            nativeCliSessionAdapter.setAll(
-              nativeCliSessionAdapter.getInitialState(),
-              listNativeCliSessionsResponseSchema.parse(raw).sessions
-            )
+          () => clientOf(api).treaty.v1['native-cli-session-summaries'].get({ query: arg ?? {} }),
+          (raw) => {
+            const parsed = listNativeCliRuntimesResponseSchema.parse(raw);
+            return {
+              ...parsed,
+              sessions: nativeCliSessionAdapter.setAll(nativeCliSessionAdapter.getInitialState(), parsed.sessions)
+            };
+          }
         ),
       providesTags: ['NativeCliSessions']
     })
