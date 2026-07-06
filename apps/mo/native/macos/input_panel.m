@@ -19,7 +19,7 @@ static NSColor *SurfaceBorderColor(void) {
   return [NSColor colorWithWhite:1 alpha:0.12];  // approximates --chat-input-border on a dark HUD
 }
 
-static const CGFloat kAuroraRingWidth = 1.6;
+static const CGFloat kAuroraRingWidth = 1.0;
 static NSString *const kAuroraRotateKey = @"aurora-rotate";
 
 // The native equivalent of the web composer's `.chat-input-aurora` focus glow: a
@@ -115,13 +115,13 @@ static CALayer *MakeAuroraLayer(NSRect bounds, CGFloat cornerRadius, CAGradientL
   if ((self = [super initWithFrame:NSZeroRect])) {
     _path = [path copy];
     self.wantsLayer = YES;
-    self.layer.cornerRadius = 6;
-    self.layer.backgroundColor = [NSColor colorWithWhite:1 alpha:0.14].CGColor;
-    self.layer.borderWidth = 0.5;
-    self.layer.borderColor = [NSColor colorWithWhite:1 alpha:0.14].CGColor;
+    // Fully rounded pill, matching the composer toolbar's own controls (ComposerSelect /
+    // shared-composer-pill: border-radius 999, no border, translucent fill).
+    self.layer.cornerRadius = kChipH / 2;
+    self.layer.backgroundColor = [NSColor colorWithWhite:1 alpha:0.1].CGColor;
 
     _label = [NSTextField labelWithString:path.lastPathComponent];
-    _label.font = [NSFont systemFontOfSize:11 weight:NSFontWeightMedium];
+    _label.font = [NSFont systemFontOfSize:11 weight:NSFontWeightSemibold];
     _label.textColor = [NSColor labelColor];
     _label.lineBreakMode = NSLineBreakByTruncatingMiddle;
     _label.maximumNumberOfLines = 1;
@@ -413,8 +413,26 @@ static CALayer *MakeAuroraLayer(NSRect bounds, CGFloat cornerRadius, CAGradientL
   };
   [_surface addSubview:_attach];
 
-  NSScrollView *scroll = [[NSScrollView alloc]
-      initWithFrame:NSMakeRect(kPad, kPad + kToolbarH + 8, contentW, kInputH)];
+  NSRect inputFrame = NSMakeRect(kPad, kPad + kToolbarH + 8, contentW, kInputH);
+  NSView *inputHost;
+  if (@available(macOS 26.0, *)) {
+    // The real macOS 26 "Liquid Glass" material — a dynamic glass effect, not a static tint.
+    NSGlassEffectView *glass = [[NSGlassEffectView alloc] initWithFrame:inputFrame];
+    glass.cornerRadius = 10;
+    glass.style = NSGlassEffectViewStyleRegular;
+    inputHost = glass;
+  } else {
+    // Pre-26: a plain translucent panel approximates the same recessed-input look.
+    NSView *plain = [[NSView alloc] initWithFrame:inputFrame];
+    plain.wantsLayer = YES;
+    plain.layer.cornerRadius = 10;
+    plain.layer.backgroundColor = [NSColor colorWithWhite:1 alpha:0.06].CGColor;
+    inputHost = plain;
+  }
+  [_surface addSubview:inputHost];
+
+  NSScrollView *scroll = [[NSScrollView alloc] initWithFrame:inputHost.bounds];
+  scroll.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
   scroll.hasVerticalScroller = YES;
   scroll.drawsBackground = NO;
   scroll.borderType = NSNoBorder;
@@ -426,7 +444,7 @@ static CALayer *MakeAuroraLayer(NSRect bounds, CGFloat cornerRadius, CAGradientL
   _text.drawsBackground = NO;
   _text.textColor = [NSColor labelColor];
   _text.insertionPointColor = AccentColor();
-  _text.textContainerInset = NSMakeSize(0, 0);
+  _text.textContainerInset = NSMakeSize(8, 8);
   _text.verticallyResizable = YES;
   _text.horizontallyResizable = NO;
   _text.autoresizingMask = NSViewWidthSizable;
@@ -435,7 +453,12 @@ static CALayer *MakeAuroraLayer(NSRect bounds, CGFloat cornerRadius, CAGradientL
   _text.textContainer.widthTracksTextView = YES;
   _text.textContainer.containerSize = NSMakeSize(contentW, FLT_MAX);
   scroll.documentView = _text;
-  [_surface addSubview:scroll];
+
+  if ([inputHost isKindOfClass:[NSGlassEffectView class]]) {
+    ((NSGlassEffectView *)inputHost).contentView = scroll;
+  } else {
+    [inputHost addSubview:scroll];
+  }
 
   // Toolbar row: hint on the left, a real submit button on the right — mirrors the web
   // composer's shared-composer-toolbar (leftTools / rightTools split, space-between).
