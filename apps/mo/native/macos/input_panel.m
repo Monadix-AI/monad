@@ -7,10 +7,15 @@ static const CGFloat kChipH = 22;
 static const CGFloat kChipGap = 8;
 static const CGFloat kAttachH = 26;
 static const CGFloat kInputH = 64;
-static const CGFloat kHintH = 14;
+static const CGFloat kToolbarH = 32;
+static const CGFloat kSurfaceRadius = 20;  // matches the web composer's chat-input-chrome (1.25rem)
 
 static NSColor *AccentColor(void) {
   return [NSColor colorWithSRGBRed:0.42 green:0.45 blue:0.95 alpha:1.0];
+}
+
+static NSColor *SurfaceBorderColor(void) {
+  return [NSColor colorWithWhite:1 alpha:0.12];  // approximates --chat-input-border on a dark HUD
 }
 
 // --- MoTextView: multi-line prompt with a drawn placeholder --------------------
@@ -273,9 +278,11 @@ static NSColor *AccentColor(void) {
 
 @implementation MoInputPanel {
   NSPanel *_panel;
+  NSVisualEffectView *_surface;
   MoTextView *_text;
   MoAttachmentsView *_attach;
   NSTextField *_hint;
+  NSButton *_submit;
   void (^_onSubmit)(NSString *, NSArray<NSString *> *);
   void (^_onCancel)(void);
 }
@@ -292,7 +299,7 @@ static NSColor *AccentColor(void) {
   _onSubmit = [onSubmit copy];
   _onCancel = [onCancel copy];
 
-  CGFloat H = kPad + kAttachH + 8 + kInputH + 6 + kHintH + kPad;
+  CGFloat H = kPad + kAttachH + 8 + kInputH + 8 + kToolbarH + kPad;
   NSRect frame = NSMakeRect(0, 0, kPanelW, H);
   _panel = [[NSPanel alloc] initWithContentRect:frame
                                       styleMask:NSWindowStyleMaskTitled | NSWindowStyleMaskClosable |
@@ -313,14 +320,18 @@ static NSColor *AccentColor(void) {
   [_panel standardWindowButton:NSWindowMiniaturizeButton].hidden = YES;
   [_panel standardWindowButton:NSWindowZoomButton].hidden = YES;
 
-  NSVisualEffectView *bg = [[NSVisualEffectView alloc] initWithFrame:frame];
-  bg.material = NSVisualEffectMaterialHUDWindow;
-  bg.blendingMode = NSVisualEffectBlendingModeBehindWindow;
-  bg.state = NSVisualEffectStateActive;
-  bg.wantsLayer = YES;
-  bg.layer.cornerRadius = 14;
-  bg.layer.masksToBounds = YES;
-  _panel.contentView = bg;
+  // Mirrors the web composer's chat-input-chrome/chat-input-surface: a translucent, rounded,
+  // hairline-bordered surface that the text and toolbar sit directly on (no separate input box).
+  _surface = [[NSVisualEffectView alloc] initWithFrame:frame];
+  _surface.material = NSVisualEffectMaterialHUDWindow;
+  _surface.blendingMode = NSVisualEffectBlendingModeBehindWindow;
+  _surface.state = NSVisualEffectStateActive;
+  _surface.wantsLayer = YES;
+  _surface.layer.cornerRadius = kSurfaceRadius;
+  _surface.layer.masksToBounds = YES;
+  _surface.layer.borderWidth = 1;
+  _surface.layer.borderColor = SurfaceBorderColor().CGColor;
+  _panel.contentView = _surface;
 
   CGFloat contentW = kPanelW - 2 * kPad;
 
@@ -330,16 +341,13 @@ static NSColor *AccentColor(void) {
   _attach.onChange = ^(NSUInteger count) {
     [weakSelf attachmentsChanged:count];
   };
-  [bg addSubview:_attach];
+  [_surface addSubview:_attach];
 
   NSScrollView *scroll = [[NSScrollView alloc]
-      initWithFrame:NSMakeRect(kPad, kPad + kHintH + 6, contentW, kInputH)];
+      initWithFrame:NSMakeRect(kPad, kPad + kToolbarH + 8, contentW, kInputH)];
   scroll.hasVerticalScroller = YES;
   scroll.drawsBackground = NO;
   scroll.borderType = NSNoBorder;
-  scroll.wantsLayer = YES;
-  scroll.layer.cornerRadius = 8;
-  scroll.layer.backgroundColor = [NSColor colorWithWhite:1 alpha:0.08].CGColor;
 
   _text = [[MoTextView alloc] initWithFrame:scroll.bounds];
   _text.delegate = self;
@@ -348,7 +356,7 @@ static NSColor *AccentColor(void) {
   _text.drawsBackground = NO;
   _text.textColor = [NSColor labelColor];
   _text.insertionPointColor = AccentColor();
-  _text.textContainerInset = NSMakeSize(6, 6);
+  _text.textContainerInset = NSMakeSize(0, 0);
   _text.verticallyResizable = YES;
   _text.horizontallyResizable = NO;
   _text.autoresizingMask = NSViewWidthSizable;
@@ -357,13 +365,26 @@ static NSColor *AccentColor(void) {
   _text.textContainer.widthTracksTextView = YES;
   _text.textContainer.containerSize = NSMakeSize(contentW, FLT_MAX);
   scroll.documentView = _text;
-  [bg addSubview:scroll];
+  [_surface addSubview:scroll];
 
+  // Toolbar row: hint on the left, a real submit button on the right — mirrors the web
+  // composer's shared-composer-toolbar (leftTools / rightTools split, space-between).
   _hint = [NSTextField labelWithString:@""];
   _hint.font = [NSFont systemFontOfSize:10];
   _hint.textColor = [NSColor tertiaryLabelColor];
-  _hint.frame = NSMakeRect(kPad, kPad, contentW, kHintH);
-  [bg addSubview:_hint];
+  _hint.lineBreakMode = NSLineBreakByTruncatingTail;
+  _hint.frame = NSMakeRect(kPad, kPad + (kToolbarH - 14) / 2, contentW - kToolbarH - 8, 14);
+  [_surface addSubview:_hint];
+
+  _submit = [NSButton buttonWithTitle:@"" target:self action:@selector(submitTapped:)];
+  _submit.bordered = NO;
+  _submit.wantsLayer = YES;
+  _submit.layer.cornerRadius = kToolbarH / 2;
+  _submit.image = [NSImage imageWithSystemSymbolName:@"arrow.turn.down.left" accessibilityDescription:@"Send"];
+  _submit.imagePosition = NSImageOnly;
+  _submit.frame = NSMakeRect(kPad + contentW - kToolbarH, kPad, kToolbarH, kToolbarH);
+  [_surface addSubview:_submit];
+
   [self attachmentsChanged:paths.count];
 
   NSRect placed = [self frameForAnchor:anchor size:NSMakeSize(kPanelW, H)];
@@ -398,11 +419,29 @@ static NSColor *AccentColor(void) {
 }
 
 - (void)attachmentsChanged:(NSUInteger)count {
-  if (count == 0) {
-    _hint.stringValue = @"add a file to send";
-  } else {
-    _hint.stringValue = @"return to send · shift+return for a new line";
-  }
+  BOOL canSend = count > 0;
+  _hint.stringValue = canSend ? @"shift+return for a new line" : @"add a file to send";
+  // Mirrors ComposerSubmitButton: filled accent when enabled, muted and non-interactive otherwise.
+  _submit.enabled = canSend;
+  _submit.layer.backgroundColor = (canSend ? AccentColor() : [NSColor colorWithWhite:1 alpha:0.1]).CGColor;
+  _submit.contentTintColor = canSend ? [NSColor whiteColor] : [NSColor tertiaryLabelColor];
+}
+
+- (void)submitTapped:(id)sender {
+  (void)sender;
+  [self submit];
+}
+
+// Mirrors the web composer's `:focus-within` aurora glow (simplified to a static accent ring —
+// an animated conic-gradient border isn't worth the native complexity for this small HUD).
+- (void)textDidBeginEditing:(NSNotification *)note {
+  (void)note;
+  _surface.layer.borderColor = AccentColor().CGColor;
+}
+
+- (void)textDidEndEditing:(NSNotification *)note {
+  (void)note;
+  _surface.layer.borderColor = SurfaceBorderColor().CGColor;
 }
 
 - (BOOL)textView:(NSTextView *)textView doCommandBySelector:(SEL)selector {
@@ -445,9 +484,11 @@ static NSColor *AccentColor(void) {
 - (void)teardown {
   [_panel close];
   _panel = nil;
+  _surface = nil;
   _text = nil;
   _attach = nil;
   _hint = nil;
+  _submit = nil;
   _onSubmit = nil;
   _onCancel = nil;
 }
