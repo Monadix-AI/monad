@@ -1,3 +1,4 @@
+import type { NativeCliHistoryPageRequest } from '@monad/protocol';
 import type { NativeCliOutputEvent, NativeCliProviderAdapter, NativeCliRuntimeHandle } from '@monad/sdk-atom';
 import type { AppServerCliHooks } from '../app-server-jsonrpc.ts';
 
@@ -244,6 +245,19 @@ function responseEvents(frame: OpenClawEnvelope, handle?: NativeCliRuntimeHandle
       ? [{ type: 'session_ref', payload: compactObject({ providerSessionRef: key, responseId: idKey }) }]
       : [];
   }
+  if (kind === 'historyPage') {
+    return [
+      {
+        type: 'history_page',
+        payload: {
+          responseId: idKey as string | number,
+          items: Array.isArray(payload?.messages) ? payload.messages : [],
+          nextCursor: null,
+          backwardsCursor: null
+        }
+      }
+    ];
+  }
   return [];
 }
 
@@ -336,6 +350,20 @@ export function sendOpenClawInput(handle: NativeCliRuntimeHandle, input: string)
   // Live-confirmed params (SessionsSendParamsSchema): {key, message, ...}. An earlier draft of this
   // adapter guessed `text` — the real gateway 400s with "must have required property 'message'".
   handle.appServer.send(req('sessions.send', id, { key: handle.providerSessionRef, message: input }));
+}
+
+export function requestOpenClawHistoryPage(
+  handle: NativeCliRuntimeHandle,
+  request: NativeCliHistoryPageRequest
+): string | number {
+  if (!handle.appServer) throw new Error('native CLI session has no app-server input bridge');
+  if (!handle.providerSessionRef) throw new Error('native CLI app-server session is not ready');
+  const id = frameId(handle);
+  handle.pendingRequests?.set(id, 'historyPage');
+  // ChatHistoryParamsSchema: {sessionKey, limit?, maxChars?}. The provider API has no cursor, so this
+  // intentionally requests the latest `limit` messages and returns no nextCursor.
+  handle.appServer.send(req('chat.history', id, { sessionKey: handle.providerSessionRef, limit: request.limit }));
+  return id;
 }
 
 export function resolveOpenClawApproval(

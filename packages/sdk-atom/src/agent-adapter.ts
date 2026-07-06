@@ -278,6 +278,10 @@ export interface NativeCliProviderHistoryPageContext extends NativeCliProviderHi
   page: { items: unknown[]; nextCursor?: string };
 }
 
+export interface NativeCliProviderHistoryPageRequestContext extends NativeCliProviderHistoryContext {
+  request: NativeCliHistoryPageRequest;
+}
+
 export interface NativeCliApprovalResolution {
   requestId: string;
   allow: boolean;
@@ -341,6 +345,7 @@ export type NativeCliObservationUsageProjector = {
 };
 
 export type NativeCliObservationProjector = NativeCliObservationUsageProjector & {
+  historyEntries?(entries: NativeCliObservationJsonRecordEntry[]): NativeCliObservationJsonRecordEntry[];
   messageGroup?: NativeCliObservationMessageGroupProjector;
   recordProjectors: NativeCliObservationRecordProjector[];
 };
@@ -467,6 +472,9 @@ export interface NativeCliProviderAdapter {
   argumentSupport?(agent: NativeCliAgentView): NativeCliArgumentSupportProbe;
   usage?(agent: NativeCliAgentView): NativeCliUsageProbe;
   parseAuthStatus(output: string, exitCode: number | null): NativeCliAuthState;
+  historyPage?(
+    context: NativeCliProviderHistoryPageRequestContext
+  ): Promise<NativeCliProviderHistoryPageContext['page'] | null>;
   requestHistoryPage?(handle: NativeCliRuntimeHandle, request: NativeCliHistoryPageRequest): string | number;
   historyPageOutput?(context: NativeCliProviderHistoryPageContext): string | null;
   historyOutput?(context: NativeCliProviderHistoryContext): string | null | Promise<string | null>;

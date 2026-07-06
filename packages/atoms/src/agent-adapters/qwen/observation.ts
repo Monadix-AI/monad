@@ -1,5 +1,9 @@
 import type { NativeCliObservationEvent } from '@monad/protocol';
-import type { NativeCliObservationProjector, ObservationRole } from '../observation-projection.ts';
+import type {
+  NativeCliObservationJsonRecordEntry,
+  NativeCliObservationProjector,
+  ObservationRole
+} from '../observation-projection.ts';
 
 import {
   observation,
@@ -231,7 +235,12 @@ export function qwenRecordEvents(
   return [];
 }
 
+function qwenHistoryEntries(entries: NativeCliObservationJsonRecordEntry[]): NativeCliObservationJsonRecordEntry[] {
+  return entries.filter((entry) => entry.record.type !== 'stream_event');
+}
+
 export const qwenObservationProjection = {
+  historyEntries: qwenHistoryEntries,
   recordProjectors: [
     {
       supports: isQwenObservationMessage,

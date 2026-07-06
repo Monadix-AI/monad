@@ -376,6 +376,41 @@ test('native CLI live start projects joined without raw terminal output', () => 
   });
 });
 
+test('native CLI live starts project only one member join per agent', () => {
+  const messages = __workplaceProjectMessageTest.buildProjectMessages({
+    persistedMessages: [],
+    nativeCliSessions: [],
+    liveItems: [],
+    liveTools: [
+      {
+        id: 'ncli_first',
+        kind: 'tool',
+        tool: 'native-cli:codex',
+        input: { agent: 'pmem_codex_a', provider: 'codex', productIcon: 'codex' },
+        status: 'running',
+        seq: '001'
+      } as never,
+      {
+        id: 'ncli_second',
+        kind: 'tool',
+        tool: 'native-cli:codex',
+        input: { agent: 'pmem_codex_a', provider: 'codex', productIcon: 'codex' },
+        status: 'running',
+        seq: '002'
+      } as never
+    ],
+    nativeCliDisplayNames: new Map([['pmem_codex_a', 'A']])
+  });
+
+  expect(messages.filter((message) => message.text === 'joined the project')).toHaveLength(1);
+  expect(messages.find((message) => message.text === 'joined the project')).toMatchObject({
+    id: 'native-cli-session:ncli_first',
+    authorId: 'pmem_codex_a',
+    authorName: 'A',
+    nativeCliSessionId: 'ncli_first'
+  });
+});
+
 test('managed native CLI reasoning-only fanout does not project a system divider', () => {
   const messages = __workplaceProjectMessageTest.buildProjectMessages({
     persistedMessages: [

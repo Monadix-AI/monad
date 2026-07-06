@@ -1,5 +1,5 @@
 import type { NativeCliObservationEvent } from '@monad/protocol';
-import type { NativeCliObservationProjector } from '../observation-projection.ts';
+import type { NativeCliObservationJsonRecordEntry, NativeCliObservationProjector } from '../observation-projection.ts';
 
 import { observation, providerIsoTimestamp, textValue, thinkingObservation } from '../observation-projection.ts';
 
@@ -82,6 +82,60 @@ export function geminiRecordEvents(
   return [];
 }
 
+function assistantMessageText(record: Record<string, unknown>): string | undefined {
+  return record.type === 'message' && record.role === 'assistant' && typeof record.content === 'string'
+    ? record.content
+    : undefined;
+}
+
+function geminiHistoryEntryFromAssistant(
+  entry: NativeCliObservationJsonRecordEntry,
+  text: string
+): NativeCliObservationJsonRecordEntry {
+  const { delta: _delta, ...record } = entry.record;
+  const foldedRecord = { ...record, content: text };
+  return { record: foldedRecord, raw: JSON.stringify(foldedRecord) };
+}
+
+function geminiHistoryEntries(entries: NativeCliObservationJsonRecordEntry[]): NativeCliObservationJsonRecordEntry[] {
+  const folded: NativeCliObservationJsonRecordEntry[] = [];
+  let pendingEntry: NativeCliObservationJsonRecordEntry | undefined;
+  let pendingText = '';
+
+  const flushAssistant = () => {
+    if (!pendingEntry || pendingText.length === 0) return;
+    folded.push(geminiHistoryEntryFromAssistant(pendingEntry, pendingText));
+    pendingEntry = undefined;
+    pendingText = '';
+  };
+
+  for (const entry of entries) {
+    const assistantText = assistantMessageText(entry.record);
+    if (assistantText !== undefined) {
+      pendingEntry = entry;
+      pendingText += assistantText;
+      continue;
+    }
+
+    if (entry.record.type === 'message' && entry.record.role === 'user') {
+      flushAssistant();
+      continue;
+    }
+
+    if (entry.record.type === 'init') continue;
+    if (entry.record.type === 'result' && !textValue(entry.record.response, entry.record.result, entry.record.text)) {
+      flushAssistant();
+      continue;
+    }
+
+    flushAssistant();
+    folded.push(entry);
+  }
+  flushAssistant();
+  return folded;
+}
+
 export const geminiObservationProjection = {
+  historyEntries: geminiHistoryEntries,
   recordProjectors: [{ parse: ({ id, record, recordIndex }) => geminiRecordEvents(id, record, recordIndex) }]
 } satisfies NativeCliObservationProjector;

@@ -1,5 +1,9 @@
-import type { NativeCliObservationProjector } from '../../observation-projection.ts';
+import type {
+  NativeCliObservationJsonRecordEntry,
+  NativeCliObservationProjector
+} from '../../observation-projection.ts';
 
+import { recordValue, textValue } from '../../observation-projection.ts';
 import {
   codexAppServerBatchRecordEvents,
   codexAppServerTurnsPageRecordEvents
@@ -17,7 +21,39 @@ export function isCodexObservationNotification(
   return typeof record.method === 'string';
 }
 
+function codexHistoryItemId(record: Record<string, unknown>): string | undefined {
+  const params = recordValue(record.params);
+  return textValue(params?.itemId, recordValue(params?.item)?.id);
+}
+
+function codexCompletedHistoryItemIds(entries: NativeCliObservationJsonRecordEntry[]): Set<string> {
+  const completed = new Set<string>();
+  for (const entry of entries) {
+    if (textValue(entry.record.method) !== 'item/completed') continue;
+    const itemId = codexHistoryItemId(entry.record);
+    if (itemId) completed.add(itemId);
+  }
+  return completed;
+}
+
+function isCodexIntermediateHistoryRecord(record: Record<string, unknown>, completedItemIds: Set<string>): boolean {
+  const method = textValue(record.method);
+  if (!method) return false;
+  const itemId = codexHistoryItemId(record);
+  if (!itemId || !completedItemIds.has(itemId)) return false;
+  return (
+    method === 'item/started' || method.endsWith('/delta') || method.endsWith('Delta') || method.endsWith('/progress')
+  );
+}
+
+function codexHistoryEntries(entries: NativeCliObservationJsonRecordEntry[]): NativeCliObservationJsonRecordEntry[] {
+  const completedItemIds = codexCompletedHistoryItemIds(entries);
+  if (completedItemIds.size === 0) return entries;
+  return entries.filter((entry) => !isCodexIntermediateHistoryRecord(entry.record, completedItemIds));
+}
+
 export const codexObservationProjection = {
+  historyEntries: codexHistoryEntries,
   usageRecords: codexUsageRecordsFromRecord,
   messageGroup: codexObservationMessageGroupAdapter,
   recordProjectors: [

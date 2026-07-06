@@ -67,7 +67,7 @@ export class NativeCliObservationResolver {
         nativeCliSessionId: id,
         provider: row.provider,
         output: row.outputSnapshot,
-        events: nativeCliStreamItems({ id, adapter, output: row.outputSnapshot }),
+        events: nativeCliStreamItems({ id, adapter, output: row.outputSnapshot, mode: 'history' }),
         usageMeter: nativeCliUsageLimitMeter({ adapter, output: row.outputSnapshot }),
         observedAt: row.updatedAt
       };
@@ -98,7 +98,7 @@ export class NativeCliObservationResolver {
         nativeCliSessionId: id,
         provider: row.provider,
         output: cliOutput,
-        events: nativeCliStreamItems({ id, adapter, output: cliOutput }),
+        events: nativeCliStreamItems({ id, adapter, output: cliOutput, mode: 'history' }),
         usageMeter: nativeCliUsageLimitMeter({ adapter, output: cliOutput }),
         observedAt: row.updatedAt
       };
@@ -110,7 +110,7 @@ export class NativeCliObservationResolver {
         nativeCliSessionId: id,
         provider: row.provider,
         output: localOutput,
-        events: nativeCliStreamItems({ id, adapter, output: localOutput }),
+        events: nativeCliStreamItems({ id, adapter, output: localOutput, mode: 'history' }),
         usageMeter: nativeCliUsageLimitMeter({ adapter, output: localOutput }),
         observedAt: row.updatedAt
       };

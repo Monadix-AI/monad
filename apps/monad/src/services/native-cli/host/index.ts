@@ -24,7 +24,7 @@ import type {
   NativeCliHostDeps,
   NativeCliObservationListener
 } from '@/services/native-cli/host/host-types.ts';
-import type { NativeCliStartPreflight } from '@/services/native-cli/types.ts';
+import type { NativeCliProviderAdapter, NativeCliStartPreflight } from '@/services/native-cli/types.ts';
 import type { NativeCliSessionRow } from '@/store/db/index.ts';
 
 import { dirname } from 'node:path';
@@ -74,7 +74,8 @@ function storedOutputHistoryPage(
     events: nativeCliStreamItems({
       id: `${id}:history:${start}`,
       adapter: getNativeCliProviderAdapter(provider),
-      output: pageOutput
+      output: pageOutput,
+      mode: 'history'
     }),
     ...(start > 0 ? { nextCursor: `${STORED_HISTORY_CURSOR_PREFIX}${start}` } : {})
   };
@@ -578,6 +579,17 @@ export class NativeCliHost {
   async historyPage(id: string, req: NativeCliHistoryPageRequest): Promise<NativeCliHistoryPageResponse> {
     const live = this.live.get(id);
     if (!live) return this.storedHistoryPage(id, req);
+    const providerSessionRef = live.providerSessionRef ?? live.initializeContext?.providerSessionRef ?? undefined;
+    const workingPath = live.initializeContext?.workingPath;
+    if (live.adapter.historyPage && providerSessionRef && workingPath) {
+      const page = await live.adapter.historyPage({
+        providerSessionRef,
+        workingPath,
+        limitBytes: MAX_OUTPUT_SNAPSHOT,
+        request: req
+      });
+      if (page) return this.providerHistoryPageResponse(id, live.adapter, providerSessionRef, workingPath, req, page);
+    }
     if (!live.adapter.requestHistoryPage) {
       throw new NativeCliError('unsupported_capability', `native CLI provider does not support paged history: ${id}`);
     }
@@ -606,6 +618,18 @@ export class NativeCliHost {
   }
 
   private async storedHistoryPage(id: string, req: NativeCliHistoryPageRequest): Promise<NativeCliHistoryPageResponse> {
+    const row = this.deps.store.getNativeCliSession(id);
+    if (row?.providerSessionRef) {
+      const adapter = getNativeCliProviderAdapter(row.provider);
+      const page = await adapter.historyPage?.({
+        providerSessionRef: row.providerSessionRef,
+        workingPath: row.workingPath,
+        limitBytes: MAX_OUTPUT_SNAPSHOT,
+        request: req
+      });
+      if (page)
+        return this.providerHistoryPageResponse(id, adapter, row.providerSessionRef, row.workingPath, req, page);
+    }
     const access = await this.observeWithProviderHistory(id);
     if (access.state === 'unavailable') {
       throw new NativeCliError(
@@ -614,6 +638,32 @@ export class NativeCliHost {
       );
     }
     return storedOutputHistoryPage(access.output ?? '', req, id, access.provider);
+  }
+
+  private providerHistoryPageResponse(
+    id: string,
+    adapter: NativeCliProviderAdapter,
+    providerSessionRef: string,
+    workingPath: string,
+    req: NativeCliHistoryPageRequest,
+    page: { items: unknown[]; nextCursor?: string }
+  ): NativeCliHistoryPageResponse {
+    const output =
+      adapter.historyPageOutput?.({
+        providerSessionRef,
+        workingPath,
+        limitBytes: MAX_OUTPUT_SNAPSHOT,
+        page
+      }) ?? page.items.map((item) => (typeof item === 'string' ? item : JSON.stringify(item))).join('\n');
+    return {
+      events: nativeCliStreamItems({
+        id: `${id}:history:provider:${req.before ?? '0'}`,
+        adapter,
+        output,
+        mode: 'history'
+      }),
+      ...(page.nextCursor ? { nextCursor: page.nextCursor } : {})
+    };
   }
 
   private historyPageOutput(

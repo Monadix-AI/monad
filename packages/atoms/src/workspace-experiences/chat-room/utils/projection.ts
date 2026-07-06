@@ -415,6 +415,7 @@ export function buildProjectMessages({
   for (const view of persistedMessages) byId.set(view.id, view);
   const currentNativeCliSessions = currentNativeCliSessionsByAgent(nativeCliSessions);
   const currentNativeCliAgentNames = new Set(currentNativeCliSessions.map((session) => session.agentName));
+  const projectedNativeCliAgentNames = new Set(currentNativeCliAgentNames);
   for (const session of currentNativeCliSessions) {
     const displayName = nativeCliDisplayNames.get(session.agentName) ?? session.agentName;
     byId.set(
@@ -489,7 +490,8 @@ export function buildProjectMessages({
     if (typeof input?.agent !== 'string') continue;
     const displayName = nativeCliDisplayNames.get(input.agent) ?? input.agent;
     const icon = productIcon(input.productIcon);
-    if (!currentNativeCliAgentNames.has(input.agent)) {
+    if (!projectedNativeCliAgentNames.has(input.agent)) {
+      projectedNativeCliAgentNames.add(input.agent);
       const provider = typeof input.provider === 'string' ? input.provider : item.tool.slice('native-cli:'.length);
       byId.set(`native-cli-session:${item.id}`, {
         id: `native-cli-session:${item.id}`,
