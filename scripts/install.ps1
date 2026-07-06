@@ -30,7 +30,7 @@ $ErrorActionPreference = 'Stop'
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 
-$ReleaseRepository = 'monadix-labs/monad'
+$ReleaseRepository = if ($env:MONAD_GITHUB_REPO) { $env:MONAD_GITHUB_REPO } else { 'Monadix-AI/monad' }
 $InstallDir  = if ($env:MONAD_INSTALL_DIR)  { $env:MONAD_INSTALL_DIR }  else { Join-Path $HOME '.monad' }
 $Channel     = if ($env:MONAD_CHANNEL)      { $env:MONAD_CHANNEL }      else { 'stable' }
 $SkipVerify  = $env:MONAD_SKIP_VERIFY -eq '1'

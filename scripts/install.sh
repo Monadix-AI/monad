@@ -2,8 +2,8 @@
 # Monad installer
 #
 # Usage (production):
-#   curl -fsSL https://raw.githubusercontent.com/monadix-labs/monad/main/scripts/install.sh | bash
-#   curl -fsSL https://raw.githubusercontent.com/monadix-labs/monad/main/scripts/install.sh | bash -s -- --channel beta
+#   curl -fsSL https://raw.githubusercontent.com/Monadix-AI/monad/main/scripts/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/Monadix-AI/monad/main/scripts/install.sh | bash -s -- --channel beta
 #
 # Usage (local dev — fully self-contained inside dist/):
 #   bun run build:release        # produces dist/monad-dev-darwin-arm64.tar.gz
@@ -25,6 +25,7 @@
 #   MONAD_TARBALL         — path to a local tarball, skips download
 #   MONAD_SKIP_VERIFY     — set to 1 to skip SHA256 verification
 #   MONAD_NO_DAEMON       — set to 1 to skip auto-starting the daemon after install
+#   MONAD_GITHUB_REPO     — GitHub owner/repo (default: Monadix-AI/monad)
 #   MONAD_APPLICATIONS_DIR — macOS app launcher directory override (default: ~/Applications)
 #   MONAD_DESKTOP_DIR     — Linux desktop launcher directory override (default: ~/Desktop)
 #   XDG_DATA_HOME         — Linux app-menu launcher root override (default: ~/.local/share)
@@ -33,7 +34,7 @@ set -euo pipefail
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 
-RELEASE_REPOSITORY="monadix-labs/monad"
+RELEASE_REPOSITORY="${MONAD_GITHUB_REPO:-Monadix-AI/monad}"
 INSTALL_DIR="${MONAD_INSTALL_DIR:-$HOME/.monad}"
 CHANNEL="stable"
 SKIP_VERIFY="${MONAD_SKIP_VERIFY:-0}"
@@ -168,11 +169,16 @@ download_progress() {
     return $rc
   fi
 
+  : > "$dest"
   curl --proto '=https' --tlsv1.2 -fsSL --retry 3 --retry-delay 1 -o "$dest" "$url" &
   local pid=$! cur pct frame=0
   printf '\033[?25l'  # hide cursor while the bar animates
   while kill -0 "$pid" 2>/dev/null; do
-    cur=$(wc -c < "$dest" 2>/dev/null | tr -dc '0-9')
+    if [ -f "$dest" ]; then
+      cur=$(wc -c < "$dest" | tr -dc '0-9')
+    else
+      cur=0
+    fi
     [ -n "$cur" ] || cur=0
     pct=$(( cur * 100 / total ))
     draw_bar "$pct" $(( (frame / 2) % 2 ))
