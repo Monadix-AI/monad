@@ -26,6 +26,9 @@
 #   MONAD_SKIP_VERIFY     — set to 1 to skip SHA256 verification
 #   MONAD_NO_DAEMON       — set to 1 to skip auto-starting the daemon after install
 #   MONAD_GITHUB_REPO     — GitHub owner/repo (default: OWNER/monad)
+#   MONAD_APPLICATIONS_DIR — macOS app launcher directory override (default: ~/Applications)
+#   MONAD_DESKTOP_DIR     — Linux desktop launcher directory override (default: ~/Desktop)
+#   XDG_DATA_HOME         — Linux app-menu launcher root override (default: ~/.local/share)
 
 set -euo pipefail
 
@@ -251,6 +254,67 @@ ensure_on_path() {
   fi
 }
 
+# ── Desktop/app launcher setup ─────────────────────────────────────────────────
+
+quote_shell() {
+  printf "'%s'" "$(printf "%s" "$1" | sed "s/'/'\\\\''/g")"
+}
+
+install_app_launcher() {
+  local bin_dir="$1"
+  local monad_bin="${bin_dir}/monad"
+
+  case "$(uname -s)" in
+    Darwin)
+      local apps_dir="${MONAD_APPLICATIONS_DIR:-$HOME/Applications}"
+      local app_dir="${apps_dir}/Monad.app"
+      local macos_dir="${app_dir}/Contents/MacOS"
+      mkdir -p "$macos_dir"
+      cat >"${macos_dir}/monad" <<EOF
+#!/usr/bin/env bash
+exec $(quote_shell "$monad_bin") up
+EOF
+      chmod +x "${macos_dir}/monad"
+      cat >"${app_dir}/Contents/Info.plist" <<'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleExecutable</key>
+  <string>monad</string>
+  <key>CFBundleIdentifier</key>
+  <string>ai.monad.launcher</string>
+  <key>CFBundleName</key>
+  <string>Monad</string>
+  <key>CFBundlePackageType</key>
+  <string>APPL</string>
+</dict>
+</plist>
+EOF
+      info "App launcher → ${app_dir}"
+      ;;
+    Linux)
+      local data_home="${XDG_DATA_HOME:-$HOME/.local/share}"
+      local app_menu_dir="${data_home}/applications"
+      local desktop_dir="${MONAD_DESKTOP_DIR:-$HOME/Desktop}"
+      mkdir -p "$app_menu_dir" "$desktop_dir"
+      local desktop_file="[Desktop Entry]
+Type=Application
+Name=Monad
+Comment=Start Monad and open the Web UI
+Exec=${monad_bin} up
+Terminal=false
+Categories=Development;Utility;
+"
+      printf "%s" "$desktop_file" >"${app_menu_dir}/monad.desktop"
+      printf "%s" "$desktop_file" >"${desktop_dir}/Monad.desktop"
+      chmod +x "${desktop_dir}/Monad.desktop" 2>/dev/null || true
+      info "App launcher → ${app_menu_dir}/monad.desktop"
+      info "Desktop launcher → ${desktop_dir}/Monad.desktop"
+      ;;
+  esac
+}
+
 # ── Stop a running daemon before its binary is overwritten ──────────────────────
 
 # Uses the currently-installed binary (pre-overwrite) to stop the daemon, then waits for the
@@ -419,6 +483,8 @@ main() {
     ln -sf "$binary" "${bin_dir}/${name}"
     info "${name} → ${bin_dir}/${name}"
   done
+
+  install_app_launcher "$bin_dir"
 
   # ── 8. PATH (production only — skipped when bin dir is explicit or opted out) ──
 

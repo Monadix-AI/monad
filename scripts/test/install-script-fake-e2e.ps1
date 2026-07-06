@@ -38,13 +38,16 @@ function Invoke-FakeInstaller([string]$Tarball) {
   $env:MONAD_INSTALL_DIR = Join-Path $TestDir 'install'
   $env:MONAD_BIN_DIR = Join-Path $TestDir 'bin'
   $env:MONAD_HOME = Join-Path $TestDir 'home'
+  $env:MONAD_START_MENU_DIR = Join-Path $TestDir 'start-menu'
+  $env:MONAD_DESKTOP_DIR = Join-Path $TestDir 'desktop'
   $env:MONAD_NO_PATH_MODIFY = '1'
   $env:MONAD_SKIP_GIT = '1'
   & powershell -NoProfile -ExecutionPolicy Bypass -File $Installer
   if ($LASTEXITCODE -ne 0) { Fail "installer exited with code $LASTEXITCODE" }
   Remove-Item Env:\MONAD_TARBALL, Env:\MONAD_SKIP_VERIFY, Env:\MONAD_INSTALL_DIR,
-    Env:\MONAD_BIN_DIR, Env:\MONAD_HOME, Env:\MONAD_NO_PATH_MODIFY,
-    Env:\MONAD_SKIP_GIT -ErrorAction SilentlyContinue
+    Env:\MONAD_BIN_DIR, Env:\MONAD_HOME, Env:\MONAD_START_MENU_DIR,
+    Env:\MONAD_DESKTOP_DIR, Env:\MONAD_NO_PATH_MODIFY, Env:\MONAD_SKIP_GIT `
+    -ErrorAction SilentlyContinue
 }
 
 function Assert-BinaryContent([string]$Expected) {
@@ -52,6 +55,25 @@ function Assert-BinaryContent([string]$Expected) {
   if (-not (Test-Path $monad)) { Fail 'monad.exe was not copied to explicit bin dir' }
   $actual = Get-Content -Raw $monad
   if ($actual -ne $Expected) { Fail "expected '$Expected', got '$actual'" }
+}
+
+function Assert-Launcher {
+  $startMenuLink = Join-Path $TestDir 'start-menu\Monad.lnk'
+  $desktopLink = Join-Path $TestDir 'desktop\Monad.lnk'
+  if (-not (Test-Path $startMenuLink)) { Fail 'Start Menu launcher was not created' }
+  if (-not (Test-Path $desktopLink)) { Fail 'Desktop launcher was not created' }
+
+  $shell = New-Object -ComObject WScript.Shell
+  foreach ($linkPath in @($startMenuLink, $desktopLink)) {
+    $shortcut = $shell.CreateShortcut($linkPath)
+    $expectedTarget = Join-Path $TestDir 'bin\monad.exe'
+    if ($shortcut.TargetPath -ne $expectedTarget) {
+      Fail "launcher target was '$($shortcut.TargetPath)', expected '$expectedTarget'"
+    }
+    if ($shortcut.Arguments -ne 'up') {
+      Fail "launcher arguments were '$($shortcut.Arguments)', expected 'up'"
+    }
+  }
 }
 
 Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $TestDir
@@ -62,6 +84,7 @@ $v2 = New-FakePackage '1.1.0'
 Step 'Flow 1: local fake tarball fresh install with explicit dirs'
 Invoke-FakeInstaller $v1
 Assert-BinaryContent 'fake monad 1.0.0'
+Assert-Launcher
 Ok 'fresh install copied fake binary'
 
 Step 'Flow 2: upgrade replaces binary and preserves home data'
@@ -71,6 +94,7 @@ $sentinel = Join-Path $HomeDir 'sentinel.txt'
 Set-Content -Path $sentinel -Value 'keep'
 Invoke-FakeInstaller $v2
 Assert-BinaryContent 'fake monad 1.1.0'
+Assert-Launcher
 if ((Test-Path $sentinel) -and ((Get-Content -Raw $sentinel) -match 'keep')) {
   Ok 'home data preserved across upgrade'
 } else {

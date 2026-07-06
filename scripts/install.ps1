@@ -20,6 +20,8 @@
     MONAD_TARBALL         path to a local .tar.gz, skips download
     MONAD_SKIP_VERIFY     set to 1 to skip SHA256 verification
     MONAD_GITHUB_REPO     GitHub owner/repo (default: monadix-labs/monad)
+    MONAD_START_MENU_DIR  Start Menu shortcut directory override
+    MONAD_DESKTOP_DIR     Desktop shortcut directory override
 #>
 
 #Requires -Version 5.1
@@ -99,6 +101,40 @@ function Add-ToUserPath ([string]$Dir) {
   Info "  Added $Dir to your user PATH (restart open terminals to pick it up)"
 }
 
+# ── Start Menu / desktop shortcut setup ─────────────────────────────────────────
+
+function New-MonadShortcut([string]$Path, [string]$Target) {
+  $dir = Split-Path $Path
+  New-Item -ItemType Directory -Path $dir -Force | Out-Null
+  $shell = New-Object -ComObject WScript.Shell
+  $shortcut = $shell.CreateShortcut($Path)
+  $shortcut.TargetPath = $Target
+  $shortcut.Arguments = 'up'
+  $shortcut.WorkingDirectory = Split-Path $Target
+  $shortcut.Description = 'Start Monad and open the Web UI'
+  $shortcut.Save()
+}
+
+function Install-AppLaunchers([string]$MonadExe) {
+  $startMenuDir = if ($env:MONAD_START_MENU_DIR) {
+    $env:MONAD_START_MENU_DIR
+  } else {
+    Join-Path ([Environment]::GetFolderPath('Programs')) 'Monad'
+  }
+  $desktopDir = if ($env:MONAD_DESKTOP_DIR) {
+    $env:MONAD_DESKTOP_DIR
+  } else {
+    [Environment]::GetFolderPath('DesktopDirectory')
+  }
+
+  $startMenuLink = Join-Path $startMenuDir 'Monad.lnk'
+  $desktopLink = Join-Path $desktopDir 'Monad.lnk'
+  New-MonadShortcut -Path $startMenuLink -Target $MonadExe
+  New-MonadShortcut -Path $desktopLink -Target $MonadExe
+  Info "  Start Menu shortcut: $startMenuLink"
+  Info "  Desktop shortcut: $desktopLink"
+}
+
 # ── Main ──────────────────────────────────────────────────────────────────────────
 
 Info 'Installing monad…'
@@ -175,11 +211,14 @@ try {
   }
   Info "  binaries in $binDir"
 
-  # ── 5. PATH (skipped when bin dir is explicit or opted out) ───────────────────
+  # ── 5. App launchers ─────────────────────────────────────────────────────────
+  $monadExe = Join-Path $binDir 'monad.exe'
+  Install-AppLaunchers -MonadExe $monadExe
+
+  # ── 6. PATH (skipped when bin dir is explicit or opted out) ───────────────────
   Add-ToUserPath -Dir $binDir
 
-  # ── 6. First-run init ─────────────────────────────────────────────────────────
-  $monadExe = Join-Path $binDir 'monad.exe'
+  # ── 7. First-run init ─────────────────────────────────────────────────────────
   try {
     & $monadExe init --quiet 2>$null
     if ($LASTEXITCODE -eq 0) { Success 'Monad home initialised' } else { throw }
@@ -187,7 +226,7 @@ try {
     Warn "Could not run 'monad init' — run it manually after restarting your terminal."
   }
 
-  # ── 7. Done ────────────────────────────────────────────────────────────────────
+  # ── 8. Done ────────────────────────────────────────────────────────────────────
   Success 'monad installed successfully!'
   $monadHome = if ($env:MONAD_HOME) { $env:MONAD_HOME } else { Join-Path $HOME '.monad' }
   Write-Host ''
