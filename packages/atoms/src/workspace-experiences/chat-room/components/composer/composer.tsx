@@ -5,7 +5,7 @@ import type { ReactElement, ReactNode } from 'react';
 import type { QuestionView } from '../../../experience/types.ts';
 import type { ProjectComposerSurface } from '../../utils/composer.ts';
 
-import { Attachment01Icon, Cancel01Icon } from '@hugeicons/core-free-icons';
+import { Attachment01Icon, Cancel01Icon, PlayIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { useOpenDraftAttachmentMutation, useTranscribeAudioMutation } from '@monad/sdk-atom-client-rtk';
 import { ComposerEditor, ComposerSubmitButton, ComposerSurface, ComposerSwap, ComposerVoiceButton } from '@monad/ui';
@@ -26,7 +26,12 @@ import {
   sendableAttachments
 } from './attachments.tsx';
 import { audioBlobToBase64 } from './audio.ts';
-import { drainProjectFollowUpQueue, type ProjectFollowUpQueueItem, submitProjectFollowUp } from './follow-up-queue.ts';
+import {
+  drainProjectFollowUpQueue,
+  type ProjectFollowUpQueueItem,
+  queuedProjectFollowUpsForDisplay,
+  submitProjectFollowUp
+} from './follow-up-queue.ts';
 import { QuestionStack } from './question-stack.tsx';
 import { useComposerVoice } from './use-composer-voice.ts';
 
@@ -230,6 +235,7 @@ export function Composer({
     const decision = submitProjectFollowUp({
       attachments: nextAttachments,
       busy: room.busy,
+      followUpBehavior: room.followUpBehavior,
       queue: followUpQueueRef.current,
       text
     });
@@ -251,6 +257,19 @@ export function Composer({
     } catch {
       updateDraft(text);
     }
+  };
+
+  const sendQueuedFollowUp = (index: number): void => {
+    if (sendingRef.current) return;
+    let queuedItem: ProjectFollowUpQueueItem | undefined;
+    setFollowUpQueue((queue) => {
+      queuedItem = queue[index];
+      if (!queuedItem) return queue;
+      const next = queue.filter((_, itemIndex) => itemIndex !== index);
+      followUpQueueRef.current = next;
+      return next;
+    });
+    if (queuedItem) void sendNow(queuedItem);
   };
 
   const acceptMention = (target: { id: string; name: string }): void => {
@@ -277,6 +296,7 @@ export function Composer({
             return next;
           });
         }}
+        onSend={sendQueuedFollowUp}
       />
 
       <ComposerSwap
@@ -678,16 +698,14 @@ function VoiceDebugPanel({
 
 function ProjectComposerQueueStack({
   items,
+  onSend,
   onRemove
 }: {
   items: string[];
+  onSend: (index: number) => void;
   onRemove: (index: number) => void;
 }): ReactElement | null {
-  const cards = items
-    .map((text, queueIndex) => ({ queueIndex, text }))
-    .slice(-2)
-    .reverse()
-    .map((card, displayIndex) => ({ ...card, displayIndex }));
+  const cards = queuedProjectFollowUpsForDisplay(items);
   if (!cards.length) return null;
   return (
     <div
@@ -703,6 +721,7 @@ function ProjectComposerQueueStack({
     >
       {cards.map((card) => (
         <div
+          className="group"
           key={`${card.queueIndex}:${card.text}`}
           style={{
             background: 'var(--popover, var(--card))',
@@ -714,7 +733,7 @@ function ProjectComposerQueueStack({
             fontSize: 12,
             lineHeight: '18px',
             opacity: card.displayIndex === 0 ? 1 : 0.86,
-            padding: '8px 20px 8px 12px',
+            padding: '8px 48px 8px 12px',
             pointerEvents: 'auto',
             position: 'absolute',
             right: 0,
@@ -737,6 +756,34 @@ function ProjectComposerQueueStack({
           >
             {card.text || 'Attachment follow-up'}
           </p>
+          <button
+            aria-label="Send queued follow-up now"
+            className="opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100"
+            onClick={() => onSend(card.queueIndex)}
+            style={{
+              alignItems: 'center',
+              background: 'transparent',
+              border: 'none',
+              borderRadius: 999,
+              color: 'var(--muted-foreground)',
+              display: 'inline-flex',
+              height: 24,
+              justifyContent: 'center',
+              padding: 0,
+              position: 'absolute',
+              right: 18,
+              top: '50%',
+              transform: 'translateY(-50%)',
+              width: 24
+            }}
+            title="Send queued follow-up now"
+            type="button"
+          >
+            <HugeiconsIcon
+              icon={PlayIcon}
+              size={13}
+            />
+          </button>
           <button
             aria-label="Remove queued follow-up"
             onClick={() => onRemove(card.queueIndex)}

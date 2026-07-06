@@ -1,24 +1,32 @@
-import type { SendMessageAttachment } from '@monad/protocol';
+import type { ComposerFollowUpBehavior, SendMessageAttachment } from '@monad/protocol';
 
 export type ProjectFollowUpQueueItem = {
   attachments: SendMessageAttachment[];
   text: string;
 };
 
+export type QueuedProjectFollowUpCard = {
+  displayIndex: number;
+  queueIndex: number;
+  text: string;
+};
+
 export function submitProjectFollowUp({
   attachments,
   busy,
+  followUpBehavior = 'queue',
   queue,
   text
 }: {
   attachments: SendMessageAttachment[];
   busy: boolean;
+  followUpBehavior?: ComposerFollowUpBehavior;
   queue: ProjectFollowUpQueueItem[];
   text: string;
 }): { nextQueue: ProjectFollowUpQueueItem[]; sendNow: ProjectFollowUpQueueItem | null } {
   const item = { attachments, text: text.trim() };
   if (!item.text && item.attachments.length === 0) return { nextQueue: queue, sendNow: null };
-  if (busy) return { nextQueue: [...queue, item], sendNow: null };
+  if (busy && followUpBehavior !== 'steer') return { nextQueue: [...queue, item], sendNow: null };
   return { nextQueue: queue, sendNow: item };
 }
 
@@ -42,4 +50,12 @@ export function drainProjectFollowUpQueue({
         .join('\n\n')
     }
   };
+}
+
+export function queuedProjectFollowUpsForDisplay(queue: string[]): QueuedProjectFollowUpCard[] {
+  return queue
+    .map((text, queueIndex) => ({ queueIndex, text }))
+    .slice(-2)
+    .reverse()
+    .map((card, displayIndex) => ({ displayIndex, ...card }));
 }
