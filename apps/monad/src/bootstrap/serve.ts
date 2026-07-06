@@ -127,9 +127,15 @@ export async function serveDaemon(deps: ServeDeps): Promise<void> {
     await unlink(sockPath).catch(() => {}); // remove stale socket from a previous run
     const unixServer = Bun.serve({
       unix: sockPath,
-      fetch: (req) => httpApp.handle(req),
-      maxRequestBodySize: MAX_REQUEST_BODY_BYTES
-    });
+      fetch: (req: Request) => httpApp.handle(req),
+      maxRequestBodySize: MAX_REQUEST_BODY_BYTES,
+      // Elysia's own Bun adapter defaults idleTimeout to 30s for the TCP listener above; Bun.serve's
+      // own default is 10s. Match it here so a slow-but-legitimate request (e.g. the 20s native-CLI
+      // auth-status probe) doesn't get killed over the Unix socket while it succeeds over TCP.
+      // bun-types omits `idleTimeout` from the unix-socket overload even though the runtime honors it
+      // (verified: a 15s handler completes fine with this set) — cast around the type gap.
+      idleTimeout: 30
+    } as unknown as Parameters<typeof Bun.serve>[0]);
     // Register teardown and mark bound BEFORE anything else that could throw — a live listener must
     // never be left un-torn-down (and unadvertised) by a later failure.
     process.on('exit', () => {

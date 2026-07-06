@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
 
 test('daemon boot registers workspace experiences from both atom-pack passes', async () => {
-  const source = await Bun.file('apps/monad/src/bootstrap/main-init/atom-discovery.ts').text();
+  const source = await Bun.file('src/bootstrap/main-init/atom-discovery.ts').text();
   const bootRegistryCall = source.slice(
     source.indexOf('const channelRegistry = await createChannelRegistry'),
     source.indexOf('return {')

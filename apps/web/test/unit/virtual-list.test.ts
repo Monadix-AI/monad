@@ -47,17 +47,16 @@ test('reducePinnedOnScroll: our own pinning scroll is ignored and consumes the f
 });
 
 test('observationFollowResetKey: streaming text changes do not request an imperative scroll reset', () => {
-  const base = {
+  // `observationFollowResetKey` only keys off `id`/`status`; callers pass the full stream (with
+  // `items`), so the fixture is typed as the wider shape to prove extra fields don't affect the key.
+  const base: { id: string; status: string; items: { id: string; text: string }[] } = {
     id: 'ncli_codex',
     status: 'running',
     items: [{ id: 'item_1', text: 'hello' }]
   };
+  const streamingUpdate: typeof base = { ...base, items: [{ id: 'item_1', text: 'hello world' }] };
+  const otherStream: typeof base = { ...base, id: 'ncli_other' };
 
-  expect(
-    observationFollowResetKey({
-      ...base,
-      items: [{ id: 'item_1', text: 'hello world' }]
-    })
-  ).toBe(observationFollowResetKey(base));
-  expect(observationFollowResetKey({ ...base, id: 'ncli_other' })).not.toBe(observationFollowResetKey(base));
+  expect(observationFollowResetKey(streamingUpdate)).toBe(observationFollowResetKey(base));
+  expect(observationFollowResetKey(otherStream)).not.toBe(observationFollowResetKey(base));
 });

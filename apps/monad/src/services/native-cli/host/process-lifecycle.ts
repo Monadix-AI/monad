@@ -22,7 +22,10 @@ export class NativeCliProcessLifecycle {
 
   constructor(private readonly ctx: NativeCliProcessLifecycleContext) {}
 
-  track(pid: number): void {
+  /** Returns the queued registry write so a caller on the critical start/stop path can await
+   *  durability before reporting success (e.g. over HTTP) — callers that don't care can ignore it,
+   *  since the queue always keeps draining regardless. */
+  track(pid: number): Promise<void> {
     daemonChildProcesses.track(pid, 'native-cli', () => killNativeCliProcess(pid));
     this.registryQueue = this.registryQueue
       .then(() => readProcessRegistry(this.ctx.nativeCliProcessRegistryPath))
@@ -30,9 +33,10 @@ export class NativeCliProcessLifecycle {
       .catch(() => {
         /* best-effort registry write — never blocks or breaks the queue for later calls */
       });
+    return this.registryQueue;
   }
 
-  untrack(pid: number): void {
+  untrack(pid: number): Promise<void> {
     daemonChildProcesses.untrack(pid);
     this.registryQueue = this.registryQueue
       .then(() => readProcessRegistry(this.ctx.nativeCliProcessRegistryPath))
@@ -45,6 +49,7 @@ export class NativeCliProcessLifecycle {
       .catch(() => {
         /* best-effort registry write — never blocks or breaks the queue for later calls */
       });
+    return this.registryQueue;
   }
 
   async reconcileOrphanedSessions(): Promise<number> {

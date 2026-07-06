@@ -114,7 +114,9 @@ export class NativeCliAuthHost {
     return buildNativeCliSpawnEnv(this.deps.resolveAgentEnv, launchEnv);
   }
 
-  private trackAuthProcess(pid: number): void {
+  /** Returns the queued registry write so the initial start path can await durability before
+   *  reporting success — best-effort either way, callers that don't care can ignore the promise. */
+  private trackAuthProcess(pid: number): Promise<void> {
     daemonChildProcesses.track(pid, 'native-cli-auth', () => killNativeCliProcess(pid));
     this.registryQueue = this.registryQueue
       .then(() => readProcessRegistry(this.deps.authProcessRegistryPath))
@@ -122,6 +124,7 @@ export class NativeCliAuthHost {
       .catch(() => {
         /* best-effort registry write — never blocks or breaks the queue for later calls */
       });
+    return this.registryQueue;
   }
 
   private untrackAuthProcess(pid: number): void {
@@ -234,7 +237,9 @@ export class NativeCliAuthHost {
       kill: (signal) => killNativeCliProcess(proc.pid, signal)
     };
     this.liveAuth.set(id, live);
-    this.trackAuthProcess(proc.pid);
+    // Awaited so the durable process registry is on disk before reporting the auth session as
+    // started (crash-safety: a daemon restart right after this point can still find and reap it).
+    await this.trackAuthProcess(proc.pid);
     void proc.exited.then((code) => {
       const current = this.liveAuth.get(id);
       if (!current) return;

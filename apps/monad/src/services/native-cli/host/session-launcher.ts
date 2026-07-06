@@ -51,7 +51,7 @@ export interface NativeCliSessionLauncherContext {
   oneshotRunner: NativeCliOneshotRunner;
   requireAgent(name: string): Promise<NativeCliAgentView>;
   buildSpawnEnv(launchEnv?: Record<string, string>): Promise<Record<string, string>>;
-  trackProcess(pid: number): void;
+  trackProcess(pid: number): Promise<void>;
   untrackProcess(pid: number): void;
   armIdleSuspend(live: LiveNativeCliSession): void;
   idleTimeoutMs(): number;
@@ -427,7 +427,9 @@ export class NativeCliSessionLauncher {
       }
     };
     this.ctx.live.set(id, live);
-    this.ctx.trackProcess(proc.pid);
+    // Awaited so the durable process registry is on disk before the caller reports the session as
+    // started (crash-safety: a daemon restart right after this point can still find and reap it).
+    await this.ctx.trackProcess(proc.pid);
     const waitForAppServerStartup =
       launch.launchMode === 'app-server'
         ? new Promise<string>((resolve, reject) => {
@@ -614,7 +616,7 @@ export class NativeCliSessionLauncher {
           isAppServerUnix = launch.launchMode === 'app-server' && launch.appServerTransport === 'unix';
           isAppServerSocket = isAppServerWs || isAppServerUnix;
           const nextProc = spawnPipeMode();
-          this.ctx.trackProcess(nextProc.pid);
+          await this.ctx.trackProcess(nextProc.pid);
           attachExitHandler(nextProc);
           try {
             await attachRuntimeStreams(nextProc);

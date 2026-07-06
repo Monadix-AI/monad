@@ -7,8 +7,20 @@
 import type { AcpAgentConfig } from '@monad/home';
 import type { NativeCliProductIcon, NativeCliProvider } from '@monad/protocol';
 
+import { homedir } from 'node:os';
+import { join } from 'node:path';
+
 import { type BinProbes, defaultBinProbes } from '@/infra/resolve-binary.ts';
 import { findNativeCliProviderAdapter, listNativeCliProviderAdapters } from '@/services/native-cli/index.ts';
+
+// ACP invites use the vendor's own npx-run bridge package, never the native `codex`/`claude` binary —
+// so unlike native-cli launch detection (adapter.detect(), which genuinely needs the binary to spawn),
+// a login dir alone means the account is set up and auth will just work through it. Scoped to this
+// ACP-specific view rather than the shared adapter.detect() result.
+const ACP_LOGIN_DIRS: Partial<Record<NativeCliProvider, string>> = {
+  codex: join(homedir(), '.codex'),
+  'claude-code': join(homedir(), '.claude')
+};
 
 /** A vetted ACP-agent invite preset plus the result of probing this machine for the underlying tool.
  *  Shape mirrors the protocol `AcpAgentPresetView`. */
@@ -31,6 +43,8 @@ export function listAcpAgentPresets(probes: BinProbes = defaultBinProbes): AcpAg
   for (const adapter of listNativeCliProviderAdapters()) {
     if (!adapter.acp) continue;
     const view = adapter.detect(probes);
+    const loginDir = ACP_LOGIN_DIRS[view.provider];
+    const installed = view.installed || (loginDir !== undefined && probes.exists(loginDir));
     presets.push({
       id: view.id,
       label: view.label,
@@ -39,7 +53,7 @@ export function listAcpAgentPresets(probes: BinProbes = defaultBinProbes): AcpAg
       args: adapter.acp.args,
       ...(adapter.acp.env ? { env: adapter.acp.env } : {}),
       installHint: view.installHint,
-      installed: view.installed,
+      installed,
       ...(view.resolvedBinPath ? { resolvedBinPath: view.resolvedBinPath } : {})
     });
   }

@@ -16,6 +16,7 @@ import { initMonadHome, loadAuth, loadConfig } from '@monad/home';
 import { setLogLevel } from '@monad/logger';
 
 import { ModelService } from '@/handlers/settings/model/index.ts';
+import { AUTH_STATUS_TIMEOUT_MS } from '@/services/native-cli/constants.ts';
 import { registerAgentAdapterImpl } from '@/services/native-cli/index.ts';
 import { createHttpTransport } from '@/transports/http.ts';
 import {
@@ -1435,16 +1436,22 @@ for (const kind of TRANSPORTS) {
       }
     });
 
-    test('returns a provider timeout code when native CLI auth status hangs', async () => {
-      const { dir, app } = await setup();
-      const t = serveTransport(kind, app);
-      try {
-        await runAuthStatusTimeoutRuntime((m, p, b) => t.fetch(p, jsonInit(m, b)), dir);
-      } finally {
-        await t.stop();
-        await rm(dir, { recursive: true, force: true });
-      }
-    });
+    test(
+      'returns a provider timeout code when native CLI auth status hangs',
+      async () => {
+        const { dir, app } = await setup();
+        const t = serveTransport(kind, app);
+        try {
+          await runAuthStatusTimeoutRuntime((m, p, b) => t.fetch(p, jsonInit(m, b)), dir);
+        } finally {
+          await t.stop();
+          await rm(dir, { recursive: true, force: true });
+        }
+      },
+      // The probe genuinely waits out the real AUTH_STATUS_TIMEOUT_MS before returning 502 — bun's
+      // 5s default per-test timeout would kill this test before that fires.
+      AUTH_STATUS_TIMEOUT_MS + 5_000
+    );
 
     test('records failed native CLI spawns in the lifecycle ledger', async () => {
       const { dir, projectDir, app, handlers } = await setup();
