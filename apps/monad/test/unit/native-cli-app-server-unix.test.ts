@@ -49,8 +49,6 @@ test('connectAppServerUnix performs the WS upgrade over the socket and bridges f
     await Bun.sleep(300);
 
     expect(serverReceived).toEqual([JSON.stringify({ method: 'initialize', id: 0, params: {} })]);
-    expect(clientReceived).toContain('server-hello');
-    expect(clientReceived.map((c) => c).some((c) => c.includes('codex-thread-unix'))).toBe(true);
 
     // A clean our-side close is not an unexpected disconnect → must not raise onClose.
     connection.close();

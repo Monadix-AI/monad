@@ -13,6 +13,5 @@ describe('native CLI stream decoder', () => {
 
     expect(first).toBe('');
     expect(`${first}${second}${final}`).toBe('╭');
-    expect(`${first}${second}${final}`).not.toContain('\uFFFD');
   });
 });

@@ -274,7 +274,7 @@ export function DaemonMenu({
             <button
               aria-label={upgradeLabel}
               className={cn(
-                'absolute top-1/2 right-1.5 -mt-px inline-flex h-4 min-w-7 shrink-0 -translate-y-1/2 items-center justify-center gap-px rounded-full border border-accent-blue/30 bg-accent-blue/10 px-1.5 font-medium text-[10px] text-accent-blue leading-none shadow-[inset_0_1px_0_rgb(255_255_255/0.08)] backdrop-blur',
+                'absolute top-1/2 right-1.5 -mt-px inline-flex h-5 min-w-8 shrink-0 -translate-y-1/2 items-center justify-center gap-1 rounded-full border border-accent-blue/30 bg-accent-blue/10 px-2 font-medium text-[10px] text-accent-blue leading-none shadow-[inset_0_1px_0_rgb(255_255_255/0.08)] backdrop-blur',
                 !upgradeActive && 'hover:bg-accent-blue/15'
               )}
               disabled={upgradeActive}
@@ -371,7 +371,7 @@ export function DaemonMenu({
               />
               <span>{t('web.sidebar.settings')}</span>
               {hasUpgrade ? (
-                <span className="ml-auto rounded-full border border-accent-blue/30 bg-accent-blue/10 px-2 py-0.5 font-medium text-[10px] text-accent-blue leading-none">
+                <span className="ml-auto inline-flex h-5 shrink-0 items-center rounded-full border border-accent-blue/30 bg-accent-blue/10 px-2 font-medium text-[10px] text-accent-blue leading-none">
                   Update
                 </span>
               ) : null}

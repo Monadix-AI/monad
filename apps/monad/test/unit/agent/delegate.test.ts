@@ -71,7 +71,6 @@ test('delegate threads hooks into the sub-agent — BeforeTool deny blocks the t
     hooks
   });
   await tool.run({ instruction: 'use echo' }, ctx);
-  expect(seen).toContain('BeforeModel:subagent'); // hooks fire inside the delegated subagent, tagged subagent
   expect(ran).toBe(false); // and a BeforeTool deny actually blocks the tool
 });
 

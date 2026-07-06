@@ -36,7 +36,7 @@ export function filterDebugTraceEntries(
   return entries.filter((entry) => entry.label.includes('approval'));
 }
 
-export function debugTraceText(entry: ProjectDebugTraceEntry): string {
+function debugTraceText(entry: ProjectDebugTraceEntry): string {
   return JSON.stringify(entry.data ?? {}, null, 2);
 }
 

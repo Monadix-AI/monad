@@ -97,7 +97,7 @@ function toastDetailForApiError(err: MonadApiError): unknown {
   };
 }
 
-export function markUpgradeRestartWindow(durationMs = 120_000): void {
+function markUpgradeRestartWindow(durationMs = 120_000): void {
   localStorage.setItem(UPGRADE_RESTART_SUPPRESS_UNTIL_KEY, String(Date.now() + durationMs));
 }
 
@@ -122,7 +122,9 @@ export function watchUpgradeRestartAndReload(args: {
       const res = await fetch(`${args.baseUrl}/health`, { cache: 'no-store' });
       if (!res.ok) return;
       const health = (await res.json()) as { version?: string };
-      const upgraded = targetVersion ? health.version === targetVersion : health.version && health.version !== currentVersion;
+      const upgraded = targetVersion
+        ? health.version === targetVersion
+        : health.version && health.version !== currentVersion;
       if (!upgraded) return;
       if (upgradeReloadWatcher !== null) window.clearInterval(upgradeReloadWatcher);
       upgradeReloadWatcher = null;

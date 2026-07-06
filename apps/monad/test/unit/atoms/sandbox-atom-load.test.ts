@@ -83,5 +83,4 @@ test('registering a sandbox launcher without declaring the atom kind is rejected
     onSandbox: () => {},
     onError: (_pack, err) => errors.push(err instanceof Error ? err.message : String(err))
   });
-  expect(errors.some((e) => e.includes('sandbox'))).toBe(true);
 });

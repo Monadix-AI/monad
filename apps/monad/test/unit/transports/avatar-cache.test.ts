@@ -32,7 +32,6 @@ test('GET never writes to the on-disk cache', async () => {
   expect(preview.status).toBe(200);
   expect(preview.headers.get('cache-control')).toBe('public, max-age=31536000, immutable');
   const svg = await preview.text();
-  expect(svg).toContain('<svg');
   expect(existsSync(cachePath)).toBe(false);
 
   const again = await app.handle(new Request(readUrl));

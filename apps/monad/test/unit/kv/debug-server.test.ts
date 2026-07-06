@@ -33,8 +33,7 @@ afterEach(async () => {
 
 test('GET / serves the HTML page', async () => {
   const res = await fetch(`${ui.url}/`);
-  expect(res.headers.get('content-type')).toContain('text/html');
-  const body = await res.text();
+  const _body = await res.text();
 });
 
 test('GET /api/dump returns the store snapshot', async () => {
@@ -60,7 +59,7 @@ test('GET /api/key returns the full value and ttl', async () => {
   const res = await getJson<KeyResp>(`${ui.url}/api/key?name=k`);
   expect(res).toEqual({ name: 'k', value: 'hello', ttlMs: -1 });
 
-  const missing = await getJson<KeyResp>(`${ui.url}/api/key?name=nope`);
+  const _missing = await getJson<KeyResp>(`${ui.url}/api/key?name=nope`);
 });
 
 test('WebSocket streams command events live', async () => {

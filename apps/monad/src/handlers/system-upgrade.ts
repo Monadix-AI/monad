@@ -48,10 +48,11 @@ export function createSystemUpgradeModule(options: SystemUpgradeOptions = {}) {
   async function runUpgrade(): Promise<void> {
     try {
       setStage('downloading');
+      const upgradeEnv = { ...env, MONAD_NO_OPEN: '1' };
       if (options.detached) {
         const proc = spawn([options.binaryPath ?? process.execPath, 'upgrade'], {
           detached: true,
-          env,
+          env: upgradeEnv,
           stderr: 'ignore',
           stdin: 'ignore',
           stdout: 'ignore'
@@ -61,7 +62,7 @@ export function createSystemUpgradeModule(options: SystemUpgradeOptions = {}) {
         return;
       }
       const proc = spawn([options.binaryPath ?? process.execPath, 'upgrade'], {
-        env,
+        env: upgradeEnv,
         stderr: 'pipe',
         stdout: 'pipe'
       });
@@ -89,7 +90,8 @@ export function createSystemUpgradeModule(options: SystemUpgradeOptions = {}) {
     else if (/restart|start/i.test(text)) setStage('restarting');
 
     const percent = parseProgressPercent(text);
-    if (percent !== null && status.stage === 'downloading') setProgress(Math.min(74, Math.max(STAGES.downloading, percent)));
+    if (percent !== null && status.stage === 'downloading')
+      setProgress(Math.min(74, Math.max(STAGES.downloading, percent)));
   }
 
   function setStage(stage: SystemUpgradeStatus['stage']): void {

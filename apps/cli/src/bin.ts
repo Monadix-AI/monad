@@ -49,7 +49,7 @@ async function dispatch(): Promise<void> {
     await startDaemon();
 
     process.stdout.write(`monad — ${webUrl}\n`);
-    openUrl(webUrl);
+    if (Bun.env.MONAD_NO_OPEN !== '1') openUrl(webUrl);
     // Exit naturally — do NOT process.exit(). Bun terminates a spawned child whose stdout is piped
     // to us when we hard-exit, which would kill the detached daemon we just launched; letting the
     // event loop drain releases the pipe cleanly and leaves the daemon running in the background.

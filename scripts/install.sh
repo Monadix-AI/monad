@@ -2,8 +2,8 @@
 # Monad installer
 #
 # Usage (production):
-#   curl -fsSL https://raw.githubusercontent.com/Monadix-AI/monad/main/scripts/install.sh | bash
-#   curl -fsSL https://raw.githubusercontent.com/Monadix-AI/monad/main/scripts/install.sh | bash -s -- --channel beta
+#   curl -fsSL https://release.monadix.ai/monad/install.sh | bash
+#   curl -fsSL https://release.monadix.ai/monad/install.sh | bash -s -- --channel beta
 #
 # Usage (local dev — fully self-contained inside dist/):
 #   bun run build:release        # produces dist/monad-dev-darwin-arm64.tar.gz
@@ -26,6 +26,7 @@
 #   MONAD_SKIP_VERIFY     — set to 1 to skip SHA256 verification
 #   MONAD_NO_DAEMON       — set to 1 to skip auto-starting the daemon after install
 #   MONAD_GITHUB_REPO     — GitHub owner/repo (default: Monadix-AI/monad)
+#   MONAD_RELEASE_BASE_URL — release mirror base URL (default: https://release.monadix.ai/monad)
 #   MONAD_APPLICATIONS_DIR — macOS app launcher directory override (default: ~/Applications)
 #   MONAD_DESKTOP_DIR     — Linux desktop launcher directory override (default: ~/Desktop)
 #   XDG_DATA_HOME         — Linux app-menu launcher root override (default: ~/.local/share)
@@ -35,6 +36,7 @@ set -euo pipefail
 # ── Constants ──────────────────────────────────────────────────────────────────
 
 RELEASE_REPOSITORY="${MONAD_GITHUB_REPO:-Monadix-AI/monad}"
+RELEASE_BASE_URL="${MONAD_RELEASE_BASE_URL:-https://release.monadix.ai/monad}"
 INSTALL_DIR="${MONAD_INSTALL_DIR:-$HOME/.monad}"
 CHANNEL="stable"
 SKIP_VERIFY="${MONAD_SKIP_VERIFY:-0}"
@@ -109,6 +111,37 @@ download() {
     wget -q --https-only -O "$dest" "$url"
   else
     fatal "Neither curl nor wget found. Please install one and re-run."
+  fi
+}
+
+fetch_text() {
+  local url="$1"
+  if command -v curl &>/dev/null; then
+    curl --proto '=https' --tlsv1.2 -fsSL --connect-timeout 10 --max-time 30 "$url"
+  elif command -v wget &>/dev/null; then
+    wget -q --https-only -O - "$url"
+  else
+    fatal "Neither curl nor wget found. Please install one and re-run."
+  fi
+}
+
+url_exists() {
+  local url="$1"
+  if command -v curl &>/dev/null; then
+    curl --proto '=https' --tlsv1.2 -fsIL --connect-timeout 10 --max-time 30 "$url" >/dev/null 2>&1
+  elif command -v wget &>/dev/null; then
+    wget -q --https-only --spider "$url" >/dev/null 2>&1
+  else
+    return 1
+  fi
+}
+
+resolve_download_url() {
+  local mirror_url="$1" github_url="$2"
+  if url_exists "$mirror_url"; then
+    echo "$mirror_url"
+  else
+    echo "$github_url"
   fi
 }
 
@@ -415,6 +448,7 @@ main() {
       info "Resolving latest ${CHANNEL} release…"
       version=$(download_latest_version)
     fi
+    [ -n "$version" ] || fatal "Could not resolve latest ${CHANNEL} release. Use --version <version>."
 
     if [ -n "$existing_version" ]; then
       if [ "$existing_version" = "$version" ]; then
@@ -439,8 +473,11 @@ main() {
     esac
     local artifact_version="${version#v}"
     artifact_name="monad-${artifact_version}-${platform}"
-    local release_url="https://github.com/${RELEASE_REPOSITORY}/releases/download/${release_tag}/${artifact_name}.tar.gz"
-    local checksum_url="${release_url}.sha256"
+    local github_release_url="https://github.com/${RELEASE_REPOSITORY}/releases/download/${release_tag}/${artifact_name}.tar.gz"
+    local mirror_release_url="${RELEASE_BASE_URL}/${release_tag}/${artifact_name}.tar.gz"
+    local release_url checksum_url
+    release_url=$(resolve_download_url "$mirror_release_url" "$github_release_url")
+    checksum_url=$(resolve_download_url "${mirror_release_url}.sha256" "${github_release_url}.sha256")
 
     step "Downloading Monad CLI"
     info "${artifact_name}.tar.gz"
@@ -538,21 +575,39 @@ main() {
   fi
 }
 
-# ── Fetch latest GitHub release tag ───────────────────────────────────────────
+# ── Fetch latest release tag ──────────────────────────────────────────────────
 
 download_latest_version() {
   local response
 
-  # stable → /releases/latest (pre-releases excluded by GitHub).
-  # beta/nightly → /releases list, filter by tag pattern, take the first hit.
+  local latest_path="latest.txt"
+  [ "$CHANNEL" != "stable" ] && latest_path="latest-${CHANNEL}.txt"
+  response=$(fetch_text "${RELEASE_BASE_URL}/${latest_path}" 2>/dev/null || true)
+  if [ -n "$response" ]; then
+    echo "$response" | head -1 | tr -d '[:space:]'
+    return
+  fi
+
   if [ "$CHANNEL" = "stable" ]; then
-    local api_url="https://api.github.com/repos/${RELEASE_REPOSITORY}/releases/latest"
+    local latest_url="${RELEASE_BASE_URL}/install.sh"
     if command -v curl &>/dev/null; then
-      response=$(curl --proto '=https' --tlsv1.2 -fsSL "$api_url")
+      response=$(curl --proto '=https' --tlsv1.2 -fsSL -o /dev/null -w '%{url_effective}' "$latest_url")
     else
-      response=$(wget -q --https-only -O - "$api_url")
+      response=$(wget --https-only --server-response --spider --max-redirect=10 "$latest_url" 2>&1 | sed -n 's/^[[:space:]]*Location: //p' | tail -1)
     fi
-    echo "$response" | grep '"tag_name"' | sed -E 's/.*"tag_name": *"([^"]+)".*/\1/'
+    local tag
+    tag=$(echo "$response" | sed -E 's#.*(/releases/tag/|/download/)(v?[^/?#]+).*#\2#')
+    if [ "$tag" = "$response" ] || [ -z "$tag" ]; then
+      latest_url="https://github.com/${RELEASE_REPOSITORY}/releases/latest"
+      if command -v curl &>/dev/null; then
+        response=$(curl --proto '=https' --tlsv1.2 -fsSL -o /dev/null -w '%{url_effective}' "$latest_url")
+      else
+        response=$(wget --https-only --server-response --spider --max-redirect=10 "$latest_url" 2>&1 | sed -n 's/^[[:space:]]*Location: //p' | tail -1)
+      fi
+      tag=$(echo "$response" | sed -E 's#.*(/releases/tag/|/download/)(v?[^/?#]+).*#\2#')
+    fi
+    [ "$tag" != "$response" ] || tag=""
+    echo "$tag"
   else
     local api_url="https://api.github.com/repos/${RELEASE_REPOSITORY}/releases?per_page=50"
     if command -v curl &>/dev/null; then

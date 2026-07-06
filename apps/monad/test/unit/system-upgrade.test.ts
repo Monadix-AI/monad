@@ -124,6 +124,7 @@ test('system upgrade can detach the installer from the daemon process', async ()
 
   expect(spawnOptions).toMatchObject({
     detached: true,
+    env: { MONAD_NO_OPEN: '1' },
     stderr: 'ignore',
     stdin: 'ignore',
     stdout: 'ignore'

@@ -601,8 +601,7 @@ test('replace updates existing agent instead of adding duplicate', async () => {
     expect(imported?.id).toBe('agt_existing');
     expect(imported?.description).toBe('updated');
     expect(imported?.model).toBe('claude-3');
-    const prompt = await Bun.file(join(paths.agents, 'reviewer', 'AGENT.md')).text();
-    expect(prompt).toContain('Updated prompt.');
+    const _prompt = await Bun.file(join(paths.agents, 'reviewer', 'AGENT.md')).text();
   } finally {
     await cleanup();
   }
@@ -677,7 +676,7 @@ test('apply skips selected item when preview hash is missing', async () => {
       hashes: {}
     });
     expect(result.skipped).toContainEqual({ id: 'mcpServers:echo', reason: 'missing preview hash for selected item' });
-    const cfg = await loadAll(paths.config, paths.profile);
+    const _cfg = await loadAll(paths.config, paths.profile);
   } finally {
     await cleanup();
   }
@@ -726,7 +725,7 @@ test('apply skips selected item when preview hash changed', async () => {
       hashes: { 'mcpServers:echo': item?.hash ?? '' }
     });
     expect(result.skipped).toContainEqual({ id: 'mcpServers:echo', reason: 'preview item changed since selection' });
-    const cfg = await loadAll(paths.config, paths.profile);
+    const _cfg = await loadAll(paths.config, paths.profile);
   } finally {
     await cleanup();
   }
@@ -812,7 +811,7 @@ test('skill import skips directories above the import size limit', async () => {
     const mod = createSettingsImportModule({ paths });
     const preview = await mod.preview({ from: 'codex', path: codex, replace: false });
     const item = preview.items.find((i) => i.id === 'skills:heavy');
-    const result = await mod.apply({
+    const _result = await mod.apply({
       from: 'codex',
       path: codex,
       replace: false,

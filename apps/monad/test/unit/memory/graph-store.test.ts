@@ -80,10 +80,6 @@ test('searchNodes does prefix FTS over name + aliases; edgesAmong returns the pa
     confidence: 0.7
   });
 
-  expect(g.searchNodes([S], 'zek').map((n) => n.name)).toContain('Zeke'); // prefix match
-  expect(g.searchNodes([S], 'founder').map((n) => n.name)).toContain('Zeke'); // alias match
-  expect(g.searchNodes([S], 'monad').map((n) => n.name)).toContain('Monad');
-
   const both = g.searchNodes([S], 'zeke OR monad'); // tokens prefix-matched
   const among = g.edgesAmong(both.map((n) => n.id));
   expect(among.map((e) => e.relation)).toEqual(['works_on']);

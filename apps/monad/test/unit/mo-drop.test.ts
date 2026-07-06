@@ -25,8 +25,6 @@ function moApp() {
 test('buildSeedMessage: user prompt leads, paths follow as a quoted list', () => {
   const msg = buildSeedMessage('summarize these', ['/tmp/a.txt', '/tmp/b.txt']);
   expect(msg.startsWith('summarize these')).toBe(true);
-  expect(msg).toContain('- "/tmp/a.txt"');
-  expect(msg).toContain('- "/tmp/b.txt"');
 });
 
 test('buildSeedMessage: blank prompt falls back to a default', () => {

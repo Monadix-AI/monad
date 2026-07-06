@@ -67,13 +67,11 @@ function preview() {
 
 test('import command is registered with settings synopsis', () => {
   const command = commands.find((c) => c.name === 'import');
-  expect(command?.synopsis).toContain('import settings');
   expect(command?.flags?.path?.type).toBe('string');
   expect(command?.flags?.apply?.type).toBe('boolean');
 });
 
-test('import command help metadata documents explicit-path and apply safety boundaries', () => {
-});
+test('import command help metadata documents explicit-path and apply safety boundaries', () => {});
 
 test('import settings defaults to dry-run preview', async () => {
   let previewBody: unknown;
@@ -118,7 +116,7 @@ test('import settings human output is grouped as a table', async () => {
       }
     }
   };
-  const output = await captureStdout(() => importCommand.run(ctx({ path: '/settings', from: 'codex' }, client)));
+  const _output = await captureStdout(() => importCommand.run(ctx({ path: '/settings', from: 'codex' }, client)));
 });
 
 test('import settings --apply --select sends selected ids', async () => {

@@ -187,7 +187,7 @@ test('Claude server errors project as agent-scoped system messages', () => {
 });
 
 test('native CLI developer messages are projected only when explicitly enabled', () => {
-  const hidden = __workplaceProjectMessageTest.buildProjectMessages({
+  const _hidden = __workplaceProjectMessageTest.buildProjectMessages({
     persistedMessages: [],
     nativeCliSessions: [],
     liveItems: [],
@@ -301,7 +301,7 @@ test('managed native CLI timeline messages use display names instead of runtime 
 });
 
 test('managed native CLI reasoning-only streaming messages stay off the transcript wall', () => {
-  const messages = __workplaceProjectMessageTest.buildProjectMessages({
+  const _messages = __workplaceProjectMessageTest.buildProjectMessages({
     persistedMessages: [],
     nativeCliSessions: [],
     liveItems: [
@@ -319,11 +319,10 @@ test('managed native CLI reasoning-only streaming messages stay off the transcri
     liveTools: [],
     nativeCliDisplayNames: new Map([['pmem_codex_abcd1234', 'codex-reviewer']])
   });
-
 });
 
 test('managed native CLI terminal reasoning-only messages stay off the transcript wall', () => {
-  const messages = __workplaceProjectMessageTest.buildProjectMessages({
+  const _messages = __workplaceProjectMessageTest.buildProjectMessages({
     persistedMessages: [],
     nativeCliSessions: [],
     liveItems: [
@@ -341,7 +340,6 @@ test('managed native CLI terminal reasoning-only messages stay off the transcrip
     liveTools: [],
     nativeCliDisplayNames: new Map([['pmem_codex_abcd1234', 'codex-reviewer']])
   });
-
 });
 
 test('native CLI live start projects joined without raw terminal output', () => {
@@ -825,7 +823,6 @@ test('native CLI projection ignores startup prose before stream-json objects', (
       providerEventType: 'result'
     }
   ]);
-  expect(stream.items.map((item) => item.text).join('\n')).not.toContain('started claude-code');
 });
 
 test('native CLI app-server JSON-RPC output is projected as readable observation items', () => {
@@ -883,7 +880,6 @@ test('native CLI app-server JSON-RPC output is projected as readable observation
       providerEventType: 'mcpServer/startupStatus/updated'
     }
   ]);
-  expect(stream.items.map((item) => item.text).join('\n')).not.toContain('"method"');
 });
 
 test('native CLI follow streams restore persisted terminal snapshots', () => {

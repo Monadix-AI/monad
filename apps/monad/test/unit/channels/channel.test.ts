@@ -927,4 +927,5 @@ test('agentHint: absent ⇒ only the structured response hint rides on the origi
   h.ctx.onMessage(inbound({ chatId: 'c', userId: 'u1', text: 'hi' }));
   await h.flush();
   const origin = h.creates[0]?.origin as { ext?: { agentHint?: string } } | undefined;
+  expect(origin?.ext?.agentHint).toBeUndefined();
 });

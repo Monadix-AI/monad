@@ -50,7 +50,7 @@ export async function loadWorkspacePromptSlots(workspace: string): Promise<UserP
 }
 
 /** Backward-compatible joined view of the workspace prompt slots, in precedence order. */
-export async function loadWorkspaceContext(workspace: string): Promise<string> {
+async function _loadWorkspaceContext(workspace: string): Promise<string> {
   const slots = await loadWorkspacePromptSlots(workspace);
   return [slots.soul, slots.agent, slots.user].filter(Boolean).join('\n\n');
 }

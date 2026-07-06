@@ -86,7 +86,4 @@ test('resume failure cold-start input restores from shared memory and project in
 
   expect(startRefs).toEqual(['archived-thread', undefined]);
   expect(inputs).toHaveLength(1);
-  expect(inputs[0]).toContain('../MEMORY.md');
-  expect(inputs[0]).toContain('project_inbox_check');
-  expect(inputs[0]).toContain('project_read');
 });

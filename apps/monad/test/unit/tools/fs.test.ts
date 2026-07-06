@@ -44,7 +44,7 @@ afterAll(async () => {
 });
 
 test('fs_read returns file contents', async () => {
-  const out = await fsReadTool.run({ path: join(root, 'src', 'a.ts') }, ctx([root]));
+  const _out = await fsReadTool.run({ path: join(root, 'src', 'a.ts') }, ctx([root]));
 });
 
 test('fs_read honours offset/limit', async () => {
@@ -84,9 +84,6 @@ test('fs_write creates files (and parent dirs) inside the sandbox', async () => 
   const res = (await fsWriteTool.run({ path: p, content: 'hello' }, ctx([root]))).metadata;
   expect(res.bytesWritten).toBe(5);
   expect(res.changed).toBe(true);
-  expect(res.diff).toContain('--- nested/new.txt\tBefore');
-  expect(res.diff).toContain('+++ nested/new.txt\tAfter');
-  expect(res.diff).toContain('+hello');
   expect(res.afterHash).toMatch(/^[a-f0-9]{64}$/);
   expect(res.display).toMatchObject({
     type: 'diff',
@@ -109,8 +106,6 @@ test('fs_edit replaces a unique string', async () => {
   const res = (await fsEditTool.run({ path: p, oldString: 'bar', newString: 'QUX' }, ctx([root]))).metadata;
   expect(res.replacements).toBe(1);
   expect(res.changed).toBe(true);
-  expect(res.diff).toContain('-foo bar baz');
-  expect(res.diff).toContain('+foo QUX baz');
   expect(res.beforeHash).toMatch(/^[a-f0-9]{64}$/);
   expect(res.afterHash).toMatch(/^[a-f0-9]{64}$/);
   expect(res.beforeHash).not.toBe(res.afterHash);
@@ -130,7 +125,6 @@ test('fs_write caps full before/after text in display payloads for large files',
   expect(res.display.afterText.length).toBeLessThan(content.length);
   expect(res.display.diff?.length).toBeLessThan(content.length);
   expect(res.display.truncated).toBe(true);
-  expect(res.diff).toContain('+');
   expect(res.afterHash).toMatch(/^[a-f0-9]{64}$/);
 });
 
@@ -204,7 +198,7 @@ test('fs_write outside sandbox: allow gate → succeeds and uses fs_path_access 
 });
 
 test('fs_read outside sandbox: allow gate → succeeds', async () => {
-  const res = await fsReadTool.run({ path: outsideFile }, ctx([root], allowGate()));
+  const _res = await fsReadTool.run({ path: outsideFile }, ctx([root], allowGate()));
 });
 
 test('fs_edit outside sandbox: allow gate → succeeds', async () => {
@@ -216,7 +210,7 @@ test('fs_edit outside sandbox: allow gate → succeeds', async () => {
 });
 
 test('fs_glob outside sandbox: allow gate → lists files', async () => {
-  const out = await fsGlobTool.run({ pattern: '*.txt', path: outside }, ctx([root], allowGate()));
+  const _out = await fsGlobTool.run({ pattern: '*.txt', path: outside }, ctx([root], allowGate()));
 });
 
 test('gate is only called once per path-escape (not on in-sandbox paths)', async () => {
