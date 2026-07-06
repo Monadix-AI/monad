@@ -16,50 +16,44 @@
  */
 
 import type { MonadAuth } from '@monad/home';
-import type { AtomDescriptor, PrincipalId, SessionId } from '@monad/protocol';
-import type { AtomConflict } from '@/atoms/resolve.ts';
+import type { PrincipalId, SessionId } from '@monad/protocol';
 import type { Tool } from '@/capabilities/tools/types.ts';
 import type { SessionGateway } from '@/channels/channel.ts';
 
 import { join } from 'node:path';
-import { computeInitStatus, getPaths, initMonadHome, loadAll, loadAuth, saveProfile } from '@monad/home';
-import { defaultLocaleName, loadLocalePacksFromDir } from '@monad/i18n';
-import { BUILTIN_LOCALES_DIR } from '@monad/i18n/locale-dir';
+import { getPaths, initMonadHome, loadAll, loadAuth, saveProfile } from '@monad/home';
 import { createLogger } from '@monad/logger';
 
 import { applyAcpDelegateTool } from '@/bootstrap/acp-delegate.ts';
-import { buildServiceTools, builtinTools, registerSandboxLauncher } from '@/capabilities/tools';
-import { createWorkspaceExperienceSnapshot } from '@/handlers/atom-pack/atom-pack-content.ts';
+import { buildServiceTools, builtinTools } from '@/capabilities/tools';
 import { AtomPackRegistry } from '@/handlers/atom-pack/index.ts';
 import { type CommandBundle, createCommandRegistry } from '@/handlers/commands/index.ts';
 import { createDaemonHandlers } from '@/handlers/handlers.ts';
-import { createHookRunner, type HookConfig } from '@/hooks/runner.ts';
+import { createHookRunner } from '@/hooks/runner.ts';
 import { daemonChildProcesses, runDaemonChildSupervisorFromArgv } from '@/infra/daemon-child-processes.ts';
 import { initObservability } from '@/infra/observability.ts';
 import { ReloadService } from '@/reload/index.ts';
-import { ConfigBus } from '@/services/config-bus.ts';
 import { DelegationService } from '@/services/delegation/delegation.ts';
 import { acpAgentCandidatesFromAdapters } from '@/services/delegation/presets.ts';
 import { configureDeveloperLogTransport } from '@/services/developer-log.ts';
 import { EventBus } from '@/services/event-bus.ts';
-import { AgentPersonaService, isToolExposed } from '@/services/generation/agent-persona.ts';
-import { I18nService, loadInstalledLocalePacks } from '@/services/i18n.ts';
+import { isToolExposed } from '@/services/generation/agent-persona.ts';
 import { createGraphQueryTools } from '@/services/memory/graph/query-tools.ts';
 import { createMemoryAgentTools } from '@/services/memory/tools.ts';
-import { registerAgentAdapterImpl } from '@/services/native-cli/index.ts';
 import { RoundCache } from '@/services/round-cache.ts';
 import { ScheduleService } from '@/services/scheduling/schedule.ts';
-import { resolveSkillState } from '@/store/home/skills.ts';
-import { loadWorkspacePromptSlots, WORKSPACE_CONTEXT_FILES } from '@/store/home/workspace-context.ts';
 import { runAcpBridge } from '@/transports/acp/launch.ts';
 import { createDaemonAgent } from './bootstrap/agent.ts';
+import { createAtomDiscovery } from './bootstrap/atom-discovery.ts';
 import { createAtomPackRediscoverer } from './bootstrap/atoms.ts';
 import { createChannelGateway } from './bootstrap/channel-gateway.ts';
-import { createChannelRegistry } from './bootstrap/channels.ts';
 import { createCommandBundle } from './bootstrap/commands.ts';
+import { createConfigWatchers } from './bootstrap/config-watchers.ts';
 import { createDataLayer } from './bootstrap/data-layer.ts';
 import { registerHotReload } from './bootstrap/hot-reload.ts';
+import { warnIfNotInitialized } from './bootstrap/init-status.ts';
 import { createInterruptServices } from './bootstrap/interrupts.ts';
+import { createLocaleService } from './bootstrap/locale.ts';
 import { connectFileMcpServers, connectMcpServers } from './bootstrap/mcp.ts';
 import { createMcpControls } from './bootstrap/mcp-controls.ts';
 import { createMemorySubsystem } from './bootstrap/memory.ts';
@@ -67,7 +61,7 @@ import { createModelSubsystem } from './bootstrap/model.ts';
 import { createObscuraController } from './bootstrap/obscura.ts';
 import { createPeerDelegateTools } from './bootstrap/peers.ts';
 import { configureDaemonLogging, readDaemonRuntimeFlags } from './bootstrap/runtime-flags.ts';
-import { createSandbox, finalizeSandboxLauncher } from './bootstrap/sandbox.ts';
+import { createSandbox } from './bootstrap/sandbox.ts';
 import { serveDaemon } from './bootstrap/serve.ts';
 import { acquireDaemonSingletonLock } from './bootstrap/singleton.ts';
 import { createSkillSubsystem } from './bootstrap/skills.ts';
@@ -196,17 +190,7 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
   });
 
   if (!USE_MOCK) {
-    const initStatus = computeInitStatus(cfg, startupAuth ?? null);
-    if (!initStatus.initialized) {
-      const missing = initStatus.missing.length ? `missing ${initStatus.missing.join(', ')}` : 'missing setup';
-      const providerCredentials = initStatus.missingProviderCredentials
-        ?.map((item) => `${item.providerLabel ?? item.providerId} (${item.providerId})`)
-        .join(', ');
-      const providerCredentialHint = providerCredentials ? `; provider credentials: ${providerCredentials}` : '';
-      logger.warn(
-        `monad is not initialized — ${missing}${providerCredentialHint} — run \`monad init\` or open http://${HOST}:${PORT}/`
-      );
-    }
+    warnIfNotInitialized({ cfg, auth: startupAuth, host: HOST, port: PORT, logger });
   }
 
   // Model router/profiles + catalog (pricing/context limits) + background embedding indexer
@@ -238,68 +222,21 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
     }
   });
 
-  // Effective skill state resolver (global master + per-instance switches, overridden by the
-  // active agent's switches). A `let` so a config.json edit can swap it in and re-map skills
-  // without a restart.
-  const computeSkillState = (c: typeof cfg) =>
-    resolveSkillState({
-      global: c.skills,
-      agent: c.agent.agents.find((a) => a.id === c.agent.defaultAgentId)?.skills
-    });
-  let skillState = computeSkillState(cfg);
-  // Command-hook config, swapped in place on a settings reload so config.json `hooks` edits
-  // hot-apply without a restart (the HookRunner below reads it via a getter each call).
-  let hooksConfig: HookConfig = cfg.hooks ?? {};
-  // Operator-managed policy hooks — same hot-swap discipline, but a separate field the hooks
-  // settings API never writes, so user edits can't remove an org-enforced rule.
-  let policyHooksConfig: HookConfig = cfg.policyHooks ?? {};
-
-  // In-process pub/sub for config/profile changes. Shared by the file-watcher and commit() paths
-  // so both trigger the exact same set of reload callbacks.
-  const configBus = new ConfigBus((err) => logger.warn(`monad: config-bus listener error: ${err}`));
-
-  // Watch the home dir, not the files directly, so atomic rename-replace writes are caught.
-  // Network/sandbox/principal settings are NOT hot-applied (wired at boot) — those need a restart.
-  reloadService.register({
-    name: 'settings',
-    path: paths.home,
-    filter: (filename) => filename === 'config.json' || filename === 'profile.json' || filename === 'auth.json',
-    onChange: async () => {
-      const [freshCfg, freshAuth] = await Promise.all([loadAll(paths.config, paths.profile), loadAuth(paths.auth)]);
-      if (!freshCfg) return; // mid-write or temporarily absent — skip this tick
-      await configBus.publish({ cfg: freshCfg, auth: freshAuth });
-      logger.info('monad: hot-reloaded settings from disk');
-    }
-  });
-
-  // User-editable prompt slots from the workspace root — SOUL.md, AGENT.md/AGENTS.md, USER.md.
-  // A `let` so an edit hot-reloads without rebuilding the agent.
-  let workspacePromptSlots = await loadWorkspacePromptSlots(paths.workspace);
-  reloadService.register({
-    name: 'workspace-context',
-    path: paths.workspace,
-    filter: (filename) => Boolean(filename && WORKSPACE_CONTEXT_FILES.includes(filename)),
-    onChange: async () => {
-      workspacePromptSlots = await loadWorkspacePromptSlots(paths.workspace);
-      logger.info('monad: hot-reloaded workspace prompt slots (SOUL.md / AGENT.md / USER.md)');
-    }
-  });
-
-  // Per-agent persona (Studio): each session's bound agent contributes its own AGENT.md as the system
-  // prompt, falling back to the global workspace identity. The cache is sync (the loop builds the
-  // prompt per turn) and hot-reloads on agents-dir edits; the configBus subscriber re-reads on agent
-  // create/rename/delete (an agent's row + dir may have changed).
-  const agentPersona = new AgentPersonaService(paths, store);
-  await agentPersona.reload(cfg);
-  reloadService.register({
-    name: 'agent-persona',
-    path: paths.agents,
-    filter: (filename) => Boolean(filename?.endsWith('AGENT.md')),
-    onChange: async () => {
-      await agentPersona.reload();
-      logger.info('monad: hot-reloaded agent personas (AGENT.md)');
-    }
-  });
+  // Live config-derived state: skill auto-load predicate, hot-swappable command/policy hooks, the
+  // config/profile/auth file watcher (feeding the shared ConfigBus), workspace prompt slots, and
+  // per-agent persona resolution (see ./bootstrap/config-watchers.ts).
+  const {
+    configBus,
+    computeSkillState,
+    getSkillState,
+    setSkillState,
+    getHooksConfig,
+    setHooksConfig,
+    getPolicyHooksConfig,
+    setPolicyHooksConfig,
+    getWorkspacePromptSlots,
+    agentPersona
+  } = await createConfigWatchers({ paths, cfg, store, reloadService, logger });
 
   // Running monad version, for advisory skill `compatibility` checks. Best-effort: a bundled
   // standalone binary may not ship package.json, so we fall back to '0.0.0' (which disables the
@@ -320,7 +257,7 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
     paths,
     reloadService,
     monadVersion,
-    skillState: (skill) => skillState(skill)
+    skillState: (skill) => getSkillState()(skill)
   });
 
   const agentModel = USE_MOCK ? (await import('@/infra/mock-model.ts')).mockModel() : modelService.router;
@@ -328,92 +265,20 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
   // Discover atom packs (built-in + ~/.monad/atoms) through the atom-kind-gated loader BEFORE the
   // agent snapshots its tools below — so a third-party atom pack's declared tools/connectors reach
   // the agent. Channel factories are collected for the channel gateway (constructed later). An atom
-  // pack that registers an undeclared atom kind is rejected here (UndeclaredAtomError), per pack.
+  // pack that registers an undeclared atom kind is rejected here (UndeclaredAtomError), per pack
+  // (see ./bootstrap/atom-discovery.ts).
   let sessionGateway: SessionGateway | null = null;
-  // builtinAtomPack and discovered third-party packs load through the SAME gated loader, but route to
-  // slightly different sinks: first-party tools get the sandbox/credentials wrap and first-party
-  // commands are reserved (registerBuiltin); third-party commands are attributed + non-reserved
-  // (registerAtom). locale/skill/mcp are file-based and do NOT flow through sinks here.
-  // Provider types are globally unique: a discovered pack may not redefine a first-party provider
-  // (no shadowing `openai` etc.). createChannelRegistry derives the reserved set from whatever the
-  // built-in pack registers in its (earlier) load pass — no separately-imported provider list.
-  // Bare-name collisions surfaced from the latest load sweep (channel/connector/command),
-  // mutated in place so the read accessor handed to the atoms module stays valid across re-discovery.
-  const atomConflicts: AtomConflict[] = [];
-  // Per-pack individual atoms from the latest sweep (packId → its atoms), read by the atom-pack
-  // manager for the detail view. Mutated in place so the accessor stays valid across re-discovery.
-  const atomDetailsByPack = new Map<string, AtomDescriptor[]>();
-  let workspaceExperienceSnapshot:
-    | Awaited<ReturnType<typeof createWorkspaceExperienceSnapshot>>['experiences']
-    | undefined;
-  async function refreshWorkspaceExperienceSnapshot(): Promise<void> {
-    const snapshot = await createWorkspaceExperienceSnapshot(paths.packs, [...registry.workspaceExperiences.values()]);
-    workspaceExperienceSnapshot = snapshot.experiences;
-    for (const warning of snapshot.warnings) {
-      logger.warn(`monad: workspace experience "${warning.experienceId}" is not serviceable: ${warning.error}`);
-    }
-  }
-  const channelRegistry = await createChannelRegistry(paths, {
-    builtin: {
-      onConnector: (c) => registry.registerConnector(c),
-      // First-party commands are reserved (non-overridable). atomPackName is ignored — they are built-ins.
-      onCommand: (_atomPackName, cmd) =>
-        commandRegistry.registerBuiltin(cmd as Parameters<typeof commandRegistry.registerBuiltin>[0]),
-      onProvider: (p) => modelService.registry.register(p),
-      onHook: (h) => registry.registerHook(h),
-      onWorkspaceExperienceApi: (api, atomPackId) => registry.registerWorkspaceExperienceApi(api, atomPackId),
-      onWorkspaceExperience: (experience, atomPackId) => registry.registerWorkspaceExperience(experience, atomPackId),
-      // Built-in agent-adapter atoms (Codex/Claude Code/Gemini/Qwen) register into the native-CLI
-      // registry keyed by provider — the same gated path a third-party adapter pack would take.
-      onAgentAdapter: (a) => registerAgentAdapterImpl(a),
-      // Built-in sandbox launchers (Seatbelt/Landlock/Low-Integrity) register into the launcher
-      // registry; finalizeSandboxLauncher() below picks one per platform. Boot-only: not wired into
-      // the rediscovery sweep, so a hot-installed launcher takes effect on the next daemon start.
-      onSandbox: (l) => registerSandboxLauncher(l, 'builtin')
-    },
-    discovered: {
-      onConnector: (c) => registry.registerConnector(c),
-      // Third-party atom commands register through the SAME registry as built-ins; built-in
-      // names are reserved, so an atom cannot shadow /reset, /model, etc. (rejected + warned).
-      onCommand: (atomName, cmd) => commandRegistry.registerAtom(atomName, cmd),
-      // An atom declaring the `provider` capability registers its model providers into the model
-      // registry — the same path first-party providers take, no special privilege. Globally unique:
-      // a type already owned by a built-in (the reserved set createChannelRegistry derives from the
-      // built-in pass) is a hard error, not an override.
-      onProvider: (p) => modelService.registry.register(p),
-      // Namespace-coexist pins: bare name resolves to the user pin (atomPins.<kind>) or first-wins.
-      channelPins: cfg.atomPins.channel,
-      connectorPins: cfg.atomPins.connector,
-      onCollision: (c) => atomConflicts.push(c),
-      // An atom pack declaring the `hook` capability registers lifecycle hooks into the registry,
-      // which the HookRunner reads alongside config.json command hooks.
-      onHook: (h) => registry.registerHook(h),
-      onWorkspaceExperienceApi: (api, atomPackId) => registry.registerWorkspaceExperienceApi(api, atomPackId),
-      onWorkspaceExperience: (experience, atomPackId) => registry.registerWorkspaceExperience(experience, atomPackId),
-      // A discovered pack declaring the `agent-adapter` capability registers native-CLI adapters into
-      // the same registry as built-ins; last registration wins, so a third-party pack can override.
-      onAgentAdapter: (a) => registerAgentAdapterImpl(a),
-      // A discovered pack declaring the `sandbox` capability (e.g. a cloud e2b/Vercel launcher)
-      // registers into the launcher registry, preferred over built-ins on select.
-      onSandbox: (l) => registerSandboxLauncher(l, 'atom'),
-      onAtoms: (packName, atoms) => atomDetailsByPack.set(packName, atoms)
-    }
-  });
-  // Resolve bare atom-command names to one winner (pin ?? first-wins); each is always reachable as
-  // /<packId>.<command> regardless. Built-in reserved names are untouched.
-  commandRegistry.resolvePins(cfg.atomPins.command, (c) => atomConflicts.push(c));
-  void refreshWorkspaceExperienceSnapshot().catch((err) =>
-    logger.warn(`monad: workspace experience warmup failed: ${err instanceof Error ? err.message : String(err)}`)
-  );
-  // The sandbox launcher atoms have now registered (built-in pack + any discovered pack) — select
-  // the one that confines spawned children for this platform and wire it into the spawn seam.
-  finalizeSandboxLauncher(cfg);
+  const {
+    channelRegistry,
+    atomConflicts,
+    atomDetailsByPack,
+    refreshWorkspaceExperienceSnapshot,
+    getWorkspaceExperienceSnapshot
+  } = await createAtomDiscovery({ paths, cfg, registry, commandRegistry, modelService, logger });
+
   // Locale gateway: file-scan loading from the builtin locale dir + any installed atom-pack locale
-  // dirs (~/.monad/locales/<packName>/<lng>/<namespace>.json). Third-party packs override the
-  // built-in for the same tag (first discovered per tag wins across pack directories).
-  const builtinLocalePacks = await loadLocalePacksFromDir(BUILTIN_LOCALES_DIR, defaultLocaleName);
-  const installedLocalePacks = await loadInstalledLocalePacks(paths.packs, paths.locales, defaultLocaleName);
-  const i18nService = new I18nService([...builtinLocalePacks, ...installedLocalePacks], cfg.locale);
+  // dirs (see ./bootstrap/locale.ts).
+  const i18nService = await createLocaleService(paths, cfg.locale);
 
   // File/pack MCP servers, in a mutable handle so rediscovery can close the previous round before
   // reconnecting — an installed/removed atoms/mcp server takes effect hot (the agent reads its tools
@@ -484,8 +349,8 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
   // behind one runner. cwd = the sandbox root so command hooks resolve relative paths predictably.
   const hooksLog = createLogger('hooks');
   const hookRunner = createHookRunner({
-    config: () => hooksConfig,
-    policy: () => policyHooksConfig,
+    config: () => getHooksConfig(),
+    policy: () => getPolicyHooksConfig(),
     atomHooks: registry.hooks,
     cwd: sandboxRoots?.[0] ?? paths.workspace,
     log: hooksLog,
@@ -558,8 +423,8 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
     // Live so a profile.json/settings edit to the policy hot-applies (updated by the configBus subscriber).
     inboundApproval: () => inboundApprovalMode,
     workspacePromptSlots: (sessionId) => ({
-      ...workspacePromptSlots,
-      agent: agentPersona.resolve(sessionId) ?? workspacePromptSlots.agent
+      ...getWorkspacePromptSlots(),
+      agent: agentPersona.resolve(sessionId) ?? getWorkspacePromptSlots().agent
     })
   });
 
@@ -615,15 +480,9 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
     setInboundApprovalMode: (mode) => {
       inboundApprovalMode = mode;
     },
-    setSkillState: (state) => {
-      skillState = state;
-    },
-    setHooksConfig: (config) => {
-      hooksConfig = config;
-    },
-    setPolicyHooksConfig: (config) => {
-      policyHooksConfig = config;
-    },
+    setSkillState,
+    setHooksConfig,
+    setPolicyHooksConfig,
     getConfigMcp: () => configMcp,
     setConfigMcp: (v) => {
       configMcp = v;
@@ -723,7 +582,7 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
     },
     getAtomConflicts: () => atomConflicts,
     getAtomDetails: (packName: string) => atomDetailsByPack.get(packName),
-    getWorkspaceExperienceSnapshot: () => workspaceExperienceSnapshot,
+    getWorkspaceExperienceSnapshot,
     getWorkspaceExperienceApiHandler: (experienceId, method, path) =>
       registry.getWorkspaceExperienceApiHandler(experienceId, method, path),
     getWorkspaceExperiences: () => [...registry.workspaceExperiences.values()],

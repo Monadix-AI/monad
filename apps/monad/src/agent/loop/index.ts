@@ -1,18 +1,19 @@
-import type { Cost, Event, EventType, HookCaller, Hooks, TranscriptTargetId } from '@monad/protocol';
-import type { Tool, ToolGate } from '@/capabilities/tools/types.ts';
+import type { Cost, Event, EventType, TranscriptTargetId } from '@monad/protocol';
+import type { Tool } from '@/capabilities/tools/types.ts';
 import type { ModelMessage, ModelUsage, ToolCall, ToolSpec } from '../model/index.ts';
 import type { ExplicitSkill } from './explicit-skill.ts';
 import type { AgentLoopDeps, ChatMessage, ImageAttachment } from './types.ts';
 
-import { createLogger } from '@monad/logger';
-import { finishReasonSchema, NO_HOOKS, newId } from '@monad/protocol';
+import { finishReasonSchema, newId } from '@monad/protocol';
 
 import { computeCost } from '../model/cost.ts';
 import { BUDGET_EXCEEDED, TOOL_BUDGET_REACHED } from '../prompts.ts';
 import { resolveExplicitSkill, skillModelInput } from './explicit-skill.ts';
+import { HookOrchestrator } from './hook-orchestrator.ts';
 import { PromptBuilder } from './prompt-builder.ts';
-import { parseAllowedTools, renderSkillBody, toolMatchesAllowedPattern } from './skill-render.ts';
+import { renderSkillBody } from './skill-render.ts';
 import { ToolExecutor } from './tool-execution.ts';
+import { ToolGrant } from './tool-grant.ts';
 import { TurnWriter } from './turn-writer.ts';
 
 export type {
@@ -38,23 +39,15 @@ export {
 
 // Model⇄tool round-trips allowed per turn before forcing a direct answer. Absent → unlimited.
 
-// Times a Stop hook may force the agent to keep working in one turn before we stop honouring it —
-// a backstop so a misbehaving hook can't loop forever.
-const DEFAULT_MAX_STOP_CONTINUES = 2;
-
-const log = createLogger('tool-trace');
-
 export class AgentLoop {
-  // Tool patterns pre-approved by skills active this turn (allowed-tools). The loop is
-  // created fresh per turn, so this is turn-scoped — no cross-session/turn leakage.
-  private readonly grantedToolPatterns = new Set<string>();
+  // Hook orchestration (BeforeTurn/BeforeModel/AfterModel/AfterTurn) and the turn-scoped state
+  // hooks contribute (model override, injected context, stop-continue count).
+  private readonly hookOrchestrator: HookOrchestrator;
 
-  // Hook-contributed state for the current turn (UserPromptSubmit): extra system context to inject
-  // and an optional per-turn model override. Turn-scoped — the loop is rebuilt each turn.
-  private turnInjectedContext: string[] = [];
-  private turnModelOverride?: string;
-  // How many times a Stop hook has forced continuation this turn (bounded by maxStopContinues).
-  private stopContinueCount = 0;
+  // Tool patterns pre-approved by skills active this turn (allowed-tools) and the approval-gate
+  // wrapper that honours them. The loop is created fresh per turn, so this is turn-scoped — no
+  // cross-session/turn leakage.
+  private readonly toolGrant: ToolGrant;
 
   // History replay, system-prompt rendering, tool-spec caching, and context-window bookkeeping.
   private readonly prompt: PromptBuilder;
@@ -66,114 +59,38 @@ export class AgentLoop {
   private readonly writer: TurnWriter;
 
   constructor(private readonly deps: AgentLoopDeps) {
+    this.hookOrchestrator = new HookOrchestrator(deps);
+    this.toolGrant = new ToolGrant(
+      deps,
+      () => this.hookOrchestrator.hooks,
+      () => this.hookOrchestrator.hookCwd()
+    );
     this.prompt = new PromptBuilder(
       deps,
       () => this.availableTools,
-      () => this.modelId(),
+      () => this.hookOrchestrator.modelId(),
       (sessionId, type, payload) => this.deps.emit(this.event(sessionId, type, payload))
     );
     this.toolExecutor = new ToolExecutor(
       deps,
       () => this.availableTools,
-      () => this.hooks,
-      () => this.hookCwd(),
-      () => this.effectiveGate(),
+      () => this.hookOrchestrator.hooks,
+      () => this.hookOrchestrator.hookCwd(),
+      () => this.toolGrant.effectiveGate(),
       (sessionId, type, payload) => this.deps.emit(this.event(sessionId, type, payload)),
-      (context) => this.turnInjectedContext.push(...context),
-      (name) => this.activateSkill(name)
+      (context) => this.hookOrchestrator.turnInjectedContext.push(...context),
+      (name) => this.toolGrant.activateSkill(name)
     );
     this.writer = new TurnWriter(
       deps,
       (sessionId, type, payload) => this.deps.emit(this.event(sessionId, type, payload)),
       () => this.prompt,
       () => this.availableTools,
-      () => this.modelId(),
-      () => this.turnInjectedContext,
-      () => this.hooks,
-      () => this.hookCwd()
+      () => this.hookOrchestrator.modelId(),
+      () => this.hookOrchestrator.turnInjectedContext,
+      () => this.hookOrchestrator.hooks,
+      () => this.hookOrchestrator.hookCwd()
     );
-  }
-
-  private get hooks(): Hooks {
-    return this.deps.hooks ?? NO_HOOKS;
-  }
-
-  /** The model used for this turn — a UserPromptSubmit hook's override, else the configured default. */
-  private modelId(): string {
-    return this.turnModelOverride ?? this.deps.defaultModel;
-  }
-
-  /** cwd handed to command hooks — the resolved sandbox root (empty when unrestricted). */
-  private hookCwd(): string {
-    return this.deps.sandboxRoots?.[0] ?? '';
-  }
-
-  /** Who is driving this reasoning call — main turn vs a forked subagent (for BeforeModel/AfterModel). */
-  private hookCaller(): HookCaller {
-    return this.deps.subagentCaller
-      ? { kind: 'subagent', agentName: this.deps.subagentCaller.agentName }
-      : { kind: 'main' };
-  }
-
-  /** BeforeModel: fired before each reasoning LLM request. A hook may deny (abort the turn) or rewrite
-   *  the request's messages. Returns the (possibly rewritten) messages to send. */
-  private async beforeModel(sessionId: TranscriptTargetId, messages: ModelMessage[]): Promise<ModelMessage[]> {
-    const d = await this.hooks.run({
-      event: 'BeforeModel',
-      sessionId,
-      cwd: this.hookCwd(),
-      timestamp: new Date().toISOString(),
-      caller: this.hookCaller(),
-      request: { model: this.modelId(), messages }
-    });
-    if (d.blocked) throw new Error(d.reason ?? 'model call blocked by hook');
-    const req = d.effectiveRequest as { messages?: ModelMessage[] } | undefined;
-    return req?.messages ?? messages;
-  }
-
-  /** AfterModel: fired after a SUCCESSFUL reasoning LLM response. A hook may rewrite the response text
-   *  (e.g. redact). Returns the (possibly rewritten) text. A failed model call doesn't fire this — it
-   *  ends the turn via the catch → emitError → AfterTurn(reason:'error') path. */
-  private async afterModel(sessionId: TranscriptTargetId, text: string): Promise<string> {
-    const d = await this.hooks.run({
-      event: 'AfterModel',
-      sessionId,
-      cwd: this.hookCwd(),
-      timestamp: new Date().toISOString(),
-      caller: this.hookCaller(),
-      response: text
-    });
-    return d.effectiveText ?? text;
-  }
-
-  /**
-   * Run the UserPromptSubmit hook before the turn begins: it may deny (abort), rewrite the prompt,
-   * override the model, or inject context. Records override/context as turn state and returns the
-   * effective prompt or a block reason.
-   */
-  private async userPromptSubmit(
-    sessionId: TranscriptTargetId,
-    userText: string
-  ): Promise<{ blocked: true; reason: string } | { blocked: false; text: string }> {
-    const d = await this.hooks.run({
-      event: 'BeforeTurn',
-      sessionId,
-      cwd: this.hookCwd(),
-      timestamp: new Date().toISOString(),
-      prompt: userText
-    });
-    // Apply a hook's model override only if the daemon vouches for it (a configured profile or a
-    // "provider:model" spec). A bogus override is dropped so the turn falls back to the default
-    // model instead of failing downstream at the gateway.
-    if (d.modelOverride && (this.deps.isModelAllowed?.(d.modelOverride) ?? true)) {
-      this.turnModelOverride = d.modelOverride;
-    } else if (d.modelOverride) {
-      // Don't silently swallow a rejected override — surface it so a misconfigured hook is debuggable.
-      log.warn({ sessionId, modelOverride: d.modelOverride }, 'hook requested a disallowed model — ignored');
-    }
-    if (d.additionalContext.length) this.turnInjectedContext.push(...d.additionalContext);
-    if (d.blocked) return { blocked: true, reason: d.reason ?? 'blocked by hook' };
-    return { blocked: false, text: d.effectivePrompt ?? userText };
   }
 
   /** Tools usable this run: the agent's base tools plus any per-run `extraTools` (e.g. an ACP
@@ -191,50 +108,6 @@ export class AgentLoop {
     return cc(usage, undefined, usage?.costUsd);
   }
 
-  private activateSkill(name: string): void {
-    const skill = (this.deps.skills ?? []).find((s) => s.name === name);
-    if (skill?.allowedTools) for (const p of parseAllowedTools(skill.allowedTools)) this.grantedToolPatterns.add(p);
-  }
-
-  private isToolGranted(toolName: string): boolean {
-    for (const pattern of this.grantedToolPatterns) {
-      if (toolMatchesAllowedPattern(pattern, toolName)) return true;
-    }
-    return false;
-  }
-
-  /**
-   * The gate handed to invokeTool. When no skill has granted anything, it's the underlying
-   * gate unchanged (so existing fail-closed behaviour is preserved). Once an active skill
-   * grants a tool, that tool is auto-approved; everything else still defers to the gate.
-   */
-  private gateWrapper?: ToolGate;
-  private effectiveGate(): ToolGate | undefined {
-    // Build the wrapper once and reuse it across tool calls (grantedToolPatterns is read live inside
-    // isToolGranted, so memoizing doesn't stale the grant set; deps.gate is stable for this loop).
-    // Always wrap so ApprovalRequest fires whenever a tool actually reaches the gate (high-risk or
-    // hook-forced). A hook may auto-deny or auto-approve; `ask`/no-decision defers to the human gate.
-    // (ApprovalRequest with no configured hooks takes the runner's zero-allocation fast path.)
-    if (!this.gateWrapper) {
-      this.gateWrapper = async (request) => {
-        if (this.isToolGranted(request.tool)) return { allow: true };
-        const d = await this.hooks.run({
-          event: 'ApprovalRequest',
-          sessionId: request.sessionId as TranscriptTargetId,
-          cwd: this.hookCwd(),
-          timestamp: new Date().toISOString(),
-          toolName: request.tool,
-          toolInput: request.input
-        });
-        if (d.blocked) return { allow: false, reason: d.reason ?? 'denied by approval hook' };
-        if (d.allowed && !d.ask) return { allow: true };
-        if (this.deps.gate) return this.deps.gate(request);
-        return { allow: false, reason: 'high-risk tool requires an approval gate but none is configured' };
-      };
-    }
-    return this.gateWrapper;
-  }
-
   async runStream(
     sessionId: TranscriptTargetId,
     userText: string,
@@ -243,7 +116,7 @@ export class AgentLoop {
   ): Promise<void> {
     this.prompt.setAttachments(attachments);
     this.prompt.resetSkillExpansion();
-    const submit = await this.userPromptSubmit(sessionId, userText);
+    const submit = await this.hookOrchestrator.userPromptSubmit(sessionId, userText);
     if (submit.blocked) {
       // Persist the user's (raw) prompt before the policy reply so the transcript shows what was
       // denied — a denied turn still has a user bubble, not an orphan assistant message.
@@ -257,7 +130,7 @@ export class AgentLoop {
     const ex = resolveExplicitSkill(this.deps.skills ?? [], userText);
     if (ex?.skill.fork && this.deps.runFork) {
       const messageId = await this.writer.beginTurn(sessionId, userText);
-      this.activateSkill(ex.skill.name);
+      this.toolGrant.activateSkill(ex.skill.name);
       try {
         const result = await this.deps.runFork(
           renderSkillBody(ex.skill.body, ex.argString, ex.skill.dir),
@@ -289,8 +162,8 @@ export class AgentLoop {
       let reasoning = '';
       let usage: ModelUsage | undefined;
       for await (const chunk of this.deps.model.stream({
-        model: this.modelId(),
-        messages: await this.beforeModel(sessionId, messages),
+        model: this.hookOrchestrator.modelId(),
+        messages: await this.hookOrchestrator.beforeModel(sessionId, messages),
         sessionId,
         userId: this.deps.userId
       })) {
@@ -312,10 +185,15 @@ export class AgentLoop {
 
       this.prompt.noteUsage(usage);
       // AfterModel fires immediately after each model call (here the single streamed response).
-      text = await this.afterModel(sessionId, text);
+      text = await this.hookOrchestrator.afterModel(sessionId, text);
       if (!(await seg.settle(text, reasoning))) await this.writer.appendEmptyAnswer(sessionId, messageId);
       // No tool loop here, so a Stop hook can only observe + rewrite the final text (no continuation).
-      const stop = await this.runStopHook(sessionId, text, usage, signal?.aborted ? 'aborted' : 'completed');
+      const stop = await this.hookOrchestrator.runStopHook(
+        sessionId,
+        text,
+        usage,
+        signal?.aborted ? 'aborted' : 'completed'
+      );
       if (stop.text !== text) await this.writer.repersistFinalText(sessionId, messageId, stop.text);
       await this.writer.finishBookkeeping(sessionId, messageId, stop.text, usage);
     } catch (err) {
@@ -331,7 +209,7 @@ export class AgentLoop {
   ): Promise<ChatMessage> {
     this.prompt.setAttachments(attachments);
     this.prompt.resetSkillExpansion();
-    const submit = await this.userPromptSubmit(sessionId, userText);
+    const submit = await this.hookOrchestrator.userPromptSubmit(sessionId, userText);
     if (submit.blocked) {
       const messageId = await this.writer.beginTurn(sessionId, userText);
       return this.writer.finishTurn(sessionId, messageId, submit.reason);
@@ -342,7 +220,7 @@ export class AgentLoop {
     const ex = resolveExplicitSkill(this.deps.skills ?? [], userText);
     if (ex?.skill.fork && this.deps.runFork) {
       const messageId = await this.writer.beginTurn(sessionId, userText);
-      this.activateSkill(ex.skill.name);
+      this.toolGrant.activateSkill(ex.skill.name);
       try {
         const result = await this.deps.runFork(
           renderSkillBody(ex.skill.body, ex.argString, ex.skill.dir),
@@ -368,15 +246,15 @@ export class AgentLoop {
 
       const messages = await this.prompt.prepare(sessionId, await this.prompt.buildPrompt(sessionId));
       const result = await this.deps.model.complete({
-        model: this.modelId(),
-        messages: await this.beforeModel(sessionId, messages),
+        model: this.hookOrchestrator.modelId(),
+        messages: await this.hookOrchestrator.beforeModel(sessionId, messages),
         sessionId,
         userId: this.deps.userId
       });
       const parsed = finishReasonSchema.safeParse(result.finishReason);
       this.prompt.noteUsage(result.usage);
-      const responseText = await this.afterModel(sessionId, result.text);
-      const stop = await this.runStopHook(sessionId, responseText, result.usage);
+      const responseText = await this.hookOrchestrator.afterModel(sessionId, result.text);
+      const stop = await this.hookOrchestrator.runStopHook(sessionId, responseText, result.usage);
       return this.writer.finishTurn(
         sessionId,
         messageId,
@@ -401,7 +279,7 @@ export class AgentLoop {
   private async runToolLoop(sessionId: TranscriptTargetId): Promise<{ text: string; usage?: ModelUsage }> {
     const maxTurns = this.deps.maxTurns;
     const maxBudgetUsd = this.deps.maxBudgetUsd;
-    let messages = await this.prompt.buildPrompt(sessionId, true, this.turnInjectedContext);
+    let messages = await this.prompt.buildPrompt(sessionId, true, this.hookOrchestrator.turnInjectedContext);
     const tools = this.prompt.toolSpecs();
     let step = 0;
     let accumulatedCostUsd = 0;
@@ -415,15 +293,15 @@ export class AgentLoop {
     for (; step < stepLimit && !budgetExceeded(); step++) {
       messages = await this.prompt.prepare(sessionId, messages); // re-bound each step: tool round-trips grow it
       const result = await this.deps.model.complete({
-        model: this.modelId(),
-        messages: await this.beforeModel(sessionId, messages),
+        model: this.hookOrchestrator.modelId(),
+        messages: await this.hookOrchestrator.beforeModel(sessionId, messages),
         tools,
         sessionId,
         userId: this.deps.userId
       });
       this.prompt.noteUsage(result.usage);
       // AfterModel fires per model step — including the intermediate responses that carry tool calls.
-      const responseText = await this.afterModel(sessionId, result.text);
+      const responseText = await this.hookOrchestrator.afterModel(sessionId, result.text);
 
       // Accumulate USD cost from this step when a budget is set.
       if (maxBudgetUsd && result.usage) {
@@ -443,7 +321,7 @@ export class AgentLoop {
 
       if (!clientCalls.length) {
         // Candidate final answer — a Stop hook may force the agent to keep working.
-        const stop = await this.runStopHook(sessionId, responseText, result.usage);
+        const stop = await this.hookOrchestrator.runStopHook(sessionId, responseText, result.usage);
         if (stop.continueReason) {
           messages.push({ role: 'assistant', content: responseText });
           messages.push({ role: 'user', content: stop.continueReason });
@@ -458,12 +336,16 @@ export class AgentLoop {
     const budgetMsg = budgetExceeded() ? BUDGET_EXCEEDED : TOOL_BUDGET_REACHED;
     messages.push({ role: 'user', content: budgetMsg });
     const result = await this.deps.model.complete({
-      model: this.modelId(),
-      messages: await this.beforeModel(sessionId, messages),
+      model: this.hookOrchestrator.modelId(),
+      messages: await this.hookOrchestrator.beforeModel(sessionId, messages),
       sessionId,
       userId: this.deps.userId
     });
-    const stop = await this.runStopHook(sessionId, await this.afterModel(sessionId, result.text), result.usage);
+    const stop = await this.hookOrchestrator.runStopHook(
+      sessionId,
+      await this.hookOrchestrator.afterModel(sessionId, result.text),
+      result.usage
+    );
     return { text: stop.text, usage: result.usage };
   } // budget-exhausted single answer — afterModel + runStopHook fire once on this final response
 
@@ -481,7 +363,7 @@ export class AgentLoop {
   ): Promise<void> {
     const maxTurns = this.deps.maxTurns;
     const maxBudgetUsd = this.deps.maxBudgetUsd;
-    let messages = await this.prompt.buildPrompt(sessionId, true, this.turnInjectedContext);
+    let messages = await this.prompt.buildPrompt(sessionId, true, this.hookOrchestrator.turnInjectedContext);
     const tools = this.prompt.toolSpecs();
     let segmentId = messageId; // the first text segment reuses the id beginTurn allocated
     let reasonBase = 0;
@@ -539,7 +421,12 @@ export class AgentLoop {
       if (isFinal) {
         // Candidate final answer — a Stop hook may force the agent to keep working. (AfterModel
         // already fired inside streamStep, so `text` is the post-AfterModel response here.)
-        const stop = await this.runStopHook(sessionId, text, lastUsage, signal?.aborted ? 'aborted' : 'completed');
+        const stop = await this.hookOrchestrator.runStopHook(
+          sessionId,
+          text,
+          lastUsage,
+          signal?.aborted ? 'aborted' : 'completed'
+        );
         if (stop.continueReason) {
           // Record this (already-settled) answer in the model context, inject the continue
           // instruction, and re-enter with a fresh segment.
@@ -565,8 +452,8 @@ export class AgentLoop {
     let finalText = '';
     let finalUsage: ModelUsage | undefined;
     for await (const chunk of this.deps.model.stream({
-      model: this.modelId(),
-      messages: await this.beforeModel(sessionId, messages),
+      model: this.hookOrchestrator.modelId(),
+      messages: await this.hookOrchestrator.beforeModel(sessionId, messages),
       sessionId,
       userId: this.deps.userId
     })) {
@@ -581,9 +468,9 @@ export class AgentLoop {
       seg.emitToken(chunk.token);
     }
     if (!(await seg.settle(finalText))) await this.writer.appendEmptyAnswer(sessionId, segmentId);
-    const stop = await this.runStopHook(
+    const stop = await this.hookOrchestrator.runStopHook(
       sessionId,
-      await this.afterModel(sessionId, finalText),
+      await this.hookOrchestrator.afterModel(sessionId, finalText),
       finalUsage ?? lastUsage,
       signal?.aborted ? 'aborted' : 'completed'
     );
@@ -620,8 +507,8 @@ export class AgentLoop {
     const providerExecuted: Array<{ call: ToolCall; output: string }> = [];
 
     for await (const chunk of this.deps.model.stream({
-      model: this.modelId(),
-      messages: await this.beforeModel(sessionId, messages),
+      model: this.hookOrchestrator.modelId(),
+      messages: await this.hookOrchestrator.beforeModel(sessionId, messages),
       tools,
       sessionId,
       userId: this.deps.userId
@@ -656,44 +543,15 @@ export class AgentLoop {
     }
     // AfterModel fires per model step here — every streamed step (intermediate tool steps included),
     // paired with this method's BeforeModel, so the rewritten text flows to settle / tools / final.
-    const afterText = await this.afterModel(sessionId, text);
+    const afterText = await this.hookOrchestrator.afterModel(sessionId, text);
     return { text: afterText, reasoning, calls, providerExecuted, usage };
   }
 
   private applyNonForkSkill(ex: ExplicitSkill): string {
-    this.activateSkill(ex.skill.name);
+    this.toolGrant.activateSkill(ex.skill.name);
     const body = renderSkillBody(ex.skill.body, ex.argString, ex.skill.dir);
     this.prompt.setSkillExpansion(body);
     return body;
-  }
-
-  /**
-   * Fire the Stop hook at a turn's final answer. Returns the (possibly rewritten) final text and, in
-   * the agentic tool loops, a `continueReason` when a hook forces the agent to keep working — bounded
-   * by `maxStopContinues` so a hook can't loop forever. Fired exactly once per final-answer decision.
-   */
-  private async runStopHook(
-    sessionId: TranscriptTargetId,
-    text: string,
-    usage?: ModelUsage,
-    reason: 'completed' | 'aborted' = 'completed'
-  ): Promise<{ text: string; continueReason?: string }> {
-    const d = await this.hooks.run({
-      event: 'AfterTurn',
-      sessionId,
-      cwd: this.hookCwd(),
-      timestamp: new Date().toISOString(),
-      reason,
-      ok: reason === 'completed',
-      usage
-    });
-    const finalText = d.effectiveText ?? text;
-    const max = this.deps.maxStopContinues ?? DEFAULT_MAX_STOP_CONTINUES;
-    if (d.continueWork && this.stopContinueCount < max) {
-      this.stopContinueCount++;
-      return { text: finalText, continueReason: d.continueWork.reason };
-    }
-    return { text: finalText };
   }
 
   private event(sessionId: TranscriptTargetId, type: EventType, payload: object): Event {

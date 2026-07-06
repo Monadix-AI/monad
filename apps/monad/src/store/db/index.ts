@@ -102,7 +102,6 @@ import {
   updateNativeCliSessionRef,
   upsertNativeCliSession
 } from './native-cli-sessions.ts';
-import { tasks } from './schema.ts';
 import {
   clearEmbeddings,
   messagesMissingEmbedding,
@@ -140,6 +139,7 @@ import {
   ledgerBreakdown,
   recordLedger
 } from './stats.ts';
+import { casTaskState, insertTask } from './tasks.ts';
 
 export type { ChatMessage } from '@monad/protocol';
 export type { AcpDelegateRow } from './acp-delegates.ts';
@@ -315,25 +315,12 @@ export class Store {
   }
 
   insertTask(t: Task): void {
-    this.db
-      .insert(tasks)
-      .values({
-        ...t,
-        dependsOn: JSON.stringify(t.dependsOn),
-        result: t.result !== undefined ? JSON.stringify(t.result) : null,
-        error: t.error !== undefined ? JSON.stringify(t.error) : null
-      })
-      .run();
+    insertTask(this.db, t);
   }
 
   /** Optimistic-concurrency CAS on `version`; returns true iff the row was updated. */
   casTaskState(id: string, expectedVersion: number, next: TaskState, updatedAt: string): boolean {
-    const result = this.sqlite
-      .query(
-        'UPDATE tasks SET state=$next, version=version+1, updated_at=$updatedAt WHERE id=$id AND version=$expected'
-      )
-      .run({ $next: next, $updatedAt: updatedAt, $id: id, $expected: expectedVersion });
-    return result.changes === 1;
+    return casTaskState(this.sqlite, id, expectedVersion, next, updatedAt);
   }
 
   insertMessage(
