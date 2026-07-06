@@ -13,6 +13,7 @@ export function InitProviderListStep({
   goAddKeyToProvider,
   goPickType,
   goToModelStep,
+  onSkip,
   onBack,
   providers,
   removeKey,
@@ -23,6 +24,7 @@ export function InitProviderListStep({
   goAddKeyToProvider: (provider: DraftProvider) => void;
   goPickType: () => void;
   goToModelStep: () => void;
+  onSkip: () => void;
   onBack: () => void;
   providers: DraftProvider[];
   removeKey: (providerId: string, keyId: string) => void;
@@ -77,13 +79,22 @@ export function InitProviderListStep({
         >
           {t('web.init.back')}
         </button>
-        <Button
-          disabled={providers.length === 0}
-          onClick={goToModelStep}
-          size="sm"
-        >
-          {t('web.init.continueArrow')}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            onClick={onSkip}
+            size="sm"
+            variant="ghost"
+          >
+            {t('web.init.skipForNow')}
+          </Button>
+          <Button
+            disabled={providers.length === 0}
+            onClick={goToModelStep}
+            size="sm"
+          >
+            {t('web.init.continueArrow')}
+          </Button>
+        </div>
       </div>
     </div>
   );

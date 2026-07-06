@@ -4,7 +4,7 @@ import type { AgentId, ModelInfo, ProviderView } from '@monad/protocol';
 import type { DraftKey, DraftProvider } from './InitWizardTypes';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { CheckIcon, PlusSignIcon } from '@hugeicons/core-free-icons';
+import { CheckIcon, CpuIcon, NeuralNetworkIcon, PlusSignIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import {
   agentSelectors,
@@ -35,6 +35,7 @@ import { useMonadRuntime } from '@/lib/monad-runtime-provider';
 import { useProviderMeta } from '@/lib/ProviderMeta';
 import { SECRET_INPUT_PASSWORD_MANAGER_PROPS } from '@/lib/secret-input-props';
 import { InitAgentStep } from './InitAgentStep';
+import { InitMeshStep } from './InitMeshStep';
 import { InitModelStep } from './InitModelStep';
 import { InitProviderListStep, InitProviderTypePickerStep } from './InitProviderSteps';
 import { InitDoneView, InitRestartingView, InitWizardFrame, InitWizardHeader } from './InitWizardLayout';
@@ -44,13 +45,13 @@ function dedupeModels(ms: ModelInfo[]): ModelInfo[] {
   return ms.filter((m) => !seen.has(m.id) && !!seen.add(m.id));
 }
 
-type Step = 'home' | 'provider' | 'model' | 'agent';
+type Step = 'choice' | 'provider' | 'model' | 'agent' | 'mesh';
 type ProviderSubStep = 'list' | 'pick-type' | 'add-key';
 
 export function InitWizard({ homePath }: { homePath?: string }) {
   const t = useT();
   const { client: monadClient } = useMonadRuntime();
-  const [step, setStep] = useState<Step>('home');
+  const [step, setStep] = useState<Step>('choice');
   const [customHome, setCustomHome] = useState('');
   const [homeError, setHomeError] = useState('');
   const [restarting, setRestarting] = useState(false);
@@ -212,7 +213,9 @@ export function InitWizard({ homePath }: { homePath?: string }) {
     });
   }
 
-  async function handleSetHome() {
+  const enterMonad = () => window.location.assign('/');
+
+  async function handleSetHome(nextStep: Step) {
     setHomeError('');
     if (customHome) {
       setRestarting(true);
@@ -233,7 +236,7 @@ export function InitWizard({ homePath }: { homePath?: string }) {
       }
       setRestarting(false);
     }
-    setStep('provider');
+    setStep(nextStep);
   }
 
   async function handleTest() {
@@ -411,34 +414,38 @@ export function InitWizard({ homePath }: { homePath?: string }) {
   }
 
   const title =
-    step === 'home'
-      ? t('web.init.titleHome')
-      : step === 'model'
-        ? t('web.init.titleModel')
-        : step === 'agent'
-          ? t('web.init.titleAgent')
-          : subStep === 'pick-type'
-            ? t('web.init.titlePickType')
-            : subStep === 'add-key'
-              ? t('web.init.titleAddKey', { provider: addingMeta?.label ?? addingType })
-              : t('web.init.titleProviders');
+    step === 'choice'
+      ? t('web.init.titleChoice')
+      : step === 'mesh'
+        ? t('web.init.titleMesh')
+        : step === 'model'
+          ? t('web.init.titleModel')
+          : step === 'agent'
+            ? t('web.init.titleAgent')
+            : subStep === 'pick-type'
+              ? t('web.init.titlePickType')
+              : subStep === 'add-key'
+                ? t('web.init.titleAddKey', { provider: addingMeta?.label ?? addingType })
+                : t('web.init.titleProviders');
 
   const description =
-    step === 'home'
-      ? t('web.init.descHome')
-      : step === 'agent'
-        ? t('web.init.descAgent')
-        : step === 'model'
-          ? t('web.init.descModel')
-          : subStep === 'list'
-            ? t('web.init.descList')
-            : subStep === 'pick-type'
-              ? t('web.init.descPickType')
-              : addingExistingProvider
-                ? t('web.init.descAddKeyExisting', { provider: addingMeta?.label ?? addingType })
-                : t('web.init.descAddKey');
+    step === 'choice'
+      ? t('web.init.descChoice')
+      : step === 'mesh'
+        ? t('web.init.descMesh')
+        : step === 'agent'
+          ? t('web.init.descAgent')
+          : step === 'model'
+            ? t('web.init.descModel')
+            : subStep === 'list'
+              ? t('web.init.descList')
+              : subStep === 'pick-type'
+                ? t('web.init.descPickType')
+                : addingExistingProvider
+                  ? t('web.init.descAddKeyExisting', { provider: addingMeta?.label ?? addingType })
+                  : t('web.init.descAddKey');
 
-  const stepIndex = step === 'home' ? 0 : step === 'provider' ? 1 : step === 'model' ? 2 : 3;
+  const stepIndex = step === 'choice' ? 0 : step === 'provider' || step === 'mesh' ? 1 : step === 'model' ? 2 : 3;
 
   const renderWizardContent = () => (
     <>
@@ -454,25 +461,66 @@ export function InitWizard({ homePath }: { homePath?: string }) {
         className="animate-init-fade"
         key={`${step}:${subStep}`}
       >
-        {step === 'home' && (
+        {step === 'choice' && (
           <div className="flex flex-col gap-4">
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="home-path">{t('web.init.homeLabel')}</Label>
-              <p className="break-all font-mono text-muted-foreground text-xs">{homePath ?? '~/.monad'}</p>
-              <Input
-                id="home-path"
-                onChange={(e) => setCustomHome(e.target.value)}
-                placeholder={t('web.init.homePlaceholder')}
-                value={customHome}
-              />
-              {homeError && <p className="text-destructive text-xs">{homeError}</p>}
-              {customHome && <p className="text-muted-foreground text-xs">{t('web.init.homeRestartNote')}</p>}
+            <div className="grid gap-3 sm:grid-cols-2">
+              <button
+                className="panel-subtle flex min-h-40 flex-col items-start gap-4 px-4 py-4 text-left transition hover:-translate-y-0.5 hover:border-foreground/30 hover:bg-accent active:translate-y-0"
+                onClick={() => void handleSetHome('provider')}
+                type="button"
+              >
+                <span className="flex size-10 items-center justify-center rounded-md border bg-background">
+                  <HugeiconsIcon
+                    className="size-5"
+                    icon={CpuIcon}
+                  />
+                </span>
+                <span className="min-w-0">
+                  <span className="block font-medium text-base">{t('web.init.runtimePileTitle')}</span>
+                  <span className="mt-2 block text-muted-foreground text-sm">{t('web.init.runtimePileDesc')}</span>
+                </span>
+              </button>
+              <button
+                className="panel-subtle flex min-h-40 flex-col items-start gap-4 px-4 py-4 text-left transition hover:-translate-y-0.5 hover:border-foreground/30 hover:bg-accent active:translate-y-0"
+                onClick={() => void handleSetHome('mesh')}
+                type="button"
+              >
+                <span className="flex size-10 items-center justify-center rounded-md border bg-background">
+                  <HugeiconsIcon
+                    className="size-5"
+                    icon={NeuralNetworkIcon}
+                  />
+                </span>
+                <span className="min-w-0">
+                  <span className="block font-medium text-base">{t('web.init.meshPileTitle')}</span>
+                  <span className="mt-2 block text-muted-foreground text-sm">{t('web.init.meshPileDesc')}</span>
+                </span>
+              </button>
             </div>
+            <details className="rounded-md border bg-muted/20">
+              <summary className="cursor-pointer px-3 py-2 text-muted-foreground text-xs hover:text-foreground">
+                {t('web.init.homeAdvanced')}
+              </summary>
+              <div className="flex flex-col gap-2 border-t px-3 py-3">
+                <Label htmlFor="home-path">{t('web.init.homeLabel')}</Label>
+                <p className="break-all font-mono text-muted-foreground text-xs">{homePath ?? '~/.monad'}</p>
+                <Input
+                  id="home-path"
+                  onChange={(e) => setCustomHome(e.target.value)}
+                  placeholder={t('web.init.homePlaceholder')}
+                  value={customHome}
+                />
+                {homeError && <p className="text-destructive text-xs">{homeError}</p>}
+                {customHome && <p className="text-muted-foreground text-xs">{t('web.init.homeRestartNote')}</p>}
+              </div>
+            </details>
             <Button
-              className="w-full hover:-translate-y-0.5 active:translate-y-0"
-              onClick={handleSetHome}
+              className="self-start"
+              onClick={enterMonad}
+              size="sm"
+              variant="ghost"
             >
-              {t('web.init.continue')}
+              {t('web.init.enterMonad')}
             </Button>
           </div>
         )}
@@ -483,10 +531,19 @@ export function InitWizard({ homePath }: { homePath?: string }) {
             goPickType={goPickType}
             goToModelStep={goToModelStep}
             metaFor={metaFor}
-            onBack={() => setStep('home')}
+            onBack={() => setStep('choice')}
+            onSkip={enterMonad}
             providers={providers}
             removeKey={removeKey}
             saveError={saveError}
+            t={t}
+          />
+        )}
+
+        {step === 'mesh' && (
+          <InitMeshStep
+            onBack={() => setStep('choice')}
+            onEnter={enterMonad}
             t={t}
           />
         )}
@@ -629,21 +686,31 @@ export function InitWizard({ homePath }: { homePath?: string }) {
         )}
 
         {step === 'model' && (
-          <InitModelStep
-            metaFor={metaFor}
-            modelFilter={modelFilter}
-            onBack={() => setStep('provider')}
-            onSave={handleSave}
-            providers={providers}
-            saveError={saveError}
-            saving={saving}
-            selectedModelId={selectedModelId}
-            selectedProviderId={selectedProviderId}
-            setModelFilter={setModelFilter}
-            setSelectedModelId={setSelectedModelId}
-            setSelectedProviderId={setSelectedProviderId}
-            t={t}
-          />
+          <div className="flex flex-col gap-3">
+            <InitModelStep
+              metaFor={metaFor}
+              modelFilter={modelFilter}
+              onBack={() => setStep('provider')}
+              onSave={handleSave}
+              providers={providers}
+              saveError={saveError}
+              saving={saving}
+              selectedModelId={selectedModelId}
+              selectedProviderId={selectedProviderId}
+              setModelFilter={setModelFilter}
+              setSelectedModelId={setSelectedModelId}
+              setSelectedProviderId={setSelectedProviderId}
+              t={t}
+            />
+            <Button
+              className="self-end"
+              onClick={enterMonad}
+              size="sm"
+              variant="ghost"
+            >
+              {t('web.init.skipForNow')}
+            </Button>
+          </div>
         )}
 
         {step === 'agent' && (
@@ -654,6 +721,7 @@ export function InitWizard({ homePath }: { homePath?: string }) {
             agentSaving={agentSaving}
             onBack={() => setStep('model')}
             onSave={() => void handleAgentSave()}
+            onSkip={enterMonad}
             savedModelAlias={savedModelAlias}
             setAgentCapabilities={setAgentCapabilities}
             setAgentName={setAgentName}

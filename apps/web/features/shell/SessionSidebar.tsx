@@ -31,6 +31,7 @@ interface Props {
   studioPileActive: boolean;
   workspacePileActive: boolean;
   monadChatActive: boolean;
+  runtimeReady: boolean;
   activeProjectId: string | null;
   daemonBaseUrl: string;
   daemonStatus: 'checking' | 'online' | 'offline';
@@ -74,6 +75,7 @@ export function SessionSidebar({
   studioPileActive,
   workspacePileActive,
   monadChatActive,
+  runtimeReady,
   activeProjectId,
   daemonBaseUrl,
   daemonStatus,
@@ -275,6 +277,7 @@ export function SessionSidebar({
               <StudioSidebarItems
                 activeSection={studioSection}
                 onSelect={onOpenStudioSection}
+                runtimeReady={runtimeReady}
                 shortcutModifierLabel={shortcutModifierLabel}
                 showShortcutBadges={showShortcutBadges}
                 t={t}

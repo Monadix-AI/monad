@@ -224,6 +224,18 @@ async function mockModelSettingsApi(
     if (method === 'GET' && path === '/v1/commands') {
       return route.fulfill(json({ commands: [] }));
     }
+    if (method === 'GET' && path === '/v1/workplace/projects') {
+      return route.fulfill(json({ projects: [] }));
+    }
+    if (method === 'GET' && (path === '/v1/native-cli-runtimes' || path === '/v1/native-cli-session-summaries')) {
+      return route.fulfill(json({ sessions: [] }));
+    }
+    if (method === 'GET' && path === '/v1/settings/locale') {
+      return route.fulfill(json({ locale: 'en' }));
+    }
+    if (method === 'GET' && path === '/v1/i18n/catalog') {
+      return route.fulfill(json({ locale: 'en', messages: {} }));
+    }
     if (method === 'GET' && path === '/v1/agents') {
       return route.fulfill(json({ agents: options.agents ?? [] }));
     }
@@ -239,6 +251,9 @@ async function mockModelSettingsApi(
     }
     if (method === 'GET' && path === '/v1/settings/model/providers') {
       return route.fulfill(json({ providers }));
+    }
+    if (method === 'GET' && path === '/v1/settings/model/roles') {
+      return route.fulfill(json({ roles: {} }));
     }
     if (method === 'PUT' && path.startsWith('/v1/settings/model/providers/')) {
       const body = request.postDataJSON() as { provider: Provider };

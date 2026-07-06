@@ -13,6 +13,7 @@ export function InitAgentStep({
   agentSaving,
   onBack,
   onSave,
+  onSkip,
   savedModelAlias,
   setAgentCapabilities,
   setAgentName
@@ -23,6 +24,7 @@ export function InitAgentStep({
   agentSaving: boolean;
   onBack: () => void;
   onSave: () => void;
+  onSkip?: () => void;
   savedModelAlias: string;
   setAgentCapabilities: (value: string) => void;
   setAgentName: (value: string) => void;
@@ -70,26 +72,37 @@ export function InitAgentStep({
         >
           {t('web.init.back')}
         </button>
-        <Button
-          disabled={!agentName.trim() || agentSaving}
-          onClick={onSave}
-          size="sm"
-        >
-          {agentSaving ? (
-            <span className="flex items-center gap-2">
-              <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
-              {t('web.init.creating')}
-            </span>
-          ) : (
-            <span className="flex items-center gap-1.5">
-              <HugeiconsIcon
-                className="h-3.5 w-3.5"
-                icon={CheckIcon}
-              />
-              {t('web.init.complete')}
-            </span>
-          )}
-        </Button>
+        <div className="flex items-center gap-2">
+          {onSkip ? (
+            <Button
+              onClick={onSkip}
+              size="sm"
+              variant="ghost"
+            >
+              {t('web.init.skipForNow')}
+            </Button>
+          ) : null}
+          <Button
+            disabled={!agentName.trim() || agentSaving}
+            onClick={onSave}
+            size="sm"
+          >
+            {agentSaving ? (
+              <span className="flex items-center gap-2">
+                <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                {t('web.init.creating')}
+              </span>
+            ) : (
+              <span className="flex items-center gap-1.5">
+                <HugeiconsIcon
+                  className="h-3.5 w-3.5"
+                  icon={CheckIcon}
+                />
+                {t('web.init.complete')}
+              </span>
+            )}
+          </Button>
+        </div>
       </div>
     </div>
   );
