@@ -4,6 +4,7 @@ import type { StudioSectionId } from '@/features/studio/sections';
 import type { RemoteDaemonConnection } from '@/lib/daemon-connections';
 
 import { cn } from '@monad/ui';
+import { animate, motion, useMotionValue, useReducedMotion, useTransform } from 'motion/react';
 import {
   type CSSProperties,
   type KeyboardEvent as ReactKeyboardEvent,
@@ -11,6 +12,7 @@ import {
   type PointerEvent as ReactPointerEvent,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState
 } from 'react';
@@ -19,6 +21,11 @@ import { useT } from '@/components/I18nProvider';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { DaemonMenu } from './SessionSidebarDaemonMenu';
 import { type ProjectItem, SidebarHeader, StudioSidebarItems, WorkspaceSidebarItems } from './SessionSidebarNav';
+import {
+  createSidebarPagerGesture,
+  sidebarTrackpadEdgeAccum,
+  sidebarTrackpadEdgeOffset
+} from './sidebar-trackpad-switch';
 
 interface Props {
   autoCollapseOnPointerLeave?: boolean;
@@ -59,6 +66,15 @@ const MIN_SIDEBAR_WIDTH = 240;
 const MAX_SIDEBAR_WIDTH = 420;
 const SIDEBAR_WIDTH_STORAGE_KEY = 'monad:web:sidebar-width';
 const AUTO_REVEAL_CLOSE_ANIMATION_MS = 200;
+const TRACKPAD_GESTURE_RELEASE_MS = 96;
+const TRACKPAD_EDGE_MARGIN_PX = 12;
+const TRACKPAD_PAGE_TURN_THRESHOLD_RATIO = 0.4;
+const PANEL_SNAP_SCROLL_DURATION_S = 0.16;
+const PANEL_SNAP_SCROLL_EASE = [0.33, 1, 0.68, 1] as const;
+const TRACKPAD_RELEASE_VELOCITY_PX_S = 1200;
+const TRACKPAD_BOUNCE_TRANSLATE_RATIO = 0.3;
+const TRACKPAD_BOUNCE_DEG_PER_PX = 0.09;
+const TRACKPAD_BOUNCE_MAX_DEG = 28;
 
 function clampSidebarWidth(width: number): number {
   return Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, width));
@@ -100,9 +116,30 @@ export function SessionSidebar({
   const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR_WIDTH);
   const [resizing, setResizing] = useState(false);
   const [autoRevealClosing, setAutoRevealClosing] = useState(false);
-  const previousShowStudioRef = useRef(showStudio);
+  const currentShowStudioRef = useRef(showStudio);
+  const sidebarRef = useRef<HTMLElement | null>(null);
+  const panelScrollRef = useRef<HTMLDivElement | null>(null);
   const dragStartRef = useRef({ pointerX: 0, width: DEFAULT_SIDEBAR_WIDTH });
+  const pagerGestureRef = useRef(createSidebarPagerGesture());
+  const dragActiveRef = useRef(false);
+  const dragOriginRef = useRef(0);
+  const dragPxRef = useRef(0);
+  const trackpadFeedbackAnimationRef = useRef<{ stop: () => void } | null>(null);
+  const panelScrollAnimationRef = useRef<{ stop: () => void } | null>(null);
+  const trackpadResetTimerRef = useRef(0);
+  const trackpadFeedbackSampleRef = useRef({ time: 0, x: 0 });
+  const trackpadFeedbackVelocityRef = useRef(0);
+  const trackpadGestureActiveRef = useRef(false);
   const suppressMouseResizeRef = useRef(false);
+  const prefersReducedMotion = useReducedMotion();
+  const trackpadFeedback = useMotionValue(0);
+  // The edge bounce reuses the snap transition's doorway pose: the pushed
+  // panel swings out behind its hinge edge instead of merely translating.
+  const trackpadBounceX = useTransform(trackpadFeedback, (value) => value * TRACKPAD_BOUNCE_TRANSLATE_RATIO);
+  const trackpadBounceRotateY = useTransform(trackpadFeedback, (value) =>
+    Math.max(-TRACKPAD_BOUNCE_MAX_DEG, Math.min(TRACKPAD_BOUNCE_MAX_DEG, value * TRACKPAD_BOUNCE_DEG_PER_PX))
+  );
+  const trackpadBounceOrigin = useTransform(trackpadFeedback, (value) => (value >= 0 ? '0% 50%' : '100% 50%'));
 
   useEffect(() => {
     const storedWidth = window.localStorage.getItem(SIDEBAR_WIDTH_STORAGE_KEY);
@@ -115,11 +152,9 @@ export function SessionSidebar({
     if (overlay) setAutoRevealClosing(false);
   }, [overlay]);
 
-  const animateModeSwitch = !collapsed && !overlay && previousShowStudioRef.current !== showStudio;
-
   useEffect(() => {
-    if (!collapsed && !overlay) previousShowStudioRef.current = showStudio;
-  }, [collapsed, overlay, showStudio]);
+    currentShowStudioRef.current = showStudio;
+  }, [showStudio]);
 
   const openMenuAction = (action: () => void) => {
     setMenuOpen(false);
@@ -219,6 +254,197 @@ export function SessionSidebar({
     [setMeasuredSidebarWidth, sidebarWidth]
   );
 
+  const stopTrackpadFeedbackAnimation = useCallback(() => {
+    trackpadFeedbackAnimationRef.current?.stop();
+    trackpadFeedbackAnimationRef.current = null;
+  }, []);
+
+  const clearTrackpadGesture = useCallback(() => {
+    window.clearTimeout(trackpadResetTimerRef.current);
+    pagerGestureRef.current.reset();
+    stopTrackpadFeedbackAnimation();
+    trackpadFeedback.set(0);
+    trackpadFeedbackSampleRef.current = { time: 0, x: 0 };
+    trackpadFeedbackVelocityRef.current = 0;
+    trackpadGestureActiveRef.current = false;
+    dragActiveRef.current = false;
+    dragPxRef.current = 0;
+  }, [stopTrackpadFeedbackAnimation, trackpadFeedback]);
+
+  const releaseTrackpadGesture = useCallback(() => {
+    window.clearTimeout(trackpadResetTimerRef.current);
+    trackpadGestureActiveRef.current = false;
+    stopTrackpadFeedbackAnimation();
+    if (prefersReducedMotion || trackpadFeedback.get() === 0) {
+      trackpadFeedback.set(0);
+      return;
+    }
+    trackpadFeedbackAnimationRef.current = animate(trackpadFeedback, 0, {
+      type: 'spring',
+      velocity: trackpadFeedbackVelocityRef.current,
+      stiffness: 520,
+      damping: 34,
+      mass: 0.42
+    });
+  }, [prefersReducedMotion, stopTrackpadFeedbackAnimation, trackpadFeedback]);
+
+  // Keep the native scroll position in lockstep with the showStudio prop, so
+  // menu/shortcut-driven switches slide the panels the same way a swipe does.
+  useLayoutEffect(() => {
+    const host = panelScrollRef.current;
+    if (!host) return;
+    const target = (showStudio ? 1 : 0) * host.clientWidth;
+    if (Math.abs(host.scrollLeft - target) <= 1) {
+      host.dataset.snapReady = 'true';
+      return;
+    }
+    panelScrollAnimationRef.current?.stop();
+    if (host.dataset.snapReady !== 'true' || prefersReducedMotion) {
+      host.scrollTo({ behavior: 'instant' as ScrollBehavior, left: target });
+    } else {
+      // Browser smooth scrolling has a fixed, sluggish pace; drive scrollLeft
+      // with a short ease-out tween so programmatic page turns feel crisp.
+      panelScrollAnimationRef.current = animate(host.scrollLeft, target, {
+        duration: PANEL_SNAP_SCROLL_DURATION_S,
+        ease: PANEL_SNAP_SCROLL_EASE,
+        onUpdate: (value) => {
+          host.scrollLeft = value;
+        }
+      });
+    }
+    host.dataset.snapReady = 'true';
+  }, [showStudio, prefersReducedMotion]);
+
+  useEffect(
+    () => () => {
+      panelScrollAnimationRef.current?.stop();
+    },
+    []
+  );
+
+  useEffect(() => {
+    const host = panelScrollRef.current;
+    if (!host) return;
+
+    const onScrollEnd = () => {
+      if (dragActiveRef.current) return;
+      const nextStudio = Math.round(host.scrollLeft / (host.clientWidth || 1)) >= 1;
+      if (nextStudio === currentShowStudioRef.current) return;
+      currentShowStudioRef.current = nextStudio;
+      if (nextStudio) onToggleStudio();
+      else onOpenWorkspace();
+    };
+
+    // Native scroll-snap is off: the release timing of the browser's snap
+    // animation is not tunable and momentum bleeds into it. The pager owns the
+    // whole horizontal stream — drag writes scrollLeft 1:1, release runs our
+    // own short tween, and the momentum tail is swallowed.
+    const finishPageTurn = (dragPxTotal: number) => {
+      window.clearTimeout(trackpadResetTimerRef.current);
+      dragActiveRef.current = false;
+      dragPxRef.current = 0;
+      const width = host.clientWidth || 1;
+      const originPage = Math.round(dragOriginRef.current / width);
+      const threshold = width * TRACKPAD_PAGE_TURN_THRESHOLD_RATIO;
+      let targetPage: number;
+      if (dragPxTotal > threshold) targetPage = originPage + 1;
+      else if (dragPxTotal < -threshold) targetPage = originPage - 1;
+      else targetPage = Math.round(host.scrollLeft / width);
+      const target = Math.max(0, Math.min(1, targetPage)) * width;
+      panelScrollAnimationRef.current?.stop();
+      if (Math.abs(host.scrollLeft - target) > 1) {
+        if (prefersReducedMotion) {
+          host.scrollLeft = target;
+        } else {
+          panelScrollAnimationRef.current = animate(host.scrollLeft, target, {
+            duration: PANEL_SNAP_SCROLL_DURATION_S,
+            ease: PANEL_SNAP_SCROLL_EASE,
+            onUpdate: (value) => {
+              host.scrollLeft = value;
+            }
+          });
+        }
+      }
+      releaseTrackpadGesture();
+    };
+
+    const finishFromTimer = () => {
+      pagerGestureRef.current.swallowTail(performance.now(), 0);
+      finishPageTurn(dragPxRef.current);
+    };
+
+    const onWheel = (event: WheelEvent) => {
+      if (Math.abs(event.deltaX) <= Math.abs(event.deltaY)) {
+        if (dragActiveRef.current) {
+          window.clearTimeout(trackpadResetTimerRef.current);
+          trackpadResetTimerRef.current = window.setTimeout(finishFromTimer, TRACKPAD_GESTURE_RELEASE_MS);
+        }
+        return;
+      }
+
+      event.preventDefault();
+      const edgeMaxPx = host.clientWidth + TRACKPAD_EDGE_MARGIN_PX;
+      const seedPx = !dragActiveRef.current ? sidebarTrackpadEdgeAccum(trackpadFeedback.get(), edgeMaxPx) : 0;
+      const result = pagerGestureRef.current.update({
+        deltaX: event.deltaX,
+        now: event.timeStamp,
+        seedPx
+      });
+      if (result.kind === 'swallowed') return;
+      if (result.kind === 'settle') {
+        finishPageTurn(result.dragPx);
+        return;
+      }
+
+      if (!dragActiveRef.current) {
+        dragActiveRef.current = true;
+        dragOriginRef.current = host.scrollLeft;
+        panelScrollAnimationRef.current?.stop();
+      }
+      trackpadGestureActiveRef.current = true;
+      dragPxRef.current = result.dragPx;
+      window.clearTimeout(trackpadResetTimerRef.current);
+      stopTrackpadFeedbackAnimation();
+
+      const maxScroll = host.scrollWidth - host.clientWidth;
+      const desired = dragOriginRef.current + result.dragPx;
+      const clamped = Math.max(0, Math.min(maxScroll, desired));
+      host.scrollLeft = clamped;
+      const excess = desired - clamped;
+      const nextFeedback = prefersReducedMotion || excess === 0 ? 0 : sidebarTrackpadEdgeOffset(excess, edgeMaxPx);
+      const lastSample = trackpadFeedbackSampleRef.current;
+      const elapsed = event.timeStamp - lastSample.time;
+      if (elapsed > 0 && elapsed < 120) {
+        const velocity = ((nextFeedback - lastSample.x) / elapsed) * 1000;
+        trackpadFeedbackVelocityRef.current = Math.max(
+          -TRACKPAD_RELEASE_VELOCITY_PX_S,
+          Math.min(TRACKPAD_RELEASE_VELOCITY_PX_S, velocity)
+        );
+      } else {
+        trackpadFeedbackVelocityRef.current = 0;
+      }
+      trackpadFeedbackSampleRef.current = { time: event.timeStamp, x: nextFeedback };
+      trackpadFeedback.set(nextFeedback);
+      trackpadResetTimerRef.current = window.setTimeout(finishFromTimer, TRACKPAD_GESTURE_RELEASE_MS);
+    };
+
+    host.addEventListener('scrollend', onScrollEnd);
+    host.addEventListener('wheel', onWheel, { passive: false });
+    return () => {
+      host.removeEventListener('scrollend', onScrollEnd);
+      host.removeEventListener('wheel', onWheel);
+    };
+  }, [
+    onOpenWorkspace,
+    onToggleStudio,
+    prefersReducedMotion,
+    releaseTrackpadGesture,
+    stopTrackpadFeedbackAnimation,
+    trackpadFeedback
+  ]);
+
+  useEffect(() => clearTrackpadGesture, [clearTrackpadGesture]);
+
   const activeSidebarWidth = collapsed || overlay ? DEFAULT_SIDEBAR_WIDTH : sidebarWidth;
   const expandedStyle = { width: activeSidebarWidth } satisfies CSSProperties;
   const animateSidebar = overlay || autoRevealClosing;
@@ -253,6 +479,7 @@ export function SessionSidebar({
         window.setTimeout(() => setAutoRevealClosing(false), AUTO_REVEAL_CLOSE_ANIMATION_MS);
         onRequestCollapse?.();
       }}
+      ref={sidebarRef}
       style={expandedStyle}
     >
       <div
@@ -267,22 +494,19 @@ export function SessionSidebar({
         />
 
         {!collapsed ? (
-          <div
-            className="panel-nav-mode flex min-h-0 flex-1 flex-col"
-            data-animate={animateModeSwitch ? 'true' : undefined}
-            data-mode={showStudio ? 'studio' : 'workspace'}
-            key={showStudio ? 'studio' : 'workspace'}
+          <motion.div
+            className="flex min-h-0 flex-1 overflow-x-auto overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            data-sidebar-trackpad-surface="true"
+            ref={panelScrollRef}
+            style={{
+              overscrollBehaviorX: 'contain',
+              rotateY: trackpadBounceRotateY,
+              transformOrigin: trackpadBounceOrigin,
+              transformPerspective: 1100,
+              x: trackpadBounceX
+            }}
           >
-            {showStudio ? (
-              <StudioSidebarItems
-                activeSection={studioSection}
-                onSelect={onOpenStudioSection}
-                runtimeReady={runtimeReady}
-                shortcutModifierLabel={shortcutModifierLabel}
-                showShortcutBadges={showShortcutBadges}
-                t={t}
-              />
-            ) : (
+            <div className="panel-nav-snap-item flex min-h-0 w-full flex-none flex-col">
               <WorkspaceSidebarItems
                 activeProjectId={activeProjectId}
                 monadChatActive={monadChatActive}
@@ -294,8 +518,18 @@ export function SessionSidebar({
                 showShortcutBadges={showShortcutBadges}
                 t={t}
               />
-            )}
-          </div>
+            </div>
+            <div className="panel-nav-snap-item flex min-h-0 w-full flex-none flex-col">
+              <StudioSidebarItems
+                activeSection={studioSection}
+                onSelect={onOpenStudioSection}
+                runtimeReady={runtimeReady}
+                shortcutModifierLabel={shortcutModifierLabel}
+                showShortcutBadges={showShortcutBadges}
+                t={t}
+              />
+            </div>
+          </motion.div>
         ) : null}
 
         {!collapsed ? (

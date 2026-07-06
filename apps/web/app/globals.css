@@ -11,6 +11,13 @@
    future Electron client. Only web-specific styling — the /init onboarding
    eye candy below — stays here. */
 
+@layer base {
+  html,
+  body {
+    overscroll-behavior-x: none;
+  }
+}
+
 @layer utilities {
   html[data-input-modality="pointer"] :where(button, a, input, textarea, select, [tabindex]):focus-visible {
     --tw-ring-shadow: 0 0 #0000;
