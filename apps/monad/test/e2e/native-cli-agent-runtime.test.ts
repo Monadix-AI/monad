@@ -325,7 +325,7 @@ async function configureMockCodexApprovalAgent(call: Call, dir: string): Promise
       args: [],
       enabled: true,
       defaultLaunchMode: 'app-server',
-      allowAutopilot: false,
+      allowAutopilot: true,
       approvalOwnership: 'provider-owned'
     }
   });

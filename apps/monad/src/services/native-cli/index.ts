@@ -38,6 +38,13 @@ export function registerAgentAdapterImpl(adapter: NativeCliProviderAdapter): voi
   ADAPTERS.set(adapter.provider, adapter);
 }
 
+/** Reverses a registerAgentAdapterImpl call. Production never needs this (adapters live for the
+ *  daemon's lifetime); it exists so tests that register a throwaway provider can clean up afterward
+ *  instead of leaking it into every other test sharing this module-level registry. */
+export function unregisterAgentAdapterImpl(provider: NativeCliProvider): void {
+  ADAPTERS.delete(provider);
+}
+
 function adapterFor(provider: NativeCliProvider): NativeCliProviderAdapter {
   const adapter = ADAPTERS.get(provider);
   if (!adapter) throw new Error(`no agent-adapter atom registered for provider "${provider}"`);
@@ -214,10 +221,18 @@ export function listNativeCliAgentPresets(probes: BinProbes = defaultBinProbes):
         settings: preset.settings ?? adapter.settings?.(presetAgentView(preset))
       };
     })
-    .map((preset) => ({
-      ...preset,
-      modelOptions: listNativeCliAgentModelOptions(presetAgentView(preset), probes),
-      reasoningEfforts: listNativeCliAgentReasoningEfforts(presetAgentView(preset), probes),
-      reasoningEffortsByModel: listNativeCliAgentReasoningEffortsByModel(presetAgentView(preset), probes)
-    }));
+    .map((preset) => {
+      const agentView = presetAgentView(preset);
+      // reasoningEfforts/reasoningEffortsByModel share one argument-support probe (both derive from
+      // the same `<cli> --help`-style spawn) — probe once here instead of letting each of
+      // listNativeCliAgentReasoningEfforts/listNativeCliAgentReasoningEffortsByModel call it
+      // independently, which spawned the provider CLI twice per adapter for one settings-page load.
+      const support = probeNativeCliArgumentSupport(agentView, probes);
+      return {
+        ...preset,
+        modelOptions: listNativeCliAgentModelOptions(agentView, probes),
+        reasoningEfforts: support?.reasoningEfforts ?? [],
+        reasoningEffortsByModel: support?.reasoningEffortsByModel
+      };
+    });
 }
