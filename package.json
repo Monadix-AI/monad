@@ -1,7 +1,7 @@
 {
   "name": "monad",
   "description": "Local, single-user daemon for running agentic sessions, with a CLI and web UI.",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "author": "Monadix Labs, Inc.",
   "bugs": {
     "url": "https://github.com/monadix-labs/monad/issues"
