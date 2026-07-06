@@ -104,7 +104,7 @@ platform_label() {
 download() {
   local url="$1" dest="$2"
   if command -v curl &>/dev/null; then
-    curl --proto '=https' --tlsv1.2 -fsSL --retry 3 --retry-delay 1 -o "$dest" "$url"
+    curl --proto '=https' --tlsv1.2 -fsSL --retry 3 --retry-delay 1 --connect-timeout 10 --max-time 120 --speed-limit 1024 --speed-time 30 -o "$dest" "$url"
   elif command -v wget &>/dev/null; then
     wget -q --https-only -O "$dest" "$url"
   else
@@ -163,14 +163,14 @@ download_progress() {
     # Unknown size — fall back to curl's own bar so the user still sees motion.
     # Both printf and curl -# write to stderr so the dim/reset wraps the bar correctly.
     printf '%s' "${DIM}" >&2
-    curl --proto '=https' --tlsv1.2 -fSL --retry 3 --retry-delay 1 -# -o "$dest" "$url"
+    curl --proto '=https' --tlsv1.2 -fSL --retry 3 --retry-delay 1 --connect-timeout 10 --max-time 120 --speed-limit 1024 --speed-time 30 -# -o "$dest" "$url"
     local rc=$?
     printf '%s' "${RESET}" >&2
     return $rc
   fi
 
   : > "$dest"
-  curl --proto '=https' --tlsv1.2 -fsSL --retry 3 --retry-delay 1 -o "$dest" "$url" &
+  curl --proto '=https' --tlsv1.2 -fsSL --retry 3 --retry-delay 1 --connect-timeout 10 --max-time 120 --speed-limit 1024 --speed-time 30 -o "$dest" "$url" &
   local pid=$! cur pct frame=0
   printf '\033[?25l'  # hide cursor while the bar animates
   while kill -0 "$pid" 2>/dev/null; do
