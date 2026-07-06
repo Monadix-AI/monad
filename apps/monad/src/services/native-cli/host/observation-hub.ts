@@ -1,7 +1,7 @@
 import type { NativeCliObservationAccessResponse } from '@monad/protocol';
-import type { LiveNativeCliSession, NativeCliObservationListener } from '@/services/native-cli/host-types.ts';
+import type { LiveNativeCliSession, NativeCliObservationListener } from '@/services/native-cli/host/host-types.ts';
 
-import { OBSERVATION_THROTTLE_MS } from '@/services/native-cli/host-constants.ts';
+import { OBSERVATION_THROTTLE_MS } from '@/services/native-cli/host/host-constants.ts';
 
 interface ObservationHubContext {
   getLive(id: string): LiveNativeCliSession | undefined;

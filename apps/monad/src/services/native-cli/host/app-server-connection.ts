@@ -1,6 +1,6 @@
 import type { Logger } from '@monad/logger';
 import type { Event, TranscriptTargetId } from '@monad/protocol';
-import type { LiveNativeCliSession } from '@/services/native-cli/host-types.ts';
+import type { LiveNativeCliSession } from '@/services/native-cli/host/host-types.ts';
 
 import { chmodSync, mkdirSync, realpathSync, rmSync } from 'node:fs';
 import { createServer } from 'node:net';
@@ -14,7 +14,7 @@ import {
   APP_SERVER_RECONNECT_ATTEMPTS,
   APP_SERVER_RECONNECT_BASE_MS,
   APP_SERVER_RECONNECT_STREAK_RESET_MS
-} from '@/services/native-cli/host-constants.ts';
+} from '@/services/native-cli/host/host-constants.ts';
 
 export interface NativeCliAppServerConnectionContext {
   live: Map<string, LiveNativeCliSession>;

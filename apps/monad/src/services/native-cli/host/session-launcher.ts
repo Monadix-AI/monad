@@ -7,7 +7,7 @@ import type {
   ProjectId,
   TranscriptTargetId
 } from '@monad/protocol';
-import type { LiveNativeCliSession, NativeCliHostDeps } from '@/services/native-cli/host-types.ts';
+import type { LiveNativeCliSession, NativeCliHostDeps } from '@/services/native-cli/host/host-types.ts';
 import type { NativeCliProcess, NativeCliTerminal } from '@/services/native-cli/runtime-types.ts';
 import type { NativeCliLaunchSpec } from '@/services/native-cli/types.ts';
 import type { NativeCliSessionRow } from '@/store/db/index.ts';
@@ -16,16 +16,18 @@ import { chmodSync, realpathSync, statSync } from 'node:fs';
 import { dirname, isAbsolute } from 'node:path';
 import { newId } from '@monad/protocol';
 
-import { NativeCliAppServerConnectionManager } from '@/services/native-cli/app-server-connection.ts';
 import { connectAppServerStdio } from '@/services/native-cli/app-server-stdio.ts';
 import { connectAppServerUnix } from '@/services/native-cli/app-server-unix.ts';
 import { connectAppServerWs, dialAppServerWs, dialAppServerWsWithRetry } from '@/services/native-cli/app-server-ws.ts';
 import { BoundedOutputBuffer } from '@/services/native-cli/bounded-output-buffer.ts';
-import { NativeCliOneshotRunner } from '@/services/native-cli/cli-oneshot.ts';
 import { MAX_OUTPUT_SNAPSHOT } from '@/services/native-cli/constants.ts';
-import { NativeCliEventLog } from '@/services/native-cli/event-log.ts';
-import { APP_SERVER_STARTUP_TIMEOUT_MS } from '@/services/native-cli/host-constants.ts';
-import { toView } from '@/services/native-cli/host-helpers.ts';
+import { NativeCliAppServerConnectionManager } from '@/services/native-cli/host/app-server-connection.ts';
+import { NativeCliOneshotRunner } from '@/services/native-cli/host/cli-oneshot.ts';
+import { NativeCliEventLog } from '@/services/native-cli/host/event-log.ts';
+import { APP_SERVER_STARTUP_TIMEOUT_MS } from '@/services/native-cli/host/host-constants.ts';
+import { toView } from '@/services/native-cli/host/host-helpers.ts';
+import { NativeCliObservationHub } from '@/services/native-cli/host/observation-hub.ts';
+import { NativeCliOutputPipeline } from '@/services/native-cli/host/output-pipeline.ts';
 import {
   buildNativeCliLaunch,
   getNativeCliProviderAdapter,
@@ -35,8 +37,6 @@ import {
   cleanupManagedProjectRuntimeToken,
   prepareManagedProjectRuntime
 } from '@/services/native-cli/managed-project.ts';
-import { NativeCliObservationHub } from '@/services/native-cli/observation-hub.ts';
-import { NativeCliOutputPipeline } from '@/services/native-cli/output-pipeline.ts';
 import { killNativeCliProcess, pickPtyFallbackLaunchMode } from '@/services/native-cli/process.ts';
 import { createStreamingTextDecoder } from '@/services/native-cli/stream-decoder.ts';
 

@@ -1,4 +1,4 @@
-import { DEFAULT_TRANSPORT, loadAll } from './config.ts';
+import { DEFAULT_TRANSPORT, loadAll } from './config/index.ts';
 import { getPaths } from './paths.ts';
 
 // `unixSocket` is returned only when transport="uds" — local REST/SSE routes over it.

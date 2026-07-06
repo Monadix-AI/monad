@@ -1,6 +1,6 @@
 import type { Logger } from '@monad/logger';
 import type { NativeCliHistoryPageRequest, TranscriptTargetId } from '@monad/protocol';
-import type { LiveNativeCliSession, ManagedProjectOutputHandler } from '@/services/native-cli/host-types.ts';
+import type { LiveNativeCliSession, ManagedProjectOutputHandler } from '@/services/native-cli/host/host-types.ts';
 import type { StructuredLineBufferState } from '@/services/native-cli/structured-lines.ts';
 import type { NativeCliOutputEvent, NativeCliProviderAdapter } from '@/services/native-cli/types.ts';
 import type { Store } from '@/store/db/index.ts';
@@ -9,18 +9,18 @@ import { nativeCliStreamItems } from '@monad/atoms/native-cli-observation';
 
 import { MAX_OUTPUT_SNAPSHOT } from '@/services/native-cli/constants.ts';
 import { NativeCliError } from '@/services/native-cli/errors.ts';
-import { NativeCliEventLog } from '@/services/native-cli/event-log.ts';
+import { NativeCliEventLog } from '@/services/native-cli/host/event-log.ts';
 import {
   MAX_STRUCTURED_LINE,
   type NativeCliOutputStream,
   SNAPSHOT_FLUSH_MS
-} from '@/services/native-cli/host-constants.ts';
+} from '@/services/native-cli/host/host-constants.ts';
 import {
   isManagedProjectRuntime,
   nativeAgentMcpToolError,
   nativeCliApprovalText
-} from '@/services/native-cli/host-helpers.ts';
-import { NativeCliObservationHub } from '@/services/native-cli/observation-hub.ts';
+} from '@/services/native-cli/host/host-helpers.ts';
+import { NativeCliObservationHub } from '@/services/native-cli/host/observation-hub.ts';
 import { createStreamingTextDecoder } from '@/services/native-cli/stream-decoder.ts';
 import { takeCompleteStructuredLines } from '@/services/native-cli/structured-lines.ts';
 import { nativeCliOutputEventSchema } from '@/services/native-cli/types.ts';

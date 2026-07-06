@@ -19,7 +19,7 @@ import type {
   StatsRange
 } from '@monad/protocol';
 import type { EmbedResult, ModelMessage, ModelResult, ToolSpec } from '@monad/sdk-atom';
-import type { DaemonHandlerDeps } from '@/handlers/handlers-deps.ts';
+import type { DaemonHandlerDeps } from './handlers-deps.ts';
 
 import { join } from 'node:path';
 import { loadAll, loadAuth, saveProfile } from '@monad/home';
@@ -28,13 +28,6 @@ import { DEFAULT_SKILL_MARKETPLACE_SOURCE, MONAD_VERSION } from '@monad/protocol
 import { createSkillCatalogs } from '@/capabilities/skills/index.ts';
 import { createAtomPacksModule } from '@/handlers/atom-pack/index.ts';
 import { HandlerError } from '@/handlers/handler-error.ts';
-import { createInitHandlers } from '@/handlers/handlers-init.ts';
-import {
-  createClarifyHandlers,
-  createDelegationHandlers,
-  createOversightHandlers,
-  createSystemHandlers
-} from '@/handlers/handlers-oversight.ts';
 import { createMemoryModule } from '@/handlers/memory/index.ts';
 import { createNativeCliModule } from '@/handlers/native-cli/index.ts';
 import { createSessionModule } from '@/handlers/session/index.ts';
@@ -61,15 +54,22 @@ import { createStartupSettingsModule } from '@/handlers/settings/startup/index.t
 import { createToolBackendsModule } from '@/handlers/settings/tool-backends/index.ts';
 import { createTranscriptProjector } from '@/handlers/transcript/projector.ts';
 import { resolveNativeCliAgentEnv } from '@/services/native-cli/env.ts';
-import { NativeCliHost } from '@/services/native-cli/host.ts';
+import { NativeCliHost } from '@/services/native-cli/host/index.ts';
 import { managedProjectRuntimeWorkspace } from '@/services/native-cli/managed-project.ts';
 import licensesData from '../../generated/licenses.json';
+import { createInitHandlers } from './handlers-init.ts';
+import {
+  createClarifyHandlers,
+  createDelegationHandlers,
+  createOversightHandlers,
+  createSystemHandlers
+} from './handlers-oversight.ts';
 
 export { HandlerError } from '@/handlers/handler-error.ts';
 
 export const VERSION: string = MONAD_VERSION;
 
-export type { DaemonHandlerDeps } from '@/handlers/handlers-deps.ts';
+export type { DaemonHandlerDeps } from './handlers-deps.ts';
 
 export function createDaemonHandlers(deps: DaemonHandlerDeps) {
   const { paths, mockMode = false } = deps;

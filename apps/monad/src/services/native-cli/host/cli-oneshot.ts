@@ -1,5 +1,5 @@
 import type { NativeCliSessionView, TranscriptTargetId } from '@monad/protocol';
-import type { LiveNativeCliSession } from '@/services/native-cli/host-types.ts';
+import type { LiveNativeCliSession } from '@/services/native-cli/host/host-types.ts';
 import type { prepareManagedProjectRuntime } from '@/services/native-cli/managed-project.ts';
 import type { NativeCliProcess } from '@/services/native-cli/runtime-types.ts';
 import type { NativeCliLaunchSpec, NativeCliProviderAdapter } from '@/services/native-cli/types.ts';
@@ -7,9 +7,9 @@ import type { NativeCliSessionRow, Store } from '@/store/db/index.ts';
 
 import { BoundedOutputBuffer } from '@/services/native-cli/bounded-output-buffer.ts';
 import { MAX_OUTPUT_SNAPSHOT } from '@/services/native-cli/constants.ts';
-import { NativeCliEventLog } from '@/services/native-cli/event-log.ts';
-import { toView } from '@/services/native-cli/host-helpers.ts';
-import { NativeCliOutputPipeline } from '@/services/native-cli/output-pipeline.ts';
+import { NativeCliEventLog } from '@/services/native-cli/host/event-log.ts';
+import { toView } from '@/services/native-cli/host/host-helpers.ts';
+import { NativeCliOutputPipeline } from '@/services/native-cli/host/output-pipeline.ts';
 import { killNativeCliProcess } from '@/services/native-cli/process.ts';
 import { createStreamingTextDecoder } from '@/services/native-cli/stream-decoder.ts';
 

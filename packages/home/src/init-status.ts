@@ -3,7 +3,7 @@ import type { MonadPaths } from './paths.ts';
 
 import { existsSync } from 'node:fs';
 
-import { DEFAULT_SAMPLE_PROVIDER_ID, loadAll, loadAuth, type MonadAuth, type MonadConfig } from './config.ts';
+import { DEFAULT_SAMPLE_PROVIDER_ID, loadAll, loadAuth, type MonadAuth, type MonadConfig } from './config/index.ts';
 
 export interface InitStatus {
   initialized: boolean;

@@ -4,7 +4,7 @@ import type {
   NativeAgentAttachmentInput,
   ProjectId
 } from '@monad/protocol';
-import type { createDaemonHandlers } from '@/handlers/handlers.ts';
+import type { createDaemonHandlers } from '@/handlers/daemon-handlers/index.ts';
 
 import { realpath, stat } from 'node:fs/promises';
 import { basename, isAbsolute, resolve, sep } from 'node:path';

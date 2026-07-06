@@ -3,7 +3,7 @@ import { mkdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { createDefaultConfig, loadConfig, saveSystemConfig } from '../../src/config.ts';
+import { createDefaultConfig, loadConfig, saveSystemConfig } from '../../src/config/index.ts';
 import {
   disableRemoteAccess,
   enableRemoteAccess,

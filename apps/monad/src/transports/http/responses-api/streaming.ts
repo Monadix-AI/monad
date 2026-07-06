@@ -1,6 +1,6 @@
 import type { AgentId, SessionId } from '@monad/protocol';
 import type { ResponseOutputMessage, ResponseOutputText } from 'openai/resources/responses/responses';
-import type { createDaemonHandlers } from '@/handlers/handlers.ts';
+import type { createDaemonHandlers } from '@/handlers/daemon-handlers/index.ts';
 import type { ResponseObject, ResponsesRequest, StoredResponse } from './types.ts';
 
 import { parseEventPayload } from '@monad/protocol';

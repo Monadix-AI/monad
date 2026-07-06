@@ -1,5 +1,5 @@
 import type { NativeCliSessionView } from '@monad/protocol';
-import type { LiveNativeCliSession } from '@/services/native-cli/host-types.ts';
+import type { LiveNativeCliSession } from '@/services/native-cli/host/host-types.ts';
 import type { NativeCliOutputEvent } from '@/services/native-cli/types.ts';
 import type { NativeCliSessionRow } from '@/store/db/index.ts';
 

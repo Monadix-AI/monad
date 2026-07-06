@@ -23,7 +23,7 @@ import {
   saveProfile,
   saveSystemConfig,
   tryParseConfig
-} from '../../src/config.ts';
+} from '../../src/config/index.ts';
 import { resolveClientConn } from '../../src/connection.ts';
 import { initMonadHome } from '../../src/init.ts';
 import { computeInitStatus } from '../../src/init-status.ts';

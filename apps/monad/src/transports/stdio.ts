@@ -4,7 +4,7 @@
 // Framing: one JSON-RPC message per line (\n terminated).
 
 import type { JsonRpcNotification, JsonRpcResponse } from '@monad/protocol';
-import type { createDaemonHandlers } from '@/handlers/handlers.ts';
+import type { createDaemonHandlers } from '@/handlers/daemon-handlers/index.ts';
 
 import { closeConnection, createConnectionState, handleRpcMessage } from '@/transports/jsonrpc/index.ts';
 

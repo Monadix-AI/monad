@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { type NetworkInterfaceInfo, networkInterfaces } from 'node:os';
 
-import { loadConfig, saveSystemConfig } from './config.ts';
+import { loadConfig, saveSystemConfig } from './config/index.ts';
 
 export function generateRemoteToken(): string {
   return randomBytes(32).toString('base64url');

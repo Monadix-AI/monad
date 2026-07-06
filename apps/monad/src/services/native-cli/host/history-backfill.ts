@@ -1,4 +1,4 @@
-import type { NativeCliHostDeps } from '@/services/native-cli/host-types.ts';
+import type { NativeCliHostDeps } from '@/services/native-cli/host/host-types.ts';
 import type { NativeCliProcess } from '@/services/native-cli/runtime-types.ts';
 import type { NativeCliProviderAdapter } from '@/services/native-cli/types.ts';
 import type { NativeCliSessionRow } from '@/store/db/index.ts';
@@ -6,7 +6,7 @@ import type { NativeCliSessionRow } from '@/store/db/index.ts';
 import { daemonChildProcesses } from '@/infra/daemon-child-processes.ts';
 import { connectAppServerStdio } from '@/services/native-cli/app-server-stdio.ts';
 import { MAX_OUTPUT_SNAPSHOT } from '@/services/native-cli/constants.ts';
-import { HISTORY_BACKFILL_TIMEOUT_MS } from '@/services/native-cli/host-constants.ts';
+import { HISTORY_BACKFILL_TIMEOUT_MS } from '@/services/native-cli/host/host-constants.ts';
 import { buildNativeCliLaunch, resolveNativeCliLaunchCommand } from '@/services/native-cli/index.ts';
 import { killNativeCliProcess } from '@/services/native-cli/process.ts';
 import { createStreamingTextDecoder } from '@/services/native-cli/stream-decoder.ts';

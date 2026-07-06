@@ -22,7 +22,7 @@ export * from './history.ts';
 export * from './loop/index.ts';
 export * from './memory/index.ts';
 export * from './model/cost.ts';
-export * from './model/gateway.ts';
+export * from './model/gateway/index.ts';
 export * from './model/index.ts';
 export * from './model/provider.ts';
 export * from './prompts.ts';

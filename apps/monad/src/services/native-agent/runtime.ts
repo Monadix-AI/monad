@@ -1,5 +1,5 @@
 import type { NativeAgentRuntime, NativeAgentRuntimeInfoResponse, ProjectId } from '@monad/protocol';
-import type { createDaemonHandlers } from '@/handlers/handlers.ts';
+import type { createDaemonHandlers } from '@/handlers/daemon-handlers/index.ts';
 import type { NativeCliSessionRow } from '@/store/db/index.ts';
 
 import { createHash, timingSafeEqual } from 'node:crypto';

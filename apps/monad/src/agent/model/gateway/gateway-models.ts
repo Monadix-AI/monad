@@ -1,5 +1,5 @@
 import type { ModelInfo, ProviderCredential, ResolvedProviderConfig } from '@monad/sdk-atom';
-import type { ModelProviderRegistry } from './provider.ts';
+import type { ModelProviderRegistry } from '../provider.ts';
 
 import { openAiPrice } from '@monad/protocol';
 

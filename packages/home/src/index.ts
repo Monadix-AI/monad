@@ -1,4 +1,4 @@
-export * from './config.ts';
+export * from './config/index.ts';
 export * from './connection.ts';
 export * from './init.ts';
 export * from './init-status.ts';

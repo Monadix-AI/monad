@@ -4,8 +4,8 @@ import type { Push, RpcContext } from '@/transports/jsonrpc/methods.ts';
 import { createLogger, formatTransportCall } from '@monad/logger';
 import { isRpcMethod, RPC_ERRORS, RPC_METHOD_PARAMS } from '@monad/protocol';
 
+import { createDaemonHandlers, HandlerError } from '@/handlers/daemon-handlers/index.ts';
 import { HANDLER_ERROR_MAP } from '@/handlers/handler-error.ts';
-import { createDaemonHandlers, HandlerError } from '@/handlers/handlers.ts';
 import { consumeToken } from '@/transports/jsonrpc/connection.ts';
 import { RPC_HANDLERS } from '@/transports/jsonrpc/methods.ts';
 

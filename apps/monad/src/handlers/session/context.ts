@@ -18,7 +18,7 @@ import type { DelegationService } from '@/services/delegation/delegation.ts';
 import type { EventBus, EventSink } from '@/services/event-bus.ts';
 import type { I18nService } from '@/services/i18n.ts';
 import type { KvService } from '@/services/kv.ts';
-import type { NativeCliHost } from '@/services/native-cli/host.ts';
+import type { NativeCliHost } from '@/services/native-cli/host/index.ts';
 import type { OversightService } from '@/services/oversight.ts';
 import type { RoundCache } from '@/services/round-cache.ts';
 import type { SessionSandboxService } from '@/services/session-sandbox.ts';

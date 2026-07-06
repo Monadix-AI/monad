@@ -19,7 +19,7 @@ import {
 } from '@monad/protocol';
 import { z } from 'zod';
 
-import { matchEnvRef } from './secret-ref.ts';
+import { matchEnvRef } from '../secret-ref.ts';
 
 // Pre-release: the full schema is a single v1 entry — edit it freely instead of writing
 // incremental migrations. When the schema changes post-release: bump the constant, update the

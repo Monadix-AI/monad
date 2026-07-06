@@ -6,7 +6,7 @@ import type {
   ResponseFunctionToolCall,
   ResponseOutputMessage
 } from 'openai/resources/responses/responses';
-import type { createDaemonHandlers } from '@/handlers/handlers.ts';
+import type { createDaemonHandlers } from '@/handlers/daemon-handlers/index.ts';
 import type { ResponseObject, ResponsesRequest, StoredResponse } from './types.ts';
 
 import { newId } from '@monad/protocol';

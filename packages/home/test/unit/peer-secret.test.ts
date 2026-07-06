@@ -1,8 +1,8 @@
-import type { MonadAuth } from '../../src/config.ts';
+import type { MonadAuth } from '../../src/config/index.ts';
 
 import { expect, test } from 'bun:test';
 
-import { resolvePeerSecretRef } from '../../src/config.ts';
+import { resolvePeerSecretRef } from '../../src/config/index.ts';
 
 function auth(over: Partial<MonadAuth> = {}): MonadAuth {
   return { version: 1, activeProvider: null, updatedAt: '', credentialPool: {}, ...over };

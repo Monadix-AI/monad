@@ -3,7 +3,7 @@ import type { DeveloperLogRecord, SessionId, SessionUiEvent, TranscriptTargetId 
 import { subscribeDeveloperLogRecords } from '@monad/logger';
 import { developerLogRecordSchema } from '@monad/protocol';
 
-import { createDaemonHandlers } from '@/handlers/handlers.ts';
+import { createDaemonHandlers } from '@/handlers/daemon-handlers/index.ts';
 import {
   createBoundedSseEncoderSink,
   createBoundedSseSink,

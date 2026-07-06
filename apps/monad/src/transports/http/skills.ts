@@ -1,4 +1,4 @@
-import type { createDaemonHandlers } from '@/handlers/handlers.ts';
+import type { createDaemonHandlers } from '@/handlers/daemon-handlers/index.ts';
 
 import {
   DEFAULT_SKILL_MARKETPLACE_SOURCE,

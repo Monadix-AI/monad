@@ -8,7 +8,7 @@ import { join, resolve } from 'node:path';
 import { newId } from '@monad/protocol';
 
 import { createSessionContext } from '@/handlers/session/context.ts';
-import { createLifecycleHandlers } from '@/handlers/session/handlers/lifecycle.ts';
+import { createLifecycleHandlers } from '@/handlers/session/handlers/lifecycle/index.ts';
 import { EventBus } from '@/services/event-bus.ts';
 import { RoundCache } from '@/services/round-cache.ts';
 import { createStore } from '@/store/db/index.ts';

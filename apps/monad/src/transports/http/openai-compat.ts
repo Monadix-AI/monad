@@ -8,7 +8,7 @@ import type {
 } from 'openai/resources/chat/completions';
 import type { CompletionUsage } from 'openai/resources/completions';
 import type { EmbeddingCreateParams } from 'openai/resources/embeddings';
-import type { createDaemonHandlers } from '@/handlers/handlers.ts';
+import type { createDaemonHandlers } from '@/handlers/daemon-handlers/index.ts';
 
 import { timingSafeEqual } from 'node:crypto';
 import { newId, parseEventPayload } from '@monad/protocol';

@@ -5,7 +5,7 @@
 
 import type { MonadConfig, MonadPaths } from '@monad/home';
 import type { ChannelService } from '@/channels/channel.ts';
-import type { createDaemonHandlers } from '@/handlers/handlers.ts';
+import type { createDaemonHandlers } from '@/handlers/daemon-handlers/index.ts';
 import type { I18nService } from '@/services/i18n.ts';
 
 import { chmod, unlink } from 'node:fs/promises';

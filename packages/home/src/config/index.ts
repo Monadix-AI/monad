@@ -75,9 +75,11 @@ function toMonadJsonSchema(schema: z.ZodType): string {
 // In production, initMonadHome writes the schema to runtime/ and calls
 // setSchemaRuntimeDir to flip this to the local file:// path.
 let _schemaUrl =
-  Bun.env.NODE_ENV === 'development' ? pathToFileURL(join(import.meta.dir, '..', 'config.schema.json')).href : '';
+  Bun.env.NODE_ENV === 'development' ? pathToFileURL(join(import.meta.dir, '..', '..', 'config.schema.json')).href : '';
 let _profileSchemaUrl =
-  Bun.env.NODE_ENV === 'development' ? pathToFileURL(join(import.meta.dir, '..', 'profile.schema.json')).href : '';
+  Bun.env.NODE_ENV === 'development'
+    ? pathToFileURL(join(import.meta.dir, '..', '..', 'profile.schema.json')).href
+    : '';
 
 export function setSchemaRuntimeDir(runtimeDir: string): void {
   if (Bun.env.NODE_ENV !== 'development') {

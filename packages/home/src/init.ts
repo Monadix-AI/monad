@@ -13,7 +13,7 @@ import {
   saveAll,
   saveAuth,
   setSchemaRuntimeDir
-} from './config.ts';
+} from './config/index.ts';
 import { TEMPLATES } from './templates-embed.ts';
 
 export interface InitOptions {

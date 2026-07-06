@@ -1,4 +1,4 @@
-import type { createDaemonHandlers } from '@/handlers/handlers.ts';
+import type { createDaemonHandlers } from '@/handlers/daemon-handlers/index.ts';
 import type { ConnectionState } from '@/transports/jsonrpc/index.ts';
 
 import { timingSafeEqual } from 'node:crypto';

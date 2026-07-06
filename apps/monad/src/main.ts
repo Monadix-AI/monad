@@ -28,7 +28,7 @@ import { applyAcpDelegateTool } from '@/bootstrap/acp-delegate.ts';
 import { buildServiceTools, builtinTools } from '@/capabilities/tools';
 import { AtomPackRegistry } from '@/handlers/atom-pack/index.ts';
 import { type CommandBundle, createCommandRegistry } from '@/handlers/commands/index.ts';
-import { createDaemonHandlers } from '@/handlers/handlers.ts';
+import { createDaemonHandlers } from '@/handlers/daemon-handlers/index.ts';
 import { createHookRunner } from '@/hooks/runner.ts';
 import { daemonChildProcesses, runDaemonChildSupervisorFromArgv } from '@/infra/daemon-child-processes.ts';
 import { initObservability } from '@/infra/observability.ts';

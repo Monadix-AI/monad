@@ -17,7 +17,7 @@ import { join } from 'node:path';
 import { builtinAgentAdapters } from '@monad/atoms/agent-adapters';
 
 import { EventBus } from '@/services/event-bus.ts';
-import { NativeCliHost } from '@/services/native-cli/host.ts';
+import { NativeCliHost } from '@/services/native-cli/host/index.ts';
 import { registerAgentAdapterImpl } from '@/services/native-cli/index.ts';
 import { createStore } from '@/store/db/index.ts';
 

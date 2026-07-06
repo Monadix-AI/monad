@@ -1,5 +1,5 @@
 import type { ToolBackends } from '@/capabilities/tools/types.ts';
-import type { createDaemonHandlers } from '@/handlers/handlers.ts';
+import type { createDaemonHandlers } from '@/handlers/daemon-handlers/index.ts';
 import type { OpenDoc } from '@/transports/acp/documents.ts';
 
 type DaemonHandlers = ReturnType<typeof createDaemonHandlers>;

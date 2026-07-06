@@ -14,7 +14,7 @@ import { ModelProviderType, newId } from '@monad/protocol';
 
 import { createAgent } from '@/agent/index.ts';
 import { ChannelService } from '@/channels/channel.ts';
-import { createDaemonHandlers } from '@/handlers/handlers.ts';
+import { createDaemonHandlers } from '@/handlers/daemon-handlers/index.ts';
 import { ModelService } from '@/handlers/settings/model/index.ts';
 import { EventBus } from '@/services/event-bus.ts';
 import { ClarifyService } from '@/services/generation/clarify.ts';

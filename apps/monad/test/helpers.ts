@@ -29,7 +29,7 @@ import { createAgent, ModelProviderRegistry } from '@/agent/index.ts';
 import { createClarifyTool } from '@/capabilities/tools/registry/clarify.ts';
 import { ChannelService } from '@/channels/channel.ts';
 import { type CommandBundle, type CommandRegistry, createCommandRegistry } from '@/handlers/commands/index.ts';
-import { createDaemonHandlers } from '@/handlers/handlers.ts';
+import { createDaemonHandlers } from '@/handlers/daemon-handlers/index.ts';
 import { type ModelDeps, ModelService } from '@/handlers/settings/model/index.ts';
 // Deterministic mock model lives in the runtime module so the daemon (--mock-model)
 // and tests share one implementation.

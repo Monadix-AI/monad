@@ -1,5 +1,5 @@
 import type { GenerateMessageResponse, ListMessagesResponse } from '@monad/protocol';
-import type { createDaemonHandlers } from '@/handlers/handlers.ts';
+import type { createDaemonHandlers } from '@/handlers/daemon-handlers/index.ts';
 
 import {
   configureRuntimeRequestSchema,

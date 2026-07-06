@@ -22,7 +22,7 @@ import type {
   StartNativeCliAuthResponse,
   TranscriptTargetId
 } from '@monad/protocol';
-import type { NativeCliHost } from '@/services/native-cli/host.ts';
+import type { NativeCliHost } from '@/services/native-cli/host/index.ts';
 import type { Store } from '@/store/db/index.ts';
 
 import { realpathSync } from 'node:fs';

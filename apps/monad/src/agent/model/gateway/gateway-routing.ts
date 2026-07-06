@@ -1,8 +1,8 @@
 import type { FallbackTargetView, ModelRole } from '@monad/protocol';
 import type { ModelCall, ProviderCredential, ResolvedProviderConfig } from '@monad/sdk-atom';
-import type { GatewayDeps } from './gateway.ts';
-import type { GenerationParams, ModelRequest } from './index.ts';
-import type { ModelProvider, ModelProviderRegistry } from './provider.ts';
+import type { GenerationParams, ModelRequest } from '../index.ts';
+import type { ModelProvider, ModelProviderRegistry } from '../provider.ts';
+import type { GatewayDeps } from './index.ts';
 
 export interface ResolvedProfile {
   alias: string;

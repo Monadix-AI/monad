@@ -23,7 +23,7 @@ import type {
   ManagedProjectOutputHandler,
   NativeCliHostDeps,
   NativeCliObservationListener
-} from '@/services/native-cli/host-types.ts';
+} from '@/services/native-cli/host/host-types.ts';
 import type { NativeCliStartPreflight } from '@/services/native-cli/types.ts';
 import type { NativeCliSessionRow } from '@/store/db/index.ts';
 
@@ -31,25 +31,25 @@ import { dirname } from 'node:path';
 import { nativeCliStreamItems } from '@monad/atoms/native-cli-observation';
 import { createLogger } from '@monad/logger';
 
-import { NativeCliAppServerConnectionManager } from '@/services/native-cli/app-server-connection.ts';
 import { NativeCliAuthHost, type NativeCliAuthListener } from '@/services/native-cli/auth-host.ts';
-import { NativeCliOneshotRunner } from '@/services/native-cli/cli-oneshot.ts';
 import { MAX_OUTPUT_SNAPSHOT } from '@/services/native-cli/constants.ts';
 import { NativeCliError } from '@/services/native-cli/errors.ts';
-import { NativeCliEventLog } from '@/services/native-cli/event-log.ts';
-import { HISTORY_PAGE_TIMEOUT_MS, NATIVE_CLI_IDLE_TIMEOUT_MS } from '@/services/native-cli/host-constants.ts';
-import { toView } from '@/services/native-cli/host-helpers.ts';
+import { NativeCliAppServerConnectionManager } from '@/services/native-cli/host/app-server-connection.ts';
+import { NativeCliOneshotRunner } from '@/services/native-cli/host/cli-oneshot.ts';
+import { NativeCliEventLog } from '@/services/native-cli/host/event-log.ts';
+import { HISTORY_PAGE_TIMEOUT_MS, NATIVE_CLI_IDLE_TIMEOUT_MS } from '@/services/native-cli/host/host-constants.ts';
+import { toView } from '@/services/native-cli/host/host-helpers.ts';
+import { NativeCliObservationHub } from '@/services/native-cli/host/observation-hub.ts';
+import { NativeCliObservationResolver } from '@/services/native-cli/host/observation-resolve.ts';
+import { NativeCliOutputPipeline } from '@/services/native-cli/host/output-pipeline.ts';
+import { NativeCliProcessLifecycle } from '@/services/native-cli/host/process-lifecycle.ts';
+import { NativeCliSessionLauncher } from '@/services/native-cli/host/session-launcher.ts';
 import { getNativeCliProviderAdapter } from '@/services/native-cli/index.ts';
 import {
   cleanupManagedProjectRuntimeToken,
   managedProjectRuntimeWorkspace
 } from '@/services/native-cli/managed-project.ts';
-import { NativeCliObservationHub } from '@/services/native-cli/observation-hub.ts';
-import { NativeCliObservationResolver } from '@/services/native-cli/observation-resolve.ts';
-import { NativeCliOutputPipeline } from '@/services/native-cli/output-pipeline.ts';
 import { killNativeCliProcess } from '@/services/native-cli/process.ts';
-import { NativeCliProcessLifecycle } from '@/services/native-cli/process-lifecycle.ts';
-import { NativeCliSessionLauncher } from '@/services/native-cli/session-launcher.ts';
 import { buildNativeCliSpawnEnv, requireNativeCliAgent } from '@/services/native-cli/spawn-support.ts';
 
 export type { NativeCliHostDeps };

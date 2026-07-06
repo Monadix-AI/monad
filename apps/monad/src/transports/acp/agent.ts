@@ -38,7 +38,7 @@ import { createLogger, formatTransportCall } from '@monad/logger';
 import { parseEventPayload } from '@monad/protocol';
 
 import { createSandboxBackends, isDelegableTool } from '@/capabilities/tools';
-import { VERSION } from '@/handlers/handlers.ts';
+import { VERSION } from '@/handlers/daemon-handlers/index.ts';
 import { buildSessionOrigin, hostOs } from '@/handlers/session/origin.ts';
 import { createAcpFsBackend, createAcpTerminalBackend } from '@/transports/acp/backends.ts';
 import { bridgeClarify, bridgeDelegation, bridgePermission } from '@/transports/acp/bridges.ts';

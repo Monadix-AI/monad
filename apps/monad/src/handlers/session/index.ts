@@ -3,7 +3,7 @@ import type { SessionDeps } from '@/handlers/session/context.ts';
 import type { MessagingCommandDeps } from '@/handlers/session/handlers/messaging/index.ts';
 
 import { createSessionContext } from '@/handlers/session/context.ts';
-import { createLifecycleHandlers } from '@/handlers/session/handlers/lifecycle.ts';
+import { createLifecycleHandlers } from '@/handlers/session/handlers/lifecycle/index.ts';
 import { createMessagingHandlers } from '@/handlers/session/handlers/messaging/index.ts';
 import { createSearchHandlers } from '@/handlers/session/handlers/search.ts';
 

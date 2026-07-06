@@ -4,7 +4,6 @@
 // drives the provider through the ai-sdk-free ModelProvider contract; ai-sdk lives in @monad/atoms.
 
 import type { ModelChunk, ProviderCredential, ResolvedProviderConfig, UsageLimits } from '@monad/sdk-atom';
-import type { ResolvedProfile } from './gateway-routing.ts';
 import type {
   EmbedResult,
   ImageRequest,
@@ -20,10 +19,13 @@ import type {
   TranscriptionResult,
   VideoRequest,
   VideoResult
-} from './index.ts';
+} from '../index.ts';
+import type { ResolvedProfile } from './gateway-routing.ts';
 
 import { createLogger } from '@monad/logger';
 
+import { withResolvedModel } from '../index.ts';
+import { ModelProviderRegistry } from '../provider.ts';
 import {
   generateImage as generateImageAttempt,
   generateSpeech as generateSpeechAttempt,
@@ -32,8 +34,6 @@ import {
   transcribe as transcribeAttempt
 } from './gateway-media.ts';
 import { buildCall, buildChain, errInfo, modelCreds, resolveProvider } from './gateway-routing.ts';
-import { withResolvedModel } from './index.ts';
-import { ModelProviderRegistry } from './provider.ts';
 
 export { fetchProviderModels, listProviderModels } from './gateway-models.ts';
 

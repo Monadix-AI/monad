@@ -1,10 +1,13 @@
 import type { NativeCliObservationAccessResponse } from '@monad/protocol';
-import type { LiveNativeCliSession, NativeCliHostDeps } from '@/services/native-cli/host-types.ts';
+import type { LiveNativeCliSession, NativeCliHostDeps } from '@/services/native-cli/host/host-types.ts';
 
 import { nativeCliStreamItems, nativeCliUsageLimitMeter } from '@monad/atoms/native-cli-observation';
 
-import { providerHistoryOutputFromLocal, providerHistoryOutputViaCli } from '@/services/native-cli/history-backfill.ts';
-import { isManagedProjectRuntime } from '@/services/native-cli/host-helpers.ts';
+import {
+  providerHistoryOutputFromLocal,
+  providerHistoryOutputViaCli
+} from '@/services/native-cli/host/history-backfill.ts';
+import { isManagedProjectRuntime } from '@/services/native-cli/host/host-helpers.ts';
 import { getNativeCliProviderAdapter } from '@/services/native-cli/index.ts';
 
 export interface NativeCliObservationResolveContext {

@@ -1,5 +1,4 @@
 import type { ImageCall, RerankCall, SpeechCall, TranscriptionCall, VideoCall } from '@monad/sdk-atom';
-import type { GatewayDeps } from './gateway.ts';
 import type {
   ImageRequest,
   ImageResult,
@@ -11,8 +10,9 @@ import type {
   TranscriptionResult,
   VideoRequest,
   VideoResult
-} from './index.ts';
-import type { ModelProviderRegistry } from './provider.ts';
+} from '../index.ts';
+import type { ModelProviderRegistry } from '../provider.ts';
+import type { GatewayDeps } from './index.ts';
 
 import { buildChain, errInfo, modelCreds, resolveProvider } from './gateway-routing.ts';
 

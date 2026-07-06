@@ -23,11 +23,11 @@ import { parseDurableSummary } from '@/agent/history.ts';
 import { canTransition } from '@/agent/index.ts';
 import { clearProcessesForSession, disposeSandboxSession } from '@/capabilities/tools';
 import { HandlerError } from '@/handlers/handler-error.ts';
-import { createProjectLifecycleHandlers } from '@/handlers/session/handlers/lifecycle-projects.ts';
-import { createWorkspaceHandlers, resolveWorkspaceDir } from '@/handlers/session/handlers/lifecycle-workspace.ts';
 import { createManagedNativeCliJoin } from '@/handlers/session/handlers/managed-native-cli-join.ts';
 import { SessionUiProjector } from '@/handlers/session/ui-projection.ts';
 import { clearAcpDelegatesForSession } from '@/services/delegation/acp-delegate.ts';
+import { createProjectLifecycleHandlers } from './lifecycle-projects.ts';
+import { createWorkspaceHandlers, resolveWorkspaceDir } from './lifecycle-workspace.ts';
 
 const log = createLogger('session');
 

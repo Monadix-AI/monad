@@ -1,6 +1,9 @@
 import { chmod, rename, unlink } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 
+import { runMigrations } from '../migrate.ts';
+import { friendlySchemaError } from './config-errors.ts';
+import { CURRENT_AUTH_VERSION, type MonadAuth, monadAuthSchema } from './config-schema.ts';
 import {
   CURRENT_CONFIG_VERSION,
   CURRENT_PROFILE_VERSION,
@@ -12,14 +15,11 @@ import {
   monadConfigSchema,
   monadProfileSchema,
   monadSystemConfigSchema
-} from './config.ts';
-import { friendlySchemaError } from './config-errors.ts';
-import { CURRENT_AUTH_VERSION, type MonadAuth, monadAuthSchema } from './config-schema.ts';
-import { runMigrations } from './migrate.ts';
+} from './index.ts';
 
-const CONFIG_MIGRATIONS_DIR = join(import.meta.dir, 'migrations', 'config');
-const PROFILE_MIGRATIONS_DIR = join(import.meta.dir, 'migrations', 'profile');
-const AUTH_MIGRATIONS_DIR = join(import.meta.dir, 'migrations', 'auth');
+const CONFIG_MIGRATIONS_DIR = join(import.meta.dir, '..', 'migrations', 'config');
+const PROFILE_MIGRATIONS_DIR = join(import.meta.dir, '..', 'migrations', 'profile');
+const AUTH_MIGRATIONS_DIR = join(import.meta.dir, '..', 'migrations', 'auth');
 
 export async function migrateConfig(raw: unknown): Promise<MonadConfig> {
   return runMigrations(raw, CURRENT_CONFIG_VERSION, CONFIG_MIGRATIONS_DIR, (data) => monadConfigSchema.parse(data));

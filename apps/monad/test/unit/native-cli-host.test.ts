@@ -10,7 +10,7 @@ import { builtinAgentAdapters } from '@monad/atoms/agent-adapters';
 import { EventBus } from '@/services/event-bus.ts';
 import { BoundedOutputBuffer } from '@/services/native-cli/bounded-output-buffer.ts';
 import { AUTH_STATUS_TIMEOUT_MS } from '@/services/native-cli/constants.ts';
-import { NativeCliHost } from '@/services/native-cli/host.ts';
+import { NativeCliHost } from '@/services/native-cli/host/index.ts';
 import { registerAgentAdapterImpl } from '@/services/native-cli/index.ts';
 import { createStore } from '@/store/db/index.ts';
 

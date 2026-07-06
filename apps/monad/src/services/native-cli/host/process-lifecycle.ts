@@ -1,4 +1,4 @@
-import type { NativeCliHostDeps } from '@/services/native-cli/host-types.ts';
+import type { NativeCliHostDeps } from '@/services/native-cli/host/host-types.ts';
 
 import { daemonChildProcesses } from '@/infra/daemon-child-processes.ts';
 import { cleanupManagedProjectOrphanTokens } from '@/services/native-cli/managed-project.ts';
