@@ -7,6 +7,7 @@ export interface SystemUpgradeOptions {
   binaryPath?: string;
   spawn?: typeof Bun.spawn;
   env?: NodeJS.ProcessEnv;
+  detached?: boolean;
 }
 
 const STAGES: Record<SystemUpgradeStatus['stage'], number> = {
@@ -47,6 +48,18 @@ export function createSystemUpgradeModule(options: SystemUpgradeOptions = {}) {
   async function runUpgrade(): Promise<void> {
     try {
       setStage('downloading');
+      if (options.detached) {
+        const proc = spawn([options.binaryPath ?? process.execPath, 'upgrade'], {
+          detached: true,
+          env,
+          stderr: 'ignore',
+          stdin: 'ignore',
+          stdout: 'ignore'
+        });
+        proc.unref?.();
+        setStage('restarting');
+        return;
+      }
       const proc = spawn([options.binaryPath ?? process.execPath, 'upgrade'], {
         env,
         stderr: 'pipe',

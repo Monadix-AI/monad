@@ -95,7 +95,7 @@ export function createDaemonHandlers(deps: DaemonHandlerDeps) {
 
   const oversight = createOversightHandlers(deps.oversight);
   const clarify = createClarifyHandlers(deps.clarify);
-  const systemUpgrade = createSystemUpgradeModule({ getUpgradeInfo: deps.getUpgradeInfo });
+  const systemUpgrade = createSystemUpgradeModule({ detached: true, getUpgradeInfo: deps.getUpgradeInfo });
   const system = createSystemHandlers(systemUpgrade);
   const delegation = createDelegationHandlers(deps.delegation);
 

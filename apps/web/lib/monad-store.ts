@@ -14,6 +14,7 @@ export interface MonadConnectionConfig {
 }
 
 const ERROR_DETAIL_LIMIT = 3000;
+const UPGRADE_RESTART_SUPPRESS_UNTIL_KEY = 'monad:upgradeRestartSuppressUntil';
 
 function truncate(value: string, limit = ERROR_DETAIL_LIMIT): string {
   return value.length > limit ? `${value.slice(0, limit)}\n… truncated` : value;
@@ -95,6 +96,17 @@ function toastDetailForApiError(err: MonadApiError): unknown {
   };
 }
 
+export function markUpgradeRestartWindow(durationMs = 120_000): void {
+  localStorage.setItem(UPGRADE_RESTART_SUPPRESS_UNTIL_KEY, String(Date.now() + durationMs));
+}
+
+function shouldSuppressApiErrorDuringUpgrade(err: MonadApiError): boolean {
+  const until = Number(localStorage.getItem(UPGRADE_RESTART_SUPPRESS_UNTIL_KEY) ?? 0);
+  if (!Number.isFinite(until) || Date.now() > until) return false;
+  const status = typeof err.status === 'number' ? err.status : 0;
+  return status >= 500;
+}
+
 export function resolveConnection(): MonadConnectionConfig {
   if (typeof window === 'undefined') throw new Error('resolveConnection requires a browser runtime');
 
@@ -126,7 +138,10 @@ export function createMonadRuntime(conn: MonadConnectionConfig) {
   });
   const store = createMonadStore({
     client,
-    onApiError: (err) => toast.error(toastMessageForApiError(err), { detail: toastDetailForApiError(err) })
+    onApiError: (err) => {
+      if (shouldSuppressApiErrorDuringUpgrade(err)) return;
+      toast.error(toastMessageForApiError(err), { detail: toastDetailForApiError(err) });
+    }
   });
 
   return {

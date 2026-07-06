@@ -28,6 +28,7 @@ import { Badge, Button, ScrollArea, Separator, Switch } from '@monad/ui';
 import { useState } from 'react';
 
 import { useT } from '@/components/I18nProvider';
+import { markUpgradeRestartWindow } from '@/lib/monad-store';
 
 interface Props {
   onClose: () => void;
@@ -94,6 +95,7 @@ export function SystemSettings({ onClose }: Props) {
   }
 
   async function handleUpgrade() {
+    markUpgradeRestartWindow();
     await startSystemUpgrade().unwrap();
   }
 
