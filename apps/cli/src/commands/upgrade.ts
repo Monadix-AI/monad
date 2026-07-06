@@ -260,11 +260,11 @@ export function createUpgradeCommand(commandDeps: UpgradeCommandDeps = {}): Comm
         process.exit(1);
       }
 
-      const proc = Bun.spawn(installerArgs(scriptPath, channel, deps), {
+      const proc = Bun.spawn(installerArgs(scriptPath, channel, deps, latest), {
         stdout: 'inherit',
         stderr: 'inherit',
         stdin: 'inherit',
-        env: installerEnv(channel, deps)
+        env: installerEnv(channel, deps, latest)
       });
       const code = await proc.exited;
       // clean up temp script regardless of exit code
@@ -283,17 +283,18 @@ function isExpectedInstallScript(script: string, deps: ResolvedUpgradeCommandDep
   return trimmed.startsWith('#!');
 }
 
-function installerArgs(scriptPath: string, channel: string, deps: ResolvedUpgradeCommandDeps): string[] {
+function installerArgs(scriptPath: string, channel: string, deps: ResolvedUpgradeCommandDeps, version: string): string[] {
   if (deps.platform === 'win32') {
     return ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', scriptPath];
   }
-  return ['bash', scriptPath, ...(channel !== 'stable' ? ['--channel', channel] : [])];
+  return ['bash', scriptPath, '--version', version, ...(channel !== 'stable' ? ['--channel', channel] : [])];
 }
 
-function installerEnv(channel: string, deps: ResolvedUpgradeCommandDeps): Record<string, string> {
+function installerEnv(channel: string, deps: ResolvedUpgradeCommandDeps, version?: string): Record<string, string> {
   return {
     ...process.env,
     MONAD_UPGRADE_TARGET: deps.binaryPath(),
+    ...(version ? { MONAD_VERSION: version } : {}),
     ...(deps.platform === 'win32' && channel !== 'stable' ? { MONAD_CHANNEL: channel } : {}),
     ...deps.installerEnv
   };

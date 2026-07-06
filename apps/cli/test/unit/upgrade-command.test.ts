@@ -155,6 +155,8 @@ test('upgrade installs via verified script and backs up the current binary', asy
 
   expect(spawnCalls).toHaveLength(1);
   expect(spawnCalls[0]?.[0]).toBe(process.platform === 'win32' ? 'powershell' : 'bash');
+  if (process.platform !== 'win32') expect(spawnCalls[0]).toContain('--version');
+  if (process.platform !== 'win32') expect(spawnCalls[0]).toContain('9.9.9');
   expect(await Bun.file(join(home, 'backup', 'binaries', `monad-${MONAD_VERSION}`)).text()).toBe('current-binary');
 });
 
@@ -174,7 +176,7 @@ test('upgrade beta selects the first prerelease and passes the channel to the in
 
   if (process.platform === 'win32') {
   } else {
-    expect(spawnCalls[0]?.slice(-2)).toEqual(['--channel', 'beta']);
+    expect(spawnCalls[0]?.slice(-4)).toEqual(['--version', '10.0.0-beta.1', '--channel', 'beta']);
   }
 });
 
