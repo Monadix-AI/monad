@@ -1,34 +1,19 @@
 'use client';
 
-import type { MessageId, ProfileView, ProjectId, SessionId, UIItem, UIMessageItem } from '@monad/protocol';
+import type { MessageId, ProjectId, SessionId, UIItem, UIMessageItem } from '@monad/protocol';
 import type { VirtualListHandle } from '@monad/ui/components/VirtualList';
 import type { SessionCommandMenuItem } from '@/features/routes/sessions/SessionRoute';
 import type { WorkspaceRouteProps } from '@/features/routes/workspace/WorkspaceRoute';
 import type { StudioSectionId } from '@/features/studio/sections';
 
 import {
-  nativeCliSessionSelectors,
-  profileSelectors,
-  sessionAdapter,
-  sessionSelectors,
   useApproveToolMutation,
   useClarifyRespondMutation,
   useCreateSessionMutation,
   useCreateWorkplaceProjectMutation,
-  useGetHealthQuery,
-  useGetRolesQuery,
   useGetWorkplaceProjectQuery,
-  useListCommandsQuery,
-  useListLiveNativeCliSessionsQuery,
-  useListNativeCliSessionSummariesQuery,
-  useListProfilesQuery,
-  useListSessionsQuery,
-  useListWorkplaceProjectsQuery,
-  useStreamControlQuery,
   useStreamUiItemsQuery,
-  useTranscribeAudioMutation,
-  workplaceProjectAdapter,
-  workplaceProjectSelectors
+  useTranscribeAudioMutation
 } from '@monad/client-rtk';
 import { cn } from '@monad/ui';
 import { useFirstItemIndex } from '@monad/ui/hooks/use-first-item-index';
@@ -74,19 +59,18 @@ import {
 import { useSidebarShortcuts } from '@/hooks/use-sidebar-shortcuts';
 import { useTranscriptHistory } from '@/hooks/use-transcript-history';
 import { useMonadRuntime } from '@/lib/monad-runtime-provider';
-import { buildWorkspaceProjects } from '@/lib/workspace-sessions';
 import { useWorkspaceShellStore, type WorkspaceShellState } from '@/lib/workspace-shell-store';
 import { AppShellRoutes } from './AppShellRoutes';
 import { AppShellSidebarReveal } from './AppShellSidebarReveal';
 import { NewProjectDialog } from './NewProjectDialog';
 import { SessionSidebar } from './SessionSidebar';
+import { useAppShellData } from './useAppShellData';
 
 // Stable empty references so query fallbacks don't change identity each render
 // (a fresh `[]` default would retrigger effects that depend on the data).
 const EMPTY_UI_ITEMS: UIItem[] = [];
 
 const viewMessageId = (item: ViewItem): string => item.id;
-const EMPTY_PROFILES: ProfileView[] = [];
 
 const SEGMENT_COLORS: Record<string, string> = {
   customAgents: 'var(--success)',
@@ -103,72 +87,19 @@ export function AppShell() {
   const t = useT();
   const { baseUrl: daemonBaseUrl, client: monadClient, switchDaemonConnection } = useMonadRuntime();
 
-  const { data: health, isError: healthError } = useGetHealthQuery();
-  const daemonStatus = health?.status === 'ok' ? 'online' : healthError ? 'offline' : 'checking';
-  const daemonVersion = health?.version;
-  const hasUpgrade = Boolean(
-    (health as { latestVersion?: string; version?: string } | undefined)?.latestVersion &&
-      (health as { latestVersion?: string; version?: string } | undefined)?.latestVersion !==
-        (health as { latestVersion?: string; version?: string } | undefined)?.version
-  );
-
-  const { data: sessionData, isLoading: sessionsLoading } = useListSessionsQuery(undefined);
-  const { data: projectData } = useListWorkplaceProjectsQuery(undefined);
-  const { data: liveNativeCliSessionData } = useListLiveNativeCliSessionsQuery(undefined);
-  const { data: nativeCliSessionSummaryData } = useListNativeCliSessionSummariesQuery(undefined);
-  const sessions = sessionSelectors.selectAll(sessionData?.sessions ?? sessionAdapter.getInitialState());
-  const projectRows = useMemo(
-    () => workplaceProjectSelectors.selectAll(projectData?.projects ?? workplaceProjectAdapter.getInitialState()),
-    [projectData]
-  );
-  const liveNativeCliSessions = useMemo(
-    () => (liveNativeCliSessionData ? nativeCliSessionSelectors.selectAll(liveNativeCliSessionData.sessions) : []),
-    [liveNativeCliSessionData]
-  );
-  const nativeCliSessionSummaries = useMemo(
-    () =>
-      nativeCliSessionSummaryData ? nativeCliSessionSelectors.selectAll(nativeCliSessionSummaryData.sessions) : [],
-    [nativeCliSessionSummaryData]
-  );
-  const directSessions = sessions;
-  const pinnedProjectIds = useWorkspaceShellStore((state: WorkspaceShellState) => state.pinnedProjectIds);
-  const pinnedProjectIdSet = useMemo(() => new Set(pinnedProjectIds), [pinnedProjectIds]);
-  const workspaceProjects = useMemo(
-    () =>
-      buildWorkspaceProjects(projectRows, {
-        liveNativeCliSessions,
-        nativeCliSessions: nativeCliSessionSummaries,
-        pinnedProjectIds: pinnedProjectIdSet
-      }),
-    [liveNativeCliSessions, nativeCliSessionSummaries, pinnedProjectIdSet, projectRows]
-  );
-  // Keep the session list live: re-fetch (and re-sort by last activity) when any session changes
-  // anywhere — another tab, or a turn started from a third-party channel.
-  useStreamControlQuery(undefined);
-  // The unified command list (built-ins + atom pack commands + user-invocable skills) drives the
-  // `/` autocomplete — one server-owned source of truth instead of a hardcoded list.
-  const { data: commandsData } = useListCommandsQuery(undefined);
-  const commands = commandsData?.commands ?? [];
-  // Model profiles drive `/model <alias>` argument autocomplete.
   const {
-    data: profileData,
-    isError: profileDataError,
-    isLoading: profileDataLoading
-  } = useListProfilesQuery(undefined);
-  const profiles = profileData ? profileSelectors.selectAll(profileData.profiles) : EMPTY_PROFILES;
-  const defaultProfile = profiles.find((profile) => profile.alias === profileData?.defaultAlias);
-  const { data: modelRoles, isError: modelRolesError, isLoading: modelRolesLoading } = useGetRolesQuery(undefined);
-  const voiceModelConfigured = Boolean(
-    modelRoles?.transcription && defaultProfile?.routes.chat.provider && defaultProfile.routes.chat.modelId
-  );
-  const voiceModelState =
-    profileDataLoading || modelRolesLoading
-      ? 'checking'
-      : profileDataError || modelRolesError
-        ? 'failed'
-        : voiceModelConfigured
-          ? 'configured'
-          : 'missing';
+    commands,
+    daemonStatus,
+    daemonVersion,
+    hasUpgrade,
+    profiles,
+    sessions,
+    sessionsLoading,
+    voiceModelConfigured,
+    voiceModelState,
+    workspaceProjects
+  } = useAppShellData();
+  const directSessions = sessions;
   const [transcribeAudio] = useTranscribeAudioMutation();
   const [createSession] = useCreateSessionMutation();
   const [createWorkplaceProject] = useCreateWorkplaceProjectMutation();
