@@ -74,6 +74,9 @@ export function createSystemUpgradeModule(options: SystemUpgradeOptions = {}) {
     else if (/sha|verif/i.test(text)) setStage('verifying');
     else if (/install/i.test(text)) setStage('installing');
     else if (/restart|start/i.test(text)) setStage('restarting');
+
+    const percent = parseProgressPercent(text);
+    if (percent !== null && status.stage === 'downloading') setProgress(Math.min(74, Math.max(STAGES.downloading, percent)));
   }
 
   function setStage(stage: SystemUpgradeStatus['stage']): void {
@@ -81,11 +84,23 @@ export function createSystemUpgradeModule(options: SystemUpgradeOptions = {}) {
     status = { ...status, stage, progress: Math.max(status.progress, STAGES[stage]), error: null };
   }
 
+  function setProgress(progress: number): void {
+    if (status.stage === 'failed' || status.stage === 'complete') return;
+    status = { ...status, progress: Math.max(status.progress, progress), error: null };
+  }
+
   function fail(error: string): void {
     status = { ...status, stage: 'failed', progress: 100, error };
   }
 
   return { getStatus: current, start };
+}
+
+function parseProgressPercent(text: string): number | null {
+  const matches = [...text.matchAll(/(\d{1,3})\s*%/g)];
+  const value = Number(matches.at(-1)?.[1]);
+  if (!Number.isFinite(value)) return null;
+  return Math.max(0, Math.min(100, value));
 }
 
 function buildIdleStatus(getUpgradeInfo?: SystemUpgradeOptions['getUpgradeInfo']): SystemUpgradeStatus {

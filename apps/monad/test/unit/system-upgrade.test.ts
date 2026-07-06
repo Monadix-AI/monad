@@ -70,3 +70,32 @@ test('system upgrade reports failure when the child process exits non-zero', asy
     error: 'upgrade exited with code 7'
   });
 });
+
+test('system upgrade reflects download progress from installer output', async () => {
+  let resolveExit!: () => void;
+  const exited = new Promise<number>((resolve) => {
+    resolveExit = () => resolve(0);
+  });
+  const upgrade = createSystemUpgradeModule({
+    getUpgradeInfo: () => ({ latestVersion: '9.9.9', latestVersionCheckedAt: '2026-07-06T00:00:00.000Z' }),
+    spawn: (() => ({
+      stdout: stream('Downloading Monad CLI\n[====      ] 42%\n'),
+      stderr: stream(''),
+      exited
+    })) as unknown as typeof Bun.spawn
+  });
+
+  await upgrade.start();
+  await Bun.sleep(0);
+
+  expect(upgrade.getStatus()).toMatchObject({
+    stage: 'downloading',
+    progress: 42
+  });
+
+  resolveExit();
+  await Bun.sleep(0);
+
+  expect(upgrade.getStatus().stage).toBe('complete');
+  expect(upgrade.getStatus().progress).toBe(100);
+});
