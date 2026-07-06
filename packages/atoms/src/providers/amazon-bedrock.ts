@@ -1,6 +1,6 @@
 import { createAmazonBedrock } from '@ai-sdk/amazon-bedrock';
 
-import { defineAiSdkProvider } from './ai-sdk-adapter.ts';
+import { defineAiSdkProvider } from './ai-sdk-adapter/index.ts';
 import { PROVIDER_DESCRIPTORS } from './catalog.ts';
 
 // Bedrock authenticates with a bearer API key (the long-lived `ABSK…` key) and requires a

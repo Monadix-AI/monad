@@ -1,14 +1,14 @@
 import type { EventType, TranscriptTargetId } from '@monad/protocol';
 import type { Tool } from '@/capabilities/tools/types.ts';
-import type { ModelContentPart, ModelMessage, ModelUsage, ToolSpec } from '../model/index.ts';
-import type { AgentLoopDeps, ImageAttachment } from './types.ts';
+import type { ModelContentPart, ModelMessage, ModelUsage, ToolSpec } from '../../model/index.ts';
+import type { AgentLoopDeps, ImageAttachment } from '../types.ts';
 
 import { includeInContext } from '@monad/protocol';
 
 import { toolInputJsonSchema } from '@/capabilities/tools/schema.ts';
-import { ContextBuilder } from '../context/budget.ts';
-import { estimateTokensCached, globalEstimator } from '../context/estimate.ts';
-import { messageChars } from '../context/index.ts';
+import { ContextBuilder } from '../../context/budget.ts';
+import { estimateTokensCached, globalEstimator } from '../../context/estimate.ts';
+import { messageChars } from '../../context/index.ts';
 import {
   DEFAULT_SYSTEM_PROMPT,
   guiTrackInstructions,
@@ -16,8 +16,8 @@ import {
   renderSystemPrompt,
   SUMMARY_MARKER,
   skillInstructions
-} from '../prompts.ts';
-import { replayHistory } from './replay.ts';
+} from '../../prompts.ts';
+import { replayHistory } from '../replay.ts';
 
 /**
  * Owns everything needed to assemble the model-facing prompt for a turn: history replay,

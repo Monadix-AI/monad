@@ -28,7 +28,7 @@ import type { NativeCliStartPreflight } from '@/services/native-cli/types.ts';
 import type { NativeCliSessionRow } from '@/store/db/index.ts';
 
 import { dirname } from 'node:path';
-import { nativeCliStreamItems, nativeCliUsageLimitMeter } from '@monad/atoms/native-cli-observation';
+import { nativeCliStreamItems } from '@monad/atoms/native-cli-observation';
 import { createLogger } from '@monad/logger';
 
 import { NativeCliAppServerConnectionManager } from '@/services/native-cli/app-server-connection.ts';
@@ -37,15 +37,15 @@ import { NativeCliOneshotRunner } from '@/services/native-cli/cli-oneshot.ts';
 import { MAX_OUTPUT_SNAPSHOT } from '@/services/native-cli/constants.ts';
 import { NativeCliError } from '@/services/native-cli/errors.ts';
 import { NativeCliEventLog } from '@/services/native-cli/event-log.ts';
-import { providerHistoryOutputFromLocal, providerHistoryOutputViaCli } from '@/services/native-cli/history-backfill.ts';
 import { HISTORY_PAGE_TIMEOUT_MS, NATIVE_CLI_IDLE_TIMEOUT_MS } from '@/services/native-cli/host-constants.ts';
-import { isManagedProjectRuntime, toView } from '@/services/native-cli/host-helpers.ts';
+import { toView } from '@/services/native-cli/host-helpers.ts';
 import { getNativeCliProviderAdapter } from '@/services/native-cli/index.ts';
 import {
   cleanupManagedProjectRuntimeToken,
   managedProjectRuntimeWorkspace
 } from '@/services/native-cli/managed-project.ts';
 import { NativeCliObservationHub } from '@/services/native-cli/observation-hub.ts';
+import { NativeCliObservationResolver } from '@/services/native-cli/observation-resolve.ts';
 import { NativeCliOutputPipeline } from '@/services/native-cli/output-pipeline.ts';
 import { killNativeCliProcess } from '@/services/native-cli/process.ts';
 import { NativeCliProcessLifecycle } from '@/services/native-cli/process-lifecycle.ts';
@@ -125,6 +125,9 @@ export class NativeCliHost {
   /** Builds and spawns a fresh native-CLI session (agent/launch resolution, process spawn, stream
    *  wiring, exit/idle-resume bookkeeping). */
   private readonly sessionLauncher: NativeCliSessionLauncher;
+  /** Resolves a session's current observable state (live buffer / durable snapshot / provider
+   *  history), independent of the observation subscription/publish side above. */
+  private readonly observationResolver: NativeCliObservationResolver;
 
   constructor(private readonly deps: NativeCliHostDeps) {
     this.authHost = new NativeCliAuthHost(deps);
@@ -177,6 +180,14 @@ export class NativeCliHost {
       armIdleSuspend: (live) => this.armIdleSuspend(live),
       idleTimeoutMs: () => this.idleTimeoutMs(),
       updateNativeCliPid: (id, pid) => this.updateNativeCliPid(id, pid)
+    });
+    this.observationResolver = new NativeCliObservationResolver({
+      live: this.live,
+      store: deps.store,
+      agents: deps.agents,
+      buildSpawnEnv: (env) => this.buildSpawnEnv(env),
+      takeStructuredLines: (id, stream, chunk) => this.outputPipeline.takeCompleteStructuredLines(id, stream, chunk),
+      dropStructuredBuffer: (id) => this.outputPipeline.dropStructuredBuffer(id)
     });
   }
 
@@ -424,101 +435,11 @@ export class NativeCliHost {
   }
 
   observe(id: string, afterSeq?: number): NativeCliObservationAccessResponse {
-    return this.observeFromStore(id, afterSeq);
+    return this.observationResolver.observe(id, afterSeq);
   }
 
-  async observeWithProviderHistory(id: string): Promise<NativeCliObservationAccessResponse> {
-    const base = this.observeFromStore(id);
-    if (base.state !== 'unavailable') return base;
-    const row = this.deps.store.getNativeCliSession(id);
-    if (!row || !isManagedProjectRuntime(row) || !row.providerSessionRef) return base;
-    const adapter = getNativeCliProviderAdapter(row.provider);
-    const cliOutput = await providerHistoryOutputViaCli(row, adapter, {
-      agents: this.deps.agents,
-      buildSpawnEnv: (env) => this.buildSpawnEnv(env),
-      takeStructuredLines: (structuredId, stream, chunk) =>
-        this.outputPipeline.takeCompleteStructuredLines(structuredId, stream, chunk),
-      dropStructuredBuffer: (structuredId) => this.outputPipeline.dropStructuredBuffer(structuredId)
-    }).catch(() => null);
-    if (cliOutput) {
-      return {
-        state: 'history',
-        nativeCliSessionId: id,
-        provider: row.provider,
-        output: cliOutput,
-        events: nativeCliStreamItems({ id, adapter, output: cliOutput }),
-        usageMeter: nativeCliUsageLimitMeter({ adapter, output: cliOutput }),
-        observedAt: row.updatedAt
-      };
-    }
-    const localOutput = await providerHistoryOutputFromLocal(row, adapter);
-    if (localOutput) {
-      return {
-        state: 'history',
-        nativeCliSessionId: id,
-        provider: row.provider,
-        output: localOutput,
-        events: nativeCliStreamItems({ id, adapter, output: localOutput }),
-        usageMeter: nativeCliUsageLimitMeter({ adapter, output: localOutput }),
-        observedAt: row.updatedAt
-      };
-    }
-    return base;
-  }
-
-  private observeFromStore(id: string, afterSeq?: number): NativeCliObservationAccessResponse {
-    const live = this.live.get(id);
-    if (live) {
-      const snapshot = live.outputBuffer.snapshot();
-      // Resume: if the caller's cursor is still within the bounded tail, hand back only the delta
-      // beyond it instead of the whole snapshot (a reconnecting client backfills from last-event-id).
-      if (afterSeq !== undefined && live.outputSeq > afterSeq && live.outputSeq - afterSeq <= snapshot.length) {
-        return {
-          state: 'live',
-          nativeCliSessionId: id,
-          provider: live.provider,
-          append: snapshot.slice(snapshot.length - (live.outputSeq - afterSeq)),
-          seq: live.outputSeq,
-          observedAt: new Date().toISOString()
-        };
-      }
-      return {
-        state: 'live',
-        nativeCliSessionId: id,
-        provider: live.provider,
-        output: snapshot,
-        events: nativeCliStreamItems({ id, adapter: live.adapter, output: snapshot }),
-        usageMeter: nativeCliUsageLimitMeter({ adapter: live.adapter, output: snapshot }),
-        seq: live.outputSeq,
-        observedAt: new Date().toISOString()
-      };
-    }
-    const row = this.deps.store.getNativeCliSession(id);
-    if (!row) {
-      return {
-        state: 'unavailable',
-        nativeCliSessionId: id,
-        reason: 'native CLI session not found'
-      };
-    }
-    if (!isManagedProjectRuntime(row) && row.outputSnapshot) {
-      const adapter = getNativeCliProviderAdapter(row.provider);
-      return {
-        state: 'history',
-        nativeCliSessionId: id,
-        provider: row.provider,
-        output: row.outputSnapshot,
-        events: nativeCliStreamItems({ id, adapter, output: row.outputSnapshot }),
-        usageMeter: nativeCliUsageLimitMeter({ adapter, output: row.outputSnapshot }),
-        observedAt: row.updatedAt
-      };
-    }
-    return {
-      state: 'unavailable',
-      nativeCliSessionId: id,
-      provider: row.provider,
-      reason: 'provider history unavailable'
-    };
+  observeWithProviderHistory(id: string): Promise<NativeCliObservationAccessResponse> {
+    return this.observationResolver.observeWithProviderHistory(id);
   }
 
   subscribeObservation(

@@ -1,6 +1,6 @@
 import type { ModelCall } from '@monad/sdk-atom';
 import type { Telemetry } from 'ai';
-import type { AiSdkProviderSpec } from './ai-sdk-adapter.ts';
+import type { AiSdkProviderSpec } from './index.ts';
 
 import { DevToolsTelemetry } from '@ai-sdk/devtools';
 import { OpenTelemetry } from '@ai-sdk/otel';

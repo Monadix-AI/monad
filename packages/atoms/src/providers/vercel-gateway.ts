@@ -3,7 +3,7 @@ import type { ModelInfo, ModelModalities } from '@monad/sdk-atom';
 import { createGateway } from '@ai-sdk/gateway';
 import { vercelGatewayPrice } from '@monad/protocol';
 
-import { defineAiSdkProvider } from './ai-sdk-adapter.ts';
+import { defineAiSdkProvider } from './ai-sdk-adapter/index.ts';
 import { PROVIDER_DESCRIPTORS } from './catalog.ts';
 
 const VERCEL_MODELS_BASE_URL = 'https://ai-gateway.vercel.sh/v1';

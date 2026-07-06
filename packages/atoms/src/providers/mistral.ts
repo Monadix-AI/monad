@@ -1,6 +1,6 @@
 import { createMistral } from '@ai-sdk/mistral';
 
-import { defineAiSdkProvider } from './ai-sdk-adapter.ts';
+import { defineAiSdkProvider } from './ai-sdk-adapter/index.ts';
 import { PROVIDER_DESCRIPTORS } from './catalog.ts';
 
 export const mistralProviderAtom = defineAiSdkProvider({

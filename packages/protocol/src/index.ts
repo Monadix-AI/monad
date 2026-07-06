@@ -28,7 +28,7 @@ export * from './mcp-server.ts';
 export * from './mem0-data.ts';
 export * from './memory.ts';
 export * from './message-types.ts';
-export * from './native-cli-agent.ts';
+export * from './native-cli-agent/index.ts';
 export * from './obscura.ts';
 export * from './pagination.ts';
 export * from './peer.ts';

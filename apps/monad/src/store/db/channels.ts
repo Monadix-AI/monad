@@ -16,17 +16,16 @@ export function getActiveConversation(
   return row ? rowToConversation(row) : null;
 }
 
+export interface SetActiveSessionArgs {
+  channelId: string;
+  conversationKey: string;
+  sessionId: string;
+  principalId: string;
+  label?: string;
+}
+
 /** Repoint a conversation at `sessionId`, recording it in the history index. Upsert. */
-export function setActiveSession(
-  sqlite: Database,
-  args: {
-    channelId: string;
-    conversationKey: string;
-    sessionId: string;
-    principalId: string;
-    label?: string;
-  }
-): void {
+export function setActiveSession(sqlite: Database, args: SetActiveSessionArgs): void {
   const now = new Date().toISOString();
   const tx = sqlite.transaction(() => {
     sqlite

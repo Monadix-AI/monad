@@ -44,16 +44,16 @@ import { RoundCache } from '@/services/round-cache.ts';
 import { ScheduleService } from '@/services/scheduling/schedule.ts';
 import { runAcpBridge } from '@/transports/acp/launch.ts';
 import { createDaemonAgent } from './bootstrap/agent.ts';
-import { createAtomDiscovery } from './bootstrap/atom-discovery.ts';
 import { createAtomPackRediscoverer } from './bootstrap/atoms.ts';
 import { createChannelGateway } from './bootstrap/channel-gateway.ts';
 import { createCommandBundle } from './bootstrap/commands.ts';
-import { createConfigWatchers } from './bootstrap/config-watchers.ts';
 import { createDataLayer } from './bootstrap/data-layer.ts';
 import { registerHotReload } from './bootstrap/hot-reload.ts';
-import { warnIfNotInitialized } from './bootstrap/init-status.ts';
 import { createInterruptServices } from './bootstrap/interrupts.ts';
-import { createLocaleService } from './bootstrap/locale.ts';
+import { createAtomDiscovery } from './bootstrap/main-init/atom-discovery.ts';
+import { createConfigWatchers } from './bootstrap/main-init/config-watchers.ts';
+import { warnIfNotInitialized } from './bootstrap/main-init/init-status.ts';
+import { createLocaleService } from './bootstrap/main-init/locale.ts';
 import { connectFileMcpServers, connectMcpServers } from './bootstrap/mcp.ts';
 import { createMcpControls } from './bootstrap/mcp-controls.ts';
 import { createMemorySubsystem } from './bootstrap/memory.ts';
@@ -224,7 +224,7 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
 
   // Live config-derived state: skill auto-load predicate, hot-swappable command/policy hooks, the
   // config/profile/auth file watcher (feeding the shared ConfigBus), workspace prompt slots, and
-  // per-agent persona resolution (see ./bootstrap/config-watchers.ts).
+  // per-agent persona resolution (see ./bootstrap/main-init/config-watchers.ts).
   const {
     configBus,
     computeSkillState,
@@ -266,7 +266,7 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
   // agent snapshots its tools below — so a third-party atom pack's declared tools/connectors reach
   // the agent. Channel factories are collected for the channel gateway (constructed later). An atom
   // pack that registers an undeclared atom kind is rejected here (UndeclaredAtomError), per pack
-  // (see ./bootstrap/atom-discovery.ts).
+  // (see ./bootstrap/main-init/atom-discovery.ts).
   let sessionGateway: SessionGateway | null = null;
   const {
     channelRegistry,
@@ -277,7 +277,7 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
   } = await createAtomDiscovery({ paths, cfg, registry, commandRegistry, modelService, logger });
 
   // Locale gateway: file-scan loading from the builtin locale dir + any installed atom-pack locale
-  // dirs (see ./bootstrap/locale.ts).
+  // dirs (see ./bootstrap/main-init/locale.ts).
   const i18nService = await createLocaleService(paths, cfg.locale);
 
   // File/pack MCP servers, in a mutable handle so rediscovery can close the previous round before

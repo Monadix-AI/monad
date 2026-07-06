@@ -4,8 +4,8 @@ import type { JSONValue } from 'ai';
 
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
 
-import { defineAiSdkProvider } from './ai-sdk-adapter.ts';
-import { PROVIDER_DESCRIPTORS } from './catalog.ts';
+import { defineAiSdkProvider } from '../ai-sdk-adapter/index.ts';
+import { PROVIDER_DESCRIPTORS } from '../catalog.ts';
 import { type OpenRouterProviderCall, openRouterApiOrigin } from './openrouter-http.ts';
 import { openRouterRerank, openRouterSpeech, openRouterTranscribe, openRouterVideo } from './openrouter-media.ts';
 import { listOpenRouterModels } from './openrouter-models.ts';

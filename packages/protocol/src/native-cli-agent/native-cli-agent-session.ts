@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
-import { transcriptTargetIdSchema } from './ids.ts';
+import { transcriptTargetIdSchema } from '../ids.ts';
+import { cursorPaginationQuerySchema, cursorPaginationResponseSchema } from '../pagination.ts';
 import {
   nativeCliAgentNameSchema,
   nativeCliAgentPresetSchema,
@@ -13,7 +14,6 @@ import {
 } from './native-cli-agent-config.ts';
 import { nativeCliObservationEventSchema } from './native-cli-agent-observation.ts';
 import { absolutePathSchema } from './native-cli-agent-paths.ts';
-import { cursorPaginationQuerySchema, cursorPaginationResponseSchema } from './pagination.ts';
 
 export const nativeCliSessionStateSchema = z.enum(['starting', 'running', 'exited', 'failed', 'stopped']);
 export type NativeCliSessionState = z.infer<typeof nativeCliSessionStateSchema>;

@@ -1,5 +1,5 @@
 // Atom pack + channel registry discovery: built-in and third-party atom packs load through the
-// SAME atom-kind-gated loader (see ./channels.ts), routing tools/connectors/commands/providers/
+// SAME atom-kind-gated loader (see ../channels.ts), routing tools/connectors/commands/providers/
 // hooks/workspace-experiences/agent-adapters/sandbox-launchers into the daemon's live registries.
 // This must run BEFORE the agent snapshots its tools, so a third-party atom pack's declared tools/
 // connectors reach the agent from the first turn.
@@ -14,8 +14,8 @@ import type { ModelService } from '@/services/model.ts';
 import { registerSandboxLauncher } from '@/capabilities/tools';
 import { createWorkspaceExperienceSnapshot } from '@/handlers/atom-pack/atom-pack-content.ts';
 import { registerAgentAdapterImpl } from '@/services/native-cli/index.ts';
-import { createChannelRegistry } from './channels.ts';
-import { finalizeSandboxLauncher } from './sandbox.ts';
+import { createChannelRegistry } from '../channels.ts';
+import { finalizeSandboxLauncher } from '../sandbox.ts';
 
 export interface AtomDiscovery {
   channelRegistry: Awaited<ReturnType<typeof createChannelRegistry>>;

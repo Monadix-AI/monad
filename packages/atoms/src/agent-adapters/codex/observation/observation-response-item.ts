@@ -1,7 +1,7 @@
 import type { NativeCliObservationEvent } from '@monad/protocol';
-import type { ObservationSource } from '../observation-projection.ts';
+import type { ObservationSource } from '../../observation-projection.ts';
 
-import { observation, textValue, thinkingObservation } from '../observation-projection.ts';
+import { observation, textValue, thinkingObservation } from '../../observation-projection.ts';
 
 export type CodexObservationResponseItem = Record<string, unknown> & { type: string };
 

@@ -1,5 +1,5 @@
 import type { NativeCliObservationEvent } from '@monad/protocol';
-import type { NativeCliObservationJsonRecordEntry } from '../observation-projection.ts';
+import type { NativeCliObservationJsonRecordEntry } from '../../observation-projection.ts';
 
 import {
   numberValue,
@@ -8,7 +8,7 @@ import {
   rawTextValue,
   recordValue,
   textValue
-} from '../observation-projection.ts';
+} from '../../observation-projection.ts';
 
 type CodexMessageGroup = {
   key: string;

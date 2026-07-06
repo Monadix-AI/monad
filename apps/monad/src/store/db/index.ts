@@ -12,7 +12,6 @@ import type {
   NativeCliInboxItem,
   SearchHit,
   Session,
-  SessionState,
   StatsRange,
   StreamStatus,
   Task,
@@ -40,6 +39,7 @@ import {
   deleteMessageAttachments,
   getMessageAttachment,
   getMessageAttachmentRefs,
+  type MessageAttachmentDetail,
   type MessageAttachmentInsert,
   registerMessageAttachment,
   registerMessageAttachments
@@ -49,10 +49,12 @@ import {
   getActiveConversation,
   listActiveConversations,
   listConversationSessions,
+  type SetActiveSessionArgs,
   setActiveSession,
   touchConversation
 } from './channels.ts';
-import { appendEvents, findDanglingInterrupts, hasEvent, listEvents } from './events.ts';
+import { type CheckpointHandle, startWalCheckpoint, stopWalCheckpoint } from './checkpoint.ts';
+import { appendEvents, type DanglingInterrupt, findDanglingInterrupts, hasEvent, listEvents } from './events.ts';
 import {
   failOrphanedStreamingMessages,
   findManagedNativeCliStreamingMessage,
@@ -72,7 +74,7 @@ import {
   setGenStatus,
   setMemory
 } from './messages.ts';
-import { migrate } from './migrations.ts';
+import { getSchemaVersion, migrate } from './migrations.ts';
 import { insertNativeAgentDirectMessage, listNativeAgentDirectMessages } from './native-agent-messages.ts';
 import {
   countNativeCliInbox,
@@ -107,6 +109,7 @@ import {
   messagesMissingEmbedding,
   pendingEmbeddingCount,
   type SearchOptions,
+  type SearchSemanticOptions,
   searchMessages,
   searchSemantic,
   staleEmbeddingCount,
@@ -127,8 +130,10 @@ import {
   listSessions,
   listWorkplaceProjects,
   provenance,
+  type SessionPatch,
   updateSession,
-  updateWorkplaceProject
+  updateWorkplaceProject,
+  type WorkplaceProjectPatch
 } from './sessions.ts';
 import {
   clearLedger,
@@ -159,8 +164,7 @@ export interface StoreOptions {
 export class Store {
   private readonly sqlite: Database;
   readonly db: BunSQLiteDatabase<Record<string, never>>;
-  #checkpointTimer: ReturnType<typeof setInterval> | undefined;
-  #checkpointWorker: Worker | undefined;
+  #checkpoint: CheckpointHandle | undefined;
 
   constructor(opts: StoreOptions = {}) {
     this.sqlite = new Database(opts.path ?? ':memory:');
@@ -173,39 +177,12 @@ export class Store {
     migrate(this.sqlite);
     this.db = drizzle(this.sqlite);
     if (opts.path && opts.path !== ':memory:') {
-      // Run WAL checkpoints in a Worker so the periodic fsync (which can stall 10-100ms on busy
-      // WAL files) does not block the daemon's main event loop mid-request. The worker is a pure
-      // optimization: if it can't be created or loaded — `new Worker(new URL(…, import.meta.url))`
-      // fails to resolve the embedded script in a bun --compile binary on some platforms (Windows),
-      // surfacing as "Worker has been terminated" — degrade silently. SQLite still auto-checkpoints
-      // the WAL at its page threshold, so correctness is unaffected; we only lose the offloaded fsync.
-      const dbPath = opts.path;
-      try {
-        const worker = new Worker(new URL('./workers/wal-checkpoint.ts', import.meta.url));
-        worker.addEventListener('error', () => {
-          this.#checkpointWorker = undefined;
-        });
-        this.#checkpointWorker = worker;
-        this.#checkpointTimer = setInterval(
-          () => {
-            try {
-              this.#checkpointWorker?.postMessage({ type: 'checkpoint', path: dbPath });
-            } catch {
-              this.#checkpointWorker = undefined;
-            }
-          },
-          5 * 60 * 1000
-        );
-        this.#checkpointTimer.unref();
-      } catch {
-        this.#checkpointWorker = undefined;
-      }
+      this.#checkpoint = startWalCheckpoint(opts.path);
     }
   }
 
   getSchemaVersion(): number {
-    const row = this.sqlite.prepare('PRAGMA user_version').get() as { user_version: number };
-    return row.user_version;
+    return getSchemaVersion(this.sqlite);
   }
 
   insertSession(s: Session): void {
@@ -225,18 +202,7 @@ export class Store {
   }
 
   /** Bumps updatedAt. Returns the updated row, or null if not found. */
-  updateSession(
-    id: string,
-    patch: {
-      title?: string;
-      state?: SessionState;
-      archived?: boolean;
-      agentIds?: Session['agentIds'];
-      model?: string | null;
-      cwd?: string | null;
-      origin?: Session['origin'] | null;
-    }
-  ): Session | null {
+  updateSession(id: string, patch: SessionPatch): Session | null {
     return updateSession(this.db, id, patch);
   }
 
@@ -260,17 +226,7 @@ export class Store {
     return getWorkplaceProject(this.db, id);
   }
 
-  updateWorkplaceProject(
-    id: string,
-    patch: {
-      title?: string;
-      state?: SessionState;
-      archived?: boolean;
-      model?: string | null;
-      cwd?: string | null;
-      origin?: WorkplaceProject['origin'] | null;
-    }
-  ): WorkplaceProject | null {
+  updateWorkplaceProject(id: string, patch: WorkplaceProjectPatch): WorkplaceProject | null {
     return updateWorkplaceProject(this.db, id, patch);
   }
 
@@ -471,10 +427,7 @@ export class Store {
     return staleEmbeddingCount(this.sqlite, currentModel);
   }
 
-  searchSemantic(
-    queryVec: number[],
-    opts: { limit?: number; transcriptTargetId?: TranscriptTargetId } = {}
-  ): SearchHit[] {
+  searchSemantic(queryVec: number[], opts: SearchSemanticOptions = {}): SearchHit[] {
     return searchSemantic(this.sqlite, queryVec, opts);
   }
 
@@ -484,12 +437,7 @@ export class Store {
   }
 
   /** Find approval/clarify requests that have no matching resolved event (left dangling by a restart). */
-  findDanglingInterrupts(): Array<{
-    type: 'approval' | 'clarify';
-    requestId: string;
-    sessionId: string;
-    tool?: string;
-  }> {
+  findDanglingInterrupts(): DanglingInterrupt[] {
     return findDanglingInterrupts(this.sqlite);
   }
 
@@ -510,13 +458,7 @@ export class Store {
   }
 
   /** Repoint a conversation at `sessionId`, recording it in the history index. Upsert. */
-  setActiveSession(args: {
-    channelId: string;
-    conversationKey: string;
-    sessionId: string;
-    principalId: string;
-    label?: string;
-  }): void {
+  setActiveSession(args: SetActiveSessionArgs): void {
     setActiveSession(this.sqlite, args);
   }
 
@@ -704,9 +646,7 @@ export class Store {
     deleteMessageAttachments(this.sqlite, ids);
   }
 
-  getMessageAttachment(
-    id: string
-  ): (MessageAttachmentRef & { projectId: string; preview: string; createdBy: string | null }) | null {
+  getMessageAttachment(id: string): MessageAttachmentDetail | null {
     return getMessageAttachment(this.sqlite, id);
   }
 
@@ -738,12 +678,10 @@ export class Store {
   }
 
   close(): void {
-    if (this.#checkpointTimer) {
-      clearInterval(this.#checkpointTimer);
-      this.#checkpointTimer = undefined;
+    if (this.#checkpoint) {
+      stopWalCheckpoint(this.#checkpoint);
+      this.#checkpoint = undefined;
     }
-    this.#checkpointWorker?.terminate();
-    this.#checkpointWorker = undefined;
     this.sqlite.exec('PRAGMA wal_checkpoint(TRUNCATE)');
     this.sqlite.close();
   }

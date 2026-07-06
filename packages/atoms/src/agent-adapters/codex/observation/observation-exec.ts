@@ -1,6 +1,6 @@
 import type { NativeCliObservationEvent } from '@monad/protocol';
 
-import { observation, permissionDenialEvents, textValue } from '../observation-projection.ts';
+import { observation, permissionDenialEvents, textValue } from '../../observation-projection.ts';
 import { codexResponseItem, isCodexObservationResponseItem } from './observation-response-item.ts';
 
 export function codexExecRecordEvents(

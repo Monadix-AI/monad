@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { nativeAgentDeliveryIdSchema } from './ids.ts';
+import { nativeAgentDeliveryIdSchema } from '../ids.ts';
 import { nativeCliProviderSchema } from './native-cli-agent-config.ts';
 
 export const nativeCliObservationRoleSchema = z.enum(['agent', 'system', 'tool', 'user']);

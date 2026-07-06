@@ -4,7 +4,7 @@ import type { SessionMcpServer } from '@monad/protocol';
 import { expect, test } from 'bun:test';
 import { envRef } from '@monad/home';
 
-import { channelDelegateMcpServers } from '@/handlers/session/handlers/messaging.ts';
+import { channelDelegateMcpServers } from '@/handlers/session/handlers/messaging/index.ts';
 
 const trust = { autoApproveTools: [], hostEscape: false };
 

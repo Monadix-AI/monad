@@ -2,7 +2,7 @@ import type { UsageLimits, UsageSnapshot } from '@monad/sdk-atom';
 
 import { createAnthropic } from '@ai-sdk/anthropic';
 
-import { defineAiSdkProvider, renderForCount } from './ai-sdk-adapter.ts';
+import { defineAiSdkProvider, renderForCount } from './ai-sdk-adapter/index.ts';
 import { PROVIDER_DESCRIPTORS } from './catalog.ts';
 
 const THINKING_BUDGET = {

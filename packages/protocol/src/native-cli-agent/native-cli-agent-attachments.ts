@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { attachmentIdSchema } from './ids.ts';
+import { attachmentIdSchema } from '../ids.ts';
 import { absolutePath } from './native-cli-agent-paths.ts';
 
 // Inline request-body cap (DoS guard). Longer content is spilled to a file and referenced as an

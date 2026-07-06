@@ -1,6 +1,6 @@
 import { createOpenAI } from '@ai-sdk/openai';
 
-import { defineAiSdkProvider, renderForCount } from './ai-sdk-adapter.ts';
+import { defineAiSdkProvider, renderForCount } from './ai-sdk-adapter/index.ts';
 import { PROVIDER_DESCRIPTORS } from './catalog.ts';
 
 const client = (call: {

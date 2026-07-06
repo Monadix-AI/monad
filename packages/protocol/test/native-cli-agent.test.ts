@@ -44,7 +44,7 @@ import {
   startNativeCliAgentRequestSchema,
   workplaceProjectMembersExtKey,
   workplaceProjectMembersExtSchema
-} from '../src/native-cli-agent.ts';
+} from '../src/native-cli-agent/index.ts';
 
 test('native CLI agent view requires provider-owned full-capability defaults', () => {
   const parsed = nativeCliAgentViewSchema.parse({

@@ -21,9 +21,9 @@ import { createAcpChannelDelegation } from '@/handlers/session/handlers/acp-chan
 import { createForwardAcpHandler } from '@/handlers/session/handlers/forward-acp.ts';
 import { createForwardNativeCliHandler } from '@/handlers/session/handlers/forward-native-cli.ts';
 import { createManagedNativeCliDelivery } from '@/handlers/session/handlers/managed-native-cli-delivery.ts';
+import { createMessagingNotifyHandlers } from '@/handlers/session/handlers/messaging/messaging-notify.ts';
+import { createSendProjectMessageHandler } from '@/handlers/session/handlers/messaging/messaging-project.ts';
 import { imageAttachments, messageTextWithAttachments } from '@/handlers/session/handlers/messaging-attachments.ts';
-import { createMessagingNotifyHandlers } from '@/handlers/session/handlers/messaging-notify.ts';
-import { createSendProjectMessageHandler } from '@/handlers/session/handlers/messaging-project.ts';
 import { createSubscribeHandlers } from '@/handlers/session/handlers/messaging-subscribe.ts';
 
 // Re-exported for existing import sites (tests import member/channel helpers from this module).

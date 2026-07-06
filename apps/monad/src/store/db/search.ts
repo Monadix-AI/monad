@@ -149,11 +149,12 @@ export function staleEmbeddingCount(sqlite: Database, currentModel: string): num
   return row.n;
 }
 
-export function searchSemantic(
-  sqlite: Database,
-  queryVec: number[],
-  opts: { limit?: number; transcriptTargetId?: TranscriptTargetId } = {}
-): SearchHit[] {
+export interface SearchSemanticOptions {
+  limit?: number;
+  transcriptTargetId?: TranscriptTargetId;
+}
+
+export function searchSemantic(sqlite: Database, queryVec: number[], opts: SearchSemanticOptions = {}): SearchHit[] {
   const limit = opts.limit ?? 20;
   // Precompute the query norm ONCE — cosine() used to recompute it for every row (N redundant
   // O(dim) passes). A zero/empty query can't match anything.

@@ -1,7 +1,7 @@
 import type { NativeCliProviderAdapter } from '@monad/sdk-atom';
 
 import { makeAppServerCliAdapter } from '../app-server-jsonrpc.ts';
-import { createFrameworkSettingsImport } from '../settings-import.ts';
+import { createFrameworkSettingsImport } from '../settings-import/index.ts';
 import { openClawAppServerHooks } from './app-server.ts';
 
 // OpenClaw ships no models-list command; these are the models its docs advertise for `--model`.

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { nativeCliProductIconSchema } from './native-cli-agent.ts';
+import { nativeCliProductIconSchema } from './native-cli-agent/index.ts';
 
 // Settings-UI view of a configured external ACP agent (the registry monad delegates subtasks to via
 // the `agent_acp_delegate` tool). Mirrors @monad/home's acpAgentSchema field-for-field; no secret

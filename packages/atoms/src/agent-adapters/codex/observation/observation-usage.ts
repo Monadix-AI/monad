@@ -1,6 +1,6 @@
 import type { NativeCliUsageRecord } from '@monad/protocol';
 
-import { numberValue, recordValue, textValue } from '../observation-projection.ts';
+import { numberValue, recordValue, textValue } from '../../observation-projection.ts';
 
 function tokenUsageRow(id: string, tokens: unknown, contextWindow: unknown): NativeCliUsageRecord | undefined {
   const totalTokens = numberValue(tokens);

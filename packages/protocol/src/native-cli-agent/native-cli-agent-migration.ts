@@ -1,11 +1,11 @@
 import { z } from 'zod';
 
-import { nativeCliAgentViewSchema, nativeCliProviderSchema } from './native-cli-agent-config.ts';
 import {
   importSettingsActionSchema,
   importSettingsCategorySchema,
   importSettingsRiskSchema
-} from './settings/settings-import.ts';
+} from '../settings/settings-import.ts';
+import { nativeCliAgentViewSchema, nativeCliProviderSchema } from './native-cli-agent-config.ts';
 
 export const adapterMigrationSourceScopeSchema = z.enum(['global', 'workspace', 'profile', 'manual']);
 export type AdapterMigrationSourceScope = z.infer<typeof adapterMigrationSourceScopeSchema>;

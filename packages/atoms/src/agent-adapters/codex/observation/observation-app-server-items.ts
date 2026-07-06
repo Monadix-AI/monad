@@ -6,7 +6,7 @@ import {
   providerEpochMsTimestamp,
   recordValue,
   textValue
-} from '../observation-projection.ts';
+} from '../../observation-projection.ts';
 import {
   codexAppServerToolCallObservation,
   codexAppServerToolResultObservation,

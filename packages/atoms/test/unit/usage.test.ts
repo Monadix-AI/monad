@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 
-import { toUsage } from '../../src/providers/ai-sdk-adapter.ts';
+import { toUsage } from '../../src/providers/ai-sdk-adapter/index.ts';
 
 test('toUsage maps a full ai-sdk usage + provider metadata', () => {
   const u = toUsage(

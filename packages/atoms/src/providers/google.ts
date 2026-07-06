@@ -1,6 +1,6 @@
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 
-import { defineAiSdkProvider, renderForCount } from './ai-sdk-adapter.ts';
+import { defineAiSdkProvider, renderForCount } from './ai-sdk-adapter/index.ts';
 import { PROVIDER_DESCRIPTORS } from './catalog.ts';
 
 const DEFAULT_BASE = 'https://generativelanguage.googleapis.com/v1beta';

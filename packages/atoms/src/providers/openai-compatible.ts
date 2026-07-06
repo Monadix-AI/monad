@@ -1,9 +1,9 @@
 import type { ModelProvider, ModelProviderDescriptor } from '@monad/sdk-atom';
-import type { CountTokensInput } from './ai-sdk-adapter.ts';
+import type { CountTokensInput } from './ai-sdk-adapter/index.ts';
 
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
 
-import { defineAiSdkProvider, renderForCount } from './ai-sdk-adapter.ts';
+import { defineAiSdkProvider, renderForCount } from './ai-sdk-adapter/index.ts';
 import { PROVIDER_DESCRIPTORS } from './catalog.ts';
 
 // A few OpenAI-compatible vendors ship a native count-tokens route over the same base URL +

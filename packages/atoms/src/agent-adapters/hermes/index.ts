@@ -4,7 +4,7 @@ import { NativeCliError } from '@monad/sdk-atom';
 
 import { parseStructuredAuthState } from '../adapter-shared.ts';
 import { makeAppServerCliAdapter } from '../app-server-jsonrpc.ts';
-import { createFrameworkSettingsImport } from '../settings-import.ts';
+import { createFrameworkSettingsImport } from '../settings-import/index.ts';
 import { hermesAppServerHooks } from './app-server.ts';
 
 // Hermes ships no models-list command; this fallback is the model its docs advertise for `--model`.

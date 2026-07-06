@@ -1,6 +1,6 @@
 import type { GenerationParams, ModelCall, ModelChunk, ModelResult, UsageLimits } from '@monad/sdk-atom';
 import type { LanguageModel } from 'ai';
-import type { AiSdkProviderSpec, ProviderOpts } from './ai-sdk-adapter.ts';
+import type { AiSdkProviderSpec, ProviderOpts } from './index.ts';
 
 import { generateText, streamText } from 'ai';
 

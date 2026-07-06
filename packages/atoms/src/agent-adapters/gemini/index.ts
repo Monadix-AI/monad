@@ -15,7 +15,7 @@ import { parseNativeCliArgumentSupport } from '../argument-support.ts';
 import { readProviderHistoryFile } from '../history-files.ts';
 import { resizePty, sendPtyInput, stopPty } from '../pty.ts';
 import { nativeCliAdapterSettings } from '../settings.ts';
-import { createBasicSettingsImport } from '../settings-import.ts';
+import { createBasicSettingsImport } from '../settings-import/index.ts';
 import { geminiObservationProjection } from './observation.ts';
 import { hasGeminiStreamJsonEvents, parseGeminiStreamJson } from './stream-json.ts';
 

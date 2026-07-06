@@ -8,7 +8,7 @@ import { googleProviderAtom } from './google.ts';
 import { mistralProviderAtom } from './mistral.ts';
 import { openaiProviderAtom } from './openai.ts';
 import { makeOpenAICompatibleProvider } from './openai-compatible.ts';
-import { openrouterProviderAtom } from './openrouter.ts';
+import { openrouterProviderAtom } from './openrouter/index.ts';
 import { vercelGatewayProviderAtom } from './vercel-gateway.ts';
 
 const nativeProviders: ModelProvider[] = [

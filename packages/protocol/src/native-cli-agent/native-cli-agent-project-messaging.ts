@@ -1,8 +1,8 @@
 import { z } from 'zod';
 
-import { clarifyChoiceModeSchema } from './clarify.ts';
-import { chatMessageSchema } from './domain.ts';
-import { messageIdSchema, nativeAgentDeliveryIdSchema, projectIdSchema } from './ids.ts';
+import { clarifyChoiceModeSchema } from '../clarify.ts';
+import { chatMessageSchema } from '../domain.ts';
+import { messageIdSchema, nativeAgentDeliveryIdSchema, projectIdSchema } from '../ids.ts';
 import {
   attachmentInputsSchema,
   messageAttachmentRefSchema,

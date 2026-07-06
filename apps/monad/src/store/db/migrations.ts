@@ -301,3 +301,8 @@ export function migrate(sqlite: Database): void {
     }
   }
 }
+
+export function getSchemaVersion(sqlite: Database): number {
+  const row = sqlite.prepare('PRAGMA user_version').get() as { user_version: number };
+  return row.user_version;
+}

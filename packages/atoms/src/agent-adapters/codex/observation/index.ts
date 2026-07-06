@@ -1,4 +1,4 @@
-import type { NativeCliObservationProjector } from '../observation-projection.ts';
+import type { NativeCliObservationProjector } from '../../observation-projection.ts';
 
 import {
   codexAppServerBatchRecordEvents,

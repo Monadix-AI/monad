@@ -1,20 +1,20 @@
 import type { Cost, Event, EventType, TranscriptTargetId } from '@monad/protocol';
 import type { Tool } from '@/capabilities/tools/types.ts';
 import type { ModelMessage, ModelUsage, ToolCall, ToolSpec } from '../model/index.ts';
-import type { ExplicitSkill } from './explicit-skill.ts';
+import type { ExplicitSkill } from './internal/explicit-skill.ts';
 import type { AgentLoopDeps, ChatMessage, ImageAttachment } from './types.ts';
 
 import { finishReasonSchema, newId } from '@monad/protocol';
 
 import { computeCost } from '../model/cost.ts';
 import { BUDGET_EXCEEDED, TOOL_BUDGET_REACHED } from '../prompts.ts';
-import { resolveExplicitSkill, skillModelInput } from './explicit-skill.ts';
-import { HookOrchestrator } from './hook-orchestrator.ts';
-import { PromptBuilder } from './prompt-builder.ts';
+import { resolveExplicitSkill, skillModelInput } from './internal/explicit-skill.ts';
+import { HookOrchestrator } from './internal/hook-orchestrator.ts';
+import { PromptBuilder } from './internal/prompt-builder.ts';
+import { ToolExecutor } from './internal/tool-execution.ts';
+import { ToolGrant } from './internal/tool-grant.ts';
+import { TurnWriter } from './internal/turn-writer.ts';
 import { renderSkillBody } from './skill-render.ts';
-import { ToolExecutor } from './tool-execution.ts';
-import { ToolGrant } from './tool-grant.ts';
-import { TurnWriter } from './turn-writer.ts';
 
 export type {
   AgentLoopDeps,

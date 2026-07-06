@@ -1,6 +1,6 @@
 import type { NativeCliObservationEvent } from '@monad/protocol';
 
-import { compactJson, observation, rawTextValue, recordValue, textValue } from '../observation-projection.ts';
+import { compactJson, observation, rawTextValue, recordValue, textValue } from '../../observation-projection.ts';
 
 export function codexAppServerItemRecord(p: Record<string, unknown>): Record<string, unknown> | undefined {
   const item = p.item;

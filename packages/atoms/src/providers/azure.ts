@@ -1,6 +1,6 @@
 import { createAzure } from '@ai-sdk/azure';
 
-import { defineAiSdkProvider } from './ai-sdk-adapter.ts';
+import { defineAiSdkProvider } from './ai-sdk-adapter/index.ts';
 import { PROVIDER_DESCRIPTORS } from './catalog.ts';
 
 // Azure OpenAI: the user supplies a resource base URL + an api-key; the model id is the Azure

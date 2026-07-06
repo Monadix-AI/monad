@@ -4,7 +4,7 @@ import { defaultBinProbes, resolveBinary } from '@monad/sdk-atom';
 
 import { parseStructuredAuthState } from '../adapter-shared.ts';
 import { nativeCliAdapterSettings } from '../settings.ts';
-import { createCodexSettingsImport } from '../settings-import.ts';
+import { createCodexSettingsImport } from '../settings-import/index.ts';
 import { parseCodexSessionJsonl } from './events.ts';
 import { codexHistoryPageOutput, readCodexHistoryOutput } from './history.ts';
 import {
@@ -18,7 +18,7 @@ import {
   parseCodexArgumentSupport,
   parseCodexModelOptions
 } from './launch.ts';
-import { codexObservationProjection } from './observation.ts';
+import { codexObservationProjection } from './observation/index.ts';
 import {
   initializeCodex,
   interruptCodex,

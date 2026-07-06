@@ -2,7 +2,7 @@ import type { ToolSpec } from '@monad/sdk-atom';
 
 import { expect, test } from 'bun:test';
 
-import { buildSdkTools } from '../../src/providers/ai-sdk-adapter.ts';
+import { buildSdkTools } from '../../src/providers/ai-sdk-adapter/index.ts';
 
 const genericSpec: ToolSpec = {
   name: 'fs_read',

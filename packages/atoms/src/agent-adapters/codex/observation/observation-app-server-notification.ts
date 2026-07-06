@@ -1,5 +1,5 @@
 import type { NativeCliObservationEvent } from '@monad/protocol';
-import type { CodexObservationNotification } from './observation.ts';
+import type { CodexObservationNotification } from './index.ts';
 
 import {
   commandText,
@@ -11,7 +11,7 @@ import {
   recordValue,
   textValue,
   thinkingObservation
-} from '../observation-projection.ts';
+} from '../../observation-projection.ts';
 import {
   codexAppServerItemRecord,
   codexAppServerToolCallObservation,

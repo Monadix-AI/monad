@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { projectIdSchema } from './ids.ts';
+import { projectIdSchema } from '../ids.ts';
 import { nativeCliAgentNameSchema, nativeCliProviderSchema } from './native-cli-agent-config.ts';
 
 export const nativeAgentRuntimePromptInputSchema = z.object({

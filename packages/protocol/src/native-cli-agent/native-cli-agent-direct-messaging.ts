@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { messageIdSchema, projectIdSchema } from './ids.ts';
+import { messageIdSchema, projectIdSchema } from '../ids.ts';
 import {
   attachmentInputsSchema,
   messageAttachmentRefSchema,

@@ -20,6 +20,25 @@ export interface ListSessionsFilter {
   offset?: number;
 }
 
+export interface SessionPatch {
+  title?: string;
+  state?: SessionState;
+  archived?: boolean;
+  agentIds?: Session['agentIds'];
+  model?: string | null;
+  cwd?: string | null;
+  origin?: Session['origin'] | null;
+}
+
+export interface WorkplaceProjectPatch {
+  title?: string;
+  state?: SessionState;
+  archived?: boolean;
+  model?: string | null;
+  cwd?: string | null;
+  origin?: WorkplaceProject['origin'] | null;
+}
+
 export function insertSession(db: Db, s: Session): void {
   db.insert(sessions)
     .values({
@@ -74,19 +93,7 @@ export function getSession(db: Db, id: string): Session | null {
 }
 
 /** Bumps updatedAt. Returns the updated row, or null if not found. */
-export function updateSession(
-  db: Db,
-  id: string,
-  patch: {
-    title?: string;
-    state?: SessionState;
-    archived?: boolean;
-    agentIds?: Session['agentIds'];
-    model?: string | null;
-    cwd?: string | null;
-    origin?: Session['origin'] | null;
-  }
-): Session | null {
+export function updateSession(db: Db, id: string, patch: SessionPatch): Session | null {
   const sets: Partial<typeof sessions.$inferInsert> = { updatedAt: new Date().toISOString() };
   if (patch.title !== undefined) sets.title = patch.title;
   if (patch.state !== undefined) sets.state = patch.state;
@@ -171,18 +178,7 @@ export function getWorkplaceProject(db: Db, id: string): WorkplaceProject | null
   return row ? rowToWorkplaceProject(row) : null;
 }
 
-export function updateWorkplaceProject(
-  db: Db,
-  id: string,
-  patch: {
-    title?: string;
-    state?: SessionState;
-    archived?: boolean;
-    model?: string | null;
-    cwd?: string | null;
-    origin?: WorkplaceProject['origin'] | null;
-  }
-): WorkplaceProject | null {
+export function updateWorkplaceProject(db: Db, id: string, patch: WorkplaceProjectPatch): WorkplaceProject | null {
   const sets: Partial<typeof workplaceProjects.$inferInsert> = { updatedAt: new Date().toISOString() };
   if (patch.title !== undefined) sets.title = patch.title;
   if (patch.state !== undefined) sets.state = patch.state;

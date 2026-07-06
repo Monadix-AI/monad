@@ -26,13 +26,15 @@ export function appendEvents(sqlite: Database, batch: Event[]): void {
   tx(batch);
 }
 
-/** Find approval/clarify requests that have no matching resolved event (left dangling by a restart). */
-export function findDanglingInterrupts(sqlite: Database): Array<{
+export interface DanglingInterrupt {
   type: 'approval' | 'clarify';
   requestId: string;
   sessionId: string;
   tool?: string;
-}> {
+}
+
+/** Find approval/clarify requests that have no matching resolved event (left dangling by a restart). */
+export function findDanglingInterrupts(sqlite: Database): DanglingInterrupt[] {
   const approvals = sqlite
     .query(
       `SELECT transcript_target_id,

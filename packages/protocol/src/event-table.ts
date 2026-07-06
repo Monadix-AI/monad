@@ -20,7 +20,7 @@ import {
   nativeCliLaunchModeSchema,
   nativeCliProductIconSchema,
   nativeCliProviderSchema
-} from './native-cli-agent.ts';
+} from './native-cli-agent/index.ts';
 
 const requestIdSchema = z.string();
 

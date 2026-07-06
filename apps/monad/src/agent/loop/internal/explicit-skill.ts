@@ -1,5 +1,5 @@
-import type { PersistedModelInputOverride } from './replay.ts';
-import type { LoadedSkill } from './types.ts';
+import type { PersistedModelInputOverride } from '../replay.ts';
+import type { LoadedSkill } from '../types.ts';
 
 import { parseSlashCommand } from '@monad/protocol';
 

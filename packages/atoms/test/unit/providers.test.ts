@@ -3,7 +3,7 @@ import type { ModelCall, ModelChunk, ResolvedProviderConfig } from '@monad/sdk-a
 import { expect, test } from 'bun:test';
 import { KNOWN_PROVIDER_TYPES } from '@monad/protocol';
 
-import { splitSystem } from '../../src/providers/ai-sdk-adapter.ts';
+import { splitSystem } from '../../src/providers/ai-sdk-adapter/index.ts';
 import { PROVIDER_DESCRIPTORS } from '../../src/providers/catalog.ts';
 import { makeOpenAICompatibleProvider } from '../../src/providers/openai-compatible.ts';
 import { builtinModelProviders } from '../../src/providers/registry.ts';

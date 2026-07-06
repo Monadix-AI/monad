@@ -37,7 +37,7 @@ import {
   nativeAgentRuntimeInfoResponseSchema,
   nativeAgentSendRequestSchema,
   nativeAgentSendResponseSchema
-} from './native-cli-agent.ts';
+} from './native-cli-agent/index.ts';
 import { obscuraStatusResponseSchema, setObscuraRequestSchema } from './obscura.ts';
 import { pickDirectoryRequestSchema, pickDirectoryResponseSchema } from './pick-directory.ts';
 import {

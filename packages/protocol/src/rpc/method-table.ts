@@ -54,7 +54,7 @@ import {
   startNativeCliAgentRequestSchema,
   startNativeCliAgentResponseSchema,
   startNativeCliAuthResponseSchema
-} from '../native-cli-agent.ts';
+} from '../native-cli-agent/index.ts';
 import { setSkillsSettingsRequestSchema, skillsSettingsResponseSchema } from '../settings/skills-settings.ts';
 import {
   abortSessionResponseSchema,

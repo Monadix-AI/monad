@@ -90,10 +90,13 @@ export function deleteMessageAttachments(sqlite: Database, ids: readonly string[
     .run(...(ids as string[]));
 }
 
-export function getMessageAttachment(
-  sqlite: Database,
-  id: string
-): (MessageAttachmentRef & { projectId: string; preview: string; createdBy: string | null }) | null {
+export type MessageAttachmentDetail = MessageAttachmentRef & {
+  projectId: string;
+  preview: string;
+  createdBy: string | null;
+};
+
+export function getMessageAttachment(sqlite: Database, id: string): MessageAttachmentDetail | null {
   const row = sqlite.query('SELECT * FROM message_attachments WHERE id = ?').get(id) as Record<string, unknown> | null;
   if (!row) return null;
   return {

@@ -1,16 +1,16 @@
 import type { EventType, Hooks, TranscriptTargetId } from '@monad/protocol';
 import type { Tool, ToolGate, ToolModelContent, ToolResult, ToolResultPart } from '@/capabilities/tools/types.ts';
-import type { ModelContentPart, ModelMessage, ToolCall } from '../model/index.ts';
-import type { PersistedToolCall, PersistedToolResult, PersistedToolResultEnvelope } from './replay.ts';
-import type { AgentLoopDeps } from './types.ts';
+import type { ModelContentPart, ModelMessage, ToolCall } from '../../model/index.ts';
+import type { PersistedToolCall, PersistedToolResult, PersistedToolResultEnvelope } from '../replay.ts';
+import type { AgentLoopDeps } from '../types.ts';
 
 import { createLogger } from '@monad/logger';
 import { newId } from '@monad/protocol';
 
 import { invokeTool } from '@/capabilities/tools/invoke.ts';
-import { shouldStripAnsiForTool, stripAnsiFromToolOutput } from './ansi-output.ts';
-import { persistToolResultEnvelope } from './replay.ts';
-import { DEFAULT_MAX_TOOL_RESULT_CHARS, logInput, truncateToolOutput } from './tool-output.ts';
+import { shouldStripAnsiForTool, stripAnsiFromToolOutput } from '../ansi-output.ts';
+import { persistToolResultEnvelope } from '../replay.ts';
+import { DEFAULT_MAX_TOOL_RESULT_CHARS, logInput, truncateToolOutput } from '../tool-output.ts';
 
 // Minimum gap between streamed tool.progress events for one tool call (drops intermediate chunks).
 const PROGRESS_THROTTLE_MS = 100;

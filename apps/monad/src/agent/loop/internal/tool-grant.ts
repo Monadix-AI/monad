@@ -1,8 +1,8 @@
 import type { Hooks, TranscriptTargetId } from '@monad/protocol';
 import type { ToolGate } from '@/capabilities/tools/types.ts';
-import type { AgentLoopDeps } from './types.ts';
+import type { AgentLoopDeps } from '../types.ts';
 
-import { parseAllowedTools, toolMatchesAllowedPattern } from './skill-render.ts';
+import { parseAllowedTools, toolMatchesAllowedPattern } from '../skill-render.ts';
 
 /**
  * Tool patterns pre-approved by skills active this turn (allowed-tools), and the gate wrapper that

@@ -1,12 +1,12 @@
 import type { AgentMessagePayload, AgentReasoningPayload, EventType, Hooks, TranscriptTargetId } from '@monad/protocol';
 import type { Tool } from '@/capabilities/tools/types.ts';
+import type { PersistedModelInputOverride } from '../replay.ts';
+import type { AgentLoopDeps, ChatMessage } from '../types.ts';
 import type { PromptBuilder } from './prompt-builder.ts';
-import type { PersistedModelInputOverride } from './replay.ts';
-import type { AgentLoopDeps, ChatMessage } from './types.ts';
 
 import { newId } from '@monad/protocol';
 
-import { extractError } from './extract-error.ts';
+import { extractError } from '../extract-error.ts';
 
 /**
  * Turn output persistence and bookkeeping: user/assistant rows, lazily-opened streaming text

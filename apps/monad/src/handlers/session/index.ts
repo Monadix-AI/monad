@@ -1,10 +1,10 @@
 import type { AgentId } from '@monad/protocol';
 import type { SessionDeps } from '@/handlers/session/context.ts';
-import type { MessagingCommandDeps } from '@/handlers/session/handlers/messaging.ts';
+import type { MessagingCommandDeps } from '@/handlers/session/handlers/messaging/index.ts';
 
 import { createSessionContext } from '@/handlers/session/context.ts';
 import { createLifecycleHandlers } from '@/handlers/session/handlers/lifecycle.ts';
-import { createMessagingHandlers } from '@/handlers/session/handlers/messaging.ts';
+import { createMessagingHandlers } from '@/handlers/session/handlers/messaging/index.ts';
 import { createSearchHandlers } from '@/handlers/session/handlers/search.ts';
 
 export function createSessionModule(deps: SessionDeps) {

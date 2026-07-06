@@ -33,7 +33,7 @@ import { parseNativeCliArgumentSupport } from '../argument-support.ts';
 import { readProviderHistoryFile } from '../history-files.ts';
 import { resizePty, sendPtyInput, stopPty } from '../pty.ts';
 import { nativeCliAdapterSettings } from '../settings.ts';
-import { createClaudeCodeSettingsImport } from '../settings-import.ts';
+import { createClaudeCodeSettingsImport } from '../settings-import/index.ts';
 import { claudeCodeObservationProjection } from './observation.ts';
 
 // `claude --help` documents `--model` as accepting either a tier alias ("fable", "opus", "sonnet",

@@ -1,6 +1,6 @@
 import type { HookCaller, Hooks, TranscriptTargetId } from '@monad/protocol';
-import type { ModelMessage, ModelUsage } from '../model/index.ts';
-import type { AgentLoopDeps } from './types.ts';
+import type { ModelMessage, ModelUsage } from '../../model/index.ts';
+import type { AgentLoopDeps } from '../types.ts';
 
 import { createLogger } from '@monad/logger';
 import { NO_HOOKS } from '@monad/protocol';
