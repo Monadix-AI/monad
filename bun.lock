@@ -217,7 +217,6 @@
       },
       "devDependencies": {
         "@monad/config": "workspace:*",
-        "@monad/monad": "workspace:*",
       },
       "peerDependencies": {
         "elysia": "^1.4.29",
