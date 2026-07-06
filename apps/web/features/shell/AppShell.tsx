@@ -12,6 +12,7 @@ import {
   useCreateSessionMutation,
   useCreateWorkplaceProjectMutation,
   useGetWorkplaceProjectQuery,
+  useInitStatusQuery,
   useStreamUiItemsQuery,
   useTranscribeAudioMutation
 } from '@monad/client-rtk';
@@ -21,6 +22,7 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'rea
 
 import { useT } from '@/components/I18nProvider';
 import { PanelLoading } from '@/components/PanelLoading';
+import { isRuntimeReady, runtimeSectionEnabled } from '@/features/init/init-readiness';
 import {
   isStudioPath,
   isWorkspacePath,
@@ -101,6 +103,7 @@ export function AppShell() {
   } = useAppShellData();
   const directSessions = sessions;
   const [transcribeAudio] = useTranscribeAudioMutation();
+  const initStatus = useInitStatusQuery();
   const [createSession] = useCreateSessionMutation();
   const [createWorkplaceProject] = useCreateWorkplaceProjectMutation();
   const [approveTool] = useApproveToolMutation();
@@ -148,6 +151,7 @@ export function AppShell() {
   const reserveHeaderLeading = sidebarAutoMode;
   const routedStudioSection = studioSectionFromPathname(pathname);
   const studioSection = routedStudioSection ?? 'runtime';
+  const runtimeReady = initStatus.isLoading ? true : isRuntimeReady(initStatus.data);
   const showStudio = isStudioRoute;
   const studioPileActive = isStudioRoute;
   const workspacePileActive = isWorkspaceRoute;
@@ -361,9 +365,13 @@ export function AppShell() {
     replaceShellUrl('/');
   }, [openWorkspaceSurface]);
 
-  const setStudioUrl = useCallback((section?: StudioSectionId) => {
-    replaceShellUrl(studioPath(section ?? 'agents'));
-  }, []);
+  const setStudioUrl = useCallback(
+    (section?: StudioSectionId) => {
+      const nextSection = section ?? 'agents';
+      replaceShellUrl(studioPath(runtimeSectionEnabled(nextSection, runtimeReady) ? nextSection : 'runtime'));
+    },
+    [runtimeReady]
+  );
 
   const toggleSidebarAutoMode = useCallback(() => {
     if (sidebarAutoMode) revealSidebar();
@@ -686,6 +694,7 @@ export function AppShell() {
           }}
           overlay={sidebarAutoReveal}
           projects={workspaceProjects}
+          runtimeReady={runtimeReady}
           shortcutModifierLabel={shortcutModifierLabel}
           showSettings={showSettings}
           showShortcutBadges={showSidebarShortcutBadges}

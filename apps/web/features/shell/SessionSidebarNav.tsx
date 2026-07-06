@@ -7,6 +7,7 @@ import { MessageSquareCodeIcon, StarIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react';
 import { cn, Tooltip, TooltipContent, TooltipTrigger } from '@monad/ui';
 
+import { runtimeSectionEnabled } from '@/features/init/init-readiness';
 import {
   STUDIO_MESH_SECTIONS,
   STUDIO_RUNTIME_SECTIONS,
@@ -56,11 +57,15 @@ function SidebarNavItem({
   icon: Icon,
   label,
   onClick,
+  disabled,
+  disabledReason,
   shortcutModifierLabel,
   shortcutValue
 }: {
   active?: boolean;
   children?: ReactNode;
+  disabled?: boolean;
+  disabledReason?: string;
   icon: IconSvgElement;
   label: string;
   onClick: () => void;
@@ -70,11 +75,17 @@ function SidebarNavItem({
   return (
     <button
       aria-current={active ? 'page' : undefined}
+      aria-disabled={disabled || undefined}
       className={cn(
         'group/item relative flex min-h-9 w-full cursor-pointer items-center gap-2.5 rounded-(--radius-md) px-2.5 py-2 text-left transition hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
-        active && 'bg-sidebar-accent text-sidebar-accent-foreground'
+        active && 'bg-sidebar-accent text-sidebar-accent-foreground',
+        disabled &&
+          'cursor-not-allowed text-sidebar-foreground/35 hover:bg-transparent hover:text-sidebar-foreground/35'
       )}
-      onClick={onClick}
+      onClick={() => {
+        if (!disabled) onClick();
+      }}
+      title={disabled ? disabledReason : undefined}
       type="button"
     >
       <div className="rounded-full border border-transparent bg-transparent p-1.5">
@@ -120,28 +131,36 @@ export function SidebarHeader({
 export function StudioSidebarItems({
   activeSection,
   onSelect,
+  runtimeReady,
   shortcutModifierLabel,
   showShortcutBadges,
   t
 }: {
   activeSection: StudioSectionId;
   onSelect: (section: StudioSectionId) => void;
+  runtimeReady: boolean;
   shortcutModifierLabel: string;
   t: TFunction;
   showShortcutBadges?: boolean;
 }) {
   const shortcutNumbers = new Map(STUDIO_SHORTCUT_ITEMS.slice(0, 9).map((item, index) => [item.id, index + 1]));
-  const renderItem = ({ id, icon, i18nKey }: StudioSectionItem) => (
-    <SidebarNavItem
-      active={activeSection === id}
-      icon={icon}
-      key={id}
-      label={t(i18nKey)}
-      onClick={() => onSelect(id)}
-      shortcutModifierLabel={shortcutModifierLabel}
-      shortcutValue={showShortcutBadges ? shortcutNumbers.get(id) : undefined}
-    />
-  );
+  const disabledReason = t('web.studio.runtimeOnboardingRequired');
+  const renderItem = ({ id, icon, i18nKey }: StudioSectionItem) => {
+    const disabled = !runtimeSectionEnabled(id, runtimeReady);
+    return (
+      <SidebarNavItem
+        active={activeSection === id}
+        disabled={disabled}
+        disabledReason={disabledReason}
+        icon={icon}
+        key={id}
+        label={t(i18nKey)}
+        onClick={() => onSelect(id)}
+        shortcutModifierLabel={shortcutModifierLabel}
+        shortcutValue={showShortcutBadges && !disabled ? shortcutNumbers.get(id) : undefined}
+      />
+    );
+  };
 
   return (
     <>

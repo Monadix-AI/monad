@@ -114,9 +114,13 @@ async function installSkillsApiMock(
       return json({ sessions: [], total: 0, limit: 50, offset: 0 });
     }
     if (method === 'GET' && path === '/v1/commands') return json({ commands: [] });
+    if (method === 'GET' && (path === '/v1/native-cli-runtimes' || path === '/v1/native-cli-session-summaries')) {
+      return json({ sessions: [] });
+    }
     if (method === 'GET' && path === '/v1/settings/model/profiles') {
       return json({ profiles: [], defaultAlias: '' });
     }
+    if (method === 'GET' && path === '/v1/settings/model/roles') return json({ roles: {} });
     if (method === 'GET' && path === '/v1/settings/locale') return json({ locale: 'en' });
     if (method === 'GET' && path === '/v1/settings/locales') {
       return json({ locales: [{ locale: 'en', label: 'English', source: 'built-in' }] });

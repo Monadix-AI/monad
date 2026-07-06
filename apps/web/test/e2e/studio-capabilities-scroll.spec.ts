@@ -25,6 +25,9 @@ async function installCapabilitiesApiMock(page: Page) {
       return json({ sessions: [], total: 0, limit: 50, offset: 0 });
     }
     if (method === 'GET' && path === '/v1/commands') return json({ commands: [] });
+    if (method === 'GET' && (path === '/v1/native-cli-runtimes' || path === '/v1/native-cli-session-summaries')) {
+      return json({ sessions: [] });
+    }
     if (method === 'GET' && path === '/v1/settings/model/profiles') {
       return json({ profiles: [], defaultAlias: '' });
     }
@@ -178,11 +181,11 @@ test('settings modal opens from canonical Studio routes', async ({ page }) => {
   const settingsDialog = page.getByRole('dialog').filter({ has: page.getByRole('heading', { name: 'Settings' }) });
   await expect(page).toHaveURL(/\/studio\/capabilities\?settings=language$/);
   await expect(settingsDialog).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Language' })).toHaveAttribute('data-active', 'true');
+  await expect(page.getByRole('tab', { name: 'Language' })).toHaveAttribute('aria-selected', 'true');
 
-  await page.getByRole('button', { name: 'Connection' }).click();
+  await page.getByRole('tab', { name: 'Connection' }).click();
   await expect(page).toHaveURL(/\/studio\/capabilities\?settings=connection$/);
-  await expect(page.getByRole('button', { name: 'Connection' })).toHaveAttribute('data-active', 'true');
+  await expect(page.getByRole('tab', { name: 'Connection' })).toHaveAttribute('aria-selected', 'true');
 
   const closeButton = settingsDialog.getByRole('button', { name: 'Close' });
   await expect(closeButton).toBeVisible();

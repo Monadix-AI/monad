@@ -30,9 +30,13 @@ async function installSystemSettingsApiMock(
       return route.fulfill(json({ sessions: [], total: 0, limit: 50, offset: 0 }));
     }
     if (method === 'GET' && path === '/v1/commands') return route.fulfill(json({ commands: [] }));
+    if (method === 'GET' && (path === '/v1/native-cli-runtimes' || path === '/v1/native-cli-session-summaries')) {
+      return route.fulfill(json({ sessions: [] }));
+    }
     if (method === 'GET' && path === '/v1/settings/model/profiles') {
       return route.fulfill(json({ profiles: [], defaultAlias: '' }));
     }
+    if (method === 'GET' && path === '/v1/settings/model/roles') return route.fulfill(json({ roles: {} }));
     if (method === 'GET' && path === '/v1/settings/locale') return route.fulfill(json({ locale: 'en' }));
     if (method === 'GET' && path === '/v1/settings/locales') {
       return route.fulfill(json({ locales: [{ locale: 'en', label: 'English', source: 'built-in' }] }));
@@ -85,7 +89,7 @@ test.describe('System upgrade settings', () => {
     await page.goto('/studio/capabilities?settings=system');
 
     await expect(page.getByRole('dialog')).toBeVisible();
-    await expect(page.getByRole('button', { name: 'System' })).toHaveAttribute('data-active', 'true');
+    await expect(page.getByRole('tab', { name: 'System' })).toHaveAttribute('aria-selected', 'true');
     await expect(page.getByText('Up to date')).toBeVisible();
     await expect(page.getByText('monad upgrade')).toHaveCount(0);
   });

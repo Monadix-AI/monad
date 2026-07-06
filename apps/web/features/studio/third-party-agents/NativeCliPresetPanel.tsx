@@ -37,8 +37,8 @@ export function NativeCliPresetPanel({
   detecting?: boolean;
   openInstallPage: (preset: NativeCliAgentPresetView) => void;
   removeAgent: (name: string) => Promise<void>;
-  setEditingAgent: (agent: NativeCliAgentView) => void;
-  setImportPreset: (preset: NativeCliAgentPresetView) => void;
+  setEditingAgent?: (agent: NativeCliAgentView) => void;
+  setImportPreset?: (preset: NativeCliAgentPresetView) => void;
 }) {
   const t = useT();
 
@@ -222,8 +222,8 @@ function NativeCliPresetRow({
   detecting: boolean;
   openInstallPage: (preset: NativeCliAgentPresetView) => void;
   removeAgent: (name: string) => Promise<void>;
-  setEditingAgent: (agent: NativeCliAgentView) => void;
-  setImportPreset: (preset: NativeCliAgentPresetView) => void;
+  setEditingAgent?: (agent: NativeCliAgentView) => void;
+  setImportPreset?: (preset: NativeCliAgentPresetView) => void;
 }) {
   const t = useT();
   const isConnected = preset.installed && statusAuth === 'authenticated' && connectedAgent;
@@ -278,18 +278,20 @@ function NativeCliPresetRow({
               label={t('web.nativeCli.connected')}
               tone="connected"
             />
-            <Button
-              aria-label={`Settings for ${connectedAgent.name}`}
-              className="border-transparent"
-              onClick={() => setEditingAgent(connectedAgent)}
-              size="sm"
-              type="button"
-              variant="ghost"
-            >
-              <HugeiconsIcon icon={Settings02Icon} />
-              {t('web.settings.title')}
-            </Button>
-            {canImportSettings ? <ImportButton onClick={() => setImportPreset(preset)} /> : null}
+            {setEditingAgent ? (
+              <Button
+                aria-label={`Settings for ${connectedAgent.name}`}
+                className="border-transparent"
+                onClick={() => setEditingAgent(connectedAgent)}
+                size="sm"
+                type="button"
+                variant="ghost"
+              >
+                <HugeiconsIcon icon={Settings02Icon} />
+                {t('web.settings.title')}
+              </Button>
+            ) : null}
+            {canImportSettings && setImportPreset ? <ImportButton onClick={() => setImportPreset(preset)} /> : null}
             <Button
               className="border-transparent"
               onClick={() => removeAgent(connectedAgent.name)}
@@ -326,7 +328,7 @@ function NativeCliPresetRow({
               )}
               {t('web.nativeCli.connect')}
             </Button>
-            {canImportSettings ? <ImportButton onClick={() => setImportPreset(preset)} /> : null}
+            {canImportSettings && setImportPreset ? <ImportButton onClick={() => setImportPreset(preset)} /> : null}
           </>
         ) : (
           <>
@@ -335,7 +337,7 @@ function NativeCliPresetRow({
               label={t('web.nativeCli.notDetected')}
               tone="missing"
             />
-            {canImportSettings ? <ImportButton onClick={() => setImportPreset(preset)} /> : null}
+            {canImportSettings && setImportPreset ? <ImportButton onClick={() => setImportPreset(preset)} /> : null}
             <Button
               className="border-transparent"
               onClick={() => openInstallPage(preset)}
