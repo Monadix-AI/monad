@@ -38,6 +38,10 @@ import {
 
 const observationRowId = (row: ObservationTimelineRow): string => row.id;
 
+export function observationFollowResetKey(stream?: { id?: string; status?: string }): string {
+  return `${stream?.id ?? ''}:${stream?.status ?? ''}`;
+}
+
 const observationAvatarRingCss = `
 @keyframes workplace-observation-avatar-breathe {
   0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--observation-presence-color) 58%, transparent); }
@@ -140,8 +144,7 @@ export function NativeCliObservationPanel({
   const [collapseCommand, setCollapseCommand] = useState<ObservationCollapseCommand>({ collapsed: false });
   const streamId = stream?.id;
   const streamStatus = stream?.status;
-  const latestItem = stream?.items.at(-1);
-  const latestObservationKey = `${streamId ?? ''}:${streamStatus ?? ''}:${stream?.items.length ?? 0}:${latestItem?.id ?? ''}:${latestItem?.text.length ?? 0}`;
+  const followResetKey = observationFollowResetKey(stream);
   const [usageOpen, setUsageOpen] = useState(false);
   const timelineRows = useMemo(
     () => observationTimelineRows(observationTimelineEntries(stream?.items ?? [])),
@@ -207,10 +210,10 @@ export function NativeCliObservationPanel({
   }, [streamId]);
 
   useEffect(() => {
-    if (!latestObservationKey) return;
+    if (!followResetKey) return;
     if (!follow || streamStatus !== 'running') return;
     listRef.current?.scrollToBottom('auto');
-  }, [follow, latestObservationKey, streamStatus]);
+  }, [follow, followResetKey, streamStatus]);
 
   const scrollToTop = () => {
     setFollow(false);
