@@ -414,7 +414,6 @@ const headerToggleStyle: CSSProperties = {
   border: 0,
   background: 'transparent',
   color: 'inherit',
-  cursor: 'var(--workplace-cursor-pointer, pointer)',
   padding: 0,
   textAlign: 'left'
 };

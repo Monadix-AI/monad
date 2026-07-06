@@ -350,8 +350,13 @@
     font-size: var(--text-base);
     font-feature-settings: "calt", "kern", "liga";
     line-height: var(--text-base--line-height);
+    user-select: none;
     background: var(--background);
     @apply text-foreground;
+  }
+
+  :where(input, textarea, [contenteditable="true"], [contenteditable=""]) {
+    user-select: text;
   }
 
   code,

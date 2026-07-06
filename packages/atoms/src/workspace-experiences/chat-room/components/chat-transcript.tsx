@@ -164,8 +164,7 @@ export function ChatTranscript({
                 fontFamily: sans,
                 fontSize: 14,
                 fontWeight: 650,
-                padding: '0 14px',
-                cursor: 'pointer'
+                padding: '0 14px'
               }}
               type="button"
             >

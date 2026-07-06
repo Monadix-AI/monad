@@ -44,7 +44,6 @@ const RETRY_BUTTON_STYLE: React.CSSProperties = {
   border: 0,
   borderRadius: 999,
   color: 'var(--destructive-foreground)',
-  cursor: 'pointer',
   display: 'inline-flex',
   flex: 'none',
   fontFamily: mono,
@@ -285,7 +284,10 @@ function MessageBubbleContent({
   return (
     <>
       {hasText ? (
-        <span style={{ display: 'block' }}>
+        <span
+          data-selectable="true"
+          style={{ display: 'block' }}
+        >
           {agent ? agentContent : <MentionText text={msg.text} />}
           {msg.streaming && agent ? (
             <span

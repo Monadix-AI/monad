@@ -667,9 +667,7 @@ function VoiceDebugPanel({
         padding: '8px 10px'
       }}
     >
-      <summary style={{ color: 'var(--foreground)', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
-        Voice debug
-      </summary>
+      <summary style={{ color: 'var(--foreground)', fontSize: 12, fontWeight: 600 }}>Voice debug</summary>
       <dl
         style={{
           display: 'grid',

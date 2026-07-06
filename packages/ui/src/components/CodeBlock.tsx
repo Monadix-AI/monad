@@ -242,6 +242,7 @@ const CodeBlockBody = memo(
     return (
       <pre
         className={cn('dark:!bg-[var(--shiki-dark-bg)] dark:!text-[var(--shiki-dark)] m-0 p-4 text-sm', className)}
+        data-selectable="true"
         style={preStyle}
       >
         <code className={cn('font-mono text-sm', showLineNumbers && '[counter-increment:line_0] [counter-reset:line]')}>
@@ -414,7 +415,10 @@ export const CodeInline = ({
   );
 
   return (
-    <code className={cn('font-mono', className)}>
+    <code
+      className={cn('font-mono', className)}
+      data-selectable="true"
+    >
       {tokens.map(({ key, token }) => (
         <TokenSpan
           key={key}

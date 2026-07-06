@@ -40,6 +40,7 @@ export const MessageContent = ({ children, className, ...props }: MessageContent
       'group-[.is-assistant]:text-foreground',
       className
     )}
+    data-selectable="true"
     {...props}
   >
     {children}
