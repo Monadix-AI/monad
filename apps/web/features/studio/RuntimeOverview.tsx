@@ -10,14 +10,19 @@ import {
   ShieldHalfIcon
 } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { useListAgentsQuery, useListWorkplaceProjectsQuery } from '@monad/client-rtk';
+import {
+  providerAdapter,
+  providerSelectors,
+  useListAgentsQuery,
+  useListProvidersQuery,
+  useListWorkplaceProjectsQuery
+} from '@monad/client-rtk';
 import { Button, ScrollArea } from '@monad/ui';
 
 import { useT } from '@/components/I18nProvider';
 import { ShellLink } from '@/components/ShellLink';
 import { PanelShell } from '@/components/ui/panel-shell';
 import { studioPath } from '@/features/routes/route-paths';
-import { useModelSettings, useModelSettingsQueryState } from '@/hooks/use-model-settings';
 import { OverviewIllustration } from './OverviewIllustration';
 import { StudioBreadcrumbHeader } from './StudioBreadcrumbHeader';
 
@@ -113,14 +118,12 @@ function AdvancedLink({
 
 export function RuntimeOverview() {
   const t = useT();
-  const modelSettings = useModelSettings();
-  const modelQuery = useModelSettingsQueryState();
+  const providersQuery = useListProvidersQuery(undefined);
   const agentsQuery = useListAgentsQuery();
   const projectsQuery = useListWorkplaceProjectsQuery(undefined);
-  const providerCount = modelSettings.providers.length;
-  const profileCount = modelSettings.profiles.length;
+  const providerCount = providerSelectors.selectAll(providersQuery.data ?? providerAdapter.getInitialState()).length;
   const agentCount = agentsQuery.data?.ids.length ?? 0;
-  const hasModels = providerCount > 0 && profileCount > 0;
+  const hasModels = providerCount > 0;
   const hasAgents = agentCount > 0;
   const projectCount = projectsQuery.data?.projects.ids.length ?? 0;
 
@@ -175,7 +178,7 @@ export function RuntimeOverview() {
                 actionLabel={hasModels ? t('web.studio.reviewModels') : t('web.studio.connectModel')}
                 body={hasModels ? t('web.studio.modelsReady', { count: providerCount }) : t('web.studio.modelsNeeded')}
                 icon={CpuIcon}
-                state={readinessState(hasModels, modelQuery.isLoading)}
+                state={readinessState(hasModels, providersQuery.isLoading)}
                 title={t('web.studio.connectModelStep')}
               />
               <ReadinessRow

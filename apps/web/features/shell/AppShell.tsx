@@ -70,6 +70,7 @@ import { useAppShellData } from './useAppShellData';
 
 export function AppShell() {
   const pathname = useShellPathname();
+  const isStudioRoute = isStudioPath(pathname);
   const t = useT();
   const { baseUrl: daemonBaseUrl, client: monadClient, switchDaemonConnection } = useMonadRuntime();
 
@@ -84,7 +85,7 @@ export function AppShell() {
     voiceModelConfigured,
     voiceModelState,
     workspaceProjects
-  } = useAppShellData();
+  } = useAppShellData({ loadModelData: !isStudioRoute });
   const directSessions = sessions;
   const [transcribeAudio] = useTranscribeAudioMutation();
   const [loadCommands, commandsQuery] = useLazyListCommandsQuery();
@@ -133,7 +134,6 @@ export function AppShell() {
   const [input, setInput] = useState('');
   const [accessMode, setAccessMode] = useState<'auto' | 'ask'>('auto');
   const showSettings = useShellSearchParamPresent('settings');
-  const isStudioRoute = isStudioPath(pathname);
   const isWorkspaceRoute = isWorkspacePath(pathname);
   const sidebarAutoMode = sidebarCollapsed || sidebarAutoReveal;
   const reserveHeaderLeading = sidebarAutoMode;

@@ -28,7 +28,7 @@ const EMPTY_PROFILES: ProfileView[] = [];
 type DaemonStatus = 'checking' | 'offline' | 'online';
 type VoiceModelState = 'checking' | 'configured' | 'failed' | 'missing';
 
-export function useAppShellData() {
+export function useAppShellData({ loadModelData = true }: { loadModelData?: boolean } = {}) {
   const { data: health, isError: healthError } = useGetHealthQuery();
   const daemonStatus: DaemonStatus = health?.status === 'ok' ? 'online' : healthError ? 'offline' : 'checking';
   const daemonVersion = health?.version;
@@ -74,10 +74,16 @@ export function useAppShellData() {
     data: profileData,
     isError: profileDataError,
     isLoading: profileDataLoading
-  } = useListProfilesQuery(undefined);
+  } = useListProfilesQuery(undefined, { skip: !loadModelData });
   const profiles = profileData ? profileSelectors.selectAll(profileData.profiles) : EMPTY_PROFILES;
   const defaultProfile = profiles.find((profile) => profile.alias === profileData?.defaultAlias);
-  const { data: modelRoles, isError: modelRolesError, isLoading: modelRolesLoading } = useGetRolesQuery(undefined);
+  const {
+    data: modelRoles,
+    isError: modelRolesError,
+    isLoading: modelRolesLoading
+  } = useGetRolesQuery(undefined, {
+    skip: !loadModelData
+  });
   const voiceModelConfigured = Boolean(
     modelRoles?.transcription && defaultProfile?.routes.chat.provider && defaultProfile.routes.chat.modelId
   );
