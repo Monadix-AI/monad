@@ -21,7 +21,7 @@ import { useFirstItemIndex } from '@monad/ui/hooks/use-first-item-index';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useT } from '@/components/I18nProvider';
-import { isRuntimeReady, runtimeSectionEnabled } from '@/features/init/init-readiness';
+import { isRuntimeReady } from '@/features/init/init-readiness';
 import {
   isStudioPath,
   isWorkspacePath,
@@ -64,6 +64,7 @@ import {
 } from './app-shell/session-view';
 import { SettingsModalHost } from './app-shell/settings-modal-host';
 import { AppShellSidebarHost } from './app-shell/sidebar-host';
+import { resolveStudioNavigationPath } from './app-shell/studio-navigation';
 import { NewProjectDialog } from './NewProjectDialog';
 import { useAppShellData } from './useAppShellData';
 
@@ -341,8 +342,7 @@ export function AppShell() {
 
   const setStudioUrl = useCallback(
     (section?: StudioSectionId) => {
-      const nextSection = section ?? 'agents';
-      replaceShellUrl(studioPath(runtimeSectionEnabled(nextSection, runtimeReady) ? nextSection : 'runtime'));
+      replaceShellUrl(resolveStudioNavigationPath({ runtimeReady, section }));
     },
     [runtimeReady]
   );

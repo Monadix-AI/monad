@@ -23,6 +23,7 @@ import { DaemonMenu } from './SessionSidebarDaemonMenu';
 import { type ProjectItem, SidebarHeader, StudioSidebarItems, WorkspaceSidebarItems } from './SessionSidebarNav';
 import {
   createSidebarPagerGesture,
+  resolveSidebarPagerTarget,
   sidebarTrackpadEdgeAccum,
   sidebarTrackpadEdgeOffset
 } from './sidebar-trackpad-switch';
@@ -68,7 +69,6 @@ const SIDEBAR_WIDTH_STORAGE_KEY = 'monad:web:sidebar-width';
 const AUTO_REVEAL_CLOSE_ANIMATION_MS = 200;
 const TRACKPAD_GESTURE_RELEASE_MS = 96;
 const TRACKPAD_EDGE_MARGIN_PX = 12;
-const TRACKPAD_PAGE_TURN_THRESHOLD_RATIO = 0.4;
 const PANEL_SNAP_SCROLL_DURATION_S = 0.16;
 const PANEL_SNAP_SCROLL_EASE = [0.33, 1, 0.68, 1] as const;
 const TRACKPAD_RELEASE_VELOCITY_PX_S = 1200;
@@ -344,13 +344,19 @@ export function SessionSidebar({
       dragActiveRef.current = false;
       dragPxRef.current = 0;
       const width = host.clientWidth || 1;
-      const originPage = Math.round(dragOriginRef.current / width);
-      const threshold = width * TRACKPAD_PAGE_TURN_THRESHOLD_RATIO;
-      let targetPage: number;
-      if (dragPxTotal > threshold) targetPage = originPage + 1;
-      else if (dragPxTotal < -threshold) targetPage = originPage - 1;
-      else targetPage = Math.round(host.scrollLeft / width);
-      const target = Math.max(0, Math.min(1, targetPage)) * width;
+      const targetSurface = resolveSidebarPagerTarget({
+        clientWidth: width,
+        dragOrigin: dragOriginRef.current,
+        dragPxTotal,
+        scrollLeft: host.scrollLeft
+      });
+      const target = (targetSurface === 'studio' ? 1 : 0) * width;
+      const targetStudio = targetSurface === 'studio';
+      if (targetStudio !== currentShowStudioRef.current) {
+        currentShowStudioRef.current = targetStudio;
+        if (targetStudio) onToggleStudio();
+        else onOpenWorkspace();
+      }
       panelScrollAnimationRef.current?.stop();
       if (Math.abs(host.scrollLeft - target) > 1) {
         if (prefersReducedMotion) {

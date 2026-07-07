@@ -1,6 +1,7 @@
 const HORIZONTAL_WHEEL_DOMINANCE = 0.85;
 const HORIZONTAL_WHEEL_MIN_PX = 2;
 const STREAM_QUIET_GAP_MS = 160;
+const TRACKPAD_PAGE_TURN_THRESHOLD_RATIO = 0.4;
 const DEFAULT_EDGE_MAX_PX = 300;
 const EDGE_RUBBER_BAND_RESISTANCE_PX = 260;
 const EDGE_ACCUM_CAP_PX = 780;
@@ -36,6 +37,29 @@ export type SidebarPagerUpdate =
   | { dragPx: number; kind: 'drag' }
   | { dragPx: number; kind: 'settle' }
   | { dragPx: 0; kind: 'swallowed' };
+
+export type SidebarPagerSurface = 'studio' | 'workspace';
+
+export function resolveSidebarPagerTarget({
+  clientWidth,
+  dragOrigin,
+  dragPxTotal,
+  scrollLeft
+}: {
+  clientWidth: number;
+  dragOrigin: number;
+  dragPxTotal: number;
+  scrollLeft: number;
+}): SidebarPagerSurface {
+  const width = clientWidth || 1;
+  const originPage = Math.round(dragOrigin / width);
+  const threshold = width * TRACKPAD_PAGE_TURN_THRESHOLD_RATIO;
+  let targetPage: number;
+  if (dragPxTotal > threshold) targetPage = originPage + 1;
+  else if (dragPxTotal < -threshold) targetPage = originPage - 1;
+  else targetPage = Math.round(scrollLeft / width);
+  return Math.max(0, Math.min(1, targetPage)) >= 1 ? 'studio' : 'workspace';
+}
 
 // The pager owns the whole horizontal wheel stream: native scroll-snap is off,
 // so paging stays deterministic — drag follows the fingers 1:1, release picks
