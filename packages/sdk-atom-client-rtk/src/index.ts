@@ -7,5 +7,5 @@ export type { MonadApiError } from '@monad/client-rtk';
 export { skipToken } from '@monad/client-rtk';
 
 export * from './attachments.ts';
-export * from './native-cli.ts';
+export * from './external-agent.ts';
 export * from './settings-model.ts';

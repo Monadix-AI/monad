@@ -4,52 +4,52 @@ import type {
   AdapterMigrationCandidate,
   AdapterMigrationPreview,
   AdapterMigrationPreviewRequest,
-  NativeCliAgentPresetView,
-  NativeCliAgentSetting,
-  NativeCliAgentView,
-  NativeCliAppServerTransport,
-  NativeCliAuthState,
-  NativeCliHistoryPageRequest,
-  NativeCliLaunchMode,
-  NativeCliObservationEvent,
-  NativeCliProductIcon,
-  NativeCliProvider,
-  NativeCliUsageRecord
+  ExternalAgentAppServerTransport,
+  ExternalAgentAuthState,
+  ExternalAgentHistoryPageRequest,
+  ExternalAgentLaunchMode,
+  ExternalAgentObservationEvent,
+  ExternalAgentPresetView,
+  ExternalAgentProductIcon,
+  ExternalAgentProvider,
+  ExternalAgentSetting,
+  ExternalAgentUsageRecord,
+  ExternalAgentView
 } from '@monad/protocol';
 import type { BinProbes } from './bin-probes.ts';
 
 import { z } from 'zod';
 
-export type NativeCliErrorCode =
+export type ExternalAgentErrorCode =
   | 'provider_not_installed'
   | 'provider_not_logged_in'
   | 'unsupported_capability'
   | 'provider_timeout'
   | 'provider_protocol_error';
 
-export class NativeCliError extends Error {
+export class ExternalAgentError extends Error {
   constructor(
-    readonly code: NativeCliErrorCode,
+    readonly code: ExternalAgentErrorCode,
     message: string
   ) {
     super(message);
-    this.name = 'NativeCliError';
+    this.name = 'ExternalAgentError';
   }
 }
 
-type NativeCliCapability =
-  | NativeCliLaunchMode
+type ExternalAgentCapability =
+  | ExternalAgentLaunchMode
   | 'provider-approval'
   | 'approval-resolution'
   | 'structured-output'
   | 'session-resume'
   | 'rollout-json-fallback';
 
-/** `ws`-transport dial hints a `buildLaunch` can attach to its `NativeCliLaunchSpec` when the default
+/** `ws`-transport dial hints a `buildLaunch` can attach to its `ExternalAgentLaunchSpec` when the default
  *  "scan the child's stderr for a self-announced `ws://host:port` line" dial strategy doesn't fit the
  *  provider's real gateway (e.g. it prints a differently-shaped announce line, announces on stdout
  *  instead of stderr, serves at a non-root path, or needs query-string auth). */
-interface NativeCliAppServerWsHints {
+interface ExternalAgentAppServerWsHints {
   /** URL path appended after `ws://host:port` (e.g. `/api/ws`). Root (`''`) by default. */
   path?: string;
   /** Query-string params merged into the dial URL (e.g. a shared-secret token). */
@@ -57,31 +57,37 @@ interface NativeCliAppServerWsHints {
   /** When set, the daemon dials this EXACT port directly (retrying until the child accepts, or the
    *  launch timeout elapses) instead of scanning stdout/stderr for a self-announced port — for a
    *  gateway the daemon itself launched with an explicit `--port` flag (see
-   *  `BuildNativeCliLaunchOptions.appServerPort`). */
+   *  `BuildExternalAgentLaunchOptions.appServerPort`). */
   port?: number;
 }
 
-export interface NativeCliLaunchSpec {
+export interface ExternalAgentLaunchSpec {
   argv: string[];
   cwd: string;
   env?: Record<string, string>;
-  launchMode: NativeCliLaunchMode;
+  launchMode: ExternalAgentLaunchMode;
   /** Byte channel for `app-server` launches. Absent (or `stdio`) means the daemon owns the child's
    *  stdin/stdout; `ws`/`unix` mean the child listens and the daemon dials the socket. */
-  appServerTransport?: NativeCliAppServerTransport;
+  appServerTransport?: ExternalAgentAppServerTransport;
   /** `ws`-transport dial hints; absent → the daemon's default self-announced-port scan. */
-  appServerWs?: NativeCliAppServerWsHints;
-  provider: NativeCliProvider;
+  appServerWs?: ExternalAgentAppServerWsHints;
+  provider: ExternalAgentProvider;
   approvalOwnership: 'provider-owned';
-  capabilities: NativeCliCapability[];
+  capabilities: ExternalAgentCapability[];
 }
 
-export type NativeCliStartPreflight =
-  | { state: 'ready'; agentName: string; provider: NativeCliProvider; checkedAt: string; providerSessionRef?: string }
+export type ExternalAgentStartPreflight =
+  | {
+      state: 'ready';
+      agentName: string;
+      provider: ExternalAgentProvider;
+      checkedAt: string;
+      providerSessionRef?: string;
+    }
   | {
       state: 'not_authenticated';
       agentName: string;
-      provider: NativeCliProvider;
+      provider: ExternalAgentProvider;
       checkedAt: string;
       action: 'reconnect_in_studio';
       reason: string;
@@ -89,30 +95,30 @@ export type NativeCliStartPreflight =
   | {
       state: 'unavailable';
       agentName: string;
-      provider: NativeCliProvider;
+      provider: ExternalAgentProvider;
       checkedAt: string;
       reason: string;
     }
   | {
       state: 'unknown';
       agentName: string;
-      provider: NativeCliProvider;
+      provider: ExternalAgentProvider;
       checkedAt: string;
       action: 'manual_check_in_studio';
       reason: string;
     };
 
-export interface BuildNativeCliLaunchOptions {
+export interface BuildExternalAgentLaunchOptions {
   workingPath: string;
   extraWorkingPaths?: string[];
-  launchMode?: NativeCliLaunchMode;
-  appServerTransport?: NativeCliAppServerTransport;
+  launchMode?: ExternalAgentLaunchMode;
+  appServerTransport?: ExternalAgentAppServerTransport;
   /** For `appServerTransport: 'unix'`, the AF_UNIX socket path the daemon allocated for the child to
    *  listen on (`--listen unix://<path>`). Ignored by other transports. */
   appServerSocketPath?: string;
   /** For `appServerTransport: 'ws'` when the daemon pre-allocates the loopback port (rather than
    *  parsing it from the child's announce output) — a `buildLaunch` that uses this must echo it back
-   *  as `NativeCliLaunchSpec.appServerWs.port` so the daemon knows to skip announce-scanning. */
+   *  as `ExternalAgentLaunchSpec.appServerWs.port` so the daemon knows to skip announce-scanning. */
   appServerPort?: number;
   providerSessionRef?: string;
   systemPromptFile?: string;
@@ -124,7 +130,7 @@ export interface BuildNativeCliLaunchOptions {
   mcpConfigArgs?: string[];
 }
 
-export interface NativeCliOutputEvent {
+export interface ExternalAgentOutputEvent {
   type:
     | 'approval_requested'
     | 'approval_resolved'
@@ -140,25 +146,25 @@ export interface NativeCliOutputEvent {
 }
 
 const requestIdSchema = z.union([z.string().min(1), z.number()]);
-const nativeCliOutputPayloadBase = z.object({}).catchall(z.unknown());
+const externalAgentOutputPayloadBase = z.object({}).catchall(z.unknown());
 
-export const nativeCliOutputEventSchema = z.discriminatedUnion('type', [
+export const externalAgentOutputEventSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('session_ref'),
-    payload: nativeCliOutputPayloadBase.extend({
+    payload: externalAgentOutputPayloadBase.extend({
       providerSessionRef: z.string().min(1)
     })
   }),
   z.object({
     type: z.literal('agent_message'),
-    payload: nativeCliOutputPayloadBase.extend({
+    payload: externalAgentOutputPayloadBase.extend({
       text: z.string(),
       final: z.boolean().optional()
     })
   }),
   z.object({
     type: z.literal('tool_call'),
-    payload: nativeCliOutputPayloadBase.extend({
+    payload: externalAgentOutputPayloadBase.extend({
       callId: z.union([z.string().min(1), z.number()]).optional(),
       tool: z.string().min(1).optional(),
       input: z.unknown().optional()
@@ -166,28 +172,28 @@ export const nativeCliOutputEventSchema = z.discriminatedUnion('type', [
   }),
   z.object({
     type: z.literal('tool_result'),
-    payload: nativeCliOutputPayloadBase.extend({
+    payload: externalAgentOutputPayloadBase.extend({
       callId: z.union([z.string().min(1), z.number()]).optional(),
       output: z.unknown().optional()
     })
   }),
   z.object({
     type: z.literal('web_search_result'),
-    payload: nativeCliOutputPayloadBase.extend({
+    payload: externalAgentOutputPayloadBase.extend({
       callId: z.union([z.string().min(1), z.number()]).optional(),
       status: z.string().optional()
     })
   }),
   z.object({
     type: z.literal('connection_required'),
-    payload: nativeCliOutputPayloadBase.extend({
+    payload: externalAgentOutputPayloadBase.extend({
       code: z.string().min(1).optional(),
       reason: z.string().min(1)
     })
   }),
   z.object({
     type: z.literal('provider_error'),
-    payload: nativeCliOutputPayloadBase.extend({
+    payload: externalAgentOutputPayloadBase.extend({
       responseId: z.union([z.string().min(1), z.number()]).optional(),
       code: z.union([z.string().min(1), z.number()]).optional(),
       message: z.string().min(1)
@@ -195,7 +201,7 @@ export const nativeCliOutputEventSchema = z.discriminatedUnion('type', [
   }),
   z.object({
     type: z.literal('history_page'),
-    payload: nativeCliOutputPayloadBase.extend({
+    payload: externalAgentOutputPayloadBase.extend({
       responseId: z.union([z.string().min(1), z.number()]),
       items: z.array(z.unknown()),
       nextCursor: z.string().nullable(),
@@ -204,14 +210,14 @@ export const nativeCliOutputEventSchema = z.discriminatedUnion('type', [
   }),
   z.object({
     type: z.literal('approval_requested'),
-    payload: nativeCliOutputPayloadBase.extend({
+    payload: externalAgentOutputPayloadBase.extend({
       requestId: requestIdSchema,
       kind: z.string().min(1)
     })
   }),
   z.object({
     type: z.literal('approval_resolved'),
-    payload: nativeCliOutputPayloadBase.extend({
+    payload: externalAgentOutputPayloadBase.extend({
       requestId: requestIdSchema
     })
   })
@@ -221,12 +227,12 @@ export const nativeCliOutputEventSchema = z.discriminatedUnion('type', [
  *  physical transport backs it (the child's stdin pipe for `stdio`, a WebSocket for `ws`, a socket
  *  for `unix`) and hands the adapter this uniform interface — an adapter frames JSON-RPC and calls
  *  `send`; it never learns whether the bytes travel over a pipe or a socket. */
-export interface NativeCliAppServerConnection {
+export interface ExternalAgentAppServerConnection {
   send(frame: string): void;
   close(): void;
 }
 
-export interface NativeCliRuntimeHandle {
+export interface ExternalAgentRuntimeHandle {
   terminal?: {
     write(input: string): void;
     resize(cols: number, rows: number): void;
@@ -242,8 +248,8 @@ export interface NativeCliRuntimeHandle {
   };
   /** Frame channel for `app-server` sessions, present regardless of the physical transport the
    *  daemon dialled (stdio/ws/unix). */
-  appServer?: NativeCliAppServerConnection;
-  launchMode?: NativeCliLaunchMode;
+  appServer?: ExternalAgentAppServerConnection;
+  launchMode?: ExternalAgentLaunchMode;
   providerSessionRef?: string | null;
   nextRequestId?(): number;
   /** Per-session JSON-RPC request→kind ledger. An adapter records what each outbound request id was
@@ -266,30 +272,30 @@ export interface NativeCliRuntimeHandle {
   kill(signal?: NodeJS.Signals): void;
 }
 
-export interface NativeCliProviderHistoryContext {
+export interface ExternalAgentProviderHistoryContext {
   providerSessionRef: string;
   workingPath: string;
   limitBytes: number;
 }
 
-export interface NativeCliProviderHistoryPageContext extends NativeCliProviderHistoryContext {
+export interface ExternalAgentProviderHistoryPageContext extends ExternalAgentProviderHistoryContext {
   /** Raw provider records to reshape into the live-JSONL-mimicking output string — not the daemon's
    *  wire response shape (that carries normalized `events`, not raw items). */
   page: { items: unknown[]; nextCursor?: string };
 }
 
-export interface NativeCliProviderHistoryPageRequestContext extends NativeCliProviderHistoryContext {
-  request: NativeCliHistoryPageRequest;
+export interface ExternalAgentProviderHistoryPageRequestContext extends ExternalAgentProviderHistoryContext {
+  request: ExternalAgentHistoryPageRequest;
 }
 
-export interface NativeCliApprovalResolution {
+export interface ExternalAgentApprovalResolution {
   requestId: string;
   allow: boolean;
   reason?: string;
   request?: Record<string, unknown>;
 }
 
-export interface NativeCliInitializeContext {
+export interface ExternalAgentInitializeContext {
   workingPath: string;
   providerSessionRef?: string;
   developerInstructions?: string;
@@ -304,51 +310,51 @@ export interface NativeCliInitializeContext {
   env?: Record<string, string>;
 }
 
-export interface NativeCliAuthStatusProbe {
-  launch: NativeCliLaunchSpec;
-  parse(output: string, exitCode: number | null): NativeCliAuthState;
+export interface ExternalAgentAuthStatusProbe {
+  launch: ExternalAgentLaunchSpec;
+  parse(output: string, exitCode: number | null): ExternalAgentAuthState;
 }
 
-export interface NativeCliModelOptionsProbe {
-  launch: NativeCliLaunchSpec;
+export interface ExternalAgentModelOptionsProbe {
+  launch: ExternalAgentLaunchSpec;
   parse(output: string, exitCode: number | null): string[];
 }
 
-export interface NativeCliUsageProbe {
-  launch: NativeCliLaunchSpec;
-  parse(output: string, exitCode: number | null): NativeCliUsageRecord[];
+export interface ExternalAgentUsageProbe {
+  launch: ExternalAgentLaunchSpec;
+  parse(output: string, exitCode: number | null): ExternalAgentUsageRecord[];
 }
 
-export type NativeCliObservationJsonRecordEntry = {
+export type ExternalAgentObservationJsonRecordEntry = {
   record: Record<string, unknown>;
   raw: string;
 };
 
-export type NativeCliObservationMessageGroupProjector = {
-  append(group: unknown, entry: NativeCliObservationJsonRecordEntry): void;
+export type ExternalAgentObservationMessageGroupProjector = {
+  append(group: unknown, entry: ExternalAgentObservationJsonRecordEntry): void;
   create(record: Record<string, unknown>): { key: string; state: unknown } | undefined;
-  render(id: string, group: unknown): NativeCliObservationEvent[];
+  render(id: string, group: unknown): ExternalAgentObservationEvent[];
 };
 
-export type NativeCliObservationRecordProjector = {
+export type ExternalAgentObservationRecordProjector = {
   parse(args: {
     id: string;
     provider?: string;
     record: Record<string, unknown>;
     recordIndex: number;
-  }): NativeCliObservationEvent[];
+  }): ExternalAgentObservationEvent[];
   supports?(record: Record<string, unknown>): boolean;
 };
 
-export type NativeCliObservationUsageProjector = {
-  usageRecords?(record: Record<string, unknown>): NativeCliUsageRecord[];
+export type ExternalAgentObservationUsageProjector = {
+  usageRecords?(record: Record<string, unknown>): ExternalAgentUsageRecord[];
 };
 
 /** Provider-agnostic classification of a projected observation event. The adapter (which owns its
  *  provider's event vocabulary) maps each event it produces to one of these kinds; consumers derive
  *  turn/generating state and the UI activity phase from the kind, never from a provider event string.
  *  `turn-end` marks a terminal record (result / turn completed / error). */
-export type NativeCliObservationActivity =
+export type ExternalAgentObservationActivity =
   | 'thinking'
   | 'message'
   | 'tool-call'
@@ -357,21 +363,21 @@ export type NativeCliObservationActivity =
   | 'system'
   | 'turn-end';
 
-export type NativeCliObservationProjector = NativeCliObservationUsageProjector & {
-  historyEntries?(entries: NativeCliObservationJsonRecordEntry[]): NativeCliObservationJsonRecordEntry[];
-  messageGroup?: NativeCliObservationMessageGroupProjector;
-  recordProjectors: NativeCliObservationRecordProjector[];
+export type ExternalAgentObservationProjector = ExternalAgentObservationUsageProjector & {
+  historyEntries?(entries: ExternalAgentObservationJsonRecordEntry[]): ExternalAgentObservationJsonRecordEntry[];
+  messageGroup?: ExternalAgentObservationMessageGroupProjector;
+  recordProjectors: ExternalAgentObservationRecordProjector[];
   /** Classify one event this adapter produced into a provider-agnostic activity kind. Returning
    *  `undefined` means "no signal" (the event doesn't affect generating/phase). Consumers fall back
    *  to a role-only heuristic when an adapter omits this. */
-  classifyActivity?(event: NativeCliObservationEvent): NativeCliObservationActivity | undefined;
+  classifyActivity?(event: ExternalAgentObservationEvent): ExternalAgentObservationActivity | undefined;
   /** Whether an event is a partial streaming fragment (a token delta) rather than a settled item.
    *  Consumers use it to merge adjacent fragments and to drive streaming affordances, without knowing
    *  this provider's delta event names. */
-  isStreamingFragment?(event: NativeCliObservationEvent): boolean;
+  isStreamingFragment?(event: ExternalAgentObservationEvent): boolean;
 };
 
-export interface NativeCliArgumentSupport {
+export interface ExternalAgentArgumentSupport {
   flags: string[];
   reasoningEfforts: string[];
   speeds: string[];
@@ -380,12 +386,12 @@ export interface NativeCliArgumentSupport {
   reasoningEffortsByModel?: Record<string, string[]>;
 }
 
-export interface NativeCliArgumentSupportProbe {
-  launch: NativeCliLaunchSpec;
-  parse(output: string, exitCode: number | null): NativeCliArgumentSupport;
+export interface ExternalAgentArgumentSupportProbe {
+  launch: ExternalAgentLaunchSpec;
+  parse(output: string, exitCode: number | null): ExternalAgentArgumentSupport;
 }
 
-export interface NativeCliManagedRuntimeContext {
+export interface ExternalAgentManagedRuntimeContext {
   monadCliEntry: {
     command: string;
     args: string[];
@@ -393,7 +399,7 @@ export interface NativeCliManagedRuntimeContext {
   env: Record<string, string>;
 }
 
-export interface NativeCliManagedEnvContext {
+export interface ExternalAgentManagedEnvContext {
   /** The managed agent's private workspace directory (already created on disk). A provider whose
    *  autopilot toggle has no CLI-flag equivalent (e.g. OpenClaw — see its adapter) writes its own
    *  config/state files here and points the child at them via env vars, rather than an argv flag. */
@@ -404,17 +410,17 @@ export interface NativeCliManagedEnvContext {
   skipProviderApprovals: boolean;
 }
 
-/** Provider-specific behavior for a *managed* project-agent runtime — a native CLI that monad spawns
+/** Provider-specific behavior for a *managed* project-agent runtime — an external agent that monad spawns
  *  and supervises as a Workplace project member. Absent → the generic defaults apply, so the daemon's
  *  managed-runtime code stays provider-agnostic and reads intent from the adapter instead of branching
  *  on the provider id. */
-export interface NativeCliManagedRuntime {
+export interface ExternalAgentManagedRuntime {
   /** Launch-mode override for the managed runtime (e.g. codex → 'app-server', others → 'json-stream'). */
-  launchMode?(defaultMode: NativeCliLaunchMode): NativeCliLaunchMode;
+  launchMode?(defaultMode: ExternalAgentLaunchMode): ExternalAgentLaunchMode;
   /** Env additions for the managed child (e.g. codex → `CODEX_NON_INTERACTIVE=1`). */
-  env?(context: NativeCliManagedEnvContext): Record<string, string>;
+  env?(context: ExternalAgentManagedEnvContext): Record<string, string>;
   /** CLI args wiring monad's managed MCP server into the provider (codex → `-c mcp_servers.monad…`). */
-  mcpConfigArgs?(context: NativeCliManagedRuntimeContext): string[];
+  mcpConfigArgs?(context: ExternalAgentManagedRuntimeContext): string[];
   /** The provider mounts monad's managed MCP server as its project bridge — drives the MCP prompt
    *  template, the MCP-flavored join greeting, and the MCP tool-usage communication instructions. */
   usesManagedMcpBridge?: boolean;
@@ -429,7 +435,7 @@ export interface NativeCliManagedRuntime {
  *  CLI. Present only on agents that ship an ACP wrapper (codex, claude-code); the daemon's ACP
  *  delegation derives its invite preset + spawn command from this, while the agent's identity and
  *  install detection still come from `detect()` — one adapter, forked by delivery mode. */
-export interface NativeCliAcpDelivery {
+export interface ExternalAgentAcpDelivery {
   /** Spawn command for the ACP wrapper (e.g. `npx`). */
   command: string;
   /** Args for the ACP wrapper (e.g. `['-y', '@agentclientprotocol/codex-acp@1.0.0']`). */
@@ -447,39 +453,39 @@ export interface AdapterMigration {
    *  writes for built-in migrations and uses this hook only when an adapter needs provider-owned apply. */
   apply?(request: AdapterMigrationApplyRequest): AdapterMigrationApplyResult | Promise<AdapterMigrationApplyResult>;
 }
-export type NativeCliSettingsImport = AdapterMigration;
+export type ExternalAgentSettingsImport = AdapterMigration;
 
 /** The authoring contract for an agent-adapter atom: a native coding-CLI (Codex, Claude Code, …)
  *  wrapped as a monad agent. The daemon owns the process/pty/socket lifecycle and calls these hooks;
  *  the adapter only builds launch specs and translates the provider's wire format to/from
- *  `NativeCliOutputEvent`s. Registered through `AtomPackContext.registerAgentAdapter`. */
-export interface NativeCliProviderAdapter {
+ *  `ExternalAgentOutputEvent`s. Registered through `AtomPackContext.registerAgentAdapter`. */
+export interface ExternalAgentProviderAdapter {
   /** Provider-specific managed project-agent runtime behavior; absent → generic defaults. */
-  managedRuntime?: NativeCliManagedRuntime;
-  /** ACP delivery variant; absent → this agent has no ACP wrapper (native-CLI delivery only). */
-  acp?: NativeCliAcpDelivery;
+  managedRuntime?: ExternalAgentManagedRuntime;
+  /** ACP delivery variant; absent → this agent has no ACP wrapper (external agent delivery only). */
+  acp?: ExternalAgentAcpDelivery;
   /** Optional provider-specific migration surface. Current UI entry points may apply only a subset of
-   *  categories (for example native CLI agents) even when the adapter previews broader settings. */
+   *  categories (for example external agents) even when the adapter previews broader settings. */
   settingsImport?: AdapterMigration;
   /** Optional provider-wire transcript projection into Monad protocol events. This is data-only:
    *  adapters may decode their own JSONL/history format, but must not return UI components, labels,
    *  cards, or view state. Experience surfaces consume only the resulting protocol events. */
-  observation?: NativeCliObservationProjector;
+  observation?: ExternalAgentObservationProjector;
   /** Declarative operator settings for this adapter. The UI renders these controls dynamically; keys
-   *  address fields on `NativeCliAgentView` so daemon launch behavior still reads the shared contract. */
-  settings?(agent?: NativeCliAgentView): NativeCliAgentSetting[];
-  provider: NativeCliProvider;
-  productIcon: NativeCliProductIcon;
+   *  address fields on `ExternalAgentView` so daemon launch behavior still reads the shared contract. */
+  settings?(agent?: ExternalAgentView): ExternalAgentSetting[];
+  provider: ExternalAgentProvider;
+  productIcon: ExternalAgentProductIcon;
   /** Human display name (e.g. "Claude Code", "Codex") — the single source the daemon/UI reads instead
    *  of mapping a provider id to a label. */
   label: string;
-  detect(probes?: BinProbes): NativeCliAgentPresetView;
-  listSupportedModels(agent?: NativeCliAgentView): string[];
-  modelOptions?(agent: NativeCliAgentView): NativeCliModelOptionsProbe;
+  detect(probes?: BinProbes): ExternalAgentPresetView;
+  listSupportedModels(agent?: ExternalAgentView): string[];
+  modelOptions?(agent: ExternalAgentView): ExternalAgentModelOptionsProbe;
   resolveCommand?(command: string, probes?: BinProbes): string | undefined;
-  buildLaunch(agent: NativeCliAgentView, opts: BuildNativeCliLaunchOptions): NativeCliLaunchSpec;
+  buildLaunch(agent: ExternalAgentView, opts: BuildExternalAgentLaunchOptions): ExternalAgentLaunchSpec;
   /** True when this provider's `ws` app-server launches want a daemon-assigned port (see
-   *  `NativeCliAppServerWsHints.port`) rather than a self-announced one. The daemon uses this to decide
+   *  `ExternalAgentAppServerWsHints.port`) rather than a self-announced one. The daemon uses this to decide
    *  whether pre-allocating a port before `buildLaunch` runs is worth the syscall — a self-announcing ws
    *  provider that doesn't set this never reads the allocated port at all. */
   usesDaemonAssignedAppServerPort?: boolean;
@@ -487,36 +493,36 @@ export interface NativeCliProviderAdapter {
    *  selector) appended to the launch spec's base argv each time the daemon spawns a fresh process for
    *  a turn. Absent → the adapter has no one-shot mode. */
   oneshotTurnArgs?(input: string, opts: { providerSessionRef?: string | null }): string[];
-  buildAuthLaunch(agent: NativeCliAgentView): NativeCliLaunchSpec;
-  buildAuthStatusLaunch(agent: NativeCliAgentView): NativeCliLaunchSpec;
-  authStatus(agent: NativeCliAgentView): NativeCliAuthStatusProbe;
-  argumentSupport?(agent: NativeCliAgentView): NativeCliArgumentSupportProbe;
-  usage?(agent: NativeCliAgentView): NativeCliUsageProbe;
-  parseAuthStatus(output: string, exitCode: number | null): NativeCliAuthState;
+  buildAuthLaunch(agent: ExternalAgentView): ExternalAgentLaunchSpec;
+  buildAuthStatusLaunch(agent: ExternalAgentView): ExternalAgentLaunchSpec;
+  authStatus(agent: ExternalAgentView): ExternalAgentAuthStatusProbe;
+  argumentSupport?(agent: ExternalAgentView): ExternalAgentArgumentSupportProbe;
+  usage?(agent: ExternalAgentView): ExternalAgentUsageProbe;
+  parseAuthStatus(output: string, exitCode: number | null): ExternalAgentAuthState;
   historyPage?(
-    context: NativeCliProviderHistoryPageRequestContext
-  ): Promise<NativeCliProviderHistoryPageContext['page'] | null>;
-  requestHistoryPage?(handle: NativeCliRuntimeHandle, request: NativeCliHistoryPageRequest): string | number;
-  historyPageOutput?(context: NativeCliProviderHistoryPageContext): string | null;
-  historyOutput?(context: NativeCliProviderHistoryContext): string | null | Promise<string | null>;
-  initialize?(handle: NativeCliRuntimeHandle, context: NativeCliInitializeContext): void;
+    context: ExternalAgentProviderHistoryPageRequestContext
+  ): Promise<ExternalAgentProviderHistoryPageContext['page'] | null>;
+  requestHistoryPage?(handle: ExternalAgentRuntimeHandle, request: ExternalAgentHistoryPageRequest): string | number;
+  historyPageOutput?(context: ExternalAgentProviderHistoryPageContext): string | null;
+  historyOutput?(context: ExternalAgentProviderHistoryContext): string | null | Promise<string | null>;
+  initialize?(handle: ExternalAgentRuntimeHandle, context: ExternalAgentInitializeContext): void;
   /** `handle`, when present, gives per-session JSON-RPC context: the request→kind ledger for by-id
    *  response dispatch and a stdin sink for replying to unhandled server-initiated requests. Adapters
    *  that don't need it (single-shot stdout parsers) ignore it. */
-  parseOutput(chunk: string, handle?: NativeCliRuntimeHandle): NativeCliOutputEvent[];
-  sendInput(handle: NativeCliRuntimeHandle, input: string): void;
+  parseOutput(chunk: string, handle?: ExternalAgentRuntimeHandle): ExternalAgentOutputEvent[];
+  sendInput(handle: ExternalAgentRuntimeHandle, input: string): void;
   /** True when the given launch mode can both project provider approval requests as
    *  `approval_requested` events AND resolve them via `resolveApproval` (a two-way channel exists).
    *  The daemon consults this before dropping the skip-approval flag for a managed agent: only a
    *  resolvable mode may delegate approvals to the human; otherwise it stays full-auto. Absent → the
    *  adapter has no resolvable approval channel in any mode. */
-  supportsApprovalResolution?(launchMode: NativeCliLaunchMode): boolean;
-  resolveApproval(handle: NativeCliRuntimeHandle, resolution: NativeCliApprovalResolution): void;
+  supportsApprovalResolution?(launchMode: ExternalAgentLaunchMode): boolean;
+  resolveApproval(handle: ExternalAgentRuntimeHandle, resolution: ExternalAgentApprovalResolution): void;
   /** Cancel the in-flight turn without tearing down the session/thread (app-server only). Absent →
    *  the provider offers no graceful interrupt; the host falls back to stopping the session. */
-  interrupt?(handle: NativeCliRuntimeHandle): void;
+  interrupt?(handle: ExternalAgentRuntimeHandle): void;
   /** Inject additional input into the in-flight turn (app-server only). Absent → not supported. */
-  steer?(handle: NativeCliRuntimeHandle, input: string): void;
-  resize(handle: NativeCliRuntimeHandle, cols: number, rows: number): void;
-  stop(handle: NativeCliRuntimeHandle): void;
+  steer?(handle: ExternalAgentRuntimeHandle, input: string): void;
+  resize(handle: ExternalAgentRuntimeHandle, cols: number, rows: number): void;
+  stop(handle: ExternalAgentRuntimeHandle): void;
 }

@@ -1,5 +1,5 @@
 import type { ChatMessage, Event, SessionId, UIItem } from '@monad/protocol';
-import type { NativeCliSessionSnapshot } from '@/handlers/session/ui-projection.ts';
+import type { ExternalAgentSessionSnapshot } from '@/handlers/session/ui-projection.ts';
 
 import { expect, test } from 'bun:test';
 import { newId } from '@monad/protocol';
@@ -344,7 +344,7 @@ test('reasoning deltas preserve the streaming message agent name', () => {
   });
 });
 
-test('hydrates a persisted managed native CLI thinking message after refresh', () => {
+test('hydrates a persisted managed external agent thinking message after refresh', () => {
   const projector = new SessionUiProjector();
   projector.hydrateMessages([
     {
@@ -353,7 +353,7 @@ test('hydrates a persisted managed native CLI thinking message after refresh', (
       role: 'assistant',
       text: '',
       type: 'text',
-      data: { agentName: 'pmem_codex_reviewer', source: 'managed-native-cli', reasoning: 'Thinking' },
+      data: { agentName: 'pmem_codex_reviewer', source: 'managed-external-agent', reasoning: 'Thinking' },
       stream: { status: 'streaming' },
       active: true,
       createdAt: '2026-06-24T00:00:00.000Z'
@@ -367,14 +367,14 @@ test('hydrates a persisted managed native CLI thinking message after refresh', (
       kind: 'message',
       id: 'msg_thinking',
       agentName: 'pmem_codex_reviewer',
-      source: 'managed-native-cli',
+      source: 'managed-external-agent',
       status: 'streaming',
       parts: [{ type: 'reasoning', text: 'Thinking' }]
     })
   ]);
 });
 
-test('hydrates native CLI provider errors without breaking the UI stream', () => {
+test('hydrates external agent provider errors without breaking the UI stream', () => {
   const projector = new SessionUiProjector();
   projector.hydrateMessages([
     {
@@ -385,9 +385,9 @@ test('hydrates native CLI provider errors without breaking the UI stream', () =>
       type: 'error',
       data: {
         agentName: 'pmem_codex_reviewer',
-        nativeCliSessionId: 'ncli_provider_error',
+        externalAgentSessionId: 'exa_provider_error',
         deliveryId: 'deliv_provider_error',
-        source: 'native-cli-provider'
+        source: 'external-agent-provider'
       },
       stream: { status: 'settled' },
       active: true,
@@ -402,8 +402,8 @@ test('hydrates native CLI provider errors without breaking the UI stream', () =>
       kind: 'message',
       id: 'msg_provider_error',
       agentName: 'pmem_codex_reviewer',
-      source: 'native-cli-provider',
-      nativeCliSessionId: 'ncli_provider_error',
+      source: 'external-agent-provider',
+      externalAgentSessionId: 'exa_provider_error',
       deliveryId: 'deliv_provider_error',
       status: 'error',
       parts: [{ type: 'text', text: 'thread not found: 019f30a7-ddaf-7062-9f89-f3fd90b5397c' }]
@@ -411,21 +411,21 @@ test('hydrates native CLI provider errors without breaking the UI stream', () =>
   ]);
 });
 
-test('managed native CLI completion moves live order to completion time', () => {
+test('managed external agent completion moves live order to completion time', () => {
   const projector = new SessionUiProjector();
   const startedAt = '2026-06-24T00:00:01.000Z';
   const completedAt = '2026-06-24T00:00:09.000Z';
   projector.applyEvent(
     event(
       'agent.token',
-      { messageId: 'msg_CLI', agentName: 'codex', delta: '', index: 0, source: 'managed-native-cli' },
+      { messageId: 'msg_CLI', agentName: 'codex', delta: '', index: 0, source: 'managed-external-agent' },
       startedAt
     )
   );
   projector.applyEvent(
     event(
       'agent.message',
-      { messageId: 'msg_CLI', agentName: 'codex', text: 'done', source: 'managed-native-cli' },
+      { messageId: 'msg_CLI', agentName: 'codex', text: 'done', source: 'managed-external-agent' },
       completedAt
     )
   );
@@ -442,33 +442,33 @@ test('managed native CLI completion moves live order to completion time', () => 
   ]);
 });
 
-test('managed native CLI message projections retain delivery observation pointers', () => {
+test('managed external agent message projections retain delivery observation pointers', () => {
   const deliveryId = newId('deliv');
   const live = new SessionUiProjector();
   live.applyEvent(
     event('agent.token', {
       messageId: 'msg_CLI',
       agentName: 'codex',
-      nativeCliSessionId: 'ncli_codex',
+      externalAgentSessionId: 'exa_codex',
       deliveryId,
       delta: '',
       index: 0,
-      source: 'managed-native-cli'
+      source: 'managed-external-agent'
     })
   );
   const [settled] = live.applyEvent(
     event('agent.message', {
       messageId: 'msg_CLI',
       agentName: 'codex',
-      nativeCliSessionId: 'ncli_codex',
+      externalAgentSessionId: 'exa_codex',
       deliveryId,
       text: 'done',
-      source: 'managed-native-cli'
+      source: 'managed-external-agent'
     })
   );
 
   expect(settled?.kind === 'upsert' && settled.item.kind === 'message' ? settled.item : undefined).toMatchObject({
-    nativeCliSessionId: 'ncli_codex',
+    externalAgentSessionId: 'exa_codex',
     deliveryId
   });
 
@@ -482,9 +482,9 @@ test('managed native CLI message projections retain delivery observation pointer
       type: 'text',
       data: {
         agentName: 'codex',
-        nativeCliSessionId: 'ncli_codex',
+        externalAgentSessionId: 'exa_codex',
         deliveryId,
-        source: 'managed-native-cli'
+        source: 'managed-external-agent'
       },
       stream: { status: 'complete' },
       active: true,
@@ -495,25 +495,25 @@ test('managed native CLI message projections retain delivery observation pointer
   if (snapshot.kind !== 'snapshot') throw new Error('expected snapshot');
   expect(snapshot.items[0]).toMatchObject({
     kind: 'message',
-    nativeCliSessionId: 'ncli_codex',
+    externalAgentSessionId: 'exa_codex',
     deliveryId
   });
 });
 
-test('live user messages keep chronological order before later managed native CLI replies', () => {
+test('live user messages keep chronological order before later managed external agent replies', () => {
   const projector = new SessionUiProjector();
   projector.applyEvent(event('user.message', { messageId: 'msg_USER', text: 'hi all' }, '2026-06-24T10:00:00.000Z'));
   projector.applyEvent(
     event(
       'agent.token',
-      { messageId: 'msg_CLI', agentName: 'claude', delta: '', index: 0, source: 'managed-native-cli' },
+      { messageId: 'msg_CLI', agentName: 'claude', delta: '', index: 0, source: 'managed-external-agent' },
       '2026-06-24T10:00:01.000Z'
     )
   );
   projector.applyEvent(
     event(
       'agent.message',
-      { messageId: 'msg_CLI', agentName: 'claude', text: 'I can take this.', source: 'managed-native-cli' },
+      { messageId: 'msg_CLI', agentName: 'claude', text: 'I can take this.', source: 'managed-external-agent' },
       '2026-06-24T10:00:02.000Z'
     )
   );
@@ -764,12 +764,12 @@ test('keeps tool progress on the standard tool item', () => {
   expect(progress.item).toMatchObject({ id: 'call_1', tool: 'shell', status: 'running', output: 'running' });
 });
 
-test('does not project raw native CLI PTY output into chat tool text', () => {
+test('does not project raw external agent PTY output into chat tool text', () => {
   const projector = new SessionUiProjector();
-  const nativeCliSessionId = 'ncli_1';
+  const externalAgentSessionId = 'exa_1';
   projector.applyEvent(
-    event('native_cli.started', {
-      nativeCliSessionId,
+    event('external_agent.started', {
+      externalAgentSessionId,
       agentName: 'claude-code',
       provider: 'claude-code',
       launchMode: 'pty',
@@ -779,8 +779,8 @@ test('does not project raw native CLI PTY output into chat tool text', () => {
   );
 
   const out = projector.applyEvent(
-    event('native_cli.output', {
-      nativeCliSessionId,
+    event('external_agent.output', {
+      externalAgentSessionId,
       stream: 'pty',
       chunk: '\u001b[?25l\u001b[38;2;255;193;7mNew MCP server found\u001b[39m'
     })
@@ -791,7 +791,7 @@ test('does not project raw native CLI PTY output into chat tool text', () => {
     kind: 'upsert',
     item: {
       kind: 'tool',
-      id: nativeCliSessionId,
+      id: externalAgentSessionId,
       output: '\u001b[?25l\u001b[38;2;255;193;7mNew MCP server found\u001b[39m'
     }
   });
@@ -799,17 +799,17 @@ test('does not project raw native CLI PTY output into chat tool text', () => {
   if (snapshot.kind !== 'snapshot') throw new Error('expected snapshot');
   expect(snapshot.items[0]).toMatchObject({
     kind: 'tool',
-    id: nativeCliSessionId,
+    id: externalAgentSessionId,
     output: '\u001b[?25l\u001b[38;2;255;193;7mNew MCP server found\u001b[39m',
     status: 'running'
   });
 });
 
-test('projects native CLI provider-owned approvals as distinct approval items', () => {
+test('projects external agent provider-owned approvals as distinct approval items', () => {
   const projector = new SessionUiProjector();
   const [approval] = projector.applyEvent(
-    event('native_cli.approval_requested', {
-      nativeCliSessionId: 'ncli_gemini',
+    event('external_agent.approval_requested', {
+      externalAgentSessionId: 'exa_gemini',
       provider: 'gemini',
       requestId: 'gemini:folder-trust',
       text: 'trust this Gemini project folder',
@@ -828,7 +828,7 @@ test('projects native CLI provider-owned approvals as distinct approval items', 
       id: 'gemini:folder-trust',
       tool: 'gemini approval',
       input: {
-        nativeCliSessionId: 'ncli_gemini',
+        externalAgentSessionId: 'exa_gemini',
         provider: 'gemini',
         text: 'trust this Gemini project folder',
         approvalOwnership: 'provider-owned'
@@ -838,11 +838,11 @@ test('projects native CLI provider-owned approvals as distinct approval items', 
   });
 });
 
-test('projects native CLI reconnect requirements as visible custom items', () => {
+test('projects external agent reconnect requirements as visible custom items', () => {
   const projector = new SessionUiProjector();
   const [connection] = projector.applyEvent(
-    event('native_cli.connection_required', {
-      nativeCliSessionId: 'ncli_gemini',
+    event('external_agent.connection_required', {
+      externalAgentSessionId: 'exa_gemini',
       agentName: 'gemini',
       provider: 'gemini',
       code: 'provider_connection_required',
@@ -855,11 +855,11 @@ test('projects native CLI reconnect requirements as visible custom items', () =>
     kind: 'upsert',
     item: {
       kind: 'custom',
-      id: 'native-cli-connection-required:ncli_gemini',
-      name: 'native_cli.connection_required',
+      id: 'external-agent-connection-required:exa_gemini',
+      name: 'external_agent.connection_required',
       status: 'error',
       data: {
-        nativeCliSessionId: 'ncli_gemini',
+        externalAgentSessionId: 'exa_gemini',
         agentName: 'gemini',
         provider: 'gemini',
         code: 'provider_connection_required',
@@ -945,9 +945,9 @@ test('snapshot omits oldestCursor when there are no messages', () => {
   if (snap.kind !== 'snapshot') throw new Error('expected snapshot');
 });
 
-function cliSession(overrides: Partial<NativeCliSessionSnapshot> = {}): NativeCliSessionSnapshot {
+function cliSession(overrides: Partial<ExternalAgentSessionSnapshot> = {}): ExternalAgentSessionSnapshot {
   return {
-    id: 'ncli_1',
+    id: 'exa_1',
     provider: 'codex',
     agentName: 'codex',
     workingPath: '/w',
@@ -960,9 +960,9 @@ function cliSession(overrides: Partial<NativeCliSessionSnapshot> = {}): NativeCl
   };
 }
 
-test('hydrateNativeCliSessions rebuilds a running tool card from the output snapshot', () => {
+test('hydrateExternalAgentSessions rebuilds a running tool card from the output snapshot', () => {
   const projector = new SessionUiProjector();
-  projector.hydrateNativeCliSessions([
+  projector.hydrateExternalAgentSessions([
     cliSession({
       outputSnapshot: [
         '{"method":"turn/started","params":{}}',
@@ -975,8 +975,8 @@ test('hydrateNativeCliSessions rebuilds a running tool card from the output snap
   expect(snap.items).toHaveLength(1);
   expect(snap.items[0]).toMatchObject({
     kind: 'tool',
-    id: 'ncli_1',
-    tool: 'native-cli:codex',
+    id: 'exa_1',
+    tool: 'external-agent:codex',
     status: 'running',
     output: [
       '{"method":"turn/started","params":{}}',
@@ -986,9 +986,9 @@ test('hydrateNativeCliSessions rebuilds a running tool card from the output snap
   });
 });
 
-test('hydrateNativeCliSessions settles a running process after provider end turn', () => {
+test('hydrateExternalAgentSessions settles a running process after provider end turn', () => {
   const projector = new SessionUiProjector();
-  projector.hydrateNativeCliSessions([
+  projector.hydrateExternalAgentSessions([
     cliSession({
       provider: 'claude-code',
       outputSnapshot: [
@@ -1002,11 +1002,11 @@ test('hydrateNativeCliSessions settles a running process after provider end turn
   expect(snap.items[0].status).toBe('ok');
 });
 
-test('native CLI output settles the live tool card after provider end turn', () => {
+test('external agent output settles the live tool card after provider end turn', () => {
   const projector = new SessionUiProjector();
   projector.applyEvent(
-    event('native_cli.started', {
-      nativeCliSessionId: 'ncli_live',
+    event('external_agent.started', {
+      externalAgentSessionId: 'exa_live',
       agentName: 'pmem_claude',
       provider: 'claude-code',
       workingPath: '/w',
@@ -1015,41 +1015,41 @@ test('native CLI output settles the live tool card after provider end turn', () 
     })
   );
   projector.applyEvent(
-    event('native_cli.output', {
-      nativeCliSessionId: 'ncli_live',
+    event('external_agent.output', {
+      externalAgentSessionId: 'exa_live',
       stream: 'stdout',
       chunk:
         '{"type":"stream_event","event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"Working"}}}\n'
     })
   );
   projector.applyEvent(
-    event('native_cli.output', {
-      nativeCliSessionId: 'ncli_live',
+    event('external_agent.output', {
+      externalAgentSessionId: 'exa_live',
       stream: 'stdout',
       chunk: '{"type":"result","subtype":"success","is_error":false,"stop_reason":"end_turn"}\n'
     })
   );
   const snap = projector.snapshot();
-  const tool = snap.kind === 'snapshot' ? snap.items.find((item) => item.id === 'ncli_live') : undefined;
+  const tool = snap.kind === 'snapshot' ? snap.items.find((item) => item.id === 'exa_live') : undefined;
   if (tool?.kind !== 'tool') throw new Error('expected tool');
   expect(tool.status).toBe('ok');
 });
 
-test('hydrateNativeCliSessions maps terminal state and appends the exit line', () => {
+test('hydrateExternalAgentSessions maps terminal state and appends the exit line', () => {
   const failed = new SessionUiProjector();
-  failed.hydrateNativeCliSessions([cliSession({ id: 'ncli_f', state: 'failed', exitCode: 1 })]);
+  failed.hydrateExternalAgentSessions([cliSession({ id: 'exa_f', state: 'failed', exitCode: 1 })]);
   const fSnap = failed.snapshot();
   if (fSnap.kind !== 'snapshot' || fSnap.items[0]?.kind !== 'tool') throw new Error('expected tool');
   expect(fSnap.items[0].status).toBe('error');
 
   const exited = new SessionUiProjector();
-  exited.hydrateNativeCliSessions([cliSession({ id: 'ncli_e', state: 'exited', exitCode: 0 })]);
+  exited.hydrateExternalAgentSessions([cliSession({ id: 'exa_e', state: 'exited', exitCode: 0 })]);
   const eSnap = exited.snapshot();
   if (eSnap.kind !== 'snapshot' || eSnap.items[0]?.kind !== 'tool') throw new Error('expected tool');
   expect(eSnap.items[0].status).toBe('ok');
 });
 
-test('hydrateNativeCliSessions interleaves cards with messages by startedAt', () => {
+test('hydrateExternalAgentSessions interleaves cards with messages by startedAt', () => {
   const projector = new SessionUiProjector();
   const mkMsg = (id: `msg_${string}`, at: string): ChatMessage => ({
     id,
@@ -1063,16 +1063,16 @@ test('hydrateNativeCliSessions interleaves cards with messages by startedAt', ()
   });
   // Messages at 00:00 and 00:01; a CLI run started at 00:00:00.500 must land between them.
   projector.hydrateMessages([mkMsg('msg_a', '2026-06-24T00:00:00.000Z'), mkMsg('msg_b', '2026-06-24T00:00:01.000Z')]);
-  projector.hydrateNativeCliSessions([cliSession()]);
+  projector.hydrateExternalAgentSessions([cliSession()]);
   const snap = projector.snapshot();
   if (snap.kind !== 'snapshot') throw new Error('expected snapshot');
-  expect(snap.items.map((i) => i.id)).toEqual(['msg_a', 'ncli_1', 'msg_b']);
+  expect(snap.items.map((i) => i.id)).toEqual(['msg_a', 'exa_1', 'msg_b']);
 });
 
-test('hydrateNativeCliSessions updates an existing card in place without duplicating', () => {
+test('hydrateExternalAgentSessions updates an existing card in place without duplicating', () => {
   const projector = new SessionUiProjector();
-  projector.hydrateNativeCliSessions([cliSession({ outputSnapshot: 'first' })]);
-  projector.hydrateNativeCliSessions([cliSession({ outputSnapshot: 'second', state: 'stopped' })]);
+  projector.hydrateExternalAgentSessions([cliSession({ outputSnapshot: 'first' })]);
+  projector.hydrateExternalAgentSessions([cliSession({ outputSnapshot: 'second', state: 'stopped' })]);
   const snap = projector.snapshot();
   if (snap.kind !== 'snapshot' || snap.items[0]?.kind !== 'tool') throw new Error('expected tool');
   expect(snap.items).toHaveLength(1);
@@ -1139,8 +1139,8 @@ test('agent join, its output card, and its wall reply project in chronological o
   const p = new SessionUiProjector();
   p.applyEvent(event('user.message', { messageId: 'msg_U', text: 'please review' }));
   p.applyEvent(
-    event('native_cli.started', {
-      nativeCliSessionId: 'ncli_1',
+    event('external_agent.started', {
+      externalAgentSessionId: 'exa_1',
       agentName: 'codex',
       provider: 'codex',
       launchMode: 'pty',
@@ -1148,28 +1148,36 @@ test('agent join, its output card, and its wall reply project in chronological o
       pid: 123
     })
   );
-  p.applyEvent(event('native_cli.output', { nativeCliSessionId: 'ncli_1', stream: 'stdout', chunk: 'analyzing repo' }));
+  p.applyEvent(
+    event('external_agent.output', { externalAgentSessionId: 'exa_1', stream: 'stdout', chunk: 'analyzing repo' })
+  );
   // The reply reaching the wall: a Thinking placeholder that settles into the posted text.
   p.applyEvent(
-    event('agent.token', { messageId: 'msg_R', agentName: 'codex', delta: '', index: 0, source: 'managed-native-cli' })
+    event('agent.token', {
+      messageId: 'msg_R',
+      agentName: 'codex',
+      delta: '',
+      index: 0,
+      source: 'managed-external-agent'
+    })
   );
   p.applyEvent(
-    event('agent.reasoning', { messageId: 'msg_R', delta: 'Thinking', index: 0, source: 'managed-native-cli' })
+    event('agent.reasoning', { messageId: 'msg_R', delta: 'Thinking', index: 0, source: 'managed-external-agent' })
   );
   p.applyEvent(
     event('agent.message', {
       messageId: 'msg_R',
       agentName: 'codex',
       text: 'looks good to me',
-      source: 'managed-native-cli'
+      source: 'managed-external-agent'
     })
   );
   const snap = p.snapshot();
   if (snap.kind !== 'snapshot') throw new Error('expected snapshot');
-  expect(snap.items.map((i) => `${i.kind}:${i.id}`)).toEqual(['message:msg_U', 'tool:ncli_1', 'message:msg_R']);
+  expect(snap.items.map((i) => `${i.kind}:${i.id}`)).toEqual(['message:msg_U', 'tool:exa_1', 'message:msg_R']);
   const card = snap.items.find((i) => i.kind === 'tool');
   if (card?.kind !== 'tool') throw new Error('expected tool card');
-  expect(card.tool).toBe('native-cli:codex');
+  expect(card.tool).toBe('external-agent:codex');
   const reply = snap.items.find((i) => i.id === 'msg_R');
   if (reply?.kind !== 'message') throw new Error('expected reply message');
   expect(reply.status).toBe('done');

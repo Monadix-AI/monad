@@ -192,7 +192,7 @@ export const workspaceExperienceProjectDialogRequestSchema = z.discriminatedUnio
 export type WorkspaceExperienceProjectDialogRequest = z.infer<typeof workspaceExperienceProjectDialogRequestSchema>;
 
 /** A Studio settings section a workspace experience can navigate the host to. */
-export type WorkspaceExperienceStudioSection = 'models' | 'nativeCliAgents';
+export type WorkspaceExperienceStudioSection = 'models' | 'externalAgents';
 
 export interface WorkspaceExperienceHostApi<Snapshot = unknown, Actions = unknown> {
   /** Contract version the host emitted this payload against; a component reads it to refuse/degrade

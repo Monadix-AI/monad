@@ -1,4 +1,7 @@
-import type { NativeCliProviderHistoryPageContext, NativeCliProviderHistoryPageRequestContext } from '@monad/sdk-atom';
+import type {
+  ExternalAgentProviderHistoryPageContext,
+  ExternalAgentProviderHistoryPageRequestContext
+} from '@monad/sdk-atom';
 
 import { Database } from 'bun:sqlite';
 import { existsSync } from 'node:fs';
@@ -323,8 +326,8 @@ function capOutput(lines: string[], limitBytes: number): string {
 }
 
 export async function hermesHistoryPage(
-  context: NativeCliProviderHistoryPageRequestContext
-): Promise<NativeCliProviderHistoryPageContext['page'] | null> {
+  context: ExternalAgentProviderHistoryPageRequestContext
+): Promise<ExternalAgentProviderHistoryPageContext['page'] | null> {
   const loaded = await loadHermesMessages(context.providerSessionRef);
   if (!loaded) return null;
   const page = sliceMessages(loaded.messages, {
@@ -332,10 +335,10 @@ export async function hermesHistoryPage(
     offset: pageOffset(context.request.before),
     desc: context.request.sortDirection === 'desc'
   });
-  return { ...page, [HISTORY_SOURCE]: loaded.source } as NativeCliProviderHistoryPageContext['page'];
+  return { ...page, [HISTORY_SOURCE]: loaded.source } as ExternalAgentProviderHistoryPageContext['page'];
 }
 
-export function hermesHistoryPageOutput(context: NativeCliProviderHistoryPageContext): string | null {
+export function hermesHistoryPageOutput(context: ExternalAgentProviderHistoryPageContext): string | null {
   const lines = context.page.items.map((item) => JSON.stringify(item));
   return capOutput(lines, context.limitBytes) || null;
 }

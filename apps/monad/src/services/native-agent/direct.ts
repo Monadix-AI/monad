@@ -14,7 +14,7 @@ import { newId } from '@monad/protocol';
 export interface NativeAgentDirectBinding {
   agentId: string;
   projectId: ProjectId;
-  nativeCliSessionId: string;
+  externalAgentSessionId: string;
 }
 
 export function createNativeAgentDirectCapabilities(
@@ -36,7 +36,7 @@ export function createNativeAgentDirectCapabilities(
       const message: NativeAgentDirectMessage = {
         id: newId('msg'),
         projectId: args.binding.projectId,
-        nativeCliSessionId: args.binding.nativeCliSessionId,
+        externalAgentSessionId: args.binding.externalAgentSessionId,
         fromAgent: args.binding.agentId,
         peer: args.body.to,
         text,
@@ -49,7 +49,7 @@ export function createNativeAgentDirectCapabilities(
         store.deleteMessageAttachments(attachments.map((ref) => ref.id));
         throw err;
       }
-      await handlers.session.notifyManagedNativeCliDirectMessage({
+      await handlers.session.notifyManagedExternalAgentDirectMessage({
         sessionId: args.binding.projectId,
         fromAgentName: args.binding.agentId,
         to: args.body.to,
@@ -59,7 +59,7 @@ export function createNativeAgentDirectCapabilities(
     },
 
     read(args: { body: NativeAgentReadRequest; binding: NativeAgentDirectBinding }): NativeAgentReadResponse {
-      const messages = store.listNativeAgentDirectMessages(args.binding.nativeCliSessionId, args.body.with, {
+      const messages = store.listNativeAgentDirectMessages(args.binding.externalAgentSessionId, args.body.with, {
         before: args.body.before,
         after: args.body.after,
         limit: args.body.limit ?? 50

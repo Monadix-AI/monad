@@ -1,4 +1,4 @@
-import type { NativeCliProviderAdapter } from '@monad/sdk-atom';
+import type { ExternalAgentProviderAdapter } from '@monad/sdk-atom';
 
 import { makeAppServerCliAdapter } from '../app-server-jsonrpc.ts';
 import { createFrameworkSettingsImport } from '../settings-import/index.ts';
@@ -34,7 +34,7 @@ const OPENCLAW_SUPPORTED_MODELS = ['openclaw-default'];
 
 // Real `gateway` app-server backend (verified live, see openclaw/app-server.ts) — uses `appServerHooks`
 // rather than `protocol` because OpenClaw's wire envelope isn't generic JSON-RPC.
-const baseOpenClawNativeCliAdapter = makeAppServerCliAdapter({
+const baseOpenClawExternalAgentAdapter = makeAppServerCliAdapter({
   provider: 'openclaw',
   productIcon: 'openclaw',
   label: 'OpenClaw',
@@ -72,8 +72,8 @@ const baseOpenClawNativeCliAdapter = makeAppServerCliAdapter({
   }
 });
 
-export const openClawNativeCliAdapter: NativeCliProviderAdapter = {
-  ...baseOpenClawNativeCliAdapter,
+export const openClawExternalAgentAdapter: ExternalAgentProviderAdapter = {
+  ...baseOpenClawExternalAgentAdapter,
   observation: openClawObservationProjection,
   settingsImport: createFrameworkSettingsImport('openclaw', 'OpenClaw'),
   // OpenClaw's managed runtime is app-server, whose JSON-RPC channel projects + resolves approvals —
@@ -81,7 +81,7 @@ export const openClawNativeCliAdapter: NativeCliProviderAdapter = {
   // app-server backend, so it deliberately doesn't opt in.)
   supportsApprovalResolution: (launchMode) => launchMode === 'app-server',
   detect(probes) {
-    const preset = baseOpenClawNativeCliAdapter.detect(probes);
+    const preset = baseOpenClawExternalAgentAdapter.detect(probes);
     return {
       ...preset,
       capabilities: {

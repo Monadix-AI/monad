@@ -16,7 +16,7 @@ export type VoiceModelState = 'checking' | 'configured' | 'missing' | 'failed';
  *  render inside the web app's Redux `<Provider>`), not a `fetch` escape hatch on this object. */
 export interface WorkspaceExperienceHost {
   voiceModelState?: VoiceModelState;
-  /** Imperative Studio navigation (replaces the old nativeCliAgentsHref link + openModelSettings). */
+  /** Imperative Studio navigation (replaces the old externalAgentsHref link + openModelSettings). */
   openStudio: (section?: WorkspaceExperienceStudioSection) => void;
   requestProjectDialog: (request: WorkspaceExperienceProjectDialogRequest) => void;
 }

@@ -1,5 +1,9 @@
-import type { NativeCliHistoryPageRequest } from '@monad/protocol';
-import type { NativeCliOutputEvent, NativeCliProviderAdapter, NativeCliRuntimeHandle } from '@monad/sdk-atom';
+import type { ExternalAgentHistoryPageRequest } from '@monad/protocol';
+import type {
+  ExternalAgentOutputEvent,
+  ExternalAgentProviderAdapter,
+  ExternalAgentRuntimeHandle
+} from '@monad/sdk-atom';
 import type { AppServerCliHooks } from '../app-server-jsonrpc.ts';
 
 import { compactObject, parseJsonObject } from '../adapter-shared.ts';
@@ -66,12 +70,12 @@ interface OpenClawConnectState {
 // `connect.challenge` frame arrives (the nonce is required in the signed payload, so the `connect`
 // request can't be sent until then). Keyed by handle so a reconnect — which re-invokes `initialize`
 // with a fresh identity — is naturally independent. A WeakMap avoids widening the runtime-handle type.
-const connectStates = new WeakMap<NativeCliRuntimeHandle, OpenClawConnectState>();
+const connectStates = new WeakMap<ExternalAgentRuntimeHandle, OpenClawConnectState>();
 
 let nextFrameSeq = 0;
 /** Frame ids must be strings (`RequestFrameSchema.id: TString`); `handle.nextRequestId()` returns a
  *  number, so every id that crosses the wire is stringified here rather than at each call site. */
-function frameId(handle: NativeCliRuntimeHandle): string {
+function frameId(handle: ExternalAgentRuntimeHandle): string {
   return String(handle.nextRequestId?.() ?? nextFrameSeq++);
 }
 
@@ -80,8 +84,8 @@ function req(method: string, id: string, params: Record<string, unknown>): strin
 }
 
 export function openClawInitialize(
-  handle: NativeCliRuntimeHandle,
-  context: Parameters<NonNullable<NativeCliProviderAdapter['initialize']>>[1]
+  handle: ExternalAgentRuntimeHandle,
+  context: Parameters<NonNullable<ExternalAgentProviderAdapter['initialize']>>[1]
 ): void {
   if (handle.launchMode !== 'app-server' || !handle.appServer) return;
   const connectId = frameId(handle);
@@ -134,8 +138,8 @@ export function openClawInitialize(
  *  distinction. */
 function handleConnectChallenge(
   payload: Record<string, unknown>,
-  handle: NativeCliRuntimeHandle | undefined
-): NativeCliOutputEvent[] {
+  handle: ExternalAgentRuntimeHandle | undefined
+): ExternalAgentOutputEvent[] {
   const state = handle ? connectStates.get(handle) : undefined;
   const nonce = typeof payload.nonce === 'string' ? payload.nonce : undefined;
   if (!handle?.appServer || !state || !nonce) return [];
@@ -177,7 +181,7 @@ function handleConnectChallenge(
   return [];
 }
 
-function responseEvents(frame: OpenClawEnvelope, handle?: NativeCliRuntimeHandle): NativeCliOutputEvent[] {
+function responseEvents(frame: OpenClawEnvelope, handle?: ExternalAgentRuntimeHandle): ExternalAgentOutputEvent[] {
   const idKey = typeof frame.id === 'string' ? frame.id : undefined;
   const kind = idKey !== undefined ? handle?.pendingRequests?.get(idKey) : undefined;
   if (idKey !== undefined && kind !== undefined) handle?.pendingRequests?.delete(idKey);
@@ -261,7 +265,7 @@ function responseEvents(frame: OpenClawEnvelope, handle?: NativeCliRuntimeHandle
   return [];
 }
 
-function approvalRequestedEvent(payload: Record<string, unknown>): NativeCliOutputEvent[] {
+function approvalRequestedEvent(payload: Record<string, unknown>): ExternalAgentOutputEvent[] {
   // Not live-observed — inferred from ExecApprovalRequestParamsSchema (id/command/systemRunPlan) plus
   // the confirmed `id` field name from ExecApprovalResolveParamsSchema.
   const requestId = payload.id;
@@ -281,7 +285,7 @@ function approvalRequestedEvent(payload: Record<string, unknown>): NativeCliOutp
   ];
 }
 
-function eventFrameEvents(eventName: string, payload: Record<string, unknown>): NativeCliOutputEvent[] {
+function eventFrameEvents(eventName: string, payload: Record<string, unknown>): ExternalAgentOutputEvent[] {
   switch (eventName) {
     case 'exec.approval.requested':
       return approvalRequestedEvent(payload);
@@ -319,7 +323,10 @@ function eventFrameEvents(eventName: string, payload: Record<string, unknown>): 
   }
 }
 
-export function parseOpenClawFrame(frame: OpenClawEnvelope, handle?: NativeCliRuntimeHandle): NativeCliOutputEvent[] {
+export function parseOpenClawFrame(
+  frame: OpenClawEnvelope,
+  handle?: ExternalAgentRuntimeHandle
+): ExternalAgentOutputEvent[] {
   if (frame.type === 'res') return responseEvents(frame, handle);
   if (frame.type === 'event' && typeof frame.event === 'string') {
     // `connect.challenge` is answered by sending the signed `connect` request (needs the handle to
@@ -330,8 +337,8 @@ export function parseOpenClawFrame(frame: OpenClawEnvelope, handle?: NativeCliRu
   return [];
 }
 
-export function parseOpenClawOutput(chunk: string, handle?: NativeCliRuntimeHandle): NativeCliOutputEvent[] {
-  const events: NativeCliOutputEvent[] = [];
+export function parseOpenClawOutput(chunk: string, handle?: ExternalAgentRuntimeHandle): ExternalAgentOutputEvent[] {
+  const events: ExternalAgentOutputEvent[] = [];
   for (const rawLine of chunk.split(/\r?\n/)) {
     const line = rawLine.trim();
     if (!line.startsWith('{')) continue;
@@ -342,9 +349,9 @@ export function parseOpenClawOutput(chunk: string, handle?: NativeCliRuntimeHand
   return events;
 }
 
-export function sendOpenClawInput(handle: NativeCliRuntimeHandle, input: string): void {
-  if (!handle.appServer) throw new Error('native CLI session has no app-server input bridge');
-  if (!handle.providerSessionRef) throw new Error('native CLI app-server session is not ready');
+export function sendOpenClawInput(handle: ExternalAgentRuntimeHandle, input: string): void {
+  if (!handle.appServer) throw new Error('external agent session has no app-server input bridge');
+  if (!handle.providerSessionRef) throw new Error('external agent app-server session is not ready');
   const id = frameId(handle);
   handle.pendingRequests?.set(id, 'turn');
   // Live-confirmed params (SessionsSendParamsSchema): {key, message, ...}. An earlier draft of this
@@ -353,11 +360,11 @@ export function sendOpenClawInput(handle: NativeCliRuntimeHandle, input: string)
 }
 
 export function requestOpenClawHistoryPage(
-  handle: NativeCliRuntimeHandle,
-  request: NativeCliHistoryPageRequest
+  handle: ExternalAgentRuntimeHandle,
+  request: ExternalAgentHistoryPageRequest
 ): string | number {
-  if (!handle.appServer) throw new Error('native CLI session has no app-server input bridge');
-  if (!handle.providerSessionRef) throw new Error('native CLI app-server session is not ready');
+  if (!handle.appServer) throw new Error('external agent session has no app-server input bridge');
+  if (!handle.providerSessionRef) throw new Error('external agent app-server session is not ready');
   const id = frameId(handle);
   handle.pendingRequests?.set(id, 'historyPage');
   // ChatHistoryParamsSchema: {sessionKey, limit?, maxChars?}. The provider API has no cursor, so this
@@ -367,10 +374,10 @@ export function requestOpenClawHistoryPage(
 }
 
 export function resolveOpenClawApproval(
-  handle: NativeCliRuntimeHandle,
-  resolution: Parameters<NativeCliProviderAdapter['resolveApproval']>[1]
+  handle: ExternalAgentRuntimeHandle,
+  resolution: Parameters<ExternalAgentProviderAdapter['resolveApproval']>[1]
 ): void {
-  if (!handle.appServer) throw new Error('native CLI session has no app-server approval bridge');
+  if (!handle.appServer) throw new Error('external agent session has no app-server approval bridge');
   const id = frameId(handle);
   // ExecApprovalResolveParamsSchema: {id, decision}. ExecApprovalDecision (openclaw's own exported
   // type) is `"allow-once" | "allow-always" | "deny"` — a 3-way choice our binary `allow` maps onto the

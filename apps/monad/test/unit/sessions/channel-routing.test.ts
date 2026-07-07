@@ -5,7 +5,7 @@ import { routeChannelMessage } from '@/handlers/session/channel-routing.ts';
 import { isChannelStructuredSession } from '@/handlers/session/handlers/messaging/index.ts';
 
 const acpAgentNames = ['planner', 'reviewer'];
-const nativeCliAgentNames = ['codex', 'claude-code'];
+const externalAgentNames = ['codex', 'claude-code'];
 const plannerMention = '@[name="planner" id="acp:planner"]';
 const reviewerMention = '@[name="reviewer" id="acp:reviewer"]';
 
@@ -58,18 +58,18 @@ test('channel routing sends a single inline ACP mention directly to that ACP age
   });
 });
 
-test('channel routing sends a single native CLI mention directly to that native CLI agent', () => {
+test('channel routing sends a single external agent mention directly to that external agent', () => {
   expect(
     routeChannelMessage({
-      text: '@[name="codex" id="native-cli:codex"] inspect repo',
+      text: '@[name="codex" id="external-agent:codex"] inspect repo',
       acpAgentNames,
-      nativeCliAgentNames
+      externalAgentNames
     })
   ).toEqual({
-    kind: 'forward-native-cli',
+    kind: 'forward-external-agent',
     agentName: 'codex',
     text: 'inspect repo',
-    displayText: '@[name="codex" id="native-cli:codex"] inspect repo',
+    displayText: '@[name="codex" id="external-agent:codex"] inspect repo',
     direct: true
   });
 });

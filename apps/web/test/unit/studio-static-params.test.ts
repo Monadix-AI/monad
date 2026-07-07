@@ -20,7 +20,7 @@ test('studio section route statically exports every known section', () => {
     'acpDelegates',
     'acpAgents',
     'mesh',
-    'nativeCliAgents',
+    'externalAgents',
     'workplaceProjects',
     'projectMembers',
     'meshTasks',

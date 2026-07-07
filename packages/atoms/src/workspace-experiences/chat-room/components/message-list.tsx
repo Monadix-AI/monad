@@ -195,7 +195,7 @@ export function shouldFollowLatestMessage(atBottom: boolean, localStatus?: Messa
 }
 
 export type ChatMessageListRoom = {
-  followNativeCliSession?: (id: string, deliveryId?: NativeAgentDeliveryId) => void;
+  followExternalAgentSession?: (id: string, deliveryId?: NativeAgentDeliveryId) => void;
   loadOlder: () => void;
   messages: Message[];
   openAgentCard?: (id: string) => void;
@@ -337,7 +337,7 @@ export function ChatMessageList({
               labels={labels}
               msg={msg}
               onAgentClick={room.openAgentCard}
-              onFollowNativeCliSession={room.followNativeCliSession}
+              onFollowExternalAgentSession={room.followExternalAgentSession}
             />
           </div>
         )}

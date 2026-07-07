@@ -1,6 +1,7 @@
 import type {
   ChatMessage,
   Event,
+  ExternalAgentInboxItem,
   GetStatsResponse,
   LedgerCategory,
   MessageAttachmentRef,
@@ -9,7 +10,6 @@ import type {
   NativeAgentDelivery,
   NativeAgentDeliveryId,
   NativeAgentDirectMessage,
-  NativeCliInboxItem,
   SearchHit,
   Session,
   StatsRange,
@@ -56,8 +56,36 @@ import {
 import { type CheckpointHandle, startWalCheckpoint, stopWalCheckpoint } from './checkpoint.ts';
 import { appendEvents, type DanglingInterrupt, findDanglingInterrupts, hasEvent, listEvents } from './events.ts';
 import {
+  countExternalAgentInbox,
+  type EnqueueExternalAgentInboxOptions,
+  enqueueExternalAgentInboxItem,
+  getNativeAgentDelivery,
+  hasUnconsumedExternalAgentInbox,
+  listExternalAgentInbox,
+  markExternalAgentInboxConsumed,
+  markExternalAgentInboxDelivered,
+  markExternalAgentInboxVisible
+} from './external-agent-inbox.ts';
+import {
+  appendExternalAgentOutput,
+  clearExternalAgentSessionRef,
+  closeExternalAgentSession,
+  type ExternalAgentSessionRow,
+  getExternalAgentSession,
+  listExternalAgentSessions,
+  listExternalAgentSessionsForTranscriptTarget,
+  listLiveExternalAgentSessions,
+  pruneExitedExternalAgentSessions,
+  reconcileOrphanedExternalAgentSessions,
+  setExternalAgentDeliveredCursor,
+  setExternalAgentOutputSnapshot,
+  setExternalAgentVisibleCursor,
+  updateExternalAgentSessionRef,
+  upsertExternalAgentSession
+} from './external-agent-sessions.ts';
+import {
   failOrphanedStreamingMessages,
-  findManagedNativeCliStreamingMessage,
+  findManagedExternalAgentStreamingMessage,
   getMemory,
   getMessage,
   getMessageText,
@@ -70,40 +98,12 @@ import {
   messageIdForSeq,
   messageSeq,
   restoreMessages,
-  retireManagedNativeCliStreamingMessage,
+  retireManagedExternalAgentStreamingMessage,
   setGenStatus,
   setMemory
 } from './messages.ts';
 import { getSchemaVersion, migrate } from './migrations.ts';
 import { insertNativeAgentDirectMessage, listNativeAgentDirectMessages } from './native-agent-messages.ts';
-import {
-  countNativeCliInbox,
-  type EnqueueNativeCliInboxOptions,
-  enqueueNativeCliInboxItem,
-  getNativeAgentDelivery,
-  hasUnconsumedNativeCliInbox,
-  listNativeCliInbox,
-  markNativeCliInboxConsumed,
-  markNativeCliInboxDelivered,
-  markNativeCliInboxVisible
-} from './native-cli-inbox.ts';
-import {
-  appendNativeCliOutput,
-  clearNativeCliSessionRef,
-  closeNativeCliSession,
-  getNativeCliSession,
-  listLiveNativeCliSessions,
-  listNativeCliSessions,
-  listNativeCliSessionsForTranscriptTarget,
-  type NativeCliSessionRow,
-  pruneExitedNativeCliSessions,
-  reconcileOrphanedNativeCliSessions,
-  setNativeCliDeliveredCursor,
-  setNativeCliOutputSnapshot,
-  setNativeCliVisibleCursor,
-  updateNativeCliSessionRef,
-  upsertNativeCliSession
-} from './native-cli-sessions.ts';
 import {
   clearEmbeddings,
   messagesMissingEmbedding,
@@ -148,9 +148,9 @@ import { casTaskState, insertTask } from './tasks.ts';
 
 export type { ChatMessage } from '@monad/protocol';
 export type { AcpDelegateRow } from './acp-delegates.ts';
+export type { EnqueueExternalAgentInboxOptions } from './external-agent-inbox.ts';
+export type { ExternalAgentSessionRow } from './external-agent-sessions.ts';
 export type { ListMessagesOptions } from './messages.ts';
-export type { EnqueueNativeCliInboxOptions } from './native-cli-inbox.ts';
-export type { NativeCliSessionRow } from './native-cli-sessions.ts';
 export type { ChannelConversation, ChannelConversationSession } from './row-mappers.ts';
 export type { SearchOptions } from './search.ts';
 export type { ListSessionsFilter } from './sessions.ts';
@@ -336,26 +336,26 @@ export class Store {
     return getMessage(this.sqlite, transcriptTargetId, messageId);
   }
 
-  findManagedNativeCliStreamingMessage(
+  findManagedExternalAgentStreamingMessage(
     transcriptTargetId: string,
-    nativeCliSessionId: string,
+    externalAgentSessionId: string,
     agentName: string
   ): string | null {
-    return findManagedNativeCliStreamingMessage(this.sqlite, transcriptTargetId, nativeCliSessionId, agentName);
+    return findManagedExternalAgentStreamingMessage(this.sqlite, transcriptTargetId, externalAgentSessionId, agentName);
   }
 
-  retireManagedNativeCliStreamingMessage(
+  retireManagedExternalAgentStreamingMessage(
     transcriptTargetId: string,
     messageId: string,
-    nativeCliSessionId: string,
+    externalAgentSessionId: string,
     agentName: string,
     updatedAt = new Date().toISOString()
   ): boolean {
-    return retireManagedNativeCliStreamingMessage(
+    return retireManagedExternalAgentStreamingMessage(
       this.sqlite,
       transcriptTargetId,
       messageId,
-      nativeCliSessionId,
+      externalAgentSessionId,
       agentName,
       updatedAt
     );
@@ -523,82 +523,94 @@ export class Store {
     return reconcileOrphanedDelegates(this.sqlite);
   }
 
-  // ── Native CLI Session Ledger ─────────────────────────────────────────────────────────────────
+  // ── External agent Session Ledger ─────────────────────────────────────────────────────────────────
 
-  upsertNativeCliSession(row: NativeCliSessionRow): void {
-    upsertNativeCliSession(this.sqlite, row);
+  upsertExternalAgentSession(row: ExternalAgentSessionRow): void {
+    upsertExternalAgentSession(this.sqlite, row);
   }
 
-  getNativeCliSession(id: string): NativeCliSessionRow | null {
-    return getNativeCliSession(this.sqlite, id);
+  getExternalAgentSession(id: string): ExternalAgentSessionRow | null {
+    return getExternalAgentSession(this.sqlite, id);
   }
 
-  listNativeCliSessionsForTranscriptTarget(transcriptTargetId: string): NativeCliSessionRow[] {
-    return listNativeCliSessionsForTranscriptTarget(this.sqlite, transcriptTargetId);
+  listExternalAgentSessionsForTranscriptTarget(transcriptTargetId: string): ExternalAgentSessionRow[] {
+    return listExternalAgentSessionsForTranscriptTarget(this.sqlite, transcriptTargetId);
   }
 
-  listNativeCliSessions(): NativeCliSessionRow[] {
-    return listNativeCliSessions(this.sqlite);
+  listExternalAgentSessions(): ExternalAgentSessionRow[] {
+    return listExternalAgentSessions(this.sqlite);
   }
 
-  listLiveNativeCliSessions(): NativeCliSessionRow[] {
-    return listLiveNativeCliSessions(this.sqlite);
+  listLiveExternalAgentSessions(): ExternalAgentSessionRow[] {
+    return listLiveExternalAgentSessions(this.sqlite);
   }
 
-  appendNativeCliOutput(id: string, chunk: string, maxSnapshotBytes = 256 * 1024): boolean {
-    return appendNativeCliOutput(this.sqlite, id, chunk, maxSnapshotBytes);
+  appendExternalAgentOutput(id: string, chunk: string, maxSnapshotBytes = 256 * 1024): boolean {
+    return appendExternalAgentOutput(this.sqlite, id, chunk, maxSnapshotBytes);
   }
 
   /** Overwrite the whole snapshot (no read-modify-write). The host buffers output in memory and
    *  flushes the bounded snapshot here on a timer, so the per-chunk path never touches SQLite. */
-  setNativeCliOutputSnapshot(id: string, snapshot: string, maxSnapshotBytes = 256 * 1024): boolean {
-    return setNativeCliOutputSnapshot(this.sqlite, id, snapshot, maxSnapshotBytes);
+  setExternalAgentOutputSnapshot(id: string, snapshot: string, maxSnapshotBytes = 256 * 1024): boolean {
+    return setExternalAgentOutputSnapshot(this.sqlite, id, snapshot, maxSnapshotBytes);
   }
 
   /** Delete terminal (exited/failed/stopped) sessions older than `olderThanMs`. Bounds table growth
    *  — one row per CLI launch, each carrying up to 256 KB of snapshot. Returns deleted count. */
-  pruneExitedNativeCliSessions(olderThanMs = 7 * 24 * 60 * 60 * 1000): number {
-    return pruneExitedNativeCliSessions(this.sqlite, olderThanMs);
+  pruneExitedExternalAgentSessions(olderThanMs = 7 * 24 * 60 * 60 * 1000): number {
+    return pruneExitedExternalAgentSessions(this.sqlite, olderThanMs);
   }
 
-  updateNativeCliSessionRef(id: string, providerSessionRef: string): boolean {
-    return updateNativeCliSessionRef(this.sqlite, id, providerSessionRef);
+  updateExternalAgentSessionRef(id: string, providerSessionRef: string): boolean {
+    return updateExternalAgentSessionRef(this.sqlite, id, providerSessionRef);
   }
 
-  clearNativeCliSessionRef(id: string): boolean {
-    return clearNativeCliSessionRef(this.sqlite, id);
+  clearExternalAgentSessionRef(id: string): boolean {
+    return clearExternalAgentSessionRef(this.sqlite, id);
   }
 
-  setNativeCliVisibleCursor(id: string, seq: number): boolean {
-    return setNativeCliVisibleCursor(this.sqlite, id, seq);
+  setExternalAgentVisibleCursor(id: string, seq: number): boolean {
+    return setExternalAgentVisibleCursor(this.sqlite, id, seq);
   }
 
-  setNativeCliDeliveredCursor(id: string, seq: number): boolean {
-    return setNativeCliDeliveredCursor(this.sqlite, id, seq);
+  setExternalAgentDeliveredCursor(id: string, seq: number): boolean {
+    return setExternalAgentDeliveredCursor(this.sqlite, id, seq);
   }
 
-  enqueueNativeCliInboxItem(
-    nativeCliSessionId: string,
+  enqueueExternalAgentInboxItem(
+    externalAgentSessionId: string,
     messageSeq: number,
-    createdAtOrOptions: string | EnqueueNativeCliInboxOptions = new Date().toISOString()
+    createdAtOrOptions: string | EnqueueExternalAgentInboxOptions = new Date().toISOString()
   ): boolean {
-    return enqueueNativeCliInboxItem(this.sqlite, nativeCliSessionId, messageSeq, createdAtOrOptions);
+    return enqueueExternalAgentInboxItem(this.sqlite, externalAgentSessionId, messageSeq, createdAtOrOptions);
   }
 
-  markNativeCliInboxDelivered(nativeCliSessionId: string, cursor: number, at = new Date().toISOString()): boolean {
-    return markNativeCliInboxDelivered(this.sqlite, nativeCliSessionId, cursor, at);
+  markExternalAgentInboxDelivered(
+    externalAgentSessionId: string,
+    cursor: number,
+    at = new Date().toISOString()
+  ): boolean {
+    return markExternalAgentInboxDelivered(this.sqlite, externalAgentSessionId, cursor, at);
   }
 
-  markNativeCliInboxVisible(nativeCliSessionId: string, cursor: number, at = new Date().toISOString()): boolean {
-    return markNativeCliInboxVisible(this.sqlite, nativeCliSessionId, cursor, at);
+  markExternalAgentInboxVisible(
+    externalAgentSessionId: string,
+    cursor: number,
+    at = new Date().toISOString()
+  ): boolean {
+    return markExternalAgentInboxVisible(this.sqlite, externalAgentSessionId, cursor, at);
   }
 
-  markNativeCliInboxConsumed(nativeCliSessionId: string, cursor: number, at = new Date().toISOString()): boolean {
-    return markNativeCliInboxConsumed(this.sqlite, nativeCliSessionId, cursor, at);
+  markExternalAgentInboxConsumed(
+    externalAgentSessionId: string,
+    cursor: number,
+    at = new Date().toISOString()
+  ): boolean {
+    return markExternalAgentInboxConsumed(this.sqlite, externalAgentSessionId, cursor, at);
   }
 
-  hasUnconsumedNativeCliInbox(nativeCliSessionId: string, cursor?: number): boolean {
-    return hasUnconsumedNativeCliInbox(this.sqlite, nativeCliSessionId, cursor);
+  hasUnconsumedExternalAgentInbox(externalAgentSessionId: string, cursor?: number): boolean {
+    return hasUnconsumedExternalAgentInbox(this.sqlite, externalAgentSessionId, cursor);
   }
 
   maxMessageSeq(sessionId: string): number {
@@ -613,12 +625,12 @@ export class Store {
     return messageIdForSeq(this.sqlite, transcriptTargetId, seq);
   }
 
-  listNativeCliInbox(nativeCliSessionId: string, limit = 50): NativeCliInboxItem[] {
-    return listNativeCliInbox(this.sqlite, nativeCliSessionId, limit);
+  listExternalAgentInbox(externalAgentSessionId: string, limit = 50): ExternalAgentInboxItem[] {
+    return listExternalAgentInbox(this.sqlite, externalAgentSessionId, limit);
   }
 
-  countNativeCliInbox(nativeCliSessionId: string): number {
-    return countNativeCliInbox(this.sqlite, nativeCliSessionId);
+  countExternalAgentInbox(externalAgentSessionId: string): number {
+    return countExternalAgentInbox(this.sqlite, externalAgentSessionId);
   }
 
   getNativeAgentDelivery(deliveryId: NativeAgentDeliveryId): NativeAgentDelivery | null {
@@ -657,24 +669,26 @@ export class Store {
   }
 
   listNativeAgentDirectMessages(
-    nativeCliSessionId: string,
+    externalAgentSessionId: string,
     peer: string,
     opts: { before?: string; after?: string; limit?: number } = {}
   ): NativeAgentDirectMessage[] {
-    return listNativeAgentDirectMessages(this.sqlite, nativeCliSessionId, peer, opts);
+    return listNativeAgentDirectMessages(this.sqlite, externalAgentSessionId, peer, opts);
   }
 
-  closeNativeCliSession(
+  closeExternalAgentSession(
     id: string,
     exitedAt: string,
     exitCode: number | null,
     state: 'exited' | 'failed' | 'stopped' = 'exited'
   ): boolean {
-    return closeNativeCliSession(this.sqlite, id, exitedAt, exitCode, state);
+    return closeExternalAgentSession(this.sqlite, id, exitedAt, exitCode, state);
   }
 
-  reconcileOrphanedNativeCliSessions(killPid: (pid: number) => void = (pid) => process.kill(pid, 'SIGTERM')): number {
-    return reconcileOrphanedNativeCliSessions(this.sqlite, killPid);
+  reconcileOrphanedExternalAgentSessions(
+    killPid: (pid: number) => void = (pid) => process.kill(pid, 'SIGTERM')
+  ): number {
+    return reconcileOrphanedExternalAgentSessions(this.sqlite, killPid);
   }
 
   close(): void {

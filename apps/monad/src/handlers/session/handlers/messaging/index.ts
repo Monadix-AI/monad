@@ -19,8 +19,8 @@ import { emitCommandTurn, executeSessionCommand, tryRunSessionCommand } from '@/
 import { HandlerError } from '@/handlers/handler-error.ts';
 import { createAcpChannelDelegation } from '@/handlers/session/handlers/acp-channel-delegation.ts';
 import { createForwardAcpHandler } from '@/handlers/session/handlers/forward-acp.ts';
-import { createForwardNativeCliHandler } from '@/handlers/session/handlers/forward-native-cli.ts';
-import { createManagedNativeCliDelivery } from '@/handlers/session/handlers/managed-native-cli-delivery.ts';
+import { createForwardExternalAgentHandler } from '@/handlers/session/handlers/forward-external-agent.ts';
+import { createManagedExternalAgentDelivery } from '@/handlers/session/handlers/managed-external-agent-delivery.ts';
 import { createMessagingNotifyHandlers } from '@/handlers/session/handlers/messaging/messaging-notify.ts';
 import { createSendProjectMessageHandler } from '@/handlers/session/handlers/messaging/messaging-project.ts';
 import { imageAttachments, messageTextWithAttachments } from '@/handlers/session/handlers/messaging-attachments.ts';
@@ -102,15 +102,15 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
 
   const runner = cmd ? { store, bus, lifecycle: cmd.lifecycle, commands: cmd.commands, ownerPrincipalId } : null;
 
-  const managedNativeCliDelivery = createManagedNativeCliDelivery(ctx);
-  const { deliverProjectMessageToManagedNativeCliMembers, startManagedNativeCliRuntimeWithRecovery } =
-    managedNativeCliDelivery;
+  const managedExternalAgentDelivery = createManagedExternalAgentDelivery(ctx);
+  const { deliverProjectMessageToManagedExternalAgentMembers, startManagedExternalAgentRuntimeWithRecovery } =
+    managedExternalAgentDelivery;
 
   const acpDelegation = createAcpChannelDelegation(ctx, sandboxRootsFor);
   const { dispatchChannelNextTargets, deliverProjectMessageToAcpMembers } = acpDelegation;
 
   const forwardToAcp = createForwardAcpHandler(ctx, sandboxRootsFor);
-  const forwardToNativeCli = createForwardNativeCliHandler(ctx, startManagedNativeCliRuntimeWithRecovery);
+  const forwardToExternalAgent = createForwardExternalAgentHandler(ctx, startManagedExternalAgentRuntimeWithRecovery);
   const { subscribe, subscribeUi, subscribeControl } = createSubscribeHandlers(ctx);
 
   const runtimeForTranscriptTarget = (sessionId: TranscriptTargetId) => runtime.get(sessionId);
@@ -201,28 +201,28 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
   const { sendProjectMessage, sendChannelMessage } = createSendProjectMessageHandler(ctx, {
     send,
     forwardToAcp,
-    forwardToNativeCli,
+    forwardToExternalAgent,
     deliverProjectMessageToAcpMembers,
     dispatchChannelNextTargets,
-    deliverProjectMessageToManagedNativeCliMembers,
+    deliverProjectMessageToManagedExternalAgentMembers,
     runtimeForTranscriptTarget
   });
 
   const {
-    notifyManagedNativeCliProjectMembers,
-    notifyManagedNativeCliDirectMessage,
-    completeManagedNativeCliProjectMessage,
-    completeManagedNativeCliProviderMessage
-  } = createMessagingNotifyHandlers(ctx, managedNativeCliDelivery);
+    notifyManagedExternalAgentProjectMembers,
+    notifyManagedExternalAgentDirectMessage,
+    completeManagedExternalAgentProjectMessage,
+    completeManagedExternalAgentProviderMessage
+  } = createMessagingNotifyHandlers(ctx, managedExternalAgentDelivery);
 
   const handlers = {
     send,
     sendProjectMessage,
     sendChannelMessage,
-    notifyManagedNativeCliProjectMembers,
-    notifyManagedNativeCliDirectMessage,
-    completeManagedNativeCliProjectMessage,
-    completeManagedNativeCliProviderMessage,
+    notifyManagedExternalAgentProjectMembers,
+    notifyManagedExternalAgentDirectMessage,
+    completeManagedExternalAgentProjectMessage,
+    completeManagedExternalAgentProviderMessage,
 
     async sendInline(
       { sessionId, text }: { sessionId: TranscriptTargetId } & SendMessageRequest,
@@ -355,7 +355,7 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
     subscribeControl,
 
     forwardToAcp,
-    forwardToNativeCli
+    forwardToExternalAgent
   };
   return handlers;
 }

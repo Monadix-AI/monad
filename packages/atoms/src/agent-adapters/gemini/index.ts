@@ -1,9 +1,9 @@
-import type { NativeCliAgentView } from '@monad/protocol';
+import type { ExternalAgentView } from '@monad/protocol';
 import type {
-  BuildNativeCliLaunchOptions,
-  NativeCliLaunchSpec,
-  NativeCliProviderAdapter,
-  NativeCliProviderHistoryContext
+  BuildExternalAgentLaunchOptions,
+  ExternalAgentLaunchSpec,
+  ExternalAgentProviderAdapter,
+  ExternalAgentProviderHistoryContext
 } from '@monad/sdk-atom';
 
 import { homedir } from 'node:os';
@@ -11,10 +11,10 @@ import { join } from 'node:path';
 import { defaultBinProbes, resolveBinary } from '@monad/sdk-atom';
 
 import { hasFlag, parseJsonObject, parseStructuredAuthState } from '../adapter-shared.ts';
-import { parseNativeCliArgumentSupport } from '../argument-support.ts';
+import { parseExternalAgentArgumentSupport } from '../argument-support.ts';
 import { readProviderHistoryFile } from '../history-files.ts';
 import { resizePty, sendPtyInput, stopPty } from '../pty.ts';
-import { nativeCliAdapterSettings } from '../settings.ts';
+import { externalAgentAdapterSettings } from '../settings.ts';
 import { createBasicSettingsImport } from '../settings-import/index.ts';
 import { geminiObservationProjection } from './observation.ts';
 import { hasGeminiStreamJsonEvents, parseGeminiStreamJson } from './stream-json.ts';
@@ -48,13 +48,13 @@ function geminiExtraWorkingPathArgs(paths: string[] | undefined): string[] {
 }
 
 function geminiLaunchEnv(
-  agent: NativeCliAgentView,
+  agent: ExternalAgentView,
   systemPromptFile: string | undefined
 ): Record<string, string> | undefined {
   return systemPromptFile ? { ...agent.env, GEMINI_SYSTEM_MD: systemPromptFile } : agent.env;
 }
 
-function buildGeminiLaunch(agent: NativeCliAgentView, opts: BuildNativeCliLaunchOptions): NativeCliLaunchSpec {
+function buildGeminiLaunch(agent: ExternalAgentView, opts: BuildExternalAgentLaunchOptions): ExternalAgentLaunchSpec {
   const launchMode = opts.launchMode ?? agent.defaultLaunchMode;
   let args = [...(agent.args ?? [])];
   if (opts.providerSessionRef && !hasFlag(args, '--resume') && !hasFlag(args, '-r')) {
@@ -78,7 +78,7 @@ function buildGeminiLaunch(agent: NativeCliAgentView, opts: BuildNativeCliLaunch
   };
 }
 
-function buildGeminiAuthLaunch(agent: NativeCliAgentView, args: string[]): NativeCliLaunchSpec {
+function buildGeminiAuthLaunch(agent: ExternalAgentView, args: string[]): ExternalAgentLaunchSpec {
   return {
     argv: [agent.command, ...args],
     cwd: homedir(),
@@ -95,7 +95,7 @@ function buildGeminiAuthLaunch(agent: NativeCliAgentView, args: string[]): Nativ
   };
 }
 
-function buildGeminiAuthStatusLaunch(agent: NativeCliAgentView): NativeCliLaunchSpec {
+function buildGeminiAuthStatusLaunch(agent: ExternalAgentView): ExternalAgentLaunchSpec {
   void agent;
   const script = String.raw`
 const { existsSync, readFileSync } = require('node:fs');
@@ -151,7 +151,7 @@ function geminiCheckpointText(content: unknown): string {
     .join('');
 }
 
-function geminiCheckpointOutput(context: NativeCliProviderHistoryContext, raw: string): string | null {
+function geminiCheckpointOutput(context: ExternalAgentProviderHistoryContext, raw: string): string | null {
   const records: Record<string, unknown>[] = [];
   for (const rawLine of raw.split(/\r?\n/)) {
     const line = rawLine.trim();
@@ -177,7 +177,7 @@ function geminiCheckpointOutput(context: NativeCliProviderHistoryContext, raw: s
   return records.length > 0 ? records.map((record) => JSON.stringify(record)).join('\n') : null;
 }
 
-function readGeminiHistoryOutput(context: NativeCliProviderHistoryContext): string | null {
+function readGeminiHistoryOutput(context: ExternalAgentProviderHistoryContext): string | null {
   const raw = readProviderHistoryFile({
     roots: [join(homedir(), '.gemini', 'tmp'), join(homedir(), '.gemini', 'history')],
     providerSessionRef: context.providerSessionRef,
@@ -190,22 +190,22 @@ function readGeminiHistoryOutput(context: NativeCliProviderHistoryContext): stri
   return geminiCheckpointOutput(context, raw);
 }
 
-function sendGeminiInput(handle: Parameters<NativeCliProviderAdapter['sendInput']>[0], input: string): void {
+function sendGeminiInput(handle: Parameters<ExternalAgentProviderAdapter['sendInput']>[0], input: string): void {
   if (handle.launchMode !== 'json-stream') {
     sendPtyInput(handle, input);
     return;
   }
-  if (!handle.stdin) throw new Error('native CLI session has no stream-json input bridge');
+  if (!handle.stdin) throw new Error('external agent session has no stream-json input bridge');
   handle.stdin.write(input);
   void handle.stdin.flush?.();
 }
 
-function resizeGemini(handle: Parameters<NativeCliProviderAdapter['resize']>[0], cols: number, rows: number): void {
+function resizeGemini(handle: Parameters<ExternalAgentProviderAdapter['resize']>[0], cols: number, rows: number): void {
   if (handle.launchMode === 'json-stream') return;
   resizePty(handle, cols, rows);
 }
 
-function stopGemini(handle: Parameters<NativeCliProviderAdapter['stop']>[0]): void {
+function stopGemini(handle: Parameters<ExternalAgentProviderAdapter['stop']>[0]): void {
   if (handle.launchMode === 'json-stream') {
     void handle.stdin?.end?.();
     handle.kill('SIGTERM');
@@ -215,21 +215,21 @@ function stopGemini(handle: Parameters<NativeCliProviderAdapter['stop']>[0]): vo
 }
 
 function resolveGeminiApproval(
-  handle: Parameters<NativeCliProviderAdapter['resolveApproval']>[0],
-  resolution: Parameters<NativeCliProviderAdapter['resolveApproval']>[1]
+  handle: Parameters<ExternalAgentProviderAdapter['resolveApproval']>[0],
+  resolution: Parameters<ExternalAgentProviderAdapter['resolveApproval']>[1]
 ): void {
   void resolution;
   if (handle.launchMode === 'json-stream') {
-    throw new Error('Gemini native CLI approval resolution is provider-owned and not supported over stream-json');
+    throw new Error('Gemini external agent approval resolution is provider-owned and not supported over stream-json');
   }
 }
 
-export const geminiNativeCliAdapter: NativeCliProviderAdapter = {
+export const geminiExternalAgentAdapter: ExternalAgentProviderAdapter = {
   provider: 'gemini',
   productIcon: 'gemini',
   label: 'Gemini CLI',
   observation: geminiObservationProjection,
-  settings: () => nativeCliAdapterSettings({ launchModes: ['pty', 'json-stream'] }),
+  settings: () => externalAgentAdapterSettings({ launchModes: ['pty', 'json-stream'] }),
   settingsImport: createBasicSettingsImport('gemini', 'Gemini CLI', 'gemini', '.gemini'),
   managedRuntime: {
     launchMode: () => 'json-stream',
@@ -240,12 +240,12 @@ export const geminiNativeCliAdapter: NativeCliProviderAdapter = {
     const installed = geminiBin !== undefined;
     return {
       id: 'gemini',
-      label: geminiNativeCliAdapter.label,
+      label: geminiExternalAgentAdapter.label,
       provider: 'gemini',
-      productIcon: geminiNativeCliAdapter.productIcon,
+      productIcon: geminiExternalAgentAdapter.productIcon,
       command: 'gemini',
       args: [],
-      modelOptions: geminiNativeCliAdapter.listSupportedModels(),
+      modelOptions: geminiExternalAgentAdapter.listSupportedModels(),
       defaultLaunchMode: 'pty',
       supportedLaunchModes: ['pty', 'json-stream'],
       installHint: 'Install Gemini CLI, then complete its provider-owned authentication flow.',
@@ -277,13 +277,13 @@ export const geminiNativeCliAdapter: NativeCliProviderAdapter = {
   authStatus(agent) {
     return {
       launch: buildGeminiAuthStatusLaunch(agent),
-      parse: (output, exitCode) => geminiNativeCliAdapter.parseAuthStatus(output, exitCode)
+      parse: (output, exitCode) => geminiExternalAgentAdapter.parseAuthStatus(output, exitCode)
     };
   },
   argumentSupport(agent) {
     return {
       launch: buildGeminiAuthLaunch(agent, ['--help']),
-      parse: (output) => parseNativeCliArgumentSupport(output)
+      parse: (output) => parseExternalAgentArgumentSupport(output)
     };
   },
   parseAuthStatus(output, exitCode) {

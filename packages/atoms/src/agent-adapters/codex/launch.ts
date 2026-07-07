@@ -1,11 +1,11 @@
-import type { NativeCliAgentView } from '@monad/protocol';
-import type { BuildNativeCliLaunchOptions, NativeCliLaunchSpec } from '@monad/sdk-atom';
+import type { ExternalAgentView } from '@monad/protocol';
+import type { BuildExternalAgentLaunchOptions, ExternalAgentLaunchSpec } from '@monad/sdk-atom';
 
 import { homedir } from 'node:os';
-import { NativeCliError } from '@monad/sdk-atom';
+import { ExternalAgentError } from '@monad/sdk-atom';
 
 import { hasFlag, parseJsonObject, uniqueModelNames } from '../adapter-shared.ts';
-import { parseNativeCliArgumentSupport } from '../argument-support.ts';
+import { parseExternalAgentArgumentSupport } from '../argument-support.ts';
 
 export const CODEX_APP_BIN = '/Applications/Codex.app/Contents/Resources/codex';
 export const CODEX_NON_INTERACTIVE_ENV = { CODEX_NON_INTERACTIVE: '1' };
@@ -50,7 +50,7 @@ export function parseCodexModelOptions(output: string): string[] {
   return uniqueModelNames(names);
 }
 
-export function parseCodexArgumentSupport(output: string): ReturnType<typeof parseNativeCliArgumentSupport> {
+export function parseCodexArgumentSupport(output: string): ReturnType<typeof parseExternalAgentArgumentSupport> {
   const catalog = parseJsonObject(output);
   const models = Array.isArray(catalog?.models) ? catalog.models : [];
   const reasoningEfforts = uniqueModelNames(
@@ -94,10 +94,10 @@ export function parseCodexArgumentSupport(output: string): ReturnType<typeof par
     );
     if (efforts.length > 0) reasoningEffortsByModel[item.slug] = efforts;
   }
-  return { ...parseNativeCliArgumentSupport(output), reasoningEfforts, speeds, reasoningEffortsByModel };
+  return { ...parseExternalAgentArgumentSupport(output), reasoningEfforts, speeds, reasoningEffortsByModel };
 }
 
-export function buildCodexAuthLaunch(agent: NativeCliAgentView, args: string[]): NativeCliLaunchSpec {
+export function buildCodexAuthLaunch(agent: ExternalAgentView, args: string[]): ExternalAgentLaunchSpec {
   return {
     argv: [agent.command, ...args],
     cwd: homedir(),
@@ -109,7 +109,10 @@ export function buildCodexAuthLaunch(agent: NativeCliAgentView, args: string[]):
   };
 }
 
-export function buildCodexLaunch(agent: NativeCliAgentView, opts: BuildNativeCliLaunchOptions): NativeCliLaunchSpec {
+export function buildCodexLaunch(
+  agent: ExternalAgentView,
+  opts: BuildExternalAgentLaunchOptions
+): ExternalAgentLaunchSpec {
   let args = [...(agent.args ?? [])];
   const launchMode = opts.launchMode ?? agent.defaultLaunchMode;
   if (launchMode === 'app-server') {
@@ -117,7 +120,7 @@ export function buildCodexLaunch(agent: NativeCliAgentView, opts: BuildNativeCli
     if (!(CODEX_APP_SERVER_TRANSPORTS as readonly string[]).includes(transport)) {
       // unix has quirky directory/path semantics we don't launch yet (schema keeps it for future
       // providers); the supported set is declared once in CODEX_APP_SERVER_TRANSPORTS.
-      throw new NativeCliError(
+      throw new ExternalAgentError(
         'unsupported_capability',
         `codex app-server transport "${transport}" is not supported yet; use ${CODEX_APP_SERVER_TRANSPORTS.join(' or ')}`
       );
@@ -131,7 +134,7 @@ export function buildCodexLaunch(agent: NativeCliAgentView, opts: BuildNativeCli
     // non-loopback deployments; the daemon only ever dials `ws://127.0.0.1:<port>`, and codex's own
     // guidance is that plain (unauthenticated) `ws://` is fine on loopback.
     if (transport === 'unix' && !opts.appServerSocketPath) {
-      throw new NativeCliError('provider_protocol_error', 'codex app-server unix transport requires a socket path');
+      throw new ExternalAgentError('provider_protocol_error', 'codex app-server unix transport requires a socket path');
     }
     const transportArgs =
       transport === 'ws'

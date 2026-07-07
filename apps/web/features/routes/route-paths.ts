@@ -27,7 +27,7 @@ export function studioSectionFromPathname(pathname: string): StudioSectionId | n
   if (section === 'acpAgents') return 'acpDelegates';
   if (section === 'thirdPartyAgents') {
     const mode = studioSubpathFromPathname(pathname)[0];
-    if (mode === 'cli') return 'nativeCliAgents';
+    if (mode === 'cli') return 'externalAgents';
     return 'acpDelegates';
   }
   return isStudioSectionId(section) ? section : null;

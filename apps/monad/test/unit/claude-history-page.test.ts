@@ -1,5 +1,5 @@
 import { expect, mock, test } from 'bun:test';
-import { claudeCodeNativeCliAdapter, createClaudeSdkHistoryPageReader } from '@monad/atoms/agent-adapters';
+import { claudeCodeExternalAgentAdapter, createClaudeSdkHistoryPageReader } from '@monad/atoms/agent-adapters';
 
 const getSessionInfo = mock(async () => ({
   sessionId: 'claude-session-1',
@@ -56,7 +56,7 @@ test('Claude Code adapter reads paged history through the Agent SDK', async () =
   });
   expect(page?.nextCursor).toBe('4');
 
-  const output = claudeCodeNativeCliAdapter.historyPageOutput?.({
+  const output = claudeCodeExternalAgentAdapter.historyPageOutput?.({
     providerSessionRef: 'claude-session-1',
     workingPath: '/tmp/project',
     limitBytes: 8192,
@@ -64,7 +64,7 @@ test('Claude Code adapter reads paged history through the Agent SDK', async () =
   });
   expect(output).toBeTruthy();
 
-  const events = claudeCodeNativeCliAdapter.parseOutput(output ?? '');
+  const events = claudeCodeExternalAgentAdapter.parseOutput(output ?? '');
   expect(events).toEqual([
     {
       type: 'session_ref',

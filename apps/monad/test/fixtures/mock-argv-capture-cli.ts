@@ -1,4 +1,4 @@
-// Mock managed native CLI for `allowAutopilot` end-to-end tests: on startup it records whatever argv
+// Mock managed external agent for `allowAutopilot` end-to-end tests: on startup it records whatever argv
 // it actually received (its first positional arg is the output file, everything after that is what
 // gets recorded) then stays alive like a real persistent provider process so the host treats the
 // session as running.

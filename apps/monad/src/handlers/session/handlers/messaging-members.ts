@@ -1,4 +1,4 @@
-import type { AcpAgentConfig, McpServerConfig, NativeCliAgentConfig } from '@monad/home';
+import type { AcpAgentConfig, ExternalAgentConfig, McpServerConfig } from '@monad/home';
 import type { Session, SessionMcpServer, TranscriptTarget, WorkplaceProjectMemberSettings } from '@monad/protocol';
 
 import { workplaceProjectMembersExtKey, workplaceProjectMembersExtSchema } from '@monad/protocol';
@@ -8,7 +8,7 @@ import { sessionMcpServersToAcp, toAcpMcpServers } from '@/services/delegation/a
 const CONTROL_ROOM_SESSION_PREFIX = 'Control Room: ';
 const WORKPLACE_SESSION_PREFIX = 'Workplace: ';
 
-export type NativeCliProjectMemberShape = {
+export type ExternalAgentProjectMemberShape = {
   type: string;
   name: string;
   templateName?: string;
@@ -17,8 +17,8 @@ export type NativeCliProjectMemberShape = {
   settings?: WorkplaceProjectMemberSettings;
 };
 
-export interface ManagedNativeCliProjectMember {
-  spec: NativeCliAgentConfig;
+export interface ManagedExternalAgentProjectMember {
+  spec: ExternalAgentConfig;
   runtimeAgentName: string;
   templateAgentName: string;
   displayName: string;
@@ -61,19 +61,19 @@ export function workplaceProjectMembers(session: TranscriptTarget) {
   return parsed.success ? parsed.data : [];
 }
 
-export function nativeCliProjectMemberTemplateName(member: NativeCliProjectMemberShape): string {
-  return member.type === 'native-cli' ? (member.templateName ?? member.name) : member.name;
+export function externalAgentProjectMemberTemplateName(member: ExternalAgentProjectMemberShape): string {
+  return member.type === 'external-agent' ? (member.templateName ?? member.name) : member.name;
 }
 
-export function nativeCliProjectMemberRuntimeName(member: NativeCliProjectMemberShape): string {
-  return member.type === 'native-cli' ? (member.instanceId ?? member.name) : member.name;
+export function externalAgentProjectMemberRuntimeName(member: ExternalAgentProjectMemberShape): string {
+  return member.type === 'external-agent' ? (member.instanceId ?? member.name) : member.name;
 }
 
-export function nativeCliProjectMemberDisplayName(member: NativeCliProjectMemberShape): string {
-  return member.type === 'native-cli' ? (member.displayName ?? member.name) : member.name;
+export function externalAgentProjectMemberDisplayName(member: ExternalAgentProjectMemberShape): string {
+  return member.type === 'external-agent' ? (member.displayName ?? member.name) : member.name;
 }
 
-export function nativeCliProjectMemberSettings(
+export function externalAgentProjectMemberSettings(
   session: TranscriptTarget,
   agentName: string
 ): Pick<
@@ -92,9 +92,9 @@ export function nativeCliProjectMemberSettings(
   if (!parsed.success) return {};
   const member = parsed.data.find(
     (candidate) =>
-      candidate.type === 'native-cli' &&
-      (nativeCliProjectMemberRuntimeName(candidate) === agentName ||
-        nativeCliProjectMemberTemplateName(candidate) === agentName)
+      candidate.type === 'external-agent' &&
+      (externalAgentProjectMemberRuntimeName(candidate) === agentName ||
+        externalAgentProjectMemberTemplateName(candidate) === agentName)
   );
   if (member?.settings) {
     return {
@@ -112,36 +112,36 @@ export function nativeCliProjectMemberSettings(
   return member ? { managedProjectAgent: true } : { managedProjectAgent: false };
 }
 
-export function nativeCliProjectMemberDisplayNameForAgent(session: TranscriptTarget, agentName: string): string {
+export function externalAgentProjectMemberDisplayNameForAgent(session: TranscriptTarget, agentName: string): string {
   const parsed = workplaceProjectMembersExtSchema.safeParse(session.origin?.ext?.[workplaceProjectMembersExtKey]);
   if (!parsed.success) return agentName;
   const member = parsed.data.find(
     (candidate) =>
-      candidate.type === 'native-cli' &&
-      (nativeCliProjectMemberRuntimeName(candidate) === agentName ||
-        nativeCliProjectMemberTemplateName(candidate) === agentName)
+      candidate.type === 'external-agent' &&
+      (externalAgentProjectMemberRuntimeName(candidate) === agentName ||
+        externalAgentProjectMemberTemplateName(candidate) === agentName)
   );
-  return member ? nativeCliProjectMemberDisplayName(member) : agentName;
+  return member ? externalAgentProjectMemberDisplayName(member) : agentName;
 }
 
-export function managedNativeCliProjectMembers(
+export function managedExternalAgentProjectMembers(
   session: TranscriptTarget,
-  nativeCliAgents: readonly NativeCliAgentConfig[]
-): ManagedNativeCliProjectMember[] {
+  externalAgents: readonly ExternalAgentConfig[]
+): ManagedExternalAgentProjectMember[] {
   const members = workplaceProjectMembers(session);
-  const configured = new Map(nativeCliAgents.map((agent) => [agent.name, agent]));
+  const configured = new Map(externalAgents.map((agent) => [agent.name, agent]));
   return members
-    .filter((member) => member.type === 'native-cli' && member.settings?.managedProjectAgent !== false)
+    .filter((member) => member.type === 'external-agent' && member.settings?.managedProjectAgent !== false)
     .flatMap((member) => {
-      const templateAgentName = nativeCliProjectMemberTemplateName(member);
+      const templateAgentName = externalAgentProjectMemberTemplateName(member);
       const spec = configured.get(templateAgentName);
       if (!spec) return [];
       return [
         {
           spec,
-          runtimeAgentName: nativeCliProjectMemberRuntimeName(member),
+          runtimeAgentName: externalAgentProjectMemberRuntimeName(member),
           templateAgentName,
-          displayName: nativeCliProjectMemberDisplayName(member),
+          displayName: externalAgentProjectMemberDisplayName(member),
           settings: {
             managedProjectAgent: true,
             ...(member.settings?.launchMode ? { launchMode: member.settings.launchMode } : {}),

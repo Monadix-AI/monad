@@ -1,10 +1,10 @@
 import type {
   AdapterMigrationSource,
-  NativeCliAgentView,
-  NativeCliProvider,
-  NativeCliSettingsImportCandidate,
-  NativeCliSettingsImportItem,
-  NativeCliSettingsImportPreview
+  ExternalAgentProvider,
+  ExternalAgentSettingsImportCandidate,
+  ExternalAgentSettingsImportItem,
+  ExternalAgentSettingsImportPreview,
+  ExternalAgentView
 } from '@monad/protocol';
 import type { BinProbes } from '@monad/sdk-atom';
 
@@ -16,11 +16,11 @@ import { withHash } from './settings-import-hash.ts';
 import { asString, getPath, isRecord, recordAt, sanitizeId } from './settings-import-parse.ts';
 
 export function defaultCandidates(
-  provider: NativeCliProvider,
+  provider: ExternalAgentProvider,
   label: string,
-  paths: Array<{ path: string; scope: NativeCliSettingsImportCandidate['scope']; label?: string }>,
+  paths: Array<{ path: string; scope: ExternalAgentSettingsImportCandidate['scope']; label?: string }>,
   probes: BinProbes | undefined
-): NativeCliSettingsImportCandidate[] {
+): ExternalAgentSettingsImportCandidate[] {
   return paths
     .filter(({ path }) => probes?.exists(path) ?? false)
     .map(({ path, scope, label: candidateLabel }) => ({
@@ -35,16 +35,16 @@ export function defaultCandidates(
 export function agentItem(
   source: string,
   target: string,
-  agent: NativeCliAgentView,
+  agent: ExternalAgentView,
   summary?: string
-): NativeCliSettingsImportItem {
+): ExternalAgentSettingsImportItem {
   return withHash({
-    id: `nativeCliAgents:${target}`,
-    category: 'nativeCliAgents',
+    id: `externalAgents:${target}`,
+    category: 'externalAgents',
     source,
     target,
     action: 'add',
-    reason: 'provider settings can be represented as a Monad native CLI agent',
+    reason: 'provider settings can be represented as a Monad external agent',
     risk: 'low',
     ...(summary ? { summary } : {}),
     agent
@@ -52,17 +52,17 @@ export function agentItem(
 }
 
 export function previewItem(
-  category: NativeCliSettingsImportItem['category'],
+  category: ExternalAgentSettingsImportItem['category'],
   source: string,
   target: string,
   reason: string,
   payload: unknown,
   options: {
-    action?: NativeCliSettingsImportItem['action'];
-    risk?: NativeCliSettingsImportItem['risk'];
+    action?: ExternalAgentSettingsImportItem['action'];
+    risk?: ExternalAgentSettingsImportItem['risk'];
     summary?: string;
   } = {}
-): NativeCliSettingsImportItem {
+): ExternalAgentSettingsImportItem {
   return withHash({
     id: `${category}:${target}`,
     category,
@@ -76,7 +76,11 @@ export function previewItem(
   });
 }
 
-export async function addSkillItems(items: NativeCliSettingsImportItem[], source: string, root: string): Promise<void> {
+export async function addSkillItems(
+  items: ExternalAgentSettingsImportItem[],
+  source: string,
+  root: string
+): Promise<void> {
   try {
     const entries = await readdir(root, { withFileTypes: true, encoding: 'utf8' });
     for (const entry of entries) {
@@ -118,10 +122,10 @@ export function providerTypeFromName(name: string): ModelProviderType | null {
 }
 
 export function addModelItems(
-  items: NativeCliSettingsImportItem[],
+  items: ExternalAgentSettingsImportItem[],
   sourcePath: string,
   data: Record<string, unknown>,
-  provider: NativeCliProvider
+  provider: ExternalAgentProvider
 ): void {
   const model = asString(getPath(data, ['model', 'default'])) ?? asString(data.default_model) ?? asString(data.model);
   const providerId =
@@ -175,10 +179,10 @@ export function addModelItems(
 }
 
 export function addChannelItems(
-  items: NativeCliSettingsImportItem[],
+  items: ExternalAgentSettingsImportItem[],
   sourcePath: string,
   data: Record<string, unknown>,
-  provider: NativeCliProvider
+  provider: ExternalAgentProvider
 ): void {
   const channels = recordAt(data, ['channels']) ?? {};
   for (const [name, raw] of Object.entries(channels)) {
@@ -202,10 +206,10 @@ export function addChannelItems(
 }
 
 export function addMonadAgentItem(
-  items: NativeCliSettingsImportItem[],
+  items: ExternalAgentSettingsImportItem[],
   sourcePath: string,
   data: Record<string, unknown>,
-  provider: NativeCliProvider
+  provider: ExternalAgentProvider
 ): void {
   const agent = recordAt(data, ['agent']);
   if (!agent) return;
@@ -230,18 +234,18 @@ export function sourcesForRequest(
   return [];
 }
 
-export function targetForScope(provider: NativeCliProvider, scope: AdapterMigrationSource['scope']): string {
+export function targetForScope(provider: ExternalAgentProvider, scope: AdapterMigrationSource['scope']): string {
   if (scope === 'workspace') return `${provider}-workspace`;
   if (scope === 'profile') return `${provider}-profile`;
   return provider;
 }
 
 export function mergePreview(
-  provider: NativeCliProvider,
+  provider: ExternalAgentProvider,
   sources: AdapterMigrationSource[],
-  items: NativeCliSettingsImportItem[],
+  items: ExternalAgentSettingsImportItem[],
   warnings: string[]
-): NativeCliSettingsImportPreview {
+): ExternalAgentSettingsImportPreview {
   return {
     provider,
     path: sources[0]?.path ?? '',

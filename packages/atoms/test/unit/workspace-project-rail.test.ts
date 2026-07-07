@@ -1,4 +1,4 @@
-import type { NativeCliSessionView } from '@monad/protocol';
+import type { ExternalAgentSessionView } from '@monad/protocol';
 import type { Participant } from '../../src/workspace-experiences/experience/types.ts';
 
 import { expect, test } from 'bun:test';
@@ -17,7 +17,7 @@ import { __workplaceProjectMessageTest } from '../../src/workspace-experiences/c
 import { projectMemberParticipants } from '../../src/workspace-experiences/experience/project-projection.ts';
 
 const agent = (name: string, presence: Participant['presence']): Participant => ({
-  id: `native-cli:${name}`,
+  id: `external-agent:${name}`,
   av: name.slice(0, 2).toUpperCase(),
   name,
   kind: 'agent',
@@ -25,8 +25,8 @@ const agent = (name: string, presence: Participant['presence']): Participant => 
   presence
 });
 
-const nativeCliSession = (overrides: Partial<NativeCliSessionView> = {}): NativeCliSessionView => ({
-  id: 'ncli_codex_running',
+const externalAgentSession = (overrides: Partial<ExternalAgentSessionView> = {}): ExternalAgentSessionView => ({
+  id: 'exa_codex_running',
   transcriptTargetId: 'prj_01KWPROJECT00000000000000',
   agentName: 'pmem_codex_active',
   provider: 'codex',
@@ -35,7 +35,7 @@ const nativeCliSession = (overrides: Partial<NativeCliSessionView> = {}): Native
   launchMode: 'app-server',
   approvalOwnership: 'provider-owned',
   runtimeRole: 'managed-project-agent',
-  agentRuntimeId: 'ncli_codex_running',
+  agentRuntimeId: 'exa_codex_running',
   lastDeliveredSeq: 0,
   lastVisibleSeq: 0,
   state: 'running',
@@ -50,9 +50,9 @@ const nativeCliSession = (overrides: Partial<NativeCliSessionView> = {}): Native
   ...overrides
 });
 
-const claudeSession = (records: Record<string, unknown>[]): NativeCliSessionView =>
-  nativeCliSession({
-    id: 'ncli_claude',
+const claudeSession = (records: Record<string, unknown>[]): ExternalAgentSessionView =>
+  externalAgentSession({
+    id: 'exa_claude',
     agentName: 'pmem_claude',
     provider: 'claude-code',
     productIcon: 'claude-code',
@@ -72,15 +72,15 @@ test('claude-code stream-json (no deltas) is detected as generating until the re
     { type: 'result', subtype: 'success', result: 'Done' }
   ]);
 
-  expect(__workplaceProjectMessageTest.nativeCliSessionIsGenerating(inFlight)).toBe(true);
-  expect(__workplaceProjectMessageTest.nativeCliSessionIsGenerating(settled)).toBe(false);
+  expect(__workplaceProjectMessageTest.externalAgentSessionIsGenerating(inFlight)).toBe(true);
+  expect(__workplaceProjectMessageTest.externalAgentSessionIsGenerating(settled)).toBe(false);
 });
 
 test('claude-code activity phase maps assistant/tool/thinking/post records', () => {
   const phaseOf = (part: Record<string, unknown>) =>
-    __workplaceProjectMessageTest.nativeCliMemberActivityPhase({
+    __workplaceProjectMessageTest.externalAgentMemberActivityPhase({
       agentName: 'pmem_claude',
-      nativeCliSessions: [claudeSession([{ type: 'system', subtype: 'init' }, claudeAssistant(part)])],
+      externalAgentSessions: [claudeSession([{ type: 'system', subtype: 'init' }, claudeAssistant(part)])],
       liveTools: []
     });
 
@@ -92,9 +92,9 @@ test('claude-code activity phase maps assistant/tool/thinking/post records', () 
 
   // After the result record the turn is settled — no phase.
   expect(
-    __workplaceProjectMessageTest.nativeCliMemberActivityPhase({
+    __workplaceProjectMessageTest.externalAgentMemberActivityPhase({
       agentName: 'pmem_claude',
-      nativeCliSessions: [
+      externalAgentSessions: [
         claudeSession([claudeAssistant({ type: 'text', text: 'Done' }), { type: 'result', subtype: 'success' }])
       ],
       liveTools: []
@@ -138,18 +138,18 @@ test('project rail sorts members by display name without status grouping', () =>
   ).toEqual(['amy', 'Amy', 'Lily', 'Zed']);
 });
 
-test('native CLI activity phase reads the running tool output, not a flat tooling', () => {
+test('external agent activity phase reads the running tool output, not a flat tooling', () => {
   // A managed runtime tool card stays 'running' the whole session — with no output yet it is a
   // starting/thinking turn, not "using a tool".
   expect(
-    __workplaceProjectMessageTest.nativeCliMemberActivityPhase({
+    __workplaceProjectMessageTest.externalAgentMemberActivityPhase({
       agentName: 'pmem_codex',
-      nativeCliSessions: [],
+      externalAgentSessions: [],
       liveTools: [
         {
           kind: 'tool',
-          id: 'tool_native_cli',
-          tool: 'native-cli:codex',
+          id: 'tool_external_agent',
+          tool: 'external-agent:codex',
           input: { agent: 'pmem_codex' },
           status: 'running',
           seq: '3'
@@ -160,14 +160,14 @@ test('native CLI activity phase reads the running tool output, not a flat toolin
 
   // Once the running tool's live output shows a provider tool call, the phase becomes 'tooling'.
   expect(
-    __workplaceProjectMessageTest.nativeCliMemberActivityPhase({
+    __workplaceProjectMessageTest.externalAgentMemberActivityPhase({
       agentName: 'pmem_codex',
-      nativeCliSessions: [],
+      externalAgentSessions: [],
       liveTools: [
         {
           kind: 'tool',
-          id: 'tool_native_cli',
-          tool: 'native-cli:codex',
+          id: 'tool_external_agent',
+          tool: 'external-agent:codex',
           input: { agent: 'pmem_codex' },
           output: [
             '{"method":"turn/started","params":{}}',
@@ -181,10 +181,10 @@ test('native CLI activity phase reads the running tool output, not a flat toolin
   ).toBe('tooling');
 
   expect(
-    __workplaceProjectMessageTest.nativeCliMemberActivityPhase({
+    __workplaceProjectMessageTest.externalAgentMemberActivityPhase({
       agentName: 'pmem_codex_active',
-      nativeCliSessions: [
-        nativeCliSession({
+      externalAgentSessions: [
+        externalAgentSession({
           outputSnapshot: [
             '{"method":"turn/started","params":{}}',
             '{"method":"item/agentMessage/delta","params":{"delta":"Working"}}'
@@ -200,7 +200,7 @@ test('a settled live tool clears working/phase even while the session snapshot s
   // The sessions list only refetches at turn boundaries, so its snapshot stays "generating" after a
   // managed agent's turn ends. The live tool card (ui-stream) flips to non-running at turn end and must
   // win — otherwise the avatar is stuck on 'working' forever.
-  const generatingSnapshot = nativeCliSession({
+  const generatingSnapshot = externalAgentSession({
     outputSnapshot: [
       '{"method":"turn/started","params":{}}',
       '{"method":"item/agentMessage/delta","params":{"delta":"Working"}}'
@@ -208,49 +208,49 @@ test('a settled live tool clears working/phase even while the session snapshot s
   });
   const settledTool = {
     kind: 'tool' as const,
-    id: 'ncli_codex_running',
-    tool: 'native-cli:codex',
+    id: 'exa_codex_running',
+    tool: 'external-agent:codex',
     input: { agent: 'pmem_codex_active' },
     status: 'ok' as const,
     seq: '9'
   };
 
   // Snapshot alone (no live tool) → still generating (the frozen-snapshot case we must override).
-  expect(__workplaceProjectMessageTest.nativeCliSessionIsGenerating(generatingSnapshot)).toBe(true);
+  expect(__workplaceProjectMessageTest.externalAgentSessionIsGenerating(generatingSnapshot)).toBe(true);
 
   expect(
-    __workplaceProjectMessageTest.nativeCliMemberPresence({
+    __workplaceProjectMessageTest.externalAgentMemberPresence({
       agentName: 'pmem_codex_active',
       enabled: true,
-      nativeCliSessions: [generatingSnapshot],
+      externalAgentSessions: [generatingSnapshot],
       liveTools: [settledTool]
     })
   ).toBe('online');
   expect(
-    __workplaceProjectMessageTest.nativeCliMemberActivityPhase({
+    __workplaceProjectMessageTest.externalAgentMemberActivityPhase({
       agentName: 'pmem_codex_active',
-      nativeCliSessions: [generatingSnapshot],
+      externalAgentSessions: [generatingSnapshot],
       liveTools: [settledTool]
     })
   ).toBeUndefined();
 
   // ...but while the live tool is still running, working/phase hold.
   expect(
-    __workplaceProjectMessageTest.nativeCliMemberPresence({
+    __workplaceProjectMessageTest.externalAgentMemberPresence({
       agentName: 'pmem_codex_active',
       enabled: true,
-      nativeCliSessions: [generatingSnapshot],
+      externalAgentSessions: [generatingSnapshot],
       liveTools: [{ ...settledTool, status: 'running' as const }]
     })
   ).toBe('working');
 });
 
-test('native CLI activity phase treats provider tool calls as tooling', () => {
+test('external agent activity phase treats provider tool calls as tooling', () => {
   expect(
-    __workplaceProjectMessageTest.nativeCliMemberActivityPhase({
+    __workplaceProjectMessageTest.externalAgentMemberActivityPhase({
       agentName: 'pmem_codex_active',
-      nativeCliSessions: [
-        nativeCliSession({
+      externalAgentSessions: [
+        externalAgentSession({
           outputSnapshot: [
             '{"method":"turn/started","params":{}}',
             '{"method":"item/started","params":{"item":{"id":"call_1","type":"function_call","name":"exec_command"}}}'
@@ -262,12 +262,12 @@ test('native CLI activity phase treats provider tool calls as tooling', () => {
   ).toBe('tooling');
 });
 
-test('native CLI activity phase treats provider reasoning as thinking', () => {
+test('external agent activity phase treats provider reasoning as thinking', () => {
   expect(
-    __workplaceProjectMessageTest.nativeCliMemberActivityPhase({
+    __workplaceProjectMessageTest.externalAgentMemberActivityPhase({
       agentName: 'pmem_codex_active',
-      nativeCliSessions: [
-        nativeCliSession({
+      externalAgentSessions: [
+        externalAgentSession({
           outputSnapshot: [
             '{"method":"turn/started","params":{}}',
             '{"method":"item/reasoning/textDelta","params":{"delta":"Need inspect."}}'
@@ -279,43 +279,43 @@ test('native CLI activity phase treats provider reasoning as thinking', () => {
   ).toBe('thinking');
 });
 
-test('native CLI running sessions without provider activity stay idle', () => {
-  const idleRunningSession = nativeCliSession({
+test('external agent running sessions without provider activity stay idle', () => {
+  const idleRunningSession = externalAgentSession({
     state: 'running',
     outputSnapshot: '',
     updatedAt: '2026-07-06T11:15:26.926Z'
   });
 
-  expect(__workplaceProjectMessageTest.nativeCliSessionIsGenerating(idleRunningSession)).toBe(false);
+  expect(__workplaceProjectMessageTest.externalAgentSessionIsGenerating(idleRunningSession)).toBe(false);
   expect(
-    __workplaceProjectMessageTest.nativeCliMemberPresence({
+    __workplaceProjectMessageTest.externalAgentMemberPresence({
       agentName: 'pmem_codex_active',
       enabled: true,
-      nativeCliSessions: [idleRunningSession],
+      externalAgentSessions: [idleRunningSession],
       liveTools: []
     })
   ).toBe('online');
   expect(
-    __workplaceProjectMessageTest.nativeCliMemberActivityPhase({
+    __workplaceProjectMessageTest.externalAgentMemberActivityPhase({
       agentName: 'pmem_codex_active',
-      nativeCliSessions: [idleRunningSession],
+      externalAgentSessions: [idleRunningSession],
       liveTools: []
     })
   ).toBeUndefined();
 });
 
-test('native CLI agent-facing project commands map to short activity phases', () => {
-  expect(__workplaceProjectMessageTest.nativeCliAgentFacingCommandPhase('Bash: monad project post -')).toBe('speaking');
-  expect(__workplaceProjectMessageTest.nativeCliAgentFacingCommandPhase('monad project send "done"')).toBe('speaking');
-  expect(__workplaceProjectMessageTest.nativeCliAgentFacingCommandPhase('monad project inbox check')).toBe('reading');
-  expect(__workplaceProjectMessageTest.nativeCliAgentFacingCommandPhase('monad inbox read')).toBe('reading');
-  expect(__workplaceProjectMessageTest.nativeCliAgentFacingCommandPhase('monad project read --project prj_1')).toBe(
+test('external agent-facing project commands map to short activity phases', () => {
+  expect(__workplaceProjectMessageTest.externalAgentFacingCommandPhase('Bash: monad project post -')).toBe('speaking');
+  expect(__workplaceProjectMessageTest.externalAgentFacingCommandPhase('monad project send "done"')).toBe('speaking');
+  expect(__workplaceProjectMessageTest.externalAgentFacingCommandPhase('monad project inbox check')).toBe('reading');
+  expect(__workplaceProjectMessageTest.externalAgentFacingCommandPhase('monad inbox read')).toBe('reading');
+  expect(__workplaceProjectMessageTest.externalAgentFacingCommandPhase('monad project read --project prj_1')).toBe(
     'reading'
   );
 });
 
-test('native CLI activity phase treats a recent user message as reading for five seconds', () => {
-  const recentUserMessage = nativeCliSession({
+test('external agent activity phase treats a recent user message as reading for five seconds', () => {
+  const recentUserMessage = externalAgentSession({
     updatedAt: '2026-07-06T10:00:04.000Z',
     outputSnapshot: JSON.stringify({
       items: [
@@ -328,7 +328,7 @@ test('native CLI activity phase treats a recent user message as reading for five
       ]
     })
   });
-  const staleUserMessage = nativeCliSession({
+  const staleUserMessage = externalAgentSession({
     updatedAt: '2026-07-06T10:00:06.000Z',
     outputSnapshot: JSON.stringify({
       items: [
@@ -343,28 +343,28 @@ test('native CLI activity phase treats a recent user message as reading for five
   });
 
   expect(
-    __workplaceProjectMessageTest.nativeCliMemberActivityPhase({
+    __workplaceProjectMessageTest.externalAgentMemberActivityPhase({
       agentName: 'pmem_codex_active',
-      nativeCliSessions: [recentUserMessage],
+      externalAgentSessions: [recentUserMessage],
       liveTools: []
     })
   ).toBe('reading');
   expect(
-    __workplaceProjectMessageTest.nativeCliMemberActivityPhase({
+    __workplaceProjectMessageTest.externalAgentMemberActivityPhase({
       agentName: 'pmem_codex_active',
-      nativeCliSessions: [staleUserMessage],
+      externalAgentSessions: [staleUserMessage],
       liveTools: []
     })
   ).toBeUndefined();
 });
 
-test('native CLI stopped sessions remain available when the template is enabled', () => {
-  const presence = __workplaceProjectMessageTest.nativeCliMemberPresence({
+test('external agent stopped sessions remain available when the template is enabled', () => {
+  const presence = __workplaceProjectMessageTest.externalAgentMemberPresence({
     agentName: 'pmem_codex_available',
     enabled: true,
-    nativeCliSessions: [
+    externalAgentSessions: [
       {
-        id: 'ncli_stopped',
+        id: 'exa_stopped',
         transcriptTargetId: 'prj_01KWPROJECT00000000000000',
         agentName: 'pmem_codex_available',
         provider: 'codex',
@@ -373,7 +373,7 @@ test('native CLI stopped sessions remain available when the template is enabled'
         launchMode: 'app-server',
         approvalOwnership: 'provider-owned',
         runtimeRole: 'managed-project-agent',
-        agentRuntimeId: 'ncli_stopped',
+        agentRuntimeId: 'exa_stopped',
         lastDeliveredSeq: 0,
         lastVisibleSeq: 0,
         state: 'stopped',
@@ -393,7 +393,7 @@ test('native CLI stopped sessions remain available when the template is enabled'
   expect(presence).toBe('online');
 });
 
-test('native CLI generating flag tracks snapshot changes for the same session id', () => {
+test('external agent generating flag tracks snapshot changes for the same session id', () => {
   const generatingOutput = [
     '{"method":"turn/started","params":{}}',
     '{"method":"item/agentMessage/delta","params":{"delta":"Working"}}'
@@ -401,20 +401,26 @@ test('native CLI generating flag tracks snapshot changes for the same session id
   const idleOutput = [generatingOutput, '{"method":"turn/completed","params":{}}'].join('\n');
 
   expect(
-    __workplaceProjectMessageTest.nativeCliSessionIsGenerating(nativeCliSession({ outputSnapshot: generatingOutput }))
+    __workplaceProjectMessageTest.externalAgentSessionIsGenerating(
+      externalAgentSession({ outputSnapshot: generatingOutput })
+    )
   ).toBe(true);
   expect(
-    __workplaceProjectMessageTest.nativeCliSessionIsGenerating(nativeCliSession({ outputSnapshot: idleOutput }))
+    __workplaceProjectMessageTest.externalAgentSessionIsGenerating(externalAgentSession({ outputSnapshot: idleOutput }))
   ).toBe(false);
   expect(
-    __workplaceProjectMessageTest.nativeCliSessionIsGenerating(nativeCliSession({ outputSnapshot: generatingOutput }))
+    __workplaceProjectMessageTest.externalAgentSessionIsGenerating(
+      externalAgentSession({ outputSnapshot: generatingOutput })
+    )
   ).toBe(true);
   expect(
-    __workplaceProjectMessageTest.nativeCliSessionIsGenerating(nativeCliSession({ outputSnapshot: generatingOutput }))
+    __workplaceProjectMessageTest.externalAgentSessionIsGenerating(
+      externalAgentSession({ outputSnapshot: generatingOutput })
+    )
   ).toBe(true);
 });
 
-test('native CLI presence follows provider turn activity before a project message streams', () => {
+test('external agent presence follows provider turn activity before a project message streams', () => {
   const generatingOutput = [
     '{"method":"turn/started","params":{}}',
     '{"method":"item/agentMessage/delta","params":{"delta":"Working"}}'
@@ -425,31 +431,31 @@ test('native CLI presence follows provider turn activity before a project messag
     '{"method":"turn/completed","params":{}}'
   ].join('\n');
 
-  const generatingSession = nativeCliSession({ outputSnapshot: generatingOutput });
-  const idleSession = nativeCliSession({ outputSnapshot: idleOutput });
+  const generatingSession = externalAgentSession({ outputSnapshot: generatingOutput });
+  const idleSession = externalAgentSession({ outputSnapshot: idleOutput });
 
-  expect(__workplaceProjectMessageTest.nativeCliSessionIsGenerating(generatingSession)).toBe(true);
+  expect(__workplaceProjectMessageTest.externalAgentSessionIsGenerating(generatingSession)).toBe(true);
   expect(
-    __workplaceProjectMessageTest.nativeCliMemberPresence({
+    __workplaceProjectMessageTest.externalAgentMemberPresence({
       agentName: 'pmem_codex_active',
       enabled: true,
-      nativeCliSessions: [generatingSession],
+      externalAgentSessions: [generatingSession],
       liveTools: []
     })
   ).toBe('working');
 
-  expect(__workplaceProjectMessageTest.nativeCliSessionIsGenerating(idleSession)).toBe(false);
+  expect(__workplaceProjectMessageTest.externalAgentSessionIsGenerating(idleSession)).toBe(false);
   expect(
-    __workplaceProjectMessageTest.nativeCliMemberPresence({
+    __workplaceProjectMessageTest.externalAgentMemberPresence({
       agentName: 'pmem_codex_active',
       enabled: true,
-      nativeCliSessions: [idleSession],
+      externalAgentSessions: [idleSession],
       liveTools: []
     })
   ).toBe('online');
 });
 
-test('native CLI presence returns to online after Claude Code result', () => {
+test('external agent presence returns to online after Claude Code result', () => {
   const generatingOutput = [
     JSON.stringify({
       type: 'stream_event',
@@ -464,24 +470,24 @@ test('native CLI presence returns to online after Claude Code result', () => {
     JSON.stringify({ type: 'result', subtype: 'success', is_error: false, stop_reason: 'end_turn' })
   ].join('\n');
 
-  const generatingSession = nativeCliSession({
+  const generatingSession = externalAgentSession({
     provider: 'claude-code',
     productIcon: 'claude-code',
     outputSnapshot: generatingOutput
   });
-  const idleSession = nativeCliSession({
+  const idleSession = externalAgentSession({
     provider: 'claude-code',
     productIcon: 'claude-code',
     outputSnapshot: idleOutput
   });
 
-  expect(__workplaceProjectMessageTest.nativeCliSessionIsGenerating(generatingSession)).toBe(true);
-  expect(__workplaceProjectMessageTest.nativeCliSessionIsGenerating(idleSession)).toBe(false);
+  expect(__workplaceProjectMessageTest.externalAgentSessionIsGenerating(generatingSession)).toBe(true);
+  expect(__workplaceProjectMessageTest.externalAgentSessionIsGenerating(idleSession)).toBe(false);
   expect(
-    __workplaceProjectMessageTest.nativeCliMemberPresence({
+    __workplaceProjectMessageTest.externalAgentMemberPresence({
       agentName: 'pmem_codex_active',
       enabled: true,
-      nativeCliSessions: [idleSession],
+      externalAgentSessions: [idleSession],
       liveTools: []
     })
   ).toBe('online');
@@ -498,27 +504,27 @@ test('project rail includes explicitly invited Monad members', () => {
 test('chatroom experience store opens the same observation view from follow and agent rows', () => {
   useChatRoomExperienceStore.getState().closeRailObservation();
 
-  useChatRoomExperienceStore.getState().followNativeCliSession('project-1', 'ncli:codex');
+  useChatRoomExperienceStore.getState().followExternalAgentSession('project-1', 'ncli:codex');
   expect(useChatRoomExperienceStore.getState().railObservation).toEqual({
     projectId: 'project-1',
-    nativeCliSessionId: 'ncli:codex'
+    externalAgentSessionId: 'ncli:codex'
   });
 
   useChatRoomExperienceStore.getState().observeProjectAgent('project-1', {
-    agentId: 'native-cli:codex',
+    agentId: 'external-agent:codex',
     agentName: 'codex'
   });
   expect(useChatRoomExperienceStore.getState().railObservation).toEqual({
     projectId: 'project-1',
-    agentId: 'native-cli:codex',
+    agentId: 'external-agent:codex',
     agentName: 'codex'
   });
 });
 
-test('agent observation selects the currently running native CLI stream by instance id', () => {
+test('agent observation selects the currently running external agent stream by instance id', () => {
   const streams = [
     {
-      id: 'ncli_old',
+      id: 'exa_old',
       agentName: 'pmem_codex_one',
       provider: 'codex',
       tag: 'Codex',
@@ -527,7 +533,7 @@ test('agent observation selects the currently running native CLI stream by insta
       items: []
     },
     {
-      id: 'ncli_running',
+      id: 'exa_running',
       agentName: 'pmem_codex_one',
       provider: 'codex',
       tag: 'Codex',
@@ -536,7 +542,7 @@ test('agent observation selects the currently running native CLI stream by insta
       items: [{ id: 'item_1', role: 'agent' as const, text: 'Thinking', source: 'codex-app-server' as const }]
     },
     {
-      id: 'ncli_other_project',
+      id: 'exa_other_project',
       agentName: 'codex',
       provider: 'codex',
       tag: 'Codex',
@@ -546,14 +552,14 @@ test('agent observation selects the currently running native CLI stream by insta
     }
   ];
 
-  expect(agentObservationStream({ agentId: 'pmem_codex_one', agentName: 'Codex' }, streams)?.id).toBe('ncli_running');
-  expect(agentObservationStream({ nativeCliSessionId: 'ncli_old' }, streams)?.id).toBe('ncli_old');
+  expect(agentObservationStream({ agentId: 'pmem_codex_one', agentName: 'Codex' }, streams)?.id).toBe('exa_running');
+  expect(agentObservationStream({ externalAgentSessionId: 'exa_old' }, streams)?.id).toBe('exa_old');
 });
 
-test('agent observation follows the newest native CLI stream when no runtime is running', () => {
+test('agent observation follows the newest external agent stream when no runtime is running', () => {
   const streams = [
     {
-      id: 'ncli_old',
+      id: 'exa_old',
       agentName: 'pmem_codex_one',
       provider: 'codex',
       tag: 'Codex',
@@ -562,7 +568,7 @@ test('agent observation follows the newest native CLI stream when no runtime is 
       items: []
     },
     {
-      id: 'ncli_new',
+      id: 'exa_new',
       agentName: 'pmem_codex_one',
       provider: 'codex',
       tag: 'Codex',
@@ -572,7 +578,7 @@ test('agent observation follows the newest native CLI stream when no runtime is 
       observedAt: '2026-07-06T10:00:00.000Z'
     },
     {
-      id: 'ncli_mid',
+      id: 'exa_mid',
       agentName: 'pmem_codex_one',
       provider: 'codex',
       tag: 'Codex',
@@ -583,13 +589,13 @@ test('agent observation follows the newest native CLI stream when no runtime is 
     }
   ];
 
-  expect(agentObservationStream({ agentId: 'pmem_codex_one', agentName: 'Codex' }, streams)?.id).toBe('ncli_new');
+  expect(agentObservationStream({ agentId: 'pmem_codex_one', agentName: 'Codex' }, streams)?.id).toBe('exa_new');
 });
 
-test('agent observation matches native CLI stream aliases for template-backed project members', () => {
+test('agent observation matches external agent stream aliases for template-backed project members', () => {
   const streams = [
     {
-      id: 'ncli_codex_template',
+      id: 'exa_codex_template',
       agentName: 'codex',
       agentAliases: ['pmem_codex_1a6c1dcc142', 'codex', 'Lily'],
       provider: 'codex',
@@ -601,24 +607,24 @@ test('agent observation matches native CLI stream aliases for template-backed pr
   ];
 
   expect(agentObservationStream({ agentId: 'pmem_codex_1a6c1dcc142', agentName: 'Lily' }, streams)?.id).toBe(
-    'ncli_codex_template'
+    'exa_codex_template'
   );
 });
 
-test('project messages bind a native CLI member to the newest session for that project member', () => {
+test('project messages bind an external agent member to the newest session for that project member', () => {
   const messages = __workplaceProjectMessageTest.buildProjectMessages({
     persistedMessages: [],
-    nativeCliSessions: [
-      nativeCliSession({
-        id: 'ncli_old',
+    externalAgentSessions: [
+      externalAgentSession({
+        id: 'exa_old',
         agentName: 'pmem_codex_one',
         state: 'stopped',
         startedAt: '2026-07-06T08:00:00.000Z',
         updatedAt: '2026-07-06T08:01:00.000Z',
         exitedAt: '2026-07-06T08:01:00.000Z'
       }),
-      nativeCliSession({
-        id: 'ncli_new',
+      externalAgentSession({
+        id: 'exa_new',
         agentName: 'pmem_codex_one',
         state: 'running',
         startedAt: '2026-07-06T09:00:00.000Z',
@@ -627,34 +633,36 @@ test('project messages bind a native CLI member to the newest session for that p
     ],
     liveItems: [],
     liveTools: [],
-    nativeCliDisplayNames: new Map([['pmem_codex_one', 'Codex']])
+    externalAgentDisplayNames: new Map([['pmem_codex_one', 'Codex']])
   });
 
-  expect(messages.find((message) => message.id === 'native-cli-session:ncli_new')?.nativeCliSessionId).toBe('ncli_new');
-  expect(messages.some((message) => message.id === 'native-cli-session:ncli_old')).toBe(false);
+  expect(messages.find((message) => message.id === 'external-agent-session:exa_new')?.externalAgentSessionId).toBe(
+    'exa_new'
+  );
+  expect(messages.some((message) => message.id === 'external-agent-session:exa_old')).toBe(false);
 });
 
-test('native CLI live launch join message renders as a pending placeholder until agent content arrives', () => {
+test('external agent live launch join message renders as a pending placeholder until agent content arrives', () => {
   const pendingMessages = __workplaceProjectMessageTest.buildProjectMessages({
     persistedMessages: [],
-    nativeCliSessions: [],
+    externalAgentSessions: [],
     liveItems: [],
     liveTools: [
       {
-        id: 'tool_native_cli_launch',
+        id: 'tool_external_agent_launch',
         kind: 'tool',
-        tool: 'native-cli:codex',
+        tool: 'external-agent:codex',
         input: { agent: 'pmem_codex_one', productIcon: 'codex', provider: 'codex' },
         status: 'running',
         seq: '2026-07-06T09:00:00.000Z'
       }
     ],
-    nativeCliDisplayNames: new Map([['pmem_codex_one', 'Codex']])
+    externalAgentDisplayNames: new Map([['pmem_codex_one', 'Codex']])
   });
 
   expect(pendingMessages).toContainEqual(
     expect.objectContaining({
-      id: 'native-cli-session:tool_native_cli_launch',
+      id: 'external-agent-session:tool_external_agent_launch',
       kind: 'system',
       systemTone: 'pending',
       text: 'joined the project'
@@ -663,15 +671,15 @@ test('native CLI live launch join message renders as a pending placeholder until
 
   const mergedMessages = __workplaceProjectMessageTest.buildProjectMessages({
     persistedMessages: [],
-    nativeCliSessions: [],
+    externalAgentSessions: [],
     liveItems: [
       {
-        id: 'msg_native_cli_reply',
+        id: 'msg_external_agent_reply',
         kind: 'message',
         role: 'assistant',
         agentName: 'pmem_codex_one',
-        nativeCliSessionId: 'tool_native_cli_launch',
-        source: 'managed-native-cli',
+        externalAgentSessionId: 'tool_external_agent_launch',
+        source: 'managed-external-agent',
         status: 'done',
         seq: '2026-07-06T09:00:01.000Z',
         parts: [{ type: 'text', text: 'Ready.' }]
@@ -679,43 +687,45 @@ test('native CLI live launch join message renders as a pending placeholder until
     ],
     liveTools: [
       {
-        id: 'tool_native_cli_launch',
+        id: 'tool_external_agent_launch',
         kind: 'tool',
-        tool: 'native-cli:codex',
+        tool: 'external-agent:codex',
         input: { agent: 'pmem_codex_one', productIcon: 'codex', provider: 'codex' },
         status: 'running',
         seq: '2026-07-06T09:00:00.000Z'
       }
     ],
-    nativeCliDisplayNames: new Map([['pmem_codex_one', 'Codex']])
+    externalAgentDisplayNames: new Map([['pmem_codex_one', 'Codex']])
   });
 
-  expect(mergedMessages.some((message) => message.id === 'native-cli-session:tool_native_cli_launch')).toBe(false);
-  expect(mergedMessages.find((message) => message.id === 'msg_native_cli_reply')?.text).toBe('Ready.');
+  expect(mergedMessages.some((message) => message.id === 'external-agent-session:tool_external_agent_launch')).toBe(
+    false
+  );
+  expect(mergedMessages.find((message) => message.id === 'msg_external_agent_reply')?.text).toBe('Ready.');
 });
 
-test('native CLI session join history stays visible after agent content arrives', () => {
+test('external agent session join history stays visible after agent content arrives', () => {
   const messages = __workplaceProjectMessageTest.buildProjectMessages({
     persistedMessages: [],
-    nativeCliSessions: [nativeCliSession({ agentName: 'pmem_codex_one', id: 'ncli_history' })],
+    externalAgentSessions: [externalAgentSession({ agentName: 'pmem_codex_one', id: 'exa_history' })],
     liveItems: [
       {
-        id: 'msg_native_cli_reply',
+        id: 'msg_external_agent_reply',
         kind: 'message',
         role: 'assistant',
         agentName: 'pmem_codex_one',
-        nativeCliSessionId: 'ncli_history',
-        source: 'managed-native-cli',
+        externalAgentSessionId: 'exa_history',
+        source: 'managed-external-agent',
         status: 'done',
         seq: '2026-07-06T09:00:01.000Z',
         parts: [{ type: 'text', text: 'Ready.' }]
       }
     ],
     liveTools: [],
-    nativeCliDisplayNames: new Map([['pmem_codex_one', 'Codex']])
+    externalAgentDisplayNames: new Map([['pmem_codex_one', 'Codex']])
   });
 
-  const joinMessage = messages.find((message) => message.id === 'native-cli-session:ncli_history');
+  const joinMessage = messages.find((message) => message.id === 'external-agent-session:exa_history');
   expect(joinMessage).toEqual(
     expect.objectContaining({
       kind: 'system',
@@ -723,10 +733,10 @@ test('native CLI session join history stays visible after agent content arrives'
     })
   );
   expect(joinMessage?.systemTone).toBeUndefined();
-  expect(messages.find((message) => message.id === 'msg_native_cli_reply')?.text).toBe('Ready.');
+  expect(messages.find((message) => message.id === 'msg_external_agent_reply')?.text).toBe('Ready.');
 });
 
-test('native CLI session observation reuses the project member identity', () => {
+test('external agent session observation reuses the project member identity', () => {
   const railAgent = {
     ...agent('Lily', 'online'),
     id: 'pmem_codex_1a6c1dcc142',
@@ -734,7 +744,7 @@ test('native CLI session observation reuses the project member identity', () => 
     icon: 'codex'
   } as Participant;
   const stream = {
-    id: 'ncli_codex',
+    id: 'exa_codex',
     agentName: 'pmem_codex_1a6c1dcc142',
     provider: 'codex',
     tag: 'Codex',
@@ -743,5 +753,5 @@ test('native CLI session observation reuses the project member identity', () => 
     items: []
   };
 
-  expect(observedRailAgent({ nativeCliSessionId: 'ncli_codex' }, stream, [railAgent])).toBe(railAgent);
+  expect(observedRailAgent({ externalAgentSessionId: 'exa_codex' }, stream, [railAgent])).toBe(railAgent);
 });

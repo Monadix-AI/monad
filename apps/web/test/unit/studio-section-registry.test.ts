@@ -17,7 +17,7 @@ test('Studio sidebar separates runtime delegates from provider-owned mesh agents
   const _meshSectionIds = STUDIO_MESH_SECTIONS.map((item) => item.id);
 
   expect(STUDIO_SECTION_COMPONENTS.acpAgents).toBe(STUDIO_SECTION_COMPONENTS.acpDelegates);
-  expect(STUDIO_SECTION_COMPONENTS.nativeCliAgents).not.toBe(STUDIO_SECTION_COMPONENTS.acpDelegates);
+  expect(STUDIO_SECTION_COMPONENTS.externalAgents).not.toBe(STUDIO_SECTION_COMPONENTS.acpDelegates);
 });
 
 test('Studio System group holds atom packs and usage, separate from the mesh', () => {

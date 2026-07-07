@@ -108,7 +108,7 @@ export function applyMessageEvent(m: ProjectionMutations, event: Event): Session
           ...m.messageObservationPointers(p, existing),
           parts,
           status: 'done',
-          seq: p.source === 'managed-native-cli' ? event.at : (existing?.seq ?? event.at)
+          seq: p.source === 'managed-external-agent' ? event.at : (existing?.seq ?? event.at)
         })
       ];
     }

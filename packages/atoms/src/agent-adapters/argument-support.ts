@@ -1,4 +1,4 @@
-import type { NativeCliArgumentSupport } from '@monad/sdk-atom';
+import type { ExternalAgentArgumentSupport } from '@monad/sdk-atom';
 
 const REASONING_FLAGS = new Set(['--effort', '--reasoning-effort', '--model-reasoning-effort']);
 const SPEED_FLAGS = new Set(['--speed', '--service-tier']);
@@ -47,7 +47,7 @@ function valuesNearFlag(output: string, flag: string): string[] {
   return unique(values);
 }
 
-export function parseNativeCliArgumentSupport(output: string): NativeCliArgumentSupport {
+export function parseExternalAgentArgumentSupport(output: string): ExternalAgentArgumentSupport {
   const flags = unique([...output.matchAll(/(^|[\s,])(--[a-z0-9][a-z0-9-]*)/gi)].map((match) => match[2] ?? ''));
   return {
     flags,

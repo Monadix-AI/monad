@@ -1,6 +1,6 @@
-import type { NativeCliProviderAdapter } from '@monad/sdk-atom';
+import type { ExternalAgentProviderAdapter } from '@monad/sdk-atom';
 
-import { NativeCliError } from '@monad/sdk-atom';
+import { ExternalAgentError } from '@monad/sdk-atom';
 
 import { parseStructuredAuthState } from '../adapter-shared.ts';
 import { makeAppServerCliAdapter } from '../app-server-jsonrpc.ts';
@@ -24,7 +24,7 @@ const HERMES_SUPPORTED_MODELS = ['hermes-4'];
 // `managedRuntime` stays on `cli-oneshot` — proven end-to-end with a real LLM turn
 // (apps/monad/test/e2e/agent-adapters-real.local.test.ts) — rather than switching the managed-member
 // default to the newly-real app-server path untested in that role.
-const baseHermesNativeCliAdapter = makeAppServerCliAdapter({
+const baseHermesExternalAgentAdapter = makeAppServerCliAdapter({
   provider: 'hermes',
   productIcon: 'hermes',
   label: 'Hermes',
@@ -67,7 +67,7 @@ const baseHermesNativeCliAdapter = makeAppServerCliAdapter({
     query: (agent) => {
       const token = agent.env?.HERMES_DASHBOARD_SESSION_TOKEN;
       if (!token) {
-        throw new NativeCliError(
+        throw new ExternalAgentError(
           'provider_not_logged_in',
           'Hermes app-server requires agent.env.HERMES_DASHBOARD_SESSION_TOKEN to be configured'
         );
@@ -77,8 +77,8 @@ const baseHermesNativeCliAdapter = makeAppServerCliAdapter({
   }
 });
 
-export const hermesNativeCliAdapter: NativeCliProviderAdapter = {
-  ...baseHermesNativeCliAdapter,
+export const hermesExternalAgentAdapter: ExternalAgentProviderAdapter = {
+  ...baseHermesExternalAgentAdapter,
   historyPage: hermesHistoryPage,
   historyPageOutput: hermesHistoryPageOutput,
   observation: hermesObservationProjection,
@@ -93,7 +93,7 @@ export const hermesNativeCliAdapter: NativeCliProviderAdapter = {
   // delegate its approvals instead of silently staying full-auto.
   supportsApprovalResolution: (launchMode) => launchMode === 'app-server',
   detect(probes) {
-    const preset = baseHermesNativeCliAdapter.detect(probes);
+    const preset = baseHermesExternalAgentAdapter.detect(probes);
     return {
       ...preset,
       capabilities: {

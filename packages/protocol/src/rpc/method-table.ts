@@ -39,22 +39,22 @@ import {
   revokeApprovalRequestSchema
 } from '../approvals.ts';
 import { commandsListQuerySchema, commandsListResponseSchema } from '../command.ts';
-import { agentIdSchema, sessionIdSchema, transcriptTargetIdSchema } from '../ids.ts';
 import {
-  getNativeCliAuthSessionResponseSchema,
-  getNativeCliSessionResponseSchema,
-  listNativeCliSessionsResponseSchema,
-  nativeCliApprovalResolutionRequestSchema,
-  nativeCliAuthStatusResponseSchema,
-  nativeCliHistoryPageRequestSchema,
-  nativeCliHistoryPageResponseSchema,
-  nativeCliInputRequestSchema,
-  nativeCliResizeRequestSchema,
-  nativeCliUsageResponseSchema,
-  startNativeCliAgentRequestSchema,
-  startNativeCliAgentResponseSchema,
-  startNativeCliAuthResponseSchema
-} from '../native-cli-agent/index.ts';
+  externalAgentApprovalResolutionRequestSchema,
+  externalAgentAuthStatusResponseSchema,
+  externalAgentHistoryPageRequestSchema,
+  externalAgentHistoryPageResponseSchema,
+  externalAgentInputRequestSchema,
+  externalAgentResizeRequestSchema,
+  externalAgentUsageResponseSchema,
+  getExternalAgentAuthSessionResponseSchema,
+  getExternalAgentSessionResponseSchema,
+  listExternalAgentSessionsResponseSchema,
+  startExternalAgentAuthResponseSchema,
+  startExternalAgentRequestSchema,
+  startExternalAgentResponseSchema
+} from '../external-agent/index.ts';
+import { agentIdSchema, sessionIdSchema, transcriptTargetIdSchema } from '../ids.ts';
 import { setSkillsSettingsRequestSchema, skillsSettingsResponseSchema } from '../settings/skills-settings.ts';
 import {
   abortSessionResponseSchema,
@@ -148,10 +148,10 @@ const emptyResultSchema = z.object({});
 const idPath = { id: sessionIdSchema };
 const transcriptTargetPath = { id: transcriptTargetIdSchema };
 const agentPath = { id: agentIdSchema };
-const nativeCliSessionPath = { id: z.string().min(1) };
-const nativeCliSessionScopeQuery = z.object({ transcriptTargetId: transcriptTargetIdSchema });
-const nativeCliAuthScopeQuery = z.object({ controlToken: z.string().min(32) });
-const nativeCliAgentNamePath = { name: z.string().min(1) };
+const externalAgentSessionPath = { id: z.string().min(1) };
+const externalAgentSessionScopeQuery = z.object({ transcriptTargetId: transcriptTargetIdSchema });
+const externalAgentAuthScopeQuery = z.object({ controlToken: z.string().min(32) });
+const externalAgentNamePath = { name: z.string().min(1) };
 
 export const UNIVERSAL_METHODS = {
   // Intentionally unversioned — liveness probes need a stable URL across API version bumps.
@@ -316,108 +316,108 @@ export const UNIVERSAL_METHODS = {
     result: okResponseSchema
   },
 
-  'nativeCli.start': {
-    http: { verb: 'POST', template: '/v1/sessions/:id/native-cli-agents/start' },
+  'externalAgent.start': {
+    http: { verb: 'POST', template: '/v1/sessions/:id/external-agents/start' },
     path: idPath,
-    body: startNativeCliAgentRequestSchema,
-    result: startNativeCliAgentResponseSchema
+    body: startExternalAgentRequestSchema,
+    result: startExternalAgentResponseSchema
   },
-  'nativeCli.list': {
-    http: { verb: 'GET', template: '/v1/sessions/:id/native-cli-sessions' },
+  'externalAgent.list': {
+    http: { verb: 'GET', template: '/v1/sessions/:id/external-agent-sessions' },
     path: idPath,
-    result: listNativeCliSessionsResponseSchema
+    result: listExternalAgentSessionsResponseSchema
   },
-  'nativeCli.get': {
-    http: { verb: 'GET', template: '/v1/native-cli-sessions/:id' },
-    path: nativeCliSessionPath,
-    query: nativeCliSessionScopeQuery,
-    result: getNativeCliSessionResponseSchema
+  'externalAgent.get': {
+    http: { verb: 'GET', template: '/v1/external-agent-sessions/:id' },
+    path: externalAgentSessionPath,
+    query: externalAgentSessionScopeQuery,
+    result: getExternalAgentSessionResponseSchema
   },
-  'nativeCli.input': {
-    http: { verb: 'POST', template: '/v1/native-cli-sessions/:id/input' },
-    path: nativeCliSessionPath,
-    query: nativeCliSessionScopeQuery,
-    body: nativeCliInputRequestSchema,
+  'externalAgent.input': {
+    http: { verb: 'POST', template: '/v1/external-agent-sessions/:id/input' },
+    path: externalAgentSessionPath,
+    query: externalAgentSessionScopeQuery,
+    body: externalAgentInputRequestSchema,
     result: okResponseSchema
   },
-  'nativeCli.interrupt': {
-    http: { verb: 'POST', template: '/v1/native-cli-sessions/:id/interrupt' },
-    path: nativeCliSessionPath,
-    query: nativeCliSessionScopeQuery,
+  'externalAgent.interrupt': {
+    http: { verb: 'POST', template: '/v1/external-agent-sessions/:id/interrupt' },
+    path: externalAgentSessionPath,
+    query: externalAgentSessionScopeQuery,
     result: okResponseSchema
   },
-  'nativeCli.steer': {
-    http: { verb: 'POST', template: '/v1/native-cli-sessions/:id/steer' },
-    path: nativeCliSessionPath,
-    query: nativeCliSessionScopeQuery,
-    body: nativeCliInputRequestSchema,
+  'externalAgent.steer': {
+    http: { verb: 'POST', template: '/v1/external-agent-sessions/:id/steer' },
+    path: externalAgentSessionPath,
+    query: externalAgentSessionScopeQuery,
+    body: externalAgentInputRequestSchema,
     result: okResponseSchema
   },
-  'nativeCli.approval': {
-    http: { verb: 'POST', template: '/v1/native-cli-sessions/:id/approval' },
-    path: nativeCliSessionPath,
-    query: nativeCliSessionScopeQuery,
-    body: nativeCliApprovalResolutionRequestSchema,
+  'externalAgent.approval': {
+    http: { verb: 'POST', template: '/v1/external-agent-sessions/:id/approval' },
+    path: externalAgentSessionPath,
+    query: externalAgentSessionScopeQuery,
+    body: externalAgentApprovalResolutionRequestSchema,
     result: okResponseSchema
   },
-  'nativeCli.resize': {
-    http: { verb: 'POST', template: '/v1/native-cli-sessions/:id/resize' },
-    path: nativeCliSessionPath,
-    query: nativeCliSessionScopeQuery,
-    body: nativeCliResizeRequestSchema,
+  'externalAgent.resize': {
+    http: { verb: 'POST', template: '/v1/external-agent-sessions/:id/resize' },
+    path: externalAgentSessionPath,
+    query: externalAgentSessionScopeQuery,
+    body: externalAgentResizeRequestSchema,
     result: okResponseSchema
   },
-  'nativeCli.stop': {
-    http: { verb: 'POST', template: '/v1/native-cli-sessions/:id/stop' },
-    path: nativeCliSessionPath,
-    query: nativeCliSessionScopeQuery,
+  'externalAgent.stop': {
+    http: { verb: 'POST', template: '/v1/external-agent-sessions/:id/stop' },
+    path: externalAgentSessionPath,
+    query: externalAgentSessionScopeQuery,
     result: okResponseSchema
   },
-  'nativeCli.historyPage': {
-    http: { verb: 'GET', template: '/v1/native-cli-sessions/:id/history-page' },
-    path: nativeCliSessionPath,
-    query: nativeCliSessionScopeQuery.merge(nativeCliHistoryPageRequestSchema),
-    result: nativeCliHistoryPageResponseSchema
+  'externalAgent.historyPage': {
+    http: { verb: 'GET', template: '/v1/external-agent-sessions/:id/history-page' },
+    path: externalAgentSessionPath,
+    query: externalAgentSessionScopeQuery.merge(externalAgentHistoryPageRequestSchema),
+    result: externalAgentHistoryPageResponseSchema
   },
-  'nativeCli.auth.start': {
-    http: { verb: 'POST', template: '/v1/native-cli-agents/:name/auth/start' },
-    path: nativeCliAgentNamePath,
-    result: startNativeCliAuthResponseSchema
+  'externalAgent.auth.start': {
+    http: { verb: 'POST', template: '/v1/external-agents/:name/auth/start' },
+    path: externalAgentNamePath,
+    result: startExternalAgentAuthResponseSchema
   },
-  'nativeCli.auth.status': {
-    http: { verb: 'GET', template: '/v1/native-cli-agents/:name/auth/status' },
-    path: nativeCliAgentNamePath,
-    result: nativeCliAuthStatusResponseSchema
+  'externalAgent.auth.status': {
+    http: { verb: 'GET', template: '/v1/external-agents/:name/auth/status' },
+    path: externalAgentNamePath,
+    result: externalAgentAuthStatusResponseSchema
   },
-  'nativeCli.usage': {
-    http: { verb: 'GET', template: '/v1/native-cli-agents/:name/usage' },
-    path: nativeCliAgentNamePath,
-    result: nativeCliUsageResponseSchema
+  'externalAgent.usage': {
+    http: { verb: 'GET', template: '/v1/external-agents/:name/usage' },
+    path: externalAgentNamePath,
+    result: externalAgentUsageResponseSchema
   },
-  'nativeCli.auth.get': {
-    http: { verb: 'GET', template: '/v1/native-cli-auth-sessions/:id' },
-    path: nativeCliSessionPath,
-    query: nativeCliAuthScopeQuery,
-    result: getNativeCliAuthSessionResponseSchema
+  'externalAgent.auth.get': {
+    http: { verb: 'GET', template: '/v1/external-agent-auth-sessions/:id' },
+    path: externalAgentSessionPath,
+    query: externalAgentAuthScopeQuery,
+    result: getExternalAgentAuthSessionResponseSchema
   },
-  'nativeCli.auth.input': {
-    http: { verb: 'POST', template: '/v1/native-cli-auth-sessions/:id/input' },
-    path: nativeCliSessionPath,
-    query: nativeCliAuthScopeQuery,
-    body: nativeCliInputRequestSchema,
+  'externalAgent.auth.input': {
+    http: { verb: 'POST', template: '/v1/external-agent-auth-sessions/:id/input' },
+    path: externalAgentSessionPath,
+    query: externalAgentAuthScopeQuery,
+    body: externalAgentInputRequestSchema,
     result: okResponseSchema
   },
-  'nativeCli.auth.resize': {
-    http: { verb: 'POST', template: '/v1/native-cli-auth-sessions/:id/resize' },
-    path: nativeCliSessionPath,
-    query: nativeCliAuthScopeQuery,
-    body: nativeCliResizeRequestSchema,
+  'externalAgent.auth.resize': {
+    http: { verb: 'POST', template: '/v1/external-agent-auth-sessions/:id/resize' },
+    path: externalAgentSessionPath,
+    query: externalAgentAuthScopeQuery,
+    body: externalAgentResizeRequestSchema,
     result: okResponseSchema
   },
-  'nativeCli.auth.stop': {
-    http: { verb: 'POST', template: '/v1/native-cli-auth-sessions/:id/stop' },
-    path: nativeCliSessionPath,
-    query: nativeCliAuthScopeQuery,
+  'externalAgent.auth.stop': {
+    http: { verb: 'POST', template: '/v1/external-agent-auth-sessions/:id/stop' },
+    path: externalAgentSessionPath,
+    query: externalAgentAuthScopeQuery,
     result: okResponseSchema
   }
 

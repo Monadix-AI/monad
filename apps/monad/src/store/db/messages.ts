@@ -145,7 +145,7 @@ export function failOrphanedStreamingMessages(sqlite: Database, updatedAt: strin
          WHERE stream_status IN ('pending', 'streaming')
            AND role = 'assistant'
            AND text = ''
-           AND json_extract(data, '$.source') = 'managed-native-cli'`
+           AND json_extract(data, '$.source') = 'managed-external-agent'`
       )
       .run({ $at: updatedAt });
     sqlite
@@ -286,10 +286,10 @@ export function getMessage(sqlite: Database, transcriptTargetId: string, message
   } as MessageRow);
 }
 
-export function findManagedNativeCliStreamingMessage(
+export function findManagedExternalAgentStreamingMessage(
   sqlite: Database,
   transcriptTargetId: string,
-  nativeCliSessionId: string,
+  externalAgentSessionId: string,
   agentName: string
 ): string | null {
   const row = sqlite
@@ -299,23 +299,23 @@ export function findManagedNativeCliStreamingMessage(
          AND role = 'assistant'
          AND active = 1
          AND stream_status IN ('pending', 'streaming')
-         AND json_extract(data, '$.source') = 'managed-native-cli'
-         AND json_extract(data, '$.nativeCliSessionId') = $nativeCliSessionId
+         AND json_extract(data, '$.source') = 'managed-external-agent'
+         AND json_extract(data, '$.externalAgentSessionId') = $externalAgentSessionId
          AND json_extract(data, '$.agentName') = $agentName
        ORDER BY rowid DESC
        LIMIT 1`
     )
-    .get({ $target: transcriptTargetId, $nativeCliSessionId: nativeCliSessionId, $agentName: agentName }) as {
+    .get({ $target: transcriptTargetId, $externalAgentSessionId: externalAgentSessionId, $agentName: agentName }) as {
     id: string;
   } | null;
   return row?.id ?? null;
 }
 
-export function retireManagedNativeCliStreamingMessage(
+export function retireManagedExternalAgentStreamingMessage(
   sqlite: Database,
   transcriptTargetId: string,
   messageId: string,
-  nativeCliSessionId: string,
+  externalAgentSessionId: string,
   agentName: string,
   updatedAt = new Date().toISOString()
 ): boolean {
@@ -328,15 +328,15 @@ export function retireManagedNativeCliStreamingMessage(
          AND role = 'assistant'
          AND active = 1
          AND stream_status IN ('pending', 'streaming')
-         AND json_extract(data, '$.source') = 'managed-native-cli'
-         AND json_extract(data, '$.nativeCliSessionId') = $nativeCliSessionId
+         AND json_extract(data, '$.source') = 'managed-external-agent'
+         AND json_extract(data, '$.externalAgentSessionId') = $externalAgentSessionId
          AND json_extract(data, '$.agentName') = $agentName`
     )
     .run({
       $updatedAt: updatedAt,
       $id: messageId,
       $target: transcriptTargetId,
-      $nativeCliSessionId: nativeCliSessionId,
+      $externalAgentSessionId: externalAgentSessionId,
       $agentName: agentName
     });
   return result.changes === 1;

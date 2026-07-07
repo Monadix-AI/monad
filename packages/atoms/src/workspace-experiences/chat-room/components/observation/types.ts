@@ -1,7 +1,7 @@
 import type React from 'react';
-import type { NativeCliStreamView } from '../../../experience/types.ts';
+import type { ExternalAgentStreamView } from '../../../experience/types.ts';
 
-export type ObservationItem = NativeCliStreamView['items'][number];
+export type ObservationItem = ExternalAgentStreamView['items'][number];
 
 export type CommandToolView = {
   type: string;

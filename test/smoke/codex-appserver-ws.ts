@@ -5,26 +5,26 @@
 // provider session ref. Requires a local codex binary; exits 0 (skipped) when codex is absent.
 //   run: bun test/smoke/codex-appserver-ws.ts
 
-import type { NativeCliRuntimeHandle } from '../../apps/monad/src/services/native-cli/types.ts';
+import type { ExternalAgentRuntimeHandle } from '../../apps/monad/src/services/external-agent/types.ts';
 
-import { connectAppServerWs } from '../../apps/monad/src/services/native-cli/app-server-ws.ts';
+import { connectAppServerWs } from '../../apps/monad/src/services/external-agent/app-server-ws.ts';
 import {
-  buildNativeCliLaunch,
+  buildExternalAgentLaunch,
   registerAgentAdapterImpl,
-  resolveNativeCliLaunchCommand
-} from '../../apps/monad/src/services/native-cli/index.ts';
-import { codexNativeCliAdapter } from '../../packages/atoms/src/agent-adapters/codex/index.ts';
+  resolveExternalAgentLaunchCommand
+} from '../../apps/monad/src/services/external-agent/index.ts';
+import { codexExternalAgentAdapter } from '../../packages/atoms/src/agent-adapters/codex/index.ts';
 
 // The launch builder resolves adapters from the daemon's runtime registry; register codex here since
 // this smoke drives the pipeline outside a booted daemon.
-registerAgentAdapterImpl(codexNativeCliAdapter);
+registerAgentAdapterImpl(codexExternalAgentAdapter);
 
 function fail(message: string): never {
   console.error(`FAIL: ${message}`);
   process.exit(1);
 }
 
-const preset = codexNativeCliAdapter.detect();
+const preset = codexExternalAgentAdapter.detect();
 if (!preset.installed) {
   console.log('SKIP: codex not installed');
   process.exit(0);
@@ -40,9 +40,9 @@ const agent = {
   approvalOwnership: 'provider-owned' as const
 };
 
-const launch = resolveNativeCliLaunchCommand(
-  codexNativeCliAdapter,
-  buildNativeCliLaunch(agent, { workingPath: process.cwd(), launchMode: 'app-server', appServerTransport: 'ws' })
+const launch = resolveExternalAgentLaunchCommand(
+  codexExternalAgentAdapter,
+  buildExternalAgentLaunch(agent, { workingPath: process.cwd(), launchMode: 'app-server', appServerTransport: 'ws' })
 );
 
 if (!launch.argv.includes('--listen') || !launch.argv.some((a) => a.startsWith('ws://'))) {
@@ -60,7 +60,7 @@ const proc = Bun.spawn(launch.argv, {
 
 let requestSeq = 0;
 let sessionRef: string | undefined;
-const handle: NativeCliRuntimeHandle = {
+const handle: ExternalAgentRuntimeHandle = {
   launchMode: 'app-server',
   providerSessionRef: null,
   pendingRequests: new Map(),
@@ -73,7 +73,7 @@ const gotRef = new Promise<void>((resolve) => {
     const connection = await connectAppServerWs({
       stderr: proc.stderr,
       onMessage: (text) => {
-        for (const event of codexNativeCliAdapter.parseOutput(`${text}\n`, handle)) {
+        for (const event of codexExternalAgentAdapter.parseOutput(`${text}\n`, handle)) {
           if (event.type === 'session_ref' && typeof event.payload.providerSessionRef === 'string') {
             sessionRef = event.payload.providerSessionRef;
             handle.providerSessionRef = sessionRef;
@@ -85,7 +85,7 @@ const gotRef = new Promise<void>((resolve) => {
       timeoutMs: 10_000
     });
     handle.appServer = connection;
-    codexNativeCliAdapter.initialize?.(handle, { workingPath: process.cwd() });
+    codexExternalAgentAdapter.initialize?.(handle, { workingPath: process.cwd() });
   })().catch((error) => fail(`ws connect failed: ${String(error)}`));
 });
 

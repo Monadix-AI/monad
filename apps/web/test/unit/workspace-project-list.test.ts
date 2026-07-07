@@ -1,4 +1,4 @@
-import type { NativeCliSessionView, WorkplaceProject } from '@monad/protocol';
+import type { ExternalAgentSessionView, WorkplaceProject } from '@monad/protocol';
 
 import { expect, test } from 'bun:test';
 
@@ -24,11 +24,11 @@ test('workspace project list keeps duplicate project names as separate projects'
   ]);
 });
 
-const nativeCliSession = (
+const externalAgentSession = (
   id: string,
   transcriptTargetId: string,
-  overrides: Partial<NativeCliSessionView> = {}
-): NativeCliSessionView =>
+  overrides: Partial<ExternalAgentSessionView> = {}
+): ExternalAgentSessionView =>
   ({
     id,
     transcriptTargetId,
@@ -51,13 +51,13 @@ const nativeCliSession = (
     updatedAt: '2026-07-02T00:00:00.000Z',
     exitedAt: null,
     ...overrides
-  }) as NativeCliSessionView;
+  }) as ExternalAgentSessionView;
 
 test('workspace project list summarizes live runtime and unread native cli messages', () => {
   expect(
     buildWorkspaceProjects([project('prj_active', 'active')], {
-      liveNativeCliSessions: [
-        nativeCliSession('ncli_one', 'prj_active', {
+      liveExternalAgentSessions: [
+        externalAgentSession('exa_one', 'prj_active', {
           lastDeliveredSeq: 6,
           lastVisibleSeq: 4,
           pendingApprovalCount: 1
@@ -79,8 +79,8 @@ test('workspace project list summarizes live runtime and unread native cli messa
 test('workspace project list keeps unread messages from stopped native cli sessions without showing runtime active', () => {
   expect(
     buildWorkspaceProjects([project('prj_stopped', 'stopped')], {
-      nativeCliSessions: [
-        nativeCliSession('ncli_stopped', 'prj_stopped', {
+      externalAgentSessions: [
+        externalAgentSession('exa_stopped', 'prj_stopped', {
           lastDeliveredSeq: 8,
           lastVisibleSeq: 5,
           state: 'stopped'

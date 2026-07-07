@@ -1,4 +1,4 @@
-import type { NativeCliProvider, NativeCliSettingsImportItem } from '@monad/protocol';
+import type { ExternalAgentProvider, ExternalAgentSettingsImportItem } from '@monad/protocol';
 
 import { previewItem } from './settings-import-items.ts';
 import { asString, asStringArray, isRecord, recordAt } from './settings-import-parse.ts';
@@ -64,10 +64,10 @@ function mcpPayload(name: string, raw: unknown): { summary?: string; payload: un
 }
 
 export function addMcpItems(
-  items: NativeCliSettingsImportItem[],
+  items: ExternalAgentSettingsImportItem[],
   sourcePath: string,
   data: Record<string, unknown>,
-  provider: NativeCliProvider
+  provider: ExternalAgentProvider
 ): void {
   const servers =
     recordAt(data, ['mcp_servers']) ?? recordAt(data, ['mcpServers']) ?? recordAt(data, ['mcp', 'servers']) ?? {};

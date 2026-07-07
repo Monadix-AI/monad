@@ -1,4 +1,4 @@
-import type { NativeCliOutputEvent, NativeCliRuntimeHandle } from '@monad/sdk-atom';
+import type { ExternalAgentOutputEvent, ExternalAgentRuntimeHandle } from '@monad/sdk-atom';
 import type {
   CodexAppServerNotification,
   CodexAppServerResponseItem,
@@ -56,7 +56,7 @@ function textFromCodexContent(content: unknown): string | undefined {
   return text || undefined;
 }
 
-function parseCodexResponseItem(item: CodexResponseItemJson): NativeCliOutputEvent[] {
+function parseCodexResponseItem(item: CodexResponseItemJson): ExternalAgentOutputEvent[] {
   if (item.type === 'message' && item.role === 'assistant') {
     const text = textFromCodexContent(item.content);
     return text ? [{ type: 'agent_message', payload: { text } }] : [];
@@ -100,7 +100,7 @@ function parseCodexResponseItem(item: CodexResponseItemJson): NativeCliOutputEve
 type CodexNotificationHandler = (
   record: CodexJsonRpcNotification,
   params: Record<string, unknown>
-) => NativeCliOutputEvent[];
+) => ExternalAgentOutputEvent[];
 
 const CODEX_APPROVAL_REQUEST_HANDLERS: Record<string, CodexNotificationHandler> = {
   'item/commandExecution/requestApproval': (record, p) => [
@@ -221,17 +221,17 @@ const CODEX_SERVER_NOTIFICATION_HANDLERS: Record<string, CodexNotificationHandle
 function dispatchCodexNotification(
   handlers: Record<string, CodexNotificationHandler>,
   record: CodexJsonRpcNotification
-): NativeCliOutputEvent[] {
+): ExternalAgentOutputEvent[] {
   const params = recordValue(record.params);
   if (!params) return [];
   return handlers[record.method]?.(record, params) ?? [];
 }
 
-function parseCodexApprovalRequest(record: CodexJsonRpcNotification): NativeCliOutputEvent[] {
+function parseCodexApprovalRequest(record: CodexJsonRpcNotification): ExternalAgentOutputEvent[] {
   return dispatchCodexNotification(CODEX_APPROVAL_REQUEST_HANDLERS, record);
 }
 
-function parseCodexServerNotification(record: CodexJsonRpcNotification): NativeCliOutputEvent[] {
+function parseCodexServerNotification(record: CodexJsonRpcNotification): ExternalAgentOutputEvent[] {
   return dispatchCodexNotification(CODEX_SERVER_NOTIFICATION_HANDLERS, record);
 }
 
@@ -269,7 +269,7 @@ function codexErrorInfoKind(info: unknown): string | undefined {
 // Turn-level errors arrive as an `error` notification carrying a `TurnError`. Triage the codex error
 // code: unauthorized → reconnect; everything else → a provider_error tagged with the code so the UI
 // can distinguish context-overflow / usage-limit / transient stream failures from a generic error.
-function codexTurnErrorEvents(turnError: Record<string, unknown>): NativeCliOutputEvent[] {
+function codexTurnErrorEvents(turnError: Record<string, unknown>): ExternalAgentOutputEvent[] {
   const kind = codexErrorInfoKind(turnError.codexErrorInfo);
   const message =
     typeof turnError.message === 'string' && turnError.message.length > 0
@@ -290,8 +290,8 @@ const CODEX_MAX_TURN_RECOVERIES = 1;
 // codex retries transient failures itself (`willRetry`), so those are suppressed rather than shown.
 function handleCodexTurnError(
   record: CodexJsonRpcNotification,
-  handle?: NativeCliRuntimeHandle
-): NativeCliOutputEvent[] | undefined {
+  handle?: ExternalAgentRuntimeHandle
+): ExternalAgentOutputEvent[] | undefined {
   const params = recordValue(record.params);
   const turnError = recordValue(params?.error);
   if (!turnError) return undefined;
@@ -327,7 +327,7 @@ function handleCodexTurnError(
   return codexTurnErrorEvents(turnError);
 }
 
-function codexHistoryPageEvent(id: unknown, r: Record<string, unknown>): NativeCliOutputEvent[] {
+function codexHistoryPageEvent(id: unknown, r: Record<string, unknown>): ExternalAgentOutputEvent[] {
   return [
     {
       type: 'history_page',
@@ -341,7 +341,7 @@ function codexHistoryPageEvent(id: unknown, r: Record<string, unknown>): NativeC
   ];
 }
 
-function codexThreadRefEvent(id: unknown, r: Record<string, unknown>): NativeCliOutputEvent[] {
+function codexThreadRefEvent(id: unknown, r: Record<string, unknown>): ExternalAgentOutputEvent[] {
   const thread = recordValue(r.thread);
   const threadId = thread?.id;
   if (typeof threadId !== 'string') return [];
@@ -354,8 +354,8 @@ export function jsonRpcIdKey(id: unknown): string | number | undefined {
 
 function parseCodexClientResponse(
   record: CodexJsonRpcResponse,
-  handle?: NativeCliRuntimeHandle
-): NativeCliOutputEvent[] {
+  handle?: ExternalAgentRuntimeHandle
+): ExternalAgentOutputEvent[] {
   const idKey = jsonRpcIdKey(record.id);
   const kind = idKey !== undefined ? handle?.pendingRequests?.get(idKey) : undefined;
   if (idKey !== undefined && kind !== undefined) handle?.pendingRequests?.delete(idKey);
@@ -412,8 +412,8 @@ function parseCodexClientResponse(
   return codexThreadRefEvent(record.id, result);
 }
 
-export function parseCodexSessionJsonl(chunk: string, handle?: NativeCliRuntimeHandle): NativeCliOutputEvent[] {
-  const events: NativeCliOutputEvent[] = [];
+export function parseCodexSessionJsonl(chunk: string, handle?: ExternalAgentRuntimeHandle): ExternalAgentOutputEvent[] {
+  const events: ExternalAgentOutputEvent[] = [];
   for (const rawLine of chunk.split(/\r?\n/)) {
     const line = rawLine.trim();
     if (!line.startsWith('{')) continue;

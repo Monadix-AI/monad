@@ -123,11 +123,11 @@ export function deleteSession(sqlite: Database, id: string): boolean {
     sqlite.query('DELETE FROM native_agent_direct_messages WHERE project_id = ?').run(sid);
     sqlite
       .query(
-        `DELETE FROM native_cli_inbox_items
-         WHERE native_cli_session_id IN (SELECT id FROM native_cli_sessions WHERE transcript_target_id = ?)`
+        `DELETE FROM external_agent_inbox_items
+         WHERE external_agent_session_id IN (SELECT id FROM external_agent_sessions WHERE transcript_target_id = ?)`
       )
       .run(sid);
-    sqlite.query('DELETE FROM native_cli_sessions WHERE transcript_target_id = ?').run(sid);
+    sqlite.query('DELETE FROM external_agent_sessions WHERE transcript_target_id = ?').run(sid);
     return sqlite.query('DELETE FROM sessions WHERE id = ?').run(sid).changes;
   });
   return tx(id) > 0;
@@ -202,11 +202,11 @@ export function deleteWorkplaceProject(sqlite: Database, id: string): boolean {
     sqlite.query('DELETE FROM native_agent_direct_messages WHERE project_id = ?').run(projectId);
     sqlite
       .query(
-        `DELETE FROM native_cli_inbox_items
-         WHERE native_cli_session_id IN (SELECT id FROM native_cli_sessions WHERE transcript_target_id = ?)`
+        `DELETE FROM external_agent_inbox_items
+         WHERE external_agent_session_id IN (SELECT id FROM external_agent_sessions WHERE transcript_target_id = ?)`
       )
       .run(projectId);
-    sqlite.query('DELETE FROM native_cli_sessions WHERE transcript_target_id = ?').run(projectId);
+    sqlite.query('DELETE FROM external_agent_sessions WHERE transcript_target_id = ?').run(projectId);
     return sqlite.query('DELETE FROM workplace_projects WHERE id = ?').run(projectId).changes;
   });
   return tx(id) > 0;

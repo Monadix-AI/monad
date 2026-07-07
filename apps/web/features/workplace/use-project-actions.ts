@@ -1,6 +1,6 @@
 import type {
   AvatarStyle,
-  NativeCliAppServerTransport,
+  ExternalAgentAppServerTransport,
   ProjectId,
   SendMessageAttachment,
   WorkplaceProject,
@@ -9,27 +9,27 @@ import type {
   WorkplaceProjectMemberView
 } from '@monad/protocol';
 import type { useAcpAgentSettings } from '@/hooks/use-acp-agent-settings';
-import type { useNativeCliAgentSettings } from '@/hooks/use-native-cli-agent-settings';
+import type { useExternalAgentSettings } from '@/hooks/use-external-agent-settings';
 
 import {
   useAbortSessionMutation,
-  useApproveNativeCliSessionMutation,
+  useApproveExternalAgentSessionMutation,
   useApproveToolMutation,
   useClarifyRespondMutation,
   useDeleteWorkplaceProjectMutation,
-  useInputNativeCliSessionMutation,
+  useInputExternalAgentSessionMutation,
   useSendProjectMessageMutation,
-  useStopNativeCliSessionMutation,
+  useStopExternalAgentSessionMutation,
   useUpdateWorkplaceProjectMutation
 } from '@monad/client-rtk';
 import {
   defaultWorkplaceProjectMemberSettings,
   entityAvatarWriteUrl,
-  nativeCliProductDisplayName,
-  newNativeCliInstanceId,
-  renameNativeCliProjectMemberDisplayName,
-  safeNativeCliDisplayName,
-  uniqueNativeCliDisplayName,
+  externalAgentProductDisplayName,
+  newExternalAgentInstanceId,
+  renameExternalAgentProjectMemberDisplayName,
+  safeExternalAgentDisplayName,
+  uniqueExternalAgentDisplayName,
   workplaceProjectMemberAvatarSeeds,
   workplaceProjectMemberId,
   workplaceProjectMembersExtKey
@@ -43,7 +43,7 @@ export type ApprovalDecision = 'approve' | 'reject';
 type ProjectApprovalActionView = {
   id: string;
   approvalOwnership?: 'provider-owned';
-  nativeCliSessionId?: string;
+  externalAgentSessionId?: string;
 };
 
 type AddProjectMemberOptions = {
@@ -52,7 +52,7 @@ type AddProjectMemberOptions = {
   modelId?: string;
   reasoningEffort?: string;
   speed?: 'standard' | 'fast';
-  appServerTransport?: NativeCliAppServerTransport;
+  appServerTransport?: ExternalAgentAppServerTransport;
   customPrompt?: string;
 };
 
@@ -70,7 +70,7 @@ export function useProjectActions(args: {
   currentProject: WorkplaceProject | null;
   projectMembers: WorkplaceProjectMemberView[];
   acpAgents: ReturnType<typeof useAcpAgentSettings>['agents'];
-  nativeCliAgents: ReturnType<typeof useNativeCliAgentSettings>['agents'];
+  externalAgents: ReturnType<typeof useExternalAgentSettings>['agents'];
   avatarStyle?: AvatarStyle;
   setResolvedProjectId: (id: ProjectId | null) => void;
 }) {
@@ -80,7 +80,7 @@ export function useProjectActions(args: {
     currentProject,
     projectMembers,
     acpAgents,
-    nativeCliAgents,
+    externalAgents,
     avatarStyle,
     setResolvedProjectId
   } = args;
@@ -88,12 +88,12 @@ export function useProjectActions(args: {
   const [sendProjectMessage] = useSendProjectMessageMutation();
   const [approveTool] = useApproveToolMutation();
   const [clarifyRespond] = useClarifyRespondMutation();
-  const [approveNativeCliSession] = useApproveNativeCliSessionMutation();
+  const [approveExternalAgentSession] = useApproveExternalAgentSessionMutation();
   const [abortSession] = useAbortSessionMutation();
   const [updateWorkplaceProject] = useUpdateWorkplaceProjectMutation();
   const [deleteWorkplaceProject] = useDeleteWorkplaceProjectMutation();
-  const [inputNativeCliSession] = useInputNativeCliSessionMutation();
-  const [stopNativeCliSession] = useStopNativeCliSessionMutation();
+  const [inputExternalAgentSession] = useInputExternalAgentSessionMutation();
+  const [stopExternalAgentSession] = useStopExternalAgentSessionMutation();
 
   const sendDirective = useCallback(
     async (directive: string | { attachments?: SendMessageAttachment[]; text: string }) => {
@@ -111,17 +111,17 @@ export function useProjectActions(args: {
   const resolveApproval = useCallback(
     (requestId: string, decision: ApprovalDecision) => {
       const approval = approvals.find((candidate) => candidate.id === requestId);
-      if (activeProjectId && approval?.approvalOwnership === 'provider-owned' && approval.nativeCliSessionId) {
+      if (activeProjectId && approval?.approvalOwnership === 'provider-owned' && approval.externalAgentSessionId) {
         void traceProjectDebugOperation(
           {
             layer: 'web',
-            label: 'native-cli.approval.resolve',
-            sessionId: approval.nativeCliSessionId,
+            label: 'external-agent.approval.resolve',
+            sessionId: approval.externalAgentSessionId,
             data: { requestId, decision }
           },
           () =>
-            approveNativeCliSession({
-              id: approval.nativeCliSessionId as string,
+            approveExternalAgentSession({
+              id: approval.externalAgentSessionId as string,
               transcriptTargetId: activeProjectId,
               requestId,
               allow: decision === 'approve',
@@ -146,7 +146,7 @@ export function useProjectActions(args: {
           }).unwrap()
       );
     },
-    [activeProjectId, approveNativeCliSession, approveTool, approvals]
+    [activeProjectId, approveExternalAgentSession, approveTool, approvals]
   );
 
   const answerQuestion = useCallback(
@@ -216,10 +216,10 @@ export function useProjectActions(args: {
 
   const addProjectMember = useCallback(
     async (type: WorkplaceProjectMemberType, name: string, options: AddProjectMemberOptions = {}) => {
-      if (type !== 'native-cli' && projectMembers.some((member) => member.type === type && member.name === name))
+      if (type !== 'external-agent' && projectMembers.some((member) => member.type === type && member.name === name))
         return;
       const acpAgent = type === 'acp' ? acpAgents.find((agent) => agent.name === name) : undefined;
-      const nativeAgent = type === 'native-cli' ? nativeCliAgents.find((agent) => agent.name === name) : undefined;
+      const nativeAgent = type === 'external-agent' ? externalAgents.find((agent) => agent.name === name) : undefined;
       const settings = {
         ...defaultWorkplaceProjectMemberSettings(type, type === 'acp' ? acpAgent : nativeAgent),
         ...(options.modelId ? { modelId: options.modelId } : {}),
@@ -228,12 +228,16 @@ export function useProjectActions(args: {
         ...(options.appServerTransport ? { appServerTransport: options.appServerTransport } : {}),
         ...(options.customPrompt ? { customPrompt: options.customPrompt } : {})
       };
-      if (type === 'native-cli') {
-        const defaultDisplayName = nativeCliProductDisplayName(nativeAgent?.productIcon, nativeAgent?.provider, name);
-        const displayName = safeNativeCliDisplayName(
-          uniqueNativeCliDisplayName(options.displayName?.trim() || defaultDisplayName, projectMembers)
+      if (type === 'external-agent') {
+        const defaultDisplayName = externalAgentProductDisplayName(
+          nativeAgent?.productIcon,
+          nativeAgent?.provider,
+          name
         );
-        const instanceId = newNativeCliInstanceId(name);
+        const displayName = safeExternalAgentDisplayName(
+          uniqueExternalAgentDisplayName(options.displayName?.trim() || defaultDisplayName, projectMembers)
+        );
+        const instanceId = newExternalAgentInstanceId(name);
         await updateProjectMembers([
           ...projectMembers,
           {
@@ -254,7 +258,7 @@ export function useProjectActions(args: {
         { id: workplaceProjectMemberId(type, name), type, name, settings }
       ]);
     },
-    [acpAgents, nativeCliAgents, projectMembers, updateProjectMembers]
+    [acpAgents, externalAgents, projectMembers, updateProjectMembers]
   );
 
   const removeProjectMember = useCallback(
@@ -280,31 +284,32 @@ export function useProjectActions(args: {
       await updateProjectMembers(
         projectMembers.map((member) => {
           if (member.id !== id) return member;
-          return renameNativeCliProjectMemberDisplayName(member, patch.displayName);
+          return renameExternalAgentProjectMemberDisplayName(member, patch.displayName);
         })
       );
     },
     [projectMembers, updateProjectMembers]
   );
 
-  const sendNativeCliInput = useCallback(
+  const sendExternalAgentInput = useCallback(
     async (id: string, input: string) => {
       if (!activeProjectId) return;
       await traceProjectDebugOperation(
-        { layer: 'web', label: 'native-cli.input', sessionId: id, data: { id, input } },
-        () => inputNativeCliSession({ id, transcriptTargetId: activeProjectId, input }).unwrap()
+        { layer: 'web', label: 'external-agent.input', sessionId: id, data: { id, input } },
+        () => inputExternalAgentSession({ id, transcriptTargetId: activeProjectId, input }).unwrap()
       );
     },
-    [activeProjectId, inputNativeCliSession]
+    [activeProjectId, inputExternalAgentSession]
   );
-  const stopNativeCli = useCallback(
+  const stopExternalAgent = useCallback(
     async (id: string) => {
       if (!activeProjectId) return;
-      await traceProjectDebugOperation({ layer: 'web', label: 'native-cli.stop', sessionId: id, data: { id } }, () =>
-        stopNativeCliSession({ id, transcriptTargetId: activeProjectId }).unwrap()
+      await traceProjectDebugOperation(
+        { layer: 'web', label: 'external-agent.stop', sessionId: id, data: { id } },
+        () => stopExternalAgentSession({ id, transcriptTargetId: activeProjectId }).unwrap()
       );
     },
-    [activeProjectId, stopNativeCliSession]
+    [activeProjectId, stopExternalAgentSession]
   );
 
   const setWorkdir = useCallback(
@@ -326,8 +331,8 @@ export function useProjectActions(args: {
     removeProjectMember,
     updateProjectMemberSettings,
     updateProjectMemberIdentity,
-    sendNativeCliInput,
-    stopNativeCli,
+    sendExternalAgentInput,
+    stopExternalAgent,
     setWorkdir
   };
 }

@@ -38,7 +38,7 @@ import { wecomChannelAtom } from './channels/wecom.ts';
 import { whatsappChannelAtom } from './channels/whatsapp.ts';
 import { BUILTIN_COMMANDS } from './commands/builtins.ts';
 import { builtinConnectors } from './connectors/registry.ts';
-import { configureBuiltinNativeCliObservationAdapters } from './native-cli-observation-setup.ts';
+import { configureBuiltinExternalAgentObservationAdapters } from './external-agent-observation-setup.ts';
 import { builtinModelProviders } from './providers/registry.ts';
 import { bwrapLauncher } from './sandbox/bwrap.ts';
 import { configureDockerImage, detectDockerRuntime, dockerLauncher, dockerRuntimeAvailable } from './sandbox/docker.ts';
@@ -64,7 +64,7 @@ export {
   sweepOrphanAppContainerProfiles
 };
 
-configureBuiltinNativeCliObservationAdapters();
+configureBuiltinExternalAgentObservationAdapters();
 
 export default defineAtomPack({
   manifest: {

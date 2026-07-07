@@ -10,9 +10,9 @@ test('mentionSegments extracts strict agent mention tokens', () => {
   ]);
 });
 
-test('mentionSegments extracts leading native CLI mentions before message text', () => {
-  expect(mentionSegments('@[name="codex" id="native-cli:codex"] inspect repo')).toEqual([
-    { kind: 'mention', name: 'codex', id: 'native-cli:codex' },
+test('mentionSegments extracts leading external agent mentions before message text', () => {
+  expect(mentionSegments('@[name="codex" id="external-agent:codex"] inspect repo')).toEqual([
+    { kind: 'mention', name: 'codex', id: 'external-agent:codex' },
     { kind: 'text', text: ' inspect repo' }
   ]);
 });

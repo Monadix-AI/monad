@@ -3,11 +3,11 @@ import type { Participant } from '../../src/workspace-experiences/experience/typ
 import { expect, test } from 'bun:test';
 
 import {
-  nativeCliProductDisplayName,
+  externalAgentProductDisplayName,
   productIcon
 } from '../../src/workspace-experiences/experience/project-members.ts';
 
-test('productIcon resolves every branded native-CLI product id including openclaw and hermes', () => {
+test('productIcon resolves every branded external agent product id including openclaw and hermes', () => {
   const ids: Participant['icon'][] = ['codex', 'claude-code', 'gemini', 'gemini-cli', 'qwen', 'openclaw', 'hermes'];
   for (const id of ids) {
     expect(productIcon(id)).toBe(id);
@@ -16,9 +16,9 @@ test('productIcon resolves every branded native-CLI product id including opencla
 
 test('productIcon rejects unknown or non-string values', () => {});
 
-test('nativeCliProductDisplayName brands openclaw and hermes instead of falling back', () => {
-  expect(nativeCliProductDisplayName('openclaw', 'openclaw', 'fallback')).toBe('OpenClaw');
-  expect(nativeCliProductDisplayName('hermes', 'hermes', 'fallback')).toBe('Hermes');
-  expect(nativeCliProductDisplayName('codex', 'codex', 'fallback')).toBe('OpenAI Codex');
-  expect(nativeCliProductDisplayName(undefined, 'unknown', 'Custom CLI')).toBe('Custom CLI');
+test('externalAgentProductDisplayName brands openclaw and hermes instead of falling back', () => {
+  expect(externalAgentProductDisplayName('openclaw', 'openclaw', 'fallback')).toBe('OpenClaw');
+  expect(externalAgentProductDisplayName('hermes', 'hermes', 'fallback')).toBe('Hermes');
+  expect(externalAgentProductDisplayName('codex', 'codex', 'fallback')).toBe('OpenAI Codex');
+  expect(externalAgentProductDisplayName(undefined, 'unknown', 'Custom CLI')).toBe('Custom CLI');
 });

@@ -4,8 +4,8 @@ import type {
   ActivityRow,
   AgentTask,
   ApprovalView,
+  ExternalAgentStreamView,
   Message,
-  NativeCliStreamView,
   Participant,
   ProjectMentionTarget,
   QuestionView,
@@ -28,9 +28,9 @@ import {
 } from '../../experience/project-projection.ts';
 import { activityRowsFromTools } from '../../shared/utils/activity.ts';
 import {
-  buildNativeCliStreams,
+  buildExternalAgentStreams,
   buildProjectMessages,
-  isManagedNativeCliReasoningOnlyMessage,
+  isManagedExternalAgentReasoningOnlyMessage,
   messageToView
 } from './projection.ts';
 
@@ -44,7 +44,7 @@ export interface ChatRoomCanvas {
   railAgents: Participant[];
   activity: ActivityRow[];
   busy: boolean;
-  nativeCliStreams: NativeCliStreamView[];
+  externalAgentStreams: ExternalAgentStreamView[];
   tasks: AgentTask[];
   typing: TypingIndicator | null;
   contextUsage?: ContextUsagePayload;
@@ -54,77 +54,77 @@ export interface ChatRoomCanvas {
   mentionTargets: ProjectMentionTarget[];
   loadOlder: () => void;
   openAgentCard?: (id: string) => void;
-  followNativeCliSession?: (id: string, deliveryId?: NativeAgentDeliveryId) => void;
+  followExternalAgentSession?: (id: string, deliveryId?: NativeAgentDeliveryId) => void;
   sendDirective: import('./composer.ts').ProjectComposerSurface['sendDirective'];
   resolveApproval: (requestId: string, decision: 'approve' | 'reject') => void;
   answerQuestion: (requestId: string, answer: string) => void;
   pauseAll: () => void;
-  sendNativeCliInput: (id: string, input: string) => Promise<void>;
-  stopNativeCli: (id: string) => Promise<void>;
+  sendExternalAgentInput: (id: string, input: string) => Promise<void>;
+  stopExternalAgent: (id: string) => Promise<void>;
 }
 
 export type ChatRoomCanvasSource = ProjectExperienceCanvasSource;
 
 export function toChatRoomCanvas(
   c: ChatRoomCanvasSource,
-  actions?: Pick<ChatRoomCanvas, 'followNativeCliSession' | 'openAgentCard'>
+  actions?: Pick<ChatRoomCanvas, 'followExternalAgentSession' | 'openAgentCard'>
 ): ChatRoomCanvas {
   const source = c.source;
   const liveItems = source.liveItems;
   const liveTools = source.liveTools ?? toolItems(liveItems);
   const busy = projectCanvasIsBusy(liveItems, liveTools);
-  const nativeCliIcons = new Map(source.nativeCliIcons ?? []);
-  for (const session of source.nativeCliSessions)
-    nativeCliIcons.set(session.agentName, productIcon(session.productIcon));
+  const externalAgentIcons = new Map(source.externalAgentIcons ?? []);
+  for (const session of source.externalAgentSessions)
+    externalAgentIcons.set(session.agentName, productIcon(session.productIcon));
   const persistedMessages = source.transcriptItems
     .filter((item) => item.kind === 'message')
-    .filter((item) => !isManagedNativeCliReasoningOnlyMessage(item))
+    .filter((item) => !isManagedExternalAgentReasoningOnlyMessage(item))
     .map((item) =>
       messageToView(
         item,
         fmtTime(item.seq),
-        source.nativeCliAvatarSeeds,
-        source.nativeCliTags,
-        source.nativeCliDisplayNames,
-        nativeCliIcons,
+        source.externalAgentAvatarSeeds,
+        source.externalAgentTags,
+        source.externalAgentDisplayNames,
+        externalAgentIcons,
         source.human,
         source.avatarStyle
       )
     );
   const messages = buildProjectMessages({
     persistedMessages,
-    nativeCliSessions: source.nativeCliSessions,
+    externalAgentSessions: source.externalAgentSessions,
     liveItems,
     liveTools,
-    nativeCliAvatarSeeds: source.nativeCliAvatarSeeds,
-    nativeCliTags: source.nativeCliTags,
-    nativeCliDisplayNames: source.nativeCliDisplayNames,
-    nativeCliIcons,
+    externalAgentAvatarSeeds: source.externalAgentAvatarSeeds,
+    externalAgentTags: source.externalAgentTags,
+    externalAgentDisplayNames: source.externalAgentDisplayNames,
+    externalAgentIcons,
     human: source.human,
     avatarStyle: source.avatarStyle,
     showDeveloperOnlyMessages: source.showDeveloperOnlyMessages
   });
   const activity = activityRowsFromTools(liveTools);
   const railAgents = projectMemberParticipants(c.participants);
-  const nativeCliTemplateAgentNames = new Map(
+  const externalAgentTemplateAgentNames = new Map(
     (c.projectMembers ?? [])
-      .filter((member) => member.type === 'native-cli')
+      .filter((member) => member.type === 'external-agent')
       .map((member) => [workplaceProjectMemberStableId(member), member.templateName ?? member.name])
   );
-  const nativeCliAgentAliases = new Map<string, string[]>();
+  const externalAgentAliases = new Map<string, string[]>();
   for (const member of c.projectMembers ?? []) {
-    if (member.type !== 'native-cli') continue;
+    if (member.type !== 'external-agent') continue;
     const stableId = workplaceProjectMemberStableId(member);
     const aliases = [stableId, member.name, member.displayName, member.templateName].filter((value): value is string =>
       Boolean(value)
     );
-    for (const alias of aliases) nativeCliAgentAliases.set(alias, aliases);
+    for (const alias of aliases) externalAgentAliases.set(alias, aliases);
   }
-  const nativeCliStreams = buildNativeCliStreams(
-    source.nativeCliSessions,
+  const externalAgentStreams = buildExternalAgentStreams(
+    source.externalAgentSessions,
     activity,
-    nativeCliTemplateAgentNames,
-    nativeCliAgentAliases
+    externalAgentTemplateAgentNames,
+    externalAgentAliases
   );
   const tasks: AgentTask[] = liveTools.slice(-6).map((s) => ({
     id: s.id,
@@ -142,7 +142,7 @@ export function toChatRoomCanvas(
       item.status === 'streaming' &&
       item.role === 'assistant' &&
       (item.agentName === undefined || item.agentName === 'monad') &&
-      item.source !== 'managed-native-cli'
+      item.source !== 'managed-external-agent'
   );
   const runningDelegation = liveTools?.find((s) => {
     if (s.status !== 'running') return false;
@@ -158,8 +158,8 @@ export function toChatRoomCanvas(
       ? {
           av: avatarForAgent(typingAgentName),
           icon: iconForAgent(typingAgentName),
-          avatarUrl: source.nativeCliAvatarSeeds.has(typingAgentName)
-            ? entityAvatarUrl(source.nativeCliAvatarSeeds.get(typingAgentName) as string, source.avatarStyle)
+          avatarUrl: source.externalAgentAvatarSeeds.has(typingAgentName)
+            ? entityAvatarUrl(source.externalAgentAvatarSeeds.get(typingAgentName) as string, source.avatarStyle)
             : undefined,
           name: typingAgentName,
           detail: 'is working…'
@@ -175,7 +175,7 @@ export function toChatRoomCanvas(
     railAgents,
     activity,
     busy,
-    nativeCliStreams,
+    externalAgentStreams,
     tasks,
     typing,
     contextUsage: contextUsageFromItems(liveItems),
@@ -184,14 +184,14 @@ export function toChatRoomCanvas(
     questions: projectQuestionViews(liveItems),
     mentionTargets: railAgents.map((agent) => ({ id: agent.id, name: agent.name })),
     loadOlder: c.loadOlder,
-    followNativeCliSession: actions?.followNativeCliSession,
+    followExternalAgentSession: actions?.followExternalAgentSession,
     openAgentCard: actions?.openAgentCard,
     sendDirective: c.sendDirective,
     resolveApproval: c.resolveApproval,
     answerQuestion: c.answerQuestion,
     pauseAll: c.pauseAll,
-    sendNativeCliInput: c.sendNativeCliInput,
-    stopNativeCli: c.stopNativeCli
+    sendExternalAgentInput: c.sendExternalAgentInput,
+    stopExternalAgent: c.stopExternalAgent
   };
 }
 

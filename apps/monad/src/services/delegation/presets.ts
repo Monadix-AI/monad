@@ -5,19 +5,22 @@
 // descriptor. One agent, forked by delivery mode; there is no parallel static list to drift.
 
 import type { AcpAgentConfig } from '@monad/home';
-import type { NativeCliProductIcon, NativeCliProvider } from '@monad/protocol';
+import type { ExternalAgentProductIcon, ExternalAgentProvider } from '@monad/protocol';
 
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
 import { type BinProbes, defaultBinProbes } from '@/infra/resolve-binary.ts';
-import { findNativeCliProviderAdapter, listNativeCliProviderAdapters } from '@/services/native-cli/index.ts';
+import {
+  findExternalAgentProviderAdapter,
+  listExternalAgentProviderAdapters
+} from '@/services/external-agent/index.ts';
 
 // ACP invites use the vendor's own npx-run bridge package, never the native `codex`/`claude` binary —
-// so unlike native-cli launch detection (adapter.detect(), which genuinely needs the binary to spawn),
+// so unlike external-agent launch detection (adapter.detect(), which genuinely needs the binary to spawn),
 // a login dir alone means the account is set up and auth will just work through it. Scoped to this
 // ACP-specific view rather than the shared adapter.detect() result.
-const ACP_LOGIN_DIRS: Partial<Record<NativeCliProvider, string>> = {
+const ACP_LOGIN_DIRS: Partial<Record<ExternalAgentProvider, string>> = {
   codex: join(homedir(), '.codex'),
   'claude-code': join(homedir(), '.claude')
 };
@@ -27,7 +30,7 @@ const ACP_LOGIN_DIRS: Partial<Record<NativeCliProvider, string>> = {
 export interface AcpAgentPresetStatus {
   id: string;
   label: string;
-  productIcon: NativeCliProductIcon;
+  productIcon: ExternalAgentProductIcon;
   command: string;
   args: string[];
   env?: Record<string, string>;
@@ -40,7 +43,7 @@ export interface AcpAgentPresetStatus {
  *  Pure read-only (which + existsSync via detect), safe to call often; probes are injectable. */
 export function listAcpAgentPresets(probes: BinProbes = defaultBinProbes): AcpAgentPresetStatus[] {
   const presets: AcpAgentPresetStatus[] = [];
-  for (const adapter of listNativeCliProviderAdapters()) {
+  for (const adapter of listExternalAgentProviderAdapters()) {
     if (!adapter.acp) continue;
     const view = adapter.detect(probes);
     const loginDir = ACP_LOGIN_DIRS[view.provider];
@@ -60,8 +63,8 @@ export function listAcpAgentPresets(probes: BinProbes = defaultBinProbes): AcpAg
   return presets;
 }
 
-export function productIconForAcpAgent(name: string): NativeCliProductIcon | undefined {
-  const adapter = findNativeCliProviderAdapter(name as NativeCliProvider);
+export function productIconForAcpAgent(name: string): ExternalAgentProductIcon | undefined {
+  const adapter = findExternalAgentProviderAdapter(name as ExternalAgentProvider);
   return adapter?.acp ? adapter.productIcon : undefined;
 }
 

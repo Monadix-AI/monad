@@ -2,8 +2,8 @@ import type {
   DeveloperLogRecord,
   Event,
   EventId,
-  NativeCliAuthSessionView,
-  NativeCliObservationAccessResponse,
+  ExternalAgentAuthSessionView,
+  ExternalAgentObservationAccessResponse,
   SendMessageResponse,
   SessionId,
   SessionUiEvent,
@@ -15,15 +15,15 @@ import {
   CONTROL_API_VERSION,
   developerLogRecordSchema,
   eventSchema,
-  nativeCliAuthSessionViewSchema,
-  nativeCliObservationAccessResponseSchema,
+  externalAgentAuthSessionViewSchema,
+  externalAgentObservationAccessResponseSchema,
   readTypedSseStream,
   SSE_IDLE_TIMEOUT_MS,
   sessionUiEventSchema
 } from '@monad/protocol';
 
 import { EventSocket } from './event-socket.ts';
-import { createNativeCliObservationFolder } from './native-cli-observation-fold.ts';
+import { createExternalAgentObservationFolder } from './external-agent-observation-fold.ts';
 import { createMonadTreaty, makeLoopbackHttpsFetcher, makeUnixFetcher } from './treaty.ts';
 
 export interface MonadClientOptions {
@@ -50,8 +50,8 @@ export interface MonadClientOptions {
 export type EventHandler = (event: Event) => void;
 export type UiEventHandler = (event: SessionUiEvent) => void;
 export type LogRecordHandler = (record: DeveloperLogRecord) => void;
-export type NativeCliAuthSessionHandler = (session: NativeCliAuthSessionView) => void;
-export type NativeCliObservationHandler = (access: NativeCliObservationAccessResponse) => void;
+export type ExternalAgentAuthSessionHandler = (session: ExternalAgentAuthSessionView) => void;
+export type ExternalAgentObservationHandler = (access: ExternalAgentObservationAccessResponse) => void;
 
 interface SsePayloadSchema<T> {
   parse(value: unknown): T;
@@ -298,24 +298,24 @@ export class MonadClient {
     return this.stream(`/${CONTROL_API_VERSION}/sessions/${sessionId}/logs`, developerLogRecordSchema, onRecord, opts);
   }
 
-  streamNativeCliAuth(
+  streamExternalAgentAuth(
     id: string,
     controlToken: string,
-    onSession: NativeCliAuthSessionHandler,
+    onSession: ExternalAgentAuthSessionHandler,
     opts?: { onError?: (err: StreamError) => void }
   ): () => void {
     return this.stream(
-      `/${CONTROL_API_VERSION}/native-cli-auth-sessions/${id}/events?controlToken=${encodeURIComponent(controlToken)}`,
-      nativeCliAuthSessionViewSchema,
+      `/${CONTROL_API_VERSION}/external-agent-auth-sessions/${id}/events?controlToken=${encodeURIComponent(controlToken)}`,
+      externalAgentAuthSessionViewSchema,
       onSession,
       opts
     );
   }
 
-  streamNativeCliObservation(
+  streamExternalAgentObservation(
     id: string,
     transcriptTargetId: TranscriptTargetId,
-    onObservation: NativeCliObservationHandler,
+    onObservation: ExternalAgentObservationHandler,
     opts?: { onError?: (err: StreamError) => void }
   ): () => void {
     // The daemon pushes per-token `append` deltas (not the whole buffer) in steady state and a full
@@ -325,9 +325,9 @@ export class MonadClient {
     // self-healing the 900ms poll this replaced used to give — and `resume` threads the last seq as
     // last-event-id so the daemon backfills the gap as a delta rather than resending the whole snapshot.
     return this.stream(
-      `/${CONTROL_API_VERSION}/native-cli-sessions/${id}/observation-stream?transcriptTargetId=${encodeURIComponent(transcriptTargetId)}`,
-      nativeCliObservationAccessResponseSchema,
-      createNativeCliObservationFolder(onObservation),
+      `/${CONTROL_API_VERSION}/external-agent-sessions/${id}/observation-stream?transcriptTargetId=${encodeURIComponent(transcriptTargetId)}`,
+      externalAgentObservationAccessResponseSchema,
+      createExternalAgentObservationFolder(onObservation),
       { ...opts, resume: true, isTerminal: (access) => access.state !== 'live' }
     );
   }

@@ -1,16 +1,16 @@
 import type {
   AdapterMigrationSource,
-  NativeCliAgentView,
-  NativeCliProvider,
-  NativeCliSettingsImportItem,
-  NativeCliSettingsImportPreview
+  ExternalAgentProvider,
+  ExternalAgentSettingsImportItem,
+  ExternalAgentSettingsImportPreview,
+  ExternalAgentView
 } from '@monad/protocol';
-import type { NativeCliSettingsImport } from '@monad/sdk-atom';
+import type { ExternalAgentSettingsImport } from '@monad/sdk-atom';
 
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
-import { nativeCliSettingsImportItemHash, publicItemWithoutHash } from './settings-import-hash.ts';
+import { externalAgentSettingsImportItemHash, publicItemWithoutHash } from './settings-import-hash.ts';
 import {
   addChannelItems,
   addModelItems,
@@ -25,17 +25,17 @@ import {
 import { addMcpItems } from './settings-import-mcp.ts';
 import { asString, asStringArray, isRecord, pathInfo, readConfigObject } from './settings-import-parse.ts';
 
-export { nativeCliSettingsImportItemHash };
+export { externalAgentSettingsImportItemHash };
 
-export function createCodexSettingsImport(): NativeCliSettingsImport {
+export function createCodexSettingsImport(): ExternalAgentSettingsImport {
   return {
     detect(probes) {
       return defaultCandidates('codex', 'Codex', [{ path: join(homedir(), '.codex'), scope: 'global' }], probes);
     },
-    async preview({ path, sources }): Promise<NativeCliSettingsImportPreview> {
+    async preview({ path, sources }): Promise<ExternalAgentSettingsImportPreview> {
       const warnings: string[] = [];
       const normalizedSources: AdapterMigrationSource[] = [];
-      const items: NativeCliSettingsImportItem[] = [];
+      const items: ExternalAgentSettingsImportItem[] = [];
       for (const source of sourcesForRequest(path, sources)) {
         const { root, isDir } = await pathInfo(source.path);
         const normalizedSource = { ...source, path: root };
@@ -45,7 +45,7 @@ export function createCodexSettingsImport(): NativeCliSettingsImport {
         if (!cfg) warnings.push(`No Codex config.toml found at ${root}.`);
         const model = asString(data.model);
         const target = targetForScope('codex', source.scope);
-        const agent: NativeCliAgentView = {
+        const agent: ExternalAgentView = {
           name: target,
           provider: 'codex',
           productIcon: 'codex',
@@ -66,7 +66,7 @@ export function createCodexSettingsImport(): NativeCliSettingsImport {
   };
 }
 
-export function createClaudeCodeSettingsImport(): NativeCliSettingsImport {
+export function createClaudeCodeSettingsImport(): ExternalAgentSettingsImport {
   return {
     detect(probes) {
       return defaultCandidates(
@@ -76,10 +76,10 @@ export function createClaudeCodeSettingsImport(): NativeCliSettingsImport {
         probes
       );
     },
-    async preview({ path, sources }): Promise<NativeCliSettingsImportPreview> {
+    async preview({ path, sources }): Promise<ExternalAgentSettingsImportPreview> {
       const warnings: string[] = [];
       const normalizedSources: AdapterMigrationSource[] = [];
-      const items: NativeCliSettingsImportItem[] = [];
+      const items: ExternalAgentSettingsImportItem[] = [];
       for (const source of sourcesForRequest(path, sources)) {
         const { root, isDir } = await pathInfo(source.path);
         const normalizedSource = { ...source, path: root };
@@ -98,7 +98,7 @@ export function createClaudeCodeSettingsImport(): NativeCliSettingsImport {
         const model = asString(data.model) ?? asString(data.defaultModel);
         const modelOptions = asStringArray(data.modelOptions) ?? (model ? [model] : undefined);
         const target = targetForScope('claude-code', source.scope);
-        const agent: NativeCliAgentView = {
+        const agent: ExternalAgentView = {
           name: target,
           provider: 'claude-code',
           productIcon: 'claude-code',
@@ -128,15 +128,18 @@ function frameworkConfigNames(provider: 'hermes' | 'openclaw'): string[] {
     : ['openclaw.json', 'config.json', 'config.yaml', 'config.yml', 'openclaw.yaml', 'openclaw.yml'];
 }
 
-export function createFrameworkSettingsImport(provider: 'hermes' | 'openclaw', label: string): NativeCliSettingsImport {
+export function createFrameworkSettingsImport(
+  provider: 'hermes' | 'openclaw',
+  label: string
+): ExternalAgentSettingsImport {
   return {
     detect(probes) {
       return defaultCandidates(provider, label, [{ path: join(homedir(), `.${provider}`), scope: 'global' }], probes);
     },
-    async preview({ path, sources }): Promise<NativeCliSettingsImportPreview> {
+    async preview({ path, sources }): Promise<ExternalAgentSettingsImportPreview> {
       const warnings: string[] = [];
       const normalizedSources: AdapterMigrationSource[] = [];
-      const items: NativeCliSettingsImportItem[] = [];
+      const items: ExternalAgentSettingsImportItem[] = [];
       for (const source of sourcesForRequest(path, sources)) {
         const { root, isDir } = await pathInfo(source.path);
         normalizedSources.push({ ...source, path: root });
@@ -151,7 +154,7 @@ export function createFrameworkSettingsImport(provider: 'hermes' | 'openclaw', l
           addMonadAgentItem(items, cfg.path, data, provider);
         }
         const target = targetForScope(provider, source.scope);
-        const agent: NativeCliAgentView = {
+        const agent: ExternalAgentView = {
           name: target,
           provider,
           productIcon: provider,
@@ -171,20 +174,20 @@ export function createFrameworkSettingsImport(provider: 'hermes' | 'openclaw', l
 }
 
 export function createBasicSettingsImport(
-  provider: NativeCliProvider,
+  provider: ExternalAgentProvider,
   label: string,
   command: string,
   homeConfigDir: string,
   configNames = ['settings.json', 'config.json', 'config.yaml', 'config.yml']
-): NativeCliSettingsImport {
+): ExternalAgentSettingsImport {
   return {
     detect(probes) {
       return defaultCandidates(provider, label, [{ path: join(homedir(), homeConfigDir), scope: 'global' }], probes);
     },
-    async preview({ path, sources }): Promise<NativeCliSettingsImportPreview> {
+    async preview({ path, sources }): Promise<ExternalAgentSettingsImportPreview> {
       const warnings: string[] = [];
       const normalizedSources: AdapterMigrationSource[] = [];
-      const items: NativeCliSettingsImportItem[] = [];
+      const items: ExternalAgentSettingsImportItem[] = [];
       for (const source of sourcesForRequest(path, sources)) {
         const { root, isDir } = await pathInfo(source.path);
         normalizedSources.push({ ...source, path: root });
@@ -193,7 +196,7 @@ export function createBasicSettingsImport(
         if (!cfg) warnings.push(`No ${label} settings/config file found at ${root}.`);
         else addMcpItems(items, cfg.path, data, provider);
         const target = targetForScope(provider, source.scope);
-        const agent: NativeCliAgentView = {
+        const agent: ExternalAgentView = {
           name: target,
           provider,
           productIcon: provider,
@@ -212,9 +215,9 @@ export function createBasicSettingsImport(
   };
 }
 
-export function nativeCliSettingsImportPreviewItemChanged(
-  item: NativeCliSettingsImportItem,
+export function externalAgentSettingsImportPreviewItemChanged(
+  item: ExternalAgentSettingsImportItem,
   expectedHash: string | undefined
 ): boolean {
-  return !expectedHash || nativeCliSettingsImportItemHash(publicItemWithoutHash(item)) !== expectedHash;
+  return !expectedHash || externalAgentSettingsImportItemHash(publicItemWithoutHash(item)) !== expectedHash;
 }

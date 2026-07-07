@@ -31,6 +31,7 @@ import { createCommandsController } from '@/transports/http/commands.ts';
 import { createDaemonCtlController } from '@/transports/http/daemon-ctl.ts';
 import { createDelegationController } from '@/transports/http/delegation.ts';
 import { createDraftAttachmentsController } from '@/transports/http/draft-attachments.ts';
+import { createExternalAgentController } from '@/transports/http/external-agent.ts';
 import { createGraphController } from '@/transports/http/graph/controller.ts';
 import { createHealthController } from '@/transports/http/health.ts';
 import { createIndexerController } from '@/transports/http/indexer.ts';
@@ -41,7 +42,6 @@ import { createLocaleCatalogController, createLocaleSettingsController } from '@
 import { createMem0DataController } from '@/transports/http/mem0-data/controller.ts';
 import { createMemoryController } from '@/transports/http/memory.ts';
 import { createNativeAgentController } from '@/transports/http/native-agent.ts';
-import { createNativeCliController } from '@/transports/http/native-cli.ts';
 import { createOpenAiCompatController } from '@/transports/http/openai-compat.ts';
 import { createIpRateLimiter } from '@/transports/http/rate-limit.ts';
 import { createResponsesApiController } from '@/transports/http/responses-api/controller.ts';
@@ -52,11 +52,11 @@ import { createBrowserPresetSettingsController } from '@/transports/http/setting
 import { createChannelSettingsController } from '@/transports/http/settings/channel.ts';
 import { createComputerPresetSettingsController } from '@/transports/http/settings/computer-preset.ts';
 import { createDeveloperSettingsController } from '@/transports/http/settings/developer.ts';
+import { createExternalAgentSettingsController } from '@/transports/http/settings/external-agent.ts';
 import { createHooksSettingsController } from '@/transports/http/settings/hooks.ts';
 import { createSettingsImportController } from '@/transports/http/settings/import.ts';
 import { createMcpServerSettingsController } from '@/transports/http/settings/mcp-server.ts';
 import { createModelSettingsController } from '@/transports/http/settings/model.ts';
-import { createNativeCliAgentSettingsController } from '@/transports/http/settings/native-cli-agent.ts';
 import { createNetworkSettingsController } from '@/transports/http/settings/network.ts';
 import { createObscuraSettingsController } from '@/transports/http/settings/obscura.ts';
 import { createOpenaiCompatSettingsController } from '@/transports/http/settings/openai-compat.ts';
@@ -326,7 +326,7 @@ export function createHttpTransport(
         .use(createMemoryController(handlers))
         .use(createAtomsController(handlers))
         .use(createNativeAgentController(handlers))
-        .use(createNativeCliController(handlers))
+        .use(createExternalAgentController(handlers))
         .use(createLocaleCatalogController(handlers))
         .use(createSystemController(handlers))
         .group('/settings', (settings) =>
@@ -335,7 +335,7 @@ export function createHttpTransport(
             .use(createChannelSettingsController(handlers))
             .use(createPeerSettingsController(handlers))
             .use(createAcpAgentSettingsController(handlers))
-            .use(createNativeCliAgentSettingsController(handlers))
+            .use(createExternalAgentSettingsController(handlers))
             .use(createMcpServerSettingsController(handlers))
             .use(createObscuraSettingsController(handlers))
             .use(createBrowserPresetSettingsController(handlers))

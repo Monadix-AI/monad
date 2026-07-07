@@ -4,28 +4,28 @@
 // the hand-rolled unix WebSocket transport, and the codex adapter, asserting the initialize→thread
 // handshake yields a provider session ref. Requires a local codex binary; exits 0 (skipped) when
 // codex is absent.  run: bun test/smoke/codex-appserver-unix.ts
-import type { NativeCliRuntimeHandle } from '../../apps/monad/src/services/native-cli/types.ts';
+import type { ExternalAgentRuntimeHandle } from '../../apps/monad/src/services/external-agent/types.ts';
 
 import { mkdirSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { connectAppServerUnix } from '../../apps/monad/src/services/native-cli/app-server-unix.ts';
+import { connectAppServerUnix } from '../../apps/monad/src/services/external-agent/app-server-unix.ts';
 import {
-  buildNativeCliLaunch,
+  buildExternalAgentLaunch,
   registerAgentAdapterImpl,
-  resolveNativeCliLaunchCommand
-} from '../../apps/monad/src/services/native-cli/index.ts';
-import { codexNativeCliAdapter } from '../../packages/atoms/src/agent-adapters/codex/index.ts';
+  resolveExternalAgentLaunchCommand
+} from '../../apps/monad/src/services/external-agent/index.ts';
+import { codexExternalAgentAdapter } from '../../packages/atoms/src/agent-adapters/codex/index.ts';
 
-registerAgentAdapterImpl(codexNativeCliAdapter);
+registerAgentAdapterImpl(codexExternalAgentAdapter);
 
 function fail(message: string): never {
   console.error(`FAIL: ${message}`);
   process.exit(1);
 }
 
-const preset = codexNativeCliAdapter.detect();
+const preset = codexExternalAgentAdapter.detect();
 if (!preset.installed) {
   console.log('SKIP: codex not installed');
   process.exit(0);
@@ -46,9 +46,9 @@ mkdirSync(dir, { recursive: true, mode: 0o700 });
 const socketPath = join(dir, `smoke-${process.pid}.sock`);
 rmSync(socketPath, { force: true });
 
-const launch = resolveNativeCliLaunchCommand(
-  codexNativeCliAdapter,
-  buildNativeCliLaunch(agent, {
+const launch = resolveExternalAgentLaunchCommand(
+  codexExternalAgentAdapter,
+  buildExternalAgentLaunch(agent, {
     workingPath: process.cwd(),
     launchMode: 'app-server',
     appServerTransport: 'unix',
@@ -70,7 +70,7 @@ const proc = Bun.spawn(launch.argv, {
 
 let requestSeq = 0;
 let sessionRef: string | undefined;
-const handle: NativeCliRuntimeHandle = {
+const handle: ExternalAgentRuntimeHandle = {
   launchMode: 'app-server',
   providerSessionRef: null,
   pendingRequests: new Map(),
@@ -83,7 +83,7 @@ const gotRef = new Promise<void>((resolve) => {
     const connection = await connectAppServerUnix({
       socketPath,
       onMessage: (text) => {
-        for (const event of codexNativeCliAdapter.parseOutput(`${text}\n`, handle)) {
+        for (const event of codexExternalAgentAdapter.parseOutput(`${text}\n`, handle)) {
           if (event.type === 'session_ref' && typeof event.payload.providerSessionRef === 'string') {
             sessionRef = event.payload.providerSessionRef;
             handle.providerSessionRef = sessionRef;
@@ -95,7 +95,7 @@ const gotRef = new Promise<void>((resolve) => {
       timeoutMs: 10_000
     });
     handle.appServer = connection;
-    codexNativeCliAdapter.initialize?.(handle, { workingPath: process.cwd() });
+    codexExternalAgentAdapter.initialize?.(handle, { workingPath: process.cwd() });
   })().catch((error) => fail(`unix connect failed: ${String(error)}`));
 });
 

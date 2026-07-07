@@ -197,7 +197,7 @@ CREATE TABLE IF NOT EXISTS acp_delegates (
 CREATE INDEX IF NOT EXISTS idx_acp_delegates_session ON acp_delegates(session_id);
 CREATE INDEX IF NOT EXISTS idx_acp_delegates_live ON acp_delegates(evicted_at) WHERE evicted_at IS NULL;
 
-CREATE TABLE IF NOT EXISTS native_cli_sessions (
+CREATE TABLE IF NOT EXISTS external_agent_sessions (
   id                    TEXT PRIMARY KEY,
   transcript_target_id  TEXT NOT NULL,
   agent_name            TEXT NOT NULL,
@@ -218,11 +218,11 @@ CREATE TABLE IF NOT EXISTS native_cli_sessions (
   updated_at            TEXT NOT NULL,
   exited_at             TEXT
 );
-CREATE INDEX IF NOT EXISTS idx_native_cli_sessions_transcript_target ON native_cli_sessions(transcript_target_id);
-CREATE INDEX IF NOT EXISTS idx_native_cli_sessions_live ON native_cli_sessions(state)
+CREATE INDEX IF NOT EXISTS idx_external_agent_sessions_transcript_target ON external_agent_sessions(transcript_target_id);
+CREATE INDEX IF NOT EXISTS idx_external_agent_sessions_live ON external_agent_sessions(state)
   WHERE state IN ('starting', 'running');
-CREATE UNIQUE INDEX IF NOT EXISTS idx_native_cli_sessions_provider_ref
-  ON native_cli_sessions(transcript_target_id, provider, provider_session_ref)
+CREATE UNIQUE INDEX IF NOT EXISTS idx_external_agent_sessions_provider_ref
+  ON external_agent_sessions(transcript_target_id, provider, provider_session_ref)
   WHERE provider_session_ref IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS message_attachments (
@@ -242,7 +242,7 @@ CREATE INDEX IF NOT EXISTS idx_message_attachments_project
 CREATE TABLE IF NOT EXISTS native_agent_direct_messages (
   id                    TEXT PRIMARY KEY,
   project_id            TEXT NOT NULL,
-  native_cli_session_id TEXT NOT NULL,
+  external_agent_session_id TEXT NOT NULL,
   from_agent            TEXT,
   peer                  TEXT NOT NULL,
   text                  TEXT NOT NULL,
@@ -250,12 +250,12 @@ CREATE TABLE IF NOT EXISTS native_agent_direct_messages (
   created_at            TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_native_agent_direct_messages_session_peer
-  ON native_agent_direct_messages(native_cli_session_id, peer, created_at);
+  ON native_agent_direct_messages(external_agent_session_id, peer, created_at);
 CREATE INDEX IF NOT EXISTS idx_native_agent_direct_messages_project_pair
   ON native_agent_direct_messages(project_id, from_agent, peer, created_at);
 
-CREATE TABLE IF NOT EXISTS native_cli_inbox_items (
-  native_cli_session_id TEXT NOT NULL,
+CREATE TABLE IF NOT EXISTS external_agent_inbox_items (
+  external_agent_session_id TEXT NOT NULL,
   message_seq           INTEGER NOT NULL,
   delivery_id           TEXT,
   project_id            TEXT,
@@ -270,17 +270,17 @@ CREATE TABLE IF NOT EXISTS native_cli_inbox_items (
   visible_at            TEXT,
   consumed_at           TEXT,
   updated_at            TEXT,
-  PRIMARY KEY (native_cli_session_id, message_seq)
+  PRIMARY KEY (external_agent_session_id, message_seq)
 );
-CREATE INDEX IF NOT EXISTS idx_native_cli_inbox_items_pending
-  ON native_cli_inbox_items(native_cli_session_id, state, message_seq);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_native_cli_inbox_delivery_id
-  ON native_cli_inbox_items(delivery_id)
+CREATE INDEX IF NOT EXISTS idx_external_agent_inbox_items_pending
+  ON external_agent_inbox_items(external_agent_session_id, state, message_seq);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_external_agent_inbox_delivery_id
+  ON external_agent_inbox_items(delivery_id)
   WHERE delivery_id IS NOT NULL;
-CREATE INDEX IF NOT EXISTS idx_native_cli_inbox_project_trigger
-  ON native_cli_inbox_items(project_id, trigger_message_id);
-CREATE INDEX IF NOT EXISTS idx_native_cli_inbox_member_state
-  ON native_cli_inbox_items(project_id, member_instance_id, state);
+CREATE INDEX IF NOT EXISTS idx_external_agent_inbox_project_trigger
+  ON external_agent_inbox_items(project_id, trigger_message_id);
+CREATE INDEX IF NOT EXISTS idx_external_agent_inbox_member_state
+  ON external_agent_inbox_items(project_id, member_instance_id, state);
 
 PRAGMA user_version = 1;
     `.trim()

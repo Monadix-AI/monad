@@ -227,7 +227,10 @@ async function mockModelSettingsApi(
     if (method === 'GET' && path === '/v1/workplace/projects') {
       return route.fulfill(json({ projects: [] }));
     }
-    if (method === 'GET' && (path === '/v1/native-cli-runtimes' || path === '/v1/native-cli-session-summaries')) {
+    if (
+      method === 'GET' &&
+      (path === '/v1/external-agent-runtimes' || path === '/v1/external-agent-session-summaries')
+    ) {
       return route.fulfill(json({ sessions: [] }));
     }
     if (method === 'GET' && path === '/v1/settings/locale') {

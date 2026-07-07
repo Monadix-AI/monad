@@ -1,7 +1,7 @@
 import type {
+  ExternalAgentObservationAccessResponse,
+  ExternalAgentUsageResponse,
   NativeAgentDeliveryId,
-  NativeCliObservationAccessResponse,
-  NativeCliUsageResponse,
   TranscriptTargetId
 } from '@monad/protocol';
 import type {
@@ -10,7 +10,7 @@ import type {
   MouseEvent as ReactMouseEvent,
   PointerEvent as ReactPointerEvent
 } from 'react';
-import type { NativeCliStreamView, Participant } from '../../experience/types.ts';
+import type { ExternalAgentStreamView, Participant } from '../../experience/types.ts';
 
 import {
   BrainIcon,
@@ -27,10 +27,10 @@ import {
 } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import {
+  useLazyGetExternalAgentHistoryPageQuery,
+  useLazyGetExternalAgentUsageQuery,
   useLazyGetNativeAgentDeliveryObservationQuery,
-  useLazyGetNativeCliHistoryPageQuery,
-  useLazyGetNativeCliUsageQuery,
-  useStreamNativeCliObservationQuery
+  useStreamExternalAgentObservationQuery
 } from '@monad/sdk-atom-client-rtk';
 import { ProductIcon, Tooltip, TooltipContent, TooltipTrigger } from '@monad/ui';
 import {
@@ -55,7 +55,7 @@ import {
   streamWithObservationProjection,
   usageMeterFromObservationAccess
 } from '../utils/agent-rail-model.ts';
-import { NativeCliObservationPanel } from './observation/panel.tsx';
+import { ExternalAgentObservationPanel } from './observation/panel.tsx';
 
 const RAIL_WIDTH_STORAGE_KEY = 'monad.workplace.agentRail.width';
 const DEFAULT_RAIL_WIDTH = 296;
@@ -102,13 +102,13 @@ function usePolledValue<T>(args: {
 }
 
 type ObservationHistoryPageState = {
-  items: NativeCliStreamView['items'];
+  items: ExternalAgentStreamView['items'];
   nextCursor: string | null;
   loading: boolean;
   exhausted: boolean;
 };
 
-function observationItemSignature(item: NativeCliStreamView['items'][number]): string {
+function observationItemSignature(item: ExternalAgentStreamView['items'][number]): string {
   return JSON.stringify({
     role: item.role,
     source: item.source,
@@ -119,11 +119,11 @@ function observationItemSignature(item: NativeCliStreamView['items'][number]): s
 }
 
 function mergeObservationItems(
-  historyItems: NativeCliStreamView['items'],
-  liveItems: NativeCliStreamView['items']
-): NativeCliStreamView['items'] {
+  historyItems: ExternalAgentStreamView['items'],
+  liveItems: ExternalAgentStreamView['items']
+): ExternalAgentStreamView['items'] {
   const seen = new Set<string>();
-  const merged: NativeCliStreamView['items'] = [];
+  const merged: ExternalAgentStreamView['items'] = [];
   for (const item of [...historyItems, ...liveItems]) {
     const signature = observationItemSignature(item);
     if (seen.has(signature)) continue;
@@ -134,9 +134,9 @@ function mergeObservationItems(
 }
 
 function streamWithHistoryPages(
-  stream: NativeCliStreamView | undefined,
+  stream: ExternalAgentStreamView | undefined,
   history: ObservationHistoryPageState | undefined
-): NativeCliStreamView | undefined {
+): ExternalAgentStreamView | undefined {
   if (!stream || !history || history.items.length === 0) return stream;
   return {
     ...stream,
@@ -544,17 +544,17 @@ const agentStatusRingCss = `
 `;
 
 type AgentTasksRailRoom = {
-  nativeCliStreams: NativeCliStreamView[];
+  externalAgentStreams: ExternalAgentStreamView[];
   projectId: string;
   railAgents: Participant[];
-  stopNativeCli: (id: string) => void;
+  stopExternalAgent: (id: string) => void;
 };
 
 export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.ReactElement {
   const t = workspaceExperienceT();
   const [triggerNativeAgentDeliveryObservation] = useLazyGetNativeAgentDeliveryObservationQuery();
-  const [triggerNativeCliHistoryPage] = useLazyGetNativeCliHistoryPageQuery();
-  const [triggerNativeCliUsage] = useLazyGetNativeCliUsageQuery();
+  const [triggerExternalAgentHistoryPage] = useLazyGetExternalAgentHistoryPageQuery();
+  const [triggerExternalAgentUsage] = useLazyGetExternalAgentUsageQuery();
   const [railWidth, setRailWidth] = useState(DEFAULT_RAIL_WIDTH);
   const [resizing, setResizing] = useState(false);
   const dragStartRef = useRef({ pointerX: 0, width: DEFAULT_RAIL_WIDTH });
@@ -566,20 +566,20 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
   const observeProjectAgent = useChatRoomExperienceStore((state) => state.observeProjectAgent);
   const closeRailObservation = useChatRoomExperienceStore((state) => state.closeRailObservation);
   const agents = sortedProjectRailAgents(room.railAgents);
-  const observedStream = agentObservationStream(observation, room.nativeCliStreams);
-  const observedNativeCliSessionId = observation?.nativeCliSessionId ?? observedStream?.id;
+  const observedStream = agentObservationStream(observation, room.externalAgentStreams);
+  const observedExternalAgentSessionId = observation?.externalAgentSessionId ?? observedStream?.id;
   const observedDeliveryId = observation?.deliveryId;
-  const observationHistoryResetKey = [observedDeliveryId, observedNativeCliSessionId].filter(Boolean).join(':');
+  const observationHistoryResetKey = [observedDeliveryId, observedExternalAgentSessionId].filter(Boolean).join(':');
   const [historyPages, setHistoryPages] = useState<ObservationHistoryPageState | undefined>(undefined);
   const [historyRequested, setHistoryRequested] = useState(false);
-  // Native-CLI observation is a server-pushed SSE stream (per-token `append` deltas folded into a full
+  // External agent observation is a server-pushed SSE stream (per-token `append` deltas folded into a full
   // `output`), not a 900ms poll — a live turn streams into the panel without waiting on a refetch.
   // Deliveries have no SSE twin yet, so they keep the poll.
-  const nativeCliObservation = useStreamNativeCliObservationQuery(
-    { id: observedNativeCliSessionId ?? '', transcriptTargetId: room.projectId as TranscriptTargetId },
-    { skip: !(observedNativeCliSessionId && observation && !observedDeliveryId) }
+  const externalAgentObservation = useStreamExternalAgentObservationQuery(
+    { id: observedExternalAgentSessionId ?? '', transcriptTargetId: room.projectId as TranscriptTargetId },
+    { skip: !(observedExternalAgentSessionId && observation && !observedDeliveryId) }
   );
-  const deliveryObservation = usePolledValue<NativeCliObservationAccessResponse>({
+  const deliveryObservation = usePolledValue<ExternalAgentObservationAccessResponse>({
     enabled: Boolean(observedDeliveryId && observation),
     intervalMs: observedStream?.status === 'running' ? 900 : 0,
     load: () =>
@@ -589,14 +589,14 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
       }).unwrap(),
     resetKey: `${room.projectId}:${observedDeliveryId ?? ''}`
   });
-  const observationAccess = observedDeliveryId ? deliveryObservation : (nativeCliObservation.data ?? undefined);
-  const observedBaseStream: NativeCliStreamView | undefined =
+  const observationAccess = observedDeliveryId ? deliveryObservation : (externalAgentObservation.data ?? undefined);
+  const observedBaseStream: ExternalAgentStreamView | undefined =
     observedStream ??
-    (observation && observedNativeCliSessionId
+    (observation && observedExternalAgentSessionId
       ? {
-          id: observedNativeCliSessionId,
-          agentName: observation.agentName ?? observationAccess?.nativeCliSessionId ?? 'Agent',
-          provider: observationAccess?.provider ?? 'native-cli',
+          id: observedExternalAgentSessionId,
+          agentName: observation.agentName ?? observationAccess?.externalAgentSessionId ?? 'Agent',
+          provider: observationAccess?.provider ?? 'external-agent',
           tag: 'Agent',
           status: 'ok',
           output: '',
@@ -614,10 +614,10 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
   const observedAccessStream = streamWithObservationProjection(observedBaseStream, observationProjection);
   const observedHistoryStream = streamWithHistoryPages(observedAccessStream, historyPages);
   const observedUsageAgentName = observedAccessStream?.templateAgentName;
-  const usage = usePolledValue<NativeCliUsageResponse>({
+  const usage = usePolledValue<ExternalAgentUsageResponse>({
     enabled: Boolean(observedUsageAgentName),
     intervalMs: observedAccessStream?.status === 'running' ? 15_000 : 0,
-    load: () => triggerNativeCliUsage(observedUsageAgentName as string).unwrap(),
+    load: () => triggerExternalAgentUsage(observedUsageAgentName as string).unwrap(),
     resetKey: observedUsageAgentName ?? ''
   });
   const usageMeter = usageMeterFromObservationAccess({
@@ -630,15 +630,15 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
 
   const loadHistoryPage = useCallback(
     (before?: string | null) => {
-      if (!observedNativeCliSessionId) return;
+      if (!observedExternalAgentSessionId) return;
       setHistoryPages((current) => {
         if (current?.loading) return current;
         return current
           ? { ...current, loading: true }
           : { items: [], nextCursor: null, loading: true, exhausted: false };
       });
-      void triggerNativeCliHistoryPage({
-        id: observedNativeCliSessionId,
+      void triggerExternalAgentHistoryPage({
+        id: observedExternalAgentSessionId,
         transcriptTargetId: room.projectId as TranscriptTargetId,
         before: before ?? undefined,
         limit: 20
@@ -672,14 +672,14 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
           }
         );
     },
-    [observedNativeCliSessionId, room.projectId, triggerNativeCliHistoryPage]
+    [observedExternalAgentSessionId, room.projectId, triggerExternalAgentHistoryPage]
   );
 
   const showHistory = useCallback(() => {
-    if (historyRequested || !observedNativeCliSessionId) return;
+    if (historyRequested || !observedExternalAgentSessionId) return;
     setHistoryRequested(true);
     loadHistoryPage(null);
-  }, [historyRequested, loadHistoryPage, observedNativeCliSessionId]);
+  }, [historyRequested, loadHistoryPage, observedExternalAgentSessionId]);
 
   useEffect(() => {
     void observationHistoryResetKey;
@@ -959,7 +959,7 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
         tabIndex={0}
       />
       {observation ? (
-        <NativeCliObservationPanel
+        <ExternalAgentObservationPanel
           agent={observedAgent}
           agentName={observedAgent?.name ?? observation.agentName}
           canLoadOlderHistory={
@@ -971,8 +971,8 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
           onBack={closeRailObservation}
           onLoadOlderHistory={() => loadHistoryPage(historyPages?.nextCursor)}
           onShowHistory={showHistory}
-          onStop={(id) => void room.stopNativeCli(id)}
-          showHistoryButton={!historyRequested && Boolean(observedNativeCliSessionId)}
+          onStop={(id) => void room.stopExternalAgent(id)}
+          showHistoryButton={!historyRequested && Boolean(observedExternalAgentSessionId)}
           stream={observedHistoryStream}
           usageMeter={usageMeter}
         />

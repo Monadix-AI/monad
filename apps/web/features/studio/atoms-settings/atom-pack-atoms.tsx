@@ -64,7 +64,7 @@ const KIND_META: Record<AtomKind, KindMeta> = {
   'agent-adapter': {
     label: 'Agent adapters',
     icon: BotIcon,
-    blurb: 'Native CLI agents managed as workplace members.',
+    blurb: 'External agent agents managed as workplace members.',
     form: 'detail'
   },
   hook: {

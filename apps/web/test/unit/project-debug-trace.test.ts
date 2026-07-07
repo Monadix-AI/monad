@@ -46,7 +46,7 @@ test('traceProjectDebugOperation records input and output around an async call',
   clearProjectDebugTrace();
 
   const result = await traceProjectDebugOperation(
-    { layer: 'web', label: 'native-cli.input', sessionId: 'ses_1', data: { id: 'ncli_1' } },
+    { layer: 'web', label: 'external-agent.input', sessionId: 'ses_1', data: { id: 'exa_1' } },
     async () => ({ ok: true })
   );
 

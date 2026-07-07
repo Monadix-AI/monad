@@ -1,22 +1,25 @@
 import type { ChatMessage, UIItem, UIMessageItem, UIPart } from '@monad/protocol';
 
-import { nativeCliEventsAreGenerating, nativeCliStructuredEvents } from '@monad/atoms/native-cli-observation';
+import {
+  externalAgentEventsAreGenerating,
+  externalAgentStructuredEvents
+} from '@monad/atoms/external-agent-observation';
 import { channelDisplayText, channelStructuredVisibility } from '@monad/protocol';
 import { Allow, parse as parsePartialJson } from 'partial-json';
 
-import { findNativeCliProviderAdapter } from '@/services/native-cli/index.ts';
+import { findExternalAgentProviderAdapter } from '@/services/external-agent/index.ts';
 
 const TEXT_TYPES = new Set(['text', 'markdown', 'error']);
-export const MAX_NATIVE_CLI_UI_OUTPUT = 64 * 1024;
+export const MAX_EXTERNAL_AGENT_UI_OUTPUT = 64 * 1024;
 // Min chars to accumulate before re-running the O(current-length) channel partial-JSON parse. Parses
 // also fire whenever a delta carries a `}` (a structural close — end of the display/visibility object),
 // so completion and `silent` flips are never missed regardless of this throttle.
 export const CHANNEL_REPARSE_MIN_DELTA = 32;
 
-/** Durable per-run projection of a native CLI session, used to rebuild its tool card during
+/** Durable per-run projection of an external agent session, used to rebuild its tool card during
  *  hydration (page refresh / reconnect) from the bounded output snapshot rather than from the
- *  per-chunk `native_cli.output` event stream. Structurally satisfied by the store's session row. */
-export interface NativeCliSessionSnapshot {
+ *  per-chunk `external_agent.output` event stream. Structurally satisfied by the store's session row. */
+export interface ExternalAgentSessionSnapshot {
   id: string;
   provider: string;
   agentName: string;
@@ -41,40 +44,42 @@ export function isEvictable(item: UIItem): boolean {
   return false;
 }
 
-// Whether a native-CLI output snapshot shows a turn in flight. Provider event vocabulary lives in each
+// Whether an external agent output snapshot shows a turn in flight. Provider event vocabulary lives in each
 // adapter's observation projector (`classifyActivity`); this just parses the snapshot with that adapter
 // and asks. `undefined` = no structured records (a PTY/plain-text run), so a caller can distinguish it
 // from "settled".
-export function nativeCliSnapshotIsGenerating(outputSnapshot: string, provider: string): boolean | undefined {
-  const adapter = findNativeCliProviderAdapter(provider);
-  const events = nativeCliStructuredEvents({ id: '', provider, adapter, output: outputSnapshot });
+export function externalAgentSnapshotIsGenerating(outputSnapshot: string, provider: string): boolean | undefined {
+  const adapter = findExternalAgentProviderAdapter(provider);
+  const events = externalAgentStructuredEvents({ id: '', provider, adapter, output: outputSnapshot });
   if (events === undefined) return undefined;
-  return nativeCliEventsAreGenerating(events, { provider, adapter });
+  return externalAgentEventsAreGenerating(events, { provider, adapter });
 }
 
-export function nativeCliProviderFromToolItem(item: Extract<UIItem, { kind: 'tool' }> | undefined): string | undefined {
+export function externalAgentProviderFromToolItem(
+  item: Extract<UIItem, { kind: 'tool' }> | undefined
+): string | undefined {
   if (!item) return undefined;
   const inputProvider = (item.input as { provider?: unknown } | undefined)?.provider;
   if (typeof inputProvider === 'string') return inputProvider;
-  return item.tool.startsWith('native-cli:') ? item.tool.slice('native-cli:'.length) : undefined;
+  return item.tool.startsWith('external-agent:') ? item.tool.slice('external-agent:'.length) : undefined;
 }
 
-export function nativeCliToolItem(s: NativeCliSessionSnapshot): Extract<UIItem, { kind: 'tool' }> {
+export function externalAgentToolItem(s: ExternalAgentSessionSnapshot): Extract<UIItem, { kind: 'tool' }> {
   const status =
     s.state === 'failed'
       ? 'error'
       : s.state === 'starting' ||
-          (s.state === 'running' && nativeCliSnapshotIsGenerating(s.outputSnapshot, s.provider) !== false)
+          (s.state === 'running' && externalAgentSnapshotIsGenerating(s.outputSnapshot, s.provider) !== false)
         ? 'running'
         : 'ok';
-  // Mirror the live `native_cli.exited` decoration so a refreshed terminal run reads the same as one
+  // Mirror the live `external_agent.exited` decoration so a refreshed terminal run reads the same as one
   // watched live; keep the running state undecorated.
   const exitText = status === 'running' ? '' : s.exitCode === null ? `\n${s.state}` : `\n${s.state} (${s.exitCode})`;
-  const output = appendBoundedText(s.outputSnapshot, exitText, MAX_NATIVE_CLI_UI_OUTPUT);
+  const output = appendBoundedText(s.outputSnapshot, exitText, MAX_EXTERNAL_AGENT_UI_OUTPUT);
   return {
     kind: 'tool',
     id: s.id,
-    tool: `native-cli:${s.provider}`,
+    tool: `external-agent:${s.provider}`,
     input: {
       agent: s.agentName,
       provider: s.provider,
@@ -136,14 +141,14 @@ export function agentNameFromData(data: unknown): string | undefined {
 export function sourceFromData(data: unknown): UIMessageItem['source'] | undefined {
   if (!data || typeof data !== 'object') return undefined;
   const source = (data as { source?: unknown }).source;
-  return source === 'managed-native-cli' || source === 'native-cli-provider' ? source : undefined;
+  return source === 'managed-external-agent' || source === 'external-agent-provider' ? source : undefined;
 }
 
-export function nativeCliSessionIdFromData(data: unknown): string | undefined {
+export function externalAgentSessionIdFromData(data: unknown): string | undefined {
   if (!data || typeof data !== 'object') return undefined;
-  const nativeCliSessionId = (data as { nativeCliSessionId?: unknown }).nativeCliSessionId;
-  return typeof nativeCliSessionId === 'string' && nativeCliSessionId.startsWith('ncli_')
-    ? nativeCliSessionId
+  const externalAgentSessionId = (data as { externalAgentSessionId?: unknown }).externalAgentSessionId;
+  return typeof externalAgentSessionId === 'string' && externalAgentSessionId.startsWith('exa_')
+    ? externalAgentSessionId
     : undefined;
 }
 

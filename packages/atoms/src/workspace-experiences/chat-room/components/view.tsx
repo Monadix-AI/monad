@@ -43,7 +43,7 @@ export function ChatRoomExperienceView({ runtime }: { runtime: ChatRoomExperienc
   const [droppedFiles, setDroppedFiles] = useState<ComposerDroppedFiles | undefined>(undefined);
   const optimisticIdRef = useRef(0);
   const [optimisticMessages, setOptimisticMessages] = useState<OptimisticChatMessage[]>([]);
-  const followNativeCliSession = useChatRoomExperienceStore((state) => state.followNativeCliSession);
+  const followExternalAgentSession = useChatRoomExperienceStore((state) => state.followExternalAgentSession);
   const human = room.human;
   const sendOptimisticDirective = useCallback(
     async (directive: ProjectComposerDirective, existingId?: string) => {
@@ -88,10 +88,10 @@ export function ChatRoomExperienceView({ runtime }: { runtime: ChatRoomExperienc
     () => ({
       ...room,
       messages,
-      followNativeCliSession: (id: string, deliveryId?: NativeAgentDeliveryId) =>
-        followNativeCliSession(room.projectId, id, undefined, deliveryId)
+      followExternalAgentSession: (id: string, deliveryId?: NativeAgentDeliveryId) =>
+        followExternalAgentSession(room.projectId, id, undefined, deliveryId)
     }),
-    [followNativeCliSession, messages, room]
+    [followExternalAgentSession, messages, room]
   );
   const composer = useMemo(
     () => ({

@@ -1,9 +1,9 @@
-import type { NativeCliAgentView } from '@monad/protocol';
+import type { ExternalAgentView } from '@monad/protocol';
 import type {
-  BuildNativeCliLaunchOptions,
-  NativeCliLaunchSpec,
-  NativeCliProviderAdapter,
-  NativeCliProviderHistoryContext
+  BuildExternalAgentLaunchOptions,
+  ExternalAgentLaunchSpec,
+  ExternalAgentProviderAdapter,
+  ExternalAgentProviderHistoryContext
 } from '@monad/sdk-atom';
 
 import { readFileSync } from 'node:fs';
@@ -12,10 +12,10 @@ import { join } from 'node:path';
 import { defaultBinProbes, resolveBinary } from '@monad/sdk-atom';
 
 import { hasFlag, parseStructuredAuthState, uniqueModelNames } from '../adapter-shared.ts';
-import { parseNativeCliArgumentSupport } from '../argument-support.ts';
+import { parseExternalAgentArgumentSupport } from '../argument-support.ts';
 import { readProviderHistoryFile } from '../history-files.ts';
 import { resizePty, sendPtyInput, stopPty } from '../pty.ts';
-import { nativeCliAdapterSettings } from '../settings.ts';
+import { externalAgentAdapterSettings } from '../settings.ts';
 import { createBasicSettingsImport } from '../settings-import/index.ts';
 import { qwenObservationProjection } from './observation.ts';
 import {
@@ -84,7 +84,7 @@ function withQwenSystemPromptArgs(args: string[], systemPromptFile: string | und
   return [...args, '--append-system-prompt', readFileSync(systemPromptFile, 'utf8')];
 }
 
-function buildQwenLaunch(agent: NativeCliAgentView, opts: BuildNativeCliLaunchOptions): NativeCliLaunchSpec {
+function buildQwenLaunch(agent: ExternalAgentView, opts: BuildExternalAgentLaunchOptions): ExternalAgentLaunchSpec {
   const launchMode = opts.launchMode ?? agent.defaultLaunchMode;
   let args = [...(agent.args ?? [])];
   if (opts.providerSessionRef && !hasFlag(args, '--resume') && !hasFlag(args, '-r')) {
@@ -116,7 +116,7 @@ function buildQwenLaunch(agent: NativeCliAgentView, opts: BuildNativeCliLaunchOp
   };
 }
 
-function buildQwenAuthLaunch(agent: NativeCliAgentView, args: string[]): NativeCliLaunchSpec {
+function buildQwenAuthLaunch(agent: ExternalAgentView, args: string[]): ExternalAgentLaunchSpec {
   return {
     argv: [agent.command, ...args],
     cwd: homedir(),
@@ -128,7 +128,7 @@ function buildQwenAuthLaunch(agent: NativeCliAgentView, args: string[]): NativeC
   };
 }
 
-function readQwenHistoryOutput(context: NativeCliProviderHistoryContext): string | null {
+function readQwenHistoryOutput(context: ExternalAgentProviderHistoryContext): string | null {
   const raw = readProviderHistoryFile({
     roots: [join(homedir(), '.qwen')],
     providerSessionRef: context.providerSessionRef,
@@ -139,7 +139,7 @@ function readQwenHistoryOutput(context: NativeCliProviderHistoryContext): string
   return raw && hasQwenStreamJsonMessages(raw) ? raw : null;
 }
 
-function sendQwenInput(handle: Parameters<NativeCliProviderAdapter['sendInput']>[0], input: string): void {
+function sendQwenInput(handle: Parameters<ExternalAgentProviderAdapter['sendInput']>[0], input: string): void {
   if (handle.launchMode !== 'json-stream') {
     sendPtyInput(handle, input);
     return;
@@ -147,12 +147,12 @@ function sendQwenInput(handle: Parameters<NativeCliProviderAdapter['sendInput']>
   sendQwenStreamJsonInput(handle, input);
 }
 
-function resizeQwen(handle: Parameters<NativeCliProviderAdapter['resize']>[0], cols: number, rows: number): void {
+function resizeQwen(handle: Parameters<ExternalAgentProviderAdapter['resize']>[0], cols: number, rows: number): void {
   if (handle.launchMode === 'json-stream') return;
   resizePty(handle, cols, rows);
 }
 
-function stopQwen(handle: Parameters<NativeCliProviderAdapter['stop']>[0]): void {
+function stopQwen(handle: Parameters<ExternalAgentProviderAdapter['stop']>[0]): void {
   if (handle.launchMode === 'json-stream') {
     void handle.stdin?.end?.();
     handle.kill('SIGTERM');
@@ -162,19 +162,19 @@ function stopQwen(handle: Parameters<NativeCliProviderAdapter['stop']>[0]): void
 }
 
 function resolveQwenApproval(
-  handle: Parameters<NativeCliProviderAdapter['resolveApproval']>[0],
-  resolution: Parameters<NativeCliProviderAdapter['resolveApproval']>[1]
+  handle: Parameters<ExternalAgentProviderAdapter['resolveApproval']>[0],
+  resolution: Parameters<ExternalAgentProviderAdapter['resolveApproval']>[1]
 ): void {
   if (handle.launchMode !== 'json-stream') return;
   resolveQwenStreamJsonApproval(handle, resolution);
 }
 
-export const qwenNativeCliAdapter: NativeCliProviderAdapter = {
+export const qwenExternalAgentAdapter: ExternalAgentProviderAdapter = {
   provider: 'qwen',
   productIcon: 'qwen',
   label: 'Qwen Code',
   observation: qwenObservationProjection,
-  settings: () => nativeCliAdapterSettings({ launchModes: ['pty', 'json-stream'] }),
+  settings: () => externalAgentAdapterSettings({ launchModes: ['pty', 'json-stream'] }),
   settingsImport: createBasicSettingsImport('qwen', 'Qwen Code', 'qwen', '.qwen'),
   managedRuntime: {
     launchMode: () => 'json-stream',
@@ -185,12 +185,12 @@ export const qwenNativeCliAdapter: NativeCliProviderAdapter = {
     const installed = qwenBin !== undefined;
     return {
       id: 'qwen',
-      label: qwenNativeCliAdapter.label,
+      label: qwenExternalAgentAdapter.label,
       provider: 'qwen',
-      productIcon: qwenNativeCliAdapter.productIcon,
+      productIcon: qwenExternalAgentAdapter.productIcon,
       command: 'qwen',
       args: [],
-      modelOptions: qwenNativeCliAdapter.listSupportedModels(),
+      modelOptions: qwenExternalAgentAdapter.listSupportedModels(),
       defaultLaunchMode: 'pty',
       supportedLaunchModes: ['pty', 'json-stream'],
       installHint: 'Install Qwen Code, then complete its provider-owned authentication flow.',
@@ -225,13 +225,13 @@ export const qwenNativeCliAdapter: NativeCliProviderAdapter = {
   authStatus(agent) {
     return {
       launch: buildQwenAuthLaunch(agent, ['--list-sessions']),
-      parse: (output, exitCode) => qwenNativeCliAdapter.parseAuthStatus(output, exitCode)
+      parse: (output, exitCode) => qwenExternalAgentAdapter.parseAuthStatus(output, exitCode)
     };
   },
   argumentSupport(agent) {
     return {
       launch: buildQwenAuthLaunch(agent, ['--help']),
-      parse: (output) => parseNativeCliArgumentSupport(output)
+      parse: (output) => parseExternalAgentArgumentSupport(output)
     };
   },
   parseAuthStatus(output, exitCode) {

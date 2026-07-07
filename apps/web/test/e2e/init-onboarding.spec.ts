@@ -63,10 +63,10 @@ async function installInitOnboardingApiMock(page: Page) {
     if (method === 'GET' && path === '/v1/workplace/projects') {
       return route.fulfill(json({ projects: [], total: 0, hasMore: false }));
     }
-    if (method === 'GET' && path === '/v1/settings/native-cli-agents') {
+    if (method === 'GET' && path === '/v1/settings/external-agents') {
       return route.fulfill(json({ agents: [] }));
     }
-    if (method === 'GET' && path === '/v1/settings/native-cli-agents/presets') {
+    if (method === 'GET' && path === '/v1/settings/external-agents/presets') {
       return route.fulfill(
         json({
           presets: [
@@ -134,9 +134,9 @@ test.describe('init onboarding', () => {
     await expect(page).toHaveURL(/\/studio\/runtime$/);
     await expect(page.getByRole('heading', { name: 'Runtime overview' })).toBeVisible();
 
-    await page.goto('/studio/nativeCliAgents');
+    await page.goto('/studio/externalAgents');
 
-    await expect(page).toHaveURL(/\/studio\/nativeCliAgents$/);
+    await expect(page).toHaveURL(/\/studio\/externalAgents$/);
     await expect(page.getByText('Codex', { exact: true })).toBeVisible();
   });
 });

@@ -1,9 +1,9 @@
-import type { NativeCliProviderAdapter } from '@monad/sdk-atom';
+import type { ExternalAgentProviderAdapter } from '@monad/sdk-atom';
 
 import { defaultBinProbes, resolveBinary } from '@monad/sdk-atom';
 
 import { parseStructuredAuthState } from '../adapter-shared.ts';
-import { nativeCliAdapterSettings } from '../settings.ts';
+import { externalAgentAdapterSettings } from '../settings.ts';
 import { createCodexSettingsImport } from '../settings-import/index.ts';
 import { parseCodexSessionJsonl } from './events.ts';
 import { codexHistoryPageOutput, readCodexHistoryOutput } from './history.ts';
@@ -30,13 +30,13 @@ import {
   stopCodex
 } from './runtime.ts';
 
-export const codexNativeCliAdapter: NativeCliProviderAdapter = {
+export const codexExternalAgentAdapter: ExternalAgentProviderAdapter = {
   provider: 'codex',
   productIcon: 'codex',
   label: 'Codex',
   observation: codexObservationProjection,
   settings: () =>
-    nativeCliAdapterSettings({
+    externalAgentAdapterSettings({
       launchModes: ['pty', 'app-server', 'remote-control'],
       appServerTransports: [...CODEX_APP_SERVER_TRANSPORTS]
     }),
@@ -60,12 +60,12 @@ export const codexNativeCliAdapter: NativeCliProviderAdapter = {
     const installed = codexBin !== undefined;
     return {
       id: 'codex',
-      label: codexNativeCliAdapter.label,
+      label: codexExternalAgentAdapter.label,
       provider: 'codex',
-      productIcon: codexNativeCliAdapter.productIcon,
+      productIcon: codexExternalAgentAdapter.productIcon,
       command: 'codex',
       args: [],
-      modelOptions: codexNativeCliAdapter.listSupportedModels(),
+      modelOptions: codexExternalAgentAdapter.listSupportedModels(),
       defaultLaunchMode: 'pty',
       supportedLaunchModes: ['pty', 'app-server', 'remote-control'],
       supportedAppServerTransports: [...CODEX_APP_SERVER_TRANSPORTS],
@@ -105,7 +105,7 @@ export const codexNativeCliAdapter: NativeCliProviderAdapter = {
   authStatus(agent) {
     return {
       launch: buildCodexAuthLaunch(agent, ['login', 'status']),
-      parse: (output, exitCode) => codexNativeCliAdapter.parseAuthStatus(output, exitCode)
+      parse: (output, exitCode) => codexExternalAgentAdapter.parseAuthStatus(output, exitCode)
     };
   },
   argumentSupport(agent) {

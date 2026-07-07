@@ -17,9 +17,9 @@ import {
 } from '@/lib/project-debug-trace';
 import { DEV_SYSTEM_MESSAGES_IN_STREAM_ENABLED, useProjectDebugStore } from './project-debug-store';
 
-type DebugFilter = 'all' | 'http' | 'sse' | 'native-cli' | 'approval' | 'log' | 'error';
+type DebugFilter = 'all' | 'http' | 'sse' | 'external-agent' | 'approval' | 'log' | 'error';
 
-const FILTERS: DebugFilter[] = ['all', 'http', 'sse', 'native-cli', 'approval', 'log', 'error'];
+const FILTERS: DebugFilter[] = ['all', 'http', 'sse', 'external-agent', 'approval', 'log', 'error'];
 
 export function filterDebugTraceEntries(
   entries: ProjectDebugTraceEntry[],
@@ -30,8 +30,8 @@ export function filterDebugTraceEntries(
   if (filter === 'http') return entries.filter((entry) => entry.layer === 'http');
   if (filter === 'sse') return entries.filter((entry) => entry.layer === 'sse');
   if (filter === 'log') return entries.filter((entry) => entry.layer === 'log');
-  if (filter === 'native-cli') {
-    return entries.filter((entry) => entry.label.includes('native_cli') || entry.label.includes('native-cli'));
+  if (filter === 'external-agent') {
+    return entries.filter((entry) => entry.label.includes('external_agent') || entry.label.includes('external-agent'));
   }
   return entries.filter((entry) => entry.label.includes('approval'));
 }

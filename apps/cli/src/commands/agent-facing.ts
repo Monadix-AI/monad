@@ -16,8 +16,8 @@ import { type CommandDef, usageError } from './types.ts';
 
 function runtimeHeaders(): Record<string, string> {
   const headers: Record<string, string> = {};
-  if (Bun.env.MONAD_NATIVE_CLI_SESSION_ID) {
-    headers['x-monad-native-cli-session-id'] = Bun.env.MONAD_NATIVE_CLI_SESSION_ID;
+  if (Bun.env.MONAD_EXTERNAL_AGENT_SESSION_ID) {
+    headers['x-monad-external-agent-session-id'] = Bun.env.MONAD_EXTERNAL_AGENT_SESSION_ID;
   }
   return headers;
 }
@@ -222,7 +222,7 @@ export const agentCommand: CommandDef = {
 export const runtimeCommand: CommandDef = {
   name: 'runtime',
   synopsis: 'runtime info',
-  description: 'show the current managed native CLI runtime binding',
+  description: 'show the current managed external agent runtime binding',
   async run({ positionals, client }) {
     if (positionals[0] !== 'info') throw usageError('usage: monad runtime info');
     print(

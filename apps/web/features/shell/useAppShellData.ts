@@ -3,14 +3,14 @@
 import type { ProfileView } from '@monad/protocol';
 
 import {
-  nativeCliSessionSelectors,
+  externalAgentSessionSelectors,
   profileSelectors,
   sessionAdapter,
   sessionSelectors,
   useGetHealthQuery,
   useGetRolesQuery,
-  useListLiveNativeCliSessionsQuery,
-  useListNativeCliSessionSummariesQuery,
+  useListExternalAgentSessionSummariesQuery,
+  useListLiveExternalAgentSessionsQuery,
   useListProfilesQuery,
   useListSessionsQuery,
   useListWorkplaceProjectsQuery,
@@ -40,32 +40,37 @@ export function useAppShellData() {
 
   const { data: sessionData, isLoading: sessionsLoading } = useListSessionsQuery(undefined);
   const { data: projectData, isLoading: projectsLoading } = useListWorkplaceProjectsQuery(undefined);
-  const { data: liveNativeCliSessionData } = useListLiveNativeCliSessionsQuery(undefined);
-  const { data: nativeCliSessionSummaryData } = useListNativeCliSessionSummariesQuery(undefined);
+  const { data: liveExternalAgentSessionData } = useListLiveExternalAgentSessionsQuery(undefined);
+  const { data: externalAgentSessionSummaryData } = useListExternalAgentSessionSummariesQuery(undefined);
   const sessions = sessionSelectors.selectAll(sessionData?.sessions ?? sessionAdapter.getInitialState());
   const projectRows = useMemo(
     () => workplaceProjectSelectors.selectAll(projectData?.projects ?? workplaceProjectAdapter.getInitialState()),
     [projectData]
   );
-  const liveNativeCliSessions = useMemo(
-    () => (liveNativeCliSessionData ? nativeCliSessionSelectors.selectAll(liveNativeCliSessionData.sessions) : []),
-    [liveNativeCliSessionData]
-  );
-  const nativeCliSessionSummaries = useMemo(
+  const liveExternalAgentSessions = useMemo(
     () =>
-      nativeCliSessionSummaryData ? nativeCliSessionSelectors.selectAll(nativeCliSessionSummaryData.sessions) : [],
-    [nativeCliSessionSummaryData]
+      liveExternalAgentSessionData
+        ? externalAgentSessionSelectors.selectAll(liveExternalAgentSessionData.sessions)
+        : [],
+    [liveExternalAgentSessionData]
+  );
+  const externalAgentSessionSummaries = useMemo(
+    () =>
+      externalAgentSessionSummaryData
+        ? externalAgentSessionSelectors.selectAll(externalAgentSessionSummaryData.sessions)
+        : [],
+    [externalAgentSessionSummaryData]
   );
   const pinnedProjectIds = useWorkspaceShellStore((state: WorkspaceShellState) => state.pinnedProjectIds);
   const pinnedProjectIdSet = useMemo(() => new Set(pinnedProjectIds), [pinnedProjectIds]);
   const workspaceProjects = useMemo(
     () =>
       buildWorkspaceProjects(projectRows, {
-        liveNativeCliSessions,
-        nativeCliSessions: nativeCliSessionSummaries,
+        liveExternalAgentSessions,
+        externalAgentSessions: externalAgentSessionSummaries,
         pinnedProjectIds: pinnedProjectIdSet
       }),
-    [liveNativeCliSessions, nativeCliSessionSummaries, pinnedProjectIdSet, projectRows]
+    [liveExternalAgentSessions, externalAgentSessionSummaries, pinnedProjectIdSet, projectRows]
   );
 
   useStreamControlQuery(undefined);

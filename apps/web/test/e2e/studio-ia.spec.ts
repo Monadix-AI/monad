@@ -92,7 +92,7 @@ async function installStudioIaApiMock(page: Page) {
         })
       );
     }
-    if (method === 'GET' && path === '/v1/settings/native-cli-agents') {
+    if (method === 'GET' && path === '/v1/settings/external-agents') {
       return route.fulfill(
         json({
           agents: [
@@ -117,7 +117,7 @@ async function installStudioIaApiMock(page: Page) {
         })
       );
     }
-    if (method === 'GET' && path === '/v1/settings/native-cli-agents/presets') {
+    if (method === 'GET' && path === '/v1/settings/external-agents/presets') {
       return route.fulfill(json({ presets: [] }));
     }
 

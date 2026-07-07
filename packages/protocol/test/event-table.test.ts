@@ -22,9 +22,9 @@ test('every EVENT_TABLE entry is a ZodType', () => {
   }
 });
 
-test('native CLI connection required events carry provider reconnect guidance', () => {
-  const payload = parseEventPayload('native_cli.connection_required', {
-    nativeCliSessionId: 'ncli_1',
+test('external agent connection required events carry provider reconnect guidance', () => {
+  const payload = parseEventPayload('external_agent.connection_required', {
+    externalAgentSessionId: 'exa_1',
     agentName: 'gemini',
     provider: 'gemini',
     reason: 'Gemini CLI is waiting for provider authentication to complete.',
@@ -32,7 +32,7 @@ test('native CLI connection required events carry provider reconnect guidance', 
   });
 
   expect(payload).toEqual({
-    nativeCliSessionId: 'ncli_1',
+    externalAgentSessionId: 'exa_1',
     agentName: 'gemini',
     provider: 'gemini',
     reason: 'Gemini CLI is waiting for provider authentication to complete.',

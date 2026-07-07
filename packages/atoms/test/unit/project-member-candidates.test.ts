@@ -2,11 +2,11 @@ import { expect, test } from 'bun:test';
 
 import { projectMemberCandidates } from '../../src/workspace-experiences/experience/project-projection.ts';
 
-test('project member candidates include project templates defined on native CLI agents', () => {
+test('project member candidates include project templates defined on external agents', () => {
   const candidates = projectMemberCandidates({
     acpAgents: [],
     projectMembers: [],
-    nativeCliAgents: [
+    externalAgents: [
       {
         name: 'codex',
         provider: 'codex',
@@ -34,8 +34,8 @@ test('project member candidates include project templates defined on native CLI 
 
   expect(candidates).toContainEqual(
     expect.objectContaining({
-      id: 'native-cli-template:codex:reviewer',
-      type: 'native-cli',
+      id: 'external-agent-template:codex:reviewer',
+      type: 'external-agent',
       name: 'codex',
       label: 'Reviewer',
       tag: 'Codex',

@@ -7,12 +7,12 @@ import type { Event } from '@monad/protocol';
 
 import { expect, test } from 'bun:test';
 
-import { getNativeAgentDeliveryApi } from '../../src/endpoints/native-cli/get-native-agent-delivery.ts';
-import { getNativeAgentDeliveryObservationApi } from '../../src/endpoints/native-cli/get-native-agent-delivery-observation.ts';
-import { getNativeCliObservationApi } from '../../src/endpoints/native-cli/get-native-cli-observation.ts';
-import { getNativeCliUsageApi } from '../../src/endpoints/native-cli/get-native-cli-usage.ts';
-import { listNativeCliSessionsApi } from '../../src/endpoints/native-cli/list-native-cli-sessions.ts';
-import { streamNativeCliObservationApi } from '../../src/endpoints/native-cli/stream-native-cli-observation.ts';
+import { getExternalAgentObservationApi } from '../../src/endpoints/external-agent/get-external-agent-observation.ts';
+import { getExternalAgentUsageApi } from '../../src/endpoints/external-agent/get-external-agent-usage.ts';
+import { getNativeAgentDeliveryApi } from '../../src/endpoints/external-agent/get-native-agent-delivery.ts';
+import { getNativeAgentDeliveryObservationApi } from '../../src/endpoints/external-agent/get-native-agent-delivery-observation.ts';
+import { listExternalAgentSessionsApi } from '../../src/endpoints/external-agent/list-external-agent-sessions.ts';
+import { streamExternalAgentObservationApi } from '../../src/endpoints/external-agent/stream-external-agent-observation.ts';
 import {
   getMessagesApi,
   listSessionsApi,
@@ -26,17 +26,17 @@ import { channelsApi } from '../../src/endpoints/settings/channels/index.ts';
 import {
   createMonadStore,
   monadApi,
+  useGetExternalAgentAuthQuery,
+  useGetExternalAgentObservationQuery,
+  useGetExternalAgentUsageQuery,
   useGetNativeAgentDeliveryObservationQuery,
   useGetNativeAgentDeliveryQuery,
-  useGetNativeCliAuthQuery,
-  useGetNativeCliObservationQuery,
-  useGetNativeCliUsageQuery,
-  useInputNativeCliAuthMutation,
-  useLazyGetNativeCliAuthStatusQuery,
-  useLazyGetNativeCliUsageQuery,
+  useInputExternalAgentAuthMutation,
+  useLazyGetExternalAgentAuthStatusQuery,
+  useLazyGetExternalAgentUsageQuery,
   useLazyListCommandsQuery,
-  useStartNativeCliAuthMutation,
-  useStopNativeCliAuthMutation
+  useStartExternalAgentAuthMutation,
+  useStopExternalAgentAuthMutation
 } from '../../src/index.ts';
 
 function ok<T>(data: T): { data: T; status: number } {
@@ -45,12 +45,12 @@ function ok<T>(data: T): { data: T; status: number } {
 
 function fakeClient(overrides: Record<string, unknown>): MonadClient {
   const client = {
-    streamNativeCliObservation: (
+    streamExternalAgentObservation: (
       id: string,
       transcriptTargetId: string,
       onObservation: (access: unknown) => void
     ): (() => void) => {
-      const fn = overrides.streamNativeCliObservation as
+      const fn = overrides.streamExternalAgentObservation as
         | ((id: string, transcriptTargetId: string, onObservation: (access: unknown) => void) => void)
         | undefined;
       fn?.(id, transcriptTargetId, onObservation);
@@ -86,9 +86,11 @@ function fakeClient(overrides: Record<string, unknown>): MonadClient {
                 return ok({ items: fn ? await fn(id) : [], nextCursor: undefined });
               }
             },
-            'native-cli-sessions': {
+            'external-agent-sessions': {
               get: async () => {
-                const fn = overrides.listNativeCliSessions as ((sessionId: string) => Promise<unknown[]>) | undefined;
+                const fn = overrides.listExternalAgentSessions as
+                  | ((sessionId: string) => Promise<unknown[]>)
+                  | undefined;
                 return ok({ sessions: fn ? await fn(id) : [] });
               }
             },
@@ -114,35 +116,35 @@ function fakeClient(overrides: Record<string, unknown>): MonadClient {
           }
         ),
         projects: ({ id }: { id: string }) => ({
-          'native-cli-sessions': {
+          'external-agent-sessions': {
             get: async () => {
-              const fn = overrides.listProjectNativeCliSessions as
+              const fn = overrides.listProjectExternalAgentSessions as
                 | ((projectId: string) => Promise<unknown[]>)
                 | undefined;
               return ok({ sessions: fn ? await fn(id) : [] });
             }
           }
         }),
-        'native-cli-sessions': ({ id }: { id: string }) => ({
+        'external-agent-sessions': ({ id }: { id: string }) => ({
           observation: {
             get: async () => {
-              const fn = overrides.getNativeCliObservation as ((id: string) => Promise<unknown>) | undefined;
+              const fn = overrides.getExternalAgentObservation as ((id: string) => Promise<unknown>) | undefined;
               return ok(
                 fn
                   ? await fn(id)
                   : {
                       state: 'unavailable',
-                      nativeCliSessionId: id,
+                      externalAgentSessionId: id,
                       reason: 'provider history unavailable'
                     }
               );
             }
           }
         }),
-        'native-cli-agents': ({ name }: { name: string }) => ({
+        'external-agents': ({ name }: { name: string }) => ({
           usage: {
             get: async () => {
-              const fn = overrides.getNativeCliUsage as ((name: string) => Promise<unknown>) | undefined;
+              const fn = overrides.getExternalAgentUsage as ((name: string) => Promise<unknown>) | undefined;
               return ok(
                 fn
                   ? await fn(name)
@@ -165,7 +167,7 @@ function fakeClient(overrides: Record<string, unknown>): MonadClient {
                   ? await fn(id)
                   : {
                       state: 'unavailable',
-                      nativeCliSessionId: 'ncli_1',
+                      externalAgentSessionId: 'exa_1',
                       reason: 'provider history unavailable'
                     }
               );
@@ -181,7 +183,7 @@ function fakeClient(overrides: Record<string, unknown>): MonadClient {
                       id,
                       projectId: 'prj_01KDEFAULTDELIVERY0000000',
                       memberInstanceId: 'pmem_codex',
-                      nativeCliSessionId: 'ncli_1',
+                      externalAgentSessionId: 'exa_1',
                       triggerMessageSeq: 1,
                       state: 'queued',
                       turn: {},
@@ -301,24 +303,24 @@ function fakeClient(overrides: Record<string, unknown>): MonadClient {
   return client as unknown as MonadClient;
 }
 
-test('native CLI auth hooks are exported from the package API', () => {
+test('external agent auth hooks are exported from the package API', () => {
   expect(typeof useGetNativeAgentDeliveryQuery).toBe('function');
   expect(typeof useGetNativeAgentDeliveryObservationQuery).toBe('function');
-  expect(typeof useGetNativeCliAuthQuery).toBe('function');
-  expect(typeof useGetNativeCliObservationQuery).toBe('function');
-  expect(typeof useGetNativeCliUsageQuery).toBe('function');
-  expect(typeof useInputNativeCliAuthMutation).toBe('function');
-  expect(typeof useLazyGetNativeCliAuthStatusQuery).toBe('function');
+  expect(typeof useGetExternalAgentAuthQuery).toBe('function');
+  expect(typeof useGetExternalAgentObservationQuery).toBe('function');
+  expect(typeof useGetExternalAgentUsageQuery).toBe('function');
+  expect(typeof useInputExternalAgentAuthMutation).toBe('function');
+  expect(typeof useLazyGetExternalAgentAuthStatusQuery).toBe('function');
   expect(typeof useLazyListCommandsQuery).toBe('function');
-  expect(typeof useLazyGetNativeCliUsageQuery).toBe('function');
-  expect(typeof useStartNativeCliAuthMutation).toBe('function');
-  expect(typeof useStopNativeCliAuthMutation).toBe('function');
+  expect(typeof useLazyGetExternalAgentUsageQuery).toBe('function');
+  expect(typeof useStartExternalAgentAuthMutation).toBe('function');
+  expect(typeof useStopExternalAgentAuthMutation).toBe('function');
 });
 
-test('getNativeCliUsage uses the typed native CLI usage treaty route', async () => {
+test('getExternalAgentUsage uses the typed external agent usage treaty route', async () => {
   const seen: string[] = [];
   const client = fakeClient({
-    getNativeCliUsage: async (name: string) => {
+    getExternalAgentUsage: async (name: string) => {
       seen.push(name);
       return {
         agentName: name,
@@ -332,12 +334,12 @@ test('getNativeCliUsage uses the typed native CLI usage treaty route', async () 
 
   const res = await store.dispatch(
     (
-      getNativeCliUsageApi.endpoints as typeof getNativeCliUsageApi.endpoints & {
-        getNativeCliUsage: {
-          initiate: typeof getNativeCliUsageApi.endpoints.getNativeCliUsage.initiate;
+      getExternalAgentUsageApi.endpoints as typeof getExternalAgentUsageApi.endpoints & {
+        getExternalAgentUsage: {
+          initiate: typeof getExternalAgentUsageApi.endpoints.getExternalAgentUsage.initiate;
         };
       }
-    ).getNativeCliUsage.initiate('codex')
+    ).getExternalAgentUsage.initiate('codex')
   );
 
   expect(seen).toEqual(['codex']);
@@ -354,7 +356,7 @@ test('getNativeAgentDelivery uses the typed native agent delivery treaty route',
           id,
           projectId: 'prj_01KCLIENTDELIVERY00000000',
           memberInstanceId: 'pmem_codex_1',
-          nativeCliSessionId: 'ncli_1',
+          externalAgentSessionId: 'exa_1',
           triggerMessageSeq: 7,
           state: 'delivered',
           turn: { providerSessionRef: 'provider-session-1', providerTurnId: 'turn-1' },
@@ -392,7 +394,7 @@ test('getNativeAgentDeliveryObservation uses the typed delivery observation trea
       seen.push(id);
       return {
         state: 'history',
-        nativeCliSessionId: 'ncli_from_delivery',
+        externalAgentSessionId: 'exa_from_delivery',
         deliveryId: id,
         turn: { providerSessionRef: 'provider-session-1', providerTurnId: 'turn-1' },
         provider: 'codex',
@@ -419,20 +421,20 @@ test('getNativeAgentDeliveryObservation uses the typed delivery observation trea
   expect(seen).toEqual(['deliv_01KCLIENTOBSERVATION0000']);
   expect('data' in res && res.data?.state).toBe('history');
   if ('data' in res && res.data?.state === 'history') {
-    expect(res.data.nativeCliSessionId).toBe('ncli_from_delivery');
+    expect(res.data.externalAgentSessionId).toBe('exa_from_delivery');
     expect(res.data.deliveryId).toBe('deliv_01KCLIENTOBSERVATION0000');
     expect(res.data.turn?.providerTurnId).toBe('turn-1');
   }
 });
 
-test('getNativeCliObservation uses the typed native CLI observation treaty route', async () => {
+test('getExternalAgentObservation uses the typed external agent observation treaty route', async () => {
   const seen: string[] = [];
   const client = fakeClient({
-    getNativeCliObservation: async (id: string) => {
+    getExternalAgentObservation: async (id: string) => {
       seen.push(id);
       return {
         state: 'live',
-        nativeCliSessionId: id,
+        externalAgentSessionId: id,
         provider: 'codex',
         output: '{"type":"agent_message","message":"ok"}',
         observedAt: '2026-07-03T00:00:00.000Z'
@@ -443,45 +445,49 @@ test('getNativeCliObservation uses the typed native CLI observation treaty route
 
   const res = await store.dispatch(
     (
-      getNativeCliObservationApi.endpoints as typeof getNativeCliObservationApi.endpoints & {
-        getNativeCliObservation: {
-          initiate: typeof getNativeCliObservationApi.endpoints.getNativeCliObservation.initiate;
+      getExternalAgentObservationApi.endpoints as typeof getExternalAgentObservationApi.endpoints & {
+        getExternalAgentObservation: {
+          initiate: typeof getExternalAgentObservationApi.endpoints.getExternalAgentObservation.initiate;
         };
       }
-    ).getNativeCliObservation.initiate({ id: 'ncli_1', transcriptTargetId: 'prj_01KCLIENTOBSERVE0000000' })
+    ).getExternalAgentObservation.initiate({ id: 'exa_1', transcriptTargetId: 'prj_01KCLIENTOBSERVE0000000' })
   );
 
-  expect(seen).toEqual(['ncli_1']);
+  expect(seen).toEqual(['exa_1']);
   expect('data' in res && res.data?.state).toBe('live');
 });
 
-test('streamNativeCliObservation pushes live access snapshots into the query cache', async () => {
+test('streamExternalAgentObservation pushes live access snapshots into the query cache', async () => {
   let seen: { id: string; transcriptTargetId: string } | undefined;
   let push: ((access: unknown) => void) | undefined;
   const client = fakeClient({
-    streamNativeCliObservation: (id: string, transcriptTargetId: string, onObservation: (access: unknown) => void) => {
+    streamExternalAgentObservation: (
+      id: string,
+      transcriptTargetId: string,
+      onObservation: (access: unknown) => void
+    ) => {
       seen = { id, transcriptTargetId };
       push = onObservation;
     }
   });
   const store = createMonadStore({ client });
-  const arg = { id: 'ncli_1', transcriptTargetId: 'prj_01KCLIENTOBSERVE0000000' as const };
+  const arg = { id: 'exa_1', transcriptTargetId: 'prj_01KCLIENTOBSERVE0000000' as const };
 
-  store.dispatch(streamNativeCliObservationApi.endpoints.streamNativeCliObservation.initiate(arg));
+  store.dispatch(streamExternalAgentObservationApi.endpoints.streamExternalAgentObservation.initiate(arg));
   await new Promise((r) => setTimeout(r, 0));
-  expect(seen).toEqual({ id: 'ncli_1', transcriptTargetId: 'prj_01KCLIENTOBSERVE0000000' });
+  expect(seen).toEqual({ id: 'exa_1', transcriptTargetId: 'prj_01KCLIENTOBSERVE0000000' });
 
   // The client pushes a live snapshot; onCacheEntryAdded writes it straight into the cache.
   push?.({
     state: 'live',
-    nativeCliSessionId: 'ncli_1',
+    externalAgentSessionId: 'exa_1',
     provider: 'codex',
     output: '{"type":"agent_message"}',
     observedAt: '2026-07-03T00:00:00.000Z'
   });
   await new Promise((r) => setTimeout(r, 0));
 
-  const cached = streamNativeCliObservationApi.endpoints.streamNativeCliObservation.select(arg)(
+  const cached = streamExternalAgentObservationApi.endpoints.streamExternalAgentObservation.select(arg)(
     store.getState() as never
   );
   expect(cached.data?.state).toBe('live');
@@ -554,15 +560,15 @@ test('client errors surface on the RTKQ error branch, not as throws', async () =
   expect((res.error as { message?: string } | undefined)?.message).toBe('boom');
 });
 
-test('listNativeCliSessions uses the typed project treaty route for Workplace Projects', async () => {
+test('listExternalAgentSessions uses the typed project treaty route for Workplace Projects', async () => {
   const seen: string[] = [];
   const now = new Date().toISOString();
   const client = fakeClient({
-    listProjectNativeCliSessions: async (projectId: string) => {
+    listProjectExternalAgentSessions: async (projectId: string) => {
       seen.push(projectId);
       return [
         {
-          id: 'ncli_1',
+          id: 'exa_1',
           transcriptTargetId: projectId,
           agentName: 'codex',
           provider: 'codex',
@@ -584,18 +590,18 @@ test('listNativeCliSessions uses the typed project treaty route for Workplace Pr
 
   const res = await store.dispatch(
     (
-      listNativeCliSessionsApi.endpoints as typeof listNativeCliSessionsApi.endpoints & {
-        listNativeCliSessions: {
+      listExternalAgentSessionsApi.endpoints as typeof listExternalAgentSessionsApi.endpoints & {
+        listExternalAgentSessions: {
           initiate: (
             id: string
-          ) => ReturnType<typeof listNativeCliSessionsApi.endpoints.listNativeCliSessions.initiate>;
+          ) => ReturnType<typeof listExternalAgentSessionsApi.endpoints.listExternalAgentSessions.initiate>;
         };
       }
-    ).listNativeCliSessions.initiate('prj_1')
+    ).listExternalAgentSessions.initiate('prj_1')
   );
 
   expect(seen).toEqual(['prj_1']);
-  expect('data' in res && res.data?.ids).toEqual(['ncli_1']);
+  expect('data' in res && res.data?.ids).toEqual(['exa_1']);
 });
 
 test('credential mutations invalidate that provider’s credential list', async () => {
@@ -727,17 +733,17 @@ test('streamControl subscribes to the control stream and invalidates Sessions on
   expect(listCalls).toBe(2);
 });
 
-test('streamControl invalidates native CLI sessions when a project native CLI runtime starts', async () => {
-  let nativeCliCalls = 0;
+test('streamControl invalidates external agent sessions when a project external agent runtime starts', async () => {
+  let externalAgentCalls = 0;
   let controlHandler: ((event: Event) => void) | undefined;
   const now = new Date().toISOString();
 
   const client = fakeClient({
-    listProjectNativeCliSessions: async (projectId: string) => {
-      nativeCliCalls++;
+    listProjectExternalAgentSessions: async (projectId: string) => {
+      externalAgentCalls++;
       return [
         {
-          id: 'ncli_1',
+          id: 'exa_1',
           transcriptTargetId: projectId,
           agentName: 'pmem_codex_reviewer',
           provider: 'codex',
@@ -763,32 +769,32 @@ test('streamControl invalidates native CLI sessions when a project native CLI ru
 
   await store.dispatch(
     (
-      listNativeCliSessionsApi.endpoints as typeof listNativeCliSessionsApi.endpoints & {
-        listNativeCliSessions: {
+      listExternalAgentSessionsApi.endpoints as typeof listExternalAgentSessionsApi.endpoints & {
+        listExternalAgentSessions: {
           initiate: (
             id: string
-          ) => ReturnType<typeof listNativeCliSessionsApi.endpoints.listNativeCliSessions.initiate>;
+          ) => ReturnType<typeof listExternalAgentSessionsApi.endpoints.listExternalAgentSessions.initiate>;
         };
       }
-    ).listNativeCliSessions.initiate('prj_1')
+    ).listExternalAgentSessions.initiate('prj_1')
   );
-  expect(nativeCliCalls).toBe(1);
+  expect(externalAgentCalls).toBe(1);
 
   store.dispatch(streamControlApi.endpoints.streamControl.initiate());
   await new Promise((r) => setTimeout(r, 0));
 
   controlHandler?.({
-    id: 'evt_native_cli_started',
+    id: 'evt_external_agent_started',
     transcriptTargetId: 'prj_1',
-    type: 'native_cli.started',
+    type: 'external_agent.started',
     actorAgentId: null,
-    payload: { nativeCliSessionId: 'ncli_1' },
+    payload: { externalAgentSessionId: 'exa_1' },
     at: ''
   });
   await Promise.resolve();
   await new Promise((r) => setTimeout(r, 0));
 
-  expect(nativeCliCalls).toBe(2);
+  expect(externalAgentCalls).toBe(2);
 });
 
 test('listChannels caches by the Channels tag', async () => {

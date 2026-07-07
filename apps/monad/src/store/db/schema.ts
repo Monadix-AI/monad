@@ -76,8 +76,8 @@ export const tasks = sqliteTable('tasks', {
   updatedAt: text('updated_at').notNull()
 });
 
-const _nativeCliSessions = sqliteTable(
-  'native_cli_sessions',
+const _externalAgentSessions = sqliteTable(
+  'external_agent_sessions',
   {
     id: text('id').primaryKey(),
     transcriptTargetId: text('transcript_target_id').notNull(),
@@ -100,7 +100,7 @@ const _nativeCliSessions = sqliteTable(
     exitedAt: text('exited_at')
   },
   (t) => [
-    uniqueIndex('idx_native_cli_sessions_provider_ref')
+    uniqueIndex('idx_external_agent_sessions_provider_ref')
       .on(t.transcriptTargetId, t.provider, t.providerSessionRef)
       .where(providerSessionRefNotNull)
   ]
@@ -109,7 +109,7 @@ const _nativeCliSessions = sqliteTable(
 const _nativeAgentDirectMessages = sqliteTable('native_agent_direct_messages', {
   id: text('id').primaryKey(),
   projectId: text('project_id').notNull(),
-  nativeCliSessionId: text('native_cli_session_id').notNull(),
+  externalAgentSessionId: text('external_agent_session_id').notNull(),
   fromAgent: text('from_agent'),
   peer: text('peer').notNull(),
   text: text('text').notNull(),
@@ -129,10 +129,10 @@ const _messageAttachments = sqliteTable('message_attachments', {
   createdAt: text('created_at').notNull()
 });
 
-const _nativeCliInboxItems = sqliteTable(
-  'native_cli_inbox_items',
+const _externalAgentInboxItems = sqliteTable(
+  'external_agent_inbox_items',
   {
-    nativeCliSessionId: text('native_cli_session_id').notNull(),
+    externalAgentSessionId: text('external_agent_session_id').notNull(),
     messageSeq: integer('message_seq').notNull(),
     state: text('state').notNull().default('queued'),
     createdAt: text('created_at').notNull(),
@@ -140,7 +140,7 @@ const _nativeCliInboxItems = sqliteTable(
     visibleAt: text('visible_at'),
     consumedAt: text('consumed_at')
   },
-  (t) => [primaryKey({ columns: [t.nativeCliSessionId, t.messageSeq] })]
+  (t) => [primaryKey({ columns: [t.externalAgentSessionId, t.messageSeq] })]
 );
 
 export const messages = sqliteTable('messages', {

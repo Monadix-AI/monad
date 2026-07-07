@@ -105,13 +105,13 @@ describe('initMonadHome', () => {
     expect(cfg?.agent.sandbox.mode).toBe('workspace');
   });
 
-  test('native CLI agents are stored in system config and merged into loadAll', async () => {
+  test('external agents are stored in system config and merged into loadAll', async () => {
     await initMonadHome(paths);
     const cfg = await loadAll(paths.config, paths.profile);
     if (!cfg) throw new Error('config missing');
     await saveSystemConfig(paths.config, {
       ...cfg,
-      nativeCliAgents: [
+      externalAgents: [
         {
           name: 'codex',
           provider: 'codex',
@@ -124,8 +124,8 @@ describe('initMonadHome', () => {
       ]
     });
 
-    expect((await loadConfig(paths.config))?.nativeCliAgents).toHaveLength(1);
-    expect((await loadAll(paths.config, paths.profile))?.nativeCliAgents[0]?.provider).toBe('codex');
+    expect((await loadConfig(paths.config))?.externalAgents).toHaveLength(1);
+    expect((await loadAll(paths.config, paths.profile))?.externalAgents[0]?.provider).toBe('codex');
   });
 
   test('preserves principal id across re-runs (idempotent)', async () => {

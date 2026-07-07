@@ -77,8 +77,8 @@ export function createProjectExperienceRuntime(
       addProjectMember: source.addProjectMember,
       removeProjectMember: source.removeProjectMember,
       updateProjectMemberSettings: source.updateProjectMemberSettings,
-      sendNativeCliInput: source.sendNativeCliInput,
-      stopNativeCli: source.stopNativeCli,
+      sendExternalAgentInput: source.sendExternalAgentInput,
+      stopExternalAgent: source.stopExternalAgent,
       switchExperience: opts.switchExperience
     }
   };

@@ -36,7 +36,7 @@ function projectView(project: WorkplaceProject): WorkplaceProject {
 }
 
 /** Workplace project CRUD (list/get/create/update/delete). Extracted from lifecycle.ts as its own
- *  factory — depends on the shared workspace-runtime helpers and the managed-native-cli join hook,
+ *  factory — depends on the shared workspace-runtime helpers and the managed-external-agent join hook,
  *  both created once in lifecycle.ts and passed in so there's a single instance of each per daemon. */
 export function createProjectLifecycleHandlers(
   ctx: SessionContext,
@@ -44,13 +44,13 @@ export function createProjectLifecycleHandlers(
     applyWorkspaceRuntime: (id: TranscriptTargetId, resolved: string | undefined) => Promise<void>;
     disposeRuntime: (id: TranscriptTargetId) => void;
     resolveWorkspaceDir: (cwd: string, base: string | undefined) => string;
-    startAddedManagedNativeCliMembers: (previous: TranscriptTarget, next: TranscriptTarget) => Promise<void>;
+    startAddedManagedExternalAgentMembers: (previous: TranscriptTarget, next: TranscriptTarget) => Promise<void>;
   }
 ) {
   const {
     deps: { store, ownerPrincipalId, sessionSandbox, log }
   } = ctx;
-  const { applyWorkspaceRuntime, disposeRuntime, resolveWorkspaceDir, startAddedManagedNativeCliMembers } = deps;
+  const { applyWorkspaceRuntime, disposeRuntime, resolveWorkspaceDir, startAddedManagedExternalAgentMembers } = deps;
 
   function requireProject(id: ProjectId): WorkplaceProject {
     const project = store.getWorkplaceProject(id);
@@ -125,7 +125,7 @@ export function createProjectLifecycleHandlers(
       });
       if (!project) throw new HandlerError('internal', 'update project failed');
       if (resolvedCwd !== undefined) await applyWorkspaceRuntime(id, resolvedCwd ?? undefined);
-      await startAddedManagedNativeCliMembers(current, project);
+      await startAddedManagedExternalAgentMembers(current, project);
       ctx.emitLifecycle(id, 'session.updated', {
         title,
         state,
@@ -142,7 +142,7 @@ export function createProjectLifecycleHandlers(
       ctx.aborts.delete(id);
       disposeRuntime(id);
       clearProcessesForSession(id);
-      ctx.deps.nativeCliHost?.stopTranscriptTarget(id);
+      ctx.deps.externalAgentHost?.stopTranscriptTarget(id);
       await sessionSandbox?.dispose(id);
       disposeSandboxSession(id);
       store.deleteWorkplaceProject(id);

@@ -17,10 +17,10 @@ test('workplace UI store keeps project settings and member settings separate', (
   useWorkplaceUiStore.getState().closeProjectSettings();
   useWorkplaceUiStore.getState().closeProjectMemberSettings();
 
-  useWorkplaceUiStore.getState().openProjectMemberSettings('project-1', 'native-cli:codex');
+  useWorkplaceUiStore.getState().openProjectMemberSettings('project-1', 'external-agent:codex');
   expect(useWorkplaceUiStore.getState().projectMemberSettings).toEqual({
     projectId: 'project-1',
-    memberId: 'native-cli:codex'
+    memberId: 'external-agent:codex'
   });
 
   useWorkplaceUiStore.getState().closeProjectMemberSettings();

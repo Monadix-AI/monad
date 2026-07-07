@@ -25,7 +25,7 @@ test('agent message bubbles pass markdown source through unchanged when no stric
 test('agent message bubbles rewrite strict mention tokens before markdown rendering', () => {
   expect(
     markdownTextWithMentionCapsules(
-      message('Please sync with @[name="A" id="native-cli:pmem_codex_b8b9123ddd3d"] before shipping.').text
+      message('Please sync with @[name="A" id="external-agent:pmem_codex_b8b9123ddd3d"] before shipping.').text
     )
-  ).toBe('Please sync with [@A](#monad-mention-native-cli%3Apmem_codex_b8b9123ddd3d) before shipping.');
+  ).toBe('Please sync with [@A](#monad-mention-external-agent%3Apmem_codex_b8b9123ddd3d) before shipping.');
 });

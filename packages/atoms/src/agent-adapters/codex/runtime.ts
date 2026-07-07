@@ -1,6 +1,6 @@
-import type { NativeCliProviderAdapter } from '@monad/sdk-atom';
+import type { ExternalAgentProviderAdapter } from '@monad/sdk-atom';
 
-import { NativeCliError } from '@monad/sdk-atom';
+import { ExternalAgentError } from '@monad/sdk-atom';
 
 import { compactObject } from '../adapter-shared.ts';
 import { jsonRpcNotification, jsonRpcRequest, jsonRpcResponse, jsonRpcResponseId } from '../jsonrpc.ts';
@@ -8,11 +8,11 @@ import { resizePty, sendPtyInput, stopPty } from '../pty.ts';
 import { buildCodexInitialTurnsPage } from './history.ts';
 
 export function initializeCodex(
-  handle: Parameters<NonNullable<NativeCliProviderAdapter['initialize']>>[0],
-  context: Parameters<NonNullable<NativeCliProviderAdapter['initialize']>>[1]
+  handle: Parameters<NonNullable<ExternalAgentProviderAdapter['initialize']>>[0],
+  context: Parameters<NonNullable<ExternalAgentProviderAdapter['initialize']>>[1]
 ): void {
   if (handle.launchMode !== 'app-server') return;
-  if (!handle.appServer) throw new Error('native CLI session has no app-server initialization bridge');
+  if (!handle.appServer) throw new Error('external agent session has no app-server initialization bridge');
   const initializeId = handle.nextRequestId?.() ?? 0;
   const threadId = handle.nextRequestId?.() ?? 1;
   handle.pendingRequests?.set(initializeId, 'initialize');
@@ -54,13 +54,13 @@ export function initializeCodex(
   for (const frame of frames) handle.appServer.send(frame);
 }
 
-export function sendCodexInput(handle: Parameters<NativeCliProviderAdapter['sendInput']>[0], input: string): void {
+export function sendCodexInput(handle: Parameters<ExternalAgentProviderAdapter['sendInput']>[0], input: string): void {
   if (handle.launchMode !== 'app-server') {
     sendPtyInput(handle, input);
     return;
   }
-  if (!handle.appServer) throw new Error('native CLI session has no app-server input bridge');
-  if (!handle.providerSessionRef) throw new Error('native CLI app-server thread is not ready');
+  if (!handle.appServer) throw new Error('external agent session has no app-server input bridge');
+  if (!handle.providerSessionRef) throw new Error('external agent app-server thread is not ready');
   handle.lastTurnInput = input;
   handle.turnRecoveries = 0;
   const turnId = handle.nextRequestId?.() ?? Date.now();
@@ -73,7 +73,7 @@ export function sendCodexInput(handle: Parameters<NativeCliProviderAdapter['send
   );
 }
 
-export function interruptCodex(handle: Parameters<NonNullable<NativeCliProviderAdapter['interrupt']>>[0]): void {
+export function interruptCodex(handle: Parameters<NonNullable<ExternalAgentProviderAdapter['interrupt']>>[0]): void {
   if (handle.launchMode !== 'app-server' || !handle.appServer) return;
   if (!handle.providerSessionRef || !handle.currentTurnId) return;
   handle.appServer.send(
@@ -84,7 +84,10 @@ export function interruptCodex(handle: Parameters<NonNullable<NativeCliProviderA
   );
 }
 
-export function steerCodex(handle: Parameters<NonNullable<NativeCliProviderAdapter['steer']>>[0], input: string): void {
+export function steerCodex(
+  handle: Parameters<NonNullable<ExternalAgentProviderAdapter['steer']>>[0],
+  input: string
+): void {
   if (handle.launchMode !== 'app-server' || !handle.appServer) return;
   if (!handle.providerSessionRef || !handle.currentTurnId) return;
   handle.appServer.send(
@@ -97,16 +100,16 @@ export function steerCodex(handle: Parameters<NonNullable<NativeCliProviderAdapt
 }
 
 export function requestCodexHistoryPage(
-  handle: Parameters<NonNullable<NativeCliProviderAdapter['requestHistoryPage']>>[0],
-  request: Parameters<NonNullable<NativeCliProviderAdapter['requestHistoryPage']>>[1]
+  handle: Parameters<NonNullable<ExternalAgentProviderAdapter['requestHistoryPage']>>[0],
+  request: Parameters<NonNullable<ExternalAgentProviderAdapter['requestHistoryPage']>>[1]
 ): string | number {
   if (handle.launchMode !== 'app-server') {
-    throw new NativeCliError('unsupported_capability', 'Codex history paging requires app-server mode');
+    throw new ExternalAgentError('unsupported_capability', 'Codex history paging requires app-server mode');
   }
   if (!handle.appServer)
-    throw new NativeCliError('provider_protocol_error', 'native CLI session has no app-server history bridge');
+    throw new ExternalAgentError('provider_protocol_error', 'external agent session has no app-server history bridge');
   if (!handle.providerSessionRef) {
-    throw new NativeCliError('provider_not_logged_in', 'native CLI app-server thread is not ready');
+    throw new ExternalAgentError('provider_not_logged_in', 'external agent app-server thread is not ready');
   }
   const id = handle.nextRequestId?.() ?? Date.now();
   handle.pendingRequests?.set(id, 'historyPage');
@@ -150,16 +153,16 @@ function buildCodexApprovalResponse(
 }
 
 export function resolveCodexApproval(
-  handle: Parameters<NativeCliProviderAdapter['resolveApproval']>[0],
-  resolution: Parameters<NativeCliProviderAdapter['resolveApproval']>[1]
+  handle: Parameters<ExternalAgentProviderAdapter['resolveApproval']>[0],
+  resolution: Parameters<ExternalAgentProviderAdapter['resolveApproval']>[1]
 ): void {
   if (handle.launchMode !== 'app-server') return;
-  if (!handle.appServer) throw new Error('native CLI session has no app-server approval bridge');
+  if (!handle.appServer) throw new Error('external agent session has no app-server approval bridge');
   handle.appServer.send(buildCodexApprovalResponse(resolution.requestId, resolution.request, resolution.allow));
 }
 
 export function resizeCodex(
-  handle: Parameters<NativeCliProviderAdapter['resize']>[0],
+  handle: Parameters<ExternalAgentProviderAdapter['resize']>[0],
   cols: number,
   rows: number
 ): void {
@@ -167,7 +170,7 @@ export function resizeCodex(
   resizePty(handle, cols, rows);
 }
 
-export function stopCodex(handle: Parameters<NativeCliProviderAdapter['stop']>[0]): void {
+export function stopCodex(handle: Parameters<ExternalAgentProviderAdapter['stop']>[0]): void {
   if (handle.launchMode === 'app-server') {
     handle.appServer?.close();
     handle.kill('SIGTERM');

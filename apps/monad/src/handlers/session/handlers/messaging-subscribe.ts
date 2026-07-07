@@ -58,14 +58,14 @@ export function createSubscribeHandlers(ctx: SessionContext) {
     });
     const hasMore = recent.length === LIVE_SNAPSHOT_LIMIT;
     projector.hydrateMessages(recent, parseDurableSummary(store.getMemory(sessionId, 'ctx:summary')));
-    // Rebuild native CLI tool cards from their durable output snapshots (native_cli.output chunks are
+    // Rebuild external agent tool cards from their durable output snapshots (external_agent.output chunks are
     // not persisted as events). Scope to this window: runs that started within it, plus any still
     // active, so an in-flight or recent CLI run survives a refresh/reconnect without dragging every
     // historical run into the bounded snapshot.
     const oldestTs = recent[0]?.createdAt;
-    projector.hydrateNativeCliSessions(
+    projector.hydrateExternalAgentSessions(
       store
-        .listNativeCliSessionsForTranscriptTarget(sessionId)
+        .listExternalAgentSessionsForTranscriptTarget(sessionId)
         .filter(
           (s) =>
             s.runtimeRole === 'managed-project-agent' ||

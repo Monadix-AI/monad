@@ -7,16 +7,16 @@ import type {
   SDKUserMessage,
   SessionMessage
 } from '@anthropic-ai/claude-agent-sdk';
-import type { NativeCliAgentView } from '@monad/protocol';
+import type { ExternalAgentView } from '@monad/protocol';
 import type {
-  BuildNativeCliLaunchOptions,
-  NativeCliLaunchSpec,
-  NativeCliManagedRuntimeContext,
-  NativeCliOutputEvent,
-  NativeCliProviderAdapter,
-  NativeCliProviderHistoryContext,
-  NativeCliProviderHistoryPageContext,
-  NativeCliProviderHistoryPageRequestContext
+  BuildExternalAgentLaunchOptions,
+  ExternalAgentLaunchSpec,
+  ExternalAgentManagedRuntimeContext,
+  ExternalAgentOutputEvent,
+  ExternalAgentProviderAdapter,
+  ExternalAgentProviderHistoryContext,
+  ExternalAgentProviderHistoryPageContext,
+  ExternalAgentProviderHistoryPageRequestContext
 } from '@monad/sdk-atom';
 
 import { homedir } from 'node:os';
@@ -31,10 +31,10 @@ import {
   parseStructuredAuthState,
   textFromContentParts
 } from '../adapter-shared.ts';
-import { parseNativeCliArgumentSupport } from '../argument-support.ts';
+import { parseExternalAgentArgumentSupport } from '../argument-support.ts';
 import { readProviderHistoryFile } from '../history-files.ts';
 import { resizePty, sendPtyInput, stopPty } from '../pty.ts';
-import { nativeCliAdapterSettings } from '../settings.ts';
+import { externalAgentAdapterSettings } from '../settings.ts';
 import { createClaudeCodeSettingsImport } from '../settings-import/index.ts';
 import { claudeCodeObservationProjection } from './observation.ts';
 
@@ -105,7 +105,7 @@ function withClaudeThinkingDisplayArgs(args: string[], showThinkingSummary: bool
   return [...args, '--thinking-display', showThinkingSummary ? 'summarized' : 'omitted'];
 }
 
-function claudeManagedMcpConfigArgs(context: NativeCliManagedRuntimeContext): string[] {
+function claudeManagedMcpConfigArgs(context: ExternalAgentManagedRuntimeContext): string[] {
   return [
     '--mcp-config',
     JSON.stringify({
@@ -121,7 +121,7 @@ function claudeManagedMcpConfigArgs(context: NativeCliManagedRuntimeContext): st
   ];
 }
 
-function buildClaudeLaunch(agent: NativeCliAgentView, opts: BuildNativeCliLaunchOptions): NativeCliLaunchSpec {
+function buildClaudeLaunch(agent: ExternalAgentView, opts: BuildExternalAgentLaunchOptions): ExternalAgentLaunchSpec {
   const launchMode = opts.launchMode ?? agent.defaultLaunchMode;
   let args = [...(agent.args ?? [])];
   if (opts.providerSessionRef && !args.includes('--resume') && !args.includes('-r')) {
@@ -156,7 +156,7 @@ function buildClaudeLaunch(agent: NativeCliAgentView, opts: BuildNativeCliLaunch
   };
 }
 
-function buildClaudeAuthLaunch(agent: NativeCliAgentView, args: string[]): NativeCliLaunchSpec {
+function buildClaudeAuthLaunch(agent: ExternalAgentView, args: string[]): ExternalAgentLaunchSpec {
   return {
     argv: [agent.command, ...args],
     cwd: homedir(),
@@ -180,9 +180,9 @@ function stringifyToolResultContent(content: ClaudeToolResultContent): string | 
   return content === undefined ? undefined : JSON.stringify(content);
 }
 
-function parseClaudeContentBlocks(content: ClaudeMessageContent): NativeCliOutputEvent[] {
+function parseClaudeContentBlocks(content: ClaudeMessageContent): ExternalAgentOutputEvent[] {
   if (typeof content === 'string') return [];
-  const events: NativeCliOutputEvent[] = [];
+  const events: ExternalAgentOutputEvent[] = [];
   let text = '';
   for (const block of content) {
     switch (block.type) {
@@ -206,7 +206,7 @@ function parseClaudeContentBlocks(content: ClaudeMessageContent): NativeCliOutpu
   return text ? [{ type: 'agent_message', payload: { text } }, ...events] : events;
 }
 
-function claudePermissionDenialEvents(denials: SDKPermissionDenial[], result: string): NativeCliOutputEvent[] {
+function claudePermissionDenialEvents(denials: SDKPermissionDenial[], result: string): ExternalAgentOutputEvent[] {
   const messages = denials
     .map((denial) => {
       const command = typeof denial.tool_input.command === 'string' ? denial.tool_input.command : undefined;
@@ -224,7 +224,7 @@ function claudePermissionDenialEvents(denials: SDKPermissionDenial[], result: st
   ];
 }
 
-function claudeSystemInitEvents(message: SDKSystemMessage): NativeCliOutputEvent[] {
+function claudeSystemInitEvents(message: SDKSystemMessage): ExternalAgentOutputEvent[] {
   return [
     {
       type: 'session_ref',
@@ -238,7 +238,7 @@ function claudeSystemInitEvents(message: SDKSystemMessage): NativeCliOutputEvent
   ];
 }
 
-function claudeMessageEvents(message: SDKMessage): NativeCliOutputEvent[] {
+function claudeMessageEvents(message: SDKMessage): ExternalAgentOutputEvent[] {
   switch (message.type) {
     case 'system':
       return message.subtype === 'init' ? claudeSystemInitEvents(message) : [];
@@ -265,8 +265,8 @@ function decodeClaudeMessage(line: string): SDKMessage | undefined {
   return record && typeof record.type === 'string' ? (record as SDKMessage) : undefined;
 }
 
-function parseClaudeStreamJson(chunk: string): NativeCliOutputEvent[] {
-  const events: NativeCliOutputEvent[] = [];
+function parseClaudeStreamJson(chunk: string): ExternalAgentOutputEvent[] {
+  const events: ExternalAgentOutputEvent[] = [];
   for (const rawLine of chunk.split(/\r?\n/)) {
     const line = rawLine.trim();
     if (!line.startsWith('{')) continue;
@@ -276,7 +276,7 @@ function parseClaudeStreamJson(chunk: string): NativeCliOutputEvent[] {
   return events;
 }
 
-function claudeTranscriptFallback(context: NativeCliProviderHistoryContext): string | null {
+function claudeTranscriptFallback(context: ExternalAgentProviderHistoryContext): string | null {
   return readProviderHistoryFile({
     roots: [join(homedir(), '.claude', 'projects')],
     providerSessionRef: context.providerSessionRef,
@@ -317,7 +317,7 @@ function claudeSdkMessagesOutput(messages: SessionMessage[], info: SDKSessionInf
   return records.join('\n');
 }
 
-function claudeSdkHistoryPageOutput(context: NativeCliProviderHistoryPageContext): string | null {
+function claudeSdkHistoryPageOutput(context: ExternalAgentProviderHistoryPageContext): string | null {
   const records = context.page.items.flatMap((item) => {
     const line = claudeHistoryItemToJsonLine(item);
     return line ? [line] : [];
@@ -338,8 +338,8 @@ interface ClaudeSdkHistoryPageDeps {
 
 export function createClaudeSdkHistoryPageReader(deps: ClaudeSdkHistoryPageDeps) {
   return async function readClaudeHistoryPage(
-    context: NativeCliProviderHistoryPageRequestContext
-  ): Promise<NativeCliProviderHistoryPageContext['page'] | null> {
+    context: ExternalAgentProviderHistoryPageRequestContext
+  ): Promise<ExternalAgentProviderHistoryPageContext['page'] | null> {
     try {
       const offset = claudeHistoryOffset(context.request.before);
       const [info, messages] = await Promise.all([
@@ -382,7 +382,7 @@ export function createClaudeSdkHistoryPageReader(deps: ClaudeSdkHistoryPageDeps)
 
 const readClaudeHistoryPage = createClaudeSdkHistoryPageReader({ getSessionInfo, getSessionMessages });
 
-async function readClaudeHistoryOutput(context: NativeCliProviderHistoryContext): Promise<string | null> {
+async function readClaudeHistoryOutput(context: ExternalAgentProviderHistoryContext): Promise<string | null> {
   try {
     const info = await getSessionInfo(context.providerSessionRef, { dir: context.workingPath });
     if ((info?.fileSize ?? 0) > context.limitBytes) return claudeTranscriptFallback(context);
@@ -408,22 +408,22 @@ function buildClaudeStreamJsonUserMessage(input: string): SDKUserMessage {
   };
 }
 
-function sendClaudeInput(handle: Parameters<NativeCliProviderAdapter['sendInput']>[0], input: string): void {
+function sendClaudeInput(handle: Parameters<ExternalAgentProviderAdapter['sendInput']>[0], input: string): void {
   if (handle.launchMode !== 'json-stream') {
     sendPtyInput(handle, input);
     return;
   }
-  if (!handle.stdin) throw new Error('native CLI session has no stream-json input bridge');
+  if (!handle.stdin) throw new Error('external agent session has no stream-json input bridge');
   handle.stdin.write(`${JSON.stringify(buildClaudeStreamJsonUserMessage(input))}\n`);
   void handle.stdin.flush?.();
 }
 
-function resizeClaude(handle: Parameters<NativeCliProviderAdapter['resize']>[0], cols: number, rows: number): void {
+function resizeClaude(handle: Parameters<ExternalAgentProviderAdapter['resize']>[0], cols: number, rows: number): void {
   if (handle.launchMode === 'json-stream') return;
   resizePty(handle, cols, rows);
 }
 
-function stopClaude(handle: Parameters<NativeCliProviderAdapter['stop']>[0]): void {
+function stopClaude(handle: Parameters<ExternalAgentProviderAdapter['stop']>[0]): void {
   if (handle.launchMode === 'json-stream') {
     void handle.stdin?.end?.();
     handle.kill('SIGTERM');
@@ -433,16 +433,16 @@ function stopClaude(handle: Parameters<NativeCliProviderAdapter['stop']>[0]): vo
 }
 
 function resolveClaudeApproval(): void {
-  throw new Error('Claude Code native CLI approval resolution is not supported in json-stream mode');
+  throw new Error('Claude Code external agent approval resolution is not supported in json-stream mode');
 }
 
-export const claudeCodeNativeCliAdapter: NativeCliProviderAdapter = {
+export const claudeCodeExternalAgentAdapter: ExternalAgentProviderAdapter = {
   provider: 'claude-code',
   productIcon: 'claude-code',
   label: 'Claude Code',
   observation: claudeCodeObservationProjection,
   settings: () => [
-    ...nativeCliAdapterSettings({ launchModes: ['pty', 'json-stream', 'remote-control'] }),
+    ...externalAgentAdapterSettings({ launchModes: ['pty', 'json-stream', 'remote-control'] }),
     {
       key: 'showThinkingSummary',
       label: 'Show thinking summary',
@@ -470,12 +470,12 @@ export const claudeCodeNativeCliAdapter: NativeCliProviderAdapter = {
     const installed = claudeBin !== undefined;
     return {
       id: 'claude-code',
-      label: claudeCodeNativeCliAdapter.label,
+      label: claudeCodeExternalAgentAdapter.label,
       provider: 'claude-code',
-      productIcon: claudeCodeNativeCliAdapter.productIcon,
+      productIcon: claudeCodeExternalAgentAdapter.productIcon,
       command: 'claude',
       args: [],
-      modelOptions: claudeCodeNativeCliAdapter.listSupportedModels(),
+      modelOptions: claudeCodeExternalAgentAdapter.listSupportedModels(),
       defaultLaunchMode: 'pty',
       supportedLaunchModes: ['pty', 'json-stream', 'remote-control'],
       installHint: 'Install Claude Code, then sign in with claude auth.',
@@ -507,13 +507,13 @@ export const claudeCodeNativeCliAdapter: NativeCliProviderAdapter = {
   authStatus(agent) {
     return {
       launch: buildClaudeAuthLaunch(agent, ['auth', 'status', '--json']),
-      parse: (output, exitCode) => claudeCodeNativeCliAdapter.parseAuthStatus(output, exitCode)
+      parse: (output, exitCode) => claudeCodeExternalAgentAdapter.parseAuthStatus(output, exitCode)
     };
   },
   argumentSupport(agent) {
     return {
       launch: buildClaudeAuthLaunch(agent, ['--help']),
-      parse: (output) => parseNativeCliArgumentSupport(output)
+      parse: (output) => parseExternalAgentArgumentSupport(output)
     };
   },
   parseAuthStatus(output, exitCode) {

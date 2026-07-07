@@ -1,4 +1,4 @@
-import type { NativeCliSessionView, WorkplaceProject } from '@monad/protocol';
+import type { ExternalAgentSessionView, WorkplaceProject } from '@monad/protocol';
 
 export const safeDecode = (value: string): string => {
   let current = value;
@@ -27,8 +27,8 @@ export interface WorkspaceProjectListItem {
 }
 
 export interface BuildWorkspaceProjectsOptions {
-  liveNativeCliSessions?: readonly NativeCliSessionView[];
-  nativeCliSessions?: readonly NativeCliSessionView[];
+  liveExternalAgentSessions?: readonly ExternalAgentSessionView[];
+  externalAgentSessions?: readonly ExternalAgentSessionView[];
   pinnedProjectIds?: ReadonlySet<string>;
 }
 
@@ -37,8 +37,8 @@ export const buildWorkspaceProjects = (
   options: BuildWorkspaceProjectsOptions = {}
 ): WorkspaceProjectListItem[] => {
   const activityByProjectId = projectActivityById({
-    liveNativeCliSessions: options.liveNativeCliSessions ?? [],
-    nativeCliSessions: options.nativeCliSessions ?? options.liveNativeCliSessions ?? []
+    liveExternalAgentSessions: options.liveExternalAgentSessions ?? [],
+    externalAgentSessions: options.externalAgentSessions ?? options.liveExternalAgentSessions ?? []
   });
   return projects
     .map((project, index) => {
@@ -58,20 +58,20 @@ export const buildWorkspaceProjects = (
 };
 
 function projectActivityById({
-  liveNativeCliSessions,
-  nativeCliSessions
+  liveExternalAgentSessions,
+  externalAgentSessions
 }: {
-  liveNativeCliSessions: readonly NativeCliSessionView[];
-  nativeCliSessions: readonly NativeCliSessionView[];
+  liveExternalAgentSessions: readonly ExternalAgentSessionView[];
+  externalAgentSessions: readonly ExternalAgentSessionView[];
 }) {
   const activity = new Map<string, { hasRunningAgent: boolean; unreadCount: number }>();
-  for (const session of nativeCliSessions) {
+  for (const session of externalAgentSessions) {
     const current = activity.get(session.transcriptTargetId) ?? { hasRunningAgent: false, unreadCount: 0 };
     current.unreadCount +=
       Math.max(0, session.lastDeliveredSeq - session.lastVisibleSeq) + session.pendingApprovalCount;
     activity.set(session.transcriptTargetId, current);
   }
-  for (const session of liveNativeCliSessions) {
+  for (const session of liveExternalAgentSessions) {
     const current = activity.get(session.transcriptTargetId) ?? { hasRunningAgent: false, unreadCount: 0 };
     current.hasRunningAgent ||= session.state === 'starting' || session.state === 'running';
     activity.set(session.transcriptTargetId, current);

@@ -1,6 +1,6 @@
 import type {
-  NativeCliObservationJsonRecordEntry,
-  NativeCliObservationProjector
+  ExternalAgentObservationJsonRecordEntry,
+  ExternalAgentObservationProjector
 } from '../../observation-projection.ts';
 
 import {
@@ -31,7 +31,7 @@ function codexHistoryItemId(record: Record<string, unknown>): string | undefined
   return textValue(params?.itemId, recordValue(params?.item)?.id);
 }
 
-function codexCompletedHistoryItemIds(entries: NativeCliObservationJsonRecordEntry[]): Set<string> {
+function codexCompletedHistoryItemIds(entries: ExternalAgentObservationJsonRecordEntry[]): Set<string> {
   const completed = new Set<string>();
   for (const entry of entries) {
     if (textValue(entry.record.method) !== 'item/completed') continue;
@@ -51,7 +51,9 @@ function isCodexIntermediateHistoryRecord(record: Record<string, unknown>, compl
   );
 }
 
-function codexHistoryEntries(entries: NativeCliObservationJsonRecordEntry[]): NativeCliObservationJsonRecordEntry[] {
+function codexHistoryEntries(
+  entries: ExternalAgentObservationJsonRecordEntry[]
+): ExternalAgentObservationJsonRecordEntry[] {
   const completedItemIds = codexCompletedHistoryItemIds(entries);
   if (completedItemIds.size === 0) return entries;
   return entries.filter((entry) => !isCodexIntermediateHistoryRecord(entry.record, completedItemIds));
@@ -73,4 +75,4 @@ export const codexObservationProjection = {
     { parse: ({ id, record, recordIndex }) => codexAppServerTurnsPageRecordEvents(id, record, recordIndex) },
     { parse: ({ id, record, recordIndex }) => codexExecRecordEvents(id, record, recordIndex) }
   ]
-} satisfies NativeCliObservationProjector;
+} satisfies ExternalAgentObservationProjector;

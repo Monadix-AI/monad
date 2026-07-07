@@ -102,7 +102,7 @@ test('subscribeUi reconnect with an un-persisted cursor does not full-replay the
   handlers.store.close();
 });
 
-test('subscribeUi keeps managed native CLI joins after newer transcript messages', async () => {
+test('subscribeUi keeps managed external agent joins after newer transcript messages', async () => {
   const handlers = buildHandlers(buildMockModel().text(['x']).build());
   const { projectId } = await handlers.session.createProject({
     title: 'project',
@@ -113,15 +113,15 @@ test('subscribeUi keeps managed native CLI joins after newer transcript messages
   const startedAt = '2026-07-02T00:00:00.000Z';
   const messageAt = '2026-07-02T00:01:00.000Z';
 
-  handlers.store.upsertNativeCliSession({
-    id: 'ncli_managed_stopped',
+  handlers.store.upsertExternalAgentSession({
+    id: 'exa_managed_stopped',
     transcriptTargetId: project,
     agentName: 'pmem_codex_test',
     provider: 'codex',
     workingPath: process.cwd(),
     launchMode: 'app-server',
     runtimeRole: 'managed-project-agent',
-    agentRuntimeId: 'ncli_managed_stopped',
+    agentRuntimeId: 'exa_managed_stopped',
     agentRuntimeTokenHash: null,
     lastDeliveredSeq: 0,
     lastVisibleSeq: 0,
@@ -147,8 +147,8 @@ test('subscribeUi keeps managed native CLI joins after newer transcript messages
     expect.arrayContaining([
       expect.objectContaining({
         kind: 'tool',
-        id: 'ncli_managed_stopped',
-        tool: 'native-cli:codex',
+        id: 'exa_managed_stopped',
+        tool: 'external-agent:codex',
         status: 'ok'
       })
     ])

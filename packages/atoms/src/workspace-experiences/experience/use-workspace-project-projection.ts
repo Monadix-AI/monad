@@ -1,8 +1,8 @@
 import type {
   AcpAgentView,
   AvatarStyle,
-  NativeCliAgentView,
-  NativeCliSessionView,
+  ExternalAgentSessionView,
+  ExternalAgentView,
   ProjectId,
   UIItem,
   WorkplaceProject
@@ -15,18 +15,18 @@ import { useMemo } from 'react';
 
 import { parseProjectMembers } from './project-members.ts';
 import {
-  activeNativeCliAgentNames,
+  activeExternalAgentNames,
+  externalAgentStreamingAgentNames,
   humanParticipant,
-  nativeCliStreamingAgentNames,
   projectApprovalViews,
+  projectExternalAgentMetadataMaps,
   projectList,
   projectMemberCandidates,
-  projectNativeCliMetadataMaps,
   projectParticipants,
   runningDelegationAgentNames,
   toolItems
 } from './project-projection.ts';
-import { useNativeCliActivityOverrides } from './use-native-cli-activity-overrides.ts';
+import { useExternalAgentActivityOverrides } from './use-external-agent-activity-overrides.ts';
 
 export interface WorkspaceProjectProjection {
   approvals: ApprovalView[];
@@ -34,10 +34,10 @@ export interface WorkspaceProjectProjection {
   human: Participant;
   liveItems: readonly UIItem[];
   liveTools: Extract<UIItem, { kind: 'tool' }>[];
-  nativeCliAvatarSeeds: Map<string, string>;
-  nativeCliDisplayNames: Map<string, string>;
-  nativeCliIcons: Map<string, Participant['icon']>;
-  nativeCliTags: Map<string, string>;
+  externalAgentAvatarSeeds: Map<string, string>;
+  externalAgentDisplayNames: Map<string, string>;
+  externalAgentIcons: Map<string, Participant['icon']>;
+  externalAgentTags: Map<string, string>;
   participants: Participant[];
   projectParticipants: Participant[];
   projectMembers: ProjectMember[];
@@ -50,8 +50,8 @@ export function useWorkspaceProjectProjection(args: {
   appearanceAvatarStyle?: AvatarStyle;
   currentProject: WorkplaceProject | null;
   liveItems: readonly UIItem[] | undefined;
-  nativeCliAgents: readonly NativeCliAgentView[];
-  nativeCliSessions: NativeCliSessionView[];
+  externalAgents: readonly ExternalAgentView[];
+  externalAgentSessions: ExternalAgentSessionView[];
   projectId: string;
   projectName: (project: WorkplaceProject) => string;
   userAvatarDataUrl?: string;
@@ -71,35 +71,35 @@ export function useWorkspaceProjectProjection(args: {
       }),
     [args.appearanceAvatarStyle, args.userAvatarDataUrl, args.userDisplayName]
   );
-  const nativeCliMetadata = useMemo(
+  const externalAgentMetadata = useMemo(
     () =>
-      projectNativeCliMetadataMaps({
-        nativeCliAgents: args.nativeCliAgents,
+      projectExternalAgentMetadataMaps({
+        externalAgents: args.externalAgents,
         projectId: args.currentProject?.id ?? args.projectId,
         projectMembers
       }),
-    [args.currentProject?.id, args.nativeCliAgents, args.projectId, projectMembers]
+    [args.currentProject?.id, args.externalAgents, args.projectId, projectMembers]
   );
   const liveItems = args.liveItems ?? [];
   const liveTools = useMemo(() => toolItems(liveItems), [liveItems]);
-  const nativeCliActivityOverrides = useNativeCliActivityOverrides(liveTools);
-  const streamingNativeCliAgentNames = useMemo(() => nativeCliStreamingAgentNames(liveItems), [liveItems]);
+  const externalAgentActivityOverrides = useExternalAgentActivityOverrides(liveTools);
+  const streamingExternalAgentNames = useMemo(() => externalAgentStreamingAgentNames(liveItems), [liveItems]);
   const activeAgentNames = useMemo(
     () =>
-      activeNativeCliAgentNames({
-        activityOverrideAgentNames: Object.keys(nativeCliActivityOverrides),
+      activeExternalAgentNames({
+        activityOverrideAgentNames: Object.keys(externalAgentActivityOverrides),
         liveTools,
-        nativeCliSessions: args.nativeCliSessions,
-        streamingAgentNames: streamingNativeCliAgentNames
+        externalAgentSessions: args.externalAgentSessions,
+        streamingAgentNames: streamingExternalAgentNames
       }),
-    [liveTools, nativeCliActivityOverrides, args.nativeCliSessions, streamingNativeCliAgentNames]
+    [liveTools, externalAgentActivityOverrides, args.externalAgentSessions, streamingExternalAgentNames]
   );
   const runningDelegations = useMemo(() => runningDelegationAgentNames(liveTools), [liveTools]);
   const participants = useMemo(
     () =>
       projectParticipants({
         acpAgents: args.acpAgents,
-        activeNativeCliAgentNames: activeAgentNames,
+        activeExternalAgentNames: activeAgentNames,
         avatarStyle: args.appearanceAvatarStyle,
         liveTools,
         monadStreaming: liveItems.some(
@@ -108,12 +108,12 @@ export function useWorkspaceProjectProjection(args: {
             item.status === 'streaming' &&
             item.role === 'assistant' &&
             (item.agentName === undefined || item.agentName === 'monad') &&
-            item.source !== 'managed-native-cli'
+            item.source !== 'managed-external-agent'
         ),
-        nativeCliActivityOverrides,
-        nativeCliAgents: args.nativeCliAgents,
-        nativeCliAvatarSeeds: nativeCliMetadata.avatarSeeds,
-        nativeCliSessions: args.nativeCliSessions,
+        externalAgentActivityOverrides,
+        externalAgents: args.externalAgents,
+        externalAgentAvatarSeeds: externalAgentMetadata.avatarSeeds,
+        externalAgentSessions: args.externalAgentSessions,
         projectMembers,
         runningDelegations
       }),
@@ -123,10 +123,10 @@ export function useWorkspaceProjectProjection(args: {
       args.appearanceAvatarStyle,
       liveTools,
       liveItems,
-      nativeCliActivityOverrides,
-      args.nativeCliAgents,
-      nativeCliMetadata.avatarSeeds,
-      args.nativeCliSessions,
+      externalAgentActivityOverrides,
+      args.externalAgents,
+      externalAgentMetadata.avatarSeeds,
+      args.externalAgentSessions,
       projectMembers,
       runningDelegations
     ]
@@ -140,10 +140,10 @@ export function useWorkspaceProjectProjection(args: {
     () =>
       projectMemberCandidates({
         acpAgents: args.acpAgents,
-        nativeCliAgents: args.nativeCliAgents,
+        externalAgents: args.externalAgents,
         projectMembers
       }),
-    [args.acpAgents, args.nativeCliAgents, projectMembers]
+    [args.acpAgents, args.externalAgents, projectMembers]
   );
 
   return {
@@ -152,10 +152,10 @@ export function useWorkspaceProjectProjection(args: {
     human,
     liveItems,
     liveTools,
-    nativeCliAvatarSeeds: nativeCliMetadata.avatarSeeds,
-    nativeCliDisplayNames: nativeCliMetadata.displayNames,
-    nativeCliIcons: nativeCliMetadata.icons,
-    nativeCliTags: nativeCliMetadata.tags,
+    externalAgentAvatarSeeds: externalAgentMetadata.avatarSeeds,
+    externalAgentDisplayNames: externalAgentMetadata.displayNames,
+    externalAgentIcons: externalAgentMetadata.icons,
+    externalAgentTags: externalAgentMetadata.tags,
     participants,
     projectParticipants: participants.filter((participant) => participant.kind === 'agent'),
     projectMembers,

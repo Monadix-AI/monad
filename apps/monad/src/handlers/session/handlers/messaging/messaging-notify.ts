@@ -1,27 +1,27 @@
-import type { NativeCliAgentConfig } from '@monad/home';
+import type { ExternalAgentConfig } from '@monad/home';
 import type { MessageAttachmentRef, TranscriptTargetId } from '@monad/protocol';
 import type { SessionContext } from '@/handlers/session/context.ts';
-import type { createManagedNativeCliDelivery } from '@/handlers/session/handlers/managed-native-cli-delivery.ts';
-import type { ManagedNativeCliProjectMessageSender } from '@/handlers/session/handlers/messaging-notices.ts';
+import type { createManagedExternalAgentDelivery } from '@/handlers/session/handlers/managed-external-agent-delivery.ts';
+import type { ManagedExternalAgentProjectMessageSender } from '@/handlers/session/handlers/messaging-notices.ts';
 
 import { loadAll } from '@monad/home';
 
-/** Wraps the managed-native-cli delivery primitives with the project-config lookups the
+/** Wraps the managed-external-agent delivery primitives with the project-config lookups the
  *  session handlers need (loading enabled agents, resolving the transcript target). */
 export function createMessagingNotifyHandlers(
   ctx: SessionContext,
-  managedNativeCliDelivery: ReturnType<typeof createManagedNativeCliDelivery>
+  managedExternalAgentDelivery: ReturnType<typeof createManagedExternalAgentDelivery>
 ) {
   const { requireTranscriptTarget } = ctx;
   const {
-    completeManagedNativeCliThinking,
-    retireManagedNativeCliThinking,
-    deliverProjectMessageToManagedNativeCliMembers,
-    deliverDirectMessageToManagedNativeCliMember
-  } = managedNativeCliDelivery;
+    completeManagedExternalAgentThinking,
+    retireManagedExternalAgentThinking,
+    deliverProjectMessageToManagedExternalAgentMembers,
+    deliverDirectMessageToManagedExternalAgentMember
+  } = managedExternalAgentDelivery;
 
   return {
-    async notifyManagedNativeCliProjectMembers({
+    async notifyManagedExternalAgentProjectMembers({
       sessionId,
       text,
       sender,
@@ -29,20 +29,26 @@ export function createMessagingNotifyHandlers(
     }: {
       sessionId: TranscriptTargetId;
       text: string;
-      sender?: ManagedNativeCliProjectMessageSender;
+      sender?: ManagedExternalAgentProjectMessageSender;
       exceptAgentName?: string;
     }) {
       const session = requireTranscriptTarget(sessionId);
       const paths = ctx.deps.paths;
       const cfg = paths ? await loadAll(paths.config, paths.profile) : null;
-      const nativeCliAgents = (cfg?.nativeCliAgents ?? []).filter(
-        (agent: NativeCliAgentConfig) => agent.enabled !== false
+      const externalAgents = (cfg?.externalAgents ?? []).filter(
+        (agent: ExternalAgentConfig) => agent.enabled !== false
       );
-      await deliverProjectMessageToManagedNativeCliMembers({ session, nativeCliAgents, text, sender, exceptAgentName });
+      await deliverProjectMessageToManagedExternalAgentMembers({
+        session,
+        externalAgents,
+        text,
+        sender,
+        exceptAgentName
+      });
       return { accepted: true as const };
     },
 
-    async notifyManagedNativeCliDirectMessage({
+    async notifyManagedExternalAgentDirectMessage({
       sessionId,
       fromAgentName,
       to,
@@ -56,31 +62,31 @@ export function createMessagingNotifyHandlers(
       const session = requireTranscriptTarget(sessionId);
       const paths = ctx.deps.paths;
       const cfg = paths ? await loadAll(paths.config, paths.profile) : null;
-      const nativeCliAgents = (cfg?.nativeCliAgents ?? []).filter(
-        (agent: NativeCliAgentConfig) => agent.enabled !== false
+      const externalAgents = (cfg?.externalAgents ?? []).filter(
+        (agent: ExternalAgentConfig) => agent.enabled !== false
       );
-      await deliverDirectMessageToManagedNativeCliMember({ session, nativeCliAgents, fromAgentName, to, text });
+      await deliverDirectMessageToManagedExternalAgentMember({ session, externalAgents, fromAgentName, to, text });
       return { accepted: true as const };
     },
 
-    async completeManagedNativeCliProjectMessage({
+    async completeManagedExternalAgentProjectMessage({
       sessionId,
-      nativeCliSessionId,
+      externalAgentSessionId,
       agentName,
       text,
       threadId,
       attachments
     }: {
       sessionId: TranscriptTargetId;
-      nativeCliSessionId: string;
+      externalAgentSessionId: string;
       agentName: string;
       text: string;
       threadId?: string;
       attachments?: MessageAttachmentRef[];
     }) {
-      return completeManagedNativeCliThinking({
+      return completeManagedExternalAgentThinking({
         sessionId,
-        nativeCliSessionId,
+        externalAgentSessionId,
         agentName,
         text,
         threadId,
@@ -88,31 +94,31 @@ export function createMessagingNotifyHandlers(
       });
     },
 
-    async completeManagedNativeCliProviderMessage({
+    async completeManagedExternalAgentProviderMessage({
       sessionId,
-      nativeCliSessionId,
+      externalAgentSessionId,
       agentName,
       text,
       error,
       post = true
     }: {
       sessionId: TranscriptTargetId;
-      nativeCliSessionId: string;
+      externalAgentSessionId: string;
       agentName: string;
       text: string;
       error?: boolean;
       post?: boolean;
     }) {
       if (!post && !error) {
-        const messageId = retireManagedNativeCliThinking(sessionId, nativeCliSessionId, agentName);
+        const messageId = retireManagedExternalAgentThinking(sessionId, externalAgentSessionId, agentName);
         return { messageId };
       }
-      const completed = completeManagedNativeCliThinking({
+      const completed = completeManagedExternalAgentThinking({
         sessionId,
-        nativeCliSessionId,
+        externalAgentSessionId,
         agentName,
         text,
-        source: 'native-cli-provider',
+        source: 'external-agent-provider',
         error
       });
       return { messageId: completed.messageId };

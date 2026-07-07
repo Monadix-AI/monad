@@ -1,4 +1,4 @@
-import type { AcpAgentConfig, NativeCliAgentConfig } from '@monad/home';
+import type { AcpAgentConfig, ExternalAgentConfig } from '@monad/home';
 import type {
   SendMessageAttachment,
   SendMessageRequest,
@@ -10,8 +10,8 @@ import type { ChannelParticipant } from '@/agent/prompts/channel.ts';
 import type { SessionContext } from '@/handlers/session/context.ts';
 import type { createAcpChannelDelegation } from '@/handlers/session/handlers/acp-channel-delegation.ts';
 import type { createForwardAcpHandler } from '@/handlers/session/handlers/forward-acp.ts';
-import type { createForwardNativeCliHandler } from '@/handlers/session/handlers/forward-native-cli.ts';
-import type { createManagedNativeCliDelivery } from '@/handlers/session/handlers/managed-native-cli-delivery.ts';
+import type { createForwardExternalAgentHandler } from '@/handlers/session/handlers/forward-external-agent.ts';
+import type { createManagedExternalAgentDelivery } from '@/handlers/session/handlers/managed-external-agent-delivery.ts';
 
 import { loadAll } from '@monad/home';
 
@@ -20,10 +20,10 @@ import { routeChannelMessage } from '@/handlers/session/channel-routing.ts';
 import { messageTextWithAttachments } from '@/handlers/session/handlers/messaging-attachments.ts';
 import {
   channelDelegateMcpServers,
+  externalAgentProjectMemberDisplayName,
+  externalAgentProjectMemberRuntimeName,
+  externalAgentProjectMemberTemplateName,
   isWorkplaceProjectTarget,
-  nativeCliProjectMemberDisplayName,
-  nativeCliProjectMemberRuntimeName,
-  nativeCliProjectMemberTemplateName,
   workplaceProjectMembers
 } from '@/handlers/session/handlers/messaging-members.ts';
 
@@ -34,29 +34,29 @@ type SendHandler = (
 export interface SendProjectMessageDeps {
   send: SendHandler;
   forwardToAcp: ReturnType<typeof createForwardAcpHandler>;
-  forwardToNativeCli: ReturnType<typeof createForwardNativeCliHandler>;
+  forwardToExternalAgent: ReturnType<typeof createForwardExternalAgentHandler>;
   deliverProjectMessageToAcpMembers: ReturnType<typeof createAcpChannelDelegation>['deliverProjectMessageToAcpMembers'];
   dispatchChannelNextTargets: ReturnType<typeof createAcpChannelDelegation>['dispatchChannelNextTargets'];
-  deliverProjectMessageToManagedNativeCliMembers: ReturnType<
-    typeof createManagedNativeCliDelivery
-  >['deliverProjectMessageToManagedNativeCliMembers'];
+  deliverProjectMessageToManagedExternalAgentMembers: ReturnType<
+    typeof createManagedExternalAgentDelivery
+  >['deliverProjectMessageToManagedExternalAgentMembers'];
   runtimeForTranscriptTarget: (
     sessionId: TranscriptTargetId
   ) => { mcpServers?: readonly SessionMcpServer[] } | undefined;
 }
 
 /** Routes an inbound channel/project message to the right recipient — the session's bound agent,
- *  a direct ACP/native-CLI target, or a project-wide fan-out — and wires up the
+ *  a direct ACP/external agent target, or a project-wide fan-out — and wires up the
  *  channel `next`-target dispatch once the turn completes. */
 export function createSendProjectMessageHandler(ctx: SessionContext, deps: SendProjectMessageDeps) {
   const { requireTranscriptTarget } = ctx;
   const {
     send,
     forwardToAcp,
-    forwardToNativeCli,
+    forwardToExternalAgent,
     deliverProjectMessageToAcpMembers,
     dispatchChannelNextTargets,
-    deliverProjectMessageToManagedNativeCliMembers,
+    deliverProjectMessageToManagedExternalAgentMembers,
     runtimeForTranscriptTarget
   } = deps;
 
@@ -74,22 +74,20 @@ export function createSendProjectMessageHandler(ctx: SessionContext, deps: SendP
     const paths = ctx.deps.paths;
     const cfg = paths ? await loadAll(paths.config, paths.profile) : null;
     const acpAgents = (cfg?.acpAgents ?? []).filter((agent: AcpAgentConfig) => agent.enabled !== false);
-    const nativeCliAgents = (cfg?.nativeCliAgents ?? []).filter(
-      (agent: NativeCliAgentConfig) => agent.enabled !== false
-    );
+    const externalAgents = (cfg?.externalAgents ?? []).filter((agent: ExternalAgentConfig) => agent.enabled !== false);
     const isWorkplaceProject = isWorkplaceProjectTarget(session);
     const projectMembers = isWorkplaceProject ? workplaceProjectMembers(session) : [];
     const projectAcpAgentNames = projectMembers.filter((member) => member.type === 'acp').map((member) => member.name);
-    const projectNativeCliAgentNames = projectMembers
-      .filter((member) => member.type === 'native-cli')
-      .map((member) => nativeCliProjectMemberRuntimeName(member));
+    const projectExternalAgentNames = projectMembers
+      .filter((member) => member.type === 'external-agent')
+      .map((member) => externalAgentProjectMemberRuntimeName(member));
     const hasMonadMember = projectMembers.some((member) => member.type === 'monad');
     const route = routeChannelMessage({
       text: routeSeedText,
       acpAgentNames: isWorkplaceProject ? projectAcpAgentNames : acpAgents.map((agent: AcpAgentConfig) => agent.name),
-      nativeCliAgentNames: isWorkplaceProject
-        ? projectNativeCliAgentNames
-        : nativeCliAgents.map((agent: NativeCliAgentConfig) => agent.name)
+      externalAgentNames: isWorkplaceProject
+        ? projectExternalAgentNames
+        : externalAgents.map((agent: ExternalAgentConfig) => agent.name)
     });
     if (route.kind === 'none') return { accepted: true as const };
     ctx.deps.log?.debug(
@@ -104,22 +102,22 @@ export function createSendProjectMessageHandler(ctx: SessionContext, deps: SendP
     );
     const responseMode = route.direct ? 'direct_structured' : 'worker_plain';
     const studioAgents = cfg?.agent.agents ?? [];
-    const nativeCliParticipants: ChannelParticipant[] = isWorkplaceProject
+    const externalAgentParticipants: ChannelParticipant[] = isWorkplaceProject
       ? projectMembers
-          .filter((member) => member.type === 'native-cli')
+          .filter((member) => member.type === 'external-agent')
           .map((member) => {
-            const templateName = nativeCliProjectMemberTemplateName(member);
+            const templateName = externalAgentProjectMemberTemplateName(member);
             return {
-              id: `native-cli:${nativeCliProjectMemberRuntimeName(member)}`,
-              name: nativeCliProjectMemberDisplayName(member),
-              kind: 'native-cli' as const,
+              id: `external-agent:${externalAgentProjectMemberRuntimeName(member)}`,
+              name: externalAgentProjectMemberDisplayName(member),
+              kind: 'external-agent' as const,
               description: `template:${templateName}`
             };
           })
-      : nativeCliAgents.map((agent: NativeCliAgentConfig) => ({
-          id: `native-cli:${agent.name}`,
+      : externalAgents.map((agent: ExternalAgentConfig) => ({
+          id: `external-agent:${agent.name}`,
           name: agent.name,
-          kind: 'native-cli' as const
+          kind: 'external-agent' as const
         }));
     const participants: ChannelParticipant[] = [
       { id: 'human', name: 'User', kind: 'human' },
@@ -134,7 +132,7 @@ export function createSendProjectMessageHandler(ctx: SessionContext, deps: SendP
         name: agent.name,
         kind: 'acp' as const
       })),
-      ...nativeCliParticipants
+      ...externalAgentParticipants
     ];
     const ambientContext =
       route.kind === 'send' && route.generate === false
@@ -183,9 +181,9 @@ export function createSendProjectMessageHandler(ctx: SessionContext, deps: SendP
           : await send({ sessionId, text: route.text, attachments, generate: false });
         const humanSender = { kind: 'human' as const, name: cfg?.principal.displayName ?? 'User', id: 'human' };
         await Promise.all([
-          deliverProjectMessageToManagedNativeCliMembers({
+          deliverProjectMessageToManagedExternalAgentMembers({
             session,
-            nativeCliAgents,
+            externalAgents,
             text: messageTextWithAttachments(route.text, attachments),
             sender: humanSender
           }),
@@ -209,17 +207,17 @@ export function createSendProjectMessageHandler(ctx: SessionContext, deps: SendP
         onComplete: dispatchStructuredNext
       });
       if (!route.direct && route.generate === false) {
-        await deliverProjectMessageToManagedNativeCliMembers({
+        await deliverProjectMessageToManagedExternalAgentMembers({
           session,
-          nativeCliAgents,
+          externalAgents,
           text: messageTextWithAttachments(route.text, attachments),
           sender: { kind: 'human', name: cfg?.principal.displayName ?? 'User', id: 'human' }
         });
       }
       return result;
     }
-    if (route.kind === 'forward-native-cli')
-      return forwardToNativeCli({
+    if (route.kind === 'forward-external-agent')
+      return forwardToExternalAgent({
         sessionId,
         agentName: route.agentName,
         text: messageTextWithAttachments(route.text, attachments),

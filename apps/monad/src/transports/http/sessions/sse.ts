@@ -88,7 +88,7 @@ export function startSseHeartbeat(
 }
 
 /**
- * Build an SSE `Response` for a live push source of typed values (native-CLI auth/observation
+ * Build an SSE `Response` for a live push source of typed values (external agent auth/observation
  * snapshots, etc. — as opposed to the durable session event bus). The source is subscribed *now*, so
  * the current snapshot is captured even before the browser's stream opens; values emitted before
  * `start` run are buffered and flushed in order once it does. A value emitted with `done: true` is the

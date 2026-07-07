@@ -315,20 +315,20 @@ export const MessageRow = memo(function MessageRow({
   Attachment,
   labels,
   onAgentClick,
-  onFollowNativeCliSession
+  onFollowExternalAgentSession
 }: {
   msg: Message;
   Attachment?: MessageAttachmentComponent;
   labels?: MessageRowLabels;
   onAgentClick?: (id: string) => void;
-  onFollowNativeCliSession?: (id: string, deliveryId?: NativeAgentDeliveryId) => void;
+  onFollowExternalAgentSession?: (id: string, deliveryId?: NativeAgentDeliveryId) => void;
 }): React.ReactElement {
   if (msg.kind === 'system' || msg.kind === 'developer') {
     return (
       <SystemMessageRow
         msg={msg}
         onAgentClick={onAgentClick}
-        onFollowNativeCliSession={onFollowNativeCliSession}
+        onFollowExternalAgentSession={onFollowExternalAgentSession}
       />
     );
   }

@@ -90,13 +90,13 @@ const SYSTEM_EVENT_CSS = `
 export function SystemMessageRow({
   msg,
   onAgentClick,
-  onFollowNativeCliSession
+  onFollowExternalAgentSession
 }: {
   msg: Message;
   onAgentClick?: (id: string) => void;
-  onFollowNativeCliSession?: (id: string, deliveryId?: NativeAgentDeliveryId) => void;
+  onFollowExternalAgentSession?: (id: string, deliveryId?: NativeAgentDeliveryId) => void;
 }): React.ReactElement {
-  void onFollowNativeCliSession;
+  void onFollowExternalAgentSession;
   const developer = msg.kind === 'developer' || msg.developerOnly === true;
   const agentProductIcon = msg.agentChip ? resolveProductIcon(msg.agentChip) : null;
   const pending = msg.systemTone === 'pending';

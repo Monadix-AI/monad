@@ -1,17 +1,17 @@
 import type { ChatMessage, Event, SessionUiEvent, UIItem, UIMessageItem } from '@monad/protocol';
-import type { NativeCliSessionSnapshot } from './ui-projection-helpers.ts';
+import type { ExternalAgentSessionSnapshot } from './ui-projection-helpers.ts';
 import type { ProjectionMutations } from './ui-projection-state.ts';
 
 import {
   agentNameFromData,
   deliveryIdFromData,
   displayFromToolResultData,
+  externalAgentSessionIdFromData,
+  externalAgentToolItem,
   isEvictable,
   isSilentChannelMessage,
   isUnknownToolResult,
   itemKey,
-  nativeCliSessionIdFromData,
-  nativeCliToolItem,
   partsFromMessage,
   sourceFromData,
   statusFromMessage
@@ -20,7 +20,7 @@ import { applyInteractionEvent } from './ui-projection-interaction-events.ts';
 import { applyMessageEvent } from './ui-projection-message-events.ts';
 import { applyToolEvent } from './ui-projection-tool-events.ts';
 
-export type { NativeCliSessionSnapshot } from './ui-projection-helpers.ts';
+export type { ExternalAgentSessionSnapshot } from './ui-projection-helpers.ts';
 
 // Ceiling on live-streamed items a single held-open subscription's projector retains. Well above the
 // hydration window (LIVE_SNAPSHOT_LIMIT); only a very long-lived viewer streaming thousands of turns
@@ -118,14 +118,14 @@ export class SessionUiProjector {
   }
 
   private messageObservationPointers(
-    payload: { nativeCliSessionId?: string; deliveryId?: `deliv_${string}` },
+    payload: { externalAgentSessionId?: string; deliveryId?: `deliv_${string}` },
     existing?: UIMessageItem
-  ): Pick<UIMessageItem, 'nativeCliSessionId' | 'deliveryId'> {
+  ): Pick<UIMessageItem, 'externalAgentSessionId' | 'deliveryId'> {
     return {
-      ...(payload.nativeCliSessionId
-        ? { nativeCliSessionId: payload.nativeCliSessionId }
-        : existing?.nativeCliSessionId
-          ? { nativeCliSessionId: existing.nativeCliSessionId }
+      ...(payload.externalAgentSessionId
+        ? { externalAgentSessionId: payload.externalAgentSessionId }
+        : existing?.externalAgentSessionId
+          ? { externalAgentSessionId: existing.externalAgentSessionId }
           : {}),
       ...(payload.deliveryId
         ? { deliveryId: payload.deliveryId }
@@ -255,8 +255,8 @@ export class SessionUiProjector {
         ...(message.role === 'assistant' && sourceFromData(message.data)
           ? { source: sourceFromData(message.data) }
           : {}),
-        ...(message.role === 'assistant' && nativeCliSessionIdFromData(message.data)
-          ? { nativeCliSessionId: nativeCliSessionIdFromData(message.data) }
+        ...(message.role === 'assistant' && externalAgentSessionIdFromData(message.data)
+          ? { externalAgentSessionId: externalAgentSessionIdFromData(message.data) }
           : {}),
         ...(message.role === 'assistant' && deliveryIdFromData(message.data)
           ? { deliveryId: deliveryIdFromData(message.data) }
@@ -270,14 +270,14 @@ export class SessionUiProjector {
   }
 
   /**
-   * Rebuild native CLI tool cards from their durable output snapshots. Call after {@link hydrateMessages}
+   * Rebuild external agent tool cards from their durable output snapshots. Call after {@link hydrateMessages}
    * so a page refresh / reconnect shows a session's terminal output without replaying the (non-durable)
-   * per-chunk `native_cli.output` events. Each card is inserted at its `startedAt` position so it
+   * per-chunk `external_agent.output` events. Each card is inserted at its `startedAt` position so it
    * interleaves with messages in array-order clients; seq-sorting clients order it the same way.
    */
-  hydrateNativeCliSessions(sessions: NativeCliSessionSnapshot[]): void {
+  hydrateExternalAgentSessions(sessions: ExternalAgentSessionSnapshot[]): void {
     for (const session of sessions) {
-      const item = nativeCliToolItem(session);
+      const item = externalAgentToolItem(session);
       const key = itemKey('tool', item.id);
       if (this.items.has(key)) {
         this.items.set(key, item);

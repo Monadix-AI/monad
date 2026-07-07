@@ -92,11 +92,11 @@ export interface DaemonHandlerDeps extends SessionDeps, ModelDeps {
   certFingerprint?: string;
   /** ISO-8601 expiry of the active TLS cert, surfaced through /health so clients can warn before it expires. */
   certExpiry?: string;
-  /** Test/runtime override for browser-attached native CLI auth connect heartbeat pruning. */
-  nativeCliAuthHeartbeatTimeoutMs?: number;
-  /** Loopback URL that managed native CLI runtimes use to call the daemon. */
-  nativeCliServerUrl?: string;
-  /** Current daemon HTTPS switch. Used only when nativeCliServerUrl is not supplied. */
+  /** Test/runtime override for browser-attached external agent auth connect heartbeat pruning. */
+  externalAgentAuthHeartbeatTimeoutMs?: number;
+  /** Loopback URL that managed external agent runtimes use to call the daemon. */
+  externalAgentServerUrl?: string;
+  /** Current daemon HTTPS switch. Used only when externalAgentServerUrl is not supplied. */
   networkHttps?: MonadConfig['network']['https'];
   /** Getter for background upgrade check result — populated asynchronously after startup. */
   getUpgradeInfo?: () => { latestVersion: string; latestVersionCheckedAt: string } | null;

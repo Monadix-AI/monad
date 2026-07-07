@@ -599,7 +599,7 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
     certFingerprint: tlsFingerprint,
     certExpiry: tlsCertExpiry,
     networkHttps: cfg.network.https,
-    nativeCliServerUrl: endpoint.localUrl,
+    externalAgentServerUrl: endpoint.localUrl,
     getUpgradeInfo: upgradeInfo.getUpgradeInfo,
     log: logger
   });

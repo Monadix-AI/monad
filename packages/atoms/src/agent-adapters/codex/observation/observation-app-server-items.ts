@@ -1,4 +1,4 @@
-import type { NativeCliObservationEvent } from '@monad/protocol';
+import type { ExternalAgentObservationEvent } from '@monad/protocol';
 
 import {
   numberValue,
@@ -23,7 +23,7 @@ function codexAppServerItemEvents(args: {
   item: Record<string, unknown>;
   itemIndex?: number;
   recordIndex: number;
-}): NativeCliObservationEvent[] {
+}): ExternalAgentObservationEvent[] {
   const type = textValue(args.item.type);
   const itemIndex = args.itemIndex === undefined ? '' : `:${args.itemIndex}`;
   const createdAt = providerEpochMsTimestamp(
@@ -103,7 +103,7 @@ export function codexAppServerBatchRecordEvents(
   id: string,
   record: Record<string, unknown>,
   recordIndex: number
-): NativeCliObservationEvent[] {
+): ExternalAgentObservationEvent[] {
   if (!Array.isArray(record.items)) return [];
   return record.items.flatMap((item, itemIndex) => {
     if (!item || typeof item !== 'object' || Array.isArray(item)) return [];
@@ -121,7 +121,7 @@ export function codexAppServerTurnsPageRecordEvents(
   id: string,
   record: Record<string, unknown>,
   recordIndex: number
-): NativeCliObservationEvent[] {
+): ExternalAgentObservationEvent[] {
   const result = recordValue(record.result);
   if (!result || !Array.isArray(result.data)) return [];
   let itemOffset = 0;

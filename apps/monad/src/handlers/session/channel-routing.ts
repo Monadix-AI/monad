@@ -2,7 +2,7 @@ interface ChannelTargetMention {
   id: string;
   name: string;
   agentName?: string;
-  nativeCliAgentName?: string;
+  externalAgentName?: string;
 }
 
 export type ChannelRouteAction =
@@ -24,7 +24,7 @@ export type ChannelRouteAction =
       targetMention?: ChannelTargetMention;
     }
   | {
-      kind: 'forward-native-cli';
+      kind: 'forward-external-agent';
       agentName: string;
       text: string;
       displayText?: string;
@@ -35,18 +35,18 @@ export type ChannelRouteAction =
 export function routeChannelMessage({
   text,
   acpAgentNames,
-  nativeCliAgentNames = []
+  externalAgentNames = []
 }: {
   text: string;
   acpAgentNames: readonly string[];
-  nativeCliAgentNames?: readonly string[];
+  externalAgentNames?: readonly string[];
 }): ChannelRouteAction {
   const trimmed = text.trim();
   if (!trimmed) return { kind: 'none' };
 
   const mentions = channelMentions(trimmed);
   const singleMention = mentions.length === 1 ? mentions[0] : undefined;
-  const singleTarget = singleMention ? targetMention(singleMention, acpAgentNames, nativeCliAgentNames) : undefined;
+  const singleTarget = singleMention ? targetMention(singleMention, acpAgentNames, externalAgentNames) : undefined;
 
   if (singleTarget) {
     const rest = singleMention ? withoutMention(trimmed, singleMention).trim() : '';
@@ -59,10 +59,10 @@ export function routeChannelMessage({
         direct: true
       };
     }
-    if (singleTarget.nativeCliAgentName) {
+    if (singleTarget.externalAgentName) {
       return {
-        kind: 'forward-native-cli',
-        agentName: singleTarget.nativeCliAgentName,
+        kind: 'forward-external-agent',
+        agentName: singleTarget.externalAgentName,
         text: rest || trimmed,
         displayText: trimmed,
         direct: true
@@ -77,13 +77,15 @@ export function routeChannelMessage({
 function targetMention(
   mention: { name: string; id: string },
   acpAgentNames: readonly string[],
-  nativeCliAgentNames: readonly string[]
+  externalAgentNames: readonly string[]
 ): ChannelTargetMention | undefined {
   const acpName = mention.id.startsWith('acp:') ? mention.id.slice(4) : undefined;
   if (acpName && acpAgentNames.includes(acpName)) return { id: mention.id, name: mention.name, agentName: acpName };
-  const nativeCliName = mention.id.startsWith('native-cli:') ? mention.id.slice('native-cli:'.length) : undefined;
-  if (nativeCliName && nativeCliAgentNames.includes(nativeCliName)) {
-    return { id: mention.id, name: mention.name, nativeCliAgentName: nativeCliName };
+  const externalAgentName = mention.id.startsWith('external-agent:')
+    ? mention.id.slice('external-agent:'.length)
+    : undefined;
+  if (externalAgentName && externalAgentNames.includes(externalAgentName)) {
+    return { id: mention.id, name: mention.name, externalAgentName: externalAgentName };
   }
   if (mention.id === 'monad' || mention.id.startsWith('agent:')) return { id: mention.id, name: mention.name };
   return undefined;

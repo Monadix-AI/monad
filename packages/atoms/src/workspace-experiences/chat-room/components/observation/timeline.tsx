@@ -1,6 +1,6 @@
 'use client';
 
-import type { NativeCliStreamView } from '../../../experience/types.ts';
+import type { ExternalAgentStreamView } from '../../../experience/types.ts';
 import type { ObservationItem, ObservationTimelineEntry, PublicObservationCard } from './types.ts';
 
 import { ChevronDownIcon } from '@hugeicons/core-free-icons';
@@ -72,7 +72,7 @@ export type ObservationTimelineRow = {
   entries: ObservationTimelineEntry[];
 };
 
-export function observationTimelineEntries(items: NativeCliStreamView['items']): ObservationTimelineEntry[] {
+export function observationTimelineEntries(items: ExternalAgentStreamView['items']): ObservationTimelineEntry[] {
   const entries: ObservationTimelineEntry[] = [];
   for (let index = 0; index < items.length; index += 1) {
     const item = items[index];

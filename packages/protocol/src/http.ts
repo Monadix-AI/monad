@@ -15,11 +15,6 @@ import {
 import { browserPresetResponseSchema, setBrowserPresetRequestSchema } from './browser-preset.ts';
 import { commandsListQuerySchema, commandsListResponseSchema } from './command.ts';
 import { computerPresetResponseSchema, setComputerPresetRequestSchema } from './computer-preset.ts';
-import { getGraphResponseSchema } from './graph.ts';
-import { agentIdSchema, projectIdSchema, sessionIdSchema } from './ids.ts';
-import { getLicensesResponseSchema } from './licenses.ts';
-import { getMem0DataResponseSchema } from './mem0-data.ts';
-import { getLawsResponseSchema } from './memory.ts';
 import {
   attachmentReadResponseSchema,
   nativeAgentProjectAskRequestSchema,
@@ -37,7 +32,12 @@ import {
   nativeAgentRuntimeInfoResponseSchema,
   nativeAgentSendRequestSchema,
   nativeAgentSendResponseSchema
-} from './native-cli-agent/index.ts';
+} from './external-agent/index.ts';
+import { getGraphResponseSchema } from './graph.ts';
+import { agentIdSchema, projectIdSchema, sessionIdSchema } from './ids.ts';
+import { getLicensesResponseSchema } from './licenses.ts';
+import { getMem0DataResponseSchema } from './mem0-data.ts';
+import { getLawsResponseSchema } from './memory.ts';
 import { obscuraStatusResponseSchema, setObscuraRequestSchema } from './obscura.ts';
 import { pickDirectoryRequestSchema, pickDirectoryResponseSchema } from './pick-directory.ts';
 import {

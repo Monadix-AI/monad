@@ -1,16 +1,16 @@
 import type {
   AvatarStyle,
-  NativeCliObservationEvent,
-  NativeCliSessionView,
+  ExternalAgentObservationEvent,
+  ExternalAgentSessionView,
   UIItem,
   UIMessageItem,
   UIPart
 } from '@monad/protocol';
 import type {
   ActivityRow,
+  ExternalAgentStreamView,
   Message,
   MessageAttachment,
-  NativeCliStreamView,
   Participant
 } from '../../experience/types.ts';
 
@@ -20,22 +20,22 @@ import {
   defaultWorkplaceProjectMemberSettings,
   entityAvatarUrl,
   entityAvatarWriteUrl,
+  externalAgentProductDisplayName,
   messageAttachmentRefSchema,
-  nativeCliProductDisplayName,
-  renameNativeCliProjectMemberDisplayName
+  renameExternalAgentProjectMemberDisplayName
 } from '@monad/protocol';
 
-import { nativeCliStreamItems } from '../../experience/native-cli-observation/native-cli-observation.ts';
+import { externalAgentStreamItems } from '../../experience/external-agent-observation/external-agent-observation.ts';
 import {
-  nativeCliAgentFacingCommandPhase,
-  nativeCliMemberActivityPhase,
-  nativeCliMemberPresence,
-  nativeCliSessionIsGenerating
-} from '../../experience/native-cli-presence.ts';
+  externalAgentFacingCommandPhase,
+  externalAgentMemberActivityPhase,
+  externalAgentMemberPresence,
+  externalAgentSessionIsGenerating
+} from '../../experience/external-agent-presence.ts';
 import { parseProjectMembers, productIcon } from '../../experience/project-members.ts';
-import { avatarForAgent, fmtTime, HUMAN, iconForAgent, nativeCliTag } from '../../experience/project-projection.ts';
+import { avatarForAgent, externalAgentTag, fmtTime, HUMAN, iconForAgent } from '../../experience/project-projection.ts';
 
-const NATIVE_CLI_FOLLOW_TEXT = 'CLI stream available';
+const EXTERNAL_AGENT_FOLLOW_TEXT = 'CLI stream available';
 
 function textFromParts(parts: UIPart[]): string {
   return parts
@@ -67,9 +67,9 @@ function displayTextFromMessage(item: UIMessageItem): string {
   return item.role === 'assistant' ? channelDisplayText(text) : text;
 }
 
-export function isManagedNativeCliReasoningOnlyMessage(item: UIMessageItem): boolean {
+export function isManagedExternalAgentReasoningOnlyMessage(item: UIMessageItem): boolean {
   return (
-    item.source === 'managed-native-cli' &&
+    item.source === 'managed-external-agent' &&
     item.role === 'assistant' &&
     !textFromParts(item.parts).trim() &&
     reasoningFromParts(item.parts) !== undefined
@@ -79,25 +79,25 @@ export function isManagedNativeCliReasoningOnlyMessage(item: UIMessageItem): boo
 export function messageToView(
   item: UIMessageItem,
   time = '',
-  nativeCliAvatarSeeds = new Map<string, string>(),
-  nativeCliTags = new Map<string, string>(),
-  nativeCliDisplayNames = new Map<string, string>(),
-  nativeCliIcons = new Map<string, Message['icon']>(),
+  externalAgentAvatarSeeds = new Map<string, string>(),
+  externalAgentTags = new Map<string, string>(),
+  externalAgentDisplayNames = new Map<string, string>(),
+  externalAgentIcons = new Map<string, Message['icon']>(),
   human = HUMAN,
   avatarStyle?: AvatarStyle
 ): Message {
   const agent = item.role === 'assistant';
   const rawName = agent ? (item.agentName ?? 'monad') : human.name;
-  const displayName = agent ? (nativeCliDisplayNames.get(rawName) ?? rawName) : rawName;
-  const icon = agent ? (nativeCliIcons.get(rawName) ?? iconForAgent(displayName)) : undefined;
+  const displayName = agent ? (externalAgentDisplayNames.get(rawName) ?? rawName) : rawName;
+  const icon = agent ? (externalAgentIcons.get(rawName) ?? iconForAgent(displayName)) : undefined;
   const reasoning = agent ? reasoningFromParts(item.parts) : undefined;
   const attachments = attachmentsFromParts(item.parts);
   const agentAvatarSeed =
-    nativeCliAvatarSeeds.get(displayName) ??
+    externalAgentAvatarSeeds.get(displayName) ??
     (displayName === 'monad'
       ? undefined
-      : item.source === 'managed-native-cli'
-        ? `native-cli:${displayName}`
+      : item.source === 'managed-external-agent'
+        ? `external-agent:${displayName}`
         : `agent:${displayName}`);
   return {
     id: item.id,
@@ -110,12 +110,12 @@ export function messageToView(
     tag: agent
       ? displayName === 'monad'
         ? 'AI'
-        : (nativeCliTags.get(rawName) ?? nativeCliTags.get(displayName) ?? 'ACP')
+        : (externalAgentTags.get(rawName) ?? externalAgentTags.get(displayName) ?? 'ACP')
       : human.tag,
     time,
     text: displayTextFromMessage(item),
     orderKey: item.seq,
-    ...(item.nativeCliSessionId ? { nativeCliSessionId: item.nativeCliSessionId } : {}),
+    ...(item.externalAgentSessionId ? { externalAgentSessionId: item.externalAgentSessionId } : {}),
     ...(item.deliveryId ? { deliveryId: item.deliveryId } : {}),
     ...(reasoning ? { reasoning } : {}),
     ...(attachments.length ? { attachments } : {}),
@@ -123,35 +123,35 @@ export function messageToView(
   };
 }
 
-function nativeCliSessionMessage(session: NativeCliSessionView): Message {
-  return nativeCliSessionMessageView(session, session.agentName);
+function externalAgentSessionMessage(session: ExternalAgentSessionView): Message {
+  return externalAgentSessionMessageView(session, session.agentName);
 }
 
-function nativeCliAvatarUrl(
+function externalAgentAvatarUrl(
   displayName: string,
-  nativeCliAvatarSeeds = new Map<string, string>(),
+  externalAgentAvatarSeeds = new Map<string, string>(),
   avatarStyle?: AvatarStyle
 ): string {
-  return entityAvatarUrl(nativeCliAvatarSeeds.get(displayName) ?? `native-cli:${displayName}`, avatarStyle);
+  return entityAvatarUrl(externalAgentAvatarSeeds.get(displayName) ?? `external-agent:${displayName}`, avatarStyle);
 }
 
-function nativeCliSessionMessageView(
-  session: NativeCliSessionView,
+function externalAgentSessionMessageView(
+  session: ExternalAgentSessionView,
   displayName: string,
-  nativeCliAvatarSeeds = new Map<string, string>(),
+  externalAgentAvatarSeeds = new Map<string, string>(),
   avatarStyle?: AvatarStyle
 ): Message {
-  const avatarUrl = nativeCliAvatarUrl(displayName, nativeCliAvatarSeeds, avatarStyle);
+  const avatarUrl = externalAgentAvatarUrl(displayName, externalAgentAvatarSeeds, avatarStyle);
   const text = session.state === 'failed' ? 'failed to join the project' : 'joined the project';
   return {
-    id: `native-cli-session:${session.id}`,
+    id: `external-agent-session:${session.id}`,
     authorId: session.agentName,
     authorName: displayName,
     av: avatarForAgent(displayName),
     icon: productIcon(session.productIcon),
     avatarUrl,
     kind: 'system',
-    tag: nativeCliTag(session.provider),
+    tag: externalAgentTag(session.provider),
     time: fmtTime(session.startedAt),
     text,
     agentChip: {
@@ -159,60 +159,60 @@ function nativeCliSessionMessageView(
       name: displayName,
       icon: productIcon(session.productIcon),
       avatarUrl,
-      tag: nativeCliTag(session.provider)
+      tag: externalAgentTag(session.provider)
     },
-    nativeCliSessionId: session.id,
+    externalAgentSessionId: session.id,
     streaming: false,
     orderKey: session.startedAt,
     ...(session.state === 'failed' ? { systemTone: 'error' as const } : {})
   };
 }
 
-function nativeCliSessionDeveloperMessage(session: NativeCliSessionView): Message {
-  return nativeCliSessionDeveloperMessageView(session, session.agentName);
+function externalAgentSessionDeveloperMessage(session: ExternalAgentSessionView): Message {
+  return externalAgentSessionDeveloperMessageView(session, session.agentName);
 }
 
-function nativeCliSessionDeveloperMessageView(
-  session: NativeCliSessionView,
+function externalAgentSessionDeveloperMessageView(
+  session: ExternalAgentSessionView,
   displayName: string,
-  nativeCliAvatarSeeds = new Map<string, string>(),
+  externalAgentAvatarSeeds = new Map<string, string>(),
   avatarStyle?: AvatarStyle
 ): Message {
   return {
-    id: `native-cli-session-developer:${session.id}`,
+    id: `external-agent-session-developer:${session.id}`,
     authorId: session.agentName,
     authorName: displayName,
     av: avatarForAgent(displayName),
     icon: productIcon(session.productIcon),
-    avatarUrl: nativeCliAvatarUrl(displayName, nativeCliAvatarSeeds, avatarStyle),
+    avatarUrl: externalAgentAvatarUrl(displayName, externalAgentAvatarSeeds, avatarStyle),
     kind: 'developer',
     tag: 'DEV',
     time: fmtTime(session.startedAt),
-    text: NATIVE_CLI_FOLLOW_TEXT,
-    nativeCliSessionId: session.id,
+    text: EXTERNAL_AGENT_FOLLOW_TEXT,
+    externalAgentSessionId: session.id,
     developerOnly: true,
     orderKey: `${session.startedAt}:developer`
   };
 }
 
-function nativeCliSessionErrorMessageView(
-  session: NativeCliSessionView,
+function externalAgentSessionErrorMessageView(
+  session: ExternalAgentSessionView,
   displayName: string,
-  item: NativeCliObservationEvent,
-  nativeCliAvatarSeeds = new Map<string, string>(),
+  item: ExternalAgentObservationEvent,
+  externalAgentAvatarSeeds = new Map<string, string>(),
   avatarStyle?: AvatarStyle
 ): Message {
   const icon = productIcon(session.productIcon);
-  const avatarUrl = nativeCliAvatarUrl(displayName, nativeCliAvatarSeeds, avatarStyle);
+  const avatarUrl = externalAgentAvatarUrl(displayName, externalAgentAvatarSeeds, avatarStyle);
   return {
-    id: `native-cli-session-error:${session.id}:${item.id}`,
+    id: `external-agent-session-error:${session.id}:${item.id}`,
     authorId: session.agentName,
     authorName: displayName,
     av: avatarForAgent(displayName),
     icon,
     avatarUrl,
     kind: 'system',
-    tag: nativeCliTag(session.provider),
+    tag: externalAgentTag(session.provider),
     time: fmtTime(session.updatedAt || session.startedAt),
     text: 'encountered an error',
     agentChip: {
@@ -220,9 +220,9 @@ function nativeCliSessionErrorMessageView(
       name: displayName,
       icon,
       avatarUrl,
-      tag: nativeCliTag(session.provider)
+      tag: externalAgentTag(session.provider)
     },
-    nativeCliSessionId: session.id,
+    externalAgentSessionId: session.id,
     orderKey: `${session.updatedAt || session.startedAt}:error:${item.id}`,
     systemTone: 'error',
     systemDetail: item.text,
@@ -230,20 +230,22 @@ function nativeCliSessionErrorMessageView(
   };
 }
 
-function nativeCliSessionErrorMessages(
-  session: NativeCliSessionView,
+function externalAgentSessionErrorMessages(
+  session: ExternalAgentSessionView,
   displayName: string,
-  nativeCliAvatarSeeds = new Map<string, string>(),
+  externalAgentAvatarSeeds = new Map<string, string>(),
   avatarStyle?: AvatarStyle
 ): Message[] {
-  return nativeCliStreamItems({
+  return externalAgentStreamItems({
     id: session.id,
     provider: session.provider,
     output: session.outputSnapshot,
     observedAt: session.updatedAt || session.startedAt
   })
     .filter((item) => item.providerEventType === 'server_error')
-    .map((item) => nativeCliSessionErrorMessageView(session, displayName, item, nativeCliAvatarSeeds, avatarStyle));
+    .map((item) =>
+      externalAgentSessionErrorMessageView(session, displayName, item, externalAgentAvatarSeeds, avatarStyle)
+    );
 }
 
 function sortMessagesOldestFirst(messages: Message[]): Message[] {
@@ -253,10 +255,10 @@ function sortMessagesOldestFirst(messages: Message[]): Message[] {
   });
 }
 
-function keepManagedNativeCliRepliesAfterJoin(messages: Map<string, Message>): void {
+function keepManagedExternalAgentRepliesAfterJoin(messages: Map<string, Message>): void {
   const joinOrderByAgent = new Map<string, string>();
   for (const message of messages.values()) {
-    if (message.kind !== 'system' || !message.nativeCliSessionId || !message.orderKey) continue;
+    if (message.kind !== 'system' || !message.externalAgentSessionId || !message.orderKey) continue;
     if (message.text !== 'joined the project' && message.text !== 'failed to join the project') continue;
     const existing = joinOrderByAgent.get(message.authorId);
     if (!existing || message.orderKey < existing) joinOrderByAgent.set(message.authorId, message.orderKey);
@@ -269,19 +271,19 @@ function keepManagedNativeCliRepliesAfterJoin(messages: Map<string, Message>): v
   }
 }
 
-function collapseNativeCliJoinPlaceholders(messages: Map<string, Message>): void {
+function collapseExternalAgentJoinPlaceholders(messages: Map<string, Message>): void {
   const repliesBySession = new Set<string>();
   const repliesByAgent = new Set<string>();
   for (const message of messages.values()) {
     if (message.kind !== 'agent') continue;
-    if (message.nativeCliSessionId) repliesBySession.add(message.nativeCliSessionId);
+    if (message.externalAgentSessionId) repliesBySession.add(message.externalAgentSessionId);
     repliesByAgent.add(message.authorId);
   }
   for (const [id, message] of messages) {
     if (message.kind !== 'system' || message.text !== 'joined the project' || message.systemTone !== 'pending')
       continue;
     if (
-      (message.nativeCliSessionId && repliesBySession.has(message.nativeCliSessionId)) ||
+      (message.externalAgentSessionId && repliesBySession.has(message.externalAgentSessionId)) ||
       repliesByAgent.has(message.authorId)
     ) {
       messages.delete(id);
@@ -291,8 +293,8 @@ function collapseNativeCliJoinPlaceholders(messages: Map<string, Message>): void
   }
 }
 
-function currentNativeCliSessionsByAgent(sessions: NativeCliSessionView[]): NativeCliSessionView[] {
-  const current = new Map<string, NativeCliSessionView>();
+function currentExternalAgentSessionsByAgent(sessions: ExternalAgentSessionView[]): ExternalAgentSessionView[] {
+  const current = new Map<string, ExternalAgentSessionView>();
   for (const session of [...sessions].sort((a, b) => {
     const byUpdatedAt = (b.updatedAt || b.startedAt).localeCompare(a.updatedAt || a.startedAt);
     return byUpdatedAt === 0 ? b.id.localeCompare(a.id) : byUpdatedAt;
@@ -303,12 +305,12 @@ function currentNativeCliSessionsByAgent(sessions: NativeCliSessionView[]): Nati
   return [...current.values()];
 }
 
-function nativeCliStreamFromSession(
-  session: NativeCliSessionView,
+function externalAgentStreamFromSession(
+  session: ExternalAgentSessionView,
   templateAgentNames = new Map<string, string>(),
   agentAliases = new Map<string, string[]>()
-): NativeCliStreamView {
-  const items = nativeCliStreamItems({
+): ExternalAgentStreamView {
+  const items = externalAgentStreamItems({
     id: session.id,
     provider: session.provider,
     output: session.outputSnapshot,
@@ -322,7 +324,7 @@ function nativeCliStreamFromSession(
       ? { templateAgentName: templateAgentNames.get(session.agentName) }
       : {}),
     provider: session.provider,
-    tag: nativeCliTag(session.provider),
+    tag: externalAgentTag(session.provider),
     icon: productIcon(session.productIcon),
     status: session.state === 'failed' ? 'error' : 'ok',
     workingPath: session.workingPath,
@@ -332,39 +334,39 @@ function nativeCliStreamFromSession(
   };
 }
 
-function nativeCliStreamFromActivity(
+function externalAgentStreamFromActivity(
   row: ActivityRow,
   templateAgentNames = new Map<string, string>(),
   agentAliases = new Map<string, string[]>()
-): NativeCliStreamView | undefined {
-  if (!row.tool.startsWith('native-cli:')) return undefined;
-  const provider = row.tool.slice('native-cli:'.length);
+): ExternalAgentStreamView | undefined {
+  if (!row.tool.startsWith('external-agent:')) return undefined;
+  const provider = row.tool.slice('external-agent:'.length);
   const agentName = row.agentName ?? row.detail ?? provider;
-  const items = nativeCliStreamItems({ id: row.id, provider, output: row.output });
+  const items = externalAgentStreamItems({ id: row.id, provider, output: row.output });
   return {
     id: row.id,
     agentName,
     ...(agentAliases.get(agentName)?.length ? { agentAliases: agentAliases.get(agentName) } : {}),
     ...(templateAgentNames.get(agentName) ? { templateAgentName: templateAgentNames.get(agentName) } : {}),
     provider,
-    tag: nativeCliTag(provider),
+    tag: externalAgentTag(provider),
     status: row.status,
     output: row.output ?? '',
     items
   };
 }
 
-export function buildNativeCliStreams(
-  nativeCliSessions: NativeCliSessionView[],
+export function buildExternalAgentStreams(
+  externalAgentSessions: ExternalAgentSessionView[],
   activity: ActivityRow[],
   templateAgentNames = new Map<string, string>(),
   agentAliases = new Map<string, string[]>()
-): NativeCliStreamView[] {
-  const byId = new Map<string, NativeCliStreamView>();
-  for (const session of nativeCliSessions)
-    byId.set(session.id, nativeCliStreamFromSession(session, templateAgentNames, agentAliases));
+): ExternalAgentStreamView[] {
+  const byId = new Map<string, ExternalAgentStreamView>();
+  for (const session of externalAgentSessions)
+    byId.set(session.id, externalAgentStreamFromSession(session, templateAgentNames, agentAliases));
   for (const row of activity) {
-    const stream = nativeCliStreamFromActivity(row, templateAgentNames, agentAliases);
+    const stream = externalAgentStreamFromActivity(row, templateAgentNames, agentAliases);
     if (!stream) continue;
     const existing = byId.get(stream.id);
     byId.set(stream.id, {
@@ -402,13 +404,13 @@ export function acpProgressText(output: string | undefined): string {
 
 interface BuildProjectMessagesInput {
   persistedMessages: Message[];
-  nativeCliSessions: NativeCliSessionView[];
+  externalAgentSessions: ExternalAgentSessionView[];
   liveItems: readonly UIItem[];
   liveTools: readonly Extract<UIItem, { kind: 'tool' }>[];
-  nativeCliAvatarSeeds?: Map<string, string>;
-  nativeCliTags?: Map<string, string>;
-  nativeCliDisplayNames?: Map<string, string>;
-  nativeCliIcons?: Map<string, Message['icon']>;
+  externalAgentAvatarSeeds?: Map<string, string>;
+  externalAgentTags?: Map<string, string>;
+  externalAgentDisplayNames?: Map<string, string>;
+  externalAgentIcons?: Map<string, Message['icon']>;
   human?: Participant;
   avatarStyle?: AvatarStyle;
   showDeveloperOnlyMessages?: boolean;
@@ -416,13 +418,13 @@ interface BuildProjectMessagesInput {
 
 export function buildProjectMessages({
   persistedMessages,
-  nativeCliSessions,
+  externalAgentSessions,
   liveItems,
   liveTools,
-  nativeCliAvatarSeeds = new Map(),
-  nativeCliTags = new Map(),
-  nativeCliDisplayNames = new Map(),
-  nativeCliIcons = new Map(),
+  externalAgentAvatarSeeds = new Map(),
+  externalAgentTags = new Map(),
+  externalAgentDisplayNames = new Map(),
+  externalAgentIcons = new Map(),
   human = HUMAN,
   avatarStyle,
   showDeveloperOnlyMessages = false
@@ -433,48 +435,55 @@ export function buildProjectMessages({
     messageToView(
       item,
       '',
-      nativeCliAvatarSeeds,
-      nativeCliTags,
-      nativeCliDisplayNames,
-      nativeCliIcons,
+      externalAgentAvatarSeeds,
+      externalAgentTags,
+      externalAgentDisplayNames,
+      externalAgentIcons,
       human,
       avatarStyle
     );
   for (const view of persistedMessages) byId.set(view.id, view);
-  const currentNativeCliSessions = currentNativeCliSessionsByAgent(nativeCliSessions);
-  const currentNativeCliAgentNames = new Set(currentNativeCliSessions.map((session) => session.agentName));
-  const projectedNativeCliAgentNames = new Set(currentNativeCliAgentNames);
-  for (const session of currentNativeCliSessions) {
-    const displayName = nativeCliDisplayNames.get(session.agentName) ?? session.agentName;
+  const currentExternalAgentSessions = currentExternalAgentSessionsByAgent(externalAgentSessions);
+  const currentExternalAgentNames = new Set(currentExternalAgentSessions.map((session) => session.agentName));
+  const projectedExternalAgentNames = new Set(currentExternalAgentNames);
+  for (const session of currentExternalAgentSessions) {
+    const displayName = externalAgentDisplayNames.get(session.agentName) ?? session.agentName;
     byId.set(
-      `native-cli-session:${session.id}`,
-      nativeCliSessionMessageView(session, displayName, nativeCliAvatarSeeds, avatarStyle)
+      `external-agent-session:${session.id}`,
+      externalAgentSessionMessageView(session, displayName, externalAgentAvatarSeeds, avatarStyle)
     );
-    for (const message of nativeCliSessionErrorMessages(session, displayName, nativeCliAvatarSeeds, avatarStyle)) {
+    for (const message of externalAgentSessionErrorMessages(
+      session,
+      displayName,
+      externalAgentAvatarSeeds,
+      avatarStyle
+    )) {
       byId.set(message.id, message);
     }
     if (shouldShowDeveloperOnlyMessages) {
       byId.set(
-        `native-cli-session-developer:${session.id}`,
-        nativeCliSessionDeveloperMessageView(session, displayName, nativeCliAvatarSeeds, avatarStyle)
+        `external-agent-session-developer:${session.id}`,
+        externalAgentSessionDeveloperMessageView(session, displayName, externalAgentAvatarSeeds, avatarStyle)
       );
     }
   }
   for (const item of liveItems) {
     if (item.kind === 'system') {
-      const nativeCliResumeAgent = item.id.startsWith('native-cli-resume-failed:')
-        ? item.id.slice('native-cli-resume-failed:'.length).split(':')[0]
+      const externalAgentResumeAgent = item.id.startsWith('external-agent-resume-failed:')
+        ? item.id.slice('external-agent-resume-failed:'.length).split(':')[0]
         : undefined;
-      const authorName = nativeCliResumeAgent || 'monad';
+      const authorName = externalAgentResumeAgent || 'monad';
       byId.set(item.id, {
         id: item.id,
         authorId: authorName,
         authorName,
         av: avatarForAgent(authorName),
         icon: iconForAgent(authorName),
-        avatarUrl: nativeCliResumeAgent ? entityAvatarUrl(`native-cli-resume:${authorName}`, avatarStyle) : undefined,
+        avatarUrl: externalAgentResumeAgent
+          ? entityAvatarUrl(`external-agent-resume:${authorName}`, avatarStyle)
+          : undefined,
         kind: 'system',
-        tag: nativeCliResumeAgent ? 'CLI' : 'SYS',
+        tag: externalAgentResumeAgent ? 'CLI' : 'SYS',
         time: '',
         text: item.text,
         orderKey: item.seq
@@ -482,7 +491,7 @@ export function buildProjectMessages({
       continue;
     }
     if (item.kind !== 'message') continue;
-    if (isManagedNativeCliReasoningOnlyMessage(item)) continue;
+    if (isManagedExternalAgentReasoningOnlyMessage(item)) continue;
     const text = displayTextFromMessage(item);
     const reasoning = item.role === 'assistant' ? reasoningFromParts(item.parts) : undefined;
     if (text || reasoning || item.status !== 'streaming') byId.set(item.id, toView(item));
@@ -513,76 +522,76 @@ export function buildProjectMessages({
     });
   }
   for (const item of liveTools) {
-    if (item.status !== 'running' || !item.tool.startsWith('native-cli:')) continue;
+    if (item.status !== 'running' || !item.tool.startsWith('external-agent:')) continue;
     const input = item.input as { agent?: unknown; productIcon?: unknown; provider?: unknown } | undefined;
     if (typeof input?.agent !== 'string') continue;
-    const displayName = nativeCliDisplayNames.get(input.agent) ?? input.agent;
+    const displayName = externalAgentDisplayNames.get(input.agent) ?? input.agent;
     const icon = productIcon(input.productIcon);
-    if (!projectedNativeCliAgentNames.has(input.agent)) {
-      projectedNativeCliAgentNames.add(input.agent);
-      const provider = typeof input.provider === 'string' ? input.provider : item.tool.slice('native-cli:'.length);
-      byId.set(`native-cli-session:${item.id}`, {
-        id: `native-cli-session:${item.id}`,
+    if (!projectedExternalAgentNames.has(input.agent)) {
+      projectedExternalAgentNames.add(input.agent);
+      const provider = typeof input.provider === 'string' ? input.provider : item.tool.slice('external-agent:'.length);
+      byId.set(`external-agent-session:${item.id}`, {
+        id: `external-agent-session:${item.id}`,
         authorId: input.agent,
         authorName: displayName,
         av: avatarForAgent(displayName),
         icon,
-        avatarUrl: nativeCliAvatarUrl(displayName, nativeCliAvatarSeeds, avatarStyle),
+        avatarUrl: externalAgentAvatarUrl(displayName, externalAgentAvatarSeeds, avatarStyle),
         kind: 'system',
-        tag: nativeCliTag(provider),
+        tag: externalAgentTag(provider),
         time: '',
         text: 'joined the project',
         agentChip: {
           id: input.agent,
           name: displayName,
           icon,
-          avatarUrl: nativeCliAvatarUrl(displayName, nativeCliAvatarSeeds, avatarStyle),
-          tag: nativeCliTag(provider)
+          avatarUrl: externalAgentAvatarUrl(displayName, externalAgentAvatarSeeds, avatarStyle),
+          tag: externalAgentTag(provider)
         },
-        nativeCliSessionId: item.id,
+        externalAgentSessionId: item.id,
         streaming: false,
         orderKey: item.seq,
         systemTone: 'pending'
       });
     }
     if (shouldShowDeveloperOnlyMessages && item.output) {
-      byId.set(`native-cli-session-developer:${item.id}`, {
-        id: `native-cli-session-developer:${item.id}`,
+      byId.set(`external-agent-session-developer:${item.id}`, {
+        id: `external-agent-session-developer:${item.id}`,
         authorId: input.agent,
         authorName: displayName,
         av: avatarForAgent(displayName),
         icon,
-        avatarUrl: nativeCliAvatarUrl(displayName, nativeCliAvatarSeeds, avatarStyle),
+        avatarUrl: externalAgentAvatarUrl(displayName, externalAgentAvatarSeeds, avatarStyle),
         kind: 'developer',
         tag: 'DEV',
         time: '',
-        text: NATIVE_CLI_FOLLOW_TEXT,
-        nativeCliSessionId: item.id,
+        text: EXTERNAL_AGENT_FOLLOW_TEXT,
+        externalAgentSessionId: item.id,
         developerOnly: true,
         orderKey: `${item.seq}:developer`
       });
     }
   }
-  keepManagedNativeCliRepliesAfterJoin(byId);
-  collapseNativeCliJoinPlaceholders(byId);
+  keepManagedExternalAgentRepliesAfterJoin(byId);
+  collapseExternalAgentJoinPlaceholders(byId);
   return sortMessagesOldestFirst([...byId.values()]);
 }
 
 export const __workplaceProjectMessageTest = {
   buildProjectMessages,
-  buildNativeCliStreams,
+  buildExternalAgentStreams,
   avatarCacheKey,
   defaultProjectMemberSettings: defaultWorkplaceProjectMemberSettings,
   entityAvatarUrl,
   entityAvatarWriteUrl,
-  nativeCliMemberPresence,
-  nativeCliMemberActivityPhase,
-  nativeCliAgentFacingCommandPhase,
-  nativeCliProductDisplayName,
-  nativeCliSessionIsGenerating,
-  nativeCliSessionMessage,
-  nativeCliSessionDeveloperMessage,
+  externalAgentMemberPresence,
+  externalAgentMemberActivityPhase,
+  externalAgentFacingCommandPhase,
+  externalAgentProductDisplayName,
+  externalAgentSessionIsGenerating,
+  externalAgentSessionMessage,
+  externalAgentSessionDeveloperMessage,
   parseProjectMembers,
-  renameNativeCliProjectMemberDisplayName,
+  renameExternalAgentProjectMemberDisplayName,
   sortMessagesOldestFirst
 };

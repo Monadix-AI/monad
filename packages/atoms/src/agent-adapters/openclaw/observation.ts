@@ -1,5 +1,5 @@
-import type { NativeCliObservationEvent } from '@monad/protocol';
-import type { NativeCliObservationProjector, ObservationRole } from '../observation-projection.ts';
+import type { ExternalAgentObservationEvent } from '@monad/protocol';
+import type { ExternalAgentObservationProjector, ObservationRole } from '../observation-projection.ts';
 
 import {
   classifyObservationActivity,
@@ -33,7 +33,7 @@ export function openClawRecordEvents(
   id: string,
   record: Record<string, unknown>,
   recordIndex: number
-): NativeCliObservationEvent[] {
+): ExternalAgentObservationEvent[] {
   if (typeof record.role !== 'string') return [];
   return observation({
     id: `${id}:json:${recordIndex}:message`,
@@ -49,4 +49,4 @@ export const openClawObservationProjection = {
   classifyActivity: classifyObservationActivity,
   isStreamingFragment: isStreamingObservationFragment,
   recordProjectors: [{ parse: ({ id, record, recordIndex }) => openClawRecordEvents(id, record, recordIndex) }]
-} satisfies NativeCliObservationProjector;
+} satisfies ExternalAgentObservationProjector;

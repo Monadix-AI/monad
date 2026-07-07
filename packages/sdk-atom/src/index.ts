@@ -31,35 +31,35 @@ import type {
 } from '@monad/protocol';
 import type {
   AdapterMigration,
-  BuildNativeCliLaunchOptions,
-  NativeCliAcpDelivery,
-  NativeCliApprovalResolution,
-  NativeCliAppServerConnection,
-  NativeCliArgumentSupport,
-  NativeCliArgumentSupportProbe,
-  NativeCliAuthStatusProbe,
-  NativeCliErrorCode,
-  NativeCliInitializeContext,
-  NativeCliLaunchSpec,
-  NativeCliManagedEnvContext,
-  NativeCliManagedRuntime,
-  NativeCliManagedRuntimeContext,
-  NativeCliModelOptionsProbe,
-  NativeCliObservationActivity,
-  NativeCliObservationJsonRecordEntry,
-  NativeCliObservationMessageGroupProjector,
-  NativeCliObservationProjector,
-  NativeCliObservationRecordProjector,
-  NativeCliObservationUsageProjector,
-  NativeCliOutputEvent,
-  NativeCliProviderAdapter,
-  NativeCliProviderHistoryContext,
-  NativeCliProviderHistoryPageContext,
-  NativeCliProviderHistoryPageRequestContext,
-  NativeCliRuntimeHandle,
-  NativeCliSettingsImport,
-  NativeCliStartPreflight,
-  NativeCliUsageProbe
+  BuildExternalAgentLaunchOptions,
+  ExternalAgentAcpDelivery,
+  ExternalAgentApprovalResolution,
+  ExternalAgentAppServerConnection,
+  ExternalAgentArgumentSupport,
+  ExternalAgentArgumentSupportProbe,
+  ExternalAgentAuthStatusProbe,
+  ExternalAgentErrorCode,
+  ExternalAgentInitializeContext,
+  ExternalAgentLaunchSpec,
+  ExternalAgentManagedEnvContext,
+  ExternalAgentManagedRuntime,
+  ExternalAgentManagedRuntimeContext,
+  ExternalAgentModelOptionsProbe,
+  ExternalAgentObservationActivity,
+  ExternalAgentObservationJsonRecordEntry,
+  ExternalAgentObservationMessageGroupProjector,
+  ExternalAgentObservationProjector,
+  ExternalAgentObservationRecordProjector,
+  ExternalAgentObservationUsageProjector,
+  ExternalAgentOutputEvent,
+  ExternalAgentProviderAdapter,
+  ExternalAgentProviderHistoryContext,
+  ExternalAgentProviderHistoryPageContext,
+  ExternalAgentProviderHistoryPageRequestContext,
+  ExternalAgentRuntimeHandle,
+  ExternalAgentSettingsImport,
+  ExternalAgentStartPreflight,
+  ExternalAgentUsageProbe
 } from './agent-adapter.ts';
 import type { BinProbes } from './bin-probes.ts';
 import type {
@@ -134,7 +134,7 @@ import type {
   WorkspaceExperienceUpdateEvent
 } from './workspace-experience.ts';
 
-import { NativeCliError, nativeCliOutputEventSchema } from './agent-adapter.ts';
+import { ExternalAgentError, externalAgentOutputEventSchema } from './agent-adapter.ts';
 import { defaultBinProbes, resolveBinary } from './bin-probes.ts';
 import { assertChannelInbound, createChannelTestHarness, defineChannel, parseChannelManifest } from './channel.ts';
 import { defineCommand } from './command.ts';
@@ -170,7 +170,7 @@ export type {
   BeliefExplanation,
   BeliefMatch,
   BinProbes,
-  BuildNativeCliLaunchOptions,
+  BuildExternalAgentLaunchOptions,
   ChannelAdapter,
   ChannelAdapterFactory,
   ChannelAtomConfig,
@@ -205,6 +205,34 @@ export type {
   ContradictionCheckSummary,
   EmbedCall,
   EmbedResult,
+  ExternalAgentAcpDelivery,
+  ExternalAgentApprovalResolution,
+  ExternalAgentAppServerConnection,
+  ExternalAgentArgumentSupport,
+  ExternalAgentArgumentSupportProbe,
+  ExternalAgentAuthStatusProbe,
+  ExternalAgentErrorCode,
+  ExternalAgentInitializeContext,
+  ExternalAgentLaunchSpec,
+  ExternalAgentManagedEnvContext,
+  ExternalAgentManagedRuntime,
+  ExternalAgentManagedRuntimeContext,
+  ExternalAgentModelOptionsProbe,
+  ExternalAgentObservationActivity,
+  ExternalAgentObservationJsonRecordEntry,
+  ExternalAgentObservationMessageGroupProjector,
+  ExternalAgentObservationProjector,
+  ExternalAgentObservationRecordProjector,
+  ExternalAgentObservationUsageProjector,
+  ExternalAgentOutputEvent,
+  ExternalAgentProviderAdapter,
+  ExternalAgentProviderHistoryContext,
+  ExternalAgentProviderHistoryPageContext,
+  ExternalAgentProviderHistoryPageRequestContext,
+  ExternalAgentRuntimeHandle,
+  ExternalAgentSettingsImport,
+  ExternalAgentStartPreflight,
+  ExternalAgentUsageProbe,
   GenerationParams,
   HookDefinition,
   HookEvent,
@@ -227,34 +255,6 @@ export type {
   ModelProviderDescriptor,
   ModelResult,
   ModelUsage,
-  NativeCliAcpDelivery,
-  NativeCliApprovalResolution,
-  NativeCliAppServerConnection,
-  NativeCliArgumentSupport,
-  NativeCliArgumentSupportProbe,
-  NativeCliAuthStatusProbe,
-  NativeCliErrorCode,
-  NativeCliInitializeContext,
-  NativeCliLaunchSpec,
-  NativeCliManagedEnvContext,
-  NativeCliManagedRuntime,
-  NativeCliManagedRuntimeContext,
-  NativeCliModelOptionsProbe,
-  NativeCliObservationActivity,
-  NativeCliObservationJsonRecordEntry,
-  NativeCliObservationMessageGroupProjector,
-  NativeCliObservationProjector,
-  NativeCliObservationRecordProjector,
-  NativeCliObservationUsageProjector,
-  NativeCliOutputEvent,
-  NativeCliProviderAdapter,
-  NativeCliProviderHistoryContext,
-  NativeCliProviderHistoryPageContext,
-  NativeCliProviderHistoryPageRequestContext,
-  NativeCliRuntimeHandle,
-  NativeCliSettingsImport,
-  NativeCliStartPreflight,
-  NativeCliUsageProbe,
   ProviderCredential,
   ProviderToolHint,
   RerankCall,
@@ -301,10 +301,10 @@ export {
   defineLocalLauncher,
   defineProvider,
   defineWorkspaceExperience,
+  ExternalAgentError,
+  externalAgentOutputEventSchema,
   extractCacheWrite,
   extractProviderCost,
-  NativeCliError,
-  nativeCliOutputEventSchema,
   noneLauncher,
   parseChannelManifest,
   resolveBinary,
@@ -365,8 +365,8 @@ export interface AtomPackContext {
   registerProvider(provider: ModelProvider): void;
   registerHook(hook: HookDefinition): void;
   /** Register a native coding-CLI agent adapter (Codex, Claude Code, …). The daemon collects them
-   *  into the native-CLI registry keyed by provider and owns the process/pty/socket lifecycle. */
-  registerAgentAdapter(adapter: NativeCliProviderAdapter): void;
+   *  into the external agent registry keyed by provider and owns the process/pty/socket lifecycle. */
+  registerAgentAdapter(adapter: ExternalAgentProviderAdapter): void;
   /** Register an OS/remote sandbox launcher. The daemon collects launchers into a registry and
    *  selects one per platform at boot — the LLM-facing tools (code_execute/…) are unchanged. */
   registerSandbox(launcher: SandboxLauncher): void;
@@ -393,7 +393,7 @@ export interface ManifestAtomPackHost {
   /** Optional: hosts that don't support lifecycle hooks omit it; a hook registration then throws. */
   registerHook?(hook: HookDefinition): void;
   /** Optional: hosts that don't support agent adapters omit it; registration then throws. */
-  registerAgentAdapter?(adapter: NativeCliProviderAdapter): void;
+  registerAgentAdapter?(adapter: ExternalAgentProviderAdapter): void;
   /** Optional: hosts that don't support sandbox launchers omit it; a sandbox registration then throws. */
   registerSandbox?(launcher: SandboxLauncher): void;
   /** Optional: hosts that don't support workspace experiences omit it; registration then throws. */
@@ -413,7 +413,7 @@ export function defineAtomPack(spec: {
   messageTypes?: MessageTypeDescriptor[];
   providers?: ModelProvider[];
   hooks?: HookDefinition[];
-  agentAdapters?: NativeCliProviderAdapter[];
+  agentAdapters?: ExternalAgentProviderAdapter[];
   sandboxes?: SandboxLauncher[];
   workspaceExperienceApis?: WorkspaceExperienceApi[];
   workspaceExperiences?: WorkspaceExperienceDefinition[];

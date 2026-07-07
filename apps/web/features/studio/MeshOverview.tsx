@@ -1,6 +1,6 @@
 'use client';
 
-import type { NativeCliSessionState, NativeCliSessionView, WorkplaceProject } from '@monad/protocol';
+import type { ExternalAgentSessionState, ExternalAgentSessionView, WorkplaceProject } from '@monad/protocol';
 
 import {
   ArrowRight01Icon,
@@ -13,8 +13,8 @@ import {
 } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import {
-  nativeCliSessionSelectors,
-  useListLiveNativeCliSessionsQuery,
+  externalAgentSessionSelectors,
+  useListLiveExternalAgentSessionsQuery,
   useListWorkplaceProjectsQuery,
   workplaceProjectAdapter,
   workplaceProjectSelectors
@@ -25,11 +25,11 @@ import { useT } from '@/components/I18nProvider';
 import { ShellLink } from '@/components/ShellLink';
 import { PanelShell } from '@/components/ui/panel-shell';
 import { studioPath } from '@/features/routes/route-paths';
-import { useNativeCliAgentSettings } from '@/hooks/use-native-cli-agent-settings';
+import { useExternalAgentSettings } from '@/hooks/use-external-agent-settings';
 import { OverviewIllustration } from './OverviewIllustration';
 import { StudioBreadcrumbHeader } from './StudioBreadcrumbHeader';
 
-const AGENT_STATE_STYLE: Record<NativeCliSessionState, string> = {
+const AGENT_STATE_STYLE: Record<ExternalAgentSessionState, string> = {
   running:
     'bg-[color-mix(in_srgb,var(--success,var(--accent-green))_16%,transparent)] text-[color-mix(in_srgb,var(--success,var(--accent-green))_72%,var(--foreground))]',
   starting:
@@ -39,11 +39,11 @@ const AGENT_STATE_STYLE: Record<NativeCliSessionState, string> = {
   failed: 'bg-destructive/12 text-destructive'
 };
 
-function agentStateLabel(t: ReturnType<typeof useT>, state: NativeCliSessionState): string {
+function agentStateLabel(t: ReturnType<typeof useT>, state: ExternalAgentSessionState): string {
   return t(`web.studio.agentState.${state}` as const);
 }
 
-function AgentRuntimeRow({ session }: { session: NativeCliSessionView }) {
+function AgentRuntimeRow({ session }: { session: ExternalAgentSessionView }) {
   const t = useT();
   return (
     <div className="flex items-center gap-2.5 rounded-lg border bg-background px-3 py-2">
@@ -64,8 +64,8 @@ function AgentRuntimeRow({ session }: { session: NativeCliSessionView }) {
   );
 }
 
-function groupByTarget(sessions: NativeCliSessionView[]): [string, NativeCliSessionView[]][] {
-  const groups = new Map<string, NativeCliSessionView[]>();
+function groupByTarget(sessions: ExternalAgentSessionView[]): [string, ExternalAgentSessionView[]][] {
+  const groups = new Map<string, ExternalAgentSessionView[]>();
   for (const session of sessions) {
     const list = groups.get(session.transcriptTargetId);
     if (list) list.push(session);
@@ -76,8 +76,8 @@ function groupByTarget(sessions: NativeCliSessionView[]): [string, NativeCliSess
 
 function AgentRuntimesSection({ projects }: { projects: WorkplaceProject[] }) {
   const t = useT();
-  const { data } = useListLiveNativeCliSessionsQuery(undefined);
-  const sessions = data ? nativeCliSessionSelectors.selectAll(data.sessions) : [];
+  const { data } = useListLiveExternalAgentSessionsQuery(undefined);
+  const sessions = data ? externalAgentSessionSelectors.selectAll(data.sessions) : [];
   const titleFor = (targetId: string): string => projects.find((p) => p.id === targetId)?.title ?? targetId;
   return (
     <section className="rounded-xl border bg-card">
@@ -150,9 +150,9 @@ function MeshAction({
 
 export function MeshOverview() {
   const t = useT();
-  const nativeCli = useNativeCliAgentSettings();
+  const externalAgent = useExternalAgentSettings();
   const projects = useListWorkplaceProjectsQuery(undefined);
-  const nativeCliCount = nativeCli.agents.length;
+  const externalAgentCount = externalAgent.agents.length;
   const projectList = workplaceProjectSelectors.selectAll(
     projects.data?.projects ?? workplaceProjectAdapter.getInitialState()
   );
@@ -175,7 +175,7 @@ export function MeshOverview() {
                     asChild
                     size="sm"
                   >
-                    <ShellLink href={studioPath('nativeCliAgents')}>{t('web.studio.connectNativeCli')}</ShellLink>
+                    <ShellLink href={studioPath('externalAgents')}>{t('web.studio.connectExternalAgent')}</ShellLink>
                   </Button>
                   <Button
                     asChild
@@ -200,13 +200,13 @@ export function MeshOverview() {
               <div className="grid gap-1 p-2">
                 <MeshAction
                   body={
-                    nativeCliCount > 0
-                      ? t('web.studio.nativeCliReady', { count: nativeCliCount })
-                      : t('web.studio.nativeCliNeeded')
+                    externalAgentCount > 0
+                      ? t('web.studio.externalAgentReady', { count: externalAgentCount })
+                      : t('web.studio.externalAgentNeeded')
                   }
-                  href={studioPath('nativeCliAgents')}
+                  href={studioPath('externalAgents')}
                   icon={TerminalIcon}
-                  title={t('web.studio.nativeCliAgents')}
+                  title={t('web.studio.externalAgents')}
                 />
                 <MeshAction
                   body={

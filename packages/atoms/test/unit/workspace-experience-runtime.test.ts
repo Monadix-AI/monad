@@ -39,11 +39,11 @@ function runtimeSource(overrides: RuntimeSourceOverrides = {}): ProjectExperienc
       transcriptItems: [],
       liveItems: [],
       liveTools: [],
-      nativeCliSessions: [],
+      externalAgentSessions: [],
       human: participant('you', 'human'),
-      nativeCliAvatarSeeds: new Map(),
-      nativeCliTags: new Map(),
-      nativeCliDisplayNames: new Map(),
+      externalAgentAvatarSeeds: new Map(),
+      externalAgentTags: new Map(),
+      externalAgentDisplayNames: new Map(),
       showDeveloperOnlyMessages: false
     },
     modelProfiles: [],
@@ -56,8 +56,8 @@ function runtimeSource(overrides: RuntimeSourceOverrides = {}): ProjectExperienc
     addProjectMember: async () => {},
     removeProjectMember: async () => {},
     updateProjectMemberSettings: async () => {},
-    sendNativeCliInput: async () => {},
-    stopNativeCli: async () => {}
+    sendExternalAgentInput: async () => {},
+    stopExternalAgent: async () => {}
   };
   return { ...base, ...overrides, source: { ...base.source, ...overrides.source } };
 }
@@ -110,8 +110,8 @@ test('toChatRoomCanvas: exposes the chatroom surface without project management 
   expect(typeof canvas.sendDirective).toBe('function');
   expect(typeof canvas.resolveApproval).toBe('function');
   expect(typeof canvas.answerQuestion).toBe('function');
-  expect(typeof canvas.sendNativeCliInput).toBe('function');
-  expect(typeof canvas.stopNativeCli).toBe('function');
+  expect(typeof canvas.sendExternalAgentInput).toBe('function');
+  expect(typeof canvas.stopExternalAgent).toBe('function');
   for (const leaked of ['setWorkdir', 'switchProject', 'experience']) {
     expect(leaked in canvas).toBe(false);
   }
@@ -180,10 +180,10 @@ test('createProjectExperienceRuntime: exposes project data and controlled commun
     resolveApproval: (id: string, decision: 'approve' | 'reject') => calls.push(`approval:${id}:${decision}`),
     answerQuestion: (id: string, answer: string) => calls.push(`answer:${id}:${answer}`),
     pauseAll: () => calls.push('pauseAll'),
-    sendNativeCliInput: async (id: string, input: string) => {
+    sendExternalAgentInput: async (id: string, input: string) => {
       calls.push(`input:${id}:${input}`);
     },
-    stopNativeCli: async (id: string) => {
+    stopExternalAgent: async (id: string) => {
       calls.push(`stop:${id}`);
     }
   });
@@ -211,8 +211,8 @@ test('createProjectExperienceRuntime: exposes project data and controlled commun
   expect('messages' in runtime.views['graphic-view'].canvas).toBe(false);
   expect('composer' in runtime.views['graphic-view'].canvas).toBe(false);
   expect('chatRoom' in runtime.views['graphic-view'].canvas).toBe(false);
-  expect('nativeCliStreams' in runtime.views['graphic-view'].canvas).toBe(false);
-  expect('sendNativeCliInput' in runtime.views['graphic-view'].canvas).toBe(false);
+  expect('externalAgentStreams' in runtime.views['graphic-view'].canvas).toBe(false);
+  expect('sendExternalAgentInput' in runtime.views['graphic-view'].canvas).toBe(false);
   expect(typeof runtime.actions.sendDirective).toBe('function');
   expect(typeof runtime.actions.resolveApproval).toBe('function');
   expect(typeof runtime.actions.switchExperience).toBe('function');

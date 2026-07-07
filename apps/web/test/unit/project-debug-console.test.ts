@@ -21,9 +21,9 @@ const entry = (overrides: Partial<ProjectDebugTraceEntry>): ProjectDebugTraceEnt
 test('project debug console filters trace entries by layer and label', () => {
   const entries = [
     entry({ layer: 'http', label: 'POST /v1/projects/ses_1/messages' }),
-    entry({ layer: 'sse', label: 'native_cli.output' }),
-    entry({ layer: 'log', label: 'native-cli.input', direction: 'input' }),
-    entry({ layer: 'sse', label: 'native_cli.approval_requested' }),
+    entry({ layer: 'sse', label: 'external_agent.output' }),
+    entry({ layer: 'log', label: 'external-agent.input', direction: 'input' }),
+    entry({ layer: 'sse', label: 'external_agent.approval_requested' }),
     entry({ layer: 'http', label: 'POST /x', direction: 'error' })
   ];
 
@@ -31,15 +31,15 @@ test('project debug console filters trace entries by layer and label', () => {
     'POST /v1/projects/ses_1/messages',
     'POST /x'
   ]);
-  expect(filterDebugTraceEntries(entries, 'native-cli').map((item) => item.label)).toEqual([
-    'native_cli.output',
-    'native-cli.input',
-    'native_cli.approval_requested'
+  expect(filterDebugTraceEntries(entries, 'external-agent').map((item) => item.label)).toEqual([
+    'external_agent.output',
+    'external-agent.input',
+    'external_agent.approval_requested'
   ]);
   expect(filterDebugTraceEntries(entries, 'approval').map((item) => item.label)).toEqual([
-    'native_cli.approval_requested'
+    'external_agent.approval_requested'
   ]);
-  expect(filterDebugTraceEntries(entries, 'log').map((item) => item.label)).toEqual(['native-cli.input']);
+  expect(filterDebugTraceEntries(entries, 'log').map((item) => item.label)).toEqual(['external-agent.input']);
   expect(filterDebugTraceEntries(entries, 'error').map((item) => item.label)).toEqual(['POST /x']);
 });
 
@@ -53,19 +53,19 @@ test('project debug console maps logger records to log trace entries', () => {
   expect(
     logRecordToDebugTrace({
       level: 20,
-      event: 'native_cli.started',
+      event: 'external_agent.started',
       sessionId: 'ses_1',
-      nativeCliSessionId: 'ncli_1',
+      externalAgentSessionId: 'exa_1',
       msg: 'native cli started'
     })
   ).toEqual({
     direction: 'internal',
-    label: 'native_cli.started',
+    label: 'external_agent.started',
     data: {
       level: 20,
-      event: 'native_cli.started',
+      event: 'external_agent.started',
       sessionId: 'ses_1',
-      nativeCliSessionId: 'ncli_1',
+      externalAgentSessionId: 'exa_1',
       msg: 'native cli started'
     }
   });

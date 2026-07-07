@@ -1,21 +1,21 @@
 import type {
+  ExternalAgentObservationAccessResponse,
+  ExternalAgentUsageResponse,
   NativeAgentDeliveryId,
-  NativeAgentObservationProjection,
-  NativeCliObservationAccessResponse,
-  NativeCliUsageResponse
+  NativeAgentObservationProjection
 } from '@monad/protocol';
-import type { NativeCliUsageLimitMeter } from '../../experience/native-cli-observation/native-cli-observation.ts';
-import type { NativeCliStreamView, Participant } from '../../experience/types.ts';
+import type { ExternalAgentUsageLimitMeter } from '../../experience/external-agent-observation/external-agent-observation.ts';
+import type { ExternalAgentStreamView, Participant } from '../../experience/types.ts';
 
 import { nativeAgentObservationProjectionSchema } from '@monad/protocol';
 
 import {
-  nativeCliStreamItems,
-  nativeCliUsageLimitMeter,
-  nativeCliUsageLimitMeterFromResponse
-} from '../../experience/native-cli-observation/native-cli-observation.ts';
+  externalAgentStreamItems,
+  externalAgentUsageLimitMeter,
+  externalAgentUsageLimitMeterFromResponse
+} from '../../experience/external-agent-observation/external-agent-observation.ts';
 
-function newestStream(streams: NativeCliStreamView[]): NativeCliStreamView | undefined {
+function newestStream(streams: ExternalAgentStreamView[]): ExternalAgentStreamView | undefined {
   return [...streams].sort((a, b) => {
     const byObservedAt = (b.observedAt ?? '').localeCompare(a.observedAt ?? '');
     return byObservedAt === 0 ? b.id.localeCompare(a.id) : byObservedAt;
@@ -28,19 +28,19 @@ export function agentObservationStream(
         agentId?: string;
         agentName?: string;
         deliveryId?: NativeAgentDeliveryId;
-        nativeCliSessionId?: string;
+        externalAgentSessionId?: string;
       }
     | null
     | undefined,
-  streams: readonly NativeCliStreamView[]
-): NativeCliStreamView | undefined {
+  streams: readonly ExternalAgentStreamView[]
+): ExternalAgentStreamView | undefined {
   if (!observation) return undefined;
-  if (observation.nativeCliSessionId) {
-    return streams.find((stream) => stream.id === observation.nativeCliSessionId);
+  if (observation.externalAgentSessionId) {
+    return streams.find((stream) => stream.id === observation.externalAgentSessionId);
   }
   const names = [observation.agentId, observation.agentName].filter((value): value is string => Boolean(value));
   if (names.length === 0) return undefined;
-  const matchesAgent = (stream: NativeCliStreamView) => {
+  const matchesAgent = (stream: ExternalAgentStreamView) => {
     const streamNames = [stream.agentName, stream.templateAgentName, ...(stream.agentAliases ?? [])].filter(
       (value): value is string => Boolean(value)
     );
@@ -56,11 +56,11 @@ export function observedRailAgent(
         agentId?: string;
         agentName?: string;
         deliveryId?: NativeAgentDeliveryId;
-        nativeCliSessionId?: string;
+        externalAgentSessionId?: string;
       }
     | null
     | undefined,
-  observedStream: NativeCliStreamView | undefined,
+  observedStream: ExternalAgentStreamView | undefined,
   agents: readonly Participant[]
 ): Participant | undefined {
   if (!observation) return undefined;
@@ -106,8 +106,8 @@ export function sortedProjectRailAgents(agents: readonly Participant[]): Partici
 }
 
 export function observationProjectionFromAccess(
-  stream: NativeCliStreamView | undefined,
-  access: NativeCliObservationAccessResponse | undefined,
+  stream: ExternalAgentStreamView | undefined,
+  access: ExternalAgentObservationAccessResponse | undefined,
   deliveryId?: NativeAgentDeliveryId
 ): NativeAgentObservationProjection | undefined {
   if (!stream || !access) return undefined;
@@ -115,7 +115,7 @@ export function observationProjectionFromAccess(
   if (access.state === 'unavailable') {
     return nativeAgentObservationProjectionSchema.parse({
       state: 'unavailable',
-      nativeCliSessionId: stream.id,
+      externalAgentSessionId: stream.id,
       ...(projectedDeliveryId ? { deliveryId: projectedDeliveryId } : {}),
       ...(access.turn ? { turn: access.turn } : {}),
       provider: access.provider,
@@ -130,11 +130,15 @@ export function observationProjectionFromAccess(
     access.events && access.events.length > 0
       ? access.events
       : access.output
-        ? nativeCliStreamItems({ id: stream.id, provider: access.provider ?? stream.provider, output: access.output })
+        ? externalAgentStreamItems({
+            id: stream.id,
+            provider: access.provider ?? stream.provider,
+            output: access.output
+          })
         : [];
   return nativeAgentObservationProjectionSchema.parse({
     state: access.state,
-    nativeCliSessionId: stream.id,
+    externalAgentSessionId: stream.id,
     ...(projectedDeliveryId ? { deliveryId: projectedDeliveryId } : {}),
     ...(access.turn ? { turn: access.turn } : {}),
     provider: access.provider,
@@ -144,7 +148,7 @@ export function observationProjectionFromAccess(
 }
 
 export function shouldProjectObservationAccess(args: {
-  access?: NativeCliObservationAccessResponse;
+  access?: ExternalAgentObservationAccessResponse;
   deliveryId?: NativeAgentDeliveryId;
   historyRequested: boolean;
 }): boolean {
@@ -157,9 +161,9 @@ export function shouldProjectObservationAccess(args: {
 }
 
 export function streamWithObservationProjection(
-  stream: NativeCliStreamView | undefined,
+  stream: ExternalAgentStreamView | undefined,
   projection: NativeAgentObservationProjection | undefined
-): NativeCliStreamView | undefined {
+): ExternalAgentStreamView | undefined {
   if (!stream || !projection) return stream;
   if (projection.state === 'unavailable') return { ...stream, output: '', items: [] };
   return {
@@ -170,17 +174,20 @@ export function streamWithObservationProjection(
 }
 
 export function usageMeterFromObservationAccess(args: {
-  access?: NativeCliObservationAccessResponse;
-  provider?: NativeCliStreamView['provider'];
-  stream?: NativeCliStreamView;
-  usage?: NativeCliUsageResponse;
-}): NativeCliUsageLimitMeter | null {
-  const fromUsageEndpoint = nativeCliUsageLimitMeterFromResponse(args.usage);
+  access?: ExternalAgentObservationAccessResponse;
+  provider?: ExternalAgentStreamView['provider'];
+  stream?: ExternalAgentStreamView;
+  usage?: ExternalAgentUsageResponse;
+}): ExternalAgentUsageLimitMeter | null {
+  const fromUsageEndpoint = externalAgentUsageLimitMeterFromResponse(args.usage);
   if (fromUsageEndpoint) return fromUsageEndpoint;
   // The daemon already normalizes the usage/rate-limit meter with the same adapter it uses for
   // parseOutput (see observeFromStore/observeWithProviderHistory) — no client-side re-derivation
   // when an access response is present. `stream`-only callers (no polled access response yet, e.g.
-  // a session-list-built NativeCliStreamView) still parse client-side as a fallback.
+  // a session-list-built ExternalAgentStreamView) still parse client-side as a fallback.
   if (args.access && args.access.state !== 'unavailable') return args.access.usageMeter ?? null;
-  return nativeCliUsageLimitMeter({ output: args.stream?.output, provider: args.provider ?? args.stream?.provider });
+  return externalAgentUsageLimitMeter({
+    output: args.stream?.output,
+    provider: args.provider ?? args.stream?.provider
+  });
 }

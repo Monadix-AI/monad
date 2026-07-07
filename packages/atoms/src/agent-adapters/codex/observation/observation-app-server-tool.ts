@@ -1,4 +1,4 @@
-import type { NativeCliObservationEvent } from '@monad/protocol';
+import type { ExternalAgentObservationEvent } from '@monad/protocol';
 
 import { compactJson, observation, rawTextValue, recordValue, textValue } from '../../observation-projection.ts';
 
@@ -73,7 +73,7 @@ export function codexAppServerToolCallObservation(args: {
   record: unknown;
   item: Record<string, unknown>;
   createdAt?: string;
-}): NativeCliObservationEvent[] {
+}): ExternalAgentObservationEvent[] {
   const tool = codexAppServerToolName(args.item);
   const input = codexAppServerToolInput(args.item);
   const inputText = compactJson(input);
@@ -96,7 +96,7 @@ export function codexAppServerToolResultObservation(args: {
   record: unknown;
   item: Record<string, unknown>;
   createdAt?: string;
-}): NativeCliObservationEvent[] {
+}): ExternalAgentObservationEvent[] {
   const output =
     textValue(
       args.item.output,

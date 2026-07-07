@@ -8,14 +8,14 @@ export interface ChatRoomRailObservation {
   projectId: string;
   agentId?: string;
   agentName?: string;
-  nativeCliSessionId?: string;
+  externalAgentSessionId?: string;
   deliveryId?: NativeAgentDeliveryId;
   turnId?: string;
 }
 
 interface ChatRoomExperienceState {
   railObservation: ChatRoomRailObservation | null;
-  followNativeCliSession: (
+  followExternalAgentSession: (
     projectId: string,
     sessionId: string,
     turnId?: string,
@@ -27,11 +27,11 @@ interface ChatRoomExperienceState {
 
 export const useChatRoomExperienceStore = create<ChatRoomExperienceState>((set) => ({
   railObservation: null,
-  followNativeCliSession: (projectId, sessionId, turnId, deliveryId) =>
+  followExternalAgentSession: (projectId, sessionId, turnId, deliveryId) =>
     set({
       railObservation: {
         projectId,
-        nativeCliSessionId: sessionId,
+        externalAgentSessionId: sessionId,
         ...(turnId ? { turnId } : {}),
         ...(deliveryId ? { deliveryId } : {})
       }

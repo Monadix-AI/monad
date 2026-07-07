@@ -39,7 +39,7 @@ test('migrate() builds the current schema and stamps user_version', () => {
     expect(acpCols).toContain(col);
   }
 
-  const nativeCliCols = (db.prepare('PRAGMA table_info(native_cli_sessions)').all() as { name: string }[]).map(
+  const externalAgentCols = (db.prepare('PRAGMA table_info(external_agent_sessions)').all() as { name: string }[]).map(
     (c) => c.name
   );
   for (const col of [
@@ -63,21 +63,21 @@ test('migrate() builds the current schema and stamps user_version', () => {
     'updated_at',
     'exited_at'
   ]) {
-    expect(nativeCliCols).toContain(col);
+    expect(externalAgentCols).toContain(col);
   }
-  const nativeCliIndexes = db.prepare('PRAGMA index_list(native_cli_sessions)').all() as {
+  const externalAgentIndexes = db.prepare('PRAGMA index_list(external_agent_sessions)').all() as {
     name: string;
     unique: number;
   }[];
-  expect(nativeCliIndexes).toContainEqual(
-    expect.objectContaining({ name: 'idx_native_cli_sessions_provider_ref', unique: 1 })
+  expect(externalAgentIndexes).toContainEqual(
+    expect.objectContaining({ name: 'idx_external_agent_sessions_provider_ref', unique: 1 })
   );
 
-  const nativeInboxCols = (db.prepare('PRAGMA table_info(native_cli_inbox_items)').all() as { name: string }[]).map(
+  const nativeInboxCols = (db.prepare('PRAGMA table_info(external_agent_inbox_items)').all() as { name: string }[]).map(
     (c) => c.name
   );
   for (const col of [
-    'native_cli_session_id',
+    'external_agent_session_id',
     'message_seq',
     'state',
     'created_at',
@@ -87,17 +87,19 @@ test('migrate() builds the current schema and stamps user_version', () => {
   ]) {
     expect(nativeInboxCols).toContain(col);
   }
-  const nativeInboxIndexes = db.prepare('PRAGMA index_list(native_cli_inbox_items)').all() as {
+  const nativeInboxIndexes = db.prepare('PRAGMA index_list(external_agent_inbox_items)').all() as {
     name: string;
   }[];
-  expect(nativeInboxIndexes).toContainEqual(expect.objectContaining({ name: 'idx_native_cli_inbox_items_pending' }));
+  expect(nativeInboxIndexes).toContainEqual(
+    expect.objectContaining({ name: 'idx_external_agent_inbox_items_pending' })
+  );
 
   const nativeDirectCols = (
     db.prepare('PRAGMA table_info(native_agent_direct_messages)').all() as {
       name: string;
     }[]
   ).map((c) => c.name);
-  for (const col of ['id', 'project_id', 'native_cli_session_id', 'from_agent', 'peer', 'text', 'created_at']) {
+  for (const col of ['id', 'project_id', 'external_agent_session_id', 'from_agent', 'peer', 'text', 'created_at']) {
     expect(nativeDirectCols).toContain(col);
   }
   const nativeDirectIndexes = db.prepare('PRAGMA index_list(native_agent_direct_messages)').all() as {

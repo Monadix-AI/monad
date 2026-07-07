@@ -23,7 +23,7 @@ import { parseDurableSummary } from '@/agent/history.ts';
 import { canTransition } from '@/agent/index.ts';
 import { clearProcessesForSession, disposeSandboxSession } from '@/capabilities/tools';
 import { HandlerError } from '@/handlers/handler-error.ts';
-import { createManagedNativeCliJoin } from '@/handlers/session/handlers/managed-native-cli-join.ts';
+import { createManagedExternalAgentJoin } from '@/handlers/session/handlers/managed-external-agent-join.ts';
 import { SessionUiProjector } from '@/handlers/session/ui-projection.ts';
 import { clearAcpDelegatesForSession } from '@/services/delegation/acp-delegate.ts';
 import { createProjectLifecycleHandlers } from './lifecycle-projects.ts';
@@ -56,7 +56,7 @@ export function createLifecycleHandlers(ctx: SessionContext) {
     emitLifecycle
   } = ctx;
 
-  const { startAddedManagedNativeCliMembers } = createManagedNativeCliJoin(ctx);
+  const { startAddedManagedExternalAgentMembers } = createManagedExternalAgentJoin(ctx);
 
   const {
     applyWorkspaceRuntime,
@@ -70,7 +70,7 @@ export function createLifecycleHandlers(ctx: SessionContext) {
 
   const { listProjects, getProject, createProject, updateProject, deleteProject } = createProjectLifecycleHandlers(
     ctx,
-    { applyWorkspaceRuntime, disposeRuntime, resolveWorkspaceDir, startAddedManagedNativeCliMembers }
+    { applyWorkspaceRuntime, disposeRuntime, resolveWorkspaceDir, startAddedManagedExternalAgentMembers }
   );
 
   // SessionStart/SessionEnd are observe-only here: SessionStart's additionalContext is stashed by the
@@ -198,7 +198,7 @@ export function createLifecycleHandlers(ctx: SessionContext) {
       });
       if (!session) throw new HandlerError('internal', 'update failed');
       if (resolvedCwd !== undefined) await applyWorkspaceRuntime(id, resolvedCwd ?? undefined);
-      await startAddedManagedNativeCliMembers(current, session);
+      await startAddedManagedExternalAgentMembers(current, session);
       emitLifecycle(id, 'session.updated', {
         title,
         state,
@@ -220,7 +220,7 @@ export function createLifecycleHandlers(ctx: SessionContext) {
       disposeRuntime(id);
       clearProcessesForSession(id);
       clearAcpDelegatesForSession(id); // kill any reused external ACP adapters held for this session
-      ctx.deps.nativeCliHost?.stopTranscriptTarget(id);
+      ctx.deps.externalAgentHost?.stopTranscriptTarget(id);
       oversight?.cancelSession(id, 'session_deleted');
       delegation?.cancelSession(id, 'session_deleted');
       // SessionEnd fires before teardown (abort only pauses a turn, so it does not end the session).
@@ -241,7 +241,7 @@ export function createLifecycleHandlers(ctx: SessionContext) {
       aborts.delete(id);
       clearProcessesForSession(id);
       clearAcpDelegatesForSession(id); // the sub-agent's continued context no longer matches a reset parent
-      ctx.deps.nativeCliHost?.stopTranscriptTarget(id);
+      ctx.deps.externalAgentHost?.stopTranscriptTarget(id);
       const clearedCount = store.clearMessages(id);
       emitLifecycle(id, 'session.updated', { reset: true });
       return { clearedCount };
@@ -316,17 +316,17 @@ export function createLifecycleHandlers(ctx: SessionContext) {
             : store.listMessages(id, { limit, before, includeInactive, latest: true });
       const projector = new SessionUiProjector();
       projector.hydrateMessages(messages, parseDurableSummary(store.getMemory(id, 'ctx:summary')));
-      // Rebuild native CLI tool cards from their durable snapshots for this window (native_cli.output
+      // Rebuild external agent tool cards from their durable snapshots for this window (external_agent.output
       // chunks aren't persisted as events). Scope to the page's time span so a card lands on the page
       // it belongs to; the full lineage view takes them all. Cross-page overlap is harmless — the
       // client merges transcript items by key.
-      const cliSessions = store.listNativeCliSessionsForTranscriptTarget(id);
-      if (includeAncestors) projector.hydrateNativeCliSessions(cliSessions);
+      const cliSessions = store.listExternalAgentSessionsForTranscriptTarget(id);
+      if (includeAncestors) projector.hydrateExternalAgentSessions(cliSessions);
       else {
         const oldestTs = messages.at(0)?.createdAt;
         const newestTs = messages.at(-1)?.createdAt;
         if (oldestTs !== undefined && newestTs !== undefined) {
-          projector.hydrateNativeCliSessions(
+          projector.hydrateExternalAgentSessions(
             cliSessions.filter((s) => s.startedAt >= oldestTs && s.startedAt <= newestTs)
           );
         }

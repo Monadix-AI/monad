@@ -29,7 +29,7 @@
     "packages/client-rtk/src/endpoints/settings/model/providers/get-provider.ts",
     "packages/client-rtk/src/endpoints/settings/model/providers/patch-provider.ts",
     "packages/client-rtk/src/endpoints/settings/model/providers/set-provider-enabled.ts",
-    "packages/client-rtk/src/endpoints/settings/native-cli-agents/get-native-cli-agent.ts"
+    "packages/client-rtk/src/endpoints/settings/external-agents/get-external-agent.ts"
   ],
   // Both "duplicates" are intentional schema aliases in @monad/protocol
   // (a request schema deliberately mirrors its response schema).

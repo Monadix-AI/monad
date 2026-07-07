@@ -63,7 +63,7 @@
     "i18n:types": "bun run scripts/i18n.ts --write",
     "knip": "knip-bun",
     "lint": "biome check --write",
-    "smoke:native-cli-managed": "bun run scripts/native-cli-managed-smoke.ts",
+    "smoke:external-agent-managed": "bun run scripts/external-agent-managed-smoke.ts",
     "test": "bun run i18n:types && turbo run test --output-logs=errors-only",
     "test:e2e": "bun run test:e2e:daemon && bun run test:e2e:web",
     "test:e2e:binary": "bash scripts/test/e2e.sh",

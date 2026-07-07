@@ -14,13 +14,13 @@ import { z } from 'zod';
 
 import { clarifyAskerSchema, clarifyChoiceModeSchema } from './clarify.ts';
 import { costSchema, type EventType, finishReasonSchema, messageTypeSchema, tokenUsageSchema } from './domain.ts';
-import { agentIdSchema, messageIdSchema, nativeAgentDeliveryIdSchema, sessionIdSchema } from './ids.ts';
 import {
-  messageAttachmentRefSchema,
-  nativeCliLaunchModeSchema,
-  nativeCliProductIconSchema,
-  nativeCliProviderSchema
-} from './native-cli-agent/index.ts';
+  externalAgentLaunchModeSchema,
+  externalAgentProductIconSchema,
+  externalAgentProviderSchema,
+  messageAttachmentRefSchema
+} from './external-agent/index.ts';
+import { agentIdSchema, messageIdSchema, nativeAgentDeliveryIdSchema, sessionIdSchema } from './ids.ts';
 
 const requestIdSchema = z.string();
 
@@ -97,42 +97,33 @@ export const agentErrorPayloadSchema = z.object({
 export const agentTokenPayloadSchema = z.object({
   messageId: messageIdSchema,
   agentName: z.string().optional(),
-  nativeCliSessionId: z
-    .string()
-    .regex(/^ncli_/)
-    .optional(),
+  externalAgentSessionId: z.string().regex(/^exa_/).optional(),
   deliveryId: nativeAgentDeliveryIdSchema.optional(),
   delta: z.string(),
   index: z.number().int().nonnegative(),
-  source: z.enum(['managed-native-cli', 'native-cli-provider']).optional()
+  source: z.enum(['managed-external-agent', 'external-agent-provider']).optional()
 });
 
 export const agentReasoningPayloadSchema = z.object({
   messageId: messageIdSchema,
-  nativeCliSessionId: z
-    .string()
-    .regex(/^ncli_/)
-    .optional(),
+  externalAgentSessionId: z.string().regex(/^exa_/).optional(),
   deliveryId: nativeAgentDeliveryIdSchema.optional(),
   delta: z.string(),
   index: z.number().int().nonnegative(),
-  source: z.enum(['managed-native-cli', 'native-cli-provider']).optional()
+  source: z.enum(['managed-external-agent', 'external-agent-provider']).optional()
 });
 
 export const agentMessagePayloadSchema = z.object({
   messageId: messageIdSchema,
   agentName: z.string().optional(),
-  nativeCliSessionId: z
-    .string()
-    .regex(/^ncli_/)
-    .optional(),
+  externalAgentSessionId: z.string().regex(/^exa_/).optional(),
   deliveryId: nativeAgentDeliveryIdSchema.optional(),
   text: z.string(),
   data: z.unknown().optional(),
   // File references shared with the message — lets live UI projections render the attachment
   // chips without reloading the persisted message row.
   attachments: z.array(messageAttachmentRefSchema).optional(),
-  source: z.enum(['managed-native-cli', 'native-cli-provider']).optional(),
+  source: z.enum(['managed-external-agent', 'external-agent-provider']).optional(),
   usage: tokenUsageSchema.optional(),
   cost: costSchema.optional(),
   finishReason: finishReasonSchema.optional()
@@ -240,58 +231,58 @@ export const delegationTerminalRequestPayloadSchema = z.object({
   timeoutMs: z.number().int().positive().optional()
 });
 
-export const nativeCliStartedPayloadSchema = z.object({
-  nativeCliSessionId: z.string(),
+export const externalAgentStartedPayloadSchema = z.object({
+  externalAgentSessionId: z.string(),
   agentName: z.string(),
-  provider: nativeCliProviderSchema,
-  productIcon: nativeCliProductIconSchema.optional(),
-  launchMode: nativeCliLaunchModeSchema,
+  provider: externalAgentProviderSchema,
+  productIcon: externalAgentProductIconSchema.optional(),
+  launchMode: externalAgentLaunchModeSchema,
   workingPath: z.string(),
   pid: z.number().int().nullable()
 });
 
-export const nativeCliOutputPayloadSchema = z.object({
-  nativeCliSessionId: z.string(),
+export const externalAgentOutputPayloadSchema = z.object({
+  externalAgentSessionId: z.string(),
   stream: z.enum(['stdout', 'stderr', 'pty']),
   chunk: z.string()
 });
 
-export const nativeCliConnectionRequiredPayloadSchema = z.object({
-  nativeCliSessionId: z.string().optional(),
+export const externalAgentConnectionRequiredPayloadSchema = z.object({
+  externalAgentSessionId: z.string().optional(),
   agentName: z.string(),
-  provider: nativeCliProviderSchema,
+  provider: externalAgentProviderSchema,
   code: z.string().optional(),
   reason: z.string(),
   reconnectIn: z.literal('studio')
 });
 
-export const nativeCliApprovalRequestedPayloadSchema = z.object({
-  nativeCliSessionId: z.string(),
-  provider: nativeCliProviderSchema,
+export const externalAgentApprovalRequestedPayloadSchema = z.object({
+  externalAgentSessionId: z.string(),
+  provider: externalAgentProviderSchema,
   requestId: requestIdSchema,
   text: z.string(),
   data: z.unknown().optional()
 });
 
-export const nativeCliApprovalResolvedPayloadSchema = z.object({
-  nativeCliSessionId: z.string(),
-  provider: nativeCliProviderSchema,
+export const externalAgentApprovalResolvedPayloadSchema = z.object({
+  externalAgentSessionId: z.string(),
+  provider: externalAgentProviderSchema,
   requestId: requestIdSchema,
   allow: z.boolean(),
   reason: z.string().optional()
 });
 
-export const nativeCliResumeFailedPayloadSchema = z.object({
+export const externalAgentResumeFailedPayloadSchema = z.object({
   agentName: z.string(),
-  provider: nativeCliProviderSchema,
+  provider: externalAgentProviderSchema,
   providerSessionRef: z.string(),
   code: z.string(),
   message: z.string(),
   fallback: z.literal('cold-start')
 });
 
-export const nativeCliExitedPayloadSchema = z.object({
-  nativeCliSessionId: z.string(),
+export const externalAgentExitedPayloadSchema = z.object({
+  externalAgentSessionId: z.string(),
   exitCode: z.number().int().nullable(),
   state: z.enum(['exited', 'failed', 'stopped'])
 });
@@ -319,13 +310,13 @@ export type ClarifyResolvedPayload = z.infer<typeof clarifyResolvedPayloadSchema
 export type ContextUsagePayload = z.infer<typeof contextUsagePayloadSchema>;
 export type DelegationFsRequestPayload = z.infer<typeof delegationFsRequestPayloadSchema>;
 export type DelegationTerminalRequestPayload = z.infer<typeof delegationTerminalRequestPayloadSchema>;
-export type NativeCliStartedPayload = z.infer<typeof nativeCliStartedPayloadSchema>;
-export type NativeCliOutputPayload = z.infer<typeof nativeCliOutputPayloadSchema>;
-export type NativeCliConnectionRequiredPayload = z.infer<typeof nativeCliConnectionRequiredPayloadSchema>;
-export type NativeCliApprovalRequestedPayload = z.infer<typeof nativeCliApprovalRequestedPayloadSchema>;
-export type NativeCliApprovalResolvedPayload = z.infer<typeof nativeCliApprovalResolvedPayloadSchema>;
-export type NativeCliResumeFailedPayload = z.infer<typeof nativeCliResumeFailedPayloadSchema>;
-export type NativeCliExitedPayload = z.infer<typeof nativeCliExitedPayloadSchema>;
+export type ExternalAgentStartedPayload = z.infer<typeof externalAgentStartedPayloadSchema>;
+export type ExternalAgentOutputPayload = z.infer<typeof externalAgentOutputPayloadSchema>;
+export type ExternalAgentConnectionRequiredPayload = z.infer<typeof externalAgentConnectionRequiredPayloadSchema>;
+export type ExternalAgentApprovalRequestedPayload = z.infer<typeof externalAgentApprovalRequestedPayloadSchema>;
+export type ExternalAgentApprovalResolvedPayload = z.infer<typeof externalAgentApprovalResolvedPayloadSchema>;
+export type ExternalAgentResumeFailedPayload = z.infer<typeof externalAgentResumeFailedPayloadSchema>;
+export type ExternalAgentExitedPayload = z.infer<typeof externalAgentExitedPayloadSchema>;
 
 export const EVENT_TABLE = {
   'session.created': sessionCreatedPayloadSchema,
@@ -356,13 +347,13 @@ export const EVENT_TABLE = {
   'context.usage': contextUsagePayloadSchema,
   'delegation.fs_request': delegationFsRequestPayloadSchema,
   'delegation.terminal_request': delegationTerminalRequestPayloadSchema,
-  'native_cli.started': nativeCliStartedPayloadSchema,
-  'native_cli.output': nativeCliOutputPayloadSchema,
-  'native_cli.connection_required': nativeCliConnectionRequiredPayloadSchema,
-  'native_cli.approval_requested': nativeCliApprovalRequestedPayloadSchema,
-  'native_cli.approval_resolved': nativeCliApprovalResolvedPayloadSchema,
-  'native_cli.resume_failed': nativeCliResumeFailedPayloadSchema,
-  'native_cli.exited': nativeCliExitedPayloadSchema
+  'external_agent.started': externalAgentStartedPayloadSchema,
+  'external_agent.output': externalAgentOutputPayloadSchema,
+  'external_agent.connection_required': externalAgentConnectionRequiredPayloadSchema,
+  'external_agent.approval_requested': externalAgentApprovalRequestedPayloadSchema,
+  'external_agent.approval_resolved': externalAgentApprovalResolvedPayloadSchema,
+  'external_agent.resume_failed': externalAgentResumeFailedPayloadSchema,
+  'external_agent.exited': externalAgentExitedPayloadSchema
 } as const satisfies Record<EventType, z.ZodTypeAny>;
 
 export type EventPayload<T extends EventType> = z.infer<(typeof EVENT_TABLE)[T]>;

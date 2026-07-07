@@ -28,9 +28,9 @@ import { DEFAULT_SKILL_MARKETPLACE_SOURCE, MONAD_VERSION } from '@monad/protocol
 
 import { createSkillCatalogs } from '@/capabilities/skills/index.ts';
 import { createAtomPacksModule } from '@/handlers/atom-pack/index.ts';
+import { createExternalAgentModule } from '@/handlers/external-agent/index.ts';
 import { HandlerError } from '@/handlers/handler-error.ts';
 import { createMemoryModule } from '@/handlers/memory/index.ts';
-import { createNativeCliModule } from '@/handlers/native-cli/index.ts';
 import { createSessionModule } from '@/handlers/session/index.ts';
 import { createAcpAgentModule } from '@/handlers/settings/acp-agent/index.ts';
 import { createAgentModule } from '@/handlers/settings/agent/index.ts';
@@ -39,11 +39,11 @@ import { createBrowserPresetModule } from '@/handlers/settings/browser-preset/in
 import { createChannelModule } from '@/handlers/settings/channel/index.ts';
 import { createComputerPresetModule } from '@/handlers/settings/computer-preset/index.ts';
 import { createDeveloperModule } from '@/handlers/settings/developer/index.ts';
+import { createExternalAgentSettingsModule } from '@/handlers/settings/external-agent/index.ts';
 import { createHooksModule } from '@/handlers/settings/hooks/index.ts';
 import { createSettingsImportModule } from '@/handlers/settings/import/index.ts';
 import { createMcpServerModule } from '@/handlers/settings/mcp-server/index.ts';
 import { createModelModule } from '@/handlers/settings/model/index.ts';
-import { createNativeCliAgentModule } from '@/handlers/settings/native-cli-agent/index.ts';
 import { createNetworkModule } from '@/handlers/settings/network/index.ts';
 import { createObscuraModule } from '@/handlers/settings/obscura/index.ts';
 import { createOpenaiCompatModule } from '@/handlers/settings/openai-compat/index.ts';
@@ -55,10 +55,10 @@ import { createStartupSettingsModule } from '@/handlers/settings/startup/index.t
 import { createToolBackendsModule } from '@/handlers/settings/tool-backends/index.ts';
 import { createSystemUpgradeModule } from '@/handlers/system-upgrade.ts';
 import { createTranscriptProjector } from '@/handlers/transcript/projector.ts';
-import { resolveNativeCliAgentEnv } from '@/services/native-cli/env.ts';
-import { NativeCliHost } from '@/services/native-cli/host/index.ts';
-import { resolveNativeCliManagedServerUrl } from '@/services/native-cli/host/session-launcher.ts';
-import { managedProjectRuntimeWorkspace } from '@/services/native-cli/managed-project.ts';
+import { resolveExternalAgentEnv } from '@/services/external-agent/env.ts';
+import { ExternalAgentHost } from '@/services/external-agent/host/index.ts';
+import { resolveExternalAgentManagedServerUrl } from '@/services/external-agent/host/session-launcher.ts';
+import { managedProjectRuntimeWorkspace } from '@/services/external-agent/managed-project.ts';
 import licensesData from '../../../generated/licenses.json';
 import { createInitHandlers } from './handlers-init.ts';
 import {
@@ -76,26 +76,26 @@ export type { DaemonHandlerDeps } from './handlers-deps.ts';
 
 export function createDaemonHandlers(deps: DaemonHandlerDeps) {
   const { paths, mockMode = false } = deps;
-  const nativeCliHost = new NativeCliHost({
+  const externalAgentHost = new ExternalAgentHost({
     store: deps.store,
     bus: deps.bus,
     monadHome: paths.home,
-    serverUrl: resolveNativeCliManagedServerUrl({
-      serverUrl: deps.nativeCliServerUrl,
+    serverUrl: resolveExternalAgentManagedServerUrl({
+      serverUrl: deps.externalAgentServerUrl,
       networkHttps: deps.networkHttps
     }),
     networkHttps: deps.networkHttps,
     agents: async () => {
       const cfg = await loadAll(paths.config, paths.profile);
-      return cfg?.nativeCliAgents ?? [];
+      return cfg?.externalAgents ?? [];
     },
-    resolveAgentEnv: async (env) => resolveNativeCliAgentEnv(env, (await loadAuth(paths.auth)) ?? undefined),
-    nativeCliProcessRegistryPath: `${paths.runtime}/native-cli-processes.json`,
-    authProcessRegistryPath: `${paths.runtime}/native-cli-auth-processes.json`,
-    authHeartbeatTimeoutMs: deps.nativeCliAuthHeartbeatTimeoutMs
+    resolveAgentEnv: async (env) => resolveExternalAgentEnv(env, (await loadAuth(paths.auth)) ?? undefined),
+    externalAgentProcessRegistryPath: `${paths.runtime}/external-agent-processes.json`,
+    authProcessRegistryPath: `${paths.runtime}/external-agent-auth-processes.json`,
+    authHeartbeatTimeoutMs: deps.externalAgentAuthHeartbeatTimeoutMs
   });
-  void nativeCliHost.reconcileOrphanedSessions();
-  process.on('exit', () => nativeCliHost.stopAll());
+  void externalAgentHost.reconcileOrphanedSessions();
+  process.on('exit', () => externalAgentHost.stopAll());
 
   const init = createInitHandlers(paths, mockMode, deps.log);
 
@@ -270,14 +270,14 @@ export function createDaemonHandlers(deps: DaemonHandlerDeps) {
       return deps.indexerStatus?.() ?? { pending: 0, running: false };
     }
   };
-  const session = createSessionModule({ ...deps, nativeCliHost });
+  const session = createSessionModule({ ...deps, externalAgentHost });
   const transcriptProjector = createTranscriptProjector({
     store: deps.store,
     bus: deps.bus,
     cache: deps.cache
   });
-  nativeCliHost.setManagedProjectOutputHandler(async (output) => {
-    await session.completeManagedNativeCliProviderMessage(output);
+  externalAgentHost.setManagedProjectOutputHandler(async (output) => {
+    await session.completeManagedExternalAgentProviderMessage(output);
   });
 
   return {
@@ -306,7 +306,7 @@ export function createDaemonHandlers(deps: DaemonHandlerDeps) {
     channel: createChannelModule({ paths, channelService: deps.channelService, configBus: deps.configBus }),
     peer: createPeerModule({ paths, configBus: deps.configBus }),
     acpAgent: createAcpAgentModule({ paths }),
-    nativeCliAgent: createNativeCliAgentModule({ paths, nativeCliSessions: nativeCliHost }),
+    externalAgentSettings: createExternalAgentSettingsModule({ paths, externalAgentSessions: externalAgentHost }),
     mcpServer: createMcpServerModule({
       paths,
       getMcpStatus: deps.getMcpStatus,
@@ -350,12 +350,12 @@ export function createDaemonHandlers(deps: DaemonHandlerDeps) {
       modelService: deps.modelService
     }),
     session,
-    nativeCli: createNativeCliModule({ paths, host: nativeCliHost, store: deps.store }),
+    externalAgent: createExternalAgentModule({ paths, host: externalAgentHost, store: deps.store }),
     _nativeAgentStore: deps.store,
     _nativeAgentAttachmentRoots: (args: { projectId: string; agentId: string; workingPath?: string | null }) => {
       const nativeSession = args.agentId
         ? deps.store
-            .listNativeCliSessionsForTranscriptTarget(args.projectId)
+            .listExternalAgentSessionsForTranscriptTarget(args.projectId)
             .find((session) => session.agentName === args.agentId)
         : null;
       const workingPath = args.workingPath ?? nativeSession?.workingPath;

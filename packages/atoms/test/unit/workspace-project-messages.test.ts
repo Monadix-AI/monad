@@ -1,19 +1,19 @@
-import type { NativeCliSessionView } from '@monad/protocol';
+import type { ExternalAgentSessionView } from '@monad/protocol';
 import type { Message } from '../../src/workspace-experiences/experience/types.ts';
 
 import { expect, test } from 'bun:test';
 
 import { builtinAgentAdapters } from '../../src/agent-adapters/index.ts';
 import { __workplaceProjectMessageTest } from '../../src/workspace-experiences/chat-room/utils/projection.ts';
-import { configureNativeCliObservationAdapterResolver } from '../../src/workspace-experiences/experience/native-cli-observation/native-cli-observation.ts';
+import { configureExternalAgentObservationAdapterResolver } from '../../src/workspace-experiences/experience/external-agent-observation/external-agent-observation.ts';
 import { projectMemberParticipants } from '../../src/workspace-experiences/experience/project-projection.ts';
 
-configureNativeCliObservationAdapterResolver((provider) =>
+configureExternalAgentObservationAdapterResolver((provider) =>
   builtinAgentAdapters.find((adapter) => adapter.provider === provider)
 );
 
-const nativeCliSession = (overrides: Partial<NativeCliSessionView> = {}): NativeCliSessionView => ({
-  id: 'ncli_01KWGEMINI000000000000000',
+const externalAgentSession = (overrides: Partial<ExternalAgentSessionView> = {}): ExternalAgentSessionView => ({
+  id: 'exa_01KWGEMINI000000000000000',
   transcriptTargetId: 'prj_01KWPROJECT00000000000000',
   agentName: 'gemini',
   provider: 'gemini',
@@ -22,7 +22,7 @@ const nativeCliSession = (overrides: Partial<NativeCliSessionView> = {}): Native
   launchMode: 'pty',
   approvalOwnership: 'provider-owned',
   runtimeRole: 'managed-project-agent',
-  agentRuntimeId: 'ncli_01KWGEMINI000000000000000',
+  agentRuntimeId: 'exa_01KWGEMINI000000000000000',
   lastDeliveredSeq: 0,
   lastVisibleSeq: 0,
   state: 'running',
@@ -38,7 +38,7 @@ const nativeCliSession = (overrides: Partial<NativeCliSessionView> = {}): Native
 });
 
 const observationFields = (
-  items: NonNullable<ReturnType<typeof __workplaceProjectMessageTest.buildNativeCliStreams>[number]>['items']
+  items: NonNullable<ReturnType<typeof __workplaceProjectMessageTest.buildExternalAgentStreams>[number]>['items']
 ) =>
   items.map(({ id, providerEventType, role, source, text }) => ({
     id,
@@ -48,17 +48,17 @@ const observationFields = (
     providerEventType
   }));
 
-function firstNativeCliStream(streams: ReturnType<typeof __workplaceProjectMessageTest.buildNativeCliStreams>) {
+function firstExternalAgentStream(streams: ReturnType<typeof __workplaceProjectMessageTest.buildExternalAgentStreams>) {
   const stream = streams[0];
-  if (!stream) throw new Error('expected a native CLI stream');
+  if (!stream) throw new Error('expected an external agent stream');
   return stream;
 }
 
-test('native CLI sessions project to durable chat messages', () => {
-  const message = __workplaceProjectMessageTest.nativeCliSessionMessage(nativeCliSession());
+test('external agent sessions project to durable chat messages', () => {
+  const message = __workplaceProjectMessageTest.externalAgentSessionMessage(externalAgentSession());
 
   expect(message).toMatchObject({
-    id: 'native-cli-session:ncli_01KWGEMINI000000000000000',
+    id: 'external-agent-session:exa_01KWGEMINI000000000000000',
     authorName: 'gemini',
     icon: 'gemini',
     kind: 'system',
@@ -70,7 +70,7 @@ test('native CLI sessions project to durable chat messages', () => {
       icon: 'gemini',
       tag: 'Gemini'
     },
-    nativeCliSessionId: 'ncli_01KWGEMINI000000000000000',
+    externalAgentSessionId: 'exa_01KWGEMINI000000000000000',
     streaming: false,
     orderKey: '2026-06-29T10:00:00.000Z'
   });
@@ -108,31 +108,31 @@ test('Monad project member parses as a normal project member', () => {
   ]);
 });
 
-test('native CLI developer messages expose only a follow entry', () => {
-  const message = __workplaceProjectMessageTest.nativeCliSessionDeveloperMessage(nativeCliSession());
+test('external agent developer messages expose only a follow entry', () => {
+  const message = __workplaceProjectMessageTest.externalAgentSessionDeveloperMessage(externalAgentSession());
 
   expect(message).toMatchObject({
-    id: 'native-cli-session-developer:ncli_01KWGEMINI000000000000000',
+    id: 'external-agent-session-developer:exa_01KWGEMINI000000000000000',
     kind: 'developer',
     tag: 'DEV',
     text: 'CLI stream available',
-    nativeCliSessionId: 'ncli_01KWGEMINI000000000000000',
+    externalAgentSessionId: 'exa_01KWGEMINI000000000000000',
     developerOnly: true,
     orderKey: '2026-06-29T10:00:00.000Z:developer'
   });
 });
 
-test('native CLI durable sessions keep timeline populated after live tool settles', () => {
+test('external agent durable sessions keep timeline populated after live tool settles', () => {
   const messages = __workplaceProjectMessageTest.buildProjectMessages({
     persistedMessages: [],
-    nativeCliSessions: [nativeCliSession()],
+    externalAgentSessions: [externalAgentSession()],
     liveItems: [],
     liveTools: []
   });
 
   expect(messages).toHaveLength(1);
   expect(messages[0]).toMatchObject({
-    id: 'native-cli-session:ncli_01KWGEMINI000000000000000',
+    id: 'external-agent-session:exa_01KWGEMINI000000000000000',
     authorName: 'gemini',
     kind: 'system',
     text: 'joined the project',
@@ -143,9 +143,9 @@ test('native CLI durable sessions keep timeline populated after live tool settle
 test('Claude server errors project as agent-scoped system messages', () => {
   const messages = __workplaceProjectMessageTest.buildProjectMessages({
     persistedMessages: [],
-    nativeCliSessions: [
-      nativeCliSession({
-        id: 'ncli_claude_error',
+    externalAgentSessions: [
+      externalAgentSession({
+        id: 'exa_claude_error',
         agentName: 'pmem_claude_1234',
         provider: 'claude-code',
         productIcon: 'claude-code',
@@ -162,19 +162,19 @@ test('Claude server errors project as agent-scoped system messages', () => {
     ],
     liveItems: [],
     liveTools: [],
-    nativeCliDisplayNames: new Map([['pmem_claude_1234', 'Steve']])
+    externalAgentDisplayNames: new Map([['pmem_claude_1234', 'Steve']])
   });
 
   expect(messages.map((message) => [message.id, message.text])).toEqual([
-    ['native-cli-session:ncli_claude_error', 'joined the project'],
-    ['native-cli-session-error:ncli_claude_error:ncli_claude_error:result', 'encountered an error']
+    ['external-agent-session:exa_claude_error', 'joined the project'],
+    ['external-agent-session-error:exa_claude_error:exa_claude_error:result', 'encountered an error']
   ]);
   expect(messages[1]).toMatchObject({
     authorId: 'pmem_claude_1234',
     authorName: 'Steve',
     kind: 'system',
     tag: 'Claude',
-    nativeCliSessionId: 'ncli_claude_error',
+    externalAgentSessionId: 'exa_claude_error',
     systemTone: 'error',
     systemDetail: 'API Error: overloaded_error. Claude Code is currently overloaded.',
     agentChip: {
@@ -186,16 +186,16 @@ test('Claude server errors project as agent-scoped system messages', () => {
   });
 });
 
-test('native CLI developer messages are projected only when explicitly enabled', () => {
+test('external agent developer messages are projected only when explicitly enabled', () => {
   const _hidden = __workplaceProjectMessageTest.buildProjectMessages({
     persistedMessages: [],
-    nativeCliSessions: [],
+    externalAgentSessions: [],
     liveItems: [],
     liveTools: [
       {
-        id: 'ncli_live',
+        id: 'exa_live',
         kind: 'tool',
-        tool: 'native-cli:codex',
+        tool: 'external-agent:codex',
         input: { agent: 'codex', provider: 'codex', productIcon: 'codex' },
         output: 'raw terminal output',
         status: 'running',
@@ -205,13 +205,13 @@ test('native CLI developer messages are projected only when explicitly enabled',
   });
   const visible = __workplaceProjectMessageTest.buildProjectMessages({
     persistedMessages: [],
-    nativeCliSessions: [],
+    externalAgentSessions: [],
     liveItems: [],
     liveTools: [
       {
-        id: 'ncli_live',
+        id: 'exa_live',
         kind: 'tool',
-        tool: 'native-cli:codex',
+        tool: 'external-agent:codex',
         input: { agent: 'codex', provider: 'codex', productIcon: 'codex' },
         output: 'raw terminal output',
         status: 'running',
@@ -222,17 +222,17 @@ test('native CLI developer messages are projected only when explicitly enabled',
   });
 
   expect(visible.find((message) => message.kind === 'developer')).toMatchObject({
-    id: 'native-cli-session-developer:ncli_live',
+    id: 'external-agent-session-developer:exa_live',
     text: 'CLI stream available'
   });
 });
 
-test('native CLI runtime lifecycle projects the current join per project member', () => {
+test('external agent runtime lifecycle projects the current join per project member', () => {
   const messages = __workplaceProjectMessageTest.buildProjectMessages({
     persistedMessages: [],
-    nativeCliSessions: [
-      nativeCliSession({
-        id: 'ncli_first',
+    externalAgentSessions: [
+      externalAgentSession({
+        id: 'exa_first',
         agentName: 'codex',
         provider: 'codex',
         productIcon: 'codex',
@@ -241,8 +241,8 @@ test('native CLI runtime lifecycle projects the current join per project member'
         updatedAt: '2026-06-29T10:01:00.000Z',
         exitedAt: '2026-06-29T10:01:00.000Z'
       }),
-      nativeCliSession({
-        id: 'ncli_second',
+      externalAgentSession({
+        id: 'exa_second',
         agentName: 'codex',
         provider: 'codex',
         productIcon: 'codex',
@@ -258,20 +258,20 @@ test('native CLI runtime lifecycle projects the current join per project member'
 
   expect(messages).toHaveLength(1);
   expect(messages[0]).toMatchObject({
-    id: 'native-cli-session:ncli_second',
+    id: 'external-agent-session:exa_second',
     authorName: 'codex',
     text: 'joined the project'
   });
 });
 
-test('managed native CLI timeline messages use display names instead of runtime ids', () => {
+test('managed external agent timeline messages use display names instead of runtime ids', () => {
   const displayNames = new Map([['pmem_codex_abcd1234', 'codex-reviewer']]);
-  const avatarSeeds = new Map([['codex-reviewer', 'native-cli:codex-reviewer']]);
+  const avatarSeeds = new Map([['codex-reviewer', 'external-agent:codex-reviewer']]);
   const messages = __workplaceProjectMessageTest.buildProjectMessages({
     persistedMessages: [],
-    nativeCliSessions: [
-      nativeCliSession({
-        id: 'ncli_display',
+    externalAgentSessions: [
+      externalAgentSession({
+        id: 'exa_display',
         agentName: 'pmem_codex_abcd1234',
         provider: 'codex',
         productIcon: 'codex'
@@ -283,15 +283,15 @@ test('managed native CLI timeline messages use display names instead of runtime 
         id: 'msg_cli_reply',
         role: 'assistant',
         agentName: 'pmem_codex_abcd1234',
-        source: 'managed-native-cli',
+        source: 'managed-external-agent',
         parts: [{ type: 'text', text: 'Ready.' }],
         status: 'done',
         seq: '2026-06-29T10:00:01.000Z'
       }
     ],
     liveTools: [],
-    nativeCliAvatarSeeds: avatarSeeds,
-    nativeCliDisplayNames: displayNames,
+    externalAgentAvatarSeeds: avatarSeeds,
+    externalAgentDisplayNames: displayNames,
     showDeveloperOnlyMessages: false
   });
 
@@ -300,58 +300,58 @@ test('managed native CLI timeline messages use display names instead of runtime 
   expect(messages[0]?.agentChip).toMatchObject({ id: 'pmem_codex_abcd1234', name: 'codex-reviewer' });
 });
 
-test('managed native CLI reasoning-only streaming messages stay off the transcript wall', () => {
+test('managed external agent reasoning-only streaming messages stay off the transcript wall', () => {
   const _messages = __workplaceProjectMessageTest.buildProjectMessages({
     persistedMessages: [],
-    nativeCliSessions: [],
+    externalAgentSessions: [],
     liveItems: [
       {
         kind: 'message',
         id: 'msg_codex_thinking',
         role: 'assistant',
         agentName: 'pmem_codex_abcd1234',
-        source: 'managed-native-cli',
+        source: 'managed-external-agent',
         parts: [{ type: 'reasoning', text: 'Thinking' }],
         status: 'streaming',
         seq: '002'
       }
     ],
     liveTools: [],
-    nativeCliDisplayNames: new Map([['pmem_codex_abcd1234', 'codex-reviewer']])
+    externalAgentDisplayNames: new Map([['pmem_codex_abcd1234', 'codex-reviewer']])
   });
 });
 
-test('managed native CLI terminal reasoning-only messages stay off the transcript wall', () => {
+test('managed external agent terminal reasoning-only messages stay off the transcript wall', () => {
   const _messages = __workplaceProjectMessageTest.buildProjectMessages({
     persistedMessages: [],
-    nativeCliSessions: [],
+    externalAgentSessions: [],
     liveItems: [
       {
         kind: 'message',
         id: 'msg_codex_orphaned_thinking',
         role: 'assistant',
         agentName: 'pmem_codex_abcd1234',
-        source: 'managed-native-cli',
+        source: 'managed-external-agent',
         parts: [{ type: 'reasoning', text: 'Thinking' }],
         status: 'error',
         seq: '002'
       }
     ],
     liveTools: [],
-    nativeCliDisplayNames: new Map([['pmem_codex_abcd1234', 'codex-reviewer']])
+    externalAgentDisplayNames: new Map([['pmem_codex_abcd1234', 'codex-reviewer']])
   });
 });
 
-test('native CLI live start projects joined without raw terminal output', () => {
+test('external agent live start projects joined without raw terminal output', () => {
   const messages = __workplaceProjectMessageTest.buildProjectMessages({
     persistedMessages: [],
-    nativeCliSessions: [],
+    externalAgentSessions: [],
     liveItems: [],
     liveTools: [
       {
-        id: 'ncli_live',
+        id: 'exa_live',
         kind: 'tool',
-        tool: 'native-cli:claude-code',
+        tool: 'external-agent:claude-code',
         input: { agent: 'claude-code', provider: 'claude-code', productIcon: 'claude-code' },
         output: 'started claude-code\n\\x1b[38;2;255;193;7mraw terminal output',
         status: 'running',
@@ -361,57 +361,57 @@ test('native CLI live start projects joined without raw terminal output', () => 
     showDeveloperOnlyMessages: true
   });
 
-  const joined = messages.find((message) => message.id === 'native-cli-session:ncli_live');
+  const joined = messages.find((message) => message.id === 'external-agent-session:exa_live');
   const developer = messages.find((message) => message.kind === 'developer');
   expect(joined).toMatchObject({
     kind: 'system',
     authorName: 'claude-code',
     text: 'joined the project',
-    nativeCliSessionId: 'ncli_live'
+    externalAgentSessionId: 'exa_live'
   });
   expect(developer).toMatchObject({
-    id: 'native-cli-session-developer:ncli_live',
+    id: 'external-agent-session-developer:exa_live',
     text: 'CLI stream available',
-    nativeCliSessionId: 'ncli_live'
+    externalAgentSessionId: 'exa_live'
   });
 });
 
-test('native CLI live starts project only one member join per agent', () => {
+test('external agent live starts project only one member join per agent', () => {
   const messages = __workplaceProjectMessageTest.buildProjectMessages({
     persistedMessages: [],
-    nativeCliSessions: [],
+    externalAgentSessions: [],
     liveItems: [],
     liveTools: [
       {
-        id: 'ncli_first',
+        id: 'exa_first',
         kind: 'tool',
-        tool: 'native-cli:codex',
+        tool: 'external-agent:codex',
         input: { agent: 'pmem_codex_a', provider: 'codex', productIcon: 'codex' },
         status: 'running',
         seq: '001'
       } as never,
       {
-        id: 'ncli_second',
+        id: 'exa_second',
         kind: 'tool',
-        tool: 'native-cli:codex',
+        tool: 'external-agent:codex',
         input: { agent: 'pmem_codex_a', provider: 'codex', productIcon: 'codex' },
         status: 'running',
         seq: '002'
       } as never
     ],
-    nativeCliDisplayNames: new Map([['pmem_codex_a', 'A']])
+    externalAgentDisplayNames: new Map([['pmem_codex_a', 'A']])
   });
 
   expect(messages.filter((message) => message.text === 'joined the project')).toHaveLength(1);
   expect(messages.find((message) => message.text === 'joined the project')).toMatchObject({
-    id: 'native-cli-session:ncli_first',
+    id: 'external-agent-session:exa_first',
     authorId: 'pmem_codex_a',
     authorName: 'A',
-    nativeCliSessionId: 'ncli_first'
+    externalAgentSessionId: 'exa_first'
   });
 });
 
-test('managed native CLI reasoning-only fanout does not project a system divider', () => {
+test('managed external agent reasoning-only fanout does not project a system divider', () => {
   const messages = __workplaceProjectMessageTest.buildProjectMessages({
     persistedMessages: [
       {
@@ -426,14 +426,14 @@ test('managed native CLI reasoning-only fanout does not project a system divider
         orderKey: '001'
       }
     ],
-    nativeCliSessions: [],
+    externalAgentSessions: [],
     liveItems: [
       {
         kind: 'message',
         id: 'msg_codex_thinking',
         role: 'assistant',
         agentName: 'codex',
-        source: 'managed-native-cli',
+        source: 'managed-external-agent',
         parts: [{ type: 'reasoning', text: 'Thinking' }],
         status: 'streaming',
         seq: '002'
@@ -443,7 +443,7 @@ test('managed native CLI reasoning-only fanout does not project a system divider
         id: 'msg_claude_thinking',
         role: 'assistant',
         agentName: 'claude-code',
-        source: 'managed-native-cli',
+        source: 'managed-external-agent',
         parts: [{ type: 'reasoning', text: 'Thinking' }],
         status: 'streaming',
         seq: '003'
@@ -456,7 +456,7 @@ test('managed native CLI reasoning-only fanout does not project a system divider
   expect(messages.map((message) => message.id)).toEqual(['msg_user']);
 });
 
-test('managed native CLI finished replies render without a thinking placeholder', () => {
+test('managed external agent finished replies render without a thinking placeholder', () => {
   const messages = __workplaceProjectMessageTest.buildProjectMessages({
     persistedMessages: [
       {
@@ -471,14 +471,14 @@ test('managed native CLI finished replies render without a thinking placeholder'
         orderKey: '001'
       }
     ],
-    nativeCliSessions: [],
+    externalAgentSessions: [],
     liveItems: [
       {
         kind: 'message',
         id: 'msg_codex_reply',
         role: 'assistant',
         agentName: 'codex',
-        source: 'managed-native-cli',
+        source: 'managed-external-agent',
         parts: [{ type: 'text', text: 'Done.' }],
         status: 'done',
         seq: '002'
@@ -488,7 +488,7 @@ test('managed native CLI finished replies render without a thinking placeholder'
         id: 'msg_claude_thinking',
         role: 'assistant',
         agentName: 'claude-code',
-        source: 'managed-native-cli',
+        source: 'managed-external-agent',
         parts: [{ type: 'reasoning', text: 'Thinking' }],
         status: 'streaming',
         seq: '003'
@@ -500,18 +500,18 @@ test('managed native CLI finished replies render without a thinking placeholder'
   expect(messages.map((message) => message.id)).toEqual(['msg_user', 'msg_codex_reply']);
 });
 
-test('managed native CLI finished replies retain delivery observation pointers', () => {
+test('managed external agent finished replies retain delivery observation pointers', () => {
   const messages = __workplaceProjectMessageTest.buildProjectMessages({
     persistedMessages: [],
-    nativeCliSessions: [],
+    externalAgentSessions: [],
     liveItems: [
       {
         kind: 'message',
         id: 'msg_codex_reply',
         role: 'assistant',
         agentName: 'pmem_codex_abcd1234',
-        source: 'managed-native-cli',
-        nativeCliSessionId: 'ncli_codex_delivery',
+        source: 'managed-external-agent',
+        externalAgentSessionId: 'exa_codex_delivery',
         deliveryId: 'deliv_01KWEBDELIVERYOBSERVE000',
         parts: [{ type: 'text', text: 'Done.' }],
         status: 'done',
@@ -519,27 +519,27 @@ test('managed native CLI finished replies retain delivery observation pointers',
       }
     ],
     liveTools: [],
-    nativeCliDisplayNames: new Map([['pmem_codex_abcd1234', 'codex-reviewer']])
+    externalAgentDisplayNames: new Map([['pmem_codex_abcd1234', 'codex-reviewer']])
   });
 
   expect(messages[0]).toMatchObject({
     id: 'msg_codex_reply',
-    nativeCliSessionId: 'ncli_codex_delivery',
+    externalAgentSessionId: 'exa_codex_delivery',
     deliveryId: 'deliv_01KWEBDELIVERYOBSERVE000'
   });
 });
 
-test('managed native CLI spawn projects joined without a thinking placeholder', () => {
+test('managed external agent spawn projects joined without a thinking placeholder', () => {
   const messages = __workplaceProjectMessageTest.buildProjectMessages({
     persistedMessages: [],
-    nativeCliSessions: [],
+    externalAgentSessions: [],
     liveItems: [
       {
         kind: 'message',
         id: 'msg_steve_thinking',
         role: 'assistant',
         agentName: 'pmem_steve',
-        source: 'managed-native-cli',
+        source: 'managed-external-agent',
         parts: [{ type: 'reasoning', text: 'Thinking' }],
         status: 'streaming',
         seq: '001'
@@ -548,22 +548,22 @@ test('managed native CLI spawn projects joined without a thinking placeholder', 
     liveTools: [
       {
         kind: 'tool',
-        id: 'ncli_steve',
-        tool: 'native-cli:codex',
+        id: 'exa_steve',
+        tool: 'external-agent:codex',
         input: { agent: 'pmem_steve', provider: 'codex', productIcon: 'codex' },
         status: 'running',
         seq: '002'
       }
     ],
-    nativeCliDisplayNames: new Map([['pmem_steve', 'Steve']])
+    externalAgentDisplayNames: new Map([['pmem_steve', 'Steve']])
   });
 
   expect(messages.map((message) => [message.id, message.text])).toEqual([
-    ['native-cli-session:ncli_steve', 'joined the project']
+    ['external-agent-session:exa_steve', 'joined the project']
   ]);
 });
 
-test('managed native CLI join stays before its first room message when live tool seq uses event ids', () => {
+test('managed external agent join stays before its first room message when live tool seq uses event ids', () => {
   const messages = __workplaceProjectMessageTest.buildProjectMessages({
     persistedMessages: [
       {
@@ -579,36 +579,36 @@ test('managed native CLI join stays before its first room message when live tool
         orderKey: '2026-07-02T10:00:02.000Z'
       }
     ],
-    nativeCliSessions: [],
+    externalAgentSessions: [],
     liveItems: [],
     liveTools: [
       {
         kind: 'tool',
-        id: 'ncli_a',
-        tool: 'native-cli:codex',
+        id: 'exa_a',
+        tool: 'external-agent:codex',
         input: { agent: 'pmem_codex_a', provider: 'codex', productIcon: 'codex' },
         status: 'running',
         seq: 'evt_01KWHJOIN'
       }
     ],
-    nativeCliDisplayNames: new Map([['pmem_codex_a', 'A']])
+    externalAgentDisplayNames: new Map([['pmem_codex_a', 'A']])
   });
 
   expect(messages.map((message) => [message.id, message.text])).toEqual([
-    ['native-cli-session:ncli_a', 'joined the project'],
+    ['external-agent-session:exa_a', 'joined the project'],
     ['msg_agent_greeting', 'A joined and is ready to take project work.']
   ]);
 });
 
-test('native CLI streams prefer live activity output over persisted snapshot', () => {
-  const stream = firstNativeCliStream(
-    __workplaceProjectMessageTest.buildNativeCliStreams(
-      [nativeCliSession({ outputSnapshot: 'old snapshot' })],
+test('external agent streams prefer live activity output over persisted snapshot', () => {
+  const stream = firstExternalAgentStream(
+    __workplaceProjectMessageTest.buildExternalAgentStreams(
+      [externalAgentSession({ outputSnapshot: 'old snapshot' })],
       [
         {
-          id: 'ncli_01KWGEMINI000000000000000',
+          id: 'exa_01KWGEMINI000000000000000',
           av: 'GE',
-          tool: 'native-cli:gemini',
+          tool: 'external-agent:gemini',
           detail: 'native cli activity',
           output: 'live output',
           status: 'running'
@@ -618,44 +618,44 @@ test('native CLI streams prefer live activity output over persisted snapshot', (
   );
 
   expect(stream).toMatchObject({
-    id: 'ncli_01KWGEMINI000000000000000',
+    id: 'exa_01KWGEMINI000000000000000',
     agentName: 'gemini',
     provider: 'gemini',
     tag: 'Gemini',
     output: 'live output',
-    items: [{ id: 'ncli_01KWGEMINI000000000000000:0', role: 'agent', text: 'live output' }],
+    items: [{ id: 'exa_01KWGEMINI000000000000000:0', role: 'agent', text: 'live output' }],
     status: 'running'
   });
 });
 
-test('native CLI durable running sessions remain observable without marking generation active', () => {
-  const stream = firstNativeCliStream(
-    __workplaceProjectMessageTest.buildNativeCliStreams(
-      [nativeCliSession({ outputSnapshot: 'previous turn output', state: 'running' })],
+test('external agent durable running sessions remain observable without marking generation active', () => {
+  const stream = firstExternalAgentStream(
+    __workplaceProjectMessageTest.buildExternalAgentStreams(
+      [externalAgentSession({ outputSnapshot: 'previous turn output', state: 'running' })],
       []
     )
   );
 
   expect(stream).toMatchObject({
-    id: 'ncli_01KWGEMINI000000000000000',
+    id: 'exa_01KWGEMINI000000000000000',
     agentName: 'gemini',
     output: 'previous turn output',
     status: 'ok',
-    items: [{ id: 'ncli_01KWGEMINI000000000000000:0', role: 'agent', text: 'previous turn output' }]
+    items: [{ id: 'exa_01KWGEMINI000000000000000:0', role: 'agent', text: 'previous turn output' }]
   });
 });
 
-test('native CLI live activity streams keep the managed agent identity', () => {
-  const stream = firstNativeCliStream(
-    __workplaceProjectMessageTest.buildNativeCliStreams(
+test('external agent live activity streams keep the managed agent identity', () => {
+  const stream = firstExternalAgentStream(
+    __workplaceProjectMessageTest.buildExternalAgentStreams(
       [],
       [
         {
-          id: 'ncli_live_codex',
+          id: 'exa_live_codex',
           av: 'CO',
           agentName: 'codex',
-          tool: 'native-cli:codex',
-          detail: 'native-cli:codex',
+          tool: 'external-agent:codex',
+          detail: 'external-agent:codex',
           output: 'thinking about the project message',
           status: 'running'
         }
@@ -664,19 +664,19 @@ test('native CLI live activity streams keep the managed agent identity', () => {
   );
 
   expect(stream).toMatchObject({
-    id: 'ncli_live_codex',
+    id: 'exa_live_codex',
     agentName: 'codex',
     status: 'running',
-    items: [{ id: 'ncli_live_codex:0', role: 'agent', text: 'thinking about the project message' }]
+    items: [{ id: 'exa_live_codex:0', role: 'agent', text: 'thinking about the project message' }]
   });
 });
 
-test('managed native CLI streams retain template agent names for host usage queries', () => {
-  const stream = firstNativeCliStream(
-    __workplaceProjectMessageTest.buildNativeCliStreams(
+test('managed external agent streams retain template agent names for host usage queries', () => {
+  const stream = firstExternalAgentStream(
+    __workplaceProjectMessageTest.buildExternalAgentStreams(
       [
-        nativeCliSession({
-          id: 'ncli_codex_reviewer',
+        externalAgentSession({
+          id: 'exa_codex_reviewer',
           agentName: 'pmem_codex_reviewer',
           provider: 'codex',
           productIcon: 'codex'
@@ -688,23 +688,23 @@ test('managed native CLI streams retain template agent names for host usage quer
   );
 
   expect(stream).toMatchObject({
-    id: 'ncli_codex_reviewer',
+    id: 'exa_codex_reviewer',
     agentName: 'pmem_codex_reviewer',
     templateAgentName: 'codex'
   });
 });
 
-test('native CLI structured result output is projected as readable observation items', () => {
-  const stream = firstNativeCliStream(
-    __workplaceProjectMessageTest.buildNativeCliStreams(
+test('external agent structured result output is projected as readable observation items', () => {
+  const stream = firstExternalAgentStream(
+    __workplaceProjectMessageTest.buildExternalAgentStreams(
       [],
       [
         {
-          id: 'ncli_structured_codex',
+          id: 'exa_structured_codex',
           av: 'CO',
           agentName: 'codex',
-          tool: 'native-cli:codex',
-          detail: 'native-cli:codex',
+          tool: 'external-agent:codex',
+          detail: 'external-agent:codex',
           output: JSON.stringify({
             type: 'result',
             subtype: 'success',
@@ -727,14 +727,14 @@ test('native CLI structured result output is projected as readable observation i
 
   expect(observationFields(stream.items)).toEqual([
     {
-      id: 'ncli_structured_codex:result',
+      id: 'exa_structured_codex:result',
       role: 'agent',
       text: '仍被拦截，无法发出。卡点未变：`monad project` 命令需要你批准。',
       source: 'codex-exec',
       providerEventType: 'result'
     },
     {
-      id: 'ncli_structured_codex:denial:0',
+      id: 'exa_structured_codex:denial:0',
       role: 'tool',
       text: 'Permission blocked Bash: monad project post "你好！"',
       source: 'codex-exec',
@@ -743,7 +743,7 @@ test('native CLI structured result output is projected as readable observation i
   ]);
 });
 
-test('native CLI stream-json events are projected as readable observation items', () => {
+test('external agent stream-json events are projected as readable observation items', () => {
   const output = [
     JSON.stringify({
       type: 'assistant',
@@ -762,16 +762,16 @@ test('native CLI stream-json events are projected as readable observation items'
     JSON.stringify({ type: 'result', response: 'Done.' })
   ].join('\n');
 
-  const stream = firstNativeCliStream(
-    __workplaceProjectMessageTest.buildNativeCliStreams(
+  const stream = firstExternalAgentStream(
+    __workplaceProjectMessageTest.buildExternalAgentStreams(
       [],
       [
         {
-          id: 'ncli_stream_events',
+          id: 'exa_stream_events',
           av: 'CO',
           agentName: 'claude-code',
-          tool: 'native-cli:claude-code',
-          detail: 'native-cli:claude-code',
+          tool: 'external-agent:claude-code',
+          detail: 'external-agent:claude-code',
           output,
           status: 'running'
         }
@@ -781,35 +781,35 @@ test('native CLI stream-json events are projected as readable observation items'
 
   expect(observationFields(stream.items)).toEqual([
     {
-      id: 'ncli_stream_events:json:0:message:0',
+      id: 'exa_stream_events:json:0:message:0',
       role: 'agent',
       text: 'I can help.',
       source: 'claude-code-sdk',
       providerEventType: 'assistant'
     },
     {
-      id: 'ncli_stream_events:json:0:tool:1',
+      id: 'exa_stream_events:json:0:tool:1',
       role: 'tool',
       text: 'Tool call Bash',
       source: 'claude-code-sdk',
       providerEventType: 'assistant'
     },
     {
-      id: 'ncli_stream_events:json:1:delta',
+      id: 'exa_stream_events:json:1:delta',
       role: 'agent',
       text: 'Streaming text.',
       source: 'claude-code-sdk',
       providerEventType: 'content_block_delta'
     },
     {
-      id: 'ncli_stream_events:json:2:tool-result',
+      id: 'exa_stream_events:json:2:tool-result',
       role: 'tool',
       text: 'command output',
       source: 'claude-code-sdk',
       providerEventType: 'tool_result'
     },
     {
-      id: 'ncli_stream_events:json:3:result',
+      id: 'exa_stream_events:json:3:result',
       role: 'agent',
       text: 'Done.',
       source: 'claude-code-sdk',
@@ -818,23 +818,23 @@ test('native CLI stream-json events are projected as readable observation items'
   ]);
 });
 
-test('native CLI projection ignores startup prose before stream-json objects', () => {
+test('external agent projection ignores startup prose before stream-json objects', () => {
   const output = [
     'started claude-code in /Users/zeke/.monad/workplace-agents/project/claude-code',
     JSON.stringify({ type: 'system', subtype: 'init', session_id: 'claude-session' }),
     JSON.stringify({ type: 'result', result: 'Need approval before posting.' })
   ].join('\n');
 
-  const stream = firstNativeCliStream(
-    __workplaceProjectMessageTest.buildNativeCliStreams(
+  const stream = firstExternalAgentStream(
+    __workplaceProjectMessageTest.buildExternalAgentStreams(
       [],
       [
         {
-          id: 'ncli_mixed_claude',
+          id: 'exa_mixed_claude',
           av: 'CL',
           agentName: 'claude-code',
-          tool: 'native-cli:claude-code',
-          detail: 'native-cli:claude-code',
+          tool: 'external-agent:claude-code',
+          detail: 'external-agent:claude-code',
           output,
           status: 'running'
         }
@@ -844,14 +844,14 @@ test('native CLI projection ignores startup prose before stream-json objects', (
 
   expect(observationFields(stream.items)).toEqual([
     {
-      id: 'ncli_mixed_claude:json:0:system',
+      id: 'exa_mixed_claude:json:0:system',
       role: 'system',
       text: 'init',
       source: 'claude-code-sdk',
       providerEventType: 'system'
     },
     {
-      id: 'ncli_mixed_claude:json:1:result',
+      id: 'exa_mixed_claude:json:1:result',
       role: 'agent',
       text: 'Need approval before posting.',
       source: 'claude-code-sdk',
@@ -860,7 +860,7 @@ test('native CLI projection ignores startup prose before stream-json objects', (
   ]);
 });
 
-test('native CLI app-server JSON-RPC output is projected as readable observation items', () => {
+test('external agent app-server JSON-RPC output is projected as readable observation items', () => {
   const output = [
     JSON.stringify({
       method: 'thread/started',
@@ -882,16 +882,16 @@ test('native CLI app-server JSON-RPC output is projected as readable observation
     })
   ].join('\n');
 
-  const stream = firstNativeCliStream(
-    __workplaceProjectMessageTest.buildNativeCliStreams(
+  const stream = firstExternalAgentStream(
+    __workplaceProjectMessageTest.buildExternalAgentStreams(
       [],
       [
         {
-          id: 'ncli_app_server_codex',
+          id: 'exa_app_server_codex',
           av: 'CO',
           agentName: 'test',
-          tool: 'native-cli:codex',
-          detail: 'native-cli:codex',
+          tool: 'external-agent:codex',
+          detail: 'external-agent:codex',
           output,
           status: 'running'
         }
@@ -901,14 +901,14 @@ test('native CLI app-server JSON-RPC output is projected as readable observation
 
   expect(observationFields(stream.items)).toEqual([
     {
-      id: 'ncli_app_server_codex:json:0:thread-started',
+      id: 'exa_app_server_codex:json:0:thread-started',
       role: 'system',
       text: 'Thread started in /Users/zeke/.codex/worktrees/28ea/monad/.dev/.monad/workplace-agents/project/test',
       source: 'codex-app-server',
       providerEventType: 'thread/started'
     },
     {
-      id: 'ncli_app_server_codex:json:1:mcp-status',
+      id: 'exa_app_server_codex:json:1:mcp-status',
       role: 'tool',
       text: 'node_repl starting',
       source: 'codex-app-server',
@@ -917,20 +917,20 @@ test('native CLI app-server JSON-RPC output is projected as readable observation
   ]);
 });
 
-test('native CLI follow streams restore persisted terminal snapshots', () => {
-  const stream = firstNativeCliStream(
-    __workplaceProjectMessageTest.buildNativeCliStreams(
-      [nativeCliSession({ outputSnapshot: '\\x1b[38;2;255;193;7mraw terminal output' })],
+test('external agent follow streams restore persisted terminal snapshots', () => {
+  const stream = firstExternalAgentStream(
+    __workplaceProjectMessageTest.buildExternalAgentStreams(
+      [externalAgentSession({ outputSnapshot: '\\x1b[38;2;255;193;7mraw terminal output' })],
       []
     )
   );
 
   expect(stream).toMatchObject({
-    id: 'ncli_01KWGEMINI000000000000000',
+    id: 'exa_01KWGEMINI000000000000000',
     output: '\\x1b[38;2;255;193;7mraw terminal output',
     items: [
       {
-        id: 'ncli_01KWGEMINI000000000000000:0',
+        id: 'exa_01KWGEMINI000000000000000:0',
         role: 'agent',
         source: 'plain-text',
         text: '\\x1b[38;2;255;193;7mraw terminal output'
@@ -939,14 +939,14 @@ test('native CLI follow streams restore persisted terminal snapshots', () => {
   });
 });
 
-test('native CLI resume failure is visible as a project system message', () => {
+test('external agent resume failure is visible as a project system message', () => {
   const messages = __workplaceProjectMessageTest.buildProjectMessages({
     persistedMessages: [],
-    nativeCliSessions: [],
+    externalAgentSessions: [],
     liveItems: [
       {
         kind: 'system',
-        id: 'native-cli-resume-failed:codex',
+        id: 'external-agent-resume-failed:codex',
         text: 'Codex resume failed for provider session codex-thread-stale; cold started a new runtime.',
         level: 'warn',
         seq: 'evt_resume_failed'
@@ -958,7 +958,7 @@ test('native CLI resume failure is visible as a project system message', () => {
 
   expect(messages).toEqual([
     expect.objectContaining({
-      id: 'native-cli-resume-failed:codex',
+      id: 'external-agent-resume-failed:codex',
       authorName: 'codex',
       kind: 'system',
       tag: 'CLI',
@@ -968,26 +968,26 @@ test('native CLI resume failure is visible as a project system message', () => {
   ]);
 });
 
-test('native CLI project member presence treats spawned runtime as online until it generates', () => {
+test('external agent project member presence treats spawned runtime as online until it generates', () => {
   expect(
-    __workplaceProjectMessageTest.nativeCliMemberPresence({
+    __workplaceProjectMessageTest.externalAgentMemberPresence({
       agentName: 'gemini',
       enabled: true,
-      nativeCliSessions: [],
+      externalAgentSessions: [],
       liveTools: []
     })
   ).toBe('online');
 
   expect(
-    __workplaceProjectMessageTest.nativeCliMemberPresence({
+    __workplaceProjectMessageTest.externalAgentMemberPresence({
       agentName: 'gemini',
       enabled: true,
-      nativeCliSessions: [],
+      externalAgentSessions: [],
       liveTools: [
         {
           id: 'tool_observation',
           kind: 'tool',
-          tool: 'native-cli:gemini',
+          tool: 'external-agent:gemini',
           input: { agent: 'gemini' },
           output: 'provider runtime output',
           status: 'running',
@@ -998,15 +998,15 @@ test('native CLI project member presence treats spawned runtime as online until 
   ).toBe('online');
 
   expect(
-    __workplaceProjectMessageTest.nativeCliMemberPresence({
+    __workplaceProjectMessageTest.externalAgentMemberPresence({
       agentName: 'gemini',
       enabled: true,
-      nativeCliSessions: [],
+      externalAgentSessions: [],
       liveTools: [
         {
           id: 'tool_login',
           kind: 'tool',
-          tool: 'native-cli:gemini',
+          tool: 'external-agent:gemini',
           input: { agent: 'gemini' },
           output: 'connection_required: sign in',
           status: 'running',
@@ -1017,35 +1017,35 @@ test('native CLI project member presence treats spawned runtime as online until 
   ).toBe('needs-login');
 
   expect(
-    __workplaceProjectMessageTest.nativeCliMemberPresence({
+    __workplaceProjectMessageTest.externalAgentMemberPresence({
       agentName: 'gemini',
       enabled: true,
-      nativeCliSessions: [nativeCliSession({ state: 'failed', outputSnapshot: 'process exited 1' })],
+      externalAgentSessions: [externalAgentSession({ state: 'failed', outputSnapshot: 'process exited 1' })],
       liveTools: []
     })
   ).toBe('failed');
 
   expect(
-    __workplaceProjectMessageTest.nativeCliMemberPresence({
+    __workplaceProjectMessageTest.externalAgentMemberPresence({
       agentName: 'gemini',
       enabled: true,
-      nativeCliSessions: [nativeCliSession({ state: 'stopped' })],
+      externalAgentSessions: [externalAgentSession({ state: 'stopped' })],
       liveTools: []
     })
   ).toBe('online');
 });
 
-test('native CLI project member presence treats lifecycle tools as stand-by availability', () => {
+test('external agent project member presence treats lifecycle tools as stand-by availability', () => {
   expect(
-    __workplaceProjectMessageTest.nativeCliMemberPresence({
+    __workplaceProjectMessageTest.externalAgentMemberPresence({
       agentName: 'gemini',
       enabled: true,
-      nativeCliSessions: [],
+      externalAgentSessions: [],
       liveTools: [
         {
-          id: 'ncli_session',
+          id: 'exa_session',
           kind: 'tool',
-          tool: 'native-cli:gemini',
+          tool: 'external-agent:gemini',
           input: { agent: 'gemini' },
           status: 'running',
           seq: '002'
@@ -1055,44 +1055,44 @@ test('native CLI project member presence treats lifecycle tools as stand-by avai
   ).toBe('online');
 });
 
-test('native CLI project member presence treats streaming managed messages as active generation', () => {
+test('external agent project member presence treats streaming managed messages as active generation', () => {
   expect(
-    __workplaceProjectMessageTest.nativeCliMemberPresence({
+    __workplaceProjectMessageTest.externalAgentMemberPresence({
       agentName: 'gemini',
       enabled: true,
-      nativeCliSessions: [],
+      externalAgentSessions: [],
       liveTools: [],
       activeAgentNames: new Set(['gemini'])
     })
   ).toBe('working');
 });
 
-test('native CLI project member presence shows running sessions with provider approvals as working', () => {
+test('external agent project member presence shows running sessions with provider approvals as working', () => {
   expect(
-    __workplaceProjectMessageTest.nativeCliMemberPresence({
+    __workplaceProjectMessageTest.externalAgentMemberPresence({
       agentName: 'gemini',
       enabled: true,
-      nativeCliSessions: [
-        nativeCliSession({
+      externalAgentSessions: [
+        externalAgentSession({
           pendingApprovalCount: 1
-        } as Partial<NativeCliSessionView> & { pendingApprovalCount: number })
+        } as Partial<ExternalAgentSessionView> & { pendingApprovalCount: number })
       ],
       liveTools: []
     })
   ).toBe('working');
 });
 
-test('native CLI project member presence is scoped by managed member instance id', () => {
+test('external agent project member presence is scoped by managed member instance id', () => {
   expect(
-    __workplaceProjectMessageTest.nativeCliMemberPresence({
+    __workplaceProjectMessageTest.externalAgentMemberPresence({
       agentName: 'pmem_codex_reviewer',
       enabled: true,
-      nativeCliSessions: [],
+      externalAgentSessions: [],
       liveTools: [
         {
           id: 'tool_other_codex',
           kind: 'tool',
-          tool: 'native-cli:codex',
+          tool: 'external-agent:codex',
           input: { agent: 'pmem_codex_writer' },
           status: 'running',
           seq: '002'
@@ -1102,19 +1102,19 @@ test('native CLI project member presence is scoped by managed member instance id
   ).toBe('online');
 
   expect(
-    __workplaceProjectMessageTest.nativeCliMemberPresence({
+    __workplaceProjectMessageTest.externalAgentMemberPresence({
       agentName: 'pmem_codex_reviewer',
       enabled: true,
-      nativeCliSessions: [],
+      externalAgentSessions: [],
       liveTools: [],
       activeAgentNames: new Set(['pmem_codex_reviewer'])
     })
   ).toBe('working');
 });
 
-test('native CLI project members default to managed project runtime', () => {
+test('external agent project members default to managed project runtime', () => {
   expect(
-    __workplaceProjectMessageTest.defaultProjectMemberSettings('native-cli', {
+    __workplaceProjectMessageTest.defaultProjectMemberSettings('external-agent', {
       defaultLaunchMode: 'pty'
     })
   ).toEqual({
@@ -1123,10 +1123,10 @@ test('native CLI project members default to managed project runtime', () => {
   });
 });
 
-test('native CLI project members preserve template and instance identity', () => {
+test('external agent project members preserve template and instance identity', () => {
   const [member] = __workplaceProjectMessageTest.parseProjectMembers([
     {
-      type: 'native-cli',
+      type: 'external-agent',
       name: 'codex-reviewer',
       templateName: 'codex',
       displayName: 'codex-reviewer',
@@ -1144,7 +1144,7 @@ test('native CLI project members preserve template and instance identity', () =>
 
   expect(member).toMatchObject({
     id: 'pmem_codex_reviewer',
-    type: 'native-cli',
+    type: 'external-agent',
     name: 'codex-reviewer',
     templateName: 'codex',
     displayName: 'codex-reviewer',
@@ -1158,20 +1158,22 @@ test('native CLI project members preserve template and instance identity', () =>
   });
 });
 
-test('native CLI product display names use official client names', () => {
-  expect(__workplaceProjectMessageTest.nativeCliProductDisplayName('codex', 'codex', 'codex')).toBe('OpenAI Codex');
-  expect(__workplaceProjectMessageTest.nativeCliProductDisplayName('claude-code', 'claude-code', 'claude-code')).toBe(
-    'Claude Code'
+test('external agent product display names use official client names', () => {
+  expect(__workplaceProjectMessageTest.externalAgentProductDisplayName('codex', 'codex', 'codex')).toBe('OpenAI Codex');
+  expect(
+    __workplaceProjectMessageTest.externalAgentProductDisplayName('claude-code', 'claude-code', 'claude-code')
+  ).toBe('Claude Code');
+  expect(__workplaceProjectMessageTest.externalAgentProductDisplayName('gemini', 'gemini', 'gemini')).toBe(
+    'Gemini CLI'
   );
-  expect(__workplaceProjectMessageTest.nativeCliProductDisplayName('gemini', 'gemini', 'gemini')).toBe('Gemini CLI');
-  expect(__workplaceProjectMessageTest.nativeCliProductDisplayName('qwen', 'qwen', 'qwen')).toBe('Qwen Code');
+  expect(__workplaceProjectMessageTest.externalAgentProductDisplayName('qwen', 'qwen', 'qwen')).toBe('Qwen Code');
 });
 
-test('native CLI project member rename preserves runtime identity fields', () => {
-  const member = __workplaceProjectMessageTest.renameNativeCliProjectMemberDisplayName(
+test('external agent project member rename preserves runtime identity fields', () => {
+  const member = __workplaceProjectMessageTest.renameExternalAgentProjectMemberDisplayName(
     {
       id: 'pmem_codex_reviewer',
-      type: 'native-cli',
+      type: 'external-agent',
       name: 'codex-reviewer',
       templateName: 'codex',
       displayName: 'Reviewer',
@@ -1183,7 +1185,7 @@ test('native CLI project member rename preserves runtime identity fields', () =>
 
   expect(member).toMatchObject({
     id: 'pmem_codex_reviewer',
-    type: 'native-cli',
+    type: 'external-agent',
     name: 'codex-reviewer',
     templateName: 'codex',
     displayName: 'Renamed reviewer',
@@ -1201,21 +1203,21 @@ test('generated avatars use local cache URLs keyed by stable seeds', () => {
     __workplaceProjectMessageTest.avatarCacheKey('user:Renamed')
   );
   expect(
-    __workplaceProjectMessageTest.nativeCliSessionMessage(nativeCliSession({ agentName: 'codex-reviewer' }))
+    __workplaceProjectMessageTest.externalAgentSessionMessage(externalAgentSession({ agentName: 'codex-reviewer' }))
   ).toMatchObject({
-    avatarUrl: __workplaceProjectMessageTest.entityAvatarUrl('native-cli:codex-reviewer'),
+    avatarUrl: __workplaceProjectMessageTest.entityAvatarUrl('external-agent:codex-reviewer'),
     agentChip: {
-      avatarUrl: __workplaceProjectMessageTest.entityAvatarUrl('native-cli:codex-reviewer')
+      avatarUrl: __workplaceProjectMessageTest.entityAvatarUrl('external-agent:codex-reviewer')
     }
   });
 });
 
-test('native CLI system and assistant messages share the same instance avatar url', () => {
-  const avatarUrl = __workplaceProjectMessageTest.entityAvatarUrl('native-cli-instance:reviewer');
+test('external agent system and assistant messages share the same instance avatar url', () => {
+  const avatarUrl = __workplaceProjectMessageTest.entityAvatarUrl('external-agent-instance:reviewer');
   const messages = __workplaceProjectMessageTest.buildProjectMessages({
     persistedMessages: [],
-    nativeCliSessions: [
-      nativeCliSession({ agentName: 'pmem_codex_reviewer', productIcon: 'codex', provider: 'codex' })
+    externalAgentSessions: [
+      externalAgentSession({ agentName: 'pmem_codex_reviewer', productIcon: 'codex', provider: 'codex' })
     ],
     liveItems: [
       {
@@ -1223,18 +1225,18 @@ test('native CLI system and assistant messages share the same instance avatar ur
         kind: 'message',
         role: 'assistant',
         agentName: 'pmem_codex_reviewer',
-        source: 'managed-native-cli',
+        source: 'managed-external-agent',
         parts: [{ type: 'text', text: 'Done' }],
         status: 'complete',
         seq: '002'
       }
     ] as never,
     liveTools: [],
-    nativeCliDisplayNames: new Map([['pmem_codex_reviewer', 'Reviewer']]),
-    nativeCliAvatarSeeds: new Map([['Reviewer', 'native-cli-instance:reviewer']])
+    externalAgentDisplayNames: new Map([['pmem_codex_reviewer', 'Reviewer']]),
+    externalAgentAvatarSeeds: new Map([['Reviewer', 'external-agent-instance:reviewer']])
   });
 
-  const joined = messages.find((message) => message.id.startsWith('native-cli-session:'));
+  const joined = messages.find((message) => message.id.startsWith('external-agent-session:'));
   const reply = messages.find((message) => message.id === 'msg_reply');
 
   expect(joined?.avatarUrl).toBe(avatarUrl);
@@ -1242,11 +1244,11 @@ test('native CLI system and assistant messages share the same instance avatar ur
   expect(reply?.avatarUrl).toBe(avatarUrl);
 });
 
-test('native CLI assistant messages keep provider icon when display name is custom', () => {
+test('external agent assistant messages keep provider icon when display name is custom', () => {
   const messages = __workplaceProjectMessageTest.buildProjectMessages({
     persistedMessages: [],
-    nativeCliSessions: [
-      nativeCliSession({ agentName: 'pmem_codex_reviewer', productIcon: 'codex', provider: 'codex' })
+    externalAgentSessions: [
+      externalAgentSession({ agentName: 'pmem_codex_reviewer', productIcon: 'codex', provider: 'codex' })
     ],
     liveItems: [
       {
@@ -1254,16 +1256,16 @@ test('native CLI assistant messages keep provider icon when display name is cust
         kind: 'message',
         role: 'assistant',
         agentName: 'pmem_codex_reviewer',
-        source: 'managed-native-cli',
+        source: 'managed-external-agent',
         parts: [{ type: 'text', text: 'Done' }],
         status: 'complete',
         seq: '002'
       }
     ] as never,
     liveTools: [],
-    nativeCliDisplayNames: new Map([['pmem_codex_reviewer', 'Lily']]),
-    nativeCliIcons: new Map([['pmem_codex_reviewer', 'codex']]),
-    nativeCliTags: new Map([['pmem_codex_reviewer', 'Codex']])
+    externalAgentDisplayNames: new Map([['pmem_codex_reviewer', 'Lily']]),
+    externalAgentIcons: new Map([['pmem_codex_reviewer', 'codex']]),
+    externalAgentTags: new Map([['pmem_codex_reviewer', 'Codex']])
   });
 
   expect(messages.find((message) => message.id === 'msg_reply')).toMatchObject({

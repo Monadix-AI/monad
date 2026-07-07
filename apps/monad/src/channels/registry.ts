@@ -2,10 +2,10 @@ import type { ChannelType } from '@monad/protocol';
 import type {
   ChannelAdapterFactory,
   Connector,
+  ExternalAgentProviderAdapter,
   HookDefinition,
   ManifestAtomPack,
   ModelProvider,
-  NativeCliProviderAdapter,
   SandboxLauncher,
   WorkspaceExperienceApi,
   WorkspaceExperienceDefinition
@@ -30,7 +30,7 @@ export function builtinChannelAdapters(
     onCommand?: (atomPackName: string, command: unknown) => void;
     onProvider?: (provider: ModelProvider) => void;
     onHook?: (hook: HookDefinition) => void;
-    onAgentAdapter?: (adapter: NativeCliProviderAdapter) => void;
+    onAgentAdapter?: (adapter: ExternalAgentProviderAdapter) => void;
     onSandbox?: (launcher: SandboxLauncher) => void;
     onWorkspaceExperience?: (experience: WorkspaceExperienceDefinition, atomPackName: string) => void;
     onWorkspaceExperienceApi?: (api: WorkspaceExperienceApi, atomPackName: string) => void;

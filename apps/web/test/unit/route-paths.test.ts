@@ -20,7 +20,7 @@ describe('canonical web route helpers', () => {
     expect(studioPath()).toBe('/studio/runtime');
     expect(studioPath('skills')).toBe('/studio/skills');
     expect(studioPath('acpDelegates')).toBe('/studio/acpDelegates');
-    expect(studioPath('nativeCliAgents')).toBe('/studio/nativeCliAgents');
+    expect(studioPath('externalAgents')).toBe('/studio/externalAgents');
     expect(skillMarketplacePath(DEFAULT_SKILL_MARKETPLACE_SOURCE)).toBe(
       `/studio/skills/marketplace/${encodeURIComponent(DEFAULT_SKILL_MARKETPLACE_SOURCE)}`
     );
@@ -28,15 +28,15 @@ describe('canonical web route helpers', () => {
     expect(isSkillMarketplacePath('/studio/skills/marketplace/clawhub')).toBe(true);
     expect(studioSectionFromPathname('/studio/skills/marketplace/clawhub')).toBe('skills');
     expect(studioSectionFromPathname('/studio/acpAgents')).toBe('acpDelegates');
-    expect(studioSectionFromPathname('/studio/nativeCliAgents')).toBe('nativeCliAgents');
+    expect(studioSectionFromPathname('/studio/externalAgents')).toBe('externalAgents');
     expect(skillMarketplaceSourceFromPathname('/studio/skills/marketplace/clawhub')).toBe('clawhub');
   });
 
   test('keeps Studio secondary pages URL-backed for breadcrumb navigation', () => {
     expect(studioDetailPath('agents', 'agent 1')).toBe('/studio/agents/agent%201');
-    expect(studioDetailPath('nativeCliAgents', 'cli')).toBe('/studio/nativeCliAgents/cli');
+    expect(studioDetailPath('externalAgents', 'cli')).toBe('/studio/externalAgents/cli');
     expect(studioSubpathFromPathname('/studio/agents/agent%201')).toEqual(['agent 1']);
-    expect(studioSubpathFromPathname('/studio/nativeCliAgents/cli')).toEqual(['cli']);
+    expect(studioSubpathFromPathname('/studio/externalAgents/cli')).toEqual(['cli']);
   });
 
   test('does not classify old marketplace routes as Studio routes', () => {

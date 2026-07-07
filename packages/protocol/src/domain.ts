@@ -378,13 +378,13 @@ export const eventTypeSchema = z.enum([
   // (and streams terminal output via `delegation.output`). Bus-only (never persisted) — ephemeral RPC.
   'delegation.fs_request',
   'delegation.terminal_request',
-  'native_cli.started',
-  'native_cli.output',
-  'native_cli.connection_required',
-  'native_cli.approval_requested',
-  'native_cli.approval_resolved',
-  'native_cli.resume_failed',
-  'native_cli.exited'
+  'external_agent.started',
+  'external_agent.output',
+  'external_agent.connection_required',
+  'external_agent.approval_requested',
+  'external_agent.approval_resolved',
+  'external_agent.resume_failed',
+  'external_agent.exited'
 ]);
 export type EventType = z.infer<typeof eventTypeSchema>;
 

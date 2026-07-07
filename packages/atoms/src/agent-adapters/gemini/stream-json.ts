@@ -1,4 +1,4 @@
-import type { NativeCliOutputEvent, NativeCliRuntimeHandle } from '@monad/sdk-atom';
+import type { ExternalAgentOutputEvent, ExternalAgentRuntimeHandle } from '@monad/sdk-atom';
 
 import { z } from 'zod';
 
@@ -7,7 +7,7 @@ import { compactObject } from '../adapter-shared.ts';
 // Wire contract for the Gemini CLI `--output-format stream-json` channel: one JSON object per line
 // (JSONL). This mirrors `@google/gemini-cli-core`'s `JsonStreamEvent` union and `JsonStreamEventType`
 // enum, reverse-verified against the `StreamJsonFormatter.emitEvent` call sites in gemini-cli
-// v0.49.0. It is the single source of truth both native-CLI adapters parse against: Qwen Code is a
+// v0.49.0. It is the single source of truth both external agent adapters parse against: Qwen Code is a
 // gemini-cli fork and emits the identical schema, so `gemini` and `qwen` share this one definition.
 //
 // Fields the daemon does not consume (`timestamp`, `stats`) stay optional and every object keeps a
@@ -111,7 +111,7 @@ export type GeminiStreamJsonEvent = z.infer<typeof geminiStreamJsonEventSchema>;
 // Code (which rewrote its output layer to the Claude-Code `SDKMessage` protocol — see
 // `qwen-stream-json.ts`), gemini still emits the flat `JsonStreamEvent` union. Every line is validated
 // against the `@monad/protocol` schema — the single source of truth for the wire shape — and mapped to
-// the daemon's native-CLI output contract via a type-keyed dispatch table, mirroring the codex
+// the daemon's external agent output contract via a type-keyed dispatch table, mirroring the codex
 // adapter's notification handlers. Adding a future event type is one table entry, not another `if`.
 
 // The assistant reply streams as incremental `message` deltas; the terminal `result` event carries
@@ -126,7 +126,7 @@ interface StreamJsonAccumulator {
   reset(): void;
 }
 
-function accumulatorFor(handle: NativeCliRuntimeHandle | undefined): StreamJsonAccumulator {
+function accumulatorFor(handle: ExternalAgentRuntimeHandle | undefined): StreamJsonAccumulator {
   if (handle) {
     return {
       get: () => turnTextByHandle.get(handle) ?? '',
@@ -148,7 +148,7 @@ function accumulatorFor(handle: NativeCliRuntimeHandle | undefined): StreamJsonA
   };
 }
 
-type StreamJsonHandler = (event: GeminiStreamJsonEvent, acc: StreamJsonAccumulator) => NativeCliOutputEvent[];
+type StreamJsonHandler = (event: GeminiStreamJsonEvent, acc: StreamJsonAccumulator) => ExternalAgentOutputEvent[];
 
 const GEMINI_STREAM_JSON_HANDLERS: Record<GeminiStreamJsonEvent['type'], StreamJsonHandler> = {
   init: (event, acc) => {
@@ -219,11 +219,11 @@ const GEMINI_STREAM_JSON_HANDLERS: Record<GeminiStreamJsonEvent['type'], StreamJ
   }
 };
 
-/** Parse a Gemini CLI stream-json chunk (one or more complete JSONL lines) into native-CLI output
+/** Parse a Gemini CLI stream-json chunk (one or more complete JSONL lines) into external agent output
  *  events. The `qwen` adapter does NOT use this — Qwen Code emits a different (Claude-Code) protocol. */
-export function parseGeminiStreamJson(chunk: string, handle?: NativeCliRuntimeHandle): NativeCliOutputEvent[] {
+export function parseGeminiStreamJson(chunk: string, handle?: ExternalAgentRuntimeHandle): ExternalAgentOutputEvent[] {
   const acc = accumulatorFor(handle);
-  const events: NativeCliOutputEvent[] = [];
+  const events: ExternalAgentOutputEvent[] = [];
   for (const rawLine of chunk.split(/\r?\n/)) {
     const line = rawLine.trim();
     if (!line.startsWith('{')) continue;

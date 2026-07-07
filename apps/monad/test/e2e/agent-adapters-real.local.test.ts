@@ -7,7 +7,7 @@
 //
 // Run:  MONAD_LIVE_AGENTS=1 bun test apps/monad/test/e2e/agent-adapters-real.local.test.ts
 
-import type { NativeCliSessionView } from '@monad/protocol';
+import type { ExternalAgentSessionView } from '@monad/protocol';
 
 import { describe, expect, test } from 'bun:test';
 import crypto from 'node:crypto';
@@ -17,42 +17,42 @@ import { join } from 'node:path';
 import { builtinAgentAdapters } from '@monad/atoms/agent-adapters';
 
 import { EventBus } from '@/services/event-bus.ts';
-import { NativeCliHost } from '@/services/native-cli/host/index.ts';
-import { registerAgentAdapterImpl } from '@/services/native-cli/index.ts';
+import { ExternalAgentHost } from '@/services/external-agent/host/index.ts';
+import { registerAgentAdapterImpl } from '@/services/external-agent/index.ts';
 import { createStore } from '@/store/db/index.ts';
 
 for (const adapter of builtinAgentAdapters) registerAgentAdapterImpl(adapter);
 
 function builtinAdapter(provider: 'hermes' | 'openclaw') {
   const adapter = builtinAgentAdapters.find((candidate) => candidate.provider === provider);
-  if (!adapter) throw new Error(`missing built-in native CLI adapter: ${provider}`);
+  if (!adapter) throw new Error(`missing built-in external agent adapter: ${provider}`);
   return adapter;
 }
 
-const hermesNativeCliAdapter = builtinAdapter('hermes');
-const openClawNativeCliAdapter = builtinAdapter('openclaw');
+const hermesExternalAgentAdapter = builtinAdapter('hermes');
+const openClawExternalAgentAdapter = builtinAdapter('openclaw');
 
 const LIVE = process.env.MONAD_LIVE_AGENTS === '1';
 const LIVE_OPENCLAW = process.env.MONAD_LIVE_OPENCLAW === '1';
 // A prompt that should elicit a short, matchable reply from any model.
 const PING_PROMPT = 'Reply with exactly the single uppercase word PONG and nothing else.';
 
-/** Drive one turn through the real NativeCliHost (real binary + adapter + host lifecycle) and return
+/** Drive one turn through the real ExternalAgentHost (real binary + adapter + host lifecycle) and return
  *  the observed transcript output once it appears (or after the timeout). */
 async function runTurn(args: {
   provider: 'hermes' | 'openclaw';
   command: string;
-  launchMode: NativeCliSessionView['launchMode'];
+  launchMode: ExternalAgentSessionView['launchMode'];
   prompt: string;
   timeoutMs: number;
   /** Operator-configured agent env — forwarded to both the spawned child and the adapter's initialize
    *  (e.g. OpenClaw's `OPENCLAW_GATEWAY_TOKEN`, which puts the spawned gateway in token mode AND is read
    *  back for the signed connect frame). */
   env?: Record<string, string>;
-}): Promise<{ view: NativeCliSessionView; output: string; host: NativeCliHost; cleanup: () => void }> {
+}): Promise<{ view: ExternalAgentSessionView; output: string; host: ExternalAgentHost; cleanup: () => void }> {
   const store = createStore();
   const workdir = mkdtempSync(join(tmpdir(), `live-${args.provider}-`));
-  const host = new NativeCliHost({
+  const host = new ExternalAgentHost({
     store,
     bus: new EventBus(),
     agents: async () => [
@@ -110,7 +110,7 @@ async function runTurn(args: {
 
 describe.skipIf(!LIVE)('real agent-adapter binaries: detect', () => {
   test('Hermes binary is installed and offers pty + app-server + cli-oneshot', () => {
-    const preset = hermesNativeCliAdapter.detect();
+    const preset = hermesExternalAgentAdapter.detect();
     expect(preset.installed).toBe(true);
     // `hermes serve` became a real WS gateway in v0.18.0 (was absent in v0.14.0), so app-server is back
     // alongside the cli-oneshot managed default.
@@ -119,13 +119,13 @@ describe.skipIf(!LIVE)('real agent-adapter binaries: detect', () => {
   });
 
   test('OpenClaw binary is installed and offers pty + app-server', () => {
-    const preset = openClawNativeCliAdapter.detect();
+    const preset = openClawExternalAgentAdapter.detect();
     expect(preset.installed).toBe(true);
     expect(preset.supportedLaunchModes).toContain('app-server');
   });
 
   test('Hermes auth-status probe reports the real signed-in state (plain-text, no --json error)', async () => {
-    const probe = hermesNativeCliAdapter.authStatus({
+    const probe = hermesExternalAgentAdapter.authStatus({
       name: 'hermes',
       provider: 'hermes',
       command: 'hermes',

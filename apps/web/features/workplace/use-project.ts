@@ -3,15 +3,15 @@
 // Single chokepoint between the workspace shell and the live monad backend.
 // Experience-specific transcript, rail, and composer projections live in atoms.
 
-import type { NativeCliSessionView, ProfileView, ProjectId, UIItem, WorkplaceProject } from '@monad/protocol';
+import type { ExternalAgentSessionView, ProfileView, ProjectId, UIItem, WorkplaceProject } from '@monad/protocol';
 
 import { useProjectExperienceProjection } from '@monad/atoms/workspace-experiences';
 import {
-  nativeCliSessionSelectors,
+  externalAgentSessionSelectors,
   profileSelectors,
   useGetAppearanceQuery,
   useGetProfileSettingsQuery,
-  useListNativeCliSessionsQuery,
+  useListExternalAgentSessionsQuery,
   useListProfilesQuery,
   useListWorkplaceProjectsQuery,
   useStreamUiItemsQuery,
@@ -21,7 +21,7 @@ import {
 import { useEffect, useMemo, useState } from 'react';
 
 import { useAcpAgentSettings } from '@/hooks/use-acp-agent-settings';
-import { useNativeCliAgentSettings } from '@/hooks/use-native-cli-agent-settings';
+import { useExternalAgentSettings } from '@/hooks/use-external-agent-settings';
 import { useTranscriptHistory } from '@/hooks/use-transcript-history';
 import { normalizedComposerSettings } from '@/lib/composer-settings';
 import { getWorkplaceProjectName } from '@/lib/workspace-sessions';
@@ -31,7 +31,7 @@ import { useProjectActions } from './use-project-actions';
 
 const EMPTY_PROFILES: ProfileView[] = [];
 const EMPTY_ITEMS: UIItem[] = [];
-const EMPTY_NATIVE_CLI_SESSIONS: NativeCliSessionView[] = [];
+const EMPTY_EXTERNAL_AGENT_SESSIONS: ExternalAgentSessionView[] = [];
 
 export function useProject(
   projectId: string,
@@ -75,7 +75,7 @@ export function useProject(
 
   // --- live stream + lazy older history ---
   const stream = useStreamUiItemsQuery(activeProjectId ?? ('prj_' as ProjectId), { skip: activeProjectId === null });
-  const nativeCliSessionsQ = useListNativeCliSessionsQuery(activeProjectId ?? ('prj_' as ProjectId), {
+  const externalAgentSessionsQ = useListExternalAgentSessionsQuery(activeProjectId ?? ('prj_' as ProjectId), {
     skip: activeProjectId === null
   });
   const transcript = useTranscriptHistory({
@@ -85,13 +85,13 @@ export function useProject(
   });
 
   const acp = useAcpAgentSettings();
-  const nativeCli = useNativeCliAgentSettings();
-  const nativeCliSessions = useMemo(
+  const externalAgent = useExternalAgentSettings();
+  const externalAgentSessions = useMemo(
     () =>
-      nativeCliSessionsQ.data
-        ? nativeCliSessionSelectors.selectAll(nativeCliSessionsQ.data)
-        : EMPTY_NATIVE_CLI_SESSIONS,
-    [nativeCliSessionsQ.data]
+      externalAgentSessionsQ.data
+        ? externalAgentSessionSelectors.selectAll(externalAgentSessionsQ.data)
+        : EMPTY_EXTERNAL_AGENT_SESSIONS,
+    [externalAgentSessionsQ.data]
   );
   const projection = useProjectExperienceProjection({
     acpAgents: acp.agents,
@@ -99,8 +99,8 @@ export function useProject(
     appearanceAvatarStyle: appearance?.avatarStyle,
     currentProject,
     liveItems: stream.data?.items ?? EMPTY_ITEMS,
-    nativeCliAgents: nativeCli.agents,
-    nativeCliSessions,
+    externalAgents: externalAgent.agents,
+    externalAgentSessions,
     projectId,
     projectName: getWorkplaceProjectName,
     userAvatarDataUrl: userProfile?.avatarDataUrl ?? undefined,
@@ -113,10 +113,10 @@ export function useProject(
     human,
     liveItems,
     liveTools,
-    nativeCliAvatarSeeds,
-    nativeCliDisplayNames,
-    nativeCliIcons,
-    nativeCliTags,
+    externalAgentAvatarSeeds,
+    externalAgentDisplayNames,
+    externalAgentIcons,
+    externalAgentTags,
     participants,
     projectParticipants,
     projectMembers,
@@ -137,8 +137,8 @@ export function useProject(
     removeProjectMember,
     updateProjectMemberSettings,
     updateProjectMemberIdentity,
-    sendNativeCliInput,
-    stopNativeCli,
+    sendExternalAgentInput,
+    stopExternalAgent,
     setWorkdir
   } = useProjectActions({
     activeProjectId,
@@ -146,7 +146,7 @@ export function useProject(
     projectMembers,
     approvals,
     acpAgents: acp.agents,
-    nativeCliAgents: nativeCli.agents,
+    externalAgents: externalAgent.agents,
     avatarStyle: appearance?.avatarStyle,
     setResolvedProjectId
   });
@@ -172,13 +172,13 @@ export function useProject(
         transcriptItems: transcript.items,
         liveItems,
         liveTools,
-        nativeCliSessions,
+        externalAgentSessions,
         human,
         avatarStyle: appearance?.avatarStyle,
-        nativeCliAvatarSeeds,
-        nativeCliTags,
-        nativeCliDisplayNames,
-        nativeCliIcons,
+        externalAgentAvatarSeeds,
+        externalAgentTags,
+        externalAgentDisplayNames,
+        externalAgentIcons,
         showDeveloperOnlyMessages: DEV_SYSTEM_MESSAGES_IN_STREAM_ENABLED && showDevSystemMessagesInStream
       },
       workdir: { path: currentProject?.cwd, set: setWorkdir },
@@ -194,8 +194,8 @@ export function useProject(
       removeProjectMember,
       updateProjectMemberSettings,
       updateProjectMemberIdentity,
-      sendNativeCliInput,
-      stopNativeCli
+      sendExternalAgentInput,
+      stopExternalAgent
     }),
     [
       activeProjectId,
@@ -214,13 +214,13 @@ export function useProject(
       transcript.items,
       liveItems,
       liveTools,
-      nativeCliSessions,
+      externalAgentSessions,
       human,
       appearance?.avatarStyle,
-      nativeCliAvatarSeeds,
-      nativeCliTags,
-      nativeCliDisplayNames,
-      nativeCliIcons,
+      externalAgentAvatarSeeds,
+      externalAgentTags,
+      externalAgentDisplayNames,
+      externalAgentIcons,
       showDevSystemMessagesInStream,
       currentProject?.cwd,
       setWorkdir,
@@ -234,8 +234,8 @@ export function useProject(
       removeProjectMember,
       updateProjectMemberSettings,
       updateProjectMemberIdentity,
-      sendNativeCliInput,
-      stopNativeCli
+      sendExternalAgentInput,
+      stopExternalAgent
     ]
   );
   const experienceRuntime = useWorkspaceProjectExperienceRuntime(controller, opts);

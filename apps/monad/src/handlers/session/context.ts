@@ -16,9 +16,9 @@ import type { Tool, ToolBackends } from '@/capabilities/tools/types.ts';
 import type { CommandBundle } from '@/handlers/commands/index.ts';
 import type { DelegationService } from '@/services/delegation/delegation.ts';
 import type { EventBus, EventSink } from '@/services/event-bus.ts';
+import type { ExternalAgentHost } from '@/services/external-agent/host/index.ts';
 import type { I18nService } from '@/services/i18n.ts';
 import type { KvService } from '@/services/kv.ts';
-import type { NativeCliHost } from '@/services/native-cli/host/index.ts';
 import type { OversightService } from '@/services/oversight.ts';
 import type { RoundCache } from '@/services/round-cache.ts';
 import type { SessionSandboxService } from '@/services/session-sandbox.ts';
@@ -63,7 +63,7 @@ export interface SessionDeps {
   /** Per-session fs sandbox roots from the bound Studio agent's `sandbox` override (global ceiling
    * applied). Returns undefined when there's no override → the caller inherits the daemon default. */
   agentSandboxRoots?: (sessionId: SessionId) => string[] | undefined;
-  nativeCliHost?: Pick<NativeCliHost, 'preflight' | 'input' | 'list' | 'start' | 'stopTranscriptTarget'>;
+  externalAgentHost?: Pick<ExternalAgentHost, 'preflight' | 'input' | 'list' | 'start' | 'stopTranscriptTarget'>;
 }
 
 /** Execution config applied to every turn of a session, set out-of-band (the ACP bridge pushes the

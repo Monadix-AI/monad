@@ -1,18 +1,18 @@
 import type { ChannelResponseNextTarget } from '@monad/protocol';
-import type { ManagedNativeCliProjectMember } from '@/handlers/session/handlers/messaging-members.ts';
+import type { ManagedExternalAgentProjectMember } from '@/handlers/session/handlers/messaging-members.ts';
 
-export interface ManagedNativeCliProjectMessageSender {
-  kind: 'human' | 'native-cli-agent' | 'agent' | 'system';
+export interface ManagedExternalAgentProjectMessageSender {
+  kind: 'human' | 'external-agent' | 'agent' | 'system';
   name: string;
   id?: string;
 }
 
-export function nativeCliInputText(input: string): string {
+export function externalAgentInputText(input: string): string {
   return input.endsWith('\n') ? input : `${input}\n`;
 }
 
-export function normalizeManagedNativeCliDirectTarget(to: string): string {
-  return to.startsWith('native-cli:') ? to.slice('native-cli:'.length) : to;
+export function normalizeManagedExternalAgentDirectTarget(to: string): string {
+  return to.startsWith('external-agent:') ? to.slice('external-agent:'.length) : to;
 }
 
 export function channelNextPrompt(target: ChannelResponseNextTarget): string {
@@ -29,9 +29,9 @@ function mentionTokenValue(value: string): string {
   return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
 }
 
-function managedNativeCliSenderMentionId(sender: ManagedNativeCliProjectMessageSender): string {
-  if (sender.kind === 'native-cli-agent') {
-    return sender.id?.startsWith('native-cli:') ? sender.id : `native-cli:${sender.id ?? sender.name}`;
+function managedExternalAgentSenderMentionId(sender: ManagedExternalAgentProjectMessageSender): string {
+  if (sender.kind === 'external-agent') {
+    return sender.id?.startsWith('external-agent:') ? sender.id : `external-agent:${sender.id ?? sender.name}`;
   }
   if (sender.kind === 'agent') {
     return sender.id?.startsWith('agent:') ? sender.id : `agent:${sender.id ?? sender.name}`;
@@ -40,18 +40,18 @@ function managedNativeCliSenderMentionId(sender: ManagedNativeCliProjectMessageS
   return sender.id ?? sender.name;
 }
 
-function managedNativeCliSenderMentionToken(sender?: ManagedNativeCliProjectMessageSender): string | null {
+function managedExternalAgentSenderMentionToken(sender?: ManagedExternalAgentProjectMessageSender): string | null {
   if (!sender?.name) return null;
-  const id = managedNativeCliSenderMentionId(sender);
+  const id = managedExternalAgentSenderMentionId(sender);
   return `@[name="${mentionTokenValue(sender.name)}" id="${mentionTokenValue(id)}"]`;
 }
 
-export function managedNativeCliInboxNotice(
-  _member: ManagedNativeCliProjectMember,
+export function managedExternalAgentInboxNotice(
+  _member: ManagedExternalAgentProjectMember,
   text: string,
-  sender?: ManagedNativeCliProjectMessageSender
+  sender?: ManagedExternalAgentProjectMessageSender
 ): string {
-  const senderMention = managedNativeCliSenderMentionToken(sender);
+  const senderMention = managedExternalAgentSenderMentionToken(sender);
   return [
     'New Workplace Project message is available.',
     'Process this project message now.',
@@ -67,11 +67,11 @@ export function managedNativeCliInboxNotice(
   ].join('\n');
 }
 
-export function managedNativeCliBusyInboxNotice(
-  _member: ManagedNativeCliProjectMember,
-  sender?: ManagedNativeCliProjectMessageSender
+export function managedExternalAgentBusyInboxNotice(
+  _member: ManagedExternalAgentProjectMember,
+  sender?: ManagedExternalAgentProjectMessageSender
 ): string {
-  const senderMention = managedNativeCliSenderMentionToken(sender);
+  const senderMention = managedExternalAgentSenderMentionToken(sender);
   return [
     'New Workplace Project message is available.',
     'You are being woken to process the pending project inbox now.',
@@ -86,12 +86,12 @@ export function managedNativeCliBusyInboxNotice(
   ].join('\n');
 }
 
-export function managedNativeCliDirectNotice({
+export function managedExternalAgentDirectNotice({
   member: _member,
   fromAgentName,
   text
 }: {
-  member: ManagedNativeCliProjectMember;
+  member: ManagedExternalAgentProjectMember;
   fromAgentName: string;
   text: string;
 }): string {
@@ -104,7 +104,7 @@ export function managedNativeCliDirectNotice({
   ].join('\n');
 }
 
-export function managedNativeCliResumeRecoveryNotice(provider: string, notice: string): string {
+export function managedExternalAgentResumeRecoveryNotice(provider: string, notice: string): string {
   void provider;
   return [
     'Provider session resume failed. Monad started a fresh managed project runtime.',

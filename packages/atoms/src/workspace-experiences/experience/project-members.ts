@@ -1,4 +1,4 @@
-import type { NativeCliProvider } from '@monad/protocol';
+import type { ExternalAgentProvider } from '@monad/protocol';
 import type {
   WorkspaceExperienceAddMemberOptions,
   WorkspaceExperienceMember,
@@ -22,17 +22,17 @@ export function parseProjectMembers(value: unknown): ProjectMember[] {
   return parseWorkplaceProjectMembers(value);
 }
 
-function safeNativeCliInstanceSegment(value: string): string {
+function safeExternalAgentInstanceSegment(value: string): string {
   return value.replace(/[^a-zA-Z0-9_-]/g, '_') || 'cli';
 }
 
-export function safeNativeCliDisplayName(value: string): string {
+export function safeExternalAgentDisplayName(value: string): string {
   return value.replace(/[\\/:\0]/g, '_').trim() || 'CLI';
 }
 
-export function nativeCliProductDisplayName(
+export function externalAgentProductDisplayName(
   icon: Participant['icon'] | undefined,
-  provider: NativeCliProvider | string | undefined,
+  provider: ExternalAgentProvider | string | undefined,
   fallback: string
 ): string {
   const product = icon ?? provider;
@@ -51,7 +51,7 @@ export function productIcon(value: unknown): Participant['icon'] | undefined {
   return typeof value === 'string' && PRODUCT_ICON_IDS.has(value) ? (value as Participant['icon']) : undefined;
 }
 
-export function uniqueNativeCliDisplayName(baseName: string, members: readonly ProjectMember[]): string {
+export function uniqueExternalAgentDisplayName(baseName: string, members: readonly ProjectMember[]): string {
   const used = new Set(members.map((member) => member.name));
   if (!used.has(baseName)) return baseName;
   for (let index = 2; index < 1000; index += 1) {
@@ -61,30 +61,30 @@ export function uniqueNativeCliDisplayName(baseName: string, members: readonly P
   return `${baseName}-${Date.now().toString(36)}`;
 }
 
-export function newNativeCliInstanceId(templateName: string): string {
+export function newExternalAgentInstanceId(templateName: string): string {
   const random =
     globalThis.crypto?.randomUUID?.().replace(/-/g, '').slice(0, 12) ??
     `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
-  return `pmem_${safeNativeCliInstanceSegment(templateName)}_${random}`;
+  return `pmem_${safeExternalAgentInstanceSegment(templateName)}_${random}`;
 }
 
-export function renameNativeCliProjectMemberDisplayName(member: ProjectMember, value?: string): ProjectMember {
-  if (member.type !== 'native-cli') return member;
-  const displayName = safeNativeCliDisplayName(value?.trim() || member.displayName || member.name);
+export function renameExternalAgentProjectMemberDisplayName(member: ProjectMember, value?: string): ProjectMember {
+  if (member.type !== 'external-agent') return member;
+  const displayName = safeExternalAgentDisplayName(value?.trim() || member.displayName || member.name);
   return { ...member, displayName };
 }
 
-export function nativeCliAvatarSeed(projectId: string, displayName: string): string {
-  return ['native-cli', `project:${projectId}`, `name:${displayName}`].join('|');
+export function externalAgentAvatarSeed(projectId: string, displayName: string): string {
+  return ['external-agent', `project:${projectId}`, `name:${displayName}`].join('|');
 }
 
-export function nativeCliProjectMemberAvatarSeed(projectId: string, member: ProjectMember): string {
-  return nativeCliAvatarSeed(projectId, member.displayName ?? member.name);
+export function externalAgentProjectMemberAvatarSeed(projectId: string, member: ProjectMember): string {
+  return externalAgentAvatarSeed(projectId, member.displayName ?? member.name);
 }
 
 export function projectMemberAvatarSeeds(projectId: string, members: readonly ProjectMember[]): string[] {
   return members.flatMap((member) => {
-    if (member.type === 'native-cli') return [nativeCliProjectMemberAvatarSeed(projectId, member)];
+    if (member.type === 'external-agent') return [externalAgentProjectMemberAvatarSeed(projectId, member)];
     if (member.type === 'acp') return [`acp:${member.name}`];
     return [];
   });

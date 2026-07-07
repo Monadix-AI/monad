@@ -1,4 +1,4 @@
-import type { NativeCliProviderHistoryContext, NativeCliProviderHistoryPageContext } from '@monad/sdk-atom';
+import type { ExternalAgentProviderHistoryContext, ExternalAgentProviderHistoryPageContext } from '@monad/sdk-atom';
 
 import { homedir } from 'node:os';
 import { join } from 'node:path';
@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { readProviderHistoryFile } from '../history-files.ts';
 import { recordValue, stringValue } from './events.ts';
 
-export function readCodexHistoryOutput(context: NativeCliProviderHistoryContext): string | null {
+export function readCodexHistoryOutput(context: ExternalAgentProviderHistoryContext): string | null {
   return readProviderHistoryFile({
     roots: [join(homedir(), '.codex', 'sessions')],
     providerSessionRef: context.providerSessionRef,
@@ -15,7 +15,7 @@ export function readCodexHistoryOutput(context: NativeCliProviderHistoryContext)
   });
 }
 
-export function codexHistoryPageOutput(context: NativeCliProviderHistoryPageContext): string | null {
+export function codexHistoryPageOutput(context: ExternalAgentProviderHistoryPageContext): string | null {
   const records: Record<string, unknown>[] = [];
   for (const item of context.page.items) {
     const turn = recordValue(item);

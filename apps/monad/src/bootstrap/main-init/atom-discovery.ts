@@ -13,7 +13,7 @@ import type { ModelService } from '@/services/model.ts';
 
 import { registerSandboxLauncher } from '@/capabilities/tools';
 import { createWorkspaceExperienceSnapshot } from '@/handlers/atom-pack/atom-pack-content.ts';
-import { registerAgentAdapterImpl } from '@/services/native-cli/index.ts';
+import { registerAgentAdapterImpl } from '@/services/external-agent/index.ts';
 import { createChannelRegistry } from '../channels.ts';
 import { finalizeSandboxLauncher } from '../sandbox.ts';
 
@@ -63,7 +63,7 @@ export async function createAtomDiscovery(deps: {
       onHook: (h) => registry.registerHook(h),
       onWorkspaceExperienceApi: (api, atomPackId) => registry.registerWorkspaceExperienceApi(api, atomPackId),
       onWorkspaceExperience: (experience, atomPackId) => registry.registerWorkspaceExperience(experience, atomPackId),
-      // Built-in agent-adapter atoms (Codex/Claude Code/Gemini/Qwen) register into the native-CLI
+      // Built-in agent-adapter atoms (Codex/Claude Code/Gemini/Qwen) register into the external agent
       // registry keyed by provider — the same gated path a third-party adapter pack would take.
       onAgentAdapter: (a) => registerAgentAdapterImpl(a),
       // Built-in sandbox launchers (Seatbelt/Landlock/Low-Integrity) register into the launcher
@@ -90,7 +90,7 @@ export async function createAtomDiscovery(deps: {
       onHook: (h) => registry.registerHook(h),
       onWorkspaceExperienceApi: (api, atomPackId) => registry.registerWorkspaceExperienceApi(api, atomPackId),
       onWorkspaceExperience: (experience, atomPackId) => registry.registerWorkspaceExperience(experience, atomPackId),
-      // A discovered pack declaring the `agent-adapter` capability registers native-CLI adapters into
+      // A discovered pack declaring the `agent-adapter` capability registers external agent adapters into
       // the same registry as built-ins; last registration wins, so a third-party pack can override.
       onAgentAdapter: (a) => registerAgentAdapterImpl(a),
       // A discovered pack declaring the `sandbox` capability (e.g. a cloud e2b/Vercel launcher)

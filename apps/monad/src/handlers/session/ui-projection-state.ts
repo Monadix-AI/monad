@@ -24,8 +24,8 @@ export interface ProjectionMutations {
   setCustom(args: SetCustomArgs): SessionUiEvent;
   findMessage(id: string): UIMessageItem | undefined;
   messageObservationPointers(
-    payload: { nativeCliSessionId?: string; deliveryId?: `deliv_${string}` },
+    payload: { externalAgentSessionId?: string; deliveryId?: `deliv_${string}` },
     existing?: UIMessageItem
-  ): Pick<UIMessageItem, 'nativeCliSessionId' | 'deliveryId'>;
+  ): Pick<UIMessageItem, 'externalAgentSessionId' | 'deliveryId'>;
   clearItems(): SessionUiEvent;
 }

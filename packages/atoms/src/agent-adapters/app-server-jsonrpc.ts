@@ -1,23 +1,28 @@
-import type { NativeCliAgentView, NativeCliAuthState, NativeCliProductIcon, NativeCliProvider } from '@monad/protocol';
 import type {
-  BuildNativeCliLaunchOptions,
-  NativeCliLaunchSpec,
-  NativeCliManagedRuntime,
-  NativeCliOutputEvent,
-  NativeCliProviderAdapter,
-  NativeCliRuntimeHandle
+  ExternalAgentAuthState,
+  ExternalAgentProductIcon,
+  ExternalAgentProvider,
+  ExternalAgentView
+} from '@monad/protocol';
+import type {
+  BuildExternalAgentLaunchOptions,
+  ExternalAgentLaunchSpec,
+  ExternalAgentManagedRuntime,
+  ExternalAgentOutputEvent,
+  ExternalAgentProviderAdapter,
+  ExternalAgentRuntimeHandle
 } from '@monad/sdk-atom';
 
 import { homedir } from 'node:os';
-import { defaultBinProbes, NativeCliError, resolveBinary } from '@monad/sdk-atom';
+import { defaultBinProbes, ExternalAgentError, resolveBinary } from '@monad/sdk-atom';
 
 import { compactObject, hasFlag, parseStructuredAuthState } from './adapter-shared.ts';
-import { parseNativeCliArgumentSupport } from './argument-support.ts';
+import { parseExternalAgentArgumentSupport } from './argument-support.ts';
 import { resizePty, sendPtyInput, stopPty } from './pty.ts';
-import { nativeCliAdapterSettings } from './settings.ts';
+import { externalAgentAdapterSettings } from './settings.ts';
 
 // CLI-adapter boilerplate (detect/launch-args/auth-probes/pty+oneshot fallback) shared by every
-// native-CLI provider built from `makeAppServerCliAdapter`. Each provider's real app-server wire
+// external agent provider built from `makeAppServerCliAdapter`. Each provider's real app-server wire
 // protocol is hand-written per-provider (`AppServerCliHooks`, see openclaw/app-server.ts and
 // hermes/app-server.ts) — OpenClaw's gateway wraps every frame in a bespoke `{type, id, ...}` envelope
 // and Hermes wraps every notification as `{method:"event", params:{type,...}}`; neither is a generic
@@ -31,20 +36,20 @@ export function recordValue(value: unknown): Record<string, unknown> | undefined
  *  Hermes). Passed as `appServerHooks` to `makeAppServerCliAdapter`. */
 export interface AppServerCliHooks {
   initialize(
-    handle: NativeCliRuntimeHandle,
-    context: Parameters<NonNullable<NativeCliProviderAdapter['initialize']>>[1]
+    handle: ExternalAgentRuntimeHandle,
+    context: Parameters<NonNullable<ExternalAgentProviderAdapter['initialize']>>[1]
   ): void;
-  parseAppServerOutput(chunk: string, handle?: NativeCliRuntimeHandle): NativeCliOutputEvent[];
-  sendAppServerInput(handle: NativeCliRuntimeHandle, input: string): void;
+  parseAppServerOutput(chunk: string, handle?: ExternalAgentRuntimeHandle): ExternalAgentOutputEvent[];
+  sendAppServerInput(handle: ExternalAgentRuntimeHandle, input: string): void;
   resolveAppServerApproval(
-    handle: NativeCliRuntimeHandle,
-    resolution: Parameters<NativeCliProviderAdapter['resolveApproval']>[1]
+    handle: ExternalAgentRuntimeHandle,
+    resolution: Parameters<ExternalAgentProviderAdapter['resolveApproval']>[1]
   ): void;
 }
 
 export interface MakeAppServerCliAdapterOptions {
-  provider: NativeCliProvider;
-  productIcon: NativeCliProductIcon;
+  provider: ExternalAgentProvider;
+  productIcon: ExternalAgentProductIcon;
   label: string;
   /** Binary name probed on PATH and used as the default command. */
   bin: string;
@@ -68,9 +73,9 @@ export interface MakeAppServerCliAdapterOptions {
    *  `auth` subcommand rejects `--json` (Hermes) — else the probe errors and a signed-in agent is
    *  misreported as unauthenticated. The plain-text exit code (0 = authenticated) is used instead. */
   authStatusJson?: boolean;
-  parseAuthStatus?(output: string, exitCode: number | null): NativeCliAuthState;
+  parseAuthStatus?(output: string, exitCode: number | null): ExternalAgentAuthState;
   /** Managed project-agent runtime behavior; omit for a non-managed adapter. */
-  managedRuntime?: NativeCliManagedRuntime;
+  managedRuntime?: ExternalAgentManagedRuntime;
   /** Opt-in `cli-oneshot` launch mode for a provider with no persistent app-server backend (Hermes):
    *  the daemon spawns a fresh process per turn with `turnArgs(input)` appended to the base argv. */
   oneshot?: {
@@ -94,7 +99,7 @@ export interface MakeAppServerCliAdapterOptions {
     usesDaemonAssignedPort?: boolean;
     /** Query-string params built from the agent's config at launch time (e.g. a shared-secret token
      *  read from `agent.env`). */
-    query?(agent: NativeCliAgentView): Record<string, string> | undefined;
+    query?(agent: ExternalAgentView): Record<string, string> | undefined;
   };
   /** The real CLI flag this provider accepts to bypass its own approval prompts (e.g. Hermes's
    *  `--yolo` — confirmed against its CLI reference: nousresearch/hermes-agent/website/docs/reference/
@@ -106,10 +111,10 @@ export interface MakeAppServerCliAdapterOptions {
   skipApprovalFlag?: string;
 }
 
-/** Build a full `NativeCliProviderAdapter` for a coding CLI whose app-server launch mode is a
+/** Build a full `ExternalAgentProviderAdapter` for a coding CLI whose app-server launch mode is a
  *  persistent gateway process reached over WebSocket (OpenClaw, Hermes), plus pty/cli-oneshot
  *  fallbacks. */
-export function makeAppServerCliAdapter(options: MakeAppServerCliAdapterOptions): NativeCliProviderAdapter {
+export function makeAppServerCliAdapter(options: MakeAppServerCliAdapterOptions): ExternalAgentProviderAdapter {
   const appServerTransports = ['ws'] as const;
 
   function skipApprovalArgs(args: string[], skipProviderApprovals: boolean): string[] {
@@ -117,7 +122,7 @@ export function makeAppServerCliAdapter(options: MakeAppServerCliAdapterOptions)
     return [...args, options.skipApprovalFlag];
   }
 
-  function buildLaunch(agent: NativeCliAgentView, opts: BuildNativeCliLaunchOptions): NativeCliLaunchSpec {
+  function buildLaunch(agent: ExternalAgentView, opts: BuildExternalAgentLaunchOptions): ExternalAgentLaunchSpec {
     const launchMode = opts.launchMode ?? agent.defaultLaunchMode;
     let args = [...(agent.args ?? [])];
     if (opts.providerSessionRef && !hasFlag(args, '--session-id')) {
@@ -129,11 +134,11 @@ export function makeAppServerCliAdapter(options: MakeAppServerCliAdapterOptions)
 
     if (launchMode === 'app-server') {
       if (!options.appServerSubcommand) {
-        throw new NativeCliError('unsupported_capability', `${options.label} has no app-server backend`);
+        throw new ExternalAgentError('unsupported_capability', `${options.label} has no app-server backend`);
       }
       const transport = opts.appServerTransport ?? agent.appServerTransport ?? 'ws';
       if (!(appServerTransports as readonly string[]).includes(transport)) {
-        throw new NativeCliError(
+        throw new ExternalAgentError(
           'unsupported_capability',
           `${options.label} app-server transport "${transport}" is not supported; use ${appServerTransports.join(' or ')}`
         );
@@ -161,7 +166,7 @@ export function makeAppServerCliAdapter(options: MakeAppServerCliAdapterOptions)
 
     if (launchMode === 'cli-oneshot') {
       if (!options.oneshot) {
-        throw new NativeCliError('unsupported_capability', `${options.label} has no cli-oneshot launch mode`);
+        throw new ExternalAgentError('unsupported_capability', `${options.label} has no cli-oneshot launch mode`);
       }
       // Base argv only — the per-turn directive is appended by the daemon via `oneshotTurnArgs`. Each
       // turn is a stateless fresh process (no --resume selector), so no `session-resume` capability.
@@ -189,7 +194,7 @@ export function makeAppServerCliAdapter(options: MakeAppServerCliAdapterOptions)
     };
   }
 
-  function buildAuthLaunch(agent: NativeCliAgentView, args: string[]): NativeCliLaunchSpec {
+  function buildAuthLaunch(agent: ExternalAgentView, args: string[]): ExternalAgentLaunchSpec {
     return {
       argv: [agent.command, ...args],
       cwd: homedir(),
@@ -201,16 +206,16 @@ export function makeAppServerCliAdapter(options: MakeAppServerCliAdapterOptions)
     };
   }
 
-  function parseTerminalOutput(chunk: string): NativeCliOutputEvent[] {
+  function parseTerminalOutput(chunk: string): ExternalAgentOutputEvent[] {
     return chunk.length > 0 ? [{ type: 'agent_message', payload: { text: chunk } }] : [];
   }
 
-  const adapter: NativeCliProviderAdapter = {
+  const adapter: ExternalAgentProviderAdapter = {
     provider: options.provider,
     productIcon: options.productIcon,
     label: options.label,
     settings: () =>
-      nativeCliAdapterSettings({
+      externalAgentAdapterSettings({
         launchModes: [
           'pty',
           ...(options.appServerSubcommand ? (['app-server'] as const) : []),
@@ -276,7 +281,7 @@ export function makeAppServerCliAdapter(options: MakeAppServerCliAdapterOptions)
     argumentSupport(agent) {
       return {
         launch: buildAuthLaunch(agent, ['--help']),
-        parse: (output) => parseNativeCliArgumentSupport(output)
+        parse: (output) => parseExternalAgentArgumentSupport(output)
       };
     },
     parseAuthStatus(output, exitCode) {
@@ -303,7 +308,7 @@ export function makeAppServerCliAdapter(options: MakeAppServerCliAdapterOptions)
     },
     resolveApproval(handle, resolution) {
       if (handle.launchMode !== 'app-server') {
-        throw new Error(`${options.label} native CLI approval resolution is provider-owned in pty mode`);
+        throw new Error(`${options.label} external agent approval resolution is provider-owned in pty mode`);
       }
       options.appServerHooks?.resolveAppServerApproval(handle, resolution);
     },

@@ -1,7 +1,7 @@
 import { closeSync, existsSync, openSync, readdirSync, readSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
-export interface NativeCliHistoryFileSearch {
+export interface ExternalAgentHistoryFileSearch {
   roots: string[];
   providerSessionRef: string;
   extensions: string[];
@@ -27,7 +27,7 @@ function readTail(path: string, limitBytes: number): string {
   }
 }
 
-function findLatestHistoryFile(args: Omit<NativeCliHistoryFileSearch, 'limitBytes'>): string | null {
+function findLatestHistoryFile(args: Omit<ExternalAgentHistoryFileSearch, 'limitBytes'>): string | null {
   let best: HistoryFileCandidate | null = null;
   const nameFragments = [args.providerSessionRef, args.providerSessionRef.split('-')[0]].filter(
     (fragment): fragment is string => !!fragment
@@ -53,7 +53,7 @@ function findLatestHistoryFile(args: Omit<NativeCliHistoryFileSearch, 'limitByte
   return best?.path ?? null;
 }
 
-export function readProviderHistoryFile(args: NativeCliHistoryFileSearch): string | null {
+export function readProviderHistoryFile(args: ExternalAgentHistoryFileSearch): string | null {
   const file = findLatestHistoryFile(args);
   return file ? readTail(file, args.limitBytes) : null;
 }

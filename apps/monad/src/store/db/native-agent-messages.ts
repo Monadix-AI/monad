@@ -1,23 +1,23 @@
-// Native agent direct messages: peer-to-peer messages between native CLI agents within a project.
+// Native agent direct messages: peer-to-peer messages between external agents within a project.
 // Split out of index.ts — every function takes the raw bun:sqlite handle.
 
 import type { Database } from 'bun:sqlite';
 import type { MessageAttachmentRef, NativeAgentDirectMessage } from '@monad/protocol';
 
 import { getMessageAttachmentRefs, parseAttachmentIds } from './attachments.ts';
-import { getNativeCliSession } from './native-cli-sessions.ts';
+import { getExternalAgentSession } from './external-agent-sessions.ts';
 
 export function insertNativeAgentDirectMessage(sqlite: Database, row: NativeAgentDirectMessage): void {
   sqlite
     .query(
       `INSERT INTO native_agent_direct_messages
-        (id, project_id, native_cli_session_id, from_agent, peer, text, attachment_ids, created_at)
-       VALUES ($id, $projectId, $nativeCliSessionId, $fromAgent, $peer, $text, $attachmentIds, $createdAt)`
+        (id, project_id, external_agent_session_id, from_agent, peer, text, attachment_ids, created_at)
+       VALUES ($id, $projectId, $externalAgentSessionId, $fromAgent, $peer, $text, $attachmentIds, $createdAt)`
     )
     .run({
       $id: row.id,
       $projectId: row.projectId,
-      $nativeCliSessionId: row.nativeCliSessionId,
+      $externalAgentSessionId: row.externalAgentSessionId,
       $fromAgent: row.fromAgent,
       $peer: row.peer,
       $text: row.text,
@@ -28,14 +28,14 @@ export function insertNativeAgentDirectMessage(sqlite: Database, row: NativeAgen
 
 export function listNativeAgentDirectMessages(
   sqlite: Database,
-  nativeCliSessionId: string,
+  externalAgentSessionId: string,
   peer: string,
   opts: { before?: string; after?: string; limit?: number } = {}
 ): NativeAgentDirectMessage[] {
-  const session = getNativeCliSession(sqlite, nativeCliSessionId);
+  const session = getExternalAgentSession(sqlite, externalAgentSessionId);
   if (!session) return [];
   const binds: Record<string, string | number> = {
-    $nativeCliSessionId: nativeCliSessionId,
+    $externalAgentSessionId: externalAgentSessionId,
     $projectId: session.transcriptTargetId,
     $self: session.agentName,
     $peer: peer
@@ -69,7 +69,7 @@ export function listNativeAgentDirectMessages(
     return {
       id: row.id as NativeAgentDirectMessage['id'],
       projectId: row.project_id as NativeAgentDirectMessage['projectId'],
-      nativeCliSessionId: row.native_cli_session_id as string,
+      externalAgentSessionId: row.external_agent_session_id as string,
       fromAgent: (row.from_agent as string | null) ?? null,
       peer: row.peer as string,
       text: row.text as string,

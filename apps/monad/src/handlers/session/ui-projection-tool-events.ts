@@ -3,14 +3,14 @@ import type { ProjectionMutations } from './ui-projection-state.ts';
 
 import { parseEventPayload } from '@monad/protocol';
 
-import { findNativeCliProviderAdapter } from '@/services/native-cli/index.ts';
+import { findExternalAgentProviderAdapter } from '@/services/external-agent/index.ts';
 import {
   appendBoundedText,
+  externalAgentProviderFromToolItem,
+  externalAgentSnapshotIsGenerating,
   isUnknownToolResult,
   itemKey,
-  MAX_NATIVE_CLI_UI_OUTPUT,
-  nativeCliProviderFromToolItem,
-  nativeCliSnapshotIsGenerating
+  MAX_EXTERNAL_AGENT_UI_OUTPUT
 } from './ui-projection-helpers.ts';
 
 export function applyToolEvent(m: ProjectionMutations, event: Event): SessionUiEvent[] | undefined {
@@ -62,16 +62,16 @@ export function applyToolEvent(m: ProjectionMutations, event: Event): SessionUiE
       };
       return [{ kind: 'upsert', cursor: event.id, item: m.upsert(next) }];
     }
-    case 'native_cli.started': {
-      const p = parseEventPayload('native_cli.started', event.payload);
+    case 'external_agent.started': {
+      const p = parseEventPayload('external_agent.started', event.payload);
       return [
         {
           kind: 'upsert',
           cursor: event.id,
           item: m.upsert({
             kind: 'tool',
-            id: p.nativeCliSessionId,
-            tool: `native-cli:${p.provider}`,
+            id: p.externalAgentSessionId,
+            tool: `external-agent:${p.provider}`,
             input: {
               agent: p.agentName,
               provider: p.provider,
@@ -86,19 +86,19 @@ export function applyToolEvent(m: ProjectionMutations, event: Event): SessionUiE
         }
       ];
     }
-    case 'native_cli.output': {
-      const p = parseEventPayload('native_cli.output', event.payload);
-      const existing = m.items.get(itemKey('tool', p.nativeCliSessionId));
+    case 'external_agent.output': {
+      const p = parseEventPayload('external_agent.output', event.payload);
+      const existing = m.items.get(itemKey('tool', p.externalAgentSessionId));
       const existingTool = existing?.kind === 'tool' ? existing : undefined;
       const output = existingTool
-        ? appendBoundedText(existingTool.output ?? '', p.chunk, MAX_NATIVE_CLI_UI_OUTPUT)
+        ? appendBoundedText(existingTool.output ?? '', p.chunk, MAX_EXTERNAL_AGENT_UI_OUTPUT)
         : p.chunk;
-      const provider = nativeCliProviderFromToolItem(existingTool);
-      const generating = provider === undefined ? undefined : nativeCliSnapshotIsGenerating(output, provider);
+      const provider = externalAgentProviderFromToolItem(existingTool);
+      const generating = provider === undefined ? undefined : externalAgentSnapshotIsGenerating(output, provider);
       const next: Extract<UIItem, { kind: 'tool' }> = {
         kind: 'tool',
-        id: p.nativeCliSessionId,
-        tool: existingTool ? existingTool.tool : 'native-cli',
+        id: p.externalAgentSessionId,
+        tool: existingTool ? existingTool.tool : 'external-agent',
         ...(existingTool?.input !== undefined ? { input: existingTool.input } : {}),
         output,
         status:
@@ -107,16 +107,16 @@ export function applyToolEvent(m: ProjectionMutations, event: Event): SessionUiE
       };
       return [{ kind: 'upsert', cursor: event.id, item: m.upsert(next) }];
     }
-    case 'native_cli.connection_required': {
-      const p = parseEventPayload('native_cli.connection_required', event.payload);
+    case 'external_agent.connection_required': {
+      const p = parseEventPayload('external_agent.connection_required', event.payload);
       return [
         {
           kind: 'upsert',
           cursor: event.id,
           item: m.upsert({
             kind: 'custom',
-            id: `native-cli-connection-required:${p.nativeCliSessionId ?? p.agentName}`,
-            name: 'native_cli.connection_required',
+            id: `external-agent-connection-required:${p.externalAgentSessionId ?? p.agentName}`,
+            name: 'external_agent.connection_required',
             status: 'error',
             data: p,
             seq: event.id
@@ -124,8 +124,8 @@ export function applyToolEvent(m: ProjectionMutations, event: Event): SessionUiE
         }
       ];
     }
-    case 'native_cli.approval_requested': {
-      const p = parseEventPayload('native_cli.approval_requested', event.payload);
+    case 'external_agent.approval_requested': {
+      const p = parseEventPayload('external_agent.approval_requested', event.payload);
       return [
         {
           kind: 'upsert',
@@ -135,7 +135,7 @@ export function applyToolEvent(m: ProjectionMutations, event: Event): SessionUiE
             id: p.requestId,
             tool: `${p.provider} approval`,
             input: {
-              nativeCliSessionId: p.nativeCliSessionId,
+              externalAgentSessionId: p.externalAgentSessionId,
               provider: p.provider,
               text: p.text,
               data: p.data,
@@ -147,20 +147,20 @@ export function applyToolEvent(m: ProjectionMutations, event: Event): SessionUiE
         }
       ];
     }
-    case 'native_cli.approval_resolved': {
-      const p = parseEventPayload('native_cli.approval_resolved', event.payload);
+    case 'external_agent.approval_resolved': {
+      const p = parseEventPayload('external_agent.approval_resolved', event.payload);
       return [m.remove('approval', p.requestId)];
     }
-    case 'native_cli.resume_failed': {
-      const p = parseEventPayload('native_cli.resume_failed', event.payload);
-      const label = findNativeCliProviderAdapter(p.provider)?.label ?? p.provider;
+    case 'external_agent.resume_failed': {
+      const p = parseEventPayload('external_agent.resume_failed', event.payload);
+      const label = findExternalAgentProviderAdapter(p.provider)?.label ?? p.provider;
       return [
         {
           kind: 'upsert',
           cursor: event.id,
           item: m.upsert({
             kind: 'system',
-            id: `native-cli-resume-failed:${p.agentName}:${p.providerSessionRef}`,
+            id: `external-agent-resume-failed:${p.agentName}:${p.providerSessionRef}`,
             text: `${label} resume failed for provider session ${p.providerSessionRef}; cold started a new runtime.`,
             level: 'warn',
             seq: event.id
@@ -168,14 +168,14 @@ export function applyToolEvent(m: ProjectionMutations, event: Event): SessionUiE
         }
       ];
     }
-    case 'native_cli.exited': {
-      const p = parseEventPayload('native_cli.exited', event.payload);
-      const existing = m.items.get(itemKey('tool', p.nativeCliSessionId));
+    case 'external_agent.exited': {
+      const p = parseEventPayload('external_agent.exited', event.payload);
+      const existing = m.items.get(itemKey('tool', p.externalAgentSessionId));
       const exitText = p.exitCode === null ? `\n${p.state}` : `\n${p.state} (${p.exitCode})`;
       const next: Extract<UIItem, { kind: 'tool' }> = {
         kind: 'tool',
-        id: p.nativeCliSessionId,
-        tool: existing?.kind === 'tool' ? existing.tool : 'native-cli',
+        id: p.externalAgentSessionId,
+        tool: existing?.kind === 'tool' ? existing.tool : 'external-agent',
         ...(existing?.kind === 'tool' && existing.input !== undefined ? { input: existing.input } : {}),
         output: `${existing?.kind === 'tool' && existing.output ? existing.output : ''}${exitText}`,
         status: p.state === 'failed' ? 'error' : 'ok',

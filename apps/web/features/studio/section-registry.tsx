@@ -113,7 +113,7 @@ export const STUDIO_SECTION_COMPONENTS: Record<StudioSectionId, StudioSectionCom
   mem0: Mem0MemorySettings,
   memory: MemorySettings,
   models: ModelSettings,
-  nativeCliAgents: NativeCliAgentsSection,
+  externalAgents: ExternalAgentsSection,
   orchestration: OrchestrationSection,
   projectMembers: ProjectMembersSection,
   runtime: RuntimeOverview,
@@ -128,16 +128,16 @@ export const STUDIO_SECTION_COMPONENTS: Record<StudioSectionId, StudioSectionCom
   workplaceProjects: WorkplaceProjectsSection
 };
 
-function NativeCliAgentsSection(props: StudioSectionProps) {
-  return <ThirdPartyNativeCliAgents {...props} />;
+function ExternalAgentsSection(props: StudioSectionProps) {
+  return <ThirdPartyExternalAgents {...props} />;
 }
 
-const ThirdPartyNativeCliAgents = dynamic(
+const ThirdPartyExternalAgents = dynamic(
   () =>
-    import('./third-party-agents/NativeCliAgentsSettings').then((m) => {
-      return function NativeCliAgentsPage(props: StudioSectionProps) {
+    import('./third-party-agents/ExternalAgentsSettings').then((m) => {
+      return function ExternalAgentsPage(props: StudioSectionProps) {
         return (
-          <m.NativeCliAgentsSettings
+          <m.ExternalAgentsSettings
             {...props}
             embedded={false}
           />

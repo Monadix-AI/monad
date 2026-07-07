@@ -1,4 +1,4 @@
-import type { NativeCliObservationEvent } from '@monad/protocol';
+import type { ExternalAgentObservationEvent } from '@monad/protocol';
 
 import { observation, permissionDenialEvents, textValue } from '../../observation-projection.ts';
 import { codexResponseItem, isCodexObservationResponseItem } from './observation-response-item.ts';
@@ -7,7 +7,7 @@ export function codexExecRecordEvents(
   id: string,
   record: Record<string, unknown>,
   recordIndex: number
-): NativeCliObservationEvent[] {
+): ExternalAgentObservationEvent[] {
   const type = record.type;
   const base = recordIndex === 0 ? id : `${id}:json:${recordIndex}`;
   if (type === 'result') {

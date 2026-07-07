@@ -68,7 +68,7 @@ export type UpdateWorkplaceProjectResponse = z.infer<typeof updateWorkplaceProje
 export const deleteWorkplaceProjectResponseSchema = z.object({ deleted: z.literal(true) });
 export type DeleteWorkplaceProjectResponse = z.infer<typeof deleteWorkplaceProjectResponseSchema>;
 
-export const experienceParticipantTransportSchema = z.enum(['monad', 'acp', 'native-cli', 'custom']);
+export const experienceParticipantTransportSchema = z.enum(['monad', 'acp', 'external-agent', 'custom']);
 export type ExperienceParticipantTransport = z.infer<typeof experienceParticipantTransportSchema>;
 
 export const experienceFanoutRecipientSchema = z.object({

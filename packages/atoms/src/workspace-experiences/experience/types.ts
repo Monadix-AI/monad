@@ -1,4 +1,4 @@
-import type { MessageAttachmentRef, NativeAgentDeliveryId, NativeCliObservationEvent } from '@monad/protocol';
+import type { ExternalAgentObservationEvent, MessageAttachmentRef, NativeAgentDeliveryId } from '@monad/protocol';
 import type { WorkspaceExperienceIcon, WorkspaceExperienceProject } from '@monad/sdk-atom';
 
 export type { WorkspaceExperienceProductIconId } from '@monad/sdk-atom';
@@ -64,7 +64,7 @@ export interface Message {
     avatarUrl?: string;
     tag: string;
   }>;
-  nativeCliSessionId?: string;
+  externalAgentSessionId?: string;
   deliveryId?: NativeAgentDeliveryId;
   developerOnly?: boolean;
   systemTone?: 'error' | 'pending';
@@ -114,7 +114,7 @@ export interface AgentTask {
   status: ActivityStatus;
 }
 
-export interface NativeCliStreamView {
+export interface ExternalAgentStreamView {
   id: string;
   agentName: string;
   agentAliases?: string[];
@@ -126,12 +126,12 @@ export interface NativeCliStreamView {
   workingPath?: string;
   observedAt?: string;
   output: string;
-  items: NativeCliObservationEvent[];
+  items: ExternalAgentObservationEvent[];
 }
 
 export interface ApprovalView {
   id: string;
-  nativeCliSessionId?: string;
+  externalAgentSessionId?: string;
   approvalOwnership?: 'provider-owned';
   av: string;
   name: string;

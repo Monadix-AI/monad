@@ -2,8 +2,11 @@ import type { ProjectController } from '../use-project';
 
 import { useEffect, useState } from 'react';
 
-import { NativeCliMemberDialog } from './NativeCliMemberDialog';
-import { type NativeCliMemberDialogState, nativeCliMemberDialogStateForMember } from './native-cli-member-dialog-model';
+import { ExternalAgentMemberDialog } from './ExternalAgentMemberDialog';
+import {
+  type ExternalAgentMemberDialogState,
+  externalAgentMemberDialogStateForMember
+} from './external-agent-member-dialog-model';
 import { ProjectMemberSettingsDialog } from './ProjectMemberSettingsDialog';
 
 type ProjectMember = ProjectController['projectMembers'][number];
@@ -18,22 +21,22 @@ export function ProjectMemberDialog({
   room: ProjectController;
 }): React.ReactElement | null {
   const member = memberId ? room.projectMembers.find((candidate) => candidate.id === memberId) : undefined;
-  const [nativeCliInvite, setNativeCliInvite] = useState<NativeCliMemberDialogState | null>(null);
+  const [externalAgentInvite, setExternalAgentInvite] = useState<ExternalAgentMemberDialogState | null>(null);
 
   useEffect(() => {
     if (!member) {
-      setNativeCliInvite(null);
+      setExternalAgentInvite(null);
       return;
     }
-    setNativeCliInvite(nativeCliMemberDialogStateForMember(room, member));
+    setExternalAgentInvite(externalAgentMemberDialogStateForMember(room, member));
   }, [member, room]);
 
   if (!member) return null;
-  if (member.type === 'native-cli') {
+  if (member.type === 'external-agent') {
     return (
-      <NativeCliMemberDialog
-        invite={nativeCliInvite}
-        onChange={setNativeCliInvite}
+      <ExternalAgentMemberDialog
+        invite={externalAgentInvite}
+        onChange={setExternalAgentInvite}
         onClose={onClose}
         room={room}
       />

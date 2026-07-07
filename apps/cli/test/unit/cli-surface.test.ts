@@ -97,9 +97,9 @@ test('agent-facing project commands derive runtime identity from the managed bin
   const _source = readFileSync(resolve(import.meta.dir, '../../src/commands/agent-facing.ts'), 'utf8');
 });
 
-test('managed native CLI smoke script is opt-in and provider-owned', () => {
+test('managed external agent smoke script is opt-in and provider-owned', () => {
   const _rootPackage = readFileSync(resolve(import.meta.dir, '../../../../package.json'), 'utf8');
-  const _source = readFileSync(resolve(import.meta.dir, '../../../../scripts/native-cli-managed-smoke.ts'), 'utf8');
+  const _source = readFileSync(resolve(import.meta.dir, '../../../../scripts/external-agent-managed-smoke.ts'), 'utf8');
 });
 
 test('friendly aliases resolve to the right command', () => {

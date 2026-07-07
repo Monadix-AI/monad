@@ -1,7 +1,7 @@
 import type {
-  NativeCliAppServerTransport,
-  NativeCliProjectTemplate,
-  NativeCliProvider,
+  ExternalAgentAppServerTransport,
+  ExternalAgentProjectTemplate,
+  ExternalAgentProvider,
   ProfileView,
   ProjectId,
   SendMessageAttachment,
@@ -56,7 +56,7 @@ export interface WorkspaceExperienceAddMemberOptions {
   modelId?: string;
   reasoningEffort?: string;
   speed?: 'standard' | 'fast';
-  appServerTransport?: NativeCliAppServerTransport;
+  appServerTransport?: ExternalAgentAppServerTransport;
   customPrompt?: string;
 }
 
@@ -70,9 +70,9 @@ export interface WorkspaceExperienceMemberCandidate {
   modelOptions: string[];
   reasoningEfforts: string[];
   icon?: WorkspaceExperienceIcon;
-  provider?: NativeCliProvider;
-  supportedAppServerTransports?: NativeCliAppServerTransport[];
-  template?: NativeCliProjectTemplate;
+  provider?: ExternalAgentProvider;
+  supportedAppServerTransports?: ExternalAgentAppServerTransport[];
+  template?: ExternalAgentProjectTemplate;
 }
 
 /** A live participant node in the activity graph (the human + each project agent), with presence so a
@@ -126,7 +126,7 @@ export interface WorkspaceExperienceActions {
   ) => Promise<void>;
   removeProjectMember: (id: string) => Promise<void>;
   updateProjectMemberSettings: (id: string, patch: WorkspaceExperienceMemberSettings) => Promise<void>;
-  sendNativeCliInput: (id: string, input: string) => Promise<void>;
-  stopNativeCli: (id: string) => Promise<void>;
+  sendExternalAgentInput: (id: string, input: string) => Promise<void>;
+  stopExternalAgent: (id: string) => Promise<void>;
   switchExperience: (id: string) => void;
 }

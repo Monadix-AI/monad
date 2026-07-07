@@ -1,8 +1,8 @@
 'use client';
 
 import type { CSSProperties } from 'react';
-import type { NativeCliUsageLimitMeter } from '../../../experience/native-cli-observation/native-cli-observation.ts';
-import type { NativeCliStreamView, Participant } from '../../../experience/types.ts';
+import type { ExternalAgentUsageLimitMeter } from '../../../experience/external-agent-observation/external-agent-observation.ts';
+import type { ExternalAgentStreamView, Participant } from '../../../experience/types.ts';
 import type { ObservationCollapseCommand } from './card-shell.tsx';
 
 import {
@@ -91,7 +91,7 @@ const observationAvatarRingCss = `
 }
 `;
 
-export function NativeCliObservationPanel({
+export function ExternalAgentObservationPanel({
   agent,
   agentName,
   icon,
@@ -110,7 +110,7 @@ export function NativeCliObservationPanel({
   agentName?: string;
   canLoadOlderHistory?: boolean;
   focusTurnId?: string;
-  icon?: NativeCliStreamView['icon'];
+  icon?: ExternalAgentStreamView['icon'];
   loadingOlderHistory?: boolean;
   onBack?: () => void;
   onClose?: () => void;
@@ -118,8 +118,8 @@ export function NativeCliObservationPanel({
   onShowHistory?: () => void;
   onStop: (id: string) => void;
   showHistoryButton?: boolean;
-  stream?: NativeCliStreamView;
-  usageMeter?: NativeCliUsageLimitMeter | null;
+  stream?: ExternalAgentStreamView;
+  usageMeter?: ExternalAgentUsageLimitMeter | null;
 }): React.ReactElement {
   const t = workspaceExperienceT();
   const displayAgent = agent ?? {
@@ -603,7 +603,7 @@ function headerIconButtonStyle(active: boolean, disabled = false): CSSProperties
   };
 }
 
-function UsageLimitPopover({ meter }: { meter: NativeCliUsageLimitMeter }): React.ReactElement {
+function UsageLimitPopover({ meter }: { meter: ExternalAgentUsageLimitMeter }): React.ReactElement {
   return (
     <aside
       style={{

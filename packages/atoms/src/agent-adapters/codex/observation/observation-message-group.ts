@@ -1,5 +1,5 @@
-import type { NativeCliObservationEvent } from '@monad/protocol';
-import type { NativeCliObservationJsonRecordEntry } from '../../observation-projection.ts';
+import type { ExternalAgentObservationEvent } from '@monad/protocol';
+import type { ExternalAgentObservationJsonRecordEntry } from '../../observation-projection.ts';
 
 import {
   numberValue,
@@ -90,7 +90,7 @@ function codexMessageGroupInit(key: string, kind: CodexMessageGroup['kind']): Co
   return { key, kind, raw: [], rawLines: [], fragments: [] };
 }
 
-function codexMessageGroupAppend(group: CodexMessageGroup, entry: NativeCliObservationJsonRecordEntry): void {
+function codexMessageGroupAppend(group: CodexMessageGroup, entry: ExternalAgentObservationJsonRecordEntry): void {
   group.raw.push(entry.record);
   group.rawLines.push(entry.raw);
   const text = codexMessageLifecycleText(entry.record);
@@ -101,7 +101,7 @@ function codexMessageGroupAppend(group: CodexMessageGroup, entry: NativeCliObser
   if (text.completedAt !== undefined) group.completedAt = text.completedAt;
 }
 
-function codexMessageGroupEvent(id: string, group: CodexMessageGroup): NativeCliObservationEvent[] {
+function codexMessageGroupEvent(id: string, group: CodexMessageGroup): ExternalAgentObservationEvent[] {
   const text = group.completedText ?? group.startedText ?? group.fragments.join('');
   return observation({
     id: `${id}:json:${group.key}:${group.kind}-message`,
@@ -115,14 +115,14 @@ function codexMessageGroupEvent(id: string, group: CodexMessageGroup): NativeCli
 }
 
 export const codexObservationMessageGroupAdapter = {
-  append(group: unknown, entry: NativeCliObservationJsonRecordEntry): void {
+  append(group: unknown, entry: ExternalAgentObservationJsonRecordEntry): void {
     codexMessageGroupAppend(group as CodexMessageGroup, entry);
   },
   create(record: Record<string, unknown>): { key: string; state: CodexMessageGroup } | undefined {
     const group = codexMessageGroup(record);
     return group ? { key: group.key, state: codexMessageGroupInit(group.key, group.kind) } : undefined;
   },
-  render(id: string, group: unknown): NativeCliObservationEvent[] {
+  render(id: string, group: unknown): ExternalAgentObservationEvent[] {
     return codexMessageGroupEvent(id, group as CodexMessageGroup);
   }
 };

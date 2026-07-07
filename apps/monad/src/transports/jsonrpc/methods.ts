@@ -136,30 +136,31 @@ export const RPC_HANDLERS: RpcHandlerMap = {
   'agents.default.get': (_params, h: D) => h.agent.getDefaultAgent(),
   'agents.default.set': ({ agentId }, h: D) => h.agent.setDefaultAgent({ agentId }),
 
-  'nativeCli.start': async ({ id, ...request }, h: D) => h.nativeCli.start({ sessionId: id, request }),
-  'nativeCli.list': async ({ id }, h: D) => h.nativeCli.list({ sessionId: id }),
-  'nativeCli.get': async ({ id, transcriptTargetId }, h: D) => h.nativeCli.get({ id, transcriptTargetId }),
-  'nativeCli.input': async ({ id, transcriptTargetId, ...request }, h: D) =>
-    h.nativeCli.input({ id, transcriptTargetId, ...request }),
-  'nativeCli.interrupt': async ({ id, transcriptTargetId }, h: D) => h.nativeCli.interrupt({ id, transcriptTargetId }),
-  'nativeCli.steer': async ({ id, transcriptTargetId, ...request }, h: D) =>
-    h.nativeCli.steer({ id, transcriptTargetId, ...request }),
-  'nativeCli.approval': async ({ id, transcriptTargetId, ...request }, h: D) =>
-    h.nativeCli.approval({ id, transcriptTargetId, ...request }),
-  'nativeCli.resize': async ({ id, transcriptTargetId, ...request }, h: D) =>
-    h.nativeCli.resize({ id, transcriptTargetId, ...request }),
-  'nativeCli.stop': async ({ id, transcriptTargetId }, h: D) => h.nativeCli.stop({ id, transcriptTargetId }),
-  'nativeCli.historyPage': async ({ id, transcriptTargetId, ...request }, h: D) =>
-    h.nativeCli.historyPage({ id, transcriptTargetId, request }),
-  'nativeCli.usage': async ({ name }, h: D) => h.nativeCli.usage({ agentName: name }),
-  'nativeCli.auth.start': async ({ name }, h: D) => h.nativeCli.startAuth({ agentName: name }),
-  'nativeCli.auth.status': async ({ name }, h: D) => h.nativeCli.authStatus({ agentName: name }),
-  'nativeCli.auth.get': async ({ id, controlToken }, h: D) => h.nativeCli.getAuth({ id, controlToken }),
-  'nativeCli.auth.input': async ({ id, controlToken, ...request }, h: D) =>
-    h.nativeCli.inputAuth({ id, controlToken, ...request }),
-  'nativeCli.auth.resize': async ({ id, controlToken, ...request }, h: D) =>
-    h.nativeCli.resizeAuth({ id, controlToken, ...request }),
-  'nativeCli.auth.stop': async ({ id, controlToken }, h: D) => h.nativeCli.stopAuth({ id, controlToken })
+  'externalAgent.start': async ({ id, ...request }, h: D) => h.externalAgent.start({ sessionId: id, request }),
+  'externalAgent.list': async ({ id }, h: D) => h.externalAgent.list({ sessionId: id }),
+  'externalAgent.get': async ({ id, transcriptTargetId }, h: D) => h.externalAgent.get({ id, transcriptTargetId }),
+  'externalAgent.input': async ({ id, transcriptTargetId, ...request }, h: D) =>
+    h.externalAgent.input({ id, transcriptTargetId, ...request }),
+  'externalAgent.interrupt': async ({ id, transcriptTargetId }, h: D) =>
+    h.externalAgent.interrupt({ id, transcriptTargetId }),
+  'externalAgent.steer': async ({ id, transcriptTargetId, ...request }, h: D) =>
+    h.externalAgent.steer({ id, transcriptTargetId, ...request }),
+  'externalAgent.approval': async ({ id, transcriptTargetId, ...request }, h: D) =>
+    h.externalAgent.approval({ id, transcriptTargetId, ...request }),
+  'externalAgent.resize': async ({ id, transcriptTargetId, ...request }, h: D) =>
+    h.externalAgent.resize({ id, transcriptTargetId, ...request }),
+  'externalAgent.stop': async ({ id, transcriptTargetId }, h: D) => h.externalAgent.stop({ id, transcriptTargetId }),
+  'externalAgent.historyPage': async ({ id, transcriptTargetId, ...request }, h: D) =>
+    h.externalAgent.historyPage({ id, transcriptTargetId, request }),
+  'externalAgent.usage': async ({ name }, h: D) => h.externalAgent.usage({ agentName: name }),
+  'externalAgent.auth.start': async ({ name }, h: D) => h.externalAgent.startAuth({ agentName: name }),
+  'externalAgent.auth.status': async ({ name }, h: D) => h.externalAgent.authStatus({ agentName: name }),
+  'externalAgent.auth.get': async ({ id, controlToken }, h: D) => h.externalAgent.getAuth({ id, controlToken }),
+  'externalAgent.auth.input': async ({ id, controlToken, ...request }, h: D) =>
+    h.externalAgent.inputAuth({ id, controlToken, ...request }),
+  'externalAgent.auth.resize': async ({ id, controlToken, ...request }, h: D) =>
+    h.externalAgent.resizeAuth({ id, controlToken, ...request }),
+  'externalAgent.auth.stop': async ({ id, controlToken }, h: D) => h.externalAgent.stopAuth({ id, controlToken })
 
   // model/* settings (and the rest of /v1/settings/*) are HTTP-only — no RPC binding by design.
 };

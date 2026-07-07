@@ -1,22 +1,22 @@
-import type { NativeCliObservationEvent } from '@monad/protocol';
+import type { ExternalAgentObservationEvent } from '@monad/protocol';
 import type {
-  NativeCliObservationActivity,
-  NativeCliObservationJsonRecordEntry,
-  NativeCliObservationMessageGroupProjector,
-  NativeCliObservationProjector,
-  NativeCliObservationRecordProjector
+  ExternalAgentObservationActivity,
+  ExternalAgentObservationJsonRecordEntry,
+  ExternalAgentObservationMessageGroupProjector,
+  ExternalAgentObservationProjector,
+  ExternalAgentObservationRecordProjector
 } from '@monad/sdk-atom';
 
-import { nativeCliObservationEventSchema } from '@monad/protocol';
+import { externalAgentObservationEventSchema } from '@monad/protocol';
 
-export type ObservationRole = NativeCliObservationEvent['role'];
-export type ObservationSource = NativeCliObservationEvent['source'];
+export type ObservationRole = ExternalAgentObservationEvent['role'];
+export type ObservationSource = ExternalAgentObservationEvent['source'];
 export type {
-  NativeCliObservationActivity,
-  NativeCliObservationJsonRecordEntry,
-  NativeCliObservationMessageGroupProjector,
-  NativeCliObservationProjector,
-  NativeCliObservationRecordProjector
+  ExternalAgentObservationActivity,
+  ExternalAgentObservationJsonRecordEntry,
+  ExternalAgentObservationMessageGroupProjector,
+  ExternalAgentObservationProjector,
+  ExternalAgentObservationRecordProjector
 };
 
 const TERMINAL_EVENT_TYPES = new Set(['turn/completed', 'result', 'error', 'server_error', 'turn-end']);
@@ -36,8 +36,8 @@ function threadStatusIsIdle(raw: unknown): boolean {
  *  strings live HERE (adapter side), never in a consumer. `system` (a turn-start / status notice) still
  *  counts as in-flight for generating but yields no UI phase. */
 export function classifyObservationActivity(
-  event: NativeCliObservationEvent
-): NativeCliObservationActivity | undefined {
+  event: ExternalAgentObservationEvent
+): ExternalAgentObservationActivity | undefined {
   const type = event.providerEventType?.toLowerCase() ?? '';
   if (event.providerEventType && TERMINAL_EVENT_TYPES.has(event.providerEventType)) return 'turn-end';
   if (event.providerEventType === 'thread/status/changed') return threadStatusIsIdle(event.raw) ? 'turn-end' : 'system';
@@ -54,7 +54,7 @@ export function classifyObservationActivity(
 
 /** Shared default for `isStreamingFragment`: the app-server / stream-json providers all name partial
  *  token events with a `*delta`/`*chunk` suffix. Adapters with a different convention override it. */
-export function isStreamingObservationFragment(event: NativeCliObservationEvent): boolean {
+export function isStreamingObservationFragment(event: ExternalAgentObservationEvent): boolean {
   const type = event.providerEventType?.toLowerCase() ?? '';
   return type.endsWith('/delta') || type.endsWith('_delta') || type.endsWith('delta') || type.includes('chunk');
 }
@@ -90,10 +90,10 @@ export function observation(args: {
   createdAt?: string;
   raw?: unknown;
   preserveWhitespace?: boolean;
-}): NativeCliObservationEvent[] {
+}): ExternalAgentObservationEvent[] {
   const text = args.preserveWhitespace ? args.text : args.text?.trim();
   if (!text) return [];
-  const parsed = nativeCliObservationEventSchema.safeParse({
+  const parsed = externalAgentObservationEventSchema.safeParse({
     id: args.id,
     role: args.role,
     text,
@@ -113,7 +113,7 @@ export function thinkingObservation(args: {
   createdAt?: string;
   raw?: unknown;
   preserveWhitespace?: boolean;
-}): NativeCliObservationEvent[] {
+}): ExternalAgentObservationEvent[] {
   return observation({
     ...args,
     role: 'agent',
@@ -133,7 +133,7 @@ function parseJsonObject(value: string): Record<string, unknown> | undefined {
   }
 }
 
-export function jsonRecordEntries(text: string): NativeCliObservationJsonRecordEntry[] {
+export function jsonRecordEntries(text: string): ExternalAgentObservationJsonRecordEntry[] {
   if (!text.includes('{')) return [];
   const trimmed = text.trim();
   const whole = parseJsonObject(trimmed);
@@ -146,7 +146,7 @@ export function jsonRecordEntries(text: string): NativeCliObservationJsonRecordE
       const record = parseJsonObject(line);
       return record ? { record, raw: line } : undefined;
     })
-    .filter((entry): entry is NativeCliObservationJsonRecordEntry => !!entry);
+    .filter((entry): entry is ExternalAgentObservationJsonRecordEntry => !!entry);
   if (lineRecords.length > 0) return lineRecords;
   return [];
 }
@@ -211,7 +211,7 @@ export function permissionDenialEvents(
   denials: unknown,
   source: ObservationSource,
   recordIndex?: number
-): NativeCliObservationEvent[] {
+): ExternalAgentObservationEvent[] {
   if (!Array.isArray(denials)) return [];
   const prefix = recordIndex === undefined ? id : `${id}:json:${recordIndex}`;
   return denials.flatMap((denial, index) => {
@@ -245,7 +245,7 @@ export function contentEvents(args: {
   raw: unknown;
   baseSource?: string;
   textRole?: Extract<ObservationRole, 'agent' | 'user'>;
-}): NativeCliObservationEvent[] {
+}): ExternalAgentObservationEvent[] {
   const textRole = args.textRole ?? 'agent';
   if (typeof args.content === 'string') {
     return observation({

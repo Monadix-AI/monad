@@ -151,7 +151,7 @@ export function ChatTranscript({
           <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10, marginTop: 20 }}>
             <button
               className="workplace-action"
-              onClick={() => host.openStudio('nativeCliAgents')}
+              onClick={() => host.openStudio('externalAgents')}
               style={{
                 minHeight: 38,
                 display: 'inline-flex',

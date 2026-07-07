@@ -47,16 +47,16 @@ export function startStartupHousekeeping(deps: { paths: MonadPaths; store: Store
   );
   delegatePruneTimer.unref();
 
-  const prunedNativeCli = store.pruneExitedNativeCliSessions();
-  if (prunedNativeCli > 0) logger.info({ pruned: prunedNativeCli }, 'pruned old native_cli_sessions rows');
-  const nativeCliPruneTimer = setInterval(
+  const prunedExternalAgent = store.pruneExitedExternalAgentSessions();
+  if (prunedExternalAgent > 0) logger.info({ pruned: prunedExternalAgent }, 'pruned old external_agent_sessions rows');
+  const externalAgentPruneTimer = setInterval(
     () => {
-      const n = store.pruneExitedNativeCliSessions();
-      if (n > 0) logger.info({ pruned: n }, 'pruned old native_cli_sessions rows');
+      const n = store.pruneExitedExternalAgentSessions();
+      if (n > 0) logger.info({ pruned: n }, 'pruned old external_agent_sessions rows');
     },
     24 * 60 * 60 * 1000
   );
-  nativeCliPruneTimer.unref();
+  externalAgentPruneTimer.unref();
 
   const logsDir = developerLogsDir(paths);
   const runLogSweep = () =>

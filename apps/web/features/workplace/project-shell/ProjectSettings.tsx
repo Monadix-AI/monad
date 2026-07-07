@@ -17,8 +17,11 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { useT } from '@/components/I18nProvider';
 import { defaultReasoningEffort } from '@/components/ReasoningEffortControl';
-import { NativeCliMemberDialog } from './NativeCliMemberDialog';
-import { type NativeCliMemberDialogState, nativeCliMemberDialogStateForMember } from './native-cli-member-dialog-model';
+import { ExternalAgentMemberDialog } from './ExternalAgentMemberDialog';
+import {
+  type ExternalAgentMemberDialogState,
+  externalAgentMemberDialogStateForMember
+} from './external-agent-member-dialog-model';
 import { ProjectAddMemberSection } from './ProjectAddMemberSection';
 import { ProjectMemberSettingsDialog } from './ProjectMemberSettingsDialog';
 
@@ -27,7 +30,7 @@ type ProjectMember = ProjectController['projectMembers'][number];
 
 function removeLabel(id: string, t: Translate): string {
   if (id === 'monad') return t('web.workplace.removeAcpMember');
-  if (id.startsWith('native-cli:')) return t('web.workplace.removeCliMember');
+  if (id.startsWith('external-agent:')) return t('web.workplace.removeCliMember');
   if (id.startsWith('acp:')) return t('web.workplace.removeAcpMember');
   return t('web.workplace.managedByMonad');
 }
@@ -49,16 +52,18 @@ export function ProjectSettings({
   const [memberSettings, setMemberSettings] = useState<ProjectMember | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [nativeCliInvite, setNativeCliInvite] = useState<NativeCliMemberDialogState | null>(null);
+  const [externalAgentInvite, setExternalAgentInvite] = useState<ExternalAgentMemberDialogState | null>(null);
   const projectParticipants = room.projectParticipants;
-  const regularCandidates = room.availableProjectMembers.filter((candidate) => candidate.type !== 'native-cli');
-  const nativeCliCandidates = room.availableProjectMembers.filter((candidate) => candidate.type === 'native-cli');
+  const regularCandidates = room.availableProjectMembers.filter((candidate) => candidate.type !== 'external-agent');
+  const externalAgentCandidates = room.availableProjectMembers.filter(
+    (candidate) => candidate.type === 'external-agent'
+  );
 
-  const openNativeCliMemberSettings = useCallback(
+  const openExternalAgentMemberSettings = useCallback(
     (member: ProjectMember) => {
-      const invite = nativeCliMemberDialogStateForMember(room, member);
+      const invite = externalAgentMemberDialogStateForMember(room, member);
       if (!invite) return false;
-      setNativeCliInvite(invite);
+      setExternalAgentInvite(invite);
       return true;
     },
     [room]
@@ -68,9 +73,9 @@ export function ProjectSettings({
     if (!initialMemberId) return;
     const member = room.projectMembers.find((candidate) => candidate.id === initialMemberId);
     if (!member) return;
-    if (openNativeCliMemberSettings(member)) return;
+    if (openExternalAgentMemberSettings(member)) return;
     setMemberSettings(member);
-  }, [initialMemberId, openNativeCliMemberSettings, room.projectMembers]);
+  }, [initialMemberId, openExternalAgentMemberSettings, room.projectMembers]);
 
   const deleteProject = async () => {
     if (!confirmDelete) {
@@ -179,7 +184,7 @@ export function ProjectSettings({
                         disabled={!member}
                         onClick={() => {
                           if (!member) return;
-                          if (openNativeCliMemberSettings(member)) return;
+                          if (openExternalAgentMemberSettings(member)) return;
                           setMemberSettings(member);
                         }}
                         style={{
@@ -243,9 +248,9 @@ export function ProjectSettings({
                 title={t('web.workplace.agentMembers')}
               />
               <ProjectAddMemberSection
-                candidates={nativeCliCandidates}
+                candidates={externalAgentCandidates}
                 onAdd={(candidate) =>
-                  setNativeCliInvite({
+                  setExternalAgentInvite({
                     candidate,
                     draft: {
                       displayName: candidate.template?.displayName,
@@ -259,7 +264,7 @@ export function ProjectSettings({
                   })
                 }
                 promoted={initialIntent === 'spawn-agent'}
-                title={t('web.workplace.nativeCliAgentMembers')}
+                title={t('web.workplace.externalAgentMembers')}
               />
             </section>
 
@@ -322,10 +327,10 @@ export function ProjectSettings({
         onClose={() => setMemberSettings(null)}
         room={room}
       />
-      <NativeCliMemberDialog
-        invite={nativeCliInvite}
-        onChange={setNativeCliInvite}
-        onClose={() => setNativeCliInvite(null)}
+      <ExternalAgentMemberDialog
+        invite={externalAgentInvite}
+        onChange={setExternalAgentInvite}
+        onClose={() => setExternalAgentInvite(null)}
         room={room}
       />
     </>

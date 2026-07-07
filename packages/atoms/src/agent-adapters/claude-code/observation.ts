@@ -6,8 +6,8 @@ import type {
   SDKSystemMessage,
   SDKUserMessage
 } from '@anthropic-ai/claude-agent-sdk';
-import type { NativeCliObservationEvent, NativeCliUsageRecord } from '@monad/protocol';
-import type { NativeCliObservationProjector, ObservationRole } from '../observation-projection.ts';
+import type { ExternalAgentObservationEvent, ExternalAgentUsageRecord } from '@monad/protocol';
+import type { ExternalAgentObservationProjector, ObservationRole } from '../observation-projection.ts';
 
 import {
   classifyObservationActivity,
@@ -42,7 +42,7 @@ function resetIso(value: unknown): string | undefined {
   return new Date(timestampMs).toISOString();
 }
 
-export function claudeUsageRecordsFromRecord(record: Record<string, unknown>): NativeCliUsageRecord[] {
+export function claudeUsageRecordsFromRecord(record: Record<string, unknown>): ExternalAgentUsageRecord[] {
   if (record.type !== 'rate_limit_event') return [];
   const info = recordValue(record.rate_limit_info ?? record.rateLimitInfo);
   const id = textValue(info?.rateLimitType, info?.rate_limit_type);
@@ -88,7 +88,7 @@ function claudeContentEvents(args: {
   createdAt?: string;
   raw: unknown;
   textRole: Extract<ObservationRole, 'agent' | 'user'>;
-}): NativeCliObservationEvent[] {
+}): ExternalAgentObservationEvent[] {
   if (typeof args.content === 'string') {
     return observation({
       id: `${args.id}:json:${args.recordIndex}:message`,
@@ -158,7 +158,7 @@ export function claudeRecordEvents(
   id: string,
   record: ClaudeObservationMessage,
   recordIndex: number
-): NativeCliObservationEvent[] {
+): ExternalAgentObservationEvent[] {
   const base = recordIndex === 0 ? id : `${id}:json:${recordIndex}`;
   if (record.type === 'rate_limit_event') {
     return observation({
@@ -286,4 +286,4 @@ export const claudeCodeObservationProjection = {
         isClaudeObservationMessage(record) ? claudeRecordEvents(id, record, recordIndex) : []
     }
   ]
-} satisfies NativeCliObservationProjector;
+} satisfies ExternalAgentObservationProjector;

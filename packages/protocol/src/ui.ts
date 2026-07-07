@@ -51,11 +51,8 @@ export const uiMessageItemSchema = z.object({
   id: z.string(),
   role: uiMessageRoleSchema,
   agentName: z.string().optional(),
-  source: z.enum(['managed-native-cli', 'native-cli-provider']).optional(),
-  nativeCliSessionId: z
-    .string()
-    .regex(/^ncli_/)
-    .optional(),
+  source: z.enum(['managed-external-agent', 'external-agent-provider']).optional(),
+  externalAgentSessionId: z.string().regex(/^exa_/).optional(),
   deliveryId: nativeAgentDeliveryIdSchema.optional(),
   parts: z.array(uiPartSchema),
   status: uiItemStatusSchema.optional(),

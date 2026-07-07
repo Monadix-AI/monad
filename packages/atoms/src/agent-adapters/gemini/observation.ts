@@ -1,5 +1,8 @@
-import type { NativeCliObservationEvent } from '@monad/protocol';
-import type { NativeCliObservationJsonRecordEntry, NativeCliObservationProjector } from '../observation-projection.ts';
+import type { ExternalAgentObservationEvent } from '@monad/protocol';
+import type {
+  ExternalAgentObservationJsonRecordEntry,
+  ExternalAgentObservationProjector
+} from '../observation-projection.ts';
 
 import {
   classifyObservationActivity,
@@ -14,7 +17,7 @@ export function geminiRecordEvents(
   id: string,
   record: Record<string, unknown>,
   recordIndex: number
-): NativeCliObservationEvent[] {
+): ExternalAgentObservationEvent[] {
   const type = record.type;
   const createdAt = providerIsoTimestamp(textValue(record.timestamp));
   if (type === 'message') {
@@ -96,17 +99,19 @@ function assistantMessageText(record: Record<string, unknown>): string | undefin
 }
 
 function geminiHistoryEntryFromAssistant(
-  entry: NativeCliObservationJsonRecordEntry,
+  entry: ExternalAgentObservationJsonRecordEntry,
   text: string
-): NativeCliObservationJsonRecordEntry {
+): ExternalAgentObservationJsonRecordEntry {
   const { delta: _delta, ...record } = entry.record;
   const foldedRecord = { ...record, content: text };
   return { record: foldedRecord, raw: JSON.stringify(foldedRecord) };
 }
 
-function geminiHistoryEntries(entries: NativeCliObservationJsonRecordEntry[]): NativeCliObservationJsonRecordEntry[] {
-  const folded: NativeCliObservationJsonRecordEntry[] = [];
-  let pendingEntry: NativeCliObservationJsonRecordEntry | undefined;
+function geminiHistoryEntries(
+  entries: ExternalAgentObservationJsonRecordEntry[]
+): ExternalAgentObservationJsonRecordEntry[] {
+  const folded: ExternalAgentObservationJsonRecordEntry[] = [];
+  let pendingEntry: ExternalAgentObservationJsonRecordEntry | undefined;
   let pendingText = '';
 
   const flushAssistant = () => {
@@ -147,4 +152,4 @@ export const geminiObservationProjection = {
   classifyActivity: classifyObservationActivity,
   isStreamingFragment: isStreamingObservationFragment,
   recordProjectors: [{ parse: ({ id, record, recordIndex }) => geminiRecordEvents(id, record, recordIndex) }]
-} satisfies NativeCliObservationProjector;
+} satisfies ExternalAgentObservationProjector;

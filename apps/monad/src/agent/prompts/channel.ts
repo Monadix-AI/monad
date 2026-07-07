@@ -3,7 +3,7 @@ import type { ChannelRouteAction } from '@/handlers/session/channel-routing.ts';
 export interface ChannelParticipant {
   id: string;
   name: string;
-  kind: 'studio' | 'acp' | 'native-cli' | 'human';
+  kind: 'studio' | 'acp' | 'external-agent' | 'human';
   description?: string;
 }
 
@@ -18,7 +18,7 @@ export interface BuildChannelContextInput {
     id: string;
     name: string;
     agentName?: string;
-    nativeCliAgentName?: string;
+    externalAgentName?: string;
   };
 }
 

@@ -1,10 +1,10 @@
 import type {
   AcpAgentView,
   AvatarStyle,
-  NativeCliAgentView,
-  NativeCliAppServerTransport,
-  NativeCliProvider,
-  NativeCliSessionView,
+  ExternalAgentAppServerTransport,
+  ExternalAgentProvider,
+  ExternalAgentSessionView,
+  ExternalAgentView,
   UIItem,
   WorkplaceProject
 } from '@monad/protocol';
@@ -13,17 +13,17 @@ import type { AgentActivityOverride, ApprovalView, Participant, Project, Questio
 
 import {
   entityAvatarUrl,
-  nativeCliProductDisplayName,
+  externalAgentProductDisplayName,
   workplaceProjectMemberAvatarSeed,
   workplaceProjectMemberId,
   workplaceProjectMemberStableId
 } from '@monad/protocol';
 
 import {
-  nativeCliAgentIsGenerating,
-  nativeCliMemberActivityPhase,
-  nativeCliMemberPresence
-} from './native-cli-presence.ts';
+  externalAgentIsGenerating,
+  externalAgentMemberActivityPhase,
+  externalAgentMemberPresence
+} from './external-agent-presence.ts';
 import { productIcon } from './project-members.ts';
 
 export const HUMAN: Participant = {
@@ -58,7 +58,7 @@ export function projectMemberParticipants(participants: readonly Participant[]):
   return participants.filter((participant) => participant.kind === 'agent');
 }
 
-export function nativeCliTag(provider: NativeCliProvider | string | undefined): string {
+export function externalAgentTag(provider: ExternalAgentProvider | string | undefined): string {
   if (provider === 'codex') return 'Codex';
   if (provider === 'claude-code') return 'Claude';
   if (provider === 'gemini') return 'Gemini';
@@ -66,7 +66,7 @@ export function nativeCliTag(provider: NativeCliProvider | string | undefined): 
   return 'CLI';
 }
 
-export function nativeCliApprovalName(provider: NativeCliProvider | string | undefined): string {
+export function externalAgentApprovalName(provider: ExternalAgentProvider | string | undefined): string {
   if (provider === 'codex') return 'Codex approval';
   if (provider === 'claude-code') return 'Claude Code approval';
   if (provider === 'gemini') return 'Gemini approval';
@@ -94,7 +94,7 @@ export function monadIsStreaming(items: readonly UIItem[]): boolean {
       item.status === 'streaming' &&
       item.role === 'assistant' &&
       (item.agentName === undefined || item.agentName === 'monad') &&
-      item.source !== 'managed-native-cli'
+      item.source !== 'managed-external-agent'
   );
 }
 
@@ -137,20 +137,20 @@ export function summarizeTool(tool: string, input: unknown): string {
 
 export function projectParticipants(args: {
   acpAgents: readonly AcpAgentView[];
-  activeNativeCliAgentNames?: ReadonlySet<string>;
+  activeExternalAgentNames?: ReadonlySet<string>;
   avatarStyle?: AvatarStyle;
   liveTools?: readonly Extract<UIItem, { kind: 'tool' }>[];
   monadStreaming?: boolean;
-  nativeCliActivityOverrides?: Record<string, AgentActivityOverride>;
-  nativeCliAgents: readonly NativeCliAgentView[];
-  nativeCliAvatarSeeds: ReadonlyMap<string, string>;
-  nativeCliSessions: NativeCliSessionView[];
+  externalAgentActivityOverrides?: Record<string, AgentActivityOverride>;
+  externalAgents: readonly ExternalAgentView[];
+  externalAgentAvatarSeeds: ReadonlyMap<string, string>;
+  externalAgentSessions: ExternalAgentSessionView[];
   projectMembers: readonly ProjectMember[];
   runningDelegations?: ReadonlySet<string>;
 }): Participant[] {
-  const activeNativeCliAgentNames = args.activeNativeCliAgentNames ?? new Set<string>();
+  const activeExternalAgentNames = args.activeExternalAgentNames ?? new Set<string>();
   const liveTools = args.liveTools ?? [];
-  const nativeCliActivityOverrides = args.nativeCliActivityOverrides ?? {};
+  const externalAgentActivityOverrides = args.externalAgentActivityOverrides ?? {};
   const runningDelegations = args.runningDelegations ?? new Set<string>();
   return args.projectMembers.map((member) => {
     if (member.type === 'monad') {
@@ -166,38 +166,38 @@ export function projectParticipants(args: {
         activityPhase: args.monadStreaming ? 'thinking' : undefined
       };
     }
-    if (member.type === 'native-cli') {
+    if (member.type === 'external-agent') {
       const templateName = member.templateName ?? member.name;
       const displayName = member.displayName ?? member.name;
-      const agent = args.nativeCliAgents.find((candidate) => candidate.name === templateName);
+      const agent = args.externalAgents.find((candidate) => candidate.name === templateName);
       const template = agent?.projectTemplates?.find((candidate) => candidate.id === member.projectTemplateId);
       const stableAgentName = workplaceProjectMemberStableId(member);
-      const presence = nativeCliMemberPresence({
-        activeAgentNames: activeNativeCliAgentNames,
+      const presence = externalAgentMemberPresence({
+        activeAgentNames: activeExternalAgentNames,
         agentName: stableAgentName,
         enabled: agent?.enabled ?? false,
-        nativeCliSessions: args.nativeCliSessions,
+        externalAgentSessions: args.externalAgentSessions,
         liveTools
       });
-      const activityOverride = nativeCliActivityOverrides[stableAgentName];
+      const activityOverride = externalAgentActivityOverrides[stableAgentName];
       const activityPhase =
         activityOverride?.phase ??
-        nativeCliMemberActivityPhase({
+        externalAgentMemberActivityPhase({
           agentName: stableAgentName,
           liveTools,
-          nativeCliSessions: args.nativeCliSessions
+          externalAgentSessions: args.externalAgentSessions
         });
       return {
         id: member.id,
         av: initials(displayName),
         icon: productIcon(agent?.productIcon),
         avatarUrl: entityAvatarUrl(
-          args.nativeCliAvatarSeeds.get(displayName) ?? `native-cli:${displayName}`,
+          args.externalAgentAvatarSeeds.get(displayName) ?? `external-agent:${displayName}`,
           args.avatarStyle
         ),
         name: displayName,
         kind: 'agent',
-        tag: nativeCliTag(agent?.provider),
+        tag: externalAgentTag(agent?.provider),
         role: 'CLI',
         presence,
         activityPhase,
@@ -229,20 +229,20 @@ export function projectParticipants(args: {
 
 export function projectMemberCandidates(args: {
   acpAgents: readonly AcpAgentView[];
-  nativeCliAgents: readonly NativeCliAgentView[];
+  externalAgents: readonly ExternalAgentView[];
   projectMembers: readonly ProjectMember[];
 }): ProjectMemberCandidate[] {
   const current = new Set(args.projectMembers.map((member) => member.id));
-  const emptyTransports: NativeCliAppServerTransport[] = [];
-  const nativeCliCandidates = args.nativeCliAgents.flatMap((agent) => {
+  const emptyTransports: ExternalAgentAppServerTransport[] = [];
+  const externalAgentCandidates = args.externalAgents.flatMap((agent) => {
     const templates = agent.projectTemplates ?? [];
     if (templates.length > 0) {
       return templates.map((template) => ({
-        id: `native-cli-template:${agent.name}:${template.id}`,
-        type: 'native-cli' as const,
+        id: `external-agent-template:${agent.name}:${template.id}`,
+        type: 'external-agent' as const,
         name: agent.name,
         label: template.displayName,
-        tag: nativeCliTag(agent.provider),
+        tag: externalAgentTag(agent.provider),
         enabled: agent.enabled,
         provider: agent.provider,
         modelOptions: agent.modelOptions ?? [],
@@ -254,11 +254,11 @@ export function projectMemberCandidates(args: {
     }
     return [
       {
-        id: `native-cli-template:${agent.name}`,
-        type: 'native-cli' as const,
+        id: `external-agent-template:${agent.name}`,
+        type: 'external-agent' as const,
         name: agent.name,
-        label: nativeCliProductDisplayName(productIcon(agent.productIcon), agent.provider, agent.name),
-        tag: nativeCliTag(agent.provider),
+        label: externalAgentProductDisplayName(productIcon(agent.productIcon), agent.provider, agent.name),
+        tag: externalAgentTag(agent.provider),
         enabled: agent.enabled,
         provider: agent.provider,
         modelOptions: agent.modelOptions ?? [],
@@ -299,7 +299,7 @@ export function projectMemberCandidates(args: {
         supportedAppServerTransports: emptyTransports,
         icon: productIcon(agent.productIcon)
       })),
-    ...nativeCliCandidates
+    ...externalAgentCandidates
   ];
 }
 
@@ -308,11 +308,11 @@ export function projectApprovalViews(items: readonly UIItem[]): ApprovalView[] {
     .filter((item): item is Extract<UIItem, { kind: 'approval' }> => item.kind === 'approval')
     .map((a) => ({
       id: a.id,
-      nativeCliSessionId:
-        (a.input as { approvalOwnership?: unknown; nativeCliSessionId?: unknown } | undefined)?.approvalOwnership ===
-          'provider-owned' &&
-        typeof (a.input as { nativeCliSessionId?: unknown } | undefined)?.nativeCliSessionId === 'string'
-          ? (a.input as { nativeCliSessionId: string }).nativeCliSessionId
+      externalAgentSessionId:
+        (a.input as { approvalOwnership?: unknown; externalAgentSessionId?: unknown } | undefined)
+          ?.approvalOwnership === 'provider-owned' &&
+        typeof (a.input as { externalAgentSessionId?: unknown } | undefined)?.externalAgentSessionId === 'string'
+          ? (a.input as { externalAgentSessionId: string }).externalAgentSessionId
           : undefined,
       approvalOwnership:
         (a.input as { approvalOwnership?: unknown } | undefined)?.approvalOwnership === 'provider-owned'
@@ -326,7 +326,7 @@ export function projectApprovalViews(items: readonly UIItem[]): ApprovalView[] {
       name:
         (a.input as { approvalOwnership?: unknown; provider?: unknown } | undefined)?.approvalOwnership ===
           'provider-owned' && typeof (a.input as { provider?: unknown } | undefined)?.provider === 'string'
-          ? nativeCliApprovalName((a.input as { provider: string }).provider)
+          ? externalAgentApprovalName((a.input as { provider: string }).provider)
           : 'monad',
       tag:
         (a.input as { approvalOwnership?: unknown } | undefined)?.approvalOwnership === 'provider-owned' ? 'CLI' : 'AI',
@@ -353,8 +353,8 @@ export function projectQuestionViews(items: readonly UIItem[]): QuestionView[] {
     }));
 }
 
-export function projectNativeCliMetadataMaps(args: {
-  nativeCliAgents: readonly NativeCliAgentView[];
+export function projectExternalAgentMetadataMaps(args: {
+  externalAgents: readonly ExternalAgentView[];
   projectId: string;
   projectMembers: readonly ProjectMember[];
 }): {
@@ -368,13 +368,13 @@ export function projectNativeCliMetadataMaps(args: {
   const icons = new Map<string, Participant['icon']>();
   const tags = new Map<string, string>();
   for (const member of args.projectMembers) {
-    if (member.type !== 'native-cli') continue;
+    if (member.type !== 'external-agent') continue;
     const templateName = member.templateName ?? member.name;
     const displayName = member.displayName ?? member.name;
-    const agent = args.nativeCliAgents.find((candidate) => candidate.name === templateName);
+    const agent = args.externalAgents.find((candidate) => candidate.name === templateName);
     const stableId = workplaceProjectMemberStableId(member);
     const icon = productIcon(agent?.productIcon);
-    const tag = nativeCliTag(agent?.provider);
+    const tag = externalAgentTag(agent?.provider);
     avatarSeeds.set(displayName, workplaceProjectMemberAvatarSeed(args.projectId, member));
     displayNames.set(stableId, displayName);
     displayNames.set(member.name, displayName);
@@ -388,28 +388,28 @@ export function projectNativeCliMetadataMaps(args: {
   return { avatarSeeds, displayNames, icons, tags };
 }
 
-export function nativeCliStreamingAgentNames(items: readonly UIItem[]): Set<string> {
+export function externalAgentStreamingAgentNames(items: readonly UIItem[]): Set<string> {
   const names = new Set<string>();
   for (const item of items) {
     if (item.kind !== 'message') continue;
-    if (item.source !== 'managed-native-cli' || item.status !== 'streaming') continue;
+    if (item.source !== 'managed-external-agent' || item.status !== 'streaming') continue;
     if (item.agentName) names.add(item.agentName);
   }
   return names;
 }
 
-export function activeNativeCliAgentNames(args: {
+export function activeExternalAgentNames(args: {
   activityOverrideAgentNames: readonly string[];
   liveTools: readonly Extract<UIItem, { kind: 'tool' }>[];
-  nativeCliSessions: readonly NativeCliSessionView[];
+  externalAgentSessions: readonly ExternalAgentSessionView[];
   streamingAgentNames: ReadonlySet<string>;
 }): Set<string> {
   const names = new Set(args.streamingAgentNames);
   for (const agentName of args.activityOverrideAgentNames) names.add(agentName);
-  for (const session of args.nativeCliSessions) {
+  for (const session of args.externalAgentSessions) {
     // Live tool status is authoritative when present (it clears at turn end); the frozen session
-    // snapshot is only the fallback — see nativeCliAgentIsGenerating.
-    if (nativeCliAgentIsGenerating(session.agentName, args.liveTools, session)) names.add(session.agentName);
+    // snapshot is only the fallback — see externalAgentIsGenerating.
+    if (externalAgentIsGenerating(session.agentName, args.liveTools, session)) names.add(session.agentName);
   }
   return names;
 }

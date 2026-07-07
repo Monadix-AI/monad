@@ -1,7 +1,7 @@
-import type { NativeCliObservationEvent } from '@monad/protocol';
+import type { ExternalAgentObservationEvent } from '@monad/protocol';
 import type {
-  NativeCliObservationJsonRecordEntry,
-  NativeCliObservationProjector,
+  ExternalAgentObservationJsonRecordEntry,
+  ExternalAgentObservationProjector,
   ObservationRole
 } from '../observation-projection.ts';
 
@@ -67,7 +67,7 @@ function qwenContentEvents(args: {
   providerEventType: string;
   raw: unknown;
   textRole: Extract<ObservationRole, 'agent' | 'user'>;
-}): NativeCliObservationEvent[] {
+}): ExternalAgentObservationEvent[] {
   if (typeof args.content === 'string') {
     return observation({
       id: `${args.id}:json:${args.recordIndex}:message`,
@@ -132,7 +132,7 @@ export function qwenRecordEvents(
   id: string,
   record: QwenObservationMessage,
   recordIndex: number
-): NativeCliObservationEvent[] {
+): ExternalAgentObservationEvent[] {
   const base = recordIndex === 0 ? id : `${id}:json:${recordIndex}`;
   if (isQwenResultMessage(record)) {
     const subtype = textValue(record.subtype);
@@ -237,7 +237,9 @@ export function qwenRecordEvents(
   return [];
 }
 
-function qwenHistoryEntries(entries: NativeCliObservationJsonRecordEntry[]): NativeCliObservationJsonRecordEntry[] {
+function qwenHistoryEntries(
+  entries: ExternalAgentObservationJsonRecordEntry[]
+): ExternalAgentObservationJsonRecordEntry[] {
   return entries.filter((entry) => entry.record.type !== 'stream_event');
 }
 
@@ -252,4 +254,4 @@ export const qwenObservationProjection = {
         isQwenObservationMessage(record) ? qwenRecordEvents(id, record, recordIndex) : []
     }
   ]
-} satisfies NativeCliObservationProjector;
+} satisfies ExternalAgentObservationProjector;

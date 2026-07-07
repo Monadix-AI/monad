@@ -1,9 +1,9 @@
-import type { NativeCliAgentSetting, NativeCliAppServerTransport, NativeCliLaunchMode } from '@monad/protocol';
+import type { ExternalAgentAppServerTransport, ExternalAgentLaunchMode, ExternalAgentSetting } from '@monad/protocol';
 
-export function nativeCliAdapterSettings(options: {
-  launchModes: NativeCliLaunchMode[];
-  appServerTransports?: NativeCliAppServerTransport[];
-}): NativeCliAgentSetting[] {
+export function externalAgentAdapterSettings(options: {
+  launchModes: ExternalAgentLaunchMode[];
+  appServerTransports?: ExternalAgentAppServerTransport[];
+}): ExternalAgentSetting[] {
   return [
     {
       key: 'defaultLaunchMode',

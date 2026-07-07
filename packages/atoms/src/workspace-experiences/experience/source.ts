@@ -2,7 +2,7 @@ import type {
   AvatarStyle,
   ComposerFollowUpBehavior,
   ComposerSendShortcut,
-  NativeCliSessionView,
+  ExternalAgentSessionView,
   ProfileView,
   UIItem
 } from '@monad/protocol';
@@ -18,12 +18,12 @@ export interface ProjectExperienceCanvasSource {
     transcriptItems: readonly UIItem[];
     liveItems: readonly UIItem[];
     liveTools?: readonly Extract<UIItem, { kind: 'tool' }>[];
-    nativeCliSessions: NativeCliSessionView[];
+    externalAgentSessions: ExternalAgentSessionView[];
     human: Participant;
-    nativeCliAvatarSeeds: Map<string, string>;
-    nativeCliTags: Map<string, string>;
-    nativeCliDisplayNames: Map<string, string>;
-    nativeCliIcons?: Map<string, Message['icon']>;
+    externalAgentAvatarSeeds: Map<string, string>;
+    externalAgentTags: Map<string, string>;
+    externalAgentDisplayNames: Map<string, string>;
+    externalAgentIcons?: Map<string, Message['icon']>;
     avatarStyle?: AvatarStyle;
     showDeveloperOnlyMessages: boolean;
   };
@@ -35,6 +35,6 @@ export interface ProjectExperienceCanvasSource {
   resolveApproval: (requestId: string, decision: 'approve' | 'reject') => void;
   answerQuestion: (requestId: string, answer: string) => void;
   pauseAll: () => void;
-  sendNativeCliInput: (id: string, input: string) => Promise<void>;
-  stopNativeCli: (id: string) => Promise<void>;
+  sendExternalAgentInput: (id: string, input: string) => Promise<void>;
+  stopExternalAgent: (id: string) => Promise<void>;
 }

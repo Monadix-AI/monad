@@ -14,10 +14,10 @@ import type { AtomDescriptor, AtomKind, ChannelType } from '@monad/protocol';
 import type {
   ChannelAdapterFactory,
   Connector,
+  ExternalAgentProviderAdapter,
   HookDefinition,
   ManifestAtomPack,
   ModelProvider,
-  NativeCliProviderAdapter,
   SandboxLauncher,
   WorkspaceExperienceApi,
   WorkspaceExperienceDefinition
@@ -55,7 +55,7 @@ export async function discoverChannelAdapters(
     onCommand?: (atomName: string, command: unknown) => void;
     onProvider?: (provider: ModelProvider) => void;
     onHook?: (hook: HookDefinition) => void;
-    onAgentAdapter?: (adapter: NativeCliProviderAdapter) => void;
+    onAgentAdapter?: (adapter: ExternalAgentProviderAdapter) => void;
     /** Receives each sandbox launcher a discovered pack registers (e.g. a cloud e2b/Vercel
      *  launcher) — routed to the daemon's sandbox registry, preferred over built-ins on select. */
     onSandbox?: (launcher: SandboxLauncher) => void;

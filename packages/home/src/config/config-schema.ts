@@ -6,6 +6,7 @@ import {
   channelAllowlistSchema,
   channelGroupPolicySchema,
   channelTypeSchema,
+  externalAgentViewSchema,
   fallbackTargetViewSchema,
   hookMatcherSettingSchema,
   httpOriginSchema,
@@ -13,7 +14,6 @@ import {
   modelProfileRoutesSchema,
   modelRoleSchema,
   modelRolesSchema,
-  nativeCliAgentViewSchema,
   KNOWN_PROVIDER_TYPES as PROTOCOL_KNOWN_PROVIDER_TYPES,
   sandboxModeSchema
 } from '@monad/protocol';
@@ -301,8 +301,8 @@ export const acpAgentSchema = z.object({
 });
 export type AcpAgentConfig = z.infer<typeof acpAgentSchema>;
 
-export const nativeCliAgentSchema = nativeCliAgentViewSchema;
-export type NativeCliAgentConfig = z.infer<typeof nativeCliAgentSchema>;
+export const externalAgentSchema = externalAgentViewSchema;
+export type ExternalAgentConfig = z.infer<typeof externalAgentSchema>;
 
 // Browser automation preset. When enabled, the daemon auto-connects the official
 // Playwright MCP server named "browser" — no manual mcpServers entry needed.

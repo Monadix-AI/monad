@@ -161,11 +161,11 @@ async function mockWorkplaceApi(
     }
     if (method === 'GET' && path === '/v1/settings/acp-agents') return route.fulfill(json({ agents: [] }));
     if (method === 'GET' && path === '/v1/settings/acp-agents/presets') return route.fulfill(json({ presets: [] }));
-    if (method === 'GET' && path === '/v1/settings/native-cli-agents') return route.fulfill(json({ agents: [] }));
-    if (method === 'GET' && path === '/v1/settings/native-cli-agents/presets') {
+    if (method === 'GET' && path === '/v1/settings/external-agents') return route.fulfill(json({ agents: [] }));
+    if (method === 'GET' && path === '/v1/settings/external-agents/presets') {
       return route.fulfill(json({ presets: [] }));
     }
-    if (method === 'GET' && path === `/v1/projects/${projectId}/native-cli-sessions`) {
+    if (method === 'GET' && path === `/v1/projects/${projectId}/external-agent-sessions`) {
       return route.fulfill(json({ sessions: [] }));
     }
     if (method === 'GET' && path === `/v1/projects/${projectId}/ui-stream`) {

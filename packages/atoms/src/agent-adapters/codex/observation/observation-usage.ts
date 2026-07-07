@@ -1,8 +1,8 @@
-import type { NativeCliUsageRecord } from '@monad/protocol';
+import type { ExternalAgentUsageRecord } from '@monad/protocol';
 
 import { numberValue, recordValue, textValue } from '../../observation-projection.ts';
 
-function tokenUsageRow(id: string, tokens: unknown, contextWindow: unknown): NativeCliUsageRecord | undefined {
+function tokenUsageRow(id: string, tokens: unknown, contextWindow: unknown): ExternalAgentUsageRecord | undefined {
   const totalTokens = numberValue(tokens);
   const window = numberValue(contextWindow);
   if (totalTokens === undefined || window === undefined || window <= 0) return undefined;
@@ -20,7 +20,7 @@ function resetIso(value: unknown): string | undefined {
   return new Date(timestampMs).toISOString();
 }
 
-function usageRecord(id: string, value: unknown): NativeCliUsageRecord | undefined {
+function usageRecord(id: string, value: unknown): ExternalAgentUsageRecord | undefined {
   const record = recordValue(value);
   if (!record) return undefined;
   const used = numberValue(record.usedPercent, record.utilization, record.used_percent);
@@ -33,7 +33,7 @@ function usageRecord(id: string, value: unknown): NativeCliUsageRecord | undefin
   };
 }
 
-export function codexUsageRecordsFromRecord(record: Record<string, unknown>): NativeCliUsageRecord[] {
+export function codexUsageRecordsFromRecord(record: Record<string, unknown>): ExternalAgentUsageRecord[] {
   const method = textValue(record.method);
   if (method === 'thread/tokenUsage/updated') {
     const params = recordValue(record.params);
@@ -44,7 +44,7 @@ export function codexUsageRecordsFromRecord(record: Record<string, unknown>): Na
     return [
       tokenUsageRow('last_turn', last?.totalTokens, contextWindow),
       tokenUsageRow('thread_total', total?.totalTokens, contextWindow)
-    ].filter((row): row is NativeCliUsageRecord => !!row);
+    ].filter((row): row is ExternalAgentUsageRecord => !!row);
   }
   if (method === 'account/rateLimits/updated') {
     const params = recordValue(record.params);
@@ -52,7 +52,7 @@ export function codexUsageRecordsFromRecord(record: Record<string, unknown>): Na
     return limits
       ? Object.entries(limits)
           .map(([id, value]) => usageRecord(id, value))
-          .filter((row): row is NativeCliUsageRecord => !!row)
+          .filter((row): row is ExternalAgentUsageRecord => !!row)
       : [];
   }
   return [];

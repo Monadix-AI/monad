@@ -1,4 +1,4 @@
-import type { NativeCliSettingsImportItem } from '@monad/protocol';
+import type { ExternalAgentSettingsImportItem } from '@monad/protocol';
 
 import { createHash } from 'node:crypto';
 
@@ -17,15 +17,17 @@ function sha256(value: string): string {
   return createHash('sha256').update(value).digest('hex');
 }
 
-export function publicItemWithoutHash(item: NativeCliSettingsImportItem): Omit<NativeCliSettingsImportItem, 'hash'> {
+export function publicItemWithoutHash(
+  item: ExternalAgentSettingsImportItem
+): Omit<ExternalAgentSettingsImportItem, 'hash'> {
   const { hash: _hash, ...rest } = item;
   return rest;
 }
 
-export function nativeCliSettingsImportItemHash(item: Omit<NativeCliSettingsImportItem, 'hash'>): string {
+export function externalAgentSettingsImportItemHash(item: Omit<ExternalAgentSettingsImportItem, 'hash'>): string {
   return sha256(stableJson(item));
 }
 
-export function withHash(item: Omit<NativeCliSettingsImportItem, 'hash'>): NativeCliSettingsImportItem {
-  return { ...item, hash: nativeCliSettingsImportItemHash(item) };
+export function withHash(item: Omit<ExternalAgentSettingsImportItem, 'hash'>): ExternalAgentSettingsImportItem {
+  return { ...item, hash: externalAgentSettingsImportItemHash(item) };
 }

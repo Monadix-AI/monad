@@ -1,42 +1,42 @@
 'use client';
 
-import type { NativeCliAgentView } from '@monad/protocol';
+import type { ExternalAgentView } from '@monad/protocol';
 import type { useT } from '@/components/I18nProvider';
 
-import { useStartNativeCliAuthMutation } from '@monad/client-rtk';
+import { useStartExternalAgentAuthMutation } from '@monad/client-rtk';
 import { Button } from '@monad/ui';
 import { useState } from 'react';
 
-import { NativeCliPresetPanel } from '@/features/studio/third-party-agents/NativeCliPresetPanel';
-import { connectNativeCliAgent } from '@/features/studio/third-party-agents/native-cli-connect-agent';
-import { DETECTING_NATIVE_CLI_PRESETS } from '@/features/studio/third-party-agents/native-cli-default-presets';
-import { NativeCliAuthModal } from '@/features/workplace/cli/NativeCliAuthModal';
+import { ExternalAgentPresetPanel } from '@/features/studio/third-party-agents/ExternalAgentPresetPanel';
+import { connectExternalAgent } from '@/features/studio/third-party-agents/external-agent-connect-agent';
+import { DETECTING_EXTERNAL_AGENT_PRESETS } from '@/features/studio/third-party-agents/external-agent-default-presets';
+import { ExternalAgentAuthModal } from '@/features/workplace/cli/ExternalAgentAuthModal';
 import { useAsyncAction } from '@/hooks/use-async-action';
-import { useNativeCliAgentSettings } from '@/hooks/use-native-cli-agent-settings';
+import { useExternalAgentSettings } from '@/hooks/use-external-agent-settings';
 
 type TFunction = ReturnType<typeof useT>;
 
 export function InitMeshStep({ onBack, onEnter, t }: { onBack: () => void; onEnter: () => void; t: TFunction }) {
-  const { agents, presets, authStates, loading, saveAgent, removeAgent } = useNativeCliAgentSettings();
-  const [startAuth] = useStartNativeCliAuthMutation();
+  const { agents, presets, authStates, loading, saveAgent, removeAgent } = useExternalAgentSettings();
+  const [startAuth] = useStartExternalAgentAuthMutation();
   const [connectingAgentName, setConnectingAgentName] = useState<string | null>(null);
   const [authSession, setAuthSession] = useState<{
     id: string;
     controlToken: string;
     agentName: string;
-    agent: NativeCliAgentView;
+    agent: ExternalAgentView;
   } | null>(null);
   const { error: connectError, run: runConnect } = useAsyncAction();
-  const visiblePresets = presets.length > 0 ? presets : DETECTING_NATIVE_CLI_PRESETS;
+  const visiblePresets = presets.length > 0 ? presets : DETECTING_EXTERNAL_AGENT_PRESETS;
   const detectingPresets = loading && presets.length === 0;
   const connectedCount = agents.length;
 
-  const connectAgent = (agent: NativeCliAgentView) =>
+  const connectAgent = (agent: ExternalAgentView) =>
     runConnect(async () => {
       setAuthSession(null);
       setConnectingAgentName(agent.name);
       try {
-        const { session, persisted } = await connectNativeCliAgent(agent, {
+        const { session, persisted } = await connectExternalAgent(agent, {
           saveAgent,
           removeAgent,
           startAuth: (agentName) => startAuth(agentName).unwrap()
@@ -68,7 +68,7 @@ export function InitMeshStep({ onBack, onEnter, t }: { onBack: () => void; onEnt
         </p>
       ) : null}
 
-      <NativeCliPresetPanel
+      <ExternalAgentPresetPanel
         agents={agents}
         authSessionAgentName={authSession?.agentName}
         authStates={authStates}
@@ -97,7 +97,7 @@ export function InitMeshStep({ onBack, onEnter, t }: { onBack: () => void; onEnt
       </div>
 
       {authSession ? (
-        <NativeCliAuthModal
+        <ExternalAgentAuthModal
           agentName={authSession.agentName}
           controlToken={authSession.controlToken}
           onAuthenticated={async () => {

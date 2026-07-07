@@ -520,7 +520,7 @@ export function AppShell() {
         () => setStudioUrl('skills'),
         () => setStudioUrl('channels'),
         () => setStudioUrl('acpAgents'),
-        () => setStudioUrl('nativeCliAgents'),
+        () => setStudioUrl('externalAgents'),
         () => setStudioUrl('capabilities')
       ];
     }

@@ -1,6 +1,6 @@
 import type { NativeAgentRuntime, NativeAgentRuntimeInfoResponse, ProjectId } from '@monad/protocol';
 import type { createDaemonHandlers } from '@/handlers/daemon-handlers/index.ts';
-import type { NativeCliSessionRow } from '@/store/db/index.ts';
+import type { ExternalAgentSessionRow } from '@/store/db/index.ts';
 
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { nativeAgentRuntimeSchema } from '@monad/protocol';
@@ -10,7 +10,7 @@ import { HandlerError } from '@/handlers/handler-error.ts';
 export interface NativeAgentRuntimeBinding {
   agentId: string;
   projectId: ProjectId;
-  nativeCliSessionId: string;
+  externalAgentSessionId: string;
 }
 
 function hashToken(token: string): string {
@@ -23,7 +23,7 @@ function tokenMatchesHash(providedToken: string, expectedHash: string): boolean 
   return provided.length === expected.length && timingSafeEqual(provided, expected);
 }
 
-function runtimeSummary(nativeSession: NativeCliSessionRow): NativeAgentRuntime {
+function runtimeSummary(nativeSession: ExternalAgentSessionRow): NativeAgentRuntime {
   return nativeAgentRuntimeSchema.parse({
     id: nativeSession.id,
     transcriptTargetId: nativeSession.transcriptTargetId,
@@ -49,54 +49,54 @@ export function createNativeAgentRuntimeService(handlers: ReturnType<typeof crea
   return {
     requireManagedBinding(headers: Headers): {
       binding: NativeAgentRuntimeBinding;
-      nativeSession: NativeCliSessionRow;
+      nativeSession: ExternalAgentSessionRow;
     } {
-      const nativeCliSessionId = headers.get('x-monad-native-cli-session-id');
-      if (!nativeCliSessionId) {
+      const externalAgentSessionId = headers.get('x-monad-external-agent-session-id');
+      if (!externalAgentSessionId) {
         throw new HandlerError(
           'forbidden',
-          'current runtime is not a project-managed native CLI agent',
-          'NOT_MANAGED_NATIVE_CLI'
+          'current runtime is not a project-managed external agent',
+          'NOT_MANAGED_EXTERNAL_AGENT'
         );
       }
-      const nativeSession = store.getNativeCliSession(nativeCliSessionId);
+      const nativeSession = store.getExternalAgentSession(externalAgentSessionId);
       if (!nativeSession) {
         throw new HandlerError(
           'not_found',
-          `native CLI session not found: ${nativeCliSessionId}`,
-          'NATIVE_CLI_SESSION_NOT_FOUND'
+          `external agent session not found: ${externalAgentSessionId}`,
+          'EXTERNAL_AGENT_SESSION_NOT_FOUND'
         );
       }
       if (nativeSession.runtimeRole !== 'managed-project-agent') {
         throw new HandlerError(
           'forbidden',
-          'current runtime is not a project-managed native CLI agent',
-          'NOT_MANAGED_NATIVE_CLI'
+          'current runtime is not a project-managed external agent',
+          'NOT_MANAGED_EXTERNAL_AGENT'
         );
       }
       if (nativeSession.state !== 'running') {
         throw new HandlerError(
           'forbidden',
-          'managed native CLI session is not active',
-          'NATIVE_CLI_SESSION_NOT_ACTIVE'
+          'managed external agent session is not active',
+          'EXTERNAL_AGENT_SESSION_NOT_ACTIVE'
         );
       }
       if (!nativeSession.transcriptTargetId.startsWith('prj_')) {
         throw new HandlerError(
           'forbidden',
-          'managed native CLI session is not bound to a Workplace Project',
-          'NOT_PROJECT_MANAGED_NATIVE_CLI'
+          'managed external agent session is not bound to a Workplace Project',
+          'NOT_PROJECT_MANAGED_EXTERNAL_AGENT'
         );
       }
       const token = headers.get('authorization')?.match(/^Bearer\s+(.+)$/i)?.[1] ?? '';
       if (!nativeSession.agentRuntimeTokenHash || !tokenMatchesHash(token, nativeSession.agentRuntimeTokenHash)) {
-        throw new HandlerError('forbidden', 'invalid managed native CLI agent token', 'INVALID_NATIVE_AGENT_TOKEN');
+        throw new HandlerError('forbidden', 'invalid managed external agent token', 'INVALID_NATIVE_AGENT_TOKEN');
       }
       return {
         binding: {
           agentId: nativeSession.agentName,
           projectId: nativeSession.transcriptTargetId as ProjectId,
-          nativeCliSessionId
+          externalAgentSessionId
         },
         nativeSession
       };
@@ -104,7 +104,7 @@ export function createNativeAgentRuntimeService(handlers: ReturnType<typeof crea
 
     info(args: {
       binding: NativeAgentRuntimeBinding;
-      nativeSession: NativeCliSessionRow;
+      nativeSession: ExternalAgentSessionRow;
       serverUrl: string;
     }): NativeAgentRuntimeInfoResponse {
       return {
@@ -115,7 +115,7 @@ export function createNativeAgentRuntimeService(handlers: ReturnType<typeof crea
         providerSessionRef: args.nativeSession.providerSessionRef,
         lastDeliveredSeq: args.nativeSession.lastDeliveredSeq,
         lastVisibleSeq: args.nativeSession.lastVisibleSeq,
-        pendingInboxCount: store.countNativeCliInbox(args.binding.nativeCliSessionId)
+        pendingInboxCount: store.countExternalAgentInbox(args.binding.externalAgentSessionId)
       };
     }
   };
