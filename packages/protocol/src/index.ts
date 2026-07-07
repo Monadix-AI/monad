@@ -6,6 +6,7 @@
 
 export * from './a2a.ts';
 export * from './acp-agent.ts';
+export * from './agent-observation.ts';
 export * from './approvals.ts';
 export * from './atom-pack.ts';
 export * from './avatar.ts';
