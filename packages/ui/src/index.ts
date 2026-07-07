@@ -69,6 +69,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger
 } from './components/DropdownMenu';
+import { ImageZoom, type ImageZoomProps } from './components/ImageZoom';
 import { Input } from './components/Input';
 import {
   InputGroup,
@@ -116,6 +117,7 @@ export type {
   ComposerSubmitButtonProps,
   ComposerSurfaceProps,
   ComposerVoiceButtonProps,
+  ImageZoomProps,
   ProductIconColors,
   ProductIconId,
   ProductIconProps,
@@ -178,6 +180,7 @@ export {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
+  ImageZoom,
   Input,
   InputGroup,
   InputGroupAddon,

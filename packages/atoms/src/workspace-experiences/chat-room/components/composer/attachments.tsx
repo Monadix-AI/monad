@@ -17,6 +17,7 @@ import {
   TextIcon
 } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react';
+import { ImageZoom } from '@monad/ui';
 import { workspaceMono as mono, workspaceSans as sans } from '@monad/ui/components/AgentAvatar';
 
 const TEXT_ATTACHMENT_MAX_BYTES = 512_000;
@@ -249,6 +250,10 @@ export function AttachmentPreviewStrip({
   );
 }
 
+function imageAttachmentSrc(attachment: DraftAttachment): string | null {
+  return attachment.kind === 'image' ? `data:${attachment.mediaType};base64,${attachment.dataBase64}` : null;
+}
+
 function AttachmentPreviewCard({
   attachment,
   onOpen,
@@ -260,7 +265,89 @@ function AttachmentPreviewCard({
 }): ReactElement {
   const visual = attachmentVisual(attachment);
   const displayName = attachmentDisplayName(attachment);
-  const imageSrc = attachment.kind === 'image' ? `data:${attachment.mediaType};base64,${attachment.dataBase64}` : null;
+  const imageSrc = imageAttachmentSrc(attachment);
+  const thumbnail = (
+    <div
+      style={{
+        alignItems: 'center',
+        background: imageSrc ? 'var(--secondary)' : `color-mix(in srgb, ${visual.accent} 18%, transparent)`,
+        border: '1px solid color-mix(in srgb, var(--border) 70%, transparent)',
+        borderRadius: 8,
+        color: visual.accent,
+        display: 'flex',
+        flex: '0 0 38px',
+        height: 38,
+        justifyContent: 'center',
+        overflow: 'hidden',
+        width: 38
+      }}
+    >
+      {imageSrc ? (
+        <ImageZoom
+          className="[&_[data-rmiz-content]]:h-full [&_[data-rmiz-content]]:w-full [&_[data-rmiz]]:h-full [&_[data-rmiz]]:w-full [&_img]:h-full [&_img]:w-full [&_img]:object-cover"
+          zoomMargin={24}
+        >
+          {/* biome-ignore lint/performance/noImgElement: draft attachment previews use local data URLs, not optimizable remote assets. */}
+          <img
+            alt={`Preview of ${displayName}`}
+            draggable={false}
+            src={imageSrc}
+          />
+        </ImageZoom>
+      ) : (
+        <HugeiconsIcon
+          icon={visual.icon}
+          size={18}
+        />
+      )}
+    </div>
+  );
+  const details = (
+    <div style={{ minWidth: 0 }}>
+      <div
+        style={{
+          color: 'var(--foreground)',
+          fontFamily: sans,
+          fontSize: 12,
+          fontWeight: 600,
+          lineHeight: '16px',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap'
+        }}
+      >
+        {displayName}
+      </div>
+      <div
+        style={{
+          color: 'var(--muted-foreground)',
+          display: 'flex',
+          fontFamily: mono,
+          fontSize: 10,
+          gap: 5,
+          lineHeight: '14px',
+          minWidth: 0,
+          whiteSpace: 'nowrap'
+        }}
+      >
+        <span style={{ color: visual.accent, overflow: 'hidden', textOverflow: 'ellipsis' }}>{visual.label}</span>
+        <span>{formatAttachmentSize(attachment.size)}</span>
+      </div>
+    </div>
+  );
+  const contentStyle = {
+    alignItems: 'center',
+    background: 'transparent',
+    border: 'none',
+    color: 'inherit',
+    display: 'flex',
+    gap: 8,
+    height: '100%',
+    minWidth: 0,
+    padding: '7px 32px 7px 8px',
+    textAlign: 'left',
+    width: '100%'
+  } as const;
   return (
     <li
       style={{
@@ -276,89 +363,22 @@ function AttachmentPreviewCard({
       }}
       title={attachmentSummary(attachment)}
     >
-      <button
-        aria-label={`Open ${displayName}`}
-        onClick={onOpen}
-        style={{
-          alignItems: 'center',
-          background: 'transparent',
-          border: 'none',
-          color: 'inherit',
-          display: 'flex',
-          gap: 8,
-          height: '100%',
-          minWidth: 0,
-          padding: '7px 32px 7px 8px',
-          textAlign: 'left',
-          width: '100%'
-        }}
-        type="button"
-      >
-        <div
-          style={{
-            alignItems: 'center',
-            background: imageSrc ? 'var(--secondary)' : `color-mix(in srgb, ${visual.accent} 18%, transparent)`,
-            border: '1px solid color-mix(in srgb, var(--border) 70%, transparent)',
-            borderRadius: 8,
-            color: visual.accent,
-            display: 'flex',
-            flex: '0 0 38px',
-            height: 38,
-            justifyContent: 'center',
-            overflow: 'hidden',
-            width: 38
-          }}
+      {imageSrc ? (
+        <div style={contentStyle}>
+          {thumbnail}
+          {details}
+        </div>
+      ) : (
+        <button
+          aria-label={`Open ${displayName}`}
+          onClick={onOpen}
+          style={contentStyle}
+          type="button"
         >
-          {imageSrc ? (
-            <div
-              aria-hidden="true"
-              style={{
-                backgroundImage: `url("${imageSrc}")`,
-                backgroundPosition: 'center',
-                backgroundSize: 'cover',
-                height: '100%',
-                width: '100%'
-              }}
-            />
-          ) : (
-            <HugeiconsIcon
-              icon={visual.icon}
-              size={18}
-            />
-          )}
-        </div>
-        <div style={{ minWidth: 0 }}>
-          <div
-            style={{
-              color: 'var(--foreground)',
-              fontFamily: sans,
-              fontSize: 12,
-              fontWeight: 600,
-              lineHeight: '16px',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap'
-            }}
-          >
-            {displayName}
-          </div>
-          <div
-            style={{
-              color: 'var(--muted-foreground)',
-              display: 'flex',
-              fontFamily: mono,
-              fontSize: 10,
-              gap: 5,
-              lineHeight: '14px',
-              minWidth: 0,
-              whiteSpace: 'nowrap'
-            }}
-          >
-            <span style={{ color: visual.accent, overflow: 'hidden', textOverflow: 'ellipsis' }}>{visual.label}</span>
-            <span>{formatAttachmentSize(attachment.size)}</span>
-          </div>
-        </div>
-      </button>
+          {thumbnail}
+          {details}
+        </button>
+      )}
       <button
         aria-label={`Remove ${displayName}`}
         className="workplace-action"
