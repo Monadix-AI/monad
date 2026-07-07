@@ -34,7 +34,8 @@ test('command-name phase filters by prefix on both raw and display name', () => 
   const items = buildCommandMenuItems('/re', commands, [], [], t);
   expect(items.map((i) => i.key)).toEqual(['global:review', 'reset']);
   // Skills sort before actions (rank prefix 0 vs 1), friendly name is used for the label.
-  expect(items[0]).toMatchObject({ key: 'global:review', label: '/Review', typeBadge: 'Skill' });
+  expect(items[0]).toMatchObject({ key: 'global:review', label: '/Review', section: 'Skills', typeBadge: 'Skill' });
+  expect(items[1]).toMatchObject({ key: 'reset', section: 'Commands', typeBadge: 'Command' });
 });
 
 test('command-name phase orders builtin actions by product group', () => {
@@ -94,6 +95,7 @@ test('subcommand phase suggests subcommands and then their args', () => {
           name: 'Consolidate',
           description: 'Consolidate memory layers',
           aliases: [],
+          shortcut: 'consolidate',
           args: [{ name: 'level', type: 'enum', values: [{ id: '1', name: 'L1' }] }]
         }
       ]
@@ -104,6 +106,7 @@ test('subcommand phase suggests subcommands and then their args', () => {
     expect.objectContaining({
       key: 'memory:consolidate',
       label: 'Consolidate',
+      badge: '/consolidate',
       insert: '/memory consolidate '
     })
   ]);

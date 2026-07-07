@@ -46,6 +46,7 @@ export interface SessionCommandMenuItem {
   key: string;
   label: string;
   replace?: { start: number; end: number };
+  section?: string;
   typeBadge?: string;
   version?: string;
 }
@@ -452,6 +453,11 @@ function CommandMenu({
   onHover: (index: number) => void;
 }) {
   const skeletonRows = ['one', 'two', 'three', 'four'];
+  const renderedItems = items.map((item, index) => {
+    const previous = items[index - 1];
+    const showSection = item.section && item.section !== previous?.section;
+    return { index, item, showSection };
+  });
   return (
     <div className="glass-surface absolute bottom-full left-0 z-10 mb-3 w-full overflow-hidden text-popover-foreground">
       <ScrollArea className="max-h-60">
@@ -471,55 +477,63 @@ function CommandMenu({
                 </div>
               ))
             : null}
-          {items.map((item, index) => (
-            <button
-              className={cn(
-                'flex w-full flex-col items-start gap-0.5 rounded-(--radius-md) px-3 py-2 text-left',
-                index === Math.min(activeSkill, items.length - 1)
-                  ? 'bg-accent text-accent-foreground'
-                  : 'hover:bg-accent/50'
-              )}
-              key={item.key}
-              onMouseDown={(event) => {
-                event.preventDefault();
-                onApply(item);
-              }}
-              onMouseEnter={() => onHover(index)}
-              type="button"
-            >
-              <span className="flex w-full items-center gap-1.5">
-                {item.icon && (item.icon.startsWith('http://') || item.icon.startsWith('https://')) ? (
-                  <span className="grid size-5 shrink-0 place-items-center rounded border bg-background text-xs">
-                    <span
-                      className="size-full rounded bg-center bg-cover"
-                      style={{ backgroundImage: `url(${item.icon})` }}
+          {renderedItems.map(({ index, item, showSection }) => (
+            <div key={item.key}>
+              {showSection ? (
+                <div className="px-3 pt-2 pb-1 font-medium text-[11px] text-muted-foreground">{item.section}</div>
+              ) : null}
+              <button
+                className={cn(
+                  'flex w-full flex-col items-start gap-0.5 rounded-(--radius-md) px-3 py-2 text-left',
+                  index === Math.min(activeSkill, items.length - 1)
+                    ? 'bg-accent text-accent-foreground'
+                    : 'hover:bg-accent/50'
+                )}
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                  onApply(item);
+                }}
+                onMouseEnter={() => onHover(index)}
+                type="button"
+              >
+                <span className="flex w-full min-w-0 items-center gap-1.5">
+                  {item.icon && (item.icon.startsWith('http://') || item.icon.startsWith('https://')) ? (
+                    <span className="grid size-5 shrink-0 place-items-center rounded border bg-background text-xs">
+                      <span
+                        className="size-full rounded bg-center bg-cover"
+                        style={{ backgroundImage: `url(${item.icon})` }}
+                      />
+                    </span>
+                  ) : renderableIconText(item.icon) ? (
+                    <span className="grid size-5 shrink-0 place-items-center rounded border bg-background text-xs">
+                      {renderableIconText(item.icon)}
+                    </span>
+                  ) : item.typeBadge === 'Skill' ? (
+                    <HugeiconsIcon
+                      className="size-3.5 shrink-0 text-muted-foreground"
+                      icon={BoxIcon}
                     />
-                  </span>
-                ) : renderableIconText(item.icon) ? (
-                  <span className="grid size-5 shrink-0 place-items-center rounded border bg-background text-xs">
-                    {renderableIconText(item.icon)}
-                  </span>
-                ) : item.typeBadge === 'Skill' ? (
-                  <HugeiconsIcon
-                    className="size-3.5 shrink-0 text-muted-foreground"
-                    icon={BoxIcon}
-                  />
-                ) : null}
-                <span className="font-medium font-mono text-xs">{item.label}</span>
-                {item.version ? (
-                  <span className="label-mono rounded-full border border-border/70 px-2 py-1">v{item.version}</span>
-                ) : null}
-                {item.typeBadge && (
-                  <span className="label-mono rounded-full border border-border/70 bg-muted/60 px-2 py-1">
-                    {item.typeBadge}
-                  </span>
-                )}
-                {item.badge && (
-                  <span className="label-mono rounded-full border border-border/70 px-2 py-1">{item.badge}</span>
-                )}
-              </span>
-              {item.hint && <span className="line-clamp-1 text-muted-foreground text-xs">{item.hint}</span>}
-            </button>
+                  ) : null}
+                  <span className="min-w-0 truncate font-medium font-mono text-xs">{item.label}</span>
+                  {item.version ? (
+                    <span className="label-mono shrink-0 rounded-full border border-border/70 px-2 py-1">
+                      v{item.version}
+                    </span>
+                  ) : null}
+                  {item.typeBadge && (
+                    <span className="label-mono shrink-0 rounded-full border border-border/70 bg-muted/60 px-2 py-1">
+                      {item.typeBadge}
+                    </span>
+                  )}
+                  {item.badge && (
+                    <span className="label-mono shrink-0 rounded-full border border-border/70 px-2 py-1">
+                      {item.badge}
+                    </span>
+                  )}
+                </span>
+                {item.hint && <span className="line-clamp-1 text-muted-foreground text-xs">{item.hint}</span>}
+              </button>
+            </div>
           ))}
         </div>
       </ScrollArea>

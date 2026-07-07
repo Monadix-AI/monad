@@ -59,6 +59,8 @@ export const commandSubcommandSchema = z.object({
   name: z.string(),
   description: z.string(),
   aliases: z.array(z.string()).default([]),
+  /** Optional top-level built-in command that shortcuts this subcommand. */
+  shortcut: z.string().optional(),
   args: z.array(commandArgSchema).optional()
 });
 export type CommandSubcommand = z.infer<typeof commandSubcommandSchema>;

@@ -267,6 +267,7 @@ describe('CommandRegistry precedence', () => {
             id: 'consolidate',
             name: 'Consolidate',
             description: 'Consolidate memory layers',
+            shortcut: 'consolidate',
             args: [{ name: 'level', type: 'number', required: false, placeholder: '[level]' }]
           }
         ],
@@ -276,7 +277,9 @@ describe('CommandRegistry precedence', () => {
     expect(r.list().find((s) => s.id === 'memory')).toMatchObject({
       group: 'Memory',
       args: [{ name: 'query', type: 'string' }],
-      subcommands: [{ id: 'consolidate', name: 'Consolidate', args: [{ name: 'level', type: 'number' }] }]
+      subcommands: [
+        { id: 'consolidate', name: 'Consolidate', shortcut: 'consolidate', args: [{ name: 'level', type: 'number' }] }
+      ]
     });
   });
 });
@@ -321,6 +324,32 @@ describe('dispatchCommand', () => {
   test('/model rejects an unknown alias without calling setModel', async () => {
     const r = seededCommandRegistry();
     const _res = await dispatchCommand(r, '/model nonexistent', (a) => fakeCtx(a));
+  });
+
+  test('/memory routes built-in subcommands while shortcuts stay available', async () => {
+    const r = seededCommandRegistry();
+    const calls: string[] = [];
+    const consolidate = await dispatchCommand(r, '/memory consolidate 2', (a) =>
+      fakeCtx(a, {
+        consolidate: async (level) => {
+          calls.push(`consolidate:${level}`);
+          return { level: level ?? 1, l1Scopes: 1, nodes: 2, edges: 3, prunedEdges: 0, laws: 4, lawScopes: 0 };
+        }
+      })
+    );
+    expect(calls).toEqual(['consolidate:2']);
+    expect(consolidate?.message).toContain('Consolidated to L2');
+
+    const shortcut = await dispatchCommand(r, '/consolidate 3', (a) =>
+      fakeCtx(a, {
+        consolidate: async (level) => {
+          calls.push(`shortcut:${level}`);
+          return { level: level ?? 1, l1Scopes: 0, nodes: 0, edges: 0, prunedEdges: 0, laws: 0, lawScopes: 0 };
+        }
+      })
+    );
+    expect(calls.at(-1)).toBe('shortcut:3');
+    expect(shortcut?.message).toContain('Consolidated to L3');
   });
 
   test('an alias resolves to the canonical built-in (/ls → sessions)', async () => {
