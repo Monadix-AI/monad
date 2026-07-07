@@ -64,6 +64,7 @@ import {
 } from './app-shell/session-view';
 import { SettingsModalHost } from './app-shell/settings-modal-host';
 import { AppShellSidebarHost } from './app-shell/sidebar-host';
+import { resolveStudioNavigationPath } from './app-shell/studio-navigation';
 import { NewProjectDialog } from './NewProjectDialog';
 import { useAppShellData } from './useAppShellData';
 
@@ -104,7 +105,6 @@ export function AppShell() {
   const composerSettings = normalizedComposerSettings(appearance?.composer);
   const primaryAgentSession = currentSession ?? directSessions[0] ?? null;
   const shellSurface = useWorkspaceShellStore((state: WorkspaceShellState) => state.surface);
-  const lastStudioSection = useWorkspaceShellStore((state: WorkspaceShellState) => state.lastStudioSection);
   const lastWorkspacePath = useWorkspaceShellStore((state: WorkspaceShellState) => state.lastWorkspacePath);
   const rememberStudioSection = useWorkspaceShellStore((state: WorkspaceShellState) => state.rememberStudioSection);
   const rememberWorkspacePath = useWorkspaceShellStore((state: WorkspaceShellState) => state.rememberWorkspacePath);
@@ -352,10 +352,9 @@ export function AppShell() {
 
   const setStudioUrl = useCallback(
     (section?: StudioSectionId) => {
-      const nextSection = section ?? lastStudioSection;
-      replaceShellUrl(studioPath(runtimeSectionEnabled(nextSection, runtimeReady) ? nextSection : 'runtime'));
+      replaceShellUrl(resolveStudioNavigationPath({ runtimeReady, section }));
     },
-    [lastStudioSection, runtimeReady]
+    [runtimeReady]
   );
 
   const toggleSidebarAutoMode = useCallback(() => {
