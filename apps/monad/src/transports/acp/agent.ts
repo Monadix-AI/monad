@@ -287,8 +287,8 @@ export class MonadAcpAgent {
     try {
       const { commands } = await this.handlers.commands.list();
       const availableCommands = commands
-        .filter((c) => c.available)
-        .map((c) => ({ name: c.name, description: c.description, input: { hint: c.argHint ?? 'arguments' } }));
+        .filter((c) => c.enabled)
+        .map((c) => ({ name: c.id, description: c.description, input: { hint: c.argHint ?? 'arguments' } }));
       if (availableCommands.length > 0) {
         await this.conn.client.notify('session/update', {
           sessionId: sid,

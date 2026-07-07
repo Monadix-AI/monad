@@ -20,7 +20,7 @@ export const installSkillApi = listInstalledSkillsApi.injectEndpoints({
           })
         ),
       // Only a committed install (no further consent needed) changes the installed set.
-      invalidatesTags: (result) => (result?.needsConsent ? [] : ['InstalledSkills', 'Skills'])
+      invalidatesTags: (result) => (result?.needsConsent ? [] : ['InstalledSkills', 'Skills', 'SlashCommands'])
     })
   })
 });

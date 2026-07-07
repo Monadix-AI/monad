@@ -30,7 +30,7 @@ export const setAtomPackEnabledApi = installAtomPackApi.injectEndpoints({
           patch.undo();
         }
       },
-      invalidatesTags: ['Atoms', 'Skills', 'SkillsSettings']
+      invalidatesTags: ['Atoms', 'Skills', 'SkillsSettings', 'SlashCommands']
     })
   })
 });

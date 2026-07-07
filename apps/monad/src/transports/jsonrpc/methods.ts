@@ -124,7 +124,7 @@ export const RPC_HANDLERS: RpcHandlerMap = {
   'settings.skills.get': (_params, h: D) => h.skillsSettings.getSkillsSettings(),
   'settings.skills.set': (params, h: D) => h.skillsSettings.setSkillsSettings(params),
 
-  'commands.list': (_params, h: D) => h.commands.list(),
+  'commands.list': (params, h: D) => h.commands.list(params),
 
   'agents.list': (_params, h: D) => h.agent.listAgents(),
   'agents.get': ({ id }, h: D) => h.agent.getAgent({ agentId: id }),

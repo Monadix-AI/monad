@@ -206,8 +206,8 @@ export class ChannelService {
       const bundle = this.deps.commands;
       const cmds = bundle.registry
         .list(bundle.skills(), this.deps.t)
-        .filter((s) => s.kind === 'builtin' && s.available && /^[a-z0-9_]+$/.test(s.name))
-        .map((s) => ({ command: s.name, description: s.description }));
+        .filter((s) => s.type === 'action' && s.source === 'builtin' && s.enabled && /^[a-z0-9_]+$/.test(s.id))
+        .map((s) => ({ command: s.id, description: s.description }));
       void adapter
         .setCommands(cmds)
         .catch((err) => this.deps.log.warn(`channel "${c.id}": setCommands failed: ${errMsg(err)}`));

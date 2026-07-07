@@ -30,6 +30,7 @@ const applySettingsImportApi = sessionsApi.injectEndpoints({
         'Roles',
         'Credentials',
         'Skills',
+        'SlashCommands',
         'SkillsSettings',
         'InstalledSkills',
         'SandboxSettings',

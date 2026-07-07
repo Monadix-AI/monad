@@ -13,7 +13,7 @@ import {
   revokeApprovalRequestSchema
 } from './approvals.ts';
 import { browserPresetResponseSchema, setBrowserPresetRequestSchema } from './browser-preset.ts';
-import { commandsListResponseSchema } from './command.ts';
+import { commandsListQuerySchema, commandsListResponseSchema } from './command.ts';
 import { computerPresetResponseSchema, setComputerPresetRequestSchema } from './computer-preset.ts';
 import { getGraphResponseSchema } from './graph.ts';
 import { agentIdSchema, projectIdSchema, sessionIdSchema } from './ids.ts';
@@ -455,6 +455,7 @@ export const daemonHttpContract = {
   },
   commands: {
     list: defineHttpEndpoint({
+      query: commandsListQuerySchema,
       response: { 200: commandsListResponseSchema }
     })
   },

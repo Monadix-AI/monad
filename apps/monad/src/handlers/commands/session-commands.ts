@@ -5,6 +5,7 @@
 import type { Translate } from '@monad/i18n';
 import type {
   ChatMessage,
+  CommandItem,
   Event,
   PrincipalId,
   Session,
@@ -18,7 +19,6 @@ import type {
   CommandDefinition,
   CommandModelInfo,
   CommandResult,
-  CommandSpec,
   CompactSummary,
   ConsolidateSummary,
   ContradictionCheckSummary
@@ -41,8 +41,8 @@ export interface CommandExecution {
   principalId: PrincipalId;
   /** Approval gate for `highRisk` commands (e.g. an atom pack command) — throws to deny. */
   gate?: (def: CommandDefinition) => Promise<void>;
-  /** Caller is the daemon owner — gates `access: 'owner'` commands. Default true. */
-  isOwner?: boolean;
+  /** Host-side policy hook for transport-specific command restrictions. */
+  denyCommand?: (def: CommandDefinition) => CommandResult | null | undefined;
   /** A turn is streaming for this session — gates non-`duringTurn` commands (concurrency guard). */
   isBusy?: boolean;
 }
@@ -66,7 +66,7 @@ export async function executeCommand(
           nav: exec.navigator,
           services: exec.services
         }),
-      { gate: exec.gate, isOwner: exec.isOwner, isBusy: exec.isBusy }
+      { gate: exec.gate, denyCommand: exec.denyCommand, isBusy: exec.isBusy }
     );
   } catch (err) {
     return { message: exec.services.t('cmd.error', { message: (err as Error).message }) };
@@ -126,7 +126,6 @@ export interface SessionCommandRunner {
   bus: EventBus;
   lifecycle: LifecycleOps;
   commands: CommandBundle;
-  /** Daemon owner principal — a session owned by it is an owner-privileged caller (gates `access`). */
   ownerPrincipalId: PrincipalId;
 }
 
@@ -175,7 +174,6 @@ function genericExecution(runner: SessionCommandRunner, session: TranscriptTarge
     registry: commands.registry,
     navigator: genericNavigator(runner, session),
     principalId: session.ownerPrincipalId,
-    isOwner: session.ownerPrincipalId === runner.ownerPrincipalId,
     isBusy: busy,
     gate: approve ? (def) => approve(sessionOnlyId(session.id, 'approval'), def) : undefined,
     services: {
@@ -193,7 +191,7 @@ function genericExecution(runner: SessionCommandRunner, session: TranscriptTarge
       setWorkdir: async (sid: TranscriptTargetId, path: string) => ({
         path: (await runner.lifecycle.setWorkspace({ id: sid, cwd: path })).cwd
       }),
-      listCommands: async (): Promise<CommandSpec[]> => commands.registry.list(commands.skills(), commands.t),
+      listCommands: async (): Promise<CommandItem[]> => commands.registry.list(commands.skills(), commands.t),
       handoff: (sid: TranscriptTargetId, initialTask?: string) =>
         commands.handoff(sessionOnlyId(sid, 'handoff'), initialTask),
       t: commands.t,

@@ -22,7 +22,7 @@ export const removeAtomPackApi = setAtomPackEnabledApi.injectEndpoints({
           patch.undo();
         }
       },
-      invalidatesTags: ['Atoms']
+      invalidatesTags: ['Atoms', 'SlashCommands']
     })
   })
 });

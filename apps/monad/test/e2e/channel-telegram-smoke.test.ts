@@ -109,7 +109,6 @@ test('telegram smoke: an allowlisted DM gets a mock-agent reply delivered back',
           options: { apiBaseUrl: tg.url, pollTimeoutSec: 1 },
           allowlist: { allowAllUsers: false, allowedUsers: [String(TESTER_ID)] },
           mapping: { granularity: 'per-conversation' },
-          ownerUsers: [],
           tokenRef: 'smoke-token',
           rateLimitPerMin: 100
         }

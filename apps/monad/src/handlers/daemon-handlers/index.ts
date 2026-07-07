@@ -1,4 +1,5 @@
 import type {
+  CommandsListQuery,
   CommandsListResponse,
   GetGraphResponse,
   GetHealthResponse,
@@ -170,9 +171,11 @@ export function createDaemonHandlers(deps: DaemonHandlerDeps) {
   // Unified command discovery: built-ins + atom pack commands + user-invocable skills. Every client
   // (ACP available_commands_update, web autocomplete, /help, CLI) derives from this one list.
   const commands = {
-    async list(): Promise<CommandsListResponse> {
+    async list(query: CommandsListQuery = { filter: 'enabled' }): Promise<CommandsListResponse> {
       return {
-        commands: deps.commands ? deps.commands.registry.list(deps.commands.skills(), deps.localeService.t) : []
+        commands: deps.commands
+          ? deps.commands.registry.list(deps.commands.skills(), deps.localeService.t, { filter: query.filter })
+          : []
       };
     }
   };

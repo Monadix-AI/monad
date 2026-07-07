@@ -38,6 +38,7 @@ export const apiSlice = createApi({
     'Models',
     'InitStatus',
     'Skills',
+    'SlashCommands',
     'SkillsSettings',
     'InstalledSkills',
     'InstalledMcp',

@@ -3,13 +3,12 @@
 // sessions over one chat (conversation-keyed), while web/ACP/CLI navigate sessions client-side
 // (principal-scoped). Everything else (reset/compact/model/listCommands) is daemon-uniform.
 
-import type { PrincipalId, TranscriptTargetId } from '@monad/protocol';
+import type { CommandItem, PrincipalId, TranscriptTargetId } from '@monad/protocol';
 import type {
   BeliefExplanation,
   CommandModelInfo,
   CommandRunContext,
   CommandSessionInfo,
-  CommandSpec,
   CompactSummary,
   ConsolidateSummary,
   ContradictionCheckSummary
@@ -32,7 +31,7 @@ export interface CommandServices {
   setModel(sessionId: TranscriptTargetId, alias: string): Promise<void>;
   getWorkdir(sessionId: TranscriptTargetId): Promise<{ path?: string }>;
   setWorkdir(sessionId: TranscriptTargetId, path: string): Promise<{ path?: string }>;
-  listCommands(): Promise<CommandSpec[]>;
+  listCommands(): Promise<CommandItem[]>;
   handoff(sessionId: TranscriptTargetId, initialTask?: string): Promise<{ sessionId: string }>;
   /** Active-locale translator, shared across every command on this transport. */
   t: CommandRunContext['t'];

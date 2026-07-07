@@ -41,3 +41,25 @@ test('createTextareaKeyDownHandler accepts DOM keyboard events from ComposerEdit
   ).not.toThrow();
   expect(prevented).toBe(true);
 });
+
+test('createTextareaKeyDownHandler does not apply an empty loading command menu on Enter', () => {
+  let applied = false;
+  let prevented = false;
+  const onKeyDown = handler({
+    applyItem: () => {
+      applied = true;
+    },
+    menuItems: [],
+    skillMenuOpen: true
+  });
+
+  onKeyDown({
+    key: 'Enter',
+    preventDefault: () => {
+      prevented = true;
+    }
+  } as KeyboardEvent);
+
+  expect(applied).toBe(false);
+  expect(prevented).toBe(false);
+});

@@ -14,6 +14,7 @@ import {
   useGetAppearanceQuery,
   useGetWorkplaceProjectQuery,
   useInitStatusQuery,
+  useLazyListCommandsQuery,
   useStreamUiItemsQuery,
   useTranscribeAudioMutation
 } from '@monad/client-rtk';
@@ -33,7 +34,7 @@ import {
 import {
   activeSkillToken,
   buildCommandMenuItems,
-  skillCommandDisplayName,
+  shouldActivateSlashCommandDiscovery,
   skillCommandMeta
 } from '@/features/routes/sessions/command-menu';
 import { type ViewItem, viewItemKey } from '@/features/session/chat-view-items';
@@ -73,7 +74,6 @@ export function AppShell() {
   const { baseUrl: daemonBaseUrl, client: monadClient, switchDaemonConnection } = useMonadRuntime();
 
   const {
-    commands,
     daemonStatus,
     daemonVersion,
     hasUpgrade,
@@ -86,6 +86,7 @@ export function AppShell() {
   } = useAppShellData();
   const directSessions = sessions;
   const [transcribeAudio] = useTranscribeAudioMutation();
+  const [loadCommands, commandsQuery] = useLazyListCommandsQuery();
   const initStatus = useInitStatusQuery();
   const [createSession] = useCreateSessionMutation();
   const [createWorkplaceProject] = useCreateWorkplaceProjectMutation();
@@ -150,26 +151,47 @@ export function AppShell() {
   } | null>(null);
   const transcriptRef = useRef<VirtualListHandle>(null);
   const [atBottom, setAtBottom] = useState(true);
+  const slashDiscoveryActive = shouldActivateSlashCommandDiscovery(input);
+  const commands = commandsQuery.data?.commands ?? [];
+  const commandMenuLoading =
+    slashDiscoveryActive &&
+    commands.length === 0 &&
+    !commandsQuery.isError &&
+    (commandsQuery.isUninitialized || commandsQuery.isLoading || commandsQuery.isFetching);
+
+  useEffect(() => {
+    if (!slashDiscoveryActive) return;
+    if (
+      !commandsQuery.isUninitialized &&
+      (commandsQuery.isLoading || commandsQuery.isFetching || commandsQuery.isSuccess)
+    ) {
+      return;
+    }
+    void loadCommands(undefined, true);
+  }, [
+    commandsQuery.isFetching,
+    commandsQuery.isLoading,
+    commandsQuery.isSuccess,
+    commandsQuery.isUninitialized,
+    loadCommands,
+    slashDiscoveryActive
+  ]);
 
   const menuItems = useMemo<SessionCommandMenuItem[]>(
     () => buildCommandMenuItems(input, commands, profiles, sessions, t),
     [commands, profiles, sessions, input, t]
   );
-  const skillMenuOpen = menuItems.length > 0 && !skillMenuDismissed;
+  const skillMenuOpen = (menuItems.length > 0 || commandMenuLoading) && !skillMenuDismissed;
   const activeInputSkill = useMemo(() => {
     return activeSkillToken(input, commands, t);
   }, [commands, input, t]);
   const openSkillPreview = useCallback(
     async (id: string) => {
-      const command = commands.find((c) => c.kind === 'prompt' && c.name === id);
+      const command = commands.find((c) => c.type === 'skill' && c.id === id);
       const meta = skillCommandMeta(command, t);
       if (!command || !meta) return;
-      const content = await loadSkillContent(
-        { id: command.name, name: skillCommandDisplayName(command.name) },
-        monadClient
-      ).catch(() => null);
-      if (content)
-        setSkillPreview({ id: command.name, name: content.name, title: meta.label, content: content.content });
+      const content = await loadSkillContent({ id: command.id, name: command.name }, monadClient).catch(() => null);
+      if (content) setSkillPreview({ id: command.id, name: content.name, title: meta.label, content: content.content });
     },
     [commands, monadClient, t]
   );
@@ -638,6 +660,7 @@ export function AppShell() {
           inspectorItems,
           isBusy,
           isReadOnly,
+          commandMenuLoading,
           menuItems,
           messageQueue,
           composerSettings,

@@ -175,7 +175,6 @@ export async function ensureDevProvider(
       enabled: true,
       options: {},
       allowlist: { policy: 'open', allowAllUsers: true, allowedUsers: [] },
-      ownerUsers: [],
       groupPolicy: { requireMention: true },
       mapping: { granularity: 'per-conversation' },
       tokenRef: `\${secret:channel/${telegramChannelId}/token}`,
