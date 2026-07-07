@@ -158,6 +158,10 @@ const observabilityConfigSchema = z
   })
   .default({ endpoint: '' });
 
+function defaultDeveloperMode(): boolean {
+  return Bun.env.NODE_ENV === 'development';
+}
+
 const monadConfigSchema = z.object({
   version: z.literal(CURRENT_CONFIG_VERSION),
   principal: z.object({
@@ -165,7 +169,7 @@ const monadConfigSchema = z.object({
     displayName: z.string(),
     verification: z.enum(['unverified', 'email', 'domain', 'attested'])
   }),
-  developerMode: z.boolean().default(false),
+  developerMode: z.boolean().default(defaultDeveloperMode),
   user: z
     .object({
       avatarDataUrl: userAvatarDataUrlSchema.nullable().default(null)
@@ -376,7 +380,7 @@ export const monadSystemConfigSchema = z.object({
     displayName: z.string(),
     verification: z.enum(['unverified', 'email', 'domain', 'attested'])
   }),
-  developerMode: z.boolean().default(false),
+  developerMode: z.boolean().default(defaultDeveloperMode),
   network: networkConfigSchema,
   agent: z.object({
     sandbox: z.object({
@@ -573,7 +577,7 @@ export function createDefaultConfig(principalId: string, displayName: string): M
     channels: [],
     locale: 'en',
     atomPins: {},
-    developerMode: false,
+    developerMode: defaultDeveloperMode(),
     observability: { endpoint: '' },
     openaiCompat: { enabled: false, approval: 'local' },
     memory: { backend: 'builtin', level: 1, mem0: {} },

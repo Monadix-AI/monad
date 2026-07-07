@@ -457,6 +457,19 @@ describe('loadConfig', () => {
     expect(cfg?.model.default).toBe('');
   });
 
+  test('defaults developerMode on when initialized in development', async () => {
+    const originalNodeEnv = Bun.env.NODE_ENV;
+    Bun.env.NODE_ENV = 'development';
+    try {
+      await initMonadHome(paths);
+      const cfg = await loadAll(paths.config, paths.profile);
+      expect(cfg?.developerMode).toBe(true);
+    } finally {
+      if (originalNodeEnv === undefined) delete Bun.env.NODE_ENV;
+      else Bun.env.NODE_ENV = originalNodeEnv;
+    }
+  });
+
   test('saveSystemConfig writes developerMode at the system root', async () => {
     await initMonadHome(paths);
     const cfg = await loadAll(paths.config, paths.profile);

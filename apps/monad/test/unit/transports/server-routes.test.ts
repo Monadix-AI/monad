@@ -8,6 +8,20 @@ function buildApp(opts?: Parameters<typeof buildHandlers>[2]) {
   return createHttpTransport(buildHandlers(mockModel(['hello']), undefined, opts));
 }
 
+test('Developer Mode adds Server-Timing headers', async () => {
+  const app = createHttpTransport(buildHandlers(mockModel(['hello'])), { developerMode: true });
+  const res = await app.handle(new Request('http://localhost/health'));
+
+  expect(res.headers.get('server-timing')).toContain('total');
+});
+
+test('Server-Timing headers are disabled by default', async () => {
+  const app = buildApp();
+  const res = await app.handle(new Request('http://localhost/health'));
+
+  expect(res.headers.has('server-timing')).toBe(false);
+});
+
 test('GET /health returns ok without a network socket', async () => {
   const app = buildApp();
   const res = await app.handle(new Request('http://localhost/health'));

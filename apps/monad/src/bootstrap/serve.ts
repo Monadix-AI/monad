@@ -166,7 +166,12 @@ export async function serveDaemon(deps: ServeDeps): Promise<void> {
   const activeDeveloperMode = resolveServeDeveloperMode({ configured: developerMode, devMode, devSilent });
   const developerDocs = shouldEnableDeveloperDocs({ developerMode: activeDeveloperMode, stdoutRpc });
 
-  const httpApp = createHttpTransport(handlers, { docs: developerDocs, remoteAccess, openaiCompatConfig });
+  const httpApp = createHttpTransport(handlers, {
+    docs: developerDocs,
+    developerMode: activeDeveloperMode,
+    remoteAccess,
+    openaiCompatConfig
+  });
 
   // Mo (the desktop sprite) is launched/quit through the daemon and dies with it: the exit handler
   // runs on the same process.exit(0) that gracefulShutdown triggers for SIGINT/SIGTERM below.
