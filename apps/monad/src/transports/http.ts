@@ -2,6 +2,7 @@ import type { createDaemonHandlers } from '@/handlers/daemon-handlers/index.ts';
 import type { ConnectionState } from '@/transports/jsonrpc/index.ts';
 
 import { timingSafeEqual } from 'node:crypto';
+import { serverTiming } from '@elysiajs/server-timing';
 import swagger from '@elysiajs/swagger';
 import { createLogger, formatTransportCall } from '@monad/logger';
 import { Elysia } from 'elysia';
@@ -91,6 +92,7 @@ export type RemoteAccessSource = RemoteAccessConfig | RemoteAccessState;
 
 export interface HttpTransportOptions {
   docs?: boolean;
+  developerMode?: boolean;
   remoteAccess?: RemoteAccessSource;
   openaiCompatConfig?: () => Promise<{ enabled: boolean; token?: string }>;
 }
@@ -177,12 +179,13 @@ export function resolveRemoteAccessConfig(source: RemoteAccessSource | undefined
 
 export function createHttpTransport(
   handlers: ReturnType<typeof createDaemonHandlers>,
-  { docs = false, remoteAccess, openaiCompatConfig }: HttpTransportOptions = {}
+  { docs = false, developerMode = false, remoteAccess, openaiCompatConfig }: HttpTransportOptions = {}
 ) {
   const connections = new Map<string, ConnectionState>();
   const encoder = new TextEncoder();
 
   let app = new Elysia()
+    .use(serverTiming({ enabled: developerMode }))
     .onRequest(({ request }) => {
       requestTimings.set(request, performance.now());
     })

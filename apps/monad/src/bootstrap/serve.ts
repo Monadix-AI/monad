@@ -319,6 +319,7 @@ export async function serveDaemon(deps: ServeDeps): Promise<void> {
   const remoteAccessState = createRemoteAccessState(remoteAccess);
   const httpApp = createHttpTransport(handlers, {
     docs: developerDocs,
+    developerMode: activeDeveloperMode,
     remoteAccess: remoteAccessState,
     openaiCompatConfig
   });
