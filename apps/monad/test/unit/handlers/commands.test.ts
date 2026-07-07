@@ -221,6 +221,7 @@ describe('CommandRegistry precedence', () => {
       name: 'Reset',
       type: 'action',
       source: 'builtin',
+      group: 'Context',
       enabled: true
     });
     expect(specs.find((s) => s.id === 'acme.acme-x')).toMatchObject({
@@ -259,6 +260,7 @@ describe('CommandRegistry precedence', () => {
       defineCommand({
         name: 'memory',
         description: 'manage memory',
+        group: 'Memory',
         args: [{ name: 'query', type: 'string', required: false, placeholder: '[query]' }],
         subcommands: [
           {
@@ -272,6 +274,7 @@ describe('CommandRegistry precedence', () => {
       })
     );
     expect(r.list().find((s) => s.id === 'memory')).toMatchObject({
+      group: 'Memory',
       args: [{ name: 'query', type: 'string' }],
       subcommands: [{ id: 'consolidate', name: 'Consolidate', args: [{ name: 'level', type: 'number' }] }]
     });

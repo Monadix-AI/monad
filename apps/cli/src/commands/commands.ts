@@ -23,20 +23,32 @@ export const command: CommandDef = {
     }
     const groups = [
       {
+        groupBuiltins: true,
         label: t('cli.commands.group.builtin'),
         match: (c: (typeof commands)[number]) => c.type === 'action' && c.source === 'builtin'
       },
       {
+        groupBuiltins: false,
         label: t('cli.commands.group.atom'),
         match: (c: (typeof commands)[number]) => c.type === 'action' && c.source === 'atom-pack'
       },
-      { label: t('cli.commands.group.skills'), match: (c: (typeof commands)[number]) => c.type === 'skill' }
+      {
+        groupBuiltins: false,
+        label: t('cli.commands.group.skills'),
+        match: (c: (typeof commands)[number]) => c.type === 'skill'
+      }
     ];
     for (const g of groups) {
       const rows = commands.filter(g.match);
       if (rows.length === 0) continue;
       out(bold(g.label));
-      for (const c of rows) {
+      const renderedRows = g.groupBuiltins ? sortCommandsByGroup(rows) : rows;
+      let previousGroup: string | undefined;
+      for (const c of renderedRows) {
+        if (c.source === 'builtin' && c.group && c.group !== previousGroup) {
+          previousGroup = c.group;
+          out(dim(`  ${commandGroupLabel(c.group)}`));
+        }
         const arg = c.argHint ? dim(` ${c.argHint}`) : '';
         const source = c.sourceName ? dim(`  (${c.sourceName})`) : '';
         out(`  ${cyan(`/${c.id}`)}${arg}  ${c.description}${source}`);
@@ -44,3 +56,24 @@ export const command: CommandDef = {
     }
   }
 };
+
+const COMMAND_GROUP_ORDER = ['Conversation', 'Context', 'Memory', 'Runtime', 'Help'];
+
+function sortCommandsByGroup<T extends { group?: string; name: string; id: string }>(commands: T[]): T[] {
+  return commands.toSorted(
+    (a, b) =>
+      commandGroupRank(a.group) - commandGroupRank(b.group) || a.name.localeCompare(b.name) || a.id.localeCompare(b.id)
+  );
+}
+
+function commandGroupRank(group: string | undefined): number {
+  if (!group) return COMMAND_GROUP_ORDER.length;
+  const rank = COMMAND_GROUP_ORDER.indexOf(group);
+  return rank === -1 ? COMMAND_GROUP_ORDER.length : rank;
+}
+
+function commandGroupLabel(group: string): string {
+  const key = group.charAt(0).toLowerCase() + group.slice(1);
+  const translated = t(`cmd.help.group.${key}`);
+  return translated === `cmd.help.group.${key}` ? group : translated;
+}

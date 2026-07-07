@@ -27,7 +27,7 @@ function command(overrides: Partial<CommandItem> & Pick<CommandItem, 'id' | 'nam
 
 test('command-name phase filters by prefix on both raw and display name', () => {
   const commands = [
-    command({ id: 'reset', name: 'Reset' }),
+    command({ id: 'reset', name: 'Reset', group: 'Context' }),
     command({ id: 'model', name: 'Model', argHint: '<alias>' }),
     command({ id: 'global:review', name: 'Review', type: 'skill' })
   ];
@@ -35,6 +35,16 @@ test('command-name phase filters by prefix on both raw and display name', () => 
   expect(items.map((i) => i.key)).toEqual(['global:review', 'reset']);
   // Skills sort before actions (rank prefix 0 vs 1), friendly name is used for the label.
   expect(items[0]).toMatchObject({ key: 'global:review', label: '/Review', typeBadge: 'Skill' });
+});
+
+test('command-name phase orders builtin actions by product group', () => {
+  const commands = [
+    command({ id: 'check-memory', name: 'Check Memory', group: 'Memory' }),
+    command({ id: 'sessions', name: 'Sessions', group: 'Conversation' }),
+    command({ id: 'reset', name: 'Reset', group: 'Context' })
+  ];
+  const items = buildCommandMenuItems('/', commands, [], [], t);
+  expect(items.map((i) => i.key)).toEqual(['sessions', 'reset', 'check-memory']);
 });
 
 test('slash command discovery activates only for command entry phases', () => {

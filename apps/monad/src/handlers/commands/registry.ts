@@ -42,6 +42,7 @@ function isCommandDefinition(value: unknown): value is CommandDefinition {
   if (typeof d.name !== 'string' || typeof d.description !== 'string' || typeof d.run !== 'function') return false;
   if (d.aliases !== undefined && (!Array.isArray(d.aliases) || d.aliases.some((a) => typeof a !== 'string')))
     return false;
+  if (d.group !== undefined && typeof d.group !== 'string') return false;
   if (d.args !== undefined && !isCommandArgs(d.args)) return false;
   if (d.subcommands !== undefined && !isCommandSubcommands(d.subcommands)) return false;
   return true;
@@ -209,6 +210,7 @@ export class CommandRegistry {
         type: 'action',
         source: e.source === 'atom' ? 'atom-pack' : 'builtin',
         ...(e.atomName ? { sourceName: e.atomName } : {}),
+        group: e.def.group,
         description,
         aliases,
         argHint: e.def.argHint,

@@ -154,6 +154,8 @@ export interface CommandDefinition {
   /** Optional i18n message id for `description`. When the registry lists commands with a translator,
    *  the localized text replaces `description`; `description` remains the authoring-language default. */
   descriptionKey?: string;
+  /** Optional product grouping for command discovery/help surfaces. */
+  group?: string;
   argHint?: string;
   /** Structured positional arguments for discovery/autocomplete. Execution still receives raw args. */
   args?: CommandArg[];

@@ -22,6 +22,18 @@ function commandMenuRank(command: CommandItem): string {
   return `0:${command.name}:${sourceRank}:${command.id}`;
 }
 
+const COMMAND_GROUP_ORDER = ['Conversation', 'Context', 'Memory', 'Runtime', 'Help'];
+
+function commandGroupRank(command: CommandItem): number {
+  if (command.type === 'skill') return 0;
+  const rank = command.group ? COMMAND_GROUP_ORDER.indexOf(command.group) : -1;
+  return rank === -1 ? COMMAND_GROUP_ORDER.length : rank;
+}
+
+function compareCommandMenuItems(a: CommandItem, b: CommandItem): number {
+  return commandGroupRank(a) - commandGroupRank(b) || commandMenuRank(a).localeCompare(commandMenuRank(b));
+}
+
 function commandHint(command: CommandItem): string {
   if (command.argHint) return ` ${command.argHint}`;
   if (!command.args?.length) return '';
@@ -77,7 +89,7 @@ export function buildCommandMenuItems(
         if (!c.enabled) return false;
         return c.id.toLowerCase().startsWith(q) || c.name.toLowerCase().startsWith(q);
       })
-      .toSorted((a, b) => commandMenuRank(a).localeCompare(commandMenuRank(b)))
+      .toSorted(compareCommandMenuItems)
       .slice(0, 8)
       .map((c) => {
         const hint = commandHint(c);
@@ -103,7 +115,7 @@ export function buildCommandMenuItems(
         if (!c.enabled || c.type !== 'skill') return false;
         return c.id.toLowerCase().startsWith(q) || c.name.toLowerCase().startsWith(q);
       })
-      .toSorted((a, b) => commandMenuRank(a).localeCompare(commandMenuRank(b)))
+      .toSorted(compareCommandMenuItems)
       .slice(0, 8)
       .map((c) => {
         return {

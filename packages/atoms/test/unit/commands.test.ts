@@ -34,6 +34,26 @@ test('every command has a description and a runnable handler', () => {
   }
 });
 
+test('every first-party command has the expected product group', () => {
+  const groups = Object.fromEntries(BUILTIN_COMMANDS.map((c) => [c.name, c.group]));
+  expect(groups).toEqual({
+    'check-memory': 'Memory',
+    clear: 'Context',
+    compact: 'Context',
+    consolidate: 'Memory',
+    end: 'Conversation',
+    handoff: 'Conversation',
+    help: 'Help',
+    model: 'Runtime',
+    new: 'Conversation',
+    reset: 'Context',
+    sessions: 'Conversation',
+    switch: 'Conversation',
+    why: 'Memory',
+    workdir: 'Runtime'
+  });
+});
+
 test('command names and aliases are unique across the set', () => {
   const seen = new Set<string>();
   for (const c of BUILTIN_COMMANDS) {

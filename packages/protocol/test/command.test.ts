@@ -41,6 +41,7 @@ test('commandItemSchema supports structured args and subcommands', () => {
       name: 'Memory',
       type: 'action',
       source: 'builtin',
+      group: 'Memory',
       description: 'Manage memory',
       aliases: [],
       enabled: true,
@@ -54,6 +55,7 @@ test('commandItemSchema supports structured args and subcommands', () => {
       ]
     })
   ).toMatchObject({
+    group: 'Memory',
     subcommands: [
       {
         id: 'consolidate',

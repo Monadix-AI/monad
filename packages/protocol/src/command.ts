@@ -74,6 +74,8 @@ export const commandItemSchema = z.object({
   source: commandSourceSchema,
   /** Atom-pack id, custom scope/owner, or other source label when available. */
   sourceName: z.string().optional(),
+  /** Optional product grouping for clients that render grouped discovery or help surfaces. */
+  group: z.string().optional(),
   /** Localized when a translator + descriptionKey are available; else the authoring default. */
   description: z.string(),
   aliases: z.array(z.string()).default([]),
