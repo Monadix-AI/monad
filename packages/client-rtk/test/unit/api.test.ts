@@ -13,6 +13,7 @@ import { getNativeAgentDeliveryApi } from '../../src/endpoints/external-agent/ge
 import { getNativeAgentDeliveryObservationApi } from '../../src/endpoints/external-agent/get-native-agent-delivery-observation.ts';
 import { listExternalAgentSessionsApi } from '../../src/endpoints/external-agent/list-external-agent-sessions.ts';
 import { streamExternalAgentObservationApi } from '../../src/endpoints/external-agent/stream-external-agent-observation.ts';
+import { streamExternalAgentUiObservationApi } from '../../src/endpoints/external-agent/stream-external-agent-ui-observation.ts';
 import {
   getMessagesApi,
   listSessionsApi,
@@ -54,6 +55,17 @@ function fakeClient(overrides: Record<string, unknown>): MonadClient {
         | ((id: string, transcriptTargetId: string, onObservation: (access: unknown) => void) => void)
         | undefined;
       fn?.(id, transcriptTargetId, onObservation);
+      return () => {};
+    },
+    streamExternalAgentUiObservation: (
+      id: string,
+      transcriptTargetId: string,
+      onFrame: (frame: unknown) => void
+    ): (() => void) => {
+      const fn = overrides.streamExternalAgentUiObservation as
+        | ((id: string, transcriptTargetId: string, onFrame: (frame: unknown) => void) => void)
+        | undefined;
+      fn?.(id, transcriptTargetId, onFrame);
       return () => {};
     },
     treaty: {
@@ -491,6 +503,36 @@ test('streamExternalAgentObservation pushes live access snapshots into the query
     store.getState() as never
   );
   expect(cached.data?.state).toBe('live');
+});
+
+test('streamExternalAgentUiObservation caches full neutral frames verbatim (no delta fold)', async () => {
+  let push: ((frame: unknown) => void) | undefined;
+  const client = fakeClient({
+    streamExternalAgentUiObservation: (_id: string, _target: string, onFrame: (frame: unknown) => void) => {
+      push = onFrame;
+    }
+  });
+  const store = createMonadStore({ client });
+  const arg = { id: 'exa_1', transcriptTargetId: 'prj_01KCLIENTOBSERVE0000000' as const };
+
+  store.dispatch(streamExternalAgentUiObservationApi.endpoints.streamExternalAgentUiObservation.initiate(arg));
+  await new Promise((r) => setTimeout(r, 0));
+
+  push?.({
+    state: 'live',
+    externalAgentSessionId: 'exa_1',
+    provider: 'codex',
+    events: [{ id: 'e1', kind: 'assistant-message', streaming: true, text: 'hi' }],
+    seq: 12,
+    observedAt: '2026-07-07T00:00:00.000Z'
+  });
+  await new Promise((r) => setTimeout(r, 0));
+
+  const cached = streamExternalAgentUiObservationApi.endpoints.streamExternalAgentUiObservation.select(arg)(
+    store.getState() as never
+  );
+  expect(cached.data?.state).toBe('live');
+  expect(cached.data?.state === 'live' ? cached.data.events[0]?.kind : undefined).toBe('assistant-message');
 });
 
 test('a query delegates to the client and caches by tag', async () => {

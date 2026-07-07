@@ -4,6 +4,7 @@ import type {
   EventId,
   ExternalAgentAuthSessionView,
   ExternalAgentObservationAccessResponse,
+  ExternalAgentUiObservationFrame,
   SendMessageResponse,
   SessionId,
   SessionUiEvent,
@@ -17,6 +18,7 @@ import {
   eventSchema,
   externalAgentAuthSessionViewSchema,
   externalAgentObservationAccessResponseSchema,
+  externalAgentUiObservationFrameSchema,
   readTypedSseStream,
   SSE_IDLE_TIMEOUT_MS,
   sessionUiEventSchema
@@ -52,6 +54,7 @@ export type UiEventHandler = (event: SessionUiEvent) => void;
 export type LogRecordHandler = (record: DeveloperLogRecord) => void;
 export type ExternalAgentAuthSessionHandler = (session: ExternalAgentAuthSessionView) => void;
 export type ExternalAgentObservationHandler = (access: ExternalAgentObservationAccessResponse) => void;
+export type ExternalAgentUiObservationHandler = (frame: ExternalAgentUiObservationFrame) => void;
 
 interface SsePayloadSchema<T> {
   parse(value: unknown): T;
@@ -329,6 +332,23 @@ export class MonadClient {
       externalAgentObservationAccessResponseSchema,
       createExternalAgentObservationFolder(onObservation),
       { ...opts, resume: true, isTerminal: (access) => access.state !== 'live' }
+    );
+  }
+
+  /** The neutral UI plane. Each frame already carries the full projected event list, so there is no
+   *  delta to fold — the handler receives frames verbatim. A non-'live' frame is terminal (the session
+   *  exited); any other close reconnects. */
+  streamExternalAgentUiObservation(
+    id: string,
+    transcriptTargetId: TranscriptTargetId,
+    onFrame: ExternalAgentUiObservationHandler,
+    opts?: { onError?: (err: StreamError) => void }
+  ): () => void {
+    return this.stream(
+      `/${CONTROL_API_VERSION}/external-agent-sessions/${id}/ui-observation-stream?transcriptTargetId=${encodeURIComponent(transcriptTargetId)}`,
+      externalAgentUiObservationFrameSchema,
+      (frame) => onFrame(frame),
+      { ...opts, resume: true, isTerminal: (frame) => frame.state !== 'live' }
     );
   }
 

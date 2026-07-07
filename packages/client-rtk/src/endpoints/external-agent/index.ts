@@ -30,3 +30,4 @@ export { useStartExternalAgentAuthMutation } from './start-external-agent-auth.t
 export { useStopExternalAgentAuthMutation } from './stop-external-agent-auth.ts';
 export { useStopExternalAgentSessionMutation } from './stop-external-agent-session.ts';
 export { useStreamExternalAgentObservationQuery } from './stream-external-agent-observation.ts';
+export { useStreamExternalAgentUiObservationQuery } from './stream-external-agent-ui-observation.ts';
