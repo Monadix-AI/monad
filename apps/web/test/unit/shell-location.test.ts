@@ -64,14 +64,19 @@ describe('shell location navigation', () => {
   test('updates browser history and emits a shell location event without document navigation', () => {
     const { calls, listeners } = installWindowMock();
     let eventCount = 0;
+    let popstateCount = 0;
     window.addEventListener('monad:shell-location', () => {
       eventCount += 1;
+    });
+    window.addEventListener('popstate', () => {
+      popstateCount += 1;
     });
 
     navigateShellUrl('/workplace/projects/p1?settings=connection', 'replace');
 
     expect(calls).toEqual([{ mode: 'replace', url: '/workplace/projects/p1?settings=connection' }]);
     expect(eventCount).toBe(1);
+    expect(popstateCount).toBe(1);
     expect(listeners.get('monad:shell-location')?.size).toBe(1);
   });
 

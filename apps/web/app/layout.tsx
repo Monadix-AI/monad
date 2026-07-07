@@ -41,7 +41,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <Script
           // biome-ignore lint/security/noDangerouslySetInnerHtml: tiny static snippet, no user input
           dangerouslySetInnerHTML={{
-            __html: `(()=>{try{const s=localStorage.getItem('monad:theme');const d=s?s==='dark':matchMedia('(prefers-color-scheme: dark)').matches;document.documentElement.classList.toggle('dark',d)}catch{}})()`
+            __html: `(()=>{try{const s=localStorage.getItem('monad:theme');const d=s==='dark'||((!s||s==='auto')&&matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.classList.toggle('dark',d)}catch{}})()`
           }}
           id="theme-init"
           strategy="beforeInteractive"
@@ -78,6 +78,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             {devToolsWidget}
           </TooltipProvider>
         </AppProviders>
+        {/* impeccable-live-start */}
+        <script src="http://localhost:8400/live.js"></script>
+        {/* impeccable-live-end */}
       </body>
     </html>
   );

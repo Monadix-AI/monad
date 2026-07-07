@@ -6,6 +6,7 @@ export const DEFAULT_COMPOSER_SETTINGS: ComposerSettings = {
 };
 
 export type ComposerKeyIntent = {
+  hasMultipleLines?: boolean;
   key: string;
   primaryModifier: boolean;
   shiftKey: boolean;
@@ -20,7 +21,7 @@ export type QueuedComposerCard = {
 export function composerShortcutLabel(shortcut: ComposerSendShortcut, isApple: boolean): string {
   const primary = isApple ? '⌘' : 'Ctrl';
   if (shortcut === 'enter') return 'Enter';
-  if (shortcut === 'mod-enter-for-multiline') return `${primary} + Enter for multiline prompts`;
+  if (shortcut === 'mod-enter-for-multiline') return `${primary} + Enter for long prompts`;
   return `${primary} + Enter always`;
 }
 
@@ -28,7 +29,8 @@ export function shouldSubmitComposerKey(intent: ComposerKeyIntent, shortcut: Com
   if (intent.key !== 'Enter') return false;
   if (intent.shiftKey) return false;
   if (shortcut === 'enter') return !intent.primaryModifier;
-  if (shortcut === 'mod-enter-for-multiline') return !intent.primaryModifier;
+  if (shortcut === 'mod-enter-for-multiline')
+    return intent.hasMultipleLines ? intent.primaryModifier : !intent.primaryModifier;
   return intent.primaryModifier;
 }
 

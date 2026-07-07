@@ -49,21 +49,23 @@ function DaemonMenuTile({
   active,
   icon: Icon,
   label,
-  onClick
+  onSelect
 }: {
   active: boolean;
   icon: IconSvgElement;
   label: string;
-  onClick: () => void;
+  onSelect: () => void;
 }) {
   return (
-    <button
+    <DropdownMenuItem
       className={cn(
-        'flex min-h-18 flex-col items-center justify-center gap-2 rounded-(--radius-md) px-2.5 py-3 text-center font-normal text-base leading-control outline-hidden transition hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground',
+        'flex min-h-18 flex-col items-center justify-center gap-2 rounded-(--radius-md) px-2.5 py-3 text-center font-normal text-base leading-control outline-hidden transition focus:bg-accent focus:text-accent-foreground',
         active && 'bg-accent text-accent-foreground'
       )}
-      onClick={onClick}
-      type="button"
+      onSelect={(event) => {
+        event.preventDefault();
+        onSelect();
+      }}
     >
       <span className="grid size-8 place-items-center rounded-(--radius-sm) border border-border bg-background/60">
         <HugeiconsIcon
@@ -72,7 +74,7 @@ function DaemonMenuTile({
         />
       </span>
       <span className="font-normal">{label}</span>
-    </button>
+    </DropdownMenuItem>
   );
 }
 
@@ -138,9 +140,9 @@ export function DaemonMenu({
   hasUpgrade,
   menuOpen,
   onOpenChange,
+  onOpenStudio,
   onOpenWorkspace,
   onToggleSettings,
-  onToggleStudio,
   shortcutModifierLabel,
   onSwitchDaemonConnection,
   showSettings,
@@ -156,9 +158,9 @@ export function DaemonMenu({
   hasUpgrade?: boolean;
   menuOpen: boolean;
   onOpenChange: (open: boolean) => void;
+  onOpenStudio: () => void;
   onOpenWorkspace: () => void;
   onToggleSettings: () => void;
-  onToggleStudio: () => void;
   shortcutModifierLabel: string;
   onSwitchDaemonConnection: (
     request: { type: 'local' } | { connection: RemoteDaemonConnection; type: 'remote' }
@@ -350,14 +352,14 @@ export function DaemonMenu({
             <DaemonMenuTile
               active={workspacePileActive}
               icon={HouseIcon}
-              label="Workplace"
-              onClick={onOpenWorkspace}
+              label={t('web.workspace.title')}
+              onSelect={onOpenWorkspace}
             />
             <DaemonMenuTile
               active={studioPileActive}
               icon={SlidersHorizontalIcon}
               label={t('web.studio.title')}
-              onClick={onToggleStudio}
+              onSelect={onOpenStudio}
             />
           </DropdownMenuGroup>
           <DropdownMenuSeparator />

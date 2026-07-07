@@ -268,6 +268,7 @@ export const ComposerEditor = forwardRef(function ComposerEditor(
         if (
           shouldSubmitComposerKey(
             {
+              hasMultipleLines: (editor?.getText() ?? '').includes('\n'),
               key: event.key,
               primaryModifier: primaryModifierPressed(event),
               shiftKey: event.shiftKey
@@ -408,6 +409,7 @@ export const ComposerEditor = forwardRef(function ComposerEditor(
 });
 
 type ComposerKeyIntent = {
+  hasMultipleLines?: boolean;
   key: string;
   primaryModifier: boolean;
   shiftKey: boolean;
@@ -417,7 +419,8 @@ export function shouldSubmitComposerKey(intent: ComposerKeyIntent, shortcut: Com
   if (intent.key !== 'Enter') return false;
   if (intent.shiftKey) return false;
   if (shortcut === 'enter') return !intent.primaryModifier;
-  if (shortcut === 'mod-enter-for-multiline') return !intent.primaryModifier;
+  if (shortcut === 'mod-enter-for-multiline')
+    return intent.hasMultipleLines ? intent.primaryModifier : !intent.primaryModifier;
   return intent.primaryModifier;
 }
 

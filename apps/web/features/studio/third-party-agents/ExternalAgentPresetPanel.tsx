@@ -238,8 +238,6 @@ function ExternalAgentPresetRow({
         : preset.installed
           ? 'detected'
           : 'missing';
-  const canImportSettings = preset.capabilities?.settingsImport === true;
-
   return (
     <div
       className={cn('external-agent-live-v2__row', status === 'connected' && 'external-agent-live-v2__row--connected')}
@@ -291,7 +289,7 @@ function ExternalAgentPresetRow({
                 {t('web.settings.title')}
               </Button>
             ) : null}
-            {canImportSettings && setImportPreset ? <ImportButton onClick={() => setImportPreset(preset)} /> : null}
+            {setImportPreset ? <ImportButton onClick={() => setImportPreset(preset)} /> : null}
             <Button
               className="border-transparent"
               onClick={() => removeAgent(connectedAgent.name)}
@@ -328,7 +326,7 @@ function ExternalAgentPresetRow({
               )}
               {t('web.externalAgent.connect')}
             </Button>
-            {canImportSettings && setImportPreset ? <ImportButton onClick={() => setImportPreset(preset)} /> : null}
+            {setImportPreset ? <ImportButton onClick={() => setImportPreset(preset)} /> : null}
           </>
         ) : (
           <>
@@ -337,7 +335,7 @@ function ExternalAgentPresetRow({
               label={t('web.externalAgent.notDetected')}
               tone="missing"
             />
-            {canImportSettings && setImportPreset ? <ImportButton onClick={() => setImportPreset(preset)} /> : null}
+            {setImportPreset ? <ImportButton onClick={() => setImportPreset(preset)} /> : null}
             <Button
               className="border-transparent"
               onClick={() => openInstallPage(preset)}

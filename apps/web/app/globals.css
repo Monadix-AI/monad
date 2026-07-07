@@ -16,6 +16,20 @@
   body {
     overscroll-behavior-x: none;
   }
+
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    mix-blend-mode: normal;
+    animation: none;
+  }
+
+  ::view-transition-old(root) {
+    z-index: 0;
+  }
+
+  ::view-transition-new(root) {
+    z-index: 1;
+  }
 }
 
 @layer utilities {

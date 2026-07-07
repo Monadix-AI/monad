@@ -106,6 +106,7 @@ export function AppShell() {
   const composerSettings = normalizedComposerSettings(appearance?.composer);
   const primaryAgentSession = currentSession ?? directSessions[0] ?? null;
   const shellSurface = useWorkspaceShellStore((state: WorkspaceShellState) => state.surface);
+  const lastStudioSection = useWorkspaceShellStore((state: WorkspaceShellState) => state.lastStudioSection);
   const lastWorkspacePath = useWorkspaceShellStore((state: WorkspaceShellState) => state.lastWorkspacePath);
   const rememberStudioSection = useWorkspaceShellStore((state: WorkspaceShellState) => state.rememberStudioSection);
   const rememberWorkspacePath = useWorkspaceShellStore((state: WorkspaceShellState) => state.rememberWorkspacePath);
@@ -352,9 +353,9 @@ export function AppShell() {
 
   const setStudioUrl = useCallback(
     (section?: StudioSectionId) => {
-      replaceShellUrl(resolveStudioNavigationPath({ runtimeReady, section }));
+      replaceShellUrl(resolveStudioNavigationPath({ runtimeReady, section: section ?? lastStudioSection }));
     },
-    [runtimeReady]
+    [lastStudioSection, runtimeReady]
   );
 
   const toggleSidebarAutoMode = useCallback(() => {
@@ -639,6 +640,9 @@ export function AppShell() {
           monadChatActive: currentId !== null || shellSurface === 'monadChat',
           onOpenMonadChat: () => void handleOpenMonadChat(),
           onOpenProject: openProject,
+          onOpenStudio: () => {
+            setStudioUrl();
+          },
           onOpenStudioSection: (section) => {
             setStudioUrl(section);
           },
@@ -649,9 +653,6 @@ export function AppShell() {
           onToggleCollapsed: toggleSidebarCollapsed,
           onToggleProjectPinned: toggleProjectPinned,
           onToggleSettings: toggleSettings,
-          onToggleStudio: () => {
-            setStudioUrl();
-          },
           overlay: sidebarAutoReveal,
           projects: workspaceProjects,
           runtimeReady,

@@ -25,6 +25,49 @@ export function formatWebUiReadyValue(opts: { webUrl: string; daemonUrl?: string
   return `${opts.webUrl}  (Daemon API: ${opts.daemonUrl})`;
 }
 
+export function formatReadyPath(path: string, homeDir = Bun.env.HOME): string {
+  if (!homeDir) return path;
+  const normalizedHome = homeDir.replace(/\/+$/, '');
+  if (path === normalizedHome) return '~';
+  return path.startsWith(`${normalizedHome}/`) ? `~/${path.slice(normalizedHome.length + 1)}` : path;
+}
+
+function wrapReadyValue(value: string, width: number): string[] {
+  const lines: string[] = [];
+  let remaining = value;
+  const safeWidth = Math.max(24, width);
+
+  while (remaining.length > safeWidth) {
+    const slice = remaining.slice(0, safeWidth + 1);
+    const spaceBreak = slice.lastIndexOf(' ');
+    const slashBreak = slice.lastIndexOf('/');
+    const usefulBreakFloor = Math.floor(safeWidth * 0.45);
+    const cut = spaceBreak > usefulBreakFloor ? spaceBreak : slashBreak > usefulBreakFloor ? slashBreak + 1 : safeWidth;
+    lines.push(remaining.slice(0, cut).trimEnd());
+    remaining = remaining.slice(cut).trimStart();
+  }
+
+  lines.push(remaining);
+  return lines;
+}
+
+export function formatReadyInfoTable(rows: Array<[string, string]>, columns = process.stdout.columns ?? 100): string {
+  const labelCol = Math.max(...rows.map(([label]) => label.length)) + 2;
+  const indent = '  ';
+  const gap = '  ';
+  const valueWidth = Math.max(24, columns - indent.length - labelCol - gap.length);
+  const continuation = `${indent}${' '.repeat(labelCol)}${gap}`;
+
+  return rows
+    .flatMap(([label, value]) => {
+      const valueLines = wrapReadyValue(value, valueWidth);
+      return valueLines.map((line, index) =>
+        index === 0 ? `${indent}${bold(label.padEnd(labelCol))}${gap}${line}` : `${continuation}${line}`
+      );
+    })
+    .join('\n');
+}
+
 export function printBanner(version: string, mock: boolean): void {
   if (!bannerVisible() || Bun.env.NO_COLOR) return;
 
@@ -72,16 +115,12 @@ export function printReadyInfo(opts: {
   const { t, webUrl, daemonUrl, docsUrl, unixSocket, tlsFingerprint, configPath } = opts;
   const rows: Array<[string, string]> = [[t('daemon.ready.webUi'), formatWebUiReadyValue({ webUrl, daemonUrl })]];
   if (docsUrl) rows.push(['API docs:', docsUrl]);
-  if (unixSocket) rows.push(['Unix socket:', unixSocket]);
+  if (unixSocket) rows.push(['Unix socket:', formatReadyPath(unixSocket)]);
   if (tlsFingerprint) rows.push(['TLS:', `SHA-256 ${tlsFingerprint}`]);
-  rows.push([t('daemon.ready.cli'), 'monad --help'], [t('daemon.ready.configure'), configPath]);
-  const col = Math.max(...rows.map(([label]) => label.length)) + 2;
+  rows.push([t('daemon.ready.cli'), 'monad --help'], [t('daemon.ready.configure'), formatReadyPath(configPath)]);
 
   process.stdout.write(`${bold(green(t('daemon.ready.title')))}\n\n`);
-  for (const [label, value] of rows) {
-    process.stdout.write(`  ${bold(label.padEnd(col))}${value}\n`);
-  }
-  process.stdout.write('\n');
+  process.stdout.write(`${formatReadyInfoTable(rows)}\n\n`);
 }
 
 export function printGoodbye(): void {

@@ -184,7 +184,6 @@ import {
   useUpsertExternalAgentMutation
 } from './endpoints/settings/external-agents/index.ts';
 import { useGetHooksQuery, useSetHooksMutation } from './endpoints/settings/hooks/index.ts';
-import { useApplySettingsImportMutation, usePreviewSettingsImportMutation } from './endpoints/settings/import/index.ts';
 import {
   localeAdapter,
   localeApi,
@@ -322,7 +321,6 @@ export {
   useAddCredentialMutation,
   useAddMemoryFactMutation,
   useApplyExternalAgentSettingsImportMutation,
-  useApplySettingsImportMutation,
   useApproveChannelPairingMutation,
   useApproveExternalAgentSessionMutation,
   useApproveToolMutation,
@@ -454,7 +452,6 @@ export {
   useOpenDraftAttachmentMutation,
   usePickDirectoryMutation,
   usePreviewExternalAgentSettingsImportMutation,
-  usePreviewSettingsImportMutation,
   useProvenanceQuery,
   useProviderCatalogQuery,
   usePutMemoryCoreMutation,
