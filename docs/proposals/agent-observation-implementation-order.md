@@ -1,8 +1,9 @@
 # Implementation order: external-agent observation + project/session
 
-Status: draft · Companion to [agent-adapter-observation-layering.md](agent-adapter-observation-layering.md).
-Sequences the work into phases. **Every phase leaves the tree green and shippable** (own PR). Two tracks
-share one foundation (P0) and are otherwise independent:
+Status: **Track A shipped** (2026-07-07) · Companion to
+[agent-adapter-observation-layering.md](agent-adapter-observation-layering.md). Sequences the work into
+phases. **Every phase leaves the tree green and shippable** (own PR). Two tracks share one foundation
+(P0) and are otherwise independent:
 
 - **Track A — observation architecture** (P1–P5): fixes the current bugs + the layering mess. Higher
   priority.
@@ -13,6 +14,36 @@ share one foundation (P0) and are otherwise independent:
 P0 rename ─┬─► P1 schema ─► P2 adapter-decode ─► P3 split-stream ─► P4 experience-render ─► P5 generalize   (Track A)
            └─► P6 session-entity ─► P7 multi-session-lifecycle                                              (Track B)
 ```
+
+## As shipped — Track A (all merged to `main`)
+
+| Phase | Commit | Notes vs. plan |
+| --- | --- | --- |
+| P0 rename | `c01a5786c` | + one-line follow-up `15ea996aa` — the sed missed the bare `newId('ncli')` prefix, so sessions minted `ncli_…` against `/^exa_/` schemas. Caught by e2e, not the unit-only gate. |
+| P1 schema | `fb6302311` | Named **`AgentObservationEvent`** (agent-kind-neutral), **not** `ExternalAgentObservationEvent` — it generalizes to any agent kind and avoids clashing with the legacy UI-flavored type. |
+| P2 decode | `8db7cd877` | `toAgentObservationEvent` (legacy→neutral) in `@monad/atoms`, reusing each adapter's `classifyActivity`/`isStreamingFragment`. Later tweak: keeps `text` on `turn-end` (codex `result`). |
+| P3 two-plane | `ce50c53e5` | `externalAgentUiObservationFrameSchema` + `observeUi`/`subscribeUiObservation` + `GET /external-agent-sessions/:id/ui-observation{,-stream}`. Kept the current endpoint keying; the `/sessions/:sid/agents/:agentId` path restructure is deferred to Track B. |
+| P4a consumer | `6be0be018` | client + client-rtk + sdk-atom-client-rtk ui-stream consumer. |
+| P4b render | `4c9970d45` | Panel renders neutral cards. **Decision:** ui-stream returns a *generic* `tool`; "which tool → which card" stays UI business (no server enrichment). Rich cards still extract from `raw` (neutral preserves it). |
+| P4c panel-on-ui-stream | `2c99afe89` | Panel's session observation moved to the ui-stream → **retires the client-side delta re-derivation = the delta-bug fix.** Deliveries keep the poll + legacy path. |
+
+### Deviations & open follow-ups
+
+- **Classifiers NOT deleted** (plan said delete): `externalAgentEventsAreGenerating` /
+  `classifyExternalAgentActivity` are load-bearing — the daemon uses the former server-side
+  (`ui-projection-helpers.ts`) and both drive avatar presence. Left intact.
+- **Legacy raw observation *stream* is now dead code** (the panel moved off it in P4c) but not yet
+  removed — `MonadClient.streamExternalAgentObservation` + `external-agent-observation-fold` + the
+  `streamExternalAgentObservation` RTK endpoint/hook + re-exports, plus the daemon
+  `/external-agent-sessions/:id/observation-stream` route and its handler/transport SSE helper. knip
+  won't flag it (public API). Tracked as a separate cleanup.
+- **P4b/P4c were verified by typecheck + the observation test suite, not a running panel.** Only
+  visible change expected: the source badge shows the coarser `provider` (e.g. `codex`) instead of the
+  fine-grained source. Worth an eyes-on pass.
+- **P5 is gated on Track B**, not independent: the monad built-in agent is already observable via its
+  own session transcript, and it would only need the *neutral* plane if it appeared as a member in a
+  project's observation panel — which needs the project→session→members model (Track B). ACP isn't a
+  first-class project member either. So P5 has no consumer until Track B lands.
 
 ## P0 — Rename `NativeCli*` → `ExternalAgent*`  (foundation, do first)
 
