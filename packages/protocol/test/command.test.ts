@@ -50,6 +50,7 @@ test('commandItemSchema supports structured args and subcommands', () => {
           id: 'consolidate',
           name: 'Consolidate',
           description: 'Consolidate memory',
+          shortcut: 'consolidate',
           args: [{ name: 'level', type: 'number', required: false, placeholder: '[level]' }]
         }
       ]
@@ -59,6 +60,7 @@ test('commandItemSchema supports structured args and subcommands', () => {
     subcommands: [
       {
         id: 'consolidate',
+        shortcut: 'consolidate',
         args: [{ name: 'level', type: 'number' }]
       }
     ]

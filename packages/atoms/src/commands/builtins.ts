@@ -95,28 +95,46 @@ const compactCommandAtom = defineCommand({
   }
 });
 
+async function runConsolidate(ctx: Parameters<CommandDefinition['run']>[0], args: string) {
+  // Optional depth override: `/consolidate 2` or `/memory consolidate 2` forces L1+L2.
+  const arg = Number.parseInt(args.trim(), 10);
+  const level = arg >= 1 && arg <= 3 ? arg : undefined;
+  const r = await ctx.consolidate(level);
+  return {
+    message: ctx.t('cmd.consolidate.done', {
+      level: String(r.level),
+      scopes: String(r.l1Scopes),
+      nodes: String(r.nodes),
+      edges: String(r.edges),
+      laws: String(r.laws)
+    })
+  };
+}
+
 const consolidateCommandAtom = defineCommand({
   name: 'consolidate',
-  aliases: ['memory'],
   description: 'Consolidate memory: dedup facts, then update the graph and laws (to your memory level)',
   descriptionKey: 'cmd.consolidate.desc',
   group: 'Memory',
   async run(ctx) {
-    // Optional depth override: `/consolidate 2` forces L1+L2 regardless of memory.level.
-    const arg = Number.parseInt(ctx.args.trim(), 10);
-    const level = arg >= 1 && arg <= 3 ? arg : undefined;
-    const r = await ctx.consolidate(level);
-    return {
-      message: ctx.t('cmd.consolidate.done', {
-        level: String(r.level),
-        scopes: String(r.l1Scopes),
-        nodes: String(r.nodes),
-        edges: String(r.edges),
-        laws: String(r.laws)
-      })
-    };
+    return runConsolidate(ctx, ctx.args);
   }
 });
+
+async function runWhy(ctx: Parameters<CommandDefinition['run']>[0], args: string) {
+  const query = args.trim();
+  if (!query) return { message: ctx.t('cmd.why.usage') };
+  const { matches } = await ctx.explainBelief(query);
+  if (matches.length === 0) return { message: ctx.t('cmd.why.none') };
+  const blocks = matches.map((m) => {
+    const lines = [`${m.statement} (${Math.round(m.confidence * 100)}%)`];
+    if (m.facts.length > 0) lines.push(`  ${ctx.t('cmd.why.facts')}: ${m.facts.join('; ')}`);
+    if (m.relations.length > 0) lines.push(`  ${ctx.t('cmd.why.relations')}: ${m.relations.join('; ')}`);
+    if (m.sources.length > 0) lines.push(`  ${ctx.t('cmd.why.sources')}: ${m.sources.join(' … ')}`);
+    return lines.join('\n');
+  });
+  return { message: blocks.join('\n\n') };
+}
 
 const whyCommandAtom = defineCommand({
   name: 'why',
@@ -124,20 +142,14 @@ const whyCommandAtom = defineCommand({
   descriptionKey: 'cmd.why.desc',
   group: 'Memory',
   async run(ctx) {
-    const query = ctx.args.trim();
-    if (!query) return { message: ctx.t('cmd.why.usage') };
-    const { matches } = await ctx.explainBelief(query);
-    if (matches.length === 0) return { message: ctx.t('cmd.why.none') };
-    const blocks = matches.map((m) => {
-      const lines = [`${m.statement} (${Math.round(m.confidence * 100)}%)`];
-      if (m.facts.length > 0) lines.push(`  ${ctx.t('cmd.why.facts')}: ${m.facts.join('; ')}`);
-      if (m.relations.length > 0) lines.push(`  ${ctx.t('cmd.why.relations')}: ${m.relations.join('; ')}`);
-      if (m.sources.length > 0) lines.push(`  ${ctx.t('cmd.why.sources')}: ${m.sources.join(' … ')}`);
-      return lines.join('\n');
-    });
-    return { message: blocks.join('\n\n') };
+    return runWhy(ctx, ctx.args);
   }
 });
+
+async function runCheckMemory(ctx: Parameters<CommandDefinition['run']>[0]) {
+  const { flagged } = await ctx.checkMemory();
+  return { message: ctx.t('cmd.checkMemory.done', { flagged: String(flagged) }) };
+}
 
 const checkMemoryCommandAtom = defineCommand({
   name: 'check-memory',
@@ -145,8 +157,45 @@ const checkMemoryCommandAtom = defineCommand({
   descriptionKey: 'cmd.checkMemory.desc',
   group: 'Memory',
   async run(ctx) {
-    const { flagged } = await ctx.checkMemory();
-    return { message: ctx.t('cmd.checkMemory.done', { flagged: String(flagged) }) };
+    return runCheckMemory(ctx);
+  }
+});
+
+const memoryCommandAtom = defineCommand({
+  name: 'memory',
+  description: 'Manage memory commands',
+  descriptionKey: 'cmd.memory.desc',
+  group: 'Memory',
+  subcommands: [
+    {
+      id: 'consolidate',
+      name: 'Consolidate',
+      description: 'Consolidate memory layers',
+      shortcut: 'consolidate',
+      args: [{ name: 'level', type: 'enum', values: [{ id: '1' }, { id: '2' }, { id: '3' }] }]
+    },
+    {
+      id: 'why',
+      name: 'Why',
+      description: 'Explain why the agent believes something',
+      shortcut: 'why',
+      args: [{ name: 'query', type: 'string', required: true, repeated: true, placeholder: '<query>' }]
+    },
+    {
+      id: 'check',
+      name: 'Check',
+      description: 'Flag contradicted learned rules',
+      aliases: ['check-memory'],
+      shortcut: 'check-memory'
+    }
+  ],
+  async run(ctx) {
+    const [subcommand, ...rest] = ctx.args.trim().split(/\s+/);
+    const args = rest.join(' ');
+    if (subcommand === 'consolidate') return runConsolidate(ctx, args);
+    if (subcommand === 'why') return runWhy(ctx, args);
+    if (subcommand === 'check' || subcommand === 'check-memory') return runCheckMemory(ctx);
+    return { message: subcommand ? ctx.t('cmd.memory.unknown', { subcommand }) : ctx.t('cmd.memory.usage') };
   }
 });
 
@@ -233,7 +282,7 @@ const helpCommandAtom = defineCommand({
     const builtins = commands.filter((c) => c.type === 'action' && c.source === 'builtin');
     const atoms = commands.filter((c) => c.type === 'action' && c.source === 'atom-pack');
     const skills = commands.filter((c) => c.type === 'skill');
-    const fmt = (c: (typeof commands)[number]) => `  /${c.id}${commandHint(c)} — ${c.description}`;
+    const fmt = (c: (typeof commands)[number]) => commandHelpRows(c).join('\n');
     const sections: string[] = groupedCommandSections(ctx.t('cmd.help.commands'), builtins, fmt, (group) =>
       helpGroupLabel(ctx.t, group)
     );
@@ -242,6 +291,26 @@ const helpCommandAtom = defineCommand({
     return { message: sections.join('\n\n'), effect: { type: 'help', commands } };
   }
 });
+
+function commandHelpRows(command: {
+  id: string;
+  description: string;
+  argHint?: string;
+  args?: Array<{ name: string; placeholder?: string; required?: boolean }>;
+  subcommands?: Array<{
+    id: string;
+    description: string;
+    shortcut?: string;
+    args?: Array<{ name: string; placeholder?: string; required?: boolean }>;
+  }>;
+}): string[] {
+  const rows = [`  /${command.id}${commandHint(command)} — ${command.description}`];
+  for (const subcommand of command.subcommands ?? []) {
+    const shortcut = subcommand.shortcut ? ` (shortcut /${subcommand.shortcut})` : '';
+    rows.push(`    /${command.id} ${subcommand.id}${commandHint(subcommand)} — ${subcommand.description}${shortcut}`);
+  }
+  return rows;
+}
 
 function commandHint(command: {
   argHint?: string;
@@ -294,6 +363,7 @@ export const BUILTIN_COMMANDS: CommandDefinition[] = [
   endCommandAtom,
   resetCommandAtom,
   compactCommandAtom,
+  memoryCommandAtom,
   consolidateCommandAtom,
   whyCommandAtom,
   checkMemoryCommandAtom,

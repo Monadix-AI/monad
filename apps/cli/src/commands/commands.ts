@@ -52,6 +52,11 @@ export const command: CommandDef = {
         const arg = c.argHint ? dim(` ${c.argHint}`) : '';
         const source = c.sourceName ? dim(`  (${c.sourceName})`) : '';
         out(`  ${cyan(`/${c.id}`)}${arg}  ${c.description}${source}`);
+        for (const subcommand of c.subcommands ?? []) {
+          const subArg = subcommand.args?.length ? dim(` ${commandArgsHint(subcommand.args)}`) : '';
+          const shortcut = subcommand.shortcut ? dim(`  shortcut /${subcommand.shortcut}`) : '';
+          out(`    ${cyan(`/${c.id} ${subcommand.id}`)}${subArg}  ${subcommand.description}${shortcut}`);
+        }
       }
     }
   }
@@ -76,4 +81,8 @@ function commandGroupLabel(group: string): string {
   const key = group.charAt(0).toLowerCase() + group.slice(1);
   const translated = t(`cmd.help.group.${key}`);
   return translated === `cmd.help.group.${key}` ? group : translated;
+}
+
+function commandArgsHint(args: Array<{ name: string; placeholder?: string; required?: boolean }>): string {
+  return args.map((arg) => arg.placeholder ?? (arg.required ? `<${arg.name}>` : `[${arg.name}]`)).join(' ');
 }

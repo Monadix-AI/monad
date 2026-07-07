@@ -17,6 +17,7 @@ test('ships the expected first-party commands', () => {
       'end',
       'handoff',
       'help',
+      'memory',
       'model',
       'new',
       'reset',
@@ -44,6 +45,7 @@ test('every first-party command has the expected product group', () => {
     end: 'Conversation',
     handoff: 'Conversation',
     help: 'Help',
+    memory: 'Memory',
     model: 'Runtime',
     new: 'Conversation',
     reset: 'Context',
@@ -62,4 +64,13 @@ test('command names and aliases are unique across the set', () => {
       seen.add(key);
     }
   }
+});
+
+test('memory command advertises shortcut-backed subcommands', () => {
+  const memory = BUILTIN_COMMANDS.find((c) => c.name === 'memory');
+  expect(memory?.subcommands).toEqual([
+    expect.objectContaining({ id: 'consolidate', shortcut: 'consolidate' }),
+    expect.objectContaining({ id: 'why', shortcut: 'why' }),
+    expect.objectContaining({ id: 'check', shortcut: 'check-memory' })
+  ]);
 });

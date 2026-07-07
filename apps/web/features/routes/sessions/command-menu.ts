@@ -40,6 +40,10 @@ function commandHint(command: CommandItem): string {
   return ` ${command.args.map((arg) => arg.placeholder ?? (arg.required ? `<${arg.name}>` : `[${arg.name}]`)).join(' ')}`;
 }
 
+function commandSection(command: CommandItem): string {
+  return command.type === 'skill' ? 'Skills' : 'Commands';
+}
+
 export function skillCommandMeta(command: CommandItem | undefined, t: TFn) {
   if (command?.type !== 'skill') return null;
   return {
@@ -102,6 +106,7 @@ export function buildCommandMenuItems(
           version: c.type === 'skill' ? c.version : undefined,
           badge: itemBadge(c, t),
           insert: `/${c.id} `,
+          section: commandSection(c),
           executeOnSelect: c.type === 'action' && c.source === 'builtin' && !hint && !c.subcommands?.length
         };
       });
@@ -127,6 +132,7 @@ export function buildCommandMenuItems(
           version: c.version,
           badge: itemBadge(c, t),
           insert: `/${c.id} `,
+          section: 'Skills',
           replace: { start, end: input.length }
         };
       });
@@ -164,6 +170,7 @@ export function buildCommandMenuItems(
           label: subcommand.name,
           hint: subcommand.description,
           typeBadge: 'Subcommand',
+          badge: subcommand.shortcut ? `/${subcommand.shortcut}` : undefined,
           insert: `/${command.id} ${subcommand.id} `
         }));
     }
