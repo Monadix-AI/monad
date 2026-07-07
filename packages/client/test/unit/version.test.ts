@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 
-import { CLIENT_VERSION, isVersionCompatible } from '../../src/version.ts';
+import { CLIENT_VERSION, isLoopbackHttpsUrl, isVersionCompatible } from '../../src/version.ts';
 
 // ── CLIENT_VERSION ─────────────────────────────────────────────────────────────
 
@@ -81,4 +81,13 @@ test('result always includes daemonVersion and clientVersion', () => {
 test('compatible result has no reason field', () => {
   const r = isVersionCompatible('1.0.0', '1.0.0');
   expect(r.compatible).toBe(true);
+});
+
+test('isLoopbackHttpsUrl only matches exact loopback HTTPS hosts', () => {
+  expect(isLoopbackHttpsUrl('https://127.0.0.1:52749/health')).toBe(true);
+  expect(isLoopbackHttpsUrl('https://localhost:52749/health')).toBe(true);
+  expect(isLoopbackHttpsUrl('https://[::1]:52749/health')).toBe(true);
+  expect(isLoopbackHttpsUrl('https://127.attacker.test:52749/health')).toBe(false);
+  expect(isLoopbackHttpsUrl('https://localhost.attacker.test:52749/health')).toBe(false);
+  expect(isLoopbackHttpsUrl('http://127.0.0.1:52749/health')).toBe(false);
 });

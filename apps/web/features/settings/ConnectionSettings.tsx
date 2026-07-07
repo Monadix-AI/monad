@@ -9,21 +9,18 @@ import {
   Cancel01Icon,
   CancelCircleIcon,
   CheckmarkCircle02Icon,
-  Copy01Icon,
   GlobeIcon,
   LoaderPinwheelIcon,
-  RotateLeft01Icon,
   Shield01Icon,
   ShieldQuestionMarkIcon
 } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { checkDaemonVersion } from '@monad/client';
-import { Button, Input, Label, Switch } from '@monad/ui';
+import { Button, Input, Label } from '@monad/ui';
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 
 import { I18nTrans, useT } from '@/components/I18nProvider';
-import { useNetworkSettings } from '@/hooks/use-network-settings';
 import { saveRemoteDaemonConnection } from '@/lib/daemon-connections';
 import { daemonConnectionFormSchema } from '@/lib/form-validation';
 import { useMonadRuntime } from '@/lib/monad-runtime-provider';
@@ -57,8 +54,6 @@ export function ConnectionSettings({ onClose }: Props) {
   const [tlsWarning, setTlsWarning] = useState<'openssl' | 'cert-error' | null>(null);
   const [certFp, setCertFp] = useState<CertFpState | null>(null);
   const [daysUntilExpiry, setDaysUntilExpiry] = useState<number | null>(null);
-  const [networkCopied, setNetworkCopied] = useState(false);
-  const network = useNetworkSettings();
   const connectionForm = useForm({
     values: { url, token },
     resolver: zodResolver(daemonConnectionFormSchema)
@@ -144,32 +139,8 @@ export function ConnectionSettings({ onClose }: Props) {
     switchDaemonConnection({ type: 'local' });
   }
 
-  async function toggleRemoteAccess(enabled: boolean) {
-    await network.set({ remoteAccess: { enabled } });
-  }
-
-  async function toggleAllowInsecureHttp(allowInsecureHttp: boolean) {
-    await network.set({ remoteAccess: { allowInsecureHttp } });
-  }
-
-  async function rotateRemoteToken() {
-    await network.set({ remoteAccess: { rotateToken: true } });
-    setNetworkCopied(false);
-  }
-
-  async function copyRemoteToken() {
-    const remoteToken = network.settings?.remoteAccess?.token;
-    if (!remoteToken) return;
-    await navigator.clipboard.writeText(remoteToken);
-    setNetworkCopied(true);
-    setTimeout(() => setNetworkCopied(false), 1500);
-  }
-
   const isRemote = !!localStorage.getItem(REMOTE_URL_KEY)?.trim();
   const checking = check.status === 'checking';
-  const remoteAccess = network.settings?.remoteAccess;
-  const remoteAccessEnabled = remoteAccess?.enabled ?? false;
-  const localScheme = remoteAccessEnabled && !remoteAccess?.allowInsecureHttp ? 'https' : 'http';
 
   return (
     <div className="flex min-w-0 flex-1 flex-col">
@@ -200,112 +171,6 @@ export function ConnectionSettings({ onClose }: Props) {
       <div className="flex flex-1 flex-col gap-6 px-6 py-6">
         <p className="text-muted-foreground text-sm">{t('web.conn.intro')}</p>
 
-        <section className="flex flex-col gap-3 rounded-md border bg-muted/20 px-3 py-3">
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex min-w-0 flex-col gap-1">
-              <span className="font-medium text-sm">{t('web.conn.localRemoteTitle')}</span>
-              <span className="text-muted-foreground text-xs">{t('web.conn.localRemoteDesc')}</span>
-            </div>
-            <Switch
-              aria-label={t('web.conn.localRemoteTitle')}
-              checked={remoteAccessEnabled}
-              disabled={network.loading || network.saving}
-              onCheckedChange={(checked) => void toggleRemoteAccess(checked)}
-            />
-          </div>
-
-          {network.loading ? (
-            <div className="flex items-center gap-2 text-muted-foreground text-xs">
-              <HugeiconsIcon
-                className="size-3.5 animate-spin"
-                icon={LoaderPinwheelIcon}
-              />
-              {t('web.common.loading')}
-            </div>
-          ) : (
-            <>
-              <div className="grid gap-2 text-xs sm:grid-cols-2">
-                <div className="rounded border bg-background px-2.5 py-2">
-                  <div className="text-muted-foreground">{t('web.conn.localEndpoint')}</div>
-                  <code className="font-mono text-foreground">
-                    {localScheme}://127.0.0.1:{network.settings?.port ?? 52749}
-                  </code>
-                </div>
-                <div className="rounded border bg-background px-2.5 py-2">
-                  <div className="text-muted-foreground">{t('web.conn.localTransport')}</div>
-                  <code className="font-mono text-foreground">{network.settings?.transport ?? 'tcp'}</code>
-                </div>
-              </div>
-
-              {remoteAccessEnabled && (
-                <div className="flex flex-col gap-2">
-                  <Label
-                    className="text-xs"
-                    htmlFor="local-remote-token"
-                  >
-                    {t('web.conn.localRemoteToken')}
-                  </Label>
-                  <div className="flex gap-2">
-                    <Input
-                      className="font-mono text-xs [-webkit-text-security:disc]"
-                      id="local-remote-token"
-                      readOnly
-                      value={remoteAccess?.token ?? ''}
-                      {...SECRET_INPUT_PASSWORD_MANAGER_PROPS}
-                    />
-                    <Button
-                      aria-label={t('web.conn.copyToken')}
-                      disabled={!remoteAccess?.token}
-                      onClick={() => void copyRemoteToken()}
-                      size="icon"
-                      variant="outline"
-                    >
-                      <HugeiconsIcon
-                        className={networkCopied ? 'text-success' : undefined}
-                        icon={Copy01Icon}
-                      />
-                    </Button>
-                    <Button
-                      aria-label={t('web.conn.rotateToken')}
-                      disabled={network.saving}
-                      onClick={() => void rotateRemoteToken()}
-                      size="icon"
-                      variant="outline"
-                    >
-                      <HugeiconsIcon icon={RotateLeft01Icon} />
-                    </Button>
-                  </div>
-                </div>
-              )}
-
-              <div className="flex items-start justify-between gap-4 rounded border bg-background px-2.5 py-2">
-                <span className="flex min-w-0 flex-col gap-0.5">
-                  <span className="text-xs">{t('web.conn.allowInsecureHttp')}</span>
-                  <span className="text-[11px] text-muted-foreground">{t('web.conn.allowInsecureHttpDesc')}</span>
-                </span>
-                <Switch
-                  aria-label={t('web.conn.allowInsecureHttp')}
-                  checked={remoteAccess?.allowInsecureHttp ?? false}
-                  disabled={network.loading || network.saving}
-                  onCheckedChange={(checked) => void toggleAllowInsecureHttp(checked)}
-                />
-              </div>
-
-              {network.settings?.restartRequired && (
-                <div className="flex items-start gap-2 rounded border border-warning/30 bg-warning/5 px-2.5 py-2 text-warning text-xs">
-                  <HugeiconsIcon
-                    className="mt-0.5 size-3.5 shrink-0"
-                    icon={Alert01Icon}
-                  />
-                  <span>{t('web.conn.restartRequired')}</span>
-                </div>
-              )}
-            </>
-          )}
-
-          {network.error && <div className="text-destructive text-xs">{network.error}</div>}
-        </section>
-
         <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="daemon-url">{t('web.conn.urlLabel')}</Label>
@@ -317,7 +182,7 @@ export function ConnectionSettings({ onClose }: Props) {
                 connectionForm.clearErrors('url');
                 resetCheck();
               }}
-              placeholder="http://192.168.1.100:52749"
+              placeholder="https://192.168.1.100:52749"
               value={url}
             />
             {urlError ? <p className="text-destructive text-xs">{urlError}</p> : null}

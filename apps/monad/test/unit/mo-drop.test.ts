@@ -18,7 +18,9 @@ import { buildHandlers, mockModel, serveTransport, TRANSPORTS } from '../helpers
 function moApp() {
   const handlers = buildHandlers(mockModel(['ok']));
   const app = createHttpTransport(handlers);
-  (app as unknown as Elysia).use(createMoController(createMoModule(handlers.session, new MoService(undefined, '', 0))));
+  (app as unknown as Elysia).use(
+    createMoController(createMoModule(handlers.session, new MoService(undefined, '', 0, 'https')))
+  );
   return app;
 }
 

@@ -24,9 +24,11 @@ import { eventSchema, readTypedSseStream } from '@monad/protocol';
 const log = createLogger('transport:acp:bridge');
 
 export interface BridgeOptions {
-  /** Daemon base URL (e.g. http://127.0.0.1:52749). With `unixSocket` set, the host/port is only
+  /** Daemon base URL (e.g. https://127.0.0.1:52749). With `unixSocket` set, the host/port is only
    * used to build the URL + Host header; requests dial the socket. */
   baseUrl: string;
+  /** TCP fallback base URL. When omitted, fallback reuses `baseUrl`. */
+  tcpBaseUrl?: string;
   /** Daemon Unix-domain HTTP socket. Local daemons only. */
   unixSocket?: string;
   token?: string;
@@ -67,6 +69,7 @@ function buildQuery(params: Record<string, unknown>): string {
  */
 export function createBridgeHandlers(opts: BridgeOptions): { handlers: AcpHandlers } {
   const base = opts.baseUrl.replace(/\/$/, '');
+  const tcpBase = (opts.tcpBaseUrl ?? opts.baseUrl).replace(/\/$/, '');
   const authHeaders: Record<string, string> = opts.token ? { authorization: `Bearer ${opts.token}` } : {};
 
   // Dial the Unix socket when configured; on a connect-level failure (socket missing / daemon not
@@ -81,7 +84,12 @@ export function createBridgeHandlers(opts: BridgeOptions): { handlers: AcpHandle
         fellBackToTcp = true;
       }
     }
-    return bunFetch(url, init);
+    return bunFetch(tcpFallbackUrl(url), init);
+  }
+
+  function tcpFallbackUrl(url: string): string {
+    if (base === tcpBase || !url.startsWith(base)) return url;
+    return `${tcpBase}${url.slice(base.length)}`;
   }
 
   async function request<T>(method: string, path: string, body?: unknown): Promise<T> {

@@ -5,7 +5,7 @@ import { join } from 'node:path';
 
 import { readDaemonUrl } from '../../app/api/[...path]/route.proxy.ts';
 
-test('readDaemonUrl uses HTTPS when remote access requires TLS', () => {
+test('readDaemonUrl uses HTTPS by default from network config', () => {
   const home = join(tmpdir(), `monad-route-proxy-${Date.now()}`);
   mkdirSync(join(home, 'configs'), { recursive: true });
   writeFileSync(
@@ -13,7 +13,8 @@ test('readDaemonUrl uses HTTPS when remote access requires TLS', () => {
     JSON.stringify({
       network: {
         port: 52522,
-        remoteAccess: { enabled: true, allowInsecureHttp: false, token: 'secret' }
+        https: { enabled: true, certStrategy: 'self-signed' },
+        remoteAccess: { enabled: true, token: 'secret' }
       }
     })
   );

@@ -69,15 +69,45 @@ test('unixSocket: requests are dialed over the unix socket', async () => {
   expect(attempts.at(-1)).toBe(sock); // carried the unix option
 });
 
+test('unixSocket: HTTPS TCP base URL is rewritten to HTTP only for the plain Unix socket', async () => {
+  const attempts: Array<{ unix?: string; url: string }> = [];
+  globalThis.fetch = (async (url: string, init?: { unix?: string }) => {
+    attempts.push({ unix: init?.unix, url: String(url) });
+    return new Response(JSON.stringify({ sessionId: 'ses_U' }), { headers: { 'content-type': 'application/json' } });
+  }) as unknown as typeof fetch;
+
+  const sock = join(tmpdir(), 'monad-https-base.sock');
+  const client = new MonadClient({ baseUrl: 'https://127.0.0.1:52749', unixSocket: sock });
+  const res = await client.treaty.v1.sessions.post({ title: 'hi' });
+
+  expect(res.data?.sessionId).toBe('ses_U');
+  expect(attempts).toEqual([{ unix: sock, url: 'http://127.0.0.1:52749/v1/sessions' }]);
+});
+
+test('unixSocket: IPv6 loopback HTTPS URL is rewritten over the unix socket', async () => {
+  const attempts: Array<{ unix?: string; url: string }> = [];
+  globalThis.fetch = (async (url: string, init?: { unix?: string }) => {
+    attempts.push({ unix: init?.unix, url: String(url) });
+    return new Response(JSON.stringify({ sessionId: 'ses_U6' }), { headers: { 'content-type': 'application/json' } });
+  }) as unknown as typeof fetch;
+
+  const sock = join(tmpdir(), 'monad-https-ipv6-base.sock');
+  const client = new MonadClient({ baseUrl: 'https://[::1]:52749', unixSocket: sock });
+  const res = await client.treaty.v1.sessions.post({ title: 'hi' });
+
+  expect(res.data?.sessionId).toBe('ses_U6');
+  expect(attempts).toEqual([{ unix: sock, url: 'http://[::1]:52749/v1/sessions' }]);
+});
+
 test('unixSocket: a dead socket falls back to TCP and sticks for later requests', async () => {
-  const attempts: Array<string | undefined> = [];
-  globalThis.fetch = (async (_url: string, init?: { unix?: string }) => {
-    attempts.push(init?.unix);
+  const attempts: Array<{ tls?: { rejectUnauthorized?: boolean }; unix?: string }> = [];
+  globalThis.fetch = (async (_url: string, init?: { tls?: { rejectUnauthorized?: boolean }; unix?: string }) => {
+    attempts.push({ tls: init?.tls, unix: init?.unix });
     if (init?.unix) throw new Error('connect ENOENT (no such socket)'); // simulate dead UDS
     return new Response(JSON.stringify({ sessionId: 'ses_T' }), { headers: { 'content-type': 'application/json' } });
   }) as unknown as typeof fetch;
 
-  const client = new MonadClient({ baseUrl: 'http://127.0.0.1:52749', unixSocket: join(tmpdir(), 'monad-dead.sock') });
+  const client = new MonadClient({ baseUrl: 'https://127.0.0.1:52749', unixSocket: join(tmpdir(), 'monad-dead.sock') });
 
   // 1st request: UDS connect throws → retried over TCP → still succeeds.
   const r1 = await client.treaty.v1.sessions.post({ title: 'a' });
@@ -87,8 +117,10 @@ test('unixSocket: a dead socket falls back to TCP and sticks for later requests'
   const r2 = await client.treaty.v1.sessions.post({ title: 'b' });
   expect(r2.data?.sessionId).toBe('ses_T');
 
-  expect(attempts.filter((u) => u).length).toBe(1); // UDS probed only once
-  expect(attempts.filter((u) => !u).length).toBe(2); // both requests ultimately over TCP
+  expect(attempts.filter((attempt) => attempt.unix).length).toBe(1); // UDS probed only once
+  const tcpAttempts = attempts.filter((attempt) => !attempt.unix);
+  expect(tcpAttempts.length).toBe(2); // both requests ultimately over TCP
+  expect(tcpAttempts.every((attempt) => attempt.tls?.rejectUnauthorized === false)).toBe(true);
 });
 
 test('streamEvents delivers live SSE events by draining the raw fetch Response body', async () => {

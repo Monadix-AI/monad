@@ -2,7 +2,10 @@
   "extends": "@monad/config/tsconfig.base.json",
   "compilerOptions": {
     "lib": ["ESNext", "DOM"],
-    "jsx": "react-jsx"
+    "jsx": "react-jsx",
+    "paths": {
+      "@monad/monad": ["../../apps/monad/dist/main.d.ts"]
+    }
   },
   "include": ["src", "test"]
 }

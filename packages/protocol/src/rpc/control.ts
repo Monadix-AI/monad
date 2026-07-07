@@ -232,6 +232,7 @@ export const getHealthResponseSchema = z.object({
   status: z.literal('ok'),
   version: z.string(),
   warnings: z.array(z.string()).optional(),
+  certStatus: z.enum(['active', 'disabled']).optional(),
   certFingerprint: z.string().optional(),
   certExpiry: z.string().optional(),
   latestVersion: z.string().optional(),

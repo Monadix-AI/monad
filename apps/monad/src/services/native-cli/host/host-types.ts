@@ -1,3 +1,4 @@
+import type { MonadConfig } from '@monad/home';
 import type {
   NativeCliAgentView,
   NativeCliHistoryPageRequest,
@@ -124,6 +125,8 @@ export interface NativeCliHostDeps {
   agents: () => Promise<NativeCliAgentView[]>;
   monadHome?: string;
   serverUrl?: string;
+  /** Current daemon HTTPS switch. Used only when serverUrl is not supplied. Defaults to HTTPS on. */
+  networkHttps?: MonadConfig['network']['https'];
   /** Resolve `${env:}`/`${secret:}` refs in an agent's env against fresh auth before spawn. When
    *  absent (tests) the env is used verbatim. */
   resolveAgentEnv?: (env?: Record<string, string>) => Promise<Record<string, string> | undefined>;

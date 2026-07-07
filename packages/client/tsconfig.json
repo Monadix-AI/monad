@@ -2,12 +2,12 @@
   "extends": "@monad/config/tsconfig.base.json",
   "compilerOptions": {
     "lib": ["ESNext", "DOM"],
-    // Type-only route-shape import for Eden Treaty (packages/client/src/treaty.ts). A tsconfig path
-    // alias instead of a package.json dependency, so the daemon app never joins this package's build
-    // graph — @monad/monad depends on @monad/atoms, and atoms depends back on this client's siblings
-    // (@monad/client-rtk/@monad/sdk-atom-client-rtk), which would otherwise cycle.
+    // Type-only route-shape import for Eden Treaty (packages/client/src/treaty.ts). Use the daemon's
+    // declaration artifact instead of resolving the package from this workspace package's node_modules:
+    // consumers like apps/web include @monad/client source in their own TS program, and package-local
+    // path aliases do not follow that source across workspace symlinks.
     "paths": {
-      "@monad/monad": ["../../apps/monad/src/main.ts"]
+      "@monad/monad": ["../../apps/monad/dist/main.d.ts"]
     }
   },
   "include": ["src", "test"],

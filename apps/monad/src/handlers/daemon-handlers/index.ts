@@ -57,6 +57,7 @@ import { createSystemUpgradeModule } from '@/handlers/system-upgrade.ts';
 import { createTranscriptProjector } from '@/handlers/transcript/projector.ts';
 import { resolveNativeCliAgentEnv } from '@/services/native-cli/env.ts';
 import { NativeCliHost } from '@/services/native-cli/host/index.ts';
+import { resolveNativeCliManagedServerUrl } from '@/services/native-cli/host/session-launcher.ts';
 import { managedProjectRuntimeWorkspace } from '@/services/native-cli/managed-project.ts';
 import licensesData from '../../../generated/licenses.json';
 import { createInitHandlers } from './handlers-init.ts';
@@ -79,7 +80,11 @@ export function createDaemonHandlers(deps: DaemonHandlerDeps) {
     store: deps.store,
     bus: deps.bus,
     monadHome: paths.home,
-    serverUrl: deps.nativeCliServerUrl ?? `http://127.0.0.1:${Bun.env.MONAD_PORT || '52749'}`,
+    serverUrl: resolveNativeCliManagedServerUrl({
+      serverUrl: deps.nativeCliServerUrl,
+      networkHttps: deps.networkHttps
+    }),
+    networkHttps: deps.networkHttps,
     agents: async () => {
       const cfg = await loadAll(paths.config, paths.profile);
       return cfg?.nativeCliAgents ?? [];
@@ -278,10 +283,16 @@ export function createDaemonHandlers(deps: DaemonHandlerDeps) {
   return {
     health: async (): Promise<GetHealthResponse> => {
       const upgradeInfo = deps.getUpgradeInfo?.();
+      const cfg = await loadAll(paths.config, paths.profile);
+      const httpsDisabled = cfg?.network.https.enabled === false;
+      const warnings = [...(deps.daemonWarnings ?? [])];
+      if (httpsDisabled && !warnings.includes('tls:https-disabled')) warnings.push('tls:https-disabled');
       return {
         status: 'ok',
         version: VERSION,
-        ...(deps.daemonWarnings?.length ? { warnings: deps.daemonWarnings } : {}),
+        ...(warnings.length ? { warnings } : {}),
+        ...(httpsDisabled ? { certStatus: 'disabled' as const } : {}),
+        ...(!httpsDisabled && (deps.certFingerprint || deps.certExpiry) ? { certStatus: 'active' as const } : {}),
         ...(deps.certFingerprint ? { certFingerprint: deps.certFingerprint } : {}),
         ...(deps.certExpiry ? { certExpiry: deps.certExpiry } : {}),
         ...(upgradeInfo

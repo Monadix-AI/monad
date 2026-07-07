@@ -152,6 +152,7 @@ async function main(): Promise<void> {
     AI_SDK_DEVTOOLS_PORT:
       envVars.get('AI_SDK_DEVTOOLS_PORT') || Bun.env.AI_SDK_DEVTOOLS_PORT || ports.AI_SDK_DEVTOOLS_PORT,
     MONAD_KV_UI_PORT: envVars.get('MONAD_KV_UI_PORT') || Bun.env.MONAD_KV_UI_PORT || ports.MONAD_KV_UI_PORT,
+    MONAD_HTTP_PORT: envVars.get('MONAD_HTTP_PORT') || Bun.env.MONAD_HTTP_PORT || ports.MONAD_HTTP_PORT,
     MONAD_PORT: envVars.get('MONAD_PORT') || Bun.env.MONAD_PORT || '52749',
     WEB_PORT: envVars.get('WEB_PORT') || Bun.env.WEB_PORT || '3000'
   };

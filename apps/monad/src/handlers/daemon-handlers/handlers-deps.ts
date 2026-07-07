@@ -1,4 +1,4 @@
-import type { MonadPaths, ObscuraConfig } from '@monad/home';
+import type { MonadConfig, MonadPaths, ObscuraConfig } from '@monad/home';
 import type { Logger } from '@monad/logger';
 import type {
   GetLawsResponse,
@@ -96,6 +96,8 @@ export interface DaemonHandlerDeps extends SessionDeps, ModelDeps {
   nativeCliAuthHeartbeatTimeoutMs?: number;
   /** Loopback URL that managed native CLI runtimes use to call the daemon. */
   nativeCliServerUrl?: string;
+  /** Current daemon HTTPS switch. Used only when nativeCliServerUrl is not supplied. */
+  networkHttps?: MonadConfig['network']['https'];
   /** Getter for background upgrade check result — populated asynchronously after startup. */
   getUpgradeInfo?: () => { latestVersion: string; latestVersionCheckedAt: string } | null;
   log: Logger;

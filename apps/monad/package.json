@@ -39,13 +39,19 @@
   "exports": {
     ".": {
       "types": "./dist/main.d.ts",
+      "monad-typecheck": "./dist/main.d.ts",
       "default": "./src/main.ts"
     },
     "./start": {
       "types": "./dist/main.d.ts",
+      "monad-typecheck": "./dist/main.d.ts",
       "default": "./src/main.ts"
     },
-    "./log-maintenance": "./src/services/log-maintenance.ts"
+    "./log-maintenance": {
+      "types": "./dist/services/log-maintenance.d.ts",
+      "monad-typecheck": "./dist/services/log-maintenance.d.ts",
+      "default": "./src/services/log-maintenance.ts"
+    }
   },
   "module": "src/main.ts",
   "private": true,

@@ -36,38 +36,38 @@ afterEach(async () => {
 // ── TLS fail-closed ────────────────────────────────────────────────────────────
 const okDeps = {
   findOpenssl: async () => '/usr/bin/openssl',
-  ensureTlsCert: async (dir: string) => ({ certPath: join(dir, 'cert.pem'), keyPath: join(dir, 'key.pem') })
+  ensureTlsCert: async (dir: string) => ({ certPath: join(dir, 'cert.pem'), keyPath: join(dir, 'key.pem') }),
+  renewTlsCert: async (dir: string) => ({ certPath: join(dir, 'cert.pem'), keyPath: join(dir, 'key.pem') }),
+  certExpiry: async () => new Date(Date.now() + 90 * 86_400_000).toISOString()
 };
 
-test('createTlsCert is a no-op when remote access is disabled', async () => {
-  const out = await createTlsCert(
-    { enabled: false, tlsDir },
-    {
-      findOpenssl: async () => null,
-      ensureTlsCert: async () => {
-        throw new Error('should not be called');
-      }
-    }
-  );
-});
-
-test('createTlsCert throws when remote access is enabled but openssl is missing', async () => {
-  await expect(createTlsCert({ enabled: true, tlsDir }, { ...okDeps, findOpenssl: async () => null })).rejects.toThrow(
+test('createTlsCert throws when openssl is missing', async () => {
+  await expect(createTlsCert({ tlsDir }, { ...okDeps, findOpenssl: async () => null })).rejects.toThrow(
     /openssl is not installed/
   );
 });
 
-test('createTlsCert downgrades to a warning when allowInsecureHttp=true and openssl is missing', async () => {
+test('createTlsCert renews a certificate that expires inside the renewal window', async () => {
+  let renewed = false;
   const out = await createTlsCert(
-    { enabled: true, tlsDir, allowInsecureHttp: true },
-    { ...okDeps, findOpenssl: async () => null }
+    { tlsDir, renewBeforeDays: 30 },
+    {
+      ...okDeps,
+      certExpiry: async () => new Date(Date.now() + 5 * 86_400_000).toISOString(),
+      renewTlsCert: async (dir: string) => {
+        renewed = true;
+        return { certPath: join(dir, 'cert.pem'), keyPath: join(dir, 'key.pem') };
+      }
+    }
   );
+  expect(renewed).toBe(true);
+  expect(out.warnings).toContain('tls:cert-renewed');
 });
 
 test('createTlsCert throws when cert generation fails (fail-closed)', async () => {
   await expect(
     createTlsCert(
-      { enabled: true, tlsDir },
+      { tlsDir },
       {
         ...okDeps,
         ensureTlsCert: async () => {
@@ -76,18 +76,6 @@ test('createTlsCert throws when cert generation fails (fail-closed)', async () =
       }
     )
   ).rejects.toThrow(/TLS certificate generation failed/);
-});
-
-test('createTlsCert warns instead of throwing on cert failure when allowInsecureHttp=true', async () => {
-  const out = await createTlsCert(
-    { enabled: true, tlsDir, allowInsecureHttp: true },
-    {
-      ...okDeps,
-      ensureTlsCert: async () => {
-        throw new Error('openssl exploded');
-      }
-    }
-  );
 });
 
 // ── sandbox fail-closed ──────────────────────────────────────────────────────────

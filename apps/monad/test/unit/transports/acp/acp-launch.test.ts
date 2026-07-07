@@ -4,7 +4,7 @@
 
 import { expect, test } from 'bun:test';
 
-import { computeDaemonSpawn } from '@/transports/acp/launch.ts';
+import { computeAcpBridgeUrls, computeDaemonSpawn } from '@/transports/acp/launch.ts';
 
 test('computeDaemonSpawn strips the --acp/--stdio flags from argv', () => {
   const { argv } = computeDaemonSpawn(['bun', '/path/main.ts', '--acp', '--mock-model'], {});
@@ -32,4 +32,15 @@ test('computeDaemonSpawn does not mutate the caller env', () => {
   const original = { MONAD_ACP: 'true' };
   computeDaemonSpawn(['bun', 'main.ts'], original);
   expect(original.MONAD_ACP).toBe('true'); // caller's Bun.env untouched
+});
+
+test('computeAcpBridgeUrls keeps the Unix socket URL plain HTTP while TCP follows HTTPS setting', () => {
+  expect(computeAcpBridgeUrls({ https: { enabled: true }, port: 52749 })).toEqual({
+    tcpBaseUrl: 'https://127.0.0.1:52749',
+    unixBaseUrl: 'http://localhost'
+  });
+  expect(computeAcpBridgeUrls({ https: { enabled: false }, port: 52749 })).toEqual({
+    tcpBaseUrl: 'http://127.0.0.1:52749',
+    unixBaseUrl: 'http://localhost'
+  });
 });

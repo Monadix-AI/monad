@@ -6,10 +6,10 @@
  * See LICENSE in the repository root for the full license text.
  *
  * Transports (clients choose the protocol):
- *   HTTP REST+SSE  http://127.0.0.1:52749            (control ops + event stream, TCP)
+ *   HTTP REST+SSE  https://127.0.0.1:52749           (control ops + event stream, TCP)
  *   HTTP REST+SSE  unix:~/.monad/run/monad.sock      (same Elysia app over a Unix socket — the
  *                                                      low-latency local path the CLI uses)
- *   WebSocket      ws://127.0.0.1:52749/v1/stream    (JSON-RPC framing, server-push, TCP only)
+ *   WebSocket      wss://127.0.0.1:52749/v1/stream   (JSON-RPC framing, server-push, TCP only)
  *   stdio          stdin/stdout                      (NDJSON / JSON-RPC, --stdio only)
  *   ACP            stdin/stdout                      (Agent Client Protocol for editors, --acp;
  *                                                      bidirectional peer — see transports/acp/)
@@ -17,11 +17,12 @@
 
 import type { MonadAuth } from '@monad/home';
 import type { PrincipalId, SessionId } from '@monad/protocol';
+import type { Elysia } from 'elysia';
 import type { Tool } from '@/capabilities/tools/types.ts';
 import type { SessionGateway } from '@/channels/channel.ts';
 
 import { join } from 'node:path';
-import { getPaths, initMonadHome, loadAll, loadAuth, saveProfile } from '@monad/home';
+import { getPaths, initMonadHome, loadAll, loadAuth, resolveDaemonNetwork, saveProfile } from '@monad/home';
 import { createLogger } from '@monad/logger';
 
 import { applyAcpDelegateTool } from '@/bootstrap/acp-delegate.ts';
@@ -58,7 +59,6 @@ import { connectFileMcpServers, connectMcpServers } from './bootstrap/mcp.ts';
 import { createMcpControls } from './bootstrap/mcp-controls.ts';
 import { createMemorySubsystem } from './bootstrap/memory.ts';
 import { createModelSubsystem } from './bootstrap/model.ts';
-import { buildNativeCliServerUrl } from './bootstrap/native-cli-url.ts';
 import { createObscuraController } from './bootstrap/obscura.ts';
 import { createPeerDelegateTools } from './bootstrap/peers.ts';
 import { configureDaemonLogging, readDaemonRuntimeFlags } from './bootstrap/runtime-flags.ts';
@@ -82,7 +82,9 @@ import { createHttpTransport } from './transports/http.ts';
 // NOTE: this import intentionally uses a relative path so tsgo emits a resolvable path in
 // dist/main.d.ts — the @/ alias is internal to @monad/monad and would not resolve for
 // consumers (e.g. @monad/client) reading the generated d.ts.
-export type App = ReturnType<typeof createHttpTransport>;
+type HttpTransport = ReturnType<typeof createHttpTransport>;
+type HttpRoutes = HttpTransport extends { '~Routes': infer Routes extends Record<any, any> } ? Routes : {};
+export type App = Elysia<'', any, any, any, HttpRoutes, any, any>;
 
 configureDaemonLogging();
 const logger = createLogger('monad-daemon');
@@ -144,11 +146,11 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
     _openAiCompatCache = { val, exp: Date.now() + 1000 };
     return val;
   };
-  // MONAD_PORT overrides the configured port (dev: one daemon per git worktree on its own port,
-  // assigned by scripts/dev-init.ts). Clients honour the same var in resolveClientConn so they
-  // dial the matching port. Unset in production → falls back to config.json.
-  const PORT = Number(Bun.env.MONAD_PORT) || cfg.network.port;
-  const HOST = remoteAccess.enabled ? '0.0.0.0' : '127.0.0.1';
+  // Resolve the daemon's bind endpoint once from config + env. Clients use the same resolver so
+  // host/port/protocol overrides stay in sync across daemon, web, CLI, and managed runtimes.
+  const endpoint = resolveDaemonNetwork({ network: cfg.network, env: Bun.env });
+  const PORT = endpoint.port;
+  const HOST = endpoint.bindHost;
 
   // Load auth once at startup so ${secret:NAME} refs can be resolved during bootstrap (tool
   // backends, MCP server headers). Hot-reload keeps a fresh copy via configBus; this copy is
@@ -493,18 +495,13 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
     }
   });
 
-  // Auto-generated self-signed TLS for remote access; best-effort with HTTP fallback (see
-  // ./bootstrap/tls.ts).
+  // Auto-generated self-signed TLS for the primary HTTPS listener (see ./bootstrap/tls.ts).
   const {
     cert: tlsCert,
     fingerprint: tlsFingerprint,
     expiry: tlsCertExpiry,
     warnings: daemonWarnings
-  } = await createTlsCert({
-    enabled: remoteAccess.enabled,
-    tlsDir: paths.tls,
-    allowInsecureHttp: remoteAccess.allowInsecureHttp
-  });
+  } = cfg.network.https.enabled ? await createTlsCert({ tlsDir: paths.tls }) : { warnings: ['tls:https-disabled'] };
 
   const rediscoverAtomPacks = createAtomPackRediscoverer({
     paths,
@@ -599,7 +596,8 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
     daemonWarnings,
     certFingerprint: tlsFingerprint,
     certExpiry: tlsCertExpiry,
-    nativeCliServerUrl: buildNativeCliServerUrl({ port: PORT, remoteAccess }),
+    networkHttps: cfg.network.https,
+    nativeCliServerUrl: endpoint.localUrl,
     getUpgradeInfo: upgradeInfo.getUpgradeInfo,
     log: logger
   });
@@ -645,7 +643,14 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
     paths,
     host: HOST,
     port: PORT,
+    https: liveCfg.network.https,
     remoteAccess,
+    localHttpFallback: {
+      enabled: liveCfg.network.localHttpFallback.enabled,
+      port:
+        resolveDaemonNetwork({ network: liveCfg.network, env: Bun.env }).localHttpFallback?.port ??
+        liveCfg.network.localHttpFallback.port
+    },
     moBinaryPath: liveCfg.mo.binaryPath,
     moEnabled: liveCfg.mo.enabled,
     setMoEnabled,

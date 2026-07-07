@@ -154,7 +154,7 @@ export function resolveConnection(): MonadConnectionConfig {
 
   const apiBase = process.env.NEXT_PUBLIC_MONAD_API_BASE;
   const port = process.env.NEXT_PUBLIC_MONAD_DAEMON_PORT;
-  const daemonScheme = process.env.NEXT_PUBLIC_MONAD_DAEMON_SCHEME === 'https' ? 'https' : 'http';
+  const daemonScheme = process.env.NEXT_PUBLIC_MONAD_DAEMON_SCHEME === 'http' ? 'http' : 'https';
   const daemonHost =
     window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
       ? window.location.hostname

@@ -58,7 +58,9 @@ async function installCapabilitiesApiMock(page: Page) {
       return json({
         port: 52749,
         transport: 'tcp',
-        remoteAccess: { enabled: false, allowInsecureHttp: false, token: '' }
+        https: { enabled: true },
+        remoteAccess: { enabled: false, token: '' },
+        localHttpFallback: { enabled: false, port: 52780 }
       });
     }
     if (method === 'GET' && path === '/v1/atoms/skills') {

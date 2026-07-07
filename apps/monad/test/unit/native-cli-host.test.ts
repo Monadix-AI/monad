@@ -11,6 +11,7 @@ import { EventBus } from '@/services/event-bus.ts';
 import { BoundedOutputBuffer } from '@/services/native-cli/bounded-output-buffer.ts';
 import { AUTH_STATUS_TIMEOUT_MS } from '@/services/native-cli/constants.ts';
 import { NativeCliHost } from '@/services/native-cli/host/index.ts';
+import { resolveNativeCliManagedServerUrl } from '@/services/native-cli/host/session-launcher.ts';
 import { registerAgentAdapterImpl, unregisterAgentAdapterImpl } from '@/services/native-cli/index.ts';
 import { createStore } from '@/store/db/index.ts';
 
@@ -20,6 +21,22 @@ for (const adapter of builtinAgentAdapters) registerAgentAdapterImpl(adapter);
 
 test('native CLI auth status probes use a global 20 second timeout', () => {
   expect(AUTH_STATUS_TIMEOUT_MS).toBe(20_000);
+});
+
+test('managed native CLI default server URL follows the daemon HTTPS switch', () => {
+  expect(resolveNativeCliManagedServerUrl({ networkHttps: { enabled: true }, port: 53210 })).toBe(
+    'https://127.0.0.1:53210'
+  );
+  expect(resolveNativeCliManagedServerUrl({ networkHttps: { enabled: false }, port: 53210 })).toBe(
+    'http://127.0.0.1:53210'
+  );
+  expect(
+    resolveNativeCliManagedServerUrl({
+      serverUrl: 'http://127.0.0.1:59999',
+      networkHttps: { enabled: true },
+      port: 53210
+    })
+  ).toBe('http://127.0.0.1:59999');
 });
 
 test('native CLI host can stop every live session during daemon shutdown', () => {

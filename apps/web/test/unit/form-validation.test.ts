@@ -58,8 +58,8 @@ test('MCP server form validates URL only for HTTP transport', () => {
 
 test('daemon connection form allows local blank and validates non-empty remote URLs', () => {
   expect(daemonConnectionFormSchema.parse({ url: '', token: '  ' })).toEqual({ url: '', token: '' });
-  expect(daemonConnectionFormSchema.parse({ url: ' http://127.0.0.1:52749 ', token: ' abc ' })).toEqual({
-    url: 'http://127.0.0.1:52749',
+  expect(daemonConnectionFormSchema.parse({ url: ' https://127.0.0.1:52749 ', token: ' abc ' })).toEqual({
+    url: 'https://127.0.0.1:52749',
     token: 'abc'
   });
   expect(() => daemonConnectionFormSchema.parse({ url: 'file:///tmp/socket', token: '' })).toThrow();

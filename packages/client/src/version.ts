@@ -46,15 +46,28 @@ export function isVersionCompatible(daemonVersion: string, clientVersion: string
   };
 }
 
+export function isLoopbackHttpsUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return (
+      parsed.protocol === 'https:' &&
+      (parsed.hostname === 'localhost' ||
+        parsed.hostname === '127.0.0.1' ||
+        parsed.hostname === '::1' ||
+        parsed.hostname === '[::1]')
+    );
+  } catch {
+    return false;
+  }
+}
+
 export async function checkDaemonVersion(baseUrl: string, token?: string): Promise<VersionCheckResult> {
   const url = `${baseUrl.replace(/\/$/, '')}/health`;
   const headers: Record<string, string> = {};
   if (token) headers.authorization = `Bearer ${token}`;
 
-  const isLoopbackHttps =
-    url.startsWith('https://127.') || url.startsWith('https://localhost') || url.startsWith('https://[::1]');
   const fetchOpts: RequestInit = { headers, signal: AbortSignal.timeout(5000) };
-  if (isLoopbackHttps) (fetchOpts as BunFetchRequestInit).tls = { rejectUnauthorized: false };
+  if (isLoopbackHttpsUrl(url)) (fetchOpts as BunFetchRequestInit).tls = { rejectUnauthorized: false };
 
   let daemonVersion: string;
   try {

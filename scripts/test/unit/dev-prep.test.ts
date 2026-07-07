@@ -60,6 +60,7 @@ test('buildDevPrepSummary groups the resolved dev environment for terminal outpu
   const lines = buildDevPrepSummary({
     BUN_RUNTIME_TRANSPILER_CACHE_PATH: '/Users/dev/.cache/monad-bun',
     MONAD_KV_UI_PORT: '6401',
+    MONAD_HTTP_PORT: '53001',
     MONAD_PORT: '52001',
     PORT: '3101',
     WEB_PORT: '3101'
@@ -69,9 +70,12 @@ test('buildDevPrepSummary groups the resolved dev environment for terminal outpu
     '',
     'Monad dev prep',
     'Ports',
-    '  Daemon API        http://127.0.0.1:52001',
+    '  Daemon API        https://127.0.0.1:52001',
+    '  Local HTTP        http://127.0.0.1:53001',
     '  Web app           http://127.0.0.1:3101',
     '  KV inspector      http://127.0.0.1:6401',
+    'Runtime URL priority',
+    '  Daemon proxy      MONAD_URL > config network.host/https/port',
     'Runtime',
     '  Bun transpiler    /Users/dev/.cache/monad-bun',
     'Tasks',

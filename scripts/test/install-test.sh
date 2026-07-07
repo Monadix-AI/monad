@@ -94,19 +94,21 @@ grep -q '"_test":"sentinel"' "${HOME_DIR}/config.json" \
 # ── Daemon + web smoke test (flow 1 install, reused) ─────────────────────────
 step "Runtime smoke tests"
 DPORT=4399; WPORT=3099
+DAEMON_URL="https://127.0.0.1:${DPORT}"
+WEB_URL="http://127.0.0.1:${WPORT}"
 MONAD_HOME="$HOME_DIR" MONAD_MOCK_MODEL=1 MONAD_PORT=$DPORT "$MONAD" daemon >/tmp/it-daemon.log 2>&1 &
 DPID=$!
-WEB_PORT=$WPORT MONAD_URL="http://127.0.0.1:${DPORT}" "$MONAD" web >/tmp/it-web.log 2>&1 &
+WEB_PORT=$WPORT MONAD_URL="$DAEMON_URL" "$MONAD" web >/tmp/it-web.log 2>&1 &
 WPID=$!
 cleanup() { kill $DPID $WPID 2>/dev/null || true; }
 trap cleanup EXIT
 
-for _ in $(seq 1 40); do curl -fsS "localhost:${DPORT}/health" >/dev/null 2>&1 && break; sleep 0.1; done
-for _ in $(seq 1 40); do curl -fsS "localhost:${WPORT}/" >/dev/null 2>&1 && break; sleep 0.1; done
+for _ in $(seq 1 40); do curl -k -fsS "${DAEMON_URL}/health" >/dev/null 2>&1 && break; sleep 0.1; done
+for _ in $(seq 1 40); do curl -fsS "${WEB_URL}/" >/dev/null 2>&1 && break; sleep 0.1; done
 
-curl -fsS "localhost:${DPORT}/health" >/dev/null && ok "daemon /health"
-curl -fsS "localhost:${WPORT}/" | grep -q '<html' && ok "web / serves embedded SPA"
-curl -fsS "localhost:${WPORT}/api/daemon/health" >/dev/null && ok "web → daemon proxy"
+curl -k -fsS "${DAEMON_URL}/health" >/dev/null && ok "daemon /health"
+curl -fsS "${WEB_URL}/" | grep -q '<html' && ok "web / serves embedded SPA"
+curl -fsS "${WEB_URL}/api/daemon/health" >/dev/null && ok "web → daemon proxy"
 
 echo ""
 echo "[install-test] All outputs inside dist/test-install/ — nothing outside the project was touched."

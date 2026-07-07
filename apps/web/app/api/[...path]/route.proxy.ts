@@ -2,31 +2,23 @@ import { readFileSync } from 'node:fs';
 import { request as httpsRequest } from 'node:https';
 import { join, resolve } from 'node:path';
 import { Readable } from 'node:stream';
+import { resolveDaemonUrl } from '@monad/home';
 
 import { proxyResponseBody } from '@/lib/proxy-stream';
 
-const runtime = 'nodejs';
-const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'] as const;
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '::1', '[::1]']);
 
-interface DaemonConfig {
-  network?: {
-    port?: number;
-    remoteAccess?: {
-      enabled?: boolean;
-      allowInsecureHttp?: boolean;
-    };
-  };
+function daemonUrlFromConfig(raw: string): string | null {
+  const network = (JSON.parse(raw) as { network?: Parameters<typeof resolveDaemonUrl>[0]['network'] })?.network;
+  if (!network?.port) return null;
+  return resolveDaemonUrl({ network, env: process.env });
 }
 
-function daemonScheme(cfg: DaemonConfig | null): 'http' | 'https' {
-  const remote = cfg?.network?.remoteAccess;
-  return remote?.enabled && !remote.allowInsecureHttp ? 'https' : 'http';
-}
-
-function readDaemonConfig(): DaemonConfig | null {
+function readDaemonConfigUrl(): string | null {
   const configPaths = [
     process.env.MONAD_HOME ? join(process.env.MONAD_HOME, 'configs', 'config.json') : undefined,
     resolve(process.cwd(), '../..', '.dev', '.monad', 'configs', 'config.json'),
@@ -35,19 +27,17 @@ function readDaemonConfig(): DaemonConfig | null {
 
   for (const configPath of configPaths) {
     try {
-      return JSON.parse(readFileSync(configPath, 'utf-8')) as DaemonConfig;
+      const raw = readFileSync(configPath, 'utf-8');
+      const url = daemonUrlFromConfig(raw);
+      if (url) return url;
     } catch {}
   }
   return null;
 }
 
 export function readDaemonUrl(): string {
-  if (process.env.MONAD_URL) return process.env.MONAD_URL;
-
-  const cfg = readDaemonConfig();
-  const port = process.env.MONAD_PORT || cfg?.network?.port || 52749;
-
-  return `${daemonScheme(cfg)}://127.0.0.1:${port}`;
+  if (process.env.MONAD_URL) return resolveDaemonUrl({ env: process.env });
+  return readDaemonConfigUrl() ?? resolveDaemonUrl({ env: process.env });
 }
 
 function isLoopbackHttps(target: string): boolean {
@@ -124,12 +114,12 @@ async function proxy(req: Request, { params }: { params: Promise<{ path?: string
   }
 }
 
-const GET = proxy;
-const POST = proxy;
-const PUT = proxy;
-const PATCH = proxy;
-const DELETE = proxy;
-const HEAD = proxy;
-const OPTIONS = proxy;
+export const GET = proxy;
+export const POST = proxy;
+export const PUT = proxy;
+export const PATCH = proxy;
+export const DELETE = proxy;
+export const HEAD = proxy;
+export const OPTIONS = proxy;
 
 void METHODS;

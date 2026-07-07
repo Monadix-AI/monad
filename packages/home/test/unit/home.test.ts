@@ -27,6 +27,7 @@ import {
 import { resolveClientConn } from '../../src/connection.ts';
 import { initMonadHome } from '../../src/init.ts';
 import { computeInitStatus } from '../../src/init-status.ts';
+import { resolveDaemonNetwork, resolveDaemonUrl } from '../../src/network-endpoints.ts';
 import { getPaths, xdgPaths } from '../../src/paths.ts';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -394,13 +395,28 @@ describe('migrateConfig', () => {
     expect(cfg.network.transport).toBe(DEFAULT_TRANSPORT);
   });
 
+  test('fills local HTTP fallback defaults when the network block is absent', async () => {
+    const cfg = await migrateConfig(CONFIG_V1_FIXTURE);
+    expect(cfg.network.https).toEqual({ enabled: true });
+    expect(cfg.network.localHttpFallback).toEqual({ enabled: false, port: 52780 });
+    expect('allowInsecureHttp' in cfg.network.remoteAccess).toBe(false);
+  });
+
   test('preserves an explicit network.transport override', async () => {
     const override = 'tcp'; // any value other than DEFAULT_TRANSPORT ('uds')
     const cfg = await migrateConfig({
       ...CONFIG_V1_FIXTURE,
-      network: { port: 52749, transport: override, remoteAccess: { enabled: false, token: null } }
+      network: {
+        port: 52749,
+        transport: override,
+        https: { enabled: false },
+        remoteAccess: { enabled: false, token: null },
+        localHttpFallback: { enabled: true, port: 52780 }
+      }
     });
     expect(cfg.network.transport).toBe(override);
+    expect(cfg.network.https).toEqual({ enabled: false });
+    expect(cfg.network.localHttpFallback).toEqual({ enabled: true, port: 52780 });
   });
 
   // ── Future migration test template ────────────────────────────────────────
@@ -658,6 +674,89 @@ describe('network.transport', () => {
     expect(createDefaultConfig('prn_x', 'x').network.transport).toBe(DEFAULT_TRANSPORT);
   });
 
+  test('createDefaultConfig stamps local HTTP fallback disabled on an independent default port', () => {
+    const cfg = createDefaultConfig('prn_x', 'x');
+    expect(cfg.network.host).toBe('127.0.0.1');
+    expect(cfg.network.https).toEqual({ enabled: true });
+    expect(cfg.network.localHttpFallback).toEqual({ enabled: false, port: 52780 });
+    expect('allowInsecureHttp' in cfg.network.remoteAccess).toBe(false);
+  });
+
+  test('resolveDaemonNetwork derives bind/connect URLs from host, protocol, and ports', () => {
+    const cfg = createDefaultConfig('prn_x', 'x');
+    cfg.network.remoteAccess.enabled = true;
+    cfg.network.host = '192.168.1.20';
+    cfg.network.port = 52801;
+    cfg.network.localHttpFallback = { enabled: true, port: 52880 };
+
+    expect(resolveDaemonNetwork({ network: cfg.network })).toMatchObject({
+      bindHost: '192.168.1.20',
+      connectHost: '192.168.1.20',
+      port: 52801,
+      scheme: 'https',
+      primaryUrl: 'https://192.168.1.20:52801',
+      localUrl: 'https://192.168.1.20:52801',
+      localHttpFallback: { port: 52880, url: 'http://127.0.0.1:52880' },
+      unixUrl: 'http://localhost'
+    });
+  });
+
+  test('resolveDaemonNetwork keeps remote access wildcard bind locally dialable', () => {
+    const cfg = createDefaultConfig('prn_x', 'x');
+    cfg.network.remoteAccess.enabled = true;
+
+    expect(resolveDaemonNetwork({ network: cfg.network })).toMatchObject({
+      bindHost: '0.0.0.0',
+      connectHost: '127.0.0.1',
+      primaryUrl: 'https://0.0.0.0:52749',
+      localUrl: 'https://127.0.0.1:52749'
+    });
+  });
+
+  test('resolveDaemonNetwork honours env host and port overrides without scheme env', () => {
+    const cfg = createDefaultConfig('prn_x', 'x');
+    cfg.network.remoteAccess.enabled = true;
+    cfg.network.localHttpFallback = { enabled: true, port: 52780 };
+
+    expect(
+      resolveDaemonNetwork({
+        network: cfg.network,
+        env: { MONAD_HOST: '::', MONAD_PORT: '53210', MONAD_HTTP_PORT: '53310' }
+      })
+    ).toMatchObject({
+      bindHost: '::',
+      connectHost: '::1',
+      primaryUrl: 'https://[::]:53210',
+      localUrl: 'https://[::1]:53210',
+      localHttpFallback: { port: 53310, url: 'http://127.0.0.1:53310' }
+    });
+  });
+
+  test('resolveDaemonNetwork rejects non-loopback hosts unless remote access is enabled', () => {
+    const cfg = createDefaultConfig('prn_x', 'x');
+    cfg.network.host = '0.0.0.0';
+
+    expect(() => resolveDaemonNetwork({ network: cfg.network })).toThrow(/network\.host must be loopback/);
+    expect(() => resolveDaemonNetwork({ network: cfg.network, env: { MONAD_HOST: '192.168.1.20' } })).toThrow(
+      /network\.host must be loopback/
+    );
+  });
+
+  test('resolveDaemonNetwork rejects remote access when HTTPS is disabled', () => {
+    const cfg = createDefaultConfig('prn_x', 'x');
+    cfg.network.remoteAccess.enabled = true;
+    cfg.network.https.enabled = false;
+
+    expect(() => resolveDaemonNetwork({ network: cfg.network })).toThrow(/network\.https\.enabled=false/);
+  });
+
+  test('resolveDaemonUrl keeps explicit MONAD_URL as the highest-priority escape hatch', () => {
+    const cfg = createDefaultConfig('prn_x', 'x');
+    expect(resolveDaemonUrl({ network: cfg.network, env: { MONAD_URL: 'http://127.0.0.1:59999' } })).toBe(
+      'http://127.0.0.1:59999'
+    );
+  });
+
   describe('resolveClientConn honours the setting', () => {
     const env = { ...Bun.env };
     let home: string;
@@ -690,9 +789,11 @@ describe('network.transport', () => {
       expect(conn.unixSocket).toBe(p.sock);
     });
 
-    test('tcp → no unix socket (plain HTTP over loopback)', async () => {
+    test('tcp → no unix socket (HTTPS over loopback)', async () => {
       await setTransport('tcp');
-      const _conn = await resolveClientConn();
+      const conn = await resolveClientConn();
+      expect(conn.unixSocket).toBeUndefined();
+      expect(conn.baseUrl).toBe('https://127.0.0.1:52749');
     });
 
     test('MONAD_PORT overrides the configured port (per-worktree dev isolation)', async () => {
@@ -705,7 +806,7 @@ describe('network.transport', () => {
 
       Bun.env.MONAD_PORT = '53210';
       const conn = await resolveClientConn();
-      expect(conn.baseUrl).toBe('http://127.0.0.1:53210');
+      expect(conn.baseUrl).toBe('https://127.0.0.1:53210');
     });
 
     test('without MONAD_PORT, falls back to the configured port', async () => {
@@ -718,7 +819,19 @@ describe('network.transport', () => {
 
       delete Bun.env.MONAD_PORT;
       const conn = await resolveClientConn();
-      expect(conn.baseUrl).toBe('http://127.0.0.1:52801');
+      expect(conn.baseUrl).toBe('https://127.0.0.1:52801');
+    });
+
+    test('tcp with HTTPS disabled returns HTTP over loopback', async () => {
+      const p = await setTransport('tcp');
+      const cfg = await loadAll(p.config, p.profile);
+      // biome-ignore lint/style/noNonNullAssertion: initMonadHome guarantees config exists
+      cfg!.network.https.enabled = false;
+      // biome-ignore lint/style/noNonNullAssertion: initMonadHome guarantees config exists
+      await saveSystemConfig(p.config, cfg!);
+
+      const conn = await resolveClientConn();
+      expect(conn.baseUrl).toBe('http://127.0.0.1:52749');
     });
   });
 });

@@ -4,7 +4,7 @@ import type { App } from '@monad/monad';
 import { treaty } from '@elysiajs/eden';
 
 export interface MonadTreatyOptions {
-  /** Daemon base URL, e.g. "http://127.0.0.1:52749". */
+  /** Daemon base URL, e.g. "https://127.0.0.1:52749". */
   baseUrl: string;
   /** Bearer token for the control API (header only — never in the URL). */
   token?: string;
@@ -46,7 +46,10 @@ function mergeTreatyHeaders(
 export function createMonadTreaty(opts: MonadTreatyOptions, config?: MonadTreatyConfig): MonadTreaty {
   const base = opts.baseUrl.replace(/\/$/, '');
   const transport =
-    makeUnixFetcher(opts.unixSocket) ?? makeLoopbackHttpsFetcher(opts.baseUrl) ?? config?.fetcher ?? fetch;
+    makeUnixFetcher(opts.unixSocket, opts.baseUrl) ??
+    makeLoopbackHttpsFetcher(opts.baseUrl) ??
+    config?.fetcher ??
+    fetch;
   // Dev-only request tracing (captures request bodies into the developer console). Gated on
   // NODE_ENV so makeTracingFetcher + requestBody dead-code-eliminate from release builds.
   const fetcher = process.env.NODE_ENV !== 'production' ? makeTracingFetcher(transport) : transport;
@@ -134,14 +137,15 @@ function makeTracingFetcher(baseFetcher: typeof fetch): typeof fetch {
  * next invocation re-probes. Returns undefined when no socket is configured (Eden uses
  * plain TCP by default).
  */
-export function makeUnixFetcher(unixSocket: string | undefined): typeof fetch | undefined {
+export function makeUnixFetcher(unixSocket: string | undefined, baseUrl?: string): typeof fetch | undefined {
   if (!unixSocket) return undefined;
   let fellBackToTcp = false;
+  const tcpFetch = (baseUrl ? makeLoopbackHttpsFetcher(baseUrl) : undefined) ?? fetch;
   const unixFetch = async (input: RequestInfo | URL, init?: BunFetchRequestInit): Promise<Response> => {
     if (!fellBackToTcp) {
       try {
         // `unix` is Bun-only (BunFetchRequestInit).
-        return await fetch(input, { ...init, unix: unixSocket });
+        return await fetch(rewriteLoopbackHttpsInputToHttp(input), { ...init, unix: unixSocket });
       } catch {
         // Connect-level failure: the request never reached the daemon, so retrying
         // over TCP (baseUrl = 127.0.0.1:<port>) is safe. No timeout added here —
@@ -149,9 +153,33 @@ export function makeUnixFetcher(unixSocket: string | undefined): typeof fetch | 
         fellBackToTcp = true;
       }
     }
-    return fetch(input, init);
+    return tcpFetch(input, init);
   };
   return unixFetch as typeof fetch;
+}
+
+function rewriteLoopbackHttpsInputToHttp(input: RequestInfo | URL): RequestInfo | URL {
+  if (typeof input === 'string') return rewriteLoopbackHttpsUrlToHttp(input);
+  if (input instanceof URL) return new URL(rewriteLoopbackHttpsUrlToHttp(input.toString()));
+  return new Request(rewriteLoopbackHttpsUrlToHttp(input.url), input);
+}
+
+function rewriteLoopbackHttpsUrlToHttp(raw: string): string {
+  try {
+    const url = new URL(raw);
+    if (
+      url.protocol === 'https:' &&
+      (url.hostname === '127.0.0.1' ||
+        url.hostname === 'localhost' ||
+        url.hostname === '::1' ||
+        url.hostname === '[::1]')
+    ) {
+      url.protocol = 'http:';
+    }
+    return url.toString();
+  } catch {
+    return raw;
+  }
 }
 
 /**
@@ -167,7 +195,7 @@ export function makeLoopbackHttpsFetcher(baseUrl: string): typeof fetch | undefi
   } catch {
     return undefined;
   }
-  if (host !== '127.0.0.1' && host !== 'localhost' && host !== '::1') return undefined;
+  if (host !== '127.0.0.1' && host !== 'localhost' && host !== '::1' && host !== '[::1]') return undefined;
   return ((input, init) =>
     fetch(input, { ...init, tls: { rejectUnauthorized: false } } as BunFetchRequestInit)) as typeof fetch;
 }

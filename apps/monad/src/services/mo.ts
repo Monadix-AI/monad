@@ -8,12 +8,13 @@ export class MoService {
 
   // socketPath is the daemon's own unix socket; it's passed to Mo via MO_DAEMON_SOCK so the
   // sprite talks to *this* daemon instance and refuses to run unless launched by the daemon.
-  // tcpPort is the daemon's TCP port; Mo connects a WebSocket to ws://127.0.0.1:{port}/stream
+  // tcpPort is the daemon's TCP port; Mo connects a WebSocket to ws(s)://127.0.0.1:{port}/stream
   // for health signalling and session event delivery (replacing the legacy HTTP health poll + SSE).
   constructor(
     private readonly binaryPath: string | undefined,
     private readonly socketPath: string,
-    private readonly tcpPort: number
+    private readonly tcpPort: number,
+    private readonly daemonScheme: 'http' | 'https'
   ) {}
 
   // Resolve the Mo binary. config.json `mo.binaryPath` overrides this. In a release build it sits next to bin/monad
@@ -74,7 +75,12 @@ export class MoService {
       this.proc = Bun.spawn([this.binaryPath], {
         stdio: ['ignore', 'ignore', 'ignore'],
         detached: true,
-        env: { ...process.env, MO_DAEMON_SOCK: this.socketPath, MO_DAEMON_PORT: String(this.tcpPort) }
+        env: {
+          ...process.env,
+          MO_DAEMON_SCHEME: this.daemonScheme,
+          MO_DAEMON_SOCK: this.socketPath,
+          MO_DAEMON_PORT: String(this.tcpPort)
+        }
       });
       const pid = this.proc.pid;
       daemonChildProcesses.track(pid, 'mo', () => killDaemonProcessTree(pid));
