@@ -10,6 +10,7 @@ import type { NativeCliObservationEvent, NativeCliUsageRecord } from '@monad/pro
 import type { NativeCliObservationProjector, ObservationRole } from '../observation-projection.ts';
 
 import {
+  classifyObservationActivity,
   numberValue,
   observation,
   permissionDenialEvents,
@@ -275,6 +276,7 @@ export function claudeRecordEvents(
 
 export const claudeCodeObservationProjection = {
   usageRecords: claudeUsageRecordsFromRecord,
+  classifyActivity: classifyObservationActivity,
   recordProjectors: [
     {
       supports: isClaudeObservationMessage,

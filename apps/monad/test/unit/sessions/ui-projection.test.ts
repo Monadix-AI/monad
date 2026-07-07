@@ -962,7 +962,14 @@ function cliSession(overrides: Partial<NativeCliSessionSnapshot> = {}): NativeCl
 
 test('hydrateNativeCliSessions rebuilds a running tool card from the output snapshot', () => {
   const projector = new SessionUiProjector();
-  projector.hydrateNativeCliSessions([cliSession()]);
+  projector.hydrateNativeCliSessions([
+    cliSession({
+      outputSnapshot: [
+        '{"method":"turn/started","params":{}}',
+        '{"method":"item/agentMessage/delta","params":{"delta":"Working"}}'
+      ].join('\n')
+    })
+  ]);
   const snap = projector.snapshot();
   if (snap.kind !== 'snapshot') throw new Error('expected snapshot');
   expect(snap.items).toHaveLength(1);
@@ -971,9 +978,61 @@ test('hydrateNativeCliSessions rebuilds a running tool card from the output snap
     id: 'ncli_1',
     tool: 'native-cli:codex',
     status: 'running',
-    output: 'line one\nline two',
+    output: [
+      '{"method":"turn/started","params":{}}',
+      '{"method":"item/agentMessage/delta","params":{"delta":"Working"}}'
+    ].join('\n'),
     input: { agent: 'codex', provider: 'codex', launchMode: 'app-server' }
   });
+});
+
+test('hydrateNativeCliSessions settles a running process after provider end turn', () => {
+  const projector = new SessionUiProjector();
+  projector.hydrateNativeCliSessions([
+    cliSession({
+      provider: 'claude-code',
+      outputSnapshot: [
+        '{"type":"stream_event","event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"Working"}}}',
+        '{"type":"result","subtype":"success","is_error":false,"stop_reason":"end_turn"}'
+      ].join('\n')
+    })
+  ]);
+  const snap = projector.snapshot();
+  if (snap.kind !== 'snapshot' || snap.items[0]?.kind !== 'tool') throw new Error('expected tool');
+  expect(snap.items[0].status).toBe('ok');
+});
+
+test('native CLI output settles the live tool card after provider end turn', () => {
+  const projector = new SessionUiProjector();
+  projector.applyEvent(
+    event('native_cli.started', {
+      nativeCliSessionId: 'ncli_live',
+      agentName: 'pmem_claude',
+      provider: 'claude-code',
+      workingPath: '/w',
+      launchMode: 'pty',
+      pid: 123
+    })
+  );
+  projector.applyEvent(
+    event('native_cli.output', {
+      nativeCliSessionId: 'ncli_live',
+      stream: 'stdout',
+      chunk:
+        '{"type":"stream_event","event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"Working"}}}\n'
+    })
+  );
+  projector.applyEvent(
+    event('native_cli.output', {
+      nativeCliSessionId: 'ncli_live',
+      stream: 'stdout',
+      chunk: '{"type":"result","subtype":"success","is_error":false,"stop_reason":"end_turn"}\n'
+    })
+  );
+  const snap = projector.snapshot();
+  const tool = snap.kind === 'snapshot' ? snap.items.find((item) => item.id === 'ncli_live') : undefined;
+  if (tool?.kind !== 'tool') throw new Error('expected tool');
+  expect(tool.status).toBe('ok');
 });
 
 test('hydrateNativeCliSessions maps terminal state and appends the exit line', () => {

@@ -5,7 +5,7 @@ export type { WorkspaceExperienceProductIconId } from '@monad/sdk-atom';
 export type ParticipantKind = 'human' | 'agent';
 type MessageKind = ParticipantKind | 'system' | 'developer';
 export type Presence = 'online' | 'working' | 'needs-login' | 'failed' | 'stopped' | 'idle';
-export type AgentActivityPhase = 'reading' | 'thinking' | 'speaking';
+export type AgentActivityPhase = 'reading' | 'thinking' | 'speaking' | 'tooling' | 'writing';
 
 export interface AgentActivityOverride {
   phase: AgentActivityPhase;
@@ -23,6 +23,13 @@ export interface Participant {
   role?: string;
   presence: Presence;
   activityPhase?: AgentActivityPhase;
+  metadata?: {
+    agent?: string;
+    model?: string;
+    effort?: string;
+    speed?: 'standard' | 'fast' | string;
+    autopilot?: boolean;
+  };
 }
 
 export type Project = WorkspaceExperienceProject;
@@ -33,6 +40,7 @@ interface ToolChip {
 
 export interface Message {
   id: string;
+  renderKey?: string;
   authorId: string;
   authorName: string;
   av: string;
@@ -59,7 +67,7 @@ export interface Message {
   nativeCliSessionId?: string;
   deliveryId?: NativeAgentDeliveryId;
   developerOnly?: boolean;
-  systemTone?: 'error';
+  systemTone?: 'error' | 'pending';
   systemDetail?: string;
   systemRaw?: unknown;
   reasoning?: string;
@@ -109,6 +117,7 @@ export interface AgentTask {
 export interface NativeCliStreamView {
   id: string;
   agentName: string;
+  agentAliases?: string[];
   templateAgentName?: string;
   provider: string;
   tag: string;

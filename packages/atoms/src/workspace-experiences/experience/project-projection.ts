@@ -20,9 +20,9 @@ import {
 } from '@monad/protocol';
 
 import {
+  nativeCliAgentIsGenerating,
   nativeCliMemberActivityPhase,
-  nativeCliMemberPresence,
-  nativeCliSessionIsGenerating
+  nativeCliMemberPresence
 } from './native-cli-presence.ts';
 import { productIcon } from './project-members.ts';
 
@@ -170,6 +170,7 @@ export function projectParticipants(args: {
       const templateName = member.templateName ?? member.name;
       const displayName = member.displayName ?? member.name;
       const agent = args.nativeCliAgents.find((candidate) => candidate.name === templateName);
+      const template = agent?.projectTemplates?.find((candidate) => candidate.id === member.projectTemplateId);
       const stableAgentName = workplaceProjectMemberStableId(member);
       const presence = nativeCliMemberPresence({
         activeAgentNames: activeNativeCliAgentNames,
@@ -179,6 +180,13 @@ export function projectParticipants(args: {
         liveTools
       });
       const activityOverride = nativeCliActivityOverrides[stableAgentName];
+      const activityPhase =
+        activityOverride?.phase ??
+        nativeCliMemberActivityPhase({
+          agentName: stableAgentName,
+          liveTools,
+          nativeCliSessions: args.nativeCliSessions
+        });
       return {
         id: member.id,
         av: initials(displayName),
@@ -192,16 +200,14 @@ export function projectParticipants(args: {
         tag: nativeCliTag(agent?.provider),
         role: 'CLI',
         presence,
-        activityPhase:
-          presence === 'working'
-            ? (activityOverride?.phase ??
-              nativeCliMemberActivityPhase({
-                agentName: stableAgentName,
-                liveTools,
-                nativeCliSessions: args.nativeCliSessions
-              }) ??
-              'thinking')
-            : undefined
+        activityPhase,
+        metadata: {
+          agent: templateName,
+          model: member.settings?.modelId ?? member.settings?.modelName ?? template?.modelId,
+          effort: member.settings?.reasoningEffort ?? template?.reasoningEffort,
+          speed: member.settings?.speed ?? template?.speed ?? 'standard',
+          autopilot: member.settings?.allowAutopilot ?? agent?.allowAutopilot ?? true
+        }
       };
     }
     const agent = args.acpAgents.find((candidate) => candidate.name === member.name);
@@ -394,13 +400,16 @@ export function nativeCliStreamingAgentNames(items: readonly UIItem[]): Set<stri
 
 export function activeNativeCliAgentNames(args: {
   activityOverrideAgentNames: readonly string[];
+  liveTools: readonly Extract<UIItem, { kind: 'tool' }>[];
   nativeCliSessions: readonly NativeCliSessionView[];
   streamingAgentNames: ReadonlySet<string>;
 }): Set<string> {
   const names = new Set(args.streamingAgentNames);
   for (const agentName of args.activityOverrideAgentNames) names.add(agentName);
   for (const session of args.nativeCliSessions) {
-    if (nativeCliSessionIsGenerating(session)) names.add(session.agentName);
+    // Live tool status is authoritative when present (it clears at turn end); the frozen session
+    // snapshot is only the fallback — see nativeCliAgentIsGenerating.
+    if (nativeCliAgentIsGenerating(session.agentName, args.liveTools, session)) names.add(session.agentName);
   }
   return names;
 }

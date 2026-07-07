@@ -1,7 +1,7 @@
 import type { NativeCliObservationEvent } from '@monad/protocol';
 import type { NativeCliObservationProjector, ObservationRole } from '../observation-projection.ts';
 
-import { observation, textValue } from '../observation-projection.ts';
+import { classifyObservationActivity, observation, textValue } from '../observation-projection.ts';
 
 function textFromContent(content: unknown): string | undefined {
   if (typeof content === 'string') return content;
@@ -41,5 +41,6 @@ export function openClawRecordEvents(
 }
 
 export const openClawObservationProjection = {
+  classifyActivity: classifyObservationActivity,
   recordProjectors: [{ parse: ({ id, record, recordIndex }) => openClawRecordEvents(id, record, recordIndex) }]
 } satisfies NativeCliObservationProjector;

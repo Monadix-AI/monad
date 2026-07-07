@@ -79,6 +79,11 @@ function qwenExtraWorkingPathArgs(paths: string[] | undefined): string[] {
   return (paths ?? []).flatMap((path) => ['--include-directories', path]);
 }
 
+function withQwenSystemPromptArgs(args: string[], systemPromptFile: string | undefined): string[] {
+  if (!systemPromptFile || hasFlag(args, '--system-prompt') || hasFlag(args, '--append-system-prompt')) return args;
+  return [...args, '--append-system-prompt', readFileSync(systemPromptFile, 'utf8')];
+}
+
 function buildQwenLaunch(agent: NativeCliAgentView, opts: BuildNativeCliLaunchOptions): NativeCliLaunchSpec {
   const launchMode = opts.launchMode ?? agent.defaultLaunchMode;
   let args = [...(agent.args ?? [])];
@@ -91,6 +96,7 @@ function buildQwenLaunch(agent: NativeCliAgentView, opts: BuildNativeCliLaunchOp
   }
   args = withQwenSkipApprovalArgs(args, !!opts.skipProviderApprovals);
   args = [...args, ...qwenExtraWorkingPathArgs(opts.extraWorkingPaths)];
+  args = withQwenSystemPromptArgs(args, opts.systemPromptFile);
   const launchArgs = launchMode === 'json-stream' ? withQwenStreamJsonArgs(args) : args;
   return {
     argv: [agent.command, ...launchArgs],
@@ -171,7 +177,8 @@ export const qwenNativeCliAdapter: NativeCliProviderAdapter = {
   settings: () => nativeCliAdapterSettings({ launchModes: ['pty', 'json-stream'] }),
   settingsImport: createBasicSettingsImport('qwen', 'Qwen Code', 'qwen', '.qwen'),
   managedRuntime: {
-    launchMode: () => 'json-stream'
+    launchMode: () => 'json-stream',
+    usesSystemPromptFile: true
   },
   detect(probes = defaultBinProbes) {
     const qwenBin = resolveBinary('qwen', [], probes);

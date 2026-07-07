@@ -31,12 +31,12 @@ import { mkdir } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 
 import { runDevInitCommandStep } from './dev-init/command-step';
+import { scaffoldDevSeed } from './dev-init/dev-seed';
 import { buildMoSprite, initCodeGraph, startPhoenix } from './dev-init/dev-services';
 import { parseEnvFile, shouldSkipDevInit } from './dev-init/env';
 import { installPostCheckoutHook } from './dev-init/git-hooks';
 import { buildDevInitSummary, generatedArtifactsHeader, shouldColorOutput } from './dev-init/output';
 import { ensurePortLines, removeBlankXdgLines, type WorktreePorts, worktreePorts } from './dev-init/ports';
-import { scaffoldSeedConfig } from './dev-init/seed-config';
 
 export { shouldRenderDevInitCommandSpinner } from './dev-init/command-step';
 export { buildCodeGraphInitStep, shouldInitCodeGraph } from './dev-init/dev-services';
@@ -134,7 +134,7 @@ async function main(): Promise<void> {
 
   // ── 3. Scaffold config.init.json (dev seed) and warn on missing API key ───────
 
-  const apiKey = await scaffoldSeedConfig(root, log, warn);
+  const apiKey = await scaffoldDevSeed(root, log, warn);
 
   await initCodeGraph(root, color, log, warn);
 

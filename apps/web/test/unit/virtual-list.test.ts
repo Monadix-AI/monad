@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import { observationFollowResetKey } from '@monad/atoms/workspace-experiences';
-import { indexOfKey, isAtBottom, reducePinnedOnScroll } from '@monad/ui/components/VirtualList';
+import { indexOfKey, isAtBottom, reducePinnedOnScroll, shouldPinToBottom } from '@monad/ui/components/VirtualList';
 
 test('isAtBottom: at the exact bottom', () => {
   expect(isAtBottom({ scrollHeight: 1000, scrollTop: 500, clientHeight: 500 })).toBe(true);
@@ -44,6 +44,12 @@ test('reducePinnedOnScroll: our own pinning scroll is ignored and consumes the f
   expect(reducePinnedOnScroll(true, true, false)).toEqual({ pinned: true, selfScrollConsumed: true });
   // A self-scroll while unpinned must NOT silently re-pin the user.
   expect(reducePinnedOnScroll(false, true, true)).toEqual({ pinned: false, selfScrollConsumed: true });
+});
+
+test('shouldPinToBottom: follows viewport changes unless the user is parked above the bottom', () => {
+  expect(shouldPinToBottom(true, true)).toBe(true);
+  expect(shouldPinToBottom(true, false)).toBe(false);
+  expect(shouldPinToBottom(false, true)).toBe(false);
 });
 
 test('observationFollowResetKey: streaming text changes do not request an imperative scroll reset', () => {

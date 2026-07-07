@@ -24,6 +24,49 @@ import {
 import { CommandToolCard, CommandToolHeader } from './command-card.tsx';
 import { FileReadToolCard, FileReadToolHeader } from './file-read-card.tsx';
 
+const THINKING_LABEL_CSS = `
+@keyframes workplace-observation-thinking-sheen {
+  0% { background-position: 160% 50%; }
+  100% { background-position: -60% 50%; }
+}
+
+.workplace-observation-thinking-label {
+  position: relative;
+  display: inline-block;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--border) 76%, transparent);
+  border-radius: 999px;
+  color: color-mix(in srgb, var(--foreground) 72%, transparent);
+  padding: 2px 6px;
+}
+
+.workplace-observation-thinking-label[data-streaming='true']::after {
+  position: absolute;
+  inset: 2px 6px;
+  content: attr(data-label);
+  background:
+    linear-gradient(
+      110deg,
+      transparent 0%,
+      transparent 38%,
+      var(--foreground) 50%,
+      transparent 62%,
+      transparent 100%
+    );
+  background-size: 220% 100%;
+  background-clip: text;
+  color: transparent;
+  pointer-events: none;
+  animation: workplace-observation-thinking-sheen 1.45s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workplace-observation-thinking-label[data-streaming='true']::after {
+    animation: none;
+  }
+}
+`;
+
 export type ObservationTimelineRow = {
   id: string;
   entries: ObservationTimelineEntry[];
@@ -163,17 +206,23 @@ function ObservationTimelineCard({
     );
   }
   if (entry.kind === 'public' && entry.card.type === 'thinking') {
+    const thinkingStreaming = isStreamingThinkingObservation(entry.card.item);
     return (
       <ObservationCardShell
         collapseCommand={collapseCommand}
         header={
           <ObservationMeta
             compact
-            label="thinking"
             source={entry.card.item.source}
-            type={entry.card.item.providerEventType}
           >
-            <span style={thinkingPulseStyle} />
+            <style>{THINKING_LABEL_CSS}</style>
+            <span
+              className="workplace-observation-thinking-label"
+              data-label="thinking"
+              data-streaming={thinkingStreaming ? 'true' : undefined}
+            >
+              thinking
+            </span>
           </ObservationMeta>
         }
         raw={entry.raw}
@@ -436,6 +485,11 @@ function observationTimestampLabel(item: ObservationItem): string | undefined {
   return timestamp === undefined ? undefined : formatObservationTime(timestamp);
 }
 
+function isStreamingThinkingObservation(item: ObservationItem): boolean {
+  const type = item.providerEventType?.toLowerCase() ?? '';
+  return type.includes('delta') || type.includes('chunk');
+}
+
 function formatObservationTime(timestamp: number): string {
   return new Intl.DateTimeFormat(undefined, {
     hour: '2-digit',
@@ -477,12 +531,4 @@ const toolGroupBodyStyle: React.CSSProperties = {
   flexDirection: 'column',
   gap: 8,
   minWidth: 0
-};
-
-const thinkingPulseStyle: React.CSSProperties = {
-  width: 6,
-  height: 6,
-  borderRadius: 999,
-  background: 'color-mix(in srgb, #8b5cf6 78%, var(--foreground))',
-  boxShadow: '0 0 0 3px color-mix(in srgb, #8b5cf6 18%, transparent)'
 };

@@ -250,7 +250,8 @@ export function DaemonMenu({
               className={cn(
                 'flex min-w-0 flex-1 items-center gap-2.5 rounded-(--radius-md) px-2.5 py-2 text-left transition hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
                 hasUpgrade && 'pr-24',
-                (showSettings || menuOpen) && 'bg-sidebar-accent text-sidebar-accent-foreground'
+                (showSettings || menuOpen) &&
+                  'bg-sidebar-selected text-sidebar-selected-foreground hover:bg-sidebar-selected-hover'
               )}
               type="button"
             >

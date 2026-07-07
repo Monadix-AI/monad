@@ -1,5 +1,6 @@
 import type { NativeCliObservationEvent } from '@monad/protocol';
 import type {
+  NativeCliObservationActivity,
   NativeCliObservationJsonRecordEntry,
   NativeCliObservationMessageGroupProjector,
   NativeCliObservationProjector,
@@ -11,11 +12,45 @@ import { nativeCliObservationEventSchema } from '@monad/protocol';
 export type ObservationRole = NativeCliObservationEvent['role'];
 export type ObservationSource = NativeCliObservationEvent['source'];
 export type {
+  NativeCliObservationActivity,
   NativeCliObservationJsonRecordEntry,
   NativeCliObservationMessageGroupProjector,
   NativeCliObservationProjector,
   NativeCliObservationRecordProjector
 };
+
+const TERMINAL_EVENT_TYPES = new Set(['turn/completed', 'result', 'error', 'server_error', 'turn-end']);
+const TOOL_RESULT_EVENT_TYPES = new Set(['tool_result', 'function_call_output', 'item/toolCallOutput']);
+
+function threadStatusIsIdle(raw: unknown): boolean {
+  const record = recordValue(raw);
+  const params = recordValue(record?.params);
+  const status = recordValue(params?.status);
+  return textValue(status?.type, params?.type, params?.status) === 'idle';
+}
+
+/** Shared classifier for adapters whose projected events follow the common conventions: a terminal
+ *  `providerEventType` (result / turn completed / error / a thread going idle), thinking events tagged
+ *  with a reasoning/thinking/plan type, and `role` carrying tool/user/system/agent. Adapters with an
+ *  exotic vocabulary can supply their own `classifyActivity`; most just reference this. Provider event
+ *  strings live HERE (adapter side), never in a consumer. `system` (a turn-start / status notice) still
+ *  counts as in-flight for generating but yields no UI phase. */
+export function classifyObservationActivity(
+  event: NativeCliObservationEvent
+): NativeCliObservationActivity | undefined {
+  const type = event.providerEventType?.toLowerCase() ?? '';
+  if (event.providerEventType && TERMINAL_EVENT_TYPES.has(event.providerEventType)) return 'turn-end';
+  if (event.providerEventType === 'thread/status/changed') return threadStatusIsIdle(event.raw) ? 'turn-end' : 'system';
+  if (event.role === 'tool') {
+    return event.providerEventType && TOOL_RESULT_EVENT_TYPES.has(event.providerEventType)
+      ? 'tool-result'
+      : 'tool-call';
+  }
+  if (type.includes('reasoning') || type.includes('thinking') || type.includes('plan')) return 'thinking';
+  if (event.role === 'user') return 'user';
+  if (event.role === 'system') return 'system';
+  return 'message';
+}
 
 function isoFromMs(value: number): string | undefined {
   if (!Number.isFinite(value) || value <= 0) return undefined;

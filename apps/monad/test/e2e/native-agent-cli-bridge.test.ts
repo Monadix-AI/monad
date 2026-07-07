@@ -68,7 +68,8 @@ function createManagedNativeSession(
   id = 'ncli_test',
   agentName = 'codex',
   state: 'running' | 'stopped' = 'running',
-  workingPath = '/tmp/project'
+  workingPath = '/tmp/project',
+  outputSnapshot = ''
 ): void {
   handlers.store.upsertNativeCliSession({
     id,
@@ -85,7 +86,7 @@ function createManagedNativeSession(
     state,
     pid: state === 'running' ? 123 : null,
     providerSessionRef: null,
-    outputSnapshot: '',
+    outputSnapshot,
     exitCode: null,
     startedAt: '2026-06-30T00:00:00.000Z',
     updatedAt: '2026-06-30T00:00:00.000Z',
@@ -926,6 +927,33 @@ for (const kind of TRANSPORTS) {
         nativeCliSessionId: 'ncli_observe_unavailable',
         provider: 'codex',
         reason: 'provider history unavailable'
+      });
+    });
+
+    test('native CLI observation endpoint uses persisted managed output before provider history', async () => {
+      const handlers = buildHandlers(mockModel());
+      t = serveTransport(kind, createHttpTransport(handlers));
+      const sessionId = await createSession(t);
+      createManagedNativeSession(
+        handlers,
+        sessionId,
+        'ncli_observe_snapshot',
+        'codex',
+        'stopped',
+        '/tmp/project',
+        '{"type":"result","result":"done"}\n'
+      );
+
+      const res = await t.fetch(
+        `/v1/native-cli-sessions/ncli_observe_snapshot/observation?transcriptTargetId=${sessionId}`
+      );
+
+      expect(res.status).toBe(200);
+      expect(await res.json()).toMatchObject({
+        state: 'history',
+        nativeCliSessionId: 'ncli_observe_snapshot',
+        provider: 'codex',
+        output: expect.stringContaining('"type":"result"')
       });
     });
   });

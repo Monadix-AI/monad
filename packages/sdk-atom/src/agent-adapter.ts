@@ -344,10 +344,27 @@ export type NativeCliObservationUsageProjector = {
   usageRecords?(record: Record<string, unknown>): NativeCliUsageRecord[];
 };
 
+/** Provider-agnostic classification of a projected observation event. The adapter (which owns its
+ *  provider's event vocabulary) maps each event it produces to one of these kinds; consumers derive
+ *  turn/generating state and the UI activity phase from the kind, never from a provider event string.
+ *  `turn-end` marks a terminal record (result / turn completed / error). */
+export type NativeCliObservationActivity =
+  | 'thinking'
+  | 'message'
+  | 'tool-call'
+  | 'tool-result'
+  | 'user'
+  | 'system'
+  | 'turn-end';
+
 export type NativeCliObservationProjector = NativeCliObservationUsageProjector & {
   historyEntries?(entries: NativeCliObservationJsonRecordEntry[]): NativeCliObservationJsonRecordEntry[];
   messageGroup?: NativeCliObservationMessageGroupProjector;
   recordProjectors: NativeCliObservationRecordProjector[];
+  /** Classify one event this adapter produced into a provider-agnostic activity kind. Returning
+   *  `undefined` means "no signal" (the event doesn't affect generating/phase). Consumers fall back
+   *  to a role-only heuristic when an adapter omits this. */
+  classifyActivity?(event: NativeCliObservationEvent): NativeCliObservationActivity | undefined;
 };
 
 export interface NativeCliArgumentSupport {

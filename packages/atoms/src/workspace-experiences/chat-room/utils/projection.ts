@@ -163,7 +163,8 @@ function nativeCliSessionMessageView(
     },
     nativeCliSessionId: session.id,
     streaming: false,
-    orderKey: session.startedAt
+    orderKey: session.startedAt,
+    ...(session.state === 'failed' ? { systemTone: 'error' as const } : {})
   };
 }
 
@@ -268,6 +269,28 @@ function keepManagedNativeCliRepliesAfterJoin(messages: Map<string, Message>): v
   }
 }
 
+function collapseNativeCliJoinPlaceholders(messages: Map<string, Message>): void {
+  const repliesBySession = new Set<string>();
+  const repliesByAgent = new Set<string>();
+  for (const message of messages.values()) {
+    if (message.kind !== 'agent') continue;
+    if (message.nativeCliSessionId) repliesBySession.add(message.nativeCliSessionId);
+    repliesByAgent.add(message.authorId);
+  }
+  for (const [id, message] of messages) {
+    if (message.kind !== 'system' || message.text !== 'joined the project' || message.systemTone !== 'pending')
+      continue;
+    if (
+      (message.nativeCliSessionId && repliesBySession.has(message.nativeCliSessionId)) ||
+      repliesByAgent.has(message.authorId)
+    ) {
+      messages.delete(id);
+    } else {
+      messages.set(id, { ...message, systemTone: 'pending' });
+    }
+  }
+}
+
 function currentNativeCliSessionsByAgent(sessions: NativeCliSessionView[]): NativeCliSessionView[] {
   const current = new Map<string, NativeCliSessionView>();
   for (const session of [...sessions].sort((a, b) => {
@@ -282,7 +305,8 @@ function currentNativeCliSessionsByAgent(sessions: NativeCliSessionView[]): Nati
 
 function nativeCliStreamFromSession(
   session: NativeCliSessionView,
-  templateAgentNames = new Map<string, string>()
+  templateAgentNames = new Map<string, string>(),
+  agentAliases = new Map<string, string[]>()
 ): NativeCliStreamView {
   const items = nativeCliStreamItems({
     id: session.id,
@@ -293,6 +317,7 @@ function nativeCliStreamFromSession(
   return {
     id: session.id,
     agentName: session.agentName,
+    ...(agentAliases.get(session.agentName)?.length ? { agentAliases: agentAliases.get(session.agentName) } : {}),
     ...(templateAgentNames.get(session.agentName)
       ? { templateAgentName: templateAgentNames.get(session.agentName) }
       : {}),
@@ -309,7 +334,8 @@ function nativeCliStreamFromSession(
 
 function nativeCliStreamFromActivity(
   row: ActivityRow,
-  templateAgentNames = new Map<string, string>()
+  templateAgentNames = new Map<string, string>(),
+  agentAliases = new Map<string, string[]>()
 ): NativeCliStreamView | undefined {
   if (!row.tool.startsWith('native-cli:')) return undefined;
   const provider = row.tool.slice('native-cli:'.length);
@@ -318,6 +344,7 @@ function nativeCliStreamFromActivity(
   return {
     id: row.id,
     agentName,
+    ...(agentAliases.get(agentName)?.length ? { agentAliases: agentAliases.get(agentName) } : {}),
     ...(templateAgentNames.get(agentName) ? { templateAgentName: templateAgentNames.get(agentName) } : {}),
     provider,
     tag: nativeCliTag(provider),
@@ -330,13 +357,14 @@ function nativeCliStreamFromActivity(
 export function buildNativeCliStreams(
   nativeCliSessions: NativeCliSessionView[],
   activity: ActivityRow[],
-  templateAgentNames = new Map<string, string>()
+  templateAgentNames = new Map<string, string>(),
+  agentAliases = new Map<string, string[]>()
 ): NativeCliStreamView[] {
   const byId = new Map<string, NativeCliStreamView>();
   for (const session of nativeCliSessions)
-    byId.set(session.id, nativeCliStreamFromSession(session, templateAgentNames));
+    byId.set(session.id, nativeCliStreamFromSession(session, templateAgentNames, agentAliases));
   for (const row of activity) {
-    const stream = nativeCliStreamFromActivity(row, templateAgentNames);
+    const stream = nativeCliStreamFromActivity(row, templateAgentNames, agentAliases);
     if (!stream) continue;
     const existing = byId.get(stream.id);
     byId.set(stream.id, {
@@ -513,7 +541,8 @@ export function buildProjectMessages({
         },
         nativeCliSessionId: item.id,
         streaming: false,
-        orderKey: item.seq
+        orderKey: item.seq,
+        systemTone: 'pending'
       });
     }
     if (shouldShowDeveloperOnlyMessages && item.output) {
@@ -535,6 +564,7 @@ export function buildProjectMessages({
     }
   }
   keepManagedNativeCliRepliesAfterJoin(byId);
+  collapseNativeCliJoinPlaceholders(byId);
   return sortMessagesOldestFirst([...byId.values()]);
 }
 

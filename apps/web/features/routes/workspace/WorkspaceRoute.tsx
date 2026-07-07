@@ -113,10 +113,18 @@ export function WorkspaceRoute({
       current.signature === signature ? current : { participants: project.participants, signature }
     );
   }, []);
+  const handleProjectDeleted = useCallback(
+    (projectId: string) => {
+      setCachedProjectEntries((entries) => entries.filter((entry) => entry.projectId !== projectId));
+      onProjectDeleted();
+    },
+    [onProjectDeleted]
+  );
 
   useEffect(() => {
     if (!activeProjectId) {
       setActiveProjectParticipants({ participants: EMPTY_PROJECT_PARTICIPANTS, signature: '' });
+      setCachedProjectEntries([]);
       return;
     }
     setActiveProjectParticipants({ participants: EMPTY_PROJECT_PARTICIPANTS, signature: '' });
@@ -182,7 +190,7 @@ export function WorkspaceRoute({
                     experiencesLoading={workspaceExperiencesLoading}
                     onModeChange={setMode}
                     onProjectControllerChange={active ? updateActiveProjectParticipants : undefined}
-                    onProjectDeleted={onProjectDeleted}
+                    onProjectDeleted={() => handleProjectDeleted(entry.projectId)}
                     projectId={entry.projectId}
                     voiceModelState={voiceModelState}
                   />

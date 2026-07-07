@@ -19,7 +19,7 @@ import { type Components, Markdown } from '@monad/ui/components/Markdown';
 import { MentionCapsule, MentionText, parseMentionTokens } from '@monad/ui/components/MentionText';
 import { memo } from 'react';
 
-import { FollowButton, SystemMessageRow, TIME_STYLE } from './system-message-row.tsx';
+import { SystemMessageRow, TIME_STYLE } from './system-message-row.tsx';
 
 export type MessageRowLabels = {
   observe?: string;
@@ -211,15 +211,7 @@ function messageAgentBadge(msg: Message): React.ReactNode {
   );
 }
 
-function MessageHeader({
-  align,
-  msg,
-  onFollowNativeCliSession
-}: {
-  align: 'left' | 'right';
-  msg: Message;
-  onFollowNativeCliSession?: (id: string, deliveryId?: NativeAgentDeliveryId) => void;
-}): React.ReactElement {
+function MessageHeader({ align, msg }: { align: 'left' | 'right'; msg: Message }): React.ReactElement {
   const showTag = msg.kind === 'agent' || msg.tag !== 'User';
   return (
     <div
@@ -239,11 +231,6 @@ function MessageHeader({
         nameStyle={NAME_STYLE}
       />
       {msg.time ? <span style={TIME_STYLE}>{msg.time}</span> : null}
-      <FollowButton
-        deliveryId={msg.deliveryId}
-        nativeCliSessionId={msg.nativeCliSessionId}
-        onFollowNativeCliSession={onFollowNativeCliSession}
-      />
     </div>
   );
 }
@@ -340,7 +327,6 @@ export const MessageRow = memo(function MessageRow({
     return (
       <SystemMessageRow
         msg={msg}
-        observeLabel={labels?.observe}
         onAgentClick={onAgentClick}
         onFollowNativeCliSession={onFollowNativeCliSession}
       />
@@ -378,7 +364,6 @@ export const MessageRow = memo(function MessageRow({
       <MessageHeader
         align={agent ? 'left' : 'right'}
         msg={msg}
-        onFollowNativeCliSession={onFollowNativeCliSession}
       />
       <div
         style={{

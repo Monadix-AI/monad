@@ -53,6 +53,7 @@ type ActiveMentionRange = ComposerMentionState & {
 const SKILL_ID_RE =
   /\/((?:global:[a-z0-9-]+)|(?:atom-pack:[a-z0-9-]+:[a-z0-9-]+)|(?:agent:[a-z0-9-]+:[a-z0-9-]+))(?=\s|$)/g;
 const HUGEICONS_SYMBOL_NAME_RE = /^[A-Z][A-Za-z0-9]*Icon$/;
+export const COMPOSER_EDITOR_IMMEDIATELY_RENDER = true;
 
 function renderableIconText(icon: string | undefined): string | undefined {
   if (!icon) return undefined;
@@ -236,6 +237,7 @@ export const ComposerEditor = forwardRef(function ComposerEditor(
     extensions,
     content: serializedTextToTiptapDoc(value, skillToken),
     editable: !disabled,
+    immediatelyRender: COMPOSER_EDITOR_IMMEDIATELY_RENDER,
     editorProps: {
       attributes: {
         'aria-label': ariaLabel,

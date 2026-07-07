@@ -55,6 +55,10 @@ function withClaudeStreamJsonArgs(args: string[]): string[] {
   if (!next.includes('--input-format')) next.push('--input-format', 'stream-json');
   if (!next.includes('--output-format')) next.push('--output-format', 'stream-json');
   if (!next.includes('--verbose')) next.push('--verbose');
+  // Re-emit stdin user messages back on stdout (`{type:'user'}` records) so the input a turn was given
+  // — the join prompt, room messages — appears in the observation timeline as real provider output.
+  // Needs both stream-json formats, which are set just above. Claude otherwise never echoes its input.
+  if (!next.includes('--replay-user-messages')) next.push('--replay-user-messages');
   return next;
 }
 

@@ -10,6 +10,7 @@ import type { NativeCliStreamView, Participant } from '../../experience/types.ts
 import { nativeAgentObservationProjectionSchema } from '@monad/protocol';
 
 import {
+  nativeCliStreamItems,
   nativeCliUsageLimitMeter,
   nativeCliUsageLimitMeterFromResponse
 } from '../../experience/native-cli-observation/native-cli-observation.ts';
@@ -39,7 +40,12 @@ export function agentObservationStream(
   }
   const names = [observation.agentId, observation.agentName].filter((value): value is string => Boolean(value));
   if (names.length === 0) return undefined;
-  const matchesAgent = (stream: NativeCliStreamView) => names.includes(stream.agentName);
+  const matchesAgent = (stream: NativeCliStreamView) => {
+    const streamNames = [stream.agentName, stream.templateAgentName, ...(stream.agentAliases ?? [])].filter(
+      (value): value is string => Boolean(value)
+    );
+    return names.some((name) => streamNames.includes(name));
+  };
   const matches = streams.filter(matchesAgent);
   return newestStream(matches.filter((stream) => stream.status === 'running')) ?? newestStream(matches);
 }
@@ -71,6 +77,14 @@ export function isActiveRailAgent(agent: Participant): boolean {
   return agent.presence === 'working';
 }
 
+export function railAgentActivityPhase(agent: Participant): Participant['activityPhase'] {
+  return agent.activityPhase;
+}
+
+export function shouldAnimateRailAgent(agent: Participant): boolean {
+  return railAgentActivityPhase(agent) !== undefined;
+}
+
 export function groupProjectRailAgents(agents: readonly Participant[]): {
   active: Participant[];
   standBy: Participant[];
@@ -82,6 +96,13 @@ export function groupProjectRailAgents(agents: readonly Participant[]): {
     else standBy.push(agent);
   }
   return { active, standBy };
+}
+
+export function sortedProjectRailAgents(agents: readonly Participant[]): Participant[] {
+  return [...agents].sort((a, b) => {
+    const byName = a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+    return byName === 0 ? a.id.localeCompare(b.id) : byName;
+  });
 }
 
 export function observationProjectionFromAccess(
@@ -101,10 +122,16 @@ export function observationProjectionFromAccess(
       reason: access.reason
     });
   }
-  // The daemon already normalizes with the same adapter it uses for parseOutput — see
-  // observeFromStore/observeWithProviderHistory in apps/monad/src/services/native-cli/host.ts.
-  // `events` is only absent on an `append`-only delta frame (no self-contained context to normalize);
-  // that case degrades to an empty batch rather than re-deriving normalization on the client.
+  // The daemon includes normalized `events` on full snapshots (the poll path, and the SSE's first
+  // frame). The SSE hub's steady-state pushes carry only the folded `output` and no `events`, so
+  // re-derive them from `output` with the same client parser — otherwise every delta frame would
+  // blank the panel until the next full snapshot.
+  const events =
+    access.events && access.events.length > 0
+      ? access.events
+      : access.output
+        ? nativeCliStreamItems({ id: stream.id, provider: access.provider ?? stream.provider, output: access.output })
+        : [];
   return nativeAgentObservationProjectionSchema.parse({
     state: access.state,
     nativeCliSessionId: stream.id,
@@ -112,8 +139,21 @@ export function observationProjectionFromAccess(
     ...(access.turn ? { turn: access.turn } : {}),
     provider: access.provider,
     observedAt: access.observedAt,
-    events: access.events ?? []
+    events
   });
+}
+
+export function shouldProjectObservationAccess(args: {
+  access?: NativeCliObservationAccessResponse;
+  deliveryId?: NativeAgentDeliveryId;
+  historyRequested: boolean;
+}): boolean {
+  return (
+    Boolean(args.deliveryId) ||
+    args.access?.state !== 'history' ||
+    args.historyRequested ||
+    Boolean(args.access?.state === 'history' && args.access.events?.length)
+  );
 }
 
 export function streamWithObservationProjection(

@@ -78,7 +78,7 @@ function SidebarNavItem({
       aria-disabled={disabled || undefined}
       className={cn(
         'group/item relative flex min-h-9 w-full cursor-pointer items-center gap-2.5 rounded-(--radius-md) px-2.5 py-2 text-left transition hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
-        active && 'bg-sidebar-accent text-sidebar-accent-foreground',
+        active && 'bg-sidebar-selected text-sidebar-selected-foreground hover:bg-sidebar-selected-hover',
         disabled &&
           'cursor-not-allowed text-sidebar-foreground/35 hover:bg-transparent hover:text-sidebar-foreground/35'
       )}
@@ -215,7 +215,7 @@ function ProjectList({
             <div
               className={cn(
                 'group/project relative flex items-center gap-1 rounded-(--radius-md) transition hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
-                active && 'bg-sidebar-accent text-sidebar-accent-foreground'
+                active && 'bg-sidebar-selected text-sidebar-selected-foreground hover:bg-sidebar-selected-hover'
               )}
               key={project.id}
             >

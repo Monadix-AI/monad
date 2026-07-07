@@ -6,6 +6,7 @@ import type {
 } from '../observation-projection.ts';
 
 import {
+  classifyObservationActivity,
   observation,
   permissionDenialEvents,
   rawTextValue,
@@ -241,6 +242,7 @@ function qwenHistoryEntries(entries: NativeCliObservationJsonRecordEntry[]): Nat
 
 export const qwenObservationProjection = {
   historyEntries: qwenHistoryEntries,
+  classifyActivity: classifyObservationActivity,
   recordProjectors: [
     {
       supports: isQwenObservationMessage,

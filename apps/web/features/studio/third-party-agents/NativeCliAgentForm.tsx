@@ -19,7 +19,8 @@ import {
   canDisableAutopilot,
   nativeCliAgentSettings,
   nativeCliLaunchModeOptions,
-  nativeCliSettingDescription
+  nativeCliSettingDescription,
+  normalizeNativeCliLaunchMode
 } from './native-cli-agent-settings-model';
 import {
   argsToStr,
@@ -66,7 +67,10 @@ export function AgentForm({
     )
   );
   const canProxyApprovals = agent ? canDisableAutopilot(agent, preset) : false;
-  const [defaultLaunchMode, setDefaultLaunchMode] = useState<NativeCliLaunchMode>(agent?.defaultLaunchMode ?? 'pty');
+  const initialLaunchModeOptions = agent ? nativeCliLaunchModeOptions(agent, preset) : ['app-server' as const];
+  const [defaultLaunchMode, setDefaultLaunchMode] = useState<NativeCliLaunchMode>(
+    normalizeNativeCliLaunchMode(agent?.defaultLaunchMode ?? 'app-server', initialLaunchModeOptions)
+  );
   const [appServerTransport, setAppServerTransport] = useState(agent?.appServerTransport ?? '');
   const [adapterSettingsValues, setAdapterSettingsValues] = useState<NativeCliAgentAdapterSettings>(
     agent?.adapterSettings ?? {}

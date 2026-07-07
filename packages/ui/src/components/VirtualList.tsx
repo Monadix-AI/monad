@@ -101,6 +101,10 @@ export function reducePinnedOnScroll(
   return { pinned: atBottom, selfScrollConsumed: false };
 }
 
+export function shouldPinToBottom(stickToBottom: boolean, pinned: boolean): boolean {
+  return stickToBottom && pinned;
+}
+
 // Generic windowed list over react-virtuoso. The custom pinning below exists because
 // virtuoso's built-in `followOutput` does not re-pin when a row grows IN PLACE (a streaming
 // message) — only on item-count changes. We instead pin from `totalListHeightChanged`
@@ -141,6 +145,7 @@ export function VirtualList<T>({
   const selfScrollRef = useRef(false);
   const userScrolledRef = useRef(false);
   const lastScrollTopRef = useRef<number | null>(null);
+  const viewportResizeObserverRef = useRef<ResizeObserver | null>(null);
 
   const measurePinned = useCallback(() => {
     const el = scrollerRef.current;
@@ -156,7 +161,7 @@ export function VirtualList<T>({
   }, []);
 
   const pinToBottom = useCallback(() => {
-    if (!stickToBottom || !pinnedRef.current) return;
+    if (!shouldPinToBottom(stickToBottom, pinnedRef.current)) return;
     const el = scrollerRef.current;
     if (!el) return;
     const max = el.scrollHeight - el.clientHeight;
@@ -262,19 +267,35 @@ export function VirtualList<T>({
 
   const setScroller = useCallback(
     (el: HTMLElement | Window | null) => {
+      viewportResizeObserverRef.current?.disconnect();
+      viewportResizeObserverRef.current = null;
       const node = el instanceof HTMLElement ? el : null;
       scrollerRef.current = node;
       if (!node) return;
+      if (typeof ResizeObserver !== 'undefined') {
+        viewportResizeObserverRef.current = new ResizeObserver(pinToBottomSoon);
+        viewportResizeObserverRef.current.observe(node);
+      }
       if (role) node.setAttribute('role', role);
       if (ariaLive) node.setAttribute('aria-live', ariaLive);
       if (!bounce || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
       node.addEventListener('wheel', handleBounceWheel, { passive: true });
       return () => {
+        viewportResizeObserverRef.current?.disconnect();
+        viewportResizeObserverRef.current = null;
         node.removeEventListener('wheel', handleBounceWheel);
         window.clearTimeout(bounceSettleTimeoutRef.current);
       };
     },
-    [role, ariaLive, bounce, handleBounceWheel]
+    [role, ariaLive, bounce, handleBounceWheel, pinToBottomSoon]
+  );
+
+  useEffect(
+    () => () => {
+      viewportResizeObserverRef.current?.disconnect();
+      viewportResizeObserverRef.current = null;
+    },
+    []
   );
 
   // Only forward firstItemIndex when paginating: Virtuoso computes `data-item-index` as

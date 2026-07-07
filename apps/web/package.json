@@ -64,7 +64,7 @@
     "export": "NEXT_OUTPUT=export bun --bun next build",
     "lint": "biome check .",
     "start": "bun --bun next start",
-    "start:dev": "bun --env-file=../../.env.local --bun next dev --turbopack",
+    "start:dev": "bun --env-file=../../.env.local --bun next dev --turbopack --experimental-https",
     "test": "bun ../../scripts/bun-test.ts test/unit/ --only-failures",
     "test:e2e": "playwright test --reporter=dot",
     "test:e2e:loud": "playwright test --reporter=list",

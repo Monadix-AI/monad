@@ -336,6 +336,8 @@ test('native CLI adapters pass managed agent workspace as an additional accessib
   expect(codex.argv).toContain('/tmp/agent-workspace');
   expect(claude.argv).toContain('--add-dir');
   expect(claude.argv).toContain('/tmp/agent-workspace');
+  // json-stream must replay stdin user messages so the turn's input shows in the observation timeline.
+  expect(claude.argv).toContain('--replay-user-messages');
   expect(gemini.argv).toContain('--include-directories');
   expect(gemini.argv).toContain('/tmp/agent-workspace');
   expect(qwen.argv).toContain('--include-directories');
@@ -480,7 +482,8 @@ test('Claude json-stream launch accepts managed MCP config overrides', () => {
     'stream-json',
     '--output-format',
     'stream-json',
-    '--verbose'
+    '--verbose',
+    '--replay-user-messages'
   ]);
 });
 
@@ -1054,7 +1057,8 @@ test('Claude Code adapter launches structured stream-json mode with print protoc
     'stream-json',
     '--output-format',
     'stream-json',
-    '--verbose'
+    '--verbose',
+    '--replay-user-messages'
   ]);
   expect(launch.cwd).toBe('/tmp/project');
   expect(launch.launchMode).toBe('json-stream');
@@ -1070,6 +1074,29 @@ test('Claude Code managed project launches allow Monad MCP bridge tools', () => 
   expect(launch.argv).toContain('--allowedTools');
   expect(launch.argv).toContain('mcp__monad__*');
   expect(launch.argv).not.toContain('Bash(monad project *)');
+});
+
+test('Qwen and Gemini managed project launches inject the managed prompt as system instructions', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'monad-managed-prompt-'));
+  const promptFile = join(dir, 'managed-prompt.md');
+  writeFileSync(promptFile, 'Managed project runtime contract.');
+
+  const qwen = buildNativeCliLaunch(qwenAgent, {
+    workingPath: '/tmp/project',
+    launchMode: 'json-stream',
+    systemPromptFile: promptFile
+  });
+  const gemini = buildNativeCliLaunch(geminiAgent, {
+    workingPath: '/tmp/project',
+    launchMode: 'json-stream',
+    systemPromptFile: promptFile
+  });
+
+  expect(qwenNativeCliAdapter.managedRuntime?.usesSystemPromptFile).toBe(true);
+  expect(geminiNativeCliAdapter.managedRuntime?.usesSystemPromptFile).toBe(true);
+  expect(qwen.argv).toContain('--append-system-prompt');
+  expect(qwen.argv).toContain('Managed project runtime contract.');
+  expect(gemini.env).toMatchObject({ GEMINI_SYSTEM_MD: promptFile });
 });
 
 test('Claude Code adapter resumes with the provider session ref in PTY and stream-json modes', () => {

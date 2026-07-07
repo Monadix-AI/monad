@@ -5,5 +5,6 @@ export {
   useLazyGetNativeAgentDeliveryObservationQuery,
   useLazyGetNativeCliHistoryPageQuery,
   useLazyGetNativeCliObservationQuery,
-  useLazyGetNativeCliUsageQuery
+  useLazyGetNativeCliUsageQuery,
+  useStreamNativeCliObservationQuery
 } from '@monad/client-rtk';

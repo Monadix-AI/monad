@@ -1,5 +1,8 @@
+import type { Participant } from '../../src/workspace-experiences/experience/types.ts';
+
 import { expect, test } from 'bun:test';
 
+import { shouldFollowLatestMessage } from '../../src/workspace-experiences/chat-room/components/message-list.tsx';
 import {
   createOptimisticUserMessage,
   mergeOptimisticMessages,
@@ -7,7 +10,17 @@ import {
 } from '../../src/workspace-experiences/chat-room/utils/optimistic-messages.ts';
 
 test('optimistic user messages render immediately until the server echo arrives', () => {
+  const human: Participant = {
+    id: 'me',
+    av: 'OP',
+    avatarUrl: 'https://avatar.example/operator.png',
+    name: 'Operator',
+    kind: 'human',
+    tag: 'User',
+    presence: 'online'
+  };
   const optimistic = createOptimisticUserMessage({
+    human,
     id: 'optimistic-1',
     retry: () => {},
     status: 'sending',
@@ -16,7 +29,9 @@ test('optimistic user messages render immediately until the server echo arrives'
 
   expect(optimistic).toMatchObject({
     id: 'optimistic-1',
-    authorName: 'You',
+    authorName: 'Operator',
+    av: 'OP',
+    avatarUrl: 'https://avatar.example/operator.png',
     kind: 'human',
     localStatus: 'sending',
     tag: 'User',
@@ -35,9 +50,118 @@ test('optimistic user messages render immediately until the server echo arrives'
   expect(mergeOptimisticMessages([serverEcho], [optimistic])).toEqual([serverEcho]);
 });
 
+test('server echoes keep the optimistic render key to avoid remount flicker', () => {
+  const optimistic = createOptimisticUserMessage({
+    createdAt: '2026-07-06T12:00:00.000Z',
+    human: {
+      id: 'me',
+      av: 'OP',
+      name: 'Operator',
+      kind: 'human',
+      tag: 'User',
+      presence: 'online'
+    },
+    id: 'optimistic-1',
+    retry: () => {},
+    status: 'sending',
+    text: 'hello project'
+  });
+  const serverEcho = {
+    ...optimistic,
+    id: 'msg_server',
+    localStatus: undefined,
+    orderKey: '2026-07-06T12:00:01.000Z',
+    retrySend: undefined
+  };
+
+  expect(mergeOptimisticMessages([serverEcho], [optimistic])).toEqual([{ ...serverEcho, renderKey: 'optimistic-1' }]);
+});
+
+test('server echoes consume optimistic render keys one-to-one', () => {
+  const first = createOptimisticUserMessage({
+    createdAt: '2026-07-06T12:00:00.000Z',
+    human: {
+      id: 'me',
+      av: 'OP',
+      name: 'Operator',
+      kind: 'human',
+      tag: 'User',
+      presence: 'online'
+    },
+    id: 'optimistic-1',
+    retry: () => {},
+    status: 'sending',
+    text: 'same text'
+  });
+  const second = createOptimisticUserMessage({
+    createdAt: '2026-07-06T12:00:01.000Z',
+    human: {
+      id: 'me',
+      av: 'OP',
+      name: 'Operator',
+      kind: 'human',
+      tag: 'User',
+      presence: 'online'
+    },
+    id: 'optimistic-2',
+    retry: () => {},
+    status: 'sending',
+    text: 'same text'
+  });
+  const firstEcho = { ...first, id: 'msg_1', localStatus: undefined, retrySend: undefined };
+  const secondEcho = { ...second, id: 'msg_2', localStatus: undefined, retrySend: undefined };
+
+  expect(mergeOptimisticMessages([firstEcho, secondEcho], [first, second]).map((message) => message.renderKey)).toEqual(
+    ['optimistic-1', 'optimistic-2']
+  );
+});
+
+test('optimistic user messages use the current human identity', () => {
+  const human: Participant = {
+    id: 'me',
+    av: 'ME',
+    avatarUrl: 'https://avatar.example/me.png',
+    name: 'Operator',
+    kind: 'human',
+    tag: 'User',
+    presence: 'online'
+  };
+
+  expect(
+    createOptimisticUserMessage({
+      human,
+      id: 'optimistic-1',
+      retry: () => {},
+      status: 'sending',
+      text: 'hello project'
+    })
+  ).toMatchObject({
+    authorId: 'me',
+    authorName: 'Operator',
+    av: 'ME',
+    avatarUrl: 'https://avatar.example/me.png',
+    renderKey: 'optimistic-1'
+  });
+});
+
+test('latest local optimistic messages re-arm bottom following', () => {
+  expect(shouldFollowLatestMessage(true)).toBe(true);
+  expect(shouldFollowLatestMessage(false)).toBe(false);
+  expect(shouldFollowLatestMessage(false, 'sending')).toBe(true);
+  expect(shouldFollowLatestMessage(false, 'failed')).toBe(true);
+});
+
 test('failed optimistic user messages stay retryable when no server echo exists', () => {
   const retryCalls: string[] = [];
   const failed: OptimisticChatMessage = createOptimisticUserMessage({
+    human: {
+      id: 'me',
+      av: 'OP',
+      name: 'Operator',
+      kind: 'human',
+      tag: 'User',
+      presence: 'online'
+    },
     id: 'optimistic-failed',
     retry: () => retryCalls.push('retry'),
     status: 'failed',

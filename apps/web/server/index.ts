@@ -115,10 +115,18 @@ function readDaemonUrl(): string {
   try {
     const configPath = getPaths().config;
     const raw = readFileSync(configPath, 'utf-8');
-    const port = (JSON.parse(raw) as { network?: { port?: number } })?.network?.port ?? 52749;
-    return `http://127.0.0.1:${port}`;
+    const network = (
+      JSON.parse(raw) as {
+        network?: { port?: number; remoteAccess?: { enabled?: boolean; allowInsecureHttp?: boolean } };
+      }
+    ).network;
+    const port = Number(Bun.env.MONAD_PORT) || network?.port || 52749;
+    const remote = network?.remoteAccess;
+    const scheme = remote?.enabled && !remote.allowInsecureHttp ? 'https' : 'http';
+    return `${scheme}://127.0.0.1:${port}`;
   } catch {
-    return 'http://127.0.0.1:52749';
+    const port = Number(Bun.env.MONAD_PORT) || 52749;
+    return `http://127.0.0.1:${port}`;
   }
 }
 

@@ -11,7 +11,9 @@ import {
   Wrench01Icon
 } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react';
-import { useState } from 'react';
+import { cn } from '@monad/ui';
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { ProjectDebugConsole } from '@/features/workplace/debug/ProjectDebugConsole';
 import { useWorkspaceShellStore } from '@/lib/workspace-shell-store';
@@ -22,6 +24,17 @@ interface DevToolLink {
   icon: IconSvgElement;
   label: string;
   port: string;
+}
+
+type DevToolActionKind = 'developer-mode' | 'fix-impeccable' | 'link';
+
+export interface DevToolAction {
+  devOnly?: boolean;
+  href?: string;
+  icon: IconSvgElement;
+  kind: DevToolActionKind;
+  label: string;
+  port?: string;
 }
 
 const tools: Array<Omit<DevToolLink, 'href' | 'port'> & { port: string | undefined }> = [
@@ -52,24 +65,88 @@ const IMPECCABLE_STORAGE_KEYS = [
   'impeccable-live-pick'
 ];
 
+export function buildDevToolActions({
+  activeProjectId,
+  ports,
+  production = process.env.NODE_ENV === 'production'
+}: {
+  activeProjectId: ProjectId | string | null;
+  ports: {
+    aiSdk?: string;
+    kv?: string;
+    otel?: string;
+  };
+  production?: boolean;
+}): DevToolAction[] {
+  const links: DevToolLink[] = tools.flatMap((tool) => {
+    const port = tool.label === 'KV' ? ports.kv : tool.label === 'AI SDK' ? ports.aiSdk : ports.otel;
+    return port && (!production || !tool.devOnly)
+      ? [
+          {
+            ...tool,
+            href: `http://localhost:${port}`,
+            port
+          }
+        ]
+      : [];
+  });
+
+  return [
+    ...(activeProjectId
+      ? [
+          {
+            kind: 'developer-mode' as const,
+            label: 'Developer Mode',
+            icon: BugIcon
+          }
+        ]
+      : []),
+    {
+      kind: 'fix-impeccable' as const,
+      label: 'Fix Impeccable',
+      icon: RotateLeft01Icon
+    },
+    ...links.map(({ devOnly, href, icon, label, port }) => ({
+      devOnly,
+      href,
+      icon,
+      kind: 'link' as const,
+      label,
+      port
+    }))
+  ];
+}
+
 export function DevToolsWidget() {
   const activeProjectId = useWorkspaceShellStore((state) =>
     state.surface === 'workspace' ? state.activeProjectId : null
   );
+  const prefersReducedMotion = useReducedMotion();
   const [developerModeOpen, setDeveloperModeOpen] = useState(false);
-  const links: DevToolLink[] = tools.flatMap((tool) =>
-    tool.port && (process.env.NODE_ENV !== 'production' || !tool.devOnly)
-      ? [
-          {
-            ...tool,
-            href: `http://localhost:${tool.port}`,
-            port: tool.port
-          }
-        ]
-      : []
+  const [open, setOpen] = useState(false);
+  const actions = useMemo(
+    () =>
+      buildDevToolActions({
+        activeProjectId,
+        ports: {
+          kv: process.env.NEXT_PUBLIC_MONAD_KV_UI_PORT,
+          aiSdk: process.env.NEXT_PUBLIC_AI_SDK_DEVTOOLS_PORT,
+          otel: process.env.NEXT_PUBLIC_MONAD_OTEL_UI_PORT
+        }
+      }),
+    [activeProjectId]
   );
 
-  if (links.length === 0 && !activeProjectId) return null;
+  useEffect(() => {
+    if (!open) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpen(false);
+    };
+    window.addEventListener('keydown', closeOnEscape);
+    return () => window.removeEventListener('keydown', closeOnEscape);
+  }, [open]);
+
+  if (actions.length === 0) return null;
 
   const fixImpeccable = () => {
     for (const key of IMPECCABLE_STORAGE_KEYS) localStorage.removeItem(key);
@@ -79,73 +156,120 @@ export function DevToolsWidget() {
 
   return (
     <>
-      <div className="group glass-surface fixed right-4 bottom-4 z-50 flex items-center gap-1 overflow-hidden p-1 text-popover-foreground">
-        <div
-          aria-hidden="true"
-          className="flex h-9 items-center gap-2 rounded-sm px-3 font-medium text-muted-foreground text-xs"
-        >
-          <HugeiconsIcon
-            className="size-4"
-            icon={Wrench01Icon}
-          />
-          <span>Dev</span>
-        </div>
-        <div className="flex max-w-0 translate-x-1 items-center gap-1 overflow-hidden opacity-0 transition-[max-width,opacity,transform] duration-200 ease-out group-focus-within:max-w-[720px] group-focus-within:translate-x-0 group-focus-within:opacity-100 group-hover:max-w-[720px] group-hover:translate-x-0 group-hover:opacity-100 motion-reduce:translate-x-0 motion-reduce:transition-none">
-          {activeProjectId ? (
-            <button
-              aria-label="Open project developer trace"
-              aria-pressed={developerModeOpen}
-              className="inline-flex h-9 items-center gap-2 rounded-sm px-3 font-medium text-xs transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              onClick={() => setDeveloperModeOpen(true)}
-              title="Open project developer trace"
-              type="button"
+      <div className="fixed right-4 bottom-4 z-50 flex flex-col items-end gap-2 text-popover-foreground">
+        <AnimatePresence>
+          {open ? (
+            <motion.div
+              animate="open"
+              className="flex flex-col items-end gap-2"
+              exit="closed"
+              initial="closed"
+              variants={{
+                closed: { transition: { staggerChildren: 0.025, staggerDirection: -1 } },
+                open: { transition: { delayChildren: 0.03, staggerChildren: 0.045 } }
+              }}
             >
-              <HugeiconsIcon
-                aria-hidden="true"
-                className="size-4"
-                icon={BugIcon}
-              />
-              <span>Developer Mode</span>
-            </button>
+              {actions.map((action) => {
+                const Icon = action.icon;
+                const commonClassName =
+                  'glass-surface group flex h-10 items-center gap-2 rounded-full p-1 pr-3 text-xs shadow-lg outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring';
+                const content = (
+                  <>
+                    <span className="grid size-8 shrink-0 place-items-center rounded-full bg-background/75 text-foreground">
+                      <HugeiconsIcon
+                        aria-hidden="true"
+                        className="size-4"
+                        icon={Icon}
+                      />
+                    </span>
+                    <span className="whitespace-nowrap font-medium">{action.label}</span>
+                    {action.kind === 'link' ? (
+                      <HugeiconsIcon
+                        aria-hidden="true"
+                        className="size-3.5 opacity-65"
+                        icon={ExternalLinkIcon}
+                      />
+                    ) : null}
+                  </>
+                );
+
+                return (
+                  <motion.div
+                    key={action.label}
+                    transition={
+                      prefersReducedMotion ? { duration: 0 } : { type: 'spring', bounce: 0.2, duration: 0.34 }
+                    }
+                    variants={{
+                      closed: { opacity: 0, scale: 0.72, y: 16 },
+                      open: { opacity: 1, scale: 1, y: 0 }
+                    }}
+                  >
+                    {action.kind === 'link' ? (
+                      <a
+                        aria-label={`Open ${action.label} on port ${action.port}`}
+                        className={commonClassName}
+                        href={action.href}
+                        rel="noreferrer"
+                        target="_blank"
+                        title={`Open ${action.label} (${action.port})`}
+                      >
+                        {content}
+                      </a>
+                    ) : (
+                      <button
+                        aria-label={
+                          action.kind === 'developer-mode'
+                            ? 'Open project developer trace'
+                            : 'Fix Impeccable live state'
+                        }
+                        aria-pressed={action.kind === 'developer-mode' ? developerModeOpen : undefined}
+                        className={commonClassName}
+                        onClick={() => {
+                          if (action.kind === 'developer-mode') setDeveloperModeOpen(true);
+                          else fixImpeccable();
+                        }}
+                        title={
+                          action.kind === 'developer-mode'
+                            ? 'Open project developer trace'
+                            : 'Clear Impeccable live state and reload'
+                        }
+                        type="button"
+                      >
+                        {content}
+                      </button>
+                    )}
+                  </motion.div>
+                );
+              })}
+            </motion.div>
           ) : null}
-          <button
-            aria-label="Fix Impeccable live state"
-            className="inline-flex h-9 items-center gap-2 rounded-sm px-3 font-medium text-xs transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            onClick={fixImpeccable}
-            title="Clear Impeccable live state and reload"
-            type="button"
+        </AnimatePresence>
+        <motion.button
+          aria-expanded={open}
+          aria-label={open ? 'Close developer tools' : 'Open developer tools'}
+          className={cn(
+            'glass-surface flex h-12 items-center gap-2 rounded-full px-4 font-medium text-sm shadow-xl outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring',
+            open && 'bg-accent text-accent-foreground'
+          )}
+          onClick={() => setOpen((value) => !value)}
+          transition={prefersReducedMotion ? { duration: 0 } : { type: 'spring', stiffness: 420, damping: 26 }}
+          type="button"
+          whileHover={prefersReducedMotion ? undefined : { scale: 1.03 }}
+          whileTap={prefersReducedMotion ? undefined : { scale: 0.96 }}
+        >
+          <motion.span
+            animate={{ rotate: open ? 45 : 0 }}
+            className="grid size-7 place-items-center rounded-full bg-foreground text-background"
+            transition={prefersReducedMotion ? { duration: 0 } : { type: 'spring', stiffness: 520, damping: 30 }}
           >
             <HugeiconsIcon
               aria-hidden="true"
               className="size-4"
-              icon={RotateLeft01Icon}
+              icon={Wrench01Icon}
             />
-            <span>Fix Impeccable</span>
-          </button>
-          {links.map(({ href, icon: Icon, label, port }) => (
-            <a
-              aria-label={`Open ${label} on port ${port}`}
-              className="inline-flex h-9 items-center gap-2 rounded-sm px-3 font-medium text-xs transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              href={href}
-              key={label}
-              rel="noreferrer"
-              target="_blank"
-              title={`Open ${label} (${port})`}
-            >
-              <HugeiconsIcon
-                aria-hidden="true"
-                className="size-4"
-                icon={Icon}
-              />
-              <span>{label}</span>
-              <HugeiconsIcon
-                aria-hidden="true"
-                className="size-3.5 opacity-65"
-                icon={ExternalLinkIcon}
-              />
-            </a>
-          ))}
-        </div>
+          </motion.span>
+          <span>Dev</span>
+        </motion.button>
       </div>
       {developerModeOpen ? (
         <ProjectDebugConsole

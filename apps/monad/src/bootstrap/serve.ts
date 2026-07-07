@@ -28,6 +28,35 @@ import { createHttpTransport } from '../transports/http.ts';
 // .max() can reject it).
 const MAX_REQUEST_BODY_BYTES = 4 * 1024 * 1024;
 
+interface DaemonTcpListenOptions {
+  hostname: string;
+  port: number;
+  maxRequestBodySize: number;
+  tls?: {
+    key: Blob;
+    cert: Blob;
+  };
+  http3?: true;
+}
+
+export function buildDaemonTcpListenOptions(args: {
+  host: string;
+  port: number;
+  tlsCert?: { certPath: string; keyPath: string };
+}): DaemonTcpListenOptions {
+  return {
+    hostname: args.host,
+    port: args.port,
+    maxRequestBodySize: MAX_REQUEST_BODY_BYTES,
+    ...(args.tlsCert
+      ? {
+          tls: { key: Bun.file(args.tlsCert.keyPath), cert: Bun.file(args.tlsCert.certPath) },
+          http3: true as const
+        }
+      : {})
+  };
+}
+
 export interface ServeDeps {
   handlers: ReturnType<typeof createDaemonHandlers>;
   paths: MonadPaths;
@@ -109,12 +138,7 @@ export async function serveDaemon(deps: ServeDeps): Promise<void> {
     return;
   }
 
-  httpApp.listen({
-    hostname: host,
-    port,
-    maxRequestBodySize: MAX_REQUEST_BODY_BYTES,
-    ...(tlsCert ? { tls: { key: Bun.file(tlsCert.keyPath), cert: Bun.file(tlsCert.certPath) } } : {})
-  });
+  httpApp.listen(buildDaemonTcpListenOptions({ host, port, tlsCert }) as Parameters<typeof httpApp.listen>[0]);
 
   // Same Elysia app, second listener on a Unix domain socket. Local clients (the CLI) reach the daemon
   // through it for lower latency than TCP loopback and filesystem-gated access — no port, no bearer

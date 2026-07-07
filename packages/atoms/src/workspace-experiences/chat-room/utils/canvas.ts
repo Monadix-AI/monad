@@ -38,6 +38,7 @@ export interface ChatRoomCanvas {
   draftKey: string;
   projectId: string;
   ready: boolean;
+  human: Participant;
   messages: Message[];
   participants: Participant[];
   railAgents: Participant[];
@@ -110,7 +111,21 @@ export function toChatRoomCanvas(
       .filter((member) => member.type === 'native-cli')
       .map((member) => [workplaceProjectMemberStableId(member), member.templateName ?? member.name])
   );
-  const nativeCliStreams = buildNativeCliStreams(source.nativeCliSessions, activity, nativeCliTemplateAgentNames);
+  const nativeCliAgentAliases = new Map<string, string[]>();
+  for (const member of c.projectMembers ?? []) {
+    if (member.type !== 'native-cli') continue;
+    const stableId = workplaceProjectMemberStableId(member);
+    const aliases = [stableId, member.name, member.displayName, member.templateName].filter((value): value is string =>
+      Boolean(value)
+    );
+    for (const alias of aliases) nativeCliAgentAliases.set(alias, aliases);
+  }
+  const nativeCliStreams = buildNativeCliStreams(
+    source.nativeCliSessions,
+    activity,
+    nativeCliTemplateAgentNames,
+    nativeCliAgentAliases
+  );
   const tasks: AgentTask[] = liveTools.slice(-6).map((s) => ({
     id: s.id,
     av:
@@ -154,6 +169,7 @@ export function toChatRoomCanvas(
     draftKey: `chat-room:${c.projectId}`,
     projectId: c.projectId,
     ready: c.ready,
+    human: source.human,
     messages,
     participants: c.participants,
     railAgents,

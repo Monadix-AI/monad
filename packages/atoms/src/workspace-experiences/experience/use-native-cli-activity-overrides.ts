@@ -5,9 +5,9 @@ import { useEffect, useRef, useState } from 'react';
 
 import { nativeCliAgentFacingCommandPhase } from './native-cli-presence.ts';
 
-/** Tracks a short-lived "speaking/typing" activity phase per native-CLI agent name, derived from
- *  the tail of each running `native-cli:*` tool's output. An override expires on its own (3s for
- *  "speaking", 5s otherwise) via a timer keyed to the soonest expiry, so a phase that isn't
+/** Tracks a short-lived activity phase per native-CLI agent name, derived from
+ *  the tail of each running `native-cli:*` tool's output. An override expires on its own after 5s
+ *  via a timer keyed to the soonest expiry, so a phase that isn't
  *  refreshed by a newer tool update clears itself without a follow-up render loop. */
 export function useNativeCliActivityOverrides(
   liveTools: Extract<UIItem, { kind: 'tool' }>[]
@@ -44,7 +44,7 @@ export function useNativeCliActivityOverrides(
       const outputTail = item.output && item.output.length > 500 ? item.output.slice(-500) : (item.output ?? '');
       const phase = nativeCliAgentFacingCommandPhase(`${inputJson}\n${outputTail}`);
       if (!phase) continue;
-      const expiresAt = now + (phase === 'speaking' ? 3000 : 5000);
+      const expiresAt = now + 5000;
       const current = next[input.agent];
       if (!current || current.phase !== phase) {
         next[input.agent] = { phase, expiresAt };

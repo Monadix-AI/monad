@@ -19,6 +19,11 @@ const CONTROL_EVENT_TYPES: ReadonlySet<EventType> = new Set<EventType>([
   'session.restored',
   'session.stream_started',
   'session.stream_ended',
+  // A native-CLI session appearing/ending in a project is list-level: a client keeping the
+  // native-CLI session list live (to observe an agent, drive rail presence) subscribes to control,
+  // not to each project id. Without these on control the list only refreshes on a manual reload.
+  'native_cli.started',
+  'native_cli.exited',
   'task.created',
   'task.progress',
   'task.completed',

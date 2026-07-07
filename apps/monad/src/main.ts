@@ -58,6 +58,7 @@ import { connectFileMcpServers, connectMcpServers } from './bootstrap/mcp.ts';
 import { createMcpControls } from './bootstrap/mcp-controls.ts';
 import { createMemorySubsystem } from './bootstrap/memory.ts';
 import { createModelSubsystem } from './bootstrap/model.ts';
+import { buildNativeCliServerUrl } from './bootstrap/native-cli-url.ts';
 import { createObscuraController } from './bootstrap/obscura.ts';
 import { createPeerDelegateTools } from './bootstrap/peers.ts';
 import { configureDaemonLogging, readDaemonRuntimeFlags } from './bootstrap/runtime-flags.ts';
@@ -598,7 +599,7 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
     daemonWarnings,
     certFingerprint: tlsFingerprint,
     certExpiry: tlsCertExpiry,
-    nativeCliServerUrl: `http://127.0.0.1:${PORT}`,
+    nativeCliServerUrl: buildNativeCliServerUrl({ port: PORT, remoteAccess }),
     getUpgradeInfo: upgradeInfo.getUpgradeInfo,
     log: logger
   });

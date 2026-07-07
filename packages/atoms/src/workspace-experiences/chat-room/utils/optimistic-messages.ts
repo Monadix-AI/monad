@@ -1,4 +1,4 @@
-import type { Message } from '../../experience/types.ts';
+import type { Message, Participant } from '../../experience/types.ts';
 
 export type OptimisticMessageStatus = 'sending' | 'sent' | 'failed';
 export type OptimisticChatMessage = Message & {
@@ -9,12 +9,14 @@ export type OptimisticChatMessage = Message & {
 
 export function createOptimisticUserMessage({
   createdAt = new Date().toISOString(),
+  human,
   id,
   retry,
   status,
   text
 }: {
   createdAt?: string;
+  human: Participant;
   id: string;
   retry: () => void;
   status: OptimisticMessageStatus;
@@ -22,11 +24,14 @@ export function createOptimisticUserMessage({
 }): OptimisticChatMessage {
   return {
     id,
-    authorId: 'human',
-    authorName: 'You',
-    av: 'YO',
+    renderKey: id,
+    authorId: human.id,
+    authorName: human.name,
+    av: human.av,
+    avatarUrl: human.avatarUrl,
+    icon: human.icon,
     kind: 'human',
-    tag: 'User',
+    tag: human.tag,
     time: '',
     text,
     localStatus: status,
@@ -44,8 +49,14 @@ function isServerEcho(message: Message, optimisticMessage: OptimisticChatMessage
 
 export function mergeOptimisticMessages(messages: Message[], optimisticMessages: OptimisticChatMessage[]): Message[] {
   if (optimisticMessages.length === 0) return messages;
-  const remaining = optimisticMessages.filter(
-    (optimisticMessage) => !messages.some((message) => isServerEcho(message, optimisticMessage))
-  );
-  return [...messages, ...remaining];
+  const matchedOptimisticIds = new Set<string>();
+  const merged = messages.map((message) => {
+    const optimisticMessage = optimisticMessages.find(
+      (candidate) => !matchedOptimisticIds.has(candidate.id) && isServerEcho(message, candidate)
+    );
+    if (optimisticMessage) matchedOptimisticIds.add(optimisticMessage.id);
+    return optimisticMessage ? { ...message, renderKey: optimisticMessage.renderKey ?? optimisticMessage.id } : message;
+  });
+  const remaining = optimisticMessages.filter((optimisticMessage) => !matchedOptimisticIds.has(optimisticMessage.id));
+  return [...merged, ...remaining];
 }

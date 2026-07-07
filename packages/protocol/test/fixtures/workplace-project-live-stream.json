@@ -1,0 +1,220 @@
+{
+  "source": {
+    "capturedAt": "2026-07-06T08:21:13.372Z",
+    "daemonUrl": "http://127.0.0.1:52749",
+    "projectId": "prj_01KWV7JGB54M02K0MAY72338CC",
+    "projectTitle": "Monad",
+    "uiItemsEndpoint": "/v1/projects/prj_01KWV7JGB54M02K0MAY72338CC/ui-items?limit=200&includeInactive=true&includeAncestors=true",
+    "uiStreamEndpoint": "/v1/projects/prj_01KWV7JGB54M02K0MAY72338CC/ui-stream"
+  },
+  "uiItems": {
+    "items": [
+      {
+        "kind": "tool",
+        "id": "ncli_01KWV7N0NGY70TTNN57YK3G5BW",
+        "tool": "native-cli:codex",
+        "input": {
+          "agent": "pmem_codex_4f745c7343e2",
+          "provider": "codex",
+          "workingPath": "/Users/zeke/Projects/monad",
+          "launchMode": "app-server",
+          "approvalOwnership": "provider-owned"
+        },
+        "status": "running",
+        "seq": "2026-07-06T08:10:26.352Z"
+      },
+      {
+        "kind": "message",
+        "id": "msg_01KWV7N1X9X1MV8GDWMP6RPW0M",
+        "role": "assistant",
+        "agentName": "pmem_codex_4f745c7343e2",
+        "source": "managed-native-cli",
+        "nativeCliSessionId": "ncli_01KWV7N0NGY70TTNN57YK3G5BW",
+        "parts": [
+          {
+            "type": "text",
+            "text": "Lily joined and is ready to take scoped Monad work with code-first context and concise progress updates."
+          }
+        ],
+        "status": "done",
+        "seq": "2026-07-06T08:10:43.836Z"
+      },
+      {
+        "kind": "tool",
+        "id": "ncli_01KWV7NHS524YR0CVZHE73HAAE",
+        "tool": "native-cli:claude-code",
+        "input": {
+          "agent": "pmem_claude-code_e59584f30f83",
+          "provider": "claude-code",
+          "workingPath": "/Users/zeke/Projects/monad",
+          "launchMode": "json-stream",
+          "approvalOwnership": "provider-owned"
+        },
+        "status": "running",
+        "seq": "2026-07-06T08:10:43.877Z"
+      },
+      {
+        "kind": "message",
+        "id": "msg_01KWV7NHS8ZG1RNV1Q6716K3BY",
+        "role": "assistant",
+        "agentName": "pmem_claude-code_e59584f30f83",
+        "source": "managed-native-cli",
+        "nativeCliSessionId": "ncli_01KWV7NHS524YR0CVZHE73HAAE",
+        "parts": [
+          {
+            "type": "reasoning",
+            "text": "Thinking"
+          }
+        ],
+        "status": "done",
+        "seq": "2026-07-06T08:10:43.880Z"
+      },
+      {
+        "kind": "tool",
+        "id": "ncli_01KWV7NHZNY2MPFZSKD8CPE0AJ",
+        "tool": "native-cli:claude-code",
+        "input": {
+          "agent": "pmem_claude-code_e59584f30f83",
+          "provider": "claude-code",
+          "workingPath": "/Users/zeke/Projects/monad",
+          "launchMode": "json-stream",
+          "approvalOwnership": "provider-owned"
+        },
+        "status": "running",
+        "seq": "2026-07-06T08:10:44.085Z"
+      },
+      {
+        "kind": "message",
+        "id": "msg_01KWV7NHZRPQFRAN4TBQ6WDVJF",
+        "role": "assistant",
+        "agentName": "pmem_claude-code_e59584f30f83",
+        "source": "managed-native-cli",
+        "nativeCliSessionId": "ncli_01KWV7NHZNY2MPFZSKD8CPE0AJ",
+        "deliveryId": "deliv_01KWV7NHR0V89XCDKMVFA11BTR",
+        "parts": [
+          {
+            "type": "text",
+            "text": "Jeff here — joined and ready. I'll dig into the monad repo (docs/CLAUDE.md already loaded) for any scoped work that comes my way."
+          }
+        ],
+        "status": "done",
+        "seq": "2026-07-06T08:11:02.718Z"
+      },
+      {
+        "kind": "message",
+        "id": "msg_01KWV7P46EHH8T37K5TZ5TWDES",
+        "role": "assistant",
+        "agentName": "pmem_codex_4f745c7343e2",
+        "source": "managed-native-cli",
+        "nativeCliSessionId": "ncli_01KWV7N0NGY70TTNN57YK3G5BW",
+        "deliveryId": "deliv_01KWV7P46EZ3NN4CVX421YVG2D",
+        "parts": [
+          {
+            "type": "reasoning",
+            "text": "Thinking"
+          }
+        ],
+        "status": "streaming",
+        "seq": "2026-07-06T08:11:02.734Z"
+      }
+    ]
+  },
+  "uiStreamSnapshot": {
+    "kind": "snapshot",
+    "oldestCursor": "msg_01KWV7N1X9X1MV8GDWMP6RPW0M",
+    "items": [
+      {
+        "kind": "tool",
+        "id": "ncli_01KWV7N0NGY70TTNN57YK3G5BW",
+        "tool": "native-cli:codex",
+        "input": {
+          "agent": "pmem_codex_4f745c7343e2",
+          "provider": "codex",
+          "workingPath": "/Users/zeke/Projects/monad",
+          "launchMode": "app-server",
+          "approvalOwnership": "provider-owned"
+        },
+        "status": "running",
+        "seq": "2026-07-06T08:10:26.352Z"
+      },
+      {
+        "kind": "message",
+        "id": "msg_01KWV7N1X9X1MV8GDWMP6RPW0M",
+        "role": "assistant",
+        "agentName": "pmem_codex_4f745c7343e2",
+        "source": "managed-native-cli",
+        "nativeCliSessionId": "ncli_01KWV7N0NGY70TTNN57YK3G5BW",
+        "parts": [
+          {
+            "type": "text",
+            "text": "Lily joined and is ready to take scoped Monad work with code-first context and concise progress updates."
+          }
+        ],
+        "status": "done",
+        "seq": "2026-07-06T08:10:43.836Z"
+      },
+      {
+        "kind": "tool",
+        "id": "ncli_01KWV7NHS524YR0CVZHE73HAAE",
+        "tool": "native-cli:claude-code",
+        "input": {
+          "agent": "pmem_claude-code_e59584f30f83",
+          "provider": "claude-code",
+          "workingPath": "/Users/zeke/Projects/monad",
+          "launchMode": "json-stream",
+          "approvalOwnership": "provider-owned"
+        },
+        "status": "running",
+        "seq": "2026-07-06T08:10:43.877Z"
+      },
+      {
+        "kind": "tool",
+        "id": "ncli_01KWV7NHZNY2MPFZSKD8CPE0AJ",
+        "tool": "native-cli:claude-code",
+        "input": {
+          "agent": "pmem_claude-code_e59584f30f83",
+          "provider": "claude-code",
+          "workingPath": "/Users/zeke/Projects/monad",
+          "launchMode": "json-stream",
+          "approvalOwnership": "provider-owned"
+        },
+        "status": "running",
+        "seq": "2026-07-06T08:10:44.085Z"
+      },
+      {
+        "kind": "message",
+        "id": "msg_01KWV7NHZRPQFRAN4TBQ6WDVJF",
+        "role": "assistant",
+        "agentName": "pmem_claude-code_e59584f30f83",
+        "source": "managed-native-cli",
+        "nativeCliSessionId": "ncli_01KWV7NHZNY2MPFZSKD8CPE0AJ",
+        "deliveryId": "deliv_01KWV7NHR0V89XCDKMVFA11BTR",
+        "parts": [
+          {
+            "type": "text",
+            "text": "Jeff here — joined and ready. I'll dig into the monad repo (docs/CLAUDE.md already loaded) for any scoped work that comes my way."
+          }
+        ],
+        "status": "done",
+        "seq": "2026-07-06T08:11:02.718Z"
+      },
+      {
+        "kind": "message",
+        "id": "msg_01KWV7P46EHH8T37K5TZ5TWDES",
+        "role": "assistant",
+        "agentName": "pmem_codex_4f745c7343e2",
+        "source": "managed-native-cli",
+        "nativeCliSessionId": "ncli_01KWV7N0NGY70TTNN57YK3G5BW",
+        "deliveryId": "deliv_01KWV7P46EZ3NN4CVX421YVG2D",
+        "parts": [
+          {
+            "type": "reasoning",
+            "text": "Thinking"
+          }
+        ],
+        "status": "streaming",
+        "seq": "2026-07-06T08:11:02.734Z"
+      }
+    ]
+  }
+}

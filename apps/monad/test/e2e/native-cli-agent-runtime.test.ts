@@ -756,8 +756,8 @@ async function runJsonStreamRuntime(
     'GET',
     `/v1/native-cli-sessions/${nativeSession.id}/history-page?transcriptTargetId=${sessionId}&limit=1`
   );
-  expect(unsupportedHistory.status).toBe(400);
-  expect(((await unsupportedHistory.json()) as { code: string }).code).toBe('unsupported_capability');
+  expect(unsupportedHistory.status).toBe(200);
+  expect(await unsupportedHistory.json()).toEqual({ events: [] });
 
   const stop = await call('POST', `/v1/native-cli-sessions/${nativeSession.id}/stop?transcriptTargetId=${sessionId}`);
   expect(stop.status).toBe(200);

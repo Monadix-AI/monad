@@ -4,7 +4,14 @@ import type { ProjectionMutations } from './ui-projection-state.ts';
 import { parseEventPayload } from '@monad/protocol';
 
 import { findNativeCliProviderAdapter } from '@/services/native-cli/index.ts';
-import { appendBoundedText, isUnknownToolResult, itemKey, MAX_NATIVE_CLI_UI_OUTPUT } from './ui-projection-helpers.ts';
+import {
+  appendBoundedText,
+  isUnknownToolResult,
+  itemKey,
+  MAX_NATIVE_CLI_UI_OUTPUT,
+  nativeCliProviderFromToolItem,
+  nativeCliSnapshotIsGenerating
+} from './ui-projection-helpers.ts';
 
 export function applyToolEvent(m: ProjectionMutations, event: Event): SessionUiEvent[] | undefined {
   switch (event.type) {
@@ -82,18 +89,21 @@ export function applyToolEvent(m: ProjectionMutations, event: Event): SessionUiE
     case 'native_cli.output': {
       const p = parseEventPayload('native_cli.output', event.payload);
       const existing = m.items.get(itemKey('tool', p.nativeCliSessionId));
-      const output =
-        existing?.kind === 'tool'
-          ? appendBoundedText(existing.output ?? '', p.chunk, MAX_NATIVE_CLI_UI_OUTPUT)
-          : p.chunk;
+      const existingTool = existing?.kind === 'tool' ? existing : undefined;
+      const output = existingTool
+        ? appendBoundedText(existingTool.output ?? '', p.chunk, MAX_NATIVE_CLI_UI_OUTPUT)
+        : p.chunk;
+      const provider = nativeCliProviderFromToolItem(existingTool);
+      const generating = provider === undefined ? undefined : nativeCliSnapshotIsGenerating(output, provider);
       const next: Extract<UIItem, { kind: 'tool' }> = {
         kind: 'tool',
         id: p.nativeCliSessionId,
-        tool: existing?.kind === 'tool' ? existing.tool : 'native-cli',
-        ...(existing?.kind === 'tool' && existing.input !== undefined ? { input: existing.input } : {}),
+        tool: existingTool ? existingTool.tool : 'native-cli',
+        ...(existingTool?.input !== undefined ? { input: existingTool.input } : {}),
         output,
-        status: existing?.kind === 'tool' ? existing.status : 'running',
-        seq: existing?.kind === 'tool' ? existing.seq : event.id
+        status:
+          generating === undefined ? (existingTool ? existingTool.status : 'running') : generating ? 'running' : 'ok',
+        seq: existingTool ? existingTool.seq : event.id
       };
       return [{ kind: 'upsert', cursor: event.id, item: m.upsert(next) }];
     }

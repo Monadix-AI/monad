@@ -91,6 +91,16 @@ async function updateWorkplaceProjectOrigin(
   return ((await res.json()) as { project: WorkplaceProject }).project;
 }
 
+async function updateWorkplaceProjectCwd(
+  t: TransportHandle,
+  projectId: string,
+  cwd: string
+): Promise<WorkplaceProject> {
+  const res = await t.fetch(`/v1/workplace/projects/${projectId}`, json('PATCH', { cwd }));
+  expect(res.status).toBe(200);
+  return ((await res.json()) as { project: WorkplaceProject }).project;
+}
+
 async function listMessages(t: TransportHandle, sessionId: string): Promise<Array<{ role: string; text: string }>> {
   const route = sessionId.startsWith('prj_') ? 'projects' : 'sessions';
   const listed = await t.fetch(`/v1/${route}/${sessionId}/messages`);
@@ -570,6 +580,44 @@ for (const kind of TRANSPORTS) {
       }
     });
 
+    test('managed native CLI project member starts when cwd is set after member add', async () => {
+      const projectDir = join(dir, 'project-member-late-cwd');
+      await mkdir(projectDir, { recursive: true });
+      const { stdinLog } = await configureMockNativeCliAgent(t, dir, { agentName: 'codex' });
+      const session = await getWorkplaceProject(t, await createWorkplaceProject(t));
+      const sessionId = session.id;
+      const origin = {
+        ...session.origin,
+        ext: {
+          ...(session.origin?.ext ?? {}),
+          [WORKPLACE_PROJECT_MEMBERS_EXT_KEY]: [
+            {
+              type: 'native-cli',
+              name: 'codex-reviewer',
+              templateName: 'codex',
+              displayName: 'codex-reviewer',
+              instanceId: 'pmem_codex_reviewer',
+              settings: { managedProjectAgent: true, launchMode: 'app-server' }
+            }
+          ]
+        }
+      };
+      await updateWorkplaceProjectOrigin(t, sessionId, origin);
+      expect(handlers.store.listNativeCliSessionsForTranscriptTarget(sessionId)).toEqual([]);
+
+      await updateWorkplaceProjectCwd(t, sessionId, projectDir);
+
+      await waitForFile(stdinLog, '"method":"thread/start"');
+      const sessions = handlers.store
+        .listNativeCliSessionsForTranscriptTarget(sessionId)
+        .filter((candidate) => candidate.runtimeRole === 'managed-project-agent');
+      expect(sessions.map((nativeSession) => nativeSession.agentName)).toEqual(['pmem_codex_reviewer']);
+      expect(sessions[0]?.workingPath).toBe(await realpath(projectDir));
+      for (const nativeSession of sessions) {
+        await t.fetch(`/v1/native-cli-sessions/${nativeSession.id}/stop?transcriptTargetId=${sessionId}`, json('POST'));
+      }
+    });
+
     test('renaming a managed native CLI project member does not change its runtime identity', async () => {
       const projectDir = join(dir, 'project-member-rename');
       await mkdir(projectDir, { recursive: true });
@@ -616,9 +664,11 @@ for (const kind of TRANSPORTS) {
       const send = await t.fetch(`/v1/projects/${sessionId}/messages`, json('POST', { text: 'after rename task' }));
       expect(send.status).toBe(200);
       const input = await waitForFile(stdinLog, 'after rename task');
-      expect(input).toContain('Your display name: Renamed reviewer');
-      expect(input).toContain('Your runtime agent id: pmem_codex_reviewer');
-      expect(input).toContain('Provider: codex');
+      const notice = input.slice(input.lastIndexOf('New Workplace Project message is available.'));
+      expect(notice).toContain('New Workplace Project message is available.');
+      expect(notice).not.toContain('Your display name: Renamed reviewer');
+      expect(notice).not.toContain('Your runtime agent id: pmem_codex_reviewer');
+      expect(notice).not.toContain('Provider: codex');
 
       const sessions = handlers.store
         .listNativeCliSessionsForTranscriptTarget(sessionId)
@@ -666,17 +716,18 @@ for (const kind of TRANSPORTS) {
           : 0
       ).toBe(1);
 
-      const input = await waitForFile(stdinLog, 'project_inbox_check');
+      const input = await waitForFile(stdinLog, 'please review this');
       expect(input).toContain('Process this project message now.');
       expect(input).toContain('Sender kind: human');
       expect(input).toContain('Sender name:');
       expect(input).toContain('Sender mention token:');
       expect(input).toContain('human');
       expect(input).toContain('please review this');
-      expect(input).toContain('project_post');
-      expect(input).toContain('first acknowledge ownership');
-      expect(input).toContain('strict capsule token');
-      expect(input).toContain('display name');
+      const notice = input.slice(input.lastIndexOf('New Workplace Project message is available.'));
+      expect(notice).not.toContain('Your display name:');
+      expect(notice).not.toContain('Your runtime agent id:');
+      expect(notice).not.toContain('Template agent:');
+      expect(notice).not.toContain('Provider:');
       const envText = await waitForFile(envLog, TEST_NATIVE_CLI_SERVER_URL);
       expect(JSON.parse(envText.trim().split(/\n/).at(-1) ?? '{}')).toMatchObject({
         MONAD_SERVER_URL: TEST_NATIVE_CLI_SERVER_URL
@@ -748,12 +799,9 @@ for (const kind of TRANSPORTS) {
       expect(input).not.toContain('second secret busy task');
       expect(input).toContain('New Workplace Project message is available.');
       expect(input).toContain('You are being woken to process the pending project inbox now.');
-      expect(input).toContain(
-        'If a public response is appropriate, post it with the `project_post` tool from the `monad` MCP server.'
-      );
-      expect(input).toContain(
-        'Every `project_post`, `project_ask`, or `agent_send` call must include a stable `requestId`'
-      );
+      expect(input).toContain('The message body is in your project inbox.');
+      expect(input).not.toContain('If a public response is appropriate');
+      expect(input).not.toContain('Every `project_post`, `project_ask`, or `agent_send` call must include');
 
       const third = await t.fetch(
         `/v1/projects/${sessionId}/messages`,
@@ -1022,7 +1070,7 @@ for (const kind of TRANSPORTS) {
       expect(post.status).toBe(200);
 
       const claudeInput = await waitForFile(claudeStdinLog, 'codex public reply');
-      expect(claudeInput).toContain('project_inbox_check');
+      expect(claudeInput).toContain('The message body is in your project inbox.');
       expect(claudeInput).toContain('Sender kind: native-cli-agent');
       expect(claudeInput).toContain('Sender name: codex');
       expect(claudeInput).toContain('Sender mention token:');
@@ -1050,7 +1098,8 @@ for (const kind of TRANSPORTS) {
 
       const directNotice = await waitForFile(claudeStdinLog, 'codex private note');
       expect(directNotice).toContain('New direct/private message from codex is available.');
-      expect(directNotice).toContain('agent_read');
+      expect(directNotice).toContain('Follow your managed runtime instructions for private/direct messages.');
+      expect(directNotice).not.toContain('Use the `agent_read` tool');
       expect(handlers.store.listMessages(sessionId, { latest: true }).filter((message) => message.text)).toHaveLength(
         2
       );

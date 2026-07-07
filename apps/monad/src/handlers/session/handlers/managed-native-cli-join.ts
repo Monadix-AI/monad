@@ -1,9 +1,4 @@
-import type {
-  ManagedNativeCliLifecycleLogEvent,
-  NativeCliProvider,
-  TranscriptTarget,
-  TranscriptTargetId
-} from '@monad/protocol';
+import type { ManagedNativeCliLifecycleLogEvent, TranscriptTarget, TranscriptTargetId } from '@monad/protocol';
 import type { SessionContext } from '@/handlers/session/context.ts';
 
 import { loadAll } from '@monad/home';
@@ -16,27 +11,14 @@ import {
   nativeCliProjectMemberRuntimeName,
   workplaceProjectMembers
 } from '@/handlers/session/handlers/messaging-members.ts';
-import { findNativeCliProviderAdapter } from '@/services/native-cli/index.ts';
-import { managedProjectLaunchMode, managedProjectMonadCliCommand } from '@/services/native-cli/managed-project.ts';
+import { managedProjectLaunchMode } from '@/services/native-cli/managed-project.ts';
 import managedProjectJoinGreetingNoticePath from '@/services/native-cli/prompts/managed-project-join-greeting-notice.md' with {
-  type: 'file'
-};
-import managedProjectJoinGreetingNoticeMcpPath from '@/services/native-cli/prompts/managed-project-join-greeting-notice-mcp.md' with {
   type: 'file'
 };
 
 const MANAGED_NATIVE_CLI_MEMBER_START_ERROR_EVENT =
   'project.managed_native_cli.member_start_error' satisfies ManagedNativeCliLifecycleLogEvent;
 const MANAGED_NATIVE_CLI_JOIN_GREETING_NOTICE = (await Bun.file(managedProjectJoinGreetingNoticePath).text()).trim();
-const MANAGED_NATIVE_CLI_JOIN_GREETING_MCP_NOTICE = (
-  await Bun.file(managedProjectJoinGreetingNoticeMcpPath).text()
-).trim();
-
-function managedNativeCliJoinGreetingNotice(provider: string): string {
-  return findNativeCliProviderAdapter(provider as NativeCliProvider)?.managedRuntime?.usesManagedMcpBridge
-    ? MANAGED_NATIVE_CLI_JOIN_GREETING_MCP_NOTICE
-    : MANAGED_NATIVE_CLI_JOIN_GREETING_NOTICE.replaceAll('{{monadCliCommand}}', managedProjectMonadCliCommand());
-}
 
 function managedNativeCliMemberRuntimeNames(target: TranscriptTarget): Set<string> {
   return new Set(
@@ -74,7 +56,7 @@ export function createManagedNativeCliJoin(ctx: SessionContext) {
 
   async function startAddedManagedNativeCliMembers(previous: TranscriptTarget, next: TranscriptTarget): Promise<void> {
     if (!nativeCliHost || !paths || !next.cwd) return;
-    const before = managedNativeCliMemberRuntimeNames(previous);
+    const before = previous.cwd ? managedNativeCliMemberRuntimeNames(previous) : new Set<string>();
     const cfg = await loadAll(paths.config, paths.profile);
     const agents = (cfg?.nativeCliAgents ?? []).filter((agent) => agent.enabled !== false);
     const added = managedNativeCliProjectMembers(next, agents).filter((member) => !before.has(member.runtimeAgentName));
@@ -117,7 +99,7 @@ export function createManagedNativeCliJoin(ctx: SessionContext) {
           launchMode: managedProjectLaunchMode(spec, settings.launchMode),
           allowAutopilot: settings.allowAutopilot,
           providerSessionRef: resumeFrom ?? undefined,
-          input: managedNativeCliJoinGreetingNotice(spec.provider)
+          input: MANAGED_NATIVE_CLI_JOIN_GREETING_NOTICE
         });
         emitManagedNativeCliThinking(next.id, nativeSession.id, runtimeAgentName);
       } catch (err) {

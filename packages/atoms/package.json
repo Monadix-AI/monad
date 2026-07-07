@@ -45,6 +45,7 @@
     "./agent-adapters/openclaw/device-identity": "./src/agent-adapters/openclaw/device-identity.ts",
     "./agent-adapters/pty": "./src/agent-adapters/pty.ts",
     "./native-cli-observation": "./src/workspace-experiences/experience/native-cli-observation/native-cli-observation.ts",
+    "./native-cli-observation-setup": "./src/native-cli-observation-setup.ts",
     "./channels/telegram": "./src/channels/telegram.ts",
     "./commands/builtins": "./src/commands/builtins.ts",
     "./providers/registry": "./src/providers/registry.ts",

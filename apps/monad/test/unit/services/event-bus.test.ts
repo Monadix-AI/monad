@@ -25,6 +25,19 @@ test('control subscriber sees list-level events from sessions it never subscribe
   expect(control).toEqual(['session.created', 'task.completed']);
 });
 
+test('native-cli lifecycle fans out to control so the session list stays live without a reload', () => {
+  const bus = new EventBus();
+  const control: EventType[] = [];
+  bus.subscribeControl((e) => control.push(e.type));
+
+  bus.publish(ev('native_cli.started', 'prj_a'));
+  bus.publish(ev('native_cli.output', 'prj_a'));
+  bus.publish(ev('native_cli.exited', 'prj_a'));
+
+  // started/exited are list-level (a session appeared/ended); per-token output stays session-scoped.
+  expect(control).toEqual(['native_cli.started', 'native_cli.exited']);
+});
+
 test('in-session detail does not fan out to the control stream', () => {
   const bus = new EventBus();
   const control: EventType[] = [];

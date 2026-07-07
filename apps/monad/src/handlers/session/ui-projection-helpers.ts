@@ -1,7 +1,10 @@
 import type { ChatMessage, UIItem, UIMessageItem, UIPart } from '@monad/protocol';
 
+import { nativeCliEventsAreGenerating, nativeCliStructuredEvents } from '@monad/atoms/native-cli-observation';
 import { channelDisplayText, channelStructuredVisibility } from '@monad/protocol';
 import { Allow, parse as parsePartialJson } from 'partial-json';
+
+import { findNativeCliProviderAdapter } from '@/services/native-cli/index.ts';
 
 const TEXT_TYPES = new Set(['text', 'markdown', 'error']);
 export const MAX_NATIVE_CLI_UI_OUTPUT = 64 * 1024;
@@ -38,8 +41,32 @@ export function isEvictable(item: UIItem): boolean {
   return false;
 }
 
+// Whether a native-CLI output snapshot shows a turn in flight. Provider event vocabulary lives in each
+// adapter's observation projector (`classifyActivity`); this just parses the snapshot with that adapter
+// and asks. `undefined` = no structured records (a PTY/plain-text run), so a caller can distinguish it
+// from "settled".
+export function nativeCliSnapshotIsGenerating(outputSnapshot: string, provider: string): boolean | undefined {
+  const adapter = findNativeCliProviderAdapter(provider);
+  const events = nativeCliStructuredEvents({ id: '', provider, adapter, output: outputSnapshot });
+  if (events === undefined) return undefined;
+  return nativeCliEventsAreGenerating(events, { provider, adapter });
+}
+
+export function nativeCliProviderFromToolItem(item: Extract<UIItem, { kind: 'tool' }> | undefined): string | undefined {
+  if (!item) return undefined;
+  const inputProvider = (item.input as { provider?: unknown } | undefined)?.provider;
+  if (typeof inputProvider === 'string') return inputProvider;
+  return item.tool.startsWith('native-cli:') ? item.tool.slice('native-cli:'.length) : undefined;
+}
+
 export function nativeCliToolItem(s: NativeCliSessionSnapshot): Extract<UIItem, { kind: 'tool' }> {
-  const status = s.state === 'failed' ? 'error' : s.state === 'starting' || s.state === 'running' ? 'running' : 'ok';
+  const status =
+    s.state === 'failed'
+      ? 'error'
+      : s.state === 'starting' ||
+          (s.state === 'running' && nativeCliSnapshotIsGenerating(s.outputSnapshot, s.provider) !== false)
+        ? 'running'
+        : 'ok';
   // Mirror the live `native_cli.exited` decoration so a refreshed terminal run reads the same as one
   // watched live; keep the running state undecorated.
   const exitText = status === 'running' ? '' : s.exitCode === null ? `\n${s.state}` : `\n${s.state} (${s.exitCode})`;

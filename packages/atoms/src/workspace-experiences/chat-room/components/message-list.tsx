@@ -12,6 +12,7 @@ import {
   type MouseEvent,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState
@@ -23,7 +24,7 @@ import { TypingRow } from './transcript-skeleton.tsx';
 
 const HEADER_SPACER = <div style={{ height: 24 }} />;
 const COMPOSER_CLEARANCE = 'calc(var(--chat-room-composer-clearance, 132px) + 24px)';
-const messageId = (m: Message): string => m.id;
+const messageRenderKey = (m: Message): string => m.renderKey ?? m.id;
 const OUTLINE_ITEM_HEIGHT = 8;
 const OUTLINE_ITEM_GAP = 1;
 const OUTLINE_PADDING_TOP = 6;
@@ -189,6 +190,10 @@ function gaussian(distance: number, sigma = OUTLINE_SIGMA): number {
   return Math.exp(-(distance * distance) / (2 * sigma * sigma));
 }
 
+export function shouldFollowLatestMessage(atBottom: boolean, localStatus?: Message['localStatus']): boolean {
+  return atBottom || Boolean(localStatus);
+}
+
 export type ChatMessageListRoom = {
   followNativeCliSession?: (id: string, deliveryId?: NativeAgentDeliveryId) => void;
   loadOlder: () => void;
@@ -209,7 +214,9 @@ export function ChatMessageList({
   const [atBottom, setAtBottom] = useState(true);
   const [visibleRange, setVisibleRange] = useState<{ endIndex: number; startIndex: number } | null>(null);
   const [outlineTop, setOutlineTop] = useState<string>('50%');
-  const firstItemIndex = useFirstItemIndex(room.messages, messageId);
+  const firstItemIndex = useFirstItemIndex(room.messages, messageRenderKey);
+  const lastMessage = room.messages.at(-1);
+  const lastMessageKey = lastMessage ? messageRenderKey(lastMessage) : undefined;
   const outlineItems = useMemo<MessageOutlineItem[]>(
     () =>
       room.messages.flatMap((message, index) => {
@@ -266,6 +273,10 @@ export function ChatMessageList({
   const scrollToOutlineItem = useCallback((id: string) => {
     listRef.current?.scrollToKey(id, { align: 'start', behavior: 'smooth' });
   }, []);
+  useLayoutEffect(() => {
+    if (!lastMessageKey) return;
+    if (shouldFollowLatestMessage(atBottom, lastMessage?.localStatus)) listRef.current?.scrollToBottom('auto');
+  }, [atBottom, lastMessage?.localStatus, lastMessageKey]);
   const footer = useMemo(
     () => (
       <>
@@ -310,7 +321,7 @@ export function ChatMessageList({
         controlRef={listRef}
         firstItemIndex={firstItemIndex}
         footer={footer}
-        getKey={(msg) => msg.id}
+        getKey={messageRenderKey}
         header={HEADER_SPACER}
         items={room.messages}
         onAtBottomChange={setAtBottom}

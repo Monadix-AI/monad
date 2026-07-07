@@ -38,6 +38,7 @@ import { wecomChannelAtom } from './channels/wecom.ts';
 import { whatsappChannelAtom } from './channels/whatsapp.ts';
 import { BUILTIN_COMMANDS } from './commands/builtins.ts';
 import { builtinConnectors } from './connectors/registry.ts';
+import { configureBuiltinNativeCliObservationAdapters } from './native-cli-observation-setup.ts';
 import { builtinModelProviders } from './providers/registry.ts';
 import { bwrapLauncher } from './sandbox/bwrap.ts';
 import { configureDockerImage, detectDockerRuntime, dockerLauncher, dockerRuntimeAvailable } from './sandbox/docker.ts';
@@ -47,7 +48,6 @@ import { configureNativeLauncherPath } from './sandbox/native-path.ts';
 import { seatbeltLauncher } from './sandbox/seatbelt.ts';
 import { win32Launcher } from './sandbox/win32.ts';
 import { sweepOrphanAppContainerProfiles, win32AppContainerLauncher } from './sandbox/win32-appcontainer.ts';
-import { configureNativeCliObservationAdapterResolver } from './workspace-experiences/experience/native-cli-observation/native-cli-observation.ts';
 import { builtinWorkspaceExperiences } from './workspace-experiences/registry.ts';
 
 // The one named export: the daemon pushes config.agent.sandbox.launcherPath here before launcher
@@ -64,9 +64,7 @@ export {
   sweepOrphanAppContainerProfiles
 };
 
-configureNativeCliObservationAdapterResolver((provider) =>
-  builtinAgentAdapters.find((adapter) => adapter.provider === provider)
-);
+configureBuiltinNativeCliObservationAdapters();
 
 export default defineAtomPack({
   manifest: {

@@ -1,7 +1,13 @@
 import type { NativeCliObservationEvent } from '@monad/protocol';
 import type { NativeCliObservationJsonRecordEntry, NativeCliObservationProjector } from '../observation-projection.ts';
 
-import { observation, providerIsoTimestamp, textValue, thinkingObservation } from '../observation-projection.ts';
+import {
+  classifyObservationActivity,
+  observation,
+  providerIsoTimestamp,
+  textValue,
+  thinkingObservation
+} from '../observation-projection.ts';
 
 export function geminiRecordEvents(
   id: string,
@@ -137,5 +143,6 @@ function geminiHistoryEntries(entries: NativeCliObservationJsonRecordEntry[]): N
 
 export const geminiObservationProjection = {
   historyEntries: geminiHistoryEntries,
+  classifyActivity: classifyObservationActivity,
   recordProjectors: [{ parse: ({ id, record, recordIndex }) => geminiRecordEvents(id, record, recordIndex) }]
 } satisfies NativeCliObservationProjector;

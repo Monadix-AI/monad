@@ -1,4 +1,9 @@
-import type { NativeCliObservationAccessResponse, NativeCliUsageResponse, TranscriptTargetId } from '@monad/protocol';
+import type {
+  NativeAgentDeliveryId,
+  NativeCliObservationAccessResponse,
+  NativeCliUsageResponse,
+  TranscriptTargetId
+} from '@monad/protocol';
 import type {
   CSSProperties,
   KeyboardEvent as ReactKeyboardEvent,
@@ -7,22 +12,32 @@ import type {
 } from 'react';
 import type { NativeCliStreamView, Participant } from '../../experience/types.ts';
 
-import { BrainIcon, EyeIcon, MegaphoneIcon } from '@hugeicons/core-free-icons';
+import {
+  BrainIcon,
+  EyeIcon,
+  FootballIcon,
+  GameboyIcon,
+  MegaphoneIcon,
+  PencilEdit01Icon,
+  PopcornIcon,
+  SwimmingIcon,
+  TennisBallIcon,
+  Wrench01Icon,
+  ZapIcon
+} from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import {
   useLazyGetNativeAgentDeliveryObservationQuery,
   useLazyGetNativeCliHistoryPageQuery,
-  useLazyGetNativeCliObservationQuery,
-  useLazyGetNativeCliUsageQuery
+  useLazyGetNativeCliUsageQuery,
+  useStreamNativeCliObservationQuery
 } from '@monad/sdk-atom-client-rtk';
-import { ProductIcon } from '@monad/ui';
+import { ProductIcon, Tooltip, TooltipContent, TooltipTrigger } from '@monad/ui';
 import {
-  AgentIdentity,
   AgentInstanceAvatar,
   agentPresenceColor as presenceColor,
   resolveProductIcon,
-  workspaceSans as sans,
-  workspaceSectionLabelStyle as sectionLabel
+  workspaceSans as sans
 } from '@monad/ui/components/AgentAvatar';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
@@ -30,10 +45,13 @@ import { workspaceExperienceT } from '../../i18n.ts';
 import { useChatRoomExperienceStore } from '../store.ts';
 import {
   agentObservationStream,
-  groupProjectRailAgents,
   isActiveRailAgent,
   observationProjectionFromAccess,
   observedRailAgent,
+  railAgentActivityPhase,
+  shouldAnimateRailAgent,
+  shouldProjectObservationAccess,
+  sortedProjectRailAgents,
   streamWithObservationProjection,
   usageMeterFromObservationAccess
 } from '../utils/agent-rail-model.ts';
@@ -131,13 +149,54 @@ function clampRailWidth(width: number): number {
   return Math.min(MAX_RAIL_WIDTH, Math.max(MIN_RAIL_WIDTH, Math.round(width)));
 }
 
-function agentActivityPhaseMeta(agent: Participant): {
+function agentActivityPhaseMeta(phase: NonNullable<Participant['activityPhase']>): {
   label: string;
   icon: typeof EyeIcon;
 } {
-  if (agent.activityPhase === 'reading') return { label: 'Reading', icon: EyeIcon };
-  if (agent.activityPhase === 'speaking') return { label: 'Speaking', icon: MegaphoneIcon };
+  if (phase === 'reading') return { label: 'Reading', icon: EyeIcon };
+  if (phase === 'speaking') return { label: 'Speaking', icon: MegaphoneIcon };
+  if (phase === 'tooling') return { label: 'Using tools', icon: Wrench01Icon };
+  if (phase === 'writing') return { label: 'Writing', icon: PencilEdit01Icon };
   return { label: 'Thinking', icon: BrainIcon };
+}
+
+function agentPresenceLabel(agent: Participant): string {
+  if (agent.presence === 'working') return 'Working';
+  if (agent.presence === 'online') return 'Online';
+  if (agent.presence === 'needs-login') return 'Needs login';
+  if (agent.presence === 'failed') return 'Failed';
+  if (agent.presence === 'stopped') return 'Stopped';
+  return 'Idle';
+}
+
+const idleAgentIcons = [
+  { label: 'Popcorn', icon: PopcornIcon },
+  { label: 'Game', icon: GameboyIcon },
+  { label: 'Football', icon: FootballIcon },
+  { label: 'Tennis', icon: TennisBallIcon },
+  { label: 'Swimming', icon: SwimmingIcon }
+] as const;
+
+function stableIdleIcon(agent: Participant): (typeof idleAgentIcons)[number] {
+  const key = agent.id || agent.name;
+  let hash = 0;
+  for (const char of key) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
+  return idleAgentIcons[hash % idleAgentIcons.length] ?? idleAgentIcons[0];
+}
+
+function titleCase(value: string): string {
+  return value ? `${value[0]?.toUpperCase() ?? ''}${value.slice(1)}` : value;
+}
+
+function agentMetadataRows(agent: Participant): Array<[string, string]> {
+  const metadata = agent.metadata;
+  return [
+    ['Agent', metadata?.agent ?? agent.name],
+    ['Model', metadata?.model ?? 'Default'],
+    ['Effort', metadata?.effort ? titleCase(metadata.effort) : 'Default'],
+    ['Speed', metadata?.speed ? titleCase(metadata.speed) : 'Standard'],
+    ['Autopilot', metadata?.autopilot === false ? 'Off' : 'On']
+  ];
 }
 
 const agentStatusRingCss = `
@@ -171,34 +230,85 @@ const agentStatusRingCss = `
   45% { transform: scale(1.22); }
 }
 
+@keyframes workplace-agent-phase-writing {
+  0%, 100% { transform: translate(0, 0) rotate(0deg); }
+  45% { transform: translate(1px, 1px) rotate(-9deg); }
+}
+
+@keyframes workplace-agent-phase-bubble-pop {
+  0% {
+    opacity: 0;
+    transform: translate(6px, 8px) scale(0.72);
+  }
+  70% {
+    opacity: 1;
+    transform: translate(0, -1px) scale(1.04);
+  }
+  100% {
+    opacity: 1;
+    transform: translate(0, 0) scale(1);
+  }
+}
+
+	@keyframes workplace-agent-phase-bubble-float {
+	  0%, 100% { translate: 0 0; }
+	  50% { translate: 0 -2px; }
+	}
+
+	@keyframes workplace-agent-status-dot-jump {
+	  0%, 80%, 100% { transform: translateY(0); opacity: 0.42; }
+	  40% { transform: translateY(-3px); opacity: 0.95; }
+	}
+
+@keyframes workplace-agent-status-sheen {
+  0% { background-position: 140% 50%; }
+  52%, 100% { background-position: -60% 50%; }
+}
+
+@keyframes workplace-agent-idle-icon-float {
+  0%, 100% { transform: translateY(0) rotate(-2deg); opacity: 0.72; }
+  50% { transform: translateY(-2px) rotate(3deg); opacity: 0.98; }
+}
+
 .workplace-agent-status-row {
   appearance: none;
-  width: 100%;
-  min-height: 36px;
+	  width: 100%;
+	  min-height: 92px;
   display: flex;
+  position: relative;
   align-items: center;
-  gap: 10px;
-  padding: 8px 10px;
-  border: 1px solid transparent;
-  border-radius: 8px;
+  justify-content: flex-start;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--sidebar-border);
+  border-radius: 10px;
   box-sizing: border-box;
-  background: transparent;
+  background: rgb(var(--backgroundColor-surface-container) / 0.36);
   color: var(--sidebar-foreground);
   font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
-  font-size: 14px;
+  font-size: 13px;
   line-height: 1;
   text-align: left;
-  transition: background-color 150ms ease-out, color 150ms ease-out;
+  overflow: visible;
+  transition: background-color 150ms ease-out, border-color 150ms ease-out, color 150ms ease-out;
 }
 
 .workplace-agent-status-row:hover {
   background: var(--sidebar-accent);
+  border-color: color-mix(in srgb, var(--sidebar-border) 58%, var(--sidebar-foreground) 42%);
   color: var(--sidebar-accent-foreground);
 }
 
 .workplace-agent-status-row[data-selected='true'] {
-  background: var(--sidebar-accent);
-  color: var(--sidebar-accent-foreground);
+  background: var(--sidebar-selected);
+  border-color: color-mix(in srgb, var(--sidebar-border) 48%, var(--sidebar-foreground) 52%);
+  color: var(--sidebar-selected-foreground);
+}
+
+.workplace-agent-status-row[data-selected='true']:hover {
+  background: var(--sidebar-selected-hover);
+  border-color: color-mix(in srgb, var(--sidebar-border) 42%, var(--sidebar-foreground) 58%);
+  color: var(--sidebar-selected-hover-foreground);
 }
 
 .workplace-agent-status-avatar {
@@ -208,6 +318,7 @@ const agentStatusRingCss = `
   place-items: center;
   border: 1.5px solid transparent;
   border-radius: 999px;
+  overflow: visible;
 }
 
 .workplace-agent-status-avatar[data-active='true'] {
@@ -225,21 +336,44 @@ const agentStatusRingCss = `
   animation: workplace-agent-status-radiate 1.8s ease-out infinite;
 }
 
-.workplace-agent-status-phase {
+.workplace-agent-status-speed {
   position: absolute;
-  right: -5px;
-  bottom: -5px;
-  z-index: 2;
+  right: -3px;
+  bottom: -3px;
+  z-index: 3;
   width: 17px;
   height: 17px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid color-mix(in srgb, var(--agent-presence-color) 72%, var(--sidebar-border));
+  border: 2px solid var(--sidebar);
   border-radius: 999px;
-  background: var(--sidebar);
-  color: var(--agent-presence-color);
-  box-shadow: 0 0 0 2px var(--sidebar), 0 0 12px -4px var(--agent-presence-color);
+  background: var(--warning, #f59e0b);
+  color: #1f1300;
+  box-shadow: 0 3px 8px rgb(0 0 0 / 0.22);
+}
+
+.workplace-agent-status-phase {
+  position: absolute;
+  right: -24px;
+  top: -16px;
+  z-index: 4;
+  width: 40px;
+  height: 31px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 0 5px 4px;
+  border: 0;
+  background:
+    center / contain no-repeat
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='-6 -7 100 82'%3E%3Cg fill='%23fff' stroke='%23332218' stroke-width='4.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='13' cy='58' r='5'/%3E%3Ccircle cx='27' cy='48' r='8'/%3E%3Cpath d='M29 42c-12-2-21-10-21-22 0-12 11-20 24-17 7-8 22-9 31-2 12-2 22 6 22 17 0 8-5 15-13 18 0 12-11 22-25 22-8 0-15-3-19-8Z'/%3E%3C/g%3E%3C/svg%3E");
+  color: #332218;
+  filter: drop-shadow(0 8px 10px rgb(0 0 0 / 0.18));
+  transform-origin: 7px 26px;
+  animation:
+    workplace-agent-phase-bubble-pop 220ms cubic-bezier(0.2, 1.45, 0.38, 1) both,
+    workplace-agent-phase-bubble-float 2.4s ease-in-out 220ms infinite;
 }
 
 .workplace-agent-status-phase[data-phase='thinking'] svg {
@@ -254,26 +388,159 @@ const agentStatusRingCss = `
   animation: workplace-agent-phase-speaking 0.8s ease-in-out infinite;
 }
 
-.workplace-agent-status-name {
-  min-width: 0;
-  flex: 1;
-  align-items: center;
-  color: var(--foreground);
-  line-height: 1;
+.workplace-agent-status-phase[data-phase='tooling'] svg {
+  animation: workplace-agent-phase-speaking 1s ease-in-out infinite;
 }
 
-.workplace-agent-status-name > span {
+.workplace-agent-status-phase[data-phase='writing'] svg {
+  animation: workplace-agent-phase-writing 0.78s ease-in-out infinite;
+}
+
+	.workplace-agent-status-name {
+	  width: auto;
+	  min-width: 0;
+	  flex: 1;
+	  display: grid;
+	  align-items: center;
+	  gap: 4px;
+	  color: var(--foreground);
+	  line-height: 1.15;
+	}
+
+	.workplace-agent-status-title {
+	  display: inline-flex;
+	  align-items: center;
+	  min-width: 0;
+	  gap: 8px;
+	  color: var(--foreground);
+	  font-weight: 500;
+	}
+
+	.workplace-agent-status-title-text {
+	  min-width: 0;
+	  overflow: hidden;
+	  text-overflow: ellipsis;
+	  white-space: nowrap;
+	}
+
+	.workplace-agent-status-subtext {
+	  position: relative;
+	  width: fit-content;
+	  max-width: 100%;
+	  display: inline-flex;
+	  align-items: center;
+	  gap: 1px;
+	  overflow: hidden;
+	  color: color-mix(in srgb, var(--sidebar-foreground) 72%, transparent);
+	  font-size: 11px;
+	  font-weight: 400;
+	  line-height: 14px;
+	  white-space: nowrap;
+	}
+
+	.workplace-agent-status-subtext[data-active='true'] {
+	  color: color-mix(in srgb, var(--agent-presence-color) 78%, var(--sidebar-foreground) 22%);
+	}
+
+	.workplace-agent-status-subtext[data-active='true']::after {
+	  position: absolute;
+	  inset: -2px -12px;
+	  content: '';
+	  pointer-events: none;
+	  background: linear-gradient(105deg, transparent 30%, rgb(255 255 255 / 0.34) 48%, transparent 64%);
+	  background-size: 240% 100%;
+	  mix-blend-mode: screen;
+	  animation: workplace-agent-status-sheen 2.1s cubic-bezier(0.19, 1, 0.22, 1) infinite;
+	}
+
+	.workplace-agent-status-ellipsis {
+	  display: inline-flex;
+	  align-items: flex-end;
+	  gap: 1px;
+	  padding-left: 1px;
+	}
+
+	.workplace-agent-status-dot {
+	  width: 2px;
+	  height: 2px;
+	  border-radius: 999px;
+	  background: currentColor;
+	}
+
+	.workplace-agent-status-subtext[data-active='true'] .workplace-agent-status-dot {
+	  animation: workplace-agent-status-dot-jump 1.05s ease-in-out infinite;
+	}
+
+	.workplace-agent-status-subtext[data-active='true'] .workplace-agent-status-dot:nth-child(2) {
+	  animation-delay: 120ms;
+	}
+
+.workplace-agent-status-subtext[data-active='true'] .workplace-agent-status-dot:nth-child(3) {
+  animation-delay: 240ms;
+}
+
+.workplace-agent-status-idle-icon {
   display: inline-flex;
   align-items: center;
+  color: color-mix(in srgb, var(--sidebar-foreground) 72%, transparent);
+  transform-origin: 50% 70%;
+  animation: workplace-agent-idle-icon-float 2.2s ease-in-out infinite;
+}
+
+.workplace-agent-status-product {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.workplace-agent-status-tooltip {
+  min-width: 168px;
+  display: grid;
+  gap: 5px;
+  padding: 8px 10px;
+  font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+}
+
+.workplace-agent-status-tooltip-row {
+  display: grid;
+  grid-template-columns: 68px minmax(0, 1fr);
+  align-items: baseline;
+  gap: 10px;
+}
+
+.workplace-agent-status-tooltip-label {
+  color: var(--muted-foreground);
+}
+
+.workplace-agent-status-tooltip-value {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--foreground);
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .workplace-agent-status-avatar,
-  .workplace-agent-status-avatar::after,
-  .workplace-agent-status-phase svg {
-    animation: none;
-  }
-}
+	  .workplace-agent-status-avatar,
+	  .workplace-agent-status-avatar::after,
+	  .workplace-agent-status-phase,
+	  .workplace-agent-status-phase svg,
+	  .workplace-agent-status-subtext::after,
+	  .workplace-agent-status-subtext,
+	  .workplace-agent-status-dot,
+	  .workplace-agent-status-idle-icon {
+	    animation: none;
+	  }
+
+	  .workplace-agent-status-subtext[data-active='true'] {
+	    color: color-mix(in srgb, var(--sidebar-foreground) 72%, transparent);
+	  }
+
+	  .workplace-agent-status-subtext[data-active='true']::after {
+	    content: none;
+	  }
+	}
 `;
 
 type AgentTasksRailRoom = {
@@ -287,7 +554,6 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
   const t = workspaceExperienceT();
   const [triggerNativeAgentDeliveryObservation] = useLazyGetNativeAgentDeliveryObservationQuery();
   const [triggerNativeCliHistoryPage] = useLazyGetNativeCliHistoryPageQuery();
-  const [triggerNativeCliObservation] = useLazyGetNativeCliObservationQuery();
   const [triggerNativeCliUsage] = useLazyGetNativeCliUsageQuery();
   const [railWidth, setRailWidth] = useState(DEFAULT_RAIL_WIDTH);
   const [resizing, setResizing] = useState(false);
@@ -299,29 +565,31 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
   );
   const observeProjectAgent = useChatRoomExperienceStore((state) => state.observeProjectAgent);
   const closeRailObservation = useChatRoomExperienceStore((state) => state.closeRailObservation);
-  const groups = groupProjectRailAgents(room.railAgents);
+  const agents = sortedProjectRailAgents(room.railAgents);
   const observedStream = agentObservationStream(observation, room.nativeCliStreams);
   const observedNativeCliSessionId = observation?.nativeCliSessionId ?? observedStream?.id;
   const observedDeliveryId = observation?.deliveryId;
   const observationHistoryResetKey = [observedDeliveryId, observedNativeCliSessionId].filter(Boolean).join(':');
   const [historyPages, setHistoryPages] = useState<ObservationHistoryPageState | undefined>(undefined);
   const [historyRequested, setHistoryRequested] = useState(false);
-  const observationPollMs = observedStream?.status === 'running' ? 900 : 0;
-  const observationAccess = usePolledValue<NativeCliObservationAccessResponse>({
-    enabled: Boolean((observedDeliveryId || observedNativeCliSessionId) && observation),
-    intervalMs: observationPollMs,
+  // Native-CLI observation is a server-pushed SSE stream (per-token `append` deltas folded into a full
+  // `output`), not a 900ms poll — a live turn streams into the panel without waiting on a refetch.
+  // Deliveries have no SSE twin yet, so they keep the poll.
+  const nativeCliObservation = useStreamNativeCliObservationQuery(
+    { id: observedNativeCliSessionId ?? '', transcriptTargetId: room.projectId as TranscriptTargetId },
+    { skip: !(observedNativeCliSessionId && observation && !observedDeliveryId) }
+  );
+  const deliveryObservation = usePolledValue<NativeCliObservationAccessResponse>({
+    enabled: Boolean(observedDeliveryId && observation),
+    intervalMs: observedStream?.status === 'running' ? 900 : 0,
     load: () =>
-      observedDeliveryId
-        ? triggerNativeAgentDeliveryObservation({
-            id: observedDeliveryId,
-            transcriptTargetId: room.projectId as TranscriptTargetId
-          }).unwrap()
-        : triggerNativeCliObservation({
-            id: observedNativeCliSessionId as string,
-            transcriptTargetId: room.projectId as TranscriptTargetId
-          }).unwrap(),
-    resetKey: `${room.projectId}:${observedDeliveryId ?? observedNativeCliSessionId ?? ''}`
+      triggerNativeAgentDeliveryObservation({
+        id: observedDeliveryId as NativeAgentDeliveryId,
+        transcriptTargetId: room.projectId as TranscriptTargetId
+      }).unwrap(),
+    resetKey: `${room.projectId}:${observedDeliveryId ?? ''}`
   });
+  const observationAccess = observedDeliveryId ? deliveryObservation : (nativeCliObservation.data ?? undefined);
   const observedBaseStream: NativeCliStreamView | undefined =
     observedStream ??
     (observation && observedNativeCliSessionId
@@ -335,9 +603,12 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
           items: []
         }
       : undefined);
-  const shouldProjectObservationAccess =
-    Boolean(observedDeliveryId) || observationAccess?.state !== 'history' || historyRequested;
-  const observationProjection = shouldProjectObservationAccess
+  const projectObservationAccess = shouldProjectObservationAccess({
+    access: observationAccess,
+    deliveryId: observedDeliveryId,
+    historyRequested
+  });
+  const observationProjection = projectObservationAccess
     ? observationProjectionFromAccess(observedBaseStream, observationAccess, observedDeliveryId)
     : undefined;
   const observedAccessStream = streamWithObservationProjection(observedBaseStream, observationProjection);
@@ -518,8 +789,48 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
   const renderAgent = (agent: Participant) => {
     const productIcon = resolveProductIcon(agent);
     const active = isActiveRailAgent(agent);
-    const phase = active ? agentActivityPhaseMeta(agent) : null;
+    const shouldAnimate = shouldAnimateRailAgent(agent);
+    const activityPhase = railAgentActivityPhase(agent);
+    const phase = activityPhase ? agentActivityPhaseMeta(activityPhase) : undefined;
     const PhaseIcon = phase?.icon;
+    const statusLabel = phase?.label ?? agentPresenceLabel(agent);
+    const idleStatusIcon =
+      !phase && (agent.presence === 'idle' || agent.presence === 'online') ? stableIdleIcon(agent) : undefined;
+    const IdleStatusIcon = idleStatusIcon?.icon;
+    const fastMode = agent.metadata?.speed === 'fast';
+    const metadataRows = agentMetadataRows(agent);
+    const productBadge = productIcon ? (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="workplace-agent-status-product">
+            <ProductIcon
+              product={productIcon}
+              size={12}
+            />
+          </span>
+        </TooltipTrigger>
+        <TooltipContent
+          className="workplace-agent-status-tooltip"
+          side="top"
+          sideOffset={8}
+        >
+          {metadataRows.map(([label, value]) => (
+            <span
+              className="workplace-agent-status-tooltip-row"
+              key={label}
+            >
+              <span className="workplace-agent-status-tooltip-label">{label}</span>
+              <span
+                className="workplace-agent-status-tooltip-value"
+                title={value}
+              >
+                {value}
+              </span>
+            </span>
+          ))}
+        </TooltipContent>
+      </Tooltip>
+    ) : null;
     return (
       <button
         aria-label={phase ? `Observe ${agent.name}, ${phase.label}` : `Observe ${agent.name}`}
@@ -533,41 +844,86 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
       >
         <span
           className="workplace-agent-status-avatar"
-          data-active={active ? 'true' : undefined}
+          data-active={shouldAnimate ? 'true' : undefined}
         >
           <AgentInstanceAvatar
             agent={agent}
             bordered={active}
-            size={28}
+            size={42}
           />
+          {fastMode ? (
+            <span
+              aria-label="Fast mode enabled"
+              className="workplace-agent-status-speed"
+              role="img"
+              title="Fast mode enabled"
+            >
+              <HugeiconsIcon
+                aria-hidden="true"
+                icon={ZapIcon}
+                size={10}
+                strokeWidth={2.5}
+              />
+            </span>
+          ) : null}
           {phase && PhaseIcon ? (
             <span
               className="workplace-agent-status-phase"
-              data-phase={agent.activityPhase}
+              data-phase={activityPhase}
               title={phase.label}
             >
               <HugeiconsIcon
                 aria-hidden="true"
                 icon={PhaseIcon}
-                size={10}
-                strokeWidth={2.4}
+                size={13}
+                strokeWidth={1.8}
               />
             </span>
           ) : null}
         </span>
-        <AgentIdentity
-          badge={
-            productIcon ? (
-              <ProductIcon
-                product={productIcon}
-                size={12}
-                title={agent.tag}
-              />
-            ) : null
-          }
-          className="workplace-agent-status-name"
-          name={agent.name}
-        />
+        <span className="workplace-agent-status-name">
+          <span className="workplace-agent-status-title">
+            <span
+              className="workplace-agent-status-title-text"
+              title={agent.name}
+            >
+              {agent.name}
+            </span>
+            {productBadge}
+          </span>
+          <span
+            className="workplace-agent-status-subtext"
+            data-active={phase ? 'true' : undefined}
+            title={statusLabel}
+          >
+            {IdleStatusIcon ? (
+              <span
+                aria-label={`${statusLabel}: ${idleStatusIcon.label}`}
+                className="workplace-agent-status-idle-icon"
+                role="img"
+              >
+                <HugeiconsIcon
+                  aria-hidden="true"
+                  icon={IdleStatusIcon}
+                  size={14}
+                  strokeWidth={1.8}
+                />
+              </span>
+            ) : (
+              <span>{statusLabel}</span>
+            )}
+            {phase ? (
+              <span
+                aria-hidden="true"
+                className="workplace-agent-status-ellipsis"
+              >
+                <span className="workplace-agent-status-dot" />
+                <span className="workplace-agent-status-dot" />
+                <span className="workplace-agent-status-dot" />
+              </span>
+            ) : null}
+          </span>
+        </span>
       </button>
     );
   };
@@ -621,68 +977,36 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
           usageMeter={usageMeter}
         />
       ) : (
-        <>
-          <div style={{ ...sectionLabel, padding: '13px 15px 8px' }}>Monad Runtime</div>
-          <div
-            className="scwf-scroll"
-            style={{
-              padding: '0 14px 14px',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 8,
-              borderBottom: `1px solid ${'var(--sidebar-border)'}`,
-              flex: 'none',
-              maxHeight: '42%',
-              overflowY: 'auto'
-            }}
-          >
-            {groups.active.length === 0 ? (
-              <div
-                style={{
-                  fontFamily: sans,
-                  fontSize: 13,
-                  color: 'var(--sidebar-foreground)',
-                  padding: '2px 0',
-                  lineHeight: 1.5,
-                  opacity: 0.6
-                }}
-              >
-                {t('web.workplace.noActiveAgents')}
-              </div>
-            ) : null}
-            {groups.active.map(renderAgent)}
-          </div>
-
-          <div style={{ ...sectionLabel, padding: '13px 15px 8px' }}>Monad Mesh</div>
-          <div
-            className="scwf-scroll"
-            style={{
-              flex: 1,
-              minHeight: 0,
-              overflowY: 'auto',
-              padding: '0 14px 14px',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 8
-            }}
-          >
-            {groups.standBy.length === 0 ? (
-              <div
-                style={{
-                  fontFamily: sans,
-                  fontSize: 13,
-                  color: 'var(--sidebar-foreground)',
-                  padding: '2px 0',
-                  lineHeight: 1.5,
-                  opacity: 0.6
-                }}
-              >
-                {t('web.workplace.noStandByAgents')}
-              </div>
-            ) : null}
-            {groups.standBy.map(renderAgent)}
-          </div>
-        </>
+        <div
+          className="scwf-scroll"
+          style={{
+            padding: '14px',
+            display: agents.length === 0 ? 'flex' : 'grid',
+            flexDirection: agents.length === 0 ? 'column' : undefined,
+            gridTemplateColumns: agents.length === 0 ? undefined : 'repeat(auto-fit, minmax(156px, 1fr))',
+            alignContent: agents.length === 0 ? undefined : 'start',
+            gap: 10,
+            flex: 1,
+            minHeight: 0,
+            overflowY: 'auto'
+          }}
+        >
+          {agents.length === 0 ? (
+            <div
+              style={{
+                fontFamily: sans,
+                fontSize: 13,
+                color: 'var(--sidebar-foreground)',
+                padding: '2px 0',
+                lineHeight: 1.5,
+                opacity: 0.6
+              }}
+            >
+              {t('web.workplace.noStandByAgents')}
+            </div>
+          ) : null}
+          {agents.map(renderAgent)}
+        </div>
       )}
     </div>
   );

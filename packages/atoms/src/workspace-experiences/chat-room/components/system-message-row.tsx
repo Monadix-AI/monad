@@ -1,15 +1,12 @@
 import type { NativeAgentDeliveryId } from '@monad/protocol';
 import type { Message } from '../../experience/types.ts';
 
-import { EyeIcon } from '@hugeicons/core-free-icons';
-import { HugeiconsIcon } from '@hugeicons/react';
 import { ProductIcon } from '@monad/ui';
 import {
   AgentIdentity,
   AgentInstanceAvatar,
   workspaceMono as mono,
   resolveProductIcon,
-  workspaceSans as sans,
   TagChip
 } from '@monad/ui/components/AgentAvatar';
 
@@ -48,69 +45,61 @@ const SYSTEM_EVENT_CSS = `
   white-space: nowrap;
 }
 
-.workplace-system-follow {
-  flex: none;
+@keyframes workplace-system-pending-pulse {
+  0%, 100% { opacity: 0.46; }
+  50% { opacity: 0.82; }
 }
-`;
 
-export function FollowButton({
-  deliveryId,
-  nativeCliSessionId,
-  observeLabel = 'Observe',
-  onFollowNativeCliSession
-}: {
-  deliveryId?: NativeAgentDeliveryId;
-  nativeCliSessionId?: string;
-  observeLabel?: string;
-  onFollowNativeCliSession?: (id: string, deliveryId?: NativeAgentDeliveryId) => void;
-}): React.ReactElement | null {
-  if (!nativeCliSessionId || !onFollowNativeCliSession) return null;
-  return (
-    <button
-      aria-label={observeLabel}
-      className="workplace-action"
-      onClick={() => onFollowNativeCliSession(nativeCliSessionId, deliveryId)}
-      style={{
-        width: 24,
-        height: 24,
-        border: '1px solid transparent',
-        borderRadius: 999,
-        background: 'transparent',
-        color: 'var(--muted-foreground)',
-        display: 'inline-flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        fontFamily: sans,
-        fontSize: 11,
-        fontWeight: 600,
-        padding: 0
-      }}
-      title={observeLabel}
-      type="button"
-    >
-      <HugeiconsIcon
-        aria-hidden="true"
-        icon={EyeIcon}
-        size={13}
-        strokeWidth={2}
-      />
-    </button>
-  );
+.workplace-system-pending {
+  width: min(420px, 100%);
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  border-radius: 12px;
+  background: var(--card);
+  padding: 8px 10px;
 }
+
+.workplace-system-pending-avatar,
+.workplace-system-pending-line {
+  flex: none;
+  background: color-mix(in srgb, var(--muted-foreground) 22%, transparent);
+  animation: workplace-system-pending-pulse 1.5s ease-in-out infinite;
+}
+
+.workplace-system-pending-avatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+}
+
+.workplace-system-pending-line {
+  height: 9px;
+  border-radius: 999px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workplace-system-pending-avatar,
+  .workplace-system-pending-line {
+    animation: none;
+  }
+}
+
+`;
 
 export function SystemMessageRow({
   msg,
   onAgentClick,
-  observeLabel,
   onFollowNativeCliSession
 }: {
   msg: Message;
   onAgentClick?: (id: string) => void;
-  observeLabel?: string;
   onFollowNativeCliSession?: (id: string, deliveryId?: NativeAgentDeliveryId) => void;
 }): React.ReactElement {
+  void onFollowNativeCliSession;
   const developer = msg.kind === 'developer' || msg.developerOnly === true;
   const agentProductIcon = msg.agentChip ? resolveProductIcon(msg.agentChip) : null;
+  const pending = msg.systemTone === 'pending';
   return (
     <div
       style={{
@@ -120,59 +109,69 @@ export function SystemMessageRow({
       }}
     >
       <style>{SYSTEM_EVENT_CSS}</style>
-      <div className="workplace-system-event">
-        {developer ? <TagChip tag="DEV" /> : null}
-        {msg.agentChip ? (
-          <button
-            className="workplace-action workplace-system-agent"
-            onClick={() => onAgentClick?.(msg.agentChip?.id ?? '')}
-            style={{ borderRadius: 999, padding: '2px 6px 2px 2px', margin: '-2px -6px -2px -2px' }}
-            type="button"
-          >
-            <AgentInstanceAvatar
-              agent={msg.agentChip}
-              bordered={false}
-              size={22}
-            />
-            <AgentIdentity
-              badge={
-                agentProductIcon ? (
-                  <ProductIcon
-                    product={agentProductIcon}
-                    size={12}
-                    title={msg.agentChip.tag}
-                  />
-                ) : null
-              }
-              badgeGap={4}
-              name={msg.agentChip.name}
-              nameStyle={{ maxWidth: 210, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-            />
-          </button>
-        ) : null}
-        {msg.fanoutAgents?.length ? (
-          <span className="workplace-system-agent">
-            {msg.fanoutAgents.map((agent) => (
-              <AgentInstanceAvatar
-                agent={agent}
-                bordered={false}
-                key={agent.id}
-                size={20}
-              />
-            ))}
-          </span>
-        ) : null}
-        {msg.text ? <span className="workplace-system-copy">{msg.text}</span> : null}
-        {msg.time ? <span style={TIME_STYLE}>{msg.time}</span> : null}
-        <span className="workplace-system-follow">
-          <FollowButton
-            deliveryId={msg.deliveryId}
-            nativeCliSessionId={msg.nativeCliSessionId}
-            observeLabel={observeLabel}
-            onFollowNativeCliSession={onFollowNativeCliSession}
+      {pending ? (
+        <div
+          aria-label="Agent response pending"
+          className="workplace-system-pending"
+          role="status"
+        >
+          <span className="workplace-system-pending-avatar" />
+          <span
+            className="workplace-system-pending-line"
+            style={{ width: '42%' }}
           />
-        </span>
-      </div>
+          <span
+            className="workplace-system-pending-line"
+            style={{ width: '18%' }}
+          />
+        </div>
+      ) : (
+        <div className="workplace-system-event">
+          {developer ? <TagChip tag="DEV" /> : null}
+          {msg.agentChip ? (
+            <button
+              className="workplace-action workplace-system-agent"
+              onClick={() => onAgentClick?.(msg.agentChip?.id ?? '')}
+              style={{ borderRadius: 999, padding: '2px 6px 2px 2px', margin: '-2px -6px -2px -2px' }}
+              type="button"
+            >
+              <AgentInstanceAvatar
+                agent={msg.agentChip}
+                bordered={false}
+                size={22}
+              />
+              <AgentIdentity
+                badge={
+                  agentProductIcon ? (
+                    <ProductIcon
+                      product={agentProductIcon}
+                      size={12}
+                      title={msg.agentChip.tag}
+                    />
+                  ) : null
+                }
+                badgeGap={4}
+                name={msg.agentChip.name}
+                nameStyle={{ maxWidth: 210, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+              />
+            </button>
+          ) : null}
+          {msg.fanoutAgents?.length ? (
+            <span className="workplace-system-agent">
+              {msg.fanoutAgents.map((agent) => (
+                <AgentInstanceAvatar
+                  agent={agent}
+                  bordered={false}
+                  key={agent.id}
+                  size={20}
+                />
+              ))}
+            </span>
+          ) : null}
+          {msg.text ? <span className="workplace-system-copy">{msg.text}</span> : null}
+          {msg.time ? <span style={TIME_STYLE}>{msg.time}</span> : null}
+        </div>
+      )}
     </div>
   );
 }

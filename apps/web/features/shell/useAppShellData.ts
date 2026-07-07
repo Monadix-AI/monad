@@ -40,7 +40,7 @@ export function useAppShellData() {
   );
 
   const { data: sessionData, isLoading: sessionsLoading } = useListSessionsQuery(undefined);
-  const { data: projectData } = useListWorkplaceProjectsQuery(undefined);
+  const { data: projectData, isLoading: projectsLoading } = useListWorkplaceProjectsQuery(undefined);
   const { data: liveNativeCliSessionData } = useListLiveNativeCliSessionsQuery(undefined);
   const { data: nativeCliSessionSummaryData } = useListNativeCliSessionSummariesQuery(undefined);
   const sessions = sessionSelectors.selectAll(sessionData?.sessions ?? sessionAdapter.getInitialState());
@@ -99,6 +99,7 @@ export function useAppShellData() {
     daemonVersion,
     hasUpgrade,
     profiles,
+    projectsLoading,
     sessions,
     sessionsLoading,
     voiceModelConfigured,

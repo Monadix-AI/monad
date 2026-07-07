@@ -1,6 +1,6 @@
 'use client';
 
-import type { MessageId, ProjectId, SessionId, UIItem } from '@monad/protocol';
+import type { MessageId, SessionId, UIItem } from '@monad/protocol';
 import type { VirtualListHandle } from '@monad/ui/components/VirtualList';
 import type { SessionCommandMenuItem } from '@/features/routes/sessions/SessionRoute';
 import type { WorkspaceRouteProps } from '@/features/routes/workspace/WorkspaceRoute';
@@ -12,7 +12,6 @@ import {
   useCreateSessionMutation,
   useCreateWorkplaceProjectMutation,
   useGetAppearanceQuery,
-  useGetWorkplaceProjectQuery,
   useInitStatusQuery,
   useStreamUiItemsQuery,
   useTranscribeAudioMutation
@@ -78,6 +77,7 @@ export function AppShell() {
     daemonVersion,
     hasUpgrade,
     profiles,
+    projectsLoading,
     sessions,
     sessionsLoading,
     voiceModelConfigured,
@@ -97,9 +97,6 @@ export function AppShell() {
   const routedProjectInList = Boolean(
     routedProjectId && workspaceProjects.some((project) => project.id === routedProjectId)
   );
-  const routedProject = useGetWorkplaceProjectQuery((routedProjectId ?? ('prj_' as ProjectId)) as ProjectId, {
-    skip: routedProjectId === null || routedProjectInList
-  });
   const currentSession = sessions.find((s) => s.id === currentId) ?? null;
   const { data: appearance } = useGetAppearanceQuery();
   const composerSettings = normalizedComposerSettings(appearance?.composer);
@@ -350,17 +347,9 @@ export function AppShell() {
   useEffect(() => {
     if (!routedProjectId) return;
     if (routedProjectInList) return;
-    if ((routedProject.isLoading || routedProject.isFetching) && !routedProject.isError) return;
-    if (routedProject.isError || routedProject.data?.id !== routedProjectId) setWorkspaceUrl();
-  }, [
-    routedProjectInList,
-    routedProject.data?.id,
-    routedProject.isError,
-    routedProject.isFetching,
-    routedProject.isLoading,
-    routedProjectId,
-    setWorkspaceUrl
-  ]);
+    if (projectsLoading) return;
+    setWorkspaceUrl();
+  }, [projectsLoading, routedProjectInList, routedProjectId, setWorkspaceUrl]);
 
   useEffect(() => {
     if (isStudioRoute) return;

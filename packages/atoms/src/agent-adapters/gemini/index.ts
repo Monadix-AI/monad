@@ -47,6 +47,13 @@ function geminiExtraWorkingPathArgs(paths: string[] | undefined): string[] {
   return (paths ?? []).flatMap((path) => ['--include-directories', path]);
 }
 
+function geminiLaunchEnv(
+  agent: NativeCliAgentView,
+  systemPromptFile: string | undefined
+): Record<string, string> | undefined {
+  return systemPromptFile ? { ...agent.env, GEMINI_SYSTEM_MD: systemPromptFile } : agent.env;
+}
+
 function buildGeminiLaunch(agent: NativeCliAgentView, opts: BuildNativeCliLaunchOptions): NativeCliLaunchSpec {
   const launchMode = opts.launchMode ?? agent.defaultLaunchMode;
   let args = [...(agent.args ?? [])];
@@ -63,7 +70,7 @@ function buildGeminiLaunch(agent: NativeCliAgentView, opts: BuildNativeCliLaunch
   return {
     argv: [agent.command, ...launchArgs],
     cwd: opts.workingPath,
-    env: agent.env,
+    env: geminiLaunchEnv(agent, opts.systemPromptFile),
     launchMode,
     provider: 'gemini',
     approvalOwnership: 'provider-owned',
@@ -225,7 +232,8 @@ export const geminiNativeCliAdapter: NativeCliProviderAdapter = {
   settings: () => nativeCliAdapterSettings({ launchModes: ['pty', 'json-stream'] }),
   settingsImport: createBasicSettingsImport('gemini', 'Gemini CLI', 'gemini', '.gemini'),
   managedRuntime: {
-    launchMode: () => 'json-stream'
+    launchMode: () => 'json-stream',
+    usesSystemPromptFile: true
   },
   detect(probes = defaultBinProbes) {
     const geminiBin = resolveBinary('gemini', [], probes);

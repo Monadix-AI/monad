@@ -5,7 +5,11 @@ import type {
   NativeCliUsageLimitMeterRow,
   NativeCliUsageResponse
 } from '@monad/protocol';
-import type { NativeCliObservationJsonRecordEntry, NativeCliProviderAdapter } from '@monad/sdk-atom';
+import type {
+  NativeCliObservationActivity,
+  NativeCliObservationJsonRecordEntry,
+  NativeCliProviderAdapter
+} from '@monad/sdk-atom';
 
 export type { NativeCliUsageLimitMeter };
 
@@ -323,6 +327,55 @@ export function nativeCliStreamItems(args: {
       text: part,
       source: 'plain-text' as const
     }));
+}
+
+/** Structured (JSON-record) events only — `undefined` when the output has no structured records (pure
+ *  plain text), so a caller can distinguish "not generating" from "can't tell". */
+export function nativeCliStructuredEvents(args: {
+  id: string;
+  provider?: NativeCliProvider | string;
+  adapter?: NativeCliObservationAdapter;
+  output?: string;
+  observedAt?: string;
+  mode?: 'history' | 'live';
+}): NativeCliObservationEvent[] | undefined {
+  return nativeCliObservationEvents(args);
+}
+
+function roleFallbackActivity(event: NativeCliObservationEvent): NativeCliObservationActivity | undefined {
+  if (event.role === 'tool') return 'tool-call';
+  if (event.role === 'user') return 'user';
+  if (event.role === 'system') return 'system';
+  return 'message';
+}
+
+/** Provider-agnostic activity kind for one event: the owning adapter classifies it (its vocabulary
+ *  lives there); a role-only fallback covers plain-text / an adapter without a classifier. */
+export function classifyNativeCliActivity(
+  event: NativeCliObservationEvent,
+  opts: { provider?: NativeCliProvider | string; adapter?: NativeCliObservationAdapter } = {}
+): NativeCliObservationActivity | undefined {
+  const classify = observationAdapter(opts)?.observation?.classifyActivity;
+  return classify?.(event) ?? roleFallbackActivity(event);
+}
+
+/** Whether the events show a turn in flight: any content activity turns it on, a `turn-end` marker
+ *  turns it off, and the final state wins. Generic over providers — the per-event kind comes from the
+ *  adapter, not from provider event strings in this consumer. */
+export function nativeCliEventsAreGenerating(
+  events: readonly NativeCliObservationEvent[],
+  opts: { provider?: NativeCliProvider | string; adapter?: NativeCliObservationAdapter } = {}
+): boolean {
+  let active = false;
+  for (const event of events) {
+    const kind = classifyNativeCliActivity(event, opts);
+    // `turn-end` settles the turn; agent output (message/thinking/tool/system-turn-start) means it is
+    // in flight. A `user` event is neutral: a lone input message is not the agent generating, but a
+    // mid-turn tool-result (also role `user`) must not clear an in-flight turn — so it changes nothing.
+    if (kind === 'turn-end') active = false;
+    else if (kind !== undefined && kind !== 'user') active = true;
+  }
+  return active;
 }
 
 function resetIsoLabel(value: string | null | undefined): string | undefined {

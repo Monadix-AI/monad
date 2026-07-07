@@ -251,7 +251,7 @@ test('managed provider final can retire a consumed inbox turn without auto-posti
   ]);
 });
 
-test('managed native CLI output stays live-only and is not persisted as a raw snapshot', async () => {
+test('managed native CLI output persists a bounded snapshot for refresh and observation history', async () => {
   const store = createStore();
   const host = new NativeCliHost({
     store,
@@ -307,7 +307,9 @@ test('managed native CLI output stays live-only and is not persisted as a raw sn
     providerSessionRef: null,
     pendingApprovals: new Map(),
     pendingHistoryPages: new Map(),
+    pendingRequests: new Map(),
     outputBuffer: new BoundedOutputBuffer(256 * 1024),
+    outputSeq: 0,
     snapshotFlushTimer: null,
     nextRequestId: () => 0,
     kill: () => {}
@@ -347,7 +349,18 @@ test('managed native CLI output stays live-only and is not persisted as a raw sn
     nativeCliSessionId,
     provider: 'codex'
   });
-  expect(store.getNativeCliSession(nativeCliSessionId)?.outputSnapshot).toBe('');
+  expect(store.getNativeCliSession(nativeCliSessionId)?.outputSnapshot).toContain('"type":"result"');
+  (
+    host as unknown as {
+      live: Map<string, unknown>;
+    }
+  ).live.delete(nativeCliSessionId);
+  expect(host.observe(nativeCliSessionId)).toMatchObject({
+    state: 'history',
+    nativeCliSessionId,
+    provider: 'codex',
+    output: expect.stringContaining('"type":"result"')
+  });
 });
 
 test('native CLI observation stream pushes incremental deltas the client can reconstruct', async () => {

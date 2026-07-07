@@ -7,7 +7,8 @@ import {
   nativeCliAgentSettings,
   nativeCliAppServerTransportOptions,
   nativeCliLaunchModeOptions,
-  nativeCliSettingDescription
+  nativeCliSettingDescription,
+  normalizeNativeCliLaunchMode
 } from '../../features/studio/third-party-agents/native-cli-agent-settings-model';
 
 const agent: NativeCliAgentView = {
@@ -36,12 +37,17 @@ const preset: NativeCliAgentPresetView = {
   installed: true
 };
 
-test('native CLI settings launch mode options come from the agent preset capabilities', () => {
-  expect(nativeCliLaunchModeOptions(agent, preset)).toEqual(['pty', 'app-server']);
+test('native CLI settings hide PTY because it is auth-only for external agents', () => {
+  expect(nativeCliLaunchModeOptions(agent, preset)).toEqual(['app-server']);
 });
 
 test('native CLI settings preserve the current launch mode when preset metadata is unavailable', () => {
   expect(nativeCliLaunchModeOptions(agent, undefined)).toEqual(['app-server']);
+});
+
+test('native CLI settings normalize existing PTY launch mode to a non-PTY mode', () => {
+  expect(normalizeNativeCliLaunchMode('pty', ['pty', 'json-stream', 'app-server'])).toBe('json-stream');
+  expect(normalizeNativeCliLaunchMode('pty', ['pty'])).toBe('app-server');
 });
 
 test('native CLI settings app-server transports come from the agent preset capabilities', () => {
@@ -101,10 +107,7 @@ test('native CLI settings prefer adapter-declared controls from the preset', () 
       key: 'defaultLaunchMode',
       label: 'Launch mode',
       kind: 'select',
-      options: [
-        { value: 'pty', label: 'PTY' },
-        { value: 'app-server', label: 'App server' }
-      ]
+      options: [{ value: 'app-server', label: 'App server' }]
     },
     { key: 'allowAutopilot', label: 'Autopilot', kind: 'switch' }
   ]);

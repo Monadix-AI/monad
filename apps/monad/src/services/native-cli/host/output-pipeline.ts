@@ -15,11 +15,7 @@ import {
   type NativeCliOutputStream,
   SNAPSHOT_FLUSH_MS
 } from '@/services/native-cli/host/host-constants.ts';
-import {
-  isManagedProjectRuntime,
-  nativeAgentMcpToolError,
-  nativeCliApprovalText
-} from '@/services/native-cli/host/host-helpers.ts';
+import { nativeAgentMcpToolError, nativeCliApprovalText } from '@/services/native-cli/host/host-helpers.ts';
 import { NativeCliObservationHub } from '@/services/native-cli/host/observation-hub.ts';
 import { createStreamingTextDecoder } from '@/services/native-cli/stream-decoder.ts';
 import { takeCompleteStructuredLines } from '@/services/native-cli/structured-lines.ts';
@@ -106,13 +102,12 @@ export class NativeCliOutputPipeline {
       // per-chunk 256 KB read-modify-write under a chatty agent.
       live.outputBuffer.append(buffered);
       live.outputSeq += buffered.length;
-      if (!isManagedProjectRuntime(live)) this.scheduleSnapshotFlush(id);
+      this.scheduleSnapshotFlush(id);
       this.ctx.observation.publish(id);
       this.ctx.armIdleSuspend(live);
     } else {
       const row = this.ctx.store.getNativeCliSession(id);
-      if (!row || !isManagedProjectRuntime(row))
-        this.ctx.store.appendNativeCliOutput(id, buffered, MAX_OUTPUT_SNAPSHOT);
+      if (row) this.ctx.store.appendNativeCliOutput(id, buffered, MAX_OUTPUT_SNAPSHOT);
     }
     this.ctx.events.publish(transcriptTargetId, 'native_cli.output', {
       nativeCliSessionId: id,
@@ -165,8 +160,7 @@ export class NativeCliOutputPipeline {
       clearTimeout(live.snapshotFlushTimer);
       live.snapshotFlushTimer = null;
     }
-    if (!isManagedProjectRuntime(live))
-      this.ctx.store.setNativeCliOutputSnapshot(id, live.outputBuffer.snapshot(), MAX_OUTPUT_SNAPSHOT);
+    this.ctx.store.setNativeCliOutputSnapshot(id, live.outputBuffer.snapshot(), MAX_OUTPUT_SNAPSHOT);
   }
 
   takeCompleteStructuredLines(id: string, stream: 'stdout' | 'stderr', chunk: string): string {

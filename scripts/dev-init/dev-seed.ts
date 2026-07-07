@@ -1,3 +1,4 @@
+/// <reference types="bun" />
 import { join } from 'node:path';
 
 /**
@@ -43,7 +44,7 @@ async function findMainSeedPath(root: string): Promise<string | null> {
  * seed when available, otherwise from config.init.json.template — and return the seed's apiKey
  * (empty when unset or the seed is missing/malformed), warning the caller if it's empty.
  */
-export async function scaffoldSeedConfig(
+async function scaffoldConfigInitDevSeed(
   root: string,
   log: (msg: string) => void,
   warn: (msg: string) => void
@@ -90,4 +91,20 @@ export async function scaffoldSeedConfig(
   }
 
   return apiKey;
+}
+
+export async function ensureProjectLiveStreamDevSeed(root: string, log: (msg: string) => void): Promise<string> {
+  const seedPath = join(root, 'packages', 'protocol', 'test', 'fixtures', 'workplace-project-live-stream.json');
+  await Bun.file(seedPath).json();
+  log('project live stream dev seed fixture ready');
+  return seedPath;
+}
+
+export async function scaffoldDevSeed(
+  root: string,
+  log: (msg: string) => void,
+  warn: (msg: string) => void
+): Promise<string> {
+  await ensureProjectLiveStreamDevSeed(root, log);
+  return scaffoldConfigInitDevSeed(root, log, warn);
 }

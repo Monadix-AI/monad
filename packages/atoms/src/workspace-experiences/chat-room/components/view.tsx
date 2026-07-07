@@ -44,6 +44,7 @@ export function ChatRoomExperienceView({ runtime }: { runtime: ChatRoomExperienc
   const optimisticIdRef = useRef(0);
   const [optimisticMessages, setOptimisticMessages] = useState<OptimisticChatMessage[]>([]);
   const followNativeCliSession = useChatRoomExperienceStore((state) => state.followNativeCliSession);
+  const human = room.human;
   const sendOptimisticDirective = useCallback(
     async (directive: ProjectComposerDirective, existingId?: string) => {
       const text = typeof directive === 'string' ? directive : directive.text;
@@ -52,7 +53,13 @@ export function ChatRoomExperienceView({ runtime }: { runtime: ChatRoomExperienc
       if (!trimmed && !attachments?.length) return;
       const id = existingId ?? `optimistic:${Date.now()}:${optimisticIdRef.current++}`;
       const retry = () => void sendOptimisticDirective({ attachments, text: trimmed }, id);
-      const optimisticMessage = createOptimisticUserMessage({ id, retry, status: 'sending', text: trimmed });
+      const optimisticMessage = createOptimisticUserMessage({
+        human,
+        id,
+        retry,
+        status: 'sending',
+        text: trimmed
+      });
       setOptimisticMessages((messages) => {
         const exists = messages.some((message) => message.id === id);
         if (exists) return messages.map((message) => (message.id === id ? optimisticMessage : message));
@@ -71,7 +78,7 @@ export function ChatRoomExperienceView({ runtime }: { runtime: ChatRoomExperienc
         );
       }
     },
-    [runtime.composer]
+    [human, runtime.composer]
   );
   const messages = useMemo(
     () => mergeOptimisticMessages(room.messages, optimisticMessages),

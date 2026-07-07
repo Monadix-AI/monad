@@ -91,6 +91,11 @@ export function createNativeCliModule({ paths, host, store }: NativeCliDeps) {
     return session;
   }
 
+  function emptyHistoryPageForUnsupported(error: unknown): NativeCliHistoryPageResponse | undefined {
+    if (error instanceof NativeCliError && error.code === 'unsupported_capability') return { events: [] };
+    return undefined;
+  }
+
   function mapNativeCliAuthScopeError(id: string, error: unknown): never {
     if (error instanceof Error && error.message.includes('native CLI auth session not found')) {
       throw new HandlerError('not_found', `native CLI auth session not found: ${id}`);
@@ -271,7 +276,7 @@ export function createNativeCliModule({ paths, host, store }: NativeCliDeps) {
       return { ok: true };
     },
 
-    historyPage({
+    async historyPage({
       id,
       transcriptTargetId,
       request
@@ -282,8 +287,10 @@ export function createNativeCliModule({ paths, host, store }: NativeCliDeps) {
     }): Promise<NativeCliHistoryPageResponse> {
       try {
         requireNativeCliSessionScope(id, transcriptTargetId);
-        return host.historyPage(id, request).catch(mapNativeCliError);
+        return await host.historyPage(id, request);
       } catch (error) {
+        const empty = emptyHistoryPageForUnsupported(error);
+        if (empty) return empty;
         mapNativeCliError(error);
       }
     },

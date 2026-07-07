@@ -13,6 +13,7 @@ import {
 } from '../../src/workspace-experiences/chat-room/components/observation/timeline.tsx';
 import {
   observationProjectionFromAccess,
+  shouldProjectObservationAccess,
   streamWithObservationProjection,
   usageMeterFromObservationAccess
 } from '../../src/workspace-experiences/chat-room/utils/agent-rail-model.ts';
@@ -58,6 +59,34 @@ test('observation access is adapted to projection events without carrying raw ou
   expect(projectedStream?.output).not.toBe(raw);
 });
 
+test('live SSE frame without events derives them from the folded output', () => {
+  // The SSE hub sends full `output` (or an `append` folded to full `output`) with no normalized
+  // `events` on steady-state pushes; the projection must re-derive events from `output` so the panel
+  // does not blank between full snapshots.
+  const stream = {
+    id: 'ncli_codex',
+    agentName: 'codex',
+    provider: 'codex',
+    tag: 'Codex',
+    status: 'running',
+    output: '',
+    items: []
+  } satisfies NativeCliStreamView;
+  const output = JSON.stringify({ method: 'item/agentMessage/delta', params: { delta: 'Streaming reply' } });
+
+  const projection = observationProjectionFromAccess(stream, {
+    state: 'live',
+    nativeCliSessionId: 'ncli_codex',
+    provider: 'codex',
+    output,
+    observedAt: '2026-07-07T00:00:00.000Z'
+  });
+
+  expect(streamWithObservationProjection(stream, projection)?.items.map((item) => item.text)).toEqual([
+    'Streaming reply'
+  ]);
+});
+
 test('delivery observation access keeps the delivery pointer on the projection', () => {
   const stream = {
     id: 'ncli_codex',
@@ -88,6 +117,36 @@ test('delivery observation access keeps the delivery pointer on the projection',
     deliveryId: 'deliv_01KWEBDELIVERYOBSERVE000',
     turn: { providerTurnId: 'turn-1' }
   });
+});
+
+test('history observation access with normalized events projects immediately', () => {
+  expect(
+    shouldProjectObservationAccess({
+      access: {
+        state: 'history',
+        nativeCliSessionId: 'ncli_codex',
+        provider: 'codex',
+        output: '',
+        events: [{ id: 'event_1', role: 'agent', source: 'codex-app-server', text: 'Projected history' }],
+        observedAt: '2026-07-06T00:00:00.000Z'
+      },
+      historyRequested: false
+    })
+  ).toBe(true);
+
+  expect(
+    shouldProjectObservationAccess({
+      access: {
+        state: 'history',
+        nativeCliSessionId: 'ncli_codex',
+        provider: 'codex',
+        output: '',
+        events: [],
+        observedAt: '2026-07-06T00:00:00.000Z'
+      },
+      historyRequested: false
+    })
+  ).toBe(false);
 });
 
 test('host native CLI usage records project to a usage limits meter', () => {

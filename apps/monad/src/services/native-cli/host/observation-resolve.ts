@@ -60,7 +60,7 @@ export class NativeCliObservationResolver {
         reason: 'native CLI session not found'
       };
     }
-    if (!isManagedProjectRuntime(row) && row.outputSnapshot) {
+    if (row.outputSnapshot) {
       const adapter = getNativeCliProviderAdapter(row.provider);
       return {
         state: 'history',

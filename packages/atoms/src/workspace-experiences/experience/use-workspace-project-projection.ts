@@ -88,10 +88,11 @@ export function useWorkspaceProjectProjection(args: {
     () =>
       activeNativeCliAgentNames({
         activityOverrideAgentNames: Object.keys(nativeCliActivityOverrides),
+        liveTools,
         nativeCliSessions: args.nativeCliSessions,
         streamingAgentNames: streamingNativeCliAgentNames
       }),
-    [nativeCliActivityOverrides, args.nativeCliSessions, streamingNativeCliAgentNames]
+    [liveTools, nativeCliActivityOverrides, args.nativeCliSessions, streamingNativeCliAgentNames]
   );
   const runningDelegations = useMemo(() => runningDelegationAgentNames(liveTools), [liveTools]);
   const participants = useMemo(
