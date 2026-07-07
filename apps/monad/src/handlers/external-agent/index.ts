@@ -193,29 +193,6 @@ export function createExternalAgentModule({ paths, host, store }: ExternalAgentD
       return Promise.resolve(externalAgentObservationAccessResponseSchema.parse(host.observe(id)));
     },
 
-    subscribeObservation({
-      id,
-      transcriptTargetId,
-      onObservation,
-      afterSeq
-    }: {
-      id: string;
-      transcriptTargetId: TranscriptTargetId;
-      onObservation: (access: ExternalAgentObservationAccessResponse, done: boolean) => void;
-      afterSeq?: number;
-    }): {
-      access: ExternalAgentObservationAccessResponse;
-      live: boolean;
-      dispose: () => void;
-    } {
-      requireExternalAgentSessionScope(id, transcriptTargetId);
-      return host.subscribeObservation(
-        id,
-        (access, done) => onObservation(externalAgentObservationAccessResponseSchema.parse(access), done),
-        afterSeq
-      );
-    },
-
     observeUi({
       id,
       transcriptTargetId

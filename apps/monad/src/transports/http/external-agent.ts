@@ -1,8 +1,4 @@
-import type {
-  ExternalAgentAuthSessionView,
-  ExternalAgentObservationAccessResponse,
-  ExternalAgentUiObservationFrame
-} from '@monad/protocol';
+import type { ExternalAgentAuthSessionView, ExternalAgentUiObservationFrame } from '@monad/protocol';
 import type { createDaemonHandlers } from '@/handlers/daemon-handlers/index.ts';
 
 import {
@@ -58,61 +54,6 @@ function createExternalAgentAuthEventsSseResponse(
       });
       emit(subscription.session);
       return { dispose: subscription.dispose };
-    }
-  });
-}
-
-function createExternalAgentObservationSseResponse(
-  handlers: ReturnType<typeof createDaemonHandlers>,
-  id: string,
-  transcriptTargetId: `ses_${string}` | `prj_${string}`,
-  encoder: TextEncoder,
-  afterSeq?: number
-): Response {
-  return createPushSseResponse<ExternalAgentObservationAccessResponse>({
-    encoder,
-    // Tag each frame with the output cursor so the client's SSE engine sends it back as
-    // last-event-id on reconnect, letting the server resume from a delta instead of a full snapshot.
-    encode: (access) =>
-      encodeSseFrame(
-        {
-          id: access.state === 'live' && access.seq !== undefined ? String(access.seq) : undefined,
-          event: 'external_agent.observation',
-          data: access
-        },
-        encoder
-      ),
-    subscribe: (emit) => {
-      let disposed = false;
-      let disposeLive = (): void => {};
-      void handlers.externalAgent
-        .observe({ id, transcriptTargetId })
-        .then((initial) => {
-          if (disposed) return;
-          if (initial.state !== 'live') {
-            emit(initial, true);
-            return;
-          }
-          const subscription = handlers.externalAgent.subscribeObservation({
-            id,
-            transcriptTargetId,
-            onObservation: (access, done) => emit(access, done),
-            afterSeq
-          });
-          disposeLive = subscription.dispose;
-          emit(subscription.access, !subscription.live);
-        })
-        .catch(() => {
-          if (!disposed) {
-            emit({ state: 'unavailable', externalAgentSessionId: id, reason: 'provider history unavailable' }, true);
-          }
-        });
-      return {
-        dispose: () => {
-          disposed = true;
-          disposeLive();
-        }
-      };
     }
   });
 }
@@ -231,27 +172,6 @@ export function createExternalAgentController(handlers: ReturnType<typeof create
         query: externalAgentScopeQuery,
         response: { 200: externalAgentObservationAccessResponseSchema },
         detail: { summary: 'Read live or backfilled external agent observation access', tags: ['http-only'] }
-      }
-    )
-    .get(
-      '/external-agent-sessions/:id/observation-stream',
-      ({ params, query, headers }) => {
-        // Standard SSE resume: the client re-sends its last frame id (the output cursor) on reconnect,
-        // so the server can backfill just the delta instead of the whole snapshot.
-        const lastEventId = Number(headers['last-event-id']);
-        const afterSeq = Number.isSafeInteger(lastEventId) && lastEventId >= 0 ? lastEventId : undefined;
-        return createExternalAgentObservationSseResponse(
-          handlers,
-          params.id,
-          query.transcriptTargetId,
-          encoder,
-          afterSeq
-        );
-      },
-      {
-        params: externalAgentParams,
-        query: externalAgentScopeQuery,
-        detail: { summary: 'Stream live or backfilled external agent observation access', tags: ['http-only'] }
       }
     )
     .get(

@@ -3,7 +3,6 @@ import type {
   Event,
   EventId,
   ExternalAgentAuthSessionView,
-  ExternalAgentObservationAccessResponse,
   ExternalAgentUiObservationFrame,
   SendMessageResponse,
   SessionId,
@@ -17,7 +16,6 @@ import {
   developerLogRecordSchema,
   eventSchema,
   externalAgentAuthSessionViewSchema,
-  externalAgentObservationAccessResponseSchema,
   externalAgentUiObservationFrameSchema,
   readTypedSseStream,
   SSE_IDLE_TIMEOUT_MS,
@@ -25,7 +23,6 @@ import {
 } from '@monad/protocol';
 
 import { EventSocket } from './event-socket.ts';
-import { createExternalAgentObservationFolder } from './external-agent-observation-fold.ts';
 import { createMonadTreaty, makeLoopbackHttpsFetcher, makeUnixFetcher } from './treaty.ts';
 
 export interface MonadClientOptions {
@@ -53,7 +50,6 @@ export type EventHandler = (event: Event) => void;
 export type UiEventHandler = (event: SessionUiEvent) => void;
 export type LogRecordHandler = (record: DeveloperLogRecord) => void;
 export type ExternalAgentAuthSessionHandler = (session: ExternalAgentAuthSessionView) => void;
-export type ExternalAgentObservationHandler = (access: ExternalAgentObservationAccessResponse) => void;
 export type ExternalAgentUiObservationHandler = (frame: ExternalAgentUiObservationFrame) => void;
 
 interface SsePayloadSchema<T> {
@@ -312,26 +308,6 @@ export class MonadClient {
       externalAgentAuthSessionViewSchema,
       onSession,
       opts
-    );
-  }
-
-  streamExternalAgentObservation(
-    id: string,
-    transcriptTargetId: TranscriptTargetId,
-    onObservation: ExternalAgentObservationHandler,
-    opts?: { onError?: (err: StreamError) => void }
-  ): () => void {
-    // The daemon pushes per-token `append` deltas (not the whole buffer) in steady state and a full
-    // `output` snapshot only on first connect / resync; fold them so every consumer reads a full
-    // `output`. A non-'live' access snapshot is terminal (the CLI process exited): stop instead of
-    // reconnecting. Any other close is a dropped connection, so `stream` reconnects — restoring the
-    // self-healing the 900ms poll this replaced used to give — and `resume` threads the last seq as
-    // last-event-id so the daemon backfills the gap as a delta rather than resending the whole snapshot.
-    return this.stream(
-      `/${CONTROL_API_VERSION}/external-agent-sessions/${id}/observation-stream?transcriptTargetId=${encodeURIComponent(transcriptTargetId)}`,
-      externalAgentObservationAccessResponseSchema,
-      createExternalAgentObservationFolder(onObservation),
-      { ...opts, resume: true, isTerminal: (access) => access.state !== 'live' }
     );
   }
 

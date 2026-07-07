@@ -89,7 +89,6 @@ import {
   useStartExternalAgentMutation,
   useStopExternalAgentAuthMutation,
   useStopExternalAgentSessionMutation,
-  useStreamExternalAgentObservationQuery,
   useStreamExternalAgentUiObservationQuery
 } from './endpoints/external-agent/index.ts';
 import { graphApi, useGetGraphQuery } from './endpoints/graph/index.ts';
@@ -514,7 +513,6 @@ export {
   useStopExternalAgentAuthMutation,
   useStopExternalAgentSessionMutation,
   useStreamControlQuery,
-  useStreamExternalAgentObservationQuery,
   useStreamExternalAgentUiObservationQuery,
   useStreamSessionQuery,
   useStreamUiItemsQuery,

@@ -6,6 +6,5 @@ export {
   useLazyGetExternalAgentObservationQuery,
   useLazyGetExternalAgentUsageQuery,
   useLazyGetNativeAgentDeliveryObservationQuery,
-  useStreamExternalAgentObservationQuery,
   useStreamExternalAgentUiObservationQuery
 } from '@monad/client-rtk';
