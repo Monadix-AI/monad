@@ -13,6 +13,7 @@ async function installSystemSettingsApiMock(
   health: { version: string; latestVersion?: string; latestVersionCheckedAt?: string }
 ) {
   let upgradeStarts = 0;
+  let startup = { enabled: false, supported: true };
   let upgradeState = {
     available: Boolean(health.latestVersion && health.latestVersion !== health.version),
     currentVersion: health.version,
@@ -68,7 +69,7 @@ async function installSystemSettingsApiMock(
       return route.fulfill(json({ developerMode: false, logsDir: '/tmp/monad-e2e-home/logs' }));
     }
     if (method === 'GET' && path === '/v1/settings/startup') {
-      return route.fulfill(json({ enabled: false, supported: true }));
+      return route.fulfill(json(startup));
     }
     if (method === 'GET' && path === '/v1/settings/tool-backends') {
       return route.fulfill(
@@ -88,12 +89,25 @@ async function installSystemSettingsApiMock(
     if (method === 'GET' && path === '/v1/settings/obscura') {
       return route.fulfill(json({ enabled: false, stealth: false, installed: false, connected: false, tools: [] }));
     }
+    if (method === 'GET' && path === '/v1/settings/network') {
+      return route.fulfill(
+        json({
+          port: 52749,
+          transport: 'tcp',
+          https: { enabled: true },
+          remoteAccess: { enabled: false, token: '' },
+          localHttpFallback: { enabled: false, port: 52780 }
+        })
+      );
+    }
     if (method === 'GET' && path === '/v1/settings/mcp-servers') return route.fulfill(json({ servers: [] }));
     if (method === 'GET' && path === '/v1/settings/mcp-servers/status') return route.fulfill(json({ servers: [] }));
     if (method === 'GET' && path === '/v1/settings/mcp-servers/catalog') return route.fulfill(json({ entries: [] }));
     if (method === 'GET' && path === '/v1/atoms/mcp') return route.fulfill(json({ servers: [] }));
     if (method === 'PUT' && (path === '/v1/settings/developer' || path === '/v1/settings/startup')) {
-      return route.fulfill(json({ ok: true }));
+      if (path === '/v1/settings/startup')
+        startup = { ...startup, ...((await request.postDataJSON()) as typeof startup) };
+      return route.fulfill(json(path === '/v1/settings/startup' ? startup : { ok: true }));
     }
     if (method === 'POST' && path === '/v1/usage/reset') return route.fulfill(json({ ok: true }));
     if (method === 'DELETE' && path.startsWith('/v1/sessions/')) return route.fulfill(json({ ok: true }));
@@ -101,7 +115,12 @@ async function installSystemSettingsApiMock(
     return route.fulfill(json({}));
   });
 
-  return { upgradeStarts: () => upgradeStarts };
+  return {
+    setExternalStartup(enabled: boolean) {
+      startup = { ...startup, enabled };
+    },
+    upgradeStarts: () => upgradeStarts
+  };
 }
 
 test.describe('System upgrade settings', () => {
@@ -143,5 +162,36 @@ test.describe('System upgrade settings', () => {
     await expect(page.getByText('Checking')).toHaveCount(0);
     await expect(page.getByText('Verifying')).toHaveCount(0);
     await expect(page.getByText('Restarting')).toHaveCount(0);
+  });
+
+  test('reloads launch-at-login switch from system state when settings opens', async ({ page }) => {
+    const api = await installSystemSettingsApiMock(page, { version: '0.1.1' });
+
+    await page.goto('/studio/capabilities?settings=system');
+
+    const launchAtLogin = page.getByRole('switch', { name: 'Launch at login' });
+    await expect(launchAtLogin).not.toBeChecked();
+
+    api.setExternalStartup(true);
+
+    await page.goto('/studio/capabilities');
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await page.goto('/studio/capabilities?settings=system');
+
+    await expect(launchAtLogin).toBeChecked();
+  });
+
+  test('refreshes launch-at-login switch on demand', async ({ page }) => {
+    const api = await installSystemSettingsApiMock(page, { version: '0.1.1' });
+
+    await page.goto('/studio/capabilities?settings=system');
+
+    const launchAtLogin = page.getByRole('switch', { name: 'Launch at login' });
+    await expect(launchAtLogin).not.toBeChecked();
+
+    api.setExternalStartup(true);
+    await page.getByRole('button', { name: 'Refresh' }).click();
+
+    await expect(launchAtLogin).toBeChecked();
   });
 });
