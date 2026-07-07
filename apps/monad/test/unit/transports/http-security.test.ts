@@ -1,6 +1,11 @@
 import { expect, test } from 'bun:test';
 
-import { resolveAllowedOrigin, tokenMatches } from '@/transports/http.ts';
+import {
+  createRemoteAccessState,
+  resolveAllowedOrigin,
+  resolveRemoteAccessConfig,
+  tokenMatches
+} from '@/transports/http.ts';
 
 // ── resolveAllowedOrigin ───────────────────────────────────────────────────────
 
@@ -44,4 +49,16 @@ test('tokenMatches: different-length strings do not match (no short-circuit)', (
 
 test('tokenMatches: empty vs empty', () => {
   expect(tokenMatches('', '')).toBe(true);
+});
+
+test('remote access state updates the active token without rebuilding the HTTP app', () => {
+  const state = createRemoteAccessState({ enabled: true, token: 'first' });
+
+  expect(resolveRemoteAccessConfig(state)).toEqual({ enabled: true, token: 'first' });
+
+  state.set({ enabled: true, token: 'second' });
+  expect(resolveRemoteAccessConfig(state)).toEqual({ enabled: true, token: 'second' });
+
+  state.set({ enabled: false, token: null });
+  expect(resolveRemoteAccessConfig(state)).toEqual({ enabled: false, token: null });
 });

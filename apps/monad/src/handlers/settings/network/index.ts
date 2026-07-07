@@ -1,9 +1,18 @@
 import type { MonadPaths } from '@monad/home';
-import type { NetworkSettings, SetNetworkSettingsRequest } from '@monad/protocol';
+import type {
+  NetworkRemoteUrl,
+  NetworkRuntimeStatus,
+  NetworkSettings,
+  ProbeNetworkRequest,
+  ProbeNetworkResponse,
+  SetNetworkSettingsRequest
+} from '@monad/protocol';
 import type { ConfigBus } from '@/services/config-bus.ts';
 
 import {
   generateRemoteToken,
+  getLanIp,
+  getTailscaleIp,
   isLoopbackDaemonHost,
   loadAll,
   loadAuth,
@@ -13,10 +22,36 @@ import {
 
 import { HandlerError } from '@/handlers/handler-error.ts';
 
+type ProbeFetch = (input: Request | URL | string, init?: RequestInit) => Promise<Response>;
+
+export interface NetworkModuleDeps {
+  currentRuntimeStatus?: () => NetworkRuntimeStatus | undefined;
+  networkAddresses?: () => { lan?: string; overlay?: string };
+  probeFetch?: ProbeFetch;
+}
+
+function remoteUrlsFor(
+  cfg: NonNullable<Awaited<ReturnType<typeof loadAll>>>,
+  addresses: { lan?: string; overlay?: string }
+): NetworkRemoteUrl[] {
+  if (!cfg.network.remoteAccess.enabled) return [];
+  const scheme = cfg.network.https.enabled === false ? 'http' : 'https';
+  const port = cfg.network.port;
+  return [
+    ...(addresses.lan ? [{ kind: 'lan' as const, label: 'LAN', url: `${scheme}://${addresses.lan}:${port}` }] : []),
+    ...(addresses.overlay
+      ? [{ kind: 'overlay' as const, label: 'Tailscale', url: `${scheme}://${addresses.overlay}:${port}` }]
+      : [])
+  ];
+}
+
 function toNetworkSettings(
   cfg: NonNullable<Awaited<ReturnType<typeof loadAll>>>,
-  restartRequired: boolean
+  restartRequired: boolean,
+  deps: NetworkModuleDeps = {}
 ): NetworkSettings {
+  const addresses = deps.networkAddresses?.() ?? { lan: getLanIp(), overlay: getTailscaleIp() };
+  const runtime = deps.currentRuntimeStatus?.();
   return {
     host: cfg.network.host,
     port: cfg.network.port,
@@ -27,15 +62,17 @@ function toNetworkSettings(
       token: cfg.network.remoteAccess.token
     },
     localHttpFallback: cfg.network.localHttpFallback,
+    remoteUrls: remoteUrlsFor(cfg, addresses),
+    ...(runtime ? { runtime } : {}),
     restartRequired
   };
 }
 
-export function createNetworkModule(paths: MonadPaths, configBus?: ConfigBus) {
+export function createNetworkModule(paths: MonadPaths, configBus?: ConfigBus, deps: NetworkModuleDeps = {}) {
   async function getNetworkSettings(): Promise<NetworkSettings> {
     const cfg = await loadAll(paths.config, paths.profile);
     if (!cfg) throw new Error('network settings: config.json missing');
-    return toNetworkSettings(cfg, false);
+    return toNetworkSettings(cfg, false, deps);
   }
 
   async function setNetworkSettings(req: SetNetworkSettingsRequest): Promise<NetworkSettings> {
@@ -90,8 +127,30 @@ export function createNetworkModule(paths: MonadPaths, configBus?: ConfigBus) {
     if (configBus) {
       await configBus.publish({ cfg, auth: await loadAuth(paths.auth) });
     }
-    return toNetworkSettings(cfg, true);
+    return toNetworkSettings(cfg, !configBus, deps);
   }
 
-  return { getNetworkSettings, setNetworkSettings };
+  async function probeNetwork(req: ProbeNetworkRequest): Promise<ProbeNetworkResponse> {
+    const fetchImpl = deps.probeFetch ?? fetch;
+    const start = performance.now();
+    try {
+      const url = new URL(req.url);
+      url.pathname = '/health';
+      url.search = '';
+      url.hash = '';
+      const res = await fetchImpl(url.toString(), {
+        headers: req.token ? { authorization: `Bearer ${req.token}` } : undefined,
+        signal: AbortSignal.timeout(5000)
+      });
+      return { ok: res.ok, status: res.status, latencyMs: Math.round(performance.now() - start) };
+    } catch (err) {
+      return {
+        ok: false,
+        latencyMs: Math.round(performance.now() - start),
+        error: err instanceof Error ? err.message : String(err)
+      };
+    }
+  }
+
+  return { getNetworkSettings, probeNetwork, setNetworkSettings };
 }

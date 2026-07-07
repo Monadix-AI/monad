@@ -28,6 +28,7 @@ import {
   offsetPaginationQuerySchema,
   offsetPaginationResponseSchema
 } from '../pagination.ts';
+import { networkRuntimeStatusSchema } from '../settings/network-settings.ts';
 import { httpUrlSchema } from '../url.ts';
 
 export type {
@@ -232,6 +233,7 @@ export const getHealthResponseSchema = z.object({
   status: z.literal('ok'),
   version: z.string(),
   warnings: z.array(z.string()).optional(),
+  networkRuntime: networkRuntimeStatusSchema.optional(),
   certStatus: z.enum(['active', 'disabled']).optional(),
   certFingerprint: z.string().optional(),
   certExpiry: z.string().optional(),

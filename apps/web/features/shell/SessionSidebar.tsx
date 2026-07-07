@@ -1,5 +1,6 @@
 'use client';
 
+import type { NetworkRuntimeStatus } from '@monad/protocol';
 import type { StudioSectionId } from '@/features/studio/sections';
 import type { RemoteDaemonConnection } from '@/lib/daemon-connections';
 
@@ -44,6 +45,7 @@ interface Props {
   daemonBaseUrl: string;
   daemonStatus: 'checking' | 'online' | 'offline';
   daemonVersion?: string;
+  networkRuntime?: NetworkRuntimeStatus;
   studioSection: StudioSectionId;
   shortcutModifierLabel?: string;
   showShortcutBadges?: boolean;
@@ -96,6 +98,7 @@ export function SessionSidebar({
   daemonBaseUrl,
   daemonStatus,
   daemonVersion,
+  networkRuntime,
   studioSection,
   shortcutModifierLabel = '⌘',
   showShortcutBadges,
@@ -569,6 +572,7 @@ export function SessionSidebar({
               daemonVersion={daemonStatus === 'online' ? daemonVersion : undefined}
               hasUpgrade={hasUpgrade}
               menuOpen={menuOpen}
+              networkRuntime={networkRuntime}
               onOpenChange={onDaemonMenuOpenChange}
               onOpenStudio={() => openMenuAction(onOpenStudio)}
               onOpenWorkspace={() => openMenuAction(onOpenWorkspace)}

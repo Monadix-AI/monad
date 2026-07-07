@@ -6,6 +6,7 @@ import type {
   IndexerStatus,
   McpServerStatus,
   MemoryBackendId,
+  NetworkRuntimeStatus,
   SetMem0ModelsRequest,
   SetMemoryGraphRequest,
   SkillListInstance,
@@ -88,6 +89,8 @@ export interface DaemonHandlerDeps extends SessionDeps, ModelDeps {
   skillInstances?: SkillListInstance[];
   /** Daemon-level warnings surfaced through /health (e.g. TLS unavailable). */
   daemonWarnings?: string[];
+  /** Live TCP listener state surfaced through /health for operator diagnostics. */
+  getNetworkRuntimeStatus?: () => NetworkRuntimeStatus | undefined;
   /** SHA-256 fingerprint of the active TLS cert, surfaced through /health for TOFU verification. */
   certFingerprint?: string;
   /** ISO-8601 expiry of the active TLS cert, surfaced through /health so clients can warn before it expires. */

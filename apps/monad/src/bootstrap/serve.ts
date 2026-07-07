@@ -4,9 +4,12 @@
 // the daemon begins serving.
 
 import type { MonadConfig, MonadPaths } from '@monad/home';
+import type { NetworkRuntimeStatus } from '@monad/protocol';
 import type { ChannelService } from '@/channels/channel.ts';
 import type { createDaemonHandlers } from '@/handlers/daemon-handlers/index.ts';
+import type { ConfigBus } from '@/services/config-bus.ts';
 import type { I18nService } from '@/services/i18n.ts';
+import type { MutableRemoteAccessState } from '@/transports/http.ts';
 
 import { chmod, unlink } from 'node:fs/promises';
 import { resolveDaemonNetwork, validateDaemonNetworkSecurity } from '@monad/home';
@@ -20,7 +23,7 @@ import { shutdownBus } from '@/infra/shutdown-bus.ts';
 import { MoService } from '@/services/mo.ts';
 import { createMoController } from '@/transports/http/mo/controller.ts';
 import { startStdioTransport } from '@/transports/stdio.ts';
-import { createHttpTransport } from '../transports/http.ts';
+import { createHttpTransport, createRemoteAccessState } from '../transports/http.ts';
 
 // Cap buffered request bodies. The largest legitimate body is a sendMessage whose text is bounded
 // by MESSAGE_TEXT_MAX (1 MiB) plus JSON envelope/escaping overhead; 4 MiB leaves headroom while
@@ -75,12 +78,24 @@ export interface ServeDeps {
   developerMode: boolean;
   i18n: I18nService;
   channelService: ChannelService;
+  configBus?: ConfigBus;
+  onNetworkRuntimeStatusReady?: (status: () => NetworkRuntimeStatus) => void;
   flags: { devMode: boolean; devSilent: boolean; stdoutRpc: boolean; stdioMode: boolean; useMock: boolean };
   beforeListen?: (app: ReturnType<typeof createHttpTransport>) => void;
   openaiCompatConfig?: () => Promise<{ enabled: boolean; token?: string }>;
 }
 
 export type TcpListenerPlan = { scheme: 'https' | 'http'; host: string; port: number };
+type TcpServer = { stop(force?: boolean): void };
+
+export interface DaemonTcpRuntimeConfig {
+  host: string;
+  https: MonadConfig['network']['https'];
+  remoteAccess: MonadConfig['network']['remoteAccess'];
+  port: number;
+  localHttpFallback: MonadConfig['network']['localHttpFallback'];
+  tlsCert?: { certPath: string; keyPath: string };
+}
 
 function hostForUrl(host: string): string {
   const displayHost = host === '0.0.0.0' ? 'localhost' : host;
@@ -141,6 +156,139 @@ export function planTcpListeners(opts: {
   return listeners;
 }
 
+function listenerKey(listener: TcpListenerPlan): string {
+  return `${listener.scheme}:${listener.host}:${listener.port}`;
+}
+
+function sameListenerPlan(a: TcpListenerPlan[], b: TcpListenerPlan[]): boolean {
+  return (
+    a.length === b.length && a.every((listener, i) => listenerKey(listener) === listenerKey(b[i] as TcpListenerPlan))
+  );
+}
+
+function stopTcpServers(servers: TcpServer[]): void {
+  for (const server of servers) server.stop(true);
+}
+
+export function createDaemonTcpRuntime(opts: {
+  app: ReturnType<typeof createHttpTransport>;
+  initial: DaemonTcpRuntimeConfig;
+  remoteAccessState?: MutableRemoteAccessState;
+  listenHttps?: (
+    app: ReturnType<typeof createHttpTransport>,
+    listener: TcpListenerPlan,
+    config: DaemonTcpRuntimeConfig
+  ) => TcpServer;
+  listenHttp?: (
+    app: ReturnType<typeof createHttpTransport>,
+    listener: TcpListenerPlan,
+    config: DaemonTcpRuntimeConfig
+  ) => TcpServer;
+}) {
+  const remoteAccessState = opts.remoteAccessState;
+  const listenHttps =
+    opts.listenHttps ??
+    ((app, listener, config) => {
+      if (!config.tlsCert) throw new Error('monad: internal error — HTTPS listener requires a TLS certificate');
+      const live = app.listen(
+        buildDaemonTcpListenOptions({
+          host: listener.host,
+          port: listener.port,
+          tlsCert: config.tlsCert
+        }) as Parameters<typeof app.listen>[0]
+      ) as unknown as { server?: TcpServer };
+      if (!live.server) throw new Error('monad: HTTPS listener did not expose a server handle');
+      return live.server;
+    });
+  const listenHttp =
+    opts.listenHttp ??
+    ((app, listener) =>
+      Bun.serve({
+        ...buildDaemonTcpListenOptions({ host: listener.host, port: listener.port }),
+        fetch: (req: Request) => app.handle(req)
+      } as Parameters<typeof Bun.serve>[0]));
+
+  let config = opts.initial;
+  let listeners = planTcpListeners(config);
+  let servers: TcpServer[] = [];
+  let lastAppliedAt: string | undefined;
+  let lastError: NetworkRuntimeStatus['lastError'];
+
+  const status = (): NetworkRuntimeStatus => ({
+    listeners,
+    remoteAccess: {
+      enabled: remoteAccessState?.current()?.enabled ?? config.remoteAccess.enabled,
+      tokenRevision: remoteAccessState?.tokenRevision() ?? 0
+    },
+    ...(lastAppliedAt ? { lastAppliedAt } : {}),
+    ...(lastError ? { lastError } : {})
+  });
+
+  const start = (next: DaemonTcpRuntimeConfig): { listeners: TcpListenerPlan[]; servers: TcpServer[] } => {
+    const nextListeners = planTcpListeners(next);
+    const nextServers: TcpServer[] = [];
+    try {
+      for (const listener of nextListeners) {
+        nextServers.push(
+          listener.scheme === 'https' ? listenHttps(opts.app, listener, next) : listenHttp(opts.app, listener, next)
+        );
+      }
+      return { listeners: nextListeners, servers: nextServers };
+    } catch (err) {
+      stopTcpServers(nextServers);
+      throw err;
+    }
+  };
+
+  const initial = start(config);
+  listeners = initial.listeners;
+  servers = initial.servers;
+  remoteAccessState?.set(config.remoteAccess);
+  lastAppliedAt = new Date().toISOString();
+
+  return {
+    listeners: () => listeners,
+    status,
+    async apply(next: DaemonTcpRuntimeConfig): Promise<void> {
+      const nextListeners = planTcpListeners(next);
+      remoteAccessState?.set(next.remoteAccess);
+      if (sameListenerPlan(listeners, nextListeners)) {
+        config = next;
+        listeners = nextListeners;
+        lastAppliedAt = new Date().toISOString();
+        lastError = undefined;
+        return;
+      }
+
+      const previousConfig = config;
+      const previousListeners = listeners;
+      const previousServers = servers;
+      stopTcpServers(previousServers);
+      try {
+        const started = start(next);
+        config = next;
+        listeners = started.listeners;
+        servers = started.servers;
+        lastAppliedAt = new Date().toISOString();
+        lastError = undefined;
+      } catch (err) {
+        lastError = { at: new Date().toISOString(), message: err instanceof Error ? err.message : String(err) };
+        remoteAccessState?.set(previousConfig.remoteAccess);
+        const restored = start(previousConfig);
+        config = previousConfig;
+        listeners = previousListeners;
+        servers = restored.servers;
+        throw err;
+      }
+    },
+    stop(): void {
+      stopTcpServers(servers);
+      servers = [];
+      listeners = [];
+    }
+  };
+}
+
 export async function serveDaemon(deps: ServeDeps): Promise<void> {
   const {
     handlers,
@@ -158,6 +306,8 @@ export async function serveDaemon(deps: ServeDeps): Promise<void> {
     developerMode,
     i18n,
     channelService,
+    configBus,
+    onNetworkRuntimeStatusReady,
     flags,
     openaiCompatConfig
   } = deps;
@@ -166,7 +316,12 @@ export async function serveDaemon(deps: ServeDeps): Promise<void> {
   const activeDeveloperMode = resolveServeDeveloperMode({ configured: developerMode, devMode, devSilent });
   const developerDocs = shouldEnableDeveloperDocs({ developerMode: activeDeveloperMode, stdoutRpc });
 
-  const httpApp = createHttpTransport(handlers, { docs: developerDocs, remoteAccess, openaiCompatConfig });
+  const remoteAccessState = createRemoteAccessState(remoteAccess);
+  const httpApp = createHttpTransport(handlers, {
+    docs: developerDocs,
+    remoteAccess: remoteAccessState,
+    openaiCompatConfig
+  });
 
   // Mo (the desktop sprite) is launched/quit through the daemon and dies with it: the exit handler
   // runs on the same process.exit(0) that gracefulShutdown triggers for SIGINT/SIGTERM below.
@@ -205,26 +360,28 @@ export async function serveDaemon(deps: ServeDeps): Promise<void> {
     return;
   }
 
-  if (https.enabled && !tlsCert) throw new Error('monad: internal error — HTTPS listener requires a TLS certificate');
-  const tcpListeners = planTcpListeners({ host, https, remoteAccess, port, localHttpFallback });
-  const tcpServers: Array<{ stop(force?: boolean): void }> = [];
-  for (const listener of tcpListeners) {
-    if (listener.scheme === 'https') {
-      httpApp.listen(
-        buildDaemonTcpListenOptions({ host: listener.host, port: listener.port, tlsCert }) as Parameters<
-          typeof httpApp.listen
-        >[0]
-      );
-    } else {
-      const server = Bun.serve({
-        ...buildDaemonTcpListenOptions({ host: listener.host, port: listener.port }),
-        fetch: (req: Request) => httpApp.handle(req)
-      } as Parameters<typeof Bun.serve>[0]);
-      tcpServers.push(server);
-    }
-  }
+  const tcpRuntime = createDaemonTcpRuntime({
+    app: httpApp,
+    remoteAccessState,
+    initial: { host, https, remoteAccess, port, localHttpFallback, tlsCert }
+  });
+  onNetworkRuntimeStatusReady?.(() => tcpRuntime.status());
   process.on('exit', () => {
-    for (const server of tcpServers) server.stop(true);
+    tcpRuntime.stop();
+  });
+  configBus?.subscribe(async ({ cfg }) => {
+    const endpoint = resolveDaemonNetwork({ network: cfg.network, env: Bun.env });
+    await tcpRuntime.apply({
+      host: endpoint.bindHost,
+      port: endpoint.port,
+      https: cfg.network.https,
+      remoteAccess: cfg.network.remoteAccess,
+      localHttpFallback: {
+        enabled: cfg.network.localHttpFallback.enabled,
+        port: endpoint.localHttpFallback?.port ?? cfg.network.localHttpFallback.port
+      },
+      tlsCert
+    });
   });
 
   // Same Elysia app, second listener on a Unix domain socket. Local clients (the CLI) reach the daemon

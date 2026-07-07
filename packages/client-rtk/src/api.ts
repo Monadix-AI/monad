@@ -237,7 +237,11 @@ import {
   useTestCredentialMutation,
   useTranscribeAudioMutation
 } from './endpoints/settings/model/index.ts';
-import { useGetNetworkQuery, useSetNetworkMutation } from './endpoints/settings/network/index.ts';
+import {
+  useGetNetworkQuery,
+  useProbeNetworkMutation,
+  useSetNetworkMutation
+} from './endpoints/settings/network/index.ts';
 import { useGetObscuraQuery, useSetObscuraMutation } from './endpoints/settings/obscura/index.ts';
 import { useGetOpenaiCompatQuery, useSetOpenaiCompatMutation } from './endpoints/settings/openai-compat/index.ts';
 import {
@@ -452,6 +456,7 @@ export {
   useOpenDraftAttachmentMutation,
   usePickDirectoryMutation,
   usePreviewExternalAgentSettingsImportMutation,
+  useProbeNetworkMutation,
   useProvenanceQuery,
   useProviderCatalogQuery,
   usePutMemoryCoreMutation,

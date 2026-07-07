@@ -1,10 +1,12 @@
 'use client';
 
-import type { SystemUpgradeStatus } from '@monad/protocol';
+import type { NetworkRuntimeStatus, SystemUpgradeStatus } from '@monad/protocol';
 import type { useT } from '@/components/I18nProvider';
 
 import {
+  Alert01Icon,
   CircleCheckIcon,
+  GlobeIcon,
   HouseIcon,
   LoaderPinwheelIcon,
   PlusSignIcon,
@@ -138,6 +140,7 @@ export function DaemonMenu({
   daemonStatusText,
   daemonVersion,
   hasUpgrade,
+  networkRuntime,
   menuOpen,
   onOpenChange,
   onOpenStudio,
@@ -156,6 +159,7 @@ export function DaemonMenu({
   daemonStatusText: string;
   daemonVersion?: string;
   hasUpgrade?: boolean;
+  networkRuntime?: NetworkRuntimeStatus;
   menuOpen: boolean;
   onOpenChange: (open: boolean) => void;
   onOpenStudio: () => void;
@@ -182,6 +186,19 @@ export function DaemonMenu({
   const hasConnectionChoices = remoteConnections.length > 0;
   const activeConnectionMeta = daemonStatus === 'online' ? 'Connected' : daemonStatusText;
   const activeConnectionVersion = daemonStatus === 'online' ? daemonVersion : undefined;
+  const runtimeIcon = networkRuntime?.lastError
+    ? Alert01Icon
+    : networkRuntime?.remoteAccess.enabled
+      ? GlobeIcon
+      : undefined;
+  const runtimeIconClass = networkRuntime?.lastError
+    ? 'text-destructive'
+    : networkRuntime?.remoteAccess.enabled
+      ? 'text-accent-blue'
+      : 'text-muted-foreground';
+  const runtimeListeners = networkRuntime?.listeners.map(
+    (listener) => `${listener.scheme}://${listener.host}:${listener.port}`
+  );
   const upgradeStage = upgradeStatus?.stage ?? 'idle';
   const upgradeActive = upgradeStatusIsActive(upgradeStage) || isStartingUpgrade;
   const upgradeLabel = upgradeActive ? upgradeDisplayLabel(upgradeStage) : 'Update';
@@ -263,6 +280,35 @@ export function DaemonMenu({
                   icon={ServerStack01Icon}
                 />
               </div>
+              {runtimeIcon ? (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span
+                      className="grid size-5 shrink-0 place-items-center rounded-full border border-border bg-background"
+                      data-testid="daemon-runtime-status"
+                    >
+                      <HugeiconsIcon
+                        className={cn('size-3.5', runtimeIconClass)}
+                        icon={runtimeIcon}
+                      />
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent className="max-w-72">
+                    <div className="flex flex-col gap-1 text-xs">
+                      <span className="font-medium">{t('web.daemon.runtimeStatus')}</span>
+                      {runtimeListeners?.length ? <span>{runtimeListeners.join(', ')}</span> : null}
+                      <span>
+                        {t('web.daemon.tokenRevision', {
+                          revision: networkRuntime?.remoteAccess.tokenRevision ?? 0
+                        })}
+                      </span>
+                      {networkRuntime?.lastError ? (
+                        <span className="text-destructive">{networkRuntime.lastError.message}</span>
+                      ) : null}
+                    </div>
+                  </TooltipContent>
+                </Tooltip>
+              ) : null}
               {showConnectionLabel ? (
                 <span className="min-w-0 flex-1 font-normal leading-tight">
                   <span className="block truncate text-ui">{activeConnection.label}</span>

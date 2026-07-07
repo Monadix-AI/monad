@@ -40,12 +40,13 @@ export function pushBounded(ws: StreamWs, state: ConnectionState, msg: unknown):
 export function createStreamController(
   handlers: ReturnType<typeof createDaemonHandlers>,
   connections: Map<string, ConnectionState>,
-  remoteEnabled: boolean
+  remoteEnabled: boolean | (() => boolean)
 ) {
   return new Elysia().ws('/stream', {
     // Guards against CSWSH + DNS rebinding (browsers can open ws:// cross-origin).
     beforeHandle({ request }: { request: Request }) {
-      if (!isBrowserRequestAllowed(request, { remoteEnabled })) {
+      const enabled = typeof remoteEnabled === 'function' ? remoteEnabled() : remoteEnabled;
+      if (!isBrowserRequestAllowed(request, { remoteEnabled: enabled })) {
         return new Response('Forbidden origin', { status: 403 });
       }
     },
