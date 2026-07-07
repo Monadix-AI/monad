@@ -2,6 +2,7 @@ export * from './config/index.ts';
 export * from './connection.ts';
 export * from './init.ts';
 export * from './init-status.ts';
+export * from './network-endpoints.ts';
 export * from './open-url.ts';
 export * from './paths.ts';
 export * from './pick-directory.ts';

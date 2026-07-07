@@ -10,6 +10,7 @@ import type { I18nService } from '@/services/i18n.ts';
 
 import { chmod, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
+import { resolveDaemonNetwork, validateDaemonNetworkSecurity } from '@monad/home';
 import { logger } from '@monad/logger';
 import { MONAD_VERSION } from '@monad/protocol';
 import { Elysia } from 'elysia';
@@ -33,7 +34,9 @@ export interface ServeDeps {
   paths: MonadPaths;
   host: string;
   port: number;
+  https: MonadConfig['network']['https'];
   remoteAccess: MonadConfig['network']['remoteAccess'];
+  localHttpFallback: MonadConfig['network']['localHttpFallback'];
   moBinaryPath?: string;
   /** Whether to auto-launch Mo on startup (config.json `mo.enabled`, default on). */
   moEnabled: boolean;
@@ -48,13 +51,47 @@ export interface ServeDeps {
   openaiCompatConfig?: () => Promise<{ enabled: boolean; token?: string }>;
 }
 
+export type TcpListenerPlan = { scheme: 'https' | 'http'; host: string; port: number };
+
+export function formatHttpsDisabledWarnings(opts: { remoteAccessEnabled: boolean }): string[] {
+  const warnings = ['WARNING: HTTPS is disabled by network.https.enabled=false. Daemon TCP traffic is plain HTTP.'];
+  if (opts.remoteAccessEnabled) {
+    warnings.push(
+      'WARNING: remote access is enabled while HTTPS is disabled. Remote daemon traffic is exposed over plain HTTP.'
+    );
+  }
+  return warnings;
+}
+
+export function daemonLoopbackUrl(opts: { https: MonadConfig['network']['https']; port: number }): string {
+  return resolveDaemonNetwork({ network: { https: opts.https, port: opts.port } }).localUrl;
+}
+
+export function planTcpListeners(opts: {
+  host: string;
+  https: MonadConfig['network']['https'];
+  remoteAccess: MonadConfig['network']['remoteAccess'];
+  port: number;
+  localHttpFallback: MonadConfig['network']['localHttpFallback'];
+}): TcpListenerPlan[] {
+  validateDaemonNetworkSecurity({ host: opts.host, https: opts.https, remoteAccess: opts.remoteAccess });
+  const primaryScheme = opts.https.enabled ? 'https' : 'http';
+  const listeners: TcpListenerPlan[] = [{ scheme: primaryScheme, host: opts.host, port: opts.port }];
+  if (opts.localHttpFallback.enabled) {
+    listeners.push({ scheme: 'http', host: '127.0.0.1', port: opts.localHttpFallback.port });
+  }
+  return listeners;
+}
+
 export async function serveDaemon(deps: ServeDeps): Promise<void> {
   const {
     handlers,
     paths,
     host,
     port,
+    https,
     remoteAccess,
+    localHttpFallback,
     moBinaryPath,
     moEnabled,
     setMoEnabled,
@@ -86,7 +123,12 @@ export async function serveDaemon(deps: ServeDeps): Promise<void> {
   // stays a runtime-only mutation (routes still serve on TCP + unix).
   // config.json `mo.binaryPath` overrides; otherwise auto-locate the bundled Mo. `||` (not `??`) so
   // an empty string in config doesn't suppress auto-location.
-  const moService = new MoService(moBinaryPath?.trim() || MoService.bundledPath(), paths.sock, port);
+  const moService = new MoService(
+    moBinaryPath?.trim() || MoService.bundledPath(),
+    paths.sock,
+    port,
+    https.enabled ? 'https' : 'http'
+  );
   process.on('exit', () => moService.stop());
   // Web UI URL Mo opens when clicked (also printed in the ready banner below): in dev, the separate
   // Next server on WEB_PORT; otherwise the daemon serves the SPA at its own origin.
@@ -94,7 +136,7 @@ export async function serveDaemon(deps: ServeDeps): Promise<void> {
   const webUiUrl =
     isDev && Bun.env.WEB_PORT
       ? `http://localhost:${Bun.env.WEB_PORT}`
-      : `${tlsCert ? 'https' : 'http'}://${host === '0.0.0.0' ? 'localhost' : host}:${port}/`;
+      : `${https.enabled ? 'https' : 'http'}://${host === '0.0.0.0' ? 'localhost' : host}:${port}/`;
   (httpApp as unknown as Elysia).use(
     createMoController(createMoModule(handlers.session, moService, webUiUrl, setMoEnabled))
   );
@@ -109,11 +151,30 @@ export async function serveDaemon(deps: ServeDeps): Promise<void> {
     return;
   }
 
-  httpApp.listen({
-    hostname: host,
-    port,
-    maxRequestBodySize: MAX_REQUEST_BODY_BYTES,
-    ...(tlsCert ? { tls: { key: Bun.file(tlsCert.keyPath), cert: Bun.file(tlsCert.certPath) } } : {})
+  if (https.enabled && !tlsCert) throw new Error('monad: internal error — HTTPS listener requires a TLS certificate');
+  const tcpListeners = planTcpListeners({ host, https, remoteAccess, port, localHttpFallback });
+  const tcpServers: Array<{ stop(force?: boolean): void }> = [];
+  for (const listener of tcpListeners) {
+    const options = {
+      hostname: listener.host,
+      port: listener.port,
+      maxRequestBodySize: MAX_REQUEST_BODY_BYTES,
+      ...(listener.scheme === 'https' && tlsCert
+        ? { tls: { key: Bun.file(tlsCert.keyPath), cert: Bun.file(tlsCert.certPath) } }
+        : {})
+    };
+    if (listener.scheme === 'https') {
+      httpApp.listen(options);
+    } else {
+      const server = Bun.serve({
+        ...options,
+        fetch: (req: Request) => httpApp.handle(req)
+      });
+      tcpServers.push(server);
+    }
+  }
+  process.on('exit', () => {
+    for (const server of tcpServers) server.stop(true);
   });
 
   // Same Elysia app, second listener on a Unix domain socket. Local clients (the CLI) reach the daemon
@@ -161,14 +222,22 @@ export async function serveDaemon(deps: ServeDeps): Promise<void> {
     });
   }
 
-  const scheme = tlsCert ? 'https' : 'http';
   const mockTag = useMock ? ' (mock model)' : '';
-  const docsTag = enableDocs ? ` docs:${scheme}://${host}:${port}/docs` : '';
+  const primaryScheme = https.enabled ? 'https' : 'http';
+  const docsTag = enableDocs ? ` docs:${primaryScheme}://${host}:${port}/docs` : '';
   // Only advertise the Unix socket when it was actually bound — listing `unix:<path>` when the bind
   // was skipped/failed would be misleading (no listener exists at that path).
   const unixTag = unixBound ? ` unix:${sockPath}` : '';
+  const fallbackTag = localHttpFallback.enabled ? ` local-http:http://127.0.0.1:${localHttpFallback.port}` : '';
   printBanner(MONAD_VERSION, useMock);
-  logger.info(`monad daemon listening on ${scheme}://${host}:${port}${unixTag}${mockTag}${docsTag}`);
+  if (!https.enabled) {
+    const warnings = formatHttpsDisabledWarnings({ remoteAccessEnabled: remoteAccess.enabled });
+    process.stdout.write(`\n${warnings.join('\n')}\n\n`);
+    for (const warning of warnings) logger.warn(warning);
+  }
+  logger.info(
+    `monad daemon listening on ${primaryScheme}://${host}:${port}${fallbackTag}${unixTag}${mockTag}${docsTag}`
+  );
   if (tlsFingerprint) {
     logger.info(`monad: TLS cert SHA-256 fingerprint: ${tlsFingerprint}`);
   }

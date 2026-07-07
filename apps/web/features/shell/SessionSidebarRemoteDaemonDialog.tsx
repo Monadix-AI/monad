@@ -130,7 +130,7 @@ export function RemoteDaemonDialog({
             onKeyDown={(event) => {
               if (event.key === 'Enter') void handleConnect();
             }}
-            placeholder="http://192.168.1.100:52749"
+            placeholder="https://192.168.1.100:52749"
             value={url}
           />
           <p

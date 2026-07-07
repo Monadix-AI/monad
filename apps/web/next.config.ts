@@ -11,9 +11,9 @@ const REPO_ROOT = resolve(import.meta.dirname, '../..');
 // Export (NEXT_OUTPUT=export): pure static SPA; the compiled binary's startWeb() does the proxy.
 const isExport = Bun.env.NEXT_OUTPUT === 'export';
 
-function readDaemonPort(): string {
+function readDaemonEndpoint(): { port: string; scheme: 'https' | 'http' } {
+  let scheme: 'https' | 'http' = 'https';
   const envPort = Number(Bun.env.MONAD_PORT);
-  if (envPort) return String(envPort);
 
   const configPaths = [
     Bun.env.MONAD_HOME ? join(Bun.env.MONAD_HOME, 'configs', 'config.json') : undefined,
@@ -24,12 +24,14 @@ function readDaemonPort(): string {
   for (const configPath of configPaths) {
     try {
       const raw = readFileSync(configPath, 'utf-8');
-      const port = (JSON.parse(raw) as { network?: { port?: number } })?.network?.port;
-      if (port) return String(port);
+      const network = (JSON.parse(raw) as { network?: { https?: { enabled?: boolean }; port?: number } })?.network;
+      if (network?.https?.enabled === false) scheme = 'http';
+      const port = envPort || network?.port;
+      if (port) return { port: String(port), scheme };
     } catch {}
   }
 
-  return '52749';
+  return { port: String(envPort || 52749), scheme };
 }
 
 // In static-export (release) builds the SPA is co-served with the daemon on the same port via
@@ -39,7 +41,7 @@ function readDaemonPort(): string {
 //
 // In dev mode the web dev server (next dev, :3000) is separate from the daemon (:52xxx), so we
 // still need to bake the port so the browser can reach the daemon directly for WebSocket upgrades.
-const MONAD_DAEMON_PORT = isExport ? '' : readDaemonPort();
+const MONAD_DAEMON_ENDPOINT = isExport ? { port: '', scheme: 'https' as const } : readDaemonEndpoint();
 
 const DEV_TOOL_PORTS = isExport
   ? {
@@ -84,7 +86,8 @@ const nextConfig: NextConfig = {
   // /api proxy and connect to the daemon's WebSocket endpoint directly.
   env: {
     NEXT_PUBLIC_MONAD_API_BASE: isExport ? '' : '/api',
-    NEXT_PUBLIC_MONAD_DAEMON_PORT: String(MONAD_DAEMON_PORT),
+    NEXT_PUBLIC_MONAD_DAEMON_PORT: MONAD_DAEMON_ENDPOINT.port,
+    NEXT_PUBLIC_MONAD_DAEMON_SCHEME: MONAD_DAEMON_ENDPOINT.scheme,
     ...DEV_TOOL_PORTS
   }
 };

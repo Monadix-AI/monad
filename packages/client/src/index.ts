@@ -27,7 +27,7 @@ import { createNativeCliObservationFolder } from './native-cli-observation-fold.
 import { createMonadTreaty, makeLoopbackHttpsFetcher, makeUnixFetcher } from './treaty.ts';
 
 export interface MonadClientOptions {
-  /** Daemon base URL, e.g. "http://127.0.0.1:52749". */
+  /** Daemon base URL, e.g. "https://127.0.0.1:52749". */
   baseUrl: string;
   /** Bearer token for the control API (header only — never in the URL). */
   token?: string;
@@ -96,7 +96,9 @@ export class MonadClient {
     this.baseUrl = opts.baseUrl.replace(/\/$/, '');
     this.token = opts.token;
     this.fetchImpl =
-      makeUnixFetcher(opts.unixSocket) ?? makeLoopbackHttpsFetcher(opts.baseUrl) ?? globalThis.fetch.bind(globalThis);
+      makeUnixFetcher(opts.unixSocket, opts.baseUrl) ??
+      makeLoopbackHttpsFetcher(opts.baseUrl) ??
+      globalThis.fetch.bind(globalThis);
     this.wsBase = (opts.wsBaseUrl ?? opts.baseUrl).replace(/\/$/, '');
     this.treaty = createMonadTreaty(opts, opts.treatyConfig);
   }
@@ -451,5 +453,5 @@ export type { MonadTreaty, MonadTreatyConfig, MonadTreatyOptions } from './treat
 export type { VersionCheckResult } from './version.ts';
 export type { SendMessageResponse };
 
-export { createMonadTreaty } from './treaty.ts';
+export { createMonadTreaty, makeLoopbackHttpsFetcher } from './treaty.ts';
 export { CLIENT_VERSION, checkDaemonVersion, isVersionCompatible } from './version.ts';

@@ -97,8 +97,8 @@ export function devCommand(): string[] {
   ];
 }
 
-function portUrl(port: string | undefined): string {
-  return port ? `http://127.0.0.1:${port}` : unset;
+function portUrl(port: string | undefined, scheme: 'http' | 'https' = 'http'): string {
+  return port ? `${scheme}://127.0.0.1:${port}` : unset;
 }
 
 function valueOrUnset(value: string | undefined): string {
@@ -147,9 +147,12 @@ export function buildDevPrepSummary(
     '',
     strong('Monad dev prep', useColor),
     label('Ports', useColor),
-    `  ${muted('Daemon API', useColor)}        ${portUrl(env.MONAD_PORT)}`,
+    `  ${muted('Daemon API', useColor)}        ${portUrl(env.MONAD_PORT, 'https')}`,
+    `  ${muted('Local HTTP', useColor)}        ${portUrl(env.MONAD_HTTP_PORT)}`,
     `  ${muted('Web app', useColor)}           ${portUrl(env.PORT ?? env.WEB_PORT)}`,
     `  ${muted('KV inspector', useColor)}      ${portUrl(env.MONAD_KV_UI_PORT)}`,
+    label('Runtime URL priority', useColor),
+    `  ${muted('Daemon proxy', useColor)}      MONAD_URL > config network.host/https/port`,
     label('Runtime', useColor),
     `  ${muted('Bun transpiler', useColor)}    ${valueOrUnset(env.BUN_RUNTIME_TRANSPILER_CACHE_PATH)}`,
     label('Tasks', useColor),
@@ -229,7 +232,7 @@ export function cleanupDevProcess(proc: DevProcess, signal: DevSignal = 'SIGTERM
 
 function killPortSurvivors(env: Record<string, string>): void {
   if (process.platform === 'win32') return;
-  const ports = [env.WEB_PORT, env.MONAD_PORT].filter(Boolean);
+  const ports = [env.WEB_PORT, env.MONAD_PORT, env.MONAD_HTTP_PORT].filter(Boolean);
   for (const port of ports) {
     const result = Bun.spawnSync(['lsof', '-ti', `:${port}`], { stdout: 'pipe', stderr: 'pipe' });
     const pids = result.stdout.toString().trim().split('\n').filter(Boolean);

@@ -1,12 +1,14 @@
 #!/usr/bin/env bun
 /// <reference types="bun" />
+import { resolveClientConn } from '@monad/home';
+
 type Json = Record<string, unknown>;
 
 function usage(): never {
   process.stderr.write(
     `${[
       'Usage:',
-      '  bun run smoke:native-cli-managed -- --agent <name> --cwd <project-dir> [--server http://127.0.0.1:52749]',
+      '  bun run smoke:native-cli-managed -- --agent <name> --cwd <project-dir> [--server https://127.0.0.1:52749]',
       '',
       'This is an opt-in smoke test for already-installed provider CLIs.',
       'It does not install provider CLIs, perform provider login, or bypass provider-owned approvals.'
@@ -20,8 +22,28 @@ function flag(name: string): string | undefined {
   return index === -1 ? undefined : process.argv[index + 1];
 }
 
+function isLoopbackHttpsUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return (
+      parsed.protocol === 'https:' &&
+      (parsed.hostname === 'localhost' ||
+        parsed.hostname === '127.0.0.1' ||
+        parsed.hostname === '::1' ||
+        parsed.hostname === '[::1]')
+    );
+  } catch {
+    return false;
+  }
+}
+
 async function request<T extends Json>(server: string, path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${server}${path}`, init);
+  const url = `${server}${path}`;
+  const fetchOpts = {
+    ...init,
+    ...(isLoopbackHttpsUrl(url) ? { tls: { rejectUnauthorized: false } } : {})
+  } as RequestInit & { tls?: { rejectUnauthorized: boolean } };
+  const res = await fetch(url, fetchOpts);
   const text = await res.text();
   const data = text ? (JSON.parse(text) as T) : ({} as T);
   if (!res.ok) {
@@ -33,7 +55,7 @@ async function request<T extends Json>(server: string, path: string, init?: Requ
 
 const agent = flag('agent') ?? usage();
 const cwd = flag('cwd') ?? usage();
-const server = flag('server') ?? Bun.env.MONAD_SERVER_URL ?? 'http://127.0.0.1:52749';
+const server = flag('server') ?? Bun.env.MONAD_SERVER_URL ?? (await resolveClientConn()).baseUrl;
 
 const session = await request<{ sessionId: string }>(server, '/v1/sessions', {
   method: 'POST',

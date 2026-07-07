@@ -273,7 +273,9 @@ static NSString *const kMoFrameName = @"MoWindow";  // NSUserDefaults key for th
     return;
   }
 
-  NSString *urlStr = [NSString stringWithFormat:@"ws://127.0.0.1:%d/v1/stream", port];
+  const char *schemeStr = getenv("MO_DAEMON_SCHEME");
+  BOOL plainHttp = schemeStr && strcmp(schemeStr, "http") == 0;
+  NSString *urlStr = [NSString stringWithFormat:@"%s://127.0.0.1:%d/v1/stream", plainHttp ? "ws" : "wss", port];
   NSURL *url = [NSURL URLWithString:urlStr];
 
   NSURLSessionConfiguration *cfg = [NSURLSessionConfiguration defaultSessionConfiguration];
@@ -332,6 +334,21 @@ static NSString *const kMoFrameName = @"MoWindow";  // NSUserDefaults key for th
 }
 
 // NSURLSessionWebSocketDelegate: fires on the main queue (delegateQueue above).
+- (void)URLSession:(NSURLSession *)session
+    didReceiveChallenge:(NSURLAuthenticationChallenge *)challenge
+      completionHandler:(void (^)(NSURLSessionAuthChallengeDisposition disposition, NSURLCredential *credential))completionHandler {
+  (void)session;
+  NSString *method = challenge.protectionSpace.authenticationMethod;
+  NSString *host = challenge.protectionSpace.host;
+  SecTrustRef trust = challenge.protectionSpace.serverTrust;
+  BOOL localDaemon = [host isEqualToString:@"127.0.0.1"] || [host isEqualToString:@"localhost"];
+  if ([method isEqualToString:NSURLAuthenticationMethodServerTrust] && localDaemon && trust) {
+    completionHandler(NSURLSessionAuthChallengeUseCredential, [NSURLCredential credentialForTrust:trust]);
+    return;
+  }
+  completionHandler(NSURLSessionAuthChallengePerformDefaultHandling, nil);
+}
+
 - (void)URLSession:(NSURLSession *)session
      webSocketTask:(NSURLSessionWebSocketTask *)webSocketTask
     didOpenWithProtocol:(NSString *)protocol {

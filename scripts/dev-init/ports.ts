@@ -1,8 +1,8 @@
 // ── Per-worktree dev port assignment ─────────────────────────────────────────
 // The daemon binds a TCP port unconditionally (the WS push channel is TCP-only), so two worktrees
-// running `bun dev` at once would both grab the default 52749/3000/6480/4983 and the second fails
+// running `bun dev` at once would both grab the default 52749/52780/3000/6480/4983 and the second fails
 // with EADDRINUSE. A stable offset derived from the worktree path gives each checkout its own ports;
-// both daemon and clients read MONAD_PORT, so they stay in sync.
+// daemon and clients read these env vars, so they stay in sync.
 
 /** Stable 0–999 offset from a seed string (FNV-1a/32). Same path → same ports, always. */
 export function portOffset(seed: string): number {
@@ -16,6 +16,7 @@ export function portOffset(seed: string): number {
 
 export interface WorktreePorts {
   MONAD_PORT: string; // 52000–52999
+  MONAD_HTTP_PORT: string; // 53000–53999 (loopback-only HTTP fallback)
   WEB_PORT: string; // 3100–4099
   MONAD_KV_UI_PORT: string; // 6400–7399 (dev KV debug UI)
   AI_SDK_DEVTOOLS_PORT: string; // 7400–8399 (AI SDK DevTools)
@@ -25,6 +26,7 @@ export function worktreePorts(root: string): WorktreePorts {
   const offset = portOffset(root);
   return {
     MONAD_PORT: String(52000 + offset),
+    MONAD_HTTP_PORT: String(53000 + offset),
     WEB_PORT: String(3100 + offset),
     MONAD_KV_UI_PORT: String(6400 + offset),
     AI_SDK_DEVTOOLS_PORT: String(7400 + offset)

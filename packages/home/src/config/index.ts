@@ -111,6 +111,44 @@ export function getProfileSchemaUrl(): string {
  * unix-socket option — and the web UI needs a port), so this only picks the CLI's REST/SSE path.
  */
 export const DEFAULT_TRANSPORT = 'uds' as const;
+export const DEFAULT_LOCAL_HTTP_FALLBACK_PORT = 52780;
+
+const localHttpFallbackSchema = z.object({
+  enabled: z.boolean().default(false),
+  port: z.number().int().min(1).max(65535).default(DEFAULT_LOCAL_HTTP_FALLBACK_PORT)
+});
+
+const httpsSchema = z.object({
+  enabled: z.boolean().default(true)
+});
+
+const networkConfigSchema = z
+  .object({
+    port: z.number().int().min(1).max(65535).default(52749),
+    host: z.string().min(1).default('127.0.0.1'),
+    // Which socket the LOCAL client dials — daemon always serves both; WS push is always TCP.
+    transport: z.enum(['tcp', 'uds']).default(DEFAULT_TRANSPORT),
+    // Global HTTPS switch. Keep enabled unless TLS provisioning is broken on this machine.
+    https: httpsSchema.default({ enabled: true }),
+    remoteAccess: z.object({
+      // When true, daemon binds HTTPS to 0.0.0.0 and requires a Bearer token for non-localhost requests.
+      enabled: z.boolean(),
+      token: z.string().nullable()
+    }),
+    // Optional compatibility listener for old local clients and debugging. Always loopback-only.
+    localHttpFallback: localHttpFallbackSchema.default({
+      enabled: false,
+      port: DEFAULT_LOCAL_HTTP_FALLBACK_PORT
+    })
+  })
+  .default(() => ({
+    port: 52749,
+    host: '127.0.0.1',
+    transport: DEFAULT_TRANSPORT,
+    https: { enabled: true },
+    remoteAccess: { enabled: false, token: null },
+    localHttpFallback: { enabled: false, port: DEFAULT_LOCAL_HTTP_FALLBACK_PORT }
+  }));
 
 const monadConfigSchema = z.object({
   version: z.literal(CURRENT_CONFIG_VERSION),
@@ -275,27 +313,7 @@ const monadConfigSchema = z.object({
       installReview: z.boolean().default(false)
     })
     .default({ autoload: true, disabled: [], autoloadDisabled: [], installReview: false }),
-  network: z
-    .object({
-      port: z.number().int().min(1).max(65535).default(52749),
-      // Which socket the LOCAL client dials — daemon always serves both; WS push is always TCP.
-      transport: z.enum(['tcp', 'uds']).default(DEFAULT_TRANSPORT),
-      remoteAccess: z.object({
-        // When true, daemon binds to 0.0.0.0 and requires a Bearer token for non-localhost requests.
-        enabled: z.boolean(),
-        token: z.string().nullable(),
-        // DANGER: allow plain HTTP when TLS setup fails (openssl absent or cert error). Default is
-        // fail-closed — the daemon refuses to start if remote access is enabled but TLS cannot be
-        // provisioned. Set to true only if you're deploying behind a TLS-terminating proxy and
-        // intentionally run the daemon-side transport unencrypted.
-        allowInsecureHttp: z.boolean().default(false)
-      })
-    })
-    .default(() => ({
-      port: 52749,
-      transport: DEFAULT_TRANSPORT,
-      remoteAccess: { enabled: false, token: null, allowInsecureHttp: false }
-    })),
+  network: networkConfigSchema,
   mcpServers: z.array(mcpServerSchema).default([]),
   acpAgents: z.array(acpAgentSchema).default([]), // external ACP agents monad can delegate to
   nativeCliAgents: z.array(nativeCliAgentSchema).default([]),
@@ -358,21 +376,7 @@ export const monadSystemConfigSchema = z.object({
     displayName: z.string(),
     verification: z.enum(['unverified', 'email', 'domain', 'attested'])
   }),
-  network: z
-    .object({
-      port: z.number().int().min(1).max(65535).default(52749),
-      transport: z.enum(['tcp', 'uds']).default(DEFAULT_TRANSPORT),
-      remoteAccess: z.object({
-        enabled: z.boolean(),
-        token: z.string().nullable(),
-        allowInsecureHttp: z.boolean().default(false)
-      })
-    })
-    .default(() => ({
-      port: 52749,
-      transport: DEFAULT_TRANSPORT,
-      remoteAccess: { enabled: false, token: null, allowInsecureHttp: false }
-    })),
+  network: networkConfigSchema,
   agent: z.object({
     sandbox: z.object({
       mode: sandboxModeSchema,
@@ -556,8 +560,11 @@ export function createDefaultConfig(principalId: string, displayName: string): M
     skills: { autoload: true, disabled: [], autoloadDisabled: [], installReview: false },
     network: {
       port: 52749,
+      host: '127.0.0.1',
       transport: DEFAULT_TRANSPORT,
-      remoteAccess: { enabled: false, token: null, allowInsecureHttp: false }
+      https: { enabled: true },
+      remoteAccess: { enabled: false, token: null },
+      localHttpFallback: { enabled: false, port: DEFAULT_LOCAL_HTTP_FALLBACK_PORT }
     },
     mcpServers: [],
     acpAgents: [],

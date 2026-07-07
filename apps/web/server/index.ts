@@ -6,9 +6,10 @@ import type { App } from '@monad/monad/start';
 
 import { readFileSync } from 'node:fs';
 import { extname } from 'node:path';
-import { getPaths } from '@monad/home';
+import { getPaths, resolveDaemonUrl } from '@monad/home';
 import { createLogger } from '@monad/logger';
 
+import { loopbackTlsOptions } from '../lib/loopback-tls';
 import { proxyResponseBody } from '../lib/proxy-stream';
 
 const logger = createLogger('monad-web');
@@ -107,18 +108,22 @@ function serveAsset(pathname: string): Response {
  * through to the SPA catch-all.
  */
 export function attachWebRoutes(app: App): void {
-  app.get('/*', ({ path }: { path: string }) => serveAsset(path));
+  app.get('/*', ({ path }) => serveAsset(path));
+}
+
+function daemonUrlFromConfig(raw: string): string {
+  const network = (JSON.parse(raw) as { network?: Parameters<typeof resolveDaemonUrl>[0]['network'] })?.network;
+  return resolveDaemonUrl({ network, env: Bun.env });
 }
 
 function readDaemonUrl(): string {
-  if (Bun.env.MONAD_URL) return Bun.env.MONAD_URL;
+  if (Bun.env.MONAD_URL) return resolveDaemonUrl({ env: Bun.env });
   try {
     const configPath = getPaths().config;
     const raw = readFileSync(configPath, 'utf-8');
-    const port = (JSON.parse(raw) as { network?: { port?: number } })?.network?.port ?? 52749;
-    return `http://127.0.0.1:${port}`;
+    return daemonUrlFromConfig(raw);
   } catch {
-    return 'http://127.0.0.1:52749';
+    return resolveDaemonUrl({ env: Bun.env });
   }
 }
 
@@ -146,8 +151,9 @@ export function startWeb(opts?: { daemonUrl?: string }) {
           const provider = await fetch(`${DAEMON}/${providerPath}${search}`, {
             method: req.method,
             headers,
-            body
-          });
+            body,
+            ...loopbackTlsOptions(DAEMON)
+          } as RequestInit & { tls?: { rejectUnauthorized: boolean } });
           // Strip transfer-encoding so SSE flows unbuffered through Bun's framing.
           const resHeaders = new Headers(provider.headers);
           resHeaders.delete('transfer-encoding');

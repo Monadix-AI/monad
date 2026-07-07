@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, expect, test } from 'bun:test';
 
+import { loopbackTlsOptions } from '@/lib/loopback-tls';
 import { proxyResponseBody } from '@/lib/proxy-stream';
 import { startWeb } from '../../server/index.ts';
 
@@ -58,7 +59,16 @@ test('proxyResponseBody turns late SSE read errors into a clean close', async ()
     }
   });
   const wrapped = proxyResponseBody(new Response(stream, { headers: { 'content-type': 'text/event-stream' } }));
+  const text = await new Response(wrapped).text();
+  expect(text).toBe('event: ready\ndata: {"ok":true}\n\n');
+});
 
+test('loopbackTlsOptions only disables verification for exact loopback HTTPS hosts', () => {
+  expect(loopbackTlsOptions('https://127.0.0.1:52749')).toEqual({ tls: { rejectUnauthorized: false } });
+  expect(loopbackTlsOptions('https://localhost:52749')).toEqual({ tls: { rejectUnauthorized: false } });
+  expect(loopbackTlsOptions('https://127.attacker.test:52749')).toEqual({});
+  expect(loopbackTlsOptions('https://localhost.attacker.test:52749')).toEqual({});
+  expect(loopbackTlsOptions('http://127.0.0.1:52749')).toEqual({});
 });
 
 test('next.config exports an object', async () => {
@@ -73,14 +83,17 @@ test('next.config exports an object', async () => {
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { ensureTlsCert } from '@monad/home';
 
 test('readDaemonUrl reads port from MONAD_HOME/configs/config.json', async () => {
   const home = join(tmpdir(), `monad-web-cfgpath-${Date.now()}`);
   mkdirSync(join(home, 'configs'), { recursive: true });
 
-  // Fake daemon returns a sentinel status so we can confirm the proxy reached it.
+  // Fake HTTPS daemon returns a sentinel status so we can confirm the proxy reached it.
+  const cert = await ensureTlsCert(join(home, 'tls'));
   const fake = Bun.serve({
     port: 0,
+    tls: { key: Bun.file(cert.keyPath), cert: Bun.file(cert.certPath) },
     fetch: () => new Response('hit', { status: 418, headers: { 'x-hit': '1' } })
   });
   writeFileSync(join(home, 'configs', 'config.json'), JSON.stringify({ network: { port: fake.port } }));
@@ -100,6 +113,71 @@ test('readDaemonUrl reads port from MONAD_HOME/configs/config.json', async () =>
     fake.stop(true);
     Bun.env.MONAD_HOME = prevHome;
     rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('readDaemonUrl uses HTTP when config disables HTTPS', async () => {
+  const home = join(tmpdir(), `monad-web-http-cfgpath-${Date.now()}`);
+  mkdirSync(join(home, 'configs'), { recursive: true });
+
+  const fake = Bun.serve({
+    port: 0,
+    fetch: () => new Response('hit', { status: 418, headers: { 'x-hit': '1' } })
+  });
+  writeFileSync(
+    join(home, 'configs', 'config.json'),
+    JSON.stringify({ network: { https: { enabled: false }, port: fake.port } })
+  );
+
+  const prevHome = Bun.env.MONAD_HOME;
+  Bun.env.MONAD_HOME = home;
+  Bun.env.WEB_PORT = '0';
+  const ws = startWeb();
+
+  try {
+    const res = await fetch(`http://127.0.0.1:${ws.port}/api/probe`);
+    expect(res.status).toBe(418);
+    expect(res.headers.get('x-hit')).toBe('1');
+  } finally {
+    ws.stop(true);
+    fake.stop(true);
+    Bun.env.MONAD_HOME = prevHome;
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('readDaemonUrl prefers an explicit MONAD_URL over derived env ports', async () => {
+  const fakeExplicit = Bun.serve({
+    port: 0,
+    fetch: () => new Response('explicit', { status: 418, headers: { 'x-hit': 'explicit' } })
+  });
+  const fakeFallback = Bun.serve({
+    port: 0,
+    fetch: () => new Response('fallback', { status: 419, headers: { 'x-hit': 'fallback' } })
+  });
+
+  const prevMonadUrl = Bun.env.MONAD_URL;
+  const prevHttpPort = Bun.env.MONAD_HTTP_PORT;
+  const prevPort = Bun.env.MONAD_PORT;
+  const prevWebPort = Bun.env.WEB_PORT;
+  Bun.env.MONAD_URL = `http://127.0.0.1:${fakeExplicit.port}`;
+  Bun.env.MONAD_HTTP_PORT = String(fakeFallback.port);
+  Bun.env.MONAD_PORT = String(fakeFallback.port);
+  Bun.env.WEB_PORT = '0';
+  const ws = startWeb();
+
+  try {
+    const res = await fetch(`http://127.0.0.1:${ws.port}/api/probe`);
+    expect(res.status).toBe(418);
+    expect(res.headers.get('x-hit')).toBe('explicit');
+  } finally {
+    ws.stop(true);
+    fakeExplicit.stop(true);
+    fakeFallback.stop(true);
+    Bun.env.MONAD_URL = prevMonadUrl;
+    Bun.env.MONAD_HTTP_PORT = prevHttpPort;
+    Bun.env.MONAD_PORT = prevPort;
+    Bun.env.WEB_PORT = prevWebPort;
   }
 });
 

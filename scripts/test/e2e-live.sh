@@ -22,7 +22,7 @@ MONAD_BIN="${MONAD_BIN:-monad}"
 export MONAD_HOME="${MONAD_HOME:-/tmp/monad-e2e-live-home}"
 DPORT="${DPORT:-52749}"
 export MODEL="${MONAD_LIVE_MODEL:-openrouter/free}"
-B="http://127.0.0.1:${DPORT}"
+B="https://127.0.0.1:${DPORT}"
 
 pass() { printf '  \033[0;32m✓\033[0m %s\n' "$1"; }
 warn() { printf '  \033[0;33m! %s\033[0m\n' "$1" >&2; }
@@ -41,11 +41,11 @@ trap cleanup EXIT
 
 ready=0
 for _ in $(seq 1 60); do
-  curl -fsS "${B}/health" >/dev/null 2>&1 && { ready=1; break; }
+  curl -k -fsS "${B}/health" >/dev/null 2>&1 && { ready=1; break; }
   sleep 0.2
 done
 [ "$ready" = 1 ] || { echo "--- daemon.log ---"; cat /tmp/e2e-live-daemon.log; fail "daemon did not become ready"; }
-curl -fsS "${B}/health" | grep -q '"status":"ok"' && pass "daemon /health" || fail "daemon /health"
+curl -k -fsS "${B}/health" | grep -q '"status":"ok"' && pass "daemon /health" || fail "daemon /health"
 
 # ── configure a real provider + credential + default profile via the CLI ───────
 "$MONAD_BIN" provider set '{"id":"openrouter","label":"OpenRouter","type":"openrouter"}' >/dev/null \
@@ -59,13 +59,13 @@ curl -fsS "${B}/health" | grep -q '"status":"ok"' && pass "daemon /health" || fa
 "$MONAD_BIN" model use default >/dev/null && pass "default profile selected" || fail "model use"
 
 new_session() {
-  curl -fsS -X POST "${B}/v1/sessions" -H 'content-type: application/json' -d "{\"title\":\"$1\"}" \
+  curl -k -fsS -X POST "${B}/v1/sessions" -H 'content-type: application/json' -d "{\"title\":\"$1\"}" \
     | python3 -c 'import sys,json; print(json.load(sys.stdin)["sessionId"])'
 }
 
 # ── 1. block round: a real, non-empty assistant reply ──────────────────────────
 sid=$(new_session live-block)
-reply=$(curl -fsS -m 120 -X POST "${B}/v1/sessions/${sid}/messages/block" \
+reply=$(curl -k -fsS -m 120 -X POST "${B}/v1/sessions/${sid}/messages/block" \
           -H 'content-type: application/json' \
           -d '{"text":"In one short sentence, what is 17 multiplied by 4? Include the number."}')
 text=$(echo "$reply" | python3 -c 'import sys,json; print((json.load(sys.stdin).get("message") or {}).get("text") or "")')
@@ -73,10 +73,10 @@ text=$(echo "$reply" | python3 -c 'import sys,json; print((json.load(sys.stdin).
 
 # ── 2. streaming round: ordered token deltas over SSE ──────────────────────────
 sid=$(new_session live-stream)
-( curl -fsS -N -m 120 "${B}/v1/sessions/${sid}/events" >/tmp/e2e-live-sse.txt 2>/dev/null ) &
+( curl -k -fsS -N -m 120 "${B}/v1/sessions/${sid}/events" >/tmp/e2e-live-sse.txt 2>/dev/null ) &
 SSEPID=$!
 sleep 1
-curl -fsS -m 120 -X POST "${B}/v1/sessions/${sid}/messages" \
+curl -k -fsS -m 120 -X POST "${B}/v1/sessions/${sid}/messages" \
   -H 'content-type: application/json' -d '{"text":"Say the word STREAMOK and nothing else."}' >/dev/null
 for _ in $(seq 1 120); do grep -q '"type":"agent.message"' /tmp/e2e-live-sse.txt && break; sleep 0.5; done
 kill $SSEPID 2>/dev/null || true
@@ -98,10 +98,10 @@ ntok=${tokstats%%$'\t'*}
 
 # ── 3. tool-call loop (SOFT — a tiny free model may skip the call) ──────────────
 sid=$(new_session live-tool)
-( curl -fsS -N -m 120 "${B}/v1/sessions/${sid}/events" >/tmp/e2e-live-tool.txt 2>/dev/null ) &
+( curl -k -fsS -N -m 120 "${B}/v1/sessions/${sid}/events" >/tmp/e2e-live-tool.txt 2>/dev/null ) &
 SSEPID=$!
 sleep 1
-curl -fsS -m 120 -X POST "${B}/v1/sessions/${sid}/messages" -H 'content-type: application/json' \
+curl -k -fsS -m 120 -X POST "${B}/v1/sessions/${sid}/messages" -H 'content-type: application/json' \
   -d '{"text":"Use your file-writing tool to create a file called e2e_live.txt with the exact contents LIVE_OK. Then say done."}' >/dev/null
 for _ in $(seq 1 120); do grep -q '"type":"agent.message"' /tmp/e2e-live-tool.txt && break; sleep 0.5; done
 kill $SSEPID 2>/dev/null || true
@@ -128,7 +128,7 @@ else
 fi
 
 # ── 4. usage ledger recorded the live spend ────────────────────────────────────
-"$MONAD_BIN" usage --json >/tmp/e2e-live-usage.json 2>/dev/null || curl -fsS "${B}/v1/usage" >/tmp/e2e-live-usage.json 2>/dev/null || true
+"$MONAD_BIN" usage --json >/tmp/e2e-live-usage.json 2>/dev/null || curl -k -fsS "${B}/v1/usage" >/tmp/e2e-live-usage.json 2>/dev/null || true
 if python3 -c 'import json,sys; d=json.load(open("/tmp/e2e-live-usage.json")); s=json.dumps(d); sys.exit(0 if ("in" in s or "tokens" in s.lower() or "total" in s.lower()) else 1)' 2>/dev/null; then
   pass "usage ledger recorded the live round(s)"
 else

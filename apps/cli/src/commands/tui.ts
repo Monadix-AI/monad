@@ -2,6 +2,7 @@ import type { CommandDef } from './types.ts';
 
 import { resolve } from 'node:path';
 import { createInterface } from 'node:readline';
+import { resolveClientConn } from '@monad/home';
 
 import { startDaemon } from '../lib/daemon.ts';
 import { t } from '../lib/i18n.ts';
@@ -17,6 +18,10 @@ function prompt(question: string): Promise<string> {
   );
 }
 
+export function formatDaemonUnreachableHint(baseUrl: string): string {
+  return yellow(t('cli.console.unreachable')) + dim(`  (${baseUrl})`);
+}
+
 export const command: CommandDef = {
   name: 'tui',
   synopsis: 'tui',
@@ -26,7 +31,8 @@ export const command: CommandDef = {
     try {
       await client.treaty.health.get();
     } catch {
-      out(yellow(t('cli.console.unreachable')) + dim('  (http://127.0.0.1:52749)'));
+      const { baseUrl } = await resolveClientConn();
+      out(formatDaemonUnreachableHint(baseUrl));
       const answer = await prompt(`${t('cli.startDaemonPrompt')} [Y/n] `);
       if (answer === '' || /^y$/i.test(answer)) {
         await startDaemon();

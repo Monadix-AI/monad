@@ -154,16 +154,17 @@ export function resolveConnection(): MonadConnectionConfig {
 
   const apiBase = process.env.NEXT_PUBLIC_MONAD_API_BASE;
   const port = process.env.NEXT_PUBLIC_MONAD_DAEMON_PORT;
+  const daemonScheme = process.env.NEXT_PUBLIC_MONAD_DAEMON_SCHEME === 'http' ? 'http' : 'https';
   if (apiBase) {
     return {
       baseUrl: `${window.location.origin}${apiBase}`,
-      wsBaseUrl: port ? `http://127.0.0.1:${port}` : undefined
+      wsBaseUrl: port ? `${daemonScheme}://127.0.0.1:${port}` : undefined
     };
   }
 
   // In release builds (NEXT_OUTPUT=export) the SPA is co-served with the daemon on the same port.
   if (!port) return { baseUrl: window.location.origin };
-  return { baseUrl: `http://127.0.0.1:${port}` };
+  return { baseUrl: `${daemonScheme}://127.0.0.1:${port}` };
 }
 
 export function createMonadRuntime(conn: MonadConnectionConfig) {

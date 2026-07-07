@@ -39,8 +39,8 @@ interface GeneratedArtifactProgressOptions extends OutputStyleOptions {
   target: string;
 }
 
-function portUrl(port: string): string {
-  return `http://127.0.0.1:${port}`;
+function portUrl(port: string, scheme: 'http' | 'https' = 'http'): string {
+  return `${scheme}://127.0.0.1:${port}`;
 }
 
 const ansi = {
@@ -95,10 +95,13 @@ export function buildDevInitSummary(
       apiKeySet ? success('set', useColor) : warning('not set - add apiKey to packages/home/config.init.json', useColor)
     }`,
     label('Ports', useColor),
-    `  ${muted('Daemon API', useColor)}        ${portUrl(ports.MONAD_PORT)}`,
+    `  ${muted('Daemon API', useColor)}        ${portUrl(ports.MONAD_PORT, 'https')}`,
+    `  ${muted('Local HTTP', useColor)}        ${portUrl(ports.MONAD_HTTP_PORT)}`,
     `  ${muted('Web app', useColor)}           ${portUrl(ports.WEB_PORT)}`,
     `  ${muted('KV inspector', useColor)}      ${portUrl(ports.MONAD_KV_UI_PORT)}`,
     `  ${muted('AI SDK DevTools', useColor)}   ${portUrl(ports.AI_SDK_DEVTOOLS_PORT)}`,
+    label('Runtime URL priority', useColor),
+    `  ${muted('Daemon proxy', useColor)}      MONAD_URL > config network.host/https/port`,
     label('Services', useColor),
     `  ${muted('Phoenix / OTel', useColor)}    ${
       otelUiUrl || warning('not running - install Docker or start Phoenix manually', useColor)

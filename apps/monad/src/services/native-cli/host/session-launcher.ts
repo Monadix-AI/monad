@@ -14,6 +14,7 @@ import type { NativeCliSessionRow } from '@/store/db/index.ts';
 
 import { chmodSync, realpathSync, statSync } from 'node:fs';
 import { dirname, isAbsolute } from 'node:path';
+import { resolveDaemonUrl } from '@monad/home';
 import { newId } from '@monad/protocol';
 
 import { connectAppServerStdio } from '@/services/native-cli/app-server-stdio.ts';
@@ -39,6 +40,20 @@ import {
 } from '@/services/native-cli/managed-project.ts';
 import { killNativeCliProcess, pickPtyFallbackLaunchMode } from '@/services/native-cli/process.ts';
 import { createStreamingTextDecoder } from '@/services/native-cli/stream-decoder.ts';
+
+export function resolveNativeCliManagedServerUrl(opts: {
+  serverUrl?: string;
+  networkHttps?: { enabled: boolean };
+  port?: number | string;
+}): string {
+  return resolveDaemonUrl({
+    network: {
+      https: opts.networkHttps,
+      ...(opts.port ? { port: Number(opts.port) } : {})
+    },
+    env: { ...Bun.env, ...(opts.serverUrl ? { MONAD_URL: opts.serverUrl } : {}) }
+  });
+}
 
 export interface NativeCliSessionLauncherContext {
   deps: NativeCliHostDeps;
@@ -122,7 +137,10 @@ export class NativeCliSessionLauncher {
     const managed = willBeManaged
       ? prepareManagedProjectRuntime({
           monadHome: this.ctx.deps.monadHome ?? dirname(this.ctx.deps.nativeCliProcessRegistryPath ?? workingPath),
-          serverUrl: this.ctx.deps.serverUrl ?? `http://127.0.0.1:${Bun.env.MONAD_PORT || '52749'}`,
+          serverUrl: resolveNativeCliManagedServerUrl({
+            serverUrl: this.ctx.deps.serverUrl,
+            networkHttps: this.ctx.deps.networkHttps
+          }),
           agentName: runtimeAgentName,
           displayName: args.displayName,
           projectId: args.transcriptTargetId as ProjectId,

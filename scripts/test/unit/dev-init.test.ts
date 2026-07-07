@@ -27,6 +27,7 @@ test('different worktree paths get different ports', () => {
   const p1 = worktreePorts('/Users/x/Projects/monad');
   const p2 = worktreePorts('/Users/x/Projects/monad-feature');
   expect(p1.MONAD_PORT).not.toBe(p2.MONAD_PORT);
+  expect(p1.MONAD_HTTP_PORT).not.toBe(p2.MONAD_HTTP_PORT);
   expect(p1.WEB_PORT).not.toBe(p2.WEB_PORT);
   expect(p1.MONAD_KV_UI_PORT).not.toBe(p2.MONAD_KV_UI_PORT);
   expect(p1.AI_SDK_DEVTOOLS_PORT).not.toBe(p2.AI_SDK_DEVTOOLS_PORT);
@@ -36,6 +37,8 @@ test('ports land in their documented non-overlapping ranges', () => {
   const p = worktreePorts('/some/worktree');
   expect(Number(p.MONAD_PORT)).toBeGreaterThanOrEqual(52000);
   expect(Number(p.MONAD_PORT)).toBeLessThan(53000);
+  expect(Number(p.MONAD_HTTP_PORT)).toBeGreaterThanOrEqual(53000);
+  expect(Number(p.MONAD_HTTP_PORT)).toBeLessThan(54000);
   expect(Number(p.WEB_PORT)).toBeGreaterThanOrEqual(3100);
   expect(Number(p.WEB_PORT)).toBeLessThan(4100);
   expect(Number(p.MONAD_KV_UI_PORT)).toBeGreaterThanOrEqual(6400);
@@ -49,6 +52,7 @@ test('ensurePortLines appends all ports to a file missing them', () => {
   const { text, added } = ensurePortLines('MONAD_HOME=/wt/.dev/.monad\nOPENROUTER_API_KEY=sk\n', ports);
   expect(added).toEqual([
     `MONAD_PORT=${ports.MONAD_PORT}`,
+    `MONAD_HTTP_PORT=${ports.MONAD_HTTP_PORT}`,
     `WEB_PORT=${ports.WEB_PORT}`,
     `MONAD_KV_UI_PORT=${ports.MONAD_KV_UI_PORT}`,
     `AI_SDK_DEVTOOLS_PORT=${ports.AI_SDK_DEVTOOLS_PORT}`
@@ -114,6 +118,7 @@ test('buildDevInitSummary groups the initialized dev environment for terminal ou
     ports: {
       AI_SDK_DEVTOOLS_PORT: '7401',
       MONAD_KV_UI_PORT: '6401',
+      MONAD_HTTP_PORT: '53001',
       MONAD_PORT: '52001',
       WEB_PORT: '3101'
     }
@@ -126,10 +131,13 @@ test('buildDevInitSummary groups the initialized dev environment for terminal ou
     '  Data directory    /repo/.dev/.monad',
     '  API key           not set - add apiKey to packages/home/config.init.json',
     'Ports',
-    '  Daemon API        http://127.0.0.1:52001',
+    '  Daemon API        https://127.0.0.1:52001',
+    '  Local HTTP        http://127.0.0.1:53001',
     '  Web app           http://127.0.0.1:3101',
     '  KV inspector      http://127.0.0.1:6401',
     '  AI SDK DevTools   http://127.0.0.1:7401',
+    'Runtime URL priority',
+    '  Daemon proxy      MONAD_URL > config network.host/https/port',
     'Services',
     '  Phoenix / OTel    http://localhost:6006',
     ''
@@ -144,6 +152,7 @@ test('dev-init summary can be colorized for terminal output', () => {
       ports: {
         AI_SDK_DEVTOOLS_PORT: '7401',
         MONAD_KV_UI_PORT: '6401',
+        MONAD_HTTP_PORT: '53001',
         MONAD_PORT: '52001',
         WEB_PORT: '3101'
       }

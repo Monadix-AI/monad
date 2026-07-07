@@ -118,9 +118,11 @@ $DPort = 4399; $WPort = 3099
 $env:MONAD_HOME       = $HomeDir
 $env:MONAD_MOCK_MODEL = '1'
 $env:MONAD_PORT       = $DPort
+$DaemonUrl = "https://127.0.0.1:$DPort"
+$WebUrl = "http://localhost:$WPort"
 $DProc = Start-Process $MonadExe -ArgumentList 'daemon' -PassThru -RedirectStandardOutput "$env:TEMP\it-daemon.log" -RedirectStandardError "$env:TEMP\it-daemon-err.log"
 $env:WEB_PORT  = $WPort
-$env:MONAD_URL = "http://127.0.0.1:$DPort"
+$env:MONAD_URL = $DaemonUrl
 $WProc = Start-Process $MonadExe -ArgumentList 'web' -PassThru -RedirectStandardOutput "$env:TEMP\it-web.log" -RedirectStandardError "$env:TEMP\it-web-err.log"
 
 function Stop-Procs { $DProc, $WProc | ForEach-Object { try { $_.Kill() } catch {} } }
@@ -128,21 +130,21 @@ try {
   # Wait for readiness
   $ready = $false
   for ($i = 0; $i -lt 40; $i++) {
-    try { Invoke-RestMethod "http://localhost:$DPort/health" -ErrorAction Stop | Out-Null; $ready = $true; break } catch {}
+    try { Invoke-RestMethod "$DaemonUrl/health" -SkipCertificateCheck -ErrorAction Stop | Out-Null; $ready = $true; break } catch {}
     Start-Sleep -Milliseconds 100
   }
   if (-not $ready) { Fail 'daemon did not become ready in time' }
   $ready = $false
   for ($i = 0; $i -lt 40; $i++) {
-    try { Invoke-WebRequest "http://localhost:$WPort/" -UseBasicParsing -ErrorAction Stop | Out-Null; $ready = $true; break } catch {}
+    try { Invoke-WebRequest "$WebUrl/" -UseBasicParsing -ErrorAction Stop | Out-Null; $ready = $true; break } catch {}
     Start-Sleep -Milliseconds 100
   }
   if (-not $ready) { Fail 'web did not become ready in time' }
 
-  Invoke-RestMethod "http://localhost:$DPort/health" -ErrorAction Stop | Out-Null; Ok 'daemon /health'
-  $html = (Invoke-WebRequest "http://localhost:$WPort/" -UseBasicParsing).Content
+  Invoke-RestMethod "$DaemonUrl/health" -SkipCertificateCheck -ErrorAction Stop | Out-Null; Ok 'daemon /health'
+  $html = (Invoke-WebRequest "$WebUrl/" -UseBasicParsing).Content
   if ($html -match '<html') { Ok 'web / serves embedded SPA' } else { Fail 'web / did not return HTML' }
-  Invoke-RestMethod "http://localhost:$WPort/api/daemon/health" -ErrorAction Stop | Out-Null; Ok 'web -> daemon proxy'
+  Invoke-RestMethod "$WebUrl/api/daemon/health" -ErrorAction Stop | Out-Null; Ok 'web -> daemon proxy'
 } finally {
   Stop-Procs
 }

@@ -1,6 +1,7 @@
 import { closeSync, openSync } from 'node:fs';
 import { mkdir, unlink } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
+import { makeLoopbackHttpsFetcher } from '@monad/client';
 import { getPaths, loadAll, resolveClientConn } from '@monad/home';
 import { rotateDaemonLog } from '@monad/monad/log-maintenance';
 
@@ -32,8 +33,9 @@ function isAlive(pid: number): boolean {
 
 async function isDaemonReachable(): Promise<boolean> {
   const { baseUrl } = await resolveClientConn();
+  const fetcher = makeLoopbackHttpsFetcher(baseUrl) ?? fetch;
   try {
-    const res = await fetch(`${baseUrl}/health`, { signal: AbortSignal.timeout(1000) });
+    const res = await fetcher(`${baseUrl}/health`, { signal: AbortSignal.timeout(1000) });
     return res.ok;
   } catch {
     return false;
@@ -207,7 +209,8 @@ export async function stopDaemon(): Promise<void> {
     // down via HTTP — this runs all process.on('exit') handlers (MCP child cleanup, socket teardown,
     // channel stop). Fall back to a hard-kill if the endpoint doesn't answer within 3 s.
     const { baseUrl } = await resolveClientConn();
-    const graceful = await fetch(`${baseUrl}/v1/daemon/stop`, {
+    const fetcher = makeLoopbackHttpsFetcher(baseUrl) ?? fetch;
+    const graceful = await fetcher(`${baseUrl}/v1/daemon/stop`, {
       method: 'POST',
       signal: AbortSignal.timeout(3000)
     })

@@ -22,7 +22,7 @@ interface MonadRuntimeContextValue {
 }
 
 const MonadRuntimeContext = createContext<MonadRuntimeContextValue | null>(null);
-const SERVER_PRERENDER_CONNECTION = { baseUrl: 'http://127.0.0.1:0' };
+const SERVER_PRERENDER_CONNECTION = { baseUrl: 'https://127.0.0.1:0' };
 
 function initialRuntime() {
   return createMonadRuntime(typeof window === 'undefined' ? SERVER_PRERENDER_CONNECTION : resolveConnection());

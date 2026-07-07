@@ -3,9 +3,9 @@
 // connection to it. The agent loop then runs in that shared daemon, so editor sessions show up in the
 // Web UI/CLI and reuse one store/model config. See bridge.ts for the proxy handlers.
 
-import type { MonadPaths } from '@monad/home';
+import type { MonadConfig, MonadPaths } from '@monad/home';
 
-import { loadConfig } from '@monad/home';
+import { loadConfig, resolveDaemonNetwork } from '@monad/home';
 import { createLogger } from '@monad/logger';
 
 import { createBridgeHandlers } from '@/transports/acp/bridge.ts';
@@ -20,6 +20,17 @@ const SPAWN_TIMEOUT_MS = 20_000;
 const POLL_INTERVAL_MS = 200;
 
 type UnixFetchInit = RequestInit & { unix?: string };
+
+export function computeAcpBridgeUrls(opts: { https: MonadConfig['network']['https']; port: number }): {
+  tcpBaseUrl: string;
+  unixBaseUrl: string;
+} {
+  const endpoint = resolveDaemonNetwork({ network: { https: opts.https, port: opts.port } });
+  return {
+    tcpBaseUrl: endpoint.localUrl,
+    unixBaseUrl: endpoint.unixUrl
+  };
+}
 
 /** Compute the argv/env for the daemon we auto-spawn from bridge mode. CRITICAL: it must NOT inherit
  * the ACP/stdio flag OR env, or the child re-enters bridge mode and spawns again — an infinite loop.
@@ -69,11 +80,11 @@ async function ensureDaemon(baseUrl: string, unixSocket: string): Promise<void> 
 export async function runAcpBridge(paths: MonadPaths): Promise<void> {
   const cfg = await loadConfig(paths.config);
   const port = Number(Bun.env.MONAD_PORT) || cfg?.network.port || DEFAULT_PORT;
-  const baseUrl = `http://127.0.0.1:${port}`;
+  const { tcpBaseUrl, unixBaseUrl } = computeAcpBridgeUrls({ https: cfg?.network.https ?? { enabled: true }, port });
   // The bridge always dials the LOCAL Unix socket, so delegation/session-scoped MCP (later phases)
   // can keep the "local editor = trust boundary" assumption — a remote daemon is never targeted.
-  await ensureDaemon(baseUrl, paths.sock);
-  const { handlers } = createBridgeHandlers({ baseUrl, unixSocket: paths.sock });
+  await ensureDaemon(unixBaseUrl, paths.sock);
+  const { handlers } = createBridgeHandlers({ baseUrl: unixBaseUrl, tcpBaseUrl, unixSocket: paths.sock });
   process.stderr.write('monad: acp bridge → shared daemon\n');
   await startAcpTransport(handlers);
 }
