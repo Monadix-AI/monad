@@ -172,7 +172,6 @@ import {
 import { useGetComputerPresetQuery, useSetComputerPresetMutation } from './endpoints/settings/computer-preset/index.ts';
 import { useGetDeveloperQuery, useSetDeveloperMutation } from './endpoints/settings/developer/index.ts';
 import { useGetHooksQuery, useSetHooksMutation } from './endpoints/settings/hooks/index.ts';
-import { useApplySettingsImportMutation, usePreviewSettingsImportMutation } from './endpoints/settings/import/index.ts';
 import {
   localeAdapter,
   localeApi,
@@ -321,7 +320,6 @@ export {
   useAddCredentialMutation,
   useAddMemoryFactMutation,
   useApplyNativeCliSettingsImportMutation,
-  useApplySettingsImportMutation,
   useApproveChannelPairingMutation,
   useApproveNativeCliSessionMutation,
   useApproveToolMutation,
@@ -453,7 +451,6 @@ export {
   useOpenDraftAttachmentMutation,
   usePickDirectoryMutation,
   usePreviewNativeCliSettingsImportMutation,
-  usePreviewSettingsImportMutation,
   useProvenanceQuery,
   useProviderCatalogQuery,
   usePutMemoryCoreMutation,

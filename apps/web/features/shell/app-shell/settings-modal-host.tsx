@@ -10,6 +10,7 @@ export function SettingsModalHost() {
     <Settings
       initialSection={settingsTab}
       onClose={() => setSettingsTab(null)}
+      onSectionChange={setSettingsTab}
     />
   );
 }

@@ -3,7 +3,7 @@
 import type { ReactNode } from 'react';
 import type { useT } from '@/components/I18nProvider';
 
-import { MessageSquareCodeIcon, StarIcon } from '@hugeicons/core-free-icons';
+import { FileInputIcon, MessageSquareCodeIcon, StarIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react';
 import { cn, Tooltip, TooltipContent, TooltipTrigger } from '@monad/ui';
 
@@ -176,6 +176,11 @@ export function StudioSidebarItems({
       </div>
       <SidebarNavSection>
         <SidebarNavSectionLabel>{t('web.studio.system')}</SidebarNavSectionLabel>
+        <SidebarNavItem
+          icon={FileInputIcon}
+          label={t('web.settings.import')}
+          onClick={() => onSelect('nativeCliAgents')}
+        />
         {STUDIO_SYSTEM_SECTIONS.map(renderItem)}
       </SidebarNavSection>
     </>

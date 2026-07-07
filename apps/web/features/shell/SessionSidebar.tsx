@@ -50,6 +50,7 @@ interface Props {
   onOpenWorkspace: () => void;
   onOpenMonadChat: () => void;
   onOpenProject: (id: string) => void;
+  onOpenStudio: () => void;
   onToggleProjectPinned: (id: string) => void;
   onOpenStudioSection: (section: StudioSectionId) => void;
   onRequestCollapse?: () => void;
@@ -59,7 +60,6 @@ interface Props {
   ) => void;
   onToggleCollapsed: () => void;
   onToggleSettings: () => void;
-  onToggleStudio: () => void;
 }
 
 const DEFAULT_SIDEBAR_WIDTH = 288;
@@ -102,14 +102,14 @@ export function SessionSidebar({
   onOpenWorkspace,
   onOpenMonadChat,
   onOpenProject,
+  onOpenStudio,
   onToggleProjectPinned,
   onOpenStudioSection,
   onRequestCollapse,
   onRequestPersistentExpand,
   onSwitchDaemonConnection,
   onToggleCollapsed,
-  onToggleSettings,
-  onToggleStudio
+  onToggleSettings
 }: Props) {
   const t = useT();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -126,6 +126,8 @@ export function SessionSidebar({
   const dragPxRef = useRef(0);
   const trackpadFeedbackAnimationRef = useRef<{ stop: () => void } | null>(null);
   const panelScrollAnimationRef = useRef<{ stop: () => void } | null>(null);
+  const routeDrivenScrollRef = useRef(false);
+  const routeDrivenScrollClearTimerRef = useRef(0);
   const trackpadResetTimerRef = useRef(0);
   const trackpadFeedbackSampleRef = useRef({ time: 0, x: 0 });
   const trackpadFeedbackVelocityRef = useRef(0);
@@ -293,24 +295,41 @@ export function SessionSidebar({
   useLayoutEffect(() => {
     const host = panelScrollRef.current;
     if (!host) return;
+    currentShowStudioRef.current = showStudio;
     const target = (showStudio ? 1 : 0) * host.clientWidth;
     if (Math.abs(host.scrollLeft - target) <= 1) {
       host.dataset.snapReady = 'true';
+      routeDrivenScrollRef.current = false;
+      window.clearTimeout(routeDrivenScrollClearTimerRef.current);
       return;
     }
+    routeDrivenScrollRef.current = true;
+    window.clearTimeout(routeDrivenScrollClearTimerRef.current);
     panelScrollAnimationRef.current?.stop();
     if (host.dataset.snapReady !== 'true' || prefersReducedMotion) {
       host.scrollTo({ behavior: 'instant' as ScrollBehavior, left: target });
+      routeDrivenScrollClearTimerRef.current = window.setTimeout(() => {
+        routeDrivenScrollRef.current = false;
+      }, 80);
     } else {
       // Browser smooth scrolling has a fixed, sluggish pace; drive scrollLeft
       // with a short ease-out tween so programmatic page turns feel crisp.
       panelScrollAnimationRef.current = animate(host.scrollLeft, target, {
         duration: PANEL_SNAP_SCROLL_DURATION_S,
         ease: PANEL_SNAP_SCROLL_EASE,
+        onComplete: () => {
+          routeDrivenScrollRef.current = false;
+        },
         onUpdate: (value) => {
           host.scrollLeft = value;
         }
       });
+      routeDrivenScrollClearTimerRef.current = window.setTimeout(
+        () => {
+          routeDrivenScrollRef.current = false;
+        },
+        PANEL_SNAP_SCROLL_DURATION_S * 1000 + 80
+      );
     }
     host.dataset.snapReady = 'true';
   }, [showStudio, prefersReducedMotion]);
@@ -318,6 +337,7 @@ export function SessionSidebar({
   useEffect(
     () => () => {
       panelScrollAnimationRef.current?.stop();
+      window.clearTimeout(routeDrivenScrollClearTimerRef.current);
     },
     []
   );
@@ -327,11 +347,12 @@ export function SessionSidebar({
     if (!host) return;
 
     const onScrollEnd = () => {
+      if (routeDrivenScrollRef.current) return;
       if (dragActiveRef.current) return;
       const nextStudio = Math.round(host.scrollLeft / (host.clientWidth || 1)) >= 1;
       if (nextStudio === currentShowStudioRef.current) return;
       currentShowStudioRef.current = nextStudio;
-      if (nextStudio) onToggleStudio();
+      if (nextStudio) onOpenStudio();
       else onOpenWorkspace();
     };
 
@@ -354,7 +375,7 @@ export function SessionSidebar({
       const targetStudio = targetSurface === 'studio';
       if (targetStudio !== currentShowStudioRef.current) {
         currentShowStudioRef.current = targetStudio;
-        if (targetStudio) onToggleStudio();
+        if (targetStudio) onOpenStudio();
         else onOpenWorkspace();
       }
       panelScrollAnimationRef.current?.stop();
@@ -441,8 +462,8 @@ export function SessionSidebar({
       host.removeEventListener('wheel', onWheel);
     };
   }, [
+    onOpenStudio,
     onOpenWorkspace,
-    onToggleStudio,
     prefersReducedMotion,
     releaseTrackpadGesture,
     stopTrackpadFeedbackAnimation,
@@ -549,10 +570,10 @@ export function SessionSidebar({
               hasUpgrade={hasUpgrade}
               menuOpen={menuOpen}
               onOpenChange={onDaemonMenuOpenChange}
+              onOpenStudio={() => openMenuAction(onOpenStudio)}
               onOpenWorkspace={() => openMenuAction(onOpenWorkspace)}
               onSwitchDaemonConnection={onSwitchDaemonConnection}
               onToggleSettings={() => openMenuAction(onToggleSettings)}
-              onToggleStudio={() => openMenuAction(onToggleStudio)}
               shortcutModifierLabel={shortcutModifierLabel}
               showSettings={showSettings}
               studioPileActive={studioPileActive}

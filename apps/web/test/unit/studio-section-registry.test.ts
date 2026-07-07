@@ -1,4 +1,6 @@
 import { expect, test } from 'bun:test';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 import { STUDIO_SECTION_COMPONENTS } from '../../features/studio/section-registry';
 import {
@@ -20,10 +22,18 @@ test('Studio sidebar separates runtime delegates from provider-owned mesh agents
   expect(STUDIO_SECTION_COMPONENTS.nativeCliAgents).not.toBe(STUDIO_SECTION_COMPONENTS.acpDelegates);
 });
 
-test('Studio System group holds atom packs and usage, separate from the mesh', () => {
+test('Studio System group holds install-level utilities, separate from the mesh overview', () => {
   const systemSectionIds = STUDIO_SYSTEM_SECTIONS.map((item) => item.id);
   const _meshSectionIds = STUDIO_MESH_SECTIONS.map((item) => item.id);
   const _runtimeSectionIds = STUDIO_RUNTIME_SECTIONS.map((item) => item.id);
 
   expect(systemSectionIds).toEqual(['atoms', 'usage']);
+});
+
+test('Studio System import is a stateless link to External Agents', () => {
+  const sidebarSource = readFileSync(join(import.meta.dir, '../../features/shell/SessionSidebarNav.tsx'), 'utf8');
+
+  expect(STUDIO_SYSTEM_SECTIONS.map((item) => item.id)).not.toContain('nativeCliAgents');
+  expect(sidebarSource).toContain("label={t('web.settings.import')}");
+  expect(sidebarSource).toContain("onClick={() => onSelect('nativeCliAgents')}");
 });

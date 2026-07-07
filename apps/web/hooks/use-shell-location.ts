@@ -39,6 +39,11 @@ function readServerSnapshot(): ShellLocationSnapshot {
 }
 
 function emitShellLocationChange(): void {
+  const popStateEvent =
+    typeof PopStateEvent === 'function'
+      ? new PopStateEvent('popstate', { state: window.history.state })
+      : new Event('popstate');
+  window.dispatchEvent(popStateEvent);
   window.dispatchEvent(new Event(SHELL_LOCATION_EVENT));
 }
 

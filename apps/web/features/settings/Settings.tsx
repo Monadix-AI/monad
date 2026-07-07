@@ -5,10 +5,8 @@ import type { WebMessageIdWithoutParams } from '@monad/i18n';
 import {
   CatIcon,
   EyeIcon,
-  FileInputIcon,
   GlobeIcon,
   JusticeScaleIcon,
-  LanguageSquareIcon,
   RotateLeft01Icon,
   SlidersHorizontalIcon,
   UserGroupIcon
@@ -23,16 +21,10 @@ import { PanelLoading } from '@/components/PanelLoading';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { ConnectionSettings } from './ConnectionSettings';
 
-const LanguageSettings = dynamic(() => import('./LanguageSettings').then((m) => m.LanguageSettings), {
-  loading: PanelLoading
-});
 const ProfileSettings = dynamic(() => import('./ProfileSettings').then((m) => m.ProfileSettings), {
   loading: PanelLoading
 });
 const AppearanceSettings = dynamic(() => import('./AppearanceSettings').then((m) => m.AppearanceSettings), {
-  loading: PanelLoading
-});
-const ComposerSettings = dynamic(() => import('./ComposerSettings').then((m) => m.ComposerSettings), {
   loading: PanelLoading
 });
 const MoSettings = dynamic(() => import('./MoSettings').then((m) => m.MoSettings), { loading: PanelLoading });
@@ -42,28 +34,13 @@ const LicensesSettings = dynamic(() => import('./Licenses').then((m) => m.Licens
 const SystemSettings = dynamic(() => import('./SystemSettings').then((m) => m.SystemSettings), {
   loading: PanelLoading
 });
-const SettingsImport = dynamic(() => import('./SettingsImport').then((m) => m.SettingsImport), {
-  loading: PanelLoading
-});
 
-export type SettingsSectionId =
-  | 'connection'
-  | 'profile'
-  | 'appearance'
-  | 'composer'
-  | 'import'
-  | 'language'
-  | 'mo'
-  | 'licenses'
-  | 'system';
+export type SettingsSectionId = 'connection' | 'profile' | 'experience' | 'mo' | 'licenses' | 'system';
 
 const SECTIONS: { id: SettingsSectionId; labelKey: WebMessageIdWithoutParams; icon: typeof SlidersHorizontalIcon }[] = [
   { id: 'connection', labelKey: 'web.settings.connection', icon: GlobeIcon },
   { id: 'profile', labelKey: 'web.settings.profile', icon: UserGroupIcon },
-  { id: 'appearance', labelKey: 'web.settings.appearance', icon: EyeIcon },
-  { id: 'composer', labelKey: 'web.settings.composer', icon: SlidersHorizontalIcon },
-  { id: 'import', labelKey: 'web.settings.import', icon: FileInputIcon },
-  { id: 'language', labelKey: 'web.settings.language', icon: LanguageSquareIcon },
+  { id: 'experience', labelKey: 'web.settings.appearance', icon: EyeIcon },
   { id: 'mo', labelKey: 'web.settings.mo', icon: CatIcon },
   { id: 'licenses', labelKey: 'web.settings.licenses', icon: JusticeScaleIcon },
   { id: 'system', labelKey: 'web.settings.system', icon: RotateLeft01Icon }
@@ -72,6 +49,8 @@ const SECTIONS: { id: SettingsSectionId; labelKey: WebMessageIdWithoutParams; ic
 const SECTION_IDS = new Set<string>(SECTIONS.map((section) => section.id));
 
 function normalizeSection(value: string | null | undefined): SettingsSectionId {
+  if (value === 'appearance' || value === 'composer' || value === 'language') return 'experience';
+  if (value === 'import') return 'system';
   return SECTION_IDS.has(value ?? '') ? (value as SettingsSectionId) : 'connection';
 }
 
@@ -188,11 +167,8 @@ const SettingsNavList = memo(function SettingsNavList() {
 });
 
 const SECTION_PANELS: Record<SettingsSectionId, ComponentType<{ onClose: () => void }>> = {
-  appearance: AppearanceSettings,
-  composer: ComposerSettings,
   connection: ConnectionSettings,
-  import: SettingsImport,
-  language: LanguageSettings,
+  experience: AppearanceSettings,
   licenses: LicensesSettings,
   mo: MoSettings,
   profile: ProfileSettings,
