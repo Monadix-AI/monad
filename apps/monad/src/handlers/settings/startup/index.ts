@@ -1,8 +1,12 @@
 import type { SetStartupSettingsRequest, StartupSettings } from '@monad/protocol';
+import type { StartupIdentity, WindowsStartupShortcut } from '@/handlers/settings/startup/platform-files.ts';
 
-import { access, mkdir, rm, writeFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
+import { access, mkdir, rm } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
+
+import { MACOS_LABEL, startupIdentity, writeStartupFile } from '@/handlers/settings/startup/platform-files.ts';
 
 export interface StartupSettingsOptions {
   platform?: NodeJS.Platform;
@@ -11,20 +15,32 @@ export interface StartupSettingsOptions {
   monadHome: string;
   command?: string[];
   logPath: string;
+  macosLoginItemRegistrar?: MacosLoginItemRegistrar;
+  writeWindowsShortcut?: (shortcut: WindowsStartupShortcut) => Promise<void>;
 }
 
-const MACOS_LABEL = 'ai.monad.daemon';
+export interface MacosLoginItemRegistrar {
+  status(): Promise<boolean>;
+  register(): Promise<void>;
+  unregister(): Promise<void>;
+}
 
 export function createStartupSettingsModule(options: StartupSettingsOptions) {
   const platform = options.platform ?? process.platform;
   const homeDir = options.homeDir ?? homedir();
   const command = options.command ?? defaultDaemonCommand();
-  const target = startupTarget(platform, homeDir, options.appDataDir ?? process.env.APPDATA);
+  const identity = startupIdentity(command);
+  const target = startupTarget(platform, homeDir, identity, options.appDataDir ?? process.env.APPDATA);
+  const legacyTargets = legacyStartupTargets(platform, homeDir, identity, options.appDataDir ?? process.env.APPDATA);
+  const macosLoginItemRegistrar =
+    platform === 'darwin' ? (options.macosLoginItemRegistrar ?? resolveMacosLoginItemRegistrar(command)) : null;
 
   async function getStartupSettings(): Promise<StartupSettings> {
     if (!target) return unsupported(platform);
     return {
-      enabled: await exists(target.path),
+      enabled: macosLoginItemRegistrar
+        ? await macosLoginItemRegistrar.status()
+        : await existsAny([target.path, ...legacyTargets]),
       supported: true,
       platform,
       command
@@ -33,14 +49,20 @@ export function createStartupSettingsModule(options: StartupSettingsOptions) {
 
   async function setStartupSettings(req: SetStartupSettingsRequest): Promise<StartupSettings> {
     if (!target) return unsupported(platform);
+    if (macosLoginItemRegistrar) {
+      if (req.enabled) await macosLoginItemRegistrar.register();
+      else await macosLoginItemRegistrar.unregister();
+      await rm(target.path, { force: true });
+      await removePaths(legacyTargets);
+      return getStartupSettings();
+    }
     if (req.enabled) {
-      await mkdir(dirname(target.path), { recursive: true });
       await mkdir(dirname(options.logPath), { recursive: true });
-      await writeFile(target.path, renderStartupFile(platform, command, options.monadHome, options.logPath), {
-        mode: target.mode
-      });
+      await writeStartupFile(platform, target, identity, command, options);
+      await removePaths(legacyTargets);
     } else {
       await rm(target.path, { force: true });
+      await removePaths(legacyTargets);
     }
     return getStartupSettings();
   }
@@ -66,9 +88,21 @@ async function exists(path: string): Promise<boolean> {
   }
 }
 
+async function existsAny(paths: string[]): Promise<boolean> {
+  for (const path of paths) {
+    if (await exists(path)) return true;
+  }
+  return false;
+}
+
+async function removePaths(paths: string[]): Promise<void> {
+  await Promise.all(paths.map((path) => rm(path, { force: true })));
+}
+
 function startupTarget(
   platform: NodeJS.Platform,
   homeDir: string,
+  identity: StartupIdentity,
   appDataDir?: string
 ): { path: string; mode: number } | null {
   if (platform === 'darwin')
@@ -76,12 +110,28 @@ function startupTarget(
   if (platform === 'win32') {
     const roaming = appDataDir || join(homeDir, 'AppData', 'Roaming');
     return {
-      path: join(roaming, 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup', 'Monad.cmd'),
+      path: join(roaming, 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup', `${identity.name}.lnk`),
       mode: 0o644
     };
   }
-  if (platform === 'linux') return { path: join(homeDir, '.config', 'autostart', 'monad.desktop'), mode: 0o644 };
+  if (platform === 'linux')
+    return { path: join(homeDir, '.config', 'autostart', `${identity.slug}.desktop`), mode: 0o644 };
   return null;
+}
+
+function legacyStartupTargets(
+  platform: NodeJS.Platform,
+  homeDir: string,
+  identity: StartupIdentity,
+  appDataDir?: string
+): string[] {
+  if (platform === 'win32') {
+    const roaming = appDataDir || join(homeDir, 'AppData', 'Roaming');
+    return [join(roaming, 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup', 'Monad.cmd')];
+  }
+  if (platform === 'linux' && identity.slug === 'monad-dev')
+    return [join(homeDir, '.config', 'autostart', 'monad.desktop')];
+  return [];
 }
 
 function defaultDaemonCommand(): string[] {
@@ -93,81 +143,47 @@ function defaultDaemonCommand(): string[] {
   return [process.execPath, 'daemon'];
 }
 
-function renderStartupFile(platform: NodeJS.Platform, command: string[], monadHome: string, logPath: string): string {
-  if (platform === 'darwin') return renderLaunchAgent(command, monadHome, logPath);
-  if (platform === 'win32') return renderWindowsStartup(command, monadHome, logPath);
-  return renderXdgAutostart(command, monadHome, logPath);
+function resolveMacosLoginItemRegistrar(command: string[]): MacosLoginItemRegistrar | null {
+  const registrar = macosLoginItemRegistrarCandidates(command).find((path) => existsSync(path));
+  return registrar ? spawnMacosLoginItemRegistrar(registrar) : null;
 }
 
-function renderLaunchAgent(command: string[], monadHome: string, logPath: string): string {
-  const args = command.map((arg) => `    <string>${escapeXml(arg)}</string>`).join('\n');
-  return `<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>Label</key>
-  <string>${MACOS_LABEL}</string>
-  <key>ProgramArguments</key>
-  <array>
-${args}
-  </array>
-  <key>EnvironmentVariables</key>
-  <dict>
-    <key>MONAD_HOME</key>
-    <string>${escapeXml(monadHome)}</string>
-  </dict>
-  <key>RunAtLoad</key>
-  <true/>
-  <key>StandardOutPath</key>
-  <string>${escapeXml(logPath)}</string>
-  <key>StandardErrorPath</key>
-  <string>${escapeXml(logPath)}</string>
-</dict>
-</plist>
-`;
+function macosLoginItemRegistrarCandidates(command: string[]): string[] {
+  const executable = command[0];
+  if (!executable) return [];
+  const candidates = [join(dirname(executable), 'monad-login-item')];
+  const marker = '.app/Contents/MacOS/';
+  const markerIndex = executable.indexOf(marker);
+  if (markerIndex !== -1) {
+    const app = executable.slice(0, markerIndex + '.app'.length);
+    candidates.push(
+      join(app, 'Contents', 'MacOS', 'monad-login-item'),
+      join(app, 'Contents', 'Library', 'LoginItems', 'Monad Login Item.app', 'Contents', 'MacOS', 'monad-login-item')
+    );
+  }
+  return candidates;
 }
 
-function renderWindowsStartup(command: string[], monadHome: string, logPath: string): string {
-  const commandLine = `${command.map(quoteWindowsArg).join(' ')} >> "${escapeCmdValue(logPath)}" 2>&1`;
-  return `@echo off\r
-set "MONAD_HOME=${escapeCmdValue(monadHome)}"\r
-start "" /min cmd /c "${escapeCmdValue(commandLine)}"\r
-`;
+function spawnMacosLoginItemRegistrar(registrar: string): MacosLoginItemRegistrar {
+  return {
+    async status() {
+      const exitCode = await runRegistrar(registrar, 'status');
+      if (exitCode === 0) return true;
+      if (exitCode === 2) return false;
+      throw new Error(`macOS login item status failed with exit ${exitCode}`);
+    },
+    async register() {
+      const exitCode = await runRegistrar(registrar, 'register');
+      if (exitCode !== 0) throw new Error(`macOS login item register failed with exit ${exitCode}`);
+    },
+    async unregister() {
+      const exitCode = await runRegistrar(registrar, 'unregister');
+      if (exitCode !== 0) throw new Error(`macOS login item unregister failed with exit ${exitCode}`);
+    }
+  };
 }
 
-function renderXdgAutostart(command: string[], monadHome: string, logPath: string): string {
-  const shellCommand = `MONAD_HOME=${quoteShell(monadHome)} exec ${command.map(quoteShell).join(' ')} >> ${quoteShell(logPath)} 2>&1`;
-  return `[Desktop Entry]
-Type=Application
-Name=Monad
-Comment=Start the Monad daemon at login
-Exec=/bin/sh -lc ${quoteDesktop(shellCommand)}
-Terminal=false
-X-GNOME-Autostart-enabled=true
-`;
-}
-
-function escapeXml(value: string): string {
-  return value
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&apos;');
-}
-
-function escapeCmdValue(value: string): string {
-  return value.replaceAll('"', '""');
-}
-
-function quoteWindowsArg(value: string): string {
-  return `"${escapeCmdValue(value)}"`;
-}
-
-function quoteShell(value: string): string {
-  return `'${value.replaceAll("'", "'\\''")}'`;
-}
-
-function quoteDesktop(value: string): string {
-  return `"${value.replaceAll('\\', '\\\\').replaceAll('"', '\\"')}"`;
+async function runRegistrar(registrar: string, action: 'status' | 'register' | 'unregister'): Promise<number> {
+  const proc = Bun.spawn([registrar, action], { stdout: 'ignore', stderr: 'ignore' });
+  return proc.exited;
 }

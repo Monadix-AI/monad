@@ -44,7 +44,13 @@ export function SystemSettings({ onClose }: Props) {
   const [resetUsage, { isLoading: isResettingUsage }] = useResetUsageMutation();
   const { data: developer } = useGetDeveloperQuery();
   const [setDeveloper, { isLoading: isSavingDeveloper }] = useSetDeveloperMutation();
-  const { data: startup } = useGetStartupQuery();
+  const {
+    data: startup,
+    isFetching: isFetchingStartup,
+    refetch: refetchStartup
+  } = useGetStartupQuery(undefined, {
+    refetchOnMountOrArgChange: true
+  });
   const [setStartup, { isLoading: isSavingStartup }] = useSetStartupMutation();
   const network = useNetworkSettings();
   const [usageResetDone, setUsageResetDone] = useState(false);
@@ -479,12 +485,27 @@ export function SystemSettings({ onClose }: Props) {
                   </span>
                 </div>
               </div>
-              <Switch
-                aria-label={t('web.settings.system.launchAtLogin')}
-                checked={startup?.enabled === true}
-                disabled={isSavingStartup || startup?.supported === false}
-                onCheckedChange={handleStartup}
-              />
+              <div className="flex shrink-0 items-center gap-2">
+                <Button
+                  aria-label={t('web.refresh')}
+                  className="size-7"
+                  disabled={isFetchingStartup}
+                  onClick={() => void refetchStartup()}
+                  size="icon"
+                  variant="ghost"
+                >
+                  <HugeiconsIcon
+                    className={isFetchingStartup ? 'animate-spin' : undefined}
+                    icon={RotateLeft01Icon}
+                  />
+                </Button>
+                <Switch
+                  aria-label={t('web.settings.system.launchAtLogin')}
+                  checked={startup?.enabled === true}
+                  disabled={isSavingStartup || startup?.supported === false}
+                  onCheckedChange={handleStartup}
+                />
+              </div>
             </div>
           </section>
 
