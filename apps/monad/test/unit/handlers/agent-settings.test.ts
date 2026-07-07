@@ -59,7 +59,7 @@ test('listAgents: empty on fresh config', async () => {
   const { handlers, cfg, configPath, profilePath, cleanup } = makeHandlers();
   await saveAll(configPath, profilePath, cfg);
   try {
-    const result = await handlers.listAgents();
+    const _result = await handlers.listAgents();
   } finally {
     cleanup();
   }
@@ -99,7 +99,7 @@ test('setDefaultAgent then deleteAgent clears defaultAgentId', async () => {
     expect(def.agentId).toBe(agent.id);
 
     await handlers.deleteAgent({ agentId: agent.id });
-    const defAfter = await handlers.getDefaultAgent();
+    const _defAfter = await handlers.getDefaultAgent();
   } finally {
     cleanup();
   }

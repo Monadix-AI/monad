@@ -9,7 +9,6 @@ import type { createDaemonHandlers } from '@/handlers/daemon-handlers/index.ts';
 import type { I18nService } from '@/services/i18n.ts';
 
 import { chmod, unlink } from 'node:fs/promises';
-import { join } from 'node:path';
 import { resolveDaemonNetwork, validateDaemonNetworkSecurity } from '@monad/home';
 import { logger } from '@monad/logger';
 import { MONAD_VERSION } from '@monad/protocol';
@@ -73,6 +72,7 @@ export interface ServeDeps {
   setMoEnabled: (enabled: boolean) => Promise<void>;
   tlsCert?: { certPath: string; keyPath: string };
   tlsFingerprint?: string;
+  developerMode: boolean;
   i18n: I18nService;
   channelService: ChannelService;
   flags: { devMode: boolean; devSilent: boolean; stdoutRpc: boolean; stdioMode: boolean; useMock: boolean };
@@ -81,6 +81,11 @@ export interface ServeDeps {
 }
 
 export type TcpListenerPlan = { scheme: 'https' | 'http'; host: string; port: number };
+
+function hostForUrl(host: string): string {
+  const displayHost = host === '0.0.0.0' ? 'localhost' : host;
+  return displayHost.includes(':') && !displayHost.startsWith('[') ? `[${displayHost}]` : displayHost;
+}
 
 export function formatHttpsDisabledWarnings(opts: { remoteAccessEnabled: boolean }): string[] {
   const warnings = ['WARNING: HTTPS is disabled by network.https.enabled=false. Daemon TCP traffic is plain HTTP.'];
@@ -94,6 +99,30 @@ export function formatHttpsDisabledWarnings(opts: { remoteAccessEnabled: boolean
 
 export function daemonLoopbackUrl(opts: { https: MonadConfig['network']['https']; port: number }): string {
   return resolveDaemonNetwork({ network: { https: opts.https, port: opts.port } }).localUrl;
+}
+
+export function daemonWebUiUrl(opts: {
+  dev: boolean;
+  host: string;
+  https: MonadConfig['network']['https'];
+  port: number;
+  webPort?: string;
+}): string {
+  const scheme = opts.https.enabled ? 'https' : 'http';
+  if (opts.dev && opts.webPort) return `${scheme}://localhost:${opts.webPort}`;
+  return `${scheme}://${hostForUrl(opts.host)}:${opts.port}/`;
+}
+
+export function shouldEnableDeveloperDocs(opts: { developerMode: boolean; stdoutRpc: boolean }): boolean {
+  return opts.developerMode && !opts.stdoutRpc;
+}
+
+export function resolveServeDeveloperMode(opts: {
+  configured: boolean;
+  devMode: boolean;
+  devSilent: boolean;
+}): boolean {
+  return opts.configured || opts.devMode || opts.devSilent;
 }
 
 export function planTcpListeners(opts: {
@@ -126,6 +155,7 @@ export async function serveDaemon(deps: ServeDeps): Promise<void> {
     setMoEnabled,
     tlsCert,
     tlsFingerprint,
+    developerMode,
     i18n,
     channelService,
     flags,
@@ -133,12 +163,10 @@ export async function serveDaemon(deps: ServeDeps): Promise<void> {
   } = deps;
   const { devMode, devSilent, stdoutRpc, stdioMode, useMock } = flags;
 
-  let enableDocs = false;
-  if (devMode && !stdoutRpc) {
-    enableDocs = devSilent || (await confirmDeveloperMode());
-  }
+  const activeDeveloperMode = resolveServeDeveloperMode({ configured: developerMode, devMode, devSilent });
+  const developerDocs = shouldEnableDeveloperDocs({ developerMode: activeDeveloperMode, stdoutRpc });
 
-  const httpApp = createHttpTransport(handlers, { docs: enableDocs, remoteAccess, openaiCompatConfig });
+  const httpApp = createHttpTransport(handlers, { docs: developerDocs, remoteAccess, openaiCompatConfig });
 
   // Mo (the desktop sprite) is launched/quit through the daemon and dies with it: the exit handler
   // runs on the same process.exit(0) that gracefulShutdown triggers for SIGINT/SIGTERM below.
@@ -162,10 +190,7 @@ export async function serveDaemon(deps: ServeDeps): Promise<void> {
   // Web UI URL Mo opens when clicked (also printed in the ready banner below): in dev, the separate
   // Next server on WEB_PORT; otherwise the daemon serves the SPA at its own origin.
   const isDev = devMode || devSilent;
-  const webUiUrl =
-    isDev && Bun.env.WEB_PORT
-      ? `http://localhost:${Bun.env.WEB_PORT}`
-      : `${https.enabled ? 'https' : 'http'}://${host === '0.0.0.0' ? 'localhost' : host}:${port}/`;
+  const webUiUrl = daemonWebUiUrl({ dev: isDev, host, https, port, webPort: Bun.env.WEB_PORT });
   (httpApp as unknown as Elysia).use(
     createMoController(createMoModule(handlers.session, moService, webUiUrl, setMoEnabled))
   );
@@ -249,7 +274,9 @@ export async function serveDaemon(deps: ServeDeps): Promise<void> {
 
   const mockTag = useMock ? ' (mock model)' : '';
   const primaryScheme = https.enabled ? 'https' : 'http';
-  const docsTag = enableDocs ? ` docs:${primaryScheme}://${host}:${port}/docs` : '';
+  const daemonUrl = `${primaryScheme}://${hostForUrl(host)}:${port}`;
+  const docsUrl = developerDocs ? `${daemonUrl}/docs` : undefined;
+  const docsTag = developerDocs ? ` docs:${docsUrl}` : '';
   // Only advertise the Unix socket when it was actually bound — listing `unix:<path>` when the bind
   // was skipped/failed would be misleading (no listener exists at that path).
   const unixTag = unixBound ? ` unix:${sockPath}` : '';
@@ -260,11 +287,11 @@ export async function serveDaemon(deps: ServeDeps): Promise<void> {
     process.stdout.write(`\n${warnings.join('\n')}\n\n`);
     for (const warning of warnings) logger.warn(warning);
   }
-  logger.info(
+  logger.debug(
     `monad daemon listening on ${primaryScheme}://${host}:${port}${fallbackTag}${unixTag}${mockTag}${docsTag}`
   );
   if (tlsFingerprint) {
-    logger.info(`monad: TLS cert SHA-256 fingerprint: ${tlsFingerprint}`);
+    logger.debug(`monad: TLS cert SHA-256 fingerprint: ${tlsFingerprint}`);
   }
 
   // The success/environment summary is owned by the daemon (single source of truth) so `monad
@@ -272,8 +299,11 @@ export async function serveDaemon(deps: ServeDeps): Promise<void> {
   // launches us detached and relays this stdout to the user until we're reachable.
   printReadyInfo({
     webUrl: webUiUrl,
+    daemonUrl,
+    docsUrl,
+    unixSocket: unixBound ? sockPath : undefined,
+    tlsFingerprint,
     configPath: paths.config,
-    guidePath: join(paths.workspace, 'templates/model-provider.sample.md'),
     t: i18n.t
   });
 
@@ -323,20 +353,4 @@ export async function serveDaemon(deps: ServeDeps): Promise<void> {
     hot?.dispose(() => void channelService.stop());
     void channelService.start();
   }
-}
-
-async function confirmDeveloperMode(): Promise<boolean> {
-  if (!process.stdin.isTTY) return true;
-
-  const { createInterface } = await import('node:readline');
-  const rl = createInterface({ input: process.stdin, output: process.stdout });
-
-  const answer = await new Promise<string>((resolve) => {
-    rl.question('\nWould you like to enable the API docs browser at /docs? [Y/n] ', resolve);
-  });
-
-  rl.close();
-
-  const trimmed = answer.trim().toLowerCase();
-  return trimmed === '' || trimmed === 'y' || trimmed === 'yes';
 }

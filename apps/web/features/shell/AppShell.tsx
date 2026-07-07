@@ -99,10 +99,15 @@ export function AppShell() {
     routedProjectId && workspaceProjects.some((project) => project.id === routedProjectId)
   );
   const currentSession = sessions.find((s) => s.id === currentId) ?? null;
+  const routedSessionInList = Boolean(currentId && currentSession);
   const { data: appearance } = useGetAppearanceQuery();
   const composerSettings = normalizedComposerSettings(appearance?.composer);
   const primaryAgentSession = currentSession ?? directSessions[0] ?? null;
   const shellSurface = useWorkspaceShellStore((state: WorkspaceShellState) => state.surface);
+  const lastStudioSection = useWorkspaceShellStore((state: WorkspaceShellState) => state.lastStudioSection);
+  const lastWorkspacePath = useWorkspaceShellStore((state: WorkspaceShellState) => state.lastWorkspacePath);
+  const rememberStudioSection = useWorkspaceShellStore((state: WorkspaceShellState) => state.rememberStudioSection);
+  const rememberWorkspacePath = useWorkspaceShellStore((state: WorkspaceShellState) => state.rememberWorkspacePath);
   const lastMonadSessionId = useWorkspaceShellStore((state: WorkspaceShellState) => state.lastMonadSessionId);
   const activeProjectId = routedProjectId;
   const rememberMonadSession = useWorkspaceShellStore((state: WorkspaceShellState) => state.rememberMonadSession);
@@ -336,15 +341,21 @@ export function AppShell() {
 
   const setWorkspaceUrl = useCallback(() => {
     openWorkspaceSurface();
+    replaceShellUrl(lastWorkspacePath);
+  }, [lastWorkspacePath, openWorkspaceSurface]);
+
+  const resetWorkspaceUrl = useCallback(() => {
+    openWorkspaceSurface();
+    rememberWorkspacePath('/');
     replaceShellUrl('/');
-  }, [openWorkspaceSurface]);
+  }, [openWorkspaceSurface, rememberWorkspacePath]);
 
   const setStudioUrl = useCallback(
     (section?: StudioSectionId) => {
-      const nextSection = section ?? 'agents';
+      const nextSection = section ?? lastStudioSection;
       replaceShellUrl(studioPath(runtimeSectionEnabled(nextSection, runtimeReady) ? nextSection : 'runtime'));
     },
-    [runtimeReady]
+    [lastStudioSection, runtimeReady]
   );
 
   const toggleSidebarAutoMode = useCallback(() => {
@@ -370,8 +381,31 @@ export function AppShell() {
     if (!routedProjectId) return;
     if (routedProjectInList) return;
     if (projectsLoading) return;
-    setWorkspaceUrl();
-  }, [projectsLoading, routedProjectInList, routedProjectId, setWorkspaceUrl]);
+    resetWorkspaceUrl();
+  }, [projectsLoading, resetWorkspaceUrl, routedProjectInList, routedProjectId]);
+
+  useEffect(() => {
+    if (!isStudioRoute || !routedStudioSection) return;
+    if (!runtimeSectionEnabled(routedStudioSection, runtimeReady)) return;
+    rememberStudioSection(routedStudioSection);
+  }, [isStudioRoute, rememberStudioSection, routedStudioSection, runtimeReady]);
+
+  useEffect(() => {
+    if (!isWorkspaceRoute) return;
+    if (routedProjectId && !projectsLoading && !routedProjectInList) return;
+    if (currentId && !sessionsLoading && !routedSessionInList) return;
+    rememberWorkspacePath(pathname);
+  }, [
+    currentId,
+    isWorkspaceRoute,
+    pathname,
+    projectsLoading,
+    rememberWorkspacePath,
+    routedProjectId,
+    routedProjectInList,
+    routedSessionInList,
+    sessionsLoading
+  ]);
 
   useEffect(() => {
     if (isStudioRoute) return;
@@ -566,7 +600,7 @@ export function AppShell() {
       onOpenProject: openProject,
       onOpenSettings: openSettings,
       onOpenStudio: handleOpenStudioAction,
-      onProjectDeleted: setWorkspaceUrl,
+      onProjectDeleted: resetWorkspaceUrl,
       projects: workspaceProjects,
       voiceModelState
     }),
@@ -579,7 +613,7 @@ export function AppShell() {
       openProject,
       openSettings,
       primaryAgentSession,
-      setWorkspaceUrl,
+      resetWorkspaceUrl,
       voiceModelState,
       workspaceProjects
     ]

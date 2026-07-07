@@ -37,6 +37,21 @@ interface TreatyError {
   value?: unknown;
 }
 
+function serializableRaw(value: unknown): unknown {
+  if (value == null) return value;
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return value;
+  if (value instanceof Error) return { name: value.name, message: value.message };
+  if (Array.isArray(value)) return value.map(serializableRaw);
+  if (typeof value === 'object') {
+    const out: Record<string, unknown> = {};
+    for (const [key, entry] of Object.entries(value)) {
+      out[key] = serializableRaw(entry);
+    }
+    return out;
+  }
+  return String(value);
+}
+
 /** Map a Treaty error (or a thrown network error) into the UI-facing MonadApiError. */
 export function toError(e: unknown): MonadApiError {
   if (e && typeof e === 'object' && 'status' in e) {
@@ -45,8 +60,14 @@ export function toError(e: unknown): MonadApiError {
     return {
       status,
       code: body.code,
-      message: body.error ?? (status !== undefined ? `request failed (${status})` : 'request failed'),
-      raw: value
+      message:
+        body.error ??
+        (value instanceof Error
+          ? value.message
+          : status !== undefined
+            ? `request failed (${status})`
+            : 'request failed'),
+      raw: serializableRaw(value)
     };
   }
   return { message: e instanceof Error ? e.message : String(e) };

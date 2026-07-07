@@ -4,6 +4,8 @@ import { openUrl, resolveClientConn } from '@monad/home';
 import { setLogLevel } from '@monad/logger';
 import { MONAD_VERSION } from '@monad/protocol';
 
+import { resolveUpWebUrl } from './lib/web-url.ts';
+
 // Silence pino output for the CLI's own commands — they render their own human output and must not
 // leak log lines. The `daemon` subcommand is the exception: it IS the log producer, so it keeps the
 // default level (info) and manages routing itself in configureDaemonLogging(). Must run before any
@@ -36,8 +38,11 @@ async function dispatch(): Promise<void> {
     // web UI is served by the daemon itself, so ignore a WEB_PORT that leaked in from a dev shell
     // (e.g. direnv in the repo). NODE_ENV is pinned to "production" at build time, so this whole
     // branch is dead-code-eliminated in the compiled binary.
-    const webUrl =
-      Bun.env.NODE_ENV !== 'production' && Bun.env.WEB_PORT ? `http://localhost:${Bun.env.WEB_PORT}` : daemonUrl;
+    const webUrl = resolveUpWebUrl({
+      daemonUrl,
+      nodeEnv: Bun.env.NODE_ENV,
+      webPort: Bun.env.WEB_PORT
+    });
 
     // Ensure the daemon is up and current: startDaemon starts it when stopped and replaces a
     // stale build after an upgrade, relaying the ready banner. This is the installer's entrypoint

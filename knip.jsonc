@@ -4,6 +4,7 @@
   // kept out of the unused-file sweep pending that landing.
   "ignore": [
     "apps/monad/src/handlers/settings/mcp-server/catalog.ts",
+    "apps/web/app/api/[...path]/route.proxy.ts",
     "apps/web/components/ai-elements/context.tsx",
     "apps/web/components/ai-elements/prompt-input-actions.tsx",
     "apps/web/components/ai-elements/prompt-input.tsx",

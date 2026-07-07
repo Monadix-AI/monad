@@ -2,14 +2,13 @@ import { readFileSync } from 'node:fs';
 import { request as httpsRequest } from 'node:https';
 import { join, resolve } from 'node:path';
 import { Readable } from 'node:stream';
-import { resolveDaemonUrl } from '@monad/home';
+import { resolveDaemonUrl } from '@monad/home/network-endpoints';
 
 import { proxyResponseBody } from '@/lib/proxy-stream';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'] as const;
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '::1', '[::1]']);
 
 function daemonUrlFromConfig(raw: string): string | null {
@@ -121,5 +120,3 @@ export const PATCH = proxy;
 export const DELETE = proxy;
 export const HEAD = proxy;
 export const OPTIONS = proxy;
-
-void METHODS;

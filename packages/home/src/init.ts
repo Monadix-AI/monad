@@ -101,12 +101,7 @@ export async function initMonadHome(paths: MonadPaths, opts: InitOptions = {}): 
   await Promise.all([
     seedFromTemplate(TEMPLATES['SOUL.md'], join(paths.workspace, 'SOUL.md'), opts.reseed),
     seedFromTemplate(TEMPLATES['AGENT.md'], join(paths.workspace, 'AGENT.md'), opts.reseed),
-    seedFromTemplate(TEMPLATES['USER.md'], join(paths.workspace, 'USER.md'), opts.reseed),
-    seedFromTemplate(
-      TEMPLATES['model-provider.sample.md'],
-      join(paths.workspace, 'templates/model-provider.sample.md'),
-      opts.reseed
-    )
+    seedFromTemplate(TEMPLATES['USER.md'], join(paths.workspace, 'USER.md'), opts.reseed)
   ]);
 
   // Seed only on first init (or reseed) so a user-deleted example stays deleted.

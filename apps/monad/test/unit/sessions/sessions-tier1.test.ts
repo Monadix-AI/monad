@@ -245,7 +245,7 @@ test('updateSession patches cwd and origin', () => {
   expect(updated?.origin).toMatchObject({ surface: 'api', transport: 'http' });
 
   // Clearing fields back to null works too.
-  const cleared = store.updateSession(s.id, { cwd: null, origin: null });
+  const _cleared = store.updateSession(s.id, { cwd: null, origin: null });
   store.close();
 });
 

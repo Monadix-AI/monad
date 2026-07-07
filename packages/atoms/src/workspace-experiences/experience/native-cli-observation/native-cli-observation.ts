@@ -191,7 +191,10 @@ function parsedJsonEvents(args: {
   });
 }
 
-function removeAdjacentDuplicateObservations(events: NativeCliObservationEvent[]): NativeCliObservationEvent[] {
+function removeAdjacentDuplicateObservations(
+  events: NativeCliObservationEvent[],
+  adapterObservation: NativeCliObservationAdapterProjection | undefined
+): NativeCliObservationEvent[] {
   const out: NativeCliObservationEvent[] = [];
   for (const event of events) {
     const previous = out.at(-1);
@@ -201,10 +204,11 @@ function removeAdjacentDuplicateObservations(events: NativeCliObservationEvent[]
       previous.source === event.source &&
       previous.text.trim() === event.text.trim()
     ) {
-      // A result whose text just repeats the assistant message it settles still marks a
-      // query boundary — keep it as a compact marker instead of dropping it outright.
+      // A turn-end whose text just repeats the assistant message it settles still marks a query
+      // boundary — keep it as a compact marker instead of dropping it. "Is this a turn-end?" is the
+      // adapter's call, not a providerEventType string check here.
       if (
-        event.providerEventType === 'result' &&
+        adapterObservation?.classifyActivity?.(event) === 'turn-end' &&
         event.raw &&
         typeof event.raw === 'object' &&
         !Array.isArray(event.raw)
@@ -216,14 +220,6 @@ function removeAdjacentDuplicateObservations(events: NativeCliObservationEvent[]
     out.push(event);
   }
   return out;
-}
-
-function isChunkObservation(event: NativeCliObservationEvent): boolean {
-  return (
-    event.providerEventType?.endsWith('/delta') === true ||
-    event.providerEventType?.endsWith('_delta') === true ||
-    event.providerEventType?.endsWith('Delta') === true
-  );
 }
 
 function rawObservationLine(raw: unknown): string {
@@ -241,7 +237,14 @@ function rawObservationLine(raw: unknown): string {
 // it inserts a spurious space inside a split word and, worse, between CJK characters that
 // never take inter-character spaces (我来 + 先做 → "我来 先做"). Always join verbatim,
 // accumulating a run's fragments and joining once so folding k deltas stays O(k).
-function mergeAdjacentChunkObservations(events: NativeCliObservationEvent[]): NativeCliObservationEvent[] {
+function mergeAdjacentChunkObservations(
+  events: NativeCliObservationEvent[],
+  adapterObservation: NativeCliObservationAdapterProjection | undefined
+): NativeCliObservationEvent[] {
+  // "Is this a streaming fragment?" is the adapter's call (its delta event names), not a suffix check
+  // here. No adapter (plain text) → nothing is a fragment.
+  const isChunkObservation = (event: NativeCliObservationEvent): boolean =>
+    adapterObservation?.isStreamingFragment?.(event) ?? false;
   const out: NativeCliObservationEvent[] = [];
   let runTexts: string[] = [];
   let runRaws: unknown[] = [];
@@ -298,8 +301,10 @@ function nativeCliObservationEvents(args: {
         : entries;
     return removeAdjacentDuplicateObservations(
       mergeAdjacentChunkObservations(
-        parsedJsonEvents({ id: args.id, provider: args.provider, adapterObservation, entries: projectionEntries })
-      )
+        parsedJsonEvents({ id: args.id, provider: args.provider, adapterObservation, entries: projectionEntries }),
+        adapterObservation
+      ),
+      adapterObservation
     );
   }
   return undefined;

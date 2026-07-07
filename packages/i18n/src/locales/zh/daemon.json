@@ -3,6 +3,5 @@
   "daemon.ready.webUi": "Web 界面：",
   "daemon.ready.cli": "命令行：",
   "daemon.ready.configure": "配置 model provider：",
-  "daemon.ready.guide": "指南：",
   "daemon.singleton.alreadyRunning": "monad daemon 已在运行，请先运行 `monad stop` 停止它。"
 }

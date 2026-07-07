@@ -12,7 +12,7 @@ test('email_send is flagged high-risk', () => {
 });
 
 test('every built-in tool declares an input schema (validated at dispatch)', () => {
-  for (const tool of builtinTools) {
+  for (const _tool of builtinTools) {
   }
 });
 

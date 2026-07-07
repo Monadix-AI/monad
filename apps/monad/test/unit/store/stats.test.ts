@@ -239,7 +239,7 @@ test('peakHour derives from message createdAt local hours', () => {
 
 test('peakHour is null when there are no messages', () => {
   const store = createStore();
-  const s = store.stats('all');
+  const _s = store.stats('all');
 });
 
 // ---------------------------------------------------------------------------
@@ -258,7 +258,7 @@ test('favoriteModel is the model with most total tokens', () => {
 
 test('favoriteModel is null when no ledger data', () => {
   const store = createStore();
-  const s = store.stats('all');
+  const _s = store.stats('all');
 });
 
 // ---------------------------------------------------------------------------

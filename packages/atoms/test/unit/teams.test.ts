@@ -25,8 +25,7 @@ test('TM2: channel conversation → group; mentionedSelf from mention entity', (
   expect(ev).toMatchObject({ chatType: 'group', mentionedSelf: true });
 });
 
-test('TM3: non-message / no conversation → null', () => {
-});
+test('TM3: non-message / no conversation → null', () => {});
 
 import { isAllowedTeamsServiceUrl } from '../../src/channels/teams.ts';
 

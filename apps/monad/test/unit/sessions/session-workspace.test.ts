@@ -57,7 +57,7 @@ test('setWorkspace persists the working folder and clears it on an empty path', 
   expect(set.cwd).toBe(dir);
   expect(h.store.getSession(sessionId)?.cwd).toBe(dir);
 
-  const cleared = await h.session.setWorkspace({ id: sessionId as SessionId, cwd: '' });
+  const _cleared = await h.session.setWorkspace({ id: sessionId as SessionId, cwd: '' });
   h.store.close();
 });
 

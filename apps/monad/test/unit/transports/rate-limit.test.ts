@@ -12,8 +12,7 @@ import { buildHandlers, mockModel } from '../../helpers.ts';
 
 type Msg = JsonRpcResponse | JsonRpcNotification;
 
-test('no config → unlimited (trusted local transports)', () => {
-});
+test('no config → unlimited (trusted local transports)', () => {});
 
 test('burst: capacity N allows N then blocks', () => {
   const { rateLimiter } = createConnectionState({ capacity: 3, refillPerSec: 0 });

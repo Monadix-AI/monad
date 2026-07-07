@@ -116,7 +116,6 @@ test('upgrade --check reports available updates without installing', async () =>
   installFetch({ '/releases/latest': response({ tag_name: 'v9.9.9' }) });
 
   await runCommand(ctx([], { check: true }));
-
 });
 
 test('upgrade --check falls back to the GitHub latest redirect when the API is unavailable', async () => {
@@ -138,7 +137,6 @@ test('upgrade --notes prints truncated release notes', async () => {
   installFetch({ '/releases/latest': () => response({ tag_name: 'v9.9.9', body: notes }) });
 
   await runCommand(ctx([], { check: true, notes: true }));
-
 });
 
 test('upgrade installs via verified script and backs up the current binary', async () => {

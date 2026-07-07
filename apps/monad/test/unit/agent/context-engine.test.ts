@@ -169,7 +169,7 @@ test('SummarizingContextEngine injects summary as a new system message when none
   // No system message — the withSummary branch for systems.length === 0.
   const msgs = [user(big('OLD')), assistant('recent')];
   const out = await engine.prepare(msgs, ctx);
-  const injected = out.find((m) => m.role === 'system');
+  const _injected = out.find((m) => m.role === 'system');
   expect(out.some((m) => m.content === 'recent')).toBe(true);
 });
 

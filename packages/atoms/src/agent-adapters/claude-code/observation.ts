@@ -11,6 +11,7 @@ import type { NativeCliObservationProjector, ObservationRole } from '../observat
 
 import {
   classifyObservationActivity,
+  isStreamingObservationFragment,
   numberValue,
   observation,
   permissionDenialEvents,
@@ -277,6 +278,7 @@ export function claudeRecordEvents(
 export const claudeCodeObservationProjection = {
   usageRecords: claudeUsageRecordsFromRecord,
   classifyActivity: classifyObservationActivity,
+  isStreamingFragment: isStreamingObservationFragment,
   recordProjectors: [
     {
       supports: isClaudeObservationMessage,

@@ -1,7 +1,13 @@
 import type { NativeCliObservationEvent } from '@monad/protocol';
 import type { NativeCliObservationProjector, ObservationRole } from '../observation-projection.ts';
 
-import { classifyObservationActivity, compactJson, observation, textValue } from '../observation-projection.ts';
+import {
+  classifyObservationActivity,
+  compactJson,
+  isStreamingObservationFragment,
+  observation,
+  textValue
+} from '../observation-projection.ts';
 
 function roleFromHermesMessage(record: Record<string, unknown>): ObservationRole {
   const role = textValue(record.role)?.toLowerCase();
@@ -68,5 +74,6 @@ export function hermesRecordEvents(
 
 export const hermesObservationProjection = {
   classifyActivity: classifyObservationActivity,
+  isStreamingFragment: isStreamingObservationFragment,
   recordProjectors: [{ parse: ({ id, record, recordIndex }) => hermesRecordEvents(id, record, recordIndex) }]
 } satisfies NativeCliObservationProjector;

@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
 
 import { runDev } from '../../src/dev.ts';
-import { main, USAGE_TEXT } from '../../src/main.ts';
+import { main } from '../../src/main.ts';
 
 test('cli module exports a main entry and usage text', () => {
   expect(typeof main).toBe('function');

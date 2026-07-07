@@ -91,7 +91,7 @@ test('countTokens delegates to the provider and returns its count', async () => 
 });
 
 test('countTokens returns undefined when the provider has no native counter', async () => {
-  const router = new GatewayModelRouter(deps(), registryWith(streamOnly));
+  const _router = new GatewayModelRouter(deps(), registryWith(streamOnly));
 });
 
 test('generateImage routes to a provider that supports it', async () => {

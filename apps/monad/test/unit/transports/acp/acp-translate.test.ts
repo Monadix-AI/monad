@@ -87,8 +87,7 @@ test('agent.reasoning becomes an agent_thought_chunk', () => {
   });
 });
 
-test('empty agent.token delta yields no update', () => {
-});
+test('empty agent.token delta yields no update', () => {});
 
 test('tool.called becomes a tool_call with kind + rawInput', () => {
   const u = eventToSessionUpdate(evt('tool.called', { toolCallId: 'tc_1', tool: 'fs_write', input: { path: '/x' } }));
@@ -102,7 +101,7 @@ test('tool.called becomes a tool_call with kind + rawInput', () => {
     locations: [{ path: '/x' }]
   });
   // No `path` arg → no locations.
-  const noPath = eventToSessionUpdate(
+  const _noPath = eventToSessionUpdate(
     evt('tool.called', { toolCallId: 'tc_2', tool: 'web_fetch', input: { url: 'u' } })
   );
 });
@@ -147,8 +146,7 @@ test('agent.message surfaces usage_update only when usage present', () => {
   expect(u).toEqual({ sessionUpdate: 'usage_update', used: 10, size: 10 });
 });
 
-test('approval events produce no streaming update', () => {
-});
+test('approval events produce no streaming update', () => {});
 
 test('sessions.updated with a title becomes a session_info_update', () => {
   expect(eventToSessionUpdate(evt('session.updated', { title: 'Renamed', state: 'active' }))).toEqual({
@@ -158,8 +156,7 @@ test('sessions.updated with a title becomes a session_info_update', () => {
   // state-only update (no title) → nothing to push.
 });
 
-test('empty agent.reasoning delta yields no update', () => {
-});
+test('empty agent.reasoning delta yields no update', () => {});
 
 test('agent.message falls back to inputTokens + outputTokens when totalTokens is absent', () => {
   const u = eventToSessionUpdate(
@@ -183,8 +180,7 @@ test('promptToAttachments extracts image blocks as Uint8Array attachments', () =
   expect(out[1]?.mediaType).toBe('image/jpeg');
 });
 
-test('promptToAttachments returns empty array when no image blocks are present', () => {
-});
+test('promptToAttachments returns empty array when no image blocks are present', () => {});
 
 // ── promptToText edge cases ───────────────────────────────────────────────────
 

@@ -21,7 +21,7 @@
 
 import type { BunPlugin } from 'bun';
 
-import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { $, Glob } from 'bun';
 
@@ -135,8 +135,15 @@ try {
     const artifact = `monad-${VERSION}-${triple(t)}`;
     const artifactDir = join(DIST, artifact);
     const binDir = join(artifactDir, 'bin');
+    const assetsDir = join(artifactDir, 'assets');
     if (existsSync(artifactDir)) rmSync(artifactDir, { recursive: true });
     mkdirSync(binDir, { recursive: true });
+    mkdirSync(assetsDir, { recursive: true });
+    copyFileSync(
+      join(ROOT, 'apps/web/public/monad-icon-vector-solid.svg'),
+      join(assetsDir, 'monad-icon-vector-solid.svg')
+    );
+    copyFileSync(join(ROOT, 'apps/web/public/favicon.ico'), join(assetsDir, 'favicon.ico'));
 
     const isWindows = t.os === 'windows';
     const binName = isWindows ? 'monad.exe' : 'monad';

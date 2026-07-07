@@ -1,9 +1,8 @@
 /**
  * Daemon-side observability via OpenTelemetry (OTLP HTTP/protobuf).
  *
- * Disabled when config.observability.endpoint is empty (the default).
- * In dev mode the endpoint auto-defaults to http://localhost:6006 and Arize Phoenix
- * is started automatically by the postinstall hook (scripts/dev-init.ts).
+ * Disabled when config.observability.endpoint is empty and Developer Mode is off.
+ * In Developer Mode the endpoint auto-defaults to http://localhost:6006.
  *
  * To start Phoenix manually:
  *   docker run -d -p 6006:6006 -p 4317:4317 -p 4318:4318 --name phoenix arizephoenix/phoenix
@@ -97,6 +96,10 @@ class SessionAwareSpanProcessor extends OpenInferenceBatchSpanProcessor {
 }
 
 let _enabled = false;
+
+export function resolveObservabilityEndpoint(opts: { endpoint?: string; developerMode: boolean }): string {
+  return opts.endpoint || (opts.developerMode ? 'http://localhost:6006' : '');
+}
 
 /** Call once at startup with the resolved config endpoint. Returns true when OTel was activated. */
 export function initObservability(endpoint: string, version: string): boolean {

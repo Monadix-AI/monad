@@ -49,7 +49,7 @@ test('joins embeddings → 2D coords; entries without a vector get null coords',
     // a1m2 has no vector
   ]);
   const d = await collectMem0Data(base({ fetchVectors: async () => vecs }));
-  const byId = new Map(d.entries.map((e) => [e.id, e]));
+  const _byId = new Map(d.entries.map((e) => [e.id, e]));
 });
 
 test('a failing vector fetch degrades gracefully (entries still returned)', async () => {

@@ -52,6 +52,13 @@ export function classifyObservationActivity(
   return 'message';
 }
 
+/** Shared default for `isStreamingFragment`: the app-server / stream-json providers all name partial
+ *  token events with a `*delta`/`*chunk` suffix. Adapters with a different convention override it. */
+export function isStreamingObservationFragment(event: NativeCliObservationEvent): boolean {
+  const type = event.providerEventType?.toLowerCase() ?? '';
+  return type.endsWith('/delta') || type.endsWith('_delta') || type.endsWith('delta') || type.includes('chunk');
+}
+
 function isoFromMs(value: number): string | undefined {
   if (!Number.isFinite(value) || value <= 0) return undefined;
   const date = new Date(value);

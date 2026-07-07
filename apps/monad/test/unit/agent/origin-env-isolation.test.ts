@@ -55,7 +55,7 @@ test('system prompt renders exactly the four daemon environment keys', async () 
 
   await loop.runBlock(newId('ses') as SessionId, 'hello');
 
-  const content = allContent(requests);
+  const _content = allContent(requests);
   // The four daemon-supplied fields must appear.
 });
 
@@ -110,6 +110,6 @@ test('adding an origin.env field to AgentEnvironment WOULD render it — proving
 
   await loop.runBlock(newId('ses') as SessionId, 'hello');
 
-  const content = allContent(requests);
+  const _content = allContent(requests);
   // Confirm the leak would be visible (the index signature renders all keys).
 });

@@ -26,6 +26,7 @@ describe('parseAgentMd', () => {
 
   test('body-only file (no fence) is valid, no frontmatter', () => {
     const { frontmatter, body } = parseAgentMd('Just a system prompt, no frontmatter.\n');
+    expect(frontmatter).toBeNull();
     expect(body).toBe('Just a system prompt, no frontmatter.');
   });
 
@@ -83,8 +84,7 @@ describe('writeAgentBody / loadAgentBody / deleteAgentDir', () => {
     expect(await loadAgentBody(dir, 'research-bot')).toBe('Be thorough.');
   });
 
-  test('absent agent dir loads as undefined (valid empty-prompt agent)', async () => {
-  });
+  test('absent agent dir loads as undefined (valid empty-prompt agent)', async () => {});
 
   test('delete removes the dir, load then undefined', async () => {
     await writeAgentBody(dir, 'temp', { name: 'Temp' }, 'x');

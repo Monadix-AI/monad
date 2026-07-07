@@ -4,7 +4,6 @@
 // seen by the compiler, so those files would be missing from $bunfs and init/daemon would
 // crash with ENOENT on first run (works only in dev, where the path is a real one).
 import agentMd from './templates/AGENT.md' with { type: 'file' };
-import modelProviderSampleMd from './templates/model-provider.sample.md' with { type: 'file' };
 import soulMd from './templates/SOUL.md' with { type: 'file' };
 import summarizeChangesMd from './templates/skills/summarize-changes.md' with { type: 'file' };
 import userMd from './templates/USER.md' with { type: 'file' };
@@ -14,7 +13,6 @@ export const TEMPLATES = {
   'AGENT.md': agentMd,
   'SOUL.md': soulMd,
   'USER.md': userMd,
-  'model-provider.sample.md': modelProviderSampleMd,
   'skills/summarize-changes.md': summarizeChangesMd
 } as const;
 

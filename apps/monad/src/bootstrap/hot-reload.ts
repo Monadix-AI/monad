@@ -72,7 +72,7 @@ export function registerHotReload(deps: {
 
   configBus.subscribe(async ({ cfg: freshCfg, auth: freshAuth }) => {
     const prevEmbedding = modelService.embeddingModel;
-    configureDeveloperLogTransport(paths, freshCfg.observability.developerMode === true);
+    configureDeveloperLogTransport(paths, freshCfg.developerMode === true);
     // Hot-apply the inbound-delegation approval policy (the agent gate reads this live).
     setInboundApprovalMode(freshCfg.openaiCompat.approval);
     modelService.reload(freshCfg, freshAuth);

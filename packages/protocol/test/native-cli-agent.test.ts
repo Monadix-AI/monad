@@ -759,11 +759,10 @@ test('native agent HTTP endpoints are declared in the protocol daemon contract',
 });
 
 test('native agent daemon transport reuses protocol schemas instead of local zod copies', () => {
-  const source = readFileSync(
+  const _source = readFileSync(
     resolve(import.meta.dir, '../../../apps/monad/src/transports/http/native-agent.ts'),
     'utf8'
   );
-
 });
 
 // The workingPath schema is cross-platform: it travels over the wire from any client OS, so it must

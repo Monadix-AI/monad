@@ -327,8 +327,7 @@ test('checkSkillCompatibility: free-form prose is advisory (compatible: true)', 
   });
 });
 
-test('checkSkillCompatibility: absent → null', () => {
-});
+test('checkSkillCompatibility: absent → null', () => {});
 
 test('skillEligibility: bins — all must be present', () => {
   expect(skillEligibility({ bins: ['git', 'jq'] }, eligCtx()).ok).toBe(true);

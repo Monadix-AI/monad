@@ -8,6 +8,7 @@ import { saveAuth } from '@monad/home';
 
 import { GatewayModelRouter, ModelProviderRegistry } from '@/agent/index.ts';
 import { DEFAULT_PROFILE_ALIAS, resolveModelRole } from '@/config/resolve.ts';
+import { getHttp2Fetch } from '@/infra/http2-fetch.ts';
 
 /** An empty provider registry — the daemon fills it from `builtinAtomPack` (+ any third-party
  *  `provider` atom) so providers flow through the unified loader, not a separate seed. ModelService
@@ -63,7 +64,8 @@ export class ModelService {
           .slice()
           .sort((a, b) => a.priority - b.priority)
           .map(credentialToHandle),
-      reportCredential: (providerId, credId, ok, err) => self.reportCredential(providerId, credId, ok, err)
+      reportCredential: (providerId, credId, ok, err) => self.reportCredential(providerId, credId, ok, err),
+      fetch: getHttp2Fetch()
     };
 
     this.router = new GatewayModelRouter(deps, registry);

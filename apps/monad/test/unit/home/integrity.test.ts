@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { initMonadHome, loadAll, loadAuth, pathsForHome, saveProfile } from '@monad/home';
+import { initMonadHome, loadAll, pathsForHome, saveProfile } from '@monad/home';
 import { ModelProviderType } from '@monad/protocol';
 
 import { createStore } from '@/store/db/index.ts';
@@ -187,7 +187,7 @@ describe('checkAndRepair', () => {
     const report = await checkAndRepair(paths, store);
     store.close();
 
-    const repaired = await loadAll(paths.config, paths.profile);
+    const _repaired = await loadAll(paths.config, paths.profile);
     expect(report.profile).toBe('repaired');
   });
 

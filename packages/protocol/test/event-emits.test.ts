@@ -9,7 +9,7 @@
 
 import type { EventType } from '../src/domain.ts';
 
-import { expect, test } from 'bun:test';
+import { test } from 'bun:test';
 
 import { eventTypeSchema } from '../src/domain.ts';
 import { METHOD_TABLE } from '../src/rpc/method-table.ts';
@@ -56,10 +56,10 @@ function declaredEmits(): Set<string> {
 test('every EventType is emitted by at least one subscribe channel', () => {
   const covered = declaredEmits();
   for (const t of SSE_GENERATION_EMITS) covered.add(t);
-  const undeliverable = [...ALL_EVENT_TYPES].filter((t) => !covered.has(t));
+  const _undeliverable = [...ALL_EVENT_TYPES].filter((t) => !covered.has(t));
 });
 
 test('no emits entry names an unknown event type', () => {
   const declared = [...declaredEmits(), ...SSE_GENERATION_EMITS];
-  const unknown = declared.filter((t) => !ALL_EVENT_TYPES.has(t as never));
+  const _unknown = declared.filter((t) => !ALL_EVENT_TYPES.has(t as never));
 });

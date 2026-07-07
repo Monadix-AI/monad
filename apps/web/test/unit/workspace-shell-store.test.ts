@@ -1,9 +1,15 @@
 import { afterEach, expect, test } from 'bun:test';
 
 import {
+  LAST_STUDIO_SECTION_STORAGE_KEY,
+  LAST_WORKSPACE_PATH_STORAGE_KEY,
+  readStoredLastStudioSection,
+  readStoredLastWorkspacePath,
   readStoredSidebarCollapsed,
   SIDEBAR_COLLAPSED_STORAGE_KEY,
   useWorkspaceShellStore,
+  writeStoredLastStudioSection,
+  writeStoredLastWorkspacePath,
   writeStoredSidebarCollapsed
 } from '../../lib/workspace-shell-store';
 
@@ -55,6 +61,46 @@ test('sidebar collapsed preference falls back open when storage is unavailable',
   });
 
   expect(readStoredSidebarCollapsed()).toBe(false);
+});
+
+test('last Studio section defaults to runtime and persists valid sections', () => {
+  const values = installLocalStorageMock({ [LAST_STUDIO_SECTION_STORAGE_KEY]: 'not-a-section' });
+
+  expect(readStoredLastStudioSection()).toBe('runtime');
+
+  writeStoredLastStudioSection('models');
+
+  expect(values.get(LAST_STUDIO_SECTION_STORAGE_KEY)).toBe('models');
+  expect(readStoredLastStudioSection()).toBe('models');
+});
+
+test('last workspace path persists only canonical workspace routes', () => {
+  const values = installLocalStorageMock({ [LAST_WORKSPACE_PATH_STORAGE_KEY]: '/channels/old' });
+
+  expect(readStoredLastWorkspacePath()).toBe('/');
+
+  writeStoredLastWorkspacePath('/workplace/projects/project%201');
+  expect(values.get(LAST_WORKSPACE_PATH_STORAGE_KEY)).toBe('/workplace/projects/project%201');
+  expect(readStoredLastWorkspacePath()).toBe('/workplace/projects/project%201');
+
+  writeStoredLastWorkspacePath('/studio/models');
+  expect(values.get(LAST_WORKSPACE_PATH_STORAGE_KEY)).toBe('/workplace/projects/project%201');
+});
+
+test('shell store remembers Studio and workspace navigation preferences', () => {
+  const values = installLocalStorageMock();
+  useWorkspaceShellStore.setState({
+    lastStudioSection: 'runtime',
+    lastWorkspacePath: '/'
+  });
+
+  useWorkspaceShellStore.getState().rememberStudioSection('capabilities');
+  useWorkspaceShellStore.getState().rememberWorkspacePath('/sessions/session-1');
+
+  expect(useWorkspaceShellStore.getState().lastStudioSection).toBe('capabilities');
+  expect(useWorkspaceShellStore.getState().lastWorkspacePath).toBe('/sessions/session-1');
+  expect(values.get(LAST_STUDIO_SECTION_STORAGE_KEY)).toBe('capabilities');
+  expect(values.get(LAST_WORKSPACE_PATH_STORAGE_KEY)).toBe('/sessions/session-1');
 });
 
 test('temporary sidebar auto reveal does not overwrite stored collapsed preference', () => {

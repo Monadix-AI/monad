@@ -121,8 +121,8 @@ test('logs and wait can strip ANSI sequences', async () => {
   );
   const waited = await waitProcess({ id, pattern: 'READY', match: 'regex', stripAnsi: true, timeoutMs: 1000 }, ctx);
   expect(waited.matched).toBe(true);
-  const raw = await processLogs({ id }, ctx);
-  const stripped = await processLogs({ id, stripAnsi: true }, ctx);
+  const _raw = await processLogs({ id }, ctx);
+  const _stripped = await processLogs({ id, stripAnsi: true }, ctx);
 });
 
 test.skipIf(process.platform === 'win32')('write supports structured keys', async () => {

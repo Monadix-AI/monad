@@ -109,8 +109,8 @@ lost work; each has a sync command:
 |---|---|---|
 | `CLAUDE.md`, `AGENTS.md`, other agent files | `.rulesync/rules/` | `bun run agents:sync` |
 | i18n type definitions | `packages/i18n/src/en.json` + locale packs | `bun run i18n:types` (auto-run by test/typecheck) |
-| license inventory | dependency tree | `bun run build:licenses` |
-| codex app-server protocol types | upstream protocol spec | `bun run protocol:codex-app-server` |
+| license inventory | dependency tree | project hook |
+| codex app-server protocol types | upstream protocol spec | project hook |
 
 `bun run agents:check` and `bun run i18n:check` verify sync without writing — CI runs
 them, so a hand-edited artifact fails fast instead of silently diverging.

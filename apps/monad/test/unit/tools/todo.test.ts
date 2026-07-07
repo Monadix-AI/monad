@@ -17,8 +17,7 @@ test('todo_write stores the list and todo_read returns it for the same session',
   expect(out.metadata.todos).toEqual(sample);
 });
 
-test('todo_read is empty for a session with no list', async () => {
-});
+test('todo_read is empty for a session with no list', async () => {});
 
 test('todo lists are isolated per session', async () => {
   await todoWriteTool.run({ todos: [{ content: 'a', status: 'pending' }] }, ctx('sA'));

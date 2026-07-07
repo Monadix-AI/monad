@@ -83,7 +83,7 @@ test('next.config exports an object', async () => {
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { ensureTlsCert } from '@monad/home';
+import { ensureTlsCert } from '@monad/home/tls';
 
 test('readDaemonUrl reads port from MONAD_HOME/configs/config.json', async () => {
   const home = join(tmpdir(), `monad-web-cfgpath-${Date.now()}`);

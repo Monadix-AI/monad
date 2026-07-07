@@ -6,7 +6,8 @@ import type { App } from '@monad/monad/start';
 
 import { readFileSync } from 'node:fs';
 import { extname } from 'node:path';
-import { getPaths, resolveDaemonUrl } from '@monad/home';
+import { resolveDaemonUrl } from '@monad/home/network-endpoints';
+import { getPaths } from '@monad/home/paths';
 import { createLogger } from '@monad/logger';
 
 import { loopbackTlsOptions } from '../lib/loopback-tls';

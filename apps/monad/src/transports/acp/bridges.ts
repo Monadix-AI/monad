@@ -1,6 +1,7 @@
 import type {
   AgentConnection,
   ClientCapabilities,
+  CreateElicitationResponse,
   RequestPermissionRequest,
   RequestPermissionResponse
 } from '@agentclientprotocol/sdk';
@@ -162,7 +163,7 @@ async function bridgeFreeTextClarify(
     return;
   }
   try {
-    const res = await conn.client.request('elicitation/create', {
+    const res = (await conn.client.request('elicitation/create', {
       mode: 'form',
       sessionId,
       message: question,
@@ -171,8 +172,12 @@ async function bridgeFreeTextClarify(
         properties: { answer: { type: 'string', title: 'Answer' } },
         required: ['answer']
       }
-    });
-    const answer = res.action === 'accept' ? String(res.content?.answer ?? '') : '';
+    })) as CreateElicitationResponse;
+    const content =
+      res.action === 'accept' && res.content && typeof res.content === 'object'
+        ? (res.content as Record<string, unknown>)
+        : undefined;
+    const answer = String(content?.answer ?? '');
     await handlers.clarify.respond({ requestId, answer });
   } catch {
     await handlers.clarify.respond({ requestId, answer: '' });

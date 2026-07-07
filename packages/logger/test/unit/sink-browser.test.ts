@@ -58,12 +58,12 @@ describe('browser sink developer records', () => {
 
   test('do NOT fan out trace records (below the debug developer floor, matching node)', () => {
     const log = createLogger('web');
-    const traceRecords = capture(() => log.trace({ sessionId: 'ses_1' }, 'too low'));
+    const _traceRecords = capture(() => log.trace({ sessionId: 'ses_1' }, 'too low'));
   });
 
   test('only records carrying a channelId/sessionId are fanned out', () => {
     const log = createLogger('web');
-    const records = capture(() => log.info('no ids here'));
+    const _records = capture(() => log.info('no ids here'));
   });
 
   test('custom destinations use the same config contract as node destinations', () => {

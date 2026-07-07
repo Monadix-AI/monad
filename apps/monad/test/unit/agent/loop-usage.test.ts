@@ -154,7 +154,7 @@ test('no recordTurnUsage configured → no crash, no cost attached', async () =>
     emit: (e) => events.push(e)
   });
   await loop.runStream(newId('ses') as SessionId, 'hi');
-  const msg = events.find((e) => e.type === 'agent.message');
+  const _msg = events.find((e) => e.type === 'agent.message');
 });
 
 test('the global estimator self-calibrates from a turn with real input tokens', async () => {

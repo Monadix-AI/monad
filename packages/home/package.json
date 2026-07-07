@@ -9,7 +9,10 @@
     "@monad/config": "workspace:*"
   },
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./network-endpoints": "./src/network-endpoints.ts",
+    "./paths": "./src/paths.ts",
+    "./tls": "./src/tls.ts"
   },
   "module": "src/index.ts",
   "private": true,

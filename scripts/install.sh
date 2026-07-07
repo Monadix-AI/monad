@@ -298,22 +298,56 @@ quote_shell() {
   printf "'%s'" "$(printf "%s" "$1" | sed "s/'/'\\\\''/g")"
 }
 
+install_macos_icon() {
+  local src="$1"
+  local resources_dir="$2"
+  [ -f "$src" ] || return 1
+
+  if command -v sips >/dev/null 2>&1 && command -v iconutil >/dev/null 2>&1; then
+    local tmp_root tmp_iconset
+    tmp_root="$(mktemp -d "${TMPDIR:-/tmp}/monad-icon.XXXXXX")"
+    tmp_iconset="${tmp_root}/MonadIcon.iconset"
+    mkdir -p "$tmp_iconset"
+    for size in 16 32 128 256 512; do
+      sips -s format png -z "$size" "$size" "$src" --out "${tmp_iconset}/icon_${size}x${size}.png" >/dev/null 2>&1 || true
+      local retina=$((size * 2))
+      sips -s format png -z "$retina" "$retina" "$src" --out "${tmp_iconset}/icon_${size}x${size}@2x.png" >/dev/null 2>&1 || true
+    done
+    if iconutil -c icns "$tmp_iconset" -o "${resources_dir}/MonadIcon.icns" >/dev/null 2>&1; then
+      rm -rf "$tmp_root"
+      return 0
+    fi
+    rm -rf "$tmp_root"
+  fi
+
+  cp "$src" "${resources_dir}/MonadIcon.svg"
+  return 1
+}
+
 install_app_launcher() {
   local bin_dir="$1"
   local monad_bin="${bin_dir}/monad"
+  local monad_icon_svg="${INSTALL_DIR}/assets/monad-icon-vector-solid.svg"
 
   case "$(uname -s)" in
     Darwin)
       local apps_dir="${MONAD_APPLICATIONS_DIR:-$HOME/Applications}"
       local app_dir="${apps_dir}/Monad.app"
       local macos_dir="${app_dir}/Contents/MacOS"
-      mkdir -p "$macos_dir"
+      local resources_dir="${app_dir}/Contents/Resources"
+      mkdir -p "$macos_dir" "$resources_dir"
+      local bundle_icon_file=""
+      if install_macos_icon "$monad_icon_svg" "$resources_dir"; then
+        bundle_icon_file="MonadIcon"
+      elif [ -f "${resources_dir}/MonadIcon.svg" ]; then
+        bundle_icon_file="MonadIcon.svg"
+      fi
       cat >"${macos_dir}/monad" <<EOF
 #!/usr/bin/env bash
 exec $(quote_shell "$monad_bin") up
 EOF
       chmod +x "${macos_dir}/monad"
-      cat >"${app_dir}/Contents/Info.plist" <<'EOF'
+      cat >"${app_dir}/Contents/Info.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -324,6 +358,8 @@ EOF
   <string>ai.monad.launcher</string>
   <key>CFBundleName</key>
   <string>Monad</string>
+  <key>CFBundleIconFile</key>
+  <string>${bundle_icon_file}</string>
   <key>CFBundlePackageType</key>
   <string>APPL</string>
 </dict>
@@ -341,6 +377,7 @@ Type=Application
 Name=Monad
 Comment=Start Monad and open the Web UI
 Exec=${monad_bin} up
+Icon=${monad_icon_svg}
 Terminal=false
 Categories=Development;Utility;
 "

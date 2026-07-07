@@ -53,8 +53,7 @@ test('non-finite values are treated as absent', () => {
   expect(u?.outputTokens).toBe(50);
 });
 
-test('completely empty usage → undefined (no-usage semantics)', () => {
-});
+test('completely empty usage → undefined (no-usage semantics)', () => {});
 
 test('cacheWrite reads the bedrock mirror when anthropic key absent', () => {
   const u = toUsage({ inputTokens: 10, outputTokens: 5 }, { bedrock: { usage: { cacheWriteInputTokens: 7 } } });

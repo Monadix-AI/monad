@@ -18,14 +18,11 @@ test('resolveAllowedOrigin: allows same-host as the listener (web UI behind reve
   ).toBe('https://dashboard.example.com');
 });
 
-test('resolveAllowedOrigin: rejects cross-site origins — does not reflect them', () => {
-});
+test('resolveAllowedOrigin: rejects cross-site origins — does not reflect them', () => {});
 
-test('resolveAllowedOrigin: returns null when no Origin header', () => {
-});
+test('resolveAllowedOrigin: returns null when no Origin header', () => {});
 
-test('resolveAllowedOrigin: returns null for a malformed Origin', () => {
-});
+test('resolveAllowedOrigin: returns null for a malformed Origin', () => {});
 
 // ── tokenMatches ──────────────────────────────────────────────────────────────
 

@@ -102,7 +102,7 @@ function Add-ToUserPath ([string]$Dir) {
 
 # ── Start Menu / desktop shortcut setup ─────────────────────────────────────────
 
-function New-MonadShortcut([string]$Path, [string]$Target) {
+function New-MonadShortcut([string]$Path, [string]$Target, [string]$IconPath) {
   $dir = Split-Path $Path
   New-Item -ItemType Directory -Path $dir -Force | Out-Null
   $shell = New-Object -ComObject WScript.Shell
@@ -111,6 +111,9 @@ function New-MonadShortcut([string]$Path, [string]$Target) {
   $shortcut.Arguments = 'up'
   $shortcut.WorkingDirectory = Split-Path $Target
   $shortcut.Description = 'Start Monad and open the Web UI'
+  if ($IconPath -and (Test-Path $IconPath)) {
+    $shortcut.IconLocation = $IconPath
+  }
   $shortcut.Save()
 }
 
@@ -128,8 +131,9 @@ function Install-AppLaunchers([string]$MonadExe) {
 
   $startMenuLink = Join-Path $startMenuDir 'Monad.lnk'
   $desktopLink = Join-Path $desktopDir 'Monad.lnk'
-  New-MonadShortcut -Path $startMenuLink -Target $MonadExe
-  New-MonadShortcut -Path $desktopLink -Target $MonadExe
+  $iconPath = Join-Path $InstallDir 'assets\favicon.ico'
+  New-MonadShortcut -Path $startMenuLink -Target $MonadExe -IconPath $iconPath
+  New-MonadShortcut -Path $desktopLink -Target $MonadExe -IconPath $iconPath
   Info "  Start Menu shortcut: $startMenuLink"
   Info "  Desktop shortcut: $desktopLink"
 }
@@ -232,7 +236,7 @@ try {
   $monadHome = if ($env:MONAD_HOME) { $env:MONAD_HOME } else { Join-Path $HOME '.monad' }
   Write-Host ''
   Write-Host '  Start everything:  monad up         # daemon + web UI in one process'
-  Write-Host '  Web UI:            http://localhost:3000'
+  Write-Host '  Web UI:            printed by monad up'
   Write-Host '  Daemon only:       monad daemon'
   Write-Host '  Use the CLI:       monad --help'
   Write-Host "  Provider sample:   $monadHome\config.json (model.providers + model.profiles)"

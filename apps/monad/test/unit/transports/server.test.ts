@@ -34,8 +34,7 @@ test('SET and GET', async () => {
   expect(await redis.get('key')).toBe('value');
 });
 
-test('GET missing returns null', async () => {
-});
+test('GET missing returns null', async () => {});
 
 test('DEL', async () => {
   await redis.set('k', 'v');
@@ -242,7 +241,7 @@ describe('streams', () => {
 
   test('XREAD BLOCK times out to empty', async () => {
     await redis.send('XADD', ['to', '1-0', 'a', '1']);
-    const res = await redis.send('XREAD', ['BLOCK', '60', 'STREAMS', 'to', '$']);
+    const _res = await redis.send('XREAD', ['BLOCK', '60', 'STREAMS', 'to', '$']);
   });
 
   test('XINFO STREAM returns a summary map', async () => {

@@ -31,7 +31,7 @@ test('detectContradictions maps cited tags to real ids and drops invented ones',
 
 test('detectContradictions short-circuits when there are no laws or no facts', async () => {
   let called = false;
-  const model = async () => {
+  const _model = async () => {
     called = true;
     return '{}';
   };

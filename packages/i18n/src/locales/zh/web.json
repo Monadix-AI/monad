@@ -631,7 +631,7 @@
   "web.settings.system.upgradeStage.failed": "更新失败",
   "web.settings.system.developer": "开发者",
   "web.settings.system.developerMode": "开发者模式",
-  "web.settings.system.developerModeDesc": "将 session、channel、LLM、ACP 和生成通信日志追加写入 monad 主目录的 logs 文件夹。",
+  "web.settings.system.developerModeDesc": "开启开发者日志、Scalar API 文档和本地 OpenTelemetry 导出。",
   "web.settings.system.startup": "启动",
   "web.settings.system.launchAtLogin": "开机自启动",
   "web.settings.system.launchAtLoginDesc": "登录系统后自动启动 monad daemon。",

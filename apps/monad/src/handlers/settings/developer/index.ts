@@ -10,13 +10,13 @@ export function createDeveloperModule(paths: MonadPaths, configBus?: ConfigBus) 
   async function getDeveloperSettings(): Promise<DeveloperSettings> {
     const cfg = await loadAll(paths.config, paths.profile);
     if (!cfg) throw new Error('developer settings: config.json missing');
-    return { developerMode: cfg.observability.developerMode === true, logsDir: developerLogsDir(paths) };
+    return { developerMode: cfg.developerMode === true, logsDir: developerLogsDir(paths) };
   }
 
   async function setDeveloperSettings(req: SetDeveloperSettingsRequest): Promise<DeveloperSettings> {
     const cfg = await loadAll(paths.config, paths.profile);
     if (!cfg) throw new Error('developer settings: config.json missing');
-    cfg.observability.developerMode = req.developerMode;
+    cfg.developerMode = req.developerMode;
     await saveSystemConfig(paths.config, cfg);
     configureDeveloperLogTransport(paths, req.developerMode);
     if (configBus) await configBus.publish({ cfg, auth: await loadAuth(paths.auth) });

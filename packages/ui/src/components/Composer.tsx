@@ -11,7 +11,7 @@ import {
   SquareIcon
 } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { forwardRef } from 'react';
+import { forwardRef, useEffect, useId, useMemo, useRef, useState } from 'react';
 
 import { cn } from '../lib/utils';
 import { ChatInputChrome } from './ChatInput';
@@ -25,6 +25,7 @@ export type ComposerSurfaceProps = {
   children: ReactNode;
   className?: string;
   leftTools?: ReactNode;
+  liquidGlass?: boolean;
   mentionMenu?: ReactNode;
   mentionPreview?: ReactNode;
   rightTools?: ReactNode;
@@ -33,11 +34,26 @@ export type ComposerSurfaceProps = {
   voiceState?: 'idle' | 'listening' | 'busy';
 };
 
+type ComposerLiquidGlassState = {
+  filterId: string;
+  height: number;
+  mapUrl: string;
+  scale: number;
+  width: number;
+};
+
+const LIQUID_GLASS_MAX_AREA = 130_000;
+const LIQUID_GLASS_MAX_WIDTH = 900;
+const LIQUID_GLASS_MAX_HEIGHT = 180;
+const COMPOSER_LIQUID_GLASS_DEFAULT_ENABLED = true;
+const liquidGlassMapCache = new Map<string, string>();
+
 export function ComposerSurface({
   ariaBusy,
   children,
   className,
   leftTools,
+  liquidGlass = COMPOSER_LIQUID_GLASS_DEFAULT_ENABLED,
   mentionMenu,
   mentionPreview,
   rightTools,
@@ -46,11 +62,29 @@ export function ComposerSurface({
   voiceState = 'idle'
 }: ComposerSurfaceProps): ReactElement {
   const voiceActive = voiceState !== 'idle';
+  const frameRef = useRef<HTMLDivElement | null>(null);
+  const liquidGlassState = useComposerLiquidGlass(frameRef, liquidGlass);
   return (
     <ChatInputChrome
-      className={cn('shared-composer-panel', voiceActive && 'chat-input-chrome--voice-active', className)}
+      className={cn(
+        'shared-composer-panel',
+        liquidGlassState && 'chat-input-chrome--liquid-glass',
+        voiceActive && 'chat-input-chrome--voice-active',
+        className
+      )}
+      style={
+        liquidGlassState
+          ? ({
+              '--composer-liquid-glass-filter': `url(#${liquidGlassState.filterId})`
+            } as CSSProperties)
+          : undefined
+      }
     >
-      <div className="chat-input-frame">
+      {liquidGlassState ? <ComposerLiquidGlassFilter state={liquidGlassState} /> : null}
+      <div
+        className="chat-input-frame"
+        ref={frameRef}
+      >
         <div
           aria-hidden="true"
           className="chat-input-aurora"
@@ -145,6 +179,136 @@ export function ComposerSurface({
       </div>
     </ChatInputChrome>
   );
+}
+
+function ComposerLiquidGlassFilter({ state }: { state: ComposerLiquidGlassState }): ReactElement {
+  return (
+    <svg
+      aria-hidden="true"
+      className="composer-liquid-glass-filter"
+      focusable="false"
+    >
+      <filter
+        colorInterpolationFilters="sRGB"
+        id={state.filterId}
+      >
+        <feImage
+          height="100%"
+          href={state.mapUrl}
+          preserveAspectRatio="none"
+          result="composer-liquid-glass-map"
+          width="100%"
+          x="0"
+          y="0"
+        />
+        <feDisplacementMap
+          in="SourceGraphic"
+          in2="composer-liquid-glass-map"
+          scale={state.scale}
+          xChannelSelector="R"
+          yChannelSelector="G"
+        />
+      </filter>
+    </svg>
+  );
+}
+
+function useComposerLiquidGlass(
+  ref: React.RefObject<HTMLElement | null>,
+  enabled: boolean
+): ComposerLiquidGlassState | null {
+  const reactId = useId();
+  const filterId = useMemo(() => `composer-liquid-glass-${reactId.replaceAll(/[^a-zA-Z0-9_-]/g, '')}`, [reactId]);
+  const [size, setSize] = useState<{ height: number; width: number } | null>(null);
+
+  useEffect(() => {
+    if (!enabled) return;
+    if (typeof window === 'undefined') return;
+    const node = ref.current;
+    if (!node || typeof ResizeObserver === 'undefined') return;
+    let frame = 0;
+    const update = (): void => {
+      const rect = node.getBoundingClientRect();
+      const width = Math.round(rect.width);
+      const height = Math.round(rect.height);
+      setSize((current) => (current?.width === width && current.height === height ? current : { width, height }));
+    };
+    const observer = new ResizeObserver(() => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(update);
+    });
+    observer.observe(node);
+    update();
+    return () => {
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
+  }, [enabled, ref]);
+
+  return useMemo(() => {
+    if (!enabled) return null;
+    if (!size) return null;
+    if (size.width <= 0 || size.height <= 0) return null;
+    if (size.width > LIQUID_GLASS_MAX_WIDTH || size.height > LIQUID_GLASS_MAX_HEIGHT) return null;
+    if (size.width * size.height > LIQUID_GLASS_MAX_AREA) return null;
+    const mapUrl = composerLiquidGlassMap(size.width, size.height);
+    if (!mapUrl) return null;
+    return {
+      filterId,
+      height: size.height,
+      mapUrl,
+      scale: Math.max(10, Math.min(24, Math.round(size.height * 0.18))),
+      width: size.width
+    };
+  }, [enabled, filterId, size]);
+}
+
+function composerLiquidGlassMap(width: number, height: number): string | null {
+  if (typeof document === 'undefined') return null;
+  const key = `${width}x${height}`;
+  const cached = liquidGlassMapCache.get(key);
+  if (cached) return cached;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext('2d', { willReadFrequently: false });
+  if (!context) return null;
+
+  const image = context.createImageData(width, height);
+  const data = image.data;
+  const radius = Math.min(18, Math.floor(Math.min(width, height) * 0.22));
+  const bezel = Math.max(12, Math.min(28, Math.round(Math.min(width, height) * 0.24)));
+  const halfWidth = width / 2;
+  const halfHeight = height / 2;
+  const innerWidth = Math.max(1, halfWidth - radius);
+  const innerHeight = Math.max(1, halfHeight - radius);
+
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const offsetX = Math.abs(x - halfWidth) - innerWidth;
+      const offsetY = Math.abs(y - halfHeight) - innerHeight;
+      const outsideX = Math.max(offsetX, 0);
+      const outsideY = Math.max(offsetY, 0);
+      const signedDistance = Math.hypot(outsideX, outsideY) + Math.min(Math.max(offsetX, offsetY), 0) - radius;
+      const edge = Math.max(0, 1 - Math.abs(signedDistance) / bezel);
+      const eased = edge * edge * (3 - 2 * edge);
+      const cornerPull = Math.max(0, Math.min(1, (Math.abs(offsetX) + Math.abs(offsetY)) / (bezel * 2)));
+      const strength = eased * (0.64 + cornerPull * 0.36);
+      const index = (y * width + x) * 4;
+      data[index] = 128 + (x < halfWidth ? -1 : 1) * strength * 92;
+      data[index + 1] = 128 + (y < halfHeight ? -1 : 1) * strength * 92;
+      data[index + 2] = 128;
+      data[index + 3] = 255;
+    }
+  }
+
+  context.putImageData(image, 0, 0);
+  const mapUrl = canvas.toDataURL('image/png');
+  liquidGlassMapCache.set(key, mapUrl);
+  const oldestKey = liquidGlassMapCache.keys().next().value;
+  if (liquidGlassMapCache.size > 24 && oldestKey) liquidGlassMapCache.delete(oldestKey);
+  return mapUrl;
 }
 
 function ComposerVoiceSpectrum({

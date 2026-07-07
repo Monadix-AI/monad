@@ -112,7 +112,6 @@ test('failOrphanedStreamingMessages retires empty managed native CLI thinking pl
   });
 
   expect(store.failOrphanedStreamingMessages('2026-06-28T00:00:02.000Z')).toBe(1);
-
 });
 
 test('native CLI inbox diagnostics count pending visible messages', () => {
@@ -392,7 +391,6 @@ test('deleteSession cleans up native CLI session rows', () => {
   expect(store.listNativeAgentDirectMessages('ncli_1', 'claude')).toHaveLength(1);
 
   store.deleteWorkplaceProject('prj_project');
-
 
   store.insertWorkplaceProject({
     id: 'prj_project',

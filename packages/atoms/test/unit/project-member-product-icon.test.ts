@@ -14,8 +14,7 @@ test('productIcon resolves every branded native-CLI product id including opencla
   }
 });
 
-test('productIcon rejects unknown or non-string values', () => {
-});
+test('productIcon rejects unknown or non-string values', () => {});
 
 test('nativeCliProductDisplayName brands openclaw and hermes instead of falling back', () => {
   expect(nativeCliProductDisplayName('openclaw', 'openclaw', 'fallback')).toBe('OpenClaw');

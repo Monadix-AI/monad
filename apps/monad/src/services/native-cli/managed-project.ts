@@ -79,7 +79,7 @@ function managedProjectMonadCliEntry(): NativeAgentMonadCliEntry {
   return { command: process.execPath, args: [] };
 }
 
-function managedProjectMonadCliCommand(): string {
+function _managedProjectMonadCliCommand(): string {
   return monadCliCommand(managedProjectMonadCliEntry());
 }
 

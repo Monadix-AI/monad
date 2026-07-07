@@ -34,5 +34,4 @@ test('toMcpSpec maps an http MCP server (headers array → record)', () => {
   });
 });
 
-test('toMcpSpec returns null for transports monad cannot speak (sse, acp)', () => {
-});
+test('toMcpSpec returns null for transports monad cannot speak (sse, acp)', () => {});

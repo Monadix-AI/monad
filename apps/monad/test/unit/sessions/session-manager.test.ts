@@ -25,7 +25,7 @@ test('createAgent with mock repo creates a session in the active state', async (
 });
 
 test('createAgent starts with no tools when none provided', () => {
-  const agent = createAgent({
+  const _agent = createAgent({
     sessionRepo: { insertSession: () => {}, getSession: () => null }
   });
 });

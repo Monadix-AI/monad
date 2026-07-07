@@ -150,6 +150,14 @@ const networkConfigSchema = z
     localHttpFallback: { enabled: false, port: DEFAULT_LOCAL_HTTP_FALLBACK_PORT }
   }));
 
+const observabilityConfigSchema = z
+  .object({
+    // OTLP HTTP endpoint for traces + metrics. Leave empty to disable.
+    // Developer Mode auto-defaults the endpoint to http://localhost:6006 unless this is set.
+    endpoint: blankableHttpUrlSchema.default('')
+  })
+  .default({ endpoint: '' });
+
 const monadConfigSchema = z.object({
   version: z.literal(CURRENT_CONFIG_VERSION),
   principal: z.object({
@@ -157,6 +165,7 @@ const monadConfigSchema = z.object({
     displayName: z.string(),
     verification: z.enum(['unverified', 'email', 'domain', 'attested'])
   }),
+  developerMode: z.boolean().default(false),
   user: z
     .object({
       avatarDataUrl: userAvatarDataUrlSchema.nullable().default(null)
@@ -337,16 +346,7 @@ const monadConfigSchema = z.object({
   // deny rules (SHELL command hooks only; atom-pack hooks are already operator-installed, not user
   // config). Pair with `onError: 'deny'` so a crashing guard fails closed. Edit config.json directly.
   policyHooks: hooksConfigSchema.optional(),
-  observability: z
-    .object({
-      // OTLP HTTP endpoint for traces + metrics. Leave empty to disable.
-      // Dev auto-starts Arize Phoenix on http://localhost:6006 (see scripts/dev-init.ts) and
-      // defaults the endpoint there; set this to "http://localhost:6006" to use it explicitly, or
-      // point at any other OTLP/HTTP-protobuf collector.
-      endpoint: blankableHttpUrlSchema.default(''),
-      developerMode: z.boolean().default(false)
-    })
-    .default({ endpoint: '', developerMode: false }),
+  observability: observabilityConfigSchema,
   openaiCompat: z
     .object({
       enabled: z.boolean().default(false),
@@ -376,6 +376,7 @@ export const monadSystemConfigSchema = z.object({
     displayName: z.string(),
     verification: z.enum(['unverified', 'email', 'domain', 'attested'])
   }),
+  developerMode: z.boolean().default(false),
   network: networkConfigSchema,
   agent: z.object({
     sandbox: z.object({
@@ -410,12 +411,7 @@ export const monadSystemConfigSchema = z.object({
   nativeCliAgents: z.array(nativeCliAgentSchema).default([]),
   // Peer daemons (delegation targets + their credentials) → system config, like acpAgents.
   peers: z.array(peerSchema).default([]),
-  observability: z
-    .object({ endpoint: blankableHttpUrlSchema.default(''), developerMode: z.boolean().default(false) })
-    .default({
-      endpoint: '',
-      developerMode: false
-    })
+  observability: observabilityConfigSchema
 });
 export type MonadSystemConfig = z.infer<typeof monadSystemConfigSchema>;
 
@@ -577,7 +573,8 @@ export function createDefaultConfig(principalId: string, displayName: string): M
     channels: [],
     locale: 'en',
     atomPins: {},
-    observability: { endpoint: '', developerMode: false },
+    developerMode: false,
+    observability: { endpoint: '' },
     openaiCompat: { enabled: false, approval: 'local' },
     memory: { backend: 'builtin', level: 1, mem0: {} },
     context: {

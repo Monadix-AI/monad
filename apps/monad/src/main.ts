@@ -17,7 +17,6 @@
 
 import type { MonadAuth } from '@monad/home';
 import type { PrincipalId, SessionId } from '@monad/protocol';
-import type { Elysia } from 'elysia';
 import type { Tool } from '@/capabilities/tools/types.ts';
 import type { SessionGateway } from '@/channels/channel.ts';
 
@@ -32,7 +31,7 @@ import { type CommandBundle, createCommandRegistry } from '@/handlers/commands/i
 import { createDaemonHandlers } from '@/handlers/daemon-handlers/index.ts';
 import { createHookRunner } from '@/hooks/runner.ts';
 import { daemonChildProcesses, runDaemonChildSupervisorFromArgv } from '@/infra/daemon-child-processes.ts';
-import { initObservability } from '@/infra/observability.ts';
+import { initObservability, resolveObservabilityEndpoint } from '@/infra/observability.ts';
 import { ReloadService } from '@/reload/index.ts';
 import { DelegationService } from '@/services/delegation/delegation.ts';
 import { acpAgentCandidatesFromAdapters } from '@/services/delegation/presets.ts';
@@ -83,8 +82,7 @@ import { createHttpTransport } from './transports/http.ts';
 // dist/main.d.ts — the @/ alias is internal to @monad/monad and would not resolve for
 // consumers (e.g. @monad/client) reading the generated d.ts.
 type HttpTransport = ReturnType<typeof createHttpTransport>;
-type HttpRoutes = HttpTransport extends { '~Routes': infer Routes extends Record<any, any> } ? Routes : {};
-export type App = Elysia<'', any, any, any, HttpRoutes, any, any>;
+export type App = HttpTransport;
 
 configureDaemonLogging();
 const logger = createLogger('monad-daemon');
@@ -131,7 +129,7 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
 
   const cfg = await loadAll(paths.config, paths.profile);
   if (!cfg) throw new Error('monad: config.json missing after repair — aborting');
-  configureDeveloperLogTransport(paths, cfg.observability.developerMode === true);
+  configureDeveloperLogTransport(paths, cfg.developerMode === true);
   const ownerPrincipalId = cfg.principal.id as PrincipalId;
 
   // Bind address: config > default.
@@ -248,7 +246,11 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
     .json()
     .then((p: { version?: string }) => p.version ?? '0.0.0')
     .catch(() => '0.0.0');
-  const otelEndpoint = cfg.observability?.endpoint || (DEV_MODE || DEV_SILENT ? 'http://localhost:6006' : '');
+  const activeDeveloperMode = cfg.developerMode === true || DEV_MODE || DEV_SILENT;
+  const otelEndpoint = resolveObservabilityEndpoint({
+    endpoint: cfg.observability?.endpoint,
+    developerMode: activeDeveloperMode
+  });
   const otelActive = initObservability(otelEndpoint, monadVersion);
   if (otelActive && !cfg.observability?.endpoint) {
     logger.info('monad: OTel auto-enabled for dev — Phoenix UI at http://localhost:6006');
@@ -656,6 +658,7 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
     setMoEnabled,
     tlsCert,
     tlsFingerprint,
+    developerMode: liveCfg.developerMode === true,
     i18n: i18nService,
     channelService,
     flags: {

@@ -365,6 +365,10 @@ export type NativeCliObservationProjector = NativeCliObservationUsageProjector &
    *  `undefined` means "no signal" (the event doesn't affect generating/phase). Consumers fall back
    *  to a role-only heuristic when an adapter omits this. */
   classifyActivity?(event: NativeCliObservationEvent): NativeCliObservationActivity | undefined;
+  /** Whether an event is a partial streaming fragment (a token delta) rather than a settled item.
+   *  Consumers use it to merge adjacent fragments and to drive streaming affordances, without knowing
+   *  this provider's delta event names. */
+  isStreamingFragment?(event: NativeCliObservationEvent): boolean;
 };
 
 export interface NativeCliArgumentSupport {

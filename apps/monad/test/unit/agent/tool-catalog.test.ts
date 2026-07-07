@@ -11,7 +11,7 @@ function makeTool(name: string, description = `desc for ${name}`): Tool {
 }
 
 test('formats a single tool with name, description, and "none" params', () => {
-  const text = getCatalog([makeTool('my_tool', 'does stuff')], 1);
+  const _text = getCatalog([makeTool('my_tool', 'does stuff')], 1);
 });
 
 test('sorts tools alphabetically by name', () => {
@@ -55,5 +55,5 @@ test('includes JSON schema when tool has a zod inputSchema', () => {
     inputSchema: z.object({ path: z.string().min(1) }),
     run: async () => toolResult('')
   };
-  const text = getCatalog([tool], 300);
+  const _text = getCatalog([tool], 300);
 });

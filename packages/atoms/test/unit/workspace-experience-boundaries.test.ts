@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test';
+import { describe, test } from 'bun:test';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, join, normalize, relative } from 'node:path';
 
@@ -58,7 +58,6 @@ describe('atom kind boundaries', () => {
         }
       }
     }
-
   });
 });
 
@@ -88,6 +87,5 @@ describe('workspace experience boundaries', () => {
         }
       }
     }
-
   });
 });

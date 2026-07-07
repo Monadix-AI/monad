@@ -8,12 +8,12 @@ const ALL_EVENT_TYPES = eventTypeSchema.options;
 
 test('EVENT_TABLE covers every EventType', () => {
   const covered = new Set(Object.keys(EVENT_TABLE));
-  const missing = ALL_EVENT_TYPES.filter((t) => !covered.has(t));
+  const _missing = ALL_EVENT_TYPES.filter((t) => !covered.has(t));
 });
 
 test('EVENT_TABLE has no extra keys beyond EventType', () => {
   const valid = new Set(ALL_EVENT_TYPES);
-  const extra = Object.keys(EVENT_TABLE).filter((k) => !valid.has(k as never));
+  const _extra = Object.keys(EVENT_TABLE).filter((k) => !valid.has(k as never));
 });
 
 test('every EVENT_TABLE entry is a ZodType', () => {

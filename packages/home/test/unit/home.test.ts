@@ -436,6 +436,7 @@ describe('loadConfig', () => {
     await initMonadHome(paths);
     const cfg = await loadAll(paths.config, paths.profile);
     expect(cfg?.version).toBe(1);
+    expect(cfg?.developerMode).toBe(false);
     expect(cfg?.model.providers).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -454,6 +455,21 @@ describe('loadConfig', () => {
       ])
     );
     expect(cfg?.model.default).toBe('');
+  });
+
+  test('saveSystemConfig writes developerMode at the system root', async () => {
+    await initMonadHome(paths);
+    const cfg = await loadAll(paths.config, paths.profile);
+    if (!cfg) throw new Error('expected config');
+    cfg.developerMode = true;
+    await saveSystemConfig(paths.config, cfg);
+
+    const raw = JSON.parse(await readFile(paths.config, 'utf8')) as {
+      developerMode?: boolean;
+      observability?: Record<string, unknown>;
+    };
+    expect(raw.developerMode).toBe(true);
+    expect(raw.observability).toEqual({ endpoint: '' });
   });
 
   test('profile slice stores user avatar data without moving principal identity out of system config', async () => {
@@ -523,7 +539,7 @@ describe('loadConfig', () => {
     expect(() =>
       monadSystemConfigSchema.parse({
         ...base,
-        observability: { endpoint: 'ftp://collector.example.com', developerMode: false }
+        observability: { endpoint: 'ftp://collector.example.com' }
       })
     ).toThrow();
   });

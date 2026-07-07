@@ -333,6 +333,24 @@ test('toError: maps zero status (unusual but valid)', () => {
   expect(err.message).toBe('offline');
 });
 
+test('toError: serializes Error values before storing raw response data', () => {
+  const err = toError({ status: 0, value: new TypeError('Failed to fetch') });
+  expect(err.status).toBe(0);
+  expect(err.message).toBe('Failed to fetch');
+  expect(err.raw).toEqual({ name: 'TypeError', message: 'Failed to fetch' });
+});
+
+test('toError: serializes nested non-plain raw response data', () => {
+  const err = toError({
+    status: 502,
+    value: { error: 'bad gateway', detail: [new Error('socket closed'), Symbol('retry')] }
+  });
+  expect(err.raw).toEqual({
+    error: 'bad gateway',
+    detail: [{ name: 'Error', message: 'socket closed' }, 'Symbol(retry)']
+  });
+});
+
 test('toError: plain object (not Error, not Treaty) uses string coercion', () => {
   const err = toError({ weird: true });
   expect(err.message).toBe('[object Object]');

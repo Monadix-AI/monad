@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 // The full set of avatar styles bundled by @dicebear/styles (https://www.dicebear.com/licenses/),
 // offered as a profile-picture choice. AVATAR_STYLE_SLUGS is GENERATED from the installed package
-// (`bun run protocol:avatar-styles`) — not hand-maintained — and is the one source of truth for the
+// by the project hook — not hand-maintained — and is the one source of truth for the
 // style SET: the wire enum below and the static imports in avatar-cache.ts both derive from it
 // (avatar-cache's `Record<AvatarStyle, …>` is compile-time-locked to this union, so a missing/extra
 // style is a type error). `apps/monad/test/unit/avatar-styles.test.ts` asserts the generated list

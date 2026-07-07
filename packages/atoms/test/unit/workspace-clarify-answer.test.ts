@@ -20,5 +20,4 @@ test('multiple mode sends selections and other text as a JSON array', () => {
   expect(buildClarifyAnswer(['A', 'B'], 'custom', true)).toBe(JSON.stringify(['A', 'B', 'custom']));
 });
 
-test('returns null when nothing is selected and other is blank', () => {
-});
+test('returns null when nothing is selected and other is blank', () => {});

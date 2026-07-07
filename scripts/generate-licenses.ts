@@ -2,8 +2,8 @@
 import { mkdir } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 
-// The style SET is enumerated from @dicebear/styles in exactly one place — the generated protocol
-// file (run `bun run protocol:avatar-styles`); this script derives its credits from that list.
+// The style SET is enumerated from @dicebear/styles in exactly one generated protocol file; this
+// script derives its credits from that list.
 import { AVATAR_STYLE_SLUGS } from '../packages/protocol/generated/avatar-styles.ts';
 
 // Mirror of @monad/protocol's `avatarStyleLabel` (kept local because this build script isn't a

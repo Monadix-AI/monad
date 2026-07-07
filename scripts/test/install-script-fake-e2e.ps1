@@ -25,7 +25,10 @@ function New-FakePackage([string]$Version) {
   $pkg = Join-Path $PackageDir "monad-$Version"
   Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $pkg
   New-Item -ItemType Directory -Path (Join-Path $pkg 'bin') -Force | Out-Null
+  New-Item -ItemType Directory -Path (Join-Path $pkg 'assets') -Force | Out-Null
   Set-Content -Path (Join-Path $pkg 'bin\monad.exe') -Value "fake monad $Version" -NoNewline
+  Set-Content -Path (Join-Path $pkg 'assets\favicon.ico') -Value 'fake ico' -NoNewline
+  Set-Content -Path (Join-Path $pkg 'assets\monad-icon-vector-solid.svg') -Value '<svg></svg>' -NoNewline
   $tarball = Join-Path $PackageDir "monad-$Version.tar.gz"
   Remove-Item -Force -ErrorAction SilentlyContinue $tarball
   tar -czf $tarball -C $pkg .
@@ -72,6 +75,10 @@ function Assert-Launcher {
     }
     if ($shortcut.Arguments -ne 'up') {
       Fail "launcher arguments were '$($shortcut.Arguments)', expected 'up'"
+    }
+    $expectedIcon = Join-Path $TestDir 'install\assets\favicon.ico'
+    if ($shortcut.IconLocation -ne $expectedIcon) {
+      Fail "launcher icon was '$($shortcut.IconLocation)', expected '$expectedIcon'"
     }
   }
 }

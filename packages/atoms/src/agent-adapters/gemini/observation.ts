@@ -3,6 +3,7 @@ import type { NativeCliObservationJsonRecordEntry, NativeCliObservationProjector
 
 import {
   classifyObservationActivity,
+  isStreamingObservationFragment,
   observation,
   providerIsoTimestamp,
   textValue,
@@ -144,5 +145,6 @@ function geminiHistoryEntries(entries: NativeCliObservationJsonRecordEntry[]): N
 export const geminiObservationProjection = {
   historyEntries: geminiHistoryEntries,
   classifyActivity: classifyObservationActivity,
+  isStreamingFragment: isStreamingObservationFragment,
   recordProjectors: [{ parse: ({ id, record, recordIndex }) => geminiRecordEvents(id, record, recordIndex) }]
 } satisfies NativeCliObservationProjector;

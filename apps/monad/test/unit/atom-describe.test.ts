@@ -19,7 +19,7 @@ test('describeAtomPack enumerates each individual atom of the built-in pack', as
   expect(channelIds.length).toBeGreaterThan(1);
 
   // Commands carry their human description.
-  const newCommand = atoms.find((a) => a.kind === 'command' && a.id === 'new');
+  const _newCommand = atoms.find((a) => a.kind === 'command' && a.id === 'new');
 
   // Sandboxes are enumerated by launcher kind.
   const sandboxIds = atoms.filter((a) => a.kind === 'sandbox').map((a) => a.id);

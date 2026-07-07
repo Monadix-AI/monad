@@ -12,8 +12,7 @@ describe('get/set/del', () => {
     store.set('k', Buffer.from('v'));
     expect(store.get('k')?.toString()).toBe('v');
   });
-  test('get missing key returns null', () => {
-  });
+  test('get missing key returns null', () => {});
   test('del removes key', () => {
     store.set('k', Buffer.from('v'));
     expect(store.del('k')).toBe(1);

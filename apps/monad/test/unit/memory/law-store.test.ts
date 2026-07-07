@@ -73,7 +73,7 @@ test('setContradictions flags laws and replaceLaws clears the flag', () => {
     return law.id;
   };
   const neverNodeId = idOf('never Node');
-  const darkModeId = idOf('dark mode');
+  const _darkModeId = idOf('dark mode');
 
   s.setContradictions('agent:a1', new Map([[neverNodeId, 'now uses Node']]));
   const flagged = s.listLaws(['agent:a1']);

@@ -216,7 +216,7 @@ async function fetchCatalogPages(
 export interface ModelCatalogDeps {
   /** Path to the on-disk cache (e.g. ~/.monad/cache/model-catalog.json). */
   cachePath: string;
-  log: (level: 'info' | 'warn', message: string) => void;
+  log: (level: 'debug' | 'info' | 'warn', message: string) => void;
   /** Override for tests. */
   fetchImpl?: typeof fetch;
   url?: string;
@@ -471,7 +471,7 @@ export class ModelCatalogService {
       const entries = flatten(catalogResponseSchema.parse(await res.json()), pages);
       this.indexCosts(entries);
       await this.writeCache(entries);
-      this.deps.log('info', `model catalog: ${this.count} priced models indexed from models.dev`);
+      this.deps.log('debug', `model catalog: ${this.count} priced models indexed from models.dev`);
       return true;
     } catch (err) {
       this.deps.log('warn', `model catalog refresh failed: ${err instanceof Error ? err.message : String(err)}`);

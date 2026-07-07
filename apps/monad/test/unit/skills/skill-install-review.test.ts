@@ -34,7 +34,7 @@ const files = new Map([
 
 test('skill install review allows a clean model verdict', async () => {
   let capturedReq: ModelRequest | undefined;
-  const warnings = await reviewSkillInstall({
+  const _warnings = await reviewSkillInstall({
     files,
     model: modelReply('{"risky":false,"reason":"clean"}', (req) => {
       capturedReq = req;

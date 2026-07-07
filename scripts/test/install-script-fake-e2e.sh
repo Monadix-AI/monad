@@ -18,7 +18,9 @@ make_package() {
   local version="$1"
   local pkg="${PKG_DIR}/monad-${version}"
   rm -rf "$pkg"
-  mkdir -p "${pkg}/bin"
+  mkdir -p "${pkg}/bin" "${pkg}/assets"
+  printf '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"></svg>\n' >"${pkg}/assets/monad-icon-vector-solid.svg"
+  printf 'fake ico\n' >"${pkg}/assets/favicon.ico"
   cat >"${pkg}/bin/monad" <<EOF
 #!/usr/bin/env bash
 set -euo pipefail
@@ -70,6 +72,10 @@ assert_launcher() {
         || fail "macOS app launcher does not target installed monad"
       grep -q "Monad" "${app}/Contents/Info.plist" \
         || fail "macOS app launcher Info.plist missing"
+      grep -q "CFBundleIconFile" "${app}/Contents/Info.plist" \
+        || fail "macOS app launcher icon plist key missing"
+      [ -f "${app}/Contents/Resources/MonadIcon.icns" ] || [ -f "${app}/Contents/Resources/MonadIcon.svg" ] \
+        || fail "macOS app launcher icon resource was not created"
       ;;
     Linux)
       local menu="${TEST_DIR}/fake-home/.local/share/applications/monad.desktop"
@@ -80,6 +86,10 @@ assert_launcher() {
         || fail "Linux menu launcher does not target installed monad"
       grep -q "Exec=${TEST_DIR}/bin/monad up" "$desktop" \
         || fail "Linux desktop launcher does not target installed monad"
+      grep -q "Icon=${TEST_DIR}/install/assets/monad-icon-vector-solid.svg" "$menu" \
+        || fail "Linux menu launcher does not use Monad icon"
+      grep -q "Icon=${TEST_DIR}/install/assets/monad-icon-vector-solid.svg" "$desktop" \
+        || fail "Linux desktop launcher does not use Monad icon"
       ;;
   esac
 }

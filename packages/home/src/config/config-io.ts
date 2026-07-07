@@ -69,6 +69,7 @@ function mergeConfigs(system: MonadSystemConfig, profile: MonadProfile): MonadCo
     acpAgents: system.acpAgents,
     nativeCliAgents: system.nativeCliAgents,
     peers: system.peers,
+    developerMode: system.developerMode,
     model: profile.model,
     skills: profile.skills,
     browser: profile.browser,
@@ -104,6 +105,7 @@ function extractSystemConfig(cfg: MonadConfig): MonadSystemConfig {
     acpAgents: cfg.acpAgents,
     nativeCliAgents: cfg.nativeCliAgents,
     peers: cfg.peers,
+    developerMode: cfg.developerMode,
     observability: cfg.observability
   });
 }

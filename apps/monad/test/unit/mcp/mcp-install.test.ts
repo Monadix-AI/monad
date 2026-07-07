@@ -108,5 +108,4 @@ test('list skips file-MCP atoms with non-http URLs', async () => {
     join(mcpDir, 'bad.json'),
     JSON.stringify({ mcpServers: { bad: { url: 'file:///etc/passwd' } } }, null, 2)
   );
-
 });

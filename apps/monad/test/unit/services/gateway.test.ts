@@ -252,7 +252,7 @@ test('usage is attributed to the FALLBACK model that actually served the turn', 
 });
 
 test('countTokens delegates to a provider with a native endpoint', async () => {
-  let seenUrl = '';
+  let _seenUrl = '';
   let seenBody: Record<string, unknown> = {};
   const router = mkRouter(
     deps({
@@ -261,7 +261,7 @@ test('countTokens delegates to a provider with a native endpoint', async () => {
         { alias: 'default', routes: { chat: { provider: 'a1', modelId: 'claude-x' } }, params: {}, fallbacks: [] }
       ],
       fetch: fakeFetch((url, init) => {
-        seenUrl = url;
+        _seenUrl = url;
         seenBody = JSON.parse(String(init?.body));
         return new Response(JSON.stringify({ input_tokens: 42 }), {
           headers: { 'Content-Type': 'application/json' }
@@ -307,11 +307,11 @@ test('countTokens forwards tool schemas so the count includes them', async () =>
 
 test('countTokens returns undefined for a provider without a native endpoint', async () => {
   // openai-compatible has no countTokens provider method ⇒ caller falls back to the char heuristic.
-  const router = mkRouter(deps({ fetch: fakeFetch(() => jsonResponse('x')) }));
+  const _router = mkRouter(deps({ fetch: fakeFetch(() => jsonResponse('x')) }));
 });
 
 test('countTokens swallows a provider error and resolves undefined', async () => {
-  const router = mkRouter(
+  const _router = mkRouter(
     deps({
       providers: [{ id: 'a1', type: 'anthropic', baseUrl: 'https://anthropic.test' }],
       profiles: [
@@ -372,7 +372,7 @@ test('embed() routes to the configured embedding model and returns one vector pe
   const router = mkRouter(
     deps({
       embeddingModel: 'u1:text-embedding-3-small',
-      fetch: fakeFetch((url) => {
+      fetch: fakeFetch((_url) => {
         return embeddingsResponse([
           [0.1, 0.2, 0.3],
           [0.4, 0.5, 0.6]

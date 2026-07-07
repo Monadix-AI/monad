@@ -34,8 +34,7 @@ function docs(entries: Array<[string, OpenDoc]>): Map<string, OpenDoc> {
   return new Map(entries);
 }
 
-test('renderOpenDocs returns undefined when nothing is open', () => {
-});
+test('renderOpenDocs returns undefined when nothing is open', () => {});
 
 test('renderOpenDocs lists the focused doc first and tags it', () => {
   const out = renderOpenDocs(
@@ -57,7 +56,7 @@ test('renderOpenDocs truncates content past the budget', () => {
 
 test('renderOpenDocs omits a second file once the budget is exhausted', () => {
   const big = 'x'.repeat(13_000); // exceeds the 12k budget on its own
-  const out = renderOpenDocs(
+  const _out = renderOpenDocs(
     docs([
       ['file:///a.ts', { text: big, version: 1 }],
       ['file:///b.ts', { text: 'small', version: 1 }]

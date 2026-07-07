@@ -20,6 +20,11 @@ function gradientColor(grad: number[], index: number, total: number): number {
 // detached with --start-relay so it can relay our stdout back to the user until we're reachable.
 const bannerVisible = (): boolean => !!process.stdout.isTTY || process.argv.includes('--start-relay');
 
+export function formatWebUiReadyValue(opts: { webUrl: string; daemonUrl?: string }): string {
+  if (!opts.daemonUrl || opts.webUrl.replace(/\/$/, '') === opts.daemonUrl.replace(/\/$/, '')) return opts.webUrl;
+  return `${opts.webUrl}  (Daemon API: ${opts.daemonUrl})`;
+}
+
 export function printBanner(version: string, mock: boolean): void {
   if (!bannerVisible() || Bun.env.NO_COLOR) return;
 
@@ -55,19 +60,21 @@ export function printBanner(version: string, mock: boolean): void {
  *  installer alike. */
 export function printReadyInfo(opts: {
   webUrl: string;
+  daemonUrl?: string;
+  docsUrl?: string;
+  unixSocket?: string;
+  tlsFingerprint?: string;
   configPath: string;
-  guidePath: string;
   t: DaemonTranslate;
 }): void {
   if (!bannerVisible()) return;
 
-  const { t, webUrl, configPath, guidePath } = opts;
-  const rows: Array<[string, string]> = [
-    [t('daemon.ready.webUi'), webUrl],
-    [t('daemon.ready.cli'), 'monad --help'],
-    [t('daemon.ready.configure'), configPath],
-    [t('daemon.ready.guide'), guidePath]
-  ];
+  const { t, webUrl, daemonUrl, docsUrl, unixSocket, tlsFingerprint, configPath } = opts;
+  const rows: Array<[string, string]> = [[t('daemon.ready.webUi'), formatWebUiReadyValue({ webUrl, daemonUrl })]];
+  if (docsUrl) rows.push(['API docs:', docsUrl]);
+  if (unixSocket) rows.push(['Unix socket:', unixSocket]);
+  if (tlsFingerprint) rows.push(['TLS:', `SHA-256 ${tlsFingerprint}`]);
+  rows.push([t('daemon.ready.cli'), 'monad --help'], [t('daemon.ready.configure'), configPath]);
   const col = Math.max(...rows.map(([label]) => label.length)) + 2;
 
   process.stdout.write(`${bold(green(t('daemon.ready.title')))}\n\n`);

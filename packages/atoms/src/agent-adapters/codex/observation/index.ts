@@ -3,7 +3,12 @@ import type {
   NativeCliObservationProjector
 } from '../../observation-projection.ts';
 
-import { classifyObservationActivity, recordValue, textValue } from '../../observation-projection.ts';
+import {
+  classifyObservationActivity,
+  isStreamingObservationFragment,
+  recordValue,
+  textValue
+} from '../../observation-projection.ts';
 import {
   codexAppServerBatchRecordEvents,
   codexAppServerTurnsPageRecordEvents
@@ -57,6 +62,7 @@ export const codexObservationProjection = {
   usageRecords: codexUsageRecordsFromRecord,
   messageGroup: codexObservationMessageGroupAdapter,
   classifyActivity: classifyObservationActivity,
+  isStreamingFragment: isStreamingObservationFragment,
   recordProjectors: [
     {
       supports: isCodexObservationNotification,

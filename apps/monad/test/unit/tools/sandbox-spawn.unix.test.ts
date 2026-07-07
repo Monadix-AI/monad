@@ -84,7 +84,7 @@ test('configureSandboxLauncher: the active launcher rewrites argv and receives t
   expect(sandboxLauncher().kind).toBe('seatbelt');
 
   const policy: SandboxPolicy = { writableRoots: ['/tmp/x'], net: 'none' };
-  const proc = sandboxedSpawn(['echo', 'wrapped'], { stdout: 'pipe' }, policy);
+  const _proc = sandboxedSpawn(['echo', 'wrapped'], { stdout: 'pipe' }, policy);
 
   expect(seenArgv).toEqual(['echo', 'wrapped']);
   expect(seenPolicy).toEqual(policy);

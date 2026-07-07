@@ -283,7 +283,12 @@ function isExpectedInstallScript(script: string, deps: ResolvedUpgradeCommandDep
   return trimmed.startsWith('#!');
 }
 
-function installerArgs(scriptPath: string, channel: string, deps: ResolvedUpgradeCommandDeps, version: string): string[] {
+function installerArgs(
+  scriptPath: string,
+  channel: string,
+  deps: ResolvedUpgradeCommandDeps,
+  version: string
+): string[] {
   if (deps.platform === 'win32') {
     return ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', scriptPath];
   }

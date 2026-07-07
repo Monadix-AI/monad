@@ -96,7 +96,7 @@ test('net:none blocks an outbound connection to a local server', async () => {
   const serverPort = Number(server.port);
   try {
     const root = await realpath(await mkdtemp(join(tmpdir(), 'sb-net-')));
-    const r = await runConfined(
+    const _r = await runConfined(
       `bun -e 'const res = await fetch("http://127.0.0.1:${serverPort}"); console.log(await res.text())' 2>&1`,
       { writableRoots: [root], net: 'none' }
     );
@@ -113,7 +113,7 @@ test('proxy-only net allows traffic to the proxy port and blocks everything else
   try {
     const root = await realpath(await mkdtemp(join(tmpdir(), 'sb-proxy-')));
     // Proxy port is originPort; confined child can only reach that port.
-    const r = await runConfined(
+    const _r = await runConfined(
       [
         `bun -e 'fetch("http://127.0.0.1:${originPort}").then(r=>r.text()).then(console.log).catch(()=>console.log("origin-denied"))' 2>&1`,
         `bun -e 'fetch("http://127.0.0.1:${restrictedPort}").then(r=>r.text()).then(console.log).catch(()=>console.log("restricted-denied"))' 2>&1`

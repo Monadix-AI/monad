@@ -80,5 +80,6 @@ describe('shell location navigation', () => {
 
     navigateShellUrl('/studio/runtime?settings=connection', 'push');
 
+    expect(calls).toEqual([]);
   });
 });

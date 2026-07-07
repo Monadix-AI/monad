@@ -4,7 +4,10 @@ import { expect, test } from 'bun:test';
 import '../../src/index.ts';
 
 import { builtinAgentAdapters } from '../../src/agent-adapters/index.ts';
-import { classifyObservationActivity } from '../../src/agent-adapters/observation-projection.ts';
+import {
+  classifyObservationActivity,
+  isStreamingObservationFragment
+} from '../../src/agent-adapters/observation-projection.ts';
 import {
   nativeCliEventsAreGenerating,
   nativeCliStreamItems
@@ -18,12 +21,21 @@ const event = (over: Partial<NativeCliObservationEvent>): NativeCliObservationEv
   ...over
 });
 
-test('every builtin adapter owns the generating/phase classification', () => {
+test('every builtin adapter owns the generating/phase + streaming classification', () => {
   const withObservation = builtinAgentAdapters.filter((adapter) => adapter.observation);
   expect(withObservation.length).toBeGreaterThanOrEqual(6);
   for (const adapter of withObservation) {
     expect(typeof adapter.observation?.classifyActivity).toBe('function');
+    expect(typeof adapter.observation?.isStreamingFragment).toBe('function');
   }
+});
+
+test('streaming-fragment detection is adapter-owned, covering delta/chunk naming', () => {
+  expect(isStreamingObservationFragment(event({ providerEventType: 'item/agentMessage/delta' }))).toBe(true);
+  expect(isStreamingObservationFragment(event({ providerEventType: 'content_block_delta' }))).toBe(true);
+  expect(isStreamingObservationFragment(event({ providerEventType: 'thinking_delta' }))).toBe(true);
+  expect(isStreamingObservationFragment(event({ providerEventType: 'item/agentMessage' }))).toBe(false);
+  expect(isStreamingObservationFragment(event({ providerEventType: 'result' }))).toBe(false);
 });
 
 test('shared classifier maps provider events to a uniform activity kind', () => {

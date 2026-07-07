@@ -7,6 +7,7 @@ import type {
 
 import {
   classifyObservationActivity,
+  isStreamingObservationFragment,
   observation,
   permissionDenialEvents,
   rawTextValue,
@@ -243,6 +244,7 @@ function qwenHistoryEntries(entries: NativeCliObservationJsonRecordEntry[]): Nat
 export const qwenObservationProjection = {
   historyEntries: qwenHistoryEntries,
   classifyActivity: classifyObservationActivity,
+  isStreamingFragment: isStreamingObservationFragment,
   recordProjectors: [
     {
       supports: isQwenObservationMessage,

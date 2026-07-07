@@ -26,8 +26,7 @@ test('SG1: dataMessage → inbound; group keyed by groupId, dm by sender', () =>
   expect(grp).toMatchObject({ chatId: 'GID==', chatType: 'group' });
 });
 
-test('SG2: sync messages (own echo) and empty bodies → null', () => {
-});
+test('SG2: sync messages (own echo) and empty bodies → null', () => {});
 
 test('SG3: mentionedSelf when a mention matches selfId; command parse', () => {
   const m = normalizeSignalEnvelope(

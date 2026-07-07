@@ -83,8 +83,7 @@ describe('disableRemoteAccess', () => {
     expect(cfg?.network.remoteAccess.enabled).toBe(false);
   });
 
-  test('is a no-op when config is missing', async () => {
-  });
+  test('is a no-op when config is missing', async () => {});
 });
 
 describe('getLanIp', () => {

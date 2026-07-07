@@ -8,7 +8,7 @@ import { assignTiers, classifyKind, ModelCatalogService } from '@/services/model
 let dir: string;
 let cachePath: string;
 const logs: Array<{ level: string; message: string }> = [];
-const log = (level: 'info' | 'warn', message: string) => void logs.push({ level, message });
+const log = (level: 'debug' | 'info' | 'warn', message: string) => void logs.push({ level, message });
 
 // A models.dev-shaped payload: provider → models → model. One model is malformed (no id).
 const CATALOG = {
