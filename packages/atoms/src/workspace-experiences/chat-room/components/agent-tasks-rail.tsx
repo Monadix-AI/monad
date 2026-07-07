@@ -1,4 +1,5 @@
 import type {
+  AgentObservationEvent,
   ExternalAgentObservationAccessResponse,
   ExternalAgentUsageResponse,
   NativeAgentDeliveryId,
@@ -41,6 +42,7 @@ import {
 } from '@monad/ui/components/AgentAvatar';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { toAgentObservationEvent } from '../../../agent-adapters/neutral-observation.ts';
 import { workspaceExperienceT } from '../../i18n.ts';
 import { useChatRoomExperienceStore } from '../store.ts';
 import {
@@ -110,10 +112,9 @@ type ObservationHistoryPageState = {
 
 function observationItemSignature(item: ExternalAgentStreamView['items'][number]): string {
   return JSON.stringify({
-    role: item.role,
-    source: item.source,
-    providerEventType: item.providerEventType,
+    kind: item.kind,
     text: item.text,
+    tool: item.tool,
     raw: item.raw
   });
 }
@@ -648,7 +649,9 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
           (response) => {
             // The daemon already knows this session's provider unambiguously and normalizes with the
             // same adapter it uses for parseOutput/historyPageOutput — no client-side re-derivation.
-            const pageItems = response.events;
+            const pageItems = response.events
+              .map((event) => toAgentObservationEvent(event))
+              .filter((event): event is AgentObservationEvent => event !== null);
             setHistoryPages((current) => {
               const existing = current?.items ?? [];
               const nextItems = before

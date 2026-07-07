@@ -1,3 +1,4 @@
+import type { AgentObservationEvent, ExternalAgentObservationEvent } from '@monad/protocol';
 import type { ExternalAgentStreamView } from '../../src/workspace-experiences/experience/types.ts';
 
 import { expect, test } from 'bun:test';
@@ -5,6 +6,7 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 import { builtinAgentAdapters } from '../../src/agent-adapters/index.ts';
+import { toAgentObservationEvent } from '../../src/agent-adapters/neutral-observation.ts';
 import { rawJsonText } from '../../src/workspace-experiences/chat-room/components/observation/card-shell.tsx';
 import { ExternalAgentObservationPanel } from '../../src/workspace-experiences/chat-room/components/observation/panel.tsx';
 import {
@@ -19,6 +21,7 @@ import {
 } from '../../src/workspace-experiences/chat-room/utils/agent-rail-model.ts';
 import {
   configureExternalAgentObservationAdapterResolver,
+  externalAgentNeutralStreamItems,
   externalAgentStreamItems,
   externalAgentUsageLimitMeter,
   externalAgentUsageLimitMeterFromResponse
@@ -27,6 +30,16 @@ import {
 configureExternalAgentObservationAdapterResolver((provider) =>
   builtinAgentAdapters.find((adapter) => adapter.provider === provider)
 );
+
+// The timeline renders neutral AgentObservationEvent[]; these tests build legacy events (via
+// externalAgentStreamItems), so convert them the same way the daemon's ui plane does before rendering.
+const renderTimeline = (items: ExternalAgentObservationEvent[], provider = 'codex') =>
+  observationTimelineEntries(
+    items
+      .map((event) => toAgentObservationEvent(event))
+      .filter((event): event is AgentObservationEvent => event !== null),
+    provider
+  );
 
 test('observation access is adapted to projection events without carrying raw output forward', () => {
   const raw = JSON.stringify({ method: 'item/agentMessage/delta', params: { delta: 'Projected update' } });
@@ -368,7 +381,7 @@ test('external agent observation projects thinking records from all adapters', (
       providerEventType: expected.type,
       text: expected.text
     });
-    expect(observationTimelineEntries(item ? [item] : [])[0]?.card.type).toBe('thinking');
+    expect(renderTimeline(item ? [item] : [])[0]?.card.type).toBe('thinking');
   }
 });
 
@@ -684,14 +697,13 @@ test('Codex app-server observation renders user message lifecycle as a shared me
       }
     })
   ].join('\n');
-  const entries = observationTimelineEntries(externalAgentStreamItems({ id: 'exa_codex', provider: 'codex', output }));
+  const entries = renderTimeline(externalAgentStreamItems({ id: 'exa_codex', provider: 'codex', output }));
 
   expect(entries).toMatchObject([
     {
       card: {
         item: {
-          providerEventType: 'item/userMessage',
-          role: 'user',
+          kind: 'user-message',
           text: 'You have just joined this Workplace Project.\nUse project_post for the public status message.'
         },
         role: 'user',
@@ -901,7 +913,7 @@ test('Codex app-server observation projects completed MCP tool calls with argume
     }
   ]);
 
-  expect(observationTimelineEntries(items).map((entry) => entry.card?.type)).toEqual(['command-tool']);
+  expect(renderTimeline(items).map((entry) => entry.card?.type)).toEqual(['command-tool']);
 });
 
 test('Codex app-server observation projects turns page responses', () => {
@@ -949,11 +961,7 @@ test('Codex app-server observation projects turns page responses', () => {
     },
     { role: 'agent', type: 'item/agentMessage', text: 'The settings form owns this surface.' }
   ]);
-  expect(observationTimelineEntries(items).map((entry) => entry.card?.type)).toEqual([
-    'message',
-    'command-tool',
-    'message'
-  ]);
+  expect(renderTimeline(items).map((entry) => entry.card?.type)).toEqual(['message', 'command-tool', 'message']);
 });
 
 test('Codex app-server observation projects web search and compaction items', () => {
@@ -1158,7 +1166,7 @@ test('observation panel shows a token usage meter entry when Codex reports token
         tag: 'Codex',
         status: 'running',
         output,
-        items: externalAgentStreamItems({ id: 'exa_codex', provider: 'codex', output })
+        items: externalAgentNeutralStreamItems({ id: 'exa_codex', provider: 'codex', output })
       },
       // The panel renders whatever meter it's given (server-normalized in production); it no longer
       // re-derives one from `stream.output` itself.
@@ -1183,7 +1191,7 @@ test('observation panel shows a usage limits entry when the stream has limit dat
         tag: 'Codex',
         status: 'running',
         output,
-        items: externalAgentStreamItems({ id: 'exa_codex', provider: 'codex', output })
+        items: externalAgentNeutralStreamItems({ id: 'exa_codex', provider: 'codex', output })
       },
       usageMeter
     })
@@ -1220,7 +1228,7 @@ test('observation panel renders show history as the first list placeholder when 
         tag: 'Codex',
         status: 'ok',
         output: 'Agent output',
-        items: [{ id: 'evt_1', role: 'agent', text: 'Agent output', source: 'codex-app-server' }]
+        items: [{ id: 'evt_1', kind: 'assistant-message', streaming: false, text: 'Agent output' }]
       }
     })
   );
@@ -1244,17 +1252,13 @@ test('Claude Code observation projects transcript user events as user message ca
     uuid: '21dace30-5217-4a5c-a48c-7f4b86f4e85d',
     timestamp: '2026-07-05T08:07:54.056Z'
   });
-  const entries = observationTimelineEntries(
-    externalAgentStreamItems({ id: 'exa_claude', provider: 'claude-code', output })
-  );
+  const entries = renderTimeline(externalAgentStreamItems({ id: 'exa_claude', provider: 'claude-code', output }));
 
   expect(entries).toMatchObject([
     {
       card: {
         item: {
-          providerEventType: 'user',
-          role: 'user',
-          source: 'claude-code-sdk',
+          kind: 'user-message',
           text: 'New Workplace Project message is available.'
         },
         role: 'user',
@@ -1279,7 +1283,7 @@ test('Codex app-server observation renders a standalone commandExecution result 
       }
     }
   };
-  const entries = observationTimelineEntries([
+  const entries = renderTimeline([
     {
       id: 'exa_codex:json:0:tool-result',
       role: 'tool',
@@ -1310,7 +1314,7 @@ test('Codex app-server observation renders a standalone commandExecution result 
 });
 
 test('observation card projection maps Codex and Claude command tools to the shared public card', () => {
-  const codexEntries = observationTimelineEntries([
+  const codexEntries = renderTimeline([
     {
       id: 'codex-command',
       role: 'tool',
@@ -1330,7 +1334,7 @@ test('observation card projection maps Codex and Claude command tools to the sha
       }
     }
   ]);
-  const claudeEntries = observationTimelineEntries([
+  const claudeEntries = renderTimeline([
     {
       id: 'claude-call',
       role: 'tool',
@@ -1358,7 +1362,7 @@ test('observation card projection maps Codex and Claude command tools to the sha
 });
 
 test('observation card projection maps generic tool pairs to the shared command card', () => {
-  const entries = observationTimelineEntries([
+  const entries = renderTimeline([
     {
       id: 'call',
       role: 'tool',
@@ -1381,7 +1385,7 @@ test('observation card projection maps generic tool pairs to the shared command 
 });
 
 test('observation timeline rows keep consecutive tool cards grouped for virtual rendering', () => {
-  const entries = observationTimelineEntries([
+  const entries = renderTimeline([
     {
       id: 'message-before',
       role: 'agent',
@@ -1432,7 +1436,7 @@ test('observation timeline rows keep consecutive tool cards grouped for virtual 
 });
 
 test('observation card projection normalizes JSON-like generic tool output', () => {
-  const entries = observationTimelineEntries([
+  const entries = renderTimeline([
     {
       id: 'call',
       role: 'tool',
@@ -1467,7 +1471,7 @@ test('observation card projection normalizes JSON-like generic tool output', () 
 });
 
 test('observation card projection maps standalone Codex function call output to the shared command card', () => {
-  const entries = observationTimelineEntries([
+  const entries = renderTimeline([
     {
       id: 'codex-output',
       role: 'tool',
@@ -1509,7 +1513,7 @@ test('observation card projection maps standalone Codex function call output to 
           output:
             '{\n  "content": [\n    {\n      "type": "text",\n      "text": "{\\"items\\":[{\\"message\\":{\\"role\\":\\"assistant\\",\\"text\\":\\"ok\\"}}],\\"seq\\":102}"\n    }\n  ]\n}',
           outputLanguage: 'json',
-          type: 'function_call_output'
+          type: 'tool-result'
         }
       }
     }
@@ -1539,7 +1543,7 @@ test('Claude Code Read tool result renders as a file read card', () => {
       raw: { type: 'tool_result', output: 'export function Example() { return <div />; }' }
     }
   ] as const;
-  const entries = observationTimelineEntries(items as never);
+  const entries = renderTimeline(items as never);
 
   expect(entries).toMatchObject([
     {

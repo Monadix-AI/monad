@@ -24,7 +24,7 @@ export function CommandToolHeader({ view }: { view: CommandToolView }): React.Re
       compact
       label="tool call"
       showSource={false}
-      source={view.source}
+      source={view.provider}
       title={view.type}
     >
       <span style={commandStatusStyle(view.status, view.exitCode)}>{commandStatusLabel(view)}</span>
@@ -36,12 +36,16 @@ export function CommandToolHeader({ view }: { view: CommandToolView }): React.Re
   );
 }
 
-export function commandToolView(call: ObservationItem, result: ObservationItem): CommandToolView | null {
+export function commandToolView(
+  call: ObservationItem,
+  result: ObservationItem,
+  provider: string
+): CommandToolView | null {
   return (
-    codexCommandExecutionView(call, result) ??
-    claudeBashToolView(call, result) ??
-    genericToolCallView(call, result) ??
-    standaloneToolResultView(call)
+    codexCommandExecutionView(call, result, provider) ??
+    claudeBashToolView(call, result, provider) ??
+    genericToolCallView(call, result, provider) ??
+    standaloneToolResultView(call, provider)
   );
 }
 
@@ -97,8 +101,8 @@ function CommandCodeSection({
   );
 }
 
-function commandOutputLanguage(text: string): BundledLanguage {
-  if (jsonCodeText(text)) return 'json';
+function commandOutputLanguage(text: string | undefined): BundledLanguage {
+  if (text && jsonCodeText(text)) return 'json';
   return 'bash';
 }
 
@@ -136,13 +140,17 @@ function bundledLanguage(value: string | undefined, fallback: BundledLanguage): 
   }
 }
 
-function codexCommandExecutionView(call: ObservationItem, result: ObservationItem): CommandToolView | null {
+function codexCommandExecutionView(
+  call: ObservationItem,
+  result: ObservationItem,
+  provider: string
+): CommandToolView | null {
   const item = rawCommandExecutionItem(result.raw) ?? rawCommandExecutionItem(call.raw);
   if (!item) return null;
   const command = stringFrom(item.command) ?? commandActionText(item.commandActions) ?? 'command';
   return {
     type: 'commandExecution',
-    source: result.source,
+    provider,
     command,
     cwd: stringFrom(item.cwd),
     status: stringFrom(item.status),
@@ -152,28 +160,27 @@ function codexCommandExecutionView(call: ObservationItem, result: ObservationIte
   };
 }
 
-function claudeBashToolView(call: ObservationItem, result: ObservationItem): CommandToolView | null {
-  if (call.source !== 'claude-code-sdk' && result.source !== 'claude-code-sdk') return null;
+function claudeBashToolView(call: ObservationItem, result: ObservationItem, provider: string): CommandToolView | null {
   const input = claudeToolInput(call.raw);
   if (input?.name !== 'Bash') return null;
   const output = claudeToolOutput(result.raw) ?? result.text;
   return {
     type: 'Bash',
-    source: result.source,
+    provider,
     command: input.command,
     status: statusFromResultText(result.text),
     output
   };
 }
 
-function genericToolCallView(call: ObservationItem, result: ObservationItem): CommandToolView | null {
-  const parsed = parseToolCallText(call.text);
+function genericToolCallView(call: ObservationItem, result: ObservationItem, provider: string): CommandToolView | null {
+  const parsed = parseToolCallText(call.text ?? '');
   if (!parsed) return null;
   const output = toolResultOutput(result);
   const jsonOutput = output ? jsonCodeText(output) : null;
   return {
     type: parsed.tool,
-    source: result.source,
+    provider,
     command: parsed.input,
     commandLanguage: parsed.language,
     status: output ? statusFromResultText(output) : statusFromResultText(result.text),
@@ -182,14 +189,14 @@ function genericToolCallView(call: ObservationItem, result: ObservationItem): Co
   };
 }
 
-function standaloneToolResultView(item: ObservationItem): CommandToolView | null {
-  if (item.providerEventType !== 'function_call_output') return null;
+function standaloneToolResultView(item: ObservationItem, provider: string): CommandToolView | null {
+  if (item.kind !== 'tool-result') return null;
   const output = toolResultOutput(item);
   if (!output) return null;
   const jsonOutput = jsonCodeText(output);
   return {
-    type: item.providerEventType,
-    source: item.source,
+    type: 'tool-result',
+    provider,
     status: statusFromResultText(output),
     output: jsonOutput ?? output,
     outputLanguage: jsonOutput ? 'json' : commandOutputLanguage(output)
@@ -331,8 +338,8 @@ function commandStatusLabel(view: CommandToolView): string {
   return view.status ?? 'running';
 }
 
-function statusFromResultText(text: string): string {
-  return /\b(error|failed|denied|blocked|permission)\b/i.test(text) ? 'failed' : 'completed';
+function statusFromResultText(text: string | undefined): string {
+  return text && /\b(error|failed|denied|blocked|permission)\b/i.test(text) ? 'failed' : 'completed';
 }
 
 function formatDurationMs(value: number): string {

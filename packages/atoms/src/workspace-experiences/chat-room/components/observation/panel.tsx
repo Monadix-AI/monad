@@ -146,9 +146,10 @@ export function ExternalAgentObservationPanel({
   const streamStatus = stream?.status;
   const followResetKey = observationFollowResetKey(stream);
   const [usageOpen, setUsageOpen] = useState(false);
+  const timelineProvider = stream?.provider ?? '';
   const timelineRows = useMemo(
-    () => observationTimelineRows(observationTimelineEntries(stream?.items ?? [])),
-    [stream?.items]
+    () => observationTimelineRows(observationTimelineEntries(stream?.items ?? [], timelineProvider)),
+    [stream?.items, timelineProvider]
   );
   const firstItemIndex = useFirstItemIndex(timelineRows, observationRowId);
   const showHistoryHeader = showHistoryButton || loadingOlderHistory;
@@ -461,6 +462,7 @@ export function ExternalAgentObservationPanel({
               <div style={{ boxSizing: 'border-box', padding: '0 14px 10px', width: '100%' }}>
                 <ObservationTimelineRowView
                   collapseCommand={collapseCommand}
+                  provider={timelineProvider}
                   row={row}
                 />
               </div>

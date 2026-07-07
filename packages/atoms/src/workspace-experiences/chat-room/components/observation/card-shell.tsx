@@ -3,6 +3,10 @@
 import type { CSSProperties } from 'react';
 import type { ObservationItem } from './types.ts';
 
+// Neutral events carry no display `role`; the card layer derives a visual role from `kind` and passes
+// it as this plain union.
+type ObservationVisualRole = 'user' | 'agent' | 'tool' | 'system';
+
 import { CheckIcon, ChevronDownIcon, Copy01Icon, SourceCodeIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { workspaceMono as mono, workspaceSans as sans } from '@monad/ui/components/AgentAvatar';
@@ -28,7 +32,7 @@ export function ObservationCardShell({
   header?: React.ReactNode;
   raw: unknown;
   timestamp?: string;
-  visualRole: ObservationItem['role'];
+  visualRole: ObservationVisualRole;
 }): React.ReactElement {
   const [collapsed, setCollapsed] = useState(collapseCommand?.collapsed ?? defaultCollapsed);
   const [rawOpen, setRawOpen] = useState(false);
@@ -91,7 +95,7 @@ export function ObservationMeta({
   compact?: boolean;
   label?: string;
   showSource?: boolean;
-  source: ObservationItem['source'];
+  source: string;
   title?: string;
   type?: string;
 }): React.ReactElement {
@@ -126,7 +130,7 @@ export function ObservationText({
 }: {
   compact?: boolean;
   contained?: boolean;
-  observationRole: ObservationItem['role'];
+  observationRole: ObservationVisualRole;
   text: string;
 }): React.ReactElement {
   return (
@@ -149,22 +153,24 @@ export function ObservationText({
 
 export function DefaultToolPairContent({
   call,
-  result
+  result,
+  provider
 }: {
   call: ObservationItem;
   result: ObservationItem;
+  provider: string;
 }): React.ReactElement {
   return (
     <>
       <ObservationMeta
         label="tool"
-        source={call.source}
-        type={call.providerEventType}
+        source={provider}
+        type={call.tool?.name}
       />
       <ObservationText
         compact
         observationRole="tool"
-        text={toolCallSummary(call.text)}
+        text={toolCallSummary(call.text ?? '')}
       />
       <div
         style={{
@@ -175,13 +181,13 @@ export function DefaultToolPairContent({
       >
         <ObservationMeta
           label="result"
-          source={result.source}
-          type={result.providerEventType}
+          source={provider}
+          type={result.tool?.name}
         />
         <ObservationText
           contained
           observationRole="tool"
-          text={result.text}
+          text={result.text ?? ''}
         />
       </div>
     </>
@@ -317,7 +323,7 @@ function highlightInlineCode(text: string): React.ReactNode {
   });
 }
 
-function cardStyle(role: ObservationItem['role']): CSSProperties {
+function cardStyle(role: ObservationVisualRole): CSSProperties {
   const borderColor =
     role === 'tool'
       ? 'color-mix(in srgb, #f59e0b 38%, var(--border))'

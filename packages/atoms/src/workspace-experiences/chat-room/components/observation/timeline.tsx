@@ -72,7 +72,10 @@ export type ObservationTimelineRow = {
   entries: ObservationTimelineEntry[];
 };
 
-export function observationTimelineEntries(items: ExternalAgentStreamView['items']): ObservationTimelineEntry[] {
+export function observationTimelineEntries(
+  items: ExternalAgentStreamView['items'],
+  provider: string
+): ObservationTimelineEntry[] {
   const entries: ObservationTimelineEntry[] = [];
   for (let index = 0; index < items.length; index += 1) {
     const item = items[index];
@@ -81,7 +84,7 @@ export function observationTimelineEntries(items: ExternalAgentStreamView['items
       entries.push({
         id: `${item.id}:pair:${next.id}`,
         kind: 'public',
-        card: projectPublicObservationPair(item, next) ?? { type: 'tool-pair', call: item, result: next },
+        card: projectPublicObservationPair(item, next, provider) ?? { type: 'tool-pair', call: item, result: next },
         timestamp: observationTimestampLabel(next),
         raw: { call: item.raw, result: next.raw }
       });
@@ -89,7 +92,7 @@ export function observationTimelineEntries(items: ExternalAgentStreamView['items
       continue;
     }
     if (!item) continue;
-    const publicCard = projectPublicObservationItem(item);
+    const publicCard = projectPublicObservationItem(item, provider);
     if (publicCard) {
       entries.push({
         id: item.id,
@@ -114,7 +117,7 @@ export function observationTimelineEntries(items: ExternalAgentStreamView['items
     entries.push({
       id: item.id,
       kind: 'public',
-      card: { type: 'message', role: item.role, item },
+      card: { type: 'message', role: item.kind === 'user-message' ? 'user' : 'agent', item },
       timestamp: observationTimestampLabel(item),
       raw: item.raw
     });
@@ -122,12 +125,20 @@ export function observationTimelineEntries(items: ExternalAgentStreamView['items
   return entries;
 }
 
+function visualRoleFromKind(kind: ObservationItem['kind']): 'user' | 'agent' | 'tool' {
+  if (kind === 'user-message') return 'user';
+  if (kind === 'tool-call' || kind === 'tool-result') return 'tool';
+  return 'agent';
+}
+
 function ObservationTimelineCard({
   collapseCommand,
-  entry
+  entry,
+  provider
 }: {
   collapseCommand?: ObservationCollapseCommand;
   entry: ObservationTimelineEntry;
+  provider: string;
 }): React.ReactElement {
   if (entry.kind === 'private') {
     const rendered = renderPrivateObservationCard(entry.card);
@@ -139,7 +150,7 @@ function ObservationTimelineCard({
             <ObservationMeta
               compact
               label="tool"
-              source={entry.card.source}
+              source={entry.card.provider}
               type={entry.card.type}
             />
           }
@@ -162,7 +173,7 @@ function ObservationTimelineCard({
             compact
             label="tool call"
             showSource={false}
-            source={entry.card.call.source}
+            source={provider}
             title={toolPairName(entry.card.call)}
           />
         }
@@ -172,6 +183,7 @@ function ObservationTimelineCard({
       >
         <DefaultToolPairContent
           call={entry.card.call}
+          provider={provider}
           result={entry.card.result}
         />
       </ObservationCardShell>
@@ -213,7 +225,7 @@ function ObservationTimelineCard({
         header={
           <ObservationMeta
             compact
-            source={entry.card.item.source}
+            source={provider}
           >
             <style>{THINKING_LABEL_CSS}</style>
             <span
@@ -232,7 +244,7 @@ function ObservationTimelineCard({
         <ObservationText
           contained
           observationRole="agent"
-          text={entry.card.item.text}
+          text={entry.card.item.text ?? ''}
         />
       </ObservationCardShell>
     );
@@ -243,6 +255,7 @@ function ObservationTimelineCard({
         collapseCommand={collapseCommand}
         entry={entry}
         item={entry.card.item}
+        provider={provider}
       />
     );
   }
@@ -252,6 +265,7 @@ function ObservationTimelineCard({
         collapseCommand={collapseCommand}
         entry={entry}
         item={entry.card.item}
+        provider={provider}
       />
     );
   }
@@ -281,19 +295,22 @@ function ObservationTimelineCard({
 function GenericObservationCard({
   collapseCommand,
   entry,
-  item
+  item,
+  provider
 }: {
   collapseCommand?: ObservationCollapseCommand;
   entry: ObservationTimelineEntry;
   item: ObservationItem;
+  provider: string;
 }): React.ReactElement {
+  const role = visualRoleFromKind(item.kind);
   const header =
-    item.role === 'user' || item.role === 'system' ? null : (
+    role === 'user' ? null : (
       <ObservationMeta
         compact
-        label={item.role}
-        source={item.source}
-        type={item.providerEventType}
+        label={role}
+        source={provider}
+        type={item.tool?.name}
       />
     );
   return (
@@ -302,11 +319,11 @@ function GenericObservationCard({
       header={header}
       raw={entry.raw}
       timestamp={entry.timestamp}
-      visualRole={item.role}
+      visualRole={role}
     >
       <ObservationText
-        observationRole={item.role}
-        text={item.text}
+        observationRole={role}
+        text={item.text ?? ''}
       />
     </ObservationCardShell>
   );
@@ -339,10 +356,12 @@ export function observationTimelineRows(entries: ObservationTimelineEntry[]): Ob
 
 export function ObservationTimelineRowView({
   collapseCommand,
-  row
+  row,
+  provider
 }: {
   collapseCommand?: ObservationCollapseCommand;
   row: ObservationTimelineRow;
+  provider: string;
 }): React.ReactElement | null {
   const first = row.entries[0];
   if (row.entries.length > 1 && isToolEntry(first))
@@ -350,22 +369,26 @@ export function ObservationTimelineRowView({
       <ToolCallGroup
         collapseCommand={collapseCommand}
         entries={row.entries as ToolTimelineEntry[]}
+        provider={provider}
       />
     );
   return first ? (
     <ObservationTimelineCard
       collapseCommand={collapseCommand}
       entry={first}
+      provider={provider}
     />
   ) : null;
 }
 
 function _ObservationTimelineCards({
   collapseCommand,
-  entries
+  entries,
+  provider
 }: {
   collapseCommand?: ObservationCollapseCommand;
   entries: ObservationTimelineEntry[];
+  provider: string;
 }): React.ReactElement {
   return (
     <>
@@ -373,6 +396,7 @@ function _ObservationTimelineCards({
         <ObservationTimelineRowView
           collapseCommand={collapseCommand}
           key={row.id}
+          provider={provider}
           row={row}
         />
       ))}
@@ -385,10 +409,12 @@ type ToolTimelineEntry = ObservationTimelineEntry & { kind: 'public'; card: Tool
 
 function ToolCallGroup({
   collapseCommand,
-  entries
+  entries,
+  provider
 }: {
   collapseCommand?: ObservationCollapseCommand;
   entries: ToolTimelineEntry[];
+  provider: string;
 }): React.ReactElement {
   const [collapsed, setCollapsed] = useState(collapseCommand?.collapsed ?? true);
   const commandCollapsed = collapseCommand?.collapsed;
@@ -420,6 +446,7 @@ function ToolCallGroup({
               collapseCommand={collapseCommand}
               entry={entry}
               key={entry.id}
+              provider={provider}
             />
           ))}
         </div>
@@ -437,10 +464,10 @@ function isToolEntry(entry: ObservationTimelineEntry | undefined): entry is Tool
 }
 
 function toolPairName(item: ObservationItem): string {
-  const textName = /^Tool call\s+([^\s]+)/.exec(item.text.trim())?.[1];
+  if (item.tool?.name) return item.tool.name;
+  const textName = /^Tool call\s+([^\s]+)/.exec((item.text ?? '').trim())?.[1];
   if (textName) return textName;
-  const rawName = toolNameFromRaw(item.raw);
-  return rawName ?? 'tool';
+  return toolNameFromRaw(item.raw) ?? 'tool';
 }
 
 function toolNameFromRaw(raw: unknown): string | undefined {
@@ -460,34 +487,20 @@ function toolNameFromRaw(raw: unknown): string | undefined {
 }
 
 function isToolCallEvent(item: ObservationItem): boolean {
-  return (
-    item.role === 'tool' &&
-    (item.providerEventType === 'function_call' ||
-      item.providerEventType === 'tool_use' ||
-      item.providerEventType === 'content_block_start' ||
-      item.text.startsWith('Tool call '))
-  );
+  return item.kind === 'tool-call';
 }
 
 function isToolResultEvent(item: ObservationItem): boolean {
-  return (
-    item.role === 'tool' &&
-    (item.providerEventType === 'function_call_output' ||
-      item.providerEventType === 'tool_result' ||
-      item.providerEventType === 'item/commandExecution/outputDelta' ||
-      item.id.includes(':tool-result') ||
-      item.id.includes(':function-output'))
-  );
+  return item.kind === 'tool-result';
 }
 
 function observationTimestampLabel(item: ObservationItem): string | undefined {
-  const timestamp = timestampMsFromIso(item.createdAt);
+  const timestamp = timestampMsFromIso(item.at);
   return timestamp === undefined ? undefined : formatObservationTime(timestamp);
 }
 
 function isStreamingThinkingObservation(item: ObservationItem): boolean {
-  const type = item.providerEventType?.toLowerCase() ?? '';
-  return type.includes('delta') || type.includes('chunk');
+  return item.kind === 'reasoning' && item.streaming;
 }
 
 function formatObservationTime(timestamp: number): string {

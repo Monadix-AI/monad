@@ -1,4 +1,4 @@
-import type { ExternalAgentObservationEvent, MessageAttachmentRef, NativeAgentDeliveryId } from '@monad/protocol';
+import type { AgentObservationEvent, MessageAttachmentRef, NativeAgentDeliveryId } from '@monad/protocol';
 import type { WorkspaceExperienceIcon, WorkspaceExperienceProject } from '@monad/sdk-atom';
 
 export type { WorkspaceExperienceProductIconId } from '@monad/sdk-atom';
@@ -126,7 +126,7 @@ export interface ExternalAgentStreamView {
   workingPath?: string;
   observedAt?: string;
   output: string;
-  items: ExternalAgentObservationEvent[];
+  items: AgentObservationEvent[];
 }
 
 export interface ApprovalView {

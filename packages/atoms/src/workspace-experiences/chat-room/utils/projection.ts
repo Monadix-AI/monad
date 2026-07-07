@@ -25,7 +25,10 @@ import {
   renameExternalAgentProjectMemberDisplayName
 } from '@monad/protocol';
 
-import { externalAgentStreamItems } from '../../experience/external-agent-observation/external-agent-observation.ts';
+import {
+  externalAgentNeutralStreamItems,
+  externalAgentStreamItems
+} from '../../experience/external-agent-observation/external-agent-observation.ts';
 import {
   externalAgentFacingCommandPhase,
   externalAgentMemberActivityPhase,
@@ -310,7 +313,7 @@ function externalAgentStreamFromSession(
   templateAgentNames = new Map<string, string>(),
   agentAliases = new Map<string, string[]>()
 ): ExternalAgentStreamView {
-  const items = externalAgentStreamItems({
+  const items = externalAgentNeutralStreamItems({
     id: session.id,
     provider: session.provider,
     output: session.outputSnapshot,
@@ -342,7 +345,7 @@ function externalAgentStreamFromActivity(
   if (!row.tool.startsWith('external-agent:')) return undefined;
   const provider = row.tool.slice('external-agent:'.length);
   const agentName = row.agentName ?? row.detail ?? provider;
-  const items = externalAgentStreamItems({ id: row.id, provider, output: row.output });
+  const items = externalAgentNeutralStreamItems({ id: row.id, provider, output: row.output });
   return {
     id: row.id,
     agentName,

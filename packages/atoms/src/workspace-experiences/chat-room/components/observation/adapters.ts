@@ -10,17 +10,7 @@ import { commandToolView } from './command-card.tsx';
 import { fileReadToolView } from './file-read-card.tsx';
 
 function isThinkingObservation(item: ObservationItem): boolean {
-  const type = item.providerEventType?.toLowerCase() ?? '';
-  return (
-    item.role === 'agent' &&
-    (type === 'thinking' ||
-      type === 'reasoning' ||
-      type === 'thinking_delta' ||
-      type.includes('/reasoning/') ||
-      type.includes('reasoning') ||
-      type.includes('thinking') ||
-      type === 'item/plan/delta')
-  );
+  return item.kind === 'reasoning';
 }
 
 const thinkingCardAdapter: PublicObservationCardAdapter = {
@@ -30,19 +20,19 @@ const thinkingCardAdapter: PublicObservationCardAdapter = {
 };
 
 const commandToolCardAdapter: PublicObservationCardAdapter = {
-  projectItem(item) {
-    const view = commandToolView(item, item);
+  projectItem(item, provider) {
+    const view = commandToolView(item, item, provider);
     return view ? { type: 'command-tool', view } : null;
   },
-  projectPair(call, result) {
-    const view = commandToolView(call, result);
+  projectPair(call, result, provider) {
+    const view = commandToolView(call, result, provider);
     return view ? { type: 'command-tool', view } : null;
   }
 };
 
 const fileReadToolCardAdapter: PublicObservationCardAdapter = {
-  projectPair(call, result) {
-    const view = fileReadToolView(call, result);
+  projectPair(call, result, provider) {
+    const view = fileReadToolView(call, result, provider);
     return view ? { type: 'file-read-tool', view } : null;
   }
 };
@@ -54,9 +44,9 @@ const publicObservationCardAdapters: PublicObservationCardAdapter[] = [
 ];
 const privateObservationCardAdapters: PrivateObservationCardAdapter[] = [];
 
-export function projectPublicObservationItem(item: ObservationItem): PublicObservationCard | null {
+export function projectPublicObservationItem(item: ObservationItem, provider: string): PublicObservationCard | null {
   for (const adapter of publicObservationCardAdapters) {
-    const projected = adapter.projectItem?.(item);
+    const projected = adapter.projectItem?.(item, provider);
     if (projected) return projected;
   }
   return null;
@@ -64,10 +54,11 @@ export function projectPublicObservationItem(item: ObservationItem): PublicObser
 
 export function projectPublicObservationPair(
   call: ObservationItem,
-  result: ObservationItem
+  result: ObservationItem,
+  provider: string
 ): PublicObservationCard | null {
   for (const adapter of publicObservationCardAdapters) {
-    const projected = adapter.projectPair?.(call, result);
+    const projected = adapter.projectPair?.(call, result, provider);
     if (projected) return projected;
   }
   return null;

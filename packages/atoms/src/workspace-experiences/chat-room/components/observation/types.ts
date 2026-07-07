@@ -3,9 +3,11 @@ import type { ExternalAgentStreamView } from '../../../experience/types.ts';
 
 export type ObservationItem = ExternalAgentStreamView['items'][number];
 
+// Neutral events carry no per-event `source`; the observed agent's `provider` is a frame-level fact,
+// threaded in from the stream and used only for the card's source badge.
 export type CommandToolView = {
   type: string;
-  source: ObservationItem['source'];
+  provider: string;
   command?: string;
   commandLanguage?: string;
   cwd?: string;
@@ -18,21 +20,21 @@ export type CommandToolView = {
 
 export type FileReadToolView = {
   type: string;
-  source: ObservationItem['source'];
+  provider: string;
   path: string;
   content: string;
 };
 
 export type PublicObservationCard =
-  | { type: 'message'; role: ObservationItem['role']; item: ObservationItem }
+  | { type: 'message'; role: 'user' | 'agent'; item: ObservationItem }
   | { type: 'thinking'; item: ObservationItem }
   | { type: 'tool-pair'; call: ObservationItem; result: ObservationItem }
   | { type: 'command-tool'; view: CommandToolView }
   | { type: 'file-read-tool'; view: FileReadToolView };
 
 export type PrivateObservationCard = {
-  type: `${ObservationItem['source']}:${string}`;
-  source: ObservationItem['source'];
+  type: string;
+  provider: string;
   item: ObservationItem;
 };
 
@@ -43,8 +45,8 @@ type ObservationCardView =
 export type ObservationTimelineEntry = ObservationCardView;
 
 export type PublicObservationCardAdapter = {
-  projectItem?(item: ObservationItem): PublicObservationCard | null;
-  projectPair?(call: ObservationItem, result: ObservationItem): PublicObservationCard | null;
+  projectItem?(item: ObservationItem, provider: string): PublicObservationCard | null;
+  projectPair?(call: ObservationItem, result: ObservationItem, provider: string): PublicObservationCard | null;
 };
 
 export type PrivateObservationCardAdapter = {

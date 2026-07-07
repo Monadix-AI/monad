@@ -1,4 +1,5 @@
 import type {
+  AgentObservationEvent,
   ExternalAgentObservationAccessResponse,
   ExternalAgentUsageResponse,
   NativeAgentDeliveryId,
@@ -9,6 +10,7 @@ import type { ExternalAgentStreamView, Participant } from '../../experience/type
 
 import { nativeAgentObservationProjectionSchema } from '@monad/protocol';
 
+import { toAgentObservationEvent } from '../../../agent-adapters/neutral-observation.ts';
 import {
   externalAgentStreamItems,
   externalAgentUsageLimitMeter,
@@ -170,6 +172,8 @@ export function streamWithObservationProjection(
     ...stream,
     output: projection.events.map((event) => event.text).join('\n\n'),
     items: projection.events
+      .map((event) => toAgentObservationEvent(event))
+      .filter((event): event is AgentObservationEvent => event !== null)
   };
 }
 

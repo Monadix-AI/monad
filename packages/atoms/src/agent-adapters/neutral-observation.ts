@@ -108,6 +108,9 @@ export function toAgentObservationEvent(
   }
   if (kind === 'turn-end') {
     event_.reason = turnEndReason(event);
+    // Some providers' terminal event carries the final assistant text (e.g. codex-exec `result`);
+    // keep it so a turn-end that doubles as the last message doesn't drop its content.
+    if (event.text) event_.text = event.text;
     return event_;
   }
   if (event.text) event_.text = event.text;

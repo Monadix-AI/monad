@@ -26,25 +26,28 @@ export function FileReadToolHeader({ view }: { view: FileReadToolView }): React.
       compact
       label="tool call"
       showSource={false}
-      source={view.source}
+      source={view.provider}
       title={view.type}
     />
   );
 }
 
-export function fileReadToolView(call: ObservationItem, result: ObservationItem): FileReadToolView | null {
-  return claudeReadToolView(call, result);
+export function fileReadToolView(
+  call: ObservationItem,
+  result: ObservationItem,
+  provider: string
+): FileReadToolView | null {
+  return claudeReadToolView(call, result, provider);
 }
 
-function claudeReadToolView(call: ObservationItem, result: ObservationItem): FileReadToolView | null {
-  if (call.source !== 'claude-code-sdk' && result.source !== 'claude-code-sdk') return null;
+function claudeReadToolView(call: ObservationItem, result: ObservationItem, provider: string): FileReadToolView | null {
   const input = claudeToolInput(call.raw);
   if (input?.name !== 'Read') return null;
   const content = claudeToolOutput(result.raw) ?? result.text;
   if (!content) return null;
   return {
     type: 'Read',
-    source: result.source,
+    provider,
     path: input.path,
     content
   };

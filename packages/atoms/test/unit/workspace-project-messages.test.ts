@@ -39,14 +39,7 @@ const externalAgentSession = (overrides: Partial<ExternalAgentSessionView> = {})
 
 const observationFields = (
   items: NonNullable<ReturnType<typeof __workplaceProjectMessageTest.buildExternalAgentStreams>[number]>['items']
-) =>
-  items.map(({ id, providerEventType, role, source, text }) => ({
-    id,
-    role,
-    text,
-    source,
-    providerEventType
-  }));
+) => items.map(({ id, text }) => ({ id, text }));
 
 function firstExternalAgentStream(streams: ReturnType<typeof __workplaceProjectMessageTest.buildExternalAgentStreams>) {
   const stream = streams[0];
@@ -623,7 +616,7 @@ test('external agent streams prefer live activity output over persisted snapshot
     provider: 'gemini',
     tag: 'Gemini',
     output: 'live output',
-    items: [{ id: 'exa_01KWGEMINI000000000000000:0', role: 'agent', text: 'live output' }],
+    items: [{ id: 'exa_01KWGEMINI000000000000000:0', kind: 'assistant-message', text: 'live output' }],
     status: 'running'
   });
 });
@@ -641,7 +634,7 @@ test('external agent durable running sessions remain observable without marking 
     agentName: 'gemini',
     output: 'previous turn output',
     status: 'ok',
-    items: [{ id: 'exa_01KWGEMINI000000000000000:0', role: 'agent', text: 'previous turn output' }]
+    items: [{ id: 'exa_01KWGEMINI000000000000000:0', kind: 'assistant-message', text: 'previous turn output' }]
   });
 });
 
@@ -667,7 +660,7 @@ test('external agent live activity streams keep the managed agent identity', () 
     id: 'exa_live_codex',
     agentName: 'codex',
     status: 'running',
-    items: [{ id: 'exa_live_codex:0', role: 'agent', text: 'thinking about the project message' }]
+    items: [{ id: 'exa_live_codex:0', kind: 'assistant-message', text: 'thinking about the project message' }]
   });
 });
 
@@ -726,20 +719,8 @@ test('external agent structured result output is projected as readable observati
   );
 
   expect(observationFields(stream.items)).toEqual([
-    {
-      id: 'exa_structured_codex:result',
-      role: 'agent',
-      text: '仍被拦截，无法发出。卡点未变：`monad project` 命令需要你批准。',
-      source: 'codex-exec',
-      providerEventType: 'result'
-    },
-    {
-      id: 'exa_structured_codex:denial:0',
-      role: 'tool',
-      text: 'Permission blocked Bash: monad project post "你好！"',
-      source: 'codex-exec',
-      providerEventType: 'permission_denial'
-    }
+    { id: 'exa_structured_codex:result', text: '仍被拦截，无法发出。卡点未变：`monad project` 命令需要你批准。' },
+    { id: 'exa_structured_codex:denial:0', text: 'Permission blocked Bash: monad project post "你好！"' }
   ]);
 });
 
@@ -780,41 +761,11 @@ test('external agent stream-json events are projected as readable observation it
   );
 
   expect(observationFields(stream.items)).toEqual([
-    {
-      id: 'exa_stream_events:json:0:message:0',
-      role: 'agent',
-      text: 'I can help.',
-      source: 'claude-code-sdk',
-      providerEventType: 'assistant'
-    },
-    {
-      id: 'exa_stream_events:json:0:tool:1',
-      role: 'tool',
-      text: 'Tool call Bash',
-      source: 'claude-code-sdk',
-      providerEventType: 'assistant'
-    },
-    {
-      id: 'exa_stream_events:json:1:delta',
-      role: 'agent',
-      text: 'Streaming text.',
-      source: 'claude-code-sdk',
-      providerEventType: 'content_block_delta'
-    },
-    {
-      id: 'exa_stream_events:json:2:tool-result',
-      role: 'tool',
-      text: 'command output',
-      source: 'claude-code-sdk',
-      providerEventType: 'tool_result'
-    },
-    {
-      id: 'exa_stream_events:json:3:result',
-      role: 'agent',
-      text: 'Done.',
-      source: 'claude-code-sdk',
-      providerEventType: 'result'
-    }
+    { id: 'exa_stream_events:json:0:message:0', text: 'I can help.' },
+    { id: 'exa_stream_events:json:0:tool:1', text: 'Tool call Bash' },
+    { id: 'exa_stream_events:json:1:delta', text: 'Streaming text.' },
+    { id: 'exa_stream_events:json:2:tool-result', text: 'command output' },
+    { id: 'exa_stream_events:json:3:result', text: 'Done.' }
   ]);
 });
 
@@ -842,21 +793,10 @@ test('external agent projection ignores startup prose before stream-json objects
     )
   );
 
+  // The `system` init notice has no neutral representation (no system kind) and is dropped; the result
+  // survives as a turn-end that keeps its final text.
   expect(observationFields(stream.items)).toEqual([
-    {
-      id: 'exa_mixed_claude:json:0:system',
-      role: 'system',
-      text: 'init',
-      source: 'claude-code-sdk',
-      providerEventType: 'system'
-    },
-    {
-      id: 'exa_mixed_claude:json:1:result',
-      role: 'agent',
-      text: 'Need approval before posting.',
-      source: 'claude-code-sdk',
-      providerEventType: 'result'
-    }
+    { id: 'exa_mixed_claude:json:1:result', text: 'Need approval before posting.' }
   ]);
 });
 
@@ -899,21 +839,10 @@ test('external agent app-server JSON-RPC output is projected as readable observa
     )
   );
 
+  // The `thread/started` system notice has no neutral representation and is dropped; the mcp status is
+  // a tool event and survives.
   expect(observationFields(stream.items)).toEqual([
-    {
-      id: 'exa_app_server_codex:json:0:thread-started',
-      role: 'system',
-      text: 'Thread started in /Users/zeke/.codex/worktrees/28ea/monad/.dev/.monad/workplace-agents/project/test',
-      source: 'codex-app-server',
-      providerEventType: 'thread/started'
-    },
-    {
-      id: 'exa_app_server_codex:json:1:mcp-status',
-      role: 'tool',
-      text: 'node_repl starting',
-      source: 'codex-app-server',
-      providerEventType: 'mcpServer/startupStatus/updated'
-    }
+    { id: 'exa_app_server_codex:json:1:mcp-status', text: 'node_repl starting' }
   ]);
 });
 
@@ -931,8 +860,7 @@ test('external agent follow streams restore persisted terminal snapshots', () =>
     items: [
       {
         id: 'exa_01KWGEMINI000000000000000:0',
-        role: 'agent',
-        source: 'plain-text',
+        kind: 'assistant-message',
         text: '\\x1b[38;2;255;193;7mraw terminal output'
       }
     ]
