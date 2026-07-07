@@ -36,6 +36,7 @@ const switchSessionCommandAtom = defineCommand({
   description: 'Switch to another conversation',
   descriptionKey: 'cmd.switch.desc',
   argHint: '<number|session-id>',
+  args: [{ name: 'target', type: 'session', required: true, placeholder: '<number|session-id>' }],
   async run(ctx) {
     const target = ctx.args.trim().split(/\s+/)[0];
     if (!target) return { message: ctx.t('cmd.switch.usage') };
@@ -155,6 +156,7 @@ const modelCommandAtom = defineCommand({
   description: 'Show or switch the model for this conversation',
   descriptionKey: 'cmd.model.desc',
   argHint: '[alias]',
+  args: [{ name: 'alias', type: 'model', required: false, placeholder: '[alias]' }],
   async run(ctx) {
     const alias = ctx.args.trim();
     const models = await ctx.listModels();
@@ -177,8 +179,7 @@ const workdirCommandAtom = defineCommand({
   description: 'Show or set the shared working folder for this conversation',
   descriptionKey: 'cmd.workdir.desc',
   argHint: '[absolute path]',
-  // Owner-only: the working folder controls the fs/shell sandbox root for every agent in the room.
-  access: 'owner',
+  args: [{ name: 'path', type: 'path', required: false, placeholder: '[absolute path]' }],
   async run(ctx) {
     const path = ctx.args.trim();
     if (!path) {
@@ -215,16 +216,25 @@ const helpCommandAtom = defineCommand({
   descriptionKey: 'cmd.help.desc',
   async run(ctx) {
     const commands = await ctx.listCommands();
-    const builtins = commands.filter((c) => c.kind === 'builtin' && c.source === 'builtin');
-    const atoms = commands.filter((c) => c.source === 'atom');
-    const skills = commands.filter((c) => c.kind === 'prompt');
-    const fmt = (c: (typeof commands)[number]) => `  /${c.name}${c.argHint ? ` ${c.argHint}` : ''} — ${c.description}`;
+    const builtins = commands.filter((c) => c.type === 'action' && c.source === 'builtin');
+    const atoms = commands.filter((c) => c.type === 'action' && c.source === 'atom-pack');
+    const skills = commands.filter((c) => c.type === 'skill');
+    const fmt = (c: (typeof commands)[number]) => `  /${c.id}${commandHint(c)} — ${c.description}`;
     const sections: string[] = [`${ctx.t('cmd.help.commands')}\n${builtins.map(fmt).join('\n')}`];
     if (atoms.length > 0) sections.push(`${ctx.t('cmd.help.atoms')}\n${atoms.map(fmt).join('\n')}`);
     if (skills.length > 0) sections.push(`${ctx.t('cmd.help.skills')}\n${skills.map(fmt).join('\n')}`);
     return { message: sections.join('\n\n'), effect: { type: 'help', commands } };
   }
 });
+
+function commandHint(command: {
+  argHint?: string;
+  args?: Array<{ name: string; placeholder?: string; required?: boolean }>;
+}): string {
+  if (command.argHint) return ` ${command.argHint}`;
+  if (!command.args?.length) return '';
+  return ` ${command.args.map((arg) => arg.placeholder ?? (arg.required ? `<${arg.name}>` : `[${arg.name}]`)).join(' ')}`;
+}
 
 export const BUILTIN_COMMANDS: CommandDefinition[] = [
   newSessionCommandAtom,

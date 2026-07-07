@@ -10,7 +10,7 @@ const setAtomPinApi = setAtomPackEnabledApi.injectEndpoints({
       queryFn: (body: SetAtomPinRequest, api: { extra: unknown }) =>
         runTreaty(() => clientOf(api).treaty.v1.atoms.pin.post(body)),
       // The pin changes which pack wins a bare id → re-resolution updates the conflicts list.
-      invalidatesTags: ['Atoms']
+      invalidatesTags: ['Atoms', 'SlashCommands']
     })
   })
 });

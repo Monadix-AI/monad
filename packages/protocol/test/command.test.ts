@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 
-import { parseSlashCommand } from '../src/command.ts';
+import { commandItemSchema, commandsListQuerySchema, parseSlashCommand } from '../src/command.ts';
 
 test('parseSlashCommand accepts addressable skill ids', () => {
   expect(parseSlashCommand('/global:summarize-changes')).toEqual({
@@ -19,4 +19,46 @@ test('parseSlashCommand accepts addressable skill ids', () => {
 
 test('parseSlashCommand keeps existing dotted command ids', () => {
   expect(parseSlashCommand('/pack.command arg')).toEqual({ name: 'pack.command', args: 'arg' });
+});
+
+test('parseSlashCommand trims surrounding whitespace but only accepts commands at the start', () => {
+  expect(parseSlashCommand(' /reset ')).toEqual({ name: 'reset', args: '' });
+  expect(parseSlashCommand('/model gpt-x')).toEqual({ name: 'model', args: 'gpt-x' });
+  expect(parseSlashCommand('hello /reset')).toBeNull();
+  expect(parseSlashCommand('正文\n/reset')).toBeNull();
+});
+
+test('commandsListQuerySchema accepts optional filters', () => {
+  expect(commandsListQuerySchema.parse({})).toEqual({});
+  expect(commandsListQuerySchema.parse({ filter: 'all' })).toEqual({ filter: 'all' });
+  expect(commandsListQuerySchema.parse({ filter: 'disabled' })).toEqual({ filter: 'disabled' });
+});
+
+test('commandItemSchema supports structured args and subcommands', () => {
+  expect(
+    commandItemSchema.parse({
+      id: 'memory',
+      name: 'Memory',
+      type: 'action',
+      source: 'builtin',
+      description: 'Manage memory',
+      aliases: [],
+      enabled: true,
+      subcommands: [
+        {
+          id: 'consolidate',
+          name: 'Consolidate',
+          description: 'Consolidate memory',
+          args: [{ name: 'level', type: 'number', required: false, placeholder: '[level]' }]
+        }
+      ]
+    })
+  ).toMatchObject({
+    subcommands: [
+      {
+        id: 'consolidate',
+        args: [{ name: 'level', type: 'number' }]
+      }
+    ]
+  });
 });

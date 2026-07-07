@@ -10,7 +10,7 @@ export const installAtomPackApi = listAtomPacksApi.injectEndpoints({
       queryFn: (body: InstallAtomPackRequest, api: { extra: unknown }) =>
         runTreaty(() => clientOf(api).treaty.v1.atoms.install.post(body)),
       // Only a committed install (no further consent needed) changes the installed set.
-      invalidatesTags: (result) => (result?.needsConsent ? [] : ['Atoms'])
+      invalidatesTags: (result) => (result?.needsConsent ? [] : ['Atoms', 'SlashCommands'])
     })
   })
 });

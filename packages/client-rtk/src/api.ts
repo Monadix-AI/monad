@@ -60,7 +60,7 @@ import {
   useLazyGetAttachmentQuery
 } from './endpoints/attachments/index.ts';
 import { useSendChannelMessageMutation } from './endpoints/channels/index.ts';
-import { commandsApi, useListCommandsQuery } from './endpoints/commands/index.ts';
+import { commandsApi, useLazyListCommandsQuery, useListCommandsQuery } from './endpoints/commands/index.ts';
 import { useOpenDraftAttachmentMutation } from './endpoints/draft-attachments/index.ts';
 import { graphApi, useGetGraphQuery } from './endpoints/graph/index.ts';
 import { indexerApi, useGetIndexerStatusQuery } from './endpoints/indexer/get-indexer-status.ts';
@@ -415,6 +415,7 @@ export {
   useLazyGetNativeCliUsageQuery,
   useLazyGetSkillContentQuery,
   useLazyGetUiItemsWindowQuery,
+  useLazyListCommandsQuery,
   useLazySearchMcpRegistryQuery,
   useLazySearchSkillsQuery,
   useListAcpAgentPresetsQuery,

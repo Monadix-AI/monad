@@ -1,11 +1,13 @@
 // The unified slash-command registry. First-party built-ins and third-party atom commands both
 // land here via the SAME defineCommand mechanism; built-ins win on name conflicts and CANNOT be
 // shadowed by an atom (the opposite of channel/registry.ts's last-write-wins merge — that is
-// deliberate). Skills are not stored here; they are merged in at list() time as kind:'prompt'.
+// deliberate). Skills are not stored here; they are merged in at list() time as type:'skill'.
 
 import type { Translate } from '@monad/i18n';
-import type { CommandSpec } from '@monad/protocol';
+import type { CommandItem, CommandsListFilter } from '@monad/protocol';
 import type { CommandDefinition } from '@monad/sdk-atom';
+
+import { commandArgSchema, commandSubcommandSchema } from '@monad/protocol';
 
 export interface RegistryEntry {
   def: CommandDefinition;
@@ -13,7 +15,7 @@ export interface RegistryEntry {
   atomName?: string;
 }
 
-/** Minimal skill view needed to surface skills as kind:'prompt' commands in discovery. */
+/** Minimal skill view needed to surface skills as type:'skill' commands in discovery. */
 export interface SkillCommandView {
   name: string;
   description: string;
@@ -24,6 +26,9 @@ export interface SkillCommandView {
 }
 
 export type RegistryLog = (level: 'info' | 'warn' | 'error', msg: string) => void;
+export interface CommandListOptions {
+  filter?: CommandsListFilter;
+}
 
 /** Command names/aliases must match the parser (lowercase-with-hyphens) or they'd register but never
  *  be reachable via parseSlashCommand. Same shape as a skill name. */
@@ -37,7 +42,17 @@ function isCommandDefinition(value: unknown): value is CommandDefinition {
   if (typeof d.name !== 'string' || typeof d.description !== 'string' || typeof d.run !== 'function') return false;
   if (d.aliases !== undefined && (!Array.isArray(d.aliases) || d.aliases.some((a) => typeof a !== 'string')))
     return false;
+  if (d.args !== undefined && !isCommandArgs(d.args)) return false;
+  if (d.subcommands !== undefined && !isCommandSubcommands(d.subcommands)) return false;
   return true;
+}
+
+function isCommandArgs(value: unknown): value is CommandDefinition['args'] {
+  return Array.isArray(value) && value.every((arg) => commandArgSchema.safeParse(arg).success);
+}
+
+function isCommandSubcommands(value: unknown): value is CommandDefinition['subcommands'] {
+  return Array.isArray(value) && value.every((sub) => commandSubcommandSchema.safeParse(sub).success);
 }
 
 export class CommandRegistry {
@@ -69,6 +84,10 @@ export class CommandRegistry {
    *  the shape is invalid; a name/alias isn't a valid command token; a name/alias collides with a
    *  built-in (built-ins are not overridable) or with an already-registered command (first-wins). */
   registerAtom(atomName: string, raw: unknown): void {
+    if (!COMMAND_NAME_RE.test(atomName)) {
+      this.log('warn', `atom pack "${atomName}" command namespace must be lowercase-with-hyphens — rejected`);
+      return;
+    }
     if (!isCommandDefinition(raw)) {
       this.log(
         'warn',
@@ -171,40 +190,87 @@ export class CommandRegistry {
   /** The full advertised command set: built-ins + atom commands + user-invocable skills. When `t`
    *  is given, a command's `description` is resolved from its `descriptionKey` (the active locale);
    *  skills keep their own description (not in the i18n catalog). */
-  list(skills: SkillCommandView[] = [], t?: Translate): CommandSpec[] {
-    const cmds: CommandSpec[] = [];
-    for (const e of this.entries.values()) {
+  list(skills: SkillCommandView[] = [], t?: Translate, opts: CommandListOptions = {}): CommandItem[] {
+    const filter = opts.filter ?? 'enabled';
+    const cmds: CommandItem[] = [];
+    for (const [canonical, e] of this.entries) {
       const description = t && e.def.descriptionKey ? t(e.def.descriptionKey) : e.def.description;
+      const aliases =
+        e.source === 'atom'
+          ? [
+              canonical,
+              ...this.allKeys(e.def).filter((key) => this.keys.get(key) === canonical),
+              ...(e.def.aliases ?? []).map((alias) => `${e.atomName}.${alias}`)
+            ]
+          : (e.def.aliases ?? []);
       cmds.push({
-        name: e.def.name,
-        aliases: e.def.aliases ?? [],
+        id: canonical,
+        name: friendlyCommandName(e.def.name),
+        type: 'action',
+        source: e.source === 'atom' ? 'atom-pack' : 'builtin',
+        ...(e.atomName ? { sourceName: e.atomName } : {}),
         description,
-        descriptionKey: e.def.descriptionKey,
+        aliases,
         argHint: e.def.argHint,
-        kind: 'builtin',
-        source: e.source,
-        atomName: e.atomName,
-        available: true
+        args: e.def.args,
+        subcommands: e.def.subcommands?.map((subcommand) => ({
+          ...subcommand,
+          aliases: subcommand.aliases ?? []
+        })),
+        enabled: true
       });
     }
     for (const s of skills) {
       if (!s.userInvocable) continue;
       if (this.keys.has(s.name)) continue; // a real command shadows a same-named skill in listings
+      const source = skillSource(s.name);
       cmds.push({
-        name: s.name,
-        aliases: [],
+        id: s.name,
+        name: friendlySkillName(s.name),
+        type: 'skill',
+        source: source.source,
+        ...(source.sourceName ? { sourceName: source.sourceName } : {}),
         description: s.description,
+        aliases: [],
         version: s.version,
         icon: s.icon,
-        kind: 'prompt',
-        source: 'skill',
-        available: s.available
+        enabled: s.available
       });
     }
-    return cmds.sort((a, b) => a.name.localeCompare(b.name));
+    return cmds
+      .filter((cmd) => filter === 'all' || (filter === 'enabled' ? cmd.enabled : !cmd.enabled))
+      .sort((a, b) => a.name.localeCompare(b.name));
   }
 
   private allKeys(def: CommandDefinition): string[] {
     return [def.name, ...(def.aliases ?? [])];
   }
+}
+
+function friendlyCommandName(id: string): string {
+  return id
+    .split(/[-.]/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
+function friendlySkillName(id: string): string {
+  const parts = id.split(':');
+  const raw =
+    parts.length === 2 && parts[0] === 'global'
+      ? parts[1]
+      : parts.length === 3 && (parts[0] === 'atom-pack' || parts[0] === 'agent')
+        ? parts[2]
+        : id;
+  return friendlyCommandName(raw ?? id);
+}
+
+function skillSource(id: string): { source: 'atom-pack' | 'custom'; sourceName?: string } {
+  const parts = id.split(':');
+  if (parts.length === 3 && parts[0] === 'atom-pack' && parts[1]) {
+    return { source: 'atom-pack', sourceName: parts[1] };
+  }
+  if (parts.length === 3 && parts[0] === 'agent' && parts[1]) return { source: 'custom', sourceName: parts[1] };
+  return { source: 'custom' };
 }

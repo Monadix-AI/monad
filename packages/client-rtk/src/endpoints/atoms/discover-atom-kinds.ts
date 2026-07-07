@@ -11,7 +11,7 @@ export const discoverAtomKindsApi = listAtomKindsApi.injectEndpoints({
     discoverAtomKinds: builder.mutation<DiscoverAtomKindsResponse, void>({
       queryFn: (_arg, api: { extra: unknown }) =>
         runTreaty(() => clientOf(api).treaty.v1.settings.model['atom-kinds'].discover.post()),
-      invalidatesTags: ['Atoms']
+      invalidatesTags: ['Atoms', 'SlashCommands']
     })
   })
 });

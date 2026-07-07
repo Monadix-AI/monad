@@ -440,9 +440,6 @@ export const channelInstanceSchema = z.object({
   // approves them via the pairing flow). The access policy + allowlist schema is shared with the
   // wire DTO in @monad/protocol so config and HTTP view stay in lockstep.
   allowlist: channelAllowlistSchema.default({ allowAllUsers: false, allowedUsers: [] }),
-  // Native user ids trusted to run owner-only commands (e.g. /workdir) over this channel. A channel
-  // guest is never the daemon owner; this is the explicit, per-channel opt-in for an IM operator.
-  ownerUsers: z.array(z.string()).default([]),
   // Group behaviour: by default the bot only answers in a group when addressed (mention/reply).
   // Optional for back-compat — the core resolves an absent policy to requireMention=true.
   groupPolicy: channelGroupPolicySchema.optional(),

@@ -47,10 +47,7 @@ export function createInstancesHandlers(ctx: ChannelSettingsContext) {
       const next: ChannelInstanceConfig = {
         ...channel,
         // Preserve the existing token reference; default new channels to the auth.json-backed scheme.
-        tokenRef: existing?.tokenRef ?? `\${secret:channel/${channel.id}/token}`,
-        // ownerUsers is config-only (like tokenRef) — it never crosses the wire, so preserve it across
-        // a web upsert rather than letting the view round-trip wipe it.
-        ownerUsers: existing?.ownerUsers ?? []
+        tokenRef: existing?.tokenRef ?? `\${secret:channel/${channel.id}/token}`
       };
       const channels = existing ? cfg.channels.map((c) => (c.id === channel.id ? next : c)) : [...cfg.channels, next];
       await ctx.commit({ ...cfg, channels });

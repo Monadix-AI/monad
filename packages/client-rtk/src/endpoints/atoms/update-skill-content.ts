@@ -19,6 +19,7 @@ const updateSkillContentApi = getSkillContentApi.injectEndpoints({
       invalidatesTags: (_result, _error, arg) => [
         'InstalledSkills',
         'Skills',
+        'SlashCommands',
         { type: 'InstalledSkills', id: arg.id ?? arg.name }
       ]
     })

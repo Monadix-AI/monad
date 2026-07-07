@@ -15,6 +15,8 @@ import {
   type SessionNavigator
 } from '@/handlers/commands/index.ts';
 
+const CHANNEL_BLOCKED_COMMANDS = new Set(['workdir']);
+
 export interface CommandHost {
   deps: ChannelServiceDeps;
   channelT: ChannelTranslate;
@@ -60,11 +62,13 @@ export async function runCommand(
     registry: bundle.registry,
     navigator: conversationNavigator(host, c, key, m.senderDisplay),
     principalId: principalFor(c.id),
-    // A channel guest is the daemon owner only when its native user id is in this channel's
-    // ownerUsers allowlist (gates owner-only commands like /workdir). The channel serializes per
-    // conversation (one run at a time), so a command never races an in-flight turn → not busy.
-    isOwner: c.ownerUsers.includes(m.userId),
+    // The channel serializes per conversation (one run at a time), so a command never races an
+    // in-flight turn → not busy.
     isBusy: false,
+    denyCommand: (def) =>
+      CHANNEL_BLOCKED_COMMANDS.has(def.name)
+        ? { message: `/${def.name} is only available from the local Monad UI or CLI.` }
+        : null,
     gate: approve ? (def) => approve(sessionId, def) : undefined,
     services: channelServices(host, bundle)
   };

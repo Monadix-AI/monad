@@ -1,5 +1,5 @@
-import type { PrincipalId, SessionId } from '@monad/protocol';
-import type { CommandModelInfo, CommandRunContext, CommandSessionInfo, CommandSpec } from '@monad/sdk-atom';
+import type { CommandItem, PrincipalId, SessionId } from '@monad/protocol';
+import type { CommandModelInfo, CommandRunContext, CommandSessionInfo } from '@monad/sdk-atom';
 
 import { describe, expect, test } from 'bun:test';
 import { createI18n } from '@monad/i18n';
@@ -43,7 +43,7 @@ function fakeCtx(args: string, servicesOver: ServicesOver = {}): CommandRunConte
       setModel: async () => {},
       getWorkdir: async () => ({ path: undefined }),
       setWorkdir: async (_sid, path) => ({ path }),
-      listCommands: async () => [] as CommandSpec[],
+      listCommands: async () => [] as CommandItem[],
       handoff: async () => ({ sessionId: 'ses_new' as SessionId }),
       t: enT,
       log: () => {},
@@ -106,10 +106,23 @@ describe('/workdir (shared working folder)', () => {
     expect(res?.effect).toEqual({ type: 'workdir-changed', path: '/tmp/project' });
   });
 
-  test('is owner-only — refused to a non-owner caller (e.g. a channel guest)', async () => {
+  test('runs for a non-owner caller', async () => {
     const r = seededCommandRegistry();
-    const res = await dispatchCommand(r, '/workdir /tmp/project', (a) => fakeCtx(a), { isOwner: false });
-    expect(res?.message).toBe('🔒 /workdir is owner-only.');
+    let received: string | undefined;
+    const res = await dispatchCommand(
+      r,
+      '/workdir /tmp/project',
+      (a) =>
+        fakeCtx(a, {
+          setWorkdir: async (_sid, path) => {
+            received = path;
+            return { path };
+          }
+        }),
+      {}
+    );
+    expect(received).toBe('/tmp/project');
+    expect(res?.effect).toEqual({ type: 'workdir-changed', path: '/tmp/project' });
   });
 
   test('replies are localized (zh)', async () => {
@@ -164,6 +177,27 @@ describe('CommandRegistry precedence', () => {
     expect(e?.atomName).toBe('acme');
   });
 
+  test('an atom pack id must be slash-token compatible for command registration', () => {
+    const warnings: string[] = [];
+    const r = seededCommandRegistry((level, msg) => level === 'warn' && warnings.push(msg));
+    r.registerAtom('bad_pack', defineCommand({ name: 'deploy', description: 'x', run: async () => ({}) }));
+    expect(r.resolve('bad_pack.deploy')).toBeUndefined();
+    expect(warnings.join('\n')).toContain('must be lowercase-with-hyphens');
+  });
+
+  test('malformed structured args from an atom command are rejected', () => {
+    const warnings: string[] = [];
+    const r = seededCommandRegistry((level, msg) => level === 'warn' && warnings.push(msg));
+    r.registerAtom('acme', {
+      name: 'deploy',
+      description: 'x',
+      args: [{ name: 'target', type: 'enum', required: 'yes', values: [{ id: 'prod', name: 1 }] }],
+      run: async () => ({})
+    });
+    expect(r.resolve('deploy')).toBeUndefined();
+    expect(warnings.join('\n')).toContain('malformed command');
+  });
+
   test('atom-vs-atom collision: both coexist (qualified), bare = first-wins; pin can override', () => {
     const r = new CommandRegistry();
     r.registerAtom('a', defineCommand({ name: 'dup', description: 'first', run: async () => ({ message: '1' }) }));
@@ -175,16 +209,72 @@ describe('CommandRegistry precedence', () => {
     expect(r.resolve('dup')?.atomName).toBe('b');
   });
 
-  test('list() merges built-ins, atom commands, and user-invocable skills', () => {
+  test('list() returns enabled command items for built-ins, atom commands, and user-invocable skills', () => {
     const r = seededCommandRegistry();
     r.registerAtom('acme', defineCommand({ name: 'acme-x', description: 'd', run: async () => ({}) }));
     const specs = r.list([
-      { name: 'deep-research', description: 'research', userInvocable: true, available: true },
+      { name: 'global:deep-research', description: 'research', userInvocable: true, available: true },
       { name: 'internal', description: 'hidden', userInvocable: false, available: true }
     ]);
-    expect(specs.find((s) => s.name === 'reset')?.source).toBe('builtin');
-    expect(specs.find((s) => s.name === 'acme-x')?.source).toBe('atom');
-    expect(specs.find((s) => s.name === 'deep-research')?.kind).toBe('prompt');
+    expect(specs.find((s) => s.id === 'reset')).toMatchObject({
+      id: 'reset',
+      name: 'Reset',
+      type: 'action',
+      source: 'builtin',
+      enabled: true
+    });
+    expect(specs.find((s) => s.id === 'acme.acme-x')).toMatchObject({
+      id: 'acme.acme-x',
+      name: 'Acme X',
+      type: 'action',
+      source: 'atom-pack',
+      sourceName: 'acme',
+      aliases: ['acme.acme-x', 'acme-x'],
+      enabled: true
+    });
+    expect(specs.find((s) => s.id === 'global:deep-research')).toMatchObject({
+      id: 'global:deep-research',
+      name: 'Deep Research',
+      type: 'skill',
+      source: 'custom',
+      enabled: true
+    });
+  });
+
+  test('list() supports all and disabled filters', () => {
+    const r = seededCommandRegistry();
+    const skills = [
+      { name: 'enabled-skill', description: 'on', userInvocable: true, available: true },
+      { name: 'disabled-skill', description: 'off', userInvocable: true, available: false }
+    ];
+    expect(r.list(skills, undefined, { filter: 'all' }).map((s) => s.id)).toEqual(
+      expect.arrayContaining(['enabled-skill', 'disabled-skill'])
+    );
+    expect(r.list(skills, undefined, { filter: 'disabled' }).map((s) => s.id)).toEqual(['disabled-skill']);
+  });
+
+  test('list() carries structured args and subcommands from command definitions', () => {
+    const r = new CommandRegistry();
+    r.registerBuiltin(
+      defineCommand({
+        name: 'memory',
+        description: 'manage memory',
+        args: [{ name: 'query', type: 'string', required: false, placeholder: '[query]' }],
+        subcommands: [
+          {
+            id: 'consolidate',
+            name: 'Consolidate',
+            description: 'Consolidate memory layers',
+            args: [{ name: 'level', type: 'number', required: false, placeholder: '[level]' }]
+          }
+        ],
+        run: async () => ({})
+      })
+    );
+    expect(r.list().find((s) => s.id === 'memory')).toMatchObject({
+      args: [{ name: 'query', type: 'string' }],
+      subcommands: [{ id: 'consolidate', name: 'Consolidate', args: [{ name: 'level', type: 'number' }] }]
+    });
   });
 });
 
@@ -248,38 +338,24 @@ describe('dispatchCommand', () => {
   });
 });
 
-describe('per-command permission (access)', () => {
-  function ownerOnlyRegistry() {
+describe('command dispatch', () => {
+  function commandRegistry() {
     const r = seededCommandRegistry();
     r.registerAtom(
       'acme',
       defineCommand({
         name: 'acme-deploy',
         description: 'd',
-        access: 'owner',
         run: async () => ({ message: 'deployed' })
       })
     );
     return r;
   }
 
-  test('an owner-only command is refused to a non-owner caller', async () => {
-    const r = ownerOnlyRegistry();
-    const _res = await dispatchCommand(r, '/acme-deploy', (a) => fakeCtx(a), { isOwner: false });
-  });
-
-  test('an owner-only command runs for the owner', async () => {
-    const r = ownerOnlyRegistry();
-    const res = await dispatchCommand(r, '/acme-deploy', (a) => fakeCtx(a), { isOwner: true });
+  test('runs atom commands without caller-owner gating', async () => {
+    const r = commandRegistry();
+    const res = await dispatchCommand(r, '/acme-deploy', (a) => fakeCtx(a));
     expect(res?.message).toBe('deployed');
-  });
-
-  test('an everyone command (default) runs for a non-owner', async () => {
-    const r = seededCommandRegistry();
-    const res = await dispatchCommand(r, '/help', (a) => fakeCtx(a, { listCommands: async () => r.list() }), {
-      isOwner: false
-    });
-    expect(res?.effect?.type).toBe('help');
   });
 });
 

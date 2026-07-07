@@ -61,6 +61,8 @@ A registration whose kind isn't in `atoms[]` throws `UndeclaredAtomError` at loa
 is an honest, auditable inventory. The user consents to the whole declared set (all-or-nothing); the
 CLI/web list each kind before install. A complete reference lives in
 [`packages/sdk-atom/examples/multi/atom-pack.ts`](../packages/sdk-atom/examples/multi/atom-pack.ts).
+For command authoring, including structured args and subcommands, see
+[`docs/third-party/commands.md`](../third-party/commands.md).
 
 ### Conflict & failure semantics
 

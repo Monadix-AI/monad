@@ -9,7 +9,6 @@ import {
   sessionSelectors,
   useGetHealthQuery,
   useGetRolesQuery,
-  useListCommandsQuery,
   useListLiveNativeCliSessionsQuery,
   useListNativeCliSessionSummariesQuery,
   useListProfilesQuery,
@@ -70,8 +69,6 @@ export function useAppShellData() {
   );
 
   useStreamControlQuery(undefined);
-  const { data: commandsData } = useListCommandsQuery(undefined);
-  const commands = commandsData?.commands ?? [];
 
   const {
     data: profileData,
@@ -94,7 +91,6 @@ export function useAppShellData() {
           : 'missing';
 
   return {
-    commands,
     daemonStatus,
     daemonVersion,
     hasUpgrade,

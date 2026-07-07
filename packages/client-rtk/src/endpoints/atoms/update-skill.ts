@@ -13,7 +13,7 @@ const updateSkillApi = installSkillApi.injectEndpoints({
             .treaty.v1.atoms.skills({ name })
             .update.post({ consent: consent ?? false })
         ),
-      invalidatesTags: (result) => (result?.needsConsent ? [] : ['InstalledSkills'])
+      invalidatesTags: (result) => (result?.needsConsent ? [] : ['InstalledSkills', 'SlashCommands'])
     })
   })
 });

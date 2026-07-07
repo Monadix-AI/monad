@@ -19,7 +19,7 @@ const setSkillsSettingsApi = getSkillsSettingsApi.injectEndpoints({
         const settings = clientOf(api).treaty.v1.settings as unknown as SkillsSettingsTreaty;
         return runTreaty(() => settings.skills.put(body));
       },
-      invalidatesTags: ['Skills'],
+      invalidatesTags: ['Skills', 'SlashCommands'],
       async onQueryStarted(patch, { dispatch, queryFulfilled }) {
         const optimistic = dispatch(
           getSkillsSettingsApi.util.updateQueryData('getSkillsSettings', undefined, (draft) => {

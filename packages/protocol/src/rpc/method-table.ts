@@ -38,7 +38,7 @@ import {
   listApprovalsResponseSchema,
   revokeApprovalRequestSchema
 } from '../approvals.ts';
-import { commandsListResponseSchema } from '../command.ts';
+import { commandsListQuerySchema, commandsListResponseSchema } from '../command.ts';
 import { agentIdSchema, sessionIdSchema, transcriptTargetIdSchema } from '../ids.ts';
 import {
   getNativeCliAuthSessionResponseSchema,
@@ -275,7 +275,11 @@ export const UNIVERSAL_METHODS = {
     result: skillsSettingsResponseSchema
   },
 
-  'commands.list': { http: { verb: 'GET', template: '/v1/commands' }, result: commandsListResponseSchema },
+  'commands.list': {
+    http: { verb: 'GET', template: '/v1/commands' },
+    query: commandsListQuerySchema,
+    result: commandsListResponseSchema
+  },
 
   'agents.list': { http: { verb: 'GET', template: '/v1/agents' }, result: listAgentsResponseSchema },
   'agents.get': { http: { verb: 'GET', template: '/v1/agents/:id' }, path: agentPath, result: getAgentResponseSchema },

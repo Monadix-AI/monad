@@ -1,62 +1,55 @@
-import type { CommandSpec, ProfileView, Session } from '@monad/protocol';
+import type { CommandItem, ProfileView, Session } from '@monad/protocol';
 import type { TFn } from '@/components/I18nProvider';
 import type { SessionCommandMenuItem } from './SessionRoute';
 
 export type CommandMenuProfile = ProfileView;
 
-export function skillCommandDisplayName(name: string): string {
-  const parts = name.split(':');
-  if (parts.length === 2 && parts[0] === 'global') return parts[1] ?? name;
-  if (parts.length === 3 && (parts[0] === 'atom-pack' || parts[0] === 'agent')) return parts[2] ?? name;
-  return name;
+export function shouldActivateSlashCommandDiscovery(input: string): boolean {
+  const commandNamePhase = /^\/[^\s/]*$/.test(input.trimStart());
+  const inlineSkillPhase = /(^|\s)\/[^\s/]*$/.test(input);
+  return commandNamePhase || inlineSkillPhase;
 }
 
-export function skillCommandSource(name: string): { kind: 'global' | 'atom-pack' | 'agent'; name?: string } | null {
-  const parts = name.split(':');
-  if (parts.length === 2 && parts[0] === 'global') return { kind: 'global' };
-  if (parts.length === 3 && parts[0] === 'atom-pack') return { kind: 'atom-pack', name: parts[1] };
-  if (parts.length === 3 && parts[0] === 'agent') return { kind: 'agent', name: parts[1] };
-  return null;
+function itemBadge(command: CommandItem, t: TFn): string | undefined {
+  if (command.source === 'atom-pack') return command.sourceName ?? 'atom-pack';
+  if (command.source === 'custom') return command.sourceName ?? t('web.skills.sourceGlobal');
+  return undefined;
 }
 
-function commandMenuRank(name: string, kind: 'builtin' | 'prompt'): string {
-  if (kind !== 'prompt') return `1:${name}`;
-  const source = skillCommandSource(name);
-  const displayName = skillCommandDisplayName(name);
-  const sourceRank = source?.kind === 'global' ? 0 : source?.kind === 'atom-pack' ? 1 : 2;
-  return `0:${displayName}:${sourceRank}:${name}`;
+function commandMenuRank(command: CommandItem): string {
+  if (command.type !== 'skill') return `1:${command.name}:${command.id}`;
+  const sourceRank = command.source === 'custom' ? 0 : 1;
+  return `0:${command.name}:${sourceRank}:${command.id}`;
 }
 
-export function skillCommandMeta(command: CommandSpec | undefined, t: TFn) {
-  if (command?.kind !== 'prompt') return null;
-  const source = skillCommandSource(command.name);
+function commandHint(command: CommandItem): string {
+  if (command.argHint) return ` ${command.argHint}`;
+  if (!command.args?.length) return '';
+  return ` ${command.args.map((arg) => arg.placeholder ?? (arg.required ? `<${arg.name}>` : `[${arg.name}]`)).join(' ')}`;
+}
+
+export function skillCommandMeta(command: CommandItem | undefined, t: TFn) {
+  if (command?.type !== 'skill') return null;
   return {
-    id: command.name,
-    label: skillCommandDisplayName(command.name),
+    id: command.id,
+    label: command.name,
     description: command.description,
     icon: command.icon,
     version: command.version,
-    sourceLabel:
-      source?.kind === 'global'
-        ? t('web.skills.sourceGlobal')
-        : source?.kind === 'atom-pack'
-          ? t('web.skills.sourceAtomPack', { name: source.name ?? '' })
-          : source?.kind === 'agent'
-            ? t('web.skills.sourceAgent', { name: source.name ?? '' })
-            : undefined
+    sourceLabel: itemBadge(command, t)
   };
 }
 
 export function activeSkillToken(
   text: string,
-  commands: CommandSpec[],
+  commands: CommandItem[],
   t: TFn
 ): (ReturnType<typeof skillCommandMeta> & { start: number; end: number; raw: string }) | null {
   const token = '[a-z0-9]+(?:-[a-z0-9]+)*';
   const re = new RegExp(`(^|\\s)/(${token}(?::${token}){1,2})(?=\\s|$)`, 'g');
   for (const match of text.matchAll(re)) {
     const id = match[2] as string;
-    const command = commands.find((c) => c.kind === 'prompt' && c.name === id);
+    const command = commands.find((c) => c.type === 'skill' && c.id === id);
     const meta = skillCommandMeta(command, t);
     if (!meta) continue;
     const start = (match.index ?? 0) + (match[1]?.length ?? 0);
@@ -65,49 +58,39 @@ export function activeSkillToken(
   return null;
 }
 
-// Builds the `/` autocomplete menu: command-name phase, inline-skill phase, then argument phase
-// (the few enumerable args — `/model <alias>`, `/switch <n>`).
+// Builds the `/` autocomplete menu: command-name phase, inline-skill phase, subcommand phase, then
+// positional argument suggestions from structured command metadata.
 export function buildCommandMenuItems(
   input: string,
-  commands: CommandSpec[],
+  commands: CommandItem[],
   profiles: CommandMenuProfile[],
   sessions: Session[],
   t: TFn
 ): SessionCommandMenuItem[] {
   // Command-name phase: "/", "/re" … — suggest matching commands with their arg hint + source badge.
-  const nameM = /^\/([^\s]*)$/.exec(input);
+  const trimmedStart = input.trimStart();
+  const nameM = /^\/([^\s]*)$/.exec(trimmedStart);
   if (nameM) {
     const q = (nameM[1] ?? '').toLowerCase();
     return commands
       .filter((c) => {
-        if (!c.available) return false;
-        const displayName = c.kind === 'prompt' ? skillCommandDisplayName(c.name) : c.name;
-        return c.name.toLowerCase().startsWith(q) || displayName.toLowerCase().startsWith(q);
+        if (!c.enabled) return false;
+        return c.id.toLowerCase().startsWith(q) || c.name.toLowerCase().startsWith(q);
       })
-      .toSorted((a, b) => commandMenuRank(a.name, a.kind).localeCompare(commandMenuRank(b.name, b.kind)))
+      .toSorted((a, b) => commandMenuRank(a).localeCompare(commandMenuRank(b)))
       .slice(0, 8)
       .map((c) => {
-        const displayName = c.kind === 'prompt' ? skillCommandDisplayName(c.name) : c.name;
-        const skillSource = c.kind === 'prompt' ? skillCommandSource(c.name) : null;
+        const hint = commandHint(c);
         return {
-          key: c.name,
-          label: `/${displayName}${c.argHint ? ` ${c.argHint}` : ''}`,
+          key: c.id,
+          label: `/${c.name}${hint}`,
           hint: c.description,
-          typeBadge: c.kind === 'prompt' ? 'Skill' : 'Command',
-          icon: c.kind === 'prompt' ? c.icon : undefined,
-          version: c.kind === 'prompt' ? c.version : undefined,
-          badge:
-            c.source === 'atom'
-              ? (c.atomName ?? 'atom')
-              : skillSource?.kind === 'global'
-                ? t('web.skills.sourceGlobal')
-                : skillSource?.kind === 'atom-pack'
-                  ? t('web.skills.sourceAtomPack', { name: skillSource.name ?? '' })
-                  : skillSource?.kind === 'agent'
-                    ? t('web.skills.sourceAgent', { name: skillSource.name ?? '' })
-                    : undefined,
-          insert: `/${c.name} `,
-          executeOnSelect: c.kind === 'builtin' && c.source === 'builtin' && !c.argHint
+          typeBadge: c.type === 'skill' ? 'Skill' : 'Command',
+          icon: c.type === 'skill' ? c.icon : undefined,
+          version: c.type === 'skill' ? c.version : undefined,
+          badge: itemBadge(c, t),
+          insert: `/${c.id} `,
+          executeOnSelect: c.type === 'action' && c.source === 'builtin' && !hint && !c.subcommands?.length
         };
       });
   }
@@ -117,64 +100,136 @@ export function buildCommandMenuItems(
     const start = (inlineSkillM.index ?? 0) + (inlineSkillM[1]?.length ?? 0);
     return commands
       .filter((c) => {
-        if (!c.available || c.kind !== 'prompt') return false;
-        const displayName = skillCommandDisplayName(c.name);
-        return c.name.toLowerCase().startsWith(q) || displayName.toLowerCase().startsWith(q);
+        if (!c.enabled || c.type !== 'skill') return false;
+        return c.id.toLowerCase().startsWith(q) || c.name.toLowerCase().startsWith(q);
       })
-      .toSorted((a, b) => commandMenuRank(a.name, a.kind).localeCompare(commandMenuRank(b.name, b.kind)))
+      .toSorted((a, b) => commandMenuRank(a).localeCompare(commandMenuRank(b)))
       .slice(0, 8)
       .map((c) => {
-        const displayName = skillCommandDisplayName(c.name);
-        const skillSource = skillCommandSource(c.name);
         return {
-          key: c.name,
-          label: `/${displayName}`,
+          key: c.id,
+          label: `/${c.name}`,
           hint: c.description,
           typeBadge: 'Skill',
           icon: c.icon,
           version: c.version,
-          badge:
-            skillSource?.kind === 'global'
-              ? t('web.skills.sourceGlobal')
-              : skillSource?.kind === 'atom-pack'
-                ? t('web.skills.sourceAtomPack', { name: skillSource.name ?? '' })
-                : skillSource?.kind === 'agent'
-                  ? t('web.skills.sourceAgent', { name: skillSource.name ?? '' })
-                  : undefined,
-          insert: `/${c.name} `,
+          badge: itemBadge(c, t),
+          insert: `/${c.id} `,
           replace: { start, end: input.length }
         };
       });
   }
-  // Argument phase: "/model fa", "/switch 2" — suggest argument values for the few enumerable ones.
-  const argM = /^\/([a-z0-9-]+)\s+(\S*)$/.exec(input);
+  const argM = /^\/([^\s]+)(?:\s+([\s\S]*))?$/.exec(trimmedStart);
   if (argM) {
-    const name = argM[1];
-    const p = (argM[2] ?? '').toLowerCase();
-    if (name === 'model') {
-      return profiles
-        .filter((pr) => pr.alias.toLowerCase().startsWith(p))
+    const commandId = argM[1] ?? '';
+    const command = commands.find((c) => c.enabled && (c.id === commandId || c.aliases.includes(commandId)));
+    const rest = argM[2];
+    if (!command || rest === undefined) return [];
+
+    if (command.subcommands?.length) {
+      const trimmedRest = rest.trimStart();
+      const subToken = trimmedRest.split(/\s+/)[0] ?? '';
+      const hasSubcommandBoundary = /\s/.test(trimmedRest);
+      const sub = command.subcommands.find((s) => s.id === subToken || (s.aliases ?? []).includes(subToken));
+      if (sub && hasSubcommandBoundary) {
+        const subRest = trimmedRest.slice(subToken.length).trimStart();
+        return buildArgSuggestions({
+          args: sub.args,
+          baseInsert: `/${command.id} ${sub.id}`,
+          profiles,
+          rest: subRest,
+          sessions
+        });
+      }
+      return command.subcommands
+        .filter((subcommand) => {
+          const q = subToken.toLowerCase();
+          return subcommand.id.toLowerCase().startsWith(q) || subcommand.name.toLowerCase().startsWith(q);
+        })
         .slice(0, 8)
-        .map((pr) => ({
-          key: pr.alias,
-          label: pr.alias,
-          hint: `${pr.routes.chat.provider}:${pr.routes.chat.modelId}`,
-          insert: `/model ${pr.alias}`,
-          dismissAfter: true
+        .map((subcommand) => ({
+          key: `${command.id}:${subcommand.id}`,
+          label: subcommand.name,
+          hint: subcommand.description,
+          typeBadge: 'Subcommand',
+          insert: `/${command.id} ${subcommand.id} `
         }));
     }
-    if (name === 'switch') {
-      return sessions
-        .filter((s) => s.title.toLowerCase().includes(p))
-        .slice(0, 8)
-        .map((s, i) => ({
-          key: s.id,
-          label: String(i + 1),
-          hint: s.title,
-          insert: `/switch ${i + 1}`,
-          dismissAfter: true
-        }));
-    }
+
+    return buildArgSuggestions({ args: command.args, baseInsert: `/${command.id}`, profiles, rest, sessions });
+  }
+  return [];
+}
+
+function positionalArgState(rest: string): { committed: string[]; hasBoundary: boolean; prefix: string } {
+  const hasBoundary = /\s/.test(rest);
+  const hasTrailingSpace = /\s$/.test(rest);
+  const tokens = rest.trim().length ? rest.trim().split(/\s+/) : [];
+  return {
+    committed: hasTrailingSpace ? tokens : tokens.slice(0, -1),
+    hasBoundary,
+    prefix: hasTrailingSpace ? '' : (tokens.at(-1) ?? '')
+  };
+}
+
+function buildArgSuggestions({
+  args,
+  baseInsert,
+  profiles,
+  rest,
+  sessions
+}: {
+  args: CommandItem['args'];
+  baseInsert: string;
+  profiles: CommandMenuProfile[];
+  rest: string;
+  sessions: Session[];
+}): SessionCommandMenuItem[] {
+  if (!args?.length) return [];
+  const state = positionalArgState(rest);
+  const arg = args[state.committed.length] ?? (args.at(-1)?.repeated ? args.at(-1) : undefined);
+  if (!arg) return [];
+  const prefix = state.prefix.toLowerCase();
+  const insertPrefix = [baseInsert, ...state.committed].join(' ');
+  const insertValue = (value: string) => `${insertPrefix} ${value}`.trim();
+
+  if (arg.type === 'enum') {
+    return (arg.values ?? [])
+      .filter(
+        (value) => value.id.toLowerCase().startsWith(prefix) || (value.name ?? '').toLowerCase().startsWith(prefix)
+      )
+      .slice(0, 8)
+      .map((value) => ({
+        key: value.id,
+        label: value.name ?? value.id,
+        hint: value.description,
+        insert: insertValue(value.id),
+        dismissAfter: true
+      }));
+  }
+  if (arg.type === 'model') {
+    return profiles
+      .filter((profile) => profile.alias.toLowerCase().startsWith(prefix))
+      .slice(0, 8)
+      .map((profile) => ({
+        key: profile.alias,
+        label: profile.alias,
+        hint: `${profile.routes.chat.provider}:${profile.routes.chat.modelId}`,
+        insert: insertValue(profile.alias),
+        dismissAfter: true
+      }));
+  }
+  if (arg.type === 'session') {
+    return sessions
+      .filter((session) => session.title.toLowerCase().includes(prefix))
+      .slice(0, 8)
+      .map((session, index) => ({
+        key: session.id,
+        label: String(index + 1),
+        hint: session.title,
+        insert: insertValue(String(index + 1)),
+        dismissAfter: true
+      }));
   }
   return [];
 }

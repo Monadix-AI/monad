@@ -117,7 +117,6 @@ test('atom-pack-loaded telegram delivers an agent reply end-to-end (mock Bot API
           options: { apiBaseUrl: tg.url, pollTimeoutSec: 1 },
           allowlist: { allowAllUsers: false, allowedUsers: [String(TESTER_ID)] },
           mapping: { granularity: 'per-conversation' },
-          ownerUsers: [],
           tokenRef: 'dogfood-token',
           rateLimitPerMin: 100
         }

@@ -56,6 +56,7 @@ const demoChannelAtom = defineChannel({
 const pingCommandAtom = defineCommand({
   name: 'multi-ping',
   description: 'Reply with pong (demonstrates the command atom kind)',
+  args: [{ name: 'message', type: 'string', required: false, placeholder: '[message]' }],
   async run(_ctx, args) {
     return { message: args.trim() ? `pong: ${args.trim()}` : 'pong' };
   }

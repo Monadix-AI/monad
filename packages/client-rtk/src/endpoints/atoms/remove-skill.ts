@@ -9,7 +9,7 @@ export const removeSkillApi = installSkillApi.injectEndpoints({
     removeSkill: builder.mutation<OkResponse, { name: string }>({
       queryFn: ({ name }: { name: string }, api: { extra: unknown }) =>
         runTreaty(() => clientOf(api).treaty.v1.atoms.skills({ name }).delete()),
-      invalidatesTags: ['InstalledSkills', 'Skills']
+      invalidatesTags: ['InstalledSkills', 'Skills', 'SlashCommands']
     })
   })
 });

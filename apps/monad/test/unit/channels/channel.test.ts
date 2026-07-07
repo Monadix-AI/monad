@@ -239,7 +239,6 @@ function channelConfig(over: Partial<ChannelInstanceConfig> = {}): ChannelInstan
     options: {},
     allowlist: { allowAllUsers: false, allowedUsers: ['u1'] },
     mapping: { granularity: 'per-conversation' },
-    ownerUsers: [],
     tokenRef: 'literal-token',
     rateLimitPerMin: 100,
     ...over
@@ -490,17 +489,24 @@ test('channel: default-deny drops an unauthorized user (no session, no reply)', 
   await h.flush();
 });
 
-test('channel: an owner-only command (/workdir) is refused to a non-owner user', async () => {
-  const h = await makeHarness(channelConfig()); // ownerUsers: [] → u1 is allowed but not an owner
-  h.ctx.onMessage(inbound({ chatId: 'chat1', userId: 'u1', kind: 'command', command: 'workdir', text: '/workdir' }));
+test('channel: /workdir is blocked for an allowed channel user', async () => {
+  const h = await makeHarness(channelConfig());
+  h.ctx.onMessage(
+    inbound({
+      chatId: 'chat1',
+      userId: 'u1',
+      kind: 'command',
+      command: 'workdir',
+      text: '/workdir',
+      nativeMessageId: 'cmd-workdir'
+    })
+  );
   await h.flush();
-});
-
-test('channel: an owner-only command (/workdir) runs for a user in ownerUsers', async () => {
-  const h = await makeHarness(channelConfig({ ownerUsers: ['u1'] }));
-  h.ctx.onMessage(inbound({ chatId: 'chat1', userId: 'u1', kind: 'command', command: 'workdir', text: '/workdir' }));
-  await h.flush();
-  // Gate passed → the show-mode reply ran (no folder set yet), never the owner-only refusal.
+  expect(h.sends.at(-1)).toEqual({
+    chatId: 'chat1',
+    content: '/workdir is only available from the local Monad UI or CLI.'
+  });
+  expect(h.reactions).toContainEqual({ messageId: 'cmd-workdir', emoji: '✅' });
 });
 
 test('channel: self-echo and duplicate messages are dropped', async () => {
@@ -920,12 +926,4 @@ test('agentHint: rides on the session origin ext with the structured response hi
   await h.flush();
   const origin = h.creates[0]?.origin as { ext?: { agentHint?: string } } | undefined;
   expect(origin?.ext?.agentHint).toContain('IM surface — keep replies short.');
-});
-
-test('agentHint: absent ⇒ only the structured response hint rides on the origin', async () => {
-  const h = await makeHarness(channelConfig());
-  h.ctx.onMessage(inbound({ chatId: 'c', userId: 'u1', text: 'hi' }));
-  await h.flush();
-  const origin = h.creates[0]?.origin as { ext?: { agentHint?: string } } | undefined;
-  expect(origin?.ext?.agentHint).toBeUndefined();
 });

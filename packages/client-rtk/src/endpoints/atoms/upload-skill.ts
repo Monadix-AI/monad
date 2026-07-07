@@ -25,7 +25,7 @@ const uploadSkillApi = listInstalledSkillsApi.injectEndpoints({
         }
         return { data: (await res.json()) as InstallSkillResponse };
       },
-      invalidatesTags: ['InstalledSkills', 'Skills']
+      invalidatesTags: ['InstalledSkills', 'Skills', 'SlashCommands']
     })
   })
 });

@@ -23,7 +23,7 @@ const uploadAtomPackApi = listAtomPacksApi.injectEndpoints({
         }
         return { data: (await res.json()) as InstallAtomPackResponse };
       },
-      invalidatesTags: (result) => (result?.needsConsent ? [] : ['Atoms'])
+      invalidatesTags: (result) => (result?.needsConsent ? [] : ['Atoms', 'SlashCommands'])
     })
   })
 });

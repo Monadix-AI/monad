@@ -9,9 +9,11 @@
 // of the SDK.
 
 import type { Translate } from '@monad/i18n';
-import type { CommandKind, CommandSource, CommandSpec } from '@monad/protocol';
+import type { CommandArg, CommandItem, CommandItemType, CommandSource, CommandSubcommand } from '@monad/protocol';
 
-export type { CommandKind, CommandSource, CommandSpec };
+export type { CommandArg, CommandItem, CommandItemType, CommandSource, CommandSubcommand };
+
+export type CommandSubcommandDefinition = Omit<CommandSubcommand, 'aliases'> & { aliases?: string[] };
 
 export type CommandLog = (level: 'info' | 'warn' | 'error', msg: string, fields?: Record<string, unknown>) => void;
 
@@ -112,7 +114,7 @@ export interface CommandRunContext {
   setWorkdir(path: string): Promise<{ path?: string }>;
 
   /** The full advertised command set (built-ins + atom pack commands + skills) — backs /help. */
-  listCommands(): Promise<CommandSpec[]>;
+  listCommands(): Promise<CommandItem[]>;
 
   /** Summarize the current session and start a new one, carrying a structured context block forward.
    *  The summary is generated via LLM (fast model). Returns the new session id. */
@@ -135,7 +137,7 @@ export type CommandEffect =
   | { type: 'model-changed'; alias: string }
   | { type: 'workdir-changed'; path?: string }
   | { type: 'view-clear' }
-  | { type: 'help'; commands: CommandSpec[] };
+  | { type: 'help'; commands: CommandItem[] };
 
 export interface CommandResult {
   /** Human-readable reply, rendered by every client (channel sends this verbatim). */
@@ -145,10 +147,6 @@ export interface CommandResult {
   data?: unknown;
 }
 
-/** Who may run a command. 'everyone' (default) = any principal in the session; 'owner' = only the
- *  daemon owner (e.g. blocks a channel guest from running a sensitive atom pack command). */
-export type CommandAccess = 'everyone' | 'owner';
-
 export interface CommandDefinition {
   name: string;
   aliases?: string[];
@@ -157,10 +155,12 @@ export interface CommandDefinition {
    *  the localized text replaces `description`; `description` remains the authoring-language default. */
   descriptionKey?: string;
   argHint?: string;
+  /** Structured positional arguments for discovery/autocomplete. Execution still receives raw args. */
+  args?: CommandArg[];
+  /** Optional one-level subcommands for discovery/autocomplete. Execution still receives raw args. */
+  subcommands?: CommandSubcommandDefinition[];
   /** Routes through the host's tool-approval/oversight gate before running. */
   highRisk?: boolean;
-  /** Who may run it (default 'everyone'). 'owner' commands are denied to non-owner callers. */
-  access?: CommandAccess;
   /** Allow running WHILE an agent turn is streaming for the session. Default false: the host rejects
    *  the command with a "busy" reply so it can't race the in-flight run (clear history, swap model…). */
   duringTurn?: boolean;

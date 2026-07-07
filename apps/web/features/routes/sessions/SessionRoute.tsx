@@ -78,6 +78,7 @@ export interface SessionRouteProps {
   inspectorItems: UIItem[];
   isBusy: boolean;
   isReadOnly: boolean;
+  commandMenuLoading: boolean;
   menuItems: SessionCommandMenuItem[];
   messageQueue: string[];
   composerSettings: ComposerSettings;
@@ -132,6 +133,7 @@ export function SessionRoute({
   inspectorItems,
   isBusy,
   isReadOnly,
+  commandMenuLoading,
   menuItems,
   messageQueue,
   composerSettings,
@@ -324,6 +326,7 @@ export function SessionRoute({
                 <CommandMenu
                   activeSkill={activeSkill}
                   items={menuItems}
+                  loading={commandMenuLoading}
                   onApply={onCommandItemApply}
                   onHover={onCommandItemHover}
                 />
@@ -438,18 +441,36 @@ function ApprovalCard({
 function CommandMenu({
   activeSkill,
   items,
+  loading,
   onApply,
   onHover
 }: {
   activeSkill: number;
   items: SessionCommandMenuItem[];
+  loading: boolean;
   onApply: (item: SessionCommandMenuItem) => void;
   onHover: (index: number) => void;
 }) {
+  const skeletonRows = ['one', 'two', 'three', 'four'];
   return (
     <div className="glass-surface absolute bottom-full left-0 z-10 mb-3 w-full overflow-hidden text-popover-foreground">
       <ScrollArea className="max-h-60">
         <div className="p-1">
+          {loading
+            ? skeletonRows.map((row) => (
+                <div
+                  className="flex flex-col gap-1.5 rounded-(--radius-md) px-3 py-2"
+                  key={`command-skeleton-${row}`}
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="size-4 animate-pulse rounded border bg-muted" />
+                    <span className="h-3 w-28 animate-pulse rounded bg-muted" />
+                    <span className="h-4 w-12 animate-pulse rounded-full bg-muted" />
+                  </div>
+                  <span className="h-3 w-3/5 animate-pulse rounded bg-muted" />
+                </div>
+              ))
+            : null}
           {items.map((item, index) => (
             <button
               className={cn(

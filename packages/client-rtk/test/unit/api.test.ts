@@ -34,6 +34,7 @@ import {
   useInputNativeCliAuthMutation,
   useLazyGetNativeCliAuthStatusQuery,
   useLazyGetNativeCliUsageQuery,
+  useLazyListCommandsQuery,
   useStartNativeCliAuthMutation,
   useStopNativeCliAuthMutation
 } from '../../src/index.ts';
@@ -308,6 +309,7 @@ test('native CLI auth hooks are exported from the package API', () => {
   expect(typeof useGetNativeCliUsageQuery).toBe('function');
   expect(typeof useInputNativeCliAuthMutation).toBe('function');
   expect(typeof useLazyGetNativeCliAuthStatusQuery).toBe('function');
+  expect(typeof useLazyListCommandsQuery).toBe('function');
   expect(typeof useLazyGetNativeCliUsageQuery).toBe('function');
   expect(typeof useStartNativeCliAuthMutation).toBe('function');
   expect(typeof useStopNativeCliAuthMutation).toBe('function');
@@ -672,6 +674,7 @@ test('resetSession clears the live stream cache immediately', async () => {
   await store.dispatch(resetSessionApi.endpoints.resetSession.initiate('ses_abc'));
 
   const uiStream = streamUiItemsApi.endpoints.streamUiItems.select('ses_abc')(store.getState() as never);
+  expect(uiStream.data?.items).toEqual([]);
 });
 
 test('streamControl subscribes to the control stream and invalidates Sessions on list events', async () => {

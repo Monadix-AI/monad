@@ -170,7 +170,7 @@ function fakeClient(handlers: Record<string, Handler> = {}): MonadClient {
           }
         },
         commands: {
-          get: () => resolve('listCommands', 'commands', [])
+          get: (...args: unknown[]) => resolve('listCommands', 'commands', [], ...args)
         },
         skills: {
           get: (...args: unknown[]) => resolve('listSkills', 'skills', [], ...args)
@@ -519,20 +519,33 @@ test('getHealth: fetches daemon health', async () => {
 // Commands / Skills / Licenses / Graph / Indexer / Mem0-data — simple queries
 // ═══════════════════════════════════════════════════════════════════════════════
 
-test('listCommands: fetches command list and caches by Skills tag', async () => {
+test('listCommands: fetches command list with optional filter and caches by SlashCommands tag', async () => {
   let calls = 0;
-  const cmds = [{ name: 'help', description: 'Show help' }];
+  const seenArgs: unknown[] = [];
+  const cmds = [
+    {
+      id: 'help',
+      name: 'Help',
+      type: 'action',
+      source: 'builtin',
+      description: 'Show help',
+      aliases: [],
+      enabled: true
+    }
+  ];
   const client = fakeClient({
-    listCommands: handler('commands', async () => {
+    listCommands: handler('commands', async (...args: unknown[]) => {
       calls++;
+      seenArgs.push(args);
       return cmds;
     })
   });
   const store = createMonadStore({ client });
-  const res = await dispatchEndpoint(store, 'listCommands');
+  const res = await dispatchEndpoint(store, 'listCommands', { filter: 'disabled' });
   expect((res.data as { commands?: unknown[] } | undefined)?.commands).toEqual(cmds);
+  expect(seenArgs[0]).toEqual([{ query: { filter: 'disabled' } }]);
   expect(calls).toBe(1);
-  await dispatchEndpoint(store, 'listCommands');
+  await dispatchEndpoint(store, 'listCommands', { filter: 'disabled' });
   expect(calls).toBe(1);
 });
 

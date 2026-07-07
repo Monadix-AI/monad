@@ -126,17 +126,17 @@ export function createTextareaKeyDownHandler({
   return (event: ComposerKeyDownEvent) => {
     if (isComposingKeyEvent(event)) return;
     if (skillMenuOpen) {
-      if (event.key === 'ArrowDown') {
+      if (event.key === 'ArrowDown' && menuItems.length > 0) {
         event.preventDefault();
         setActiveSkill((index) => (index + 1) % menuItems.length);
         return;
       }
-      if (event.key === 'ArrowUp') {
+      if (event.key === 'ArrowUp' && menuItems.length > 0) {
         event.preventDefault();
         setActiveSkill((index) => (index - 1 + menuItems.length) % menuItems.length);
         return;
       }
-      if (event.key === 'Enter' || event.key === 'Tab') {
+      if ((event.key === 'Enter' || event.key === 'Tab') && menuItems.length > 0) {
         event.preventDefault();
         const picked = menuItems[Math.min(activeSkill, menuItems.length - 1)];
         if (picked) applyItem(picked);
