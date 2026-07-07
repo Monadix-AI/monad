@@ -150,19 +150,52 @@ experience                         neutral events → cards / DOM (observation p
 - **3rd party:** subscribe to `raw` and render your own way, OR subscribe to the neutral `ui-stream`
   and render it differently from monad. `raw` is the ground truth and escape hatch.
 
-## Connection model
+## Neutral observation event (the `ui-stream` payload)
 
-**Four independent endpoints, one per (target × plane). Reuse rides HTTP/2, not frame multiplexing.**
+`ExternalAgentObservationEvent` in `@monad/protocol` — UI-agnostic; no roles, no pre-formatted text, no
+`providerEventType` passthrough. `kind` is a small kebab enum:
 
-- Keep the existing pattern: `events` and `ui-stream` are already separate endpoints. Observation gets
-  the same two.
-- HTTP/2 is already required (realtime-channels constraint 3: HTTP/1.1 caps 6 conns/origin). Under h2,
-  N SSE streams multiplex over one TCP — the connection count is a non-issue.
-- A consumer subscribes to the **one plane it needs** (transcript UI → `ui-stream`; 3rd party → `raw`;
-  observation panel → observation `ui-stream`). Wanting both planes at once is rare, and since `ui` is
-  derived from `raw`, it's served by two cheap h2 streams.
-- **No frame-level multiplexing** (one SSE carrying raw+ui tagged by channel): it adds dual resume
-  cursors + demux for a rare case h2 already handles. Each plane keeps its own `last-event-id` resume.
+```
+turn-start | user-message | reasoning | tool-call | tool-result | assistant-message | turn-end
+```
+
+- Each event carries `streaming: boolean` (partial delta vs settled), `text?`, structured
+  `tool?: {name, input?, output?}`, `raw`, `at?`.
+- **`turn-end` carries `reason`** (`completed | aborted | error | length | content-filter`) — a
+  *turn-level* (business) failure is expressed here, in-band; the stream continues.
+- **No `error` kind, no `system` kind.** Provider init folds into `turn-start`, idle/status into
+  `turn-end`. A **system/transport error** (the process/stream died) is NOT an in-band event — it is
+  signalled by **stream termination** (`MonadClient.stream`'s terminal frame / `onError`, fatal vs
+  transient). In-band = the turn failed but the stream lives; out-of-band = the stream itself failed.
+- **`usage`** (rate-limit / tokens) is metadata that can arrive off-turn — carried as a separate
+  `usage` frame kind, tagged meta, not mixed into the conversation kinds above.
+
+## Endpoints & connection model
+
+Uniform leaf names at each scope — `stream` (raw) and `ui-stream` (projected). "Observation" is the
+*concept* for the agent-scoped pair, not a word in the URL.
+
+```
+create / list (scoped under the parent — REST shallow-nesting):
+  POST /agents/:agentId/sessions          new chat session (1:1 with that agent)
+  GET  /agents/:agentId/sessions
+  POST /projects/:projectId/sessions       new project session
+  GET  /projects/:projectId/sessions
+
+direct access + sub-resources (flat, global session id):
+  GET  /sessions/:sid/stream                        session raw
+  GET  /sessions/:sid/ui-stream                      session projected (transcript)
+  POST /sessions/:sid/messages
+  GET  /sessions/:sid/agents/:agentId/stream         one agent's raw   ("observation" raw)
+  GET  /sessions/:sid/agents/:agentId/ui-stream      one agent's projected (neutral events)
+```
+
+- **Shallow nesting** (≤2 levels): the session id is globally unique, so access + streams are flat under
+  `/sessions/:sid`; nesting is used only to *scope create/list* under `agents`/`projects`. Agent streams
+  nest one level under the session (an agent is local to a session).
+- **Reuse rides HTTP/2** (realtime-channels constraint 3), not frame multiplexing. Each plane is its own
+  SSE with its own `last-event-id` resume; a consumer subscribes to the one plane it needs. No
+  raw+ui-in-one-SSE demux.
 
 ## What changes vs. gets deleted
 
@@ -215,26 +248,35 @@ and "chat session / project session are parallel kinds". The rest is its own pro
   people.
 - UI: a **session tab** strip within a project.
 - Data model: project = environment (cwd, config, member roster capability); session = conversation
-  instance that binds some members; ids (`ses_…` under a `prj_…` vs a distinct prefix — TBD there).
+  instance that binds some members. Storage + id scheme resolved above (one `sessions` table, nullable
+  `projectId`, single `ses_…`).
 
-## Open questions
+## Resolved decisions
 
-- **Exact wire shape of `raw`.** Provider-raw chunk vs the runtime `agent.output`-style domain event.
-  Leaning: `session.stream` stays domain events (raw chunk carried inside); `observation.stream` strips
-  to the pure provider output for that agent. Confirm 3rd-party consumers key off provider-raw.
-- **`tool_call` / `tool_result` in the runtime `ExternalAgentOutputEvent`.** If the daemon doesn't act
-  on the agent's own tool calls (provider-owned tools), they're observation-only and belong to the
-  neutral observation events, not the runtime contract — shrinking what the adapter must decode for the
-  daemon.
-- **`usageMeter` + history pages** follow the same 2×2 (raw / projected, project / observation) and must
-  offer the same plane split so history and live stay symmetric.
-- **Chat-session endpoint rename scheme.** Rename the paths/handlers/client methods (`/sessions/:id/*`,
-  `streamEvents`/`streamUiEvents`, `session.*` RPC) to *chat session*, or keep the paths and only
-  re-document "session" → "chat session"? And the **project-session id scheme** — reuse `ses_…` scoped
-  under a `prj_…`, or a distinct prefix — needs a call in the project↔session decoupling work.
-- **Packaging** of monad's observation **rendering** library (neutral events → cards): `@monad/sdk-experience`
-  vs a `@monad/atoms` subpath. Must be browser-safe and importable by 3rd-party experiences that want to
-  reuse monad's cards, without the node-only adapter runtime. (The neutral event *schema* is in
-  `@monad/protocol`; the adapter's decode ships with the adapter.)
-- **Persistence** stores `outputSnapshot` (raw); projected events are derived per read — so no stored-
-  data migration. Confirm no consumer persists projected events.
+- **`raw` shape:** `session.stream` = domain events (`external_agent.output` carrying the raw chunk +
+  monad metadata, interleaved with `user.message` etc.); `/sessions/:sid/agents/:agentId/stream` =
+  **provider-raw** (that agent's chunks, envelope stripped = its pure stdout), framed per provider record
+  with a seq cursor.
+- **Runtime event shrinks.** `tool_call` / `tool_result` / `web_search_result` **leave** the runtime
+  `ExternalAgentOutputEvent` — the daemon doesn't act on the agent's own (provider-owned) tool calls, so
+  they're observation-only neutral events. Runtime keeps only what the daemon acts on: `agent_message`,
+  `approval_*`, `session_ref`, `connection_required`, `provider_error`, `history_page`.
+- **Packaging:** `@monad/sdk-atom` = pure adapter contract (extract any experience-facing types out); the
+  neutral event **schema** → `@monad/protocol`; the **decode** (raw → neutral) ships with the adapter
+  (node-capable, the daemon uses it server-side); the **rendering** (neutral → cards) + hooks →
+  `@monad/sdk-atom-client-rtk` (the experience SDK — client React).
+- **Storage (Track B):** one `sessions` table, `projectId` nullable (null = chat, set = project), a
+  `session_members` join table (empty for chat sessions), shared message/event storage keyed by
+  `session_id`. Business logic branches by kind; the conversation/stream infra is not duplicated.
+- **ids (Track B):** a single `ses_…` for both kinds; the parent project is a nullable `projectId` field,
+  not encoded in the id.
+- **Persistence:** stored data is raw (`outputSnapshot`); projected events are derived per read → no
+  stored-data migration. (Confirm no consumer persists projected events.)
+
+## Still open
+
+- **`usageMeter` + history pages** follow the same planes (raw / projected, session / agent) and must
+  offer the same split so history and live stay symmetric — detail TBD in the schema.
+- **Chat-session endpoint URL** — the scheme above is `/sessions/:sid` for access, `/agents/:aid/sessions`
+  for create/list. Confirm whether the current `prj_…`-coupled routes get a deprecation alias during the
+  Track B migration.

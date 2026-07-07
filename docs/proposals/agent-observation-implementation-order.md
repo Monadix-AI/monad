@@ -30,10 +30,15 @@ P0 rename ─┬─► P1 schema ─► P2 adapter-decode ─► P3 split-stream
 
 ### P1 — Neutral observation-event schema (protocol)
 
-- **What:** define `ExternalAgentObservationEvent` in `@monad/protocol`: `kind`
-  (`message`/`reasoning`/`tool-call`/`tool-result`/`turn-start`/`turn-end`/`error`/`system`), structured
-  `tool` (`{name,input?,output?}`), `streaming: boolean`, `text?`, `raw`, `at?`. **UI-agnostic** — no
-  roles, no pre-formatted `"Tool call X"`, no `providerEventType` passthrough.
+- **What:** define `ExternalAgentObservationEvent` in `@monad/protocol`. `kind` (kebab enum):
+  `turn-start | user-message | reasoning | tool-call | tool-result | assistant-message | turn-end`.
+  Plus `streaming: boolean`, `text?`, structured `tool?: {name,input?,output?}`, `raw`, `at?`.
+  `turn-end` carries `reason` (`completed|aborted|error|length|content-filter`). A separate `usage` frame
+  for rate-limit/tokens. **No `error`/`system` kind** — system/transport failure is signalled by stream
+  termination (`onError`/terminal frame), not an in-band event. **UI-agnostic** — no roles, no
+  pre-formatted text, no `providerEventType`.
+- **Also shrink the runtime event:** move `tool_call`/`tool_result`/`web_search_result` out of
+  `ExternalAgentOutputEvent` (daemon doesn't act on them) into the neutral observation events.
 - **Why:** the single contract both the adapter emits and every experience renders. Everything after
   keys off it.
 - **Depends:** P0. **Ships green:** additive (no consumers yet). **Size:** small.
@@ -61,8 +66,10 @@ P0 rename ─┬─► P1 schema ─► P2 adapter-decode ─► P3 split-stream
 ### P4 — Move rendering to experience; delete client re-classification
 
 - **What:** the observation experience renders `ExternalAgentObservationEvent[]` → cards/timeline/sheen.
-  **Delete** the client resolver singleton + `classifyNativeCliActivity` + client
-  `nativeCliEventsAreGenerating` re-derivation. Remove the old dual-emit path from P2.
+  The rendering lib lands in **`@monad/sdk-atom-client-rtk`** (the experience SDK; client React) — extract
+  any experience-facing types out of `@monad/sdk-atom` (which stays a pure adapter contract) at the same
+  time. **Delete** the client resolver singleton + `classifyNativeCliActivity` + client
+  `nativeCliEventsAreGenerating`. Remove the P2 dual-emit path.
 - **Depends:** P2, P3. **Ships green:** panel now on the neutral plane. **Size:** medium (UI move + deletes).
 
 ### P5 — Generalize observation to every agent kind + unified agent identity
@@ -83,13 +90,15 @@ its two conclusions ("streams are session-keyed", "chat session / project sessio
 ### P6 — Session as a first-class entity under project
 
 - **What:** split the coupled `prj_…`-as-conversation. **project** = environment (cwd, config, member
-  roster capability); **session** = a conversation instance that binds members. Rename the monad chat
-  session concept + its endpoints to *chat session*. Decide the id scheme (`ses_…` scoped under `prj_…`
-  vs a distinct prefix) and re-key the session `stream`/`ui-stream` off `prj_…`.
+  roster capability); **session** = a conversation instance that binds members. One `sessions` table with
+  nullable `projectId` + a `session_members` join table (empty for chat); single `ses_…` id for both
+  kinds. Endpoints: `POST/GET /agents/:aid/sessions` and `/projects/:pid/sessions` (create/list),
+  `/sessions/:sid/{stream,ui-stream,messages}` + `/sessions/:sid/agents/:agentId/{stream,ui-stream}`
+  (access, flat). Rename the monad chat-session concept accordingly.
 - **Depends:** P0. **Ships green:** one implicit session per project preserves current behavior while the
   model generalizes. **Size:** large (data model + endpoints + client).
-- **Note:** doing this *after* Track A means Track A's observation planes (per-`agentId`) don't re-key —
-  only the session-level `events`/`ui-stream` re-key here, which is B's job regardless.
+- **Note:** doing this *after* Track A means Track A's per-`agentId` planes don't re-key — only the
+  session-level streams re-key here, which is B's job regardless.
 
 ### P7 — Multi-session lifecycle + UI
 
@@ -106,10 +115,17 @@ its two conclusions ("streams are session-keyed", "chat session / project sessio
 3. **P6 → P7** (Track B) — the multi-session product feature; parallelizable after P0 if staffed, else
    after A.
 
-## Open decisions gating a start
+## Gating decisions — resolved (see layering proposal → Resolved decisions)
 
-- Neutral-event `kind` set + whether `tool_call`/`tool_result` leave the runtime `…OutputEvent` for the
-  observation events (per the layering proposal's Open questions).
-- Wire shape of `raw` (provider-raw vs domain event) — decide before P3.
-- Rendering-library packaging (`@monad/sdk-experience` vs `@monad/atoms` subpath) — decide before P4.
-- B's id scheme + chat-session endpoint rename scheme — decide before P6.
+- **Neutral `kind` set + runtime shrink** — set fixed above; `tool_call`/`tool_result`/`web_search_result`
+  leave the runtime event. ✅
+- **`raw` shape** — session raw = domain events; agent raw = provider-raw (stripped). ✅
+- **Packaging** — schema→protocol, decode→adapter, rendering+hooks→`@monad/sdk-atom-client-rtk`,
+  `@monad/sdk-atom` stays pure. ✅
+- **B storage + ids** — one `sessions` table, nullable `projectId`, `session_members` join, single
+  `ses_…`. ✅
+- **Endpoint scheme** — create/list scoped under `agents`/`projects`; access flat under `/sessions/:sid`
+  with agent streams one level down. ✅
+
+Remaining: `usageMeter`/history plane detail (schema); whether the old `prj_…` routes get a deprecation
+alias during P6.
