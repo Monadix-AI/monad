@@ -1,4 +1,5 @@
 import type {
+  AgentObservationEvent,
   ExternalAgentObservationEvent,
   ExternalAgentProvider,
   ExternalAgentUsageLimitMeter,
@@ -10,6 +11,8 @@ import type {
   ExternalAgentObservationJsonRecordEntry,
   ExternalAgentProviderAdapter
 } from '@monad/sdk-atom';
+
+import { toAgentObservationEvent } from '../../../agent-adapters/neutral-observation.ts';
 
 export type { ExternalAgentUsageLimitMeter };
 
@@ -334,6 +337,23 @@ export function externalAgentStreamItems(args: {
       text: part,
       source: 'plain-text' as const
     }));
+}
+
+/** Neutral projection of the full output: the same records `externalAgentStreamItems` produces, mapped
+ *  to `AgentObservationEvent` via the adapter's own classification. Re-run on the full snapshot every
+ *  frame (server side) so a consumer replaces its list wholesale — no client-side delta re-derivation. */
+export function externalAgentNeutralStreamItems(args: {
+  id: string;
+  provider?: ExternalAgentProvider | string;
+  adapter?: ExternalAgentObservationAdapter;
+  output?: string;
+  observedAt?: string;
+  mode?: 'history' | 'live';
+}): AgentObservationEvent[] {
+  const projector = args.adapter?.observation;
+  return externalAgentStreamItems(args)
+    .map((event) => toAgentObservationEvent(event, projector))
+    .filter((event): event is AgentObservationEvent => event !== null);
 }
 
 /** Structured (JSON-record) events only — `undefined` when the output has no structured records (pure

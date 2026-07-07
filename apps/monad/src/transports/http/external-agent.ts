@@ -1,4 +1,8 @@
-import type { ExternalAgentAuthSessionView, ExternalAgentObservationAccessResponse } from '@monad/protocol';
+import type {
+  ExternalAgentAuthSessionView,
+  ExternalAgentObservationAccessResponse,
+  ExternalAgentUiObservationFrame
+} from '@monad/protocol';
 import type { createDaemonHandlers } from '@/handlers/daemon-handlers/index.ts';
 
 import {
@@ -9,6 +13,7 @@ import {
   externalAgentInputRequestSchema,
   externalAgentObservationAccessResponseSchema,
   externalAgentResizeRequestSchema,
+  externalAgentUiObservationFrameSchema,
   externalAgentUsageResponseSchema,
   getExternalAgentAuthSessionResponseSchema,
   getExternalAgentSessionResponseSchema,
@@ -112,6 +117,60 @@ function createExternalAgentObservationSseResponse(
   });
 }
 
+// The neutral UI plane. Each frame carries the full projected event list (re-derived server-side from
+// the whole snapshot), so unlike the raw stream there is no delta to resume — a reconnect just gets the
+// next full frame. `seq` still tags each frame with the raw output cursor for cross-plane alignment.
+function createExternalAgentUiObservationSseResponse(
+  handlers: ReturnType<typeof createDaemonHandlers>,
+  id: string,
+  transcriptTargetId: `ses_${string}` | `prj_${string}`,
+  encoder: TextEncoder
+): Response {
+  return createPushSseResponse<ExternalAgentUiObservationFrame>({
+    encoder,
+    encode: (frame) =>
+      encodeSseFrame(
+        {
+          id: frame.state === 'live' && frame.seq !== undefined ? String(frame.seq) : undefined,
+          event: 'external_agent.ui_observation',
+          data: frame
+        },
+        encoder
+      ),
+    subscribe: (emit) => {
+      let disposed = false;
+      let disposeLive = (): void => {};
+      void handlers.externalAgent
+        .observeUi({ id, transcriptTargetId })
+        .then((initial) => {
+          if (disposed) return;
+          if (initial.state !== 'live') {
+            emit(initial, true);
+            return;
+          }
+          const subscription = handlers.externalAgent.subscribeUiObservation({
+            id,
+            transcriptTargetId,
+            onFrame: (frame, done) => emit(frame, done)
+          });
+          disposeLive = subscription.dispose;
+          emit(subscription.frame, !subscription.live);
+        })
+        .catch(() => {
+          if (!disposed) {
+            emit({ state: 'unavailable', externalAgentSessionId: id, reason: 'provider history unavailable' }, true);
+          }
+        });
+      return {
+        dispose: () => {
+          disposed = true;
+          disposeLive();
+        }
+      };
+    }
+  });
+}
+
 export function createExternalAgentController(handlers: ReturnType<typeof createDaemonHandlers>) {
   const encoder = new TextEncoder();
   return new Elysia()
@@ -193,6 +252,26 @@ export function createExternalAgentController(handlers: ReturnType<typeof create
         params: externalAgentParams,
         query: externalAgentScopeQuery,
         detail: { summary: 'Stream live or backfilled external agent observation access', tags: ['http-only'] }
+      }
+    )
+    .get(
+      '/external-agent-sessions/:id/ui-observation',
+      async ({ params, query }) => handlers.externalAgent.observeUi({ id: params.id, ...query }),
+      {
+        params: externalAgentParams,
+        query: externalAgentScopeQuery,
+        response: { 200: externalAgentUiObservationFrameSchema },
+        detail: { summary: 'Read the neutral (projected) external agent observation frame', tags: ['http-only'] }
+      }
+    )
+    .get(
+      '/external-agent-sessions/:id/ui-observation-stream',
+      ({ params, query }) =>
+        createExternalAgentUiObservationSseResponse(handlers, params.id, query.transcriptTargetId, encoder),
+      {
+        params: externalAgentParams,
+        query: externalAgentScopeQuery,
+        detail: { summary: 'Stream neutral (projected) external agent observation frames', tags: ['http-only'] }
       }
     )
     .get(

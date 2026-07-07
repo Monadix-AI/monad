@@ -530,6 +530,25 @@ async function runRuntime(call: Call, projectDir: string, handlers: ReturnType<t
     return row?.outputSnapshot.includes('ready') ? row : undefined;
   });
 
+  res = await call(
+    'GET',
+    `/v1/external-agent-sessions/${nativeSession.id}/ui-observation?transcriptTargetId=${sessionId}`
+  );
+  expect(res.status).toBe(200);
+  const uiFrame = (await res.json()) as {
+    state: string;
+    seq?: number;
+    events: Array<{ kind: string; role?: unknown }>;
+  };
+  expect(uiFrame.state).toBe('live');
+  expect(typeof uiFrame.seq).toBe('number');
+  expect(Array.isArray(uiFrame.events)).toBe(true);
+  // The neutral plane emits `kind`-tagged events and never leaks the legacy `role`/providerEventType.
+  for (const event of uiFrame.events) {
+    expect(typeof event.kind).toBe('string');
+    expect(event).not.toHaveProperty('role');
+  }
+
   res = await call('POST', `/v1/external-agent-sessions/${nativeSession.id}/input?transcriptTargetId=${sessionId}`, {
     input: 'hello\n'
   });

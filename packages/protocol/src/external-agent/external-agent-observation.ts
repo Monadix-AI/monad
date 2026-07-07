@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { agentObservationEventSchema } from '../agent-observation.ts';
 import { nativeAgentDeliveryIdSchema } from '../ids.ts';
 import { externalAgentProviderSchema } from './external-agent-config.ts';
 
@@ -136,6 +137,41 @@ export const externalAgentObservationAccessResponseSchema = z.discriminatedUnion
   })
 ]);
 export type ExternalAgentObservationAccessResponse = z.infer<typeof externalAgentObservationAccessResponseSchema>;
+
+// The neutral UI plane. Where the raw access response streams provider bytes (`output`/`append`) and
+// leaves the consumer to re-derive cards from deltas, a ui frame carries the FULL neutral event list
+// re-projected server-side every frame. The consumer replaces its list by event id — no delta math.
+// `seq` mirrors the raw plane's output cursor so a reconnecting client resumes at the same point.
+export const externalAgentUiObservationFrameSchema = z.discriminatedUnion('state', [
+  z.object({
+    state: z.literal('live'),
+    externalAgentSessionId: z.string().regex(/^exa_/),
+    deliveryId: nativeAgentDeliveryIdSchema.optional(),
+    turn: nativeAgentTurnPointerSchema.optional(),
+    provider: externalAgentProviderSchema,
+    events: z.array(agentObservationEventSchema),
+    seq: z.number().int().nonnegative().optional(),
+    observedAt: z.string()
+  }),
+  z.object({
+    state: z.literal('history'),
+    externalAgentSessionId: z.string().regex(/^exa_/),
+    deliveryId: nativeAgentDeliveryIdSchema.optional(),
+    turn: nativeAgentTurnPointerSchema.optional(),
+    provider: externalAgentProviderSchema,
+    events: z.array(agentObservationEventSchema),
+    observedAt: z.string()
+  }),
+  z.object({
+    state: z.literal('unavailable'),
+    externalAgentSessionId: z.string().regex(/^exa_/),
+    deliveryId: nativeAgentDeliveryIdSchema.optional(),
+    turn: nativeAgentTurnPointerSchema.optional(),
+    provider: externalAgentProviderSchema.optional(),
+    reason: z.string()
+  })
+]);
+export type ExternalAgentUiObservationFrame = z.infer<typeof externalAgentUiObservationFrameSchema>;
 
 export const managedExternalAgentLifecycleLogEventSchema = z.enum([
   'project.managed_external_agent.member_start_error',

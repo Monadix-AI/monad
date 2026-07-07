@@ -8,6 +8,7 @@ import type {
   ExternalAgentInputRequest,
   ExternalAgentObservationAccessResponse,
   ExternalAgentResizeRequest,
+  ExternalAgentUiObservationFrame,
   ExternalAgentUsageResponse,
   GetExternalAgentAuthSessionResponse,
   GetExternalAgentSessionResponse,
@@ -30,6 +31,7 @@ import { isAbsolute, relative, resolve } from 'node:path';
 import { loadAll } from '@monad/home';
 import {
   externalAgentObservationAccessResponseSchema,
+  externalAgentUiObservationFrameSchema,
   getExternalAgentSessionResponseSchema,
   getNativeAgentDeliveryResponseSchema,
   listExternalAgentRuntimesResponseSchema,
@@ -211,6 +213,36 @@ export function createExternalAgentModule({ paths, host, store }: ExternalAgentD
         id,
         (access, done) => onObservation(externalAgentObservationAccessResponseSchema.parse(access), done),
         afterSeq
+      );
+    },
+
+    observeUi({
+      id,
+      transcriptTargetId
+    }: {
+      id: string;
+      transcriptTargetId: TranscriptTargetId;
+    }): Promise<ExternalAgentUiObservationFrame> {
+      requireExternalAgentSessionScope(id, transcriptTargetId);
+      return Promise.resolve(externalAgentUiObservationFrameSchema.parse(host.observeUi(id)));
+    },
+
+    subscribeUiObservation({
+      id,
+      transcriptTargetId,
+      onFrame
+    }: {
+      id: string;
+      transcriptTargetId: TranscriptTargetId;
+      onFrame: (frame: ExternalAgentUiObservationFrame, done: boolean) => void;
+    }): {
+      frame: ExternalAgentUiObservationFrame;
+      live: boolean;
+      dispose: () => void;
+    } {
+      requireExternalAgentSessionScope(id, transcriptTargetId);
+      return host.subscribeUiObservation(id, (frame, done) =>
+        onFrame(externalAgentUiObservationFrameSchema.parse(frame), done)
       );
     },
 

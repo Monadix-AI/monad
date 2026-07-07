@@ -11,6 +11,7 @@ import type {
   ExternalAgentProvider,
   ExternalAgentResizeRequest,
   ExternalAgentSessionView,
+  ExternalAgentUiObservationFrame,
   ExternalAgentUsageResponse,
   ExternalAgentView,
   ListExternalAgentRuntimesQuery,
@@ -463,6 +464,27 @@ export class ExternalAgentHost {
     afterSeq?: number
   ): { access: ExternalAgentObservationAccessResponse; live: boolean; dispose: () => void } {
     return this.observation.subscribe(id, listener, afterSeq);
+  }
+
+  observeUi(id: string): ExternalAgentUiObservationFrame {
+    return this.observationResolver.observeUi(id);
+  }
+
+  /** UI plane subscription: rides the raw observation hub (its throttle + lifecycle) but re-projects
+   *  the full neutral event list from the whole snapshot on every tick, so the consumer never derives
+   *  cards from a delta. Needs no `afterSeq` — each frame is the complete state. */
+  subscribeUiObservation(
+    id: string,
+    onFrame: (frame: ExternalAgentUiObservationFrame, done: boolean) => void
+  ): { frame: ExternalAgentUiObservationFrame; live: boolean; dispose: () => void } {
+    const frame = this.observeUi(id);
+    if (frame.state !== 'live') return { frame, live: false, dispose: () => {} };
+    const sub = this.observation.subscribe(id, (_access, done) => onFrame(this.observeUi(id), done));
+    if (!sub.live) {
+      sub.dispose();
+      return { frame: this.observeUi(id), live: false, dispose: () => {} };
+    }
+    return { frame, live: true, dispose: sub.dispose };
   }
 
   resize(id: string, req: ExternalAgentResizeRequest): void {

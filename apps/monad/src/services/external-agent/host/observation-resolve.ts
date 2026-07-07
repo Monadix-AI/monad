@@ -1,7 +1,11 @@
-import type { ExternalAgentObservationAccessResponse } from '@monad/protocol';
+import type { ExternalAgentObservationAccessResponse, ExternalAgentUiObservationFrame } from '@monad/protocol';
 import type { ExternalAgentHostDeps, LiveExternalAgentSession } from '@/services/external-agent/host/host-types.ts';
 
-import { externalAgentStreamItems, externalAgentUsageLimitMeter } from '@monad/atoms/external-agent-observation';
+import {
+  externalAgentNeutralStreamItems,
+  externalAgentStreamItems,
+  externalAgentUsageLimitMeter
+} from '@monad/atoms/external-agent-observation';
 
 import {
   providerHistoryOutputFromLocal,
@@ -69,6 +73,43 @@ export class ExternalAgentObservationResolver {
         output: row.outputSnapshot,
         events: externalAgentStreamItems({ id, adapter, output: row.outputSnapshot, mode: 'history' }),
         usageMeter: externalAgentUsageLimitMeter({ adapter, output: row.outputSnapshot }),
+        observedAt: row.updatedAt
+      };
+    }
+    return {
+      state: 'unavailable',
+      externalAgentSessionId: id,
+      provider: row.provider,
+      reason: 'provider history unavailable'
+    };
+  }
+
+  /** The neutral UI plane: the full projected event list for the session's current output, re-derived
+   *  from the whole snapshot every call (never a delta), so a consumer replaces its list wholesale. */
+  observeUi(id: string): ExternalAgentUiObservationFrame {
+    const live = this.ctx.live.get(id);
+    if (live) {
+      const snapshot = live.outputBuffer.snapshot();
+      return {
+        state: 'live',
+        externalAgentSessionId: id,
+        provider: live.provider,
+        events: externalAgentNeutralStreamItems({ id, adapter: live.adapter, output: snapshot }),
+        seq: live.outputSeq,
+        observedAt: new Date().toISOString()
+      };
+    }
+    const row = this.ctx.store.getExternalAgentSession(id);
+    if (!row) {
+      return { state: 'unavailable', externalAgentSessionId: id, reason: 'external agent session not found' };
+    }
+    if (row.outputSnapshot) {
+      const adapter = getExternalAgentProviderAdapter(row.provider);
+      return {
+        state: 'history',
+        externalAgentSessionId: id,
+        provider: row.provider,
+        events: externalAgentNeutralStreamItems({ id, adapter, output: row.outputSnapshot, mode: 'history' }),
         observedAt: row.updatedAt
       };
     }
