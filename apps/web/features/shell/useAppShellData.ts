@@ -32,6 +32,7 @@ export function useAppShellData() {
   const { data: health, isError: healthError } = useGetHealthQuery();
   const daemonStatus: DaemonStatus = health?.status === 'ok' ? 'online' : healthError ? 'offline' : 'checking';
   const daemonVersion = health?.version;
+  const networkRuntime = health?.networkRuntime;
   const hasUpgrade = Boolean(
     (health as { latestVersion?: string; version?: string } | undefined)?.latestVersion &&
       (health as { latestVersion?: string; version?: string } | undefined)?.latestVersion !==
@@ -94,6 +95,7 @@ export function useAppShellData() {
     daemonStatus,
     daemonVersion,
     hasUpgrade,
+    networkRuntime,
     profiles,
     projectsLoading,
     sessions,

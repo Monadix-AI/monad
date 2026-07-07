@@ -73,14 +73,25 @@ import { createSystemController } from '@/transports/http/system.ts';
 import { createToolsController } from '@/transports/http/tools.ts';
 import { createUsageController } from '@/transports/http/usage.ts';
 
-interface RemoteAccessConfig {
+export interface RemoteAccessConfig {
   enabled: boolean;
   token: string | null;
 }
 
+interface RemoteAccessState {
+  current(): RemoteAccessConfig | undefined;
+  tokenRevision(): number;
+}
+
+export interface MutableRemoteAccessState extends RemoteAccessState {
+  set(next: RemoteAccessConfig | undefined): void;
+}
+
+export type RemoteAccessSource = RemoteAccessConfig | RemoteAccessState;
+
 export interface HttpTransportOptions {
   docs?: boolean;
-  remoteAccess?: RemoteAccessConfig;
+  remoteAccess?: RemoteAccessSource;
   openaiCompatConfig?: () => Promise<{ enabled: boolean; token?: string }>;
 }
 
@@ -145,14 +156,31 @@ export function tokenMatches(provided: string, expected: string): boolean {
   return timingSafeEqual(pa, pb) && a.length === b.length;
 }
 
+export function createRemoteAccessState(initial?: RemoteAccessConfig): MutableRemoteAccessState {
+  let value = initial;
+  let revision = initial?.token ? 1 : 0;
+  return {
+    current: () => value,
+    tokenRevision: () => revision,
+    set: (next) => {
+      if (value?.enabled !== next?.enabled || value?.token !== next?.token) revision += 1;
+      value = next;
+    }
+  };
+}
+
+export function resolveRemoteAccessConfig(source: RemoteAccessSource | undefined): RemoteAccessConfig | undefined {
+  if (!source) return undefined;
+  if ('current' in source) return source.current();
+  return source;
+}
+
 export function createHttpTransport(
   handlers: ReturnType<typeof createDaemonHandlers>,
   { docs = false, remoteAccess, openaiCompatConfig }: HttpTransportOptions = {}
 ) {
   const connections = new Map<string, ConnectionState>();
   const encoder = new TextEncoder();
-
-  const remoteEnabled = remoteAccess?.enabled ?? false;
 
   let app = new Elysia()
     .onRequest(({ request }) => {
@@ -205,6 +233,7 @@ export function createHttpTransport(
   // (carries no credentials and is handled by the CORS responder).
   app = app.onBeforeHandle(({ request }) => {
     if (request.method === 'OPTIONS') return;
+    const remoteEnabled = resolveRemoteAccessConfig(remoteAccess)?.enabled ?? false;
     if (!isBrowserRequestAllowed(request, { remoteEnabled })) {
       return jsonResponse(403, { error: 'forbidden' }, request);
     }
@@ -263,12 +292,14 @@ export function createHttpTransport(
     }) as unknown as typeof app;
 
   // Cast through unknown to satisfy Elysia's route-tracking generics — the final return type is what matters.
-  if (remoteAccess?.enabled) {
-    const ra = remoteAccess;
+  if (remoteAccess) {
     const rateLimiter = createIpRateLimiter(REMOTE_RATE_LIMIT);
     const guarded = app
       // Auth guard: unix-socket and localhost always pass; remote requests need Bearer.
       .onBeforeHandle(({ request, server }) => {
+        const ra = resolveRemoteAccessConfig(remoteAccess);
+        if (!ra?.enabled) return;
+
         const ip = server?.requestIP(request);
         // No peer IP → Unix socket (filesystem-permission gated) — trust without token.
         if (!ip) return;
@@ -353,7 +384,9 @@ export function createHttpTransport(
             .use(createLocaleSettingsController(handlers))
             .use(createSkillsSettingsController(handlers))
         )
-        .use(createStreamController(handlers, connections, remoteEnabled))
+        .use(
+          createStreamController(handlers, connections, () => resolveRemoteAccessConfig(remoteAccess)?.enabled ?? false)
+        )
         .use(createDaemonCtlController())
     );
 }

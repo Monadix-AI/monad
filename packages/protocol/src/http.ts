@@ -86,7 +86,12 @@ import {
 import { appearanceSettingsSchema, setAppearanceSettingsRequestSchema } from './settings/appearance-settings.ts';
 import { developerSettingsSchema, setDeveloperSettingsRequestSchema } from './settings/developer-settings.ts';
 import { hooksSettingsResponseSchema, setHooksSettingsRequestSchema } from './settings/hooks-settings.ts';
-import { networkSettingsSchema, setNetworkSettingsRequestSchema } from './settings/network-settings.ts';
+import {
+  networkSettingsSchema,
+  probeNetworkRequestSchema,
+  probeNetworkResponseSchema,
+  setNetworkSettingsRequestSchema
+} from './settings/network-settings.ts';
 import { openaiCompatSettingsSchema, setOpenaiCompatRequestSchema } from './settings/openai-compat-settings.ts';
 import { sandboxSettingsResponseSchema, setSandboxSettingsRequestSchema } from './settings/sandbox-settings.ts';
 import {
@@ -352,7 +357,8 @@ export const daemonHttpContract = {
   },
   networkSettings: {
     get: defineHttpEndpoint({ response: { 200: networkSettingsSchema } }),
-    set: defineHttpEndpoint({ body: setNetworkSettingsRequestSchema, response: { 200: networkSettingsSchema } })
+    set: defineHttpEndpoint({ body: setNetworkSettingsRequestSchema, response: { 200: networkSettingsSchema } }),
+    probe: defineHttpEndpoint({ body: probeNetworkRequestSchema, response: { 200: probeNetworkResponseSchema } })
   },
   appearanceSettings: {
     get: defineHttpEndpoint({ response: { 200: appearanceSettingsSchema } }),

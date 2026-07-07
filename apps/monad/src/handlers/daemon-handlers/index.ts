@@ -291,6 +291,7 @@ export function createDaemonHandlers(deps: DaemonHandlerDeps) {
         status: 'ok',
         version: VERSION,
         ...(warnings.length ? { warnings } : {}),
+        ...(deps.getNetworkRuntimeStatus?.() ? { networkRuntime: deps.getNetworkRuntimeStatus() } : {}),
         ...(httpsDisabled ? { certStatus: 'disabled' as const } : {}),
         ...(!httpsDisabled && (deps.certFingerprint || deps.certExpiry) ? { certStatus: 'active' as const } : {}),
         ...(deps.certFingerprint ? { certFingerprint: deps.certFingerprint } : {}),

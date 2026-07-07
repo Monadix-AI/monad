@@ -15,5 +15,10 @@ export function createNetworkSettingsController(handlers: ReturnType<typeof crea
       body: c.set.body,
       response: c.set.response,
       detail: { summary: 'Update network and remote access settings' }
+    })
+    .post('/network/probe', async ({ body }) => handlers.network.probeNetwork(body), {
+      body: c.probe.body,
+      response: c.probe.response,
+      detail: { summary: 'Probe a daemon network URL from the daemon host' }
     });
 }

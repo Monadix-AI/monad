@@ -237,7 +237,11 @@ import {
   usePreviewNativeCliSettingsImportMutation,
   useUpsertNativeCliAgentMutation
 } from './endpoints/settings/native-cli-agents/index.ts';
-import { useGetNetworkQuery, useSetNetworkMutation } from './endpoints/settings/network/index.ts';
+import {
+  useGetNetworkQuery,
+  useProbeNetworkMutation,
+  useSetNetworkMutation
+} from './endpoints/settings/network/index.ts';
 import { useGetObscuraQuery, useSetObscuraMutation } from './endpoints/settings/obscura/index.ts';
 import { useGetOpenaiCompatQuery, useSetOpenaiCompatMutation } from './endpoints/settings/openai-compat/index.ts';
 import {
@@ -454,6 +458,7 @@ export {
   usePickDirectoryMutation,
   usePreviewNativeCliSettingsImportMutation,
   usePreviewSettingsImportMutation,
+  useProbeNetworkMutation,
   useProvenanceQuery,
   useProviderCatalogQuery,
   usePutMemoryCoreMutation,

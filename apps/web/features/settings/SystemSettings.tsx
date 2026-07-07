@@ -21,6 +21,7 @@ import {
   useGetStartupQuery,
   useGetSystemUpgradeQuery,
   useListSessionsQuery,
+  useProbeNetworkMutation,
   useResetUsageMutation,
   useSetDeveloperMutation,
   useSetStartupMutation,
@@ -49,6 +50,10 @@ export function SystemSettings({ onClose }: Props) {
   const network = useNetworkSettings();
   const [usageResetDone, setUsageResetDone] = useState(false);
   const [networkCopied, setNetworkCopied] = useState(false);
+  const [probeResults, setProbeResults] = useState<
+    Record<string, { error?: string; latencyMs?: number; ok: boolean; status?: number }>
+  >({});
+  const [probeNetwork, { isLoading: isProbingNetwork }] = useProbeNetworkMutation();
   const { data: sessionData } = useListSessionsQuery(undefined);
   const sessionIds = Object.keys(sessionData?.sessions?.entities ?? {});
   const sessionCount = sessionIds.length;
@@ -129,6 +134,11 @@ export function SystemSettings({ onClose }: Props) {
     await navigator.clipboard.writeText(remoteToken);
     setNetworkCopied(true);
     setTimeout(() => setNetworkCopied(false), 1500);
+  }
+
+  async function checkRemoteUrl(url: string) {
+    const result = await probeNetwork({ url, token: network.settings?.remoteAccess.token ?? undefined }).unwrap();
+    setProbeResults((current) => ({ ...current, [url]: result }));
   }
 
   async function handleUpgrade() {
@@ -382,6 +392,49 @@ export function SystemSettings({ onClose }: Props) {
                     <HugeiconsIcon icon={RotateLeft01Icon} />
                   </Button>
                 </div>
+                <div className="text-[11px] text-muted-foreground">
+                  {t('web.settings.system.remoteTokenRevision', {
+                    revision: network.settings.runtime?.remoteAccess.tokenRevision ?? 0
+                  })}
+                </div>
+                {network.settings.remoteUrls.length > 0 ? (
+                  <div className="flex flex-col gap-1.5 pt-1">
+                    {network.settings.remoteUrls.map((entry) => {
+                      const result = probeResults[entry.url];
+                      return (
+                        <div
+                          className="grid items-center gap-2 rounded border bg-muted/20 px-2 py-1.5 text-xs sm:grid-cols-[72px_1fr_auto]"
+                          key={entry.url}
+                        >
+                          <span className="text-muted-foreground">{entry.label}</span>
+                          <code className="truncate font-mono">{entry.url}</code>
+                          <div className="flex items-center justify-end gap-2">
+                            {result ? (
+                              <span className={result.ok ? 'text-success' : 'text-destructive'}>
+                                {result.ok
+                                  ? t('web.settings.system.remoteProbeOk', { ms: result.latencyMs ?? 0 })
+                                  : t('web.settings.system.remoteProbeFailed')}
+                              </span>
+                            ) : null}
+                            <Button
+                              disabled={isProbingNetwork}
+                              onClick={() => void checkRemoteUrl(entry.url)}
+                              size="sm"
+                              variant="outline"
+                            >
+                              {t('web.settings.system.remoteProbe')}
+                            </Button>
+                          </div>
+                          {result?.error ? (
+                            <span className="break-all text-[11px] text-destructive sm:col-span-3">{result.error}</span>
+                          ) : null}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="text-muted-foreground text-xs">{t('web.settings.system.remoteUrlsEmpty')}</div>
+                )}
               </div>
             )}
 

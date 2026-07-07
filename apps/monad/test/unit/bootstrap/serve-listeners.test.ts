@@ -2,6 +2,7 @@ import { expect, test } from 'bun:test';
 
 import {
   buildDaemonTcpListenOptions,
+  createDaemonTcpRuntime,
   daemonLoopbackUrl,
   daemonWebUiUrl,
   formatHttpsDisabledWarnings,
@@ -119,6 +120,85 @@ test('formatHttpsDisabledWarnings calls out remote access when HTTP is exposed b
     'WARNING: HTTPS is disabled by network.https.enabled=false. Daemon TCP traffic is plain HTTP.',
     'WARNING: remote access is enabled while HTTPS is disabled. Remote daemon traffic is exposed over plain HTTP.'
   ]);
+});
+
+test('daemon TCP runtime reapplies listener plan without a process restart', async () => {
+  const stopped: string[] = [];
+  const started: string[] = [];
+  const runtime = createDaemonTcpRuntime({
+    app: {} as never,
+    initial: {
+      host: '127.0.0.1',
+      https: { enabled: false },
+      remoteAccess: { enabled: false, token: null },
+      port: 52749,
+      localHttpFallback: { enabled: false, port: 52780 }
+    },
+    listenHttp: (_app, listener) => {
+      const key = `${listener.scheme}:${listener.host}:${listener.port}`;
+      started.push(key);
+      return { stop: () => stopped.push(key) };
+    },
+    listenHttps: (_app, listener) => {
+      const key = `${listener.scheme}:${listener.host}:${listener.port}`;
+      started.push(key);
+      return { stop: () => stopped.push(key) };
+    }
+  });
+
+  expect(runtime.listeners()).toEqual([{ scheme: 'http', host: '127.0.0.1', port: 52749 }]);
+
+  await runtime.apply({
+    host: '0.0.0.0',
+    https: { enabled: true },
+    remoteAccess: { enabled: true, token: 'secret' },
+    port: 52749,
+    localHttpFallback: { enabled: true, port: 52780 },
+    tlsCert: { certPath: '/tmp/cert.pem', keyPath: '/tmp/key.pem' }
+  });
+
+  expect(started).toEqual(['http:127.0.0.1:52749', 'https:0.0.0.0:52749', 'http:127.0.0.1:52780']);
+  expect(stopped).toEqual(['http:127.0.0.1:52749']);
+  expect(runtime.listeners()).toEqual([
+    { scheme: 'https', host: '0.0.0.0', port: 52749 },
+    { scheme: 'http', host: '127.0.0.1', port: 52780 }
+  ]);
+
+  runtime.stop();
+  expect(stopped).toEqual(['http:127.0.0.1:52749', 'https:0.0.0.0:52749', 'http:127.0.0.1:52780']);
+});
+
+test('daemon TCP runtime records last apply failures and preserves the previous listener plan', async () => {
+  const runtime = createDaemonTcpRuntime({
+    app: {} as never,
+    initial: {
+      host: '127.0.0.1',
+      https: { enabled: false },
+      remoteAccess: { enabled: false, token: null },
+      port: 52749,
+      localHttpFallback: { enabled: false, port: 52780 }
+    },
+    listenHttp: (_app, listener) => {
+      if (listener.port === 52780) throw new Error('bind failed');
+      return { stop: () => {} };
+    },
+    listenHttps: () => ({ stop: () => {} })
+  });
+
+  await expect(
+    runtime.apply({
+      host: '0.0.0.0',
+      https: { enabled: true },
+      remoteAccess: { enabled: true, token: 'secret' },
+      port: 52749,
+      localHttpFallback: { enabled: true, port: 52780 },
+      tlsCert: { certPath: '/tmp/cert.pem', keyPath: '/tmp/key.pem' }
+    })
+  ).rejects.toThrow(/bind failed/);
+
+  expect(runtime.status().lastError?.message).toBe('bind failed');
+  expect(runtime.status().listeners).toEqual([{ scheme: 'http', host: '127.0.0.1', port: 52749 }]);
+  runtime.stop();
 });
 
 test('daemonLoopbackUrl follows the HTTPS setting for native CLI callbacks', () => {

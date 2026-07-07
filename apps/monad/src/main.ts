@@ -16,7 +16,7 @@
  */
 
 import type { MonadAuth } from '@monad/home';
-import type { PrincipalId, SessionId } from '@monad/protocol';
+import type { NetworkRuntimeStatus, PrincipalId, SessionId } from '@monad/protocol';
 import type { Tool } from '@/capabilities/tools/types.ts';
 import type { SessionGateway } from '@/channels/channel.ts';
 
@@ -537,6 +537,7 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
 
   const upgradeInfo = await createUpgradeInfoMonitor(paths);
 
+  let getNetworkRuntimeStatus: (() => NetworkRuntimeStatus | undefined) | undefined;
   const handlers = createDaemonHandlers({
     store,
     agent,
@@ -596,6 +597,7 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
     skillInstances,
     discoverProjectSkills,
     daemonWarnings,
+    getNetworkRuntimeStatus: () => getNetworkRuntimeStatus?.(),
     certFingerprint: tlsFingerprint,
     certExpiry: tlsCertExpiry,
     networkHttps: cfg.network.https,
@@ -661,6 +663,10 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
     developerMode: liveCfg.developerMode === true,
     i18n: i18nService,
     channelService,
+    configBus,
+    onNetworkRuntimeStatusReady: (status) => {
+      getNetworkRuntimeStatus = status;
+    },
     flags: {
       devMode: DEV_MODE,
       devSilent: DEV_SILENT,
