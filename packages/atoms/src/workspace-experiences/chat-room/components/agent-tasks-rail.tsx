@@ -31,7 +31,7 @@ import {
   useLazyGetExternalAgentHistoryPageQuery,
   useLazyGetExternalAgentUsageQuery,
   useLazyGetNativeAgentDeliveryObservationQuery,
-  useStreamExternalAgentObservationQuery
+  useStreamExternalAgentUiObservationQuery
 } from '@monad/sdk-atom-client-rtk';
 import { ProductIcon, Tooltip, TooltipContent, TooltipTrigger } from '@monad/ui';
 import {
@@ -55,6 +55,7 @@ import {
   shouldProjectObservationAccess,
   sortedProjectRailAgents,
   streamWithObservationProjection,
+  streamWithUiObservationFrame,
   usageMeterFromObservationAccess
 } from '../utils/agent-rail-model.ts';
 import { ExternalAgentObservationPanel } from './observation/panel.tsx';
@@ -573,10 +574,10 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
   const observationHistoryResetKey = [observedDeliveryId, observedExternalAgentSessionId].filter(Boolean).join(':');
   const [historyPages, setHistoryPages] = useState<ObservationHistoryPageState | undefined>(undefined);
   const [historyRequested, setHistoryRequested] = useState(false);
-  // External agent observation is a server-pushed SSE stream (per-token `append` deltas folded into a full
-  // `output`), not a 900ms poll — a live turn streams into the panel without waiting on a refetch.
-  // Deliveries have no SSE twin yet, so they keep the poll.
-  const externalAgentObservation = useStreamExternalAgentObservationQuery(
+  // The external-agent session observation is the neutral UI plane: a server-pushed SSE that carries the
+  // full projected event list every frame, so the panel replaces its list wholesale — no client-side
+  // delta re-derivation. Deliveries have no ui-stream twin yet, so they keep the poll + legacy projection.
+  const externalAgentUiObservation = useStreamExternalAgentUiObservationQuery(
     { id: observedExternalAgentSessionId ?? '', transcriptTargetId: room.projectId as TranscriptTargetId },
     { skip: !(observedExternalAgentSessionId && observation && !observedDeliveryId) }
   );
@@ -590,29 +591,33 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
       }).unwrap(),
     resetKey: `${room.projectId}:${observedDeliveryId ?? ''}`
   });
-  const observationAccess = observedDeliveryId ? deliveryObservation : (externalAgentObservation.data ?? undefined);
+  const uiFrame = observedDeliveryId ? undefined : (externalAgentUiObservation.data ?? undefined);
+  const deliveryAccess = observedDeliveryId ? deliveryObservation : undefined;
   const observedBaseStream: ExternalAgentStreamView | undefined =
     observedStream ??
     (observation && observedExternalAgentSessionId
       ? {
           id: observedExternalAgentSessionId,
-          agentName: observation.agentName ?? observationAccess?.externalAgentSessionId ?? 'Agent',
-          provider: observationAccess?.provider ?? 'external-agent',
+          agentName:
+            observation.agentName ??
+            uiFrame?.externalAgentSessionId ??
+            deliveryAccess?.externalAgentSessionId ??
+            'Agent',
+          provider: uiFrame?.provider ?? deliveryAccess?.provider ?? 'external-agent',
           tag: 'Agent',
           status: 'ok',
           output: '',
           items: []
         }
       : undefined);
-  const projectObservationAccess = shouldProjectObservationAccess({
-    access: observationAccess,
-    deliveryId: observedDeliveryId,
-    historyRequested
-  });
-  const observationProjection = projectObservationAccess
-    ? observationProjectionFromAccess(observedBaseStream, observationAccess, observedDeliveryId)
-    : undefined;
-  const observedAccessStream = streamWithObservationProjection(observedBaseStream, observationProjection);
+  const observedAccessStream = observedDeliveryId
+    ? streamWithObservationProjection(
+        observedBaseStream,
+        shouldProjectObservationAccess({ access: deliveryAccess, deliveryId: observedDeliveryId, historyRequested })
+          ? observationProjectionFromAccess(observedBaseStream, deliveryAccess, observedDeliveryId)
+          : undefined
+      )
+    : streamWithUiObservationFrame(observedBaseStream, uiFrame);
   const observedHistoryStream = streamWithHistoryPages(observedAccessStream, historyPages);
   const observedUsageAgentName = observedAccessStream?.templateAgentName;
   const usage = usePolledValue<ExternalAgentUsageResponse>({
@@ -622,7 +627,7 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
     resetKey: observedUsageAgentName ?? ''
   });
   const usageMeter = usageMeterFromObservationAccess({
-    access: observationAccess,
+    access: deliveryAccess,
     provider: observedAccessStream?.provider,
     stream: observedStream,
     usage

@@ -1,6 +1,7 @@
 import type {
   AgentObservationEvent,
   ExternalAgentObservationAccessResponse,
+  ExternalAgentUiObservationFrame,
   ExternalAgentUsageResponse,
   NativeAgentDeliveryId,
   NativeAgentObservationProjection
@@ -174,6 +175,22 @@ export function streamWithObservationProjection(
     items: projection.events
       .map((event) => toAgentObservationEvent(event))
       .filter((event): event is AgentObservationEvent => event !== null)
+  };
+}
+
+/** The neutral UI plane feeds the stream directly: each ui frame already carries the full projected
+ *  event list, so there is nothing to re-derive — set `items` to the frame's events verbatim. This is
+ *  what retires the client-side delta re-derivation the raw-access path still does. */
+export function streamWithUiObservationFrame(
+  stream: ExternalAgentStreamView | undefined,
+  frame: ExternalAgentUiObservationFrame | undefined
+): ExternalAgentStreamView | undefined {
+  if (!stream || !frame) return stream;
+  if (frame.state === 'unavailable') return { ...stream, output: '', items: [] };
+  return {
+    ...stream,
+    output: frame.events.map((event) => event.text ?? '').join('\n\n'),
+    items: frame.events
   };
 }
 
