@@ -115,7 +115,7 @@ export class ExternalAgentSessionLauncher {
     if (!statSync(workingPath).isDirectory())
       throw new Error(`workingPath must be an existing directory: ${args.workingPath}`);
     const adapter = getExternalAgentProviderAdapter(agent.provider);
-    const id = newId('ncli');
+    const id = newId('exa');
     const now = new Date().toISOString();
     let requestSeq = 0;
     const runtimeRole = args.runtimeRole ?? 'interactive';
