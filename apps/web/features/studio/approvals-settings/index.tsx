@@ -12,7 +12,8 @@ import { Button } from '@monad/ui';
 import { useMemo } from 'react';
 
 import { useT } from '@/components/I18nProvider';
-import { PanelShell, PanelShellHeader } from '@/components/ui/panel-shell';
+import { PanelShell } from '@/components/ui/panel-shell';
+import { StudioBreadcrumbHeader } from '@/features/studio/StudioBreadcrumbHeader';
 
 interface Props {
   onClose: () => void;
@@ -33,7 +34,7 @@ export function ApprovalsSettings(_props: Props) {
 
   return (
     <PanelShell>
-      <PanelShellHeader
+      <StudioBreadcrumbHeader
         icon={
           <HugeiconsIcon
             className="size-4 text-muted-foreground"

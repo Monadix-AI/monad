@@ -281,7 +281,7 @@ async function installSkillsApiMock(
 
 async function openSkills(page: Page) {
   await page.goto('/studio/skills');
-  await expect(page.getByRole('heading', { name: 'Skills', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Studio\s*\/\s*Skills/ })).toBeVisible();
   await expect(page.getByText('CodeGraph Navigator').or(page.getByText('No skills installed yet.'))).toBeVisible();
 }
 
@@ -458,7 +458,7 @@ Use this editor-created skill in e2e.
     await installSkillsApiMock(page);
 
     await page.goto('/studio/skills/marketplace/skills.sh');
-    await expect(page.getByRole('heading', { name: 'Skills', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /Studio\s*\/\s*Skills\s*\/\s*Marketplace/ })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Installed' })).toBeVisible();
     await expect(page.getByRole('tab', { name: 'skills.sh' })).toHaveAttribute('aria-selected', 'true');
 

@@ -6,7 +6,6 @@ import type { GetHealthResponse } from '@monad/protocol';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
   Alert01Icon,
-  Cancel01Icon,
   CancelCircleIcon,
   CheckmarkCircle02Icon,
   Copy01Icon,
@@ -29,6 +28,7 @@ import { daemonConnectionFormSchema } from '@/lib/form-validation';
 import { useMonadRuntime } from '@/lib/monad-runtime-provider';
 import { REMOTE_TOKEN_KEY, REMOTE_URL_KEY } from '@/lib/monad-store';
 import { SECRET_INPUT_PASSWORD_MANAGER_PROPS } from '@/lib/secret-input-props';
+import { SettingsBreadcrumbHeader } from './SettingsBreadcrumbHeader';
 
 interface Props {
   onClose: () => void;
@@ -184,29 +184,23 @@ export function ConnectionSettings({ onClose }: Props) {
 
   return (
     <div className="flex min-w-0 flex-1 flex-col">
-      <div className="flex items-center justify-between border-b px-6 py-4">
-        <div className="flex items-center gap-2">
-          <HugeiconsIcon
-            className="size-4 text-muted-foreground"
-            icon={GlobeIcon}
-          />
-          <span className="font-semibold text-sm">{t('web.conn.title')}</span>
-          {isRemote && (
+      <SettingsBreadcrumbHeader
+        badge={
+          isRemote ? (
             <span className="rounded bg-primary/10 px-1.5 py-0.5 font-medium text-[10px] text-primary uppercase tracking-wide">
               {t('web.conn.remote')}
             </span>
-          )}
-        </div>
-        <Button
-          aria-label={t('web.close')}
-          className="size-7"
-          onClick={onClose}
-          size="icon"
-          variant="ghost"
-        >
-          <HugeiconsIcon icon={Cancel01Icon} />
-        </Button>
-      </div>
+          ) : undefined
+        }
+        icon={
+          <HugeiconsIcon
+            className="size-4"
+            icon={GlobeIcon}
+          />
+        }
+        onClose={onClose}
+        title={t('web.conn.title')}
+      />
 
       <ScrollArea className="min-h-0 flex-1">
         <div className="flex flex-col gap-4 px-6 py-5">

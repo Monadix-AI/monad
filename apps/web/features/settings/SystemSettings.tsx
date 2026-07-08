@@ -2,7 +2,6 @@
 
 import {
   Alert01Icon,
-  Cancel01Icon,
   CheckIcon,
   Copy01Icon,
   Delete02Icon,
@@ -34,6 +33,7 @@ import { useT } from '@/components/I18nProvider';
 import { useNetworkSettings } from '@/hooks/use-network-settings';
 import { resolveConnection, watchUpgradeRestartAndReload } from '@/lib/monad-store';
 import { SECRET_INPUT_PASSWORD_MANAGER_PROPS } from '@/lib/secret-input-props';
+import { SettingsBreadcrumbHeader } from './SettingsBreadcrumbHeader';
 
 interface Props {
   onClose: () => void;
@@ -164,24 +164,16 @@ export function SystemSettings({ onClose }: Props) {
   return (
     <ScrollArea className="h-full">
       <div className="flex min-h-full flex-col">
-        <div className="flex items-center justify-between border-b px-6 py-4">
-          <div className="flex items-center gap-2">
+        <SettingsBreadcrumbHeader
+          icon={
             <HugeiconsIcon
-              className="size-4 text-muted-foreground"
+              className="size-4"
               icon={RotateLeft01Icon}
             />
-            <span className="font-semibold text-sm">{t('web.settings.system')}</span>
-          </div>
-          <Button
-            aria-label={t('web.close')}
-            className="size-7"
-            onClick={onClose}
-            size="icon"
-            variant="ghost"
-          >
-            <HugeiconsIcon icon={Cancel01Icon} />
-          </Button>
-        </div>
+          }
+          onClose={onClose}
+          title={t('web.settings.system')}
+        />
 
         <div className="flex flex-col gap-6 p-6">
           {/* Version & upgrade */}

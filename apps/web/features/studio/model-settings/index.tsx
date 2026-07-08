@@ -164,7 +164,6 @@ export function ModelSettings(_props: { onClose: () => void }) {
             icon={CpuIcon}
           />
         }
-        showSubtitle={false}
         title={t('web.model.title')}
       />
 

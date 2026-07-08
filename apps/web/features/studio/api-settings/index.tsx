@@ -6,7 +6,8 @@ import { Button, cn, Input, Label, ScrollArea, Switch, Textarea } from '@monad/u
 import { useEffect, useRef, useState } from 'react';
 
 import { type TFn, useT } from '@/components/I18nProvider';
-import { PanelShell, PanelShellHeader } from '@/components/ui/panel-shell';
+import { PanelShell } from '@/components/ui/panel-shell';
+import { StudioBreadcrumbHeader } from '@/features/studio/StudioBreadcrumbHeader';
 import { useAsyncAction } from '@/hooks/use-async-action';
 import { useOpenaiCompatSettings } from '@/hooks/use-openai-compat-settings';
 import { useMonadRuntime } from '@/lib/monad-runtime-provider';
@@ -160,7 +161,7 @@ export function OpenaiCompatSettings({ embedded = false }: { onClose: () => void
 
   return (
     <PanelShell>
-      <PanelShellHeader
+      <StudioBreadcrumbHeader
         actions={
           <Button
             aria-label={t('web.common.refresh')}
@@ -175,7 +176,6 @@ export function OpenaiCompatSettings({ embedded = false }: { onClose: () => void
             />
           </Button>
         }
-        subtitle={t('web.api.subtitle')}
         title={t('web.api.title')}
       />
 

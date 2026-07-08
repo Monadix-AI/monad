@@ -13,7 +13,8 @@ import { Separator } from '@monad/ui';
 import { useState } from 'react';
 
 import { useT } from '@/components/I18nProvider';
-import { PanelShell, PanelShellHeader } from '@/components/ui/panel-shell';
+import { PanelShell } from '@/components/ui/panel-shell';
+import { StudioBreadcrumbHeader } from '@/features/studio/StudioBreadcrumbHeader';
 import { BackendSection } from './BackendSection';
 import { ConsolidationSection } from './ConsolidationSection';
 import { FactsView } from './FactsView';
@@ -46,7 +47,7 @@ export function MemorySettings({ initialTab = 'settings' }: Props) {
 
   return (
     <PanelShell>
-      <PanelShellHeader
+      <StudioBreadcrumbHeader
         actions={
           <Segmented
             onChange={setTab}

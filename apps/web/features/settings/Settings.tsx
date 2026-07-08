@@ -81,9 +81,6 @@ const SettingsPolishStyle = memo(function SettingsPolishStyle() {
         :scope .settings-polish-v2 .settings-polish-a-head {
           padding: 0 8px 8px;
         }
-        :scope .settings-polish-v2 .settings-polish-a-title {
-          font-size: 18px;
-        }
         :scope .settings-polish-v2 .settings-polish-a-summary {
           padding: 4px 0 0;
         }
@@ -119,10 +116,16 @@ const SettingsPolishStyle = memo(function SettingsPolishStyle() {
   );
 });
 
-const SettingsNavHead = memo(function SettingsNavHead({ title }: { title: string }) {
+const SettingsNavHead = memo(function SettingsNavHead() {
   const t = useT();
   return (
     <div className="settings-polish-a-head">
+      <DialogTitle
+        className="sr-only"
+        id="settings-title"
+      >
+        {t('web.settings.title')}
+      </DialogTitle>
       <div className="settings-polish-a-icon">
         <HugeiconsIcon
           className="size-4"
@@ -130,12 +133,6 @@ const SettingsNavHead = memo(function SettingsNavHead({ title }: { title: string
         />
       </div>
       <div className="min-w-0">
-        <DialogTitle
-          className="settings-polish-a-title"
-          id="settings-title"
-        >
-          {title}
-        </DialogTitle>
         <p className="settings-polish-a-kicker">{t('web.settings.localDaemon')}</p>
       </div>
     </div>
@@ -184,7 +181,7 @@ export function Settings({
   onClose: () => void;
   onSectionChange?: (section: SettingsSectionId) => void;
 }) {
-  const t = useT();
+  const _t = useT();
   const [section, setSection] = useState<SettingsSectionId>(() => normalizeSection(initialSection));
   const [visitedSections, setVisitedSections] = useState<ReadonlySet<SettingsSectionId>>(
     () => new Set([normalizeSection(initialSection)])
@@ -219,7 +216,7 @@ export function Settings({
           value={section}
         >
           <div className="settings-polish-a settings-polish-v3 panel-nav flex w-56 shrink-0 flex-col px-3 py-4">
-            <SettingsNavHead title={t('web.settings.title')} />
+            <SettingsNavHead />
             <div className="settings-polish-a-divider" />
             <SettingsNavList />
           </div>

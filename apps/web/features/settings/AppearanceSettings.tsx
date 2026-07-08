@@ -4,15 +4,7 @@ import type { WebMessageIdWithoutParams } from '@monad/i18n';
 import type { ComposerFollowUpBehavior, ComposerSendShortcut } from '@monad/protocol';
 import type { MouseEvent } from 'react';
 
-import {
-  Cancel01Icon,
-  CheckIcon,
-  ColorsIcon,
-  HandIcon,
-  LanguageSquareIcon,
-  Moon02Icon,
-  Sun03Icon
-} from '@hugeicons/core-free-icons';
+import { CheckIcon, ColorsIcon, HandIcon, LanguageSquareIcon, Moon02Icon, Sun03Icon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import {
   localeAdapter,
@@ -34,6 +26,7 @@ import { AVATAR_STYLES } from '@/lib/avatar-styles';
 import { composerShortcutLabel, DEFAULT_COMPOSER_SETTINGS, normalizedComposerSettings } from '@/lib/composer-settings';
 import { isInteractiveCursorEnabled, setInteractiveCursorEnabled } from '@/lib/interactive-cursor';
 import { applyThemePreference, getThemePreference, type ThemePreference, transitionThemePreference } from '@/lib/theme';
+import { SettingsBreadcrumbHeader } from './SettingsBreadcrumbHeader';
 
 interface Props {
   onClose: () => void;
@@ -112,24 +105,16 @@ export function AppearanceSettings({ onClose }: Props) {
   return (
     <ScrollArea className="h-full">
       <div className="flex min-h-full flex-col">
-        <div className="flex items-center justify-between border-b px-6 py-4">
-          <div className="flex items-center gap-2">
+        <SettingsBreadcrumbHeader
+          icon={
             <HugeiconsIcon
-              className="size-4 text-muted-foreground"
+              className="size-4"
               icon={ColorsIcon}
             />
-            <span className="font-semibold text-sm">{t('web.settings.appearance')}</span>
-          </div>
-          <Button
-            aria-label={t('web.close')}
-            className="size-7"
-            onClick={onClose}
-            size="icon"
-            variant="ghost"
-          >
-            <HugeiconsIcon icon={Cancel01Icon} />
-          </Button>
-        </div>
+          }
+          onClose={onClose}
+          title={t('web.settings.appearance')}
+        />
 
         <div className="flex flex-col gap-6 p-6">
           <p className="text-muted-foreground text-sm">{t('web.settings.appearanceDesc')}</p>

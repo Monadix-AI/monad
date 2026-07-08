@@ -389,13 +389,13 @@ async function mockModelSettingsApi(
 async function openModels(page: Page) {
   await mockModelSettingsApi(page);
   await page.goto('/studio/models');
-  await expect(page.getByRole('heading', { name: 'Models' })).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByRole('heading', { name: /Studio\s*\/\s*Models/ })).toBeVisible({ timeout: 20_000 });
 }
 
 async function openModelsWithApi(page: Page, options: Parameters<typeof mockModelSettingsApi>[1]) {
   await mockModelSettingsApi(page, options);
   await page.goto('/studio/models');
-  await expect(page.getByRole('heading', { name: 'Models' })).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByRole('heading', { name: /Studio\s*\/\s*Models/ })).toBeVisible({ timeout: 20_000 });
 }
 
 async function addCompatibleProvider(page: Page, key = 'sk-added-9999') {

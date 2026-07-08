@@ -10,7 +10,8 @@ import { Button } from '@monad/ui';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useT } from '@/components/I18nProvider';
-import { PanelShell, PanelShellHeader } from '@/components/ui/panel-shell';
+import { PanelShell } from '@/components/ui/panel-shell';
+import { StudioBreadcrumbHeader } from '@/features/studio/StudioBreadcrumbHeader';
 import { useHooksSettings } from '@/hooks/use-hooks-settings';
 import { HookEditorDialog } from './HookEditorDialog';
 import { HookFlow } from './HookFlow';
@@ -223,7 +224,7 @@ export function HooksSettings(_props: { onClose: () => void }) {
 
   return (
     <PanelShell>
-      <PanelShellHeader
+      <StudioBreadcrumbHeader
         actions={
           <Button
             aria-label={t('web.common.refresh')}
@@ -238,7 +239,6 @@ export function HooksSettings(_props: { onClose: () => void }) {
             />
           </Button>
         }
-        subtitle={t('web.hooks.subtitle')}
         title={t('web.settings.hooks')}
       />
 

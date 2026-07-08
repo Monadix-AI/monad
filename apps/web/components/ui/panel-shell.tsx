@@ -26,11 +26,47 @@ export function PanelShellHeader({ title, subtitle, badge, actions, className }:
       )}
     >
       <div className="flex min-w-0 flex-1 items-center gap-2.5">
-        <h2 className="shrink-0 font-medium text-sm">{title}</h2>
+        <h2 className="min-w-0 font-medium text-sm">{title}</h2>
         {badge}
         {subtitle && <span className="min-w-0 truncate text-muted-foreground text-xs">{subtitle}</span>}
       </div>
       {actions && <div className="ml-auto flex shrink-0 items-center gap-1">{actions}</div>}
     </header>
+  );
+}
+
+export function PanelShellBreadcrumbHeader({
+  actions,
+  badge,
+  className,
+  crumbs,
+  icon
+}: {
+  actions?: ReactNode;
+  badge?: ReactNode;
+  className?: string;
+  crumbs: { id: string; label: ReactNode }[];
+  icon?: ReactNode;
+}) {
+  return (
+    <PanelShellHeader
+      actions={actions}
+      badge={badge}
+      className={className}
+      icon={icon}
+      title={
+        <span className="inline-flex min-w-0 items-center gap-1.5">
+          {crumbs.map((crumb, index) => (
+            <span
+              className={index === crumbs.length - 1 ? 'truncate' : 'shrink-0'}
+              key={crumb.id}
+            >
+              {index > 0 ? <span className="mr-1.5 text-muted-foreground/70">/</span> : null}
+              {crumb.label}
+            </span>
+          ))}
+        </span>
+      }
+    />
   );
 }
