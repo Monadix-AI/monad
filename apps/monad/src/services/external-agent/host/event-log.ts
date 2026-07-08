@@ -1,4 +1,4 @@
-import type { Event, TranscriptTargetId } from '@monad/protocol';
+import type { Event, SessionId } from '@monad/protocol';
 import type { EventBus } from '@/services/event-bus.ts';
 import type { Store } from '@/store/db/index.ts';
 
@@ -15,10 +15,14 @@ export interface ExternalAgentEventLogDeps {
 export class ExternalAgentEventLog {
   constructor(private readonly deps: ExternalAgentEventLogDeps) {}
 
-  private build(sessionId: TranscriptTargetId, type: Event['type'], payload: Record<string, unknown>): Event {
+  // TODO(track-b): `sessionId` here is really an ExternalAgentTargetId (SessionId | ProjectId) — an
+  // external agent may be scoped to a Workplace Project, not only a chat session. `Event.sessionId` is
+  // strictly `SessionId` on the wire post-collapse, so this casts; see the class-C note in
+  // apps/monad/src/store/db/external-agent-sessions.ts.
+  private build(sessionId: string, type: Event['type'], payload: Record<string, unknown>): Event {
     return {
       id: newId('evt'),
-      transcriptTargetId: sessionId,
+      sessionId: sessionId as SessionId,
       type,
       actorAgentId: null,
       payload,
@@ -27,7 +31,7 @@ export class ExternalAgentEventLog {
   }
 
   /** Durable milestone event (started/exited/approval/…): persisted to the event log and published. */
-  emit(sessionId: TranscriptTargetId, type: Event['type'], payload: Record<string, unknown>): void {
+  emit(sessionId: string, type: Event['type'], payload: Record<string, unknown>): void {
     const event = this.build(sessionId, type, payload);
     this.deps.store.appendEvents([event]);
     this.deps.bus.publish(event);
@@ -37,7 +41,7 @@ export class ExternalAgentEventLog {
    *  the bus and captured in the bounded per-session output snapshot, so one durable row per chunk would
    *  grow the event log without bound. Hydration rebuilds the tool card from that snapshot instead
    *  (see SessionUiProjector.hydrateExternalAgentSessions), so no durable output rows are needed. */
-  publish(sessionId: TranscriptTargetId, type: Event['type'], payload: Record<string, unknown>): void {
+  publish(sessionId: string, type: Event['type'], payload: Record<string, unknown>): void {
     this.deps.bus.publish(this.build(sessionId, type, payload));
   }
 }

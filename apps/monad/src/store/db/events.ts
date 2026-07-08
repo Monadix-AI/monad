@@ -14,7 +14,7 @@ export function appendEvents(sqlite: Database, batch: Event[]): void {
     for (const e of rows) {
       insert.run({
         $id: e.id,
-        $transcriptTargetId: e.transcriptTargetId,
+        $transcriptTargetId: e.sessionId,
         $type: e.type,
         $actorAgentId: e.actorAgentId,
         $taskId: e.taskId ?? null,
@@ -107,7 +107,7 @@ export function listEvents(sqlite: Database, sessionId: string, afterEventId?: s
   }>;
   return rows.map((r) => ({
     id: r.id as Event['id'],
-    transcriptTargetId: r.transcript_target_id as Event['transcriptTargetId'],
+    sessionId: r.transcript_target_id as Event['sessionId'],
     type: r.type as Event['type'],
     actorAgentId: r.actor_agent_id as Event['actorAgentId'],
     taskId: (r.task_id ?? undefined) as Event['taskId'],

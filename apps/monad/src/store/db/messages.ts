@@ -3,7 +3,7 @@
 // schema-typed insert or lineage walk is needed, the drizzle handle (`db`).
 
 import type { Database } from 'bun:sqlite';
-import type { ChatMessage, MessageId, MessageType, Session, StreamStatus, TranscriptTargetId } from '@monad/protocol';
+import type { ChatMessage, MessageId, MessageType, Session, SessionId, StreamStatus } from '@monad/protocol';
 import type { BunSQLiteDatabase } from 'drizzle-orm/bun-sqlite';
 
 import { persistedIncludeInContext } from '@monad/protocol';
@@ -455,11 +455,7 @@ export function maxMessageCreatedAt(sqlite: Database, sessionId: string): string
   return row?.created_at ?? null;
 }
 
-export function messageIdForSeq(
-  sqlite: Database,
-  transcriptTargetId: TranscriptTargetId,
-  seq: number
-): MessageId | null {
+export function messageIdForSeq(sqlite: Database, transcriptTargetId: SessionId, seq: number): MessageId | null {
   const row = sqlite
     .query('SELECT id FROM messages WHERE transcript_target_id = ? AND rowid = ?')
     .get(transcriptTargetId, seq) as { id: MessageId } | null;

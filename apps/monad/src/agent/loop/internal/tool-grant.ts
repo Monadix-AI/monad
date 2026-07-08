@@ -1,4 +1,4 @@
-import type { Hooks, TranscriptTargetId } from '@monad/protocol';
+import type { Hooks, SessionId } from '@monad/protocol';
 import type { ToolGate } from '@/capabilities/tools/types.ts';
 import type { AgentLoopDeps } from '../types.ts';
 
@@ -47,7 +47,7 @@ export class ToolGrant {
         if (this.isToolGranted(request.tool)) return { allow: true };
         const d = await this.hooks().run({
           event: 'ApprovalRequest',
-          sessionId: request.sessionId as TranscriptTargetId,
+          sessionId: request.sessionId as SessionId,
           cwd: this.hookCwd(),
           timestamp: new Date().toISOString(),
           toolName: request.tool,

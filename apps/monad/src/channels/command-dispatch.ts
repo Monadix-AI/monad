@@ -1,5 +1,5 @@
 import type { ChannelInstanceConfig } from '@monad/home';
-import type { ChannelInbound, SessionId, TranscriptTargetId } from '@monad/protocol';
+import type { ChannelInbound, SessionId } from '@monad/protocol';
 import type { ChannelAdapter } from '@monad/sdk-atom';
 import type { ChannelRoute, ChannelServiceDeps, ChannelTranslate, Instance } from '@/channels/types.ts';
 
@@ -36,11 +36,6 @@ export interface CommandHost {
     role?: ChannelRoute['kind']
   ): Promise<SessionId>;
   registerMirror(channelId: string, conversationKey: string, sessionId: SessionId, adapter: ChannelAdapter): void;
-}
-
-function sessionOnlyId(sessionId: TranscriptTargetId, command: string): SessionId {
-  if (sessionId.startsWith('ses_')) return sessionId as SessionId;
-  throw new Error(`${command} is only available in Monad agent sessions`);
 }
 
 /** Dispatch one in-band command through the unified registry with a conversation-keyed navigator.
@@ -106,26 +101,26 @@ export async function runCommand(
   return true;
 }
 
+// Channels are always session-scoped (a conversation maps to a real chat session, never a Workplace
+// Project id), so `sid` is cast to `SessionId` at each `bundle.*`/`session.*` call below.
 function channelServices(host: CommandHost, bundle: CommandBundle): CommandServices {
   return {
     resetHistory: (sid) =>
       host.deps.session.reset
-        ? host.deps.session.reset({ id: sid })
+        ? host.deps.session.reset({ id: sid as SessionId })
         : Promise.reject(new Error('reset is unavailable')),
-    compact: (sid) => bundle.compact(sessionOnlyId(sid, 'compact')),
+    compact: (sid) => bundle.compact(sid as SessionId),
     consolidate: (level?: number) => bundle.consolidate(level),
-    explainBelief: (sid, query) => bundle.explainBelief(sessionOnlyId(sid, 'belief'), query),
+    explainBelief: (sid, query) => bundle.explainBelief(sid as SessionId, query),
     checkMemory: () => bundle.checkMemory(),
-    listModels: (sid) => bundle.listModels(sessionOnlyId(sid, 'model')),
-    setModel: (sid, alias) => bundle.setModel(sessionOnlyId(sid, 'model'), alias),
-    getWorkdir: async (sid) => ({
-      path: (host.deps.store.getSession(sid) ?? host.deps.store.getWorkplaceProject(sid))?.cwd
-    }),
+    listModels: (sid) => bundle.listModels(sid as SessionId),
+    setModel: (sid, alias) => bundle.setModel(sid as SessionId, alias),
+    getWorkdir: async (sid) => ({ path: host.deps.store.getSession(sid)?.cwd }),
     setWorkdir: (sid, path) =>
       host.deps.session.setWorkspace
-        ? host.deps.session.setWorkspace({ id: sid, cwd: path }).then((r) => ({ path: r.cwd }))
+        ? host.deps.session.setWorkspace({ id: sid as SessionId, cwd: path }).then((r) => ({ path: r.cwd }))
         : Promise.reject(new Error('setWorkspace is unavailable')),
-    handoff: (sid, initialTask) => bundle.handoff(sessionOnlyId(sid, 'handoff'), initialTask),
+    handoff: (sid, initialTask) => bundle.handoff(sid as SessionId, initialTask),
     listCommands: async () => bundle.registry.list(bundle.skills(), host.deps.t),
     t: host.deps.t,
     log: bundle.log

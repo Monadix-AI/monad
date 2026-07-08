@@ -1,5 +1,5 @@
 import type { AcpAgentConfig } from '@monad/home';
-import type { TranscriptTarget, TranscriptTargetId } from '@monad/protocol';
+import type { Session, SessionId } from '@monad/protocol';
 import type { SessionContext } from '@/handlers/session/context.ts';
 
 import { loadAll } from '@monad/home';
@@ -12,7 +12,7 @@ import { channelDelegateMcpServers } from '@/handlers/session/handlers/messaging
 import { acpAuthGuidance, directDelegate } from '@/services/delegation/acp-delegate.ts';
 
 type SandboxRootsFor = (
-  sessionId: TranscriptTargetId,
+  sessionId: SessionId,
   cwd: string | undefined,
   rt: { sandboxRoots?: string[] } | undefined,
   override?: string[]
@@ -20,7 +20,7 @@ type SandboxRootsFor = (
 
 // Access control reads the write policy STORED on the session (origin.writableBy) — mirrors the
 // check in messaging.ts (kept local so this module has no import-cycle back to it).
-function assertWriteAllowed(session: TranscriptTarget, transport: 'http'): void {
+function assertWriteAllowed(session: Session, transport: 'http'): void {
   const writableBy = session.origin?.writableBy;
   if (!writableBy) return;
   if (!writableBy.includes(transport)) {
@@ -39,10 +39,10 @@ export function createForwardAcpHandler(ctx: SessionContext, sandboxRootsFor: Sa
     beginRun,
     makeEmit,
     persistAndRetire,
-    requireTranscriptTarget
+    requireSession
   } = ctx;
 
-  const runtimeForTranscriptTarget = (sessionId: TranscriptTargetId) => runtime.get(sessionId);
+  const runtimeForSession = (sessionId: SessionId) => runtime.get(sessionId);
 
   return async function forwardToAcp({
     sessionId,
@@ -52,14 +52,14 @@ export function createForwardAcpHandler(ctx: SessionContext, sandboxRootsFor: Sa
     ambientContext,
     onComplete
   }: {
-    sessionId: TranscriptTargetId;
+    sessionId: SessionId;
     agentName: string;
     text: string;
     displayText?: string;
     ambientContext?: string;
     onComplete?: (text: string) => void | Promise<void>;
   }) {
-    const session = requireTranscriptTarget(sessionId);
+    const session = requireSession(sessionId);
     assertWriteAllowed(session, 'http');
     // Reject if a turn is already streaming for this session — same concurrency guard as `send`.
     if (aborts.has(sessionId)) throw new HandlerError('conflict', 'a turn is already in progress for this session');
@@ -85,7 +85,7 @@ export function createForwardAcpHandler(ctx: SessionContext, sandboxRootsFor: Sa
       acpActivityStarted = true;
       emit({
         id: newId('evt'),
-        transcriptTargetId: sessionId,
+        sessionId: sessionId as SessionId,
         type: 'tool.called',
         actorAgentId: null,
         payload: { toolCallId: acpToolCallId, tool: `acp:${spec.name}`, input: { agent: spec.name } },
@@ -93,7 +93,7 @@ export function createForwardAcpHandler(ctx: SessionContext, sandboxRootsFor: Sa
       });
       emit({
         id: newId('evt'),
-        transcriptTargetId: sessionId,
+        sessionId: sessionId as SessionId,
         type: 'tool.progress',
         actorAgentId: null,
         payload: { toolCallId: acpToolCallId, tool: `acp:${spec.name}`, output: 'waiting for response...' },
@@ -107,7 +107,7 @@ export function createForwardAcpHandler(ctx: SessionContext, sandboxRootsFor: Sa
       ].filter(Boolean);
       emit({
         id: newId('evt'),
-        transcriptTargetId: sessionId,
+        sessionId: sessionId as SessionId,
         type: 'tool.progress',
         actorAgentId: null,
         payload: {
@@ -121,7 +121,7 @@ export function createForwardAcpHandler(ctx: SessionContext, sandboxRootsFor: Sa
 
     emit({
       id: newId('evt'),
-      transcriptTargetId: sessionId,
+      sessionId: sessionId as SessionId,
       type: 'user.message',
       actorAgentId: null,
       payload: { messageId: userMsgId, text: displayText ?? text },
@@ -129,12 +129,12 @@ export function createForwardAcpHandler(ctx: SessionContext, sandboxRootsFor: Sa
     });
     store.insertMessage(userMsgId, sessionId, displayText ?? text, new Date().toISOString(), 'user');
 
-    const rt = runtimeForTranscriptTarget(sessionId);
+    const rt = runtimeForSession(sessionId);
     emitAcpActivityStart();
     directDelegate(spec, composeAcpChannelPrompt(text, ambientContext), {
       sessionId,
       signal,
-      sandboxRoots: sandboxRootsFor(sessionId, requireTranscriptTarget(sessionId).cwd, rt),
+      sandboxRoots: sandboxRootsFor(sessionId, requireSession(sessionId).cwd, rt),
       backends: rt?.backends,
       toolFilter: rt?.toolFilter,
       extraTools: rt?.extraTools,
@@ -143,7 +143,7 @@ export function createForwardAcpHandler(ctx: SessionContext, sandboxRootsFor: Sa
       onChunk: (delta) => {
         emit({
           id: newId('evt'),
-          transcriptTargetId: sessionId,
+          sessionId: sessionId as SessionId,
           type: 'agent.token',
           actorAgentId: null,
           payload: { messageId: agentMsgId, agentName: spec.name, delta, index: tokenIndex++ },
@@ -164,7 +164,7 @@ export function createForwardAcpHandler(ctx: SessionContext, sandboxRootsFor: Sa
         );
         emit({
           id: newId('evt'),
-          transcriptTargetId: sessionId,
+          sessionId: sessionId as SessionId,
           type: 'tool.result',
           actorAgentId: null,
           payload: { toolCallId: acpToolCallId, tool: `acp:${spec.name}`, ok: true, result: 'completed' },
@@ -175,7 +175,7 @@ export function createForwardAcpHandler(ctx: SessionContext, sandboxRootsFor: Sa
         });
         emit({
           id: newId('evt'),
-          transcriptTargetId: sessionId,
+          sessionId: sessionId as SessionId,
           type: 'agent.message',
           actorAgentId: null,
           payload: { messageId: agentMsgId, agentName: spec.name, text: fullText },
@@ -200,7 +200,7 @@ export function createForwardAcpHandler(ctx: SessionContext, sandboxRootsFor: Sa
         const errorText = hint ? `${message}\n\n${hint}` : message;
         emit({
           id: newId('evt'),
-          transcriptTargetId: sessionId,
+          sessionId: sessionId as SessionId,
           type: 'tool.result',
           actorAgentId: null,
           payload: { toolCallId: acpToolCallId, tool: `acp:${spec.name}`, ok: false, result: errorText },
@@ -219,7 +219,7 @@ export function createForwardAcpHandler(ctx: SessionContext, sandboxRootsFor: Sa
         );
         emit({
           id: newId('evt'),
-          transcriptTargetId: sessionId,
+          sessionId: sessionId as SessionId,
           type: 'agent.error',
           actorAgentId: null,
           payload: { messageId: agentMsgId, agentName: spec.name, code, message: errorText },

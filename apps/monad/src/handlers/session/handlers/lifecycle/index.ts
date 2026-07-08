@@ -12,7 +12,6 @@ import type {
   SessionOrigin,
   SessionState,
   SessionTransport,
-  TranscriptTargetId,
   UpdateSessionRequest
 } from '@monad/protocol';
 import type { SessionContext } from '@/handlers/session/context.ts';
@@ -53,7 +52,6 @@ export function createLifecycleHandlers(ctx: SessionContext) {
     deps: { store, agent, ownerPrincipalId, paths, oversight, delegation, sessionSandbox, hooks, hookCwd },
     aborts,
     requireSession,
-    requireTranscriptTarget,
     emitLifecycle
   } = ctx;
 
@@ -71,7 +69,7 @@ export function createLifecycleHandlers(ctx: SessionContext) {
 
   const { listProjects, getProject, createProject, updateProject, deleteProject } = createProjectLifecycleHandlers(
     ctx,
-    { applyWorkspaceRuntime, disposeRuntime, resolveWorkspaceDir, startAddedManagedExternalAgentMembers }
+    { resolveWorkspaceDir }
   );
 
   // SessionStart/SessionEnd are observe-only here: SessionStart's additionalContext is stashed by the
@@ -255,7 +253,7 @@ export function createLifecycleHandlers(ctx: SessionContext) {
       disposeRuntime(id);
       clearProcessesForSession(id);
       clearAcpDelegatesForSession(id); // kill any reused external ACP adapters held for this session
-      ctx.deps.externalAgentHost?.stopTranscriptTarget(id);
+      ctx.deps.externalAgentHost?.stopSession(id);
       oversight?.cancelSession(id, 'session_deleted');
       delegation?.cancelSession(id, 'session_deleted');
       // SessionEnd fires before teardown (abort only pauses a turn, so it does not end the session).
@@ -270,32 +268,28 @@ export function createLifecycleHandlers(ctx: SessionContext) {
 
     configureRuntime,
 
-    async reset({ id }: { id: TranscriptTargetId }) {
-      requireTranscriptTarget(id);
+    async reset({ id }: { id: SessionId }) {
+      requireSession(id);
       aborts.get(id)?.abort();
       aborts.delete(id);
       clearProcessesForSession(id);
       clearAcpDelegatesForSession(id); // the sub-agent's continued context no longer matches a reset parent
-      ctx.deps.externalAgentHost?.stopTranscriptTarget(id);
+      ctx.deps.externalAgentHost?.stopSession(id);
       const clearedCount = store.clearMessages(id);
       emitLifecycle(id, 'session.updated', { reset: true });
       return { clearedCount };
     },
 
-    async abort({ id }: { id: TranscriptTargetId }) {
-      const current = requireTranscriptTarget(id);
+    async abort({ id }: { id: SessionId }) {
+      const current = requireSession(id);
       const controller = aborts.get(id);
       const aborted = controller !== undefined;
       controller?.abort();
       aborts.delete(id);
-      if (id.startsWith('ses_')) {
-        const sessionId = id as SessionId;
-        oversight?.cancelSession(sessionId, 'session_aborted');
-        delegation?.cancelSession(sessionId, 'session_aborted');
-      }
+      oversight?.cancelSession(id, 'session_aborted');
+      delegation?.cancelSession(id, 'session_aborted');
       if (aborted && canTransition(current.state, 'paused')) {
-        if (store.getSession(id)) store.updateSession(id, { state: 'paused' });
-        else store.updateWorkplaceProject(id, { state: 'paused' });
+        store.updateSession(id, { state: 'paused' });
         emitLifecycle(id, 'session.updated', { state: 'paused' });
       }
       return { aborted };
@@ -308,13 +302,13 @@ export function createLifecycleHandlers(ctx: SessionContext) {
       includeInactive,
       includeAncestors
     }: {
-      id: TranscriptTargetId;
+      id: SessionId;
       limit?: number;
       before?: string;
       includeInactive?: boolean;
       includeAncestors?: boolean;
     }) {
-      requireTranscriptTarget(id);
+      requireSession(id);
       if (!includeAncestors) {
         return { messages: store.listMessages(id, { limit, before, includeInactive }) };
       }
@@ -330,7 +324,7 @@ export function createLifecycleHandlers(ctx: SessionContext) {
       includeInactive,
       includeAncestors
     }: {
-      id: TranscriptTargetId;
+      id: SessionId;
       limit?: number;
       before?: string;
       after?: string;
@@ -338,7 +332,7 @@ export function createLifecycleHandlers(ctx: SessionContext) {
       includeInactive?: boolean;
       includeAncestors?: boolean;
     }): Promise<ListUiItemsResponse> {
-      requireTranscriptTarget(id);
+      requireSession(id);
       // `around` opens an inclusive window centred on a message; `after` pages forward
       // (oldest-first from the cursor); otherwise take the newest window (optionally older than
       // `before`) — all returned oldest→newest by listMessages.

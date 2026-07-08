@@ -1,11 +1,12 @@
 import type { Logger } from '@monad/logger';
-import type { ExternalAgentHistoryPageRequest, TranscriptTargetId } from '@monad/protocol';
+import type { ExternalAgentHistoryPageRequest } from '@monad/protocol';
 import type {
   LiveExternalAgentSession,
   ManagedProjectOutputHandler
 } from '@/services/external-agent/host/host-types.ts';
 import type { StructuredLineBufferState } from '@/services/external-agent/structured-lines.ts';
 import type { ExternalAgentOutputEvent, ExternalAgentProviderAdapter } from '@/services/external-agent/types.ts';
+import type { ExternalAgentTargetId } from '@/store/db/external-agent-sessions.ts';
 import type { Store } from '@/store/db/index.ts';
 
 import { externalAgentStreamItems } from '@monad/atoms/external-agent-observation';
@@ -65,7 +66,7 @@ export class ExternalAgentOutputPipeline {
   constructor(private readonly ctx: ExternalAgentOutputPipelineContext) {}
 
   readPipe(
-    transcriptTargetId: TranscriptTargetId,
+    transcriptTargetId: ExternalAgentTargetId,
     id: string,
     stream: ReadableStream<Uint8Array> | undefined,
     name: 'stdout' | 'stderr',
@@ -88,7 +89,7 @@ export class ExternalAgentOutputPipeline {
   }
 
   output(
-    transcriptTargetId: TranscriptTargetId,
+    transcriptTargetId: ExternalAgentTargetId,
     id: string,
     chunk: string,
     // 'app-server' is a single pre-framed JSON-RPC message (one ws text frame) — already a complete
@@ -176,7 +177,7 @@ export class ExternalAgentOutputPipeline {
   }
 
   private emitStructuredOutputEvent(
-    transcriptTargetId: TranscriptTargetId,
+    transcriptTargetId: ExternalAgentTargetId,
     id: string,
     adapter: ExternalAgentProviderAdapter,
     event: ExternalAgentOutputEvent
@@ -355,7 +356,7 @@ export class ExternalAgentOutputPipeline {
   }
 
   emitManagedProjectOutput(
-    transcriptTargetId: TranscriptTargetId,
+    transcriptTargetId: ExternalAgentTargetId,
     id: string,
     text: string,
     error = false,

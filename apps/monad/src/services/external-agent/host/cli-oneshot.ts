@@ -1,8 +1,9 @@
-import type { ExternalAgentSessionView, TranscriptTargetId } from '@monad/protocol';
+import type { ExternalAgentSessionView } from '@monad/protocol';
 import type { LiveExternalAgentSession } from '@/services/external-agent/host/host-types.ts';
 import type { prepareManagedProjectRuntime } from '@/services/external-agent/managed-project.ts';
 import type { ExternalAgentProcess } from '@/services/external-agent/runtime-types.ts';
 import type { ExternalAgentLaunchSpec, ExternalAgentProviderAdapter } from '@/services/external-agent/types.ts';
+import type { ExternalAgentTargetId } from '@/store/db/external-agent-sessions.ts';
 import type { ExternalAgentSessionRow, Store } from '@/store/db/index.ts';
 
 import { BoundedOutputBuffer } from '@/services/external-agent/bounded-output-buffer.ts';
@@ -32,7 +33,7 @@ export class ExternalAgentOneshotRunner {
    *  fresh CLI (see runTurn). Mirrors the persistent path's row/live/started bookkeeping. */
   start(args: {
     id: string;
-    transcriptTargetId: TranscriptTargetId;
+    transcriptTargetId: ExternalAgentTargetId;
     agentName: string;
     provider: ExternalAgentSessionRow['provider'];
     workingPath: string;

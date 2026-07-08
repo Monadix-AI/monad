@@ -1,5 +1,5 @@
 import type { Logger } from '@monad/logger';
-import type { Event, TranscriptTargetId } from '@monad/protocol';
+import type { Event } from '@monad/protocol';
 import type { LiveExternalAgentSession } from '@/services/external-agent/host/host-types.ts';
 
 import { chmodSync, mkdirSync, realpathSync, rmSync } from 'node:fs';
@@ -18,7 +18,7 @@ import {
 
 export interface ExternalAgentAppServerConnectionContext {
   live: Map<string, LiveExternalAgentSession>;
-  emit(sessionId: TranscriptTargetId, type: Event['type'], payload: Record<string, unknown>): void;
+  emit(sessionId: string, type: Event['type'], payload: Record<string, unknown>): void;
   stop(id: string): void;
   log: Logger;
 }

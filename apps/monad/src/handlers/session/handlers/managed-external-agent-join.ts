@@ -1,5 +1,6 @@
-import type { ManagedExternalAgentLifecycleLogEvent, TranscriptTarget, TranscriptTargetId } from '@monad/protocol';
+import type { ManagedExternalAgentLifecycleLogEvent, Session, SessionId } from '@monad/protocol';
 import type { SessionContext } from '@/handlers/session/context.ts';
+import type { Store } from '@/store/db/index.ts';
 
 import { loadAll } from '@monad/home';
 import { newId } from '@monad/protocol';
@@ -22,9 +23,9 @@ const MANAGED_EXTERNAL_AGENT_JOIN_GREETING_NOTICE = (
   await Bun.file(managedProjectJoinGreetingNoticePath).text()
 ).trim();
 
-function managedExternalAgentMemberRuntimeNames(target: TranscriptTarget): Set<string> {
+function managedExternalAgentMemberRuntimeNames(store: Store, sessionId: SessionId): Set<string> {
   return new Set(
-    workplaceProjectMembers(target)
+    workplaceProjectMembers(store, sessionId)
       .filter((member) => member.type === 'external-agent' && member.settings?.managedProjectAgent !== false)
       .map(externalAgentProjectMemberRuntimeName)
   );
@@ -41,11 +42,7 @@ export function createManagedExternalAgentJoin(ctx: SessionContext) {
   const { emitManagedExternalAgentThinking, startManagedExternalAgentRuntimeWithRecovery } =
     createManagedExternalAgentDelivery(ctx);
 
-  function recordManagedExternalAgentProjectError(
-    sessionId: TranscriptTargetId,
-    agentName: string,
-    message: string
-  ): void {
+  function recordManagedExternalAgentProjectError(sessionId: SessionId, agentName: string, message: string): void {
     const text = `${agentName} failed to join the project: ${message}`;
     const messageId = newId('msg');
     store.insertMessage(messageId, sessionId, text, new Date().toISOString(), 'assistant', {
@@ -60,15 +57,12 @@ export function createManagedExternalAgentJoin(ctx: SessionContext) {
     });
   }
 
-  async function startAddedManagedExternalAgentMembers(
-    previous: TranscriptTarget,
-    next: TranscriptTarget
-  ): Promise<void> {
+  async function startAddedManagedExternalAgentMembers(previous: Session, next: Session): Promise<void> {
     if (!externalAgentHost || !paths || !next.cwd) return;
-    const before = previous.cwd ? managedExternalAgentMemberRuntimeNames(previous) : new Set<string>();
+    const before = previous.cwd ? managedExternalAgentMemberRuntimeNames(store, previous.id) : new Set<string>();
     const cfg = await loadAll(paths.config, paths.profile);
     const agents = (cfg?.externalAgents ?? []).filter((agent) => agent.enabled !== false);
-    const added = managedExternalAgentProjectMembers(next, agents).filter(
+    const added = managedExternalAgentProjectMembers(store, next.id, agents).filter(
       (member) => !before.has(member.runtimeAgentName)
     );
     for (const member of added) {

@@ -1,4 +1,4 @@
-import type { HookCaller, Hooks, TranscriptTargetId } from '@monad/protocol';
+import type { HookCaller, Hooks, SessionId } from '@monad/protocol';
 import type { ModelMessage, ModelUsage } from '../../model/index.ts';
 import type { AgentLoopDeps } from '../types.ts';
 
@@ -49,7 +49,7 @@ export class HookOrchestrator {
 
   /** BeforeModel: fired before each reasoning LLM request. A hook may deny (abort the turn) or rewrite
    *  the request's messages. Returns the (possibly rewritten) messages to send. */
-  async beforeModel(sessionId: TranscriptTargetId, messages: ModelMessage[]): Promise<ModelMessage[]> {
+  async beforeModel(sessionId: SessionId, messages: ModelMessage[]): Promise<ModelMessage[]> {
     const d = await this.hooks.run({
       event: 'BeforeModel',
       sessionId,
@@ -66,7 +66,7 @@ export class HookOrchestrator {
   /** AfterModel: fired after a SUCCESSFUL reasoning LLM response. A hook may rewrite the response text
    *  (e.g. redact). Returns the (possibly rewritten) text. A failed model call doesn't fire this — it
    *  ends the turn via the catch → emitError → AfterTurn(reason:'error') path. */
-  async afterModel(sessionId: TranscriptTargetId, text: string): Promise<string> {
+  async afterModel(sessionId: SessionId, text: string): Promise<string> {
     const d = await this.hooks.run({
       event: 'AfterModel',
       sessionId,
@@ -84,7 +84,7 @@ export class HookOrchestrator {
    * effective prompt or a block reason.
    */
   async userPromptSubmit(
-    sessionId: TranscriptTargetId,
+    sessionId: SessionId,
     userText: string
   ): Promise<{ blocked: true; reason: string } | { blocked: false; text: string }> {
     const d = await this.hooks.run({
@@ -114,7 +114,7 @@ export class HookOrchestrator {
    * by `maxStopContinues` so a hook can't loop forever. Fired exactly once per final-answer decision.
    */
   async runStopHook(
-    sessionId: TranscriptTargetId,
+    sessionId: SessionId,
     text: string,
     usage?: ModelUsage,
     reason: 'completed' | 'aborted' = 'completed'

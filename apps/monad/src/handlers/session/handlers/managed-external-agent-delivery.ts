@@ -1,11 +1,5 @@
 import type { ExternalAgentConfig } from '@monad/home';
-import type {
-  Event,
-  ManagedExternalAgentLifecycleLogEvent,
-  ProjectId,
-  TranscriptTarget,
-  TranscriptTargetId
-} from '@monad/protocol';
+import type { Event, ManagedExternalAgentLifecycleLogEvent, ProjectId, Session, SessionId } from '@monad/protocol';
 import type { SessionContext } from '@/handlers/session/context.ts';
 import type { ManagedExternalAgentProjectMessageSender } from '@/handlers/session/handlers/messaging-notices.ts';
 
@@ -42,7 +36,7 @@ export function createManagedExternalAgentDelivery(ctx: SessionContext) {
     createManagedExternalAgentMessages(ctx);
 
   function recordManagedExternalAgentProjectDeliveryError(
-    sessionId: TranscriptTargetId,
+    sessionId: SessionId,
     agentName: string,
     code: string | undefined,
     message: string
@@ -56,7 +50,7 @@ export function createManagedExternalAgentDelivery(ctx: SessionContext) {
     });
     makeEmit(round)({
       id: newId('evt'),
-      transcriptTargetId: sessionId,
+      sessionId: sessionId as SessionId,
       type: 'agent.error',
       actorAgentId: null,
       payload: {
@@ -77,13 +71,13 @@ export function createManagedExternalAgentDelivery(ctx: SessionContext) {
     sender,
     exceptAgentName
   }: {
-    session: TranscriptTarget;
+    session: Session;
     externalAgents: readonly ExternalAgentConfig[];
     text: string;
     sender?: ManagedExternalAgentProjectMessageSender;
     exceptAgentName?: string;
   }): Promise<void> {
-    const managedMembers = managedExternalAgentProjectMembers(session, externalAgents);
+    const managedMembers = managedExternalAgentProjectMembers(store, session.id, externalAgents);
     if (managedMembers.length === 0) return;
     const resolvedSender =
       sender?.kind === 'external-agent'
@@ -102,7 +96,7 @@ export function createManagedExternalAgentDelivery(ctx: SessionContext) {
         const notice = managedExternalAgentInboxNotice(member, text, resolvedSender);
         const deliveredSeq = store.maxMessageSeq(session.id);
         const triggerMessageId =
-          deliveredSeq > 0 ? (store.messageIdForSeq(session.id, deliveredSeq) ?? undefined) : undefined;
+          deliveredSeq > 0 ? (store.messageIdForSeq(session.id as SessionId, deliveredSeq) ?? undefined) : undefined;
         const deliveryId = deliveredSeq > 0 ? newId('deliv') : undefined;
         const managedSessions = managedExternalAgentSessionsForAgent(session.id, runtimeAgentName);
         const existing = managedSessions.find((candidate) => candidate.state === 'running');
@@ -142,7 +136,7 @@ export function createManagedExternalAgentDelivery(ctx: SessionContext) {
           if (preflight.state === 'not_authenticated' || preflight.state === 'unknown') {
             makeEmit(round)({
               id: newId('evt'),
-              transcriptTargetId: session.id,
+              sessionId: session.id as SessionId,
               type: 'external_agent.connection_required',
               actorAgentId: null,
               payload: {
@@ -211,7 +205,7 @@ export function createManagedExternalAgentDelivery(ctx: SessionContext) {
     to,
     text
   }: {
-    session: TranscriptTarget;
+    session: Session;
     externalAgents: readonly ExternalAgentConfig[];
     fromAgentName: string;
     to: string;
@@ -219,7 +213,7 @@ export function createManagedExternalAgentDelivery(ctx: SessionContext) {
   }): Promise<void> {
     const targetName = normalizeManagedExternalAgentDirectTarget(to);
     if (!targetName || targetName === fromAgentName) return;
-    const member = managedExternalAgentProjectMembers(session, externalAgents).find(
+    const member = managedExternalAgentProjectMembers(store, session.id, externalAgents).find(
       (candidate) => candidate.runtimeAgentName === targetName
     );
     if (!member) return;
@@ -241,7 +235,7 @@ export function createManagedExternalAgentDelivery(ctx: SessionContext) {
         if (preflight.state === 'not_authenticated' || preflight.state === 'unknown') {
           makeEmit(round)({
             id: newId('evt'),
-            transcriptTargetId: session.id,
+            sessionId: session.id as SessionId,
             type: 'external_agent.connection_required',
             actorAgentId: null,
             payload: {

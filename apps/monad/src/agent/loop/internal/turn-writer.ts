@@ -1,4 +1,4 @@
-import type { AgentMessagePayload, AgentReasoningPayload, EventType, Hooks, TranscriptTargetId } from '@monad/protocol';
+import type { AgentMessagePayload, AgentReasoningPayload, EventType, Hooks, SessionId } from '@monad/protocol';
 import type { Tool } from '@/capabilities/tools/types.ts';
 import type { PersistedModelInputOverride } from '../replay.ts';
 import type { AgentLoopDeps, ChatMessage } from '../types.ts';
@@ -17,7 +17,7 @@ import { extractError } from '../extract-error.ts';
 export class TurnWriter {
   constructor(
     private readonly deps: AgentLoopDeps,
-    private readonly emitEvent: (sessionId: TranscriptTargetId, type: EventType, payload: object) => void,
+    private readonly emitEvent: (sessionId: SessionId, type: EventType, payload: object) => void,
     private readonly prompt: () => PromptBuilder,
     private readonly availableTools: () => Tool[],
     private readonly modelId: () => string,
@@ -29,10 +29,10 @@ export class TurnWriter {
   /** Persist an empty assistant row so a turn that ended with no closing text still has an answer
    * message (the UI anchors the turn on it). Excluded from context — an empty assistant turn must
    * not reach the next prompt (some providers reject empty assistant content). */
-  async appendEmptyAnswer(sessionId: TranscriptTargetId, messageId: `msg_${string}`): Promise<void> {
+  async appendEmptyAnswer(sessionId: SessionId, messageId: `msg_${string}`): Promise<void> {
     await this.deps.messages.append({
       id: messageId,
-      transcriptTargetId: sessionId,
+      sessionId,
       role: 'assistant',
       text: '',
       includeInContext: false,
@@ -41,14 +41,14 @@ export class TurnWriter {
   }
 
   async beginTurn(
-    sessionId: TranscriptTargetId,
+    sessionId: SessionId,
     userText: string,
     modelInput?: PersistedModelInputOverride
   ): Promise<`msg_${string}`> {
     const userMessageId = newId('msg');
     await this.deps.messages.append({
       id: userMessageId,
-      transcriptTargetId: sessionId,
+      sessionId,
       role: 'user',
       text: userText,
       data: modelInput,
@@ -69,7 +69,7 @@ export class TurnWriter {
    * `settle(text)` writes the final content in place (append-fallback for non-streaming repos); it
    * returns false when the segment produced no text, so the caller can skip an empty row.
    */
-  beginSegment(sessionId: TranscriptTargetId, segmentId: `msg_${string}`, reasonBase: number) {
+  beginSegment(sessionId: SessionId, segmentId: `msg_${string}`, reasonBase: number) {
     let opened = false;
     let tokenIndex = 0;
     let reasonIndex = reasonBase;
@@ -80,7 +80,7 @@ export class TurnWriter {
           // Synchronous for the store-backed repo (bun:sqlite); a no-op for the in-memory repo.
           void this.deps.messages.open?.({
             id: segmentId,
-            transcriptTargetId: sessionId,
+            sessionId,
             role: 'assistant',
             text: '',
             createdAt: new Date().toISOString()
@@ -95,7 +95,7 @@ export class TurnWriter {
         if (!opened && text === '') return false;
         const message: ChatMessage = {
           id: segmentId,
-          transcriptTargetId: sessionId,
+          sessionId,
           role: 'assistant',
           text,
           createdAt: new Date().toISOString(),
@@ -109,7 +109,7 @@ export class TurnWriter {
   }
 
   async finishTurn(
-    sessionId: TranscriptTargetId,
+    sessionId: SessionId,
     messageId: `msg_${string}`,
     text: string,
     usage?: AgentMessagePayload['usage'],
@@ -118,7 +118,7 @@ export class TurnWriter {
   ): Promise<ChatMessage> {
     const message: ChatMessage = {
       id: messageId,
-      transcriptTargetId: sessionId,
+      sessionId,
       role: 'assistant',
       text,
       createdAt: new Date().toISOString(),
@@ -139,7 +139,7 @@ export class TurnWriter {
    * record real usage/cost, self-calibrate the token estimator, emit `agent.message` and the
    * `context.usage` breakdown. The assistant row itself is written by the segment/finishTurn path. */
   async finishBookkeeping(
-    sessionId: TranscriptTargetId,
+    sessionId: SessionId,
     messageId: `msg_${string}`,
     text: string,
     usage?: AgentMessagePayload['usage'],
@@ -159,20 +159,20 @@ export class TurnWriter {
 
   /** Best-effort re-persist of a settled segment when a Stop hook rewrote the final text (the
    * streamed row was already settled with the original). No-op for repos without `settle`. */
-  async repersistFinalText(sessionId: TranscriptTargetId, messageId: `msg_${string}`, text: string): Promise<void> {
+  async repersistFinalText(sessionId: SessionId, messageId: `msg_${string}`, text: string): Promise<void> {
     await this.deps.messages.settle?.(
-      { id: messageId, transcriptTargetId: sessionId, role: 'assistant', text, createdAt: new Date().toISOString() },
+      { id: messageId, sessionId, role: 'assistant', text, createdAt: new Date().toISOString() },
       'complete'
     );
   }
 
   /** Emit one reasoning/extended-thinking delta on its own channel (transient, not persisted). */
-  emitReasoning(sessionId: TranscriptTargetId, messageId: `msg_${string}`, delta: string, index: number): void {
+  emitReasoning(sessionId: SessionId, messageId: `msg_${string}`, delta: string, index: number): void {
     const payload: AgentReasoningPayload = { messageId, delta, index };
     this.emitEvent(sessionId, 'agent.reasoning', payload);
   }
 
-  async emitError(sessionId: TranscriptTargetId, messageId: string, err: unknown): Promise<void> {
+  async emitError(sessionId: SessionId, messageId: string, err: unknown): Promise<void> {
     const { code, message } = extractError(err);
     const text = code ? `[${code}] ${message}` : message;
     // Persist the failure as an assistant message so it survives in history and is visible even when
@@ -180,7 +180,7 @@ export class TurnWriter {
     // the model. Settle the row opened in beginTurn (→ error); repos without the lifecycle append it.
     const errMessage: ChatMessage = {
       id: messageId,
-      transcriptTargetId: sessionId,
+      sessionId,
       role: 'assistant',
       text,
       createdAt: new Date().toISOString(),

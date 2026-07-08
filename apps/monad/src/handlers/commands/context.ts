@@ -3,7 +3,7 @@
 // sessions over one chat (conversation-keyed), while web/ACP/CLI navigate sessions client-side
 // (principal-scoped). Everything else (reset/compact/model/listCommands) is daemon-uniform.
 
-import type { CommandItem, PrincipalId, TranscriptTargetId } from '@monad/protocol';
+import type { CommandItem, PrincipalId } from '@monad/protocol';
 import type {
   BeliefExplanation,
   CommandModelInfo,
@@ -20,26 +20,32 @@ export interface SessionNavigator {
   switchSession(target: string): Promise<CommandSessionInfo | null>;
 }
 
+// `sessionId` here is plain `string` (matching @monad/sdk-atom's CommandRunContext.sessionId), not
+// `SessionId`: the generic (principal-scoped) command bridge in session-commands.ts can pass a
+// Workplace Project's own id through this same path (project-wide command execution) — see the
+// SessionOrProject TODO(track-b) in apps/monad/src/handlers/session/context.ts. Individual command
+// implementations that are genuinely session-only (compact/model/belief/handoff) narrow via their
+// own `sessionOnlyId` guard before calling out.
 /** Daemon-uniform backing for the non-navigation verbs. */
 export interface CommandServices {
-  resetHistory(sessionId: TranscriptTargetId): Promise<{ clearedCount: number }>;
-  compact(sessionId: TranscriptTargetId): Promise<CompactSummary>;
+  resetHistory(sessionId: string): Promise<{ clearedCount: number }>;
+  compact(sessionId: string): Promise<CompactSummary>;
   consolidate(level?: number): Promise<ConsolidateSummary>;
-  explainBelief(sessionId: TranscriptTargetId, query: string): Promise<BeliefExplanation>;
+  explainBelief(sessionId: string, query: string): Promise<BeliefExplanation>;
   checkMemory(): Promise<ContradictionCheckSummary>;
-  listModels(sessionId: TranscriptTargetId): Promise<CommandModelInfo[]>;
-  setModel(sessionId: TranscriptTargetId, alias: string): Promise<void>;
-  getWorkdir(sessionId: TranscriptTargetId): Promise<{ path?: string }>;
-  setWorkdir(sessionId: TranscriptTargetId, path: string): Promise<{ path?: string }>;
+  listModels(sessionId: string): Promise<CommandModelInfo[]>;
+  setModel(sessionId: string, alias: string): Promise<void>;
+  getWorkdir(sessionId: string): Promise<{ path?: string }>;
+  setWorkdir(sessionId: string, path: string): Promise<{ path?: string }>;
   listCommands(): Promise<CommandItem[]>;
-  handoff(sessionId: TranscriptTargetId, initialTask?: string): Promise<{ sessionId: string }>;
+  handoff(sessionId: string, initialTask?: string): Promise<{ sessionId: string }>;
   /** Active-locale translator, shared across every command on this transport. */
   t: CommandRunContext['t'];
   log: CommandRunContext['log'];
 }
 
 export function makeCommandRunContext(p: {
-  sessionId: TranscriptTargetId;
+  sessionId: string;
   principalId: PrincipalId;
   args: string;
   nav: SessionNavigator;

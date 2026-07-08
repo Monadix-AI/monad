@@ -2,7 +2,7 @@
 // index.ts — every function takes the raw bun:sqlite handle.
 
 import type { Database } from 'bun:sqlite';
-import type { SearchHit, SearchMode, TranscriptTargetId } from '@monad/protocol';
+import type { SearchHit, SearchMode, SessionId } from '@monad/protocol';
 
 import { makeSnippet, type SearchRow } from './row-mappers.ts';
 
@@ -10,7 +10,7 @@ export interface SearchOptions {
   q: string;
   mode?: SearchMode;
   limit?: number;
-  transcriptTargetId?: TranscriptTargetId;
+  transcriptTargetId?: SessionId;
 }
 
 /**
@@ -27,7 +27,7 @@ export function searchMessages(sqlite: Database, opts: SearchOptions): SearchHit
   const add = (r: SearchRow, score: number): void => {
     if (hits.has(r.id)) return;
     hits.set(r.id, {
-      transcriptTargetId: r.transcript_target_id as SearchHit['transcriptTargetId'],
+      sessionId: r.transcript_target_id as SearchHit['sessionId'],
       transcriptTargetTitle: r.stitle,
       messageId: r.id as SearchHit['messageId'],
       role: r.role as SearchHit['role'],
@@ -151,7 +151,7 @@ export function staleEmbeddingCount(sqlite: Database, currentModel: string): num
 
 export interface SearchSemanticOptions {
   limit?: number;
-  transcriptTargetId?: TranscriptTargetId;
+  transcriptTargetId?: SessionId;
 }
 
 export function searchSemantic(sqlite: Database, queryVec: number[], opts: SearchSemanticOptions = {}): SearchHit[] {
@@ -215,7 +215,7 @@ export function searchSemantic(sqlite: Database, queryVec: number[], opts: Searc
     if (!r) return [];
     return [
       {
-        transcriptTargetId: r.transcript_target_id as SearchHit['transcriptTargetId'],
+        sessionId: r.transcript_target_id as SearchHit['sessionId'],
         transcriptTargetTitle: r.stitle,
         messageId: r.id as SearchHit['messageId'],
         role: r.role as SearchHit['role'],

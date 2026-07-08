@@ -1,14 +1,6 @@
 import type { ChannelInstanceConfig } from '@monad/home';
 import type { StrictTranslateForNamespace } from '@monad/i18n';
-import type {
-  AgentId,
-  ChannelType,
-  PrincipalId,
-  SessionId,
-  SessionOrigin,
-  SessionTransport,
-  TranscriptTargetId
-} from '@monad/protocol';
+import type { AgentId, ChannelType, PrincipalId, SessionId, SessionOrigin, SessionTransport } from '@monad/protocol';
 import type { ChannelAdapter, ChannelAdapterFactory } from '@monad/sdk-atom';
 import type { CommandBundle } from '@/handlers/commands/index.ts';
 import type { EventBus, EventSink } from '@/services/event-bus.ts';
@@ -29,9 +21,9 @@ export interface SessionGateway {
     runOpts?: { transport?: SessionTransport }
   ): Promise<void>;
   /** Clear a session's history (for /reset over a channel). Optional: tests omit the command path. */
-  reset?(args: { id: TranscriptTargetId }): Promise<{ clearedCount: number }>;
+  reset?(args: { id: SessionId }): Promise<{ clearedCount: number }>;
   /** Set the session's shared working folder (for /workdir over a channel). Optional: tests omit it. */
-  setWorkspace?(args: { id: TranscriptTargetId; cwd: string }): Promise<{ cwd?: string }>;
+  setWorkspace?(args: { id: SessionId; cwd: string }): Promise<{ cwd?: string }>;
 }
 
 export interface ChannelLogger {

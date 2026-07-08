@@ -20,10 +20,10 @@ import type {
   SessionId,
   StartExternalAgentAuthResponse,
   StartExternalAgentRequest,
-  StartExternalAgentResponse,
-  TranscriptTargetId
+  StartExternalAgentResponse
 } from '@monad/protocol';
 import type { ExternalAgentHost } from '@/services/external-agent/host/index.ts';
+import type { ExternalAgentTargetId } from '@/store/db/external-agent-sessions.ts';
 import type { Store } from '@/store/db/index.ts';
 
 import { realpathSync } from 'node:fs';
@@ -85,9 +85,9 @@ export function createExternalAgentModule({ paths, host, store }: ExternalAgentD
     throw error;
   }
 
-  function requireExternalAgentSessionScope(id: string, transcriptTargetId: TranscriptTargetId) {
+  function requireExternalAgentSessionScope(id: string, transcriptTargetId: ExternalAgentTargetId) {
     const session = host.get(id);
-    if (session.transcriptTargetId !== transcriptTargetId) {
+    if (session.sessionId !== transcriptTargetId) {
       throw new HandlerError('not_found', `external agent session not found for transcript target: ${id}`);
     }
     return session;
@@ -114,6 +114,13 @@ export function createExternalAgentModule({ paths, host, store }: ExternalAgentD
       request: StartExternalAgentRequest;
     }): Promise<StartExternalAgentResponse> {
       await requireConfig();
+      // TODO(track-b): `sessionId` is typed `SessionId` here (the id union collapse), so
+      // `getWorkplaceProject(sessionId)` can no longer match anything reachable through this
+      // handler's own type boundary — the /v1/sessions/:id/external-agent route casts to
+      // `ses_${string}` before calling in (apps/monad/src/transports/http/external-agent.ts).
+      // The parallel /v1/projects/:id/* route (untouched per this pass's scope) still exists and
+      // may still reach a genuinely different code path — left as-is pending the class-C decision
+      // on whether external-agent runtimes should still attach directly to a ProjectId at all.
       const project = store.getSession(sessionId) ?? store.getWorkplaceProject(sessionId);
       if (!project) throw new HandlerError('not_found', `project not found: ${sessionId}`);
       // When the project pins a working folder, the CLI must launch within it so the direct API
@@ -136,13 +143,13 @@ export function createExternalAgentModule({ paths, host, store }: ExternalAgentD
       id,
       input,
       transcriptTargetId
-    }: { id: string; transcriptTargetId: TranscriptTargetId } & ExternalAgentInputRequest): Promise<OkResponse> {
+    }: { id: string; transcriptTargetId: ExternalAgentTargetId } & ExternalAgentInputRequest): Promise<OkResponse> {
       requireExternalAgentSessionScope(id, transcriptTargetId);
       await host.input(id, { input });
       return { ok: true };
     },
 
-    interrupt({ id, transcriptTargetId }: { id: string; transcriptTargetId: TranscriptTargetId }): OkResponse {
+    interrupt({ id, transcriptTargetId }: { id: string; transcriptTargetId: ExternalAgentTargetId }): OkResponse {
       requireExternalAgentSessionScope(id, transcriptTargetId);
       host.interrupt(id);
       return { ok: true };
@@ -152,7 +159,7 @@ export function createExternalAgentModule({ paths, host, store }: ExternalAgentD
       id,
       input,
       transcriptTargetId
-    }: { id: string; transcriptTargetId: TranscriptTargetId } & ExternalAgentInputRequest): OkResponse {
+    }: { id: string; transcriptTargetId: ExternalAgentTargetId } & ExternalAgentInputRequest): OkResponse {
       requireExternalAgentSessionScope(id, transcriptTargetId);
       host.steer(id, { input });
       return { ok: true };
@@ -163,14 +170,14 @@ export function createExternalAgentModule({ paths, host, store }: ExternalAgentD
       transcriptTargetId
     }: {
       id: string;
-      transcriptTargetId: TranscriptTargetId;
+      transcriptTargetId: ExternalAgentTargetId;
     }): GetExternalAgentSessionResponse {
       return getExternalAgentSessionResponseSchema.parse({
         session: requireExternalAgentSessionScope(id, transcriptTargetId)
       });
     },
 
-    list({ sessionId }: { sessionId: TranscriptTargetId }): ListExternalAgentSessionsResponse {
+    list({ sessionId }: { sessionId: ExternalAgentTargetId }): ListExternalAgentSessionsResponse {
       return listExternalAgentSessionsResponseSchema.parse(host.list(sessionId));
     },
 
@@ -187,7 +194,7 @@ export function createExternalAgentModule({ paths, host, store }: ExternalAgentD
       transcriptTargetId
     }: {
       id: string;
-      transcriptTargetId: TranscriptTargetId;
+      transcriptTargetId: ExternalAgentTargetId;
     }): Promise<ExternalAgentObservationAccessResponse> {
       requireExternalAgentSessionScope(id, transcriptTargetId);
       return Promise.resolve(externalAgentObservationAccessResponseSchema.parse(host.observe(id)));
@@ -198,7 +205,7 @@ export function createExternalAgentModule({ paths, host, store }: ExternalAgentD
       transcriptTargetId
     }: {
       id: string;
-      transcriptTargetId: TranscriptTargetId;
+      transcriptTargetId: ExternalAgentTargetId;
     }): Promise<ExternalAgentUiObservationFrame> {
       requireExternalAgentSessionScope(id, transcriptTargetId);
       return Promise.resolve(externalAgentUiObservationFrameSchema.parse(host.observeUi(id)));
@@ -210,7 +217,7 @@ export function createExternalAgentModule({ paths, host, store }: ExternalAgentD
       onFrame
     }: {
       id: string;
-      transcriptTargetId: TranscriptTargetId;
+      transcriptTargetId: ExternalAgentTargetId;
       onFrame: (frame: ExternalAgentUiObservationFrame, done: boolean) => void;
     }): {
       frame: ExternalAgentUiObservationFrame;
@@ -228,11 +235,11 @@ export function createExternalAgentModule({ paths, host, store }: ExternalAgentD
       transcriptTargetId
     }: {
       id: `deliv_${string}`;
-      transcriptTargetId: TranscriptTargetId;
+      transcriptTargetId: ExternalAgentTargetId;
     }): GetNativeAgentDeliveryResponse {
       const delivery = store.getNativeAgentDelivery(id);
       if (!delivery) throw new HandlerError('not_found', `native agent delivery not found: ${id}`);
-      if (delivery.projectId !== transcriptTargetId) {
+      if (delivery.sessionId !== transcriptTargetId) {
         throw new HandlerError('not_found', `native agent delivery not found for transcript target: ${id}`);
       }
       return getNativeAgentDeliveryResponseSchema.parse({ delivery });
@@ -243,11 +250,11 @@ export function createExternalAgentModule({ paths, host, store }: ExternalAgentD
       transcriptTargetId
     }: {
       id: `deliv_${string}`;
-      transcriptTargetId: TranscriptTargetId;
+      transcriptTargetId: ExternalAgentTargetId;
     }): ExternalAgentObservationAccessResponse {
       const delivery = store.getNativeAgentDelivery(id);
       if (!delivery) throw new HandlerError('not_found', `native agent delivery not found: ${id}`);
-      if (delivery.projectId !== transcriptTargetId) {
+      if (delivery.sessionId !== transcriptTargetId) {
         throw new HandlerError('not_found', `native agent delivery not found for transcript target: ${id}`);
       }
       requireExternalAgentSessionScope(delivery.externalAgentSessionId, transcriptTargetId);
@@ -263,7 +270,7 @@ export function createExternalAgentModule({ paths, host, store }: ExternalAgentD
       cols,
       rows,
       transcriptTargetId
-    }: { id: string; transcriptTargetId: TranscriptTargetId } & ExternalAgentResizeRequest): OkResponse {
+    }: { id: string; transcriptTargetId: ExternalAgentTargetId } & ExternalAgentResizeRequest): OkResponse {
       requireExternalAgentSessionScope(id, transcriptTargetId);
       host.resize(id, { cols, rows });
       return { ok: true };
@@ -275,13 +282,13 @@ export function createExternalAgentModule({ paths, host, store }: ExternalAgentD
       allow,
       reason,
       transcriptTargetId
-    }: { id: string; transcriptTargetId: TranscriptTargetId } & ExternalAgentApprovalResolutionRequest): OkResponse {
+    }: { id: string; transcriptTargetId: ExternalAgentTargetId } & ExternalAgentApprovalResolutionRequest): OkResponse {
       requireExternalAgentSessionScope(id, transcriptTargetId);
       host.resolveApproval(id, { requestId, allow, reason });
       return { ok: true };
     },
 
-    stop({ id, transcriptTargetId }: { id: string; transcriptTargetId: TranscriptTargetId }): OkResponse {
+    stop({ id, transcriptTargetId }: { id: string; transcriptTargetId: ExternalAgentTargetId }): OkResponse {
       requireExternalAgentSessionScope(id, transcriptTargetId);
       host.stop(id);
       return { ok: true };
@@ -293,7 +300,7 @@ export function createExternalAgentModule({ paths, host, store }: ExternalAgentD
       request
     }: {
       id: string;
-      transcriptTargetId: TranscriptTargetId;
+      transcriptTargetId: ExternalAgentTargetId;
       request: ExternalAgentHistoryPageRequest;
     }): Promise<ExternalAgentHistoryPageResponse> {
       try {

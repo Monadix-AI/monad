@@ -3,17 +3,7 @@
 // persisted directive message plus a live event — so HTTP/ACP/WS/CLI all render it identically.
 
 import type { Translate } from '@monad/i18n';
-import type {
-  ChatMessage,
-  CommandItem,
-  Event,
-  PrincipalId,
-  Session,
-  SessionId,
-  SessionOrigin,
-  TranscriptTarget,
-  TranscriptTargetId
-} from '@monad/protocol';
+import type { ChatMessage, CommandItem, Event, PrincipalId, Session, SessionId, SessionOrigin } from '@monad/protocol';
 import type {
   BeliefExplanation,
   CommandDefinition,
@@ -51,7 +41,7 @@ export interface CommandExecution {
  *  the text is not a host command (plain text or a skill → caller's loop). */
 export async function executeCommand(
   exec: CommandExecution,
-  sessionId: TranscriptTargetId,
+  sessionId: SessionId,
   text: string
 ): Promise<CommandResult | null> {
   try {
@@ -81,7 +71,7 @@ export async function executeCommand(
 export function emitCommandTurn(
   store: Store,
   emit: (e: Event) => void,
-  sessionId: TranscriptTargetId,
+  sessionId: SessionId,
   text: string,
   result: CommandResult
 ): ChatMessage {
@@ -98,9 +88,9 @@ export interface LifecycleOps {
     agentId?: string;
     origin?: SessionOrigin;
   }): Promise<{ sessionId: string }>;
-  reset(args: { id: TranscriptTargetId }): Promise<{ clearedCount: number }>;
+  reset(args: { id: SessionId }): Promise<{ clearedCount: number }>;
   list(args: { limit?: number }): Promise<{ sessions: Session[] }>;
-  setWorkspace(args: { id: TranscriptTargetId; cwd: string }): Promise<{ cwd?: string }>;
+  setWorkspace(args: { id: SessionId; cwd: string }): Promise<{ cwd?: string }>;
 }
 
 /** Backend hooks for the non-navigation verbs, wired in main.ts. */
@@ -131,12 +121,7 @@ export interface SessionCommandRunner {
 
 /** A principal-scoped navigator for generic transports: it creates sessions and resolves targets,
  *  but holds no server-side "active session" pointer — the client navigates via the returned effect. */
-function sessionOnlyId(sessionId: TranscriptTargetId, command: string): SessionId {
-  if (sessionId.startsWith('ses_')) return sessionId as SessionId;
-  throw new Error(`${command} is only available in Monad agent sessions`);
-}
-
-function genericNavigator(runner: SessionCommandRunner, session: TranscriptTarget): SessionNavigator {
+function genericNavigator(runner: SessionCommandRunner, session: Session): SessionNavigator {
   const { lifecycle } = runner;
   const owned = async () => {
     const { sessions } = await lifecycle.list({ limit: 50 });
@@ -167,7 +152,7 @@ function genericNavigator(runner: SessionCommandRunner, session: TranscriptTarge
 }
 
 /** The generic (principal-scoped) execution context for a session command. */
-function genericExecution(runner: SessionCommandRunner, session: TranscriptTarget, busy: boolean): CommandExecution {
+function genericExecution(runner: SessionCommandRunner, session: Session, busy: boolean): CommandExecution {
   const { commands } = runner;
   const approve = commands.approveHighRisk;
   return {
@@ -175,25 +160,23 @@ function genericExecution(runner: SessionCommandRunner, session: TranscriptTarge
     navigator: genericNavigator(runner, session),
     principalId: session.ownerPrincipalId,
     isBusy: busy,
-    gate: approve ? (def) => approve(sessionOnlyId(session.id, 'approval'), def) : undefined,
+    gate: approve ? (def) => approve(session.id, def) : undefined,
     services: {
-      resetHistory: (sid: TranscriptTargetId) => runner.lifecycle.reset({ id: sid }),
-      compact: (sid: TranscriptTargetId) => commands.compact(sessionOnlyId(sid, 'compact')),
+      resetHistory: (sid: SessionId) => runner.lifecycle.reset({ id: sid }),
+      compact: (sid: SessionId) => commands.compact(sid),
       consolidate: (level?: number) => commands.consolidate(level),
-      explainBelief: (sid: TranscriptTargetId, query: string) =>
-        commands.explainBelief(sessionOnlyId(sid, 'belief'), query),
+      explainBelief: (sid: SessionId, query: string) => commands.explainBelief(sid, query),
       checkMemory: () => commands.checkMemory(),
-      listModels: (sid: TranscriptTargetId) => commands.listModels(sessionOnlyId(sid, 'model')),
-      setModel: (sid: TranscriptTargetId, alias: string) => commands.setModel(sessionOnlyId(sid, 'model'), alias),
-      getWorkdir: async (sid: TranscriptTargetId) => ({
-        path: (runner.store.getSession(sid) ?? runner.store.getWorkplaceProject(sid))?.cwd
+      listModels: (sid: SessionId) => commands.listModels(sid),
+      setModel: (sid: SessionId, alias: string) => commands.setModel(sid, alias),
+      getWorkdir: async (sid: SessionId) => ({
+        path: runner.store.getSession(sid)?.cwd
       }),
-      setWorkdir: async (sid: TranscriptTargetId, path: string) => ({
+      setWorkdir: async (sid: SessionId, path: string) => ({
         path: (await runner.lifecycle.setWorkspace({ id: sid, cwd: path })).cwd
       }),
       listCommands: async (): Promise<CommandItem[]> => commands.registry.list(commands.skills(), commands.t),
-      handoff: (sid: TranscriptTargetId, initialTask?: string) =>
-        commands.handoff(sessionOnlyId(sid, 'handoff'), initialTask),
+      handoff: (sid: SessionId, initialTask?: string) => commands.handoff(sid, initialTask),
       t: commands.t,
       log: commands.log
     }
@@ -204,7 +187,7 @@ function genericExecution(runner: SessionCommandRunner, session: TranscriptTarge
  *  threw, or null when the text is not a host command (plain text or a skill → caller's loop). */
 export function executeSessionCommand(
   runner: SessionCommandRunner,
-  session: TranscriptTarget,
+  session: Session,
   text: string,
   opts: { busy?: boolean } = {}
 ): Promise<CommandResult | null> {
@@ -216,7 +199,7 @@ export function executeSessionCommand(
  *  prompt stream); `busy` flags that a turn is streaming (concurrency guard). */
 export async function tryRunSessionCommand(
   runner: SessionCommandRunner,
-  session: TranscriptTarget,
+  session: Session,
   text: string,
   opts: { sink?: (event: Event) => void; busy?: boolean } = {}
 ): Promise<boolean> {
@@ -238,12 +221,7 @@ export async function tryRunSessionCommand(
 
 /** Persist a command turn (echo + directive reply) and return the reply ChatMessage. Used by the
  *  blocking `generate` path, where the reply is the response body. */
-function _directiveMessage(
-  store: Store,
-  sessionId: TranscriptTargetId,
-  text: string,
-  result: CommandResult
-): ChatMessage {
+function _directiveMessage(store: Store, sessionId: SessionId, text: string, result: CommandResult): ChatMessage {
   persistEcho(store, sessionId, text);
   const id = newId('msg');
   const createdAt = new Date().toISOString();
@@ -251,7 +229,7 @@ function _directiveMessage(
   store.insertMessage(id, sessionId, result.message ?? '', createdAt, 'assistant', { type: 'directive', data });
   return {
     id,
-    transcriptTargetId: sessionId,
+    sessionId: sessionId as SessionId,
     role: 'assistant',
     text: result.message ?? '',
     type: 'directive',
@@ -262,7 +240,7 @@ function _directiveMessage(
   };
 }
 
-function persistEcho(store: Store, sessionId: TranscriptTargetId, text: string): `msg_${string}` {
+function persistEcho(store: Store, sessionId: SessionId, text: string): `msg_${string}` {
   const id = newId('msg');
   store.insertMessage(id, sessionId, text, new Date().toISOString(), 'user', { type: 'directive' });
   return id;
@@ -271,7 +249,7 @@ function persistEcho(store: Store, sessionId: TranscriptTargetId, text: string):
 function emitDirective(
   store: Store,
   emit: (e: Event) => void,
-  sessionId: TranscriptTargetId,
+  sessionId: SessionId,
   result: CommandResult
 ): ChatMessage {
   const id = newId('msg');
@@ -282,7 +260,7 @@ function emitDirective(
   emit(event(sessionId, 'agent.message', { messageId: id, text, ...(data !== undefined ? { data } : {}) }));
   return {
     id,
-    transcriptTargetId: sessionId,
+    sessionId: sessionId as SessionId,
     role: 'assistant',
     text,
     type: 'directive',
@@ -293,10 +271,10 @@ function emitDirective(
   };
 }
 
-function event(sessionId: TranscriptTargetId, type: Event['type'], payload: Record<string, unknown>): Event {
+function event(sessionId: SessionId, type: Event['type'], payload: Record<string, unknown>): Event {
   return {
     id: newId('evt'),
-    transcriptTargetId: sessionId,
+    sessionId: sessionId as SessionId,
     type,
     actorAgentId: null,
     payload,

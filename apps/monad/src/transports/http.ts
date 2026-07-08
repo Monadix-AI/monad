@@ -341,7 +341,7 @@ export function createHttpTransport(
       v1
         .use(createInitController(handlers))
         .use(createAgentsController(handlers))
-        .use(createChannelsController(handlers, encoder))
+        .use(createChannelsController(handlers))
         .use(createSessionsController(handlers, encoder))
         .use(createUsageController(handlers))
         .use(createStatsController(handlers))

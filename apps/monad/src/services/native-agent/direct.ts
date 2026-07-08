@@ -4,7 +4,7 @@ import type {
   NativeAgentReadResponse,
   NativeAgentSendRequest,
   NativeAgentSendResponse,
-  ProjectId
+  SessionId
 } from '@monad/protocol';
 import type { createDaemonHandlers } from '@/handlers/daemon-handlers/index.ts';
 import type { NativeAgentAttachmentResolver } from './attachments.ts';
@@ -13,7 +13,7 @@ import { newId } from '@monad/protocol';
 
 export interface NativeAgentDirectBinding {
   agentId: string;
-  projectId: ProjectId;
+  sessionId: SessionId;
   externalAgentSessionId: string;
 }
 
@@ -35,7 +35,7 @@ export function createNativeAgentDirectCapabilities(
       );
       const message: NativeAgentDirectMessage = {
         id: newId('msg'),
-        projectId: args.binding.projectId,
+        sessionId: args.binding.sessionId,
         externalAgentSessionId: args.binding.externalAgentSessionId,
         fromAgent: args.binding.agentId,
         peer: args.body.to,
@@ -50,7 +50,7 @@ export function createNativeAgentDirectCapabilities(
         throw err;
       }
       await handlers.session.notifyManagedExternalAgentDirectMessage({
-        sessionId: args.binding.projectId,
+        sessionId: args.binding.sessionId,
         fromAgentName: args.binding.agentId,
         to: args.body.to,
         text: noticeText

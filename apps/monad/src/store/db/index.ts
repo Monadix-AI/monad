@@ -12,12 +12,12 @@ import type {
   NativeAgentDirectMessage,
   SearchHit,
   Session,
+  SessionId,
   StatsRange,
   StreamStatus,
   Task,
   TaskState,
   TokenUsage,
-  TranscriptTargetId,
   WorkplaceProject
 } from '@monad/protocol';
 import type { ChannelConversation, ChannelConversationSession } from './row-mappers.ts';
@@ -657,7 +657,7 @@ export class Store {
     return maxMessageCreatedAt(this.sqlite, sessionId);
   }
 
-  messageIdForSeq(transcriptTargetId: TranscriptTargetId, seq: number): MessageId | null {
+  messageIdForSeq(transcriptTargetId: SessionId, seq: number): MessageId | null {
     return messageIdForSeq(this.sqlite, transcriptTargetId, seq);
   }
 

@@ -16,7 +16,7 @@ export function insertNativeAgentDirectMessage(sqlite: Database, row: NativeAgen
     )
     .run({
       $id: row.id,
-      $projectId: row.projectId,
+      $projectId: row.sessionId,
       $externalAgentSessionId: row.externalAgentSessionId,
       $fromAgent: row.fromAgent,
       $peer: row.peer,
@@ -68,7 +68,7 @@ export function listNativeAgentDirectMessages(
       .filter((ref): ref is MessageAttachmentRef => ref !== undefined);
     return {
       id: row.id as NativeAgentDirectMessage['id'],
-      projectId: row.project_id as NativeAgentDirectMessage['projectId'],
+      sessionId: row.project_id as NativeAgentDirectMessage['sessionId'],
       externalAgentSessionId: row.external_agent_session_id as string,
       fromAgent: (row.from_agent as string | null) ?? null,
       peer: row.peer as string,

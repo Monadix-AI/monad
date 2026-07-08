@@ -2,7 +2,7 @@
 // the client must answer. We model it as an out-of-band event + an inbound RPC rather
 // than full reverse-RPC over WS (see transport notes).
 
-import type { ApprovalScope, Event, TranscriptTargetId } from '@monad/protocol';
+import type { ApprovalScope, Event, SessionId } from '@monad/protocol';
 import type { ToolGate, ToolGateOutcome, ToolGateRequest } from '@/capabilities/tools/types.ts';
 
 import { newId } from '@monad/protocol';
@@ -12,7 +12,7 @@ import { HostEscapePersistError, type PolicyEngine } from '@/agent/approvals/eng
 interface Pending {
   resolve: (outcome: ToolGateOutcome) => void;
   timer: ReturnType<typeof setTimeout>;
-  sessionId: TranscriptTargetId;
+  sessionId: SessionId;
   tool: string;
   key?: string;
 }
@@ -73,7 +73,7 @@ export class OversightService {
         return;
       }
       const requestId = newId('gate');
-      const sessionId = req.sessionId as TranscriptTargetId;
+      const sessionId = req.sessionId as SessionId;
       const timer = setTimeout(() => {
         if (this.pending.delete(requestId)) {
           this.emit(sessionId, 'tool.approval_resolved', {
@@ -96,7 +96,7 @@ export class OversightService {
 
   /** Cancel all pending approvals for a session (e.g. on abort or delete). Also drops the session's
    *  in-memory approval rules — they must not outlive the session. */
-  cancelSession(sessionId: TranscriptTargetId, reason = 'session_aborted'): void {
+  cancelSession(sessionId: SessionId, reason = 'session_aborted'): void {
     for (const [requestId, p] of this.pending) {
       if (p.sessionId !== sessionId) continue;
       clearTimeout(p.timer);
@@ -104,7 +104,7 @@ export class OversightService {
       this.emit(p.sessionId, 'tool.approval_resolved', { requestId, tool: p.tool, allow: false, reason });
       p.resolve({ allow: false, reason });
     }
-    if (sessionId.startsWith('ses_')) this.engine?.clearSession(sessionId);
+    this.engine?.clearSession(sessionId);
   }
 
   /** Resolve a pending request. Returns false if the id is unknown or already resolved. When
@@ -115,7 +115,7 @@ export class OversightService {
     if (!p) return false;
     clearTimeout(p.timer);
     this.pending.delete(requestId);
-    if (scope && scope !== 'once' && this.engine && p.sessionId.startsWith('ses_')) {
+    if (scope && scope !== 'once' && this.engine) {
       const agentId = this.originOf(p.sessionId);
       try {
         await this.engine.record({
@@ -142,8 +142,6 @@ export class OversightService {
           throw err;
         }
       }
-    } else if (scope && scope !== 'once' && !p.sessionId.startsWith('ses_')) {
-      scope = 'once';
     }
     this.emit(p.sessionId, 'tool.approval_resolved', {
       requestId,
@@ -176,13 +174,13 @@ export class OversightService {
   }
 
   private emit(
-    sessionId: TranscriptTargetId,
+    sessionId: SessionId,
     type: 'tool.approval_requested' | 'tool.approval_resolved',
     payload: Record<string, unknown>
   ): void {
     this.publish({
       id: newId('evt'),
-      transcriptTargetId: sessionId,
+      sessionId,
       type,
       actorAgentId: null,
       payload,

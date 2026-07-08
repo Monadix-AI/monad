@@ -1,4 +1,4 @@
-import type { SearchHit, SearchMode, SearchSessionsResponse, TranscriptTargetId } from '@monad/protocol';
+import type { SearchHit, SearchMode, SearchSessionsResponse, SessionId } from '@monad/protocol';
 import type { SessionContext } from '@/handlers/session/context.ts';
 
 function rrfMerge(keyword: SearchHit[], semantic: SearchHit[], limit: number): SearchHit[] {
@@ -36,13 +36,14 @@ export function createSearchHandlers(ctx: SessionContext) {
       q,
       mode = 'hybrid',
       limit,
-      transcriptTargetId
+      sessionId
     }: {
       q: string;
       mode?: SearchMode;
       limit?: number;
-      transcriptTargetId?: TranscriptTargetId;
+      sessionId?: SessionId;
     }): Promise<SearchSessionsResponse> {
+      const transcriptTargetId = sessionId;
       const keywordOnly = (): SearchSessionsResponse => ({
         hits: store.searchMessages({ q, mode: 'keyword', limit, transcriptTargetId })
       });

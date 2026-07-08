@@ -3,8 +3,8 @@ import type {
   SendMessageAttachment,
   SendMessageRequest,
   SendMessageResponse,
-  SessionMcpServer,
-  TranscriptTargetId
+  SessionId,
+  SessionMcpServer
 } from '@monad/protocol';
 import type { ChannelParticipant } from '@/agent/prompts/channel.ts';
 import type { SessionContext } from '@/handlers/session/context.ts';
@@ -28,7 +28,7 @@ import {
 } from '@/handlers/session/handlers/messaging-members.ts';
 
 type SendHandler = (
-  args: { sessionId: TranscriptTargetId; onComplete?: (text: string) => void | Promise<void> } & SendMessageRequest
+  args: { sessionId: SessionId; onComplete?: (text: string) => void | Promise<void> } & SendMessageRequest
 ) => Promise<SendMessageResponse>;
 
 export interface SendProjectMessageDeps {
@@ -40,16 +40,17 @@ export interface SendProjectMessageDeps {
   deliverProjectMessageToManagedExternalAgentMembers: ReturnType<
     typeof createManagedExternalAgentDelivery
   >['deliverProjectMessageToManagedExternalAgentMembers'];
-  runtimeForTranscriptTarget: (
-    sessionId: TranscriptTargetId
-  ) => { mcpServers?: readonly SessionMcpServer[] } | undefined;
+  runtimeForSession: (sessionId: SessionId) => { mcpServers?: readonly SessionMcpServer[] } | undefined;
 }
 
 /** Routes an inbound channel/project message to the right recipient — the session's bound agent,
  *  a direct ACP/external agent target, or a project-wide fan-out — and wires up the
  *  channel `next`-target dispatch once the turn completes. */
 export function createSendProjectMessageHandler(ctx: SessionContext, deps: SendProjectMessageDeps) {
-  const { requireTranscriptTarget } = ctx;
+  const {
+    requireSession,
+    deps: { store }
+  } = ctx;
   const {
     send,
     forwardToAcp,
@@ -57,7 +58,7 @@ export function createSendProjectMessageHandler(ctx: SessionContext, deps: SendP
     deliverProjectMessageToAcpMembers,
     dispatchChannelNextTargets,
     deliverProjectMessageToManagedExternalAgentMembers,
-    runtimeForTranscriptTarget
+    runtimeForSession
   } = deps;
 
   async function sendProjectMessage({
@@ -65,18 +66,18 @@ export function createSendProjectMessageHandler(ctx: SessionContext, deps: SendP
     text,
     attachments
   }: {
-    sessionId: TranscriptTargetId;
+    sessionId: SessionId;
     text: string;
     attachments?: SendMessageAttachment[];
   }) {
     const routeSeedText = text.trim() || (attachments?.length ? 'Shared attachments.' : '');
-    const session = requireTranscriptTarget(sessionId);
+    const session = requireSession(sessionId);
     const paths = ctx.deps.paths;
     const cfg = paths ? await loadAll(paths.config, paths.profile) : null;
     const acpAgents = (cfg?.acpAgents ?? []).filter((agent: AcpAgentConfig) => agent.enabled !== false);
     const externalAgents = (cfg?.externalAgents ?? []).filter((agent: ExternalAgentConfig) => agent.enabled !== false);
     const isWorkplaceProject = isWorkplaceProjectTarget(session);
-    const projectMembers = isWorkplaceProject ? workplaceProjectMembers(session) : [];
+    const projectMembers = isWorkplaceProject ? workplaceProjectMembers(store, session.id) : [];
     const projectAcpAgentNames = projectMembers.filter((member) => member.type === 'acp').map((member) => member.name);
     const projectExternalAgentNames = projectMembers
       .filter((member) => member.type === 'external-agent')
@@ -146,7 +147,7 @@ export function createSendProjectMessageHandler(ctx: SessionContext, deps: SendP
             participants,
             targetMention: route.targetMention
           });
-    const mcpServers = channelDelegateMcpServers(cfg?.mcpServers, runtimeForTranscriptTarget(sessionId)?.mcpServers);
+    const mcpServers = channelDelegateMcpServers(cfg?.mcpServers, runtimeForSession(sessionId)?.mcpServers);
     const isPublicProjectFanout = isWorkplaceProject && route.kind === 'send' && !route.direct;
     const publicAmbientContext = buildChannelTurnContext({
       channelId: session.title,
@@ -238,7 +239,7 @@ export function createSendProjectMessageHandler(ctx: SessionContext, deps: SendP
     text,
     attachments
   }: {
-    sessionId: TranscriptTargetId;
+    sessionId: SessionId;
     text: string;
     attachments?: SendMessageAttachment[];
   }) {

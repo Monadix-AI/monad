@@ -22,7 +22,7 @@ export function createNativeAgentController(handlers: ReturnType<typeof createDa
   const rootsForManagedBinding = (
     binding: ReturnType<typeof requireManagedBinding>['binding'],
     workingPath: string
-  ): string[] => attachmentRoots({ projectId: binding.projectId, agentId: binding.agentId, workingPath });
+  ): string[] => attachmentRoots({ sessionId: binding.sessionId, agentId: binding.agentId, workingPath });
   return new Elysia({ tags: ['http-only'] })
     .post(
       '/internal/native-agent/project/post',

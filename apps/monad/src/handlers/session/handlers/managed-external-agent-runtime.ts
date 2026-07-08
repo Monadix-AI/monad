@@ -3,9 +3,11 @@ import type {
   Event,
   ExternalAgentSessionView,
   ManagedExternalAgentLifecycleLogEvent,
-  TranscriptTarget
+  Session,
+  SessionId
 } from '@monad/protocol';
 import type { SessionContext } from '@/handlers/session/context.ts';
+import type { ExternalAgentTargetId } from '@/store/db/external-agent-sessions.ts';
 
 import { newId } from '@monad/protocol';
 
@@ -29,7 +31,7 @@ const inflightManagedExternalAgentStarts = new Map<
 >();
 
 export type StartManagedExternalAgentRuntimeArgs = {
-  session: TranscriptTarget;
+  session: Session;
   spec: ExternalAgentConfig;
   runtimeAgentName: string;
   templateAgentName: string;
@@ -59,7 +61,7 @@ export function createManagedExternalAgentRuntime(ctx: SessionContext) {
   } = ctx;
 
   function managedExternalAgentSessionsForAgent(
-    transcriptTargetId: TranscriptTarget['id'],
+    transcriptTargetId: ExternalAgentTargetId,
     agentName: string
   ): ExternalAgentSessionView[] {
     return (externalAgentHost?.list(transcriptTargetId).sessions ?? []).filter(
@@ -127,7 +129,7 @@ export function createManagedExternalAgentRuntime(ctx: SessionContext) {
       const round: Event[] = [];
       makeEmit(round)({
         id: newId('evt'),
-        transcriptTargetId: session.id,
+        sessionId: session.id as SessionId,
         type: 'external_agent.resume_failed',
         actorAgentId: null,
         payload: {

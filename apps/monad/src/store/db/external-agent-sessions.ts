@@ -8,12 +8,18 @@ import type {
   ExternalAgentProvider,
   ExternalAgentRuntimeRole,
   ExternalAgentSessionState,
-  TranscriptTargetId
+  SessionId
 } from '@monad/protocol';
+
+// A native-CLI runtime is always launched under a specific session's own id (Track B P6b:
+// every conversation — chat or project-bound — is a real Session; a project itself hosts no
+// runtime directly). Kept as its own alias (not inlined to SessionId) since `transcriptTargetId`
+// is this module's established field name.
+export type ExternalAgentTargetId = SessionId;
 
 export interface ExternalAgentSessionRow {
   id: string;
-  transcriptTargetId: TranscriptTargetId;
+  transcriptTargetId: ExternalAgentTargetId;
   agentName: string;
   provider: ExternalAgentProvider;
   workingPath: string;
@@ -36,7 +42,7 @@ export interface ExternalAgentSessionRow {
 function rowToExternalAgentSession(r: Record<string, unknown>): ExternalAgentSessionRow {
   return {
     id: r.id as string,
-    transcriptTargetId: r.transcript_target_id as TranscriptTargetId,
+    transcriptTargetId: r.transcript_target_id as ExternalAgentTargetId,
     agentName: r.agent_name as string,
     provider: r.provider as ExternalAgentProvider,
     workingPath: r.working_path as string,

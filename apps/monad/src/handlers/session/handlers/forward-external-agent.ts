@@ -1,5 +1,5 @@
 import type { ExternalAgentConfig } from '@monad/home';
-import type { Event, ExternalAgentSessionView, TranscriptTarget, TranscriptTargetId } from '@monad/protocol';
+import type { Event, ExternalAgentSessionView, Session, SessionId } from '@monad/protocol';
 import type { SessionContext } from '@/handlers/session/context.ts';
 
 import { loadAll } from '@monad/home';
@@ -15,7 +15,7 @@ import {
 import { managedProjectLaunchMode } from '@/services/external-agent/managed-project.ts';
 
 type StartManagedExternalAgentRuntimeWithRecovery = (args: {
-  session: TranscriptTarget;
+  session: Session;
   spec: ExternalAgentConfig;
   runtimeAgentName: string;
   templateAgentName: string;
@@ -33,7 +33,7 @@ type StartManagedExternalAgentRuntimeWithRecovery = (args: {
 
 // Access control reads the write policy STORED on the session (origin.writableBy) — mirrors the
 // check in messaging.ts (kept local so this module has no import-cycle back to it).
-function assertWriteAllowed(session: TranscriptTarget, transport: 'http'): void {
+function assertWriteAllowed(session: Session, transport: 'http'): void {
   const writableBy = session.origin?.writableBy;
   if (!writableBy) return;
   if (!writableBy.includes(transport)) {
@@ -50,7 +50,7 @@ export function createForwardExternalAgentHandler(
     deps: { store, log },
     makeEmit,
     persistAndRetire,
-    requireTranscriptTarget
+    requireSession
   } = ctx;
 
   return async function forwardToExternalAgent({
@@ -59,19 +59,19 @@ export function createForwardExternalAgentHandler(
     text,
     displayText
   }: {
-    sessionId: TranscriptTargetId;
+    sessionId: SessionId;
     agentName: string;
     text: string;
     displayText?: string;
   }) {
-    const session = requireTranscriptTarget(sessionId);
+    const session = requireSession(sessionId);
     assertWriteAllowed(session, 'http');
     const userRound: Event[] = [];
     const userEmit = makeEmit(userRound);
     const userMsgId = newId('msg');
     userEmit({
       id: newId('evt'),
-      transcriptTargetId: sessionId,
+      sessionId: sessionId as SessionId,
       type: 'user.message',
       actorAgentId: null,
       payload: { messageId: userMsgId, text: displayText ?? text },
@@ -95,7 +95,7 @@ export function createForwardExternalAgentHandler(
       );
       emit({
         id: newId('evt'),
-        transcriptTargetId: sessionId,
+        sessionId: sessionId as SessionId,
         type: 'agent.error',
         actorAgentId: null,
         payload: { messageId: agentMsgId, agentName, code: code ?? fallbackCode, message },
@@ -118,7 +118,7 @@ export function createForwardExternalAgentHandler(
     const configuredExternalAgents = (cfg?.externalAgents ?? []).filter(
       (agent: ExternalAgentConfig) => agent.enabled !== false
     );
-    const managedMember = managedExternalAgentProjectMembers(session, configuredExternalAgents).find(
+    const managedMember = managedExternalAgentProjectMembers(store, sessionId, configuredExternalAgents).find(
       (candidate) => candidate.runtimeAgentName === agentName || candidate.templateAgentName === agentName
     );
     const runtimeAgentName = managedMember?.runtimeAgentName ?? agentName;
@@ -141,7 +141,8 @@ export function createForwardExternalAgentHandler(
       'forward native cli start'
     );
     try {
-      const memberSettings = managedMember?.settings ?? externalAgentProjectMemberSettings(session, runtimeAgentName);
+      const memberSettings =
+        managedMember?.settings ?? externalAgentProjectMemberSettings(store, sessionId, runtimeAgentName);
       const runtimeRole = memberSettings.managedProjectAgent ? 'managed-project-agent' : 'interactive';
       const nativeSessions = externalAgentHost
         .list(sessionId)
@@ -171,7 +172,7 @@ export function createForwardExternalAgentHandler(
         if (preflight.state === 'not_authenticated' || preflight.state === 'unknown') {
           emit({
             id: newId('evt'),
-            transcriptTargetId: sessionId,
+            sessionId: sessionId as SessionId,
             type: 'external_agent.connection_required',
             actorAgentId: null,
             payload: {
@@ -190,7 +191,7 @@ export function createForwardExternalAgentHandler(
         });
         emit({
           id: newId('evt'),
-          transcriptTargetId: sessionId,
+          sessionId: sessionId as SessionId,
           type: 'agent.error',
           actorAgentId: null,
           payload: {
@@ -232,7 +233,7 @@ export function createForwardExternalAgentHandler(
               spec,
               runtimeAgentName,
               templateAgentName,
-              displayName: externalAgentProjectMemberDisplayNameForAgent(session, runtimeAgentName),
+              displayName: externalAgentProjectMemberDisplayNameForAgent(store, sessionId, runtimeAgentName),
               reasoningEffort: memberSettings.reasoningEffort,
               modelId: memberSettings.modelId ?? memberSettings.modelName,
               speed: memberSettings.speed,

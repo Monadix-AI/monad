@@ -5,8 +5,7 @@ import type {
   ExternalAgentLaunchMode,
   ExternalAgentObservationAccessResponse,
   ExternalAgentSessionView,
-  ExternalAgentView,
-  TranscriptTargetId
+  ExternalAgentView
 } from '@monad/protocol';
 import type { EventBus } from '@/services/event-bus.ts';
 import type { BoundedOutputBuffer } from '@/services/external-agent/bounded-output-buffer.ts';
@@ -21,10 +20,11 @@ import type {
   ExternalAgentLaunchSpec,
   ExternalAgentProviderAdapter
 } from '@/services/external-agent/types.ts';
+import type { ExternalAgentTargetId } from '@/store/db/external-agent-sessions.ts';
 import type { Store } from '@/store/db/index.ts';
 
 interface ManagedProjectOutput {
-  sessionId: TranscriptTargetId;
+  sessionId: ExternalAgentTargetId;
   externalAgentSessionId: string;
   agentName: string;
   text: string;
@@ -37,7 +37,7 @@ export type ExternalAgentObservationListener = (access: ExternalAgentObservation
 
 export interface LiveExternalAgentSession {
   id: string;
-  transcriptTargetId: TranscriptTargetId;
+  transcriptTargetId: ExternalAgentTargetId;
   agentName: string;
   provider: ExternalAgentView['provider'];
   runtimeRole: ExternalAgentSessionView['runtimeRole'];

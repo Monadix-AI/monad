@@ -126,7 +126,7 @@ export function rowToWorkplaceProject(row: WorkplaceProjectRow): WorkplaceProjec
 
 export function rowToMessage(row: MessageRow): ChatMessage {
   const status = row.streamStatus as StreamStatus;
-  const transcriptTargetId = row.transcriptTargetId as ChatMessage['transcriptTargetId'];
+  const sessionId = row.transcriptTargetId as ChatMessage['sessionId'];
   const messageId = row.id as ChatMessage['id'];
   const type = row.type as MessageType;
   // `source` is not persisted; reconstruct it for live rows so a UI can subscribe. The assistant's
@@ -136,14 +136,14 @@ export function rowToMessage(row: MessageRow): ChatMessage {
   const prose = row.role === 'assistant' && (type === 'text' || type === 'markdown');
   return {
     id: messageId,
-    transcriptTargetId,
+    sessionId,
     role: row.role as ChatMessage['role'],
     text: row.text,
     type,
     data: row.data != null ? (JSON.parse(row.data) as unknown) : undefined,
     stream: {
       status,
-      source: live ? { transcriptTargetId, messageId, channel: prose ? undefined : `message:${messageId}` } : undefined
+      source: live ? { sessionId, messageId, channel: prose ? undefined : `message:${messageId}` } : undefined
     },
     active: row.active === 1,
     ...(row.includeInContext != null ? { includeInContext: row.includeInContext === 1 } : {}),

@@ -1,4 +1,4 @@
-import type { DeveloperLogRecord, SessionId, SessionUiEvent, TranscriptTargetId } from '@monad/protocol';
+import type { DeveloperLogRecord, SessionId, SessionUiEvent } from '@monad/protocol';
 
 import { subscribeDeveloperLogRecords } from '@monad/logger';
 import { developerLogRecordSchema } from '@monad/protocol';
@@ -50,7 +50,7 @@ export function createSessionMessageSseResponse(params: {
 
 export async function createSessionEventsSseResponse(params: {
   handlers: ReturnType<typeof createDaemonHandlers>;
-  sessionId: TranscriptTargetId;
+  sessionId: SessionId;
   afterEventId?: string;
   encoder: TextEncoder;
 }): Promise<Response> {
@@ -90,7 +90,7 @@ export async function createSessionEventsSseResponse(params: {
 
 export async function createSessionUiEventsSseResponse(params: {
   handlers: ReturnType<typeof createDaemonHandlers>;
-  sessionId: TranscriptTargetId;
+  sessionId: SessionId;
   afterEventId?: string;
   encoder: TextEncoder;
 }): Promise<Response> {

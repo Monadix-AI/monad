@@ -84,10 +84,10 @@ export class ChannelService {
     // Clean up outbound mirrors when sessions are deleted from any client.
     this.controlUnsubscribe = this.deps.bus.subscribeControl((event) => {
       if (event.type === 'session.deleted') {
-        const mirror = this.sessionMirrors.get(event.transcriptTargetId);
+        const mirror = this.sessionMirrors.get(event.sessionId);
         if (mirror) {
           mirror.unsubscribe();
-          this.sessionMirrors.delete(event.transcriptTargetId);
+          this.sessionMirrors.delete(event.sessionId);
         }
       }
     });

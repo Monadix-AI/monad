@@ -1,4 +1,4 @@
-import type { Event, SessionUiEvent, TranscriptTargetId } from '@monad/protocol';
+import type { Event, SessionId, SessionUiEvent } from '@monad/protocol';
 import type { EventSink, SessionContext } from '@/handlers/session/context.ts';
 
 import { parseDurableSummary } from '@/agent/history.ts';
@@ -15,11 +15,11 @@ const LIVE_SNAPSHOT_LIMIT = 80;
 export function createSubscribeHandlers(ctx: SessionContext) {
   const {
     deps: { bus, cache, store },
-    requireTranscriptTarget
+    requireSession
   } = ctx;
 
   async function subscribe(
-    { sessionId, afterEventId }: { sessionId: TranscriptTargetId; afterEventId?: string },
+    { sessionId, afterEventId }: { sessionId: SessionId; afterEventId?: string },
     sink: EventSink
   ) {
     const buffered = cache.since(sessionId, afterEventId);
@@ -44,10 +44,10 @@ export function createSubscribeHandlers(ctx: SessionContext) {
   }
 
   async function subscribeUi(
-    { sessionId, afterEventId }: { sessionId: TranscriptTargetId; afterEventId?: string },
+    { sessionId, afterEventId }: { sessionId: SessionId; afterEventId?: string },
     sink: (event: SessionUiEvent) => void
   ) {
-    const session = requireTranscriptTarget(sessionId);
+    const session = requireSession(sessionId);
     const projector = new SessionUiProjector({ channelStructured: isChannelStructuredSession(session) });
     // Bound the initial snapshot to the most-recent window; older history is loaded lazily by
     // the client over GET /ui-items. A full window implies there may be older messages.

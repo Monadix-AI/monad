@@ -19,10 +19,10 @@ import {
   listExternalAgentSessionsResponseSchema,
   nativeAgentDeliveryIdSchema,
   okResponseSchema,
+  sessionIdSchema,
   startExternalAgentAuthResponseSchema,
   startExternalAgentRequestSchema,
-  startExternalAgentResponseSchema,
-  transcriptTargetIdSchema
+  startExternalAgentResponseSchema
 } from '@monad/protocol';
 import { Elysia } from 'elysia';
 import { z } from 'zod';
@@ -33,7 +33,7 @@ const sessionParams = z.object({ id: z.string() });
 const externalAgentParams = z.object({ id: z.string() });
 const nativeAgentDeliveryParams = z.object({ id: nativeAgentDeliveryIdSchema });
 const externalAgentNameParams = z.object({ name: z.string().min(1) });
-const externalAgentScopeQuery = z.object({ transcriptTargetId: transcriptTargetIdSchema });
+const externalAgentScopeQuery = z.object({ transcriptTargetId: sessionIdSchema });
 const externalAgentHistoryPageQuery = externalAgentScopeQuery.merge(externalAgentHistoryPageRequestSchema);
 const externalAgentAuthScopeQuery = z.object({ controlToken: z.string().min(32) });
 
@@ -64,7 +64,7 @@ function createExternalAgentAuthEventsSseResponse(
 function createExternalAgentUiObservationSseResponse(
   handlers: ReturnType<typeof createDaemonHandlers>,
   id: string,
-  transcriptTargetId: `ses_${string}` | `prj_${string}`,
+  transcriptTargetId: `ses_${string}`,
   encoder: TextEncoder
 ): Response {
   return createPushSseResponse<ExternalAgentUiObservationFrame>({
@@ -133,15 +133,6 @@ export function createExternalAgentController(handlers: ReturnType<typeof create
         params: sessionParams,
         response: { 200: listExternalAgentSessionsResponseSchema },
         detail: { summary: 'List external agent sessions for a project' }
-      }
-    )
-    .get(
-      '/projects/:id/external-agent-sessions',
-      ({ params }) => handlers.externalAgent.list({ sessionId: params.id as `prj_${string}` }),
-      {
-        params: sessionParams,
-        response: { 200: listExternalAgentSessionsResponseSchema },
-        detail: { summary: 'List external agent sessions for a Workplace Project', tags: ['http-only'] }
       }
     )
     .get('/external-agent-runtimes', ({ query }) => handlers.externalAgent.listLive(query), {

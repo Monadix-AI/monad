@@ -358,10 +358,10 @@ export function createDaemonHandlers(deps: DaemonHandlerDeps) {
     session,
     externalAgent: createExternalAgentModule({ paths, host: externalAgentHost, store: deps.store }),
     _nativeAgentStore: deps.store,
-    _nativeAgentAttachmentRoots: (args: { projectId: string; agentId: string; workingPath?: string | null }) => {
+    _nativeAgentAttachmentRoots: (args: { sessionId: string; agentId: string; workingPath?: string | null }) => {
       const nativeSession = args.agentId
         ? deps.store
-            .listExternalAgentSessionsForTranscriptTarget(args.projectId)
+            .listExternalAgentSessionsForTranscriptTarget(args.sessionId)
             .find((session) => session.agentName === args.agentId)
         : null;
       const workingPath = args.workingPath ?? nativeSession?.workingPath;
@@ -371,7 +371,7 @@ export function createDaemonHandlers(deps: DaemonHandlerDeps) {
           ? [
               managedProjectRuntimeWorkspace({
                 monadHome: paths.home,
-                projectId: args.projectId,
+                projectId: args.sessionId,
                 agentName: args.agentId
               })
             ]

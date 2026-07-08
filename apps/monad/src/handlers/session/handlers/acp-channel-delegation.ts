@@ -1,5 +1,5 @@
 import type { AcpAgentConfig, McpServerConfig } from '@monad/home';
-import type { ChannelResponseNextTarget, Event, TranscriptTarget, TranscriptTargetId } from '@monad/protocol';
+import type { ChannelResponseNextTarget, Event, Session, SessionId } from '@monad/protocol';
 import type { SessionContext } from '@/handlers/session/context.ts';
 
 import { newId, parseChannelStructuredResponse } from '@monad/protocol';
@@ -14,7 +14,7 @@ import { acpAuthGuidance, directDelegate } from '@/services/delegation/acp-deleg
 export function createAcpChannelDelegation(
   ctx: SessionContext,
   sandboxRootsFor: (
-    sessionId: TranscriptTargetId,
+    sessionId: SessionId,
     cwd: string | undefined,
     rt: { sandboxRoots?: string[] } | undefined,
     override?: string[]
@@ -25,10 +25,10 @@ export function createAcpChannelDelegation(
     runtime,
     makeEmit,
     persistAndRetire,
-    requireTranscriptTarget
+    requireSession
   } = ctx;
 
-  const runtimeForTranscriptTarget = (sessionId: TranscriptTargetId) => runtime.get(sessionId);
+  const runtimeForSession = (sessionId: SessionId) => runtime.get(sessionId);
 
   function startAcpAssignedTask({
     sessionId,
@@ -37,7 +37,7 @@ export function createAcpChannelDelegation(
     ambientContext,
     mcpServers
   }: {
-    sessionId: TranscriptTargetId;
+    sessionId: SessionId;
     spec: AcpAgentConfig;
     text: string;
     ambientContext?: string;
@@ -59,7 +59,7 @@ export function createAcpChannelDelegation(
       ].filter(Boolean);
       emit({
         id: newId('evt'),
-        transcriptTargetId: sessionId,
+        sessionId: sessionId as SessionId,
         type: 'tool.progress',
         actorAgentId: null,
         payload: {
@@ -73,7 +73,7 @@ export function createAcpChannelDelegation(
 
     emit({
       id: newId('evt'),
-      transcriptTargetId: sessionId,
+      sessionId: sessionId as SessionId,
       type: 'tool.called',
       actorAgentId: null,
       payload: { toolCallId: acpToolCallId, tool: `acp:${spec.name}`, input: { agent: spec.name } },
@@ -81,11 +81,11 @@ export function createAcpChannelDelegation(
     });
     emitAcpActivityProgress();
 
-    const rt = runtimeForTranscriptTarget(sessionId);
+    const rt = runtimeForSession(sessionId);
     directDelegate(spec, composeAcpChannelPrompt(text, ambientContext), {
       sessionId,
       signal: controller.signal,
-      sandboxRoots: sandboxRootsFor(sessionId, requireTranscriptTarget(sessionId).cwd, rt),
+      sandboxRoots: sandboxRootsFor(sessionId, requireSession(sessionId).cwd, rt),
       backends: rt?.backends,
       toolFilter: rt?.toolFilter,
       extraTools: rt?.extraTools,
@@ -94,7 +94,7 @@ export function createAcpChannelDelegation(
       onChunk: (delta) => {
         emit({
           id: newId('evt'),
-          transcriptTargetId: sessionId,
+          sessionId: sessionId as SessionId,
           type: 'agent.token',
           actorAgentId: null,
           payload: { messageId: agentMsgId, agentName: spec.name, delta, index: tokenIndex++ },
@@ -111,7 +111,7 @@ export function createAcpChannelDelegation(
       .then((fullText) => {
         emit({
           id: newId('evt'),
-          transcriptTargetId: sessionId,
+          sessionId: sessionId as SessionId,
           type: 'tool.result',
           actorAgentId: null,
           payload: { toolCallId: acpToolCallId, tool: `acp:${spec.name}`, ok: true, result: 'completed' },
@@ -122,7 +122,7 @@ export function createAcpChannelDelegation(
         });
         emit({
           id: newId('evt'),
-          transcriptTargetId: sessionId,
+          sessionId: sessionId as SessionId,
           type: 'agent.message',
           actorAgentId: null,
           payload: { messageId: agentMsgId, agentName: spec.name, text: fullText },
@@ -134,7 +134,7 @@ export function createAcpChannelDelegation(
         const { code, message } = extractError(err);
         emit({
           id: newId('evt'),
-          transcriptTargetId: sessionId,
+          sessionId: sessionId as SessionId,
           type: 'tool.result',
           actorAgentId: null,
           payload: { toolCallId: acpToolCallId, tool: `acp:${spec.name}`, ok: false, result: message },
@@ -150,7 +150,7 @@ export function createAcpChannelDelegation(
         );
         emit({
           id: newId('evt'),
-          transcriptTargetId: sessionId,
+          sessionId: sessionId as SessionId,
           type: 'agent.error',
           actorAgentId: null,
           payload: { messageId: agentMsgId, agentName: spec.name, code, message },
@@ -167,7 +167,7 @@ export function createAcpChannelDelegation(
     acpAgents,
     mcpServers
   }: {
-    sessionId: TranscriptTargetId;
+    sessionId: SessionId;
     responseText: string;
     ambientContext: string;
     acpAgents: readonly AcpAgentConfig[];
@@ -198,13 +198,13 @@ export function createAcpChannelDelegation(
     text,
     ambientContext
   }: {
-    session: TranscriptTarget;
+    session: Session;
     acpAgents: readonly AcpAgentConfig[];
     mcpServers: readonly McpServerConfig[] | undefined;
     text: string;
     ambientContext?: string;
   }): Promise<void> {
-    const members = projectAcpMembers(session, acpAgents);
+    const members = projectAcpMembers(store, session.id, acpAgents);
     if (members.length === 0) return;
     await Promise.all(
       members.map(async (spec) => {
@@ -218,7 +218,7 @@ export function createAcpChannelDelegation(
         const emitAcpActivityProgress = (output = 'waiting for response...') => {
           emit({
             id: newId('evt'),
-            transcriptTargetId: session.id,
+            sessionId: session.id as SessionId,
             type: 'tool.progress',
             actorAgentId: null,
             payload: { toolCallId: acpToolCallId, tool: `acp:${spec.name}`, output },
@@ -227,7 +227,7 @@ export function createAcpChannelDelegation(
         };
         emit({
           id: newId('evt'),
-          transcriptTargetId: session.id,
+          sessionId: session.id as SessionId,
           type: 'tool.called',
           actorAgentId: null,
           payload: { toolCallId: acpToolCallId, tool: `acp:${spec.name}`, input: { agent: spec.name } },
@@ -248,7 +248,7 @@ export function createAcpChannelDelegation(
             onChunk: (delta) => {
               emit({
                 id: newId('evt'),
-                transcriptTargetId: session.id,
+                sessionId: session.id as SessionId,
                 type: 'agent.token',
                 actorAgentId: null,
                 payload: { messageId: agentMsgId, agentName: spec.name, delta, index: tokenIndex++ },
@@ -272,7 +272,7 @@ export function createAcpChannelDelegation(
           });
           emit({
             id: newId('evt'),
-            transcriptTargetId: session.id,
+            sessionId: session.id as SessionId,
             type: 'tool.result',
             actorAgentId: null,
             payload: { toolCallId: acpToolCallId, tool: `acp:${spec.name}`, ok: true, result: 'completed' },
@@ -283,7 +283,7 @@ export function createAcpChannelDelegation(
           });
           emit({
             id: newId('evt'),
-            transcriptTargetId: session.id,
+            sessionId: session.id as SessionId,
             type: 'agent.message',
             actorAgentId: null,
             payload: { messageId: agentMsgId, agentName: spec.name, text: fullText },
@@ -295,7 +295,7 @@ export function createAcpChannelDelegation(
           const errorText = hint ? `${message}\n\n${hint}` : message;
           emit({
             id: newId('evt'),
-            transcriptTargetId: session.id,
+            sessionId: session.id as SessionId,
             type: 'tool.result',
             actorAgentId: null,
             payload: { toolCallId: acpToolCallId, tool: `acp:${spec.name}`, ok: false, result: errorText },
@@ -311,7 +311,7 @@ export function createAcpChannelDelegation(
           );
           emit({
             id: newId('evt'),
-            transcriptTargetId: session.id,
+            sessionId: session.id as SessionId,
             type: 'agent.error',
             actorAgentId: null,
             payload: { messageId: agentMsgId, agentName: spec.name, code, message: errorText },

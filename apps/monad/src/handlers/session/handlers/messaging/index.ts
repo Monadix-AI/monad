@@ -1,12 +1,4 @@
-import type {
-  ChatMessage,
-  Event,
-  SendMessageRequest,
-  SessionId,
-  SessionTransport,
-  TranscriptTarget,
-  TranscriptTargetId
-} from '@monad/protocol';
+import type { ChatMessage, Event, SendMessageRequest, Session, SessionId, SessionTransport } from '@monad/protocol';
 import type { ImageAttachment } from '@/agent/index.ts';
 import type { Tool, ToolBackends } from '@/capabilities/tools/types.ts';
 import type { CommandBundle, LifecycleOps } from '@/handlers/commands/index.ts';
@@ -35,7 +27,7 @@ export {
 // Access control reads the write policy STORED on the session (origin.writableBy) — derived from the
 // originating surface at creation, overridable per-session — not a label→transport lookup at the call
 // site. Sessions with no origin stay unrestricted.
-function assertWriteAllowed(session: TranscriptTarget, transport: SessionTransport): void {
+function assertWriteAllowed(session: Session, transport: SessionTransport): void {
   const writableBy = session.origin?.writableBy;
   if (!writableBy) return;
   if (!writableBy.includes(transport)) {
@@ -81,7 +73,7 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
     beginRun,
     makeEmit,
     persistAndRetire,
-    requireTranscriptTarget
+    requireSession
   } = ctx;
 
   // Effective fs/shell sandbox roots for a turn, single precedence chain so every call site agrees:
@@ -91,7 +83,7 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
   // bound agent's per-agent override. A site that also has an async ephemeral fallback applies it to
   // this result (`?? await …`).
   const sandboxRootsFor = (
-    sessionId: TranscriptTargetId,
+    sessionId: SessionId,
     cwd: string | undefined,
     rt: { sandboxRoots?: string[] } | undefined,
     override?: string[]
@@ -113,8 +105,8 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
   const forwardToExternalAgent = createForwardExternalAgentHandler(ctx, startManagedExternalAgentRuntimeWithRecovery);
   const { subscribe, subscribeUi, subscribeControl } = createSubscribeHandlers(ctx);
 
-  const runtimeForTranscriptTarget = (sessionId: TranscriptTargetId) => runtime.get(sessionId);
-  const agentToolFilterForTranscriptTarget = (sessionId: TranscriptTargetId) =>
+  const runtimeForSession = (sessionId: SessionId) => runtime.get(sessionId);
+  const agentToolFilterForSession = (sessionId: SessionId) =>
     sessionId.startsWith('ses_') ? agentToolFilter?.(sessionId as SessionId) : undefined;
 
   async function send({
@@ -124,10 +116,10 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
     generate,
     ambientContext,
     onComplete
-  }: { sessionId: TranscriptTargetId; onComplete?: (text: string) => void | Promise<void> } & SendMessageRequest) {
+  }: { sessionId: SessionId; onComplete?: (text: string) => void | Promise<void> } & SendMessageRequest) {
     const effectiveText = messageTextWithAttachments(text, attachments);
     const modelAttachments = imageAttachments(attachments);
-    const session = requireTranscriptTarget(sessionId);
+    const session = requireSession(sessionId);
     assertWriteAllowed(session, 'http');
     log?.debug(
       { sessionId, event: 'session.send.accept', text: effectiveText, generate, ambientContext },
@@ -143,7 +135,7 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
       store.insertMessage(messageId, sessionId, effectiveText, new Date().toISOString(), 'user');
       makeEmit(round)({
         id: newId('evt'),
-        transcriptTargetId: sessionId,
+        sessionId: sessionId as SessionId,
         type: 'user.message',
         actorAgentId: null,
         payload: { messageId, text: effectiveText },
@@ -157,7 +149,7 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
       return { accepted: true as const };
     }
     const { round, signal } = beginRun(sessionId);
-    const rt = runtimeForTranscriptTarget(sessionId);
+    const rt = runtimeForSession(sessionId);
     const loop = agent.loop(makeEmit(round), {
       modelOverride: session.model,
       ambientContext,
@@ -165,10 +157,10 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
       defaultCwd: session.cwd,
       extraTools: rt?.extraTools,
       extraSkills: rt?.extraSkills,
-      toolFilter: composeFilter(rt?.toolFilter, agentToolFilterForTranscriptTarget(sessionId))
+      toolFilter: composeFilter(rt?.toolFilter, agentToolFilterForSession(sessionId))
     });
     loop
-      .runStream(sessionId, effectiveText, signal, modelAttachments)
+      .runStream(sessionId as SessionId, effectiveText, signal, modelAttachments)
       .then(async () => {
         const finalText = lastAgentMessageText(round);
         persistAndRetire(sessionId, round);
@@ -205,7 +197,7 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
     deliverProjectMessageToAcpMembers,
     dispatchChannelNextTargets,
     deliverProjectMessageToManagedExternalAgentMembers,
-    runtimeForTranscriptTarget
+    runtimeForSession
   });
 
   const {
@@ -225,7 +217,7 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
     completeManagedExternalAgentProviderMessage,
 
     async sendInline(
-      { sessionId, text }: { sessionId: TranscriptTargetId } & SendMessageRequest,
+      { sessionId, text }: { sessionId: SessionId } & SendMessageRequest,
       sink: EventSink,
       // ACP sessions pass a delegating backend (fs/shell run in the connected editor), a toolFilter
       // dropping tools that would otherwise run on the daemon host, and any image attachments for
@@ -240,14 +232,14 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
         sandboxRoots?: string[];
       }
     ) {
-      const session = requireTranscriptTarget(sessionId);
+      const session = requireSession(sessionId);
       assertWriteAllowed(session, runOpts?.transport ?? 'acp');
       if (runner && (await tryRunSessionCommand(runner, session, text, { sink, busy: aborts.has(sessionId) }))) return;
       // Out-of-band per-session runtime config (sandbox roots / session-scoped MCP tools / delegating
       // backends) set via configureRuntime — used when the caller doesn't pass explicit runOpts (the
       // ACP bridge proxies turns over HTTP and can't ship in-process backends, so it configures the
       // daemon out-of-band).
-      const rt = runtimeForTranscriptTarget(sessionId);
+      const rt = runtimeForSession(sessionId);
       // Shared precedence (runOpts override > rt > session.cwd > per-agent), then this session's
       // disposable ephemeral root (sandbox mode 'ephemeral'), then the loop's global default.
       const sandboxRoots =
@@ -261,10 +253,7 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
         },
         {
           backends: runOpts?.backends ?? rt?.backends,
-          toolFilter: composeFilter(
-            runOpts?.toolFilter ?? rt?.toolFilter,
-            agentToolFilterForTranscriptTarget(sessionId)
-          ),
+          toolFilter: composeFilter(runOpts?.toolFilter ?? rt?.toolFilter, agentToolFilterForSession(sessionId)),
           ambientContext: runOpts?.ambientContext,
           extraTools: runOpts?.extraTools ?? rt?.extraTools,
           extraSkills: rt?.extraSkills,
@@ -292,7 +281,7 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
         }
       });
       try {
-        await loop.runStream(sessionId, text, signal, runOpts?.attachments);
+        await loop.runStream(sessionId as SessionId, text, signal, runOpts?.attachments);
       } finally {
         oob();
         persistAndRetire(sessionId, round);
@@ -300,8 +289,8 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
       }
     },
 
-    async generate({ sessionId, text }: { sessionId: TranscriptTargetId } & SendMessageRequest) {
-      const session = requireTranscriptTarget(sessionId);
+    async generate({ sessionId, text }: { sessionId: SessionId } & SendMessageRequest) {
+      const session = requireSession(sessionId);
       assertWriteAllowed(session, 'http');
       log?.debug({ sessionId, event: 'session.generate.start', text }, 'session generate start');
       if (runner) {
@@ -315,21 +304,21 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
         }
       }
       const round: Event[] = [];
-      const rt = runtimeForTranscriptTarget(sessionId);
+      const rt = runtimeForSession(sessionId);
       const loop = agent.loop(makeEmit(round), {
         modelOverride: session.model,
         sandboxRoots: sandboxRootsFor(sessionId, session.cwd, rt),
         defaultCwd: session.cwd,
         extraTools: rt?.extraTools,
         extraSkills: rt?.extraSkills,
-        toolFilter: composeFilter(rt?.toolFilter, agentToolFilterForTranscriptTarget(sessionId))
+        toolFilter: composeFilter(rt?.toolFilter, agentToolFilterForSession(sessionId))
       });
       try {
-        const msg = await loop.runBlock(sessionId, text);
+        const msg = await loop.runBlock(sessionId as SessionId, text);
         log?.debug({ sessionId, event: 'session.generate.complete', text: msg.text }, 'session generate complete');
         const message: ChatMessage = {
           id: msg.id as ChatMessage['id'],
-          transcriptTargetId: msg.transcriptTargetId as ChatMessage['transcriptTargetId'],
+          sessionId: msg.sessionId as ChatMessage['sessionId'],
           role: msg.role,
           text: msg.text,
           type: 'text',

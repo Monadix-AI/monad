@@ -1,7 +1,6 @@
 import type { AcpAgentConfig, ExternalAgentConfig, McpServerConfig } from '@monad/home';
-import type { Session, SessionMcpServer, TranscriptTarget, WorkplaceProjectMemberSettings } from '@monad/protocol';
-
-import { workplaceProjectMembersExtKey, workplaceProjectMembersExtSchema } from '@monad/protocol';
+import type { Session, SessionId, SessionMcpServer, WorkplaceProjectMemberSettings } from '@monad/protocol';
+import type { Store } from '@/store/db/index.ts';
 
 import { sessionMcpServersToAcp, toAcpMcpServers } from '@/services/delegation/acp-delegate.ts';
 
@@ -56,9 +55,27 @@ export function channelDelegateMcpServers(
   return [...toAcpMcpServers([...(configured ?? [])]), ...sessionMcpServersToAcp([...(sessionScoped ?? [])])];
 }
 
-export function workplaceProjectMembers(session: TranscriptTarget) {
-  const parsed = workplaceProjectMembersExtSchema.safeParse(session.origin?.ext?.[workplaceProjectMembersExtKey]);
-  return parsed.success ? parsed.data : [];
+/** A session's live member bindings (Track B `session_members`, not the pre-Track-B
+ *  `origin.ext` roster hack) shaped like the legacy `WorkplaceProjectMemberView` so the
+ *  rest of this module's helpers stay unchanged. */
+export function workplaceProjectMembers(store: Store, sessionId: SessionId): ExternalAgentProjectMemberShape[] {
+  return store.listSessionMembers(sessionId).map((m) => {
+    const data = m.data as {
+      name?: string;
+      templateName?: string;
+      displayName?: string;
+      instanceId?: string;
+      settings?: WorkplaceProjectMemberSettings;
+    };
+    return {
+      type: m.type,
+      name: data.name ?? m.memberId,
+      ...(data.templateName ? { templateName: data.templateName } : {}),
+      ...(data.displayName ? { displayName: data.displayName } : {}),
+      instanceId: data.instanceId ?? m.memberId,
+      ...(data.settings ? { settings: data.settings } : {})
+    };
+  });
 }
 
 export function externalAgentProjectMemberTemplateName(member: ExternalAgentProjectMemberShape): string {
@@ -74,7 +91,8 @@ export function externalAgentProjectMemberDisplayName(member: ExternalAgentProje
 }
 
 export function externalAgentProjectMemberSettings(
-  session: TranscriptTarget,
+  store: Store,
+  sessionId: SessionId,
   agentName: string
 ): Pick<
   WorkplaceProjectMemberSettings,
@@ -88,9 +106,7 @@ export function externalAgentProjectMemberSettings(
   | 'speed'
   | 'customPrompt'
 > {
-  const parsed = workplaceProjectMembersExtSchema.safeParse(session.origin?.ext?.[workplaceProjectMembersExtKey]);
-  if (!parsed.success) return {};
-  const member = parsed.data.find(
+  const member = workplaceProjectMembers(store, sessionId).find(
     (candidate) =>
       candidate.type === 'external-agent' &&
       (externalAgentProjectMemberRuntimeName(candidate) === agentName ||
@@ -112,10 +128,12 @@ export function externalAgentProjectMemberSettings(
   return member ? { managedProjectAgent: true } : { managedProjectAgent: false };
 }
 
-export function externalAgentProjectMemberDisplayNameForAgent(session: TranscriptTarget, agentName: string): string {
-  const parsed = workplaceProjectMembersExtSchema.safeParse(session.origin?.ext?.[workplaceProjectMembersExtKey]);
-  if (!parsed.success) return agentName;
-  const member = parsed.data.find(
+export function externalAgentProjectMemberDisplayNameForAgent(
+  store: Store,
+  sessionId: SessionId,
+  agentName: string
+): string {
+  const member = workplaceProjectMembers(store, sessionId).find(
     (candidate) =>
       candidate.type === 'external-agent' &&
       (externalAgentProjectMemberRuntimeName(candidate) === agentName ||
@@ -125,10 +143,11 @@ export function externalAgentProjectMemberDisplayNameForAgent(session: Transcrip
 }
 
 export function managedExternalAgentProjectMembers(
-  session: TranscriptTarget,
+  store: Store,
+  sessionId: SessionId,
   externalAgents: readonly ExternalAgentConfig[]
 ): ManagedExternalAgentProjectMember[] {
-  const members = workplaceProjectMembers(session);
+  const members = workplaceProjectMembers(store, sessionId);
   const configured = new Map(externalAgents.map((agent) => [agent.name, agent]));
   return members
     .filter((member) => member.type === 'external-agent' && member.settings?.managedProjectAgent !== false)
@@ -160,9 +179,13 @@ export function managedExternalAgentProjectMembers(
     });
 }
 
-export function projectAcpMembers(session: TranscriptTarget, acpAgents: readonly AcpAgentConfig[]): AcpAgentConfig[] {
+export function projectAcpMembers(
+  store: Store,
+  sessionId: SessionId,
+  acpAgents: readonly AcpAgentConfig[]
+): AcpAgentConfig[] {
   const configured = new Map(acpAgents.map((agent) => [agent.name, agent]));
-  return workplaceProjectMembers(session)
+  return workplaceProjectMembers(store, sessionId)
     .filter((member) => member.type === 'acp')
     .flatMap((member) => {
       const spec = configured.get(member.name);

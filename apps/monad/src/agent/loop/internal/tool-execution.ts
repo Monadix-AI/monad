@@ -1,4 +1,4 @@
-import type { EventType, Hooks, TranscriptTargetId } from '@monad/protocol';
+import type { EventType, Hooks, SessionId } from '@monad/protocol';
 import type { Tool, ToolGate, ToolModelContent, ToolResult, ToolResultPart } from '@/capabilities/tools/types.ts';
 import type { ModelContentPart, ModelMessage, ToolCall } from '../../model/index.ts';
 import type { PersistedToolCall, PersistedToolResult, PersistedToolResultEnvelope } from '../replay.ts';
@@ -48,7 +48,7 @@ export class ToolExecutor {
     private readonly hooks: () => Hooks,
     private readonly hookCwd: () => string,
     private readonly effectiveGate: () => ToolGate | undefined,
-    private readonly emitEvent: (sessionId: TranscriptTargetId, type: EventType, payload: object) => void,
+    private readonly emitEvent: (sessionId: SessionId, type: EventType, payload: object) => void,
     private readonly pushInjectedContext: (context: string[]) => void,
     private readonly activateSkill: (name: string) => void
   ) {}
@@ -60,7 +60,7 @@ export class ToolExecutor {
    * since tool-results carry text at the provider boundary.
    */
   async runToolCalls(
-    sessionId: TranscriptTargetId,
+    sessionId: SessionId,
     assistantText: string,
     calls: ToolCall[],
     messages: ModelMessage[],
@@ -117,11 +117,7 @@ export class ToolExecutor {
     messages.push(...followups);
   }
 
-  private async executeToolCall(
-    sessionId: TranscriptTargetId,
-    call: ToolCall,
-    signal?: AbortSignal
-  ): Promise<ExecuteOutcome> {
+  private async executeToolCall(sessionId: SessionId, call: ToolCall, signal?: AbortSignal): Promise<ExecuteOutcome> {
     this.emitEvent(sessionId, 'tool.called', { toolCallId: call.toolCallId, tool: call.toolName, input: call.input });
     log.debug({ toolCallId: call.toolCallId, sessionId, input: logInput(call.input) }, `→ ${call.toolName}`);
     const tool = this.availableTools().find((t) => t.name === call.toolName);
@@ -288,7 +284,7 @@ export class ToolExecutor {
    * degrades them to text observations instead — providers reject stale tool_use IDs.
    */
   async persistToolStep(
-    sessionId: TranscriptTargetId,
+    sessionId: SessionId,
     call: ToolCall,
     observation: string,
     providerExecuted = false,
@@ -315,7 +311,7 @@ export class ToolExecutor {
     };
     await this.deps.messages.append({
       id: newId('msg'),
-      transcriptTargetId: sessionId,
+      sessionId,
       role: 'assistant',
       text: JSON.stringify({ tool: call.toolName, input: call.input }),
       createdAt: new Date().toISOString(),
@@ -324,7 +320,7 @@ export class ToolExecutor {
     });
     await this.deps.messages.append({
       id: newId('msg'),
-      transcriptTargetId: sessionId,
+      sessionId,
       role: 'tool',
       text: observation,
       createdAt: new Date().toISOString(),

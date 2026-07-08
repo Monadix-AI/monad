@@ -1,10 +1,7 @@
 import type {
   ConfigureRuntimeRequest,
-  ProjectId,
   Session,
   SessionId,
-  TranscriptTargetId,
-  WorkplaceProject,
   WorkspaceActionRequest,
   WorkspaceActionResponse
 } from '@monad/protocol';
@@ -50,7 +47,6 @@ export function createWorkspaceHandlers(ctx: SessionContext) {
   const {
     deps: { discoverProjectSkills, delegation },
     runtime,
-    requireTranscriptTarget,
     requireSession,
     emitLifecycle
   } = ctx;
@@ -60,7 +56,7 @@ export function createWorkspaceHandlers(ctx: SessionContext) {
    *  skills from it. `resolved === undefined` clears the override back to the daemon/agent default.
    *  The working folder fully determines both fields, so switching/clearing it drops the prior
    *  folder's skills (no stale carry-over); other runtime config (MCP tools/connections) survives. */
-  async function applyWorkspaceRuntime(id: TranscriptTargetId, resolved: string | undefined): Promise<void> {
+  async function applyWorkspaceRuntime(id: SessionId, resolved: string | undefined): Promise<void> {
     const previous = runtime.get(id);
     const extraSkills = resolved && discoverProjectSkills ? await discoverProjectSkills(resolved).catch(() => []) : [];
     runtime.set(id, {
@@ -71,7 +67,7 @@ export function createWorkspaceHandlers(ctx: SessionContext) {
   }
 
   /** Close + forget a session's out-of-band runtime config (MCP connections, sandbox roots). */
-  function disposeRuntime(id: TranscriptTargetId): void {
+  function disposeRuntime(id: SessionId): void {
     const rt = runtime.get(id);
     if (!rt) return;
     for (const conn of rt.mcpConnections ?? []) void conn.close().catch(() => {});
@@ -89,36 +85,33 @@ export function createWorkspaceHandlers(ctx: SessionContext) {
      * fs/shell tools — and any delegated subagent that inherits `ctx.sandboxRoots` — can reach it,
      * refreshes project-local skills from the folder, and fans a `session.updated` delta.
      */
-    async setWorkspace({ id, cwd }: { id: TranscriptTargetId; cwd: string }): Promise<Session | WorkplaceProject> {
-      const current = requireTranscriptTarget(id);
+    async setWorkspace({ id, cwd }: { id: SessionId; cwd: string }): Promise<Session> {
+      const current = requireSession(id);
       const resolved = cwd.trim() ? resolveWorkspaceDir(cwd, current.cwd) : undefined;
-      const updatedSession = ctx.deps.store.updateSession(id, { cwd: resolved ?? null });
-      const updatedProject = updatedSession
-        ? null
-        : ctx.deps.store.updateWorkplaceProject(id as ProjectId, { cwd: resolved ?? null });
-      if (!updatedSession && !updatedProject) throw new HandlerError('internal', 'set workspace failed');
+      const updated = ctx.deps.store.updateSession(id, { cwd: resolved ?? null });
+      if (!updated) throw new HandlerError('internal', 'set workspace failed');
       await applyWorkspaceRuntime(id, resolved);
       emitLifecycle(id, 'session.updated', { cwd: resolved ?? null });
-      return updatedSession ?? (updatedProject as WorkplaceProject);
+      return updated;
     },
 
     /** Best-effort workspace metadata for the session's working folder. No folder → not a git repo. */
-    async workspaceMeta({ id }: { id: TranscriptTargetId }) {
-      const session = requireTranscriptTarget(id);
+    async workspaceMeta({ id }: { id: SessionId }) {
+      const session = requireSession(id);
       return { git: session.cwd ? await readWorkspaceGit(session.cwd) : { isRepo: false } };
     },
 
     /** Backward-compatible alias for callers that still read only the git slice. */
     async workspaceGit({ id }: { id: SessionId }) {
-      const session = requireTranscriptTarget(id);
+      const session = requireSession(id);
       return session.cwd ? await readWorkspaceGit(session.cwd) : { isRepo: false };
     },
 
     async workspaceAction({
       id,
       action
-    }: { id: TranscriptTargetId } & WorkspaceActionRequest): Promise<WorkspaceActionResponse> {
-      const session = requireTranscriptTarget(id);
+    }: { id: SessionId } & WorkspaceActionRequest): Promise<WorkspaceActionResponse> {
+      const session = requireSession(id);
       if (!session.cwd) throw new HandlerError('invalid', 'working folder is not set');
       await runWorkspaceAction(action, session.cwd);
       return { ok: true, action };

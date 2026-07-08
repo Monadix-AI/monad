@@ -16,8 +16,7 @@ import type {
   ExternalAgentView,
   ListExternalAgentRuntimesQuery,
   ListExternalAgentRuntimesResponse,
-  ListExternalAgentSessionsResponse,
-  TranscriptTargetId
+  ListExternalAgentSessionsResponse
 } from '@monad/protocol';
 import type {
   ExternalAgentHostDeps,
@@ -26,6 +25,7 @@ import type {
   ManagedProjectOutputHandler
 } from '@/services/external-agent/host/host-types.ts';
 import type { ExternalAgentProviderAdapter, ExternalAgentStartPreflight } from '@/services/external-agent/types.ts';
+import type { ExternalAgentTargetId } from '@/store/db/external-agent-sessions.ts';
 import type { ExternalAgentSessionRow } from '@/store/db/index.ts';
 
 import { dirname } from 'node:path';
@@ -321,7 +321,7 @@ export class ExternalAgentHost {
   }
 
   start(args: {
-    transcriptTargetId: TranscriptTargetId;
+    transcriptTargetId: ExternalAgentTargetId;
     agentName: string;
     displayName?: string;
     templateAgentName?: string;
@@ -417,7 +417,7 @@ export class ExternalAgentHost {
     return toView(row, live?.pendingApprovals.size ?? 0, live);
   }
 
-  list(transcriptTargetId: TranscriptTargetId): ListExternalAgentSessionsResponse {
+  list(transcriptTargetId: ExternalAgentTargetId): ListExternalAgentSessionsResponse {
     return {
       sessions: this.deps.store.listExternalAgentSessionsForTranscriptTarget(transcriptTargetId).map((row) => {
         const live = this.live.get(row.id);
@@ -574,9 +574,9 @@ export class ExternalAgentHost {
     });
   }
 
-  stopTranscriptTarget(transcriptTargetId: TranscriptTargetId): void {
+  stopSession(sessionId: ExternalAgentTargetId): void {
     for (const live of [...this.live.values()]) {
-      if (live.transcriptTargetId === transcriptTargetId) this.stop(live.id);
+      if (live.transcriptTargetId === sessionId) this.stop(live.id);
     }
   }
 

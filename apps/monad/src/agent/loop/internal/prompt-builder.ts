@@ -1,4 +1,4 @@
-import type { EventType, TranscriptTargetId } from '@monad/protocol';
+import type { EventType, SessionId } from '@monad/protocol';
 import type { Tool } from '@/capabilities/tools/types.ts';
 import type { ModelContentPart, ModelMessage, ModelUsage, ToolSpec } from '../../model/index.ts';
 import type { AgentLoopDeps, ImageAttachment } from '../types.ts';
@@ -54,7 +54,7 @@ export class PromptBuilder {
     private readonly deps: AgentLoopDeps,
     private readonly availableTools: () => Tool[],
     private readonly modelId: () => string,
-    private readonly emitEvent: (sessionId: TranscriptTargetId, type: EventType, payload: object) => void
+    private readonly emitEvent: (sessionId: SessionId, type: EventType, payload: object) => void
   ) {}
 
   setAttachments(attachments?: ImageAttachment[]): void {
@@ -75,7 +75,7 @@ export class PromptBuilder {
   }
 
   /** Run the assembled prompt through the context engine (truncate/summarize) before sending. */
-  async prepare(sessionId: TranscriptTargetId, messages: ModelMessage[]): Promise<ModelMessage[]> {
+  async prepare(sessionId: SessionId, messages: ModelMessage[]): Promise<ModelMessage[]> {
     const sent = this.deps.context
       ? await this.deps.context.prepare(messages, {
           sessionId,
@@ -138,23 +138,19 @@ export class PromptBuilder {
   // Tools are offered to the model natively (function-calling), so the system prompt only
   // carries the L1 skill listing here; the model pulls a skill body via the `skill` tool.
   /** The base system prompt template: host instructions (or the default). */
-  private systemPromptTemplate(sessionId?: TranscriptTargetId): string {
+  private systemPromptTemplate(sessionId?: SessionId): string {
     const resolved =
       typeof this.deps.instructions === 'function' ? this.deps.instructions(sessionId) : this.deps.instructions;
     return resolved || DEFAULT_SYSTEM_PROMPT;
   }
 
-  private userPromptSlots(sessionId?: TranscriptTargetId) {
+  private userPromptSlots(sessionId?: SessionId) {
     const resolved =
       typeof this.deps.promptSlots === 'function' ? this.deps.promptSlots(sessionId) : this.deps.promptSlots;
     return resolved ?? {};
   }
 
-  async buildPrompt(
-    sessionId: TranscriptTargetId,
-    withTools = false,
-    injectedContext: string[] = []
-  ): Promise<ModelMessage[]> {
+  async buildPrompt(sessionId: SessionId, withTools = false, injectedContext: string[] = []): Promise<ModelMessage[]> {
     let replayed: ModelMessage[];
     let summary: string | undefined;
     if (this.deps.history) {
@@ -255,7 +251,7 @@ export class PromptBuilder {
    * no usage. Clients group the itemized segments by category for the `/context` view.
    */
   async emitContextUsage(
-    sessionId: TranscriptTargetId,
+    sessionId: SessionId,
     withTools: boolean,
     inputTokens?: number,
     injectedContext: string[] = []

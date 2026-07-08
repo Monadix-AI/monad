@@ -81,7 +81,7 @@ export const RPC_HANDLERS: RpcHandlerMap = {
         push({
           jsonrpc: '2.0',
           method: 'sessions.event',
-          params: { sessionId: event.transcriptTargetId, event }
+          params: { sessionId: event.sessionId, event }
         });
       };
       const { dispose } = h.session.subscribeControl(sink);
@@ -138,20 +138,20 @@ export const RPC_HANDLERS: RpcHandlerMap = {
 
   'externalAgent.start': async ({ id, ...request }, h: D) => h.externalAgent.start({ sessionId: id, request }),
   'externalAgent.list': async ({ id }, h: D) => h.externalAgent.list({ sessionId: id }),
-  'externalAgent.get': async ({ id, transcriptTargetId }, h: D) => h.externalAgent.get({ id, transcriptTargetId }),
-  'externalAgent.input': async ({ id, transcriptTargetId, ...request }, h: D) =>
-    h.externalAgent.input({ id, transcriptTargetId, ...request }),
-  'externalAgent.interrupt': async ({ id, transcriptTargetId }, h: D) =>
-    h.externalAgent.interrupt({ id, transcriptTargetId }),
-  'externalAgent.steer': async ({ id, transcriptTargetId, ...request }, h: D) =>
-    h.externalAgent.steer({ id, transcriptTargetId, ...request }),
-  'externalAgent.approval': async ({ id, transcriptTargetId, ...request }, h: D) =>
-    h.externalAgent.approval({ id, transcriptTargetId, ...request }),
-  'externalAgent.resize': async ({ id, transcriptTargetId, ...request }, h: D) =>
-    h.externalAgent.resize({ id, transcriptTargetId, ...request }),
-  'externalAgent.stop': async ({ id, transcriptTargetId }, h: D) => h.externalAgent.stop({ id, transcriptTargetId }),
-  'externalAgent.historyPage': async ({ id, transcriptTargetId, ...request }, h: D) =>
-    h.externalAgent.historyPage({ id, transcriptTargetId, request }),
+  'externalAgent.get': async ({ id, sessionId }, h: D) => h.externalAgent.get({ id, transcriptTargetId: sessionId }),
+  'externalAgent.input': async ({ id, sessionId, ...request }, h: D) =>
+    h.externalAgent.input({ id, transcriptTargetId: sessionId, ...request }),
+  'externalAgent.interrupt': async ({ id, sessionId }, h: D) =>
+    h.externalAgent.interrupt({ id, transcriptTargetId: sessionId }),
+  'externalAgent.steer': async ({ id, sessionId, ...request }, h: D) =>
+    h.externalAgent.steer({ id, transcriptTargetId: sessionId, ...request }),
+  'externalAgent.approval': async ({ id, sessionId, ...request }, h: D) =>
+    h.externalAgent.approval({ id, transcriptTargetId: sessionId, ...request }),
+  'externalAgent.resize': async ({ id, sessionId, ...request }, h: D) =>
+    h.externalAgent.resize({ id, transcriptTargetId: sessionId, ...request }),
+  'externalAgent.stop': async ({ id, sessionId }, h: D) => h.externalAgent.stop({ id, transcriptTargetId: sessionId }),
+  'externalAgent.historyPage': async ({ id, sessionId, ...request }, h: D) =>
+    h.externalAgent.historyPage({ id, transcriptTargetId: sessionId, request }),
   'externalAgent.usage': async ({ name }, h: D) => h.externalAgent.usage({ agentName: name }),
   'externalAgent.auth.start': async ({ name }, h: D) => h.externalAgent.startAuth({ agentName: name }),
   'externalAgent.auth.status': async ({ name }, h: D) => h.externalAgent.authStatus({ agentName: name }),

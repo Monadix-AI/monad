@@ -1,4 +1,4 @@
-import type { NativeAgentRuntime, NativeAgentRuntimeInfoResponse, ProjectId } from '@monad/protocol';
+import type { NativeAgentRuntime, NativeAgentRuntimeInfoResponse, SessionId } from '@monad/protocol';
 import type { createDaemonHandlers } from '@/handlers/daemon-handlers/index.ts';
 import type { ExternalAgentSessionRow } from '@/store/db/index.ts';
 
@@ -9,7 +9,7 @@ import { HandlerError } from '@/handlers/handler-error.ts';
 
 export interface NativeAgentRuntimeBinding {
   agentId: string;
-  projectId: ProjectId;
+  sessionId: SessionId;
   externalAgentSessionId: string;
 }
 
@@ -81,13 +81,6 @@ export function createNativeAgentRuntimeService(handlers: ReturnType<typeof crea
           'EXTERNAL_AGENT_SESSION_NOT_ACTIVE'
         );
       }
-      if (!nativeSession.transcriptTargetId.startsWith('prj_')) {
-        throw new HandlerError(
-          'forbidden',
-          'managed external agent session is not bound to a Workplace Project',
-          'NOT_PROJECT_MANAGED_EXTERNAL_AGENT'
-        );
-      }
       const token = headers.get('authorization')?.match(/^Bearer\s+(.+)$/i)?.[1] ?? '';
       if (!nativeSession.agentRuntimeTokenHash || !tokenMatchesHash(token, nativeSession.agentRuntimeTokenHash)) {
         throw new HandlerError('forbidden', 'invalid managed external agent token', 'INVALID_NATIVE_AGENT_TOKEN');
@@ -95,7 +88,7 @@ export function createNativeAgentRuntimeService(handlers: ReturnType<typeof crea
       return {
         binding: {
           agentId: nativeSession.agentName,
-          projectId: nativeSession.transcriptTargetId as ProjectId,
+          sessionId: nativeSession.transcriptTargetId,
           externalAgentSessionId
         },
         nativeSession

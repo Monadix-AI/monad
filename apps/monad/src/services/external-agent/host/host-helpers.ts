@@ -1,4 +1,4 @@
-import type { ExternalAgentSessionView } from '@monad/protocol';
+import type { ExternalAgentSessionView, SessionId } from '@monad/protocol';
 import type { LiveExternalAgentSession } from '@/services/external-agent/host/host-types.ts';
 import type { ExternalAgentOutputEvent } from '@/services/external-agent/types.ts';
 import type { ExternalAgentSessionRow } from '@/store/db/index.ts';
@@ -11,6 +11,12 @@ export function isManagedProjectRuntime(
   return runtime.runtimeRole === 'managed-project-agent';
 }
 
+// TODO(track-b): `ExternalAgentSessionView.sessionId` is now strictly a `SessionId` on the wire
+// (packages/protocol/src/external-agent/external-agent-session.ts) — the Track B P6b id collapse
+// narrowed this response shape's identity field. `row.transcriptTargetId` (the store row, see
+// apps/monad/src/store/db/external-agent-sessions.ts's `ExternalAgentTargetId`) is still genuinely
+// `SessionId | ProjectId` internally, so a project-scoped runtime's view cast here is a real,
+// pre-existing lossy narrowing this pass does not resolve (open class-C question).
 export function toView(
   row: ExternalAgentSessionRow,
   pendingApprovalCount = 0,
@@ -19,7 +25,7 @@ export function toView(
   const { transcriptTargetId, ...view } = row;
   return {
     ...view,
-    transcriptTargetId: transcriptTargetId,
+    sessionId: transcriptTargetId as SessionId,
     productIcon: getExternalAgentProviderAdapter(row.provider).productIcon,
     pendingApprovalCount,
     approvalOwnership: 'provider-owned',

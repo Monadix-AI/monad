@@ -2,8 +2,6 @@ import type {
   ProjectId,
   SessionOrigin,
   SessionState,
-  TranscriptTarget,
-  TranscriptTargetId,
   UpdateWorkplaceProjectRequest,
   WorkplaceProject
 } from '@monad/protocol';
@@ -41,16 +39,13 @@ function projectView(project: WorkplaceProject): WorkplaceProject {
 export function createProjectLifecycleHandlers(
   ctx: SessionContext,
   deps: {
-    applyWorkspaceRuntime: (id: TranscriptTargetId, resolved: string | undefined) => Promise<void>;
-    disposeRuntime: (id: TranscriptTargetId) => void;
     resolveWorkspaceDir: (cwd: string, base: string | undefined) => string;
-    startAddedManagedExternalAgentMembers: (previous: TranscriptTarget, next: TranscriptTarget) => Promise<void>;
   }
 ) {
   const {
     deps: { store, ownerPrincipalId, sessionSandbox, log }
   } = ctx;
-  const { applyWorkspaceRuntime, disposeRuntime, resolveWorkspaceDir, startAddedManagedExternalAgentMembers } = deps;
+  const { resolveWorkspaceDir } = deps;
 
   function requireProject(id: ProjectId): WorkplaceProject {
     const project = store.getWorkplaceProject(id);
@@ -91,12 +86,7 @@ export function createProjectLifecycleHandlers(
       };
       store.insertWorkplaceProject(project);
       await sessionSandbox?.ensure(project.id);
-      if (project.cwd) await applyWorkspaceRuntime(project.id, project.cwd);
       log?.info({ projectId: project.id, ...originLog(origin) }, 'workplace project created');
-      ctx.emitLifecycle(project.id, 'session.created', {
-        title: project.title,
-        kind: 'workplace_project'
-      });
       return { projectId: project.id };
     },
 
@@ -124,29 +114,15 @@ export function createProjectLifecycleHandlers(
         ...(resolvedCwd !== undefined ? { cwd: resolvedCwd } : {})
       });
       if (!project) throw new HandlerError('internal', 'update project failed');
-      if (resolvedCwd !== undefined) await applyWorkspaceRuntime(id, resolvedCwd ?? undefined);
-      await startAddedManagedExternalAgentMembers(current, project);
-      ctx.emitLifecycle(id, 'session.updated', {
-        title,
-        state,
-        archived,
-        ...(resolvedCwd !== undefined ? { cwd: resolvedCwd } : {}),
-        kind: 'workplace_project'
-      });
       return { project: projectView(project) };
     },
 
     async deleteProject({ id }: { id: ProjectId }) {
       requireProject(id);
-      ctx.aborts.get(id)?.abort();
-      ctx.aborts.delete(id);
-      disposeRuntime(id);
       clearProcessesForSession(id);
-      ctx.deps.externalAgentHost?.stopTranscriptTarget(id);
       await sessionSandbox?.dispose(id);
       disposeSandboxSession(id);
       store.deleteWorkplaceProject(id);
-      ctx.emitLifecycle(id, 'session.deleted', { kind: 'workplace_project' });
       return { deleted: true as const };
     }
   };

@@ -122,7 +122,7 @@ export class DelegationService {
   private emit(sessionId: SessionId, type: Event['type'], payload: Record<string, unknown>): void {
     this.publish({
       id: newId('evt'),
-      transcriptTargetId: sessionId,
+      sessionId,
       type,
       actorAgentId: null,
       payload,

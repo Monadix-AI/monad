@@ -8,8 +8,8 @@ export class InMemoryMessageRepo implements MessageRepo {
   }
 
   append(message: ChatMessage): void {
-    const list = this.bySession.get(message.transcriptTargetId) ?? [];
+    const list = this.bySession.get(message.sessionId) ?? [];
     list.push(message);
-    this.bySession.set(message.transcriptTargetId, list);
+    this.bySession.set(message.sessionId, list);
   }
 }

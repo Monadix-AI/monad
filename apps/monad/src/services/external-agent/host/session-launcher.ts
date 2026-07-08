@@ -4,12 +4,12 @@ import type {
   ExternalAgentLaunchMode,
   ExternalAgentSessionView,
   ExternalAgentView,
-  ProjectId,
-  TranscriptTargetId
+  ProjectId
 } from '@monad/protocol';
 import type { ExternalAgentHostDeps, LiveExternalAgentSession } from '@/services/external-agent/host/host-types.ts';
 import type { ExternalAgentProcess, ExternalAgentTerminal } from '@/services/external-agent/runtime-types.ts';
 import type { ExternalAgentLaunchSpec } from '@/services/external-agent/types.ts';
+import type { ExternalAgentTargetId } from '@/store/db/external-agent-sessions.ts';
 import type { ExternalAgentSessionRow } from '@/store/db/index.ts';
 
 import { chmodSync, realpathSync, statSync } from 'node:fs';
@@ -84,7 +84,7 @@ export class ExternalAgentSessionLauncher {
   constructor(private readonly ctx: ExternalAgentSessionLauncherContext) {}
 
   async start(args: {
-    transcriptTargetId: TranscriptTargetId;
+    transcriptTargetId: ExternalAgentTargetId;
     agentName: string;
     displayName?: string;
     templateAgentName?: string;

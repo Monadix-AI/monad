@@ -1,4 +1,4 @@
-import type { Cost, Event, EventType, TranscriptTargetId } from '@monad/protocol';
+import type { Cost, Event, EventType, SessionId } from '@monad/protocol';
 import type { Tool } from '@/capabilities/tools/types.ts';
 import type { ModelMessage, ModelUsage, ToolCall, ToolSpec } from '../model/index.ts';
 import type { ExplicitSkill } from './internal/explicit-skill.ts';
@@ -109,7 +109,7 @@ export class AgentLoop {
   }
 
   async runStream(
-    sessionId: TranscriptTargetId,
+    sessionId: SessionId,
     userText: string,
     signal?: AbortSignal,
     attachments?: ImageAttachment[]
@@ -202,11 +202,7 @@ export class AgentLoop {
     }
   }
 
-  async runBlock(
-    sessionId: TranscriptTargetId,
-    userText: string,
-    attachments?: ImageAttachment[]
-  ): Promise<ChatMessage> {
+  async runBlock(sessionId: SessionId, userText: string, attachments?: ImageAttachment[]): Promise<ChatMessage> {
     this.prompt.setAttachments(attachments);
     this.prompt.resetSkillExpansion();
     const submit = await this.hookOrchestrator.userPromptSubmit(sessionId, userText);
@@ -276,7 +272,7 @@ export class AgentLoop {
    * them (gate + sandbox via invokeTool), feed structured tool results back, and re-prompt —
    * up to a step budget. Returns the model's final prose.
    */
-  private async runToolLoop(sessionId: TranscriptTargetId): Promise<{ text: string; usage?: ModelUsage }> {
+  private async runToolLoop(sessionId: SessionId): Promise<{ text: string; usage?: ModelUsage }> {
     const maxTurns = this.deps.maxTurns;
     const maxBudgetUsd = this.deps.maxBudgetUsd;
     let messages = await this.prompt.buildPrompt(sessionId, true, this.hookOrchestrator.turnInjectedContext);
@@ -357,7 +353,7 @@ export class AgentLoop {
    * tools are registered.
    */
   private async runStreamWithTools(
-    sessionId: TranscriptTargetId,
+    sessionId: SessionId,
     messageId: `msg_${string}`,
     signal?: AbortSignal
   ): Promise<void> {
@@ -490,7 +486,7 @@ export class AgentLoop {
     emitToken: (delta: string) => void,
     emitReasoning: (delta: string) => void,
     signal: AbortSignal | undefined,
-    sessionId: TranscriptTargetId
+    sessionId: SessionId
   ): Promise<{
     text: string;
     reasoning: string;
@@ -554,10 +550,10 @@ export class AgentLoop {
     return body;
   }
 
-  private event(sessionId: TranscriptTargetId, type: EventType, payload: object): Event {
+  private event(sessionId: SessionId, type: EventType, payload: object): Event {
     return {
       id: newId('evt'),
-      transcriptTargetId: sessionId,
+      sessionId,
       type,
       actorAgentId: null,
       payload: payload as Record<string, unknown>,

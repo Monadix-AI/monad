@@ -1,5 +1,5 @@
 import type { ExternalAgentConfig } from '@monad/home';
-import type { MessageAttachmentRef, TranscriptTargetId } from '@monad/protocol';
+import type { MessageAttachmentRef, SessionId } from '@monad/protocol';
 import type { SessionContext } from '@/handlers/session/context.ts';
 import type { createManagedExternalAgentDelivery } from '@/handlers/session/handlers/managed-external-agent-delivery.ts';
 import type { ManagedExternalAgentProjectMessageSender } from '@/handlers/session/handlers/messaging-notices.ts';
@@ -12,7 +12,7 @@ export function createMessagingNotifyHandlers(
   ctx: SessionContext,
   managedExternalAgentDelivery: ReturnType<typeof createManagedExternalAgentDelivery>
 ) {
-  const { requireTranscriptTarget } = ctx;
+  const { requireSession } = ctx;
   const {
     completeManagedExternalAgentThinking,
     retireManagedExternalAgentThinking,
@@ -27,12 +27,12 @@ export function createMessagingNotifyHandlers(
       sender,
       exceptAgentName
     }: {
-      sessionId: TranscriptTargetId;
+      sessionId: SessionId;
       text: string;
       sender?: ManagedExternalAgentProjectMessageSender;
       exceptAgentName?: string;
     }) {
-      const session = requireTranscriptTarget(sessionId);
+      const session = requireSession(sessionId);
       const paths = ctx.deps.paths;
       const cfg = paths ? await loadAll(paths.config, paths.profile) : null;
       const externalAgents = (cfg?.externalAgents ?? []).filter(
@@ -54,12 +54,12 @@ export function createMessagingNotifyHandlers(
       to,
       text
     }: {
-      sessionId: TranscriptTargetId;
+      sessionId: SessionId;
       fromAgentName: string;
       to: string;
       text: string;
     }) {
-      const session = requireTranscriptTarget(sessionId);
+      const session = requireSession(sessionId);
       const paths = ctx.deps.paths;
       const cfg = paths ? await loadAll(paths.config, paths.profile) : null;
       const externalAgents = (cfg?.externalAgents ?? []).filter(
@@ -77,7 +77,7 @@ export function createMessagingNotifyHandlers(
       threadId,
       attachments
     }: {
-      sessionId: TranscriptTargetId;
+      sessionId: SessionId;
       externalAgentSessionId: string;
       agentName: string;
       text: string;
@@ -102,7 +102,7 @@ export function createMessagingNotifyHandlers(
       error,
       post = true
     }: {
-      sessionId: TranscriptTargetId;
+      sessionId: SessionId;
       externalAgentSessionId: string;
       agentName: string;
       text: string;

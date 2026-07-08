@@ -2,7 +2,7 @@ import type {
   AttachmentReadResponse,
   MessageAttachmentRef,
   NativeAgentAttachmentInput,
-  ProjectId
+  SessionId
 } from '@monad/protocol';
 import type { createDaemonHandlers } from '@/handlers/daemon-handlers/index.ts';
 
@@ -23,7 +23,7 @@ const ATTACHMENT_PREVIEW_READ_BYTES = NATIVE_AGENT_ATTACHMENT_PREVIEW_MAX * 4;
 const ATTACHMENT_INLINE_READ_MAX = 1_000_000;
 
 interface NativeAgentAttachmentRootRequest {
-  projectId: ProjectId;
+  sessionId: SessionId;
   agentId: string;
   workingPath?: string | null;
 }
@@ -32,7 +32,7 @@ export type NativeAgentAttachmentRoots = (request: NativeAgentAttachmentRootRequ
 
 export type NativeAgentAttachmentResolver = (
   body: { text?: string; attachments?: NativeAgentAttachmentInput[] },
-  binding: { projectId: ProjectId; agentId: string },
+  binding: { sessionId: SessionId; agentId: string },
   attachmentRoots: readonly string[]
 ) => Promise<{ text: string; noticeText: string; attachments: MessageAttachmentRef[] }>;
 
@@ -106,7 +106,7 @@ export function createNativeAgentAttachmentResolver(
 ): NativeAgentAttachmentResolver {
   return async function resolveAttachmentPayload(
     body: { text?: string; attachments?: NativeAgentAttachmentInput[] },
-    binding: { projectId: ProjectId; agentId: string },
+    binding: { sessionId: SessionId; agentId: string },
     attachmentRoots: readonly string[]
   ): Promise<{ text: string; noticeText: string; attachments: MessageAttachmentRef[] }> {
     const parsed = body.text ? parseNativeAgentFileReferences(body.text) : { text: body.text ?? '', paths: [] };
@@ -142,7 +142,7 @@ export function createNativeAgentAttachmentResolver(
     const attachments = store.registerMessageAttachments(
       snapshots.map(({ ref, preview }) => ({
         id: newId('att'),
-        projectId: binding.projectId,
+        projectId: binding.sessionId,
         ...ref,
         preview,
         createdBy: binding.agentId,
@@ -176,12 +176,12 @@ export function createNativeAgentAttachmentReader(
         'ATTACHMENT_PATH_CHANGED'
       );
     }
-    const project = store.getSession(attachment.projectId) ?? store.getWorkplaceProject(attachment.projectId);
+    const session = store.getSession(attachment.projectId as SessionId);
     const allowedRootRealpaths = await resolveAllowedRootRealpaths(
       attachmentRoots({
-        projectId: attachment.projectId as ProjectId,
+        sessionId: attachment.projectId as SessionId,
         agentId: attachment.createdBy ?? '',
-        workingPath: project?.cwd
+        workingPath: session?.cwd
       })
     );
     if (!allowedRootRealpaths.some((root) => resolved === root || resolved.startsWith(root + sep))) {

@@ -1,10 +1,4 @@
-import type {
-  Event,
-  MessageAttachmentRef,
-  MessageId,
-  NativeAgentDeliveryId,
-  TranscriptTargetId
-} from '@monad/protocol';
+import type { Event, MessageAttachmentRef, MessageId, NativeAgentDeliveryId, SessionId } from '@monad/protocol';
 import type { SessionContext } from '@/handlers/session/context.ts';
 
 import { newId } from '@monad/protocol';
@@ -21,10 +15,7 @@ export function createManagedExternalAgentMessages(ctx: SessionContext) {
     { messageId: MessageId; deliveryId?: NativeAgentDeliveryId }
   >();
 
-  function deliveryIdFromMessageData(
-    sessionId: TranscriptTargetId,
-    messageId: MessageId
-  ): NativeAgentDeliveryId | undefined {
+  function deliveryIdFromMessageData(sessionId: SessionId, messageId: MessageId): NativeAgentDeliveryId | undefined {
     const data = store.getMessage(sessionId, messageId)?.data;
     if (!data || typeof data !== 'object') return undefined;
     const deliveryId = (data as { deliveryId?: unknown }).deliveryId;
@@ -34,7 +25,7 @@ export function createManagedExternalAgentMessages(ctx: SessionContext) {
   }
 
   function emitManagedExternalAgentThinking(
-    sessionId: TranscriptTargetId,
+    sessionId: SessionId,
     externalAgentSessionId: string,
     agentName: string,
     deliveryId?: NativeAgentDeliveryId
@@ -68,7 +59,7 @@ export function createManagedExternalAgentMessages(ctx: SessionContext) {
     const emit = makeEmit(round);
     emit({
       id: newId('evt'),
-      transcriptTargetId: sessionId,
+      sessionId: sessionId as SessionId,
       type: 'agent.token',
       actorAgentId: null,
       payload: {
@@ -84,7 +75,7 @@ export function createManagedExternalAgentMessages(ctx: SessionContext) {
     });
     emit({
       id: newId('evt'),
-      transcriptTargetId: sessionId,
+      sessionId: sessionId as SessionId,
       type: 'agent.reasoning',
       actorAgentId: null,
       payload: {
@@ -111,7 +102,7 @@ export function createManagedExternalAgentMessages(ctx: SessionContext) {
     source = 'managed-external-agent',
     error = false
   }: {
-    sessionId: TranscriptTargetId;
+    sessionId: SessionId;
     externalAgentSessionId: string;
     agentName: string;
     text: string;
@@ -154,7 +145,7 @@ export function createManagedExternalAgentMessages(ctx: SessionContext) {
     const round: Event[] = [];
     makeEmit(round)({
       id: newId('evt'),
-      transcriptTargetId: sessionId,
+      sessionId: sessionId as SessionId,
       type: 'agent.message',
       actorAgentId: null,
       payload: {
@@ -173,7 +164,7 @@ export function createManagedExternalAgentMessages(ctx: SessionContext) {
   }
 
   function retireManagedExternalAgentThinking(
-    sessionId: TranscriptTargetId,
+    sessionId: SessionId,
     externalAgentSessionId: string,
     agentName: string
   ): MessageId | null {
@@ -193,7 +184,7 @@ export function createManagedExternalAgentMessages(ctx: SessionContext) {
     const round: Event[] = [];
     makeEmit(round)({
       id: newId('evt'),
-      transcriptTargetId: sessionId,
+      sessionId: sessionId as SessionId,
       type: 'agent.message',
       actorAgentId: null,
       payload: {
