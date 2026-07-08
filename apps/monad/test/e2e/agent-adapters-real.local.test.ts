@@ -68,17 +68,7 @@ async function runTurn(args: {
       }
     ]
   });
-  const projectId = 'prj_01KWLIVEADAPTERS000000000001';
-  store.insertWorkplaceProject({
-    id: projectId,
-    title: 'live adapter test',
-    ownerPrincipalId: 'prn_test',
-    state: 'active',
-    archived: false,
-    memberTemplates: [],
-    createdAt: '2026-07-04T00:00:00.000Z',
-    updatedAt: '2026-07-04T00:00:00.000Z'
-  });
+  const projectId = 'ses_01KWLIVEADAPTERS000000000001';
   const observed = (id: string): string => {
     const obs = host.observe(id);
     return obs && 'output' in obs ? (obs.output ?? '') : '';

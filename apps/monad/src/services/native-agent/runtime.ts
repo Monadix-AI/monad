@@ -26,7 +26,7 @@ function tokenMatchesHash(providedToken: string, expectedHash: string): boolean 
 function runtimeSummary(nativeSession: ExternalAgentSessionRow): NativeAgentRuntime {
   return nativeAgentRuntimeSchema.parse({
     id: nativeSession.id,
-    transcriptTargetId: nativeSession.transcriptTargetId,
+    sessionId: nativeSession.transcriptTargetId,
     agentName: nativeSession.agentName,
     provider: nativeSession.provider,
     workingPath: nativeSession.workingPath,

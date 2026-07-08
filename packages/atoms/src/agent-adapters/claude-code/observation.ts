@@ -206,11 +206,15 @@ export function claudeRecordEvents(
       textRole: record.type === 'user' ? 'user' : 'agent'
     });
   }
-  if (record.type === 'tool_result') {
+  // The adapter emits `{ type: 'tool_result', ... }` records at runtime (see index.ts), but that
+  // variant isn't in the SDKMessage `type` union, so read through the loose Record view rather than
+  // the narrowed (here: `never`) discriminant.
+  const loose = record as Record<string, unknown>;
+  if (loose.type === 'tool_result') {
     return observation({
       id: `${base}:tool-result`,
       role: 'tool',
-      text: textValue(record.output, record.result, record.content) ?? JSON.stringify(record),
+      text: textValue(loose.output, loose.result, loose.content) ?? JSON.stringify(record),
       source: 'claude-code-sdk',
       providerEventType: 'tool_result',
       raw: record

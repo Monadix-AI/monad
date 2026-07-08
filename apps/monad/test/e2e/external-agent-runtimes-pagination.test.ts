@@ -12,7 +12,7 @@ import { buildHandlers, mockModel, serveTransport, TRANSPORTS, type TransportHan
 function seedRunning(store: ReturnType<typeof createStore>, id: string, startedAt: string): void {
   store.upsertExternalAgentSession({
     id,
-    transcriptTargetId: 'prj_01KWRUNTIME000000000001',
+    transcriptTargetId: 'ses_01KWRUNTIME000000000001',
     agentName: 'codex',
     provider: 'codex',
     workingPath: '/tmp/p',
@@ -40,16 +40,6 @@ for (const kind of TRANSPORTS) {
 
     beforeEach(() => {
       store = createStore();
-      store.insertWorkplaceProject({
-        id: 'prj_01KWRUNTIME000000000001',
-        title: 'Runtime overview',
-        ownerPrincipalId: 'prn_test',
-        state: 'active',
-        archived: false,
-        memberTemplates: [],
-        createdAt: '2026-07-06T00:00:00.000Z',
-        updatedAt: '2026-07-06T00:00:00.000Z'
-      });
       // Seed AFTER the transport/host exists: ExternalAgentHost reconciles orphaned "running"/"starting"
       // rows (no live process backing them) to 'stopped' once at construction, which would otherwise
       // race with (and erase) these fixture rows.

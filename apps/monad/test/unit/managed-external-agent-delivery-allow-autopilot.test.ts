@@ -1,10 +1,9 @@
 import type { ExternalAgentConfig } from '@monad/home';
-import type { ExternalAgentSessionView, TranscriptTarget } from '@monad/protocol';
+import type { ExternalAgentSessionView, Session } from '@monad/protocol';
 import type { SessionContext } from '@/handlers/session/context.ts';
 
 import { expect, test } from 'bun:test';
 import { builtinAgentAdapters } from '@monad/atoms/agent-adapters';
-import { workplaceProjectMembersExtKey } from '@monad/protocol';
 
 import { createManagedExternalAgentDelivery } from '@/handlers/session/handlers/managed-external-agent-delivery.ts';
 import { registerAgentAdapterImpl } from '@/services/external-agent/index.ts';
@@ -35,7 +34,20 @@ function buildHarness() {
     markExternalAgentInboxDelivered: () => {},
     markExternalAgentInboxVisible: () => {},
     findManagedExternalAgentStreamingMessage: () => undefined,
-    insertMessage: () => {}
+    insertMessage: () => {},
+    // Track B: managed members are now read from session_members, not origin.ext.
+    listSessionMembers: () => [
+      {
+        sessionId: 'ses_delegated',
+        memberId: 'codex',
+        templateId: null,
+        type: 'external-agent',
+        externalAgentSessionId: null,
+        data: { name: 'codex', settings: { managedProjectAgent: true, allowAutopilot: false } },
+        createdAt: '',
+        updatedAt: ''
+      }
+    ]
   };
   const ctx = {
     deps: { store, log: undefined, externalAgentHost },
@@ -55,22 +67,12 @@ const externalAgents: ExternalAgentConfig[] = [
   } as unknown as ExternalAgentConfig
 ];
 
-function sessionWithDelegatedCodexMember(): TranscriptTarget {
+function sessionWithDelegatedCodexMember(): Session {
   return {
-    id: 'prj_delegated',
+    id: 'ses_delegated',
     cwd: '/tmp/prj',
-    origin: {
-      ext: {
-        [workplaceProjectMembersExtKey]: [
-          {
-            type: 'external-agent',
-            name: 'codex',
-            settings: { managedProjectAgent: true, allowAutopilot: false }
-          }
-        ]
-      }
-    }
-  } as unknown as TranscriptTarget;
+    origin: { client: 'workplace' }
+  } as unknown as Session;
 }
 
 test('project-message delivery threads a delegated member allowAutopilot to host.start', async () => {

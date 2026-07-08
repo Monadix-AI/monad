@@ -219,11 +219,11 @@ export function getNativeAgentDelivery(
     )
     .get(deliveryId) as Record<string, unknown> | null;
   if (!row) return null;
-  const projectId = (row.project_id ?? row.transcript_target_id) as string;
-  if (!projectId.startsWith('prj_')) return null;
+  const sessionId = (row.project_id ?? row.transcript_target_id) as string;
+  if (!sessionId.startsWith('ses_')) return null;
   return nativeAgentDeliverySchema.parse({
     id: row.delivery_id,
-    projectId,
+    sessionId,
     memberInstanceId: row.member_instance_id ?? row.agent_name,
     externalAgentSessionId: row.external_agent_session_id,
     triggerMessageId: row.trigger_message_id ?? undefined,

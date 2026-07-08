@@ -7,8 +7,8 @@ import {
   type Event,
   nativeAgentRuntimeInfoResponseSchema,
   type ProjectId,
-  type SessionUiEvent,
-  workplaceProjectMembersExtKey
+  type SessionId,
+  type SessionUiEvent
 } from '@monad/protocol';
 
 import { createHttpTransport } from '@/transports/http.ts';
@@ -36,14 +36,31 @@ async function responseError(res: Response): Promise<{ error?: string; code?: st
   return (await res.json().catch(() => ({}))) as { error?: string; code?: string };
 }
 
-async function createSession(t: TransportHandle): Promise<ProjectId> {
+async function createProject(t: TransportHandle): Promise<ProjectId> {
   const res = await t.fetch('/v1/workplace/projects', json({ title: 'Workplace: managed native agent' }));
   expect(res.status).toBe(201);
   return ((await res.json()) as { projectId: ProjectId }).projectId;
 }
 
-async function messages(t: TransportHandle, sessionId: ProjectId): Promise<Array<{ role: string; text: string }>> {
-  const res = await t.fetch(`/v1/projects/${sessionId}/messages`);
+// A project (prj_) is an environment; its conversation is a real session (ses_) created under it.
+// Every transcript/binding id in this file is the session id, never the project id.
+async function createProjectSession(t: TransportHandle, projectId: ProjectId, cwd?: string): Promise<SessionId> {
+  const res = await t.fetch(
+    `/v1/projects/${projectId}/sessions`,
+    json({ title: 'Workplace: managed native agent', ...(cwd ? { cwd } : {}) })
+  );
+  expect(res.status).toBe(201);
+  return ((await res.json()) as { sessionId: SessionId }).sessionId;
+}
+
+// Convenience: create a project and its single conversation session in one step.
+async function createSession(t: TransportHandle, cwd?: string): Promise<SessionId> {
+  const projectId = await createProject(t);
+  return createProjectSession(t, projectId, cwd);
+}
+
+async function messages(t: TransportHandle, sessionId: SessionId): Promise<Array<{ role: string; text: string }>> {
+  const res = await t.fetch(`/v1/sessions/${sessionId}/messages`);
   expect(res.status).toBe(200);
   return ((await res.json()) as { messages: Array<{ role: string; text: string }> }).messages.map(({ role, text }) => ({
     role,
@@ -51,8 +68,34 @@ async function messages(t: TransportHandle, sessionId: ProjectId): Promise<Array
   }));
 }
 
+// A "project message" fan-out now targets a SESSION id via the channel alias
+// (POST /v1/channels/:sessionId/messages → sendChannelMessage → sendProjectMessage).
+async function _sendChannelMessage(t: TransportHandle, sessionId: SessionId, text: string): Promise<Response> {
+  return t.fetch(`/v1/channels/${sessionId}/messages`, json({ text }));
+}
+
+// Live per-session member binding (Track B `session_members`), inserted directly so display-name
+// resolution and managed-member enumeration see the member without spawning a real runtime.
+function addSessionMember(
+  handlers: ReturnType<typeof buildHandlers>,
+  sessionId: SessionId,
+  agentName: string,
+  displayName: string
+): void {
+  const now = new Date().toISOString();
+  handlers.store.insertSessionMember({
+    sessionId,
+    memberId: agentName,
+    templateId: null,
+    type: 'external-agent',
+    data: { name: agentName, displayName, settings: { managedProjectAgent: true } },
+    createdAt: now,
+    updatedAt: now
+  });
+}
+
 function bindingHeaders(
-  _sessionId: ProjectId,
+  _sessionId: SessionId,
   externalAgentSessionId = 'exa_test',
   _agentId = 'codex'
 ): Record<string, string> {
@@ -64,7 +107,7 @@ function bindingHeaders(
 
 function createManagedNativeSession(
   handlers: ReturnType<typeof buildHandlers>,
-  sessionId: ProjectId,
+  sessionId: SessionId,
   id = 'exa_test',
   agentName = 'codex',
   state: 'running' | 'stopped' = 'running',
@@ -110,7 +153,7 @@ for (const kind of TRANSPORTS) {
 
       const res = await t.fetch(
         '/v1/internal/native-agent/project/post',
-        json({ projectId: sessionId, text: 'managed reply' }, bindingHeaders(sessionId))
+        json({ sessionId, text: 'managed reply' }, bindingHeaders(sessionId))
       );
 
       expect(res.status).toBe(200);
@@ -134,10 +177,7 @@ for (const kind of TRANSPORTS) {
 
         const posted = await t.fetch(
           '/v1/internal/native-agent/project/post',
-          json(
-            { projectId: sessionId, attachments: [{ path: filePath }, { path: extraPath }] },
-            bindingHeaders(sessionId)
-          )
+          json({ sessionId, attachments: [{ path: filePath }, { path: extraPath }] }, bindingHeaders(sessionId))
         );
         expect(posted.status).toBe(200);
         const postedBody = (await posted.json()) as {
@@ -191,7 +231,7 @@ for (const kind of TRANSPORTS) {
         await writeFile(filePath, '# 报告', 'utf8');
         const posted = await t.fetch(
           '/v1/internal/native-agent/project/post',
-          json({ attachments: [{ path: filePath }] }, bindingHeaders(sessionId))
+          json({ sessionId, attachments: [{ path: filePath }] }, bindingHeaders(sessionId))
         );
         expect(posted.status).toBe(200);
         const { message } = (await posted.json()) as { message: { attachments?: Array<{ id: string }> } };
@@ -220,7 +260,7 @@ for (const kind of TRANSPORTS) {
         // Referencing a nonexistent file fails the post outright; nothing lands on the wall.
         const missing = await t.fetch(
           '/v1/internal/native-agent/project/post',
-          json({ attachments: [{ path: join(dir, 'nope.md') }] }, bindingHeaders(sessionId))
+          json({ sessionId, attachments: [{ path: join(dir, 'nope.md') }] }, bindingHeaders(sessionId))
         );
         expect(missing.status).toBe(400);
 
@@ -230,7 +270,7 @@ for (const kind of TRANSPORTS) {
         await writeFile(secretPath, 'not yours', 'utf8');
         const outside = await t.fetch(
           '/v1/internal/native-agent/project/post',
-          json({ attachments: [{ path: secretPath }] }, bindingHeaders(sessionId))
+          json({ sessionId, attachments: [{ path: secretPath }] }, bindingHeaders(sessionId))
         );
         expect(outside.status).toBe(403);
         expect((await responseError(outside)).code).toBe('ATTACHMENT_PATH_OUTSIDE_WORKSPACE');
@@ -314,36 +354,11 @@ for (const kind of TRANSPORTS) {
       const handlers = buildHandlers(mockModel());
       t = serveTransport(kind, createHttpTransport(handlers));
       const sessionId = await createSession(t);
-      const current = handlers.store.getWorkplaceProject(sessionId);
-      if (!current) throw new Error('expected workplace project');
-      if (!current.origin) throw new Error('expected workplace project origin');
-      handlers.store.updateWorkplaceProject(sessionId, {
-        origin: {
-          ...current.origin,
-          ext: {
-            ...(current.origin.ext ?? {}),
-            [workplaceProjectMembersExtKey]: [
-              {
-                type: 'external-agent',
-                name: 'codex',
-                instanceId: 'codex',
-                displayName: 'Lily',
-                settings: { managedProjectAgent: true }
-              },
-              {
-                type: 'external-agent',
-                name: 'claude',
-                instanceId: 'claude',
-                displayName: 'Steve',
-                settings: { managedProjectAgent: true }
-              }
-            ]
-          }
-        }
-      });
+      addSessionMember(handlers, sessionId, 'codex', 'Lily');
+      addSessionMember(handlers, sessionId, 'claude', 'Steve');
       createManagedNativeSession(handlers, sessionId);
       createManagedNativeSession(handlers, sessionId, 'exa_peer', 'claude');
-      const requested = t.sse(`/v1/projects/${sessionId}/events`, {
+      const requested = t.sse(`/v1/sessions/${sessionId}/events`, {
         until: (event) => event.type === 'clarify.requested',
         timeoutMs: 3000
       });
@@ -392,7 +407,7 @@ for (const kind of TRANSPORTS) {
 
       const peerInbox = await t.fetch(
         '/v1/internal/native-agent/project/inbox',
-        json({ projectId: sessionId }, bindingHeaders(sessionId, 'exa_peer', 'claude'))
+        json({ sessionId }, bindingHeaders(sessionId, 'exa_peer', 'claude'))
       );
       expect(peerInbox.status).toBe(200);
       expect(
@@ -412,12 +427,12 @@ for (const kind of TRANSPORTS) {
       // Two agents post to the wall in sequence.
       const first = await t.fetch(
         '/v1/internal/native-agent/project/post',
-        json({ projectId: sessionId, text: 'codex: looks good' }, bindingHeaders(sessionId, 'exa_codex', 'codex'))
+        json({ sessionId, text: 'codex: looks good' }, bindingHeaders(sessionId, 'exa_codex', 'codex'))
       );
       expect(first.status).toBe(200);
       const second = await t.fetch(
         '/v1/internal/native-agent/project/post',
-        json({ projectId: sessionId, text: 'claude: I agree' }, bindingHeaders(sessionId, 'exa_claude', 'claude'))
+        json({ sessionId, text: 'claude: I agree' }, bindingHeaders(sessionId, 'exa_claude', 'claude'))
       );
       expect(second.status).toBe(200);
 
@@ -427,8 +442,8 @@ for (const kind of TRANSPORTS) {
         { role: 'assistant', text: 'claude: I agree' }
       ]);
 
-      // A viewer opening the project afterwards sees the same order + content in the projected UI.
-      const events = await t.sse(`/v1/projects/${sessionId}/ui-stream`, {
+      // A viewer opening the session afterwards sees the same order + content in the projected UI.
+      const events = await t.sse(`/v1/sessions/${sessionId}/ui-stream`, {
         until: (e) => (e as unknown as SessionUiEvent).kind === 'snapshot',
         timeoutMs: 3000
       });
@@ -476,24 +491,18 @@ for (const kind of TRANSPORTS) {
       // claude posts FIRST, codex SECOND — the reverse of the fan-out (placeholder) order.
       const claudePost = await t.fetch(
         '/v1/internal/native-agent/project/post',
-        json(
-          { projectId: sessionId, text: 'claude: here is the split' },
-          bindingHeaders(sessionId, 'exa_claude', 'claude')
-        )
+        json({ sessionId, text: 'claude: here is the split' }, bindingHeaders(sessionId, 'exa_claude', 'claude'))
       );
       expect(claudePost.status).toBe(200);
       const codexPost = await t.fetch(
         '/v1/internal/native-agent/project/post',
-        json(
-          { projectId: sessionId, text: 'codex: that split matches mine' },
-          bindingHeaders(sessionId, 'exa_codex', 'codex')
-        )
+        json({ sessionId, text: 'codex: that split matches mine' }, bindingHeaders(sessionId, 'exa_codex', 'codex'))
       );
       expect(codexPost.status).toBe(200);
 
       // A late viewer's hydrated wall orders by post time (the projection's seq), so claude's reply
       // precedes the codex reply that answers it — even though codex's placeholder was reserved first.
-      const events = await t.sse(`/v1/projects/${sessionId}/ui-stream`, {
+      const events = await t.sse(`/v1/sessions/${sessionId}/ui-stream`, {
         until: (e) => (e as unknown as SessionUiEvent).kind === 'snapshot',
         timeoutMs: 3000
       });
@@ -513,14 +522,14 @@ for (const kind of TRANSPORTS) {
       t = serveTransport(kind, createHttpTransport(handlers));
       const sessionId = await createSession(t);
       createManagedNativeSession(handlers, sessionId);
-      const eventP = t.sse(`/v1/projects/${sessionId}/events`, {
+      const eventP = t.sse(`/v1/sessions/${sessionId}/events`, {
         until: (event) =>
           event.type === 'agent.message' &&
           (event.payload as { agentName?: unknown; text?: unknown }).agentName === 'codex' &&
           (event.payload as { text?: unknown }).text === 'live managed reply',
         timeoutMs: 3000
       });
-      const uiP = t.sse(`/v1/projects/${sessionId}/ui-stream`, {
+      const uiP = t.sse(`/v1/sessions/${sessionId}/ui-stream`, {
         until: (event) => {
           const uiEvent = event as unknown as SessionUiEvent;
           return (
@@ -536,7 +545,7 @@ for (const kind of TRANSPORTS) {
 
       const res = await t.fetch(
         '/v1/internal/native-agent/project/post',
-        json({ projectId: sessionId, text: 'live managed reply' }, bindingHeaders(sessionId))
+        json({ sessionId, text: 'live managed reply' }, bindingHeaders(sessionId))
       );
 
       expect(res.status).toBe(200);
@@ -553,11 +562,11 @@ for (const kind of TRANSPORTS) {
 
       const first = await t.fetch(
         '/v1/internal/native-agent/project/post',
-        json({ projectId: sessionId, text: 'KTzhou joined. Ready for tasks.' }, bindingHeaders(sessionId))
+        json({ sessionId, text: 'KTzhou joined. Ready for tasks.' }, bindingHeaders(sessionId))
       );
       const second = await t.fetch(
         '/v1/internal/native-agent/project/post',
-        json({ projectId: sessionId, text: 'KTzhou joined. Ready for tasks.' }, bindingHeaders(sessionId))
+        json({ sessionId, text: 'KTzhou joined. Ready for tasks.' }, bindingHeaders(sessionId))
       );
 
       expect(first.status).toBe(200);
@@ -683,7 +692,7 @@ for (const kind of TRANSPORTS) {
 
       const read = await t.fetch(
         '/v1/internal/native-agent/project/read',
-        json({ projectId: sessionId, threadId: 'msg_ROOT' }, bindingHeaders(sessionId))
+        json({ sessionId, threadId: 'msg_ROOT' }, bindingHeaders(sessionId))
       );
 
       expect(read.status).toBe(200);
@@ -693,7 +702,7 @@ for (const kind of TRANSPORTS) {
 
       const inbox = await t.fetch(
         '/v1/internal/native-agent/project/inbox',
-        json({ projectId: sessionId }, bindingHeaders(sessionId))
+        json({ sessionId }, bindingHeaders(sessionId))
       );
       expect(inbox.status).toBe(200);
       expect(
@@ -705,10 +714,7 @@ for (const kind of TRANSPORTS) {
       t = serveTransport(kind, createHttpTransport(buildHandlers(mockModel())));
       const sessionId = await createSession(t);
 
-      const res = await t.fetch(
-        '/v1/internal/native-agent/project/post',
-        json({ projectId: sessionId, text: 'should fail' })
-      );
+      const res = await t.fetch('/v1/internal/native-agent/project/post', json({ sessionId, text: 'should fail' }));
 
       expect(res.status).toBe(403);
       expect(await responseError(res)).toMatchObject({ code: 'NOT_MANAGED_EXTERNAL_AGENT' });
@@ -721,7 +727,7 @@ for (const kind of TRANSPORTS) {
 
       const res = await t.fetch(
         '/v1/internal/native-agent/project/post',
-        json({ projectId: sessionId, text: 'should fail' }, bindingHeaders(sessionId))
+        json({ sessionId, text: 'should fail' }, bindingHeaders(sessionId))
       );
 
       expect(res.status).toBe(404);
@@ -737,10 +743,7 @@ for (const kind of TRANSPORTS) {
 
       const res = await t.fetch(
         '/v1/internal/native-agent/project/post',
-        json(
-          { projectId: sessionId, text: 'should fail' },
-          { ...bindingHeaders(sessionId), authorization: 'Bearer wrong-token' }
-        )
+        json({ sessionId, text: 'should fail' }, { ...bindingHeaders(sessionId), authorization: 'Bearer wrong-token' })
       );
 
       expect(res.status).toBe(403);
@@ -756,7 +759,7 @@ for (const kind of TRANSPORTS) {
 
       const res = await t.fetch(
         '/v1/internal/native-agent/project/post',
-        json({ projectId: sessionId, text: 'should fail' }, bindingHeaders(sessionId, 'exa_stopped'))
+        json({ sessionId, text: 'should fail' }, bindingHeaders(sessionId, 'exa_stopped'))
       );
 
       expect(res.status).toBe(403);
@@ -764,7 +767,7 @@ for (const kind of TRANSPORTS) {
       expect(await messages(t, sessionId)).toEqual([]);
     });
 
-    test('project scoped commands reject a different project id', async () => {
+    test('project scoped commands reject a different session id', async () => {
       const handlers = buildHandlers(mockModel());
       t = serveTransport(kind, createHttpTransport(handlers));
       const sessionId = await createSession(t);
@@ -773,7 +776,7 @@ for (const kind of TRANSPORTS) {
 
       const res = await t.fetch(
         '/v1/internal/native-agent/project/post',
-        json({ projectId: otherSessionId, text: 'should fail' }, bindingHeaders(sessionId))
+        json({ sessionId: otherSessionId, text: 'should fail' }, bindingHeaders(sessionId))
       );
 
       expect(res.status).toBe(403);
@@ -792,7 +795,7 @@ for (const kind of TRANSPORTS) {
 
       const first = await t.fetch(
         '/v1/internal/native-agent/project/inbox',
-        json({ projectId: sessionId }, bindingHeaders(sessionId, 'exa_inbox'))
+        json({ sessionId }, bindingHeaders(sessionId, 'exa_inbox'))
       );
       expect(first.status).toBe(200);
       const firstBody = (await first.json()) as { items: Array<{ deliveryId?: string; message: { text: string } }> };
@@ -805,7 +808,7 @@ for (const kind of TRANSPORTS) {
       const deliveryBody = (await deliveryRes.json()) as {
         delivery: {
           id: string;
-          projectId: string;
+          sessionId: string;
           externalAgentSessionId: string;
           triggerMessageSeq: number;
           state: string;
@@ -815,7 +818,7 @@ for (const kind of TRANSPORTS) {
       };
       expect(deliveryBody.delivery).toMatchObject({
         id: deliveryId,
-        projectId: sessionId,
+        sessionId,
         externalAgentSessionId: 'exa_inbox',
         triggerMessageSeq: 1,
         state: 'visible'
@@ -837,7 +840,7 @@ for (const kind of TRANSPORTS) {
 
       const second = await t.fetch(
         '/v1/internal/native-agent/project/inbox',
-        json({ projectId: sessionId }, bindingHeaders(sessionId, 'exa_inbox'))
+        json({ sessionId }, bindingHeaders(sessionId, 'exa_inbox'))
       );
       expect(second.status).toBe(200);
       expect(((await second.json()) as { items: unknown[] }).items).toEqual([]);
@@ -853,13 +856,13 @@ for (const kind of TRANSPORTS) {
 
       const ack = await t.fetch(
         '/v1/internal/native-agent/project/inbox/ack',
-        json({ projectId: sessionId }, bindingHeaders(sessionId, 'exa_ack'))
+        json({ sessionId }, bindingHeaders(sessionId, 'exa_ack'))
       );
       expect(ack.status).toBe(200);
 
       const inbox = await t.fetch(
         '/v1/internal/native-agent/project/inbox',
-        json({ projectId: sessionId }, bindingHeaders(sessionId, 'exa_ack'))
+        json({ sessionId }, bindingHeaders(sessionId, 'exa_ack'))
       );
       expect(inbox.status).toBe(200);
       expect(((await inbox.json()) as { items: unknown[] }).items).toEqual([]);
@@ -884,7 +887,7 @@ for (const kind of TRANSPORTS) {
       const body = nativeAgentRuntimeInfoResponseSchema.parse(await res.json());
       expect(body).toMatchObject({
         agentId: 'codex',
-        projectId: sessionId,
+        sessionId,
         externalAgentSessionId: 'exa_runtime_info',
         lastDeliveredSeq: 2,
         lastVisibleSeq: 0,
@@ -892,7 +895,7 @@ for (const kind of TRANSPORTS) {
       });
       expect(body.runtime).toMatchObject({
         id: 'exa_runtime_info',
-        transcriptTargetId: sessionId,
+        sessionId,
         agentName: 'codex',
         provider: 'codex',
         workingPath: '/tmp/project',

@@ -1,4 +1,4 @@
-import type { Event, ProjectId, SessionId, SessionUiEvent } from '@monad/protocol';
+import type { Event, SessionId, SessionUiEvent } from '@monad/protocol';
 
 import { expect, test } from 'bun:test';
 import { newId } from '@monad/protocol';
@@ -7,8 +7,8 @@ import { RoundCache } from '@/services/round-cache.ts';
 import { buildMockModel } from '../../fixtures/mock-model.ts';
 import { buildHandlers } from '../../helpers.ts';
 
-function evt(transcriptTargetId: SessionId, type: Event['type'], payload: Record<string, unknown>): Event {
-  return { id: newId('evt'), transcriptTargetId, type, actorAgentId: null, payload, at: new Date().toISOString() };
+function evt(sessionId: SessionId, type: Event['type'], payload: Record<string, unknown>): Event {
+  return { id: newId('evt'), sessionId, type, actorAgentId: null, payload, at: new Date().toISOString() };
 }
 
 async function collect(
@@ -109,7 +109,8 @@ test('subscribeUi keeps managed external agent joins after newer transcript mess
     cwd: process.cwd(),
     origin: { surface: 'web', client: 'workplace', transport: 'http', writableBy: ['http'], branchableBy: ['http'] }
   });
-  const project = projectId as ProjectId;
+  const { sessionId } = await handlers.session.createProjectSession({ projectId, title: 'project session' });
+  const project = sessionId;
   const startedAt = '2026-07-02T00:00:00.000Z';
   const messageAt = '2026-07-02T00:01:00.000Z';
 

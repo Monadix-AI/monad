@@ -1,3 +1,4 @@
+import type { ProjectId } from '@monad/protocol';
 import type { ExternalAgentSessionRow } from '@/store/db/index.ts';
 
 import { afterEach, beforeEach, expect, test } from 'bun:test';
@@ -20,7 +21,7 @@ afterEach(() => {
 
 const row: ExternalAgentSessionRow = {
   id: 'exa_1',
-  transcriptTargetId: 'prj_project',
+  transcriptTargetId: 'ses_project',
   agentName: 'codex',
   provider: 'codex' as const,
   workingPath: '/tmp/project',
@@ -46,7 +47,7 @@ test('external agent session lifecycle stores output snapshots and exit status',
   store.updateExternalAgentSessionRef('exa_1', 'provider-session-1');
   store.closeExternalAgentSession('exa_1', '2026-06-28T00:00:01.000Z', 0);
 
-  const rows = store.listExternalAgentSessionsForTranscriptTarget('prj_project');
+  const rows = store.listExternalAgentSessionsForTranscriptTarget('ses_project');
   expect(rows).toHaveLength(1);
   expect(rows[0]?.outputSnapshot).toBe('hello');
   expect(rows[0]?.providerSessionRef).toBe('provider-session-1');
@@ -100,7 +101,7 @@ test('reconcileOrphanedExternalAgentSessions preserves managed provider refs for
 });
 
 test('failOrphanedStreamingMessages retires empty managed external agent thinking placeholders', () => {
-  store.insertMessage('msg_thinking', 'prj_project', '', '2026-06-28T00:00:01.000Z', 'assistant', {
+  store.insertMessage('msg_thinking', 'ses_project', '', '2026-06-28T00:00:01.000Z', 'assistant', {
     data: {
       agentName: 'codex',
       externalAgentSessionId: 'exa_1',
@@ -115,9 +116,9 @@ test('failOrphanedStreamingMessages retires empty managed external agent thinkin
 });
 
 test('external agent inbox diagnostics count pending visible messages', () => {
-  store.insertMessage('msg_1', 'prj_project', 'seen', '2026-06-28T00:00:01.000Z', 'user');
-  store.insertMessage('msg_2', 'prj_project', 'pending one', '2026-06-28T00:00:02.000Z', 'user');
-  store.insertMessage('msg_3', 'prj_project', 'pending two', '2026-06-28T00:00:03.000Z', 'user');
+  store.insertMessage('msg_1', 'ses_project', 'seen', '2026-06-28T00:00:01.000Z', 'user');
+  store.insertMessage('msg_2', 'ses_project', 'pending one', '2026-06-28T00:00:02.000Z', 'user');
+  store.insertMessage('msg_3', 'ses_project', 'pending two', '2026-06-28T00:00:03.000Z', 'user');
   store.upsertExternalAgentSession({ ...row, id: 'exa_inbox_diag', lastVisibleSeq: 1, lastDeliveredSeq: 3 });
   store.enqueueExternalAgentInboxItem('exa_inbox_diag', 2);
   store.enqueueExternalAgentInboxItem('exa_inbox_diag', 3);
@@ -126,19 +127,19 @@ test('external agent inbox diagnostics count pending visible messages', () => {
 });
 
 test('external agent inbox diagnostics ignore inactive messages', () => {
-  store.insertMessage('msg_1', 'prj_project', 'pending one', '2026-06-28T00:00:01.000Z', 'user');
-  store.insertMessage('msg_2', 'prj_project', 'pending two', '2026-06-28T00:00:02.000Z', 'user');
+  store.insertMessage('msg_1', 'ses_project', 'pending one', '2026-06-28T00:00:01.000Z', 'user');
+  store.insertMessage('msg_2', 'ses_project', 'pending two', '2026-06-28T00:00:02.000Z', 'user');
   store.upsertExternalAgentSession({ ...row, id: 'exa_inbox_diag', lastVisibleSeq: 0, lastDeliveredSeq: 2 });
   store.enqueueExternalAgentInboxItem('exa_inbox_diag', 1);
   store.enqueueExternalAgentInboxItem('exa_inbox_diag', 2);
-  store.restoreMessages('prj_project', 'msg_2');
+  store.restoreMessages('ses_project', 'msg_2');
 
   expect(store.countExternalAgentInbox('exa_inbox_diag')).toBe(1);
 });
 
 test('external agent inbox only exposes messages explicitly queued for that runtime', () => {
-  store.insertMessage('msg_1', 'prj_project', 'unqueued', '2026-06-28T00:00:01.000Z', 'user');
-  store.insertMessage('msg_2', 'prj_project', 'queued', '2026-06-28T00:00:02.000Z', 'user');
+  store.insertMessage('msg_1', 'ses_project', 'unqueued', '2026-06-28T00:00:01.000Z', 'user');
+  store.insertMessage('msg_2', 'ses_project', 'queued', '2026-06-28T00:00:02.000Z', 'user');
   store.upsertExternalAgentSession({ ...row, id: 'exa_inbox_diag', lastVisibleSeq: 0, lastDeliveredSeq: 0 });
 
   store.enqueueExternalAgentInboxItem('exa_inbox_diag', 2);
@@ -153,7 +154,7 @@ test('external agent inbox only exposes messages explicitly queued for that runt
 });
 
 test('external agent inbox delivery and visible cursors update queued item state', () => {
-  store.insertMessage('msg_1', 'prj_project', 'queued', '2026-06-28T00:00:01.000Z', 'user');
+  store.insertMessage('msg_1', 'ses_project', 'queued', '2026-06-28T00:00:01.000Z', 'user');
   store.upsertExternalAgentSession({ ...row, id: 'exa_inbox_diag', lastVisibleSeq: 0, lastDeliveredSeq: 0 });
   store.enqueueExternalAgentInboxItem('exa_inbox_diag', 1);
 
@@ -171,7 +172,7 @@ test('external agent inbox delivery and visible cursors update queued item state
 test('message attachments register a file reference snapshot, not content', () => {
   const ref = store.registerMessageAttachment({
     id: 'att_1',
-    projectId: 'prj_project',
+    projectId: 'ses_project',
     path: '/tmp/project/report.md',
     name: 'report.md',
     mime: 'text/markdown',
@@ -190,7 +191,7 @@ test('message attachments register a file reference snapshot, not content', () =
   });
 
   const fetched = store.getMessageAttachment('att_1');
-  expect(fetched).toMatchObject({ id: 'att_1', projectId: 'prj_project', path: '/tmp/project/report.md' });
+  expect(fetched).toMatchObject({ id: 'att_1', projectId: 'ses_project', path: '/tmp/project/report.md' });
 });
 
 test('message attachment reader rejects paths that changed after registration', async () => {
@@ -202,20 +203,9 @@ test('message attachment reader rejects paths that changed after registration', 
     await mkdir(workspace, { recursive: true });
     await writeFile(outside, 'outside secret');
     await writeFile(file, 'inside report');
-    store.insertWorkplaceProject({
-      id: 'prj_project',
-      title: 'project',
-      ownerPrincipalId: 'prn_test',
-      cwd: workspace,
-      state: 'active',
-      archived: false,
-      memberTemplates: [],
-      createdAt: '2026-06-28T00:00:00.000Z',
-      updatedAt: '2026-06-28T00:00:00.000Z'
-    });
     store.registerMessageAttachment({
       id: 'att_1',
-      projectId: 'prj_project',
+      projectId: 'ses_project',
       path: file,
       name: 'report.md',
       mime: 'text/markdown',
@@ -242,7 +232,7 @@ test('native agent direct messages round-trip an attachment reference', () => {
   store.upsertExternalAgentSession({ ...row, id: 'exa_direct' });
   const ref = store.registerMessageAttachment({
     id: 'att_1',
-    projectId: 'prj_project',
+    projectId: 'ses_project',
     path: '/tmp/project/report.md',
     name: 'report.md',
     mime: 'text/markdown',
@@ -252,7 +242,7 @@ test('native agent direct messages round-trip an attachment reference', () => {
   });
   store.insertNativeAgentDirectMessage({
     id: 'msg_D1',
-    projectId: 'prj_project',
+    sessionId: 'ses_project',
     externalAgentSessionId: 'exa_direct',
     fromAgent: 'codex',
     peer: 'human',
@@ -262,7 +252,7 @@ test('native agent direct messages round-trip an attachment reference', () => {
   });
   store.insertNativeAgentDirectMessage({
     id: 'msg_D2',
-    projectId: 'prj_project',
+    sessionId: 'ses_project',
     externalAgentSessionId: 'exa_direct',
     fromAgent: 'codex',
     peer: 'human',
@@ -281,7 +271,7 @@ test('provider session refs are unique per project session and provider when pre
   store.upsertExternalAgentSession({
     ...row,
     id: 'exa_other_project',
-    transcriptTargetId: 'prj_other',
+    transcriptTargetId: 'ses_other',
     providerSessionRef: 'provider-thread-1'
   });
   store.upsertExternalAgentSession({
@@ -314,19 +304,9 @@ test('clearing a terminal external agent provider session ref allows a managed r
 });
 
 test('external agent inbox items expose delivery pointers without raw provider output', () => {
-  store.insertWorkplaceProject({
-    id: 'prj_01KPROJECTDELIVERY000000000',
-    title: 'project',
-    ownerPrincipalId: 'prn_test',
-    state: 'active',
-    archived: false,
-    memberTemplates: [],
-    createdAt: '2026-06-28T00:00:00.000Z',
-    updatedAt: '2026-06-28T00:00:00.000Z'
-  });
   store.upsertExternalAgentSession({
     ...row,
-    transcriptTargetId: 'prj_01KPROJECTDELIVERY000000000',
+    transcriptTargetId: 'ses_01KPROJECTDELIVERY000000000',
     runtimeRole: 'managed-project-agent',
     agentRuntimeId: 'exa_1',
     providerSessionRef: 'provider-session-1',
@@ -334,7 +314,7 @@ test('external agent inbox items expose delivery pointers without raw provider o
   });
   store.insertMessage(
     'msg_01KDELIVERYTRIGGER00000000',
-    'prj_01KPROJECTDELIVERY000000000',
+    'ses_01KPROJECTDELIVERY000000000',
     'hi',
     '2026-06-28T00:00:01.000Z',
     'user'
@@ -343,7 +323,7 @@ test('external agent inbox items expose delivery pointers without raw provider o
   expect(
     store.enqueueExternalAgentInboxItem('exa_1', 1, {
       deliveryId: 'deliv_01KDELIVERYTEST0000000000',
-      projectId: 'prj_01KPROJECTDELIVERY000000000',
+      projectId: 'ses_01KPROJECTDELIVERY000000000' as ProjectId,
       memberInstanceId: 'pmem_codex_1',
       triggerMessageId: 'msg_01KDELIVERYTRIGGER00000000',
       providerSessionRef: 'provider-session-1',
@@ -358,7 +338,7 @@ test('external agent inbox items expose delivery pointers without raw provider o
   expect(item?.deliveryId).toBe('deliv_01KDELIVERYTEST0000000000');
   expect(delivery).toMatchObject({
     id: 'deliv_01KDELIVERYTEST0000000000',
-    projectId: 'prj_01KPROJECTDELIVERY000000000',
+    sessionId: 'ses_01KPROJECTDELIVERY000000000',
     memberInstanceId: 'pmem_codex_1',
     externalAgentSessionId: 'exa_1',
     triggerMessageId: 'msg_01KDELIVERYTRIGGER00000000',
@@ -369,22 +349,12 @@ test('external agent inbox items expose delivery pointers without raw provider o
 });
 
 test('deleteSession cleans up external agent session rows', () => {
-  store.insertWorkplaceProject({
-    id: 'prj_project',
-    title: 'project',
-    ownerPrincipalId: 'prn_test',
-    state: 'active',
-    archived: false,
-    memberTemplates: [],
-    createdAt: '2026-06-28T00:00:00.000Z',
-    updatedAt: '2026-06-28T00:00:00.000Z'
-  });
   store.upsertExternalAgentSession(row);
-  store.insertMessage('msg_cleanup', 'prj_project', 'cleanup', '2026-06-28T00:00:01.000Z', 'user');
+  store.insertMessage('msg_cleanup', 'ses_project', 'cleanup', '2026-06-28T00:00:01.000Z', 'user');
   expect(store.enqueueExternalAgentInboxItem('exa_1', 1)).toBe(true);
   store.insertNativeAgentDirectMessage({
     id: 'msg_direct_cleanup',
-    projectId: 'prj_project',
+    sessionId: 'ses_project',
     externalAgentSessionId: 'exa_1',
     fromAgent: 'codex',
     peer: 'claude',
@@ -393,18 +363,8 @@ test('deleteSession cleans up external agent session rows', () => {
   });
   expect(store.listNativeAgentDirectMessages('exa_1', 'claude')).toHaveLength(1);
 
-  store.deleteWorkplaceProject('prj_project');
+  store.deleteWorkplaceProject('ses_project');
 
-  store.insertWorkplaceProject({
-    id: 'prj_project',
-    title: 'project',
-    ownerPrincipalId: 'prn_test',
-    state: 'active',
-    archived: false,
-    memberTemplates: [],
-    createdAt: '2026-06-28T00:00:02.000Z',
-    updatedAt: '2026-06-28T00:00:02.000Z'
-  });
   store.upsertExternalAgentSession(row);
   expect(store.enqueueExternalAgentInboxItem('exa_1', 1)).toBe(true);
 });

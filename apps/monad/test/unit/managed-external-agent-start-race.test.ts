@@ -1,5 +1,5 @@
 import type { ExternalAgentConfig } from '@monad/home';
-import type { ExternalAgentSessionView, TranscriptTarget } from '@monad/protocol';
+import type { ExternalAgentSessionView, Session } from '@monad/protocol';
 import type { SessionContext } from '@/handlers/session/context.ts';
 
 import { expect, test } from 'bun:test';
@@ -29,7 +29,7 @@ function buildHarness() {
   return { delivery: createManagedExternalAgentDelivery(ctx), starts, startRefs, inputs, externalAgentHost };
 }
 
-const session = { id: 'prj_race', cwd: '/tmp/prj' } as unknown as TranscriptTarget;
+const session = { id: 'ses_race', cwd: '/tmp/prj' } as unknown as Session;
 const spec = { name: 'codex', provider: 'codex' } as unknown as ExternalAgentConfig;
 
 function startArgs(input: string, runtimeAgentName = 'codex') {

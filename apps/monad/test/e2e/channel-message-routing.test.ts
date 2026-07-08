@@ -6,7 +6,10 @@ import type {
   SessionUiEvent,
   UIMessageItem,
   UIPart,
-  WorkplaceProject
+  WorkplaceProject,
+  WorkplaceProjectMemberSettings,
+  WorkplaceProjectMemberTemplate,
+  WorkplaceProjectSessionMember
 } from '@monad/protocol';
 import type { ModelChunk, ModelRequest, ModelRouter } from '@/agent/model/index.ts';
 
@@ -28,7 +31,6 @@ import {
   type TransportHandle
 } from '../helpers.ts';
 
-const WORKPLACE_PROJECT_MEMBERS_EXT_KEY = 'workplaceProjectMembers';
 const MANAGED_AGENT_TOKEN = 'managed-agent-token';
 const TEST_EXTERNAL_AGENT_SERVER_URL = 'http://127.0.0.1:61234';
 
@@ -74,19 +76,8 @@ async function createWorkplaceProject(t: TransportHandle, cwd?: string): Promise
   return ((await res.json()) as { projectId: ProjectId }).projectId;
 }
 
-async function getWorkplaceProject(t: TransportHandle, projectId: string): Promise<WorkplaceProject> {
+async function _getWorkplaceProject(t: TransportHandle, projectId: string): Promise<WorkplaceProject> {
   const res = await t.fetch(`/v1/workplace/projects/${projectId}`);
-  expect(res.status).toBe(200);
-  return ((await res.json()) as { project: WorkplaceProject }).project;
-}
-
-async function updateWorkplaceProjectOrigin(
-  t: TransportHandle,
-  projectId: string,
-  origin: unknown
-): Promise<WorkplaceProject> {
-  if (!origin) throw new Error('workplace project origin missing');
-  const res = await t.fetch(`/v1/workplace/projects/${projectId}`, json('PATCH', { origin }));
   expect(res.status).toBe(200);
   return ((await res.json()) as { project: WorkplaceProject }).project;
 }
@@ -99,6 +90,63 @@ async function updateWorkplaceProjectCwd(
   const res = await t.fetch(`/v1/workplace/projects/${projectId}`, json('PATCH', { cwd }));
   expect(res.status).toBe(200);
   return ((await res.json()) as { project: WorkplaceProject }).project;
+}
+
+/** Track B: create a real Session under a Workplace Project. Its id is the conversation id used for
+ *  channel messages, events, ui-stream, external-agent-sessions, and the external-agent transcript
+ *  target — the project is only the environment, not the conversation. */
+async function createProjectSession(t: TransportHandle, projectId: string, cwd?: string): Promise<SessionId> {
+  const res = await t.fetch(
+    `/v1/projects/${projectId}/sessions`,
+    json('POST', {
+      title: 'Workplace: routing',
+      origin: { surface: 'web' },
+      ...(cwd ? { cwd } : {})
+    })
+  );
+  expect(res.status).toBe(201);
+  return ((await res.json()) as { sessionId: SessionId }).sessionId;
+}
+
+/** Track B: set the project-level memberTemplates catalog (config only — nothing runs yet). */
+async function setMemberTemplates(
+  t: TransportHandle,
+  projectId: string,
+  memberTemplates: WorkplaceProjectMemberTemplate[]
+): Promise<WorkplaceProject> {
+  const res = await t.fetch(`/v1/workplace/projects/${projectId}`, json('PATCH', { memberTemplates }));
+  expect(res.status).toBe(200);
+  return ((await res.json()) as { project: WorkplaceProject }).project;
+}
+
+/** Track B: invite a template into a session as a live member binding (starts the runtime immediately
+ *  when the member is a managed external-agent and the session already has a cwd). */
+async function inviteMember(
+  t: TransportHandle,
+  sessionId: string,
+  templateId: string
+): Promise<WorkplaceProjectSessionMember> {
+  const res = await t.fetch(`/v1/sessions/${sessionId}/members`, json('POST', { templateId }));
+  expect(res.status).toBe(201);
+  return ((await res.json()) as { member: WorkplaceProjectSessionMember }).member;
+}
+
+/** Build a managed external-agent member template. `id` becomes the runtime agent id (agentName);
+ *  `name` selects the registered external-agent config that backs it. Reproduces the pre-Track-B
+ *  origin.ext member roster entries with matching runtime identity. */
+function externalAgentTemplate(
+  id: string,
+  configName: string,
+  settings: WorkplaceProjectMemberSettings,
+  displayName?: string
+): WorkplaceProjectMemberTemplate {
+  return {
+    id,
+    type: 'external-agent',
+    name: configName,
+    ...(displayName ? { displayName } : {}),
+    settings
+  };
 }
 
 async function listMessages(t: TransportHandle, sessionId: string): Promise<Array<{ role: string; text: string }>> {
@@ -378,15 +426,16 @@ for (const kind of TRANSPORTS) {
       await rm(dir, { recursive: true, force: true });
     });
 
-    test('no-host project message records timeline only through the project route', async () => {
-      const sessionId = await createWorkplaceProject(t);
+    test('no-host project message records timeline only through the channel route', async () => {
+      const projectId = await createWorkplaceProject(t);
+      const sessionId = await createProjectSession(t, projectId);
       const oldRoute = await t.fetch(
         `/v1/sessions/${sessionId}/room/messages`,
         json('POST', { text: 'timeline only' })
       );
       expect(oldRoute.status).toBe(404);
 
-      const send = await t.fetch(`/v1/projects/${sessionId}/messages`, json('POST', { text: 'timeline only' }));
+      const send = await t.fetch(`/v1/channels/${sessionId}/messages`, json('POST', { text: 'timeline only' }));
       expect(send.status).toBe(200);
       expect(send.headers.get('content-type')).toContain('application/json');
       expect(await send.json()).toEqual({ accepted: true });
@@ -397,35 +446,31 @@ for (const kind of TRANSPORTS) {
       expect(modelRequests).toEqual([]);
     });
 
-    test('project workdir slash command updates the Workplace Project row, not a Monad session', async () => {
-      const sessionId = await createWorkplaceProject(t);
+    test('project workdir slash command updates the project session, not the Workplace Project row', async () => {
+      const projectId = await createWorkplaceProject(t);
+      const sessionId = await createProjectSession(t, projectId);
       const projectDir = join(dir, 'project-command-workdir');
       await mkdir(projectDir, { recursive: true });
 
       const workdir = await t.fetch(
-        `/v1/projects/${sessionId}/messages`,
+        `/v1/channels/${sessionId}/messages`,
         json('POST', { text: `/workdir ${projectDir}` })
       );
       expect(workdir.status).toBe(200);
-      expect(handlers.store.getSession(sessionId)).toBeNull();
-      expect(handlers.store.getWorkplaceProject(sessionId)?.cwd).toBe(projectDir);
+      await Bun.sleep(50);
+      expect(handlers.store.getSession(sessionId)?.cwd).toBe(projectDir);
+      expect(handlers.store.getWorkplaceProject(projectId)?.cwd ?? null).toBeNull();
       expect(modelRequests).toEqual([]);
     });
 
     test('Monad only generates for project messages when invited as a project member', async () => {
       modelReplies.push('monad member response');
-      const session = await getWorkplaceProject(t, await createWorkplaceProject(t));
-      const sessionId = session.id;
-      const origin = {
-        ...session.origin,
-        ext: {
-          ...(session.origin?.ext ?? {}),
-          [WORKPLACE_PROJECT_MEMBERS_EXT_KEY]: [{ type: 'monad', name: 'monad' }]
-        }
-      };
-      await updateWorkplaceProjectOrigin(t, sessionId, origin);
+      const projectId = await createWorkplaceProject(t);
+      const sessionId = await createProjectSession(t, projectId);
+      await setMemberTemplates(t, projectId, [{ id: 'monad', type: 'monad', name: 'monad' }]);
+      await inviteMember(t, sessionId, 'monad');
 
-      const send = await t.fetch(`/v1/projects/${sessionId}/messages`, json('POST', { text: 'hello monad member' }));
+      const send = await t.fetch(`/v1/channels/${sessionId}/messages`, json('POST', { text: 'hello monad member' }));
       expect(send.status).toBe(200);
       expect(await send.json()).toEqual({ accepted: true });
 
@@ -442,9 +487,10 @@ for (const kind of TRANSPORTS) {
       await mkdir(projectDir, { recursive: true });
       const codex = await configureMockExternalAgent(t, dir, { agentName: 'codex' });
       const claude = await configureMockExternalAgent(t, dir, { agentName: 'claude-code' });
-      const session = await getWorkplaceProject(t, await createWorkplaceProject(t, projectDir));
-      const sessionId = session.id;
-      const uiStartedP = t.sse(`/v1/projects/${sessionId}/ui-stream`, {
+      const projectId = await createWorkplaceProject(t, projectDir);
+      const sessionId = await createProjectSession(t, projectId, projectDir);
+      await setMemberTemplates(t, projectId, [externalAgentTemplate('codex', 'codex', { launchMode: 'pty' })]);
+      const uiStartedP = t.sse(`/v1/sessions/${sessionId}/ui-stream`, {
         until: (event) => {
           const uiEvent = event as unknown as SessionUiEvent;
           return (
@@ -456,23 +502,10 @@ for (const kind of TRANSPORTS) {
         },
         timeoutMs: 3000
       });
-      const origin = {
-        ...session.origin,
-        ext: {
-          ...(session.origin?.ext ?? {}),
-          [WORKPLACE_PROJECT_MEMBERS_EXT_KEY]: [
-            {
-              type: 'external-agent',
-              name: 'codex',
-              settings: { launchMode: 'pty' }
-            }
-          ]
-        }
-      };
 
-      await updateWorkplaceProjectOrigin(t, sessionId, origin);
+      await inviteMember(t, sessionId, 'codex');
       expect((await uiStartedP).some((event) => (event as unknown as SessionUiEvent).kind === 'upsert')).toBe(true);
-      const snapshotEvents = await t.sse(`/v1/projects/${sessionId}/ui-stream`, {
+      const snapshotEvents = await t.sse(`/v1/sessions/${sessionId}/ui-stream`, {
         until: (event) => (event as unknown as SessionUiEvent).kind === 'snapshot',
         timeoutMs: 3000
       });
@@ -490,7 +523,7 @@ for (const kind of TRANSPORTS) {
       await waitForFile(codex.envLog, TEST_EXTERNAL_AGENT_SERVER_URL);
       expect(await readLogIfExists(claude.envLog)).toBe('');
 
-      const listed = await t.fetch(`/v1/projects/${sessionId}/external-agent-sessions`);
+      const listed = await t.fetch(`/v1/sessions/${sessionId}/external-agent-sessions`);
       expect(listed.status).toBe(200);
       const sessions = ((await listed.json()) as { sessions: Array<{ agentName: string }> }).sessions;
       expect(sessions.map((nativeSession) => nativeSession.agentName)).toEqual(['codex']);
@@ -501,24 +534,12 @@ for (const kind of TRANSPORTS) {
       await mkdir(projectDir, { recursive: true });
       const codex = await configureMockExternalAgent(t, dir, { agentName: 'codex' });
       const claude = await configureMockExternalAgent(t, dir, { agentName: 'claude-code' });
-      const session = await getWorkplaceProject(t, await createWorkplaceProject(t, projectDir));
-      const sessionId = session.id;
-      const origin = {
-        ...session.origin,
-        ext: {
-          ...(session.origin?.ext ?? {}),
-          [WORKPLACE_PROJECT_MEMBERS_EXT_KEY]: [
-            {
-              type: 'external-agent',
-              name: 'codex',
-              settings: { launchMode: 'pty' }
-            }
-          ]
-        }
-      };
-      await updateWorkplaceProjectOrigin(t, sessionId, origin);
+      const projectId = await createWorkplaceProject(t, projectDir);
+      const sessionId = await createProjectSession(t, projectId, projectDir);
+      await setMemberTemplates(t, projectId, [externalAgentTemplate('codex', 'codex', { launchMode: 'pty' })]);
+      await inviteMember(t, sessionId, 'codex');
 
-      const send = await t.fetch(`/v1/projects/${sessionId}/messages`, json('POST', { text: 'roster scoped task' }));
+      const send = await t.fetch(`/v1/channels/${sessionId}/messages`, json('POST', { text: 'roster scoped task' }));
       expect(send.status).toBe(200);
       expect(await send.json()).toEqual({ accepted: true });
       const codexInput = await waitForFile(codex.stdinLog, 'roster scoped task');
@@ -528,37 +549,28 @@ for (const kind of TRANSPORTS) {
       expect(await readLogIfExists(claude.stdinLog)).toBe('');
     });
 
-    test('one external agent template can be invited twice as isolated managed project agents', async () => {
+    test('one external agent template can be invited as isolated managed project agents', async () => {
       const projectDir = join(dir, 'project-template-instances');
       await mkdir(projectDir, { recursive: true });
       const { stdinLog } = await configureMockExternalAgent(t, dir, { agentName: 'codex' });
-      const session = await getWorkplaceProject(t, await createWorkplaceProject(t, projectDir));
-      const sessionId = session.id;
-      const origin = {
-        ...session.origin,
-        ext: {
-          ...(session.origin?.ext ?? {}),
-          [WORKPLACE_PROJECT_MEMBERS_EXT_KEY]: [
-            {
-              type: 'external-agent',
-              name: 'codex-reviewer',
-              templateName: 'codex',
-              displayName: 'codex-reviewer',
-              instanceId: 'pmem_codex_reviewer',
-              settings: { managedProjectAgent: true, launchMode: 'app-server' }
-            },
-            {
-              type: 'external-agent',
-              name: 'codex-tester',
-              templateName: 'codex',
-              displayName: 'codex-tester',
-              instanceId: 'pmem_codex_tester',
-              settings: { managedProjectAgent: true, launchMode: 'app-server' }
-            }
-          ]
-        }
-      };
-      await updateWorkplaceProjectOrigin(t, sessionId, origin);
+      const projectId = await createWorkplaceProject(t, projectDir);
+      const sessionId = await createProjectSession(t, projectId, projectDir);
+      await setMemberTemplates(t, projectId, [
+        externalAgentTemplate(
+          'pmem_codex_reviewer',
+          'codex',
+          { managedProjectAgent: true, launchMode: 'app-server' },
+          'codex-reviewer'
+        ),
+        externalAgentTemplate(
+          'pmem_codex_tester',
+          'codex',
+          { managedProjectAgent: true, launchMode: 'app-server' },
+          'codex-tester'
+        )
+      ]);
+      await inviteMember(t, sessionId, 'pmem_codex_reviewer');
+      await inviteMember(t, sessionId, 'pmem_codex_tester');
 
       const input = await waitForFile(stdinLog, '"method":"thread/start"');
       expect(input.split('"method":"thread/start"').length - 1).toBeGreaterThanOrEqual(2);
@@ -591,28 +603,22 @@ for (const kind of TRANSPORTS) {
       const projectDir = join(dir, 'project-member-late-cwd');
       await mkdir(projectDir, { recursive: true });
       const { stdinLog } = await configureMockExternalAgent(t, dir, { agentName: 'codex' });
-      const session = await getWorkplaceProject(t, await createWorkplaceProject(t));
-      const sessionId = session.id;
-      const origin = {
-        ...session.origin,
-        ext: {
-          ...(session.origin?.ext ?? {}),
-          [WORKPLACE_PROJECT_MEMBERS_EXT_KEY]: [
-            {
-              type: 'external-agent',
-              name: 'codex-reviewer',
-              templateName: 'codex',
-              displayName: 'codex-reviewer',
-              instanceId: 'pmem_codex_reviewer',
-              settings: { managedProjectAgent: true, launchMode: 'app-server' }
-            }
-          ]
-        }
-      };
-      await updateWorkplaceProjectOrigin(t, sessionId, origin);
+      const projectId = await createWorkplaceProject(t);
+      const sessionId = await createProjectSession(t, projectId);
+      await setMemberTemplates(t, projectId, [
+        externalAgentTemplate(
+          'pmem_codex_reviewer',
+          'codex',
+          { managedProjectAgent: true, launchMode: 'app-server' },
+          'codex-reviewer'
+        )
+      ]);
+      await inviteMember(t, sessionId, 'pmem_codex_reviewer');
       expect(handlers.store.listExternalAgentSessionsForTranscriptTarget(sessionId)).toEqual([]);
 
-      await updateWorkplaceProjectCwd(t, sessionId, projectDir);
+      await updateWorkplaceProjectCwd(t, projectId, projectDir);
+      await t.fetch(`/v1/sessions/${sessionId}`, json('PATCH', { cwd: projectDir }));
+      await t.fetch(`/v1/channels/${sessionId}/messages`, json('POST', { text: 'start after cwd' }));
 
       await waitForFile(stdinLog, '"method":"thread/start"');
       const sessions = handlers.store
@@ -632,46 +638,29 @@ for (const kind of TRANSPORTS) {
       const projectDir = join(dir, 'project-member-rename');
       await mkdir(projectDir, { recursive: true });
       const { stdinLog } = await configureMockExternalAgent(t, dir, { agentName: 'codex' });
-      const session = await getWorkplaceProject(t, await createWorkplaceProject(t, projectDir));
-      const sessionId = session.id;
-      const origin = {
-        ...session.origin,
-        ext: {
-          ...(session.origin?.ext ?? {}),
-          [WORKPLACE_PROJECT_MEMBERS_EXT_KEY]: [
-            {
-              type: 'external-agent',
-              name: 'codex-reviewer',
-              templateName: 'codex',
-              displayName: 'Reviewer',
-              instanceId: 'pmem_codex_reviewer',
-              settings: { managedProjectAgent: true, launchMode: 'pty' }
-            }
-          ]
-        }
-      };
-      await updateWorkplaceProjectOrigin(t, sessionId, origin);
+      const projectId = await createWorkplaceProject(t, projectDir);
+      const sessionId = await createProjectSession(t, projectId, projectDir);
+      await setMemberTemplates(t, projectId, [
+        externalAgentTemplate(
+          'pmem_codex_reviewer',
+          'codex',
+          { managedProjectAgent: true, launchMode: 'pty' },
+          'Reviewer'
+        )
+      ]);
+      await inviteMember(t, sessionId, 'pmem_codex_reviewer');
       await waitForFile(stdinLog, 'You are a Monad-managed external agent participating in a Workplace Project.');
 
-      const renamed = {
-        ...origin,
-        ext: {
-          ...origin.ext,
-          [WORKPLACE_PROJECT_MEMBERS_EXT_KEY]: [
-            {
-              type: 'external-agent',
-              name: 'codex-reviewer',
-              templateName: 'codex',
-              displayName: 'Renamed reviewer',
-              instanceId: 'pmem_codex_reviewer',
-              settings: { managedProjectAgent: true, launchMode: 'pty' }
-            }
-          ]
-        }
-      };
-      await updateWorkplaceProjectOrigin(t, sessionId, renamed);
+      await setMemberTemplates(t, projectId, [
+        externalAgentTemplate(
+          'pmem_codex_reviewer',
+          'codex',
+          { managedProjectAgent: true, launchMode: 'pty' },
+          'Renamed reviewer'
+        )
+      ]);
 
-      const send = await t.fetch(`/v1/projects/${sessionId}/messages`, json('POST', { text: 'after rename task' }));
+      const send = await t.fetch(`/v1/channels/${sessionId}/messages`, json('POST', { text: 'after rename task' }));
       expect(send.status).toBe(200);
       const input = await waitForFile(stdinLog, 'after rename task');
       const notice = input.slice(input.lastIndexOf('New Workplace Project message is available.'));
@@ -696,27 +685,15 @@ for (const kind of TRANSPORTS) {
       const projectDir = join(dir, 'project');
       await mkdir(projectDir, { recursive: true });
       const { envLog, stdinLog } = await configureMockExternalAgent(t, dir);
-      const session = await getWorkplaceProject(t, await createWorkplaceProject(t, projectDir));
-      const sessionId = session.id;
-      const origin = {
-        ...session.origin,
-        ext: {
-          ...(session.origin?.ext ?? {}),
-          [WORKPLACE_PROJECT_MEMBERS_EXT_KEY]: [
-            {
-              type: 'external-agent',
-              name: 'codex',
-              settings: { launchMode: 'pty' }
-            }
-          ]
-        }
-      };
-      await updateWorkplaceProjectOrigin(t, sessionId, origin);
+      const projectId = await createWorkplaceProject(t, projectDir);
+      const sessionId = await createProjectSession(t, projectId, projectDir);
+      await setMemberTemplates(t, projectId, [externalAgentTemplate('codex', 'codex', { launchMode: 'pty' })]);
+      await inviteMember(t, sessionId, 'codex');
 
-      const send = await t.fetch(`/v1/projects/${sessionId}/messages`, json('POST', { text: 'please review this' }));
+      const send = await t.fetch(`/v1/channels/${sessionId}/messages`, json('POST', { text: 'please review this' }));
       expect(send.status).toBe(200);
       expect(await send.json()).toEqual({ accepted: true });
-      const snapshotEvents = await t.sse(`/v1/projects/${sessionId}/ui-stream`, {
+      const snapshotEvents = await t.sse(`/v1/sessions/${sessionId}/ui-stream`, {
         until: (event) => (event as unknown as SessionUiEvent).kind === 'snapshot',
         timeoutMs: 3000
       });
@@ -749,7 +726,7 @@ for (const kind of TRANSPORTS) {
       expect(messages.filter((message) => message.text).map((message) => [message.role, message.text])).toEqual([
         ['user', 'please review this']
       ]);
-      const listed = await t.fetch(`/v1/projects/${sessionId}/external-agent-sessions`);
+      const listed = await t.fetch(`/v1/sessions/${sessionId}/external-agent-sessions`);
       expect(listed.status).toBe(200);
       const [nativeSession] = (
         (await listed.json()) as {
@@ -784,29 +761,19 @@ for (const kind of TRANSPORTS) {
       const projectDir = join(dir, 'project');
       await mkdir(projectDir, { recursive: true });
       const { stdinLog } = await configureMockExternalAgent(t, dir);
-      const session = await getWorkplaceProject(t, await createWorkplaceProject(t, projectDir));
-      const sessionId = session.id;
-      const origin = {
-        ...session.origin,
-        ext: {
-          ...(session.origin?.ext ?? {}),
-          [WORKPLACE_PROJECT_MEMBERS_EXT_KEY]: [
-            {
-              type: 'external-agent',
-              name: 'codex',
-              settings: { managedProjectAgent: true, launchMode: 'pty' }
-            }
-          ]
-        }
-      };
-      await updateWorkplaceProjectOrigin(t, sessionId, origin);
+      const projectId = await createWorkplaceProject(t, projectDir);
+      const sessionId = await createProjectSession(t, projectId, projectDir);
+      await setMemberTemplates(t, projectId, [
+        externalAgentTemplate('codex', 'codex', { managedProjectAgent: true, launchMode: 'pty' })
+      ]);
+      await inviteMember(t, sessionId, 'codex');
 
-      const first = await t.fetch(`/v1/projects/${sessionId}/messages`, json('POST', { text: 'first project task' }));
+      const first = await t.fetch(`/v1/channels/${sessionId}/messages`, json('POST', { text: 'first project task' }));
       expect(first.status).toBe(200);
       await waitForFile(stdinLog, 'first project task');
 
       const second = await t.fetch(
-        `/v1/projects/${sessionId}/messages`,
+        `/v1/channels/${sessionId}/messages`,
         json('POST', { text: 'second secret busy task' })
       );
       expect(second.status).toBe(200);
@@ -820,7 +787,7 @@ for (const kind of TRANSPORTS) {
       expect(input).not.toContain('Every `project_post`, `project_ask`, or `agent_send` call must include');
 
       const third = await t.fetch(
-        `/v1/projects/${sessionId}/messages`,
+        `/v1/channels/${sessionId}/messages`,
         json('POST', { text: 'third secret busy task' })
       );
       expect(third.status).toBe(200);
@@ -849,8 +816,8 @@ for (const kind of TRANSPORTS) {
       const projectDir = join(dir, 'project');
       await mkdir(projectDir, { recursive: true });
       const { argsLog } = await configureMockExternalAgent(t, dir, { agentName: 'claude' });
-      const session = await getWorkplaceProject(t, await createWorkplaceProject(t, projectDir));
-      const sessionId = session.id;
+      const projectId = await createWorkplaceProject(t, projectDir);
+      const sessionId = await createProjectSession(t, projectId, projectDir);
       handlers.store.upsertExternalAgentSession({
         id: 'exa_old_claude',
         transcriptTargetId: sessionId,
@@ -872,22 +839,12 @@ for (const kind of TRANSPORTS) {
         updatedAt: '2026-06-30T00:00:01.000Z',
         exitedAt: '2026-06-30T00:00:01.000Z'
       });
-      const origin = {
-        ...session.origin,
-        ext: {
-          ...(session.origin?.ext ?? {}),
-          [WORKPLACE_PROJECT_MEMBERS_EXT_KEY]: [
-            {
-              type: 'external-agent',
-              name: 'claude',
-              settings: { managedProjectAgent: true, launchMode: 'pty' }
-            }
-          ]
-        }
-      };
-      await updateWorkplaceProjectOrigin(t, sessionId, origin);
+      await setMemberTemplates(t, projectId, [
+        externalAgentTemplate('claude', 'claude', { managedProjectAgent: true, launchMode: 'pty' })
+      ]);
+      await inviteMember(t, sessionId, 'claude');
 
-      const send = await t.fetch(`/v1/projects/${sessionId}/messages`, json('POST', { text: 'resume this task' }));
+      const send = await t.fetch(`/v1/channels/${sessionId}/messages`, json('POST', { text: 'resume this task' }));
       expect(send.status).toBe(200);
 
       const args = await waitForFile(argsLog, '--resume claude-session-resume');
@@ -904,8 +861,8 @@ for (const kind of TRANSPORTS) {
       const projectDir = join(dir, 'project');
       await mkdir(projectDir, { recursive: true });
       const { stdinLog } = await configureMockCodexResumeFailureAgent(t, dir);
-      const session = await getWorkplaceProject(t, await createWorkplaceProject(t, projectDir));
-      const sessionId = session.id;
+      const projectId = await createWorkplaceProject(t, projectDir);
+      const sessionId = await createProjectSession(t, projectId, projectDir);
       handlers.store.upsertExternalAgentSession({
         id: 'exa_old_codex',
         transcriptTargetId: sessionId,
@@ -927,27 +884,20 @@ for (const kind of TRANSPORTS) {
         updatedAt: '2026-06-30T00:00:01.000Z',
         exitedAt: '2026-06-30T00:00:01.000Z'
       });
-      const origin = {
-        ...session.origin,
-        ext: {
-          ...(session.origin?.ext ?? {}),
-          [WORKPLACE_PROJECT_MEMBERS_EXT_KEY]: [
-            {
-              type: 'external-agent',
-              name: 'codex-resume-failure',
-              settings: { managedProjectAgent: true, launchMode: 'app-server' }
-            }
-          ]
-        }
-      };
-      await updateWorkplaceProjectOrigin(t, sessionId, origin);
+      await setMemberTemplates(t, projectId, [
+        externalAgentTemplate('codex-resume-failure', 'codex-resume-failure', {
+          managedProjectAgent: true,
+          launchMode: 'app-server'
+        })
+      ]);
+      await inviteMember(t, sessionId, 'codex-resume-failure');
 
-      const resumeFailedP = t.sse(`/v1/projects/${sessionId}/events`, {
+      const resumeFailedP = t.sse(`/v1/sessions/${sessionId}/events`, {
         until: (event) => event.type === 'external_agent.resume_failed',
         timeoutMs: 3000
       });
       const send = await t.fetch(
-        `/v1/projects/${sessionId}/messages`,
+        `/v1/channels/${sessionId}/messages`,
         json('POST', { text: 'recover from stale resume' })
       );
       expect(send.status).toBe(200);
@@ -976,23 +926,16 @@ for (const kind of TRANSPORTS) {
       const projectDir = join(dir, 'project');
       await mkdir(projectDir, { recursive: true });
       await configureMockCodexStartFailureAgent(t, dir);
-      const session = await getWorkplaceProject(t, await createWorkplaceProject(t, projectDir));
-      const sessionId = session.id;
-      const origin = {
-        ...session.origin,
-        ext: {
-          ...(session.origin?.ext ?? {}),
-          [WORKPLACE_PROJECT_MEMBERS_EXT_KEY]: [
-            {
-              type: 'external-agent',
-              name: 'codex-start-failure',
-              settings: { managedProjectAgent: true, launchMode: 'app-server' }
-            }
-          ]
-        }
-      };
+      const projectId = await createWorkplaceProject(t, projectDir);
+      const sessionId = await createProjectSession(t, projectId, projectDir);
+      await setMemberTemplates(t, projectId, [
+        externalAgentTemplate('codex-start-failure', 'codex-start-failure', {
+          managedProjectAgent: true,
+          launchMode: 'app-server'
+        })
+      ]);
 
-      await updateWorkplaceProjectOrigin(t, sessionId, origin);
+      await inviteMember(t, sessionId, 'codex-start-failure');
 
       const messages = await waitForMessages(t, sessionId, 1);
       expect(messages[0]?.role).toBe('assistant');
@@ -1003,28 +946,18 @@ for (const kind of TRANSPORTS) {
       const projectDir = join(dir, 'project');
       await mkdir(projectDir, { recursive: true });
       const { stdinLog } = await configureMockExternalAgent(t, dir, { authState: 'unauthenticated' });
-      const session = await getWorkplaceProject(t, await createWorkplaceProject(t, projectDir));
-      const sessionId = session.id;
-      const origin = {
-        ...session.origin,
-        ext: {
-          ...(session.origin?.ext ?? {}),
-          [WORKPLACE_PROJECT_MEMBERS_EXT_KEY]: [
-            {
-              type: 'external-agent',
-              name: 'codex',
-              settings: { managedProjectAgent: true, launchMode: 'pty' }
-            }
-          ]
-        }
-      };
-      await updateWorkplaceProjectOrigin(t, sessionId, origin);
+      const projectId = await createWorkplaceProject(t, projectDir);
+      const sessionId = await createProjectSession(t, projectId, projectDir);
+      await setMemberTemplates(t, projectId, [
+        externalAgentTemplate('codex', 'codex', { managedProjectAgent: true, launchMode: 'pty' })
+      ]);
 
-      const eventsP = t.sse(`/v1/projects/${sessionId}/events`, {
+      const eventsP = t.sse(`/v1/sessions/${sessionId}/events`, {
         until: (event) => event.type === 'external_agent.connection_required',
         timeoutMs: 3000
       });
-      const send = await t.fetch(`/v1/projects/${sessionId}/messages`, json('POST', { text: 'please review this' }));
+      await inviteMember(t, sessionId, 'codex');
+      const send = await t.fetch(`/v1/channels/${sessionId}/messages`, json('POST', { text: 'please review this' }));
       expect(send.status).toBe(200);
       expect(await send.json()).toEqual({ accepted: true });
 
@@ -1037,7 +970,7 @@ for (const kind of TRANSPORTS) {
       expect(await readFile(stdinLog, 'utf8').catch(() => '')).toBe('');
       const messages = await waitForMessages(t, sessionId, 1);
       expect(messages[0]?.text).toBe('please review this');
-      const listed = await t.fetch(`/v1/projects/${sessionId}/external-agent-sessions`);
+      const listed = await t.fetch(`/v1/sessions/${sessionId}/external-agent-sessions`);
       expect(listed.status).toBe(200);
       expect(((await listed.json()) as { sessions: unknown[] }).sessions).toEqual([]);
     });
@@ -1047,29 +980,16 @@ for (const kind of TRANSPORTS) {
       await mkdir(projectDir, { recursive: true });
       const { stdinLog: codexStdinLog } = await configureMockExternalAgent(t, dir, { agentName: 'codex' });
       const { stdinLog: claudeStdinLog } = await configureMockExternalAgent(t, dir, { agentName: 'claude' });
-      const session = await getWorkplaceProject(t, await createWorkplaceProject(t, projectDir));
-      const sessionId = session.id;
-      const origin = {
-        ...session.origin,
-        ext: {
-          ...(session.origin?.ext ?? {}),
-          [WORKPLACE_PROJECT_MEMBERS_EXT_KEY]: [
-            {
-              type: 'external-agent',
-              name: 'codex',
-              settings: { managedProjectAgent: true, launchMode: 'pty' }
-            },
-            {
-              type: 'external-agent',
-              name: 'claude',
-              settings: { managedProjectAgent: true, launchMode: 'pty' }
-            }
-          ]
-        }
-      };
-      await updateWorkplaceProjectOrigin(t, sessionId, origin);
+      const projectId = await createWorkplaceProject(t, projectDir);
+      const sessionId = await createProjectSession(t, projectId, projectDir);
+      await setMemberTemplates(t, projectId, [
+        externalAgentTemplate('codex', 'codex', { managedProjectAgent: true, launchMode: 'pty' }),
+        externalAgentTemplate('claude', 'claude', { managedProjectAgent: true, launchMode: 'pty' })
+      ]);
+      await inviteMember(t, sessionId, 'codex');
+      await inviteMember(t, sessionId, 'claude');
 
-      const send = await t.fetch(`/v1/projects/${sessionId}/messages`, json('POST', { text: 'initial project task' }));
+      const send = await t.fetch(`/v1/channels/${sessionId}/messages`, json('POST', { text: 'initial project task' }));
       expect(send.status).toBe(200);
       await waitForFile(codexStdinLog, 'initial project task');
       await waitForFile(claudeStdinLog, 'initial project task');
@@ -1133,30 +1053,25 @@ for (const kind of TRANSPORTS) {
       }
     });
 
-    test('external agent mention forwards input to the provider-owned CLI session through the project route', async () => {
+    test('external agent mention forwards input to the provider-owned CLI session through the channel route', async () => {
       const projectDir = join(dir, 'project');
       await mkdir(projectDir, { recursive: true });
       const { stdinLog } = await configureMockExternalAgent(t, dir);
-      const session = await getWorkplaceProject(t, await createWorkplaceProject(t, projectDir));
-      const sessionId = session.id;
-      await updateWorkplaceProjectOrigin(t, sessionId, {
-        ...session.origin,
-        ext: {
-          ...(session.origin?.ext ?? {}),
-          [WORKPLACE_PROJECT_MEMBERS_EXT_KEY]: [
-            { type: 'external-agent', name: 'codex', settings: { managedProjectAgent: false, launchMode: 'pty' } }
-          ]
-        }
-      });
+      const projectId = await createWorkplaceProject(t, projectDir);
+      const sessionId = await createProjectSession(t, projectId, projectDir);
+      await setMemberTemplates(t, projectId, [
+        externalAgentTemplate('codex', 'codex', { managedProjectAgent: false, launchMode: 'pty' })
+      ]);
+      await inviteMember(t, sessionId, 'codex');
 
-      const eventsP = t.sse(`/v1/projects/${sessionId}/events`, {
+      const eventsP = t.sse(`/v1/sessions/${sessionId}/events`, {
         until: (event) =>
           event.type === 'external_agent.output' &&
           String((event.payload as { chunk?: unknown }).chunk).includes('inspect repo'),
         timeoutMs: 3000
       });
       const send = await t.fetch(
-        `/v1/projects/${sessionId}/messages`,
+        `/v1/channels/${sessionId}/messages`,
         json('POST', { text: '@[name="codex" id="external-agent:codex"] inspect repo' })
       );
       if (send.status !== 200) throw new Error(await send.text());
@@ -1170,7 +1085,7 @@ for (const kind of TRANSPORTS) {
       expect(
         events.some((event) => event.type === 'external_agent.started' && event.payload.agentName === 'codex')
       ).toBe(true);
-      const listed = await t.fetch(`/v1/projects/${sessionId}/external-agent-sessions`);
+      const listed = await t.fetch(`/v1/sessions/${sessionId}/external-agent-sessions`);
       expect(listed.status).toBe(200);
       const nativeSessionId = ((await listed.json()) as { sessions: Array<{ id: string }> }).sessions[0]?.id;
       expect(typeof nativeSessionId).toBe('string');
@@ -1184,24 +1099,19 @@ for (const kind of TRANSPORTS) {
       const projectDir = join(dir, 'project');
       await mkdir(projectDir, { recursive: true });
       const { stdinLog } = await configureMockExternalAgent(t, dir, { authState: 'unauthenticated' });
-      const session = await getWorkplaceProject(t, await createWorkplaceProject(t, projectDir));
-      const sessionId = session.id;
-      await updateWorkplaceProjectOrigin(t, sessionId, {
-        ...session.origin,
-        ext: {
-          ...(session.origin?.ext ?? {}),
-          [WORKPLACE_PROJECT_MEMBERS_EXT_KEY]: [
-            { type: 'external-agent', name: 'codex', settings: { managedProjectAgent: false, launchMode: 'pty' } }
-          ]
-        }
-      });
+      const projectId = await createWorkplaceProject(t, projectDir);
+      const sessionId = await createProjectSession(t, projectId, projectDir);
+      await setMemberTemplates(t, projectId, [
+        externalAgentTemplate('codex', 'codex', { managedProjectAgent: false, launchMode: 'pty' })
+      ]);
+      await inviteMember(t, sessionId, 'codex');
 
-      const eventsP = t.sse(`/v1/projects/${sessionId}/events`, {
+      const eventsP = t.sse(`/v1/sessions/${sessionId}/events`, {
         until: (event) => event.type === 'external_agent.connection_required',
         timeoutMs: 3000
       });
       const send = await t.fetch(
-        `/v1/projects/${sessionId}/messages`,
+        `/v1/channels/${sessionId}/messages`,
         json('POST', { text: '@[name="codex" id="external-agent:codex"] inspect repo' })
       );
       if (send.status !== 200) throw new Error(await send.text());
@@ -1225,20 +1135,15 @@ for (const kind of TRANSPORTS) {
       const projectDir = join(dir, 'project');
       await mkdir(projectDir, { recursive: true });
       const { stdinLog } = await configureMockExternalAgent(t, dir, { authState: 'unknown' });
-      const session = await getWorkplaceProject(t, await createWorkplaceProject(t, projectDir));
-      const sessionId = session.id;
-      await updateWorkplaceProjectOrigin(t, sessionId, {
-        ...session.origin,
-        ext: {
-          ...(session.origin?.ext ?? {}),
-          [WORKPLACE_PROJECT_MEMBERS_EXT_KEY]: [
-            { type: 'external-agent', name: 'codex', settings: { managedProjectAgent: false, launchMode: 'pty' } }
-          ]
-        }
-      });
+      const projectId = await createWorkplaceProject(t, projectDir);
+      const sessionId = await createProjectSession(t, projectId, projectDir);
+      await setMemberTemplates(t, projectId, [
+        externalAgentTemplate('codex', 'codex', { managedProjectAgent: false, launchMode: 'pty' })
+      ]);
+      await inviteMember(t, sessionId, 'codex');
 
       const send = await t.fetch(
-        `/v1/projects/${sessionId}/messages`,
+        `/v1/channels/${sessionId}/messages`,
         json('POST', { text: '@[name="codex" id="external-agent:codex"] inspect repo' })
       );
       if (send.status !== 200) throw new Error(await send.text());
@@ -1253,19 +1158,14 @@ for (const kind of TRANSPORTS) {
 
     test('external agent mention without project working path records user message and visible error', async () => {
       await configureMockExternalAgent(t, dir);
-      const session = await getWorkplaceProject(t, await createWorkplaceProject(t));
-      const sessionId = session.id;
-      await updateWorkplaceProjectOrigin(t, sessionId, {
-        ...session.origin,
-        ext: {
-          ...(session.origin?.ext ?? {}),
-          [WORKPLACE_PROJECT_MEMBERS_EXT_KEY]: [
-            { type: 'external-agent', name: 'codex', settings: { managedProjectAgent: false, launchMode: 'pty' } }
-          ]
-        }
-      });
+      const projectId = await createWorkplaceProject(t);
+      const sessionId = await createProjectSession(t, projectId);
+      await setMemberTemplates(t, projectId, [
+        externalAgentTemplate('codex', 'codex', { managedProjectAgent: false, launchMode: 'pty' })
+      ]);
+      await inviteMember(t, sessionId, 'codex');
       const send = await t.fetch(
-        `/v1/projects/${sessionId}/messages`,
+        `/v1/channels/${sessionId}/messages`,
         json('POST', { text: '@[name="codex" id="external-agent:codex"] inspect repo' })
       );
       expect(send.status).toBe(200);

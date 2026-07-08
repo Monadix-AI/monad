@@ -94,7 +94,7 @@ test('createNativeAgentAttachmentResolver registers @file references as message 
 
   const result = await resolver(
     { text: `Summary is ready.\n@file(${report})` },
-    { projectId: 'prj_TEST', agentId: 'external-agent:test' },
+    { sessionId: 'ses_TEST', agentId: 'external-agent:test' },
     [workspace]
   );
 
@@ -126,7 +126,7 @@ test('createNativeAgentAttachmentResolver registers monad:file markdown links as
 
   const result = await resolver(
     { text: `Summary is ready: [report with spaces.md](${url} "monad:file").` },
-    { projectId: 'prj_TEST', agentId: 'external-agent:test' },
+    { sessionId: 'ses_TEST', agentId: 'external-agent:test' },
     [workspace]
   );
 
@@ -145,6 +145,6 @@ test('createNativeAgentAttachmentResolver applies the attachment limit after par
   const markers = Array.from({ length: NATIVE_AGENT_ATTACHMENTS_MAX + 1 }, (_, index) => `@file(file-${index}.txt)`);
 
   await expect(
-    resolver({ text: markers.join('\n') }, { projectId: 'prj_TEST', agentId: 'external-agent:test' }, [workspace])
+    resolver({ text: markers.join('\n') }, { sessionId: 'ses_TEST', agentId: 'external-agent:test' }, [workspace])
   ).rejects.toThrow(`at most ${NATIVE_AGENT_ATTACHMENTS_MAX} file attachments per message`);
 });

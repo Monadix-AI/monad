@@ -1,4 +1,4 @@
-import type { Session, WorkplaceProject } from '@monad/protocol';
+import type { Session } from '@monad/protocol';
 
 import { expect, test } from 'bun:test';
 import { newId } from '@monad/protocol';
@@ -21,22 +21,6 @@ function seedSession(store: ReturnType<typeof createStore>, title: string): Sess
   };
   store.insertSession(s);
   return s;
-}
-
-function seedProject(store: ReturnType<typeof createStore>, title: string): WorkplaceProject {
-  const now = new Date().toISOString();
-  const project: WorkplaceProject = {
-    id: newId('prj'),
-    title,
-    ownerPrincipalId: newId('prn'),
-    state: 'active',
-    archived: false,
-    memberTemplates: [],
-    createdAt: now,
-    updatedAt: now
-  };
-  store.insertWorkplaceProject(project);
-  return project;
 }
 
 test('keyword search finds ASCII word matches with session context', () => {
@@ -88,10 +72,10 @@ test('search excludes soft-deleted (restored) messages and respects transcript t
   store.restoreMessages(a.id, m1); // soft-delete a's message
 });
 
-test('keyword search includes Workplace Project transcripts and respects project scope', () => {
+test('keyword search spans multiple session transcripts and respects per-session scope', () => {
   const store = createStore();
   const s = seedSession(store, 'Session notes');
-  const p = seedProject(store, 'Project room');
+  const p = seedSession(store, 'Project room');
   store.insertMessage(newId('msg'), s.id, 'shared keyword apples in session', new Date().toISOString(), 'user');
   store.insertMessage(newId('msg'), p.id, 'shared keyword apples in project', new Date().toISOString(), 'user');
 
@@ -100,6 +84,6 @@ test('keyword search includes Workplace Project transcripts and respects project
 
   const scoped = store.searchMessages({ q: 'apples', transcriptTargetId: p.id });
   expect(scoped).toHaveLength(1);
-  expect(scoped[0]?.transcriptTargetId).toBe(p.id);
+  expect(scoped[0]?.sessionId).toBe(p.id);
   expect(scoped[0]?.transcriptTargetTitle).toBe('Project room');
 });

@@ -175,19 +175,9 @@ test('external agent host can stop every live session during daemon shutdown', (
 test('external agent host stops live sessions for a disconnected provider adapter', () => {
   const store = createStore();
   const bus = new EventBus();
-  const projectId = 'prj_01KWHOSTPROVIDER000000000';
+  const projectId = 'ses_01KWHOSTPROVIDER000000000';
   const externalAgentSessionId = 'exa_provider_stop_test';
   const runtimeAgentName = 'pmem_codex_abc123';
-  store.insertWorkplaceProject({
-    id: projectId,
-    title: 'Provider stop',
-    ownerPrincipalId: 'prn_test',
-    state: 'active',
-    archived: false,
-    memberTemplates: [],
-    createdAt: '2026-07-02T00:00:00.000Z',
-    updatedAt: '2026-07-02T00:00:00.000Z'
-  });
   store.upsertExternalAgentSession({
     id: externalAgentSessionId,
     transcriptTargetId: projectId,
@@ -253,19 +243,9 @@ test('managed provider final can retire a consumed inbox turn without auto-posti
     bus: new EventBus(),
     agents: async () => []
   });
-  store.insertWorkplaceProject({
-    id: 'prj_01KWHOSTTEST0000000000000',
-    title: 'Host test',
-    ownerPrincipalId: 'prn_test',
-    state: 'active',
-    archived: false,
-    memberTemplates: [],
-    createdAt: '2026-07-02T00:00:00.000Z',
-    updatedAt: '2026-07-02T00:00:00.000Z'
-  });
   store.upsertExternalAgentSession({
     id: 'exa_host_test',
-    transcriptTargetId: 'prj_01KWHOSTTEST0000000000000',
+    transcriptTargetId: 'ses_01KWHOSTTEST0000000000000',
     agentName: 'codex',
     provider: 'codex',
     workingPath: '/tmp/project',
@@ -284,8 +264,8 @@ test('managed provider final can retire a consumed inbox turn without auto-posti
     updatedAt: '2026-07-02T00:00:00.000Z',
     exitedAt: null
   });
-  store.insertMessage('msg_USER', 'prj_01KWHOSTTEST0000000000000', 'hi', '2026-07-02T00:00:01.000Z', 'user');
-  store.insertMessage('msg_THINKING', 'prj_01KWHOSTTEST0000000000000', '', '2026-07-02T00:00:02.000Z', 'assistant', {
+  store.insertMessage('msg_USER', 'ses_01KWHOSTTEST0000000000000', 'hi', '2026-07-02T00:00:01.000Z', 'user');
+  store.insertMessage('msg_THINKING', 'ses_01KWHOSTTEST0000000000000', '', '2026-07-02T00:00:02.000Z', 'assistant', {
     data: {
       agentName: 'codex',
       externalAgentSessionId: 'exa_host_test',
@@ -316,7 +296,7 @@ test('managed provider final can retire a consumed inbox turn without auto-posti
       };
     }
   ).outputPipeline.emitManagedProjectOutput(
-    'prj_01KWHOSTTEST0000000000000',
+    'ses_01KWHOSTTEST0000000000000',
     'exa_host_test',
     'No action needed.',
     false,
@@ -326,7 +306,7 @@ test('managed provider final can retire a consumed inbox turn without auto-posti
 
   expect(calls).toEqual([
     {
-      sessionId: 'prj_01KWHOSTTEST0000000000000',
+      sessionId: 'ses_01KWHOSTTEST0000000000000',
       externalAgentSessionId: 'exa_host_test',
       agentName: 'codex',
       text: 'No action needed.',
@@ -343,18 +323,8 @@ test('managed external agent output persists a bounded snapshot for refresh and 
     bus: new EventBus(),
     agents: async () => []
   });
-  const projectId = 'prj_01KWHOSTTEST0000000000001';
+  const projectId = 'ses_01KWHOSTTEST0000000000001';
   const externalAgentSessionId = 'exa_host_snapshot_test';
-  store.insertWorkplaceProject({
-    id: projectId,
-    title: 'Host snapshot test',
-    ownerPrincipalId: 'prn_test',
-    state: 'active',
-    archived: false,
-    memberTemplates: [],
-    createdAt: '2026-07-02T00:00:00.000Z',
-    updatedAt: '2026-07-02T00:00:00.000Z'
-  });
   store.upsertExternalAgentSession({
     id: externalAgentSessionId,
     transcriptTargetId: projectId,
@@ -458,18 +428,8 @@ test('managed external agent output persists a bounded snapshot for refresh and 
 test('external agent observation stream pushes incremental deltas the client can reconstruct', async () => {
   const store = createStore();
   const host = new ExternalAgentHost({ store, bus: new EventBus(), agents: async () => [] });
-  const projectId = 'prj_01KWHOSTTEST0000000000009';
+  const projectId = 'ses_01KWHOSTTEST0000000000009';
   const externalAgentSessionId = 'exa_host_delta_test';
-  store.insertWorkplaceProject({
-    id: projectId,
-    title: 'Delta',
-    ownerPrincipalId: 'prn_test',
-    state: 'active',
-    archived: false,
-    memberTemplates: [],
-    createdAt: '2026-07-02T00:00:00.000Z',
-    updatedAt: '2026-07-02T00:00:00.000Z'
-  });
   store.upsertExternalAgentSession({
     id: externalAgentSessionId,
     transcriptTargetId: projectId,
@@ -562,7 +522,7 @@ test('external agent observation resume returns only the delta past the client c
   } as unknown as ExternalAgentProviderAdapter;
   const live = {
     id,
-    transcriptTargetId: 'prj_01KWHOSTTEST000000000000S',
+    transcriptTargetId: 'ses_01KWHOSTTEST000000000000S',
     agentName: 'codex',
     provider: 'codex',
     runtimeRole: 'managed-project-agent',
@@ -613,7 +573,7 @@ test('external agent app-server reconnect re-dials the socket and resumes the th
   let redials = 0;
   const live = {
     id: externalAgentSessionId,
-    transcriptTargetId: 'prj_01KWHOSTTEST000000000000R',
+    transcriptTargetId: 'ses_01KWHOSTTEST000000000000R',
     agentName: 'codex',
     provider: 'codex',
     runtimeRole: 'interactive',
@@ -657,7 +617,7 @@ test('external agent app-server gives up instead of reconnecting forever when th
   // adapter swallows, expecting the resulting close to trigger redial) would restart that counter every
   // cycle and never hit a per-invocation exhaustion path. This drives that exact scenario past any
   // reasonable churn budget and asserts the session eventually gives up instead of looping silently.
-  const transcriptTargetId = 'prj_01KWHOSTTEST0000000000CH';
+  const transcriptTargetId = 'ses_01KWHOSTTEST0000000000CH';
   const bus = new EventBus();
   const events: string[] = [];
   bus.subscribe(transcriptTargetId, (e) => events.push(e.type));
@@ -745,7 +705,7 @@ test('external agent app-server disconnect during initial startup redials before
   };
   const live = {
     id,
-    transcriptTargetId: 'prj_01KWHOSTTEST0000000000PS',
+    transcriptTargetId: 'ses_01KWHOSTTEST0000000000PS',
     agentName: 'openclaw',
     provider: 'openclaw',
     runtimeRole: 'interactive',
@@ -814,7 +774,7 @@ test('external agent input throws instead of silently vanishing into a stale con
   } as unknown as ExternalAgentProviderAdapter;
   const live = {
     id,
-    transcriptTargetId: 'prj_01KWHOSTTEST0000000000IN',
+    transcriptTargetId: 'ses_01KWHOSTTEST0000000000IN',
     agentName: 'openclaw',
     provider: 'openclaw',
     runtimeRole: 'interactive',
@@ -929,17 +889,7 @@ setInterval(() => {}, 1000);
     agents: async () => [agent],
     externalAgentIdleTimeoutMs: 300
   });
-  const projectId = 'prj_01KWHOSTIDLE000000000000';
-  store.insertWorkplaceProject({
-    id: projectId,
-    title: 'idle test',
-    ownerPrincipalId: 'prn_test',
-    state: 'active',
-    archived: false,
-    memberTemplates: [],
-    createdAt: '2026-07-02T00:00:00.000Z',
-    updatedAt: '2026-07-02T00:00:00.000Z'
-  });
+  const projectId = 'ses_01KWHOSTIDLE000000000000';
 
   try {
     const view = await host.start({
@@ -1067,17 +1017,7 @@ setInterval(() => {}, 1000);
     agents: async () => [agent],
     externalAgentIdleTimeoutMs: 300
   });
-  const projectId = 'prj_01KWHOSTIDLEAPP000000000';
-  store.insertWorkplaceProject({
-    id: projectId,
-    title: 'idle app-server test',
-    ownerPrincipalId: 'prn_test',
-    state: 'active',
-    archived: false,
-    memberTemplates: [],
-    createdAt: '2026-07-02T00:00:00.000Z',
-    updatedAt: '2026-07-02T00:00:00.000Z'
-  });
+  const projectId = 'ses_01KWHOSTIDLEAPP000000000';
 
   try {
     const view = await host.start({
@@ -1116,7 +1056,7 @@ test('external agent idle suspend unlinks an app-server unix socket before later
   } as unknown as ExternalAgentProviderAdapter;
   const live = {
     id,
-    transcriptTargetId: 'prj_01KWHOSTIDLESOCKET00000',
+    transcriptTargetId: 'ses_01KWHOSTIDLESOCKET00000',
     agentName: 'codex',
     provider: 'codex',
     runtimeRole: 'interactive',
@@ -1244,17 +1184,7 @@ setInterval(() => {}, 1000);
     agents: async () => [agent],
     externalAgentIdleTimeoutMs: 300
   });
-  const projectId = 'prj_01KWHOSTIDLEFALLBACK0000';
-  store.insertWorkplaceProject({
-    id: projectId,
-    title: 'idle fallback test',
-    ownerPrincipalId: 'prn_test',
-    state: 'active',
-    archived: false,
-    memberTemplates: [],
-    createdAt: '2026-07-02T00:00:00.000Z',
-    updatedAt: '2026-07-02T00:00:00.000Z'
-  });
+  const projectId = 'ses_01KWHOSTIDLEFALLBACK0000';
   const originalSpawn = Bun.spawn;
   (Bun as unknown as { spawn: typeof Bun.spawn }).spawn = ((argv, options) => {
     if (options && typeof options === 'object' && 'terminal' in options) throw new Error('pty unavailable');
@@ -1296,7 +1226,7 @@ test('managed external agent observation restores Codex provider history from pe
     bus: new EventBus(),
     agents: async () => []
   });
-  const projectId = 'prj_01KWHOSTTEST0000000000002';
+  const projectId = 'ses_01KWHOSTTEST0000000000002';
   const externalAgentSessionId = 'exa_host_unavailable_test';
   const testRun = `monad-external-agent-host-${Date.now()}`;
   const rolloutDir = join(homedir(), '.codex', 'sessions', '2099', '01', testRun);
@@ -1308,16 +1238,6 @@ test('managed external agent observation restores Codex provider history from pe
       payload: { type: 'agent_message', message: 'restored from provider history' }
     })}\n`
   );
-  store.insertWorkplaceProject({
-    id: projectId,
-    title: 'Host unavailable test',
-    ownerPrincipalId: 'prn_test',
-    state: 'active',
-    archived: false,
-    memberTemplates: [],
-    createdAt: '2026-07-02T00:00:00.000Z',
-    updatedAt: '2026-07-02T00:00:00.000Z'
-  });
   store.upsertExternalAgentSession({
     id: externalAgentSessionId,
     transcriptTargetId: projectId,
@@ -1383,7 +1303,7 @@ test('managed external agent observation prefers Codex CLI history over rollout 
   );
 
   const store = createStore();
-  const projectId = 'prj_01KWHOSTTEST0000000000003';
+  const projectId = 'ses_01KWHOSTTEST0000000000003';
   const externalAgentSessionId = 'exa_host_cli_history_test';
   const agent: ExternalAgentView = {
     name: 'codex',
@@ -1398,16 +1318,6 @@ test('managed external agent observation prefers Codex CLI history over rollout 
     store,
     bus: new EventBus(),
     agents: async () => [agent]
-  });
-  store.insertWorkplaceProject({
-    id: projectId,
-    title: 'Host CLI history test',
-    ownerPrincipalId: 'prn_test',
-    state: 'active',
-    archived: false,
-    memberTemplates: [],
-    createdAt: '2026-07-02T00:00:00.000Z',
-    updatedAt: '2026-07-02T00:00:00.000Z'
   });
   store.upsertExternalAgentSession({
     id: externalAgentSessionId,
@@ -1462,19 +1372,9 @@ test('managed external agent observation restores Claude Code provider history',
     })}\n`
   );
   const store = createStore();
-  const projectId = 'prj_01KWHOSTTEST0000000000004';
+  const projectId = 'ses_01KWHOSTTEST0000000000004';
   const externalAgentSessionId = 'exa_host_claude_history_test';
   const host = new ExternalAgentHost({ store, bus: new EventBus(), agents: async () => [] });
-  store.insertWorkplaceProject({
-    id: projectId,
-    title: 'Host Claude history test',
-    ownerPrincipalId: 'prn_test',
-    state: 'active',
-    archived: false,
-    memberTemplates: [],
-    createdAt: '2026-07-02T00:00:00.000Z',
-    updatedAt: '2026-07-02T00:00:00.000Z'
-  });
   store.upsertExternalAgentSession({
     id: externalAgentSessionId,
     transcriptTargetId: projectId,
@@ -1530,19 +1430,9 @@ test('managed external agent observation restores Gemini checkpoint history', as
     })}\n`
   );
   const store = createStore();
-  const projectId = 'prj_01KWHOSTTEST0000000000005';
+  const projectId = 'ses_01KWHOSTTEST0000000000005';
   const externalAgentSessionId = 'exa_host_gemini_history_test';
   const host = new ExternalAgentHost({ store, bus: new EventBus(), agents: async () => [] });
-  store.insertWorkplaceProject({
-    id: projectId,
-    title: 'Host Gemini history test',
-    ownerPrincipalId: 'prn_test',
-    state: 'active',
-    archived: false,
-    memberTemplates: [],
-    createdAt: '2026-07-02T00:00:00.000Z',
-    updatedAt: '2026-07-02T00:00:00.000Z'
-  });
   store.upsertExternalAgentSession({
     id: externalAgentSessionId,
     transcriptTargetId: projectId,
@@ -1589,19 +1479,9 @@ test('managed external agent observation restores Qwen stream-json history', asy
     })}\n`
   );
   const store = createStore();
-  const projectId = 'prj_01KWHOSTTEST0000000000006';
+  const projectId = 'ses_01KWHOSTTEST0000000000006';
   const externalAgentSessionId = 'exa_host_qwen_history_test';
   const host = new ExternalAgentHost({ store, bus: new EventBus(), agents: async () => [] });
-  store.insertWorkplaceProject({
-    id: projectId,
-    title: 'Host Qwen history test',
-    ownerPrincipalId: 'prn_test',
-    state: 'active',
-    archived: false,
-    memberTemplates: [],
-    createdAt: '2026-07-02T00:00:00.000Z',
-    updatedAt: '2026-07-02T00:00:00.000Z'
-  });
   store.upsertExternalAgentSession({
     id: externalAgentSessionId,
     transcriptTargetId: projectId,
@@ -1665,22 +1545,12 @@ test('external agent usage returns empty records when the adapter has no usage p
 test('listLive returns only starting/running runtimes across all projects', () => {
   const store = createStore();
   const host = new ExternalAgentHost({ store, bus: new EventBus(), agents: async () => [] });
-  const insertProject = (id: `prj_${string}`, title: string): void =>
-    store.insertWorkplaceProject({
-      id,
-      title,
-      ownerPrincipalId: 'prn_test',
-      state: 'active',
-      archived: false,
-      memberTemplates: [],
-      createdAt: '2026-07-02T00:00:00.000Z',
-      updatedAt: '2026-07-02T00:00:00.000Z'
-    });
-  insertProject('prj_01KWLIVE0000000000000001', 'Alpha');
-  insertProject('prj_01KWLIVE0000000000000002', 'Beta');
+  const insertProject = (_id: `ses_${string}`, _title: string): void =>
+    insertProject('ses_01KWLIVE0000000000000001', 'Alpha');
+  insertProject('ses_01KWLIVE0000000000000002', 'Beta');
   const insertSession = (
     id: string,
-    transcriptTargetId: `prj_${string}`,
+    transcriptTargetId: `ses_${string}`,
     provider: string,
     state: ExternalAgentSessionState,
     startedAt: string,
@@ -1711,21 +1581,21 @@ test('listLive returns only starting/running runtimes across all projects', () =
   // dead ones that must be excluded.
   insertSession(
     'exa_run_a',
-    'prj_01KWLIVE0000000000000001',
+    'ses_01KWLIVE0000000000000001',
     'openclaw',
     'running',
     '2026-07-02T00:00:01.000Z',
     'noisy output'
   );
-  insertSession('exa_start_b', 'prj_01KWLIVE0000000000000002', 'hermes', 'starting', '2026-07-02T00:00:02.000Z');
-  insertSession('exa_stop_a', 'prj_01KWLIVE0000000000000001', 'codex', 'stopped', '2026-07-02T00:00:03.000Z');
-  insertSession('exa_exit_b', 'prj_01KWLIVE0000000000000002', 'qwen', 'exited', '2026-07-02T00:00:04.000Z');
+  insertSession('exa_start_b', 'ses_01KWLIVE0000000000000002', 'hermes', 'starting', '2026-07-02T00:00:02.000Z');
+  insertSession('exa_stop_a', 'ses_01KWLIVE0000000000000001', 'codex', 'stopped', '2026-07-02T00:00:03.000Z');
+  insertSession('exa_exit_b', 'ses_01KWLIVE0000000000000002', 'qwen', 'exited', '2026-07-02T00:00:04.000Z');
 
   const live = host.listLive().sessions;
   expect(live.map((s) => s.id)).toEqual(['exa_run_a', 'exa_start_b']);
   expect(live.every((s) => s.state === 'running' || s.state === 'starting')).toBe(true);
   // spans multiple projects and surfaces framework (openclaw/hermes) providers, not just external agents
-  expect(new Set(live.map((s) => s.transcriptTargetId)).size).toBe(2);
+  expect(new Set(live.map((s) => s.sessionId)).size).toBe(2);
   expect(live.map((s) => s.provider).sort()).toEqual(['hermes', 'openclaw']);
   // status-only list: output snapshots are stripped so the poll ships no output buffers
   expect(live.every((s) => s.outputSnapshot === '')).toBe(true);
@@ -1734,20 +1604,10 @@ test('listLive returns only starting/running runtimes across all projects', () =
 test('listLive/listAllSummaries paginate with a cursor and expose nextCursor', () => {
   const store = createStore();
   const host = new ExternalAgentHost({ store, bus: new EventBus(), agents: async () => [] });
-  store.insertWorkplaceProject({
-    id: 'prj_01KWLIVE0000000000000003',
-    title: 'Gamma',
-    ownerPrincipalId: 'prn_test',
-    state: 'active',
-    archived: false,
-    memberTemplates: [],
-    createdAt: '2026-07-02T00:00:00.000Z',
-    updatedAt: '2026-07-02T00:00:00.000Z'
-  });
   for (let i = 0; i < 5; i++) {
     store.upsertExternalAgentSession({
       id: `exa_page_${i}`,
-      transcriptTargetId: 'prj_01KWLIVE0000000000000003',
+      transcriptTargetId: 'ses_01KWLIVE0000000000000003',
       agentName: 'codex',
       provider: 'codex',
       workingPath: '/tmp/p',
@@ -1799,17 +1659,7 @@ test('cli-oneshot session has no persistent process and runs a fresh CLI per tur
     approvalOwnership: 'provider-owned'
   };
   const host = new ExternalAgentHost({ store, bus: new EventBus(), agents: async () => [agent] });
-  const projectId = 'prj_01KWHOSTTEST0000000000009';
-  store.insertWorkplaceProject({
-    id: projectId,
-    title: 'cli-oneshot test',
-    ownerPrincipalId: 'prn_test',
-    state: 'active',
-    archived: false,
-    memberTemplates: [],
-    createdAt: '2026-07-02T00:00:00.000Z',
-    updatedAt: '2026-07-02T00:00:00.000Z'
-  });
+  const projectId = 'ses_01KWHOSTTEST0000000000009';
   try {
     const view = await host.start({
       transcriptTargetId: projectId,
@@ -1839,18 +1689,8 @@ test('cli-oneshot session has no persistent process and runs a fresh CLI per tur
 function seedApprovalLiveSession(
   host: ExternalAgentHost,
   store: ReturnType<typeof createStore>,
-  { projectId, id, proxyApprovals }: { projectId: `prj_${string}`; id: string; proxyApprovals: boolean }
+  { projectId, id, proxyApprovals }: { projectId: `ses_${string}`; id: string; proxyApprovals: boolean }
 ): { resolveCalls: { allow: boolean; reason?: string }[]; live: { pendingApprovals: Map<string, unknown> } } {
-  store.insertWorkplaceProject({
-    id: projectId,
-    title: 'Approval test',
-    ownerPrincipalId: 'prn_test',
-    state: 'active',
-    archived: false,
-    memberTemplates: [],
-    createdAt: '2026-07-02T00:00:00.000Z',
-    updatedAt: '2026-07-02T00:00:00.000Z'
-  });
   store.upsertExternalAgentSession({
     id,
     transcriptTargetId: projectId,
@@ -1925,7 +1765,7 @@ test('a delegated managed session projects the provider approval and relays the 
   const host = new ExternalAgentHost({ store, bus: new EventBus(), agents: async () => [] });
   const id = 'exa_approval_delegate';
   const { resolveCalls, live } = seedApprovalLiveSession(host, store, {
-    projectId: 'prj_01KWHOSTAPPROVE000000000A',
+    projectId: 'ses_01KWHOSTAPPROVE000000000A',
     id,
     proxyApprovals: true
   });
@@ -1942,7 +1782,7 @@ test('an autopilot managed session auto-denies a leaked provider approval', () =
   const store = createStore();
   const host = new ExternalAgentHost({ store, bus: new EventBus(), agents: async () => [] });
   const { resolveCalls, live } = seedApprovalLiveSession(host, store, {
-    projectId: 'prj_01KWHOSTAPPROVE000000000B',
+    projectId: 'ses_01KWHOSTAPPROVE000000000B',
     id: 'exa_approval_autopilot',
     proxyApprovals: false
   });
@@ -2013,17 +1853,7 @@ test('a real spawned managed process actually receives the autopilot skip flag o
     }
   ];
   const host = new ExternalAgentHost({ store, bus: new EventBus(), agents: async () => agents, monadHome });
-  const projectId = 'prj_01KWHOSTTEST00000ARGVCAP1';
-  store.insertWorkplaceProject({
-    id: projectId,
-    title: 'argv capture test',
-    ownerPrincipalId: 'prn_test',
-    state: 'active',
-    archived: false,
-    memberTemplates: [],
-    createdAt: '2026-07-05T00:00:00.000Z',
-    updatedAt: '2026-07-05T00:00:00.000Z'
-  });
+  const projectId = 'ses_01KWHOSTTEST00000ARGVCAP1';
 
   const readArgvOnceReady = async (argvFile: string): Promise<string> => {
     for (let i = 0; i < 60; i++) {
@@ -2100,17 +1930,7 @@ async function runRealAdapterArgvCapture(opts: {
     approvalOwnership: 'provider-owned'
   };
   const host = new ExternalAgentHost({ store, bus: new EventBus(), agents: async () => [agent], monadHome });
-  const projectId: `prj_${string}` = `prj_01KWHOSTTEST0000${opts.provider.slice(0, 6).toUpperCase().padEnd(6, '0')}01`;
-  store.insertWorkplaceProject({
-    id: projectId,
-    title: `real adapter argv capture: ${opts.provider}`,
-    ownerPrincipalId: 'prn_test',
-    state: 'active',
-    archived: false,
-    memberTemplates: [],
-    createdAt: '2026-07-05T00:00:00.000Z',
-    updatedAt: '2026-07-05T00:00:00.000Z'
-  });
+  const projectId: `ses_${string}` = `ses_01KWHOSTTEST0000${opts.provider.slice(0, 6).toUpperCase().padEnd(6, '0')}01`;
   try {
     const view = await host.start({
       transcriptTargetId: projectId,
