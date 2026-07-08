@@ -47,10 +47,11 @@ test('approveChannelPairing: invalid/expired code throws, nothing committed', as
     channel: { id: 'chn_X', allowlist: { allowedUsers: [] } }
   });
   await expect(createPairingHandlers(ctx).approveChannelPairing({ id: 'chn_X', code: 'BAD' })).rejects.toThrow();
+  expect(committed).toHaveLength(0);
 });
 
 test('approveChannelPairing: already-allowlisted user is a no-op commit', async () => {
-  const { ctx, committed } = fakeCtx({
+  const { ctx } = fakeCtx({
     consume: () => 'existing',
     channel: { id: 'chn_X', allowlist: { allowedUsers: ['existing'] } }
   });

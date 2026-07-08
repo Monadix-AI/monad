@@ -96,123 +96,157 @@ const codexTemplate: WorkplaceProjectMemberTemplate = {
 
 test('inviteSessionMember creates a session_members row from a project memberTemplate', async () => {
   const store = createStore();
-  const project = fixtureProject(store, { memberTemplates: [codexTemplate] });
-  const session = fixtureSession(store, { projectId: project.id });
-  const { handlers } = buildHarness(store);
+  try {
+    const project = fixtureProject(store, { memberTemplates: [codexTemplate] });
+    const session = fixtureSession(store, { projectId: project.id });
+    const { handlers } = buildHarness(store);
 
-  const { member } = await handlers.inviteSessionMember({ sessionId: session.id, templateId: codexTemplate.id });
+    const { member } = await handlers.inviteSessionMember({ sessionId: session.id, templateId: codexTemplate.id });
 
-  expect(member).toMatchObject({
-    id: codexTemplate.id,
-    templateId: codexTemplate.id,
-    type: 'external-agent',
-    name: 'codex',
-    displayName: 'Codex'
-  });
-  expect(store.listSessionMembers(session.id)).toHaveLength(1);
+    expect(member).toMatchObject({
+      id: codexTemplate.id,
+      templateId: codexTemplate.id,
+      type: 'external-agent',
+      name: 'codex',
+      displayName: 'Codex'
+    });
+    expect(store.listSessionMembers(session.id)).toHaveLength(1);
+  } finally {
+    store.close();
+  }
 });
 
 test('inviteSessionMember throws not_found for an unknown template', async () => {
   const store = createStore();
-  const project = fixtureProject(store);
-  const session = fixtureSession(store, { projectId: project.id });
-  const { handlers } = buildHarness(store);
+  try {
+    const project = fixtureProject(store);
+    const session = fixtureSession(store, { projectId: project.id });
+    const { handlers } = buildHarness(store);
 
-  await expect(handlers.inviteSessionMember({ sessionId: session.id, templateId: 'tmpl_missing' })).rejects.toThrow(
-    HandlerError
-  );
+    await expect(handlers.inviteSessionMember({ sessionId: session.id, templateId: 'tmpl_missing' })).rejects.toThrow(
+      HandlerError
+    );
+  } finally {
+    store.close();
+  }
 });
 
 test('inviteSessionMember rejects a session with no project', async () => {
   const store = createStore();
-  const session = fixtureSession(store);
-  const { handlers } = buildHarness(store);
+  try {
+    const session = fixtureSession(store);
+    const { handlers } = buildHarness(store);
 
-  await expect(handlers.inviteSessionMember({ sessionId: session.id, templateId: 'tmpl_codex' })).rejects.toThrow(
-    HandlerError
-  );
+    await expect(handlers.inviteSessionMember({ sessionId: session.id, templateId: 'tmpl_codex' })).rejects.toThrow(
+      HandlerError
+    );
+  } finally {
+    store.close();
+  }
 });
 
 test('inviteSessionMember rejects inviting the same template twice into one session', async () => {
   const store = createStore();
-  const project = fixtureProject(store, { memberTemplates: [codexTemplate] });
-  const session = fixtureSession(store, { projectId: project.id });
-  const { handlers } = buildHarness(store);
+  try {
+    const project = fixtureProject(store, { memberTemplates: [codexTemplate] });
+    const session = fixtureSession(store, { projectId: project.id });
+    const { handlers } = buildHarness(store);
 
-  await handlers.inviteSessionMember({ sessionId: session.id, templateId: codexTemplate.id });
-  await expect(handlers.inviteSessionMember({ sessionId: session.id, templateId: codexTemplate.id })).rejects.toThrow(
-    HandlerError
-  );
+    await handlers.inviteSessionMember({ sessionId: session.id, templateId: codexTemplate.id });
+    await expect(handlers.inviteSessionMember({ sessionId: session.id, templateId: codexTemplate.id })).rejects.toThrow(
+      HandlerError
+    );
+  } finally {
+    store.close();
+  }
 });
 
 test('inviting the same template into two different sessions produces two independent bindings', async () => {
   const store = createStore();
-  const project = fixtureProject(store, { memberTemplates: [codexTemplate] });
-  const sessionA = fixtureSession(store, { projectId: project.id });
-  const sessionB = fixtureSession(store, { projectId: project.id });
-  const { handlers } = buildHarness(store);
+  try {
+    const project = fixtureProject(store, { memberTemplates: [codexTemplate] });
+    const sessionA = fixtureSession(store, { projectId: project.id });
+    const sessionB = fixtureSession(store, { projectId: project.id });
+    const { handlers } = buildHarness(store);
 
-  await handlers.inviteSessionMember({ sessionId: sessionA.id, templateId: codexTemplate.id });
-  await handlers.inviteSessionMember({ sessionId: sessionB.id, templateId: codexTemplate.id });
+    await handlers.inviteSessionMember({ sessionId: sessionA.id, templateId: codexTemplate.id });
+    await handlers.inviteSessionMember({ sessionId: sessionB.id, templateId: codexTemplate.id });
 
-  // Each session's own session_members row — never shared. Simulate what a successful spawn would
-  // persist for each (spawnIfManaged writes exactly this shape via store.updateSessionMember).
-  store.updateSessionMember(sessionA.id, codexTemplate.id, {
-    externalAgentSessionId: 'exa_a',
-    updatedAt: new Date().toISOString()
-  });
-  store.updateSessionMember(sessionB.id, codexTemplate.id, {
-    externalAgentSessionId: 'exa_b',
-    updatedAt: new Date().toISOString()
-  });
+    // Each session's own session_members row — never shared. Simulate what a successful spawn would
+    // persist for each (spawnIfManaged writes exactly this shape via store.updateSessionMember).
+    store.updateSessionMember(sessionA.id, codexTemplate.id, {
+      externalAgentSessionId: 'exa_a',
+      updatedAt: new Date().toISOString()
+    });
+    store.updateSessionMember(sessionB.id, codexTemplate.id, {
+      externalAgentSessionId: 'exa_b',
+      updatedAt: new Date().toISOString()
+    });
 
-  expect(store.getSessionMember(sessionA.id, codexTemplate.id)?.externalAgentSessionId).toBe('exa_a');
-  expect(store.getSessionMember(sessionB.id, codexTemplate.id)?.externalAgentSessionId).toBe('exa_b');
+    expect(store.getSessionMember(sessionA.id, codexTemplate.id)?.externalAgentSessionId).toBe('exa_a');
+    expect(store.getSessionMember(sessionB.id, codexTemplate.id)?.externalAgentSessionId).toBe('exa_b');
+  } finally {
+    store.close();
+  }
 });
 
 test('spawnSessionMember creates an ad-hoc member with no templateId and never touches memberTemplates', async () => {
   const store = createStore();
-  const project = fixtureProject(store);
-  const session = fixtureSession(store, { projectId: project.id });
-  const { handlers } = buildHarness(store);
+  try {
+    const project = fixtureProject(store);
+    const session = fixtureSession(store, { projectId: project.id });
+    const { handlers } = buildHarness(store);
 
-  const { member } = await handlers.spawnSessionMember({
-    sessionId: session.id,
-    type: 'external-agent',
-    name: 'claude-code',
-    displayName: 'Ad hoc Claude'
-  });
+    const { member } = await handlers.spawnSessionMember({
+      sessionId: session.id,
+      type: 'external-agent',
+      name: 'claude-code',
+      displayName: 'Ad hoc Claude'
+    });
 
-  expect(member.templateId).toBeUndefined();
-  expect(member.name).toBe('claude-code');
-  expect(store.getWorkplaceProject(project.id)?.memberTemplates).toEqual([]);
+    expect(member.templateId).toBeUndefined();
+    expect(member.name).toBe('claude-code');
+    expect(store.getWorkplaceProject(project.id)?.memberTemplates).toEqual([]);
+  } finally {
+    store.close();
+  }
 });
 
 test('removeSessionMember stops the runtime when bound and deletes the row', async () => {
   const store = createStore();
-  const project = fixtureProject(store, { memberTemplates: [codexTemplate] });
-  const session = fixtureSession(store, { projectId: project.id });
-  const { handlers, stopCalls } = buildHarness(store);
+  try {
+    const project = fixtureProject(store, { memberTemplates: [codexTemplate] });
+    const session = fixtureSession(store, { projectId: project.id });
+    const { handlers, stopCalls } = buildHarness(store);
 
-  await handlers.inviteSessionMember({ sessionId: session.id, templateId: codexTemplate.id });
-  store.updateSessionMember(session.id, codexTemplate.id, {
-    externalAgentSessionId: 'exa_running',
-    updatedAt: new Date().toISOString()
-  });
+    await handlers.inviteSessionMember({ sessionId: session.id, templateId: codexTemplate.id });
+    store.updateSessionMember(session.id, codexTemplate.id, {
+      externalAgentSessionId: 'exa_running',
+      updatedAt: new Date().toISOString()
+    });
 
-  const result = await handlers.removeSessionMember({ sessionId: session.id, memberId: codexTemplate.id });
+    const result = await handlers.removeSessionMember({ sessionId: session.id, memberId: codexTemplate.id });
 
-  expect(result).toEqual({ deleted: true });
-  expect(stopCalls).toEqual(['exa_running']);
-  expect(store.listSessionMembers(session.id)).toEqual([]);
+    expect(result).toEqual({ deleted: true });
+    expect(stopCalls).toEqual(['exa_running']);
+    expect(store.listSessionMembers(session.id)).toEqual([]);
+  } finally {
+    store.close();
+  }
 });
 
 test('removeSessionMember throws not_found for an unknown member', async () => {
   const store = createStore();
-  const session = fixtureSession(store);
-  const { handlers } = buildHarness(store);
+  try {
+    const session = fixtureSession(store);
+    const { handlers } = buildHarness(store);
 
-  await expect(handlers.removeSessionMember({ sessionId: session.id, memberId: 'nope' })).rejects.toThrow(HandlerError);
+    await expect(handlers.removeSessionMember({ sessionId: session.id, memberId: 'nope' })).rejects.toThrow(
+      HandlerError
+    );
+  } finally {
+    store.close();
+  }
 });
 
 const acpOnlyOrigin: SessionOrigin = {
@@ -225,31 +259,39 @@ const acpOnlyOrigin: SessionOrigin = {
 
 test('inviteSessionMember/spawnSessionMember/removeSessionMember reject http on a non-http-writable session', async () => {
   const store = createStore();
-  const project = fixtureProject(store, { memberTemplates: [codexTemplate] });
-  const session = fixtureSession(store, { projectId: project.id, origin: acpOnlyOrigin });
-  const { handlers } = buildHarness(store);
+  try {
+    const project = fixtureProject(store, { memberTemplates: [codexTemplate] });
+    const session = fixtureSession(store, { projectId: project.id, origin: acpOnlyOrigin });
+    const { handlers } = buildHarness(store);
 
-  await expect(handlers.inviteSessionMember({ sessionId: session.id, templateId: codexTemplate.id })).rejects.toThrow(
-    /cannot write/
-  );
-  await expect(
-    handlers.spawnSessionMember({ sessionId: session.id, type: 'external-agent', name: 'claude-code' })
-  ).rejects.toThrow(/cannot write/);
-  await expect(handlers.removeSessionMember({ sessionId: session.id, memberId: codexTemplate.id })).rejects.toThrow(
-    /cannot write/
-  );
-  expect(store.listSessionMembers(session.id)).toEqual([]);
+    await expect(handlers.inviteSessionMember({ sessionId: session.id, templateId: codexTemplate.id })).rejects.toThrow(
+      /cannot write/
+    );
+    await expect(
+      handlers.spawnSessionMember({ sessionId: session.id, type: 'external-agent', name: 'claude-code' })
+    ).rejects.toThrow(/cannot write/);
+    await expect(handlers.removeSessionMember({ sessionId: session.id, memberId: codexTemplate.id })).rejects.toThrow(
+      /cannot write/
+    );
+    expect(store.listSessionMembers(session.id)).toEqual([]);
+  } finally {
+    store.close();
+  }
 });
 
 test('listSessionMembers returns the wire shape for every bound member', async () => {
   const store = createStore();
-  const project = fixtureProject(store, { memberTemplates: [codexTemplate] });
-  const session = fixtureSession(store, { projectId: project.id });
-  const { handlers } = buildHarness(store);
+  try {
+    const project = fixtureProject(store, { memberTemplates: [codexTemplate] });
+    const session = fixtureSession(store, { projectId: project.id });
+    const { handlers } = buildHarness(store);
 
-  await handlers.inviteSessionMember({ sessionId: session.id, templateId: codexTemplate.id });
-  await handlers.spawnSessionMember({ sessionId: session.id, type: 'acp', name: 'ad-hoc-acp' });
+    await handlers.inviteSessionMember({ sessionId: session.id, templateId: codexTemplate.id });
+    await handlers.spawnSessionMember({ sessionId: session.id, type: 'acp', name: 'ad-hoc-acp' });
 
-  const { members } = await handlers.listSessionMembers({ sessionId: session.id });
-  expect(members.map((m) => m.name).sort()).toEqual(['ad-hoc-acp', 'codex']);
+    const { members } = await handlers.listSessionMembers({ sessionId: session.id });
+    expect(members.map((m) => m.name).sort()).toEqual(['ad-hoc-acp', 'codex']);
+  } finally {
+    store.close();
+  }
 });
