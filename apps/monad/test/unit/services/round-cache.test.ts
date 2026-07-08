@@ -5,10 +5,10 @@ import { newId } from '@monad/protocol';
 
 import { RoundCache } from '@/services/round-cache.ts';
 
-function evt(transcriptTargetId: SessionId): Event {
+function evt(sessionId: SessionId): Event {
   return {
     id: newId('evt'),
-    transcriptTargetId,
+    sessionId,
     type: 'agent.token',
     actorAgentId: null,
     payload: {},

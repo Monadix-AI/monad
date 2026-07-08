@@ -247,7 +247,7 @@ export function buildHandlers(
     },
     messageRepo: {
       list: (sessionId) => store.listMessages(sessionId),
-      append: (m) => store.insertMessage(m.id, m.transcriptTargetId, m.text, m.createdAt, m.role)
+      append: (m) => store.insertMessage(m.id, m.sessionId, m.text, m.createdAt, m.role)
     },
     defaultModel: opts?.defaultModel ?? 'mock'
   });

@@ -22,14 +22,14 @@ function storeRepo(store: ReturnType<typeof createStore>) {
   return {
     list: (sessionId: string) => store.listMessagesWithLineage(sessionId) as ChatMessage[],
     append: (m: ChatMessage) =>
-      store.insertMessage(m.id, m.transcriptTargetId, m.text, m.createdAt, m.role, {
+      store.insertMessage(m.id, m.sessionId, m.text, m.createdAt, m.role, {
         type: m.type,
         data: m.data,
         streamStatus: m.role === 'assistant' && (m.type ?? 'text') === 'text' ? 'complete' : 'settled',
         includeInContext: m.includeInContext
       }),
     open: (m: ChatMessage) =>
-      store.insertMessage(m.id, m.transcriptTargetId, m.text, m.createdAt, m.role, {
+      store.insertMessage(m.id, m.sessionId, m.text, m.createdAt, m.role, {
         type: m.type,
         streamStatus: 'pending',
         includeInContext: m.includeInContext
@@ -38,7 +38,7 @@ function storeRepo(store: ReturnType<typeof createStore>) {
       store.setGenStatus(sessionId, messageId, 'streaming', now());
     },
     settle: (m: ChatMessage, status: 'complete' | 'error') =>
-      store.setGenStatus(m.transcriptTargetId, m.id, status, now(), { text: m.text, data: m.data, type: m.type })
+      store.setGenStatus(m.sessionId, m.id, status, now(), { text: m.text, data: m.data, type: m.type })
   };
 }
 

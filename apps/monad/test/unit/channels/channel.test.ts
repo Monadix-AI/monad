@@ -67,7 +67,7 @@ const EMPTY_AUTH: MonadAuth = { version: 1, activeProvider: null, updatedAt: '',
 function tokenEvent(delta: string, index: number): Event {
   return {
     id: newId('evt'),
-    transcriptTargetId: 'ses_X' as SessionId,
+    sessionId: 'ses_X' as SessionId,
     type: 'agent.token',
     actorAgentId: null,
     payload: { messageId: 'msg_X' as MessageId, delta, index },
@@ -77,7 +77,7 @@ function tokenEvent(delta: string, index: number): Event {
 function messageEvent(text: string): Event {
   return {
     id: newId('evt'),
-    transcriptTargetId: 'ses_X' as SessionId,
+    sessionId: 'ses_X' as SessionId,
     type: 'agent.message',
     actorAgentId: null,
     payload: { messageId: 'msg_X' as MessageId, text },
@@ -170,7 +170,7 @@ test('renderer: agent.error surfaces an error message and resets stream state', 
   r.consume(tokenEvent('partial', 0)); // start a streaming bubble
   r.consume({
     id: newId('evt'),
-    transcriptTargetId: 'ses_X' as SessionId,
+    sessionId: 'ses_X' as SessionId,
     type: 'agent.error',
     actorAgentId: null,
     payload: { message: 'upstream 503', code: '503' },
@@ -191,7 +191,7 @@ test('renderer: agent.error without code still includes the message', async () =
   const r = createRenderer({ adapter, chatId: 'c1', log: () => {}, t });
   r.consume({
     id: newId('evt'),
-    transcriptTargetId: 'ses_X' as SessionId,
+    sessionId: 'ses_X' as SessionId,
     type: 'agent.error',
     actorAgentId: null,
     payload: { message: 'something broke' },
@@ -206,7 +206,7 @@ test('renderer: surfaces an approval notice (no channel approver)', async () => 
   const r = createRenderer({ adapter, chatId: 'c1', log: () => {}, t });
   r.consume({
     id: newId('evt'),
-    transcriptTargetId: 'ses_X' as SessionId,
+    sessionId: 'ses_X' as SessionId,
     type: 'tool.approval_requested',
     actorAgentId: null,
     payload: {},
@@ -658,8 +658,8 @@ async function makeMirrorHarness(mirror: boolean): Promise<{
   };
 }
 
-function makeAgentEvent(transcriptTargetId: SessionId, type: Event['type'], payload: Record<string, unknown>): Event {
-  return { id: newId('evt'), transcriptTargetId, type, actorAgentId: null, payload, at: '' };
+function makeAgentEvent(sessionId: SessionId, type: Event['type'], payload: Record<string, unknown>): Event {
+  return { id: newId('evt'), sessionId, type, actorAgentId: null, payload, at: '' };
 }
 
 test('mirror: web-UI agent reply is forwarded to the adapter when outboundMirror is true', async () => {
@@ -726,7 +726,7 @@ test('mirror: Telegram inbound dispatch is not double-sent (activeDispatches gua
         // Simulate real behavior: publish to bus AND call the direct sink.
         sendInline: async ({ sessionId, text }, sink) => {
           const evt = messageEvent(`reply: ${text}`);
-          const withSid = { ...evt, transcriptTargetId: sessionId as SessionId };
+          const withSid = { ...evt, sessionId: sessionId as SessionId };
           bus.publish(withSid);
           sink(withSid);
         },

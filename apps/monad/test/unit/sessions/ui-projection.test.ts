@@ -11,7 +11,7 @@ const sessionId = 'ses_test' as SessionId;
 function event(type: Event['type'], payload: Record<string, unknown>, at = new Date().toISOString()): Event {
   return {
     id: newId('evt'),
-    transcriptTargetId: sessionId,
+    sessionId: sessionId,
     type,
     actorAgentId: null,
     payload,
@@ -24,7 +24,7 @@ test('hydrates persisted tool calls into one tool item', () => {
   const messages: ChatMessage[] = [
     {
       id: 'msg_tool_call',
-      transcriptTargetId: sessionId,
+      sessionId: sessionId,
       role: 'assistant',
       text: '',
       type: 'tool_call',
@@ -35,7 +35,7 @@ test('hydrates persisted tool calls into one tool item', () => {
     },
     {
       id: 'msg_tool_result',
-      transcriptTargetId: sessionId,
+      sessionId: sessionId,
       role: 'tool',
       text: 'ok',
       type: 'tool_result',
@@ -118,7 +118,7 @@ test('hydrates structured tool display from persisted full result envelope', () 
   const messages: ChatMessage[] = [
     {
       id: 'msg_tool_call',
-      transcriptTargetId: sessionId,
+      sessionId: sessionId,
       role: 'assistant',
       text: '',
       type: 'tool_call',
@@ -129,7 +129,7 @@ test('hydrates structured tool display from persisted full result envelope', () 
     },
     {
       id: 'msg_tool_result',
-      transcriptTargetId: sessionId,
+      sessionId: sessionId,
       role: 'tool',
       text: 'Modified file: /tmp/a.txt. 1 added, 1 removed.',
       type: 'tool_result',
@@ -184,7 +184,7 @@ test('hydrates without model hallucinated tool calls', () => {
   const messages: ChatMessage[] = [
     {
       id: 'msg_tool_call',
-      transcriptTargetId: sessionId,
+      sessionId: sessionId,
       role: 'assistant',
       text: '',
       type: 'tool_call',
@@ -195,7 +195,7 @@ test('hydrates without model hallucinated tool calls', () => {
     },
     {
       id: 'msg_tool_result',
-      transcriptTargetId: sessionId,
+      sessionId: sessionId,
       role: 'tool',
       text: 'Error: unknown tool "missing_tool"',
       type: 'tool_result',
@@ -216,7 +216,7 @@ test('hydrates persisted raw terminal output after refresh', () => {
   const messages: ChatMessage[] = [
     {
       id: 'msg_tool_call',
-      transcriptTargetId: sessionId,
+      sessionId: sessionId,
       role: 'assistant',
       text: '',
       type: 'tool_call',
@@ -227,7 +227,7 @@ test('hydrates persisted raw terminal output after refresh', () => {
     },
     {
       id: 'msg_tool_result',
-      transcriptTargetId: sessionId,
+      sessionId: sessionId,
       role: 'tool',
       text: 'red plain',
       type: 'tool_result',
@@ -254,7 +254,7 @@ test('hydrates durable memory summary at the compaction boundary', () => {
   const messages: ChatMessage[] = [
     {
       id: 'msg_1',
-      transcriptTargetId: sessionId,
+      sessionId: sessionId,
       role: 'user',
       text: 'old request',
       type: 'text',
@@ -264,7 +264,7 @@ test('hydrates durable memory summary at the compaction boundary', () => {
     },
     {
       id: 'msg_2',
-      transcriptTargetId: sessionId,
+      sessionId: sessionId,
       role: 'assistant',
       text: 'recent answer',
       type: 'text',
@@ -349,7 +349,7 @@ test('hydrates a persisted managed external agent thinking message after refresh
   projector.hydrateMessages([
     {
       id: 'msg_thinking',
-      transcriptTargetId: sessionId,
+      sessionId: sessionId,
       role: 'assistant',
       text: '',
       type: 'text',
@@ -379,7 +379,7 @@ test('hydrates external agent provider errors without breaking the UI stream', (
   projector.hydrateMessages([
     {
       id: 'msg_provider_error',
-      transcriptTargetId: sessionId,
+      sessionId: sessionId,
       role: 'assistant',
       text: 'thread not found: 019f30a7-ddaf-7062-9f89-f3fd90b5397c',
       type: 'error',
@@ -476,7 +476,7 @@ test('managed external agent message projections retain delivery observation poi
   hydrated.hydrateMessages([
     {
       id: 'msg_CLI',
-      transcriptTargetId: sessionId,
+      sessionId: sessionId,
       role: 'assistant',
       text: 'done',
       type: 'text',
@@ -625,7 +625,7 @@ test('channel projector hydrates persisted structured assistant content as displ
   const messages: ChatMessage[] = [
     {
       id: 'msg_structured',
-      transcriptTargetId: sessionId,
+      sessionId: sessionId,
       role: 'assistant',
       text: JSON.stringify({
         display: { kind: 'markdown', content: 'visible host reply' },
@@ -653,7 +653,7 @@ test('channel projector hides silent structured channel replies', () => {
   const messages: ChatMessage[] = [
     {
       id: 'msg_silent',
-      transcriptTargetId: sessionId,
+      sessionId: sessionId,
       role: 'assistant',
       text: JSON.stringify({
         visibility: 'silent',
@@ -904,7 +904,7 @@ test('snapshot emits oldestCursor (oldest raw message id) and hasMore when bound
   const messages: ChatMessage[] = [
     {
       id: m0,
-      transcriptTargetId: sessionId,
+      sessionId: sessionId,
       role: 'user',
       text: 'first',
       type: 'text',
@@ -915,7 +915,7 @@ test('snapshot emits oldestCursor (oldest raw message id) and hasMore when bound
     },
     {
       id: m1,
-      transcriptTargetId: sessionId,
+      sessionId: sessionId,
       role: 'assistant',
       text: 'second',
       type: 'text',
@@ -1053,7 +1053,7 @@ test('hydrateExternalAgentSessions interleaves cards with messages by startedAt'
   const projector = new SessionUiProjector();
   const mkMsg = (id: `msg_${string}`, at: string): ChatMessage => ({
     id,
-    transcriptTargetId: sessionId,
+    sessionId: sessionId,
     role: 'user',
     text: id,
     type: 'text',

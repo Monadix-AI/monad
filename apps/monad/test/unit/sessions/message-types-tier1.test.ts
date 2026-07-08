@@ -76,7 +76,7 @@ test('a pending/streaming row reconstructs a subscription source; terminal rows 
 
   const m = store.getMessage(s.id, id);
   expect(m?.stream.status).toBe('pending');
-  expect(m?.stream.source).toEqual({ transcriptTargetId: s.id, messageId: id, channel: `message:${id}` });
+  expect(m?.stream.source).toEqual({ sessionId: s.id, messageId: id, channel: `message:${id}` });
   store.close();
 });
 

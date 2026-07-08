@@ -5,8 +5,8 @@ import { newId } from '@monad/protocol';
 
 import { createStore } from '@/store/db/index.ts';
 
-function evt(transcriptTargetId: SessionId, type: Event['type'], payload: Record<string, unknown>): Event {
-  return { id: newId('evt'), transcriptTargetId, type, actorAgentId: null, payload, at: new Date().toISOString() };
+function evt(sessionId: SessionId, type: Event['type'], payload: Record<string, unknown>): Event {
+  return { id: newId('evt'), sessionId, type, actorAgentId: null, payload, at: new Date().toISOString() };
 }
 
 test('appendEvents persists and listEvents replays in id order', () => {

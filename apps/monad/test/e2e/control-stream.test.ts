@@ -37,7 +37,7 @@ interface Frame {
   id?: number;
   method?: string;
   result?: { subscribed?: boolean; sessionId?: string };
-  params?: { event?: { type?: string; transcriptTargetId?: string; payload?: { title?: string } } };
+  params?: { event?: { type?: string; sessionId?: string; payload?: { title?: string } } };
 }
 
 /** Resolve with the first frame whose JSON satisfies `match`. */
@@ -73,7 +73,7 @@ test('a control subscriber sees a session created on another connection', async 
 
     const evt = await created;
     // The TUI saw the new session's id without ever subscribing to it.
-    expect(evt.params?.event?.transcriptTargetId).toBe(ack.result?.sessionId);
+    expect(evt.params?.event?.sessionId).toBe(ack.result?.sessionId);
     expect(evt.params?.event?.payload?.title).toBe('from web ui');
   } finally {
     tui.close();

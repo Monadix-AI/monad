@@ -34,30 +34,33 @@ for (const kind of TRANSPORTS) {
 
       const res = await t.fetch(`/v1/sessions/search?q=${encodeURIComponent('answer')}`);
       expect(res.status).toBe(200);
-      const body = (await res.json()) as { hits: { transcriptTargetId: string }[]; indexingPending?: number };
-      expect(body.hits.some((h) => h.transcriptTargetId === sessionId)).toBe(true);
+      const body = (await res.json()) as { hits: { sessionId: string }[]; indexingPending?: number };
+      expect(body.hits.some((h) => h.sessionId === sessionId)).toBe(true);
       // no embedding model configured here ⇒ keyword path, no indexing-pending hint
       expect(body.indexingPending).toBeUndefined();
     });
 
-    test('GET /v1/sessions/search accepts a Workplace Project transcript scope', async () => {
+    test('GET /v1/sessions/search accepts a project session scope', async () => {
       const { projectId } = (await (
         await json('POST', '/v1/workplace/projects', { title: 'project search route' })
       ).json()) as {
         projectId: string;
       };
-      await json('POST', `/v1/projects/${projectId}/messages`, { text: 'project transcript contains bananas' });
+      const { sessionId } = (await (
+        await json('POST', `/v1/projects/${projectId}/sessions`, { title: 'project search session' })
+      ).json()) as { sessionId: string };
+      await json('POST', `/v1/sessions/${sessionId}/messages/block`, { text: 'project transcript contains bananas' });
 
-      const params = new URLSearchParams({ q: 'bananas', transcriptTargetId: projectId });
+      const params = new URLSearchParams({ q: 'bananas', sessionId });
       const res = await t.fetch(`/v1/sessions/search?${params}`);
       expect(res.status).toBe(200);
       const body = (await res.json()) as {
-        hits: { transcriptTargetId: string; transcriptTargetTitle: string }[];
+        hits: { sessionId: string; transcriptTargetTitle: string }[];
       };
       expect(body.hits).toHaveLength(1);
       expect(body.hits[0]).toMatchObject({
-        transcriptTargetId: projectId,
-        transcriptTargetTitle: 'project search route'
+        sessionId,
+        transcriptTargetTitle: 'project search session'
       });
     });
   });

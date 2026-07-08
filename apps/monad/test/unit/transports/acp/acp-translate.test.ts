@@ -15,7 +15,7 @@ import {
 function evt(type: Event['type'], payload: Record<string, unknown>): Event {
   return {
     id: 'evt_1',
-    transcriptTargetId: 'ses_1',
+    sessionId: 'ses_1',
     type,
     actorAgentId: null,
     payload,

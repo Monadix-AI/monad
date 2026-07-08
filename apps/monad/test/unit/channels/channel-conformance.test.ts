@@ -76,7 +76,7 @@ function capturingAdapter(
 function msgEvent(text: string) {
   return {
     id: newId('evt'),
-    transcriptTargetId: 'ses_X' as SessionId,
+    sessionId: 'ses_X' as SessionId,
     type: 'agent.message' as const,
     actorAgentId: null,
     payload: { messageId: 'msg_X' as MessageId, text },
@@ -100,7 +100,7 @@ test('B-render(streaming): an over-limit final is edited (first chunk) then over
   const r = createRenderer({ adapter, chatId: 'c1', log: () => {}, t });
   r.consume({
     id: newId('evt'),
-    transcriptTargetId: 'ses_X' as SessionId,
+    sessionId: 'ses_X' as SessionId,
     type: 'agent.token',
     actorAgentId: null,
     payload: { messageId: 'msg_X' as MessageId, delta: 'start', index: 0 },
@@ -123,7 +123,7 @@ test('B-render(streaming): finalize without agent.message flushes buf, chunking 
   for (const chunk of long.split(' ')) {
     r.consume({
       id: newId('evt'),
-      transcriptTargetId: 'ses_X' as SessionId,
+      sessionId: 'ses_X' as SessionId,
       type: 'agent.token',
       actorAgentId: null,
       payload: { messageId: 'msg_X' as MessageId, delta: `${chunk} `, index: 0 },

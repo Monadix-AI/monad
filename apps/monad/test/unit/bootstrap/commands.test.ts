@@ -6,7 +6,7 @@ import { createDefaultConfig } from '@monad/home';
 import { createCommandBundle } from '@/bootstrap/commands.ts';
 import { createStore } from '@/store/db/index.ts';
 
-test('command bundle model commands read and write Workplace Projects when no Monad session exists', async () => {
+test('command bundle model commands read and write a project-bound session', async () => {
   const store = createStore();
   const cfg = createDefaultConfig('prn_1', 'tester');
   cfg.model.profiles = [
@@ -20,6 +20,20 @@ test('command bundle model commands read and write Workplace Projects when no Mo
     ownerPrincipalId: 'prn_1',
     state: 'active',
     archived: false,
+    createdAt: new Date(0).toISOString(),
+    updatedAt: new Date(0).toISOString()
+  });
+  const sessionId = 'ses_project_session' as SessionId;
+  store.insertSession({
+    id: sessionId,
+    projectId: 'prj_project',
+    title: 'project session',
+    ownerPrincipalId: 'prn_1',
+    state: 'active',
+    agentIds: [],
+    parentSessionId: null,
+    archived: false,
+    restoreCount: 0,
     origin: {
       surface: 'web',
       client: 'workplace',
@@ -50,15 +64,9 @@ test('command bundle model commands read and write Workplace Projects when no Mo
     logger: { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} } as never
   });
 
-  expect(
-    (await bundle.listModels('prj_project' as unknown as SessionId)).find((profile) => profile.alias === 'fast')
-      ?.current
-  ).toBe(true);
-  await bundle.setModel('prj_project' as unknown as SessionId, 'smart');
-  expect(store.getWorkplaceProject('prj_project')?.model).toBe('smart');
-  expect(
-    (await bundle.listModels('prj_project' as unknown as SessionId)).find((profile) => profile.alias === 'smart')
-      ?.current
-  ).toBe(true);
+  expect((await bundle.listModels(sessionId)).find((profile) => profile.alias === 'fast')?.current).toBe(true);
+  await bundle.setModel(sessionId, 'smart');
+  expect(store.getSession(sessionId)?.model).toBe('smart');
+  expect((await bundle.listModels(sessionId)).find((profile) => profile.alias === 'smart')?.current).toBe(true);
   store.close();
 });

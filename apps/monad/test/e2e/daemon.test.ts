@@ -28,15 +28,6 @@ for (const kind of TRANSPORTS) {
       return ((await res.json()) as { sessionId: string }).sessionId;
     }
 
-    async function createProject(title: string): Promise<string> {
-      const res = await t.fetch('/v1/workplace/projects', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ title })
-      });
-      return ((await res.json()) as { projectId: string }).projectId;
-    }
-
     function send(sessionId: string, text: string): Promise<Response> {
       return t.fetch(`/v1/sessions/${sessionId}/messages`, {
         method: 'POST',
@@ -201,32 +192,6 @@ for (const kind of TRANSPORTS) {
       const after = await t.fetch(`/v1/sessions/${sessionId}/messages`);
       const { messages: afterMsgs } = (await after.json()) as { messages: unknown[] };
       expect(afterMsgs).toHaveLength(0);
-    });
-
-    test('POST /projects/:id/reset clears Workplace Project messages and keeps the project', async () => {
-      const projectId = await createProject('reset-project');
-      const posted = await t.fetch(`/v1/projects/${projectId}/messages`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ text: 'project hello' })
-      });
-      expect(posted.status).toBe(200);
-
-      const before = await t.fetch(`/v1/projects/${projectId}/messages`);
-      const { messages: beforeMsgs } = (await before.json()) as { messages: unknown[] };
-      expect(beforeMsgs.length).toBeGreaterThan(0);
-
-      const res = await t.fetch(`/v1/projects/${projectId}/reset`, { method: 'POST' });
-      expect(res.status).toBe(200);
-      const { clearedCount } = (await res.json()) as { clearedCount: number };
-      expect(clearedCount).toBeGreaterThan(0);
-
-      const after = await t.fetch(`/v1/projects/${projectId}/messages`);
-      const { messages: afterMsgs } = (await after.json()) as { messages: unknown[] };
-      expect(afterMsgs).toHaveLength(0);
-
-      const project = await t.fetch(`/v1/workplace/projects/${projectId}`);
-      expect(project.status).toBe(200);
     });
 
     test('GET /workplace/projects/:id returns 404 for an unknown project', async () => {

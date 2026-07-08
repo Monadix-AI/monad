@@ -150,7 +150,7 @@ test('deleteSession cascades session-owned project data', () => {
   store.appendEvents([
     {
       id: newId('evt'),
-      transcriptTargetId: s.id,
+      sessionId: s.id,
       type: 'session.created',
       actorAgentId: null,
       payload: {},
@@ -172,7 +172,7 @@ test('clearMessages removes messages + events but keeps the session', () => {
   store.appendEvents([
     {
       id: newId('evt'),
-      transcriptTargetId: s.id,
+      sessionId: s.id,
       type: 'session.created',
       actorAgentId: null,
       payload: {},
@@ -193,7 +193,7 @@ test('clearMessages removes Workplace Project transcript data and keeps the proj
   store.appendEvents([
     {
       id: newId('evt'),
-      transcriptTargetId: project.id as unknown as SessionId,
+      sessionId: project.id as unknown as SessionId,
       type: 'session.created',
       actorAgentId: null,
       payload: {},
