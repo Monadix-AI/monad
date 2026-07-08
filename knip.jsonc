@@ -12,7 +12,6 @@
     "apps/web/components/ai-elements/prompt-input-controls.tsx",
     "apps/web/components/ai-elements/prompt-input-textarea.tsx",
     "apps/web/components/ai-elements/prompt-input-utils.ts",
-    "apps/web/components/shadcn-space/slider/slider-04.tsx",
     "apps/web/components/ui/command.tsx",
     "apps/web/components/ui/dialog.tsx",
     "apps/web/components/ui/dropdown-menu.tsx",
@@ -76,13 +75,16 @@
       "ignoreDependencies": ["cmdk", "react-compiler-runtime"]
     },
     "apps/mo": {},
-    // pino loads pino-pretty by name string (transport target), not by import.
-    "packages/logger": { "entry": ["test/**/*.{ts,tsx}", "**/*.test.{ts,tsx}"], "ignoreDependencies": ["pino-pretty"] },
+    "packages/logger": { "entry": ["test/**/*.{ts,tsx}", "**/*.test.{ts,tsx}"] },
     // Channel adapters and model providers are loaded dynamically via the atom-pack runtime
     // (not static imports), so knip can't trace them. Declare src/** as entries so their
     // exports are treated as public API and not flagged as unused.
     "packages/atoms": { "entry": ["src/**/*.ts", "test/**/*.{ts,tsx}", "**/*.test.{ts,tsx}"] },
     "packages/config": {},
-    "packages/ui": {}
+    "packages/ui": {},
+    // No test files in either package — the universal packages/* entry pattern matches
+    // nothing, so knip flags it as a useless override; state that explicitly instead.
+    "packages/sdk-atom-client-rtk": {},
+    "packages/monad-power-pack": {}
   }
 }
