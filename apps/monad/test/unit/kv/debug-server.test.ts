@@ -58,8 +58,6 @@ test('GET /api/key returns the full value and ttl', async () => {
   type KeyResp = { name: string; value: string | null; ttlMs: number };
   const res = await getJson<KeyResp>(`${ui.url}/api/key?name=k`);
   expect(res).toEqual({ name: 'k', value: 'hello', ttlMs: -1 });
-
-  const _missing = await getJson<KeyResp>(`${ui.url}/api/key?name=nope`);
 });
 
 test('WebSocket streams command events live', async () => {

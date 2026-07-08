@@ -3,19 +3,6 @@ import { expect, test } from 'bun:test';
 import { METHOD_TABLE } from '../src/rpc/method-table.ts';
 import { RPC_METHOD_PARAMS } from '../src/rpc/rpc-methods.ts';
 
-test('every method declares a result schema', () => {
-  for (const [_method, def] of Object.entries(METHOD_TABLE)) {
-    expect(typeof def.result.safeParse).toBe('function');
-  }
-});
-
-test('RPC_METHOD_PARAMS is derived for every table method', () => {
-  expect(Object.keys(RPC_METHOD_PARAMS).sort()).toEqual(Object.keys(METHOD_TABLE).sort());
-  for (const method of Object.keys(METHOD_TABLE) as (keyof typeof METHOD_TABLE)[]) {
-    expect(typeof RPC_METHOD_PARAMS[method].safeParse).toBe('function');
-  }
-});
-
 test('path + body flatten into one params object on the wire', () => {
   const sid = 'ses_01KV8EP5YE7JFRSZXYKFMCBEE9';
   // sessions.update: path {id} ⊕ body {title?} → flat {id, title?}

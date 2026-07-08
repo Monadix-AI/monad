@@ -72,6 +72,73 @@ async function installStudioIaApiMock(page: Page) {
     if (method === 'GET' && path === '/v1/agents') {
       return route.fulfill(json({ agents: [{ id: 'agt_mock', name: 'Builder', hasPrompt: true }] }));
     }
+    if (method === 'GET' && path === '/v1/stats') {
+      return route.fulfill(
+        json({
+          range: url.searchParams.get('range') ?? 'all',
+          sessions: 3,
+          messages: 12,
+          totalTokens: 123456,
+          activeDays: 4,
+          currentStreak: 2,
+          longestStreak: 3,
+          peakHour: 14,
+          favoriteModel: 'gpt-4.1',
+          heatmap: [{ day: '2026-07-03', totalTokens: 123456 }],
+          models: [
+            {
+              provider: 'openai',
+              model: 'gpt-4.1',
+              inputTokens: 80000,
+              outputTokens: 30000,
+              totalTokens: 123456,
+              pct: 100
+            }
+          ]
+        })
+      );
+    }
+    if (method === 'GET' && path === '/v1/usage') {
+      return route.fulfill(
+        json({
+          total: 1,
+          limit: 50,
+          offset: 0,
+          totalCostUsd: 1.23,
+          totalInputTokens: 80000,
+          totalOutputTokens: 30000,
+          entries: [
+            {
+              provider: 'openai',
+              model: 'gpt-4.1',
+              inputTokens: 80000,
+              outputTokens: 30000,
+              cacheReadTokens: 9000,
+              cacheWriteTokens: 4000,
+              reasoningTokens: 456,
+              costUsd: 1.23,
+              updatedAt: '2026-07-03T00:00:00.000Z'
+            }
+          ],
+          breakdown: [
+            {
+              day: '2026-07-03',
+              provider: 'openai',
+              model: 'gpt-4.1',
+              category: 'chat',
+              inputTokens: 80000,
+              outputTokens: 30000,
+              cacheReadTokens: 9000,
+              cacheWriteTokens: 4000,
+              reasoningTokens: 456,
+              costUsd: 1.23,
+              updatedAt: '2026-07-03T00:00:00.000Z'
+            }
+          ]
+        })
+      );
+    }
+    if (method === 'POST' && path === '/v1/usage/reset') return route.fulfill(json({ ok: true }));
     if (method === 'GET' && path === '/v1/workplace/projects') {
       return route.fulfill(
         json({
@@ -120,6 +187,16 @@ async function installStudioIaApiMock(page: Page) {
     if (method === 'GET' && path === '/v1/settings/external-agents/presets') {
       return route.fulfill(json({ presets: [] }));
     }
+    if (method === 'GET' && path === '/v1/external-agents/codex/usage') {
+      return route.fulfill(
+        json({
+          agentName: 'codex',
+          provider: 'codex',
+          checkedAt: '2026-07-03T00:00:00.000Z',
+          records: [{ name: '5h tokens', current: 21000, max: 100000, resetAt: '2026-07-03T05:00:00.000Z' }]
+        })
+      );
+    }
 
     return route.fulfill(json({}));
   });
@@ -159,6 +236,19 @@ test.describe('Studio IA', () => {
     await expect(page.getByTestId('studio-mesh-illustration')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Project members' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Tasks and sessions' })).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'Mesh usage' })).toBeVisible();
+    await expect(page.getByText('5h tokens')).toBeVisible();
+  });
+
+  test('embeds Monad agent usage under the Agents surface', async ({ page }) => {
+    await installStudioIaApiMock(page);
+
+    await page.goto('/studio/agents');
+
+    await expect(page.getByRole('heading', { name: 'Agents' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Monad agent usage' })).toBeVisible();
+    await expect(page.getByText('gpt-4.1')).toBeVisible();
+    await expect(page.getByText('$1.23')).toBeVisible();
   });
 
   test('uses client-local shell navigation for Studio links', async ({ page }) => {
