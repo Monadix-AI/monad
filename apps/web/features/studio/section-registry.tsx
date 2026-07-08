@@ -25,7 +25,6 @@ import {
   ModelsStudioLoading,
   SkillsStudioLoading
 } from './StudioLoading';
-import { Usage } from './Usage';
 
 export interface StudioSectionProps {
   onClose: () => void;
@@ -107,10 +106,6 @@ function OrchestrationSection() {
   return <Orchestration />;
 }
 
-function UsageSection() {
-  return <Usage />;
-}
-
 export const STUDIO_SECTION_COMPONENTS: Record<StudioSectionId, StudioSectionComponent> = {
   acpAgents: ThirdPartyAgentsSettings,
   acpDelegates: ThirdPartyAgentsSettings,
@@ -137,7 +132,6 @@ export const STUDIO_SECTION_COMPONENTS: Record<StudioSectionId, StudioSectionCom
   meshTasks: MeshTasksSection,
   thirdPartyAgents: ThirdPartyAgentsSettings,
   tools: CapabilitiesSettings,
-  usage: UsageSection,
   workplaceProjects: WorkplaceProjectsSection
 };
 

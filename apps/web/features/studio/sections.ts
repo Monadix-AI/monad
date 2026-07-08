@@ -2,7 +2,6 @@ import type { IconSvgElement } from '@hugeicons/react';
 import type { WebMessageIdWithoutParams } from '@monad/i18n';
 
 import {
-  Activity01Icon,
   BotIcon,
   BrainIcon,
   CpuIcon,
@@ -42,8 +41,7 @@ export type StudioSectionId =
   | 'hooks'
   | 'mcpAtoms'
   | 'sandbox'
-  | 'safety'
-  | 'usage';
+  | 'safety';
 
 export const STUDIO_SECTION_IDS = [
   'runtime',
@@ -71,8 +69,7 @@ export const STUDIO_SECTION_IDS = [
   'hooks',
   'mcpAtoms',
   'sandbox',
-  'safety',
-  'usage'
+  'safety'
 ] as const satisfies readonly StudioSectionId[];
 
 export function isStudioSectionId(value: string | null | undefined): value is StudioSectionId {
@@ -103,12 +100,9 @@ export const STUDIO_MESH_SECTIONS: StudioSectionItem[] = [
   { id: 'workplaceProjects', icon: MessageSquareCodeIcon, i18nKey: 'web.studio.workplaceProjects' }
 ];
 
-// System: host-level facilities that belong to neither the runtime nor the mesh — atom packs
-// (installed capability bundles) and usage/telemetry. Kept as its own group so it reads as
-// "about the installation" rather than "about the agents".
+// System: host-level facilities that belong to neither the runtime nor the mesh.
 export const STUDIO_SYSTEM_SECTIONS: StudioSectionItem[] = [
-  { id: 'atoms', icon: PackageIcon, i18nKey: 'web.studio.atoms' },
-  { id: 'usage', icon: Activity01Icon, i18nKey: 'web.studio.usage' }
+  { id: 'atoms', icon: PackageIcon, i18nKey: 'web.studio.atoms' }
 ];
 
 const _STUDIO_AGENT_SECTIONS = STUDIO_RUNTIME_SECTIONS;

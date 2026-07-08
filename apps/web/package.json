@@ -23,7 +23,7 @@
     "@tanstack/hotkeys": "0.8.0",
     "@tanstack/react-hotkeys": "^0.10.0",
     "@xyflow/react": "^12.11.2",
-    "ai": "^7.0.16",
+    "ai": "^7.0.17",
     "cmdk": "^1.1.1",
     "ghostty-web": "^0.4.0",
     "motion": "^12.42.2",

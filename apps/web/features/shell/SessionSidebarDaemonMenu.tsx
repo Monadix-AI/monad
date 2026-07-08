@@ -57,7 +57,7 @@ function DaemonMenuTile({
   return (
     <DropdownMenuItem
       className={cn(
-        'flex min-h-18 flex-col items-center justify-center gap-2 rounded-(--radius-md) px-2.5 py-3 text-center font-normal text-base leading-control outline-hidden transition focus:bg-accent focus:text-accent-foreground',
+        'flex min-h-18 flex-col items-center justify-center gap-2 rounded-md px-2.5 py-3 text-center font-normal text-base leading-control outline-hidden transition focus:bg-accent focus:text-accent-foreground',
         active && 'bg-accent text-accent-foreground'
       )}
       onSelect={(event) => {
@@ -65,7 +65,7 @@ function DaemonMenuTile({
         onSelect();
       }}
     >
-      <span className="grid size-8 place-items-center rounded-(--radius-sm) border border-border bg-background/60">
+      <span className="grid size-8 place-items-center rounded-sm border border-border bg-background/60">
         <HugeiconsIcon
           className="size-4"
           icon={Icon}
@@ -262,7 +262,7 @@ export function DaemonMenu({
           <DropdownMenuTrigger asChild>
             <button
               className={cn(
-                'flex min-w-0 flex-1 items-center gap-2.5 rounded-(--radius-md) px-2.5 py-2 text-left transition hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
+                'flex min-w-0 flex-1 items-center gap-2.5 rounded-md px-2.5 py-2 text-left transition hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
                 (showSettings || menuOpen) &&
                   'bg-sidebar-selected text-sidebar-selected-foreground hover:bg-sidebar-selected-hover'
               )}
@@ -323,14 +323,14 @@ export function DaemonMenu({
           {upgradeReady || upgradeActive ? (
             <>
               <DropdownMenuItem
-                className="mb-1 flex min-h-16 items-center gap-3 rounded-(--radius-md) border border-border bg-card px-3 py-3 outline-hidden focus:bg-accent"
+                className="mb-1 flex min-h-16 items-center gap-3 rounded-md border border-border bg-card px-3 py-3 outline-hidden focus:bg-accent"
                 disabled={upgradeActive}
                 onSelect={(event) => {
                   event.preventDefault();
                   void startUpgrade();
                 }}
               >
-                <span className="grid size-10 shrink-0 place-items-center rounded-(--radius-sm) border bg-background/70">
+                <span className="grid size-10 shrink-0 place-items-center rounded-sm border bg-background/70">
                   <HugeiconsIcon
                     className={cn('size-5', upgradeActive && 'animate-spin')}
                     icon={upgradeActive ? LoaderPinwheelIcon : CircleCheckIcon}

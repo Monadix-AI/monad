@@ -25,6 +25,7 @@ import { parseClaudeSubagent } from '@/lib/parse-agent-import';
 import { AgentEditor } from './agent-workshop/AgentEditor';
 import { OpenaiCompatSettings } from './api-settings';
 import { StudioBreadcrumbHeader } from './StudioBreadcrumbHeader';
+import { MonadAgentUsage } from './Usage';
 
 function AgentsListSkeleton() {
   return (
@@ -295,6 +296,8 @@ export function AgentsPanel({ onClose, subpath = [] }: StudioSectionProps) {
             embedded
             onClose={onClose}
           />
+
+          <MonadAgentUsage />
         </div>
       </ScrollArea>
     </PanelShell>

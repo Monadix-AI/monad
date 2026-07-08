@@ -28,6 +28,7 @@ import { studioPath } from '@/features/routes/route-paths';
 import { useExternalAgentSettings } from '@/hooks/use-external-agent-settings';
 import { OverviewIllustration } from './OverviewIllustration';
 import { StudioBreadcrumbHeader } from './StudioBreadcrumbHeader';
+import { MeshUsage } from './Usage';
 
 const AGENT_STATE_STYLE: Record<ExternalAgentSessionState, string> = {
   running:
@@ -238,6 +239,8 @@ export function MeshOverview() {
             </section>
 
             <AgentRuntimesSection projects={projectList} />
+
+            <MeshUsage />
           </main>
 
           <aside className="hidden min-w-0 flex-col gap-4 lg:flex">

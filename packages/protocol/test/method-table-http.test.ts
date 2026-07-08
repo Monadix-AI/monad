@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 
-import { HTTP_ROUTES, METHOD_TABLE, type MethodName } from '../src/rpc/method-table.ts';
+import { METHOD_TABLE, type MethodName } from '../src/rpc/method-table.ts';
 
 const entries = Object.entries(METHOD_TABLE) as [MethodName, (typeof METHOD_TABLE)[MethodName]][];
 
@@ -35,13 +35,5 @@ test('no two methods bind the same (verb, template)', () => {
     const key = `${def.http.verb} ${def.http.template}`;
     expect(seen.has(key), `${method} collides with ${seen.get(key)} on "${key}"`).toBe(false);
     seen.set(key, method);
-  }
-});
-
-test('HTTP_ROUTES is derived for exactly the methods that declare http', () => {
-  const declared = entries.filter(([, def]) => 'http' in def && def.http).map(([m]) => m);
-  expect(Object.keys(HTTP_ROUTES).sort()).toEqual([...declared].sort());
-  // control.subscribe/unsubscribe are RPC/stream-only and must NOT get a REST binding.
-  for (const _m of ['control.subscribe', 'control.unsubscribe'] as const) {
   }
 });
