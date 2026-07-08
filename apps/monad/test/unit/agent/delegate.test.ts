@@ -130,3 +130,25 @@ test('runSubagent succeeds when forkDepth is below the limit', async () => {
   });
   expect(result).toBe('ok');
 });
+
+test('runSubagent clears file observations after isolated context execution', async () => {
+  const cleared: string[] = [];
+  const result = await runSubagent(
+    {
+      model: scriptedModel(['ok']),
+      tools: [],
+      defaultModel: 'mock',
+      fileObservations: {
+        remember: () => {},
+        get: () => null,
+        clear: (sessionId) => {
+          cleared.push(sessionId);
+        }
+      }
+    },
+    'task',
+    { sessionId: 'ses_observed' }
+  );
+
+  expect({ result, cleared }).toEqual({ result: 'ok', cleared: ['ses_observed'] });
+});

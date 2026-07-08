@@ -8,6 +8,7 @@ import type { BunSQLiteDatabase } from 'drizzle-orm/bun-sqlite';
 
 import { persistedIncludeInContext } from '@monad/protocol';
 
+import { clearFileObservationsIfObservedSince } from './file-observations.ts';
 import { type MessageRow, rowToMessage, toIntFlag } from './row-mappers.ts';
 import { messages } from './schema.ts';
 import { getSession, provenance } from './sessions.ts';
@@ -429,7 +430,10 @@ export function restoreMessages(
         });
       }
     }
-    sqlite.query('DELETE FROM file_observations WHERE session_id = $sid').run({ $sid: sessionId });
+    const target = sqlite
+      .query('SELECT created_at FROM messages WHERE id = $mid AND transcript_target_id = $sid')
+      .get({ $sid: sessionId, $mid: toMessageId }) as { created_at: string } | null;
+    if (target) clearFileObservationsIfObservedSince(sqlite, sessionId, target.created_at);
     sqlite
       .query('UPDATE sessions SET restore_count = restore_count + 1, updated_at = $at WHERE id = $id')
       .run({ $at: at, $id: sessionId });

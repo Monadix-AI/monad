@@ -56,3 +56,15 @@ export function getFileObservation(sqlite: Database, sessionId: string, path: st
 export function clearFileObservations(sqlite: Database, sessionId: string): number {
   return sqlite.query('DELETE FROM file_observations WHERE session_id = ?').run(sessionId).changes;
 }
+
+export function clearFileObservationsIfObservedSince(sqlite: Database, sessionId: string, since: string): number {
+  const row = sqlite
+    .query(
+      `SELECT 1 AS found
+       FROM file_observations
+       WHERE session_id = ? AND observed_at >= ?
+       LIMIT 1`
+    )
+    .get(sessionId, since) as { found: number } | null;
+  return row ? clearFileObservations(sqlite, sessionId) : 0;
+}

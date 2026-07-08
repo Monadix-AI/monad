@@ -109,7 +109,7 @@ interface DiffDisplay {
 
 interface MultiDiffDisplay {
   type: 'multi_diff';
-  summary?: { added: number; removed: number; succeeded: number; failed: number; total: number };
+  summary?: { added: number; removed: number; succeeded: number; failed: number; total: number; warnings?: number };
   files: Array<{
     path: string;
     status: 'ok' | 'error';
@@ -286,7 +286,10 @@ function parseMultiDiffDisplay(display: unknown): MultiDiffDisplay | null {
     typeof value.summary.succeeded === 'number' &&
     typeof value.summary.failed === 'number' &&
     typeof value.summary.total === 'number'
-      ? value.summary
+      ? {
+          ...value.summary,
+          ...(typeof value.summary.warnings === 'number' ? { warnings: value.summary.warnings } : {})
+        }
       : undefined;
   return files.length > 0 ? { type: 'multi_diff', files, ...(summary ? { summary } : {}) } : null;
 }
@@ -671,7 +674,7 @@ function FileDiffOutputBlock({ display }: { display: DiffDisplay }) {
         />
         <span className="min-w-0 truncate font-mono">{display.path}</span>
         {display.warning && (
-          <span className="shrink-0 rounded bg-amber-500/15 px-1.5 py-0.5 font-mono text-[10px] text-amber-600 dark:text-amber-300">
+          <span className="shrink-0 rounded bg-warning/10 px-1.5 py-0.5 font-mono text-[10px] text-warning">
             warning
           </span>
         )}
@@ -682,7 +685,7 @@ function FileDiffOutputBlock({ display }: { display: DiffDisplay }) {
         </span>
       </div>
       {display.warning && (
-        <div className="border-border/70 border-b bg-amber-500/5 px-3 py-2 text-[11px] text-amber-700 dark:text-amber-300">
+        <div className="border-warning/20 border-b bg-warning/5 px-3 py-2 text-[11px] text-warning">
           {display.warning}
         </div>
       )}
@@ -717,9 +720,10 @@ function MultiFileDiffOutputBlock({ display }: { display: MultiDiffDisplay }) {
         removed: acc.removed + (file.display?.diffStat?.removed ?? 0),
         succeeded: acc.succeeded + (file.status === 'ok' ? 1 : 0),
         failed: acc.failed + (file.status === 'error' ? 1 : 0),
-        total: acc.total + 1
+        total: acc.total + 1,
+        warnings: acc.warnings + (file.display?.warning ? 1 : 0)
       }),
-      { added: 0, removed: 0, succeeded: 0, failed: 0, total: 0 }
+      { added: 0, removed: 0, succeeded: 0, failed: 0, total: 0, warnings: 0 }
     );
   const visibleFiles = useMemo(() => {
     if (expanded || display.files.length <= 4) return display.files;
@@ -737,6 +741,7 @@ function MultiFileDiffOutputBlock({ display }: { display: MultiDiffDisplay }) {
         <span className="min-w-0 truncate font-medium">
           {summary.succeeded}/{summary.total} files changed
           {summary.failed > 0 ? `, ${summary.failed} failed` : ''}
+          {(summary.warnings ?? 0) > 0 ? `, ${summary.warnings} warning${summary.warnings === 1 ? '' : 's'}` : ''}
         </span>
         <span className="ml-auto shrink-0 font-mono text-[11px]">
           <span className="text-emerald-500">+{summary.added}</span>

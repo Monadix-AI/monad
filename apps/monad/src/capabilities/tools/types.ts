@@ -32,7 +32,7 @@ export type ToolDisplayContent =
     }
   | {
       type: 'multi_diff';
-      summary?: { added: number; removed: number; succeeded: number; failed: number; total: number };
+      summary?: { added: number; removed: number; succeeded: number; failed: number; total: number; warnings?: number };
       files: Array<{
         path: string;
         status: 'ok' | 'error';
@@ -52,7 +52,8 @@ const toolDisplayContentSchema = z.discriminatedUnion('type', [
     afterText: z.string(),
     diff: z.string().optional(),
     diffStat: z.object({ added: z.number(), removed: z.number() }).optional(),
-    truncated: z.boolean().optional()
+    truncated: z.boolean().optional(),
+    warning: z.string().optional()
   }),
   z.object({
     type: z.literal('multi_diff'),
@@ -62,7 +63,8 @@ const toolDisplayContentSchema = z.discriminatedUnion('type', [
         removed: z.number(),
         succeeded: z.number(),
         failed: z.number(),
-        total: z.number()
+        total: z.number(),
+        warnings: z.number().optional()
       })
       .optional(),
     files: z.array(
@@ -193,6 +195,7 @@ export interface FileObservation {
 export interface FileObservationStore {
   remember(sessionId: string, observation: FileObservation): void | Promise<void>;
   get(sessionId: string, path: string): FileObservation | null | Promise<FileObservation | null>;
+  clear?(sessionId: string): void | Promise<void>;
 }
 
 import type { Scope } from '@monad/protocol';

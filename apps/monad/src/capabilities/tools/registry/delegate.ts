@@ -69,8 +69,12 @@ export async function runSubagent(
     hooks: deps.hooks,
     subagentCaller: deps.subagentCaller
   });
-  const result = await loop.runBlock(ctx.sessionId as SessionId, task);
-  return result.text;
+  try {
+    const result = await loop.runBlock(ctx.sessionId as SessionId, task);
+    return result.text;
+  } finally {
+    await deps.fileObservations?.clear?.(ctx.sessionId);
+  }
 }
 
 export interface DelegateDeps {

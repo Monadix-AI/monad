@@ -310,6 +310,7 @@ function fileMutationBatchResult(files: FilePatchFileResult[]): FileMutationBatc
 function mutationDisplay(output: FileMutationBatchResult): ToolDisplayContent | undefined {
   if (output.files.length === 0) return undefined;
   if (output.files.length === 1 && output.files[0]?.status === 'ok') return output.files[0].display;
+  const warnings = output.files.filter((file) => file.status === 'ok' && file.warning).length;
   return {
     type: 'multi_diff',
     summary: {
@@ -317,7 +318,8 @@ function mutationDisplay(output: FileMutationBatchResult): ToolDisplayContent | 
       removed: output.summary.removed,
       succeeded: output.succeeded,
       failed: output.failed,
-      total: output.files.length
+      total: output.files.length,
+      ...(warnings > 0 ? { warnings } : {})
     },
     files: output.files.map((file) =>
       file.status === 'ok'
@@ -366,8 +368,11 @@ async function assertFreshObservation(ctx: ToolContext, path: string, currentTex
   if (!observation) {
     throw new ToolSecurityError('File has not been observed in this session. Read it first or provide baseHash.');
   }
-  if (observation.hash !== sha256(currentText)) {
-    throw new ToolSecurityError('File has changed since the session observation. Read it again or provide baseHash.');
+  const currentHash = sha256(currentText);
+  if (observation.hash !== currentHash) {
+    throw new ToolSecurityError(
+      `File has changed since the session observation for ${ledgerPath(path)}. observed=${observation.hash} current=${currentHash}. Read it again or provide baseHash.`
+    );
   }
 }
 
@@ -424,10 +429,13 @@ export const fileReadTool: Tool<z.infer<typeof fileReadInput>, string> = {
       const readComplete = startLine === 1 && startLine - 1 + selected.length >= lines.length;
       if (readComplete) await rememberObservation(ctx, path, fullText);
       const numbered = selected.map((line, i) => `${startLine + i}\t${line}`).join('\n');
+      const partialNote = '(partial read; does not authorize whole-file overwrite)';
       if (limit === undefined && selected.length === effectiveLimit && startLine - 1 + selected.length < lines.length) {
-        return toolResult(`${numbered}\n(truncated; use offset=${startLine + selected.length} to continue)`);
+        return toolResult(
+          `${numbered}\n(truncated; use offset=${startLine + selected.length} to continue)\n${partialNote}`
+        );
       }
-      return toolResult(numbered);
+      return toolResult(readComplete ? numbered : `${numbered}${numbered ? '\n' : ''}${partialNote}`);
     })
 };
 

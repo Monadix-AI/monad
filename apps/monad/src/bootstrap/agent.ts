@@ -119,7 +119,10 @@ export function createDaemonAgent(deps: AgentDeps): DaemonAgent {
   const gate = createInboundApprovalGate({ store, mode: inboundApproval, fallback: oversight.gate });
   const fileObservations: FileObservationStore = {
     remember: (sessionId, observation) => store.recordFileObservation(sessionId, observation),
-    get: (sessionId, path) => store.getFileObservation(sessionId, path)
+    get: (sessionId, path) => store.getFileObservation(sessionId, path),
+    clear: (sessionId) => {
+      store.clearFileObservations(sessionId);
+    }
   };
 
   // Resolve the default profile's context-window size so the agent can emit `context.usage`

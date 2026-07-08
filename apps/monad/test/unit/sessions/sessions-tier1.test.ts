@@ -249,26 +249,60 @@ test('file observations upsert and follow session cleanup', () => {
   store.close();
 });
 
-test('restore clears file observations for the rewound session', () => {
+test('restore clears file observations when the rewound range contains a newer observation', () => {
   const store = createStore();
   const s = fixtureSession();
-  const now = new Date().toISOString();
+  const before = '2026-01-01T00:00:00.000Z';
+  const targetAt = '2026-01-01T00:01:00.000Z';
+  const after = '2026-01-01T00:02:00.000Z';
   store.insertSession(s);
   const first = newId('msg');
   const second = newId('msg');
-  store.insertMessage(first, s.id, 'first', now, 'user');
-  store.insertMessage(second, s.id, 'second', now, 'assistant');
+  store.insertMessage(first, s.id, 'first', before, 'assistant');
+  store.insertMessage(second, s.id, 'second', targetAt, 'user');
   store.recordFileObservation(s.id, {
-    path: '/tmp/a.txt',
-    hash: 'hash-a',
+    path: '/tmp/older.txt',
+    hash: 'hash-older',
     coverage: 'full',
-    observedAt: now,
-    toolCallId: 'call_1'
+    observedAt: before,
+    toolCallId: 'call_older'
+  });
+  store.recordFileObservation(s.id, {
+    path: '/tmp/newer.txt',
+    hash: 'hash-newer',
+    coverage: 'full',
+    observedAt: after,
+    toolCallId: 'call_newer'
   });
 
   store.restoreMessages(s.id, second);
   expect(store.listMessages(s.id)).toHaveLength(1);
-  expect(store.getFileObservation(s.id, '/tmp/a.txt')).toBeNull();
+  expect(store.getFileObservation(s.id, '/tmp/older.txt')).toBeNull();
+  expect(store.getFileObservation(s.id, '/tmp/newer.txt')).toBeNull();
+  store.close();
+});
+
+test('restore preserves file observations when no observation falls inside the rewound range', () => {
+  const store = createStore();
+  const s = fixtureSession();
+  const before = '2026-01-01T00:00:00.000Z';
+  const targetAt = '2026-01-01T00:01:00.000Z';
+  store.insertSession(s);
+  const first = newId('msg');
+  const second = newId('msg');
+  store.insertMessage(first, s.id, 'first', before, 'assistant');
+  store.insertMessage(second, s.id, 'second', targetAt, 'user');
+  store.recordFileObservation(s.id, {
+    path: '/tmp/older.txt',
+    hash: 'hash-older',
+    coverage: 'full',
+    observedAt: before,
+    toolCallId: 'call_older'
+  });
+
+  store.restoreMessages(s.id, second);
+  expect(store.listMessages(s.id).map((m) => m.id)).toEqual([first]);
+  expect(store.getFileObservation(s.id, '/tmp/older.txt')).toMatchObject({ hash: 'hash-older' });
   store.close();
 });
 

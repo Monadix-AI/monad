@@ -70,7 +70,7 @@ test('file_read returns file contents', async () => {
 
 test('file_read honours offset/limit', async () => {
   const out = await fileReadTool.run({ path: join(root, 'src', 'a.ts'), offset: 2, limit: 1 }, ctx([root]));
-  expect(out.modelContent).toBe('2\tconst secret = "needle";');
+  expect(out.modelContent).toBe('2\tconst secret = "needle";\n(partial read; does not authorize whole-file overwrite)');
 });
 
 test('file_read prefixes lines with 1-based line numbers', async () => {
@@ -150,11 +150,13 @@ test('file_write does not treat partial file_read as a whole-file observation', 
   const p = join(root, 'partial-read-overwrite.txt');
   const c = ctx([root]);
   await writeFile(p, `${Array.from({ length: 2105 }, (_, i) => `line ${i}`).join('\n')}\n`);
-  await fileReadTool.run({ path: p }, c);
+  const truncated = await fileReadTool.run({ path: p }, c);
+  expect(truncated.modelContent).toContain('(partial read; does not authorize whole-file overwrite)');
   await expect(fileWriteTool.run({ path: p, content: 'after\n' }, c)).rejects.toThrow(
     'File has not been observed in this session'
   );
-  await fileReadTool.run({ path: p, offset: 2001, limit: 200 }, c);
+  const tail = await fileReadTool.run({ path: p, offset: 2001, limit: 200 }, c);
+  expect(tail.modelContent).toContain('(partial read; does not authorize whole-file overwrite)');
   await expect(fileWriteTool.run({ path: p, content: 'after\n' }, c)).rejects.toThrow(
     'File has not been observed in this session'
   );
@@ -167,7 +169,9 @@ test('file_write rejects overwrite when the file changed after read', async () =
   await fileReadTool.run({ path: p }, c);
   await writeFile(p, 'changed');
   await expect(fileWriteTool.run({ path: p, content: 'after' }, c)).rejects.toThrow(
-    'File has changed since the session observation'
+    new RegExp(
+      `File has changed since the session observation for .+stale-overwrite\\.txt\\. observed=${sha256('before')} current=${sha256('changed')}`
+    )
   );
 });
 
@@ -294,6 +298,7 @@ test('file_patch updates after file_read records the current hash', async () => 
 
 test('file_patch updates when full-file hash changed but hunk context matches', async () => {
   const p = join(root, 'patch-observation-drift.txt');
+  const added = join(root, 'patch-observation-drift-added.txt');
   const c = ctx([root]);
   await writeFile(p, 'target\nuntouched\n');
   await fileReadTool.run({ path: p }, c);
@@ -306,6 +311,8 @@ test('file_patch updates when full-file hash changed but hunk context matches', 
 @@
 -target
 +updated
+*** Add File: ${added}
++added
 *** End Patch`
     },
     c
@@ -314,6 +321,7 @@ test('file_patch updates when full-file hash changed but hunk context matches', 
   expect(out.metadata.files[0]?.status === 'ok' ? out.metadata.files[0].warning : undefined).toContain(
     'hunk context matched'
   );
+  expect(out.displayContent).toMatchObject({ type: 'multi_diff', summary: { warnings: 1 } });
   expect(out.modelContent).toContain('1 warning');
   expect(await readFile(p, 'utf8')).toBe('updated\nexternal\n');
 });
