@@ -1,11 +1,11 @@
-import type { ExternalAgentResizeRequest, OkResponse, TranscriptTargetId } from '@monad/protocol';
+import type { ExternalAgentResizeRequest, OkResponse, SessionId } from '@monad/protocol';
 
 import { clientOf, runTreaty } from '../../endpoint-helpers.ts';
 import { sessionsApi } from '../sessions/index.ts';
 
 interface ExternalAgentResizeArgs extends ExternalAgentResizeRequest {
   id: string;
-  transcriptTargetId: TranscriptTargetId;
+  transcriptTargetId: SessionId;
 }
 
 const resizeExternalAgentSessionApi = sessionsApi.injectEndpoints({

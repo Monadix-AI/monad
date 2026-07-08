@@ -1,11 +1,11 @@
-import type { ExternalAgentApprovalResolutionRequest, OkResponse, TranscriptTargetId } from '@monad/protocol';
+import type { ExternalAgentApprovalResolutionRequest, OkResponse, SessionId } from '@monad/protocol';
 
 import { clientOf, runTreaty } from '../../endpoint-helpers.ts';
 import { sessionsApi } from '../sessions/index.ts';
 
 interface ExternalAgentApprovalArgs extends ExternalAgentApprovalResolutionRequest {
   id: string;
-  transcriptTargetId: TranscriptTargetId;
+  transcriptTargetId: SessionId;
 }
 
 const approveExternalAgentSessionApi = sessionsApi.injectEndpoints({

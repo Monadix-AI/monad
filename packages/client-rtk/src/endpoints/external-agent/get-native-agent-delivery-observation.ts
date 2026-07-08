@@ -1,8 +1,4 @@
-import type {
-  ExternalAgentObservationAccessResponse,
-  NativeAgentDeliveryId,
-  TranscriptTargetId
-} from '@monad/protocol';
+import type { ExternalAgentObservationAccessResponse, NativeAgentDeliveryId, SessionId } from '@monad/protocol';
 
 import { externalAgentObservationAccessResponseSchema } from '@monad/protocol';
 
@@ -14,7 +10,7 @@ export const getNativeAgentDeliveryObservationApi = sessionsApi.injectEndpoints(
   endpoints: (builder) => ({
     getNativeAgentDeliveryObservation: builder.query<
       ExternalAgentObservationAccessResponse,
-      { id: NativeAgentDeliveryId; transcriptTargetId: TranscriptTargetId }
+      { id: NativeAgentDeliveryId; transcriptTargetId: SessionId }
     >({
       queryFn: ({ id, transcriptTargetId }, api: { extra: unknown }) =>
         runTreaty(

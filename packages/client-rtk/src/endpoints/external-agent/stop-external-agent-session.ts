@@ -1,4 +1,4 @@
-import type { OkResponse, TranscriptTargetId } from '@monad/protocol';
+import type { OkResponse, SessionId } from '@monad/protocol';
 
 import { clientOf, runTreaty } from '../../endpoint-helpers.ts';
 import { sessionsApi } from '../sessions/index.ts';
@@ -6,7 +6,7 @@ import { sessionsApi } from '../sessions/index.ts';
 const stopExternalAgentSessionApi = sessionsApi.injectEndpoints({
   overrideExisting: true,
   endpoints: (builder) => ({
-    stopExternalAgentSession: builder.mutation<OkResponse, { id: string; transcriptTargetId: TranscriptTargetId }>({
+    stopExternalAgentSession: builder.mutation<OkResponse, { id: string; transcriptTargetId: SessionId }>({
       queryFn: ({ id, transcriptTargetId }, api: { extra: unknown }) =>
         runTreaty(() =>
           clientOf(api)

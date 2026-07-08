@@ -4,10 +4,10 @@ import type {
   EventId,
   ExternalAgentAuthSessionView,
   ExternalAgentUiObservationFrame,
+  ProjectId,
   SendMessageResponse,
   SessionId,
-  SessionUiEvent,
-  TranscriptTargetId
+  SessionUiEvent
 } from '@monad/protocol';
 import type { MonadTreaty, MonadTreatyConfig } from './treaty.ts';
 
@@ -62,7 +62,7 @@ const FATAL_SSE_STATUS: ReadonlySet<number> = new Set([401, 403, 404]);
 
 /** Build the SSE path for a session's or Workplace Project's generation/UI stream. Sessions and
  *  projects share the same leaf routes under different scopes; the id prefix picks which. */
-function transcriptStreamPath(id: TranscriptTargetId, leaf: 'events' | 'ui-stream'): string {
+function transcriptStreamPath(id: SessionId | ProjectId, leaf: 'events' | 'ui-stream'): string {
   const scope = id.startsWith('prj_') ? 'projects' : 'sessions';
   return `/${CONTROL_API_VERSION}/${scope}/${encodeURIComponent(id)}/${leaf}`;
 }
@@ -223,7 +223,7 @@ export class MonadClient {
     };
 
     const unsubControl = this.subscribeControl((event) => {
-      if (event.transcriptTargetId !== sessionId) return;
+      if (event.sessionId !== sessionId) return;
       if (event.type === 'session.stream_started') {
         openSse();
         return;
@@ -271,7 +271,7 @@ export class MonadClient {
   }
 
   streamEvents(
-    sessionId: TranscriptTargetId,
+    sessionId: SessionId | ProjectId,
     onEvent: EventHandler,
     opts?: { afterEventId?: EventId; onOpen?: () => void; onError?: (err: StreamError) => void }
   ): () => void {
@@ -279,7 +279,7 @@ export class MonadClient {
   }
 
   streamUiEvents(
-    sessionId: TranscriptTargetId,
+    sessionId: SessionId | ProjectId,
     onEvent: UiEventHandler,
     opts?: { afterEventId?: EventId; onOpen?: () => void; onError?: (err: StreamError) => void }
   ): () => void {
@@ -316,7 +316,7 @@ export class MonadClient {
    *  exited); any other close reconnects. */
   streamExternalAgentUiObservation(
     id: string,
-    transcriptTargetId: TranscriptTargetId,
+    transcriptTargetId: SessionId | ProjectId,
     onFrame: ExternalAgentUiObservationHandler,
     opts?: { onError?: (err: StreamError) => void }
   ): () => void {

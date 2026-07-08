@@ -1,8 +1,4 @@
-import type {
-  ExternalAgentHistoryPageRequest,
-  ExternalAgentHistoryPageResponse,
-  TranscriptTargetId
-} from '@monad/protocol';
+import type { ExternalAgentHistoryPageRequest, ExternalAgentHistoryPageResponse, SessionId } from '@monad/protocol';
 
 import { externalAgentHistoryPageRequestSchema, externalAgentHistoryPageResponseSchema } from '@monad/protocol';
 
@@ -12,7 +8,7 @@ import { sessionsApi } from '../sessions/index.ts';
 type GetExternalAgentHistoryPageArg = Partial<ExternalAgentHistoryPageRequest> & {
   before?: string | null;
   id: string;
-  transcriptTargetId: TranscriptTargetId;
+  transcriptTargetId: SessionId;
 };
 
 function normalizeExternalAgentHistoryPageQuery({
@@ -24,7 +20,7 @@ function normalizeExternalAgentHistoryPageQuery({
   transcriptTargetId
 }: GetExternalAgentHistoryPageArg): {
   id: string;
-  query: ExternalAgentHistoryPageRequest & { transcriptTargetId: TranscriptTargetId };
+  query: ExternalAgentHistoryPageRequest & { transcriptTargetId: SessionId };
 } {
   const request = externalAgentHistoryPageRequestSchema.parse({
     ...(before ? { before } : {}),

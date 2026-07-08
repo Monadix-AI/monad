@@ -1,4 +1,4 @@
-import type { ExternalAgentSessionView, TranscriptTargetId } from '@monad/protocol';
+import type { ExternalAgentSessionView, SessionId } from '@monad/protocol';
 
 import { externalAgentSessionViewSchema } from '@monad/protocol';
 
@@ -8,10 +8,7 @@ import { sessionsApi } from '../sessions/index.ts';
 const getExternalAgentSessionApi = sessionsApi.injectEndpoints({
   overrideExisting: true,
   endpoints: (builder) => ({
-    getExternalAgentSession: builder.query<
-      ExternalAgentSessionView,
-      { id: string; transcriptTargetId: TranscriptTargetId }
-    >({
+    getExternalAgentSession: builder.query<ExternalAgentSessionView, { id: string; transcriptTargetId: SessionId }>({
       queryFn: ({ id, transcriptTargetId }, api: { extra: unknown }) =>
         runTreaty(
           () => clientOf(api).treaty.v1['external-agent-sessions']({ id }).get({ query: { transcriptTargetId } }),

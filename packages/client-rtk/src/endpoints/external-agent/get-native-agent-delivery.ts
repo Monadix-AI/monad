@@ -1,4 +1,4 @@
-import type { GetNativeAgentDeliveryResponse, NativeAgentDeliveryId, TranscriptTargetId } from '@monad/protocol';
+import type { GetNativeAgentDeliveryResponse, NativeAgentDeliveryId, SessionId } from '@monad/protocol';
 
 import { getNativeAgentDeliveryResponseSchema } from '@monad/protocol';
 
@@ -10,7 +10,7 @@ export const getNativeAgentDeliveryApi = sessionsApi.injectEndpoints({
   endpoints: (builder) => ({
     getNativeAgentDelivery: builder.query<
       GetNativeAgentDeliveryResponse,
-      { id: NativeAgentDeliveryId; transcriptTargetId: TranscriptTargetId }
+      { id: NativeAgentDeliveryId; transcriptTargetId: SessionId }
     >({
       queryFn: ({ id, transcriptTargetId }, api: { extra: unknown }) =>
         runTreaty(

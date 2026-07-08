@@ -1,4 +1,4 @@
-import type { TranscriptTargetId, WorkspaceGit, WorkspaceMeta } from '@monad/protocol';
+import type { SessionId, WorkspaceGit, WorkspaceMeta } from '@monad/protocol';
 
 import { apiSlice } from '../../api-slice.ts';
 import { clientOf, runTreaty } from '../../endpoint-helpers.ts';
@@ -8,22 +8,14 @@ import { clientOf, runTreaty } from '../../endpoint-helpers.ts';
 const workspaceMetaApi = apiSlice.injectEndpoints({
   overrideExisting: true,
   endpoints: (builder) => ({
-    workspaceMeta: builder.query<WorkspaceMeta, TranscriptTargetId>({
-      queryFn: (id: TranscriptTargetId, api: { extra: unknown }) =>
-        runTreaty(() =>
-          id.startsWith('prj_')
-            ? clientOf(api).treaty.v1.projects({ id })['workspace-meta'].get()
-            : clientOf(api).treaty.v1.sessions({ id })['workspace-meta'].get()
-        ),
+    workspaceMeta: builder.query<WorkspaceMeta, SessionId>({
+      queryFn: (id: SessionId, api: { extra: unknown }) =>
+        runTreaty(() => clientOf(api).treaty.v1.sessions({ id })['workspace-meta'].get()),
       providesTags: ['Sessions']
     }),
-    workspaceGit: builder.query<WorkspaceGit, TranscriptTargetId>({
-      queryFn: async (id: TranscriptTargetId, api: { extra: unknown }) => {
-        const result = await runTreaty(() =>
-          id.startsWith('prj_')
-            ? clientOf(api).treaty.v1.projects({ id })['workspace-meta'].get()
-            : clientOf(api).treaty.v1.sessions({ id })['workspace-meta'].get()
-        );
+    workspaceGit: builder.query<WorkspaceGit, SessionId>({
+      queryFn: async (id: SessionId, api: { extra: unknown }) => {
+        const result = await runTreaty(() => clientOf(api).treaty.v1.sessions({ id })['workspace-meta'].get());
         if ('error' in result) return result;
         return { data: result.data.git };
       },

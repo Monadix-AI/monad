@@ -1,4 +1,4 @@
-import type { ExternalAgentUiObservationFrame, TranscriptTargetId } from '@monad/protocol';
+import type { ExternalAgentUiObservationFrame, SessionId } from '@monad/protocol';
 
 import { clientOf } from '../../endpoint-helpers.ts';
 import { sessionsApi } from '../sessions/index.ts';
@@ -8,7 +8,7 @@ export const streamExternalAgentUiObservationApi = sessionsApi.injectEndpoints({
   endpoints: (builder) => ({
     streamExternalAgentUiObservation: builder.query<
       ExternalAgentUiObservationFrame | null,
-      { id: string; transcriptTargetId: TranscriptTargetId }
+      { id: string; transcriptTargetId: SessionId }
     >({
       queryFn: () => ({ data: null }),
       async onCacheEntryAdded(

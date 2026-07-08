@@ -41,7 +41,7 @@ export const streamControlApi = apiSlice.injectEndpoints({
               dispatch(
                 apiSlice.util.invalidateTags([
                   'ExternalAgentSessions',
-                  { type: 'ExternalAgentSessions', id: event.transcriptTargetId }
+                  { type: 'ExternalAgentSessions', id: event.sessionId }
                 ])
               );
             }

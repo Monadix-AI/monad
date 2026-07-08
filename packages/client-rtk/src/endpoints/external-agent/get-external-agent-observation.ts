@@ -1,4 +1,4 @@
-import type { ExternalAgentObservationAccessResponse, TranscriptTargetId } from '@monad/protocol';
+import type { ExternalAgentObservationAccessResponse, SessionId } from '@monad/protocol';
 
 import { externalAgentObservationAccessResponseSchema } from '@monad/protocol';
 
@@ -10,7 +10,7 @@ export const getExternalAgentObservationApi = sessionsApi.injectEndpoints({
   endpoints: (builder) => ({
     getExternalAgentObservation: builder.query<
       ExternalAgentObservationAccessResponse,
-      { id: string; transcriptTargetId: TranscriptTargetId }
+      { id: string; transcriptTargetId: SessionId }
     >({
       queryFn: ({ id, transcriptTargetId }, api: { extra: unknown }) =>
         runTreaty(

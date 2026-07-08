@@ -115,16 +115,6 @@ function fakeClient(overrides: Record<string, unknown>): MonadClient {
             }
           }
         ),
-        projects: ({ id }: { id: string }) => ({
-          'external-agent-sessions': {
-            get: async () => {
-              const fn = overrides.listProjectExternalAgentSessions as
-                | ((projectId: string) => Promise<unknown[]>)
-                | undefined;
-              return ok({ sessions: fn ? await fn(id) : [] });
-            }
-          }
-        }),
         'external-agent-sessions': ({ id }: { id: string }) => ({
           observation: {
             get: async () => {
@@ -181,7 +171,7 @@ function fakeClient(overrides: Record<string, unknown>): MonadClient {
                 : {
                     delivery: {
                       id,
-                      projectId: 'prj_01KDEFAULTDELIVERY0000000',
+                      sessionId: 'ses_01KDEFAULTDELIVERY0000000',
                       memberInstanceId: 'pmem_codex',
                       externalAgentSessionId: 'exa_1',
                       triggerMessageSeq: 1,
@@ -354,7 +344,7 @@ test('getNativeAgentDelivery uses the typed native agent delivery treaty route',
       return {
         delivery: {
           id,
-          projectId: 'prj_01KCLIENTDELIVERY00000000',
+          sessionId: 'ses_01KCLIENTDELIVERY00000000',
           memberInstanceId: 'pmem_codex_1',
           externalAgentSessionId: 'exa_1',
           triggerMessageSeq: 7,
@@ -378,7 +368,7 @@ test('getNativeAgentDelivery uses the typed native agent delivery treaty route',
       }
     ).getNativeAgentDelivery.initiate({
       id: 'deliv_01KCLIENTDELIVERY000000',
-      transcriptTargetId: 'prj_01KCLIENTDELIVERY00000000'
+      transcriptTargetId: 'ses_01KCLIENTDELIVERY00000000'
     })
   );
 
@@ -414,7 +404,7 @@ test('getNativeAgentDeliveryObservation uses the typed delivery observation trea
       }
     ).getNativeAgentDeliveryObservation.initiate({
       id: 'deliv_01KCLIENTOBSERVATION0000',
-      transcriptTargetId: 'prj_01KCLIENTOBSERVE0000000'
+      transcriptTargetId: 'ses_01KCLIENTOBSERVE0000000'
     })
   );
 
@@ -450,7 +440,7 @@ test('getExternalAgentObservation uses the typed external agent observation trea
           initiate: typeof getExternalAgentObservationApi.endpoints.getExternalAgentObservation.initiate;
         };
       }
-    ).getExternalAgentObservation.initiate({ id: 'exa_1', transcriptTargetId: 'prj_01KCLIENTOBSERVE0000000' })
+    ).getExternalAgentObservation.initiate({ id: 'exa_1', transcriptTargetId: 'ses_01KCLIENTOBSERVE0000000' })
   );
 
   expect(seen).toEqual(['exa_1']);
@@ -465,7 +455,7 @@ test('streamExternalAgentUiObservation caches full neutral frames verbatim (no d
     }
   });
   const store = createMonadStore({ client });
-  const arg = { id: 'exa_1', transcriptTargetId: 'prj_01KCLIENTOBSERVE0000000' as const };
+  const arg = { id: 'exa_1', transcriptTargetId: 'ses_01KCLIENTOBSERVE0000000' as const };
 
   store.dispatch(streamExternalAgentUiObservationApi.endpoints.streamExternalAgentUiObservation.initiate(arg));
   await new Promise((r) => setTimeout(r, 0));
@@ -554,16 +544,16 @@ test('client errors surface on the RTKQ error branch, not as throws', async () =
   expect((res.error as { message?: string } | undefined)?.message).toBe('boom');
 });
 
-test('listExternalAgentSessions uses the typed project treaty route for Workplace Projects', async () => {
+test('listExternalAgentSessions uses the typed session treaty route', async () => {
   const seen: string[] = [];
   const now = new Date().toISOString();
   const client = fakeClient({
-    listProjectExternalAgentSessions: async (projectId: string) => {
-      seen.push(projectId);
+    listExternalAgentSessions: async (sessionId: string) => {
+      seen.push(sessionId);
       return [
         {
           id: 'exa_1',
-          transcriptTargetId: projectId,
+          sessionId: sessionId,
           agentName: 'codex',
           provider: 'codex',
           workingPath: '/tmp/project',
@@ -591,10 +581,10 @@ test('listExternalAgentSessions uses the typed project treaty route for Workplac
           ) => ReturnType<typeof listExternalAgentSessionsApi.endpoints.listExternalAgentSessions.initiate>;
         };
       }
-    ).listExternalAgentSessions.initiate('prj_1')
+    ).listExternalAgentSessions.initiate('ses_1')
   );
 
-  expect(seen).toEqual(['prj_1']);
+  expect(seen).toEqual(['ses_1']);
   expect('data' in res && res.data?.ids).toEqual(['exa_1']);
 });
 
@@ -703,7 +693,7 @@ test('streamControl subscribes to the control stream and invalidates Sessions on
   // A SESSION_LIST_EVENT triggers a Sessions tag invalidation → listSessions refetches.
   controlHandler?.({
     id: 'evt_1',
-    transcriptTargetId: 'ses_1',
+    sessionId: 'ses_1',
     type: 'session.created',
     actorAgentId: null,
     payload: {},
@@ -716,7 +706,7 @@ test('streamControl subscribes to the control stream and invalidates Sessions on
   // A non-list event must NOT trigger a refetch.
   controlHandler?.({
     id: 'evt_2',
-    transcriptTargetId: 'ses_1',
+    sessionId: 'ses_1',
     type: 'tool.called',
     actorAgentId: null,
     payload: {},
@@ -727,18 +717,18 @@ test('streamControl subscribes to the control stream and invalidates Sessions on
   expect(listCalls).toBe(2);
 });
 
-test('streamControl invalidates external agent sessions when a project external agent runtime starts', async () => {
+test('streamControl invalidates external agent sessions when a managed external agent runtime starts', async () => {
   let externalAgentCalls = 0;
   let controlHandler: ((event: Event) => void) | undefined;
   const now = new Date().toISOString();
 
   const client = fakeClient({
-    listProjectExternalAgentSessions: async (projectId: string) => {
+    listExternalAgentSessions: async (sessionId: string) => {
       externalAgentCalls++;
       return [
         {
           id: 'exa_1',
-          transcriptTargetId: projectId,
+          sessionId: sessionId,
           agentName: 'pmem_codex_reviewer',
           provider: 'codex',
           workingPath: '/tmp/project',
@@ -770,7 +760,7 @@ test('streamControl invalidates external agent sessions when a project external 
           ) => ReturnType<typeof listExternalAgentSessionsApi.endpoints.listExternalAgentSessions.initiate>;
         };
       }
-    ).listExternalAgentSessions.initiate('prj_1')
+    ).listExternalAgentSessions.initiate('ses_1')
   );
   expect(externalAgentCalls).toBe(1);
 
@@ -779,7 +769,7 @@ test('streamControl invalidates external agent sessions when a project external 
 
   controlHandler?.({
     id: 'evt_external_agent_started',
-    transcriptTargetId: 'prj_1',
+    sessionId: 'ses_1',
     type: 'external_agent.started',
     actorAgentId: null,
     payload: { externalAgentSessionId: 'exa_1' },
