@@ -14,6 +14,7 @@ import {
   sandboxedSpawn,
   sandboxLauncher
 } from '@/capabilities/tools';
+import { isActiveLocalOsSandbox } from '@/capabilities/tools/sandbox/active-local.ts';
 
 afterEach(() => {
   configureSandboxLauncher(noneLauncher);
@@ -30,6 +31,19 @@ test('noneLauncher returns argv unchanged', () => {
 
 test('default launcher is none (passthrough)', () => {
   expect(sandboxLauncher().kind).toBe('none');
+});
+
+test('isActiveLocalOsSandbox only returns true for local sandboxed roots', () => {
+  const fakeLocal: SandboxLauncher = { kind: 'fake-local', wrap: (argv) => argv };
+  configureSandboxLauncher(fakeLocal);
+  expect(isActiveLocalOsSandbox({ sandboxRoots: ['/work'] })).toBe(true);
+  expect(isActiveLocalOsSandbox({ sandboxRoots: undefined })).toBe(false);
+  expect(
+    isActiveLocalOsSandbox({
+      sandboxRoots: ['/work'],
+      backends: { terminal: { delegated: true } }
+    })
+  ).toBe(false);
 });
 
 test('sandboxedSpawn passes argv straight through under the none launcher', async () => {

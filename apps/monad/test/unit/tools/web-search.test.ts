@@ -1,11 +1,14 @@
 import { afterEach, beforeEach, expect, test } from 'bun:test';
 
 import {
+  configureSandboxNet,
   configureWebSearch,
   createBraveProvider,
   duckDuckGoProvider,
   parseDuckDuckGoHtml,
+  registerWebSearchTools,
   selectProvider,
+  ToolSecurityError,
   WebSearchError
 } from '@/capabilities/tools';
 
@@ -23,7 +26,10 @@ function htmlFetch(html: string): typeof fetch {
 }
 
 beforeEach(() => configureWebSearch({ provider: 'auto' }));
-afterEach(() => configureWebSearch({ provider: 'auto' }));
+afterEach(() => {
+  configureWebSearch({ provider: 'auto' });
+  configureSandboxNet('unrestricted');
+});
 
 // ── Brave factory ─────────────────────────────────────────────────────────────
 
@@ -88,4 +94,47 @@ test('selectProvider uses ddgs as the local fallback for provider=native', () =>
 test('selectProvider throws when provider=brave but no key configured', () => {
   configureWebSearch({ provider: 'brave' });
   expect(() => selectProvider()).toThrow(WebSearchError);
+});
+
+test('web_search requests network_access for the selected local provider host', async () => {
+  configureSandboxNet('none');
+  configureWebSearch({ provider: 'brave', braveApiKey: 'bk' });
+  const [tool] = registerWebSearchTools({});
+  const calls: Array<{ tool: string; key?: string; input: unknown }> = [];
+
+  await expect(
+    tool?.run?.(
+      { query: 'monad sandbox', count: 1 },
+      {
+        sessionId: 'ses_1',
+        log: () => {},
+        gate: async (req) => {
+          calls.push({ tool: req.tool, key: req.key, input: req.input });
+          return { allow: false, reason: 'deny test' };
+        }
+      }
+    )
+  ).rejects.toBeInstanceOf(ToolSecurityError);
+
+  expect(calls).toEqual([
+    {
+      tool: 'network_access',
+      key: 'api.search.brave.com',
+      input: {
+        url: 'https://api.search.brave.com/res/v1/web/search?q=monad+sandbox&count=1',
+        host: 'api.search.brave.com',
+        protocol: 'https',
+        reason: 'web_search',
+        defaultScope: 'session',
+        rememberScopes: ['once', 'session', 'agent', 'global'],
+        displayHint: {
+          kind: 'resource-approval',
+          resource: 'network',
+          subject: 'api.search.brave.com',
+          defaultScope: 'session',
+          rememberScopes: ['once', 'session', 'agent', 'global']
+        }
+      }
+    }
+  ]);
 });

@@ -1,5 +1,7 @@
 'use client';
 
+import type { ApprovalRule } from '@monad/protocol';
+
 import { Delete02Icon, Shield01Icon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import {
@@ -19,10 +21,23 @@ interface Props {
   onClose: () => void;
 }
 
+type Translate = (key: string) => string;
+
+export function approvalRuleLabel(rule: ApprovalRule, t: Translate): string {
+  if (rule.tool === 'path_access') {
+    const key = rule.key ?? '?';
+    const match = /^(write|cwd|execute):(.+)$/.exec(key);
+    return match
+      ? `${t('web.chat.pathAccessTitle')} · ${match[1]} · ${match[2]}`
+      : `${t('web.chat.pathAccessTitle')} · ${key}`;
+  }
+  return rule.key ? `${rule.tool}(${rule.key})` : rule.tool;
+}
+
 // Authorized-rules panel: lists remembered allow/deny rules (persisted global + agent) and lets the
 // user revoke one or clear all so the gate prompts again. Session rules aren't shown here (they're
 // scoped to a live session and cleared on its end).
-export function ApprovalsSettings(_props: Props) {
+function ApprovalsSettings(_props: Props) {
   const t = useT();
   const { data: ruleData } = useListApprovalsQuery(undefined);
   const rules = useMemo(
@@ -76,13 +91,7 @@ export function ApprovalsSettings(_props: Props) {
                   <span className={r.decision === 'deny' ? 'font-medium text-destructive' : 'font-medium text-success'}>
                     {r.decision}
                   </span>
-                  <code className="truncate font-mono">
-                    {r.tool === 'fs_path_access'
-                      ? `${t('web.chat.pathAccessTitle')}: ${r.key ?? '?'}`
-                      : r.key
-                        ? `${r.tool}(${r.key})`
-                        : r.tool}
-                  </code>
+                  <code className="truncate font-mono">{approvalRuleLabel(r, t)}</code>
                   <span className="text-muted-foreground text-xs">
                     {r.scope === 'agent' ? `agent:${r.agentId ?? '?'}` : r.scope}
                   </span>

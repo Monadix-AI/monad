@@ -76,7 +76,7 @@ test('session allow is cleared by cancelSession (re-prompts afterwards)', async 
 });
 
 test('host escape allow downgrades to session scope (never persisted)', async () => {
-  const { oversight, events, store } = await setup();
+  const { oversight, events } = await setup();
   const p1 = oversight.gate(req('code_execute', 'target:host'));
   const id = requested(events)[0]?.payload.requestId as string;
   await oversight.respond(id, true, undefined, 'global'); // requests global, must downgrade
@@ -87,4 +87,27 @@ test('host escape allow downgrades to session scope (never persisted)', async ()
   const before = requested(events).length;
   expect(await oversight.gate(req('code_execute', 'target:host'))).toEqual({ allow: true });
   expect(requested(events).length).toBe(before);
+});
+
+test('resource approval rememberScopes caps requested persistence scope', async () => {
+  const { oversight, events, store } = await setup();
+  const p1 = oversight.gate({
+    tool: 'path_access',
+    key: 'write:/outside',
+    sessionId: 'ses_T',
+    highRisk: false,
+    input: {
+      path: '/outside/file.txt',
+      dir: '/outside',
+      defaultScope: 'session',
+      rememberScopes: ['once', 'session']
+    }
+  });
+  const id = requested(events)[0]?.payload.requestId as string;
+  await oversight.respond(id, true, undefined, 'global');
+  expect(await p1).toEqual({ allow: true });
+
+  const resolved = events.find((event) => event.type === 'tool.approval_resolved' && event.payload.requestId === id);
+  expect(resolved?.payload.scope).toBe('session');
+  expect(store.global().some((rule) => rule.tool === 'path_access')).toBe(false);
 });

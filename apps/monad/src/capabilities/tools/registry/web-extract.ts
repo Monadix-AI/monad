@@ -83,8 +83,8 @@ export const webExtractTool: Tool<
     'Fetch a web page and return its main readable content as clean text (with links), stripped of HTML chrome. Use instead of net_fetch when you want the article, not the markup.',
   scopes: [{ resource: 'net:fetch' }],
   inputSchema: webExtractInput,
-  run: async ({ url, maxBytes }) => {
-    const res = await fetchTextSafe(url, { maxBytes });
+  run: async ({ url, maxBytes }, ctx) => {
+    const res = await fetchTextSafe(url, { maxBytes, approval: { ctx, reason: 'web_extract' } });
     const contentType = res.headers['content-type'] ?? '';
     if (!contentType.includes('html')) {
       return toolResult({ url: res.url, title: '', text: res.body.trim(), truncated: res.truncated });

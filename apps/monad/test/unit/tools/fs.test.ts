@@ -1,7 +1,7 @@
 import type { FileObservationStore, ToolBackends, ToolContext, ToolGate } from '@/capabilities/tools/types.ts';
 
 import { afterAll, beforeAll, expect, test } from 'bun:test';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -37,9 +37,9 @@ function sha256(text: string): string {
   return new Bun.CryptoHasher('sha256').update(text).digest('hex');
 }
 
-function allowGate(calls: { tool: string; key?: string }[] = []): ToolGate {
+function allowGate(calls: { tool: string; key?: string; input?: unknown }[] = []): ToolGate {
   return async (req) => {
-    calls.push({ tool: req.tool, key: req.key });
+    calls.push({ tool: req.tool, key: req.key, input: req.input });
     return { allow: true };
   };
 }
@@ -780,20 +780,49 @@ test('file_write outside sandbox: deny gate still throws', async () => {
   );
 });
 
-test('file_write outside sandbox: allow gate succeeds and uses fs_path_access key', async () => {
-  const calls: { tool: string; key?: string }[] = [];
+test('file_write outside sandbox: allow gate succeeds and uses path_access key', async () => {
+  const calls: { tool: string; key?: string; input?: unknown }[] = [];
   const p = join(outside, 'written.txt');
   const res = (await fileWriteTool.run({ path: p, content: 'via gate' }, ctx([root], allowGate(calls)))).metadata;
   expect(res.files[0]).toMatchObject({ status: 'ok', bytesWritten: 8 });
   expect(calls).toHaveLength(1);
-  expect(calls[0]?.tool).toBe('fs_path_access');
-  expect(calls[0]?.key).toBe(outside);
+  expect(calls[0]?.tool).toBe('path_access');
+  expect(calls[0]?.key).toBe(`write:${await realpath(outside)}`);
+  expect(calls[0]?.input).toMatchObject({
+    operation: 'write',
+    pathKind: 'directory',
+    requestedByTool: 'file_write'
+  });
 });
 
 test('file_read outside sandbox: allow gate succeeds', async () => {
-  const res = await fileReadTool.run({ path: outsideFile }, ctx([root], allowGate()));
+  const calls: { tool: string; key?: string; input?: unknown }[] = [];
+  const res = await fileReadTool.run({ path: outsideFile }, ctx([root], allowGate(calls)));
   expect(res.modelContent).toBe('1\toutside content');
+  expect(calls[0]?.input).toMatchObject({
+    operation: 'read',
+    pathKind: 'directory',
+    requestedByTool: 'file_read'
+  });
 });
+
+test.skipIf(process.platform === 'win32')(
+  'file_read outside sandbox canonicalizes existing symlink dir approval key',
+  async () => {
+    const realOutside = await realpath(outside);
+    const linkParent = await mkdtemp(join(tmpdir(), 'monad-file-link-'));
+    const linked = join(linkParent, 'outside-link');
+    await symlink(realOutside, linked);
+    const calls: { tool: string; key?: string }[] = [];
+    try {
+      const res = await fileReadTool.run({ path: join(linked, 'secret.txt') }, ctx([root], allowGate(calls)));
+      expect(res.modelContent).toBe('1\toutside content');
+      expect(calls[0]).toMatchObject({ tool: 'path_access', key: realOutside });
+    } finally {
+      await rm(linkParent, { recursive: true, force: true });
+    }
+  }
+);
 
 test('file_patch outside sandbox: allow gate succeeds after file_read', async () => {
   const p = join(outside, 'patch-gate.txt');

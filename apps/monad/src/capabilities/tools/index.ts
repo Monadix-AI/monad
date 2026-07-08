@@ -57,9 +57,11 @@ export {
   createBraveProvider,
   duckDuckGoProvider,
   parseDuckDuckGoHtml,
+  register as registerWebSearchTools,
   selectProvider,
   WebSearchError
 } from './registry/web-search.ts';
+
 // Sandbox launchers (seatbelt/landlock/win32/bwrap) are the `sandbox` atom kind — they live in
 export {
   domainMatches,

@@ -245,11 +245,17 @@ export function AppShell() {
     () =>
       visibleLiveItems
         .filter((item): item is Extract<UIItem, { kind: 'approval' }> => item.kind === 'approval')
-        .map((item) => ({ requestId: item.id, tool: item.tool, input: item.input, key: item.key })),
+        .map((item) => ({
+          requestId: item.id,
+          tool: item.tool,
+          input: item.input,
+          display: item.display,
+          key: item.key
+        })),
     [visibleLiveItems]
   );
 
-  // Auto-trigger the native OS folder picker for fs_path_access approvals — the system dialog
+  // Auto-trigger the native OS folder picker for path_access approvals — the system dialog
   // IS the authorization: picking grants, cancelling falls back to the in-product deny card.
   const pendingClarifications = useMemo(
     () =>

@@ -78,6 +78,15 @@ function summarizeInput(input: unknown): string | undefined {
   return undefined;
 }
 
+function summarizeApproval(approval: Extract<UIItem, { kind: 'approval' }>): string | undefined {
+  if (approval.display?.kind === 'resource-approval') {
+    const prefix = approval.display.resource === 'network' ? 'Network' : 'File';
+    const op = approval.display.operation ? ` ${approval.display.operation}` : '';
+    return approval.display.subject ? `${prefix}${op}: ${approval.display.subject}` : `${prefix}${op} access`;
+  }
+  return summarizeInput(approval.input);
+}
+
 function node(id: string, position: { x: number; y: number }, data: InspectorNodeData): InspectorNode {
   return { id, type: 'inspector', position, data };
 }
@@ -304,7 +313,7 @@ export function buildInspectorFlow(items: UIItem[], t: InspectorT = defaultInspe
         `approval:${approval.id}`,
         { x: 540 + index * 245, y: 260 },
         {
-          detail: summarizeInput(approval.input),
+          detail: summarizeApproval(approval),
           eventKind: approval.kind,
           item: approval,
           meta: approval.key,

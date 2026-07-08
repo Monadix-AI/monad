@@ -127,6 +127,7 @@ describe('AgentPersonaService', () => {
 
     expect(svc.sandboxRootsFor('ses_w')).toEqual([join(agentsDir, 'workspaced')]);
     expect(svc.sandboxRootsFor('ses_h')).toEqual([homedir()]);
+    expect(svc.sandboxRootsFor('ses_n')).toEqual([join(agentsDir, 'noov')]);
   });
 
   test('global sandbox ceiling overrides a looser per-agent mode', async () => {

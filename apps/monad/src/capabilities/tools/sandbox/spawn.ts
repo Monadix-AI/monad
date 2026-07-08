@@ -78,6 +78,10 @@ export function configureSandboxNet(net: SandboxPolicy['net']): void {
   netDefault = net;
 }
 
+export function sandboxNetMode(): SandboxPolicy['net'] {
+  return netDefault;
+}
+
 // Sensitive paths every confined child is denied read access to (credential dir, SSH/cloud keys).
 // Daemon-wide, resolved once at boot from the real home — see configureSandboxReadDeny.
 let readDenyDefault: string[] = [];

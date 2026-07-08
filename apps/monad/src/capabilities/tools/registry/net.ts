@@ -6,12 +6,15 @@
 //      automatically would bypass checks via a 302 to an internal host.
 // See docs/security-guidelines.md §4.
 
-import type { Tool } from '../types.ts';
+import type { Tool, ToolContext } from '../types.ts';
 
 import { lookup } from 'node:dns/promises';
 import { httpUrlSchema } from '@monad/protocol';
 import { z } from 'zod';
 
+import { defaultApprovalPolicy } from '../approval/policy.ts';
+import { approvalDeniedMessage, requestNetworkAccess } from '../approval/resource-approval.ts';
+import { normalizeHost } from '../sandbox/egress-policy.ts';
 import { assertUrlAllowed, isBlockedIp, ToolSecurityError } from '../security.ts';
 import { toolResult } from '../types.ts';
 
@@ -32,6 +35,46 @@ export interface FetchResult {
   headers: Record<string, string>;
   body: string;
   truncated: boolean;
+}
+
+function shouldRequestNetworkApproval(ctx: ToolContext): boolean {
+  return defaultApprovalPolicy.shouldRequestNetworkApproval(ctx);
+}
+
+async function approveNetworkAccess(
+  ctx: ToolContext,
+  request: { url: string; host: string; protocol: 'http' | 'https'; reason: string },
+  approvedHosts?: Set<string>
+): Promise<string> {
+  const host = normalizeHost(request.host);
+  if (!shouldRequestNetworkApproval(ctx) || approvedHosts?.has(host)) return host;
+  const outcome = await requestNetworkAccess(ctx, { ...request, host });
+  if (!outcome.allow) throw new ToolSecurityError(approvalDeniedMessage('network', host));
+  approvedHosts?.add(host);
+  return host;
+}
+
+export function createApprovalFetch(
+  ctx: ToolContext,
+  opts: { reason: string; fetchImpl?: typeof fetch; approvedHosts?: Set<string> }
+): typeof fetch {
+  const fetchImpl = opts.fetchImpl ?? fetch;
+  const approvedHosts = opts.approvedHosts ?? new Set<string>();
+  return (async (input: string | URL | Request, init?: RequestInit) => {
+    const request = input instanceof Request ? input : new Request(input.toString(), init);
+    const checked = assertUrlAllowed(request.url);
+    await approveNetworkAccess(
+      ctx,
+      {
+        url: checked.toString(),
+        host: checked.hostname,
+        protocol: checked.protocol === 'https:' ? 'https' : 'http',
+        reason: opts.reason
+      },
+      approvedHosts
+    );
+    return fetchImpl(request);
+  }) as typeof fetch;
 }
 
 // Resolve once, validate every address, and return the URL plus the single pinned address we'll
@@ -106,16 +149,33 @@ export async function fetchTextSafe(
     timeoutMs?: number;
     maxBytes?: number;
     signal?: AbortSignal;
+    approval?: { ctx: ToolContext; reason: string };
+    approvedHosts?: Set<string>;
   } = {}
 ): Promise<FetchResult> {
   // Abort on whichever comes first: the per-request timeout or the caller's cancellation.
   const timeout = AbortSignal.timeout(opts.timeoutMs ?? DEFAULT_TIMEOUT_MS);
   const signal = opts.signal ? AbortSignal.any([timeout, opts.signal]) : timeout;
   const maxBytes = opts.maxBytes ?? MAX_BODY_BYTES;
+  const approvedHosts = opts.approvedHosts ?? new Set<string>();
   let current = url;
 
   for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
-    const { url: safe, address } = await assertHostSafe(current);
+    const checked = assertUrlAllowed(current);
+    const host = normalizeHost(checked.hostname);
+    if (opts.approval) {
+      await approveNetworkAccess(
+        opts.approval.ctx,
+        {
+          url: checked.toString(),
+          host,
+          protocol: checked.protocol === 'https:' ? 'https' : 'http',
+          reason: opts.approval.reason
+        },
+        approvedHosts
+      );
+    }
+    const { url: safe, address } = await assertHostSafe(checked.toString());
     const target = pinnedTarget(safe, address);
     const res = await fetch(target.url, {
       method: opts.method ?? 'GET',
@@ -152,7 +212,9 @@ export const netFetchTool: Tool<z.infer<typeof netFetchInput>, FetchResult> = {
   scopes: [{ resource: 'net:fetch' }],
   inputSchema: netFetchInput,
   run: ({ url, method, headers, timeoutMs }, ctx) =>
-    fetchTextSafe(url, { method, headers, timeoutMs, signal: ctx.signal }).then((result) => toolResult(result))
+    fetchTextSafe(url, { method, headers, timeoutMs, signal: ctx.signal, approval: { ctx, reason: 'net_fetch' } }).then(
+      (result) => toolResult(result)
+    )
 };
 
 const netTools: Tool[] = [netFetchTool as Tool];

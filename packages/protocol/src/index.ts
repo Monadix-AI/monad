@@ -34,6 +34,7 @@ export * from './obscura.ts';
 export * from './pagination.ts';
 export * from './peer.ts';
 export * from './pick-directory.ts';
+export * from './resource-approval.ts';
 export * from './rpc/control.ts';
 export * from './rpc/method-table.ts';
 export * from './rpc/rpc.ts';

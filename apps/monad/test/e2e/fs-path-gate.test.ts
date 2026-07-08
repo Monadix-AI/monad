@@ -1,4 +1,4 @@
-// E2E: fs_path_access gate — the out-of-sandbox path escalation flow over both transports.
+// E2E: path_access gate — the out-of-sandbox path escalation flow over both transports.
 // Drives the real HTTP surface (POST /v1/tools/approve, GET /v1/approvals, POST
 // /v1/approvals/revoke) against a real PolicyEngine + ApprovalStore, verifying that path
 // escalation behaves identically to the general approval flow but with scope:'agent' (not
@@ -43,11 +43,17 @@ const DESKTOP = '/tmp/monad-e2e-desktop';
 const SESSION_ID = 'ses_FSG';
 const AGENT_ID = 'agent_FSG_test';
 const pathGateReq = {
-  tool: 'fs_path_access',
+  tool: 'path_access',
   sessionId: SESSION_ID,
   highRisk: false,
-  input: { path: `${DESKTOP}/report.txt` },
-  key: DESKTOP
+  input: {
+    path: `${DESKTOP}/report.txt`,
+    dir: DESKTOP,
+    operation: 'write',
+    defaultScope: 'session',
+    rememberScopes: ['once', 'session', 'agent', 'global']
+  },
+  key: `write:${DESKTOP}`
 };
 
 const requested = (e: Event[]) => e.filter((x) => x.type === 'tool.approval_requested');
@@ -58,7 +64,7 @@ const json = (m: string, b: unknown) => ({
 });
 
 for (const kind of TRANSPORTS) {
-  describe(`fs_path_access gate over ${kind}`, () => {
+  describe(`path_access gate over ${kind}`, () => {
     test('scope:agent persists → no re-prompt; GET lists rule with directory key; revoke restores prompting', async () => {
       const { t, oversight, events, store } = await setup(kind);
       try {
@@ -74,13 +80,13 @@ for (const kind of TRANSPORTS) {
         expect(await oversight.gate(pathGateReq)).toEqual({ allow: true });
         expect(requested(events).length).toBe(before);
 
-        // 3. GET /v1/approvals lists the rule with tool:'fs_path_access' and the directory key.
+        // 3. GET /v1/approvals lists the rule with tool:'path_access' and the operation-scoped key.
         const listRes = await t.fetch('/v1/approvals');
         expect(listRes.status).toBe(200);
         const { rules } = (await listRes.json()) as {
           rules: { id: string; tool: string; key?: string; scope: string }[];
         };
-        const rule = rules.find((r) => r.tool === 'fs_path_access' && r.key === DESKTOP);
+        const rule = rules.find((r) => r.tool === 'path_access' && r.key === `write:${DESKTOP}`);
         expect(rule).toMatchObject({ scope: 'agent', agentId: AGENT_ID });
         expect(store.all()).toHaveLength(1);
 

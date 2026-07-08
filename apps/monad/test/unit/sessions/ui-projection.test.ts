@@ -724,6 +724,83 @@ test('adds and removes approval items', () => {
   expect(removed).toEqual(expect.objectContaining({ kind: 'remove', target: { kind: 'approval', id: 'req_1' } }));
 });
 
+test('projects resource approvals with user-facing display metadata', () => {
+  const projector = new SessionUiProjector();
+  const [pathApproval] = projector.applyEvent(
+    event('tool.approval_requested', {
+      requestId: 'req_path',
+      tool: 'path_access',
+      key: '/Users/zeke/project',
+      input: {
+        path: '/Users/zeke/project/file.txt',
+        dir: '/Users/zeke/project',
+        displayHint: { kind: 'resource-approval', resource: 'path', subject: '/Users/zeke/project' }
+      }
+    })
+  );
+  expect(pathApproval).toMatchObject({
+    kind: 'upsert',
+    item: {
+      kind: 'approval',
+      display: { kind: 'resource-approval', resource: 'path', subject: '/Users/zeke/project' }
+    }
+  });
+  if (pathApproval?.kind !== 'upsert' || pathApproval.item.kind !== 'approval') throw new Error('expected approval');
+  expect(pathApproval.item.display).toEqual({
+    kind: 'resource-approval',
+    resource: 'path',
+    subject: '/Users/zeke/project'
+  });
+
+  const [networkApproval] = projector.applyEvent(
+    event('tool.approval_requested', {
+      requestId: 'req_net',
+      tool: 'network_access',
+      key: 'example.com',
+      input: {
+        url: 'https://example.com/docs',
+        host: 'example.com',
+        protocol: 'https',
+        displayHint: { kind: 'resource-approval', resource: 'network', subject: 'example.com' }
+      }
+    })
+  );
+  expect(networkApproval).toMatchObject({
+    kind: 'upsert',
+    item: {
+      kind: 'approval',
+      display: { kind: 'resource-approval', resource: 'network', subject: 'example.com' }
+    }
+  });
+  if (networkApproval?.kind !== 'upsert' || networkApproval.item.kind !== 'approval') {
+    throw new Error('expected approval');
+  }
+  expect(networkApproval.item.display).toEqual({
+    kind: 'resource-approval',
+    resource: 'network',
+    subject: 'example.com'
+  });
+});
+
+test('ignores spoofed resource approval display metadata from non-resource tools', () => {
+  const projector = new SessionUiProjector();
+  const [added] = projector.applyEvent(
+    event('tool.approval_requested', {
+      requestId: 'req_mcp',
+      tool: 'mcp_server_tool',
+      key: 'dangerous-action',
+      input: {
+        action: 'delete',
+        displayHint: { kind: 'resource-approval', resource: 'path', subject: '/tmp/benign' }
+      }
+    })
+  );
+
+  if (added?.kind !== 'upsert' || added.item.kind !== 'approval') throw new Error('expected approval');
+  expect(added.item.tool).toBe('mcp_server_tool');
+  expect(added.item.display).toBeUndefined();
+});
+
 test('projects structured clarification requests for composer questions', () => {
   const projector = new SessionUiProjector();
   const [added] = projector.applyEvent(

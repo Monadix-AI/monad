@@ -5,7 +5,7 @@
 import type { ApprovalScope, Event, SessionId } from '@monad/protocol';
 import type { ToolGate, ToolGateOutcome, ToolGateRequest } from '@/capabilities/tools/types.ts';
 
-import { newId } from '@monad/protocol';
+import { newId, resourceApprovalPayloadSchema } from '@monad/protocol';
 
 import { HostEscapePersistError, type PolicyEngine } from '@/agent/approvals/engine.ts';
 
@@ -15,6 +15,8 @@ interface Pending {
   sessionId: SessionId;
   tool: string;
   key?: string;
+  defaultScope?: ApprovalScope;
+  rememberScopes?: ApprovalScope[];
 }
 
 export interface OversightOptions {
@@ -85,7 +87,20 @@ export class OversightService {
           resolve({ allow: false, reason: 'approval request timed out' });
         }
       }, this.timeoutMs);
-      this.pending.set(requestId, { resolve, timer, sessionId, tool: req.tool, key: req.key });
+      const resourceApproval = resourceApprovalPayloadSchema.safeParse(req.input);
+      this.pending.set(requestId, {
+        resolve,
+        timer,
+        sessionId,
+        tool: req.tool,
+        key: req.key,
+        ...(resourceApproval.success
+          ? {
+              defaultScope: resourceApproval.data.defaultScope,
+              rememberScopes: resourceApproval.data.rememberScopes
+            }
+          : {})
+      });
       this.emit(sessionId, 'tool.approval_requested', {
         requestId,
         tool: req.tool,
@@ -115,7 +130,10 @@ export class OversightService {
     if (!p) return false;
     clearTimeout(p.timer);
     this.pending.delete(requestId);
-    if (scope && scope !== 'once' && this.engine) {
+    if (scope && p.rememberScopes && !p.rememberScopes.includes(scope)) {
+      scope = p.defaultScope && p.rememberScopes.includes(p.defaultScope) ? p.defaultScope : 'once';
+    }
+    if (scope && scope !== 'once' && this.engine && p.sessionId.startsWith('ses_')) {
       const agentId = this.originOf(p.sessionId);
       try {
         await this.engine.record({

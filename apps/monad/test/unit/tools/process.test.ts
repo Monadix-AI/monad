@@ -1,10 +1,17 @@
+import type { SandboxLauncher } from '@monad/sdk-atom';
 import type { ToolContext } from '@/capabilities/tools/types.ts';
 
 import { afterEach, expect, test } from 'bun:test';
+import { mkdtemp, realpath, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 import {
   clearProcesses,
   clearProcessesForSession,
+  configureSandboxLauncher,
+  configureSandboxNet,
+  noneLauncher,
   processKillTool,
   processListTool,
   processLogsTool,
@@ -14,9 +21,19 @@ import {
   processWaitTool,
   processWriteTool
 } from '@/capabilities/tools';
+import { invokeTool } from '@/capabilities/tools/invoke.ts';
 
 const ctx: ToolContext = { sessionId: 's1', sandboxRoots: undefined, log: () => {} };
 const ctxB: ToolContext = { sessionId: 's2', sandboxRoots: undefined, log: () => {} };
+const fakeLauncher: SandboxLauncher = {
+  kind: 'fake-os-sandbox',
+  wrap: (argv) => argv
+};
+const approvalEquivalentLauncher: SandboxLauncher = {
+  kind: 'fake-approval-equivalent-sandbox',
+  enforces: { readDeny: true, net: ['none'] },
+  wrap: (argv) => argv
+};
 
 const startProcess = async (...args: Parameters<typeof processStartTool.run>) =>
   (await processStartTool.run(...args)).metadata;
@@ -29,7 +46,11 @@ const listProcesses = async (...args: Parameters<typeof processListTool.run>) =>
 const killProcess = async (...args: Parameters<typeof processKillTool.run>) =>
   (await processKillTool.run(...args)).metadata;
 
-afterEach(() => clearProcesses());
+afterEach(() => {
+  clearProcesses();
+  configureSandboxLauncher(noneLauncher);
+  configureSandboxNet('unrestricted');
+});
 
 async function waitForExit(id: string, ms = 3000) {
   const start = Date.now();
@@ -52,6 +73,53 @@ async function waitForStdout(id: string, needle: string, ms = 5000) {
 
 test('process_start is high-risk (gated)', () => {
   expect(processStartTool.highRisk).toBe(true);
+});
+
+test('process_start still requires primary approval when the active sandbox is read or network permissive', async () => {
+  configureSandboxLauncher(fakeLauncher);
+  await expect(
+    invokeTool(
+      processStartTool,
+      { command: 'bun -e "console.log(7)"', cwd: process.cwd(), terminalMode: 'pipe' },
+      { sessionId: 's1', sandboxRoots: [process.cwd()], log: () => {} }
+    )
+  ).rejects.toThrow(/requires an approval gate/);
+});
+
+test('process_start skips primary approval only when the active sandbox enforces read-deny and egress', async () => {
+  configureSandboxLauncher(approvalEquivalentLauncher);
+  configureSandboxNet('none');
+  const out = await invokeTool(
+    processStartTool,
+    { command: 'bun -e "console.log(7)"', cwd: process.cwd(), terminalMode: 'pipe' },
+    { sessionId: 's1', sandboxRoots: [process.cwd()], log: () => {} }
+  );
+  expect(out.metadata.id).toMatch(/^proc_/);
+  const r = await waitForExit(out.metadata.id);
+  expect(r.exitCode).toBe(0);
+});
+
+test('process_start secondary gate allow expands roots and starts outside cwd', async () => {
+  configureSandboxLauncher(fakeLauncher);
+  const outside = await realpath(await mkdtemp(join(tmpdir(), 'monad-process-out-')));
+  const calls: { key?: string; tool: string }[] = [];
+  try {
+    const c: ToolContext = {
+      ...ctx,
+      sandboxRoots: [process.cwd()],
+      gate: async (req) => {
+        calls.push({ tool: req.tool, key: req.key });
+        return { allow: true };
+      }
+    };
+    const { id } = await startProcess({ command: 'pwd', cwd: outside, terminalMode: 'pipe' }, c);
+    const r = await waitForExit(id);
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout.trim()).toBe(outside);
+    expect(calls).toEqual([{ tool: 'path_access', key: `cwd:${outside}` }]);
+  } finally {
+    await rm(outside, { recursive: true, force: true });
+  }
 });
 
 test('start → captures stdout and exit code of a short process', async () => {

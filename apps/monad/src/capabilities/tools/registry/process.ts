@@ -1,14 +1,19 @@
 // Background process management — unlike shell_exec (blocking + timeout), these start
 // long-lived commands and manage them across tool calls.
 //
-// process_start is HIGH-RISK (arbitrary command) → human-approved. The rest manage an
-// already-approved process and are not gated. All children are killed on daemon exit.
+// process_start is high-risk when it escapes containment. With an active OS sandbox and sandbox
+// roots, commands inside the roots run without a primary prompt; out-of-sandbox cwd access routes
+// through path approval. The rest manage an already-started process and are not gated. All children
+// are killed on daemon exit.
 
 import type { Tool, ToolContext } from '../types.ts';
 
+import { isAbsolute, resolve } from 'node:path';
 import { createLogger } from '@monad/logger';
 import { z } from 'zod';
 
+import { gatePathAccess } from '../approval/path-gate.ts';
+import { canSkipHighRiskApprovalInLocalSandbox } from '../sandbox/active-local.ts';
 import { assertPathWithinRoots, ToolSecurityError } from '../security.ts';
 import { toolResult } from '../types.ts';
 import {
@@ -77,9 +82,10 @@ export const processStartTool: Tool<
 > = {
   name: 'process_start',
   description:
-    'Start a long-running command in the background and return a process id to poll/write/kill. Defaults to an interactive PTY terminal that can be driven with process_write; pass terminalMode:"pipe" for plain stdin/stdout pipes.',
+    'Start a long-running command in the background and return a process id to poll/write/kill. Defaults to an interactive PTY terminal that can be driven with process_write; pass terminalMode:"pipe" for plain stdin/stdout pipes. Runs without primary approval inside an active OS sandbox; host-wide or out-of-sandbox execution is approval-gated.',
   scopes: [{ resource: 'shell:exec' }],
   highRisk: true,
+  needsApproval: (_input, ctx) => !canSkipHighRiskApprovalInLocalSandbox(ctx),
   inputSchema: processStartInput,
   run: async ({ command, cwd, terminalMode, cols, rows, idleTimeoutMs, maxRuntimeMs }, ctx) => {
     // Prune this session's finished entries so completed runs don't consume capacity.
@@ -96,7 +102,24 @@ export const processStartTool: Tool<
       throw new ToolSecurityError(`daemon background-process limit reached (>= ${MAX_PROCESSES_GLOBAL})`);
     }
 
-    const dir = assertPathWithinRoots(cwd ?? ctx.sandboxRoots?.[0] ?? process.cwd(), ctx.sandboxRoots);
+    const requestedCwd = cwd ?? ctx.sandboxRoots?.[0] ?? process.cwd();
+    const absCwd = isAbsolute(requestedCwd)
+      ? resolve(requestedCwd)
+      : resolve(ctx.sandboxRoots?.[0] ?? process.cwd(), requestedCwd);
+    let runCtx = ctx;
+    let dir: string;
+    try {
+      dir = assertPathWithinRoots(absCwd, ctx.sandboxRoots);
+    } catch (err) {
+      const expandedRoots = await gatePathAccess(absCwd, ctx, err, {
+        dir: absCwd,
+        operation: 'cwd',
+        pathKind: 'directory',
+        requestedByTool: 'process_start'
+      });
+      runCtx = { ...ctx, sandboxRoots: expandedRoots };
+      dir = assertPathWithinRoots(absCwd, expandedRoots);
+    }
     let mode = terminalMode ?? 'pty';
     const stdoutChunks: string[] = [];
     let entry: ProcEntry | undefined;
@@ -104,7 +127,7 @@ export const processStartTool: Tool<
       startPtyProcess(
         command,
         dir,
-        ctx,
+        runCtx,
         (chunk) => {
           if (entry) {
             appendOutput(entry, 'stdout', chunk);
@@ -128,10 +151,10 @@ export const processStartTool: Tool<
           'pty terminal unavailable — falling back to pipe mode'
         );
         mode = 'pipe';
-        started = startPipeProcess(command, dir, ctx);
+        started = startPipeProcess(command, dir, runCtx);
       }
     } else {
-      started = startPipeProcess(command, dir, ctx);
+      started = startPipeProcess(command, dir, runCtx);
     }
     const id = `proc_${crypto.randomUUID()}`;
     entry = {

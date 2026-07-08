@@ -1,6 +1,6 @@
 'use client';
 
-import type { ComposerSettings, Session, SessionId, UIItem } from '@monad/protocol';
+import type { ApprovalScope, ComposerSettings, Session, SessionId, UIApprovalDisplay, UIItem } from '@monad/protocol';
 import type { VirtualListHandle } from '@monad/ui/components/VirtualList';
 import type { ComponentProps, KeyboardEventHandler, Ref } from 'react';
 
@@ -23,6 +23,8 @@ import { memo, useState } from 'react';
 
 import { useT } from '@/components/I18nProvider';
 import { AgentLoopInspector } from '@/features/session/AgentLoopInspector';
+import { ApprovalDisplayCard } from '@/features/session/ApprovalDisplayCard';
+import { approvalActionScopes } from '@/features/session/approval-display';
 import { Message } from '@/features/session/ChatMessage';
 import { ComposerQueueStack } from '@/features/session/ComposerQueueStack';
 import { ComposerShell } from '@/features/session/ComposerShell';
@@ -52,6 +54,7 @@ export interface SessionCommandMenuItem {
 }
 
 interface PendingApproval {
+  display?: UIApprovalDisplay;
   input?: unknown;
   key?: string;
   requestId: string;
@@ -66,7 +69,7 @@ interface PendingClarification {
 
 type ComposerProps = ComponentProps<typeof ComposerShell>;
 
-export interface SessionRouteProps {
+interface SessionRouteProps {
   accessMode: 'auto' | 'ask';
   activeInputSkillToken?: ComposerProps['skillToken'];
   activeSkill: number;
@@ -85,12 +88,7 @@ export interface SessionRouteProps {
   composerSettings: ComposerSettings;
   model: ComposerProps['model'];
   onAccessModeChange: (mode: 'auto' | 'ask') => void;
-  onApproval: (
-    approval: PendingApproval,
-    allow: boolean,
-    scope: 'once' | 'session' | 'global',
-    reason?: string
-  ) => void;
+  onApproval: (approval: PendingApproval, allow: boolean, scope: ApprovalScope, reason?: string) => void;
   onBranch: (messageId: string) => void;
   onClarifyAnswer: (requestId: string, answer: string) => void;
   onRemoveQueuedMessage: (index: number) => void;
@@ -121,7 +119,7 @@ export interface SessionRouteProps {
   viewMessages: ViewItem[];
 }
 
-export function SessionRoute({
+function SessionRoute({
   accessMode,
   activeInputSkillToken,
   activeSkill,
@@ -370,14 +368,12 @@ function ApprovalCard({
   onApproval
 }: {
   approval: PendingApproval;
-  onApproval: (
-    approval: PendingApproval,
-    allow: boolean,
-    scope: 'once' | 'session' | 'global',
-    reason?: string
-  ) => void;
+  onApproval: (approval: PendingApproval, allow: boolean, scope: ApprovalScope, reason?: string) => void;
 }) {
   const t = useT();
+  const scopes = approvalActionScopes(approval.display).filter(
+    (scope) => approval.key !== 'host-control' || scope !== 'global'
+  );
 
   return (
     <div className="panel-subtle flex max-w-170 flex-col gap-2 self-start border-warning/40 bg-warning/10 px-4 py-4">
@@ -386,7 +382,13 @@ function ApprovalCard({
           className="size-4"
           icon={ShieldQuestionMarkIcon}
         />
-        {approval.tool === 'fs_path_access' ? (
+        {approval.display?.kind === 'resource-approval' ? (
+          approval.display.resource === 'path' ? (
+            t('web.chat.pathAccessTitle')
+          ) : (
+            'Network access'
+          )
+        ) : approval.tool === 'path_access' ? (
           t('web.chat.pathAccessTitle')
         ) : (
           <>
@@ -394,7 +396,9 @@ function ApprovalCard({
           </>
         )}
       </div>
-      {approval.tool === 'fs_path_access' && approval.key ? (
+      {approval.display?.kind === 'resource-approval' ? (
+        <ApprovalDisplayCard display={approval.display} />
+      ) : approval.tool === 'path_access' && approval.key ? (
         <div className="flex items-baseline gap-1.5 text-muted-foreground text-xs">
           <span className="shrink-0">{t('web.chat.pathAccessDir')}:</span>
           <code className="min-w-0 break-all font-mono">{approval.key}</code>
@@ -405,28 +409,17 @@ function ApprovalCard({
         </pre>
       ) : null}
       <div className="flex flex-wrap gap-2">
-        <Button
-          onClick={() => onApproval(approval, true, 'once')}
-          size="sm"
-        >
-          <HugeiconsIcon icon={CheckIcon} /> {t('web.chat.approveOnce')}
-        </Button>
-        <Button
-          onClick={() => onApproval(approval, true, 'session')}
-          size="sm"
-          variant={approval.key === 'host-control' ? undefined : 'outline'}
-        >
-          {t('web.chat.approveSession')}
-        </Button>
-        {approval.key !== 'host-control' && (
+        {scopes.map((scope, index) => (
           <Button
-            onClick={() => onApproval(approval, true, 'global')}
+            key={scope}
+            onClick={() => onApproval(approval, true, scope)}
             size="sm"
-            variant="outline"
+            variant={index === 0 ? undefined : 'outline'}
           >
-            {t('web.chat.approveAlways')}
+            {index === 0 ? <HugeiconsIcon icon={CheckIcon} /> : null}
+            {approvalScopeLabel(scope, t)}
           </Button>
-        )}
+        ))}
         <Button
           onClick={() => onApproval(approval, false, 'once', 'denied by operator')}
           size="sm"
@@ -437,6 +430,13 @@ function ApprovalCard({
       </div>
     </div>
   );
+}
+
+function approvalScopeLabel(scope: ApprovalScope, t: ReturnType<typeof useT>): string {
+  if (scope === 'once') return t('web.chat.approveOnce');
+  if (scope === 'session') return t('web.chat.approveSession');
+  if (scope === 'global') return t('web.chat.approveAlways');
+  return 'This agent';
 }
 
 function CommandMenu({

@@ -1,12 +1,42 @@
-import type { Event, SessionUiEvent } from '@monad/protocol';
+import type { Event, SessionUiEvent, UIApprovalDisplay } from '@monad/protocol';
 import type { ProjectionMutations } from './ui-projection-state.ts';
 
-import { parseEventPayload } from '@monad/protocol';
+import { parseEventPayload, uiApprovalDisplaySchema } from '@monad/protocol';
+
+function approvalDisplayHint(input: unknown): UIApprovalDisplay | undefined {
+  const parsed = uiApprovalDisplaySchema.safeParse((input as { displayHint?: unknown } | undefined)?.displayHint);
+  return parsed.success ? parsed.data : undefined;
+}
+
+function approvalDisplay(tool: string, input: unknown, key?: string): UIApprovalDisplay | undefined {
+  if (tool === 'path_access') {
+    const hint = approvalDisplayHint(input);
+    if (hint?.kind === 'resource-approval' && hint.resource === 'path') return hint;
+    const dir = typeof (input as { dir?: unknown })?.dir === 'string' ? (input as { dir: string }).dir : key;
+    return {
+      kind: 'resource-approval',
+      resource: 'path',
+      ...(dir ? { subject: dir } : {})
+    };
+  }
+  if (tool === 'network_access') {
+    const hint = approvalDisplayHint(input);
+    if (hint?.kind === 'resource-approval' && hint.resource === 'network') return hint;
+    const host = typeof (input as { host?: unknown })?.host === 'string' ? (input as { host: string }).host : key;
+    return {
+      kind: 'resource-approval',
+      resource: 'network',
+      ...(host ? { subject: host } : {})
+    };
+  }
+  return undefined;
+}
 
 export function applyInteractionEvent(m: ProjectionMutations, event: Event): SessionUiEvent[] | undefined {
   switch (event.type) {
     case 'tool.approval_requested': {
       const p = parseEventPayload('tool.approval_requested', event.payload);
+      const display = approvalDisplay(p.tool, p.input, p.key);
       return [
         {
           kind: 'upsert',
@@ -16,6 +46,7 @@ export function applyInteractionEvent(m: ProjectionMutations, event: Event): Ses
             id: p.requestId,
             tool: p.tool,
             ...(p.input !== undefined ? { input: p.input } : {}),
+            ...(display !== undefined ? { display } : {}),
             ...(p.key ? { key: p.key } : {}),
             seq: event.id
           })

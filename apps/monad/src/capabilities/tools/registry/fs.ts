@@ -9,8 +9,8 @@ import { realpathSync } from 'node:fs';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 import { z } from 'zod';
 
+import { gatePathAccess, type PathAccessOperation } from '../approval/path-gate.ts';
 import { createSandboxBackends, resolveReal } from '../backends.ts';
-import { gatePathAccess } from '../path-gate.ts';
 import { ToolSecurityError } from '../security.ts';
 import { toolResult } from '../types.ts';
 
@@ -354,11 +354,20 @@ function ignored(path: string): boolean {
   return ALWAYS_IGNORE.some((seg) => p === seg || p.includes(`${seg}/`) || p.includes(`/${seg}/`));
 }
 
-async function withFsGate<T>(path: string, ctx: ToolContext, fn: (fs: FsBackend) => Promise<T>): Promise<T> {
+async function withFsGate<T>(
+  path: string,
+  ctx: ToolContext,
+  options: { operation: PathAccessOperation; requestedByTool: string },
+  fn: (fs: FsBackend) => Promise<T>
+): Promise<T> {
   try {
     return await fn(fsBackend(ctx));
   } catch (err) {
-    const expanded = await gatePathAccess(path, ctx, err);
+    const expanded = await gatePathAccess(path, ctx, err, {
+      operation: options.operation,
+      pathKind: 'directory',
+      requestedByTool: options.requestedByTool
+    });
     return fn(createSandboxBackends(expanded, { defaultCwd: ctx.defaultCwd }).fs);
   }
 }
@@ -419,7 +428,7 @@ export const fileReadTool: Tool<z.infer<typeof fileReadInput>, string> = {
   scopes: [{ resource: 'fs:read' }],
   inputSchema: fileReadInput,
   run: async ({ path, offset, limit }, ctx) =>
-    withFsGate(path, ctx, async (fs) => {
+    withFsGate(path, ctx, { operation: 'read', requestedByTool: 'file_read' }, async (fs) => {
       const fullText = await fs.readTextFile(path);
       const effectiveLimit = limit ?? DEFAULT_READ_LINES;
       const startLine = offset ?? 1;
@@ -456,7 +465,7 @@ export const fileWriteTool: Tool<z.infer<typeof fileWriteInput>, FileMutationBat
   needsApproval: (_input, ctx) => !ctx.backends?.fs.delegated && ctx.sandboxRoots === undefined,
   inputSchema: fileWriteInput,
   run: ({ path, content, baseHash }, ctx) =>
-    withFsGate(path, ctx, async (fs) => {
+    withFsGate(path, ctx, { operation: 'write', requestedByTool: 'file_write' }, async (fs) => {
       const before = await readExistingText(fs, path);
       if (before !== null) {
         const currentHash = sha256(before);
@@ -496,7 +505,12 @@ export const fileGlobTool: Tool<z.infer<typeof fileGlobInput>, string[]> = {
     } catch (err) {
       if (!path) throw err;
       const dir = isAbsolute(path) ? resolve(path) : resolve(ctx.sandboxRoots?.[0] ?? process.cwd(), path);
-      const expanded = await gatePathAccess(path, ctx, err, dir);
+      const expanded = await gatePathAccess(path, ctx, err, {
+        dir,
+        operation: 'read',
+        pathKind: 'directory',
+        requestedByTool: 'file_glob'
+      });
       cwd = await resolveReal(path, expanded);
     }
     const glob = new Bun.Glob(pattern);
@@ -543,7 +557,12 @@ export const fileGrepTool: Tool<z.infer<typeof fileGrepInput>, GrepMatch[]> = {
     } catch (err) {
       if (!path) throw err;
       const dir = isAbsolute(path) ? resolve(path) : resolve(ctx.sandboxRoots?.[0] ?? process.cwd(), path);
-      const expanded = await gatePathAccess(path, ctx, err, dir);
+      const expanded = await gatePathAccess(path, ctx, err, {
+        dir,
+        operation: 'read',
+        pathKind: 'directory',
+        requestedByTool: 'file_grep'
+      });
       cwd = await resolveReal(path, expanded);
     }
     const scanner = new Bun.Glob(glob ?? '**/*');
@@ -746,7 +765,7 @@ function providedBaseHash(path: string, options: PatchOptions): string | undefin
 async function applyPatchOp(op: PatchOp, ctx: ToolContext, options: PatchOptions): Promise<FileMutationResult> {
   if (op.type === 'add') {
     const content = op.lines.length === 0 ? '' : `${op.lines.join('\n')}\n`;
-    return withFsGate(op.path, ctx, async (fs) => {
+    return withFsGate(op.path, ctx, { operation: 'write', requestedByTool: 'file_patch' }, async (fs) => {
       const existing = await readExistingText(fs, op.path);
       if (existing !== null) throw new ToolSecurityError(`cannot add existing file: ${op.path}`);
       const { path: written, bytesWritten } = await fs.writeTextFile(op.path, content);
@@ -756,14 +775,14 @@ async function applyPatchOp(op: PatchOp, ctx: ToolContext, options: PatchOptions
     });
   }
   if (op.type === 'delete') {
-    return withFsGate(op.path, ctx, async (fs) => {
+    return withFsGate(op.path, ctx, { operation: 'write', requestedByTool: 'file_patch' }, async (fs) => {
       const before = await fs.readTextFile(op.path);
       await assertObservedOrBaseHash(ctx, op.path, before, options, 'Delete File');
       const deleted = await requireDelete(fs)(op.path);
       return createMutationResult(ctx, deleted.path, before, null, 'delete');
     });
   }
-  return withFsGate(op.path, ctx, async (fs) => {
+  return withFsGate(op.path, ctx, { operation: 'write', requestedByTool: 'file_patch' }, async (fs) => {
     const before = await fs.readTextFile(op.path);
     if (op.newPath && op.hunks.length === 0) {
       await assertObservedOrBaseHash(ctx, op.path, before, options, 'Move without hunks');
@@ -817,7 +836,9 @@ async function validatePatchGroup(
     const key = ledgerPath(path);
     const cached = state.get(key);
     if (cached) return cached;
-    const text = await withFsGate(path, ctx, async (fs) => readExistingText(fs, path));
+    const text = await withFsGate(path, ctx, { operation: 'read', requestedByTool: 'file_patch' }, async (fs) =>
+      readExistingText(fs, path)
+    );
     const file = { path, text };
     state.set(key, file);
     return file;

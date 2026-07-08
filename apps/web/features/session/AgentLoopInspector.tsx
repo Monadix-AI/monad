@@ -30,6 +30,7 @@ import { memo, useEffect, useMemo, useState } from 'react';
 import '@xyflow/react/dist/style.css';
 
 import { type TFn, useT } from '@/components/I18nProvider';
+import { ApprovalDisplayCard } from '@/features/session/ApprovalDisplayCard';
 import {
   buildInspectorFlow,
   type InspectorNode,
@@ -361,6 +362,11 @@ function InspectorDetails({ data, t }: { data: InspectorNodeData | null; t: TFn 
         ) : null}
       </div>
       <div className="min-h-0 overflow-auto border-border/70 border-t px-4 py-3">
+        {data.item?.kind === 'approval' ? (
+          <div className="mb-3">
+            <ApprovalDisplayCard display={data.item.display} />
+          </div>
+        ) : null}
         {data.detail ? <p className="mb-3 text-muted-foreground text-xs">{data.detail}</p> : null}
         <pre className="whitespace-pre-wrap break-words rounded-md bg-muted/45 p-3 font-mono text-[11px] leading-relaxed">
           {safeJson(data.item)}

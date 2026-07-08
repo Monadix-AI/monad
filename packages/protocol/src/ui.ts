@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { clarifyAskerSchema, clarifyChoiceModeSchema } from './clarify.ts';
 import { contextUsagePayloadSchema } from './event-table.ts';
 import { eventIdSchema, messageIdSchema, nativeAgentDeliveryIdSchema } from './ids.ts';
+import { resourceApprovalDisplaySchema } from './resource-approval.ts';
 import { listMessagesQuerySchema } from './rpc/control.ts';
 
 export const uiMessageRoleSchema = z.enum(['user', 'assistant']);
@@ -72,11 +73,15 @@ export const uiToolItemSchema = z.object({
 });
 export type UIToolItem = z.infer<typeof uiToolItemSchema>;
 
+export const uiApprovalDisplaySchema = z.discriminatedUnion('kind', [resourceApprovalDisplaySchema]);
+export type UIApprovalDisplay = z.infer<typeof uiApprovalDisplaySchema>;
+
 export const uiApprovalItemSchema = z.object({
   kind: z.literal('approval'),
   id: z.string(),
   tool: z.string(),
   input: z.unknown().optional(),
+  display: uiApprovalDisplaySchema.optional(),
   key: z.string().optional(),
   seq: z.string()
 });

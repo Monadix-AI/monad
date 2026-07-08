@@ -2,11 +2,12 @@
 // all adapters are plain HTTP with no SDK dependencies and are fetch-injectable for tests.
 // Configuration flows in via configureWebSearch() (called from main.ts after config load).
 
-import type { Tool } from '../types.ts';
+import type { Tool, ToolContext } from '../types.ts';
 
 import { z } from 'zod';
 
 import { toolResult } from '../types.ts';
+import { createApprovalFetch } from './net.ts';
 
 const DEFAULT_COUNT = 10;
 const MAX_COUNT = 20;
@@ -26,6 +27,7 @@ export class WebSearchError extends Error {
 
 export interface SearchProvider {
   name: string;
+  networkHost: string;
   isConfigured(): boolean;
   search(query: string, count: number, fetchImpl: typeof fetch): Promise<WebSearchResult[]>;
 }
@@ -33,6 +35,7 @@ export interface SearchProvider {
 export function createBraveProvider(apiKey: string): SearchProvider {
   return {
     name: 'brave',
+    networkHost: 'api.search.brave.com',
     isConfigured: () => true,
     async search(query, count, fetchImpl) {
       const url = new URL('https://api.search.brave.com/res/v1/web/search');
@@ -93,6 +96,7 @@ export function parseDuckDuckGoHtml(html: string): WebSearchResult[] {
 
 export const duckDuckGoProvider: SearchProvider = {
   name: 'ddgs',
+  networkHost: 'html.duckduckgo.com',
   isConfigured: () => true, // keyless fallback; always available
   async search(query, count, fetchImpl) {
     const url = new URL('https://html.duckduckgo.com/html/');
@@ -145,9 +149,13 @@ const webSearchTool: Tool<z.infer<typeof webSearchInput>, { provider: string; re
     anthropic: { type: 'web_search_20260209' },
     openai: { type: 'web_search_preview' }
   },
-  run: async ({ query, count }) => {
+  run: async ({ query, count }, ctx: ToolContext) => {
     const provider = selectProvider();
-    const results = await provider.search(query, count ?? DEFAULT_COUNT, fetch);
+    const results = await provider.search(
+      query,
+      count ?? DEFAULT_COUNT,
+      createApprovalFetch(ctx, { reason: 'web_search' })
+    );
     return toolResult({ provider: provider.name, results });
   }
 };

@@ -84,9 +84,10 @@ export class AgentPersonaService {
     return this.boundAgent(sessionId)?.atoms;
   }
 
-  /** The fs sandbox roots for the session's bound agent's `sandbox` override, with the global ceiling
-   *  applied (`resolveEffectiveSandboxMode`). Returns undefined when there is no per-agent override, so
-   *  the caller inherits the daemon default. Narrow-only by design: `workspace` jails to the agent's own
+  /** The fs sandbox roots for the session's bound agent, with the global ceiling applied
+   *  (`resolveEffectiveSandboxMode`). A bound agent without an explicit `sandbox` defaults to
+   *  `workspace`, so monad-owned agents are jailed to their own agent dir by default. Narrow-only:
+   *  `workspace` jails to the agent's own
    *  dir, `home` to the home dir; `ephemeral` defers to the per-session disposable root (created
    *  out-of-band by SessionSandboxService) and `unrestricted` never widens past the daemon default from
    *  here — both yield undefined. (An explicit-unrestricted widening isn't expressible at this layer:
@@ -94,9 +95,9 @@ export class AgentPersonaService {
    *  would jail to nothing.) */
   sandboxRootsFor(sessionId?: string): string[] | undefined {
     const agent = this.boundAgent(sessionId);
-    if (!agent?.sandbox) return undefined;
+    if (!agent) return undefined;
     const global = this.lastConfig?.agent.globalSandbox ?? { enabled: false, mode: 'workspace' as const };
-    const mode = resolveEffectiveSandboxMode(agent.sandbox, global);
+    const mode = resolveEffectiveSandboxMode(agent.sandbox ?? { mode: 'workspace' as const }, global);
     if (mode === 'home') return [homedir()];
     if (mode === 'workspace') return [join(this.paths.agents, agent.dir ?? toAgentDir(agent.name))];
     return undefined;
