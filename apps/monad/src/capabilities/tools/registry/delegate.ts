@@ -5,7 +5,7 @@
 import type { Event, Hooks, SessionId } from '@monad/protocol';
 import type { ContextEngine } from '@/agent/context/index.ts';
 import type { ModelRouter } from '@/agent/model/index.ts';
-import type { Tool, ToolBackends, ToolGate } from '@/capabilities/tools/types.ts';
+import type { FileObservationStore, Tool, ToolBackends, ToolGate } from '@/capabilities/tools/types.ts';
 
 import { z } from 'zod';
 
@@ -21,6 +21,7 @@ export interface SubagentRunDeps {
   /** Principal id for observability span attribution, inherited from the parent. Telemetry only. */
   userId?: string;
   gate?: ToolGate;
+  fileObservations?: FileObservationStore;
   maxTurns?: number;
   /** Context engine so long delegated runs compact too (same as the parent). */
   context?: ContextEngine;
@@ -59,6 +60,7 @@ export async function runSubagent(
     // Inherit the parent's backends so a delegated/forked subagent edits the editor's files too
     // (a delegated ACP session), instead of silently falling back to the daemon sandbox.
     backends: ctx.backends,
+    fileObservations: deps.fileObservations,
     gate: deps.gate,
     maxTurns: deps.maxTurns,
     context: deps.context,
@@ -79,6 +81,7 @@ export interface DelegateDeps {
   /** Principal id for observability span attribution, inherited from the parent. Telemetry only. */
   userId?: string;
   gate?: ToolGate;
+  fileObservations?: FileObservationStore;
   maxTurns?: number;
   context?: ContextEngine;
   contextLimit?: number;
@@ -112,6 +115,7 @@ export function createDelegateTool(deps: DelegateDeps): Tool<DelegateInput, { te
           defaultModel: deps.defaultModel,
           userId: deps.userId,
           gate: deps.gate,
+          fileObservations: deps.fileObservations,
           maxTurns: deps.maxTurns,
           context: deps.context,
           contextLimit: deps.contextLimit,

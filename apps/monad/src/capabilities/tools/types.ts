@@ -180,6 +180,19 @@ export interface ToolBackends {
   terminal: TerminalBackend;
 }
 
+export interface FileObservation {
+  path: string;
+  hash: string;
+  coverage: 'full';
+  observedAt: string;
+  toolCallId?: string;
+}
+
+export interface FileObservationStore {
+  remember(sessionId: string, observation: FileObservation): void | Promise<void>;
+  get(sessionId: string, path: string): FileObservation | null | Promise<FileObservation | null>;
+}
+
 import type { Scope } from '@monad/protocol';
 import type { ProviderToolHint } from '@monad/sdk-atom';
 
@@ -210,6 +223,8 @@ export interface ToolContext {
    * it; tools fall back to a sandbox backend built from `sandboxRoots` when absent.
    */
   backends?: ToolBackends;
+  /** Durable per-session file observations used for whole-file write/delete/move guards. */
+  fileObservations?: FileObservationStore;
   /** Per-session/per-run tools appended to the base toolset. Used by delegation bridges. */
   extraTools?: Tool[];
   /** Optional filter narrowing the exposed tool set for this run/session. */

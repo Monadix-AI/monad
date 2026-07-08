@@ -8,7 +8,7 @@ import type {
   SessionId,
   ChatMessage as WireChatMessage
 } from '@monad/protocol';
-import type { Tool, ToolBackends, ToolGate } from '@/capabilities/tools/types.ts';
+import type { FileObservationStore, Tool, ToolBackends, ToolGate } from '@/capabilities/tools/types.ts';
 import type { ContextEngine } from '../context/index.ts';
 import type { HistoryProvider } from '../history.ts';
 import type { ModelRouter, ModelUsage } from '../model/index.ts';
@@ -53,6 +53,8 @@ export interface AgentLoopDeps {
   sandboxRoots?: string[];
   /** Execution backends for this run. ACP sessions supply delegating backends. */
   backends?: ToolBackends;
+  /** Durable per-session file observations used by file tools. */
+  fileObservations?: FileObservationStore;
   /** Default working directory for shell commands when not overridden per-call. */
   defaultCwd?: string;
   /** Per-run predicate keeping only the named tools. */

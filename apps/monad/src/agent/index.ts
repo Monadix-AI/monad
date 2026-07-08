@@ -1,5 +1,5 @@
 import type { Event, Hooks, SessionId } from '@monad/protocol';
-import type { Tool, ToolBackends, ToolGate } from '@/capabilities/tools/types.ts';
+import type { FileObservationStore, Tool, ToolBackends, ToolGate } from '@/capabilities/tools/types.ts';
 import type { ContextEngine } from './context/index.ts';
 import type { HistoryProvider } from './history.ts';
 import type { AgentLoopDeps, LoadedSkill, MessageRepo, SkillTier, ToolSearchConfig } from './loop/index.ts';
@@ -45,6 +45,8 @@ export interface AgentConfig {
   /** Principal id for observability span attribution (Phoenix user.id). In-process telemetry only. */
   userId?: string;
   sandboxRoots?: string[];
+  /** Durable per-session file observations used by file tools. */
+  fileObservations?: FileObservationStore;
   /** Active model's context-window size; enables per-turn `context.usage` breakdowns. */
   contextLimit?: number;
   /** Records each turn's real usage (session + global ledger) and returns its real cost. Injected
@@ -174,6 +176,7 @@ export function createAgent(config: AgentConfig): Agent {
       defaultModel: forkModel,
       userId: config.userId,
       gate: config.gate,
+      fileObservations: config.fileObservations,
       context: config.context,
       contextLimit: config.contextLimit,
       forkDepth: 1,
@@ -269,6 +272,7 @@ export function createAgent(config: AgentConfig): Agent {
         emit,
         sandboxRoots: opts?.sandboxRoots ?? config.sandboxRoots,
         backends: opts?.backends,
+        fileObservations: config.fileObservations,
         toolFilter: opts?.toolFilter,
         ambientContext: opts?.ambientContext,
         extraTools: opts?.extraTools,

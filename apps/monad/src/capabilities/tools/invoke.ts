@@ -4,7 +4,14 @@
 // resource guards (fs paths, net URLs) can enforce at call time.
 // See docs/security-guidelines.md §4.
 
-import type { Tool, ToolBackends, ToolContext, ToolGate, ToolResult } from '@/capabilities/tools/types.ts';
+import type {
+  FileObservationStore,
+  Tool,
+  ToolBackends,
+  ToolContext,
+  ToolGate,
+  ToolResult
+} from '@/capabilities/tools/types.ts';
 
 import { toolResultSchema } from '@/capabilities/tools/types.ts';
 
@@ -55,6 +62,8 @@ export interface InvokeToolOptions {
   /** fs/terminal execution backends — forwarded into ToolContext.backends. Absent → tools
    * fall back to a sandbox backend built from `sandboxRoots`. */
   backends?: ToolBackends;
+  /** Per-session durable file observations. */
+  fileObservations?: FileObservationStore;
   /** Forwarded into ToolContext.defaultCwd. */
   defaultCwd?: string;
   /** Streamed partial-output sink — forwarded into ToolContext.reportProgress. */
@@ -87,6 +96,7 @@ export async function invokeTool<Input, Metadata>(
     toolCallId: opts.toolCallId,
     sandboxRoots: opts.sandboxRoots,
     backends: opts.backends,
+    fileObservations: opts.fileObservations,
     defaultCwd: opts.defaultCwd,
     signal: opts.signal,
     reportProgress: opts.onProgress,

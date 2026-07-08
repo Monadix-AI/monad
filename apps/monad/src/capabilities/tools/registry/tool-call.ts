@@ -33,6 +33,7 @@ export function createToolCallTool(
         toolCallId: ctx.toolCallId,
         sandboxRoots: ctx.sandboxRoots,
         backends: ctx.backends,
+        fileObservations: ctx.fileObservations,
         defaultCwd: ctx.defaultCwd,
         signal: ctx.signal,
         log: ctx.log,

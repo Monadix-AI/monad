@@ -1,4 +1,4 @@
-import type { ToolBackends, ToolContext, ToolGate } from '@/capabilities/tools/types.ts';
+import type { FileObservationStore, ToolBackends, ToolContext, ToolGate } from '@/capabilities/tools/types.ts';
 
 import { afterAll, beforeAll, expect, test } from 'bun:test';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
@@ -16,9 +16,19 @@ import {
 
 let root: string;
 let sessionCounter = 0;
-const ctx = (roots: string[] | undefined, gate?: ToolGate): ToolContext => ({
-  sessionId: `s${++sessionCounter}`,
+const observations = new Map<string, Awaited<ReturnType<FileObservationStore['get']>>>();
+const fileObservations: FileObservationStore = {
+  remember(sessionId, observation) {
+    observations.set(`${sessionId}:${observation.path}`, observation);
+  },
+  get(sessionId, path) {
+    return observations.get(`${sessionId}:${path}`) ?? null;
+  }
+};
+const ctx = (roots: string[] | undefined, gate?: ToolGate, sessionId = `s${++sessionCounter}`): ToolContext => ({
+  sessionId,
   sandboxRoots: roots,
+  fileObservations,
   gate,
   log: () => {}
 });
@@ -95,6 +105,7 @@ test('file_write creates files and parent dirs inside the sandbox', async () => 
   const res = (await fileWriteTool.run({ path: p, content: 'hello' }, ctx([root]))).metadata;
   expect(res.files[0]?.status).toBe('ok');
   const file = res.files[0]?.status === 'ok' ? res.files[0] : undefined;
+  if (!file) throw new Error('expected file_write mutation');
   expect(file?.bytesWritten).toBe(5);
   expect(res.changed).toBe(true);
   expect(file?.afterHash).toMatch(/^[a-f0-9]{64}$/);
@@ -111,7 +122,7 @@ test('file_write blocks overwrite when the file was not read first', async () =>
   const p = join(root, 'unread-overwrite.txt');
   await writeFile(p, 'before');
   await expect(fileWriteTool.run({ path: p, content: 'after' }, ctx([root]))).rejects.toThrow(
-    'File has not been read yet'
+    'File has not been observed in this session'
   );
 });
 
@@ -125,6 +136,16 @@ test('file_write overwrites after file_read records the current hash', async () 
   expect(await readFile(p, 'utf8')).toBe('after');
 });
 
+test('file_write uses session observations after ToolContext recreation', async () => {
+  const p = join(root, 'persisted-observation-overwrite.txt');
+  const sessionId = `s${++sessionCounter}`;
+  await writeFile(p, 'before');
+  await fileReadTool.run({ path: p }, ctx([root], undefined, sessionId));
+  const res = (await fileWriteTool.run({ path: p, content: 'after' }, ctx([root], undefined, sessionId))).metadata;
+  expect(res.files[0]).toMatchObject({ status: 'ok', beforeHash: sha256('before'), afterHash: sha256('after') });
+  expect(await readFile(p, 'utf8')).toBe('after');
+});
+
 test('file_write rejects overwrite when the file changed after read', async () => {
   const p = join(root, 'stale-overwrite.txt');
   const c = ctx([root]);
@@ -132,7 +153,7 @@ test('file_write rejects overwrite when the file changed after read', async () =
   await fileReadTool.run({ path: p }, c);
   await writeFile(p, 'changed');
   await expect(fileWriteTool.run({ path: p, content: 'after' }, c)).rejects.toThrow(
-    'File has been modified since read'
+    'File has changed since the session observation'
   );
 });
 
@@ -243,6 +264,32 @@ test('file_patch updates after file_read records the current hash', async () => 
   );
   expect(out.metadata.files[0]).toMatchObject({ operation: 'update', changed: true });
   expect(await readFile(p, 'utf8')).toBe('one\nTWO\nthree\n');
+});
+
+test('file_patch updates when full-file hash changed but hunk context matches', async () => {
+  const p = join(root, 'patch-observation-drift.txt');
+  const c = ctx([root]);
+  await writeFile(p, 'target\nuntouched\n');
+  await fileReadTool.run({ path: p }, c);
+  await writeFile(p, 'target\nexternal\n');
+  const out = await filePatchTool.run(
+    {
+      baseHashByPath: { [p]: sha256('target\nuntouched\n') },
+      patch: `*** Begin Patch
+*** Update File: ${p}
+@@
+-target
++updated
+*** End Patch`
+    },
+    c
+  );
+  expect(out.metadata.files[0]).toMatchObject({ status: 'ok', operation: 'update' });
+  expect(out.metadata.files[0]?.status === 'ok' ? out.metadata.files[0].warning : undefined).toContain(
+    'hunk context matched'
+  );
+  expect(out.modelContent).toContain('1 warning');
+  expect(await readFile(p, 'utf8')).toBe('updated\nexternal\n');
 });
 
 test('file_patch applies multiple file operations', async () => {
@@ -476,7 +523,7 @@ test('file_patch syntax errors fail the whole tool call', async () => {
   );
 });
 
-test('file_patch requires baseHash for delete operations', async () => {
+test('file_patch requires observation or baseHash for delete operations', async () => {
   const p = join(root, 'patch-delete-without-hash.txt');
   await writeFile(p, 'delete me\n');
   const out = await filePatchTool.run(
@@ -508,7 +555,23 @@ test('file_patch deletes with a matching baseHash', async () => {
   expect(out.metadata.files[0]).toMatchObject({ operation: 'delete', afterHash: null });
 });
 
-test('file_patch requires baseHash for move without hunks', async () => {
+test('file_patch deletes with a persisted session observation', async () => {
+  const p = join(root, 'patch-delete-observed.txt');
+  const sessionId = `s${++sessionCounter}`;
+  await writeFile(p, 'delete me\n');
+  await fileReadTool.run({ path: p }, ctx([root], undefined, sessionId));
+  const out = await filePatchTool.run(
+    {
+      patch: `*** Begin Patch
+*** Delete File: ${p}
+*** End Patch`
+    },
+    ctx([root], undefined, sessionId)
+  );
+  expect(out.metadata.files[0]).toMatchObject({ operation: 'delete', afterHash: null });
+});
+
+test('file_patch requires observation or baseHash for move without hunks', async () => {
   const from = join(root, 'patch-move-without-hash-from.txt');
   const to = join(root, 'patch-move-without-hash-to.txt');
   await writeFile(from, 'move me\n');
@@ -547,6 +610,25 @@ test('file_patch moves without hunks with a matching baseHash', async () => {
   expect(await readFile(to, 'utf8')).toBe('move me\n');
 });
 
+test('file_patch moves without hunks with a persisted session observation', async () => {
+  const from = join(root, 'patch-move-observed-from.txt');
+  const to = join(root, 'patch-move-observed-to.txt');
+  const sessionId = `s${++sessionCounter}`;
+  await writeFile(from, 'move me\n');
+  await fileReadTool.run({ path: from }, ctx([root], undefined, sessionId));
+  const out = await filePatchTool.run(
+    {
+      patch: `*** Begin Patch
+*** Update File: ${from}
+*** Move to: ${to}
+*** End Patch`
+    },
+    ctx([root], undefined, sessionId)
+  );
+  expect(out.metadata.files[0]).toMatchObject({ operation: 'move' });
+  expect(await readFile(to, 'utf8')).toBe('move me\n');
+});
+
 test('file_patch serializes operations that target a move destination', async () => {
   const files = new Map([['/source.txt', 'a\n']]);
   const writes: string[] = [];
@@ -568,7 +650,7 @@ test('file_patch serializes operations that target a move destination', async ()
         if (text === undefined) throw new Error('not found');
         files.delete(from);
         files.set(to, text);
-        return { oldPath: from, newPath: to };
+        return { path: from, newPath: to };
       }
     },
     terminal: {
@@ -675,7 +757,9 @@ test('file_patch outside sandbox: allow gate succeeds after file_read', async ()
       c
     )
   ).metadata;
-  expect(res.files[0]?.summary).toMatchObject({ added: 1, removed: 1, changed: true });
+  const file = res.files[0];
+  if (file?.status !== 'ok') throw new Error('expected file_patch mutation');
+  expect(file.summary).toMatchObject({ added: 1, removed: 1, changed: true });
 });
 
 test('file_glob outside sandbox: allow gate lists files', async () => {

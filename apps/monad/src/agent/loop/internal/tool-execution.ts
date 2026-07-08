@@ -174,6 +174,7 @@ export class ToolExecutor {
         toolCallId: call.toolCallId,
         sandboxRoots: this.deps.sandboxRoots,
         backends: this.deps.backends,
+        fileObservations: this.deps.fileObservations,
         defaultCwd: this.deps.defaultCwd,
         signal,
         forceApproval: pre.ask,

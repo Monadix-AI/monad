@@ -43,6 +43,7 @@ export interface AgentDelegateDeps {
   model: SubagentDeps['model'];
   defaultModel: string;
   gate?: SubagentDeps['gate'];
+  fileObservations?: SubagentDeps['fileObservations'];
   context?: SubagentDeps['context'];
   contextLimit?: number;
   /** Lifecycle hooks for the delegated agent's inner loop — so its reasoning/tool/turn events fire
@@ -107,6 +108,7 @@ export function createAgentDelegateTool(deps: AgentDelegateDeps): Tool<DelegateI
           tools: subTools,
           defaultModel: target.model ?? deps.defaultModel,
           gate: deps.gate,
+          fileObservations: deps.fileObservations,
           context: deps.context,
           contextLimit: deps.contextLimit,
           instructions: target.instructions,
