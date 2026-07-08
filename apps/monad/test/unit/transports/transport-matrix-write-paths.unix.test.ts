@@ -5,12 +5,16 @@
 //   - Approvals (POST revoke/clear)
 // Agent CRUD is covered separately in test/e2e/agent-crud.test.ts (requires real home dir).
 
+import type { ModelResult, ModelRouter } from '@/agent/index.ts';
+
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import { fileReadTool, fileWriteTool } from '@/capabilities/tools';
 import { createHttpTransport } from '@/transports/http.ts';
-import { buildHandlers, mockModel } from '../../helpers.ts';
+import { buildHandlers, mockModel, serveTransport, TRANSPORTS, type TransportKind } from '../../helpers.ts';
 
 const app = createHttpTransport(buildHandlers(mockModel(['ok'])));
 const handler = (req: Request) => app.handle(req);
@@ -53,6 +57,39 @@ async function createSession(title: string): Promise<string> {
   });
   const body = (await res.json()) as { sessionId: string };
   return body.sessionId;
+}
+
+type Step = string | { tool: string; input?: unknown };
+
+function scriptedModel(steps: Step[]): ModelRouter {
+  let i = 0;
+  return {
+    async *stream() {},
+    async complete(): Promise<ModelResult> {
+      const step = i < steps.length ? (steps[i] as Step) : 'done';
+      i++;
+      if (typeof step === 'string') return { text: step, finishReason: 'stop' };
+      return {
+        text: '',
+        toolCalls: [{ toolCallId: `tc_${i}`, toolName: step.tool, input: step.input ?? {} }],
+        finishReason: 'tool-calls'
+      };
+    }
+  };
+}
+
+async function postJson<T>(
+  transport: { fetch: (path: string, init?: RequestInit) => Promise<Response> },
+  path: string,
+  body: unknown
+): Promise<T> {
+  const res = await transport.fetch(path, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+  expect(res.status).toBeLessThan(300);
+  return (await res.json()) as T;
 }
 
 describe('transport parity — session write paths', () => {
@@ -161,4 +198,90 @@ describe('transport parity — GET routes with write-path prerequisites', () => 
     expect(Array.isArray((udsRes as { rules: unknown[] }).rules)).toBe(true);
     expect((udsRes as { rules: unknown[] }).rules.length).toBe((tcpRes as { rules: unknown[] }).rules.length);
   });
+});
+
+describe('transport parity — file observation restore guard', () => {
+  for (const kind of TRANSPORTS) {
+    test(`${kind}: file_read observation authorizes a later file_write`, async () => {
+      const root = await mkdtemp(join(tmpdir(), `monad-file-transport-write-${kind}-`));
+      const file = join(root, 'guard.txt');
+      await writeFile(file, 'before');
+      const transport = serveTransport(
+        kind as TransportKind,
+        createHttpTransport(
+          buildHandlers(
+            scriptedModel([
+              { tool: 'file_read', input: { path: file } },
+              'read',
+              { tool: 'file_write', input: { path: file, content: 'after' } },
+              'write'
+            ]),
+            undefined,
+            { tools: [fileReadTool, fileWriteTool] }
+          )
+        )
+      );
+
+      try {
+        const created = await postJson<{ sessionId: string }>(transport, '/v1/sessions', {
+          title: `file observation write ${kind}`,
+          cwd: root
+        });
+        await postJson(transport, `/v1/sessions/${created.sessionId}/messages/block`, { text: 'read file' });
+        await postJson(transport, `/v1/sessions/${created.sessionId}/messages/block`, { text: 'write file' });
+
+        expect(await readFile(file, 'utf8')).toBe('after');
+      } finally {
+        await transport.stop();
+        await rm(root, { recursive: true, force: true });
+      }
+    });
+
+    test(`${kind}: restore invalidates file_read observations before later file_write`, async () => {
+      const root = await mkdtemp(join(tmpdir(), `monad-file-transport-${kind}-`));
+      const file = join(root, 'guard.txt');
+      await writeFile(file, 'before');
+      const transport = serveTransport(
+        kind as TransportKind,
+        createHttpTransport(
+          buildHandlers(
+            scriptedModel([
+              { tool: 'file_read', input: { path: file } },
+              'read',
+              { tool: 'file_write', input: { path: file, content: 'after' } },
+              'write'
+            ]),
+            undefined,
+            {
+              tools: [fileReadTool, fileWriteTool]
+            }
+          )
+        )
+      );
+
+      try {
+        const created = await postJson<{ sessionId: string }>(transport, '/v1/sessions', {
+          title: `file observation ${kind}`,
+          cwd: root
+        });
+        await postJson(transport, `/v1/sessions/${created.sessionId}/messages`, {
+          text: 'checkpoint',
+          generate: false
+        });
+        const checkpointRes = await transport.fetch(`/v1/sessions/${created.sessionId}/messages`);
+        const checkpoint = (await checkpointRes.json()) as { messages: Array<{ id: string; text: string }> };
+        expect(checkpoint.messages.map((message) => message.text)).toEqual(['checkpoint']);
+        await postJson(transport, `/v1/sessions/${created.sessionId}/messages/block`, { text: 'read file' });
+        await postJson(transport, `/v1/sessions/${created.sessionId}/restore`, {
+          toMessageId: checkpoint.messages[0]?.id
+        });
+        await postJson(transport, `/v1/sessions/${created.sessionId}/messages/block`, { text: 'write file' });
+
+        expect(await readFile(file, 'utf8')).toBe('before');
+      } finally {
+        await transport.stop();
+        await rm(root, { recursive: true, force: true });
+      }
+    });
+  }
 });

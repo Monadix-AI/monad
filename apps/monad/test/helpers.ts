@@ -249,6 +249,13 @@ export function buildHandlers(
       list: (sessionId) => store.listMessages(sessionId),
       append: (m) => store.insertMessage(m.id, m.sessionId, m.text, m.createdAt, m.role)
     },
+    fileObservations: {
+      remember: (sessionId, observation) => store.recordFileObservation(sessionId, observation),
+      get: (sessionId, path) => store.getFileObservation(sessionId, path),
+      clear: (sessionId) => {
+        store.clearFileObservations(sessionId);
+      }
+    },
     defaultModel: opts?.defaultModel ?? 'mock'
   });
   const i18n = new I18nService([{ locale: 'en', name: 'English', messages: i18nMessages }], 'en');
