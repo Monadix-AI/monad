@@ -106,6 +106,19 @@ interface DiffDisplay {
   diffStat?: { added: number; removed: number };
 }
 
+interface MultiDiffDisplay {
+  type: 'multi_diff';
+  summary?: { added: number; removed: number; succeeded: number; failed: number; total: number };
+  files: Array<{
+    path: string;
+    status: 'ok' | 'error';
+    display?: DiffDisplay;
+    error?: string;
+    operation?: string;
+    newPath?: string;
+  }>;
+}
+
 interface AnsiState {
   color?: string;
   bold: boolean;
@@ -241,6 +254,41 @@ function parseDiffDisplay(display: unknown): DiffDisplay | null {
   };
 }
 
+function parseMultiDiffDisplay(display: unknown): MultiDiffDisplay | null {
+  if (!display || typeof display !== 'object') return null;
+  const value = display as Partial<MultiDiffDisplay>;
+  if (value.type !== 'multi_diff' || !Array.isArray(value.files)) return null;
+  const files = value.files
+    .map((file): MultiDiffDisplay['files'][number] | null => {
+      if (!file || typeof file !== 'object') return null;
+      const entry = file as MultiDiffDisplay['files'][number];
+      if (typeof entry.path !== 'string' || (entry.status !== 'ok' && entry.status !== 'error')) return null;
+      const display = parseDiffDisplay(entry.display);
+      if (entry.status === 'ok' && !display) return null;
+      if (entry.status === 'error' && typeof entry.error !== 'string') return null;
+      return {
+        path: entry.path,
+        status: entry.status,
+        ...(display ? { display } : {}),
+        ...(typeof entry.error === 'string' ? { error: entry.error } : {}),
+        ...(typeof entry.operation === 'string' ? { operation: entry.operation } : {}),
+        ...(typeof entry.newPath === 'string' ? { newPath: entry.newPath } : {})
+      };
+    })
+    .filter((file): file is MultiDiffDisplay['files'][number] => file !== null);
+  const summary =
+    value.summary &&
+    typeof value.summary === 'object' &&
+    typeof value.summary.added === 'number' &&
+    typeof value.summary.removed === 'number' &&
+    typeof value.summary.succeeded === 'number' &&
+    typeof value.summary.failed === 'number' &&
+    typeof value.summary.total === 'number'
+      ? value.summary
+      : undefined;
+  return files.length > 0 ? { type: 'multi_diff', files, ...(summary ? { summary } : {}) } : null;
+}
+
 function firstStringField(input: unknown, keys: string[]): string | undefined {
   if (!input || typeof input !== 'object' || Array.isArray(input)) return undefined;
   const obj = input as Record<string, unknown>;
@@ -262,7 +310,7 @@ function groupStatus(steps: ToolItem[]): ToolItem['status'] {
   return 'ok';
 }
 
-const ToolStepView = memo(function ToolStepView({ step }: { step: ToolViewItem }) {
+export const ToolStepView = memo(function ToolStepView({ step }: { step: ToolViewItem }) {
   if (step.kind === 'toolGroup') return <ToolGroupView step={step} />;
   return <SingleToolView step={step} />;
 });
@@ -365,6 +413,7 @@ function ToolDetails({ step, pendingLabel }: { step: ToolItem; pendingLabel: str
   const searchResults = isWebSearch ? parseWebSearchOutput(step.output) : null;
   const shellOutput = isShellTool(step.tool) ? parseShellOutput(step.output) : null;
   const diffDisplay = parseDiffDisplay(step.display);
+  const multiDiffDisplay = parseMultiDiffDisplay(step.display);
 
   if (isWebSearch && searchResults) {
     return (
@@ -396,6 +445,15 @@ function ToolDetails({ step, pendingLabel }: { step: ToolItem; pendingLabel: str
       <>
         {step.input !== undefined && <ToolInput input={step.input} />}
         <FileDiffOutputBlock display={diffDisplay} />
+      </>
+    );
+  }
+
+  if (multiDiffDisplay && !isError) {
+    return (
+      <>
+        {step.input !== undefined && <ToolInput input={step.input} />}
+        <MultiFileDiffOutputBlock display={multiDiffDisplay} />
       </>
     );
   }
@@ -633,6 +691,65 @@ function FileDiffOutputBlock({ display }: { display: DiffDisplay }) {
           </span>
         ))}
       </pre>
+    </div>
+  );
+}
+
+function MultiFileDiffOutputBlock({ display }: { display: MultiDiffDisplay }) {
+  const summary =
+    display.summary ??
+    display.files.reduce(
+      (acc, file) => ({
+        added: acc.added + (file.display?.diffStat?.added ?? 0),
+        removed: acc.removed + (file.display?.diffStat?.removed ?? 0),
+        succeeded: acc.succeeded + (file.status === 'ok' ? 1 : 0),
+        failed: acc.failed + (file.status === 'error' ? 1 : 0),
+        total: acc.total + 1
+      }),
+      { added: 0, removed: 0, succeeded: 0, failed: 0, total: 0 }
+    );
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center gap-2 rounded-md border border-border/70 bg-muted/40 px-3 py-2 text-muted-foreground text-xs">
+        <HugeiconsIcon
+          className="size-3.5"
+          icon={TextIcon}
+        />
+        <span className="min-w-0 truncate font-medium">
+          {summary.succeeded}/{summary.total} files changed
+          {summary.failed > 0 ? `, ${summary.failed} failed` : ''}
+        </span>
+        <span className="ml-auto shrink-0 font-mono text-[11px]">
+          <span className="text-emerald-500">+{summary.added}</span>
+          <span className="mx-1 text-muted-foreground/50">/</span>
+          <span className="text-red-500">-{summary.removed}</span>
+        </span>
+      </div>
+      {display.files.map((file) =>
+        file.status === 'ok' && file.display ? (
+          <FileDiffOutputBlock
+            display={file.display}
+            key={`${file.path}-${file.operation ?? 'ok'}`}
+          />
+        ) : (
+          <div
+            className="overflow-hidden rounded-md border border-destructive/30 bg-destructive/5"
+            key={`${file.path}-${file.operation ?? 'error'}`}
+          >
+            <div className="flex items-center gap-2 border-destructive/20 border-b px-3 py-2 text-destructive text-xs">
+              <HugeiconsIcon
+                className="size-3.5"
+                icon={TextIcon}
+              />
+              <span className="min-w-0 truncate font-mono">{file.path}</span>
+              {file.operation && <span className="ml-auto shrink-0 font-mono text-[11px]">{file.operation}</span>}
+            </div>
+            <pre className="max-h-32 overflow-auto whitespace-pre-wrap p-3 font-mono text-[12px] text-destructive leading-relaxed">
+              {file.error ?? 'operation failed'}
+            </pre>
+          </div>
+        )
+      )}
     </div>
   );
 }

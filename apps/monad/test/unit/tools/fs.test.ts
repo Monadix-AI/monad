@@ -1,4 +1,4 @@
-import type { ToolContext, ToolGate } from '@/capabilities/tools/types.ts';
+import type { ToolBackends, ToolContext, ToolGate } from '@/capabilities/tools/types.ts';
 
 import { afterAll, beforeAll, expect, test } from 'bun:test';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
@@ -93,12 +93,14 @@ test('file_read rejects ".." traversal', async () => {
 test('file_write creates files and parent dirs inside the sandbox', async () => {
   const p = join(root, 'nested', 'new.txt');
   const res = (await fileWriteTool.run({ path: p, content: 'hello' }, ctx([root]))).metadata;
-  expect(res.bytesWritten).toBe(5);
+  expect(res.files[0]?.status).toBe('ok');
+  const file = res.files[0]?.status === 'ok' ? res.files[0] : undefined;
+  expect(file?.bytesWritten).toBe(5);
   expect(res.changed).toBe(true);
-  expect(res.afterHash).toMatch(/^[a-f0-9]{64}$/);
-  expect(res.display).toMatchObject({
+  expect(file?.afterHash).toMatch(/^[a-f0-9]{64}$/);
+  expect(file?.display).toMatchObject({
     type: 'diff',
-    path: res.path,
+    path: file.path,
     beforeText: null,
     afterText: 'hello'
   });
@@ -119,8 +121,7 @@ test('file_write overwrites after file_read records the current hash', async () 
   await writeFile(p, 'before');
   await fileReadTool.run({ path: p }, c);
   const res = (await fileWriteTool.run({ path: p, content: 'after' }, c)).metadata;
-  expect(res.beforeHash).toBe(sha256('before'));
-  expect(res.afterHash).toBe(sha256('after'));
+  expect(res.files[0]).toMatchObject({ status: 'ok', beforeHash: sha256('before'), afterHash: sha256('after') });
   expect(await readFile(p, 'utf8')).toBe('after');
 });
 
@@ -140,8 +141,7 @@ test('file_write allows explicit whole-file overwrite with matching baseHash', a
   await writeFile(p, 'before');
   const res = (await fileWriteTool.run({ path: p, content: 'after', baseHash: sha256('before') }, ctx([root])))
     .metadata;
-  expect(res.beforeHash).toBe(sha256('before'));
-  expect(res.afterHash).toBe(sha256('after'));
+  expect(res.files[0]).toMatchObject({ status: 'ok', beforeHash: sha256('before'), afterHash: sha256('after') });
 });
 
 test('file_write is blocked outside the sandbox', async () => {
@@ -157,10 +157,11 @@ test('file_write caps full before/after text in display payloads for large files
   await fileReadTool.run({ path: p }, c);
   const content = `${'a'.repeat(12_000)}\n`;
   const res = (await fileWriteTool.run({ path: p, content }, c)).metadata;
-  expect(res.display.afterText.length).toBeLessThan(content.length);
-  expect(res.display.diff?.length).toBeLessThan(content.length);
-  expect(res.display.truncated).toBe(true);
-  expect(res.afterHash).toMatch(/^[a-f0-9]{64}$/);
+  const file = res.files[0]?.status === 'ok' ? res.files[0] : undefined;
+  expect(file?.display.afterText.length).toBeLessThan(content.length);
+  expect(file?.display.diff?.length).toBeLessThan(content.length);
+  expect(file?.display.truncated).toBe(true);
+  expect(file?.afterHash).toMatch(/^[a-f0-9]{64}$/);
 });
 
 test('file_write skips unified diff generation for large line counts', async () => {
@@ -170,8 +171,9 @@ test('file_write skips unified diff generation for large line counts', async () 
   expect(res.changed).toBe(true);
   expect(res.summary.added).toBe(300);
   expect(res.summary.removed).toBe(0);
-  expect(res.display.truncated).toBe(true);
-  expect(res.afterHash).toMatch(/^[a-f0-9]{64}$/);
+  const file = res.files[0]?.status === 'ok' ? res.files[0] : undefined;
+  expect(file?.display.truncated).toBe(true);
+  expect(file?.afterHash).toMatch(/^[a-f0-9]{64}$/);
 });
 
 test('file_glob lists matching files relative to the scan dir', async () => {
@@ -203,22 +205,22 @@ test('file_patch adds a new file', async () => {
   expect(await readFile(p, 'utf8')).toBe('alpha\nbeta\n');
 });
 
-test('file_patch refuses update when the file was not read first', async () => {
+test('file_patch updates without a prior read when context matches', async () => {
   const p = join(root, 'patch-unread.txt');
   await writeFile(p, 'before\n');
-  await expect(
-    filePatchTool.run(
-      {
-        patch: `*** Begin Patch
+  const out = await filePatchTool.run(
+    {
+      patch: `*** Begin Patch
 *** Update File: ${p}
 @@
 -before
 +after
 *** End Patch`
-      },
-      ctx([root])
-    )
-  ).rejects.toThrow('File has not been read yet');
+    },
+    ctx([root])
+  );
+  expect(out.metadata).toMatchObject({ succeeded: 1, failed: 0, changed: true });
+  expect(await readFile(p, 'utf8')).toBe('after\n');
 });
 
 test('file_patch updates after file_read records the current hash', async () => {
@@ -271,6 +273,155 @@ test('file_patch applies multiple file operations', async () => {
   expect(await readFile(add, 'utf8')).toBe('created\n');
 });
 
+test('file_patch returns per-file errors while applying other files', async () => {
+  const good = join(root, 'patch-partial-good.txt');
+  const bad = join(root, 'patch-partial-bad.txt');
+  await writeFile(good, 'old\n');
+  await writeFile(bad, 'actual\n');
+  const out = await filePatchTool.run(
+    {
+      patch: `*** Begin Patch
+*** Update File: ${good}
+@@
+-old
++new
+*** Update File: ${bad}
+@@
+-expected
++after
+*** End Patch`
+    },
+    ctx([root])
+  );
+  expect(out.metadata).toMatchObject({ succeeded: 1, failed: 1, changed: true });
+  expect(out.metadata.files.map((file) => file.status)).toEqual(['ok', 'error']);
+  expect(out.metadata.files[1]).toMatchObject({ status: 'error', path: bad });
+  expect(await readFile(good, 'utf8')).toBe('new\n');
+  expect(await readFile(bad, 'utf8')).toBe('actual\n');
+});
+
+test('file_patch preserves files without trailing newline', async () => {
+  const p = join(root, 'patch-no-newline.txt');
+  await writeFile(p, 'before');
+  const out = await filePatchTool.run(
+    {
+      patch: `*** Begin Patch
+*** Update File: ${p}
+@@
+-before
++after
+*** End Patch`
+    },
+    ctx([root])
+  );
+  expect(out.metadata).toMatchObject({ succeeded: 1, failed: 0 });
+  expect(await readFile(p, 'utf8')).toBe('after');
+});
+
+test('file_patch executes independent file operations concurrently', async () => {
+  const files = new Map([
+    ['/a.txt', 'old\n'],
+    ['/b.txt', 'old\n']
+  ]);
+  let activeWrites = 0;
+  let maxActiveWrites = 0;
+  const backends: ToolBackends = {
+    fs: {
+      delegated: true,
+      async readTextFile(path) {
+        const text = files.get(path);
+        if (text === undefined) throw new Error('not found');
+        return text;
+      },
+      async writeTextFile(path, content) {
+        activeWrites++;
+        maxActiveWrites = Math.max(maxActiveWrites, activeWrites);
+        await Bun.sleep(20);
+        files.set(path, content);
+        activeWrites--;
+        return { path, bytesWritten: content.length };
+      }
+    },
+    terminal: {
+      delegated: true,
+      async exec() {
+        return { stdout: '', stderr: '', exitCode: 0, timedOut: false };
+      }
+    }
+  };
+  const out = await filePatchTool.run(
+    {
+      patch: `*** Begin Patch
+*** Update File: /a.txt
+@@
+-old
++new a
+*** Update File: /b.txt
+@@
+-old
++new b
+*** End Patch`
+    },
+    { ...ctx(undefined), backends }
+  );
+  expect(out.metadata).toMatchObject({ succeeded: 2, failed: 0 });
+  expect(maxActiveWrites).toBeGreaterThan(1);
+});
+
+test('file_patch runs repeated operations on the same file in order', async () => {
+  const files = new Map([['/same.txt', 'a\n']]);
+  let activeWrites = 0;
+  let maxActiveWrites = 0;
+  const backends: ToolBackends = {
+    fs: {
+      delegated: true,
+      async readTextFile(path) {
+        const text = files.get(path);
+        if (text === undefined) throw new Error('not found');
+        return text;
+      },
+      async writeTextFile(path, content) {
+        activeWrites++;
+        maxActiveWrites = Math.max(maxActiveWrites, activeWrites);
+        await Bun.sleep(20);
+        files.set(path, content);
+        activeWrites--;
+        return { path, bytesWritten: content.length };
+      }
+    },
+    terminal: {
+      delegated: true,
+      async exec() {
+        return { stdout: '', stderr: '', exitCode: 0, timedOut: false };
+      }
+    }
+  };
+  const out = await filePatchTool.run(
+    {
+      patch: `*** Begin Patch
+*** Update File: /same.txt
+@@
+-a
++b
+*** Update File: /same.txt
+@@
+-b
++c
+*** End Patch`
+    },
+    { ...ctx(undefined), backends }
+  );
+  expect(out.metadata).toMatchObject({ succeeded: 2, failed: 0 });
+  expect(maxActiveWrites).toBe(1);
+  expect(files.get('/same.txt')).toBe('c\n');
+});
+
+test('file_patch syntax errors fail the whole tool call', async () => {
+  await expect(filePatchTool.run({ patch: '*** Add File: bad.txt\n+bad' }, ctx([root]))).rejects.toThrow(
+    'patch must start'
+  );
+});
+
 test('file_patch deletes a previously read file', async () => {
   const p = join(root, 'patch-delete.txt');
   const c = ctx([root]);
@@ -310,24 +461,25 @@ test('file_patch moves a previously read file', async () => {
   expect(await readFile(to, 'utf8')).toBe('move me\n');
 });
 
-test('file_patch rejects context mismatches', async () => {
+test('file_patch reports context mismatches as file errors', async () => {
   const p = join(root, 'patch-context.txt');
-  const c = ctx([root]);
   await writeFile(p, 'actual\n');
-  await fileReadTool.run({ path: p }, c);
-  await expect(
-    filePatchTool.run(
-      {
-        patch: `*** Begin Patch
+  const out = await filePatchTool.run(
+    {
+      patch: `*** Begin Patch
 *** Update File: ${p}
 @@
 -expected
 +after
 *** End Patch`
-      },
-      c
-    )
-  ).rejects.toThrow('patch context did not match');
+    },
+    ctx([root])
+  );
+  expect(out.metadata).toMatchObject({ succeeded: 0, failed: 1, changed: false });
+  expect(out.metadata.files[0]).toMatchObject({
+    status: 'error',
+    error: `patch context did not match ${p} at hunk 1`
+  });
 });
 
 let outside: string;
@@ -358,7 +510,7 @@ test('file_write outside sandbox: allow gate succeeds and uses fs_path_access ke
   const calls: { tool: string; key?: string }[] = [];
   const p = join(outside, 'written.txt');
   const res = (await fileWriteTool.run({ path: p, content: 'via gate' }, ctx([root], allowGate(calls)))).metadata;
-  expect(res.bytesWritten).toBe(8);
+  expect(res.files[0]).toMatchObject({ status: 'ok', bytesWritten: 8 });
   expect(calls).toHaveLength(1);
   expect(calls[0]?.tool).toBe('fs_path_access');
   expect(calls[0]?.key).toBe(outside);

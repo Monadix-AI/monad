@@ -25,6 +25,7 @@ const MAX_DIFF_LINES = 200;
 const MAX_DIFF_CELLS = 40_000;
 
 export interface FileMutationResult {
+  status: 'ok';
   path: string;
   operation: 'add' | 'update' | 'delete' | 'move' | 'write';
   bytesWritten?: number;
@@ -42,9 +43,21 @@ export interface FileMutationResult {
   newPath?: string;
 }
 
+export interface FileMutationError {
+  status: 'error';
+  path: string;
+  operation: 'add' | 'update' | 'delete' | 'move';
+  error: string;
+  newPath?: string;
+}
+
+export type FilePatchFileResult = FileMutationResult | FileMutationError;
+
 export interface FilePatchResult {
-  files: FileMutationResult[];
+  files: FilePatchFileResult[];
   touchedFiles: string[];
+  succeeded: number;
+  failed: number;
   changed: boolean;
   summary: {
     added: number;
@@ -55,10 +68,12 @@ export interface FilePatchResult {
 
 type ReadLedgerEntry = {
   hash: string;
-  mtimeMs: number | null;
   readAt: number;
 };
 
+// Process-local by design. The ledger proves a whole-file overwrite is based on
+// content read in this daemon process; after restart, file_write must read again
+// or supply baseHash. file_patch relies on current-content hunk matching instead.
 const readLedger = new Map<string, Map<string, ReadLedgerEntry>>();
 
 function fsBackend(ctx: ToolContext) {
@@ -83,22 +98,13 @@ function ledgerPath(path: string): string {
   return toPosix(canonicalize(path));
 }
 
-function fileMtimeMs(path: string): number | null {
-  try {
-    const mtime = Bun.file(canonicalize(path)).lastModified;
-    return Number.isFinite(mtime) && mtime > 0 ? mtime : null;
-  } catch {
-    return null;
-  }
-}
-
 function rememberRead(ctx: ToolContext, path: string, text: string): void {
   let session = readLedger.get(ctx.sessionId);
   if (!session) {
     session = new Map();
     readLedger.set(ctx.sessionId, session);
   }
-  session.set(ledgerPath(path), { hash: sha256(text), mtimeMs: fileMtimeMs(path), readAt: Date.now() });
+  session.set(ledgerPath(path), { hash: sha256(text), readAt: Date.now() });
 }
 
 function readEntry(ctx: ToolContext, path: string): ReadLedgerEntry | undefined {
@@ -241,6 +247,7 @@ function createMutationResult(
       : {})
   };
   return {
+    status: 'ok',
     path,
     operation,
     ...extra,
@@ -262,7 +269,70 @@ function mutationSummary(output: FileMutationResult): string {
 
 function patchSummary(output: FilePatchResult): string {
   const delta = `${output.summary.added} added, ${output.summary.removed} removed`;
-  return `Patched ${output.files.length} file${output.files.length === 1 ? '' : 's'} (${delta}).`;
+  const failed = output.failed > 0 ? `, ${output.failed} failed` : '';
+  return `Patched ${output.succeeded}/${output.files.length} file${output.files.length === 1 ? '' : 's'} (${delta}${failed}).`;
+}
+
+function mutationError(op: PatchOp, err: unknown): FileMutationError {
+  return {
+    status: 'error',
+    path: op.path,
+    operation: op.type === 'update' && op.newPath ? 'move' : op.type,
+    error: err instanceof Error ? err.message : String(err),
+    ...(op.type === 'update' && op.newPath ? { newPath: op.newPath } : {})
+  };
+}
+
+function filePatchResult(files: FilePatchFileResult[]): FilePatchResult {
+  const okFiles = files.filter((file): file is FileMutationResult => file.status === 'ok');
+  const summary = okFiles.reduce(
+    (acc, file) => ({
+      added: acc.added + file.summary.added,
+      removed: acc.removed + file.summary.removed,
+      changed: acc.changed || file.changed
+    }),
+    { added: 0, removed: 0, changed: false }
+  );
+  return {
+    files,
+    touchedFiles: files.flatMap((file) => (file.newPath ? [file.path, file.newPath] : [file.path])),
+    succeeded: okFiles.length,
+    failed: files.length - okFiles.length,
+    changed: summary.changed,
+    summary
+  };
+}
+
+function mutationDisplay(output: FilePatchResult): ToolDisplayContent | undefined {
+  if (output.files.length === 0) return undefined;
+  if (output.files.length === 1 && output.files[0]?.status === 'ok') return output.files[0].display;
+  return {
+    type: 'multi_diff',
+    summary: {
+      added: output.summary.added,
+      removed: output.summary.removed,
+      succeeded: output.succeeded,
+      failed: output.failed,
+      total: output.files.length
+    },
+    files: output.files.map((file) =>
+      file.status === 'ok'
+        ? {
+            path: file.path,
+            status: 'ok' as const,
+            display: file.display,
+            operation: file.operation,
+            ...(file.newPath ? { newPath: file.newPath } : {})
+          }
+        : {
+            path: file.path,
+            status: 'error' as const,
+            error: file.error,
+            operation: file.operation,
+            ...(file.newPath ? { newPath: file.newPath } : {})
+          }
+    )
+  };
 }
 
 async function readExistingText(fs: FsBackend, path: string): Promise<string | null> {
@@ -292,9 +362,7 @@ function assertFreshRead(ctx: ToolContext, path: string, currentText: string): v
   if (!entry) {
     throw new ToolSecurityError('File has not been read yet. Read it first before writing to it.');
   }
-  const currentMtimeMs = fileMtimeMs(path);
-  const mtimeChanged = entry.mtimeMs !== null && currentMtimeMs !== null && entry.mtimeMs !== currentMtimeMs;
-  if (entry.hash !== sha256(currentText) || mtimeChanged) {
+  if (entry.hash !== sha256(currentText)) {
     throw new ToolSecurityError('File has been modified since read. Read it again before writing to it.');
   }
 }
@@ -337,7 +405,7 @@ const fileWriteInput = z.object({
     .optional()
 });
 
-export const fileWriteTool: Tool<z.infer<typeof fileWriteInput>, FileMutationResult> = {
+export const fileWriteTool: Tool<z.infer<typeof fileWriteInput>, FilePatchResult> = {
   name: 'file_write',
   description:
     'Create or overwrite a UTF-8 text file. Existing files must be read first, or baseHash must match the current file hash.',
@@ -358,9 +426,10 @@ export const fileWriteTool: Tool<z.infer<typeof fileWriteInput>, FileMutationRes
         }
       }
       const { path: written, bytesWritten } = await fs.writeTextFile(path, content);
-      const result = createMutationResult(ctx, written, before, content, 'write', { bytesWritten });
+      const mutation = createMutationResult(ctx, written, before, content, 'write', { bytesWritten });
+      const result = filePatchResult([mutation]);
       rememberRead(ctx, written, content);
-      return toolResult(result, { modelContent: mutationSummary(result), displayContent: result.display });
+      return toolResult(result, { modelContent: mutationSummary(mutation), displayContent: mutationDisplay(result) });
     })
 };
 
@@ -471,6 +540,10 @@ interface PatchHunk {
   newLines: string[];
 }
 
+interface PatchGroup {
+  ops: PatchOp[];
+}
+
 function isFileHeader(line: string): boolean {
   return (
     line.startsWith('*** Add File: ') ||
@@ -568,21 +641,31 @@ function findSubsequence(lines: string[], needle: string[], from: number): numbe
   return -1;
 }
 
-function applyHunks(text: string, hunks: PatchHunk[]): string {
+function joinPatchLines(lines: string[], hadTrailingNewline: boolean): string {
+  if (lines.length === 0) return '';
+  const joined = lines.join('\n');
+  return hadTrailingNewline ? `${joined}\n` : joined;
+}
+
+function applyHunks(path: string, text: string, hunks: PatchHunk[]): string {
   let lines = splitDiffLines(text);
+  const hadTrailingNewline = text.endsWith('\n') || text.endsWith('\r');
   let searchFrom = 0;
-  for (const hunk of hunks) {
+  for (let hunkIndex = 0; hunkIndex < hunks.length; hunkIndex++) {
+    const hunk = hunks[hunkIndex] as PatchHunk;
     if (hunk.oldLines.length === 0) {
       lines.splice(searchFrom, 0, ...hunk.newLines);
       searchFrom += hunk.newLines.length;
       continue;
     }
     const at = findSubsequence(lines, hunk.oldLines, searchFrom);
-    if (at === -1) throw new ToolSecurityError('patch context did not match the current file');
+    if (at === -1) {
+      throw new ToolSecurityError(`patch context did not match ${path} at hunk ${hunkIndex + 1}`);
+    }
     lines = [...lines.slice(0, at), ...hunk.newLines, ...lines.slice(at + hunk.oldLines.length)];
     searchFrom = at + hunk.newLines.length;
   }
-  return lines.length === 0 ? '' : `${lines.join('\n')}\n`;
+  return joinPatchLines(lines, hadTrailingNewline);
 }
 
 function requireDelete(fs: FsBackend): NonNullable<FsBackend['deleteFile']> {
@@ -597,81 +680,89 @@ function requireMove(fs: FsBackend): NonNullable<FsBackend['moveFile']> {
 
 const filePatchInput = z.object({ patch: z.string().min(1) });
 
+async function applyPatchOp(op: PatchOp, ctx: ToolContext): Promise<FileMutationResult> {
+  if (op.type === 'add') {
+    const content = op.lines.length === 0 ? '' : `${op.lines.join('\n')}\n`;
+    return withFsGate(op.path, ctx, async (fs) => {
+      const existing = await readExistingText(fs, op.path);
+      if (existing !== null) throw new ToolSecurityError(`cannot add existing file: ${op.path}`);
+      const { path: written, bytesWritten } = await fs.writeTextFile(op.path, content);
+      const mutation = createMutationResult(ctx, written, null, content, 'add', { bytesWritten });
+      rememberRead(ctx, written, content);
+      return mutation;
+    });
+  }
+  if (op.type === 'delete') {
+    return withFsGate(op.path, ctx, async (fs) => {
+      const before = await fs.readTextFile(op.path);
+      const deleted = await requireDelete(fs)(op.path);
+      return createMutationResult(ctx, deleted.path, before, null, 'delete');
+    });
+  }
+  return withFsGate(op.path, ctx, async (fs) => {
+    const before = await fs.readTextFile(op.path);
+    const after = applyHunks(op.path, before, op.hunks);
+    if (op.newPath) {
+      const existingDest = await readExistingText(fs, op.newPath);
+      if (existingDest !== null) throw new ToolSecurityError(`cannot move over existing file: ${op.newPath}`);
+    }
+    const { path: written, bytesWritten } = await fs.writeTextFile(op.path, after);
+    let finalPath = written;
+    if (op.newPath) {
+      const moved = await requireMove(fs)(op.path, op.newPath);
+      finalPath = moved.newPath;
+    }
+    const mutation = createMutationResult(ctx, written, before, after, op.newPath ? 'move' : 'update', {
+      bytesWritten,
+      ...(op.newPath ? { newPath: finalPath } : {})
+    });
+    rememberRead(ctx, finalPath, after);
+    return mutation;
+  });
+}
+
+async function applyPatchGroup(group: PatchGroup, ctx: ToolContext): Promise<FilePatchFileResult[]> {
+  const results: FilePatchFileResult[] = [];
+  for (const op of group.ops) {
+    try {
+      results.push(await applyPatchOp(op, ctx));
+    } catch (err) {
+      results.push(mutationError(op, err));
+    }
+  }
+  return results;
+}
+
+function groupPatchOps(ops: PatchOp[]): PatchGroup[] {
+  const groups = new Map<string, PatchGroup>();
+  const order: PatchGroup[] = [];
+  for (const op of ops) {
+    const key = ledgerPath(op.path);
+    let group = groups.get(key);
+    if (!group) {
+      group = { ops: [] };
+      groups.set(key, group);
+      order.push(group);
+    }
+    group.ops.push(op);
+  }
+  return order;
+}
+
 export const filePatchTool: Tool<z.infer<typeof filePatchInput>, FilePatchResult> = {
   name: 'file_patch',
   description:
-    'Apply a structured patch to files. Supports Add File, Update File, Delete File, and Move to operations. Existing files must be read first.',
+    'Apply a structured patch to files. Supports Add File, Update File, Delete File, and Move to operations. Patch syntax errors stop the whole call. File operation errors are returned per file. Update hunks are applied only when their context matches the current file; different files execute concurrently while repeated operations on the same file run in patch order.',
   scopes: [{ resource: 'fs:write' }],
   needsApproval: (_input, ctx) => !ctx.backends?.fs.delegated && ctx.sandboxRoots === undefined,
   inputSchema: filePatchInput,
   run: async ({ patch }, ctx) => {
     const ops = parsePatch(patch);
-    const results: FileMutationResult[] = [];
-    for (const op of ops) {
-      if (op.type === 'add') {
-        const content = op.lines.length === 0 ? '' : `${op.lines.join('\n')}\n`;
-        const result = await withFsGate(op.path, ctx, async (fs) => {
-          const existing = await readExistingText(fs, op.path);
-          if (existing !== null) throw new ToolSecurityError(`cannot add existing file: ${op.path}`);
-          const { path: written, bytesWritten } = await fs.writeTextFile(op.path, content);
-          const mutation = createMutationResult(ctx, written, null, content, 'add', { bytesWritten });
-          rememberRead(ctx, written, content);
-          return mutation;
-        });
-        results.push(result);
-        continue;
-      }
-      if (op.type === 'delete') {
-        const result = await withFsGate(op.path, ctx, async (fs) => {
-          const before = await fs.readTextFile(op.path);
-          assertFreshRead(ctx, op.path, before);
-          const deleted = await requireDelete(fs)(op.path);
-          const mutation = createMutationResult(ctx, deleted.path, before, null, 'delete');
-          return mutation;
-        });
-        results.push(result);
-        continue;
-      }
-      const result = await withFsGate(op.path, ctx, async (fs) => {
-        const before = await fs.readTextFile(op.path);
-        assertFreshRead(ctx, op.path, before);
-        const after = applyHunks(before, op.hunks);
-        if (op.newPath) {
-          const existingDest = await readExistingText(fs, op.newPath);
-          if (existingDest !== null) throw new ToolSecurityError(`cannot move over existing file: ${op.newPath}`);
-        }
-        const { path: written, bytesWritten } = await fs.writeTextFile(op.path, after);
-        let finalPath = written;
-        if (op.newPath) {
-          const moved = await requireMove(fs)(op.path, op.newPath);
-          finalPath = moved.newPath;
-        }
-        const mutation = createMutationResult(ctx, written, before, after, op.newPath ? 'move' : 'update', {
-          bytesWritten,
-          ...(op.newPath ? { newPath: finalPath } : {})
-        });
-        rememberRead(ctx, finalPath, after);
-        return mutation;
-      });
-      results.push(result);
-    }
-    const summary = results.reduce(
-      (acc, file) => ({
-        added: acc.added + file.summary.added,
-        removed: acc.removed + file.summary.removed,
-        changed: acc.changed || file.changed
-      }),
-      { added: 0, removed: 0, changed: false }
-    );
-    const output: FilePatchResult = {
-      files: results,
-      touchedFiles: results.flatMap((file) => (file.newPath ? [file.path, file.newPath] : [file.path])),
-      changed: summary.changed,
-      summary
-    };
+    const results = (await Promise.all(groupPatchOps(ops).map((group) => applyPatchGroup(group, ctx)))).flat();
+    const output = filePatchResult(results);
     return toolResult(output, {
       modelContent: patchSummary(output),
-      displayContent: results.length === 1 ? results[0]?.display : undefined
+      displayContent: mutationDisplay(output)
     });
   }
 };

@@ -29,6 +29,18 @@ export type ToolDisplayContent =
       diffStat?: { added: number; removed: number };
       truncated?: boolean;
     }
+  | {
+      type: 'multi_diff';
+      summary?: { added: number; removed: number; succeeded: number; failed: number; total: number };
+      files: Array<{
+        path: string;
+        status: 'ok' | 'error';
+        display?: Extract<ToolDisplayContent, { type: 'diff' }>;
+        error?: string;
+        operation?: string;
+        newPath?: string;
+      }>;
+    }
   | { type: 'text'; text: string };
 
 const toolDisplayContentSchema = z.discriminatedUnion('type', [
@@ -40,6 +52,38 @@ const toolDisplayContentSchema = z.discriminatedUnion('type', [
     diff: z.string().optional(),
     diffStat: z.object({ added: z.number(), removed: z.number() }).optional(),
     truncated: z.boolean().optional()
+  }),
+  z.object({
+    type: z.literal('multi_diff'),
+    summary: z
+      .object({
+        added: z.number(),
+        removed: z.number(),
+        succeeded: z.number(),
+        failed: z.number(),
+        total: z.number()
+      })
+      .optional(),
+    files: z.array(
+      z.object({
+        path: z.string(),
+        status: z.enum(['ok', 'error']),
+        display: z
+          .object({
+            type: z.literal('diff'),
+            path: z.string(),
+            beforeText: z.string().nullable(),
+            afterText: z.string(),
+            diff: z.string().optional(),
+            diffStat: z.object({ added: z.number(), removed: z.number() }).optional(),
+            truncated: z.boolean().optional()
+          })
+          .optional(),
+        error: z.string().optional(),
+        operation: z.string().optional(),
+        newPath: z.string().optional()
+      })
+    )
   }),
   z.object({ type: z.literal('text'), text: z.string() })
 ]);
