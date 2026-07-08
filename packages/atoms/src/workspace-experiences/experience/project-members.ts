@@ -5,10 +5,10 @@ import type {
   WorkspaceExperienceMemberCandidate,
   WorkspaceExperienceMemberSettings,
   WorkspaceExperienceMemberType
-} from '@monad/sdk-atom';
+} from '@monad/sdk-experience';
 import type { Participant } from './types.ts';
 
-// The member types are the published third-party contract (in @monad/sdk-atom); these aliases keep the
+// The member types are the published third-party contract (in @monad/sdk-experience); these aliases keep the
 // atoms-internal names while sdk-atom owns the shape. The functions below stay here.
 export type ProjectMemberType = WorkspaceExperienceMemberType;
 export type ProjectMemberSettings = WorkspaceExperienceMemberSettings;

@@ -4,6 +4,7 @@ import type {
   ComposerSendShortcut,
   ExternalAgentSessionView,
   ProfileView,
+  SessionId,
   UIItem
 } from '@monad/protocol';
 import type { ProjectMember } from './project-members.ts';
@@ -14,7 +15,7 @@ export interface ProjectExperienceCanvasSource {
   /** The project's currently-active session (Track B: a project's own id is no longer a
    *  conversation id — external-agent observation/history/input targets this instead). Null while
    *  the session is still resolving/being created. */
-  activeSessionId: string | null;
+  activeSessionId: SessionId | null;
   ready: boolean;
   participants: Participant[];
   projectMembers: ProjectMember[];

@@ -13,7 +13,7 @@
     "@monad/i18n": "workspace:*",
     "@monad/logger": "workspace:*",
     "@monad/protocol": "workspace:*",
-    "@monad/sdk-atom": "workspace:*",
+    "@monad/sdk-experience": "workspace:*",
     "@monad/ui": "workspace:*",
     "@monad/utils": "workspace:*",
     "@radix-ui/react-use-controllable-state": "^1.2.3",

@@ -2,7 +2,7 @@ import type {
   WorkspaceExperienceActions,
   WorkspaceExperienceSnapshot,
   WorkspaceExperienceWorkdir
-} from '@monad/sdk-atom';
+} from '@monad/sdk-experience';
 import type { ChatRoomExperienceRuntime } from './chat-room/runtime.ts';
 import type {
   AddProjectMemberOptions,
@@ -15,7 +15,7 @@ import type { GraphicViewExperienceRuntime } from './graph-view/runtime.ts';
 import { createChatRoomExperienceRuntime } from './chat-room/runtime.ts';
 import { createGraphicViewExperienceRuntime } from './graph-view/runtime.ts';
 
-// Snapshot/actions are the published third-party contract, defined once in @monad/sdk-atom. These
+// Snapshot/actions are the published third-party contract, defined once in @monad/sdk-experience. These
 // aliases keep the atoms-internal names stable while sdk-atom owns the shape.
 export type ProjectWorkdirController = WorkspaceExperienceWorkdir;
 export type ProjectExperienceSnapshot = WorkspaceExperienceSnapshot;
@@ -52,6 +52,7 @@ export function createProjectExperienceRuntime(
   const snapshot: ProjectExperienceSnapshot = {
     projectId: source.projectId,
     activeProjectId: source.activeProjectId,
+    activeSessionId: source.activeSessionId,
     projects: source.projects,
     projectMembers: source.projectMembers,
     availableProjectMembers: source.availableProjectMembers,

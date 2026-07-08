@@ -1,7 +1,7 @@
 import type { AgentObservationEvent, MessageAttachmentRef, NativeAgentDeliveryId } from '@monad/protocol';
-import type { WorkspaceExperienceIcon, WorkspaceExperienceProject } from '@monad/sdk-atom';
+import type { WorkspaceExperienceIcon, WorkspaceExperienceProject } from '@monad/sdk-experience';
 
-export type { WorkspaceExperienceProductIconId } from '@monad/sdk-atom';
+export type { WorkspaceExperienceProductIconId } from '@monad/sdk-experience';
 export type ParticipantKind = 'human' | 'agent';
 type MessageKind = ParticipantKind | 'system' | 'developer';
 export type Presence = 'online' | 'working' | 'needs-login' | 'failed' | 'stopped' | 'idle';

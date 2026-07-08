@@ -125,7 +125,7 @@
         "@monad/i18n": "workspace:*",
         "@monad/logger": "workspace:*",
         "@monad/protocol": "workspace:*",
-        "@monad/sdk-atom": "workspace:*",
+        "@monad/sdk-experience": "workspace:*",
         "@monad/ui": "workspace:*",
         "@monad/utils": "workspace:*",
         "@radix-ui/react-use-controllable-state": "^1.2.3",
@@ -188,6 +188,7 @@
         "@monad/protocol": "workspace:*",
         "@monad/sdk-atom": "workspace:*",
         "@monad/sdk-atom-client-rtk": "workspace:*",
+        "@monad/sdk-experience": "workspace:*",
         "@monad/ui": "workspace:*",
         "@xyflow/react": "^12.11.2",
         "ai": "^7.0.17",
@@ -304,6 +305,7 @@
       "devDependencies": {
         "@monad/config": "workspace:*",
         "@monad/i18n": "workspace:*",
+        "@monad/sdk-experience": "workspace:*",
       },
     },
     "packages/sdk-atom-client-rtk": {
@@ -318,6 +320,16 @@
       "peerDependencies": {
         "react": "^19.2.7",
         "react-redux": "^9.3.0",
+      },
+    },
+    "packages/sdk-experience": {
+      "name": "@monad/sdk-experience",
+      "version": "0.0.2",
+      "dependencies": {
+        "@monad/protocol": "workspace:*",
+      },
+      "devDependencies": {
+        "@monad/config": "workspace:*",
       },
     },
     "packages/ui": {
@@ -711,6 +723,8 @@
     "@monad/sdk-atom": ["@monad/sdk-atom@workspace:packages/sdk-atom"],
 
     "@monad/sdk-atom-client-rtk": ["@monad/sdk-atom-client-rtk@workspace:packages/sdk-atom-client-rtk"],
+
+    "@monad/sdk-experience": ["@monad/sdk-experience@workspace:packages/sdk-experience"],
 
     "@monad/tui": ["@monad/tui@workspace:apps/tui"],
 

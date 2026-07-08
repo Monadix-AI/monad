@@ -1,4 +1,4 @@
-import type { WorkspaceExperienceDefinition } from '@monad/sdk-atom';
+import type { WorkspaceExperienceDefinition } from '@monad/sdk-experience';
 
 export const chatRoomWorkspaceExperience: WorkspaceExperienceDefinition = {
   id: 'chat-room',

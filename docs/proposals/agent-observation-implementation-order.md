@@ -152,7 +152,10 @@ its two conclusions ("streams are session-keyed", "chat session / project sessio
   leave the runtime event. ✅
 - **`raw` shape** — session raw = domain events; agent raw = provider-raw (stripped). ✅
 - **Packaging** — schema→protocol, decode→adapter, rendering+hooks→`@monad/sdk-atom-client-rtk`,
-  `@monad/sdk-atom` stays pure. ✅
+  `@monad/sdk-atom` stays pure. ✅ The experience *contract* (React-free types + event bridge) has
+  since been extracted from `@monad/sdk-atom` into its own `@monad/sdk-experience` package; the
+  observation-card *rendering* library (the hooks/React half) is still the `sdk-atom-client-rtk`
+  story and remains open.
 - **B storage + ids** — one `sessions` table, nullable `projectId`, `session_members` join, single
   `ses_…`. ✅
 - **Endpoint scheme** — create/list scoped under `agents`/`projects`; access flat under `/sessions/:sid`

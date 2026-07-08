@@ -5,6 +5,7 @@ import type {
   ProfileView,
   ProjectId,
   SendMessageAttachment,
+  SessionId,
   WorkplaceProjectMemberSettings,
   WorkplaceProjectMemberType,
   WorkplaceProjectMemberView
@@ -105,6 +106,9 @@ export interface WorkspaceExperienceGraphCanvas {
 export interface WorkspaceExperienceSnapshot {
   projectId: string;
   activeProjectId: ProjectId | null;
+  /** The project's currently-active session (Track B: a project HAS sessions; a third-party
+   *  experience needs this to scope session-level host calls, not the project id). */
+  activeSessionId: SessionId | null;
   projects: WorkspaceExperienceProject[];
   projectMembers: WorkspaceExperienceMember[];
   availableProjectMembers: WorkspaceExperienceMemberCandidate[];

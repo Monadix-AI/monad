@@ -10,16 +10,13 @@ import type {
 } from '../../src/index.ts';
 
 import { expect, test } from 'bun:test';
-
 import {
   bindWorkspaceExperience,
-  defineAtomPack,
-  defineChannel,
   defineWorkspaceExperience,
-  loadManifestAtomPack,
-  UndeclaredAtomError,
   WORKSPACE_EXPERIENCE_UPDATE_EVENT
-} from '../../src/index.ts';
+} from '@monad/sdk-experience';
+
+import { defineAtomPack, defineChannel, loadManifestAtomPack, UndeclaredAtomError } from '../../src/index.ts';
 
 const SDK_VERSION = '0';
 

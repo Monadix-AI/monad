@@ -24,3 +24,16 @@ elements, e.g. graph-view) can't use React hooks and stay on the `WorkspaceExper
 event-bridge contract from `@monad/protocol`. `@monad/sdk-atom` itself stays
 dependency-free (protocol + zod only) — `sdk-atom-client-rtk` is a sibling package, not
 a subpath of it.
+
+## Recorded decision: `@monad/sdk-experience`
+
+The workspace-experience **contract** — the published snapshot/actions/host-API types plus the
+framework-agnostic runtime helpers (`WORKSPACE_EXPERIENCE_API_VERSION`,
+`defineWorkspaceExperience`, `isWorkspaceExperienceApiCompatible`, `bindWorkspaceExperience`, the
+DOM event bridge) — lives in `@monad/sdk-experience` (protocol-only deps, **zero React**). It moved
+out of `@monad/sdk-atom` so that package stays the pure atom-authoring adapter contract, and so
+third-party **web-component** experience authors can type their host API without pulling in
+React/react-redux. This is the React-free half of the experience SDK; `sdk-atom-client-rtk` (React
+RTK hooks) is its sibling for **host-component** experiences — the two split on the React boundary.
+`WorkspaceExperienceDefinition`/`Entry`/`HostApi` remain wire types in `@monad/protocol`; the
+daemon consumes those directly.

@@ -1,0 +1,20 @@
+{
+  "name": "@monad/sdk-experience",
+  "version": "0.0.2",
+  "dependencies": {
+    "@monad/protocol": "workspace:*"
+  },
+  "devDependencies": {
+    "@monad/config": "workspace:*"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "module": "src/index.ts",
+  "private": true,
+  "scripts": {
+    "lint": "biome check .",
+    "typecheck": "tsgo --noEmit"
+  },
+  "type": "module"
+}

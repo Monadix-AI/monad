@@ -1,4 +1,4 @@
-import type { WorkspaceExperienceDefinition } from '@monad/sdk-atom';
+import type { WorkspaceExperienceDefinition } from '@monad/sdk-experience';
 
 // First-party dogfood of the `web-component` delivery path: graph-view ships as a same-origin JS
 // module (served by the web app from public/experiences/graph-view.js) that defines the

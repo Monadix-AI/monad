@@ -1,6 +1,6 @@
 import type { WebMessageIdWithoutParams } from '@monad/i18n';
 import type { WorkspaceExperienceProjectDialogRequest } from '@monad/protocol';
-import type { WorkspaceExperienceActions, WorkspaceExperienceSnapshot } from '@monad/sdk-atom/workspace-experience';
+import type { WorkspaceExperienceActions, WorkspaceExperienceSnapshot } from '@monad/sdk-experience';
 import type { ReactElement } from 'react';
 
 interface ProjectExperienceHostRuntime {

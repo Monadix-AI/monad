@@ -3,9 +3,9 @@ import type {
   WorkspaceExperienceEntry,
   WorkspaceExperienceHostApi
 } from '@monad/protocol';
-import type { WorkspaceExperienceActions, WorkspaceExperienceSnapshot } from './workspace-experience-runtime.ts';
+import type { WorkspaceExperienceActions, WorkspaceExperienceSnapshot } from './runtime.ts';
 
-import { WORKSPACE_EXPERIENCE_API_VERSION } from './workspace-experience-runtime.ts';
+import { WORKSPACE_EXPERIENCE_API_VERSION } from './runtime.ts';
 
 export type {
   WorkspaceExperienceActions,
@@ -23,7 +23,7 @@ export type {
   WorkspaceExperienceProject,
   WorkspaceExperienceSnapshot,
   WorkspaceExperienceWorkdir
-} from './workspace-experience-runtime.ts';
+} from './runtime.ts';
 export type { WorkspaceExperienceDefinition, WorkspaceExperienceEntry, WorkspaceExperienceHostApi };
 
 export { WORKSPACE_EXPERIENCE_API_VERSION };

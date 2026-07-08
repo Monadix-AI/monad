@@ -1,10 +1,10 @@
 'use client';
 
 import type { WorkspaceExperienceDefinition, WorkspaceExperienceEntry } from '@monad/protocol';
-import type { WorkspaceExperienceHostApiV1 } from '@monad/sdk-atom/workspace-experience';
+import type { WorkspaceExperienceHostApiV1 } from '@monad/sdk-experience';
 import type { ProjectExperienceView } from '../types';
 
-import { WORKSPACE_EXPERIENCE_API_VERSION } from '@monad/sdk-atom/workspace-experience';
+import { WORKSPACE_EXPERIENCE_API_VERSION } from '@monad/sdk-experience';
 import { createElement, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useT } from '#/components/I18nProvider';

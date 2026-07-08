@@ -26,6 +26,7 @@ import type {
   ModelPrice,
   ModelProviderDescriptor,
   Scope,
+  WorkspaceExperienceDefinition,
   WorkspaceExperienceEntry,
   WorkspaceExperienceHostApi
 } from '@monad/protocol';
@@ -127,13 +128,6 @@ import type {
   SandboxProcess,
   SandboxSpawnOptions
 } from './sandbox.ts';
-import type {
-  WorkspaceExperienceDefinition,
-  WorkspaceExperienceElement,
-  WorkspaceExperienceEventTarget,
-  WorkspaceExperienceUpdateEvent
-} from './workspace-experience.ts';
-
 import { ExternalAgentError, externalAgentOutputEventSchema } from './agent-adapter.ts';
 import { defaultBinProbes, resolveBinary } from './bin-probes.ts';
 import { assertChannelInbound, createChannelTestHarness, defineChannel, parseChannelManifest } from './channel.ts';
@@ -141,30 +135,6 @@ import { defineCommand } from './command.ts';
 import { defineProvider } from './model.ts';
 import { extractCacheWrite, extractProviderCost, usageFromProviderMetadataJson } from './provider-usage.ts';
 import { configureSandboxCredential, defineLocalLauncher, noneLauncher, sandboxCredential } from './sandbox.ts';
-import {
-  bindWorkspaceExperience,
-  defineWorkspaceExperience,
-  WORKSPACE_EXPERIENCE_UPDATE_EVENT
-} from './workspace-experience.ts';
-
-export type { WorkspaceExperienceHostApiV1 } from './workspace-experience.ts';
-export type {
-  WorkspaceExperienceActions,
-  WorkspaceExperienceAddMemberOptions,
-  WorkspaceExperienceApiVersion,
-  WorkspaceExperienceGraphActivityRow,
-  WorkspaceExperienceGraphCanvas,
-  WorkspaceExperienceGraphParticipant,
-  WorkspaceExperienceIcon,
-  WorkspaceExperienceMember,
-  WorkspaceExperienceMemberCandidate,
-  WorkspaceExperienceMemberSettings,
-  WorkspaceExperienceMemberType,
-  WorkspaceExperienceProductIconId,
-  WorkspaceExperienceProject,
-  WorkspaceExperienceSnapshot,
-  WorkspaceExperienceWorkdir
-} from './workspace-experience-runtime.ts';
 export type {
   AdapterMigration,
   BeliefExplanation,
@@ -280,19 +250,12 @@ export type {
   VideoCall,
   VideoResult,
   WorkspaceExperienceDefinition,
-  WorkspaceExperienceElement,
   WorkspaceExperienceEntry,
-  WorkspaceExperienceEventTarget,
-  WorkspaceExperienceHostApi,
-  WorkspaceExperienceUpdateEvent
+  WorkspaceExperienceHostApi
 };
-
-export { isWorkspaceExperienceApiCompatible } from './workspace-experience.ts';
-export { WORKSPACE_EXPERIENCE_API_VERSION } from './workspace-experience-runtime.ts';
 
 export {
   assertChannelInbound,
-  bindWorkspaceExperience,
   configureSandboxCredential,
   createChannelTestHarness,
   defaultBinProbes,
@@ -300,7 +263,6 @@ export {
   defineCommand,
   defineLocalLauncher,
   defineProvider,
-  defineWorkspaceExperience,
   ExternalAgentError,
   externalAgentOutputEventSchema,
   extractCacheWrite,
@@ -309,8 +271,7 @@ export {
   parseChannelManifest,
   resolveBinary,
   sandboxCredential,
-  usageFromProviderMetadataJson,
-  WORKSPACE_EXPERIENCE_UPDATE_EVENT
+  usageFromProviderMetadataJson
 };
 
 /** The SDK contract version. Atom packs are built against it; the host checks compatibility at load.
