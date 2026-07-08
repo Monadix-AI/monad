@@ -10,6 +10,7 @@
     "tamasfe.even-better-toml",
     "github.vscode-github-actions",
     "astudioplus.codegraph",
-    "typescriptteam.native-preview"
+    "typescriptteam.native-preview",
+    "inlang.vs-code-extension"
   ]
 }

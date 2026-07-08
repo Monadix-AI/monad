@@ -1,9 +1,4 @@
 {
   "extends": "./tsconfig.json",
-  "compilerOptions": {
-    "paths": {
-      "#catalog-types": ["./src/catalog-types.typecheck.ts"]
-    }
-  },
   "exclude": ["generated/paraglide", "src/catalog-types.ts"]
 }

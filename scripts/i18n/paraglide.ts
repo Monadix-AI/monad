@@ -144,7 +144,6 @@ async function runParaglideCompile(scope: ParaglideScope, outdir = join(PARAGLID
         outdir,
         '--output-structure',
         'locale-modules',
-        '--emit-ts-declarations',
         '--no-emit-git-ignore',
         '--no-emit-prettier-ignore',
         '--no-emit-readme',
@@ -179,12 +178,18 @@ async function readExistingFiles(paths: string[]): Promise<Map<string, string>> 
 
 export async function currentGeneratedFiles(
   generated: string,
+  generatedMessages: string,
   paraglideInputs: Map<string, string>,
-  generatedPath: string
+  generatedPath: string,
+  generatedMessagesPath: string
 ): Promise<boolean> {
-  const expected = new Map([[generatedPath, generated], ...paraglideInputs]);
+  const expected = new Map([
+    [generatedPath, generated],
+    [generatedMessagesPath, generatedMessages],
+    ...paraglideInputs
+  ]);
   const inputFiles = await collectFiles(PARAGLIDE_INPUT_DIR).catch(() => []);
-  const actual = await readExistingFiles([generatedPath, ...inputFiles]);
+  const actual = await readExistingFiles([generatedPath, generatedMessagesPath, ...inputFiles]);
   return generatedFilesMatch(expected, actual);
 }
 
@@ -219,7 +224,6 @@ async function runParaglideCompileInDir(
       outdir,
       '--output-structure',
       'locale-modules',
-      '--emit-ts-declarations',
       '--no-emit-git-ignore',
       '--no-emit-prettier-ignore',
       '--no-emit-readme',

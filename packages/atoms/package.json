@@ -31,7 +31,6 @@
   "devDependencies": {
     "@ai-sdk/devtools": "^1.0.2",
     "@grammyjs/types": "^3.28.0",
-    "@monad/config": "workspace:*",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "botframework-schema": "^4.23.3",

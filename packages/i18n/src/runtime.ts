@@ -1,6 +1,6 @@
 import type { LocalePack, MessageId, TParams, Translate } from './types.ts';
 
-import { buildBuiltinCatalog } from './messages.ts';
+import { buildBuiltinCatalog } from '#messages';
 
 export const BUILTIN_LOCALES = ['en', 'zh'] as const;
 export const DEFAULT_LOCALE = 'en';

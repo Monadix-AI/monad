@@ -12,6 +12,10 @@
     "./locale-dir": "./src/locale-dir.ts"
   },
   "imports": {
+    "#messages": {
+      "monad-typecheck": "./src/messages.typecheck.ts",
+      "default": "./src/messages.ts"
+    },
     "#catalog-types": {
       "monad-typecheck": "./src/catalog-types.typecheck.ts",
       "default": "./src/catalog-types.ts"
@@ -21,14 +25,15 @@
   "private": true,
   "scripts": {
     "i18n:check": "bun ../../scripts/i18n.ts --check",
-    "i18n:types": "bun ../../scripts/i18n.ts --write",
+    "i18n:types": "bun ../../scripts/i18n.ts --write-if-stale",
+    "i18n:types:force": "bun ../../scripts/i18n.ts --write",
     "lint": "biome check .",
     "start:dev": "bun ../../scripts/i18n.ts --watch",
-    "test": "bun ../../scripts/i18n.ts --write && bun ../../scripts/bun-test.ts test/ --only-failures",
-    "test:loud": "bun ../../scripts/i18n.ts --write && bun ../../scripts/bun-test.ts test/ --loud",
-    "test:unit": "bun ../../scripts/i18n.ts --write && bun ../../scripts/bun-test.ts test/unit/ --only-failures",
-    "test:unit:loud": "bun ../../scripts/i18n.ts --write && bun ../../scripts/bun-test.ts test/unit/ --loud",
-    "typecheck": "bun ../../scripts/i18n.ts --write && tsgo -p tsconfig.typecheck.json --noEmit"
+    "test": "bun run i18n:types && bun ../../scripts/bun-test.ts test/ --only-failures",
+    "test:loud": "bun run i18n:types && bun ../../scripts/bun-test.ts test/ --loud",
+    "test:unit": "bun run i18n:types && bun ../../scripts/bun-test.ts test/unit/ --only-failures",
+    "test:unit:loud": "bun run i18n:types && bun ../../scripts/bun-test.ts test/unit/ --loud",
+    "typecheck": "tsgo -p tsconfig.typecheck.json --noEmit"
   },
   "sideEffects": false,
   "type": "module"

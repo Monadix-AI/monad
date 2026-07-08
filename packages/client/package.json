@@ -5,9 +5,7 @@
     "@elysiajs/eden": "^1.4.9",
     "@monad/protocol": "workspace:*"
   },
-  "devDependencies": {
-    "@monad/config": "workspace:*"
-  },
+  "devDependencies": {},
   "exports": {
     ".": "./src/index.ts"
   },

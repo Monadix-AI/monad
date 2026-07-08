@@ -1,9 +1,4 @@
 {
   "extends": "@monad/config/tsconfig.base.json",
-  "include": ["src", "test"],
-  "compilerOptions": {
-    "paths": {
-      "#catalog-types": ["./src/catalog-types.ts"]
-    }
-  }
+  "include": ["src", "test"]
 }

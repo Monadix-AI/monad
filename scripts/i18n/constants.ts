@@ -7,6 +7,7 @@ export const ZH_DIR = join(LOCALES_DIR, 'zh');
 export const I18N_SRC_DIR = join(ROOT, 'packages', 'i18n', 'src');
 export const I18N_GENERATED_DIR = join(ROOT, 'packages', 'i18n', 'generated');
 export const GENERATED_PATH = join(I18N_SRC_DIR, 'catalog-types.ts');
+export const GENERATED_MESSAGES_PATH = join(I18N_SRC_DIR, 'messages.generated.ts');
 export const PARAGLIDE_INPUT_DIR = join(I18N_GENERATED_DIR, 'paraglide-input');
 export const PARAGLIDE_OUTPUT_DIR = join(I18N_GENERATED_DIR, 'paraglide');
 export const PLURAL_SUFFIXES = new Set(['zero', 'one', 'two', 'few', 'many', 'other']);

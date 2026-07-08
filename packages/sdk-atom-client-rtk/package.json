@@ -4,9 +4,7 @@
   "dependencies": {
     "@monad/client-rtk": "workspace:*"
   },
-  "devDependencies": {
-    "@monad/config": "workspace:*"
-  },
+  "devDependencies": {},
   "exports": {
     ".": "./src/index.ts"
   },

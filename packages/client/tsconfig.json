@@ -1,15 +1,4 @@
 {
-  "extends": "@monad/config/tsconfig.base.json",
-  "compilerOptions": {
-    "lib": ["ESNext", "DOM"],
-    // Type-only route-shape import for Eden Treaty (packages/client/src/treaty.ts). Use the daemon's
-    // source-safe public type entry instead of resolving the package from this workspace package's node_modules:
-    // consumers like apps/web include @monad/client source in their own TS program, and package-local
-    // path aliases do not follow that source across workspace symlinks.
-    "paths": {
-      "#/*": ["../../apps/monad/src/*", "../../apps/monad/src/*.ts", "../../apps/monad/src/*/index.ts"],
-      "@monad/monad": ["../../apps/monad/src/public-api.ts"]
-    }
-  },
+  "extends": "../config/tsconfig.monad-source-consumer.json",
   "include": ["src", "test"]
 }
