@@ -1,6 +1,6 @@
 # Implementation order: external-agent observation + project/session
 
-Status: **Track A shipped** (2026-07-07) · Companion to
+Status: **Track A shipped** (2026-07-07); **P5a (monad built-in agent) shipped** (2026-07-09) · Companion to
 [agent-adapter-observation-layering.md](agent-adapter-observation-layering.md). Sequences the work into
 phases. **Every phase leaves the tree green and shippable** (own PR). Two tracks share one foundation
 (P0) and are otherwise independent:
@@ -26,6 +26,35 @@ P0 rename ─┬─► P1 schema ─► P2 adapter-decode ─► P3 split-stream
 | P4a consumer | `6be0be018` | client + client-rtk + sdk-atom-client-rtk ui-stream consumer. |
 | P4b render | `4c9970d45` | Panel renders neutral cards. **Decision:** ui-stream returns a *generic* `tool`; "which tool → which card" stays UI business (no server enrichment). Rich cards still extract from `raw` (neutral preserves it). |
 | P4c panel-on-ui-stream | `2c99afe89` | Panel's session observation moved to the ui-stream → **retires the client-side delta re-derivation = the delta-bug fix.** Deliveries keep the poll + legacy path. |
+| P5a monad built-in agent | *(this branch)* | Unblocked by Track B landing (`session_members`, `type: 'monad'`). Scoped to the monad built-in agent only — **ACP agents are explicitly out of scope for this pass** (P5b, still open — see below). |
+
+### P5a — monad built-in agent (this branch)
+
+- **What:** the daemon's own agent-loop turn (`user.message` / `agent.token` / `agent.reasoning` /
+  `agent.message` / `agent.error` / `tool.called` / `tool.progress` / `tool.result`, plus the
+  publish-only `session.stream_started`/`session.stream_ended` turn-boundary markers) is now mapped to
+  the neutral `AgentObservationEvent` plane, the same one external-agent adapters already emit. No new
+  raw decode was needed — monad's own domain `Event`s are already structured, so this is a field reshape
+  (`toAgentObservationEvent` in `apps/monad/src/agent/observation.ts`), not a parser, confirming the
+  "session raw = domain events" decision in the layering proposal.
+- **Member scoping:** a session's domain-event log is the *merged* log for every member (per the layering
+  doc); a `monad`-typed `session_members` row's own observation is the log filtered to events with no
+  `externalAgentSessionId`/`deliveryId` tag (`isMonadAgentDomainEvent`) — those belong to a different,
+  bridged member. ACP-delegated tool events (`forward-acp.ts`, `acp-channel-delegation.ts`) carry neither
+  tag today, so they are **not yet distinguishable from the monad member's own tool calls** — one of the
+  reasons ACP generalization (P5b) is deferred rather than folded in here.
+- **Plane wiring:** no `externalAgentSessionId` exists for a `monad` member, so it can't ride
+  `/external-agent-sessions/:id/ui-observation`. Added the session-member counterpart instead:
+  `GET /sessions/:id/members/:memberId/ui-observation{,-stream}` (http-only, same pattern as the
+  external-agent routes — see `apps/monad/src/transports/http/sessions/controller.ts`), backed by
+  `createSessionMemberObservationHandlers` (`apps/monad/src/handlers/session/handlers/
+  session-member-observation.ts`) and a new `SessionMemberUiObservationFrame` schema in
+  `@monad/protocol`. The GET snapshot merges persisted history (`store.listEvents`) with the active
+  round's un-persisted tail (`RoundCache`, since `agent.token`/`agent.reasoning` are bus-only); the SSE
+  stream layers a `bus.subscribe` filter+map on top, so a `history`-state member can still start streaming
+  once a fresh turn begins (unlike the external-agent SSE, which force-closes on any non-`live` frame).
+- **Explicitly not built:** observation-card rendering for these events (separate, already-deferred task)
+  and any ACP wiring (P5b below).
 
 ### Deviations & open follow-ups
 
@@ -40,10 +69,19 @@ P0 rename ─┬─► P1 schema ─► P2 adapter-decode ─► P3 split-stream
 - **P4b/P4c were verified by typecheck + the observation test suite, not a running panel.** Only
   visible change expected: the source badge shows the coarser `provider` (e.g. `codex`) instead of the
   fine-grained source. Worth an eyes-on pass.
-- **P5 is gated on Track B**, not independent: the monad built-in agent is already observable via its
-  own session transcript, and it would only need the *neutral* plane if it appeared as a member in a
-  project's observation panel — which needs the project→session→members model (Track B). ACP isn't a
-  first-class project member either. So P5 has no consumer until Track B lands.
+- **P5 split into P5a (monad built-in agent, done — see above) and P5b (ACP agents, still open).** It was
+  gated on Track B, not independent: the monad built-in agent was already observable via its own session
+  transcript, and only needed the *neutral* plane once it could appear as a member in a project's
+  observation panel — which needed the project→session→members model (Track B). Now that P5a is done,
+  **ACP agents are still not a first-class observable project member**: they have no `session_members`
+  row today (channel/editor-bridged, not member-modeled), no `externalAgentSessionId`, and their
+  `tool.called`/`tool.result` events (routed via `forward-acp.ts`/`acp-channel-delegation.ts`) aren't
+  tagged the way a bridged external-agent member's events are — `isMonadAgentDomainEvent`
+  (`apps/monad/src/agent/observation.ts`) would currently misattribute an ACP agent's tool activity to
+  the monad member. Generalizing P5b needs: (1) an ACP-typed `session_members` row/identity, (2) a
+  disambiguating tag on ACP-originated domain events (mirroring `externalAgentSessionId`/`deliveryId`),
+  and (3) the equivalent `observeMemberUi`/`subscribeMemberUiObservation` branch for that member type.
+  Not implemented in this pass — left for a follow-up.
 
 ## P0 — Rename `NativeCli*` → `ExternalAgent*`  (foundation, do first)
 
@@ -110,6 +148,8 @@ P0 rename ─┬─► P1 schema ─► P2 adapter-decode ─► P3 split-stream
   the *chat-session-is-its-own-observation* identity (1:1 needs no slice).
 - **Depends:** P1–P4. **Ships green:** external agents already work; this adds the other kinds. **Size:**
   medium.
+- **Status: P5a (monad built-in agent) shipped** — see "As shipped" above. **P5b (ACP agents) still
+  open** — deferred to a follow-up (see Deviations).
 
 ---
 

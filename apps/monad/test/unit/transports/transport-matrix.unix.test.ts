@@ -16,7 +16,8 @@ const sockPath = join(tmpdir(), `monad-transport-${process.pid}.sock`);
 const EXTERNAL_DEPENDENCY_ROUTES = new Set([
   '/v1/skills/search',
   '/v1/settings/mcp-servers/catalog',
-  '/v1/settings/mcp-servers/registry/search'
+  '/v1/settings/mcp-servers/registry/search',
+  '/v1/settings/external-agents/presets'
 ]);
 
 let tcp: ReturnType<typeof Bun.serve>;
