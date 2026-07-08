@@ -4,7 +4,10 @@ import { Settings02Icon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Card, Switch } from '@monad/ui';
 
+import { CapabilityIcon, type CapabilityIconId } from '../CapabilityIcon';
+
 export function ToolCard({
+  capabilityIcon,
   description,
   enabled,
   icon: Icon,
@@ -14,9 +17,10 @@ export function ToolCard({
   optional,
   summary
 }: {
+  capabilityIcon?: CapabilityIconId;
   description: string;
   enabled?: boolean;
-  icon: IconSvgElement;
+  icon?: IconSvgElement;
   name: string;
   onConfigure?: () => void;
   onToggle?: (v: boolean) => void;
@@ -30,11 +34,18 @@ export function ToolCard({
     >
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-2">
-          <div className="rounded-md bg-muted/50 p-1.5">
-            <HugeiconsIcon
-              className="size-4 text-foreground/70"
-              icon={Icon}
-            />
+          <div className="flex size-9 items-center justify-center rounded-lg bg-muted/50">
+            {capabilityIcon ? (
+              <CapabilityIcon
+                className="size-7"
+                icon={capabilityIcon}
+              />
+            ) : Icon ? (
+              <HugeiconsIcon
+                className="size-4 text-foreground/70"
+                icon={Icon}
+              />
+            ) : null}
           </div>
           <span className="font-medium text-sm">{name}</span>
         </div>

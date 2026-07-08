@@ -4,8 +4,6 @@ import {
   BrainIcon,
   EyeIcon,
   GripVerticalIcon,
-  PackageIcon,
-  Plug01Icon,
   ShieldHalfIcon,
   SparklesIcon,
   Wrench01Icon
@@ -14,6 +12,7 @@ import { HugeiconsIcon } from '@hugeicons/react';
 import { ScrollArea } from '@monad/ui';
 
 import { useT } from '@/components/I18nProvider';
+import { CapabilityIcon, resolveCapabilityIcon } from '../CapabilityIcon';
 import { type CapabilityItem, PartCard, serializePayload, type WorkshopPart } from './AgentWorkshopPrimitives';
 
 interface AgentWorkshopPartsBinProps {
@@ -125,18 +124,11 @@ export function AgentWorkshopPartsBin({
                   }}
                   type="button"
                 >
-                  <span className="flex size-8 items-center justify-center rounded-xl bg-secondary text-secondary-foreground">
-                    {capability.sourceKind === 'atom' ? (
-                      <HugeiconsIcon
-                        className="size-4"
-                        icon={PackageIcon}
-                      />
-                    ) : (
-                      <HugeiconsIcon
-                        className="size-4"
-                        icon={Plug01Icon}
-                      />
-                    )}
+                  <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-secondary/70">
+                    <CapabilityIcon
+                      className="size-8"
+                      icon={resolveCapabilityIcon(capability)}
+                    />
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="block font-medium text-sm">{capability.name}</span>

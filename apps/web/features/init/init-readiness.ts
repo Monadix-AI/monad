@@ -2,9 +2,7 @@ import type { GetInitStatusResponse } from '@monad/protocol';
 import type { StudioSectionId } from '@/features/studio/sections';
 
 export const runtimeDisabledSectionIds = [
-  'models',
   'agents',
-  'capabilities',
   'acpDelegates',
   'memory',
   'safety'

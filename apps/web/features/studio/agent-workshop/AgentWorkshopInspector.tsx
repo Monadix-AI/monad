@@ -10,8 +10,6 @@ import {
   Copy01Icon,
   EyeIcon,
   GlobeIcon,
-  PackageIcon,
-  Plug01Icon,
   ShieldHalfIcon,
   SparklesIcon,
   UserGroupIcon,
@@ -35,6 +33,7 @@ import { Markdown } from '@monad/ui/components/Markdown';
 import { useState } from 'react';
 
 import { useT } from '@/components/I18nProvider';
+import { CapabilityIcon, resolveCapabilityIcon } from '../CapabilityIcon';
 import { type CapabilityItem, INHERIT, MODEL_ROLES, SANDBOX_MODES, type WorkshopPart } from './AgentWorkshopPrimitives';
 
 interface AgentWorkshopInspectorProps {
@@ -253,18 +252,11 @@ export function AgentWorkshopInspector({
                   className="flex items-center gap-3 rounded-2xl border bg-background/70 px-3 py-3"
                   key={capability.name}
                 >
-                  <span className="flex size-8 items-center justify-center rounded-xl bg-secondary text-secondary-foreground">
-                    {capability.sourceKind === 'atom' ? (
-                      <HugeiconsIcon
-                        className="size-4"
-                        icon={PackageIcon}
-                      />
-                    ) : (
-                      <HugeiconsIcon
-                        className="size-4"
-                        icon={Plug01Icon}
-                      />
-                    )}
+                  <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-secondary/70">
+                    <CapabilityIcon
+                      className="size-8"
+                      icon={resolveCapabilityIcon(capability)}
+                    />
                   </span>
                   <div className="min-w-0 flex-1">
                     <div className="font-medium text-sm">{capability.name}</div>
