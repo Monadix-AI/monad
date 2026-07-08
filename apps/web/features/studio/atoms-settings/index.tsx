@@ -12,7 +12,8 @@ import { Badge, Button, cn, ScrollArea } from '@monad/ui';
 import { useState } from 'react';
 
 import { useT } from '@/components/I18nProvider';
-import { PanelShell, PanelShellHeader } from '@/components/ui/panel-shell';
+import { PanelShell } from '@/components/ui/panel-shell';
+import { StudioBreadcrumbHeader } from '@/features/studio/StudioBreadcrumbHeader';
 import { AtomPackCard, ConflictRow } from './AtomPackCard';
 import { InstallForm } from './InstallForm';
 
@@ -35,7 +36,7 @@ export function AtomsSettings(_props: { onClose: () => void }) {
 
   return (
     <PanelShell>
-      <PanelShellHeader
+      <StudioBreadcrumbHeader
         actions={
           <>
             <Button
@@ -74,7 +75,6 @@ export function AtomsSettings(_props: { onClose: () => void }) {
             </Button>
           </>
         }
-        subtitle={t('web.atoms.subtitle')}
         title={t('web.atoms.title')}
       />
 

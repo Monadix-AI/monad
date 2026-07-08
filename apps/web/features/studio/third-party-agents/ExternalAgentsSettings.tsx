@@ -10,7 +10,8 @@ import { useState } from 'react';
 
 import { useT } from '@/components/I18nProvider';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { PanelShell, PanelShellHeader } from '@/components/ui/panel-shell';
+import { PanelShell } from '@/components/ui/panel-shell';
+import { StudioBreadcrumbHeader } from '@/features/studio/StudioBreadcrumbHeader';
 import { ExternalAgentAuthModal } from '@/features/workplace/cli/ExternalAgentAuthModal';
 import { useAsyncAction } from '@/hooks/use-async-action';
 import { useExternalAgentSettings } from '@/hooks/use-external-agent-settings';
@@ -64,7 +65,7 @@ export function ExternalAgentsSettings({ embedded = false }: { onClose: () => vo
   return (
     <PanelShell>
       {!embedded ? (
-        <PanelShellHeader
+        <StudioBreadcrumbHeader
           actions={
             <>
               <Button
@@ -90,7 +91,6 @@ export function ExternalAgentsSettings({ embedded = false }: { onClose: () => vo
               </Button>
             </>
           }
-          subtitle={t('web.externalAgent.subtitle')}
           title={t('web.externalAgent.title')}
         />
       ) : null}

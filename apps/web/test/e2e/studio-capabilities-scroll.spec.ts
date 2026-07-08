@@ -145,7 +145,7 @@ test('Studio capabilities content scrolls within the panel', async ({ page }) =>
   await installCapabilitiesApiMock(page);
 
   await page.goto('/studio/capabilities');
-  await expect(page.getByRole('heading', { name: 'Capabilities', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Studio\s*\/\s*Capabilities/ })).toBeVisible();
   await expect(page.getByText('atom-server-8')).toBeVisible();
   await expect
     .poll(async () =>

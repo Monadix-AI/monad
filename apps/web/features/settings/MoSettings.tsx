@@ -1,6 +1,6 @@
 'use client';
 
-import { Cancel01Icon, CatIcon, LoaderPinwheelIcon, PlayIcon, SquareIcon } from '@hugeicons/core-free-icons';
+import { CatIcon, LoaderPinwheelIcon, PlayIcon, SquareIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Button, cn } from '@monad/ui';
 import { useCallback, useEffect, useState } from 'react';
@@ -9,6 +9,7 @@ import { useT } from '@/components/I18nProvider';
 import { useAsyncAction } from '@/hooks/use-async-action';
 import { useMonadRuntime } from '@/lib/monad-runtime-provider';
 import moAtlasManifest from '../../../../apps/mo/assets/atlas.json' with { type: 'json' };
+import { SettingsBreadcrumbHeader } from './SettingsBreadcrumbHeader';
 
 const MO_ATLAS = {
   cols: moAtlasManifest.columns,
@@ -80,24 +81,16 @@ export function MoSettings({ onClose }: Props) {
 
   return (
     <div className="flex min-w-0 flex-1 flex-col">
-      <div className="flex items-center justify-between border-b px-6 py-4">
-        <div className="flex items-center gap-2">
+      <SettingsBreadcrumbHeader
+        icon={
           <HugeiconsIcon
-            className="size-4 text-muted-foreground"
+            className="size-4"
             icon={CatIcon}
           />
-          <span className="font-semibold text-sm">{t('web.settings.mo')}</span>
-        </div>
-        <Button
-          aria-label={t('web.close')}
-          className="size-7"
-          onClick={onClose}
-          size="icon"
-          variant="ghost"
-        >
-          <HugeiconsIcon icon={Cancel01Icon} />
-        </Button>
-      </div>
+        }
+        onClose={onClose}
+        title={t('web.settings.mo')}
+      />
 
       <div className="flex flex-1 flex-col gap-6 overflow-y-auto px-6 py-6">
         <p className="text-muted-foreground text-sm">{t('web.settings.moDesc')}</p>

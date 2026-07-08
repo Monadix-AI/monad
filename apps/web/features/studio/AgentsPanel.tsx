@@ -113,7 +113,6 @@ export function AgentsPanel({ onClose, subpath = [] }: StudioSectionProps) {
             icon={BotIcon}
           />
         }
-        showSubtitle={false}
         title={t('web.studio.agents')}
       />
 

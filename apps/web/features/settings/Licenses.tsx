@@ -13,6 +13,7 @@ import { Button, Input } from '@monad/ui';
 import { memo, useState } from 'react';
 
 import { useT } from '@/components/I18nProvider';
+import { SettingsBreadcrumbHeader } from './SettingsBreadcrumbHeader';
 
 interface Props {
   onClose: () => void;
@@ -412,29 +413,23 @@ export function LicensesSettings({ onClose }: Props) {
   return (
     <div className="licenses-shell flex min-h-0 min-w-0 flex-1 flex-col">
       <LicensePolishStyle />
-      <div className="flex items-center justify-between border-b px-6 py-4">
-        <div className="flex items-center gap-2">
-          <HugeiconsIcon
-            className="size-4 text-muted-foreground"
-            icon={JusticeScaleIcon}
-          />
-          <span className="font-semibold text-sm">{t('web.licenses.title')}</span>
-          {totalPackageCount > 0 && (
+      <SettingsBreadcrumbHeader
+        badge={
+          totalPackageCount > 0 ? (
             <span className="rounded-full bg-muted px-2 py-0.5 text-muted-foreground text-xs">
               {t('web.licenses.packageCount', { count: totalPackageCount })}
             </span>
-          )}
-        </div>
-        <Button
-          aria-label={t('web.close')}
-          className="size-7"
-          onClick={onClose}
-          size="icon"
-          variant="ghost"
-        >
-          <HugeiconsIcon icon={Cancel01Icon} />
-        </Button>
-      </div>
+          ) : undefined
+        }
+        icon={
+          <HugeiconsIcon
+            className="size-4"
+            icon={JusticeScaleIcon}
+          />
+        }
+        onClose={onClose}
+        title={t('web.licenses.title')}
+      />
 
       <div className="flex flex-col gap-4 border-b px-6 py-4">
         <div className="licenses-toolbar">

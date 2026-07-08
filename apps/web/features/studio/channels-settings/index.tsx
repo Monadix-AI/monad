@@ -39,7 +39,8 @@ import {
 import { useMemo, useState } from 'react';
 
 import { I18nTrans, useT } from '@/components/I18nProvider';
-import { PanelShell, PanelShellHeader } from '@/components/ui/panel-shell';
+import { PanelShell } from '@/components/ui/panel-shell';
+import { StudioBreadcrumbHeader } from '@/features/studio/StudioBreadcrumbHeader';
 import { useAsyncAction } from '@/hooks/use-async-action';
 import { useChannelSettings } from '@/hooks/use-channel-settings';
 import { SECRET_INPUT_PASSWORD_MANAGER_PROPS } from '@/lib/secret-input-props';
@@ -53,7 +54,7 @@ export function ChannelsSettings(_props: { onClose: () => void }) {
 
   return (
     <PanelShell>
-      <PanelShellHeader
+      <StudioBreadcrumbHeader
         actions={
           <>
             <Button
@@ -79,7 +80,6 @@ export function ChannelsSettings(_props: { onClose: () => void }) {
             </Button>
           </>
         }
-        subtitle={t('web.ch.subtitle')}
         title={t('web.ch.title')}
       />
 

@@ -8,7 +8,7 @@ import { Button } from '@monad/ui';
 
 import { useT } from '@/components/I18nProvider';
 import { ShellLink } from '@/components/ShellLink';
-import { PanelShellHeader } from '@/components/ui/panel-shell';
+import { PanelShellBreadcrumbHeader } from '@/components/ui/panel-shell';
 
 export function StudioBreadcrumbHeader({
   actions,
@@ -16,7 +16,6 @@ export function StudioBreadcrumbHeader({
   badge,
   icon,
   parentTitle,
-  showSubtitle = true,
   title
 }: {
   actions?: ReactNode;
@@ -24,7 +23,6 @@ export function StudioBreadcrumbHeader({
   badge?: ReactNode;
   icon?: ReactNode;
   parentTitle?: ReactNode;
-  showSubtitle?: boolean;
   title: ReactNode;
 }) {
   const t = useT();
@@ -43,30 +41,23 @@ export function StudioBreadcrumbHeader({
   ) : icon ? (
     <span className="flex size-7 shrink-0 items-center justify-center text-muted-foreground">{icon}</span>
   ) : undefined;
-  const mainTitle = parentTitle ? (
-    <span className="inline-flex min-w-0 items-center gap-1.5">
-      <span className="shrink-0">{parentTitle}</span>
-      <span className="text-muted-foreground/70">/</span>
-      <span className="truncate">{title}</span>
-    </span>
-  ) : (
-    title
-  );
-  const subtitle =
-    parentTitle || !showSubtitle ? undefined : (
-      <span className="inline-flex min-w-0 items-center gap-1">
-        <span>{t('web.studio.title')}</span>
-        <span className="text-muted-foreground/70">/</span>
-        <span className="truncate">{title}</span>
-      </span>
-    );
   return (
-    <PanelShellHeader
+    <PanelShellBreadcrumbHeader
       actions={actions}
       badge={badge}
+      crumbs={
+        parentTitle
+          ? [
+              { id: 'studio', label: t('web.studio.title') },
+              { id: 'parent', label: parentTitle },
+              { id: 'current', label: title }
+            ]
+          : [
+              { id: 'studio', label: t('web.studio.title') },
+              { id: 'current', label: title }
+            ]
+      }
       icon={iconSlot}
-      subtitle={subtitle}
-      title={mainTitle}
     />
   );
 }

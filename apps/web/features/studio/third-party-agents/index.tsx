@@ -23,7 +23,6 @@ export function ThirdPartyAgentsSettings({ onClose }: StudioSectionProps) {
             icon={BotIcon}
           />
         }
-        showSubtitle={false}
         title={t('web.studio.acpDelegates')}
       />
       <div className="border-b bg-muted/20 px-5 py-3">

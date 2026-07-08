@@ -20,7 +20,8 @@ import { Badge, Button, cn, Input, isProductIconId, Label, ProductIcon, ScrollAr
 import { useId, useState } from 'react';
 
 import { I18nTrans, useT } from '@/components/I18nProvider';
-import { PanelShell, PanelShellHeader } from '@/components/ui/panel-shell';
+import { PanelShell } from '@/components/ui/panel-shell';
+import { StudioBreadcrumbHeader } from '@/features/studio/StudioBreadcrumbHeader';
 import { useAcpAgentSettings } from '@/hooks/use-acp-agent-settings';
 import { useAsyncAction } from '@/hooks/use-async-action';
 
@@ -80,7 +81,7 @@ export function AcpAgentsSettings({ embedded = false }: { onClose: () => void; e
   return (
     <PanelShell>
       {!embedded ? (
-        <PanelShellHeader
+        <StudioBreadcrumbHeader
           actions={
             <>
               <Button
@@ -106,7 +107,6 @@ export function AcpAgentsSettings({ embedded = false }: { onClose: () => void; e
               </Button>
             </>
           }
-          subtitle={t('web.acp.subtitle')}
           title={t('web.acp.title')}
         />
       ) : null}

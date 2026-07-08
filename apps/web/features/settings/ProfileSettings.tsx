@@ -1,12 +1,6 @@
 'use client';
 
-import {
-  Cancel01Icon,
-  Delete02Icon,
-  LoaderPinwheelIcon,
-  Upload01Icon,
-  UserGroupIcon
-} from '@hugeicons/core-free-icons';
+import { Delete02Icon, LoaderPinwheelIcon, Upload01Icon, UserGroupIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { useGetAppearanceQuery, useGetProfileSettingsQuery, useSetProfileSettingsMutation } from '@monad/client-rtk';
 import { DEFAULT_AVATAR_STYLE, entityAvatarUrl, entityAvatarWriteUrl } from '@monad/protocol';
@@ -15,6 +9,7 @@ import Image from 'next/image';
 import { useEffect, useRef, useState } from 'react';
 
 import { useT } from '@/components/I18nProvider';
+import { SettingsBreadcrumbHeader } from './SettingsBreadcrumbHeader';
 
 const MAX_AVATAR_BYTES = 512 * 1024;
 const AVATAR_ACCEPT = 'image/png,image/jpeg,image/webp,image/gif';
@@ -85,24 +80,16 @@ export function ProfileSettings({ onClose }: Props) {
 
   return (
     <div className="flex min-w-0 flex-1 flex-col">
-      <div className="flex items-center justify-between border-b px-6 py-4">
-        <div className="flex items-center gap-2">
+      <SettingsBreadcrumbHeader
+        icon={
           <HugeiconsIcon
-            className="size-4 text-muted-foreground"
+            className="size-4"
             icon={UserGroupIcon}
           />
-          <span className="font-semibold text-sm">{t('web.settings.profile')}</span>
-        </div>
-        <Button
-          aria-label={t('web.close')}
-          className="size-7"
-          onClick={onClose}
-          size="icon"
-          variant="ghost"
-        >
-          <HugeiconsIcon icon={Cancel01Icon} />
-        </Button>
-      </div>
+        }
+        onClose={onClose}
+        title={t('web.settings.profile')}
+      />
 
       <div className="flex flex-1 flex-col gap-6 overflow-y-auto px-6 py-6">
         <p className="text-muted-foreground text-sm">{t('web.settings.profileDesc')}</p>

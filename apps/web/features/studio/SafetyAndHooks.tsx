@@ -37,10 +37,7 @@ export function SafetyAndHooks() {
   const t = useT();
   return (
     <PanelShell>
-      <StudioBreadcrumbHeader
-        showSubtitle={false}
-        title={t('web.studio.safetyAndHooks')}
-      />
+      <StudioBreadcrumbHeader title={t('web.studio.safetyAndHooks')} />
       <ScrollArea className="min-h-0 flex-1">
         <div className="mx-auto grid max-w-5xl gap-5 p-4 pb-24 lg:grid-cols-[minmax(0,1fr)_18rem] lg:p-6 lg:pb-24">
           <main className="rounded-xl border bg-card">

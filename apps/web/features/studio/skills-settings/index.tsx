@@ -590,7 +590,6 @@ function SkillsSettingsContent({ embedded = false }: { embedded?: boolean }) {
           />
         }
         parentTitle={panel === 'browse' ? t('web.skills.title') : undefined}
-        showSubtitle={false}
         title={panel === 'browse' ? t('web.skills.marketplace') : t('web.skills.title')}
       />
 
