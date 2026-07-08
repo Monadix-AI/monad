@@ -10,8 +10,7 @@ import {
   principalIdSchema,
   projectIdSchema,
   sessionIdSchema,
-  taskIdSchema,
-  transcriptTargetIdSchema
+  taskIdSchema
 } from './ids.ts';
 
 // Schema-first at wire boundaries (HTTP/WS/disk). Types with no runtime boundary yet
@@ -302,7 +301,7 @@ export type StreamStatus = z.infer<typeof streamStatusSchema>;
  * a non-assistant generative message streams over `message.delta` keyed by this `channel`.
  * `afterEventId` is the resume cursor. */
 export const streamRefSchema = z.object({
-  transcriptTargetId: transcriptTargetIdSchema,
+  sessionId: sessionIdSchema,
   messageId: messageIdSchema,
   channel: z.string().optional(),
   afterEventId: eventIdSchema.optional()
@@ -320,7 +319,7 @@ export type MessageStream = z.infer<typeof messageStreamSchema>;
 // can subscribe to an in-flight assistant turn.
 export const chatMessageSchema = z.object({
   id: messageIdSchema,
-  transcriptTargetId: transcriptTargetIdSchema,
+  sessionId: sessionIdSchema,
   role: messageRoleSchema,
   text: z.string(),
   type: messageTypeSchema,
@@ -337,7 +336,7 @@ export const chatMessageSchema = z.object({
 export type ChatMessage = z.infer<typeof chatMessageSchema>;
 
 export const searchHitSchema = z.object({
-  transcriptTargetId: transcriptTargetIdSchema,
+  sessionId: sessionIdSchema,
   transcriptTargetTitle: z.string(),
   messageId: messageIdSchema,
   role: messageRoleSchema,
@@ -394,7 +393,7 @@ export type EventType = z.infer<typeof eventTypeSchema>;
 
 export const eventSchema = z.object({
   id: eventIdSchema,
-  transcriptTargetId: transcriptTargetIdSchema,
+  sessionId: sessionIdSchema,
   type: eventTypeSchema,
   actorAgentId: agentIdSchema.nullable(), // null = system- or human-originated
   taskId: taskIdSchema.optional(),

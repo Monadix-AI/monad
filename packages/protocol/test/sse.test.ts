@@ -17,7 +17,7 @@ test('SSE idle timeout stays well above the heartbeat interval', () => {
 
 const event = {
   id: 'evt_01ABC',
-  transcriptTargetId: 'ses_01ABC',
+  sessionId: 'ses_01ABC',
   type: 'session.updated',
   actorAgentId: null,
   payload: {},

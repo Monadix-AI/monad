@@ -292,7 +292,7 @@ test('start request requires an absolute working path', () => {
 test('external agent session view preserves provider session lifecycle fields', () => {
   const parsed = externalAgentSessionViewSchema.parse({
     id: 'exa_1',
-    transcriptTargetId: 'prj_PROJECT',
+    sessionId: 'ses_SESSION',
     agentName: 'claude-code',
     provider: 'claude-code',
     workingPath: '/tmp/project',
@@ -308,7 +308,7 @@ test('external agent session view preserves provider session lifecycle fields', 
   });
 
   expect(parsed.approvalOwnership).toBe('provider-owned');
-  expect(parsed.transcriptTargetId).toBe('prj_PROJECT');
+  expect(parsed.sessionId).toBe('ses_SESSION');
   expect('projectSessionId' in parsed).toBe(false);
   expect('projectId' in parsed).toBe(false);
   expect(parsed.runtimeRole).toBe('interactive');
@@ -317,7 +317,7 @@ test('external agent session view preserves provider session lifecycle fields', 
 test('external agent session view carries managed project runtime fields', () => {
   const parsed = externalAgentSessionViewSchema.parse({
     id: 'exa_1',
-    transcriptTargetId: 'prj_PROJECT',
+    sessionId: 'ses_SESSION',
     agentName: 'codex',
     provider: 'codex',
     workingPath: '/tmp/project',
@@ -337,7 +337,7 @@ test('external agent session view carries managed project runtime fields', () =>
   });
 
   expect(parsed.runtimeRole).toBe('managed-project-agent');
-  expect(parsed.transcriptTargetId).toBe('prj_PROJECT');
+  expect(parsed.sessionId).toBe('ses_SESSION');
   expect('projectSessionId' in parsed).toBe(false);
   expect('projectId' in parsed).toBe(false);
   expect(parsed.agentRuntimeId).toBe('nclirt_codex_project');
@@ -374,7 +374,7 @@ test('external agent usage response carries optional quota-style records', () =>
 test('native agent runtime contract is a raw-output-free host summary', () => {
   const parsed = nativeAgentRuntimeSchema.parse({
     id: 'exa_1',
-    transcriptTargetId: 'prj_PROJECT',
+    sessionId: 'ses_SESSION',
     agentName: 'codex',
     provider: 'codex',
     workingPath: '/tmp/project',
@@ -599,20 +599,20 @@ test('native agent runtime prompt and prepared spec are protocol contracts', () 
 test('native agent project command schemas allow runtime-bound project defaults and require non-empty text', () => {
   expect(
     nativeAgentProjectPostRequestSchema.parse({
-      projectId: 'prj_PROJECT',
+      sessionId: 'ses_PROJECT',
       threadId: 'msg_PARENT',
       text: 'hello project'
     })
-  ).toEqual({ projectId: 'prj_PROJECT', threadId: 'msg_PARENT', text: 'hello project' });
+  ).toEqual({ sessionId: 'ses_PROJECT', threadId: 'msg_PARENT', text: 'hello project' });
 
-  expect(nativeAgentProjectPostRequestSchema.safeParse({ projectId: 'not-a-session', text: 'hello' }).success).toBe(
+  expect(nativeAgentProjectPostRequestSchema.safeParse({ sessionId: 'not-a-session', text: 'hello' }).success).toBe(
     false
   );
   expect(nativeAgentProjectPostRequestSchema.parse({ text: 'hello' })).toEqual({ text: 'hello' });
-  expect(nativeAgentProjectPostRequestSchema.safeParse({ projectId: 'prj_PROJECT', text: '' }).success).toBe(false);
+  expect(nativeAgentProjectPostRequestSchema.safeParse({ sessionId: 'ses_PROJECT', text: '' }).success).toBe(false);
   expect(
     nativeAgentProjectReadRequestSchema.parse({
-      projectId: 'prj_PROJECT',
+      sessionId: 'ses_PROJECT',
       after: 'msg_OLD',
       limit: 25
     }).limit
@@ -621,14 +621,14 @@ test('native agent project command schemas allow runtime-bound project defaults 
 
 test('native agent inbox and runtime info schemas carry project-managed runtime state', () => {
   const inbox = nativeAgentProjectInboxResponseSchema.parse({
-    projectId: 'prj_PROJECT',
+    sessionId: 'ses_PROJECT',
     cursor: 7,
     items: [
       {
         seq: 7,
         message: {
           id: 'msg_INBOX',
-          transcriptTargetId: 'prj_PROJECT',
+          sessionId: 'ses_SESSION',
           role: 'user',
           text: 'please take a look',
           type: 'text',
@@ -644,7 +644,7 @@ test('native agent inbox and runtime info schemas carry project-managed runtime 
 
   const info = nativeAgentRuntimeInfoResponseSchema.parse({
     agentId: 'codex',
-    projectId: 'prj_PROJECT',
+    sessionId: 'ses_PROJECT',
     externalAgentSessionId: 'exa_1',
     serverUrl: 'http://127.0.0.1:3000',
     workdir: '/tmp/project',
@@ -666,7 +666,7 @@ test('native agent direct message schemas stay separate from project transcript'
 
   const message = nativeAgentDirectMessageSchema.parse({
     id: 'msg_DIRECT',
-    projectId: 'prj_PROJECT',
+    sessionId: 'ses_PROJECT',
     externalAgentSessionId: 'exa_1',
     fromAgent: 'codex',
     peer: 'human',
@@ -674,7 +674,7 @@ test('native agent direct message schemas stay separate from project transcript'
     createdAt: '2026-06-28T00:00:00.000Z'
   });
 
-  expect(message.projectId).toBe('prj_PROJECT');
+  expect(message.sessionId).toBe('ses_PROJECT');
   expect('projectSessionId' in message).toBe(false);
   expect(message.peer).toBe('human');
 });
@@ -734,7 +734,7 @@ test('attachment refs and direct messages carry the structured file reference', 
   });
   const message = nativeAgentDirectMessageSchema.parse({
     id: 'msg_DIRECT',
-    projectId: 'prj_PROJECT',
+    sessionId: 'ses_PROJECT',
     externalAgentSessionId: 'exa_1',
     fromAgent: 'codex',
     peer: 'human',

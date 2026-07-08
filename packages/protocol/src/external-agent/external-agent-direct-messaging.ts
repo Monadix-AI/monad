@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { messageIdSchema, projectIdSchema } from '../ids.ts';
+import { messageIdSchema, sessionIdSchema } from '../ids.ts';
 import {
   attachmentInputsSchema,
   messageAttachmentRefSchema,
@@ -10,7 +10,7 @@ import { nativeAgentRuntimeSchema } from './external-agent-session.ts';
 
 export const nativeAgentDirectMessageSchema = z.object({
   id: messageIdSchema,
-  projectId: projectIdSchema,
+  sessionId: sessionIdSchema,
   externalAgentSessionId: z.string().min(1),
   fromAgent: z.string().nullable(),
   peer: z.string(),
@@ -55,7 +55,7 @@ export type NativeAgentReadResponse = z.infer<typeof nativeAgentReadResponseSche
 
 export const nativeAgentRuntimeInfoResponseSchema = z.object({
   agentId: z.string(),
-  projectId: projectIdSchema,
+  sessionId: sessionIdSchema,
   externalAgentSessionId: z.string(),
   runtime: nativeAgentRuntimeSchema.optional(),
   serverUrl: z.string(),

@@ -1,5 +1,5 @@
 import type { Event } from '../domain.ts';
-import type { TranscriptTargetId } from '../ids.ts';
+import type { SessionId } from '../ids.ts';
 
 export interface JsonRpcRequest {
   jsonrpc: '2.0';
@@ -19,7 +19,7 @@ export interface JsonRpcResponse {
 export interface JsonRpcNotification {
   jsonrpc: '2.0';
   method: 'sessions.event';
-  params: { sessionId: TranscriptTargetId; event: Event };
+  params: { sessionId: SessionId; event: Event };
 }
 
 export interface JsonRpcError {

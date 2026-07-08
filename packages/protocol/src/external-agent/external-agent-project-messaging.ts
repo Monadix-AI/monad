@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 import { clarifyChoiceModeSchema } from '../clarify.ts';
 import { chatMessageSchema } from '../domain.ts';
-import { messageIdSchema, nativeAgentDeliveryIdSchema, projectIdSchema } from '../ids.ts';
+import { messageIdSchema, nativeAgentDeliveryIdSchema, sessionIdSchema } from '../ids.ts';
 import {
   attachmentInputsSchema,
   messageAttachmentRefSchema,
@@ -15,7 +15,7 @@ import { nativeAgentTurnPointerSchema } from './external-agent-observation.ts';
 // one must be present; the inline cap stays as the fallback DoS guard.
 export const nativeAgentProjectPostRequestSchema = z
   .object({
-    projectId: projectIdSchema.optional(),
+    sessionId: sessionIdSchema.optional(),
     threadId: z.string().optional(),
     text: z.string().min(1).max(NATIVE_AGENT_INLINE_TEXT_MAX).optional(),
     attachments: attachmentInputsSchema.optional()
@@ -25,7 +25,7 @@ export type NativeAgentProjectPostRequest = z.infer<typeof nativeAgentProjectPos
 
 export const nativeAgentProjectMessageSchema = z.object({
   id: messageIdSchema,
-  projectId: projectIdSchema,
+  sessionId: sessionIdSchema,
   text: z.string(),
   attachments: z.array(messageAttachmentRefSchema).optional(),
   createdAt: z.string()
@@ -39,7 +39,7 @@ export const nativeAgentProjectPostResponseSchema = z.object({
 export type NativeAgentProjectPostResponse = z.infer<typeof nativeAgentProjectPostResponseSchema>;
 
 export const nativeAgentProjectAskRequestSchema = z.object({
-  projectId: projectIdSchema.optional(),
+  sessionId: sessionIdSchema.optional(),
   question: z.string().min(1).max(10_000),
   options: z.array(z.string().min(1).max(1_000)).max(10).default([]),
   mode: clarifyChoiceModeSchema.default('single'),
@@ -55,7 +55,7 @@ export const nativeAgentProjectAskResponseSchema = z.object({
 export type NativeAgentProjectAskResponse = z.infer<typeof nativeAgentProjectAskResponseSchema>;
 
 export const nativeAgentProjectReadRequestSchema = z.object({
-  projectId: projectIdSchema.optional(),
+  sessionId: sessionIdSchema.optional(),
   threadId: z.string().optional(),
   before: z.string().optional(),
   after: z.string().optional(),
@@ -77,7 +77,7 @@ export type NativeAgentDeliveryState = z.infer<typeof nativeAgentDeliveryStateSc
 
 export const nativeAgentDeliverySchema = z.object({
   id: nativeAgentDeliveryIdSchema,
-  projectId: projectIdSchema,
+  sessionId: sessionIdSchema,
   memberInstanceId: z.string().min(1),
   externalAgentSessionId: z.string().regex(/^exa_/),
   triggerMessageId: messageIdSchema.optional(),
@@ -103,24 +103,24 @@ export const externalAgentInboxItemSchema = z.object({
 });
 export type ExternalAgentInboxItem = z.infer<typeof externalAgentInboxItemSchema>;
 
-export const nativeAgentProjectInboxRequestSchema = z.object({ projectId: projectIdSchema.optional() }).optional();
+export const nativeAgentProjectInboxRequestSchema = z.object({ sessionId: sessionIdSchema.optional() }).optional();
 export type NativeAgentProjectInboxRequest = z.infer<typeof nativeAgentProjectInboxRequestSchema>;
 
 export const nativeAgentProjectInboxResponseSchema = z.object({
   items: z.array(externalAgentInboxItemSchema),
-  projectId: projectIdSchema,
+  sessionId: sessionIdSchema,
   cursor: z.number().int().nonnegative()
 });
 export type NativeAgentProjectInboxResponse = z.infer<typeof nativeAgentProjectInboxResponseSchema>;
 
 export const nativeAgentProjectInboxAckRequestSchema = z
-  .object({ projectId: projectIdSchema.optional(), cursor: z.number().int().nonnegative().optional() })
+  .object({ sessionId: sessionIdSchema.optional(), cursor: z.number().int().nonnegative().optional() })
   .optional();
 export type NativeAgentProjectInboxAckRequest = z.infer<typeof nativeAgentProjectInboxAckRequestSchema>;
 
 export const nativeAgentProjectInboxAckResponseSchema = z.object({
   ok: z.literal(true),
-  projectId: projectIdSchema,
+  sessionId: sessionIdSchema,
   cursor: z.number().int().nonnegative()
 });
 export type NativeAgentProjectInboxAckResponse = z.infer<typeof nativeAgentProjectInboxAckResponseSchema>;

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { transcriptTargetIdSchema } from '../ids.ts';
+import { sessionIdSchema } from '../ids.ts';
 import { cursorPaginationQuerySchema, cursorPaginationResponseSchema } from '../pagination.ts';
 import {
   externalAgentApprovalOwnershipSchema,
@@ -57,7 +57,7 @@ export type ExternalAgentAuthSessionView = z.infer<typeof externalAgentAuthSessi
 
 export const externalAgentSessionViewSchema = z.object({
   id: z.string().regex(/^exa_/),
-  transcriptTargetId: transcriptTargetIdSchema,
+  sessionId: sessionIdSchema,
   agentName: z.string(),
   provider: externalAgentProviderSchema,
   productIcon: externalAgentProductIconSchema.optional(),
@@ -90,7 +90,7 @@ export type NativeAgentSessionPointer = z.infer<typeof nativeAgentSessionPointer
 
 export const nativeAgentRuntimeSchema = z.object({
   id: z.string().regex(/^exa_/),
-  transcriptTargetId: transcriptTargetIdSchema,
+  sessionId: sessionIdSchema,
   agentName: z.string(),
   provider: externalAgentProviderSchema,
   productIcon: externalAgentProductIconSchema.optional(),

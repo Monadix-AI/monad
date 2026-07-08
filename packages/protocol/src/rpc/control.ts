@@ -21,7 +21,7 @@ import {
   sessionSurfaceSchema,
   sessionTransportSchema
 } from '../domain.ts';
-import { agentIdSchema, messageIdSchema, sessionIdSchema, transcriptTargetIdSchema } from '../ids.ts';
+import { agentIdSchema, messageIdSchema, sessionIdSchema } from '../ids.ts';
 import {
   cursorPaginationQuerySchema,
   cursorPaginationResponseSchema,
@@ -490,7 +490,7 @@ export const searchSessionsRequestSchema = z.object({
   q: z.string().max(SEARCH_QUERY_MAX).optional().default(''),
   mode: searchModeSchema.optional(),
   limit: z.number().int().positive().optional(),
-  transcriptTargetId: transcriptTargetIdSchema.optional()
+  sessionId: sessionIdSchema.optional()
 });
 export type SearchSessionsRequest = z.infer<typeof searchSessionsRequestSchema>;
 

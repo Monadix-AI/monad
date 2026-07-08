@@ -54,7 +54,7 @@ import {
   startExternalAgentRequestSchema,
   startExternalAgentResponseSchema
 } from '../external-agent/index.ts';
-import { agentIdSchema, sessionIdSchema, transcriptTargetIdSchema } from '../ids.ts';
+import { agentIdSchema, sessionIdSchema } from '../ids.ts';
 import { setSkillsSettingsRequestSchema, skillsSettingsResponseSchema } from '../settings/skills-settings.ts';
 import {
   abortSessionResponseSchema,
@@ -146,10 +146,9 @@ const subscribeAckSchema = z.object({ subscribed: z.literal(true) });
 const emptyResultSchema = z.object({});
 
 const idPath = { id: sessionIdSchema };
-const transcriptTargetPath = { id: transcriptTargetIdSchema };
 const agentPath = { id: agentIdSchema };
 const externalAgentSessionPath = { id: z.string().min(1) };
-const externalAgentSessionScopeQuery = z.object({ transcriptTargetId: transcriptTargetIdSchema });
+const externalAgentSessionScopeQuery = z.object({ sessionId: sessionIdSchema });
 const externalAgentAuthScopeQuery = z.object({ controlToken: z.string().min(32) });
 const externalAgentNamePath = { name: z.string().min(1) };
 
@@ -459,7 +458,7 @@ export const RPC_ONLY_METHODS = {
   // `sessions.event` notifications. Used by native clients (e.g. Mo) that already hold a WS
   // connection and want a single multiplexed channel instead of a parallel SSE stream.
   'session.subscribe': {
-    path: transcriptTargetPath,
+    path: idPath,
     result: subscribeAckSchema,
     emits: [
       'agent.message',
@@ -477,7 +476,7 @@ export const RPC_ONLY_METHODS = {
       'session.stream_ended'
     ] satisfies EventType[]
   },
-  'session.unsubscribe': { path: transcriptTargetPath, result: emptyResultSchema }
+  'session.unsubscribe': { path: idPath, result: emptyResultSchema }
 } as const satisfies Record<string, RpcOnlyMethodDef>;
 
 export type RpcOnlyMethodName = keyof typeof RPC_ONLY_METHODS;

@@ -1,5 +1,3 @@
-import type { Session } from './domain.ts';
-
 import { z } from 'zod';
 
 import {
@@ -25,7 +23,6 @@ export const workplaceProjectSchema = z.object({
   updatedAt: z.string()
 });
 export type WorkplaceProject = z.infer<typeof workplaceProjectSchema>;
-export type TranscriptTarget = Session | WorkplaceProject;
 
 export const createWorkplaceProjectOriginHintSchema = z.object({
   surface: sessionSurfaceSchema.optional(),
