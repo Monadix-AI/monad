@@ -1,4 +1,8 @@
-import type { ExternalAgentObservationAccessResponse, ExternalAgentUiObservationFrame } from '@monad/protocol';
+import type {
+  ExternalAgentObservationAccessResponse,
+  ExternalAgentSessionId,
+  ExternalAgentUiObservationFrame
+} from '@monad/protocol';
 import type { ExternalAgentHostDeps, LiveExternalAgentSession } from '#/services/external-agent/host/host-types.ts';
 
 import {
@@ -38,7 +42,7 @@ export class ExternalAgentObservationResolver {
       if (afterSeq !== undefined && live.outputSeq > afterSeq && live.outputSeq - afterSeq <= snapshot.length) {
         return {
           state: 'live',
-          externalAgentSessionId: id,
+          externalAgentSessionId: id as ExternalAgentSessionId,
           provider: live.provider,
           append: snapshot.slice(snapshot.length - (live.outputSeq - afterSeq)),
           seq: live.outputSeq,
@@ -47,7 +51,7 @@ export class ExternalAgentObservationResolver {
       }
       return {
         state: 'live',
-        externalAgentSessionId: id,
+        externalAgentSessionId: id as ExternalAgentSessionId,
         provider: live.provider,
         output: snapshot,
         events: externalAgentStreamItems({ id, adapter: live.adapter, output: snapshot }),
@@ -60,7 +64,7 @@ export class ExternalAgentObservationResolver {
     if (!row) {
       return {
         state: 'unavailable',
-        externalAgentSessionId: id,
+        externalAgentSessionId: id as ExternalAgentSessionId,
         reason: 'external agent session not found'
       };
     }
@@ -68,7 +72,7 @@ export class ExternalAgentObservationResolver {
       const adapter = getExternalAgentProviderAdapter(row.provider);
       return {
         state: 'history',
-        externalAgentSessionId: id,
+        externalAgentSessionId: id as ExternalAgentSessionId,
         provider: row.provider,
         output: row.outputSnapshot,
         events: externalAgentStreamItems({ id, adapter, output: row.outputSnapshot, mode: 'history' }),
@@ -78,7 +82,7 @@ export class ExternalAgentObservationResolver {
     }
     return {
       state: 'unavailable',
-      externalAgentSessionId: id,
+      externalAgentSessionId: id as ExternalAgentSessionId,
       provider: row.provider,
       reason: 'provider history unavailable'
     };
@@ -92,7 +96,7 @@ export class ExternalAgentObservationResolver {
       const snapshot = live.outputBuffer.snapshot();
       return {
         state: 'live',
-        externalAgentSessionId: id,
+        externalAgentSessionId: id as ExternalAgentSessionId,
         provider: live.provider,
         events: externalAgentNeutralStreamItems({ id, adapter: live.adapter, output: snapshot }),
         seq: live.outputSeq,
@@ -101,13 +105,17 @@ export class ExternalAgentObservationResolver {
     }
     const row = this.ctx.store.getExternalAgentSession(id);
     if (!row) {
-      return { state: 'unavailable', externalAgentSessionId: id, reason: 'external agent session not found' };
+      return {
+        state: 'unavailable',
+        externalAgentSessionId: id as ExternalAgentSessionId,
+        reason: 'external agent session not found'
+      };
     }
     if (row.outputSnapshot) {
       const adapter = getExternalAgentProviderAdapter(row.provider);
       return {
         state: 'history',
-        externalAgentSessionId: id,
+        externalAgentSessionId: id as ExternalAgentSessionId,
         provider: row.provider,
         events: externalAgentNeutralStreamItems({ id, adapter, output: row.outputSnapshot, mode: 'history' }),
         observedAt: row.updatedAt
@@ -115,7 +123,7 @@ export class ExternalAgentObservationResolver {
     }
     return {
       state: 'unavailable',
-      externalAgentSessionId: id,
+      externalAgentSessionId: id as ExternalAgentSessionId,
       provider: row.provider,
       reason: 'provider history unavailable'
     };
@@ -136,7 +144,7 @@ export class ExternalAgentObservationResolver {
     if (cliOutput) {
       return {
         state: 'history',
-        externalAgentSessionId: id,
+        externalAgentSessionId: id as ExternalAgentSessionId,
         provider: row.provider,
         output: cliOutput,
         events: externalAgentStreamItems({ id, adapter, output: cliOutput, mode: 'history' }),
@@ -148,7 +156,7 @@ export class ExternalAgentObservationResolver {
     if (localOutput) {
       return {
         state: 'history',
-        externalAgentSessionId: id,
+        externalAgentSessionId: id as ExternalAgentSessionId,
         provider: row.provider,
         output: localOutput,
         events: externalAgentStreamItems({ id, adapter, output: localOutput, mode: 'history' }),

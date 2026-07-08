@@ -119,10 +119,10 @@ test('external agent host can stop every live session during daemon shutdown', (
     }
   };
 
-  for (const id of ['exa_shutdown_one', 'exa_shutdown_two']) {
+  for (const id of ['exa_shutdownone0', 'exa_shutdowntwo0']) {
     store.upsertExternalAgentSession({
       id,
-      transcriptTargetId: 'ses_shutdown',
+      transcriptTargetId: 'ses_shutdown0000',
       agentName: 'codex',
       provider: 'codex',
       workingPath: '/tmp/project',
@@ -133,7 +133,7 @@ test('external agent host can stop every live session during daemon shutdown', (
       lastDeliveredSeq: 0,
       lastVisibleSeq: 0,
       state: 'running',
-      pid: id === 'exa_shutdown_one' ? 111 : 222,
+      pid: id === 'exa_shutdownone0' ? 111 : 222,
       providerSessionRef: null,
       outputSnapshot: '',
       exitCode: null,
@@ -147,7 +147,7 @@ test('external agent host can stop every live session during daemon shutdown', (
       }
     ).live.set(id, {
       id,
-      transcriptTargetId: 'ses_shutdown',
+      transcriptTargetId: 'ses_shutdown0000',
       agentName: 'codex',
       provider: 'codex',
       runtimeRole: 'interactive',
@@ -167,16 +167,16 @@ test('external agent host can stop every live session during daemon shutdown', (
 
   (host as unknown as { stopAll(): void }).stopAll();
 
-  expect(killed).toEqual(['exa_shutdown_one:SIGTERM', 'exa_shutdown_two:SIGTERM']);
-  expect(store.getExternalAgentSession('exa_shutdown_one')?.state).toBe('stopped');
-  expect(store.getExternalAgentSession('exa_shutdown_two')?.state).toBe('stopped');
+  expect(killed).toEqual(['exa_shutdownone0:SIGTERM', 'exa_shutdowntwo0:SIGTERM']);
+  expect(store.getExternalAgentSession('exa_shutdownone0')?.state).toBe('stopped');
+  expect(store.getExternalAgentSession('exa_shutdowntwo0')?.state).toBe('stopped');
 });
 
 test('external agent host stops live sessions for a disconnected provider adapter', () => {
   const store = createStore();
   const bus = new EventBus();
-  const projectId = 'ses_01KWHOSTPROVIDER000000000';
-  const externalAgentSessionId = 'exa_provider_stop_test';
+  const projectId = 'ses_01KWHOST4eTF';
+  const externalAgentSessionId = 'exa_providerYAIx';
   const runtimeAgentName = 'pmem_codex_abc123';
   store.upsertExternalAgentSession({
     id: externalAgentSessionId,
@@ -244,14 +244,14 @@ test('managed provider final can retire a consumed inbox turn without auto-posti
     agents: async () => []
   });
   store.upsertExternalAgentSession({
-    id: 'exa_host_test',
-    transcriptTargetId: 'ses_01KWHOSTTEST0000000000000',
+    id: 'exa_hosttest0000',
+    transcriptTargetId: 'ses_01KWHOSTmAx6',
     agentName: 'codex',
     provider: 'codex',
     workingPath: '/tmp/project',
     launchMode: 'app-server',
     runtimeRole: 'managed-project-agent',
-    agentRuntimeId: 'exa_host_test',
+    agentRuntimeId: 'exa_hosttest0000',
     agentRuntimeTokenHash: null,
     lastDeliveredSeq: 1,
     lastVisibleSeq: 1,
@@ -264,20 +264,20 @@ test('managed provider final can retire a consumed inbox turn without auto-posti
     updatedAt: '2026-07-02T00:00:00.000Z',
     exitedAt: null
   });
-  store.insertMessage('msg_USER', 'ses_01KWHOSTTEST0000000000000', 'hi', '2026-07-02T00:00:01.000Z', 'user');
-  store.insertMessage('msg_THINKING', 'ses_01KWHOSTTEST0000000000000', '', '2026-07-02T00:00:02.000Z', 'assistant', {
+  store.insertMessage('msg_USER00000000', 'ses_01KWHOSTmAx6', 'hi', '2026-07-02T00:00:01.000Z', 'user');
+  store.insertMessage('msg_THINKING0000', 'ses_01KWHOSTmAx6', '', '2026-07-02T00:00:02.000Z', 'assistant', {
     data: {
       agentName: 'codex',
-      externalAgentSessionId: 'exa_host_test',
+      externalAgentSessionId: 'exa_hosttest0000',
       reasoning: 'Thinking',
       source: 'managed-external-agent'
     },
     includeInContext: false,
     streamStatus: 'streaming'
   });
-  store.enqueueExternalAgentInboxItem('exa_host_test', 1);
-  store.markExternalAgentInboxDelivered('exa_host_test', 1);
-  store.markExternalAgentInboxConsumed('exa_host_test', 1);
+  store.enqueueExternalAgentInboxItem('exa_hosttest0000', 1);
+  store.markExternalAgentInboxDelivered('exa_hosttest0000', 1);
+  store.markExternalAgentInboxConsumed('exa_hosttest0000', 1);
 
   const calls: unknown[] = [];
   host.setManagedProjectOutputHandler(async (payload) => {
@@ -295,19 +295,13 @@ test('managed provider final can retire a consumed inbox turn without auto-posti
         ): void;
       };
     }
-  ).outputPipeline.emitManagedProjectOutput(
-    'ses_01KWHOSTTEST0000000000000',
-    'exa_host_test',
-    'No action needed.',
-    false,
-    false
-  );
+  ).outputPipeline.emitManagedProjectOutput('ses_01KWHOSTmAx6', 'exa_hosttest0000', 'No action needed.', false, false);
   await Bun.sleep(0);
 
   expect(calls).toEqual([
     {
-      sessionId: 'ses_01KWHOSTTEST0000000000000',
-      externalAgentSessionId: 'exa_host_test',
+      sessionId: 'ses_01KWHOSTmAx6',
+      externalAgentSessionId: 'exa_hosttest0000',
       agentName: 'codex',
       text: 'No action needed.',
       error: false,
@@ -323,8 +317,8 @@ test('managed external agent output persists a bounded snapshot for refresh and 
     bus: new EventBus(),
     agents: async () => []
   });
-  const projectId = 'ses_01KWHOSTTEST0000000000001';
-  const externalAgentSessionId = 'exa_host_snapshot_test';
+  const projectId = 'ses_01KWHOSTmAx7';
+  const externalAgentSessionId = 'exa_hostsnap2f5a';
   store.upsertExternalAgentSession({
     id: externalAgentSessionId,
     transcriptTargetId: projectId,
@@ -428,8 +422,8 @@ test('managed external agent output persists a bounded snapshot for refresh and 
 test('external agent observation stream pushes incremental deltas the client can reconstruct', async () => {
   const store = createStore();
   const host = new ExternalAgentHost({ store, bus: new EventBus(), agents: async () => [] });
-  const projectId = 'ses_01KWHOSTTEST0000000000009';
-  const externalAgentSessionId = 'exa_host_delta_test';
+  const projectId = 'ses_01KWHOSTmAxf';
+  const externalAgentSessionId = 'exa_hostdeltp9ri';
   store.upsertExternalAgentSession({
     id: externalAgentSessionId,
     transcriptTargetId: projectId,
@@ -514,7 +508,7 @@ test('external agent observation stream pushes incremental deltas the client can
 
 test('external agent observation resume returns only the delta past the client cursor', async () => {
   const host = new ExternalAgentHost({ store: createStore(), bus: new EventBus(), agents: async () => [] });
-  const id = 'exa_resume_seq_test';
+  const id = 'exa_resumeseED9Q';
   const adapter = {
     provider: 'codex',
     productIcon: 'openai',
@@ -522,7 +516,7 @@ test('external agent observation resume returns only the delta past the client c
   } as unknown as ExternalAgentProviderAdapter;
   const live = {
     id,
-    transcriptTargetId: 'ses_01KWHOSTTEST000000000000S',
+    transcriptTargetId: 'ses_01KWHOSTmAxF',
     agentName: 'codex',
     provider: 'codex',
     runtimeRole: 'managed-project-agent',
@@ -560,7 +554,7 @@ test('external agent observation resume returns only the delta past the client c
 
 test('external agent app-server reconnect re-dials the socket and resumes the thread', async () => {
   const host = new ExternalAgentHost({ store: createStore(), bus: new EventBus(), agents: async () => [] });
-  const externalAgentSessionId = 'exa_reconnect_test';
+  const externalAgentSessionId = 'exa_reconnec1Vci';
   const initCalls: { providerSessionRef?: string }[] = [];
   const adapter = {
     provider: 'codex',
@@ -573,7 +567,7 @@ test('external agent app-server reconnect re-dials the socket and resumes the th
   let redials = 0;
   const live = {
     id: externalAgentSessionId,
-    transcriptTargetId: 'ses_01KWHOSTTEST000000000000R',
+    transcriptTargetId: 'ses_01KWHOSTmAxE',
     agentName: 'codex',
     provider: 'codex',
     runtimeRole: 'interactive',
@@ -617,12 +611,12 @@ test('external agent app-server gives up instead of reconnecting forever when th
   // adapter swallows, expecting the resulting close to trigger redial) would restart that counter every
   // cycle and never hit a per-invocation exhaustion path. This drives that exact scenario past any
   // reasonable churn budget and asserts the session eventually gives up instead of looping silently.
-  const transcriptTargetId = 'ses_01KWHOSTTEST0000000000CH';
+  const transcriptTargetId = 'ses_01KWHOSTxcED';
   const bus = new EventBus();
   const events: string[] = [];
   bus.subscribe(transcriptTargetId, (e) => events.push(e.type));
   const host = new ExternalAgentHost({ store: createStore(), bus, agents: async () => [] });
-  const externalAgentSessionId = 'exa_reconnect_churn_test';
+  const externalAgentSessionId = 'exa_reconnecDa55';
   const adapter = {
     provider: 'openclaw',
     productIcon: 'openclaw',
@@ -689,7 +683,7 @@ test('external agent app-server disconnect during initial startup redials before
   // pending gets a few redial attempts (a slow-starting gateway shouldn't fail on its very first
   // handshake attempt), but if the handshake never succeeds, the session still fails — not hangs.
   const host = new ExternalAgentHost({ store: createStore(), bus: new EventBus(), agents: async () => [] });
-  const id = 'exa_pending_startup_churn_test';
+  const id = 'exa_pendingspNT9';
   const adapter = {
     provider: 'openclaw',
     productIcon: 'openclaw',
@@ -705,7 +699,7 @@ test('external agent app-server disconnect during initial startup redials before
   };
   const live = {
     id,
-    transcriptTargetId: 'ses_01KWHOSTTEST0000000000PS',
+    transcriptTargetId: 'ses_01KWHOSTxcsD',
     agentName: 'openclaw',
     provider: 'openclaw',
     runtimeRole: 'interactive',
@@ -762,7 +756,7 @@ test('external agent input throws instead of silently vanishing into a stale con
       throw new Error('external agent input should not read agent config');
     }
   });
-  const id = 'exa_reconnect_input_test';
+  const id = 'exa_reconnecLZKf';
   let sent = 0;
   const adapter = {
     provider: 'openclaw',
@@ -774,7 +768,7 @@ test('external agent input throws instead of silently vanishing into a stale con
   } as unknown as ExternalAgentProviderAdapter;
   const live = {
     id,
-    transcriptTargetId: 'ses_01KWHOSTTEST0000000000IN',
+    transcriptTargetId: 'ses_01KWHOSTxcFt',
     agentName: 'openclaw',
     provider: 'openclaw',
     runtimeRole: 'interactive',
@@ -889,7 +883,7 @@ setInterval(() => {}, 1000);
     agents: async () => [agent],
     externalAgentIdleTimeoutMs: 300
   });
-  const projectId = 'ses_01KWHOSTIDLE000000000000';
+  const projectId = 'ses_01KWHOSTxRoW';
 
   try {
     const view = await host.start({
@@ -1017,7 +1011,7 @@ setInterval(() => {}, 1000);
     agents: async () => [agent],
     externalAgentIdleTimeoutMs: 300
   });
-  const projectId = 'ses_01KWHOSTIDLEAPP000000000';
+  const projectId = 'ses_01KWHOSTsvyf';
 
   try {
     const view = await host.start({
@@ -1047,7 +1041,7 @@ test('external agent idle suspend unlinks an app-server unix socket before later
   const workdir = mkdtempSync(join(tmpdir(), 'monad-external-agent-socket-idle-'));
   const socketPath = join(workdir, 'provider.sock');
   writeFileSync(socketPath, '');
-  const id = 'exa_idle_socket_cleanup';
+  const id = 'exa_idlesockHcft';
   const adapter = {
     provider: 'codex',
     productIcon: 'codex',
@@ -1056,7 +1050,7 @@ test('external agent idle suspend unlinks an app-server unix socket before later
   } as unknown as ExternalAgentProviderAdapter;
   const live = {
     id,
-    transcriptTargetId: 'ses_01KWHOSTIDLESOCKET00000',
+    transcriptTargetId: 'ses_01KWHOSTnskj',
     agentName: 'codex',
     provider: 'codex',
     runtimeRole: 'interactive',
@@ -1184,7 +1178,7 @@ setInterval(() => {}, 1000);
     agents: async () => [agent],
     externalAgentIdleTimeoutMs: 300
   });
-  const projectId = 'ses_01KWHOSTIDLEFALLBACK0000';
+  const projectId = 'ses_01KWHOSTiGUO';
   const originalSpawn = Bun.spawn;
   (Bun as unknown as { spawn: typeof Bun.spawn }).spawn = ((argv, options) => {
     if (options && typeof options === 'object' && 'terminal' in options) throw new Error('pty unavailable');
@@ -1226,8 +1220,8 @@ test('managed external agent observation restores Codex provider history from pe
     bus: new EventBus(),
     agents: async () => []
   });
-  const projectId = 'ses_01KWHOSTTEST0000000000002';
-  const externalAgentSessionId = 'exa_host_unavailable_test';
+  const projectId = 'ses_01KWHOSTmAx8';
+  const externalAgentSessionId = 'exa_hostunavarpU';
   const testRun = `monad-external-agent-host-${Date.now()}`;
   const rolloutDir = join(homedir(), '.codex', 'sessions', '2099', '01', testRun);
   mkdirSync(rolloutDir, { recursive: true });
@@ -1303,8 +1297,8 @@ test('managed external agent observation prefers Codex CLI history over rollout 
   );
 
   const store = createStore();
-  const projectId = 'ses_01KWHOSTTEST0000000000003';
-  const externalAgentSessionId = 'exa_host_cli_history_test';
+  const projectId = 'ses_01KWHOSTmAx9';
+  const externalAgentSessionId = 'exa_hostclihRLrJ';
   const agent: ExternalAgentView = {
     name: 'codex',
     provider: 'codex',
@@ -1372,8 +1366,8 @@ test('managed external agent observation restores Claude Code provider history',
     })}\n`
   );
   const store = createStore();
-  const projectId = 'ses_01KWHOSTTEST0000000000004';
-  const externalAgentSessionId = 'exa_host_claude_history_test';
+  const projectId = 'ses_01KWHOSTmAx2';
+  const externalAgentSessionId = 'exa_hostclauvTb9';
   const host = new ExternalAgentHost({ store, bus: new EventBus(), agents: async () => [] });
   store.upsertExternalAgentSession({
     id: externalAgentSessionId,
@@ -1430,8 +1424,8 @@ test('managed external agent observation restores Gemini checkpoint history', as
     })}\n`
   );
   const store = createStore();
-  const projectId = 'ses_01KWHOSTTEST0000000000005';
-  const externalAgentSessionId = 'exa_host_gemini_history_test';
+  const projectId = 'ses_01KWHOSTmAx3';
+  const externalAgentSessionId = 'exa_hostgemiqd5i';
   const host = new ExternalAgentHost({ store, bus: new EventBus(), agents: async () => [] });
   store.upsertExternalAgentSession({
     id: externalAgentSessionId,
@@ -1479,8 +1473,8 @@ test('managed external agent observation restores Qwen stream-json history', asy
     })}\n`
   );
   const store = createStore();
-  const projectId = 'ses_01KWHOSTTEST0000000000006';
-  const externalAgentSessionId = 'exa_host_qwen_history_test';
+  const projectId = 'ses_01KWHOSTmAx4';
+  const externalAgentSessionId = 'exa_hostqwen7L9e';
   const host = new ExternalAgentHost({ store, bus: new EventBus(), agents: async () => [] });
   store.upsertExternalAgentSession({
     id: externalAgentSessionId,
@@ -1545,9 +1539,6 @@ test('external agent usage returns empty records when the adapter has no usage p
 test('listLive returns only starting/running runtimes across all projects', () => {
   const store = createStore();
   const host = new ExternalAgentHost({ store, bus: new EventBus(), agents: async () => [] });
-  const insertProject = (_id: `ses_${string}`, _title: string): void =>
-    insertProject('ses_01KWLIVE0000000000000001', 'Alpha');
-  insertProject('ses_01KWLIVE0000000000000002', 'Beta');
   const insertSession = (
     id: string,
     transcriptTargetId: `ses_${string}`,
@@ -1580,19 +1571,19 @@ test('listLive returns only starting/running runtimes across all projects', () =
   // Two live (running/starting) runtimes in different projects, incl. framework adapters, plus two
   // dead ones that must be excluded.
   insertSession(
-    'exa_run_a',
-    'ses_01KWLIVE0000000000000001',
+    'exa_runa00000000',
+    'ses_01KWLIVEhNu5',
     'openclaw',
     'running',
     '2026-07-02T00:00:01.000Z',
     'noisy output'
   );
-  insertSession('exa_start_b', 'ses_01KWLIVE0000000000000002', 'hermes', 'starting', '2026-07-02T00:00:02.000Z');
-  insertSession('exa_stop_a', 'ses_01KWLIVE0000000000000001', 'codex', 'stopped', '2026-07-02T00:00:03.000Z');
-  insertSession('exa_exit_b', 'ses_01KWLIVE0000000000000002', 'qwen', 'exited', '2026-07-02T00:00:04.000Z');
+  insertSession('exa_startb000000', 'ses_01KWLIVEhNu6', 'hermes', 'starting', '2026-07-02T00:00:02.000Z');
+  insertSession('exa_stopa0000000', 'ses_01KWLIVEhNu5', 'codex', 'stopped', '2026-07-02T00:00:03.000Z');
+  insertSession('exa_exitb0000000', 'ses_01KWLIVEhNu6', 'qwen', 'exited', '2026-07-02T00:00:04.000Z');
 
   const live = host.listLive().sessions;
-  expect(live.map((s) => s.id)).toEqual(['exa_run_a', 'exa_start_b']);
+  expect(live.map((s) => s.id)).toEqual(['exa_runa00000000', 'exa_startb000000']);
   expect(live.every((s) => s.state === 'running' || s.state === 'starting')).toBe(true);
   // spans multiple projects and surfaces framework (openclaw/hermes) providers, not just external agents
   expect(new Set(live.map((s) => s.sessionId)).size).toBe(2);
@@ -1606,14 +1597,14 @@ test('listLive/listAllSummaries paginate with a cursor and expose nextCursor', (
   const host = new ExternalAgentHost({ store, bus: new EventBus(), agents: async () => [] });
   for (let i = 0; i < 5; i++) {
     store.upsertExternalAgentSession({
-      id: `exa_page_${i}`,
-      transcriptTargetId: 'ses_01KWLIVE0000000000000003',
+      id: `exa_page${i}0000000`,
+      transcriptTargetId: 'ses_01KWLIVEhNu7',
       agentName: 'codex',
       provider: 'codex',
       workingPath: '/tmp/p',
       launchMode: 'app-server',
       runtimeRole: 'managed-project-agent',
-      agentRuntimeId: `exa_page_${i}`,
+      agentRuntimeId: `exa_page${i}0000000`,
       agentRuntimeTokenHash: null,
       lastDeliveredSeq: 0,
       lastVisibleSeq: 0,
@@ -1629,13 +1620,13 @@ test('listLive/listAllSummaries paginate with a cursor and expose nextCursor', (
   }
 
   const firstPage = host.listLive({ limit: 2 });
-  expect(firstPage.sessions.map((s) => s.id)).toEqual(['exa_page_3', 'exa_page_4']);
+  expect(firstPage.sessions.map((s) => s.id)).toEqual(['exa_page30000000', 'exa_page40000000']);
 
   const secondPage = host.listLive({ limit: 2, before: firstPage.nextCursor });
-  expect(secondPage.sessions.map((s) => s.id)).toEqual(['exa_page_1', 'exa_page_2']);
+  expect(secondPage.sessions.map((s) => s.id)).toEqual(['exa_page10000000', 'exa_page20000000']);
 
   const lastPage = host.listLive({ limit: 2, before: secondPage.nextCursor });
-  expect(lastPage.sessions.map((s) => s.id)).toEqual(['exa_page_0']);
+  expect(lastPage.sessions.map((s) => s.id)).toEqual(['exa_page00000000']);
 
   const summaries = host.listAllSummaries({ limit: 3 });
   expect(summaries.sessions.length).toBe(3);
@@ -1659,7 +1650,7 @@ test('cli-oneshot session has no persistent process and runs a fresh CLI per tur
     approvalOwnership: 'provider-owned'
   };
   const host = new ExternalAgentHost({ store, bus: new EventBus(), agents: async () => [agent] });
-  const projectId = 'ses_01KWHOSTTEST0000000000009';
+  const projectId = 'ses_01KWHOSTmAxf';
   try {
     const view = await host.start({
       transcriptTargetId: projectId,
@@ -1763,9 +1754,9 @@ function seedApprovalLiveSession(
 test('a delegated managed session projects the provider approval and relays the human decision', () => {
   const store = createStore();
   const host = new ExternalAgentHost({ store, bus: new EventBus(), agents: async () => [] });
-  const id = 'exa_approval_delegate';
+  const id = 'exa_approvalyMxz';
   const { resolveCalls, live } = seedApprovalLiveSession(host, store, {
-    projectId: 'ses_01KWHOSTAPPROVE000000000A',
+    projectId: 'ses_01KWHOST1qS8',
     id,
     proxyApprovals: true
   });
@@ -1782,8 +1773,8 @@ test('an autopilot managed session auto-denies a leaked provider approval', () =
   const store = createStore();
   const host = new ExternalAgentHost({ store, bus: new EventBus(), agents: async () => [] });
   const { resolveCalls, live } = seedApprovalLiveSession(host, store, {
-    projectId: 'ses_01KWHOSTAPPROVE000000000B',
-    id: 'exa_approval_autopilot',
+    projectId: 'ses_01KWHOST1qSb',
+    id: 'exa_approval0dVJ',
     proxyApprovals: false
   });
 
@@ -1853,7 +1844,7 @@ test('a real spawned managed process actually receives the autopilot skip flag o
     }
   ];
   const host = new ExternalAgentHost({ store, bus: new EventBus(), agents: async () => agents, monadHome });
-  const projectId = 'ses_01KWHOSTTEST00000ARGVCAP1';
+  const projectId = 'ses_01KWHOSTNFdj';
 
   const readArgvOnceReady = async (argvFile: string): Promise<string> => {
     for (let i = 0; i < 60; i++) {
@@ -1930,7 +1921,7 @@ async function runRealAdapterArgvCapture(opts: {
     approvalOwnership: 'provider-owned'
   };
   const host = new ExternalAgentHost({ store, bus: new EventBus(), agents: async () => [agent], monadHome });
-  const projectId: `ses_${string}` = `ses_01KWHOSTTEST0000${opts.provider.slice(0, 6).toUpperCase().padEnd(6, '0')}01`;
+  const projectId: `ses_${string}` = `ses_${opts.provider.slice(0, 6).toUpperCase().padEnd(6, '0')}01`;
   try {
     const view = await host.start({
       transcriptTargetId: projectId,

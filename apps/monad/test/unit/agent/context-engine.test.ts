@@ -11,7 +11,7 @@ import {
   TokenLimiterContext
 } from '#/agent/index.ts';
 
-const ctx = { sessionId: 'ses_x', emit: () => {} };
+const ctx = { sessionId: 'ses_x00000000000', emit: () => {} };
 const sys = (text: string): ModelMessage => ({ role: 'system', content: text });
 const user = (text: string): ModelMessage => ({ role: 'user', content: text });
 const assistant = (text: string): ModelMessage => ({ role: 'assistant', content: text });
@@ -29,7 +29,7 @@ test('TokenLimiterContext keeps system + the most recent messages that fit', () 
   const msgs = [sys('system'), user(big('OLD')), assistant(big('MID')), user('recent question')];
   // Pin a fresh estimator: the process-wide global one self-calibrates from other tests' real
   // usage samples, which would otherwise shift the char/token ratio and this token-budget boundary.
-  const out = engine.prepare(msgs, { sessionId: 'ses_x', emit: () => {}, estimator: new TokenEstimator() });
+  const out = engine.prepare(msgs, { sessionId: 'ses_x00000000000', emit: () => {}, estimator: new TokenEstimator() });
 
   expect(out[0]?.role).toBe('system'); // system always kept
   expect(out.some((m) => m.content === 'recent question')).toBe(true); // newest kept
@@ -106,7 +106,7 @@ test('SummarizingContextEngine compacts synchronously past the hard threshold an
 
   const out = await engine.prepare(msgs, ctx);
   expect(calls()).toBe(1); // synchronous compaction ran
-  expect(await memory.recall('summary:ses_x')).toBe('DENSE SUMMARY'); // spilled to durable memory
+  expect(await memory.recall('summary:ses_x00000000000')).toBe('DENSE SUMMARY'); // spilled to durable memory
   // The rolling summary is injected as a single system note (append-only, cache-friendly).
   const notes = out.filter((m) => typeof m.content === 'string' && m.content.includes('DENSE SUMMARY'));
   expect(notes).toHaveLength(1);

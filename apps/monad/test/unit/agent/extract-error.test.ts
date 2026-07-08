@@ -143,6 +143,6 @@ test('plain Error with no structured data: uses err.message + httpCode', () => {
 });
 
 test('non-Error value: stringified', () => {
-  const { code, message } = extractError('something broke');
+  const { message } = extractError('something broke');
   expect(message).toBe('something broke');
 });

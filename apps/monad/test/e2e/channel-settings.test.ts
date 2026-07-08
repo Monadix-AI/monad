@@ -25,7 +25,7 @@ function makePaths(base: string): MonadPaths {
   return makeTestPaths(base);
 }
 
-const CHANNEL_ID = 'chn_TESTCHANNEL';
+const CHANNEL_ID = 'chn_TESTCHANNEL0';
 const SECRET = 'super-secret-bot-token';
 
 function channelView() {

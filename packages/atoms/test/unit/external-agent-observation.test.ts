@@ -44,7 +44,7 @@ const renderTimeline = (items: ExternalAgentObservationEvent[], provider = 'code
 test('observation access is adapted to projection events without carrying raw output forward', () => {
   const raw = JSON.stringify({ method: 'item/agentMessage/delta', params: { delta: 'Projected update' } });
   const stream = {
-    id: 'exa_codex',
+    id: 'exa_codex0000000',
     agentName: 'codex',
     provider: 'codex',
     tag: 'Codex',
@@ -55,13 +55,13 @@ test('observation access is adapted to projection events without carrying raw ou
 
   const projection = observationProjectionFromAccess(stream, {
     state: 'live',
-    externalAgentSessionId: 'exa_codex',
+    externalAgentSessionId: 'exa_codex0000000',
     provider: 'codex',
     output: raw,
     // The daemon normalizes `output` into `events` with the same adapter before sending the access
     // response — the client never re-derives this from raw output (see observeFromStore/
     // observeWithProviderHistory in apps/monad/src/services/external-agent/host.ts).
-    events: externalAgentStreamItems({ id: 'exa_codex', provider: 'codex', output: raw }),
+    events: externalAgentStreamItems({ id: 'exa_codex0000000', provider: 'codex', output: raw }),
     observedAt: '2026-06-28T00:00:00.000Z'
   });
   const projectedStream = streamWithObservationProjection(stream, projection);
@@ -77,7 +77,7 @@ test('live SSE frame without events derives them from the folded output', () => 
   // `events` on steady-state pushes; the projection must re-derive events from `output` so the panel
   // does not blank between full snapshots.
   const stream = {
-    id: 'exa_codex',
+    id: 'exa_codex0000000',
     agentName: 'codex',
     provider: 'codex',
     tag: 'Codex',
@@ -89,7 +89,7 @@ test('live SSE frame without events derives them from the folded output', () => 
 
   const projection = observationProjectionFromAccess(stream, {
     state: 'live',
-    externalAgentSessionId: 'exa_codex',
+    externalAgentSessionId: 'exa_codex0000000',
     provider: 'codex',
     output,
     observedAt: '2026-07-07T00:00:00.000Z'
@@ -102,7 +102,7 @@ test('live SSE frame without events derives them from the folded output', () => 
 
 test('delivery observation access keeps the delivery pointer on the projection', () => {
   const stream = {
-    id: 'exa_codex',
+    id: 'exa_codex0000000',
     agentName: 'codex',
     provider: 'codex',
     tag: 'Codex',
@@ -116,9 +116,9 @@ test('delivery observation access keeps the delivery pointer on the projection',
       stream,
       {
         state: 'live',
-        externalAgentSessionId: 'exa_codex',
+        externalAgentSessionId: 'exa_codex0000000',
         provider: 'codex',
-        deliveryId: 'deliv_01KWEBDELIVERYOBSERVE000',
+        deliveryId: 'deliv_01KWEBDErrBa',
         turn: { providerSessionRef: 'provider-session-1', providerTurnId: 'turn-1' },
         output: '',
         observedAt: '2026-06-28T00:00:00.000Z'
@@ -126,8 +126,8 @@ test('delivery observation access keeps the delivery pointer on the projection',
       undefined
     )
   ).toMatchObject({
-    externalAgentSessionId: 'exa_codex',
-    deliveryId: 'deliv_01KWEBDELIVERYOBSERVE000',
+    externalAgentSessionId: 'exa_codex0000000',
+    deliveryId: 'deliv_01KWEBDErrBa',
     turn: { providerTurnId: 'turn-1' }
   });
 });
@@ -137,7 +137,7 @@ test('history observation access with normalized events projects immediately', (
     shouldProjectObservationAccess({
       access: {
         state: 'history',
-        externalAgentSessionId: 'exa_codex',
+        externalAgentSessionId: 'exa_codex0000000',
         provider: 'codex',
         output: '',
         events: [{ id: 'event_1', role: 'agent', source: 'codex-app-server', text: 'Projected history' }],
@@ -151,7 +151,7 @@ test('history observation access with normalized events projects immediately', (
     shouldProjectObservationAccess({
       access: {
         state: 'history',
-        externalAgentSessionId: 'exa_codex',
+        externalAgentSessionId: 'exa_codex0000000',
         provider: 'codex',
         output: '',
         events: [],
@@ -193,7 +193,7 @@ test('observation rail usage fallback reads raw access output before projected d
     }
   });
   const stream = {
-    id: 'exa_codex',
+    id: 'exa_codex0000000',
     agentName: 'codex',
     provider: 'codex',
     tag: 'Codex',
@@ -205,7 +205,7 @@ test('observation rail usage fallback reads raw access output before projected d
   const meter = usageMeterFromObservationAccess({
     access: {
       state: 'live',
-      externalAgentSessionId: 'exa_codex',
+      externalAgentSessionId: 'exa_codex0000000',
       provider: 'codex',
       output: raw,
       // Server-normalized, same as `events` — the daemon computes this from `raw`, the client never
@@ -237,7 +237,7 @@ test('Claude Code observation keeps a result marker without repeating assistant 
   ].join('\n');
 
   expect(
-    externalAgentStreamItems({ id: 'exa_claude', provider: 'claude-code', output }).map((item) => item.text)
+    externalAgentStreamItems({ id: 'exa_claude000000', provider: 'claude-code', output }).map((item) => item.text)
   ).toEqual(['Joined the project and posted status.', 'Result: success']);
 });
 
@@ -250,9 +250,9 @@ test('Claude Code observation maps server errors to readable system events', () 
     session_id: 'claude-session'
   });
 
-  expect(externalAgentStreamItems({ id: 'exa_claude', provider: 'claude-code', output })).toEqual([
+  expect(externalAgentStreamItems({ id: 'exa_claude000000', provider: 'claude-code', output })).toEqual([
     {
-      id: 'exa_claude:result',
+      id: 'exa_claude000000:result',
       role: 'system',
       text: 'API Error: overloaded_error. Claude Code is currently overloaded.',
       source: 'claude-code-sdk',
@@ -279,7 +279,7 @@ test('Qwen Code observation uses SDK-shaped assistant and result messages', () =
     }),
     JSON.stringify({
       type: 'assistant',
-      uuid: 'msg_1',
+      uuid: 'msg_100000000000',
       session_id: 'qwen-session',
       message: {
         id: 'assistant_1',
@@ -306,7 +306,7 @@ test('Qwen Code observation uses SDK-shaped assistant and result messages', () =
     })
   ].join('\n');
 
-  const items = externalAgentStreamItems({ id: 'exa_qwen', provider: 'qwen', output });
+  const items = externalAgentStreamItems({ id: 'exa_qwen00000000', provider: 'qwen', output });
 
   expect(
     items.map((item) => ({ role: item.role, source: item.source, type: item.providerEventType, text: item.text }))
@@ -324,7 +324,7 @@ test('Codex app-server observation renders reasoning and diff streams', () => {
     JSON.stringify({ method: 'turn/diff/updated', params: { threadId: 't', turnId: 'u', diff: '--- a\n+++ b\n' } })
   ].join('\n');
 
-  const items = externalAgentStreamItems({ id: 'exa_codex', provider: 'codex', output });
+  const items = externalAgentStreamItems({ id: 'exa_codex0000000', provider: 'codex', output });
   expect(items.map((item) => ({ role: item.role, type: item.providerEventType, text: item.text }))).toEqual([
     { role: 'agent', type: 'item/reasoning/summaryTextDelta', text: 'Considering the plan.' },
     { role: 'tool', type: 'turn/diff/updated', text: '--- a\n+++ b\n' }
@@ -407,7 +407,9 @@ test('external agent observation merges streaming thinking deltas', () => {
     })
   ].join('\n');
 
-  expect(externalAgentStreamItems({ id: 'exa_claude', provider: 'claude-code', output: claudeOutput })).toMatchObject([
+  expect(
+    externalAgentStreamItems({ id: 'exa_claude000000', provider: 'claude-code', output: claudeOutput })
+  ).toMatchObject([
     {
       role: 'agent',
       source: 'claude-code-sdk',
@@ -415,7 +417,7 @@ test('external agent observation merges streaming thinking deltas', () => {
       text: 'Analyzing context.'
     }
   ]);
-  expect(externalAgentStreamItems({ id: 'exa_qwen', provider: 'qwen', output: qwenOutput })).toMatchObject([
+  expect(externalAgentStreamItems({ id: 'exa_qwen00000000', provider: 'qwen', output: qwenOutput })).toMatchObject([
     {
       role: 'agent',
       source: 'qwen-code-sdk',
@@ -443,7 +445,7 @@ test('Qwen Code observation merges partial stream-json deltas', () => {
     })
   ].join('\n');
 
-  expect(externalAgentStreamItems({ id: 'exa_qwen', provider: 'qwen', output })).toMatchObject([
+  expect(externalAgentStreamItems({ id: 'exa_qwen00000000', provider: 'qwen', output })).toMatchObject([
     {
       role: 'agent',
       source: 'qwen-code-sdk',
@@ -456,9 +458,9 @@ test('Qwen Code observation merges partial stream-json deltas', () => {
 test('observation preserves unparsed JSONL records verbatim', () => {
   const raw = '{"type":"unexpected_event","payload":{"value":42}}';
 
-  expect(externalAgentStreamItems({ id: 'exa_unknown', provider: 'claude-code', output: raw })).toEqual([
+  expect(externalAgentStreamItems({ id: 'exa_unknown00000', provider: 'claude-code', output: raw })).toEqual([
     {
-      id: 'exa_unknown:json:0:raw',
+      id: 'exa_unknown00000:json:0:raw',
       role: 'system',
       text: raw,
       source: 'unknown',
@@ -489,9 +491,9 @@ test('observation does not promote embedded JSON fragments to raw cards', () => 
     'done'
   ].join(' ');
 
-  expect(externalAgentStreamItems({ id: 'exa_codex', provider: 'codex', output })).toEqual([
+  expect(externalAgentStreamItems({ id: 'exa_codex0000000', provider: 'codex', output })).toEqual([
     {
-      id: 'exa_codex:0',
+      id: 'exa_codex0000000:0',
       role: 'agent',
       text: output,
       source: 'plain-text'
@@ -511,9 +513,9 @@ test('Codex app-server observation merges adjacent agent message chunks', () => 
     })
   ].join('\n');
 
-  expect(externalAgentStreamItems({ id: 'exa_codex', provider: 'codex', output }).map((item) => item.text)).toEqual([
-    'Hello, world'
-  ]);
+  expect(
+    externalAgentStreamItems({ id: 'exa_codex0000000', provider: 'codex', output }).map((item) => item.text)
+  ).toEqual(['Hello, world']);
 });
 
 test('Codex app-server observation collects merged chunk raw JSONL lines into a flat array', () => {
@@ -525,7 +527,7 @@ test('Codex app-server observation collects merged chunk raw JSONL lines into a 
   const rawLines = records.map((record) => JSON.stringify(record));
   const output = rawLines.join('\n');
 
-  const items = externalAgentStreamItems({ id: 'exa_codex', provider: 'codex', output });
+  const items = externalAgentStreamItems({ id: 'exa_codex0000000', provider: 'codex', output });
 
   expect(items).toHaveLength(1);
   expect(items[0]?.text).toBe('abc');
@@ -538,7 +540,7 @@ test('Codex app-server observation groups one agent message item lifecycle into 
     {
       method: 'item/started',
       params: {
-        item: { type: 'agentMessage', id: 'msg_1', text: '', phase: 'commentary' },
+        item: { type: 'agentMessage', id: 'msg_100000000000', text: '', phase: 'commentary' },
         threadId: 'thread_1',
         turnId: 'turn_1',
         startedAtMs: 1
@@ -547,7 +549,7 @@ test('Codex app-server observation groups one agent message item lifecycle into 
     {
       method: 'item/agentMessage/delta',
       params: {
-        itemId: 'msg_1',
+        itemId: 'msg_100000000000',
         threadId: 'thread_1',
         turnId: 'turn_1',
         delta: "I'll fetch zeke's pending message now."
@@ -558,7 +560,7 @@ test('Codex app-server observation groups one agent message item lifecycle into 
       params: {
         item: {
           type: 'agentMessage',
-          id: 'msg_1',
+          id: 'msg_100000000000',
           text: "I'll fetch zeke's pending message now.",
           phase: 'commentary'
         },
@@ -571,7 +573,7 @@ test('Codex app-server observation groups one agent message item lifecycle into 
   const rawLines = records.map((record) => JSON.stringify(record));
   const output = rawLines.join('\n');
 
-  const items = externalAgentStreamItems({ id: 'exa_codex', provider: 'codex', output });
+  const items = externalAgentStreamItems({ id: 'exa_codex0000000', provider: 'codex', output });
 
   expect(items).toHaveLength(1);
   expect(items[0]).toMatchObject({
@@ -619,7 +621,7 @@ test('Codex app-server observation groups one user message item lifecycle into o
   const rawLines = records.map((record) => JSON.stringify(record));
   const output = rawLines.join('\n');
 
-  const items = externalAgentStreamItems({ id: 'exa_codex', provider: 'codex', output });
+  const items = externalAgentStreamItems({ id: 'exa_codex0000000', provider: 'codex', output });
 
   expect(items).toHaveLength(1);
   expect(items[0]).toMatchObject({
@@ -649,7 +651,7 @@ test('Codex app-server observation expands batch item envelopes', () => {
     ]
   });
 
-  const items = externalAgentStreamItems({ id: 'exa_codex', provider: 'codex', output });
+  const items = externalAgentStreamItems({ id: 'exa_codex0000000', provider: 'codex', output });
 
   expect(items.map((item) => ({ role: item.role, type: item.providerEventType, text: item.text }))).toEqual([
     {
@@ -697,7 +699,7 @@ test('Codex app-server observation renders user message lifecycle as a shared me
       }
     })
   ].join('\n');
-  const entries = renderTimeline(externalAgentStreamItems({ id: 'exa_codex', provider: 'codex', output }));
+  const entries = renderTimeline(externalAgentStreamItems({ id: 'exa_codex0000000', provider: 'codex', output }));
 
   expect(entries).toMatchObject([
     {
@@ -717,7 +719,7 @@ test('Codex app-server observation renders user message lifecycle as a shared me
 test('Codex app-server observation keeps a lone chunk raw record unwrapped', () => {
   const record = { method: 'item/agentMessage/delta', params: { delta: 'solo' } };
 
-  const items = externalAgentStreamItems({ id: 'exa_codex', provider: 'codex', output: JSON.stringify(record) });
+  const items = externalAgentStreamItems({ id: 'exa_codex0000000', provider: 'codex', output: JSON.stringify(record) });
 
   expect(items).toHaveLength(1);
   expect(items[0]?.raw).toEqual(record);
@@ -729,9 +731,9 @@ test('Codex app-server observation concatenates deltas verbatim without injectin
     JSON.stringify({ method: 'item/agentMessage/delta', params: { delta: 'ementation' } })
   ].join('\n');
 
-  expect(externalAgentStreamItems({ id: 'exa_codex', provider: 'codex', output }).map((item) => item.text)).toEqual([
-    'implementation'
-  ]);
+  expect(
+    externalAgentStreamItems({ id: 'exa_codex0000000', provider: 'codex', output }).map((item) => item.text)
+  ).toEqual(['implementation']);
 });
 
 test('Codex app-server observation does not insert spaces between CJK deltas', () => {
@@ -741,9 +743,9 @@ test('Codex app-server observation does not insert spaces between CJK deltas', (
     JSON.stringify({ method: 'item/agentMessage/delta', params: { delta: '盘点' } })
   ].join('\n');
 
-  expect(externalAgentStreamItems({ id: 'exa_codex', provider: 'codex', output }).map((item) => item.text)).toEqual([
-    '我来先做大文件盘点'
-  ]);
+  expect(
+    externalAgentStreamItems({ id: 'exa_codex0000000', provider: 'codex', output }).map((item) => item.text)
+  ).toEqual(['我来先做大文件盘点']);
 });
 
 test('Codex app-server observation keeps codex-sent whitespace across clause punctuation', () => {
@@ -753,9 +755,9 @@ test('Codex app-server observation keeps codex-sent whitespace across clause pun
     JSON.stringify({ method: 'item/agentMessage/delta', params: { delta: ' Two branches remain.' } })
   ].join('\n');
 
-  expect(externalAgentStreamItems({ id: 'exa_codex', provider: 'codex', output }).map((item) => item.text)).toEqual([
-    'already gone; I am checking now. Two branches remain.'
-  ]);
+  expect(
+    externalAgentStreamItems({ id: 'exa_codex0000000', provider: 'codex', output }).map((item) => item.text)
+  ).toEqual(['already gone; I am checking now. Two branches remain.']);
 });
 
 test('Codex app-server observation keeps provider events in timeline order', () => {
@@ -771,7 +773,7 @@ test('Codex app-server observation keeps provider events in timeline order', () 
     JSON.stringify({ method: 'turn/completed', params: {} })
   ].join('\n');
 
-  const items = externalAgentStreamItems({ id: 'exa_codex', provider: 'codex', output });
+  const items = externalAgentStreamItems({ id: 'exa_codex0000000', provider: 'codex', output });
 
   expect(items.map((item) => item.text)).toEqual([
     'codegraph starting',
@@ -822,7 +824,7 @@ test('Codex app-server observation projects raw response tool calls and results'
     })
   ].join('\n');
 
-  const items = externalAgentStreamItems({ id: 'exa_codex', provider: 'codex', output });
+  const items = externalAgentStreamItems({ id: 'exa_codex0000000', provider: 'codex', output });
 
   expect(items.map((item) => ({ role: item.role, type: item.providerEventType, text: item.text }))).toEqual([
     {
@@ -864,7 +866,7 @@ test('Codex app-server observation projects item tool lifecycle and output delta
     })
   ].join('\n');
 
-  const items = externalAgentStreamItems({ id: 'exa_codex', provider: 'codex', output });
+  const items = externalAgentStreamItems({ id: 'exa_codex0000000', provider: 'codex', output });
 
   expect(items.map((item) => ({ role: item.role, type: item.providerEventType, text: item.text }))).toEqual([
     { role: 'tool', type: 'function_call', text: 'Tool call commandExecution bun test' },
@@ -898,7 +900,7 @@ test('Codex app-server observation projects completed MCP tool calls with argume
     }
   });
 
-  const items = externalAgentStreamItems({ id: 'exa_codex', provider: 'codex', output });
+  const items = externalAgentStreamItems({ id: 'exa_codex0000000', provider: 'codex', output });
 
   expect(items.map((item) => ({ role: item.role, type: item.providerEventType, text: item.text }))).toEqual([
     {
@@ -945,7 +947,7 @@ test('Codex app-server observation projects turns page responses', () => {
     }
   });
 
-  const items = externalAgentStreamItems({ id: 'exa_codex', provider: 'codex', output });
+  const items = externalAgentStreamItems({ id: 'exa_codex0000000', provider: 'codex', output });
 
   expect(items.map((item) => ({ role: item.role, type: item.providerEventType, text: item.text }))).toEqual([
     { role: 'user', type: 'item/userMessage', text: 'Inspect external agent settings' },
@@ -992,7 +994,7 @@ test('Codex app-server observation projects web search and compaction items', ()
     })
   ].join('\n');
 
-  expect(externalAgentStreamItems({ id: 'exa_codex', provider: 'codex', output })).toMatchObject([
+  expect(externalAgentStreamItems({ id: 'exa_codex0000000', provider: 'codex', output })).toMatchObject([
     {
       role: 'tool',
       source: 'codex-app-server',
@@ -1026,9 +1028,9 @@ test('Codex app-server usage meter reads rate limit updates', () => {
       { id: 'secondary', label: 'Weekly · all models', percent: 75 }
     ]
   });
-  expect(externalAgentStreamItems({ id: 'exa_codex', provider: 'codex', output }).map((item) => item.text)).toEqual([
-    'Usage limits updated'
-  ]);
+  expect(
+    externalAgentStreamItems({ id: 'exa_codex0000000', provider: 'codex', output }).map((item) => item.text)
+  ).toEqual(['Usage limits updated']);
 });
 
 test('Codex app-server usage meter reads token usage updates', () => {
@@ -1064,9 +1066,9 @@ test('Codex app-server usage meter reads token usage updates', () => {
       { id: 'thread_total', label: 'Thread total', percent: 398, meterPercent: 100 }
     ]
   });
-  expect(externalAgentStreamItems({ id: 'exa_codex', provider: 'codex', output }).map((item) => item.text)).toEqual([
-    'Token usage updated'
-  ]);
+  expect(
+    externalAgentStreamItems({ id: 'exa_codex0000000', provider: 'codex', output }).map((item) => item.text)
+  ).toEqual(['Token usage updated']);
 });
 
 test('Claude Code usage meter reads rate limit events', () => {
@@ -1103,7 +1105,7 @@ test('Claude Code observation projects rate limit events without raw cards', () 
     session_id: 'claude-session'
   });
 
-  expect(externalAgentStreamItems({ id: 'exa_claude', provider: 'claude-code', output })).toMatchObject([
+  expect(externalAgentStreamItems({ id: 'exa_claude000000', provider: 'claude-code', output })).toMatchObject([
     {
       role: 'system',
       source: 'claude-code-sdk',
@@ -1160,13 +1162,13 @@ test('observation panel shows a token usage meter entry when Codex reports token
     React.createElement(ExternalAgentObservationPanel, {
       onStop: () => {},
       stream: {
-        id: 'exa_codex',
+        id: 'exa_codex0000000',
         agentName: 'codex',
         provider: 'codex',
         tag: 'Codex',
         status: 'running',
         output,
-        items: externalAgentNeutralStreamItems({ id: 'exa_codex', provider: 'codex', output })
+        items: externalAgentNeutralStreamItems({ id: 'exa_codex0000000', provider: 'codex', output })
       },
       // The panel renders whatever meter it's given (server-normalized in production); it no longer
       // re-derives one from `stream.output` itself.
@@ -1185,13 +1187,13 @@ test('observation panel shows a usage limits entry when the stream has limit dat
     React.createElement(ExternalAgentObservationPanel, {
       onStop: () => {},
       stream: {
-        id: 'exa_codex',
+        id: 'exa_codex0000000',
         agentName: 'codex',
         provider: 'codex',
         tag: 'Codex',
         status: 'running',
         output,
-        items: externalAgentNeutralStreamItems({ id: 'exa_codex', provider: 'codex', output })
+        items: externalAgentNeutralStreamItems({ id: 'exa_codex0000000', provider: 'codex', output })
       },
       usageMeter
     })
@@ -1203,7 +1205,7 @@ test('observation panel distinguishes unavailable provider history from empty li
     React.createElement(ExternalAgentObservationPanel, {
       onStop: () => {},
       stream: {
-        id: 'exa_codex',
+        id: 'exa_codex0000000',
         agentName: 'codex',
         provider: 'codex',
         tag: 'Codex',
@@ -1222,13 +1224,13 @@ test('observation panel renders show history as the first list placeholder when 
       onStop: () => {},
       showHistoryButton: true,
       stream: {
-        id: 'exa_codex',
+        id: 'exa_codex0000000',
         agentName: 'codex',
         provider: 'codex',
         tag: 'Codex',
         status: 'ok',
         output: 'Agent output',
-        items: [{ id: 'evt_1', kind: 'assistant-message', streaming: false, text: 'Agent output' }]
+        items: [{ id: 'evt_100000000000', kind: 'assistant-message', streaming: false, text: 'Agent output' }]
       }
     })
   );
@@ -1252,7 +1254,7 @@ test('Claude Code observation projects transcript user events as user message ca
     uuid: '21dace30-5217-4a5c-a48c-7f4b86f4e85d',
     timestamp: '2026-07-05T08:07:54.056Z'
   });
-  const entries = renderTimeline(externalAgentStreamItems({ id: 'exa_claude', provider: 'claude-code', output }));
+  const entries = renderTimeline(externalAgentStreamItems({ id: 'exa_claude000000', provider: 'claude-code', output }));
 
   expect(entries).toMatchObject([
     {
@@ -1285,7 +1287,7 @@ test('Codex app-server observation renders a standalone commandExecution result 
   };
   const entries = renderTimeline([
     {
-      id: 'exa_codex:json:0:tool-result',
+      id: 'exa_codex0000000:json:0:tool-result',
       role: 'tool',
       text: JSON.stringify(raw.params.item),
       source: 'codex-app-server',
@@ -1578,7 +1580,7 @@ test('Claude Code observation keeps result-delimited SDK queries in timeline ord
     JSON.stringify({ type: 'result', subtype: 'success', session_id: 'claude_session', result: 'Second response' })
   ].join('\n');
 
-  const items = externalAgentStreamItems({ id: 'exa_claude', provider: 'claude-code', output });
+  const items = externalAgentStreamItems({ id: 'exa_claude000000', provider: 'claude-code', output });
 
   expect(items.map((item) => item.text)).toEqual([
     'init',

@@ -1,4 +1,4 @@
-import type { ExternalAgentObservationAccessResponse } from '@monad/protocol';
+import type { ExternalAgentObservationAccessResponse, ExternalAgentSessionId } from '@monad/protocol';
 import type {
   ExternalAgentObservationListener,
   LiveExternalAgentSession
@@ -65,7 +65,7 @@ export class ExternalAgentObservationHub {
       deltaLen > 0 && deltaLen <= snapshot.length
         ? {
             state: 'live',
-            externalAgentSessionId: id,
+            externalAgentSessionId: id as ExternalAgentSessionId,
             provider: live.provider,
             append: snapshot.slice(snapshot.length - deltaLen),
             seq: live.outputSeq,
@@ -73,7 +73,7 @@ export class ExternalAgentObservationHub {
           }
         : {
             state: 'live',
-            externalAgentSessionId: id,
+            externalAgentSessionId: id as ExternalAgentSessionId,
             provider: live.provider,
             output: snapshot,
             seq: live.outputSeq,

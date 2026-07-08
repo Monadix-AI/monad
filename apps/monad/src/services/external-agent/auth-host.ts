@@ -1,4 +1,5 @@
 import type {
+  ExternalAgentAuthSessionId,
   ExternalAgentAuthSessionView,
   ExternalAgentAuthState,
   ExternalAgentAuthStatusResponse,
@@ -42,7 +43,7 @@ import { createStreamingTextDecoder } from '#/services/external-agent/stream-dec
 export type ExternalAgentAuthListener = (session: ExternalAgentAuthSessionView) => void;
 
 interface LiveExternalAgentAuthSession {
-  id: string;
+  id: ExternalAgentAuthSessionId;
   controlToken: string;
   agentName: string;
   provider: ExternalAgentView['provider'];

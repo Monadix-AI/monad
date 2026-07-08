@@ -1,4 +1,4 @@
-import type { ChatMessage, UIItem, UIMessageItem, UIPart } from '@monad/protocol';
+import type { ChatMessage, ExternalAgentSessionId, UIItem, UIMessageItem, UIPart } from '@monad/protocol';
 
 import {
   externalAgentEventsAreGenerating,
@@ -144,11 +144,11 @@ export function sourceFromData(data: unknown): UIMessageItem['source'] | undefin
   return source === 'managed-external-agent' || source === 'external-agent-provider' ? source : undefined;
 }
 
-export function externalAgentSessionIdFromData(data: unknown): string | undefined {
+export function externalAgentSessionIdFromData(data: unknown): ExternalAgentSessionId | undefined {
   if (!data || typeof data !== 'object') return undefined;
   const externalAgentSessionId = (data as { externalAgentSessionId?: unknown }).externalAgentSessionId;
   return typeof externalAgentSessionId === 'string' && externalAgentSessionId.startsWith('exa_')
-    ? externalAgentSessionId
+    ? (externalAgentSessionId as ExternalAgentSessionId)
     : undefined;
 }
 

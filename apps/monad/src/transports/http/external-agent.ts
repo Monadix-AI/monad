@@ -1,4 +1,8 @@
-import type { ExternalAgentAuthSessionView, ExternalAgentUiObservationFrame } from '@monad/protocol';
+import type {
+  ExternalAgentAuthSessionView,
+  ExternalAgentSessionId,
+  ExternalAgentUiObservationFrame
+} from '@monad/protocol';
 import type { createDaemonHandlers } from '#/handlers/daemon-handlers/index.ts';
 
 import {
@@ -99,7 +103,14 @@ function createExternalAgentUiObservationSseResponse(
         })
         .catch(() => {
           if (!disposed) {
-            emit({ state: 'unavailable', externalAgentSessionId: id, reason: 'provider history unavailable' }, true);
+            emit(
+              {
+                state: 'unavailable',
+                externalAgentSessionId: id as ExternalAgentSessionId,
+                reason: 'provider history unavailable'
+              },
+              true
+            );
           }
         });
       return {

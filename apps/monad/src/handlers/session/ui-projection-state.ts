@@ -1,4 +1,4 @@
-import type { SessionUiEvent, UIItem, UIMessageItem } from '@monad/protocol';
+import type { ExternalAgentSessionId, SessionUiEvent, UIItem, UIMessageItem } from '@monad/protocol';
 
 interface ChannelDisplayCacheEntry {
   len: number;
@@ -24,7 +24,7 @@ export interface ProjectionMutations {
   setCustom(args: SetCustomArgs): SessionUiEvent;
   findMessage(id: string): UIMessageItem | undefined;
   messageObservationPointers(
-    payload: { externalAgentSessionId?: string; deliveryId?: `deliv_${string}` },
+    payload: { externalAgentSessionId?: ExternalAgentSessionId; deliveryId?: `deliv_${string}` },
     existing?: UIMessageItem
   ): Pick<UIMessageItem, 'externalAgentSessionId' | 'deliveryId'>;
   clearItems(): SessionUiEvent;

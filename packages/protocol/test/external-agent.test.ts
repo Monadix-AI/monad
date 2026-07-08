@@ -291,8 +291,8 @@ test('start request requires an absolute working path', () => {
 
 test('external agent session view preserves provider session lifecycle fields', () => {
   const parsed = externalAgentSessionViewSchema.parse({
-    id: 'exa_1',
-    sessionId: 'ses_SESSION',
+    id: 'exa_100000000000',
+    sessionId: 'ses_SESSION00000',
     agentName: 'claude-code',
     provider: 'claude-code',
     workingPath: '/tmp/project',
@@ -308,7 +308,7 @@ test('external agent session view preserves provider session lifecycle fields', 
   });
 
   expect(parsed.approvalOwnership).toBe('provider-owned');
-  expect(parsed.sessionId).toBe('ses_SESSION');
+  expect(parsed.sessionId).toBe('ses_SESSION00000');
   expect('projectSessionId' in parsed).toBe(false);
   expect('projectId' in parsed).toBe(false);
   expect(parsed.runtimeRole).toBe('interactive');
@@ -316,8 +316,8 @@ test('external agent session view preserves provider session lifecycle fields', 
 
 test('external agent session view carries managed project runtime fields', () => {
   const parsed = externalAgentSessionViewSchema.parse({
-    id: 'exa_1',
-    sessionId: 'ses_SESSION',
+    id: 'exa_100000000000',
+    sessionId: 'ses_SESSION00000',
     agentName: 'codex',
     provider: 'codex',
     workingPath: '/tmp/project',
@@ -337,7 +337,7 @@ test('external agent session view carries managed project runtime fields', () =>
   });
 
   expect(parsed.runtimeRole).toBe('managed-project-agent');
-  expect(parsed.sessionId).toBe('ses_SESSION');
+  expect(parsed.sessionId).toBe('ses_SESSION00000');
   expect('projectSessionId' in parsed).toBe(false);
   expect('projectId' in parsed).toBe(false);
   expect(parsed.agentRuntimeId).toBe('nclirt_codex_project');
@@ -373,8 +373,8 @@ test('external agent usage response carries optional quota-style records', () =>
 
 test('native agent runtime contract is a raw-output-free host summary', () => {
   const parsed = nativeAgentRuntimeSchema.parse({
-    id: 'exa_1',
-    sessionId: 'ses_SESSION',
+    id: 'exa_100000000000',
+    sessionId: 'ses_SESSION00000',
     agentName: 'codex',
     provider: 'codex',
     workingPath: '/tmp/project',
@@ -403,15 +403,17 @@ test('native agent runtime contract is a raw-output-free host summary', () => {
 
 test('native agent observation projection is addressed by pointers and excludes raw output', () => {
   expect(nativeAgentObservationRequestSchema.safeParse({}).success).toBe(false);
-  expect(nativeAgentObservationRequestSchema.parse({ deliveryId: 'deliv_ABC123' }).deliveryId).toBe('deliv_ABC123');
-  expect(nativeAgentObservationRequestSchema.parse({ externalAgentSessionId: 'exa_1' }).externalAgentSessionId).toBe(
-    'exa_1'
+  expect(nativeAgentObservationRequestSchema.parse({ deliveryId: 'deliv_VALID0000000' }).deliveryId).toBe(
+    'deliv_VALID0000000'
   );
+  expect(
+    nativeAgentObservationRequestSchema.parse({ externalAgentSessionId: 'exa_VALID0000000' }).externalAgentSessionId
+  ).toBe('exa_VALID0000000');
 
   const live = nativeAgentObservationProjectionSchema.parse({
     state: 'live',
-    externalAgentSessionId: 'exa_1',
-    deliveryId: 'deliv_ABC123',
+    externalAgentSessionId: 'exa_100000000000',
+    deliveryId: 'deliv_ABC123000000',
     turn: { providerSessionRef: 'provider-session', providerTurnId: 'turn-1' },
     provider: 'codex',
     output: '{"raw":"provider frame"}',
@@ -433,8 +435,8 @@ test('native agent observation projection is addressed by pointers and excludes 
   expect('output' in live).toBe(false);
   const access = externalAgentObservationAccessResponseSchema.parse({
     state: 'history',
-    externalAgentSessionId: 'exa_1',
-    deliveryId: 'deliv_ABC123',
+    externalAgentSessionId: 'exa_100000000000',
+    deliveryId: 'deliv_ABC123000000',
     turn: { providerSessionRef: 'provider-session', providerTurnId: 'turn-1' },
     provider: 'codex',
     output: '{"raw":"provider frame"}',
@@ -445,7 +447,7 @@ test('native agent observation projection is addressed by pointers and excludes 
   expect(access.turn?.providerTurnId).toBe('turn-1');
   const unavailable = nativeAgentObservationProjectionSchema.parse({
     state: 'unavailable',
-    externalAgentSessionId: 'exa_1',
+    externalAgentSessionId: 'exa_100000000000',
     reason: 'Provider history unavailable'
   });
   expect(unavailable.state).toBe('unavailable');
@@ -529,7 +531,7 @@ test('workplace external agent members can be instantiated multiple times from o
 
 test('external agent auth views model provider-owned login relay without project session fields', () => {
   const session = externalAgentAuthSessionViewSchema.parse({
-    id: 'ncliauth_1',
+    id: 'ncliauth_100000000000',
     controlToken: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
     agentName: 'codex',
     provider: 'codex',
@@ -561,16 +563,16 @@ test('native agent runtime prompt and prepared spec are protocol contracts', () 
 
   const promptInput = nativeAgentRuntimePromptInputSchema.parse({
     agentName: 'codex',
-    projectId: 'prj_PROJECT',
-    externalAgentSessionId: 'exa_1',
+    projectId: 'prj_PROJECT00000',
+    externalAgentSessionId: 'exa_100000000000',
     provider: 'codex',
-    workspace: '/tmp/monad/workplace-agents/prj_PROJECT/codex',
+    workspace: '/tmp/monad/workplace-agents/prj_PROJECT00000/codex',
     modelName: 'gpt-5.5',
     reasoningEffort: 'high',
     speed: 'fast'
   });
 
-  expect(promptInput.projectId).toBe('prj_PROJECT');
+  expect(promptInput.projectId).toBe('prj_PROJECT00000');
   expect('projectSessionId' in promptInput).toBe(false);
   expect(promptInput.provider).toBe('codex');
   expect(promptInput.modelName).toBe('gpt-5.5');
@@ -578,42 +580,44 @@ test('native agent runtime prompt and prepared spec are protocol contracts', () 
   expect(promptInput.speed).toBe('fast');
 
   const spec = nativeAgentRuntimeSpecSchema.parse({
-    workspace: '/tmp/monad/workplace-agents/prj_PROJECT/codex',
-    promptFile: '/tmp/monad/workplace-agents/prj_PROJECT/codex/managed-prompt.md',
-    tokenFile: '/tmp/monad/workplace-agents/prj_PROJECT/codex/.monad-agent-token',
+    workspace: '/tmp/monad/workplace-agents/prj_PROJECT00000/codex',
+    promptFile: '/tmp/monad/workplace-agents/prj_PROJECT00000/codex/managed-prompt.md',
+    tokenFile: '/tmp/monad/workplace-agents/prj_PROJECT00000/codex/.monad-agent-token',
     tokenHash: 'abc123',
     monadCliEntry: {
       command: '/Applications/Monad.app/Contents/MacOS/Monad',
       args: []
     },
     env: {
-      MONAD_EXTERNAL_AGENT_SESSION_ID: 'exa_1'
+      MONAD_EXTERNAL_AGENT_SESSION_ID: 'exa_100000000000'
     },
     prompt: 'Use monad project post for public replies.'
   });
 
-  expect(spec.env.MONAD_EXTERNAL_AGENT_SESSION_ID).toBe('exa_1');
+  expect(spec.env.MONAD_EXTERNAL_AGENT_SESSION_ID).toBe('exa_100000000000');
   expect(nativeAgentRuntimeSpecSchema.safeParse({ ...spec, env: undefined }).success).toBe(false);
 });
 
 test('native agent project command schemas allow runtime-bound project defaults and require non-empty text', () => {
   expect(
     nativeAgentProjectPostRequestSchema.parse({
-      sessionId: 'ses_PROJECT',
-      threadId: 'msg_PARENT',
+      sessionId: 'ses_PROJECT00000',
+      threadId: 'msg_PARENT000000',
       text: 'hello project'
     })
-  ).toEqual({ sessionId: 'ses_PROJECT', threadId: 'msg_PARENT', text: 'hello project' });
+  ).toEqual({ sessionId: 'ses_PROJECT00000', threadId: 'msg_PARENT000000', text: 'hello project' });
 
   expect(nativeAgentProjectPostRequestSchema.safeParse({ sessionId: 'not-a-session', text: 'hello' }).success).toBe(
     false
   );
   expect(nativeAgentProjectPostRequestSchema.parse({ text: 'hello' })).toEqual({ text: 'hello' });
-  expect(nativeAgentProjectPostRequestSchema.safeParse({ sessionId: 'ses_PROJECT', text: '' }).success).toBe(false);
+  expect(nativeAgentProjectPostRequestSchema.safeParse({ sessionId: 'ses_PROJECT00000', text: '' }).success).toBe(
+    false
+  );
   expect(
     nativeAgentProjectReadRequestSchema.parse({
-      sessionId: 'ses_PROJECT',
-      after: 'msg_OLD',
+      sessionId: 'ses_PROJECT00000',
+      after: 'msg_OLD000000000',
       limit: 25
     }).limit
   ).toBe(25);
@@ -621,14 +625,14 @@ test('native agent project command schemas allow runtime-bound project defaults 
 
 test('native agent inbox and runtime info schemas carry project-managed runtime state', () => {
   const inbox = nativeAgentProjectInboxResponseSchema.parse({
-    sessionId: 'ses_PROJECT',
+    sessionId: 'ses_PROJECT00000',
     cursor: 7,
     items: [
       {
         seq: 7,
         message: {
-          id: 'msg_INBOX',
-          sessionId: 'ses_SESSION',
+          id: 'msg_INBOX0000000',
+          sessionId: 'ses_SESSION00000',
           role: 'user',
           text: 'please take a look',
           type: 'text',
@@ -640,12 +644,12 @@ test('native agent inbox and runtime info schemas carry project-managed runtime 
     ]
   });
 
-  expect(inbox.items[0]?.message.id).toBe('msg_INBOX');
+  expect(inbox.items[0]?.message.id).toBe('msg_INBOX0000000');
 
   const info = nativeAgentRuntimeInfoResponseSchema.parse({
     agentId: 'codex',
-    sessionId: 'ses_PROJECT',
-    externalAgentSessionId: 'exa_1',
+    sessionId: 'ses_PROJECT00000',
+    externalAgentSessionId: 'exa_100000000000',
     serverUrl: 'http://127.0.0.1:3000',
     workdir: '/tmp/project',
     providerSessionRef: null,
@@ -665,16 +669,16 @@ test('native agent direct message schemas stay separate from project transcript'
   });
 
   const message = nativeAgentDirectMessageSchema.parse({
-    id: 'msg_DIRECT',
-    sessionId: 'ses_PROJECT',
-    externalAgentSessionId: 'exa_1',
+    id: 'msg_DIRECT000000',
+    sessionId: 'ses_PROJECT00000',
+    externalAgentSessionId: 'exa_100000000000',
     fromAgent: 'codex',
     peer: 'human',
     text: 'private note',
     createdAt: '2026-06-28T00:00:00.000Z'
   });
 
-  expect(message.sessionId).toBe('ses_PROJECT');
+  expect(message.sessionId).toBe('ses_PROJECT00000');
   expect('projectSessionId' in message).toBe(false);
   expect(message.peer).toBe('human');
 });
@@ -725,7 +729,7 @@ test('attachment previews are bounded snippets and never split a surrogate pair'
 
 test('attachment refs and direct messages carry the structured file reference', () => {
   const ref = messageAttachmentRefSchema.parse({
-    id: 'att_01ABC',
+    id: 'att_01ABC0000000',
     path: '/tmp/project/report.md',
     name: 'report.md',
     mime: 'text/markdown',
@@ -733,9 +737,9 @@ test('attachment refs and direct messages carry the structured file reference', 
     createdAt: '2026-06-28T00:00:00.000Z'
   });
   const message = nativeAgentDirectMessageSchema.parse({
-    id: 'msg_DIRECT',
-    sessionId: 'ses_PROJECT',
-    externalAgentSessionId: 'exa_1',
+    id: 'msg_DIRECT000000',
+    sessionId: 'ses_PROJECT00000',
+    externalAgentSessionId: 'exa_100000000000',
     fromAgent: 'codex',
     peer: 'human',
     text: 'preview…',

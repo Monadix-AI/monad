@@ -96,7 +96,7 @@ function addSessionMember(
 
 function bindingHeaders(
   _sessionId: SessionId,
-  externalAgentSessionId = 'exa_test',
+  externalAgentSessionId = 'exa_test00000000',
   _agentId = 'codex'
 ): Record<string, string> {
   return {
@@ -108,7 +108,7 @@ function bindingHeaders(
 function createManagedNativeSession(
   handlers: ReturnType<typeof buildHandlers>,
   sessionId: SessionId,
-  id = 'exa_test',
+  id = 'exa_test00000000',
   agentName = 'codex',
   state: 'running' | 'stopped' = 'running',
   workingPath = '/tmp/project',
@@ -167,7 +167,7 @@ for (const kind of TRANSPORTS) {
       // realpath: attachment refs are canonicalized, and registration confines paths to the
       // runtime's working directory — the session's workingPath must be the (real) test dir.
       const dir = await realpath(await mkdtemp(join(tmpdir(), 'monad-attachment-')));
-      createManagedNativeSession(handlers, sessionId, 'exa_test', 'codex', 'running', dir);
+      createManagedNativeSession(handlers, sessionId, 'exa_test00000000', 'codex', 'running', dir);
       try {
         const longBody = `START ${'x'.repeat(150_000)} END`;
         const filePath = join(dir, 'report.md');
@@ -225,7 +225,7 @@ for (const kind of TRANSPORTS) {
       t = serveTransport(kind, createHttpTransport(handlers));
       const sessionId = await createSession(t);
       const dir = await realpath(await mkdtemp(join(tmpdir(), 'monad-attachment-')));
-      createManagedNativeSession(handlers, sessionId, 'exa_test', 'codex', 'running', dir);
+      createManagedNativeSession(handlers, sessionId, 'exa_test00000000', 'codex', 'running', dir);
       try {
         const filePath = join(dir, '项目报告.md');
         await writeFile(filePath, '# 报告', 'utf8');
@@ -252,7 +252,7 @@ for (const kind of TRANSPORTS) {
       const sessionId = await createSession(t);
       const dir = await realpath(await mkdtemp(join(tmpdir(), 'monad-attachment-')));
       const outsideDir = await realpath(await mkdtemp(join(tmpdir(), 'monad-outside-')));
-      createManagedNativeSession(handlers, sessionId, 'exa_test', 'codex', 'running', dir);
+      createManagedNativeSession(handlers, sessionId, 'exa_test00000000', 'codex', 'running', dir);
       try {
         // The web endpoint is id-gated: unregistered ids never resolve to file reads.
         expect((await t.fetch('/v1/attachments/att_UNKNOWN')).status).toBe(404);
@@ -292,7 +292,7 @@ for (const kind of TRANSPORTS) {
       const agentName = 'pmem_claude-code_123';
       const managedWorkspace = join(dir, 'workplace-agents', sessionId, agentName);
       await mkdir(managedWorkspace, { recursive: true });
-      createManagedNativeSession(handlers, sessionId, 'exa_test', agentName, 'running', projectDir);
+      createManagedNativeSession(handlers, sessionId, 'exa_test00000000', agentName, 'running', projectDir);
       try {
         const filePath = join(managedWorkspace, 'proposal.md');
         await writeFile(filePath, '# Proposal', 'utf8');
@@ -320,7 +320,7 @@ for (const kind of TRANSPORTS) {
       t = serveTransport(kind, createHttpTransport(handlers));
       const sessionId = await createSession(t);
       const dir = await realpath(await mkdtemp(join(tmpdir(), 'monad-attachment-')));
-      createManagedNativeSession(handlers, sessionId, 'exa_test', 'codex', 'running', dir);
+      createManagedNativeSession(handlers, sessionId, 'exa_test00000000', 'codex', 'running', dir);
       try {
         const longBody = `PRIVATE ${'y'.repeat(140_000)}`;
         const filePath = join(dir, 'private-note.txt');
@@ -357,7 +357,7 @@ for (const kind of TRANSPORTS) {
       addSessionMember(handlers, sessionId, 'codex', 'Lily');
       addSessionMember(handlers, sessionId, 'claude', 'Steve');
       createManagedNativeSession(handlers, sessionId);
-      createManagedNativeSession(handlers, sessionId, 'exa_peer', 'claude');
+      createManagedNativeSession(handlers, sessionId, 'exa_peer00000000', 'claude');
       const requested = t.sse(`/v1/sessions/${sessionId}/events`, {
         until: (event) => event.type === 'clarify.requested',
         timeoutMs: 3000
@@ -407,7 +407,7 @@ for (const kind of TRANSPORTS) {
 
       const peerInbox = await t.fetch(
         '/v1/internal/native-agent/project/inbox',
-        json({ sessionId }, bindingHeaders(sessionId, 'exa_peer', 'claude'))
+        json({ sessionId }, bindingHeaders(sessionId, 'exa_peer00000000', 'claude'))
       );
       expect(peerInbox.status).toBe(200);
       expect(
@@ -421,18 +421,18 @@ for (const kind of TRANSPORTS) {
       const handlers = buildHandlers(mockModel());
       t = serveTransport(kind, createHttpTransport(handlers));
       const sessionId = await createSession(t);
-      createManagedNativeSession(handlers, sessionId, 'exa_codex', 'codex');
-      createManagedNativeSession(handlers, sessionId, 'exa_claude', 'claude');
+      createManagedNativeSession(handlers, sessionId, 'exa_codex0000000', 'codex');
+      createManagedNativeSession(handlers, sessionId, 'exa_claude000000', 'claude');
 
       // Two agents post to the wall in sequence.
       const first = await t.fetch(
         '/v1/internal/native-agent/project/post',
-        json({ sessionId, text: 'codex: looks good' }, bindingHeaders(sessionId, 'exa_codex', 'codex'))
+        json({ sessionId, text: 'codex: looks good' }, bindingHeaders(sessionId, 'exa_codex0000000', 'codex'))
       );
       expect(first.status).toBe(200);
       const second = await t.fetch(
         '/v1/internal/native-agent/project/post',
-        json({ sessionId, text: 'claude: I agree' }, bindingHeaders(sessionId, 'exa_claude', 'claude'))
+        json({ sessionId, text: 'claude: I agree' }, bindingHeaders(sessionId, 'exa_claude000000', 'claude'))
       );
       expect(second.status).toBe(200);
 
@@ -460,27 +460,27 @@ for (const kind of TRANSPORTS) {
       const handlers = buildHandlers(mockModel());
       t = serveTransport(kind, createHttpTransport(handlers));
       const sessionId = await createSession(t);
-      createManagedNativeSession(handlers, sessionId, 'exa_codex', 'codex');
-      createManagedNativeSession(handlers, sessionId, 'exa_claude', 'claude');
+      createManagedNativeSession(handlers, sessionId, 'exa_codex0000000', 'codex');
+      createManagedNativeSession(handlers, sessionId, 'exa_claude000000', 'claude');
 
       // A human message fans out to both agents; each reserves a "thinking" placeholder at fan-out
       // time — codex a hair before claude (loop order), stamped in the far past to stand apart from
       // the (real-clock) completion time below.
-      handlers.store.insertMessage('msg_USER', sessionId, 'plan the split', '2020-01-01T00:00:01.000Z', 'user');
-      handlers.store.insertMessage('msg_CODEX', sessionId, '', '2020-01-01T00:00:02.000Z', 'assistant', {
+      handlers.store.insertMessage('msg_USER00000000', sessionId, 'plan the split', '2020-01-01T00:00:01.000Z', 'user');
+      handlers.store.insertMessage('msg_CODEX0000000', sessionId, '', '2020-01-01T00:00:02.000Z', 'assistant', {
         data: {
           agentName: 'codex',
-          externalAgentSessionId: 'exa_codex',
+          externalAgentSessionId: 'exa_codex0000000',
           reasoning: 'Thinking',
           source: 'managed-external-agent'
         },
         includeInContext: false,
         streamStatus: 'streaming'
       });
-      handlers.store.insertMessage('msg_CLAUDE', sessionId, '', '2020-01-01T00:00:03.000Z', 'assistant', {
+      handlers.store.insertMessage('msg_CLAUDE000000', sessionId, '', '2020-01-01T00:00:03.000Z', 'assistant', {
         data: {
           agentName: 'claude',
-          externalAgentSessionId: 'exa_claude',
+          externalAgentSessionId: 'exa_claude000000',
           reasoning: 'Thinking',
           source: 'managed-external-agent'
         },
@@ -491,12 +491,15 @@ for (const kind of TRANSPORTS) {
       // claude posts FIRST, codex SECOND — the reverse of the fan-out (placeholder) order.
       const claudePost = await t.fetch(
         '/v1/internal/native-agent/project/post',
-        json({ sessionId, text: 'claude: here is the split' }, bindingHeaders(sessionId, 'exa_claude', 'claude'))
+        json({ sessionId, text: 'claude: here is the split' }, bindingHeaders(sessionId, 'exa_claude000000', 'claude'))
       );
       expect(claudePost.status).toBe(200);
       const codexPost = await t.fetch(
         '/v1/internal/native-agent/project/post',
-        json({ sessionId, text: 'codex: that split matches mine' }, bindingHeaders(sessionId, 'exa_codex', 'codex'))
+        json(
+          { sessionId, text: 'codex: that split matches mine' },
+          bindingHeaders(sessionId, 'exa_codex0000000', 'codex')
+        )
       );
       expect(codexPost.status).toBe(200);
 
@@ -582,31 +585,33 @@ for (const kind of TRANSPORTS) {
       t = serveTransport(kind, createHttpTransport(handlers));
       const sessionId = await createSession(t);
       createManagedNativeSession(handlers, sessionId);
-      handlers.store.insertMessage('msg_USER', sessionId, 'hi', '2026-06-30T00:00:01.000Z', 'user');
-      handlers.store.insertMessage('msg_THINKING', sessionId, '', '2026-06-30T00:00:02.000Z', 'assistant', {
+      handlers.store.insertMessage('msg_USER00000000', sessionId, 'hi', '2026-06-30T00:00:01.000Z', 'user');
+      handlers.store.insertMessage('msg_THINKING0000', sessionId, '', '2026-06-30T00:00:02.000Z', 'assistant', {
         data: {
           agentName: 'codex',
-          externalAgentSessionId: 'exa_test',
+          externalAgentSessionId: 'exa_test00000000',
           reasoning: 'Thinking',
           source: 'managed-external-agent'
         },
         includeInContext: false,
         streamStatus: 'streaming'
       });
-      handlers.store.enqueueExternalAgentInboxItem('exa_test', handlers.store.maxMessageSeq(sessionId));
-      handlers.store.markExternalAgentInboxDelivered('exa_test', handlers.store.maxMessageSeq(sessionId));
-      handlers.store.markExternalAgentInboxConsumed('exa_test', handlers.store.maxMessageSeq(sessionId));
+      handlers.store.enqueueExternalAgentInboxItem('exa_test00000000', handlers.store.maxMessageSeq(sessionId));
+      handlers.store.markExternalAgentInboxDelivered('exa_test00000000', handlers.store.maxMessageSeq(sessionId));
+      handlers.store.markExternalAgentInboxConsumed('exa_test00000000', handlers.store.maxMessageSeq(sessionId));
 
       await handlers.session.completeManagedExternalAgentProviderMessage({
         sessionId,
-        externalAgentSessionId: 'exa_test',
+        externalAgentSessionId: 'exa_test00000000',
         agentName: 'codex',
         text: 'No action needed.',
         post: false
       });
 
       expect(await messages(t, sessionId)).toEqual([{ role: 'user', text: 'hi' }]);
-      expect(handlers.store.findManagedExternalAgentStreamingMessage(sessionId, 'exa_test', 'codex')).toBeNull();
+      expect(
+        handlers.store.findManagedExternalAgentStreamingMessage(sessionId, 'exa_test00000000', 'codex')
+      ).toBeNull();
     });
 
     test('agent send stays out of the Workplace Project transcript', async () => {
@@ -652,18 +657,18 @@ for (const kind of TRANSPORTS) {
       const handlers = buildHandlers(mockModel());
       t = serveTransport(kind, createHttpTransport(handlers));
       const sessionId = await createSession(t);
-      createManagedNativeSession(handlers, sessionId, 'exa_codex', 'codex');
-      createManagedNativeSession(handlers, sessionId, 'exa_claude', 'claude');
+      createManagedNativeSession(handlers, sessionId, 'exa_codex0000000', 'codex');
+      createManagedNativeSession(handlers, sessionId, 'exa_claude000000', 'claude');
 
       const sent = await t.fetch(
         '/v1/internal/native-agent/agent/send',
-        json({ to: 'claude', text: 'private handoff' }, bindingHeaders(sessionId, 'exa_codex', 'codex'))
+        json({ to: 'claude', text: 'private handoff' }, bindingHeaders(sessionId, 'exa_codex0000000', 'codex'))
       );
       expect(sent.status).toBe(200);
 
       const readByClaude = await t.fetch(
         '/v1/internal/native-agent/agent/read',
-        json({ with: 'codex' }, bindingHeaders(sessionId, 'exa_claude', 'claude'))
+        json({ with: 'codex' }, bindingHeaders(sessionId, 'exa_claude000000', 'claude'))
       );
 
       expect(readByClaude.status).toBe(200);
@@ -678,21 +683,21 @@ for (const kind of TRANSPORTS) {
       t = serveTransport(kind, createHttpTransport(handlers));
       const sessionId = await createSession(t);
       createManagedNativeSession(handlers, sessionId);
-      handlers.store.insertMessage('msg_ROOT', sessionId, 'root issue', '2026-06-30T00:00:01.000Z', 'user');
+      handlers.store.insertMessage('msg_ROOT00000000', sessionId, 'root issue', '2026-06-30T00:00:01.000Z', 'user');
       handlers.store.insertMessage(
-        'msg_THREADREPLY',
+        'msg_THREADREPLY0',
         sessionId,
         'thread reply',
         '2026-06-30T00:00:02.000Z',
         'assistant',
-        { data: { threadId: 'msg_ROOT', agentName: 'codex' } }
+        { data: { threadId: 'msg_ROOT00000000', agentName: 'codex' } }
       );
-      handlers.store.insertMessage('msg_OTHER', sessionId, 'unrelated', '2026-06-30T00:00:03.000Z', 'user');
-      handlers.store.enqueueExternalAgentInboxItem('exa_test', 3);
+      handlers.store.insertMessage('msg_OTHER0000000', sessionId, 'unrelated', '2026-06-30T00:00:03.000Z', 'user');
+      handlers.store.enqueueExternalAgentInboxItem('exa_test00000000', 3);
 
       const read = await t.fetch(
         '/v1/internal/native-agent/project/read',
-        json({ sessionId, threadId: 'msg_ROOT' }, bindingHeaders(sessionId))
+        json({ sessionId, threadId: 'msg_ROOT00000000' }, bindingHeaders(sessionId))
       );
 
       expect(read.status).toBe(200);
@@ -755,11 +760,11 @@ for (const kind of TRANSPORTS) {
       const handlers = buildHandlers(mockModel());
       t = serveTransport(kind, createHttpTransport(handlers));
       const sessionId = await createSession(t);
-      createManagedNativeSession(handlers, sessionId, 'exa_stopped', 'codex', 'stopped');
+      createManagedNativeSession(handlers, sessionId, 'exa_stopped00000', 'codex', 'stopped');
 
       const res = await t.fetch(
         '/v1/internal/native-agent/project/post',
-        json({ sessionId, text: 'should fail' }, bindingHeaders(sessionId, 'exa_stopped'))
+        json({ sessionId, text: 'should fail' }, bindingHeaders(sessionId, 'exa_stopped00000'))
       );
 
       expect(res.status).toBe(403);
@@ -789,13 +794,19 @@ for (const kind of TRANSPORTS) {
       const handlers = buildHandlers(mockModel());
       t = serveTransport(kind, createHttpTransport(handlers));
       const sessionId = await createSession(t);
-      createManagedNativeSession(handlers, sessionId, 'exa_inbox');
-      handlers.store.insertMessage('msg_INBOX1', sessionId, 'please review this', '2026-06-30T00:00:01.000Z', 'user');
-      handlers.store.enqueueExternalAgentInboxItem('exa_inbox', 1);
+      createManagedNativeSession(handlers, sessionId, 'exa_inbox0000000');
+      handlers.store.insertMessage(
+        'msg_INBOX1000000',
+        sessionId,
+        'please review this',
+        '2026-06-30T00:00:01.000Z',
+        'user'
+      );
+      handlers.store.enqueueExternalAgentInboxItem('exa_inbox0000000', 1);
 
       const first = await t.fetch(
         '/v1/internal/native-agent/project/inbox',
-        json({ sessionId }, bindingHeaders(sessionId, 'exa_inbox'))
+        json({ sessionId }, bindingHeaders(sessionId, 'exa_inbox0000000'))
       );
       expect(first.status).toBe(200);
       const firstBody = (await first.json()) as { items: Array<{ deliveryId?: string; message: { text: string } }> };
@@ -819,7 +830,7 @@ for (const kind of TRANSPORTS) {
       expect(deliveryBody.delivery).toMatchObject({
         id: deliveryId,
         sessionId,
-        externalAgentSessionId: 'exa_inbox',
+        externalAgentSessionId: 'exa_inbox0000000',
         triggerMessageSeq: 1,
         state: 'visible'
       });
@@ -831,7 +842,7 @@ for (const kind of TRANSPORTS) {
       expect(observationRes.status).toBe(200);
       expect(await observationRes.json()).toMatchObject({
         state: 'unavailable',
-        externalAgentSessionId: 'exa_inbox',
+        externalAgentSessionId: 'exa_inbox0000000',
         deliveryId,
         turn: { providerSessionRef: null, providerTurnId: null },
         provider: 'codex',
@@ -840,7 +851,7 @@ for (const kind of TRANSPORTS) {
 
       const second = await t.fetch(
         '/v1/internal/native-agent/project/inbox',
-        json({ sessionId }, bindingHeaders(sessionId, 'exa_inbox'))
+        json({ sessionId }, bindingHeaders(sessionId, 'exa_inbox0000000'))
       );
       expect(second.status).toBe(200);
       expect(((await second.json()) as { items: unknown[] }).items).toEqual([]);
@@ -850,19 +861,19 @@ for (const kind of TRANSPORTS) {
       const handlers = buildHandlers(mockModel());
       t = serveTransport(kind, createHttpTransport(handlers));
       const sessionId = await createSession(t);
-      createManagedNativeSession(handlers, sessionId, 'exa_ack');
-      handlers.store.insertMessage('msg_ACK1', sessionId, 'ack me', '2026-06-30T00:00:01.000Z', 'user');
-      handlers.store.enqueueExternalAgentInboxItem('exa_ack', 1);
+      createManagedNativeSession(handlers, sessionId, 'exa_ack000000000');
+      handlers.store.insertMessage('msg_ACK100000000', sessionId, 'ack me', '2026-06-30T00:00:01.000Z', 'user');
+      handlers.store.enqueueExternalAgentInboxItem('exa_ack000000000', 1);
 
       const ack = await t.fetch(
         '/v1/internal/native-agent/project/inbox/ack',
-        json({ sessionId }, bindingHeaders(sessionId, 'exa_ack'))
+        json({ sessionId }, bindingHeaders(sessionId, 'exa_ack000000000'))
       );
       expect(ack.status).toBe(200);
 
       const inbox = await t.fetch(
         '/v1/internal/native-agent/project/inbox',
-        json({ sessionId }, bindingHeaders(sessionId, 'exa_ack'))
+        json({ sessionId }, bindingHeaders(sessionId, 'exa_ack000000000'))
       );
       expect(inbox.status).toBe(200);
       expect(((await inbox.json()) as { items: unknown[] }).items).toEqual([]);
@@ -872,15 +883,15 @@ for (const kind of TRANSPORTS) {
       const handlers = buildHandlers(mockModel());
       t = serveTransport(kind, createHttpTransport(handlers));
       const sessionId = await createSession(t);
-      createManagedNativeSession(handlers, sessionId, 'exa_runtime_info');
-      handlers.store.insertMessage('msg_INFO1', sessionId, 'first pending', '2026-06-30T00:00:01.000Z', 'user');
-      handlers.store.insertMessage('msg_INFO2', sessionId, 'second pending', '2026-06-30T00:00:02.000Z', 'user');
-      handlers.store.enqueueExternalAgentInboxItem('exa_runtime_info', 1);
-      handlers.store.enqueueExternalAgentInboxItem('exa_runtime_info', 2);
-      handlers.store.markExternalAgentInboxDelivered('exa_runtime_info', handlers.store.maxMessageSeq(sessionId));
+      createManagedNativeSession(handlers, sessionId, 'exa_runtimeinfo0');
+      handlers.store.insertMessage('msg_INFO10000000', sessionId, 'first pending', '2026-06-30T00:00:01.000Z', 'user');
+      handlers.store.insertMessage('msg_INFO20000000', sessionId, 'second pending', '2026-06-30T00:00:02.000Z', 'user');
+      handlers.store.enqueueExternalAgentInboxItem('exa_runtimeinfo0', 1);
+      handlers.store.enqueueExternalAgentInboxItem('exa_runtimeinfo0', 2);
+      handlers.store.markExternalAgentInboxDelivered('exa_runtimeinfo0', handlers.store.maxMessageSeq(sessionId));
 
       const res = await t.fetch('/v1/internal/native-agent/runtime/info', {
-        headers: bindingHeaders(sessionId, 'exa_runtime_info')
+        headers: bindingHeaders(sessionId, 'exa_runtimeinfo0')
       });
 
       expect(res.status).toBe(200);
@@ -888,20 +899,20 @@ for (const kind of TRANSPORTS) {
       expect(body).toMatchObject({
         agentId: 'codex',
         sessionId,
-        externalAgentSessionId: 'exa_runtime_info',
+        externalAgentSessionId: 'exa_runtimeinfo0',
         lastDeliveredSeq: 2,
         lastVisibleSeq: 0,
         pendingInboxCount: 2
       });
       expect(body.runtime).toMatchObject({
-        id: 'exa_runtime_info',
+        id: 'exa_runtimeinfo0',
         sessionId,
         agentName: 'codex',
         provider: 'codex',
         workingPath: '/tmp/project',
         launchMode: 'app-server',
         runtimeRole: 'managed-project-agent',
-        agentRuntimeId: 'exa_runtime_info',
+        agentRuntimeId: 'exa_runtimeinfo0',
         state: 'running',
         session: { providerSessionRef: null },
         lastDeliveredSeq: 2,
@@ -918,16 +929,16 @@ for (const kind of TRANSPORTS) {
       const handlers = buildHandlers(mockModel());
       t = serveTransport(kind, createHttpTransport(handlers));
       const sessionId = await createSession(t);
-      createManagedNativeSession(handlers, sessionId, 'exa_observe_unavailable', 'codex', 'stopped');
+      createManagedNativeSession(handlers, sessionId, 'exa_observeuqrOV', 'codex', 'stopped');
 
       const res = await t.fetch(
-        `/v1/external-agent-sessions/exa_observe_unavailable/observation?transcriptTargetId=${sessionId}`
+        `/v1/external-agent-sessions/exa_observeuqrOV/observation?transcriptTargetId=${sessionId}`
       );
 
       expect(res.status).toBe(200);
       expect(await res.json()).toMatchObject({
         state: 'unavailable',
-        externalAgentSessionId: 'exa_observe_unavailable',
+        externalAgentSessionId: 'exa_observeuqrOV',
         provider: 'codex',
         reason: 'provider history unavailable'
       });
@@ -940,7 +951,7 @@ for (const kind of TRANSPORTS) {
       createManagedNativeSession(
         handlers,
         sessionId,
-        'exa_observe_snapshot',
+        'exa_observes7pOD',
         'codex',
         'stopped',
         '/tmp/project',
@@ -948,13 +959,13 @@ for (const kind of TRANSPORTS) {
       );
 
       const res = await t.fetch(
-        `/v1/external-agent-sessions/exa_observe_snapshot/observation?transcriptTargetId=${sessionId}`
+        `/v1/external-agent-sessions/exa_observes7pOD/observation?transcriptTargetId=${sessionId}`
       );
 
       expect(res.status).toBe(200);
       expect(await res.json()).toMatchObject({
         state: 'history',
-        externalAgentSessionId: 'exa_observe_snapshot',
+        externalAgentSessionId: 'exa_observes7pOD',
         provider: 'codex',
         output: expect.stringContaining('"type":"result"')
       });
@@ -977,7 +988,7 @@ describe('native agent CLI bridge real CLI process', () => {
     t = serveTransport('tcp', createHttpTransport(handlers));
     if (!t.baseUrl) throw new Error('tcp transport did not expose baseUrl');
     const sessionId = await createSession(t);
-    createManagedNativeSession(handlers, sessionId, 'exa_cli');
+    createManagedNativeSession(handlers, sessionId, 'exa_cli000000000');
     const tokenFile = join(dir, '.monad-agent-token');
     await writeFile(tokenFile, AGENT_TOKEN);
 
@@ -989,7 +1000,7 @@ describe('native agent CLI bridge real CLI process', () => {
         MONAD_HOME: join(dir, 'home'),
         MONAD_SERVER_URL: t.baseUrl,
         MONAD_AGENT_TOKEN_FILE: tokenFile,
-        MONAD_EXTERNAL_AGENT_SESSION_ID: 'exa_cli'
+        MONAD_EXTERNAL_AGENT_SESSION_ID: 'exa_cli000000000'
       },
       stdout: 'pipe',
       stderr: 'pipe'
@@ -1010,8 +1021,8 @@ describe('native agent CLI bridge real CLI process', () => {
     t = serveTransport('tcp', createHttpTransport(handlers));
     if (!t.baseUrl) throw new Error('tcp transport did not expose baseUrl');
     const sessionId = await createSession(t);
-    createManagedNativeSession(handlers, sessionId, 'exa_cli', 'codex');
-    createManagedNativeSession(handlers, sessionId, 'exa_peer', 'claude');
+    createManagedNativeSession(handlers, sessionId, 'exa_cli000000000', 'codex');
+    createManagedNativeSession(handlers, sessionId, 'exa_peer00000000', 'claude');
     const tokenFile = join(dir, '.monad-agent-token');
     await writeFile(tokenFile, AGENT_TOKEN);
 
@@ -1021,7 +1032,7 @@ describe('native agent CLI bridge real CLI process', () => {
       MONAD_HOME: join(dir, 'home'),
       MONAD_SERVER_URL: t.baseUrl,
       MONAD_AGENT_TOKEN_FILE: tokenFile,
-      MONAD_EXTERNAL_AGENT_SESSION_ID: 'exa_cli'
+      MONAD_EXTERNAL_AGENT_SESSION_ID: 'exa_cli000000000'
     };
     const sent = Bun.spawn(['bun', 'apps/cli/src/main.ts', 'agent', 'send', '--to', 'claude', 'private cli note'], {
       cwd: repoRoot,

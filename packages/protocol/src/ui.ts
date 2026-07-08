@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 import { clarifyAskerSchema, clarifyChoiceModeSchema } from './clarify.ts';
 import { contextUsagePayloadSchema } from './event-table.ts';
-import { eventIdSchema, messageIdSchema, nativeAgentDeliveryIdSchema } from './ids.ts';
+import { eventIdSchema, externalAgentSessionIdSchema, messageIdSchema, nativeAgentDeliveryIdSchema } from './ids.ts';
 import { resourceApprovalDisplaySchema } from './resource-approval.ts';
 import { listMessagesQuerySchema } from './rpc/control.ts';
 
@@ -53,7 +53,7 @@ export const uiMessageItemSchema = z.object({
   role: uiMessageRoleSchema,
   agentName: z.string().optional(),
   source: z.enum(['managed-external-agent', 'external-agent-provider']).optional(),
-  externalAgentSessionId: z.string().regex(/^exa_/).optional(),
+  externalAgentSessionId: externalAgentSessionIdSchema.optional(),
   deliveryId: nativeAgentDeliveryIdSchema.optional(),
   parts: z.array(uiPartSchema),
   status: uiItemStatusSchema.optional(),
@@ -69,6 +69,7 @@ export const uiToolItemSchema = z.object({
   output: z.string().optional(),
   display: z.unknown().optional(),
   status: z.enum(['running', 'ok', 'error']),
+  errorCode: z.string().optional(),
   seq: z.string()
 });
 export type UIToolItem = z.infer<typeof uiToolItemSchema>;

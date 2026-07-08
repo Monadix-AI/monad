@@ -1653,9 +1653,9 @@ test('Gemini history observation folds assistant stream-json message deltas by r
     JSON.stringify({ type: 'result', status: 'success', stats: { total_tokens: 42 } })
   ].join('\n');
 
-  const liveEvents = externalAgentStreamItems({ id: 'exa_gemini', adapter: geminiExternalAgentAdapter, output });
+  const liveEvents = externalAgentStreamItems({ id: 'exa_gemini000000', adapter: geminiExternalAgentAdapter, output });
   const historyEvents = externalAgentStreamItems({
-    id: 'exa_gemini',
+    id: 'exa_gemini000000',
     adapter: geminiExternalAgentAdapter,
     output,
     mode: 'history'
@@ -1747,9 +1747,9 @@ test('Qwen history observation drops partial stream events and keeps complete SD
     JSON.stringify({ type: 'result', subtype: 'success', session_id: 'qwen-session-1', result: 'done' })
   ].join('\n');
 
-  const liveEvents = externalAgentStreamItems({ id: 'exa_qwen', adapter: qwenExternalAgentAdapter, output });
+  const liveEvents = externalAgentStreamItems({ id: 'exa_qwen00000000', adapter: qwenExternalAgentAdapter, output });
   const historyEvents = externalAgentStreamItems({
-    id: 'exa_qwen',
+    id: 'exa_qwen00000000',
     adapter: qwenExternalAgentAdapter,
     output,
     mode: 'history'
@@ -2165,9 +2165,9 @@ test('Codex history observation folds realtime item lifecycle into final events'
     .map((record) => JSON.stringify(record))
     .join('\n');
 
-  const liveEvents = externalAgentStreamItems({ id: 'exa_test', adapter: codexExternalAgentAdapter, output });
+  const liveEvents = externalAgentStreamItems({ id: 'exa_test00000000', adapter: codexExternalAgentAdapter, output });
   const historyEvents = externalAgentStreamItems({
-    id: 'exa_test',
+    id: 'exa_test00000000',
     adapter: codexExternalAgentAdapter,
     output,
     mode: 'history'
@@ -2933,7 +2933,7 @@ test('OpenClaw history observation projects provider chat messages without guess
   ].join('\n');
 
   const historyEvents = externalAgentStreamItems({
-    id: 'exa_openclaw',
+    id: 'exa_openclaw0000',
     adapter: openClawExternalAgentAdapter,
     output,
     mode: 'history'

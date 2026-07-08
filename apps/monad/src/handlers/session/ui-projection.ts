@@ -1,4 +1,11 @@
-import type { ChatMessage, Event, SessionUiEvent, UIItem, UIMessageItem } from '@monad/protocol';
+import type {
+  ChatMessage,
+  Event,
+  ExternalAgentSessionId,
+  SessionUiEvent,
+  UIItem,
+  UIMessageItem
+} from '@monad/protocol';
 import type { ExternalAgentSessionSnapshot } from './ui-projection-helpers.ts';
 import type { ProjectionMutations } from './ui-projection-state.ts';
 
@@ -118,7 +125,7 @@ export class SessionUiProjector {
   }
 
   private messageObservationPointers(
-    payload: { externalAgentSessionId?: string; deliveryId?: `deliv_${string}` },
+    payload: { externalAgentSessionId?: ExternalAgentSessionId; deliveryId?: `deliv_${string}` },
     existing?: UIMessageItem
   ): Pick<UIMessageItem, 'externalAgentSessionId' | 'deliveryId'> {
     return {

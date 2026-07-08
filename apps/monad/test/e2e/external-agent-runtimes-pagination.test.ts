@@ -12,7 +12,7 @@ import { buildHandlers, mockModel, serveTransport, TRANSPORTS, type TransportHan
 function seedRunning(store: ReturnType<typeof createStore>, id: string, startedAt: string): void {
   store.upsertExternalAgentSession({
     id,
-    transcriptTargetId: 'ses_01KWRUNTIME000000000001',
+    transcriptTargetId: 'ses_01KWRUNT0GbJ',
     agentName: 'codex',
     provider: 'codex',
     workingPath: '/tmp/p',
@@ -44,7 +44,7 @@ for (const kind of TRANSPORTS) {
       // rows (no live process backing them) to 'stopped' once at construction, which would otherwise
       // race with (and erase) these fixture rows.
       t = serveTransport(kind, createHttpTransport(buildHandlers(mockModel(), undefined, { store })));
-      for (let i = 0; i < 3; i++) seedRunning(store, `exa_rt_${i}`, `2026-07-06T00:00:0${i}.000Z`);
+      for (let i = 0; i < 3; i++) seedRunning(store, `exa_rt${i}000000000`, `2026-07-06T00:00:0${i}.000Z`);
     });
 
     afterEach(async () => {
@@ -56,12 +56,12 @@ for (const kind of TRANSPORTS) {
       const res = await t.fetch('/v1/external-agent-runtimes?limit=2');
       expect(res.status).toBe(200);
       const body = (await res.json()) as ListExternalAgentRuntimesResponse;
-      expect(body.sessions.map((s) => s.id)).toEqual(['exa_rt_1', 'exa_rt_2']);
+      expect(body.sessions.map((s) => s.id)).toEqual(['exa_rt1000000000', 'exa_rt2000000000']);
       expect(body.nextCursor).toBeDefined();
 
       const nextRes = await t.fetch(`/v1/external-agent-runtimes?limit=2&before=${body.nextCursor}`);
       const nextBody = (await nextRes.json()) as ListExternalAgentRuntimesResponse;
-      expect(nextBody.sessions.map((s) => s.id)).toEqual(['exa_rt_0']);
+      expect(nextBody.sessions.map((s) => s.id)).toEqual(['exa_rt0000000000']);
       expect(nextBody.nextCursor).toBeUndefined();
     });
 

@@ -9,11 +9,11 @@ test('sessionUiEventSchema accepts snapshot and upsert payloads', () => {
       items: [
         {
           kind: 'message',
-          id: 'msg_1',
+          id: 'msg_100000000000',
           role: 'assistant',
           parts: [{ type: 'text', text: 'hello' }],
           status: 'done',
-          seq: 'msg_1'
+          seq: 'msg_100000000000'
         }
       ]
     }).kind
@@ -27,7 +27,7 @@ test('sessionUiEventSchema accepts snapshot and upsert payloads', () => {
         id: 'tool_1',
         tool: 'search',
         status: 'running',
-        seq: 'evt_1'
+        seq: 'evt_100000000000'
       }
     }).kind
   ).toBe('upsert');
@@ -38,10 +38,10 @@ test('listUiItemsResponseSchema accepts mixed ui items', () => {
     items: [
       {
         kind: 'message',
-        id: 'msg_1',
+        id: 'msg_100000000000',
         role: 'user',
         parts: [{ type: 'text', text: 'ping' }],
-        seq: 'msg_1'
+        seq: 'msg_100000000000'
       },
       {
         kind: 'context',
@@ -54,22 +54,22 @@ test('listUiItemsResponseSchema accepts mixed ui items', () => {
           approximate: true,
           segments: [{ category: 'messages', label: 'messages', tokens: 100 }]
         },
-        seq: 'evt_1'
+        seq: 'evt_100000000000'
       },
       {
         kind: 'memory_summary',
-        id: 'memory-summary:msg_1',
+        id: 'memory-summary:msg_100000000000',
         summary: 'Earlier turns discussed setup and constraints.',
-        uptoMessageId: 'msg_1',
-        seq: 'msg_1'
+        uptoMessageId: 'msg_100000000000',
+        seq: 'msg_100000000000'
       },
       {
         kind: 'custom',
-        id: 'tsk_1',
+        id: 'tsk_100000000000',
         name: 'task.created',
-        data: { taskId: 'tsk_1', title: 'Plan' },
+        data: { taskId: 'tsk_100000000000', title: 'Plan' },
         status: 'streaming',
-        seq: 'evt_2'
+        seq: 'evt_200000000000'
       }
     ]
   });
@@ -83,10 +83,10 @@ test('ui schemas accept custom parts and removal targets', () => {
       kind: 'upsert',
       item: {
         kind: 'message',
-        id: 'msg_1',
+        id: 'msg_100000000000',
         role: 'assistant',
         parts: [{ type: 'custom', name: 'monad.directive', data: { command: '/model' } }],
-        seq: 'evt_1'
+        seq: 'evt_100000000000'
       }
     }).kind
   ).toBe('upsert');
@@ -94,7 +94,7 @@ test('ui schemas accept custom parts and removal targets', () => {
   expect(
     sessionUiEventSchema.parse({
       kind: 'remove',
-      target: { kind: 'custom', id: 'tsk_1' }
+      target: { kind: 'custom', id: 'tsk_100000000000' }
     }).kind
   ).toBe('remove');
 

@@ -43,6 +43,7 @@ export function applyToolEvent(m: ProjectionMutations, event: Event): SessionUiE
         ...(existing?.kind === 'tool' && existing.input !== undefined ? { input: existing.input } : {}),
         ...((p.displayResult ?? p.result) ? { output: p.displayResult ?? p.result } : {}),
         ...('display' in p ? { display: p.display } : {}),
+        ...(p.errorCode !== undefined ? { errorCode: p.errorCode } : {}),
         status: p.ok ? 'ok' : 'error',
         seq: existing?.kind === 'tool' ? existing.seq : event.id
       };

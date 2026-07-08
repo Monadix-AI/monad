@@ -119,14 +119,14 @@ test('agent_delegate metadata is not high-risk', () => {
 test('runSubagent throws when forkDepth reaches the limit', async () => {
   const model = scriptedModel(['answer']);
   await expect(
-    runSubagent({ model, tools: [], defaultModel: 'mock', forkDepth: 3 }, 'task', { sessionId: 'ses_test' })
+    runSubagent({ model, tools: [], defaultModel: 'mock', forkDepth: 3 }, 'task', { sessionId: 'ses_test00000000' })
   ).rejects.toThrow('fork depth limit');
 });
 
 test('runSubagent succeeds when forkDepth is below the limit', async () => {
   const model = scriptedModel(['ok']);
   const result = await runSubagent({ model, tools: [], defaultModel: 'mock', forkDepth: 2 }, 'task', {
-    sessionId: 'ses_test'
+    sessionId: 'ses_test00000000'
   });
   expect(result).toBe('ok');
 });
@@ -147,7 +147,7 @@ test('runSubagent keeps the shared session file observations after isolated cont
       }
     },
     'task',
-    { sessionId: 'ses_observed' }
+    { sessionId: 'ses_observed0000' }
   );
 
   expect({ result, cleared }).toEqual({ result: 'ok', cleared: [] });
@@ -168,7 +168,9 @@ test('runSubagent does not promote hidden child file observations to the parent 
     coverage: 'full',
     observedAt: '2026-07-08T00:00:01.000Z'
   };
-  const observations = new Map<string, FileObservation>([['ses_observed:/workspace/parent.txt', parentObservation]]);
+  const observations = new Map<string, FileObservation>([
+    ['ses_observed0000:/workspace/parent.txt', parentObservation]
+  ]);
   const childChecks: boolean[] = [];
   const observe: Tool = {
     name: 'test.observe',
@@ -200,7 +202,7 @@ test('runSubagent does not promote hidden child file observations to the parent 
       }
     },
     'task',
-    { sessionId: 'ses_observed' }
+    { sessionId: 'ses_observed0000' }
   );
 
   expect({
@@ -210,6 +212,6 @@ test('runSubagent does not promote hidden child file observations to the parent 
   }).toEqual({
     result: 'ok',
     childChecks: [true, true],
-    parentLedger: [['ses_observed:/workspace/parent.txt', parentObservation]]
+    parentLedger: [['ses_observed0000:/workspace/parent.txt', parentObservation]]
   });
 });

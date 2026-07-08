@@ -1,4 +1,4 @@
-import type { ExternalAgentSessionView, SessionId } from '@monad/protocol';
+import type { ExternalAgentSessionId, ExternalAgentSessionView, SessionId } from '@monad/protocol';
 import type { LiveExternalAgentSession } from '#/services/external-agent/host/host-types.ts';
 import type { ExternalAgentOutputEvent } from '#/services/external-agent/types.ts';
 import type { ExternalAgentSessionRow } from '#/store/db/index.ts';
@@ -25,6 +25,7 @@ export function toView(
   const { transcriptTargetId, ...view } = row;
   return {
     ...view,
+    id: view.id as ExternalAgentSessionId,
     sessionId: transcriptTargetId as SessionId,
     productIcon: getExternalAgentProviderAdapter(row.provider).productIcon,
     pendingApprovalCount,

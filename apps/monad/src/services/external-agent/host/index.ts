@@ -562,7 +562,10 @@ export class ExternalAgentHost {
     const row = this.deps.store.getExternalAgentSession(id);
     if (row?.runtimeRole === 'managed-project-agent')
       cleanupManagedProjectRuntimeToken(this.managedRuntimeWorkspace(row));
-    if (live.proc) this.processLifecycle.untrack(live.proc.pid);
+    if (live.proc) {
+      killExternalAgentProcess(live.proc.pid);
+      this.processLifecycle.untrack(live.proc.pid);
+    }
     this.outputPipeline.dropStructuredBuffer(id);
     this.appServerConnections.unlinkSocket(live.appServerSocketPath);
     const exitedAt = new Date().toISOString();

@@ -69,10 +69,14 @@ for (const kind of TRANSPORTS) {
         const put = await t.fetch('/v1/memory/core', {
           method: 'PUT',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ scopeKind: 'agent', scopeId: 'agt_X', core: '# Memory\n\n- hand-written\n' })
+          body: JSON.stringify({
+            scopeKind: 'agent',
+            scopeId: 'agt_X00000000000',
+            core: '# Memory\n\n- hand-written\n'
+          })
         });
         expect(put.status).toBe(200);
-        const get = await t.fetch('/v1/memory/core?scopeKind=agent&scopeId=agt_X');
+        const get = await t.fetch('/v1/memory/core?scopeKind=agent&scopeId=agt_X00000000000');
         const body = (await get.json()) as { core: string };
         expect(body.core).toContain('hand-written');
       } finally {

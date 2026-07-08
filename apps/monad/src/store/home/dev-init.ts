@@ -2,7 +2,7 @@ import type { MonadPaths } from '@monad/home';
 
 import { join, resolve } from 'node:path';
 import { type Credential, computeInitStatus, loadAll, loadAuth, saveAuth, saveProfile } from '@monad/home';
-import { ModelProviderType, newId } from '@monad/protocol';
+import { channelIdSchema, ModelProviderType, newId } from '@monad/protocol';
 import { z } from 'zod';
 
 // Developer-specific seed parameters live in a gitignored `config.init.json` inside packages/home —
@@ -34,12 +34,7 @@ const devSeedSchema = z.object({
   reasoningEffort: z.enum(['low', 'medium', 'high']).default('low'),
   telegram: z
     .object({
-      // Must satisfy `chn_[A-Z0-9]+`: the channel gateway derives a synthetic PrincipalId from this
-      // suffix, and PrincipalId rejects underscores.
-      channelId: z
-        .string()
-        .regex(/^chn_[A-Z0-9]+$/)
-        .default('chn_DEVTELEGRAM'),
+      channelId: channelIdSchema.default('chn_DEVTELEGRAM0'),
       botToken: z.string().trim().default('')
     })
     .optional()
@@ -166,7 +161,7 @@ export async function ensureDevProvider(
   }
 
   const telegramToken = (seed.telegram?.botToken || '').trim();
-  const telegramChannelId = seed.telegram?.channelId ?? 'chn_DEVTELEGRAM';
+  const telegramChannelId = seed.telegram?.channelId ?? 'chn_DEVTELEGRAM0';
   if (telegramToken && !cfg.channels.some((c) => c.id === telegramChannelId)) {
     cfg.channels.push({
       id: telegramChannelId,

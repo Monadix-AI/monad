@@ -1,7 +1,7 @@
 // QQ official Bot adapter — Gateway WebSocket (Discord-shaped: op codes, heartbeat, identify) for
 // inbound, REST for outbound. QQ has FOUR messaging surfaces with different id schemes and two auth
 // schemes: guild channel / guild DM use `Bot {appId}.{token}`; group / C2C (single-chat) use an
-// AppAccessToken (`QQBot {token}`). Passive replies need the originating msg_id (5-min window), so we
+// AppAccessToken (`QQBot {token}`). Passive replies need the originating undefined (5-min window), so we
 // remember a per-chat reply context. Pure platform I/O; never touches sessions.
 //
 // secrets: extra.appId, extra.token (Bot token), extra.clientSecret (AppSecret, for AppAccessToken).
@@ -46,7 +46,7 @@ export interface QQNormalized {
 }
 
 /** Normalize a QQ dispatch (event type + payload) into a ChannelInbound plus the reply context
- *  (surface + msg_id) the adapter needs to answer on the right endpoint. Returns null for events we
+ *  (surface + undefined) the adapter needs to answer on the right endpoint. Returns null for events we
  *  don't handle. Exported for tests. */
 export function normalizeQQMessage(t: string, d: QQPayload): QQNormalized | null {
   let surface: QQSurface;
@@ -119,7 +119,7 @@ export function createQQAdapter(ctx: ChannelContext): ChannelAdapter {
   let heartbeat: ReturnType<typeof setInterval> | undefined;
   let seq: number | null = null;
   let backoff = 1000;
-  // Per-chat reply context so a passive reply hits the right endpoint with the right msg_id.
+  // Per-chat reply context so a passive reply hits the right endpoint with the right undefined.
   const replyCtx = new Map<string, { surface: QQSurface; msgId: string }>();
 
   let appToken: { token: string; exp: number } | undefined;
@@ -239,7 +239,7 @@ export function createQQAdapter(ctx: ChannelContext): ChannelAdapter {
         });
         if (!res.ok) throw new Error(`qq send failed: ${res.status}`);
       } else {
-        // Group / C2C — AppAccessToken auth, msg_type 0 = text.
+        // Group / C2C — AppAccessToken auth, undefined 0 = text.
         const base =
           rc.surface === 'group' ? `${api}/v2/groups/${chatId}/messages` : `${api}/v2/users/${chatId}/messages`;
         const res = await fetch(base, {

@@ -73,12 +73,12 @@ for (const kind of TRANSPORTS) {
     });
 
     test('creating a session for an unknown project 404s', async () => {
-      const res = await json('POST', '/v1/projects/prj_01KWY9999999999999999999X/sessions', { title: 'x' });
+      const res = await json('POST', '/v1/projects/prj_ZZZZZZZZZZZZ/sessions', { title: 'x' });
       expect(res.status).toBe(404);
     });
 
     test('listing sessions for an unknown project 404s', async () => {
-      const res = await t.fetch('/v1/projects/prj_01KWY9999999999999999999X/sessions');
+      const res = await t.fetch('/v1/projects/prj_ZZZZZZZZZZZZ/sessions');
       expect(res.status).toBe(404);
     });
   });

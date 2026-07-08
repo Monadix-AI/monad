@@ -48,10 +48,10 @@ test('observe forwards the exchange to mem0.add under the agent userId', async (
   const a = new Mem0Adapter(client, silent);
   await a.observe(
     { user: 'I use Bun', assistant: 'noted' },
-    { sessionId: 'ses_1', scope: { kind: 'agent', id: 'agt_1' } }
+    { sessionId: 'ses_100000000000', scope: { kind: 'agent', id: 'agt_100000000000' } }
   );
   expect(client.addCalls).toHaveLength(1);
-  expect(client.addCalls[0]?.userId).toBe('agent:agt_1'); // userId namespaced by kind
+  expect(client.addCalls[0]?.userId).toBe('agent:agt_100000000000'); // userId namespaced by kind
   expect(client.addCalls[0]?.messages.map((m) => m.content)).toEqual(['I use Bun', 'noted']);
 });
 
@@ -59,16 +59,16 @@ test('recall searches every requested scope and merges (global facts no longer l
   const client = new FakeMem0();
   await client.add([{ role: 'user', content: 'global fact' }], { userId: 'global' });
   await client.add([{ role: 'user', content: 'project fact' }], { userId: 'project:p1' });
-  await client.add([{ role: 'user', content: 'agent fact' }], { userId: 'agent:agt_1' });
+  await client.add([{ role: 'user', content: 'agent fact' }], { userId: 'agent:agt_100000000000' });
   const a = new Mem0Adapter(client, silent);
   const block = await a.recall({
     query: 'q',
-    sessionId: 'ses_1',
-    agentId: 'agt_1',
+    sessionId: 'ses_100000000000',
+    agentId: 'agt_100000000000',
     scopes: [
       { kind: 'global', id: '*' },
       { kind: 'project', id: 'p1' },
-      { kind: 'agent', id: 'agt_1' }
+      { kind: 'agent', id: 'agt_100000000000' }
     ],
     advanced: false,
     budget
@@ -81,7 +81,7 @@ test('recall searches every requested scope and merges (global facts no longer l
 test('facade: addFact (infer:false) / listFacts / forgetFact map to mem0', async () => {
   const client = new FakeMem0();
   const a = new Mem0Adapter(client, silent);
-  const scope: MemoryScope = { kind: 'agent', id: 'agt_1' };
+  const scope: MemoryScope = { kind: 'agent', id: 'agt_100000000000' };
   const fact = await a.addFact(scope, 'User prefers tabs');
   expect(fact?.provClass).toBe('user');
   expect(client.addCalls[0]?.infer).toBe(false);

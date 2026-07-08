@@ -20,7 +20,13 @@ import {
   externalAgentProviderSchema,
   messageAttachmentRefSchema
 } from './external-agent/index.ts';
-import { agentIdSchema, messageIdSchema, nativeAgentDeliveryIdSchema, sessionIdSchema } from './ids.ts';
+import {
+  agentIdSchema,
+  externalAgentSessionIdSchema,
+  messageIdSchema,
+  nativeAgentDeliveryIdSchema,
+  sessionIdSchema
+} from './ids.ts';
 
 const requestIdSchema = z.string();
 
@@ -97,7 +103,7 @@ export const agentErrorPayloadSchema = z.object({
 export const agentTokenPayloadSchema = z.object({
   messageId: messageIdSchema,
   agentName: z.string().optional(),
-  externalAgentSessionId: z.string().regex(/^exa_/).optional(),
+  externalAgentSessionId: externalAgentSessionIdSchema.optional(),
   deliveryId: nativeAgentDeliveryIdSchema.optional(),
   delta: z.string(),
   index: z.number().int().nonnegative(),
@@ -106,7 +112,7 @@ export const agentTokenPayloadSchema = z.object({
 
 export const agentReasoningPayloadSchema = z.object({
   messageId: messageIdSchema,
-  externalAgentSessionId: z.string().regex(/^exa_/).optional(),
+  externalAgentSessionId: externalAgentSessionIdSchema.optional(),
   deliveryId: nativeAgentDeliveryIdSchema.optional(),
   delta: z.string(),
   index: z.number().int().nonnegative(),
@@ -116,7 +122,7 @@ export const agentReasoningPayloadSchema = z.object({
 export const agentMessagePayloadSchema = z.object({
   messageId: messageIdSchema,
   agentName: z.string().optional(),
-  externalAgentSessionId: z.string().regex(/^exa_/).optional(),
+  externalAgentSessionId: externalAgentSessionIdSchema.optional(),
   deliveryId: nativeAgentDeliveryIdSchema.optional(),
   text: z.string(),
   data: z.unknown().optional(),
@@ -158,7 +164,10 @@ export const toolResultPayloadSchema = z.object({
   ok: z.boolean(),
   result: z.string(),
   displayResult: z.string().optional(),
-  display: z.unknown().optional()
+  display: z.unknown().optional(),
+  // Machine-readable failure classification (e.g. 'PROCESS_NOT_FOUND') for tools whose failures a
+  // client wants to branch on, distinct from the free-text `result` shown to the user.
+  errorCode: z.string().optional()
 });
 
 export const toolProgressPayloadSchema = z.object({

@@ -87,21 +87,21 @@ for (const kind of TRANSPORTS) {
         const add = await t.fetch('/v1/memory/facts', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ scopeKind: 'agent', scopeId: 'agt_1', content: 'User uses Bun' })
+          body: JSON.stringify({ scopeKind: 'agent', scopeId: 'agt_100000000000', content: 'User uses Bun' })
         });
         expect(add.status).toBe(200);
         expect(((await add.json()) as { fact: Fact }).fact.content).toBe('User uses Bun');
         expect(fake.mem.map((m) => m.memory)).toEqual(['User uses Bun']);
-        expect(fake.userIds).toContain('agent:agt_1');
+        expect(fake.userIds).toContain('agent:agt_100000000000');
 
         // list reads back through mem0
-        const list = (await (await t.fetch('/v1/memory/facts?scopeKind=agent&scopeId=agt_1')).json()) as {
+        const list = (await (await t.fetch('/v1/memory/facts?scopeKind=agent&scopeId=agt_100000000000')).json()) as {
           facts: Fact[];
         };
         expect(list.facts.map((f) => f.content)).toEqual(['User uses Bun']);
 
         // mem0 has no editable markdown file → core is empty
-        const core = (await (await t.fetch('/v1/memory/core?scopeKind=agent&scopeId=agt_1')).json()) as {
+        const core = (await (await t.fetch('/v1/memory/core?scopeKind=agent&scopeId=agt_100000000000')).json()) as {
           core: string;
         };
         expect(core.core).toBe('');
@@ -110,7 +110,7 @@ for (const kind of TRANSPORTS) {
         const forget = await t.fetch('/v1/memory/facts/m0', {
           method: 'DELETE',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ scopeKind: 'agent', scopeId: 'agt_1' })
+          body: JSON.stringify({ scopeKind: 'agent', scopeId: 'agt_100000000000' })
         });
         expect(forget.status).toBe(200);
         expect(fake.mem).toHaveLength(0);

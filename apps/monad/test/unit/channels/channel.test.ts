@@ -29,7 +29,7 @@ function testCommandBundle(): CommandBundle {
     consolidate: async () => ({ level: 1, l1Scopes: 0, nodes: 0, edges: 0, prunedEdges: 0, laws: 0, lawScopes: 0 }),
     explainBelief: async () => ({ matches: [] }),
     checkMemory: async () => ({ flagged: 0 }),
-    handoff: async () => ({ sessionId: 'ses_new' as SessionId }),
+    handoff: async () => ({ sessionId: 'ses_new000000000' as SessionId }),
     t,
     log: () => {}
   };
@@ -67,20 +67,20 @@ const EMPTY_AUTH: MonadAuth = { version: 1, activeProvider: null, updatedAt: '',
 function tokenEvent(delta: string, index: number): Event {
   return {
     id: newId('evt'),
-    sessionId: 'ses_X' as SessionId,
+    sessionId: 'ses_X00000000000' as SessionId,
     type: 'agent.token',
     actorAgentId: null,
-    payload: { messageId: 'msg_X' as MessageId, delta, index },
+    payload: { messageId: 'msg_X00000000000' as MessageId, delta, index },
     at: ''
   };
 }
 function messageEvent(text: string): Event {
   return {
     id: newId('evt'),
-    sessionId: 'ses_X' as SessionId,
+    sessionId: 'ses_X00000000000' as SessionId,
     type: 'agent.message',
     actorAgentId: null,
-    payload: { messageId: 'msg_X' as MessageId, text },
+    payload: { messageId: 'msg_X00000000000' as MessageId, text },
     at: ''
   };
 }
@@ -137,7 +137,7 @@ test('renderer: structured channel response renders only display content', async
       JSON.stringify({
         display: { kind: 'markdown', content: 'visible update' },
         attachments: [{ kind: 'note', text: 'metadata' }],
-        next: [{ agentId: 'agt_NEXT', prompt: 'do work' }]
+        next: [{ agentId: 'agt_NEXT00000000', prompt: 'do work' }]
       })
     )
   );
@@ -170,7 +170,7 @@ test('renderer: agent.error surfaces an error message and resets stream state', 
   r.consume(tokenEvent('partial', 0)); // start a streaming bubble
   r.consume({
     id: newId('evt'),
-    sessionId: 'ses_X' as SessionId,
+    sessionId: 'ses_X00000000000' as SessionId,
     type: 'agent.error',
     actorAgentId: null,
     payload: { message: 'upstream 503', code: '503' },
@@ -191,7 +191,7 @@ test('renderer: agent.error without code still includes the message', async () =
   const r = createRenderer({ adapter, chatId: 'c1', log: () => {}, t });
   r.consume({
     id: newId('evt'),
-    sessionId: 'ses_X' as SessionId,
+    sessionId: 'ses_X00000000000' as SessionId,
     type: 'agent.error',
     actorAgentId: null,
     payload: { message: 'something broke' },
@@ -206,7 +206,7 @@ test('renderer: surfaces an approval notice (no channel approver)', async () => 
   const r = createRenderer({ adapter, chatId: 'c1', log: () => {}, t });
   r.consume({
     id: newId('evt'),
-    sessionId: 'ses_X' as SessionId,
+    sessionId: 'ses_X00000000000' as SessionId,
     type: 'tool.approval_requested',
     actorAgentId: null,
     payload: {},
@@ -232,7 +232,7 @@ interface Harness {
 
 function channelConfig(over: Partial<ChannelInstanceConfig> = {}): ChannelInstanceConfig {
   return {
-    id: 'chn_TESTCHANNEL',
+    id: 'chn_TESTCHANNEL0',
     type: 'telegram',
     label: 'Test',
     enabled: true,
@@ -295,7 +295,7 @@ async function makeHarness(
     }
   };
 
-  const cfg: MonadConfig = { ...createDefaultConfig('prn_OWNER', 'owner'), channels: [channel] };
+  const cfg: MonadConfig = { ...createDefaultConfig('prn_OWNER0000000', 'owner'), channels: [channel] };
   cfg.agent.agents = agents;
   const service = new ChannelService(
     {
@@ -380,20 +380,18 @@ test('channel: an allowed inbound creates a session with a SYNTHETIC principal (
   await h.flush();
 
   expect(h.creates.length).toBe(1);
-  expect(h.creates[0]?.principalId).toBe('prn_TESTCHANNEL'); // derived from the channel id
-  expect(h.creates[0]?.principalId).not.toBe('prn_OWNER');
+  expect(h.creates[0]?.principalId).toBe('prn_TESTCHANNEL0'); // derived from the channel id
+  expect(h.creates[0]?.principalId).not.toBe('prn_OWNER0000000');
   expect(h.sends.at(-1)).toEqual({ chatId: 'chat1', content: 'reply: hi' });
 });
 
-test('channel: the synthetic principal is always a schema-valid PrincipalId, even for a non-ULID id', async () => {
-  // A channel id with underscores/lowercase (config schema permits any `chn_*`) must still yield a
-  // `prn_[A-Z0-9]+` principal — otherwise the whole session-list response fails validation.
-  const h = await makeHarness(channelConfig({ id: 'chn_DEV_Telegram' }));
+test('channel: the synthetic principal stays schema-valid for any canonical channel id', async () => {
+  const h = await makeHarness(channelConfig({ id: 'chn_DEVTelegram0' }));
   h.ctx.onMessage(inbound({ chatId: 'chat1', userId: 'u1', text: 'hi' }));
   await h.flush();
 
   const principalId = h.creates[0]?.principalId;
-  expect(principalId).toBe('prn_DEVTELEGRAM');
+  expect(principalId).toBe('prn_DEVTelegram0');
   expect(() => principalIdSchema.parse(principalId)).not.toThrow();
 });
 
@@ -610,7 +608,7 @@ async function makeMirrorHarness(mirror: boolean): Promise<{
 
   const store = createStore();
   const cfg: MonadConfig = {
-    ...createDefaultConfig('prn_OWNER', 'owner'),
+    ...createDefaultConfig('prn_OWNER0000000', 'owner'),
     channels: [channelConfig({ allowlist: { allowAllUsers: true, allowedUsers: [] } })]
   };
   const service = new ChannelService(
@@ -716,7 +714,7 @@ test('mirror: Telegram inbound dispatch is not double-sent (activeDispatches gua
   };
 
   const cfg: MonadConfig = {
-    ...createDefaultConfig('prn_OWNER', 'owner'),
+    ...createDefaultConfig('prn_OWNER0000000', 'owner'),
     channels: [channelConfig({ allowlist: { allowAllUsers: true, allowedUsers: [] } })]
   };
   const service = new ChannelService(
@@ -799,7 +797,7 @@ test('pairing: an unknown DM sender gets a one-time code and no session is creat
   await h.flush();
   // The reply carries the issued code.
   const reply = h.sends.at(-1)?.content ?? '';
-  const pending = h.service.listPendingPairings('chn_TESTCHANNEL');
+  const pending = h.service.listPendingPairings('chn_TESTCHANNEL0');
   expect(pending.length).toBe(1);
   const issued = pending[0];
   if (!issued) throw new Error('expected a pending pairing');
@@ -813,10 +811,10 @@ test('pairing: consuming a valid code returns the userId and removes the request
   );
   h.ctx.onMessage(inbound({ chatId: 'c', userId: 'newcomer', text: 'hi', chatType: 'dm' }));
   await h.flush();
-  const pending = h.service.listPendingPairings('chn_TESTCHANNEL')[0];
+  const pending = h.service.listPendingPairings('chn_TESTCHANNEL0')[0];
   if (!pending) throw new Error('expected a pending pairing');
   const { code } = pending;
-  expect(h.service.consumePairing('chn_TESTCHANNEL', code.toLowerCase())).toBe('newcomer'); // case-insensitive
+  expect(h.service.consumePairing('chn_TESTCHANNEL0', code.toLowerCase())).toBe('newcomer'); // case-insensitive
 });
 
 test('pairing: a repeat message from the same user reuses the live code (no spam)', async () => {
@@ -826,7 +824,7 @@ test('pairing: a repeat message from the same user reuses the live code (no spam
   h.ctx.onMessage(inbound({ chatId: 'c', userId: 'newcomer', text: 'one', chatType: 'dm' }));
   h.ctx.onMessage(inbound({ chatId: 'c', userId: 'newcomer', text: 'two', chatType: 'dm' }));
   await h.flush();
-  expect(h.service.listPendingPairings('chn_TESTCHANNEL').length).toBe(1);
+  expect(h.service.listPendingPairings('chn_TESTCHANNEL0').length).toBe(1);
 });
 
 test('pairing: never issues a code in a group (treated as deny)', async () => {
@@ -882,7 +880,7 @@ test('group gate: DMs are always answered regardless of mention', async () => {
 });
 
 test('group gate: configured agent channels require an agent mention', async () => {
-  const coder = testAgent('agt_CODER', 'Coder');
+  const coder = testAgent('agt_CODER0000000', 'Coder');
   const h = await makeHarness(
     channelConfig({
       allowlist: { policy: 'open', allowAllUsers: false, allowedUsers: [] },
@@ -901,8 +899,8 @@ test('group gate: configured agent channels require an agent mention', async () 
 });
 
 test('group gate: multiple agent mentions route to the first mentioned agent', async () => {
-  const coder = testAgent('agt_CODER', 'Coder');
-  const reviewer = testAgent('agt_REVIEWER', 'Reviewer');
+  const coder = testAgent('agt_CODER0000000', 'Coder');
+  const reviewer = testAgent('agt_REVIEWER0000', 'Reviewer');
   const h = await makeHarness(
     channelConfig({
       allowlist: { policy: 'open', allowAllUsers: false, allowedUsers: [] },

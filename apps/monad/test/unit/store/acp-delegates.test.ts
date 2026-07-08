@@ -40,7 +40,7 @@ test('migrate() is idempotent — running again is a no-op', () => {
   // Insert a row to verify re-running doesn't corrupt data
   db.exec(
     `INSERT INTO acp_delegates (id, session_id, agent_name, acp_session_id, pid, spawned_at, last_used_at)
-       VALUES ('k1', 'ses_x', 'a', 'acp-1', 1, '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z')`
+       VALUES ('k1', 'ses_x00000000000', 'a', 'acp-1', 1, '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z')`
   );
   migrate(db);
   expect((db.prepare('PRAGMA user_version').get() as { user_version: number }).user_version).toBe(
@@ -62,8 +62,8 @@ afterEach(() => {
 });
 
 const makeRow = (overrides: Partial<Parameters<typeof store.upsertAcpDelegate>[0]> = {}) => ({
-  id: 'ses_abc\x00my-agent',
-  sessionId: 'ses_abc',
+  id: 'ses_abc000000000\x00my-agent',
+  sessionId: 'ses_abc000000000',
   agentName: 'my-agent',
   acpSessionId: 'acp-sess-1',
   pid: 1234,
@@ -108,7 +108,7 @@ test('touchAcpDelegate updates stats on a live row and returns true', () => {
   const updated = store.touchAcpDelegate(makeRow().id, '2026-06-23T10:02:00.000Z', 1, 2);
 
   expect(updated).toBe(true);
-  const rows = store.listAcpDelegatesForSession('ses_abc');
+  const rows = store.listAcpDelegatesForSession('ses_abc000000000');
   expect(rows[0]?.reuseCount).toBe(1);
   expect(rows[0]?.promptCount).toBe(2);
   expect(rows[0]?.lastUsedAt).toBe('2026-06-23T10:02:00.000Z');
@@ -120,7 +120,7 @@ test('touchAcpDelegate is a no-op on an already-evicted row and returns false', 
   const updated = store.touchAcpDelegate(makeRow().id, '2026-06-23T10:04:00.000Z', 5, 10);
 
   expect(updated).toBe(false);
-  const rows = store.listAcpDelegatesForSession('ses_abc');
+  const rows = store.listAcpDelegatesForSession('ses_abc000000000');
   // Stats must NOT have been updated after eviction
   expect(rows[0]?.reuseCount).toBe(0);
   expect(rows[0]?.promptCount).toBe(0);
@@ -130,19 +130,29 @@ test('closeAcpDelegate marks the row evicted', () => {
   store.upsertAcpDelegate(makeRow());
   store.closeAcpDelegate(makeRow().id, '2026-06-23T10:05:00.000Z', 'idle');
 
-  const rows = store.listAcpDelegatesForSession('ses_abc');
+  const rows = store.listAcpDelegatesForSession('ses_abc000000000');
   expect(rows[0]?.evictedAt).toBe('2026-06-23T10:05:00.000Z');
   expect(rows[0]?.evictReason).toBe('idle');
 });
 
 test('listLiveAcpDelegates returns only rows with evicted_at NULL', () => {
   store.upsertAcpDelegate(
-    makeRow({ id: 'ses_a\x00agent-1', sessionId: 'ses_a', agentName: 'agent-1', acpSessionId: 'acp-1' })
+    makeRow({
+      id: 'ses_a00000000000\x00agent-1',
+      sessionId: 'ses_a00000000000',
+      agentName: 'agent-1',
+      acpSessionId: 'acp-1'
+    })
   );
   store.upsertAcpDelegate(
-    makeRow({ id: 'ses_a\x00agent-2', sessionId: 'ses_a', agentName: 'agent-2', acpSessionId: 'acp-2' })
+    makeRow({
+      id: 'ses_a00000000000\x00agent-2',
+      sessionId: 'ses_a00000000000',
+      agentName: 'agent-2',
+      acpSessionId: 'acp-2'
+    })
   );
-  store.closeAcpDelegate('ses_a\x00agent-1', '2026-06-23T10:05:00.000Z', 'done');
+  store.closeAcpDelegate('ses_a00000000000\x00agent-1', '2026-06-23T10:05:00.000Z', 'done');
 
   const live = store.listLiveAcpDelegates();
   expect(live).toHaveLength(1);
@@ -150,11 +160,11 @@ test('listLiveAcpDelegates returns only rows with evicted_at NULL', () => {
 });
 
 test('listAcpDelegatesForSession returns all rows (live + evicted) for the session', () => {
-  store.upsertAcpDelegate(makeRow({ id: 'ses_abc\x00a1', agentName: 'a1', acpSessionId: 'acp-1' }));
-  store.upsertAcpDelegate(makeRow({ id: 'ses_abc\x00a2', agentName: 'a2', acpSessionId: 'acp-2' }));
-  store.closeAcpDelegate('ses_abc\x00a1', '2026-06-23T10:05:00.000Z', 'idle');
+  store.upsertAcpDelegate(makeRow({ id: 'ses_abc000000000\x00a1', agentName: 'a1', acpSessionId: 'acp-1' }));
+  store.upsertAcpDelegate(makeRow({ id: 'ses_abc000000000\x00a2', agentName: 'a2', acpSessionId: 'acp-2' }));
+  store.closeAcpDelegate('ses_abc000000000\x00a1', '2026-06-23T10:05:00.000Z', 'idle');
 
-  const rows = store.listAcpDelegatesForSession('ses_abc');
+  const rows = store.listAcpDelegatesForSession('ses_abc000000000');
   expect(rows).toHaveLength(2);
 });
 
@@ -170,25 +180,25 @@ test('pruneOldAcpDelegates deletes evicted rows older than the cutoff', () => {
 
 test('pruneOldAcpDelegates does NOT delete live rows or recently evicted rows', () => {
   // Live row
-  store.upsertAcpDelegate(makeRow({ id: 'k1', sessionId: 'ses_x', agentName: 'live' }));
+  store.upsertAcpDelegate(makeRow({ id: 'k1', sessionId: 'ses_x00000000000', agentName: 'live' }));
   // Recently evicted
-  store.upsertAcpDelegate(makeRow({ id: 'k2', sessionId: 'ses_x', agentName: 'recent' }));
+  store.upsertAcpDelegate(makeRow({ id: 'k2', sessionId: 'ses_x00000000000', agentName: 'recent' }));
   store.closeAcpDelegate('k2', new Date().toISOString(), 'idle');
 
   const deleted = store.pruneOldAcpDelegates(7 * 24 * 60 * 60 * 1000);
   expect(deleted).toBe(0);
-  expect(store.listAcpDelegatesForSession('ses_x')).toHaveLength(2);
+  expect(store.listAcpDelegatesForSession('ses_x00000000000')).toHaveLength(2);
 });
 
 // ── Orphan reconciliation ─────────────────────────────────────────────────────
 
 test('reconcileOrphanedDelegates closes all live rows and logs count', () => {
-  store.upsertAcpDelegate(makeRow({ id: 'k1', sessionId: 'ses_x', agentName: 'a', pid: 99999 }));
-  store.upsertAcpDelegate(makeRow({ id: 'k2', sessionId: 'ses_x', agentName: 'b', pid: 99998 }));
+  store.upsertAcpDelegate(makeRow({ id: 'k1', sessionId: 'ses_x00000000000', agentName: 'a', pid: 99999 }));
+  store.upsertAcpDelegate(makeRow({ id: 'k2', sessionId: 'ses_x00000000000', agentName: 'b', pid: 99998 }));
 
   store.reconcileOrphanedDelegates();
 
-  const rows = store.listAcpDelegatesForSession('ses_x');
+  const rows = store.listAcpDelegatesForSession('ses_x00000000000');
   for (const r of rows) {
     expect(r.evictReason).toBe('daemon_restart');
   }
@@ -202,9 +212,9 @@ test('reconcileOrphanedDelegates is a no-op when there are no live rows', () => 
 test('deleteSession cleans up acp_delegates rows', () => {
   // Insert a session so the FK-like cleanup has a session to reference
   store.insertSession({
-    id: 'ses_del',
+    id: 'ses_del000000000',
     title: 'test',
-    ownerPrincipalId: 'prn_test1',
+    ownerPrincipalId: 'prn_test10000000',
     state: 'active',
     agentIds: [],
     parentSessionId: null,
@@ -213,10 +223,10 @@ test('deleteSession cleans up acp_delegates rows', () => {
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString()
   });
-  store.upsertAcpDelegate(makeRow({ id: 'k1', sessionId: 'ses_del', agentName: 'a', acpSessionId: 'acp-1' }));
-  store.upsertAcpDelegate(makeRow({ id: 'k2', sessionId: 'ses_del', agentName: 'b', acpSessionId: 'acp-2' }));
+  store.upsertAcpDelegate(makeRow({ id: 'k1', sessionId: 'ses_del000000000', agentName: 'a', acpSessionId: 'acp-1' }));
+  store.upsertAcpDelegate(makeRow({ id: 'k2', sessionId: 'ses_del000000000', agentName: 'b', acpSessionId: 'acp-2' }));
 
-  store.deleteSession('ses_del');
+  store.deleteSession('ses_del000000000');
 
   // Delegate rows must be gone
 });

@@ -96,9 +96,9 @@ for (const kind of TRANSPORTS) {
       store.insertSession({
         id: sid,
         title: 't',
-        ownerPrincipalId: 'prn_1',
+        ownerPrincipalId: 'prn_100000000000',
         state: 'active',
-        agentIds: ['agt_1'],
+        agentIds: ['agt_100000000000'],
         parentSessionId: null,
         archived: false,
         restoreCount: 0,
@@ -125,7 +125,7 @@ for (const kind of TRANSPORTS) {
       // AfterTurn observe forwarded the exchange to mem0 (infer=true extraction) under the agent userId.
       const observe = fake.addCalls.find((c) => c.infer !== false);
       expect(observe).toBeDefined();
-      expect(observe?.userId).toBe('agent:agt_1');
+      expect(observe?.userId).toBe('agent:agt_100000000000');
       expect(observe?.content).toContain('I deploy with Bun');
       expect(observe?.content).toContain(MOCK_REPLY);
     } finally {
