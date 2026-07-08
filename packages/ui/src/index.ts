@@ -94,6 +94,7 @@ import {
   SelectValue
 } from './components/Select';
 import { Separator } from './components/Separator';
+import { Skeleton } from './components/Skeleton';
 import { Spinner } from './components/Spinner';
 import { Switch } from './components/Switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/Tabs';
@@ -205,6 +206,7 @@ export {
   SelectTrigger,
   SelectValue,
   Separator,
+  Skeleton,
   Spinner,
   Switch,
   shouldSubmitComposerKey,

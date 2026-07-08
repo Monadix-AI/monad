@@ -1,5 +1,4 @@
 #!/usr/bin/env bun
-/// <reference types="bun" />
 // Personal agent overlay generator.
 //
 // Source of truth: .rulesync.local/rules.md (gitignored, per-machine).

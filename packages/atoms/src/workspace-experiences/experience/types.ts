@@ -67,7 +67,7 @@ export interface Message {
   externalAgentSessionId?: string;
   deliveryId?: NativeAgentDeliveryId;
   developerOnly?: boolean;
-  systemTone?: 'error' | 'pending';
+  systemTone?: 'error';
   systemDetail?: string;
   systemRaw?: unknown;
   reasoning?: string;

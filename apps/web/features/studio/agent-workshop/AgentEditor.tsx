@@ -11,7 +11,7 @@ import {
   useSetAgentPromptMutation,
   useUpdateAgentMutation
 } from '@monad/client-rtk';
-import { Button } from '@monad/ui';
+import { Button, Skeleton } from '@monad/ui';
 import { useEffect, useState } from 'react';
 
 import { useT } from '@/components/I18nProvider';
@@ -19,6 +19,42 @@ import { studioPath } from '@/features/routes/route-paths';
 import { StudioBreadcrumbHeader } from '../StudioBreadcrumbHeader';
 import { AgentWorkshop } from './AgentWorkshop';
 import { buildAgentEditorUpdate } from './agent-editor-update';
+
+function AgentEditorSkeleton() {
+  return (
+    <section
+      aria-busy="true"
+      className="flex min-w-0 flex-1 flex-col"
+    >
+      <div className="flex items-center justify-between border-b px-5 py-3">
+        <div className="flex min-w-0 items-center gap-2">
+          <Skeleton className="h-4 w-20 rounded" />
+          <Skeleton className="h-4 w-4 rounded-full" />
+          <Skeleton className="h-4 w-36 rounded" />
+        </div>
+        <Skeleton className="h-8 w-20 rounded-md" />
+      </div>
+      <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_18rem] gap-0 overflow-hidden">
+        <div className="flex flex-col gap-4 overflow-hidden p-5">
+          <Skeleton className="h-9 w-full rounded-md" />
+          <Skeleton className="h-24 w-full rounded-md" />
+          <Skeleton className="h-56 w-full rounded-md" />
+        </div>
+        <div className="flex flex-col gap-3 border-l p-5">
+          {Array.from({ length: 6 }, (_, i) => `agent-editor-side-${i}`).map((key) => (
+            <div
+              className="flex flex-col gap-2"
+              key={key}
+            >
+              <Skeleton className="h-3 w-24 rounded" />
+              <Skeleton className="h-8 w-full rounded-md" />
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
 
 export function AgentEditor({ agentId }: { agentId: AgentId; onClose: () => void }) {
   const t = useT();
@@ -92,16 +128,7 @@ export function AgentEditor({ agentId }: { agentId: AgentId; onClose: () => void
     }
   };
 
-  if (isLoading || !agent) {
-    return (
-      <section className="flex min-w-0 flex-1 items-center justify-center">
-        <HugeiconsIcon
-          className="size-4 animate-spin text-muted-foreground"
-          icon={LoaderPinwheelIcon}
-        />
-      </section>
-    );
-  }
+  if (isLoading || !agent) return <AgentEditorSkeleton />;
 
   const exposed = subagentCallable || isPublic || a2aEnabled;
 

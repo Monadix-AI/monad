@@ -2,8 +2,20 @@
 
 import type { ReactNode } from 'react';
 import type { useT } from '@/components/I18nProvider';
+import type { SettingsSectionId } from '@/features/settings/sections';
 
-import { FileInputIcon, MessageSquareCodeIcon, StarIcon } from '@hugeicons/core-free-icons';
+import {
+  ArrowLeft01Icon,
+  CatIcon,
+  EyeIcon,
+  FileInputIcon,
+  GlobeIcon,
+  JusticeScaleIcon,
+  MessageSquareCodeIcon,
+  RotateLeft01Icon,
+  StarIcon,
+  UserGroupIcon
+} from '@hugeicons/core-free-icons';
 import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react';
 import { cn, Tooltip, TooltipContent, TooltipTrigger } from '@monad/ui';
 
@@ -29,6 +41,24 @@ type TFunction = ReturnType<typeof useT>;
 const STUDIO_SHORTCUT_ITEMS = [...STUDIO_RUNTIME_SECTIONS, ...STUDIO_MESH_SECTIONS, ...STUDIO_SYSTEM_SECTIONS];
 const SHELL_HEADER_HEIGHT = 52;
 const SHORTCUT_BADGE_OVERLAY_CLASS = 'pointer-events-none absolute top-1/2 right-1.5 -mt-px -translate-y-1/2';
+const SETTINGS_SECTION_ITEMS: {
+  id: SettingsSectionId;
+  icon: IconSvgElement;
+  i18nKey:
+    | 'web.settings.connection'
+    | 'web.settings.profile'
+    | 'web.settings.appearance'
+    | 'web.settings.mo'
+    | 'web.settings.licenses'
+    | 'web.settings.system';
+}[] = [
+  { id: 'connection', icon: GlobeIcon, i18nKey: 'web.settings.connection' },
+  { id: 'profile', icon: UserGroupIcon, i18nKey: 'web.settings.profile' },
+  { id: 'experience', icon: EyeIcon, i18nKey: 'web.settings.appearance' },
+  { id: 'mo', icon: CatIcon, i18nKey: 'web.settings.mo' },
+  { id: 'licenses', icon: JusticeScaleIcon, i18nKey: 'web.settings.licenses' },
+  { id: 'system', icon: RotateLeft01Icon, i18nKey: 'web.settings.system' }
+];
 
 function ShortcutBadge({ modifierLabel, value }: { modifierLabel: string; value: number | string }) {
   return (
@@ -183,6 +213,44 @@ export function StudioSidebarItems({
         />
         {STUDIO_SYSTEM_SECTIONS.map(renderItem)}
       </SidebarNavSection>
+    </>
+  );
+}
+
+export function SettingsSidebarItems({
+  activeSection,
+  onBack,
+  onSelect,
+  t
+}: {
+  activeSection: SettingsSectionId;
+  onBack: () => void;
+  onSelect: (section: SettingsSectionId) => void;
+  t: TFunction;
+}) {
+  return (
+    <>
+      <SidebarNavSection>
+        <SidebarNavItem
+          icon={ArrowLeft01Icon}
+          label={t('web.common.back')}
+          onClick={onBack}
+        />
+      </SidebarNavSection>
+      <div className="sidebar-scroll-area min-h-0 flex-1 overflow-y-auto">
+        <SidebarNavSection>
+          <SidebarNavSectionLabel>{t('web.settings.title')}</SidebarNavSectionLabel>
+          {SETTINGS_SECTION_ITEMS.map(({ id, icon, i18nKey }) => (
+            <SidebarNavItem
+              active={activeSection === id}
+              icon={icon}
+              key={id}
+              label={t(i18nKey)}
+              onClick={() => onSelect(id)}
+            />
+          ))}
+        </SidebarNavSection>
+      </div>
     </>
   );
 }

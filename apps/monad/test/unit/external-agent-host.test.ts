@@ -23,6 +23,72 @@ test('external agent auth status probes use a global 20 second timeout', () => {
   expect(AUTH_STATUS_TIMEOUT_MS).toBe(20_000);
 });
 
+test('external agent auth status probes can use a host-specific timeout', async () => {
+  const provider = `auth-timeout-${Date.now()}`;
+  const adapter = {
+    provider,
+    productIcon: 'codex',
+    label: 'Auth Timeout',
+    detect: () => ({
+      id: provider,
+      provider,
+      productIcon: 'codex',
+      label: 'Auth Timeout',
+      command: process.execPath,
+      args: ['-e', 'setInterval(() => {}, 1000);'],
+      installed: true,
+      supportedLaunchModes: ['app-server']
+    }),
+    listSupportedModels: () => [],
+    resolveCommand: (command: string) => command,
+    buildLaunch: () => {
+      throw new Error('not used');
+    },
+    authStatus: (agent: ExternalAgentView) => ({
+      launch: {
+        argv: [agent.command, ...(agent.args ?? [])],
+        provider,
+        launchMode: 'app-server',
+        approvalOwnership: 'provider-owned',
+        capabilities: ['app-server']
+      },
+      parse: () => 'unknown'
+    }),
+    parseOutput: () => [],
+    sendInput: () => {},
+    resolveApproval: () => {},
+    resize: () => {},
+    stop: () => {}
+  } as unknown as ExternalAgentProviderAdapter;
+  registerAgentAdapterImpl(adapter);
+  const host = new ExternalAgentHost({
+    store: createStore(),
+    bus: new EventBus(),
+    agents: async () => [
+      {
+        name: provider,
+        provider,
+        productIcon: 'codex',
+        command: process.execPath,
+        args: ['-e', 'setInterval(() => {}, 1000);'],
+        enabled: true,
+        defaultLaunchMode: 'app-server',
+        allowAutopilot: false,
+        approvalOwnership: 'provider-owned'
+      }
+    ],
+    authStatusTimeoutMs: 50
+  });
+
+  try {
+    const started = performance.now();
+    await expect(host.authStatus(provider)).rejects.toMatchObject({ code: 'provider_timeout' });
+    expect(performance.now() - started).toBeLessThan(1_000);
+  } finally {
+    unregisterAgentAdapterImpl(provider);
+  }
+});
+
 test('managed external agent default server URL follows the daemon HTTPS switch', () => {
   expect(resolveExternalAgentManagedServerUrl({ networkHttps: { enabled: true }, port: 53210 })).toBe(
     'https://127.0.0.1:53210'

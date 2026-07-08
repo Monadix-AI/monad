@@ -66,7 +66,7 @@ const osFilter = osArg ? new Set(osArg.split(',')) : null;
 
 const TARGETS: Target[] = (
   BUILD_ALL
-    ? [
+    ? ([
         { os: 'darwin', arch: 'arm64' },
         { os: 'darwin', arch: 'x64' },
         { os: 'linux', arch: 'arm64' },
@@ -75,7 +75,7 @@ const TARGETS: Target[] = (
         { os: 'linux', arch: 'x64', libc: 'musl' }, // embedded Linux / Alpine (x64)
         { os: 'windows', arch: 'x64' },
         { os: 'windows', arch: 'arm64' }
-      ]
+      ] satisfies Target[])
     : [HOST]
 ).filter((t) => !osFilter || osFilter.has(t.os));
 

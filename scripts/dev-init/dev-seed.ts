@@ -1,4 +1,3 @@
-/// <reference types="bun" />
 import { join } from 'node:path';
 
 /**

@@ -642,7 +642,10 @@ test('project messages bind an external agent member to the newest session for t
   expect(messages.some((message) => message.id === 'external-agent-session:exa_old')).toBe(false);
 });
 
-test('external agent live launch join message renders as a pending placeholder until agent content arrives', () => {
+test('external agent live launch join message renders settled immediately and stays after the agent replies', () => {
+  // The tool.input payload for `external_agent.started` already carries the agent's display identity
+  // (name/icon/avatar), so the join notice never needs a "loading" placeholder — it renders with real
+  // content from the first live-tool frame, exactly like the REST-session-derived join view.
   const pendingMessages = __workplaceProjectMessageTest.buildProjectMessages({
     persistedMessages: [],
     externalAgentSessions: [],
@@ -660,14 +663,17 @@ test('external agent live launch join message renders as a pending placeholder u
     externalAgentDisplayNames: new Map([['pmem_codex_one', 'Codex']])
   });
 
-  expect(pendingMessages).toContainEqual(
+  const joinMessage = pendingMessages.find(
+    (message) => message.id === 'external-agent-session:tool_external_agent_launch'
+  );
+  expect(joinMessage).toEqual(
     expect.objectContaining({
       id: 'external-agent-session:tool_external_agent_launch',
       kind: 'system',
-      systemTone: 'pending',
       text: 'joined the project'
     })
   );
+  expect(joinMessage?.systemTone).toBeUndefined();
 
   const mergedMessages = __workplaceProjectMessageTest.buildProjectMessages({
     persistedMessages: [],
@@ -699,7 +705,7 @@ test('external agent live launch join message renders as a pending placeholder u
   });
 
   expect(mergedMessages.some((message) => message.id === 'external-agent-session:tool_external_agent_launch')).toBe(
-    false
+    true
   );
   expect(mergedMessages.find((message) => message.id === 'msg_external_agent_reply')?.text).toBe('Ready.');
 });

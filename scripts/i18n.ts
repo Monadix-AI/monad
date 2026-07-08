@@ -1,4 +1,3 @@
-/// <reference types="bun" />
 import { watch } from 'node:fs';
 import { join } from 'node:path';
 

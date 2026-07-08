@@ -12,6 +12,7 @@ async function installSystemSettingsApiMock(
   page: Page,
   health: { version: string; latestVersion?: string; latestVersionCheckedAt?: string }
 ) {
+  let upgradeGets = 0;
   let upgradeStarts = 0;
   let startup = { enabled: false, supported: true };
   let upgradeState = {
@@ -34,13 +35,23 @@ async function installSystemSettingsApiMock(
     const method = request.method();
 
     if (method === 'GET' && path === '/health') return route.fulfill(json({ status: 'ok', ...health }));
-    if (method === 'GET' && path === '/v1/system/upgrade') return route.fulfill(json(upgradeState));
+    if (method === 'GET' && path === '/v1/system/upgrade') {
+      upgradeGets += 1;
+      if (upgradeState.available && upgradeState.stage === 'idle') {
+        upgradeState = {
+          ...upgradeState,
+          progress: 100,
+          stage: 'ready'
+        };
+      }
+      return route.fulfill(json(upgradeState));
+    }
     if (method === 'POST' && path === '/v1/system/upgrade') {
       upgradeStarts += 1;
       upgradeState = {
         ...upgradeState,
-        progress: 25,
-        stage: 'downloading'
+        progress: 90,
+        stage: 'restarting'
       };
       return route.fulfill(json(upgradeState));
     }
@@ -122,6 +133,7 @@ async function installSystemSettingsApiMock(
     setExternalStartup(enabled: boolean) {
       startup = { ...startup, enabled };
     },
+    upgradeGets: () => upgradeGets,
     upgradeStarts: () => upgradeStarts
   };
 }
@@ -130,15 +142,15 @@ test.describe('System upgrade settings', () => {
   test('shows up-to-date state when daemon and latest versions match', async ({ page }) => {
     await installSystemSettingsApiMock(page, { version: '0.1.1', latestVersion: '0.1.1' });
 
-    await page.goto('/studio/capabilities?settings=system');
+    await page.goto('/settings/system');
 
-    await expect(page.getByRole('dialog')).toBeVisible();
-    await expect(page.getByRole('tab', { name: 'System' })).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByRole('heading', { name: 'System' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'System' })).toHaveAttribute('aria-current', 'page');
     await expect(page.getByText('Up to date')).toBeVisible();
     await expect(page.getByText('monad upgrade')).toHaveCount(0);
   });
 
-  test('shows update affordances and progress when health reports a newer version', async ({ page }) => {
+  test('auto-prepares update from the daemon menu and starts install when ready', async ({ page }) => {
     const api = await installSystemSettingsApiMock(page, {
       version: '0.1.1',
       latestVersion: '0.2.0',
@@ -147,30 +159,32 @@ test.describe('System upgrade settings', () => {
 
     await page.goto('/');
 
-    await expect(page.getByText('Update')).toBeVisible();
-    await page.getByText('Update').click();
+    await expect.poll(api.upgradeGets).toBeGreaterThan(0);
+    await expect(page.getByText('Update')).toHaveCount(0);
+
+    await page.getByRole('button', { name: /Daemon/ }).click();
+    await expect(page.getByText('Relaunch to update')).toBeVisible();
+    await page.getByText('Relaunch to update').click();
 
     await expect.poll(api.upgradeStarts).toBe(1);
-    await expect(page.getByText('Downloading')).toBeVisible();
+    await expect(page.getByText('Restart')).toBeVisible();
 
-    await page.goto('/studio/capabilities?settings=system');
+    await page.goto('/settings/system');
 
-    await expect(page.getByRole('dialog')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'System' })).toBeVisible();
     await expect(page.getByText('0.2.0 available')).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Update' })).toBeVisible();
 
-    const dialog = page.getByRole('dialog');
-    await expect(dialog.getByText('Downloading')).toBeVisible();
-    await expect(page.getByText('25%')).toBeVisible();
+    const settingsPage = page.locator('main');
+    await expect(settingsPage.getByText('Restart')).toBeVisible();
+    await expect(page.getByText('90%')).toBeVisible();
     await expect(page.getByText('Checking')).toHaveCount(0);
     await expect(page.getByText('Verifying')).toHaveCount(0);
-    await expect(page.getByText('Restarting')).toHaveCount(0);
   });
 
   test('reloads launch-at-login switch from system state when settings opens', async ({ page }) => {
     const api = await installSystemSettingsApiMock(page, { version: '0.1.1' });
 
-    await page.goto('/studio/capabilities?settings=system');
+    await page.goto('/settings/system');
 
     const launchAtLogin = page.getByRole('switch', { name: 'Launch at login' });
     await expect(launchAtLogin).not.toBeChecked();
@@ -178,8 +192,8 @@ test.describe('System upgrade settings', () => {
     api.setExternalStartup(true);
 
     await page.goto('/studio/capabilities');
-    await expect(page.getByRole('dialog')).toHaveCount(0);
-    await page.goto('/studio/capabilities?settings=system');
+    await expect(page.getByRole('heading', { name: 'System' })).toHaveCount(0);
+    await page.goto('/settings/system');
 
     await expect(launchAtLogin).toBeChecked();
   });
@@ -187,7 +201,7 @@ test.describe('System upgrade settings', () => {
   test('refreshes launch-at-login switch on demand', async ({ page }) => {
     const api = await installSystemSettingsApiMock(page, { version: '0.1.1' });
 
-    await page.goto('/studio/capabilities?settings=system');
+    await page.goto('/settings/system');
 
     const launchAtLogin = page.getByRole('switch', { name: 'Launch at login' });
     await expect(launchAtLogin).not.toBeChecked();

@@ -4,7 +4,7 @@ import type { WebMessageIdWithoutParams } from '@monad/i18n';
 import type { ComposerFollowUpBehavior, ComposerSendShortcut } from '@monad/protocol';
 import type { MouseEvent } from 'react';
 
-import { CheckIcon, ColorsIcon, HandIcon, LanguageSquareIcon, Moon02Icon, Sun03Icon } from '@hugeicons/core-free-icons';
+import { CheckIcon, HandIcon, LanguageSquareIcon, Moon02Icon, Sun03Icon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import {
   localeAdapter,
@@ -26,11 +26,6 @@ import { AVATAR_STYLES } from '@/lib/avatar-styles';
 import { composerShortcutLabel, DEFAULT_COMPOSER_SETTINGS, normalizedComposerSettings } from '@/lib/composer-settings';
 import { isInteractiveCursorEnabled, setInteractiveCursorEnabled } from '@/lib/interactive-cursor';
 import { applyThemePreference, getThemePreference, type ThemePreference, transitionThemePreference } from '@/lib/theme';
-import { SettingsBreadcrumbHeader } from './SettingsBreadcrumbHeader';
-
-interface Props {
-  onClose: () => void;
-}
 
 const SEND_SHORTCUTS: ComposerSendShortcut[] = ['enter', 'mod-enter-for-multiline', 'mod-enter-always'];
 const FOLLOW_UP_BEHAVIORS: ComposerFollowUpBehavior[] = ['queue', 'steer'];
@@ -46,7 +41,7 @@ function isApplePlatform(): boolean {
   return /Mac|iPhone|iPad|iPod/.test(navigator.platform);
 }
 
-export function AppearanceSettings({ onClose }: Props) {
+export function AppearanceSettings() {
   const t = useT();
   const { data: appearance } = useGetAppearanceQuery();
   const [setAppearance, { isLoading: isSavingAppearance }] = useSetAppearanceMutation();
@@ -105,17 +100,6 @@ export function AppearanceSettings({ onClose }: Props) {
   return (
     <ScrollArea className="h-full">
       <div className="flex min-h-full flex-col">
-        <SettingsBreadcrumbHeader
-          icon={
-            <HugeiconsIcon
-              className="size-4"
-              icon={ColorsIcon}
-            />
-          }
-          onClose={onClose}
-          title={t('web.settings.appearance')}
-        />
-
         <div className="flex flex-col gap-6 p-6">
           <p className="text-muted-foreground text-sm">{t('web.settings.appearanceDesc')}</p>
 

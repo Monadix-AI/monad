@@ -1,6 +1,7 @@
 'use client';
 
 import type { NetworkRuntimeStatus } from '@monad/protocol';
+import type { SettingsSectionId } from '@/features/settings/sections';
 import type { StudioSectionId } from '@/features/studio/sections';
 import type { RemoteDaemonConnection } from '@/lib/daemon-connections';
 
@@ -14,6 +15,7 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState
 } from 'react';
@@ -21,10 +23,17 @@ import {
 import { useT } from '@/components/I18nProvider';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { DaemonMenu } from './SessionSidebarDaemonMenu';
-import { type ProjectItem, SidebarHeader, StudioSidebarItems, WorkspaceSidebarItems } from './SessionSidebarNav';
+import {
+  type ProjectItem,
+  SettingsSidebarItems,
+  SidebarHeader,
+  StudioSidebarItems,
+  WorkspaceSidebarItems
+} from './SessionSidebarNav';
 import {
   createSidebarPagerGesture,
   resolveSidebarPagerTarget,
+  type SidebarPagerSurface,
   sidebarTrackpadEdgeAccum,
   sidebarTrackpadEdgeOffset
 } from './sidebar-trackpad-switch';
@@ -46,12 +55,15 @@ interface Props {
   daemonStatus: 'checking' | 'online' | 'offline';
   daemonVersion?: string;
   networkRuntime?: NetworkRuntimeStatus;
+  settingsReturnSurface: Exclude<SidebarPagerSurface, 'settings'>;
+  settingsSection: SettingsSectionId;
   studioSection: StudioSectionId;
   shortcutModifierLabel?: string;
   showShortcutBadges?: boolean;
   onOpenWorkspace: () => void;
   onOpenMonadChat: () => void;
   onOpenProject: (id: string) => void;
+  onOpenSettingsSection: (section: SettingsSectionId) => void;
   onOpenStudio: () => void;
   onToggleProjectPinned: (id: string) => void;
   onOpenStudioSection: (section: StudioSectionId) => void;
@@ -61,6 +73,7 @@ interface Props {
     request: { type: 'local' } | { connection: RemoteDaemonConnection; type: 'remote' }
   ) => void;
   onToggleCollapsed: () => void;
+  onCloseSettings: () => void;
   onToggleSettings: () => void;
 }
 
@@ -99,12 +112,15 @@ export function SessionSidebar({
   daemonStatus,
   daemonVersion,
   networkRuntime,
+  settingsReturnSurface,
+  settingsSection,
   studioSection,
   shortcutModifierLabel = '⌘',
   showShortcutBadges,
   onOpenWorkspace,
   onOpenMonadChat,
   onOpenProject,
+  onOpenSettingsSection,
   onOpenStudio,
   onToggleProjectPinned,
   onOpenStudioSection,
@@ -112,6 +128,7 @@ export function SessionSidebar({
   onRequestPersistentExpand,
   onSwitchDaemonConnection,
   onToggleCollapsed,
+  onCloseSettings,
   onToggleSettings
 }: Props) {
   const t = useT();
@@ -119,7 +136,7 @@ export function SessionSidebar({
   const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR_WIDTH);
   const [resizing, setResizing] = useState(false);
   const [autoRevealClosing, setAutoRevealClosing] = useState(false);
-  const currentShowStudioRef = useRef(showStudio);
+  const currentSidebarSurfaceRef = useRef<SidebarPagerSurface>(showStudio ? 'studio' : 'workspace');
   const sidebarRef = useRef<HTMLElement | null>(null);
   const panelScrollRef = useRef<HTMLDivElement | null>(null);
   const dragStartRef = useRef({ pointerX: 0, width: DEFAULT_SIDEBAR_WIDTH });
@@ -129,6 +146,7 @@ export function SessionSidebar({
   const dragPxRef = useRef(0);
   const trackpadFeedbackAnimationRef = useRef<{ stop: () => void } | null>(null);
   const panelScrollAnimationRef = useRef<{ stop: () => void } | null>(null);
+  const previousShowSettingsRef = useRef(showSettings);
   const routeDrivenScrollRef = useRef(false);
   const routeDrivenScrollClearTimerRef = useRef(0);
   const trackpadResetTimerRef = useRef(0);
@@ -157,9 +175,12 @@ export function SessionSidebar({
     if (overlay) setAutoRevealClosing(false);
   }, [overlay]);
 
-  useEffect(() => {
-    currentShowStudioRef.current = showStudio;
-  }, [showStudio]);
+  const pagerSurfaces = useMemo<SidebarPagerSurface[]>(
+    () => (showSettings ? [settingsReturnSurface, 'settings'] : ['workspace', 'studio']),
+    [settingsReturnSurface, showSettings]
+  );
+  const activeSidebarSurface: SidebarPagerSurface = showSettings ? 'settings' : showStudio ? 'studio' : 'workspace';
+  const activeSidebarPageIndex = Math.max(0, pagerSurfaces.indexOf(activeSidebarSurface));
 
   const openMenuAction = (action: () => void) => {
     setMenuOpen(false);
@@ -293,13 +314,65 @@ export function SessionSidebar({
     });
   }, [prefersReducedMotion, stopTrackpadFeedbackAnimation, trackpadFeedback]);
 
-  // Keep the native scroll position in lockstep with the showStudio prop, so
+  const closeSettingsWithPagerAnimation = useCallback(() => {
+    const host = panelScrollRef.current;
+    if (!host || !showSettings) {
+      onCloseSettings();
+      return;
+    }
+    panelScrollAnimationRef.current?.stop();
+    window.clearTimeout(routeDrivenScrollClearTimerRef.current);
+    const target = 0;
+    let finished = false;
+    const finish = () => {
+      if (finished) return;
+      finished = true;
+      routeDrivenScrollRef.current = false;
+      window.clearTimeout(routeDrivenScrollClearTimerRef.current);
+      onCloseSettings();
+    };
+    routeDrivenScrollRef.current = true;
+    currentSidebarSurfaceRef.current = settingsReturnSurface;
+    if (prefersReducedMotion || Math.abs(host.scrollLeft - target) <= 1) {
+      host.scrollLeft = target;
+      finish();
+      return;
+    }
+    panelScrollAnimationRef.current = animate(host.scrollLeft, target, {
+      duration: PANEL_SNAP_SCROLL_DURATION_S,
+      ease: PANEL_SNAP_SCROLL_EASE,
+      onComplete: finish,
+      onUpdate: (value) => {
+        host.scrollLeft = value;
+      }
+    });
+    routeDrivenScrollClearTimerRef.current = window.setTimeout(finish, PANEL_SNAP_SCROLL_DURATION_S * 1000 + 120);
+  }, [onCloseSettings, prefersReducedMotion, settingsReturnSurface, showSettings]);
+
+  useEffect(() => {
+    currentSidebarSurfaceRef.current = activeSidebarSurface;
+  }, [activeSidebarSurface]);
+
+  // Keep the native scroll position in lockstep with the active sidebar surface, so
   // menu/shortcut-driven switches slide the panels the same way a swipe does.
   useLayoutEffect(() => {
     const host = panelScrollRef.current;
     if (!host) return;
-    currentShowStudioRef.current = showStudio;
-    const target = (showStudio ? 1 : 0) * host.clientWidth;
+    currentSidebarSurfaceRef.current = activeSidebarSurface;
+    const wasShowingSettings = previousShowSettingsRef.current;
+    const enteringSettings = showSettings && !wasShowingSettings;
+    const leavingSettings = !showSettings && wasShowingSettings;
+    previousShowSettingsRef.current = showSettings;
+    if (enteringSettings) host.scrollTo({ behavior: 'instant' as ScrollBehavior, left: 0 });
+    const target = activeSidebarPageIndex * host.clientWidth;
+    if (leavingSettings) {
+      routeDrivenScrollRef.current = false;
+      window.clearTimeout(routeDrivenScrollClearTimerRef.current);
+      panelScrollAnimationRef.current?.stop();
+      host.scrollTo({ behavior: 'instant' as ScrollBehavior, left: target });
+      host.dataset.snapReady = 'true';
+      return;
+    }
     if (Math.abs(host.scrollLeft - target) <= 1) {
       host.dataset.snapReady = 'true';
       routeDrivenScrollRef.current = false;
@@ -335,7 +408,7 @@ export function SessionSidebar({
       );
     }
     host.dataset.snapReady = 'true';
-  }, [showStudio, prefersReducedMotion]);
+  }, [activeSidebarPageIndex, activeSidebarSurface, prefersReducedMotion, showSettings]);
 
   useEffect(
     () => () => {
@@ -352,10 +425,16 @@ export function SessionSidebar({
     const onScrollEnd = () => {
       if (routeDrivenScrollRef.current) return;
       if (dragActiveRef.current) return;
-      const nextStudio = Math.round(host.scrollLeft / (host.clientWidth || 1)) >= 1;
-      if (nextStudio === currentShowStudioRef.current) return;
-      currentShowStudioRef.current = nextStudio;
-      if (nextStudio) onOpenStudio();
+      const nextPage = Math.max(
+        0,
+        Math.min(pagerSurfaces.length - 1, Math.round(host.scrollLeft / (host.clientWidth || 1)))
+      );
+      const nextSurface = pagerSurfaces[nextPage] ?? 'workspace';
+      if (nextSurface === currentSidebarSurfaceRef.current) return;
+      currentSidebarSurfaceRef.current = nextSurface;
+      if (nextSurface === 'settings') onToggleSettings();
+      else if (showSettings) onCloseSettings();
+      else if (nextSurface === 'studio') onOpenStudio();
       else onOpenWorkspace();
     };
 
@@ -372,28 +451,41 @@ export function SessionSidebar({
         clientWidth: width,
         dragOrigin: dragOriginRef.current,
         dragPxTotal,
+        pageCount: pagerSurfaces.length,
         scrollLeft: host.scrollLeft
       });
-      const target = (targetSurface === 'studio' ? 1 : 0) * width;
-      const targetStudio = targetSurface === 'studio';
-      if (targetStudio !== currentShowStudioRef.current) {
-        currentShowStudioRef.current = targetStudio;
-        if (targetStudio) onOpenStudio();
-        else onOpenWorkspace();
+      const target = targetSurface * width;
+      const targetSurfaceId = pagerSurfaces[targetSurface] ?? 'workspace';
+      const closesSettings = showSettings && targetSurfaceId !== 'settings';
+      const surfaceChanged = targetSurfaceId !== currentSidebarSurfaceRef.current;
+      if (surfaceChanged) {
+        currentSidebarSurfaceRef.current = targetSurfaceId;
+        if (!closesSettings) {
+          if (targetSurfaceId === 'settings') onToggleSettings();
+          if (targetSurfaceId === 'studio') onOpenStudio();
+          if (targetSurfaceId === 'workspace') onOpenWorkspace();
+        }
       }
+      const finishSettingsClose = () => {
+        if (closesSettings) onCloseSettings();
+      };
       panelScrollAnimationRef.current?.stop();
       if (Math.abs(host.scrollLeft - target) > 1) {
         if (prefersReducedMotion) {
           host.scrollLeft = target;
+          finishSettingsClose();
         } else {
           panelScrollAnimationRef.current = animate(host.scrollLeft, target, {
             duration: PANEL_SNAP_SCROLL_DURATION_S,
             ease: PANEL_SNAP_SCROLL_EASE,
+            onComplete: finishSettingsClose,
             onUpdate: (value) => {
               host.scrollLeft = value;
             }
           });
         }
+      } else {
+        finishSettingsClose();
       }
       releaseTrackpadGesture();
     };
@@ -465,10 +557,14 @@ export function SessionSidebar({
       host.removeEventListener('wheel', onWheel);
     };
   }, [
+    onCloseSettings,
     onOpenStudio,
     onOpenWorkspace,
+    onToggleSettings,
+    pagerSurfaces,
     prefersReducedMotion,
     releaseTrackpadGesture,
+    showSettings,
     stopTrackpadFeedbackAnimation,
     trackpadFeedback
   ]);
@@ -536,29 +632,42 @@ export function SessionSidebar({
               x: trackpadBounceX
             }}
           >
-            <div className="panel-nav-snap-item flex min-h-0 w-full flex-none flex-col">
-              <WorkspaceSidebarItems
-                activeProjectId={activeProjectId}
-                monadChatActive={monadChatActive}
-                onOpenMonadChat={onOpenMonadChat}
-                onOpenProject={onOpenProject}
-                onToggleProjectPinned={onToggleProjectPinned}
-                projects={projects}
-                shortcutModifierLabel={shortcutModifierLabel}
-                showShortcutBadges={showShortcutBadges}
-                t={t}
-              />
-            </div>
-            <div className="panel-nav-snap-item flex min-h-0 w-full flex-none flex-col">
-              <StudioSidebarItems
-                activeSection={studioSection}
-                onSelect={onOpenStudioSection}
-                runtimeReady={runtimeReady}
-                shortcutModifierLabel={shortcutModifierLabel}
-                showShortcutBadges={showShortcutBadges}
-                t={t}
-              />
-            </div>
+            {pagerSurfaces.map((surface) => (
+              <div
+                className="panel-nav-snap-item flex min-h-0 w-full flex-none flex-col"
+                key={surface}
+              >
+                {surface === 'settings' ? (
+                  <SettingsSidebarItems
+                    activeSection={settingsSection}
+                    onBack={closeSettingsWithPagerAnimation}
+                    onSelect={onOpenSettingsSection}
+                    t={t}
+                  />
+                ) : surface === 'studio' ? (
+                  <StudioSidebarItems
+                    activeSection={studioSection}
+                    onSelect={onOpenStudioSection}
+                    runtimeReady={runtimeReady}
+                    shortcutModifierLabel={shortcutModifierLabel}
+                    showShortcutBadges={showShortcutBadges}
+                    t={t}
+                  />
+                ) : (
+                  <WorkspaceSidebarItems
+                    activeProjectId={activeProjectId}
+                    monadChatActive={monadChatActive}
+                    onOpenMonadChat={onOpenMonadChat}
+                    onOpenProject={onOpenProject}
+                    onToggleProjectPinned={onToggleProjectPinned}
+                    projects={projects}
+                    shortcutModifierLabel={shortcutModifierLabel}
+                    showShortcutBadges={showShortcutBadges}
+                    t={t}
+                  />
+                )}
+              </div>
+            ))}
           </motion.div>
         ) : null}
 

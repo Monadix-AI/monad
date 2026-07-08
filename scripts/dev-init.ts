@@ -1,5 +1,4 @@
 #!/usr/bin/env bun
-/// <reference types="bun" />
 /**
  * One-time idempotent dev environment initialization.
  *

@@ -5,6 +5,7 @@ export const systemUpgradeStageSchema = z.enum([
   'checking',
   'downloading',
   'verifying',
+  'ready',
   'installing',
   'restarting',
   'complete',

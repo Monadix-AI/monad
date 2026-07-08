@@ -97,6 +97,8 @@ export interface DaemonHandlerDeps extends SessionDeps, ModelDeps {
   certExpiry?: string;
   /** Test/runtime override for browser-attached external agent auth connect heartbeat pruning. */
   externalAgentAuthHeartbeatTimeoutMs?: number;
+  /** Test/runtime override for one-shot external agent auth/usage probe timeout. */
+  externalAgentAuthStatusTimeoutMs?: number;
   /** Loopback URL that managed external agent runtimes use to call the daemon. */
   externalAgentServerUrl?: string;
   /** Current daemon HTTPS switch. Used only when externalAgentServerUrl is not supplied. */

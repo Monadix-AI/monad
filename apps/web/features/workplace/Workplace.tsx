@@ -12,8 +12,8 @@ import {
 } from '@monad/ui/components/AgentAvatar';
 import { memo, useCallback, useEffect } from 'react';
 
+import { MonadLoading } from '@/components/MonadLoading';
 import { ShellLink } from '@/components/ShellLink';
-import { MonadLoading } from '@/features/init/MonadLoading';
 import { getProjectExperience } from './experiences/registry';
 import { ProjectHeader } from './project-shell/ProjectHeader';
 import { ProjectMemberDialog } from './project-shell/ProjectMemberDialog';

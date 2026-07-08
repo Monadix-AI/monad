@@ -38,19 +38,21 @@ export type SidebarPagerUpdate =
   | { dragPx: number; kind: 'settle' }
   | { dragPx: 0; kind: 'swallowed' };
 
-export type SidebarPagerSurface = 'studio' | 'workspace';
+export type SidebarPagerSurface = 'settings' | 'studio' | 'workspace';
 
 export function resolveSidebarPagerTarget({
   clientWidth,
   dragOrigin,
   dragPxTotal,
+  pageCount = 2,
   scrollLeft
 }: {
   clientWidth: number;
   dragOrigin: number;
   dragPxTotal: number;
+  pageCount?: number;
   scrollLeft: number;
-}): SidebarPagerSurface {
+}): number {
   const width = clientWidth || 1;
   const originPage = Math.round(dragOrigin / width);
   const threshold = width * TRACKPAD_PAGE_TURN_THRESHOLD_RATIO;
@@ -58,7 +60,7 @@ export function resolveSidebarPagerTarget({
   if (dragPxTotal > threshold) targetPage = originPage + 1;
   else if (dragPxTotal < -threshold) targetPage = originPage - 1;
   else targetPage = Math.round(scrollLeft / width);
-  return Math.max(0, Math.min(1, targetPage)) >= 1 ? 'studio' : 'workspace';
+  return Math.max(0, Math.min(Math.max(1, pageCount) - 1, targetPage));
 }
 
 // The pager owns the whole horizontal wheel stream: native scroll-snap is off,

@@ -16,7 +16,6 @@ import { initMonadHome, loadAuth, loadConfig } from '@monad/home';
 import { setLogLevel } from '@monad/logger';
 
 import { ModelService } from '@/handlers/settings/model/index.ts';
-import { AUTH_STATUS_TIMEOUT_MS } from '@/services/external-agent/constants.ts';
 import { registerAgentAdapterImpl } from '@/services/external-agent/index.ts';
 import { createHttpTransport } from '@/transports/http.ts';
 import {
@@ -54,7 +53,10 @@ function makePaths(base: string): MonadPaths {
   return makeTestPaths(base);
 }
 
-async function setup(opts?: { externalAgentAuthHeartbeatTimeoutMs?: number }): Promise<{
+async function setup(opts?: {
+  externalAgentAuthHeartbeatTimeoutMs?: number;
+  externalAgentAuthStatusTimeoutMs?: number;
+}): Promise<{
   dir: string;
   projectDir: string;
   app: ReturnType<typeof createHttpTransport>;
@@ -1470,22 +1472,16 @@ for (const kind of TRANSPORTS) {
       }
     });
 
-    test(
-      'returns a provider timeout code when external agent auth status hangs',
-      async () => {
-        const { dir, app } = await setup();
-        const t = serveTransport(kind, app);
-        try {
-          await runAuthStatusTimeoutRuntime((m, p, b) => t.fetch(p, jsonInit(m, b)), dir);
-        } finally {
-          await t.stop();
-          await rm(dir, { recursive: true, force: true });
-        }
-      },
-      // The probe genuinely waits out the real AUTH_STATUS_TIMEOUT_MS before returning 502 — bun's
-      // 5s default per-test timeout would kill this test before that fires.
-      AUTH_STATUS_TIMEOUT_MS + 5_000
-    );
+    test('returns a provider timeout code when external agent auth status hangs', async () => {
+      const { dir, app } = await setup({ externalAgentAuthStatusTimeoutMs: 100 });
+      const t = serveTransport(kind, app);
+      try {
+        await runAuthStatusTimeoutRuntime((m, p, b) => t.fetch(p, jsonInit(m, b)), dir);
+      } finally {
+        await t.stop();
+        await rm(dir, { recursive: true, force: true });
+      }
+    }, 2_000);
 
     test('records failed external agent spawns in the lifecycle ledger', async () => {
       const { dir, projectDir, app, handlers } = await setup();

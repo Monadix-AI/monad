@@ -274,28 +274,6 @@ function keepManagedExternalAgentRepliesAfterJoin(messages: Map<string, Message>
   }
 }
 
-function collapseExternalAgentJoinPlaceholders(messages: Map<string, Message>): void {
-  const repliesBySession = new Set<string>();
-  const repliesByAgent = new Set<string>();
-  for (const message of messages.values()) {
-    if (message.kind !== 'agent') continue;
-    if (message.externalAgentSessionId) repliesBySession.add(message.externalAgentSessionId);
-    repliesByAgent.add(message.authorId);
-  }
-  for (const [id, message] of messages) {
-    if (message.kind !== 'system' || message.text !== 'joined the project' || message.systemTone !== 'pending')
-      continue;
-    if (
-      (message.externalAgentSessionId && repliesBySession.has(message.externalAgentSessionId)) ||
-      repliesByAgent.has(message.authorId)
-    ) {
-      messages.delete(id);
-    } else {
-      messages.set(id, { ...message, systemTone: 'pending' });
-    }
-  }
-}
-
 function currentExternalAgentSessionsByAgent(sessions: ExternalAgentSessionView[]): ExternalAgentSessionView[] {
   const current = new Map<string, ExternalAgentSessionView>();
   for (const session of [...sessions].sort((a, b) => {
@@ -553,8 +531,7 @@ export function buildProjectMessages({
         },
         externalAgentSessionId: item.id,
         streaming: false,
-        orderKey: item.seq,
-        systemTone: 'pending'
+        orderKey: item.seq
       });
     }
     if (shouldShowDeveloperOnlyMessages && item.output) {
@@ -576,7 +553,6 @@ export function buildProjectMessages({
     }
   }
   keepManagedExternalAgentRepliesAfterJoin(byId);
-  collapseExternalAgentJoinPlaceholders(byId);
   return sortMessagesOldestFirst([...byId.values()]);
 }
 

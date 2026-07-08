@@ -2,10 +2,10 @@
 
 import dynamic from 'next/dynamic';
 
-import { PanelLoading } from '@/components/PanelLoading';
+import { StudioRouteLoading } from '@/features/studio/StudioLoading';
 
 const Studio = dynamic(() => import('@/features/studio/Studio').then((m) => m.Studio), {
-  loading: PanelLoading,
+  loading: StudioRouteLoading,
   ssr: false
 });
 

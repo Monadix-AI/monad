@@ -6,6 +6,7 @@ import { cn } from '@monad/ui';
 
 interface MonadLoadingProps {
   className?: string;
+  label?: string;
   markClassName?: string;
 }
 
@@ -20,10 +21,10 @@ const iconMaskStyle: CSSProperties = {
   maskSize: 'contain'
 };
 
-export function MonadLoading({ className, markClassName }: MonadLoadingProps) {
+export function MonadLoading({ className, label = 'Loading', markClassName }: MonadLoadingProps) {
   return (
     <div
-      aria-label="Loading"
+      aria-label={label}
       className={cn('monad-loading flex items-center justify-center', className)}
       role="status"
     >

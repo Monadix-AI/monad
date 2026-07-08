@@ -70,7 +70,8 @@ export function removeBlankXdgLines(envText: string): { text: string; removed: s
     if (index === lines.length - 1 && line === '' && envText.endsWith('\n')) return true;
     const match = line.match(blankXdgLinePattern);
     if (!match) return true;
-    removed.push(match[1]);
+    const key = match[1];
+    if (key) removed.push(key);
     return false;
   });
   return { text: kept.join('\n'), removed };

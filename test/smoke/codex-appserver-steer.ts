@@ -1,4 +1,3 @@
-/// <reference types="bun" />
 // biome-ignore-all lint/suspicious/noConsole: standalone smoke CLI — console is the report
 // Smoke test: steer a real codex app-server turn mid-flight. Send a long-running turn, wait for it to
 // go in-flight, inject a `turn/steer`, assert the turn survives the steer (still in-flight — steer

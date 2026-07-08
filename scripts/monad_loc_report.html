@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta content="width=device-width, initial-scale=1" name="viewport" >
+  <title>Monad LOC Daily Report</title>
+  <style>
+    :root { --bg: #0b0f14; --panel: #111821; --panel-2: #17212d; --text: #edf4ff; --muted: #93a4b8; --line: #263445; --accent: #74e0c0; --accent-2: #8ab4ff; --warn: #f8c46c; color-scheme: dark; }
+    * { box-sizing: border-box; }
+    body { min-height: 100vh; margin: 0; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: var(--text); background: radial-gradient(circle at 15% 0%, #18314b 0, transparent 32rem), linear-gradient(135deg, #081018 0%, #0b0f14 52%, #10151d 100%); }
+    main { width: min(1180px, calc(100vw - 40px)); padding: 48px 0; margin: 0 auto; }
+    header { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 32px; align-items: end; margin-bottom: 30px; }
+    h1 { max-width: 720px; margin: 0; font-size: clamp(36px, 6vw, 78px); line-height: .92; letter-spacing: 0; }
+    .lede { max-width: 680px; margin: 18px 0 0; font-size: 16px; line-height: 1.7; color: var(--muted); }
+    .stamp { font-size: 13px; line-height: 1.7; color: var(--muted); text-align: right; }
+    .grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-bottom: 16px; }
+    .metric, .chart, .table-wrap { background: linear-gradient(180deg, color-mix(in srgb, var(--panel), transparent 2%), color-mix(in srgb, var(--panel-2), transparent 18%)); border: 1px solid color-mix(in srgb, var(--line), transparent 20%); border-radius: 8px; box-shadow: 0 20px 70px rgba(0,0,0,.28); }
+    .metric { min-height: 128px; padding: 18px; }
+    .label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+    .value { margin-top: 16px; font-size: clamp(26px, 4vw, 44px); font-weight: 760; line-height: 1; }
+    .sub { margin-top: 10px; font-size: 13px; color: var(--muted); }
+    .chart { padding: 20px; margin-bottom: 16px; overflow: hidden; }
+    .chart-head { display: flex; gap: 20px; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+    h2 { margin: 0; font-size: 18px; }
+    .legend { display: flex; gap: 14px; font-size: 12px; color: var(--muted); }
+    .legend span::before { display: inline-block; width: 9px; height: 9px; margin-right: 6px; content: ""; background: var(--accent); border-radius: 99px; }
+    svg { display: block; width: 100%; height: auto; }
+    .axis { stroke: #2b3949; stroke-width: 1; }
+    .tick { stroke: #223041; stroke-width: 1; }
+    .axis-text { font-size: 12px; fill: #93a4b8; }
+    .axis-title { font-size: 12px; font-weight: 650; text-transform: uppercase; letter-spacing: .08em; fill: #c5d5e8; }
+    .area { opacity: .85; fill: url(#area); }
+    .line { fill: none; stroke: var(--accent); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+    .estimate { opacity: .95; fill: var(--warn); }
+    .actual { fill: var(--accent); }
+    .table-wrap { overflow: hidden; }
+    table { width: 100%; font-size: 13px; border-collapse: collapse; }
+    th, td { padding: 12px 14px; text-align: left; white-space: nowrap; border-bottom: 1px solid var(--line); }
+    th { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; background: rgba(255,255,255,.03); }
+    td:nth-child(2), td:nth-child(3) { font-variant-numeric: tabular-nums; }
+    tr:last-child td { border-bottom: 0; }
+    .pill { display: inline-flex; align-items: center; height: 24px; padding: 0 9px; color: var(--accent); background: rgba(116,224,192,.12); border: 1px solid rgba(116,224,192,.28); border-radius: 999px; }
+    @media (max-width: 860px) { main { width: min(100vw - 28px, 680px); padding: 28px 0; } header { grid-template-columns: 1fr; } .stamp { text-align: left; } .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .table-wrap { overflow-x: auto; } }
+    @media (max-width: 520px) { .grid { grid-template-columns: 1fr; } h1 { font-size: 42px; } }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <h1>Monad LOC Daily Report</h1>
+        <p class="lede">Daily TypeScript line settlement at local midnight. Historical rows are rebuilt from real git snapshots; dates before the first available snapshot are fitted from the earliest real trend.</p>
+      </div>
+      <div class="stamp">Generated from <code>scripts/loc-daily.ts</code><br>Latest row 2026-07-08</div>
+    </header>
+    <section class="grid">
+      <div class="metric"><div class="label">Latest lines</div><div class="value">250,212</div><div class="sub">actual row</div></div>
+      <div class="metric"><div class="label">Latest files</div><div class="value">1,911</div><div class="sub">TS/TSX files counted</div></div>
+      <div class="metric"><div class="label">Actual growth</div><div class="value">388%</div><div class="sub">2026-06-16 to 2026-07-08</div></div>
+      <div class="metric"><div class="label">Rows</div><div class="value">37</div><div class="sub">23 actual snapshots</div></div>
+    </section>
+    <section class="chart">
+      <div class="chart-head"><h2>Lines by day</h2><div class="legend"><span>actual</span><span>estimated</span></div></div>
+      <svg aria-label="Daily LOC chart" id="chart" role="img" viewBox="0 0 1120 430" ></svg>
+    </section>
+    <section class="table-wrap">
+      <table>
+        <thead><tr><th>Date</th><th>Lines</th><th>Files</th><th>Type</th><th>Note</th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </section>
+  </main>
+  <script>
+    const rows = [{"date":"2026-06-02","files":114,"lines":4436,"note":"log-linear backward extrapolation from first two midnight snapshots","type":"estimated"},{"date":"2026-06-03","files":127,"lines":5284,"note":"log-linear backward extrapolation from first two midnight snapshots","type":"estimated"},{"date":"2026-06-04","files":141,"lines":6294,"note":"log-linear backward extrapolation from first two midnight snapshots","type":"estimated"},{"date":"2026-06-05","files":157,"lines":7496,"note":"log-linear backward extrapolation from first two midnight snapshots","type":"estimated"},{"date":"2026-06-06","files":174,"lines":8929,"note":"log-linear backward extrapolation from first two midnight snapshots","type":"estimated"},{"date":"2026-06-07","files":194,"lines":10635,"note":"log-linear backward extrapolation from first two midnight snapshots","type":"estimated"},{"date":"2026-06-08","files":215,"lines":12668,"note":"log-linear backward extrapolation from first two midnight snapshots","type":"estimated"},{"date":"2026-06-09","files":239,"lines":15089,"note":"log-linear backward extrapolation from first two midnight snapshots","type":"estimated"},{"date":"2026-06-10","files":266,"lines":17972,"note":"log-linear backward extrapolation from first two midnight snapshots","type":"estimated"},{"date":"2026-06-11","files":296,"lines":21407,"note":"log-linear backward extrapolation from first two midnight snapshots","type":"estimated"},{"date":"2026-06-12","files":329,"lines":25498,"note":"log-linear backward extrapolation from first two midnight snapshots","type":"estimated"},{"date":"2026-06-13","files":366,"lines":30370,"note":"log-linear backward extrapolation from first two midnight snapshots","type":"estimated"},{"date":"2026-06-14","files":406,"lines":36174,"note":"log-linear backward extrapolation from first two midnight snapshots","type":"estimated"},{"date":"2026-06-15","files":452,"lines":43088,"note":"log-linear backward extrapolation from first two midnight snapshots","type":"estimated"},{"date":"2026-06-16","files":502,"lines":51322,"note":"midnight snapshot 7ebdb448d","type":"actual"},{"date":"2026-06-17","files":558,"lines":61130,"note":"midnight snapshot 77c4adceb","type":"actual"},{"date":"2026-06-18","files":613,"lines":65882,"note":"midnight snapshot 9b78d147a","type":"actual"},{"date":"2026-06-19","files":613,"lines":65882,"note":"midnight snapshot 9b78d147a","type":"actual"},{"date":"2026-06-20","files":685,"lines":73717,"note":"midnight snapshot 6e5689826","type":"actual"},{"date":"2026-06-21","files":815,"lines":87919,"note":"midnight snapshot f90bb7916","type":"actual"},{"date":"2026-06-22","files":889,"lines":97027,"note":"midnight snapshot d6deeb869","type":"actual"},{"date":"2026-06-23","files":976,"lines":109176,"note":"midnight snapshot bddc69d82","type":"actual"},{"date":"2026-06-24","files":996,"lines":112579,"note":"midnight snapshot 8173e11cf","type":"actual"},{"date":"2026-06-25","files":1064,"lines":123966,"note":"midnight snapshot fa69d9e04","type":"actual"},{"date":"2026-06-26","files":1090,"lines":130205,"note":"midnight snapshot c9e9a1493","type":"actual"},{"date":"2026-06-27","files":1140,"lines":140190,"note":"midnight snapshot 87924089a","type":"actual"},{"date":"2026-06-28","files":1167,"lines":147448,"note":"midnight snapshot 76c5c83b0","type":"actual"},{"date":"2026-06-29","files":1181,"lines":149119,"note":"midnight snapshot 5e9370eb8","type":"actual"},{"date":"2026-06-30","files":1252,"lines":159394,"note":"midnight snapshot c44b44109","type":"actual"},{"date":"2026-07-01","files":1335,"lines":173453,"note":"midnight snapshot c26b96e15","type":"actual"},{"date":"2026-07-02","files":1373,"lines":181233,"note":"midnight snapshot 6bba9d4ef","type":"actual"},{"date":"2026-07-03","files":1470,"lines":196108,"note":"midnight snapshot 4cbe1b0de","type":"actual"},{"date":"2026-07-04","files":1537,"lines":207471,"note":"midnight snapshot 9137adc6c","type":"actual"},{"date":"2026-07-05","files":1629,"lines":220177,"note":"midnight snapshot 39d3b38e8","type":"actual"},{"date":"2026-07-06","files":1736,"lines":230421,"note":"midnight snapshot 7e392fc36","type":"actual"},{"date":"2026-07-07","files":1853,"lines":240495,"note":"midnight snapshot 4b1b084a2","type":"actual"},{"date":"2026-07-08","files":1911,"lines":250212,"note":"midnight snapshot ed680d628","type":"actual"}];
+    const fmt = new Intl.NumberFormat();
+    const svg = document.getElementById('chart');
+    const width = 1120, height = 430, pad = { left: 82, right: 28, top: 24, bottom: 62 };
+    const max = Math.max(...rows.map((row) => row.lines), 1);
+    const min = Math.min(...rows.map((row) => row.lines), 0);
+    const span = Math.max(1, max - min);
+    const x = (i) => pad.left + (i / Math.max(1, rows.length - 1)) * (width - pad.left - pad.right);
+    const y = (value) => pad.top + (1 - (value - min) / span) * (height - pad.top - pad.bottom);
+    const points = rows.map((row, i) => [x(i), y(row.lines)]);
+    const line = points.map(([px, py], i) => `${i === 0 ? 'M' : 'L'}${px.toFixed(1)},${py.toFixed(1)}`).join(' ');
+    const area = `${line} L${x(rows.length - 1).toFixed(1)},${height - pad.bottom} L${pad.left},${height - pad.bottom} Z`;
+    const xTickIndexes = Array.from(new Set([0, Math.round((rows.length - 1) * .25), Math.round((rows.length - 1) * .5), Math.round((rows.length - 1) * .75), rows.length - 1])).filter((i) => rows[i]);
+    const yTicks = Array.from({ length: 4 }, (_, i) => Math.round(min + (span * i) / 3));
+    svg.innerHTML = `
+      <defs><linearGradient id="area" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#74e0c0" stop-opacity=".35"/><stop offset="100%" stop-color="#74e0c0" stop-opacity="0"/></linearGradient></defs>
+      ${yTicks.map((tick) => `<line class="tick" x1="${pad.left}" y1="${y(tick).toFixed(1)}" x2="${width - pad.right}" y2="${y(tick).toFixed(1)}"></line><text class="axis-text" x="${pad.left - 12}" y="${y(tick).toFixed(1)}" text-anchor="end" dominant-baseline="middle">${fmt.format(tick)}</text>`).join('')}
+      ${xTickIndexes.map((i) => `<line class="tick" x1="${x(i).toFixed(1)}" y1="${height - pad.bottom}" x2="${x(i).toFixed(1)}" y2="${height - pad.bottom + 6}"></line><text class="axis-text" x="${x(i).toFixed(1)}" y="${height - pad.bottom + 24}" text-anchor="middle">${rows[i].date.slice(5)}</text>`).join('')}
+      <line class="axis" x1="${pad.left}" y1="${height - pad.bottom}" x2="${width - pad.right}" y2="${height - pad.bottom}"></line>
+      <line class="axis" x1="${pad.left}" y1="${pad.top}" x2="${pad.left}" y2="${height - pad.bottom}"></line>
+      <path class="area" d="${area}"></path>
+      <path class="line" d="${line}"></path>
+      ${rows.map((row, i) => `<circle class="${row.type}" cx="${x(i).toFixed(1)}" cy="${y(row.lines).toFixed(1)}" r="${row.type === 'actual' ? 4.5 : 3.5}"><title>${row.date}: ${fmt.format(row.lines)} lines</title></circle>`).join('')}
+      <text class="axis-title" x="${(pad.left + width - pad.right) / 2}" y="${height - 10}" text-anchor="middle">Date</text>
+      <text class="axis-title" x="18" y="${(pad.top + height - pad.bottom) / 2}" text-anchor="middle" transform="rotate(-90 18 ${(pad.top + height - pad.bottom) / 2})">Lines of code</text>
+    `;
+    document.getElementById('rows').innerHTML = rows.toReversed().map((row) => `
+      <tr><td>${row.date}</td><td>${fmt.format(row.lines)}</td><td>${row.files == null ? '' : fmt.format(row.files)}</td><td><span class="pill ${row.type}">${row.type}</span></td><td>${row.note}</td></tr>
+    `).join('');
+  </script>
+</body>
+</html>

@@ -18,7 +18,7 @@ import {
   workplaceProjectAdapter,
   workplaceProjectSelectors
 } from '@monad/client-rtk';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { useAcpAgentSettings } from '@/hooks/use-acp-agent-settings';
 import { useExternalAgentSettings } from '@/hooks/use-external-agent-settings';
@@ -123,6 +123,29 @@ export function useProject(
     projects
   } = projection;
   const showDevSystemMessagesInStream = useProjectDebugStore((state) => state.showDevSystemMessagesInStream);
+
+  // The daemon starts a managed member's external-agent session server-side (join / first delivery),
+  // so no client mutation ever fires to invalidate `listExternalAgentSessions`'s RTK Query cache — the
+  // join notice would otherwise only ever be backed by the bounded live-items window and vanish once a
+  // long turn's events push the launch record out of it. Refetch the durable session list the moment a
+  // new external-agent session id shows up live, so the REST-backed join view takes over before that
+  // happens. Tracked in a ref (not state) so this never re-renders on its own.
+  const refetchedExternalAgentSessionIds = useRef(new Set<string>());
+  useEffect(() => {
+    refetchedExternalAgentSessionIds.current.clear();
+  }, []);
+  useEffect(() => {
+    const knownIds = new Set(externalAgentSessions.map((session) => session.id));
+    const unseenLiveId = liveTools.find(
+      (tool) =>
+        tool.tool.startsWith('external-agent:') &&
+        !knownIds.has(tool.id) &&
+        !refetchedExternalAgentSessionIds.current.has(tool.id)
+    );
+    if (!unseenLiveId) return;
+    refetchedExternalAgentSessionIds.current.add(unseenLiveId.id);
+    void externalAgentSessionsQ.refetch();
+  }, [liveTools, externalAgentSessions, externalAgentSessionsQ]);
 
   const loadOlder = transcript.loadOlder;
 

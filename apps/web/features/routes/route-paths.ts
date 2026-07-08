@@ -5,10 +5,26 @@ import {
 } from '@monad/protocol';
 
 import { safeDecode } from '@/lib/workspace-sessions';
+import { normalizeSettingsSection, type SettingsSectionId } from '../settings/sections';
 import { isStudioSectionId, type StudioSectionId } from '../studio/sections';
 
 export function isStudioPath(pathname: string): boolean {
   return pathname.startsWith('/studio/');
+}
+
+export function isSettingsPath(pathname: string): boolean {
+  return pathname === '/settings' || pathname.startsWith('/settings/');
+}
+
+export function settingsPath(section: SettingsSectionId = 'connection'): string {
+  return `/settings/${encodeURIComponent(section)}`;
+}
+
+export function settingsSectionFromPathname(pathname: string): SettingsSectionId | null {
+  const raw = pathname.match(/^\/settings(?:\/([^/?#]+))?/)?.[1];
+  if (!raw) return 'connection';
+  const section = safeDecode(raw);
+  return normalizeSettingsSection(section);
 }
 
 export function studioPath(section: StudioSectionId = 'runtime'): string {

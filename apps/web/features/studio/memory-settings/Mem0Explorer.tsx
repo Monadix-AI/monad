@@ -5,12 +5,54 @@ import type { GetMem0DataResponse, Mem0EntryView } from '@monad/protocol';
 import { BoxesIcon, DatabaseIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { useGetMem0DataQuery } from '@monad/client-rtk';
-import { Button } from '@monad/ui';
+import { Button, Skeleton } from '@monad/ui';
 import { useMemo } from 'react';
 
 import { useT } from '@/components/I18nProvider';
 import { DataEmpty } from './DataEmpty';
 import { colorForScope, scopeLabel } from './scope';
+
+function Mem0ExplorerSkeleton() {
+  return (
+    <div
+      aria-busy="true"
+      className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-6 py-5"
+    >
+      <section className="flex flex-wrap items-center gap-x-6 gap-y-2">
+        <Skeleton className="h-4 w-28 rounded" />
+        <Skeleton className="h-4 w-36 rounded" />
+        <Skeleton className="h-4 w-52 rounded" />
+      </section>
+      <section className="flex flex-col gap-2">
+        <Skeleton className="h-3 w-24 rounded" />
+        <div className="relative h-48 rounded-lg border bg-muted/10 p-2">
+          {Array.from({ length: 18 }, (_, i) => `mem0-dot-${i}`).map((key, index) => (
+            <Skeleton
+              className="absolute size-2 rounded-full"
+              key={key}
+              style={{
+                left: `${12 + ((index * 31) % 76)}%`,
+                top: `${16 + ((index * 17) % 66)}%`
+              }}
+            />
+          ))}
+        </div>
+      </section>
+      <section className="flex flex-col gap-2">
+        <Skeleton className="h-3 w-20 rounded" />
+        {Array.from({ length: 5 }, (_, i) => `mem0-entry-${i}`).map((key) => (
+          <div
+            className="flex items-start gap-2 rounded-md border px-3 py-2"
+            key={key}
+          >
+            <Skeleton className="mt-1.5 size-2 shrink-0 rounded-full" />
+            <Skeleton className="h-4 w-4/5 rounded" />
+          </div>
+        ))}
+      </section>
+    </div>
+  );
+}
 
 // 2D scatter of the embedding projection, points colored by scope. Hand-rolled SVG (no chart dep);
 // coordinates are min/max-normalized into the viewport. Hover shows the memory text via <title>.
@@ -80,7 +122,9 @@ export function Mem0Explorer() {
         </Button>
       </div>
 
-      {!isLoading && !d?.available ? (
+      {isLoading ? (
+        <Mem0ExplorerSkeleton />
+      ) : !d?.available ? (
         <DataEmpty
           hint={t('web.mem0.inactiveHint')}
           icon={DatabaseIcon}

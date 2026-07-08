@@ -92,7 +92,8 @@ export function createDaemonHandlers(deps: DaemonHandlerDeps) {
     resolveAgentEnv: async (env) => resolveExternalAgentEnv(env, (await loadAuth(paths.auth)) ?? undefined),
     externalAgentProcessRegistryPath: `${paths.runtime}/external-agent-processes.json`,
     authProcessRegistryPath: `${paths.runtime}/external-agent-auth-processes.json`,
-    authHeartbeatTimeoutMs: deps.externalAgentAuthHeartbeatTimeoutMs
+    authHeartbeatTimeoutMs: deps.externalAgentAuthHeartbeatTimeoutMs,
+    authStatusTimeoutMs: deps.externalAgentAuthStatusTimeoutMs
   });
   void externalAgentHost.reconcileOrphanedSessions();
   process.on('exit', () => externalAgentHost.stopAll());
@@ -101,7 +102,11 @@ export function createDaemonHandlers(deps: DaemonHandlerDeps) {
 
   const oversight = createOversightHandlers(deps.oversight);
   const clarify = createClarifyHandlers(deps.clarify);
-  const systemUpgrade = createSystemUpgradeModule({ detached: true, getUpgradeInfo: deps.getUpgradeInfo });
+  const systemUpgrade = createSystemUpgradeModule({
+    cacheDir: join(paths.cache, 'upgrade'),
+    detached: true,
+    getUpgradeInfo: deps.getUpgradeInfo
+  });
   const system = createSystemHandlers(systemUpgrade);
   const delegation = createDelegationHandlers(deps.delegation);
 

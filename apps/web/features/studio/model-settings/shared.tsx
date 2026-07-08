@@ -3,7 +3,7 @@
 import type { CredentialView } from '@monad/protocol';
 
 import { ModelProviderType } from '@monad/protocol';
-import { cn } from '@monad/ui';
+import { cn, Skeleton } from '@monad/ui';
 
 export interface AddForm {
   type: ModelProviderType;
@@ -72,20 +72,17 @@ function SkeletonSection({
   return (
     <section className="flex flex-col gap-3">
       <div className="flex items-center gap-3">
-        <div className="h-3 w-20 animate-pulse rounded bg-muted motion-reduce:animate-none" />
+        <Skeleton className="h-3 w-20 rounded" />
         <div className="h-px flex-1 bg-border/80" />
       </div>
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="h-4 w-64 max-w-full animate-pulse rounded bg-muted motion-reduce:animate-none" />
-        <div className="h-7 w-24 animate-pulse rounded bg-muted motion-reduce:animate-none" />
+        <Skeleton className="h-4 w-64 max-w-full rounded" />
+        <Skeleton className="h-7 w-24 rounded" />
       </div>
       <div className={cn('grid gap-3', gridClassName)}>
         {Array.from({ length: count }, (_, i) => `skeleton-card-${i}`).map((key) => (
           <div
-            className={cn(
-              'animate-pulse rounded-md border border-border/70 bg-muted/10 motion-reduce:animate-none',
-              cardClassName
-            )}
+            className={cn('rounded-md border border-border/70 bg-muted/10', cardClassName)}
             key={key}
           />
         ))}

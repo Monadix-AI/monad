@@ -1,6 +1,4 @@
 #!/usr/bin/env bun
-
-/// <reference types="bun" />
 /**
  * Dev prep — prints the resolved local-dev environment, refreshes generated
  * artifacts, then starts the daemon/web/devtools task group.

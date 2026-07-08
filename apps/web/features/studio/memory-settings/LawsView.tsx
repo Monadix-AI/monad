@@ -13,12 +13,50 @@ import {
 } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { useGetLawsQuery } from '@monad/client-rtk';
-import { Badge, Button } from '@monad/ui';
+import { Badge, Button, Skeleton } from '@monad/ui';
 import { useMemo, useState } from 'react';
 
 import { type TFn, useT } from '@/components/I18nProvider';
 import { DataEmpty } from './DataEmpty';
 import { scopeLabel } from './scope';
+
+function LawsSkeleton() {
+  return (
+    <div
+      aria-busy="true"
+      className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto px-6 py-4"
+    >
+      {Array.from({ length: 2 }, (_, section) => `laws-section-${section}`).map((key) => (
+        <section
+          className="flex flex-col gap-2"
+          key={key}
+        >
+          <div className="flex items-center gap-2">
+            <Skeleton className="h-4 w-28 rounded" />
+            <Skeleton className="h-5 w-8 rounded-full" />
+          </div>
+          <ul className="flex flex-col gap-2">
+            {Array.from({ length: 3 }, (_, row) => `${key}-row-${row}`).map((rowKey) => (
+              <li
+                className="rounded-lg border p-3"
+                key={rowKey}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex flex-1 flex-col gap-2">
+                    <Skeleton className="h-4 w-full rounded" />
+                    <Skeleton className="h-4 w-3/4 rounded" />
+                  </div>
+                  <Skeleton className="h-5 w-10 rounded-full" />
+                </div>
+                <Skeleton className="mt-2 h-3 w-32 rounded" />
+              </li>
+            ))}
+          </ul>
+        </section>
+      ))}
+    </div>
+  );
+}
 
 // One law + its grounding, expandable. The grounding is the "why do you believe X" chain: the L1
 // facts the law generalizes and the L2 relations it rests on, resolved server-side from the law's
@@ -148,7 +186,9 @@ export function LawsView() {
           {t('web.graph.refresh')}
         </Button>
       </div>
-      {empty ? (
+      {isLoading ? (
+        <LawsSkeleton />
+      ) : empty ? (
         <DataEmpty
           hint={t('web.laws.empty')}
           icon={JusticeScaleIcon}

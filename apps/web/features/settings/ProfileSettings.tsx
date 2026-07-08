@@ -1,21 +1,44 @@
 'use client';
 
-import { Delete02Icon, LoaderPinwheelIcon, Upload01Icon, UserGroupIcon } from '@hugeicons/core-free-icons';
+import { Delete02Icon, LoaderPinwheelIcon, Upload01Icon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { useGetAppearanceQuery, useGetProfileSettingsQuery, useSetProfileSettingsMutation } from '@monad/client-rtk';
 import { DEFAULT_AVATAR_STYLE, entityAvatarUrl, entityAvatarWriteUrl } from '@monad/protocol';
-import { Button, Input, Label } from '@monad/ui';
+import { Button, Input, Label, Skeleton } from '@monad/ui';
 import Image from 'next/image';
 import { useEffect, useRef, useState } from 'react';
 
 import { useT } from '@/components/I18nProvider';
-import { SettingsBreadcrumbHeader } from './SettingsBreadcrumbHeader';
 
 const MAX_AVATAR_BYTES = 512 * 1024;
 const AVATAR_ACCEPT = 'image/png,image/jpeg,image/webp,image/gif';
 
-interface Props {
-  onClose: () => void;
+function ProfileSettingsSkeleton() {
+  return (
+    <div
+      aria-busy="true"
+      className="flex flex-1 flex-col gap-6 overflow-y-auto px-6 py-6"
+    >
+      <Skeleton className="h-4 w-4/5 rounded" />
+      <section className="flex flex-col gap-3">
+        <Skeleton className="h-4 w-20 rounded" />
+        <div className="flex items-center gap-4">
+          <Skeleton className="size-20 shrink-0 rounded-full" />
+          <div className="flex flex-wrap gap-2">
+            <Skeleton className="h-8 w-28 rounded-md" />
+            <Skeleton className="h-8 w-28 rounded-md" />
+          </div>
+        </div>
+      </section>
+      <section className="flex max-w-md flex-col gap-2">
+        <Skeleton className="h-4 w-28 rounded" />
+        <Skeleton className="h-9 w-full rounded-md" />
+      </section>
+      <div className="flex justify-end">
+        <Skeleton className="h-9 w-20 rounded-md" />
+      </div>
+    </div>
+  );
 }
 
 function readFileAsDataUrl(file: File): Promise<string> {
@@ -27,7 +50,7 @@ function readFileAsDataUrl(file: File): Promise<string> {
   });
 }
 
-export function ProfileSettings({ onClose }: Props) {
+export function ProfileSettings() {
   const t = useT();
   const inputRef = useRef<HTMLInputElement>(null);
   const { data, isLoading } = useGetProfileSettingsQuery();
@@ -80,111 +103,104 @@ export function ProfileSettings({ onClose }: Props) {
 
   return (
     <div className="flex min-w-0 flex-1 flex-col">
-      <SettingsBreadcrumbHeader
-        icon={
-          <HugeiconsIcon
-            className="size-4"
-            icon={UserGroupIcon}
-          />
-        }
-        onClose={onClose}
-        title={t('web.settings.profile')}
-      />
+      {isLoading && !data ? (
+        <ProfileSettingsSkeleton />
+      ) : (
+        <div className="flex flex-1 flex-col gap-6 overflow-y-auto px-6 py-6">
+          <p className="text-muted-foreground text-sm">{t('web.settings.profileDesc')}</p>
 
-      <div className="flex flex-1 flex-col gap-6 overflow-y-auto px-6 py-6">
-        <p className="text-muted-foreground text-sm">{t('web.settings.profileDesc')}</p>
-
-        <section className="flex flex-col gap-3">
-          <h3 className="font-semibold text-sm">{t('web.settings.profile.avatar')}</h3>
-          <div className="flex items-center gap-4">
-            <div className="relative flex size-20 shrink-0 items-center justify-center overflow-hidden rounded-full border bg-muted font-semibold text-lg">
-              {avatarDataUrl ? (
-                <Image
-                  alt=""
-                  className="size-full object-cover"
-                  fill
-                  src={avatarDataUrl}
+          <section className="flex flex-col gap-3">
+            <h3 className="font-semibold text-sm">{t('web.settings.profile.avatar')}</h3>
+            <div className="flex items-center gap-4">
+              <div className="relative flex size-20 shrink-0 items-center justify-center overflow-hidden rounded-full border bg-muted font-semibold text-lg">
+                {avatarDataUrl ? (
+                  <Image
+                    alt=""
+                    className="size-full object-cover"
+                    fill
+                    src={avatarDataUrl}
+                  />
+                ) : (
+                  <Image
+                    alt=""
+                    className="size-full object-cover"
+                    fill
+                    src={generatedAvatarUrl}
+                    unoptimized
+                  />
+                )}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <input
+                  accept="image/png,image/jpeg,image/webp,image/gif"
+                  className="hidden"
+                  onChange={(event) => void handleAvatar(event.currentTarget.files?.[0])}
+                  ref={inputRef}
+                  type="file"
                 />
-              ) : (
-                <Image
-                  alt=""
-                  className="size-full object-cover"
-                  fill
-                  src={generatedAvatarUrl}
-                  unoptimized
+                <Button
+                  className="gap-2"
+                  disabled={isLoading || isSaving}
+                  onClick={() => inputRef.current?.click()}
+                  size="sm"
+                  variant="secondary"
+                >
+                  <HugeiconsIcon
+                    className="size-4"
+                    icon={Upload01Icon}
+                  />
+                  {t('web.settings.profile.avatarUpload')}
+                </Button>
+                <Button
+                  className="gap-2"
+                  disabled={isLoading || isSaving || !avatarDataUrl}
+                  onClick={() => {
+                    setAvatarDataUrl(null);
+                    if (inputRef.current) inputRef.current.value = '';
+                  }}
+                  size="sm"
+                  variant="ghost"
+                >
+                  <HugeiconsIcon
+                    className="size-4"
+                    icon={Delete02Icon}
+                  />
+                  {t('web.settings.profile.avatarRemove')}
+                </Button>
+              </div>
+            </div>
+          </section>
+
+          <section className="flex max-w-md flex-col gap-2">
+            <Label htmlFor="profile-display-name">{t('web.settings.profile.displayName')}</Label>
+            <Input
+              disabled={isLoading || isSaving}
+              id="profile-display-name"
+              maxLength={80}
+              onChange={(event) => setDisplayName(event.currentTarget.value)}
+              value={displayName}
+            />
+          </section>
+
+          {error && <p className="text-destructive text-xs">{error}</p>}
+
+          <div className="flex justify-end">
+            <Button
+              className="gap-2"
+              disabled={isLoading || isSaving || !changed}
+              onClick={() => void handleSave()}
+            >
+              {isSaving && (
+                <HugeiconsIcon
+                  className="size-4 animate-spin"
+                  icon={LoaderPinwheelIcon}
                 />
               )}
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <input
-                accept="image/png,image/jpeg,image/webp,image/gif"
-                className="hidden"
-                onChange={(event) => void handleAvatar(event.currentTarget.files?.[0])}
-                ref={inputRef}
-                type="file"
-              />
-              <Button
-                className="gap-2"
-                disabled={isLoading || isSaving}
-                onClick={() => inputRef.current?.click()}
-                size="sm"
-                variant="secondary"
-              >
-                <HugeiconsIcon
-                  className="size-4"
-                  icon={Upload01Icon}
-                />
-                {t('web.settings.profile.avatarUpload')}
-              </Button>
-              <Button
-                className="gap-2"
-                disabled={isLoading || isSaving || !avatarDataUrl}
-                onClick={() => {
-                  setAvatarDataUrl(null);
-                  if (inputRef.current) inputRef.current.value = '';
-                }}
-                size="sm"
-                variant="ghost"
-              >
-                <HugeiconsIcon
-                  className="size-4"
-                  icon={Delete02Icon}
-                />
-                {t('web.settings.profile.avatarRemove')}
-              </Button>
-            </div>
+              {t('web.save')}
+            </Button>
           </div>
-        </section>
-
-        <section className="flex max-w-md flex-col gap-2">
-          <Label htmlFor="profile-display-name">{t('web.settings.profile.displayName')}</Label>
-          <Input
-            disabled={isLoading || isSaving}
-            id="profile-display-name"
-            maxLength={80}
-            onChange={(event) => setDisplayName(event.currentTarget.value)}
-            value={displayName}
-          />
-        </section>
-
-        {error && <p className="text-destructive text-xs">{error}</p>}
-
-        <div className="flex justify-end">
-          <Button
-            className="gap-2"
-            disabled={isLoading || isSaving || !changed}
-            onClick={() => void handleSave()}
-          >
-            {isSaving && (
-              <HugeiconsIcon
-                className="size-4 animate-spin"
-                icon={LoaderPinwheelIcon}
-              />
-            )}
-            {t('web.save')}
-          </Button>
         </div>
-      </div>
+      )}
     </div>
   );
 }

@@ -2,7 +2,7 @@
 
 import { Copy01Icon, LoaderPinwheelIcon, Refresh01Icon, SendToMobileIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { Button, cn, Input, Label, ScrollArea, Switch, Textarea } from '@monad/ui';
+import { Button, cn, Input, Label, ScrollArea, Skeleton, Switch, Textarea } from '@monad/ui';
 import { useEffect, useRef, useState } from 'react';
 
 import { type TFn, useT } from '@/components/I18nProvider';
@@ -12,6 +12,33 @@ import { useAsyncAction } from '@/hooks/use-async-action';
 import { useOpenaiCompatSettings } from '@/hooks/use-openai-compat-settings';
 import { useMonadRuntime } from '@/lib/monad-runtime-provider';
 import { SECRET_INPUT_PASSWORD_MANAGER_PROPS } from '@/lib/secret-input-props';
+
+function OpenaiCompatSettingsSkeleton() {
+  return (
+    <div
+      aria-busy="true"
+      className="flex flex-col gap-4"
+    >
+      <div className="flex items-center gap-3">
+        <Skeleton className="h-5 w-9 rounded-full" />
+        <Skeleton className="h-4 w-24 rounded" />
+      </div>
+      <div className="flex flex-col gap-2">
+        <Skeleton className="h-4 w-24 rounded" />
+        <Skeleton className="h-3 w-3/5 rounded" />
+        <div className="flex gap-2">
+          <Skeleton className="h-9 flex-1 rounded-md" />
+          <Skeleton className="size-9 rounded-md" />
+        </div>
+        <Skeleton className="h-8 w-24 rounded-md" />
+      </div>
+      <div className="rounded-md border bg-muted/10 p-3">
+        <Skeleton className="h-4 w-40 rounded" />
+        <Skeleton className="mt-3 h-16 w-full rounded-md" />
+      </div>
+    </div>
+  );
+}
 
 export function OpenaiCompatSettings({ embedded = false }: { onClose: () => void; embedded?: boolean }) {
   const t = useT();
@@ -49,13 +76,7 @@ export function OpenaiCompatSettings({ embedded = false }: { onClose: () => void
       </p>
 
       {loading ? (
-        <div className="flex items-center gap-2 text-muted-foreground text-sm">
-          <HugeiconsIcon
-            className="size-4 animate-spin"
-            icon={LoaderPinwheelIcon}
-          />
-          {t('web.common.loading')}
-        </div>
+        <OpenaiCompatSettingsSkeleton />
       ) : (
         <>
           <div className="flex items-center gap-3">

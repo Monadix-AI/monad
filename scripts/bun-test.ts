@@ -1,4 +1,3 @@
-/// <reference types="bun" />
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, relative, resolve } from 'node:path';
@@ -116,9 +115,12 @@ interface FailedCase {
 function parseFailedCases(xml: string): FailedCase[] {
   const failed: FailedCase[] = [];
   for (const match of xml.matchAll(/<testcase\b([^>]*[^/])>([\s\S]*?)<\/testcase>/g)) {
-    if (!match[2].includes('<failure') && !match[2].includes('<error')) continue;
+    const attrsSource = match[1];
+    const body = match[2];
+    if (!attrsSource || !body) continue;
+    if (!body.includes('<failure') && !body.includes('<error')) continue;
     const attrs = Object.fromEntries(
-      [...match[1].matchAll(/(\w+)="([^"]*)"/g)].map(([, key, value]) => [key, decodeXml(value)])
+      [...attrsSource.matchAll(/(\w+)="([^"]*)"/g)].map(([, key, value]) => [key, decodeXml(value ?? '')])
     );
     if (attrs.file && attrs.name) failed.push({ file: attrs.file, name: attrs.name });
   }

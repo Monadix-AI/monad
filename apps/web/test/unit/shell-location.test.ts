@@ -56,8 +56,8 @@ describe('shell location navigation', () => {
   test('normalizes same-origin URLs to path-only shell URLs', () => {
     installWindowMock();
 
-    expect(toShellUrl('http://localhost:3000/studio/models?settings=profile#top')).toBe(
-      '/studio/models?settings=profile#top'
+    expect(toShellUrl('http://localhost:3000/studio/models?view=profiles#top')).toBe(
+      '/studio/models?view=profiles#top'
     );
   });
 
@@ -72,18 +72,18 @@ describe('shell location navigation', () => {
       popstateCount += 1;
     });
 
-    navigateShellUrl('/workplace/projects/p1?settings=connection', 'replace');
+    navigateShellUrl('/workplace/projects/p1?view=members', 'replace');
 
-    expect(calls).toEqual([{ mode: 'replace', url: '/workplace/projects/p1?settings=connection' }]);
+    expect(calls).toEqual([{ mode: 'replace', url: '/workplace/projects/p1?view=members' }]);
     expect(eventCount).toBe(1);
     expect(popstateCount).toBe(1);
     expect(listeners.get('monad:shell-location')?.size).toBe(1);
   });
 
   test('skips no-op navigation to the current URL', () => {
-    const { calls } = installWindowMock('http://localhost:3000/studio/runtime?settings=connection');
+    const { calls } = installWindowMock('http://localhost:3000/studio/runtime?view=overview');
 
-    navigateShellUrl('/studio/runtime?settings=connection', 'push');
+    navigateShellUrl('/studio/runtime?view=overview', 'push');
 
     expect(calls).toEqual([]);
   });

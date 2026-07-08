@@ -94,6 +94,19 @@ function SkeletonRow({ align, bodyWidth }: { align: 'left' | 'right'; bodyWidth:
   );
 }
 
+// A project room's first item is almost always a "joined the project" system pill, and the room is
+// multi-agent (not a 1:1 DM), so agent-authored (left-aligned) rows dominate the real distribution.
+function SystemPillSkeletonRow(): React.ReactElement {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
+      <div
+        className="chat-transcript-skeleton-bar"
+        style={{ width: 176, height: 26, borderRadius: 999 }}
+      />
+    </div>
+  );
+}
+
 export function TranscriptSkeleton(): React.ReactElement {
   return (
     <div
@@ -101,17 +114,18 @@ export function TranscriptSkeleton(): React.ReactElement {
       style={{ paddingTop: 4 }}
     >
       <style>{SKELETON_CSS}</style>
+      <SystemPillSkeletonRow />
       <SkeletonRow
         align="left"
         bodyWidth="72%"
       />
       <SkeletonRow
-        align="right"
-        bodyWidth="48%"
-      />
-      <SkeletonRow
         align="left"
         bodyWidth="58%"
+      />
+      <SkeletonRow
+        align="right"
+        bodyWidth="42%"
       />
     </div>
   );

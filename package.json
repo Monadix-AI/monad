@@ -79,7 +79,7 @@
     "test:loud": "bun run i18n:types && turbo run test:loud",
     "test:unit": "bun run i18n:types && turbo run test:unit --output-logs=errors-only",
     "test:unit:loud": "bun run i18n:types && turbo run test:unit:loud",
-    "typecheck": "bun run i18n:types && turbo run typecheck"
+    "typecheck": "bun run i18n:types && tsgo --noEmit && turbo run typecheck"
   },
   "type": "module",
   "workspaces": [

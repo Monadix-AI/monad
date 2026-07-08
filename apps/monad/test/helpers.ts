@@ -208,6 +208,8 @@ export function buildHandlers(
     getUpgradeInfo?: () => { latestVersion: string; latestVersionCheckedAt: string } | null;
     /** Override external agent auth connect heartbeat pruning for fast e2e coverage. */
     externalAgentAuthHeartbeatTimeoutMs?: number;
+    /** Override external agent auth/usage probe timeout for fast timeout-path coverage. */
+    externalAgentAuthStatusTimeoutMs?: number;
     /** Override the loopback URL injected into managed external agent runtimes. */
     externalAgentServerUrl?: string;
     /** Dynamic workspace experience API route resolver for atom HTTP tests. */
@@ -317,6 +319,7 @@ export function buildHandlers(
       memorySetMem0Models: async () => {},
       memorySetGraph: async () => {},
       externalAgentAuthHeartbeatTimeoutMs: opts?.externalAgentAuthHeartbeatTimeoutMs,
+      externalAgentAuthStatusTimeoutMs: opts?.externalAgentAuthStatusTimeoutMs,
       externalAgentServerUrl: opts?.externalAgentServerUrl,
       log: { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} } as never,
       ...modelDeps

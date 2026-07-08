@@ -71,6 +71,7 @@ export interface ExternalAgentAuthHostDeps {
   resolveAgentEnv?: ResolveAgentEnv;
   authProcessRegistryPath?: string;
   authHeartbeatTimeoutMs?: number;
+  authStatusTimeoutMs?: number;
 }
 
 function authToView(session: LiveExternalAgentAuthSession): ExternalAgentAuthSessionView {
@@ -107,8 +108,11 @@ export class ExternalAgentAuthHost {
    *  async (never block the event loop), so overlapping track/untrack calls are chained onto this
    *  promise instead of racing each other and losing an update. */
   private registryQueue: Promise<void> = Promise.resolve();
+  private readonly authStatusTimeoutMs: number;
 
-  constructor(private readonly deps: ExternalAgentAuthHostDeps) {}
+  constructor(private readonly deps: ExternalAgentAuthHostDeps) {
+    this.authStatusTimeoutMs = deps.authStatusTimeoutMs ?? AUTH_STATUS_TIMEOUT_MS;
+  }
 
   private requireAgent(name: string): Promise<ExternalAgentView> {
     return requireExternalAgent(this.deps.agents, name);
@@ -362,7 +366,7 @@ export class ExternalAgentAuthHost {
       stdout: 'pipe',
       stderr: 'pipe'
     });
-    const result = await collectProbeResult(proc, AUTH_STATUS_TIMEOUT_MS, MAX_OUTPUT_SNAPSHOT);
+    const result = await collectProbeResult(proc, this.authStatusTimeoutMs, MAX_OUTPUT_SNAPSHOT);
     if (result.timedOut) {
       this.log.warn(
         {
@@ -371,7 +375,7 @@ export class ExternalAgentAuthHost {
           provider: agent.provider,
           argv: launch.argv,
           cwd: launch.cwd,
-          timeoutMs: AUTH_STATUS_TIMEOUT_MS,
+          timeoutMs: this.authStatusTimeoutMs,
           output: result.output
         },
         'native cli auth status probe timed out'
@@ -431,7 +435,7 @@ export class ExternalAgentAuthHost {
       stdout: 'pipe',
       stderr: 'pipe'
     });
-    const result = await collectProbeResult(proc, AUTH_STATUS_TIMEOUT_MS, MAX_OUTPUT_SNAPSHOT);
+    const result = await collectProbeResult(proc, this.authStatusTimeoutMs, MAX_OUTPUT_SNAPSHOT);
     if (result.timedOut) {
       this.log.warn(
         {
@@ -440,7 +444,7 @@ export class ExternalAgentAuthHost {
           provider: agent.provider,
           argv: launch.argv,
           cwd: launch.cwd,
-          timeoutMs: AUTH_STATUS_TIMEOUT_MS,
+          timeoutMs: this.authStatusTimeoutMs,
           output: result.output
         },
         'native cli usage probe timed out'

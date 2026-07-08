@@ -137,6 +137,7 @@ export interface ExternalAgentHostDeps {
   externalAgentProcessRegistryPath?: string;
   authProcessRegistryPath?: string;
   authHeartbeatTimeoutMs?: number;
+  authStatusTimeoutMs?: number;
   /** Milliseconds before a resumable external agent child is released while idle. <=0 disables it. */
   externalAgentIdleTimeoutMs?: number;
 }

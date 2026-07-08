@@ -14,6 +14,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  Skeleton,
   Switch
 } from '@monad/ui';
 import { useEffect, useState } from 'react';
@@ -27,6 +28,44 @@ type HostExec = 'deny' | 'ask' | 'allow';
 const MODES: Mode[] = ['workspace', 'home', 'unrestricted', 'ephemeral'];
 const NETS: Net[] = ['none', 'unrestricted', 'filtered'];
 const HOST_EXECS: HostExec[] = ['deny', 'ask', 'allow'];
+
+function SandboxDefaultsSkeleton() {
+  return (
+    <ScrollArea className="flex-1">
+      <div
+        aria-busy="true"
+        className="mx-auto flex max-w-2xl flex-col gap-6 p-5"
+      >
+        <header className="flex flex-col gap-2">
+          <Skeleton className="h-5 w-44 rounded" />
+          <Skeleton className="h-4 w-4/5 rounded" />
+        </header>
+        {Array.from({ length: 2 }, (_, section) => `sandbox-section-${section}`).map((key) => (
+          <section
+            className="flex flex-col gap-1"
+            key={key}
+          >
+            <Skeleton className="mb-1 h-3 w-28 rounded" />
+            <div className="divide-y rounded-lg border px-3">
+              {Array.from({ length: 4 }, (_, row) => `${key}-row-${row}`).map((rowKey) => (
+                <div
+                  className="flex items-center justify-between gap-4 py-2.5"
+                  key={rowKey}
+                >
+                  <div className="flex flex-col gap-1.5">
+                    <Skeleton className="h-4 w-32 rounded" />
+                    <Skeleton className="h-3 w-52 rounded" />
+                  </div>
+                  <Skeleton className="h-8 w-44 rounded-md" />
+                </div>
+              ))}
+            </div>
+          </section>
+        ))}
+      </div>
+    </ScrollArea>
+  );
+}
 
 /** Studio › Capabilities › Sandbox: the system-level sandbox defaults (cfg.agent.sandbox) + the global
  *  ceiling (cfg.agent.globalSandbox). Per-agent sandbox overrides narrow within these; the ceiling, when
@@ -87,16 +126,7 @@ export function SandboxDefaults() {
     }
   };
 
-  if (isLoading) {
-    return (
-      <div className="flex flex-1 items-center justify-center">
-        <HugeiconsIcon
-          className="size-4 animate-spin text-muted-foreground"
-          icon={LoaderPinwheelIcon}
-        />
-      </div>
-    );
-  }
+  if (isLoading) return <SandboxDefaultsSkeleton />;
 
   const enumSelect = <T extends string>(value: T, onChange: (v: T) => void, options: readonly T[]) => (
     <Select

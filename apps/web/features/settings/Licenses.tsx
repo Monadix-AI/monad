@@ -9,18 +9,13 @@ import {
 } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { useListLicensesQuery } from '@monad/client-rtk';
-import { Button, Input } from '@monad/ui';
+import { Button, Input, Skeleton } from '@monad/ui';
 import { memo, useState } from 'react';
 
 import { useT } from '@/components/I18nProvider';
-import { SettingsBreadcrumbHeader } from './SettingsBreadcrumbHeader';
-
-interface Props {
-  onClose: () => void;
-}
 
 interface LicenseRowProps {
-  icon: typeof JusticeScaleIcon;
+  icon: typeof PackageIcon;
   name: string;
   subtitle: string;
   badge: string;
@@ -32,9 +27,7 @@ const LicensePolishStyle = memo(function LicensePolishStyle() {
   return (
     <style data-impeccable-css="licenses-polish">{`
       .licenses-shell {
-        background:
-          linear-gradient(180deg, color-mix(in srgb, var(--muted) 28%, transparent), transparent 188px),
-          var(--background);
+        background: var(--background);
       }
 
       .licenses-toolbar {
@@ -244,12 +237,6 @@ const LicensePolishStyle = memo(function LicensePolishStyle() {
         border-bottom: 0;
       }
 
-      .licenses-skeleton-line {
-        height: 10px;
-        background: color-mix(in srgb, var(--muted-foreground) 15%, transparent);
-        border-radius: 999px;
-      }
-
       @media (max-width: 720px) {
         .licenses-toolbar,
         .licenses-row {
@@ -333,20 +320,20 @@ function LicenseSkeleton({ rows = 8 }: { rows?: number }) {
           key={rowKey}
         >
           <div className="grid min-w-0 grid-cols-[30px_minmax(0,1fr)] items-center gap-3">
-            <span className="block size-[30px] rounded-lg bg-muted" />
+            <Skeleton className="size-[30px] rounded-lg" />
             <span className="grid gap-2">
-              <span className="licenses-skeleton-line w-3/5" />
-              <span className="licenses-skeleton-line w-1/4" />
+              <Skeleton className="h-2.5 w-3/5 rounded-full" />
+              <Skeleton className="h-2.5 w-1/4 rounded-full" />
             </span>
           </div>
-          <span className="licenses-skeleton-line w-full" />
+          <Skeleton className="h-2.5 w-full rounded-full" />
         </div>
       ))}
     </div>
   );
 }
 
-export function LicensesSettings({ onClose }: Props) {
+export function LicensesSettings() {
   const t = useT();
   const { data, isLoading } = useListLicensesQuery();
   const [search, setSearch] = useState('');
@@ -413,24 +400,6 @@ export function LicensesSettings({ onClose }: Props) {
   return (
     <div className="licenses-shell flex min-h-0 min-w-0 flex-1 flex-col">
       <LicensePolishStyle />
-      <SettingsBreadcrumbHeader
-        badge={
-          totalPackageCount > 0 ? (
-            <span className="rounded-full bg-muted px-2 py-0.5 text-muted-foreground text-xs">
-              {t('web.licenses.packageCount', { count: totalPackageCount })}
-            </span>
-          ) : undefined
-        }
-        icon={
-          <HugeiconsIcon
-            className="size-4"
-            icon={JusticeScaleIcon}
-          />
-        }
-        onClose={onClose}
-        title={t('web.licenses.title')}
-      />
-
       <div className="flex flex-col gap-4 border-b px-6 py-4">
         <div className="licenses-toolbar">
           <div className="min-w-0">

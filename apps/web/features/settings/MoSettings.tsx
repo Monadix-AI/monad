@@ -1,6 +1,6 @@
 'use client';
 
-import { CatIcon, LoaderPinwheelIcon, PlayIcon, SquareIcon } from '@hugeicons/core-free-icons';
+import { LoaderPinwheelIcon, PlayIcon, SquareIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Button, cn } from '@monad/ui';
 import { useCallback, useEffect, useState } from 'react';
@@ -9,7 +9,6 @@ import { useT } from '@/components/I18nProvider';
 import { useAsyncAction } from '@/hooks/use-async-action';
 import { useMonadRuntime } from '@/lib/monad-runtime-provider';
 import moAtlasManifest from '../../../../apps/mo/assets/atlas.json' with { type: 'json' };
-import { SettingsBreadcrumbHeader } from './SettingsBreadcrumbHeader';
 
 const MO_ATLAS = {
   cols: moAtlasManifest.columns,
@@ -23,11 +22,7 @@ const TILE_W = 96; // displayed cell width (px)
 const SCALE = TILE_W / MO_ATLAS.cellW;
 const TILE_H = MO_ATLAS.cellH * SCALE;
 
-interface Props {
-  onClose: () => void;
-}
-
-export function MoSettings({ onClose }: Props) {
+export function MoSettings() {
   const t = useT();
   const { baseUrl: daemonBaseUrl } = useMonadRuntime();
   const { busy, error, run } = useAsyncAction();
@@ -81,17 +76,6 @@ export function MoSettings({ onClose }: Props) {
 
   return (
     <div className="flex min-w-0 flex-1 flex-col">
-      <SettingsBreadcrumbHeader
-        icon={
-          <HugeiconsIcon
-            className="size-4"
-            icon={CatIcon}
-          />
-        }
-        onClose={onClose}
-        title={t('web.settings.mo')}
-      />
-
       <div className="flex flex-1 flex-col gap-6 overflow-y-auto px-6 py-6">
         <p className="text-muted-foreground text-sm">{t('web.settings.moDesc')}</p>
 

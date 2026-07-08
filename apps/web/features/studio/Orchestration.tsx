@@ -2,18 +2,44 @@
 
 import type { Agent } from '@monad/protocol';
 
-import {
-  ArrowRight01Icon,
-  BotIcon,
-  LoaderPinwheelIcon,
-  NeuralNetworkIcon,
-  UserGroupIcon
-} from '@hugeicons/core-free-icons';
+import { ArrowRight01Icon, BotIcon, NeuralNetworkIcon, UserGroupIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { agentSelectors, useListAgentsQuery } from '@monad/client-rtk';
-import { Badge, ScrollArea } from '@monad/ui';
+import { Badge, ScrollArea, Skeleton } from '@monad/ui';
 
 import { useT } from '@/components/I18nProvider';
+
+function OrchestrationSkeleton() {
+  return (
+    <div
+      aria-busy="true"
+      className="flex gap-6"
+    >
+      <div className="flex w-36 shrink-0 flex-col items-center gap-2 self-start rounded-lg border bg-card px-4 py-3">
+        <Skeleton className="size-5 rounded-md" />
+        <Skeleton className="h-4 w-20 rounded" />
+        <Skeleton className="size-4 rounded-md" />
+      </div>
+      <div className="relative flex flex-1 flex-col gap-2 border-l pl-6">
+        {Array.from({ length: 4 }, (_, i) => `orchestration-skeleton-${i}`).map((key) => (
+          <div
+            className="rounded-lg border bg-card px-4 py-3"
+            key={key}
+          >
+            <div className="flex items-center gap-2">
+              <Skeleton className="size-4 rounded-md" />
+              <Skeleton className="h-4 w-32 rounded" />
+              <Skeleton className="h-5 w-14 rounded-full" />
+              <Skeleton className="ml-auto h-3 w-24 rounded" />
+            </div>
+            <Skeleton className="mt-2 h-3 w-4/5 rounded" />
+            <Skeleton className="mt-2 h-3 w-28 rounded" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 /** Studio › Agents › Orchestration: a read-only delegation map. Delegation is global — any agent may
  *  call any `subagentCallable` agent via agent_delegate_to — so the map is a hub (Any agent) → the
@@ -43,12 +69,7 @@ export function Orchestration() {
           </div>
         </header>
 
-        {isLoading && (
-          <HugeiconsIcon
-            className="size-4 animate-spin text-muted-foreground"
-            icon={LoaderPinwheelIcon}
-          />
-        )}
+        {isLoading && <OrchestrationSkeleton />}
 
         {!isLoading && targets.length === 0 && (
           <div className="mx-auto flex max-w-xs flex-col items-center gap-3 py-16 text-center">

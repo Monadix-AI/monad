@@ -18,7 +18,9 @@ export function AppShellRoutesHost({
   isWorkspaceHome,
   onCloseStudio,
   reserveHeaderLeading,
+  settingsRouteProps,
   sessionRouteProps,
+  showSettings,
   showStudio,
   workspaceRouteProps
 }: AppShellRoutesHostProps) {
@@ -36,6 +38,8 @@ export function AppShellRoutesHost({
             currentSessionId={currentSessionId}
             onCloseStudio={onCloseStudio}
             sessionRouteProps={sessionRouteProps}
+            settingsRouteProps={settingsRouteProps}
+            showSettings={showSettings}
             showStudio={showStudio}
             workspaceRouteProps={workspaceRouteProps}
           />

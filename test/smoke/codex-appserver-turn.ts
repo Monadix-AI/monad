@@ -1,4 +1,3 @@
-/// <reference types="bun" />
 // biome-ignore-all lint/suspicious/noConsole: standalone smoke CLI — console is the report
 // Smoke test: drive a real codex app-server turn end-to-end — send a long-running turn, wait for it
 // to go in-flight, interrupt it, and assert the turn settles. This exercises the turn lifecycle

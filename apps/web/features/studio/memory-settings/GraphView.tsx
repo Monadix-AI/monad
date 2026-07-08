@@ -4,7 +4,7 @@ import type { GetGraphResponse } from '@monad/protocol';
 
 import { NeuralNetworkIcon } from '@hugeicons/core-free-icons';
 import { useGetGraphQuery } from '@monad/client-rtk';
-import { Button } from '@monad/ui';
+import { Button, Skeleton } from '@monad/ui';
 import {
   Background,
   Controls,
@@ -22,6 +22,29 @@ import '@xyflow/react/dist/style.css';
 import { useT } from '@/components/I18nProvider';
 import { DataEmpty } from './DataEmpty';
 import { colorForScope, scopeLabel } from './scope';
+
+function GraphSkeleton() {
+  return (
+    <div
+      aria-busy="true"
+      className="absolute inset-0 flex flex-col gap-3 p-6"
+    >
+      <div className="flex flex-wrap gap-2">
+        <Skeleton className="h-5 w-20 rounded-full" />
+        <Skeleton className="h-5 w-24 rounded-full" />
+        <Skeleton className="h-5 w-16 rounded-full" />
+      </div>
+      <div className="relative min-h-0 flex-1 rounded-lg border bg-muted/10">
+        <Skeleton className="absolute top-[18%] left-[18%] h-10 w-28 rounded-lg" />
+        <Skeleton className="absolute top-[32%] right-[20%] h-10 w-32 rounded-lg" />
+        <Skeleton className="absolute bottom-[24%] left-[34%] h-10 w-28 rounded-lg" />
+        <Skeleton className="absolute right-[30%] bottom-[16%] h-10 w-24 rounded-lg" />
+        <span className="absolute top-[25%] left-[35%] h-px w-[28%] rotate-12 bg-border" />
+        <span className="absolute right-[35%] bottom-[31%] h-px w-[24%] -rotate-12 bg-border" />
+      </div>
+    </div>
+  );
+}
 
 // Deterministic circular layout — no native layout engine, fitView handles framing. Good enough for
 // the modest graphs L2 builds; swap for dagre/elk if it grows.
@@ -109,7 +132,9 @@ export function GraphView() {
       ) : null}
 
       <div className="relative min-h-0 flex-1">
-        {empty ? (
+        {isLoading ? (
+          <GraphSkeleton />
+        ) : empty ? (
           <DataEmpty
             hint={t('web.graph.emptyHint')}
             icon={NeuralNetworkIcon}

@@ -3,12 +3,48 @@
 import { Delete02Icon, LoaderPinwheelIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { useGetStatsQuery, useResetUsageMutation } from '@monad/client-rtk';
-import { Button, Card, cn } from '@monad/ui';
+import { Button, Card, cn, Skeleton } from '@monad/ui';
 import { useState } from 'react';
 
 import { useT } from '@/components/I18nProvider';
 
 type StatsRange = 'all' | '30d' | '7d';
+
+function UsageSkeleton() {
+  return (
+    <div
+      aria-busy="true"
+      className="flex flex-col gap-3 p-5"
+    >
+      <div className="flex items-center justify-between">
+        <Skeleton className="h-7 w-40 rounded-md" />
+        <Skeleton className="h-7 w-36 rounded-md" />
+      </div>
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        {Array.from({ length: 8 }, (_, i) => `usage-stat-skeleton-${i}`).map((key) => (
+          <Card
+            className="flex flex-col gap-2 p-3"
+            key={key}
+          >
+            <Skeleton className="h-3 w-20 rounded" />
+            <Skeleton className="h-4 w-16 rounded" />
+          </Card>
+        ))}
+      </div>
+      <Card className="flex flex-col gap-3 p-4">
+        <Skeleton className="h-4 w-32 rounded" />
+        <div className="grid grid-flow-col grid-rows-7 gap-1 overflow-hidden">
+          {Array.from({ length: 84 }, (_, i) => `usage-day-skeleton-${i}`).map((key) => (
+            <Skeleton
+              className="size-3 rounded-sm"
+              key={key}
+            />
+          ))}
+        </div>
+      </Card>
+    </div>
+  );
+}
 
 /** Studio › Usage: cross-agent token/usage observability. Lifted out of model-settings into its own
  *  top-level Studio page (overview heatmap + per-model breakdown + reset). */
@@ -21,13 +57,7 @@ export function Usage() {
 
   const { data: stats, isLoading } = useGetStatsQuery(range);
 
-  if (isLoading)
-    return (
-      <HugeiconsIcon
-        className="size-4 animate-spin text-muted-foreground"
-        icon={LoaderPinwheelIcon}
-      />
-    );
+  if (isLoading) return <UsageSkeleton />;
 
   const fmtTokens = (n: number) => {
     if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;

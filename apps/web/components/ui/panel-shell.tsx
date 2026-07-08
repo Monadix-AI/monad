@@ -17,7 +17,7 @@ interface PanelShellHeaderProps {
   className?: string;
 }
 
-export function PanelShellHeader({ title, subtitle, badge, actions, className }: PanelShellHeaderProps) {
+export function PanelShellHeader({ title, subtitle, badge, icon, actions, className }: PanelShellHeaderProps) {
   return (
     <header
       className={cn(
@@ -26,6 +26,7 @@ export function PanelShellHeader({ title, subtitle, badge, actions, className }:
       )}
     >
       <div className="flex min-w-0 flex-1 items-center gap-2.5">
+        {icon}
         <h2 className="min-w-0 font-medium text-sm">{title}</h2>
         {badge}
         {subtitle && <span className="min-w-0 truncate text-muted-foreground text-xs">{subtitle}</span>}

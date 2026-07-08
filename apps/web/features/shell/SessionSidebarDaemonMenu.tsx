@@ -5,6 +5,7 @@ import type { useT } from '@/components/I18nProvider';
 
 import {
   Alert01Icon,
+  ArrowRight01Icon,
   CircleCheckIcon,
   GlobeIcon,
   HouseIcon,
@@ -17,12 +18,7 @@ import {
 import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react';
 import { useGetSystemUpgradeQuery, useStartSystemUpgradeMutation } from '@monad/client-rtk';
 import { Button, cn, Tooltip, TooltipContent, TooltipTrigger } from '@monad/ui';
-import {
-  type KeyboardEvent as ReactKeyboardEvent,
-  type MouseEvent as ReactMouseEvent,
-  useEffect,
-  useState
-} from 'react';
+import { type KeyboardEvent as ReactKeyboardEvent, useEffect, useState } from 'react';
 
 import {
   DropdownMenu,
@@ -139,7 +135,6 @@ export function DaemonMenu({
   daemonStatusClass,
   daemonStatusText,
   daemonVersion,
-  hasUpgrade,
   networkRuntime,
   menuOpen,
   onOpenChange,
@@ -178,11 +173,12 @@ export function DaemonMenu({
   const [remoteConnections, setRemoteConnections] = useState<RemoteDaemonConnection[]>([]);
   const [activeConnection, setActiveConnection] = useState(() => getActiveDaemonConnection(daemonBaseUrl));
   const [showConnectionLabel, setShowConnectionLabel] = useState(false);
-  const { data: upgradeStatus } = useGetSystemUpgradeQuery(undefined, {
-    pollingInterval: hasUpgrade ? 1000 : 0,
-    skip: !hasUpgrade
-  });
+  const [upgradePolling, setUpgradePolling] = useState(false);
   const [startSystemUpgrade, { isLoading: isStartingUpgrade }] = useStartSystemUpgradeMutation();
+  const { data: upgradeStatus } = useGetSystemUpgradeQuery(undefined, {
+    pollingInterval: menuOpen || isStartingUpgrade || upgradePolling ? 1000 : 0,
+    skip: daemonStatus !== 'online' || (!menuOpen && !isStartingUpgrade && !upgradePolling)
+  });
   const hasConnectionChoices = remoteConnections.length > 0;
   const activeConnectionMeta = daemonStatus === 'online' ? 'Connected' : daemonStatusText;
   const activeConnectionVersion = daemonStatus === 'online' ? daemonVersion : undefined;
@@ -201,7 +197,12 @@ export function DaemonMenu({
   );
   const upgradeStage = upgradeStatus?.stage ?? 'idle';
   const upgradeActive = upgradeStatusIsActive(upgradeStage) || isStartingUpgrade;
-  const upgradeLabel = upgradeActive ? upgradeDisplayLabel(upgradeStage) : 'Update';
+  const upgradeReady = upgradeStatus?.available === true && upgradeStatus.stage === 'ready';
+  const upgradeLabel = upgradeActive ? upgradeDisplayLabel(upgradeStage) : 'Relaunch to update';
+
+  useEffect(() => {
+    setUpgradePolling(upgradeStatusIsActive(upgradeStage) || isStartingUpgrade);
+  }, [isStartingUpgrade, upgradeStage]);
 
   useEffect(() => {
     setRemoteConnections(readRemoteDaemonConnections());
@@ -251,12 +252,6 @@ export function DaemonMenu({
     await startSystemUpgrade().unwrap();
   };
 
-  const onUpgradeClick = async (event: ReactMouseEvent<HTMLElement>) => {
-    event.preventDefault();
-    event.stopPropagation();
-    await startUpgrade();
-  };
-
   return (
     <>
       <DropdownMenu
@@ -268,7 +263,6 @@ export function DaemonMenu({
             <button
               className={cn(
                 'flex min-w-0 flex-1 items-center gap-2.5 rounded-(--radius-md) px-2.5 py-2 text-left transition hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
-                hasUpgrade && 'pr-24',
                 (showSettings || menuOpen) &&
                   'bg-sidebar-selected text-sidebar-selected-foreground hover:bg-sidebar-selected-hover'
               )}
@@ -319,26 +313,6 @@ export function DaemonMenu({
               )}
             </button>
           </DropdownMenuTrigger>
-          {hasUpgrade ? (
-            <button
-              aria-label={upgradeLabel}
-              className={cn(
-                'absolute top-1/2 right-1.5 -mt-px inline-flex h-5 min-w-8 shrink-0 -translate-y-1/2 items-center justify-center gap-1 rounded-full border border-accent-blue/30 bg-accent-blue/10 px-2 font-medium text-[10px] text-accent-blue leading-none shadow-[inset_0_1px_0_rgb(255_255_255/0.08)] backdrop-blur',
-                !upgradeActive && 'hover:bg-accent-blue/15'
-              )}
-              disabled={upgradeActive}
-              onClick={onUpgradeClick}
-              type="button"
-            >
-              {upgradeActive ? (
-                <HugeiconsIcon
-                  className="size-3 animate-spin"
-                  icon={LoaderPinwheelIcon}
-                />
-              ) : null}
-              {upgradeLabel}
-            </button>
-          ) : null}
         </div>
         <DropdownMenuContent
           align="start"
@@ -346,6 +320,40 @@ export function DaemonMenu({
           onKeyDown={onMenuKeyDown}
           side="top"
         >
+          {upgradeReady || upgradeActive ? (
+            <>
+              <DropdownMenuItem
+                className="mb-1 flex min-h-16 items-center gap-3 rounded-(--radius-md) border border-border bg-card px-3 py-3 outline-hidden focus:bg-accent"
+                disabled={upgradeActive}
+                onSelect={(event) => {
+                  event.preventDefault();
+                  void startUpgrade();
+                }}
+              >
+                <span className="grid size-10 shrink-0 place-items-center rounded-(--radius-sm) border bg-background/70">
+                  <HugeiconsIcon
+                    className={cn('size-5', upgradeActive && 'animate-spin')}
+                    icon={upgradeActive ? LoaderPinwheelIcon : CircleCheckIcon}
+                  />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate font-medium text-base">{upgradeLabel}</span>
+                  {upgradeStatus?.latestVersion ? (
+                    <span className="block truncate font-mono text-muted-foreground text-xs">
+                      v{upgradeStatus.latestVersion}
+                    </span>
+                  ) : null}
+                </span>
+                {!upgradeActive ? (
+                  <HugeiconsIcon
+                    className="size-5 text-muted-foreground"
+                    icon={ArrowRight01Icon}
+                  />
+                ) : null}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+            </>
+          ) : null}
           <DropdownMenuGroup>
             <DropdownMenuLabel className="flex items-center gap-2 font-normal text-base leading-control">
               <span className="text-foreground">{t('web.daemon.label')}</span>
@@ -419,11 +427,6 @@ export function DaemonMenu({
                 icon={Settings02Icon}
               />
               <span>{t('web.sidebar.settings')}</span>
-              {hasUpgrade ? (
-                <span className="ml-auto inline-flex h-5 shrink-0 items-center rounded-full border border-accent-blue/30 bg-accent-blue/10 px-2 font-medium text-[10px] text-accent-blue leading-none">
-                  Update
-                </span>
-              ) : null}
               <DropdownMenuShortcut>
                 {shortcutModifierLabel}
                 {','}

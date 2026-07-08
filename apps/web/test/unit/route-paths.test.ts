@@ -2,11 +2,14 @@ import { describe, expect, test } from 'bun:test';
 import { DEFAULT_SKILL_MARKETPLACE_SOURCE } from '@monad/protocol';
 
 import {
+  isSettingsPath,
   isSkillMarketplacePath,
   isStudioPath,
   isWorkspacePath,
   projectIdFromPathname,
   sessionIdFromPathname,
+  settingsPath,
+  settingsSectionFromPathname,
   skillMarketplacePath,
   skillMarketplaceSourceFromPathname,
   studioDetailPath,
@@ -50,6 +53,16 @@ describe('canonical web route helpers', () => {
     expect(isWorkspacePath('/sessions/session-1')).toBe(true);
     expect(projectIdFromPathname('/workplace/projects/project%201')).toBe('project 1');
     expect(sessionIdFromPathname('/sessions/session-1')).toBe('session-1');
+  });
+
+  test('keeps settings as a top-level route instead of a modal query', () => {
+    expect(settingsPath('system')).toBe('/settings/system');
+    expect(settingsPath('experience')).toBe('/settings/experience');
+    expect(isSettingsPath('/settings')).toBe(true);
+    expect(isSettingsPath('/settings/system')).toBe(true);
+    expect(settingsSectionFromPathname('/settings/system')).toBe('system');
+    expect(settingsSectionFromPathname('/settings/language')).toBe('experience');
+    expect(isSettingsPath('/studio/runtime?panel=system')).toBe(false);
   });
 
   test('does not classify old channel routes as workspace project routes', () => {

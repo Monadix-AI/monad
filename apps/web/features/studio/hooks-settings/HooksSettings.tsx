@@ -6,7 +6,7 @@ import type { DraftCommand, DraftMatcher } from './hook-settings-types';
 import { CheckIcon, LoaderPinwheelIcon, Refresh01Icon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { HOOK_EVENTS } from '@monad/protocol';
-import { Button } from '@monad/ui';
+import { Button, Skeleton } from '@monad/ui';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useT } from '@/components/I18nProvider';
@@ -43,6 +43,47 @@ function emptyDraft(): DraftHooks {
     AfterTurn: [],
     SessionEnd: []
   };
+}
+
+function HooksSettingsSkeleton() {
+  return (
+    <div
+      aria-busy="true"
+      className="flex min-h-0 flex-1 flex-col"
+    >
+      <div className="grid flex-1 grid-cols-[14rem_minmax(0,1fr)] gap-0">
+        <div className="flex flex-col gap-2 border-r p-5">
+          {Array.from({ length: 8 }, (_, i) => `hook-event-skeleton-${i}`).map((key) => (
+            <div
+              className="flex items-center justify-between rounded-md border px-3 py-2"
+              key={key}
+            >
+              <Skeleton className="h-4 w-24 rounded" />
+              <Skeleton className="h-5 w-6 rounded-full" />
+            </div>
+          ))}
+        </div>
+        <div className="flex flex-col gap-3 p-5">
+          <Skeleton className="h-5 w-44 rounded" />
+          <Skeleton className="h-4 w-4/5 rounded" />
+          <div className="mt-2 flex flex-col gap-2">
+            {Array.from({ length: 4 }, (_, i) => `hook-card-skeleton-${i}`).map((key) => (
+              <div
+                className="rounded-lg border p-3"
+                key={key}
+              >
+                <Skeleton className="h-4 w-32 rounded" />
+                <Skeleton className="mt-2 h-3 w-3/4 rounded" />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+      <div className="border-t px-5 py-3">
+        <Skeleton className="h-8 w-20 rounded-md" />
+      </div>
+    </div>
+  );
 }
 function toDraft(
   raw: Record<
@@ -243,13 +284,7 @@ export function HooksSettings(_props: { onClose: () => void }) {
       />
 
       {loading ? (
-        <div className="flex items-center gap-2 p-5 text-muted-foreground text-sm">
-          <HugeiconsIcon
-            className="size-4 animate-spin"
-            icon={LoaderPinwheelIcon}
-          />
-          {t('web.common.loading')}
-        </div>
+        <HooksSettingsSkeleton />
       ) : (
         <>
           <HookFlow

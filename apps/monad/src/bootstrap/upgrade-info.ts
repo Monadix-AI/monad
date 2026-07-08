@@ -3,6 +3,8 @@ import type { MonadPaths } from '@monad/home';
 import { join } from 'node:path';
 import { MONAD_VERSION } from '@monad/protocol';
 
+const RELEASE_REPOSITORY = 'Monadix-AI/monad';
+
 export interface UpgradeInfo {
   latestVersion: string;
   latestVersionCheckedAt: string;
@@ -16,7 +18,7 @@ export async function createUpgradeInfoMonitor(paths: MonadPaths): Promise<{
 
   async function checkLatestVersion(): Promise<void> {
     try {
-      const res = await fetch('https://api.github.com/repos/monadix-labs/monad/releases/latest', {
+      const res = await fetch(`https://api.github.com/repos/${RELEASE_REPOSITORY}/releases/latest`, {
         headers: { 'User-Agent': `monad-daemon/${MONAD_VERSION}` }
       });
       if (res.ok) {

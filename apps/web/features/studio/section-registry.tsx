@@ -5,13 +5,26 @@ import type { StudioSectionId } from './sections';
 
 import dynamic from 'next/dynamic';
 
-import { PanelLoading } from '@/components/PanelLoading';
 import { AgentsPanel } from './AgentsPanel';
 import { MeshOverview, MeshPlaceholder } from './MeshOverview';
 import { Orchestration } from './Orchestration';
 import { RuntimeOverview } from './RuntimeOverview';
 import { SafetyAndHooks } from './SafetyAndHooks';
 import { SandboxDefaults } from './SandboxDefaults';
+import {
+  AcpAgentsStudioLoading,
+  ApprovalsStudioLoading,
+  AtomsStudioLoading,
+  CapabilitiesStudioLoading,
+  ChannelsStudioLoading,
+  ExternalAgentsStudioLoading,
+  HooksStudioLoading,
+  MemoryGraphStudioLoading,
+  MemoryMem0StudioLoading,
+  MemorySettingsStudioLoading,
+  ModelsStudioLoading,
+  SkillsStudioLoading
+} from './StudioLoading';
 import { Usage } from './Usage';
 
 export interface StudioSectionProps {
@@ -22,35 +35,35 @@ export interface StudioSectionProps {
 export type StudioSectionComponent = ComponentType<StudioSectionProps>;
 
 const ModelSettings = dynamic(() => import('./model-settings').then((m) => m.ModelSettings), {
-  loading: PanelLoading,
+  loading: ModelsStudioLoading,
   ssr: false
 });
 const ChannelsSettings = dynamic(() => import('./channels-settings').then((m) => m.ChannelsSettings), {
-  loading: PanelLoading,
+  loading: ChannelsStudioLoading,
   ssr: false
 });
 const AtomsSettings = dynamic(() => import('./atoms-settings').then((m) => m.AtomsSettings), {
-  loading: PanelLoading,
+  loading: AtomsStudioLoading,
   ssr: false
 });
 const ThirdPartyAgentsSettings = dynamic(() => import('./third-party-agents').then((m) => m.ThirdPartyAgentsSettings), {
-  loading: PanelLoading,
+  loading: AcpAgentsStudioLoading,
   ssr: false
 });
 const SkillsSettings = dynamic(() => import('./skills-settings').then((m) => m.SkillsSettings), {
-  loading: PanelLoading,
+  loading: SkillsStudioLoading,
   ssr: false
 });
 const CapabilitiesSettings = dynamic(() => import('./capabilities-settings').then((m) => m.CapabilitiesSettings), {
-  loading: PanelLoading,
+  loading: CapabilitiesStudioLoading,
   ssr: false
 });
 const ApprovalsSettings = dynamic(() => import('./approvals-settings').then((m) => m.ApprovalsSettings), {
-  loading: PanelLoading,
+  loading: ApprovalsStudioLoading,
   ssr: false
 });
 const MemorySettings = dynamic(() => import('./memory-settings/MemorySettings').then((m) => m.MemorySettings), {
-  loading: PanelLoading,
+  loading: MemorySettingsStudioLoading,
   ssr: false
 });
 const GraphMemorySettings = dynamic(
@@ -65,7 +78,7 @@ const GraphMemorySettings = dynamic(
         );
       };
     }),
-  { loading: PanelLoading, ssr: false }
+  { loading: MemoryGraphStudioLoading, ssr: false }
 );
 const Mem0MemorySettings = dynamic(
   () =>
@@ -79,10 +92,10 @@ const Mem0MemorySettings = dynamic(
         );
       };
     }),
-  { loading: PanelLoading, ssr: false }
+  { loading: MemoryMem0StudioLoading, ssr: false }
 );
 const HooksSettings = dynamic(() => import('./hooks-settings/HooksSettings').then((m) => m.HooksSettings), {
-  loading: PanelLoading,
+  loading: HooksStudioLoading,
   ssr: false
 });
 
@@ -144,7 +157,7 @@ const ThirdPartyExternalAgents = dynamic(
         );
       };
     }),
-  { loading: PanelLoading, ssr: false }
+  { loading: ExternalAgentsStudioLoading, ssr: false }
 );
 
 function WorkplaceProjectsSection() {

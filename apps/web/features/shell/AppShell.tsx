@@ -23,10 +23,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useT } from '@/components/I18nProvider';
 import { isRuntimeReady, runtimeSectionEnabled } from '@/features/init/init-readiness';
 import {
+  isSettingsPath,
   isStudioPath,
   isWorkspacePath,
   projectIdFromPathname,
   sessionIdFromPathname,
+  settingsPath,
+  settingsSectionFromPathname,
   studioPath,
   studioSectionFromPathname
 } from '@/features/routes/route-paths';
@@ -38,17 +41,11 @@ import {
 } from '@/features/routes/sessions/command-menu';
 import { type ViewItem, viewItemKey } from '@/features/session/chat-view-items';
 import { audioBlobToBase64 } from '@/features/session/voice-transcription';
+import { normalizeSettingsSection, type SettingsSectionId } from '@/features/settings/sections';
 import { SkillEditorDialog } from '@/features/studio/skills-settings/SkillEditorDialog';
 import { loadSkillContent } from '@/features/studio/skills-settings/utils';
 import { useChatComposer } from '@/hooks/use-chat-composer';
-import { buildNavigableModalUrl } from '@/hooks/use-navigable-modal';
-import {
-  pushShellUrl,
-  replaceShellUrl,
-  useShellPathname,
-  useShellSearchParam,
-  useShellSearchParamPresent
-} from '@/hooks/use-shell-location';
+import { pushShellUrl, replaceShellUrl, useShellPathname, useShellSearchParam } from '@/hooks/use-shell-location';
 import { useSidebarShortcuts } from '@/hooks/use-sidebar-shortcuts';
 import { useTranscriptHistory } from '@/hooks/use-transcript-history';
 import { normalizedComposerSettings } from '@/lib/composer-settings';
@@ -62,11 +59,23 @@ import {
   EMPTY_UI_ITEMS,
   viewMessageId
 } from './app-shell/session-view';
-import { SettingsModalHost } from './app-shell/settings-modal-host';
 import { AppShellSidebarHost } from './app-shell/sidebar-host';
 import { resolveStudioNavigationPath } from './app-shell/studio-navigation';
 import { NewProjectDialog } from './NewProjectDialog';
 import { useAppShellData } from './useAppShellData';
+
+function currentShellUrl(): string {
+  if (typeof window === 'undefined') return '/';
+  return `${window.location.pathname}${window.location.search}${window.location.hash}`;
+}
+
+function normalizedSettingsReturnPath(value: string | null, fallback: string): string {
+  if (!value?.startsWith('/') || value.startsWith('//')) return fallback;
+  const pathname = value.split(/[?#]/, 1)[0] ?? '/';
+  if (isSettingsPath(pathname)) return fallback;
+  if (isStudioPath(pathname) || isWorkspacePath(pathname)) return value;
+  return fallback;
+}
 
 export function AppShell() {
   const pathname = useShellPathname();
@@ -135,15 +144,20 @@ export function AppShell() {
   const [hiddenViewItemKeysBySession, setHiddenViewItemKeysBySession] = useState<Record<string, string[]>>({});
   const [input, setInput] = useState('');
   const [accessMode, setAccessMode] = useState<'auto' | 'ask'>('auto');
-  const showSettings = useShellSearchParamPresent('settings');
+  const [settingsReturnPathState, setSettingsReturnPathState] = useState<string | null>(null);
+  const showSettings = isSettingsPath(pathname);
+  const settingsSection = settingsSectionFromPathname(pathname) ?? 'connection';
   const isWorkspaceRoute = isWorkspacePath(pathname);
   const sidebarAutoMode = sidebarCollapsed || sidebarAutoReveal;
   const reserveHeaderLeading = sidebarAutoMode;
   const routedStudioSection = studioSectionFromPathname(pathname);
-  const studioSection = routedStudioSection ?? 'runtime';
   const runtimeReady = initStatus.isLoading ? true : isRuntimeReady(initStatus.data);
   const showStudio = isStudioRoute;
-  const studioPileActive = isStudioRoute;
+  const settingsFallbackReturnPath = isStudioRoute ? studioPath(lastStudioSection) : lastWorkspacePath;
+  const settingsReturnPath = normalizedSettingsReturnPath(settingsReturnPathState, settingsFallbackReturnPath);
+  const settingsReturnSurface = isStudioPath(settingsReturnPath.split(/[?#]/, 1)[0] ?? '/') ? 'studio' : 'workspace';
+  const studioSection = routedStudioSection ?? 'runtime';
+  const studioPileActive = showStudio;
   const workspacePileActive = isWorkspaceRoute;
   const [activeSkill, setActiveSkill] = useState(0);
   const [skillMenuDismissed, setSkillMenuDismissed] = useState(false);
@@ -392,6 +406,10 @@ export function AppShell() {
   }, [isStudioRoute, rememberStudioSection, routedStudioSection, runtimeReady]);
 
   useEffect(() => {
+    if (!showSettings && settingsReturnPathState !== null) setSettingsReturnPathState(null);
+  }, [settingsReturnPathState, showSettings]);
+
+  useEffect(() => {
     if (!isWorkspaceRoute) return;
     if (routedProjectId && !projectsLoading && !routedProjectInList) return;
     if (currentId && !sessionsLoading && !routedSessionInList) return;
@@ -409,7 +427,7 @@ export function AppShell() {
   ]);
 
   useEffect(() => {
-    if (isStudioRoute) return;
+    if (isStudioRoute || showSettings) return;
     if (currentId) {
       openMonadChatSurface();
       rememberMonadSession(currentId);
@@ -427,6 +445,7 @@ export function AppShell() {
     openWorkspaceSurface,
     rememberMonadSession,
     isStudioRoute,
+    showSettings,
     activeProjectId
   ]);
 
@@ -496,21 +515,33 @@ export function AppShell() {
     [createWorkplaceProject, openProject, setNewProjectOpen]
   );
 
-  const setSettingsUrl = useCallback((tab: string | null, mode: 'push' | 'replace' = 'replace') => {
-    if (typeof window === 'undefined') return;
-    const url = buildNavigableModalUrl(window.location.pathname, window.location.search, 'settings', tab);
-    if (mode === 'push') pushShellUrl(url);
-    else replaceShellUrl(url);
-  }, []);
+  const closeSettings = useCallback(() => {
+    replaceShellUrl(settingsReturnPath);
+  }, [settingsReturnPath]);
+
+  const setSettingsUrl = useCallback(
+    (section: string | null, mode: 'push' | 'replace' = 'replace') => {
+      if (section === null) {
+        replaceShellUrl(settingsReturnPath);
+        return;
+      }
+      if (!showSettings)
+        setSettingsReturnPathState(normalizedSettingsReturnPath(currentShellUrl(), settingsFallbackReturnPath));
+      const url = settingsPath(normalizeSettingsSection(section));
+      if (mode === 'push') pushShellUrl(url);
+      else replaceShellUrl(url);
+    },
+    [settingsFallbackReturnPath, settingsReturnPath, showSettings]
+  );
 
   const openSettings = useCallback(() => {
     setSettingsUrl('connection', showSettings ? 'replace' : 'push');
   }, [setSettingsUrl, showSettings]);
 
   const toggleSettings = useCallback(() => {
-    if (showSettings) setSettingsUrl(null);
+    if (showSettings) closeSettings();
     else openSettings();
-  }, [openSettings, setSettingsUrl, showSettings]);
+  }, [closeSettings, openSettings, showSettings]);
 
   const sidebarShortcutActions = useMemo(() => {
     if (showStudio) {
@@ -642,6 +673,9 @@ export function AppShell() {
           monadChatActive: currentId !== null || shellSurface === 'monadChat',
           onOpenMonadChat: () => void handleOpenMonadChat(),
           onOpenProject: openProject,
+          onOpenSettingsSection: (section: SettingsSectionId) => {
+            setSettingsUrl(section);
+          },
           onOpenStudio: () => {
             setStudioUrl();
           },
@@ -653,11 +687,14 @@ export function AppShell() {
           onRequestPersistentExpand: revealSidebar,
           onSwitchDaemonConnection: switchDaemonConnection,
           onToggleCollapsed: toggleSidebarCollapsed,
+          onCloseSettings: closeSettings,
           onToggleProjectPinned: toggleProjectPinned,
           onToggleSettings: toggleSettings,
           overlay: sidebarAutoReveal,
           projects: workspaceProjects,
           runtimeReady,
+          settingsReturnSurface,
+          settingsSection,
           shortcutModifierLabel,
           showSettings,
           showShortcutBadges: showSidebarShortcutBadges,
@@ -733,11 +770,15 @@ export function AppShell() {
           viewMessages,
           voiceModelConfigured
         }}
+        settingsRouteProps={{
+          initialSection: settingsSection,
+          onClose: closeSettings
+        }}
+        showSettings={showSettings}
         showStudio={showStudio}
         workspaceRouteProps={workspaceRouteProps}
       />
 
-      <SettingsModalHost />
       <NewProjectDialog
         onClose={() => setNewProjectOpen(false)}
         onCreate={handleCreateProject}

@@ -1,4 +1,3 @@
-/// <reference types="bun" />
 // bun test preload — forces MONAD_HOME into a repo-local, per-process temp dir unless the
 // caller set one. Guarantees no test can ever write to ~/.monad on the developer's machine.
 // (Most tests use an in-memory store and never touch home; this is a belt-and-suspenders guard

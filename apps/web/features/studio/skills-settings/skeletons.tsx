@@ -1,4 +1,4 @@
-import { cn } from '@monad/ui';
+import { cn, Skeleton } from '@monad/ui';
 
 const INSTALLED_SKILL_SKELETON_KEYS = [
   'installed-skill-1',
@@ -19,7 +19,7 @@ const BROWSE_SKILL_SKELETON_KEYS = [
 export const BROWSE_MORE_SKELETON_KEYS = ['browse-more-1', 'browse-more-2'];
 export { BROWSE_SKILL_SKELETON_KEYS };
 export function SkeletonBlock({ className }: { className?: string }) {
-  return <span className={cn('block animate-pulse rounded-sm bg-muted', className)} />;
+  return <Skeleton className={cn('rounded-sm', className)} />;
 }
 
 function SkillCardSkeleton() {

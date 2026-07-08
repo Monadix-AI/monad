@@ -14,7 +14,7 @@ import {
 } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { agentSelectors, useCreateAgentMutation, useDeleteAgentMutation, useListAgentsQuery } from '@monad/client-rtk';
-import { Badge, Button, ScrollArea, Textarea } from '@monad/ui';
+import { Badge, Button, ScrollArea, Skeleton, Textarea } from '@monad/ui';
 import { useMemo, useState } from 'react';
 
 import { useT } from '@/components/I18nProvider';
@@ -25,6 +25,32 @@ import { parseClaudeSubagent } from '@/lib/parse-agent-import';
 import { AgentEditor } from './agent-workshop/AgentEditor';
 import { OpenaiCompatSettings } from './api-settings';
 import { StudioBreadcrumbHeader } from './StudioBreadcrumbHeader';
+
+function AgentsListSkeleton() {
+  return (
+    <div
+      aria-busy="true"
+      className="flex flex-col gap-2"
+    >
+      {Array.from({ length: 5 }, (_, i) => `agent-skeleton-${i}`).map((key) => (
+        <div
+          className="flex items-start gap-2 rounded-lg border bg-card px-4 py-3"
+          key={key}
+        >
+          <div className="flex min-w-0 flex-1 flex-col gap-2">
+            <div className="flex items-center gap-2">
+              <Skeleton className="h-4 w-36 rounded" />
+              <Skeleton className="h-5 w-16 rounded-full" />
+            </div>
+            <Skeleton className="h-3 w-4/5 rounded" />
+            <Skeleton className="h-3 w-44 rounded" />
+          </div>
+          <Skeleton className="size-6 rounded-md" />
+        </div>
+      ))}
+    </div>
+  );
+}
 
 /** Agents area of Studio: a master list of agents ↔ a single-agent editor. */
 export function AgentsPanel({ onClose, subpath = [] }: StudioSectionProps) {
@@ -165,12 +191,7 @@ export function AgentsPanel({ onClose, subpath = [] }: StudioSectionProps) {
             </div>
           )}
 
-          {isLoading && (
-            <HugeiconsIcon
-              className="size-4 animate-spin text-muted-foreground"
-              icon={LoaderPinwheelIcon}
-            />
-          )}
+          {isLoading && <AgentsListSkeleton />}
 
           {!isLoading && agents.length === 0 && (
             <div className="mx-auto flex max-w-xs flex-col items-center gap-3 py-16 text-center">

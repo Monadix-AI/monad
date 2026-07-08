@@ -122,9 +122,9 @@ test('daemon item shows remote runtime details on hover', async ({ page }) => {
 
 test('system settings shows remote URLs and probes them', async ({ page }) => {
   const api = await installRemoteAccessRuntimeMock(page);
-  await page.goto('/studio/capabilities?settings=system');
+  await page.goto('/settings/system');
 
-  await expect(page.getByRole('dialog')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'System' })).toBeVisible();
   await expect(page.getByText('https://172.16.112.210:52749')).toBeVisible();
   await expect(page.getByText('https://100.64.1.2:52749')).toBeVisible();
   await expect(page.getByText('Token revision 3')).toBeVisible();

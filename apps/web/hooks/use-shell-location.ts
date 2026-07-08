@@ -93,8 +93,3 @@ export function useShellSearchParam(param: string): string | null {
   const getSnapshot = useCallback(() => new URLSearchParams(readSnapshot().search).get(param), [param]);
   return useSyncExternalStore(subscribe, getSnapshot, () => null);
 }
-
-export function useShellSearchParamPresent(param: string): boolean {
-  const getSnapshot = useCallback(() => new URLSearchParams(readSnapshot().search).has(param), [param]);
-  return useSyncExternalStore(subscribe, getSnapshot, () => false);
-}

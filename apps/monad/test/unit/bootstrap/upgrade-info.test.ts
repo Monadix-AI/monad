@@ -38,11 +38,16 @@ afterEach(async () => {
 });
 
 test('upgrade info monitor normalizes release tags and persists successful checks', async () => {
-  globalThis.fetch = (async () => response({ tag_name: 'v9.9.9' })) as unknown as typeof fetch;
+  let requestedUrl: string | undefined;
+  globalThis.fetch = (async (url: string) => {
+    requestedUrl = url;
+    return response({ tag_name: 'v9.9.9' });
+  }) as unknown as typeof fetch;
 
   const monitor = await createUpgradeInfoMonitor(paths);
   await waitFor(() => monitor.getUpgradeInfo()?.latestVersion === '9.9.9');
 
+  expect(requestedUrl).toBe('https://api.github.com/repos/Monadix-AI/monad/releases/latest');
   const cached = JSON.parse(await Bun.file(join(paths.cache, 'upgrade-info.json')).text()) as {
     latestVersion: string;
     latestVersionCheckedAt: string;

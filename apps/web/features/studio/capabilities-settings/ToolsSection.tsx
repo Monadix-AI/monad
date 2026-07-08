@@ -2,10 +2,10 @@
 
 import type { SetToolBackendsRequest, SmtpSettings } from '@monad/protocol';
 
-import { LoaderPinwheelIcon, Refresh01Icon } from '@hugeicons/core-free-icons';
+import { Refresh01Icon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { useInitDockerBackendMutation } from '@monad/client-rtk';
-import { Button } from '@monad/ui';
+import { Button, Skeleton } from '@monad/ui';
 import { useCallback, useEffect, useState } from 'react';
 
 import { useT } from '@/components/I18nProvider';
@@ -20,6 +20,32 @@ import {
   type WebSearchProvider,
   WebSearchSettingsDialog
 } from './ToolSettingsDialogs';
+
+function ToolsSectionSkeleton() {
+  return (
+    <div
+      aria-busy="true"
+      className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,18rem),1fr))] gap-3"
+    >
+      {Array.from({ length: 6 }, (_, i) => `tool-card-skeleton-${i}`).map((key) => (
+        <div
+          className="flex min-h-28 flex-col gap-2 rounded-lg border bg-card p-4"
+          key={key}
+        >
+          <div className="flex items-start gap-3">
+            <Skeleton className="size-9 rounded-md" />
+            <div className="min-w-0 flex-1 space-y-2">
+              <Skeleton className="h-4 w-32 rounded" />
+              <Skeleton className="h-3 w-full rounded" />
+              <Skeleton className="h-3 w-4/5 rounded" />
+            </div>
+          </div>
+          <Skeleton className="mt-auto h-5 w-24 rounded-full" />
+        </div>
+      ))}
+    </div>
+  );
+}
 
 // The Tools half of the Capabilities panel: native built-in tool cards. MCP-backed presets live in
 // the MCP section so the two capability surfaces stay visually separate.
@@ -205,13 +231,7 @@ export function ToolsSection() {
         title={t('web.studio.capabilitiesToolsSection')}
       >
         {loading ? (
-          <div className="flex items-center gap-2 text-muted-foreground text-sm">
-            <HugeiconsIcon
-              className="size-4 animate-spin"
-              icon={LoaderPinwheelIcon}
-            />
-            {t('web.common.loading')}
-          </div>
+          <ToolsSectionSkeleton />
         ) : (
           <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,18rem),1fr))] gap-3">
             <ToolCard

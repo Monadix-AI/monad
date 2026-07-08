@@ -5,7 +5,7 @@ import { createMonadStore, createMonadTreatyClient, type MonadApiError } from '@
 import { toast } from '@/components/ToastProvider';
 import { REMOTE_TOKEN_KEY, REMOTE_URL_KEY } from './daemon-connections';
 
-export { REMOTE_TOKEN_KEY, REMOTE_URL_KEY } from './daemon-connections';
+export { REMOTE_URL_KEY } from './daemon-connections';
 
 export interface MonadConnectionConfig {
   baseUrl: string;

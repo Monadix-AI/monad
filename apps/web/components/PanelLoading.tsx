@@ -1,9 +1,12 @@
-import { Spinner } from '@monad/ui';
+import { MonadLoading } from './MonadLoading';
 
 export function PanelLoading() {
   return (
     <div className="flex flex-1 items-center justify-center">
-      <Spinner className="size-5 text-muted-foreground" />
+      <MonadLoading
+        className="min-h-40 flex-1"
+        markClassName="size-10"
+      />
     </div>
   );
 }

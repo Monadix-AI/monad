@@ -26,20 +26,15 @@ import {
   useSetStartupMutation,
   useStartSystemUpgradeMutation
 } from '@monad/client-rtk';
-import { Badge, Button, Input, Label, ScrollArea, Separator, Switch } from '@monad/ui';
-import { useState } from 'react';
+import { Badge, Button, Input, Label, ScrollArea, Separator, Skeleton, Switch } from '@monad/ui';
+import { useEffect, useState } from 'react';
 
 import { useT } from '@/components/I18nProvider';
 import { useNetworkSettings } from '@/hooks/use-network-settings';
 import { resolveConnection, watchUpgradeRestartAndReload } from '@/lib/monad-store';
 import { SECRET_INPUT_PASSWORD_MANAGER_PROPS } from '@/lib/secret-input-props';
-import { SettingsBreadcrumbHeader } from './SettingsBreadcrumbHeader';
 
-interface Props {
-  onClose: () => void;
-}
-
-export function SystemSettings({ onClose }: Props) {
+export function SystemSettings() {
   const t = useT();
   const { data: health, isLoading } = useGetHealthQuery();
   const [resetUsage, { isLoading: isResettingUsage }] = useResetUsageMutation();
@@ -66,16 +61,15 @@ export function SystemSettings({ onClose }: Props) {
   const [deleteSession] = useDeleteSessionMutation();
   const [clearingAllSessions, setClearingAllSessions] = useState(false);
   const [sessionsCleared, setSessionsCleared] = useState(false);
+  const [upgradePolling, setUpgradePolling] = useState(false);
 
   const version = health?.version ?? '—';
   const latestVersion = (health as { latestVersion?: string } | undefined)?.latestVersion;
   const hasUpgrade = latestVersion && latestVersion !== version;
-  const { data: upgradeStatus } = useGetSystemUpgradeQuery(undefined, {
-    pollingInterval: upgradeStatusIsActive((health as { latestVersion?: string } | undefined)?.latestVersion, version)
-      ? 1000
-      : 0
-  });
   const [startSystemUpgrade, { isLoading: isStartingUpgrade }] = useStartSystemUpgradeMutation();
+  const { data: upgradeStatus } = useGetSystemUpgradeQuery(undefined, {
+    pollingInterval: isStartingUpgrade || upgradePolling ? 1000 : 0
+  });
   const upgradeStage = upgradeStatus?.stage ?? 'idle';
   const upgradeActive =
     upgradeStage === 'checking' ||
@@ -84,6 +78,10 @@ export function SystemSettings({ onClose }: Props) {
     upgradeStage === 'installing' ||
     upgradeStage === 'restarting';
   const upgradeProgress = upgradeStatus?.progress ?? 0;
+
+  useEffect(() => {
+    setUpgradePolling(upgradeActive);
+  }, [upgradeActive]);
 
   async function handleClearAllSessions() {
     if (sessionIds.length === 0) return;
@@ -164,27 +162,16 @@ export function SystemSettings({ onClose }: Props) {
   return (
     <ScrollArea className="h-full">
       <div className="flex min-h-full flex-col">
-        <SettingsBreadcrumbHeader
-          icon={
-            <HugeiconsIcon
-              className="size-4"
-              icon={RotateLeft01Icon}
-            />
-          }
-          onClose={onClose}
-          title={t('web.settings.system')}
-        />
-
         <div className="flex flex-col gap-6 p-6">
           {/* Version & upgrade */}
           <section className="flex flex-col gap-3">
             <h3 className="font-semibold text-sm">{t('web.settings.system.version')}</h3>
             <div className="flex items-center gap-3">
-              {isLoading ? (
-                <HugeiconsIcon
-                  className="size-4 animate-spin text-muted-foreground"
-                  icon={LoaderPinwheelIcon}
-                />
+              {isLoading && !health ? (
+                <>
+                  <Skeleton className="h-5 w-24 rounded" />
+                  <Skeleton className="h-5 w-20 rounded-full" />
+                </>
               ) : (
                 <>
                   <span className="font-mono text-sm">{version}</span>
@@ -654,10 +641,6 @@ export function SystemSettings({ onClose }: Props) {
       </div>
     </ScrollArea>
   );
-}
-
-function upgradeStatusIsActive(latestVersion: string | undefined, version: string): boolean {
-  return Boolean(latestVersion && latestVersion !== version);
 }
 
 function upgradeStageLabel(t: ReturnType<typeof useT>, stage: string): string {
