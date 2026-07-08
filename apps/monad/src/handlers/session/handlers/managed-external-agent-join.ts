@@ -23,7 +23,7 @@ const MANAGED_EXTERNAL_AGENT_JOIN_GREETING_NOTICE = (
   await Bun.file(managedProjectJoinGreetingNoticePath).text()
 ).trim();
 
-function managedExternalAgentMemberRuntimeNames(store: Store, sessionId: SessionId): Set<string> {
+export function managedExternalAgentMemberRuntimeNames(store: Store, sessionId: SessionId): Set<string> {
   return new Set(
     workplaceProjectMembers(store, sessionId)
       .filter((member) => member.type === 'external-agent' && member.settings?.managedProjectAgent !== false)
@@ -57,9 +57,14 @@ export function createManagedExternalAgentJoin(ctx: SessionContext) {
     });
   }
 
-  async function startAddedManagedExternalAgentMembers(previous: Session, next: Session): Promise<void> {
+  async function startAddedManagedExternalAgentMembers(
+    previous: Session,
+    next: Session,
+    beforeOverride?: Set<string>
+  ): Promise<void> {
     if (!externalAgentHost || !paths || !next.cwd) return;
-    const before = previous.cwd ? managedExternalAgentMemberRuntimeNames(store, previous.id) : new Set<string>();
+    const before =
+      beforeOverride ?? (previous.cwd ? managedExternalAgentMemberRuntimeNames(store, previous.id) : new Set<string>());
     const cfg = await loadAll(paths.config, paths.profile);
     const agents = (cfg?.externalAgents ?? []).filter((agent) => agent.enabled !== false);
     const added = managedExternalAgentProjectMembers(store, next.id, agents).filter(

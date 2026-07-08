@@ -24,6 +24,7 @@ import { canTransition } from '@/agent/index.ts';
 import { clearProcessesForSession, disposeSandboxSession } from '@/capabilities/tools';
 import { HandlerError } from '@/handlers/handler-error.ts';
 import { createManagedExternalAgentJoin } from '@/handlers/session/handlers/managed-external-agent-join.ts';
+import { syncSessionMembersFromProjectTemplates } from '@/handlers/session/handlers/session-member-sync.ts';
 import { SessionUiProjector } from '@/handlers/session/ui-projection.ts';
 import { clearAcpDelegatesForSession } from '@/services/delegation/acp-delegate.ts';
 import { createProjectLifecycleHandlers } from './lifecycle-projects.ts';
@@ -69,7 +70,7 @@ export function createLifecycleHandlers(ctx: SessionContext) {
 
   const { listProjects, getProject, createProject, updateProject, deleteProject } = createProjectLifecycleHandlers(
     ctx,
-    { resolveWorkspaceDir }
+    { resolveWorkspaceDir, syncSessionMembersFromProjectTemplates, startAddedManagedExternalAgentMembers }
   );
 
   // SessionStart/SessionEnd are observe-only here: SessionStart's additionalContext is stashed by the
@@ -199,6 +200,8 @@ export function createLifecycleHandlers(ctx: SessionContext) {
       const session = await agent.sessions.createForProject(projectId, title, ownerPrincipalId, origin, resolvedCwd);
       await sessionSandbox?.ensure(session.id);
       if (session.cwd) await applyWorkspaceRuntime(session.id, session.cwd);
+      syncSessionMembersFromProjectTemplates(store, session);
+      await startAddedManagedExternalAgentMembers({ ...session, cwd: undefined }, session);
       log.info({ sessionId: session.id, projectId, ...originLog(origin) }, 'project session created');
       emitLifecycle(session.id, 'session.created', { title: session.title });
       await fireSessionHook('SessionStart', session.id);

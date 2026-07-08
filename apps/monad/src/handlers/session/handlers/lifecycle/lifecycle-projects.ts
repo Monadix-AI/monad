@@ -1,17 +1,20 @@
 import type {
   ProjectId,
+  Session,
   SessionOrigin,
   SessionState,
   UpdateWorkplaceProjectRequest,
   WorkplaceProject
 } from '@monad/protocol';
 import type { SessionContext } from '@/handlers/session/context.ts';
+import type { Store } from '@/store/db/index.ts';
 
 import { newId } from '@monad/protocol';
 
 import { canTransition } from '@/agent/index.ts';
 import { clearProcessesForSession, disposeSandboxSession } from '@/capabilities/tools';
 import { HandlerError } from '@/handlers/handler-error.ts';
+import { managedExternalAgentMemberRuntimeNames } from '@/handlers/session/handlers/managed-external-agent-join.ts';
 
 /** Identity-only origin fields for observability — NEVER the env block (PII). */
 function originLog(origin?: SessionOrigin): Record<string, string | undefined> {
@@ -40,12 +43,18 @@ export function createProjectLifecycleHandlers(
   ctx: SessionContext,
   deps: {
     resolveWorkspaceDir: (cwd: string, base: string | undefined) => string;
+    syncSessionMembersFromProjectTemplates: (store: Store, session: Session) => void;
+    startAddedManagedExternalAgentMembers: (
+      previous: Session,
+      next: Session,
+      beforeOverride?: Set<string>
+    ) => Promise<void>;
   }
 ) {
   const {
     deps: { store, ownerPrincipalId, sessionSandbox, log }
   } = ctx;
-  const { resolveWorkspaceDir } = deps;
+  const { resolveWorkspaceDir, syncSessionMembersFromProjectTemplates, startAddedManagedExternalAgentMembers } = deps;
 
   function requireProject(id: ProjectId): WorkplaceProject {
     const project = store.getWorkplaceProject(id);
@@ -114,6 +123,15 @@ export function createProjectLifecycleHandlers(
         ...(resolvedCwd !== undefined ? { cwd: resolvedCwd } : {})
       });
       if (!project) throw new HandlerError('internal', 'update project failed');
+      // A member-roster edit lives on `origin.ext` — resync every session under this project so the
+      // change reaches `session_members` (the live bindings the delivery/join paths actually read).
+      if (origin !== undefined) {
+        for (const session of store.listSessions({ projectId: id })) {
+          const before = managedExternalAgentMemberRuntimeNames(store, session.id);
+          syncSessionMembersFromProjectTemplates(store, session);
+          if (session.cwd) await startAddedManagedExternalAgentMembers(session, session, before);
+        }
+      }
       return { project: projectView(project) };
     },
 
