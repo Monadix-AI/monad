@@ -1,5 +1,5 @@
 export function nextDate(date: string): string {
-  const [year, month, day] = date.split('-').map(Number);
+  const [year, month, day] = parseDateParts(date);
   return formatDate(new Date(year, month - 1, day + 1));
 }
 
@@ -17,7 +17,7 @@ export function formatDate(date: Date): string {
 }
 
 export function midnightIso(date: string): string {
-  const [year, month, day] = date.split('-').map(Number);
+  const [year, month, day] = parseDateParts(date);
   return new Date(year, month - 1, day, 0, 0, 0, 0).toISOString();
 }
 
@@ -26,6 +26,14 @@ export function daysBetween(start: string, end: string): number {
 }
 
 function dateValue(date: string): Date {
-  const [year, month, day] = date.split('-').map(Number);
+  const [year, month, day] = parseDateParts(date);
   return new Date(year, month - 1, day);
+}
+
+function parseDateParts(date: string): [number, number, number] {
+  const parts = date.split('-').map(Number);
+  if (parts.length !== 3 || parts.some((value) => Number.isNaN(value))) {
+    throw new Error(`invalid date: ${date}`);
+  }
+  return [parts[0] as number, parts[1] as number, parts[2] as number];
 }

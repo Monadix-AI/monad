@@ -37,8 +37,26 @@ function estimateRow(
   const first = firstActual ? snapshots.get(firstActual) : undefined;
   if (!first) return { date, files: undefined, lines: 0, note: 'no midnight snapshot available', type: 'estimated' };
   const second = secondActual ? snapshots.get(secondActual) : undefined;
+  if (!firstActual) {
+    return {
+      date,
+      files: first.files,
+      lines: first.lines,
+      note: 'flat estimate from first midnight snapshot',
+      type: 'estimated'
+    };
+  }
   const daysBefore = daysBetween(date, firstActual);
   if (!second || daysBefore <= 0) {
+    return {
+      date,
+      files: first.files,
+      lines: first.lines,
+      note: 'flat estimate from first midnight snapshot',
+      type: 'estimated'
+    };
+  }
+  if (!secondActual) {
     return {
       date,
       files: first.files,

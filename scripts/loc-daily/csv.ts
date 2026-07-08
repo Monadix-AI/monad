@@ -9,12 +9,12 @@ export function parseCsv(input: string): LocRow[] {
     .slice(1)
     .filter(Boolean)
     .map((line) => {
-      const [date, rawLines, rawFiles, type, note] = parseCsvLine(line);
+      const [date = '', rawLines = '0', rawFiles = '', type = 'actual', note = ''] = parseCsvLine(line);
       return {
         date,
         files: rawFiles ? Number(rawFiles) : undefined,
         lines: Number(rawLines),
-        note: note ?? '',
+        note,
         type: type as LocRowType
       };
     });

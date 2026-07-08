@@ -87,16 +87,22 @@ function parseArgs(args: string[]): CliOptions {
     const arg = args[i];
     if (arg === '--rebuild') options.rebuild = true;
     else if (arg === '--no-html') options.renderHtml = false;
-    else if (arg === '--csv') options.csvPath = resolve(args[++i]);
-    else if (arg === '--html') options.htmlPath = resolve(args[++i]);
-    else if (arg === '--from') options.from = args[++i];
-    else if (arg === '--to') options.to = args[++i];
+    else if (arg === '--csv') options.csvPath = resolve(nextArg(args, ++i, '--csv'));
+    else if (arg === '--html') options.htmlPath = resolve(nextArg(args, ++i, '--html'));
+    else if (arg === '--from') options.from = nextArg(args, ++i, '--from');
+    else if (arg === '--to') options.to = nextArg(args, ++i, '--to');
     else if (arg === '--help') {
       printHelp();
       process.exit(0);
     }
   }
   return options;
+}
+
+function nextArg(args: string[], index: number, flag: string): string {
+  const value = args[index];
+  if (value === undefined) throw new Error(`missing value for ${flag}`);
+  return value;
 }
 
 function printHelp() {}
