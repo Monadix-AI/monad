@@ -8,12 +8,12 @@ import {
   useListAtomKindsQuery,
   useListAtomPacksQuery
 } from '@monad/client-rtk';
-import { Badge, Button, cn, ScrollArea } from '@monad/ui';
+import { Badge, Button, cn } from '@monad/ui';
 import { useState } from 'react';
 
-import { useT } from '@/components/I18nProvider';
-import { PanelShell } from '@/components/ui/panel-shell';
-import { StudioBreadcrumbHeader } from '@/features/studio/StudioBreadcrumbHeader';
+import { useT } from '#/components/I18nProvider';
+import { PanelShell, PanelShellBody } from '#/components/ui/panel-shell';
+import { StudioBreadcrumbHeader } from '#/features/studio/StudioBreadcrumbHeader';
 import { AtomPackCard, ConflictRow } from './AtomPackCard';
 import { InstallForm } from './InstallForm';
 
@@ -116,7 +116,7 @@ export function AtomsSettings(_props: { onClose: () => void }) {
         </div>
       ) : null}
 
-      <ScrollArea className="min-h-0 flex-1">
+      <PanelShellBody>
         <div className="flex flex-col gap-2 p-4">
           {adding ? (
             <InstallForm
@@ -136,7 +136,7 @@ export function AtomsSettings(_props: { onClose: () => void }) {
             />
           ))}
         </div>
-      </ScrollArea>
+      </PanelShellBody>
 
       {kindsData && kindsData.kinds.length > 0 ? (
         <div className="flex flex-wrap items-center gap-1.5 border-t px-5 py-2 text-muted-foreground text-xs">

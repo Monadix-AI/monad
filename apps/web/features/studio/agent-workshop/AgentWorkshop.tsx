@@ -15,8 +15,8 @@ import {
 import { ScrollArea } from '@monad/ui';
 import { useMemo, useState } from 'react';
 
-import { useT } from '@/components/I18nProvider';
-import { useModelSettings } from '@/hooks/use-model-settings';
+import { useT } from '#/components/I18nProvider';
+import { useModelSettings } from '#/hooks/use-model-settings';
 import { AgentWorkshopHeader } from './AgentWorkshopHeader';
 import { AgentWorkshopInspector } from './AgentWorkshopInspector';
 import { AgentWorkshopPartsBin } from './AgentWorkshopPartsBin';

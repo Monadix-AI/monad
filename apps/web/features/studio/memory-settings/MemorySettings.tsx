@@ -12,9 +12,9 @@ import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react';
 import { Separator } from '@monad/ui';
 import { useState } from 'react';
 
-import { useT } from '@/components/I18nProvider';
-import { PanelShell } from '@/components/ui/panel-shell';
-import { StudioBreadcrumbHeader } from '@/features/studio/StudioBreadcrumbHeader';
+import { useT } from '#/components/I18nProvider';
+import { PanelShell, PanelShellBody } from '#/components/ui/panel-shell';
+import { StudioBreadcrumbHeader } from '#/features/studio/StudioBreadcrumbHeader';
 import { BackendSection } from './BackendSection';
 import { ConsolidationSection } from './ConsolidationSection';
 import { FactsView } from './FactsView';
@@ -73,11 +73,11 @@ export function MemorySettings({ initialTab = 'settings' }: Props) {
       ) : tab === 'mem0' ? (
         <Mem0Explorer />
       ) : (
-        <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto px-6 py-6">
+        <PanelShellBody className="flex flex-col gap-6 px-6 py-6">
           <BackendSection />
           <Separator />
           <ConsolidationSection />
-        </div>
+        </PanelShellBody>
       )}
     </PanelShell>
   );

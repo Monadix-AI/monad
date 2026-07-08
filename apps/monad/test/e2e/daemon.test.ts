@@ -2,7 +2,7 @@ import type { AgentMessagePayload, AgentTokenPayload, Event } from '@monad/proto
 
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 
-import { createHttpTransport } from '@/transports/http.ts';
+import { createHttpTransport } from '#/transports/http.ts';
 import { buildHandlers, mockModel, serveTransport, TRANSPORTS, type TransportHandle } from '../helpers.ts';
 
 // E2E: the full HTTP + SSE stack against a deterministic mock model (no network), covering both

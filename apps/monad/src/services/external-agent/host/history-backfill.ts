@@ -1,16 +1,16 @@
-import type { ExternalAgentHostDeps } from '@/services/external-agent/host/host-types.ts';
-import type { ExternalAgentProcess } from '@/services/external-agent/runtime-types.ts';
-import type { ExternalAgentProviderAdapter } from '@/services/external-agent/types.ts';
-import type { ExternalAgentSessionRow } from '@/store/db/index.ts';
+import type { ExternalAgentHostDeps } from '#/services/external-agent/host/host-types.ts';
+import type { ExternalAgentProcess } from '#/services/external-agent/runtime-types.ts';
+import type { ExternalAgentProviderAdapter } from '#/services/external-agent/types.ts';
+import type { ExternalAgentSessionRow } from '#/store/db/index.ts';
 
-import { daemonChildProcesses } from '@/infra/daemon-child-processes.ts';
-import { connectAppServerStdio } from '@/services/external-agent/app-server-stdio.ts';
-import { MAX_OUTPUT_SNAPSHOT } from '@/services/external-agent/constants.ts';
-import { HISTORY_BACKFILL_TIMEOUT_MS } from '@/services/external-agent/host/host-constants.ts';
-import { buildExternalAgentLaunch, resolveExternalAgentLaunchCommand } from '@/services/external-agent/index.ts';
-import { killExternalAgentProcess } from '@/services/external-agent/process.ts';
-import { createStreamingTextDecoder } from '@/services/external-agent/stream-decoder.ts';
-import { externalAgentOutputEventSchema } from '@/services/external-agent/types.ts';
+import { daemonChildProcesses } from '#/infra/daemon-child-processes.ts';
+import { connectAppServerStdio } from '#/services/external-agent/app-server-stdio.ts';
+import { MAX_OUTPUT_SNAPSHOT } from '#/services/external-agent/constants.ts';
+import { HISTORY_BACKFILL_TIMEOUT_MS } from '#/services/external-agent/host/host-constants.ts';
+import { buildExternalAgentLaunch, resolveExternalAgentLaunchCommand } from '#/services/external-agent/index.ts';
+import { killExternalAgentProcess } from '#/services/external-agent/process.ts';
+import { createStreamingTextDecoder } from '#/services/external-agent/stream-decoder.ts';
+import { externalAgentOutputEventSchema } from '#/services/external-agent/types.ts';
 
 export async function providerHistoryOutputFromLocal(
   row: ExternalAgentSessionRow,

@@ -2,7 +2,7 @@
 
 import { expect, test } from 'bun:test';
 
-import { decayedConfidence, isRecallEligible } from '@/services/memory/decay.ts';
+import { decayedConfidence, isRecallEligible } from '#/services/memory/decay.ts';
 
 const DAY = 86_400_000;
 const now = 1_000 * DAY; // arbitrary fixed "now" (Date.now is avoided so the test is deterministic)

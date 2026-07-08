@@ -7,8 +7,8 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { NATIVE_AGENT_ATTACHMENTS_MAX } from '@monad/protocol';
 
-import { createNativeAgentAttachmentResolver } from '@/services/native-agent/attachments.ts';
-import { parseNativeAgentFileReferences } from '@/services/native-agent/file-refs.ts';
+import { createNativeAgentAttachmentResolver } from '#/services/native-agent/attachments.ts';
+import { parseNativeAgentFileReferences } from '#/services/native-agent/file-refs.ts';
 
 test('parseNativeAgentFileReferences extracts @file markers and removes them from visible text', () => {
   const parsed = parseNativeAgentFileReferences(

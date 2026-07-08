@@ -32,11 +32,11 @@ import {
 } from '@monad/client-rtk';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
-import { useAcpAgentSettings } from '@/hooks/use-acp-agent-settings';
-import { useExternalAgentSettings } from '@/hooks/use-external-agent-settings';
-import { useTranscriptHistory } from '@/hooks/use-transcript-history';
-import { normalizedComposerSettings } from '@/lib/composer-settings';
-import { getWorkplaceProjectName } from '@/lib/workspace-sessions';
+import { useAcpAgentSettings } from '#/hooks/use-acp-agent-settings';
+import { useExternalAgentSettings } from '#/hooks/use-external-agent-settings';
+import { useTranscriptHistory } from '#/hooks/use-transcript-history';
+import { normalizedComposerSettings } from '#/lib/composer-settings';
+import { getWorkplaceProjectName } from '#/lib/workspace-sessions';
 import { DEV_SYSTEM_MESSAGES_IN_STREAM_ENABLED, useProjectDebugStore } from './debug/project-debug-store';
 import { useWorkspaceProjectExperienceRuntime } from './experiences/project-experience-adapter';
 import { useProjectActions } from './use-project-actions';

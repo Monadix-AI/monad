@@ -6,23 +6,23 @@ import type {
   ListInstalledMcpAtomsResponse,
   OkResponse
 } from '@monad/protocol';
-import type { AtomPacksDeps } from '@/handlers/atom-pack/atom-pack-manager.ts';
+import type { AtomPacksDeps } from '#/handlers/atom-pack/atom-pack-manager.ts';
 
 import { loadAuth } from '@monad/home';
 
 import {
   createReleaseAssetFetcher,
   installMcpBinary as installMcpBinaryService
-} from '@/capabilities/mcp/install/binary.ts';
+} from '#/capabilities/mcp/install/binary.ts';
 import {
   installMcpAtom as installMcpAtomService,
   listInstalledMcpAtoms,
   McpInstallError,
   removeMcpAtom,
   setMcpAtomEnabled
-} from '@/capabilities/mcp/install/index.ts';
-import { resolveToken } from '@/handlers/atom-pack/atom-pack-shared.ts';
-import { HandlerError } from '@/handlers/handler-error.ts';
+} from '#/capabilities/mcp/install/index.ts';
+import { resolveToken } from '#/handlers/atom-pack/atom-pack-shared.ts';
+import { HandlerError } from '#/handlers/handler-error.ts';
 
 export function createMcpModule(deps: AtomPacksDeps) {
   const mcp = {

@@ -24,22 +24,22 @@ import {
   useSetSkillsSettingsMutation,
   useUploadSkillMutation
 } from '@monad/client-rtk';
-import { Button, cn, ScrollArea, Switch, Tooltip, TooltipContent, TooltipTrigger } from '@monad/ui';
+import { Button, cn, Switch, Tooltip, TooltipContent, TooltipTrigger } from '@monad/ui';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
-import { useT } from '@/components/I18nProvider';
-import { toast } from '@/components/ToastProvider';
+import { useT } from '#/components/I18nProvider';
+import { toast } from '#/components/ToastProvider';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu';
-import { PanelShell } from '@/components/ui/panel-shell';
-import { isSkillMarketplacePath, skillMarketplacePath, studioPath } from '@/features/routes/route-paths';
-import { StudioBreadcrumbHeader } from '@/features/studio/StudioBreadcrumbHeader';
-import { replaceShellUrl, useShellPathname } from '@/hooks/use-shell-location';
-import { useMonadRuntime } from '@/lib/monad-runtime-provider';
+} from '#/components/ui/dropdown-menu';
+import { PanelShell, PanelShellBody } from '#/components/ui/panel-shell';
+import { isSkillMarketplacePath, skillMarketplacePath, studioPath } from '#/features/routes/route-paths';
+import { StudioBreadcrumbHeader } from '#/features/studio/StudioBreadcrumbHeader';
+import { replaceShellUrl, useShellPathname } from '#/hooks/use-shell-location';
+import { useMonadRuntime } from '#/lib/monad-runtime-provider';
 import { CapabilitySection } from '../capabilities-settings/CapabilitySection';
 import { BrowsePanel } from './BrowsePanel';
 import { GitHubMark } from './GitHubMark';
@@ -595,7 +595,7 @@ function SkillsSettingsContent({ embedded = false }: { embedded?: boolean }) {
 
       {hiddenUploadInput}
 
-      {panel === 'browse' ? content : <ScrollArea className="min-h-0 flex-1">{content}</ScrollArea>}
+      <PanelShellBody>{content}</PanelShellBody>
       {dialogs}
     </PanelShell>
   );

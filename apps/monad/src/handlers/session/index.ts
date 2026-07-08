@@ -1,11 +1,11 @@
 import type { AgentId } from '@monad/protocol';
-import type { SessionDeps } from '@/handlers/session/context.ts';
-import type { MessagingCommandDeps } from '@/handlers/session/handlers/messaging/index.ts';
+import type { SessionDeps } from '#/handlers/session/context.ts';
+import type { MessagingCommandDeps } from '#/handlers/session/handlers/messaging/index.ts';
 
-import { createSessionContext } from '@/handlers/session/context.ts';
-import { createLifecycleHandlers } from '@/handlers/session/handlers/lifecycle/index.ts';
-import { createMessagingHandlers } from '@/handlers/session/handlers/messaging/index.ts';
-import { createSearchHandlers } from '@/handlers/session/handlers/search.ts';
+import { createSessionContext } from '#/handlers/session/context.ts';
+import { createLifecycleHandlers } from '#/handlers/session/handlers/lifecycle/index.ts';
+import { createMessagingHandlers } from '#/handlers/session/handlers/messaging/index.ts';
+import { createSearchHandlers } from '#/handlers/session/handlers/search.ts';
 
 export function createSessionModule(deps: SessionDeps) {
   const ctx = createSessionContext(deps);
@@ -34,4 +34,4 @@ export function createSessionModule(deps: SessionDeps) {
   return Object.assign(lifecycle, createMessagingHandlers(ctx, cmd), createSearchHandlers(ctx));
 }
 
-export type { EventSink, SessionDeps } from '@/handlers/session/context.ts';
+export type { EventSink, SessionDeps } from '#/handlers/session/context.ts';

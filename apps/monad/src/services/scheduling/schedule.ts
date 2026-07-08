@@ -6,14 +6,14 @@
 // Cron semantics on restart: missed runs are NOT backfilled (next fire is recomputed from
 // now). A missed one-shot IS run once on load (catch-up), then dropped.
 
-import type { ScheduleCreateInput, ScheduleInfo, Scheduler } from '@/capabilities/tools/registry/schedule.ts';
+import type { ScheduleCreateInput, ScheduleInfo, Scheduler } from '#/capabilities/tools/registry/schedule.ts';
 
 import { renameSync, writeFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { newId } from '@monad/protocol';
 
-import { scheduleInfoSchema } from '@/capabilities/tools/registry/schedule.ts';
-import { CronError, type CronFields, nextCronTime, parseCron } from '@/services/scheduling/cron.ts';
+import { scheduleInfoSchema } from '#/capabilities/tools/registry/schedule.ts';
+import { CronError, type CronFields, nextCronTime, parseCron } from '#/services/scheduling/cron.ts';
 
 // setTimeout overflows past this (~24.8 days) and would fire immediately; longer waits re-arm
 // in chunks until the real fire time arrives.

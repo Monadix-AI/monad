@@ -16,7 +16,7 @@ import { useGetLawsQuery } from '@monad/client-rtk';
 import { Badge, Button, Skeleton } from '@monad/ui';
 import { useMemo, useState } from 'react';
 
-import { type TFn, useT } from '@/components/I18nProvider';
+import { type TFn, useT } from '#/components/I18nProvider';
 import { DataEmpty } from './DataEmpty';
 import { scopeLabel } from './scope';
 

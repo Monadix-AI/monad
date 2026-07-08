@@ -27,9 +27,9 @@ import type {
 import { registerMessageType } from '@monad/protocol';
 import { loadManifestAtomPack, SDK_VERSION } from '@monad/sdk-atom';
 
-import { assertAtomPackMonadCompatibility } from '@/atoms/compat.ts';
-import { describeAtomPack } from '@/atoms/describe.ts';
-import { type AtomConflict, qualifiedAtomName, resolveAtomPins } from '@/atoms/resolve.ts';
+import { assertAtomPackMonadCompatibility } from '#/atoms/compat.ts';
+import { describeAtomPack } from '#/atoms/describe.ts';
+import { type AtomConflict, qualifiedAtomName, resolveAtomPins } from '#/atoms/resolve.ts';
 
 interface ChannelAtomPackHostOptions {
   onConnector?: (connector: Connector) => void;

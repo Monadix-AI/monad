@@ -5,8 +5,8 @@ import { Alert01Icon, LoaderPinwheelIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Badge, Button } from '@monad/ui';
 
-import { useT } from '@/components/I18nProvider';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { useT } from '#/components/I18nProvider';
+import { Popover, PopoverContent, PopoverTrigger } from '#/components/ui/popover';
 
 export function ConsentPopover({
   children,

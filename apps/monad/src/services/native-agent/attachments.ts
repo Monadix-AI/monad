@@ -4,7 +4,7 @@ import type {
   NativeAgentAttachmentInput,
   SessionId
 } from '@monad/protocol';
-import type { createDaemonHandlers } from '@/handlers/daemon-handlers/index.ts';
+import type { createDaemonHandlers } from '#/handlers/daemon-handlers/index.ts';
 
 import { realpath, stat } from 'node:fs/promises';
 import { basename, isAbsolute, resolve, sep } from 'node:path';
@@ -16,7 +16,7 @@ import {
   newId
 } from '@monad/protocol';
 
-import { HandlerError } from '@/handlers/handler-error.ts';
+import { HandlerError } from '#/handlers/handler-error.ts';
 import { parseNativeAgentFileReferences } from './file-refs.ts';
 
 const ATTACHMENT_PREVIEW_READ_BYTES = NATIVE_AGENT_ATTACHMENT_PREVIEW_MAX * 4;

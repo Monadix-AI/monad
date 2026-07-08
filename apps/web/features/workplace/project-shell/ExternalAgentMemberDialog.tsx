@@ -14,12 +14,12 @@ import {
 } from '@monad/ui/components/AgentAvatar';
 import { useEffect, useState } from 'react';
 
-import { useT } from '@/components/I18nProvider';
+import { useT } from '#/components/I18nProvider';
 import {
   defaultReasoningEffort,
   ReasoningEffortControl,
   reasoningEffortOption
-} from '@/components/ReasoningEffortControl';
+} from '#/components/ReasoningEffortControl';
 import { externalAgentModelDisplayName } from './external-agent-member-dialog-model';
 
 export function ExternalAgentMemberDialog({

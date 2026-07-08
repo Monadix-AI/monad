@@ -10,7 +10,7 @@
 //   OPENROUTER_API_KEY=sk-or-... bun test apps/monad/test/e2e/live-approvals.test.ts
 
 import type { Event } from '@monad/protocol';
-import type { Tool } from '@/capabilities/tools/types.ts';
+import type { Tool } from '#/capabilities/tools/types.ts';
 
 import { afterEach, describe, expect, test } from 'bun:test';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -18,10 +18,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { z } from 'zod';
 
-import { buildOperatorRules, PolicyEngine } from '@/agent/approvals/engine.ts';
-import { ApprovalStore } from '@/agent/approvals/store.ts';
-import { toolResult } from '@/capabilities/tools/types.ts';
-import { createHttpTransport } from '@/transports/http.ts';
+import { buildOperatorRules, PolicyEngine } from '#/agent/approvals/engine.ts';
+import { ApprovalStore } from '#/agent/approvals/store.ts';
+import { toolResult } from '#/capabilities/tools/types.ts';
+import { createHttpTransport } from '#/transports/http.ts';
 import {
   buildHandlers,
   liveModelDeps,

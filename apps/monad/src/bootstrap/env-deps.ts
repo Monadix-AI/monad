@@ -4,15 +4,15 @@
 // `monad init`). The daemon startup only does PATH prepending — no downloads, no detection.
 
 import type { Logger } from '@monad/logger';
-import type { DownloadProgress } from '@/services/download.ts';
+import type { DownloadProgress } from '#/services/download.ts';
 
 import { existsSync } from 'node:fs';
 import { chmod, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import { untar } from '@/atoms/install/untar.ts';
-import { parseChecksums, selectReleaseAsset } from '@/capabilities/mcp/install/binary.ts';
-import { downloadBytes } from '@/services/download.ts';
+import { untar } from '#/atoms/install/untar.ts';
+import { parseChecksums, selectReleaseAsset } from '#/capabilities/mcp/install/binary.ts';
+import { downloadBytes } from '#/services/download.ts';
 
 type EnvDepResult = 'found' | 'installed' | 'failed' | 'skipped';
 type EnvDepsDownloadProgress = DownloadProgress & { dependency: 'node' | 'uv'; artifact: string };

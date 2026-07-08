@@ -11,10 +11,10 @@ import { join } from 'node:path';
 import { initMonadHome, loadAuth, loadConfig } from '@monad/home';
 import { ModelProviderType } from '@monad/protocol';
 
-import { ModelProviderRegistry } from '@/agent/index.ts';
-import { ModelService } from '@/handlers/settings/model/index.ts';
-import { ModelCatalogService } from '@/services/model-catalog.ts';
-import { createHttpTransport } from '@/transports/http.ts';
+import { ModelProviderRegistry } from '#/agent/index.ts';
+import { ModelService } from '#/handlers/settings/model/index.ts';
+import { ModelCatalogService } from '#/services/model-catalog.ts';
+import { createHttpTransport } from '#/transports/http.ts';
 import {
   buildHandlers,
   makeTestPaths,

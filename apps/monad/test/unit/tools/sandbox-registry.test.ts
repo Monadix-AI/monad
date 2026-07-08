@@ -10,7 +10,7 @@ import {
   disposeSandboxSession,
   registerSandboxLauncher,
   selectSandboxLauncher
-} from '@/capabilities/tools';
+} from '#/capabilities/tools';
 
 afterEach(() => clearSandboxLaunchers());
 

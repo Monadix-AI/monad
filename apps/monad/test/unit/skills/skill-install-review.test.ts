@@ -1,4 +1,4 @@
-import type { ModelRequest, ModelResult, ModelRouter } from '@/agent/model/index.ts';
+import type { ModelRequest, ModelResult, ModelRouter } from '#/agent/model/index.ts';
 
 import { expect, test } from 'bun:test';
 
@@ -6,7 +6,7 @@ import {
   reviewSkillInstall,
   type SkillInstallReviewWarning,
   warningToString
-} from '@/capabilities/skills/install/review.ts';
+} from '#/capabilities/skills/install/review.ts';
 
 const promptContent = (
   await Bun.file(

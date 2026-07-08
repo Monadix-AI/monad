@@ -2,8 +2,8 @@ import { matchesKeyboardEvent } from '@tanstack/hotkeys';
 import { useKeyHold } from '@tanstack/react-hotkeys';
 import { useEffect, useMemo } from 'react';
 
-import { isApplePlatform } from '@/lib/keyboard';
-import { useWorkspaceShellStore } from '@/lib/workspace-shell-store';
+import { isApplePlatform } from '#/lib/keyboard';
+import { useWorkspaceShellStore } from '#/lib/workspace-shell-store';
 
 interface UseSidebarShortcutsArgs {
   monadAgentShortcutAction?: () => void;

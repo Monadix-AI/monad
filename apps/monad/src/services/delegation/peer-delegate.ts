@@ -9,12 +9,12 @@
 // (local/auto on its side) governs what it may do; forward-to-here approval arrives with the PeerLink
 // transport (P1).
 
-import type { Tool, ToolContext, ToolGate } from '@/capabilities/tools/types.ts';
+import type { Tool, ToolContext, ToolGate } from '#/capabilities/tools/types.ts';
 
 import { createLogger } from '@monad/logger';
 import { z } from 'zod';
 
-import { toolResult } from '@/capabilities/tools/types.ts';
+import { toolResult } from '#/capabilities/tools/types.ts';
 
 const log = createLogger('peer-delegate');
 

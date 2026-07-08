@@ -15,8 +15,8 @@ import {
 } from '@monad/ui/components/AgentAvatar';
 import { useCallback, useEffect, useState } from 'react';
 
-import { useT } from '@/components/I18nProvider';
-import { defaultReasoningEffort } from '@/components/ReasoningEffortControl';
+import { useT } from '#/components/I18nProvider';
+import { defaultReasoningEffort } from '#/components/ReasoningEffortControl';
 import { ExternalAgentMemberDialog } from './ExternalAgentMemberDialog';
 import {
   type ExternalAgentMemberDialogState,

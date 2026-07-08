@@ -16,14 +16,14 @@ import {
   SaveIcon
 } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { Badge, Button, cn, Input, isProductIconId, Label, ProductIcon, ScrollArea, Switch } from '@monad/ui';
+import { Badge, Button, cn, Input, isProductIconId, Label, ProductIcon, Switch } from '@monad/ui';
 import { useId, useState } from 'react';
 
-import { I18nTrans, useT } from '@/components/I18nProvider';
-import { PanelShell } from '@/components/ui/panel-shell';
-import { StudioBreadcrumbHeader } from '@/features/studio/StudioBreadcrumbHeader';
-import { useAcpAgentSettings } from '@/hooks/use-acp-agent-settings';
-import { useAsyncAction } from '@/hooks/use-async-action';
+import { I18nTrans, useT } from '#/components/I18nProvider';
+import { PanelShell, PanelShellBody } from '#/components/ui/panel-shell';
+import { StudioBreadcrumbHeader } from '#/features/studio/StudioBreadcrumbHeader';
+import { useAcpAgentSettings } from '#/hooks/use-acp-agent-settings';
+import { useAsyncAction } from '#/hooks/use-async-action';
 
 const envRef = (name: string) => `\${env:${name}}`;
 
@@ -119,7 +119,7 @@ export function AcpAgentsSettings({ embedded = false }: { onClose: () => void; e
         />
       </p>
 
-      <ScrollArea className="flex-1">
+      <PanelShellBody>
         <div className="flex flex-col gap-2 p-4">
           {/* One-click invite for same-machine third-party agents; badge shows local detection. */}
           {presets.length > 0 && !draft ? (
@@ -201,7 +201,7 @@ export function AcpAgentsSettings({ embedded = false }: { onClose: () => void; e
             />
           ))}
         </div>
-      </ScrollArea>
+      </PanelShellBody>
     </PanelShell>
   );
 }

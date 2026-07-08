@@ -1,8 +1,8 @@
 import type { TranscribeAudioRequest } from '@monad/protocol';
-import type { ModelContext, ModelDeps } from '@/handlers/settings/model/context.ts';
+import type { ModelContext, ModelDeps } from '#/handlers/settings/model/context.ts';
 
-import { resolveModelRole } from '@/config/resolve.ts';
-import { HandlerError } from '@/handlers/handler-error.ts';
+import { resolveModelRole } from '#/config/resolve.ts';
+import { HandlerError } from '#/handlers/handler-error.ts';
 // `with { type: 'file' }` embeds reliably in bun's --compile binary (unlike new URL+import.meta.url).
 import transcriptionCleanupPromptPath from '../prompts/transcription-cleanup-prompt.md' with { type: 'file' };
 

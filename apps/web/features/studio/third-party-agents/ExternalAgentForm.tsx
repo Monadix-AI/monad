@@ -14,7 +14,7 @@ import { HugeiconsIcon } from '@hugeicons/react';
 import { Button, Input, Label, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Switch } from '@monad/ui';
 import { useState } from 'react';
 
-import { useT } from '@/components/I18nProvider';
+import { useT } from '#/components/I18nProvider';
 import {
   canDisableAutopilot,
   externalAgentLaunchModeOptions,

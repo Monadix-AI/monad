@@ -5,8 +5,8 @@ import type { ComponentProps } from 'react';
 import { Button, cn, Progress } from '@monad/ui';
 import { createContext, useContext, useMemo } from 'react';
 
-import { useT } from '@/components/I18nProvider';
-import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
+import { useT } from '#/components/I18nProvider';
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '#/components/ui/hover-card';
 
 const PERCENT_MAX = 100;
 const ICON_RADIUS = 10;

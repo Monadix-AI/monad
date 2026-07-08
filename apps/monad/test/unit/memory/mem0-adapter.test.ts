@@ -5,7 +5,7 @@ import type { MemoryScope } from '@monad/protocol';
 
 import { expect, test } from 'bun:test';
 
-import { Mem0Adapter, type Mem0Client, type Mem0Memory } from '@/services/memory/mem0.ts';
+import { Mem0Adapter, type Mem0Client, type Mem0Memory } from '#/services/memory/mem0.ts';
 
 const silent = { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} } as never;
 const budget = { core: 0, facts: 2000, graph: 0, laws: 0 };

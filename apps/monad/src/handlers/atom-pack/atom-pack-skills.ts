@@ -15,33 +15,33 @@ import type {
   ValidateSkillsRequest,
   ValidateSkillsResponse
 } from '@monad/protocol';
-import type { SkillInstallReviewer } from '@/capabilities/skills/install/index.ts';
-import type { AtomPacksDeps } from '@/handlers/atom-pack/atom-pack-manager.ts';
+import type { SkillInstallReviewer } from '#/capabilities/skills/install/index.ts';
+import type { AtomPacksDeps } from '#/handlers/atom-pack/atom-pack-manager.ts';
 
 import { Buffer } from 'node:buffer';
 import { mkdir, readdir, rm } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { loadAll, loadAuth } from '@monad/home';
 
-import { checkClawHubSkillUpdate, removeFromSkillsLock } from '@/capabilities/skills/install/clawhub.ts';
-import { resolveGithubCommit } from '@/capabilities/skills/install/fetch.ts';
-import { checkGitSkillUpdate } from '@/capabilities/skills/install/git.ts';
-import { checkSkillUpdate } from '@/capabilities/skills/install/index.ts';
-import { reviewSkillInstall } from '@/capabilities/skills/install/review.ts';
-import { scanSkillDir, scanSkillFiles } from '@/capabilities/skills/install/scan.ts';
+import { checkClawHubSkillUpdate, removeFromSkillsLock } from '#/capabilities/skills/install/clawhub.ts';
+import { resolveGithubCommit } from '#/capabilities/skills/install/fetch.ts';
+import { checkGitSkillUpdate } from '#/capabilities/skills/install/git.ts';
+import { checkSkillUpdate } from '#/capabilities/skills/install/index.ts';
+import { reviewSkillInstall } from '#/capabilities/skills/install/review.ts';
+import { scanSkillDir, scanSkillFiles } from '#/capabilities/skills/install/scan.ts';
 import {
   contentTypeForSkillFile,
   listSkillContentFiles,
   previewForSkillFile,
   resolveSkillResourcePath,
   SAFE_NAME
-} from '@/handlers/atom-pack/atom-pack-content.ts';
-import { resolveToken } from '@/handlers/atom-pack/atom-pack-shared.ts';
-import { createSkillInstallers } from '@/handlers/atom-pack/atom-pack-skill-install.ts';
-import { readSkillRecord, resolveUsableInstallReviewModel } from '@/handlers/atom-pack/atom-pack-skill-source.ts';
-import { HandlerError } from '@/handlers/handler-error.ts';
-import { type DecodedUpload, decodeRawUpload, unpackZipUpload } from '@/services/upload.ts';
-import { findSkillDirs, installSkillFromDir, parseSkillMd, writeSkill } from '@/store/home/skills.ts';
+} from '#/handlers/atom-pack/atom-pack-content.ts';
+import { resolveToken } from '#/handlers/atom-pack/atom-pack-shared.ts';
+import { createSkillInstallers } from '#/handlers/atom-pack/atom-pack-skill-install.ts';
+import { readSkillRecord, resolveUsableInstallReviewModel } from '#/handlers/atom-pack/atom-pack-skill-source.ts';
+import { HandlerError } from '#/handlers/handler-error.ts';
+import { type DecodedUpload, decodeRawUpload, unpackZipUpload } from '#/services/upload.ts';
+import { findSkillDirs, installSkillFromDir, parseSkillMd, writeSkill } from '#/store/home/skills.ts';
 
 const SKILL_UPLOAD_MAX_BYTES = 5 * 1024 * 1024;
 

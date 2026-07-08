@@ -9,16 +9,16 @@
 
 import type { Event, HookEvent, HookInput } from '@monad/protocol';
 import type { HookDefinition } from '@monad/sdk-atom';
-import type { Tool } from '@/capabilities/tools/types.ts';
+import type { Tool } from '#/capabilities/tools/types.ts';
 
 import { afterEach, describe, expect, test } from 'bun:test';
 import { tmpdir } from 'node:os';
 import { createLogger } from '@monad/logger';
 import { z } from 'zod';
 
-import { toolResult } from '@/capabilities/tools/types.ts';
-import { createHookRunner } from '@/hooks/runner.ts';
-import { createHttpTransport } from '@/transports/http.ts';
+import { toolResult } from '#/capabilities/tools/types.ts';
+import { createHookRunner } from '#/hooks/runner.ts';
+import { createHttpTransport } from '#/transports/http.ts';
 import {
   buildHandlers,
   liveModelDeps,

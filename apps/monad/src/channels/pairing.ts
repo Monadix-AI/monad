@@ -1,8 +1,8 @@
 import type { StrictTranslateForNamespace } from '@monad/i18n';
 import type { ChannelInbound, ChannelPairingRequest } from '@monad/protocol';
-import type { ChannelLogger, Instance } from '@/channels/channel.ts';
+import type { ChannelLogger, Instance } from '#/channels/channel.ts';
 
-import { makePairingCode } from '@/channels/helpers.ts';
+import { makePairingCode } from '#/channels/helpers.ts';
 
 const PAIRING_TTL_MS = 15 * 60_000;
 

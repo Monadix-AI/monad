@@ -6,21 +6,19 @@ import { PanelLeftCloseIcon, PanelLeftOpenIcon } from '@hugeicons/core-free-icon
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Button } from '@monad/ui';
 
-import { MonadLogo } from '@/components/MonadLogo';
+import { MonadLogo } from '#/components/MonadLogo';
+import { useWorkspaceShellStore } from '#/lib/workspace-shell-store';
 import { isSidebarHorizontalWheel } from './sidebar-trackpad-switch';
 
-export function AppShellSidebarReveal({
-  autoRevealSidebar,
-  autoMode,
-  onOpenWorkspace,
-  onToggleAutoMode
-}: {
-  autoRevealSidebar: () => void;
-  autoMode: boolean;
-  onOpenWorkspace: () => void;
-  onToggleAutoMode: () => void;
-}) {
+export function AppShellSidebarReveal({ onOpenWorkspace }: { onOpenWorkspace: () => void }) {
+  const sidebarCollapsed = useWorkspaceShellStore((state) => state.sidebarCollapsed);
+  const sidebarAutoReveal = useWorkspaceShellStore((state) => state.sidebarAutoReveal);
+  const autoRevealSidebar = useWorkspaceShellStore((state) => state.autoRevealSidebar);
+  const collapseSidebar = useWorkspaceShellStore((state) => state.collapseSidebar);
+  const revealSidebar = useWorkspaceShellStore((state) => state.revealSidebar);
+  const autoMode = sidebarCollapsed || sidebarAutoReveal;
   const toggleLabel = autoMode ? 'Keep sidebar expanded' : 'Auto-hide sidebar';
+  const onToggleAutoMode = autoMode ? revealSidebar : collapseSidebar;
   const preventHorizontalHistorySwipe = (event: ReactWheelEvent<HTMLElement>) => {
     if (!isSidebarHorizontalWheel(event)) return;
     event.preventDefault();

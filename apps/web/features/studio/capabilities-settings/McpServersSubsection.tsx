@@ -18,9 +18,9 @@ import { HugeiconsIcon } from '@hugeicons/react';
 import { Badge, Button, cn } from '@monad/ui';
 import { useState } from 'react';
 
-import { I18nTrans, useT } from '@/components/I18nProvider';
-import { useAsyncAction } from '@/hooks/use-async-action';
-import { useMcpServerSettings } from '@/hooks/use-mcp-server-settings';
+import { I18nTrans, useT } from '#/components/I18nProvider';
+import { useAsyncAction } from '#/hooks/use-async-action';
+import { useMcpServerSettings } from '#/hooks/use-mcp-server-settings';
 import { ServerForm } from './mcp-servers/server-form';
 
 const envRef = (name: string) => `\${env:${name}}`;

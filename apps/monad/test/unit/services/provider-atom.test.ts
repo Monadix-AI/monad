@@ -8,8 +8,8 @@ import type { ModelChunk, ModelProvider } from '@monad/sdk-atom';
 import { expect, test } from 'bun:test';
 import { defineAtomPack, defineProvider, SDK_VERSION } from '@monad/sdk-atom';
 
-import { type GatewayDeps, GatewayModelRouter, ModelProviderRegistry } from '@/agent/index.ts';
-import { loadChannelAtomPacks } from '@/channels/atom-pack-host.ts';
+import { type GatewayDeps, GatewayModelRouter, ModelProviderRegistry } from '#/agent/index.ts';
+import { loadChannelAtomPacks } from '#/channels/atom-pack-host.ts';
 
 const fakeProviderAtom = defineProvider({
   type: 'fake',

@@ -29,8 +29,8 @@ import { memo, useEffect, useMemo, useState } from 'react';
 
 import '@xyflow/react/dist/style.css';
 
-import { type TFn, useT } from '@/components/I18nProvider';
-import { ApprovalDisplayCard } from '@/features/session/ApprovalDisplayCard';
+import { type TFn, useT } from '#/components/I18nProvider';
+import { ApprovalDisplayCard } from '#/features/session/ApprovalDisplayCard';
 import {
   buildInspectorFlow,
   type InspectorNode,

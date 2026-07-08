@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { detectDockerRuntime, dockerLauncher, dockerRuntimeAvailable } from '@monad/atoms';
 
-import { configureSandboxLauncher, noneLauncher, sandboxedSpawn } from '@/capabilities/tools';
+import { configureSandboxLauncher, noneLauncher, sandboxedSpawn } from '#/capabilities/tools';
 
 const runtime = await detectDockerRuntime();
 if (!runtime) {

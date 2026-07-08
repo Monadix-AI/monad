@@ -1,13 +1,13 @@
 import type { MonadConfig, MonadPaths } from '@monad/home';
 import type { Logger } from '@monad/logger';
-import type { CommandBundle } from '@/handlers/commands/index.ts';
-import type { EventBus } from '@/services/event-bus.ts';
-import type { I18nService } from '@/services/i18n.ts';
-import type { Store } from '@/store/db/index.ts';
+import type { CommandBundle } from '#/handlers/commands/index.ts';
+import type { EventBus } from '#/services/event-bus.ts';
+import type { I18nService } from '#/services/i18n.ts';
+import type { Store } from '#/store/db/index.ts';
 
 import { emptyAuth, loadAuth } from '@monad/home';
 
-import { ChannelService, type ChannelServiceDeps, type SessionGateway } from '@/channels/channel.ts';
+import { ChannelService, type ChannelServiceDeps, type SessionGateway } from '#/channels/channel.ts';
 
 // Channel gateway: external IM platforms (Telegram, …) as an inbound transport. It CALLS the
 // session handlers (createForPrincipal + sendInline), wired via the late-bound sessionGateway ref

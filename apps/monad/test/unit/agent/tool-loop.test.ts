@@ -1,14 +1,14 @@
 import type { Event, HookDecision, HookInput, Hooks, SessionId } from '@monad/protocol';
-import type { ModelContentPart, ModelMessage, ModelResult, ModelRouter, ToolSpec } from '@/agent/index.ts';
-import type { Tool, ToolGate } from '@/capabilities/tools/types.ts';
+import type { ModelContentPart, ModelMessage, ModelResult, ModelRouter, ToolSpec } from '#/agent/index.ts';
+import type { Tool, ToolGate } from '#/capabilities/tools/types.ts';
 
 import { expect, test } from 'bun:test';
 import { newId } from '@monad/protocol';
 import { z } from 'zod';
 
-import { AgentLoop, InMemoryMessageRepo, replayHistory } from '@/agent/index.ts';
-import { fileReadTool } from '@/capabilities/tools';
-import { toolResult } from '@/capabilities/tools/types.ts';
+import { AgentLoop, InMemoryMessageRepo, replayHistory } from '#/agent/index.ts';
+import { fileReadTool } from '#/capabilities/tools';
+import { toolResult } from '#/capabilities/tools/types.ts';
 
 // A scripted step is either a final text answer (string) or a tool call the model requests.
 type Step = string | { tool: string; input?: unknown };

@@ -1,12 +1,12 @@
 import type { MonadAuth, MonadConfig } from '@monad/home';
-import type { ModelContext } from '@/handlers/settings/model/context.ts';
+import type { ModelContext } from '#/handlers/settings/model/context.ts';
 
 import { expect, test } from 'bun:test';
 import { createDefaultConfig } from '@monad/home';
 import { ModelProviderType } from '@monad/protocol';
 
-import { ModelProviderRegistry } from '@/agent/index.ts';
-import { enrichModelInfo } from '@/handlers/settings/model/utils.ts';
+import { ModelProviderRegistry } from '#/agent/index.ts';
+import { enrichModelInfo } from '#/handlers/settings/model/utils.ts';
 
 function modelContextWithCatalogContextLimit(limit?: number): ModelContext {
   return {

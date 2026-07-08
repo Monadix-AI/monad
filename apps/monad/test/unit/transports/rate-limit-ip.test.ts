@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 
-import { createIpRateLimiter } from '@/transports/http/rate-limit.ts';
+import { createIpRateLimiter } from '#/transports/http/rate-limit.ts';
 
 test('burst: an IP gets `capacity` requests then is throttled', () => {
   const limiter = createIpRateLimiter({ capacity: 3, refillPerSec: 0 });

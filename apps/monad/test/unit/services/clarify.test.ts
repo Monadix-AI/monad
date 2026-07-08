@@ -2,8 +2,8 @@ import type { Event } from '@monad/protocol';
 
 import { expect, test } from 'bun:test';
 
-import { createClarifyTool } from '@/capabilities/tools/registry/clarify.ts';
-import { ClarifyService } from '@/services/generation/clarify.ts';
+import { createClarifyTool } from '#/capabilities/tools/registry/clarify.ts';
+import { ClarifyService } from '#/services/generation/clarify.ts';
 
 function capture(opts?: { timeoutMs?: number; maxPending?: number }) {
   const events: Event[] = [];

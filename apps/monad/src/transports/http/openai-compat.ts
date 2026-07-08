@@ -8,16 +8,16 @@ import type {
 } from 'openai/resources/chat/completions';
 import type { CompletionUsage } from 'openai/resources/completions';
 import type { EmbeddingCreateParams } from 'openai/resources/embeddings';
-import type { createDaemonHandlers } from '@/handlers/daemon-handlers/index.ts';
+import type { createDaemonHandlers } from '#/handlers/daemon-handlers/index.ts';
 
 import { timingSafeEqual } from 'node:crypto';
 import { newId, parseEventPayload } from '@monad/protocol';
 import { Elysia } from 'elysia';
 
-import { HANDLER_ERROR_MAP, HandlerError } from '@/handlers/handler-error.ts';
-import { buildSessionOrigin } from '@/handlers/session/origin.ts';
-import { isInboundDelegationSession } from '@/services/inbound-approval.ts';
-import { SSE_RESPONSE_HEADERS } from '@/transports/http/sessions/sse.ts';
+import { HANDLER_ERROR_MAP, HandlerError } from '#/handlers/handler-error.ts';
+import { buildSessionOrigin } from '#/handlers/session/origin.ts';
+import { isInboundDelegationSession } from '#/services/inbound-approval.ts';
+import { SSE_RESPONSE_HEADERS } from '#/transports/http/sessions/sse.ts';
 
 // ── OpenAI wire types ─────────────────────────────────────────────────────────
 // All openai SDK imports are type-only — erased at bundle time.

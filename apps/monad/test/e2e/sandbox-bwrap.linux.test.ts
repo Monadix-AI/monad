@@ -22,7 +22,7 @@ import {
   sandboxedSpawn,
   sandboxLauncher,
   selectSandboxLauncher
-} from '@/capabilities/tools';
+} from '#/capabilities/tools';
 
 beforeAll(() => configureSandboxLauncher(bwrapLauncher));
 afterAll(() => {

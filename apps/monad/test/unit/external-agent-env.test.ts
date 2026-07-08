@@ -2,7 +2,7 @@ import type { MonadAuth } from '@monad/home';
 
 import { afterEach, expect, test } from 'bun:test';
 
-import { mergeExternalAgentChildEnv, resolveExternalAgentEnv } from '@/services/external-agent/env.ts';
+import { mergeExternalAgentChildEnv, resolveExternalAgentEnv } from '#/services/external-agent/env.ts';
 
 const touched: string[] = [];
 function setEnv(key: string, value: string): void {

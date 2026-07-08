@@ -1,22 +1,22 @@
 import type { ExternalAgentConfig } from '@monad/home';
 import type { Event, ManagedExternalAgentLifecycleLogEvent, ProjectId, Session, SessionId } from '@monad/protocol';
-import type { SessionContext } from '@/handlers/session/context.ts';
-import type { ManagedExternalAgentProjectMessageSender } from '@/handlers/session/handlers/messaging-notices.ts';
+import type { SessionContext } from '#/handlers/session/context.ts';
+import type { ManagedExternalAgentProjectMessageSender } from '#/handlers/session/handlers/messaging-notices.ts';
 
 import { newId } from '@monad/protocol';
 
-import { extractError } from '@/agent/index.ts';
-import { createManagedExternalAgentMessages } from '@/handlers/session/handlers/managed-external-agent-messages.ts';
-import { createManagedExternalAgentRuntime } from '@/handlers/session/handlers/managed-external-agent-runtime.ts';
-import { managedExternalAgentProjectMembers } from '@/handlers/session/handlers/messaging-members.ts';
+import { extractError } from '#/agent/index.ts';
+import { createManagedExternalAgentMessages } from '#/handlers/session/handlers/managed-external-agent-messages.ts';
+import { createManagedExternalAgentRuntime } from '#/handlers/session/handlers/managed-external-agent-runtime.ts';
+import { managedExternalAgentProjectMembers } from '#/handlers/session/handlers/messaging-members.ts';
 import {
   externalAgentInputText,
   managedExternalAgentBusyInboxNotice,
   managedExternalAgentDirectNotice,
   managedExternalAgentInboxNotice,
   normalizeManagedExternalAgentDirectTarget
-} from '@/handlers/session/handlers/messaging-notices.ts';
-import { managedProjectLaunchMode } from '@/services/external-agent/managed-project.ts';
+} from '#/handlers/session/handlers/messaging-notices.ts';
+import { managedProjectLaunchMode } from '#/services/external-agent/managed-project.ts';
 
 const MANAGED_EXTERNAL_AGENT_DELIVERY_ERROR_EVENT =
   'project.managed_external_agent.delivery_error' satisfies ManagedExternalAgentLifecycleLogEvent;

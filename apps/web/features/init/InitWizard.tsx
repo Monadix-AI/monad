@@ -29,11 +29,11 @@ import { Button, Input, Label } from '@monad/ui';
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 
-import { useT } from '@/components/I18nProvider';
-import { providerFormSchema } from '@/lib/form-validation';
-import { useMonadRuntime } from '@/lib/monad-runtime-provider';
-import { useProviderMeta } from '@/lib/ProviderMeta';
-import { SECRET_INPUT_PASSWORD_MANAGER_PROPS } from '@/lib/secret-input-props';
+import { useT } from '#/components/I18nProvider';
+import { providerFormSchema } from '#/lib/form-validation';
+import { useMonadRuntime } from '#/lib/monad-runtime-provider';
+import { useProviderMeta } from '#/lib/ProviderMeta';
+import { SECRET_INPUT_PASSWORD_MANAGER_PROPS } from '#/lib/secret-input-props';
 import { InitAgentStep } from './InitAgentStep';
 import { InitMeshStep } from './InitMeshStep';
 import { InitModelStep } from './InitModelStep';

@@ -3,7 +3,7 @@ import type { PlannedItem } from '../types.ts';
 import { stat } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 
-import { findSkillDirs, parseSkillMd } from '@/store/home/skills.ts';
+import { findSkillDirs, parseSkillMd } from '#/store/home/skills.ts';
 import { addItem } from './shared.ts';
 
 export async function addSkillItems(items: PlannedItem[], source: string, dir: string): Promise<void> {

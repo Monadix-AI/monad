@@ -1,12 +1,12 @@
 // Vector search uses a pure-JS cosine fallback (bun:sqlite can't load sqlite-vec).
 // A deterministic bucket embedder lets us assert semantic recall without a real model.
 
-import type { ModelRouter } from '@/agent/index.ts';
-import type { EmbeddingIndexerDeps } from '@/services/embedding-indexer.ts';
+import type { ModelRouter } from '#/agent/index.ts';
+import type { EmbeddingIndexerDeps } from '#/services/embedding-indexer.ts';
 
 import { expect, test } from 'bun:test';
 
-import { EmbeddingIndexer } from '@/services/embedding-indexer.ts';
+import { EmbeddingIndexer } from '#/services/embedding-indexer.ts';
 import { buildHandlers, mockModel } from '../../helpers.ts';
 
 // Message vectors are produced off the request path now, so drive the indexer to idle (the daemon

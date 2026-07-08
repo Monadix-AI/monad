@@ -1,5 +1,5 @@
 import type { Event, Hooks, SessionId } from '@monad/protocol';
-import type { FileObservationStore, Tool, ToolBackends, ToolGate } from '@/capabilities/tools/types.ts';
+import type { FileObservationStore, Tool, ToolBackends, ToolGate } from '#/capabilities/tools/types.ts';
 import type { ContextEngine } from './context/index.ts';
 import type { HistoryProvider } from './history.ts';
 import type { AgentLoopDeps, LoadedSkill, MessageRepo, SkillTier, ToolSearchConfig } from './loop/index.ts';
@@ -8,8 +8,8 @@ import type { ModelRouter } from './model/index.ts';
 import type { AgentEnvironment, UserPromptSlots } from './prompts.ts';
 import type { SessionRepo } from './session/index.ts';
 
-import { runSubagent } from '@/capabilities/tools/registry/delegate.ts';
-import { register as skillRegister } from '@/capabilities/tools/registry/skill.ts';
+import { runSubagent } from '#/capabilities/tools/registry/delegate.ts';
+import { register as skillRegister } from '#/capabilities/tools/registry/skill.ts';
 import { AgentLoop, InMemoryMessageRepo, PromptReplayCache } from './loop/index.ts';
 import { InMemoryMemory } from './memory/index.ts';
 import { SessionManager } from './session/index.ts';

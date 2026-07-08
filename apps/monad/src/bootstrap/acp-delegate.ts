@@ -5,13 +5,13 @@
 // turn. Same mechanism MCP config servers use (see bootstrap/mcp.ts reloadConfigMcpServers).
 
 import type { AcpAgentConfig, McpServerConfig, MonadAuth } from '@monad/home';
-import type { ToolGate } from '@/capabilities/tools/types.ts';
-import type { AtomPackRegistry } from '@/handlers/atom-pack/atom-pack-registry.ts';
-import type { Store } from '@/store/db/index.ts';
+import type { ToolGate } from '#/capabilities/tools/types.ts';
+import type { AtomPackRegistry } from '#/handlers/atom-pack/atom-pack-registry.ts';
+import type { Store } from '#/store/db/index.ts';
 
 import { createLogger } from '@monad/logger';
 
-import { createAcpDelegateTool, toAcpMcpServers } from '@/services/delegation/acp-delegate.ts';
+import { createAcpDelegateTool, toAcpMcpServers } from '#/services/delegation/acp-delegate.ts';
 
 // Dedicated source tag so clearToolsFrom() drops exactly this tool on a 1→0 transition without
 // touching builtin / config-MCP tools (which use the default 'static' source and are never cleared).

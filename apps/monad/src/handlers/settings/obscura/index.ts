@@ -1,13 +1,13 @@
 import type { MonadPaths, ObscuraConfig } from '@monad/home';
 import type { ObscuraStatusResponse, SetObscuraRequest } from '@monad/protocol';
-import type { DownloadProgress } from '@/services/download.ts';
+import type { DownloadProgress } from '#/services/download.ts';
 
 import { chmodSync, mkdirSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { loadAll, saveProfile } from '@monad/home';
 
-import { resolveBinary } from '@/infra/resolve-binary.ts';
-import { downloadBytes } from '@/services/download.ts';
+import { resolveBinary } from '#/infra/resolve-binary.ts';
+import { downloadBytes } from '#/services/download.ts';
 
 function obscuraBinaryAssetName(): string {
   const os = process.platform === 'darwin' ? 'macos' : process.platform === 'win32' ? 'windows' : 'linux';

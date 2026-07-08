@@ -4,7 +4,7 @@
 
 import type { MonadAuth, MonadConfig } from '@monad/home';
 
-import { DEFAULT_PROFILE_ALIAS, resolveModelRole } from '@/config/resolve.ts';
+import { DEFAULT_PROFILE_ALIAS, resolveModelRole } from '#/config/resolve.ts';
 
 export interface Mem0ModelSpec {
   provider: string; // mem0 provider name

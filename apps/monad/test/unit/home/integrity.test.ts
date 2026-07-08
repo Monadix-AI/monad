@@ -7,8 +7,8 @@ import { join } from 'node:path';
 import { initMonadHome, loadAll, pathsForHome, saveProfile } from '@monad/home';
 import { ModelProviderType } from '@monad/protocol';
 
-import { createStore } from '@/store/db/index.ts';
-import { checkAndRepair } from '@/store/home/integrity.ts';
+import { createStore } from '#/store/db/index.ts';
+import { checkAndRepair } from '#/store/home/integrity.ts';
 
 function makePaths(base: string): MonadPaths {
   return pathsForHome(base);

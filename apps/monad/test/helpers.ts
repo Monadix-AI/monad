@@ -11,9 +11,9 @@ import type {
   WorkspaceExperienceDefinition
 } from '@monad/protocol';
 import type { WorkspaceExperienceApiHandler } from '@monad/sdk-atom';
-import type { PolicyEngine } from '@/agent/approvals/engine.ts';
-import type { ModelRouter } from '@/agent/index.ts';
-import type { Tool } from '@/capabilities/tools/types.ts';
+import type { PolicyEngine } from '#/agent/approvals/engine.ts';
+import type { ModelRouter } from '#/agent/index.ts';
+import type { Tool } from '#/capabilities/tools/types.ts';
 
 import { unlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -25,27 +25,27 @@ import { createDefaultConfig } from '@monad/home';
 import { enMessages as i18nMessages } from '@monad/i18n/messages';
 import { ModelProviderType, newId } from '@monad/protocol';
 
-import { createAgent, ModelProviderRegistry } from '@/agent/index.ts';
-import { createClarifyTool } from '@/capabilities/tools/registry/clarify.ts';
-import { ChannelService } from '@/channels/channel.ts';
-import { type CommandBundle, type CommandRegistry, createCommandRegistry } from '@/handlers/commands/index.ts';
-import { createDaemonHandlers } from '@/handlers/daemon-handlers/index.ts';
-import { type ModelDeps, ModelService } from '@/handlers/settings/model/index.ts';
+import { createAgent, ModelProviderRegistry } from '#/agent/index.ts';
+import { createClarifyTool } from '#/capabilities/tools/registry/clarify.ts';
+import { ChannelService } from '#/channels/channel.ts';
+import { type CommandBundle, type CommandRegistry, createCommandRegistry } from '#/handlers/commands/index.ts';
+import { createDaemonHandlers } from '#/handlers/daemon-handlers/index.ts';
+import { type ModelDeps, ModelService } from '#/handlers/settings/model/index.ts';
 // Deterministic mock model lives in the runtime module so the daemon (--mock-model)
 // and tests share one implementation.
-import { mockModel } from '@/infra/mock-model.ts';
-import { DelegationService } from '@/services/delegation/delegation.ts';
-import { EventBus } from '@/services/event-bus.ts';
-import { registerAgentAdapterImpl } from '@/services/external-agent/index.ts';
-import { ClarifyService } from '@/services/generation/clarify.ts';
-import { I18nService } from '@/services/i18n.ts';
-import { GraphStore } from '@/services/memory/graph/store.ts';
-import { createMemoryService, type MemoryService } from '@/services/memory/index.ts';
-import { ModelCatalogService } from '@/services/model-catalog.ts';
-import { OversightService } from '@/services/oversight.ts';
-import { RoundCache } from '@/services/round-cache.ts';
-import { createStore } from '@/store/db/index.ts';
-import { createHttpTransport } from '@/transports/http.ts';
+import { mockModel } from '#/infra/mock-model.ts';
+import { DelegationService } from '#/services/delegation/delegation.ts';
+import { EventBus } from '#/services/event-bus.ts';
+import { registerAgentAdapterImpl } from '#/services/external-agent/index.ts';
+import { ClarifyService } from '#/services/generation/clarify.ts';
+import { I18nService } from '#/services/i18n.ts';
+import { GraphStore } from '#/services/memory/graph/store.ts';
+import { createMemoryService, type MemoryService } from '#/services/memory/index.ts';
+import { ModelCatalogService } from '#/services/model-catalog.ts';
+import { OversightService } from '#/services/oversight.ts';
+import { RoundCache } from '#/services/round-cache.ts';
+import { createStore } from '#/store/db/index.ts';
+import { createHttpTransport } from '#/transports/http.ts';
 
 // Production populates the external agent adapter registry at boot via the gated atom-pack path
 // (onAgentAdapter → registerAgentAdapterImpl); this harness builds handlers directly, so register the

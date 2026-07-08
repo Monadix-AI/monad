@@ -1,8 +1,8 @@
 'use client';
 
 import type { ProjectId, Session, SessionId, WorkspaceAction } from '@monad/protocol';
-import type { ProjectExperienceDefinition } from '@/features/workplace/experiences/types';
-import type { ProjectController } from '@/features/workplace/use-project';
+import type { ProjectExperienceDefinition } from '#/features/workplace/experiences/types';
+import type { ProjectController } from '#/features/workplace/use-project';
 
 import {
   ChevronDownIcon,
@@ -31,9 +31,9 @@ import {
 import { Avatar } from '@monad/ui/components/AgentAvatar';
 import { useState } from 'react';
 
-import { useT } from '@/components/I18nProvider';
-import { getProjectExperience } from '@/features/workplace/experiences/registry';
-import { fileManagerLabel, terminalLabel, workdirLabel } from '@/features/workplace/project-shell/project-header-utils';
+import { useT } from '#/components/I18nProvider';
+import { getProjectExperience } from '#/features/workplace/experiences/registry';
+import { fileManagerLabel, terminalLabel, workdirLabel } from '#/features/workplace/project-shell/project-header-utils';
 import { ProjectSessionTabs } from './ProjectSessionTabs';
 
 interface ProjectTopBarProps {

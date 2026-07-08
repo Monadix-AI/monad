@@ -7,14 +7,14 @@ import { HugeiconsIcon } from '@hugeicons/react';
 import { workspaceMono as mono } from '@monad/ui/components/AgentAvatar';
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 
-import { useMonadRuntime } from '@/lib/monad-runtime-provider';
+import { useMonadRuntime } from '#/lib/monad-runtime-provider';
 import {
   appendProjectDebugTrace,
   clearProjectDebugTrace,
   type ProjectDebugTraceEntry,
   projectDebugTraceSnapshot,
   subscribeProjectDebugTrace
-} from '@/lib/project-debug-trace';
+} from '#/lib/project-debug-trace';
 import { DEV_SYSTEM_MESSAGES_IN_STREAM_ENABLED, useProjectDebugStore } from './project-debug-store';
 
 type DebugFilter = 'all' | 'http' | 'sse' | 'external-agent' | 'approval' | 'log' | 'error';

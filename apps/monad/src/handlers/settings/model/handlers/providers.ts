@@ -1,19 +1,19 @@
 import type { Credential, Provider } from '@monad/home';
 import type { ModelInfo, PatchProviderRequest, ProviderView, SetProviderRequest } from '@monad/protocol';
-import type { ModelContext } from '@/handlers/settings/model/context.ts';
+import type { ModelContext } from '#/handlers/settings/model/context.ts';
 
 import { mkdir, rename } from 'node:fs/promises';
 import { dirname } from 'node:path';
 
-import { listProviderModels } from '@/agent/index.ts';
-import { HandlerError } from '@/handlers/handler-error.ts';
+import { listProviderModels } from '#/agent/index.ts';
+import { HandlerError } from '#/handlers/handler-error.ts';
 import {
   credentialToHandle,
   enrichModelInfo,
   providerToResolved,
   providerToView,
   viewToProvider
-} from '@/handlers/settings/model/utils.ts';
+} from '#/handlers/settings/model/utils.ts';
 
 interface ProviderModelCacheEntry {
   providerType: Provider['type'];

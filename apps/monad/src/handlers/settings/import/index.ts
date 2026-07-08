@@ -15,8 +15,8 @@ import { join } from 'node:path';
 import { loadAll, loadAuth, saveAll, saveAuth, saveSystemConfig } from '@monad/home';
 import { newId } from '@monad/protocol';
 
-import { toAgentDir, writeAgentBody } from '@/store/home/agent-def.ts';
-import { installSkillFromDir } from '@/store/home/skills.ts';
+import { toAgentDir, writeAgentBody } from '#/store/home/agent-def.ts';
+import { installSkillFromDir } from '#/store/home/skills.ts';
 import { parseSource } from './adapters/index.ts';
 
 const MAX_SKILL_IMPORT_FILES = 256;

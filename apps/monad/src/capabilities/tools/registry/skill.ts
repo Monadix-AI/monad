@@ -6,14 +6,14 @@
 // already-loaded, already-validated set.
 // No scopes / not high-risk — it only returns text the operator already trusted at load.
 
-import type { LoadedSkill, SkillTier } from '@/agent/loop/index.ts';
-import type { Tool } from '@/capabilities/tools/types.ts';
+import type { LoadedSkill, SkillTier } from '#/agent/loop/index.ts';
+import type { Tool } from '#/capabilities/tools/types.ts';
 
 import { isAbsolute, join, normalize } from 'node:path';
 import { z } from 'zod';
 
-import { substituteSkillDir } from '@/agent/loop/index.ts';
-import { toolResult } from '@/capabilities/tools/types.ts';
+import { substituteSkillDir } from '#/agent/loop/index.ts';
+import { toolResult } from '#/capabilities/tools/types.ts';
 
 /**
  * Runs a `context: fork` skill's body as an isolated subagent and returns its final answer.

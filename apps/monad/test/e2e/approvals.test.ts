@@ -10,10 +10,10 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { HOST_CONTROL_KEY, PolicyEngine } from '@/agent/approvals/engine.ts';
-import { ApprovalStore } from '@/agent/approvals/store.ts';
-import { OversightService } from '@/services/oversight.ts';
-import { createHttpTransport } from '@/transports/http.ts';
+import { HOST_CONTROL_KEY, PolicyEngine } from '#/agent/approvals/engine.ts';
+import { ApprovalStore } from '#/agent/approvals/store.ts';
+import { OversightService } from '#/services/oversight.ts';
+import { createHttpTransport } from '#/transports/http.ts';
 import { buildHandlers, mockModel, serveTransport, TRANSPORTS, type TransportKind } from '../helpers.ts';
 
 const dirs: string[] = [];

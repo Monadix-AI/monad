@@ -1,9 +1,9 @@
-import type { Tool, ToolGate } from '@/capabilities/tools/types.ts';
+import type { Tool, ToolGate } from '#/capabilities/tools/types.ts';
 
 import { expect, test } from 'bun:test';
 
-import { createToolCallTool } from '@/capabilities/tools/registry/tool-call.ts';
-import { toolResult } from '@/capabilities/tools/types.ts';
+import { createToolCallTool } from '#/capabilities/tools/registry/tool-call.ts';
+import { toolResult } from '#/capabilities/tools/types.ts';
 
 const noopLog = () => {};
 const baseCtx = { sessionId: 'sess_1', toolCallId: 'tc_1', log: noopLog };

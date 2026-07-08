@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 
-import { createHttpTransport } from '@/transports/http.ts';
+import { createHttpTransport } from '#/transports/http.ts';
 import { buildHandlers, mockModel } from '../../helpers.ts';
 
 // Unit-level: drive the Elysia app via app.handle() — no network socket.

@@ -3,7 +3,7 @@
 
 import { expect, test } from 'bun:test';
 
-import { createStore } from '@/store/db/index.ts';
+import { createStore } from '#/store/db/index.ts';
 
 test('getActiveConversation returns null before any binding', () => {
   const store = createStore();

@@ -1,7 +1,7 @@
 import type { LedgerCategory, TokenUsage } from '@monad/protocol';
-import type { EmbedResult, ModelPrice } from '@/agent/index.ts';
+import type { EmbedResult, ModelPrice } from '#/agent/index.ts';
 
-import { computeCost } from '@/agent/index.ts';
+import { computeCost } from '#/agent/index.ts';
 
 /** What the indexer needs from the store — structural so tests can supply a fake. */
 interface IndexerStore {

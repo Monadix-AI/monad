@@ -1,5 +1,5 @@
 import type { SandboxLauncher } from '@monad/sdk-atom';
-import type { ToolContext } from '@/capabilities/tools/types.ts';
+import type { ToolContext } from '#/capabilities/tools/types.ts';
 
 import { afterEach, expect, test } from 'bun:test';
 import { mkdir, mkdtemp, realpath, rm } from 'node:fs/promises';
@@ -12,8 +12,8 @@ import {
   noneLauncher,
   shellExecTool,
   ToolSecurityError
-} from '@/capabilities/tools';
-import { invokeTool } from '@/capabilities/tools/invoke.ts';
+} from '#/capabilities/tools';
+import { invokeTool } from '#/capabilities/tools/invoke.ts';
 
 const ctx = (roots?: string[]): ToolContext => ({ sessionId: 's1', sandboxRoots: roots, log: () => {} });
 

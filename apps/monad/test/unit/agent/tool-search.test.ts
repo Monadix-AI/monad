@@ -1,10 +1,10 @@
-import type { ModelRouter } from '@/agent/model/index.ts';
-import type { Tool } from '@/capabilities/tools/types.ts';
+import type { ModelRouter } from '#/agent/model/index.ts';
+import type { Tool } from '#/capabilities/tools/types.ts';
 
 import { expect, mock, test } from 'bun:test';
 
-import { createToolSearchTool } from '@/capabilities/tools/registry/tool-search.ts';
-import { toolResult } from '@/capabilities/tools/types.ts';
+import { createToolSearchTool } from '#/capabilities/tools/registry/tool-search.ts';
+import { toolResult } from '#/capabilities/tools/types.ts';
 
 const noopLog = () => {};
 const baseCtx = { sessionId: 'sess_test', toolCallId: 'tc_1', log: noopLog };

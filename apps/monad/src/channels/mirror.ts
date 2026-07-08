@@ -1,10 +1,10 @@
 import type { SessionId } from '@monad/protocol';
 import type { ChannelAdapter, ChannelLog } from '@monad/sdk-atom';
-import type { ChannelLogger, ChannelTranslate } from '@/channels/types.ts';
-import type { EventBus } from '@/services/event-bus.ts';
+import type { ChannelLogger, ChannelTranslate } from '#/channels/types.ts';
+import type { EventBus } from '#/services/event-bus.ts';
 
-import { errMsg } from '@/channels/helpers.ts';
-import { createRenderer } from '@/channels/render.ts';
+import { errMsg } from '#/channels/helpers.ts';
+import { createRenderer } from '#/channels/render.ts';
 
 export interface MirrorContext {
   sessionMirrors: Map<string, { channelId: string; unsubscribe: () => void }>;

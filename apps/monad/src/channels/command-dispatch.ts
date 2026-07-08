@@ -1,11 +1,11 @@
 import type { ChannelInstanceConfig } from '@monad/home';
 import type { ChannelInbound, SessionId } from '@monad/protocol';
 import type { ChannelAdapter } from '@monad/sdk-atom';
-import type { ChannelRoute, ChannelServiceDeps, ChannelTranslate, Instance } from '@/channels/types.ts';
+import type { ChannelRoute, ChannelServiceDeps, ChannelTranslate, Instance } from '#/channels/types.ts';
 
-import { errMsg } from '@/channels/helpers.ts';
-import { createRenderer } from '@/channels/render.ts';
-import { principalFor } from '@/channels/routing.ts';
+import { errMsg } from '#/channels/helpers.ts';
+import { createRenderer } from '#/channels/render.ts';
+import { principalFor } from '#/channels/routing.ts';
 import {
   type CommandBundle,
   type CommandExecution,
@@ -13,7 +13,7 @@ import {
   emitCommandTurn,
   executeCommand,
   type SessionNavigator
-} from '@/handlers/commands/index.ts';
+} from '#/handlers/commands/index.ts';
 
 const CHANNEL_BLOCKED_COMMANDS = new Set(['workdir']);
 

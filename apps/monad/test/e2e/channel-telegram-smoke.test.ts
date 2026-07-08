@@ -8,10 +8,10 @@ import { createTelegramAdapter } from '@monad/atoms/channels/telegram';
 import { createI18n } from '@monad/i18n';
 import { enMessages as i18nMessages } from '@monad/i18n/messages';
 
-import { ChannelService } from '@/channels/channel.ts';
-import { MOCK_REPLY } from '@/infra/mock-model.ts';
-import { EventBus } from '@/services/event-bus.ts';
-import { createStore } from '@/store/db/index.ts';
+import { ChannelService } from '#/channels/channel.ts';
+import { MOCK_REPLY } from '#/infra/mock-model.ts';
+import { EventBus } from '#/services/event-bus.ts';
+import { createStore } from '#/store/db/index.ts';
 import { buildHandlers, mockModel } from '../helpers.ts';
 
 const BOT_USER_ID = 4242;

@@ -13,9 +13,9 @@ import {
 import { Button } from '@monad/ui';
 import { useMemo } from 'react';
 
-import { useT } from '@/components/I18nProvider';
-import { PanelShell } from '@/components/ui/panel-shell';
-import { StudioBreadcrumbHeader } from '@/features/studio/StudioBreadcrumbHeader';
+import { useT } from '#/components/I18nProvider';
+import { PanelShell, PanelShellBody } from '#/components/ui/panel-shell';
+import { StudioBreadcrumbHeader } from '#/features/studio/StudioBreadcrumbHeader';
 
 interface Props {
   onClose: () => void;
@@ -37,7 +37,7 @@ export function approvalRuleLabel(rule: ApprovalRule, t: Translate): string {
 // Authorized-rules panel: lists remembered allow/deny rules (persisted global + agent) and lets the
 // user revoke one or clear all so the gate prompts again. Session rules aren't shown here (they're
 // scoped to a live session and cleared on its end).
-function ApprovalsSettings(_props: Props) {
+export function ApprovalsSettings(_props: Props) {
   const t = useT();
   const { data: ruleData } = useListApprovalsQuery(undefined);
   const rules = useMemo(
@@ -59,7 +59,7 @@ function ApprovalsSettings(_props: Props) {
         title={t('web.settings.approvals')}
       />
 
-      <div className="flex flex-1 flex-col gap-4 px-6 py-6">
+      <PanelShellBody className="flex flex-col gap-4 px-6 py-6">
         <div className="flex items-center justify-between gap-4">
           <p className="text-muted-foreground text-sm">{t('web.approvals.desc')}</p>
           {rules.length > 0 && (
@@ -108,7 +108,7 @@ function ApprovalsSettings(_props: Props) {
             ))}
           </div>
         )}
-      </div>
+      </PanelShellBody>
     </PanelShell>
   );
 }

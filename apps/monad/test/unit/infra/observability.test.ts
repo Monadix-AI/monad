@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 
-import { resolveObservabilityEndpoint } from '@/infra/observability.ts';
+import { resolveObservabilityEndpoint } from '#/infra/observability.ts';
 
 test('resolveObservabilityEndpoint keeps an explicit endpoint', () => {
   expect(resolveObservabilityEndpoint({ endpoint: 'http://collector.local:4318', developerMode: true })).toBe(

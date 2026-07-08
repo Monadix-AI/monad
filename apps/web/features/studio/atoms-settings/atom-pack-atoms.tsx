@@ -19,7 +19,7 @@ import { HugeiconsIcon } from '@hugeicons/react';
 import { Badge, cn } from '@monad/ui';
 import { Fragment } from 'react';
 
-import { providerLogo, useProviderMeta } from '@/lib/ProviderMeta';
+import { providerLogo, useProviderMeta } from '#/lib/ProviderMeta';
 
 type AtomForm = 'chips' | 'command' | 'detail';
 type KindMeta = { label: string; icon: typeof PackageIcon; blurb: string; form: AtomForm };

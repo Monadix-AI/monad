@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 
-import { takeCompleteStructuredLines } from '@/services/external-agent/structured-lines.ts';
+import { takeCompleteStructuredLines } from '#/services/external-agent/structured-lines.ts';
 
 test('external agent structured line buffer joins split lines and keeps partial tails', () => {
   const state = { text: '', discarding: false };

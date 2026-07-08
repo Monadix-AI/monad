@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 
-import { connectAppServerWs } from '@/services/external-agent/app-server-ws.ts';
+import { connectAppServerWs } from '#/services/external-agent/app-server-ws.ts';
 
 function stderrWith(line: string): ReadableStream<Uint8Array> {
   return new ReadableStream<Uint8Array>({

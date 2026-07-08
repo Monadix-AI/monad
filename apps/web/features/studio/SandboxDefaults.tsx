@@ -19,7 +19,7 @@ import {
 } from '@monad/ui';
 import { useEffect, useState } from 'react';
 
-import { useT } from '@/components/I18nProvider';
+import { useT } from '#/components/I18nProvider';
 
 type Mode = 'workspace' | 'home' | 'unrestricted' | 'ephemeral';
 type Net = 'none' | 'unrestricted' | 'filtered';

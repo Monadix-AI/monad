@@ -1,6 +1,6 @@
 import { Elysia } from 'elysia';
 
-import { shutdownBus } from '@/infra/shutdown-bus.ts';
+import { shutdownBus } from '#/infra/shutdown-bus.ts';
 
 // POST /v1/daemon/stop — triggers graceful shutdown via the shutdown bus. Primarily used by
 // `monad stop` on Windows where SIGTERM cannot be delivered to a detached process. On Unix,

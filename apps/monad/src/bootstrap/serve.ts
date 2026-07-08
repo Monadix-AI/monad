@@ -5,11 +5,11 @@
 
 import type { MonadConfig, MonadPaths } from '@monad/home';
 import type { NetworkRuntimeStatus } from '@monad/protocol';
-import type { ChannelService } from '@/channels/channel.ts';
-import type { createDaemonHandlers } from '@/handlers/daemon-handlers/index.ts';
-import type { ConfigBus } from '@/services/config-bus.ts';
-import type { I18nService } from '@/services/i18n.ts';
-import type { MutableRemoteAccessState } from '@/transports/http.ts';
+import type { ChannelService } from '#/channels/channel.ts';
+import type { createDaemonHandlers } from '#/handlers/daemon-handlers/index.ts';
+import type { ConfigBus } from '#/services/config-bus.ts';
+import type { I18nService } from '#/services/i18n.ts';
+import type { MutableRemoteAccessState } from '#/transports/http.ts';
 
 import { chmod, unlink } from 'node:fs/promises';
 import { resolveDaemonNetwork, validateDaemonNetworkSecurity } from '@monad/home';
@@ -17,12 +17,12 @@ import { logger } from '@monad/logger';
 import { MONAD_VERSION } from '@monad/protocol';
 import { Elysia } from 'elysia';
 
-import { createMoModule } from '@/handlers/mo/handlers.ts';
-import { printBanner, printGoodbye, printReadyInfo } from '@/infra/banner.ts';
-import { shutdownBus } from '@/infra/shutdown-bus.ts';
-import { MoService } from '@/services/mo.ts';
-import { createMoController } from '@/transports/http/mo/controller.ts';
-import { startStdioTransport } from '@/transports/stdio.ts';
+import { createMoModule } from '#/handlers/mo/handlers.ts';
+import { printBanner, printGoodbye, printReadyInfo } from '#/infra/banner.ts';
+import { shutdownBus } from '#/infra/shutdown-bus.ts';
+import { MoService } from '#/services/mo.ts';
+import { createMoController } from '#/transports/http/mo/controller.ts';
+import { startStdioTransport } from '#/transports/stdio.ts';
 import { createHttpTransport, createRemoteAccessState } from '../transports/http.ts';
 
 // Cap buffered request bodies. The largest legitimate body is a sendMessage whose text is bounded

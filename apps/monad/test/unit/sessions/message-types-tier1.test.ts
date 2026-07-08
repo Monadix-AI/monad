@@ -3,7 +3,7 @@ import type { Session } from '@monad/protocol';
 import { expect, test } from 'bun:test';
 import { cardSchema, newId, registerMessageType, unregisterMessageType } from '@monad/protocol';
 
-import { createStore } from '@/store/db/index.ts';
+import { createStore } from '#/store/db/index.ts';
 
 function fixtureSession(over: Partial<Session> = {}): Session {
   const now = new Date().toISOString();

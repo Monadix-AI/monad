@@ -2,10 +2,10 @@
 // entities by a query and returns the relations among them; `graph_node` returns one entity and its
 // neighbours. Read-only, scoped to the calling agent (+ global). Pulled on demand — never injected.
 
-import type { Tool, ToolContext, ToolInputSchema } from '@/capabilities/tools/types.ts';
+import type { Tool, ToolContext, ToolInputSchema } from '#/capabilities/tools/types.ts';
 import type { GraphEdge, GraphNode, L2Provider } from './types.ts';
 
-import { toolResult } from '@/capabilities/tools/types.ts';
+import { toolResult } from '#/capabilities/tools/types.ts';
 
 /** Resolve the read scopes for a session (its agent scope + global). Injected so it's testable. */
 export type GraphScopesFor = (sessionId: string) => string[];

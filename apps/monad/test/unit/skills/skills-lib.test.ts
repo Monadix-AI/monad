@@ -18,7 +18,7 @@ import {
   skillPathsMatch,
   writeSkill,
   writeSkillResource
-} from '@/store/home/skills.ts';
+} from '#/store/home/skills.ts';
 
 // ── parseSkillMd ────────────────────────────────────────────────────────────────
 

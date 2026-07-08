@@ -6,7 +6,7 @@ import { expect, test } from 'bun:test';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
-import { adapterSpawnEnv } from '@/services/delegation/acp-delegate.ts';
+import { adapterSpawnEnv } from '#/services/delegation/acp-delegate.ts';
 
 const spec = (osSandbox: boolean) => ({
   name: 'x',

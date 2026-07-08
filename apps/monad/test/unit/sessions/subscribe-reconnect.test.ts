@@ -3,7 +3,7 @@ import type { Event, SessionId, SessionUiEvent } from '@monad/protocol';
 import { expect, test } from 'bun:test';
 import { newId } from '@monad/protocol';
 
-import { RoundCache } from '@/services/round-cache.ts';
+import { RoundCache } from '#/services/round-cache.ts';
 import { buildMockModel } from '../../fixtures/mock-model.ts';
 import { buildHandlers } from '../../helpers.ts';
 

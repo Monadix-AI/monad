@@ -16,10 +16,11 @@ import {
   useSendMessageMutation
 } from '@monad/client-rtk';
 import { parseSlashCommand } from '@monad/protocol';
-import { type Dispatch, type SetStateAction, useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { type Msg } from '@/features/session/ChatMessage';
-import { textFromParts, viewItemKey } from '@/features/session/chat-view-items';
+import { type Msg } from '#/features/session/ChatMessage';
+import { textFromParts, viewItemKey } from '#/features/session/chat-view-items';
+import { useSessionUiStore } from '#/features/session/session-ui-store';
 
 type CommandEffect = { type: string; sessionId?: string; compacted?: number };
 
@@ -29,12 +30,9 @@ interface UseChatComposerArgs {
   history: UIItem[];
   liveItems: UIItem[];
   streamData: { items: UIItem[] } | undefined;
-  input: string;
-  setInput: Dispatch<SetStateAction<string>>;
   scrollToBottom: (behavior?: 'smooth' | 'auto') => void;
   jumpToLive: () => void;
   setSessionUrl: (id: SessionId | null) => void;
-  setHiddenViewItemKeysBySession: Dispatch<SetStateAction<Record<string, string[]>>>;
   followUpBehavior: ComposerFollowUpBehavior;
 }
 
@@ -46,12 +44,9 @@ export function useChatComposer({
   history,
   liveItems,
   streamData,
-  input,
-  setInput,
   scrollToBottom,
   jumpToLive,
   setSessionUrl,
-  setHiddenViewItemKeysBySession,
   followUpBehavior
 }: UseChatComposerArgs) {
   const [generate, { isLoading: generating }] = useGenerateMutation();
@@ -64,6 +59,9 @@ export function useChatComposer({
   const [optimistic, setOptimistic] = useState<Msg[]>([]);
   const [commandPending, setCommandPending] = useState<string | null>(null);
   const [messageQueue, setMessageQueue] = useState<string[]>([]);
+  const input = useSessionUiStore((state) => state.input);
+  const clearComposerInput = useSessionUiStore((state) => state.clearComposerInput);
+  const setHiddenViewItemKeysBySession = useSessionUiStore((state) => state.setHiddenViewItemKeysBySession);
   const messageQueueRef = useRef<string[]>([]);
   const prevBusyRef = useRef(false);
   const handleSendRef = useRef<((text: string) => Promise<void>) | null>(null);
@@ -226,12 +224,12 @@ export function useChatComposer({
       if (!merged) return;
       setMessageQueue([]);
       messageQueueRef.current = [];
-      setInput('');
+      clearComposerInput();
       void abortSession(currentId);
       await new Promise((r) => setTimeout(r, 100));
       await handleSend(merged);
     },
-    [currentId, abortSession, handleSend, setInput]
+    [currentId, abortSession, clearComposerInput, handleSend]
   );
 
   // When generation ends (stream or block), drain the queue: merge all queued messages and send as one turn.
@@ -249,7 +247,7 @@ export function useChatComposer({
   const handleSubmit = useCallback(async () => {
     const text = input.trim();
     if (!text || !currentId) return;
-    setInput('');
+    clearComposerInput();
     if (isBusy) {
       if (followUpBehavior === 'steer') {
         await handleForceSteerText(text);
@@ -259,18 +257,18 @@ export function useChatComposer({
       return;
     }
     await handleSend(text);
-  }, [input, currentId, isBusy, followUpBehavior, handleSend, handleForceSteerText, setInput]);
+  }, [input, currentId, isBusy, followUpBehavior, handleSend, handleForceSteerText, clearComposerInput]);
 
   const handleQueueSubmit = useCallback(async () => {
     const text = input.trim();
     if (!text || !currentId) return;
-    setInput('');
+    clearComposerInput();
     if (isBusy) {
       setMessageQueue((queue) => [...queue, text]);
       return;
     }
     await handleSend(text);
-  }, [input, currentId, isBusy, handleSend, setInput]);
+  }, [input, currentId, isBusy, handleSend, clearComposerInput]);
 
   const handleForceSteer = useCallback(async () => {
     if (!currentId) return;

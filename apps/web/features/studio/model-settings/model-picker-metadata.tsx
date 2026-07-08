@@ -20,7 +20,7 @@ import {
 import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react';
 import { cn, Tooltip, TooltipContent, TooltipTrigger } from '@monad/ui';
 
-import { useT } from '@/components/I18nProvider';
+import { useT } from '#/components/I18nProvider';
 
 function formatContextLimit(limit: number): string {
   return `${Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(limit)}`;

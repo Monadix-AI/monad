@@ -1,6 +1,6 @@
 import type { Event, SessionId } from '@monad/protocol';
-import type { EventBus } from '@/services/event-bus.ts';
-import type { Store } from '@/store/db/index.ts';
+import type { EventBus } from '#/services/event-bus.ts';
+import type { Store } from '#/store/db/index.ts';
 
 import { newId } from '@monad/protocol';
 

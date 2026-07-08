@@ -1,14 +1,14 @@
 'use client';
 
 import type { HookEvent } from '@monad/protocol';
-import type { TFn } from '@/components/I18nProvider';
+import type { TFn } from '#/components/I18nProvider';
 import type { DraftMatcher } from './hook-settings-types';
 
 import { Cancel01Icon, Delete02Icon, PlusSignIcon, ShieldQuestionMarkIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Button, Input, Label, ScrollArea } from '@monad/ui';
 
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '#/components/ui/dialog';
 
 type HookEditorDialogProps = {
   event: HookEvent;

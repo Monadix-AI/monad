@@ -5,7 +5,7 @@ import type { AppShellRoutesProps } from '../AppShellRoutes';
 import { cn } from '@monad/ui';
 import { Suspense } from 'react';
 
-import { PanelLoading } from '@/components/PanelLoading';
+import { PanelLoading } from '#/components/PanelLoading';
 import { AppShellRoutes } from '../AppShellRoutes';
 
 type AppShellRoutesHostProps = AppShellRoutesProps & {

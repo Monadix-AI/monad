@@ -4,8 +4,8 @@
 
 import { describe, expect, test } from 'bun:test';
 
-import { MOCK_REPLY } from '@/infra/mock-model.ts';
-import { createHttpTransport } from '@/transports/http.ts';
+import { MOCK_REPLY } from '#/infra/mock-model.ts';
+import { createHttpTransport } from '#/transports/http.ts';
 import { buildHandlers, mockModel, serveTransport, TRANSPORTS } from '../helpers.ts';
 
 // ── SSE helpers ──────────────────────────────────────────────────────────────

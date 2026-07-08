@@ -1,4 +1,4 @@
-import type { ModelResult, ModelRouter } from '@/agent/model/index.ts';
+import type { ModelResult, ModelRouter } from '#/agent/model/index.ts';
 
 // `with { type: 'file' }` embeds reliably in bun's --compile binary (unlike new URL+import.meta.url).
 import reviewPromptPath from './prompts/skill-install-review-prompt.md' with { type: 'file' };

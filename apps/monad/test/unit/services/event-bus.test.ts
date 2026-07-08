@@ -2,7 +2,7 @@ import type { Event, EventType, SessionId } from '@monad/protocol';
 
 import { expect, test } from 'bun:test';
 
-import { EventBus } from '@/services/event-bus.ts';
+import { EventBus } from '#/services/event-bus.ts';
 
 let counter = 0;
 const ev = (type: EventType, sessionId: string): Event => ({

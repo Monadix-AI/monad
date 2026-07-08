@@ -1,5 +1,5 @@
-import type { Disposer } from '@/handlers/session/context.ts';
-import type { RateLimitConfig } from '@/transports/types.ts';
+import type { Disposer } from '#/handlers/session/context.ts';
+import type { RateLimitConfig } from '#/transports/types.ts';
 import type { TokenBucket } from './rate-limit.ts';
 
 import { consumeToken, createTokenBucket } from './rate-limit.ts';

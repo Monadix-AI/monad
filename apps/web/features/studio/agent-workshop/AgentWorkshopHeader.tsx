@@ -1,57 +1,45 @@
 'use client';
 
 import type { WebMessageIdWithoutParams } from '@monad/i18n';
-import type { SandboxMode } from '@monad/protocol';
 import type { WorkshopPart } from './AgentWorkshopPrimitives';
 
 import { SparklesIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Badge, Button, cn, Input, Label } from '@monad/ui';
 
-import { useT } from '@/components/I18nProvider';
+import { useT } from '#/components/I18nProvider';
+import { useAgentWorkshopStore } from './agent-workshop-store';
 
 interface AgentWorkshopHeaderProps {
-  a2aEnabled: boolean;
   allowCount: number;
-  atomsMode: 'inherit' | 'allowlist';
-  description: string;
   exposed: boolean;
-  isPublic: boolean;
-  model: string;
-  name: string;
   nextAssemblyPart: WorkshopPart | null;
   partCompletion: { active: boolean; label: string; part: WorkshopPart }[];
   partsInstalled: number;
   readinessKey: WebMessageIdWithoutParams;
-  sandboxMode: SandboxMode | '';
-  setDescription: (value: string) => void;
-  setModel: (value: string) => void;
-  setName: (value: string) => void;
-  setSelectedPart: (part: WorkshopPart) => void;
-  subagentCallable: boolean;
 }
 
 export function AgentWorkshopHeader({
-  a2aEnabled,
   allowCount,
-  atomsMode,
-  description,
   exposed,
-  isPublic,
-  model,
-  name,
   nextAssemblyPart,
   partCompletion,
   partsInstalled,
-  readinessKey,
-  sandboxMode,
-  setDescription,
-  setModel,
-  setName,
-  setSelectedPart,
-  subagentCallable
+  readinessKey
 }: AgentWorkshopHeaderProps) {
   const t = useT();
+  const a2aEnabled = useAgentWorkshopStore((state) => state.a2aEnabled);
+  const atomsMode = useAgentWorkshopStore((state) => state.atomsMode);
+  const description = useAgentWorkshopStore((state) => state.description);
+  const isPublic = useAgentWorkshopStore((state) => state.isPublic);
+  const model = useAgentWorkshopStore((state) => state.model);
+  const name = useAgentWorkshopStore((state) => state.name);
+  const sandboxMode = useAgentWorkshopStore((state) => state.sandboxMode);
+  const setDescription = useAgentWorkshopStore((state) => state.setDescription);
+  const setModel = useAgentWorkshopStore((state) => state.setModel);
+  const setName = useAgentWorkshopStore((state) => state.setName);
+  const setSelectedPart = useAgentWorkshopStore((state) => state.setSelectedPart);
+  const subagentCallable = useAgentWorkshopStore((state) => state.subagentCallable);
   const nextPartLabel = nextAssemblyPart ? partCompletion.find(({ part }) => part === nextAssemblyPart)?.label : null;
 
   return (

@@ -1,4 +1,4 @@
-import type { ToolResult, ToolResultPart } from '@/capabilities/tools/types.ts';
+import type { ToolResult, ToolResultPart } from '#/capabilities/tools/types.ts';
 import type { ModelContentPart, ModelMessage } from '../model/index.ts';
 import type { ChatMessage } from './types.ts';
 

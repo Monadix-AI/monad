@@ -5,7 +5,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { ApprovalStore } from '@/agent/approvals/store.ts';
+import { ApprovalStore } from '#/agent/approvals/store.ts';
 
 const dirs: string[] = [];
 function tmpFile(): string {

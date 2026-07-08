@@ -1,12 +1,12 @@
 import type { Session, SessionId, WorkplaceProject, WorkplaceProjectMemberTemplate } from '@monad/protocol';
-import type { SessionContext } from '@/handlers/session/context.ts';
+import type { SessionContext } from '#/handlers/session/context.ts';
 
 import { expect, test } from 'bun:test';
 import { newId } from '@monad/protocol';
 
-import { HandlerError } from '@/handlers/handler-error.ts';
-import { createSessionMembersHandlers } from '@/handlers/session/handlers/session-members.ts';
-import { createStore } from '@/store/db/index.ts';
+import { HandlerError } from '#/handlers/handler-error.ts';
+import { createSessionMembersHandlers } from '#/handlers/session/handlers/session-members.ts';
+import { createStore } from '#/store/db/index.ts';
 
 // spawnIfManaged (session-members.ts) requires a real config file match to reach
 // spawnManagedSessionMember at all — that resolution path is exercised by the existing

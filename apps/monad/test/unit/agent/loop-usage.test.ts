@@ -1,10 +1,10 @@
 import type { Cost, Event, SessionId } from '@monad/protocol';
-import type { ModelRouter, ModelUsage } from '@/agent/index.ts';
+import type { ModelRouter, ModelUsage } from '#/agent/index.ts';
 
 import { expect, test } from 'bun:test';
 import { newId } from '@monad/protocol';
 
-import { AgentLoop, globalEstimator, InMemoryMessageRepo } from '@/agent/index.ts';
+import { AgentLoop, globalEstimator, InMemoryMessageRepo } from '#/agent/index.ts';
 
 // A model that reports usage on its stream (like a real provider returning token counts).
 function usageModel(usage: ModelUsage): ModelRouter {

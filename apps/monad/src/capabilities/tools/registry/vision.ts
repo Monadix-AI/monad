@@ -1,14 +1,14 @@
-import type { ModelContentPart, ModelRouter, ModelSpecRef } from '@/agent/model/index.ts';
-import type { Tool } from '@/capabilities/tools/types.ts';
+import type { ModelContentPart, ModelRouter, ModelSpecRef } from '#/agent/model/index.ts';
+import type { Tool } from '#/capabilities/tools/types.ts';
 
 import { realpath } from 'node:fs/promises';
 import { extname } from 'node:path';
 import { z } from 'zod';
 
-import { resolveSpec } from '@/agent/model/index.ts';
-import { VISION_DEFAULT_PROMPT as DEFAULT_PROMPT } from '@/agent/prompts/short-text.ts';
-import { assertPathWithinRoots } from '@/capabilities/tools/security.ts';
-import { toolResult } from '@/capabilities/tools/types.ts';
+import { resolveSpec } from '#/agent/model/index.ts';
+import { VISION_DEFAULT_PROMPT as DEFAULT_PROMPT } from '#/agent/prompts/short-text.ts';
+import { assertPathWithinRoots } from '#/capabilities/tools/security.ts';
+import { toolResult } from '#/capabilities/tools/types.ts';
 
 export interface VisionDeps {
   model: ModelRouter;

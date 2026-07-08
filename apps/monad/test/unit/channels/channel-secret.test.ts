@@ -2,7 +2,7 @@ import type { MonadAuth } from '@monad/home';
 
 import { expect, test } from 'bun:test';
 
-import { resolveChannelSecretRef } from '@/config/secrets.ts';
+import { resolveChannelSecretRef } from '#/config/secrets.ts';
 
 function auth(over: Partial<MonadAuth> = {}): MonadAuth {
   return { version: 1, activeProvider: null, updatedAt: '', credentialPool: {}, ...over };

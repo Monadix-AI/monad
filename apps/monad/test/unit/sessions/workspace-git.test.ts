@@ -3,7 +3,7 @@ import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { readWorkspaceGit } from '@/handlers/session/workspace-git.ts';
+import { readWorkspaceGit } from '#/handlers/session/workspace-git.ts';
 
 const tmpDir = () => mkdtempSync(join(tmpdir(), 'monad-git-'));
 

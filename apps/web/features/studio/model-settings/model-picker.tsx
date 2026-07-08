@@ -8,9 +8,9 @@ import { ModelProviderType } from '@monad/protocol';
 import { cn } from '@monad/ui';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
-import { useT } from '@/components/I18nProvider';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { useProviderMeta } from '@/lib/ProviderMeta';
+import { useT } from '#/components/I18nProvider';
+import { Popover, PopoverContent, PopoverTrigger } from '#/components/ui/popover';
+import { useProviderMeta } from '#/lib/ProviderMeta';
 import { ContextLimitTag, ModelOptionPriceTag } from './model-picker-metadata';
 
 export interface HighlightPart {

@@ -1,6 +1,6 @@
 import type { Credential, MonadConfig, Provider } from '@monad/home';
 import type { CredentialView, ModelInfo, ProfileView, ProviderView } from '@monad/protocol';
-import type { ModelContext } from '@/handlers/settings/model/context.ts';
+import type { ModelContext } from '#/handlers/settings/model/context.ts';
 
 import { ModelProviderType } from '@monad/protocol';
 

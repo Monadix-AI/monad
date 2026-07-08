@@ -1,12 +1,12 @@
 // The inbound-approval gate: high-risk tools in a peer-delegated (openai-compat) session follow the
 // configured policy (auto/local/deny); the daemon's own sessions always reach the fallback gate.
 
-import type { ToolGate, ToolGateRequest } from '@/capabilities/tools/types.ts';
-import type { Store } from '@/store/db/index.ts';
+import type { ToolGate, ToolGateRequest } from '#/capabilities/tools/types.ts';
+import type { Store } from '#/store/db/index.ts';
 
 import { expect, test } from 'bun:test';
 
-import { createInboundApprovalGate, type InboundApprovalMode } from '@/services/inbound-approval.ts';
+import { createInboundApprovalGate, type InboundApprovalMode } from '#/services/inbound-approval.ts';
 
 function storeWith(client: string | undefined): Pick<Store, 'getSession'> {
   return {

@@ -7,7 +7,7 @@ import {
 import { channelDisplayText, channelStructuredVisibility } from '@monad/protocol';
 import { Allow, parse as parsePartialJson } from 'partial-json';
 
-import { findExternalAgentProviderAdapter } from '@/services/external-agent/index.ts';
+import { findExternalAgentProviderAdapter } from '#/services/external-agent/index.ts';
 
 const TEXT_TYPES = new Set(['text', 'markdown', 'error']);
 export const MAX_EXTERNAL_AGENT_UI_OUTPUT = 64 * 1024;

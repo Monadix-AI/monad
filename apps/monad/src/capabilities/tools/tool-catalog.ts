@@ -1,6 +1,6 @@
-import type { Tool } from '@/capabilities/tools/types.ts';
+import type { Tool } from '#/capabilities/tools/types.ts';
 
-import { toolInputJsonSchema } from '@/capabilities/tools/schema.ts';
+import { toolInputJsonSchema } from '#/capabilities/tools/schema.ts';
 
 // Module-level cache keyed by toolRevision; survives AgentLoop reconstruction across turns.
 // Ring-eviction: keep at most 3 revisions to bound memory.

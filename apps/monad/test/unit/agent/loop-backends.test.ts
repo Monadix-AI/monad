@@ -1,12 +1,12 @@
 import type { Event, SessionId } from '@monad/protocol';
-import type { ModelResult, ModelRouter } from '@/agent/index.ts';
-import type { Tool, ToolBackends } from '@/capabilities/tools/types.ts';
+import type { ModelResult, ModelRouter } from '#/agent/index.ts';
+import type { Tool, ToolBackends } from '#/capabilities/tools/types.ts';
 
 import { expect, test } from 'bun:test';
 
-import { AgentLoop, InMemoryMessageRepo } from '@/agent/index.ts';
-import { fileGlobTool, fileWriteTool } from '@/capabilities/tools';
-import { toolResult } from '@/capabilities/tools/types.ts';
+import { AgentLoop, InMemoryMessageRepo } from '#/agent/index.ts';
+import { fileGlobTool, fileWriteTool } from '#/capabilities/tools';
+import { toolResult } from '#/capabilities/tools/types.ts';
 
 type Step = string | { tool: string; input?: unknown };
 

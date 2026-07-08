@@ -4,7 +4,7 @@ import { HelpCircleIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Button } from '@monad/ui';
 
-import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '#/components/ui/hover-card';
 
 export function InlineHelpHover({
   body,

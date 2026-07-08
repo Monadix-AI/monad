@@ -17,32 +17,32 @@
 
 import type { MonadAuth } from '@monad/home';
 import type { NetworkRuntimeStatus, PrincipalId, SessionId } from '@monad/protocol';
-import type { Tool } from '@/capabilities/tools/types.ts';
-import type { SessionGateway } from '@/channels/channel.ts';
+import type { Tool } from '#/capabilities/tools/types.ts';
+import type { SessionGateway } from '#/channels/channel.ts';
 
 import { join } from 'node:path';
 import { getPaths, initMonadHome, loadAll, loadAuth, resolveDaemonNetwork, saveProfile } from '@monad/home';
 import { createLogger } from '@monad/logger';
 
-import { applyAcpDelegateTool } from '@/bootstrap/acp-delegate.ts';
-import { buildServiceTools, builtinTools } from '@/capabilities/tools';
-import { AtomPackRegistry } from '@/handlers/atom-pack/index.ts';
-import { type CommandBundle, createCommandRegistry } from '@/handlers/commands/index.ts';
-import { createDaemonHandlers } from '@/handlers/daemon-handlers/index.ts';
-import { createHookRunner } from '@/hooks/runner.ts';
-import { daemonChildProcesses, runDaemonChildSupervisorFromArgv } from '@/infra/daemon-child-processes.ts';
-import { initObservability, resolveObservabilityEndpoint } from '@/infra/observability.ts';
-import { ReloadService } from '@/reload/index.ts';
-import { DelegationService } from '@/services/delegation/delegation.ts';
-import { acpAgentCandidatesFromAdapters } from '@/services/delegation/presets.ts';
-import { configureDeveloperLogTransport } from '@/services/developer-log.ts';
-import { EventBus } from '@/services/event-bus.ts';
-import { isToolExposed } from '@/services/generation/agent-persona.ts';
-import { createGraphQueryTools } from '@/services/memory/graph/query-tools.ts';
-import { createMemoryAgentTools } from '@/services/memory/tools.ts';
-import { RoundCache } from '@/services/round-cache.ts';
-import { ScheduleService } from '@/services/scheduling/schedule.ts';
-import { runAcpBridge } from '@/transports/acp/launch.ts';
+import { applyAcpDelegateTool } from '#/bootstrap/acp-delegate.ts';
+import { buildServiceTools, builtinTools } from '#/capabilities/tools';
+import { AtomPackRegistry } from '#/handlers/atom-pack/index.ts';
+import { type CommandBundle, createCommandRegistry } from '#/handlers/commands/index.ts';
+import { createDaemonHandlers } from '#/handlers/daemon-handlers/index.ts';
+import { createHookRunner } from '#/hooks/runner.ts';
+import { daemonChildProcesses, runDaemonChildSupervisorFromArgv } from '#/infra/daemon-child-processes.ts';
+import { initObservability, resolveObservabilityEndpoint } from '#/infra/observability.ts';
+import { ReloadService } from '#/reload/index.ts';
+import { DelegationService } from '#/services/delegation/delegation.ts';
+import { acpAgentCandidatesFromAdapters } from '#/services/delegation/presets.ts';
+import { configureDeveloperLogTransport } from '#/services/developer-log.ts';
+import { EventBus } from '#/services/event-bus.ts';
+import { isToolExposed } from '#/services/generation/agent-persona.ts';
+import { createGraphQueryTools } from '#/services/memory/graph/query-tools.ts';
+import { createMemoryAgentTools } from '#/services/memory/tools.ts';
+import { RoundCache } from '#/services/round-cache.ts';
+import { ScheduleService } from '#/services/scheduling/schedule.ts';
+import { runAcpBridge } from '#/transports/acp/launch.ts';
 import { createDaemonAgent } from './bootstrap/agent.ts';
 import { createAtomPackRediscoverer } from './bootstrap/atoms.ts';
 import { createChannelGateway } from './bootstrap/channel-gateway.ts';
@@ -265,7 +265,7 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
     skillState: (skill) => getSkillState()(skill)
   });
 
-  const agentModel = USE_MOCK ? (await import('@/infra/mock-model.ts')).mockModel() : modelService.router;
+  const agentModel = USE_MOCK ? (await import('#/infra/mock-model.ts')).mockModel() : modelService.router;
 
   // Discover atom packs (built-in + ~/.monad/atoms) through the atom-kind-gated loader BEFORE the
   // agent snapshots its tools below — so a third-party atom pack's declared tools/connectors reach

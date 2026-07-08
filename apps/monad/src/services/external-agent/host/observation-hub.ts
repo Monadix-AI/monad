@@ -2,9 +2,9 @@ import type { ExternalAgentObservationAccessResponse } from '@monad/protocol';
 import type {
   ExternalAgentObservationListener,
   LiveExternalAgentSession
-} from '@/services/external-agent/host/host-types.ts';
+} from '#/services/external-agent/host/host-types.ts';
 
-import { OBSERVATION_THROTTLE_MS } from '@/services/external-agent/host/host-constants.ts';
+import { OBSERVATION_THROTTLE_MS } from '#/services/external-agent/host/host-constants.ts';
 
 interface ObservationHubContext {
   getLive(id: string): LiveExternalAgentSession | undefined;

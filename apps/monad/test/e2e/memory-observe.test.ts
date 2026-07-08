@@ -3,8 +3,8 @@
 // Exercises the SAME wiring main.ts ships (registerMemoryHooks), not a copy, against the real agent
 // loop + hook runner. mem0 backend (its observe is the per-turn write path; built-in has none).
 
-import type { ModelRouter } from '@/agent/index.ts';
-import type { Mem0Client, Mem0Memory } from '@/services/memory/mem0.ts';
+import type { ModelRouter } from '#/agent/index.ts';
+import type { Mem0Client, Mem0Memory } from '#/services/memory/mem0.ts';
 
 import { expect, test } from 'bun:test';
 import { mkdtempSync } from 'node:fs';
@@ -13,13 +13,13 @@ import { join } from 'node:path';
 import { createLogger } from '@monad/logger';
 import { newId } from '@monad/protocol';
 
-import { AtomPackRegistry } from '@/handlers/atom-pack/atom-pack-registry.ts';
-import { createHookRunner } from '@/hooks/runner.ts';
-import { MOCK_REPLY } from '@/infra/mock-model.ts';
-import { registerMemoryHooks } from '@/services/memory/hooks.ts';
-import { createMemoryService } from '@/services/memory/index.ts';
-import { createStore } from '@/store/db/index.ts';
-import { createHttpTransport } from '@/transports/http.ts';
+import { AtomPackRegistry } from '#/handlers/atom-pack/atom-pack-registry.ts';
+import { createHookRunner } from '#/hooks/runner.ts';
+import { MOCK_REPLY } from '#/infra/mock-model.ts';
+import { registerMemoryHooks } from '#/services/memory/hooks.ts';
+import { createMemoryService } from '#/services/memory/index.ts';
+import { createStore } from '#/store/db/index.ts';
+import { createHttpTransport } from '#/transports/http.ts';
 import { buildHandlers, mockModel, serveTransport, stubModelDeps, TRANSPORTS } from '../helpers.ts';
 
 const log = createLogger('e2e-observe');

@@ -1,13 +1,13 @@
 // Invite presets for same-machine third-party agents (Codex / Claude Code) + same-machine detection.
 // The detection probes are injected so the codex-not-on-PATH app-bundle fallback is deterministic.
 
-import type { BinProbes } from '@/infra/resolve-binary.ts';
+import type { BinProbes } from '#/infra/resolve-binary.ts';
 
 import { expect, test } from 'bun:test';
 import { builtinAgentAdapters } from '@monad/atoms/agent-adapters';
 
-import { listAcpAgentPresets } from '@/services/delegation/presets.ts';
-import { registerAgentAdapterImpl } from '@/services/external-agent/index.ts';
+import { listAcpAgentPresets } from '#/services/delegation/presets.ts';
+import { registerAgentAdapterImpl } from '#/services/external-agent/index.ts';
 
 // ACP invite presets now derive from the agent-adapter registry (adapters that declare an `acp`
 // delivery variant); the daemon populates it at boot, so register the built-ins for this unit test.

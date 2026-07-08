@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
 
-import { KvStore } from '@/store/kv/store.ts';
+import { KvStore } from '#/store/kv/store.ts';
 
 let store: KvStore;
 beforeEach(() => {

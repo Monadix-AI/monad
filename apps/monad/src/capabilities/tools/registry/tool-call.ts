@@ -1,8 +1,8 @@
-import type { Tool, ToolContext } from '@/capabilities/tools/types.ts';
+import type { Tool, ToolContext } from '#/capabilities/tools/types.ts';
 
 import { z } from 'zod';
 
-import { invokeTool } from '@/capabilities/tools/invoke.ts';
+import { invokeTool } from '#/capabilities/tools/invoke.ts';
 
 export function createToolCallTool(
   getTools: () => Tool[]

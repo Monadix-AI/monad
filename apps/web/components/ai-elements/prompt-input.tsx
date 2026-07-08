@@ -6,7 +6,7 @@ import type { ChangeEventHandler, FormEvent, FormEventHandler, HTMLAttributes } 
 import { cn, InputGroup } from '@monad/ui';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { useT } from '@/components/I18nProvider';
+import { useT } from '#/components/I18nProvider';
 import {
   type AttachmentsContext,
   LocalAttachmentsContext,

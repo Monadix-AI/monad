@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
-import { daemonChildProcesses, killDaemonProcessTree } from '@/infra/daemon-child-processes.ts';
+import { daemonChildProcesses, killDaemonProcessTree } from '#/infra/daemon-child-processes.ts';
 
 export class MoService {
   private proc: ReturnType<typeof Bun.spawn> | null = null;

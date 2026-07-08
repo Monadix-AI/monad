@@ -9,7 +9,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createDefaultConfig, loadAll, saveAll } from '@monad/home';
 
-import { createAtomPacksModule } from '@/handlers/atom-pack/index.ts';
+import { createAtomPacksModule } from '#/handlers/atom-pack/index.ts';
 
 let base: string;
 let atomsDir: string;
@@ -165,7 +165,7 @@ test('removeAtomPack rejects path-traversal names', async () => {
 });
 
 test('disable hides an atom pack from discovery; enable restores it', async () => {
-  const { discoverChannelAdapters } = await import('@/channels/discover.ts');
+  const { discoverChannelAdapters } = await import('#/channels/discover.ts');
   const p = paths();
   await saveAll(p.config, p.profile, createDefaultConfig('prn_test', 'Test User'));
   await mod.installAtomPack({ source: `local:${stagedDir}`, consent: true });

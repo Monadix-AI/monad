@@ -2,7 +2,7 @@
 
 import { expect, test } from 'bun:test';
 
-import { matchLaws } from '@/services/memory/explain.ts';
+import { matchLaws } from '#/services/memory/explain.ts';
 
 const laws = [
   { statement: 'User deploys with Bun, never Node' },

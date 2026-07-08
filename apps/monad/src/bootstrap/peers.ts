@@ -1,10 +1,10 @@
 import type { MonadAuth, MonadConfig } from '@monad/home';
 import type { Logger } from '@monad/logger';
-import type { Tool } from '@/capabilities/tools/types.ts';
+import type { Tool } from '#/capabilities/tools/types.ts';
 
 import { emptyAuth, resolvePeerSecretRef } from '@monad/home';
 
-import { createPeerDelegateTool, type PeerDelegateTarget } from '@/services/delegation/peer-delegate.ts';
+import { createPeerDelegateTool, type PeerDelegateTarget } from '#/services/delegation/peer-delegate.ts';
 
 // monad-as-peer-client: expose `agent_peer_delegate` only for enabled peers whose token resolves
 // (a peer configured but missing its auth.json credential is skipped, not fatal). The peer runs the

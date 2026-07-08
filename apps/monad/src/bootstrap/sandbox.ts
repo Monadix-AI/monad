@@ -3,7 +3,7 @@
 // policy as a side effect, and returns the three products the rest of startDaemon consumes.
 
 import type { MonadAuth, MonadConfig, MonadPaths, SandboxMode } from '@monad/home';
-import type { Store } from '@/store/db/index.ts';
+import type { Store } from '#/store/db/index.ts';
 import type { SessionSandboxService } from '../services/session-sandbox.ts';
 
 import { homedir } from 'node:os';
@@ -26,9 +26,9 @@ import {
   configureSandboxReadDeny,
   noneLauncher,
   selectSandboxLauncher
-} from '@/capabilities/tools';
-import { resolveEffectiveSandboxMode } from '@/config/resolve.ts';
-import { resolveSecretRef } from '@/config/secrets.ts';
+} from '#/capabilities/tools';
+import { resolveEffectiveSandboxMode } from '#/config/resolve.ts';
+import { resolveSecretRef } from '#/config/secrets.ts';
 import { startEgressProxy } from '../services/egress-proxy.ts';
 import { createSessionSandboxService } from '../services/session-sandbox.ts';
 

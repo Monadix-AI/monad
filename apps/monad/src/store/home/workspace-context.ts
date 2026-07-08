@@ -1,4 +1,4 @@
-import type { UserPromptSlots } from '@/agent/prompts.ts';
+import type { UserPromptSlots } from '#/agent/prompts.ts';
 
 import { join } from 'node:path';
 import { TEMPLATES, type TemplateName } from '@monad/home';

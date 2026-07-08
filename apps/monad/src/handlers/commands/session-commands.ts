@@ -13,8 +13,8 @@ import type {
   ConsolidateSummary,
   ContradictionCheckSummary
 } from '@monad/sdk-atom';
-import type { EventBus } from '@/services/event-bus.ts';
-import type { Store } from '@/store/db/index.ts';
+import type { EventBus } from '#/services/event-bus.ts';
+import type { Store } from '#/store/db/index.ts';
 
 import { newId } from '@monad/protocol';
 

@@ -7,9 +7,9 @@ import type { ProjectExperienceView } from '../types';
 import { WORKSPACE_EXPERIENCE_API_VERSION } from '@monad/sdk-atom/workspace-experience';
 import { createElement, useEffect, useMemo, useRef, useState } from 'react';
 
-import { useT } from '@/components/I18nProvider';
-import { studioPath } from '@/features/routes/route-paths';
-import { pushShellUrl } from '@/hooks/use-shell-location';
+import { useT } from '#/components/I18nProvider';
+import { studioPath } from '#/features/routes/route-paths';
+import { pushShellUrl } from '#/hooks/use-shell-location';
 
 type WorkspaceExperienceElement = HTMLElement & {
   monadWorkspaceExperience?: WorkspaceExperienceHostApiV1;

@@ -6,14 +6,14 @@ import { CpuIcon, PlusSignIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { agentSelectors, useListAgentsQuery } from '@monad/client-rtk';
 import { ModelProviderType } from '@monad/protocol';
-import { Button, ScrollArea } from '@monad/ui';
+import { Button } from '@monad/ui';
 import { useCallback, useEffect, useState } from 'react';
 import { flushSync } from 'react-dom';
 
-import { useT } from '@/components/I18nProvider';
-import { PanelShell } from '@/components/ui/panel-shell';
-import { useModelSettings, useModelSettingsQueryState, useProviderDetail } from '@/hooks/use-model-settings';
-import { useProviderMeta } from '@/lib/ProviderMeta';
+import { useT } from '#/components/I18nProvider';
+import { PanelShell, PanelShellBody } from '#/components/ui/panel-shell';
+import { useModelSettings, useModelSettingsQueryState, useProviderDetail } from '#/hooks/use-model-settings';
+import { useProviderMeta } from '#/lib/ProviderMeta';
 import { StudioBreadcrumbHeader } from '../StudioBreadcrumbHeader';
 import { type DeleteBlock, profileDeleteBlock, providerDeleteBlock } from './delete-guards';
 import { splitModelSpec } from './model-picker';
@@ -167,7 +167,7 @@ export function ModelSettings(_props: { onClose: () => void }) {
         title={t('web.model.title')}
       />
 
-      <ScrollArea className="min-h-0 flex-1">
+      <PanelShellBody>
         {settingsQuery.isLoading ? (
           <ModelSettingsSkeleton />
         ) : (
@@ -273,7 +273,7 @@ export function ModelSettings(_props: { onClose: () => void }) {
             </ModelSection>
           </div>
         )}
-      </ScrollArea>
+      </PanelShellBody>
 
       <ProviderDialog
         metaFor={metaFor}

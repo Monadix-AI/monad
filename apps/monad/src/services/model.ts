@@ -1,14 +1,14 @@
 import type { Credential, MonadAuth, MonadConfig } from '@monad/home';
 import type { ModelRole } from '@monad/protocol';
 import type { ProviderCredential } from '@monad/sdk-atom';
-import type { DiscoverResult, GatewayDeps, ModelRouter } from '@/agent/index.ts';
-import type { ModelCatalogService } from '@/services/model-catalog.ts';
+import type { DiscoverResult, GatewayDeps, ModelRouter } from '#/agent/index.ts';
+import type { ModelCatalogService } from '#/services/model-catalog.ts';
 
 import { saveAuth } from '@monad/home';
 
-import { GatewayModelRouter, ModelProviderRegistry } from '@/agent/index.ts';
-import { DEFAULT_PROFILE_ALIAS, resolveModelRole } from '@/config/resolve.ts';
-import { getHttp2Fetch } from '@/infra/http2-fetch.ts';
+import { GatewayModelRouter, ModelProviderRegistry } from '#/agent/index.ts';
+import { DEFAULT_PROFILE_ALIAS, resolveModelRole } from '#/config/resolve.ts';
+import { getHttp2Fetch } from '#/infra/http2-fetch.ts';
 
 /** An empty provider registry — the daemon fills it from `builtinAtomPack` (+ any third-party
  *  `provider` atom) so providers flow through the unified loader, not a separate seed. ModelService

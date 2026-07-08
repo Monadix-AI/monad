@@ -14,7 +14,7 @@ import { checkDaemonVersion } from '@monad/client';
 import { Button, cn, Input, Label } from '@monad/ui';
 import { useState } from 'react';
 
-import { useT } from '@/components/I18nProvider';
+import { useT } from '#/components/I18nProvider';
 import {
   Dialog,
   DialogContent,
@@ -22,8 +22,8 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle
-} from '@/components/ui/dialog';
-import { normalizeDaemonUrl, type RemoteDaemonConnection, saveRemoteDaemonConnection } from '@/lib/daemon-connections';
+} from '#/components/ui/dialog';
+import { normalizeDaemonUrl, type RemoteDaemonConnection, saveRemoteDaemonConnection } from '#/lib/daemon-connections';
 
 export function RemoteDaemonDialog({
   onConnected,

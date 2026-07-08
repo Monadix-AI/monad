@@ -22,13 +22,13 @@
 
 import type { McpServer } from '@agentclientprotocol/sdk';
 import type { AcpAgentConfig } from '@monad/home';
-import type { Tool, ToolBackends, ToolContext, ToolGate } from '@/capabilities/tools/types.ts';
-import type { Store } from '@/store/db/index.ts';
+import type { Tool, ToolBackends, ToolContext, ToolGate } from '#/capabilities/tools/types.ts';
+import type { Store } from '#/store/db/index.ts';
 
 import { createLogger } from '@monad/logger';
 import { z } from 'zod';
 
-import { toolResult } from '@/capabilities/tools/types.ts';
+import { toolResult } from '#/capabilities/tools/types.ts';
 import { setDelegateStore } from './acp-registry.ts';
 import { runExternalAgent } from './acp-spawn.ts';
 

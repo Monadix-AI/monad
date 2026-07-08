@@ -6,9 +6,9 @@ import { cn } from '@monad/ui';
 import { CodeInline } from '@monad/ui/components/CodeBlock';
 import { memo, useMemo, useState } from 'react';
 
-import { Tool, ToolContent, ToolHeader, ToolInput, ToolOutput, type ToolPart } from '@/components/ai-elements/tool';
-import { useT } from '@/components/I18nProvider';
-import { useToolBackendsSettings } from '@/hooks/use-tool-backends-settings';
+import { Tool, ToolContent, ToolHeader, ToolInput, ToolOutput, type ToolPart } from '#/components/ai-elements/tool';
+import { useT } from '#/components/I18nProvider';
+import { useToolBackendsSettings } from '#/hooks/use-tool-backends-settings';
 
 export interface ToolItem {
   kind: 'tool';

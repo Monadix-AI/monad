@@ -3,7 +3,7 @@ import { afterEach, expect, test } from 'bun:test';
 import {
   __clearRemoteMarketplaceCacheForTest,
   createRemoteMarketplaceSources
-} from '@/capabilities/skills/sources/marketplaces.ts';
+} from '#/capabilities/skills/sources/marketplaces.ts';
 
 const realFetch = globalThis.fetch;
 

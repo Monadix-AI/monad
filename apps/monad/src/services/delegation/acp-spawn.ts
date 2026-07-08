@@ -1,14 +1,14 @@
 import type { ClientConnection, McpServer } from '@agentclientprotocol/sdk';
 import type { AcpAgentConfig } from '@monad/home';
-import type { ToolContext, ToolGate } from '@/capabilities/tools/types.ts';
+import type { ToolContext, ToolGate } from '#/capabilities/tools/types.ts';
 import type { LiveDelegate } from './acp-delegate-types.ts';
 
 import { ndJsonStream, PROTOCOL_VERSION } from '@agentclientprotocol/sdk';
 import { createLogger } from '@monad/logger';
 
-import { buildSandboxPolicy, createSandboxBackends, sandboxedSpawn, sandboxLauncher } from '@/capabilities/tools';
-import { tryResolveSecretMap } from '@/config/secrets.ts';
-import { daemonChildProcesses, killDaemonProcessTree } from '@/infra/daemon-child-processes.ts';
+import { buildSandboxPolicy, createSandboxBackends, sandboxedSpawn, sandboxLauncher } from '#/capabilities/tools';
+import { tryResolveSecretMap } from '#/config/secrets.ts';
+import { daemonChildProcesses, killDaemonProcessTree } from '#/infra/daemon-child-processes.ts';
 import { buildDelegateApp } from './acp-delegate-app.ts';
 import { adapterSpawnEnv } from './acp-env.ts';
 import { adapterFailureError } from './acp-errors.ts';

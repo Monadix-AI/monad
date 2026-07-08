@@ -7,8 +7,8 @@ import { HugeiconsIcon } from '@hugeicons/react';
 import { useGetMemoryStatusQuery, useSetMem0ModelsMutation, useSetMemoryBackendMutation } from '@monad/client-rtk';
 import { Badge, cn, Label, Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@monad/ui';
 
-import { type TFn, useT } from '@/components/I18nProvider';
-import { useModelSettings } from '@/hooks/use-model-settings';
+import { type TFn, useT } from '#/components/I18nProvider';
+import { useModelSettings } from '#/hooks/use-model-settings';
 import { Segmented } from './Segmented';
 
 const DEFAULT_LLM = '__default__';

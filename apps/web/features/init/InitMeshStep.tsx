@@ -1,18 +1,18 @@
 'use client';
 
 import type { ExternalAgentView } from '@monad/protocol';
-import type { useT } from '@/components/I18nProvider';
+import type { useT } from '#/components/I18nProvider';
 
 import { useStartExternalAgentAuthMutation } from '@monad/client-rtk';
 import { Button } from '@monad/ui';
 import { useState } from 'react';
 
-import { ExternalAgentPresetPanel } from '@/features/studio/third-party-agents/ExternalAgentPresetPanel';
-import { connectExternalAgent } from '@/features/studio/third-party-agents/external-agent-connect-agent';
-import { DETECTING_EXTERNAL_AGENT_PRESETS } from '@/features/studio/third-party-agents/external-agent-default-presets';
-import { ExternalAgentAuthModal } from '@/features/workplace/cli/ExternalAgentAuthModal';
-import { useAsyncAction } from '@/hooks/use-async-action';
-import { useExternalAgentSettings } from '@/hooks/use-external-agent-settings';
+import { ExternalAgentPresetPanel } from '#/features/studio/third-party-agents/ExternalAgentPresetPanel';
+import { connectExternalAgent } from '#/features/studio/third-party-agents/external-agent-connect-agent';
+import { DETECTING_EXTERNAL_AGENT_PRESETS } from '#/features/studio/third-party-agents/external-agent-default-presets';
+import { ExternalAgentAuthModal } from '#/features/workplace/cli/ExternalAgentAuthModal';
+import { useAsyncAction } from '#/hooks/use-async-action';
+import { useExternalAgentSettings } from '#/hooks/use-external-agent-settings';
 
 type TFunction = ReturnType<typeof useT>;
 

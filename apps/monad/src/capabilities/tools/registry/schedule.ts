@@ -9,12 +9,12 @@
 // send_later is returned by createScheduleTools (not a separate factory) so schedule_cancel
 // is always co-registered — the receipt id it returns is only useful with schedule_cancel.
 
-import type { Tool, ToolContext, ToolInputSchema } from '@/capabilities/tools/types.ts';
+import type { Tool, ToolContext, ToolInputSchema } from '#/capabilities/tools/types.ts';
 import type { ToolModule } from './contract.ts';
 
 import { z } from 'zod';
 
-import { toolResult } from '@/capabilities/tools/types.ts';
+import { toolResult } from '#/capabilities/tools/types.ts';
 
 export interface ScheduleCreateInput {
   prompt: string;

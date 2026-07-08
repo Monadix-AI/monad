@@ -1,11 +1,11 @@
-import type { ModelRouter, ModelSpecRef } from '@/agent/model/index.ts';
-import type { Tool } from '@/capabilities/tools/types.ts';
+import type { ModelRouter, ModelSpecRef } from '#/agent/model/index.ts';
+import type { Tool } from '#/capabilities/tools/types.ts';
 
 import { join } from 'node:path';
 import { z } from 'zod';
 
-import { resolveSpec } from '@/agent/model/index.ts';
-import { toolResult } from '@/capabilities/tools/types.ts';
+import { resolveSpec } from '#/agent/model/index.ts';
+import { toolResult } from '#/capabilities/tools/types.ts';
 
 export interface TtsToolDeps {
   router: ModelRouter;

@@ -2,7 +2,7 @@
 
 import { expect, test } from 'bun:test';
 
-import { LawStore } from '@/services/memory/law-store.ts';
+import { LawStore } from '#/services/memory/law-store.ts';
 
 const fresh = () => new LawStore(':memory:');
 

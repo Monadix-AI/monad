@@ -3,7 +3,7 @@ import type { ResolvedSkillContent, SkillDetail, SkillRef, SkillSearchResult, Sk
 
 import { createLogger } from '@monad/logger';
 
-import { HandlerError } from '@/handlers/handler-error.ts';
+import { HandlerError } from '#/handlers/handler-error.ts';
 
 const log = createLogger('marketplace');
 const BASE = 'https://clawhub.ai/api/v1';

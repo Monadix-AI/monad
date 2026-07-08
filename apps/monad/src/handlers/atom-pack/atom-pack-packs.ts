@@ -10,8 +10,8 @@ import type {
   SetAtomPinRequest
 } from '@monad/protocol';
 import type { WorkspaceExperienceApiHandler } from '@monad/sdk-atom';
-import type { AtomPackSource } from '@/atoms/install/source.ts';
-import type { AtomPacksDeps } from '@/handlers/atom-pack/atom-pack-manager.ts';
+import type { AtomPackSource } from '#/atoms/install/source.ts';
+import type { AtomPacksDeps } from '#/handlers/atom-pack/atom-pack-manager.ts';
 
 import { readdir, rm, stat } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -19,23 +19,23 @@ import builtinAtomPack from '@monad/atoms';
 import { loadAll, loadAuth, saveProfile } from '@monad/home';
 import { parseAtomPackManifest } from '@monad/protocol';
 
-import { describeAtomPack } from '@/atoms/describe.ts';
-import { createAtomFetcher } from '@/atoms/install/fetch.ts';
+import { describeAtomPack } from '#/atoms/describe.ts';
+import { createAtomFetcher } from '#/atoms/install/fetch.ts';
 import {
   type AtomPackInstallRecord,
   atomPackInstallRecordSchema,
   installAtomPack,
   type StagedAtomPack
-} from '@/atoms/install/index.ts';
+} from '#/atoms/install/index.ts';
 import {
   contentTypeForSkillFile,
   resolveAtomPackAssetPath,
   SAFE_NAME,
   toPublicWorkspaceExperience
-} from '@/handlers/atom-pack/atom-pack-content.ts';
-import { resolveToken } from '@/handlers/atom-pack/atom-pack-shared.ts';
-import { HandlerError } from '@/handlers/handler-error.ts';
-import { type DecodedUpload, decodeRawUpload, unpackZipUpload } from '@/services/upload.ts';
+} from '#/handlers/atom-pack/atom-pack-content.ts';
+import { resolveToken } from '#/handlers/atom-pack/atom-pack-shared.ts';
+import { HandlerError } from '#/handlers/handler-error.ts';
+import { type DecodedUpload, decodeRawUpload, unpackZipUpload } from '#/services/upload.ts';
 
 const ATOM_PACK_UPLOAD_MAX_BYTES = 25 * 1024 * 1024;
 const MONAD_POWER_PACK_DEBUG_SOURCE = 'debug:monad-power-pack';

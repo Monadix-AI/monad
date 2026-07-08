@@ -1,4 +1,4 @@
-import type { createDaemonHandlers } from '@/handlers/daemon-handlers/index.ts';
+import type { createDaemonHandlers } from '#/handlers/daemon-handlers/index.ts';
 
 import { daemonHttpContract } from '@monad/protocol';
 import { Elysia } from 'elysia';
@@ -6,9 +6,9 @@ import { Elysia } from 'elysia';
 import {
   createNativeAgentAttachmentReader,
   createNativeAgentAttachmentResolver
-} from '@/services/native-agent/attachments.ts';
-import { createDefaultNativeAgentCapabilities } from '@/services/native-agent/default-capabilities.ts';
-import { createNativeAgentRuntimeService } from '@/services/native-agent/runtime.ts';
+} from '#/services/native-agent/attachments.ts';
+import { createDefaultNativeAgentCapabilities } from '#/services/native-agent/default-capabilities.ts';
+import { createNativeAgentRuntimeService } from '#/services/native-agent/runtime.ts';
 
 export function createNativeAgentController(handlers: ReturnType<typeof createDaemonHandlers>) {
   const store = handlers._nativeAgentStore;

@@ -18,9 +18,9 @@ import type {
   SetMemoryBackendRequest,
   SetMemoryGraphRequest
 } from '@monad/protocol';
-import type { MemoryService } from '@/services/memory/index.ts';
+import type { MemoryService } from '#/services/memory/index.ts';
 
-import { HandlerError } from '@/handlers/handler-error.ts';
+import { HandlerError } from '#/handlers/handler-error.ts';
 
 export function createMemoryModule(
   svc: MemoryService,

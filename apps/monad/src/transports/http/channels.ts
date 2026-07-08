@@ -1,4 +1,4 @@
-import type { createDaemonHandlers } from '@/handlers/daemon-handlers/index.ts';
+import type { createDaemonHandlers } from '#/handlers/daemon-handlers/index.ts';
 
 import {
   daemonHttpContract,
@@ -10,7 +10,7 @@ import {
 import { Elysia } from 'elysia';
 import { z } from 'zod';
 
-import { buildSessionOrigin } from '@/handlers/session/origin.ts';
+import { buildSessionOrigin } from '#/handlers/session/origin.ts';
 
 const channelParams = z.object({ id: sessionIdSchema });
 

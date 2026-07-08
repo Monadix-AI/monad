@@ -1,7 +1,7 @@
 import { join } from 'node:path';
 import { MONAD_VERSION } from '@monad/protocol';
 
-import { checkSkillCompatibility, parseSkillMd } from '@/store/home/skills.ts';
+import { checkSkillCompatibility, parseSkillMd } from '#/store/home/skills.ts';
 
 /**
  * Read SKILL.md from a staging dir and enforce the `compatibility` field at install time.

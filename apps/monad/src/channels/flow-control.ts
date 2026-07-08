@@ -1,6 +1,6 @@
-import type { Instance } from '@/channels/types.ts';
+import type { Instance } from '#/channels/types.ts';
 
-import { sweepIdleBuckets } from '@/channels/helpers.ts';
+import { sweepIdleBuckets } from '#/channels/helpers.ts';
 
 /** Soft cap on per-user rate-limit buckets before an idle-bucket sweep runs. */
 const BUCKET_CAP = 1000;

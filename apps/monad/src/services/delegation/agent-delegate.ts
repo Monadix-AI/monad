@@ -14,15 +14,15 @@
 //     on the same oversight stream the user is watching.
 
 import type { Event } from '@monad/protocol';
-import type { Tool } from '@/capabilities/tools/types.ts';
-import type { DelegatableAgent } from '@/services/generation/agent-persona.ts';
+import type { Tool } from '#/capabilities/tools/types.ts';
+import type { DelegatableAgent } from '#/services/generation/agent-persona.ts';
 
 import { createLogger } from '@monad/logger';
 import { z } from 'zod';
 
-import { runSubagent } from '@/capabilities/tools/registry/delegate.ts';
-import { toolResult } from '@/capabilities/tools/types.ts';
-import { isToolExposed } from '@/services/generation/agent-persona.ts';
+import { runSubagent } from '#/capabilities/tools/registry/delegate.ts';
+import { toolResult } from '#/capabilities/tools/types.ts';
+import { isToolExposed } from '#/services/generation/agent-persona.ts';
 
 const log = createLogger('agent-delegate');
 
@@ -125,6 +125,6 @@ export function createAgentDelegateTool(deps: AgentDelegateDeps): Tool<DelegateI
   };
 }
 
-import type { ToolModule } from '@/capabilities/tools/registry/contract.ts';
+import type { ToolModule } from '#/capabilities/tools/registry/contract.ts';
 // Uniform module entry.
 export const register: ToolModule<AgentDelegateDeps> = (deps) => [createAgentDelegateTool(deps)];

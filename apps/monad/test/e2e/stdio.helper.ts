@@ -9,7 +9,7 @@ import { setLogStderr } from '@monad/logger';
 
 setLogStderr(true);
 
-const { startStdioTransport } = await import('@/transports/stdio.ts');
+const { startStdioTransport } = await import('#/transports/stdio.ts');
 const { buildHandlers, mockModel } = await import('../helpers.ts');
 
 await startStdioTransport(buildHandlers(mockModel()));

@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, expect, test } from 'bun:test';
 
-import { loopbackTlsOptions } from '@/lib/loopback-tls';
-import { proxyResponseBody } from '@/lib/proxy-stream';
+import { loopbackTlsOptions } from '#/lib/loopback-tls';
+import { proxyResponseBody } from '#/lib/proxy-stream';
 import { startWeb } from '../../server/index.ts';
 
 // The web server serves the embedded SPA and proxies /api/* to the daemon (replacing

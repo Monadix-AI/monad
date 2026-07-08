@@ -1,5 +1,5 @@
 import type { Event, MessageAttachmentRef, MessageId, NativeAgentDeliveryId, SessionId } from '@monad/protocol';
-import type { SessionContext } from '@/handlers/session/context.ts';
+import type { SessionContext } from '#/handlers/session/context.ts';
 
 import { newId } from '@monad/protocol';
 

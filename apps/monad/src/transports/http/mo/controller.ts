@@ -1,9 +1,9 @@
-import type { createMoModule } from '@/handlers/mo/handlers.ts';
+import type { createMoModule } from '#/handlers/mo/handlers.ts';
 
 import { okResponseSchema } from '@monad/protocol';
 import { Elysia } from 'elysia';
 
-import { moDropRequestSchema, moDropResponseSchema, moStatusResponseSchema } from '@/handlers/mo/schema.ts';
+import { moDropRequestSchema, moDropResponseSchema, moStatusResponseSchema } from '#/handlers/mo/schema.ts';
 
 // The return type is erased to the bare `Elysia` on purpose. Mo talks to the daemon over its own
 // native client (libcurl), never the Eden treaty, so the web client never needs these routes typed.

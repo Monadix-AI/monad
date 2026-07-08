@@ -2,7 +2,7 @@
 
 import type { AnchorHTMLAttributes, MouseEvent, ReactElement } from 'react';
 
-import { pushShellUrl, replaceShellUrl } from '@/hooks/use-shell-location';
+import { pushShellUrl, replaceShellUrl } from '#/hooks/use-shell-location';
 
 type ShellLinkProps = AnchorHTMLAttributes<HTMLAnchorElement> & {
   replace?: boolean;

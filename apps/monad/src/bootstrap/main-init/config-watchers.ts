@@ -7,16 +7,16 @@
 
 import type { MonadConfig, MonadPaths } from '@monad/home';
 import type { Logger } from '@monad/logger';
-import type { HookConfig } from '@/hooks/runner.ts';
-import type { ReloadService } from '@/reload/index.ts';
-import type { Store } from '@/store/db/index.ts';
+import type { HookConfig } from '#/hooks/runner.ts';
+import type { ReloadService } from '#/reload/index.ts';
+import type { Store } from '#/store/db/index.ts';
 
 import { loadAll, loadAuth } from '@monad/home';
 
-import { ConfigBus } from '@/services/config-bus.ts';
-import { AgentPersonaService } from '@/services/generation/agent-persona.ts';
-import { resolveSkillState } from '@/store/home/skills.ts';
-import { loadWorkspacePromptSlots, WORKSPACE_CONTEXT_FILES } from '@/store/home/workspace-context.ts';
+import { ConfigBus } from '#/services/config-bus.ts';
+import { AgentPersonaService } from '#/services/generation/agent-persona.ts';
+import { resolveSkillState } from '#/store/home/skills.ts';
+import { loadWorkspacePromptSlots, WORKSPACE_CONTEXT_FILES } from '#/store/home/workspace-context.ts';
 
 type SkillState = ReturnType<typeof resolveSkillState>;
 type WorkspacePromptSlots = Awaited<ReturnType<typeof loadWorkspacePromptSlots>>;

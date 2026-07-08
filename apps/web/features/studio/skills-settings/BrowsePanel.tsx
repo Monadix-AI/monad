@@ -28,11 +28,11 @@ import { Badge, Button, cn, Input, ScrollArea } from '@monad/ui';
 import { Markdown } from '@monad/ui/components/Markdown';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { hoverActionsClassName, hoverActionsVisibleClassName } from '@/components/HoverActions';
-import { useT } from '@/components/I18nProvider';
-import { toast } from '@/components/ToastProvider';
-import { skillMarketplacePath, skillMarketplaceSourceFromPathname } from '@/features/routes/route-paths';
-import { replaceShellUrl, useShellPathname } from '@/hooks/use-shell-location';
+import { hoverActionsClassName, hoverActionsVisibleClassName } from '#/components/HoverActions';
+import { useT } from '#/components/I18nProvider';
+import { toast } from '#/components/ToastProvider';
+import { skillMarketplacePath, skillMarketplaceSourceFromPathname } from '#/features/routes/route-paths';
+import { replaceShellUrl, useShellPathname } from '#/hooks/use-shell-location';
 import { ConsentPopover } from './ConsentPopover';
 import {
   BROWSE_MORE_SKELETON_KEYS,

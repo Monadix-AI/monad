@@ -36,7 +36,7 @@ import {
   pollDeviceToken,
   type StoredOAuth,
   startDeviceAuthorization
-} from '@/capabilities/tools';
+} from '#/capabilities/tools';
 
 const AUTHORIZE_TIMEOUT_MS = 5 * 60_000;
 const OAUTH_CSRF_SECRET = crypto.randomUUID();

@@ -2,7 +2,7 @@ if (process.platform !== 'win32') process.exit(0);
 
 import { afterEach, beforeEach, expect, test } from 'bun:test';
 
-import { KvServer } from '@/store/kv/index.ts';
+import { KvServer } from '#/store/kv/index.ts';
 
 let server: KvServer;
 let redis: InstanceType<typeof Bun.RedisClient>;

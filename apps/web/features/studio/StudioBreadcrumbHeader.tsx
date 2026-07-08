@@ -6,9 +6,9 @@ import { ArrowLeft01Icon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Button } from '@monad/ui';
 
-import { useT } from '@/components/I18nProvider';
-import { ShellLink } from '@/components/ShellLink';
-import { PanelShellBreadcrumbHeader } from '@/components/ui/panel-shell';
+import { useT } from '#/components/I18nProvider';
+import { ShellLink } from '#/components/ShellLink';
+import { PanelShellBreadcrumbHeader } from '#/components/ui/panel-shell';
 
 export function StudioBreadcrumbHeader({
   actions,

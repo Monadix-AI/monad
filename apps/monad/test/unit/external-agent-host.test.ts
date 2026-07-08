@@ -1,5 +1,5 @@
 import type { ExternalAgentSessionState, ExternalAgentView } from '@monad/protocol';
-import type { ExternalAgentProviderAdapter } from '@/services/external-agent/types.ts';
+import type { ExternalAgentProviderAdapter } from '#/services/external-agent/types.ts';
 
 import { expect, test } from 'bun:test';
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
@@ -7,13 +7,13 @@ import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { builtinAgentAdapters } from '@monad/atoms/agent-adapters';
 
-import { EventBus } from '@/services/event-bus.ts';
-import { BoundedOutputBuffer } from '@/services/external-agent/bounded-output-buffer.ts';
-import { AUTH_STATUS_TIMEOUT_MS } from '@/services/external-agent/constants.ts';
-import { ExternalAgentHost } from '@/services/external-agent/host/index.ts';
-import { resolveExternalAgentManagedServerUrl } from '@/services/external-agent/host/session-launcher.ts';
-import { registerAgentAdapterImpl, unregisterAgentAdapterImpl } from '@/services/external-agent/index.ts';
-import { createStore } from '@/store/db/index.ts';
+import { EventBus } from '#/services/event-bus.ts';
+import { BoundedOutputBuffer } from '#/services/external-agent/bounded-output-buffer.ts';
+import { AUTH_STATUS_TIMEOUT_MS } from '#/services/external-agent/constants.ts';
+import { ExternalAgentHost } from '#/services/external-agent/host/index.ts';
+import { resolveExternalAgentManagedServerUrl } from '#/services/external-agent/host/session-launcher.ts';
+import { registerAgentAdapterImpl, unregisterAgentAdapterImpl } from '#/services/external-agent/index.ts';
+import { createStore } from '#/store/db/index.ts';
 
 // Adapters are agent-adapter atoms registered at daemon boot; tests drive the host directly, so they
 // register the built-ins up front (mirrors the daemon's registration path).

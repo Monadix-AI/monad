@@ -8,36 +8,36 @@ import type {
   ExternalAgentUsageResponse,
   ExternalAgentView
 } from '@monad/protocol';
-import type { ExternalAgentProcess, ExternalAgentTerminal } from '@/services/external-agent/runtime-types.ts';
-import type { ResolveAgentEnv } from '@/services/external-agent/spawn-support.ts';
-import type { ExternalAgentProviderAdapter, ExternalAgentStartPreflight } from '@/services/external-agent/types.ts';
+import type { ExternalAgentProcess, ExternalAgentTerminal } from '#/services/external-agent/runtime-types.ts';
+import type { ResolveAgentEnv } from '#/services/external-agent/spawn-support.ts';
+import type { ExternalAgentProviderAdapter, ExternalAgentStartPreflight } from '#/services/external-agent/types.ts';
 
 import { randomBytes } from 'node:crypto';
 import { createLogger } from '@monad/logger';
 import { newId } from '@monad/protocol';
 
-import { daemonChildProcesses } from '@/infra/daemon-child-processes.ts';
+import { daemonChildProcesses } from '#/infra/daemon-child-processes.ts';
 import {
   AUTH_RUNNING_TTL_MS,
   AUTH_STATUS_TIMEOUT_MS,
   AUTH_TERMINAL_TTL_MS,
   DEFAULT_AUTH_HEARTBEAT_TIMEOUT_MS,
   MAX_OUTPUT_SNAPSHOT
-} from '@/services/external-agent/constants.ts';
-import { ExternalAgentError } from '@/services/external-agent/errors.ts';
+} from '#/services/external-agent/constants.ts';
+import { ExternalAgentError } from '#/services/external-agent/errors.ts';
 import {
   buildExternalAgentAuthLaunch,
   getExternalAgentProviderAdapter,
   resolveExternalAgentLaunchCommand
-} from '@/services/external-agent/index.ts';
-import { appendBounded, collectProbeResult } from '@/services/external-agent/probe.ts';
+} from '#/services/external-agent/index.ts';
+import { appendBounded, collectProbeResult } from '#/services/external-agent/probe.ts';
 import {
   killExternalAgentProcess,
   readProcessRegistry,
   writeProcessRegistry
-} from '@/services/external-agent/process.ts';
-import { buildExternalAgentSpawnEnv, requireExternalAgent } from '@/services/external-agent/spawn-support.ts';
-import { createStreamingTextDecoder } from '@/services/external-agent/stream-decoder.ts';
+} from '#/services/external-agent/process.ts';
+import { buildExternalAgentSpawnEnv, requireExternalAgent } from '#/services/external-agent/spawn-support.ts';
+import { createStreamingTextDecoder } from '#/services/external-agent/stream-decoder.ts';
 
 export type ExternalAgentAuthListener = (session: ExternalAgentAuthSessionView) => void;
 

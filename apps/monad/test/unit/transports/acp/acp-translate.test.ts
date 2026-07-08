@@ -10,7 +10,7 @@ import {
   promptToAttachments,
   promptToText,
   toolKind
-} from '@/transports/acp/translate.ts';
+} from '#/transports/acp/translate.ts';
 
 function evt(type: Event['type'], payload: Record<string, unknown>): Event {
   return {

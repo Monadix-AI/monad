@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, expect, test } from 'bun:test';
 
-import { connectMcpServer, type McpConnection } from '@/capabilities/tools';
+import { connectMcpServer, type McpConnection } from '#/capabilities/tools';
 
 // Exercises the http transport's text/event-stream (SSE) response path: every JSON-RPC
 // response comes back as an SSE `event: message / data: {…}` frame rather than a plain

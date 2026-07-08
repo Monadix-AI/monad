@@ -16,8 +16,8 @@ import { Badge, cn } from '@monad/ui';
 import { CodeBlock } from '@monad/ui/components/CodeBlock';
 import { isValidElement } from 'react';
 
-import { useT } from '@/components/I18nProvider';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { useT } from '#/components/I18nProvider';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '#/components/ui/collapsible';
 
 export type ToolProps = ComponentProps<typeof Collapsible>;
 

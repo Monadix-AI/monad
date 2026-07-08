@@ -1,5 +1,5 @@
 import type { CommandItem, ProfileView, Session } from '@monad/protocol';
-import type { TFn } from '@/components/I18nProvider';
+import type { TFn } from '#/components/I18nProvider';
 import type { SessionCommandMenuItem } from './SessionRoute';
 
 export type CommandMenuProfile = ProfileView;

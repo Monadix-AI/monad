@@ -7,7 +7,7 @@ import type { MonadConfig, MonadPaths } from '@monad/home';
 import { defaultLocaleName, loadLocalePacksFromDir } from '@monad/i18n';
 import { BUILTIN_LOCALES_DIR } from '@monad/i18n/locale-dir';
 
-import { I18nService, loadInstalledLocalePacks } from '@/services/i18n.ts';
+import { I18nService, loadInstalledLocalePacks } from '#/services/i18n.ts';
 
 export async function createLocaleService(paths: MonadPaths, locale: MonadConfig['locale']): Promise<I18nService> {
   const builtinLocalePacks = await loadLocalePacksFromDir(BUILTIN_LOCALES_DIR, defaultLocaleName);

@@ -7,7 +7,7 @@ import {
   checkContradictionsForScopes,
   detectContradictions,
   parseContradictions
-} from '@/services/memory/contradict.ts';
+} from '#/services/memory/contradict.ts';
 
 const silent = { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} } as never;
 

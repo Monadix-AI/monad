@@ -10,23 +10,25 @@ import type {
   Session,
   SessionId,
   SessionOrigin,
+  SessionProcessControlRequest,
+  SessionProcessControlResponse,
   SessionState,
   SessionTransport,
   UpdateSessionRequest
 } from '@monad/protocol';
-import type { SessionContext } from '@/handlers/session/context.ts';
+import type { SessionContext } from '#/handlers/session/context.ts';
 
 import { loadAll } from '@monad/home';
 import { createLogger } from '@monad/logger';
 
-import { parseDurableSummary } from '@/agent/history.ts';
-import { canTransition } from '@/agent/index.ts';
-import { clearProcessesForSession, disposeSandboxSession } from '@/capabilities/tools';
-import { HandlerError } from '@/handlers/handler-error.ts';
-import { createManagedExternalAgentJoin } from '@/handlers/session/handlers/managed-external-agent-join.ts';
-import { createSessionMembersHandlers } from '@/handlers/session/handlers/session-members.ts';
-import { SessionUiProjector } from '@/handlers/session/ui-projection.ts';
-import { clearAcpDelegatesForSession } from '@/services/delegation/acp-delegate.ts';
+import { parseDurableSummary } from '#/agent/history.ts';
+import { canTransition } from '#/agent/index.ts';
+import { clearProcessesForSession, disposeSandboxSession, processControlTool } from '#/capabilities/tools';
+import { HandlerError } from '#/handlers/handler-error.ts';
+import { createManagedExternalAgentJoin } from '#/handlers/session/handlers/managed-external-agent-join.ts';
+import { createSessionMembersHandlers } from '#/handlers/session/handlers/session-members.ts';
+import { SessionUiProjector } from '#/handlers/session/ui-projection.ts';
+import { clearAcpDelegatesForSession } from '#/services/delegation/acp-delegate.ts';
 import { createProjectLifecycleHandlers } from './lifecycle-projects.ts';
 import { createWorkspaceHandlers, resolveWorkspaceDir } from './lifecycle-workspace.ts';
 
@@ -252,6 +254,23 @@ export function createLifecycleHandlers(ctx: SessionContext) {
     workspaceMeta,
     workspaceGit,
     workspaceAction,
+
+    async sessionProcessControl({
+      id,
+      action,
+      processId
+    }: { id: SessionId } & SessionProcessControlRequest): Promise<SessionProcessControlResponse> {
+      requireSession(id);
+      await processControlTool.run(
+        { action, id: processId },
+        {
+          sessionId: id,
+          sandboxRoots: undefined,
+          log: () => {}
+        }
+      );
+      return { ok: true, action, processId };
+    },
 
     async delete({ id }: { id: SessionId }) {
       requireSession(id);

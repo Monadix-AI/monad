@@ -1,4 +1,4 @@
-import type { createDaemonHandlers } from '@/handlers/daemon-handlers/index.ts';
+import type { createDaemonHandlers } from '#/handlers/daemon-handlers/index.ts';
 
 import { getStatsResponseSchema, statsRangeSchema } from '@monad/protocol';
 import { Elysia } from 'elysia';

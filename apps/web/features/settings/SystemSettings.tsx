@@ -29,10 +29,10 @@ import {
 import { Badge, Button, Input, Label, ScrollArea, Separator, Skeleton, Switch } from '@monad/ui';
 import { useEffect, useState } from 'react';
 
-import { useT } from '@/components/I18nProvider';
-import { useNetworkSettings } from '@/hooks/use-network-settings';
-import { resolveConnection, watchUpgradeRestartAndReload } from '@/lib/monad-store';
-import { SECRET_INPUT_PASSWORD_MANAGER_PROPS } from '@/lib/secret-input-props';
+import { useT } from '#/components/I18nProvider';
+import { useNetworkSettings } from '#/hooks/use-network-settings';
+import { resolveConnection, watchUpgradeRestartAndReload } from '#/lib/monad-store';
+import { SECRET_INPUT_PASSWORD_MANAGER_PROPS } from '#/lib/secret-input-props';
 
 export function SystemSettings() {
   const t = useT();

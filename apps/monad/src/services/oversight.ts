@@ -3,11 +3,11 @@
 // than full reverse-RPC over WS (see transport notes).
 
 import type { ApprovalScope, Event, SessionId } from '@monad/protocol';
-import type { ToolGate, ToolGateOutcome, ToolGateRequest } from '@/capabilities/tools/types.ts';
+import type { ToolGate, ToolGateOutcome, ToolGateRequest } from '#/capabilities/tools/types.ts';
 
 import { newId, resourceApprovalPayloadSchema } from '@monad/protocol';
 
-import { HostEscapePersistError, type PolicyEngine } from '@/agent/approvals/engine.ts';
+import { HostEscapePersistError, type PolicyEngine } from '#/agent/approvals/engine.ts';
 
 interface Pending {
   resolve: (outcome: ToolGateOutcome) => void;

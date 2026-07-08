@@ -4,7 +4,8 @@
     "lib": ["ESNext", "DOM"],
     "jsx": "react-jsx",
     "paths": {
-      "@monad/monad": ["../../apps/monad/dist/main.d.ts"]
+      "#/*": ["../../apps/monad/src/*", "../../apps/monad/src/*.ts", "../../apps/monad/src/*/index.ts"],
+      "@monad/monad": ["../../apps/monad/src/public-api.ts"]
     }
   },
   "include": ["src", "test"]

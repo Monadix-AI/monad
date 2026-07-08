@@ -6,9 +6,9 @@
 
 import type { MonadPaths } from '@monad/home';
 import type { Event, SessionId } from '@monad/protocol';
-import type { PolicyEngine } from '@/agent/approvals/engine.ts';
-import type { ModelRouter } from '@/agent/index.ts';
-import type { ToolContext } from '@/capabilities/tools/types.ts';
+import type { PolicyEngine } from '#/agent/approvals/engine.ts';
+import type { ModelRouter } from '#/agent/index.ts';
+import type { ToolContext } from '#/capabilities/tools/types.ts';
 
 import { afterAll, beforeAll, expect, test } from 'bun:test';
 import { rm } from 'node:fs/promises';
@@ -16,12 +16,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initMonadHome, loadAuth, loadConfig } from '@monad/home';
 
-import { buildSessionOrigin } from '@/handlers/session/origin.ts';
-import { ModelService } from '@/handlers/settings/model/index.ts';
-import { MOCK_REPLY, mockModel } from '@/infra/mock-model.ts';
-import { createPeerDelegateTool, type PeerDelegateTarget } from '@/services/delegation/peer-delegate.ts';
-import { OversightService } from '@/services/oversight.ts';
-import { createHttpTransport } from '@/transports/http.ts';
+import { buildSessionOrigin } from '#/handlers/session/origin.ts';
+import { ModelService } from '#/handlers/settings/model/index.ts';
+import { MOCK_REPLY, mockModel } from '#/infra/mock-model.ts';
+import { createPeerDelegateTool, type PeerDelegateTarget } from '#/services/delegation/peer-delegate.ts';
+import { OversightService } from '#/services/oversight.ts';
+import { createHttpTransport } from '#/transports/http.ts';
 import { buildHandlers, type LiveApp, makeTestPaths, readSSE, seededProviderRegistry } from '../helpers.ts';
 
 const TOKEN = 'peer-secret-token';

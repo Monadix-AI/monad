@@ -1,10 +1,10 @@
 import type { Event, SessionId } from '@monad/protocol';
-import type { ModelMessage, ModelResult } from '@/agent/index.ts';
+import type { ModelMessage, ModelResult } from '#/agent/index.ts';
 
 import { expect, test } from 'bun:test';
 import { newId } from '@monad/protocol';
 
-import { AgentLoop, type ImageAttachment, InMemoryMessageRepo, type ModelRouter } from '@/agent/index.ts';
+import { AgentLoop, type ImageAttachment, InMemoryMessageRepo, type ModelRouter } from '#/agent/index.ts';
 import { buildMockModel } from '../../fixtures/mock-model.ts';
 
 function mockModel(deltas: string[]): ModelRouter {

@@ -6,12 +6,12 @@ import type {
   ModelResult,
   ModelRouter,
   SummaryStore
-} from '@/agent/index.ts';
+} from '#/agent/index.ts';
 
 import { expect, test } from 'bun:test';
 import { newId } from '@monad/protocol';
 
-import { AgentLoop, DurableSummarizer, InMemoryMessageRepo, replayHistory } from '@/agent/index.ts';
+import { AgentLoop, DurableSummarizer, InMemoryMessageRepo, replayHistory } from '#/agent/index.ts';
 
 // A MessageSource over an in-memory list that supports the after-cursor (by array index of id).
 function source(rows: ChatMessage[]) {

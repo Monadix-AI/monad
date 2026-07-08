@@ -9,8 +9,8 @@ import { expect, test } from 'bun:test';
 import { join } from 'node:path';
 import { createDefaultConfig } from '@monad/home';
 
-import { collectMcpStatus, connectMcpServers, reloadConfigMcpServers } from '@/bootstrap/mcp.ts';
-import { AtomPackRegistry } from '@/handlers/atom-pack/index.ts';
+import { collectMcpStatus, connectMcpServers, reloadConfigMcpServers } from '#/bootstrap/mcp.ts';
+import { AtomPackRegistry } from '#/handlers/atom-pack/index.ts';
 
 const fixture = join(import.meta.dir, '../unit/tools/fixtures/mock-mcp-server.ts');
 

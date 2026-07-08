@@ -4,16 +4,16 @@
 // server collapse to a single connection (dedup by normalized url).
 
 import type { MonadPaths } from '@monad/home';
-import type { McpConnection } from '@/capabilities/tools';
+import type { McpConnection } from '#/capabilities/tools';
 
 import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { mkdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { connectFileMcpServers } from '@/bootstrap/mcp.ts';
-import { toolResult } from '@/capabilities/tools/types.ts';
-import { AtomPackRegistry } from '@/handlers/atom-pack/index.ts';
+import { connectFileMcpServers } from '#/bootstrap/mcp.ts';
+import { toolResult } from '#/capabilities/tools/types.ts';
+import { AtomPackRegistry } from '#/handlers/atom-pack/index.ts';
 
 const fixture = join(import.meta.dir, '../unit/tools/fixtures/mock-mcp-server.ts');
 

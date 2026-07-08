@@ -9,7 +9,7 @@ import {
   encodePush,
   encodeSimple,
   parseCommand
-} from '@/store/kv/resp.ts';
+} from '#/store/kv/resp.ts';
 
 describe('encoders', () => {
   test('encodeSimple', () => {

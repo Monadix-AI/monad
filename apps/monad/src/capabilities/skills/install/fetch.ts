@@ -5,17 +5,17 @@
 // installs are testable offline.
 
 import type { GithubSource } from '@monad/utils';
-import type { SkillFetcher, StagedSkillRepo } from '@/capabilities/skills/install/index.ts';
-import type { DownloadProgress } from '@/services/download.ts';
+import type { SkillFetcher, StagedSkillRepo } from '#/capabilities/skills/install/index.ts';
+import type { DownloadProgress } from '#/services/download.ts';
 
 import { mkdtemp, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, relative, sep } from 'node:path';
 
-import { untar } from '@/atoms/install/untar.ts';
-import { SkillInstallError } from '@/capabilities/skills/install/index.ts';
-import { daemonChildProcesses } from '@/infra/daemon-child-processes.ts';
-import { downloadBytes } from '@/services/download.ts';
+import { untar } from '#/atoms/install/untar.ts';
+import { SkillInstallError } from '#/capabilities/skills/install/index.ts';
+import { daemonChildProcesses } from '#/infra/daemon-child-processes.ts';
+import { downloadBytes } from '#/services/download.ts';
 
 type SkillFetcherOptions = {
   githubToken?: string;

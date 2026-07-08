@@ -1,13 +1,13 @@
 import type { SessionId, SessionOrigin } from '@monad/protocol';
-import type { MoDropRequest, MoDropResponse } from '@/handlers/mo/schema.ts';
-import type { MoService } from '@/services/mo.ts';
+import type { MoDropRequest, MoDropResponse } from '#/handlers/mo/schema.ts';
+import type { MoService } from '#/services/mo.ts';
 
 import { existsSync } from 'node:fs';
 import { basename, resolve } from 'node:path';
 
-import { MO_DROP_DEFAULT_PROMPT as DEFAULT_PROMPT } from '@/agent/prompts/short-text.ts';
-import { HandlerError } from '@/handlers/handler-error.ts';
-import { buildSessionOrigin, hostOs } from '@/handlers/session/origin.ts';
+import { MO_DROP_DEFAULT_PROMPT as DEFAULT_PROMPT } from '#/agent/prompts/short-text.ts';
+import { HandlerError } from '#/handlers/handler-error.ts';
+import { buildSessionOrigin, hostOs } from '#/handlers/session/origin.ts';
 
 // Mo is a first-party native desktop app that POSTs drops over the daemon's HTTP transport. It maps
 // to the `web` surface (interactive, http-writable) so the seeded session stays writable/forkable

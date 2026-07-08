@@ -5,7 +5,7 @@ import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { createAtomPacksModule } from '@/handlers/atom-pack/index.ts';
+import { createAtomPacksModule } from '#/handlers/atom-pack/index.ts';
 
 let base: string;
 let atomsDir: string;

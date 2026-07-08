@@ -1,6 +1,6 @@
 import type { MonadAuth } from '@monad/home';
 
-import { tryResolveSecretMap } from '@/config/secrets.ts';
+import { tryResolveSecretMap } from '#/config/secrets.ts';
 
 // Markers a nested CLI must not inherit. The CLI refuses to start when it sees its own
 // nested-session guard (which leaks down whenever monad was itself launched from the same

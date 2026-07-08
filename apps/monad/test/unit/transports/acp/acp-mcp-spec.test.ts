@@ -2,7 +2,7 @@ import type { McpServer } from '@agentclientprotocol/sdk';
 
 import { expect, test } from 'bun:test';
 
-import { toMcpSpec } from '@/transports/acp/connection.ts';
+import { toMcpSpec } from '#/transports/acp/connection.ts';
 
 test('toMcpSpec maps a stdio MCP server (env array → record)', () => {
   const server = {

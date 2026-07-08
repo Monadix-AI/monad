@@ -2,7 +2,7 @@
 // (default-deny consent), lists it, then removes it — exercising the controller wiring.
 
 import type { MonadPaths } from '@monad/home';
-import type { ModelRouter } from '@/agent/index.ts';
+import type { ModelRouter } from '#/agent/index.ts';
 
 import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { mkdir, rm, symlink, writeFile } from 'node:fs/promises';
@@ -11,8 +11,8 @@ import { join } from 'node:path';
 import { initMonadHome, loadAuth, loadConfig, saveAll, saveAuth } from '@monad/home';
 import { ModelProviderType } from '@monad/protocol';
 
-import { ModelService } from '@/handlers/settings/model/index.ts';
-import { createHttpTransport } from '@/transports/http.ts';
+import { ModelService } from '#/handlers/settings/model/index.ts';
+import { createHttpTransport } from '#/transports/http.ts';
 import { buildHandlers, makeTestPaths, mockModel, seededProviderRegistry } from '../helpers.ts';
 
 function makePaths(base: string): MonadPaths {

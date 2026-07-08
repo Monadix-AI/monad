@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
 import { builtinModelProviders } from '@monad/atoms/providers/registry';
 
-import { type GatewayDeps, GatewayModelRouter, ModelProviderRegistry } from '@/agent/index.ts';
+import { type GatewayDeps, GatewayModelRouter, ModelProviderRegistry } from '#/agent/index.ts';
 
 // The gateway is driven through the REAL first-party providers (from @monad/atoms) registered
 // here; each provider's ai-sdk client speaks to the injected fake fetch — no network.

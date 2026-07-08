@@ -9,10 +9,10 @@
 // "global"` shares a fact across all the user's agents (use for facts about the user themselves).
 
 import type { SessionId } from '@monad/protocol';
-import type { Tool, ToolContext, ToolInputSchema } from '@/capabilities/tools/types.ts';
-import type { MemoryService, MemoryToolResult, MemoryToolScope } from '@/services/memory/index.ts';
+import type { Tool, ToolContext, ToolInputSchema } from '#/capabilities/tools/types.ts';
+import type { MemoryService, MemoryToolResult, MemoryToolScope } from '#/services/memory/index.ts';
 
-import { toolResult } from '@/capabilities/tools/types.ts';
+import { toolResult } from '#/capabilities/tools/types.ts';
 
 type MemoryAction = 'view' | 'record' | 'update' | 'delete';
 

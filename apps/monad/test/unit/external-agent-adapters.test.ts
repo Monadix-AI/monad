@@ -21,9 +21,9 @@ import {
   listExternalAgentPresets,
   registerAgentAdapterImpl,
   resolveExternalAgentLaunchCommand
-} from '@/services/external-agent/index.ts';
-import { killExternalAgentProcess, pickPtyFallbackLaunchMode } from '@/services/external-agent/process.ts';
-import { externalAgentOutputEventSchema } from '@/services/external-agent/types.ts';
+} from '#/services/external-agent/index.ts';
+import { killExternalAgentProcess, pickPtyFallbackLaunchMode } from '#/services/external-agent/process.ts';
+import { externalAgentOutputEventSchema } from '#/services/external-agent/types.ts';
 
 function builtinAdapter(provider: ExternalAgentView['provider']) {
   const adapter = builtinAgentAdapters.find((candidate) => candidate.provider === provider);

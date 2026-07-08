@@ -9,7 +9,7 @@ import { unlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { createHttpTransport } from '@/transports/http.ts';
+import { createHttpTransport } from '#/transports/http.ts';
 import { buildHandlers, mockModel } from '../helpers.ts';
 
 type UnixServer = { stop: (force?: boolean) => void };

@@ -10,8 +10,8 @@ import {
   configureShell,
   configureWebSearch,
   detectDockerRuntime
-} from '@/capabilities/tools';
-import { resolveSecretRef } from '@/config/secrets.ts';
+} from '#/capabilities/tools';
+import { resolveSecretRef } from '#/config/secrets.ts';
 
 export async function configureToolBackends(cfg: MonadConfig, auth?: MonadAuth): Promise<void> {
   configureShell({ shellPath: cfg.agent.tools.shellPath, gitBashPath: cfg.agent.tools.gitBashPath });

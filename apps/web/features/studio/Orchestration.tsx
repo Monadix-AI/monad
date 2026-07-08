@@ -7,7 +7,7 @@ import { HugeiconsIcon } from '@hugeicons/react';
 import { agentSelectors, useListAgentsQuery } from '@monad/client-rtk';
 import { Badge, ScrollArea, Skeleton } from '@monad/ui';
 
-import { useT } from '@/components/I18nProvider';
+import { useT } from '#/components/I18nProvider';
 
 function OrchestrationSkeleton() {
   return (

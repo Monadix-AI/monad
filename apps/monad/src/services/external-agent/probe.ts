@@ -1,6 +1,6 @@
-import { daemonChildProcesses } from '@/infra/daemon-child-processes.ts';
-import { killExternalAgentProcess } from '@/services/external-agent/process.ts';
-import { createStreamingTextDecoder } from '@/services/external-agent/stream-decoder.ts';
+import { daemonChildProcesses } from '#/infra/daemon-child-processes.ts';
+import { killExternalAgentProcess } from '#/services/external-agent/process.ts';
+import { createStreamingTextDecoder } from '#/services/external-agent/stream-decoder.ts';
 
 /** Append `chunk` to `existing`, keeping only the trailing `max` bytes. The bound is what makes the
  *  in-memory output snapshot and the probe collectors safe against a runaway child. */

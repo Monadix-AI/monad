@@ -12,18 +12,18 @@ import { initMonadHome, loadAuth, loadConfig, saveAll, saveAuth } from '@monad/h
 import { enMessages as i18nMessages } from '@monad/i18n/messages';
 import { ModelProviderType, newId } from '@monad/protocol';
 
-import { createAgent } from '@/agent/index.ts';
-import { ChannelService } from '@/channels/channel.ts';
-import { createDaemonHandlers } from '@/handlers/daemon-handlers/index.ts';
-import { ModelService } from '@/handlers/settings/model/index.ts';
-import { EventBus } from '@/services/event-bus.ts';
-import { ClarifyService } from '@/services/generation/clarify.ts';
-import { I18nService } from '@/services/i18n.ts';
-import { GraphStore } from '@/services/memory/graph/store.ts';
-import { OversightService } from '@/services/oversight.ts';
-import { RoundCache } from '@/services/round-cache.ts';
-import { createStore } from '@/store/db/index.ts';
-import { createHttpTransport } from '@/transports/http.ts';
+import { createAgent } from '#/agent/index.ts';
+import { ChannelService } from '#/channels/channel.ts';
+import { createDaemonHandlers } from '#/handlers/daemon-handlers/index.ts';
+import { ModelService } from '#/handlers/settings/model/index.ts';
+import { EventBus } from '#/services/event-bus.ts';
+import { ClarifyService } from '#/services/generation/clarify.ts';
+import { I18nService } from '#/services/i18n.ts';
+import { GraphStore } from '#/services/memory/graph/store.ts';
+import { OversightService } from '#/services/oversight.ts';
+import { RoundCache } from '#/services/round-cache.ts';
+import { createStore } from '#/store/db/index.ts';
+import { createHttpTransport } from '#/transports/http.ts';
 import { makeTestPaths, seededProviderRegistry, stubMemoryService } from '../helpers.ts';
 
 function makePaths(b: string): MonadPaths {

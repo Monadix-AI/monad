@@ -6,8 +6,8 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { AgentPersonaService, isToolExposed, type SessionAgentLookup } from '@/services/generation/agent-persona.ts';
-import { writeAgentBody } from '@/store/home/agent-def.ts';
+import { AgentPersonaService, isToolExposed, type SessionAgentLookup } from '#/services/generation/agent-persona.ts';
+import { writeAgentBody } from '#/store/home/agent-def.ts';
 
 describe('isToolExposed (per-agent atoms policy)', () => {
   const allowlist = { mode: 'allowlist' as const, allow: ['playwright', 'file_write'], deny: ['shell_exec'] };

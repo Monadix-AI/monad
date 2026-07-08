@@ -1,5 +1,5 @@
 import type { ExternalAgentAuthSessionView, ExternalAgentUiObservationFrame } from '@monad/protocol';
-import type { createDaemonHandlers } from '@/handlers/daemon-handlers/index.ts';
+import type { createDaemonHandlers } from '#/handlers/daemon-handlers/index.ts';
 
 import {
   externalAgentApprovalResolutionRequestSchema,
@@ -27,7 +27,7 @@ import {
 import { Elysia } from 'elysia';
 import { z } from 'zod';
 
-import { createPushSseResponse, encodeSseFrame } from '@/transports/http/sessions/sse.ts';
+import { createPushSseResponse, encodeSseFrame } from '#/transports/http/sessions/sse.ts';
 
 const sessionParams = z.object({ id: z.string() });
 const externalAgentParams = z.object({ id: z.string() });

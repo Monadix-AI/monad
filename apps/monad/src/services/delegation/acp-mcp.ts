@@ -4,8 +4,8 @@ import type { SessionMcpServer } from '@monad/protocol';
 
 import { createLogger } from '@monad/logger';
 
-import { mcpHttpHeaders } from '@/bootstrap/mcp.ts';
-import { resolveSecretMap } from '@/config/secrets.ts';
+import { mcpHttpHeaders } from '#/bootstrap/mcp.ts';
+import { resolveSecretMap } from '#/config/secrets.ts';
 
 const log = createLogger('acp-delegate');
 

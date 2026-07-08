@@ -2,7 +2,7 @@
 
 import type { HookEvent } from '@monad/protocol';
 import type { Edge, EdgeProps, Node, NodeProps } from '@xyflow/react';
-import type { TFn } from '@/components/I18nProvider';
+import type { TFn } from '#/components/I18nProvider';
 
 import { PlusSignIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';

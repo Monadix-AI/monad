@@ -1,7 +1,7 @@
 import type { ClientConnection } from '@agentclientprotocol/sdk';
 import type { AcpAgentConfig } from '@monad/home';
-import type { sandboxedSpawn } from '@/capabilities/tools';
-import type { TerminalExecResult, ToolBackends, ToolContext, ToolGate } from '@/capabilities/tools/types.ts';
+import type { sandboxedSpawn } from '#/capabilities/tools';
+import type { TerminalExecResult, ToolBackends, ToolContext, ToolGate } from '#/capabilities/tools/types.ts';
 
 // ── Reusable live delegates ──────────────────────────────────────────────────────────────────────
 // The builder handlers below are registered ONCE per delegate but must serve whichever turn is

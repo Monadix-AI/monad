@@ -4,7 +4,7 @@
 
 import { expect, test } from 'bun:test';
 
-import { computeAcpBridgeUrls, computeDaemonSpawn } from '@/transports/acp/launch.ts';
+import { computeAcpBridgeUrls, computeDaemonSpawn } from '#/transports/acp/launch.ts';
 
 test('computeDaemonSpawn strips the --acp/--stdio flags from argv', () => {
   const { argv } = computeDaemonSpawn(['bun', '/path/main.ts', '--acp', '--mock-model'], {});

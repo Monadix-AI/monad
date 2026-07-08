@@ -3,8 +3,8 @@ import type { Event, Session } from '@monad/protocol';
 import { expect, test } from 'bun:test';
 import { newId } from '@monad/protocol';
 
-import { startGenerativeMessage } from '@/services/generation/generative-message.ts';
-import { createStore } from '@/store/db/index.ts';
+import { startGenerativeMessage } from '#/services/generation/generative-message.ts';
+import { createStore } from '#/store/db/index.ts';
 
 function seedSession(store: ReturnType<typeof createStore>): Session {
   const now = new Date().toISOString();

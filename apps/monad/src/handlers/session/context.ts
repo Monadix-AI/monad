@@ -1,22 +1,22 @@
 import type { Logger } from '@monad/logger';
 import type { Event, EventType, Hooks, PrincipalId, Session, SessionId, SessionMcpServer } from '@monad/protocol';
-import type { Agent, LoadedSkill } from '@/agent/index.ts';
-import type { McpConnection } from '@/capabilities/tools';
-import type { Tool, ToolBackends } from '@/capabilities/tools/types.ts';
-import type { CommandBundle } from '@/handlers/commands/index.ts';
-import type { DelegationService } from '@/services/delegation/delegation.ts';
-import type { EventBus, EventSink } from '@/services/event-bus.ts';
-import type { ExternalAgentHost } from '@/services/external-agent/host/index.ts';
-import type { I18nService } from '@/services/i18n.ts';
-import type { KvService } from '@/services/kv.ts';
-import type { OversightService } from '@/services/oversight.ts';
-import type { RoundCache } from '@/services/round-cache.ts';
-import type { SessionSandboxService } from '@/services/session-sandbox.ts';
-import type { Store } from '@/store/db/index.ts';
+import type { Agent, LoadedSkill } from '#/agent/index.ts';
+import type { McpConnection } from '#/capabilities/tools';
+import type { Tool, ToolBackends } from '#/capabilities/tools/types.ts';
+import type { CommandBundle } from '#/handlers/commands/index.ts';
+import type { DelegationService } from '#/services/delegation/delegation.ts';
+import type { EventBus, EventSink } from '#/services/event-bus.ts';
+import type { ExternalAgentHost } from '#/services/external-agent/host/index.ts';
+import type { I18nService } from '#/services/i18n.ts';
+import type { KvService } from '#/services/kv.ts';
+import type { OversightService } from '#/services/oversight.ts';
+import type { RoundCache } from '#/services/round-cache.ts';
+import type { SessionSandboxService } from '#/services/session-sandbox.ts';
+import type { Store } from '#/store/db/index.ts';
 
 import { newId } from '@monad/protocol';
 
-import { HandlerError } from '@/handlers/handler-error.ts';
+import { HandlerError } from '#/handlers/handler-error.ts';
 
 export type Disposer = () => void;
 export type { EventSink };

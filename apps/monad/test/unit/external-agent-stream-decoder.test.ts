@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { createStreamingTextDecoder } from '@/services/external-agent/stream-decoder.ts';
+import { createStreamingTextDecoder } from '#/services/external-agent/stream-decoder.ts';
 
 describe('external agent stream decoder', () => {
   test('preserves UTF-8 characters split across provider chunks', () => {

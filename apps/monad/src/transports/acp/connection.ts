@@ -8,15 +8,15 @@
 // stdout is exclusively the ACP channel; all logs MUST go to stderr.
 
 import type { AgentConnection, Stream } from '@agentclientprotocol/sdk';
-import type { Handlers } from '@/transports/acp/types.ts';
+import type { Handlers } from '#/transports/acp/types.ts';
 
 import { agent as createAcpAgent, ndJsonStream } from '@agentclientprotocol/sdk';
 
-import { MonadAcpAgent } from '@/transports/acp/agent.ts';
+import { MonadAcpAgent } from '#/transports/acp/agent.ts';
 
-export type { AcpHandlers } from '@/transports/acp/types.ts';
+export type { AcpHandlers } from '#/transports/acp/types.ts';
 
-export { toMcpSpec } from '@/transports/acp/meta.ts';
+export { toMcpSpec } from '#/transports/acp/meta.ts';
 
 /** Bind monad's handlers to an ACP peer over an arbitrary message stream. Returns the live
  * connection. Used by {@link startAcpTransport} for stdio and by tests over an in-memory pipe.

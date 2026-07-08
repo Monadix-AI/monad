@@ -3,8 +3,8 @@ import type { ProviderCredential, ResolvedProviderConfig } from '@monad/sdk-atom
 import { expect, test } from 'bun:test';
 import { openAiPrice, vercelGatewayPrice } from '@monad/protocol';
 
-import { fetchProviderModels } from '@/agent/model/gateway/index.ts';
-import { ModelProviderRegistry } from '@/agent/model/provider.ts';
+import { fetchProviderModels } from '#/agent/model/gateway/index.ts';
+import { ModelProviderRegistry } from '#/agent/model/provider.ts';
 
 test('openAiPrice normalizes $/token to $/1M and drops non-positive / missing values', () => {
   expect(

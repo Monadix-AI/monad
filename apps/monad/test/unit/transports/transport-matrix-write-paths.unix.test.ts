@@ -5,15 +5,15 @@
 //   - Approvals (POST revoke/clear)
 // Agent CRUD is covered separately in test/e2e/agent-crud.test.ts (requires real home dir).
 
-import type { ModelResult, ModelRouter } from '@/agent/index.ts';
+import type { ModelResult, ModelRouter } from '#/agent/index.ts';
 
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { fileReadTool, fileWriteTool } from '@/capabilities/tools';
-import { createHttpTransport } from '@/transports/http.ts';
+import { fileReadTool, fileWriteTool } from '#/capabilities/tools';
+import { createHttpTransport } from '#/transports/http.ts';
 import { buildHandlers, mockModel, serveTransport, TRANSPORTS, type TransportKind } from '../../helpers.ts';
 
 const app = createHttpTransport(buildHandlers(mockModel(['ok'])));

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { decodeRawUpload, decodeRawUploads, readRequestBytes } from '@/services/upload.ts';
+import { decodeRawUpload, decodeRawUploads, readRequestBytes } from '#/services/upload.ts';
 
 const bytes = (value: string) => new TextEncoder().encode(value);
 

@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 
-import { CronError, nextCronTime, parseCron } from '@/services/scheduling/cron.ts';
+import { CronError, nextCronTime, parseCron } from '#/services/scheduling/cron.ts';
 
 test('parseCron expands steps, ranges, and lists', () => {
   expect([...parseCron('*/15 * * * *').minute].sort((a, b) => a - b)).toEqual([0, 15, 30, 45]);

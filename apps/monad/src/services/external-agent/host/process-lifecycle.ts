@@ -1,12 +1,12 @@
-import type { ExternalAgentHostDeps } from '@/services/external-agent/host/host-types.ts';
+import type { ExternalAgentHostDeps } from '#/services/external-agent/host/host-types.ts';
 
-import { daemonChildProcesses } from '@/infra/daemon-child-processes.ts';
-import { cleanupManagedProjectOrphanTokens } from '@/services/external-agent/managed-project.ts';
+import { daemonChildProcesses } from '#/infra/daemon-child-processes.ts';
+import { cleanupManagedProjectOrphanTokens } from '#/services/external-agent/managed-project.ts';
 import {
   killExternalAgentProcess,
   readProcessRegistry,
   writeProcessRegistry
-} from '@/services/external-agent/process.ts';
+} from '#/services/external-agent/process.ts';
 
 export interface ExternalAgentProcessLifecycleContext {
   store: ExternalAgentHostDeps['store'];

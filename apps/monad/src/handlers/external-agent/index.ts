@@ -22,9 +22,9 @@ import type {
   StartExternalAgentRequest,
   StartExternalAgentResponse
 } from '@monad/protocol';
-import type { ExternalAgentHost } from '@/services/external-agent/host/index.ts';
-import type { ExternalAgentTargetId } from '@/store/db/external-agent-sessions.ts';
-import type { Store } from '@/store/db/index.ts';
+import type { ExternalAgentHost } from '#/services/external-agent/host/index.ts';
+import type { ExternalAgentTargetId } from '#/store/db/external-agent-sessions.ts';
+import type { Store } from '#/store/db/index.ts';
 
 import { realpathSync } from 'node:fs';
 import { isAbsolute, relative, resolve } from 'node:path';
@@ -39,8 +39,8 @@ import {
   startExternalAgentResponseSchema
 } from '@monad/protocol';
 
-import { HandlerError } from '@/handlers/handler-error.ts';
-import { ExternalAgentError } from '@/services/external-agent/errors.ts';
+import { HandlerError } from '#/handlers/handler-error.ts';
+import { ExternalAgentError } from '#/services/external-agent/errors.ts';
 
 export interface ExternalAgentDeps {
   paths: MonadPaths;

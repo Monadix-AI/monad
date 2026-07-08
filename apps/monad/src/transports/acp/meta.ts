@@ -1,6 +1,6 @@
 import type { McpServer } from '@agentclientprotocol/sdk';
 import type { SessionOriginExt } from '@monad/protocol';
-import type { McpServerSpec } from '@/capabilities/tools';
+import type { McpServerSpec } from '#/capabilities/tools';
 
 import { sessionOriginExtSchema } from '@monad/protocol';
 

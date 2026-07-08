@@ -8,7 +8,7 @@ import {
   daemonChildSupervisorLauncherArgv,
   killDaemonProcessTree,
   runDaemonChildSupervisor
-} from '@/infra/daemon-child-processes.ts';
+} from '#/infra/daemon-child-processes.ts';
 
 test('killDaemonProcessTree uses taskkill for Windows process trees', () => {
   const commands: string[][] = [];

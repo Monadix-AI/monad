@@ -1,5 +1,5 @@
 import type { ChannelStatusResponse } from '@monad/protocol';
-import type { ChannelSettingsContext } from '@/handlers/settings/channel/context.ts';
+import type { ChannelSettingsContext } from '#/handlers/settings/channel/context.ts';
 
 export function createStatusHandlers(ctx: ChannelSettingsContext) {
   return {

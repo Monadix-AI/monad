@@ -15,16 +15,16 @@ import { HugeiconsIcon } from '@hugeicons/react';
 import { Button, Card, cn, Input, Tooltip, TooltipContent, TooltipTrigger } from '@monad/ui';
 import { useEffect, useState } from 'react';
 
-import { ProfileCardHoverActions } from '@/components/HoverActions';
-import { useT } from '@/components/I18nProvider';
+import { ProfileCardHoverActions } from '#/components/HoverActions';
+import { useT } from '#/components/I18nProvider';
 import {
   defaultReasoningEffort,
   ReasoningEffortControl,
   reasoningEffortOption
-} from '@/components/ReasoningEffortControl';
-import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { useProviderMeta } from '@/lib/ProviderMeta';
+} from '#/components/ReasoningEffortControl';
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '#/components/ui/hover-card';
+import { Popover, PopoverContent, PopoverTrigger } from '#/components/ui/popover';
+import { useProviderMeta } from '#/lib/ProviderMeta';
 import { ModelRoleIcon, type ModelRoleIconId } from './ModelRoleIcon';
 import { ModelHoverCardBody, ModelPickerPopover, ROLE_NONE, splitModelSpec } from './model-picker';
 import { roleFallbackLabelKey } from './role-fallback';

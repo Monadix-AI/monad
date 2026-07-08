@@ -1,4 +1,4 @@
-import type { FileObservationStore, ToolBackends, ToolContext, ToolGate } from '@/capabilities/tools/types.ts';
+import type { FileObservationStore, ToolBackends, ToolContext, ToolGate } from '#/capabilities/tools/types.ts';
 
 import { afterAll, beforeAll, expect, test } from 'bun:test';
 import { mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises';
@@ -12,7 +12,7 @@ import {
   fileReadTool,
   fileWriteTool,
   ToolSecurityError
-} from '@/capabilities/tools';
+} from '#/capabilities/tools';
 
 let root: string;
 let sessionCounter = 0;

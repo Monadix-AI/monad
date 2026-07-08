@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 
-import { formatReadyInfoTable, formatReadyPath, formatWebUiReadyValue } from '@/infra/banner.ts';
+import { formatReadyInfoTable, formatReadyPath, formatWebUiReadyValue } from '#/infra/banner.ts';
 
 function stripAnsi(value: string): string {
   return value.replace(new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, 'g'), '');

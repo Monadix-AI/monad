@@ -3,7 +3,7 @@ import { unlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { KvServer } from '@/store/kv/index.ts';
+import { KvServer } from '#/store/kv/index.ts';
 
 const SOCK = join(tmpdir(), 'monad-kv-test.sock');
 

@@ -8,9 +8,9 @@ import type {
   TestPeerConnectionResponse,
   UpsertPeerRequest
 } from '@monad/protocol';
-import type { PeerSettingsContext } from '@/handlers/settings/peer/context.ts';
+import type { PeerSettingsContext } from '#/handlers/settings/peer/context.ts';
 
-import { HandlerError } from '@/handlers/handler-error.ts';
+import { HandlerError } from '#/handlers/handler-error.ts';
 
 const PEER_TEST_CONNECTION_TIMEOUT_MS = 5_000;
 

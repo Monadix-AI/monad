@@ -1,4 +1,4 @@
-import type { KvServer } from '@/store/kv/index.ts';
+import type { KvServer } from '#/store/kv/index.ts';
 
 type RedisClient = InstanceType<typeof Bun.RedisClient>;
 

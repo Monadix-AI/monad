@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { newId } from '@monad/protocol';
 
-import { createStore } from '@/store/db/index.ts';
+import { createStore } from '#/store/db/index.ts';
 
 const DB_PATH = join(tmpdir(), `monad-store-e2e-${Date.now()}.sqlite`);
 

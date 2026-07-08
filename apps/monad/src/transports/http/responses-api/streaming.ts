@@ -1,12 +1,12 @@
 import type { AgentId, SessionId } from '@monad/protocol';
 import type { ResponseOutputMessage, ResponseOutputText } from 'openai/resources/responses/responses';
-import type { createDaemonHandlers } from '@/handlers/daemon-handlers/index.ts';
+import type { createDaemonHandlers } from '#/handlers/daemon-handlers/index.ts';
 import type { ResponseObject, ResponsesRequest, StoredResponse } from './types.ts';
 
 import { parseEventPayload } from '@monad/protocol';
 
-import { HandlerError } from '@/handlers/handler-error.ts';
-import { SSE_RESPONSE_HEADERS } from '@/transports/http/sessions/sse.ts';
+import { HandlerError } from '#/handlers/handler-error.ts';
+import { SSE_RESPONSE_HEADERS } from '#/transports/http/sessions/sse.ts';
 import { buildUsage, computeOutputText } from './input.ts';
 import { CORS_HEADERS, MAX_STORED_RESPONSES, MAX_STREAMING_BACKLOG, sseFrame } from './shared.ts';
 

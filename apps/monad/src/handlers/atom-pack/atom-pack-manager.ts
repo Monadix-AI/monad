@@ -1,14 +1,14 @@
 import type { MonadPaths } from '@monad/home';
 import type { AtomDescriptor, WorkspaceExperienceDefinition } from '@monad/protocol';
 import type { WorkspaceExperienceApiHandler } from '@monad/sdk-atom';
-import type { AtomConflict } from '@/atoms/resolve.ts';
-import type { RegisteredWorkspaceExperience } from '@/handlers/atom-pack/atom-pack-registry.ts';
-import type { ConfigBus } from '@/services/config-bus.ts';
-import type { ModelService } from '@/services/model.ts';
+import type { AtomConflict } from '#/atoms/resolve.ts';
+import type { RegisteredWorkspaceExperience } from '#/handlers/atom-pack/atom-pack-registry.ts';
+import type { ConfigBus } from '#/services/config-bus.ts';
+import type { ModelService } from '#/services/model.ts';
 
-import { createMcpModule } from '@/handlers/atom-pack/atom-pack-mcp.ts';
-import { createPacksModule } from '@/handlers/atom-pack/atom-pack-packs.ts';
-import { createSkillsModule } from '@/handlers/atom-pack/atom-pack-skills.ts';
+import { createMcpModule } from '#/handlers/atom-pack/atom-pack-mcp.ts';
+import { createPacksModule } from '#/handlers/atom-pack/atom-pack-packs.ts';
+import { createSkillsModule } from '#/handlers/atom-pack/atom-pack-skills.ts';
 
 export interface AtomPacksDeps {
   paths: MonadPaths;

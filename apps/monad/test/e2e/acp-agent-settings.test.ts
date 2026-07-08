@@ -10,8 +10,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { envRef, initMonadHome, loadAll, loadAuth, loadConfig } from '@monad/home';
 
-import { ModelService } from '@/handlers/settings/model/index.ts';
-import { createHttpTransport } from '@/transports/http.ts';
+import { ModelService } from '#/handlers/settings/model/index.ts';
+import { createHttpTransport } from '#/transports/http.ts';
 import {
   buildHandlers,
   makeTestPaths,

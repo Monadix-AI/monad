@@ -13,7 +13,7 @@ import {
   sandboxedSpawn,
   sandboxHomeEnv,
   sandboxLauncher
-} from '@/capabilities/tools';
+} from '#/capabilities/tools';
 
 // The sandbox env/launcher model is POSIX-only: HOME/XDG_CACHE_HOME redirection,
 // /bin/sh + /usr/bin/env probes. Windows has no launcher yet.

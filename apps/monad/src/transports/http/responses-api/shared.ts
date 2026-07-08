@@ -1,7 +1,7 @@
 import { timingSafeEqual } from 'node:crypto';
 
-import { HANDLER_ERROR_MAP, HandlerError } from '@/handlers/handler-error.ts';
-import { buildSessionOrigin } from '@/handlers/session/origin.ts';
+import { HANDLER_ERROR_MAP, HandlerError } from '#/handlers/handler-error.ts';
+import { buildSessionOrigin } from '#/handlers/session/origin.ts';
 
 // ── constants ─────────────────────────────────────────────────────────────────
 

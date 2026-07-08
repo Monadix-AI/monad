@@ -3,16 +3,39 @@
 // (an ephemeral session id would route approvals nowhere and silently time out).
 
 import type { Event, Hooks, SessionId } from '@monad/protocol';
-import type { ContextEngine } from '@/agent/context/index.ts';
-import type { ModelRouter } from '@/agent/model/index.ts';
-import type { FileObservationStore, Tool, ToolBackends, ToolGate } from '@/capabilities/tools/types.ts';
+import type { ContextEngine } from '#/agent/context/index.ts';
+import type { ModelRouter } from '#/agent/model/index.ts';
+import type {
+  FileObservation,
+  FileObservationStore,
+  Tool,
+  ToolBackends,
+  ToolGate
+} from '#/capabilities/tools/types.ts';
 
 import { z } from 'zod';
 
-import { AgentLoop, InMemoryMessageRepo } from '@/agent/loop/index.ts';
-import { toolResult } from '@/capabilities/tools/types.ts';
+import { AgentLoop, InMemoryMessageRepo } from '#/agent/loop/index.ts';
+import { toolResult } from '#/capabilities/tools/types.ts';
 
 const MAX_FORK_DEPTH = 3;
+
+function scopedFileObservations(parent: FileObservationStore | undefined): FileObservationStore | undefined {
+  if (!parent) return undefined;
+  const local = new Map<string, FileObservation>();
+  const key = (sessionId: string, path: string) => `${sessionId}\0${path}`;
+  return {
+    remember: (sessionId, observation) => {
+      local.set(key(sessionId, observation.path), observation);
+    },
+    get: async (sessionId, path) => local.get(key(sessionId, path)) ?? (await parent.get(sessionId, path)),
+    clear: (sessionId) => {
+      for (const entryKey of local.keys()) {
+        if (entryKey.startsWith(`${sessionId}\0`)) local.delete(entryKey);
+      }
+    }
+  };
+}
 
 export interface SubagentRunDeps {
   model: ModelRouter;
@@ -60,7 +83,7 @@ export async function runSubagent(
     // Inherit the parent's backends so a delegated/forked subagent edits the editor's files too
     // (a delegated ACP session), instead of silently falling back to the daemon sandbox.
     backends: ctx.backends,
-    fileObservations: deps.fileObservations,
+    fileObservations: scopedFileObservations(deps.fileObservations),
     gate: deps.gate,
     maxTurns: deps.maxTurns,
     context: deps.context,
@@ -69,12 +92,8 @@ export async function runSubagent(
     hooks: deps.hooks,
     subagentCaller: deps.subagentCaller
   });
-  try {
-    const result = await loop.runBlock(ctx.sessionId as SessionId, task);
-    return result.text;
-  } finally {
-    await deps.fileObservations?.clear?.(ctx.sessionId);
-  }
+  const result = await loop.runBlock(ctx.sessionId as SessionId, task);
+  return result.text;
 }
 
 export interface DelegateDeps {

@@ -2,9 +2,9 @@
 
 import dynamic from 'next/dynamic';
 
-import { StudioRouteLoading } from '@/features/studio/StudioLoading';
+import { StudioRouteLoading } from '#/features/studio/StudioLoading';
 
-const Studio = dynamic(() => import('@/features/studio/Studio').then((m) => m.Studio), {
+const Studio = dynamic(() => import('#/features/studio/Studio').then((m) => m.Studio), {
   loading: StudioRouteLoading,
   ssr: false
 });

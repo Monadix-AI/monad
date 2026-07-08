@@ -1,8 +1,8 @@
 import type { ChannelInstanceConfig, MonadConfig } from '@monad/home';
 import type { ChannelInbound, PrincipalId } from '@monad/protocol';
-import type { ChannelRoute } from '@/channels/types.ts';
+import type { ChannelRoute } from '#/channels/types.ts';
 
-import { addressedToBot, channelStructuredResponseHint, mentionedAgents } from '@/channels/helpers.ts';
+import { addressedToBot, channelStructuredResponseHint, mentionedAgents } from '#/channels/helpers.ts';
 
 export function deriveKey(c: ChannelInstanceConfig, m: ChannelInbound, agentId?: string): string {
   const parts = [c.id, m.chatId];

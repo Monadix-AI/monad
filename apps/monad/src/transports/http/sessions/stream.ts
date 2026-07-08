@@ -3,14 +3,14 @@ import type { DeveloperLogRecord, SessionId, SessionUiEvent } from '@monad/proto
 import { subscribeDeveloperLogRecords } from '@monad/logger';
 import { developerLogRecordSchema } from '@monad/protocol';
 
-import { createDaemonHandlers } from '@/handlers/daemon-handlers/index.ts';
+import { createDaemonHandlers } from '#/handlers/daemon-handlers/index.ts';
 import {
   createBoundedSseEncoderSink,
   createBoundedSseSink,
   createSseResponse,
   encodeSseFrame,
   startSseHeartbeat
-} from '@/transports/http/sessions/sse.ts';
+} from '#/transports/http/sessions/sse.ts';
 
 export function wantsInlineSessionStream(acceptHeader: string | undefined): boolean {
   return (acceptHeader ?? '').includes('text/event-stream');

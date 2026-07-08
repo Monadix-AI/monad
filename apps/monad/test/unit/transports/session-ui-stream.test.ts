@@ -1,10 +1,10 @@
 import type { SessionId, SessionUiEvent } from '@monad/protocol';
-import type { createDaemonHandlers } from '@/handlers/daemon-handlers/index.ts';
+import type { createDaemonHandlers } from '#/handlers/daemon-handlers/index.ts';
 
 import { expect, test } from 'bun:test';
 import { newId } from '@monad/protocol';
 
-import { createSessionUiEventsSseResponse } from '@/transports/http/sessions/stream.ts';
+import { createSessionUiEventsSseResponse } from '#/transports/http/sessions/stream.ts';
 
 function uiSnapshot(): SessionUiEvent {
   return {

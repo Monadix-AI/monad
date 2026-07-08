@@ -6,8 +6,8 @@ import type { MonadPaths } from '@monad/home';
 
 import { logger } from '@monad/logger';
 
-import { discoverChannelAdapters } from '@/channels/discover.ts';
-import { builtinChannelAdapters, mergeRegistries } from '@/channels/registry.ts';
+import { discoverChannelAdapters } from '#/channels/discover.ts';
+import { builtinChannelAdapters, mergeRegistries } from '#/channels/registry.ts';
 
 export type BuiltinSinks = Parameters<typeof builtinChannelAdapters>[1];
 export type DiscoveredSinks = Parameters<typeof discoverChannelAdapters>[1];

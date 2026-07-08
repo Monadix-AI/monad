@@ -3,9 +3,9 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { discoverChannelAdapters } from '@/channels/discover.ts';
-import { AtomPackRegistry } from '@/handlers/atom-pack/index.ts';
-import { createHttpTransport } from '@/transports/http.ts';
+import { discoverChannelAdapters } from '#/channels/discover.ts';
+import { AtomPackRegistry } from '#/handlers/atom-pack/index.ts';
+import { createHttpTransport } from '#/transports/http.ts';
 import { buildHandlers, makeTestPaths, mockModel, serveTransport, stubModelDeps, TRANSPORTS } from '../helpers.ts';
 
 for (const transport of TRANSPORTS) {

@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 
-import { scanSkillFiles } from '@/capabilities/skills/install/scan.ts';
+import { scanSkillFiles } from '#/capabilities/skills/install/scan.ts';
 
 const enc = (s: string): Uint8Array => new TextEncoder().encode(s);
 const files = (obj: Record<string, string>): Map<string, Uint8Array> =>

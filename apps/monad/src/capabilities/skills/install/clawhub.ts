@@ -1,16 +1,16 @@
-import type { SkillRef } from '@/capabilities/skills/index.ts';
-import type { SkillInstallReviewer } from '@/capabilities/skills/install/index.ts';
+import type { SkillRef } from '#/capabilities/skills/index.ts';
+import type { SkillInstallReviewer } from '#/capabilities/skills/install/index.ts';
 
 import { mkdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DEFAULT_SKILL_MARKETPLACE_SOURCE, type SkillUpdate, skillMarketplaceSourceMeta } from '@monad/protocol';
 
-import { ClawHubSkillSource, parseSkillRef } from '@/capabilities/skills/index.ts';
-import { assertStagingCompatibility } from '@/capabilities/skills/install/compat.ts';
-import { warningModelRequestFailed, warningsToStrings } from '@/capabilities/skills/install/review.ts';
-import { scanSkillFiles } from '@/capabilities/skills/install/scan.ts';
-import { installSkillFromDir } from '@/store/home/skills.ts';
+import { ClawHubSkillSource, parseSkillRef } from '#/capabilities/skills/index.ts';
+import { assertStagingCompatibility } from '#/capabilities/skills/install/compat.ts';
+import { warningModelRequestFailed, warningsToStrings } from '#/capabilities/skills/install/review.ts';
+import { scanSkillFiles } from '#/capabilities/skills/install/scan.ts';
+import { installSkillFromDir } from '#/store/home/skills.ts';
 
 interface ClawHubSkillRecord {
   [key: string]: unknown;

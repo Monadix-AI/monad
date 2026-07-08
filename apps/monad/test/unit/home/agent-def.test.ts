@@ -11,7 +11,7 @@ import {
   parseAgentMd,
   toAgentDir,
   writeAgentBody
-} from '@/store/home/agent-def.ts';
+} from '#/store/home/agent-def.ts';
 
 describe('parseAgentMd', () => {
   test('parses frontmatter + body', () => {

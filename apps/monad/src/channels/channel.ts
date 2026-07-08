@@ -13,16 +13,16 @@ import type {
   SessionId
 } from '@monad/protocol';
 import type { ChannelAdapter, ChannelAdapterFactory, ChannelLog } from '@monad/sdk-atom';
-import type { ChannelRoute, ChannelServiceDeps, ChannelTranslate, Instance } from '@/channels/types.ts';
+import type { ChannelRoute, ChannelServiceDeps, ChannelTranslate, Instance } from '#/channels/types.ts';
 
 import { channelDisplayText, parseEventPayload } from '@monad/protocol';
 
-import { type CommandHost, runCommand } from '@/channels/command-dispatch.ts';
-import { rateOk, serialize } from '@/channels/flow-control.ts';
-import { errMsg, redact, rememberSeen, resolveExtra } from '@/channels/helpers.ts';
-import { type MirrorContext, subscribeMirror } from '@/channels/mirror.ts';
-import { ChannelPairings } from '@/channels/pairing.ts';
-import { createRenderer } from '@/channels/render.ts';
+import { type CommandHost, runCommand } from '#/channels/command-dispatch.ts';
+import { rateOk, serialize } from '#/channels/flow-control.ts';
+import { errMsg, redact, rememberSeen, resolveExtra } from '#/channels/helpers.ts';
+import { type MirrorContext, subscribeMirror } from '#/channels/mirror.ts';
+import { ChannelPairings } from '#/channels/pairing.ts';
+import { createRenderer } from '#/channels/render.ts';
 import {
   accessDecision,
   channelOriginExt,
@@ -30,12 +30,12 @@ import {
   needsReset,
   principalFor,
   routeInbound
-} from '@/channels/routing.ts';
-import { resolveChannelSecretRef } from '@/config/secrets.ts';
-import { buildSessionOrigin } from '@/handlers/session/origin.ts';
-import { daemonChildProcesses, killDaemonProcessTree } from '@/infra/daemon-child-processes.ts';
+} from '#/channels/routing.ts';
+import { resolveChannelSecretRef } from '#/config/secrets.ts';
+import { buildSessionOrigin } from '#/handlers/session/origin.ts';
+import { daemonChildProcesses, killDaemonProcessTree } from '#/infra/daemon-child-processes.ts';
 
-export type { ChannelLogger, ChannelRoute, ChannelServiceDeps, Instance, SessionGateway } from '@/channels/types.ts';
+export type { ChannelLogger, ChannelRoute, ChannelServiceDeps, Instance, SessionGateway } from '#/channels/types.ts';
 
 export class ChannelService {
   private readonly instances = new Map<string, Instance>();
@@ -413,4 +413,4 @@ export class ChannelService {
   }
 }
 
-export { sweepIdleBuckets } from '@/channels/helpers.ts';
+export { sweepIdleBuckets } from '#/channels/helpers.ts';

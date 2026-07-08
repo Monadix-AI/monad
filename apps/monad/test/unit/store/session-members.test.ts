@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, test } from 'bun:test';
 
-import { createStore } from '@/store/db/index.ts';
+import { createStore } from '#/store/db/index.ts';
 
 let store: ReturnType<typeof createStore>;
 

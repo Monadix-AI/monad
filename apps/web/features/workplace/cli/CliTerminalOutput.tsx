@@ -5,7 +5,7 @@ import type { CSSProperties } from 'react';
 
 import { useEffect, useRef } from 'react';
 
-import { useT } from '@/components/I18nProvider';
+import { useT } from '#/components/I18nProvider';
 
 const TERMINAL_THEME: ITheme = {
   background: '#0b0f14',

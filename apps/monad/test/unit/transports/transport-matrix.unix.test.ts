@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { createHttpTransport } from '@/transports/http.ts';
+import { createHttpTransport } from '#/transports/http.ts';
 import { buildHandlers, mockModel } from '../../helpers.ts';
 
 // AGENTS.md: every daemon feature must behave identically over BOTH local transports — TCP loopback

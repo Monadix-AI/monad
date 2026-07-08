@@ -12,7 +12,7 @@ import {
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Button, cn, isProductIconId, ProductIcon } from '@monad/ui';
 
-import { useT } from '@/components/I18nProvider';
+import { useT } from '#/components/I18nProvider';
 import { presetHintKey, presetToView } from './external-agent-settings-utils';
 
 export function ExternalAgentPresetPanel({

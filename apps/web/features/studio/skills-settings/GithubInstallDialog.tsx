@@ -4,11 +4,11 @@ import { useInstallSkillMutation } from '@monad/client-rtk';
 import { Button, Input } from '@monad/ui';
 import { useEffect, useRef, useState } from 'react';
 
-import { useT } from '@/components/I18nProvider';
-import { MonadIcon } from '@/components/MonadLogo';
-import { toast } from '@/components/ToastProvider';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { useT } from '#/components/I18nProvider';
+import { MonadIcon } from '#/components/MonadLogo';
+import { toast } from '#/components/ToastProvider';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '#/components/ui/dialog';
+import { Popover, PopoverContent, PopoverTrigger } from '#/components/ui/popover';
 import { ConsentPopover } from './ConsentPopover';
 import { GitHubMark } from './GitHubMark';
 import { normalizeGithubSkillSource } from './utils';

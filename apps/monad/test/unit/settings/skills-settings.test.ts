@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { createDefaultConfig, loadAll, saveAll, saveAuth } from '@monad/home';
 import { ModelProviderType } from '@monad/protocol';
 
-import { createSkillsSettingsModule } from '@/handlers/settings/skills/index.ts';
+import { createSkillsSettingsModule } from '#/handlers/settings/skills/index.ts';
 
 let dir: string;
 let paths: MonadPaths;

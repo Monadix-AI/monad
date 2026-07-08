@@ -1,7 +1,7 @@
-import type { StudioSectionId } from '@/features/studio/sections';
+import type { StudioSectionId } from '#/features/studio/sections';
 
-import { runtimeSectionEnabled } from '@/features/init/init-readiness';
-import { studioPath } from '@/features/routes/route-paths';
+import { runtimeSectionEnabled } from '#/features/init/init-readiness';
+import { studioPath } from '#/features/routes/route-paths';
 
 export function resolveStudioNavigationPath({
   runtimeReady,

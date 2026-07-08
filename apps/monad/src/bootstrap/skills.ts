@@ -5,18 +5,18 @@
 
 import type { MonadPaths } from '@monad/home';
 import type { AtomConflict, SkillListInstance, SkillListItem } from '@monad/protocol';
-import type { LoadedSkill } from '@/agent/index.ts';
-import type { ReloadService } from '@/reload/index.ts';
-import type { ResolvedSkillState, Skill, SkillCollision, SkillStateRef } from '@/store/home/skills.ts';
+import type { LoadedSkill } from '#/agent/index.ts';
+import type { ReloadService } from '#/reload/index.ts';
+import type { ResolvedSkillState, Skill, SkillCollision, SkillStateRef } from '#/store/home/skills.ts';
 
 import { readdir } from 'node:fs/promises';
 import { basename, dirname, join, sep } from 'node:path';
 import { logger } from '@monad/logger';
 
-import { renderShellInjections } from '@/agent/index.ts';
-import { shellArgv } from '@/capabilities/tools';
-import { daemonChildProcesses, killDaemonProcessTree } from '@/infra/daemon-child-processes.ts';
-import { checkSkillCompatibility, SkillRegistry, skillEligibility, skillPathsMatch } from '@/store/home/skills.ts';
+import { renderShellInjections } from '#/agent/index.ts';
+import { shellArgv } from '#/capabilities/tools';
+import { daemonChildProcesses, killDaemonProcessTree } from '#/infra/daemon-child-processes.ts';
+import { checkSkillCompatibility, SkillRegistry, skillEligibility, skillPathsMatch } from '#/store/home/skills.ts';
 
 /** Conventional project-local monad directory (analogous to `.git`). */
 const PROJECT_LOCAL_DIR = '.monad';

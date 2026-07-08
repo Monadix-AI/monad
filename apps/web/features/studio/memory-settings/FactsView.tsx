@@ -33,7 +33,7 @@ import {
 } from '@monad/ui';
 import { useState } from 'react';
 
-import { useT } from '@/components/I18nProvider';
+import { useT } from '#/components/I18nProvider';
 import { DataEmpty } from './DataEmpty';
 import { Segmented } from './Segmented';
 

@@ -1,5 +1,5 @@
 import type { GetInitStatusResponse } from '@monad/protocol';
-import type { StudioSectionId } from '@/features/studio/sections';
+import type { StudioSectionId } from '#/features/studio/sections';
 
 export const runtimeDisabledSectionIds = [
   'agents',

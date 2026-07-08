@@ -13,7 +13,7 @@ import { mermaid } from '@streamdown/mermaid';
 import { createContext, memo, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { Streamdown } from 'streamdown';
 
-import { useT } from '@/components/I18nProvider';
+import { useT } from '#/components/I18nProvider';
 
 export type MessageProps = HTMLAttributes<HTMLDivElement> & {
   from: UIMessage['role'];

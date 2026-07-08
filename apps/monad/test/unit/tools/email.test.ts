@@ -1,4 +1,4 @@
-import type { SmtpConfig, SmtpIO, SmtpReply } from '@/capabilities/tools/registry/email/smtp.ts';
+import type { SmtpConfig, SmtpIO, SmtpReply } from '#/capabilities/tools/registry/email/smtp.ts';
 
 import { afterEach, beforeEach, expect, test } from 'bun:test';
 
@@ -9,8 +9,8 @@ import {
   EmailError,
   resendBackend,
   selectEmailBackend
-} from '@/capabilities/tools/registry/email/index.ts';
-import { parseSmtpReply, sendMail } from '@/capabilities/tools/registry/email/smtp.ts';
+} from '#/capabilities/tools/registry/email/index.ts';
+import { parseSmtpReply, sendMail } from '#/capabilities/tools/registry/email/smtp.ts';
 
 // ── MIME builder ──────────────────────────────────────────────────────────────────
 

@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 
-import { buildDaemonTcpListenOptions } from '@/bootstrap/serve.ts';
+import { buildDaemonTcpListenOptions } from '#/bootstrap/serve.ts';
 
 test('daemon TCP listener enables HTTP/3 when TLS is configured', () => {
   const options = buildDaemonTcpListenOptions({

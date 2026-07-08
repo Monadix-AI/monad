@@ -1,7 +1,7 @@
 import type { Event, MessageId, ProjectId, SessionId } from '@monad/protocol';
-import type { EventBus } from '@/services/event-bus.ts';
-import type { RoundCache } from '@/services/round-cache.ts';
-import type { Store } from '@/store/db/index.ts';
+import type { EventBus } from '#/services/event-bus.ts';
+import type { RoundCache } from '#/services/round-cache.ts';
+import type { Store } from '#/store/db/index.ts';
 
 import { newId } from '@monad/protocol';
 

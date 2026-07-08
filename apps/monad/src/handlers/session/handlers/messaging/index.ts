@@ -1,28 +1,28 @@
 import type { ChatMessage, Event, SendMessageRequest, Session, SessionId, SessionTransport } from '@monad/protocol';
-import type { ImageAttachment } from '@/agent/index.ts';
-import type { Tool, ToolBackends } from '@/capabilities/tools/types.ts';
-import type { CommandBundle, LifecycleOps } from '@/handlers/commands/index.ts';
-import type { EventSink, SessionContext } from '@/handlers/session/context.ts';
+import type { ImageAttachment } from '#/agent/index.ts';
+import type { Tool, ToolBackends } from '#/capabilities/tools/types.ts';
+import type { CommandBundle, LifecycleOps } from '#/handlers/commands/index.ts';
+import type { EventSink, SessionContext } from '#/handlers/session/context.ts';
 
 import { newId } from '@monad/protocol';
 
-import { extractError } from '@/agent/index.ts';
-import { emitCommandTurn, executeSessionCommand, tryRunSessionCommand } from '@/handlers/commands/index.ts';
-import { HandlerError } from '@/handlers/handler-error.ts';
-import { createAcpChannelDelegation } from '@/handlers/session/handlers/acp-channel-delegation.ts';
-import { createForwardAcpHandler } from '@/handlers/session/handlers/forward-acp.ts';
-import { createForwardExternalAgentHandler } from '@/handlers/session/handlers/forward-external-agent.ts';
-import { createManagedExternalAgentDelivery } from '@/handlers/session/handlers/managed-external-agent-delivery.ts';
-import { createMessagingNotifyHandlers } from '@/handlers/session/handlers/messaging/messaging-notify.ts';
-import { createSendProjectMessageHandler } from '@/handlers/session/handlers/messaging/messaging-project.ts';
-import { imageAttachments, messageTextWithAttachments } from '@/handlers/session/handlers/messaging-attachments.ts';
-import { createSubscribeHandlers } from '@/handlers/session/handlers/messaging-subscribe.ts';
+import { extractError } from '#/agent/index.ts';
+import { emitCommandTurn, executeSessionCommand, tryRunSessionCommand } from '#/handlers/commands/index.ts';
+import { HandlerError } from '#/handlers/handler-error.ts';
+import { createAcpChannelDelegation } from '#/handlers/session/handlers/acp-channel-delegation.ts';
+import { createForwardAcpHandler } from '#/handlers/session/handlers/forward-acp.ts';
+import { createForwardExternalAgentHandler } from '#/handlers/session/handlers/forward-external-agent.ts';
+import { createManagedExternalAgentDelivery } from '#/handlers/session/handlers/managed-external-agent-delivery.ts';
+import { createMessagingNotifyHandlers } from '#/handlers/session/handlers/messaging/messaging-notify.ts';
+import { createSendProjectMessageHandler } from '#/handlers/session/handlers/messaging/messaging-project.ts';
+import { imageAttachments, messageTextWithAttachments } from '#/handlers/session/handlers/messaging-attachments.ts';
+import { createSubscribeHandlers } from '#/handlers/session/handlers/messaging-subscribe.ts';
 
 // Re-exported for existing import sites (tests import member/channel helpers from this module).
 export {
   channelDelegateMcpServers,
   isChannelStructuredSession
-} from '@/handlers/session/handlers/messaging-members.ts';
+} from '#/handlers/session/handlers/messaging-members.ts';
 
 // Access control reads the write policy STORED on the session (origin.writableBy) — derived from the
 // originating surface at creation, overridable per-session — not a label→transport lookup at the call

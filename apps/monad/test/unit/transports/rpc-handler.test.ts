@@ -7,7 +7,7 @@ import type { JsonRpcNotification, JsonRpcResponse, SessionId } from '@monad/pro
 import { expect, test } from 'bun:test';
 import { RPC_ERRORS } from '@monad/protocol';
 
-import { createConnectionState, handleRpcMessage } from '@/transports/jsonrpc/index.ts';
+import { createConnectionState, handleRpcMessage } from '#/transports/jsonrpc/index.ts';
 import { buildHandlers, mockModel } from '../../helpers.ts';
 
 type Msg = JsonRpcResponse | JsonRpcNotification;

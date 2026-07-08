@@ -1,9 +1,9 @@
-import type { ExternalAgentOutputEvent } from '@/services/external-agent/types.ts';
+import type { ExternalAgentOutputEvent } from '#/services/external-agent/types.ts';
 
 import { describe, expect, test } from 'bun:test';
 import { builtinAgentAdapters } from '@monad/atoms/agent-adapters';
 
-import { externalAgentOutputEventSchema } from '@/services/external-agent/types.ts';
+import { externalAgentOutputEventSchema } from '#/services/external-agent/types.ts';
 
 function builtinAdapter(provider: 'claude-code' | 'codex') {
   const adapter = builtinAgentAdapters.find((candidate) => candidate.provider === provider);

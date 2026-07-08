@@ -3,8 +3,8 @@ import type { SessionId } from '@monad/protocol';
 
 import { expect, test } from 'bun:test';
 
-import { isDelegableTool } from '@/capabilities/tools';
-import { createAcpFsBackend, createAcpTerminalBackend } from '@/transports/acp/backends.ts';
+import { isDelegableTool } from '#/capabilities/tools';
+import { createAcpFsBackend, createAcpTerminalBackend } from '#/transports/acp/backends.ts';
 
 const SID = 'ses_1' as SessionId;
 

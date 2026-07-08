@@ -10,8 +10,8 @@ import type { AgentAtoms } from '@monad/protocol';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
-import { resolveEffectiveSandboxMode } from '@/config/resolve.ts';
-import { loadAgentBody, toAgentDir } from '@/store/home/agent-def.ts';
+import { resolveEffectiveSandboxMode } from '#/config/resolve.ts';
+import { loadAgentBody, toAgentDir } from '#/store/home/agent-def.ts';
 
 type AgentConfigRow = MonadConfig['agent']['agents'][number];
 

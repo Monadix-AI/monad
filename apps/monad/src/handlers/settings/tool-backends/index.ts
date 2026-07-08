@@ -1,6 +1,6 @@
 import type { MonadPaths } from '@monad/home';
 import type { InitDockerResponse, SetToolBackendsRequest, ToolBackendsResponse } from '@monad/protocol';
-import type { ConfigBus } from '@/services/config-bus.ts';
+import type { ConfigBus } from '#/services/config-bus.ts';
 
 import { detectDockerRuntime, dockerRuntimeAvailable } from '@monad/atoms';
 import { loadAll, loadAuth, saveProfile } from '@monad/home';

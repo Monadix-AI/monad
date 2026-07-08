@@ -14,8 +14,8 @@ import {
 import { Button, Skeleton } from '@monad/ui';
 import { useEffect, useState } from 'react';
 
-import { useT } from '@/components/I18nProvider';
-import { studioPath } from '@/features/routes/route-paths';
+import { useT } from '#/components/I18nProvider';
+import { studioPath } from '#/features/routes/route-paths';
 import { StudioBreadcrumbHeader } from '../StudioBreadcrumbHeader';
 import { AgentWorkshop } from './AgentWorkshop';
 import { buildAgentEditorUpdate } from './agent-editor-update';

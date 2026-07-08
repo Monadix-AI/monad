@@ -1,20 +1,20 @@
 import type { Logger } from '@monad/logger';
 import type { Event } from '@monad/protocol';
-import type { LiveExternalAgentSession } from '@/services/external-agent/host/host-types.ts';
+import type { LiveExternalAgentSession } from '#/services/external-agent/host/host-types.ts';
 
 import { chmodSync, mkdirSync, realpathSync, rmSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { ExternalAgentError } from '@/services/external-agent/errors.ts';
+import { ExternalAgentError } from '#/services/external-agent/errors.ts';
 import {
   APP_SERVER_DISCONNECT_GRACE_MS,
   APP_SERVER_MAX_DISCONNECT_CYCLES,
   APP_SERVER_RECONNECT_ATTEMPTS,
   APP_SERVER_RECONNECT_BASE_MS,
   APP_SERVER_RECONNECT_STREAK_RESET_MS
-} from '@/services/external-agent/host/host-constants.ts';
+} from '#/services/external-agent/host/host-constants.ts';
 
 export interface ExternalAgentAppServerConnectionContext {
   live: Map<string, LiveExternalAgentSession>;

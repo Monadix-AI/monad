@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 
-import { renderableIconText } from '@/lib/renderable-icon-text';
+import { renderableIconText } from '#/lib/renderable-icon-text';
 
 test('renderableIconText hides Hugeicons symbol names', () => {
   expect(renderableIconText('Wrench01Icon')).toBeUndefined();

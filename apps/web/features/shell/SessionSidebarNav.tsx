@@ -1,8 +1,8 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import type { useT } from '@/components/I18nProvider';
-import type { SettingsSectionId } from '@/features/settings/sections';
+import type { useT } from '#/components/I18nProvider';
+import type { SettingsSectionId } from '#/features/settings/sections';
 
 import {
   ArrowLeft01Icon,
@@ -19,14 +19,14 @@ import {
 import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react';
 import { cn, Tooltip, TooltipContent, TooltipTrigger } from '@monad/ui';
 
-import { runtimeSectionEnabled } from '@/features/init/init-readiness';
+import { runtimeSectionEnabled } from '#/features/init/init-readiness';
 import {
   STUDIO_MESH_SECTIONS,
   STUDIO_RUNTIME_SECTIONS,
   STUDIO_SYSTEM_SECTIONS,
   type StudioSectionId,
   type StudioSectionItem
-} from '@/features/studio/sections';
+} from '#/features/studio/sections';
 
 export interface ProjectItem {
   id: string;

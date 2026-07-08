@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
 
-import { pushBounded, type StreamWs } from '@/transports/http/stream/controller.ts';
-import { createConnectionState } from '@/transports/jsonrpc/index.ts';
+import { pushBounded, type StreamWs } from '#/transports/http/stream/controller.ts';
+import { createConnectionState } from '#/transports/jsonrpc/index.ts';
 
 function fakeWs(buffered: () => number): { ws: StreamWs; sent: string[]; closed: () => boolean } {
   const sent: string[] = [];

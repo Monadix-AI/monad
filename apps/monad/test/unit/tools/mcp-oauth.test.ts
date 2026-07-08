@@ -7,7 +7,7 @@ import {
   discoverProtectedResource,
   pollDeviceToken,
   startDeviceAuthorization
-} from '@/capabilities/tools';
+} from '#/capabilities/tools';
 
 // These primitives back the device-grant flow (RFC 8628), the one path the MCP SDK does not cover.
 // The interactive authorization-code + PKCE + DCR flow runs on the SDK and is exercised end-to-end

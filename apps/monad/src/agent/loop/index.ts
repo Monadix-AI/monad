@@ -1,5 +1,5 @@
 import type { Cost, Event, EventType, SessionId } from '@monad/protocol';
-import type { Tool } from '@/capabilities/tools/types.ts';
+import type { Tool } from '#/capabilities/tools/types.ts';
 import type { ModelMessage, ModelUsage, ToolCall, ToolSpec } from '../model/index.ts';
 import type { ExplicitSkill } from './internal/explicit-skill.ts';
 import type { AgentLoopDeps, ChatMessage, ImageAttachment } from './types.ts';

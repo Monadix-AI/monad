@@ -10,7 +10,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { loadAuth, saveAuth } from '@monad/home';
 
-import { createDaemonMcpOAuth } from '@/capabilities/mcp/oauth.ts';
+import { createDaemonMcpOAuth } from '#/capabilities/mcp/oauth.ts';
 
 let dir: string;
 let authPath: string;

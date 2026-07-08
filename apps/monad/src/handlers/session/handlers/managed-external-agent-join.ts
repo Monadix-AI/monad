@@ -1,13 +1,13 @@
 import type { ManagedExternalAgentLifecycleLogEvent, Session } from '@monad/protocol';
-import type { SessionContext } from '@/handlers/session/context.ts';
-import type { ManagedExternalAgentProjectMember } from '@/handlers/session/handlers/messaging-members.ts';
+import type { SessionContext } from '#/handlers/session/context.ts';
+import type { ManagedExternalAgentProjectMember } from '#/handlers/session/handlers/messaging-members.ts';
 
 import { newId } from '@monad/protocol';
 
-import { extractError } from '@/agent/index.ts';
-import { createManagedExternalAgentDelivery } from '@/handlers/session/handlers/managed-external-agent-delivery.ts';
-import { managedProjectLaunchMode } from '@/services/external-agent/managed-project.ts';
-import managedProjectJoinGreetingNoticePath from '@/services/external-agent/prompts/managed-project-join-greeting-notice.md' with {
+import { extractError } from '#/agent/index.ts';
+import { createManagedExternalAgentDelivery } from '#/handlers/session/handlers/managed-external-agent-delivery.ts';
+import { managedProjectLaunchMode } from '#/services/external-agent/managed-project.ts';
+import managedProjectJoinGreetingNoticePath from '#/services/external-agent/prompts/managed-project-join-greeting-notice.md' with {
   type: 'file'
 };
 

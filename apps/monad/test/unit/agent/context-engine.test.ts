@@ -1,4 +1,4 @@
-import type { ModelMessage, ModelResult, ModelRouter } from '@/agent/index.ts';
+import type { ModelMessage, ModelResult, ModelRouter } from '#/agent/index.ts';
 
 import { expect, test } from 'bun:test';
 
@@ -9,7 +9,7 @@ import {
   SummarizingContextEngine,
   TokenEstimator,
   TokenLimiterContext
-} from '@/agent/index.ts';
+} from '#/agent/index.ts';
 
 const ctx = { sessionId: 'ses_x', emit: () => {} };
 const sys = (text: string): ModelMessage => ({ role: 'system', content: text });

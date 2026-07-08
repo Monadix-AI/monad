@@ -4,7 +4,7 @@ import {
   type SkillMarketplaceSource
 } from '@monad/protocol';
 
-import { safeDecode } from '@/lib/workspace-sessions';
+import { safeDecode } from '#/lib/workspace-sessions';
 import { normalizeSettingsSection, type SettingsSectionId } from '../settings/sections';
 import { isStudioSectionId, type StudioSectionId } from '../studio/sections';
 

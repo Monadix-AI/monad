@@ -6,17 +6,17 @@ import type {
   Session,
   SessionId
 } from '@monad/protocol';
-import type { SessionContext } from '@/handlers/session/context.ts';
-import type { ExternalAgentTargetId } from '@/store/db/external-agent-sessions.ts';
+import type { SessionContext } from '#/handlers/session/context.ts';
+import type { ExternalAgentTargetId } from '#/store/db/external-agent-sessions.ts';
 
 import { newId } from '@monad/protocol';
 
-import { extractError } from '@/agent/index.ts';
-import { HandlerError } from '@/handlers/handler-error.ts';
+import { extractError } from '#/agent/index.ts';
+import { HandlerError } from '#/handlers/handler-error.ts';
 import {
   externalAgentInputText,
   managedExternalAgentResumeRecoveryNotice
-} from '@/handlers/session/handlers/messaging-notices.ts';
+} from '#/handlers/session/handlers/messaging-notices.ts';
 
 const MANAGED_EXTERNAL_AGENT_RESUME_FAILED_COLD_START_EVENT =
   'project.managed_external_agent.resume_failed_cold_start' satisfies ManagedExternalAgentLifecycleLogEvent;

@@ -11,7 +11,7 @@ import {
 import { HugeiconsIcon } from '@hugeicons/react';
 import { ScrollArea } from '@monad/ui';
 
-import { useT } from '@/components/I18nProvider';
+import { useT } from '#/components/I18nProvider';
 import { CapabilityIcon, resolveCapabilityIcon } from '../CapabilityIcon';
 import { type CapabilityItem, PartCard, serializePayload, type WorkshopPart } from './AgentWorkshopPrimitives';
 

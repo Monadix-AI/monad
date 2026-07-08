@@ -3,8 +3,8 @@
 import { Database } from 'bun:sqlite';
 import { afterEach, beforeEach, expect, test } from 'bun:test';
 
-import { createStore } from '@/store/db/index.ts';
-import { CURRENT_SCHEMA_VERSION, migrate } from '@/store/db/migrations.ts';
+import { createStore } from '#/store/db/index.ts';
+import { CURRENT_SCHEMA_VERSION, migrate } from '#/store/db/migrations.ts';
 
 // ── Migration ─────────────────────────────────────────────────────────────────
 

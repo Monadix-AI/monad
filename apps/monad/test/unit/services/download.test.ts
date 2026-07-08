@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 
-import { type DownloadFetch, type DownloadProgress, downloadBytes } from '@/services/download.ts';
+import { type DownloadFetch, type DownloadProgress, downloadBytes } from '#/services/download.ts';
 
 function streamChunks(chunks: string[]): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();

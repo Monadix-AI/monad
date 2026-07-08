@@ -17,14 +17,14 @@ import { Button, Card, cn, Input, Label, Tooltip, TooltipContent, TooltipTrigger
 import { useEffect, useState } from 'react';
 import { type Resolver, useForm } from 'react-hook-form';
 
-import { HoverActions } from '@/components/HoverActions';
-import { useT } from '@/components/I18nProvider';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { useModelSettings, useProviderDetail } from '@/hooks/use-model-settings';
-import { providerFormSchema } from '@/lib/form-validation';
-import { providerLogo, useProviderMeta } from '@/lib/ProviderMeta';
-import { SECRET_INPUT_PASSWORD_MANAGER_PROPS } from '@/lib/secret-input-props';
+import { HoverActions } from '#/components/HoverActions';
+import { useT } from '#/components/I18nProvider';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '#/components/ui/dialog';
+import { Popover, PopoverContent, PopoverTrigger } from '#/components/ui/popover';
+import { useModelSettings, useProviderDetail } from '#/hooks/use-model-settings';
+import { providerFormSchema } from '#/lib/form-validation';
+import { providerLogo, useProviderMeta } from '#/lib/ProviderMeta';
+import { SECRET_INPUT_PASSWORD_MANAGER_PROPS } from '#/lib/secret-input-props';
 import { modelMatchesQuery, sortModelsForProvider } from './model-picker';
 import {
   initialProviderDialogStep,

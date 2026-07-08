@@ -1,9 +1,9 @@
-import type { Store } from '@/store/db/index.ts';
+import type { Store } from '#/store/db/index.ts';
 import type { LiveDelegate } from './acp-delegate-types.ts';
 
 import { createLogger } from '@monad/logger';
 
-import { daemonChildProcesses, killDaemonProcessTree } from '@/infra/daemon-child-processes.ts';
+import { daemonChildProcesses, killDaemonProcessTree } from '#/infra/daemon-child-processes.ts';
 
 const log = createLogger('acp-delegate');
 

@@ -8,8 +8,8 @@ import type { MonadConfig, MonadPaths } from '@monad/home';
 import { loadConfig, resolveDaemonNetwork } from '@monad/home';
 import { createLogger } from '@monad/logger';
 
-import { createBridgeHandlers } from '@/transports/acp/bridge.ts';
-import { startAcpTransport } from '@/transports/acp/connection.ts';
+import { createBridgeHandlers } from '#/transports/acp/bridge.ts';
+import { startAcpTransport } from '#/transports/acp/connection.ts';
 
 const log = createLogger('transport:acp:launch');
 

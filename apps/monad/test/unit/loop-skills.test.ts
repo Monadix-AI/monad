@@ -1,10 +1,10 @@
 import type { SessionId } from '@monad/protocol';
-import type { ModelMessage, ModelResult, ModelRouter } from '@/agent/index.ts';
+import type { ModelMessage, ModelResult, ModelRouter } from '#/agent/index.ts';
 
 import { expect, test } from 'bun:test';
 import { newId } from '@monad/protocol';
 
-import { AgentLoop, InMemoryMessageRepo, type LoadedSkill } from '@/agent/index.ts';
+import { AgentLoop, InMemoryMessageRepo, type LoadedSkill } from '#/agent/index.ts';
 import { buildMockModel } from '../fixtures/mock-model.ts';
 
 function lastUserText(messages: ModelMessage[]): string {

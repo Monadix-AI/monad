@@ -2,7 +2,7 @@
 
 import { expect, test } from 'bun:test';
 
-import { project2d } from '@/services/memory/pca2d.ts';
+import { project2d } from '#/services/memory/pca2d.ts';
 
 test('degenerate inputs are safe', () => {
   expect(project2d([[1, 2, 3]])).toEqual([{ x: 0, y: 0 }]); // <2 vectors → origin

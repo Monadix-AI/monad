@@ -6,10 +6,10 @@ import type {
   RequestPermissionResponse
 } from '@agentclientprotocol/sdk';
 import type { ApprovalScope, Event, SessionId } from '@monad/protocol';
-import type { ToolBackends } from '@/capabilities/tools/types.ts';
-import type { Handlers } from '@/transports/acp/types.ts';
+import type { ToolBackends } from '#/capabilities/tools/types.ts';
+import type { Handlers } from '#/transports/acp/types.ts';
 
-import { toolKind } from '@/transports/acp/translate.ts';
+import { toolKind } from '#/transports/acp/translate.ts';
 
 /** Service a daemon delegation request against the editor: the daemon's remote fs/terminal backend
  * emitted a `delegation.{fs,terminal}_request` event (routed here over the turn's stream); we run it

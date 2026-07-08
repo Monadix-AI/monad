@@ -1,11 +1,11 @@
 import type { HookInput, Hooks } from '@monad/protocol';
-import type { ModelResult, ModelRouter } from '@/agent/index.ts';
-import type { Tool, ToolContext } from '@/capabilities/tools/types.ts';
+import type { ModelResult, ModelRouter } from '#/agent/index.ts';
+import type { FileObservation, Tool, ToolContext } from '#/capabilities/tools/types.ts';
 
 import { expect, test } from 'bun:test';
 
-import { createDelegateTool, runSubagent } from '@/capabilities/tools/registry/delegate.ts';
-import { toolResult } from '@/capabilities/tools/types.ts';
+import { createDelegateTool, runSubagent } from '#/capabilities/tools/registry/delegate.ts';
+import { toolResult } from '#/capabilities/tools/types.ts';
 
 // A scripted step is either a final text answer or a tool call the model requests.
 type Step = string | { tool: string; input?: unknown };
@@ -131,7 +131,7 @@ test('runSubagent succeeds when forkDepth is below the limit', async () => {
   expect(result).toBe('ok');
 });
 
-test('runSubagent clears file observations after isolated context execution', async () => {
+test('runSubagent keeps the shared session file observations after isolated context execution', async () => {
   const cleared: string[] = [];
   const result = await runSubagent(
     {
@@ -150,5 +150,66 @@ test('runSubagent clears file observations after isolated context execution', as
     { sessionId: 'ses_observed' }
   );
 
-  expect({ result, cleared }).toEqual({ result: 'ok', cleared: ['ses_observed'] });
+  expect({ result, cleared }).toEqual({ result: 'ok', cleared: [] });
+});
+
+test('runSubagent does not promote hidden child file observations to the parent session ledger', async () => {
+  const parentPath = '/workspace/parent.txt';
+  const childPath = '/workspace/child.txt';
+  const parentObservation: FileObservation = {
+    path: parentPath,
+    hash: 'parent-hash',
+    coverage: 'full',
+    observedAt: '2026-07-08T00:00:00.000Z'
+  };
+  const childObservation: FileObservation = {
+    path: childPath,
+    hash: 'child-hash',
+    coverage: 'full',
+    observedAt: '2026-07-08T00:00:01.000Z'
+  };
+  const observations = new Map<string, FileObservation>([['ses_observed:/workspace/parent.txt', parentObservation]]);
+  const childChecks: boolean[] = [];
+  const observe: Tool = {
+    name: 'test.observe',
+    description: 'observe',
+    scopes: [],
+    run: async (_input, ctx) => {
+      childChecks.push((await ctx.fileObservations?.get(ctx.sessionId, parentPath)) === parentObservation);
+      await ctx.fileObservations?.remember(ctx.sessionId, childObservation);
+      childChecks.push((await ctx.fileObservations?.get(ctx.sessionId, childPath)) === childObservation);
+      return toolResult('observed');
+    }
+  };
+
+  const result = await runSubagent(
+    {
+      model: scriptedModel([{ tool: 'test.observe' }, 'ok']),
+      tools: [observe],
+      defaultModel: 'mock',
+      fileObservations: {
+        remember: (sessionId, observation) => {
+          observations.set(`${sessionId}:${observation.path}`, observation);
+        },
+        get: (sessionId, path) => observations.get(`${sessionId}:${path}`) ?? null,
+        clear: (sessionId) => {
+          for (const key of observations.keys()) {
+            if (key.startsWith(`${sessionId}:`)) observations.delete(key);
+          }
+        }
+      }
+    },
+    'task',
+    { sessionId: 'ses_observed' }
+  );
+
+  expect({
+    result,
+    childChecks,
+    parentLedger: Array.from(observations.entries())
+  }).toEqual({
+    result: 'ok',
+    childChecks: [true, true],
+    parentLedger: [['ses_observed:/workspace/parent.txt', parentObservation]]
+  });
 });

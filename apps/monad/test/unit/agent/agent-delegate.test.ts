@@ -1,11 +1,11 @@
-import type { ModelResult, ModelRouter } from '@/agent/index.ts';
-import type { Tool, ToolContext } from '@/capabilities/tools/types.ts';
-import type { DelegatableAgent } from '@/services/generation/agent-persona.ts';
+import type { ModelResult, ModelRouter } from '#/agent/index.ts';
+import type { Tool, ToolContext } from '#/capabilities/tools/types.ts';
+import type { DelegatableAgent } from '#/services/generation/agent-persona.ts';
 
 import { expect, test } from 'bun:test';
 
-import { toolResult } from '@/capabilities/tools/types.ts';
-import { createAgentDelegateTool } from '@/services/delegation/agent-delegate.ts';
+import { toolResult } from '#/capabilities/tools/types.ts';
+import { createAgentDelegateTool } from '#/services/delegation/agent-delegate.ts';
 
 type Step = string | { tool: string; input?: unknown };
 

@@ -8,7 +8,7 @@ import { cn } from '@monad/ui';
 import { AnimatePresence, motion } from 'motion/react';
 import { useEffect, useRef, useState } from 'react';
 
-import { useT } from '@/components/I18nProvider';
+import { useT } from '#/components/I18nProvider';
 
 export interface ReasoningEffortOption {
   value?: string;

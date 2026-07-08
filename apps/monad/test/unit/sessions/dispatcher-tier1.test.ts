@@ -2,8 +2,8 @@ import type { SessionId } from '@monad/protocol';
 
 import { expect, test } from 'bun:test';
 
-import { HandlerError } from '@/handlers/handler-error.ts';
-import { createStore } from '@/store/db/index.ts';
+import { HandlerError } from '#/handlers/handler-error.ts';
+import { createStore } from '#/store/db/index.ts';
 import { buildHandlers, mockModel } from '../../helpers.ts';
 
 test('sessionGet throws INVALID_PARAMS for an unknown session', async () => {

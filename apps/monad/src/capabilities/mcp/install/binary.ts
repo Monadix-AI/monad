@@ -11,9 +11,9 @@
 import { chmod, mkdir } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 
-import { untar } from '@/atoms/install/untar.ts';
-import { unzip } from '@/capabilities/mcp/install/unzip.ts';
-import { type DownloadProgress, downloadBytes } from '@/services/download.ts';
+import { untar } from '#/atoms/install/untar.ts';
+import { unzip } from '#/capabilities/mcp/install/unzip.ts';
+import { type DownloadProgress, downloadBytes } from '#/services/download.ts';
 
 export class McpBinaryInstallError extends Error {}
 

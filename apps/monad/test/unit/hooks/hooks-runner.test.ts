@@ -4,7 +4,7 @@ import type { HookDefinition } from '@monad/sdk-atom';
 import { expect, test } from 'bun:test';
 import { createLogger } from '@monad/logger';
 
-import { createHookRunner, type HookConfig, type HookRunRecord } from '@/hooks/runner.ts';
+import { createHookRunner, type HookConfig, type HookRunRecord } from '#/hooks/runner.ts';
 
 const log = createLogger('hooks-test');
 

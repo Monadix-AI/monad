@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
 import builtinAtomPack from '@monad/atoms';
 
-import { describeAtomPack } from '@/atoms/describe.ts';
+import { describeAtomPack } from '#/atoms/describe.ts';
 
 test('describeAtomPack enumerates each individual atom of the built-in pack', async () => {
   const atoms = await describeAtomPack(builtinAtomPack);

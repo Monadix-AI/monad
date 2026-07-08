@@ -3,7 +3,7 @@
 
 import { expect, test } from 'bun:test';
 
-import { GraphStore } from '@/services/memory/graph/store.ts';
+import { GraphStore } from '#/services/memory/graph/store.ts';
 
 const S = 'agent:a1';
 const fresh = () => new GraphStore(':memory:');

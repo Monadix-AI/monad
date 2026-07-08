@@ -5,8 +5,8 @@
 
 import type { Logger } from '@monad/logger';
 import type { Fact, L1Capabilities, MemoryBlock, MemoryScope, RecallCtx, WriteCtx } from '@monad/protocol';
-import type { L1Adapter, MemoryToolSchema, MemoryTurn } from '@/agent/index.ts';
-import type { Mem0ModelSpec, Mem0Models } from '@/services/memory/resolve-mem0.ts';
+import type { L1Adapter, MemoryToolSchema, MemoryTurn } from '#/agent/index.ts';
+import type { Mem0ModelSpec, Mem0Models } from '#/services/memory/resolve-mem0.ts';
 
 import { mkdir } from 'node:fs/promises';
 import { dirname } from 'node:path';

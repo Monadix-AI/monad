@@ -1,9 +1,9 @@
 import type { MonadAuth, MonadConfig, MonadPaths } from '@monad/home';
 import type { ModelModalities, ModelPrice } from '@monad/protocol';
-import type { ModelProviderRegistry } from '@/agent/index.ts';
-import type { ConfigBus } from '@/services/config-bus.ts';
-import type { ModelService } from '@/services/model.ts';
-import type { ModelCatalogService } from '@/services/model-catalog.ts';
+import type { ModelProviderRegistry } from '#/agent/index.ts';
+import type { ConfigBus } from '#/services/config-bus.ts';
+import type { ModelService } from '#/services/model.ts';
+import type { ModelCatalogService } from '#/services/model-catalog.ts';
 
 import { join } from 'node:path';
 import { loadAll, loadAuth, saveAuth, saveProfile } from '@monad/home';

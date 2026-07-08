@@ -1,11 +1,11 @@
 import type { NativeAgentRuntime, NativeAgentRuntimeInfoResponse, SessionId } from '@monad/protocol';
-import type { createDaemonHandlers } from '@/handlers/daemon-handlers/index.ts';
-import type { ExternalAgentSessionRow } from '@/store/db/index.ts';
+import type { createDaemonHandlers } from '#/handlers/daemon-handlers/index.ts';
+import type { ExternalAgentSessionRow } from '#/store/db/index.ts';
 
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { nativeAgentRuntimeSchema } from '@monad/protocol';
 
-import { HandlerError } from '@/handlers/handler-error.ts';
+import { HandlerError } from '#/handlers/handler-error.ts';
 
 export interface NativeAgentRuntimeBinding {
   agentId: string;

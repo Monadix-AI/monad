@@ -9,10 +9,10 @@ import { HOOK_EVENTS } from '@monad/protocol';
 import { Button, Skeleton } from '@monad/ui';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { useT } from '@/components/I18nProvider';
-import { PanelShell } from '@/components/ui/panel-shell';
-import { StudioBreadcrumbHeader } from '@/features/studio/StudioBreadcrumbHeader';
-import { useHooksSettings } from '@/hooks/use-hooks-settings';
+import { useT } from '#/components/I18nProvider';
+import { PanelShell } from '#/components/ui/panel-shell';
+import { StudioBreadcrumbHeader } from '#/features/studio/StudioBreadcrumbHeader';
+import { useHooksSettings } from '#/hooks/use-hooks-settings';
 import { HookEditorDialog } from './HookEditorDialog';
 import { HookFlow } from './HookFlow';
 

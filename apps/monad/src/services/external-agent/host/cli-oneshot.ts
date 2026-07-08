@@ -1,18 +1,18 @@
 import type { ExternalAgentSessionView } from '@monad/protocol';
-import type { LiveExternalAgentSession } from '@/services/external-agent/host/host-types.ts';
-import type { prepareManagedProjectRuntime } from '@/services/external-agent/managed-project.ts';
-import type { ExternalAgentProcess } from '@/services/external-agent/runtime-types.ts';
-import type { ExternalAgentLaunchSpec, ExternalAgentProviderAdapter } from '@/services/external-agent/types.ts';
-import type { ExternalAgentTargetId } from '@/store/db/external-agent-sessions.ts';
-import type { ExternalAgentSessionRow, Store } from '@/store/db/index.ts';
+import type { LiveExternalAgentSession } from '#/services/external-agent/host/host-types.ts';
+import type { prepareManagedProjectRuntime } from '#/services/external-agent/managed-project.ts';
+import type { ExternalAgentProcess } from '#/services/external-agent/runtime-types.ts';
+import type { ExternalAgentLaunchSpec, ExternalAgentProviderAdapter } from '#/services/external-agent/types.ts';
+import type { ExternalAgentTargetId } from '#/store/db/external-agent-sessions.ts';
+import type { ExternalAgentSessionRow, Store } from '#/store/db/index.ts';
 
-import { BoundedOutputBuffer } from '@/services/external-agent/bounded-output-buffer.ts';
-import { MAX_OUTPUT_SNAPSHOT } from '@/services/external-agent/constants.ts';
-import { ExternalAgentEventLog } from '@/services/external-agent/host/event-log.ts';
-import { toView } from '@/services/external-agent/host/host-helpers.ts';
-import { ExternalAgentOutputPipeline } from '@/services/external-agent/host/output-pipeline.ts';
-import { killExternalAgentProcess } from '@/services/external-agent/process.ts';
-import { createStreamingTextDecoder } from '@/services/external-agent/stream-decoder.ts';
+import { BoundedOutputBuffer } from '#/services/external-agent/bounded-output-buffer.ts';
+import { MAX_OUTPUT_SNAPSHOT } from '#/services/external-agent/constants.ts';
+import { ExternalAgentEventLog } from '#/services/external-agent/host/event-log.ts';
+import { toView } from '#/services/external-agent/host/host-helpers.ts';
+import { ExternalAgentOutputPipeline } from '#/services/external-agent/host/output-pipeline.ts';
+import { killExternalAgentProcess } from '#/services/external-agent/process.ts';
+import { createStreamingTextDecoder } from '#/services/external-agent/stream-decoder.ts';
 
 export interface ExternalAgentOneshotRunnerContext {
   live: Map<string, LiveExternalAgentSession>;

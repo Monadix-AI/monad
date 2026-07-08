@@ -5,19 +5,19 @@ import type {
   WorkspaceActionRequest,
   WorkspaceActionResponse
 } from '@monad/protocol';
-import type { McpConnection } from '@/capabilities/tools';
-import type { Tool, ToolBackends } from '@/capabilities/tools/types.ts';
-import type { SessionContext } from '@/handlers/session/context.ts';
+import type { McpConnection } from '#/capabilities/tools';
+import type { Tool, ToolBackends } from '#/capabilities/tools/types.ts';
+import type { SessionContext } from '#/handlers/session/context.ts';
 
 import { statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { isAbsolute, join, resolve } from 'node:path';
 
-import { connectMcpServer, createSandboxBackends, isDelegableTool } from '@/capabilities/tools';
-import { HandlerError } from '@/handlers/handler-error.ts';
-import { runWorkspaceAction } from '@/handlers/session/workspace-actions.ts';
-import { readWorkspaceGit } from '@/handlers/session/workspace-git.ts';
-import { createRemoteFsBackend, createRemoteTerminalBackend } from '@/services/delegation/delegation.ts';
+import { connectMcpServer, createSandboxBackends, isDelegableTool } from '#/capabilities/tools';
+import { HandlerError } from '#/handlers/handler-error.ts';
+import { runWorkspaceAction } from '#/handlers/session/workspace-actions.ts';
+import { readWorkspaceGit } from '#/handlers/session/workspace-git.ts';
+import { createRemoteFsBackend, createRemoteTerminalBackend } from '#/services/delegation/delegation.ts';
 
 /** Resolve + validate a working-folder path: expands a leading `~`, resolves a relative path against
  *  `base` (the session's current folder), then requires it to exist and be a directory. A relative

@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 
-import { isBrowserRequestAllowed, isLoopbackPeer } from '@/transports/http/browser-guard.ts';
+import { isBrowserRequestAllowed, isLoopbackPeer } from '#/transports/http/browser-guard.ts';
 
 const req = (headers: Record<string, string>) => new Request('http://127.0.0.1:52749/v1/sessions', { headers });
 

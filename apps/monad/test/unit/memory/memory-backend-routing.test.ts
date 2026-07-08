@@ -2,16 +2,16 @@
 // facade to it, and falls back to built-in when mem0 is unavailable.
 
 import type { SessionId } from '@monad/protocol';
-import type { ModelRouter } from '@/agent/index.ts';
-import type { BuildMem0Options, Mem0Client, Mem0Memory } from '@/services/memory/mem0.ts';
+import type { ModelRouter } from '#/agent/index.ts';
+import type { BuildMem0Options, Mem0Client, Mem0Memory } from '#/services/memory/mem0.ts';
 
 import { expect, test } from 'bun:test';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { createMemoryService } from '@/services/memory/index.ts';
-import { createStore, projectKey } from '@/store/db/index.ts';
+import { createMemoryService } from '#/services/memory/index.ts';
+import { createStore, projectKey } from '#/store/db/index.ts';
 
 const silent = { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} } as never;
 const router: ModelRouter = { stream: () => (async function* () {})(), complete: async () => ({ text: '' }) };

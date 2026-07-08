@@ -4,7 +4,7 @@
 // filesystem (containment), the permission round-trip through the gate, and multi-turn delegate reuse.
 
 import type { SessionId } from '@monad/protocol';
-import type { ToolContext, ToolGate } from '@/capabilities/tools/types.ts';
+import type { ToolContext, ToolGate } from '#/capabilities/tools/types.ts';
 
 import { afterAll, expect, test } from 'bun:test';
 import { resolve } from 'node:path';
@@ -13,7 +13,7 @@ import {
   clearAcpDelegatesForSession,
   createAcpDelegateTool,
   directDelegate
-} from '@/services/delegation/acp-delegate.ts';
+} from '#/services/delegation/acp-delegate.ts';
 
 const fixture = resolve(import.meta.dir, '../fixtures/mock-acp-agent.ts');
 

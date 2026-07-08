@@ -1,11 +1,11 @@
 import type { Dirent } from 'node:fs';
 import type { GetSkillContentResponse, WorkspaceExperienceDefinition } from '@monad/protocol';
-import type { RegisteredWorkspaceExperience } from '@/handlers/atom-pack/atom-pack-registry.ts';
+import type { RegisteredWorkspaceExperience } from '#/handlers/atom-pack/atom-pack-registry.ts';
 
 import { lstat, readdir, realpath, stat } from 'node:fs/promises';
 import { isAbsolute, join, normalize, relative, sep } from 'node:path';
 
-import { HandlerError } from '@/handlers/handler-error.ts';
+import { HandlerError } from '#/handlers/handler-error.ts';
 
 export const SAFE_NAME = /^[a-z0-9][a-z0-9._-]*$/i;
 

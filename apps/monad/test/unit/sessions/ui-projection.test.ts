@@ -1,12 +1,16 @@
 import type { ChatMessage, Event, SessionId, UIItem } from '@monad/protocol';
-import type { ExternalAgentSessionSnapshot } from '@/handlers/session/ui-projection.ts';
+import type { ExternalAgentSessionSnapshot } from '#/handlers/session/ui-projection.ts';
 
 import { expect, test } from 'bun:test';
+import { builtinAgentAdapters } from '@monad/atoms/agent-adapters';
 import { newId } from '@monad/protocol';
 
-import { SessionUiProjector } from '@/handlers/session/ui-projection.ts';
+import { SessionUiProjector } from '#/handlers/session/ui-projection.ts';
+import { registerAgentAdapterImpl } from '#/services/external-agent/index.ts';
 
 const sessionId = 'ses_test' as SessionId;
+
+for (const adapter of builtinAgentAdapters) registerAgentAdapterImpl(adapter);
 
 function event(type: Event['type'], payload: Record<string, unknown>, at = new Date().toISOString()): Event {
   return {
@@ -71,6 +75,33 @@ test('projects display tool result when present', () => {
   expect(events.at(-1)).toMatchObject({
     kind: 'upsert',
     item: { kind: 'tool', id: 'call_1', output: '\x1B[31mred\x1B[0m plain', status: 'ok' }
+  });
+});
+
+test('projects structured tool error codes', () => {
+  const projector = new SessionUiProjector();
+  projector.applyEvent(
+    event('tool.called', { toolCallId: 'call_1', tool: 'process_control', input: { action: 'logs', id: 'proc_nope' } })
+  );
+  const events = projector.applyEvent(
+    event('tool.result', {
+      toolCallId: 'call_1',
+      tool: 'process_control',
+      ok: false,
+      result: 'unknown process id "proc_nope"',
+      errorCode: 'PROCESS_NOT_FOUND'
+    })
+  );
+
+  expect(events.at(-1)).toMatchObject({
+    kind: 'upsert',
+    item: {
+      kind: 'tool',
+      id: 'call_1',
+      status: 'error',
+      output: 'unknown process id "proc_nope"',
+      errorCode: 'PROCESS_NOT_FOUND'
+    }
   });
 });
 

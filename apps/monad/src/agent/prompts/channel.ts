@@ -1,4 +1,4 @@
-import type { ChannelRouteAction } from '@/handlers/session/channel-routing.ts';
+import type { ChannelRouteAction } from '#/handlers/session/channel-routing.ts';
 
 export interface ChannelParticipant {
   id: string;

@@ -4,9 +4,9 @@
 import { describe, expect, test } from 'bun:test';
 import { createDefaultConfig } from '@monad/home';
 
-import { buildBrowserMcpServer, buildComputerMcpServer } from '@/config/mcp-presets.ts';
-import { resolveEffectiveSandboxMode } from '@/config/resolve.ts';
-import { resolveSecretMap, resolveSecretRef } from '@/config/secrets.ts';
+import { buildBrowserMcpServer, buildComputerMcpServer } from '#/config/mcp-presets.ts';
+import { resolveEffectiveSandboxMode } from '#/config/resolve.ts';
+import { resolveSecretMap, resolveSecretRef } from '#/config/secrets.ts';
 
 describe('resolveEffectiveSandboxMode', () => {
   test('uses the per-agent mode when the global restriction is disabled', () => {

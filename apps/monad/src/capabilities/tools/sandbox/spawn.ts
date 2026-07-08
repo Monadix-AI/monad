@@ -14,7 +14,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { noneLauncher, sandboxCredential } from '@monad/sdk-atom';
 
-import { daemonChildProcesses, killDaemonProcessTree } from '@/infra/daemon-child-processes.ts';
+import { daemonChildProcesses, killDaemonProcessTree } from '#/infra/daemon-child-processes.ts';
 
 // The launcher contract (SandboxLauncher / SandboxPolicy) and the passthrough noneLauncher live in
 // @monad/sdk-atom — the `sandbox` atom kind — so launchers in @monad/atoms and third-party packs

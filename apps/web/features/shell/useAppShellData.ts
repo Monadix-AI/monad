@@ -20,8 +20,8 @@ import {
 } from '@monad/client-rtk';
 import { useMemo } from 'react';
 
-import { buildWorkspaceProjects } from '@/lib/workspace-sessions';
-import { useWorkspaceShellStore, type WorkspaceShellState } from '@/lib/workspace-shell-store';
+import { buildWorkspaceProjects } from '#/lib/workspace-sessions';
+import { useWorkspaceShellStore, type WorkspaceShellState } from '#/lib/workspace-shell-store';
 
 const EMPTY_PROFILES: ProfileView[] = [];
 

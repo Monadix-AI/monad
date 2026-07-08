@@ -5,15 +5,15 @@ import type {
   SpawnSessionMemberRequest,
   WorkplaceProjectSessionMember
 } from '@monad/protocol';
-import type { SessionContext } from '@/handlers/session/context.ts';
-import type { ManagedExternalAgentProjectMember } from '@/handlers/session/handlers/messaging-members.ts';
-import type { SessionMember } from '@/store/db/session-members.ts';
+import type { SessionContext } from '#/handlers/session/context.ts';
+import type { ManagedExternalAgentProjectMember } from '#/handlers/session/handlers/messaging-members.ts';
+import type { SessionMember } from '#/store/db/session-members.ts';
 
 import { loadAll } from '@monad/home';
 import { newId } from '@monad/protocol';
 
-import { HandlerError } from '@/handlers/handler-error.ts';
-import { managedExternalAgentProjectMembers } from '@/handlers/session/handlers/messaging-members.ts';
+import { HandlerError } from '#/handlers/handler-error.ts';
+import { managedExternalAgentProjectMembers } from '#/handlers/session/handlers/messaging-members.ts';
 
 export interface SessionMembersDeps {
   spawnManagedSessionMember: (

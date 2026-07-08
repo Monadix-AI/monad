@@ -1,11 +1,11 @@
 import type { Event } from '@monad/protocol';
-import type { Tool } from '@/capabilities/tools/types.ts';
+import type { Tool } from '#/capabilities/tools/types.ts';
 
 import { expect, test } from 'bun:test';
 
-import { invokeTool, ToolGateDeniedError } from '@/capabilities/tools/invoke.ts';
-import { toolResult } from '@/capabilities/tools/types.ts';
-import { OversightService } from '@/services/oversight.ts';
+import { invokeTool, ToolGateDeniedError } from '#/capabilities/tools/invoke.ts';
+import { toolResult } from '#/capabilities/tools/types.ts';
+import { OversightService } from '#/services/oversight.ts';
 
 const gateReq = { tool: 'email_send', sessionId: 'ses_TEST', highRisk: true, input: { to: ['a@b.c'] } };
 

@@ -6,7 +6,7 @@ import { Button, cn } from '@monad/ui';
 import { Dialog as DialogPrimitive } from 'radix-ui';
 import * as React from 'react';
 
-import { useT } from '@/components/I18nProvider';
+import { useT } from '#/components/I18nProvider';
 
 function Dialog({ ...props }: React.ComponentProps<typeof DialogPrimitive.Root>) {
   return (

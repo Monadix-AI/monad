@@ -1,13 +1,13 @@
 import type { MonadPaths } from '@monad/home';
 import type { createLogger } from '@monad/logger';
-import type { Store } from '@/store/db/index.ts';
+import type { Store } from '#/store/db/index.ts';
 
 import { existsSync } from 'node:fs';
 
-import { pathDelimiterFor } from '@/infra/platform-path.ts';
-import { developerLogsDir } from '@/services/developer-log.ts';
-import { sweepStaleLogs } from '@/services/log-maintenance.ts';
-import { ensureDevProvider } from '@/store/home/dev-init.ts';
+import { pathDelimiterFor } from '#/infra/platform-path.ts';
+import { developerLogsDir } from '#/services/developer-log.ts';
+import { sweepStaleLogs } from '#/services/log-maintenance.ts';
+import { ensureDevProvider } from '#/store/home/dev-init.ts';
 
 type StartupLogger = Pick<ReturnType<typeof createLogger>, 'info' | 'warn'>;
 

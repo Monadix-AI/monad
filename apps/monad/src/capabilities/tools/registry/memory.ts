@@ -4,10 +4,10 @@
 // capture/recall split that hooks make clean. Notes are session-scoped and stored as one JSON blob
 // under `agent:notes`, so the backend only needs get/set (no list-by-prefix).
 
-import type { Tool, ToolContext, ToolInputSchema } from '@/capabilities/tools/types.ts';
+import type { Tool, ToolContext, ToolInputSchema } from '#/capabilities/tools/types.ts';
 import type { ToolModule } from './contract.ts';
 
-import { toolResult } from '@/capabilities/tools/types.ts';
+import { toolResult } from '#/capabilities/tools/types.ts';
 
 /** Minimal key/value backend (the daemon wires this to @monad/store's session memory). */
 export interface NoteStore {

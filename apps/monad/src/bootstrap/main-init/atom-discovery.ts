@@ -6,14 +6,14 @@
 
 import type { MonadConfig, MonadPaths } from '@monad/home';
 import type { AtomDescriptor } from '@monad/protocol';
-import type { AtomConflict } from '@/atoms/resolve.ts';
-import type { AtomPackRegistry } from '@/handlers/atom-pack/index.ts';
-import type { CommandRegistry } from '@/handlers/commands/index.ts';
-import type { ModelService } from '@/services/model.ts';
+import type { AtomConflict } from '#/atoms/resolve.ts';
+import type { AtomPackRegistry } from '#/handlers/atom-pack/index.ts';
+import type { CommandRegistry } from '#/handlers/commands/index.ts';
+import type { ModelService } from '#/services/model.ts';
 
-import { registerSandboxLauncher } from '@/capabilities/tools';
-import { createWorkspaceExperienceSnapshot } from '@/handlers/atom-pack/atom-pack-content.ts';
-import { registerAgentAdapterImpl } from '@/services/external-agent/index.ts';
+import { registerSandboxLauncher } from '#/capabilities/tools';
+import { createWorkspaceExperienceSnapshot } from '#/handlers/atom-pack/atom-pack-content.ts';
+import { registerAgentAdapterImpl } from '#/services/external-agent/index.ts';
 import { createChannelRegistry } from '../channels.ts';
 import { finalizeSandboxLauncher } from '../sandbox.ts';
 

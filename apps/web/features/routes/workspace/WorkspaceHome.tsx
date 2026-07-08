@@ -15,9 +15,9 @@ import {
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Button } from '@monad/ui';
 
-import { useT } from '@/components/I18nProvider';
-import { ThemeToggle } from '@/components/ThemeToggle';
-import { PanelShellHeader } from '@/components/ui/panel-shell';
+import { useT } from '#/components/I18nProvider';
+import { ThemeToggle } from '#/components/ThemeToggle';
+import { PanelShellHeader } from '#/components/ui/panel-shell';
 
 interface WorkspaceHomeProps {
   agentSession: Session | null;

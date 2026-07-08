@@ -1,9 +1,9 @@
 import type { Event, SessionId, SessionUiEvent } from '@monad/protocol';
-import type { EventSink, SessionContext } from '@/handlers/session/context.ts';
+import type { EventSink, SessionContext } from '#/handlers/session/context.ts';
 
-import { parseDurableSummary } from '@/agent/history.ts';
-import { isChannelStructuredSession } from '@/handlers/session/handlers/messaging-members.ts';
-import { SessionUiProjector } from '@/handlers/session/ui-projection.ts';
+import { parseDurableSummary } from '#/agent/history.ts';
+import { isChannelStructuredSession } from '#/handlers/session/handlers/messaging-members.ts';
+import { SessionUiProjector } from '#/handlers/session/ui-projection.ts';
 
 // Size of the live UI snapshot window. Older history is paged lazily over GET /ui-items.
 // Keep ≥ a realistic single agent round so a tool call+result pair never straddles the window.

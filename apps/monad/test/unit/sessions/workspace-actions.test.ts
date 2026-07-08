@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 
-import { workspaceActionCommands, workspaceActionLabel } from '@/handlers/session/workspace-actions.ts';
+import { workspaceActionCommands, workspaceActionLabel } from '#/handlers/session/workspace-actions.ts';
 
 const cwd = process.platform === 'win32' ? 'C:\\work\\repo' : '/work/repo';
 

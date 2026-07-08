@@ -6,18 +6,18 @@ import type {
   SessionId,
   SessionMcpServer
 } from '@monad/protocol';
-import type { ChannelParticipant } from '@/agent/prompts/channel.ts';
-import type { SessionContext } from '@/handlers/session/context.ts';
-import type { createAcpChannelDelegation } from '@/handlers/session/handlers/acp-channel-delegation.ts';
-import type { createForwardAcpHandler } from '@/handlers/session/handlers/forward-acp.ts';
-import type { createForwardExternalAgentHandler } from '@/handlers/session/handlers/forward-external-agent.ts';
-import type { createManagedExternalAgentDelivery } from '@/handlers/session/handlers/managed-external-agent-delivery.ts';
+import type { ChannelParticipant } from '#/agent/prompts/channel.ts';
+import type { SessionContext } from '#/handlers/session/context.ts';
+import type { createAcpChannelDelegation } from '#/handlers/session/handlers/acp-channel-delegation.ts';
+import type { createForwardAcpHandler } from '#/handlers/session/handlers/forward-acp.ts';
+import type { createForwardExternalAgentHandler } from '#/handlers/session/handlers/forward-external-agent.ts';
+import type { createManagedExternalAgentDelivery } from '#/handlers/session/handlers/managed-external-agent-delivery.ts';
 
 import { loadAll } from '@monad/home';
 
-import { buildChannelTurnContext } from '@/agent/prompts/channel.ts';
-import { routeChannelMessage } from '@/handlers/session/channel-routing.ts';
-import { messageTextWithAttachments } from '@/handlers/session/handlers/messaging-attachments.ts';
+import { buildChannelTurnContext } from '#/agent/prompts/channel.ts';
+import { routeChannelMessage } from '#/handlers/session/channel-routing.ts';
+import { messageTextWithAttachments } from '#/handlers/session/handlers/messaging-attachments.ts';
 import {
   channelDelegateMcpServers,
   externalAgentProjectMemberDisplayName,
@@ -25,7 +25,7 @@ import {
   externalAgentProjectMemberTemplateName,
   isWorkplaceProjectTarget,
   workplaceProjectMembers
-} from '@/handlers/session/handlers/messaging-members.ts';
+} from '#/handlers/session/handlers/messaging-members.ts';
 
 type SendHandler = (
   args: { sessionId: SessionId; onComplete?: (text: string) => void | Promise<void> } & SendMessageRequest

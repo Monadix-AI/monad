@@ -11,9 +11,9 @@ import type {
   ToolContext,
   ToolGate,
   ToolResult
-} from '@/capabilities/tools/types.ts';
+} from '#/capabilities/tools/types.ts';
 
-import { toolResultSchema } from '@/capabilities/tools/types.ts';
+import { toolResultSchema } from '#/capabilities/tools/types.ts';
 
 export class ToolGateDeniedError extends Error {
   constructor(message: string) {

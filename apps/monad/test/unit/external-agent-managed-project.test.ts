@@ -4,12 +4,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { builtinAgentAdapters } from '@monad/atoms/agent-adapters';
 
-import { registerAgentAdapterImpl } from '@/services/external-agent/index.ts';
+import { registerAgentAdapterImpl } from '#/services/external-agent/index.ts';
 import {
   cleanupManagedProjectOrphanTokens,
   managedProjectLaunchMode,
   prepareManagedProjectRuntime
-} from '@/services/external-agent/managed-project.ts';
+} from '#/services/external-agent/managed-project.ts';
 
 // managed-project now reads launch mode / env / mcp config / prompt style from the adapter contract,
 // which the daemon populates at boot; register the built-ins so the direct-call unit tests resolve.

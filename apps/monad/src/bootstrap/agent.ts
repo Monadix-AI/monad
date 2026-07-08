@@ -6,17 +6,17 @@
 // is passed in: extra tools, the hook runner, and a live workspace prompt-slots getter.
 
 import type { MonadConfig, MonadPaths } from '@monad/home';
-import type { LoadedSkill } from '@/agent/index.ts';
-import type { UserPromptSlots } from '@/agent/prompts.ts';
-import type { FileObservationStore } from '@/capabilities/tools/types.ts';
-import type { createHookRunner } from '@/hooks/runner.ts';
-import type { EmbeddingIndexer } from '@/services/embedding-indexer.ts';
-import type { DelegatableAgent } from '@/services/generation/agent-persona.ts';
-import type { ClarifyService } from '@/services/generation/clarify.ts';
-import type { ModelService } from '@/services/model.ts';
-import type { ModelCatalogService } from '@/services/model-catalog.ts';
-import type { OversightService } from '@/services/oversight.ts';
-import type { Store } from '@/store/db/index.ts';
+import type { LoadedSkill } from '#/agent/index.ts';
+import type { UserPromptSlots } from '#/agent/prompts.ts';
+import type { FileObservationStore } from '#/capabilities/tools/types.ts';
+import type { createHookRunner } from '#/hooks/runner.ts';
+import type { EmbeddingIndexer } from '#/services/embedding-indexer.ts';
+import type { DelegatableAgent } from '#/services/generation/agent-persona.ts';
+import type { ClarifyService } from '#/services/generation/clarify.ts';
+import type { ModelService } from '#/services/model.ts';
+import type { ModelCatalogService } from '#/services/model-catalog.ts';
+import type { OversightService } from '#/services/oversight.ts';
+import type { Store } from '#/store/db/index.ts';
 
 import { createLogger } from '@monad/logger';
 
@@ -29,18 +29,18 @@ import {
   type SummaryStore,
   TokenLimiterContext,
   ToolResultEvictionContext
-} from '@/agent/index.ts';
-import { register as clarifyRegister } from '@/capabilities/tools/registry/clarify.ts';
-import { only } from '@/capabilities/tools/registry/contract.ts';
-import { register as delegateRegister } from '@/capabilities/tools/registry/delegate.ts';
-import { register as imageRegister } from '@/capabilities/tools/registry/image.ts';
-import { register as skillManageRegister } from '@/capabilities/tools/registry/skill-manage.ts';
-import { register as toolCallRegister } from '@/capabilities/tools/registry/tool-call.ts';
-import { register as toolSearchRegister } from '@/capabilities/tools/registry/tool-search.ts';
-import { register as ttsRegister } from '@/capabilities/tools/registry/tts.ts';
-import { register as visionRegister } from '@/capabilities/tools/registry/vision.ts';
-import { register as agentDelegateRegister } from '@/services/delegation/agent-delegate.ts';
-import { createInboundApprovalGate, type InboundApprovalMode } from '@/services/inbound-approval.ts';
+} from '#/agent/index.ts';
+import { register as clarifyRegister } from '#/capabilities/tools/registry/clarify.ts';
+import { only } from '#/capabilities/tools/registry/contract.ts';
+import { register as delegateRegister } from '#/capabilities/tools/registry/delegate.ts';
+import { register as imageRegister } from '#/capabilities/tools/registry/image.ts';
+import { register as skillManageRegister } from '#/capabilities/tools/registry/skill-manage.ts';
+import { register as toolCallRegister } from '#/capabilities/tools/registry/tool-call.ts';
+import { register as toolSearchRegister } from '#/capabilities/tools/registry/tool-search.ts';
+import { register as ttsRegister } from '#/capabilities/tools/registry/tts.ts';
+import { register as visionRegister } from '#/capabilities/tools/registry/vision.ts';
+import { register as agentDelegateRegister } from '#/services/delegation/agent-delegate.ts';
+import { createInboundApprovalGate, type InboundApprovalMode } from '#/services/inbound-approval.ts';
 
 const log = createLogger('bootstrap:agent');
 

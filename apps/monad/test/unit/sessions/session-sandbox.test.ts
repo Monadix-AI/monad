@@ -4,7 +4,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { createSessionSandboxService } from '@/services/session-sandbox.ts';
+import { createSessionSandboxService } from '#/services/session-sandbox.ts';
 
 async function base(): Promise<string> {
   return mkdtemp(join(tmpdir(), 'svc-sbx-'));

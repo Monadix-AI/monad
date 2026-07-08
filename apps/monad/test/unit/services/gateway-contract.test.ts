@@ -2,7 +2,7 @@ import type { ModelCall, ModelChunk, ModelProvider } from '@monad/sdk-atom';
 
 import { expect, test } from 'bun:test';
 
-import { type GatewayDeps, GatewayModelRouter, ModelProviderRegistry } from '@/agent/index.ts';
+import { type GatewayDeps, GatewayModelRouter, ModelProviderRegistry } from '#/agent/index.ts';
 
 // These exercise the gateway against the ai-sdk-FREE ModelProvider contract directly (no ai-sdk,
 // no fetch): the `complete()` aggregation fallback for providers that only implement `stream`, and

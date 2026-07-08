@@ -1,8 +1,8 @@
 import { expect, test } from 'bun:test';
 import { newId } from '@monad/protocol';
 
-import { createAgent } from '@/agent/index.ts';
-import { createStore } from '@/store/db/index.ts';
+import { createAgent } from '#/agent/index.ts';
+import { createStore } from '#/store/db/index.ts';
 
 // E2E: agent-core wired to a real Store (bun:sqlite in-memory). Validates that the
 // session repo interface is honoured end-to-end rather than just with a hand-rolled mock.

@@ -14,7 +14,7 @@ import { HugeiconsIcon } from '@hugeicons/react';
 import { Button, cn } from '@monad/ui';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { useT } from '@/components/I18nProvider';
+import { useT } from '#/components/I18nProvider';
 
 type ToastVariant = 'success' | 'error' | 'info';
 

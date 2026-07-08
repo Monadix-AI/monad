@@ -8,7 +8,7 @@ import { Button, Input, Label, Skeleton } from '@monad/ui';
 import Image from 'next/image';
 import { useEffect, useRef, useState } from 'react';
 
-import { useT } from '@/components/I18nProvider';
+import { useT } from '#/components/I18nProvider';
 
 const MAX_AVATAR_BYTES = 512 * 1024;
 const AVATAR_ACCEPT = 'image/png,image/jpeg,image/webp,image/gif';

@@ -1,8 +1,8 @@
-import type { ToolContext } from '@/capabilities/tools/types.ts';
+import type { ToolContext } from '#/capabilities/tools/types.ts';
 
 import { expect, test } from 'bun:test';
 
-import { extractReadable, webExtractTool } from '@/capabilities/tools';
+import { extractReadable, webExtractTool } from '#/capabilities/tools';
 
 const ctx: ToolContext = { sessionId: 's1', sandboxRoots: undefined, log: () => {} };
 

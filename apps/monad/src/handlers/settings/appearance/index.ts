@@ -1,6 +1,6 @@
 import type { MonadPaths } from '@monad/home';
 import type { AppearanceSettings, SetAppearanceSettingsRequest } from '@monad/protocol';
-import type { ConfigBus } from '@/services/config-bus.ts';
+import type { ConfigBus } from '#/services/config-bus.ts';
 
 import { loadAll, loadAuth, saveProfile } from '@monad/home';
 

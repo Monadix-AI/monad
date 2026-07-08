@@ -6,44 +6,44 @@ import type {
   ExternalAgentView,
   ProjectId
 } from '@monad/protocol';
-import type { ExternalAgentHostDeps, LiveExternalAgentSession } from '@/services/external-agent/host/host-types.ts';
-import type { ExternalAgentProcess, ExternalAgentTerminal } from '@/services/external-agent/runtime-types.ts';
-import type { ExternalAgentLaunchSpec } from '@/services/external-agent/types.ts';
-import type { ExternalAgentTargetId } from '@/store/db/external-agent-sessions.ts';
-import type { ExternalAgentSessionRow } from '@/store/db/index.ts';
+import type { ExternalAgentHostDeps, LiveExternalAgentSession } from '#/services/external-agent/host/host-types.ts';
+import type { ExternalAgentProcess, ExternalAgentTerminal } from '#/services/external-agent/runtime-types.ts';
+import type { ExternalAgentLaunchSpec } from '#/services/external-agent/types.ts';
+import type { ExternalAgentTargetId } from '#/store/db/external-agent-sessions.ts';
+import type { ExternalAgentSessionRow } from '#/store/db/index.ts';
 
 import { chmodSync, realpathSync, statSync } from 'node:fs';
 import { dirname, isAbsolute } from 'node:path';
 import { resolveDaemonUrl } from '@monad/home';
 import { newId } from '@monad/protocol';
 
-import { connectAppServerStdio } from '@/services/external-agent/app-server-stdio.ts';
-import { connectAppServerUnix } from '@/services/external-agent/app-server-unix.ts';
+import { connectAppServerStdio } from '#/services/external-agent/app-server-stdio.ts';
+import { connectAppServerUnix } from '#/services/external-agent/app-server-unix.ts';
 import {
   connectAppServerWs,
   dialAppServerWs,
   dialAppServerWsWithRetry
-} from '@/services/external-agent/app-server-ws.ts';
-import { BoundedOutputBuffer } from '@/services/external-agent/bounded-output-buffer.ts';
-import { MAX_OUTPUT_SNAPSHOT } from '@/services/external-agent/constants.ts';
-import { ExternalAgentAppServerConnectionManager } from '@/services/external-agent/host/app-server-connection.ts';
-import { ExternalAgentOneshotRunner } from '@/services/external-agent/host/cli-oneshot.ts';
-import { ExternalAgentEventLog } from '@/services/external-agent/host/event-log.ts';
-import { APP_SERVER_STARTUP_TIMEOUT_MS } from '@/services/external-agent/host/host-constants.ts';
-import { toView } from '@/services/external-agent/host/host-helpers.ts';
-import { ExternalAgentObservationHub } from '@/services/external-agent/host/observation-hub.ts';
-import { ExternalAgentOutputPipeline } from '@/services/external-agent/host/output-pipeline.ts';
+} from '#/services/external-agent/app-server-ws.ts';
+import { BoundedOutputBuffer } from '#/services/external-agent/bounded-output-buffer.ts';
+import { MAX_OUTPUT_SNAPSHOT } from '#/services/external-agent/constants.ts';
+import { ExternalAgentAppServerConnectionManager } from '#/services/external-agent/host/app-server-connection.ts';
+import { ExternalAgentOneshotRunner } from '#/services/external-agent/host/cli-oneshot.ts';
+import { ExternalAgentEventLog } from '#/services/external-agent/host/event-log.ts';
+import { APP_SERVER_STARTUP_TIMEOUT_MS } from '#/services/external-agent/host/host-constants.ts';
+import { toView } from '#/services/external-agent/host/host-helpers.ts';
+import { ExternalAgentObservationHub } from '#/services/external-agent/host/observation-hub.ts';
+import { ExternalAgentOutputPipeline } from '#/services/external-agent/host/output-pipeline.ts';
 import {
   buildExternalAgentLaunch,
   getExternalAgentProviderAdapter,
   resolveExternalAgentLaunchCommand
-} from '@/services/external-agent/index.ts';
+} from '#/services/external-agent/index.ts';
 import {
   cleanupManagedProjectRuntimeToken,
   prepareManagedProjectRuntime
-} from '@/services/external-agent/managed-project.ts';
-import { killExternalAgentProcess, pickPtyFallbackLaunchMode } from '@/services/external-agent/process.ts';
-import { createStreamingTextDecoder } from '@/services/external-agent/stream-decoder.ts';
+} from '#/services/external-agent/managed-project.ts';
+import { killExternalAgentProcess, pickPtyFallbackLaunchMode } from '#/services/external-agent/process.ts';
+import { createStreamingTextDecoder } from '#/services/external-agent/stream-decoder.ts';
 
 export function resolveExternalAgentManagedServerUrl(opts: {
   serverUrl?: string;

@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 
-import { domainMatches, type EgressPolicy, isEgressAllowed, normalizeHost } from '@/capabilities/tools';
+import { domainMatches, type EgressPolicy, isEgressAllowed, normalizeHost } from '#/capabilities/tools';
 
 test('normalizeHost lowercases and strips brackets / trailing dot', () => {
   expect(normalizeHost('Example.COM.')).toBe('example.com');

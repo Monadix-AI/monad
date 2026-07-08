@@ -4,7 +4,7 @@
 
 import type { Dirent } from 'node:fs';
 import type { AtomKind, AtomPackManifestWire } from '@monad/protocol';
-import type { AtomPackSource } from '@/atoms/install/source.ts';
+import type { AtomPackSource } from '#/atoms/install/source.ts';
 
 import { mkdir, readdir, rm } from 'node:fs/promises';
 import { basename, dirname, join, posix } from 'node:path';
@@ -12,9 +12,9 @@ import { parseAtomPackManifest } from '@monad/protocol';
 import { SDK_VERSION } from '@monad/sdk-atom';
 import { z } from 'zod';
 
-import { assertAtomPackMonadCompatibility } from '@/atoms/compat.ts';
-import { scanBundle } from '@/atoms/install/scan.ts';
-import { parseAtomPackSource, sourceIdentity } from '@/atoms/install/source.ts';
+import { assertAtomPackMonadCompatibility } from '#/atoms/compat.ts';
+import { scanBundle } from '#/atoms/install/scan.ts';
+import { parseAtomPackSource, sourceIdentity } from '#/atoms/install/source.ts';
 
 /** The `.install.json` written next to each installed atom pack. Every field is optional: drop-in
  *  packs have no record, and `enabled`/`sourceId` were added over time. Schema-first because the
@@ -230,4 +230,4 @@ export async function installAtomPack(spec: string, deps: InstallAtomPackDeps): 
   return { name: installedName, atoms: manifest.atoms, warnings, installed: true, dir };
 }
 
-export { parseAtomPackSource } from '@/atoms/install/source.ts';
+export { parseAtomPackSource } from '#/atoms/install/source.ts';

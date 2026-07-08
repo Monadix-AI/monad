@@ -1,8 +1,8 @@
 import type { ModelProfileRoutes, ModelRoles, SetProfileRequest } from '@monad/protocol';
-import type { ModelContext } from '@/handlers/settings/model/context.ts';
+import type { ModelContext } from '#/handlers/settings/model/context.ts';
 
-import { HandlerError } from '@/handlers/handler-error.ts';
-import { profileToView, viewToProfile } from '@/handlers/settings/model/utils.ts';
+import { HandlerError } from '#/handlers/handler-error.ts';
+import { profileToView, viewToProfile } from '#/handlers/settings/model/utils.ts';
 
 const DEFAULT_PROFILE_ALIAS = 'default';
 

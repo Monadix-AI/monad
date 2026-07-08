@@ -14,10 +14,10 @@ import { existsSync } from 'node:fs';
 import { chmod, mkdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import { untar } from '@/atoms/install/untar.ts';
-import { createReleaseAssetFetcher, type ReleaseAssetFetcher } from '@/capabilities/mcp/install/binary.ts';
-import { unzip } from '@/capabilities/mcp/install/unzip.ts';
-import { daemonChildProcesses, killDaemonProcessTree } from '@/infra/daemon-child-processes.ts';
+import { untar } from '#/atoms/install/untar.ts';
+import { createReleaseAssetFetcher, type ReleaseAssetFetcher } from '#/capabilities/mcp/install/binary.ts';
+import { unzip } from '#/capabilities/mcp/install/unzip.ts';
+import { daemonChildProcesses, killDaemonProcessTree } from '#/infra/daemon-child-processes.ts';
 
 const REPO = { owner: 'qdrant', repo: 'qdrant' };
 // Pinned default; overridable via memory.mem0.qdrant.version. Bump deliberately (the release's

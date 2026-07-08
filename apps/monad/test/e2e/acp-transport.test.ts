@@ -2,8 +2,8 @@
 // duplex pipe — the same wire path Zed would use, minus stdio framing.
 
 import type { RequestPermissionResponse, SessionNotification, Stream } from '@agentclientprotocol/sdk';
-import type { ModelMessage, ModelResult, ModelRouter } from '@/agent/index.ts';
-import type { Tool } from '@/capabilities/tools/types.ts';
+import type { ModelMessage, ModelResult, ModelRouter } from '#/agent/index.ts';
+import type { Tool } from '#/capabilities/tools/types.ts';
 
 import { expect, spyOn, test } from 'bun:test';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
@@ -11,9 +11,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { client as acpClient, ndJsonStream, PROTOCOL_VERSION } from '@agentclientprotocol/sdk';
 
-import { fileReadTool, fileWriteTool } from '@/capabilities/tools';
-import { toolResult } from '@/capabilities/tools/types.ts';
-import { connectAcp } from '@/transports/acp/connection.ts';
+import { fileReadTool, fileWriteTool } from '#/capabilities/tools';
+import { toolResult } from '#/capabilities/tools/types.ts';
+import { connectAcp } from '#/transports/acp/connection.ts';
 import { buildHandlers, mockModel } from '../helpers.ts';
 
 type Step = string | { tool: string; input?: unknown };

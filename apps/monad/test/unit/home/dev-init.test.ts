@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { computeInitStatus, initMonadHome, loadAll, loadAuth, pathsForHome } from '@monad/home';
 
-import { defaultSeedPath, ensureDevProvider } from '@/store/home/dev-init.ts';
+import { defaultSeedPath, ensureDevProvider } from '#/store/home/dev-init.ts';
 
 function makePaths(base: string): MonadPaths {
   return pathsForHome(base);

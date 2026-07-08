@@ -3,7 +3,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { createSkillManageTool } from '@/capabilities/tools/registry/skill-manage.ts';
+import { createSkillManageTool } from '#/capabilities/tools/registry/skill-manage.ts';
 
 let dir: string;
 const ctx = { sessionId: 'ses_x', log: () => {} };

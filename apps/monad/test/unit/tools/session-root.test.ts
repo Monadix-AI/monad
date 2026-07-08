@@ -10,7 +10,7 @@ import {
   sandboxDirName,
   sessionSandboxPath,
   sweepOrphanSandboxes
-} from '@/capabilities/tools';
+} from '#/capabilities/tools';
 
 const made: string[] = [];
 async function base(): Promise<string> {

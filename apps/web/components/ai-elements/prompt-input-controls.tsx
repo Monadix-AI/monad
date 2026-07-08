@@ -29,14 +29,14 @@ import {
   CommandItem,
   CommandList,
   CommandSeparator
-} from '@/components/ui/command';
+} from '#/components/ui/command';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu';
-import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
+} from '#/components/ui/dropdown-menu';
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '#/components/ui/hover-card';
 
 export type PromptInputHeaderProps = Omit<ComponentProps<typeof InputGroupAddon>, 'align'>;
 

@@ -6,9 +6,9 @@ import { createI18n } from '@monad/i18n';
 import { enMessages as i18nMessages } from '@monad/i18n/messages';
 import { defineCommand } from '@monad/sdk-atom';
 
-import { makeCommandRunContext } from '@/handlers/commands/context.ts';
-import { dispatchCommand } from '@/handlers/commands/dispatch.ts';
-import { CommandRegistry } from '@/handlers/commands/index.ts';
+import { makeCommandRunContext } from '#/handlers/commands/context.ts';
+import { dispatchCommand } from '#/handlers/commands/dispatch.ts';
+import { CommandRegistry } from '#/handlers/commands/index.ts';
 import { seededCommandRegistry } from '../../helpers.ts';
 
 type ServicesOver = Partial<Parameters<typeof makeCommandRunContext>[0]['services']>;

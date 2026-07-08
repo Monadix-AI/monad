@@ -4,7 +4,7 @@ import { useInstallAtomPackMutation, useUploadAtomPackMutation } from '@monad/cl
 import { Badge, Button, Input, Label } from '@monad/ui';
 import { useState } from 'react';
 
-import { useT } from '@/components/I18nProvider';
+import { useT } from '#/components/I18nProvider';
 
 export function InstallForm({ onCancel, onInstalled }: { onCancel: () => void; onInstalled: () => void }) {
   const t = useT();

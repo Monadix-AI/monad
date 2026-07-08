@@ -1,5 +1,5 @@
 import type { EmbedCall, EmbedResult, ImageCall, ImageResult, SpeechCall, SpeechResult } from '@monad/sdk-atom';
-import type { ModelChunk, ModelResult, ModelRouter, ModelUsage, ToolCall } from '@/agent/index.ts';
+import type { ModelChunk, ModelResult, ModelRouter, ModelUsage, ToolCall } from '#/agent/index.ts';
 
 class MockModelBuilder {
   private readonly chunks: ModelChunk[] = [];

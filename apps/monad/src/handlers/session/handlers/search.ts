@@ -1,5 +1,5 @@
 import type { SearchHit, SearchMode, SearchSessionsResponse, SessionId } from '@monad/protocol';
-import type { SessionContext } from '@/handlers/session/context.ts';
+import type { SessionContext } from '#/handlers/session/context.ts';
 
 function rrfMerge(keyword: SearchHit[], semantic: SearchHit[], limit: number): SearchHit[] {
   const K0 = 60;

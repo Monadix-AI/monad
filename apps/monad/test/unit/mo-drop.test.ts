@@ -7,10 +7,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Elysia } from 'elysia';
 
-import { buildSeedMessage, createMoModule, resolveDropPaths } from '@/handlers/mo/handlers.ts';
-import { MoService } from '@/services/mo.ts';
-import { createMoController } from '@/transports/http/mo/controller.ts';
-import { createHttpTransport } from '@/transports/http.ts';
+import { buildSeedMessage, createMoModule, resolveDropPaths } from '#/handlers/mo/handlers.ts';
+import { MoService } from '#/services/mo.ts';
+import { createMoController } from '#/transports/http/mo/controller.ts';
+import { createHttpTransport } from '#/transports/http.ts';
 import { buildHandlers, mockModel, serveTransport, TRANSPORTS } from '../helpers.ts';
 
 // Mo's routes are mounted on the app instance (not in createHttpTransport's type — see serve.ts).

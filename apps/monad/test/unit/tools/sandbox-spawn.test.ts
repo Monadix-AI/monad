@@ -13,8 +13,8 @@ import {
   noneLauncher,
   sandboxedSpawn,
   sandboxLauncher
-} from '@/capabilities/tools';
-import { isActiveLocalOsSandbox } from '@/capabilities/tools/sandbox/active-local.ts';
+} from '#/capabilities/tools';
+import { isActiveLocalOsSandbox } from '#/capabilities/tools/sandbox/active-local.ts';
 
 afterEach(() => {
   configureSandboxLauncher(noneLauncher);

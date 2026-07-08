@@ -1,9 +1,9 @@
 'use client';
 
 import type { NetworkRuntimeStatus } from '@monad/protocol';
-import type { SettingsSectionId } from '@/features/settings/sections';
-import type { StudioSectionId } from '@/features/studio/sections';
-import type { RemoteDaemonConnection } from '@/lib/daemon-connections';
+import type { SettingsSectionId } from '#/features/settings/sections';
+import type { StudioSectionId } from '#/features/studio/sections';
+import type { RemoteDaemonConnection } from '#/lib/daemon-connections';
 
 import { cn } from '@monad/ui';
 import { animate, motion, useMotionValue, useReducedMotion, useTransform } from 'motion/react';
@@ -20,8 +20,9 @@ import {
   useState
 } from 'react';
 
-import { useT } from '@/components/I18nProvider';
-import { ThemeToggle } from '@/components/ThemeToggle';
+import { useT } from '#/components/I18nProvider';
+import { ThemeToggle } from '#/components/ThemeToggle';
+import { useWorkspaceShellStore } from '#/lib/workspace-shell-store';
 import { DaemonMenu } from './SessionSidebarDaemonMenu';
 import {
   type ProjectItem,
@@ -39,10 +40,7 @@ import {
 } from './sidebar-trackpad-switch';
 
 interface Props {
-  autoCollapseOnPointerLeave?: boolean;
   projects: ProjectItem[];
-  collapsed: boolean;
-  overlay?: boolean;
   hasUpgrade?: boolean;
   showSettings: boolean;
   showStudio: boolean;
@@ -65,14 +63,10 @@ interface Props {
   onOpenProject: (id: string) => void;
   onOpenSettingsSection: (section: SettingsSectionId) => void;
   onOpenStudio: () => void;
-  onToggleProjectPinned: (id: string) => void;
   onOpenStudioSection: (section: StudioSectionId) => void;
-  onRequestCollapse?: () => void;
-  onRequestPersistentExpand?: () => void;
   onSwitchDaemonConnection: (
     request: { type: 'local' } | { connection: RemoteDaemonConnection; type: 'remote' }
   ) => void;
-  onToggleCollapsed: () => void;
   onCloseSettings: () => void;
   onToggleSettings: () => void;
 }
@@ -96,10 +90,7 @@ function clampSidebarWidth(width: number): number {
 }
 
 export function SessionSidebar({
-  autoCollapseOnPointerLeave,
   projects,
-  collapsed,
-  overlay,
   hasUpgrade,
   showSettings,
   showStudio,
@@ -122,16 +113,19 @@ export function SessionSidebar({
   onOpenProject,
   onOpenSettingsSection,
   onOpenStudio,
-  onToggleProjectPinned,
   onOpenStudioSection,
-  onRequestCollapse,
-  onRequestPersistentExpand,
   onSwitchDaemonConnection,
-  onToggleCollapsed,
   onCloseSettings,
   onToggleSettings
 }: Props) {
   const t = useT();
+  const collapsed = useWorkspaceShellStore((state) => state.sidebarCollapsed);
+  const overlay = useWorkspaceShellStore((state) => state.sidebarAutoReveal);
+  const collapseSidebar = useWorkspaceShellStore((state) => state.collapseSidebar);
+  const revealSidebar = useWorkspaceShellStore((state) => state.revealSidebar);
+  const toggleProjectPinned = useWorkspaceShellStore((state) => state.toggleProjectPinned);
+  const toggleSidebarCollapsed = useWorkspaceShellStore((state) => state.toggleSidebarCollapsed);
+  const autoCollapseOnPointerLeave = overlay;
   const [menuOpen, setMenuOpen] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR_WIDTH);
   const [resizing, setResizing] = useState(false);
@@ -149,6 +143,7 @@ export function SessionSidebar({
   const previousShowSettingsRef = useRef(showSettings);
   const routeDrivenScrollRef = useRef(false);
   const routeDrivenScrollClearTimerRef = useRef(0);
+  const resizingRef = useRef(false);
   const trackpadResetTimerRef = useRef(0);
   const trackpadFeedbackSampleRef = useRef({ time: 0, x: 0 });
   const trackpadFeedbackVelocityRef = useRef(0);
@@ -190,9 +185,9 @@ export function SessionSidebar({
   const onDaemonMenuOpenChange = useCallback(
     (open: boolean) => {
       setMenuOpen(open);
-      if (open && autoCollapseOnPointerLeave) onRequestPersistentExpand?.();
+      if (open && autoCollapseOnPointerLeave) revealSidebar();
     },
-    [autoCollapseOnPointerLeave, onRequestPersistentExpand]
+    [autoCollapseOnPointerLeave, revealSidebar]
   );
 
   const setMeasuredSidebarWidth = useCallback((width: number) => {
@@ -213,7 +208,17 @@ export function SessionSidebar({
       moveEvent: 'mousemove' | 'pointermove';
       upEvent: 'mouseup' | 'pointerup';
     }) => {
+      resizingRef.current = true;
       dragStartRef.current = { pointerX: clientX, width: sidebarWidth };
+      window.clearTimeout(trackpadResetTimerRef.current);
+      pagerGestureRef.current.reset();
+      trackpadFeedbackAnimationRef.current?.stop();
+      trackpadFeedback.set(0);
+      trackpadFeedbackSampleRef.current = { time: 0, x: 0 };
+      trackpadFeedbackVelocityRef.current = 0;
+      trackpadGestureActiveRef.current = false;
+      dragActiveRef.current = false;
+      dragPxRef.current = 0;
       setResizing(true);
 
       const previousCursor = document.body.style.cursor;
@@ -226,6 +231,7 @@ export function SessionSidebar({
         setMeasuredSidebarWidth(dragStartRef.current.width + resizeEvent.clientX - dragStartRef.current.pointerX);
       };
       const onResizeEnd = () => {
+        resizingRef.current = false;
         setResizing(false);
         document.body.style.cursor = previousCursor;
         document.body.style.userSelect = previousUserSelect;
@@ -239,12 +245,13 @@ export function SessionSidebar({
       window.addEventListener(upEvent, onResizeEnd);
       if (cancelEvent) window.addEventListener(cancelEvent, onResizeEnd);
     },
-    [setMeasuredSidebarWidth, sidebarWidth]
+    [setMeasuredSidebarWidth, sidebarWidth, trackpadFeedback]
   );
 
   const onResizePointerDown = useCallback(
     (event: ReactPointerEvent<HTMLHRElement>) => {
       event.preventDefault();
+      event.stopPropagation();
       suppressMouseResizeRef.current = true;
       window.setTimeout(() => {
         suppressMouseResizeRef.current = false;
@@ -263,6 +270,7 @@ export function SessionSidebar({
     (event: ReactMouseEvent<HTMLHRElement>) => {
       if (event.button !== 0 || suppressMouseResizeRef.current) return;
       event.preventDefault();
+      event.stopPropagation();
       beginResize({ clientX: event.clientX, moveEvent: 'mousemove', upEvent: 'mouseup' });
     },
     [beginResize]
@@ -424,6 +432,7 @@ export function SessionSidebar({
 
     const onScrollEnd = () => {
       if (routeDrivenScrollRef.current) return;
+      if (resizingRef.current) return;
       if (dragActiveRef.current) return;
       const nextPage = Math.max(
         0,
@@ -496,6 +505,7 @@ export function SessionSidebar({
     };
 
     const onWheel = (event: WheelEvent) => {
+      if (resizingRef.current) return;
       if (Math.abs(event.deltaX) <= Math.abs(event.deltaY)) {
         if (dragActiveRef.current) {
           window.clearTimeout(trackpadResetTimerRef.current);
@@ -603,7 +613,7 @@ export function SessionSidebar({
         if (nextTarget instanceof Element && nextTarget.closest('[data-sidebar-chrome="true"]')) return;
         setAutoRevealClosing(true);
         window.setTimeout(() => setAutoRevealClosing(false), AUTO_REVEAL_CLOSE_ANIMATION_MS);
-        onRequestCollapse?.();
+        collapseSidebar();
       }}
       ref={sidebarRef}
       style={expandedStyle}
@@ -615,7 +625,7 @@ export function SessionSidebar({
         <SidebarHeader
           collapsed={collapsed}
           onOpenWorkspace={onOpenWorkspace}
-          onToggleCollapsed={onToggleCollapsed}
+          onToggleCollapsed={toggleSidebarCollapsed}
           t={t}
         />
 
@@ -659,7 +669,7 @@ export function SessionSidebar({
                     monadChatActive={monadChatActive}
                     onOpenMonadChat={onOpenMonadChat}
                     onOpenProject={onOpenProject}
-                    onToggleProjectPinned={onToggleProjectPinned}
+                    onToggleProjectPinned={toggleProjectPinned}
                     projects={projects}
                     shortcutModifierLabel={shortcutModifierLabel}
                     showShortcutBadges={showShortcutBadges}

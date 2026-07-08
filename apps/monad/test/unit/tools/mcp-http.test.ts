@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, expect, test } from 'bun:test';
 
-import { connectMcpServer, type McpConnection } from '@/capabilities/tools';
+import { connectMcpServer, type McpConnection } from '#/capabilities/tools';
 
 // A minimal streamable-HTTP MCP server (application/json responses) to exercise the http
 // transport: initialize → initialized(202) → tools/list → tools/call, plus auth header.

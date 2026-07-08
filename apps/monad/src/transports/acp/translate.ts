@@ -3,7 +3,7 @@
 
 import type { ContentBlock, PlanEntry, SessionUpdate, StopReason, ToolKind } from '@agentclientprotocol/sdk';
 import type { Event, FinishReason } from '@monad/protocol';
-import type { ImageAttachment } from '@/agent/index.ts';
+import type { ImageAttachment } from '#/agent/index.ts';
 
 import { parseEventPayload } from '@monad/protocol';
 

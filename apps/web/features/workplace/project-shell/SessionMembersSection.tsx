@@ -19,7 +19,7 @@ import {
 } from '@monad/ui/components/AgentAvatar';
 import { useState } from 'react';
 
-import { useT } from '@/components/I18nProvider';
+import { useT } from '#/components/I18nProvider';
 
 type ProjectMember = ProjectController['projectMembers'][number];
 

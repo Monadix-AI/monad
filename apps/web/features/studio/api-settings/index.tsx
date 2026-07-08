@@ -2,16 +2,16 @@
 
 import { Copy01Icon, LoaderPinwheelIcon, Refresh01Icon, SendToMobileIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { Button, cn, Input, Label, ScrollArea, Skeleton, Switch, Textarea } from '@monad/ui';
+import { Button, cn, Input, Label, Skeleton, Switch, Textarea } from '@monad/ui';
 import { useEffect, useRef, useState } from 'react';
 
-import { type TFn, useT } from '@/components/I18nProvider';
-import { PanelShell } from '@/components/ui/panel-shell';
-import { StudioBreadcrumbHeader } from '@/features/studio/StudioBreadcrumbHeader';
-import { useAsyncAction } from '@/hooks/use-async-action';
-import { useOpenaiCompatSettings } from '@/hooks/use-openai-compat-settings';
-import { useMonadRuntime } from '@/lib/monad-runtime-provider';
-import { SECRET_INPUT_PASSWORD_MANAGER_PROPS } from '@/lib/secret-input-props';
+import { type TFn, useT } from '#/components/I18nProvider';
+import { PanelShell, PanelShellBody } from '#/components/ui/panel-shell';
+import { StudioBreadcrumbHeader } from '#/features/studio/StudioBreadcrumbHeader';
+import { useAsyncAction } from '#/hooks/use-async-action';
+import { useOpenaiCompatSettings } from '#/hooks/use-openai-compat-settings';
+import { useMonadRuntime } from '#/lib/monad-runtime-provider';
+import { SECRET_INPUT_PASSWORD_MANAGER_PROPS } from '#/lib/secret-input-props';
 
 function OpenaiCompatSettingsSkeleton() {
   return (
@@ -200,9 +200,9 @@ export function OpenaiCompatSettings({ embedded = false }: { onClose: () => void
         title={t('web.api.title')}
       />
 
-      <ScrollArea className="flex-1">
+      <PanelShellBody>
         <div className="flex flex-col gap-5 p-5">{body}</div>
-      </ScrollArea>
+      </PanelShellBody>
     </PanelShell>
   );
 }

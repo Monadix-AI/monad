@@ -5,14 +5,14 @@
 //   - agent_delegate_to → named in-process delegation runs the target subagent (P2)
 // The mock model is scripted per turn; tools record what actually ran via closures.
 
-import type { ModelResult, ModelRouter } from '@/agent/index.ts';
-import type { Tool, ToolContext } from '@/capabilities/tools/types.ts';
+import type { ModelResult, ModelRouter } from '#/agent/index.ts';
+import type { Tool, ToolContext } from '#/capabilities/tools/types.ts';
 
 import { describe, expect, test } from 'bun:test';
 
-import { toolResult } from '@/capabilities/tools/types.ts';
-import { createAgentDelegateTool } from '@/services/delegation/agent-delegate.ts';
-import { createHttpTransport } from '@/transports/http.ts';
+import { toolResult } from '#/capabilities/tools/types.ts';
+import { createAgentDelegateTool } from '#/services/delegation/agent-delegate.ts';
+import { createHttpTransport } from '#/transports/http.ts';
 import { buildHandlers, serveTransport, TRANSPORTS, type TransportHandle } from '../helpers.ts';
 
 type Step = string | { tool: string; input?: unknown };

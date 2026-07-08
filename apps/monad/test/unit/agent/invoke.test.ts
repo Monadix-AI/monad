@@ -1,10 +1,10 @@
-import type { Tool, ToolContext, ToolGate, ToolInputSchema } from '@/capabilities/tools/types.ts';
+import type { Tool, ToolContext, ToolGate, ToolInputSchema } from '#/capabilities/tools/types.ts';
 
 import { expect, test } from 'bun:test';
 
-import { fileReadTool, netFetchTool, ToolSecurityError } from '@/capabilities/tools';
-import { invokeTool, ToolGateDeniedError, ToolInputError, ToolResultError } from '@/capabilities/tools/invoke.ts';
-import { toolResult } from '@/capabilities/tools/types.ts';
+import { fileReadTool, netFetchTool, ToolSecurityError } from '#/capabilities/tools';
+import { invokeTool, ToolGateDeniedError, ToolInputError, ToolResultError } from '#/capabilities/tools/invoke.ts';
+import { toolResult } from '#/capabilities/tools/types.ts';
 
 const noopLog: ToolContext['log'] = () => {};
 const baseOpts = { sessionId: 'sess_1', log: noopLog };

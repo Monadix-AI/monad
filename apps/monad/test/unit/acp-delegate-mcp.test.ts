@@ -7,7 +7,7 @@ import type { McpServerConfig } from '@monad/home';
 import { expect, test } from 'bun:test';
 import { envRef } from '@monad/home';
 
-import { toAcpMcpServers } from '@/services/delegation/acp-delegate.ts';
+import { toAcpMcpServers } from '#/services/delegation/acp-delegate.ts';
 
 const trust = { autoApproveTools: [], hostEscape: false };
 const stdio = (over: Partial<McpServerConfig> = {}): McpServerConfig =>

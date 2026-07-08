@@ -21,11 +21,11 @@ import { Button, cn, ScrollArea, Separator, Switch } from '@monad/ui';
 import Image from 'next/image';
 import { useEffect, useMemo, useState } from 'react';
 
-import { useT } from '@/components/I18nProvider';
-import { AVATAR_STYLES } from '@/lib/avatar-styles';
-import { composerShortcutLabel, DEFAULT_COMPOSER_SETTINGS, normalizedComposerSettings } from '@/lib/composer-settings';
-import { isInteractiveCursorEnabled, setInteractiveCursorEnabled } from '@/lib/interactive-cursor';
-import { applyThemePreference, getThemePreference, type ThemePreference, transitionThemePreference } from '@/lib/theme';
+import { useT } from '#/components/I18nProvider';
+import { AVATAR_STYLES } from '#/lib/avatar-styles';
+import { composerShortcutLabel, DEFAULT_COMPOSER_SETTINGS, normalizedComposerSettings } from '#/lib/composer-settings';
+import { isInteractiveCursorEnabled, setInteractiveCursorEnabled } from '#/lib/interactive-cursor';
+import { applyThemePreference, getThemePreference, type ThemePreference, transitionThemePreference } from '#/lib/theme';
 
 const SEND_SHORTCUTS: ComposerSendShortcut[] = ['enter', 'mod-enter-for-multiline', 'mod-enter-always'];
 const FOLLOW_UP_BEHAVIORS: ComposerFollowUpBehavior[] = ['queue', 'steer'];

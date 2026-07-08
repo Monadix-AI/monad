@@ -23,38 +23,38 @@ import type {
   ExternalAgentObservationListener,
   LiveExternalAgentSession,
   ManagedProjectOutputHandler
-} from '@/services/external-agent/host/host-types.ts';
-import type { ExternalAgentProviderAdapter, ExternalAgentStartPreflight } from '@/services/external-agent/types.ts';
-import type { ExternalAgentTargetId } from '@/store/db/external-agent-sessions.ts';
-import type { ExternalAgentSessionRow } from '@/store/db/index.ts';
+} from '#/services/external-agent/host/host-types.ts';
+import type { ExternalAgentProviderAdapter, ExternalAgentStartPreflight } from '#/services/external-agent/types.ts';
+import type { ExternalAgentTargetId } from '#/store/db/external-agent-sessions.ts';
+import type { ExternalAgentSessionRow } from '#/store/db/index.ts';
 
 import { dirname } from 'node:path';
 import { externalAgentStreamItems } from '@monad/atoms/external-agent-observation';
 import { createLogger } from '@monad/logger';
 
-import { ExternalAgentAuthHost, type ExternalAgentAuthListener } from '@/services/external-agent/auth-host.ts';
-import { MAX_OUTPUT_SNAPSHOT } from '@/services/external-agent/constants.ts';
-import { ExternalAgentError } from '@/services/external-agent/errors.ts';
-import { ExternalAgentAppServerConnectionManager } from '@/services/external-agent/host/app-server-connection.ts';
-import { ExternalAgentOneshotRunner } from '@/services/external-agent/host/cli-oneshot.ts';
-import { ExternalAgentEventLog } from '@/services/external-agent/host/event-log.ts';
+import { ExternalAgentAuthHost, type ExternalAgentAuthListener } from '#/services/external-agent/auth-host.ts';
+import { MAX_OUTPUT_SNAPSHOT } from '#/services/external-agent/constants.ts';
+import { ExternalAgentError } from '#/services/external-agent/errors.ts';
+import { ExternalAgentAppServerConnectionManager } from '#/services/external-agent/host/app-server-connection.ts';
+import { ExternalAgentOneshotRunner } from '#/services/external-agent/host/cli-oneshot.ts';
+import { ExternalAgentEventLog } from '#/services/external-agent/host/event-log.ts';
 import {
   EXTERNAL_AGENT_IDLE_TIMEOUT_MS,
   HISTORY_PAGE_TIMEOUT_MS
-} from '@/services/external-agent/host/host-constants.ts';
-import { toView } from '@/services/external-agent/host/host-helpers.ts';
-import { ExternalAgentObservationHub } from '@/services/external-agent/host/observation-hub.ts';
-import { ExternalAgentObservationResolver } from '@/services/external-agent/host/observation-resolve.ts';
-import { ExternalAgentOutputPipeline } from '@/services/external-agent/host/output-pipeline.ts';
-import { ExternalAgentProcessLifecycle } from '@/services/external-agent/host/process-lifecycle.ts';
-import { ExternalAgentSessionLauncher } from '@/services/external-agent/host/session-launcher.ts';
-import { getExternalAgentProviderAdapter } from '@/services/external-agent/index.ts';
+} from '#/services/external-agent/host/host-constants.ts';
+import { toView } from '#/services/external-agent/host/host-helpers.ts';
+import { ExternalAgentObservationHub } from '#/services/external-agent/host/observation-hub.ts';
+import { ExternalAgentObservationResolver } from '#/services/external-agent/host/observation-resolve.ts';
+import { ExternalAgentOutputPipeline } from '#/services/external-agent/host/output-pipeline.ts';
+import { ExternalAgentProcessLifecycle } from '#/services/external-agent/host/process-lifecycle.ts';
+import { ExternalAgentSessionLauncher } from '#/services/external-agent/host/session-launcher.ts';
+import { getExternalAgentProviderAdapter } from '#/services/external-agent/index.ts';
 import {
   cleanupManagedProjectRuntimeToken,
   managedProjectRuntimeWorkspace
-} from '@/services/external-agent/managed-project.ts';
-import { killExternalAgentProcess } from '@/services/external-agent/process.ts';
-import { buildExternalAgentSpawnEnv, requireExternalAgent } from '@/services/external-agent/spawn-support.ts';
+} from '#/services/external-agent/managed-project.ts';
+import { killExternalAgentProcess } from '#/services/external-agent/process.ts';
+import { buildExternalAgentSpawnEnv, requireExternalAgent } from '#/services/external-agent/spawn-support.ts';
 
 export type { ExternalAgentHostDeps };
 

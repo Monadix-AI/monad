@@ -22,16 +22,16 @@ import type {
   WorkspaceExperienceApi,
   WorkspaceExperienceDefinition
 } from '@monad/sdk-atom';
-import type { AtomConflict } from '@/atoms/resolve.ts';
+import type { AtomConflict } from '#/atoms/resolve.ts';
 
 import { readdir, readFile } from 'node:fs/promises';
 import { isAbsolute, join, relative } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { parseAtomPackManifest } from '@monad/protocol';
 
-import { assertAtomPackMonadCompatibility } from '@/atoms/compat.ts';
-import { atomPackInstallRecordSchema } from '@/atoms/install/index.ts';
-import { loadChannelAtomPacks } from '@/channels/atom-pack-host.ts';
+import { assertAtomPackMonadCompatibility } from '#/atoms/compat.ts';
+import { atomPackInstallRecordSchema } from '#/atoms/install/index.ts';
+import { loadChannelAtomPacks } from '#/channels/atom-pack-host.ts';
 
 export interface DiscoverChannelsResult {
   factories: Map<ChannelType, ChannelAdapterFactory>;

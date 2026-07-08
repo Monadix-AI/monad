@@ -19,9 +19,9 @@ import {
   MessageActions,
   MessageContent,
   MessageResponse
-} from '@/components/ai-elements/message';
-import { Reasoning, ReasoningContent, ReasoningTrigger } from '@/components/ai-elements/reasoning';
-import { useT } from '@/components/I18nProvider';
+} from '#/components/ai-elements/message';
+import { Reasoning, ReasoningContent, ReasoningTrigger } from '#/components/ai-elements/reasoning';
+import { useT } from '#/components/I18nProvider';
 import { MessageBody } from './MessageBody';
 
 export interface Msg {

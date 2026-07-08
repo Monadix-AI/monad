@@ -12,10 +12,10 @@ import { createI18n } from '@monad/i18n';
 import { enMessages as i18nMessages } from '@monad/i18n/messages';
 import { newId } from '@monad/protocol';
 
-import { ChannelService } from '@/channels/channel.ts';
-import { createRenderer, splitForLimit } from '@/channels/render.ts';
-import { EventBus } from '@/services/event-bus.ts';
-import { createStore } from '@/store/db/index.ts';
+import { ChannelService } from '#/channels/channel.ts';
+import { createRenderer, splitForLimit } from '#/channels/render.ts';
+import { EventBus } from '#/services/event-bus.ts';
+import { createStore } from '#/store/db/index.ts';
 
 const EMPTY_AUTH: MonadAuth = { version: 1, activeProvider: null, updatedAt: '', credentialPool: {} };
 const t = createI18n({ locale: 'en', packs: [{ locale: 'en', name: 'English', messages: i18nMessages }] }).t;

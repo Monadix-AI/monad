@@ -5,8 +5,8 @@ import type { ListExternalAgentRuntimesResponse } from '@monad/protocol';
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 
-import { createStore } from '@/store/db/index.ts';
-import { createHttpTransport } from '@/transports/http.ts';
+import { createStore } from '#/store/db/index.ts';
+import { createHttpTransport } from '#/transports/http.ts';
 import { buildHandlers, mockModel, serveTransport, TRANSPORTS, type TransportHandle } from '../helpers.ts';
 
 function seedRunning(store: ReturnType<typeof createStore>, id: string, startedAt: string): void {

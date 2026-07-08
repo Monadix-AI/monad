@@ -11,7 +11,7 @@ import {
   type SessionUiEvent
 } from '@monad/protocol';
 
-import { createHttpTransport } from '@/transports/http.ts';
+import { createHttpTransport } from '#/transports/http.ts';
 import {
   buildHandlers,
   makeTestPaths,

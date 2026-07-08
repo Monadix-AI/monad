@@ -1,10 +1,10 @@
-import type { Tool } from '@/capabilities/tools/types.ts';
+import type { Tool } from '#/capabilities/tools/types.ts';
 
 import { expect, test } from 'bun:test';
 import { z } from 'zod';
 
-import { getCatalog } from '@/capabilities/tools/tool-catalog.ts';
-import { toolResult } from '@/capabilities/tools/types.ts';
+import { getCatalog } from '#/capabilities/tools/tool-catalog.ts';
+import { toolResult } from '#/capabilities/tools/types.ts';
 
 function makeTool(name: string, description = `desc for ${name}`): Tool {
   return { name, description, scopes: [], run: async () => toolResult('') };

@@ -12,7 +12,7 @@
 import { expect, test } from 'bun:test';
 import { HTTP_ROUTES } from '@monad/protocol';
 
-import { createHttpTransport } from '@/transports/http.ts';
+import { createHttpTransport } from '#/transports/http.ts';
 import { buildHandlers, mockModel } from '../helpers.ts';
 
 type LiveRoute = { method: string; path: string; hooks?: { detail?: { tags?: string[] } } };

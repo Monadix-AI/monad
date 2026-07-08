@@ -2,9 +2,9 @@
 
 import type { MessageId, SessionId, UIItem } from '@monad/protocol';
 import type { VirtualListHandle } from '@monad/ui/components/VirtualList';
-import type { SessionCommandMenuItem } from '@/features/routes/sessions/SessionRoute';
-import type { WorkspaceRouteProps } from '@/features/routes/workspace/WorkspaceRoute';
-import type { StudioSectionId } from '@/features/studio/sections';
+import type { SessionCommandMenuItem } from '#/features/routes/sessions/SessionRoute';
+import type { WorkspaceRouteProps } from '#/features/routes/workspace/WorkspaceRoute';
+import type { StudioSectionId } from '#/features/studio/sections';
 
 import {
   useApproveToolMutation,
@@ -20,8 +20,8 @@ import {
 import { useFirstItemIndex } from '@monad/ui/hooks/use-first-item-index';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { useT } from '@/components/I18nProvider';
-import { isRuntimeReady, runtimeSectionEnabled } from '@/features/init/init-readiness';
+import { useT } from '#/components/I18nProvider';
+import { isRuntimeReady, runtimeSectionEnabled } from '#/features/init/init-readiness';
 import {
   isSettingsPath,
   isStudioPath,
@@ -32,25 +32,26 @@ import {
   settingsSectionFromPathname,
   studioPath,
   studioSectionFromPathname
-} from '@/features/routes/route-paths';
+} from '#/features/routes/route-paths';
 import {
   activeSkillToken,
   buildCommandMenuItems,
   shouldActivateSlashCommandDiscovery,
   skillCommandMeta
-} from '@/features/routes/sessions/command-menu';
-import { type ViewItem, viewItemKey } from '@/features/session/chat-view-items';
-import { audioBlobToBase64 } from '@/features/session/voice-transcription';
-import { normalizeSettingsSection, type SettingsSectionId } from '@/features/settings/sections';
-import { SkillEditorDialog } from '@/features/studio/skills-settings/SkillEditorDialog';
-import { loadSkillContent } from '@/features/studio/skills-settings/utils';
-import { useChatComposer } from '@/hooks/use-chat-composer';
-import { pushShellUrl, replaceShellUrl, useShellPathname, useShellSearchParam } from '@/hooks/use-shell-location';
-import { useSidebarShortcuts } from '@/hooks/use-sidebar-shortcuts';
-import { useTranscriptHistory } from '@/hooks/use-transcript-history';
-import { normalizedComposerSettings } from '@/lib/composer-settings';
-import { useMonadRuntime } from '@/lib/monad-runtime-provider';
-import { useWorkspaceShellStore, type WorkspaceShellState } from '@/lib/workspace-shell-store';
+} from '#/features/routes/sessions/command-menu';
+import { type ViewItem, viewItemKey } from '#/features/session/chat-view-items';
+import { useSessionUiStore } from '#/features/session/session-ui-store';
+import { audioBlobToBase64 } from '#/features/session/voice-transcription';
+import { normalizeSettingsSection, type SettingsSectionId } from '#/features/settings/sections';
+import { SkillEditorDialog } from '#/features/studio/skills-settings/SkillEditorDialog';
+import { loadSkillContent } from '#/features/studio/skills-settings/utils';
+import { useChatComposer } from '#/hooks/use-chat-composer';
+import { pushShellUrl, replaceShellUrl, useShellPathname, useShellSearchParam } from '#/hooks/use-shell-location';
+import { useSidebarShortcuts } from '#/hooks/use-sidebar-shortcuts';
+import { useTranscriptHistory } from '#/hooks/use-transcript-history';
+import { normalizedComposerSettings } from '#/lib/composer-settings';
+import { useMonadRuntime } from '#/lib/monad-runtime-provider';
+import { useWorkspaceShellStore, type WorkspaceShellState } from '#/lib/workspace-shell-store';
 import { AppShellRoutesHost } from './app-shell/routes-host';
 import {
   buildSessionContextUsage,
@@ -130,20 +131,17 @@ export function AppShell() {
   const sidebarAutoReveal = useWorkspaceShellStore((state: WorkspaceShellState) => state.sidebarAutoReveal);
   const newProjectOpen = useWorkspaceShellStore((state: WorkspaceShellState) => state.newProjectOpen);
   const showInspector = useWorkspaceShellStore((state: WorkspaceShellState) => state.sessionInspectorOpen);
-  const revealSidebar = useWorkspaceShellStore((state: WorkspaceShellState) => state.revealSidebar);
-  const autoRevealSidebar = useWorkspaceShellStore((state: WorkspaceShellState) => state.autoRevealSidebar);
-  const collapseSidebar = useWorkspaceShellStore((state: WorkspaceShellState) => state.collapseSidebar);
-  const toggleSidebarCollapsed = useWorkspaceShellStore((state: WorkspaceShellState) => state.toggleSidebarCollapsed);
-  const toggleProjectPinned = useWorkspaceShellStore((state: WorkspaceShellState) => state.toggleProjectPinned);
   const setNewProjectOpen = useWorkspaceShellStore((state: WorkspaceShellState) => state.setNewProjectOpen);
   const toggleSessionInspector = useWorkspaceShellStore((state: WorkspaceShellState) => state.toggleSessionInspector);
 
   // The web client writes over HTTP — read-only when the session's policy excludes it.
   const writableBy = currentSession?.origin?.writableBy;
   const isReadOnly = writableBy != null && !writableBy.includes('http');
-  const [hiddenViewItemKeysBySession, setHiddenViewItemKeysBySession] = useState<Record<string, string[]>>({});
-  const [input, setInput] = useState('');
-  const [accessMode, setAccessMode] = useState<'auto' | 'ask'>('auto');
+  const hiddenViewItemKeysBySession = useSessionUiStore((state) => state.hiddenViewItemKeysBySession);
+  const input = useSessionUiStore((state) => state.input);
+  const appendVoiceText = useSessionUiStore((state) => state.appendVoiceText);
+  const applyCommandInsert = useSessionUiStore((state) => state.applyCommandInsert);
+  const clearComposerInput = useSessionUiStore((state) => state.clearComposerInput);
   const [settingsReturnPathState, setSettingsReturnPathState] = useState<string | null>(null);
   const showSettings = isSettingsPath(pathname);
   const settingsSection = settingsSectionFromPathname(pathname) ?? 'connection';
@@ -159,8 +157,10 @@ export function AppShell() {
   const studioSection = routedStudioSection ?? 'runtime';
   const studioPileActive = showStudio;
   const workspacePileActive = isWorkspaceRoute;
-  const [activeSkill, setActiveSkill] = useState(0);
-  const [skillMenuDismissed, setSkillMenuDismissed] = useState(false);
+  const activeSkill = useSessionUiStore((state) => state.activeSkill);
+  const setActiveSkill = useSessionUiStore((state) => state.setActiveSkill);
+  const skillMenuDismissed = useSessionUiStore((state) => state.skillMenuDismissed);
+  const setSkillMenuDismissed = useSessionUiStore((state) => state.setSkillMenuDismissed);
   const [skillPreview, setSkillPreview] = useState<{
     id?: string;
     name?: string;
@@ -168,7 +168,6 @@ export function AppShell() {
     content: string;
   } | null>(null);
   const transcriptRef = useRef<VirtualListHandle>(null);
-  const [atBottom, setAtBottom] = useState(true);
   const slashDiscoveryActive = shouldActivateSlashCommandDiscovery(input);
   const commands = commandsQuery.data?.commands ?? [];
   const commandMenuLoading =
@@ -314,12 +313,9 @@ export function AppShell() {
     history,
     liveItems,
     streamData: stream.data,
-    input,
-    setInput,
     scrollToBottom,
     jumpToLive,
     setSessionUrl,
-    setHiddenViewItemKeysBySession,
     followUpBehavior: composerSettings.followUpBehavior
   });
 
@@ -378,11 +374,6 @@ export function AppShell() {
     },
     [lastStudioSection, runtimeReady]
   );
-
-  const toggleSidebarAutoMode = useCallback(() => {
-    if (sidebarAutoMode) revealSidebar();
-    else collapseSidebar();
-  }, [collapseSidebar, revealSidebar, sidebarAutoMode]);
 
   const openProject = useCallback(
     (projectId: string) => {
@@ -577,21 +568,13 @@ export function AppShell() {
   const applyItem = useCallback(
     (item: SessionCommandMenuItem) => {
       if (item.executeOnSelect) {
-        setInput('');
-        setActiveSkill(0);
-        setSkillMenuDismissed(true);
+        clearComposerInput();
         void handleSend(item.insert.trim());
         return;
       }
-      setInput((current) =>
-        item.replace
-          ? `${current.slice(0, item.replace.start)}${item.insert}${current.slice(item.replace.end)}`
-          : item.insert
-      );
-      setActiveSkill(0);
-      setSkillMenuDismissed(item.dismissAfter ?? false);
+      applyCommandInsert(item);
     },
-    [handleSend]
+    [applyCommandInsert, clearComposerInput, handleSend]
   );
 
   const handleTextareaKeyDown = createTextareaKeyDownHandler({
@@ -661,16 +644,11 @@ export function AppShell() {
     <div className="app-shell relative flex h-screen overflow-hidden bg-background text-foreground">
       <AppShellSidebarHost
         reveal={{
-          autoMode: sidebarAutoMode,
-          autoRevealSidebar,
-          onOpenWorkspace: setWorkspaceUrl,
-          onToggleAutoMode: toggleSidebarAutoMode
+          onOpenWorkspace: setWorkspaceUrl
         }}
         show={shouldShowSidebar}
         sidebar={{
           activeProjectId,
-          autoCollapseOnPointerLeave: sidebarAutoReveal,
-          collapsed: sidebarCollapsed,
           daemonBaseUrl,
           daemonStatus,
           daemonVersion,
@@ -689,14 +667,9 @@ export function AppShell() {
             setStudioUrl(section);
           },
           onOpenWorkspace: setWorkspaceUrl,
-          onRequestCollapse: collapseSidebar,
-          onRequestPersistentExpand: revealSidebar,
           onSwitchDaemonConnection: switchDaemonConnection,
-          onToggleCollapsed: toggleSidebarCollapsed,
           onCloseSettings: closeSettings,
-          onToggleProjectPinned: toggleProjectPinned,
           onToggleSettings: toggleSettings,
-          overlay: sidebarAutoReveal,
           projects: workspaceProjects,
           runtimeReady,
           settingsReturnSurface,
@@ -717,10 +690,7 @@ export function AppShell() {
         onCloseStudio={setWorkspaceUrl}
         reserveHeaderLeading={reserveHeaderLeading}
         sessionRouteProps={{
-          accessMode,
           activeInputSkillToken,
-          activeSkill,
-          atBottom,
           contextUsage: sessionContextUsage,
           currentSession,
           disabled: isReadOnly,
@@ -733,22 +703,14 @@ export function AppShell() {
           messageQueue,
           composerSettings,
           model: sessionModel,
-          onAccessModeChange: setAccessMode,
           onApproval: (approval, allow, scope, reason) => {
             void approveTool({ requestId: approval.requestId, allow, scope, reason });
           },
-          onAtBottomChange: setAtBottom,
           onBranch: handleBranch,
           onClarifyAnswer: (requestId, answer) => void clarifyRespond({ requestId, answer }),
           onRemoveQueuedMessage: removeQueuedMessage,
           onCommandItemApply: applyItem,
-          onCommandItemHover: setActiveSkill,
           onEndReached: transcript.loadNewer,
-          onInputChange: (value) => {
-            setInput(value);
-            setActiveSkill(0);
-            setSkillMenuDismissed(false);
-          },
           onKeyDown: handleTextareaKeyDown,
           onRestore: handleRestore,
           onScrollToBottom: scrollToBottom,
@@ -760,8 +722,7 @@ export function AppShell() {
           onToggleInspector: toggleSessionInspector,
           onVoiceSettingsClick: () => pushShellUrl(studioPath('models')),
           onVoiceText: (text) => {
-            setInput((current) => (current.trim() ? `${current.trimEnd()} ${text}` : text));
-            setSkillMenuDismissed(false);
+            appendVoiceText(text);
           },
           onVoiceTranscribe: async (audio) => {
             const body = await audioBlobToBase64(audio);
@@ -772,7 +733,6 @@ export function AppShell() {
           showInspector,
           skillMenuOpen,
           transcriptRef,
-          value: input,
           viewMessages,
           voiceModelConfigured
         }}

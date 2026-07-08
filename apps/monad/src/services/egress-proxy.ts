@@ -14,7 +14,7 @@ import type { Socket } from 'bun';
 
 import { lookup } from 'node:dns/promises';
 
-import { type EgressPolicy, isBlockedIp, isEgressAllowed } from '@/capabilities/tools';
+import { type EgressPolicy, isBlockedIp, isEgressAllowed } from '#/capabilities/tools';
 
 const MAX_HEADER_BYTES = 64 * 1024; // a request head larger than this is hostile/broken
 const CRLF2 = '\r\n\r\n';

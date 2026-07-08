@@ -6,7 +6,7 @@ import type {
   NativeAgentSendResponse,
   SessionId
 } from '@monad/protocol';
-import type { createDaemonHandlers } from '@/handlers/daemon-handlers/index.ts';
+import type { createDaemonHandlers } from '#/handlers/daemon-handlers/index.ts';
 import type { NativeAgentAttachmentResolver } from './attachments.ts';
 
 import { newId } from '@monad/protocol';

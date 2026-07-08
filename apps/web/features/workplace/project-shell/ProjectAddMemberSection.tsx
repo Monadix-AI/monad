@@ -11,7 +11,7 @@ import {
   workspaceSectionLabelStyle as sectionLabel
 } from '@monad/ui/components/AgentAvatar';
 
-import { useT } from '@/components/I18nProvider';
+import { useT } from '#/components/I18nProvider';
 
 type AvailableProjectMember = ProjectController['availableProjectMembers'][number];
 

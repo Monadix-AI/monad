@@ -8,7 +8,7 @@ import { useGetMem0DataQuery } from '@monad/client-rtk';
 import { Button, Skeleton } from '@monad/ui';
 import { useMemo } from 'react';
 
-import { useT } from '@/components/I18nProvider';
+import { useT } from '#/components/I18nProvider';
 import { DataEmpty } from './DataEmpty';
 import { colorForScope, scopeLabel } from './scope';
 

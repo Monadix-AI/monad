@@ -1,6 +1,6 @@
 import type { ExternalAgentView } from '@monad/protocol';
 
-import { mergeExternalAgentChildEnv } from '@/services/external-agent/env.ts';
+import { mergeExternalAgentChildEnv } from '#/services/external-agent/env.ts';
 
 export type ResolveAgentEnv = (env?: Record<string, string>) => Promise<Record<string, string> | undefined>;
 

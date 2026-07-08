@@ -7,21 +7,21 @@ import type {
   ExternalAgentSessionView,
   ExternalAgentView
 } from '@monad/protocol';
-import type { EventBus } from '@/services/event-bus.ts';
-import type { BoundedOutputBuffer } from '@/services/external-agent/bounded-output-buffer.ts';
+import type { EventBus } from '#/services/event-bus.ts';
+import type { BoundedOutputBuffer } from '#/services/external-agent/bounded-output-buffer.ts';
 import type {
   ExternalAgentProcess,
   ExternalAgentStdin,
   ExternalAgentTerminal
-} from '@/services/external-agent/runtime-types.ts';
+} from '#/services/external-agent/runtime-types.ts';
 import type {
   ExternalAgentAppServerConnection,
   ExternalAgentInitializeContext,
   ExternalAgentLaunchSpec,
   ExternalAgentProviderAdapter
-} from '@/services/external-agent/types.ts';
-import type { ExternalAgentTargetId } from '@/store/db/external-agent-sessions.ts';
-import type { Store } from '@/store/db/index.ts';
+} from '#/services/external-agent/types.ts';
+import type { ExternalAgentTargetId } from '#/store/db/external-agent-sessions.ts';
+import type { Store } from '#/store/db/index.ts';
 
 interface ManagedProjectOutput {
   sessionId: ExternalAgentTargetId;

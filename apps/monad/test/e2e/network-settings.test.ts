@@ -4,9 +4,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initMonadHome } from '@monad/home';
 
-import { ModelService } from '@/handlers/settings/model/index.ts';
-import { ModelCatalogService } from '@/services/model-catalog.ts';
-import { createHttpTransport } from '@/transports/http.ts';
+import { ModelService } from '#/handlers/settings/model/index.ts';
+import { ModelCatalogService } from '#/services/model-catalog.ts';
+import { createHttpTransport } from '#/transports/http.ts';
 import { buildHandlers, makeTestPaths, mockModel, seededProviderRegistry, serveTransport } from '../helpers.ts';
 
 let healthServer: { port: number; stop(force?: boolean): void } | undefined;

@@ -12,7 +12,7 @@ import { useListLicensesQuery } from '@monad/client-rtk';
 import { Button, Input, Skeleton } from '@monad/ui';
 import { memo, useState } from 'react';
 
-import { useT } from '@/components/I18nProvider';
+import { useT } from '#/components/I18nProvider';
 
 interface LicenseRowProps {
   icon: typeof PackageIcon;

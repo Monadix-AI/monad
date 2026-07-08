@@ -1,17 +1,17 @@
-import type { SkillInstallReviewer } from '@/capabilities/skills/install/index.ts';
-import type { DownloadProgress } from '@/services/download.ts';
+import type { SkillInstallReviewer } from '#/capabilities/skills/install/index.ts';
+import type { DownloadProgress } from '#/services/download.ts';
 
 import { lstat, mkdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, isAbsolute, join, normalize, relative, sep } from 'node:path';
 
-import { untar } from '@/atoms/install/untar.ts';
-import { upsertSkillsLock } from '@/capabilities/skills/install/clawhub.ts';
-import { assertStagingCompatibility } from '@/capabilities/skills/install/compat.ts';
-import { warningModelRequestFailed, warningsToStrings } from '@/capabilities/skills/install/review.ts';
-import { scanSkillDir } from '@/capabilities/skills/install/scan.ts';
-import { downloadBytes } from '@/services/download.ts';
-import { findSkillDirs, installSkillFromDir, parseSkillMd } from '@/store/home/skills.ts';
+import { untar } from '#/atoms/install/untar.ts';
+import { upsertSkillsLock } from '#/capabilities/skills/install/clawhub.ts';
+import { assertStagingCompatibility } from '#/capabilities/skills/install/compat.ts';
+import { warningModelRequestFailed, warningsToStrings } from '#/capabilities/skills/install/review.ts';
+import { scanSkillDir } from '#/capabilities/skills/install/scan.ts';
+import { downloadBytes } from '#/services/download.ts';
+import { findSkillDirs, installSkillFromDir, parseSkillMd } from '#/store/home/skills.ts';
 
 const MAX_ENTRY_BYTES = 10 * 1024 * 1024; // 10 MB per file
 const MAX_TOTAL_BYTES = 50 * 1024 * 1024; // 50 MB extracted total

@@ -3,7 +3,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { createSandboxBackends } from '@/capabilities/tools/backends.ts';
+import { createSandboxBackends } from '#/capabilities/tools/backends.ts';
 
 async function tmp(): Promise<string> {
   return mkdtemp(join(tmpdir(), 'monad-be-'));

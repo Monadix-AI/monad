@@ -21,8 +21,8 @@ import {
   SmitheryMcpAdapter,
   searchMcpRegistry,
   toCatalogEntry
-} from '@/capabilities/mcp/index.ts';
-import { HandlerError } from '@/handlers/handler-error.ts';
+} from '#/capabilities/mcp/index.ts';
+import { HandlerError } from '#/handlers/handler-error.ts';
 
 const REGISTRY_ADAPTERS = [
   new BuiltInMcpAdapter(),

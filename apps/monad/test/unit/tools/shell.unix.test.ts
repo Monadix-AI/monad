@@ -1,10 +1,10 @@
 if (process.platform === 'win32') process.exit(0);
 
-import type { ToolContext } from '@/capabilities/tools/types.ts';
+import type { ToolContext } from '#/capabilities/tools/types.ts';
 
 import { expect, test } from 'bun:test';
 
-import { shellExecTool, ToolSecurityError } from '@/capabilities/tools';
+import { shellExecTool, ToolSecurityError } from '#/capabilities/tools';
 
 const ctx = (roots?: string[]): ToolContext => ({ sessionId: 's1', sandboxRoots: roots, log: () => {} });
 

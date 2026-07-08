@@ -1,4 +1,4 @@
-import type { ModelService } from '@/services/model.ts';
+import type { ModelService } from '#/services/model.ts';
 
 export function createAtomKindsHandlers(providersDir: string, modelService: ModelService) {
   return {

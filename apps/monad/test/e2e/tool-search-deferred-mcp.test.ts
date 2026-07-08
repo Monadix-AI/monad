@@ -8,22 +8,22 @@
 
 import type { McpServerConfig, MonadPaths } from '@monad/home';
 import type { SessionId } from '@monad/protocol';
-import type { ModelResult, ModelRouter } from '@/agent/index.ts';
-import type { ToolGate } from '@/capabilities/tools/types.ts';
+import type { ModelResult, ModelRouter } from '#/agent/index.ts';
+import type { ToolGate } from '#/capabilities/tools/types.ts';
 
 import { afterEach, expect, test } from 'bun:test';
 import { join } from 'node:path';
 import { createDefaultConfig } from '@monad/home';
 import { newId } from '@monad/protocol';
 
-import { AgentLoop, InMemoryMessageRepo } from '@/agent/index.ts';
-import { createToolCallTool } from '@/capabilities/tools/registry/tool-call.ts';
-import { createToolSearchTool } from '@/capabilities/tools/registry/tool-search.ts';
+import { AgentLoop, InMemoryMessageRepo } from '#/agent/index.ts';
+import { createToolCallTool } from '#/capabilities/tools/registry/tool-call.ts';
+import { createToolSearchTool } from '#/capabilities/tools/registry/tool-search.ts';
 
 const allowGate: ToolGate = async () => ({ allow: true });
 
-import { connectMcpServers } from '@/bootstrap/mcp.ts';
-import { AtomPackRegistry } from '@/handlers/atom-pack/index.ts';
+import { connectMcpServers } from '#/bootstrap/mcp.ts';
+import { AtomPackRegistry } from '#/handlers/atom-pack/index.ts';
 
 const fixture = join(import.meta.dir, '../unit/tools/fixtures/fat-mcp-server.ts');
 

@@ -12,7 +12,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { installGitSkill } from '@/capabilities/skills/install/git.ts';
+import { installGitSkill } from '#/capabilities/skills/install/git.ts';
 
 const sh = (cmd: string, cwd: string) =>
   new Promise<void>((res, rej) => {

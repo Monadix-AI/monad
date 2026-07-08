@@ -3,8 +3,8 @@ import type { ProjectController } from '../use-project';
 import { Dialog, DialogContent, DialogTitle } from '@monad/ui';
 import { workspaceMono as mono, workspaceSans as sans } from '@monad/ui/components/AgentAvatar';
 
-import { useT } from '@/components/I18nProvider';
-import { useExternalAgentSettings } from '@/hooks/use-external-agent-settings';
+import { useT } from '#/components/I18nProvider';
+import { useExternalAgentSettings } from '#/hooks/use-external-agent-settings';
 import { canDisableAutopilot } from '../../studio/third-party-agents/external-agent-settings-model';
 
 type ProjectMember = ProjectController['projectMembers'][number];

@@ -1,13 +1,13 @@
 import type { ProjectId } from '@monad/protocol';
-import type { ExternalAgentSessionRow } from '@/store/db/index.ts';
+import type { ExternalAgentSessionRow } from '#/store/db/index.ts';
 
 import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { mkdir, mkdtemp, rm, symlink, unlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { createNativeAgentAttachmentReader } from '@/services/native-agent/attachments.ts';
-import { createStore } from '@/store/db/index.ts';
+import { createNativeAgentAttachmentReader } from '#/services/native-agent/attachments.ts';
+import { createStore } from '#/store/db/index.ts';
 
 let store: ReturnType<typeof createStore>;
 

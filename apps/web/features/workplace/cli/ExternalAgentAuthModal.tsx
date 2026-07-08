@@ -11,7 +11,7 @@ import {
 import { isProductIconId } from '@monad/ui';
 import { useEffect, useRef, useState } from 'react';
 
-import { useT } from '@/components/I18nProvider';
+import { useT } from '#/components/I18nProvider';
 import { CliTerminalModal } from './CliTerminalModal';
 
 function externalAgentAuthSessionForView(

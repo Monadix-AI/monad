@@ -1,11 +1,11 @@
 import type { MonadConfig, MonadPaths } from '@monad/home';
 import type { Logger } from '@monad/logger';
 import type { McpServerStatus } from '@monad/protocol';
-import type { AtomPackRegistry } from '@/handlers/atom-pack/index.ts';
+import type { AtomPackRegistry } from '#/handlers/atom-pack/index.ts';
 
 import { loadAll, loadAuth } from '@monad/home';
 
-import { authorizeMcpOAuth } from '@/capabilities/mcp/oauth.ts';
+import { authorizeMcpOAuth } from '#/capabilities/mcp/oauth.ts';
 import { type ConfigMcpHandle, collectMcpStatus, reconnectOneMcpServer } from './mcp.ts';
 
 type CollectInput = Parameters<typeof collectMcpStatus>[0];

@@ -1,10 +1,9 @@
 import type { ToolContext } from '../types.ts';
 
-import { daemonChildProcesses } from '@/infra/daemon-child-processes.ts';
-import { signalProcessTree } from '../backends.ts';
+import { daemonChildProcesses } from '#/infra/daemon-child-processes.ts';
+import { shellArgv, signalProcessTree } from '../backends.ts';
 import { buildSandboxPolicy, sandboxedPtySpawn, sandboxedSpawn } from '../sandbox/spawn.ts';
 import { ToolSecurityError } from '../security.ts';
-import { shellArgv } from './shell.ts';
 
 const MAX_BUFFER = 256 * 1024;
 const ANSI_PATTERN_SOURCE =
@@ -41,6 +40,7 @@ export interface ProcEntry {
   id: string;
   ownerSessionId: string;
   command: string;
+  cwd: string;
   mode: TerminalMode;
   proc: ProcessHandle;
   stdout: string;
@@ -56,9 +56,17 @@ export interface ProcEntry {
   status: 'running' | 'exited' | 'killed';
   exitCode: number | null;
   startedAt: string;
+  endedAt?: string;
+  limits: { idleTimeoutMs?: number; maxRuntimeMs?: number };
 }
 
 export type ProcessSnapshot = {
+  processId: string;
+  pid: number;
+  command: string;
+  cwd: string;
+  startedAt: string;
+  limits: { idleTimeoutMs?: number; maxRuntimeMs?: number };
   status: ProcEntry['status'];
   exitCode: number | null;
   stdout: string;
@@ -79,7 +87,7 @@ export interface PtyStartOptions {
   rows?: number;
 }
 
-// process_start spawns detached, making the child a process-group leader; the cross-platform
+// Background shell_exec spawns detached, making the child a process-group leader; the cross-platform
 // group-signalling glue lives in backends.ts (signalProcessTree).
 function signalTree(proc: Sub, signal: ProcessSignal): void {
   signalProcessTree(proc, signal);
@@ -126,6 +134,7 @@ export function resetIdleTimer(entry: ProcEntry): void {
     appendOutput(entry, 'stderr', `process killed after ${entry.idleTimeoutMs}ms idle timeout\n`);
     entry.proc.kill();
     entry.status = 'killed';
+    entry.endedAt = new Date().toISOString();
     clearIdleTimer(entry);
   }, entry.idleTimeoutMs);
 }
@@ -138,6 +147,7 @@ export function startRuntimeTimer(entry: ProcEntry): void {
     appendOutput(entry, 'stderr', `process killed after ${entry.maxRuntimeMs}ms max runtime\n`);
     entry.proc.kill();
     entry.status = 'killed';
+    entry.endedAt = new Date().toISOString();
     clearTimers(entry);
   }, entry.maxRuntimeMs);
 }
@@ -169,6 +179,12 @@ export function snapshot(
   const stdout = sliceOutput(entry, 'stdout', cursor?.stdout);
   const stderr = sliceOutput(entry, 'stderr', cursor?.stderr);
   return {
+    processId: entry.id,
+    pid: entry.proc.pid,
+    command: entry.command,
+    cwd: entry.cwd,
+    startedAt: entry.startedAt,
+    limits: entry.limits,
     status: entry.status,
     exitCode: entry.exitCode,
     stdout: options.stripAnsi ? stripAnsi(stdout.text) : stdout.text,
@@ -217,6 +233,7 @@ export function attachExit(entry: ProcEntry): void {
     if (entry.status === 'running') {
       entry.status = 'exited';
       entry.exitCode = code;
+      entry.endedAt = new Date().toISOString();
     }
   });
 }
@@ -232,7 +249,7 @@ function pipeHandle(proc: Sub): ProcessHandle {
     write(input) {
       const stdin = proc.stdin;
       if (!stdin || typeof stdin === 'number')
-        throw new ToolSecurityError(`process "${proc.pid}" has no writable stdin`);
+        throw new ToolSecurityError(`process "${proc.pid}" has no writable stdin`, 'PROCESS_STDIN_UNAVAILABLE');
       stdin.write(input);
       stdin.flush();
     }
@@ -246,7 +263,7 @@ export function startPipeProcess(command: string, dir: string, ctx: ToolContext)
     buildSandboxPolicy(ctx.sandboxRoots, [], ctx.sessionId),
     { sessionId: ctx.sessionId }
   );
-  daemonChildProcesses.track(proc.pid, 'tool:process_start', () => killTree(proc));
+  daemonChildProcesses.track(proc.pid, 'tool:shell_exec:background', () => killTree(proc));
   void proc.exited.then(() => daemonChildProcesses.untrack(proc.pid));
   return pipeHandle(proc);
 }
@@ -281,9 +298,9 @@ export function startPtyProcess(
     buildSandboxPolicy(ctx.sandboxRoots, [], ctx.sessionId),
     { sessionId: ctx.sessionId }
   );
-  daemonChildProcesses.track(proc.pid, 'tool:process_start', () => killTree(proc));
+  daemonChildProcesses.track(proc.pid, 'tool:shell_exec:background', () => killTree(proc));
   void proc.exited.then(() => daemonChildProcesses.untrack(proc.pid));
-  if (!proc.terminal) throw new ToolSecurityError('failed to start pty terminal');
+  if (!proc.terminal) throw new ToolSecurityError('failed to start pty terminal', 'PROCESS_PTY_UNAVAILABLE');
   void proc.exited.then(() => {
     if (pendingCR) onData('\n');
   });
@@ -301,12 +318,14 @@ export function startPtyProcess(
     signal: (signal) => signalTree(proc, signal),
     write(input) {
       const terminal = proc.terminal;
-      if (!terminal) throw new ToolSecurityError(`process "${proc.pid}" has no writable terminal`);
+      if (!terminal)
+        throw new ToolSecurityError(`process "${proc.pid}" has no writable terminal`, 'PROCESS_STDIN_UNAVAILABLE');
       terminal.write(input);
     },
     resize(cols, rows) {
       const terminal = proc.terminal;
-      if (!terminal) throw new ToolSecurityError(`process "${proc.pid}" has no resizable terminal`);
+      if (!terminal)
+        throw new ToolSecurityError(`process "${proc.pid}" has no resizable terminal`, 'PROCESS_PTY_UNAVAILABLE');
       terminal.resize(cols, rows);
     }
   };

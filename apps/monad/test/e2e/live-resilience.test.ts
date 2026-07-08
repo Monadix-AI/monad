@@ -11,7 +11,7 @@ import type { Event } from '@monad/protocol';
 
 import { afterEach, describe, expect, test } from 'bun:test';
 
-import { createHttpTransport } from '@/transports/http.ts';
+import { createHttpTransport } from '#/transports/http.ts';
 import {
   buildHandlers,
   liveModelDeps,

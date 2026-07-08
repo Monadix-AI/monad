@@ -3,7 +3,7 @@ import type { MonadConfig } from '@monad/home';
 import { expect, test } from 'bun:test';
 import { createDefaultConfig } from '@monad/home';
 
-import { resolveAgentModelRole, resolveModelRole } from '@/config/resolve.ts';
+import { resolveAgentModelRole, resolveModelRole } from '#/config/resolve.ts';
 
 function model(over: Partial<MonadConfig['model']> = {}): MonadConfig['model'] {
   return {

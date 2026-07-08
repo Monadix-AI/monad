@@ -15,8 +15,8 @@ import { cn } from '@monad/ui';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useEffect, useMemo, useState } from 'react';
 
-import { ProjectDebugConsole } from '@/features/workplace/debug/ProjectDebugConsole';
-import { useWorkspaceShellStore } from '@/lib/workspace-shell-store';
+import { ProjectDebugConsole } from '#/features/workplace/debug/ProjectDebugConsole';
+import { useWorkspaceShellStore } from '#/lib/workspace-shell-store';
 
 interface DevToolLink {
   devOnly?: boolean;

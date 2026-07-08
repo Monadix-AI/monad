@@ -3,7 +3,7 @@
 
 import { expect, test } from 'bun:test';
 
-import { collectMem0Data, type Mem0ExplorerDeps } from '@/services/memory/mem0-explorer.ts';
+import { collectMem0Data, type Mem0ExplorerDeps } from '#/services/memory/mem0-explorer.ts';
 
 const silent = { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} } as never;
 

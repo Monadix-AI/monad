@@ -2,7 +2,7 @@
 // fetch is injected, so no network. Covers platform/arch asset selection, MANDATORY SHA256 (abort on
 // mismatch, before any write), default-deny consent, raw + .tar.gz extraction, and the hot config write.
 
-import type { ReleaseAssetFetcher } from '@/capabilities/mcp/install/binary.ts';
+import type { ReleaseAssetFetcher } from '#/capabilities/mcp/install/binary.ts';
 
 import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -14,7 +14,7 @@ import {
   McpBinaryInstallError,
   parseChecksums,
   selectReleaseAsset
-} from '@/capabilities/mcp/install/binary.ts';
+} from '#/capabilities/mcp/install/binary.ts';
 
 let mcpDir: string;
 beforeEach(async () => {

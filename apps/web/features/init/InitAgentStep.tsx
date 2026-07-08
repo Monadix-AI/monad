@@ -4,7 +4,7 @@ import { CheckIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Button, Input, Label } from '@monad/ui';
 
-import { useT } from '@/components/I18nProvider';
+import { useT } from '#/components/I18nProvider';
 
 export function InitAgentStep({
   agentCapabilities,

@@ -7,13 +7,13 @@ import { chmod, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { createSkillFetcher } from '@/capabilities/skills/install/fetch.ts';
+import { createSkillFetcher } from '#/capabilities/skills/install/fetch.ts';
 import {
   checkSkillUpdate,
   installSkill,
   type SkillFetcher,
   type SkillInstallRecord
-} from '@/capabilities/skills/install/index.ts';
+} from '#/capabilities/skills/install/index.ts';
 
 let skillsDir: string;
 const realFetch = globalThis.fetch;

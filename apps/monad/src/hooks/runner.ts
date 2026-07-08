@@ -23,7 +23,7 @@ import type { HookDefinition } from '@monad/sdk-atom';
 
 import { hookOutputSchema, PARALLEL_HOOK_EVENTS } from '@monad/protocol';
 
-import { shellArgv } from '@/capabilities/tools';
+import { shellArgv } from '#/capabilities/tools';
 
 // Command-hook + matcher shapes are owned by @monad/protocol (commandHookSettingSchema /
 // hookMatcherSettingSchema); derive rather than re-declare. `onError` fail-closed: when `deny`, a

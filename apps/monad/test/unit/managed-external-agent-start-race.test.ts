@@ -1,10 +1,10 @@
 import type { ExternalAgentConfig } from '@monad/home';
 import type { ExternalAgentSessionView, Session } from '@monad/protocol';
-import type { SessionContext } from '@/handlers/session/context.ts';
+import type { SessionContext } from '#/handlers/session/context.ts';
 
 import { expect, test } from 'bun:test';
 
-import { createManagedExternalAgentDelivery } from '@/handlers/session/handlers/managed-external-agent-delivery.ts';
+import { createManagedExternalAgentDelivery } from '#/handlers/session/handlers/managed-external-agent-delivery.ts';
 
 function buildHarness() {
   const starts: string[] = [];

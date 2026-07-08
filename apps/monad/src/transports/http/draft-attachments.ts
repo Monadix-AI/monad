@@ -1,9 +1,9 @@
-import type { createDaemonHandlers } from '@/handlers/daemon-handlers/index.ts';
+import type { createDaemonHandlers } from '#/handlers/daemon-handlers/index.ts';
 
 import { openDraftAttachmentRequestSchema, openDraftAttachmentResponseSchema } from '@monad/protocol';
 import { Elysia } from 'elysia';
 
-import { openDraftAttachment } from '@/handlers/session/workspace-actions.ts';
+import { openDraftAttachment } from '#/handlers/session/workspace-actions.ts';
 
 export function createDraftAttachmentsController(_handlers: ReturnType<typeof createDaemonHandlers>) {
   return new Elysia({ tags: ['http-only'] }).post(

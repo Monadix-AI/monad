@@ -1,14 +1,14 @@
 import type { MonadConfig, MonadPaths } from '@monad/home';
 import type { Event, SessionId } from '@monad/protocol';
-import type { EventBus } from '@/services/event-bus.ts';
-import type { Store } from '@/store/db/index.ts';
+import type { EventBus } from '#/services/event-bus.ts';
+import type { Store } from '#/store/db/index.ts';
 
 import { newId } from '@monad/protocol';
 
-import { buildOperatorRules, PolicyEngine } from '@/agent/approvals/engine.ts';
-import { ApprovalStore } from '@/agent/approvals/store.ts';
-import { ClarifyService } from '@/services/generation/clarify.ts';
-import { OversightService } from '@/services/oversight.ts';
+import { buildOperatorRules, PolicyEngine } from '#/agent/approvals/engine.ts';
+import { ApprovalStore } from '#/agent/approvals/store.ts';
+import { ClarifyService } from '#/services/generation/clarify.ts';
+import { OversightService } from '#/services/oversight.ts';
 
 export async function createInterruptServices(deps: {
   paths: MonadPaths;

@@ -19,7 +19,7 @@ import { useMemo } from 'react';
 
 import '@xyflow/react/dist/style.css';
 
-import { useT } from '@/components/I18nProvider';
+import { useT } from '#/components/I18nProvider';
 import { DataEmpty } from './DataEmpty';
 import { colorForScope, scopeLabel } from './scope';
 

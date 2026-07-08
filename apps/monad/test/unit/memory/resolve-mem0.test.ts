@@ -6,7 +6,7 @@ import type { MonadAuth, MonadConfig } from '@monad/home';
 
 import { expect, test } from 'bun:test';
 
-import { resolveMem0Models } from '@/services/memory/resolve-mem0.ts';
+import { resolveMem0Models } from '#/services/memory/resolve-mem0.ts';
 
 const cfg = {
   model: {

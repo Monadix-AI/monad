@@ -13,8 +13,8 @@ import { mermaid } from '@streamdown/mermaid';
 import { createContext, memo, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { Streamdown } from 'streamdown';
 
-import { useT } from '@/components/I18nProvider';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { useT } from '#/components/I18nProvider';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '#/components/ui/collapsible';
 import { Shimmer } from './shimmer';
 
 interface ReasoningContextValue {

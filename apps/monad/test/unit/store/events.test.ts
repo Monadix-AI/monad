@@ -3,7 +3,7 @@ import type { Event, SessionId } from '@monad/protocol';
 import { expect, test } from 'bun:test';
 import { newId } from '@monad/protocol';
 
-import { createStore } from '@/store/db/index.ts';
+import { createStore } from '#/store/db/index.ts';
 
 function evt(sessionId: SessionId, type: Event['type'], payload: Record<string, unknown>): Event {
   return { id: newId('evt'), sessionId, type, actorAgentId: null, payload, at: new Date().toISOString() };

@@ -11,7 +11,7 @@ import type {
   WorkplaceProjectMemberTemplate,
   WorkplaceProjectSessionMember
 } from '@monad/protocol';
-import type { ModelChunk, ModelRequest, ModelRouter } from '@/agent/model/index.ts';
+import type { ModelChunk, ModelRequest, ModelRouter } from '#/agent/model/index.ts';
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { createHash } from 'node:crypto';
@@ -20,8 +20,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initMonadHome, loadAuth, loadConfig } from '@monad/home';
 
-import { ModelService } from '@/handlers/settings/model/index.ts';
-import { createHttpTransport } from '@/transports/http.ts';
+import { ModelService } from '#/handlers/settings/model/index.ts';
+import { createHttpTransport } from '#/transports/http.ts';
 import {
   buildHandlers,
   makeTestPaths,

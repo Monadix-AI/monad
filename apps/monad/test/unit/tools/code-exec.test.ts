@@ -6,7 +6,7 @@ import {
   configureCodeExec,
   followSystemBackend,
   selectCodeExecBackend
-} from '@/capabilities/tools';
+} from '#/capabilities/tools';
 
 beforeEach(() => configureCodeExec('follow-system'));
 afterEach(() => configureCodeExec('follow-system'));

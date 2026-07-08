@@ -6,7 +6,7 @@ import type {
   WorkspaceExperienceApiHandler,
   WorkspaceExperienceDefinition
 } from '@monad/sdk-atom';
-import type { Tool } from '@/capabilities/tools/types.ts';
+import type { Tool } from '#/capabilities/tools/types.ts';
 
 export interface RegisteredWorkspaceExperience extends WorkspaceExperienceDefinition {
   atomPackId?: string;

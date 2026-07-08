@@ -8,7 +8,7 @@ import type {
   SessionId,
   ChatMessage as WireChatMessage
 } from '@monad/protocol';
-import type { FileObservationStore, Tool, ToolBackends, ToolGate } from '@/capabilities/tools/types.ts';
+import type { FileObservationStore, Tool, ToolBackends, ToolGate } from '#/capabilities/tools/types.ts';
 import type { ContextEngine } from '../context/index.ts';
 import type { HistoryProvider } from '../history.ts';
 import type { ModelRouter, ModelUsage } from '../model/index.ts';

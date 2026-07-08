@@ -1,6 +1,6 @@
 import type { SessionOrigin } from '@monad/protocol';
-import type { ToolGate } from '@/capabilities/tools/types.ts';
-import type { Store } from '@/store/db/index.ts';
+import type { ToolGate } from '#/capabilities/tools/types.ts';
+import type { Store } from '#/store/db/index.ts';
 
 export type InboundApprovalMode = 'auto' | 'local' | 'deny';
 

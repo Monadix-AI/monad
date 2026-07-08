@@ -5,11 +5,11 @@
 
 import type { ObscuraConfig } from '@monad/home';
 import type { Logger } from '@monad/logger';
-import type { McpConnection } from '@/capabilities/tools';
+import type { McpConnection } from '#/capabilities/tools';
 
-import { connectMcpServer } from '@/capabilities/tools';
-import { buildObscuraMcpServer } from '@/config/mcp-presets.ts';
-import { AtomPackRegistry } from '@/handlers/atom-pack/index.ts';
+import { connectMcpServer } from '#/capabilities/tools';
+import { buildObscuraMcpServer } from '#/config/mcp-presets.ts';
+import { AtomPackRegistry } from '#/handlers/atom-pack/index.ts';
 import { fingerprintToolset } from './mcp.ts';
 
 export interface ObscuraController {

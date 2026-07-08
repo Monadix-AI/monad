@@ -4,15 +4,15 @@
 // client connected to the mock stdio server (whose `screenshot` tool returns text + an image
 // content block). If Phase 0's mcp.ts passthrough regresses, this fails.
 
-import type { ModelChunk, ModelRequest, ModelResult, ModelRouter } from '@/agent/index.ts';
+import type { ModelChunk, ModelRequest, ModelResult, ModelRouter } from '#/agent/index.ts';
 
 import { expect, test } from 'bun:test';
 import { join } from 'node:path';
 import { newId } from '@monad/protocol';
 
-import { createAgent } from '@/agent/index.ts';
-import { connectMcpServer } from '@/capabilities/tools';
-import { createStore } from '@/store/db/index.ts';
+import { createAgent } from '#/agent/index.ts';
+import { connectMcpServer } from '#/capabilities/tools';
+import { createStore } from '#/store/db/index.ts';
 
 const fixture = join(import.meta.dir, '../unit/tools/fixtures/mock-mcp-server.ts');
 

@@ -1,9 +1,9 @@
 import type { ExternalAgentSessionView, SessionId } from '@monad/protocol';
-import type { LiveExternalAgentSession } from '@/services/external-agent/host/host-types.ts';
-import type { ExternalAgentOutputEvent } from '@/services/external-agent/types.ts';
-import type { ExternalAgentSessionRow } from '@/store/db/index.ts';
+import type { LiveExternalAgentSession } from '#/services/external-agent/host/host-types.ts';
+import type { ExternalAgentOutputEvent } from '#/services/external-agent/types.ts';
+import type { ExternalAgentSessionRow } from '#/store/db/index.ts';
 
-import { getExternalAgentProviderAdapter } from '@/services/external-agent/index.ts';
+import { getExternalAgentProviderAdapter } from '#/services/external-agent/index.ts';
 
 export function isManagedProjectRuntime(
   runtime: Pick<ExternalAgentSessionRow | LiveExternalAgentSession, 'runtimeRole'>

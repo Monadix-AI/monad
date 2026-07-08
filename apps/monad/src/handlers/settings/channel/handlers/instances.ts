@@ -6,9 +6,9 @@ import type {
   OkResponse,
   UpsertChannelRequest
 } from '@monad/protocol';
-import type { ChannelSettingsContext } from '@/handlers/settings/channel/context.ts';
+import type { ChannelSettingsContext } from '#/handlers/settings/channel/context.ts';
 
-import { HandlerError } from '@/handlers/handler-error.ts';
+import { HandlerError } from '#/handlers/handler-error.ts';
 
 function toView(c: ChannelInstanceConfig): ChannelInstanceView {
   // tokenRef is intentionally dropped — secret material never crosses the wire.

@@ -16,8 +16,8 @@ import {
   ComposerVoiceUnavailableContent
 } from '@monad/ui';
 
-import { useT } from '@/components/I18nProvider';
-import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
+import { useT } from '#/components/I18nProvider';
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '#/components/ui/hover-card';
 import { useComposerVoice } from './use-composer-voice';
 
 type ComposerShellProps = {

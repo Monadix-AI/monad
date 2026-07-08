@@ -4,14 +4,14 @@
 // and hot-reload.
 
 import type { MonadAuth, MonadConfig, MonadPaths } from '@monad/home';
-import type { Store } from '@/store/db/index.ts';
+import type { Store } from '#/store/db/index.ts';
 
 import { join } from 'node:path';
 import { logger } from '@monad/logger';
 
-import { EmbeddingIndexer } from '@/services/embedding-indexer.ts';
-import { createEmptyProviderRegistry, ModelService } from '@/services/model.ts';
-import { ModelCatalogService } from '@/services/model-catalog.ts';
+import { EmbeddingIndexer } from '#/services/embedding-indexer.ts';
+import { createEmptyProviderRegistry, ModelService } from '#/services/model.ts';
+import { ModelCatalogService } from '#/services/model-catalog.ts';
 
 export interface ModelSubsystem {
   modelService: ModelService;

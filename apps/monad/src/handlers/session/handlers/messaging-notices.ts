@@ -1,5 +1,5 @@
 import type { ChannelResponseNextTarget } from '@monad/protocol';
-import type { ManagedExternalAgentProjectMember } from '@/handlers/session/handlers/messaging-members.ts';
+import type { ManagedExternalAgentProjectMember } from '#/handlers/session/handlers/messaging-members.ts';
 
 export interface ManagedExternalAgentProjectMessageSender {
   kind: 'human' | 'external-agent' | 'agent' | 'system';

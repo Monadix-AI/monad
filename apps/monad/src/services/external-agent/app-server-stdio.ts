@@ -1,4 +1,4 @@
-import type { ExternalAgentAppServerConnection } from '@/services/external-agent/types.ts';
+import type { ExternalAgentAppServerConnection } from '#/services/external-agent/types.ts';
 
 /** The child stdin pipe an `app-server: stdio` launch owns: frames are newline-delimited JSON lines
  *  written to the process's stdin, flushed so they aren't held in the pipe buffer. */

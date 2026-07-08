@@ -6,7 +6,7 @@ import type { DragEvent } from 'react';
 import { BrainIcon, EyeIcon, ShieldHalfIcon, SparklesIcon, Wrench01Icon } from '@hugeicons/core-free-icons';
 import { Badge, ScrollArea } from '@monad/ui';
 
-import { useT } from '@/components/I18nProvider';
+import { useT } from '#/components/I18nProvider';
 import { type WorkshopPart, WorkshopSlot } from './AgentWorkshopPrimitives';
 
 interface AgentWorkshopWorkbenchProps {

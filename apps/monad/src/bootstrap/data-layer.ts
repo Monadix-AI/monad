@@ -8,15 +8,15 @@
 // Redis by changing only the client URL — the interface stays identical. Do not gate this behind dev.
 
 import type { MonadPaths } from '@monad/home';
-import type { KvService } from '@/services/kv.ts';
+import type { KvService } from '#/services/kv.ts';
 
 import { unlink } from 'node:fs/promises';
 import { createLogger, logger } from '@monad/logger';
 
-import { createKvService } from '@/services/kv.ts';
-import { createStore, type Store } from '@/store/db/index.ts';
-import { checkAndRepair } from '@/store/home/integrity.ts';
-import { KvServer } from '@/store/kv/index.ts';
+import { createKvService } from '#/services/kv.ts';
+import { createStore, type Store } from '#/store/db/index.ts';
+import { checkAndRepair } from '#/store/home/integrity.ts';
+import { KvServer } from '#/store/kv/index.ts';
 
 export async function createDataLayer(deps: {
   paths: MonadPaths;
@@ -56,7 +56,7 @@ export async function createDataLayer(deps: {
   kvServer.onCommand((e) => kvLog.trace({ connId: e.connId, cmd: e.args[0], args: e.args.slice(1) }, 'cmd'));
 
   if (devMode) {
-    const { startKvDebugServer } = await import('@/store/kv/debug-server.ts');
+    const { startKvDebugServer } = await import('#/store/kv/debug-server.ts');
     const ui = startKvDebugServer(kvServer);
     logger.info(`dev: kv debug UI on ${ui.url}`);
     process.on('exit', () => ui.stop());

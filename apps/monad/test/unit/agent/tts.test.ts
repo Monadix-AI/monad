@@ -1,12 +1,12 @@
-import type { ToolContext } from '@/capabilities/tools/types.ts';
+import type { ToolContext } from '#/capabilities/tools/types.ts';
 
 import { expect, test } from 'bun:test';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { type ModelRouter, type SpeechRequest, type SpeechResult } from '@/agent/index.ts';
-import { createTtsTool } from '@/capabilities/tools/registry/tts.ts';
+import { type ModelRouter, type SpeechRequest, type SpeechResult } from '#/agent/index.ts';
+import { createTtsTool } from '#/capabilities/tools/registry/tts.ts';
 
 function speechRouter(
   bytes: Uint8Array,

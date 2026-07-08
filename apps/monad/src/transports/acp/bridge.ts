@@ -15,8 +15,8 @@
 // sandbox roots arrive in later phases.
 
 import type { SessionOrigin, SessionTransport } from '@monad/protocol';
-import type { EventSink } from '@/handlers/session/index.ts';
-import type { AcpHandlers } from '@/transports/acp/connection.ts';
+import type { EventSink } from '#/handlers/session/index.ts';
+import type { AcpHandlers } from '#/transports/acp/connection.ts';
 
 import { createLogger } from '@monad/logger';
 import { eventSchema, readTypedSseStream } from '@monad/protocol';

@@ -12,11 +12,11 @@ import type {
   RpcParams,
   RpcResult
 } from '@monad/protocol';
-import type { EventSink } from '@/handlers/session/index.ts';
-import type { ConnectionState } from '@/transports/jsonrpc/connection.ts';
+import type { EventSink } from '#/handlers/session/index.ts';
+import type { ConnectionState } from '#/transports/jsonrpc/connection.ts';
 
-import { createDaemonHandlers } from '@/handlers/daemon-handlers/index.ts';
-import { buildSessionOrigin } from '@/handlers/session/origin.ts';
+import { createDaemonHandlers } from '#/handlers/daemon-handlers/index.ts';
+import { buildSessionOrigin } from '#/handlers/session/origin.ts';
 
 export type Push = (msg: JsonRpcResponse | JsonRpcNotification) => void;
 

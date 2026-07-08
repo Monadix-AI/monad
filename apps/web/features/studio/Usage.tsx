@@ -18,8 +18,8 @@ import {
 import { Button, Card, cn, Skeleton } from '@monad/ui';
 import { useMemo, useState } from 'react';
 
-import { useT } from '@/components/I18nProvider';
-import { useExternalAgentSettings } from '@/hooks/use-external-agent-settings';
+import { useT } from '#/components/I18nProvider';
+import { useExternalAgentSettings } from '#/hooks/use-external-agent-settings';
 
 type UsageTab = 'overview' | 'models' | 'ledger';
 

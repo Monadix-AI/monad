@@ -1,16 +1,16 @@
 import type { Credential } from '@monad/home';
 import type { AddCredentialRequest, TestConnectionRequest, TestCredentialRequest } from '@monad/protocol';
-import type { ModelContext } from '@/handlers/settings/model/context.ts';
+import type { ModelContext } from '#/handlers/settings/model/context.ts';
 
 import { newId } from '@monad/protocol';
 
-import { fetchProviderModels } from '@/agent/index.ts';
+import { fetchProviderModels } from '#/agent/index.ts';
 import {
   credentialToHandle,
   credentialToView,
   enrichModelInfo,
   providerToResolved
-} from '@/handlers/settings/model/utils.ts';
+} from '#/handlers/settings/model/utils.ts';
 
 export function createCredentialsHandlers(ctx: ModelContext) {
   return {

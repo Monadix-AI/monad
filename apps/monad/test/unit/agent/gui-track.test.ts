@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 
-import { guiTrackInstructions } from '@/agent/prompts.ts';
+import { guiTrackInstructions } from '#/agent/prompts.ts';
 
 test('no GUI tools → no hint', () => {
   expect(guiTrackInstructions(['file_read', 'shell_exec'])).toBe('');

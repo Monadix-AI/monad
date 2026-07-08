@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 
-import { HandlerError } from '@/handlers/handler-error.ts';
+import { HandlerError } from '#/handlers/handler-error.ts';
 import { buildHandlers, mockModel } from '../../helpers.ts';
 
 test('branch creates a child with parentSessionId set; provenance links them', async () => {

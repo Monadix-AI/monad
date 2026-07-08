@@ -5,7 +5,7 @@ import { existsSync, unlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { acquireSingletonLock } from '@/infra/singleton-lock.ts';
+import { acquireSingletonLock } from '#/infra/singleton-lock.ts';
 
 const t = (key: string) => key;
 let lockPath: string;

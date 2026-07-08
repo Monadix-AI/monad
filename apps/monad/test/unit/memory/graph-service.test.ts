@@ -1,14 +1,14 @@
 // L2 consolidation loop (extract → upsert → cursor → reconcile) + the CodeGraph-shaped query tools,
 // over a real in-memory GraphStore with a fake model + fake message source.
 
-import type { ToolContext } from '@/capabilities/tools/types.ts';
+import type { ToolContext } from '#/capabilities/tools/types.ts';
 
 import { expect, test } from 'bun:test';
 
-import { parseExtracted } from '@/services/memory/graph/extract.ts';
-import { createGraphQueryTools } from '@/services/memory/graph/query-tools.ts';
-import { consolidateGraph, type GraphMessage, graphAutoDue } from '@/services/memory/graph/service.ts';
-import { GraphStore } from '@/services/memory/graph/store.ts';
+import { parseExtracted } from '#/services/memory/graph/extract.ts';
+import { createGraphQueryTools } from '#/services/memory/graph/query-tools.ts';
+import { consolidateGraph, type GraphMessage, graphAutoDue } from '#/services/memory/graph/service.ts';
+import { GraphStore } from '#/services/memory/graph/store.ts';
 
 const silent = { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} } as never;
 const GRAPH_JSON = JSON.stringify({

@@ -1,4 +1,4 @@
-import type { createDaemonHandlers } from '@/handlers/daemon-handlers/index.ts';
+import type { createDaemonHandlers } from '#/handlers/daemon-handlers/index.ts';
 
 import {
   checkSkillUpdatesResponseSchema,
@@ -34,8 +34,8 @@ import {
 import { Elysia } from 'elysia';
 import { z } from 'zod';
 
-import { HandlerError } from '@/handlers/handler-error.ts';
-import { readRequestBytes } from '@/services/upload.ts';
+import { HandlerError } from '#/handlers/handler-error.ts';
+import { readRequestBytes } from '#/services/upload.ts';
 
 // HTTP-only surface: contract declared inline; reusable wire schemas come from @monad/protocol.
 const packParams = z.object({ name: z.string() });
@@ -86,7 +86,8 @@ export function createAtomsController(handlers: ReturnType<typeof createDaemonHa
       '/atoms/:name/assets/*',
       async ({ params }) => {
         const asset = await handlers.atoms.getAtomPackAsset({ name: params.name, path: params['*'] });
-        return new Response(asset.bytes, {
+        const body = new Uint8Array(asset.bytes).buffer;
+        return new Response(body, {
           headers: {
             ...(asset.contentType ? { 'content-type': asset.contentType } : {}),
             'cache-control': 'no-store'

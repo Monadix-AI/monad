@@ -1,6 +1,6 @@
 import type { UIItem, UIMessageItem } from '@monad/protocol';
 import type { Dispatch, KeyboardEvent as ReactKeyboardEvent, SetStateAction } from 'react';
-import type { SessionCommandMenuItem } from '@/features/routes/sessions/SessionRoute';
+import type { SessionCommandMenuItem } from '#/features/routes/sessions/SessionRoute';
 
 import {
   compactDividerItems,
@@ -9,7 +9,7 @@ import {
   type ViewItem,
   viewItemFromUi,
   viewItemKey
-} from '@/features/session/chat-view-items';
+} from '#/features/session/chat-view-items';
 
 export const EMPTY_UI_ITEMS: UIItem[] = [];
 

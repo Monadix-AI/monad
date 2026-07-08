@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, expect, test } from 'bun:test';
 import { join } from 'node:path';
 
-import { connectMcpServer, type McpConnection } from '@/capabilities/tools';
+import { connectMcpServer, type McpConnection } from '#/capabilities/tools';
 
 const fixture = join(import.meta.dir, 'fixtures', 'mock-mcp-server.ts');
 let conn: McpConnection | null = null;

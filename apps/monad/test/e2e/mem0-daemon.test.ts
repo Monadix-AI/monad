@@ -4,17 +4,17 @@
 // cfg.memory.backend = 'mem0'.
 
 import type { Fact } from '@monad/protocol';
-import type { ModelRouter } from '@/agent/index.ts';
-import type { Mem0Client, Mem0Memory } from '@/services/memory/mem0.ts';
-import type { createStore } from '@/store/db/index.ts';
+import type { ModelRouter } from '#/agent/index.ts';
+import type { Mem0Client, Mem0Memory } from '#/services/memory/mem0.ts';
+import type { createStore } from '#/store/db/index.ts';
 
 import { describe, expect, test } from 'bun:test';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { createMemoryService } from '@/services/memory/index.ts';
-import { createHttpTransport } from '@/transports/http.ts';
+import { createMemoryService } from '#/services/memory/index.ts';
+import { createHttpTransport } from '#/transports/http.ts';
 import { buildHandlers, mockModel, serveTransport, TRANSPORTS } from '../helpers.ts';
 
 const silent = { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} } as never;

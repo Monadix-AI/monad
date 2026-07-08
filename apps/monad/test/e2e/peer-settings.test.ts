@@ -11,7 +11,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initMonadHome, loadAll, loadAuth, saveSystemConfig } from '@monad/home';
 
-import { ModelService } from '@/handlers/settings/model/index.ts';
+import { ModelService } from '#/handlers/settings/model/index.ts';
 import { buildHandlers, makeTestPaths, mockModel, seededProviderRegistry } from '../helpers.ts';
 
 function makePaths(base: string): MonadPaths {

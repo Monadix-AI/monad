@@ -14,12 +14,12 @@ import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react';
 import { Badge, Button, Card, Input, Label, Switch } from '@monad/ui';
 import { useEffect, useState } from 'react';
 
-import { useT } from '@/components/I18nProvider';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { useAsyncAction } from '@/hooks/use-async-action';
-import { useBrowserPresetSettings } from '@/hooks/use-browser-preset-settings';
-import { useComputerPresetSettings } from '@/hooks/use-computer-preset-settings';
-import { useObscuraSettings } from '@/hooks/use-obscura-settings';
+import { useT } from '#/components/I18nProvider';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '#/components/ui/dialog';
+import { useAsyncAction } from '#/hooks/use-async-action';
+import { useBrowserPresetSettings } from '#/hooks/use-browser-preset-settings';
+import { useComputerPresetSettings } from '#/hooks/use-computer-preset-settings';
+import { useObscuraSettings } from '#/hooks/use-obscura-settings';
 
 type McpPreset = 'browser' | 'computer' | 'obscura';
 

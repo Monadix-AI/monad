@@ -1,8 +1,8 @@
-import type { WatchFn, WatchHandle } from '@/reload/index.ts';
+import type { WatchFn, WatchHandle } from '#/reload/index.ts';
 
 import { beforeEach, expect, test } from 'bun:test';
 
-import { ReloadService } from '@/reload/index.ts';
+import { ReloadService } from '#/reload/index.ts';
 
 const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 

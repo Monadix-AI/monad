@@ -1,11 +1,11 @@
-import type { createDaemonHandlers } from '@/handlers/daemon-handlers/index.ts';
-import type { ConnectionState } from '@/transports/jsonrpc/index.ts';
+import type { createDaemonHandlers } from '#/handlers/daemon-handlers/index.ts';
+import type { ConnectionState } from '#/transports/jsonrpc/index.ts';
 
 import { Elysia } from 'elysia';
 
-import { isBrowserRequestAllowed } from '@/transports/http/browser-guard.ts';
-import { getStreamSocketId } from '@/transports/http/stream/model.ts';
-import { closeConnection, createConnectionState, handleRpcMessage } from '@/transports/jsonrpc/index.ts';
+import { isBrowserRequestAllowed } from '#/transports/http/browser-guard.ts';
+import { getStreamSocketId } from '#/transports/http/stream/model.ts';
+import { closeConnection, createConnectionState, handleRpcMessage } from '#/transports/jsonrpc/index.ts';
 
 // Browser-facing WS gets a token-bucket rate limit: a 100-request burst, then a
 // sustained 50 req/s — far above any legitimate UI, but caps a flooding socket.

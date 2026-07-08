@@ -5,7 +5,7 @@ import {
   resolveAllowedOrigin,
   resolveRemoteAccessConfig,
   tokenMatches
-} from '@/transports/http.ts';
+} from '#/transports/http.ts';
 
 // ── resolveAllowedOrigin ───────────────────────────────────────────────────────
 

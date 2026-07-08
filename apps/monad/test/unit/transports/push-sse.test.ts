@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 
-import { createPushSseResponse, startSseHeartbeat } from '@/transports/http/sessions/sse.ts';
+import { createPushSseResponse, startSseHeartbeat } from '#/transports/http/sessions/sse.ts';
 
 const encoder = new TextEncoder();
 const encode = (v: { n: number }): Uint8Array => encoder.encode(`event: t\ndata: ${JSON.stringify(v)}\n\n`);

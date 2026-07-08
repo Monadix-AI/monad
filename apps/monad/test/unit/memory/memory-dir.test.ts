@@ -7,7 +7,7 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { factId, MemoryDir, projectKey, scopeOf } from '@/store/db/index.ts';
+import { factId, MemoryDir, projectKey, scopeOf } from '#/store/db/index.ts';
 
 test('projectKey is filename-safe, stable, and disambiguates distinct paths', () => {
   const k = projectKey('/Users/zeke/Projects/Monad');

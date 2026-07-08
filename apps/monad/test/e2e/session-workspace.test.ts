@@ -4,8 +4,8 @@
 // #1 fix in messaging.ts (sandboxRootsFor falls back to the persisted session.cwd).
 
 import type { Session } from '@monad/protocol';
-import type { ModelResult, ModelRouter } from '@/agent/index.ts';
-import type { Tool, ToolContext } from '@/capabilities/tools/types.ts';
+import type { ModelResult, ModelRouter } from '#/agent/index.ts';
+import type { Tool, ToolContext } from '#/capabilities/tools/types.ts';
 
 import { describe, expect, test } from 'bun:test';
 import { mkdtempSync } from 'node:fs';
@@ -13,9 +13,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { newId } from '@monad/protocol';
 
-import { toolResult } from '@/capabilities/tools/types.ts';
-import { createStore } from '@/store/db/index.ts';
-import { createHttpTransport } from '@/transports/http.ts';
+import { toolResult } from '#/capabilities/tools/types.ts';
+import { createStore } from '#/store/db/index.ts';
+import { createHttpTransport } from '#/transports/http.ts';
 import { buildHandlers, serveTransport, TRANSPORTS, type TransportHandle } from '../helpers.ts';
 
 function scriptedModel(steps: (string | { tool: string })[]): ModelRouter {

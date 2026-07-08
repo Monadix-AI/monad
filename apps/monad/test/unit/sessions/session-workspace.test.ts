@@ -1,5 +1,5 @@
 import type { Session, SessionId } from '@monad/protocol';
-import type { Agent } from '@/agent/index.ts';
+import type { Agent } from '#/agent/index.ts';
 
 import { expect, test } from 'bun:test';
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
@@ -7,11 +7,11 @@ import { homedir, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { newId } from '@monad/protocol';
 
-import { createSessionContext } from '@/handlers/session/context.ts';
-import { createLifecycleHandlers } from '@/handlers/session/handlers/lifecycle/index.ts';
-import { EventBus } from '@/services/event-bus.ts';
-import { RoundCache } from '@/services/round-cache.ts';
-import { createStore } from '@/store/db/index.ts';
+import { createSessionContext } from '#/handlers/session/context.ts';
+import { createLifecycleHandlers } from '#/handlers/session/handlers/lifecycle/index.ts';
+import { EventBus } from '#/services/event-bus.ts';
+import { RoundCache } from '#/services/round-cache.ts';
+import { createStore } from '#/store/db/index.ts';
 import { buildHandlers, mockModel } from '../../helpers.ts';
 
 const tmpDir = () => mkdtempSync(join(tmpdir(), 'monad-ws-'));

@@ -1,4 +1,4 @@
-import type { ToolContext } from '@/capabilities/tools/types.ts';
+import type { FileObservationStore, ToolContext } from '#/capabilities/tools/types.ts';
 
 import { afterAll, beforeAll, expect, test } from 'bun:test';
 
@@ -8,10 +8,24 @@ import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { fileReadTool, fileWriteTool, ToolSecurityError } from '@/capabilities/tools';
+import { fileReadTool, fileWriteTool, ToolSecurityError } from '#/capabilities/tools';
 
 let root: string;
-const ctx = (roots: string[] | undefined): ToolContext => ({ sessionId: 's1', sandboxRoots: roots, log: () => {} });
+const observations = new Map<string, Awaited<ReturnType<FileObservationStore['get']>>>();
+const fileObservations: FileObservationStore = {
+  remember(sessionId, observation) {
+    observations.set(`${sessionId}:${observation.path}`, observation);
+  },
+  get(sessionId, path) {
+    return observations.get(`${sessionId}:${path}`) ?? null;
+  }
+};
+const ctx = (roots: string[] | undefined): ToolContext => ({
+  sessionId: 's1',
+  sandboxRoots: roots,
+  fileObservations,
+  log: () => {}
+});
 
 beforeAll(async () => {
   root = await mkdtemp(join(tmpdir(), 'monad-fs-unix-'));

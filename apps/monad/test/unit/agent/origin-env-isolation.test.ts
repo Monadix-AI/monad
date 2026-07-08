@@ -7,12 +7,12 @@
 // prompt. The test catches that failure mode by asserting only the four safe keys appear.
 
 import type { SessionId } from '@monad/protocol';
-import type { ModelRequest, ModelResult } from '@/agent/index.ts';
+import type { ModelRequest, ModelResult } from '#/agent/index.ts';
 
 import { expect, test } from 'bun:test';
 import { newId } from '@monad/protocol';
 
-import { AgentLoop, InMemoryMessageRepo, type ModelRouter } from '@/agent/index.ts';
+import { AgentLoop, InMemoryMessageRepo, type ModelRouter } from '#/agent/index.ts';
 
 /** Capture every ModelRequest seen by model.complete and model.stream. */
 function capturingModel(): { model: ModelRouter; requests: ModelRequest[] } {

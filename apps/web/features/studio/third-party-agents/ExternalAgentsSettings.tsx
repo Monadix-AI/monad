@@ -8,13 +8,13 @@ import { useStartExternalAgentAuthMutation } from '@monad/client-rtk';
 import { Button, cn, isProductIconId, ProductIcon, ScrollArea } from '@monad/ui';
 import { useState } from 'react';
 
-import { useT } from '@/components/I18nProvider';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { PanelShell } from '@/components/ui/panel-shell';
-import { StudioBreadcrumbHeader } from '@/features/studio/StudioBreadcrumbHeader';
-import { ExternalAgentAuthModal } from '@/features/workplace/cli/ExternalAgentAuthModal';
-import { useAsyncAction } from '@/hooks/use-async-action';
-import { useExternalAgentSettings } from '@/hooks/use-external-agent-settings';
+import { useT } from '#/components/I18nProvider';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '#/components/ui/dialog';
+import { PanelShell, PanelShellBody } from '#/components/ui/panel-shell';
+import { StudioBreadcrumbHeader } from '#/features/studio/StudioBreadcrumbHeader';
+import { ExternalAgentAuthModal } from '#/features/workplace/cli/ExternalAgentAuthModal';
+import { useAsyncAction } from '#/hooks/use-async-action';
+import { useExternalAgentSettings } from '#/hooks/use-external-agent-settings';
 import { AgentForm } from './ExternalAgentForm';
 import { ExternalAgentPresetPanel } from './ExternalAgentPresetPanel';
 import { ExternalAgentSettingsImportDialog } from './ExternalAgentSettingsImportDialog';
@@ -94,7 +94,7 @@ export function ExternalAgentsSettings({ embedded = false }: { onClose: () => vo
           title={t('web.externalAgent.title')}
         />
       ) : null}
-      <ScrollArea className="flex-1">
+      <PanelShellBody>
         <div className="flex flex-col gap-2 p-4">
           {connectError ? (
             <p className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-destructive text-xs">
@@ -147,7 +147,7 @@ export function ExternalAgentsSettings({ embedded = false }: { onClose: () => vo
             />
           ))}
         </div>
-      </ScrollArea>
+      </PanelShellBody>
       {authSession ? (
         <ExternalAgentAuthModal
           agentName={authSession.agentName}

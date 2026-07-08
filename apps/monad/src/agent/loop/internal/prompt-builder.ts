@@ -1,11 +1,11 @@
 import type { EventType, SessionId } from '@monad/protocol';
-import type { Tool } from '@/capabilities/tools/types.ts';
+import type { Tool } from '#/capabilities/tools/types.ts';
 import type { ModelContentPart, ModelMessage, ModelUsage, ToolSpec } from '../../model/index.ts';
 import type { AgentLoopDeps, ImageAttachment } from '../types.ts';
 
 import { includeInContext } from '@monad/protocol';
 
-import { toolInputJsonSchema } from '@/capabilities/tools/schema.ts';
+import { toolInputJsonSchema } from '#/capabilities/tools/schema.ts';
 import { ContextBuilder } from '../../context/budget.ts';
 import { estimateTokensCached, globalEstimator } from '../../context/estimate.ts';
 import { messageChars } from '../../context/index.ts';

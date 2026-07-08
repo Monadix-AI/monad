@@ -2,14 +2,14 @@
 // registry the getter reads) reaches the running agent without a rebuild — the same contract that
 // lets atom-pack/MCP installs take effect without a daemon restart.
 
-import type { ModelResult, ModelRouter } from '@/agent/index.ts';
-import type { Tool, ToolContext } from '@/capabilities/tools/types.ts';
+import type { ModelResult, ModelRouter } from '#/agent/index.ts';
+import type { Tool, ToolContext } from '#/capabilities/tools/types.ts';
 
 import { expect, test } from 'bun:test';
 
-import { createAgent } from '@/agent/index.ts';
-import { createDelegateTool } from '@/capabilities/tools/registry/delegate.ts';
-import { toolResult } from '@/capabilities/tools/types.ts';
+import { createAgent } from '#/agent/index.ts';
+import { createDelegateTool } from '#/capabilities/tools/registry/delegate.ts';
+import { toolResult } from '#/capabilities/tools/types.ts';
 
 const mkTool = (name: string): Tool => ({ name, description: name, scopes: [], run: async () => toolResult('ok') });
 const sessionRepo = { insertSession: () => {}, getSession: () => null };

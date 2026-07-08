@@ -13,7 +13,7 @@ import type {
 
 import builtinAtomPack from '@monad/atoms';
 
-import { loadChannelAtomPacks } from '@/channels/atom-pack-host.ts';
+import { loadChannelAtomPacks } from '#/channels/atom-pack-host.ts';
 
 /** The single first-party atom pack — every built-in atom (connectors, Telegram channel, reserved
  *  commands, en/zh locales, model providers) bundled and loaded through the SAME atom-kind-gated

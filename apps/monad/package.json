@@ -54,10 +54,17 @@
       "default": "./src/services/log-maintenance.ts"
     }
   },
+  "imports": {
+    "#/*": [
+      "./src/*",
+      "./src/*.ts",
+      "./src/*/index.ts"
+    ]
+  },
   "module": "src/main.ts",
   "private": true,
   "scripts": {
-    "build": "tsc --build --clean tsconfig.build.json && tsc --build tsconfig.build.json",
+    "build": "tsgo --noEmit",
     "devtools": "bunx @ai-sdk/devtools",
     "lint": "biome check .",
     "start": "bun src/main.ts",

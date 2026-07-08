@@ -1,12 +1,12 @@
 import type { SessionId } from '@monad/protocol';
-import type { ToolContext } from '@/capabilities/tools/types.ts';
+import type { ToolContext } from '#/capabilities/tools/types.ts';
 
 import { expect, test } from 'bun:test';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
-import { createAcpDelegateTool } from '@/services/delegation/acp-delegate.ts';
+import { createAcpDelegateTool } from '#/services/delegation/acp-delegate.ts';
 
 const fixture = resolve(import.meta.dir, '../fixtures/mock-acp-agent.ts');
 

@@ -1,22 +1,22 @@
 import type { InstallSkillRequest, InstallSkillResponse } from '@monad/protocol';
-import type { SkillInstallReviewer } from '@/capabilities/skills/install/index.ts';
-import type { AtomPacksDeps } from '@/handlers/atom-pack/atom-pack-manager.ts';
+import type { SkillInstallReviewer } from '#/capabilities/skills/install/index.ts';
+import type { AtomPacksDeps } from '#/handlers/atom-pack/atom-pack-manager.ts';
 
 import { loadAuth } from '@monad/home';
 
-import { installClawHubSkill } from '@/capabilities/skills/install/clawhub.ts';
-import { createSkillFetcher } from '@/capabilities/skills/install/fetch.ts';
-import { installGitSkill } from '@/capabilities/skills/install/git.ts';
-import { installSkill as installSkillFromGithub } from '@/capabilities/skills/install/index.ts';
-import { installHttpSkill } from '@/capabilities/skills/install/tarball.ts';
-import { SAFE_NAME } from '@/handlers/atom-pack/atom-pack-content.ts';
-import { resolveToken } from '@/handlers/atom-pack/atom-pack-shared.ts';
+import { installClawHubSkill } from '#/capabilities/skills/install/clawhub.ts';
+import { createSkillFetcher } from '#/capabilities/skills/install/fetch.ts';
+import { installGitSkill } from '#/capabilities/skills/install/git.ts';
+import { installSkill as installSkillFromGithub } from '#/capabilities/skills/install/index.ts';
+import { installHttpSkill } from '#/capabilities/skills/install/tarball.ts';
+import { SAFE_NAME } from '#/handlers/atom-pack/atom-pack-content.ts';
+import { resolveToken } from '#/handlers/atom-pack/atom-pack-shared.ts';
 import {
   isDefaultMarketplaceSourceSpec,
   isGithubHttpSource,
   readSkillRecord
-} from '@/handlers/atom-pack/atom-pack-skill-source.ts';
-import { HandlerError } from '@/handlers/handler-error.ts';
+} from '#/handlers/atom-pack/atom-pack-skill-source.ts';
+import { HandlerError } from '#/handlers/handler-error.ts';
 
 interface SkillInstallerDeps {
   reviewInstall: SkillInstallReviewer;

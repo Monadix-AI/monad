@@ -1,5 +1,5 @@
 import type { GenerateMessageResponse, ListMessagesResponse } from '@monad/protocol';
-import type { createDaemonHandlers } from '@/handlers/daemon-handlers/index.ts';
+import type { createDaemonHandlers } from '#/handlers/daemon-handlers/index.ts';
 
 import {
   configureRuntimeRequestSchema,
@@ -18,14 +18,14 @@ import {
 import { Elysia } from 'elysia';
 import { z } from 'zod';
 
-import { buildSessionOrigin } from '@/handlers/session/origin.ts';
+import { buildSessionOrigin } from '#/handlers/session/origin.ts';
 import {
   createSessionEventsSseResponse,
   createSessionLogsSseResponse,
   createSessionMessageSseResponse,
   createSessionUiEventsSseResponse,
   wantsInlineSessionStream
-} from '@/transports/http/sessions/stream.ts';
+} from '#/transports/http/sessions/stream.ts';
 
 // The two HTTP-only routes in this otherwise-universal controller (SSE events + out-of-band runtime
 // config) declare their contracts inline from protocol leaf schemas — they have no JSON-RPC twin, so

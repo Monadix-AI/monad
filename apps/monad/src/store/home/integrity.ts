@@ -1,10 +1,10 @@
 import type { MonadPaths } from '@monad/home';
-import type { Store } from '@/store/db/index.ts';
+import type { Store } from '#/store/db/index.ts';
 
 import { unlink } from 'node:fs/promises';
 import { initMonadHome, loadAll, loadAuth, saveAuth, saveProfile, tryParseProfile } from '@monad/home';
 
-import { CURRENT_SCHEMA_VERSION } from '@/store/db/index.ts';
+import { CURRENT_SCHEMA_VERSION } from '#/store/db/index.ts';
 
 export interface IntegrityReport {
   config: 'ok' | 'missing';

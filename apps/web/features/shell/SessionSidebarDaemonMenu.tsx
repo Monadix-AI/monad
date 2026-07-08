@@ -1,7 +1,7 @@
 'use client';
 
 import type { NetworkRuntimeStatus, SystemUpgradeStatus } from '@monad/protocol';
-import type { useT } from '@/components/I18nProvider';
+import type { useT } from '#/components/I18nProvider';
 
 import {
   Alert01Icon,
@@ -29,7 +29,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuShortcut,
   DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu';
+} from '#/components/ui/dropdown-menu';
 import {
   daemonDisplayHost,
   getActiveDaemonConnection,
@@ -37,8 +37,8 @@ import {
   type RemoteDaemonConnection,
   readRemoteDaemonConnections,
   saveRemoteDaemonConnection
-} from '@/lib/daemon-connections';
-import { watchUpgradeRestartAndReload } from '@/lib/monad-store';
+} from '#/lib/daemon-connections';
+import { watchUpgradeRestartAndReload } from '#/lib/monad-store';
 import { RemoteDaemonDialog } from './SessionSidebarRemoteDaemonDialog';
 
 type TFunction = ReturnType<typeof useT>;

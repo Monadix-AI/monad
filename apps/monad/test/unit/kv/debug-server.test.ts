@@ -3,8 +3,8 @@ import { unlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { startKvDebugServer } from '@/store/kv/debug-server.ts';
-import { KvServer, type StoreSnapshot } from '@/store/kv/index.ts';
+import { startKvDebugServer } from '#/store/kv/debug-server.ts';
+import { KvServer, type StoreSnapshot } from '#/store/kv/index.ts';
 
 const getJson = async <T>(url: string): Promise<T> => (await fetch(url)).json() as Promise<T>;
 

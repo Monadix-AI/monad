@@ -9,8 +9,8 @@ import { Button, Input, Label, Select, SelectContent, SelectItem, SelectTrigger,
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 
-import { useT } from '@/components/I18nProvider';
-import { mcpServerFormSchema } from '@/lib/form-validation';
+import { useT } from '#/components/I18nProvider';
+import { mcpServerFormSchema } from '#/lib/form-validation';
 
 type AuthMode = 'none' | 'bearer' | 'headers' | 'oauth';
 type McpServerFormValues = {

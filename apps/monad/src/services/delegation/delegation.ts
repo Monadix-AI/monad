@@ -6,7 +6,7 @@
 // editor answers via the `delegation.respond` RPC (streaming terminal output via `delegation.output`).
 
 import type { Event, SessionId } from '@monad/protocol';
-import type { FsBackend, TerminalBackend, TerminalExecResult } from '@/capabilities/tools/types.ts';
+import type { FsBackend, TerminalBackend, TerminalExecResult } from '#/capabilities/tools/types.ts';
 
 import { newId } from '@monad/protocol';
 

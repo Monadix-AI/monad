@@ -1,7 +1,7 @@
 import { Database } from 'bun:sqlite';
 import { expect, test } from 'bun:test';
 
-import { CURRENT_SCHEMA_VERSION, migrate } from '@/store/db/migrations.ts';
+import { CURRENT_SCHEMA_VERSION, migrate } from '#/store/db/migrations.ts';
 
 // Pre-release: migrations are additive. These tests assert migrate() builds the current
 // shape on a fresh DB and is safe to re-run.

@@ -7,8 +7,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createDefaultConfig, saveAll } from '@monad/home';
 
-import { ModelService } from '@/handlers/settings/model/index.ts';
-import { createHttpTransport } from '@/transports/http.ts';
+import { ModelService } from '#/handlers/settings/model/index.ts';
+import { createHttpTransport } from '#/transports/http.ts';
 import { buildHandlers, mockModel, seededProviderRegistry } from '../../helpers.ts';
 
 function makeTempPaths() {

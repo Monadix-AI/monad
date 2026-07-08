@@ -19,11 +19,11 @@ import { useRemoveSkillMutation, useUpdateSkillMutation } from '@monad/client-rt
 import { Badge, Button, cn, Switch, Tooltip, TooltipContent, TooltipTrigger } from '@monad/ui';
 import { useState } from 'react';
 
-import { HoverActions } from '@/components/HoverActions';
-import { useT } from '@/components/I18nProvider';
-import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { renderableIconText } from '@/lib/renderable-icon-text';
+import { HoverActions } from '#/components/HoverActions';
+import { useT } from '#/components/I18nProvider';
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '#/components/ui/hover-card';
+import { Popover, PopoverContent, PopoverTrigger } from '#/components/ui/popover';
+import { renderableIconText } from '#/lib/renderable-icon-text';
 import { GitHubMark } from './GitHubMark';
 import { formatDate, githubRefKind, githubRepositoryHref, githubSourceDetails, isHttpIcon } from './utils';
 

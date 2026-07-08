@@ -15,7 +15,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { landlockLauncher } from '@monad/atoms/sandbox/landlock';
 
-import { configureSandboxLauncher, noneLauncher, sandboxedSpawn } from '@/capabilities/tools';
+import { configureSandboxLauncher, noneLauncher, sandboxedSpawn } from '#/capabilities/tools';
 
 const launcher = landlockLauncher;
 // Skip when the native monad-sandbox-launcher binary isn't installed (isAvailable() probes for it).

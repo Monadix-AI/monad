@@ -4,8 +4,8 @@ import { expect, test } from 'bun:test';
 import { newId } from '@monad/protocol';
 import { sql } from 'drizzle-orm';
 
-import { createStore } from '@/store/db/index.ts';
-import { sessions, tasks, workplaceProjects } from '@/store/db/schema.ts';
+import { createStore } from '#/store/db/index.ts';
+import { sessions, tasks, workplaceProjects } from '#/store/db/schema.ts';
 
 function fixtureSession(over: Partial<Session> = {}): Session {
   const now = new Date().toISOString();

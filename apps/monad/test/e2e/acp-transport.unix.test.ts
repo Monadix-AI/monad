@@ -1,12 +1,12 @@
 import type { RequestPermissionResponse, SessionNotification } from '@agentclientprotocol/sdk';
-import type { ModelResult, ModelRouter } from '@/agent/index.ts';
-import type { Tool } from '@/capabilities/tools/types.ts';
+import type { ModelResult, ModelRouter } from '#/agent/index.ts';
+import type { Tool } from '#/capabilities/tools/types.ts';
 
 import { expect, test } from 'bun:test';
 import { client as acpClient, ndJsonStream, PROTOCOL_VERSION, type Stream } from '@agentclientprotocol/sdk';
 
-import { shellExecTool } from '@/capabilities/tools';
-import { connectAcp } from '@/transports/acp/connection.ts';
+import { shellExecTool } from '#/capabilities/tools';
+import { connectAcp } from '#/transports/acp/connection.ts';
 import { buildHandlers } from '../helpers.ts';
 
 type Step = string | { tool: string; input?: unknown };

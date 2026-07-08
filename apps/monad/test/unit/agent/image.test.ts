@@ -1,12 +1,12 @@
-import type { ToolContext } from '@/capabilities/tools/types.ts';
+import type { ToolContext } from '#/capabilities/tools/types.ts';
 
 import { expect, test } from 'bun:test';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { type ImageRequest, type ImageResult, type ModelRouter } from '@/agent/index.ts';
-import { createImageTool } from '@/capabilities/tools/registry/image.ts';
+import { type ImageRequest, type ImageResult, type ModelRouter } from '#/agent/index.ts';
+import { createImageTool } from '#/capabilities/tools/registry/image.ts';
 
 /** A router whose generateImage returns fixed bytes and records the request. */
 function imageRouter(

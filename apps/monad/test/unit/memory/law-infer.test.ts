@@ -2,9 +2,9 @@
 
 import { expect, test } from 'bun:test';
 
-import { ConsolidationState } from '@/services/memory/consolidation-state.ts';
-import { inferLawsForScopes, parseLaws } from '@/services/memory/law-infer.ts';
-import { LawStore } from '@/services/memory/law-store.ts';
+import { ConsolidationState } from '#/services/memory/consolidation-state.ts';
+import { inferLawsForScopes, parseLaws } from '#/services/memory/law-infer.ts';
+import { LawStore } from '#/services/memory/law-store.ts';
 
 const silent = { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} } as never;
 // The model cites the short ref tags it was shown ([f1]/[e1]); a fabricated tag (f9) must be dropped.

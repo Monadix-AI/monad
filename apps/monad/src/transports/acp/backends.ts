@@ -4,9 +4,9 @@
 
 import type { AgentContext } from '@agentclientprotocol/sdk';
 import type { SessionId } from '@monad/protocol';
-import type { FsBackend, TerminalBackend } from '@/capabilities/tools/types.ts';
+import type { FsBackend, TerminalBackend } from '#/capabilities/tools/types.ts';
 
-import { shellArgv } from '@/capabilities/tools';
+import { shellArgv } from '#/capabilities/tools';
 
 const OUTPUT_BYTE_LIMIT = 1024 * 1024; // mirror the sandbox shell cap
 const POLL_INTERVAL_MS = 200; // how often to poll the client terminal for live output

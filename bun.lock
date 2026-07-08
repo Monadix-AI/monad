@@ -120,6 +120,7 @@
         "@monad/atoms": "workspace:*",
         "@monad/client": "workspace:*",
         "@monad/client-rtk": "workspace:*",
+        "@monad/config": "workspace:*",
         "@monad/home": "workspace:*",
         "@monad/i18n": "workspace:*",
         "@monad/logger": "workspace:*",

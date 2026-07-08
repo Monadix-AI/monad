@@ -5,7 +5,7 @@ import { HugeiconsIcon } from '@hugeicons/react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@monad/ui';
 import { memo } from 'react';
 
-import { useT } from '@/components/I18nProvider';
+import { useT } from '#/components/I18nProvider';
 
 export const MemorySummaryDivider = memo(function MemorySummaryDivider({
   item,

@@ -10,11 +10,11 @@ import type { ExternalAgentProductIcon, ExternalAgentProvider } from '@monad/pro
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
-import { type BinProbes, defaultBinProbes } from '@/infra/resolve-binary.ts';
+import { type BinProbes, defaultBinProbes } from '#/infra/resolve-binary.ts';
 import {
   findExternalAgentProviderAdapter,
   listExternalAgentProviderAdapters
-} from '@/services/external-agent/index.ts';
+} from '#/services/external-agent/index.ts';
 
 // ACP invites use the vendor's own npx-run bridge package, never the native `codex`/`claude` binary —
 // so unlike external-agent launch detection (adapter.detect(), which genuinely needs the binary to spawn),

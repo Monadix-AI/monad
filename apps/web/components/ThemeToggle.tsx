@@ -7,13 +7,13 @@ import { HugeiconsIcon } from '@hugeicons/react';
 import { Button, Tooltip, TooltipContent, TooltipTrigger } from '@monad/ui';
 import { useEffect, useState } from 'react';
 
-import { useT } from '@/components/I18nProvider';
+import { useT } from '#/components/I18nProvider';
 import {
   applyThemePreference,
   getThemePreference,
   resolveThemePreference,
   transitionThemePreference
-} from '@/lib/theme';
+} from '#/lib/theme';
 
 export function ThemeToggle() {
   const t = useT();

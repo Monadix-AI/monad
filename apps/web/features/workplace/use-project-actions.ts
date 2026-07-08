@@ -9,8 +9,8 @@ import type {
   WorkplaceProjectMemberType,
   WorkplaceProjectMemberView
 } from '@monad/protocol';
-import type { useAcpAgentSettings } from '@/hooks/use-acp-agent-settings';
-import type { useExternalAgentSettings } from '@/hooks/use-external-agent-settings';
+import type { useAcpAgentSettings } from '#/hooks/use-acp-agent-settings';
+import type { useExternalAgentSettings } from '#/hooks/use-external-agent-settings';
 
 import {
   useAbortSessionMutation,
@@ -36,7 +36,7 @@ import {
 } from '@monad/protocol';
 import { useCallback } from 'react';
 
-import { traceProjectDebugOperation } from '@/lib/project-debug-trace';
+import { traceProjectDebugOperation } from '#/lib/project-debug-trace';
 
 export type ApprovalDecision = 'approve' | 'reject';
 

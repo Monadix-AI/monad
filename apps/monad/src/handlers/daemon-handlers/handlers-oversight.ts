@@ -5,13 +5,13 @@ import type {
   PickDirectoryResponse,
   SystemUpgradeStatus
 } from '@monad/protocol';
-import type { DelegationService } from '@/services/delegation/delegation.ts';
-import type { ClarifyService } from '@/services/generation/clarify.ts';
-import type { OversightService } from '@/services/oversight.ts';
+import type { DelegationService } from '#/services/delegation/delegation.ts';
+import type { ClarifyService } from '#/services/generation/clarify.ts';
+import type { OversightService } from '#/services/oversight.ts';
 
 import { pickDirectory } from '@monad/home';
 
-import { createSystemUpgradeModule } from '@/handlers/system-upgrade.ts';
+import { createSystemUpgradeModule } from '#/handlers/system-upgrade.ts';
 
 /** Human-in-the-loop control surfaces with no dependency on the rest of the daemon composition
  *  root: tool-approval gate CRUD, the clarify_ask response channel, the native directory picker,

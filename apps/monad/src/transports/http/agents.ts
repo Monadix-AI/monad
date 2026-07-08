@@ -1,9 +1,9 @@
-import type { createDaemonHandlers } from '@/handlers/daemon-handlers/index.ts';
+import type { createDaemonHandlers } from '#/handlers/daemon-handlers/index.ts';
 
 import { daemonHttpContract } from '@monad/protocol';
 import { Elysia } from 'elysia';
 
-import { baseUrlOf, buildA2aStatus } from '@/transports/a2a/index.ts';
+import { baseUrlOf, buildA2aStatus } from '#/transports/a2a/index.ts';
 
 export function createAgentsController(handlers: ReturnType<typeof createDaemonHandlers>) {
   const contracts = daemonHttpContract.agents;

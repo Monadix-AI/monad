@@ -3,7 +3,7 @@ import type { ProjectionMutations } from './ui-projection-state.ts';
 
 import { parseEventPayload } from '@monad/protocol';
 
-import { findExternalAgentProviderAdapter } from '@/services/external-agent/index.ts';
+import { findExternalAgentProviderAdapter } from '#/services/external-agent/index.ts';
 import {
   appendBoundedText,
   externalAgentProviderFromToolItem,

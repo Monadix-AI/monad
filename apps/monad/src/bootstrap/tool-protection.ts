@@ -1,4 +1,4 @@
-import type { Tool } from '@/capabilities/tools/types.ts';
+import type { Tool } from '#/capabilities/tools/types.ts';
 
 import { normalize, resolve, sep } from 'node:path';
 

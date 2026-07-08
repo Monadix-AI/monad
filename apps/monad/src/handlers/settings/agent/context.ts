@@ -1,5 +1,5 @@
 import type { MonadConfig, MonadPaths } from '@monad/home';
-import type { ConfigBus } from '@/services/config-bus.ts';
+import type { ConfigBus } from '#/services/config-bus.ts';
 
 import { loadAll, loadAuth, saveProfile } from '@monad/home';
 

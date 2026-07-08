@@ -14,7 +14,7 @@ import {
   listInstalledMcpAtoms,
   McpInstallError,
   removeMcpAtom
-} from '@/capabilities/mcp/install/index.ts';
+} from '#/capabilities/mcp/install/index.ts';
 
 let mcpDir: string;
 beforeEach(async () => {

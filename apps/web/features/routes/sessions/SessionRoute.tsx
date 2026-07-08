@@ -21,22 +21,23 @@ import { Button, cn, ScrollArea, Textarea } from '@monad/ui';
 import { VirtualList } from '@monad/ui/components/VirtualList';
 import { memo, useState } from 'react';
 
-import { useT } from '@/components/I18nProvider';
-import { AgentLoopInspector } from '@/features/session/AgentLoopInspector';
-import { ApprovalDisplayCard } from '@/features/session/ApprovalDisplayCard';
-import { approvalActionScopes } from '@/features/session/approval-display';
-import { Message } from '@/features/session/ChatMessage';
-import { ComposerQueueStack } from '@/features/session/ComposerQueueStack';
-import { ComposerShell } from '@/features/session/ComposerShell';
+import { useT } from '#/components/I18nProvider';
+import { AgentLoopInspector } from '#/features/session/AgentLoopInspector';
+import { ApprovalDisplayCard } from '#/features/session/ApprovalDisplayCard';
+import { approvalActionScopes } from '#/features/session/approval-display';
+import { Message } from '#/features/session/ChatMessage';
+import { ComposerQueueStack } from '#/features/session/ComposerQueueStack';
+import { ComposerShell } from '#/features/session/ComposerShell';
 import {
   isCompactCommandItem,
   isMemorySummaryItem,
   isToolItem,
   type ViewItem
-} from '@/features/session/chat-view-items';
-import { MemorySummaryDivider } from '@/features/session/MemorySummaryDivider';
-import { ToolStepView } from '@/features/session/ToolStepView';
-import { renderableIconText } from '@/lib/renderable-icon-text';
+} from '#/features/session/chat-view-items';
+import { MemorySummaryDivider } from '#/features/session/MemorySummaryDivider';
+import { useSessionUiStore } from '#/features/session/session-ui-store';
+import { ToolStepView } from '#/features/session/ToolStepView';
+import { renderableIconText } from '#/lib/renderable-icon-text';
 
 export interface SessionCommandMenuItem {
   badge?: string;
@@ -69,11 +70,8 @@ interface PendingClarification {
 
 type ComposerProps = ComponentProps<typeof ComposerShell>;
 
-interface SessionRouteProps {
-  accessMode: 'auto' | 'ask';
+export interface SessionRouteProps {
   activeInputSkillToken?: ComposerProps['skillToken'];
-  activeSkill: number;
-  atBottom: boolean;
   contextUsage?: ComposerProps['contextUsage'];
   currentSession: Session | null;
   currentSessionId: SessionId;
@@ -87,16 +85,12 @@ interface SessionRouteProps {
   messageQueue: string[];
   composerSettings: ComposerSettings;
   model: ComposerProps['model'];
-  onAccessModeChange: (mode: 'auto' | 'ask') => void;
   onApproval: (approval: PendingApproval, allow: boolean, scope: ApprovalScope, reason?: string) => void;
   onBranch: (messageId: string) => void;
   onClarifyAnswer: (requestId: string, answer: string) => void;
   onRemoveQueuedMessage: (index: number) => void;
   onCommandItemApply: (item: SessionCommandMenuItem) => void;
-  onCommandItemHover: (index: number) => void;
-  onInputChange: (value: string) => void;
   onKeyDown: KeyboardEventHandler<HTMLElement>;
-  onAtBottomChange: (atBottom: boolean) => void;
   onEndReached: () => void;
   onStartReached: () => void;
   onRestore: (messageId: string) => void;
@@ -114,16 +108,12 @@ interface SessionRouteProps {
   showInspector: boolean;
   skillMenuOpen: boolean;
   transcriptRef: Ref<VirtualListHandle>;
-  value: string;
   voiceModelConfigured: boolean;
   viewMessages: ViewItem[];
 }
 
-function SessionRoute({
-  accessMode,
+export function SessionRoute({
   activeInputSkillToken,
-  activeSkill,
-  atBottom,
   contextUsage,
   currentSession,
   currentSessionId,
@@ -137,15 +127,11 @@ function SessionRoute({
   messageQueue,
   composerSettings,
   model,
-  onAccessModeChange,
   onApproval,
   onBranch,
   onClarifyAnswer,
   onRemoveQueuedMessage,
   onCommandItemApply,
-  onCommandItemHover,
-  onInputChange,
-  onAtBottomChange,
   onEndReached,
   onStartReached,
   onKeyDown,
@@ -164,11 +150,18 @@ function SessionRoute({
   showInspector,
   skillMenuOpen,
   transcriptRef,
-  value,
   voiceModelConfigured,
   viewMessages
 }: SessionRouteProps) {
   const t = useT();
+  const accessMode = useSessionUiStore((state) => state.accessMode);
+  const activeSkill = useSessionUiStore((state) => state.activeSkill);
+  const atBottom = useSessionUiStore((state) => state.atBottom);
+  const input = useSessionUiStore((state) => state.input);
+  const setAccessMode = useSessionUiStore((state) => state.setAccessMode);
+  const setActiveSkill = useSessionUiStore((state) => state.setActiveSkill);
+  const setAtBottom = useSessionUiStore((state) => state.setAtBottom);
+  const setComposerInput = useSessionUiStore((state) => state.setComposerInput);
 
   return (
     <>
@@ -239,13 +232,16 @@ function SessionRoute({
               )
             }
             items={viewMessages}
-            onAtBottomChange={onAtBottomChange}
+            onAtBottomChange={setAtBottom}
             onEndReached={onEndReached}
             onStartReached={onStartReached}
             renderItem={(message) => (
               <div className="mx-auto w-full max-w-4xl px-6 pb-5">
                 {isToolItem(message) ? (
-                  <ToolStepView step={message} />
+                  <ToolStepView
+                    sessionId={currentSessionId}
+                    step={message}
+                  />
                 ) : isMemorySummaryItem(message) ? (
                   <MemorySummaryDivider item={message} />
                 ) : isCompactCommandItem(message) ? (
@@ -327,20 +323,20 @@ function SessionRoute({
                   items={menuItems}
                   loading={commandMenuLoading}
                   onApply={onCommandItemApply}
-                  onHover={onCommandItemHover}
+                  onHover={setActiveSkill}
                 />
               ) : null}
               <ComposerShell
                 access={{
                   mode: isReadOnly ? 'ask' : accessMode,
-                  onChange: onAccessModeChange
+                  onChange: setAccessMode
                 }}
                 ariaLabel="Message monad"
                 busy={isBusy}
                 contextUsage={contextUsage}
                 disabled={disabled}
                 model={model}
-                onChange={onInputChange}
+                onChange={setComposerInput}
                 onKeyDown={onKeyDown}
                 onStop={onStop}
                 onSubmit={onSubmit}
@@ -348,7 +344,7 @@ function SessionRoute({
                 placeholder={t('web.chat.placeholder')}
                 sendShortcut={composerSettings.sendShortcut}
                 skillToken={activeInputSkillToken}
-                value={value}
+                value={input}
                 voice={{
                   modelConfigured: voiceModelConfigured,
                   onSettingsClick: onVoiceSettingsClick,
@@ -404,7 +400,7 @@ function ApprovalCard({
           <code className="min-w-0 break-all font-mono">{approval.key}</code>
         </div>
       ) : approval.input !== undefined ? (
-        <pre className="max-h-32 overflow-auto rounded-(--radius-md) bg-background/60 p-3 text-muted-foreground text-xs">
+        <pre className="max-h-32 overflow-auto rounded-md bg-background/60 p-3 text-muted-foreground text-xs">
           {JSON.stringify(approval.input, null, 2)}
         </pre>
       ) : null}
@@ -465,7 +461,7 @@ function CommandMenu({
           {loading
             ? skeletonRows.map((row) => (
                 <div
-                  className="flex flex-col gap-1.5 rounded-(--radius-md) px-3 py-2"
+                  className="flex flex-col gap-1.5 rounded-md px-3 py-2"
                   key={`command-skeleton-${row}`}
                 >
                   <div className="flex items-center gap-2">
@@ -484,7 +480,7 @@ function CommandMenu({
               ) : null}
               <button
                 className={cn(
-                  'flex w-full flex-col items-start gap-0.5 rounded-(--radius-md) px-3 py-2 text-left',
+                  'flex w-full flex-col items-start gap-0.5 rounded-md px-3 py-2 text-left',
                   index === Math.min(activeSkill, items.length - 1)
                     ? 'bg-accent text-accent-foreground'
                     : 'hover:bg-accent/50'

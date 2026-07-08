@@ -4,7 +4,7 @@ import { Image01Icon, MonitorDotIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { useCallback } from 'react';
 
-import { DropdownMenuItem } from '@/components/ui/dropdown-menu';
+import { DropdownMenuItem } from '#/components/ui/dropdown-menu';
 import { usePromptInputAttachments } from './prompt-input-context';
 
 const captureScreenshot = async (): Promise<File | null> => {

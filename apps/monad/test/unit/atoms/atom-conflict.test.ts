@@ -12,8 +12,8 @@ import { unregisterMessageType } from '@monad/protocol';
 import { defineAtomPack, defineChannel, defineProvider, SDK_VERSION } from '@monad/sdk-atom';
 import { z } from 'zod';
 
-import { loadChannelAtomPacks } from '@/channels/atom-pack-host.ts';
-import { AtomPackRegistry } from '@/handlers/atom-pack/atom-pack-registry.ts';
+import { loadChannelAtomPacks } from '#/channels/atom-pack-host.ts';
+import { AtomPackRegistry } from '#/handlers/atom-pack/atom-pack-registry.ts';
 
 const caps = {
   edit: false,

@@ -1,8 +1,8 @@
-import type { ToolContext } from '@/capabilities/tools/types.ts';
+import type { ToolContext } from '#/capabilities/tools/types.ts';
 
 import { expect, test } from 'bun:test';
 
-import { clearTodos, type TodoItem, todoReadTool, todoWriteTool } from '@/capabilities/tools';
+import { clearTodos, type TodoItem, todoReadTool, todoWriteTool } from '#/capabilities/tools';
 
 const ctx = (sessionId: string): ToolContext => ({ sessionId, sandboxRoots: undefined, log: () => {} });
 

@@ -5,7 +5,7 @@ import type { Fact } from '@monad/protocol';
 
 import { describe, expect, test } from 'bun:test';
 
-import { createHttpTransport } from '@/transports/http.ts';
+import { createHttpTransport } from '#/transports/http.ts';
 import { buildHandlers, mockModel, serveTransport, TRANSPORTS } from '../helpers.ts';
 
 for (const kind of TRANSPORTS) {

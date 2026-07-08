@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 
-import { extractError } from '@/agent/loop/index.ts';
+import { extractError } from '#/agent/loop/index.ts';
 
 // Simulate AI_APICallError shape from @ai-sdk/provider-utils
 function apiCallError(opts: { statusCode: number; data: unknown; message?: string }): Error {

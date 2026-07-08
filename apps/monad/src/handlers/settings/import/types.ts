@@ -1,6 +1,6 @@
 import type { AgentConfig, McpServerConfig, ModelProfile, MonadConfig, MonadPaths, Provider } from '@monad/home';
 import type { ImportSettingsItem, ImportSettingsSource, ModelRoles } from '@monad/protocol';
-import type { ConfigBus } from '@/services/config-bus.ts';
+import type { ConfigBus } from '#/services/config-bus.ts';
 
 export type KnownSource = Exclude<ImportSettingsSource, 'auto'>;
 

@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initMonadHome, pathsForHome } from '@monad/home';
 
-import { loadWorkspacePromptSlots, WORKSPACE_CONTEXT_FILES } from '@/store/home/workspace-context.ts';
+import { loadWorkspacePromptSlots, WORKSPACE_CONTEXT_FILES } from '#/store/home/workspace-context.ts';
 
 function makePaths(base: string): MonadPaths {
   return pathsForHome(base);

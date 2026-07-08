@@ -1,6 +1,6 @@
 // Mirrors the test harness mock in test/helpers.ts (kept in sync; the test helper may re-export from here).
 
-import type { ModelRequest, ModelResult, ModelRouter } from '@/agent/index.ts';
+import type { ModelRequest, ModelResult, ModelRouter } from '#/agent/index.ts';
 
 /** The fixed reply the mock streams/returns. e2e asserts on this exact text. */
 export const MOCK_REPLY = 'Hello from the mock model.';

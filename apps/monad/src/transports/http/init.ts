@@ -1,4 +1,4 @@
-import type { createDaemonHandlers } from '@/handlers/daemon-handlers/index.ts';
+import type { createDaemonHandlers } from '#/handlers/daemon-handlers/index.ts';
 
 import {
   envDepsStatusResponseSchema,
@@ -11,7 +11,7 @@ import {
 } from '@monad/protocol';
 import { Elysia } from 'elysia';
 
-import { HandlerError } from '@/handlers/handler-error.ts';
+import { HandlerError } from '#/handlers/handler-error.ts';
 
 // HTTP-only surface: contract declared inline; reusable wire schemas come from @monad/protocol.
 export function createInitController(handlers: ReturnType<typeof createDaemonHandlers>) {

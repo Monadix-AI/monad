@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 
-import { builtinTools, emailSendTool } from '@/capabilities/tools';
+import { builtinTools, emailSendTool } from '#/capabilities/tools';
 
 test('built-in tools have unique names', () => {
   const names = builtinTools.map((t) => t.name);

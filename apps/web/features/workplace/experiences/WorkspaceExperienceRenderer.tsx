@@ -3,7 +3,7 @@ import type { ProjectExperienceView } from './types';
 
 import { lazy, Suspense } from 'react';
 
-import { MonadLoading } from '@/components/MonadLoading';
+import { MonadLoading } from '#/components/MonadLoading';
 
 const WebComponentExperience = lazy(() =>
   import('./web-component/WebComponentExperience').then((module) => ({ default: module.WebComponentExperience }))

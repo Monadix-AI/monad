@@ -5,8 +5,8 @@ import { join } from 'node:path';
 import { createDefaultConfig, saveAll } from '@monad/home';
 import { newId } from '@monad/protocol';
 
-import { createAgentContext } from '@/handlers/settings/agent/context.ts';
-import { createAgentHandlers } from '@/handlers/settings/agent/handlers.ts';
+import { createAgentContext } from '#/handlers/settings/agent/context.ts';
+import { createAgentHandlers } from '#/handlers/settings/agent/handlers.ts';
 
 function makeHandlers() {
   const dir = mkdtempSync(join(tmpdir(), 'monad-agent-test-'));

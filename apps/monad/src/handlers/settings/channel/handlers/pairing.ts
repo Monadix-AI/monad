@@ -1,8 +1,8 @@
 import type { ChannelInstanceConfig } from '@monad/home';
 import type { ListChannelPairingsResponse, OkResponse } from '@monad/protocol';
-import type { ChannelSettingsContext } from '@/handlers/settings/channel/context.ts';
+import type { ChannelSettingsContext } from '#/handlers/settings/channel/context.ts';
 
-import { HandlerError } from '@/handlers/handler-error.ts';
+import { HandlerError } from '#/handlers/handler-error.ts';
 
 export function createPairingHandlers(ctx: ChannelSettingsContext) {
   return {

@@ -3,17 +3,17 @@
 // offline). npm downloads + extracts the registry tarball (npm packs files under `package/`).
 
 import type { Dirent } from 'node:fs';
-import type { AtomPackFetcher, FileAtoms, StagedAtomPack } from '@/atoms/install/index.ts';
-import type { AtomPackSource } from '@/atoms/install/source.ts';
-import type { DownloadProgress } from '@/services/download.ts';
+import type { AtomPackFetcher, FileAtoms, StagedAtomPack } from '#/atoms/install/index.ts';
+import type { AtomPackSource } from '#/atoms/install/source.ts';
+import type { DownloadProgress } from '#/services/download.ts';
 
 import { readdir } from 'node:fs/promises';
 import { join, posix } from 'node:path';
 import { z } from 'zod';
 
-import { InstallError } from '@/atoms/install/index.ts';
-import { untar } from '@/atoms/install/untar.ts';
-import { type DownloadFetch, downloadBytes } from '@/services/download.ts';
+import { InstallError } from '#/atoms/install/index.ts';
+import { untar } from '#/atoms/install/untar.ts';
+import { type DownloadFetch, downloadBytes } from '#/services/download.ts';
 
 // Untrusted downloaded/staged JSON — parsed (not cast) on read. The atom-pack.json read here only
 // needs `entry` to locate the bundle; the full manifest is validated later by parseAtomPackManifest.

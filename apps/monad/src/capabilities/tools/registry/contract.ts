@@ -13,7 +13,7 @@
 // the static builtins are composed at module load with no deps), and a module that needs a missing
 // dep returns [].
 
-import type { Tool } from '@/capabilities/tools/types.ts';
+import type { Tool } from '#/capabilities/tools/types.ts';
 import type { NoteStore } from './memory.ts';
 import type { Scheduler } from './schedule.ts';
 

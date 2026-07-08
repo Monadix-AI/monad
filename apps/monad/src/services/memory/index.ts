@@ -19,16 +19,16 @@ import type {
   ScopeKind,
   SessionId
 } from '@monad/protocol';
-import type { ModelRouter } from '@/agent/index.ts';
-import type { Mem0Resolution } from '@/services/memory/resolve-mem0.ts';
-import type { Store } from '@/store/db/index.ts';
+import type { ModelRouter } from '#/agent/index.ts';
+import type { Mem0Resolution } from '#/services/memory/resolve-mem0.ts';
+import type { Store } from '#/store/db/index.ts';
 
 import { join } from 'node:path';
 
-import { type MemoryTurn, renderMemoryBlock, sanitizeFact } from '@/agent/index.ts';
-import { fingerprint } from '@/services/memory/consolidation-state.ts';
-import { type BuildMem0Options, buildMem0Client, Mem0Adapter, type Mem0Client } from '@/services/memory/mem0.ts';
-import { factId, MemoryDir, projectKey, scopeOf } from '@/store/db/index.ts';
+import { type MemoryTurn, renderMemoryBlock, sanitizeFact } from '#/agent/index.ts';
+import { fingerprint } from '#/services/memory/consolidation-state.ts';
+import { type BuildMem0Options, buildMem0Client, Mem0Adapter, type Mem0Client } from '#/services/memory/mem0.ts';
+import { factId, MemoryDir, projectKey, scopeOf } from '#/store/db/index.ts';
 // `with { type: 'file' }` embeds reliably in bun's --compile binary (unlike new URL+import.meta.url).
 import consolidatePromptPath from '../../agent/prompts/memory-consolidate-system-prompt.md' with { type: 'file' };
 

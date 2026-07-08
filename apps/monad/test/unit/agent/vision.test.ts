@@ -1,12 +1,12 @@
-import type { ToolContext } from '@/capabilities/tools/types.ts';
+import type { ToolContext } from '#/capabilities/tools/types.ts';
 
 import { expect, test } from 'bun:test';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { type ModelContentPart, type ModelRequest, type ModelResult, type ModelRouter } from '@/agent/index.ts';
-import { createVisionTool } from '@/capabilities/tools/registry/vision.ts';
+import { type ModelContentPart, type ModelRequest, type ModelResult, type ModelRouter } from '#/agent/index.ts';
+import { createVisionTool } from '#/capabilities/tools/registry/vision.ts';
 
 /** A model that records the last request and returns a fixed analysis. */
 function recordingModel(): { model: ModelRouter; last: () => ModelRequest | undefined } {

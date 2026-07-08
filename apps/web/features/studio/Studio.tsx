@@ -5,9 +5,9 @@ import type { StudioSectionId } from './sections';
 import { useInitStatusQuery } from '@monad/client-rtk';
 import { useEffect } from 'react';
 
-import { isRuntimeReady, runtimeSectionEnabled } from '@/features/init/init-readiness';
-import { studioPath, studioSectionFromPathname, studioSubpathFromPathname } from '@/features/routes/route-paths';
-import { replaceShellUrl, useShellPathname } from '@/hooks/use-shell-location';
+import { isRuntimeReady, runtimeSectionEnabled } from '#/features/init/init-readiness';
+import { studioPath, studioSectionFromPathname, studioSubpathFromPathname } from '#/features/routes/route-paths';
+import { replaceShellUrl, useShellPathname } from '#/hooks/use-shell-location';
 import { STUDIO_SECTION_COMPONENTS } from './section-registry';
 
 /**

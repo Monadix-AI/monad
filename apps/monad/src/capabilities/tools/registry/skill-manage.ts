@@ -3,13 +3,13 @@
 // the agent proposes, a human approves. Writes are validated by writeSkill (parseSkillMd +
 // name/path guards) and the daemon's ReloadService makes them live without a restart.
 
-import type { Tool, ToolInputSchema } from '@/capabilities/tools/types.ts';
+import type { Tool, ToolInputSchema } from '#/capabilities/tools/types.ts';
 
 import { join } from 'node:path';
 
-import { scanSkillFiles } from '@/capabilities/skills/install/scan.ts';
-import { toolResult } from '@/capabilities/tools/types.ts';
-import { deleteSkill, patchSkill, removeSkillResource, writeSkill, writeSkillResource } from '@/store/home/skills.ts';
+import { scanSkillFiles } from '#/capabilities/skills/install/scan.ts';
+import { toolResult } from '#/capabilities/tools/types.ts';
+import { deleteSkill, patchSkill, removeSkillResource, writeSkill, writeSkillResource } from '#/store/home/skills.ts';
 
 const ACTIONS = ['create', 'edit', 'patch', 'delete', 'write_file', 'remove_file'] as const;
 type SkillAction = (typeof ACTIONS)[number];

@@ -1,8 +1,8 @@
-import type { OpenDoc } from '@/transports/acp/documents.ts';
+import type { OpenDoc } from '#/transports/acp/documents.ts';
 
 import { expect, test } from 'bun:test';
 
-import { applyRangeEdit, renderOpenDocs } from '@/transports/acp/documents.ts';
+import { applyRangeEdit, renderOpenDocs } from '#/transports/acp/documents.ts';
 
 const r = (sl: number, sc: number, el: number, ec: number) => ({
   start: { line: sl, character: sc },

@@ -3,7 +3,7 @@ import type { Session } from '@monad/protocol';
 import { expect, test } from 'bun:test';
 import { newId } from '@monad/protocol';
 
-import { createStore } from '@/store/db/index.ts';
+import { createStore } from '#/store/db/index.ts';
 
 // biome-ignore lint/suspicious/noExplicitAny: test-only escape hatch to access private sqlite for backdated ledger rows
 const rawSqlite = (store: ReturnType<typeof createStore>) => (store as any).sqlite;

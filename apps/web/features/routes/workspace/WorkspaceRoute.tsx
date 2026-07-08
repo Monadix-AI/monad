@@ -1,15 +1,15 @@
 'use client';
 
 import type { ProjectId, Session, SessionId } from '@monad/protocol';
-import type { ProjectExperienceDefinition } from '@/features/workplace/experiences/types';
-import type { ProjectController } from '@/features/workplace/use-project';
+import type { ProjectExperienceDefinition } from '#/features/workplace/experiences/types';
+import type { ProjectController } from '#/features/workplace/use-project';
 
 import { useListWorkspaceExperiencesQuery } from '@monad/client-rtk';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { listProjectExperiences, toProjectExperienceDefinitions } from '@/features/workplace/experiences/registry';
-import { Workplace } from '@/features/workplace/Workplace';
-import { useWorkplaceUiStore } from '@/features/workplace/workplace-ui-store';
+import { listProjectExperiences, toProjectExperienceDefinitions } from '#/features/workplace/experiences/registry';
+import { Workplace } from '#/features/workplace/Workplace';
+import { useWorkplaceUiStore } from '#/features/workplace/workplace-ui-store';
 import { ProjectTopBar } from './ProjectTopBar';
 import { useProjectViewMode } from './use-project-view-mode';
 import { WorkspaceHome } from './WorkspaceHome';

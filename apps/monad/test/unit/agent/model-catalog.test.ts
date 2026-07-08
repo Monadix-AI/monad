@@ -3,7 +3,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { assignTiers, classifyKind, ModelCatalogService } from '@/services/model-catalog.ts';
+import { assignTiers, classifyKind, ModelCatalogService } from '#/services/model-catalog.ts';
 
 let dir: string;
 let cachePath: string;

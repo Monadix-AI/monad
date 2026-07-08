@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 
-import { estimateTokens, estimateTokensCached, TokenEstimator } from '@/agent/index.ts';
+import { estimateTokens, estimateTokensCached, TokenEstimator } from '#/agent/index.ts';
 
 test('fresh estimator is approximate and uses the chars/4 seed', () => {
   const e = new TokenEstimator();

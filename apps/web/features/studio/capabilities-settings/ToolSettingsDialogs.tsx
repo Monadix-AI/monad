@@ -2,8 +2,8 @@ import { CheckIcon, FileCodeIcon, GlobeIcon, LoaderPinwheelIcon, Mail01Icon } fr
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Button, Input, Label } from '@monad/ui';
 
-import { useT } from '@/components/I18nProvider';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { useT } from '#/components/I18nProvider';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '#/components/ui/dialog';
 
 export type WebSearchProvider = 'auto' | 'native' | 'brave' | 'ddgs';
 export type CodeExecBackend = 'follow-system' | 'docker' | 'e2b';

@@ -2,9 +2,9 @@
 
 import { configureBuiltinExternalAgentObservationAdapters } from '@monad/atoms/external-agent-observation-setup';
 
-import { I18nProvider } from '@/components/I18nProvider';
-import { ToastProvider } from '@/components/ToastProvider';
-import { MonadStoreProvider } from '@/lib/monad-runtime-provider';
+import { I18nProvider } from '#/components/I18nProvider';
+import { ToastProvider } from '#/components/ToastProvider';
+import { MonadStoreProvider } from '#/lib/monad-runtime-provider';
 
 // Composition root: the web loads the experience UI but not the atoms barrel, so wire the external agent
 // observation parsers here. Without it the client renders structured provider output as raw JSON. The

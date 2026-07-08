@@ -10,7 +10,7 @@ import { CodeBlock } from '@monad/ui/components/CodeBlock';
 import { Markdown } from '@monad/ui/components/Markdown';
 import { useMemo, useState } from 'react';
 
-import { useT } from '@/components/I18nProvider';
+import { useT } from '#/components/I18nProvider';
 import {
   Dialog,
   DialogContent,
@@ -18,9 +18,9 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle
-} from '@/components/ui/dialog';
-import { FileIcon } from '@/lib/file-icons';
-import { useMonadRuntime } from '@/lib/monad-runtime-provider';
+} from '#/components/ui/dialog';
+import { FileIcon } from '#/lib/file-icons';
+import { useMonadRuntime } from '#/lib/monad-runtime-provider';
 import { formatAttachmentSize, loadSkillContent, parseSkillFrontmatter, parseSkillPreview } from './utils';
 
 export function SkillEditorDialog({

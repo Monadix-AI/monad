@@ -1,7 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import type { useT } from '@/components/I18nProvider';
+import type { useT } from '#/components/I18nProvider';
 
 import { CheckIcon, SparklesIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';

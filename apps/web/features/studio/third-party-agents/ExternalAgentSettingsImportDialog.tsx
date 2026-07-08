@@ -14,8 +14,8 @@ import {
 import { Button, cn, Input, isProductIconId, Label, ProductIcon, ScrollArea } from '@monad/ui';
 import { useEffect, useState } from 'react';
 
-import { useT } from '@/components/I18nProvider';
-import { DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { useT } from '#/components/I18nProvider';
+import { DialogDescription, DialogHeader, DialogTitle } from '#/components/ui/dialog';
 import { canApplyImportItem, errorMessage } from './external-agent-settings-utils';
 
 export function ExternalAgentSettingsImportDialog({

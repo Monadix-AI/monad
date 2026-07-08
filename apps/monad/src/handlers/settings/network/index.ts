@@ -7,7 +7,7 @@ import type {
   ProbeNetworkResponse,
   SetNetworkSettingsRequest
 } from '@monad/protocol';
-import type { ConfigBus } from '@/services/config-bus.ts';
+import type { ConfigBus } from '#/services/config-bus.ts';
 
 import {
   generateRemoteToken,
@@ -20,7 +20,7 @@ import {
   validateDaemonNetworkSecurity
 } from '@monad/home';
 
-import { HandlerError } from '@/handlers/handler-error.ts';
+import { HandlerError } from '#/handlers/handler-error.ts';
 
 type ProbeFetch = (input: Request | URL | string, init?: RequestInit) => Promise<Response>;
 

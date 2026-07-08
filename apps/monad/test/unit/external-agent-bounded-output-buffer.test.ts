@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
 
-import { BoundedOutputBuffer } from '@/services/external-agent/bounded-output-buffer.ts';
-import { appendBounded } from '@/services/external-agent/probe.ts';
+import { BoundedOutputBuffer } from '#/services/external-agent/bounded-output-buffer.ts';
+import { appendBounded } from '#/services/external-agent/probe.ts';
 
 test('BoundedOutputBuffer.snapshot matches the previous appendBounded semantics', () => {
   const max = 512;

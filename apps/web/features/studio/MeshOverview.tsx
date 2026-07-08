@@ -22,13 +22,13 @@ import {
   workplaceProjectAdapter,
   workplaceProjectSelectors
 } from '@monad/client-rtk';
-import { Button, ProductIcon, ScrollArea } from '@monad/ui';
+import { Button, ProductIcon } from '@monad/ui';
 
-import { useT } from '@/components/I18nProvider';
-import { ShellLink } from '@/components/ShellLink';
-import { PanelShell } from '@/components/ui/panel-shell';
-import { studioPath } from '@/features/routes/route-paths';
-import { useExternalAgentSettings } from '@/hooks/use-external-agent-settings';
+import { useT } from '#/components/I18nProvider';
+import { ShellLink } from '#/components/ShellLink';
+import { PanelShell, PanelShellBody } from '#/components/ui/panel-shell';
+import { studioPath } from '#/features/routes/route-paths';
+import { useExternalAgentSettings } from '#/hooks/use-external-agent-settings';
 import { OverviewIllustration } from './OverviewIllustration';
 import { StudioBreadcrumbHeader } from './StudioBreadcrumbHeader';
 import { MeshUsage } from './Usage';
@@ -171,7 +171,7 @@ export function MeshOverview() {
   return (
     <PanelShell>
       <StudioBreadcrumbHeader title={t('web.studio.meshOverview')} />
-      <ScrollArea className="min-h-0 flex-1">
+      <PanelShellBody>
         <div className="mx-auto grid max-w-6xl gap-5 p-4 pb-24 lg:grid-cols-[minmax(0,1fr)_19rem] lg:p-6 lg:pb-24">
           <main className="flex min-w-0 flex-col gap-5">
             <section className="grid gap-5 rounded-xl border border-[color-mix(in_srgb,var(--info)_20%,var(--border))] bg-[color-mix(in_srgb,var(--info)_5%,var(--card))] px-5 py-5 shadow-xs md:grid-cols-[minmax(0,1fr)_17rem] md:items-center">
@@ -274,7 +274,7 @@ export function MeshOverview() {
             </section>
           </aside>
         </div>
-      </ScrollArea>
+      </PanelShellBody>
     </PanelShell>
   );
 }
@@ -299,7 +299,7 @@ export function MeshPlaceholder({ kind }: { kind: 'projects' | 'members' | 'task
   return (
     <PanelShell>
       <StudioBreadcrumbHeader title={copy.title} />
-      <ScrollArea className="min-h-0 flex-1">
+      <PanelShellBody>
         <div className="mx-auto flex max-w-2xl flex-col gap-4 p-6 pb-24">
           <div className="rounded-xl border bg-card px-5 py-5">
             <div className="flex items-start gap-3">
@@ -331,7 +331,7 @@ export function MeshPlaceholder({ kind }: { kind: 'projects' | 'members' | 'task
             </div>
           </div>
         </div>
-      </ScrollArea>
+      </PanelShellBody>
     </PanelShell>
   );
 }

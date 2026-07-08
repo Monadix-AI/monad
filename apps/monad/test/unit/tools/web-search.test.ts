@@ -10,7 +10,7 @@ import {
   selectProvider,
   ToolSecurityError,
   WebSearchError
-} from '@/capabilities/tools';
+} from '#/capabilities/tools';
 
 function jsonFetch(body: unknown, capture?: (req: Request) => void): typeof fetch {
   return (async (input: string | URL | Request, init?: RequestInit) => {

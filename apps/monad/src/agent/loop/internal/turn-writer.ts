@@ -1,5 +1,5 @@
 import type { AgentMessagePayload, AgentReasoningPayload, EventType, Hooks, SessionId } from '@monad/protocol';
-import type { Tool } from '@/capabilities/tools/types.ts';
+import type { Tool } from '#/capabilities/tools/types.ts';
 import type { PersistedModelInputOverride } from '../replay.ts';
 import type { AgentLoopDeps, ChatMessage } from '../types.ts';
 import type { PromptBuilder } from './prompt-builder.ts';

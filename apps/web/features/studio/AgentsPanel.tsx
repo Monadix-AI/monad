@@ -14,14 +14,14 @@ import {
 } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { agentSelectors, useCreateAgentMutation, useDeleteAgentMutation, useListAgentsQuery } from '@monad/client-rtk';
-import { Badge, Button, ScrollArea, Skeleton, Textarea } from '@monad/ui';
+import { Badge, Button, Skeleton, Textarea } from '@monad/ui';
 import { useMemo, useState } from 'react';
 
-import { useT } from '@/components/I18nProvider';
-import { PanelShell } from '@/components/ui/panel-shell';
-import { studioDetailPath } from '@/features/routes/route-paths';
-import { replaceShellUrl } from '@/hooks/use-shell-location';
-import { parseClaudeSubagent } from '@/lib/parse-agent-import';
+import { useT } from '#/components/I18nProvider';
+import { PanelShell, PanelShellBody } from '#/components/ui/panel-shell';
+import { studioDetailPath } from '#/features/routes/route-paths';
+import { replaceShellUrl } from '#/hooks/use-shell-location';
+import { parseClaudeSubagent } from '#/lib/parse-agent-import';
 import { AgentEditor } from './agent-workshop/AgentEditor';
 import { OpenaiCompatSettings } from './api-settings';
 import { StudioBreadcrumbHeader } from './StudioBreadcrumbHeader';
@@ -143,7 +143,7 @@ export function AgentsPanel({ onClose, subpath = [] }: StudioSectionProps) {
         title={t('web.studio.agents')}
       />
 
-      <ScrollArea className="flex-1">
+      <PanelShellBody>
         <div className="flex flex-col gap-2 p-5">
           {importing && (
             <div className="flex flex-col gap-2 rounded-lg border bg-card p-4">
@@ -299,7 +299,7 @@ export function AgentsPanel({ onClose, subpath = [] }: StudioSectionProps) {
 
           <MonadAgentUsage />
         </div>
-      </ScrollArea>
+      </PanelShellBody>
     </PanelShell>
   );
 }

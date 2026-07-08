@@ -9,7 +9,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { existsSync, lstatSync, mkdirSync, readdirSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 
-import { getExternalAgentProviderAdapter } from '@/services/external-agent/index.ts';
+import { getExternalAgentProviderAdapter } from '#/services/external-agent/index.ts';
 import managedProjectRuntimeMcpPromptPath from './prompts/managed-project-runtime-mcp-prompt.md' with { type: 'file' };
 import managedProjectRuntimePromptPath from './prompts/managed-project-runtime-prompt.md' with { type: 'file' };
 

@@ -3,27 +3,27 @@ import type { ExternalAgentHistoryPageRequest } from '@monad/protocol';
 import type {
   LiveExternalAgentSession,
   ManagedProjectOutputHandler
-} from '@/services/external-agent/host/host-types.ts';
-import type { StructuredLineBufferState } from '@/services/external-agent/structured-lines.ts';
-import type { ExternalAgentOutputEvent, ExternalAgentProviderAdapter } from '@/services/external-agent/types.ts';
-import type { ExternalAgentTargetId } from '@/store/db/external-agent-sessions.ts';
-import type { Store } from '@/store/db/index.ts';
+} from '#/services/external-agent/host/host-types.ts';
+import type { StructuredLineBufferState } from '#/services/external-agent/structured-lines.ts';
+import type { ExternalAgentOutputEvent, ExternalAgentProviderAdapter } from '#/services/external-agent/types.ts';
+import type { ExternalAgentTargetId } from '#/store/db/external-agent-sessions.ts';
+import type { Store } from '#/store/db/index.ts';
 
 import { externalAgentStreamItems } from '@monad/atoms/external-agent-observation';
 
-import { MAX_OUTPUT_SNAPSHOT } from '@/services/external-agent/constants.ts';
-import { ExternalAgentError } from '@/services/external-agent/errors.ts';
-import { ExternalAgentEventLog } from '@/services/external-agent/host/event-log.ts';
+import { MAX_OUTPUT_SNAPSHOT } from '#/services/external-agent/constants.ts';
+import { ExternalAgentError } from '#/services/external-agent/errors.ts';
+import { ExternalAgentEventLog } from '#/services/external-agent/host/event-log.ts';
 import {
   type ExternalAgentOutputStream,
   MAX_STRUCTURED_LINE,
   SNAPSHOT_FLUSH_MS
-} from '@/services/external-agent/host/host-constants.ts';
-import { externalAgentApprovalText, nativeAgentMcpToolError } from '@/services/external-agent/host/host-helpers.ts';
-import { ExternalAgentObservationHub } from '@/services/external-agent/host/observation-hub.ts';
-import { createStreamingTextDecoder } from '@/services/external-agent/stream-decoder.ts';
-import { takeCompleteStructuredLines } from '@/services/external-agent/structured-lines.ts';
-import { externalAgentOutputEventSchema } from '@/services/external-agent/types.ts';
+} from '#/services/external-agent/host/host-constants.ts';
+import { externalAgentApprovalText, nativeAgentMcpToolError } from '#/services/external-agent/host/host-helpers.ts';
+import { ExternalAgentObservationHub } from '#/services/external-agent/host/observation-hub.ts';
+import { createStreamingTextDecoder } from '#/services/external-agent/stream-decoder.ts';
+import { takeCompleteStructuredLines } from '#/services/external-agent/structured-lines.ts';
+import { externalAgentOutputEventSchema } from '#/services/external-agent/types.ts';
 
 export interface ExternalAgentOutputPipelineContext {
   live: Map<string, LiveExternalAgentSession>;

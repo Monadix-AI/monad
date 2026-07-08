@@ -1,5 +1,5 @@
 import type { SendMessageAttachment } from '@monad/protocol';
-import type { ImageAttachment } from '@/agent/index.ts';
+import type { ImageAttachment } from '#/agent/index.ts';
 
 export function imageAttachments(attachments: SendMessageAttachment[] | undefined): ImageAttachment[] | undefined {
   const images = (attachments ?? [])

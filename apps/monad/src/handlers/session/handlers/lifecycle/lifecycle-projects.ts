@@ -5,13 +5,13 @@ import type {
   UpdateWorkplaceProjectRequest,
   WorkplaceProject
 } from '@monad/protocol';
-import type { SessionContext } from '@/handlers/session/context.ts';
+import type { SessionContext } from '#/handlers/session/context.ts';
 
 import { newId } from '@monad/protocol';
 
-import { canTransition } from '@/agent/index.ts';
-import { clearProcessesForSession, disposeSandboxSession } from '@/capabilities/tools';
-import { HandlerError } from '@/handlers/handler-error.ts';
+import { canTransition } from '#/agent/index.ts';
+import { clearProcessesForSession, disposeSandboxSession } from '#/capabilities/tools';
+import { HandlerError } from '#/handlers/handler-error.ts';
 
 /** Identity-only origin fields for observability — NEVER the env block (PII). */
 function originLog(origin?: SessionOrigin): Record<string, string | undefined> {

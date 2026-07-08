@@ -1,12 +1,12 @@
 import type { ExternalAgentConfig } from '@monad/home';
 import type { ExternalAgentSessionView, Session } from '@monad/protocol';
-import type { SessionContext } from '@/handlers/session/context.ts';
+import type { SessionContext } from '#/handlers/session/context.ts';
 
 import { expect, test } from 'bun:test';
 import { builtinAgentAdapters } from '@monad/atoms/agent-adapters';
 
-import { createManagedExternalAgentDelivery } from '@/handlers/session/handlers/managed-external-agent-delivery.ts';
-import { registerAgentAdapterImpl } from '@/services/external-agent/index.ts';
+import { createManagedExternalAgentDelivery } from '#/handlers/session/handlers/managed-external-agent-delivery.ts';
+import { registerAgentAdapterImpl } from '#/services/external-agent/index.ts';
 
 // Notice-building (e.g. `usesMcpProjectBridge`) reads the adapter registry, so it must be populated
 // like every other external-agent test — mirrors external-agent-host.test.ts / external-agent-adapters.test.ts.

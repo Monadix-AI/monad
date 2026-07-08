@@ -9,13 +9,13 @@
 //   OPENROUTER_API_KEY=sk-or-... bun test apps/monad/test/e2e/live-scenarios.test.ts
 
 import type { Event } from '@monad/protocol';
-import type { Tool } from '@/capabilities/tools/types.ts';
+import type { Tool } from '#/capabilities/tools/types.ts';
 
 import { afterEach, describe, expect, test } from 'bun:test';
 import { z } from 'zod';
 
-import { toolResult } from '@/capabilities/tools/types.ts';
-import { createHttpTransport } from '@/transports/http.ts';
+import { toolResult } from '#/capabilities/tools/types.ts';
+import { createHttpTransport } from '#/transports/http.ts';
 import {
   buildHandlers,
   liveModelDeps,

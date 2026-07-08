@@ -13,17 +13,17 @@ import type {
   SkillListItem
 } from '@monad/protocol';
 import type { WorkspaceExperienceApiHandler } from '@monad/sdk-atom';
-import type { AtomConflict } from '@/atoms/resolve.ts';
-import type { ChannelService } from '@/channels/channel.ts';
-import type { SessionDeps } from '@/handlers/session/index.ts';
-import type { ModelDeps } from '@/handlers/settings/model/index.ts';
-import type { ConfigBus } from '@/services/config-bus.ts';
-import type { ClarifyService } from '@/services/generation/clarify.ts';
-import type { I18nService } from '@/services/i18n.ts';
-import type { KvService } from '@/services/kv.ts';
-import type { L2Provider } from '@/services/memory/graph/types.ts';
-import type { MemoryService } from '@/services/memory/index.ts';
-import type { OversightService } from '@/services/oversight.ts';
+import type { AtomConflict } from '#/atoms/resolve.ts';
+import type { ChannelService } from '#/channels/channel.ts';
+import type { SessionDeps } from '#/handlers/session/index.ts';
+import type { ModelDeps } from '#/handlers/settings/model/index.ts';
+import type { ConfigBus } from '#/services/config-bus.ts';
+import type { ClarifyService } from '#/services/generation/clarify.ts';
+import type { I18nService } from '#/services/i18n.ts';
+import type { KvService } from '#/services/kv.ts';
+import type { L2Provider } from '#/services/memory/graph/types.ts';
+import type { MemoryService } from '#/services/memory/index.ts';
+import type { OversightService } from '#/services/oversight.ts';
 
 export interface DaemonHandlerDeps extends SessionDeps, ModelDeps {
   // SessionDeps types `paths` as the narrow `{ config }?` while ModelDeps needs the full

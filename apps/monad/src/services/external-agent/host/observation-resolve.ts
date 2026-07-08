@@ -1,5 +1,5 @@
 import type { ExternalAgentObservationAccessResponse, ExternalAgentUiObservationFrame } from '@monad/protocol';
-import type { ExternalAgentHostDeps, LiveExternalAgentSession } from '@/services/external-agent/host/host-types.ts';
+import type { ExternalAgentHostDeps, LiveExternalAgentSession } from '#/services/external-agent/host/host-types.ts';
 
 import {
   externalAgentNeutralStreamItems,
@@ -10,9 +10,9 @@ import {
 import {
   providerHistoryOutputFromLocal,
   providerHistoryOutputViaCli
-} from '@/services/external-agent/host/history-backfill.ts';
-import { isManagedProjectRuntime } from '@/services/external-agent/host/host-helpers.ts';
-import { getExternalAgentProviderAdapter } from '@/services/external-agent/index.ts';
+} from '#/services/external-agent/host/history-backfill.ts';
+import { isManagedProjectRuntime } from '#/services/external-agent/host/host-helpers.ts';
+import { getExternalAgentProviderAdapter } from '#/services/external-agent/index.ts';
 
 export interface ExternalAgentObservationResolveContext {
   live: Map<string, LiveExternalAgentSession>;

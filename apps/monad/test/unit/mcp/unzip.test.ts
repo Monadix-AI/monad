@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
 import { deflateRawSync } from 'node:zlib';
 
-import { unzip } from '@/capabilities/mcp/install/unzip.ts';
+import { unzip } from '#/capabilities/mcp/install/unzip.ts';
 
 /** Build a single-entry ZIP (stored or deflate) so unzip() can be tested without a zip CLI/lib. */
 function makeZip(name: string, content: Uint8Array, deflate = false): Uint8Array {

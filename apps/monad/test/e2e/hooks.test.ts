@@ -3,15 +3,15 @@
 // end to end, not just the unit-level fakes. Uses shell command hooks (the user-facing path), so
 // Bun.spawn round-trips through the real daemon.
 
-import type { HookConfig } from '@/hooks/runner.ts';
+import type { HookConfig } from '#/hooks/runner.ts';
 
 import { expect, test } from 'bun:test';
 import { tmpdir } from 'node:os';
 import { createLogger } from '@monad/logger';
 
-import { createHookRunner } from '@/hooks/runner.ts';
-import { MOCK_REPLY } from '@/infra/mock-model.ts';
-import { createHttpTransport } from '@/transports/http.ts';
+import { createHookRunner } from '#/hooks/runner.ts';
+import { MOCK_REPLY } from '#/infra/mock-model.ts';
+import { createHttpTransport } from '#/transports/http.ts';
 import { buildHandlers, mockModel, serveTransport, stubModelDeps, TRANSPORTS } from '../helpers.ts';
 
 const log = createLogger('e2e-hooks');

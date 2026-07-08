@@ -2,7 +2,7 @@ if (process.platform === 'win32') process.exit(0);
 
 import { afterEach, expect, test } from 'bun:test';
 
-import { configureShell, shellArgv } from '@/capabilities/tools/backends.ts';
+import { configureShell, shellArgv } from '#/capabilities/tools/backends.ts';
 
 afterEach(() => {
   // Reset the lazy shell cache so tests don't bleed into each other.

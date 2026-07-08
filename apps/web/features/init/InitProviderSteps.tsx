@@ -1,6 +1,6 @@
 'use client';
 
-import type { useT } from '@/components/I18nProvider';
+import type { useT } from '#/components/I18nProvider';
 import type { DraftProvider, InitProviderMeta } from './InitWizardTypes';
 
 import { Cancel01Icon, LockIcon, PlusSignIcon } from '@hugeicons/core-free-icons';

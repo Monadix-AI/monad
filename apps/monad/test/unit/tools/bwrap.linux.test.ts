@@ -12,7 +12,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { bwrapLauncher } from '@monad/atoms/sandbox/bwrap';
 
-import { configureSandboxLauncher, noneLauncher, sandboxedSpawn } from '@/capabilities/tools';
+import { configureSandboxLauncher, noneLauncher, sandboxedSpawn } from '#/capabilities/tools';
 
 afterEach(() => configureSandboxLauncher(noneLauncher));
 

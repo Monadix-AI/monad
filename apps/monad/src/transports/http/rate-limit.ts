@@ -1,4 +1,4 @@
-import type { RateLimitBucket, RateLimitConfig } from '@/transports/types.ts';
+import type { RateLimitBucket, RateLimitConfig } from '#/transports/types.ts';
 
 type Bucket = RateLimitBucket;
 

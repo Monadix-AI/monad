@@ -1,11 +1,11 @@
 'use client';
 
 import type { SessionId } from '@monad/protocol';
-import type { StudioSectionId } from '@/features/studio/sections';
+import type { StudioSectionId } from '#/features/studio/sections';
 
 import { create } from 'zustand';
 
-import { isStudioSectionId } from '@/features/studio/sections';
+import { isStudioSectionId } from '#/features/studio/sections';
 
 type WorkspaceSurface = 'workspace' | 'monadChat';
 

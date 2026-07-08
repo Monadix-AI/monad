@@ -3,9 +3,9 @@ import type { LoggerRecord } from '@monad/logger';
 import { afterEach, expect, test } from 'bun:test';
 import { configureLogger } from '@monad/logger';
 
-import { createHttpTransport } from '@/transports/http.ts';
-import { createConnectionState } from '@/transports/jsonrpc/connection.ts';
-import { handleRpcMessage } from '@/transports/jsonrpc/handler.ts';
+import { createHttpTransport } from '#/transports/http.ts';
+import { createConnectionState } from '#/transports/jsonrpc/connection.ts';
+import { handleRpcMessage } from '#/transports/jsonrpc/handler.ts';
 import { buildHandlers, mockModel } from '../../helpers.ts';
 
 function captureErrorLogs(): LoggerRecord[] {

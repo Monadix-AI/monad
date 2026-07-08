@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { DEFAULT_SAMPLE_PROVIDER_ID } from '@monad/home';
 import { DEFAULT_SKILL_MARKETPLACE_SOURCE, skillMarketplaceSourceMeta } from '@monad/protocol';
 
-import { type SkillInstallRecord, skillInstallRecordSchema } from '@/capabilities/skills/install/index.ts';
+import { type SkillInstallRecord, skillInstallRecordSchema } from '#/capabilities/skills/install/index.ts';
 
 const DEFAULT_SKILL_INSTALL_SOURCE_PREFIX = skillMarketplaceSourceMeta(
   DEFAULT_SKILL_MARKETPLACE_SOURCE

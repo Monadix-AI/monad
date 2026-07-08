@@ -9,8 +9,8 @@ import { afterEach, expect, test } from 'bun:test';
 import builtinAtomPack from '@monad/atoms';
 import { defineAtomPack, defineLocalLauncher, SDK_VERSION } from '@monad/sdk-atom';
 
-import { clearSandboxLaunchers, registerSandboxLauncher, selectSandboxLauncher } from '@/capabilities/tools';
-import { loadChannelAtomPacks } from '@/channels/atom-pack-host.ts';
+import { clearSandboxLaunchers, registerSandboxLauncher, selectSandboxLauncher } from '#/capabilities/tools';
+import { loadChannelAtomPacks } from '#/channels/atom-pack-host.ts';
 
 afterEach(() => clearSandboxLaunchers());
 

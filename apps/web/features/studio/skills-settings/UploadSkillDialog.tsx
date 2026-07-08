@@ -3,8 +3,8 @@ import type { RefObject } from 'react';
 import { FileArchiveIcon, LoaderPinwheelIcon, TextIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 
-import { useT } from '@/components/I18nProvider';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { useT } from '#/components/I18nProvider';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '#/components/ui/dialog';
 
 export function UploadSkillDialog({
   inputRef,

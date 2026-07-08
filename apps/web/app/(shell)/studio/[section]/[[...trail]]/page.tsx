@@ -1,6 +1,6 @@
 import { SKILL_MARKETPLACE_SOURCES } from '@monad/protocol';
 
-import { STUDIO_SECTION_IDS } from '@/features/studio/sections';
+import { STUDIO_SECTION_IDS } from '#/features/studio/sections';
 
 // The `trail` catch-all is optional (`[[...trail]]`), so its root case (a bare `/studio/<section>`)
 // must be enumerated with an explicit empty array — omitting `trail` leaves the optional segment

@@ -1,20 +1,20 @@
 import type { MonadConfig, MonadPaths } from '@monad/home';
 import type { Logger } from '@monad/logger';
-import type { ChannelService } from '@/channels/channel.ts';
-import type { AtomPackRegistry } from '@/handlers/atom-pack/index.ts';
-import type { HookConfig } from '@/hooks/runner.ts';
-import type { ConfigBus } from '@/services/config-bus.ts';
-import type { EmbeddingIndexer } from '@/services/embedding-indexer.ts';
-import type { AgentPersonaService } from '@/services/generation/agent-persona.ts';
-import type { I18nService } from '@/services/i18n.ts';
-import type { ModelService } from '@/services/model.ts';
-import type { Store } from '@/store/db/index.ts';
-import type { resolveSkillState } from '@/store/home/skills.ts';
+import type { ChannelService } from '#/channels/channel.ts';
+import type { AtomPackRegistry } from '#/handlers/atom-pack/index.ts';
+import type { HookConfig } from '#/hooks/runner.ts';
+import type { ConfigBus } from '#/services/config-bus.ts';
+import type { EmbeddingIndexer } from '#/services/embedding-indexer.ts';
+import type { AgentPersonaService } from '#/services/generation/agent-persona.ts';
+import type { I18nService } from '#/services/i18n.ts';
+import type { ModelService } from '#/services/model.ts';
+import type { Store } from '#/store/db/index.ts';
+import type { resolveSkillState } from '#/store/home/skills.ts';
 
 import { emptyAuth } from '@monad/home';
 
-import { acpAgentCandidatesFromAdapters } from '@/services/delegation/presets.ts';
-import { configureDeveloperLogTransport } from '@/services/developer-log.ts';
+import { acpAgentCandidatesFromAdapters } from '#/services/delegation/presets.ts';
+import { configureDeveloperLogTransport } from '#/services/developer-log.ts';
 import { applyAcpDelegateTool } from './acp-delegate.ts';
 import { type ConfigMcpHandle, reloadConfigMcpServers } from './mcp.ts';
 import { configureToolBackends } from './tool-backends.ts';

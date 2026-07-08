@@ -29,8 +29,8 @@ import { parseGithubReleaseSource } from '@monad/utils';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 
-import { useT } from '@/components/I18nProvider';
-import { mcpServerFormSchema } from '@/lib/form-validation';
+import { useT } from '#/components/I18nProvider';
+import { mcpServerFormSchema } from '#/lib/form-validation';
 
 type Mode = 'command' | 'url' | 'binary';
 type InstallFormValues = {

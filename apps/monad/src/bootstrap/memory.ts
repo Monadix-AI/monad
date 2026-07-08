@@ -16,34 +16,34 @@ import type {
   SetMemoryGraphRequest
 } from '@monad/protocol';
 import type { BeliefExplanation, ConsolidateSummary } from '@monad/sdk-atom';
-import type { ModelRouter } from '@/agent/index.ts';
-import type { NoteStore } from '@/capabilities/tools/registry/memory.ts';
-import type { ConfigBus } from '@/services/config-bus.ts';
-import type { MemoryHookRegistry } from '@/services/memory/hooks.ts';
-import type { MemoryService } from '@/services/memory/index.ts';
-import type { Mem0Data } from '@/services/memory/mem0-explorer.ts';
-import type { Store } from '@/store/db/index.ts';
+import type { ModelRouter } from '#/agent/index.ts';
+import type { NoteStore } from '#/capabilities/tools/registry/memory.ts';
+import type { ConfigBus } from '#/services/config-bus.ts';
+import type { MemoryHookRegistry } from '#/services/memory/hooks.ts';
+import type { MemoryService } from '#/services/memory/index.ts';
+import type { Mem0Data } from '#/services/memory/mem0-explorer.ts';
+import type { Store } from '#/store/db/index.ts';
 
 import { join } from 'node:path';
 import { saveProfile } from '@monad/home';
 import { createLogger } from '@monad/logger';
 
-import { renderNotes } from '@/capabilities/tools/registry/memory.ts';
-import { resolveAgentModelRole } from '@/config/resolve.ts';
-import { ConsolidationState } from '@/services/memory/consolidation-state.ts';
-import { type CheckResult, checkContradictionsForScopes } from '@/services/memory/contradict.ts';
-import { DEFAULT_DECAY, decayedConfidence, isRecallEligible } from '@/services/memory/decay.ts';
-import { matchLaws } from '@/services/memory/explain.ts';
-import { consolidateGraph, graphAutoDue } from '@/services/memory/graph/service.ts';
-import { GraphStore } from '@/services/memory/graph/store.ts';
-import { registerMemoryHooks } from '@/services/memory/hooks.ts';
-import { createMemoryService } from '@/services/memory/index.ts';
-import { inferLawsForScopes } from '@/services/memory/law-infer.ts';
-import { LawStore } from '@/services/memory/law-store.ts';
-import { collectMem0Data, fetchQdrantVectors } from '@/services/memory/mem0-explorer.ts';
-import { QdrantManager } from '@/services/memory/qdrant.ts';
-import { resolveMem0Models } from '@/services/memory/resolve-mem0.ts';
-import { projectKey } from '@/store/db/index.ts';
+import { renderNotes } from '#/capabilities/tools/registry/memory.ts';
+import { resolveAgentModelRole } from '#/config/resolve.ts';
+import { ConsolidationState } from '#/services/memory/consolidation-state.ts';
+import { type CheckResult, checkContradictionsForScopes } from '#/services/memory/contradict.ts';
+import { DEFAULT_DECAY, decayedConfidence, isRecallEligible } from '#/services/memory/decay.ts';
+import { matchLaws } from '#/services/memory/explain.ts';
+import { consolidateGraph, graphAutoDue } from '#/services/memory/graph/service.ts';
+import { GraphStore } from '#/services/memory/graph/store.ts';
+import { registerMemoryHooks } from '#/services/memory/hooks.ts';
+import { createMemoryService } from '#/services/memory/index.ts';
+import { inferLawsForScopes } from '#/services/memory/law-infer.ts';
+import { LawStore } from '#/services/memory/law-store.ts';
+import { collectMem0Data, fetchQdrantVectors } from '#/services/memory/mem0-explorer.ts';
+import { QdrantManager } from '#/services/memory/qdrant.ts';
+import { resolveMem0Models } from '#/services/memory/resolve-mem0.ts';
+import { projectKey } from '#/store/db/index.ts';
 
 export interface MemorySubsystemDeps {
   store: Store;

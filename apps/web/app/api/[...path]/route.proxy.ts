@@ -4,7 +4,7 @@ import { join, resolve } from 'node:path';
 import { Readable } from 'node:stream';
 import { resolveDaemonUrl } from '@monad/home/network-endpoints';
 
-import { proxyResponseBody } from '@/lib/proxy-stream';
+import { proxyResponseBody } from '#/lib/proxy-stream';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';

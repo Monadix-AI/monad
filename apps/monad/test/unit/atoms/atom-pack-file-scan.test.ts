@@ -6,8 +6,8 @@ import { join } from 'node:path';
 // Access internal scan helpers via the fetcher factory (test the public contract instead of
 // internals): build a minimal StagedAtomPack and assert the fileAtoms shape.
 
-import { createAtomFetcher } from '@/atoms/install/fetch.ts';
-import { parseAtomPackSource } from '@/atoms/install/source.ts';
+import { createAtomFetcher } from '#/atoms/install/fetch.ts';
+import { parseAtomPackSource } from '#/atoms/install/source.ts';
 
 let dir: string;
 beforeEach(async () => {

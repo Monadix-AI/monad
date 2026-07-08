@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 
-import { createHttp2Fetch, getHttp2Fetch } from '@/infra/http2-fetch.ts';
+import { createHttp2Fetch, getHttp2Fetch } from '#/infra/http2-fetch.ts';
 
 type CapturedCall = {
   input: string | URL | Request;

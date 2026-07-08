@@ -3,8 +3,8 @@
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 
-import { GraphStore } from '@/services/memory/graph/store.ts';
-import { createHttpTransport } from '@/transports/http.ts';
+import { GraphStore } from '#/services/memory/graph/store.ts';
+import { createHttpTransport } from '#/transports/http.ts';
 import { buildHandlers, mockModel, serveTransport, TRANSPORTS, type TransportHandle } from '../helpers.ts';
 
 for (const kind of TRANSPORTS) {

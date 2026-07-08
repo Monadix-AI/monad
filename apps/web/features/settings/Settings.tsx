@@ -5,9 +5,9 @@ import type { WebMessageIdWithoutParams } from '@monad/i18n';
 import dynamic from 'next/dynamic';
 import { type ComponentType, type PointerEvent as ReactPointerEvent, useCallback, useRef } from 'react';
 
-import { useT } from '@/components/I18nProvider';
-import { PanelLoading } from '@/components/PanelLoading';
-import { PanelShell, PanelShellBreadcrumbHeader } from '@/components/ui/panel-shell';
+import { useT } from '#/components/I18nProvider';
+import { PanelLoading } from '#/components/PanelLoading';
+import { PanelShell, PanelShellBody, PanelShellBreadcrumbHeader } from '#/components/ui/panel-shell';
 import { ConnectionSettings } from './ConnectionSettings';
 import { normalizeSettingsSection, type SettingsSectionId } from './sections';
 
@@ -79,8 +79,8 @@ export function Settings({ onClose, initialSection }: { initialSection: string |
           { id: 'current', label: t(SECTION_LABEL_KEYS[section]) }
         ]}
       />
-      <div
-        className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background"
+      <PanelShellBody
+        className="flex flex-col"
         onPointerCancel={() => {
           swipeStartRef.current = null;
         }}
@@ -88,7 +88,7 @@ export function Settings({ onClose, initialSection }: { initialSection: string |
         onPointerUp={handlePointerUp}
       >
         <Panel />
-      </div>
+      </PanelShellBody>
     </PanelShell>
   );
 }

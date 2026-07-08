@@ -1,11 +1,11 @@
 import type { Message, Task, TaskState, TaskStatusUpdateEvent } from '@a2a-js/sdk';
 import type { AgentExecutor, ExecutionEventBus, RequestContext } from '@a2a-js/sdk/server';
 import type { AgentId, Event, SessionId } from '@monad/protocol';
-import type { createDaemonHandlers } from '@/handlers/daemon-handlers/index.ts';
+import type { createDaemonHandlers } from '#/handlers/daemon-handlers/index.ts';
 
 import { parseEventPayload } from '@monad/protocol';
 
-import { buildSessionOrigin } from '@/handlers/session/origin.ts';
+import { buildSessionOrigin } from '#/handlers/session/origin.ts';
 
 type Handlers = ReturnType<typeof createDaemonHandlers>;
 

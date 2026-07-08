@@ -7,7 +7,7 @@ import {
   isBlockedIp,
   netFetchTool,
   ToolSecurityError
-} from '@/capabilities/tools';
+} from '#/capabilities/tools';
 
 // ── isBlockedIp ───────────────────────────────────────────────────────────────
 

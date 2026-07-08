@@ -12,7 +12,7 @@ import {
   sandboxedSpawn,
   shellArgv,
   sweepOrphanSandboxes
-} from '@/capabilities/tools';
+} from '#/capabilities/tools';
 
 export interface SessionSandboxService {
   readonly enabled: boolean;

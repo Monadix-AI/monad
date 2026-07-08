@@ -6,7 +6,7 @@
 
 import type { McpServerConfig, MonadAuth, MonadConfig, MonadPaths } from '@monad/home';
 import type { McpServerStatus } from '@monad/protocol';
-import type { AtomPackRegistry } from '@/handlers/atom-pack/index.ts';
+import type { AtomPackRegistry } from '#/handlers/atom-pack/index.ts';
 
 import { lookup } from 'node:dns/promises';
 import { readdir } from 'node:fs/promises';
@@ -14,11 +14,11 @@ import { join } from 'node:path';
 import { matchEnvRef, matchSecretRef } from '@monad/home';
 import { logger } from '@monad/logger';
 
-import { HOST_CONTROL_KEY } from '@/agent/approvals/engine.ts';
-import { createDaemonMcpOAuth } from '@/capabilities/mcp/oauth.ts';
-import { assertUrlAllowed, connectMcpServer, isBlockedIp, type McpConnection } from '@/capabilities/tools';
-import { buildBrowserMcpServer, buildComputerMcpServer } from '@/config/mcp-presets.ts';
-import { resolveSecretMap, resolveSecretRef } from '@/config/secrets.ts';
+import { HOST_CONTROL_KEY } from '#/agent/approvals/engine.ts';
+import { createDaemonMcpOAuth } from '#/capabilities/mcp/oauth.ts';
+import { assertUrlAllowed, connectMcpServer, isBlockedIp, type McpConnection } from '#/capabilities/tools';
+import { buildBrowserMcpServer, buildComputerMcpServer } from '#/config/mcp-presets.ts';
+import { resolveSecretMap, resolveSecretRef } from '#/config/secrets.ts';
 
 /** One live config/preset MCP connection plus the spec it was opened from (the spec lets a later
  *  reload tell "unchanged" from "edited" without re-handshaking). */

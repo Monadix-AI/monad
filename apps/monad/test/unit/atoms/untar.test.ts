@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 
-import { untar } from '@/atoms/install/untar.ts';
+import { untar } from '#/atoms/install/untar.ts';
 
 const BLOCK = 512;
 

@@ -17,15 +17,15 @@ import type {
 import { createHash } from 'node:crypto';
 import { loadAll, saveSystemConfig } from '@monad/home';
 
-import { HandlerError } from '@/handlers/handler-error.ts';
-import { defaultBinProbes } from '@/infra/resolve-binary.ts';
+import { HandlerError } from '#/handlers/handler-error.ts';
+import { defaultBinProbes } from '#/infra/resolve-binary.ts';
 import {
   getExternalAgentProviderAdapter,
   listExternalAgentModelOptions,
   listExternalAgentPresets,
   listExternalAgentReasoningEfforts,
   listExternalAgentReasoningEffortsByModel
-} from '@/services/external-agent/index.ts';
+} from '#/services/external-agent/index.ts';
 
 export interface ExternalAgentSettingsDeps {
   paths: MonadPaths;

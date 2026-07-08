@@ -2,7 +2,7 @@
 
 import { expect, test } from 'bun:test';
 
-import { ConsolidationState, fingerprint } from '@/services/memory/consolidation-state.ts';
+import { ConsolidationState, fingerprint } from '#/services/memory/consolidation-state.ts';
 
 test('fingerprint is order-independent and changes with the set', () => {
   expect(fingerprint(['a', 'b', 'c'])).toBe(fingerprint(['c', 'a', 'b']));

@@ -17,12 +17,12 @@ import {
   useListProvidersQuery,
   useListWorkplaceProjectsQuery
 } from '@monad/client-rtk';
-import { Button, ScrollArea } from '@monad/ui';
+import { Button } from '@monad/ui';
 
-import { useT } from '@/components/I18nProvider';
-import { ShellLink } from '@/components/ShellLink';
-import { PanelShell } from '@/components/ui/panel-shell';
-import { studioPath } from '@/features/routes/route-paths';
+import { useT } from '#/components/I18nProvider';
+import { ShellLink } from '#/components/ShellLink';
+import { PanelShell, PanelShellBody } from '#/components/ui/panel-shell';
+import { studioPath } from '#/features/routes/route-paths';
 import { OverviewIllustration } from './OverviewIllustration';
 import { StudioBreadcrumbHeader } from './StudioBreadcrumbHeader';
 
@@ -130,7 +130,7 @@ export function RuntimeOverview() {
   return (
     <PanelShell>
       <StudioBreadcrumbHeader title={t('web.studio.runtimeOverview')} />
-      <ScrollArea className="min-h-0 flex-1">
+      <PanelShellBody>
         <div className="mx-auto grid max-w-6xl gap-5 p-4 pb-24 lg:grid-cols-[minmax(0,1fr)_19rem] lg:p-6 lg:pb-24">
           <main className="flex min-w-0 flex-col gap-5">
             <section className="grid gap-5 rounded-xl border bg-card px-5 py-5 shadow-xs md:grid-cols-[minmax(0,1fr)_17rem] md:items-center">
@@ -262,7 +262,7 @@ export function RuntimeOverview() {
             </section>
           </aside>
         </div>
-      </ScrollArea>
+      </PanelShellBody>
     </PanelShell>
   );
 }

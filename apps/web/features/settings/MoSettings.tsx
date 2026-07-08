@@ -5,9 +5,9 @@ import { HugeiconsIcon } from '@hugeicons/react';
 import { Button, cn } from '@monad/ui';
 import { useCallback, useEffect, useState } from 'react';
 
-import { useT } from '@/components/I18nProvider';
-import { useAsyncAction } from '@/hooks/use-async-action';
-import { useMonadRuntime } from '@/lib/monad-runtime-provider';
+import { useT } from '#/components/I18nProvider';
+import { useAsyncAction } from '#/hooks/use-async-action';
+import { useMonadRuntime } from '#/lib/monad-runtime-provider';
 import moAtlasManifest from '../../../../apps/mo/assets/atlas.json' with { type: 'json' };
 
 const MO_ATLAS = {

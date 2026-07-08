@@ -1,7 +1,7 @@
 import type { Event, SessionId } from '@monad/protocol';
-import type { ModelMessage, ModelResult, ModelRouter } from '@/agent/index.ts';
-import type { LoadedSkill } from '@/agent/loop/index.ts';
-import type { Tool } from '@/capabilities/tools/types.ts';
+import type { ModelMessage, ModelResult, ModelRouter } from '#/agent/index.ts';
+import type { LoadedSkill } from '#/agent/loop/index.ts';
+import type { Tool } from '#/capabilities/tools/types.ts';
 
 import { expect, test } from 'bun:test';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
@@ -19,9 +19,9 @@ import {
   skillInstructions,
   substituteSkillDir,
   toolMatchesAllowedPattern
-} from '@/agent/index.ts';
-import { createSkillTool } from '@/capabilities/tools/registry/skill.ts';
-import { toolResult } from '@/capabilities/tools/types.ts';
+} from '#/agent/index.ts';
+import { createSkillTool } from '#/capabilities/tools/registry/skill.ts';
+import { toolResult } from '#/capabilities/tools/types.ts';
 
 const stubSessionRepo = { insertSession: () => {}, getSession: () => null };
 

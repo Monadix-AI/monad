@@ -20,7 +20,7 @@ import {
 import { workspaceMono as mono } from '@monad/ui/components/AgentAvatar';
 import { useState } from 'react';
 
-import { useT } from '@/components/I18nProvider';
+import { useT } from '#/components/I18nProvider';
 import { fileManagerLabel, terminalLabel, workdirLabel } from './project-header-utils';
 
 function WorkdirControl({

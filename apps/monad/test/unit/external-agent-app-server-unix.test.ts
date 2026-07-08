@@ -3,7 +3,7 @@ import { mkdirSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { connectAppServerUnix } from '@/services/external-agent/app-server-unix.ts';
+import { connectAppServerUnix } from '#/services/external-agent/app-server-unix.ts';
 
 function socketPath(name: string): string {
   const dir = join(realpathSync(tmpdir()), 'monad-appserver-test');

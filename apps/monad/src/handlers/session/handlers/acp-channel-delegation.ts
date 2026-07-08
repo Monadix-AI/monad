@@ -1,14 +1,14 @@
 import type { AcpAgentConfig, McpServerConfig } from '@monad/home';
 import type { ChannelResponseNextTarget, Event, Session, SessionId } from '@monad/protocol';
-import type { SessionContext } from '@/handlers/session/context.ts';
+import type { SessionContext } from '#/handlers/session/context.ts';
 
 import { newId, parseChannelStructuredResponse } from '@monad/protocol';
 
-import { extractError } from '@/agent/index.ts';
-import { composeAcpChannelPrompt } from '@/agent/prompts/channel.ts';
-import { channelDelegateMcpServers, projectAcpMembers } from '@/handlers/session/handlers/messaging-members.ts';
-import { channelNextPrompt } from '@/handlers/session/handlers/messaging-notices.ts';
-import { acpAuthGuidance, directDelegate } from '@/services/delegation/acp-delegate.ts';
+import { extractError } from '#/agent/index.ts';
+import { composeAcpChannelPrompt } from '#/agent/prompts/channel.ts';
+import { channelDelegateMcpServers, projectAcpMembers } from '#/handlers/session/handlers/messaging-members.ts';
+import { channelNextPrompt } from '#/handlers/session/handlers/messaging-notices.ts';
+import { acpAuthGuidance, directDelegate } from '#/services/delegation/acp-delegate.ts';
 
 /** Direct-to-ACP-agent delegation for channel `next` targets and project fan-out. */
 export function createAcpChannelDelegation(

@@ -5,7 +5,7 @@ import type { Fact } from '@monad/protocol';
 
 import { expect, test } from 'bun:test';
 
-import { renderMemoryBlock, sanitizeFact } from '@/agent/index.ts';
+import { renderMemoryBlock, sanitizeFact } from '#/agent/index.ts';
 
 test('sanitizeFact strips invisible unicode and trims', () => {
   const r = sanitizeFact('User uses​ Bun  ');

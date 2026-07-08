@@ -2,12 +2,12 @@
 
 import { ShieldHalfIcon, WorkflowSquare01Icon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { Button, ScrollArea } from '@monad/ui';
+import { Button } from '@monad/ui';
 
-import { useT } from '@/components/I18nProvider';
-import { ShellLink } from '@/components/ShellLink';
-import { PanelShell } from '@/components/ui/panel-shell';
-import { studioPath } from '@/features/routes/route-paths';
+import { useT } from '#/components/I18nProvider';
+import { ShellLink } from '#/components/ShellLink';
+import { PanelShell, PanelShellBody } from '#/components/ui/panel-shell';
+import { studioPath } from '#/features/routes/route-paths';
 import { StudioBreadcrumbHeader } from './StudioBreadcrumbHeader';
 
 function SafetyLink({ href, title, body }: { href: string; title: string; body: string }) {
@@ -38,7 +38,7 @@ export function SafetyAndHooks() {
   return (
     <PanelShell>
       <StudioBreadcrumbHeader title={t('web.studio.safetyAndHooks')} />
-      <ScrollArea className="min-h-0 flex-1">
+      <PanelShellBody>
         <div className="mx-auto grid max-w-5xl gap-5 p-4 pb-24 lg:grid-cols-[minmax(0,1fr)_18rem] lg:p-6 lg:pb-24">
           <main className="rounded-xl border bg-card">
             <div className="border-b px-5 py-5">
@@ -74,7 +74,7 @@ export function SafetyAndHooks() {
             <p className="mt-2 text-muted-foreground text-sm">{t('web.studio.safetyBoundaryDesc')}</p>
           </aside>
         </div>
-      </ScrollArea>
+      </PanelShellBody>
     </PanelShell>
   );
 }

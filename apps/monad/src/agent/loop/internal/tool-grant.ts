@@ -1,5 +1,5 @@
 import type { Hooks, SessionId } from '@monad/protocol';
-import type { ToolGate } from '@/capabilities/tools/types.ts';
+import type { ToolGate } from '#/capabilities/tools/types.ts';
 import type { AgentLoopDeps } from '../types.ts';
 
 import { parseAllowedTools, toolMatchesAllowedPattern } from '../skill-render.ts';

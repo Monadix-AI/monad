@@ -1,6 +1,6 @@
 import type { MonadAuth, MonadConfig, MonadPaths } from '@monad/home';
 import type { SetSkillsSettingsRequest, SkillsSettingsResponse } from '@monad/protocol';
-import type { ConfigBus } from '@/services/config-bus.ts';
+import type { ConfigBus } from '#/services/config-bus.ts';
 
 import { DEFAULT_SAMPLE_PROVIDER_ID, loadAll, loadAuth, saveProfile } from '@monad/home';
 

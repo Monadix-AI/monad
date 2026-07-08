@@ -14,8 +14,8 @@ import {
   PolicyEngine,
   parseOperatorEntry,
   ruleMatches
-} from '@/agent/approvals/engine.ts';
-import { ApprovalStore } from '@/agent/approvals/store.ts';
+} from '#/agent/approvals/engine.ts';
+import { ApprovalStore } from '#/agent/approvals/store.ts';
 
 const dirs: string[] = [];
 function tmpFile(): string {

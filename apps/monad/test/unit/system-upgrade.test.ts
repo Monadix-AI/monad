@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { MONAD_VERSION } from '@monad/protocol';
 
-import { createSystemUpgradeModule } from '@/handlers/system-upgrade.ts';
+import { createSystemUpgradeModule } from '#/handlers/system-upgrade.ts';
 
 type SpawnOptions = NonNullable<Parameters<typeof Bun.spawn>[1]>;
 

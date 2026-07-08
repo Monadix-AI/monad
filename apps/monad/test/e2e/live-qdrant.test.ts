@@ -10,7 +10,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createLogger } from '@monad/logger';
 
-import { QdrantManager } from '@/services/memory/qdrant.ts';
+import { QdrantManager } from '#/services/memory/qdrant.ts';
 
 const LIVE = process.env.MONAD_QDRANT_LIVE;
 const log = createLogger('live-qdrant');

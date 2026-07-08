@@ -6,7 +6,7 @@
 // rather than reaching clients or the prompt.
 
 import type { Event, MessageId, MessageType, SessionId } from '@monad/protocol';
-import type { Store } from '@/store/db/index.ts';
+import type { Store } from '#/store/db/index.ts';
 
 import { newId, validateMessageData } from '@monad/protocol';
 

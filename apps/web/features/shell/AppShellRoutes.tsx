@@ -2,17 +2,17 @@
 
 import type { SessionId } from '@monad/protocol';
 import type { ComponentProps } from 'react';
-import type { SessionRouteProps } from '@/features/routes/sessions/SessionRoute';
+import type { SessionRouteProps } from '#/features/routes/sessions/SessionRoute';
 
 import dynamic from 'next/dynamic';
 import { memo } from 'react';
 
-import { PanelLoading } from '@/components/PanelLoading';
-import { StudioRoute } from '@/features/routes/studio/StudioRoute';
-import { WorkspaceRoute } from '@/features/routes/workspace/WorkspaceRoute';
-import { Settings } from '@/features/settings/Settings';
+import { PanelLoading } from '#/components/PanelLoading';
+import { StudioRoute } from '#/features/routes/studio/StudioRoute';
+import { WorkspaceRoute } from '#/features/routes/workspace/WorkspaceRoute';
+import { Settings } from '#/features/settings/Settings';
 
-const SessionRoute = dynamic(() => import('@/features/routes/sessions/SessionRoute').then((m) => m.SessionRoute), {
+const SessionRoute = dynamic(() => import('#/features/routes/sessions/SessionRoute').then((m) => m.SessionRoute), {
   loading: PanelLoading
 });
 

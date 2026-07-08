@@ -1,10 +1,10 @@
 import type { MonadPaths } from '@monad/home';
 import type { DeveloperSettings, SetDeveloperSettingsRequest } from '@monad/protocol';
-import type { ConfigBus } from '@/services/config-bus.ts';
+import type { ConfigBus } from '#/services/config-bus.ts';
 
 import { loadAll, loadAuth, saveSystemConfig } from '@monad/home';
 
-import { configureDeveloperLogTransport, developerLogsDir } from '@/services/developer-log.ts';
+import { configureDeveloperLogTransport, developerLogsDir } from '#/services/developer-log.ts';
 
 export function createDeveloperModule(paths: MonadPaths, configBus?: ConfigBus) {
   async function getDeveloperSettings(): Promise<DeveloperSettings> {

@@ -1,12 +1,12 @@
 import type { Session, SessionId } from '@monad/protocol';
-import type { ChatMessage, ModelChunk, ModelResult, ModelRouter } from '@/agent/index.ts';
+import type { ChatMessage, ModelChunk, ModelResult, ModelRouter } from '#/agent/index.ts';
 
 import { expect, test } from 'bun:test';
 import { newId } from '@monad/protocol';
 
-import { AgentLoop } from '@/agent/index.ts';
-import { toolResult } from '@/capabilities/tools/types.ts';
-import { createStore } from '@/store/db/index.ts';
+import { AgentLoop } from '#/agent/index.ts';
+import { toolResult } from '#/capabilities/tools/types.ts';
+import { createStore } from '#/store/db/index.ts';
 
 const echoTool = {
   name: 'test.echo',

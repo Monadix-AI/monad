@@ -4,11 +4,11 @@
 // (peer-delegate.test.ts) covers the real B daemon; this pins the wire details deterministically.
 
 import type { SessionId } from '@monad/protocol';
-import type { ToolContext } from '@/capabilities/tools/types.ts';
+import type { ToolContext } from '#/capabilities/tools/types.ts';
 
 import { afterAll, beforeEach, expect, test } from 'bun:test';
 
-import { createPeerDelegateTool, type PeerDelegateTarget } from '@/services/delegation/peer-delegate.ts';
+import { createPeerDelegateTool, type PeerDelegateTarget } from '#/services/delegation/peer-delegate.ts';
 
 interface Captured {
   method: string;

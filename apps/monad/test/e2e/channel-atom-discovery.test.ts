@@ -7,8 +7,8 @@ import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { discoverChannelAdapters } from '@/channels/discover.ts';
-import { mergeRegistries } from '@/channels/registry.ts';
+import { discoverChannelAdapters } from '#/channels/discover.ts';
+import { mergeRegistries } from '#/channels/registry.ts';
 
 let dir: string;
 

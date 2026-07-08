@@ -4,7 +4,7 @@
 
 import type { SessionId } from '@monad/protocol';
 import type { HookDefinition } from '@monad/sdk-atom';
-import type { MemoryService } from '@/services/memory/index.ts';
+import type { MemoryService } from '#/services/memory/index.ts';
 
 const MEMORY_NUDGE =
   'You have a `memory` tool. The index above shows what you already know — use action "view" to read ' +

@@ -1,8 +1,8 @@
-import type { EmbedResult } from '@/agent/index.ts';
+import type { EmbedResult } from '#/agent/index.ts';
 
 import { expect, test } from 'bun:test';
 
-import { EmbeddingIndexer } from '@/services/embedding-indexer.ts';
+import { EmbeddingIndexer } from '#/services/embedding-indexer.ts';
 
 // In-memory store fake: messages start un-embedded; upsertEmbedding marks them done.
 function fakeStore() {

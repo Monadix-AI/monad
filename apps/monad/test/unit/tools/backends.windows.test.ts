@@ -6,7 +6,7 @@ import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { configureShell, findGitBash, shellArgv } from '@/capabilities/tools/backends.ts';
+import { configureShell, findGitBash, shellArgv } from '#/capabilities/tools/backends.ts';
 
 const FAKE_BASH = join(tmpdir(), 'fake-bash.exe');
 

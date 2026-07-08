@@ -8,8 +8,8 @@ import { useInitDockerBackendMutation } from '@monad/client-rtk';
 import { Button, Skeleton } from '@monad/ui';
 import { useCallback, useEffect, useState } from 'react';
 
-import { useT } from '@/components/I18nProvider';
-import { useToolBackendsSettings } from '@/hooks/use-tool-backends-settings';
+import { useT } from '#/components/I18nProvider';
+import { useToolBackendsSettings } from '#/hooks/use-tool-backends-settings';
 import { CapabilitySection } from './CapabilitySection';
 import { ToolCard } from './ToolCard';
 import {

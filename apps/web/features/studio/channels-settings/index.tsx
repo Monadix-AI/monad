@@ -28,7 +28,6 @@ import {
   cn,
   Input,
   Label,
-  ScrollArea,
   Select,
   SelectContent,
   SelectItem,
@@ -38,12 +37,12 @@ import {
 } from '@monad/ui';
 import { useMemo, useState } from 'react';
 
-import { I18nTrans, useT } from '@/components/I18nProvider';
-import { PanelShell } from '@/components/ui/panel-shell';
-import { StudioBreadcrumbHeader } from '@/features/studio/StudioBreadcrumbHeader';
-import { useAsyncAction } from '@/hooks/use-async-action';
-import { useChannelSettings } from '@/hooks/use-channel-settings';
-import { SECRET_INPUT_PASSWORD_MANAGER_PROPS } from '@/lib/secret-input-props';
+import { I18nTrans, useT } from '#/components/I18nProvider';
+import { PanelShell, PanelShellBody } from '#/components/ui/panel-shell';
+import { StudioBreadcrumbHeader } from '#/features/studio/StudioBreadcrumbHeader';
+import { useAsyncAction } from '#/hooks/use-async-action';
+import { useChannelSettings } from '#/hooks/use-channel-settings';
+import { SECRET_INPUT_PASSWORD_MANAGER_PROPS } from '#/lib/secret-input-props';
 
 const KNOWN_TYPES = ['telegram', 'slack', 'discord'];
 export function ChannelsSettings(_props: { onClose: () => void }) {
@@ -83,7 +82,7 @@ export function ChannelsSettings(_props: { onClose: () => void }) {
         title={t('web.ch.title')}
       />
 
-      <ScrollArea className="flex-1">
+      <PanelShellBody>
         <div className="flex flex-col gap-2 p-4">
           {adding ? (
             <AddChannelForm
@@ -123,7 +122,7 @@ export function ChannelsSettings(_props: { onClose: () => void }) {
             />
           ))}
         </div>
-      </ScrollArea>
+      </PanelShellBody>
     </PanelShell>
   );
 }

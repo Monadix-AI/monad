@@ -1,8 +1,8 @@
 import { expect, test } from 'bun:test';
 
-import { buildChannelTurnContext, composeAcpChannelPrompt } from '@/agent/prompts/channel.ts';
-import { routeChannelMessage } from '@/handlers/session/channel-routing.ts';
-import { isChannelStructuredSession } from '@/handlers/session/handlers/messaging/index.ts';
+import { buildChannelTurnContext, composeAcpChannelPrompt } from '#/agent/prompts/channel.ts';
+import { routeChannelMessage } from '#/handlers/session/channel-routing.ts';
+import { isChannelStructuredSession } from '#/handlers/session/handlers/messaging/index.ts';
 
 const acpAgentNames = ['planner', 'reviewer'];
 const externalAgentNames = ['codex', 'claude-code'];

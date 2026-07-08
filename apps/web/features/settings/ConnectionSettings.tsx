@@ -5,10 +5,10 @@ import { HugeiconsIcon } from '@hugeicons/react';
 import { Button, Input, Label, ScrollArea, Switch } from '@monad/ui';
 import { useState } from 'react';
 
-import { useT } from '@/components/I18nProvider';
-import { useNetworkSettings } from '@/hooks/use-network-settings';
-import { REMOTE_URL_KEY } from '@/lib/monad-store';
-import { SECRET_INPUT_PASSWORD_MANAGER_PROPS } from '@/lib/secret-input-props';
+import { useT } from '#/components/I18nProvider';
+import { useNetworkSettings } from '#/hooks/use-network-settings';
+import { REMOTE_URL_KEY } from '#/lib/monad-store';
+import { SECRET_INPUT_PASSWORD_MANAGER_PROPS } from '#/lib/secret-input-props';
 
 export function ConnectionSettings() {
   const t = useT();

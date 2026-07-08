@@ -1,5 +1,5 @@
 import type { EventType, Hooks, SessionId } from '@monad/protocol';
-import type { Tool, ToolGate, ToolModelContent, ToolResult, ToolResultPart } from '@/capabilities/tools/types.ts';
+import type { Tool, ToolGate, ToolModelContent, ToolResult, ToolResultPart } from '#/capabilities/tools/types.ts';
 import type { ModelContentPart, ModelMessage, ToolCall } from '../../model/index.ts';
 import type { PersistedToolCall, PersistedToolResult, PersistedToolResultEnvelope } from '../replay.ts';
 import type { AgentLoopDeps } from '../types.ts';
@@ -7,7 +7,7 @@ import type { AgentLoopDeps } from '../types.ts';
 import { createLogger } from '@monad/logger';
 import { newId } from '@monad/protocol';
 
-import { invokeTool } from '@/capabilities/tools/invoke.ts';
+import { invokeTool } from '#/capabilities/tools/invoke.ts';
 import { shouldStripAnsiForTool, stripAnsiFromToolOutput } from '../ansi-output.ts';
 import { persistToolResultEnvelope } from '../replay.ts';
 import { DEFAULT_MAX_TOOL_RESULT_CHARS, logInput, truncateToolOutput } from '../tool-output.ts';

@@ -1,7 +1,7 @@
 import type { ChannelInstanceConfig, MonadAuth, MonadConfig } from '@monad/home';
 import type { ChannelInbound, Event, MessageId, SessionId } from '@monad/protocol';
 import type { ChannelAdapter, ChannelContext, SentMessage } from '@monad/sdk-atom';
-import type { CommandBundle } from '@/handlers/commands/index.ts';
+import type { CommandBundle } from '#/handlers/commands/index.ts';
 
 import { expect, test } from 'bun:test';
 import { createDefaultConfig } from '@monad/home';
@@ -9,10 +9,10 @@ import { createI18n } from '@monad/i18n';
 import { enMessages as i18nMessages } from '@monad/i18n/messages';
 import { channelDisplayText, newId, principalIdSchema } from '@monad/protocol';
 
-import { ChannelService, sweepIdleBuckets } from '@/channels/channel.ts';
-import { createRenderer } from '@/channels/render.ts';
-import { EventBus } from '@/services/event-bus.ts';
-import { createStore } from '@/store/db/index.ts';
+import { ChannelService, sweepIdleBuckets } from '#/channels/channel.ts';
+import { createRenderer } from '#/channels/render.ts';
+import { EventBus } from '#/services/event-bus.ts';
+import { createStore } from '#/store/db/index.ts';
 import { seededCommandRegistry } from '../../helpers.ts';
 
 /** A real English translator so command/channel replies read as before (assertions check English). */

@@ -1,14 +1,14 @@
 // QdrantManager orchestration over injected seams (no real download/process/network): ensure =
 // download-if-missing → spawn → health-poll → url; idempotent; binary cached; stop kills.
 
-import type { QdrantProcess } from '@/services/memory/qdrant.ts';
+import type { QdrantProcess } from '#/services/memory/qdrant.ts';
 
 import { expect, test } from 'bun:test';
 import { existsSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { QdrantManager } from '@/services/memory/qdrant.ts';
+import { QdrantManager } from '#/services/memory/qdrant.ts';
 
 const silent = { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} } as never;
 const rawAsset = async () => ({ name: 'qdrant', bytes: new TextEncoder().encode('#!/bin/sh\n') }); // raw (no archive ext)

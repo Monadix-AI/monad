@@ -1,12 +1,12 @@
-import type { ModelRouter } from '@/agent/model/index.ts';
-import type { Tool } from '@/capabilities/tools/types.ts';
+import type { ModelRouter } from '#/agent/model/index.ts';
+import type { Tool } from '#/capabilities/tools/types.ts';
 
 import { createLogger } from '@monad/logger';
 import { z } from 'zod';
 
-import { toolInputJsonSchema } from '@/capabilities/tools/schema.ts';
-import { getCatalog } from '@/capabilities/tools/tool-catalog.ts';
-import { toolResult } from '@/capabilities/tools/types.ts';
+import { toolInputJsonSchema } from '#/capabilities/tools/schema.ts';
+import { getCatalog } from '#/capabilities/tools/tool-catalog.ts';
+import { toolResult } from '#/capabilities/tools/types.ts';
 // `with { type: 'file' }` embeds reliably in bun's --compile binary; `new URL(..., import.meta.url)`
 // resolves against the bundled module's relocated path and breaks in the standalone binary.
 import searchPromptPath from '../../../agent/prompts/tool-search-system-prompt.md' with { type: 'file' };

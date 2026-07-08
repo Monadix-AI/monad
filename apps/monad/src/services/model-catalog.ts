@@ -3,7 +3,7 @@
 // at startup, and a failed refresh keeps the previous data.
 
 import type { ModelKind, ModelModalities } from '@monad/protocol';
-import type { ModelPrice } from '@/agent/index.ts';
+import type { ModelPrice } from '#/agent/index.ts';
 
 import { rename } from 'node:fs/promises';
 import { z } from 'zod';

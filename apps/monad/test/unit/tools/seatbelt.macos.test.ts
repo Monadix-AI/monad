@@ -1,6 +1,6 @@
 if (process.platform !== 'darwin') process.exit(0);
 
-import type { SandboxPolicy } from '@/capabilities/tools';
+import type { SandboxPolicy } from '#/capabilities/tools';
 
 import { afterEach, expect, test } from 'bun:test';
 import { existsSync } from 'node:fs';
@@ -9,7 +9,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { seatbeltLauncher } from '@monad/atoms/sandbox/seatbelt';
 
-import { configureSandboxLauncher, noneLauncher, sandboxedSpawn } from '@/capabilities/tools';
+import { configureSandboxLauncher, noneLauncher, sandboxedSpawn } from '#/capabilities/tools';
 
 // Real Seatbelt enforcement — requires the macOS kernel.
 

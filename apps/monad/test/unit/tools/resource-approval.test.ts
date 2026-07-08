@@ -1,9 +1,9 @@
-import type { ToolContext } from '@/capabilities/tools/types.ts';
+import type { ToolContext } from '#/capabilities/tools/types.ts';
 
 import { expect, test } from 'bun:test';
 
-import { normalizePathApprovalKey } from '@/capabilities/tools/approval/path-gate.ts';
-import { createApprovalPolicy } from '@/capabilities/tools/approval/policy.ts';
+import { normalizePathApprovalKey } from '#/capabilities/tools/approval/path-gate.ts';
+import { createApprovalPolicy } from '#/capabilities/tools/approval/policy.ts';
 import {
   approvalDeniedMessage,
   buildResourceApprovalRequest,
@@ -11,7 +11,7 @@ import {
   RESOURCE_APPROVAL_TOOLS,
   requestNetworkAccess,
   requestPathAccess
-} from '@/capabilities/tools/approval/resource-approval.ts';
+} from '#/capabilities/tools/approval/resource-approval.ts';
 
 test('RESOURCE_APPROVAL_TOOLS centralizes remembered approval tool names', () => {
   expect(RESOURCE_APPROVAL_TOOLS.pathAccess).toBe('path_access');

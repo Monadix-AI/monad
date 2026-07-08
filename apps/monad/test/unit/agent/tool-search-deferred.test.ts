@@ -1,12 +1,12 @@
 import type { SessionId } from '@monad/protocol';
-import type { ToolSearchConfig } from '@/agent/loop/index.ts';
-import type { Tool } from '@/capabilities/tools/types.ts';
+import type { ToolSearchConfig } from '#/agent/loop/index.ts';
+import type { Tool } from '#/capabilities/tools/types.ts';
 
 import { expect, test } from 'bun:test';
 import { newId } from '@monad/protocol';
 
-import { AgentLoop, InMemoryMessageRepo, type ModelRequest, type ModelRouter } from '@/agent/index.ts';
-import { toolResult } from '@/capabilities/tools/types.ts';
+import { AgentLoop, InMemoryMessageRepo, type ModelRequest, type ModelRouter } from '#/agent/index.ts';
+import { toolResult } from '#/capabilities/tools/types.ts';
 import { buildMockModel } from '../../fixtures/mock-model.ts';
 
 function makeTool(name: string, description = `desc for ${name}`): Tool {

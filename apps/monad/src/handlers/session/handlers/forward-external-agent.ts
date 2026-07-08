@@ -1,18 +1,18 @@
 import type { ExternalAgentConfig } from '@monad/home';
 import type { Event, ExternalAgentSessionView, Session, SessionId } from '@monad/protocol';
-import type { SessionContext } from '@/handlers/session/context.ts';
+import type { SessionContext } from '#/handlers/session/context.ts';
 
 import { loadAll } from '@monad/home';
 import { newId } from '@monad/protocol';
 
-import { extractError } from '@/agent/index.ts';
-import { HandlerError } from '@/handlers/handler-error.ts';
+import { extractError } from '#/agent/index.ts';
+import { HandlerError } from '#/handlers/handler-error.ts';
 import {
   externalAgentProjectMemberDisplayNameForAgent,
   externalAgentProjectMemberSettings,
   managedExternalAgentProjectMembers
-} from '@/handlers/session/handlers/messaging-members.ts';
-import { managedProjectLaunchMode } from '@/services/external-agent/managed-project.ts';
+} from '#/handlers/session/handlers/messaging-members.ts';
+import { managedProjectLaunchMode } from '#/services/external-agent/managed-project.ts';
 
 type StartManagedExternalAgentRuntimeWithRecovery = (args: {
   session: Session;

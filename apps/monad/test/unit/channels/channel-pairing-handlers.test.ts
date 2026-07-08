@@ -2,11 +2,11 @@
 // awaiting user to the channel's allowlist, then commits. Drives the handler against fakes so the
 // wiring (consume → append → commit) is locked without standing up a full daemon.
 
-import type { ChannelSettingsContext } from '@/handlers/settings/channel/context.ts';
+import type { ChannelSettingsContext } from '#/handlers/settings/channel/context.ts';
 
 import { expect, test } from 'bun:test';
 
-import { createPairingHandlers } from '@/handlers/settings/channel/handlers/pairing.ts';
+import { createPairingHandlers } from '#/handlers/settings/channel/handlers/pairing.ts';
 
 function fakeCtx(opts: {
   consume: (id: string, code: string) => string | null;

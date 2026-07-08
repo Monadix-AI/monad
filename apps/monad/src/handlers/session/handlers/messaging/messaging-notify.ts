@@ -1,8 +1,8 @@
 import type { ExternalAgentConfig } from '@monad/home';
 import type { MessageAttachmentRef, SessionId } from '@monad/protocol';
-import type { SessionContext } from '@/handlers/session/context.ts';
-import type { createManagedExternalAgentDelivery } from '@/handlers/session/handlers/managed-external-agent-delivery.ts';
-import type { ManagedExternalAgentProjectMessageSender } from '@/handlers/session/handlers/messaging-notices.ts';
+import type { SessionContext } from '#/handlers/session/context.ts';
+import type { createManagedExternalAgentDelivery } from '#/handlers/session/handlers/managed-external-agent-delivery.ts';
+import type { ManagedExternalAgentProjectMessageSender } from '#/handlers/session/handlers/messaging-notices.ts';
 
 import { loadAll } from '@monad/home';
 

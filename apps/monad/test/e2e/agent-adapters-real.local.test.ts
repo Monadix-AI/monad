@@ -16,10 +16,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { builtinAgentAdapters } from '@monad/atoms/agent-adapters';
 
-import { EventBus } from '@/services/event-bus.ts';
-import { ExternalAgentHost } from '@/services/external-agent/host/index.ts';
-import { registerAgentAdapterImpl } from '@/services/external-agent/index.ts';
-import { createStore } from '@/store/db/index.ts';
+import { EventBus } from '#/services/event-bus.ts';
+import { ExternalAgentHost } from '#/services/external-agent/host/index.ts';
+import { registerAgentAdapterImpl } from '#/services/external-agent/index.ts';
+import { createStore } from '#/store/db/index.ts';
 
 for (const adapter of builtinAgentAdapters) registerAgentAdapterImpl(adapter);
 

@@ -1,8 +1,8 @@
-import type { ContextPrepareCtx, ModelMessage } from '@/agent/index.ts';
+import type { ContextPrepareCtx, ModelMessage } from '#/agent/index.ts';
 
 import { expect, test } from 'bun:test';
 
-import { EVICTED_MARKER, TokenEstimator, ToolResultEvictionContext } from '@/agent/index.ts';
+import { EVICTED_MARKER, TokenEstimator, ToolResultEvictionContext } from '#/agent/index.ts';
 
 // Fresh estimator (ratio 4 chars/token) so eviction sizing doesn't ride on the self-calibrating
 // global one, which other tests move. Trigger is gated via lastRealInputTokens for determinism.

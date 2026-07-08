@@ -15,9 +15,9 @@ import { builtinAgentAdapters } from '@monad/atoms/agent-adapters';
 import { initMonadHome, loadAuth, loadConfig } from '@monad/home';
 import { setLogLevel } from '@monad/logger';
 
-import { ModelService } from '@/handlers/settings/model/index.ts';
-import { registerAgentAdapterImpl } from '@/services/external-agent/index.ts';
-import { createHttpTransport } from '@/transports/http.ts';
+import { ModelService } from '#/handlers/settings/model/index.ts';
+import { registerAgentAdapterImpl } from '#/services/external-agent/index.ts';
+import { createHttpTransport } from '#/transports/http.ts';
 import {
   buildHandlers,
   makeTestPaths,

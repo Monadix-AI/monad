@@ -33,8 +33,8 @@ reasonably reach for a different approach and get it wrong. Explain the constrai
 the mechanics.
 
 ```ts
-// tsgo emits this path into dist/main.d.ts; the @/ alias is internal and
-// would not resolve for consumers reading the generated .d.ts.
+// Public type entries live under src/public-*.ts; keep imports there resolvable
+// without leaking package-private alias conventions.
 import { createTransport } from "./transports/http";
 ```
 

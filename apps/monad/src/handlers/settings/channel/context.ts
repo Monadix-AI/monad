@@ -1,6 +1,6 @@
 import type { MonadAuth, MonadConfig, MonadPaths } from '@monad/home';
-import type { ChannelService } from '@/channels/channel.ts';
-import type { ConfigBus } from '@/services/config-bus.ts';
+import type { ChannelService } from '#/channels/channel.ts';
+import type { ConfigBus } from '#/services/config-bus.ts';
 
 import { loadAll, loadAuth, saveAuth, saveProfile } from '@monad/home';
 

@@ -2,7 +2,7 @@
 
 import { createMonadStore, createMonadTreatyClient, type MonadApiError } from '@monad/client-rtk';
 
-import { toast } from '@/components/ToastProvider';
+import { toast } from '#/components/ToastProvider';
 import { REMOTE_TOKEN_KEY, REMOTE_URL_KEY } from './daemon-connections';
 
 export { REMOTE_URL_KEY } from './daemon-connections';

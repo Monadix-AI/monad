@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 
-import { buildAssetMap, serveAssetFromMap } from '@/server/index';
+import { buildAssetMap, serveAssetFromMap } from '#/server/index';
 
 test('serves gzip-embedded web assets with original URL and content type', async () => {
   const compressed = Bun.gzipSync(Buffer.from('<!doctype html><title>monad</title>'));

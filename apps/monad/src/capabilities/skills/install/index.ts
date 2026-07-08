@@ -18,9 +18,9 @@ import {
   type SkillInstallReviewWarning,
   warningModelRequestFailed,
   warningsToStrings
-} from '@/capabilities/skills/install/review.ts';
-import { scanSkillFiles } from '@/capabilities/skills/install/scan.ts';
-import { findSkillDirs, installSkillFromDir, parseSkillMd } from '@/store/home/skills.ts';
+} from '#/capabilities/skills/install/review.ts';
+import { scanSkillFiles } from '#/capabilities/skills/install/scan.ts';
+import { findSkillDirs, installSkillFromDir, parseSkillMd } from '#/store/home/skills.ts';
 
 export class SkillInstallError extends Error {}
 

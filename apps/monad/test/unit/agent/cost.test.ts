@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 
-import { computeCost, type ModelPrice } from '@/agent/index.ts';
+import { computeCost, type ModelPrice } from '#/agent/index.ts';
 
 // $/1M tokens — input $3, output $15, cache-read $0.30 (10%), cache-write $3.75 (1.25×).
 const price: ModelPrice = { input: 3, output: 15, cacheRead: 0.3, cacheWrite: 3.75 };

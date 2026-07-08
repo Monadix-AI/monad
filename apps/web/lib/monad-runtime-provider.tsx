@@ -10,8 +10,8 @@ import {
   activateLocalDaemonConnection,
   activateRemoteDaemonConnection,
   type RemoteDaemonConnection
-} from '@/lib/daemon-connections';
-import { createMonadRuntime, resolveConnection } from '@/lib/monad-store';
+} from '#/lib/daemon-connections';
+import { createMonadRuntime, resolveConnection } from '#/lib/monad-store';
 
 type DaemonSwitchRequest = { type: 'local' } | { type: 'remote'; connection: Pick<RemoteDaemonConnection, 'url'> };
 

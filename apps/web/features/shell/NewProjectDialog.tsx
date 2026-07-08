@@ -6,7 +6,7 @@ import { usePickDirectoryMutation } from '@monad/client-rtk';
 import { Button, Input, Label } from '@monad/ui';
 import { useState } from 'react';
 
-import { useT } from '@/components/I18nProvider';
+import { useT } from '#/components/I18nProvider';
 import {
   Dialog,
   DialogContent,
@@ -14,7 +14,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle
-} from '@/components/ui/dialog';
+} from '#/components/ui/dialog';
 
 interface NewProjectDialogProps {
   open: boolean;

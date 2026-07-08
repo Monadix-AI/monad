@@ -11,8 +11,8 @@ import type {
 
 import { loadAll, saveSystemConfig } from '@monad/home';
 
-import { HandlerError } from '@/handlers/handler-error.ts';
-import { listAcpAgentPresets, productIconForAcpAgent } from '@/services/delegation/presets.ts';
+import { HandlerError } from '#/handlers/handler-error.ts';
+import { listAcpAgentPresets, productIconForAcpAgent } from '#/services/delegation/presets.ts';
 
 export interface AcpAgentDeps {
   paths: MonadPaths;

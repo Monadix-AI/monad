@@ -12,14 +12,14 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createDefaultConfig, pathsForHome } from '@monad/home';
 
-import { createSandbox, finalizeSandboxLauncher } from '@/bootstrap/sandbox.ts';
-import { createTlsCert } from '@/bootstrap/tls.ts';
+import { createSandbox, finalizeSandboxLauncher } from '#/bootstrap/sandbox.ts';
+import { createTlsCert } from '#/bootstrap/tls.ts';
 import {
   clearSandboxLaunchers,
   configureSandboxLauncher,
   noneLauncher,
   registerSandboxLauncher
-} from '@/capabilities/tools';
+} from '#/capabilities/tools';
 
 let tlsDir: string;
 beforeEach(async () => {

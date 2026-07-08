@@ -10,7 +10,7 @@ import type { Tool, ToolInputSchema, ToolResultPart } from '../../types.ts';
 import { createLogger } from '@monad/logger';
 import { z } from 'zod';
 
-import { daemonChildProcesses, killDaemonProcessTree } from '@/infra/daemon-child-processes.ts';
+import { daemonChildProcesses, killDaemonProcessTree } from '#/infra/daemon-child-processes.ts';
 import { toolResult } from '../../types.ts';
 
 const log = createLogger('mcp');

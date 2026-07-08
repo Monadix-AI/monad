@@ -1,9 +1,9 @@
-import type { ToolContext } from '@/capabilities/tools/types.ts';
+import type { ToolContext } from '#/capabilities/tools/types.ts';
 
 import { afterEach, expect, test } from 'bun:test';
 
-import { configureSandboxNet, netFetchTool, ToolSecurityError } from '@/capabilities/tools';
-import { createApprovalFetch, fetchTextSafe } from '@/capabilities/tools/registry/net.ts';
+import { configureSandboxNet, netFetchTool, ToolSecurityError } from '#/capabilities/tools';
+import { createApprovalFetch, fetchTextSafe } from '#/capabilities/tools/registry/net.ts';
 
 // These assert the SSRF guards reject without ever opening a socket — no network needed.
 const ctx: ToolContext = { sessionId: 's1', sandboxRoots: undefined, log: () => {} };

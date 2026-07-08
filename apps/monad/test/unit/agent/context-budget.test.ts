@@ -10,7 +10,7 @@ import {
   DEFAULT_AUTOCOMPACT_BUFFER,
   estimateTokens,
   InMemoryMessageRepo
-} from '@/agent/index.ts';
+} from '#/agent/index.ts';
 import { buildMockModel } from '../../fixtures/mock-model.ts';
 
 test('estimateTokens is positive, monotonic, and zero for empty', () => {

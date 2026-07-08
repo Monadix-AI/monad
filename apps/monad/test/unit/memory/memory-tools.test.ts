@@ -1,8 +1,8 @@
-import type { ToolContext } from '@/capabilities/tools/types.ts';
+import type { ToolContext } from '#/capabilities/tools/types.ts';
 
 import { expect, test } from 'bun:test';
 
-import { createMemoryTools, type NoteStore, renderNotes } from '@/capabilities/tools/registry/memory.ts';
+import { createMemoryTools, type NoteStore, renderNotes } from '#/capabilities/tools/registry/memory.ts';
 
 function memStore(): NoteStore {
   const m = new Map<string, string>();

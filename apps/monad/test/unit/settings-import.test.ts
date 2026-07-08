@@ -11,8 +11,8 @@ import {
   applyModelRolesToConfiguredDefaultProfile,
   createSettingsImportModule,
   previewSettingsImport
-} from '@/handlers/settings/import/index.ts';
-import { ConfigBus } from '@/services/config-bus.ts';
+} from '#/handlers/settings/import/index.ts';
+import { ConfigBus } from '#/services/config-bus.ts';
 
 function pathsFor(dir: string): MonadPaths {
   return {

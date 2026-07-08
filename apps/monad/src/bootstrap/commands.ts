@@ -7,19 +7,19 @@ import type { MonadConfig } from '@monad/home';
 import type { Logger } from '@monad/logger';
 import type { Event, SessionId } from '@monad/protocol';
 import type { BeliefExplanation, ConsolidateSummary, ContradictionCheckSummary } from '@monad/sdk-atom';
-import type { DurableSummarizer, ModelRouter } from '@/agent/index.ts';
-import type { SessionGateway } from '@/channels/channel.ts';
-import type { CommandBundle, CommandRegistry, SkillCommandView } from '@/handlers/commands/index.ts';
-import type { EventBus } from '@/services/event-bus.ts';
-import type { I18nService } from '@/services/i18n.ts';
-import type { ModelService } from '@/services/model.ts';
-import type { ModelCatalogService } from '@/services/model-catalog.ts';
-import type { OversightService } from '@/services/oversight.ts';
-import type { Store } from '@/store/db/index.ts';
+import type { DurableSummarizer, ModelRouter } from '#/agent/index.ts';
+import type { SessionGateway } from '#/channels/channel.ts';
+import type { CommandBundle, CommandRegistry, SkillCommandView } from '#/handlers/commands/index.ts';
+import type { EventBus } from '#/services/event-bus.ts';
+import type { I18nService } from '#/services/i18n.ts';
+import type { ModelService } from '#/services/model.ts';
+import type { ModelCatalogService } from '#/services/model-catalog.ts';
+import type { OversightService } from '#/services/oversight.ts';
+import type { Store } from '#/store/db/index.ts';
 
 import { newId } from '@monad/protocol';
 
-import { HANDOFF_PROMPT, replayHistory } from '@/agent/index.ts';
+import { HANDOFF_PROMPT, replayHistory } from '#/agent/index.ts';
 
 export interface CommandBundleDeps {
   commandRegistry: CommandRegistry;

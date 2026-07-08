@@ -32,7 +32,7 @@ import {
 import { Markdown } from '@monad/ui/components/Markdown';
 import { useState } from 'react';
 
-import { useT } from '@/components/I18nProvider';
+import { useT } from '#/components/I18nProvider';
 import { CapabilityIcon, resolveCapabilityIcon } from '../CapabilityIcon';
 import { type CapabilityItem, INHERIT, MODEL_ROLES, SANDBOX_MODES, type WorkshopPart } from './AgentWorkshopPrimitives';
 

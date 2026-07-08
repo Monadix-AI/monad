@@ -12,13 +12,13 @@
 // nightly / manual job, not a PR gate (that stays with the mock e2e).
 
 import type { AgentMessagePayload, AgentTokenPayload, Event } from '@monad/protocol';
-import type { Tool } from '@/capabilities/tools/types.ts';
+import type { Tool } from '#/capabilities/tools/types.ts';
 
 import { beforeAll, describe, expect, test } from 'bun:test';
 import { z } from 'zod';
 
-import { toolResult } from '@/capabilities/tools/types.ts';
-import { createHttpTransport } from '@/transports/http.ts';
+import { toolResult } from '#/capabilities/tools/types.ts';
+import { createHttpTransport } from '#/transports/http.ts';
 import { buildHandlers, liveModelDeps, serveTransport, TRANSPORTS, type TransportHandle } from '../helpers.ts';
 
 const KEY = process.env.OPENROUTER_API_KEY;

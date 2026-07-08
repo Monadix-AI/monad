@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 
-import { type AtomCandidate, qualifiedAtomName, resolveAtomPins } from '@/atoms/resolve.ts';
+import { type AtomCandidate, qualifiedAtomName, resolveAtomPins } from '#/atoms/resolve.ts';
 
 const c = (bareId: string, packId: string): AtomCandidate => ({ bareId, packId });
 

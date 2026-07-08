@@ -29,28 +29,28 @@ import type {
   ResumeSessionResponse
 } from '@agentclientprotocol/sdk';
 import type { AgentErrorPayload, AgentId, Event, FinishReason, MessageId, SessionId } from '@monad/protocol';
-import type { McpServerSpec } from '@/capabilities/tools';
-import type { ToolBackends } from '@/capabilities/tools/types.ts';
-import type { AcpSession, Handlers } from '@/transports/acp/types.ts';
+import type { McpServerSpec } from '#/capabilities/tools';
+import type { ToolBackends } from '#/capabilities/tools/types.ts';
+import type { AcpSession, Handlers } from '#/transports/acp/types.ts';
 
 import { PROTOCOL_VERSION, RequestError } from '@agentclientprotocol/sdk';
 import { createLogger, formatTransportCall } from '@monad/logger';
 import { parseEventPayload } from '@monad/protocol';
 
-import { createSandboxBackends, isDelegableTool } from '@/capabilities/tools';
-import { VERSION } from '@/handlers/daemon-handlers/index.ts';
-import { buildSessionOrigin, hostOs } from '@/handlers/session/origin.ts';
-import { createAcpFsBackend, createAcpTerminalBackend } from '@/transports/acp/backends.ts';
-import { bridgeClarify, bridgeDelegation, bridgePermission } from '@/transports/acp/bridges.ts';
-import { applyRangeEdit, renderOpenDocs } from '@/transports/acp/documents.ts';
-import { acpExt, MONAD_EXT_METHODS, monadMeta, toMcpSpec } from '@/transports/acp/meta.ts';
+import { createSandboxBackends, isDelegableTool } from '#/capabilities/tools';
+import { VERSION } from '#/handlers/daemon-handlers/index.ts';
+import { buildSessionOrigin, hostOs } from '#/handlers/session/origin.ts';
+import { createAcpFsBackend, createAcpTerminalBackend } from '#/transports/acp/backends.ts';
+import { bridgeClarify, bridgeDelegation, bridgePermission } from '#/transports/acp/bridges.ts';
+import { applyRangeEdit, renderOpenDocs } from '#/transports/acp/documents.ts';
+import { acpExt, MONAD_EXT_METHODS, monadMeta, toMcpSpec } from '#/transports/acp/meta.ts';
 import {
   eventToPlanUpdate,
   eventToSessionUpdate,
   finishReasonToStopReason,
   promptToAttachments,
   promptToText
-} from '@/transports/acp/translate.ts';
+} from '#/transports/acp/translate.ts';
 
 const log = createLogger('transport:acp');
 

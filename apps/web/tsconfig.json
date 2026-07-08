@@ -4,10 +4,13 @@
     "lib": ["ESNext", "DOM", "DOM.Iterable"],
     "module": "ESNext",
     "allowArbitraryExtensions": true,
-    "jsx": "react-jsx",
     "noUncheckedIndexedAccess": false,
+    "jsx": "react-jsx",
     "paths": {
-      "@/*": ["./*"]
+      "#/*": ["./*", "../monad/src/*"],
+      "@monad/monad": ["../monad/src/public-api.ts"],
+      "@monad/monad/start": ["../monad/src/public-api.ts"],
+      "@monad/monad/log-maintenance": ["../monad/src/public-log-maintenance.ts"]
     },
     "plugins": [
       {

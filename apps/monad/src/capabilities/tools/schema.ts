@@ -4,7 +4,7 @@
 // toJsonSchema() wins (non-zod opt-in), else a zod schema is auto-converted, else the tool
 // exposes no parameters. `inputExamples` ride along as the schema's `examples`.
 
-import type { Tool } from '@/capabilities/tools/types.ts';
+import type { Tool } from '#/capabilities/tools/types.ts';
 
 import { z } from 'zod';
 

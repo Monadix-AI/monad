@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { avatarCacheKey } from '@monad/protocol';
 
-import { createAvatarCacheController } from '@/transports/http/avatar-cache.ts';
+import { createAvatarCacheController } from '#/transports/http/avatar-cache.ts';
 
 const realHome = Bun.env.MONAD_HOME;
 

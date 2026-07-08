@@ -1,8 +1,8 @@
 import type { AcpAgentConfig, ExternalAgentConfig, McpServerConfig } from '@monad/home';
 import type { Session, SessionId, SessionMcpServer, WorkplaceProjectMemberSettings } from '@monad/protocol';
-import type { Store } from '@/store/db/index.ts';
+import type { Store } from '#/store/db/index.ts';
 
-import { sessionMcpServersToAcp, toAcpMcpServers } from '@/services/delegation/acp-delegate.ts';
+import { sessionMcpServersToAcp, toAcpMcpServers } from '#/services/delegation/acp-delegate.ts';
 
 const CONTROL_ROOM_SESSION_PREFIX = 'Control Room: ';
 const WORKPLACE_SESSION_PREFIX = 'Workplace: ';

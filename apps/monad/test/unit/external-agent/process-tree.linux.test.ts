@@ -10,7 +10,7 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { killExternalAgentProcess } from '@/services/external-agent/process.ts';
+import { killExternalAgentProcess } from '#/services/external-agent/process.ts';
 
 function isAlive(pid: number): boolean {
   try {

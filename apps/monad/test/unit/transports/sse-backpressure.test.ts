@@ -3,7 +3,7 @@ import type { Event, SessionId } from '@monad/protocol';
 import { expect, test } from 'bun:test';
 import { newId } from '@monad/protocol';
 
-import { createBoundedSseSink } from '@/transports/http/sessions/sse.ts';
+import { createBoundedSseSink } from '#/transports/http/sessions/sse.ts';
 
 function evt(): Event {
   return {

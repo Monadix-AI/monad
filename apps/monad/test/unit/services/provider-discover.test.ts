@@ -3,7 +3,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { ModelProviderRegistry } from '@/agent/index.ts';
+import { ModelProviderRegistry } from '#/agent/index.ts';
 
 // The file-scan discovery path: drop a `.js` whose default export is a ModelProvider (or array)
 // into a dir; registry.discover() loads + registers it. One bad file never blocks the others.

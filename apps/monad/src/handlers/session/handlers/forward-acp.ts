@@ -1,15 +1,15 @@
 import type { AcpAgentConfig } from '@monad/home';
 import type { Session, SessionId } from '@monad/protocol';
-import type { SessionContext } from '@/handlers/session/context.ts';
+import type { SessionContext } from '#/handlers/session/context.ts';
 
 import { loadAll } from '@monad/home';
 import { newId } from '@monad/protocol';
 
-import { extractError } from '@/agent/index.ts';
-import { composeAcpChannelPrompt } from '@/agent/prompts/channel.ts';
-import { HandlerError } from '@/handlers/handler-error.ts';
-import { channelDelegateMcpServers } from '@/handlers/session/handlers/messaging-members.ts';
-import { acpAuthGuidance, directDelegate } from '@/services/delegation/acp-delegate.ts';
+import { extractError } from '#/agent/index.ts';
+import { composeAcpChannelPrompt } from '#/agent/prompts/channel.ts';
+import { HandlerError } from '#/handlers/handler-error.ts';
+import { channelDelegateMcpServers } from '#/handlers/session/handlers/messaging-members.ts';
+import { acpAuthGuidance, directDelegate } from '#/services/delegation/acp-delegate.ts';
 
 type SandboxRootsFor = (
   sessionId: SessionId,

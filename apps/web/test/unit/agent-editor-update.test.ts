@@ -2,7 +2,7 @@ import type { Agent } from '@monad/protocol';
 
 import { expect, test } from 'bun:test';
 
-import { buildAgentEditorUpdate } from '@/features/studio/agent-workshop/agent-editor-update';
+import { buildAgentEditorUpdate } from '#/features/studio/agent-workshop/agent-editor-update';
 
 const agent = {
   id: 'agt_1',

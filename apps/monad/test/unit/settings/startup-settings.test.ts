@@ -3,7 +3,7 @@ import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promise
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { createStartupSettingsModule } from '@/handlers/settings/startup/index.ts';
+import { createStartupSettingsModule } from '#/handlers/settings/startup/index.ts';
 
 let dir: string;
 

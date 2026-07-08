@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 
-import { installGitSkill } from '@/capabilities/skills/install/git.ts';
+import { installGitSkill } from '#/capabilities/skills/install/git.ts';
 
 // The git+ skill source is attacker-controllable and reaches `git clone` before any consent/scan
 // gate. git's remote-helper transports (ext::, fd::) execute code at clone time, so a malicious

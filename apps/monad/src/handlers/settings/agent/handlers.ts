@@ -4,8 +4,8 @@ import type { AgentContext } from './context.ts';
 
 import { newId } from '@monad/protocol';
 
-import { HandlerError } from '@/handlers/handler-error.ts';
-import { deleteAgentDir, loadAgentBody, toAgentDir, writeAgentBody } from '@/store/home/agent-def.ts';
+import { HandlerError } from '#/handlers/handler-error.ts';
+import { deleteAgentDir, loadAgentBody, toAgentDir, writeAgentBody } from '#/store/home/agent-def.ts';
 
 function toWireAgent(a: AgentConfig, principalId: PrincipalId, hasPrompt: boolean): Agent {
   return {

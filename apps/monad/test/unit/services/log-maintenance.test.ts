@@ -9,7 +9,7 @@ import {
   rotateDaemonLog,
   rotateLogFile,
   sweepStaleLogs
-} from '@/services/log-maintenance.ts';
+} from '#/services/log-maintenance.ts';
 
 let dir: string;
 let seq = 0;

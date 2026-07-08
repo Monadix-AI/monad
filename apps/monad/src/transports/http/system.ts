@@ -1,9 +1,9 @@
-import type { createDaemonHandlers } from '@/handlers/daemon-handlers/index.ts';
+import type { createDaemonHandlers } from '#/handlers/daemon-handlers/index.ts';
 
 import { daemonHttpContract } from '@monad/protocol';
 import { Elysia } from 'elysia';
 
-import { isLoopbackPeer } from '@/transports/http/browser-guard.ts';
+import { isLoopbackPeer } from '#/transports/http/browser-guard.ts';
 
 export function createSystemController(handlers: ReturnType<typeof createDaemonHandlers>) {
   const pickDirectoryContract = daemonHttpContract.system.pickDirectory;

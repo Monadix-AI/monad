@@ -3,8 +3,8 @@ import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { createScheduleTools } from '@/capabilities/tools/registry/schedule.ts';
-import { ScheduleService } from '@/services/scheduling/schedule.ts';
+import { createScheduleTools } from '#/capabilities/tools/registry/schedule.ts';
+import { ScheduleService } from '#/services/scheduling/schedule.ts';
 
 function tmpStore(): string {
   return join(tmpdir(), `monad-sched-${process.pid}-${process.hrtime.bigint()}.json`);

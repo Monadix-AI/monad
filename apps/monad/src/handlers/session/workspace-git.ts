@@ -1,6 +1,6 @@
 import type { WorkspaceGit } from '@monad/protocol';
 
-import { buildSandboxPolicy, sandboxedSpawn, sandboxLauncher } from '@/capabilities/tools';
+import { buildSandboxPolicy, sandboxedSpawn, sandboxLauncher } from '#/capabilities/tools';
 
 /** Parse `git status --porcelain=v1 --branch` output. The first `## ` line carries the branch and
  *  ahead/behind counts; any other line means the tree is dirty. */

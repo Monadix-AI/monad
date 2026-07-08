@@ -3,7 +3,7 @@
 import { Cancel01Icon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 
-import { queuedCardsForDisplay } from '@/lib/composer-settings';
+import { queuedCardsForDisplay } from '#/lib/composer-settings';
 
 export function ComposerQueueStack({
   className,

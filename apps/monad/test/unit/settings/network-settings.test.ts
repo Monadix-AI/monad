@@ -4,8 +4,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initMonadHome } from '@monad/home';
 
-import { createNetworkModule } from '@/handlers/settings/network/index.ts';
-import { ConfigBus } from '@/services/config-bus.ts';
+import { createNetworkModule } from '#/handlers/settings/network/index.ts';
+import { ConfigBus } from '#/services/config-bus.ts';
 import { makeTestPaths } from '../../helpers.ts';
 
 test('network settings apply through config bus without requiring a daemon restart', async () => {

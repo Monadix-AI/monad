@@ -4,7 +4,7 @@ import { unlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { KvServer } from '@/store/kv/index.ts';
+import { KvServer } from '#/store/kv/index.ts';
 
 // AF_UNIX is available on every platform monad's CI runs on (macOS, Linux, Windows 10+ with Bun),
 // so start() binds the Unix socket everywhere; bindTcpFallback() is the graceful degradation the

@@ -4,7 +4,7 @@ import { useGetMemoryStatusQuery, useSetMemoryGraphMutation } from '@monad/clien
 import { Input, Label, Switch } from '@monad/ui';
 import { useState } from 'react';
 
-import { useT } from '@/components/I18nProvider';
+import { useT } from '#/components/I18nProvider';
 import { Segmented } from './Segmented';
 
 const DEFAULT_INTERVAL = 30;

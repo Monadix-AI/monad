@@ -1,12 +1,12 @@
 import type { SetStartupSettingsRequest, StartupSettings } from '@monad/protocol';
-import type { StartupIdentity, WindowsStartupShortcut } from '@/handlers/settings/startup/platform-files.ts';
+import type { StartupIdentity, WindowsStartupShortcut } from '#/handlers/settings/startup/platform-files.ts';
 
 import { existsSync } from 'node:fs';
 import { access, mkdir, rm } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 
-import { MACOS_LABEL, startupIdentity, writeStartupFile } from '@/handlers/settings/startup/platform-files.ts';
+import { MACOS_LABEL, startupIdentity, writeStartupFile } from '#/handlers/settings/startup/platform-files.ts';
 
 export interface StartupSettingsOptions {
   platform?: NodeJS.Platform;

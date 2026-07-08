@@ -2,11 +2,11 @@
 // a daemon-provided dependency (the ClarifyService ask function) rather than being a static
 // built-in. Resolves with '' on timeout so the agent proceeds with best-effort judgement.
 
-import type { Tool } from '@/capabilities/tools/types.ts';
+import type { Tool } from '#/capabilities/tools/types.ts';
 
 import { z } from 'zod';
 
-import { toolResult } from '@/capabilities/tools/types.ts';
+import { toolResult } from '#/capabilities/tools/types.ts';
 
 /** Ask the user a question on a session; resolves with their answer ('' on timeout). */
 export type ClarifyAsk = (sessionId: string, question: string, options?: string[]) => Promise<string>;

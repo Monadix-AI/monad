@@ -1,17 +1,17 @@
 // Install pipeline: fetch (injected) → manifest validate → integrity → sdkVersion → scan →
 // consent (default-deny) → write. Then the written atom pack is loaded by the real discovery path.
 
-import type { StagedAtomPack } from '@/atoms/install/index.ts';
+import type { StagedAtomPack } from '#/atoms/install/index.ts';
 
 import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { mkdir, readdir, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { createAtomFetcher } from '@/atoms/install/fetch.ts';
-import { installAtomPack, parseAtomPackSource } from '@/atoms/install/index.ts';
-import { sourceIdentity } from '@/atoms/install/source.ts';
-import { discoverChannelAdapters } from '@/channels/discover.ts';
+import { createAtomFetcher } from '#/atoms/install/fetch.ts';
+import { installAtomPack, parseAtomPackSource } from '#/atoms/install/index.ts';
+import { sourceIdentity } from '#/atoms/install/source.ts';
+import { discoverChannelAdapters } from '#/channels/discover.ts';
 
 let atomsDir: string;
 
