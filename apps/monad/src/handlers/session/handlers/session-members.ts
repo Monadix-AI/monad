@@ -22,6 +22,19 @@ export interface SessionMembersDeps {
   ) => Promise<{ started: boolean; nativeSessionId?: string }>;
 }
 
+// Access control reads the write policy STORED on the session (origin.writableBy) — mirrors the
+// check in messaging.ts / forward-acp.ts / forward-external-agent.ts (kept local so this module
+// has no import-cycle back to them). Without this, a session whose policy says only 'acp' or
+// 'channel' may write (e.g. an editor- or IM-bound session) could still have its member roster
+// mutated — and managed-agent runtimes started/stopped — over plain HTTP.
+function assertWriteAllowed(session: Session, transport: 'http'): void {
+  const writableBy = session.origin?.writableBy;
+  if (!writableBy) return;
+  if (!writableBy.includes(transport)) {
+    throw new HandlerError('forbidden', `transport '${transport}' cannot write to this session`);
+  }
+}
+
 function toWireMember(row: SessionMember): WorkplaceProjectSessionMember {
   const data = row.data as {
     name?: string;
@@ -80,6 +93,7 @@ export function createSessionMembersHandlers(ctx: SessionContext, deps: SessionM
 
     async inviteSessionMember({ sessionId, templateId }: { sessionId: SessionId } & InviteSessionMemberRequest) {
       const session = requireSession(sessionId);
+      assertWriteAllowed(session, 'http');
       if (!session.projectId) throw new HandlerError('invalid', 'session is not bound to a project');
       const project = store.getWorkplaceProject(session.projectId);
       if (!project) throw new HandlerError('not_found', `workplace project not found: ${session.projectId}`);
@@ -115,7 +129,8 @@ export function createSessionMembersHandlers(ctx: SessionContext, deps: SessionM
       displayName,
       settings
     }: { sessionId: SessionId } & SpawnSessionMemberRequest) {
-      requireSession(sessionId);
+      const session = requireSession(sessionId);
+      assertWriteAllowed(session, 'http');
       const memberId = newId('pmem');
       const now = new Date().toISOString();
       store.insertSessionMember({
@@ -138,7 +153,8 @@ export function createSessionMembersHandlers(ctx: SessionContext, deps: SessionM
     },
 
     async removeSessionMember({ sessionId, memberId }: { sessionId: SessionId; memberId: string }) {
-      requireSession(sessionId);
+      const session = requireSession(sessionId);
+      assertWriteAllowed(session, 'http');
       const member = store.getSessionMember(sessionId, memberId);
       if (!member) throw new HandlerError('not_found', `session member not found: ${memberId}`);
       if (member.externalAgentSessionId) externalAgentHost?.stop(member.externalAgentSessionId);

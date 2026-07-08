@@ -1,4 +1,11 @@
-import { type ContextUsagePayload, type Event, parseEventPayload, type SessionId } from '@monad/protocol';
+import {
+  type ChatMessage,
+  type ContextUsagePayload,
+  type Event,
+  parseEventPayload,
+  type SessionId,
+  type UIToolItem
+} from '@monad/protocol';
 
 import { apiSlice } from '../../api-slice.ts';
 import { clientOf } from '../../endpoint-helpers.ts';
@@ -6,8 +13,8 @@ import { sendMessageApi } from './send-message.ts';
 
 interface StreamMessage {
   id: string;
-  role: 'user' | 'assistant';
-  text: string;
+  role: Extract<ChatMessage['role'], 'user' | 'assistant'>;
+  text: ChatMessage['text'];
   agentName?: string;
   reasoning?: string;
   error?: boolean;
@@ -20,8 +27,8 @@ interface StreamMessage {
   seq?: string;
   // For a generative non-assistant message streamed over message.delta: its type + settled data,
   // so a client can render it richly (degrading via the shared registry) while it generates.
-  type?: string;
-  data?: unknown;
+  type?: ChatMessage['type'];
+  data?: ChatMessage['data'];
 }
 
 interface PendingApproval {
@@ -44,13 +51,14 @@ interface PendingClarification {
  *  (ok/error). Mirrors the persisted `tool_call`/`tool_result` history rows so the UI can show the
  *  loop's progress mid-turn and the same view from history afterwards. */
 interface ToolStep {
-  id: string; // toolCallId
-  tool: string;
-  input?: unknown;
-  status: 'running' | 'ok' | 'error';
-  output?: string;
+  id: UIToolItem['id']; // toolCallId
+  tool: UIToolItem['tool'];
+  input?: UIToolItem['input'];
+  status: UIToolItem['status'];
+  output?: UIToolItem['output'];
+  errorCode?: UIToolItem['errorCode'];
   /** Arrival order (the `tool.called` event's id) — see StreamMessage.seq. */
-  seq?: string;
+  seq?: UIToolItem['seq'];
 }
 
 interface SessionStreamState {
@@ -190,6 +198,7 @@ export const streamSessionApi = sendMessageApi.injectEndpoints({
                     if (step) {
                       step.status = p.ok ? 'ok' : 'error';
                       step.output = p.displayResult ?? p.result;
+                      step.errorCode = p.errorCode;
                     }
                     break;
                   }

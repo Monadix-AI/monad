@@ -4,16 +4,11 @@ import { clientOf, runTreaty } from '../../endpoint-helpers.ts';
 import { installAtomPackApi } from './install-atom-pack.ts';
 import { atomPackAdapter, listAtomPacksApi } from './list-atom-packs.ts';
 
-export interface SetAtomPackEnabledArgs {
-  name: string;
-  enabled: boolean;
-}
-
 export const setAtomPackEnabledApi = installAtomPackApi.injectEndpoints({
   overrideExisting: true,
   endpoints: (builder) => ({
-    setAtomPackEnabled: builder.mutation<OkResponse, SetAtomPackEnabledArgs>({
-      queryFn: ({ name, enabled }: SetAtomPackEnabledArgs, api: { extra: unknown }) =>
+    setAtomPackEnabled: builder.mutation<OkResponse, { name: string; enabled: boolean }>({
+      queryFn: ({ name, enabled }, api: { extra: unknown }) =>
         runTreaty(() => {
           const pack = clientOf(api).treaty.v1.atoms({ name });
           return enabled ? pack.enable.post() : pack.disable.post();

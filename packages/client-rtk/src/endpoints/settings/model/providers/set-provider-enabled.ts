@@ -4,13 +4,11 @@ import { clientOf, runTreaty } from '../../../../endpoint-helpers.ts';
 import { listProvidersApi, providerAdapter } from './list-providers.ts';
 import { patchProviderApi } from './patch-provider.ts';
 
-type SetProviderEnabledArg = { id: string; enabled: boolean };
-
 const setProviderEnabledApi = patchProviderApi.injectEndpoints({
   overrideExisting: true,
   endpoints: (builder) => ({
-    setProviderEnabled: builder.mutation<OkResponse, SetProviderEnabledArg>({
-      queryFn: ({ id, enabled }: SetProviderEnabledArg, api: { extra: unknown }) =>
+    setProviderEnabled: builder.mutation<OkResponse, { id: string; enabled: boolean }>({
+      queryFn: ({ id, enabled }, api: { extra: unknown }) =>
         runTreaty(() =>
           clientOf(api).treaty.v1.settings.model.providers({ id })[enabled ? 'enable' : 'disable'].post()
         ),
@@ -26,7 +24,7 @@ const setProviderEnabledApi = patchProviderApi.injectEndpoints({
           patch.undo();
         }
       },
-      invalidatesTags: (_r: unknown, _e: unknown, { id }: SetProviderEnabledArg) => [{ type: 'Providers', id }]
+      invalidatesTags: (_r: unknown, _e: unknown, { id }) => [{ type: 'Providers', id }]
     })
   })
 });

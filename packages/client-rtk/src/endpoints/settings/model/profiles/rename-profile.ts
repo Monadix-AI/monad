@@ -1,18 +1,13 @@
-import type { OkResponse, ProfileView } from '@monad/protocol';
+import type { OkResponse, ProfileView, RenameProfileRequest } from '@monad/protocol';
 
 import { clientOf, runTreaty } from '../../../../endpoint-helpers.ts';
 import { deleteProfileApi } from './delete-profile.ts';
 import { listProfilesApi, profileAdapter } from './list-profiles.ts';
 
-interface RenameProfileArg {
-  alias: string;
-  nextAlias: string;
-}
-
 const renameProfileApi = deleteProfileApi.injectEndpoints({
   overrideExisting: true,
   endpoints: (builder) => ({
-    renameProfile: builder.mutation<OkResponse, RenameProfileArg>({
+    renameProfile: builder.mutation<OkResponse, { alias: string; nextAlias: RenameProfileRequest['alias'] }>({
       queryFn: async ({ alias, nextAlias }, api: { extra: unknown }) => {
         return runTreaty(() =>
           clientOf(api).treaty.v1.settings.model.profiles({ alias }).alias.patch({ alias: nextAlias })

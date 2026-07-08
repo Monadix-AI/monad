@@ -1,8 +1,11 @@
 'use client';
 
-import { ComputerTerminal01Icon, ExternalLinkIcon, TextIcon } from '@hugeicons/core-free-icons';
+import type { SessionId } from '@monad/protocol';
+
+import { ComputerTerminal01Icon, ExternalLinkIcon, SquareIcon, TextIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { cn } from '@monad/ui';
+import { useSessionProcessControlMutation } from '@monad/client-rtk';
+import { Button, cn } from '@monad/ui';
 import { CodeInline } from '@monad/ui/components/CodeBlock';
 import { memo, useMemo, useState } from 'react';
 
@@ -17,6 +20,7 @@ export interface ToolItem {
   input?: unknown;
   status: 'running' | 'ok' | 'error';
   output?: string;
+  errorCode?: string;
   display?: unknown;
 }
 
@@ -86,8 +90,18 @@ function safeUrl(url: string): string {
 interface ShellOutput {
   stdout: string;
   stderr: string;
-  exitCode: number;
+  exitCode: number | null;
   timedOut: boolean;
+  status?: string;
+  command?: string;
+  cwd?: string;
+  pid?: number;
+  processId?: string;
+  mode?: string;
+  startedAt?: string;
+  limits?: { idleTimeoutMs?: number; maxRuntimeMs?: number };
+  matched?: boolean;
+  reason?: string;
 }
 
 interface CodeExecOutput {
@@ -165,8 +179,34 @@ function parseShellOutput(raw: string | undefined): ShellOutput | null {
   if (!parsed || typeof parsed !== 'object') return null;
   const obj = parsed as Partial<ShellOutput>;
   if (typeof obj.stdout !== 'string' || typeof obj.stderr !== 'string') return null;
-  if (typeof obj.exitCode !== 'number' || typeof obj.timedOut !== 'boolean') return null;
-  return { stdout: obj.stdout, stderr: obj.stderr, exitCode: obj.exitCode, timedOut: obj.timedOut };
+  const exitCode = typeof obj.exitCode === 'number' || obj.exitCode === null ? obj.exitCode : null;
+  const timedOut = typeof obj.timedOut === 'boolean' ? obj.timedOut : false;
+  return {
+    stdout: obj.stdout,
+    stderr: obj.stderr,
+    exitCode,
+    timedOut,
+    status: typeof obj.status === 'string' ? obj.status : undefined,
+    command: typeof obj.command === 'string' ? obj.command : undefined,
+    cwd: typeof obj.cwd === 'string' ? obj.cwd : undefined,
+    pid: typeof obj.pid === 'number' ? obj.pid : undefined,
+    processId: typeof obj.processId === 'string' ? obj.processId : undefined,
+    mode: typeof obj.mode === 'string' ? obj.mode : undefined,
+    startedAt: typeof obj.startedAt === 'string' ? obj.startedAt : undefined,
+    limits: parseShellLimits(obj.limits),
+    matched:
+      typeof (obj as { matched?: unknown }).matched === 'boolean' ? (obj as { matched: boolean }).matched : undefined,
+    reason: typeof (obj as { reason?: unknown }).reason === 'string' ? (obj as { reason: string }).reason : undefined
+  };
+}
+
+function parseShellLimits(value: unknown): ShellOutput['limits'] {
+  if (!value || typeof value !== 'object') return undefined;
+  const limits = value as { idleTimeoutMs?: unknown; maxRuntimeMs?: unknown };
+  return {
+    ...(typeof limits.idleTimeoutMs === 'number' ? { idleTimeoutMs: limits.idleTimeoutMs } : {}),
+    ...(typeof limits.maxRuntimeMs === 'number' ? { maxRuntimeMs: limits.maxRuntimeMs } : {})
+  };
 }
 
 function parseCodeExecOutput(raw: string | undefined): CodeExecOutput | null {
@@ -236,7 +276,13 @@ function isFileReadTool(tool: string): boolean {
 }
 
 function isShellTool(tool: string): boolean {
-  return tool === 'shell_exec' || tool === 'shell' || tool === 'exec_command';
+  return (
+    tool === 'shell_exec' ||
+    tool === 'process_control' ||
+    tool === 'monitor_watch' ||
+    tool === 'shell' ||
+    tool === 'exec_command'
+  );
 }
 
 function parseDiffDisplay(display: unknown): DiffDisplay | null {
@@ -315,12 +361,29 @@ function groupStatus(steps: ToolItem[]): ToolItem['status'] {
   return 'ok';
 }
 
-export const ToolStepView = memo(function ToolStepView({ step }: { step: ToolViewItem }) {
-  if (step.kind === 'toolGroup') return <ToolGroupView step={step} />;
-  return <SingleToolView step={step} />;
+export const ToolStepView = memo(function ToolStepView({
+  sessionId,
+  step
+}: {
+  sessionId?: SessionId;
+  step: ToolViewItem;
+}) {
+  if (step.kind === 'toolGroup')
+    return (
+      <ToolGroupView
+        sessionId={sessionId}
+        step={step}
+      />
+    );
+  return (
+    <SingleToolView
+      sessionId={sessionId}
+      step={step}
+    />
+  );
 });
 
-function SingleToolView({ step }: { step: ToolItem }) {
+function SingleToolView({ step, sessionId }: { step: ToolItem; sessionId?: SessionId }) {
   const t = useT();
   const isError = step.status === 'error';
 
@@ -338,6 +401,7 @@ function SingleToolView({ step }: { step: ToolItem }) {
       <ToolContent className="border-border/70 border-t px-4 py-3">
         <ToolDetails
           pendingLabel={t('web.tools.running')}
+          sessionId={sessionId}
           step={step}
         />
       </ToolContent>
@@ -345,7 +409,7 @@ function SingleToolView({ step }: { step: ToolItem }) {
   );
 }
 
-function ToolGroupView({ step }: { step: ToolGroupItem }) {
+function ToolGroupView({ step, sessionId }: { step: ToolGroupItem; sessionId?: SessionId }) {
   const t = useT();
   const status = groupStatus(step.steps);
   const isError = status === 'error';
@@ -367,6 +431,7 @@ function ToolGroupView({ step }: { step: ToolGroupItem }) {
             <NestedToolView
               key={child.id}
               pendingLabel={t('web.tools.running')}
+              sessionId={sessionId}
               step={child}
             />
           ))}
@@ -376,7 +441,15 @@ function ToolGroupView({ step }: { step: ToolGroupItem }) {
   );
 }
 
-function NestedToolView({ step, pendingLabel }: { step: ToolItem; pendingLabel: string }) {
+function NestedToolView({
+  step,
+  pendingLabel,
+  sessionId
+}: {
+  step: ToolItem;
+  pendingLabel: string;
+  sessionId?: SessionId;
+}) {
   return (
     <Tool
       className={cn(
@@ -394,6 +467,7 @@ function NestedToolView({ step, pendingLabel }: { step: ToolItem; pendingLabel: 
       <ToolContent className="border-border/60 border-t px-3 py-2">
         <ToolDetails
           pendingLabel={pendingLabel}
+          sessionId={sessionId}
           step={step}
         />
       </ToolContent>
@@ -401,8 +475,26 @@ function NestedToolView({ step, pendingLabel }: { step: ToolItem; pendingLabel: 
   );
 }
 
-function ToolDetails({ step, pendingLabel }: { step: ToolItem; pendingLabel: string }) {
+function ToolDetails({
+  step,
+  pendingLabel,
+  sessionId
+}: {
+  step: ToolItem;
+  pendingLabel: string;
+  sessionId?: SessionId;
+}) {
   const isError = step.status === 'error';
+  const [processControl, { isLoading: stoppingProcess }] = useSessionProcessControlMutation();
+  const isWebSearch = step.tool === 'web_search';
+  const isShell = isShellTool(step.tool);
+  const searchResults = useMemo(
+    () => (isWebSearch ? parseWebSearchOutput(step.output) : null),
+    [isWebSearch, step.output]
+  );
+  // step.output grows on every poll tick for a live background process — memoize so an unchanged
+  // tick doesn't re-run JSON.parse + full ANSI re-segmentation of the whole accumulated output.
+  const shellOutput = useMemo(() => (isShell ? parseShellOutput(step.output) : null), [isShell, step.output]);
 
   if (step.tool === 'code_execute') {
     return (
@@ -414,9 +506,6 @@ function ToolDetails({ step, pendingLabel }: { step: ToolItem; pendingLabel: str
     );
   }
 
-  const isWebSearch = step.tool === 'web_search';
-  const searchResults = isWebSearch ? parseWebSearchOutput(step.output) : null;
-  const shellOutput = isShellTool(step.tool) ? parseShellOutput(step.output) : null;
   const diffDisplay = parseDiffDisplay(step.display);
   const multiDiffDisplay = parseMultiDiffDisplay(step.display);
 
@@ -434,12 +523,24 @@ function ToolDetails({ step, pendingLabel }: { step: ToolItem; pendingLabel: str
   }
 
   if (shellOutput) {
+    const stopSessionId = step.status === 'running' && shellOutput.processId ? sessionId : undefined;
     return (
       <>
         {step.input !== undefined && <ToolInput input={step.input} />}
         <ShellOutputBlock
-          command={firstStringField(step.input, ['command'])}
+          command={firstStringField(step.input, ['command']) ?? shellOutput.command}
+          onStop={
+            stopSessionId
+              ? () =>
+                  void processControl({
+                    id: stopSessionId,
+                    action: 'stop',
+                    processId: shellOutput.processId as string
+                  })
+              : undefined
+          }
           output={shellOutput}
+          stopping={stoppingProcess}
         />
       </>
     );
@@ -482,7 +583,7 @@ function ToolDetails({ step, pendingLabel }: { step: ToolItem; pendingLabel: str
         <ToolPending label={pendingLabel} />
       ) : (
         <ToolOutput
-          errorText={isError ? step.output : undefined}
+          errorText={isError ? formatToolError(step.output, step.errorCode) : undefined}
           output={isError ? undefined : (parsedJsonObject(step.output) ?? step.output)}
         />
       )}
@@ -498,7 +599,7 @@ function backendLabel(backend: string): string {
 
 function CodeExecDetails({ step, pendingLabel, isError }: { step: ToolItem; pendingLabel: string; isError: boolean }) {
   const { config } = useToolBackendsSettings();
-  const output = parseCodeExecOutput(step.output);
+  const output = useMemo(() => parseCodeExecOutput(step.output), [step.output]);
   const backend = output?.backend ?? config?.codeExec?.backend ?? 'follow-system';
   const input = step.input as Record<string, unknown> | null;
   const language = typeof input?.language === 'string' ? input.language : undefined;
@@ -506,6 +607,11 @@ function CodeExecDetails({ step, pendingLabel, isError }: { step: ToolItem; pend
   const isHost = input?.target === 'host';
   const hasStdout = (output?.stdout.length ?? 0) > 0;
   const hasStderr = (output?.stderr.length ?? 0) > 0;
+  const stdoutSegments = useMemo(() => (output?.stdout ? parseAnsiText(output.stdout) : []), [output?.stdout]);
+  const stderrSegments = useMemo(
+    () => (output?.stderr ? parseAnsiText(output.stderr, 'text-red-300') : []),
+    [output?.stderr]
+  );
 
   return (
     <div className="flex flex-col gap-2">
@@ -544,9 +650,9 @@ function CodeExecDetails({ step, pendingLabel, isError }: { step: ToolItem; pend
           <pre className="max-h-72 overflow-auto whitespace-pre-wrap p-3 font-mono text-[12px] leading-relaxed">
             {hasStdout || hasStderr ? (
               <>
-                {hasStdout && <AnsiText segments={parseAnsiText(output.stdout)} />}
+                {hasStdout && <AnsiText segments={stdoutSegments} />}
                 {hasStdout && hasStderr && '\n'}
-                {hasStderr && <AnsiText segments={parseAnsiText(output.stderr, 'text-red-300')} />}
+                {hasStderr && <AnsiText segments={stderrSegments} />}
               </>
             ) : (
               <span className="text-zinc-500">(no output)</span>
@@ -555,7 +661,7 @@ function CodeExecDetails({ step, pendingLabel, isError }: { step: ToolItem; pend
         </div>
       ) : (
         <ToolOutput
-          errorText={isError ? step.output : undefined}
+          errorText={isError ? formatToolError(step.output, step.errorCode) : undefined}
           output={isError ? undefined : (parsedJsonObject(step.output) ?? step.output)}
         />
       )}
@@ -567,11 +673,47 @@ function ToolPending({ label }: { label: string }) {
   return <div className="rounded-md bg-muted/50 px-3 py-2 text-muted-foreground text-xs">{label}</div>;
 }
 
-function ShellOutputBlock({ output, command }: { output: ShellOutput; command?: string }) {
+function formatToolError(output: string | undefined, code: string | undefined): string | undefined {
+  if (!code) return output;
+  return output ? `[${code}] ${output}` : `[${code}]`;
+}
+
+function ShellOutputBlock({
+  output,
+  command,
+  onStop,
+  stopping
+}: {
+  output: ShellOutput;
+  command?: string;
+  onStop?: () => void;
+  stopping?: boolean;
+}) {
   const hasStdout = output.stdout.length > 0;
   const hasStderr = output.stderr.length > 0;
-  const stdout = parseAnsiText(output.stdout);
-  const stderr = parseAnsiText(output.stderr, 'text-red-300');
+  // output.stdout/stderr grow on every poll tick for a live background process — memoize so an
+  // unchanged tick doesn't re-run the full ANSI re-segmentation of the whole accumulated output.
+  const stdout = useMemo(() => parseAnsiText(output.stdout), [output.stdout]);
+  const stderr = useMemo(() => parseAnsiText(output.stderr, 'text-red-300'), [output.stderr]);
+  const isSuccess = output.exitCode === 0 && !output.timedOut;
+  const badgeText = output.timedOut
+    ? 'timed out'
+    : output.matched === true && output.reason
+      ? output.reason
+      : output.exitCode === null
+        ? (output.status ?? 'running')
+        : `exit ${output.exitCode}`;
+  const badgeClass = isSuccess
+    ? 'bg-emerald-500/15 text-emerald-300'
+    : output.matched === true && !output.timedOut
+      ? 'bg-emerald-500/15 text-emerald-300'
+      : output.exitCode === null && !output.timedOut
+        ? 'bg-zinc-700/60 text-zinc-300'
+        : 'bg-red-500/15 text-red-300';
+  const limitLabels = [
+    output.limits?.idleTimeoutMs !== undefined ? `idle ${output.limits.idleTimeoutMs}ms` : undefined,
+    output.limits?.maxRuntimeMs !== undefined ? `max ${output.limits.maxRuntimeMs}ms` : undefined
+  ].filter((label): label is string => label !== undefined);
   return (
     <div className="overflow-hidden rounded-md border border-border/70 bg-zinc-950 text-zinc-100 shadow-inner">
       <div className="flex items-center gap-2 border-zinc-800 border-b bg-zinc-900 px-3 py-2 text-[11px] text-zinc-400">
@@ -580,17 +722,46 @@ function ShellOutputBlock({ output, command }: { output: ShellOutput; command?: 
           icon={ComputerTerminal01Icon}
         />
         {command ? <ShellCommand command={command} /> : <span className="min-w-0 truncate font-mono">terminal</span>}
-        <span
-          className={cn(
-            'ml-auto rounded-full px-2 py-0.5 font-mono',
-            output.exitCode === 0 && !output.timedOut
-              ? 'bg-emerald-500/15 text-emerald-300'
-              : 'bg-red-500/15 text-red-300'
-          )}
-        >
-          {output.timedOut ? 'timed out' : `exit ${output.exitCode}`}
+        {output.mode && (
+          <span className="shrink-0 rounded bg-zinc-700/60 px-1.5 py-0.5 font-mono text-[10px] text-zinc-300">
+            {output.mode}
+          </span>
+        )}
+        {output.pid !== undefined && (
+          <span className="shrink-0 rounded bg-zinc-700/60 px-1.5 py-0.5 font-mono text-[10px] text-zinc-300">
+            pid {output.pid}
+          </span>
+        )}
+        {onStop && (
+          <Button
+            aria-label="Stop process"
+            className="ml-auto size-6 border-zinc-700 bg-zinc-800 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-100"
+            disabled={stopping}
+            onClick={onStop}
+            size="icon"
+            title="Stop process"
+            type="button"
+            variant="outline"
+          >
+            <HugeiconsIcon
+              className="size-3.5"
+              icon={SquareIcon}
+            />
+          </Button>
+        )}
+        <span className={cn(onStop ? '' : 'ml-auto', 'rounded-full px-2 py-0.5 font-mono', badgeClass)}>
+          {badgeText}
         </span>
       </div>
+      {(output.cwd || output.startedAt || limitLabels.length > 0) && (
+        <div className="flex flex-wrap gap-x-3 gap-y-1 border-zinc-800 border-b bg-zinc-950 px-3 py-2 font-mono text-[10px] text-zinc-500">
+          {output.cwd && <span className="min-w-0 truncate">cwd {output.cwd}</span>}
+          {output.startedAt && <span>started {output.startedAt}</span>}
+          {limitLabels.map((label) => (
+            <span key={label}>{label}</span>
+          ))}
+        </div>
+      )}
       <pre className="max-h-72 overflow-auto whitespace-pre-wrap p-3 font-mono text-[12px] leading-relaxed">
         {hasStdout || hasStderr ? (
           <>
@@ -610,7 +781,7 @@ function ShellCommand({ command }: { command: string }) {
   return (
     <span className="min-w-0 truncate">
       <CodeInline
-        className="[&_span]:!bg-transparent [&_span]:!text-[var(--shiki-dark)] text-[11px]"
+        className="text-[11px] [&_span]:bg-transparent! [&_span]:text-(--shiki-dark)!"
         code={`$ ${command}`}
         language="bash"
       />

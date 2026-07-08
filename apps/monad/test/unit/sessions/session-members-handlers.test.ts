@@ -1,4 +1,10 @@
-import type { Session, SessionId, WorkplaceProject, WorkplaceProjectMemberTemplate } from '@monad/protocol';
+import type {
+  Session,
+  SessionId,
+  SessionOrigin,
+  WorkplaceProject,
+  WorkplaceProjectMemberTemplate
+} from '@monad/protocol';
 import type { SessionContext } from '#/handlers/session/context.ts';
 
 import { expect, test } from 'bun:test';
@@ -207,6 +213,32 @@ test('removeSessionMember throws not_found for an unknown member', async () => {
   const { handlers } = buildHarness(store);
 
   await expect(handlers.removeSessionMember({ sessionId: session.id, memberId: 'nope' })).rejects.toThrow(HandlerError);
+});
+
+const acpOnlyOrigin: SessionOrigin = {
+  surface: 'editor',
+  client: 'zed',
+  transport: 'acp',
+  writableBy: ['acp'],
+  branchableBy: ['acp']
+};
+
+test('inviteSessionMember/spawnSessionMember/removeSessionMember reject http on a non-http-writable session', async () => {
+  const store = createStore();
+  const project = fixtureProject(store, { memberTemplates: [codexTemplate] });
+  const session = fixtureSession(store, { projectId: project.id, origin: acpOnlyOrigin });
+  const { handlers } = buildHarness(store);
+
+  await expect(handlers.inviteSessionMember({ sessionId: session.id, templateId: codexTemplate.id })).rejects.toThrow(
+    /cannot write/
+  );
+  await expect(
+    handlers.spawnSessionMember({ sessionId: session.id, type: 'external-agent', name: 'claude-code' })
+  ).rejects.toThrow(/cannot write/);
+  await expect(handlers.removeSessionMember({ sessionId: session.id, memberId: codexTemplate.id })).rejects.toThrow(
+    /cannot write/
+  );
+  expect(store.listSessionMembers(session.id)).toEqual([]);
 });
 
 test('listSessionMembers returns the wire shape for every bound member', async () => {

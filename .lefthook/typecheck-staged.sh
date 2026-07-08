@@ -1,12 +1,8 @@
 #!/bin/bash
 set -e
 
-# Eden Treaty types are derived from apps/monad's App type (exported from dist/main.d.ts).
-# packages/client-rtk and packages/client both carry a project reference to
-# apps/monad/tsconfig.build.json. With disableReferencedProjectLoad, TypeScript skips that
-# reference — but if the compiled .d.ts output already exists in apps/monad/dist/, it can
-# resolve @monad/monad via the package's "exports.types" field without loading the project.
-# So: build apps/monad once before staged checking; then treaty types resolve correctly.
+# Eden Treaty types are derived from apps/monad's App type. Build apps/monad once before
+# staged checking to ensure downstream type resolution stays warm for client packages.
 needs_monad_build=false
 for file in "$@"; do
   if [[ $file == apps/cli/* ]] || [[ $file == packages/client-rtk/* ]] || [[ $file == packages/client/* ]]; then
@@ -16,7 +12,11 @@ for file in "$@"; do
 done
 if $needs_monad_build; then
   echo "🔨 Building apps/monad declaration files for treaty type resolution..."
-  bunx tsc --build apps/monad/tsconfig.build.json 2>/dev/null
+  monad_build_config="apps/monad/tsconfig.build.json"
+  if [ ! -f "$monad_build_config" ]; then
+    monad_build_config="apps/monad/tsconfig.json"
+  fi
+  bunx tsc --build "$monad_build_config" 2>/dev/null
 fi
 
 workspaces=""

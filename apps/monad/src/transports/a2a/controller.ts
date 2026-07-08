@@ -1,3 +1,4 @@
+import type { MessageSendParams, TaskIdParams, TaskQueryParams } from '@a2a-js/sdk';
 import type { Agent } from '@monad/protocol';
 import type { createDaemonHandlers } from '#/handlers/daemon-handlers/index.ts';
 
@@ -10,19 +11,68 @@ import { baseUrlOf } from './util.ts';
 
 type Handlers = ReturnType<typeof createDaemonHandlers>;
 
-interface JsonRpcRequest {
+interface JsonRpcEnvelope {
   jsonrpc: '2.0';
   id: string | number | null;
   method: string;
   params: unknown;
 }
 
-function rpcError(id: JsonRpcRequest['id'], code: number, message: string): Response {
+type A2aRpcRequest =
+  | (JsonRpcEnvelope & { method: 'message/send' | 'message/stream'; params: MessageSendParams })
+  | (JsonRpcEnvelope & { method: 'tasks/get'; params: TaskQueryParams })
+  | (JsonRpcEnvelope & { method: 'tasks/cancel'; params: TaskIdParams });
+
+type JsonRpcId = JsonRpcEnvelope['id'];
+type ParsedRpcRequest =
+  | { kind: 'supported'; request: A2aRpcRequest }
+  | { kind: 'unsupported'; envelope: JsonRpcEnvelope }
+  | { kind: 'invalid'; id: JsonRpcId };
+
+function rpcError(id: JsonRpcId, code: number, message: string): Response {
   return Response.json({ jsonrpc: '2.0', id, error: { code, message } });
 }
 
-function sseFrame(id: JsonRpcRequest['id'], result: unknown): string {
+function sseFrame(id: JsonRpcId, result: unknown): string {
   return `data: ${JSON.stringify({ jsonrpc: '2.0', id, result })}\n\n`;
+}
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function parseRpcRequest(body: unknown): ParsedRpcRequest {
+  if (!isObject(body) || body.jsonrpc !== '2.0' || typeof body.method !== 'string') {
+    return { kind: 'invalid', id: null };
+  }
+  const id = typeof body.id === 'string' || typeof body.id === 'number' || body.id === null ? body.id : null;
+  const envelope: JsonRpcEnvelope = {
+    jsonrpc: '2.0',
+    id,
+    method: body.method,
+    params: body.params
+  };
+  if (!isObject(envelope.params)) return { kind: 'unsupported', envelope };
+  switch (envelope.method) {
+    case 'message/send':
+    case 'message/stream':
+      return {
+        kind: 'supported',
+        request: { ...envelope, method: envelope.method, params: envelope.params as unknown as MessageSendParams }
+      };
+    case 'tasks/get':
+      return {
+        kind: 'supported',
+        request: { ...envelope, method: envelope.method, params: envelope.params as unknown as TaskQueryParams }
+      };
+    case 'tasks/cancel':
+      return {
+        kind: 'supported',
+        request: { ...envelope, method: envelope.method, params: envelope.params as unknown as TaskIdParams }
+      };
+    default:
+      return { kind: 'unsupported', envelope };
+  }
 }
 
 /** Exposes each A2A-enabled agent as a standard A2A server: an AgentCard at the well-known path and
@@ -55,20 +105,16 @@ export function createA2aController(handlers: Handlers) {
     return handler;
   }
 
-  async function dispatch(handler: DefaultRequestHandler, rpc: JsonRpcRequest): Promise<Response> {
+  async function dispatch(handler: DefaultRequestHandler, rpc: A2aRpcRequest): Promise<Response> {
     switch (rpc.method) {
       case 'message/send':
-        // biome-ignore lint/suspicious/noExplicitAny: params are validated inside the SDK handler.
-        return Response.json({ jsonrpc: '2.0', id: rpc.id, result: await handler.sendMessage(rpc.params as any) });
+        return Response.json({ jsonrpc: '2.0', id: rpc.id, result: await handler.sendMessage(rpc.params) });
       case 'tasks/get':
-        // biome-ignore lint/suspicious/noExplicitAny: params are validated inside the SDK handler.
-        return Response.json({ jsonrpc: '2.0', id: rpc.id, result: await handler.getTask(rpc.params as any) });
+        return Response.json({ jsonrpc: '2.0', id: rpc.id, result: await handler.getTask(rpc.params) });
       case 'tasks/cancel':
-        // biome-ignore lint/suspicious/noExplicitAny: params are validated inside the SDK handler.
-        return Response.json({ jsonrpc: '2.0', id: rpc.id, result: await handler.cancelTask(rpc.params as any) });
+        return Response.json({ jsonrpc: '2.0', id: rpc.id, result: await handler.cancelTask(rpc.params) });
       case 'message/stream': {
-        // biome-ignore lint/suspicious/noExplicitAny: params are validated inside the SDK handler.
-        const events = handler.sendMessageStream(rpc.params as any);
+        const events = handler.sendMessageStream(rpc.params);
         const stream = new ReadableStream<Uint8Array>({
           async start(controller) {
             const encoder = new TextEncoder();
@@ -86,8 +132,6 @@ export function createA2aController(handlers: Handlers) {
           headers: { 'content-type': 'text/event-stream', 'cache-control': 'no-cache', connection: 'keep-alive' }
         });
       }
-      default:
-        return rpcError(rpc.id, -32601, `method not found: ${rpc.method}`);
     }
   }
 
@@ -106,11 +150,14 @@ export function createA2aController(handlers: Handlers) {
       async ({ params, request, body, status }) => {
         const agent = await enabledAgent(params.agentId);
         if (!agent) return status(404, { error: 'a2a not enabled for this agent' });
-        const rpc = body as JsonRpcRequest | null;
-        if (rpc?.jsonrpc !== '2.0' || typeof rpc.method !== 'string') {
-          return rpcError(rpc?.id ?? null, -32600, 'invalid JSON-RPC request');
+        const parsed = parseRpcRequest(body);
+        if (parsed.kind === 'invalid') {
+          return rpcError(parsed.id, -32600, 'invalid JSON-RPC request');
         }
-        return dispatch(handlerFor(agent, baseUrlOf(request)), rpc);
+        if (parsed.kind === 'unsupported') {
+          return rpcError(parsed.envelope.id, -32601, `method not found: ${parsed.envelope.method}`);
+        }
+        return dispatch(handlerFor(agent, baseUrlOf(request)), parsed.request);
       },
       { detail: { tags: ['http-only'], summary: 'A2A JSON-RPC', description: 'A2A JSON-RPC endpoint for one agent.' } }
     );
