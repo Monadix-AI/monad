@@ -296,8 +296,62 @@ test('file_patch returns per-file errors while applying other files', async () =
   expect(out.metadata).toMatchObject({ succeeded: 1, failed: 1, changed: true });
   expect(out.metadata.files.map((file) => file.status)).toEqual(['ok', 'error']);
   expect(out.metadata.files[1]).toMatchObject({ status: 'error', path: bad });
+  expect(out.modelContent).toContain('Some files were already modified');
   expect(await readFile(good, 'utf8')).toBe('new\n');
   expect(await readFile(bad, 'utf8')).toBe('actual\n');
+});
+
+test('file_patch strict mode validates all files before writing', async () => {
+  const good = join(root, 'patch-strict-good.txt');
+  const bad = join(root, 'patch-strict-bad.txt');
+  await writeFile(good, 'old\n');
+  await writeFile(bad, 'actual\n');
+  const out = await filePatchTool.run(
+    {
+      strict: true,
+      patch: `*** Begin Patch
+*** Update File: ${good}
+@@
+-old
++new
+*** Update File: ${bad}
+@@
+-expected
++after
+*** End Patch`
+    },
+    ctx([root])
+  );
+  expect(out.metadata).toMatchObject({ succeeded: 0, failed: 1, changed: false });
+  expect(out.metadata.files[0]).toMatchObject({ status: 'error', path: bad });
+  expect(await readFile(good, 'utf8')).toBe('old\n');
+  expect(await readFile(bad, 'utf8')).toBe('actual\n');
+});
+
+test('file_patch strict mode writes after validation succeeds', async () => {
+  const first = join(root, 'patch-strict-first.txt');
+  const second = join(root, 'patch-strict-second.txt');
+  await writeFile(first, 'a\n');
+  await writeFile(second, 'b\n');
+  const out = await filePatchTool.run(
+    {
+      strict: true,
+      patch: `*** Begin Patch
+*** Update File: ${first}
+@@
+-a
++aa
+*** Update File: ${second}
+@@
+-b
++bb
+*** End Patch`
+    },
+    ctx([root])
+  );
+  expect(out.metadata).toMatchObject({ succeeded: 2, failed: 0, changed: true });
+  expect(await readFile(first, 'utf8')).toBe('aa\n');
+  expect(await readFile(second, 'utf8')).toBe('bb\n');
 });
 
 test('file_patch preserves files without trailing newline', async () => {
@@ -422,29 +476,42 @@ test('file_patch syntax errors fail the whole tool call', async () => {
   );
 });
 
-test('file_patch deletes a previously read file', async () => {
-  const p = join(root, 'patch-delete.txt');
-  const c = ctx([root]);
+test('file_patch requires baseHash for delete operations', async () => {
+  const p = join(root, 'patch-delete-without-hash.txt');
   await writeFile(p, 'delete me\n');
-  await fileReadTool.run({ path: p }, c);
   const out = await filePatchTool.run(
     {
       patch: `*** Begin Patch
 *** Delete File: ${p}
 *** End Patch`
     },
-    c
+    ctx([root])
   );
-  expect(out.metadata.files[0]).toMatchObject({ operation: 'delete', afterHash: null });
-  await expect(Bun.file(p).exists()).resolves.toBe(false);
+  expect(out.metadata).toMatchObject({ succeeded: 0, failed: 1, changed: false });
+  expect(out.metadata.files[0]).toMatchObject({ status: 'error', operation: 'delete' });
+  expect(await readFile(p, 'utf8')).toBe('delete me\n');
 });
 
-test('file_patch moves a previously read file', async () => {
-  const from = join(root, 'patch-move-from.txt');
-  const to = join(root, 'patch-move-to.txt');
-  const c = ctx([root]);
+test('file_patch deletes with a matching baseHash', async () => {
+  const p = join(root, 'patch-delete.txt');
+  const content = 'delete me\n';
+  await writeFile(p, content);
+  const out = await filePatchTool.run(
+    {
+      baseHashByPath: { [p]: sha256(content) },
+      patch: `*** Begin Patch
+*** Delete File: ${p}
+*** End Patch`
+    },
+    ctx([root])
+  );
+  expect(out.metadata.files[0]).toMatchObject({ operation: 'delete', afterHash: null });
+});
+
+test('file_patch requires baseHash for move without hunks', async () => {
+  const from = join(root, 'patch-move-without-hash-from.txt');
+  const to = join(root, 'patch-move-without-hash-to.txt');
   await writeFile(from, 'move me\n');
-  await fileReadTool.run({ path: from }, c);
   const out = await filePatchTool.run(
     {
       patch: `*** Begin Patch
@@ -452,13 +519,82 @@ test('file_patch moves a previously read file', async () => {
 *** Move to: ${to}
 *** End Patch`
     },
-    c
+    ctx([root])
+  );
+  expect(out.metadata).toMatchObject({ succeeded: 0, failed: 1, changed: false });
+  expect(out.metadata.files[0]).toMatchObject({ status: 'error', operation: 'move' });
+  expect(await readFile(from, 'utf8')).toBe('move me\n');
+});
+
+test('file_patch moves without hunks with a matching baseHash', async () => {
+  const from = join(root, 'patch-move-from.txt');
+  const to = join(root, 'patch-move-to.txt');
+  const content = 'move me\n';
+  await writeFile(from, content);
+  const out = await filePatchTool.run(
+    {
+      baseHashByPath: { [from]: sha256(content) },
+      patch: `*** Begin Patch
+*** Update File: ${from}
+*** Move to: ${to}
+*** End Patch`
+    },
+    ctx([root])
   );
   expect(out.metadata.files[0]).toMatchObject({ operation: 'move' });
   expect(out.metadata.files[0]?.path.endsWith('/patch-move-from.txt')).toBe(true);
   expect(out.metadata.files[0]?.newPath?.endsWith('/patch-move-to.txt')).toBe(true);
-  await expect(readFile(from, 'utf8')).rejects.toThrow();
   expect(await readFile(to, 'utf8')).toBe('move me\n');
+});
+
+test('file_patch serializes operations that target a move destination', async () => {
+  const files = new Map([['/source.txt', 'a\n']]);
+  const writes: string[] = [];
+  const backends: ToolBackends = {
+    fs: {
+      delegated: true,
+      async readTextFile(path) {
+        const text = files.get(path);
+        if (text === undefined) throw new Error('not found');
+        return text;
+      },
+      async writeTextFile(path, content) {
+        writes.push(path);
+        files.set(path, content);
+        return { path, bytesWritten: content.length };
+      },
+      async moveFile(from, to) {
+        const text = files.get(from);
+        if (text === undefined) throw new Error('not found');
+        files.delete(from);
+        files.set(to, text);
+        return { oldPath: from, newPath: to };
+      }
+    },
+    terminal: {
+      delegated: true,
+      async exec() {
+        return { stdout: '', stderr: '', exitCode: 0, timedOut: false };
+      }
+    }
+  };
+  const out = await filePatchTool.run(
+    {
+      baseHashByPath: { '/source.txt': sha256('a\n') },
+      patch: `*** Begin Patch
+*** Update File: /source.txt
+*** Move to: /dest.txt
+*** Update File: /dest.txt
+@@
+-a
++b
+*** End Patch`
+    },
+    { ...ctx(undefined), backends }
+  );
+  expect(out.metadata).toMatchObject({ succeeded: 2, failed: 0, changed: true });
+  expect(writes).toEqual(['/source.txt', '/dest.txt']);
+  expect(files.get('/dest.txt')).toBe('b\n');
 });
 
 test('file_patch reports context mismatches as file errors', async () => {

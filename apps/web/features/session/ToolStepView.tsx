@@ -4,7 +4,7 @@ import { ComputerTerminal01Icon, ExternalLinkIcon, TextIcon } from '@hugeicons/c
 import { HugeiconsIcon } from '@hugeicons/react';
 import { cn } from '@monad/ui';
 import { CodeInline } from '@monad/ui/components/CodeBlock';
-import { memo } from 'react';
+import { memo, useMemo, useState } from 'react';
 
 import { Tool, ToolContent, ToolHeader, ToolInput, ToolOutput, type ToolPart } from '@/components/ai-elements/tool';
 import { useT } from '@/components/I18nProvider';
@@ -696,6 +696,7 @@ function FileDiffOutputBlock({ display }: { display: DiffDisplay }) {
 }
 
 function MultiFileDiffOutputBlock({ display }: { display: MultiDiffDisplay }) {
+  const [expanded, setExpanded] = useState(false);
   const summary =
     display.summary ??
     display.files.reduce(
@@ -708,6 +709,12 @@ function MultiFileDiffOutputBlock({ display }: { display: MultiDiffDisplay }) {
       }),
       { added: 0, removed: 0, succeeded: 0, failed: 0, total: 0 }
     );
+  const visibleFiles = useMemo(() => {
+    if (expanded || display.files.length <= 4) return display.files;
+    const firstFiles = new Set(display.files.slice(0, 3));
+    return display.files.filter((file) => firstFiles.has(file) || file.status === 'error');
+  }, [display.files, expanded]);
+  const hiddenCount = display.files.length - visibleFiles.length;
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-center gap-2 rounded-md border border-border/70 bg-muted/40 px-3 py-2 text-muted-foreground text-xs">
@@ -725,7 +732,7 @@ function MultiFileDiffOutputBlock({ display }: { display: MultiDiffDisplay }) {
           <span className="text-red-500">-{summary.removed}</span>
         </span>
       </div>
-      {display.files.map((file) =>
+      {visibleFiles.map((file) =>
         file.status === 'ok' && file.display ? (
           <FileDiffOutputBlock
             display={file.display}
@@ -749,6 +756,24 @@ function MultiFileDiffOutputBlock({ display }: { display: MultiDiffDisplay }) {
             </pre>
           </div>
         )
+      )}
+      {hiddenCount > 0 && (
+        <button
+          className="rounded-md border border-border/70 bg-muted/30 px-3 py-2 text-left text-muted-foreground text-xs hover:bg-muted/50"
+          onClick={() => setExpanded(true)}
+          type="button"
+        >
+          Show {hiddenCount} more file{hiddenCount === 1 ? '' : 's'}
+        </button>
+      )}
+      {expanded && display.files.length > 4 && (
+        <button
+          className="rounded-md border border-border/70 bg-muted/30 px-3 py-2 text-left text-muted-foreground text-xs hover:bg-muted/50"
+          onClick={() => setExpanded(false)}
+          type="button"
+        >
+          Show fewer files
+        </button>
       )}
     </div>
   );

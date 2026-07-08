@@ -53,7 +53,7 @@ export interface FileMutationError {
 
 export type FilePatchFileResult = FileMutationResult | FileMutationError;
 
-export interface FilePatchResult {
+export interface FileMutationBatchResult {
   files: FilePatchFileResult[];
   touchedFiles: string[];
   succeeded: number;
@@ -267,10 +267,14 @@ function mutationSummary(output: FileMutationResult): string {
   return `${output.operation} ${target}. ${output.changed ? delta : 'No content changes'}. beforeHash=${output.beforeHash ?? 'new'} afterHash=${output.afterHash ?? 'deleted'}`;
 }
 
-function patchSummary(output: FilePatchResult): string {
+function patchSummary(output: FileMutationBatchResult): string {
   const delta = `${output.summary.added} added, ${output.summary.removed} removed`;
   const failed = output.failed > 0 ? `, ${output.failed} failed` : '';
-  return `Patched ${output.succeeded}/${output.files.length} file${output.files.length === 1 ? '' : 's'} (${delta}${failed}).`;
+  const warning =
+    output.failed > 0 && output.succeeded > 0
+      ? ' Some files were already modified; inspect per-file errors before retrying.'
+      : '';
+  return `Patched ${output.succeeded}/${output.files.length} file${output.files.length === 1 ? '' : 's'} (${delta}${failed}).${warning}`;
 }
 
 function mutationError(op: PatchOp, err: unknown): FileMutationError {
@@ -283,7 +287,7 @@ function mutationError(op: PatchOp, err: unknown): FileMutationError {
   };
 }
 
-function filePatchResult(files: FilePatchFileResult[]): FilePatchResult {
+function fileMutationBatchResult(files: FilePatchFileResult[]): FileMutationBatchResult {
   const okFiles = files.filter((file): file is FileMutationResult => file.status === 'ok');
   const summary = okFiles.reduce(
     (acc, file) => ({
@@ -303,7 +307,7 @@ function filePatchResult(files: FilePatchFileResult[]): FilePatchResult {
   };
 }
 
-function mutationDisplay(output: FilePatchResult): ToolDisplayContent | undefined {
+function mutationDisplay(output: FileMutationBatchResult): ToolDisplayContent | undefined {
   if (output.files.length === 0) return undefined;
   if (output.files.length === 1 && output.files[0]?.status === 'ok') return output.files[0].display;
   return {
@@ -405,7 +409,7 @@ const fileWriteInput = z.object({
     .optional()
 });
 
-export const fileWriteTool: Tool<z.infer<typeof fileWriteInput>, FilePatchResult> = {
+export const fileWriteTool: Tool<z.infer<typeof fileWriteInput>, FileMutationBatchResult> = {
   name: 'file_write',
   description:
     'Create or overwrite a UTF-8 text file. Existing files must be read first, or baseHash must match the current file hash.',
@@ -427,7 +431,7 @@ export const fileWriteTool: Tool<z.infer<typeof fileWriteInput>, FilePatchResult
       }
       const { path: written, bytesWritten } = await fs.writeTextFile(path, content);
       const mutation = createMutationResult(ctx, written, before, content, 'write', { bytesWritten });
-      const result = filePatchResult([mutation]);
+      const result = fileMutationBatchResult([mutation]);
       rememberRead(ctx, written, content);
       return toolResult(result, { modelContent: mutationSummary(mutation), displayContent: mutationDisplay(result) });
     })
@@ -542,6 +546,16 @@ interface PatchHunk {
 
 interface PatchGroup {
   ops: PatchOp[];
+  paths: Set<string>;
+}
+
+interface PatchOptions {
+  baseHashByPath?: Record<string, string>;
+}
+
+interface SimulatedFile {
+  path: string;
+  text: string | null;
 }
 
 function isFileHeader(line: string): boolean {
@@ -678,9 +692,27 @@ function requireMove(fs: FsBackend): NonNullable<FsBackend['moveFile']> {
   return fs.moveFile.bind(fs);
 }
 
-const filePatchInput = z.object({ patch: z.string().min(1) });
+const hashSchema = z.string().regex(/^[a-f0-9]{64}$/);
 
-async function applyPatchOp(op: PatchOp, ctx: ToolContext): Promise<FileMutationResult> {
+const filePatchInput = z.object({
+  patch: z.string().min(1),
+  strict: z.boolean().optional(),
+  baseHashByPath: z.record(z.string(), hashSchema).optional()
+});
+
+function providedBaseHash(path: string, options: PatchOptions): string | undefined {
+  return options.baseHashByPath?.[path] ?? options.baseHashByPath?.[ledgerPath(path)];
+}
+
+function assertProvidedBaseHash(path: string, text: string, options: PatchOptions, reason: string): void {
+  const baseHash = providedBaseHash(path, options);
+  if (!baseHash) throw new ToolSecurityError(`${reason} requires baseHashByPath["${path}"]`);
+  if (baseHash !== sha256(text)) {
+    throw new ToolSecurityError(`baseHashByPath["${path}"] does not match the current file`);
+  }
+}
+
+async function applyPatchOp(op: PatchOp, ctx: ToolContext, options: PatchOptions): Promise<FileMutationResult> {
   if (op.type === 'add') {
     const content = op.lines.length === 0 ? '' : `${op.lines.join('\n')}\n`;
     return withFsGate(op.path, ctx, async (fs) => {
@@ -695,12 +727,20 @@ async function applyPatchOp(op: PatchOp, ctx: ToolContext): Promise<FileMutation
   if (op.type === 'delete') {
     return withFsGate(op.path, ctx, async (fs) => {
       const before = await fs.readTextFile(op.path);
+      assertProvidedBaseHash(op.path, before, options, 'Delete File');
       const deleted = await requireDelete(fs)(op.path);
       return createMutationResult(ctx, deleted.path, before, null, 'delete');
     });
   }
   return withFsGate(op.path, ctx, async (fs) => {
     const before = await fs.readTextFile(op.path);
+    if (op.newPath && op.hunks.length === 0) {
+      assertProvidedBaseHash(op.path, before, options, 'Move without hunks');
+    }
+    const baseHash = providedBaseHash(op.path, options);
+    if (baseHash !== undefined && baseHash !== sha256(before)) {
+      throw new ToolSecurityError(`baseHashByPath["${op.path}"] does not match the current file`);
+    }
     const after = applyHunks(op.path, before, op.hunks);
     if (op.newPath) {
       const existingDest = await readExistingText(fs, op.newPath);
@@ -721,11 +761,15 @@ async function applyPatchOp(op: PatchOp, ctx: ToolContext): Promise<FileMutation
   });
 }
 
-async function applyPatchGroup(group: PatchGroup, ctx: ToolContext): Promise<FilePatchFileResult[]> {
+async function applyPatchGroup(
+  group: PatchGroup,
+  ctx: ToolContext,
+  options: PatchOptions
+): Promise<FilePatchFileResult[]> {
   const results: FilePatchFileResult[] = [];
   for (const op of group.ops) {
     try {
-      results.push(await applyPatchOp(op, ctx));
+      results.push(await applyPatchOp(op, ctx, options));
     } catch (err) {
       results.push(mutationError(op, err));
     }
@@ -733,33 +777,133 @@ async function applyPatchGroup(group: PatchGroup, ctx: ToolContext): Promise<Fil
   return results;
 }
 
-function groupPatchOps(ops: PatchOp[]): PatchGroup[] {
-  const groups = new Map<string, PatchGroup>();
-  const order: PatchGroup[] = [];
-  for (const op of ops) {
-    const key = ledgerPath(op.path);
-    let group = groups.get(key);
-    if (!group) {
-      group = { ops: [] };
-      groups.set(key, group);
-      order.push(group);
+async function validatePatchGroup(
+  group: PatchGroup,
+  ctx: ToolContext,
+  options: PatchOptions
+): Promise<FileMutationError[]> {
+  const state = new Map<string, SimulatedFile>();
+  const errors: FileMutationError[] = [];
+  const getCurrent = async (path: string): Promise<SimulatedFile> => {
+    const key = ledgerPath(path);
+    const cached = state.get(key);
+    if (cached) return cached;
+    const text = await withFsGate(path, ctx, async (fs) => readExistingText(fs, path));
+    const file = { path, text };
+    state.set(key, file);
+    return file;
+  };
+  const putCurrent = (path: string, text: string | null) => {
+    state.set(ledgerPath(path), { path, text });
+  };
+
+  for (const op of group.ops) {
+    try {
+      if (op.type === 'add') {
+        const existing = await getCurrent(op.path);
+        if (existing.text !== null) throw new ToolSecurityError(`cannot add existing file: ${op.path}`);
+        putCurrent(op.path, op.lines.length === 0 ? '' : `${op.lines.join('\n')}\n`);
+        continue;
+      }
+      if (op.type === 'delete') {
+        const before = await getCurrent(op.path);
+        if (before.text === null) throw new ToolSecurityError(`file not found: ${op.path}`);
+        assertProvidedBaseHash(op.path, before.text, options, 'Delete File');
+        putCurrent(op.path, null);
+        continue;
+      }
+      const before = await getCurrent(op.path);
+      if (before.text === null) throw new ToolSecurityError(`file not found: ${op.path}`);
+      if (op.newPath && op.hunks.length === 0) {
+        assertProvidedBaseHash(op.path, before.text, options, 'Move without hunks');
+      }
+      const baseHash = providedBaseHash(op.path, options);
+      if (baseHash !== undefined && baseHash !== sha256(before.text)) {
+        throw new ToolSecurityError(`baseHashByPath["${op.path}"] does not match the current file`);
+      }
+      const after = applyHunks(op.path, before.text, op.hunks);
+      if (op.newPath) {
+        const existingDest = await getCurrent(op.newPath);
+        if (existingDest.text !== null) throw new ToolSecurityError(`cannot move over existing file: ${op.newPath}`);
+        putCurrent(op.path, null);
+        putCurrent(op.newPath, after);
+      } else {
+        putCurrent(op.path, after);
+      }
+    } catch (err) {
+      errors.push(mutationError(op, err));
     }
-    group.ops.push(op);
   }
-  return order;
+  return errors;
 }
 
-export const filePatchTool: Tool<z.infer<typeof filePatchInput>, FilePatchResult> = {
+function patchOpPaths(op: PatchOp): Set<string> {
+  const paths = new Set([ledgerPath(op.path)]);
+  if (op.type === 'update' && op.newPath) paths.add(ledgerPath(op.newPath));
+  return paths;
+}
+
+function intersects(a: Set<string>, b: Set<string>): boolean {
+  for (const value of a) {
+    if (b.has(value)) return true;
+  }
+  return false;
+}
+
+function groupPatchOps(ops: PatchOp[]): PatchGroup[] {
+  const groups: PatchGroup[] = [];
+  for (const op of ops) {
+    const paths = patchOpPaths(op);
+    const matchingIndexes: number[] = [];
+    for (let i = 0; i < groups.length; i++) {
+      if (intersects(groups[i]?.paths ?? new Set(), paths)) matchingIndexes.push(i);
+    }
+    if (matchingIndexes.length === 0) {
+      groups.push({ ops: [op], paths });
+      continue;
+    }
+    const first = matchingIndexes[0] as number;
+    const merged: PatchGroup = { ops: [], paths: new Set(paths) };
+    for (const index of matchingIndexes) {
+      const group = groups[index];
+      if (!group) continue;
+      merged.ops.push(...group.ops);
+      for (const path of group.paths) merged.paths.add(path);
+    }
+    merged.ops.push(op);
+    groups.splice(first, 1, merged);
+    for (let i = matchingIndexes.length - 1; i >= 1; i--) {
+      groups.splice(matchingIndexes[i] as number, 1);
+    }
+  }
+  return groups;
+}
+
+export const filePatchTool: Tool<z.infer<typeof filePatchInput>, FileMutationBatchResult> = {
   name: 'file_patch',
   description:
     'Apply a structured patch to files. Supports Add File, Update File, Delete File, and Move to operations. Patch syntax errors stop the whole call. File operation errors are returned per file. Update hunks are applied only when their context matches the current file; different files execute concurrently while repeated operations on the same file run in patch order.',
   scopes: [{ resource: 'fs:write' }],
   needsApproval: (_input, ctx) => !ctx.backends?.fs.delegated && ctx.sandboxRoots === undefined,
   inputSchema: filePatchInput,
-  run: async ({ patch }, ctx) => {
+  run: async ({ patch, strict, baseHashByPath }, ctx) => {
     const ops = parsePatch(patch);
-    const results = (await Promise.all(groupPatchOps(ops).map((group) => applyPatchGroup(group, ctx)))).flat();
-    const output = filePatchResult(results);
+    const groups = groupPatchOps(ops);
+    const options: PatchOptions = baseHashByPath ? { baseHashByPath } : {};
+    if (strict) {
+      const validationErrors = (
+        await Promise.all(groups.map((group) => validatePatchGroup(group, ctx, options)))
+      ).flat();
+      if (validationErrors.length > 0) {
+        const output = fileMutationBatchResult(validationErrors);
+        return toolResult(output, {
+          modelContent: patchSummary(output),
+          displayContent: mutationDisplay(output)
+        });
+      }
+    }
+    const results = (await Promise.all(groups.map((group) => applyPatchGroup(group, ctx, options)))).flat();
+    const output = fileMutationBatchResult(results);
     return toolResult(output, {
       modelContent: patchSummary(output),
       displayContent: mutationDisplay(output)
