@@ -67,11 +67,12 @@ export function useAppShellData({ loadModelData = true }: { loadModelData?: bool
   const workspaceProjects = useMemo(
     () =>
       buildWorkspaceProjects(projectRows, {
+        sessions,
         liveExternalAgentSessions,
         externalAgentSessions: externalAgentSessionSummaries,
         pinnedProjectIds: pinnedProjectIdSet
       }),
-    [liveExternalAgentSessions, externalAgentSessionSummaries, pinnedProjectIdSet, projectRows]
+    [sessions, liveExternalAgentSessions, externalAgentSessionSummaries, pinnedProjectIdSet, projectRows]
   );
 
   useStreamControlQuery(undefined);

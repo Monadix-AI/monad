@@ -11,6 +11,10 @@ import type { Message, Participant } from './types.ts';
 
 export interface ProjectExperienceCanvasSource {
   projectId: string;
+  /** The project's currently-active session (Track B: a project's own id is no longer a
+   *  conversation id — external-agent observation/history/input targets this instead). Null while
+   *  the session is still resolving/being created. */
+  activeSessionId: string | null;
   ready: boolean;
   participants: Participant[];
   projectMembers: ProjectMember[];

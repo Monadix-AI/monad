@@ -27,7 +27,7 @@ const agent = (name: string, presence: Participant['presence']): Participant => 
 
 const externalAgentSession = (overrides: Partial<ExternalAgentSessionView> = {}): ExternalAgentSessionView => ({
   id: 'exa_codex_running',
-  transcriptTargetId: 'prj_01KWPROJECT00000000000000',
+  sessionId: 'ses_01KWPROJECT00000000000000',
   agentName: 'pmem_codex_active',
   provider: 'codex',
   productIcon: 'codex',
@@ -365,7 +365,7 @@ test('external agent stopped sessions remain available when the template is enab
     externalAgentSessions: [
       {
         id: 'exa_stopped',
-        transcriptTargetId: 'prj_01KWPROJECT00000000000000',
+        sessionId: 'ses_01KWPROJECT00000000000000',
         agentName: 'pmem_codex_available',
         provider: 'codex',
         productIcon: 'codex',

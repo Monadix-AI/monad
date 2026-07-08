@@ -14,7 +14,7 @@ configureExternalAgentObservationAdapterResolver((provider) =>
 
 const externalAgentSession = (overrides: Partial<ExternalAgentSessionView> = {}): ExternalAgentSessionView => ({
   id: 'exa_01KWGEMINI000000000000000',
-  transcriptTargetId: 'prj_01KWPROJECT00000000000000',
+  sessionId: 'ses_01KWPROJECT00000000000000',
   agentName: 'gemini',
   provider: 'gemini',
   productIcon: 'gemini',

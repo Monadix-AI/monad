@@ -3,7 +3,7 @@ import type {
   ExternalAgentObservationAccessResponse,
   ExternalAgentUsageResponse,
   NativeAgentDeliveryId,
-  TranscriptTargetId
+  SessionId
 } from '@monad/protocol';
 import type {
   CSSProperties,
@@ -548,6 +548,7 @@ const agentStatusRingCss = `
 type AgentTasksRailRoom = {
   externalAgentStreams: ExternalAgentStreamView[];
   projectId: string;
+  activeSessionId: string | null;
   railAgents: Participant[];
   stopExternalAgent: (id: string) => void;
 };
@@ -578,18 +579,18 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
   // full projected event list every frame, so the panel replaces its list wholesale — no client-side
   // delta re-derivation. Deliveries have no ui-stream twin yet, so they keep the poll + legacy projection.
   const externalAgentUiObservation = useStreamExternalAgentUiObservationQuery(
-    { id: observedExternalAgentSessionId ?? '', transcriptTargetId: room.projectId as TranscriptTargetId },
-    { skip: !(observedExternalAgentSessionId && observation && !observedDeliveryId) }
+    { id: observedExternalAgentSessionId ?? '', transcriptTargetId: (room.activeSessionId ?? '') as SessionId },
+    { skip: !(observedExternalAgentSessionId && observation && !observedDeliveryId && room.activeSessionId) }
   );
   const deliveryObservation = usePolledValue<ExternalAgentObservationAccessResponse>({
-    enabled: Boolean(observedDeliveryId && observation),
+    enabled: Boolean(observedDeliveryId && observation && room.activeSessionId),
     intervalMs: observedStream?.status === 'running' ? 900 : 0,
     load: () =>
       triggerNativeAgentDeliveryObservation({
         id: observedDeliveryId as NativeAgentDeliveryId,
-        transcriptTargetId: room.projectId as TranscriptTargetId
+        transcriptTargetId: room.activeSessionId as SessionId
       }).unwrap(),
-    resetKey: `${room.projectId}:${observedDeliveryId ?? ''}`
+    resetKey: `${room.activeSessionId ?? ''}:${observedDeliveryId ?? ''}`
   });
   const uiFrame = observedDeliveryId ? undefined : (externalAgentUiObservation.data ?? undefined);
   const deliveryAccess = observedDeliveryId ? deliveryObservation : undefined;
@@ -643,9 +644,10 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
           ? { ...current, loading: true }
           : { items: [], nextCursor: null, loading: true, exhausted: false };
       });
+      if (!room.activeSessionId) return;
       void triggerExternalAgentHistoryPage({
         id: observedExternalAgentSessionId,
-        transcriptTargetId: room.projectId as TranscriptTargetId,
+        transcriptTargetId: room.activeSessionId as SessionId,
         before: before ?? undefined,
         limit: 20
       })
@@ -680,7 +682,7 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
           }
         );
     },
-    [observedExternalAgentSessionId, room.projectId, triggerExternalAgentHistoryPage]
+    [observedExternalAgentSessionId, room.activeSessionId, triggerExternalAgentHistoryPage]
   );
 
   const showHistory = useCallback(() => {

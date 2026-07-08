@@ -1,4 +1,4 @@
-import type { ExternalAgentSessionView, WorkplaceProject } from '@monad/protocol';
+import type { ExternalAgentSessionView, Session, WorkplaceProject } from '@monad/protocol';
 
 export const safeDecode = (value: string): string => {
   let current = value;
@@ -27,6 +27,10 @@ export interface WorkspaceProjectListItem {
 }
 
 export interface BuildWorkspaceProjectsOptions {
+  /** Every session (chat or project-bound) — used to resolve which project an external-agent
+   *  session's sessionId belongs to, now that a project session's own id is distinct from its
+   *  project's id (Track B). */
+  sessions?: readonly Pick<Session, 'id' | 'projectId'>[];
   liveExternalAgentSessions?: readonly ExternalAgentSessionView[];
   externalAgentSessions?: readonly ExternalAgentSessionView[];
   pinnedProjectIds?: ReadonlySet<string>;
@@ -36,7 +40,9 @@ export const buildWorkspaceProjects = (
   projects: Pick<WorkplaceProject, 'id' | 'title' | 'cwd'>[] = [],
   options: BuildWorkspaceProjectsOptions = {}
 ): WorkspaceProjectListItem[] => {
+  const sessionProjectId = new Map((options.sessions ?? []).map((s) => [s.id, s.projectId]));
   const activityByProjectId = projectActivityById({
+    sessionProjectId,
     liveExternalAgentSessions: options.liveExternalAgentSessions ?? [],
     externalAgentSessions: options.externalAgentSessions ?? options.liveExternalAgentSessions ?? []
   });
@@ -58,23 +64,29 @@ export const buildWorkspaceProjects = (
 };
 
 function projectActivityById({
+  sessionProjectId,
   liveExternalAgentSessions,
   externalAgentSessions
 }: {
+  sessionProjectId: ReadonlyMap<string, string | undefined>;
   liveExternalAgentSessions: readonly ExternalAgentSessionView[];
   externalAgentSessions: readonly ExternalAgentSessionView[];
 }) {
   const activity = new Map<string, { hasRunningAgent: boolean; unreadCount: number }>();
   for (const session of externalAgentSessions) {
-    const current = activity.get(session.transcriptTargetId) ?? { hasRunningAgent: false, unreadCount: 0 };
+    const projectId = sessionProjectId.get(session.sessionId);
+    if (!projectId) continue;
+    const current = activity.get(projectId) ?? { hasRunningAgent: false, unreadCount: 0 };
     current.unreadCount +=
       Math.max(0, session.lastDeliveredSeq - session.lastVisibleSeq) + session.pendingApprovalCount;
-    activity.set(session.transcriptTargetId, current);
+    activity.set(projectId, current);
   }
   for (const session of liveExternalAgentSessions) {
-    const current = activity.get(session.transcriptTargetId) ?? { hasRunningAgent: false, unreadCount: 0 };
+    const projectId = sessionProjectId.get(session.sessionId);
+    if (!projectId) continue;
+    const current = activity.get(projectId) ?? { hasRunningAgent: false, unreadCount: 0 };
     current.hasRunningAgent ||= session.state === 'starting' || session.state === 'running';
-    activity.set(session.transcriptTargetId, current);
+    activity.set(projectId, current);
   }
   return activity;
 }

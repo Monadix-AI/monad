@@ -1,6 +1,6 @@
 'use client';
 
-import type { ProjectId, WorkspaceAction } from '@monad/protocol';
+import type { ProjectId, SessionId, WorkspaceAction } from '@monad/protocol';
 import type { ProjectExperienceDefinition } from '@/features/workplace/experiences/types';
 import type { ProjectController } from '@/features/workplace/use-project';
 
@@ -41,6 +41,7 @@ interface ProjectTopBarProps {
   projectName: string;
   projectWorkdir?: string;
   projectId: ProjectId | null;
+  sessionId: SessionId | null;
   experiences: ProjectExperienceDefinition[];
   onModeChange: (mode: string) => void;
   onOpenSettings: () => void;
@@ -55,15 +56,23 @@ function iconForExperience(experience: ProjectExperienceDefinition): typeof Mess
   return experienceIcon[experience.icon ?? ''] ?? MessageSquareCodeIcon;
 }
 
-function ProjectTopBarWorkdir({ path, projectId }: { path?: string; projectId: ProjectId | null }): React.ReactElement {
+function ProjectTopBarWorkdir({
+  path,
+  projectId,
+  sessionId
+}: {
+  path?: string;
+  projectId: ProjectId | null;
+  sessionId: SessionId | null;
+}): React.ReactElement {
   const t = useT();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
   const [updateWorkplaceProject, updateState] = useUpdateWorkplaceProjectMutation();
   const [runWorkspaceAction, actionState] = useWorkspaceActionMutation();
-  const { data: workspaceMeta } = useWorkspaceMetaQuery(projectId ?? ('prj_' as ProjectId), {
-    skip: !menuOpen || !projectId || !path
+  const { data: workspaceMeta } = useWorkspaceMetaQuery(sessionId ?? ('ses_' as SessionId), {
+    skip: !menuOpen || !sessionId || !path
   });
   const gitRemoteUrl = workspaceMeta?.git.remoteUrl;
   const busy = updateState.isLoading;
@@ -77,7 +86,7 @@ function ProjectTopBarWorkdir({ path, projectId }: { path?: string; projectId: P
     if (path) await navigator.clipboard.writeText(path);
   };
   const performWorkspaceAction = (action: WorkspaceAction) => {
-    if (projectId && path) void runWorkspaceAction({ id: projectId, action });
+    if (sessionId && path) void runWorkspaceAction({ id: sessionId, action });
   };
 
   if (editing) {
@@ -98,7 +107,7 @@ function ProjectTopBarWorkdir({ path, projectId }: { path?: string; projectId: P
     );
   }
 
-  const disabled = !projectId || !path || actionState.isLoading;
+  const disabled = !sessionId || !path || actionState.isLoading;
   return (
     <DropdownMenu
       onOpenChange={setMenuOpen}
@@ -261,6 +270,7 @@ export function ProjectTopBar({
   projectName,
   projectWorkdir,
   projectId,
+  sessionId,
   experiences,
   onModeChange,
   onOpenSettings
@@ -448,6 +458,7 @@ export function ProjectTopBar({
           <ProjectTopBarWorkdir
             path={projectWorkdir}
             projectId={projectId}
+            sessionId={sessionId}
           />
         </div>
         <div className="project-topbar-spacer" />

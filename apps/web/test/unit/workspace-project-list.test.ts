@@ -26,12 +26,12 @@ test('workspace project list keeps duplicate project names as separate projects'
 
 const externalAgentSession = (
   id: string,
-  transcriptTargetId: string,
+  sessionId: string,
   overrides: Partial<ExternalAgentSessionView> = {}
 ): ExternalAgentSessionView =>
   ({
     id,
-    transcriptTargetId,
+    sessionId,
     agentName: 'codex',
     provider: 'codex',
     workingPath: '/tmp/demo',
@@ -56,8 +56,9 @@ const externalAgentSession = (
 test('workspace project list summarizes live runtime and unread native cli messages', () => {
   expect(
     buildWorkspaceProjects([project('prj_active', 'active')], {
+      sessions: [{ id: 'ses_active', projectId: 'prj_active' }],
       liveExternalAgentSessions: [
-        externalAgentSession('exa_one', 'prj_active', {
+        externalAgentSession('exa_one', 'ses_active', {
           lastDeliveredSeq: 6,
           lastVisibleSeq: 4,
           pendingApprovalCount: 1
@@ -79,8 +80,9 @@ test('workspace project list summarizes live runtime and unread native cli messa
 test('workspace project list keeps unread messages from stopped native cli sessions without showing runtime active', () => {
   expect(
     buildWorkspaceProjects([project('prj_stopped', 'stopped')], {
+      sessions: [{ id: 'ses_stopped', projectId: 'prj_stopped' }],
       externalAgentSessions: [
-        externalAgentSession('exa_stopped', 'prj_stopped', {
+        externalAgentSession('exa_stopped', 'ses_stopped', {
           lastDeliveredSeq: 8,
           lastVisibleSeq: 5,
           state: 'stopped'

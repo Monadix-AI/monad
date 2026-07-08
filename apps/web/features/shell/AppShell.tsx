@@ -217,7 +217,7 @@ export function AppShell() {
   const stream = useStreamUiItemsQuery(currentId as SessionId, { skip: currentId === null });
   // Older history (and deep-linked windows) load lazily; the live tail arrives over `stream`.
   const transcript = useTranscriptHistory({
-    transcriptTargetId: currentId,
+    sessionId: currentId,
     streamOldestCursor: stream.data?.oldestCursor,
     streamHasMore: stream.data?.hasMore ?? false
   });

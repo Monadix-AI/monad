@@ -1,4 +1,4 @@
-import type { ProjectId, WorkspaceAction } from '@monad/protocol';
+import type { SessionId, WorkspaceAction } from '@monad/protocol';
 import type { ProjectController } from '../use-project';
 
 import {
@@ -25,11 +25,11 @@ import { fileManagerLabel, terminalLabel, workdirLabel } from './project-header-
 
 function WorkdirControl({
   gitRemoteUrl,
-  projectId,
+  sessionId,
   workdir
 }: {
   gitRemoteUrl?: string;
-  projectId?: ProjectId;
+  sessionId?: SessionId;
   workdir: ProjectController['workdir'];
 }): React.ReactElement {
   const t = useT();
@@ -80,12 +80,12 @@ function WorkdirControl({
     if (path) await navigator.clipboard.writeText(path);
   };
   const performWorkspaceAction = (action: WorkspaceAction) => {
-    if (projectId && path) void runWorkspaceAction({ id: projectId, action });
+    if (sessionId && path) void runWorkspaceAction({ id: sessionId, action });
   };
   const openGitHub = () => {
     if (gitRemoteUrl) window.open(gitRemoteUrl, '_blank', 'noopener,noreferrer');
   };
-  const actionDisabled = !projectId || !path || workspaceAction.isLoading;
+  const actionDisabled = !sessionId || !path || workspaceAction.isLoading;
 
   return (
     <DropdownMenu>
@@ -169,9 +169,8 @@ export function ProjectHeader({
   embedded?: boolean;
 }): React.ReactElement {
   const activeProject = room.projects.find((p) => p.active);
-  const activeProjectId = activeProject?.id as ProjectId | undefined;
-  const { data: workspaceMeta } = useWorkspaceMetaQuery(activeProjectId ?? ('prj_' as ProjectId), {
-    skip: !activeProject?.id || !room.workdir.path
+  const { data: workspaceMeta } = useWorkspaceMetaQuery(room.activeSessionId ?? ('ses_' as SessionId), {
+    skip: !room.activeSessionId || !room.workdir.path
   });
   const git = workspaceMeta?.git;
   return (
@@ -199,7 +198,7 @@ export function ProjectHeader({
       <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
         <WorkdirControl
           gitRemoteUrl={git?.remoteUrl}
-          projectId={activeProject?.id as ProjectId | undefined}
+          sessionId={room.activeSessionId as SessionId | undefined}
           workdir={room.workdir}
         />
       </div>

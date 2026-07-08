@@ -1,4 +1,4 @@
-import type { MessageId, TranscriptTargetId, UIItem } from '@monad/protocol';
+import type { MessageId, SessionId, UIItem } from '@monad/protocol';
 
 import { useLazyGetUiItemsWindowQuery } from '@monad/client-rtk';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -6,7 +6,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 type TranscriptMode = 'live' | 'history';
 
 interface Params {
-  transcriptTargetId: TranscriptTargetId | null;
+  sessionId: SessionId | null;
   /** Oldest message id in the live window (from the bounded stream snapshot). */
   streamOldestCursor: string | undefined;
   /** Whether older messages exist before the live window. */
@@ -40,11 +40,7 @@ function mergeUnique(a: UIItem[], b: UIItem[]): UIItem[] {
  * live tail is suppressed (avoids a gap between the window and the tail) until paging newer
  * reaches the end, at which point it reconnects to `live`.
  */
-export function useTranscriptHistory({
-  transcriptTargetId,
-  streamOldestCursor,
-  streamHasMore
-}: Params): TranscriptHistory {
+export function useTranscriptHistory({ sessionId, streamOldestCursor, streamHasMore }: Params): TranscriptHistory {
   const [items, setItems] = useState<UIItem[]>([]);
   const [mode, setMode] = useState<TranscriptMode>('live');
   const [fetchWindow] = useLazyGetUiItemsWindowQuery();
@@ -66,7 +62,7 @@ export function useTranscriptHistory({
     canNewer.current = false;
     fetching.current = false;
     seeded.current = false;
-  }, [transcriptTargetId]);
+  }, [sessionId]);
 
   // Seed the older-page cursor from the live snapshot once it arrives (live mode, nothing loaded).
   useEffect(() => {
@@ -78,11 +74,11 @@ export function useTranscriptHistory({
   }, [mode, streamOldestCursor, streamHasMore]);
 
   const loadOlder = useCallback(() => {
-    if (transcriptTargetId === null || fetching.current || !canOlder.current) return;
+    if (sessionId === null || fetching.current || !canOlder.current) return;
     const before = olderCursor.current as MessageId | undefined;
     if (!before) return;
     fetching.current = true;
-    fetchWindow({ sessionId: transcriptTargetId, before })
+    fetchWindow({ sessionId: sessionId, before })
       .unwrap()
       .then((res) => {
         setItems((prev) => mergeUnique(res.items, prev));
@@ -93,14 +89,14 @@ export function useTranscriptHistory({
       .finally(() => {
         fetching.current = false;
       });
-  }, [transcriptTargetId, fetchWindow]);
+  }, [sessionId, fetchWindow]);
 
   const loadNewer = useCallback(() => {
-    if (transcriptTargetId === null || mode !== 'history' || fetching.current || !canNewer.current) return;
+    if (sessionId === null || mode !== 'history' || fetching.current || !canNewer.current) return;
     const after = newerCursor.current as MessageId | undefined;
     if (!after) return;
     fetching.current = true;
-    fetchWindow({ sessionId: transcriptTargetId, after })
+    fetchWindow({ sessionId: sessionId, after })
       .unwrap()
       .then((res) => {
         setItems((prev) => mergeUnique(prev, res.items));
@@ -112,15 +108,15 @@ export function useTranscriptHistory({
       .finally(() => {
         fetching.current = false;
       });
-  }, [transcriptTargetId, mode, fetchWindow]);
+  }, [sessionId, mode, fetchWindow]);
 
   const openAtMessage = useCallback(
     (messageId: MessageId) => {
-      if (transcriptTargetId === null) return;
+      if (sessionId === null) return;
       setMode('history');
       seeded.current = true; // don't re-seed from the stream while detached
       fetching.current = true;
-      fetchWindow({ sessionId: transcriptTargetId, around: messageId })
+      fetchWindow({ sessionId: sessionId, around: messageId })
         .unwrap()
         .then((res) => {
           setItems(res.items);
@@ -135,7 +131,7 @@ export function useTranscriptHistory({
           fetching.current = false;
         });
     },
-    [transcriptTargetId, fetchWindow]
+    [sessionId, fetchWindow]
   );
 
   const jumpToLive = useCallback(() => {

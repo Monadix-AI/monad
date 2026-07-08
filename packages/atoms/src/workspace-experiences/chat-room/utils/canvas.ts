@@ -37,6 +37,7 @@ import {
 export interface ChatRoomCanvas {
   draftKey: string;
   projectId: string;
+  activeSessionId: string | null;
   ready: boolean;
   human: Participant;
   messages: Message[];
@@ -166,8 +167,9 @@ export function toChatRoomCanvas(
         }
       : null;
   return {
-    draftKey: `chat-room:${c.projectId}`,
+    draftKey: `chat-room:${c.activeSessionId ?? c.projectId}`,
     projectId: c.projectId,
+    activeSessionId: c.activeSessionId,
     ready: c.ready,
     human: source.human,
     messages,

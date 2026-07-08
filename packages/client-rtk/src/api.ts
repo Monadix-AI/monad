@@ -112,9 +112,13 @@ import {
   useSetMemoryGraphMutation
 } from './endpoints/memory/index.ts';
 import {
+  projectSessionAdapter,
+  projectSessionSelectors,
+  useCreateProjectSessionMutation,
   useCreateWorkplaceProjectMutation,
   useDeleteWorkplaceProjectMutation,
   useGetWorkplaceProjectQuery,
+  useListProjectSessionsQuery,
   useListWorkplaceProjectsQuery,
   useSendProjectMessageMutation,
   useUpdateWorkplaceProjectMutation,
@@ -315,6 +319,8 @@ export {
   peerSelectors,
   profileAdapter,
   profileSelectors,
+  projectSessionAdapter,
+  projectSessionSelectors,
   providerAdapter,
   providerSelectors,
   sessionAdapter,
@@ -335,6 +341,7 @@ export {
   useClarifyRespondMutation,
   useClearApprovalsMutation,
   useCreateAgentMutation,
+  useCreateProjectSessionMutation,
   useCreateSessionMutation,
   useCreateWorkplaceProjectMutation,
   useDeleteAcpAgentMutation,
@@ -447,6 +454,7 @@ export {
   useListModelsQuery,
   useListPeersQuery,
   useListProfilesQuery,
+  useListProjectSessionsQuery,
   useListProvidersQuery,
   useListSessionsQuery,
   useListSkillsQuery,

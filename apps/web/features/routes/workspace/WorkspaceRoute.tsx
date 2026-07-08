@@ -1,6 +1,6 @@
 'use client';
 
-import type { ProjectId, Session } from '@monad/protocol';
+import type { ProjectId, Session, SessionId } from '@monad/protocol';
 import type { ProjectExperienceDefinition } from '@/features/workplace/experiences/types';
 import type { ProjectController } from '@/features/workplace/use-project';
 
@@ -89,6 +89,7 @@ export function WorkspaceRoute({
     participants: EMPTY_PROJECT_PARTICIPANTS,
     signature: ''
   });
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [cachedProjectEntries, setCachedProjectEntries] = useState<CachedProjectEntry[]>([]);
   const openProjectSettingsInStore = useWorkplaceUiStore((state) => state.openProjectSettings);
   const { data: workspaceExperiences, isLoading: workspaceExperiencesLoading } = useListWorkspaceExperiencesQuery(
@@ -112,6 +113,7 @@ export function WorkspaceRoute({
     setActiveProjectParticipants((current) =>
       current.signature === signature ? current : { participants: project.participants, signature }
     );
+    setActiveSessionId((current) => (current === project.activeSessionId ? current : project.activeSessionId));
   }, []);
   const handleProjectDeleted = useCallback(
     (projectId: string) => {
@@ -124,10 +126,12 @@ export function WorkspaceRoute({
   useEffect(() => {
     if (!activeProjectId) {
       setActiveProjectParticipants({ participants: EMPTY_PROJECT_PARTICIPANTS, signature: '' });
+      setActiveSessionId(null);
       setCachedProjectEntries([]);
       return;
     }
     setActiveProjectParticipants({ participants: EMPTY_PROJECT_PARTICIPANTS, signature: '' });
+    setActiveSessionId(null);
     const projectIds = new Set(projects.map((project) => project.id));
     const now = Date.now();
     setCachedProjectEntries((entries) => {
@@ -173,6 +177,7 @@ export function WorkspaceRoute({
             projectId={activeProjectId as ProjectId}
             projectName={projectName}
             projectWorkdir={activeProject?.cwd}
+            sessionId={activeSessionId as SessionId | null}
           />
           <div className="g1-workspace-canvas">
             {cachedProjectEntries.map((entry) => {

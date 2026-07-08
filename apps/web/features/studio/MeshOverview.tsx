@@ -14,7 +14,10 @@ import {
 import { HugeiconsIcon } from '@hugeicons/react';
 import {
   externalAgentSessionSelectors,
+  sessionAdapter,
+  sessionSelectors,
   useListLiveExternalAgentSessionsQuery,
+  useListSessionsQuery,
   useListWorkplaceProjectsQuery,
   workplaceProjectAdapter,
   workplaceProjectSelectors
@@ -68,9 +71,9 @@ function AgentRuntimeRow({ session }: { session: ExternalAgentSessionView }) {
 function groupByTarget(sessions: ExternalAgentSessionView[]): [string, ExternalAgentSessionView[]][] {
   const groups = new Map<string, ExternalAgentSessionView[]>();
   for (const session of sessions) {
-    const list = groups.get(session.transcriptTargetId);
+    const list = groups.get(session.sessionId);
     if (list) list.push(session);
-    else groups.set(session.transcriptTargetId, [session]);
+    else groups.set(session.sessionId, [session]);
   }
   return [...groups.entries()];
 }
@@ -79,7 +82,13 @@ function AgentRuntimesSection({ projects }: { projects: WorkplaceProject[] }) {
   const t = useT();
   const { data } = useListLiveExternalAgentSessionsQuery(undefined);
   const sessions = data ? externalAgentSessionSelectors.selectAll(data.sessions) : [];
-  const titleFor = (targetId: string): string => projects.find((p) => p.id === targetId)?.title ?? targetId;
+  const { data: sessionData } = useListSessionsQuery(undefined);
+  const allSessions = sessionSelectors.selectAll(sessionData?.sessions ?? sessionAdapter.getInitialState());
+  const titleFor = (targetId: string): string => {
+    const session = allSessions.find((s) => s.id === targetId);
+    if (session) return session.title;
+    return projects.find((p) => p.id === targetId)?.title ?? targetId;
+  };
   return (
     <section className="rounded-xl border bg-card">
       <div className="flex items-center gap-2 border-b px-4 py-3">

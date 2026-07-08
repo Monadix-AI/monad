@@ -3,6 +3,7 @@ import type {
   ExternalAgentAppServerTransport,
   ProjectId,
   SendMessageAttachment,
+  SessionId,
   WorkplaceProject,
   WorkplaceProjectMemberSettings,
   WorkplaceProjectMemberType,
@@ -66,6 +67,7 @@ function warmEntityAvatar(seed: string, avatarStyle?: AvatarStyle): void {
  *  of computed values passed in, none of the surrounding view-building state. */
 export function useProjectActions(args: {
   activeProjectId: ProjectId | null;
+  activeSessionId: SessionId | null;
   approvals: ProjectApprovalActionView[];
   currentProject: WorkplaceProject | null;
   projectMembers: WorkplaceProjectMemberView[];
@@ -76,6 +78,7 @@ export function useProjectActions(args: {
 }) {
   const {
     activeProjectId,
+    activeSessionId,
     approvals,
     currentProject,
     projectMembers,
@@ -97,21 +100,21 @@ export function useProjectActions(args: {
 
   const sendDirective = useCallback(
     async (directive: string | { attachments?: SendMessageAttachment[]; text: string }) => {
-      if (!activeProjectId) return;
+      if (!activeSessionId) return;
       const text = typeof directive === 'string' ? directive : directive.text;
       const attachments = typeof directive === 'string' ? undefined : directive.attachments;
       await traceProjectDebugOperation(
-        { layer: 'web', label: 'project.message.send', sessionId: activeProjectId, data: { attachments, text } },
-        () => sendProjectMessage({ projectId: activeProjectId, text, attachments }).unwrap()
+        { layer: 'web', label: 'project.message.send', sessionId: activeSessionId, data: { attachments, text } },
+        () => sendProjectMessage({ sessionId: activeSessionId, text, attachments }).unwrap()
       );
     },
-    [activeProjectId, sendProjectMessage]
+    [activeSessionId, sendProjectMessage]
   );
 
   const resolveApproval = useCallback(
     (requestId: string, decision: ApprovalDecision) => {
       const approval = approvals.find((candidate) => candidate.id === requestId);
-      if (activeProjectId && approval?.approvalOwnership === 'provider-owned' && approval.externalAgentSessionId) {
+      if (activeSessionId && approval?.approvalOwnership === 'provider-owned' && approval.externalAgentSessionId) {
         void traceProjectDebugOperation(
           {
             layer: 'web',
@@ -122,7 +125,7 @@ export function useProjectActions(args: {
           () =>
             approveExternalAgentSession({
               id: approval.externalAgentSessionId as string,
-              transcriptTargetId: activeProjectId,
+              transcriptTargetId: activeSessionId,
               requestId,
               allow: decision === 'approve',
               ...(decision === 'reject' ? { reason: 'denied by operator' } : {})
@@ -134,7 +137,7 @@ export function useProjectActions(args: {
         {
           layer: 'web',
           label: 'tool.approval.resolve',
-          sessionId: activeProjectId ?? undefined,
+          sessionId: activeSessionId ?? undefined,
           data: { requestId, decision }
         },
         () =>
@@ -146,7 +149,7 @@ export function useProjectActions(args: {
           }).unwrap()
       );
     },
-    [activeProjectId, approveExternalAgentSession, approveTool, approvals]
+    [activeSessionId, approveExternalAgentSession, approveTool, approvals]
   );
 
   const answerQuestion = useCallback(
@@ -155,18 +158,18 @@ export function useProjectActions(args: {
         {
           layer: 'web',
           label: 'clarify.respond',
-          sessionId: activeProjectId ?? undefined,
+          sessionId: activeSessionId ?? undefined,
           data: { requestId }
         },
         () => clarifyRespond({ requestId, answer }).unwrap()
       );
     },
-    [activeProjectId, clarifyRespond]
+    [activeSessionId, clarifyRespond]
   );
 
   const pauseAll = useCallback(() => {
-    if (activeProjectId) void abortSession(activeProjectId);
-  }, [activeProjectId, abortSession]);
+    if (activeSessionId) void abortSession(activeSessionId);
+  }, [activeSessionId, abortSession]);
 
   const deleteProject = useCallback(async () => {
     if (!activeProjectId) return;
@@ -293,23 +296,23 @@ export function useProjectActions(args: {
 
   const sendExternalAgentInput = useCallback(
     async (id: string, input: string) => {
-      if (!activeProjectId) return;
+      if (!activeSessionId) return;
       await traceProjectDebugOperation(
         { layer: 'web', label: 'external-agent.input', sessionId: id, data: { id, input } },
-        () => inputExternalAgentSession({ id, transcriptTargetId: activeProjectId, input }).unwrap()
+        () => inputExternalAgentSession({ id, transcriptTargetId: activeSessionId, input }).unwrap()
       );
     },
-    [activeProjectId, inputExternalAgentSession]
+    [activeSessionId, inputExternalAgentSession]
   );
   const stopExternalAgent = useCallback(
     async (id: string) => {
-      if (!activeProjectId) return;
+      if (!activeSessionId) return;
       await traceProjectDebugOperation(
         { layer: 'web', label: 'external-agent.stop', sessionId: id, data: { id } },
-        () => stopExternalAgentSession({ id, transcriptTargetId: activeProjectId }).unwrap()
+        () => stopExternalAgentSession({ id, transcriptTargetId: activeSessionId }).unwrap()
       );
     },
-    [activeProjectId, stopExternalAgentSession]
+    [activeSessionId, stopExternalAgentSession]
   );
 
   const setWorkdir = useCallback(

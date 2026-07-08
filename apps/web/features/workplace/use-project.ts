@@ -3,16 +3,27 @@
 // Single chokepoint between the workspace shell and the live monad backend.
 // Experience-specific transcript, rail, and composer projections live in atoms.
 
-import type { ExternalAgentSessionView, ProfileView, ProjectId, UIItem, WorkplaceProject } from '@monad/protocol';
+import type {
+  ExternalAgentSessionView,
+  ProfileView,
+  ProjectId,
+  Session,
+  SessionId,
+  UIItem,
+  WorkplaceProject
+} from '@monad/protocol';
 
 import { useProjectExperienceProjection } from '@monad/atoms/workspace-experiences';
 import {
   externalAgentSessionSelectors,
   profileSelectors,
+  projectSessionSelectors,
+  useCreateProjectSessionMutation,
   useGetAppearanceQuery,
   useGetProfileSettingsQuery,
   useListExternalAgentSessionsQuery,
   useListProfilesQuery,
+  useListProjectSessionsQuery,
   useListWorkplaceProjectsQuery,
   useStreamUiItemsQuery,
   workplaceProjectAdapter,
@@ -73,13 +84,44 @@ export function useProject(
   );
   const activeProjectId = currentProject?.id ?? null;
 
-  // --- live stream + lazy older history ---
-  const stream = useStreamUiItemsQuery(activeProjectId ?? ('prj_' as ProjectId), { skip: activeProjectId === null });
-  const externalAgentSessionsQ = useListExternalAgentSessionsQuery(activeProjectId ?? ('prj_' as ProjectId), {
+  // --- project session resolution (Track B: a project's own id is no longer a conversation id) ---
+  // No default session is auto-created when a project is made; this is the minimal owed UI —
+  // resolve to the project's most-recently-active session, or silently create one on first open so
+  // the existing single-conversation shell keeps working without a multi-session tab strip (P7).
+  const { data: projectSessionData } = useListProjectSessionsQuery(activeProjectId ?? ('prj_' as ProjectId), {
     skip: activeProjectId === null
   });
+  const projectSessions: Session[] = useMemo(
+    () => (projectSessionData ? projectSessionSelectors.selectAll(projectSessionData) : []),
+    [projectSessionData]
+  );
+  const [createProjectSession] = useCreateProjectSessionMutation();
+  const creatingSessionForProject = useRef<ProjectId | null>(null);
+  const activeSessionId: SessionId | null = useMemo(() => {
+    if (projectSessions.length === 0) return null;
+    return [...projectSessions].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0]?.id ?? null;
+  }, [projectSessions]);
+
+  useEffect(() => {
+    if (!activeProjectId || !currentProject) return;
+    if (!projectSessionData) return; // wait for the list query to settle before deciding it's empty
+    if (projectSessions.length > 0) return;
+    if (creatingSessionForProject.current === activeProjectId) return;
+    creatingSessionForProject.current = activeProjectId;
+    void createProjectSession({ projectId: activeProjectId, title: currentProject.title })
+      .unwrap()
+      .catch(() => {
+        creatingSessionForProject.current = null;
+      });
+  }, [activeProjectId, currentProject, projectSessionData, projectSessions, createProjectSession]);
+
+  // --- live stream + lazy older history ---
+  const stream = useStreamUiItemsQuery(activeSessionId ?? ('ses_' as SessionId), { skip: activeSessionId === null });
+  const externalAgentSessionsQ = useListExternalAgentSessionsQuery(activeSessionId ?? ('ses_' as SessionId), {
+    skip: activeSessionId === null
+  });
   const transcript = useTranscriptHistory({
-    transcriptTargetId: activeProjectId,
+    sessionId: activeSessionId,
     streamOldestCursor: stream.data?.oldestCursor,
     streamHasMore: stream.data?.hasMore ?? false
   });
@@ -165,6 +207,7 @@ export function useProject(
     setWorkdir
   } = useProjectActions({
     activeProjectId,
+    activeSessionId,
     currentProject,
     projectMembers,
     approvals,
@@ -178,6 +221,7 @@ export function useProject(
     () => ({
       projectId,
       activeProjectId,
+      activeSessionId,
       ready: activeProjectId !== null,
       // live collections
       projects,
@@ -222,6 +266,7 @@ export function useProject(
     }),
     [
       activeProjectId,
+      activeSessionId,
       projectId,
       projects,
       participants,
