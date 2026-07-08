@@ -146,6 +146,20 @@ test('file_write uses session observations after ToolContext recreation', async 
   expect(await readFile(p, 'utf8')).toBe('after');
 });
 
+test('file_write does not treat partial file_read as a whole-file observation', async () => {
+  const p = join(root, 'partial-read-overwrite.txt');
+  const c = ctx([root]);
+  await writeFile(p, `${Array.from({ length: 2105 }, (_, i) => `line ${i}`).join('\n')}\n`);
+  await fileReadTool.run({ path: p }, c);
+  await expect(fileWriteTool.run({ path: p, content: 'after\n' }, c)).rejects.toThrow(
+    'File has not been observed in this session'
+  );
+  await fileReadTool.run({ path: p, offset: 2001, limit: 200 }, c);
+  await expect(fileWriteTool.run({ path: p, content: 'after\n' }, c)).rejects.toThrow(
+    'File has not been observed in this session'
+  );
+});
+
 test('file_write rejects overwrite when the file changed after read', async () => {
   const p = join(root, 'stale-overwrite.txt');
   const c = ctx([root]);
@@ -163,6 +177,18 @@ test('file_write allows explicit whole-file overwrite with matching baseHash', a
   const res = (await fileWriteTool.run({ path: p, content: 'after', baseHash: sha256('before') }, ctx([root])))
     .metadata;
   expect(res.files[0]).toMatchObject({ status: 'ok', beforeHash: sha256('before'), afterHash: sha256('after') });
+});
+
+test('file_write reports baseHash mismatch with canonical path and hashes', async () => {
+  const p = join(root, 'basehash-mismatch.txt');
+  await writeFile(p, 'before');
+  await expect(
+    fileWriteTool.run({ path: p, content: 'after', baseHash: sha256('stale') }, ctx([root]))
+  ).rejects.toThrow(
+    new RegExp(
+      `baseHash does not match current file for .+basehash-mismatch\\.txt\\. expected=${sha256('stale')} current=${sha256('before')}`
+    )
+  );
 });
 
 test('file_write is blocked outside the sandbox', async () => {
@@ -608,6 +634,28 @@ test('file_patch moves without hunks with a matching baseHash', async () => {
   expect(out.metadata.files[0]?.path.endsWith('/patch-move-from.txt')).toBe(true);
   expect(out.metadata.files[0]?.newPath?.endsWith('/patch-move-to.txt')).toBe(true);
   expect(await readFile(to, 'utf8')).toBe('move me\n');
+});
+
+test('file_patch reports baseHashByPath mismatch with canonical path and hashes', async () => {
+  const p = join(root, 'patch-delete-hash-mismatch.txt');
+  await writeFile(p, 'delete me\n');
+  const out = await filePatchTool.run(
+    {
+      baseHashByPath: { [p]: sha256('stale') },
+      patch: `*** Begin Patch
+*** Delete File: ${p}
+*** End Patch`
+    },
+    ctx([root])
+  );
+  expect(out.metadata.files[0]).toMatchObject({
+    status: 'error',
+    error: expect.stringMatching(
+      new RegExp(
+        `baseHashByPath\\["${p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"\\] does not match current file for .+patch-delete-hash-mismatch\\.txt\\. expected=${sha256('stale')} current=${sha256('delete me\n')}`
+      )
+    )
+  });
 });
 
 test('file_patch moves without hunks with a persisted session observation', async () => {

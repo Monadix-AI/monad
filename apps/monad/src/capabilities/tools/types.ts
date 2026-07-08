@@ -28,6 +28,7 @@ export type ToolDisplayContent =
       diff?: string;
       diffStat?: { added: number; removed: number };
       truncated?: boolean;
+      warning?: string;
     }
   | {
       type: 'multi_diff';
@@ -76,7 +77,8 @@ const toolDisplayContentSchema = z.discriminatedUnion('type', [
             afterText: z.string(),
             diff: z.string().optional(),
             diffStat: z.object({ added: z.number(), removed: z.number() }).optional(),
-            truncated: z.boolean().optional()
+            truncated: z.boolean().optional(),
+            warning: z.string().optional()
           })
           .optional(),
         error: z.string().optional(),

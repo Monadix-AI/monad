@@ -104,6 +104,7 @@ interface DiffDisplay {
   afterText: string;
   diff?: string;
   diffStat?: { added: number; removed: number };
+  warning?: string;
 }
 
 interface MultiDiffDisplay {
@@ -250,7 +251,8 @@ function parseDiffDisplay(display: unknown): DiffDisplay | null {
     beforeText: value.beforeText,
     afterText: value.afterText,
     diff: value.diff,
-    diffStat: value.diffStat
+    diffStat: value.diffStat,
+    warning: typeof value.warning === 'string' ? value.warning : undefined
   };
 }
 
@@ -668,12 +670,22 @@ function FileDiffOutputBlock({ display }: { display: DiffDisplay }) {
           icon={TextIcon}
         />
         <span className="min-w-0 truncate font-mono">{display.path}</span>
+        {display.warning && (
+          <span className="shrink-0 rounded bg-amber-500/15 px-1.5 py-0.5 font-mono text-[10px] text-amber-600 dark:text-amber-300">
+            warning
+          </span>
+        )}
         <span className="ml-auto shrink-0 font-mono text-[11px]">
           <span className="text-emerald-500">+{added}</span>
           <span className="mx-1 text-muted-foreground/50">/</span>
           <span className="text-red-500">-{removed}</span>
         </span>
       </div>
+      {display.warning && (
+        <div className="border-border/70 border-b bg-amber-500/5 px-3 py-2 text-[11px] text-amber-700 dark:text-amber-300">
+          {display.warning}
+        </div>
+      )}
       <pre className="max-h-80 overflow-auto whitespace-pre p-3 font-mono text-[12px] leading-relaxed">
         {lines.map(({ key, line }) => (
           <span

@@ -89,6 +89,10 @@ function ledgerPath(path: string): string {
   return toPosix(canonicalize(path));
 }
 
+function baseHashMismatchMessage(label: string, path: string, expected: string, current: string): string {
+  return `${label} does not match current file for ${ledgerPath(path)}. expected=${expected} current=${current}`;
+}
+
 async function rememberObservation(ctx: ToolContext, path: string, text: string): Promise<void> {
   await ctx.fileObservations?.remember(ctx.sessionId, {
     path: ledgerPath(path),
@@ -234,6 +238,7 @@ function createMutationResult(
     afterText: afterPreview?.text ?? '',
     ...(diffPreview ? { diff: diffPreview.text } : {}),
     diffStat: { added, removed },
+    ...(extra.warning ? { warning: extra.warning } : {}),
     ...(beforePreview?.truncated || afterPreview?.truncated || diffPreview?.truncated || diffSkipped
       ? { truncated: true }
       : {})
@@ -375,9 +380,9 @@ async function assertObservedOrBaseHash(
 ): Promise<void> {
   const baseHash = providedBaseHash(path, options);
   if (baseHash !== undefined) {
-    if (baseHash !== sha256(text)) {
-      throw new ToolSecurityError(`baseHashByPath["${path}"] does not match the current file`);
-    }
+    const currentHash = sha256(text);
+    if (baseHash !== currentHash)
+      throw new ToolSecurityError(baseHashMismatchMessage(`baseHashByPath["${path}"]`, path, baseHash, currentHash));
     return;
   }
   try {
@@ -411,12 +416,13 @@ export const fileReadTool: Tool<z.infer<typeof fileReadInput>, string> = {
   run: async ({ path, offset, limit }, ctx) =>
     withFsGate(path, ctx, async (fs) => {
       const fullText = await fs.readTextFile(path);
-      await rememberObservation(ctx, path, fullText);
       const effectiveLimit = limit ?? DEFAULT_READ_LINES;
       const startLine = offset ?? 1;
       const lines = fullText.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
       while (lines.length > 0 && lines.at(-1) === '') lines.pop();
       const selected = lines.slice(startLine - 1, startLine - 1 + effectiveLimit);
+      const readComplete = startLine === 1 && startLine - 1 + selected.length >= lines.length;
+      if (readComplete) await rememberObservation(ctx, path, fullText);
       const numbered = selected.map((line, i) => `${startLine + i}\t${line}`).join('\n');
       if (limit === undefined && selected.length === effectiveLimit && startLine - 1 + selected.length < lines.length) {
         return toolResult(`${numbered}\n(truncated; use offset=${startLine + selected.length} to continue)`);
@@ -448,7 +454,7 @@ export const fileWriteTool: Tool<z.infer<typeof fileWriteInput>, FileMutationBat
         const currentHash = sha256(before);
         if (baseHash !== undefined) {
           if (baseHash !== currentHash) {
-            throw new ToolSecurityError('baseHash does not match the current file. Read it again before writing.');
+            throw new ToolSecurityError(baseHashMismatchMessage('baseHash', path, baseHash, currentHash));
           }
         } else {
           await assertFreshObservation(ctx, path, before);
