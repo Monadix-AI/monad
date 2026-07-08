@@ -160,3 +160,35 @@ export function defaultWorkplaceProjectMemberSettings(
     managedProjectAgent: true
   };
 }
+
+// --- Track B: project-level member templates + session-level member bindings ---
+// docs/proposals/project-session-decoupling.md. A project's `memberTemplates` is a preset catalog
+// (config, never itself running anything); a session's members are the live bindings a session
+// invites from a template or spawns ad hoc — see workplaceProjectSessionMemberSchema below.
+
+export const workplaceProjectMemberTemplateSchema = z.object({
+  id: z.string().min(1),
+  type: workplaceProjectMemberTypeSchema,
+  name: externalAgentNameSchema,
+  displayName: externalAgentNameSchema.optional(),
+  settings: workplaceProjectMemberSettingsSchema.optional()
+});
+export type WorkplaceProjectMemberTemplate = z.infer<typeof workplaceProjectMemberTemplateSchema>;
+
+export const workplaceProjectMemberTemplatesSchema = z.array(workplaceProjectMemberTemplateSchema);
+export type WorkplaceProjectMemberTemplates = z.infer<typeof workplaceProjectMemberTemplatesSchema>;
+
+// A session's live member binding. `templateId` links back to a workplaceProjectMemberTemplate when
+// invited from one; absent for an ad-hoc spawn. Distinct from a template: this carries the runtime
+// binding (`externalAgentSessionId`) once running, and is never shared across sessions — inviting
+// "the same" template into two sessions produces two independent bindings, each with its own id.
+export const workplaceProjectSessionMemberSchema = z.object({
+  id: z.string().min(1),
+  templateId: z.string().min(1).optional(),
+  type: workplaceProjectMemberTypeSchema,
+  name: externalAgentNameSchema,
+  displayName: externalAgentNameSchema.optional(),
+  settings: workplaceProjectMemberSettingsSchema.optional(),
+  externalAgentSessionId: z.string().regex(/^exa_/).optional()
+});
+export type WorkplaceProjectSessionMember = z.infer<typeof workplaceProjectSessionMemberSchema>;

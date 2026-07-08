@@ -115,8 +115,11 @@ export type {
   WorkplaceProjectMember,
   WorkplaceProjectMemberSettings,
   WorkplaceProjectMembersExt,
+  WorkplaceProjectMemberTemplate,
+  WorkplaceProjectMemberTemplates,
   WorkplaceProjectMemberType,
-  WorkplaceProjectMemberView
+  WorkplaceProjectMemberView,
+  WorkplaceProjectSessionMember
 } from './external-agent-workplace.ts';
 
 export {
@@ -257,5 +260,8 @@ export {
   workplaceProjectMemberStableId,
   workplaceProjectMembersExtKey,
   workplaceProjectMembersExtSchema,
-  workplaceProjectMemberTypeSchema
+  workplaceProjectMemberTemplateSchema,
+  workplaceProjectMemberTemplatesSchema,
+  workplaceProjectMemberTypeSchema,
+  workplaceProjectSessionMemberSchema
 } from './external-agent-workplace.ts';
