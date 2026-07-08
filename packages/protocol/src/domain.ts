@@ -8,6 +8,7 @@ import {
   iso8601Schema,
   messageIdSchema,
   principalIdSchema,
+  projectIdSchema,
   sessionIdSchema,
   taskIdSchema,
   transcriptTargetIdSchema
@@ -233,6 +234,9 @@ export type Cost = z.infer<typeof costSchema>;
 
 export const sessionSchema = z.object({
   id: sessionIdSchema,
+  /** Set when this session belongs to a Workplace Project (Track B); absent for a plain chat session.
+   *  See docs/proposals/project-session-decoupling.md. */
+  projectId: projectIdSchema.optional(),
   title: z.string(),
   ownerPrincipalId: principalIdSchema,
   state: sessionStateSchema,

@@ -108,6 +108,47 @@ export function createChannelsController(handlers: ReturnType<typeof createDaemo
       detail: { summary: 'Delete workplace project', description: 'Deletes the project and associated data.' }
     })
     .get(
+      '/projects/:id/sessions',
+      async ({ params }) => handlers.session.listProjectSessions({ projectId: params.id }),
+      {
+        params: contracts.sessions.list.params,
+        response: contracts.sessions.list.response,
+        detail: {
+          summary: 'List project sessions',
+          description: 'Lists the sessions under a Workplace Project (Track B).'
+        }
+      }
+    )
+    .post(
+      '/projects/:id/sessions',
+      async ({ params, body, status, set }) => {
+        const origin = buildSessionOrigin({
+          transport: 'http',
+          surface: body.origin?.surface ?? 'web',
+          client: 'workplace',
+          clientVersion: body.origin?.clientVersion,
+          ext: body.origin?.ext
+        });
+        const result = await handlers.session.createProjectSession({
+          projectId: params.id,
+          title: body.title,
+          origin,
+          cwd: body.cwd
+        });
+        set.headers.location = `/v1/sessions/${result.sessionId}`;
+        return status(201, result);
+      },
+      {
+        params: contracts.sessions.create.params,
+        body: contracts.sessions.create.body,
+        response: contracts.sessions.create.response,
+        detail: {
+          summary: 'Create project session',
+          description: 'Creates a new session under a Workplace Project (Track B). No default session is auto-created.'
+        }
+      }
+    )
+    .get(
       '/projects/:id/messages',
       async ({ params, query }) =>
         handlers.session.messages({

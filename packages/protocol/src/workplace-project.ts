@@ -2,7 +2,13 @@ import type { Session } from './domain.ts';
 
 import { z } from 'zod';
 
-import { sessionOriginExtSchema, sessionOriginSchema, sessionStateSchema, sessionSurfaceSchema } from './domain.ts';
+import {
+  sessionOriginExtSchema,
+  sessionOriginSchema,
+  sessionSchema,
+  sessionStateSchema,
+  sessionSurfaceSchema
+} from './domain.ts';
 import { messageIdSchema, nativeAgentDeliveryIdSchema, principalIdSchema, projectIdSchema } from './ids.ts';
 import { offsetPaginationQuerySchema, offsetPaginationResponseSchema, SESSION_TITLE_MAX } from './rpc/control.ts';
 
@@ -48,6 +54,21 @@ export const listWorkplaceProjectsResponseSchema = offsetPaginationResponseSchem
   projects: z.array(workplaceProjectSchema)
 });
 export type ListWorkplaceProjectsResponse = z.infer<typeof listWorkplaceProjectsResponseSchema>;
+
+// A session under a project (Track B). No auto-created default (resolved decision 3) — this is the
+// explicit entry point a project's UI calls to start its first (or an additional) session.
+export const createProjectSessionRequestSchema = z.object({
+  title: z.string().max(SESSION_TITLE_MAX),
+  origin: createWorkplaceProjectOriginHintSchema.optional(),
+  cwd: z.string().optional()
+});
+export type CreateProjectSessionRequest = z.infer<typeof createProjectSessionRequestSchema>;
+
+export const createProjectSessionResponseSchema = z.object({ sessionId: sessionSchema.shape.id });
+export type CreateProjectSessionResponse = z.infer<typeof createProjectSessionResponseSchema>;
+
+export const listProjectSessionsResponseSchema = z.object({ sessions: z.array(sessionSchema) });
+export type ListProjectSessionsResponse = z.infer<typeof listProjectSessionsResponseSchema>;
 
 export const getWorkplaceProjectResponseSchema = z.object({ project: workplaceProjectSchema });
 export type GetWorkplaceProjectResponse = z.infer<typeof getWorkplaceProjectResponseSchema>;

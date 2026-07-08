@@ -83,6 +83,7 @@ function parseOrigin(raw: string | null): Session['origin'] {
 export function rowToSession(row: SessionRow): Session {
   return {
     id: row.id as Session['id'],
+    projectId: (row.projectId ?? undefined) as Session['projectId'],
     title: row.title,
     ownerPrincipalId: row.ownerPrincipalId as Session['ownerPrincipalId'],
     state: row.state as SessionState,

@@ -16,6 +16,9 @@ type Db = BunSQLiteDatabase<Record<string, never>>;
 export interface ListSessionsFilter {
   archived?: boolean;
   state?: SessionState;
+  /** Scope to sessions under one Workplace Project (Track B); omitted → plain chat sessions are not
+   *  filtered out, so callers that only want chat sessions must also exclude rows with a projectId. */
+  projectId?: string;
   limit?: number;
   offset?: number;
 }
@@ -43,6 +46,7 @@ export function insertSession(db: Db, s: Session): void {
   db.insert(sessions)
     .values({
       id: s.id,
+      projectId: s.projectId ?? null,
       title: s.title,
       ownerPrincipalId: s.ownerPrincipalId,
       state: s.state,
@@ -71,6 +75,7 @@ export function listSessions(db: Db, filter: ListSessionsFilter = {}): Session[]
   const conds = [];
   if (filter.archived !== undefined) conds.push(eq(sessions.archived, filter.archived ? 1 : 0));
   if (filter.state !== undefined) conds.push(eq(sessions.state, filter.state));
+  if (filter.projectId !== undefined) conds.push(eq(sessions.projectId, filter.projectId));
   const where = conds.length === 1 ? conds[0] : conds.length > 1 ? and(...conds) : undefined;
   const base = db.select().from(sessions).where(where).orderBy(desc(sessions.updatedAt), desc(sessions.id));
   const limited = filter.limit !== undefined ? base.limit(filter.limit) : base;
@@ -82,6 +87,7 @@ export function countSessions(db: Db, filter: Omit<ListSessionsFilter, 'limit' |
   const conds = [];
   if (filter.archived !== undefined) conds.push(eq(sessions.archived, filter.archived ? 1 : 0));
   if (filter.state !== undefined) conds.push(eq(sessions.state, filter.state));
+  if (filter.projectId !== undefined) conds.push(eq(sessions.projectId, filter.projectId));
   const where = conds.length === 1 ? conds[0] : conds.length > 1 ? and(...conds) : undefined;
   const result = db.select({ count: count() }).from(sessions).where(where).get();
   return result?.count ?? 0;

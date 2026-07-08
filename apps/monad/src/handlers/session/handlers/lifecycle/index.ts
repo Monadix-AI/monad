@@ -4,6 +4,7 @@ import type {
   ListUiItemsResponse,
   MessageId,
   PrincipalId,
+  ProjectId,
   RestoreSessionRequest,
   RestoreSessionResponse,
   Session,
@@ -177,6 +178,40 @@ export function createLifecycleHandlers(ctx: SessionContext) {
       emitLifecycle(session.id, 'session.created', { title: session.title });
       await fireSessionHook('SessionStart', session.id);
       return { sessionId: session.id };
+    },
+
+    /** A session under a Workplace Project (Track B) — no auto-created default (resolved decision 3),
+     *  so this is the explicit entry point a project's UI calls to start its first (or an additional)
+     *  session. Same lifecycle as a plain chat session, just tagged with `projectId`. */
+    async createProjectSession({
+      projectId,
+      title,
+      origin,
+      cwd
+    }: {
+      projectId: ProjectId;
+      title: string;
+      origin?: SessionOrigin;
+      cwd?: string;
+    }) {
+      if (!store.getWorkplaceProject(projectId)) {
+        throw new HandlerError('not_found', `workplace project not found: ${projectId}`);
+      }
+      const resolvedCwd = cwd?.trim() ? resolveWorkspaceDir(cwd, undefined) : undefined;
+      const session = await agent.sessions.createForProject(projectId, title, ownerPrincipalId, origin, resolvedCwd);
+      await sessionSandbox?.ensure(session.id);
+      if (session.cwd) await applyWorkspaceRuntime(session.id, session.cwd);
+      log.info({ sessionId: session.id, projectId, ...originLog(origin) }, 'project session created');
+      emitLifecycle(session.id, 'session.created', { title: session.title });
+      await fireSessionHook('SessionStart', session.id);
+      return { sessionId: session.id };
+    },
+
+    async listProjectSessions({ projectId }: { projectId: ProjectId }) {
+      if (!store.getWorkplaceProject(projectId)) {
+        throw new HandlerError('not_found', `workplace project not found: ${projectId}`);
+      }
+      return { sessions: store.listSessions({ projectId }) };
     },
 
     async update({ id, title, state, archived, agentId, origin, cwd }: { id: SessionId } & UpdateSessionRequest) {

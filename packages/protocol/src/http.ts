@@ -106,10 +106,13 @@ import { setUserProfileSettingsRequestSchema, userProfileSettingsSchema } from '
 import { systemUpgradeStatusSchema } from './system-upgrade.ts';
 import { initDockerResponseSchema, setToolBackendsRequestSchema, toolBackendsResponseSchema } from './tool-backends.ts';
 import {
+  createProjectSessionRequestSchema,
+  createProjectSessionResponseSchema,
   createWorkplaceProjectRequestSchema,
   createWorkplaceProjectResponseSchema,
   deleteWorkplaceProjectResponseSchema,
   getWorkplaceProjectResponseSchema,
+  listProjectSessionsResponseSchema,
   listWorkplaceProjectsQuerySchema,
   listWorkplaceProjectsResponseSchema,
   updateWorkplaceProjectRequestSchema,
@@ -294,7 +297,18 @@ export const daemonHttpContract = {
       delete: defineHttpEndpoint({
         params: projectParamsSchema,
         response: { 200: deleteWorkplaceProjectResponseSchema, 404: httpErrorSchema }
-      })
+      }),
+      sessions: {
+        list: defineHttpEndpoint({
+          params: projectParamsSchema,
+          response: { 200: listProjectSessionsResponseSchema, 404: httpErrorSchema }
+        }),
+        create: defineHttpEndpoint({
+          params: projectParamsSchema,
+          body: createProjectSessionRequestSchema,
+          response: { 201: createProjectSessionResponseSchema, 404: httpErrorSchema }
+        })
+      }
     }
   },
   agents: {

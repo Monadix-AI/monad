@@ -52,6 +52,18 @@ export class SessionManager {
     return this.build(title, owner, parentId, atMessageId, undefined, origin);
   }
 
+  /** A session under a Workplace Project (Track B). Otherwise identical to `create` — same lineage,
+   * same lifecycle — just tagged with the owning project. */
+  async createForProject(
+    projectId: Session['projectId'],
+    title: string,
+    owner: PrincipalId,
+    origin?: SessionOrigin,
+    cwd?: string
+  ): Promise<Session> {
+    return this.build(title, owner, null, undefined, undefined, origin, cwd, projectId);
+  }
+
   private async build(
     title: string,
     owner: PrincipalId,
@@ -59,7 +71,8 @@ export class SessionManager {
     branchedAtMessageId?: MessageId,
     agentId?: AgentId,
     origin?: SessionOrigin,
-    cwd?: string
+    cwd?: string,
+    projectId?: Session['projectId']
   ): Promise<Session> {
     const now = new Date().toISOString();
     const session: Session = {
@@ -74,6 +87,7 @@ export class SessionManager {
       restoreCount: 0,
       origin,
       cwd,
+      projectId,
       createdAt: now,
       updatedAt: now
     };
