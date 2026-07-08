@@ -215,10 +215,12 @@ export function createLifecycleHandlers(ctx: SessionContext) {
       origin?: SessionOrigin;
       cwd?: string;
     }) {
-      if (!store.getWorkplaceProject(projectId)) {
+      const project = store.getWorkplaceProject(projectId);
+      if (!project) {
         throw new HandlerError('not_found', `workplace project not found: ${projectId}`);
       }
-      const resolvedCwd = cwd?.trim() ? resolveWorkspaceDir(cwd, undefined) : undefined;
+      const cwdInput = cwd?.trim() ? cwd : project.cwd;
+      const resolvedCwd = cwdInput ? resolveWorkspaceDir(cwdInput, undefined) : undefined;
       const session = await agent.sessions.createForProject(projectId, title, ownerPrincipalId, origin, resolvedCwd);
       await sessionSandbox?.ensure(session.id);
       if (session.cwd) await applyWorkspaceRuntime(session.id, session.cwd);

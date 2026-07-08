@@ -549,6 +549,32 @@ for (const kind of TRANSPORTS) {
       expect(await readLogIfExists(claude.stdinLog)).toBe('');
     });
 
+    test('project sessions inherit the Workplace Project cwd for managed external agent fanout', async () => {
+      const projectDir = join(dir, 'project-inherited-cwd');
+      await mkdir(projectDir, { recursive: true });
+      const { stdinLog } = await configureMockExternalAgent(t, dir, { agentName: 'codex' });
+      const projectId = await createWorkplaceProject(t, projectDir);
+      const project = await _getWorkplaceProject(t, projectId);
+      const sessionId = await createProjectSession(t, projectId);
+      await setMemberTemplates(t, projectId, [externalAgentTemplate('codex', 'codex', { launchMode: 'pty' })]);
+      await inviteMember(t, sessionId, 'codex');
+
+      expect(handlers.store.getSession(sessionId)?.cwd).toBe(project.cwd);
+
+      const send = await t.fetch(`/v1/channels/${sessionId}/messages`, json('POST', { text: 'inherited cwd task' }));
+      expect(send.status).toBe(200);
+      expect(await send.json()).toEqual({ accepted: true });
+
+      const input = await waitForFile(stdinLog, 'inherited cwd task');
+      expect(input).toContain('Process this project message now.');
+      expect(input).toContain('inherited cwd task');
+      const sessions = handlers.store
+        .listExternalAgentSessionsForTranscriptTarget(sessionId)
+        .filter((candidate) => candidate.runtimeRole === 'managed-project-agent');
+      expect(sessions.map((nativeSession) => nativeSession.agentName)).toEqual(['codex']);
+      expect(sessions[0]?.workingPath).toBe(await realpath(projectDir));
+    });
+
     test('one external agent template can be invited as isolated managed project agents', async () => {
       const projectDir = join(dir, 'project-template-instances');
       await mkdir(projectDir, { recursive: true });
