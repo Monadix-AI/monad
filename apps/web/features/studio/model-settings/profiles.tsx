@@ -10,19 +10,8 @@ import type {
   ProviderView
 } from '@monad/protocol';
 
-import {
-  BrainIcon,
-  CaptionsIcon,
-  DatabaseIcon,
-  Delete02Icon,
-  EyeIcon,
-  MagicWand02Icon,
-  Mic01Icon,
-  StarIcon,
-  VideoIcon,
-  ZapIcon
-} from '@hugeicons/core-free-icons';
-import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react';
+import { Delete02Icon } from '@hugeicons/core-free-icons';
+import { HugeiconsIcon } from '@hugeicons/react';
 import { Button, Card, cn, Input, Tooltip, TooltipContent, TooltipTrigger } from '@monad/ui';
 import { useEffect, useState } from 'react';
 
@@ -36,6 +25,7 @@ import {
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useProviderMeta } from '@/lib/ProviderMeta';
+import { ModelRoleIcon, type ModelRoleIconId } from './ModelRoleIcon';
 import { ModelHoverCardBody, ModelPickerPopover, ROLE_NONE, splitModelSpec } from './model-picker';
 import { roleFallbackLabelKey } from './role-fallback';
 
@@ -46,44 +36,44 @@ const ROLE_DEFS: {
   role: RoleKey;
   labelKey: WebMessageIdWithoutParams;
   match: (c?: ModelModalities) => boolean;
-  icon: IconSvgElement;
+  icon: ModelRoleIconId;
 }[] = [
   {
     role: 'memory',
     labelKey: 'web.model.roleMemory',
     match: (c) => !!c?.input?.includes('text') && !!c?.output?.includes('text'),
-    icon: BrainIcon
+    icon: 'memory'
   },
   {
     role: 'embedding',
     labelKey: 'web.model.roleEmbedding',
     match: (c) => c?.kind === 'embedding' || !!c?.output?.some((v) => v === 'embedding' || v === 'embeddings'),
-    icon: DatabaseIcon
+    icon: 'embedding'
   },
-  { role: 'vision', labelKey: 'web.model.roleVision', match: (c) => !!c?.input?.includes('image'), icon: EyeIcon },
+  { role: 'vision', labelKey: 'web.model.roleVision', match: (c) => !!c?.input?.includes('image'), icon: 'vision' },
   {
     role: 'image',
     labelKey: 'web.model.roleImage',
     match: (c) => c?.kind === 'image' || !!c?.output?.includes('image'),
-    icon: MagicWand02Icon
+    icon: 'image'
   },
   {
     role: 'video',
     labelKey: 'web.model.roleVideo',
     match: (c) => c?.kind === 'video' || !!c?.output?.includes('video'),
-    icon: VideoIcon
+    icon: 'video'
   },
   {
     role: 'speech',
     labelKey: 'web.model.roleSpeech',
     match: (c) => c?.kind === 'speech' || !!c?.output?.includes('speech'),
-    icon: Mic01Icon
+    icon: 'speech'
   },
   {
     role: 'transcription',
     labelKey: 'web.model.roleTranscription',
     match: (c) => c?.kind === 'transcription' || !!c?.output?.includes('transcription'),
-    icon: CaptionsIcon
+    icon: 'transcription'
   }
 ];
 
@@ -199,7 +189,7 @@ export function ProfileCard({
     {
       key: 'chat' as const,
       label: t('web.model.defaultModel'),
-      icon: StarIcon,
+      icon: 'chat' as const,
       model: defaultModelEntry,
       provMeta: defaultProvMeta,
       spec: defaultSpec,
@@ -211,7 +201,7 @@ export function ProfileCard({
     {
       key: 'fast' as const,
       label: t('web.model.fastModel'),
-      icon: ZapIcon,
+      icon: 'fast' as const,
       model: fastModelEntry,
       provMeta: fastProvMeta,
       spec: fastSpec || ROLE_NONE,
@@ -336,7 +326,6 @@ export function ProfileCard({
 
       <div className="flex flex-1 flex-col gap-1.5 p-2">
         {rows.map((row) => {
-          const RoleIcon = row.icon;
           const ProviderLogo = row.provMeta?.logo;
           const modelLabel = row.modelId ? (row.model?.label ?? row.modelId) : row.noneLabel;
           const showEffort = row.modelId && !HIDE_EFFORT_ROLES.has(row.key);
@@ -357,13 +346,13 @@ export function ProfileCard({
             >
               <span
                 className={cn(
-                  'mt-0.5 inline-flex size-6 shrink-0 items-center justify-center rounded-md',
+                  'mt-0.5 inline-flex size-7 shrink-0 items-center justify-center rounded-lg',
                   configured ? 'bg-primary/8 text-primary' : 'bg-muted/50 text-muted-foreground'
                 )}
               >
-                <HugeiconsIcon
-                  className="size-3.5"
-                  icon={RoleIcon}
+                <ModelRoleIcon
+                  className="size-6"
+                  role={row.icon}
                 />
               </span>
 

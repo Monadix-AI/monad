@@ -2,21 +2,7 @@
 
 import type { SetToolBackendsRequest, SmtpSettings } from '@monad/protocol';
 
-import {
-  BrainIcon,
-  CalendarClockIcon,
-  CircleCheckBigIcon,
-  ComputerTerminal01Icon,
-  CpuIcon,
-  FileCodeIcon,
-  FileSearchIcon,
-  FolderOpenIcon,
-  GlobeIcon,
-  LoaderPinwheelIcon,
-  Mail01Icon,
-  NeuralNetworkIcon,
-  Refresh01Icon
-} from '@hugeicons/core-free-icons';
+import { LoaderPinwheelIcon, Refresh01Icon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { useInitDockerBackendMutation } from '@monad/client-rtk';
 import { Button } from '@monad/ui';
@@ -229,23 +215,23 @@ export function ToolsSection() {
         ) : (
           <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,18rem),1fr))] gap-3">
             <ToolCard
+              capabilityIcon="web-search"
               description={t('web.tools.webSearchDesc')}
-              icon={GlobeIcon}
               name={t('web.tools.searchTool')}
               onConfigure={() => setOpenTool('webSearch')}
               summary={wsProviderLabel}
             />
             <ToolCard
+              capabilityIcon="code-execution"
               description={t('web.tools.codeExecDesc')}
-              icon={FileCodeIcon}
               name={t('web.tools.codeExec')}
               onConfigure={() => setOpenTool('codeExec')}
               summary={codeExecLabel}
             />
             <ToolCard
+              capabilityIcon="email-messaging"
               description={t('web.tools.emailDesc')}
               enabled={emailEnabled}
-              icon={Mail01Icon}
               name={t('web.tools.email')}
               onConfigure={() => setOpenTool('email')}
               onToggle={(v) => {
@@ -256,50 +242,50 @@ export function ToolsSection() {
               summary={emailSummary}
             />
             <ToolCard
+              capabilityIcon="file-system"
               description={t('web.tools.filesystemDesc')}
-              icon={FolderOpenIcon}
               name={t('web.tools.filesystem')}
               summary={t('web.tools.alwaysOn')}
             />
             <ToolCard
+              capabilityIcon="shell-terminal"
               description={t('web.tools.shellDesc')}
-              icon={ComputerTerminal01Icon}
               name={t('web.tools.shell')}
               summary={t('web.tools.alwaysOn')}
             />
             <ToolCard
+              capabilityIcon="process-runtime"
               description={t('web.tools.processDesc')}
-              icon={CpuIcon}
               name={t('web.tools.process')}
               summary={t('web.tools.alwaysOn')}
             />
             <ToolCard
+              capabilityIcon="network-access"
               description={t('web.tools.networkDesc')}
-              icon={NeuralNetworkIcon}
               name={t('web.tools.network')}
               summary={t('web.tools.alwaysOn')}
             />
             <ToolCard
+              capabilityIcon="web-extraction"
               description={t('web.tools.webExtractDesc')}
-              icon={FileSearchIcon}
               name={t('web.tools.webExtract')}
               summary={t('web.tools.alwaysOn')}
             />
             <ToolCard
+              capabilityIcon="task-list"
               description={t('web.tools.todoDesc')}
-              icon={CircleCheckBigIcon}
               name={t('web.tools.todo')}
               summary={t('web.tools.alwaysOn')}
             />
             <ToolCard
+              capabilityIcon="memory"
               description={t('web.tools.memoryDesc')}
-              icon={BrainIcon}
               name={t('web.tools.memory')}
               summary={t('web.tools.alwaysOn')}
             />
             <ToolCard
+              capabilityIcon="schedule-automation"
               description={t('web.tools.scheduleDesc')}
-              icon={CalendarClockIcon}
               name={t('web.tools.schedule')}
               summary={t('web.tools.alwaysOn')}
             />
