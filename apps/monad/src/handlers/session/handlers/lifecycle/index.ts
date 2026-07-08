@@ -10,8 +10,6 @@ import type {
   Session,
   SessionId,
   SessionOrigin,
-  SessionProcessControlRequest,
-  SessionProcessControlResponse,
   SessionState,
   SessionTransport,
   UpdateSessionRequest
@@ -34,6 +32,17 @@ import { createProjectLifecycleHandlers } from './lifecycle-projects.ts';
 import { createWorkspaceHandlers, resolveWorkspaceDir } from './lifecycle-workspace.ts';
 
 const log = createLogger('session');
+
+type SessionProcessControlRequest = {
+  action: 'stop';
+  processId: string;
+};
+
+type SessionProcessControlResponse = {
+  ok: true;
+  action: 'stop';
+  processId: string;
+};
 
 /** Identity-only origin fields for observability — NEVER the env block (PII). */
 function originLog(origin?: SessionOrigin): Record<string, string | undefined> {

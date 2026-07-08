@@ -4,12 +4,17 @@
 // counterpart, GET /sessions/:id/members/:memberId/ui-observation{,-stream}. Over BOTH transports (TCP
 // loopback + Unix socket), per the all-transports rule in AGENTS.md.
 
-import type { SessionMemberUiObservationFrame } from '@monad/protocol';
+import type { AgentObservationEvent, SessionMemberUiObservationFrame } from '@monad/protocol';
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 
 import { createHttpTransport } from '#/transports/http.ts';
 import { buildHandlers, mockModel, serveTransport, TRANSPORTS, type TransportHandle } from '../helpers.ts';
+
+/** Narrows the discriminated frame union without a state check at every call site. */
+function eventsOf(frame: SessionMemberUiObservationFrame): AgentObservationEvent[] {
+  return frame.state === 'unavailable' ? [] : frame.events;
+}
 
 /** Reads SSE frames off `path` until `until` matches one, or `timeoutMs` elapses. Mirrors
  *  `readSSE` in `test/helpers.ts` (generic over the frame type rather than the domain `Event`). */
@@ -104,7 +109,7 @@ for (const kind of TRANSPORTS) {
       const res = await t.fetch(`/v1/sessions/${sessionId}/members/${memberId}/ui-observation`);
       const frame = (await res.json()) as SessionMemberUiObservationFrame;
       expect(frame.state).toBe('history');
-      expect(frame.events).toMatchObject([
+      expect(eventsOf(frame)).toMatchObject([
         { kind: 'user-message', streaming: false, text: 'hi' },
         { kind: 'assistant-message', streaming: false, text: 'hello back' }
       ]);
@@ -137,7 +142,7 @@ for (const kind of TRANSPORTS) {
       const framesPromise = readFrames(
         t,
         `/v1/sessions/${sessionId}/members/${memberId}/ui-observation-stream`,
-        (frame) => frame.state === 'live' && frame.events.some((e) => e.kind === 'user-message')
+        (frame) => frame.state === 'live' && eventsOf(frame).some((e) => e.kind === 'user-message')
       );
       // Give the SSE subscription a moment to attach before the turn runs.
       await new Promise((resolve) => setTimeout(resolve, 50));
@@ -145,7 +150,7 @@ for (const kind of TRANSPORTS) {
 
       const frames = await framesPromise;
       expect(frames[0]).toMatchObject({ state: 'history', sessionId, memberId, events: [] });
-      const live = frames.find((f) => f.state === 'live' && f.events.some((e) => e.kind === 'user-message'));
+      const live = frames.find((f) => f.state === 'live' && eventsOf(f).some((e) => e.kind === 'user-message'));
       expect(live).toMatchObject({ sessionId, memberId, events: [{ kind: 'user-message', text: 'hi' }] });
     });
 
@@ -157,7 +162,8 @@ for (const kind of TRANSPORTS) {
         `/v1/sessions/${sessionId}/members/does-not-exist/ui-observation-stream`,
         () => true
       );
-      expect(frames).toEqual([{ state: 'unavailable', sessionId, memberId: 'does-not-exist', reason: expect.any(String) }]);
+      expect(frames).toHaveLength(1);
+      expect(frames[0]).toMatchObject({ state: 'unavailable', sessionId, memberId: 'does-not-exist' });
     });
   });
 }

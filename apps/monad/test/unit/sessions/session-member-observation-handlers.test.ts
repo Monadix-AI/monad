@@ -1,4 +1,10 @@
-import type { Event, Session, SessionId } from '@monad/protocol';
+import type {
+  AgentObservationEvent,
+  Event,
+  Session,
+  SessionId,
+  SessionMemberUiObservationFrame
+} from '@monad/protocol';
 import type { SessionContext } from '#/handlers/session/context.ts';
 
 import { describe, expect, test } from 'bun:test';
@@ -71,130 +77,162 @@ function insertMonadMember(store: ReturnType<typeof createStore>, sessionId: Ses
   });
 }
 
+function eventsOf(frame: SessionMemberUiObservationFrame): AgentObservationEvent[] {
+  return frame.state === 'unavailable' ? [] : frame.events;
+}
+
 describe('observeMemberUi', () => {
   test('returns unavailable for an unknown member id', () => {
     const store = createStore();
-    const session = fixtureSession(store);
-    const { handlers } = buildHarness(store);
+    try {
+      const session = fixtureSession(store);
+      const { handlers } = buildHarness(store);
 
-    const frame = handlers.observeMemberUi({ sessionId: session.id, memberId: 'nope' });
-    expect(frame).toMatchObject({ state: 'unavailable', sessionId: session.id, memberId: 'nope' });
+      const frame = handlers.observeMemberUi({ sessionId: session.id, memberId: 'nope' });
+      expect(frame).toMatchObject({ state: 'unavailable', sessionId: session.id, memberId: 'nope' });
+    } finally {
+      store.close();
+    }
   });
 
   test('returns unavailable for a non-monad member (e.g. external-agent)', () => {
     const store = createStore();
-    const session = fixtureSession(store);
-    const now = new Date().toISOString();
-    store.insertSessionMember({
-      sessionId: session.id,
-      memberId: 'external-agent:codex',
-      templateId: null,
-      type: 'external-agent',
-      data: { name: 'codex' },
-      createdAt: now,
-      updatedAt: now
-    });
-    const { handlers } = buildHarness(store);
+    try {
+      const session = fixtureSession(store);
+      const now = new Date().toISOString();
+      store.insertSessionMember({
+        sessionId: session.id,
+        memberId: 'external-agent:codex',
+        templateId: null,
+        type: 'external-agent',
+        data: { name: 'codex' },
+        createdAt: now,
+        updatedAt: now
+      });
+      const { handlers } = buildHarness(store);
 
-    const frame = handlers.observeMemberUi({ sessionId: session.id, memberId: 'external-agent:codex' });
-    expect(frame.state).toBe('unavailable');
+      const frame = handlers.observeMemberUi({ sessionId: session.id, memberId: 'external-agent:codex' });
+      expect(frame.state).toBe('unavailable');
+    } finally {
+      store.close();
+    }
   });
 
   test('projects persisted history events for the monad member as neutral events, in order', () => {
     const store = createStore();
-    const session = fixtureSession(store);
-    insertMonadMember(store, session.id);
-    store.appendEvents([
-      fixtureEvent(session.id, { type: 'user.message', payload: { messageId: 'msg_1', text: 'hi' } }),
-      fixtureEvent(session.id, { type: 'agent.message', payload: { messageId: 'msg_2', text: 'hello' } })
-    ]);
-    const { handlers } = buildHarness(store);
+    try {
+      const session = fixtureSession(store);
+      insertMonadMember(store, session.id);
+      store.appendEvents([
+        fixtureEvent(session.id, { type: 'user.message', payload: { messageId: 'msg_1', text: 'hi' } }),
+        fixtureEvent(session.id, { type: 'agent.message', payload: { messageId: 'msg_2', text: 'hello' } })
+      ]);
+      const { handlers } = buildHarness(store);
 
-    const frame = handlers.observeMemberUi({ sessionId: session.id, memberId: 'monad' });
-    expect(frame.state).toBe('history');
-    expect(frame.events.map((e) => e.kind)).toEqual(['user-message', 'assistant-message']);
+      const frame = handlers.observeMemberUi({ sessionId: session.id, memberId: 'monad' });
+      expect(frame.state).toBe('history');
+      expect(eventsOf(frame).map((e) => e.kind)).toEqual(['user-message', 'assistant-message']);
+    } finally {
+      store.close();
+    }
   });
 
   test('excludes events bridged from a different (managed external-agent) member', () => {
     const store = createStore();
-    const session = fixtureSession(store);
-    insertMonadMember(store, session.id);
-    store.appendEvents([
-      fixtureEvent(session.id, { type: 'user.message', payload: { messageId: 'msg_1', text: 'hi' } }),
-      fixtureEvent(session.id, {
-        type: 'agent.message',
-        payload: { messageId: 'msg_2', text: 'from codex', externalAgentSessionId: 'exa_abc' }
-      })
-    ]);
-    const { handlers } = buildHarness(store);
+    try {
+      const session = fixtureSession(store);
+      insertMonadMember(store, session.id);
+      store.appendEvents([
+        fixtureEvent(session.id, { type: 'user.message', payload: { messageId: 'msg_1', text: 'hi' } }),
+        fixtureEvent(session.id, {
+          type: 'agent.message',
+          payload: { messageId: 'msg_2', text: 'from codex', externalAgentSessionId: 'exa_abc' }
+        })
+      ]);
+      const { handlers } = buildHarness(store);
 
-    const frame = handlers.observeMemberUi({ sessionId: session.id, memberId: 'monad' });
-    expect(frame.events).toHaveLength(1);
-    expect(frame.events[0]).toMatchObject({ kind: 'user-message' });
+      const frame = handlers.observeMemberUi({ sessionId: session.id, memberId: 'monad' });
+      expect(eventsOf(frame)).toHaveLength(1);
+      expect(eventsOf(frame)[0]).toMatchObject({ kind: 'user-message' });
+    } finally {
+      store.close();
+    }
   });
 
   test('reports state "live" and includes the active round tail when a turn is in flight', () => {
     const store = createStore();
-    const session = fixtureSession(store);
-    insertMonadMember(store, session.id);
-    const { handlers, cache, aborts } = buildHarness(store);
+    try {
+      const session = fixtureSession(store);
+      insertMonadMember(store, session.id);
+      const { handlers, cache, aborts } = buildHarness(store);
 
-    aborts.set(session.id, new AbortController());
-    cache.append(
-      fixtureEvent(session.id, { type: 'agent.token', payload: { messageId: 'msg_1', delta: 'Hi', index: 0 } })
-    );
+      aborts.set(session.id, new AbortController());
+      cache.append(
+        fixtureEvent(session.id, { type: 'agent.token', payload: { messageId: 'msg_1', delta: 'Hi', index: 0 } })
+      );
 
-    const frame = handlers.observeMemberUi({ sessionId: session.id, memberId: 'monad' });
-    expect(frame.state).toBe('live');
-    expect(frame.events).toMatchObject([{ kind: 'assistant-message', streaming: true, text: 'Hi' }]);
+      const frame = handlers.observeMemberUi({ sessionId: session.id, memberId: 'monad' });
+      expect(frame.state).toBe('live');
+      expect(eventsOf(frame)).toMatchObject([{ kind: 'assistant-message', streaming: true, text: 'Hi' }]);
+    } finally {
+      store.close();
+    }
   });
 });
 
 describe('subscribeMemberUiObservation', () => {
   test('emits an initial frame then a live frame per matching bus event', () => {
     const store = createStore();
-    const session = fixtureSession(store);
-    insertMonadMember(store, session.id);
-    const { handlers, bus } = buildHarness(store);
+    try {
+      const session = fixtureSession(store);
+      insertMonadMember(store, session.id);
+      const { handlers, bus } = buildHarness(store);
 
-    const frames: unknown[] = [];
-    const { dispose } = handlers.subscribeMemberUiObservation({ sessionId: session.id, memberId: 'monad' }, (frame) =>
-      frames.push(frame)
-    );
-    expect(frames).toHaveLength(1);
+      const frames: unknown[] = [];
+      const { dispose } = handlers.subscribeMemberUiObservation({ sessionId: session.id, memberId: 'monad' }, (frame) =>
+        frames.push(frame)
+      );
+      expect(frames).toHaveLength(1);
 
-    bus.publish(fixtureEvent(session.id, { type: 'user.message', payload: { messageId: 'msg_1', text: 'hi' } }));
-    expect(frames).toHaveLength(2);
-    expect(frames[1]).toMatchObject({ state: 'live', events: [{ kind: 'user-message' }] });
+      bus.publish(fixtureEvent(session.id, { type: 'user.message', payload: { messageId: 'msg_1', text: 'hi' } }));
+      expect(frames).toHaveLength(2);
+      expect(frames[1]).toMatchObject({ state: 'live', events: [{ kind: 'user-message' }] });
 
-    // An event belonging to another member never reaches this subscriber.
-    bus.publish(
-      fixtureEvent(session.id, {
-        type: 'agent.message',
-        payload: { messageId: 'msg_2', text: 'other', externalAgentSessionId: 'exa_abc' }
-      })
-    );
-    expect(frames).toHaveLength(2);
+      // An event belonging to another member never reaches this subscriber.
+      bus.publish(
+        fixtureEvent(session.id, {
+          type: 'agent.message',
+          payload: { messageId: 'msg_2', text: 'other', externalAgentSessionId: 'exa_abc' }
+        })
+      );
+      expect(frames).toHaveLength(2);
 
-    dispose();
-    bus.publish(
-      fixtureEvent(session.id, { type: 'user.message', payload: { messageId: 'msg_3', text: 'after dispose' } })
-    );
-    expect(frames).toHaveLength(2);
+      dispose();
+      bus.publish(
+        fixtureEvent(session.id, { type: 'user.message', payload: { messageId: 'msg_3', text: 'after dispose' } })
+      );
+      expect(frames).toHaveLength(2);
+    } finally {
+      store.close();
+    }
   });
 
   test('emits a single unavailable frame and never subscribes for an unknown member', () => {
     const store = createStore();
-    const session = fixtureSession(store);
-    const { handlers, bus } = buildHarness(store);
+    try {
+      const session = fixtureSession(store);
+      const { handlers, bus } = buildHarness(store);
 
-    const frames: unknown[] = [];
-    handlers.subscribeMemberUiObservation({ sessionId: session.id, memberId: 'nope' }, (frame) => frames.push(frame));
-    expect(frames).toEqual([
-      { state: 'unavailable', sessionId: session.id, memberId: 'nope', reason: expect.any(String) }
-    ]);
+      const frames: unknown[] = [];
+      handlers.subscribeMemberUiObservation({ sessionId: session.id, memberId: 'nope' }, (frame) => frames.push(frame));
+      expect(frames).toEqual([
+        { state: 'unavailable', sessionId: session.id, memberId: 'nope', reason: expect.any(String) }
+      ]);
 
-    bus.publish(fixtureEvent(session.id, { type: 'user.message', payload: { messageId: 'msg_1', text: 'hi' } }));
-    expect(frames).toHaveLength(1);
+      bus.publish(fixtureEvent(session.id, { type: 'user.message', payload: { messageId: 'msg_1', text: 'hi' } }));
+      expect(frames).toHaveLength(1);
+    } finally {
+      store.close();
+    }
   });
 });
