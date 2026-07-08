@@ -24,7 +24,7 @@ const DISPLAY_TEXT_LIMIT = 8_000;
 const MAX_DIFF_LINES = 200;
 const MAX_DIFF_CELLS = 40_000;
 
-export interface FileMutationResult {
+interface FileMutationResult {
   status: 'ok';
   path: string;
   operation: 'add' | 'update' | 'delete' | 'move' | 'write';
@@ -44,7 +44,7 @@ export interface FileMutationResult {
   warning?: string;
 }
 
-export interface FileMutationError {
+interface FileMutationError {
   status: 'error';
   path: string;
   operation: 'add' | 'update' | 'delete' | 'move';
@@ -52,7 +52,7 @@ export interface FileMutationError {
   newPath?: string;
 }
 
-export type FilePatchFileResult = FileMutationResult | FileMutationError;
+type FilePatchFileResult = FileMutationResult | FileMutationError;
 
 export interface FileMutationBatchResult {
   files: FilePatchFileResult[];

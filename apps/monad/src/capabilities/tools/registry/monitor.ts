@@ -138,10 +138,7 @@ function matchesText(text: string, pattern: string, match: 'literal' | 'regex' |
   try {
     return new RegExp(pattern).test(text);
   } catch (err) {
-    throw new ToolSecurityError(
-      `invalid monitor_watch regex: ${err instanceof Error ? err.message : String(err)}`,
-      'INVALID_REGEX'
-    );
+    throw new ToolSecurityError(`invalid monitor_watch regex: ${err instanceof Error ? err.message : String(err)}`);
   }
 }
 
@@ -167,8 +164,7 @@ async function watchFile(
   }
 
   for (;;) {
-    if (ctx.signal?.aborted)
-      throw new ToolSecurityError(`monitor_watch aborted for "${input.path}"`, 'MONITOR_ABORTED');
+    if (ctx.signal?.aborted) throw new ToolSecurityError(`monitor_watch aborted for "${input.path}"`);
 
     const needsContent = input.condition === 'changes' || input.condition === 'contains';
     const probe = await statFile(input.path, ctx);
@@ -225,4 +221,4 @@ export const monitorWatchTool: Tool<MonitorWatchInput, MonitorWatchResult> = {
   }
 };
 
-export const register: ToolModule = () => [monitorWatchTool as Tool];
+const _register: ToolModule = () => [monitorWatchTool as Tool];

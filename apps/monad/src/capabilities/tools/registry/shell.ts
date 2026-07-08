@@ -16,6 +16,7 @@ import { createSandboxBackends } from '../backends.ts';
 import { canSkipHighRiskApprovalInLocalSandbox } from '../sandbox/active-local.ts';
 import { assertPathWithinRoots } from '../security.ts';
 import { toolResult } from '../types.ts';
+import { startBackgroundProcess } from './process.ts';
 
 const MAX_TIMEOUT_MS = 600_000;
 
@@ -26,7 +27,13 @@ export { shellArgv } from '../backends.ts';
 const shellExecInput = z.object({
   command: z.union([z.string().min(1), z.array(z.string().min(1)).min(1)]),
   cwd: z.string().optional(),
-  timeoutMs: z.number().int().min(1).max(MAX_TIMEOUT_MS).optional()
+  timeoutMs: z.number().int().min(1).max(MAX_TIMEOUT_MS).optional(),
+  mode: z.enum(['foreground', 'background']).optional(),
+  terminalMode: z.enum(['pty', 'pipe']).optional(),
+  cols: z.number().int().min(1).max(1000).optional(),
+  rows: z.number().int().min(1).max(1000).optional(),
+  idleTimeoutMs: z.number().int().min(1).optional(),
+  maxRuntimeMs: z.number().int().min(1).optional()
 });
 
 export interface ShellResult {
@@ -34,6 +41,10 @@ export interface ShellResult {
   stderr: string;
   exitCode: number;
   timedOut: boolean;
+  status: 'running' | 'completed';
+  processId: string;
+  pid: number;
+  mode: 'pty' | 'pipe';
 }
 
 function terminalBackend(ctx: ToolContext) {
@@ -62,9 +73,40 @@ export const shellExecTool: Tool<z.infer<typeof shellExecInput>, ShellResult> = 
   // first element. Undefined → whole-tool rule.
   gateKey: ({ command }) => commandName(command),
   inputSchema: shellExecInput,
-  run: async ({ command, cwd, timeoutMs }, ctx) => {
+  run: async ({ command, cwd, timeoutMs, mode, terminalMode, cols, rows, idleTimeoutMs, maxRuntimeMs }, ctx) => {
+    if (mode === 'background') {
+      const commandText = Array.isArray(command) ? command.join(' ') : command;
+      const started = await startBackgroundProcess(
+        { command: commandText, cwd, terminalMode, cols, rows, idleTimeoutMs, maxRuntimeMs },
+        ctx
+      );
+      return toolResult({
+        stdout: '',
+        stderr: '',
+        exitCode: 0,
+        timedOut: false,
+        status: 'running',
+        processId: started.id,
+        pid: started.pid,
+        mode: started.mode
+      });
+    }
+
     const exec = (term: ReturnType<typeof terminalBackend>) =>
       term.exec({ command, cwd, timeoutMs, signal: ctx.signal, onChunk: ctx.reportProgress });
+
+    const normalizeForeground = (result: {
+      stdout: string;
+      stderr: string;
+      exitCode: number;
+      timedOut: boolean;
+    }): ShellResult => ({
+      ...result,
+      status: 'completed',
+      processId: '',
+      pid: 0,
+      mode: 'pipe'
+    });
 
     // When cwd escapes the sandbox, use the shared path gate before attempting execution.
     // A remembered path_access:/abs/dir approval covers file, shell, and process tools.
@@ -81,12 +123,16 @@ export const shellExecTool: Tool<z.infer<typeof shellExecInput>, ShellResult> = 
           requestedByTool: 'shell_exec'
         });
         return toolResult(
-          await exec(createSandboxBackends(expanded, { defaultCwd: ctx.defaultCwd, sessionId: ctx.sessionId }).terminal)
+          normalizeForeground(
+            await exec(
+              createSandboxBackends(expanded, { defaultCwd: ctx.defaultCwd, sessionId: ctx.sessionId }).terminal
+            )
+          )
         );
       }
     }
 
-    return toolResult(await exec(terminalBackend(ctx)));
+    return toolResult(normalizeForeground(await exec(terminalBackend(ctx))));
   }
 };
 

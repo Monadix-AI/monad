@@ -40,6 +40,7 @@ test('pushBounded is a no-op once the connection is marked dropped', () => {
   const state = createConnectionState();
   state.dropped = true;
   pushBounded(ws, state, { x: 1 });
+  expect(sent).toHaveLength(0);
 });
 
 test('pushBounded tolerates a socket with no backpressure API (non-Bun/raw absent)', () => {

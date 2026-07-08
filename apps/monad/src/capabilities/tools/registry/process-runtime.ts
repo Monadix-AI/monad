@@ -249,7 +249,7 @@ function pipeHandle(proc: Sub): ProcessHandle {
     write(input) {
       const stdin = proc.stdin;
       if (!stdin || typeof stdin === 'number')
-        throw new ToolSecurityError(`process "${proc.pid}" has no writable stdin`, 'PROCESS_STDIN_UNAVAILABLE');
+        throw new ToolSecurityError(`process "${proc.pid}" has no writable stdin`);
       stdin.write(input);
       stdin.flush();
     }
@@ -300,7 +300,7 @@ export function startPtyProcess(
   );
   daemonChildProcesses.track(proc.pid, 'tool:shell_exec:background', () => killTree(proc));
   void proc.exited.then(() => daemonChildProcesses.untrack(proc.pid));
-  if (!proc.terminal) throw new ToolSecurityError('failed to start pty terminal', 'PROCESS_PTY_UNAVAILABLE');
+  if (!proc.terminal) throw new ToolSecurityError('failed to start pty terminal');
   void proc.exited.then(() => {
     if (pendingCR) onData('\n');
   });
@@ -318,14 +318,12 @@ export function startPtyProcess(
     signal: (signal) => signalTree(proc, signal),
     write(input) {
       const terminal = proc.terminal;
-      if (!terminal)
-        throw new ToolSecurityError(`process "${proc.pid}" has no writable terminal`, 'PROCESS_STDIN_UNAVAILABLE');
+      if (!terminal) throw new ToolSecurityError(`process "${proc.pid}" has no writable terminal`);
       terminal.write(input);
     },
     resize(cols, rows) {
       const terminal = proc.terminal;
-      if (!terminal)
-        throw new ToolSecurityError(`process "${proc.pid}" has no resizable terminal`, 'PROCESS_PTY_UNAVAILABLE');
+      if (!terminal) throw new ToolSecurityError(`process "${proc.pid}" has no resizable terminal`);
       terminal.resize(cols, rows);
     }
   };

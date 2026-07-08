@@ -31,9 +31,11 @@ function buildServer(rest: string[]): McpServerView | null {
 
 export const command: CommandDef = {
   name: 'mcp',
-  synopsis: 'mcp <list|status|add|remove> [name] [command…|--url <url>|--release owner/repo@tag --sha256 <hex>]',
+  synopsis:
+    'mcp <list|status|add|remove|authorize|reconnect> [name] [command…|--url <url>|--release owner/repo@tag --sha256 <hex>]',
   description:
-    'manage hot MCP servers (atoms/mcp): add npx/uvx, a remote url, or a prebuilt binary; list; remove; status',
+    'manage hot MCP servers (atoms/mcp): add npx/uvx, a remote url, or a prebuilt binary; list; remove; status. ' +
+    'authorize/reconnect target system config.json servers (e.g. http+oauth) added via config or the web UI',
   async run({ positionals: args, globals, client }) {
     const [sub, ...rest] = args;
     const mcp = client.treaty.v1.atoms.mcp;
@@ -144,6 +146,33 @@ export const command: CommandDef = {
       return;
     }
 
+    // A system config.json server with auth.mode 'oauth' — this blocks on the daemon's interactive
+    // flow (loopback opens the daemon-host's browser; device flow logs a code+URL instead) and
+    // reconnects the server once tokens are persisted. Same endpoint the web Settings "Authorize"
+    // button hits; only reachable for http+oauth servers (config.json), not the hot install/mcp atoms.
+    if (sub === 'authorize' || sub === 'auth') {
+      const name = rest.find((a) => !a.startsWith('-'));
+      if (!name) {
+        out(dim('usage: monad mcp authorize <name>'));
+        return;
+      }
+      out(dim(t('cli.mcp.authorizing', { name })));
+      requireTreatyData(await client.treaty.v1.settings['mcp-servers']({ name }).authorize.post());
+      out(`${green('✓')} ${cyan(name)} ${dim(t('cli.mcp.authorized'))}`);
+      return;
+    }
+
+    if (sub === 'reconnect') {
+      const name = rest.find((a) => !a.startsWith('-'));
+      if (!name) {
+        out(dim('usage: monad mcp reconnect <name>'));
+        return;
+      }
+      requireTreatyData(await client.treaty.v1.settings['mcp-servers']({ name }).reconnect.post());
+      out(`${green('✓')} ${cyan(name)} ${dim(t('cli.mcp.reconnected'))}`);
+      return;
+    }
+
     if (sub === 'search') {
       const query = rest.join(' ').trim();
       if (!query) {
@@ -170,7 +199,7 @@ export const command: CommandDef = {
     }
 
     if (sub && sub !== 'list' && sub !== 'ls') {
-      out(dim('usage: monad mcp <list|status|search|add|remove|enable|disable> …'));
+      out(dim('usage: monad mcp <list|status|search|add|remove|enable|disable|authorize|reconnect> …'));
       return;
     }
 

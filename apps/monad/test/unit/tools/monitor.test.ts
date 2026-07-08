@@ -1,4 +1,4 @@
-import type { ToolContext } from '#/capabilities/tools/types.ts';
+import type { ToolContext, ToolGateRequest } from '#/capabilities/tools/types.ts';
 
 import { afterEach, expect, test } from 'bun:test';
 import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
@@ -92,7 +92,7 @@ test('monitor_watch reports invalid file regex with a stable error code', async 
     throw new Error('invalid monitor regex was accepted');
   } catch (err) {
     expect(err).toBeInstanceOf(ToolSecurityError);
-    expect((err as ToolSecurityError).code).toBe('INVALID_REGEX');
+    expect((err as Error).message).toContain('invalid monitor_watch regex');
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -113,7 +113,7 @@ test('monitor_watch file target uses shared path access gate', async () => {
         { target: 'file', path, condition: 'exists', timeoutMs: 1000 },
         {
           ...ctx([root]),
-          gate: async (req) => {
+          gate: async (req: ToolGateRequest) => {
             calls.push({ tool: req.tool, key: req.key });
             return { allow: true };
           }

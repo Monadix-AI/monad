@@ -56,7 +56,7 @@ type ProcessListResult = {
   }>;
 };
 
-export interface BackgroundProcessWatchInput {
+interface BackgroundProcessWatchInput {
   id: string;
   pattern?: string;
   match?: 'literal' | 'regex';
@@ -66,7 +66,7 @@ export interface BackgroundProcessWatchInput {
   cursor?: { stdout?: number; stderr?: number };
 }
 
-export type BackgroundProcessWatchResult = ProcessSnapshot & {
+type BackgroundProcessWatchResult = ProcessSnapshot & {
   matched: boolean;
   timedOut: boolean;
   reason: 'pattern' | 'status' | 'exit' | 'timeout';
@@ -92,8 +92,7 @@ function getEntry(id: string, ctx: ToolContext): ProcEntry {
       requester: ctx.sessionId
     });
   }
-  if (!entry || entry.ownerSessionId !== ctx.sessionId)
-    throw new ToolSecurityError(`unknown process id "${id}"`, 'PROCESS_NOT_FOUND');
+  if (!entry || entry.ownerSessionId !== ctx.sessionId) throw new ToolSecurityError(`unknown process id "${id}"`);
   return entry;
 }
 
@@ -118,7 +117,7 @@ type BackgroundProcessResult = {
   limits: { idleTimeoutMs?: number; maxRuntimeMs?: number };
 };
 
-async function startBackgroundProcess(
+export async function startBackgroundProcess(
   { command, cwd, terminalMode, cols, rows, idleTimeoutMs, maxRuntimeMs }: BackgroundProcessInput,
   ctx: ToolContext
 ): Promise<BackgroundProcessResult> {
@@ -128,16 +127,10 @@ async function startBackgroundProcess(
   let ownedRunning = 0;
   for (const e of registry.values()) if (e.ownerSessionId === ctx.sessionId) ownedRunning++;
   if (ownedRunning >= MAX_PROCESSES) {
-    throw new ToolSecurityError(
-      `too many background processes (>= ${MAX_PROCESSES}); kill some first`,
-      'PROCESS_LIMIT_EXCEEDED'
-    );
+    throw new ToolSecurityError(`too many background processes (>= ${MAX_PROCESSES}); kill some first`);
   }
   if (registry.size >= MAX_PROCESSES_GLOBAL) {
-    throw new ToolSecurityError(
-      `daemon background-process limit reached (>= ${MAX_PROCESSES_GLOBAL})`,
-      'PROCESS_LIMIT_EXCEEDED'
-    );
+    throw new ToolSecurityError(`daemon background-process limit reached (>= ${MAX_PROCESSES_GLOBAL})`);
   }
 
   const requestedCwd = cwd ?? ctx.sandboxRoots?.[0] ?? process.cwd();
@@ -411,13 +404,12 @@ export async function watchBackgroundProcess(
       regex = new RegExp(pattern);
     } catch (err) {
       throw new ToolSecurityError(
-        `invalid process_control wait regex: ${err instanceof Error ? err.message : String(err)}`,
-        'INVALID_REGEX'
+        `invalid process_control wait regex: ${err instanceof Error ? err.message : String(err)}`
       );
     }
   }
   for (;;) {
-    if (ctx.signal?.aborted) throw new ToolSecurityError(`process watch aborted for "${id}"`, 'PROCESS_WATCH_ABORTED');
+    if (ctx.signal?.aborted) throw new ToolSecurityError(`process watch aborted for "${id}"`);
     const e = getEntry(id, ctx);
     const stdout = shouldStripAnsi ? stripAnsi(e.stdout) : e.stdout;
     const stderr = shouldStripAnsi ? stripAnsi(e.stderr) : e.stderr;
@@ -479,8 +471,7 @@ export const processControlTool: Tool<ProcessControlInput, ProcessControlResult>
         return toolResult(await waitForProcess(input, ctx));
       case 'write': {
         const e = getEntry(input.id, ctx);
-        if (e.status !== 'running')
-          throw new ToolSecurityError(`process "${input.id}" is not running (${e.status})`, 'PROCESS_NOT_RUNNING');
+        if (e.status !== 'running') throw new ToolSecurityError(`process "${input.id}" is not running (${e.status})`);
         if (input.input !== undefined) e.proc.write(input.input);
         if (input.key) e.proc.write(keySequence(input.key));
         resetIdleTimer(e);
@@ -488,17 +479,14 @@ export const processControlTool: Tool<ProcessControlInput, ProcessControlResult>
       }
       case 'resize': {
         const e = getEntry(input.id, ctx);
-        if (e.status !== 'running')
-          throw new ToolSecurityError(`process "${input.id}" is not running (${e.status})`, 'PROCESS_NOT_RUNNING');
-        if (e.mode !== 'pty' || !e.proc.resize)
-          throw new ToolSecurityError(`process "${input.id}" is not pty-backed`, 'PROCESS_NOT_PTY');
+        if (e.status !== 'running') throw new ToolSecurityError(`process "${input.id}" is not running (${e.status})`);
+        if (e.mode !== 'pty' || !e.proc.resize) throw new ToolSecurityError(`process "${input.id}" is not pty-backed`);
         e.proc.resize(input.cols, input.rows);
         return toolResult({ ok: true as const });
       }
       case 'signal': {
         const e = getEntry(input.id, ctx);
-        if (e.status !== 'running')
-          throw new ToolSecurityError(`process "${input.id}" is not running (${e.status})`, 'PROCESS_NOT_RUNNING');
+        if (e.status !== 'running') throw new ToolSecurityError(`process "${input.id}" is not running (${e.status})`);
         e.proc.signal(input.signal as ProcessSignal);
         resetIdleTimer(e);
         return toolResult({ ok: true as const });
@@ -511,13 +499,6 @@ export const processControlTool: Tool<ProcessControlInput, ProcessControlResult>
     }
   }
 };
-
-export async function startProcessFromShellExec(
-  input: BackgroundProcessInput,
-  ctx: ToolContext
-): Promise<BackgroundProcessResult> {
-  return startBackgroundProcess(input, ctx);
-}
 
 const processTools: Tool[] = [processControlTool as Tool];
 

@@ -26,7 +26,14 @@ function ok<T>(data: T) {
   return { data, status: 200 };
 }
 
-function makeClient(mcpOverrides: Record<string, unknown> = {}, settingsOverrides: Record<string, unknown> = {}) {
+function makeClient(
+  mcpOverrides: Record<string, unknown> = {},
+  settingsOverrides: Record<string, unknown> = {},
+  byName: (args: { name: string }) => Record<string, unknown> = () => ({
+    authorize: { post: async () => ok({ ok: true }) },
+    reconnect: { post: async () => ok({ ok: true }) }
+  })
+) {
   const mcpBase = Object.assign(
     (_: unknown) => ({
       delete: async () => ok({}),
@@ -46,13 +53,11 @@ function makeClient(mcpOverrides: Record<string, unknown> = {}, settingsOverride
       v1: {
         atoms: { mcp: mcpBase },
         settings: {
-          'mcp-servers': Object.assign(
-            {
-              status: { get: async () => ok({ servers: [] }) },
-              registry: { search: { get: async () => ok({ entries: [] }) } }
-            },
-            settingsOverrides
-          )
+          'mcp-servers': Object.assign(byName, {
+            status: { get: async () => ok({ servers: [] }) },
+            registry: { search: { get: async () => ok({ entries: [] }) } },
+            ...settingsOverrides
+          })
         }
       }
     }
@@ -237,4 +242,53 @@ test('mcp search: prints empty message when no results', async () => {
 test('mcp search: shows usage when query is empty', async () => {
   const client = makeClient();
   await silently(() => mcp.run(ctx(['search'], {}, client)));
+});
+
+// ── authorize ──────────────────────────────────────────────────────────────────
+
+test('mcp authorize: hits the authorize endpoint for the named server', async () => {
+  let authorizedName: string | undefined;
+  const client = makeClient({}, {}, (args) => {
+    authorizedName = args.name;
+    return { authorize: { post: async () => ok({ ok: true }) } };
+  });
+  await silently(() => mcp.run(ctx(['authorize', 'linear'], {}, client)));
+  expect(authorizedName).toBe('linear');
+});
+
+test('mcp authorize: aliases to auth', async () => {
+  let authorizedName: string | undefined;
+  const client = makeClient({}, {}, (args) => {
+    authorizedName = args.name;
+    return { authorize: { post: async () => ok({ ok: true }) } };
+  });
+  await silently(() => mcp.run(ctx(['auth', 'linear'], {}, client)));
+  expect(authorizedName).toBe('linear');
+});
+
+test('mcp authorize: shows usage when name is missing', async () => {
+  const client = makeClient();
+  await silently(() => mcp.run(ctx(['authorize'], {}, client)));
+});
+
+test('mcp authorize: propagates a 404 for an unknown server', async () => {
+  const client = makeClient({}, {}, () => ({ authorize: { post: async () => ({ data: null, status: 404 }) } }));
+  await expect(silently(() => mcp.run(ctx(['authorize', 'nope'], {}, client)))).rejects.toThrow();
+});
+
+// ── reconnect ──────────────────────────────────────────────────────────────────
+
+test('mcp reconnect: hits the reconnect endpoint for the named server', async () => {
+  let reconnectedName: string | undefined;
+  const client = makeClient({}, {}, (args) => {
+    reconnectedName = args.name;
+    return { reconnect: { post: async () => ok({ ok: true }) } };
+  });
+  await silently(() => mcp.run(ctx(['reconnect', 'linear'], {}, client)));
+  expect(reconnectedName).toBe('linear');
+});
+
+test('mcp reconnect: shows usage when name is missing', async () => {
+  const client = makeClient();
+  await silently(() => mcp.run(ctx(['reconnect'], {}, client)));
 });

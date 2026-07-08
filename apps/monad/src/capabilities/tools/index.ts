@@ -36,18 +36,13 @@ export {
   type StoredOAuth,
   startDeviceAuthorization
 } from './registry/mcp/oauth.ts';
+export { monitorWatchTool } from './registry/monitor.ts';
 export { netFetchTool } from './registry/net.ts';
 export {
   clearProcesses,
   clearProcessesForSession,
-  processKillTool,
-  processListTool,
-  processLogsTool,
-  processResizeTool,
-  processSignalTool,
-  processStartTool,
-  processWaitTool,
-  processWriteTool
+  expireFinishedProcessesForTests,
+  processControlTool
 } from './registry/process.ts';
 export { shellArgv, shellExecTool } from './registry/shell.ts';
 export { clearTodos, type TodoItem, todoReadTool, todoWriteTool } from './registry/todo.ts';
@@ -61,7 +56,6 @@ export {
   selectProvider,
   WebSearchError
 } from './registry/web-search.ts';
-
 // Sandbox launchers (seatbelt/landlock/win32/bwrap) are the `sandbox` atom kind — they live in
 export {
   domainMatches,
