@@ -1,4 +1,4 @@
-import type { ExternalAgentAppServerConnection } from '@/services/external-agent/types.ts';
+import type { ExternalAgentAppServerConnection } from '#/services/external-agent/types.ts';
 
 import { randomBytes } from 'node:crypto';
 

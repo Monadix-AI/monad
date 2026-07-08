@@ -1,19 +1,19 @@
 import type { ExternalAgentPresetView, ExternalAgentProvider, ExternalAgentView } from '@monad/protocol';
-import type { BinProbes } from '@/infra/resolve-binary.ts';
+import type { BinProbes } from '#/infra/resolve-binary.ts';
 import type {
   BuildExternalAgentLaunchOptions,
   ExternalAgentArgumentSupport,
   ExternalAgentArgumentSupportProbe,
   ExternalAgentLaunchSpec,
   ExternalAgentProviderAdapter
-} from '@/services/external-agent/types.ts';
+} from '#/services/external-agent/types.ts';
 
 import { spawnSync } from 'node:child_process';
 import { isAbsolute } from 'node:path';
 
-import { defaultBinProbes } from '@/infra/resolve-binary.ts';
+import { defaultBinProbes } from '#/infra/resolve-binary.ts';
 
-export type { ExternalAgentLaunchSpec, ExternalAgentProviderAdapter } from '@/services/external-agent/types.ts';
+export type { ExternalAgentLaunchSpec, ExternalAgentProviderAdapter } from '#/services/external-agent/types.ts';
 
 const DANGEROUS_ARGS = new Set([
   '--dangerously-bypass-approvals-and-sandbox',

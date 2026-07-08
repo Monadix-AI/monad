@@ -1,6 +1,6 @@
-import type { ExternalAgentAppServerConnection } from '@/services/external-agent/types.ts';
+import type { ExternalAgentAppServerConnection } from '#/services/external-agent/types.ts';
 
-import { createStreamingTextDecoder } from '@/services/external-agent/stream-decoder.ts';
+import { createStreamingTextDecoder } from '#/services/external-agent/stream-decoder.ts';
 
 interface DialAppServerWsOptions {
   /** Each inbound WebSocket text frame is one JSON-RPC message (no framing newline). */

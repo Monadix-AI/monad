@@ -77,6 +77,7 @@ const cleanup = (): void => {
 let requestSeq = 0;
 let ready = false;
 let failure: ExternalAgentOutputEvent | undefined;
+const getFailure = (): ExternalAgentOutputEvent | undefined => failure;
 const handle: ExternalAgentRuntimeHandle = {
   launchMode: 'app-server',
   providerSessionRef: null,
@@ -131,7 +132,8 @@ codexExternalAgentAdapter.steer?.(handle, 'Also, after each number, write its sq
 const survived = await holds(() => handle.currentTurnId === steeredTurn && failure === undefined, 3_000);
 if (!survived) {
   cleanup();
-  if (failure) fail(`steer produced an error: ${String(failure.payload.code ?? failure.type)}`);
+  const failureAtCheck = getFailure();
+  if (failureAtCheck) fail(`steer produced an error: ${String(failureAtCheck.payload.code ?? failureAtCheck.type)}`);
   fail('steer ended the turn (currentTurnId changed/cleared) — steer must amend, not terminate');
 }
 console.log('turn survived steer, still in-flight');
