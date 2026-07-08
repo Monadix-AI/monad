@@ -1,4 +1,9 @@
-import type { GenerateMessageResponse, ListMessagesResponse } from '@monad/protocol';
+import type {
+  GenerateMessageResponse,
+  ListMessagesResponse,
+  SessionId,
+  SessionMemberUiObservationFrame
+} from '@monad/protocol';
 import type { createDaemonHandlers } from '#/handlers/daemon-handlers/index.ts';
 
 import {
@@ -10,6 +15,7 @@ import {
   okResponseSchema,
   responseInstanceSchema,
   sessionIdSchema,
+  sessionMemberUiObservationFrameSchema,
   workspaceActionRequestSchema,
   workspaceActionResponseSchema,
   workspaceGitSchema,
@@ -19,6 +25,7 @@ import { Elysia } from 'elysia';
 import { z } from 'zod';
 
 import { buildSessionOrigin } from '#/handlers/session/origin.ts';
+import { createPushSseResponse, encodeSseFrame } from '#/transports/http/sessions/sse.ts';
 import {
   createSessionEventsSseResponse,
   createSessionLogsSseResponse,
@@ -27,10 +34,33 @@ import {
   wantsInlineSessionStream
 } from '#/transports/http/sessions/stream.ts';
 
-// The two HTTP-only routes in this otherwise-universal controller (SSE events + out-of-band runtime
-// config) declare their contracts inline from protocol leaf schemas — they have no JSON-RPC twin, so
-// they don't belong in daemonHttpContract (which mirrors the universal METHOD_TABLE methods).
+// The HTTP-only routes in this otherwise-universal controller (SSE events, member ui-observation,
+// out-of-band runtime config) declare their contracts inline from protocol leaf schemas — they have no
+// JSON-RPC twin, so they don't belong in daemonHttpContract (which mirrors the universal METHOD_TABLE
+// methods). Mirrors `/external-agent-sessions/:id/ui-observation{,-stream}` in transports/http/external-agent.ts.
 const sessionParams = z.object({ id: sessionIdSchema });
+const sessionMemberParams = z.object({ id: sessionIdSchema, memberId: z.string().min(1) });
+
+// The neutral UI plane for a session member with no `externalAgentSessionId` of its own (today, the
+// `monad` built-in-agent member) — see `session-member-observation.ts`. Unlike the external-agent SSE
+// (which force-closes on any non-`live` frame, since a stopped provider session never resumes), a
+// `history`/idle monad member can still start a fresh turn later, so only the terminal `unavailable`
+// state (unknown member) ends the stream.
+function createSessionMemberUiObservationSseResponse(
+  handlers: ReturnType<typeof createDaemonHandlers>,
+  sessionId: SessionId,
+  memberId: string,
+  encoder: TextEncoder
+): Response {
+  return createPushSseResponse<SessionMemberUiObservationFrame>({
+    encoder,
+    encode: (frame) => encodeSseFrame({ event: 'session_member.ui_observation', data: frame }, encoder),
+    subscribe: (emit) =>
+      handlers.session.subscribeMemberUiObservation({ sessionId, memberId }, (frame) =>
+        emit(frame, frame.state === 'unavailable')
+      )
+  });
+}
 
 type ReqServer = { requestIP(req: Request): { address: string } | null } | null;
 
@@ -410,6 +440,34 @@ export function createSessionsController(handlers: ReturnType<typeof createDaemo
             tags: ['http-only'],
             summary: 'Remove a session member',
             description: 'Stops the member’s runtime if running, then deletes its session binding.'
+          }
+        }
+      )
+      .get(
+        '/sessions/:id/members/:memberId/ui-observation',
+        async ({ params }) => handlers.session.observeMemberUi({ sessionId: params.id, memberId: params.memberId }),
+        {
+          params: sessionMemberParams,
+          response: { 200: sessionMemberUiObservationFrameSchema },
+          detail: {
+            tags: ['http-only'],
+            summary: 'Read a session member’s neutral (projected) observation frame',
+            description:
+              'The `AgentObservationEvent` plane for a session member with no `externalAgentSessionId` of ' +
+              'its own (today, the monad built-in agent) — the session-member counterpart to ' +
+              'GET /external-agent-sessions/:id/ui-observation.'
+          }
+        }
+      )
+      .get(
+        '/sessions/:id/members/:memberId/ui-observation-stream',
+        ({ params }) => createSessionMemberUiObservationSseResponse(handlers, params.id, params.memberId, encoder),
+        {
+          params: sessionMemberParams,
+          detail: {
+            tags: ['http-only'],
+            summary: 'Stream a session member’s neutral (projected) observation frames',
+            description: 'The session-member counterpart to GET /external-agent-sessions/:id/ui-observation-stream.'
           }
         }
       )

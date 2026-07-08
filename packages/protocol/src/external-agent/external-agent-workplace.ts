@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { agentObservationEventSchema } from '../agent-observation.ts';
+import { sessionIdSchema } from '../ids.ts';
 import {
   type ExternalAgentProvider,
   externalAgentAppServerTransportSchema,
@@ -215,3 +217,32 @@ export type SessionMemberResponse = z.infer<typeof sessionMemberResponseSchema>;
 
 export const removeSessionMemberResponseSchema = z.object({ deleted: z.literal(true) });
 export type RemoveSessionMemberResponse = z.infer<typeof removeSessionMemberResponseSchema>;
+
+// The neutral UI-observation plane for a session member that has no `externalAgentSessionId` of its
+// own (today, the `monad`-typed member) — its raw source is the session's own domain event log
+// (filtered to the events that member produced) rather than a provider's raw output. Mirrors
+// `ExternalAgentUiObservationFrame`'s shape (state/events/observedAt) so a consumer renders either
+// uniformly, but keys on `sessionId`+`memberId` since there is no `exa_` id to key on.
+export const sessionMemberUiObservationFrameSchema = z.discriminatedUnion('state', [
+  z.object({
+    state: z.literal('live'),
+    sessionId: sessionIdSchema,
+    memberId: z.string().min(1),
+    events: z.array(agentObservationEventSchema),
+    observedAt: z.string()
+  }),
+  z.object({
+    state: z.literal('history'),
+    sessionId: sessionIdSchema,
+    memberId: z.string().min(1),
+    events: z.array(agentObservationEventSchema),
+    observedAt: z.string()
+  }),
+  z.object({
+    state: z.literal('unavailable'),
+    sessionId: sessionIdSchema,
+    memberId: z.string().min(1),
+    reason: z.string()
+  })
+]);
+export type SessionMemberUiObservationFrame = z.infer<typeof sessionMemberUiObservationFrameSchema>;

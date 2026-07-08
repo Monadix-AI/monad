@@ -26,6 +26,7 @@ import { canTransition } from '#/agent/index.ts';
 import { clearProcessesForSession, disposeSandboxSession, processControlTool } from '#/capabilities/tools';
 import { HandlerError } from '#/handlers/handler-error.ts';
 import { createManagedExternalAgentJoin } from '#/handlers/session/handlers/managed-external-agent-join.ts';
+import { createSessionMemberObservationHandlers } from '#/handlers/session/handlers/session-member-observation.ts';
 import { createSessionMembersHandlers } from '#/handlers/session/handlers/session-members.ts';
 import { SessionUiProjector } from '#/handlers/session/ui-projection.ts';
 import { clearAcpDelegatesForSession } from '#/services/delegation/acp-delegate.ts';
@@ -61,6 +62,7 @@ export function createLifecycleHandlers(ctx: SessionContext) {
   const { spawnManagedSessionMember } = createManagedExternalAgentJoin(ctx);
   const { listSessionMembers, inviteSessionMember, spawnSessionMember, removeSessionMember } =
     createSessionMembersHandlers(ctx, { spawnManagedSessionMember });
+  const { observeMemberUi, subscribeMemberUiObservation } = createSessionMemberObservationHandlers(ctx);
 
   const {
     applyWorkspaceRuntime,
@@ -134,6 +136,8 @@ export function createLifecycleHandlers(ctx: SessionContext) {
     inviteSessionMember,
     spawnSessionMember,
     removeSessionMember,
+    observeMemberUi,
+    subscribeMemberUiObservation,
 
     async get({ id }: { id: SessionId }) {
       return { session: requireSession(id) };

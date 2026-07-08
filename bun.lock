@@ -309,9 +309,6 @@
         "@monad/client-rtk": "workspace:*",
         "@monad/protocol": "workspace:*",
       },
-      "devDependencies": {
-        "@monad/config": "workspace:*",
-      },
       "peerDependencies": {
         "react": "^19.2.7",
         "react-redux": "^9.3.0",

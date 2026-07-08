@@ -25,6 +25,7 @@ export * from './model/cost.ts';
 export * from './model/gateway/index.ts';
 export * from './model/index.ts';
 export * from './model/provider.ts';
+export * from './observation.ts';
 export * from './prompts.ts';
 export * from './session/index.ts';
 
