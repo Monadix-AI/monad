@@ -12,7 +12,7 @@ export type VoiceModelState = 'checking' | 'configured' | 'missing' | 'failed';
  *  protocol type so the two host contracts stay aligned. The web app supplies the value; atoms never
  *  imports the web layer.
  *
- *  Daemon reads/writes go through `@monad/sdk-atom-client-rtk` hooks (host-component experiences already
+ *  Daemon reads/writes go through `@monad/sdk-experience/react` hooks (host-component experiences already
  *  render inside the web app's Redux `<Provider>`), not a `fetch` escape hatch on this object. */
 export interface WorkspaceExperienceHost {
   voiceModelState?: VoiceModelState;

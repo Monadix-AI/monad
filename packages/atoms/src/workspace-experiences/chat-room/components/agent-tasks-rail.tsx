@@ -32,7 +32,7 @@ import {
   useLazyGetExternalAgentUsageQuery,
   useLazyGetNativeAgentDeliveryObservationQuery,
   useStreamExternalAgentUiObservationQuery
-} from '@monad/sdk-atom-client-rtk';
+} from '@monad/sdk-experience/react';
 import { ProductIcon, Tooltip, TooltipContent, TooltipTrigger } from '@monad/ui';
 import {
   AgentInstanceAvatar,

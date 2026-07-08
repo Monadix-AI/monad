@@ -17,7 +17,6 @@
     "@monad/i18n": "workspace:*",
     "@monad/protocol": "workspace:*",
     "@monad/sdk-atom": "workspace:*",
-    "@monad/sdk-atom-client-rtk": "workspace:*",
     "@monad/sdk-experience": "workspace:*",
     "@monad/ui": "workspace:*",
     "@xyflow/react": "^12.11.2",

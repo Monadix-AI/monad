@@ -2,15 +2,29 @@
   "name": "@monad/sdk-experience",
   "version": "0.0.2",
   "dependencies": {
+    "@monad/client-rtk": "workspace:*",
     "@monad/protocol": "workspace:*"
   },
   "devDependencies": {
     "@monad/config": "workspace:*"
   },
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./react": "./src/react/index.ts"
   },
   "module": "src/index.ts",
+  "peerDependencies": {
+    "react": "^19.2.7",
+    "react-redux": "^9.3.0"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    },
+    "react-redux": {
+      "optional": true
+    }
+  },
   "private": true,
   "scripts": {
     "lint": "biome check .",

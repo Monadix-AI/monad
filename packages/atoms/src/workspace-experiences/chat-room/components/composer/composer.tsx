@@ -7,7 +7,7 @@ import type { ProjectComposerSurface } from '../../utils/composer.ts';
 
 import { Attachment01Icon, Cancel01Icon, PlayIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { useOpenDraftAttachmentMutation, useTranscribeAudioMutation } from '@monad/sdk-atom-client-rtk';
+import { useOpenDraftAttachmentMutation, useTranscribeAudioMutation } from '@monad/sdk-experience/react';
 import { ComposerEditor, ComposerSubmitButton, ComposerSurface, ComposerSwap, ComposerVoiceButton } from '@monad/ui';
 import { workspaceMono as mono, workspaceSans as sans } from '@monad/ui/components/AgentAvatar';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';

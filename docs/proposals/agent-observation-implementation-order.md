@@ -97,7 +97,7 @@ P0 rename ─┬─► P1 schema ─► P2 adapter-decode ─► P3 split-stream
 ### P4 — Move rendering to experience; delete client re-classification
 
 - **What:** the observation experience renders `ExternalAgentObservationEvent[]` → cards/timeline/sheen.
-  The rendering lib lands in **`@monad/sdk-atom-client-rtk`** (the experience SDK; client React) — extract
+  The rendering lib lands in the experience SDK's React half (**`@monad/sdk-experience/react`**) — extract
   any experience-facing types out of `@monad/sdk-atom` (which stays a pure adapter contract) at the same
   time. **Delete** the client resolver singleton + `classifyNativeCliActivity` + client
   `nativeCliEventsAreGenerating`. Remove the P2 dual-emit path.
@@ -151,11 +151,12 @@ its two conclusions ("streams are session-keyed", "chat session / project sessio
 - **Neutral `kind` set + runtime shrink** — set fixed above; `tool_call`/`tool_result`/`web_search_result`
   leave the runtime event. ✅
 - **`raw` shape** — session raw = domain events; agent raw = provider-raw (stripped). ✅
-- **Packaging** — schema→protocol, decode→adapter, rendering+hooks→`@monad/sdk-atom-client-rtk`,
-  `@monad/sdk-atom` stays pure. ✅ The experience *contract* (React-free types + event bridge) has
-  since been extracted from `@monad/sdk-atom` into its own `@monad/sdk-experience` package; the
-  observation-card *rendering* library (the hooks/React half) is still the `sdk-atom-client-rtk`
-  story and remains open.
+- **Packaging** — schema→protocol, decode→adapter, hooks + rendering→the experience SDK,
+  `@monad/sdk-atom` stays pure. ✅ The experience SDK is now **one package, `@monad/sdk-experience`,
+  split by subpath on the React boundary**: the root is the React-free contract (types + event
+  bridge, extracted from `@monad/sdk-atom`) and `@monad/sdk-experience/react` holds the RTK hooks
+  (the former `@monad/sdk-atom-client-rtk`, now folded in). The observation-card *rendering*
+  library that would live alongside those hooks remains open.
 - **B storage + ids** — one `sessions` table, nullable `projectId`, `session_members` join, single
   `ses_…`. ✅
 - **Endpoint scheme** — create/list scoped under `agents`/`projects`; access flat under `/sessions/:sid`

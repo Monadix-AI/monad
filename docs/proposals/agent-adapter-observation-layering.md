@@ -264,7 +264,7 @@ and "chat session / project session are parallel kinds". The rest is its own pro
 - **Packaging:** `@monad/sdk-atom` = pure adapter contract (extract any experience-facing types out); the
   neutral event **schema** → `@monad/protocol`; the **decode** (raw → neutral) ships with the adapter
   (node-capable, the daemon uses it server-side); the **rendering** (neutral → cards) + hooks →
-  `@monad/sdk-atom-client-rtk` (the experience SDK — client React).
+  `@monad/sdk-experience/react` (the experience SDK's React half — client React).
 - **Storage (Track B):** one `sessions` table, `projectId` nullable (null = chat, set = project), a
   `session_members` join table (empty for chat sessions), shared message/event storage keyed by
   `session_id`. Business logic branches by kind; the conversation/stream infra is not duplicated.

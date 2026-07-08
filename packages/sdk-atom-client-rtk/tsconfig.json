@@ -1,4 +1,0 @@
-{
-  "extends": "../config/tsconfig.monad-source-consumer.json",
-  "include": ["src"]
-}

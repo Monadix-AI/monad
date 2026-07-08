@@ -5,7 +5,7 @@ import type { MessageAttachment } from '../../experience/types.ts';
 import { Attachment01Icon, Download04Icon, EyeIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { isPreviewableAttachmentMime } from '@monad/protocol';
-import { useDownloadAttachmentMutation, useLazyGetAttachmentQuery } from '@monad/sdk-atom-client-rtk';
+import { useDownloadAttachmentMutation, useLazyGetAttachmentQuery } from '@monad/sdk-experience/react';
 import { workspaceMono as mono, workspaceSans as sans } from '@monad/ui/components/AgentAvatar';
 import { useState } from 'react';
 
