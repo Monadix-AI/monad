@@ -209,6 +209,69 @@ test('clearMessages removes Workplace Project transcript data and keeps the proj
   store.close();
 });
 
+test('file observations upsert and follow session cleanup', () => {
+  const store = createStore();
+  const first = fixtureSession();
+  const second = fixtureSession();
+  const now = new Date().toISOString();
+  store.insertSession(first);
+  store.insertSession(second);
+  store.insertMessage(newId('msg'), first.id, 'first', now, 'user');
+  store.insertMessage(newId('msg'), second.id, 'second', now, 'user');
+  store.recordFileObservation(first.id, {
+    path: '/tmp/a.txt',
+    hash: 'hash-a1',
+    coverage: 'full',
+    observedAt: now,
+    toolCallId: 'call_1'
+  });
+  store.recordFileObservation(first.id, {
+    path: '/tmp/a.txt',
+    hash: 'hash-a2',
+    coverage: 'full',
+    observedAt: now,
+    toolCallId: 'call_2'
+  });
+  store.recordFileObservation(second.id, {
+    path: '/tmp/a.txt',
+    hash: 'hash-b',
+    coverage: 'full',
+    observedAt: now
+  });
+
+  expect(store.getFileObservation(first.id, '/tmp/a.txt')).toMatchObject({ hash: 'hash-a2', toolCallId: 'call_2' });
+  expect(store.clearMessages(first.id)).toBe(1);
+  expect(store.getSession(first.id)?.id).toBe(first.id);
+  expect(store.getFileObservation(first.id, '/tmp/a.txt')).toBeNull();
+  expect(store.getFileObservation(second.id, '/tmp/a.txt')?.hash).toBe('hash-b');
+  expect(store.deleteSession(second.id)).toBe(true);
+  expect(store.getFileObservation(second.id, '/tmp/a.txt')).toBeNull();
+  store.close();
+});
+
+test('restore clears file observations for the rewound session', () => {
+  const store = createStore();
+  const s = fixtureSession();
+  const now = new Date().toISOString();
+  store.insertSession(s);
+  const first = newId('msg');
+  const second = newId('msg');
+  store.insertMessage(first, s.id, 'first', now, 'user');
+  store.insertMessage(second, s.id, 'second', now, 'assistant');
+  store.recordFileObservation(s.id, {
+    path: '/tmp/a.txt',
+    hash: 'hash-a',
+    coverage: 'full',
+    observedAt: now,
+    toolCallId: 'call_1'
+  });
+
+  store.restoreMessages(s.id, second);
+  expect(store.listMessages(s.id)).toHaveLength(1);
+  expect(store.getFileObservation(s.id, '/tmp/a.txt')).toBeNull();
+  store.close();
+});
+
 test('messages carry the three-layer shape (text/type/data/stream/active)', () => {
   const store = createStore();
   const s = fixtureSession();

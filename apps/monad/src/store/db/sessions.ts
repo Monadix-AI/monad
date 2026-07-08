@@ -122,6 +122,7 @@ export function deleteSession(sqlite: Database, id: string): boolean {
       .run(sid);
     sqlite.query('DELETE FROM tasks WHERE session_id = ?').run(sid);
     sqlite.query('DELETE FROM memory WHERE session_id = ?').run(sid);
+    sqlite.query('DELETE FROM file_observations WHERE session_id = ?').run(sid);
     sqlite.query('DELETE FROM messages WHERE transcript_target_id = ?').run(sid);
     sqlite.query('DELETE FROM events WHERE transcript_target_id = ?').run(sid);
     sqlite.query('DELETE FROM acp_delegates WHERE session_id = ?').run(sid);
@@ -206,6 +207,7 @@ export function deleteWorkplaceProject(sqlite: Database, id: string): boolean {
         'DELETE FROM message_embeddings WHERE message_id IN (SELECT id FROM messages WHERE transcript_target_id = ?)'
       )
       .run(projectId);
+    sqlite.query('DELETE FROM file_observations WHERE session_id = ?').run(projectId);
     sqlite.query('DELETE FROM messages WHERE transcript_target_id = ?').run(projectId);
     sqlite.query('DELETE FROM events WHERE transcript_target_id = ?').run(projectId);
     sqlite.query('DELETE FROM native_agent_direct_messages WHERE project_id = ?').run(projectId);
@@ -237,6 +239,7 @@ export function clearMessages(sqlite: Database, db: Db, id: string): number {
     sqlite.query('DELETE FROM messages WHERE transcript_target_id = ?').run(sid);
     sqlite.query('DELETE FROM events WHERE transcript_target_id = ?').run(sid);
     sqlite.query("DELETE FROM memory WHERE session_id = ? AND key = 'ctx:summary'").run(sid);
+    sqlite.query('DELETE FROM file_observations WHERE session_id = ?').run(sid);
     const updatedAt = new Date().toISOString();
     db.update(sessions).set({ updatedAt }).where(eq(sessions.id, sid)).run();
     db.update(workplaceProjects).set({ updatedAt }).where(eq(workplaceProjects.id, sid)).run();

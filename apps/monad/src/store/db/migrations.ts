@@ -1,7 +1,7 @@
 import type { Database } from 'bun:sqlite';
 
 // Pre-release: keep the dev schema flattened; delete/recreate dev DBs as needed.
-export const CURRENT_SCHEMA_VERSION = 1;
+export const CURRENT_SCHEMA_VERSION = 2;
 
 const MIGRATIONS: { version: number; sql: string }[] = [
   {
@@ -303,6 +303,23 @@ CREATE INDEX IF NOT EXISTS idx_external_agent_inbox_member_state
   ON external_agent_inbox_items(project_id, member_instance_id, state);
 
 PRAGMA user_version = 1;
+    `.trim()
+  },
+  {
+    version: 2,
+    sql: `
+CREATE TABLE IF NOT EXISTS file_observations (
+  session_id    TEXT NOT NULL,
+  path          TEXT NOT NULL,
+  hash          TEXT NOT NULL,
+  coverage      TEXT NOT NULL,
+  observed_at   TEXT NOT NULL,
+  tool_call_id  TEXT,
+  PRIMARY KEY (session_id, path)
+);
+CREATE INDEX IF NOT EXISTS idx_file_observations_session ON file_observations(session_id);
+
+PRAGMA user_version = 2;
     `.trim()
   }
 ];

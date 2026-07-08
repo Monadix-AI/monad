@@ -84,6 +84,12 @@ import {
   upsertExternalAgentSession
 } from './external-agent-sessions.ts';
 import {
+  clearFileObservations,
+  type FileObservationRow,
+  getFileObservation,
+  recordFileObservation
+} from './file-observations.ts';
+import {
   failOrphanedStreamingMessages,
   findManagedExternalAgentStreamingMessage,
   getMemory,
@@ -161,6 +167,7 @@ export type { ChatMessage } from '@monad/protocol';
 export type { AcpDelegateRow } from './acp-delegates.ts';
 export type { EnqueueExternalAgentInboxOptions } from './external-agent-inbox.ts';
 export type { ExternalAgentSessionRow } from './external-agent-sessions.ts';
+export type { FileObservationRow } from './file-observations.ts';
 export type { ListMessagesOptions } from './messages.ts';
 export type { ChannelConversation, ChannelConversationSession } from './row-mappers.ts';
 export type { SearchOptions } from './search.ts';
@@ -412,6 +419,18 @@ export class Store {
   /** Upsert a per-session durable key/value. */
   setMemory(sessionId: string, key: string, value: string): void {
     setMemory(this.sqlite, sessionId, key, value);
+  }
+
+  recordFileObservation(sessionId: string, observation: FileObservationRow): void {
+    recordFileObservation(this.sqlite, sessionId, observation);
+  }
+
+  getFileObservation(sessionId: string, path: string): FileObservationRow | null {
+    return getFileObservation(this.sqlite, sessionId, path);
+  }
+
+  clearFileObservations(sessionId: string): number {
+    return clearFileObservations(this.sqlite, sessionId);
   }
 
   /**

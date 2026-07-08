@@ -429,6 +429,7 @@ export function restoreMessages(
         });
       }
     }
+    sqlite.query('DELETE FROM file_observations WHERE session_id = $sid').run({ $sid: sessionId });
     sqlite
       .query('UPDATE sessions SET restore_count = restore_count + 1, updated_at = $at WHERE id = $id')
       .run({ $at: at, $id: sessionId });

@@ -8,7 +8,7 @@
 import type { MonadConfig, MonadPaths } from '@monad/home';
 import type { LoadedSkill } from '@/agent/index.ts';
 import type { UserPromptSlots } from '@/agent/prompts.ts';
-import type { FileObservation, FileObservationStore } from '@/capabilities/tools/types.ts';
+import type { FileObservationStore } from '@/capabilities/tools/types.ts';
 import type { createHookRunner } from '@/hooks/runner.ts';
 import type { EmbeddingIndexer } from '@/services/embedding-indexer.ts';
 import type { DelegatableAgent } from '@/services/generation/agent-persona.ts';
@@ -43,7 +43,6 @@ import { register as agentDelegateRegister } from '@/services/delegation/agent-d
 import { createInboundApprovalGate, type InboundApprovalMode } from '@/services/inbound-approval.ts';
 
 const log = createLogger('bootstrap:agent');
-const FILE_OBSERVATION_KEY_PREFIX = 'file:observation:';
 
 type CreateAgentOptions = Parameters<typeof createAgent>[0];
 type AgentModel = NonNullable<CreateAgentOptions['model']>;
@@ -119,34 +118,8 @@ export function createDaemonAgent(deps: AgentDeps): DaemonAgent {
   // unaffected (straight to oversight). See services/inbound-approval.ts.
   const gate = createInboundApprovalGate({ store, mode: inboundApproval, fallback: oversight.gate });
   const fileObservations: FileObservationStore = {
-    remember: (sessionId, observation) => {
-      store.setMemory(
-        sessionId,
-        `${FILE_OBSERVATION_KEY_PREFIX}${encodeURIComponent(observation.path)}`,
-        JSON.stringify(observation)
-      );
-    },
-    get: (sessionId, path) => {
-      const raw = store.getMemory(sessionId, `${FILE_OBSERVATION_KEY_PREFIX}${encodeURIComponent(path)}`);
-      if (!raw) return null;
-      try {
-        const parsed = JSON.parse(raw) as Partial<FileObservation>;
-        return parsed.path === path &&
-          typeof parsed.hash === 'string' &&
-          parsed.coverage === 'full' &&
-          typeof parsed.observedAt === 'string'
-          ? {
-              path: parsed.path,
-              hash: parsed.hash,
-              coverage: parsed.coverage,
-              observedAt: parsed.observedAt,
-              ...(typeof parsed.toolCallId === 'string' ? { toolCallId: parsed.toolCallId } : {})
-            }
-          : null;
-      } catch {
-        return null;
-      }
-    }
+    remember: (sessionId, observation) => store.recordFileObservation(sessionId, observation),
+    get: (sessionId, path) => store.getFileObservation(sessionId, path)
   };
 
   // Resolve the default profile's context-window size so the agent can emit `context.usage`

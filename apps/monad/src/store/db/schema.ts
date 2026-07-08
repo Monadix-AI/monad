@@ -184,6 +184,19 @@ const _memory = sqliteTable('memory', {
   value: text('value').notNull()
 });
 
+const _fileObservations = sqliteTable(
+  'file_observations',
+  {
+    sessionId: text('session_id').notNull(),
+    path: text('path').notNull(),
+    hash: text('hash').notNull(),
+    coverage: text('coverage').notNull(),
+    observedAt: text('observed_at').notNull(),
+    toolCallId: text('tool_call_id')
+  },
+  (t) => [primaryKey({ columns: [t.sessionId, t.path] })]
+);
+
 const _channelConversations = sqliteTable('channel_conversations', {
   channelId: text('channel_id').notNull(),
   conversationKey: text('conversation_key').notNull(),
