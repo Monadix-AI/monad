@@ -4,6 +4,7 @@ import { integer, primaryKey, real, sqliteTable, text, uniqueIndex } from 'drizz
 
 export const sessions = sqliteTable('sessions', {
   id: text('id').primaryKey(),
+  projectId: text('project_id'), // null = plain chat session; set = a session under this project (Track B)
   title: text('title').notNull(),
   ownerPrincipalId: text('owner_principal_id').notNull(),
   state: text('state').notNull(),
@@ -35,9 +36,29 @@ export const workplaceProjects = sqliteTable('workplace_projects', {
   model: text('model'),
   cwd: text('cwd'),
   origin: text('origin'),
+  memberTemplates: text('member_templates').notNull().default('[]'), // JSON WorkplaceProjectMemberTemplate[] — presets a session can invite from (Track B)
   createdAt: text('created_at').notNull(),
   updatedAt: text('updated_at').notNull()
 });
+
+// A session's live member bindings (Track B). workplace_projects.memberTemplates are presets;
+// a row here is the actual per-session binding — invited from a template (templateId set) or spawned
+// ad hoc (null). Each session's binding runs its own external-agent session, never shared across
+// sessions even when invited from the same template.
+export const sessionMembers = sqliteTable(
+  'session_members',
+  {
+    sessionId: text('session_id').notNull(),
+    memberId: text('member_id').notNull(),
+    templateId: text('template_id'),
+    type: text('type').notNull(),
+    externalAgentSessionId: text('external_agent_session_id'),
+    data: text('data').notNull().default('{}'), // JSON: name, templateName, displayName, settings, ...
+    createdAt: text('created_at').notNull(),
+    updatedAt: text('updated_at').notNull()
+  },
+  (t) => [primaryKey({ columns: [t.sessionId, t.memberId] })]
+);
 
 // Global, append-only usage accounting — the "账本". Bucketed by (local day, provider, model,
 // category), monotonic, survives session deletion; only a manual clearLedger() resets it. Distinct

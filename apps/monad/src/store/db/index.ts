@@ -116,6 +116,17 @@ import {
   upsertEmbedding
 } from './search.ts';
 import {
+  deleteSessionMember,
+  deleteSessionMembers,
+  getSessionMember,
+  insertSessionMember,
+  listSessionMembers,
+  type SessionMember,
+  type SessionMemberInsert,
+  type SessionMemberPatch,
+  updateSessionMember
+} from './session-members.ts';
+import {
   addUsage,
   clearMessages,
   countSessions,
@@ -153,6 +164,7 @@ export type { ExternalAgentSessionRow } from './external-agent-sessions.ts';
 export type { ListMessagesOptions } from './messages.ts';
 export type { ChannelConversation, ChannelConversationSession } from './row-mappers.ts';
 export type { SearchOptions } from './search.ts';
+export type { SessionMember, SessionMemberInsert, SessionMemberPatch } from './session-members.ts';
 export type { ListSessionsFilter } from './sessions.ts';
 export type { LedgerBreakdownRow, LedgerEntry } from './stats.ts';
 
@@ -228,6 +240,30 @@ export class Store {
 
   updateWorkplaceProject(id: string, patch: WorkplaceProjectPatch): WorkplaceProject | null {
     return updateWorkplaceProject(this.db, id, patch);
+  }
+
+  insertSessionMember(member: SessionMemberInsert): void {
+    insertSessionMember(this.db, member);
+  }
+
+  listSessionMembers(sessionId: string): SessionMember[] {
+    return listSessionMembers(this.db, sessionId);
+  }
+
+  getSessionMember(sessionId: string, memberId: string): SessionMember | null {
+    return getSessionMember(this.db, sessionId, memberId);
+  }
+
+  updateSessionMember(sessionId: string, memberId: string, patch: SessionMemberPatch): void {
+    updateSessionMember(this.db, sessionId, memberId, patch);
+  }
+
+  deleteSessionMember(sessionId: string, memberId: string): void {
+    deleteSessionMember(this.db, sessionId, memberId);
+  }
+
+  deleteSessionMembers(sessionId: string): void {
+    deleteSessionMembers(this.db, sessionId);
   }
 
   deleteWorkplaceProject(id: string): boolean {

@@ -11,6 +11,7 @@ PRAGMA journal_mode = WAL;
 
 CREATE TABLE IF NOT EXISTS sessions (
   id                      TEXT PRIMARY KEY,
+  project_id              TEXT,
   title                   TEXT NOT NULL,
   owner_principal_id      TEXT NOT NULL,
   state                   TEXT NOT NULL,
@@ -33,6 +34,24 @@ CREATE TABLE IF NOT EXISTS sessions (
   updated_at             TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_sessions_parent ON sessions(parent_session_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_project ON sessions(project_id);
+
+-- A session's member bindings (Track B: project-level member_templates on workplace_projects are
+-- presets; a row here is the live, per-session binding — invited from a template (template_id set)
+-- or spawned ad hoc (null). Each session's binding is its own external-agent session even when two
+-- sessions invite "the same" template member — never shared.
+CREATE TABLE IF NOT EXISTS session_members (
+  session_id                 TEXT NOT NULL,
+  member_id                  TEXT NOT NULL,
+  template_id                TEXT,
+  type                       TEXT NOT NULL,
+  external_agent_session_id  TEXT,
+  data                       TEXT NOT NULL DEFAULT '{}',
+  created_at                 TEXT NOT NULL,
+  updated_at                 TEXT NOT NULL,
+  PRIMARY KEY (session_id, member_id)
+);
+CREATE INDEX IF NOT EXISTS idx_session_members_session ON session_members(session_id);
 
 CREATE TABLE IF NOT EXISTS workplace_projects (
   id                      TEXT PRIMARY KEY,
@@ -43,6 +62,7 @@ CREATE TABLE IF NOT EXISTS workplace_projects (
   model                   TEXT,
   cwd                     TEXT,
   origin                  TEXT,
+  member_templates        TEXT NOT NULL DEFAULT '[]',
   created_at              TEXT NOT NULL,
   updated_at              TEXT NOT NULL
 );
