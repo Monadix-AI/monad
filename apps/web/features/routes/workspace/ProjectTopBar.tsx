@@ -1,6 +1,6 @@
 'use client';
 
-import type { ProjectId, SessionId, WorkspaceAction } from '@monad/protocol';
+import type { ProjectId, Session, SessionId, WorkspaceAction } from '@monad/protocol';
 import type { ProjectExperienceDefinition } from '@/features/workplace/experiences/types';
 import type { ProjectController } from '@/features/workplace/use-project';
 
@@ -34,6 +34,7 @@ import { useState } from 'react';
 import { useT } from '@/components/I18nProvider';
 import { getProjectExperience } from '@/features/workplace/experiences/registry';
 import { fileManagerLabel, terminalLabel, workdirLabel } from '@/features/workplace/project-shell/project-header-utils';
+import { ProjectSessionTabs } from './ProjectSessionTabs';
 
 interface ProjectTopBarProps {
   mode: string;
@@ -42,6 +43,9 @@ interface ProjectTopBarProps {
   projectWorkdir?: string;
   projectId: ProjectId | null;
   sessionId: SessionId | null;
+  sessions: Session[];
+  onSwitchSession: (id: SessionId) => void;
+  onCloseSession: (id: SessionId) => Promise<void>;
   experiences: ProjectExperienceDefinition[];
   onModeChange: (mode: string) => void;
   onOpenSettings: () => void;
@@ -271,6 +275,9 @@ export function ProjectTopBar({
   projectWorkdir,
   projectId,
   sessionId,
+  sessions,
+  onSwitchSession,
+  onCloseSession,
   experiences,
   onModeChange,
   onOpenSettings
@@ -461,6 +468,15 @@ export function ProjectTopBar({
             sessionId={sessionId}
           />
         </div>
+        {projectId ? (
+          <ProjectSessionTabs
+            activeSessionId={sessionId}
+            onCloseSession={onCloseSession}
+            onSwitchSession={onSwitchSession}
+            projectId={projectId}
+            sessions={sessions}
+          />
+        ) : null}
         <div className="project-topbar-spacer" />
         <ProjectTopBarParticipants participants={participants} />
         <ProjectTopBarExperienceSwitch

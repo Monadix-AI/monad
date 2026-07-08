@@ -3,6 +3,7 @@ import type { SessionId } from '@monad/protocol';
 import { expect, test } from 'bun:test';
 
 import { HandlerError } from '@/handlers/handler-error.ts';
+import { createStore } from '@/store/db/index.ts';
 import { buildHandlers, mockModel } from '../../helpers.ts';
 
 test('sessionGet throws INVALID_PARAMS for an unknown session', async () => {
@@ -37,6 +38,24 @@ test('sessionDelete removes the session', async () => {
   const { sessionId } = await d.session.create({ title: 't' });
   expect(await d.session.delete({ id: sessionId })).toEqual({ deleted: true });
   await expect(d.session.get({ id: sessionId })).rejects.toBeInstanceOf(HandlerError);
+});
+
+test('sessionDelete cleans up orphaned session_members rows', async () => {
+  const store = createStore();
+  const d = buildHandlers(mockModel(['hi']), undefined, { store });
+  const { sessionId } = await d.session.create({ title: 't' });
+  store.insertSessionMember({
+    sessionId,
+    memberId: 'pmem_codex_a',
+    templateId: 'pmem_codex_a',
+    type: 'external-agent',
+    data: { name: 'codex', instanceId: 'pmem_codex_a' },
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  });
+  expect(store.listSessionMembers(sessionId)).toHaveLength(1);
+  await d.session.delete({ id: sessionId });
+  expect(store.listSessionMembers(sessionId)).toEqual([]);
 });
 
 test('sessionAbort reports false when nothing is in flight', async () => {

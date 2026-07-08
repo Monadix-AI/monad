@@ -264,6 +264,7 @@ export function createLifecycleHandlers(ctx: SessionContext) {
       await sessionSandbox?.dispose(id);
       // Release any remote launcher instance kept for this session (e.g. an e2b cloud sandbox).
       disposeSandboxSession(id);
+      store.deleteSessionMembers(id);
       store.deleteSession(id);
       emitLifecycle(id, 'session.deleted', {});
       return { deleted: true as const };

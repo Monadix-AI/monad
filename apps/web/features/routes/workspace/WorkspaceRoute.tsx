@@ -5,7 +5,7 @@ import type { ProjectExperienceDefinition } from '@/features/workplace/experienc
 import type { ProjectController } from '@/features/workplace/use-project';
 
 import { useListWorkspaceExperiencesQuery } from '@monad/client-rtk';
-import { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { listProjectExperiences, toProjectExperienceDefinitions } from '@/features/workplace/experiences/registry';
 import { Workplace } from '@/features/workplace/Workplace';
@@ -90,6 +90,13 @@ export function WorkspaceRoute({
     signature: ''
   });
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [activeProjectSessions, setActiveProjectSessions] = useState<Session[]>([]);
+  const switchSessionRef = useRef<ProjectController['switchSession'] | null>(null);
+  const closeSessionRef = useRef<ProjectController['closeSession'] | null>(null);
+  const switchSession = useCallback((id: SessionId) => switchSessionRef.current?.(id), []);
+  const closeSession = useCallback(async (id: SessionId) => {
+    await closeSessionRef.current?.(id);
+  }, []);
   const [cachedProjectEntries, setCachedProjectEntries] = useState<CachedProjectEntry[]>([]);
   const openProjectSettingsInStore = useWorkplaceUiStore((state) => state.openProjectSettings);
   const { data: workspaceExperiences, isLoading: workspaceExperiencesLoading } = useListWorkspaceExperiencesQuery(
@@ -114,6 +121,9 @@ export function WorkspaceRoute({
       current.signature === signature ? current : { participants: project.participants, signature }
     );
     setActiveSessionId((current) => (current === project.activeSessionId ? current : project.activeSessionId));
+    setActiveProjectSessions((current) => (current === project.projectSessions ? current : project.projectSessions));
+    switchSessionRef.current = project.switchSession;
+    closeSessionRef.current = project.closeSession;
   }, []);
   const handleProjectDeleted = useCallback(
     (projectId: string) => {
@@ -123,15 +133,19 @@ export function WorkspaceRoute({
     [onProjectDeleted]
   );
 
+  // Resets transient active-project UI state on a real project switch only — deliberately keyed on
+  // `activeProjectId` alone. `projects` must NOT be a dependency here: its array reference changes on
+  // any unrelated activity-badge recompute (e.g. a session list mutation from the tab strip below),
+  // which would otherwise wipe activeProjectSessions with nothing left to repopulate it.
   useEffect(() => {
-    if (!activeProjectId) {
-      setActiveProjectParticipants({ participants: EMPTY_PROJECT_PARTICIPANTS, signature: '' });
-      setActiveSessionId(null);
-      setCachedProjectEntries([]);
-      return;
-    }
     setActiveProjectParticipants({ participants: EMPTY_PROJECT_PARTICIPANTS, signature: '' });
     setActiveSessionId(null);
+    setActiveProjectSessions([]);
+    if (!activeProjectId) setCachedProjectEntries([]);
+  }, [activeProjectId]);
+
+  useEffect(() => {
+    if (!activeProjectId) return;
     const projectIds = new Set(projects.map((project) => project.id));
     const now = Date.now();
     setCachedProjectEntries((entries) => {
@@ -171,13 +185,16 @@ export function WorkspaceRoute({
           <ProjectTopBar
             experiences={experiences}
             mode={mode}
+            onCloseSession={closeSession}
             onModeChange={setMode}
             onOpenSettings={openProjectSettings}
+            onSwitchSession={switchSession}
             participants={activeProjectParticipants.participants}
             projectId={activeProjectId as ProjectId}
             projectName={projectName}
             projectWorkdir={activeProject?.cwd}
             sessionId={activeSessionId as SessionId | null}
+            sessions={activeProjectSessions}
           />
           <div className="g1-workspace-canvas">
             {cachedProjectEntries.map((entry) => {

@@ -19,6 +19,7 @@ import {
   profileSelectors,
   projectSessionSelectors,
   useCreateProjectSessionMutation,
+  useDeleteSessionMutation,
   useGetAppearanceQuery,
   useGetProfileSettingsQuery,
   useListExternalAgentSessionsQuery,
@@ -96,11 +97,23 @@ export function useProject(
     [projectSessionData]
   );
   const [createProjectSession] = useCreateProjectSessionMutation();
+  const [deleteSession] = useDeleteSessionMutation();
   const creatingSessionForProject = useRef<ProjectId | null>(null);
-  const activeSessionId: SessionId | null = useMemo(() => {
+  // Manual pick (tab click) wins over the default; forgotten when the project changes so a fresh
+  // project always starts on its own default rather than a stale sibling's manual selection.
+  const [sessionOverride, setSessionOverride] = useState<SessionId | null>(null);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: activeProjectId is the reset trigger, not a read value.
+  useEffect(() => {
+    setSessionOverride(null);
+  }, [activeProjectId]);
+  const defaultSessionId: SessionId | null = useMemo(() => {
     if (projectSessions.length === 0) return null;
     return [...projectSessions].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0]?.id ?? null;
   }, [projectSessions]);
+  const activeSessionId: SessionId | null =
+    sessionOverride && projectSessions.some((session) => session.id === sessionOverride)
+      ? sessionOverride
+      : defaultSessionId;
 
   useEffect(() => {
     if (!activeProjectId || !currentProject) return;
@@ -114,6 +127,15 @@ export function useProject(
         creatingSessionForProject.current = null;
       });
   }, [activeProjectId, currentProject, projectSessionData, projectSessions, createProjectSession]);
+
+  const switchSession = useMemo(() => (id: SessionId) => setSessionOverride(id), []);
+  const closeSession = useMemo(
+    () => async (id: SessionId) => {
+      await deleteSession(id).unwrap();
+      if (sessionOverride === id) setSessionOverride(null);
+    },
+    [deleteSession, sessionOverride]
+  );
 
   // --- live stream + lazy older history ---
   const stream = useStreamUiItemsQuery(activeSessionId ?? ('ses_' as SessionId), { skip: activeSessionId === null });
@@ -222,6 +244,7 @@ export function useProject(
       projectId,
       activeProjectId,
       activeSessionId,
+      projectSessions,
       ready: activeProjectId !== null,
       // live collections
       projects,
@@ -262,11 +285,16 @@ export function useProject(
       updateProjectMemberSettings,
       updateProjectMemberIdentity,
       sendExternalAgentInput,
-      stopExternalAgent
+      stopExternalAgent,
+      switchSession,
+      closeSession
     }),
     [
       activeProjectId,
       activeSessionId,
+      projectSessions,
+      switchSession,
+      closeSession,
       projectId,
       projects,
       participants,
