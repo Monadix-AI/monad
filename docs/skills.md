@@ -206,10 +206,10 @@ active** this turn — a skill becomes active when the model loads it (via the `
 you invoke it with `/name`:
 
 ```yaml
-allowed-tools: fs_read shell_exec
+allowed-tools: file_read shell_exec
 ```
 
-Patterns are matched against monad tool *names*: exact (`fs_read`), prefix glob (`fs_*`), or a
+Patterns are matched against monad tool *names*: exact (`file_read`), prefix glob (`file_*`), or a
 Claude-style `Bash(git:*)` form (the argument constraint is ignored — monad gates per tool, not
 per argument). A granted high-risk tool skips the human approval prompt; everything else still
 goes through the gate. Grants are **turn-scoped** and only apply to tools a skill explicitly

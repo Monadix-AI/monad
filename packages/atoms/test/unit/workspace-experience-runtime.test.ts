@@ -66,7 +66,7 @@ function runtimeSource(overrides: RuntimeSourceOverrides = {}): ProjectExperienc
 test('canvasToGraph: projects agent presence and activity status nodes', () => {
   const { nodes } = canvasToGraph({
     participants: [participant('busy', 'agent', 'working'), participant('idle', 'agent', 'idle')],
-    activity: [activityRow('ok1', 'fs_read', 'ok'), activityRow('err1', 'shell', 'error')]
+    activity: [activityRow('ok1', 'file_read', 'ok'), activityRow('err1', 'shell', 'error')]
   });
 
   expect(nodes.some((node) => node.id === 'p:busy')).toBe(true);
@@ -78,7 +78,7 @@ test('canvasToGraph: projects agent presence and activity status nodes', () => {
 test('canvasToGraph: a monad hub, one node + edge per participant, recent activity attached', () => {
   const { nodes, edges } = canvasToGraph({
     participants: [participant('you', 'human'), participant('monad', 'agent')],
-    activity: [activityRow('a1', 'fs_read', 'ok'), activityRow('a2', 'shell', 'running')]
+    activity: [activityRow('a1', 'file_read', 'ok'), activityRow('a2', 'shell', 'running')]
   });
 
   expect(nodes).toHaveLength(5);

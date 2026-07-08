@@ -1,12 +1,6 @@
-// Filesystem tools — read / write / edit / glob / grep. Tool arguments are
-// attacker-controllable (prompt injection), so every path passes through
-// assertPathWithinRoots (lexical `..` defence) AND a realpath re-check (symlink
-// escape defence) before the resource is touched.
-//
-// fs_write / fs_edit are NOT highRisk: the sandbox is the control. The gate is
-// all-or-nothing per tool, so gating every edit would make the agent unusable.
-// Writes outside the sandbox are blocked by default; the user can grant access
-// via the approval gate (once / session / agent). See docs/security-guidelines.md §4.
+// Filesystem tools — read / glob / grep / write / patch. Tool arguments are
+// attacker-controllable, so every path passes through the sandbox backend and
+// out-of-sandbox path gate before the resource is touched.
 
 import type { FsBackend, Tool, ToolContext, ToolDisplayContent } from '../types.ts';
 import type { ToolModule } from './contract.ts';
@@ -24,19 +18,18 @@ const DEFAULT_READ_LINES = 2000;
 const MAX_GLOB_RESULTS = 1000;
 const MAX_GREP_MATCHES = 1000;
 const MAX_GREP_FILE_BYTES = 2 * 1024 * 1024;
-// Built from char code so the source stays pure-ASCII (no literal NUL in a string literal).
 const NUL_CHAR = String.fromCharCode(0);
 const ALWAYS_IGNORE = ['node_modules', '.git'];
 const DISPLAY_TEXT_LIMIT = 8_000;
 const MAX_DIFF_LINES = 200;
 const MAX_DIFF_CELLS = 40_000;
 
-export interface FsMutationResult {
+export interface FileMutationResult {
   path: string;
+  operation: 'add' | 'update' | 'delete' | 'move' | 'write';
   bytesWritten?: number;
-  replacements?: number;
   beforeHash: string | null;
-  afterHash: string;
+  afterHash: string | null;
   changed: boolean;
   diff: string | null;
   diffFormat: 'unified';
@@ -46,33 +39,36 @@ export interface FsMutationResult {
     changed: boolean;
   };
   display: Extract<ToolDisplayContent, { type: 'diff' }>;
+  newPath?: string;
 }
 
-/** The fs backend for this call: the ACP-delegating one when the session runs over an
- * editor that owns the filesystem, else a sandbox backend over the daemon disk. */
+export interface FilePatchResult {
+  files: FileMutationResult[];
+  touchedFiles: string[];
+  changed: boolean;
+  summary: {
+    added: number;
+    removed: number;
+    changed: boolean;
+  };
+}
+
+type ReadLedgerEntry = {
+  hash: string;
+  mtimeMs: number | null;
+  readAt: number;
+};
+
+const readLedger = new Map<string, Map<string, ReadLedgerEntry>>();
+
 function fsBackend(ctx: ToolContext) {
   return ctx.backends?.fs ?? createSandboxBackends(ctx.sandboxRoots, { defaultCwd: ctx.defaultCwd }).fs;
 }
 
-// Bun.Glob.scan may yield OS-native separators on Windows; normalize to forward slashes
-// so the ignore filter and callers behave identically on every platform.
 const toPosix = (p: string): string => p.replaceAll('\\', '/');
 
 function sha256(text: string): string {
   return new Bun.CryptoHasher('sha256').update(text).digest('hex');
-}
-
-function displayPath(path: string, ctx: ToolContext): string {
-  const canonicalPath = canonicalize(path);
-  // Compare in posix form: realpathSync returns OS-native separators (backslash on Windows), so a
-  // `${root}/` prefix check with a hardcoded forward slash never matches on Windows — the file then
-  // falls through to its absolute path in the diff header instead of the sandbox-relative one.
-  const canonicalPathPosix = toPosix(canonicalPath);
-  const root = ctx.sandboxRoots?.find((r) => {
-    const canonicalRootPosix = toPosix(canonicalize(r));
-    return canonicalPathPosix === canonicalRootPosix || canonicalPathPosix.startsWith(`${canonicalRootPosix}/`);
-  });
-  return root ? toPosix(relative(canonicalize(root), canonicalPath)) : canonicalPathPosix;
 }
 
 function canonicalize(path: string): string {
@@ -81,6 +77,42 @@ function canonicalize(path: string): string {
   } catch {
     return resolve(path);
   }
+}
+
+function ledgerPath(path: string): string {
+  return toPosix(canonicalize(path));
+}
+
+function fileMtimeMs(path: string): number | null {
+  try {
+    const mtime = Bun.file(canonicalize(path)).lastModified;
+    return Number.isFinite(mtime) && mtime > 0 ? mtime : null;
+  } catch {
+    return null;
+  }
+}
+
+function rememberRead(ctx: ToolContext, path: string, text: string): void {
+  let session = readLedger.get(ctx.sessionId);
+  if (!session) {
+    session = new Map();
+    readLedger.set(ctx.sessionId, session);
+  }
+  session.set(ledgerPath(path), { hash: sha256(text), mtimeMs: fileMtimeMs(path), readAt: Date.now() });
+}
+
+function readEntry(ctx: ToolContext, path: string): ReadLedgerEntry | undefined {
+  return readLedger.get(ctx.sessionId)?.get(ledgerPath(path));
+}
+
+function displayPath(path: string, ctx: ToolContext): string {
+  const canonicalPath = canonicalize(path);
+  const canonicalPathPosix = toPosix(canonicalPath);
+  const root = ctx.sandboxRoots?.find((r) => {
+    const canonicalRootPosix = toPosix(canonicalize(r));
+    return canonicalPathPosix === canonicalRootPosix || canonicalPathPosix.startsWith(`${canonicalRootPosix}/`);
+  });
+  return root ? toPosix(relative(canonicalize(root), canonicalPath)) : canonicalPathPosix;
 }
 
 function splitDiffLines(text: string): string[] {
@@ -138,7 +170,7 @@ function createUnifiedDiff(
   beforeLines: string[],
   afterLines: string[],
   lines: string[]
-): FsMutationResult['diff'] {
+): FileMutationResult['diff'] {
   return [
     `--- ${path}\tBefore`,
     `+++ ${path}\tAfter`,
@@ -148,26 +180,23 @@ function createUnifiedDiff(
   ].join('\n');
 }
 
-function fallbackSummary(beforeLines: string[], afterLines: string[]): { added: number; removed: number } {
-  return { added: afterLines.length, removed: beforeLines.length };
-}
-
 function createDiffSummary(
   path: string,
   before: string | null,
-  after: string
+  after: string | null
 ): {
   added: number;
   removed: number;
-  diff: FsMutationResult['diff'];
+  diff: FileMutationResult['diff'];
   diffSkipped: boolean;
 } {
   const oldText = before ?? '';
+  const newText = after ?? '';
   const beforeLines = splitDiffLines(oldText);
-  const afterLines = splitDiffLines(after);
-  if (oldText === after) return { added: 0, removed: 0, diff: null, diffSkipped: false };
+  const afterLines = splitDiffLines(newText);
+  if (oldText === newText) return { added: 0, removed: 0, diff: null, diffSkipped: false };
   if (shouldSkipDiff(beforeLines, afterLines)) {
-    return { ...fallbackSummary(beforeLines, afterLines), diff: null, diffSkipped: true };
+    return { added: afterLines.length, removed: beforeLines.length, diff: null, diffSkipped: true };
   }
   const result = diffLinesFromLines(beforeLines, afterLines);
   return {
@@ -190,31 +219,33 @@ function createMutationResult(
   ctx: ToolContext,
   path: string,
   before: string | null,
-  after: string,
-  extra: Pick<FsMutationResult, 'bytesWritten'> | Pick<FsMutationResult, 'replacements'>
-): FsMutationResult {
+  after: string | null,
+  operation: FileMutationResult['operation'],
+  extra: Pick<FileMutationResult, 'bytesWritten' | 'newPath'> = {}
+): FileMutationResult {
   const shownPath = displayPath(path, ctx);
   const changed = before !== after;
   const { added, removed, diff, diffSkipped } = createDiffSummary(shownPath, before, after);
   const beforePreview = before === null ? null : displayPreview(before);
-  const afterPreview = displayPreview(after);
+  const afterPreview = after === null ? null : displayPreview(after);
   const diffPreview = diff === null ? null : displayPreview(diff);
   const display = {
     type: 'diff' as const,
     path,
     beforeText: beforePreview?.text ?? null,
-    afterText: afterPreview.text,
+    afterText: afterPreview?.text ?? '',
     ...(diffPreview ? { diff: diffPreview.text } : {}),
     diffStat: { added, removed },
-    ...(beforePreview?.truncated || afterPreview.truncated || diffPreview?.truncated || diffSkipped
+    ...(beforePreview?.truncated || afterPreview?.truncated || diffPreview?.truncated || diffSkipped
       ? { truncated: true }
       : {})
   };
   return {
     path,
+    operation,
     ...extra,
     beforeHash: before === null ? null : sha256(before),
-    afterHash: sha256(after),
+    afterHash: after === null ? null : sha256(after),
     changed,
     diff,
     diffFormat: 'unified',
@@ -223,16 +254,15 @@ function createMutationResult(
   };
 }
 
-function mutationSummary(output: FsMutationResult): string {
-  const action = output.replacements !== undefined ? `Modified file: ${output.path}` : `Wrote file: ${output.path}`;
-  const details =
-    output.replacements !== undefined
-      ? ` (${output.replacements} replacement${output.replacements === 1 ? '' : 's'})`
-      : output.bytesWritten !== undefined
-        ? ` (${output.bytesWritten} bytes)`
-        : '';
+function mutationSummary(output: FileMutationResult): string {
+  const target = output.newPath ? `${output.path} -> ${output.newPath}` : output.path;
   const delta = `${output.summary.added} added, ${output.summary.removed} removed`;
-  return `${action}${details}. ${output.changed ? delta : 'No content changes'}. beforeHash=${output.beforeHash ?? 'new'} afterHash=${output.afterHash}`;
+  return `${output.operation} ${target}. ${output.changed ? delta : 'No content changes'}. beforeHash=${output.beforeHash ?? 'new'} afterHash=${output.afterHash ?? 'deleted'}`;
+}
+
+function patchSummary(output: FilePatchResult): string {
+  const delta = `${output.summary.added} added, ${output.summary.removed} removed`;
+  return `Patched ${output.files.length} file${output.files.length === 1 ? '' : 's'} (${delta}).`;
 }
 
 async function readExistingText(fs: FsBackend, path: string): Promise<string | null> {
@@ -248,11 +278,6 @@ function ignored(path: string): boolean {
   return ALWAYS_IGNORE.some((seg) => p === seg || p.includes(`${seg}/`) || p.includes(`/${seg}/`));
 }
 
-/**
- * Run `fn` with the current sandbox backend; on a path-escape error, gate the access and
- * retry with an expanded backend. Transparent for delegated backends (they never throw
- * ToolSecurityError with "path escapes sandbox").
- */
 async function withFsGate<T>(path: string, ctx: ToolContext, fn: (fs: FsBackend) => Promise<T>): Promise<T> {
   try {
     return await fn(fsBackend(ctx));
@@ -262,112 +287,102 @@ async function withFsGate<T>(path: string, ctx: ToolContext, fn: (fs: FsBackend)
   }
 }
 
-const fsReadInput = z.object({
+function assertFreshRead(ctx: ToolContext, path: string, currentText: string): void {
+  const entry = readEntry(ctx, path);
+  if (!entry) {
+    throw new ToolSecurityError('File has not been read yet. Read it first before writing to it.');
+  }
+  const currentMtimeMs = fileMtimeMs(path);
+  const mtimeChanged = entry.mtimeMs !== null && currentMtimeMs !== null && entry.mtimeMs !== currentMtimeMs;
+  if (entry.hash !== sha256(currentText) || mtimeChanged) {
+    throw new ToolSecurityError('File has been modified since read. Read it again before writing to it.');
+  }
+}
+
+const fileReadInput = z.object({
   path: z.string().min(1),
   offset: z.number().int().min(1).optional(),
   limit: z.number().int().min(1).optional()
 });
 
-export const fsReadTool: Tool<z.infer<typeof fsReadInput>, string> = {
-  name: 'fs_read',
+export const fileReadTool: Tool<z.infer<typeof fileReadInput>, string> = {
+  name: 'file_read',
   description:
     'Read a UTF-8 text file. Returns lines with 1-based line numbers (format: "N\\tcontent"). Defaults to first 2000 lines; use offset to page through large files.',
   scopes: [{ resource: 'fs:read' }],
-  inputSchema: fsReadInput,
-  run: async ({ path, offset, limit }, ctx) => {
-    const effectiveLimit = limit ?? DEFAULT_READ_LINES;
-    const text = await withFsGate(path, ctx, (fs) => fs.readTextFile(path, { offset, limit: effectiveLimit }));
-    const startLine = offset ?? 1;
-    // Normalize CRLF so Windows files don't emit trailing \r on every output line.
-    const lines = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
-    // Strip ALL trailing blank lines — a file ending with multiple \n would otherwise
-    // produce phantom numbered blank lines.
-    while (lines.length > 0 && lines.at(-1) === '') lines.pop();
-    const numbered = lines.map((line, i) => `${startLine + i}\t${line}`).join('\n');
-    // Add a pagination hint only when the default limit was applied (not an explicit caller
-    // limit), so the model knows there is more content to read.
-    if (limit === undefined && lines.length === effectiveLimit) {
-      return toolResult(`${numbered}\n(truncated; use offset=${startLine + lines.length} to continue)`);
-    }
-    return toolResult(numbered);
-  }
+  inputSchema: fileReadInput,
+  run: async ({ path, offset, limit }, ctx) =>
+    withFsGate(path, ctx, async (fs) => {
+      const fullText = await fs.readTextFile(path);
+      rememberRead(ctx, path, fullText);
+      const effectiveLimit = limit ?? DEFAULT_READ_LINES;
+      const startLine = offset ?? 1;
+      const lines = fullText.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+      while (lines.length > 0 && lines.at(-1) === '') lines.pop();
+      const selected = lines.slice(startLine - 1, startLine - 1 + effectiveLimit);
+      const numbered = selected.map((line, i) => `${startLine + i}\t${line}`).join('\n');
+      if (limit === undefined && selected.length === effectiveLimit && startLine - 1 + selected.length < lines.length) {
+        return toolResult(`${numbered}\n(truncated; use offset=${startLine + selected.length} to continue)`);
+      }
+      return toolResult(numbered);
+    })
 };
 
-const fsWriteInput = z.object({ path: z.string().min(1), content: z.string() });
+const fileWriteInput = z.object({
+  path: z.string().min(1),
+  content: z.string(),
+  baseHash: z
+    .string()
+    .regex(/^[a-f0-9]{64}$/)
+    .optional()
+});
 
-export const fsWriteTool: Tool<z.infer<typeof fsWriteInput>, FsMutationResult> = {
-  name: 'fs_write',
+export const fileWriteTool: Tool<z.infer<typeof fileWriteInput>, FileMutationResult> = {
+  name: 'file_write',
   description:
-    'Write (create or overwrite) a UTF-8 text file. Parent directories are created as needed. Constrained to the sandbox by default; the user can grant access to paths outside it via the approval prompt.',
+    'Create or overwrite a UTF-8 text file. Existing files must be read first, or baseHash must match the current file hash.',
   scopes: [{ resource: 'fs:write' }],
-  // Inside a sandbox the path guard already confines writes; only an unrestricted sandbox
-  // (no roots) lets a write land anywhere on the host, so gate just that case. When delegated,
-  // the editor owns the filesystem and gates the write itself — don't double-prompt.
   needsApproval: (_input, ctx) => !ctx.backends?.fs.delegated && ctx.sandboxRoots === undefined,
-  inputSchema: fsWriteInput,
-  run: ({ path, content }, ctx) =>
+  inputSchema: fileWriteInput,
+  run: ({ path, content, baseHash }, ctx) =>
     withFsGate(path, ctx, async (fs) => {
       const before = await readExistingText(fs, path);
+      if (before !== null) {
+        const currentHash = sha256(before);
+        if (baseHash !== undefined) {
+          if (baseHash !== currentHash) {
+            throw new ToolSecurityError('baseHash does not match the current file. Read it again before writing.');
+          }
+        } else {
+          assertFreshRead(ctx, path, before);
+        }
+      }
       const { path: written, bytesWritten } = await fs.writeTextFile(path, content);
-      const result = createMutationResult(ctx, written, before, content, { bytesWritten });
+      const result = createMutationResult(ctx, written, before, content, 'write', { bytesWritten });
+      rememberRead(ctx, written, content);
       return toolResult(result, { modelContent: mutationSummary(result), displayContent: result.display });
     })
 };
 
-const fsEditInput = z.object({
-  path: z.string().min(1),
-  oldString: z.string().min(1),
-  newString: z.string(),
-  // Default false: oldString must be unique — an ambiguous match is a model error,
-  // not a silent multi-edit.
-  replaceAll: z.boolean().optional()
-});
-
-export const fsEditTool: Tool<z.infer<typeof fsEditInput>, FsMutationResult> = {
-  name: 'fs_edit',
-  description:
-    'Replace an exact string in a file. oldString must be unique unless replaceAll is set. Constrained to the sandbox by default; the user can grant access to paths outside it via the approval prompt.',
-  scopes: [{ resource: 'fs:write' }],
-  needsApproval: (_input, ctx) => !ctx.backends?.fs.delegated && ctx.sandboxRoots === undefined,
-  inputSchema: fsEditInput,
-  run: async ({ path, oldString, newString, replaceAll }, ctx) => {
-    if (oldString === newString) throw new ToolSecurityError('oldString and newString are identical — no-op edit');
-    // The diff/replace logic stays in monad; only the read/write primitives are delegated, so
-    // an editor-delegated edit still produces a single reviewable write of the final content.
-    return withFsGate(path, ctx, async (fs) => {
-      const text = await fs.readTextFile(path);
-      const count = text.split(oldString).length - 1;
-      if (count === 0) throw new ToolSecurityError('oldString not found in file');
-      if (count > 1 && !replaceAll) {
-        throw new ToolSecurityError(`oldString is not unique (${count} matches) — pass replaceAll or add more context`);
-      }
-      const next = replaceAll ? text.split(oldString).join(newString) : text.replace(oldString, newString);
-      const { path: written } = await fs.writeTextFile(path, next);
-      const result = createMutationResult(ctx, written, text, next, { replacements: replaceAll ? count : 1 });
-      return toolResult(result, { modelContent: mutationSummary(result), displayContent: result.display });
-    });
-  }
-};
-
-const fsGlobInput = z.object({
+const fileGlobInput = z.object({
   pattern: z.string().min(1),
-  path: z.string().optional() // scan directory; defaults to the primary sandbox root
+  path: z.string().optional()
 });
 
-export const fsGlobTool: Tool<z.infer<typeof fsGlobInput>, string[]> = {
-  name: 'fs_glob',
+export const fileGlobTool: Tool<z.infer<typeof fileGlobInput>, string[]> = {
+  name: 'file_glob',
   description:
     'List files matching a glob pattern (e.g. "src/**/*.ts"), relative to the scan directory. Skips node_modules/.git.',
   scopes: [{ resource: 'fs:read' }],
   inputExamples: [{ pattern: '**/*.ts' }, { pattern: '**/*.test.ts', path: 'packages' }],
-  inputSchema: fsGlobInput,
+  inputSchema: fileGlobInput,
   run: async ({ pattern, path }, ctx) => {
     const scanPath = path ?? ctx.sandboxRoots?.[0] ?? process.cwd();
     let cwd: string;
     try {
       cwd = await resolveReal(scanPath, ctx.sandboxRoots);
     } catch (err) {
-      if (!path) throw err; // default path is the sandbox root — can't escape
+      if (!path) throw err;
       const dir = isAbsolute(path) ? resolve(path) : resolve(ctx.sandboxRoots?.[0] ?? process.cwd(), path);
       const expanded = await gatePathAccess(path, ctx, err, dir);
       cwd = await resolveReal(path, expanded);
@@ -383,25 +398,25 @@ export const fsGlobTool: Tool<z.infer<typeof fsGlobInput>, string[]> = {
   }
 };
 
-const fsGrepInput = z.object({
-  pattern: z.string().min(1), // JS regex source
+const fileGrepInput = z.object({
+  pattern: z.string().min(1),
   path: z.string().optional(),
-  glob: z.string().optional(), // file glob to search within; defaults to everything
-  flags: z.string().optional() // e.g. "i"
+  glob: z.string().optional(),
+  flags: z.string().optional()
 });
 
 export interface GrepMatch {
-  file: string; // relative to scan dir
-  line: number; // 1-based line number
+  file: string;
+  line: number;
   text: string;
 }
 
-export const fsGrepTool: Tool<z.infer<typeof fsGrepInput>, GrepMatch[]> = {
-  name: 'fs_grep',
+export const fileGrepTool: Tool<z.infer<typeof fileGrepInput>, GrepMatch[]> = {
+  name: 'file_grep',
   description:
     'Search file contents by regex and return matching lines with file + line number. Skips node_modules/.git and large/binary files.',
   scopes: [{ resource: 'fs:read' }],
-  inputSchema: fsGrepInput,
+  inputSchema: fileGrepInput,
   run: async ({ pattern, path, glob, flags }, ctx) => {
     let re: RegExp;
     try {
@@ -414,7 +429,7 @@ export const fsGrepTool: Tool<z.infer<typeof fsGrepInput>, GrepMatch[]> = {
     try {
       cwd = await resolveReal(scanPath, ctx.sandboxRoots);
     } catch (err) {
-      if (!path) throw err; // default path is the sandbox root — can't escape
+      if (!path) throw err;
       const dir = isAbsolute(path) ? resolve(path) : resolve(ctx.sandboxRoots?.[0] ?? process.cwd(), path);
       const expanded = await gatePathAccess(path, ctx, err, dir);
       cwd = await resolveReal(path, expanded);
@@ -431,10 +446,9 @@ export const fsGrepTool: Tool<z.infer<typeof fsGrepInput>, GrepMatch[]> = {
       } catch {
         continue;
       }
-      if (text.includes(NUL_CHAR)) continue; // binary file
+      if (text.includes(NUL_CHAR)) continue;
       const lines = text.split('\n');
       for (let i = 0; i < lines.length; i++) {
-        // Strip trailing CR so CRLF files match `$`-anchored patterns.
         const lineText = (lines[i] ?? '').replace(/\r$/, '');
         re.lastIndex = 0;
         if (re.test(lineText)) {
@@ -447,13 +461,227 @@ export const fsGrepTool: Tool<z.infer<typeof fsGrepInput>, GrepMatch[]> = {
   }
 };
 
-const fsTools: Tool[] = [
-  fsReadTool as Tool,
-  fsWriteTool as Tool,
-  fsEditTool as Tool,
-  fsGlobTool as Tool,
-  fsGrepTool as Tool
+type PatchOp =
+  | { type: 'add'; path: string; lines: string[] }
+  | { type: 'delete'; path: string }
+  | { type: 'update'; path: string; newPath?: string; hunks: PatchHunk[] };
+
+interface PatchHunk {
+  oldLines: string[];
+  newLines: string[];
+}
+
+function isFileHeader(line: string): boolean {
+  return (
+    line.startsWith('*** Add File: ') ||
+    line.startsWith('*** Delete File: ') ||
+    line.startsWith('*** Update File: ') ||
+    line === '*** End Patch'
+  );
+}
+
+function parsePatch(patch: string): PatchOp[] {
+  const lines = patch.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+  if (lines.at(-1) === '') lines.pop();
+  if (lines[0] !== '*** Begin Patch') throw new ToolSecurityError('patch must start with "*** Begin Patch"');
+  if (lines.at(-1) !== '*** End Patch') throw new ToolSecurityError('patch must end with "*** End Patch"');
+  const ops: PatchOp[] = [];
+  let i = 1;
+  while (i < lines.length - 1) {
+    const line = lines[i] ?? '';
+    if (line.startsWith('*** Add File: ')) {
+      const path = line.slice('*** Add File: '.length).trim();
+      i++;
+      const content: string[] = [];
+      while (i < lines.length - 1 && !isFileHeader(lines[i] ?? '')) {
+        const l = lines[i] ?? '';
+        if (!l.startsWith('+')) throw new ToolSecurityError(`add file lines must start with "+": ${l}`);
+        content.push(l.slice(1));
+        i++;
+      }
+      ops.push({ type: 'add', path, lines: content });
+      continue;
+    }
+    if (line.startsWith('*** Delete File: ')) {
+      ops.push({ type: 'delete', path: line.slice('*** Delete File: '.length).trim() });
+      i++;
+      continue;
+    }
+    if (line.startsWith('*** Update File: ')) {
+      const path = line.slice('*** Update File: '.length).trim();
+      i++;
+      let newPath: string | undefined;
+      if ((lines[i] ?? '').startsWith('*** Move to: ')) {
+        newPath = (lines[i] ?? '').slice('*** Move to: '.length).trim();
+        i++;
+      }
+      const hunks: PatchHunk[] = [];
+      while (i < lines.length - 1 && !isFileHeader(lines[i] ?? '')) {
+        const header = lines[i] ?? '';
+        if (!header.startsWith('@@')) throw new ToolSecurityError(`expected hunk header, got: ${header}`);
+        i++;
+        const oldLines: string[] = [];
+        const newLines: string[] = [];
+        while (i < lines.length - 1 && !isFileHeader(lines[i] ?? '') && !(lines[i] ?? '').startsWith('@@')) {
+          const hunkLine = lines[i] ?? '';
+          if (hunkLine === '*** End of File') {
+            i++;
+            continue;
+          }
+          const marker = hunkLine[0];
+          const text = hunkLine.slice(1);
+          if (marker === ' ') {
+            oldLines.push(text);
+            newLines.push(text);
+          } else if (marker === '-') {
+            oldLines.push(text);
+          } else if (marker === '+') {
+            newLines.push(text);
+          } else {
+            throw new ToolSecurityError(`invalid hunk line: ${hunkLine}`);
+          }
+          i++;
+        }
+        hunks.push({ oldLines, newLines });
+      }
+      ops.push({ type: 'update', path, newPath, hunks });
+      continue;
+    }
+    throw new ToolSecurityError(`unexpected patch line: ${line}`);
+  }
+  if (ops.length === 0) throw new ToolSecurityError('patch contains no file operations');
+  return ops;
+}
+
+function findSubsequence(lines: string[], needle: string[], from: number): number {
+  if (needle.length === 0) return from;
+  for (let i = from; i <= lines.length - needle.length; i++) {
+    let ok = true;
+    for (let j = 0; j < needle.length; j++) {
+      if (lines[i + j] !== needle[j]) {
+        ok = false;
+        break;
+      }
+    }
+    if (ok) return i;
+  }
+  return -1;
+}
+
+function applyHunks(text: string, hunks: PatchHunk[]): string {
+  let lines = splitDiffLines(text);
+  let searchFrom = 0;
+  for (const hunk of hunks) {
+    if (hunk.oldLines.length === 0) {
+      lines.splice(searchFrom, 0, ...hunk.newLines);
+      searchFrom += hunk.newLines.length;
+      continue;
+    }
+    const at = findSubsequence(lines, hunk.oldLines, searchFrom);
+    if (at === -1) throw new ToolSecurityError('patch context did not match the current file');
+    lines = [...lines.slice(0, at), ...hunk.newLines, ...lines.slice(at + hunk.oldLines.length)];
+    searchFrom = at + hunk.newLines.length;
+  }
+  return lines.length === 0 ? '' : `${lines.join('\n')}\n`;
+}
+
+function requireDelete(fs: FsBackend): NonNullable<FsBackend['deleteFile']> {
+  if (!fs.deleteFile) throw new ToolSecurityError('file_patch delete is not supported by this filesystem backend');
+  return fs.deleteFile.bind(fs);
+}
+
+function requireMove(fs: FsBackend): NonNullable<FsBackend['moveFile']> {
+  if (!fs.moveFile) throw new ToolSecurityError('file_patch move is not supported by this filesystem backend');
+  return fs.moveFile.bind(fs);
+}
+
+const filePatchInput = z.object({ patch: z.string().min(1) });
+
+export const filePatchTool: Tool<z.infer<typeof filePatchInput>, FilePatchResult> = {
+  name: 'file_patch',
+  description:
+    'Apply a structured patch to files. Supports Add File, Update File, Delete File, and Move to operations. Existing files must be read first.',
+  scopes: [{ resource: 'fs:write' }],
+  needsApproval: (_input, ctx) => !ctx.backends?.fs.delegated && ctx.sandboxRoots === undefined,
+  inputSchema: filePatchInput,
+  run: async ({ patch }, ctx) => {
+    const ops = parsePatch(patch);
+    const results: FileMutationResult[] = [];
+    for (const op of ops) {
+      if (op.type === 'add') {
+        const content = op.lines.length === 0 ? '' : `${op.lines.join('\n')}\n`;
+        const result = await withFsGate(op.path, ctx, async (fs) => {
+          const existing = await readExistingText(fs, op.path);
+          if (existing !== null) throw new ToolSecurityError(`cannot add existing file: ${op.path}`);
+          const { path: written, bytesWritten } = await fs.writeTextFile(op.path, content);
+          const mutation = createMutationResult(ctx, written, null, content, 'add', { bytesWritten });
+          rememberRead(ctx, written, content);
+          return mutation;
+        });
+        results.push(result);
+        continue;
+      }
+      if (op.type === 'delete') {
+        const result = await withFsGate(op.path, ctx, async (fs) => {
+          const before = await fs.readTextFile(op.path);
+          assertFreshRead(ctx, op.path, before);
+          const deleted = await requireDelete(fs)(op.path);
+          const mutation = createMutationResult(ctx, deleted.path, before, null, 'delete');
+          return mutation;
+        });
+        results.push(result);
+        continue;
+      }
+      const result = await withFsGate(op.path, ctx, async (fs) => {
+        const before = await fs.readTextFile(op.path);
+        assertFreshRead(ctx, op.path, before);
+        const after = applyHunks(before, op.hunks);
+        if (op.newPath) {
+          const existingDest = await readExistingText(fs, op.newPath);
+          if (existingDest !== null) throw new ToolSecurityError(`cannot move over existing file: ${op.newPath}`);
+        }
+        const { path: written, bytesWritten } = await fs.writeTextFile(op.path, after);
+        let finalPath = written;
+        if (op.newPath) {
+          const moved = await requireMove(fs)(op.path, op.newPath);
+          finalPath = moved.newPath;
+        }
+        const mutation = createMutationResult(ctx, written, before, after, op.newPath ? 'move' : 'update', {
+          bytesWritten,
+          ...(op.newPath ? { newPath: finalPath } : {})
+        });
+        rememberRead(ctx, finalPath, after);
+        return mutation;
+      });
+      results.push(result);
+    }
+    const summary = results.reduce(
+      (acc, file) => ({
+        added: acc.added + file.summary.added,
+        removed: acc.removed + file.summary.removed,
+        changed: acc.changed || file.changed
+      }),
+      { added: 0, removed: 0, changed: false }
+    );
+    const output: FilePatchResult = {
+      files: results,
+      touchedFiles: results.flatMap((file) => (file.newPath ? [file.path, file.newPath] : [file.path])),
+      changed: summary.changed,
+      summary
+    };
+    return toolResult(output, {
+      modelContent: patchSummary(output),
+      displayContent: results.length === 1 ? results[0]?.display : undefined
+    });
+  }
+};
+
+const fileTools: Tool[] = [
+  fileReadTool as Tool,
+  fileWriteTool as Tool,
+  fileGlobTool as Tool,
+  fileGrepTool as Tool,
+  filePatchTool as Tool
 ];
 
-// Uniform module entry. fs is a static module — it needs no boot deps, so it ignores `deps`.
-export const register: ToolModule = () => fsTools;
+export const register: ToolModule = () => fileTools;

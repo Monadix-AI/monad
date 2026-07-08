@@ -22,7 +22,7 @@ credential, or tool dispatch.
    "localhost" as far as the socket is concerned.
 2. **The model (primary, once tools land).** Tool arguments are attacker-controlled
    data: prompt injection from a fetched web page, a file, or a connector can make
-   the model emit `fs_read("/etc/shadow")` or `net_fetch("http://169.254.169.254/…")`.
+   the model emit `file_read("/etc/shadow")` or `net_fetch("http://169.254.169.254/…")`.
    Treat every tool argument as hostile input, never as trusted intent.
 3. **Other local users (shared host).** Files and sockets under `~/.monad/` must not
    be readable by siblings on a multi-user machine.
@@ -106,7 +106,7 @@ them — `net_fetch` already does. Before any tool is made callable:
   tools each carry a schema.
 - **Enforce filesystem sandboxing at call time, not declaration time.** The agent's
   effective roots arrive on `ToolContext.sandboxRoots` (injected by `invokeTool`);
-  fs tools call `assertPathWithinRoots(path, ctx.sandboxRoots)` — `fs_read` already
+  file tools call `assertPathWithinRoots(path, ctx.sandboxRoots)` — `file_read` already
   does. It resolves and rejects `..`/absolute escapes lexically. A constraint the tool
   doesn't check is decoration. Caveat: when opening an EXISTING file, also `realpath`
   and re-check, since a symlink inside the sandbox can point out of it.

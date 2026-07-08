@@ -11,7 +11,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { client as acpClient, ndJsonStream, PROTOCOL_VERSION } from '@agentclientprotocol/sdk';
 
-import { fsReadTool, fsWriteTool } from '@/capabilities/tools';
+import { fileReadTool, fileWriteTool } from '@/capabilities/tools';
 import { toolResult } from '@/capabilities/tools/types.ts';
 import { connectAcp } from '@/transports/acp/connection.ts';
 import { buildHandlers, mockModel } from '../helpers.ts';
@@ -199,15 +199,15 @@ test('a model error ends the turn as an error, not a silent end_turn', async () 
   });
 });
 
-test('delegated session routes fs_write to the editor via reverse-RPC', async () => {
+test('delegated session routes file_write to the editor via reverse-RPC', async () => {
   const writes: { path: string; content: string }[] = [];
 
   const { agent, clientStream } = pipe();
   connectAcp(
     buildHandlers(
-      scriptedModel([{ tool: 'fs_write', input: { path: '/proj/x.ts', content: 'hi' } }, 'done']),
+      scriptedModel([{ tool: 'file_write', input: { path: '/proj/x.ts', content: 'hi' } }, 'done']),
       undefined,
-      { tools: [fsWriteTool as Tool] }
+      { tools: [fileWriteTool as Tool] }
     ),
     agent
   );
@@ -224,7 +224,9 @@ test('delegated session routes fs_write to the editor via reverse-RPC', async ()
       writes.push({ path: params.path, content: params.content });
       return {};
     })
-    .onRequest('fs/read_text_file', () => ({ content: '' }))
+    .onRequest('fs/read_text_file', () => {
+      throw new Error('not found');
+    })
     .connectWith(clientStream, async (ctx) => {
       await ctx.request('initialize', {
         protocolVersion: PROTOCOL_VERSION,
@@ -466,12 +468,12 @@ test('a non-delegated session scopes fs to the client cwd + additionalDirectorie
     connectAcp(
       buildHandlers(
         scriptedModel([
-          { tool: 'fs_read', input: { path: join(dir, 'inside.txt') } },
-          { tool: 'fs_read', input: { path: '/etc/hosts' } },
+          { tool: 'file_read', input: { path: join(dir, 'inside.txt') } },
+          { tool: 'file_read', input: { path: '/etc/hosts' } },
           'done'
         ]),
         undefined,
-        { tools: [fsReadTool as Tool] }
+        { tools: [fileReadTool as Tool] }
       ),
       agent
     );

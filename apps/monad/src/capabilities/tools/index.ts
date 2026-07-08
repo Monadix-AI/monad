@@ -16,7 +16,7 @@ export {
   configureEmail,
   emailSendTool
 } from './registry/email/index.ts';
-export { fsEditTool, fsGlobTool, fsGrepTool, fsReadTool, fsWriteTool } from './registry/fs.ts';
+export { fileGlobTool, fileGrepTool, filePatchTool, fileReadTool, fileWriteTool } from './registry/fs.ts';
 // builtinTools (static tier) + the service-tier composer are assembled in the registry manifest
 // (registry/index.ts) from each module's uniform `register` entry.
 export { buildServiceTools, builtinTools } from './registry/index.ts';

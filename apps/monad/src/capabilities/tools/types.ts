@@ -98,6 +98,8 @@ export interface ToolInputSchema<T = unknown> {
 export interface FsBackend {
   readTextFile(path: string, opts?: { offset?: number; limit?: number }): Promise<string>;
   writeTextFile(path: string, content: string): Promise<{ path: string; bytesWritten: number }>;
+  deleteFile?(path: string): Promise<{ path: string }>;
+  moveFile?(path: string, newPath: string): Promise<{ path: string; newPath: string }>;
   readonly delegated: boolean;
 }
 

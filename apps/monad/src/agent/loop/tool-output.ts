@@ -6,7 +6,7 @@ export function truncateToolOutput(text: string, max: number): string {
   const head = Math.floor(max * 0.7);
   const tail = max - head;
   const omitted = text.length - head - tail;
-  return `${text.slice(0, head)}\n\n…[tool output truncated: ${omitted} of ${text.length} chars omitted; narrow the call (e.g. fs_read offset/limit, grep) to see more]…\n\n${text.slice(text.length - tail)}`;
+  return `${text.slice(0, head)}\n\n…[tool output truncated: ${omitted} of ${text.length} chars omitted; narrow the call (e.g. file_read offset/limit, grep) to see more]…\n\n${text.slice(text.length - tail)}`;
 }
 
 // Production logs keep inputs out of info streams; development logs keep a short preview.

@@ -5,7 +5,7 @@ import { expect, test } from 'bun:test';
 import { buildSdkTools } from '../../src/providers/ai-sdk-adapter/index.ts';
 
 const genericSpec: ToolSpec = {
-  name: 'fs_read',
+  name: 'file_read',
   description: 'read a file',
   parameters: { type: 'object', properties: { path: { type: 'string' } } }
 };
@@ -20,7 +20,7 @@ const computerSpec: ToolSpec = {
 test('generic tools build a function tool for any provider', () => {
   const set = buildSdkTools([genericSpec], 'anthropic');
   // The generic path is NOT a provider-defined tool.
-  expect((set?.fs_read as { type?: string }).type).not.toBe('provider');
+  expect((set?.file_read as { type?: string }).type).not.toBe('provider');
 });
 
 test('anthropic provider emits the native computer tool when providerTool.anthropic is set', () => {

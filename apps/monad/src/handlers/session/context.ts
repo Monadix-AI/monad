@@ -70,7 +70,7 @@ interface SessionRuntime {
   /** Delegating fs/terminal backends (ACP editor performs the ops) — installed when the session
    * advertised fs/terminal capability via configureRuntime's `delegate` flag. */
   backends?: ToolBackends;
-  /** Drops daemon-host tools (process_*, code_execute, fs_glob/grep) when execution is delegated. */
+  /** Drops daemon-host tools (process_*, code_execute, file_glob/grep) when execution is delegated. */
   toolFilter?: (toolName: string) => boolean;
   /** Project-local skills loaded from session.cwd/.monad/skills/ — merged into the loop for this session. */
   extraSkills?: LoadedSkill[];

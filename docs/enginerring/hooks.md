@@ -110,7 +110,7 @@ match.
 {
   "hooks": {
     "BeforeTool": [
-      { "matcher": "^(shell_exec|fs_write)$",
+      { "matcher": "^(shell_exec|file_write)$",
         "hooks": [{ "command": "./guards/check.sh", "timeoutMs": 5000, "onError": "deny" }] }
     ],
     "AfterModel": [
@@ -138,7 +138,7 @@ and the settings API never writes them. Shell command hooks only.
 
 ```ts
 import { hook } from '@monad/sdk-atom';
-hook({ event: 'BeforeTool', matcher: '^fs_write$', handler: () => ({ decision: 'ask' }), onError: 'deny' });
+hook({ event: 'BeforeTool', matcher: '^file_write$', handler: () => ({ decision: 'ask' }), onError: 'deny' });
 ```
 
 ---

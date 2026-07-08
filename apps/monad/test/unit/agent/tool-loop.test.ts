@@ -7,7 +7,7 @@ import { newId } from '@monad/protocol';
 import { z } from 'zod';
 
 import { AgentLoop, InMemoryMessageRepo, replayHistory } from '@/agent/index.ts';
-import { fsReadTool } from '@/capabilities/tools';
+import { fileReadTool } from '@/capabilities/tools';
 import { toolResult } from '@/capabilities/tools/types.ts';
 
 // A scripted step is either a final text answer (string) or a tool call the model requests.
@@ -299,9 +299,9 @@ test('a huge tool result is truncated before being fed back to the model', async
   expect(out.output.length).toBeLessThan(2000);
 });
 
-test('sandbox guard is enforced through the loop (fs_read traversal → tool error)', async () => {
-  const { loop, events } = harness([{ tool: 'fs_read', input: { path: '/etc/passwd' } }, 'done'], {
-    tools: [fsReadTool],
+test('sandbox guard is enforced through the loop (file_read traversal → tool error)', async () => {
+  const { loop, events } = harness([{ tool: 'file_read', input: { path: '/etc/passwd' } }, 'done'], {
+    tools: [fileReadTool],
     sandboxRoots: ['/home/u/workspace']
   });
   const msg = await loop.runBlock(sid(), 'read it');
@@ -311,9 +311,9 @@ test('sandbox guard is enforced through the loop (fs_read traversal → tool err
 });
 
 test('malformed tool input is rejected by the schema and surfaced as a tool error', async () => {
-  // fs_read requires a non-empty `path`; the model supplies none.
-  const { loop, events } = harness([{ tool: 'fs_read', input: {} }, 'done'], {
-    tools: [fsReadTool],
+  // file_read requires a non-empty `path`; the model supplies none.
+  const { loop, events } = harness([{ tool: 'file_read', input: {} }, 'done'], {
+    tools: [fileReadTool],
     sandboxRoots: ['/home/u/workspace']
   });
   const msg = await loop.runBlock(sid(), 'read it');
@@ -575,8 +575,8 @@ test('runStream: plain prose streams directly with no tool call', async () => {
 });
 
 test('runStream: sandbox guard enforced; tool error surfaced, final answer streamed', async () => {
-  const { loop, events } = streamHarness([{ tool: 'fs_read', input: { path: '/etc/passwd' } }, 'done'], {
-    tools: [fsReadTool],
+  const { loop, events } = streamHarness([{ tool: 'file_read', input: { path: '/etc/passwd' } }, 'done'], {
+    tools: [fileReadTool],
     sandboxRoots: ['/home/u/workspace']
   });
   await loop.runStream(sid(), 'read it');
@@ -650,10 +650,10 @@ test('replays persisted tool steps WITH data structurally (native tool-call/tool
     id: newId('msg'),
     sessionId: s,
     role: 'assistant',
-    text: '{"tool":"fs_read","input":{"path":"a"}}',
+    text: '{"tool":"file_read","input":{"path":"a"}}',
     createdAt: '',
     type: 'tool_call',
-    data: { toolCallId: 'tc1', toolName: 'fs_read', input: { path: 'a' } }
+    data: { toolCallId: 'tc1', toolName: 'file_read', input: { path: 'a' } }
   });
   messages.append({
     id: newId('msg'),
@@ -662,7 +662,7 @@ test('replays persisted tool steps WITH data structurally (native tool-call/tool
     text: 'contents of a',
     createdAt: '',
     type: 'tool_result',
-    data: { toolCallId: 'tc1', toolName: 'fs_read', output: 'contents of a' }
+    data: { toolCallId: 'tc1', toolName: 'file_read', output: 'contents of a' }
   });
   const loop = new AgentLoop({ model, tools: [], messages, defaultModel: 'mock', emit: () => {} });
 
@@ -698,10 +698,10 @@ test('replay uses persisted result.modelContent as the model-facing source of tr
     id: newId('msg'),
     sessionId: s,
     role: 'assistant',
-    text: '{"tool":"fs_edit","input":{"path":"a"}}',
+    text: '{"tool":"file_patch","input":{"path":"a"}}',
     createdAt: '',
     type: 'tool_call',
-    data: { toolCallId: 'tc1', toolName: 'fs_edit', input: { path: 'a' } }
+    data: { toolCallId: 'tc1', toolName: 'file_patch', input: { path: 'a' } }
   });
   messages.append({
     id: newId('msg'),
@@ -712,7 +712,7 @@ test('replay uses persisted result.modelContent as the model-facing source of tr
     type: 'tool_result',
     data: {
       toolCallId: 'tc1',
-      toolName: 'fs_edit',
+      toolName: 'file_patch',
       output: 'legacy output',
       ok: true,
       result: { modelContent: 'canonical model output', metadata: { changed: true } }

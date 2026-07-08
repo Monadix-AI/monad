@@ -93,10 +93,10 @@ test('ACP terminal backend sets timedOut=true and exitCode=124 when the timer fi
 });
 
 test('isDelegableTool excludes daemon-host tools, keeps editor-routable ones', () => {
-  for (const t of ['process_start', 'process_kill', 'code_execute', 'fs_glob', 'fs_grep']) {
+  for (const t of ['process_start', 'process_kill', 'code_execute', 'file_glob', 'file_grep']) {
     expect(isDelegableTool(t)).toBe(false);
   }
-  for (const t of ['fs_read', 'fs_write', 'fs_edit', 'shell_exec', 'web_fetch']) {
+  for (const t of ['file_read', 'file_write', 'file_patch', 'shell_exec', 'web_fetch']) {
     expect(isDelegableTool(t)).toBe(true);
   }
 });

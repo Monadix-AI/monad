@@ -26,8 +26,8 @@ async function runSearch(tool: ReturnType<typeof createToolSearchTool>, input: u
 }
 
 test('returns matching tools with their schemas', async () => {
-  const tools = [makeTool('fs_read', 'reads a file'), makeTool('net_fetch', 'fetches a URL')];
-  const model = makeModel('fs_read');
+  const tools = [makeTool('file_read', 'reads a file'), makeTool('net_fetch', 'fetches a URL')];
+  const model = makeModel('file_read');
   const builtinNames = new Set<string>();
 
   const tool = createToolSearchTool({

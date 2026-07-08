@@ -5,7 +5,7 @@ import type { Tool, ToolBackends } from '@/capabilities/tools/types.ts';
 import { expect, test } from 'bun:test';
 
 import { AgentLoop, InMemoryMessageRepo } from '@/agent/index.ts';
-import { fsGlobTool, fsWriteTool } from '@/capabilities/tools';
+import { fileGlobTool, fileWriteTool } from '@/capabilities/tools';
 import { toolResult } from '@/capabilities/tools/types.ts';
 
 type Step = string | { tool: string; input?: unknown };
@@ -45,13 +45,13 @@ function run(
   return { loop, events };
 }
 
-test('fs_write routes through an injected delegating backend, not the daemon disk', async () => {
+test('file_write routes through an injected delegating backend, not the daemon disk', async () => {
   const writes: { path: string; content: string }[] = [];
   const backends: ToolBackends = {
     fs: {
       delegated: true,
       async readTextFile() {
-        return '';
+        throw new Error('not found');
       },
       async writeTextFile(path, content) {
         writes.push({ path, content });
@@ -67,8 +67,8 @@ test('fs_write routes through an injected delegating backend, not the daemon dis
   };
   // An absolute path outside any sandbox would throw in the sandbox backend; the delegating
   // backend accepts it (the editor owns the fs) and no gate fires because delegated === true.
-  const { loop } = run([{ tool: 'fs_write', input: { path: '/outside/x.txt', content: 'hi' } }, 'done'], {
-    tools: [fsWriteTool as Tool],
+  const { loop } = run([{ tool: 'file_write', input: { path: '/outside/x.txt', content: 'hi' } }, 'done'], {
+    tools: [fileWriteTool as Tool],
     backends
   });
   await loop.runBlock('ses_1' as SessionId, 'write a file');
@@ -96,11 +96,11 @@ test('extraTools (e.g. per-session MCP tools) are available and callable this ru
 test('toolFilter hides a tool from execution (model gets unknown-tool)', async () => {
   // A second, unfiltered tool keeps tool-mode active so the filtered call reaches execution
   // and resolves to unknown-tool (rather than the loop skipping tools entirely).
-  const { loop, events } = run([{ tool: 'fs_glob', input: { pattern: '*' } }, 'done'], {
-    tools: [fsWriteTool as Tool, fsGlobTool as Tool],
-    toolFilter: (n) => n !== 'fs_glob'
+  const { loop, events } = run([{ tool: 'file_glob', input: { pattern: '*' } }, 'done'], {
+    tools: [fileWriteTool as Tool, fileGlobTool as Tool],
+    toolFilter: (n) => n !== 'file_glob'
   });
   await loop.runBlock('ses_1' as SessionId, 'list files');
   const result = events.find((e) => e.type === 'tool.result');
-  expect(result?.payload).toMatchObject({ tool: 'fs_glob', ok: false });
+  expect(result?.payload).toMatchObject({ tool: 'file_glob', ok: false });
 });

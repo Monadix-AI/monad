@@ -10,7 +10,7 @@ import { AgentPersonaService, isToolExposed, type SessionAgentLookup } from '@/s
 import { writeAgentBody } from '@/store/home/agent-def.ts';
 
 describe('isToolExposed (per-agent atoms policy)', () => {
-  const allowlist = { mode: 'allowlist' as const, allow: ['playwright', 'fs_write'], deny: ['shell_exec'] };
+  const allowlist = { mode: 'allowlist' as const, allow: ['playwright', 'file_write'], deny: ['shell_exec'] };
   const inherit = { mode: 'inherit' as const, allow: [], deny: ['shell_exec'] };
 
   test('undefined policy exposes everything', () => {
@@ -25,13 +25,13 @@ describe('isToolExposed (per-agent atoms policy)', () => {
 
   test('inherit exposes all non-denied', () => {
     expect(isToolExposed(inherit, 'read_file', 'somepack')).toBe(true);
-    expect(isToolExposed(inherit, 'fs_read')).toBe(true);
+    expect(isToolExposed(inherit, 'file_read')).toBe(true);
   });
 
   test('allowlist: built-ins ungated, pack/server tools need their source (or name) allowed', () => {
-    expect(isToolExposed(allowlist, 'fs_read')).toBe(true); // built-in (no source) — ungated
+    expect(isToolExposed(allowlist, 'file_read')).toBe(true); // built-in (no source) — ungated
     expect(isToolExposed(allowlist, 'click', 'playwright')).toBe(true); // source allowed
-    expect(isToolExposed(allowlist, 'fs_write', 'somepack')).toBe(true); // exact tool name allowed
+    expect(isToolExposed(allowlist, 'file_write', 'somepack')).toBe(true); // exact tool name allowed
     expect(isToolExposed(allowlist, 'query', 'notion')).toBe(false); // source not in allow
   });
 });
@@ -102,7 +102,7 @@ describe('AgentPersonaService', () => {
     };
 
     const filter = filterFor('ses_1');
-    expect(filter?.('fs_read')).toBe(true); // built-in — ungated
+    expect(filter?.('file_read')).toBe(true); // built-in — ungated
     expect(filter?.('click')).toBe(true); // source 'playwright' allowed
     expect(filter?.('query')).toBe(false); // source 'notion' not allowed
     expect(filter?.('shell_exec')).toBe(false); // denied

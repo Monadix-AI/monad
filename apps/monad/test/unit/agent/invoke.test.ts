@@ -2,7 +2,7 @@ import type { Tool, ToolContext, ToolGate, ToolInputSchema } from '@/capabilitie
 
 import { expect, test } from 'bun:test';
 
-import { fsReadTool, netFetchTool, ToolSecurityError } from '@/capabilities/tools';
+import { fileReadTool, netFetchTool, ToolSecurityError } from '@/capabilities/tools';
 import { invokeTool, ToolGateDeniedError, ToolInputError, ToolResultError } from '@/capabilities/tools/invoke.ts';
 import { toolResult } from '@/capabilities/tools/types.ts';
 
@@ -61,9 +61,9 @@ test('the gate receives the correct request', async () => {
 
 // ── resource guards fire through the dispatcher (defense lives in the tool) ──────
 
-test('fs_read: path traversal is rejected when a sandbox root is set', async () => {
+test('file_read: path traversal is rejected when a sandbox root is set', async () => {
   await expect(
-    invokeTool(fsReadTool, { path: '/etc/passwd' }, { ...baseOpts, sandboxRoots: ['/home/u/workspace'] })
+    invokeTool(fileReadTool, { path: '/etc/passwd' }, { ...baseOpts, sandboxRoots: ['/home/u/workspace'] })
   ).rejects.toBeInstanceOf(ToolSecurityError);
 });
 
@@ -122,9 +122,9 @@ test('input validation runs before the gate (malformed high-risk call never reac
   expect(gateCalls).toBe(0);
 });
 
-test('builtin fs_read schema rejects a missing path', async () => {
+test('builtin file_read schema rejects a missing path', async () => {
   await expect(
-    invokeTool(fsReadTool, {} as unknown as { path: string }, { ...baseOpts, sandboxRoots: ['/ws'] })
+    invokeTool(fileReadTool, {} as unknown as { path: string }, { ...baseOpts, sandboxRoots: ['/ws'] })
   ).rejects.toBeInstanceOf(ToolInputError);
 });
 

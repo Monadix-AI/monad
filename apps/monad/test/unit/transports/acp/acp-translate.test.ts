@@ -59,10 +59,10 @@ test('finishReasonToStopReason passes through and defaults to end_turn', () => {
 });
 
 test('toolKind maps monad tool names to ACP kinds', () => {
-  expect(toolKind('fs_read')).toBe('read');
-  expect(toolKind('fs_write')).toBe('edit');
-  expect(toolKind('fs_edit')).toBe('edit');
-  expect(toolKind('fs_grep')).toBe('search');
+  expect(toolKind('file_read')).toBe('read');
+  expect(toolKind('file_write')).toBe('edit');
+  expect(toolKind('file_patch')).toBe('edit');
+  expect(toolKind('file_grep')).toBe('search');
   expect(toolKind('shell_exec')).toBe('execute');
   expect(toolKind('web_fetch')).toBe('fetch');
   expect(toolKind('skill')).toBe('think');
@@ -90,11 +90,11 @@ test('agent.reasoning becomes an agent_thought_chunk', () => {
 test('empty agent.token delta yields no update', () => {});
 
 test('tool.called becomes a tool_call with kind + rawInput', () => {
-  const u = eventToSessionUpdate(evt('tool.called', { toolCallId: 'tc_1', tool: 'fs_write', input: { path: '/x' } }));
+  const u = eventToSessionUpdate(evt('tool.called', { toolCallId: 'tc_1', tool: 'file_write', input: { path: '/x' } }));
   expect(u).toEqual({
     sessionUpdate: 'tool_call',
     toolCallId: 'tc_1',
-    title: 'fs_write',
+    title: 'file_write',
     kind: 'edit',
     status: 'in_progress',
     rawInput: { path: '/x' },
@@ -120,7 +120,7 @@ test('tool.progress becomes an in_progress tool_call_update with cumulative outp
 
 test('tool.result becomes a tool_call_update with terminal status + content', () => {
   const ok = eventToSessionUpdate(
-    evt('tool.result', { toolCallId: 'tc_1', tool: 'fs_write', ok: true, result: 'done' })
+    evt('tool.result', { toolCallId: 'tc_1', tool: 'file_write', ok: true, result: 'done' })
   );
   expect(ok).toEqual({
     sessionUpdate: 'tool_call_update',
@@ -200,15 +200,11 @@ test('promptToText returns empty string for empty input', () => {
 // ── toolKind remaining patterns ───────────────────────────────────────────────
 
 test('toolKind covers all remaining built-in name patterns', () => {
-  // read
-  expect(toolKind('fs_list')).toBe('read');
-  expect(toolKind('fs_readBytes')).toBe('read'); // startsWith 'fs_read'
-  // edit
-  expect(toolKind('fs_delete')).toBe('edit');
-  // move
-  expect(toolKind('fs_move')).toBe('move');
+  expect(toolKind('file_read')).toBe('read');
+  expect(toolKind('file_write')).toBe('edit');
+  expect(toolKind('file_patch')).toBe('edit');
   // search (glob, grep already covered; name-contains-search catch-all)
-  expect(toolKind('fs_glob')).toBe('search');
+  expect(toolKind('file_glob')).toBe('search');
   expect(toolKind('web_search')).toBe('search'); // includes('search')
   // execute
   expect(toolKind('process_start')).toBe('execute');

@@ -96,7 +96,7 @@ test('allowlist agent runs an allowed pack tool but not a denied one', async () 
 
 test('built-ins (no source) stay available to an allowlist agent', async () => {
   const builtin = { ran: false };
-  const tool = makeTool(scriptedModel([{ tool: 'fs_read' }, 'ok']), [flagTool('fs_read', builtin)]);
+  const tool = makeTool(scriptedModel([{ tool: 'file_read' }, 'ok']), [flagTool('file_read', builtin)]);
   await tool.run({ agent: 'narrow', instruction: 'go' }, ctx);
   expect(builtin.ran).toBe(true); // no source → ungated by the allowlist
 });

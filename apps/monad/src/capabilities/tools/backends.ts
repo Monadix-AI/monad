@@ -7,7 +7,7 @@
 import type { TerminalExecResult, ToolBackends } from './types.ts';
 
 import { existsSync } from 'node:fs';
-import { lstat, mkdir, realpath } from 'node:fs/promises';
+import { lstat, mkdir, realpath, rename, unlink } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
 
 import { buildSandboxPolicy, sandboxedSpawn } from './sandbox/spawn.ts';
@@ -275,6 +275,19 @@ export function createSandboxBackends(
         const real = await resolveReal(path, sandboxRoots, leafIsSymlink);
         await Bun.write(real, content);
         return { path: real, bytesWritten: Buffer.byteLength(content, 'utf8') };
+      },
+      async deleteFile(path) {
+        const real = await resolveReal(path, sandboxRoots);
+        await unlink(real);
+        return { path: real };
+      },
+      async moveFile(path, newPath) {
+        const real = await resolveReal(path, sandboxRoots);
+        const lexicalNew = assertPathWithinRoots(newPath, sandboxRoots);
+        await mkdir(dirname(lexicalNew), { recursive: true });
+        const realNew = await resolveReal(newPath, sandboxRoots, false);
+        await rename(real, realNew);
+        return { path: real, newPath: realNew };
       }
     },
     terminal: {
@@ -285,13 +298,13 @@ export function createSandboxBackends(
 }
 
 // Tools that must NOT run in a delegated (ACP) session: they would execute on the daemon host
-// (process_*, code_execute) or read the daemon's disk (fs_glob/fs_grep) rather than the editor's,
+// (process_*, code_execute) or read the daemon's disk (file_glob/file_grep) rather than the editor's,
 // bypassing delegation. Used as a per-session toolFilter when fs/terminal delegation is active.
 export function isDelegableTool(toolName: string): boolean {
   return !(
     toolName.startsWith('process_') ||
     toolName === 'code_execute' ||
-    toolName === 'fs_glob' ||
-    toolName === 'fs_grep'
+    toolName === 'file_glob' ||
+    toolName === 'file_grep'
   );
 }

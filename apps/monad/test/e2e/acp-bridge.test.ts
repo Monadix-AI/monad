@@ -13,7 +13,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { client as acpClient, ndJsonStream, PROTOCOL_VERSION } from '@agentclientprotocol/sdk';
 
-import { fsReadTool, fsWriteTool } from '@/capabilities/tools';
+import { fileReadTool, fileWriteTool } from '@/capabilities/tools';
 import { createBridgeHandlers } from '@/transports/acp/bridge.ts';
 import { connectAcp } from '@/transports/acp/connection.ts';
 import { createHttpTransport } from '@/transports/http.ts';
@@ -142,11 +142,11 @@ test('bridge: a session is sandboxed to the editor cwd via configureRuntime → 
     // Reads a file inside cwd (allowed) then one outside (rejected by the session sandbox).
     const daemon = bridgeToDaemon(
       scriptedModel([
-        { tool: 'fs_read', input: { path: join(dir, 'inside.txt') } },
-        { tool: 'fs_read', input: { path: '/etc/hosts' } },
+        { tool: 'file_read', input: { path: join(dir, 'inside.txt') } },
+        { tool: 'file_read', input: { path: '/etc/hosts' } },
         'done'
       ]),
-      { tools: [fsReadTool as Tool] }
+      { tools: [fileReadTool as Tool] }
     );
     const { agent, clientStream } = pipe();
     connectAcp(daemon.handlers, agent);
@@ -263,14 +263,14 @@ test('bridge: a session-scoped MCP server connects daemon-side and its tool runs
   }
 });
 
-test('bridge: a delegated session routes fs_write back to the editor via the daemon DelegationService', async () => {
+test('bridge: a delegated session routes file_write back to the editor via the daemon DelegationService', async () => {
   const writes: { path: string; content: string }[] = [];
-  // fs_write runs in the DAEMON loop, but the session is delegated → the daemon's remote backend emits
+  // file_write runs in the DAEMON loop, but the session is delegated → the daemon's remote backend emits
   // a delegation.fs_request, the bridge services it against the editor (this client), and answers via
   // delegation.respond. The write must land in the editor, NOT on the daemon disk.
   const daemon = bridgeToDaemon(
-    scriptedModel([{ tool: 'fs_write', input: { path: '/proj/x.ts', content: 'hi' } }, 'done']),
-    { tools: [fsWriteTool as Tool] }
+    scriptedModel([{ tool: 'file_write', input: { path: '/proj/x.ts', content: 'hi' } }, 'done']),
+    { tools: [fileWriteTool as Tool] }
   );
   const { agent, clientStream } = pipe();
   connectAcp(daemon.handlers, agent);
@@ -288,7 +288,9 @@ test('bridge: a delegated session routes fs_write back to the editor via the dae
         writes.push({ path: params.path, content: params.content });
         return {};
       })
-      .onRequest('fs/read_text_file', () => ({ content: '' }))
+      .onRequest('fs/read_text_file', () => {
+        throw new Error('not found');
+      })
       .connectWith(clientStream, async (ctx) => {
         await ctx.request('initialize', {
           protocolVersion: PROTOCOL_VERSION,

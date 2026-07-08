@@ -218,7 +218,7 @@ function parsedJsonObject(raw: string | undefined): unknown {
 }
 
 function isFileReadTool(tool: string): boolean {
-  return tool === 'fs_read' || tool === 'file_read' || tool === 'read_file';
+  return tool === 'file_read';
 }
 
 function isShellTool(tool: string): boolean {
@@ -262,7 +262,7 @@ function groupStatus(steps: ToolItem[]): ToolItem['status'] {
   return 'ok';
 }
 
-export const ToolStepView = memo(function ToolStepView({ step }: { step: ToolViewItem }) {
+const ToolStepView = memo(function ToolStepView({ step }: { step: ToolViewItem }) {
   if (step.kind === 'toolGroup') return <ToolGroupView step={step} />;
   return <SingleToolView step={step} />;
 });

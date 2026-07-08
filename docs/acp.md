@@ -87,13 +87,13 @@ edits appear as **reviewable diffs** and commands run in the editor's terminal. 
 the daemon (not in the bridge), this is modelled like oversight/clarify — **an out-of-band event + an
 inbound RPC**, not in-process backends:
 
-1. A delegated `fs_write`/shell tool runs in the daemon against a *remote* backend
+1. A delegated `file_write`/shell tool runs in the daemon against a *remote* backend
    (`DelegationService`), which emits a `delegation.fs_request` / `delegation.terminal_request` event.
 2. The event rides the turn's stream to the bridge, which services it against the editor
    (`fs/*`, `terminal/*` reverse-RPC) and answers via the `delegation.respond` RPC (streaming terminal
    output via `delegation.output`).
 
-Tools that can't be delegated (`process_*`, `code_execute`, `fs_glob`, `fs_grep`) are dropped from a
+Tools that can't be delegated (`process_*`, `code_execute`, `file_glob`, `file_grep`) are dropped from a
 delegated session so they can't silently run on the daemon host (`isDelegableTool`).
 
 ## monad as an ACP client — multi-agent delegation

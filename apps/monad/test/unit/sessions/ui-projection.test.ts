@@ -83,11 +83,13 @@ test('projects structured tool display payloads for replay', () => {
     afterText: 'new',
     diff: '--- a.txt\tBefore\n+++ a.txt\tAfter\n@@ -1 +1 @@\n-old\n+new\n'
   };
-  projector.applyEvent(event('tool.called', { toolCallId: 'call_1', tool: 'fs_edit', input: { path: '/tmp/a.txt' } }));
+  projector.applyEvent(
+    event('tool.called', { toolCallId: 'call_1', tool: 'file_patch', input: { path: '/tmp/a.txt' } })
+  );
   const events = projector.applyEvent(
     event('tool.result', {
       toolCallId: 'call_1',
-      tool: 'fs_edit',
+      tool: 'file_patch',
       ok: true,
       result: 'Modified file: /tmp/a.txt. 1 added, 1 removed.',
       display
@@ -122,7 +124,7 @@ test('hydrates structured tool display from persisted full result envelope', () 
       role: 'assistant',
       text: '',
       type: 'tool_call',
-      data: { toolCallId: 'call_1', toolName: 'fs_edit', input: { path: '/tmp/a.txt' } },
+      data: { toolCallId: 'call_1', toolName: 'file_patch', input: { path: '/tmp/a.txt' } },
       stream: { status: 'complete' },
       active: true,
       createdAt: '2026-06-24T00:00:00.000Z'
@@ -135,7 +137,7 @@ test('hydrates structured tool display from persisted full result envelope', () 
       type: 'tool_result',
       data: {
         toolCallId: 'call_1',
-        toolName: 'fs_edit',
+        toolName: 'file_patch',
         output: 'Modified file: /tmp/a.txt. 1 added, 1 removed.',
         ok: true,
         result: {

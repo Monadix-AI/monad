@@ -103,13 +103,13 @@ test('remove drops the peer and its credential', async () => {
 test('a peer mutation preserves the operator agent.approvals policy', async () => {
   const cfg = await loadAll(paths.config, paths.profile);
   if (!cfg) throw new Error('config missing');
-  cfg.agent.approvals = { deny: ['shell_exec'], ask: ['fs_write'], allow: [] };
+  cfg.agent.approvals = { deny: ['shell_exec'], ask: ['file_write'], allow: [] };
   await saveSystemConfig(paths.config, cfg);
 
   await handlers.peer.upsertPeer({ peer: view() });
 
   const after = await loadAll(paths.config, paths.profile);
-  expect(after?.agent.approvals).toEqual({ deny: ['shell_exec'], ask: ['fs_write'], allow: [] });
+  expect(after?.agent.approvals).toEqual({ deny: ['shell_exec'], ask: ['file_write'], allow: [] });
 });
 
 test('getPeer returns one peer without any secret material', async () => {

@@ -57,10 +57,9 @@ export function finishReasonToStopReason(reason: FinishReason | undefined): Stop
 
 /** Map a monad built-in tool name to an ACP ToolKind so clients pick sensible icons/UI. */
 export function toolKind(toolName: string): ToolKind {
-  if (toolName.startsWith('fs_read') || toolName === 'fs_list') return 'read';
-  if (toolName === 'fs_write' || toolName === 'fs_edit' || toolName === 'fs_delete') return 'edit';
-  if (toolName === 'fs_move') return 'move';
-  if (toolName === 'fs_glob' || toolName === 'fs_grep' || toolName.includes('search')) return 'search';
+  if (toolName === 'file_read') return 'read';
+  if (toolName === 'file_write' || toolName === 'file_patch') return 'edit';
+  if (toolName === 'file_glob' || toolName === 'file_grep' || toolName.includes('search')) return 'search';
   if (toolName.startsWith('shell') || toolName.startsWith('process') || toolName === 'code_execute') return 'execute';
   if (toolName.startsWith('web') || toolName.startsWith('net') || toolName.startsWith('fetch')) return 'fetch';
   if (toolName === 'skill' || toolName === 'clarify_ask') return 'think';

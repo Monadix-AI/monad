@@ -109,15 +109,15 @@ test('renderShellInjections replaces a failing command with a visible marker', a
 // ── allowed-tools matching + enforcement ─────────────────────────────────────────
 
 test('parseAllowedTools splits on whitespace and commas', () => {
-  expect(parseAllowedTools('Read  Bash, fs_read')).toEqual(['Read', 'Bash', 'fs_read']);
+  expect(parseAllowedTools('Read  Bash, file_read')).toEqual(['Read', 'Bash', 'file_read']);
 });
 
 test('toolMatchesAllowedPattern: exact, prefix glob, and Claude arg-constraint syntax', () => {
-  expect(toolMatchesAllowedPattern('fs_read', 'fs_read')).toBe(true);
-  expect(toolMatchesAllowedPattern('fs_read', 'fs_write')).toBe(false);
-  expect(toolMatchesAllowedPattern('fs_*', 'fs_write')).toBe(true);
+  expect(toolMatchesAllowedPattern('file_read', 'file_read')).toBe(true);
+  expect(toolMatchesAllowedPattern('file_read', 'file_write')).toBe(false);
+  expect(toolMatchesAllowedPattern('file_*', 'file_write')).toBe(true);
   expect(toolMatchesAllowedPattern('Bash(git:*)', 'Bash')).toBe(true);
-  expect(toolMatchesAllowedPattern('shell_*', 'fs_read')).toBe(false);
+  expect(toolMatchesAllowedPattern('shell_*', 'file_read')).toBe(false);
 });
 
 const dangerTool: Tool<unknown, string> = {

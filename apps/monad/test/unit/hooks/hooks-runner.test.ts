@@ -25,7 +25,7 @@ test('no configured hooks → zero-cost pass-through', async () => {
 test('command hook exit 2 → blocked with stderr reason', async () => {
   const d = await runner({
     BeforeTool: [{ hooks: [{ command: 'echo "no writes" >&2; exit 2' }] }]
-  }).run(input('BeforeTool', { toolName: 'fs_write', toolInput: {} }));
+  }).run(input('BeforeTool', { toolName: 'file_write', toolInput: {} }));
   expect(d.blocked).toBe(true);
   expect(d.reason).toBe('no writes');
 });
@@ -94,11 +94,11 @@ test('a throwing atom hook and a non-2 exit are isolated (not blocked)', async (
 
 test('matcher filters tool events by tool name', async () => {
   const cfg: HookConfig = {
-    BeforeTool: [{ matcher: '^fs_write$', hooks: [{ command: 'exit 2' }] }]
+    BeforeTool: [{ matcher: '^file_write$', hooks: [{ command: 'exit 2' }] }]
   };
-  const allowed = await runner(cfg).run(input('BeforeTool', { toolName: 'fs_read', toolInput: {} }));
+  const allowed = await runner(cfg).run(input('BeforeTool', { toolName: 'file_read', toolInput: {} }));
   expect(allowed.blocked).toBe(false);
-  const blocked = await runner(cfg).run(input('BeforeTool', { toolName: 'fs_write', toolInput: {} }));
+  const blocked = await runner(cfg).run(input('BeforeTool', { toolName: 'file_write', toolInput: {} }));
   expect(blocked.blocked).toBe(true);
 });
 
@@ -121,15 +121,15 @@ test('Stop continueWork surfaces on the decision', async () => {
 test('command-hook config is read per call (supports hot-reload)', async () => {
   let cfg: HookConfig = {};
   const r = createHookRunner({ config: () => cfg, atomHooks: new Map(), cwd: process.cwd(), log });
-  expect((await r.run(input('BeforeTool', { toolName: 'fs_write', toolInput: {} }))).blocked).toBe(false);
+  expect((await r.run(input('BeforeTool', { toolName: 'file_write', toolInput: {} }))).blocked).toBe(false);
   cfg = { BeforeTool: [{ hooks: [{ command: 'exit 2' }] }] };
-  expect((await r.run(input('BeforeTool', { toolName: 'fs_write', toolInput: {} }))).blocked).toBe(true);
+  expect((await r.run(input('BeforeTool', { toolName: 'file_write', toolInput: {} }))).blocked).toBe(true);
 });
 
 test('onError:deny — a timed-out command hook fails closed (blocks)', async () => {
   const d = await runner({
     BeforeTool: [{ hooks: [{ command: 'sleep 0.1', timeoutMs: 50, onError: 'deny' }] }]
-  }).run(input('BeforeTool', { toolName: 'fs_write', toolInput: {} }));
+  }).run(input('BeforeTool', { toolName: 'file_write', toolInput: {} }));
   expect(d.blocked).toBe(true);
 });
 
@@ -148,14 +148,14 @@ test('onError:deny — a throwing atom hook fails closed (blocks)', async () => 
       ]
     ]
   ]);
-  const d = await runner({}, hooks).run(input('BeforeTool', { toolName: 'fs_write', toolInput: {} }));
+  const d = await runner({}, hooks).run(input('BeforeTool', { toolName: 'file_write', toolInput: {} }));
   expect(d.blocked).toBe(true);
 });
 
 test('onError defaults to allow — a non-2 exit still skips (fail-open)', async () => {
   const d = await runner({
     BeforeTool: [{ hooks: [{ command: 'exit 1' }] }]
-  }).run(input('BeforeTool', { toolName: 'fs_write', toolInput: {} }));
+  }).run(input('BeforeTool', { toolName: 'file_write', toolInput: {} }));
   expect(d.blocked).toBe(false);
 });
 
@@ -165,7 +165,7 @@ test('identical command specs are deduped (run once per event)', async () => {
     config: {
       BeforeTool: [
         { matcher: '.*', hooks: [{ command: 'exit 0' }] },
-        { matcher: '^fs_write$', hooks: [{ command: 'exit 0' }] }
+        { matcher: '^file_write$', hooks: [{ command: 'exit 0' }] }
       ]
     },
     atomHooks: new Map(),
@@ -173,7 +173,7 @@ test('identical command specs are deduped (run once per event)', async () => {
     log,
     record: (e) => records.push(e)
   });
-  await r.run(input('BeforeTool', { toolName: 'fs_write', toolInput: {} }));
+  await r.run(input('BeforeTool', { toolName: 'file_write', toolInput: {} }));
   expect(records.filter((e) => e.source === 'command').length).toBe(1);
 });
 
@@ -185,7 +185,7 @@ test('policy command hooks run before user hooks and a policy deny wins', async 
     cwd: process.cwd(),
     log
   });
-  const d = await r.run(input('BeforeTool', { toolName: 'fs_write', toolInput: {} }));
+  const d = await r.run(input('BeforeTool', { toolName: 'file_write', toolInput: {} }));
   expect(d.blocked).toBe(true);
   expect(d.reason).toBe('org policy');
 });
@@ -201,7 +201,7 @@ test('record fires per executed hook with outcome + duration', async () => {
     log,
     record: (e) => records.push(e)
   });
-  await r.run(input('BeforeTool', { toolName: 'fs_write', toolInput: {} }));
+  await r.run(input('BeforeTool', { toolName: 'file_write', toolInput: {} }));
   expect(records).toHaveLength(1);
   expect(records[0]?.outcome).toBe('deny');
   expect(typeof records[0]?.durationMs).toBe('number');
