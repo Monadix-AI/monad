@@ -29,7 +29,7 @@ test('sidebar paging is fully pager-driven with a JS edge rubber band', () => {
   expect(source).toContain('transformPerspective: 1100');
   expect(source).toContain('x: trackpadBounceX');
   expect(source).toContain('data-sidebar-trackpad-surface="true"');
-  expect(source.match(/panel-nav-snap-item/g)).toHaveLength(2);
+  expect(source.match(/panel-nav-snap-item/g)).toHaveLength(1);
 
   expect(source).not.toContain('scrollSnapType');
   expect(source).not.toContain('scroll-snap-align');

@@ -4,7 +4,6 @@ import type { SessionId } from '@monad/protocol';
 
 import { ComputerTerminal01Icon, ExternalLinkIcon, SquareIcon, TextIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { useSessionProcessControlMutation } from '@monad/client-rtk';
 import { Button, cn } from '@monad/ui';
 import { CodeInline } from '@monad/ui/components/CodeBlock';
 import { memo, useMemo, useState } from 'react';
@@ -478,14 +477,14 @@ function NestedToolView({
 function ToolDetails({
   step,
   pendingLabel,
-  sessionId
+  sessionId: _sessionId
 }: {
   step: ToolItem;
   pendingLabel: string;
   sessionId?: SessionId;
 }) {
   const isError = step.status === 'error';
-  const [processControl, { isLoading: stoppingProcess }] = useSessionProcessControlMutation();
+  const stoppingProcess = false;
   const isWebSearch = step.tool === 'web_search';
   const isShell = isShellTool(step.tool);
   const searchResults = useMemo(
@@ -523,22 +522,12 @@ function ToolDetails({
   }
 
   if (shellOutput) {
-    const stopSessionId = step.status === 'running' && shellOutput.processId ? sessionId : undefined;
     return (
       <>
         {step.input !== undefined && <ToolInput input={step.input} />}
         <ShellOutputBlock
           command={firstStringField(step.input, ['command']) ?? shellOutput.command}
-          onStop={
-            stopSessionId
-              ? () =>
-                  void processControl({
-                    id: stopSessionId,
-                    action: 'stop',
-                    processId: shellOutput.processId as string
-                  })
-              : undefined
-          }
+          onStop={undefined}
           output={shellOutput}
           stopping={stoppingProcess}
         />

@@ -36,9 +36,9 @@ test('runtime incomplete covers missing provider, credential, default, and agent
 });
 
 test('runtime overview stays enabled while the other runtime tabs disable until onboarding is complete', () => {
-  expect(runtimeDisabledSectionIds).toEqual(['models', 'agents', 'capabilities', 'acpDelegates', 'memory', 'safety']);
+  expect(runtimeDisabledSectionIds).toEqual(['agents', 'acpDelegates', 'memory', 'safety']);
   expect(runtimeSectionEnabled('runtime', false)).toBe(true);
-  expect(runtimeSectionEnabled('models', false)).toBe(false);
+  expect(runtimeSectionEnabled('agents', false)).toBe(false);
   expect(runtimeSectionEnabled('externalAgents', false)).toBe(true);
-  expect(runtimeSectionEnabled('models', true)).toBe(true);
+  expect(runtimeSectionEnabled('agents', true)).toBe(true);
 });

@@ -56,7 +56,6 @@ interface ToolStep {
   input?: UIToolItem['input'];
   status: UIToolItem['status'];
   output?: UIToolItem['output'];
-  errorCode?: UIToolItem['errorCode'];
   /** Arrival order (the `tool.called` event's id) — see StreamMessage.seq. */
   seq?: UIToolItem['seq'];
 }
@@ -198,7 +197,6 @@ export const streamSessionApi = sendMessageApi.injectEndpoints({
                     if (step) {
                       step.status = p.ok ? 'ok' : 'error';
                       step.output = p.displayResult ?? p.result;
-                      step.errorCode = p.errorCode;
                     }
                     break;
                   }

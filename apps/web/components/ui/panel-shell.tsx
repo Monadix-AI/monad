@@ -1,11 +1,30 @@
 'use client';
 
+import type React from 'react';
 import type { ReactNode } from 'react';
 
 import { cn } from '@monad/ui';
 
-export function PanelShell({ children, className }: { children: ReactNode; className?: string }) {
-  return <section className={cn('flex min-h-0 min-w-0 flex-1 flex-col', className)}>{children}</section>;
+export function PanelShell({ children, className, ...rest }: React.HTMLAttributes<HTMLElement>) {
+  return (
+    <section
+      {...rest}
+      className={cn('flex min-h-0 min-w-0 flex-1 flex-col', className)}
+    >
+      {children}
+    </section>
+  );
+}
+
+export function PanelShellBody({ children, className, ...rest }: React.HTMLAttributes<HTMLDivElement>) {
+  return (
+    <div
+      {...rest}
+      className={cn('flex min-h-0 min-w-0 flex-1 flex-col', className)}
+    >
+      {children}
+    </div>
+  );
 }
 
 interface PanelShellHeaderProps {
