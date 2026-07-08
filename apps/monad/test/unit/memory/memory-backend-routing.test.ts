@@ -43,6 +43,7 @@ function freshStoreWithProject(cwd: string) {
     ownerPrincipalId: 'prn_1',
     state: 'active',
     archived: false,
+    memberTemplates: [],
     cwd,
     origin: {
       surface: 'web',

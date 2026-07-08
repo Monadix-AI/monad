@@ -2,7 +2,7 @@ import type { ProjectController } from '../use-project';
 
 import { ChevronRightIcon, Delete02Icon, MinusSignIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { Dialog, DialogContent, DialogTitle, ProductIcon } from '@monad/ui';
+import { Dialog, DialogContent, DialogTitle, ProductIcon, Tabs, TabsContent, TabsList, TabsTrigger } from '@monad/ui';
 import {
   AgentIdentity,
   AgentInstanceAvatar,
@@ -24,6 +24,7 @@ import {
 } from './external-agent-member-dialog-model';
 import { ProjectAddMemberSection } from './ProjectAddMemberSection';
 import { ProjectMemberSettingsDialog } from './ProjectMemberSettingsDialog';
+import { SessionMembersSection } from './SessionMembersSection';
 
 type Translate = ReturnType<typeof useT>;
 type ProjectMember = ProjectController['projectMembers'][number];
@@ -49,6 +50,7 @@ export function ProjectSettings({
   initialMemberId?: string | null;
 }): React.ReactElement {
   const t = useT();
+  const [activeTab, setActiveTab] = useState(initialIntent === 'spawn-agent' ? 'session' : 'templates');
   const [memberSettings, setMemberSettings] = useState<ProjectMember | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -139,134 +141,153 @@ export function ProjectSettings({
                 </p>
               </div>
             ) : null}
-            <section style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <div style={sectionLabel}>{t('web.workplace.currentMembers')}</div>
-              <div style={{ border: `1px solid ${'var(--border)'}`, borderRadius: boxR, background: 'var(--card)' }}>
-                {projectParticipants.map((participant, index) => {
-                  const member = room.projectMembers.find((candidate) => candidate.id === participant.id);
-                  const productIcon = participant.kind === 'agent' ? resolveProductIcon(participant) : undefined;
-                  return (
-                    <div
-                      key={participant.id}
-                      style={{
-                        display: 'grid',
-                        gridTemplateColumns: '32px minmax(0, 1fr) auto auto',
-                        alignItems: 'center',
-                        gap: 10,
-                        padding: '10px 12px',
-                        borderTop: index === 0 ? 'none' : `1px solid ${'var(--border)'}`
-                      }}
-                    >
-                      <div style={{ position: 'relative', flex: 'none' }}>
-                        <AgentInstanceAvatar
-                          agent={participant}
-                          size={30}
-                        />
-                        <PresenceBadge presence={participant.presence} />
-                      </div>
-                      <div style={{ minWidth: 0 }}>
-                        <AgentIdentity
-                          badge={
-                            productIcon ? (
-                              <ProductIcon
-                                product={productIcon}
-                                size={12}
-                              />
-                            ) : null
-                          }
-                          badgeGap={4}
-                          name={participant.name}
-                          nameStyle={{ fontFamily: sans, fontSize: 14, fontWeight: 600 }}
-                        />
-                      </div>
-                      <button
-                        className="workplace-action"
-                        disabled={!member}
-                        onClick={() => {
-                          if (!member) return;
-                          if (openExternalAgentMemberSettings(member)) return;
-                          setMemberSettings(member);
-                        }}
-                        style={{
-                          width: 28,
-                          height: 28,
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          border: `1px solid ${'var(--border)'}`,
-                          borderRadius: 8,
-                          background: 'transparent',
-                          color: member ? 'var(--foreground)' : 'var(--muted-foreground)'
-                        }}
-                        title={member ? t('web.workplace.memberSettings') : t('web.workplace.managedByMonad')}
-                        type="button"
-                      >
-                        <HugeiconsIcon
-                          icon={ChevronRightIcon}
-                          size={14}
-                        />
-                      </button>
-                      <button
-                        className="workplace-action"
-                        onClick={() => void room.removeProjectMember(participant.id)}
-                        style={{
-                          width: 28,
-                          height: 28,
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          border: `1px solid ${'var(--destructive)'}`,
-                          borderRadius: 8,
-                          background: 'transparent',
-                          color: 'var(--destructive)'
-                        }}
-                        title={removeLabel(participant.id, t)}
-                        type="button"
-                      >
-                        <HugeiconsIcon
-                          icon={MinusSignIcon}
-                          size={14}
-                        />
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-              {projectParticipants.length === 0 ? (
-                <p style={{ margin: 0, fontFamily: sans, fontSize: 13, color: 'var(--muted-foreground)' }}>
-                  {t('web.workplace.noMembersHint')}
-                </p>
-              ) : null}
-            </section>
+            <Tabs
+              onValueChange={setActiveTab}
+              value={activeTab}
+            >
+              <TabsList>
+                <TabsTrigger value="templates">{t('web.workplace.templatesTab')}</TabsTrigger>
+                <TabsTrigger value="session">{t('web.workplace.sessionTab')}</TabsTrigger>
+              </TabsList>
+              <TabsContent value="templates">
+                <section style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div style={sectionLabel}>{t('web.workplace.currentMembers')}</div>
+                  <div
+                    style={{ border: `1px solid ${'var(--border)'}`, borderRadius: boxR, background: 'var(--card)' }}
+                  >
+                    {projectParticipants.map((participant, index) => {
+                      const member = room.projectMembers.find((candidate) => candidate.id === participant.id);
+                      const productIcon = participant.kind === 'agent' ? resolveProductIcon(participant) : undefined;
+                      return (
+                        <div
+                          key={participant.id}
+                          style={{
+                            display: 'grid',
+                            gridTemplateColumns: '32px minmax(0, 1fr) auto auto',
+                            alignItems: 'center',
+                            gap: 10,
+                            padding: '10px 12px',
+                            borderTop: index === 0 ? 'none' : `1px solid ${'var(--border)'}`
+                          }}
+                        >
+                          <div style={{ position: 'relative', flex: 'none' }}>
+                            <AgentInstanceAvatar
+                              agent={participant}
+                              size={30}
+                            />
+                            <PresenceBadge presence={participant.presence} />
+                          </div>
+                          <div style={{ minWidth: 0 }}>
+                            <AgentIdentity
+                              badge={
+                                productIcon ? (
+                                  <ProductIcon
+                                    product={productIcon}
+                                    size={12}
+                                  />
+                                ) : null
+                              }
+                              badgeGap={4}
+                              name={participant.name}
+                              nameStyle={{ fontFamily: sans, fontSize: 14, fontWeight: 600 }}
+                            />
+                          </div>
+                          <button
+                            className="workplace-action"
+                            disabled={!member}
+                            onClick={() => {
+                              if (!member) return;
+                              if (openExternalAgentMemberSettings(member)) return;
+                              setMemberSettings(member);
+                            }}
+                            style={{
+                              width: 28,
+                              height: 28,
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              border: `1px solid ${'var(--border)'}`,
+                              borderRadius: 8,
+                              background: 'transparent',
+                              color: member ? 'var(--foreground)' : 'var(--muted-foreground)'
+                            }}
+                            title={member ? t('web.workplace.memberSettings') : t('web.workplace.managedByMonad')}
+                            type="button"
+                          >
+                            <HugeiconsIcon
+                              icon={ChevronRightIcon}
+                              size={14}
+                            />
+                          </button>
+                          <button
+                            className="workplace-action"
+                            onClick={() => void room.removeProjectMember(participant.id)}
+                            style={{
+                              width: 28,
+                              height: 28,
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              border: `1px solid ${'var(--destructive)'}`,
+                              borderRadius: 8,
+                              background: 'transparent',
+                              color: 'var(--destructive)'
+                            }}
+                            title={removeLabel(participant.id, t)}
+                            type="button"
+                          >
+                            <HugeiconsIcon
+                              icon={MinusSignIcon}
+                              size={14}
+                            />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {projectParticipants.length === 0 ? (
+                    <p style={{ margin: 0, fontFamily: sans, fontSize: 13, color: 'var(--muted-foreground)' }}>
+                      {t('web.workplace.noMembersHint')}
+                    </p>
+                  ) : null}
+                </section>
 
-            <section style={{ marginTop: 18, display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <div style={sectionLabel}>{t('web.workplace.addMembers')}</div>
-              <ProjectAddMemberSection
-                candidates={regularCandidates}
-                onAdd={(candidate) => void room.addProjectMember(candidate.type, candidate.name)}
-                promoted={initialIntent === 'connect-agent'}
-                title={t('web.workplace.agentMembers')}
-              />
-              <ProjectAddMemberSection
-                candidates={externalAgentCandidates}
-                onAdd={(candidate) =>
-                  setExternalAgentInvite({
-                    candidate,
-                    draft: {
-                      displayName: candidate.template?.displayName,
-                      projectTemplateId: candidate.template?.id,
-                      modelId: candidate.template?.modelId,
-                      reasoningEffort:
-                        candidate.template?.reasoningEffort ?? defaultReasoningEffort(candidate.reasoningEfforts),
-                      speed: candidate.template?.speed,
-                      customPrompt: candidate.template?.customPrompt
+                <section style={{ marginTop: 18, display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  <div style={sectionLabel}>{t('web.workplace.addMembers')}</div>
+                  <ProjectAddMemberSection
+                    candidates={regularCandidates}
+                    onAdd={(candidate) => void room.addProjectMember(candidate.type, candidate.name)}
+                    promoted={initialIntent === 'connect-agent'}
+                    title={t('web.workplace.agentMembers')}
+                  />
+                  <ProjectAddMemberSection
+                    candidates={externalAgentCandidates}
+                    onAdd={(candidate) =>
+                      setExternalAgentInvite({
+                        candidate,
+                        draft: {
+                          displayName: candidate.template?.displayName,
+                          projectTemplateId: candidate.template?.id,
+                          modelId: candidate.template?.modelId,
+                          reasoningEffort:
+                            candidate.template?.reasoningEffort ?? defaultReasoningEffort(candidate.reasoningEfforts),
+                          speed: candidate.template?.speed,
+                          customPrompt: candidate.template?.customPrompt
+                        }
+                      })
                     }
-                  })
-                }
-                promoted={initialIntent === 'spawn-agent'}
-                title={t('web.workplace.externalAgentMembers')}
-              />
-            </section>
+                    promoted={initialIntent === 'spawn-agent'}
+                    title={t('web.workplace.externalAgentMembers')}
+                  />
+                </section>
+              </TabsContent>
+              <TabsContent value="session">
+                <SessionMembersSection
+                  activeSessionId={room.activeSessionId}
+                  templates={room.projectMembers}
+                />
+              </TabsContent>
+            </Tabs>
 
             <section style={{ marginTop: 18, display: 'flex', flexDirection: 'column', gap: 8 }}>
               <div style={sectionLabel}>{t('web.workplace.dangerZone')}</div>

@@ -31,6 +31,7 @@ function seedProject(store: ReturnType<typeof createStore>, title: string): Work
     ownerPrincipalId: newId('prn'),
     state: 'active',
     archived: false,
+    memberTemplates: [],
     createdAt: now,
     updatedAt: now
   };

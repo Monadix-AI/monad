@@ -17,6 +17,8 @@ import { commandsListQuerySchema, commandsListResponseSchema } from './command.t
 import { computerPresetResponseSchema, setComputerPresetRequestSchema } from './computer-preset.ts';
 import {
   attachmentReadResponseSchema,
+  inviteSessionMemberRequestSchema,
+  listSessionMembersResponseSchema,
   nativeAgentProjectAskRequestSchema,
   nativeAgentProjectAskResponseSchema,
   nativeAgentProjectInboxAckRequestSchema,
@@ -31,7 +33,10 @@ import {
   nativeAgentReadResponseSchema,
   nativeAgentRuntimeInfoResponseSchema,
   nativeAgentSendRequestSchema,
-  nativeAgentSendResponseSchema
+  nativeAgentSendResponseSchema,
+  removeSessionMemberResponseSchema,
+  sessionMemberResponseSchema,
+  spawnSessionMemberRequestSchema
 } from './external-agent/index.ts';
 import { getGraphResponseSchema } from './graph.ts';
 import { agentIdSchema, projectIdSchema, sessionIdSchema } from './ids.ts';
@@ -188,6 +193,7 @@ export function coercifyQuery<T extends z.ZodObject<z.ZodRawShape>>(schema: T): 
 export const responseInstanceSchema = z.custom<Response>((value: unknown) => value instanceof Response);
 
 const sessionParamsSchema = z.object({ id: sessionIdSchema });
+const sessionMemberParamsSchema = z.object({ id: sessionIdSchema, memberId: z.string().min(1) });
 const projectParamsSchema = z.object({ id: projectIdSchema });
 const agentParamsSchema = z.object({ id: agentIdSchema });
 
@@ -273,7 +279,24 @@ export const daemonHttpContract = {
       params: z.object({ id: sessionIdSchema, agent: z.string().min(1) }),
       body: forwardToAcpRequestSchema,
       response: { 200: forwardToAcpResponseSchema }
-    })
+    }),
+    members: {
+      list: defineHttpEndpoint({
+        params: sessionParamsSchema,
+        response: { 200: listSessionMembersResponseSchema }
+      }),
+      // Invites from a project memberTemplate (`{templateId}`) or spawns an ad-hoc member
+      // (`{type, name, ...}`) — the daemon route branches on which shape matched.
+      add: defineHttpEndpoint({
+        params: sessionParamsSchema,
+        body: z.union([inviteSessionMemberRequestSchema, spawnSessionMemberRequestSchema]),
+        response: { 201: sessionMemberResponseSchema, 404: httpErrorSchema }
+      }),
+      remove: defineHttpEndpoint({
+        params: sessionMemberParamsSchema,
+        response: { 200: removeSessionMemberResponseSchema, 404: httpErrorSchema }
+      })
+    }
   },
   workplace: {
     projects: {

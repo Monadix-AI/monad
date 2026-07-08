@@ -366,6 +366,53 @@ export function createSessionsController(handlers: ReturnType<typeof createDaemo
           }
         }
       )
+      .get(
+        '/sessions/:id/members',
+        async ({ params }) => handlers.session.listSessionMembers({ sessionId: params.id }),
+        {
+          params: contracts.members.list.params,
+          response: contracts.members.list.response,
+          detail: {
+            tags: ['http-only'],
+            summary: 'List session members',
+            description: 'Returns the live member bindings for a session.'
+          }
+        }
+      )
+      .post(
+        '/sessions/:id/members',
+        async ({ params, body, status }) => {
+          const result =
+            'templateId' in body
+              ? await handlers.session.inviteSessionMember({ sessionId: params.id, templateId: body.templateId })
+              : await handlers.session.spawnSessionMember({ sessionId: params.id, ...body });
+          return status(201, result);
+        },
+        {
+          params: contracts.members.add.params,
+          body: contracts.members.add.body,
+          response: contracts.members.add.response,
+          detail: {
+            tags: ['http-only'],
+            summary: 'Invite or spawn a session member',
+            description:
+              'Invites a member from the project memberTemplates ({templateId}), or spawns one ad hoc ({type, name, ...}).'
+          }
+        }
+      )
+      .delete(
+        '/sessions/:id/members/:memberId',
+        async ({ params }) => handlers.session.removeSessionMember({ sessionId: params.id, memberId: params.memberId }),
+        {
+          params: contracts.members.remove.params,
+          response: contracts.members.remove.response,
+          detail: {
+            tags: ['http-only'],
+            summary: 'Remove a session member',
+            description: 'Stops the member’s runtime if running, then deletes its session binding.'
+          }
+        }
+      )
       .post(
         '/sessions/:id/acp/:agent',
         async ({ params, body }) =>

@@ -46,6 +46,7 @@ for (const kind of TRANSPORTS) {
         ownerPrincipalId: 'prn_test',
         state: 'active',
         archived: false,
+        memberTemplates: [],
         createdAt: '2026-07-06T00:00:00.000Z',
         updatedAt: '2026-07-06T00:00:00.000Z'
       });

@@ -112,6 +112,11 @@ export type {
   UpsertExternalAgentRequest
 } from './external-agent-session.ts';
 export type {
+  InviteSessionMemberRequest,
+  ListSessionMembersResponse,
+  RemoveSessionMemberResponse,
+  SessionMemberResponse,
+  SpawnSessionMemberRequest,
   WorkplaceProjectMember,
   WorkplaceProjectMemberSettings,
   WorkplaceProjectMembersExt,
@@ -247,10 +252,15 @@ export {
   defaultWorkplaceProjectMemberSettings,
   externalAgentProductDisplayName,
   externalAgentProjectMemberAvatarSeed,
+  inviteSessionMemberRequestSchema,
+  listSessionMembersResponseSchema,
   newExternalAgentInstanceId,
   parseWorkplaceProjectMembers,
+  removeSessionMemberResponseSchema,
   renameExternalAgentProjectMemberDisplayName,
   safeExternalAgentDisplayName,
+  sessionMemberResponseSchema,
+  spawnSessionMemberRequestSchema,
   uniqueExternalAgentDisplayName,
   workplaceProjectMemberAvatarSeed,
   workplaceProjectMemberAvatarSeeds,

@@ -24,7 +24,7 @@ import { canTransition } from '@/agent/index.ts';
 import { clearProcessesForSession, disposeSandboxSession } from '@/capabilities/tools';
 import { HandlerError } from '@/handlers/handler-error.ts';
 import { createManagedExternalAgentJoin } from '@/handlers/session/handlers/managed-external-agent-join.ts';
-import { syncSessionMembersFromProjectTemplates } from '@/handlers/session/handlers/session-member-sync.ts';
+import { createSessionMembersHandlers } from '@/handlers/session/handlers/session-members.ts';
 import { SessionUiProjector } from '@/handlers/session/ui-projection.ts';
 import { clearAcpDelegatesForSession } from '@/services/delegation/acp-delegate.ts';
 import { createProjectLifecycleHandlers } from './lifecycle-projects.ts';
@@ -56,7 +56,9 @@ export function createLifecycleHandlers(ctx: SessionContext) {
     emitLifecycle
   } = ctx;
 
-  const { startAddedManagedExternalAgentMembers } = createManagedExternalAgentJoin(ctx);
+  const { spawnManagedSessionMember } = createManagedExternalAgentJoin(ctx);
+  const { listSessionMembers, inviteSessionMember, spawnSessionMember, removeSessionMember } =
+    createSessionMembersHandlers(ctx, { spawnManagedSessionMember });
 
   const {
     applyWorkspaceRuntime,
@@ -70,7 +72,7 @@ export function createLifecycleHandlers(ctx: SessionContext) {
 
   const { listProjects, getProject, createProject, updateProject, deleteProject } = createProjectLifecycleHandlers(
     ctx,
-    { resolveWorkspaceDir, syncSessionMembersFromProjectTemplates, startAddedManagedExternalAgentMembers }
+    { resolveWorkspaceDir }
   );
 
   // SessionStart/SessionEnd are observe-only here: SessionStart's additionalContext is stashed by the
@@ -125,6 +127,11 @@ export function createLifecycleHandlers(ctx: SessionContext) {
     createProject,
     updateProject,
     deleteProject,
+
+    listSessionMembers,
+    inviteSessionMember,
+    spawnSessionMember,
+    removeSessionMember,
 
     async get({ id }: { id: SessionId }) {
       return { session: requireSession(id) };
@@ -200,8 +207,6 @@ export function createLifecycleHandlers(ctx: SessionContext) {
       const session = await agent.sessions.createForProject(projectId, title, ownerPrincipalId, origin, resolvedCwd);
       await sessionSandbox?.ensure(session.id);
       if (session.cwd) await applyWorkspaceRuntime(session.id, session.cwd);
-      syncSessionMembersFromProjectTemplates(store, session);
-      await startAddedManagedExternalAgentMembers({ ...session, cwd: undefined }, session);
       log.info({ sessionId: session.id, projectId, ...originLog(origin) }, 'project session created');
       emitLifecycle(session.id, 'session.created', { title: session.title });
       await fireSessionHook('SessionStart', session.id);
@@ -234,7 +239,6 @@ export function createLifecycleHandlers(ctx: SessionContext) {
       });
       if (!session) throw new HandlerError('internal', 'update failed');
       if (resolvedCwd !== undefined) await applyWorkspaceRuntime(id, resolvedCwd ?? undefined);
-      await startAddedManagedExternalAgentMembers(current, session);
       emitLifecycle(id, 'session.updated', {
         title,
         state,

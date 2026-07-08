@@ -32,8 +32,7 @@ import {
   safeExternalAgentDisplayName,
   uniqueExternalAgentDisplayName,
   workplaceProjectMemberAvatarSeeds,
-  workplaceProjectMemberId,
-  workplaceProjectMembersExtKey
+  workplaceProjectMemberId
 } from '@monad/protocol';
 import { useCallback } from 'react';
 
@@ -189,26 +188,16 @@ export function useProjectActions(args: {
 
   const updateProjectMembers = useCallback(
     async (nextMembers: WorkplaceProjectMemberView[]) => {
-      if (!currentProject?.origin) return;
+      if (!currentProject) return;
       await updateWorkplaceProject({
         id: currentProject.id,
-        origin: {
-          ...currentProject.origin,
-          ext: {
-            ...(currentProject.origin.ext ?? {}),
-            [workplaceProjectMembersExtKey]: nextMembers.map(
-              ({ type, name, templateName, projectTemplateId, displayName, instanceId, settings }) => ({
-                type,
-                name,
-                ...(templateName ? { templateName } : {}),
-                ...(projectTemplateId ? { projectTemplateId } : {}),
-                ...(displayName ? { displayName } : {}),
-                ...(instanceId ? { instanceId } : {}),
-                ...(settings && Object.keys(settings).length > 0 ? { settings } : {})
-              })
-            )
-          }
-        }
+        memberTemplates: nextMembers.map(({ id, type, name, displayName, settings }) => ({
+          id,
+          type,
+          name,
+          ...(displayName ? { displayName } : {}),
+          ...(settings && Object.keys(settings).length > 0 ? { settings } : {})
+        }))
       }).unwrap();
       for (const seed of workplaceProjectMemberAvatarSeeds(currentProject.id, nextMembers)) {
         warmEntityAvatar(seed, avatarStyle);
@@ -246,9 +235,9 @@ export function useProjectActions(args: {
           {
             id: instanceId,
             type,
-            name: displayName,
-            templateName: name,
-            ...(options.projectTemplateId ? { projectTemplateId: options.projectTemplateId } : {}),
+            // `name` stays the real, configured external-agent name (config resolution reads
+            // `templateName ?? name`) — the user-facing label lives only in `displayName`.
+            name,
             displayName,
             instanceId,
             settings

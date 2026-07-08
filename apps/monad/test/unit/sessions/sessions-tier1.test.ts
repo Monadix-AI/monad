@@ -41,6 +41,7 @@ function fixtureProject(over: Partial<WorkplaceProject> = {}): WorkplaceProject 
     ownerPrincipalId: newId('prn'),
     state: 'active',
     archived: false,
+    memberTemplates: [],
     createdAt: now,
     updatedAt: now,
     ...over

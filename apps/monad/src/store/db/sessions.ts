@@ -40,6 +40,7 @@ export interface WorkplaceProjectPatch {
   model?: string | null;
   cwd?: string | null;
   origin?: WorkplaceProject['origin'] | null;
+  memberTemplates?: WorkplaceProject['memberTemplates'];
 }
 
 export function insertSession(db: Db, s: Session): void {
@@ -150,6 +151,7 @@ export function insertWorkplaceProject(db: Db, project: WorkplaceProject): void 
       model: project.model ?? null,
       cwd: project.cwd ?? null,
       origin: project.origin ? JSON.stringify(project.origin) : null,
+      memberTemplates: JSON.stringify(project.memberTemplates),
       createdAt: project.createdAt,
       updatedAt: project.updatedAt
     })
@@ -192,6 +194,7 @@ export function updateWorkplaceProject(db: Db, id: string, patch: WorkplaceProje
   if (patch.model !== undefined) sets.model = patch.model;
   if (patch.cwd !== undefined) sets.cwd = patch.cwd;
   if (patch.origin !== undefined) sets.origin = patch.origin ? JSON.stringify(patch.origin) : null;
+  if (patch.memberTemplates !== undefined) sets.memberTemplates = JSON.stringify(patch.memberTemplates);
   db.update(workplaceProjects).set(sets).where(eq(workplaceProjects.id, id)).run();
   return getWorkplaceProject(db, id);
 }

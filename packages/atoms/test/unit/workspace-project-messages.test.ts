@@ -96,7 +96,7 @@ test('project rail only includes Monad when explicitly invited', () => {
 });
 
 test('Monad project member parses as a normal project member', () => {
-  expect(__workplaceProjectMessageTest.parseProjectMembers([{ type: 'monad', name: 'monad' }])).toEqual([
+  expect(__workplaceProjectMessageTest.parseProjectMembers([{ id: 'monad', type: 'monad', name: 'monad' }])).toEqual([
     { id: 'monad', type: 'monad', name: 'monad' }
   ]);
 });
@@ -1051,14 +1051,13 @@ test('external agent project members default to managed project runtime', () => 
   });
 });
 
-test('external agent project members preserve template and instance identity', () => {
+test('external agent project members derive template and instance identity from the template itself', () => {
   const [member] = __workplaceProjectMessageTest.parseProjectMembers([
     {
+      id: 'pmem_codex_reviewer',
       type: 'external-agent',
-      name: 'codex-reviewer',
-      templateName: 'codex',
+      name: 'codex',
       displayName: 'codex-reviewer',
-      instanceId: 'pmem_codex_reviewer',
       settings: {
         managedProjectAgent: true,
         launchMode: 'app-server',
@@ -1073,7 +1072,7 @@ test('external agent project members preserve template and instance identity', (
   expect(member).toMatchObject({
     id: 'pmem_codex_reviewer',
     type: 'external-agent',
-    name: 'codex-reviewer',
+    name: 'codex',
     templateName: 'codex',
     displayName: 'codex-reviewer',
     instanceId: 'pmem_codex_reviewer',

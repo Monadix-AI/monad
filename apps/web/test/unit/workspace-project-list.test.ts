@@ -13,6 +13,7 @@ const project = (id: string, title: string): WorkplaceProject =>
     archived: false,
     origin: { surface: 'web', client: 'workplace', transport: 'http', writableBy: ['http'], branchableBy: ['http'] },
     cwd: undefined,
+    memberTemplates: [],
     createdAt: '2026-07-02T00:00:00.000Z',
     updatedAt: '2026-07-02T00:00:00.000Z'
   }) as WorkplaceProject;

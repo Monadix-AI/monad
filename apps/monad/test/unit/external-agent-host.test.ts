@@ -184,6 +184,7 @@ test('external agent host stops live sessions for a disconnected provider adapte
     ownerPrincipalId: 'prn_test',
     state: 'active',
     archived: false,
+    memberTemplates: [],
     createdAt: '2026-07-02T00:00:00.000Z',
     updatedAt: '2026-07-02T00:00:00.000Z'
   });
@@ -258,6 +259,7 @@ test('managed provider final can retire a consumed inbox turn without auto-posti
     ownerPrincipalId: 'prn_test',
     state: 'active',
     archived: false,
+    memberTemplates: [],
     createdAt: '2026-07-02T00:00:00.000Z',
     updatedAt: '2026-07-02T00:00:00.000Z'
   });
@@ -349,6 +351,7 @@ test('managed external agent output persists a bounded snapshot for refresh and 
     ownerPrincipalId: 'prn_test',
     state: 'active',
     archived: false,
+    memberTemplates: [],
     createdAt: '2026-07-02T00:00:00.000Z',
     updatedAt: '2026-07-02T00:00:00.000Z'
   });
@@ -463,6 +466,7 @@ test('external agent observation stream pushes incremental deltas the client can
     ownerPrincipalId: 'prn_test',
     state: 'active',
     archived: false,
+    memberTemplates: [],
     createdAt: '2026-07-02T00:00:00.000Z',
     updatedAt: '2026-07-02T00:00:00.000Z'
   });
@@ -932,6 +936,7 @@ setInterval(() => {}, 1000);
     ownerPrincipalId: 'prn_test',
     state: 'active',
     archived: false,
+    memberTemplates: [],
     createdAt: '2026-07-02T00:00:00.000Z',
     updatedAt: '2026-07-02T00:00:00.000Z'
   });
@@ -1069,6 +1074,7 @@ setInterval(() => {}, 1000);
     ownerPrincipalId: 'prn_test',
     state: 'active',
     archived: false,
+    memberTemplates: [],
     createdAt: '2026-07-02T00:00:00.000Z',
     updatedAt: '2026-07-02T00:00:00.000Z'
   });
@@ -1245,6 +1251,7 @@ setInterval(() => {}, 1000);
     ownerPrincipalId: 'prn_test',
     state: 'active',
     archived: false,
+    memberTemplates: [],
     createdAt: '2026-07-02T00:00:00.000Z',
     updatedAt: '2026-07-02T00:00:00.000Z'
   });
@@ -1307,6 +1314,7 @@ test('managed external agent observation restores Codex provider history from pe
     ownerPrincipalId: 'prn_test',
     state: 'active',
     archived: false,
+    memberTemplates: [],
     createdAt: '2026-07-02T00:00:00.000Z',
     updatedAt: '2026-07-02T00:00:00.000Z'
   });
@@ -1397,6 +1405,7 @@ test('managed external agent observation prefers Codex CLI history over rollout 
     ownerPrincipalId: 'prn_test',
     state: 'active',
     archived: false,
+    memberTemplates: [],
     createdAt: '2026-07-02T00:00:00.000Z',
     updatedAt: '2026-07-02T00:00:00.000Z'
   });
@@ -1462,6 +1471,7 @@ test('managed external agent observation restores Claude Code provider history',
     ownerPrincipalId: 'prn_test',
     state: 'active',
     archived: false,
+    memberTemplates: [],
     createdAt: '2026-07-02T00:00:00.000Z',
     updatedAt: '2026-07-02T00:00:00.000Z'
   });
@@ -1529,6 +1539,7 @@ test('managed external agent observation restores Gemini checkpoint history', as
     ownerPrincipalId: 'prn_test',
     state: 'active',
     archived: false,
+    memberTemplates: [],
     createdAt: '2026-07-02T00:00:00.000Z',
     updatedAt: '2026-07-02T00:00:00.000Z'
   });
@@ -1587,6 +1598,7 @@ test('managed external agent observation restores Qwen stream-json history', asy
     ownerPrincipalId: 'prn_test',
     state: 'active',
     archived: false,
+    memberTemplates: [],
     createdAt: '2026-07-02T00:00:00.000Z',
     updatedAt: '2026-07-02T00:00:00.000Z'
   });
@@ -1660,6 +1672,7 @@ test('listLive returns only starting/running runtimes across all projects', () =
       ownerPrincipalId: 'prn_test',
       state: 'active',
       archived: false,
+      memberTemplates: [],
       createdAt: '2026-07-02T00:00:00.000Z',
       updatedAt: '2026-07-02T00:00:00.000Z'
     });
@@ -1727,6 +1740,7 @@ test('listLive/listAllSummaries paginate with a cursor and expose nextCursor', (
     ownerPrincipalId: 'prn_test',
     state: 'active',
     archived: false,
+    memberTemplates: [],
     createdAt: '2026-07-02T00:00:00.000Z',
     updatedAt: '2026-07-02T00:00:00.000Z'
   });
@@ -1792,6 +1806,7 @@ test('cli-oneshot session has no persistent process and runs a fresh CLI per tur
     ownerPrincipalId: 'prn_test',
     state: 'active',
     archived: false,
+    memberTemplates: [],
     createdAt: '2026-07-02T00:00:00.000Z',
     updatedAt: '2026-07-02T00:00:00.000Z'
   });
@@ -1832,6 +1847,7 @@ function seedApprovalLiveSession(
     ownerPrincipalId: 'prn_test',
     state: 'active',
     archived: false,
+    memberTemplates: [],
     createdAt: '2026-07-02T00:00:00.000Z',
     updatedAt: '2026-07-02T00:00:00.000Z'
   });
@@ -2004,6 +2020,7 @@ test('a real spawned managed process actually receives the autopilot skip flag o
     ownerPrincipalId: 'prn_test',
     state: 'active',
     archived: false,
+    memberTemplates: [],
     createdAt: '2026-07-05T00:00:00.000Z',
     updatedAt: '2026-07-05T00:00:00.000Z'
   });
@@ -2090,6 +2107,7 @@ async function runRealAdapterArgvCapture(opts: {
     ownerPrincipalId: 'prn_test',
     state: 'active',
     archived: false,
+    memberTemplates: [],
     createdAt: '2026-07-05T00:00:00.000Z',
     updatedAt: '2026-07-05T00:00:00.000Z'
   });

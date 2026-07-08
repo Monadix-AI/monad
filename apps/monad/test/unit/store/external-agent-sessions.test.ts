@@ -209,6 +209,7 @@ test('message attachment reader rejects paths that changed after registration', 
       cwd: workspace,
       state: 'active',
       archived: false,
+      memberTemplates: [],
       createdAt: '2026-06-28T00:00:00.000Z',
       updatedAt: '2026-06-28T00:00:00.000Z'
     });
@@ -319,6 +320,7 @@ test('external agent inbox items expose delivery pointers without raw provider o
     ownerPrincipalId: 'prn_test',
     state: 'active',
     archived: false,
+    memberTemplates: [],
     createdAt: '2026-06-28T00:00:00.000Z',
     updatedAt: '2026-06-28T00:00:00.000Z'
   });
@@ -373,6 +375,7 @@ test('deleteSession cleans up external agent session rows', () => {
     ownerPrincipalId: 'prn_test',
     state: 'active',
     archived: false,
+    memberTemplates: [],
     createdAt: '2026-06-28T00:00:00.000Z',
     updatedAt: '2026-06-28T00:00:00.000Z'
   });
@@ -398,6 +401,7 @@ test('deleteSession cleans up external agent session rows', () => {
     ownerPrincipalId: 'prn_test',
     state: 'active',
     archived: false,
+    memberTemplates: [],
     createdAt: '2026-06-28T00:00:02.000Z',
     updatedAt: '2026-06-28T00:00:02.000Z'
   });

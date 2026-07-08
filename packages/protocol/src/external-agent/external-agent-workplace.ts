@@ -88,7 +88,7 @@ export function uniqueExternalAgentDisplayName(
   baseName: string,
   members: readonly WorkplaceProjectMemberView[]
 ): string {
-  const used = new Set(members.map((member) => member.name));
+  const used = new Set(members.map((member) => member.displayName ?? member.name));
   if (!used.has(baseName)) return baseName;
   for (let index = 2; index < 1000; index += 1) {
     const candidate = `${baseName}-${index}`;
@@ -192,3 +192,26 @@ export const workplaceProjectSessionMemberSchema = z.object({
   externalAgentSessionId: z.string().regex(/^exa_/).optional()
 });
 export type WorkplaceProjectSessionMember = z.infer<typeof workplaceProjectSessionMemberSchema>;
+
+export const listSessionMembersResponseSchema = z.object({ members: z.array(workplaceProjectSessionMemberSchema) });
+export type ListSessionMembersResponse = z.infer<typeof listSessionMembersResponseSchema>;
+
+// Invites a member from one of the project's memberTemplates into the target session.
+export const inviteSessionMemberRequestSchema = z.object({ templateId: z.string().min(1) });
+export type InviteSessionMemberRequest = z.infer<typeof inviteSessionMemberRequestSchema>;
+
+// Spawns an ad-hoc member into just the target session — no templateId link, never touches the
+// project's memberTemplates.
+export const spawnSessionMemberRequestSchema = z.object({
+  type: workplaceProjectMemberTypeSchema,
+  name: externalAgentNameSchema,
+  displayName: externalAgentNameSchema.optional(),
+  settings: workplaceProjectMemberSettingsSchema.optional()
+});
+export type SpawnSessionMemberRequest = z.infer<typeof spawnSessionMemberRequestSchema>;
+
+export const sessionMemberResponseSchema = z.object({ member: workplaceProjectSessionMemberSchema });
+export type SessionMemberResponse = z.infer<typeof sessionMemberResponseSchema>;
+
+export const removeSessionMemberResponseSchema = z.object({ deleted: z.literal(true) });
+export type RemoveSessionMemberResponse = z.infer<typeof removeSessionMemberResponseSchema>;

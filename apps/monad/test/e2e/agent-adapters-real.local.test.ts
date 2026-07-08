@@ -75,6 +75,7 @@ async function runTurn(args: {
     ownerPrincipalId: 'prn_test',
     state: 'active',
     archived: false,
+    memberTemplates: [],
     createdAt: '2026-07-04T00:00:00.000Z',
     updatedAt: '2026-07-04T00:00:00.000Z'
   });

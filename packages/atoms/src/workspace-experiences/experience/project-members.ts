@@ -1,4 +1,4 @@
-import type { ExternalAgentProvider } from '@monad/protocol';
+import type { ExternalAgentProvider, WorkplaceProjectMemberTemplate } from '@monad/protocol';
 import type {
   WorkspaceExperienceAddMemberOptions,
   WorkspaceExperienceMember,
@@ -8,8 +8,6 @@ import type {
 } from '@monad/sdk-atom';
 import type { Participant } from './types.ts';
 
-import { parseWorkplaceProjectMembers } from '@monad/protocol';
-
 // The member types are the published third-party contract (in @monad/sdk-atom); these aliases keep the
 // atoms-internal names while sdk-atom owns the shape. The functions below stay here.
 export type ProjectMemberType = WorkspaceExperienceMemberType;
@@ -18,8 +16,20 @@ export type ProjectMember = WorkspaceExperienceMember;
 export type AddProjectMemberOptions = WorkspaceExperienceAddMemberOptions;
 export type ProjectMemberCandidate = WorkspaceExperienceMemberCandidate;
 
-export function parseProjectMembers(value: unknown): ProjectMember[] {
-  return parseWorkplaceProjectMembers(value);
+/** Adapts the project's memberTemplates (Track B: project-level preset catalog, a plain
+ *  id/type/name/displayName/settings shape) into the richer ProjectMember view this module's
+ *  rendering/identity helpers already expect — `instanceId`/`templateName` are derived from the
+ *  template's own stable id/name rather than carried separately, since a template has no
+ *  distinct "instance" concept the way a session-bound member does. */
+export function parseProjectMembers(memberTemplates: readonly WorkplaceProjectMemberTemplate[]): ProjectMember[] {
+  return memberTemplates.map((template) => ({
+    id: template.id,
+    type: template.type,
+    name: template.name,
+    ...(template.type === 'external-agent' ? { templateName: template.name, instanceId: template.id } : {}),
+    ...(template.displayName ? { displayName: template.displayName } : {}),
+    ...(template.settings ? { settings: template.settings } : {})
+  }));
 }
 
 function safeExternalAgentInstanceSegment(value: string): string {
@@ -52,7 +62,7 @@ export function productIcon(value: unknown): Participant['icon'] | undefined {
 }
 
 export function uniqueExternalAgentDisplayName(baseName: string, members: readonly ProjectMember[]): string {
-  const used = new Set(members.map((member) => member.name));
+  const used = new Set(members.map((member) => member.displayName ?? member.name));
   if (!used.has(baseName)) return baseName;
   for (let index = 2; index < 1000; index += 1) {
     const candidate = `${baseName}-${index}`;

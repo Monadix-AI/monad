@@ -119,6 +119,7 @@ export function rowToWorkplaceProject(row: WorkplaceProjectRow): WorkplaceProjec
     model: row.model ?? undefined,
     cwd: row.cwd ?? undefined,
     origin: parseOrigin(row.origin),
+    memberTemplates: JSON.parse(row.memberTemplates) as WorkplaceProject['memberTemplates'],
     createdAt: row.createdAt,
     updatedAt: row.updatedAt
   };

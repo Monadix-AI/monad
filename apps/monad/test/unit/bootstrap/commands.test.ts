@@ -20,6 +20,7 @@ test('command bundle model commands read and write a project-bound session', asy
     ownerPrincipalId: 'prn_1',
     state: 'active',
     archived: false,
+    memberTemplates: [],
     createdAt: new Date(0).toISOString(),
     updatedAt: new Date(0).toISOString()
   });

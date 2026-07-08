@@ -10,7 +10,6 @@ import type {
 import type { ProjectMember } from './project-members.ts';
 import type { ApprovalView, Participant, Project } from './types.ts';
 
-import { workplaceProjectMembersExtKey } from '@monad/protocol';
 import { useMemo } from 'react';
 
 import { parseProjectMembers } from './project-members.ts';
@@ -59,8 +58,8 @@ export function useWorkspaceProjectProjection(args: {
   workplaceProjects: readonly WorkplaceProject[];
 }): WorkspaceProjectProjection {
   const projectMembers = useMemo(
-    () => parseProjectMembers(args.currentProject?.origin?.ext?.[workplaceProjectMembersExtKey]),
-    [args.currentProject?.origin?.ext]
+    () => parseProjectMembers(args.currentProject?.memberTemplates ?? []),
+    [args.currentProject?.memberTemplates]
   );
   const human = useMemo(
     () =>

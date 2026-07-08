@@ -28,6 +28,7 @@ export const apiSlice = createApi({
   baseQuery: fakeBaseQuery<MonadApiError>(),
   tagTypes: [
     'Sessions',
+    'SessionMembers',
     'Messages',
     'Agents',
     'Providers',

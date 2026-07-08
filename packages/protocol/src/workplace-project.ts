@@ -7,6 +7,7 @@ import {
   sessionStateSchema,
   sessionSurfaceSchema
 } from './domain.ts';
+import { workplaceProjectMemberTemplatesSchema } from './external-agent/external-agent-workplace.ts';
 import { messageIdSchema, nativeAgentDeliveryIdSchema, principalIdSchema, projectIdSchema } from './ids.ts';
 import { offsetPaginationQuerySchema, offsetPaginationResponseSchema, SESSION_TITLE_MAX } from './rpc/control.ts';
 
@@ -19,6 +20,9 @@ export const workplaceProjectSchema = z.object({
   model: z.string().optional(),
   cwd: z.string().optional(),
   origin: sessionOriginSchema.optional(),
+  // Project-level preset catalog (Track B, decision 4) — config a session invites from; never
+  // itself running anything. Distinct from a session's live session_members bindings.
+  memberTemplates: workplaceProjectMemberTemplatesSchema.default([]),
   createdAt: z.string(),
   updatedAt: z.string()
 });
@@ -76,7 +80,8 @@ export const updateWorkplaceProjectRequestSchema = z.object({
   archived: z.boolean().optional(),
   model: z.string().nullable().optional(),
   cwd: z.string().nullable().optional(),
-  origin: sessionOriginSchema.nullable().optional()
+  origin: sessionOriginSchema.nullable().optional(),
+  memberTemplates: workplaceProjectMemberTemplatesSchema.optional()
 });
 export type UpdateWorkplaceProjectRequest = z.infer<typeof updateWorkplaceProjectRequestSchema>;
 
