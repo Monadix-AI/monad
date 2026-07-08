@@ -10,7 +10,7 @@ export const sessionMemberAdapter = createEntityAdapter<WorkplaceProjectSessionM
 });
 export const sessionMemberSelectors = sessionMemberAdapter.getSelectors();
 
-const listSessionMembersApi = apiSlice.injectEndpoints({
+export const listSessionMembersApi = apiSlice.injectEndpoints({
   overrideExisting: true,
   endpoints: (builder) => ({
     listSessionMembers: builder.query<ReturnType<typeof sessionMemberAdapter.getInitialState>, SessionId>({

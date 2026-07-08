@@ -6,6 +6,9 @@ import { Cancel01Icon, PlusSignIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { useCreateProjectSessionMutation } from '@monad/client-rtk';
 
+import { DestructiveConfirmPopover } from '#/components/DestructiveConfirmPopover';
+import { useT } from '#/components/I18nProvider';
+
 interface ProjectSessionTabsProps {
   projectId: ProjectId;
   sessions: Session[];
@@ -21,6 +24,7 @@ export function ProjectSessionTabs({
   onSwitchSession,
   onCloseSession
 }: ProjectSessionTabsProps): React.ReactElement {
+  const t = useT();
   const [createProjectSession, createState] = useCreateProjectSessionMutation();
 
   return (
@@ -117,29 +121,32 @@ export function ProjectSessionTabs({
             >
               {session.title}
             </button>
-            <button
-              aria-label={`Close ${session.title}`}
-              className="project-session-tab-close"
-              onClick={(event) => {
-                event.stopPropagation();
-                void onCloseSession(session.id as SessionId);
-              }}
-              title="Close session"
-              type="button"
+            <DestructiveConfirmPopover
+              confirmLabel={t('web.workplace.deleteSession')}
+              description={t('web.workplace.deleteSessionConfirmDescription', { name: session.title })}
+              onConfirm={() => onCloseSession(session.id as SessionId)}
             >
-              <HugeiconsIcon
-                icon={Cancel01Icon}
-                size={11}
-              />
-            </button>
+              <button
+                aria-label={t('web.workplace.closeSessionAriaLabel', { name: session.title })}
+                className="project-session-tab-close"
+                onClick={(event) => event.stopPropagation()}
+                title={t('web.workplace.closeSessionAriaLabel', { name: session.title })}
+                type="button"
+              >
+                <HugeiconsIcon
+                  icon={Cancel01Icon}
+                  size={11}
+                />
+              </button>
+            </DestructiveConfirmPopover>
           </div>
         ))}
         <button
-          aria-label="New session"
+          aria-label={t('web.sidebar.newSession')}
           className="project-session-tab-add"
           disabled={createState.isLoading}
           onClick={() => void createProjectSession({ projectId, title: 'New session' })}
-          title="New session"
+          title={t('web.sidebar.newSession')}
           type="button"
         >
           <HugeiconsIcon

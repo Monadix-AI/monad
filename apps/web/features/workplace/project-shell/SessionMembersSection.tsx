@@ -19,6 +19,7 @@ import {
 } from '@monad/ui/components/AgentAvatar';
 import { useState } from 'react';
 
+import { DestructiveConfirmPopover } from '#/components/DestructiveConfirmPopover';
 import { useT } from '#/components/I18nProvider';
 
 type ProjectMember = ProjectController['projectMembers'][number];
@@ -26,14 +27,13 @@ type ProjectMember = ProjectController['projectMembers'][number];
 function MemberRow({
   index,
   name,
-  onRemove,
-  removeTitle
+  onRemove
 }: {
   index: number;
   name: string;
-  onRemove: () => void;
-  removeTitle: string;
+  onRemove: () => Promise<unknown>;
 }): React.ReactElement {
+  const t = useT();
   return (
     <div
       style={{
@@ -56,28 +56,34 @@ function MemberRow({
           nameStyle={{ fontFamily: sans, fontSize: 14, fontWeight: 600 }}
         />
       </div>
-      <button
-        className="workplace-action"
-        onClick={onRemove}
-        style={{
-          width: 28,
-          height: 28,
-          display: 'inline-flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          border: `1px solid ${'var(--destructive)'}`,
-          borderRadius: 8,
-          background: 'transparent',
-          color: 'var(--destructive)'
-        }}
-        title={removeTitle}
-        type="button"
+      <DestructiveConfirmPopover
+        confirmLabel={t('web.workplace.removeSessionMemberConfirmAction')}
+        description={t('web.workplace.removeSessionMemberConfirmDescription', { name })}
+        onConfirm={onRemove}
       >
-        <HugeiconsIcon
-          icon={MinusSignIcon}
-          size={14}
-        />
-      </button>
+        <button
+          aria-label={t('web.workplace.removeSessionMemberAriaLabel', { name })}
+          className="workplace-action"
+          style={{
+            width: 28,
+            height: 28,
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            border: `1px solid ${'var(--destructive)'}`,
+            borderRadius: 8,
+            background: 'transparent',
+            color: 'var(--destructive)'
+          }}
+          title={t('web.workplace.removeSessionMemberAriaLabel', { name })}
+          type="button"
+        >
+          <HugeiconsIcon
+            icon={MinusSignIcon}
+            size={14}
+          />
+        </button>
+      </DestructiveConfirmPopover>
     </div>
   );
 }
@@ -97,8 +103,8 @@ export function SessionMembersSection({
     skip: activeSessionId === null
   });
   const members = data?.ids.map((id) => data.entities[id]).filter((member) => member !== undefined) ?? [];
-  const [inviteSessionMember] = useInviteSessionMemberMutation();
-  const [spawnSessionMember] = useSpawnSessionMemberMutation();
+  const [inviteSessionMember, inviteState] = useInviteSessionMemberMutation();
+  const [spawnSessionMember, spawnState] = useSpawnSessionMemberMutation();
   const [removeSessionMember] = useRemoveSessionMemberMutation();
   const [adHocName, setAdHocName] = useState('');
 
@@ -128,8 +134,7 @@ export function SessionMembersSection({
                 index={index}
                 key={member.id}
                 name={member.displayName ?? member.name}
-                onRemove={() => void removeSessionMember({ sessionId: activeSessionId, memberId: member.id })}
-                removeTitle={t('web.workplace.removeSessionMember')}
+                onRemove={() => removeSessionMember({ sessionId: activeSessionId, memberId: member.id }).unwrap()}
               />
             ))}
           </div>
@@ -160,7 +165,11 @@ export function SessionMembersSection({
                     />
                   </div>
                   <button
+                    aria-label={t('web.workplace.inviteIntoSessionAriaLabel', {
+                      name: template.displayName ?? template.name
+                    })}
                     className="workplace-action"
+                    disabled={inviteState.isLoading}
                     onClick={() => void inviteSessionMember({ sessionId: activeSessionId, templateId: template.id })}
                     style={{
                       minHeight: 28,
@@ -210,7 +219,7 @@ export function SessionMembersSection({
             />
             <button
               className="workplace-action"
-              disabled={!adHocName.trim()}
+              disabled={!adHocName.trim() || spawnState.isLoading}
               onClick={() => {
                 const name = adHocName.trim();
                 if (!name) return;
