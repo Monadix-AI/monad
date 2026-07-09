@@ -50,17 +50,20 @@ async function acquireUnixFlock(t: DaemonTranslate, lockPath: string): Promise<v
 
   if (symbols.flock(fd, LOCK_EX | LOCK_NB) !== 0) throw new AlreadyRunningError(t);
 
-  // Stamp our PID for diagnostics only — flock, not this value, is the actual lock.
-  await Bun.write(lockPath, String(process.pid));
+  // Stamp the externally managed process when the daemon is supervised. The flock,
+  // not this value, is the actual lock.
+  await Bun.write(lockPath, pidFileStamp());
 
   // Keep `fd` open for the process lifetime. The flock is bound to this open file
   // description and is released by the kernel when the fd closes — on any exit,
   // including SIGKILL (no cleanup code needed for the lock itself).
-  process.on('exit', () => {
-    try {
-      unlinkSync(lockPath);
-    } catch {}
-  });
+  if (!isSupervisedDaemon()) {
+    process.on('exit', () => {
+      try {
+        unlinkSync(lockPath);
+      } catch {}
+    });
+  }
 }
 
 /**
@@ -129,7 +132,8 @@ async function acquirePidFallback(t: DaemonTranslate, lockPath: string): Promise
   // daemon acquires the lock, so the daemon would otherwise read its own (alive) pid and falsely
   // refuse to start. Only another live process's pid means a real prior instance. (This fallback is
   // hit on Windows, where the bun:ffi mutex path can throw and degrade to here.)
-  if (!Number.isNaN(pid) && pid !== process.pid) {
+  const supervisorPid = getSupervisorPid();
+  if (!Number.isNaN(pid) && pid !== process.pid && pid !== supervisorPid) {
     try {
       process.kill(pid, 0);
       throw new AlreadyRunningError(t);
@@ -137,10 +141,25 @@ async function acquirePidFallback(t: DaemonTranslate, lockPath: string): Promise
       if ((err as NodeJS.ErrnoException).code !== 'ESRCH') throw err;
     }
   }
-  await Bun.write(lockPath, String(process.pid));
-  process.on('exit', () => {
-    try {
-      unlinkSync(lockPath);
-    } catch {}
-  });
+  await Bun.write(lockPath, pidFileStamp());
+  if (!isSupervisedDaemon()) {
+    process.on('exit', () => {
+      try {
+        unlinkSync(lockPath);
+      } catch {}
+    });
+  }
+}
+
+function getSupervisorPid(): number | null {
+  const pid = Number.parseInt(Bun.env.MONAD_SUPERVISOR_PID ?? '', 10);
+  return Number.isInteger(pid) && pid > 0 ? pid : null;
+}
+
+function isSupervisedDaemon(): boolean {
+  return getSupervisorPid() !== null;
+}
+
+function pidFileStamp(): string {
+  return String(getSupervisorPid() ?? process.pid);
 }

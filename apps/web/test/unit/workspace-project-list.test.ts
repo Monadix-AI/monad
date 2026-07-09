@@ -2,7 +2,7 @@ import type { ExternalAgentSessionView, Session, WorkplaceProject } from '@monad
 
 import { expect, test } from 'bun:test';
 
-import { buildWorkspaceProjects } from '../../lib/workspace-sessions.ts';
+import { buildWorkspaceProjects } from '../../src/lib/workspace-sessions.ts';
 
 const project = (id: string, title: string): WorkplaceProject =>
   ({

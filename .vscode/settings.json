@@ -40,6 +40,12 @@
   "files.associations": {
     "*.css": "tailwindcss"
   },
+  "files.watcherExclude": {
+    "**/apps/web/src/routeTree.gen.ts": true
+  },
+  "search.exclude": {
+    "**/apps/web/src/routeTree.gen.ts": true
+  },
   "json.schemas": [
     {
       "fileMatch": ["~/.monad/config.json"],

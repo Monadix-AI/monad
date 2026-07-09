@@ -2,7 +2,7 @@ import type { ExternalAgentAuthSessionView, ExternalAgentView } from '@monad/pro
 
 import { expect, test } from 'bun:test';
 
-import { connectExternalAgent } from '../../features/studio/third-party-agents/external-agent-connect-agent';
+import { connectExternalAgent } from '../../src/features/studio/third-party-agents/external-agent-connect-agent';
 
 const agent: ExternalAgentView = {
   name: 'qwen',

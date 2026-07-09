@@ -18,6 +18,7 @@
     "MONAD_PROJECT_SESSION_ID",
     "MONAD_SERVER_URL",
     "MONAD_SKIP_SETUP",
+    "MONAD_SUPERVISOR_PID",
 
     // Live model e2e (opt-in): provider key + model id. Read only by the live test suite.
     "OPENROUTER_API_KEY",

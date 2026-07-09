@@ -1,4 +1,6 @@
 import { expect, test } from 'bun:test';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 import {
   buildDevEnv,
@@ -10,6 +12,8 @@ import {
   devSpawnOptions,
   i18nCommand
 } from '../../dev-prep.ts';
+
+const repoRoot = join(import.meta.dir, '..', '..', '..');
 
 test('buildDevEnv loads .env.local values without clobbering shell overrides', () => {
   const env = buildDevEnv(
@@ -54,6 +58,15 @@ test('devSpawnOptions starts turbo as a process-group leader', () => {
     env: { PATH: '/bin' },
     detached: true
   });
+});
+
+test('monad dev task enters through the CLI daemon so web routes are mounted', () => {
+  const pkg = JSON.parse(readFileSync(join(repoRoot, 'apps/monad/package.json'), 'utf-8')) as {
+    scripts?: Record<string, string>;
+  };
+
+  expect(pkg.scripts?.['start:dev']).toContain('../cli/src/bin.ts daemon');
+  expect(pkg.scripts?.['start:dev']).toContain('--env-file=../../.env.local');
 });
 
 test('buildDevPrepSummary groups the resolved dev environment for terminal output', () => {

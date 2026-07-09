@@ -5,7 +5,7 @@ import {
   DEFAULT_COMPOSER_SETTINGS,
   queuedCardsForDisplay,
   shouldSubmitComposerKey
-} from '../../lib/composer-settings';
+} from '../../src/lib/composer-settings';
 
 test('composer settings default to Enter send and queued follow-ups', () => {
   expect(DEFAULT_COMPOSER_SETTINGS).toEqual({

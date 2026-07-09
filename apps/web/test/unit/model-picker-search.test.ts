@@ -5,7 +5,7 @@ import {
   modelMatchesQuery,
   modelPickerPriceSummary,
   renderHighlightedModelText
-} from '../../features/studio/model-settings/model-picker';
+} from '../../src/features/studio/model-settings/model-picker';
 
 test('model search matches query segments across model label and id', () => {
   const model = { id: 'google/gemini-3.5-pro', label: 'Gemini 3.5 Pro' };

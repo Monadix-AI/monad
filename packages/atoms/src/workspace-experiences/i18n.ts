@@ -1,6 +1,6 @@
-import type { StrictTranslateForNamespace } from '@monad/i18n';
+import type { StrictTranslateForNamespace } from '@monad/i18n/browser';
 
-import { createI18n } from '@monad/i18n';
+import { createI18n } from '@monad/i18n/browser';
 
 export function workspaceExperienceT(): StrictTranslateForNamespace<'web'> {
   const locale =

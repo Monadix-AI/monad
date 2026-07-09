@@ -1,4 +1,23 @@
 import type {
+  MessageActionProps,
+  MessageActionsProps,
+  MessageContentProps,
+  MessageProps,
+  MessageResponseProps,
+  ReasoningContentProps,
+  ReasoningLabels,
+  ReasoningProps,
+  ReasoningTriggerProps,
+  ShimmerProps,
+  ToolContentProps,
+  ToolHeaderProps,
+  ToolInputProps,
+  ToolOutputProps,
+  ToolPart,
+  ToolProps,
+  ToolStatusLabels
+} from './components/AIElements';
+import type {
   ComposerAccessMode,
   ComposerContextUsageButtonProps,
   ComposerContextUsagePanelProps,
@@ -20,6 +39,24 @@ import type { ProductIconColors, ProductIconId, ProductIconProps } from './compo
 import type { SwitchProps } from './components/Switch';
 
 import { Badge, badgeVariants } from './components/Badge';
+import {
+  AiElementIcons,
+  defaultToolStatusLabels,
+  Message,
+  MessageAction,
+  MessageActions,
+  MessageContent,
+  MessageResponse,
+  Reasoning,
+  ReasoningContent,
+  ReasoningTrigger,
+  Shimmer,
+  Tool,
+  ToolContent,
+  ToolHeader,
+  ToolInput,
+  ToolOutput
+} from './components/AIElements';
 import { Button, buttonVariants } from './components/Button';
 import { ButtonGroup, ButtonGroupText } from './components/ButtonGroup';
 import { Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from './components/Card';
@@ -103,6 +140,23 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './comp
 import { cn } from './lib/utils';
 
 export type {
+  MessageActionProps,
+  MessageActionsProps,
+  MessageContentProps,
+  MessageProps,
+  MessageResponseProps,
+  ReasoningContentProps,
+  ReasoningLabels,
+  ReasoningProps,
+  ReasoningTriggerProps,
+  ShimmerProps,
+  ToolContentProps,
+  ToolHeaderProps,
+  ToolInputProps,
+  ToolOutputProps,
+  ToolPart,
+  ToolProps,
+  ToolStatusLabels,
   ComposerAccessMode,
   ComposerAskSheetProps,
   ComposerAskSheetQuestion,
@@ -126,6 +180,7 @@ export type {
 };
 
 export {
+  AiElementIcons,
   Badge,
   Button,
   ButtonGroup,
@@ -142,6 +197,7 @@ export {
   ChatInputChrome,
   CodeBlock,
   CodeInline,
+  defaultToolStatusLabels,
   ComposerAccessSelect,
   ComposerAskSheet,
   ComposerContextUsageButton,
@@ -191,11 +247,19 @@ export {
   InputGroupTextarea,
   isProductIconId,
   Label,
+  Message,
+  MessageAction,
+  MessageActions,
+  MessageContent,
+  MessageResponse,
   Popover,
   PopoverContent,
   PopoverTrigger,
   ProductIcon,
   Progress,
+  Reasoning,
+  ReasoningContent,
+  ReasoningTrigger,
   ScrollArea,
   ScrollBar,
   Select,
@@ -206,6 +270,7 @@ export {
   SelectTrigger,
   SelectValue,
   Separator,
+  Shimmer,
   Skeleton,
   Spinner,
   Switch,
@@ -218,5 +283,10 @@ export {
   Tooltip,
   TooltipContent,
   TooltipProvider,
-  TooltipTrigger
+  TooltipTrigger,
+  Tool,
+  ToolContent,
+  ToolHeader,
+  ToolInput,
+  ToolOutput
 };

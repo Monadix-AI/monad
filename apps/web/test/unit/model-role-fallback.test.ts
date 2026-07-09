@@ -2,7 +2,7 @@ import type { ModelModalities } from '@monad/protocol';
 
 import { expect, test } from 'bun:test';
 
-import { roleFallbackLabelKey } from '../../features/studio/model-settings/role-fallback';
+import { roleFallbackLabelKey } from '../../src/features/studio/model-settings/role-fallback';
 
 const vision = (c?: ModelModalities) => !!c?.input?.includes('image');
 

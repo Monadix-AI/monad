@@ -1,8 +1,6 @@
 import { expect, test } from 'bun:test';
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 
-import { buildDevToolActions } from '../../features/shell/DevToolsWidget';
+import { buildDevToolActions } from '../../src/features/shell/DevToolsWidget';
 
 test('dev tools widget builds project actions before dev server links', () => {
   const actions = buildDevToolActions({
@@ -30,13 +28,4 @@ test('dev tools widget keeps dev-only links out of production action data', () =
   });
 
   expect(actions.map((action) => action.label)).toEqual(['Fix Impeccable', 'OTel']);
-});
-
-test('app shell only imports DevToolsWidget behind the development guard', () => {
-  const source = readFileSync(join(import.meta.dir, '../../pages/_app.tsx'), 'utf8');
-  const guardIndex = source.indexOf("process.env.NODE_ENV === 'production'");
-  const importIndex = source.indexOf("import('#/features/shell/DevToolsWidget')");
-
-  expect(guardIndex).toBeGreaterThanOrEqual(0);
-  expect(importIndex).toBeGreaterThan(guardIndex);
 });

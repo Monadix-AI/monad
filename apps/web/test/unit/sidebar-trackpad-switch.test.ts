@@ -5,7 +5,7 @@ import {
   isSidebarHorizontalWheel,
   sidebarTrackpadEdgeAccum,
   sidebarTrackpadEdgeOffset
-} from '../../features/shell/sidebar-trackpad-switch.ts';
+} from '../../src/features/shell/sidebar-trackpad-switch.ts';
 
 describe('sidebar pager gesture', () => {
   test('recognizes horizontal wheel gestures for the reveal strip', () => {

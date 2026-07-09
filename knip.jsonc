@@ -4,17 +4,6 @@
   // kept out of the unused-file sweep pending that landing.
   "ignore": [
     "apps/monad/src/handlers/settings/mcp-server/catalog.ts",
-    "apps/web/components/ai-elements/context.tsx",
-    "apps/web/components/ai-elements/prompt-input-actions.tsx",
-    "apps/web/components/ai-elements/prompt-input.tsx",
-    "apps/web/components/ai-elements/prompt-input-context.tsx",
-    "apps/web/components/ai-elements/prompt-input-controls.tsx",
-    "apps/web/components/ai-elements/prompt-input-textarea.tsx",
-    "apps/web/components/ai-elements/prompt-input-utils.ts",
-    "apps/web/components/ui/command.tsx",
-    "apps/web/components/ui/dialog.tsx",
-    "apps/web/components/ui/dropdown-menu.tsx",
-    "apps/web/components/ui/slider.tsx",
     // @monad/sdk-atom-client-rtk re-exports these client-rtk detail endpoints for atom authors;
     // no atom consumes them yet, but they're real API surface, not dead code.
     "packages/client-rtk/src/endpoints/atoms/get-atom-pack.ts",
@@ -63,16 +52,13 @@
       "bun": { "entry": ["test/**/*.{ts,tsx}", "**/*.test.{ts,tsx}"] },
       "ignoreDependencies": ["@monad/monad-power-pack"]
     },
-    // The React Compiler runtime is injected by next.config's reactCompiler flag;
-    // cmdk/nanoid are pulled in dynamically. public/experiences/*.js are workspace-experience
-    // web-component modules loaded by the browser via a runtime URL string (the atom-pack
-    // registry), never a static import — same rationale as packages/atoms below.
+    // public/experiences/*.js are workspace-experience web-component modules loaded by the
+    // browser via a runtime URL string (the atom-pack registry), never a static import — same
+    // rationale as packages/atoms below.
     "apps/web": {
-      "next": true,
       "playwright": true,
       "bun": { "entry": ["test/**/*.{ts,tsx}", "**/*.test.{ts,tsx}"] },
-      "entry": ["public/experiences/*.js"],
-      "ignoreDependencies": ["cmdk", "react-compiler-runtime"]
+      "entry": ["public/experiences/*.js", "src/routes/**/*.tsx"]
     },
     "apps/mo": {},
     // Channel adapters and model providers are loaded dynamically via the atom-pack runtime

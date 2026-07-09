@@ -1,12 +1,9 @@
 import type { CommandItem } from '@monad/protocol';
-import type { TFn } from '../../components/I18nProvider.tsx';
+import type { TFn } from '../../src/components/I18nProvider.tsx';
 
 import { expect, test } from 'bun:test';
 
-import {
-  buildCommandMenuItems,
-  shouldActivateSlashCommandDiscovery
-} from '../../features/routes/sessions/command-menu.ts';
+import { buildCommandMenuItems, shouldActivateSlashCommandDiscovery } from '../../src/features/session/command-menu.ts';
 
 // The menu only translates source badges; a passthrough keeps assertions on the raw keys.
 const t = ((key: string) => key) as unknown as TFn;

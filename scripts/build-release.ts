@@ -4,7 +4,7 @@
  *
  * Pipeline:
  *   1. bun install
- *   2. Web: static-export the Next SPA (apps/web/out/) → generate the embed module
+ *   2. Web: build the Vite SPA (apps/web/out/) → generate the embed module
  *   3. Compile apps/cli/src/bin.ts → bin/monad (embeds daemon + web + tui + SPA)
  *   4. tar + sha256 per platform
  *
@@ -102,11 +102,11 @@ await $`bun run ${join(ROOT, 'packages/home/scripts/gen-config-schema.ts')}`;
 await $`bun run ${join(ROOT, 'scripts/gen-mo-atlas.ts')}`;
 await $`bun run ${join(ROOT, 'scripts/generate-licenses.ts')}`;
 
-// ── 1. Web: static export (platform-independent; done once) ──────────────────
-log('Building apps/web static export…');
-await $`bun run export`.cwd(join(ROOT, 'apps/web')).env({ ...Bun.env, NODE_ENV: 'production', NEXT_OUTPUT: 'export' });
+// ── 1. Web: static build (platform-independent; done once) ───────────────────
+log('Building apps/web static assets…');
+await $`bun run export`.cwd(join(ROOT, 'apps/web')).env({ ...Bun.env, NODE_ENV: 'production' });
 if (!existsSync(join(ROOT, 'apps/web/out/index.html'))) {
-  process.stderr.write('next export did not produce apps/web/out/index.html\n');
+  process.stderr.write('web build did not produce apps/web/out/index.html\n');
   process.exit(1);
 }
 
@@ -253,9 +253,6 @@ try {
     log(`  ✓ dist/${tarball}`);
   }
 } finally {
-  // Restore the auto-generated next-env.d.ts, which Next flips between dev/prod type-import
-  // paths on each build.
-  await $`git checkout -- apps/web/next-env.d.ts`.cwd(ROOT).quiet().nothrow();
   if (existsSync(webOutGzipDir)) rmSync(webOutGzipDir, { recursive: true });
 }
 

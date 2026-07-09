@@ -11,7 +11,7 @@ import {
   writeStoredLastStudioSection,
   writeStoredLastWorkspacePath,
   writeStoredSidebarCollapsed
-} from '../../lib/workspace-shell-store';
+} from '../../src/lib/workspace-shell-store';
 
 const originalWindow = globalThis.window;
 
@@ -145,4 +145,22 @@ test('shell store keeps project session coordination as client-only state', () =
 
   expect(useWorkspaceShellStore.getState().activeProjectSession).toBeNull();
   expect(useWorkspaceShellStore.getState().pendingProjectSession).toBeNull();
+});
+
+test('right panel open state toggles and resolves through explicit open/close', () => {
+  installLocalStorageMock();
+
+  expect(useWorkspaceShellStore.getState().rightPanelOpen).toBe(false);
+
+  useWorkspaceShellStore.getState().toggleRightPanel();
+  expect(useWorkspaceShellStore.getState().rightPanelOpen).toBe(true);
+
+  useWorkspaceShellStore.getState().toggleRightPanel();
+  expect(useWorkspaceShellStore.getState().rightPanelOpen).toBe(false);
+
+  useWorkspaceShellStore.getState().openRightPanel();
+  expect(useWorkspaceShellStore.getState().rightPanelOpen).toBe(true);
+
+  useWorkspaceShellStore.getState().closeRightPanel();
+  expect(useWorkspaceShellStore.getState().rightPanelOpen).toBe(false);
 });

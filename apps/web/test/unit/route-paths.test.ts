@@ -21,7 +21,7 @@ import {
   studioPath,
   studioSectionFromPathname,
   studioSubpathFromPathname
-} from '../../features/shell/routing/paths.ts';
+} from '../../src/features/shell/routing/paths.ts';
 
 describe('canonical web route helpers', () => {
   test('keeps Studio sections and their internal breadcrumbs under /studio', () => {

@@ -1,7 +1,7 @@
 import type { CommandDef } from './types.ts';
 
 import { join } from 'node:path';
-import { certExpiry, certFingerprint, getPaths, renewTlsCert } from '@monad/home';
+import { certExpiry, certFingerprint, ensureTlsCert, getPaths, renewTlsCert } from '@monad/home';
 
 import { t } from '../lib/i18n.ts';
 import { bold, dim, green, json, out, red, yellow } from '../lib/output.ts';
@@ -36,6 +36,52 @@ async function showCert(certPath: string): Promise<void> {
   }
 }
 
+function loginKeychainPath(): string {
+  return join(Bun.env.HOME ?? process.env.HOME ?? '', 'Library', 'Keychains', 'login.keychain-db');
+}
+
+async function trustCert(tlsDir: string): Promise<void> {
+  if (process.platform !== 'darwin') {
+    throw new CliError(t('cli.tls.trustUnsupported'), EXIT.USAGE);
+  }
+
+  const cert = await ensureTlsCert(tlsDir);
+  const keychain = loginKeychainPath();
+  const result = Bun.spawnSync([
+    'security',
+    'add-trusted-cert',
+    '-d',
+    '-r',
+    'trustRoot',
+    '-p',
+    'ssl',
+    '-k',
+    keychain,
+    cert.certPath
+  ]);
+  if (result.exitCode !== 0) {
+    const detail = new TextDecoder().decode(result.stderr).trim();
+    throw new CliError(t('cli.tls.trustFailed', { msg: detail || `security exited ${result.exitCode}` }), EXIT.ERROR);
+  }
+
+  let fingerprint: string | undefined;
+  try {
+    fingerprint = await certFingerprint(cert.certPath);
+  } catch {
+    /* openssl unavailable */
+  }
+
+  json({
+    action: 'trust',
+    certPath: cert.certPath,
+    fingerprint: fingerprint ?? null,
+    keychain
+  });
+
+  out(`${green('✓')} ${t('cli.tls.trusted', { path: cert.certPath })}`);
+  out(dim(t('cli.tls.trustedHint')));
+}
+
 export const command: CommandDef = {
   local: true,
   name: 'tls',
@@ -45,11 +91,12 @@ export const command: CommandDef = {
   async run({ positionals }) {
     const [sub] = positionals;
 
-    if (sub !== 'renew' && sub !== 'show') {
-      out(`${bold(t('cli.tls.usageTitle'))} monad tls renew|show`);
+    if (sub !== 'renew' && sub !== 'show' && sub !== 'trust') {
+      out(`${bold(t('cli.tls.usageTitle'))} monad tls renew|show|trust`);
       out('');
       out(`  ${bold('renew')}  ${t('cli.tls.usageRenew')}`);
       out(`  ${bold('show ')}  ${t('cli.tls.usageShow')}`);
+      out(`  ${bold('trust')}  ${t('cli.tls.usageTrust')}`);
       out(`         ${dim(t('cli.tls.usageRestartHint'))}`);
       return;
     }
@@ -59,6 +106,11 @@ export const command: CommandDef = {
 
     if (sub === 'show') {
       await showCert(certPath);
+      return;
+    }
+
+    if (sub === 'trust') {
+      await trustCert(paths.tls);
       return;
     }
 

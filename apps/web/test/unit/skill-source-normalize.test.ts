@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 
-import { normalizeGithubSkillSource } from '../../features/studio/skills-settings/utils.ts';
+import { normalizeGithubSkillSource } from '../../src/features/studio/skills-settings/utils.ts';
 
 test('normalizeGithubSkillSource keeps GitHub tree URLs unambiguous', () => {
   expect(normalizeGithubSkillSource('https://github.com/vercel-labs/skills/tree/main/skills/find-skills')).toBe(

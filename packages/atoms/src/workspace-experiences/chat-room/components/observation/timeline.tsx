@@ -6,7 +6,7 @@ import type { ObservationItem, ObservationTimelineEntry, PublicObservationCard }
 import { ChevronDownIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { workspaceMono as mono } from '@monad/ui/components/AgentAvatar';
-import { useEffect, useState } from 'react';
+import { memo, useEffect, useState } from 'react';
 
 import {
   privateObservationCard,
@@ -354,7 +354,7 @@ export function observationTimelineRows(entries: ObservationTimelineEntry[]): Ob
   return rows;
 }
 
-export function ObservationTimelineRowView({
+function ObservationTimelineRowViewImpl({
   collapseCommand,
   row,
   provider
@@ -380,6 +380,8 @@ export function ObservationTimelineRowView({
     />
   ) : null;
 }
+
+export const ObservationTimelineRowView = memo(ObservationTimelineRowViewImpl);
 
 function _ObservationTimelineCards({
   collapseCommand,

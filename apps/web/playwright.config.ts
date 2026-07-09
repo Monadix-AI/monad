@@ -43,10 +43,9 @@ export default defineConfig({
     trace: 'retain-on-failure'
   },
   webServer: {
-    command: `bun --bun next dev --turbopack -p ${port}`,
+    command: `bunx --bun vite --host 0.0.0.0 --port ${port}`,
     env: {
-      WEB_PORT: String(port),
-      NEXT_PUBLIC_MONAD_API_BASE: '/api'
+      WEB_PORT: String(port)
     },
     url: `http://localhost:${port}`,
     reuseExistingServer: !process.env.CI,

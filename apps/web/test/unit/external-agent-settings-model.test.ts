@@ -9,7 +9,7 @@ import {
   externalAgentSettingDescription,
   externalAgentSettings,
   normalizeExternalAgentLaunchMode
-} from '../../features/studio/third-party-agents/external-agent-settings-model';
+} from '../../src/features/studio/third-party-agents/external-agent-settings-model';
 
 const agent: ExternalAgentView = {
   name: 'codex',

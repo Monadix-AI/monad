@@ -7,7 +7,7 @@ import {
   isRuntimeReady,
   runtimeDisabledSectionIds,
   runtimeSectionEnabled
-} from '../../features/init/init-readiness';
+} from '../../src/features/init/init-readiness';
 
 const completeStatus: GetInitStatusResponse = {
   initialized: true,

@@ -140,6 +140,11 @@ export function resolveServeDeveloperMode(opts: {
   return opts.configured || opts.devMode || opts.devSilent;
 }
 
+function isSupervisedDaemon(): boolean {
+  const pid = Number.parseInt(Bun.env.MONAD_SUPERVISOR_PID ?? '', 10);
+  return Number.isInteger(pid) && pid > 0;
+}
+
 export function planTcpListeners(opts: {
   host: string;
   https: MonadConfig['network']['https'];
@@ -492,9 +497,10 @@ export async function serveDaemon(deps: ServeDeps): Promise<void> {
   // console window is closed. These only reach the daemon when it owns an attached console (a
   // foreground `monad daemon`), NOT the detached `monad start` background process — there is no
   // way to send a catchable signal to a detached process on Windows. SIGHUP also covers a closed
-  // controlling terminal on Unix. Harmless to register everywhere — Bun emits only what the OS supports.
+  // controlling terminal on Unix; when supervised, ignore it so the launcher shell closing does not
+  // stop the background daemon.
   process.once('SIGBREAK', () => gracefulShutdown(false));
-  process.once('SIGHUP', () => gracefulShutdown(false));
+  if (!isSupervisedDaemon()) process.once('SIGHUP', () => gracefulShutdown(false));
 
   // Connect channels after the banner so startup noise doesn't precede the "ready" signal.
   // Non-fatal per-channel (start() already swallows individual errors); run detached so a slow IM

@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
-import { resolveStudioNavigationPath } from '../../features/shell/routing/studio-navigation.ts';
-import { resolveSidebarPagerTarget } from '../../features/shell/sidebar-trackpad-switch.ts';
+import { resolveStudioNavigationPath } from '../../src/features/shell/routing/studio-navigation.ts';
+import { resolveSidebarPagerTarget } from '../../src/features/shell/sidebar-trackpad-switch.ts';
 
 describe('Studio shell navigation', () => {
   test('defaults sidebar Studio switches to the runtime router', () => {

@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 
-import { resolveConnection } from '../../lib/monad-store.ts';
+import { daemonApiUrl, resolveConnection } from '../../src/lib/monad-store.ts';
 
 test('resolveConnection requires an explicit browser runtime instead of falling back to a daemon URL', () => {
   const originalWindow = globalThis.window;
@@ -17,12 +17,10 @@ test('resolveConnection requires an explicit browser runtime instead of falling 
   }
 });
 
-test('resolveConnection uses the configured HTTPS daemon scheme for direct WebSocket control stream', () => {
+test('resolveConnection uses the Vite proxy path in development', () => {
   const originalWindow = globalThis.window;
   const originalLocalStorage = globalThis.localStorage;
-  const originalApiBase = process.env.NEXT_PUBLIC_MONAD_API_BASE;
-  const originalPort = process.env.NEXT_PUBLIC_MONAD_DAEMON_PORT;
-  const originalScheme = process.env.NEXT_PUBLIC_MONAD_DAEMON_SCHEME;
+  const originalNodeEnv = process.env.NODE_ENV;
 
   const storage = {
     getItem: () => null
@@ -38,14 +36,11 @@ test('resolveConnection uses the configured HTTPS daemon scheme for direct WebSo
     value: storage,
     writable: true
   });
-  process.env.NEXT_PUBLIC_MONAD_API_BASE = '/api';
-  process.env.NEXT_PUBLIC_MONAD_DAEMON_PORT = '52522';
-  process.env.NEXT_PUBLIC_MONAD_DAEMON_SCHEME = 'https';
+  process.env.NODE_ENV = 'development';
 
   try {
     expect(resolveConnection()).toEqual({
-      baseUrl: 'https://127.0.0.1:3000/api',
-      wsBaseUrl: 'https://127.0.0.1:52522'
+      baseUrl: 'https://127.0.0.1:3000/api'
     });
   } finally {
     Object.defineProperty(globalThis, 'window', {
@@ -58,22 +53,18 @@ test('resolveConnection uses the configured HTTPS daemon scheme for direct WebSo
       value: originalLocalStorage,
       writable: true
     });
-    process.env.NEXT_PUBLIC_MONAD_API_BASE = originalApiBase;
-    process.env.NEXT_PUBLIC_MONAD_DAEMON_PORT = originalPort;
-    process.env.NEXT_PUBLIC_MONAD_DAEMON_SCHEME = originalScheme;
+    process.env.NODE_ENV = originalNodeEnv;
   }
 });
 
-test('resolveConnection keeps the browser loopback host for direct WebSocket control stream', () => {
+test('resolveConnection uses same-origin daemon API outside development', () => {
   const originalWindow = globalThis.window;
   const originalLocalStorage = globalThis.localStorage;
-  const originalApiBase = process.env.NEXT_PUBLIC_MONAD_API_BASE;
-  const originalPort = process.env.NEXT_PUBLIC_MONAD_DAEMON_PORT;
-  const originalScheme = process.env.NEXT_PUBLIC_MONAD_DAEMON_SCHEME;
+  const originalNodeEnv = process.env.NODE_ENV;
 
   Object.defineProperty(globalThis, 'window', {
     configurable: true,
-    value: { location: { hostname: 'localhost', origin: 'https://localhost:3000' } },
+    value: { location: { origin: 'https://localhost:52749' } },
     writable: true
   });
   Object.defineProperty(globalThis, 'localStorage', {
@@ -81,12 +72,10 @@ test('resolveConnection keeps the browser loopback host for direct WebSocket con
     value: { getItem: () => null },
     writable: true
   });
-  process.env.NEXT_PUBLIC_MONAD_API_BASE = '/api';
-  process.env.NEXT_PUBLIC_MONAD_DAEMON_PORT = '52522';
-  process.env.NEXT_PUBLIC_MONAD_DAEMON_SCHEME = 'https';
+  process.env.NODE_ENV = 'production';
 
   try {
-    expect(resolveConnection().wsBaseUrl).toBe('https://localhost:52522');
+    expect(resolveConnection()).toEqual({ baseUrl: 'https://localhost:52749' });
   } finally {
     Object.defineProperty(globalThis, 'window', {
       configurable: true,
@@ -98,8 +87,12 @@ test('resolveConnection keeps the browser loopback host for direct WebSocket con
       value: originalLocalStorage,
       writable: true
     });
-    process.env.NEXT_PUBLIC_MONAD_API_BASE = originalApiBase;
-    process.env.NEXT_PUBLIC_MONAD_DAEMON_PORT = originalPort;
-    process.env.NEXT_PUBLIC_MONAD_DAEMON_SCHEME = originalScheme;
+    process.env.NODE_ENV = originalNodeEnv;
   }
+});
+
+test('daemonApiUrl appends daemon paths to development and release base URLs', () => {
+  expect(daemonApiUrl('https://127.0.0.1:3000/api', '/v1/sessions')).toBe('https://127.0.0.1:3000/api/v1/sessions');
+  expect(daemonApiUrl('https://127.0.0.1:52749', '/v1/sessions')).toBe('https://127.0.0.1:52749/v1/sessions');
+  expect(daemonApiUrl('https://127.0.0.1:52749/', '/health')).toBe('https://127.0.0.1:52749/health');
 });

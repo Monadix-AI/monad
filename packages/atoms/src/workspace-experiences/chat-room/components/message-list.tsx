@@ -24,6 +24,7 @@ import { TypingRow } from './transcript-skeleton.tsx';
 
 const HEADER_SPACER = <div style={{ height: 24 }} />;
 const COMPOSER_CLEARANCE = 'calc(var(--chat-room-composer-clearance, 132px) + 24px)';
+const MESSAGE_ROW_WRAP_STYLE = { boxSizing: 'border-box', padding: '0 16px', width: '100%' } satisfies CSSProperties;
 const messageRenderKey = (m: Message): string => m.renderKey ?? m.id;
 const OUTLINE_ITEM_HEIGHT = 8;
 const OUTLINE_ITEM_GAP = 1;
@@ -273,6 +274,23 @@ export function ChatMessageList({
   const scrollToOutlineItem = useCallback((id: string) => {
     listRef.current?.scrollToKey(id, { align: 'start', behavior: 'smooth' });
   }, []);
+  const renderMessageItem = useCallback(
+    (msg: Message) => (
+      <div
+        className="chat-room-message-row-wrap"
+        style={MESSAGE_ROW_WRAP_STYLE}
+      >
+        <MessageRow
+          Attachment={AttachmentChip}
+          labels={labels}
+          msg={msg}
+          onAgentClick={room.openAgentCard}
+          onFollowExternalAgentSession={room.followExternalAgentSession}
+        />
+      </div>
+    ),
+    [labels, room.followExternalAgentSession, room.openAgentCard]
+  );
   useLayoutEffect(() => {
     if (!lastMessageKey) return;
     if (shouldFollowLatestMessage(atBottom, lastMessage?.localStatus)) listRef.current?.scrollToBottom('auto');
@@ -327,20 +345,7 @@ export function ChatMessageList({
         onAtBottomChange={setAtBottom}
         onRangeChange={setVisibleRange}
         onStartReached={room.loadOlder}
-        renderItem={(msg) => (
-          <div
-            className="chat-room-message-row-wrap"
-            style={{ boxSizing: 'border-box', padding: '0 16px', width: '100%' }}
-          >
-            <MessageRow
-              Attachment={AttachmentChip}
-              labels={labels}
-              msg={msg}
-              onAgentClick={room.openAgentCard}
-              onFollowExternalAgentSession={room.followExternalAgentSession}
-            />
-          </div>
-        )}
+        renderItem={renderMessageItem}
         role="log"
         stickToBottom
         style={{ boxSizing: 'border-box', flex: 1, overflowX: 'hidden' }}

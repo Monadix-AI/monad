@@ -7,19 +7,14 @@
     "noUncheckedIndexedAccess": false,
     "jsx": "react-jsx",
     "paths": {
-      "#/*": ["./*", "../monad/src/*"],
+      "#/*": ["./src/*", "./*", "../monad/src/*"],
       "@monad/monad": ["../monad/src/public-api.ts"],
       "@monad/monad/start": ["../monad/src/public-api.ts"],
       "@monad/monad/log-maintenance": ["../monad/src/public-log-maintenance.ts"]
     },
-    "plugins": [
-      {
-        "name": "next"
-      }
-    ],
     "allowJs": true,
     "incremental": true
   },
-  "include": ["**/*.ts", "**/*.tsx", "next-env.d.ts", ".next/types/**/*.ts", ".next/dev/types/**/*.ts"],
-  "exclude": ["node_modules", ".next"]
+  "include": ["**/*.ts", "**/*.tsx"],
+  "exclude": ["node_modules", ".next", "out"]
 }

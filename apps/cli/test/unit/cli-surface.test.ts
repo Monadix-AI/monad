@@ -1,6 +1,4 @@
 import { expect, test } from 'bun:test';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 
 import { command as completion } from '../../src/commands/completion.ts';
 import { commands } from '../../src/commands/index.ts';
@@ -87,19 +85,6 @@ test('the new canonical commands are all registered', () => {
 test('agent-facing project and direct-agent commands stay separate', () => {
   const reg = registry();
   expect(reg.has('message')).toBe(false);
-});
-
-test('agent-facing commands use the typed treaty client surface', () => {
-  const _source = readFileSync(resolve(import.meta.dir, '../../src/commands/agent-facing.ts'), 'utf8');
-});
-
-test('agent-facing project commands derive runtime identity from the managed binding', () => {
-  const _source = readFileSync(resolve(import.meta.dir, '../../src/commands/agent-facing.ts'), 'utf8');
-});
-
-test('managed external agent smoke script is opt-in and provider-owned', () => {
-  const _rootPackage = readFileSync(resolve(import.meta.dir, '../../../../package.json'), 'utf8');
-  const _source = readFileSync(resolve(import.meta.dir, '../../../../scripts/external-agent-managed-smoke.ts'), 'utf8');
 });
 
 test('friendly aliases resolve to the right command', () => {

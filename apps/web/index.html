@@ -1,0 +1,49 @@
+<!doctype html>
+<html class="h-full" lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta content="" name="description" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <title>Monad</title>
+    <link href="/favicon.svg" rel="icon" type="image/svg+xml" />
+    <link href="/favicon.ico" rel="icon" sizes="any" />
+    <script>
+      (() => {
+        try {
+          const s = localStorage.getItem('monad:theme');
+          const d = s === 'dark' || ((!s || s === 'auto') && matchMedia('(prefers-color-scheme: dark)').matches);
+          document.documentElement.classList.toggle('dark', d);
+        } catch {}
+      })();
+    </script>
+    <script>
+      (() => {
+        try {
+          document.documentElement.classList.toggle(
+            'monad-interactive-cursor',
+            localStorage.getItem('monad:interactiveCursor') === 'true'
+          );
+        } catch {}
+      })();
+    </script>
+    <script>
+      (() => {
+        const d = document.documentElement;
+        const k = new Set(['Tab', 'ArrowUp', 'ArrowRight', 'ArrowDown', 'ArrowLeft', 'Home', 'End', 'PageUp', 'PageDown']);
+        d.setAttribute('data-input-modality', 'pointer');
+        addEventListener('pointerdown', () => d.setAttribute('data-input-modality', 'pointer'), true);
+        addEventListener(
+          'keydown',
+          (e) => {
+            if (k.has(e.key)) d.setAttribute('data-input-modality', 'keyboard');
+          },
+          true
+        );
+      })();
+    </script>
+  </head>
+  <body class="h-full overflow-hidden">
+    <div id="root"></div>
+    <script src="/src/main.tsx" type="module"></script>
+  </body>
+</html>

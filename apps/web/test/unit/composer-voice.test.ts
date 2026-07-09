@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 
-import { collectStoppedMediaRecorderAudio } from '../../features/session/use-composer-voice';
+import { collectStoppedMediaRecorderAudio } from '../../src/features/session/use-composer-voice';
 
 test('composer voice waits for the final MediaRecorder chunk after stop before transcribing', async () => {
   const chunksRef = { current: [] as Blob[] };

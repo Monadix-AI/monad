@@ -1,0 +1,131 @@
+'use client';
+
+import type { WorkspaceExperienceDefinition, WorkspaceExperienceEntry } from '@monad/protocol';
+import type { WorkspaceExperienceHostApiV1 } from '@monad/sdk-experience';
+import type { ProjectExperienceView } from '../types';
+
+import { WORKSPACE_EXPERIENCE_API_VERSION } from '@monad/sdk-experience';
+import { createElement, useEffect, useMemo, useRef, useState } from 'react';
+
+import { useT } from '#/components/I18nProvider';
+import { studioPath } from '#/features/shell/routing/paths';
+import { pushShellUrl } from '#/hooks/use-shell-location';
+import { useMonadRuntime } from '#/lib/monad-runtime-provider';
+import { daemonApiUrl } from '#/lib/monad-store';
+
+type WorkspaceExperienceElement = HTMLElement & {
+  monadWorkspaceExperience?: WorkspaceExperienceHostApiV1;
+};
+
+type WebComponentWorkspaceExperienceDefinition = WorkspaceExperienceDefinition & {
+  entry: Extract<WorkspaceExperienceEntry, { type: 'web-component' }>;
+};
+
+function isValidCustomElementName(name: string): boolean {
+  return /^[a-z][.0-9_a-z-]*-[.0-9_a-z-]*$/.test(name);
+}
+
+function isSameOriginModule(module: string): boolean {
+  try {
+    return new URL(module, window.location.origin).origin === window.location.origin;
+  } catch {
+    return false;
+  }
+}
+
+export function WebComponentExperience({
+  atom,
+  view
+}: {
+  atom: WebComponentWorkspaceExperienceDefinition;
+  view: ProjectExperienceView;
+}) {
+  const t = useT();
+  const { baseUrl: daemonBaseUrl } = useMonadRuntime();
+  const ref = useRef<WorkspaceExperienceElement | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const hostApi = useMemo<WorkspaceExperienceHostApiV1>(
+    () => ({
+      // TODO: add per-atom API permission controls before third-party workspace experiences ship.
+      version: WORKSPACE_EXPERIENCE_API_VERSION,
+      actions: view.runtime.actions,
+      apiBaseUrl: daemonApiUrl(daemonBaseUrl, `/v1/atoms/workspace-experiences/${encodeURIComponent(atom.id)}/api`),
+      embedded: view.embedded,
+      voiceModelState: view.voiceModelState,
+      requestProjectDialog: view.onProjectDialogRequest ?? (() => {}),
+      openStudio: (section = 'models') => pushShellUrl(studioPath(section)),
+      snapshot: view.runtime.snapshot
+    }),
+    [
+      atom.id,
+      daemonBaseUrl,
+      view.embedded,
+      view.onProjectDialogRequest,
+      view.runtime.actions,
+      view.runtime.snapshot,
+      view.voiceModelState
+    ]
+  );
+
+  useEffect(() => {
+    let active = true;
+    setLoadError(null);
+    if (!isSameOriginModule(atom.entry.module)) {
+      setLoadError('workspace experience module must be same-origin');
+      return () => {
+        active = false;
+      };
+    }
+    void import(/* webpackIgnore: true */ atom.entry.module).catch((err) => {
+      if (!active) return;
+      setLoadError(err instanceof Error ? err.message : String(err));
+    });
+    return () => {
+      active = false;
+    };
+  }, [atom.entry.module]);
+
+  useEffect(() => {
+    const node = ref.current;
+    if (!node) return;
+    node.monadWorkspaceExperience = hostApi;
+    node.dispatchEvent(new CustomEvent('monad-workspace-experience:update', { detail: hostApi }));
+  }, [hostApi]);
+
+  if (!isValidCustomElementName(atom.entry.tagName)) {
+    return <div className="workspace-experience-error">Invalid workspace experience element: {atom.entry.tagName}</div>;
+  }
+
+  return (
+    <div className="workspace-experience-host">
+      <style>{`
+        .workspace-experience-host {
+          flex: 1;
+          min-width: 0;
+          min-height: 0;
+          display: flex;
+          background: var(--card);
+        }
+        .workspace-experience-host > * {
+          flex: 1;
+          min-width: 0;
+          min-height: 0;
+          display: block;
+        }
+        .workspace-experience-error {
+          flex: 1;
+          display: grid;
+          place-items: center;
+          color: var(--muted-foreground);
+          font-size: 12px;
+        }
+      `}</style>
+      {loadError ? <div className="workspace-experience-error">{t('web.workplace.experienceLoadFailed')}</div> : null}
+      {createElement(atom.entry.tagName, {
+        ref,
+        'data-experience-id': atom.id,
+        hidden: loadError ? true : undefined
+      })}
+    </div>
+  );
+}

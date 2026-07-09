@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 
-import { daemonConnectionFormSchema, mcpServerFormSchema, providerFormSchema } from '../../lib/form-validation.ts';
+import { daemonConnectionFormSchema, mcpServerFormSchema, providerFormSchema } from '../../src/lib/form-validation.ts';
 
 test('provider form requires and normalizes baseUrl only when the provider needs one', () => {
   expect(providerFormSchema(false).parse({ type: 'anthropic', baseUrl: '' })).toEqual({

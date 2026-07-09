@@ -2,7 +2,7 @@ import { afterAll, beforeAll, expect, test } from 'bun:test';
 
 import { loopbackTlsOptions } from '#/lib/loopback-tls';
 import { proxyResponseBody } from '#/lib/proxy-stream';
-import { startWeb } from '../../server/index.ts';
+import { proxyDevWebRequest, resolveDevWebProxyUrl, startWeb } from '../../server/index.ts';
 
 // The web server serves the embedded SPA and proxies /api/* to the daemon (replacing
 // the old Next route handler). Exercise the proxy against a fake provider.
@@ -46,6 +46,90 @@ test('proxy forwards the request method', async () => {
   expect(await res.text()).toBe('POST');
 });
 
+test('standalone web proxies same-origin /v1 requests for exported release assets', async () => {
+  const res = await fetch(`http://127.0.0.1:${web.port}/v1/echo`, { method: 'POST', body: 'x' });
+  expect(await res.text()).toBe('POST');
+});
+
+test('standalone web bridges same-origin WebSocket control stream to the daemon', async () => {
+  const upstream = Bun.serve({
+    port: 0,
+    fetch(req, server) {
+      if (server.upgrade(req)) return undefined;
+      return new Response('upgrade required', { status: 426 });
+    },
+    websocket: {
+      message(ws, message) {
+        ws.send(`daemon:${String(message)}`);
+      }
+    }
+  });
+
+  Bun.env.WEB_PORT = '0';
+  const proxy = startWeb({ daemonUrl: `http://127.0.0.1:${upstream.port}` });
+  const reply = await new Promise<string>((resolve, reject) => {
+    const socket = new WebSocket(`ws://127.0.0.1:${proxy.port}/v1/stream`);
+    const timeout = setTimeout(() => reject(new Error('timed out waiting for bridged frame')), 2000);
+    socket.onopen = () => socket.send('ping');
+    socket.onmessage = (event) => {
+      clearTimeout(timeout);
+      resolve(String(event.data));
+      socket.close();
+    };
+    socket.onerror = () => {
+      clearTimeout(timeout);
+      reject(new Error('websocket bridge failed'));
+    };
+  });
+
+  proxy.stop(true);
+  upstream.stop(true);
+  expect(reply).toBe('daemon:ping');
+});
+
+test('standalone web preserves WebSocket subprotocols for Vite HMR', async () => {
+  const upstream = Bun.serve({
+    port: 0,
+    fetch(req, server) {
+      if (req.headers.get('sec-websocket-protocol') !== 'vite-hmr') {
+        return new Response('missing websocket protocol', { status: 400 });
+      }
+      if (server.upgrade(req)) return undefined;
+      return new Response('upgrade required', { status: 426 });
+    },
+    websocket: {
+      message() {},
+      open(ws) {
+        ws.send('hmr:ready');
+      }
+    }
+  });
+
+  Bun.env.WEB_PORT = '0';
+  const proxy = startWeb({ daemonUrl: `http://127.0.0.1:${upstream.port}` });
+
+  try {
+    const reply = await new Promise<string>((resolve, reject) => {
+      const socket = new WebSocket(`ws://127.0.0.1:${proxy.port}/v1/stream?token=dev`, 'vite-hmr');
+      const timeout = setTimeout(() => reject(new Error('timed out waiting for bridged HMR frame')), 2000);
+      socket.onmessage = (event) => {
+        clearTimeout(timeout);
+        resolve(String(event.data));
+        socket.close();
+      };
+      socket.onerror = () => {
+        clearTimeout(timeout);
+        reject(new Error('websocket HMR bridge failed'));
+      };
+    });
+
+    expect(reply).toBe('hmr:ready');
+  } finally {
+    proxy.stop(true);
+    upstream.stop(true);
+  }
+});
+
 test('proxyResponseBody turns late SSE read errors into a clean close', async () => {
   let pulls = 0;
   const stream = new ReadableStream<Uint8Array>({
@@ -65,15 +149,83 @@ test('proxyResponseBody turns late SSE read errors into a clean close', async ()
 
 test('loopbackTlsOptions only disables verification for exact loopback HTTPS hosts', () => {
   expect(loopbackTlsOptions('https://127.0.0.1:52749')).toEqual({ tls: { rejectUnauthorized: false } });
+  expect(loopbackTlsOptions('wss://127.0.0.1:52749')).toEqual({ tls: { rejectUnauthorized: false } });
   expect(loopbackTlsOptions('https://localhost:52749')).toEqual({ tls: { rejectUnauthorized: false } });
   expect(loopbackTlsOptions('https://127.attacker.test:52749')).toEqual({});
   expect(loopbackTlsOptions('https://localhost.attacker.test:52749')).toEqual({});
   expect(loopbackTlsOptions('http://127.0.0.1:52749')).toEqual({});
 });
 
-test('next.config exports an object', async () => {
-  const mod = await import('../../next.config.ts');
-  expect(typeof mod.default).toBe('object');
+test('vite.config exports a config factory', async () => {
+  const mod = await import('../../vite.config.ts');
+  expect(typeof mod.default).toBe('function');
+});
+
+test('vite dev server uses the configured port exactly for daemon proxy compatibility', async () => {
+  const mod = await import('../../vite.config.ts');
+  const config = mod.default({ command: 'serve', mode: 'development' });
+  expect(config.server?.strictPort).toBe(true);
+});
+
+test('web dev scripts pass a deterministic editor to Vite overlays', async () => {
+  const pkg = (await Bun.file(new URL('../../package.json', import.meta.url)).json()) as {
+    scripts: Record<string, string>;
+  };
+  expect(pkg.scripts.dev).toContain('LAUNCH_EDITOR=');
+  expect(pkg.scripts['start:dev']).toContain('LAUNCH_EDITOR=');
+});
+
+test('resolveDevWebProxyUrl only uses WEB_PORT in explicit development mode', () => {
+  expect(
+    resolveDevWebProxyUrl('https://127.0.0.1:52749/workspace/p1?tab=room', {
+      NODE_ENV: 'development',
+      WEB_PORT: '3147'
+    })
+  ).toBe('http://127.0.0.1:3147/workspace/p1?tab=room');
+
+  expect(
+    resolveDevWebProxyUrl('https://127.0.0.1:52749/@vite/client', {
+      NODE_ENV: 'production',
+      WEB_PORT: '3147'
+    })
+  ).toBeNull();
+
+  expect(
+    resolveDevWebProxyUrl('https://127.0.0.1:52749/workspace/p1?tab=room', {
+      WEB_PORT: '3147'
+    })
+  ).toBeNull();
+});
+
+test('proxyDevWebRequest forwards method, path, query, and body to Vite', async () => {
+  const vite = Bun.serve({
+    port: 0,
+    async fetch(req) {
+      const url = new URL(req.url);
+      return Response.json({
+        body: await req.text(),
+        method: req.method,
+        pathname: url.pathname,
+        search: url.search
+      });
+    }
+  });
+
+  try {
+    const req = new Request('https://127.0.0.1:52749/workspace/p1?tab=room', {
+      method: 'POST',
+      body: 'payload'
+    });
+    const res = await proxyDevWebRequest(req, `http://127.0.0.1:${vite.port}/workspace/p1?tab=room`);
+    expect(await res.json()).toEqual({
+      body: 'payload',
+      method: 'POST',
+      pathname: '/workspace/p1',
+      search: '?tab=room'
+    });
+  } finally {
+    vite.stop(true);
+  }
 });
 
 // ── readDaemonUrl path resolution ─────────────────────────────────────────────

@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 
-import { primaryModifierPressed, shortcutNumberFromEvent } from '../../lib/keyboard.ts';
+import { primaryModifierPressed, shortcutNumberFromEvent } from '../../src/lib/keyboard.ts';
 
 test('shortcutNumberFromEvent reads 1-9 from the key, ignoring 0 and non-digits', () => {
   expect(shortcutNumberFromEvent({ key: '3', code: 'Digit3' } as KeyboardEvent)).toBe(3);

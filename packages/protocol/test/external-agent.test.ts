@@ -1,6 +1,4 @@
 import { expect, test } from 'bun:test';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 
 import {
   attachmentPreviewText,
@@ -767,13 +765,6 @@ test('native agent HTTP endpoints are declared in the protocol daemon contract',
   expect(daemonHttpContract.nativeAgent.agentRead.response[200]).toBe(nativeAgentReadResponseSchema);
   expect(daemonHttpContract.nativeAgent.runtimeInfo.response[200]).toBe(nativeAgentRuntimeInfoResponseSchema);
   expect(daemonHttpContract.nativeAgent.attachmentRead.response[200]).toBe(attachmentReadResponseSchema);
-});
-
-test('native agent daemon transport reuses protocol schemas instead of local zod copies', () => {
-  const _source = readFileSync(
-    resolve(import.meta.dir, '../../../apps/monad/src/transports/http/native-agent.ts'),
-    'utf8'
-  );
 });
 
 // The workingPath schema is cross-platform: it travels over the wire from any client OS, so it must

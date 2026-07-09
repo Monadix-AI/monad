@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 
-import { useWorkplaceUiStore } from '../../features/workplace/workplace-ui-store.ts';
+import { useWorkplaceUiStore } from '../../src/features/workplace/workplace-ui-store.ts';
 
 test('workplace UI store owns project settings panel state', () => {
   useWorkplaceUiStore.getState().closeProjectSettings();

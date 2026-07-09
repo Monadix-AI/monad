@@ -15,6 +15,7 @@
       "!.claude",
       "!.superpowers",
       "!packages/i18n/generated/paraglide",
+      "!apps/web/src/routeTree.gen.ts",
       "!packages/home/config.schema.json",
       "!packages/home/profile.schema.json"
     ]

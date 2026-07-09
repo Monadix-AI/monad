@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 
-import { approvalActionScopes } from '../../features/session/approval-display';
+import { approvalActionScopes } from '../../src/features/session/approval-display';
 
 test('approvalActionScopes uses rememberScopes and moves defaultScope first', () => {
   expect(

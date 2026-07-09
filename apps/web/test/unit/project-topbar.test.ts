@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 
-import { projectTopBarBreadcrumbItems } from '../../features/routes/workspace/ProjectTopBar';
+import { projectTopBarBreadcrumbItems } from '../../src/features/workspace/ProjectTopBar';
 
 test('project top bar breadcrumb includes the active session when available', () => {
   expect(projectTopBarBreadcrumbItems({ projectName: 'Mock Project', sessionTitle: 'Alpha session' })).toEqual([

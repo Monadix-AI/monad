@@ -5,7 +5,7 @@ import {
   providerDialogCanGoBack,
   providerDialogNextStep,
   providerDialogPreviousStep
-} from '../../features/studio/model-settings/provider-dialog-flow';
+} from '../../src/features/studio/model-settings/provider-dialog-flow';
 
 test('add provider starts at provider selection and can go back from configure', () => {
   const initial = initialProviderDialogStep('add');

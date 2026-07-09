@@ -1,8 +1,9 @@
 // Release: SPA assets are served from Bun's embedded filesystem — no sidecar, no Node runtime.
 // attachWebRoutes() mounts onto the daemon's Elysia app so everything shares one port.
-// Dev: `next dev` runs on :3000; startWeb() is only used for standalone `monad web`.
+// Dev: Vite runs on :3000; startWeb() is only used for standalone `monad web`.
 
 import type { App } from '@monad/monad/start';
+import type { ServerWebSocket } from 'bun';
 
 import { readFileSync } from 'node:fs';
 import { extname } from 'node:path';
@@ -10,8 +11,8 @@ import { resolveDaemonUrl } from '@monad/home/network-endpoints';
 import { getPaths } from '@monad/home/paths';
 import { createLogger } from '@monad/logger';
 
-import { loopbackTlsOptions } from '../lib/loopback-tls';
-import { proxyResponseBody } from '../lib/proxy-stream';
+import { loopbackTlsOptions } from '../src/lib/loopback-tls';
+import { proxyResponseBody } from '../src/lib/proxy-stream';
 
 const logger = createLogger('monad-web');
 
@@ -20,9 +21,24 @@ type EmbeddedAsset = {
   headers: Headers;
 };
 
+type WebSocketProxyData = {
+  pending: WebSocketMessage[];
+  protocol?: string;
+  target: string;
+  upstream?: WebSocket;
+};
+
+type WebSocketMessage = string | ArrayBuffer;
+type Env = { NODE_ENV?: string; WEB_PORT?: string };
+type WebSocketBridge = {
+  close: () => void;
+  data?: { request?: Request };
+  send: (message: string | ArrayBuffer) => unknown;
+};
+
 // Build a URL-path → Blob map from embedded assets once at startup.
 // build-release embeds gzip-compressed apps/web/out.gz/ files as extra entrypoints; Bun.embeddedFiles
-// names include the source path tail (e.g. ".../apps/web/out.gz/_next/.../foo.js.gz"). Strip the
+// names include the source path tail (e.g. ".../apps/web/out.gz/assets/foo.js.gz"). Strip the
 // embed prefix and trailing ".gz" to get the URL path. Also keep legacy uncompressed apps/web/out/
 // support for dev/tests and older local binaries.
 // Bun types declare embeddedFiles as Blob[], but each item is a subclass with a `name` property.
@@ -103,12 +119,96 @@ function serveAsset(pathname: string): Response {
   return serveAssetFromMap(ASSETS, pathname);
 }
 
+export function resolveDevWebProxyUrl(
+  requestUrl: string,
+  env: Env = Bun.env,
+  protocol: 'http' | 'ws' = 'http'
+): string | null {
+  if (env.NODE_ENV !== 'development' || !env.WEB_PORT) return null;
+  const source = new URL(requestUrl);
+  return `${protocol}://127.0.0.1:${env.WEB_PORT}${source.pathname}${source.search}`;
+}
+
+export async function proxyDevWebRequest(req: Request, target: string): Promise<Response> {
+  const headers = new Headers(req.headers);
+  headers.delete('host');
+  headers.delete('upgrade');
+  headers.delete('connection');
+  const body = req.method === 'GET' || req.method === 'HEAD' ? undefined : await req.arrayBuffer();
+  try {
+    const upstream = await fetch(target, { method: req.method, headers, body });
+    const resHeaders = new Headers(upstream.headers);
+    resHeaders.delete('transfer-encoding');
+    return new Response(proxyResponseBody(upstream), { status: upstream.status, headers: resHeaders });
+  } catch {
+    return new Response('Bad Gateway', { status: 502 });
+  }
+}
+
+function bridgeWebSocketToTarget(
+  client: WebSocketBridge,
+  target: string,
+  data: WebSocketProxyData = { pending: [], target }
+): WebSocketProxyData {
+  data.target = target;
+  const upstream = openUpstreamWebSocket(target, data.protocol);
+  data.upstream = upstream;
+  upstream.binaryType = 'arraybuffer';
+  upstream.onopen = () => {
+    const pending = data.pending.splice(0);
+    for (const message of pending) sendWhenOpen(upstream, message);
+  };
+  upstream.onmessage = (event) => {
+    client.send(normalizeWebSocketMessage(event.data as string | ArrayBuffer | Uint8Array));
+  };
+  upstream.onclose = () => client.close();
+  upstream.onerror = () => client.close();
+  return data;
+}
+
 /**
  * Mount the SPA onto an existing Elysia app (same-port, same-process mode).
  * The daemon's /v1/* and /health routes take priority; everything else falls
  * through to the SPA catch-all.
  */
 export function attachWebRoutes(app: App): void {
+  if (resolveDevWebProxyUrl('http://127.0.0.1/')) {
+    const wsData = new WeakMap<WebSocketBridge, WebSocketProxyData>();
+    app.ws('/*', {
+      open(ws: WebSocketBridge) {
+        const target = resolveDevWebProxyUrl(ws.data?.request?.url ?? 'http://127.0.0.1/', Bun.env, 'ws');
+        if (!target) {
+          ws.close();
+          return;
+        }
+        wsData.set(
+          ws,
+          bridgeWebSocketToTarget(ws, target, {
+            pending: [],
+            protocol: ws.data?.request?.headers.get('sec-websocket-protocol') ?? undefined,
+            target
+          })
+        );
+      },
+      message(ws: WebSocketBridge, message: string | ArrayBuffer | Uint8Array) {
+        const data = wsData.get(ws);
+        const upstream = data?.upstream;
+        if (!data || !upstream || !sendWhenOpen(upstream, message))
+          data?.pending.push(normalizeWebSocketMessage(message));
+      },
+      close(ws: WebSocketBridge) {
+        const data = wsData.get(ws);
+        data?.upstream?.close();
+        wsData.delete(ws);
+      }
+    });
+    app.get('/*', async ({ request }) => {
+      const target = resolveDevWebProxyUrl(request.url);
+      return target ? proxyDevWebRequest(request, target) : new Response('Not found', { status: 404 });
+    });
+    return;
+  }
+
   app.get('/*', ({ path }) => serveAsset(path));
 }
 
@@ -117,7 +217,7 @@ function daemonUrlFromConfig(raw: string): string {
   return resolveDaemonUrl({ network, env: Bun.env });
 }
 
-function readDaemonUrl(): string {
+export function readDaemonUrl(): string {
   if (Bun.env.MONAD_URL) return resolveDaemonUrl({ env: Bun.env });
   try {
     const configPath = getPaths().config;
@@ -126,6 +226,47 @@ function readDaemonUrl(): string {
   } catch {
     return resolveDaemonUrl({ env: Bun.env });
   }
+}
+
+function proxyPath(pathname: string): string | null {
+  if (pathname === '/api') return '/';
+  if (pathname.startsWith('/api/')) return `/${pathname.slice('/api/'.length)}`;
+  if (pathname === '/v1' || pathname.startsWith('/v1/')) return pathname;
+  return null;
+}
+
+function webSocketTarget(daemon: string, pathname: string, search: string): string {
+  return `${daemon.replace(/^http/, 'ws')}${pathname}${search}`;
+}
+
+function normalizeWebSocketMessage(message: string | ArrayBuffer | Uint8Array): WebSocketMessage {
+  if (typeof message === 'string' || message instanceof ArrayBuffer) return message;
+  const copy = new Uint8Array(message.byteLength);
+  copy.set(message);
+  return copy.buffer;
+}
+
+function openUpstreamWebSocket(target: string, protocol?: string): WebSocket {
+  const connect = WebSocket as unknown as {
+    new (url: string, options?: { tls?: { rejectUnauthorized: boolean } }): WebSocket;
+    new (url: string, protocol: string, options?: { tls?: { rejectUnauthorized: boolean } }): WebSocket;
+  };
+  const options = loopbackTlsOptions(target);
+  return protocol ? new connect(target, protocol, options) : new connect(target, options);
+}
+
+function sendWhenOpen(ws: WebSocket, message: string | ArrayBuffer | Uint8Array): boolean {
+  if (ws.readyState !== WebSocket.OPEN) return false;
+  ws.send(normalizeWebSocketMessage(message));
+  return true;
+}
+
+function sendToClient(
+  client: ServerWebSocket<WebSocketProxyData>,
+  message: string | ArrayBuffer | Uint8Array
+): boolean {
+  client.send(normalizeWebSocketMessage(message));
+  return true;
 }
 
 /**
@@ -137,19 +278,35 @@ export function startWeb(opts?: { daemonUrl?: string }) {
   const PORT = Number(Bun.env.WEB_PORT ?? 3000);
   const HOST = Bun.env.WEB_HOST ?? '0.0.0.0';
 
-  const server = Bun.serve({
+  const server = Bun.serve<WebSocketProxyData>({
     port: PORT,
     hostname: HOST,
-    async fetch(req) {
+    async fetch(req, server) {
       const { pathname, search } = new URL(req.url);
+      const providerPath = proxyPath(pathname);
 
-      if (pathname === '/api' || pathname.startsWith('/api/')) {
-        const providerPath = pathname.slice('/api/'.length);
+      if (providerPath) {
+        if (req.headers.get('upgrade')?.toLowerCase() === 'websocket') {
+          const target = webSocketTarget(DAEMON, providerPath, search);
+          if (
+            server.upgrade(req, {
+              data: {
+                pending: [],
+                protocol: req.headers.get('sec-websocket-protocol') ?? undefined,
+                target
+              }
+            })
+          )
+            return undefined;
+          return new Response('websocket upgrade failed', { status: 400 });
+        }
         const headers = new Headers(req.headers);
         headers.delete('host');
+        headers.delete('upgrade');
+        headers.delete('connection');
         const body = req.method === 'GET' || req.method === 'HEAD' ? undefined : await req.arrayBuffer();
         try {
-          const provider = await fetch(`${DAEMON}/${providerPath}${search}`, {
+          const provider = await fetch(`${DAEMON}${providerPath}${search}`, {
             method: req.method,
             headers,
             body,
@@ -165,6 +322,25 @@ export function startWeb(opts?: { daemonUrl?: string }) {
       }
 
       return serveAsset(pathname);
+    },
+    websocket: {
+      open(client) {
+        bridgeWebSocketToTarget(
+          {
+            close: () => client.close(),
+            send: (message) => sendToClient(client, message)
+          },
+          client.data.target,
+          client.data
+        );
+      },
+      message(client, message) {
+        const upstream = client.data.upstream;
+        if (!upstream || !sendWhenOpen(upstream, message)) client.data.pending.push(normalizeWebSocketMessage(message));
+      },
+      close(client) {
+        client.data.upstream?.close();
+      }
     }
   });
 

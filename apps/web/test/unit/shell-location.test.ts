@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 
-import { navigateShellUrl, toShellUrl } from '../../hooks/use-shell-location';
+import { navigateShellUrl, toShellUrl } from '../../src/hooks/use-shell-location';
 
 const originalWindow = globalThis.window;
 

@@ -1,4 +1,4 @@
-import type { ProjectDebugTraceEntry } from '../../lib/project-debug-trace';
+import type { ProjectDebugTraceEntry } from '../../src/lib/project-debug-trace';
 
 import { expect, test } from 'bun:test';
 
@@ -6,7 +6,7 @@ import {
   filterDebugTraceEntries,
   formatDebugTimestamp,
   logRecordToDebugTrace
-} from '../../features/workplace/debug/ProjectDebugConsole';
+} from '../../src/features/workplace/debug/ProjectDebugConsole';
 
 const entry = (overrides: Partial<ProjectDebugTraceEntry>): ProjectDebugTraceEntry => ({
   id: overrides.id ?? `dbg_${overrides.label ?? 'x'}`,

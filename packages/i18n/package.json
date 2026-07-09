@@ -8,6 +8,7 @@
   },
   "exports": {
     ".": "./src/index.ts",
+    "./browser": "./src/browser.ts",
     "./messages": "./src/messages.ts",
     "./locale-dir": "./src/locale-dir.ts"
   },

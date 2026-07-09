@@ -30,7 +30,7 @@ const SUBCOMMANDS: Record<string, string[]> = {
   skill: ['list', 'install', 'remove', 'new', 'validate'],
   atom: ['list', 'install', 'remove'],
   completion: ['bash', 'zsh', 'fish', 'install'],
-  tls: ['renew']
+  tls: ['renew', 'show', 'trust']
 };
 
 const SKILL_SCOPE_VALUES = ['runtime', 'global', 'atom-pack', 'agent'] as const;

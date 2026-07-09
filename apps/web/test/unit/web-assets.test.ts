@@ -33,12 +33,12 @@ test('falls back to the gzip shell for deep links', () => {
 test('recognizes Bun asset names that include the absolute project path tail', () => {
   const compressed = Bun.gzipSync(Buffer.from('console.log("monad")'));
   const assets = buildAssetMap([
-    new File([compressed], 'Users/zeke/Projects/monad/apps/web/out.gz/_next/static/chunks/app.js.gz') as File & {
+    new File([compressed], 'Users/zeke/Projects/monad/apps/web/out.gz/assets/app.js.gz') as File & {
       name: string;
     }
   ]);
 
-  const res = serveAssetFromMap(assets, '/_next/static/chunks/app.js');
+  const res = serveAssetFromMap(assets, '/assets/app.js');
 
   expect(res.status).toBe(200);
   expect(res.headers.get('content-encoding')).toBe('gzip');

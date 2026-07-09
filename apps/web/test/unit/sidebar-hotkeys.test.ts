@@ -6,7 +6,7 @@ import {
   settingsHotkey,
   sidebarNumberHotkeys,
   sidebarShortcutListenerOptions
-} from '../../hooks/use-sidebar-shortcuts.ts';
+} from '../../src/hooks/use-sidebar-shortcuts.ts';
 
 function shortcutEvent(init: {
   altKey?: boolean;

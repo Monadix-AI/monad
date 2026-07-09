@@ -4,7 +4,7 @@ import {
   fileManagerLabel,
   terminalLabel,
   workdirLabel
-} from '../../features/workplace/project-shell/project-header-utils';
+} from '../../src/features/workplace/project-shell/project-header-utils';
 
 test('workdir label uses the last path segment', () => {
   expect(workdirLabel('/Users/zeke/Projects/monad/', 'Set folder')).toBe('monad');

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { shouldRedirectInitToHome } from '../../lib/init-redirect.ts';
+import { shouldRedirectInitToHome } from '../../src/lib/init-redirect.ts';
 
 // The /init route is canonical and stays reachable after initialization.
 describe('shouldRedirectInitToHome', () => {

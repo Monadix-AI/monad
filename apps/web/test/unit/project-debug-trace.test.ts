@@ -6,7 +6,7 @@ import {
   projectDebugTraceSnapshot,
   subscribeProjectDebugTrace,
   traceProjectDebugOperation
-} from '../../lib/project-debug-trace';
+} from '../../src/lib/project-debug-trace';
 
 test('project debug trace stores bounded entries and notifies subscribers', () => {
   clearProjectDebugTrace();

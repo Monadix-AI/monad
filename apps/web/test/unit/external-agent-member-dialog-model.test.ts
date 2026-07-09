@@ -3,7 +3,7 @@ import { expect, test } from 'bun:test';
 import {
   externalAgentMemberDialogStateForMember,
   externalAgentModelDisplayName
-} from '../../features/workplace/project-shell/external-agent-member-dialog-model';
+} from '../../src/features/workplace/project-shell/external-agent-member-dialog-model';
 
 test('external agent member dialog formats first party model names', () => {
   expect(externalAgentModelDisplayName('gpt-5-codex')).toBe('GPT-5-Codex');

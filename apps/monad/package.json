@@ -68,7 +68,7 @@
     "devtools": "bunx @ai-sdk/devtools",
     "lint": "biome check .",
     "start": "bun src/main.ts",
-    "start:dev": "NODE_ENV=development bun --env-file=../../.env.local --watch src/main.ts --dev",
+    "start:dev": "NODE_ENV=development bun --env-file=../../.env.local --watch ../cli/src/bin.ts daemon --dev",
     "test": "bun ../../scripts/bun-test.ts test/ --only-failures",
     "test:e2e": "bun ../../scripts/bun-test.ts test/e2e/ --only-failures",
     "test:e2e:loud": "bun ../../scripts/bun-test.ts test/e2e/ --loud",

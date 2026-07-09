@@ -26,7 +26,7 @@ import {
 } from '@monad/ui/components/AgentAvatar';
 import { VirtualList, type VirtualListHandle } from '@monad/ui/components/VirtualList';
 import { useFirstItemIndex } from '@monad/ui/hooks/use-first-item-index';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { workspaceExperienceT } from '../../../i18n.ts';
 import {
@@ -221,6 +221,23 @@ export function ExternalAgentObservationPanel({
     if (!follow || streamStatus !== 'running') return;
     listRef.current?.scrollToBottom('auto');
   }, [follow, followResetKey, streamStatus]);
+
+  const loadOlderObservationHistory = useCallback(() => {
+    if (canLoadOlderHistory && !loadingOlderHistory) onLoadOlderHistory?.();
+  }, [canLoadOlderHistory, loadingOlderHistory, onLoadOlderHistory]);
+
+  const renderObservationRow = useCallback(
+    (row: ObservationTimelineRow) => (
+      <div style={{ boxSizing: 'border-box', padding: '0 14px 10px', width: '100%' }}>
+        <ObservationTimelineRowView
+          collapseCommand={collapseCommand}
+          provider={timelineProvider}
+          row={row}
+        />
+      </div>
+    ),
+    [collapseCommand, timelineProvider]
+  );
 
   const scrollToTop = () => {
     setFollow(false);
@@ -454,19 +471,9 @@ export function ExternalAgentObservationPanel({
             header={listHeader}
             items={timelineRows}
             onAtBottomChange={setFollow}
-            onStartReached={() => {
-              if (canLoadOlderHistory && !loadingOlderHistory) onLoadOlderHistory?.();
-            }}
+            onStartReached={loadOlderObservationHistory}
             overscan={600}
-            renderItem={(row) => (
-              <div style={{ boxSizing: 'border-box', padding: '0 14px 10px', width: '100%' }}>
-                <ObservationTimelineRowView
-                  collapseCommand={collapseCommand}
-                  provider={timelineProvider}
-                  row={row}
-                />
-              </div>
-            )}
+            renderItem={renderObservationRow}
             role="log"
             stickToBottom
             style={{

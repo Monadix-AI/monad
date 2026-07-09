@@ -1,4 +1,4 @@
-import { closeSync, openSync } from 'node:fs';
+import { appendFileSync, closeSync, openSync } from 'node:fs';
 import { mkdir, unlink } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { makeLoopbackHttpsFetcher } from '@monad/client';
@@ -29,6 +29,10 @@ function isAlive(pid: number): boolean {
   } catch {
     return false;
   }
+}
+
+function isSourceCliInvocation(): boolean {
+  return process.argv.some((arg) => arg.endsWith('/apps/cli/src/bin.ts') || arg.endsWith('/apps/cli/src/main.ts'));
 }
 
 async function isDaemonReachable(): Promise<boolean> {
@@ -100,16 +104,14 @@ export async function startDaemon(): Promise<{ alreadyRunning: boolean }> {
   // never becomes reachable the PID is stale (a crashed daemon whose PID was recycled, or a hung
   // process), so we fall through and (re)start; the daemon's singleton lock guards a true double-run.
   // Reachability — the same signal `monad status` uses — is the source of truth, never bare liveness.
-  if (pid && isAlive(pid) && (await waitForReachable(3000))) {
+  if (pid && isAlive(pid) && (await waitForReachable(8000))) {
     out(yellow(t('cli.daemon.alreadyRunning')) + dim(t('cli.daemon.pid', { pid })));
     return { alreadyRunning: true };
   }
 
-  // The daemon owns the startup banner + ready-info (single source of truth for `monad start`,
-  // `monad daemon`, and the installer). Launch it detached: its banner/ready-info go to stdout —
-  // which we pipe and relay to the user until it's reachable — while its logs go to stderr → the
-  // persistent daemon.log. The daemon writes nothing more to stdout after startup, so closing the
-  // pipe when we exit can't EPIPE it. --start-relay tells it to emit the banner and route logs.
+  // The daemon owns the startup banner + ready-info in dev. In release it is supervised, so startup
+  // readiness is detected by /health instead of stdout relay; otherwise the supervisor would keep a
+  // pipe tied to this short-lived CLI process.
   const logPath = join(getPaths().logs, 'daemon.log');
   await mkdir(getPaths().logs, { recursive: true });
   // Size-cap daemon.log at this start boundary: the CLI's inherited stderr fd (below) pins the file
@@ -120,17 +122,41 @@ export async function startDaemon(): Promise<{ alreadyRunning: boolean }> {
   // Dev: resolve the daemon source from daemon.ts's own location (apps/cli/src/lib/ → apps/monad/src/).
   // Release: the compiled binary handles all subcommands — spawn self with 'daemon'.
   const devEntry = resolve(import.meta.dir, '../../../monad/src/main.ts');
-  const isDevEntry = await Bun.file(devEntry).exists();
+  const isDevEntry = isSourceCliInvocation() && (await Bun.file(devEntry).exists());
   // --start-relay tells the daemon to emit its banner/ready-info to stdout for relay
   // to the user, and to route logs to stderr (daemon.log) so stdout stays clean.
   // Pass --log-file so the daemon writes daemon.log itself (see configureDaemonLogging). The `stderr:
   // logFd` redirect below still captures native/pre-logger crash output on Unix, but a detached child
   // does not inherit that fd on Windows — so the daemon owning the file is what populates it there.
   const relayArgs = ['--start-relay', '--log-file', logPath];
-  const argv = isDevEntry ? ['bun', devEntry, ...relayArgs] : [process.execPath, 'daemon', ...relayArgs];
+  if (!isDevEntry && process.platform !== 'win32') {
+    closeSync(logFd);
+    const result = Bun.spawnSync(
+      [
+        'sh',
+        '-c',
+        'nohup "$1" daemon-supervisor "$2" </dev/null >/dev/null 2>>"$2" & printf "%s\\n" "$!"',
+        'monad-supervisor-launch',
+        process.execPath,
+        logPath
+      ],
+      { stdin: 'ignore', stdout: 'pipe', stderr: 'pipe' }
+    );
+    const supervisorPid = Number.parseInt(new TextDecoder().decode(result.stdout).trim(), 10);
+    if (result.exitCode !== 0 || !Number.isInteger(supervisorPid) || supervisorPid <= 0) {
+      const stderr = new TextDecoder().decode(result.stderr).trim();
+      throw new Error(stderr || `failed to launch daemon supervisor (${logPath})`);
+    }
+    await Bun.write(getPidPath(), String(supervisorPid));
+    await waitUntilReady(supervisorPid, logPath);
+    return { alreadyRunning: false };
+  }
+
+  const releaseSupervisorArgs = [process.execPath, 'daemon-supervisor', logPath];
+  const argv = isDevEntry ? ['bun', devEntry, ...relayArgs] : releaseSupervisorArgs;
   const proc = Bun.spawn(argv, {
     stdin: 'ignore',
-    stdout: 'pipe',
+    stdout: isDevEntry ? 'pipe' : 'ignore',
     stderr: logFd,
     detached: true
   });
@@ -138,8 +164,126 @@ export async function startDaemon(): Promise<{ alreadyRunning: boolean }> {
   await Bun.write(getPidPath(), String(proc.pid));
   proc.unref();
 
-  await relayUntilReady(proc.stdout, proc.pid, logPath);
+  if (isDevEntry && proc.stdout instanceof ReadableStream) await relayUntilReady(proc.stdout, proc.pid, logPath);
+  else await waitUntilReady(proc.pid, logPath);
   return { alreadyRunning: false };
+}
+
+type SupervisedProcess = ReturnType<typeof Bun.spawn>;
+type SupervisorAction = { type: 'exit'; code: number } | { type: 'restart' };
+
+export function nextDaemonSupervisorAction(args: {
+  started: boolean;
+  readyOnce: boolean;
+  exitCode: number | null | undefined;
+}): SupervisorAction {
+  if (!args.started && !args.readyOnce) return { type: 'exit', code: args.exitCode ?? 1 };
+  if ((args.exitCode ?? 0) === 0) return { type: 'exit', code: 0 };
+  return { type: 'restart' };
+}
+
+function supervisorLog(logPath: string, message: string, record: Record<string, unknown> = {}, level = 40): void {
+  appendFileSync(
+    logPath,
+    `${JSON.stringify({
+      level,
+      time: Date.now(),
+      pid: process.pid,
+      name: 'monad-supervisor',
+      ...record,
+      msg: message
+    })}\n`
+  );
+}
+
+async function terminateSupervisedChild(child: SupervisedProcess | null): Promise<void> {
+  if (!child) return;
+  try {
+    child.kill('SIGTERM');
+  } catch {
+    return;
+  }
+  await Promise.race([child.exited.catch(() => undefined), Bun.sleep(3000)]);
+  try {
+    process.kill(child.pid, 0);
+    child.kill('SIGKILL');
+  } catch {}
+}
+
+async function clearSupervisorPidFile(): Promise<void> {
+  if ((await readPid()) === process.pid) await unlink(getPidPath()).catch(() => {});
+}
+
+async function waitForSupervisorReady(child: SupervisedProcess): Promise<boolean> {
+  while (true) {
+    if (await isDaemonReachable()) return true;
+    const exited = await Promise.race([
+      child.exited.then(() => true).catch(() => true),
+      Bun.sleep(150).then(() => false)
+    ]);
+    if (exited) return false;
+  }
+}
+
+export async function runDaemonSupervisor(): Promise<void> {
+  const logPath = process.argv[3];
+  if (!logPath) throw new Error('daemon-supervisor requires a log file path');
+
+  let child: SupervisedProcess | null = null;
+  let stopping = false;
+  let readyOnce = false;
+  let backoffMs = 500;
+
+  const stop = (signal: NodeJS.Signals) => {
+    stopping = true;
+    supervisorLog(logPath, 'daemon supervisor stopping', { signal }, 30);
+    void terminateSupervisedChild(child).finally(() => {
+      void clearSupervisorPidFile().finally(() => process.exit(0));
+    });
+  };
+  process.once('SIGTERM', () => stop('SIGTERM'));
+  process.once('SIGINT', () => stop('SIGINT'));
+  process.on('SIGHUP', () => supervisorLog(logPath, 'daemon supervisor ignored SIGHUP', {}, 30));
+
+  while (!stopping) {
+    const logFd = openSync(logPath, 'a');
+    child = Bun.spawn([process.execPath, 'daemon', '--start-relay', '--log-file', logPath], {
+      stdin: 'ignore',
+      stdout: 'ignore',
+      stderr: logFd,
+      env: { ...Bun.env, MONAD_SUPERVISOR_PID: String(process.pid) }
+    });
+    closeSync(logFd);
+    supervisorLog(logPath, 'daemon supervisor started child', { childPid: child.pid }, 30);
+
+    const started = await waitForSupervisorReady(child);
+    const exitCode = await child.exited.catch(() => 1);
+    if (stopping) return;
+    const action = nextDaemonSupervisorAction({ started, readyOnce, exitCode });
+    if (action.type === 'exit') {
+      await clearSupervisorPidFile();
+      process.exit(action.code);
+    }
+
+    readyOnce = readyOnce || started;
+    supervisorLog(logPath, 'daemon exited unexpectedly — restarting', {
+      childPid: child.pid,
+      exitCode,
+      restartInMs: backoffMs
+    });
+    await Bun.sleep(backoffMs);
+    backoffMs = Math.min(backoffMs * 2, 5000);
+  }
+}
+
+async function waitUntilReady(pid: number, logPath: string): Promise<void> {
+  const deadline = Date.now() + 30_000;
+  while (Date.now() < deadline) {
+    if (!isAlive(pid)) break;
+    if (await isDaemonReachable()) return;
+    await Bun.sleep(150);
+  }
+  out(yellow(t('cli.daemon.notReady')) + dim(` (${logPath})`));
 }
 
 /** Relay the detached daemon's stdout (its banner + ready-info) to the user until the daemon is

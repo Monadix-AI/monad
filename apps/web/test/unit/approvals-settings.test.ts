@@ -2,7 +2,7 @@ import type { ApprovalRule } from '@monad/protocol';
 
 import { expect, test } from 'bun:test';
 
-import { approvalRuleLabel } from '../../features/studio/approvals-settings';
+import { approvalRuleLabel } from '../../src/features/studio/approvals-settings';
 
 function rule(overrides: Partial<ApprovalRule>): ApprovalRule {
   return {
